@@ -50,8 +50,10 @@ using StringTools;
  * directive or lying in a conditional region is faceted, and nothing it resolved its sites through is examined. What stays is what
  * holds in every build as much as in one: the facts are whole, none lost to a macro's expansion or a stale file, the graph node
  * stands for one declaration, and a body another graph node starts at is that node's. A body an inlined function was spliced into is
- * faceted too: the splice's facts are the body's, at the callee's positions, so a range question takes each of them from every body
- * it meets (`CompilerFacts.within`, `CallGraphFacts.siteOf`) — more than the range runs, never less — and the `inlined` call is an
+ * faceted too: the splice's facts are the body's, at the callee's positions, each run at a site of the `inlined` call whose method
+ * declares it — the innermost expression of the body around the call — so a range question meeting such a site takes it, and one
+ * no call's method declares from every body it meets (`CompilerFacts.within`, `CallGraphFacts.siteOf`): more than the range runs,
+ * never less. What a method that runs no project code spliced in is none of the body's (`harmlessSplice`); the `inlined` call is an
  * edge to the callee's own node, whose text still answers for it. A `Reflect`/`Type` body spliced in (`reflection-inlined`) leaves
  * neither the call nor its name among the facts: a name computed at run time (`blindIn`). A faceted body's syntax then records an edge
  * only at a site its facts do not type (`CallGraphFacts.holdsBack`): at one they type, the compiler resolved the site
@@ -104,6 +106,13 @@ final class FactsView {
 	 * what every build resolves, not only the listed ones.
 	 */
 	public final truth: Bool;
+
+	/**
+	 * Whether a call of `type.name` runs no project code, as the analysis owning the view classifies one
+	 * (`ReachGraph.runsNoUserCode`): what an inlined call of such a method spliced in is none of the body's own code
+	 * (`harmlessSplice`). None does until the analysis says so.
+	 */
+	public var runsNoUserCode: (g:CallGraph, type:String, name:String) -> Bool = (g, type, name) -> false;
 
 	/** File -> its conditional directives and regions, scanned once. */
 	private final _conditional: Map<String, ConditionalText> = [];
@@ -160,10 +169,11 @@ final class FactsView {
 	 */
 	public function sitesIn(g: CallGraph, file: String, span: Span): Null<Array<ImplicitSite>> {
 		if (!faceted(g, file, span)) return null;
-		final strings: Null<Array<StringFact>> = table.within(file, span, n -> n.strings, s -> s.at, truth);
-		final iterations: Null<Array<IterationFact>> = table.within(file, span, n -> n.iterations, i -> i.at, truth);
-		final calls: Null<Array<CallFact>> = table.callsIn(file, span, truth);
-		final flows: Null<Array<FlowFact>> = table.flowsIn(file, span, truth);
+		final harmless: (callee:String) -> Bool = harmlessSplice.bind(g);
+		final strings: Null<Array<StringFact>> = table.within(file, span, n -> n.strings, s -> s.at, truth, harmless);
+		final iterations: Null<Array<IterationFact>> = table.within(file, span, n -> n.iterations, i -> i.at, truth, harmless);
+		final calls: Null<Array<CallFact>> = table.callsIn(file, span, truth, harmless);
+		final flows: Null<Array<FlowFact>> = table.flowsIn(file, span, truth, harmless);
 		if (strings == null || iterations == null || calls == null || flows == null) return null;
 		final out: Array<ImplicitSite> = [
 			for (s in strings) { family: Text, span: s.at.span, types: [simpleSource(s.operand)] }
@@ -188,9 +198,20 @@ final class FactsView {
 	 */
 	public function truthSites(g: CallGraph, file: String, span: Span): Null<TruthSites> {
 		if (!truth || !faceted(g, file, span)) return null;
-		final natives: Null<Array<NativeFact>> = table.within(file, span, n -> n.natives, f -> f.at, true);
-		final reflection: Null<Array<ReflectionFact>> = table.within(file, span, n -> n.reflection, r -> r.at, true);
+		final harmless: (callee:String) -> Bool = harmlessSplice.bind(g);
+		final natives: Null<Array<NativeFact>> = table.within(file, span, n -> n.natives, f -> f.at, true, harmless);
+		final reflection: Null<Array<ReflectionFact>> = table.within(file, span, n -> n.reflection, r -> r.at, true, harmless);
 		return natives == null || reflection == null ? null : { natives: natives, reflection: reflection };
+	}
+
+	/**
+	 * Whether what an inlined call of `callee` (`pack.Type.field`) spliced into a body is none of the body's own code: the
+	 * method runs no project code (`runsNoUserCode`), so the `inlined` call of it, which the walk judges as any call of it,
+	 * answers for all it does.
+	 */
+	public function harmlessSplice(g: CallGraph, callee: String): Bool {
+		final dot: Int = callee.lastIndexOf('.');
+		return dot > 0 && runsNoUserCode(g, graphType(callee.substr(0, dot)), callee.substr(dot + 1));
 	}
 
 	/** Whether the innermost graph node holding `span` of `file` is faceted: its facts replace its syntax. */

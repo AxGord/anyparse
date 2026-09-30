@@ -4,6 +4,7 @@ import anyparse.check.OracleCoverage;
 import anyparse.query.CallGraph.CallEdge;
 import anyparse.query.CallGraph.EdgeKind;
 import anyparse.query.CallGraph.FnNode;
+import anyparse.query.CallGraph.SplicedSite;
 import anyparse.query.CallGraph.UnresolvedAccess;
 import anyparse.query.CallGraph.UnresolvedCall;
 import anyparse.query.FactsView.TruthSites;
@@ -249,8 +250,12 @@ final class MemberReach {
 			final source: Null<String> = scope.sources[file];
 			source == null || live.live(file, source, span);
 		});
-		scope.facts = FactsView.of(facts, scope, factsAreTruth(facts, configurations));
-		_g = new ReachGraph(_scope, carriers, maxLibraryFiles);
+		final view: Null<FactsView> = FactsView.of(facts, scope, factsAreTruth(facts, configurations));
+		scope.facts = view;
+		final reachGraph: ReachGraph = new ReachGraph(_scope, carriers, maxLibraryFiles);
+		_g = reachGraph;
+		// an inlined call of a method that runs no project code answers for what it spliced in, as any call of it does
+		if (view != null) view.runsNoUserCode = (g, type, name) -> reachGraph.runsNoUserCode(g, type, name, true);
 		_admission = new ReachAdmission(_scope, _g);
 		final built: ValueEscapes = new ValueEscapes(scope, _g, _hazards, live, carriers, scopeKnown);
 		escapes = built;
@@ -605,17 +610,20 @@ final class MemberReach {
 	 * The graph facts the entry starts from: the edges, unresolved calls
 	 * and accesses at its sites, and the region its own touches are read in —
 	 * with, where the facts are the truth, those of a faceted body meeting it that
-	 * have no site of their own (`splicedInto`).
+	 * have no site of their own and may run there (`splicedInto`, `splicedAt`).
 	 */
 	private function seedsOf(g: CallGraph, entry: ReachEntry): Seeds {
 		return switch entry {
 			case Region(file, span): seedsWhere(
-				g, file, span, s -> s != null && s.from >= span.from && s.to <= span.to && isLive(g, file, s), splicedInto(g, file, [span])
+				g, file, span, s -> s != null && s.from >= span.from && s.to <= span.to && isLive(g, file, s),
+				splicedInto(g, file, [span]), [span]
 			);
 			case Calls(file, sites):
 				final starts: Array<Int> = [for (s in sites) if (s.span != null) s.span.from];
 				final spans: Array<Span> = [for (s in sites) if (s.span != null) s.span];
-				seedsWhere(g, file, null, s -> s != null && starts.contains(s.from) && isLive(g, file, s), splicedInto(g, file, spans));
+				seedsWhere(
+					g, file, null, s -> s != null && starts.contains(s.from) && isLive(g, file, s), splicedInto(g, file, spans), spans
+				);
 		};
 	}
 
@@ -787,7 +795,9 @@ final class MemberReach {
 			final target: Null<FnNode> = g.node(e.to);
 			if (target == null || e.kind == Ref) return e.span ?? region;
 			final call: Null<QueryNode> = calls.find(c -> c.span?.from == e.span?.from);
-			if (!target.isExternal || !benignCall(g, tree, source, fn, target, call, region)) callees.push(e);
+			// code a body spliced in is asked where that body is written
+			final benign: Bool = e.spliced == null ? benignCall(g, tree, source, fn, target, call, region) : benignWhereWritten(g, e);
+			if (!target.isExternal || !benign) callees.push(e);
 		}
 		return null;
 	}
@@ -964,8 +974,12 @@ final class MemberReach {
 		return null;
 	}
 
-	/** Whether the edge `e` out of the body `node` invokes library code that cannot change an array other code holds (`benignCall`). */
+	/**
+	 * Whether the edge `e` out of the body `node` invokes library code that cannot change an array other code holds (`benignCall`).
+	 * One the facts filed off a spliced body is asked where that body is written (`benignWhereWritten`).
+	 */
 	private function benignEdge(g: CallGraph, node: FnNode, e: CallEdge): Bool {
+		if (e.spliced != null) return benignWhereWritten(g, e);
 		final target: Null<FnNode> = g.node(e.to);
 		final tree: Null<QueryNode> = g.treeOf(node.file);
 		final source: Null<String> = g.sourceOf(node.file);
@@ -976,6 +990,30 @@ final class MemberReach {
 		final fn: Null<QueryNode> = enclosingFunctionNode(tree, body);
 		final call: Null<QueryNode> = _hazards.callsIn(tree, at).find(c -> c.span?.from == at.from);
 		return fn != null && benignCall(g, tree, source, fn, target, call, body);
+	}
+
+	/**
+	 * Whether the edge `e`, which the facts filed off a body an inlined call spliced into its function, is benign in the
+	 * method that body is written in (`SplicedSite.origin`), asked as that method's own edge at the code's own range: the
+	 * spliced code is that method's text, so a receiver it holds fresh there is a fresh one each time it is spliced in.
+	 * False when the graph holds no such method, or holds it in another file than the one the code lies in.
+	 */
+	private function benignWhereWritten(g: CallGraph, e: CallEdge): Bool {
+		final origin: Null<{ node: String, file: String, span: Span }> = e.spliced?.origin;
+		final written: Null<FnNode> = origin == null ? null : g.node(origin.node);
+		if (origin == null || written == null) return false;
+		final file: String = written.file;
+		if (_scope.facts?.table.keyOf(file) != origin.file) return false;
+		return benignEdge(g, written, {
+			from: written.id,
+			to: e.to,
+			kind: e.kind,
+			via: e.via,
+			file: written.file,
+			span: origin.span,
+			dispatchType: e.dispatchType,
+			receiverField: e.receiverField
+		});
 	}
 
 	/** Whether the code that runs for `node` may not be its source: a build macro may rewrite its type, or two types share the name. */
@@ -1694,20 +1732,38 @@ final class MemberReach {
 		};
 	}
 
-	/** The graph facts of `file` whose site `keep` admits, and those with no site of the nodes `spliced` names (`splicedInto`). */
+	/**
+	 * The graph facts of `file` whose site `keep` admits, and those with no site of the nodes `spliced` names (`splicedInto`)
+	 * that may run at one of `spans` (`splicedAt`).
+	 */
 	private static function seedsWhere(
-		g: CallGraph, file: String, region: Null<Span>, keep: Null<Span> -> Bool, spliced: Array<String>
+		g: CallGraph, file: String, region: Null<Span>, keep: Null<Span> -> Bool, spliced: Array<String>, spans: Array<Span>
 	): Seeds {
-		function admits(from: String, span: Null<Span>): Bool return keep(span) || (span == null && spliced.contains(from));
+		function admits(from: String, span: Null<Span>, where: Null<SplicedSite>): Bool
+			return keep(span) || (span == null && spliced.contains(from) && splicedAt(where, spans));
 		return {
 			file: file,
 			region: region,
 			edges: [
-				for (e in g.edges) if (e.file == file && e.kind != Contains && admits(e.from, e.span)) e
+				for (e in g.edges) if (e.file == file && e.kind != Contains && admits(e.from, e.span, e.spliced)) e
 			],
-			unresolved: [for (u in g.unresolved) if (u.file == file && admits(u.from, u.span)) u],
-			access: [for (a in g.unresolvedAccess) if (a.file == file && admits(a.from, a.span)) a]
+			unresolved: [
+				for (u in g.unresolved) if (u.file == file && admits(u.from, u.span, u.spliced)) u
+			],
+			access: [
+				for (a in g.unresolvedAccess) if (a.file == file && admits(a.from, a.span, a.spliced)) a
+			]
 		};
+	}
+
+	/**
+	 * Whether what the facts filed off a body spliced in at `where` may run at one of `spans`: a site of its splice meets
+	 * one, or no site is known — code no inlined call's body holds, or a fact filed without one, may run anywhere in its
+	 * function.
+	 */
+	private static function splicedAt(where: Null<SplicedSite>, spans: Array<Span>): Bool {
+		final sites: Null<Array<Span>> = where?.sites;
+		return sites == null || sites.exists(s -> spans.exists(r -> s.from < r.to && r.from < s.to));
 	}
 
 	/** The path the walk took to `id`, ending with the touch it found there. */

@@ -450,6 +450,38 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
+	@:pin('control') @:killer('M-FACTS-SPLICE-SITE') @:killer('M-FACTS-SPLICE-SITE-INNERMOST') @:killer('M-FACTS-SPLICE-BODY')
+	@:killer('M-FACTS-NESTED-SPLICE')
+	public function testAnInlinedCallCarriesWhereItRanAndTheBodyItSplicedIn(): Void {
+		// the compiler keeps no range for the call it replaced: the call carries the range of the caller's innermost expression
+		// around it, and the callee's declared range, which holds all it spliced in. A body the spliced one spliced in turn is
+		// a call of its own, run at the same site, and holds the code of its own callee
+		final main: String = 'class Main {\n\tpublic static function hook(i:Int):Int return i;\n'
+			+ '\tstatic function main() {\n\t\tvar a = hook(1);\n\t\tvar y = Lib.two(a);\n\t}\n}\n';
+		final lib: String = 'class Lib {\n\tpublic static inline function two(x:Int):Int return Lib.one(x) * 2;\n'
+			+ '\tpublic static inline function one(x:Int):Int return Main.hook(x) + 1;\n}\n';
+		final scratch: Scratch = compile(['Main.hx' => main, 'Lib.hx' => lib]);
+		final node: Null<FactNode> = scratch.facts?.node('Main.main');
+		final libFile: String = scratch.facts?.keyOf(scratch.path('Lib.hx')) ?? '';
+		final two: Null<CallFact> = node?.calls.find(c -> c.access == 'inlined' && c.target == 'Lib.two');
+		final one: Null<CallFact> = node?.calls.find(c -> c.access == 'inlined' && c.target == 'Lib.one');
+		final call: Int = main.indexOf('Lib.two(a)');
+		final statement: Int = main.indexOf('var y');
+		final site: Null<Span> = two?.site?.span;
+		Assert.isTrue(site != null && site.from >= statement && site.from <= call && site.to >= call + 'Lib.two(a)'.length, 'site: $site');
+		Assert.isTrue(site != null && site.to <= main.indexOf(';', call) + 1, 'the site runs past the statement: $site');
+		Assert.equals(site?.from, one?.site?.span.from);
+		Assert.equals(site?.to, one?.site?.span.to);
+		final declared: Null<FactPos> = two?.body;
+		Assert.equals(libFile, declared?.file);
+		Assert.isTrue(declared != null && declared.span.to >= lib.indexOf('* 2;'), 'body: $declared');
+		final hook: Null<CallFact> = node?.calls.find(c -> c.target == 'Main.hook' && c.at.file == libFile);
+		final splice: Null<SpliceFact> = node == null || hook == null ? null : CompilerFacts.spliceOf(node, hook.at);
+		Assert.equals('Lib.one', splice?.callee);
+		Assert.equals(site?.from, splice?.sites[0]?.from);
+		scratch.remove();
+	}
+
 	@:pin('control') @:killer('M-FACTS-STALE-SOURCE') @:killer('M-FACTS-INVALIDATE') @:killer('M-FACTS-VARIANT-RANGES')
 	public function testFactsOfAnotherTextAreAbsent(): Void {
 		// facts describe the text the compile read: a file changed since, or one the run rewrote, has none; and two `#if`

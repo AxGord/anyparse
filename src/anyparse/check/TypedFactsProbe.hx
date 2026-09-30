@@ -43,14 +43,17 @@ import haxe.io.Path;
  *   A `gen`, `gi` or `inl` node is found by id, never by a range of its file. `ov`: the overload index. `inc`: markers.
  *   The facts, each list deduplicated:
  *   - `params`: `{n, t}` — the function's parameters, in order; the compiler gives a parameter no position of its own.
- *   - `calls`: `{t?, a, sig?, r?, rp?, rt, p}` — `a` is the field access `FInstance`/`FStatic`/`FAnon`/`FDynamic`/
+ *   - `calls`: `{t?, a, sig?, r?, rp?, rt, p, s?, d?}` — `a` is the field access `FInstance`/`FStatic`/`FAnon`/`FDynamic`/
  *     `FClosure`/`FEnum` with `t` = `<declaring type>.<field>` (a bare name for `FAnon`/`FDynamic`) and `r`/`rp` the
  *     receiver's type and position; `fieldValue` for a field that holds a replaceable value (a variable of a function
  *     type, a `dynamic` method); `super` (`t` = `<super>.new`); `local` (`t` = the local function's node id); `ident`
  *     (a native identifier); `value` (a call of any other value, `r` its type); `inlined` (`t` = the method — `inline`, or
- *     inlined by its call site — whose body was spliced in, positioned at that body). `sig` is the signature chosen among a
- *     field's overloads. `rt` is the result type. A property access IS a call of `get_x`/`set_x`; an abstract operator,
- *     `@:from` or `@:to` is a call of the implementation class's static.
+ *     inlined by its call site — whose body was spliced in, positioned at that body; `s` is where it ran: the range of the
+ *     innermost expression of the node's own range around the call site it replaced, the whole body when none is, and `d`
+ *     the method's declared range, which holds the code the call spliced in; a body a spliced body spliced in turn is a
+ *     call of its own at the same `s`). `sig` is the signature chosen among a field's overloads. `rt` is the result
+ *     type. A property access IS a call of `get_x`/`set_x`; an abstract operator, `@:from` or `@:to` is a call of the
+ *     implementation class's static.
  *   - `news`: `{t, ty, p}` — the class and the instance type.
  *   - `fields`: `{f, a, o?, r, t, p, w?, u?, m?, fresh?}` — a field read (a write when `w`) that is not a callee; `o` is
  *     the declaring type, absent for a structure or a dynamic access. A read has `u`, how its value is used: `call` (the
@@ -82,7 +85,7 @@ import haxe.io.Path;
  * ## Markers (`inc`) — what a consumer answers Unknown for
  *
  * - `inline-site-unknown`: a body was spliced in; its facts are the node's but no range says where they run, so a range
- *   query not covering the whole node is Unknown.
+ *   query not covering the whole node is Unknown — unless it reads them by the `s` and `d` of their `inlined` calls.
  * - `macro-expansion`: a spliced body no method could be matched to — an expression macro's expansion, or
  *   an inlined piece that carries only its declaring type's range (an abstract's `this`); as above, and no callee is named.
  * - `reflection-inlined`: a `Reflect`/`Type` body was inlined; its call, name and arguments are gone.

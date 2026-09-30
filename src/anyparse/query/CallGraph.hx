@@ -65,6 +65,9 @@ typedef CallEdge = {
 	 * What names one lock OBJECT for a lock-discipline analysis: the receiver's type alone merges every lock of a class.
 	 */
 	var receiverField: Null<String>;
+
+	/** For an edge the compiler facts file off a body an inlined call spliced into `from`: where it runs (`SplicedSite`). */
+	@:optional var spliced: Null<SplicedSite>;
 }
 
 /**
@@ -105,6 +108,9 @@ typedef UnresolvedCall = {
 	var span: Null<Span>;
 	var from: String;
 	var reason: UnresolvedReason;
+
+	/** For a site the compiler facts file off a body an inlined call spliced into `from`: where it runs (`SplicedSite`). */
+	@:optional var spliced: Null<SplicedSite>;
 }
 
 /**
@@ -120,6 +126,21 @@ typedef UnresolvedAccess = {
 	var member: String;
 	var write: Bool;
 	var dynamicReceiver: Bool;
+
+	/** For an access the compiler facts file off a body an inlined call spliced into `from`: where it runs (`SplicedSite`). */
+	@:optional var spliced: Null<SplicedSite>;
+}
+
+/**
+ * Where the code of an edge, unresolved call or access the compiler facts file off a body an inlined call spliced into a
+ * function runs, which no span of the function's file says (`CallGraphFacts.siteOf`): `sites`, ranges of that file each
+ * holding a call site that spliced the body in — null when no inlined call's body holds the code, which may then run
+ * anywhere in the function — and `origin`, the graph node of the inlined method the code is written in, with the code's
+ * own range (`span`) in the file the compiler facts key as `file`; null when the graph names no such node.
+ */
+typedef SplicedSite = {
+	final sites: Null<Array<Span>>;
+	final origin: Null<{ node: String, file: String, span: Span }>;
 }
 
 /**
