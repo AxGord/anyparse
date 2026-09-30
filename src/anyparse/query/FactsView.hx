@@ -44,9 +44,16 @@ using StringTools;
  * it is such an edge.
  *
  * Under a list of builds declared to be every build the project ships (`reachConfigurationsComplete`), a table holding
- * exactly the listed builds, none dropped, is the TRUTH (`truth`): a build the list does not name does not
- * exist, so no declaration can read differently in one. There a faceted body's natives and reflective calls are
- * its facts' (`truthSites`), and a project file no listed build read runs in none (`ReachProject.runsInNoBuild`).
+ * exactly the listed builds, none dropped, is the TRUTH (`truth`): a build the list does not name does not exist, so no
+ * declaration can read differently in one, and the facts hold every branch of a conditional region some build takes,
+ * the union of what each typed. Every test above that guards against such a build is then skipped: a body holding a
+ * directive or lying in a conditional region is faceted, and nothing it resolved its sites through is examined. What
+ * stays is what holds in every build as much as in one: the facts are whole and placed, the graph node stands for one
+ * declaration, and a body another graph node starts at is that node's. A faceted body's syntax then records an edge
+ * only at a site its facts do not type (`CallGraphFacts.holdsBack`): at one they type, the compiler resolved the site
+ * in every build there is. A local `inline function` keeps its edge under it: the compiler splices its body at its
+ * declaration and types nothing at the site of its call. A faceted body's natives and reflective calls are then its
+ * facts' (`truthSites`), and a project file no listed build read runs in none (`ReachProject.runsInNoBuild`).
  */
 @:nullSafety(Strict)
 final class FactsView {
@@ -121,15 +128,17 @@ final class FactsView {
 	}
 
 	/**
-	 * The facts of the function the graph node `node` declares when they replace its syntax (see the type doc): the
-	 * outermost typed function bodies inside its span. Null keeps the syntactic reading. `declarations` is how many
+	 * The facts of the function the graph node `node` declares when they replace its syntax (see the type
+	 * doc; under the truth, whatever a build the list does not name might read otherwise): the outermost
+	 * typed function bodies inside its span. Null keeps the syntactic reading. `declarations` is how many
 	 * declarations the graph folded into the node.
 	 */
 	public function bodyFacts(g: CallGraph, node: FnNode, declarations: Int): Null<Array<FactNode>> {
 		final outer: Null<Array<FactNode>> = declarations == 1 ? typedBodies(g, node) : null;
 		if (outer == null) return null;
 		for (n in outer) if (n.incomplete.exists(m -> UNPLACED.contains(m))) return null;
-		return contextAlike(g, node, outer) ? outer : null;
+		// under the truth no build the list does not name exists, to resolve the sites otherwise
+		return truth || contextAlike(g, node, outer) ? outer : null;
 	}
 
 	/**
@@ -279,14 +288,15 @@ final class FactsView {
 	}
 
 	/**
-	 * The outermost typed function bodies inside the span of `node`, when its text holds no directive and lies in no
-	 * conditional region; null otherwise, or when none was typed.
+	 * The outermost typed function bodies inside the span of `node`, when its text holds no directive and
+	 * lies in no conditional region, or the facts are the truth; null otherwise, or when none was typed.
 	 */
 	private function typedBodies(g: CallGraph, node: FnNode): Null<Array<FactNode>> {
 		final span: Null<Span> = node.span;
 		final source: Null<String> = g.sourceOf(node.file);
 		if (span == null || source == null) return null;
-		if (conditional(node.file, source, span)) return null;
+		// every build typed its own branch: under the truth their union is every branch that runs
+		if (!truth && conditional(node.file, source, span)) return null;
 		final inside: Array<FactNode> = [
 			for (n in table.nodesIn(node.file)) if (FUNCTION_KINDS.contains(n.kind) && !n.generated && within(n.at.span, span)) n
 		];

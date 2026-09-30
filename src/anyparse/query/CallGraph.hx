@@ -694,9 +694,7 @@ final class CallGraph {
 		from: String, to: String, kind: EdgeKind, via: Null<String>, file: String, span: Null<Span>, ?dispatchType: String,
 		?receiverField: String
 	): Void {
-		// a faceted function's syntax still records every edge it names: the facts add to them and make them precise, never
-		// take one away, since a build the list does not name may resolve a name the way the syntax reads it
-		indexEdge({
+		final edge: CallEdge = {
 			from: from,
 			to: to,
 			kind: kind,
@@ -705,7 +703,10 @@ final class CallGraph {
 			span: span,
 			dispatchType: dispatchType,
 			receiverField: receiverField
-		});
+		};
+		// a faceted function's syntax still records every edge it names, which the facts only add to — unless they are the
+		// truth: then its edge at a site they type is dropped (`CallGraphFacts.holdsBack`)
+		if (facts?.holdsBack(edge) != true) indexEdge(edge);
 	}
 
 	/** Record `edge` in the edge list and the per-node indexes. */

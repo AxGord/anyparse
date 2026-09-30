@@ -6836,6 +6836,62 @@
 			"note": "a local question in a file no build compiles is proven off a graph that holds none of it, whatever the region calls"
 		},
 		{
+			"name": "M-FACTS-TRUTH-CONTEXT",
+			"type": "anyparse.query.FactsView",
+			"method": "bodyFacts",
+			"find": "return truth || contextAlike(g, node, outer) ? outer : null;",
+			"replace": "return contextAlike(g, node, outer) ? outer : null;",
+			"note": "(precision) under the whole list of builds a body is still refused its facts for what a build the list does not name might read differently"
+		},
+		{
+			"name": "M-FACTS-TRUTH-CONTEXT-ALWAYS",
+			"type": "anyparse.query.FactsView",
+			"method": "bodyFacts",
+			"find": "return truth || contextAlike(g, node, outer) ? outer : null;",
+			"replace": "return outer;",
+			"note": "a body is read through the facts of the listed builds though a build the list does not name may resolve its sites otherwise"
+		},
+		{
+			"name": "M-FACTS-TRUTH-CONDITIONAL",
+			"type": "anyparse.query.FactsView",
+			"method": "typedBodies",
+			"find": "if (!truth && conditional(node.file, source, span)) return null;",
+			"replace": "if (conditional(node.file, source, span)) return null;",
+			"note": "(precision) under the whole list of builds a body holding a directive keeps its syntax, though the facts hold every branch a build takes"
+		},
+		{
+			"name": "M-FACTS-TRUTH-CONDITIONAL-ALWAYS",
+			"type": "anyparse.query.FactsView",
+			"method": "typedBodies",
+			"find": "if (!truth && conditional(node.file, source, span)) return null;",
+			"replace": "",
+			"note": "a body holding a directive is read through the facts of the listed builds, though a build the list does not name may take another branch"
+		},
+		{
+			"name": "M-GRAPH-TRUTH-MUTE",
+			"type": "anyparse.query.CallGraphFacts",
+			"method": "holdsBack",
+			"find": "if (!view.truth ||",
+			"replace": "if (true ||",
+			"note": "(precision) under the whole list of builds a faceted body keeps the syntax's edge at a site the compiler typed in every build there is"
+		},
+		{
+			"name": "M-GRAPH-TRUTH-MUTE-ALWAYS",
+			"type": "anyparse.query.CallGraphFacts",
+			"method": "holdsBack",
+			"find": "if (!view.truth ||",
+			"replace": "if (false ||",
+			"note": "a faceted body drops the syntax's edge at a site the listed builds typed, though a build the list does not name may resolve it the way the syntax reads it"
+		},
+		{
+			"name": "M-GRAPH-TRUTH-MUTE-UNTYPED",
+			"type": "anyparse.query.CallGraphFacts",
+			"method": "recordMuted",
+			"find": "if (at == null || !(typed[e.from] ?? []).contains(siteKey(at))) g.indexEdge(e);",
+			"replace": "",
+			"note": "under the whole list of builds a faceted body drops every edge its syntax records, even at a site its facts do not type, which may be the only thing saying the site runs code"
+		},
+		{
 			"name": "M-REACH-BASE-CLASSPATH",
 			"type": "anyparse.query.MemberReach",
 			"method": "forRun",
@@ -7280,7 +7336,7 @@
 			"name": "M-FACTS-REACH-EDGES",
 			"type": "anyparse.query.FactsView",
 			"method": "bodyFacts",
-			"find": "return contextAlike(g, node, outer) ? outer : null;",
+			"find": "return truth || contextAlike(g, node, outer) ? outer : null;",
 			"replace": "return null;",
 			"note": "no function is read through its compiler facts, so a call the syntax cannot resolve is admitted by name again"
 		},
@@ -7496,8 +7552,8 @@
 			"name": "M-FACTS-REACH-SYNTAX-UNION",
 			"type": "anyparse.query.CallGraph",
 			"method": "addEdge",
-			"find": "indexEdge({",
-			"replace": "if (kind != Contains && facts?.muted.exists(from) == true) return;\nindexEdge({",
+			"find": "if (facts?.holdsBack(edge) != true) indexEdge(edge);",
+			"replace": "if (kind != Contains && facts?.muted.exists(from) == true) return;\nindexEdge(edge);",
 			"note": "a faceted function records the facts' edges alone, so a name another build resolves the way the syntax reads it is lost"
 		},
 		{
