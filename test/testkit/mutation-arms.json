@@ -9813,7 +9813,7 @@
 			"name": "M-PAREN-LIST-BREAK",
 			"type": "anyparse.core.Renderer",
 			"method": "flatTokenWidthOfRestStack",
-			"find": "exact ? penCol - pending : -1",
+			"find": "exact && predicts ? frameSibling.col + total - pending : -1",
 			"replace": "-1",
 			"note": "an argument list that crosses the limit is not seen breaking by itself, so the fitting paren before it opens instead"
 		},
@@ -9857,9 +9857,9 @@
 		{
 			"name": "M-PAREN-EXACT-SOFT-BOUNDARY",
 			"type": "anyparse.core.Renderer",
-			"method": "rendersAsMeasured",
-			"find": "push(x, false, false, false)",
-			"replace": "push(x, e.flat, false, false)",
+			"method": "pushRouteChildren",
+			"find": "push(x, e.grouped && !e.forceFlat, false, false)",
+			"replace": "push(x, e.grouped, false, false)",
 			"note": "a soft break under a WrapBoundary inside a Flatten reads as flat, though render restores break mode there, so the asker trusts columns it never reaches"
 		},
 		{
@@ -9893,6 +9893,30 @@
 			"find": "if (extra > 0) routes.surplus += extra;",
 			"replace": "",
 			"note": "an untaken side that runs on past its node without breaking adds nothing, so a group that breaks onto its wider IfBreak side is measured too short"
+		},
+		{
+			"name": "M-PAREN-RUNON-SUSPEND",
+			"type": "anyparse.core.Renderer",
+			"method": "recordRoute",
+			"find": "if (route.cont >= 0) routes.suspendedAbove.push(height);",
+			"replace": "",
+			"note": "a prediction inside the walked side of a node whose untaken route runs on ends the walk, so what follows the node on that route's line is never counted"
+		},
+		{
+			"name": "M-PAREN-RUNON-RESUME",
+			"type": "anyparse.core.Renderer",
+			"method": "predictsAt",
+			"find": "while (suspended.length > 0 && height < suspended[suspended.length - 1]) suspended.pop();",
+			"replace": "",
+			"note": "a run-on route's suspension outlives its node, so a later paren after the node no longer ends the line and the fitting asker opens"
+		},
+		{
+			"name": "M-PAREN-RUNON-FRAME",
+			"type": "anyparse.core.Renderer",
+			"method": "flatTokenWidthOfRestStack",
+			"find": "routes.suspendedAbove.resize(0);",
+			"replace": "",
+			"note": "a run-on route's suspension survives its frame, so a later paren in the next frame no longer ends the line and the fitting asker opens"
 		}
 	]
 }

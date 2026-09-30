@@ -75,21 +75,23 @@ private typedef RestSibling = {
 	What the routes a sibling-aware rest walk did NOT take add to the line
 	(`Renderer.recordRoute`): whether the walk is still on the path render takes
 	(`onPath`), the widest line an untaken route ends on (`altLine`), the extra
-	width of untaken routes that run on (`surplus`), and whether a prediction
-	ended the walk, the one case that answers the widest route.
+	width of untaken routes that run on (`surplus`), whether a prediction ended the walk, the one case that
+	answers the widest route, and the inner-stack heights above which a run-on route suspends predictions.
 **/
 private typedef RestRoutes = {
 	var onPath: Bool;
 	var altLine: Int;
 	var surplus: Int;
 	var endedByPrediction: Bool;
+	final suspendedAbove: Array<Int>;
 };
 
 /**
-	One node of an `alternativeLineWidth` walk with the render state it is reached
-	in: whether soft breaks around it render flat (`grouped`), and whether it sits
-	in a force-flat or a hard force-flat region.
-**/
+ * One node of a render-state walk (`rendersAsMeasured`, `alternativeLineWidth`,
+ * through `pushRouteChildren`) with the state it is reached in: whether soft
+ * breaks around it render flat (`grouped`), and whether it sits in a force-flat
+ * or a hard force-flat region.
+ */
 private typedef RouteEntry = {
 	final doc: Doc;
 	final grouped: Bool;
@@ -1352,7 +1354,8 @@ class Renderer {
 			onPath: true,
 			altLine: 0,
 			surplus: 0,
-			endedByPrediction: false
+			endedByPrediction: false,
+			suspendedAbove: []
 		};
 		var i: Int = stack.length - 1;
 		while (i >= 0 && !aborted) {
@@ -1384,15 +1387,20 @@ class Renderer {
 			// of them is a break point.
 			final frameSibling: Null<RestSibling> = f.forceFlat ? null : sibling;
 			if (f.forceFlat) exact = false;
+			routes.suspendedAbove.resize(0);
 			final inner: Array<{ doc: Doc, mode: Mode }> = [{ doc: f.doc, mode: f.mode }];
 			while (inner.length > 0 && !aborted) {
 				final node: { doc: Doc, mode: Mode } = inner.pop();
-				final penCol: Int = sibling == null ? 0 : sibling.col + total;
+				final height: Int = inner.length;
+				final predicts: Bool = predictsAt(routes, height);
 				final predicted: Null<{ add: Int, aborted: Bool }> = frameSibling == null
 					? null
-					: siblingRestStep(node, inner, frameSibling, exact ? penCol - pending : -1, penCol, routes.onPath);
+					: siblingRestStep(
+						node, inner, frameSibling, exact && predicts ? frameSibling.col + total - pending : -1, frameSibling.col + total,
+						predicts
+					);
 				final step: { add: Int, aborted: Bool } = predicted ?? restNodeWidth(node, inner, false);
-				if (predicted == null) recordRoute(routes, node, exact, total);
+				if (predicted == null) recordRoute(routes, node, exact, total, height);
 				exact = exact && keepsColumnExact(node.doc, predicted != null);
 				total += step.add;
 				aborted = step.aborted;
@@ -3939,70 +3947,31 @@ class Renderer {
 	 * against a rest the asker no longer counts.
 	 */
 	private static function rendersAsMeasured(d: Doc): Bool {
-		final stack: Array<{
-			doc: Doc,
-			flat: Bool,
-			forceFlat: Bool,
-			hardFlat: Bool
-		}> = [
+		final stack: Array<RouteEntry> = [
 			{
 				doc: d,
-				flat: false,
+				grouped: false,
 				forceFlat: false,
 				hardFlat: false
 			}
 		];
 		while (stack.length > 0) {
-			final e: {
-				doc: Doc,
-				flat: Bool,
-				forceFlat: Bool,
-				hardFlat: Bool
-			} = stack.pop();
-			inline function push(x: Doc, flat: Bool, forceFlat: Bool, hardFlat: Bool): Void {
-				stack.push({
-					doc: x,
-					flat: flat,
-					forceFlat: forceFlat,
-					hardFlat: hardFlat
-				});
-			}
+			final e: RouteEntry = stack.pop();
 			switch e.doc {
 				case Empty, OptSpace(_), OptSpaceSkipAfterHardline:
 				case Text(s):
 					if (s.indexOf('\n') >= 0) return false;
 				case Line(flat):
-					if (!e.flat || flat.charAt(0) == '\n') return false;
-				case Concat(items):
-					for (it in items) push(it, e.flat, e.forceFlat, e.hardFlat);
-				case Fill(items, sep, _):
-					for (it in items) push(it, true, e.forceFlat, e.hardFlat);
-					push(sep, true, e.forceFlat, e.hardFlat);
-				case Nest(_, x), CollapseProbe(x), CollapseAddProbe(x), CollapseBoolProbe(x), CollapseChainProbe(x),
-					ConditionalMarkerZero(x), ConditionalMarkerDecrease(x):
-					push(x, e.flat, e.forceFlat, e.hardFlat);
-				case WrapBoundary(x):
-					// Render's boundary: a hard region survives it, a soft one ends at it and
-					// restores break mode, so a soft break directly under it is a newline.
-					if (e.hardFlat)
-						push(x, e.flat, true, true)
-					else if (e.forceFlat)
-						push(x, false, false, false)
-					else
-						push(x, e.flat, false, false);
-				case Group(x):
-					push(x, true, e.forceFlat, e.hardFlat);
-				case Flatten(x):
-					push(x, true, true, e.hardFlat);
-				case HardFlatten(x):
-					push(x, true, true, true);
-				case LeadingBreak(_, x):
+					if (!e.grouped || flat.charAt(0) == '\n') return false;
+				case GroupWithRestProbe(_):
+					// Its fit also weighs the tail after it, so fitting content may still break.
+					return false;
+				case LeadingBreak(_, _) if (!e.forceFlat):
 					// Its break is rendered everywhere but in a force-flat region.
-					if (!e.forceFlat) return false;
-					push(x, e.flat, true, e.hardFlat);
-				case IfBreak(_, fl):
-					if (!e.flat) return false;
-					push(fl, true, e.forceFlat, e.hardFlat);
+					return false;
+				case IfBreak(_, _) if (!e.grouped):
+					return false;
+				case _ if (pushRouteChildren(e, stack)):
 				case _:
 					return false;
 			}
@@ -4179,11 +4148,12 @@ class Renderer {
 	 * routes the walk did not take. A two-sided node render may lay out the other way
 	 * (`unresolvedAlternative`) has that route bounded (`alternativeLineWidth`): the
 	 * widest line one ends on raises `altLine`, the extra width of one that runs on
-	 * raises `surplus`. A route that cannot be bounded, or any node outside
+	 * raises `surplus`, and suspends every prediction inside the walked side of `node` (`suspendedAbove`), since what
+	 * follows `node` on that route's line would go uncounted. A route that cannot be bounded, or any node outside
 	 * `keepsRenderedPath`, takes the walk off the rendered path, where no later paren
 	 * ends the line.
 	 */
-	private static function recordRoute(routes: RestRoutes, node: { doc: Doc, mode: Mode }, exact: Bool, total: Int): Void {
+	private static function recordRoute(routes: RestRoutes, node: { doc: Doc, mode: Mode }, exact: Bool, total: Int, height: Int): Void {
 		if (!routes.onPath) return;
 		final alt: Null<Doc> = unresolvedAlternative(node, exact);
 		if (alt == null) {
@@ -4198,14 +4168,21 @@ class Renderer {
 		if (route.ends >= 0 && total + routes.surplus + route.ends > routes.altLine) routes.altLine = total + routes.surplus + route.ends;
 		final extra: Int = route.cont - DocMeasure.flatTokenWidth(node.doc);
 		if (extra > 0) routes.surplus += extra;
+		// A route that runs on past `node` carries what follows `node` on its line,
+		// which a prediction made INSIDE `node`'s walked side would never measure:
+		// nothing inside that subtree may end the walk.
+		if (route.cont >= 0) routes.suspendedAbove.push(height);
 	}
 
 	/**
-	 * Pushes the children of a render-structural node onto an `alternativeLineWidth`
-	 * stack in the mode render gives them, and answers whether `e` was one: a
-	 * wrapper, a group (its content counts as flat), an `IfBreak` (the side its mode
-	 * picks), a flat fill, a force-flat region, a `LeadingBreak` inside one, and a
-	 * `WrapBoundary`, which a hard region survives and a soft one ends at.
+	 * Pushes the children of a render-structural node onto `stack` in the state render
+	 * gives them, and answers whether `e` was one. The ONE mirror of render's child
+	 * transitions that both `rendersAsMeasured` and `alternativeLineWidth` walk with:
+	 * a wrapper keeps the state; a group, a force-flat region and a flat fill render
+	 * their content flat; an `IfBreak` takes the side its mode picks; a `LeadingBreak`
+	 * is its content; a `WrapBoundary` is survived by a hard region and ends a soft
+	 * one, which restores break mode. Each walker rejects what it cannot measure
+	 * before asking.
 	 */
 	private static function pushRouteChildren(e: RouteEntry, stack: Array<RouteEntry>): Bool {
 		inline function push(x: Doc, grouped: Bool, forceFlat: Bool, hardFlat: Bool): Void {
@@ -4267,6 +4244,18 @@ class Renderer {
 		return fl == null || brk == null
 			? null
 			: { ends: fl.ends > brk.ends ? fl.ends : brk.ends, cont: fl.cont > brk.cont ? fl.cont : brk.cont };
+	}
+
+	/**
+	 * Whether the rest walk may predict for the node it just popped at inner-stack
+	 * index `height`: it is on the rendered path and inside no run-on node's subtree.
+	 * A suspension recorded above `height` belonged to a node the walk has now left,
+	 * so it ends here.
+	 */
+	private static function predictsAt(routes: RestRoutes, height: Int): Bool {
+		final suspended: Array<Int> = routes.suspendedAbove;
+		while (suspended.length > 0 && height < suspended[suspended.length - 1]) suspended.pop();
+		return routes.onPath && suspended.length == 0;
 	}
 
 }

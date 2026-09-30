@@ -143,6 +143,61 @@ final class RendererParenSiblingRestTest extends Test {
 	}
 
 	/**
+	 * The later paren sits on the flat side of an `IfLineExceeds` whose break side
+	 * runs on without breaking: if render takes it, what follows the node lands on
+	 * the same line, which no prediction made inside the node would count. The walk
+	 * ends nowhere inside it, and the asker opens.
+	 */
+	@:pin('control')
+	@:killer('M-PAREN-RUNON-SUSPEND')
+	public function testARunOnRouteSuspendsPredictionsInsideItsNode(): Void {
+		final runOn: Doc = IfLineExceeds(
+			WIDE + 1, Text('g[' + ''.lpad('b', 20) + ']'), Concat([Text('g'), parenOf(WIDE, Text(''.lpad('b', 25)))])
+		);
+		final doc: Doc = Concat([Text('x = '), parenOf(WIDE, Text('aaaa')), Text(' / '), runOn, Text(' + ccccc;')]);
+		Assert.equals('x = (\n  aaaa\n) / g[bbbbbbbbbbbbbbbbbbbb] + ccccc;', Renderer.render(doc, WIDE));
+	}
+
+	/**
+	 * The suspension a run-on route puts on its node's subtree ends with that node:
+	 * a later paren AFTER it still ends the line, so the asker stays glued.
+	 */
+	@:pin('control')
+	@:killer('M-PAREN-RUNON-RESUME')
+	public function testASuspensionEndsWithTheNodeItCovers(): Void {
+		// The rest shares ONE frame, so the walk leaves the node by popping below it
+		// rather than by moving to the next frame.
+		final doc: Doc = Concat([
+			Text('x = '),
+			parenOf(WIDE, Text('aaaa')),
+			Concat([
+				Text(' / '),
+				IfLineExceeds(WIDE + 1, Text('mm'), Text('m')),
+				Text(' / '),
+				parenOf(WIDE, Text(''.lpad('b', 24))),
+				Text(';')
+			])
+		]);
+		Assert.equals('x = (aaaa) / mm / (\n  bbbbbbbbbbbbbbbbbbbbbbbb\n);', Renderer.render(doc, WIDE));
+	}
+
+	/** Across frames: the node's frame is left, and its suspension with it. */
+	@:pin('control')
+	@:killer('M-PAREN-RUNON-FRAME')
+	public function testASuspensionEndsWithItsFrame(): Void {
+		final doc: Doc = Concat([
+			Text('x = '),
+			parenOf(WIDE, Text('aaaa')),
+			Text(' / '),
+			IfLineExceeds(WIDE + 1, Text('mm'), Text('m')),
+			Text(' / '),
+			parenOf(WIDE, Text(''.lpad('b', 24))),
+			Text(';')
+		]);
+		Assert.equals('x = (aaaa) / mm / (\n  bbbbbbbbbbbbbbbbbbbbbbbb\n);', Renderer.render(doc, WIDE));
+	}
+
+	/**
 	 * `LeadingBreak` renders its break outside a force-flat region and only its
 	 * content inside one, so it keeps the asker's column exact only there, and in
 	 * the rest it ends the column predictions.
