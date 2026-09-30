@@ -6,6 +6,7 @@ import anyparse.query.CallGraph.EdgeKind;
 import anyparse.query.CallGraph.FnNode;
 import anyparse.query.CallGraph.UnresolvedAccess;
 import anyparse.query.CallGraph.UnresolvedCall;
+import anyparse.query.CompilerFacts.FieldDeclFact;
 import anyparse.query.FactsView.TruthSites;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.ImplicitSites.ImplicitSite;
@@ -154,6 +155,12 @@ final class MemberReach {
 
 	/** The step kind of a constructor the walk admitted through reflective instantiation. */
 	private static inline final REFLECTIVE_CONSTRUCTOR: String = 'reflective constructor';
+
+	/**
+	 * A typed variable's kind (`FieldDeclFact.kind`) read straight from its storage (`readStraight`): a `default` or `null`
+	 * read, and a write that is a field write, a setter call, or none.
+	 */
+	private static final STRAIGHT_PROPERTY: EReg = ~/^var\((default|null),(default|null|never|ctor|call)\)$/;
 
 	private final _projectSources: Map<String, String> = [];
 
@@ -353,9 +360,7 @@ final class MemberReach {
 		final g: CallGraph = graph();
 		final seeds: Seeds = seedsOf(g, entry);
 		final declaring: String = g.types.declaringTypeOf(member.owner, member.name) ?? member.owner;
-		final typeSource: Null<String> = g.types.memberOnChain(declaring, member.name)?.typeSource;
-		final outer: Null<String> = typeSource == null ? null : NominalTypes.outerNominalOf(typeSource, _plugin.typeSyntax);
-		final arrayTyped: Bool = outer != null && (_shape.arrayTypeNames ?? []).contains(outer);
+		final arrayTyped: Bool = memberIsArray(g, declaring, member.name);
 		final scan: MemberTouches = _touches.scan(g, member.name, declaring, access, arrayTyped, seeds.file, seeds.region);
 		if (scan.inRegion != null) return Reached([scan.inRegion]);
 		if (!_scopeKnown)
@@ -367,7 +372,7 @@ final class MemberReach {
 		if (ownerFile == null || !_projectSources.exists(ownerFile))
 			return Unknown(OutOfScope('`$declaring` is not declared in the project, so library code may name `${member.name}`'));
 		final info: Null<MemberInfo> = g.types.memberOnChain(declaring, member.name);
-		if (info != null && (info.hasGetter || info.hasSetter))
+		if (info != null && (info.hasGetter || info.hasSetter) && !readStraight(declaring, member.name))
 			return Unknown(UnresolvedDispatch(
 				ownerFile, null, '`${member.name}` is a property whose accessor stands between the reader and the storage'
 			));
@@ -634,6 +639,50 @@ final class MemberReach {
 			if (node != null && at != null && node.file == file && spans.exists(s -> at.from < s.to && s.from < at.to)) out.push(id);
 		}
 		return out;
+	}
+
+	/**
+	 * Whether the member `name` of `declaring` holds an array: its declaration types it one, or — an unannotated
+	 * `var items = []` included, which the index cannot type — the facts, being the truth (`FactsView.truth`), type it one
+	 * in every build: each typed type standing for `declaring` declares it, and every type a build gave it is the array type.
+	 */
+	private function memberIsArray(g: CallGraph, declaring: String, name: String): Bool {
+		final arrays: Array<String> = _shape.arrayTypeNames ?? [];
+		final typeSource: Null<String> = g.types.memberOnChain(declaring, name)?.typeSource;
+		final outer: Null<String> = typeSource == null ? null : NominalTypes.outerNominalOf(typeSource, _plugin.typeSyntax);
+		if (outer != null && arrays.contains(outer)) return true;
+		final fields: Null<Array<FieldDeclFact>> = typedFields(declaring, name);
+		return fields != null && fields.foreach(f -> f.types.foreach(t -> arrays.contains(outerTypeName(t))));
+	}
+
+	/**
+	 * Whether the facts, being the truth (`FactsView.truth`), say every build reads the property `name` of `declaring`
+	 * straight from its storage: each typed type standing for `declaring` declares it with a `default` or `null` read — a
+	 * physical field, read by a field access — and a write that is a field write, never, or a setter call. A setter then
+	 * stands between a writer and the storage only as a call the facts name, whose body writes the storage by a field
+	 * access (`MemberTouchScan.typedAccesses`). A getter decides what a reader sees whatever the storage holds, so a
+	 * property with one is never read straight, `@:isVar` or not.
+	 */
+	private function readStraight(declaring: String, name: String): Bool {
+		final fields: Null<Array<FieldDeclFact>> = typedFields(declaring, name);
+		return fields != null && fields.foreach(f -> STRAIGHT_PROPERTY.match(f.kind));
+	}
+
+	/**
+	 * The declarations of the member `name` by every typed type standing for `declaring` (`FactsView.bySimpleName`), when
+	 * the facts are the truth and each of them declares it; null otherwise.
+	 */
+	private function typedFields(declaring: String, name: String): Null<Array<FieldDeclFact>> {
+		final view: Null<FactsView> = _scope.facts;
+		if (view == null || !view.truth) return null;
+		final ids: Array<String> = view.bySimpleName()[declaring] ?? [];
+		final out: Array<FieldDeclFact> = [];
+		for (id in ids) {
+			final declared: Null<FieldDeclFact> = view.table.type(id)?.fields.find(f -> f.name == name);
+			if (declared == null) return null;
+			out.push(declared);
+		}
+		return out.length == 0 ? null : out;
 	}
 
 	/**
@@ -1765,6 +1814,13 @@ final class MemberReach {
 		if (typed.length != listed.length) return false;
 		for (i in 0...typed.length) if (typed[i] != listed[i]) return false;
 		return true;
+	}
+
+	/** The outer type a facts type string names, by its simple name: `Array` for `Array<Int>`, `Map` for `haxe.ds.Map<K,V>`. */
+	private static function outerTypeName(type: String): String {
+		final open: Int = type.indexOf('<');
+		final path: String = open < 0 ? type : type.substr(0, open);
+		return path.substr(path.lastIndexOf('.') + 1);
 	}
 
 	/**

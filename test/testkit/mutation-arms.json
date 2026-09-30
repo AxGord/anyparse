@@ -5337,7 +5337,7 @@
 			"name": "M-REACH-PROPERTY",
 			"type": "anyparse.query.MemberReach",
 			"method": "answerReach",
-			"find": "\t\tif (info != null && (info.hasGetter || info.hasSetter))\n",
+			"find": "\t\tif (info != null && (info.hasGetter || info.hasSetter) && !readStraight(declaring, member.name))\n",
 			"replace": "\t\tif (false)\n",
 			"note": "a member behind an accessor is answered as if it were the storage"
 		},
@@ -6890,6 +6890,126 @@
 			"find": "if (at == null || !(typed[e.from] ?? []).contains(siteKey(at))) g.indexEdge(e);",
 			"replace": "",
 			"note": "under the whole list of builds a faceted body drops every edge its syntax records, even at a site its facts do not type, which may be the only thing saying the site runs code"
+		},
+		{
+			"name": "M-TOUCH-TYPED-NEVER",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "typedAccesses",
+			"find": "if (facts == null || !facts.view.truth) return null;",
+			"replace": "if (facts == null || true) return null;",
+			"note": "every function is read by its syntax under the truth too, so a touch only the facts name - a member imported under another name - is missed"
+		},
+		{
+			"name": "M-TOUCH-TYPED-UNTRUE",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "typedAccesses",
+			"find": "if (facts == null || !facts.view.truth) return null;",
+			"replace": "if (facts == null) return null;",
+			"note": "the facts of listed builds decide the touches though the list is not every build, so the syntax's answer changes with no truth"
+		},
+		{
+			"name": "M-TOUCH-TYPED-SHAPE-NONE",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "typedShape",
+			"find": "if (!TYPED_ACCESSES.contains(f.access)) return false;",
+			"replace": "return false;",
+			"note": "no typed access is of a known shape, so every faceted function falls back to its syntax and a touch only the facts name is missed"
+		},
+		{
+			"name": "M-TOUCH-TYPED-CALL",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "classifyTyped",
+			"find": "{ touch: !reads, escape: !own };",
+			"replace": "{ touch: false, escape: false };",
+			"note": "a method called on the member touches nothing, so `stuff.push(1)` changes nothing"
+		},
+		{
+			"name": "M-TOUCH-TYPED-OWNER",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "bindsTo",
+			"find": ": owners.contains(owner);",
+			"replace": ": true;",
+			"note": "(precision) a field of any type named like the member binds to it, so another type's `items` touches it"
+		},
+		{
+			"name": "M-TOUCH-TYPED-CALLED",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "nodeAccesses",
+			"find": "for (c in n.calls) if (calledField(c.target) == name) return null;",
+			"replace": "",
+			"note": "a function calling a field of the member's name - a dynamic receiver's, a variable holding a function - is read through facts that record the call and no access, so the member's value handed to the call escapes nowhere"
+		},
+		{
+			"name": "M-TOUCH-TYPED-VALUE",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "classifyTyped",
+			"find": "case 'value': { touch: false, escape: true };",
+			"replace": "case 'value': { touch: false, escape: false };",
+			"note": "the member's value handed on - a method closure read off it - lets nothing escape"
+		},
+		{
+			"name": "M-TOUCH-TYPED-FRESH",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "classifyTyped",
+			"find": "case Mutate: { touch: true, escape: !f.fresh };",
+			"replace": "case Mutate: { touch: true, escape: true };",
+			"note": "(precision) a write the compiler sees storing only values built right there lets the member escape"
+		},
+		{
+			"name": "M-TOUCH-TYPED-SYNTAX-TOO",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "scanFile",
+			"find": "if (!_live(file, span) || factsRead.exists(g.functionAt(file, span.from) ?? '')) return;",
+			"replace": "if (!_live(file, span)) return;",
+			"note": "(precision) a function read through its facts is read through its syntax as well, whose coarser reading of a fresh write escapes"
+		},
+		{
+			"name": "M-TOUCH-TYPED-SELF",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "onSelf",
+			"find": "if (tree != null) walk(tree);",
+			"replace": "",
+			"note": "(precision) no typed touch is on the function's own `this`, so a constructor building another object is never excused"
+		},
+		{
+			"name": "M-REACH-TYPED-ARRAY-NEVER",
+			"type": "anyparse.query.MemberReach",
+			"method": "memberIsArray",
+			"find": "final fields: Null<Array<FieldDeclFact>> = typedFields(declaring, name);",
+			"replace": "final fields: Null<Array<FieldDeclFact>> = null;",
+			"note": "(precision) an unannotated member the facts type an array is never one, so its array readers change it"
+		},
+		{
+			"name": "M-REACH-TYPED-ARRAY-ANY",
+			"type": "anyparse.query.MemberReach",
+			"method": "memberIsArray",
+			"find": "fields.foreach(f -> f.types.foreach(t -> arrays.contains(outerTypeName(t))))",
+			"replace": "true",
+			"note": "any member the facts declare is an array, so a `Bag`'s own `indexOf` is an array's reader"
+		},
+		{
+			"name": "M-REACH-PROPERTY-STRAIGHT",
+			"type": "anyparse.query.MemberReach",
+			"method": "readStraight",
+			"find": "final fields: Null<Array<FieldDeclFact>> = typedFields(declaring, name);",
+			"replace": "final fields: Null<Array<FieldDeclFact>> = null;",
+			"note": "(precision) a property read straight from its storage stays refused under the truth"
+		},
+		{
+			"name": "M-REACH-PROPERTY-GETTER",
+			"type": "anyparse.query.MemberReach",
+			"method": "readStraight",
+			"find": "fields.foreach(f -> STRAIGHT_PROPERTY.match(f.kind))",
+			"replace": "fields.foreach(f -> STRAIGHT_PROPERTY.match(f.kind) || StringTools.startsWith(f.kind, 'var(call,'))",
+			"note": "a property with a getter is taken as read straight from its storage, though the getter decides what a reader sees"
+		},
+		{
+			"name": "M-REACH-FACTS-FIELDS-UNTRUE",
+			"type": "anyparse.query.MemberReach",
+			"method": "typedFields",
+			"find": "if (view == null || !view.truth) return null;",
+			"replace": "if (view == null) return null;",
+			"note": "the facts of listed builds type the member though the list is not every build, so a property is answered with no truth"
 		},
 		{
 			"name": "M-REACH-BASE-CLASSPATH",

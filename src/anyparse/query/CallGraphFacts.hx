@@ -307,7 +307,7 @@ final class CallGraphFacts {
 	 * The graph node declared where the compiler typed the function `id` — a local or nested function of `node`'s own
 	 * text, or of the callee an inlined body spliced it in from — or null when no node of the graph starts where it does.
 	 */
-	private static function graphNodeOf(g: CallGraph, node: FnNode, id: String, view: FactsView): Null<String> {
+	public static function graphNodeOf(g: CallGraph, node: FnNode, id: String, view: FactsView): Null<String> {
 		final fact: Null<FactNode> = view.table.node(id);
 		final file: Null<String> = fact == null || fact.generated ? null : graphFile(g, node, fact.at.file, view);
 		if (fact == null || file == null) return null;
