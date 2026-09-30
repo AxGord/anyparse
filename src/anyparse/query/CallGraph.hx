@@ -426,13 +426,16 @@ final class CallGraph {
 		if (unindexed.length > 0) types.merge(SymbolIndex.build(unindexed, _plugin));
 		_grownTypes.resize(0);
 		for (p in parsed) collectNodes(p);
+		final reading: Null<CallGraphFacts> = facts;
+		// a method a build macro made has no declaration to collect: the facts make its node (`CallGraphFacts.adopt`)
+		final adopted: Array<String> = reading == null ? [] : [for (p in parsed) for (id in reading.adopt(this, p.file)) id];
 		for (p in parsed) {
-			final reading: Null<CallGraphFacts> = facts;
 			// a function the facts describe records its syntax's edges alone, none of its unresolved sites (`CallGraphFacts.mute`)
 			final faceted: Map<String, Array<FactNode>> = reading == null ? [] : reading.mute(this, p.file, p.fnBySpanFrom);
 			collectEdges(p);
 			if (reading != null) reading.recordMuted(this, faceted);
 		}
+		if (reading != null) reading.recordAdopted(this, adopted);
 		_wiring.markGrownChains(_grownTypes);
 		_wiring.wire((from, to, kind, file, span) -> addEdge(from, to, kind, null, file, span));
 	}
@@ -636,6 +639,33 @@ final class CallGraph {
 		}
 		entry.fnBySpanFrom[span.from] = id;
 		if (name == null) return;
+		final ids: Array<String> = _byMember[name] ?? [];
+		if (!ids.contains(id)) ids.push(id);
+		_byMember[name] = ids;
+	}
+
+	/**
+	 * Take in the method `name` of `typeName` a build macro made (`CallGraphFacts.adopt`): a node of `file` with no range —
+	 * the compiler facts alone describe its body — that replaces the placeholder a call of it left, and a member of its type.
+	 */
+	private function adoptNode(id: String, file: String, typeName: String, name: String, isDynamic: Bool): Void {
+		final created: FnNode = {
+			id: id,
+			file: file,
+			typeName: typeName,
+			name: name,
+			span: null,
+			isExternal: false,
+			isDynamic: isDynamic,
+			isBodyless: false
+		};
+		nodes[id] = created;
+		final key: String = CallGraphNames.normalizePath(file);
+		final inFile: Array<FnNode> = _fileNodes[key] ?? [];
+		inFile.push(created);
+		_fileNodes[key] = inFile;
+		if (!_grownTypes.contains(typeName)) _grownTypes.push(typeName);
+		registerMember(typeName, name, id);
 		final ids: Array<String> = _byMember[name] ?? [];
 		if (!ids.contains(id)) ids.push(id);
 		_byMember[name] = ids;

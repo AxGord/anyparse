@@ -118,6 +118,53 @@ class MemberReachFactsTest extends Test {
 		+ 'class Quiet {\n\tpublic static function go(w:W):Void {}\n}\n'
 		+ 'class Loud {\n\tpublic static function go(w:W):Void Main.items.push(1);\n}\n';
 
+	/**
+	 * The build macros of the `Mac` module: `keep` hands its class's fields back as they are, `bind` does so only for a class
+	 * carrying `@:bind` and changes nothing otherwise (openfl's `initBinding`), `hub` rebuilds every class of the root
+	 * package from its own fields (tink's `SyntaxHub`), `rewrite` makes its class's `calm` push onto `Main.items`, `add`
+	 * gives its class an `added` doing so, `dyn` one calling what a dynamic value's `items` holds, `prop` makes its class's
+	 * `items` a property read through `get_items`, `recall` makes its class's `all` return `Main.make()`, positioned where
+	 * the old body was, and `loop` makes its class's `f` push onto `Store.items`.
+	 */
+	private static final BUILD_MACROS: String = 'import haxe.macro.Context;\nimport haxe.macro.Expr;\n\nclass Mac {\n'
+		+ '\tpublic static macro function keep():Array<Field> return Context.getBuildFields();\n\n'
+		+ '\tpublic static macro function bind():Array<Field> {\n\t\tif (!Context.getLocalClass().get().meta.has(":bind")) return null;\n'
+		+ '\t\treturn Context.getBuildFields();\n\t}\n\n' + '\tpublic static macro function hub():Array<Field> {\n'
+		+ '\t\tfinal c = Context.getLocalClass()?.get();\n'
+		+ '\t\tif (c == null || c.pack.length > 0 || c.isExtern || c.module != c.name) return null;\n'
+		+ '\t\treturn Context.getBuildFields();\n\t}\n\n' + '\tpublic static macro function rewrite():Array<Field> {\n'
+		+ '\t\tfinal fields:Array<Field> = Context.getBuildFields();\n\t\tfor (f in fields) if (f.name == "calm") switch f.kind {\n'
+		+ '\t\t\tcase FFun(fn): fn.expr = macro Main.items.push(1);\n\t\t\tcase _:\n\t\t}\n\t\treturn fields;\n\t}\n\n'
+		+ '\tpublic static macro function add():Array<Field> {\n\t\tfinal fields:Array<Field> = Context.getBuildFields();\n'
+		+ '\t\tfields.push({\n\t\t\tname: "added",\n\t\t\tpos: Context.currentPos(),\n\t\t\taccess: [APublic],\n'
+		+ '\t\t\tkind: FFun({ args: [], ret: macro:Void, expr: macro Main.items.push(1) })\n\t\t});\n\t\treturn fields;\n\t}\n\n'
+		+ '\tpublic static macro function prop():Array<Field> {\n\t\tfinal fields:Array<Field> = Context.getBuildFields();\n'
+		+ '\t\tfor (f in fields) if (f.name == "items") switch f.kind {\n'
+		+ '\t\t\tcase FVar(t, e):\n\t\t\t\tf.kind = FProp("get", "default", t, e);\n\t\t\t\tf.meta.push({ name: ":isVar", pos: f.pos });\n'
+		+ '\t\t\tcase _:\n\t\t}\n\t\treturn fields;\n\t}\n\n' + '\tpublic static macro function recall():Array<Field> {\n'
+		+ '\t\tfinal fields:Array<Field> = Context.getBuildFields();\n\t\tfor (f in fields) if (f.name == "all") switch f.kind {\n'
+		+ '\t\t\tcase FFun(fn): fn.expr = macro @:pos(fn.expr.pos) return Main.make();\n\t\t\tcase _:\n\t\t}\n\t\treturn fields;\n\t}\n\n'
+		+ '\tpublic static macro function dyn():Array<Field> {\n\t\tfinal fields:Array<Field> = Context.getBuildFields();\n'
+		+ '\t\tfields.push({\n\t\t\tname: "added",\n\t\t\tpos: Context.currentPos(),\n\t\t\taccess: [APublic],\n'
+		+ '\t\t\tkind: FFun({ args: [], ret: macro:Void, expr: macro (cast null : Dynamic).items(1) })\n\t\t});\n'
+		+ '\t\treturn fields;\n\t}\n\n' + '\tpublic static macro function loop():Array<Field> {\n'
+		+ '\t\tfinal fields:Array<Field> = Context.getBuildFields();\n\t\tfor (f in fields) if (f.name == "f") switch f.kind {\n'
+		+ '\t\t\tcase FFun(fn): fn.expr = macro Store.items.push(1);\n\t\t\tcase _:\n\t\t}\n\t\treturn fields;\n\t}\n}\n';
+
+	/**
+	 * A fixture whose region calls `region` on the `Helper` in `Main.main`, `Helper` extending a `Base` that carries
+	 * `@:autoBuild(Mac.<builder>())` (`BUILD_MACROS`): its text declares `calm`, which changes nothing.
+	 */
+	private static function helperBuiltBy(builder: String, region: String): Map<String, String> {
+		return [
+			'Main.hx' => LOOP_HEAD + '\tstatic function main() {\n\t\tfinal h:Helper = new Helper();\n'
+				+ '\t\tfor (i in 0...items.length) { /*<*/ ' + region + ' /*>*/ }\n\t}\n}\n',
+			'Helper.hx' => 'class Helper extends Base {\n\tpublic function calm():Void {}\n}\n',
+			'Base.hx' => '@:autoBuild(Mac.' + builder + '())\nclass Base {\n\tpublic function new() {}\n}\n',
+			'Mac.hx' => BUILD_MACROS
+		];
+	}
+
 	@:pin('control') @:killer('M-FACTS-REACH-EDGES')
 	public function testTheCompilerResolvesACallTheSyntaxCannot(): Void {
 		// `pick()` declares no return type, so the syntax cannot tell which `grow` runs and admits every one so named; the
@@ -454,7 +501,7 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main]), r -> r.match(Unknown(DynamicName(_, _))));
 	}
 
-	@:pin('control') @:killer('M-FACTS-REACH-BUILDS')
+	@:pin('control') @:killer('M-FACTS-REACH-BUILDS') @:killer('M-REACH-REWRITTEN-UNTRUE')
 	public function testABuildMacroOnlyTheCompilerSawIsUnknown(): Void {
 		// a global `addGlobalMetadata` puts a `@:build` on `Main` its text never spells
 		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ helper(); /*>*/ }\n\t}\n'
@@ -546,6 +593,7 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main], null, true, null, false, null, ['Wrap.hx' => wrap]), r -> !r.match(Proven));
 	}
 
+	@:pin('control') @:killer('M-FACTS-TEXT-SPELLED')
 	public function testAMacroBuiltTypeAnswersFromItsTextOnlyWhenItsFactsAreItsText(): Void {
 		// `Line` inherits an `@:autoBuild`: the text of `all` answers for the local it initialises only when the compiled body
 		// is that text. A macro keeping the fields leaves it so; one replacing the body with `return Main.kept` does not
@@ -930,6 +978,145 @@ class MemberReachFactsTest extends Test {
 		assertMatch(askAs(fixture('default, set', 'g();'), Write, true), r -> r.match(Reached(_)));
 		assertMatch(askAs(fixture('default, set', 'h();'), Write, false), r -> r.match(Unknown(UnresolvedDispatch(_, _, _))));
 		assertMatch(askAs(fixture('get, set', 'h();'), Write, true), r -> r.match(Unknown(UnresolvedDispatch(_, _, _))));
+	}
+
+	@:pin('control') @:killer('M-REACH-REWRITTEN-TRUTH') @:killer('M-REACH-REWRITTEN-UNTRUE')
+	public function testCodeABuildMacroLeftAsItsTextIsAnsweredUnderTheTruth(): Void {
+		// `Main` inherits `Base`'s `@:autoBuild`, whose macro hands the fields back as they are: the facts, the code every build
+		// compiled, are `Main`'s text, so no touch of `items` hides in code the text does not show. Without the whole list of
+		// builds, a build the list does not name may run the macro to other effect
+		final main: String = 'class Main extends Base {\n\tpublic var items:Array<Int> = [1];\n'
+			+ '\tstatic function main() {\n\t\tnew Main().f();\n\t}\n'
+			+ '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n\t}\n\tfunction calm():Void {}\n}\n';
+		final files: Map<String, String> = [
+			'Main.hx' => main,
+			'Base.hx' => '@:autoBuild(Mac.keep())\nclass Base {\n\tpublic function new() {}\n}\n',
+			'Mac.hx' => BUILD_MACROS
+		];
+		assertMatch(truthAsk(files), r -> r.match(Proven));
+		assertMatch(ask(files), r -> r.match(Unknown(Reification(_, _))));
+		// the region runs `Helper.calm`, of a class under `Base`'s `@:autoBuild`: kept as its text, it is walked as any other
+		assertMatch(truthAsk(helperBuiltBy('keep', 'h.calm();')), r -> r.match(Proven));
+		assertMatch(ask(helperBuiltBy('keep', 'h.calm();')), r -> r.match(Unknown(Reification(_, _))));
+	}
+
+	@:pin('control') @:killer('M-FACTS-OWNER-IDS') @:killer('M-GRAPH-ADOPT-NONE') @:killer('M-GRAPH-ADOPT-UNRECORDED')
+	@:killer('M-TOUCH-ADOPTED-SYNTAX')
+	public function testACalleeABuildMacroRewroteToTouchTheMemberReachesItUnderTheTruth(): Void {
+		// `Mac.rewrite` makes `Helper.calm` push onto `items`, which its text never names: the facts, read by the node's id
+		// since the body lies in `Mac.hx`, show the touch
+		assertMatch(truthAsk(helperBuiltBy('rewrite', 'h.calm();')), r -> r.match(Reached(_)));
+		assertMatch(ask(helperBuiltBy('rewrite', 'h.calm();')), r -> r.match(Unknown(Reification(_, _))));
+	}
+
+	@:pin('control') @:killer('M-GRAPH-ADOPT-NONE') @:killer('M-TOUCH-ADOPTED-SYNTAX')
+	public function testAMethodABuildMacroAddedTouchingTheMemberReachesItUnderTheTruth(): Void {
+		// `Mac.add` gives `Helper` an `added` that pushes onto `items`: no text declares it, the region calls it. Its facts make
+		// it a node of the graph, which the call the facts name reaches
+		assertMatch(truthAsk(helperBuiltBy('add', 'h.added();')), r -> r.match(Reached(_)));
+	}
+
+	@:pin('control') @:killer('M-TOUCH-ADOPTED-UNREAD')
+	public function testAMethodABuildMacroAddedTheFactsCannotReadTouchesTheMemberUnderTheTruth(): Void {
+		// `Mac.dyn`'s `added` calls what a dynamic value's `items` holds, a call the facts do not read as an access of the
+		// member, and no text holds the body to read instead: it touches the member and lets its value go
+		assertMatch(truthAsk(helperBuiltBy('dyn', 'h.added();')), r -> r.match(Unknown(Escape(_, _))));
+	}
+
+	@:pin('control') @:killer('M-REACH-ENTRY-REWRITTEN') @:killer('M-REACH-ENTRY-MEMBER') @:killer('M-REACH-TEXTUAL-ALWAYS')
+	public function testARegionOfABodyABuildMacroReplacedIsNoProofUnderTheTruth(): Void {
+		// `Mac.loop` replaces `Main.f`, the region's function, by a push onto `Store.items`: the region's text is none of what
+		// runs, whatever the owner of the member
+		final main: String = 'class Main extends Base {\n\tstatic function main() {\n\t\tnew Main().f();\n\t}\n'
+			+ '\tfunction f():Void {\n\t\tfor (i in 0...Store.items.length) { /*<*/ var k = i; /*>*/ }\n\t}\n}\n';
+		final files: Map<String, String> = [
+			'Main.hx' => main,
+			'Store.hx' => 'class Store {\n\tpublic static var items:Array<Int> = [1];\n}\n',
+			'Base.hx' => '@:autoBuild(Mac.loop())\nclass Base {\n\tpublic function new() {}\n}\n',
+			'Mac.hx' => BUILD_MACROS
+		];
+		final store: MemberRef = { owner: 'Store', name: 'items' };
+		assertMatch(ask(files, null, true, store, false, null, null, null, true), r -> r.match(Unknown(Reification(_, _))));
+	}
+
+	@:pin('control') @:killer('M-REACH-ENTRY-REWRITTEN') @:killer('M-REACH-ENTRY-LOCAL')
+	public function testALocalOfABodyABuildMacroReplacedIsNoProofUnderTheTruth(): Void {
+		// `Mac.loop` replaces `Main.f`, where the region and the local are, by a push onto `Store.items`: the text declaring the
+		// local is none of what runs
+		final main: String = 'class Main extends Base {\n\tpublic static var kept:Array<Int> = [1];\n'
+			+ '\tstatic function main() {\n\t\tnew Main().f();\n\t}\n\tfunction f():Void {\n\t\tfinal xs:Array<Int> = [1];\n'
+			+ '\t\tfor (i in 0...xs.length) { /*<*/ kept.push(xs[i]); /*>*/ }\n\t}\n}\n';
+		final files: Map<String, String> = [
+			'Main.hx' => main,
+			'Store.hx' => 'class Store {\n\tpublic static var items:Array<Int> = [1];\n}\n',
+			'Base.hx' => '@:autoBuild(Mac.loop())\nclass Base {\n\tpublic function new() {}\n}\n',
+			'Mac.hx' => BUILD_MACROS
+		];
+		assertMatch(askLocal(files, 'xs'), r -> r.match(Unknown(Reification(_, _))));
+	}
+
+	@:pin('control') @:killer('M-FACTS-TEXT-FIELDS-ANY')
+	public function testAVariableABuildMacroMadeAPropertyKeepsItsOwnerUnknownUnderTheTruth(): Void {
+		// `Mac.prop` makes `items` a property its text never declares: a read of it runs `get_items`, which hands out `shared`,
+		// the array `calm` pushes onto. The text's plain variable is not what every build compiled
+		final main: String = 'class Main extends Base {\n\tpublic var items:Array<Int> = [1];\n'
+			+ '\tpublic static var shared:Array<Int> = [2];\n\tstatic function main() {\n\t\tnew Main().f();\n\t}\n'
+			+ '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n\t}\n'
+			+ '\tfunction calm():Void {\n\t\tshared.push(3);\n\t}\n\tfunction get_items():Array<Int> {\n\t\treturn shared;\n\t}\n}\n';
+		final files: Map<String, String> = [
+			'Main.hx' => main,
+			'Base.hx' => '@:autoBuild(Mac.prop())\nclass Base {\n\tpublic function new() {}\n}\n',
+			'Mac.hx' => BUILD_MACROS
+		];
+		assertMatch(truthAsk(files), r -> r.match(Unknown(Reification(_, _))));
+	}
+
+	@:pin('control') @:killer('M-FACTS-TEXT-CALLS-ANY')
+	public function testALocalACalleeRebuiltInPlaceHandsOutIsNoProofUnderTheTruth(): Void {
+		// `Mac.recall` gives `Line.all` the body `return Main.make()` at the old body's range: every fact of it is in place, but no
+		// text there spells `make`, whose `kept` the region changes. The text of `all` would hand out a fresh array
+		final main: String = 'class Main {\n\tpublic static var kept:Array<Int> = [1];\n'
+			+ '\tpublic static function make():Array<Int> {\n\t\treturn kept;\n\t}\n\tstatic function main() {\n'
+			+ '\t\tfinal xs:Array<Int> = new Line().all();\n\t\tfor (i in 0...xs.length) { /*<*/ kept.push(xs[i]); /*>*/ }\n\t}\n}\n';
+		final files: Map<String, String> = [
+			'Main.hx' => main,
+			'Line.hx' => 'class Line extends Base {\n\tpublic function all():Array<Int> {\n\t\tfinal out:Array<Int> = [1];\n'
+				+ '\t\tout.push(2);\n\t\treturn out;\n\t}\n}\n',
+			'Base.hx' => '@:autoBuild(Mac.recall())\nclass Base {\n\tpublic function new() {}\n}\n',
+			'Mac.hx' => BUILD_MACROS
+		];
+		assertMatch(askLocal(files, 'xs'), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-REACH-REWRITTEN-TRUTH')
+	public function testABuildMacroOnlyTheCompilerSawChangingNothingIsNoneUnderTheTruth(): Void {
+		// the listed twin of `testABuildMacroOnlyTheCompilerSawIsUnknown`: the `@:build` a global `addGlobalMetadata` puts on
+		// `Main` hands back no fields, so what every build compiled is `Main`'s text
+		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ helper(); /*>*/ }\n\t}\n'
+			+ '\tstatic function helper():Void {}\n}\n';
+		final mac: String = 'class Mac {\n\tpublic static macro function b():Array<haxe.macro.Expr.Field> return null;\n}\n';
+		final build: String = BUILD + '--macro addGlobalMetadata("Main", "@:build(Mac.b())", false)\n';
+		assertMatch(ask(['Main.hx' => main, 'Mac.hx' => mac], null, true, null, false, build, null, null, true), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-REACH-REWRITTEN-TRUTH') @:killer('M-REACH-REWRITTEN-UNTRUE')
+	public function testAnArrayMemberOfASubclassUnderAnAncestorsAutoBuildIsAnsweredUnderTheTruth(): Void {
+		// TM's `GridScale extends Sprite`: an ancestor's `@:autoBuild` that changes nothing but a class carrying `@:bind`, and a
+		// global build rebuilding every class from its own fields, over a subclass looping over its own private array
+		final main: String = 'class Main extends Mid {\n\tprivate final _points:Array<Int> = [];\n'
+			+ '\tstatic function main() {\n\t\tnew Main().f();\n\t}\n'
+			+ '\tfunction f():Void {\n\t\tfor (i in 0..._points.length) { /*<*/ calm(\'$${_points[i]}\'); /*>*/ }\n\t}\n'
+			+ '\tfunction calm(s:String):Void {}\n}\n';
+		final files: Map<String, String> = [
+			'Main.hx' => main,
+			'Mid.hx' => 'class Mid extends Top {}\n',
+			'Top.hx' => '@:autoBuild(Mac.bind())\nclass Top {\n\tpublic function new() {}\n}\n',
+			'Mac.hx' => BUILD_MACROS
+		];
+		final build: String = BUILD + '--macro addGlobalMetadata("", "@:build(Mac.hub())")\n';
+		final points: MemberRef = { owner: 'Main', name: '_points' };
+		assertMatch(ask(files, null, true, points, false, build, null, null, true), r -> r.match(Proven));
+		assertMatch(ask(files, null, true, points, false, build), r -> r.match(Unknown(Reification(_, _))));
 	}
 
 	/**

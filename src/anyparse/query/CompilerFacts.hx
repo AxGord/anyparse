@@ -311,6 +311,10 @@ final class CompilerFacts {
 	private final _originals: Map<String, String> = [];
 
 	private final _dumps: Array<DumpFiles> = [];
+
+	/** Typed type id -> the ids of its field nodes (`nodeIdsOf`), built on first need and dropped by `add`. */
+	private var _byOwner: Null<Map<String, Array<String>>> = null;
+
 	private final _read: (String) -> Null<String>;
 	private final _key: (String) -> String;
 
@@ -395,6 +399,30 @@ final class CompilerFacts {
 		final made: Null<FactNode> = lines == null ? null : materialize(id, lines);
 		_nodeCache[id] = made;
 		return made;
+	}
+
+	/**
+	 * The ids of the nodes of the typed type `typeId`'s fields — each field's body or initializer, its further overloads,
+	 * its static initializer (`__init__`) — a macro-generated one among them, whichever file it lies in; not the functions
+	 * nested in them, which their `fns` list.
+	 */
+	public function nodeIdsOf(typeId: String): Array<String> {
+		var byOwner: Null<Map<String, Array<String>>> = _byOwner;
+		if (byOwner == null) {
+			final built: Map<String, Array<String>> = [];
+			for (id in _nodeLines.keys()) {
+				final dot: Int = id.lastIndexOf('.');
+				// a nested function's id carries its offset after the field's: `<field id>@<min>`
+				if (dot <= 0 || id.indexOf('@', dot) >= 0) continue;
+				final owner: String = id.substr(0, dot);
+				final ids: Array<String> = built[owner] ?? [];
+				ids.push(id);
+				built[owner] = ids;
+			}
+			_byOwner = built;
+			byOwner = built;
+		}
+		return byOwner[typeId] ?? [];
 	}
 
 	/** Every node of `file`, outermost first. */
@@ -496,6 +524,7 @@ final class CompilerFacts {
 			dropped.push({ name: dump.name, reason: 'its facts file is not complete' });
 			return;
 		}
+		_byOwner = null;
 		final index: Int = _dumps.length;
 		final files: DumpFiles = { paths: [], file: dump.file };
 		_dumps.push(files);

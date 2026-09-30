@@ -7693,6 +7693,118 @@
 			"note": "(precision) a spliced edge is asked in the method it is written in at no range of it"
 		},
 		{
+			"name": "M-REACH-REWRITTEN-TRUTH",
+			"type": "anyparse.query.ReachGraph",
+			"method": "rewrittenBy",
+			"find": "return textual ? null : built;",
+			"replace": "return built;",
+			"note": "a build macro whose output the facts show is the text keeps its type Unknown under the truth too, so no question about a class under an ancestor's `@:autoBuild` is ever answered"
+		},
+		{
+			"name": "M-REACH-REWRITTEN-UNTRUE",
+			"type": "anyparse.query.ReachGraph",
+			"method": "rewrittenBy",
+			"find": "_scope.facts?.truth == true ? _scope.provenance() : null",
+			"replace": "_scope.provenance()",
+			"note": "the facts of listed builds retire a build macro though the list is not every build, where one it does not name may run the macro to other effect"
+		},
+		{
+			"name": "M-REACH-TEXTUAL-ALWAYS",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "typeIsItsText",
+			"find": "if (site == null || ids.length == 0 || g.types.declarationCount(type) != 1) return false;",
+			"replace": "if (site == null || ids.length == 0 || g.types.declarationCount(type) != 1 || true) return true;",
+			"note": "every type is its text, so a body a build macro rewrote to touch the member is read by its syntax, which never names it"
+		},
+		{
+			"name": "M-FACTS-OWNER-IDS",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "nodeIdsOf",
+			"find": "return byOwner[typeId] ?? [];",
+			"replace": "return [];",
+			"note": "a typed type holds no body, so a body a build macro rewrote is never asked whether it is its text"
+		},
+		{
+			"name": "M-FACTS-TEXT-FIELDS-ANY",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "declaredAlike",
+			"find": "return found.exists(",
+			"replace": "return true || found.exists(",
+			"note": "a field declared as anything the text declares it as is alike, so a variable a macro made a property is read as the text's plain variable"
+		},
+		{
+			"name": "M-FACTS-TEXT-SPELLED",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "factsOnText",
+			"find": "body.holds(f.at) && (body.mentions(f.at, f.field) || (!f.write && body.lowered(f.at)))",
+			"replace": "body.holds(f.at)",
+			"note": "a field access on text that does not spell it is the text's, so a body a macro put at the old body's range is taken for the text"
+		},
+		{
+			"name": "M-FACTS-TEXT-CALLS-ANY",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "callOnText",
+			"find": "if (!body.holds(c.at)) return false;",
+			"replace": "return true;",
+			"note": "every call is the text's wherever it sits, so a body a macro put at the old body's range calling what the text never names is taken for the text"
+		},
+		{
+			"name": "M-GRAPH-ADOPT-NONE",
+			"type": "anyparse.query.CallGraphFacts",
+			"method": "adopt",
+			"find": "if (!view.truth) return [];",
+			"replace": "return [];",
+			"note": "a method a build macro made or placed outside its type's file is no node of the graph, so what its facts show it touching is never found"
+		},
+		{
+			"name": "M-GRAPH-ADOPT-UNRECORDED",
+			"type": "anyparse.query.CallGraph",
+			"method": "addFiles",
+			"find": "if (reading != null) reading.recordAdopted(this, adopted);",
+			"replace": "",
+			"note": "a method a build macro made is a node with no facts recorded, so neither what it runs nor what it touches is seen"
+		},
+		{
+			"name": "M-TOUCH-ADOPTED-SYNTAX",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "nodeAccesses",
+			"find": "if (n == null || (n.generated && !made)) return null;",
+			"replace": "if (n == null || n.generated) return null;",
+			"note": "a body a build macro placed outside its type's file is left to its text, which holds none of it, so its touch is only a guess"
+		},
+		{
+			"name": "M-TOUCH-ADOPTED-UNREAD",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "recordUnread",
+			"find": "out.touchers[id] = at;",
+			"replace": "return;",
+			"note": "a method a build macro made whose facts do not say how it names the member touches nothing, though no text holds it to read instead"
+		},
+		{
+			"name": "M-REACH-ENTRY-REWRITTEN",
+			"type": "anyparse.query.MemberReach",
+			"method": "entryRewritten",
+			"find": "if (_scope.facts?.truth != true || tree == null) return null;",
+			"replace": "if (tree == null || true) return null;",
+			"note": "an entry in code a build macro replaced is read as its text, which is none of what runs"
+		},
+		{
+			"name": "M-REACH-ENTRY-MEMBER",
+			"type": "anyparse.query.MemberReach",
+			"method": "answerReach",
+			"find": " ?? entryRewritten(entryFile, entrySpans(entry))",
+			"replace": "",
+			"note": "a member question's region in code a build macro replaced is read as its text, which is none of what runs"
+		},
+		{
+			"name": "M-REACH-ENTRY-LOCAL",
+			"type": "anyparse.query.MemberReach",
+			"method": "answerLocal",
+			"find": "if (rebuilt != null) return Unknown(rebuilt);",
+			"replace": "",
+			"note": "a local question in code a build macro replaced is read as its text, which is none of what runs"
+		},
+		{
 			"name": "M-FACTS-REACH-ESCAPE-TYPED",
 			"type": "anyparse.query.ValueEscapes",
 			"method": "scanFile",
@@ -7975,7 +8087,7 @@
 			"name": "M-REACH-CALLEE-REWRITTEN",
 			"type": "anyparse.query.MemberReach",
 			"method": "bodyNotItsSource",
-			"find": " || _g.buildMacroOn(type) != null)",
+			"find": " || _g.rewrittenBy(type) != null)",
 			"replace": ")",
 			"note": "a callee a build macro may rewrite is read as its source"
 		},

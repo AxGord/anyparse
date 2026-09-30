@@ -139,8 +139,10 @@ typedef MemberRef = {
  * function of the same name, and ANY code any function the language calls implicitly — an operator,
  * conversion, index, string conversion, iteration, literal construction; every admission is narrowed to the
  * functions that can themselves reach a toucher, and re-run whenever the graph grew. Reflection by a literal
- * name is a hand-off it follows; by a computed name, native code, untyped code, a raw conditional region, an
- * unmodelled construct, a build macro, an ambiguous type name or an unparsed file is `Unknown`.
+ * name is a hand-off it follows; by a computed name, native code, untyped code, a raw conditional region, an unmodelled
+ * construct, a build macro, an ambiguous type name or an unparsed file is `Unknown` — a build macro, where the compiler facts
+ * are the truth (`FactsView.truth`), only when they show the code it made of a type is not the text (`ReachGraph.rewrittenBy`);
+ * what they show a method it made or placed elsewhere touching is found all the same (`CallGraphFacts.adopt`).
  */
 @:nullSafety(Strict)
 final class MemberReach {
@@ -381,7 +383,7 @@ final class MemberReach {
 			return Unknown(UnresolvedDispatch(
 				ownerFile, null, '`${member.name}` is a property whose accessor stands between the reader and the storage'
 			));
-		final built: Null<ReachUnknown> = _g.buildMacroOn(declaring);
+		final built: Null<ReachUnknown> = _g.rewrittenBy(declaring) ?? entryRewritten(entryFile, entrySpans(entry));
 		if (built != null) return Unknown(built);
 		if (access == Mutate && scan.escapes.length > 0) {
 			final at: Occurrence = scan.escapes[0];
@@ -416,6 +418,8 @@ final class MemberReach {
 		final name: Null<String> = declaration.name;
 		if (tree == null || source == null) return Unknown(SkipParse(file));
 		if (declSpan == null || name == null) return Unknown(OutOfScope('the declaration of the collection carries no span'));
+		final rebuilt: Null<ReachUnknown> = entryRewritten(file, [region]);
+		if (rebuilt != null) return Unknown(rebuilt);
 		final rerun: Span = new Span(declSpan.from, _touches.rerunEnd(fn, region));
 		final blind: Null<ReachUnknown> = firstBlind(file, liveHazards(file, tree, source, rerun)) ?? _scope.facts?.blindIn(file, rerun);
 		if (blind != null) return Unknown(blind);
@@ -478,7 +482,7 @@ final class MemberReach {
 		if (!_projectSources.exists(target.file) || g.types.declarationCount(type) != 1 || !declaredOnce(target.file, type, name))
 			return false;
 		if (!_carriers.subtypesKnown(type) || g.virtualTargets(type, name).length > 0 || overriddenInFacts(g, type, name)) return false;
-		return _g.buildMacroOn(type) == null || _scope.provenance()?.bodyIsSource(g, target) == true;
+		return _g.rewrittenBy(type) == null || _scope.provenance()?.bodyIsSource(g, target) == true;
 	}
 
 	/**
@@ -709,6 +713,31 @@ final class MemberReach {
 		};
 	}
 
+	/** The spans of the entry's own code: the region, or each call site. */
+	private static function entrySpans(entry: ReachEntry): Array<Span> {
+		return switch entry {
+			case Region(_, span): [span];
+			case Calls(_, sites): [for (s in sites) if (s.span != null) s.span];
+		};
+	}
+
+	/**
+	 * Under the truth (`FactsView.truth`), the site of the build macro that made the code of a type holding one of `spans`
+	 * of `file` other than its text (`ReachGraph.rewrittenBy`), or null: an entry is text, which may be none of what the
+	 * builds compiled there. Without the truth, null: the walk asks every build macro of the code it enters, the entry's
+	 * among it only as the member's owner.
+	 */
+	private function entryRewritten(file: String, spans: Array<Span>): Null<ReachUnknown> {
+		final tree: Null<QueryNode> = _g.treeOf(file);
+		if (_scope.facts?.truth != true || tree == null) return null;
+		for (span in spans) {
+			final type: Null<String> = MemberTouchScan.typeAt(tree, span.from);
+			final built: Null<ReachUnknown> = type == null ? null : _g.rewrittenBy(type);
+			if (built != null) return built;
+		}
+		return null;
+	}
+
 	/** Record the code of the body `node` as entered (`ReachGraph.enter`); true when that widened what was. */
 	private function enterBody(g: CallGraph, node: FnNode): Bool {
 		var widened: Bool = false;
@@ -724,10 +753,7 @@ final class MemberReach {
 		final file: String = switch entry {
 			case Region(f, _), Calls(f, _): f;
 		};
-		final spans: Array<Span> = switch entry {
-			case Region(_, span): [span];
-			case Calls(_, sites): [for (s in sites) if (s.span != null) s.span];
-		};
+		final spans: Array<Span> = entrySpans(entry);
 		final tree: Null<QueryNode> = g.treeOf(file);
 		var marked: Null<ReachUnknown> = null;
 		for (span in spans) {
@@ -1068,7 +1094,7 @@ final class MemberReach {
 	/** Whether the code that runs for `node` may not be its source: a build macro may rewrite its type, or two types share the name. */
 	private function bodyNotItsSource(g: CallGraph, node: FnNode): Bool {
 		final type: Null<String> = node.typeName;
-		return type != null && (g.types.declarationCount(type) > 1 || _g.buildMacroOn(type) != null);
+		return type != null && (g.types.declarationCount(type) > 1 || _g.rewrittenBy(type) != null);
 	}
 
 	/** What the external `node` stands for once its library file is read: harmless, a body to walk, or nothing the walk can see. */
@@ -1317,7 +1343,7 @@ final class MemberReach {
 					continue;
 				}
 				if (type != null && g.types.declarationCount(type) > 1) blind = blind ?? Ambiguous(type);
-				final rebuilt: Null<ReachUnknown> = type == null ? null : _g.buildMacroOn(type);
+				final rebuilt: Null<ReachUnknown> = type == null ? null : _g.rewrittenBy(type);
 				if (rebuilt != null) blind = blind ?? rebuilt;
 				final spans: Null<Array<Span>> = bodySpans(g, node);
 				if (spans == null)

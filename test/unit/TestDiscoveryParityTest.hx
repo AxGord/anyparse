@@ -2534,8 +2534,13 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testABodyTheFactsDoNotDescribeWholeKeepsItsSyntacticHazards :: control :: '
 				+ 'M-FACTS-TRUTH-FACETED',
 			'unit.query.MemberReachFactsTest#testABoundMethodRunsWheneverItsClosureIsCalled :: control :: M-FACTS-REACH-BIND',
-			'unit.query.MemberReachFactsTest#testABuildMacroOnlyTheCompilerSawIsUnknown :: control :: M-FACTS-REACH-BUILDS',
+			'unit.query.MemberReachFactsTest#testABuildMacroOnlyTheCompilerSawChangingNothingIsNoneUnderTheTruth :: control :: '
+				+ 'M-REACH-REWRITTEN-TRUTH',
+			'unit.query.MemberReachFactsTest#testABuildMacroOnlyTheCompilerSawIsUnknown :: control :: '
+				+ 'M-FACTS-REACH-BUILDS,M-REACH-REWRITTEN-UNTRUE',
 			'unit.query.MemberReachFactsTest#testACallOfAValueAdmitsTheValueChannel :: control :: M-FACTS-REACH-VALUE',
+			'unit.query.MemberReachFactsTest#testACalleeABuildMacroRewroteToTouchTheMemberReachesItUnderTheTruth :: control :: '
+				+ 'M-FACTS-OWNER-IDS,M-GRAPH-ADOPT-NONE,M-GRAPH-ADOPT-UNRECORDED,M-TOUCH-ADOPTED-SYNTAX',
 			'unit.query.MemberReachFactsTest#testACalleeEveryListedBuildTypesIsReadFromTheirFacts :: control :: M-FACTS-TRUTH-CONTEXT',
 			'unit.query.MemberReachFactsTest#testACalleeTypedDifferentlyInAnotherBuildKeepsTheSyntax :: control :: '
 				+ 'M-FACTS-REACH-ALIKE,M-FACTS-TRUTH-CONTEXT-ALWAYS',
@@ -2554,11 +2559,21 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-REACH-NESTED-OWNER',
 			'unit.query.MemberReachFactsTest#testAGenericInstanceIsItsGenericClass :: control :: M-FACTS-REACH-GENERIC',
 			'unit.query.MemberReachFactsTest#testALibraryDynamicMethodNotReadYetIsFollowed :: control :: M-FACTS-REACH-LIBRARY-DYNAMIC',
+			'unit.query.MemberReachFactsTest#testALocalACalleeRebuiltInPlaceHandsOutIsNoProofUnderTheTruth :: control :: '
+				+ 'M-FACTS-TEXT-CALLS-ANY',
 			'unit.query.MemberReachFactsTest#testALocalInlineFunctionKeepsItsBodysSyntax :: control :: M-GRAPH-LOCAL-INLINE',
+			'unit.query.MemberReachFactsTest#testALocalOfABodyABuildMacroReplacedIsNoProofUnderTheTruth :: control :: '
+				+ 'M-REACH-ENTRY-REWRITTEN,M-REACH-ENTRY-LOCAL',
+			'unit.query.MemberReachFactsTest#testAMacroBuiltTypeAnswersFromItsTextOnlyWhenItsFactsAreItsText :: control :: '
+				+ 'M-FACTS-TEXT-SPELLED',
 			'unit.query.MemberReachFactsTest#testAMacroExpansionIsUnknown :: control :: M-FACTS-REACH-MACRO',
 			'unit.query.MemberReachFactsTest#testAMemberAnotherBuildDeclaresShadowsAnExtension :: control :: M-FACTS-REACH-GUARDED-NAME',
 			'unit.query.MemberReachFactsTest#testAMemberOnlyAListedBuildDeclaresShadowsAnExtensionThere :: control :: '
 				+ 'M-FACTS-TRUTH-CONTEXT',
+			'unit.query.MemberReachFactsTest#testAMethodABuildMacroAddedTheFactsCannotReadTouchesTheMemberUnderTheTruth :: control :: '
+				+ 'M-TOUCH-ADOPTED-UNREAD',
+			'unit.query.MemberReachFactsTest#testAMethodABuildMacroAddedTouchingTheMemberReachesItUnderTheTruth :: control :: '
+				+ 'M-GRAPH-ADOPT-NONE,M-TOUCH-ADOPTED-SYNTAX',
 			'unit.query.MemberReachFactsTest#testAMethodClosureOfTheMemberEscapesUnderTheTruth :: control :: '
 				+ 'M-TOUCH-TYPED-VALUE,M-TOUCH-TYPED-UNTRUE',
 			'unit.query.MemberReachFactsTest#testANativeIdentifierAdmitsWhatItMayCall :: control :: M-FACTS-REACH-NATIVE-IDENT',
@@ -2570,6 +2585,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testAReflectiveCallTheSyntaxDoesNotSeeNamesNothingUnderTheTruth :: control :: '
 				+ 'M-FACTS-TRUTH-REFLECTION,M-FACTS-TRUTH-REFLECTION-TWIN',
 			'unit.query.MemberReachFactsTest#testAReflectiveMemberReadAsAValueIsUnknown :: control :: M-FACTS-REACH-REFLECT-VALUE',
+			'unit.query.MemberReachFactsTest#testARegionOfABodyABuildMacroReplacedIsNoProofUnderTheTruth :: control :: '
+				+ 'M-REACH-ENTRY-REWRITTEN,M-REACH-ENTRY-MEMBER,M-REACH-TEXTUAL-ALWAYS',
 			'unit.query.MemberReachFactsTest#testAStoredFunctionValueMayConvertWhatItIsHanded :: control :: M-FACTS-REACH-UNREAD-VALUE',
 			'unit.query.MemberReachFactsTest#testAStoredFunctionValueMayRunAnOperatorOverload :: control :: M-FACTS-REACH-UNREAD-IMPLICIT',
 			'unit.query.MemberReachFactsTest#testATouchOnlyTheFactsSeeIsFoundUnderTheTruth :: control :: '
@@ -2582,8 +2599,12 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-REACH-USING-META,M-GRAPH-USING-META,M-INDEX-GUARDED-META-LIFT',
 			'unit.query.MemberReachFactsTest#testATypeInAFileImportingUnderAConditionKeepsTheSyntax :: control :: '
 				+ 'M-FACTS-REACH-GUARDED-IMPORT',
+			'unit.query.MemberReachFactsTest#testAVariableABuildMacroMadeAPropertyKeepsItsOwnerUnknownUnderTheTruth :: control :: '
+				+ 'M-FACTS-TEXT-FIELDS-ANY',
 			'unit.query.MemberReachFactsTest#testAWriteTheCompilerSeesStoringOnlyFreshValuesLetsNothingEscape :: control :: '
 				+ 'M-TOUCH-TYPED-FRESH,M-TOUCH-TYPED-SYNTAX-TOO',
+			'unit.query.MemberReachFactsTest#testAnArrayMemberOfASubclassUnderAnAncestorsAutoBuildIsAnsweredUnderTheTruth :: control :: '
+				+ 'M-REACH-REWRITTEN-TRUTH,M-REACH-REWRITTEN-UNTRUE',
 			'unit.query.MemberReachFactsTest#testAnEscapeTheCompilerTypesCostsOnlyItsOwnFamily :: control :: M-FACTS-REACH-ESCAPE-TYPED',
 			'unit.query.MemberReachFactsTest#testAnExtensionAnotherBuildBringsInIsKeptFromTheSyntax :: control :: '
 				+ 'M-FACTS-REACH-SYNTAX-UNION,M-GRAPH-TRUTH-MUTE-ALWAYS',
@@ -2594,6 +2615,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-REACH-TYPED-ARRAY-NEVER,M-REACH-TYPED-ARRAY-ANY',
 			'unit.query.MemberReachFactsTest#testAnUntypedIndexAccessKeepsItsHazardUnderTheTruth :: control :: '
 				+ 'M-FACTS-TRUTH-UNTYPED-ALL,M-FACTS-TRUTH-UNTYPED-SHAPE',
+			'unit.query.MemberReachFactsTest#testCodeABuildMacroLeftAsItsTextIsAnsweredUnderTheTruth :: control :: '
+				+ 'M-REACH-REWRITTEN-TRUTH,M-REACH-REWRITTEN-UNTRUE',
 			'unit.query.MemberReachFactsTest#testCodeNoBuildCompilesHasNoAnswerUnderTheTruth :: control :: '
 				+ 'M-REACH-DEAD-FILE-ENTRY,M-REACH-DEAD-FILE-LOCAL-ENTRY',
 			'unit.query.MemberReachFactsTest#testTheCompilerResolvesACallTheSyntaxCannot :: control :: M-FACTS-REACH-EDGES',
@@ -3843,6 +3866,20 @@ class TestDiscoveryParityTest extends Test {
 			'M-REACH-SPLICED-BENIGN',
 			'M-REACH-SPLICED-CULPRIT',
 			'M-REACH-WHERE-WRITTEN-RANGE',
+			'M-REACH-REWRITTEN-TRUTH',
+			'M-REACH-REWRITTEN-UNTRUE',
+			'M-REACH-TEXTUAL-ALWAYS',
+			'M-FACTS-OWNER-IDS',
+			'M-FACTS-TEXT-FIELDS-ANY',
+			'M-FACTS-TEXT-SPELLED',
+			'M-FACTS-TEXT-CALLS-ANY',
+			'M-GRAPH-ADOPT-NONE',
+			'M-GRAPH-ADOPT-UNRECORDED',
+			'M-TOUCH-ADOPTED-SYNTAX',
+			'M-TOUCH-ADOPTED-UNREAD',
+			'M-REACH-ENTRY-REWRITTEN',
+			'M-REACH-ENTRY-MEMBER',
+			'M-REACH-ENTRY-LOCAL',
 			'M-FACTS-REACH-ESCAPE-TYPED',
 			'M-FACTS-REACH-TOUCH-TYPED',
 			'M-FACTS-REACH-MACRO',

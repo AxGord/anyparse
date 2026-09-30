@@ -82,6 +82,12 @@ final class FactsView {
 	/** The suffix of an abstract's implementation class: its statics are the abstract's members. */
 	private static inline final IMPL_SUFFIX: String = '_Impl_';
 
+	/** The kind of an abstract's implementation class (`TypeFact.kind`). */
+	private static inline final IMPL_KIND: String = 'impl';
+
+	/** The name an abstract's constructor takes in its implementation class. */
+	private static inline final IMPL_CONSTRUCTOR: String = '_new';
+
 	/** The markers that leave some fact of a node without a place: its body keeps the syntactic reading. */
 	private static final UNPLACED: Array<String> = [MACRO_EXPANSION, INLINE_SITE_UNKNOWN, 'stale-foreign'];
 
@@ -250,6 +256,14 @@ final class FactsView {
 		if (generic != null) base = CompilerFacts.baseId(generic);
 		final simple: String = base.substr(base.lastIndexOf('.') + 1);
 		return simple.endsWith(IMPL_SUFFIX) ? simple.substr(0, simple.length - IMPL_SUFFIX.length) : simple;
+	}
+
+	/**
+	 * The graph's name for the field `field` of the typed type `typeId`: its own, save an abstract's constructor, which is
+	 * `_new` in its implementation class.
+	 */
+	public function graphMember(typeId: String, field: String): String {
+		return field == IMPL_CONSTRUCTOR && table.type(typeId)?.kind == IMPL_KIND ? _scope.shape.constructorName ?? 'new' : field;
 	}
 
 	/** The typed subtypes of `type` that declare an instance method `name`, by graph id: overrides a dispatch on it reaches. */

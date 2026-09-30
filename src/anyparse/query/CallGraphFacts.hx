@@ -15,6 +15,7 @@ import anyparse.query.CompilerFacts.TypeFact;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -30,8 +31,9 @@ using StringTools;
  * (`siteOf`), which no dead branch of the file drops, and says where it runs instead (`SplicedSite`, `filed`): at the sites
  * of the inlined calls whose method declares it, which a range question meeting one takes (`MemberReach.splicedAt`), or
  * anywhere in the node when no such method does. What a method that runs no project code spliced in is not filed
- * (`FactsView.harmlessSplice`): the `inlined` call of it answers for all it does. A function nested in a spliced body is
- * the node the graph declares in the callee's file.
+ * (`FactsView.harmlessSplice`): the `inlined` call of it answers for all it does. A function nested in a spliced
+ * body is the node the graph declares in the callee's file. Under the truth, a method a build macro made — placed
+ * outside its type's file, or where no declaration of the text is — is a node too, read by its id alone (`adopt`).
  */
 @:access(anyparse.query.CallGraph)
 @:nullSafety(Strict)
@@ -42,6 +44,15 @@ final class CallGraphFacts {
 
 	/** The access of a call of a method the compiler spliced in (`CompilerFacts.CallFact`). */
 	private static inline final INLINED: String = 'inlined';
+
+	/** The fact kind of a method's body (`TypedFactsProbe`): the one kind a build macro's own method is taken in as. */
+	private static inline final METHOD_KIND: String = 'method';
+
+	/** The field kind of a macro function (`TypeFact.fields`): its body runs while compiling, in no program. */
+	private static inline final MACRO_FIELD: String = 'macro';
+
+	/** The field kind of a method the program may reassign (`TypeFact.fields`). */
+	private static inline final DYNAMIC_FIELD: String = 'dynamic';
 
 	/** The view over the table the graph reads. */
 	public final view: FactsView;
@@ -58,6 +69,12 @@ final class CallGraphFacts {
 	 * type (`holdsBack`) — but none of its unresolved sites and accesses, which the facts type.
 	 */
 	public var muted(default, null): Map<String, Bool> = [];
+
+	/**
+	 * Node id -> the body a build macro made for it (`adopt`), which the facts describe and no text holds: it is read by
+	 * that id alone, never by a range of its file. It is faceted too (`faceted`).
+	 */
+	public final adopted: Map<String, FactNode> = [];
 
 	/** The edges the syntax of a muted node recorded while the facts are the truth, until `recordMuted` sorts them. */
 	private final _heldBack: Array<CallEdge> = [];
@@ -117,9 +134,44 @@ final class CallGraphFacts {
 		return true;
 	}
 
+	/**
+	 * Under the truth (`FactsView.truth`), take into the graph every method a build macro made for a type `file` declares:
+	 * one whose compiled body the macro placed outside that file (`FactNode.generated`), or that no declaration of the text
+	 * holds (`CallGraph.adoptNode`). Neither has a range of the file to be found by: its body is read by its id (`adopted`)
+	 * and recorded from its facts once every file's nodes exist (`recordAdopted`), so what it runs and what it touches are
+	 * seen. Such a type's text is not its code (`FactsProvenance.typeIsItsText`), so the walk answers Unknown wherever it
+	 * enters code of it; what the facts show it doing is still found. A type named twice, and one no build macro ran over,
+	 * takes nothing in. Answers the ids taken in.
+	 */
+	public function adopt(g: CallGraph, file: String): Array<String> {
+		if (!view.truth) return [];
+		final key: String = view.table.keyOf(file);
+		final out: Array<String> = [];
+		for (t in view.indexedFile(key)?.types ?? []) {
+			if (g.types.declarationCount(t.name) != 1) continue;
+			for (id in view.bySimpleName()[t.name] ?? []) adoptType(g, file, key, t.name, id, out);
+		}
+		return out;
+	}
+
+	/** Record the body of each method `adopt` took in (`ids`) as a faceted node's facts (`record`). */
+	public function recordAdopted(g: CallGraph, ids: Array<String>): Void {
+		for (id in ids) {
+			final node: Null<FnNode> = g.nodes[id];
+			final found: Null<FactNode> = adopted[id];
+			if (node == null || found == null) continue;
+			final bodies: Array<FactNode> = [found];
+			faceted[id] = bodies;
+			record(g, node, bodies, view);
+		}
+	}
+
 	/** Forget the text of `file`, which left the graph, and the `removed` nodes it declared. */
 	public function forget(file: String, removed: Map<String, Bool>): Void {
-		for (id in removed.keys()) faceted.remove(id);
+		for (id in removed.keys()) {
+			faceted.remove(id);
+			adopted.remove(id);
+		}
 		view.forget(file);
 	}
 
@@ -416,6 +468,29 @@ final class CallGraphFacts {
 	private static function ownerOf(target: String): String {
 		final dot: Int = target.lastIndexOf('.');
 		return dot < 0 ? target : target.substr(0, dot);
+	}
+
+	/**
+	 * Take in (`adopt`) the methods a build macro made of the typed type `id`, which the graph calls `type`, declared in
+	 * `file` (keyed `key`), adding their ids to `out`: none unless a build macro ran over it and it was typed from that file.
+	 */
+	private function adoptType(g: CallGraph, file: String, key: String, type: String, id: String, out: Array<String>): Void {
+		final table: CompilerFacts = view.table;
+		final typed: Null<TypeFact> = table.type(id);
+		if (typed == null || typed.builds.length == 0 || table.typePosition(id)?.file != key) return;
+		for (nodeId in table.nodeIdsOf(id)) {
+			final n: Null<FactNode> = table.node(nodeId);
+			final field: String = nodeId.substr(nodeId.lastIndexOf('.') + 1);
+			final kind: Null<String> = typed.fields.find(f -> f.name == field)?.kind;
+			if (n == null || n.kind != METHOD_KIND || n.overloadIndex > 0 || kind == MACRO_FIELD) continue;
+			final name: String = view.graphMember(id, field);
+			final graphId: String = '$type.$name';
+			final declared: Bool = g.nodes[graphId]?.isExternal == false;
+			if (declared && !n.generated) continue;
+			if (!declared) g.adoptNode(graphId, file, type, name, kind == DYNAMIC_FIELD);
+			adopted[graphId] = n;
+			out.push(graphId);
+		}
 	}
 
 }
