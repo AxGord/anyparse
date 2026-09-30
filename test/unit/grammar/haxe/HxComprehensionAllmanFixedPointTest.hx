@@ -23,6 +23,12 @@ final class HxComprehensionAllmanFixedPointTest extends Test {
 	/** Columns a tab occupies under every config here. */
 	private static inline final TAB_WIDTH: Int = 4;
 
+	/**
+	 * How far past the limit a declaration's `=` probe lets its line run: the probe measures the comprehension one
+	 * column before the renderer places it, a known skew outside this fixture's subject.
+	 */
+	private static inline final EQ_PROBE_SKEW: Int = 2;
+
 	/** `comprehensionFor: same`, cuddled-open head, and a width-broken object literal — the Pony shape. */
 	private static final CFG_SAME: String = cfg('same', true, true);
 
@@ -84,8 +90,9 @@ final class HxComprehensionAllmanFixedPointTest extends Test {
 	/**
 	 * One write is a fixed point for every literal width across the break boundary, and never spends a line past
 	 * the limit, in every host the cuddled head answers differently in: a field value, a nested list item (whose
-	 * ladder column lies RIGHT of its cuddled column), a declaration, a call argument with two generators, and an
-	 * iterable call that wraps before the literal.
+	 * ladder column lies RIGHT of its cuddled column), a declaration, a call argument with two
+	 * generators, an iterable call that wraps before the literal, an assignment whose array stays
+	 * NoWrap until the literal breaks, a call as the iterable, and a comprehension as the iterable.
 	 */
 	public function testOneWriteIsAFixedPointAcrossTheBoundary(): Void {
 		for (config in CONFIGS) for (k in 20...100) {
@@ -94,7 +101,10 @@ final class HxComprehensionAllmanFixedPointTest extends Test {
 				nestedShape(k),
 				declShape(k),
 				callShape(k),
-				longIterableShape(k - 20)
+				longIterableShape(k - 20),
+				assignShape(k),
+				callIterableShape(k),
+				comprehensionIterableShape(k)
 			]) assertOneWriteWithinLimit(src, config, k);
 		}
 	}
@@ -102,15 +112,15 @@ final class HxComprehensionAllmanFixedPointTest extends Test {
 	/**
 	 * A declaration whose `=` breaks for a comprehension too wide to follow it, in a NoWrap array that force-flattens
 	 * its item: the `=` still breaks, and the literal stays flat on the continuation line rather than the whole
-	 * declaration running on past the limit. The widths between the two ranges belong to other families — the
-	 * array's `hasMultilineItems` rule reading the break the literal made, and the `=` probe's pending-space skew.
+	 * declaration running on past the limit. Where the `=` stays glued the literal's break reaches a NoWrap array,
+	 * which the next rewrite lays out one item per line — the first one already does.
 	 */
 	public function testADeclarationStillBreaksAfterItsEquals(): Void {
-		for (config in CONFIGS) for (k in [for (k in 70...80) k].concat([for (k in 93...110) k]))
-			assertOneWriteWithinLimit(shortDeclShape(k), config, k);
+		for (config in CONFIGS) for (k in 70...110)
+			assertOneWriteWithinLimit(shortDeclShape(k), config, k, k == 80 || k == 81 ? EQ_PROBE_SKEW : 0);
 	}
 
-	private static function assertOneWriteWithinLimit(src: String, config: String, k: Int): Void {
+	private static function assertOneWriteWithinLimit(src: String, config: String, k: Int, slack: Int = 0): Void {
 		final once: String = HxWriteFixture.triviaWrite(src, config);
 		Assert.equals(once, HxWriteFixture.triviaWrite(once, config), 'k=$k config=$config\n$src');
 		var widest: Int = 0;
@@ -118,7 +128,7 @@ final class HxComprehensionAllmanFixedPointTest extends Test {
 			final width: Int = line.replace('\t', ''.lpad(' ', TAB_WIDTH)).length;
 			if (width > widest) widest = width;
 		}
-		Assert.isTrue(widest <= LIMIT, 'k=$k config=$config: a $widest-column line\n$once');
+		Assert.isTrue(widest <= LIMIT + slack, 'k=$k config=$config: a $widest-column line\n$once');
 	}
 
 	private static function fieldShape(k: Int): String {
@@ -144,6 +154,24 @@ final class HxComprehensionAllmanFixedPointTest extends Test {
 	private static function longIterableShape(k: Int): String {
 		return 'class M {\n\tfunction f() {\n\t\tvar y = [for (entry in someFunction(argumentNumberOne, argumentNumberTwo, '
 			+ 'argumentNumberThree)) {alpha: entry.aaaaaaaa, beta: \'${kinds(k)}\'}];\n\t}\n}';
+	}
+
+	/** An assignment whose short item leaves the array NoWrap until its literal breaks. */
+	private static function assignShape(k: Int): String {
+		return 'class M {\n\tfunction f() {\n\t\tthis.someFieldName${''.lpad('n', k)} = [for (t in xs) {'
+			+ 'alpha: t.aaaaaaaaaaaaaaaa, beta: t.bbbbbbbbbbbbbbbbbbbbbbbbb}];\n\t}\n}';
+	}
+
+	/** An iterable call whose arguments the ladder would wrap before the literal is asked. */
+	private static function callIterableShape(k: Int): String {
+		return 'class M {\n\tfunction f() {\n\t\tvar y = [for (e in getThings(alpha, beta)) {'
+			+ 'alpha: e.aaaaaaaaaaaaaaaaaaaaaaaaa, beta: e.bbbbbbbbbbbbbbbbbbbbbbbbbbbbb, k: \'${kinds(k)}\'}];\n\t}\n}';
+	}
+
+	/** A comprehension as the iterable, whose own literal breaks inside the head of the outer one. */
+	private static function comprehensionIterableShape(k: Int): String {
+		return 'class M {\n\tfunction f() {\n\t\tvar y = [for (x in [for (y in ys) {a: y, b: 2}]) {'
+			+ 'alpha: x.aaaaaaaaaaaaaaaaaaaaaaa, beta: x.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, k: \'${kinds(k)}\'}];\n\t}\n}';
 	}
 
 	private static function shortDeclShape(k: Int): String {

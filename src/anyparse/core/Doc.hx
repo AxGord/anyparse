@@ -982,13 +982,26 @@ enum Doc {
 	/**
 	 * Render-only line break AHEAD of `inner`: the renderer emits a hardline and then `inner` with the indent raised
 	 * by `indent` — what `Nest(indent, Concat([Line('\n'), inner]))` renders. Every other walker, static or
-	 * speculative, sees `inner` alone, transparent like `WrapBoundary`.
+	 * speculative, either reads `inner` alone, transparent like `WrapBoundary`, or refuses the node as a shape it
+	 * does not model.
 	 *
 	 * It places a construct without reshaping it. Its consumer (`BodyAllman`) puts it on the BREAK side of a body's
 	 * own width decision, so a body that breaks lands in Allman position while every layout decision measured on that
 	 * break side — a declaration's `=`, a cond-wrap close, a pivot — reads the same shape it read before, and stays the
-	 * decision it was. A walker that must see the real break asks for it by name.
+	 * decision it was. `token` names the break for a `BreakCommit` that follows it.
 	 */
-	LeadingBreak(indent: Int, inner: Doc);
+	LeadingBreak(indent: Int, inner: Doc, ?token: BreakToken);
+
+	/**
+	 * A layout that follows whether the `LeadingBreak` named by `token` renders: `brk` is the construct laid out as
+	 * if that break were already in the source, `flat` as it stands. `BreakCommits` finds out with a measure render,
+	 * at the break's true column, and leaves `brk` or `flat` in the node's place before the collapse pass and the emit
+	 * render run; until then every walker, the renderer included, reads `flat`.
+	 *
+	 * It exists because the break is decided at render time while the construct around it is placed at build time:
+	 * a list whose one item breaks inside is laid out by the rules for a MULTI-LINE item on the next rewrite, and
+	 * only this node lets the first rewrite already pick that layout.
+	 */
+	BreakCommit(brk: Doc, flat: Doc, ?token: BreakToken);
 
 }

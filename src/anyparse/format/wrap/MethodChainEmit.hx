@@ -695,6 +695,8 @@ class MethodChainEmit {
 			case WrapBoundary(inner):
 				final swapped: Null<Doc> = restAwareArgsWrap(inner, lineWidth);
 				swapped == null ? null : WrapBoundary(swapped);
+			case BreakCommit(_, flat):
+				restAwareArgsWrap(flat, lineWidth);
 			case Group(IfBreak(brk, flat)) if (brkLeadingBreaks(brk)):
 				IfLineExceeds(lineWidth, brk, flat);
 			case _: null;

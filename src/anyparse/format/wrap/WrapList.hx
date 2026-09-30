@@ -1,5 +1,7 @@
 package anyparse.format.wrap;
 
+import anyparse.core.BreakCommits;
+import anyparse.core.BreakToken;
 import anyparse.core.CollapsePass;
 import anyparse.core.Doc;
 import anyparse.core.DocIdentityMap;
@@ -290,189 +292,31 @@ class WrapList {
 	 * them is passed at every call site. Every OPTIONAL axis lives on `options`
 	 * (`WrapListOptions`), where each field carries its own contract; omitting the
 	 * argument entirely is the default cascade with no decoration.
+	 *
+	 * A list of ONE item that may still break inside at render time — its own body into Allman position
+	 * (`BodyAllman.tailBreak`), or a list nested in it that is offered the same way — is laid out once more per such
+	 * break, as if it had happened, and offered as a chain of `Doc.BreakCommit`s. The next rewrite reads the break as
+	 * source and lays the list out by the rules for a multi-line item, so the first rewrite has to pick that layout
+	 * exactly when the break happens. A nested break is asked first: it is the one that can change the head.
 	 */
 	public static function emit(
 		open: String, close: String, sep: String, items: Array<Doc>, opt: WriteOptions, openInside: Doc, closeInside: Doc,
 		keepInnerWhenEmpty: Bool, rules: WrapRules, ?options: WrapListOptions
 	): Doc {
-		// Resolve every optional axis ONCE, into locals the body then reads as plain
-		// values. `forceMode`, `sepBeforeFlags` and `sourceBreakBefore` stay nullable:
-		// null is their meaningful state.
-		final axes: ResolvedWrapListOptions = resolveAxes(options);
-		final appendTrailingComma: Bool = axes.appendTrailingComma;
-		final leadFlat: Doc = axes.leadFlat;
-		final leadBreak: Doc = axes.leadBreak;
-		final forceExceeds: Bool = axes.forceExceeds;
-		final forceMode: Null<WrapMode> = axes.forceMode;
-		final compactContinuation: Bool = axes.compactContinuation;
-		final groupRestProbe: Bool = axes.groupRestProbe;
-		final sepBeforeFlags: Null<Array<Bool>> = axes.sepBeforeFlags;
-		final sourceMultilineKeep: Bool = axes.sourceMultilineKeep;
-		final breakAsOnePerLine: Bool = axes.breakAsOnePerLine;
-		final sourceBreakBefore: Null<Array<Bool>> = axes.sourceBreakBefore;
-		final keepCloseGlued: Bool = axes.keepCloseGlued;
-		final flatTrailingComma: Bool = axes.flatTrailingComma;
-		final comprehensionFitMeasure: Bool = axes.comprehensionFitMeasure;
-		final comprehensionBodyMeasure: Bool = axes.comprehensionBodyMeasure;
-		final complexItemKinds: Null<Array<Int>> = axes.complexItemKinds;
-		final trailBreakDoc: Doc = axes.trailBreakDoc;
-		if (items.length == 0) return WrapBoundary(Text(open + (keepInnerWhenEmpty ? ' ' : '') + close));
-
-		// ω-arrowif-open: a call/array arg whose body is a PLAIN `if` (no else,
-		// not a `{}`-block) hides its inline then-branch behind a `BodyGroup`
-		// that every static width measure DEFERS to width 0 — under-measuring
-		// the arg so the `callParameter` cascade, the outer-Group fit, and the
-		// fill-pack all keep it hugged even when the body overflows. Re-tag its
-		// hardline-free `BodyGroup`s as `Group` (render-identical; only the
-		// measure differs) so the true width is visible and the call opens on
-		// the overflowing line, matching the fork's full-arrow-line measure.
-		// Copy-on-write: untouched when no such arg is present.
-		//
-		// ω-comprehension-body-measure: `comprehensionBodyMeasure` extends the
-		// SAME re-tag to each item of a comprehension — identical
-		// defect (a `BodyGroup`-parked body hiding its width from a width-only
-		// cascade), identical remedy, one mechanism. No per-item Doc sniff: the
-		// caller already proved the list IS a comprehension from the AST.
-		// It is NOT gated on the fit cascade: `wrapping.arrayWrap`'s
-		// `totalItemLength <= n` rule is just as width-only as
-		// `defaultComprehensionWrap`'s `exceedsMaxLineLength`, and a filter-`if`
-		// comprehension under-measured there stays pinned flat past the line limit
-		// (`comprehensionFitMeasure` still owns the rest probe, which does belong
-		// to the fit cascade alone). The copy-on-write below is per-LIST, not per-item:
-		// every comprehension now rebuilds its items, whether or not one of them
-		// parks a body — the walk is the only way to find out.
-		//
-		// `flatLength(item) >= 0` is the load-bearing half of that gate. The
-		// re-tag exists to let a hardline-FREE item reveal the width the
-		// cascade must weigh; an item that ALREADY forces a break has nothing
-		// to reveal — `defaultComprehensionWrap` answers `OnePerLine` on the
-		// exceeds side and `measureItems` reports `anyHardline`, so the array
-		// is committed to break either way — and re-tagging it only leaks the
-		// newly-visible width OUT through the returned Doc into an enclosing
-		// construct's measure, flipping e.g. a `callParameter`
-		// `totalItemLength <= n` rule and opening a call paren that used to hug
-		// the bracket. Host positions are not this gate's to decide, so it keeps the re-tag where it
-		// decides something.
-		//
-		// ω-fnlambda-body-width: the third disjunct opens the SAME re-tag for the `function`-keyword spelling of a lambda item
-		// (`isFunctionInlineBodyItem`) — same defect, same remedy. Its body condition is WIDER than the arrow arm's: any hardline-free
-		// body, not only a plain `if`. The leak warning above does not reach it, because it shares the comprehension arm's
-		// `flatLength >= 0` guard — an item that already forces a break is exactly what it excludes. The residual asymmetry it
-		// leaves on the arrow side is described in that predicate's own doc.
-		var groupified: Null<Array<Doc>> = null;
-		for (i in 0...items.length) if (
-			(comprehensionBodyMeasure && flatLength(items[i]) >= 0) || isArrowPlainIfBody(items[i]) || isFunctionInlineBodyItem(items[i])
-		) {
-			if (groupified == null) groupified = items.copy();
-			groupified[i] = groupifyInlineBodies(items[i]);
+		final plain: Doc = emitList(open, close, sep, items, opt, openInside, closeInside, keepInnerWhenEmpty, rules, options);
+		if (items.length != 1 || flatLength(items[0]) < 0) return plain;
+		final item: Doc = items[0];
+		inline function laidOut(broken: Doc): Doc {
+			return emitList(open, close, sep, [broken], opt, openInside, closeInside, keepInnerWhenEmpty, rules, options);
 		}
-		if (groupified != null) items = groupified;
-
-		final sepWidth: Int = sep.length + 1;
-		final measure: WrapItemMeasure = measureItems(items, sepWidth);
-		final total: Int = measure.total;
-		final maxLen: Int = measure.maxLen;
-		final minLen: Int = measure.minLen;
-		final equalLens: Bool = measure.equalLens;
-		final anyHardline: Bool = measure.anyHardline;
-		// ω-complex-item-count: the cascade counter behind `complexItemCount >= n`.
-		// A caller that supplies no kinds counts 0, so the condition cannot fire
-		// for any `value >= 1` — which is every shipped config, since the loader
-		// defaults an omitted `value` to 1 — and every such list is byte-identical
-		// to the pre-slice layout. Computed BEFORE
-		// `continuationCols` because the continuation-indent probe re-runs the same
-		// cascade and has to see the same count the real decision does.
-		final complexCount: Int = countComplexItems(complexItemKinds);
-		// ω-container-item-cond: the `hasContainerItems` axis, read off the SAME
-		// per-element kinds array. Computed here beside the complex count so the
-		// continuation-indent probe and the real decision see one answer.
-		final containerItems: Bool = anyContainerItem(complexItemKinds);
-		// ω-container-item-cond: the `hasMultilineLambdaItems` axis — WHICH element carries
-		// the break, not merely that one does. Crosses the same kinds array with each item's
-		// own rendered Doc, so it has to be computed here rather than off `measure`.
-		final multilineLambda: Bool = anyMultilineLambdaItem(items, complexItemKinds);
-		final cols: Int = continuationCols(
-			rules, opt, items, measure, sourceMultilineKeep, compactContinuation, breakAsOnePerLine, complexCount, containerItems,
-			multilineLambda
-		);
-
-		// Column-aware `LineLengthLargerThan` thresholds (slice
-		// ω-ifwidthexceeds-infra). Cascade rules with `lineLength >= n`
-		// where `n != opt.lineWidth` cannot be answered at emit time
-		// because the rendered column position is unknown until layout.
-		// Threshold == lineWidth collapses cleanly to `exceeds` (the
-		// existing `IfBreak` pivot) and stays on the legacy 2-state
-		// path. Non-lineWidth thresholds enumerate extra states and
-		// emit one `IfWidthExceeds(t, …)` wrapper per distinct
-		// threshold so the renderer probes `column + flatWidth(flat)`
-		// against `t` at layout time.
-		final extraThresholds: Array<Int> = collectExtraLineLengthThresholds(rules, opt.lineWidth);
-
-		// Cascade-eval helper: caller specifies the (exceeds, firingThresholds)
-		// state and gets the cascade's resolved mode. `LineLengthLargerThan`
-		// is mapped to:
-		//   - `t == lineWidth` → use `exceeds` (collapse semantic)
-		//   - `t != lineWidth` → membership in `firingThresholds`
-		// All other cond kinds preserve their original evaluators.
-		// Non-`inline` so it can be passed as `evalAt` arg into
-		// `buildForceBreakTree` (Haxe forbids closure-on-inline-closure).
-		// ω-typedef-anon-force-multi: when caller passes a non-null
-		// `forceMode`, the cascade is bypassed and the supplied mode is
-		// returned unconditionally. Used by `@:fmt(forceMultiInTypedef)`
-		// on typedef-RHS anon types via the runtime gate
-		// `opt._inTypedefBody ? WrapMode.OnePerLine : null`.
-		function evalAt(exceeds: Bool, firing: Array<Int>): WrapMode {
-			return forceMode ?? onePerLineWhenBreaking(
-				floorSourceMultiline(
-					decideWithLineLengthState(
-						rules, items.length, maxLen, total, exceeds, anyHardline, t -> t == opt.lineWidth ? exceeds : firing.contains(t),
-						complexCount, minLen, equalLens, containerItems, multilineLambda
-					),
-					sourceMultilineKeep
-				),
-				breakAsOnePerLine, exceeds
-			);
+		final tail: Null<{ brk: Doc, token: BreakToken }> = BodyAllman.tailBreak(item);
+		var out: Doc = tail == null ? plain : BreakCommit(laidOut(tail.brk), plain, tail.token);
+		for (inner in BreakCommits.nested(item)) switch inner {
+			case BreakCommit(brk, _, token) if (token != null):
+				out = BreakCommit(laidOut(BreakCommits.replaced(item, inner, brk)), out, token);
+			case _:
 		}
-
-		// Per-state shape builder: picks the right lead based on the
-		// resolved mode (flat vs break-style layout).
-		function shapeAt(mode: WrapMode, lead: Doc): Doc {
-			final body: Doc = shape(
-				mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, trailBreakDoc, groupRestProbe,
-				sepBeforeFlags, opt.lineWidth, sourceBreakBefore, keepCloseGlued, flatTrailingComma, opt.comprehensionCuddledOpen,
-				opt.soleItemCuddledBrackets, complexItemKinds
-			);
-			return prependLead(body, lead);
-		}
-
-		function leadFor(mode: WrapMode): Doc {
-			return isFlatMode(mode) ? leadFlat : leadBreak;
-		}
-
-		// Force-break path: cascade evaluated only against
-		// `exceeds=true`. Thresholds still column-aware — even when
-		// the parent commits to break-mode, a `LineLengthLargerThan`
-		// rule answer can flip with column position. The unified
-		// `buildThresholdTree` helper handles 0/1/N thresholds via
-		// recursion (1-threshold optimization with impossibility
-		// filtering inlined for the common case below).
-		//
-		// ω-comprehension-fit-measure: a fit-cascade comprehension joins the
-		// `groupRestProbe` consumers for the zero-threshold call — its bracket
-		// shares its line with the statement's `;` (or a call's `);`), and the
-		// plain-`Group` fit is blind to that tail. See the param doc above.
-		return if (anyHardline || forceExceeds)
-			WrapBoundary(buildThresholdTree(extraThresholds, [], true, leadFlat, leadBreak, evalAt, shapeAt, leadFor))
-		else if (extraThresholds.length == 0)
-			emitZeroThreshold(
-				rules, items, opt, cols, open, close, openInside, closeInside, forceMode, groupRestProbe || comprehensionFitMeasure,
-				leadFlat, leadBreak, evalAt, shapeAt, leadFor,
-				onePerLineWhenBreaking(floorSourceMultiline(rules.defaultMode, sourceMultilineKeep), breakAsOnePerLine, true)
-			)
-		else if (extraThresholds.length == 1)
-			emitOneThreshold(extraThresholds[0], opt, evalAt, shapeAt, leadFor)
-		else
-			WrapBoundary(buildThresholdTree(extraThresholds, [], null, leadFlat, leadBreak, evalAt, shapeAt, leadFor));
+		return out;
 	}
 
 	/**
@@ -654,7 +498,7 @@ class WrapList {
 			if (depth > 1) return;
 			switch n {
 				case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), Flatten(i), HardFlatten(i), CollapseProbe(i),
-					CollapseAddProbe(i), ConditionalMarkerZero(i), ConditionalMarkerDecrease(i):
+					CollapseAddProbe(i), ConditionalMarkerZero(i), ConditionalMarkerDecrease(i), BreakCommit(_, i):
 					w(i, depth);
 				case WrapBoundary(i):
 					w(i, depth + 1);
@@ -984,7 +828,7 @@ class WrapList {
 				// break point" so the wrap still places close on its own
 				// line.
 				return true;
-			case Nest(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner):
+			case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner):
 				node = inner;
 			case IfBreak(brk, _):
 				node = brk;
@@ -1090,9 +934,9 @@ class WrapList {
 				return s.length > 0
 					&& (StringTools.fastCodeAt(s, 0) == '('.code || StringTools.fastCodeAt(s, 0) == '['.code
 						|| StringTools.fastCodeAt(s, 0) == '{'.code);
-			case Nest(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Flatten(inner),
-				WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
-				CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+			case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner),
+				Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner),
+				CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
 				node = inner;
 			case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
@@ -1139,9 +983,9 @@ class WrapList {
 				if (s.length == 0) return false;
 				final c: Int = StringTools.fastCodeAt(s, s.length - 1);
 				return c == ')'.code || c == ']'.code || c == '}'.code;
-			case Nest(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Flatten(inner),
-				WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
-				CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+			case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner),
+				Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner),
+				CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
 				node = inner;
 			case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
@@ -1180,9 +1024,9 @@ class WrapList {
 				if (s.length == 0) return false;
 				final c: Int = StringTools.fastCodeAt(s, s.length - 1);
 				return c >= '0'.code && c <= '9'.code;
-			case Nest(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Flatten(inner),
-				WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
-				CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+			case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner),
+				Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner),
+				CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
 				node = inner;
 			case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
@@ -1229,7 +1073,7 @@ class WrapList {
 		function w(n: Doc, depth: Int): Void {
 			switch n {
 				case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), Flatten(i), HardFlatten(i), CollapseProbe(i),
-					CollapseAddProbe(i), ConditionalMarkerZero(i), ConditionalMarkerDecrease(i):
+					CollapseAddProbe(i), ConditionalMarkerZero(i), ConditionalMarkerDecrease(i), BreakCommit(_, i):
 					w(i, depth);
 				case WrapBoundary(i):
 					w(i, depth + 1);
@@ -1284,9 +1128,9 @@ class WrapList {
 				return false;
 			case Text(s):
 				return s.length > 0 && (StringTools.fastCodeAt(s, 0) == '['.code || StringTools.fastCodeAt(s, 0) == '{'.code);
-			case Nest(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Flatten(inner),
-				WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
-				CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+			case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner),
+				Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner),
+				CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
 				node = inner;
 			case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
@@ -1322,9 +1166,9 @@ class WrapList {
 				return false;
 			case Text(s):
 				return StringTools.endsWith(s, '#end');
-			case Nest(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Flatten(inner),
-				WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
-				CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+			case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner),
+				Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner),
+				CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
 				node = inner;
 			case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
@@ -1387,8 +1231,8 @@ class WrapList {
 				var i: Int = arr.length;
 				while (--i >= 0 && r == null) r = lastVisibleText(arr[i]);
 				r;
-			case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), LeadingBreak(_, i), Flatten(i), HardFlatten(i),
-				CollapseProbe(i), CollapseAddProbe(i), CollapseBoolProbe(i), CollapseChainProbe(i), WrapBoundary(i),
+			case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), BreakCommit(_, i), LeadingBreak(_, i), Flatten(i),
+				HardFlatten(i), CollapseProbe(i), CollapseAddProbe(i), CollapseBoolProbe(i), CollapseChainProbe(i), WrapBoundary(i),
 				ConditionalMarkerZero(i), ConditionalMarkerDecrease(i):
 				lastVisibleText(i);
 			case IfBreak(brk, _), IfWidthExceeds(_, brk, _), IfFirstLineExceeds(_, brk, _), IfLineExceeds(_, brk, _),
@@ -1857,9 +1701,9 @@ class WrapList {
 		function w(n: Doc, depth: Int): Void {
 			if (found || depth > 1) return;
 			switch n {
-				case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), LeadingBreak(_, i), Flatten(i), HardFlatten(i),
-					CollapseProbe(i), CollapseAddProbe(i), CollapseBoolProbe(i), CollapseChainProbe(i), ConditionalMarkerZero(i),
-					ConditionalMarkerDecrease(i):
+				case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), BreakCommit(_, i), LeadingBreak(_, i), Flatten(i),
+					HardFlatten(i), CollapseProbe(i), CollapseAddProbe(i), CollapseBoolProbe(i), CollapseChainProbe(i),
+					ConditionalMarkerZero(i), ConditionalMarkerDecrease(i):
 					w(i, depth);
 				case WrapBoundary(i):
 					w(i, depth + 1);
@@ -1914,9 +1758,9 @@ class WrapList {
 		function w(n: Doc, depth: Int): Void {
 			if (found || depth > 1) return;
 			switch n {
-				case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), LeadingBreak(_, i), Flatten(i), HardFlatten(i),
-					CollapseProbe(i), CollapseAddProbe(i), CollapseBoolProbe(i), CollapseChainProbe(i), ConditionalMarkerZero(i),
-					ConditionalMarkerDecrease(i):
+				case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), BreakCommit(_, i), LeadingBreak(_, i), Flatten(i),
+					HardFlatten(i), CollapseProbe(i), CollapseAddProbe(i), CollapseBoolProbe(i), CollapseChainProbe(i),
+					ConditionalMarkerZero(i), ConditionalMarkerDecrease(i):
 					w(i, depth);
 				case WrapBoundary(i):
 					w(i, depth + 1);
@@ -2058,8 +1902,8 @@ class WrapList {
 				stack.push(flatDoc);
 			case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
 				DocMeasure.pushFillReversed(stack, items, sep);
-			case Flatten(inner), WrapBoundary(inner), LeadingBreak(_, inner), HardFlatten(inner), CollapseProbe(inner),
-				CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner):
+			case Flatten(inner), WrapBoundary(inner), LeadingBreak(_, inner), BreakCommit(_, inner), HardFlatten(inner),
+				CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner):
 				stack.push(inner);
 			case ConditionalMarkerZero(inner):
 				stack.push(inner);
@@ -2108,6 +1952,8 @@ class WrapList {
 			case WrapBoundary(inner):
 				final arm: Null<Doc> = pivotBreakArm(inner, fitPivot);
 				return arm == null ? null : WrapBoundary(arm);
+			case BreakCommit(_, flat):
+				return pivotBreakArm(flat, fitPivot);
 			case Nest(n, inner):
 				final arm: Null<Doc> = pivotBreakArm(inner, fitPivot);
 				return arm == null ? null : Nest(n, arm);
@@ -3088,8 +2934,9 @@ class WrapList {
 					IfIndentWidthExceeds(_, _, _, _), IfGluedFirstLineExceeds(_, _, _, _):
 					return true;
 				case WrapBoundary(inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Nest(_, inner),
-					LeadingBreak(_, inner), Flatten(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner),
-					CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+					BreakCommit(_, inner), LeadingBreak(_, inner), Flatten(inner), HardFlatten(inner), CollapseProbe(inner),
+					CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner),
+					ConditionalMarkerDecrease(inner):
 					stack.push(inner);
 				case Concat(arr):
 					for (it in arr) stack.push(it);
@@ -3171,9 +3018,9 @@ class WrapList {
 	// NOT this item's top-level layout — so we do NOT recurse through it.
 	private static function isMethodChainItem(item: Doc): Bool {
 		return switch item {
-			case WrapBoundary(inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Nest(_, inner), LeadingBreak(_, inner),
-				Flatten(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
-				CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+			case WrapBoundary(inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Nest(_, inner), BreakCommit(_, inner),
+				LeadingBreak(_, inner), Flatten(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner),
+				CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
 				isMethodChainItem(inner);
 			case IfBreak(brk, _), IfWidthExceeds(_, brk, _), IfFirstLineExceeds(_, brk, _), IfLineExceeds(_, brk, _),
 				IfResidualLineExceeds(_, brk, _), IfFullLineExceeds(_, brk, _), IfNaturalFirstLineExceeds(_, brk, _),
@@ -3778,6 +3625,7 @@ class WrapList {
 	private static function isChainOPLBreak(item: Doc): Bool {
 		return switch item {
 			case WrapBoundary(inner): isOPLShape(inner);
+			case BreakCommit(_, flat): isChainOPLBreak(flat);
 			case _: false;
 		};
 	}
@@ -3983,8 +3831,8 @@ class WrapList {
 			// ω-force-flat-engine slice A: pass-through. All four markers
 			// are render-time state — their `inner` carries the same leading
 			// hardline answer it would without the wrap.
-			case Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner),
-				CollapseBoolProbe(inner), CollapseChainProbe(inner):
+			case Flatten(inner), WrapBoundary(inner), BreakCommit(_, inner), HardFlatten(inner), CollapseProbe(inner),
+				CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner):
 				hasLeadingHardline(inner);
 			// ω-cond-indent-policy FixedZero / AlignedDecrease: render-time
 			// markers, transparent — leading-hardline answer matches `inner`.
@@ -4086,8 +3934,8 @@ class WrapList {
 						hit = firstVisibleTextIsFunctionKw(it);
 				}
 				hit;
-			case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), LeadingBreak(_, i), Flatten(i), HardFlatten(i),
-				CollapseProbe(i), CollapseAddProbe(i), CollapseBoolProbe(i), CollapseChainProbe(i), WrapBoundary(i),
+			case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), BreakCommit(_, i), LeadingBreak(_, i), Flatten(i),
+				HardFlatten(i), CollapseProbe(i), CollapseAddProbe(i), CollapseBoolProbe(i), CollapseChainProbe(i), WrapBoundary(i),
 				ConditionalMarkerZero(i), ConditionalMarkerDecrease(i):
 				firstVisibleTextIsFunctionKw(i);
 			case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
@@ -4186,8 +4034,8 @@ class WrapList {
 						r = firstVisibleText(it);
 				}
 				r;
-			case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), LeadingBreak(_, i), Flatten(i), HardFlatten(i),
-				CollapseProbe(i), CollapseAddProbe(i), CollapseBoolProbe(i), CollapseChainProbe(i), WrapBoundary(i),
+			case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), BreakCommit(_, i), LeadingBreak(_, i), Flatten(i),
+				HardFlatten(i), CollapseProbe(i), CollapseAddProbe(i), CollapseBoolProbe(i), CollapseChainProbe(i), WrapBoundary(i),
 				ConditionalMarkerZero(i), ConditionalMarkerDecrease(i):
 				firstVisibleText(i);
 			case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
@@ -4250,7 +4098,7 @@ class WrapList {
 			case Concat(arr):
 				for (it in arr) if (hasTopLevelElse(it, depth)) return true;
 				false;
-			case Nest(_, inner), LeadingBreak(_, inner):
+			case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner):
 				hasTopLevelElse(inner, depth + 1);
 			case Group(i), BodyGroup(i), GroupWithRestProbe(i), Flatten(i), HardFlatten(i), CollapseProbe(i), CollapseAddProbe(i),
 				CollapseBoolProbe(i), CollapseChainProbe(i), WrapBoundary(i), ConditionalMarkerZero(i), ConditionalMarkerDecrease(i):
@@ -4399,9 +4247,9 @@ class WrapList {
 	 * cuddling spends the whole prefix as head budget. A wrapping ITERABLE is NOT excluded,
 	 * because the walk resolves every probe to its flat side.
 	 *
-	 * A flat item whose body carries a `BodyAllman` break cuddles only when that body will break and its head cannot
-	 * (`BodyAllman.tailSides`, `headCanBreakBeforeBody`). The tail mirrors `shapeOnePerLine` exactly, so switching the
-	 * head placement never adds or drops a token, and `closeInside` is dropped: the close no longer shares the body's line.
+	 * The tail mirrors `shapeOnePerLine` exactly, so switching the head placement never adds or
+	 * drops a token, and `closeInside` is dropped because the close delimiter no longer shares a
+	 * line with the body.
 	 */
 	private static function shapeComprehensionCuddledOpen(
 		enabled: Bool, mode: WrapMode, open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, cols: Int,
@@ -4409,76 +4257,21 @@ class WrapList {
 	): Null<Doc> {
 		if (!enabled || mode != OnePerLine || items.length != 1 || !isCuddleableComprehensionItem(items[0])) return null;
 		final itemFlat: Int = flatLength(items[0]);
-		inline function glueShape(item: Doc): Doc {
-			return Concat([
-				Text(open),
-				openInside,
-				item,
-				appendTrailingComma ? Text(sep) : Empty,
-				trailBreak,
-				Text(close)
-			]);
-		}
-		inline function openShape(item: Doc): Doc {
-			return shapeOnePerLine(open, close, sep, [item], cols, appendTrailingComma, trailBreak, sepBeforeFlags);
-		}
-		final allman: Null<AllmanSides> = itemFlat < 0
-			? null
-			: BodyAllman.tailSides(items[0], lineWidth, appendTrailingComma ? sep.length : 0);
-		if (allman != null) {
-			return headCanBreakBeforeBody(allman.brk)
-				? null
-				: IfIndentWidthExceeds(
-					cols + flatLength(allman.flat), allman.limit,
-					IfFirstLineExceeds(lineWidth, openShape(items[0]), glueShape(allman.brk)), openShape(items[0])
-				);
-		}
 		if (itemFlat >= 0 && !firstBreakIsDelimChar(items[0], ')'.code)) return null;
 		final item: Null<Doc> = itemFlat < 0 ? items[0] : dropComprehensionBody(items[0]);
-		return if (item == null)
-			null
-		else if (itemFlat < 0)
-			IfFirstLineExceeds(lineWidth, openShape(items[0]), glueShape(item))
-		else
-			IfNaturalFirstLineExceeds(lineWidth, openShape(items[0]), glueShape(item));
-	}
-
-	/**
-	 * Can `item` — a comprehension with its body resolved to the Allman break — break anywhere before that body's
-	 * forced line? A break opportunity in the HEAD (an iterable call that wraps) is taken before the body is asked, so
-	 * the body's own width verdict no longer describes the line it lands on and no static answer does. Positive walk:
-	 * text, wrappers and anything inside a force-flat region pass; any other break point, or a construct the walk does
-	 * not model, answers `true`.
-	 */
-	private static function headCanBreakBeforeBody(item: Doc): Bool {
-		final stack: Array<{ d: Doc, flat: Bool }> = [{ d: item, flat: false }];
-		while (stack.length > 0) {
-			final top: { d: Doc, flat: Bool } = stack.pop();
-			final inFlat: Bool = top.flat;
-			switch top.d {
-				case Empty, Text(_), OptSpace(_), OptSpaceSkipAfterHardline:
-				case Line(flat) if (flat.length > 0 && flat.fastCodeAt(0) == '\n'.code):
-					if (!inFlat) return false;
-				case Line(_):
-					if (!inFlat) return true;
-				case Concat(items):
-					var i: Int = items.length;
-					while (--i >= 0) stack.push({ d: items[i], flat: inFlat });
-				case Nest(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner):
-					stack.push({ d: inner, flat: inFlat });
-				case Flatten(inner), HardFlatten(inner):
-					stack.push({ d: inner, flat: true });
-				case WrapBoundary(inner):
-					stack.push({ d: inner, flat: false });
-				case LeadingBreak(_, _):
-					if (!inFlat) return false;
-				case IfBreak(_, fl), IfWidthExceeds(_, _, fl), IfFirstLineExceeds(_, _, fl), IfLineExceeds(_, _, fl) if (inFlat):
-					stack.push({ d: fl, flat: true });
-				case _:
-					return true;
-			}
-		}
-		return true;
+		if (item == null) return null;
+		final glueShape: Doc = Concat([
+			Text(open),
+			openInside,
+			item,
+			appendTrailingComma ? Text(sep) : Empty,
+			trailBreak,
+			Text(close)
+		]);
+		final openShape: Doc = shapeOnePerLine(open, close, sep, items, cols, appendTrailingComma, trailBreak, sepBeforeFlags);
+		return itemFlat < 0
+			? IfFirstLineExceeds(lineWidth, openShape, glueShape)
+			: IfNaturalFirstLineExceeds(lineWidth, openShape, glueShape);
 	}
 
 	/**
@@ -4645,8 +4438,10 @@ class WrapList {
 				Flatten(groupifyShared(inner, memo));
 			case WrapBoundary(inner):
 				WrapBoundary(groupifyShared(inner, memo));
-			case LeadingBreak(n, inner):
-				LeadingBreak(n, groupifyShared(inner, memo));
+			case LeadingBreak(n, inner, token):
+				LeadingBreak(n, groupifyShared(inner, memo), token);
+			case BreakCommit(brk, flat, token):
+				BreakCommit(groupifyShared(brk, memo), groupifyShared(flat, memo), token);
 			case HardFlatten(inner):
 				HardFlatten(groupifyShared(inner, memo));
 			case CollapseProbe(inner):
@@ -4734,6 +4529,191 @@ class WrapList {
 			complexItemKinds: axes.complexItemKinds,
 			trailBreakDoc: axes.trailBreak ?? Line('\n')
 		};
+	}
+
+	/** `emit` for one layout of the list, with its items as they stand. */
+	private static function emitList(
+		open: String, close: String, sep: String, items: Array<Doc>, opt: WriteOptions, openInside: Doc, closeInside: Doc,
+		keepInnerWhenEmpty: Bool, rules: WrapRules, ?options: WrapListOptions
+	): Doc {
+		// Resolve every optional axis ONCE, into locals the body then reads as plain
+		// values. `forceMode`, `sepBeforeFlags` and `sourceBreakBefore` stay nullable:
+		// null is their meaningful state.
+		final axes: ResolvedWrapListOptions = resolveAxes(options);
+		final appendTrailingComma: Bool = axes.appendTrailingComma;
+		final leadFlat: Doc = axes.leadFlat;
+		final leadBreak: Doc = axes.leadBreak;
+		final forceExceeds: Bool = axes.forceExceeds;
+		final forceMode: Null<WrapMode> = axes.forceMode;
+		final compactContinuation: Bool = axes.compactContinuation;
+		final groupRestProbe: Bool = axes.groupRestProbe;
+		final sepBeforeFlags: Null<Array<Bool>> = axes.sepBeforeFlags;
+		final sourceMultilineKeep: Bool = axes.sourceMultilineKeep;
+		final breakAsOnePerLine: Bool = axes.breakAsOnePerLine;
+		final sourceBreakBefore: Null<Array<Bool>> = axes.sourceBreakBefore;
+		final keepCloseGlued: Bool = axes.keepCloseGlued;
+		final flatTrailingComma: Bool = axes.flatTrailingComma;
+		final comprehensionFitMeasure: Bool = axes.comprehensionFitMeasure;
+		final comprehensionBodyMeasure: Bool = axes.comprehensionBodyMeasure;
+		final complexItemKinds: Null<Array<Int>> = axes.complexItemKinds;
+		final trailBreakDoc: Doc = axes.trailBreakDoc;
+		if (items.length == 0) return WrapBoundary(Text(open + (keepInnerWhenEmpty ? ' ' : '') + close));
+
+		// ω-arrowif-open: a call/array arg whose body is a PLAIN `if` (no else,
+		// not a `{}`-block) hides its inline then-branch behind a `BodyGroup`
+		// that every static width measure DEFERS to width 0 — under-measuring
+		// the arg so the `callParameter` cascade, the outer-Group fit, and the
+		// fill-pack all keep it hugged even when the body overflows. Re-tag its
+		// hardline-free `BodyGroup`s as `Group` (render-identical; only the
+		// measure differs) so the true width is visible and the call opens on
+		// the overflowing line, matching the fork's full-arrow-line measure.
+		// Copy-on-write: untouched when no such arg is present.
+		//
+		// ω-comprehension-body-measure: `comprehensionBodyMeasure` extends the
+		// SAME re-tag to each item of a comprehension — identical
+		// defect (a `BodyGroup`-parked body hiding its width from a width-only
+		// cascade), identical remedy, one mechanism. No per-item Doc sniff: the
+		// caller already proved the list IS a comprehension from the AST.
+		// It is NOT gated on the fit cascade: `wrapping.arrayWrap`'s
+		// `totalItemLength <= n` rule is just as width-only as
+		// `defaultComprehensionWrap`'s `exceedsMaxLineLength`, and a filter-`if`
+		// comprehension under-measured there stays pinned flat past the line limit
+		// (`comprehensionFitMeasure` still owns the rest probe, which does belong
+		// to the fit cascade alone). The copy-on-write below is per-LIST, not per-item:
+		// every comprehension now rebuilds its items, whether or not one of them
+		// parks a body — the walk is the only way to find out.
+		//
+		// `flatLength(item) >= 0` is the load-bearing half of that gate. The
+		// re-tag exists to let a hardline-FREE item reveal the width the
+		// cascade must weigh; an item that ALREADY forces a break has nothing
+		// to reveal — `defaultComprehensionWrap` answers `OnePerLine` on the
+		// exceeds side and `measureItems` reports `anyHardline`, so the array
+		// is committed to break either way — and re-tagging it only leaks the
+		// newly-visible width OUT through the returned Doc into an enclosing
+		// construct's measure, flipping e.g. a `callParameter`
+		// `totalItemLength <= n` rule and opening a call paren that used to hug
+		// the bracket. Host positions are not this gate's to decide, so it keeps the re-tag where it
+		// decides something.
+		//
+		// ω-fnlambda-body-width: the third disjunct opens the SAME re-tag for the `function`-keyword spelling of a lambda item
+		// (`isFunctionInlineBodyItem`) — same defect, same remedy. Its body condition is WIDER than the arrow arm's: any hardline-free
+		// body, not only a plain `if`. The leak warning above does not reach it, because it shares the comprehension arm's
+		// `flatLength >= 0` guard — an item that already forces a break is exactly what it excludes. The residual asymmetry it
+		// leaves on the arrow side is described in that predicate's own doc.
+		var groupified: Null<Array<Doc>> = null;
+		for (i in 0...items.length) if (
+			(comprehensionBodyMeasure && flatLength(items[i]) >= 0) || isArrowPlainIfBody(items[i]) || isFunctionInlineBodyItem(items[i])
+		) {
+			if (groupified == null) groupified = items.copy();
+			groupified[i] = groupifyInlineBodies(items[i]);
+		}
+		if (groupified != null) items = groupified;
+
+		final sepWidth: Int = sep.length + 1;
+		final measure: WrapItemMeasure = measureItems(items, sepWidth);
+		final total: Int = measure.total;
+		final maxLen: Int = measure.maxLen;
+		final minLen: Int = measure.minLen;
+		final equalLens: Bool = measure.equalLens;
+		final anyHardline: Bool = measure.anyHardline;
+		// ω-complex-item-count: the cascade counter behind `complexItemCount >= n`.
+		// A caller that supplies no kinds counts 0, so the condition cannot fire
+		// for any `value >= 1` — which is every shipped config, since the loader
+		// defaults an omitted `value` to 1 — and every such list is byte-identical
+		// to the pre-slice layout. Computed BEFORE
+		// `continuationCols` because the continuation-indent probe re-runs the same
+		// cascade and has to see the same count the real decision does.
+		final complexCount: Int = countComplexItems(complexItemKinds);
+		// ω-container-item-cond: the `hasContainerItems` axis, read off the SAME
+		// per-element kinds array. Computed here beside the complex count so the
+		// continuation-indent probe and the real decision see one answer.
+		final containerItems: Bool = anyContainerItem(complexItemKinds);
+		// ω-container-item-cond: the `hasMultilineLambdaItems` axis — WHICH element carries
+		// the break, not merely that one does. Crosses the same kinds array with each item's
+		// own rendered Doc, so it has to be computed here rather than off `measure`.
+		final multilineLambda: Bool = anyMultilineLambdaItem(items, complexItemKinds);
+		final cols: Int = continuationCols(
+			rules, opt, items, measure, sourceMultilineKeep, compactContinuation, breakAsOnePerLine, complexCount, containerItems,
+			multilineLambda
+		);
+
+		// Column-aware `LineLengthLargerThan` thresholds (slice
+		// ω-ifwidthexceeds-infra). Cascade rules with `lineLength >= n`
+		// where `n != opt.lineWidth` cannot be answered at emit time
+		// because the rendered column position is unknown until layout.
+		// Threshold == lineWidth collapses cleanly to `exceeds` (the
+		// existing `IfBreak` pivot) and stays on the legacy 2-state
+		// path. Non-lineWidth thresholds enumerate extra states and
+		// emit one `IfWidthExceeds(t, …)` wrapper per distinct
+		// threshold so the renderer probes `column + flatWidth(flat)`
+		// against `t` at layout time.
+		final extraThresholds: Array<Int> = collectExtraLineLengthThresholds(rules, opt.lineWidth);
+
+		// Cascade-eval helper: caller specifies the (exceeds, firingThresholds)
+		// state and gets the cascade's resolved mode. `LineLengthLargerThan`
+		// is mapped to:
+		//   - `t == lineWidth` → use `exceeds` (collapse semantic)
+		//   - `t != lineWidth` → membership in `firingThresholds`
+		// All other cond kinds preserve their original evaluators.
+		// Non-`inline` so it can be passed as `evalAt` arg into
+		// `buildForceBreakTree` (Haxe forbids closure-on-inline-closure).
+		// ω-typedef-anon-force-multi: when caller passes a non-null
+		// `forceMode`, the cascade is bypassed and the supplied mode is
+		// returned unconditionally. Used by `@:fmt(forceMultiInTypedef)`
+		// on typedef-RHS anon types via the runtime gate
+		// `opt._inTypedefBody ? WrapMode.OnePerLine : null`.
+		function evalAt(exceeds: Bool, firing: Array<Int>): WrapMode {
+			return forceMode ?? onePerLineWhenBreaking(
+				floorSourceMultiline(
+					decideWithLineLengthState(
+						rules, items.length, maxLen, total, exceeds, anyHardline, t -> t == opt.lineWidth ? exceeds : firing.contains(t),
+						complexCount, minLen, equalLens, containerItems, multilineLambda
+					),
+					sourceMultilineKeep
+				),
+				breakAsOnePerLine, exceeds
+			);
+		}
+
+		// Per-state shape builder: picks the right lead based on the
+		// resolved mode (flat vs break-style layout).
+		function shapeAt(mode: WrapMode, lead: Doc): Doc {
+			final body: Doc = shape(
+				mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, trailBreakDoc, groupRestProbe,
+				sepBeforeFlags, opt.lineWidth, sourceBreakBefore, keepCloseGlued, flatTrailingComma, opt.comprehensionCuddledOpen,
+				opt.soleItemCuddledBrackets, complexItemKinds
+			);
+			return prependLead(body, lead);
+		}
+
+		function leadFor(mode: WrapMode): Doc {
+			return isFlatMode(mode) ? leadFlat : leadBreak;
+		}
+
+		// Force-break path: cascade evaluated only against
+		// `exceeds=true`. Thresholds still column-aware — even when
+		// the parent commits to break-mode, a `LineLengthLargerThan`
+		// rule answer can flip with column position. The unified
+		// `buildThresholdTree` helper handles 0/1/N thresholds via
+		// recursion (1-threshold optimization with impossibility
+		// filtering inlined for the common case below).
+		//
+		// ω-comprehension-fit-measure: a fit-cascade comprehension joins the
+		// `groupRestProbe` consumers for the zero-threshold call — its bracket
+		// shares its line with the statement's `;` (or a call's `);`), and the
+		// plain-`Group` fit is blind to that tail. See the param doc above.
+		return if (anyHardline || forceExceeds)
+			WrapBoundary(buildThresholdTree(extraThresholds, [], true, leadFlat, leadBreak, evalAt, shapeAt, leadFor))
+		else if (extraThresholds.length == 0)
+			emitZeroThreshold(
+				rules, items, opt, cols, open, close, openInside, closeInside, forceMode, groupRestProbe || comprehensionFitMeasure,
+				leadFlat, leadBreak, evalAt, shapeAt, leadFor,
+				onePerLineWhenBreaking(floorSourceMultiline(rules.defaultMode, sourceMultilineKeep), breakAsOnePerLine, true)
+			)
+		else if (extraThresholds.length == 1)
+			emitOneThreshold(extraThresholds[0], opt, evalAt, shapeAt, leadFor)
+		else
+			WrapBoundary(buildThresholdTree(extraThresholds, [], null, leadFlat, leadBreak, evalAt, shapeAt, leadFor));
 	}
 
 }

@@ -112,14 +112,15 @@ final class DocMeasure {
 					while (--i >= 0) stack.push(items[i]);
 				case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
 					pushFillReversed(stack, items, sep);
-				case Nest(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), IfBreak(_, inner),
-					IfWidthExceeds(_, _, inner), IfFirstLineExceeds(_, _, inner), IfLineExceeds(_, _, inner),
-					IfResidualLineExceeds(_, _, inner), IfFullLineExceeds(_, _, inner), IfNaturalFirstLineExceeds(_, _, inner),
-					IfNaturalFirstLineExceedsWithRest(_, _, inner), IfNaturalFirstLineFitsOpenDelim(_, _, inner),
-					IfArrowContinuationFits(_, _, _, _, inner), IfArrowContinuationFitsWithRest(_, _, _, _, inner),
-					IfIndentWidthExceeds(_, _, _, inner), IfGluedFirstLineExceeds(_, _, _, inner), Flatten(inner), WrapBoundary(inner),
-					HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
-					CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+				case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner),
+					GroupWithRestProbe(inner), IfBreak(_, inner), IfWidthExceeds(_, _, inner), IfFirstLineExceeds(_, _, inner),
+					IfLineExceeds(_, _, inner), IfResidualLineExceeds(_, _, inner), IfFullLineExceeds(_, _, inner),
+					IfNaturalFirstLineExceeds(_, _, inner), IfNaturalFirstLineExceedsWithRest(_, _, inner),
+					IfNaturalFirstLineFitsOpenDelim(_, _, inner), IfArrowContinuationFits(_, _, _, _, inner),
+					IfArrowContinuationFitsWithRest(_, _, _, _, inner), IfIndentWidthExceeds(_, _, _, inner),
+					IfGluedFirstLineExceeds(_, _, _, inner), Flatten(inner), WrapBoundary(inner), HardFlatten(inner),
+					CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner),
+					ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
 					stack.push(inner);
 			}
 		}
@@ -229,10 +230,10 @@ final class DocMeasure {
 				case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
 					stack.push(sep);
 					for (item in items) stack.push(item);
-				case Nest(_, inner), LeadingBreak(_, inner), Group(inner), GroupWithRestProbe(inner), BodyGroup(inner), IfBreak(_, inner),
-					IfWidthExceeds(_, _, inner), IfFirstLineExceeds(_, _, inner), IfLineExceeds(_, _, inner),
-					IfResidualLineExceeds(_, _, inner), IfFullLineExceeds(_, _, inner), IfIndentWidthExceeds(_, _, _, inner),
-					IfGluedFirstLineExceeds(_, _, _, inner), IfNaturalFirstLineExceeds(_, _, inner),
+				case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), GroupWithRestProbe(inner),
+					BodyGroup(inner), IfBreak(_, inner), IfWidthExceeds(_, _, inner), IfFirstLineExceeds(_, _, inner),
+					IfLineExceeds(_, _, inner), IfResidualLineExceeds(_, _, inner), IfFullLineExceeds(_, _, inner),
+					IfIndentWidthExceeds(_, _, _, inner), IfGluedFirstLineExceeds(_, _, _, inner), IfNaturalFirstLineExceeds(_, _, inner),
 					IfNaturalFirstLineExceedsWithRest(_, _, inner), IfNaturalFirstLineFitsOpenDelim(_, _, inner),
 					IfArrowContinuationFits(_, _, _, _, inner), IfArrowContinuationFitsWithRest(_, _, _, _, inner), Flatten(inner),
 					WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
@@ -279,10 +280,10 @@ final class DocMeasure {
 				case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
 					stack.push(sep);
 					for (item in items) stack.push(item);
-				case Nest(_, inner), LeadingBreak(_, inner), Group(inner), GroupWithRestProbe(inner), BodyGroup(inner), IfBreak(_, inner),
-					IfWidthExceeds(_, _, inner), IfFirstLineExceeds(_, _, inner), IfLineExceeds(_, _, inner),
-					IfResidualLineExceeds(_, _, inner), IfFullLineExceeds(_, _, inner), IfIndentWidthExceeds(_, _, _, inner),
-					IfGluedFirstLineExceeds(_, _, _, inner), IfNaturalFirstLineExceeds(_, _, inner),
+				case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), GroupWithRestProbe(inner),
+					BodyGroup(inner), IfBreak(_, inner), IfWidthExceeds(_, _, inner), IfFirstLineExceeds(_, _, inner),
+					IfLineExceeds(_, _, inner), IfResidualLineExceeds(_, _, inner), IfFullLineExceeds(_, _, inner),
+					IfIndentWidthExceeds(_, _, _, inner), IfGluedFirstLineExceeds(_, _, _, inner), IfNaturalFirstLineExceeds(_, _, inner),
 					IfNaturalFirstLineExceedsWithRest(_, _, inner), IfNaturalFirstLineFitsOpenDelim(_, _, inner),
 					IfArrowContinuationFits(_, _, _, _, inner), IfArrowContinuationFitsWithRest(_, _, _, _, inner), Flatten(inner),
 					WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
@@ -312,9 +313,10 @@ final class DocMeasure {
 					if (!(flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code)) buf.add(flat);
 				case OptSpace(s):
 					buf.add(s);
-				case Nest(_, inner), LeadingBreak(_, inner), Group(inner), GroupWithRestProbe(inner), BodyGroup(inner), Flatten(inner),
-					WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
-					CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+				case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), GroupWithRestProbe(inner),
+					BodyGroup(inner), Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner),
+					CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner),
+					ConditionalMarkerDecrease(inner):
 					stack.push(inner);
 				case Concat(items):
 					var k: Int = items.length;
@@ -382,9 +384,10 @@ final class DocMeasure {
 				case Text(s), OptSpace(s), Line(s):
 					final t: String = StringTools.rtrim(s);
 					if (t.length > 0) return t.fastCodeAt(t.length - 1) == '}'.code;
-				case Nest(_, inner), LeadingBreak(_, inner), Group(inner), GroupWithRestProbe(inner), BodyGroup(inner), Flatten(inner),
-					WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
-					CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+				case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), GroupWithRestProbe(inner),
+					BodyGroup(inner), Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner),
+					CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner),
+					ConditionalMarkerDecrease(inner):
 					stack.push(inner);
 				case Concat(items):
 					for (it in items) stack.push(it);
@@ -473,8 +476,8 @@ final class DocMeasure {
 					break;
 				}
 				hit;
-			case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), LeadingBreak(_, i), Flatten(i), HardFlatten(i),
-				CollapseProbe(i), CollapseAddProbe(i), CollapseBoolProbe(i), CollapseChainProbe(i), WrapBoundary(i),
+			case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), BreakCommit(_, i), LeadingBreak(_, i), Flatten(i),
+				HardFlatten(i), CollapseProbe(i), CollapseAddProbe(i), CollapseBoolProbe(i), CollapseChainProbe(i), WrapBoundary(i),
 				ConditionalMarkerZero(i), ConditionalMarkerDecrease(i):
 				firstVisibleText(i);
 			case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
@@ -513,9 +516,10 @@ final class DocMeasure {
 						final c: Int = t.fastCodeAt(t.length - 1);
 						return c == '}'.code || c == ';'.code;
 					}
-				case Nest(_, inner), LeadingBreak(_, inner), Group(inner), GroupWithRestProbe(inner), BodyGroup(inner), Flatten(inner),
-					WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
-					CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+				case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), GroupWithRestProbe(inner),
+					BodyGroup(inner), Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner),
+					CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner),
+					ConditionalMarkerDecrease(inner):
 					stack.push(inner);
 				case Concat(items):
 					for (it in items) stack.push(it);
@@ -557,9 +561,10 @@ final class DocMeasure {
 						final c: Int = t.fastCodeAt(t.length - 1);
 						return c == ';'.code;
 					}
-				case Nest(_, inner), LeadingBreak(_, inner), Group(inner), GroupWithRestProbe(inner), BodyGroup(inner), Flatten(inner),
-					WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
-					CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+				case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), GroupWithRestProbe(inner),
+					BodyGroup(inner), Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner),
+					CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner),
+					ConditionalMarkerDecrease(inner):
 					stack.push(inner);
 				case Concat(items):
 					for (it in items) stack.push(it);
@@ -798,8 +803,8 @@ final class DocMeasure {
 			case Nest(n, inner):
 				scanTailAt(inner, nest + n, resolveForcedBreaks, out);
 			case Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Flatten(inner), WrapBoundary(inner), LeadingBreak(_, inner),
-				HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner),
-				ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+				BreakCommit(_, inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
+				CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
 				scanTailAt(inner, nest, resolveForcedBreaks, out);
 			case IfBreak(breakDoc, flatDoc), IfWidthExceeds(_, breakDoc, flatDoc), IfFirstLineExceeds(_, breakDoc, flatDoc),
 				IfLineExceeds(_, breakDoc, flatDoc), IfResidualLineExceeds(_, breakDoc, flatDoc), IfFullLineExceeds(_, breakDoc, flatDoc),
@@ -866,8 +871,8 @@ final class DocMeasure {
 			// thresholds are decided at layout, not here); the force-flat /
 			// conditional-indent markers are render-time state transparent to
 			// static token-width measurement.
-			case Nest(_, inner), LeadingBreak(_, inner), Group(inner), GroupWithRestProbe(inner), IfBreak(_, inner),
-				IfWidthExceeds(_, _, inner), IfFirstLineExceeds(_, _, inner), IfLineExceeds(_, _, inner),
+			case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), GroupWithRestProbe(inner),
+				IfBreak(_, inner), IfWidthExceeds(_, _, inner), IfFirstLineExceeds(_, _, inner), IfLineExceeds(_, _, inner),
 				IfResidualLineExceeds(_, _, inner), IfFullLineExceeds(_, _, inner), IfNaturalFirstLineExceeds(_, _, inner),
 				IfNaturalFirstLineExceedsWithRest(_, _, inner), IfNaturalFirstLineFitsOpenDelim(_, _, inner),
 				IfArrowContinuationFits(_, _, _, _, inner), IfArrowContinuationFitsWithRest(_, _, _, _, inner),
@@ -935,9 +940,9 @@ final class DocMeasure {
 				// one side rather than because its own shapes demand it.
 				stack.push(fl);
 				return { add: 0, stop: false, delim: null };
-			case Nest(_, inner), LeadingBreak(_, inner), Group(inner), GroupWithRestProbe(inner), Flatten(inner), WrapBoundary(inner),
-				HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner),
-				ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+			case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), GroupWithRestProbe(inner), Flatten(inner),
+				WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
+				CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
 				stack.push(inner);
 				return { add: 0, stop: false, delim: null };
 		}
