@@ -1,5 +1,8 @@
 package anyparse.query;
 
+import anyparse.query.CallGraph.FnNode;
+import anyparse.query.CompilerFacts.FactNode;
+import anyparse.query.CompilerFacts.FieldFact;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.MemberReach.ReachAccess;
 import anyparse.query.MemberReach.ReachStep;
@@ -16,10 +19,33 @@ using Lambda;
 /**
  * The toucher half of `MemberReach`: every access of a member BY BINDING across the project files a
  * call graph holds, what each access does for a `ReachAccess` question (a touch, an escape of the
- * member's value, or a harmless read), and whether a LOCAL's value ever escapes before a region ends.
+ * member's value, or a harmless read), and whether a LOCAL's value ever escapes before a region ends. Where the compiler facts are
+ * the truth (`FactsView.truth`), a faceted function is read through its typed field accesses instead of its syntax (`typedAccesses`).
  */
 @:nullSafety(Strict)
 final class MemberTouchScan {
+
+	/**
+	 * The uses a typed read of the member may carry (`FieldFact.use`) — every one `classifyTyped` answers for. A read
+	 * carrying any other keeps its function read by its syntax.
+	 */
+	private static final TYPED_USES: Array<String> = [
+		'call',
+		'index',
+		'elemWrite',
+		'member',
+		'memberWrite',
+		'compare',
+		'iter',
+		'update',
+		'value'
+	];
+
+	/**
+	 * The accesses a typed access of the member may be (`FieldFact.access`): a field of an instance, a static, a structure
+	 * or a dynamic receiver.
+	 */
+	private static final TYPED_ACCESSES: Array<String> = ['FInstance', 'FStatic', 'FAnon', 'FDynamic'];
 
 	private final _scope: ReachProject;
 	private final _hazards: ReachHazards;
@@ -42,7 +68,8 @@ final class MemberTouchScan {
 	 * graph holds: the functions that TOUCH it for `access`, the sites where its value escapes, and the
 	 * touch (if any) inside `region` of `regionFile` itself. Any project file that did not
 	 * parse, and a raw conditional region spelling the name, is recorded as a blind spot. A file no build
-	 * runs (`ReachProject.runsInNoBuild`) is none the graph holds: it touches nothing and hides nothing.
+	 * runs (`ReachProject.runsInNoBuild`) is none the graph holds: it touches nothing and hides nothing. Under the truth a faceted
+	 * function touches as its compiler facts say (`typedAccesses`, `recordTyped`), its syntax aside, reflective names excepted.
 	 */
 	public function scan(
 		g: CallGraph, name: String, declaring: String, access: ReachAccess, arrayTyped: Bool, regionFile: String, region: Null<Span>
@@ -60,6 +87,7 @@ final class MemberTouchScan {
 			out.hidden = SkipParse(file);
 			break;
 		}
+		final typed: Map<String, Array<FieldFact>> = typedAccesses(g, name, declaring) ?? [];
 		for (f in _scope.files) {
 			final tree: Null<QueryNode> = g.treeOf(f.file);
 			if (tree == null || !RawSourceScan.mentionsWord(f.source, name)) continue;
@@ -67,8 +95,9 @@ final class MemberTouchScan {
 			// a raw region no configured build compiles hides nothing
 			final hides: Bool = opaque != null && _live(f.file, opaque);
 			if (opaque != null && hides && out.hidden == null) out.hidden = OpaqueCond(f.file, opaque);
-			scanFile(g, f.file, f.source, tree, name, declaring, access, arrayTyped, out, f.file == regionFile ? region : null);
+			scanFile(g, f.file, f.source, tree, name, declaring, access, arrayTyped, out, f.file == regionFile ? region : null, typed);
 		}
+		for (id => accesses in typed) recordTyped(g, id, name, accesses, access, arrayTyped, out, regionFile, region);
 		// a field initializer that is not freshly built shares its value from the start
 		if (access == Mutate) {
 			final site: Null<{ file: String, span: Span }> = sharedInitializer(g, declaring, name);
@@ -150,7 +179,7 @@ final class MemberTouchScan {
 
 	private function scanFile(
 		g: CallGraph, file: String, source: String, tree: QueryNode, name: String, declaring: String, access: ReachAccess,
-		arrayTyped: Bool, out: MemberTouches, region: Null<Span>
+		arrayTyped: Bool, out: MemberTouches, region: Null<Span>, factsRead: Map<String, Array<FieldFact>>
 	): Void {
 		// noqa: complexity
 		final shape: RefShape = _scope.shape;
@@ -172,10 +201,7 @@ final class MemberTouchScan {
 			// the compiler's type of the receiver, where its facts replace the syntax of the code holding it
 			final at: Null<Span> = receiver.span;
 			final typed: Null<String> = at == null ? null : g.facts?.view.typeSourceAt(g, file, at);
-			if (typed != null)
-				return _carriers.relation(
-					NominalTypes.unwrapNullable(typed, shape.memberTransparentWrapperTypeNames ?? [], _scope.plugin.typeSyntax), declaring
-				) != CannotCarry;
+			if (typed != null) return typedMayCarry(typed, declaring);
 			final types: Map<Int, String> = declaredTypes ?? typesOf(provider, source);
 			declaredTypes = types;
 			final nominal: Null<String> = NominalTypes.expressionTypeNominal(receiver, tree, shape, types, _scope.index, file, null, true);
@@ -189,7 +215,8 @@ final class MemberTouchScan {
 			final at: Null<Span> = node.span;
 			if (at == null) return;
 			final span: Span = at;
-			if (!_live(file, span)) return;
+			// a function read through its compiler facts touches as they say (`recordTyped`), not as its syntax reads
+			if (!_live(file, span) || factsRead.exists(g.functionAt(file, span.from) ?? '')) return;
 			final verdict: Verdict = classify(node, parent, grand, lineage, index, parentIndex, access, arrayTyped);
 			if (verdict.escape) out.escapes.push({ file: file, span: span });
 			if (!verdict.touch) return;
@@ -245,6 +272,160 @@ final class MemberTouchScan {
 			lineage.pop();
 		}
 		walk(tree, null, null, 0, 0, null);
+	}
+
+	/**
+	 * Under the truth (`FactsView.truth`), each faceted function of the project with the accesses the compiler typed in it of
+	 * the member `declaring` declares as `name`: that function is read through them (`recordTyped`), not through its syntax.
+	 * Every access of a field in typed code is a `FieldFact`, a property's through its accessor a call, so no access of the
+	 * member escapes them. An access binds to the member when its declaring type is one of the typed types standing for
+	 * `declaring` (`FactsView.bySimpleName`), or, off a structure or a dynamic receiver, when the receiver's value may carry
+	 * the member (`ValueCarriers.relation`). Null without the truth, or when no typed type stands for `declaring`.
+	 */
+	private function typedAccesses(g: CallGraph, name: String, declaring: String): Null<Map<String, Array<FieldFact>>> {
+		final facts: Null<CallGraphFacts> = g.facts;
+		if (facts == null || !facts.view.truth) return null;
+		final owners: Array<String> = facts.view.bySimpleName()[declaring] ?? [];
+		if (owners.length == 0) return null;
+		final out: Map<String, Array<FieldFact>> = [];
+		for (id => bodies in facts.faceted) {
+			final node: Null<FnNode> = g.node(id);
+			if (node == null || !_scope.sources.exists(node.file)) continue;
+			final accesses: Null<Array<FieldFact>> = nodeAccesses(g, node, bodies, name, declaring, owners, facts.view);
+			if (accesses != null) out[id] = accesses;
+		}
+		return out;
+	}
+
+	/**
+	 * The typed accesses of the member (see `typedAccesses`) in the faceted `node`, whose bodies are `bodies`: their own and
+	 * those of every function the compiler made inside them that the graph declares no node for (a `.bind` closure) — one it
+	 * does declare is read as that node is. Null — the syntax reads `node` — when such an access is of a shape `classifyTyped`
+	 * does not answer for, or lies outside `node`'s text, when a call names a field of the member's name (a call of the value
+	 * a variable holds is a call fact, never a field one), or when a function inside it was placed by a macro.
+	 */
+	private function nodeAccesses(
+		g: CallGraph, node: FnNode, bodies: Array<FactNode>, name: String, declaring: String, owners: Array<String>, view: FactsView
+	): Null<Array<FieldFact>> {
+		final span: Null<Span> = node.span;
+		if (span == null) return null;
+		final home: String = view.table.keyOf(node.file);
+		final out: Array<FieldFact> = [];
+		final work: Array<FactNode> = bodies.copy();
+		while (work.length > 0) {
+			final n: Null<FactNode> = work.pop();
+			if (n == null || n.generated) return null;
+			// a field the compiler calls — a function a variable holds, a dynamic receiver's field — is a call, no field fact
+			for (c in n.calls) if (calledField(c.target) == name) return null;
+			for (f in n.fields) if (f.field == name && bindsTo(f, declaring, owners)) {
+				final at: Span = f.at.span;
+				if (f.at.file != home || at.from < span.from || at.to > span.to || !typedShape(f)) return null;
+				out.push(f);
+			}
+			for (child in n.fns) {
+				final made: Null<FactNode> = view.table.node(child);
+				if (made == null) return null;
+				if (CallGraphFacts.graphNodeOf(g, node, child, view) == null) work.push(made);
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * Whether the typed field access `f` binds to the member `declaring` declares: its declaring type is one of `owners`,
+	 * or it names no declaring type — a structure's or a dynamic receiver's field — and the receiver's value may carry the
+	 * member.
+	 */
+	private function bindsTo(f: FieldFact, declaring: String, owners: Array<String>): Bool {
+		final owner: Null<String> = f.owner;
+		return owner == null ? typedMayCarry(FactsView.simpleSource(f.receiver), declaring) : owners.contains(owner);
+	}
+
+	/**
+	 * Whether a receiver the compiler typed `typed` — a facts type spelled as source declares it, null when it names no
+	 * declaration — may hold an object carrying the member `declaring` declares (`ValueCarriers.relation`).
+	 */
+	private function typedMayCarry(typed: Null<String>, declaring: String): Bool {
+		final wrappers: Array<String> = _scope.shape.memberTransparentWrapperTypeNames ?? [];
+		final known: Null<String> = typed == null ? null : NominalTypes.unwrapNullable(typed, wrappers, _scope.plugin.typeSyntax);
+		return _carriers.relation(known, declaring) != CannotCarry;
+	}
+
+	/**
+	 * Record the typed accesses `accesses` of the member in the function `id` (`typedAccesses`): each touch, escape and
+	 * touch meeting `region` of `regionFile`, as `classifyTyped` reads it. A touch is on the function's own `this` only
+	 * where its text spells the bare name or `this.name` (`onSelf`). The facts are code a listed build compiled, so no
+	 * liveness is asked of them.
+	 */
+	private function recordTyped(
+		g: CallGraph, id: String, name: String, accesses: Array<FieldFact>, access: ReachAccess, arrayTyped: Bool, out: MemberTouches,
+		regionFile: String, region: Null<Span>
+	): Void {
+		final held: Null<String> = g.node(id)?.file;
+		if (held == null) return;
+		final file: String = held;
+		for (f in accesses) {
+			final span: Span = f.at.span;
+			final verdict: Verdict = classifyTyped(f, access, arrayTyped);
+			if (verdict.escape) out.escapes.push({ file: file, span: span });
+			if (!verdict.touch) continue;
+			// the compiler may place what it made of an expression at a range wider than the expression's own
+			if (file == regionFile && meets(span, region) && out.inRegion == null) out.inRegion = {
+				from: 'entry',
+				to: name,
+				kind: 'touch',
+				file: file,
+				span: span
+			};
+			out.touchers[id] = { file: file, span: span };
+			if (!onSelf(g, file, span, name) && !out.notOnSelf.exists(id)) out.notOnSelf[id] = { file: file, span: span };
+		}
+	}
+
+	/**
+	 * What the typed access `f` of the member does for `access` — `classify`, read off the facts: a write touches, and for
+	 * `Mutate` escapes unless it stores a value only the field holds (`FieldFact.fresh`); a read touches for `Read`, and for
+	 * `Mutate` touches and escapes by its use: an element write or a write of a field of the member's value touches, a
+	 * method call is a read only for one of the array type's own readers on an array-typed member (the facts name the
+	 * method the receiver's type declares, never an extension), and a value handed on escapes.
+	 */
+	private function classifyTyped(f: FieldFact, access: ReachAccess, arrayTyped: Bool): Verdict {
+		if (f.write) return switch access {
+			case Read: { touch: false, escape: false };
+			case Write: { touch: true, escape: false };
+			case Mutate: { touch: true, escape: !f.fresh };
+		};
+		if (access != Mutate) return { touch: access == Read, escape: false };
+		return switch f.use {
+			case 'call':
+				final method: String = f.method ?? '';
+				final reads: Bool = arrayTyped && (_scope.shape.execution?.nonMutatingArrayMethods ?? []).contains(method);
+				final own: Bool = arrayTyped && (reads || (_scope.shape.execution?.mutatingArrayMethods ?? []).contains(method));
+				{ touch: !reads, escape: !own };
+			case 'elemWrite', 'memberWrite': { touch: true, escape: false };
+			case 'value': { touch: false, escape: true };
+			case _: { touch: false, escape: false };
+		};
+	}
+
+	/** Whether the text at `span` of `file` spells the member `name` on its own `this`: the bare name, or `this.name`. */
+	private function onSelf(g: CallGraph, file: String, span: Span, name: String): Bool {
+		final shape: RefShape = _scope.shape;
+		var found: Bool = false;
+		function walk(node: QueryNode): Void {
+			final at: Null<Span> = node.span;
+			if (found || (at != null && (at.from > span.from || at.to < span.to))) return;
+			if (at != null && at.from == span.from && at.to == span.to && node.name == name) {
+				final receiver: Null<QueryNode> = node.children.length > 0 ? node.children[0] : null;
+				final self: Bool = receiver != null && receiver.kind == shape.identKind && receiver.name == shape.selfReferenceText;
+				if (node.kind == shape.identKind || (_hazards.isAccess(node.kind) && self)) found = true;
+			}
+			// a node with no span of its own may still hold the text
+			for (c in node.children) walk(c);
+		}
+		final tree: Null<QueryNode> = g.treeOf(file);
+		if (tree != null) walk(tree);
+		return found;
 	}
 
 	/**
@@ -441,6 +622,26 @@ final class MemberTouchScan {
 		}
 		walk(tree);
 		return found;
+	}
+
+	/** The field a call fact's `target` names (`pack.Type.field`, a bare field name), or null for a call of no field. */
+	private static function calledField(target: Null<String>): Null<String> {
+		return target == null ? null : target.substr(target.lastIndexOf('.') + 1);
+	}
+
+	/** Whether `span` shares a position with `region`; false when there is no region. */
+	private static function meets(span: Span, region: Null<Span>): Bool {
+		return region != null && span.from < region.to && region.from < span.to;
+	}
+
+	/**
+	 * Whether the typed access `f` is of a shape `classifyTyped` answers for: a field of an instance, a static, a structure
+	 * or a dynamic receiver, written, or read with a use it lists (`TYPED_USES`) — a call naming its method.
+	 */
+	private static function typedShape(f: FieldFact): Bool {
+		if (!TYPED_ACCESSES.contains(f.access)) return false;
+		final use: Null<String> = f.use;
+		return f.write || (use != null && TYPED_USES.contains(use) && (use != 'call' || f.method != null));
 	}
 
 	/** Whether `span` lies inside `region`; false when there is no region. */

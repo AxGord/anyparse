@@ -568,6 +568,103 @@ class MemberReachFactsTest extends Test {
 		assertMatch(question(false, true), r -> !r.match(Proven));
 	}
 
+	@:pin('control') @:killer('M-TOUCH-TYPED-NEVER') @:killer('M-TOUCH-TYPED-SHAPE-NONE') @:killer('M-TOUCH-TYPED-CALL')
+	@:killer('M-TOUCH-TYPED-OWNER')
+	public function testATouchOnlyTheFactsSeeIsFoundUnderTheTruth(): Void {
+		// `stuff` is `Main.items` imported under another name: no text of `Other.grow` spells `items`, the facts name the
+		// field it pushes to. `Bag.items` is another type's field of the same name
+		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Other.REGION(); /*>*/ }\n'
+			+ '\t\tOther.grow();\n\t\tOther.calm();\n\t}\n}\n';
+		final other: String = 'import Main.items as stuff;\n\nclass Other {\n\tpublic static function grow():Void stuff.push(1);\n\n'
+			+ '\tpublic static function calm():Void Bag.items.push(1);\n}\n\nclass Bag {\n\tpublic static var items:Array<Int> = [];\n}\n';
+		function files(called: String): Map<String, String> {
+			return ['Main.hx' => StringTools.replace(main, 'REGION', called), 'Other.hx' => other];
+		}
+		assertMatch(truthAsk(files('grow')), r -> r.match(Reached(_)));
+		// the index is the analysis's word for the classpath, which `Array` would otherwise leave open
+		assertMatch(ask(files('calm'), null, true, null, true, null, null, null, true), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-TOUCH-TYPED-VALUE') @:killer('M-TOUCH-TYPED-UNTRUE')
+	public function testAMethodClosureOfTheMemberEscapesUnderTheTruth(): Void {
+		// `items.push` read as a value holds `items` for whoever calls it later: the facts use the read as a value, where the
+		// syntax sees a harmless field read. With no list of builds the syntax answers, as it did
+		final main: String = LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n\t\tkeep();\n\t}\n'
+			+ '\tstatic function calm():Void {}\n\tstatic function keep():Void {\n\t\tvar p = items.push;\n\t\tp(1);\n\t}\n}\n';
+		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Unknown(Escape(_, _))));
+		assertMatch(ask(['Main.hx' => main]), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-TOUCH-TYPED-CALLED')
+	public function testAFieldTheCompilerCallsLeavesItsFunctionToTheSyntaxUnderTheTruth(): Void {
+		// `d.items(1)` calls whatever a dynamic receiver's `items` holds: the facts record a call and no field read, so `poke`
+		// is read by its syntax, where the receiver may be the one holding the member and its value is handed to a call
+		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n'
+			+ '\t\tpoke(null);\n\t}\n\tstatic function calm():Void {}\n\tstatic function poke(d:Dynamic):Void d.items(1);\n}\n';
+		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Unknown(Escape(_, _))));
+	}
+
+	@:pin('control') @:killer('M-TOUCH-TYPED-FRESH') @:killer('M-TOUCH-TYPED-SYNTAX-TOO')
+	public function testAWriteTheCompilerSeesStoringOnlyFreshValuesLetsNothingEscape(): Void {
+		// every value `reset` stores is built right there, which the syntax cannot see through the conditional
+		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n'
+			+ '\t\treset(true);\n\t}\n\tstatic function calm():Void {}\n'
+			+ '\tstatic function reset(c:Bool):Void {\n\t\titems = c ? [] : null;\n\t}\n}\n';
+		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Proven));
+		assertMatch(ask(['Main.hx' => main]), r -> r.match(Unknown(Escape(_, _))));
+	}
+
+	@:pin('control') @:killer('M-TOUCH-TYPED-SELF')
+	public function testAConstructorTouchingItsOwnObjectIsExcusedUnderTheTruth(): Void {
+		// the object `new Main()` builds is not the one the loop runs on: its constructor writes its own `items`
+		final main: String = 'class Main {\n\tpublic var items:Array<Int> = [];\n'
+			+ '\tpublic function new() {\n\t\tthis.items = [];\n\t\titems.push(0);\n\t}\n'
+			+ '\tstatic function main() {\n\t\tnew Main().f();\n\t}\n'
+			+ '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ var m = new Main(); /*>*/ }\n\t}\n}\n';
+		// the index is the analysis's word for the classpath, which `Array` would otherwise leave open
+		assertMatch(ask(['Main.hx' => main], null, true, null, true, null, null, null, true), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-REACH-TYPED-ARRAY-NEVER') @:killer('M-REACH-TYPED-ARRAY-ANY')
+	public function testAnUnannotatedArrayMemberIsAnArrayUnderTheTruth(): Void {
+		// `items` declares no type, so the index cannot say `items.indexOf` is the array's own reader and not a method that
+		// changes it; the facts type it `Array<Int>`. A `Bag` with an `indexOf` of its own is no array
+		function fixture(init: String): Map<String, String> {
+			final main: String = 'class Main {\n\tpublic var items = ' + init + ';\n\tpublic function new() {}\n'
+				+ '\tstatic function main() {\n\t\tvar m = new Main();\n\t\tm.items.push(1);\n\t\tm.f();\n\t}\n'
+				+ '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ var k = items.indexOf(i); /*>*/ }\n\t}\n}\n'
+				+ 'class Bag {\n\tpublic var length:Int = 0;\n\tpublic function new() {}\n\tpublic function push(v:Int):Void length++;\n'
+				+ '\tpublic function indexOf(v:Int):Int return length++;\n}\n';
+			return ['Main.hx' => main];
+		}
+		// the index is the analysis's word for the classpath, which `Array` would otherwise leave open
+		assertMatch(ask(fixture('[]'), null, true, null, true, null, null, null, true), r -> r.match(Proven));
+		assertMatch(ask(fixture('[]')), r -> r.match(Reached(_)));
+		assertMatch(truthAsk(fixture('new Bag()')), r -> r.match(Reached(_)));
+	}
+
+	@:pin('control') @:killer('M-REACH-PROPERTY-STRAIGHT') @:killer('M-REACH-PROPERTY-GETTER')
+	@:killer('M-REACH-FACTS-FIELDS-UNTRUE')
+	public function testAPropertyReadStraightFromItsStorageIsAnsweredUnderTheTruth(): Void {
+		// a write of `items` runs `set_items`, a call the facts name, whose body writes the storage by a field access, and a
+		// read reads the storage itself; a getter decides what a reader sees whatever the storage holds, `@:isVar` or not
+		function fixture(accessors: String, region: String): Map<String, String> {
+			final main: String = 'class Main {\n\t@:isVar public var items(' + accessors
+				+ '):Array<Int> = [];\n\tpublic function new() {}\n'
+				+ '\tfunction set_items(v:Array<Int>):Array<Int> {\n\t\titems = v;\n\t\treturn v;\n\t}\n'
+				+ '\tfunction get_items():Array<Int> return items;\n'
+				+ '\tstatic function main() {\n\t\tvar m = new Main();\n\t\tm.f();\n\t\tm.g();\n\t}\n'
+				+ '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ ' + region + ' /*>*/ }\n\t}\n'
+				+ '\tfunction h():Void {}\n\tfunction g():Void {\n\t\titems = [1];\n\t}\n}\n';
+			return ['Main.hx' => main];
+		}
+		assertMatch(askAs(fixture('default, set', 'h();'), Write, true), r -> r.match(Proven));
+		assertMatch(askAs(fixture('default, set', 'g();'), Write, true), r -> r.match(Reached(_)));
+		assertMatch(askAs(fixture('default, set', 'h();'), Write, false), r -> r.match(Unknown(UnresolvedDispatch(_, _, _))));
+		assertMatch(askAs(fixture('get, set', 'h();'), Write, true), r -> r.match(Unknown(UnresolvedDispatch(_, _, _))));
+	}
+
 	/**
 	 * The answer for `member` (by default `Main.items`) over the region of `Main.hx` among `files`, compiled by `build` under
 	 * each define set of `configurations` and read through the facts unless `withFacts` is false; `classpathComplete` is
@@ -585,6 +682,14 @@ class MemberReachFactsTest extends Test {
 		return withReach(files, configurations, withFacts, classpathComplete, build, library, unindexed, listed, (reach, dir) -> {
 			final source: String = files['Main.hx'] ?? '';
 			reach.mayReach(Region(Path.join([dir, 'Main.hx']), regionOf(source)), member ?? { owner: 'Main', name: 'items' }, Mutate);
+		});
+	}
+
+	/** `ask` of `files` for `access` instead of `Mutate`, under the whole list of their builds when `listed`. */
+	private static function askAs(files: Map<String, String>, access: ReachAccess, listed: Bool): ReachResult {
+		return withReach(files, null, true, false, null, null, null, listed, (reach, dir) -> {
+			final source: String = files['Main.hx'] ?? '';
+			reach.mayReach(Region(Path.join([dir, 'Main.hx']), regionOf(source)), { owner: 'Main', name: 'items' }, access);
 		});
 	}
 
