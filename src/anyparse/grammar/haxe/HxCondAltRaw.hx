@@ -24,9 +24,10 @@ package anyparse.grammar.haxe;
  * The `#else` prefix is MANDATORY, which is also what keeps the owning ctor off regions that
  * have no alternative branch at all.
  *
- * NESTING is supported by the same two-branch alternation `HxCondSpliceRaw` uses: the first
- * alternative skips over BALANCED inner `#if ... #end` pairs and stops at the first UNMATCHED
- * `#end`, the second is the plain stop-at-the-first-`#end` fallback (an `#else` branch may
+ * NESTING is supported by the same three-branch alternation `HxCondSpliceRaw` uses: the first
+ * alternative skips over BALANCED inner `#if ... #end` regions nested up to four deep and stops
+ * at the first UNMATCHED `#end`, the second is the one-level reading, the third the plain
+ * stop-at-the-first-`#end` fallback (an `#else` branch may
  * hold complete inner regions and a whole class declaration before the header that opens the
  * shared body). The known hazard of the nesting-aware branch — a DIRECTIVE-unbalanced inner
  * `#if` whose `#end` also closes the outer region — does not arise here: such a region has no
@@ -37,7 +38,7 @@ package anyparse.grammar.haxe;
  * be free to match mid-buffer. `@:rawString` — byte-exact round-trip through `_dt(value)`, no
  * unescape pass; the writer re-emits the fragment verbatim.
  */
-@:re('#else(?:(?:(?!#if|#end)[\\s\\S])*(?:#if(?:(?!#end)[\\s\\S])*#end(?:(?!#if|#end)[\\s\\S])*)*#end|(?:(?!#end)[\\s\\S])*#end)')
+@:re('#else(?:(?:(?!#if|#end)[\\s\\S])*(?:#if(?:(?!#if|#end)[\\s\\S])*(?:#if(?:(?!#if|#end)[\\s\\S])*(?:#if(?:(?!#if|#end)[\\s\\S])*(?:#if(?:(?!#if|#end)[\\s\\S])*#end(?:(?!#if|#end)[\\s\\S])*)*#end(?:(?!#if|#end)[\\s\\S])*)*#end(?:(?!#if|#end)[\\s\\S])*)*#end(?:(?!#if|#end)[\\s\\S])*)*#end|(?:(?!#if|#end)[\\s\\S])*(?:#if(?:(?!#end)[\\s\\S])*#end(?:(?!#if|#end)[\\s\\S])*)*#end|(?:(?!#end)[\\s\\S])*#end)')
 @:rawString
 @:condRegionRaw
 abstract HxCondAltRaw(String) from String to String {}

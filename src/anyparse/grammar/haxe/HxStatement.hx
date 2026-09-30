@@ -298,6 +298,14 @@ enum HxStatement {
 	EllipsisStmt;
 
 	/**
+	 * An assignment whose value is a region that ends the statement in every configuration — each branch closes with its
+	 * own `;` and an `#else` is present: `enabled = #if disable_cffi false; #else true; #end`. See `HxCondSemiAssign`.
+	 * BEFORE `ExprStmt`, whose expression parse would read the region as an operand and the statement after its `#end`
+	 * as the value's continuation (`#end (f)();` a call of it, `#end -y;` a subtraction).
+	 */
+	CondSemiAssignStmt(inner: HxCondSemiAssign);
+
+	/**
 	 * Metadata-prefixed statement whose whole body is a self-terminating
 	 * `#if … ; #end` region — see `HxMetaCondStmt` for the swallow it stops
 	 * and for why the metadata is part of the shape rather than an

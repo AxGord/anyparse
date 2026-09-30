@@ -12,7 +12,8 @@ package anyparse.grammar.haxe;
  *    `SimpleCtor`. If `(` is missing, the sub-rule parse fails and
  *    tryBranch rolls back.
  *
- *  - `SimpleCtor` — `Name;` zero-argument constructor. Fallback
+ *  - `SimpleCtor` — `Name;` zero-argument constructor, optionally with a
+ *    GADT result type (`Name:Type;`, see `HxEnumSimpleCtorDecl`). Fallback
  *    when `ParamCtor` fails.
  *
  * Both branches carry `@:trail(';')` — the semicolon is always
@@ -25,6 +26,6 @@ enum HxEnumCtor {
 	ParamCtor(decl: HxEnumCtorDecl);
 
 	@:trail(';')
-	SimpleCtor(name: HxIdentLit);
+	SimpleCtor(decl: HxEnumSimpleCtorDecl);
 
 }

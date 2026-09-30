@@ -105,6 +105,14 @@ enum HxClassMember {
 	FnMember(decl: HxFnDecl);
 
 	/**
+	 * `function f(a:T, b:#if c U):R #else V):S #end { … }` — a method whose parameter list
+	 * closes inside a `#if` region. See `HxCondSigFnDecl`. Tried AFTER `FnMember`, so only a
+	 * signature that ordinary dispatch cannot read reaches it.
+	 */
+	@:kw('function')
+	CondSigFnMember(decl: HxCondSigFnDecl);
+
+	/**
 	 * `#error "msg"` / `#error 'msg'` preprocessor directive at member
 	 * scope (slice ω-sharp-error). Reachable from
 	 * `HxConditionalMember.body` (`Array<HxMemberDecl>`) — `#if cs

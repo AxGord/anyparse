@@ -19,6 +19,9 @@ package anyparse.grammar.haxe;
  * for empty list, then sep-separated loop. Zero-param constructors
  * `Ctor()` parse as `params: []`.
  *
+ * `returnType` is the GADT result type (`Errored(e:Error):Status<Error>;`), absent on a
+ * plain constructor, which therefore stays byte-identical.
+ *
  * The trailing semicolon is NOT on this typedef — it lives on the
  * `HxEnumCtor.ParamCtor` enum branch via `@:trail(';')`.
  */
@@ -27,4 +30,5 @@ typedef HxEnumCtorDecl = {
 	var name: HxIdentLit;
 	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe) var typeParams: Null<Array<HxTypeParamDecl>>;
 	@:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams')) var params: Array<HxParam>;
+	@:optional @:fmt(typeHintColon) @:lead(':') var returnType: Null<HxType>;
 };

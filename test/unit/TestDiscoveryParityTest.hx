@@ -682,6 +682,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.grammar.haxe.HxLambdaParamDefaultSliceTest',
 		'unit.grammar.haxe.HxLambdaParamOptionalSliceTest',
 		'unit.grammar.haxe.HxLeftCurlyOptionsTest',
+		'unit.grammar.haxe.HxLibraryParseCoverageSliceTest',
 		'unit.grammar.haxe.HxLineCommentIndentSliceTest',
 		'unit.grammar.haxe.HxListLiteralEmissionSliceTest',
 		'unit.grammar.haxe.HxLocalFnStmtSliceTest',

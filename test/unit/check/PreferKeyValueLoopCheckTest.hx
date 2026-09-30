@@ -392,7 +392,7 @@ class PreferKeyValueLoopCheckTest extends Test {
 			)
 		);
 		Assert.equals(
-			'the element name `item` is already spelled in the enclosing function',
+			'the element name `item` would shadow a parameter the loop can see',
 			declineOf(
 				'class C {\n\tfunction f(items:Array<Item>, item:Item, sink:Sink):Void {\n'
 				+ '\t\tfor (i in 0...items.length) sink.use(items[i], i);\n\t}\n}'
@@ -451,6 +451,14 @@ class PreferKeyValueLoopCheckTest extends Test {
 		Assert.equals(1, vs.length);
 		Assert.equals(0, value.fix(src, vs, project(src)).length);
 		Assert.equals(nestedDecline('key'), vs[0].declineReason);
+	}
+
+	public function testASiblingLoopsBinderIsNoClash(): Void {
+		// `item` is bound by the loop after it, which the loop being fixed cannot see: nothing is shadowed
+		final text: String = fixedAll(
+			wrapSink('for (i in 0...items.length) sink.use(i, items[i]);\n\t\tfor (j => item in items) sink.log(j, item);')
+		);
+		Assert.isTrue(text.indexOf('for (i => item in items) sink.use(i, item);') >= 0, text);
 	}
 
 	public function testSiblingLoopsDerivingOneBinderAreBothFixed(): Void {

@@ -1,11 +1,13 @@
 package unit.query;
 
 import anyparse.check.LintConfig.OracleConfig;
+import anyparse.check.OracleCoverage;
 import anyparse.check.TypedFactsProbe;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CompilerFacts;
 import anyparse.query.MemberReach;
+import anyparse.query.ReachLiveness.ReachConfiguration;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import haxe.io.Path;
@@ -277,6 +279,87 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main], null, true, null, false, null, ['Wrap.hx' => wrap]), r -> !r.match(Proven));
 	}
 
+	public function testAMacroBuiltTypeAnswersFromItsTextOnlyWhenItsFactsAreItsText(): Void {
+		// `Line` inherits an `@:autoBuild`: the text of `all` answers for the local it initialises only when the compiled body
+		// is that text. A macro keeping the fields leaves it so; one replacing the body with `return Main.kept` does not
+		final main: String = 'class Main {\n\tpublic static var kept:Array<Int> = [1];\n\tstatic function main() {\n'
+			+ '\t\tfinal xs:Array<Int> = new Line().all();\n\t\tfor (i in 0...xs.length) { /*<*/ kept.push(xs[i]); /*>*/ }\n\t}\n}\n';
+		final line: String = 'class Line extends Base {\n\tpublic function all():Array<Int> {\n\t\tfinal out:Array<Int> = [1];\n'
+			+ '\t\tout.push(2);\n\t\treturn out;\n\t}\n}\n';
+		final mac: String = 'import haxe.macro.Context;\nimport haxe.macro.Expr;\n\nclass Mac {\n'
+			+ '\tpublic static macro function keep():Array<Field> return Context.getBuildFields();\n\n'
+			+ '\tpublic static macro function rewrite():Array<Field> {\n\t\tfinal fields:Array<Field> = Context.getBuildFields();\n'
+			+ '\t\tfor (f in fields) if (f.name == "all") switch f.kind {\n\t\t\tcase FFun(fn): fn.expr = macro return Main.kept;\n'
+			+ '\t\t\tcase _:\n\t\t}\n\t\treturn fields;\n\t}\n\n'
+			+ '\tpublic static macro function retarget():Array<Field> {\n\t\tfinal fields:Array<Field> = Context.getBuildFields();\n'
+			+ '\t\tfor (f in fields) if (f.name == "all") switch f.kind {\n'
+			+ '\t\t\tcase FFun(fn): fn.expr = macro @:pos(fn.expr.pos) return Main.kept;\n\t\t\tcase _:\n\t\t}\n\t\treturn fields;\n\t}\n}\n';
+		function files(builder: String): Map<String, String> {
+			return [
+				'Main.hx' => main,
+				'Line.hx' => line,
+				'Mac.hx' => mac,
+				'Base.hx' => '@:autoBuild(Mac.$builder())\nclass Base {\n\tpublic function new() {}\n}\n'
+			];
+		}
+		assertMatch(askLocal(files('keep'), 'xs'), r -> r.match(Proven));
+		assertMatch(askLocal(files('keep'), 'xs', false), r -> !r.match(Proven));
+		assertMatch(askLocal(files('rewrite'), 'xs'), r -> !r.match(Proven));
+		// the new body sits where the old one did: its facts are in place, but no text there spells `kept`
+		assertMatch(askLocal(files('retarget'), 'xs'), r -> !r.match(Proven));
+	}
+
+	public function testAnOverrideOnlyTheFactsSeeRefusesAFreshSource(): Void {
+		// the analysis is told the index holds every compiled type, but `pack.Sub` — compiled, indexed by nothing — overrides
+		// `all` with a shared array: only the facts know it, and by its package-qualified name
+		// the directive keeps `main` read by its syntax: its facts would otherwise name the dispatch to `Sub.all` at the call
+		final main: String = 'import pack.Line;\n\nclass Main {\n\tpublic static var kept:Array<Int> = [1];\n\tstatic function main() {\n'
+			+ '\t\t#if never\n\t\tkept = [];\n\t\t#end\n'
+			+ '\t\tfinal line:Line = new pack.Sub();\n\t\tfinal xs:Array<Int> = line.all();\n'
+			+ '\t\tfor (i in 0...xs.length) { /*<*/ kept.push(xs[i]); /*>*/ }\n\t}\n}\n';
+		final files: Map<String, String> = [
+			'Main.hx' => main,
+			'pack/Line.hx' => 'package pack;\n\nclass Line {\n\tpublic function new() {}\n\n\tpublic function all():Array<Int> return [];\n}\n'
+		];
+		final sub: Map<String, String> = [
+			'pack/Sub.hx' => 'package pack;\n\nclass Sub extends Line {\n\toverride public function all():Array<Int> return Main.kept;\n}\n'
+		];
+		assertMatch(askLocal(files, 'xs', true, true, sub), r -> !r.match(Proven));
+		files['Main.hx'] = StringTools.replace(main, 'new pack.Sub()', 'new Line()');
+		assertMatch(askLocal(files, 'xs', true, true), r -> r.match(Proven));
+	}
+
+	public function testALibraryFileNoBuildCompilesHidesNoOverride(): Void {
+		// `Broken.hx` does not parse and spells both `Worker` and `run`, but no build reads it: the facts say so, and it
+		// holds no override of `Worker.run`. Without the facts it stays a blind spot
+		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tvar w:Worker = new Worker();\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ w.run(); /*>*/ }\n\t}\n}\n';
+		final library: Map<String, String> = [
+			'Worker.hx' => 'class Worker {\n\tpublic function new() {}\n\tpublic function run():Void {}\n}\n',
+			'Broken.hx' => 'package x {\n\tclass Worker extends Worker {\n\t\tfunction run() Main.items.push(1);\n\t}\n}\n'
+		];
+		assertMatch(ask(['Main.hx' => main], null, true, null, true, null, library), r -> r.match(Proven));
+		assertMatch(ask(['Main.hx' => main], null, false, null, true, null, library), r -> r.match(Unknown(SkipParse(_))));
+	}
+
+	public function testTheBuildsSubtypesOfALibraryTypeAreKnownFromTheirFacts(): Void {
+		// no oracle list vouches for the classpath, but under the listed builds the facts name every subtype of `Worker`: none,
+		// so a dispatch on it reaches no override the index cannot see — unless a compiled subtype the index does not hold
+		// overrides `run`
+		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tvar w:Worker = new Worker();\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ w.run(); /*>*/ }\n\t}\n}\n';
+		final library: Map<String, String> = [
+			'Worker.hx' => 'class Worker {\n\tpublic function new() {}\n\tpublic function run():Void {}\n}\n'
+		];
+		assertMatch(ask(['Main.hx' => main], null, true, null, false, null, library, null, true), r -> r.match(Proven));
+		assertMatch(ask(['Main.hx' => main], null, true, null, false, null, library), r -> !r.match(Proven));
+		final withSub: String = StringTools.replace(main, '\t\tfor (i', '\t\tvar s:Worker = new Sub();\n\t\ts.run();\n\t\tfor (i');
+		final hidden: Map<String, String> = [
+			'Sub.hx' => 'class Sub extends Worker {\n\tpublic function new() super();\n\toverride public function run():Void Main.items.push(1);\n}\n'
+		];
+		assertMatch(ask(['Main.hx' => withSub], null, true, null, false, null, library, hidden, true), r -> !r.match(Proven));
+	}
+
 	@:pin('control') @:killer('M-FACTS-REACH-UNREAD-VALUE')
 	public function testAStoredFunctionValueMayConvertWhatItIsHanded(): Void {
 		// `fmt` holds a lambda the walk never enters — it reaches no toucher by an edge — whose `Std.string` runs `toString`
@@ -314,13 +397,44 @@ class MemberReachFactsTest extends Test {
 	 * each define set of `configurations` and read through the facts unless `withFacts` is false; `classpathComplete` is
 	 * the analysis's word that the index holds every type the builds compile. `library` files compile beside
 	 * them and are indexed, but are no part of the project: the walk reads one only when it follows code into it.
+	 * `unindexed` files are written and compiled but indexed by nothing — code only the compiler sees. `listed` hands the
+	 * analysis the builds as the whole list of them, compiling every file of the fixture.
 	 */
 	private static function ask(
 		files: Map<String, String>, ?configurations: Array<Array<String>>, withFacts: Bool = true, ?member: MemberRef,
-		classpathComplete: Bool = false, ?build: String, ?library: Map<String, String>
+		classpathComplete: Bool = false, ?build: String, ?library: Map<String, String>, ?unindexed: Map<String, String>,
+		listed: Bool = false
+	): ReachResult {
+		return withReach(files, configurations, withFacts, classpathComplete, build, library, unindexed, listed, (reach, dir) -> {
+			final source: String = files['Main.hx'] ?? '';
+			reach.mayReach(Region(Path.join([dir, 'Main.hx']), regionOf(source)), member ?? { owner: 'Main', name: 'items' }, Mutate);
+		});
+	}
+
+	/**
+	 * Whether the region of `Main.hx` may change what the local `name`, read last in it, holds (see `ask`), answered under
+	 * the builds listed as the whole list of them — or, with `classpathComplete`, under the analysis's word that the index
+	 * holds every type they compile.
+	 */
+	private static function askLocal(
+		files: Map<String, String>, name: String, withFacts: Bool = true, classpathComplete: Bool = false, ?unindexed: Map<String, String>
+	): ReachResult {
+		return withReach(files, null, withFacts, classpathComplete, null, null, unindexed, !classpathComplete, (reach, dir) -> {
+			final source: String = files['Main.hx'] ?? '';
+			final at: Int = source.lastIndexOf(name, source.indexOf(REGION_CLOSE));
+			reach.mayMutateNamed(Path.join([dir, 'Main.hx']), name, new Span(at, at + name.length), regionOf(source));
+		});
+	}
+
+	/** The fixture of `ask` written, compiled and indexed, `question` asked of its analysis, and the fixture removed. */
+	private static function withReach(
+		files: Map<String, String>, configurations: Null<Array<Array<String>>>, withFacts: Bool, classpathComplete: Bool,
+		build: Null<String>, library: Null<Map<String, String>>, unindexed: Null<Map<String, String>>, listed: Bool,
+		question: (MemberReach, String) -> ReachResult
 	): ReachResult {
 		final entries: Array<{ name: String, source: String }> = [for (name => text in files) { name: name, source: text }];
 		for (name => text in library ?? []) entries.push({ name: name, source: text });
+		for (name => text in unindexed ?? []) entries.push({ name: name, source: text });
 		entries.push({ name: 'build.hxml', source: build ?? BUILD });
 		final dir: String = CliFixture.writeTree('reach_facts', entries);
 		final oracles: Array<OracleConfig> = [for (d in configurations ?? [[]]) { hxml: 'build.hxml', dir: dir, defines: d }];
@@ -343,13 +457,20 @@ class MemberReachFactsTest extends Test {
 		final index: SymbolIndex = SymbolIndex.build(
 			project.concat(libraries).concat([{ file: 'std/Array.hx', source: STD_ARRAY }]), plugin
 		);
+		final cwd: String = Sys.getCwd();
+		final builds: Null<Array<ReachConfiguration>> = listed ? [
+			{
+				name: 'listed',
+				defined: [],
+				everDefined: [],
+				compiled: [for (e in entries) OracleCoverage.canonical(cwd, Path.join([dir, e.name]))],
+				types: []
+			}
+		] : null;
 		final reach: MemberReach = new MemberReach(
-			plugin, project, index, true, MemberReach.MAX_LIBRARY_FILES, MemberReach.MAX_VISITED, null, () -> classpathComplete, facts
+			plugin, project, index, true, MemberReach.MAX_LIBRARY_FILES, MemberReach.MAX_VISITED, builds, () -> classpathComplete, facts
 		);
-		final source: String = files['Main.hx'] ?? '';
-		final result: ReachResult = reach.mayReach(
-			Region(Path.join([dir, 'Main.hx']), regionOf(source)), member ?? { owner: 'Main', name: 'items' }, Mutate
-		);
+		final result: ReachResult = question(reach, dir);
 		CliFixture.removeDir(dir);
 		return result;
 	}

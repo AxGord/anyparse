@@ -40,12 +40,19 @@ final class ValueCarriers {
 	/** The types whose instances may have escaped the type system (`ValueEscapes.escaped`), or null for any. */
 	private final _escaped: () -> Null<Array<String>>;
 
+	/**
+	 * Whether the analysis answers under a list of builds that is every build (`MemberReach` configurations): only then
+	 * do the compiler facts of those builds speak for every subtype that exists.
+	 */
+	private final _buildsListed: Bool;
+
 	private var _completeMemo: Null<Bool> = null;
 
-	public function new(scope: ReachProject, complete: () -> Bool, escaped: () -> Null<Array<String>>) {
+	public function new(scope: ReachProject, complete: () -> Bool, escaped: () -> Null<Array<String>>, buildsListed: Bool) {
 		_scope = scope;
 		_complete = complete;
 		_escaped = escaped;
+		_buildsListed = buildsListed;
 	}
 
 	/** Start a new question: nothing met yet. */
@@ -65,6 +72,17 @@ final class ValueCarriers {
 		_completeMemo = answer;
 		if (!answer) metIncomplete = true;
 		return answer;
+	}
+
+	/**
+	 * Whether every subtype of `type` the builds compile is one the index declares: the whole classpath is
+	 * (`classpathComplete`), or — under a listed set of builds — their compiler facts place every subtype they typed in a
+	 * file the index holds (`FactsProvenance.subtypesIndexed`). A type a macro defined then blinds only the questions about its
+	 * own supertypes, not the whole run.
+	 */
+	public function subtypesKnown(type: String): Bool {
+		if (classpathComplete()) return true;
+		return _buildsListed && _scope.provenance()?.subtypesIndexed(type) == true;
 	}
 
 	/**
@@ -134,7 +152,6 @@ final class ValueCarriers {
 		return names.contains(nominal);
 	}
 
-
 	/**
 	 * Whether a value statically typed `type` (null: not known) may be an object that carries a member `owner` declares:
 	 * `Carries` when the types it may be meet the types that carry the member, `CannotCarry` when both are known and
@@ -170,13 +187,16 @@ final class ValueCarriers {
 		return null;
 	}
 
-	/** Whether every subtype of `type` is one the index lists: the classpath is complete and no unparsed file spells it. */
+	/**
+	 * Whether every subtype of `type` is one the index lists: the builds' subtypes of it are known (`subtypesKnown`) and no
+	 * unparsed file a build may compile (`ReachProject.mayCompile`) spells it.
+	 */
 	private function complete(type: String): Bool {
-		if (!classpathComplete()) return false;
+		if (!subtypesKnown(type)) return false;
 		final held: Null<Bool> = _completeByType[type];
 		if (held != null) return held;
 		var answer: Bool = true;
-		for (file in _scope.index.skippedFiles()) {
+		for (file in _scope.index.skippedFiles()) if (_scope.mayCompile(file)) {
 			final source: Null<String> = _scope.sources[file] ?? _scope.index.sourceOf(file);
 			if (source == null || RawSourceScan.mentionsWord(source, type)) {
 				answer = false;

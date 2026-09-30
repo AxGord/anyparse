@@ -248,7 +248,7 @@ class HxTestHelpers extends Test {
 
 	private function expectSimpleCtor(ctor: HxEnumCtor): HxIdentLit {
 		return switch ctor {
-			case SimpleCtor(name): name;
+			case SimpleCtor(decl): decl.name;
 			case _: throw 'expected SimpleCtor, got $ctor';
 		};
 	}

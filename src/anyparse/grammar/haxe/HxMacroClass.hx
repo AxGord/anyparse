@@ -16,6 +16,11 @@ package anyparse.grammar.haxe;
  * as an expression operand (which would fail). It is declared AFTER
  * `MacroTypeExpr` (`macro :`) since that form is disjoint.
  *
+ * `heritage` is the `extends` / `implements` clause list, the twin of
+ * `HxClassDecl.heritage` (`macro class $name extends Base<$ct> { … }`); the
+ * `@:tryparse` loop ends at the `{` of `members`, so a clause-less head adds
+ * no output.
+ *
  * `members` is a separator-less close-peek `Star`, byte-identical in
  * parse behaviour to `HxClassDecl.members` (`@:lead('{') @:trail('}')
  * @:trivia` with no `@:sep`) — each `HxMemberDecl` self-terminates
@@ -38,6 +43,7 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxMacroClass = {
 	var head: HxMacroClassHead;
+	@:trivia @:tryparse @:fmt(padLeading, lineLengthAwareSeps, heritageWrap) var heritage: Array<HxHeritageClause>;
 	@:fmt(interMemberBlankLines(
 		'member', 'VarMember|FinalMember', 'FnMember'
 	), blankAroundMultilineMembers('aroundMultilineFields')) @:lead('{') @:trail('}') @:trivia var members: Array<HxMemberDecl>;

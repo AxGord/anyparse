@@ -114,9 +114,9 @@ final class HxAstPredLowering extends AstPredLowering {
 	 * reached through the Assign / If / Meta / Return arms.
 	 *
 	 * `DollarReifExpr` is DELIBERATELY absent from `_binopRhsNoSemi`'s
-	 * carve-out while present here: the carve-out encodes a corpus
-	 * contract for `x = ${expr}` / `x = {a: 1}` / `x = [1, 2]`, and no
-	 * fixture covers a reification splice as an assignment RHS
+	 * carve-out while present here: the carve-out keeps `;` strict for an
+	 * assignment RHS that does not end with `}` (`x = [1, 2]`, `x = a is
+	 * T`), and no fixture covers a reification splice as an assignment RHS
 	 * (motivating source for the bare-statement entry: Pony
 	 * `DIBuilder.hx` `$b{loadBody}` inside a `macro class` body). The
 	 * asymmetry is intentional, not an oversight.
@@ -157,6 +157,8 @@ final class HxAstPredLowering extends AstPredLowering {
 		// BlockBody Star refused to continue and the whole file skip-parsed in PLAIN
 		// mode while the trivia parser accepted it (`CondSpliceReturnStmt`).
 		'CondSpliceReturnStmt',
+		// every branch of the region ends the assignment with its own `;`
+		'CondSemiAssignStmt',
 		'MetaCondStmt',
 		'CondSpliceSwitchOpen',
 		'VoidReturnStmt',
@@ -593,18 +595,17 @@ final class HxAstPredLowering extends AstPredLowering {
 
 	/**
 	 * Any binary infix's right operand at statement position. Carve-out:
-	 * `x = {a: 1}` / `x = [1, 2]` / `x = ${expr}` / `x = a is Int` keep
-	 * `;` strict (the corpus contract — distinct from the bare forms at
-	 * stmt position). The carve-out lives here, not in the
-	 * brace-terminal set, so the Meta / Return / If arms still see them
-	 * as brace-terminated; it applies to the non-assign family too, so
-	 * the two stay indistinguishable to the corpus.
+	 * `x = [1, 2]` / `x = a is Int` keep `;` strict — neither ends with
+	 * `}`, which is the one token Haxe lets stand in for the terminator.
+	 * An object literal or a `${expr}` DOES end with `}`, so `x = {a: 1}`
+	 * needs no `;`, exactly as the compiler accepts it. The carve-out
+	 * lives here, not in the brace-terminal set, so the Meta / Return / If
+	 * arms still see them as brace-terminated; it applies to the
+	 * non-assign family too, so the two stay indistinguishable.
 	 */
 	private function binopRhsNoSemiField(): Field {
 		final recurse: Expr = { expr: ECall(ident('_stmtExprNoSemiAt'), [ident('r'), macro true]), pos: Context.currentPos() };
-		final body: Expr = nullSwitch(ident('r'), macro false, [
-			caseOf(HX_EXPR, ['ObjectLit', 'ArrayExpr', 'DollarBlockExpr', 'Is'], macro false)
-		], recurse);
+		final body: Expr = nullSwitch(ident('r'), macro false, [caseOf(HX_EXPR, ['ArrayExpr', 'Is'], macro false)], recurse);
 		return predField(
 			'_binopRhsNoSemi',
 			[valueArg('r', HX_EXPR)],

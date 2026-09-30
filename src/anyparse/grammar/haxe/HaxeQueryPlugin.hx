@@ -622,7 +622,8 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// position-scoped statement lists too, but live in `branchScopeKinds` rather than
 			// `scopeKinds`. `RefShape.positionScopedKinds` is keyed by kind, not by vocabulary.
 			positionScopedKinds: POSITION_SCOPED_SCOPE_KINDS.concat(BRANCH_SCOPE_KINDS),
-			writeParentKinds: ASSIGN_KINDS.concat(['PreIncr', 'PreDecr', 'PostIncr', 'PostDecr']),
+			// `CondSemiAssignStmt` assigns its child 0 like `Assign`, its value a `#if` region of statements
+			writeParentKinds: ASSIGN_KINDS.concat(['PreIncr', 'PreDecr', 'PostIncr', 'PostDecr', 'CondSemiAssignStmt']),
 			// Self-scoped decl kinds: scope-introducers whose own name binds
 			// into the frame they open (the for-loop iterator pattern). Listed
 			// in scopeKinds, absent from declHostKinds — the binding is visible

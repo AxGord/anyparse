@@ -106,7 +106,8 @@ class FieldRefScanTest extends Test {
 		{ kind: 'PreIncr', code: '++_x' },
 		{ kind: 'PostIncr', code: '_x++' },
 		{ kind: 'PreDecr', code: '--_x' },
-		{ kind: 'PostDecr', code: '_x--' }
+		{ kind: 'PostDecr', code: '_x--' },
+		{ kind: 'CondSemiAssignStmt', code: '_x = #if a 1; #else 2; #end' }
 	];
 
 	/**
@@ -264,7 +265,16 @@ class FieldRefScanTest extends Test {
 	 * predicate lost a kind, and the pin would die by exception instead of by its own assertion.
 	 */
 	private static function firstWriteNode(code: String): QueryNode {
-		final tree: QueryNode = new HaxeQueryPlugin().parseFile('class C {\n\tfunction m():Void {\n\t\t$code;\n\t}\n}');
+		// a region every branch of which ends the statement is a statement of its own, with no `;` after its `#end`
+		final terminated: Bool = StringTools.endsWith(code, '#end');
+		final tree: QueryNode = new HaxeQueryPlugin().parseFile(
+			'class C {\n\tfunction m():Void {\n\t\t$code${terminated ? '' : ';'}\n\t}\n}'
+		);
+		if (terminated) {
+			final region: Null<QueryNode> = firstOfKind(tree, 'CondSemiAssignStmt');
+			if (region == null) throw 'no self-terminating region statement parsed out of "$code"';
+			return region;
+		}
 		final stmt: Null<QueryNode> = firstOfKind(tree, 'ExprStmt');
 		if (stmt == null || stmt.children.length != 1) throw 'no single-expression statement parsed out of "$code"';
 		return stmt.children[0];

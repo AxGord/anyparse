@@ -233,6 +233,14 @@ enum HxExpr {
 	CondSpliceOpExpr(inner: HxCondSpliceOpExpr);
 
 	/**
+	 * Token-splice region whose every branch opens one `(` that the
+	 * shared tail closes — see `HxCondSpliceCallOpen`. Dispatched BEFORE
+	 * `CondSpliceExpr`, whose tail has no slot for that `)`.
+	 */
+	@:kw('#if') @:trail(')')
+	CondSpliceCallOpenExpr(inner: HxCondSpliceCallOpen);
+
+	/**
 	 * Token-splice fallback for `#if` regions no structural
 	 * conditional can represent — see `HxCondSpliceExpr`.
 	 */

@@ -34,7 +34,7 @@ package anyparse.grammar.haxe;
 @:peg
 @:fmt(multilineWhenFieldShape('body'))
 typedef HxFnDecl = {
-	var name: HxIdentLit;
+	var name: HxFnNameLit;
 	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe) var typeParams: Null<Array<HxTypeParamDecl>>;
 	@:trivia @:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams'), funcParamParens,
 		wrapRules('functionSignatureWrap'), bodyAwareCompactIndent, groupRestProbe, ignoreSourceNewlinesForWrap) var params: Array<HxParam>;

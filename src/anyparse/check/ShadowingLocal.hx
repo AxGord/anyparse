@@ -7,6 +7,7 @@ import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TreePath;
 import anyparse.runtime.Span;
 
 using StringTools;
@@ -145,6 +146,19 @@ final class ShadowingLocal implements Check implements NoAutofix {
 		return violations;
 	}
 
+	/**
+	 * What `name` is already bound to where `node` stands — `'parameter'`, `'local'`, `'loop iterator'` or
+	 * `'catch binding'` — or null: the declarations a binding of `name` introduced at `node` would hide, by the
+	 * same ancestor walk this rule reports with. A rewrite introducing such a binding asks it, so it never creates
+	 * what this rule reports.
+	 */
+	public static function boundAt(root: QueryNode, node: QueryNode, name: String, shape: RefShape): Null<String> {
+		final seams: Null<ScopeSeams> = seamsOf(shape, true, RULE_ID);
+		final path: Null<Array<QueryNode>> = TreePath.pathTo(root, node);
+		final at: Null<Span> = node.span;
+		return seams == null || path == null || at == null ? null : boundBefore(name, at.from, node, path.slice(0, path.length - 1), seams);
+	}
+
 	/** Whether `span` lies wholly inside `outer`. */
 	private static inline function within(span: Span, outer: Span): Bool {
 		return span.from >= outer.from && span.to <= outer.to;
@@ -206,15 +220,21 @@ final class ShadowingLocal implements Check implements NoAutofix {
 	private static function shadowedBinding(decl: QueryNode, ancestors: Array<QueryNode>, seams: ScopeSeams): Null<String> {
 		final name: Null<String> = decl.name;
 		final declSpan: Null<Span> = decl.span;
-		if (name == null || declSpan == null) return null;
-		var arrivedFrom: QueryNode = decl;
+		return name == null || declSpan == null ? null : boundBefore(name, declSpan.from, decl, ancestors, seams);
+	}
+
+	/** `shadowedBinding`'s walk for `name` in effect before `from`, starting at `start` under `ancestors`. */
+	private static function boundBefore(
+		name: String, from: Int, start: QueryNode, ancestors: Array<QueryNode>, seams: ScopeSeams
+	): Null<String> {
+		var arrivedFrom: QueryNode = start;
 		var at: Int = ancestors.length - 1;
 		while (at >= 0) {
 			final frame: QueryNode = ancestors[at];
 			if (seams.classLikeKinds.contains(frame.kind)) return null;
 			if (seams.positionScopedKinds.contains(frame.kind)) {
-				if (bindsItself(frame, name, declSpan.from, seams)) return binderLabel(frame.kind, seams);
-				final hidden: Null<String> = declaredIn(frame, arrivedFrom, name, declSpan.from, seams);
+				if (bindsItself(frame, name, from, seams)) return binderLabel(frame.kind, seams);
+				final hidden: Null<String> = declaredIn(frame, arrivedFrom, name, from, seams);
 				if (hidden != null) return hidden;
 			}
 			arrivedFrom = frame;

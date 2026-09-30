@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
 
@@ -14,16 +15,22 @@ final class ReachProject {
 	/** Project file -> its text. */
 	public final sources: Map<String, String> = [];
 
+	public final plugin: GrammarPlugin;
+	public final shape: RefShape;
+	public final index: SymbolIndex;
+	public final files: Array<{ file: String, source: String }>;
+
 	/**
 	 * The compiler facts of the run's builds, as the analysis reads them (`FactsView`): set once by the analysis that owns
 	 * this scope, null for syntax alone.
 	 */
 	public var facts: Null<FactsView> = null;
 
-	public final plugin: GrammarPlugin;
-	public final shape: RefShape;
-	public final index: SymbolIndex;
-	public final files: Array<{ file: String, source: String }>;
+	/** What the facts say the builds made of the index and the text (`FactsProvenance`), made on first need. */
+	private var _provenance: Null<FactsProvenance> = null;
+
+	/** The files the builds typed a type in (`typeHomes`), read on first need. */
+	private var _typeHomes: Null<Map<String, Bool>> = null;
 
 	public function new(plugin: GrammarPlugin, index: SymbolIndex, files: Array<{ file: String, source: String }>) {
 		this.plugin = plugin;
@@ -31,6 +38,25 @@ final class ReachProject {
 		this.index = index;
 		this.files = files;
 		for (f in files) sources[f.file] = f.source;
+	}
+
+	/**
+	 * Whether the file `file`, which did not parse, may hold code or a declaration a build compiles: always without
+	 * compiler facts; with them, only when some configuration typed code of it or a type it declares. A file no build
+	 * reads (a source of another language on a classpath, a template) can declare no subtype and run no code.
+	 */
+	public function mayCompile(file: String): Bool {
+		final view: Null<FactsView> = facts;
+		return view == null || view.table.compiled(file) || typeHomes(view).exists(view.table.keyOf(file));
+	}
+
+	/** What the compiler facts say the builds made of the index and the text; null without facts. */
+	public function provenance(): Null<FactsProvenance> {
+		final view: Null<FactsView> = facts;
+		if (view == null) return null;
+		final made: FactsProvenance = _provenance ?? new FactsProvenance(view, this);
+		_provenance = made;
+		return made;
 	}
 
 	/**
@@ -46,6 +72,22 @@ final class ReachProject {
 			for (t in fi.types)
 				if (t.name == type && !CallGraphNames.selfAlias(t)) found.push({ file: fi.file, span: t.span });
 		return found.length == 1 ? found[0] : null;
+	}
+
+	/**
+	 * The table keys of the files the builds typed a type in, read once: a file of declarations alone (an interface, a
+	 * typedef) carries no code facts, yet a build compiles it.
+	 */
+	private function typeHomes(view: FactsView): Map<String, Bool> {
+		final held: Null<Map<String, Bool>> = _typeHomes;
+		if (held != null) return held;
+		final out: Map<String, Bool> = [];
+		for (id in view.table.typeIds()) {
+			final at: Null<FactPos> = view.table.typePosition(id);
+			if (at != null) out[at.file] = true;
+		}
+		_typeHomes = out;
+		return out;
 	}
 
 }

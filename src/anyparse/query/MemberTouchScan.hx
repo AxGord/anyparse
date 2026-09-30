@@ -84,14 +84,14 @@ final class MemberTouchScan {
 	 * built, escapes at once.
 	 */
 	public function localEscape(
-		tree: QueryNode, source: String, fn: QueryNode, declaration: QueryNode, name: String, region: Span
+		tree: QueryNode, source: String, fn: QueryNode, declaration: QueryNode, name: String, region: Span, ?freshCall: QueryNode -> Bool
 	): Null<Span> {
 		final shape: RefShape = _scope.shape;
 		final declSpan: Null<Span> = declaration.span;
 		if (declSpan == null) return fn.span ?? region;
 		if (!(shape.localDeclKinds ?? []).contains(declaration.kind)) return declSpan;
 		final init: Null<QueryNode> = CtorFieldFold.declInitializer(declaration, shape);
-		if (init == null || !isFresh(init, { tree: tree, source: source })) return init?.span ?? declSpan;
+		if (init == null || !isFresh(init, { tree: tree, source: source, call: freshCall })) return init?.span ?? declSpan;
 		final closures: Array<String> = (shape.lambdaKinds ?? []).concat(shape.localFunctionKinds ?? []);
 		final end: Int = rerunEnd(fn, region);
 		var found: Null<Span> = null;
@@ -134,13 +134,17 @@ final class MemberTouchScan {
 	/**
 	 * Whether `value` builds a fresh object nothing else holds: an array literal or comprehension, `null`, `new`
 	 * of an array type, or — with `ctx` to type the receiver — a call of a method the receiver's built-in array
-	 * or string type declares as returning a new object (`xs.copy()`, `'a,b'.split(',')`, `freshResult`).
+	 * or string type declares as returning a new object (`xs.copy()`, `'a,b'.split(',')`, `freshResult`), or a call
+	 * `ctx.call` proves returns one (a project function whose every `return` hands out a fresh value).
 	 */
 	public function isFresh(raw: QueryNode, ctx: Null<FreshContext>): Bool {
 		final value: QueryNode = BoolExprShape.unwrapParens(raw, _scope.shape.parenKind);
 		if (value.kind == _scope.shape.arrayLiteralKind || value.kind == _scope.shape.nullLiteralKind) return true;
 		if (value.kind == _scope.shape.newExprKind) return (_scope.shape.arrayTypeNames ?? []).contains(lastSegment(value.name ?? ''));
-		return ctx != null && freshResult(value, ctx);
+		if (ctx == null) return false;
+		if (freshResult(value, ctx)) return true;
+		final call: Null<QueryNode -> Bool> = ctx.call;
+		return call != null && value.kind == _scope.shape.callKind && call(value);
 	}
 
 	private function scanFile(
@@ -479,6 +483,9 @@ typedef MemberTouches = {
 typedef FreshContext = {
 	var tree: QueryNode;
 	var source: String;
+
+	/** Whether a call node of `tree` returns an object nothing else holds; absent, no call but a built-in one is fresh. */
+	@:optional var call: Null<QueryNode -> Bool>;
 }
 
 private typedef Verdict = {

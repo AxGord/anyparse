@@ -2711,10 +2711,10 @@
 		{
 			"name": "M-KV-NOOPENER-TAKEN-SCOPE",
 			"type": "anyparse.check.PreferKeyValueLoop",
-			"method": "analyzeReads",
-			"find": "outerFn?.span ?? new Span(0, f.source.length)",
-			"replace": "h.body.span ?? forSpan",
-			"note": "the binder name is checked against the body only, so it shadows a parameter or outer local of the same name for the whole loop"
+			"method": "binderOf",
+			"find": "if (hidden != null) return",
+			"replace": "if (false) return",
+			"note": "the binder name is checked against the loop only, so it shadows a parameter or outer local of the same name for the whole loop"
 		},
 		{
 			"name": "M-KV-NOOPENER-TAKEN-MEMBER",
@@ -4992,7 +4992,7 @@
 			"name": "M-CARRY-CLASSPATH",
 			"type": "anyparse.query.ValueCarriers",
 			"method": "complete",
-			"find": "if (!classpathComplete()) return false;",
+			"find": "if (!subtypesKnown(type)) return false;",
 			"replace": "",
 			"note": "a type's subtypes are the index's even when the builds compile code the index does not hold"
 		},
@@ -5314,7 +5314,7 @@
 			"name": "M-REACH-CLASSPATH-DISPATCH",
 			"type": "anyparse.query.ReachGraph",
 			"method": "loadOverrides",
-			"find": "if (!carriers.classpathComplete())",
+			"find": "if (!carriers.subtypesKnown(type))",
 			"replace": "if (false)",
 			"note": "a dispatch on a library type reads only the overrides the index holds, although the builds compile more"
 		},
@@ -5456,7 +5456,7 @@
 			"name": "M-REACH-LOCAL-FRESH",
 			"type": "anyparse.query.MemberTouchScan",
 			"method": "localEscape",
-			"find": "if (init == null || !isFresh(init, { tree: tree, source: source })) return init?.span ?? declSpan;",
+			"find": "if (init == null || !isFresh(init, { tree: tree, source: source, call: freshCall })) return init?.span ?? declSpan;",
 			"replace": "return init?.span ?? declSpan;",
 			"note": "no local initializer counts as fresh, so every local collection whose loop calls anything is refused"
 		},

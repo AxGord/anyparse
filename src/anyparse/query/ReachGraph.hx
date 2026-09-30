@@ -495,10 +495,10 @@ final class ReachGraph {
 		final unparsed: Null<String> = unparsedLibraryMentioning([type, member]);
 		if (unparsed != null) return SkipParse(unparsed);
 		// a build compiling code the index does not hold may declare an override of it there
-		if (!carriers.classpathComplete())
+		if (!carriers.subtypesKnown(type))
 			return OutOfScope(
-				'a dispatch on the library type `$type` may reach an override the index does not hold — '
-				+ 'no oracle list declared complete says which library code the builds compile'
+				'a dispatch on the library type `$type` may reach an override the index does not hold — neither a complete '
+				+ 'oracle list nor the builds\' compiler facts place every subtype of it in a file the index holds'
 			);
 		for (file in _scope.index.subtypes.subtypeFiles(type)) if (g.treeOf(file) == null) {
 			if (g.skippedFiles.contains(file)) return SkipParse(file);
@@ -1065,9 +1065,9 @@ final class ReachGraph {
 		return null;
 	}
 
-	/** The first library file of the index that did not parse and spells one of `words`, or null. */
+	/** The first library file of the index that did not parse, a build may compile, and spells one of `words`, or null. */
 	private function unparsedLibraryMentioning(words: Array<String>): Null<String> {
-		for (file in _scope.index.skippedFiles()) if (!_scope.sources.exists(file)) {
+		for (file in _scope.index.skippedFiles()) if (!_scope.sources.exists(file) && _scope.mayCompile(file)) {
 			final source: Null<String> = _scope.index.sourceOf(file);
 			if (source == null || words.exists(w -> RawSourceScan.mentionsWord(source, w))) return file;
 		}

@@ -44,8 +44,17 @@ using StringTools;
 @:nullSafety(Strict)
 final class FactsView {
 
+	/** What the graph puts in the id of a function nested in another (`CallGraph`): a local function or a lambda. */
+	public static inline final NESTED_MARK: String = '#';
+
 	/** The node kinds that are the body of a function (`TypedFactsProbe`). */
-	private static final FUNCTION_KINDS: Array<String> = ['method', 'ctor', 'fn', 'local'];
+	public static final FUNCTION_KINDS: Array<String> = ['method', 'ctor', 'fn', 'local'];
+
+	/** The marker of a body a macro expanded into: it may run code no fact names. */
+	private static inline final MACRO_EXPANSION: String = 'macro-expansion';
+
+	/** The suffix of an abstract's implementation class: its statics are the abstract's members. */
+	private static inline final IMPL_SUFFIX: String = '_Impl_';
 
 	/** The markers that leave some fact of a node without a place: its body keeps the syntactic reading. */
 	private static final UNPLACED: Array<String> = [MACRO_EXPANSION, 'inline-site-unknown', 'stale-foreign'];
@@ -56,15 +65,6 @@ final class FactsView {
 	/** The field kinds that are methods (`TypedFactsProbe`): a read of one is a function value. */
 	private static final METHOD_KINDS: Array<String> = ['method', 'inline', 'dynamic'];
 
-	/** The marker of a body a macro expanded into: it may run code no fact names. */
-	private static inline final MACRO_EXPANSION: String = 'macro-expansion';
-
-	/** What the graph puts in the id of a function nested in another (`CallGraph`): a local function or a lambda. */
-	private static inline final NESTED_MARK: String = '#';
-
-	/** The suffix of an abstract's implementation class: its statics are the abstract's members. */
-	private static inline final IMPL_SUFFIX: String = '_Impl_';
-
 	/** A package-qualified path's package prefix, in a type string. */
 	private static final PACKAGE_PREFIX: EReg = ~/([A-Za-z_][A-Za-z0-9_]*\.)+(?=[A-Za-z_])/g;
 
@@ -74,13 +74,13 @@ final class FactsView {
 	/** The table read. */
 	public final table: CompilerFacts;
 
-	private final _scope: ReachProject;
-
 	/** File -> its conditional directives and regions, scanned once. */
 	private final _conditional: Map<String, ConditionalText> = [];
 
 	/** `Type.member` or `Type` -> whether every build resolves it the same (`resolvedAlike`), settled once. */
 	private final _alike: Map<String, Bool> = [];
+
+	private final _scope: ReachProject;
 
 	/** Graph type name -> the typed types standing for it, built on first need. */
 	private var _bySimpleName: Null<Map<String, Array<String>>> = null;
@@ -99,12 +99,6 @@ final class FactsView {
 		_scope = scope;
 	}
 
-	/** The view of `table` for `scope`; null when there is none, or a configuration left no facts: the table then holds less. */
-	public static function of(table: Null<CompilerFacts>, scope: ReachProject): Null<FactsView> {
-		if (table == null || table.dropped.length > 0 || table.configurations.length == 0) return null;
-		return new FactsView(table, scope);
-	}
-
 	/** Drop what was read off the text of `file`, which changed. */
 	public function forget(file: String): Void {
 		_conditional.remove(file);
@@ -121,48 +115,6 @@ final class FactsView {
 		if (outer == null) return null;
 		for (n in outer) if (n.incomplete.exists(m -> UNPLACED.contains(m))) return null;
 		return contextAlike(g, node, outer) ? outer : null;
-	}
-
-	/**
-	 * The outermost typed function bodies inside the span of `node`, when its text holds no directive and lies in no
-	 * conditional region; null otherwise, or when none was typed.
-	 */
-	private function typedBodies(g: CallGraph, node: FnNode): Null<Array<FactNode>> {
-		final span: Null<Span> = node.span;
-		final source: Null<String> = g.sourceOf(node.file);
-		if (span == null || source == null) return null;
-		if (conditional(node.file, source, span)) return null;
-		final inside: Array<FactNode> = [
-			for (n in table.nodesIn(node.file)) if (FUNCTION_KINDS.contains(n.kind) && !n.generated && within(n.at.span, span)) n
-		];
-		final outer: Array<FactNode> = [
-			for (n in inside) if (!inside.exists(o -> within(n.at.span, o.at.span) && wider(o.at.span, n.at.span))) n
-		];
-		// a body another graph node starts at is that node's: one nested in this one, whose own facts this one has none of
-		// (a local `inline function`, which the compiler types into its caller)
-		for (n in outer) {
-			final owner: Null<String> = g.functionAt(node.file, n.at.span.from);
-			if (owner != node.id && g.node(owner ?? '')?.span?.from == n.at.span.from) return null;
-		}
-		return outer.length == 0 ? null : outer;
-	}
-
-	/**
-	 * Whether what the compiler typed `node`'s bodies `bodies` against reads alike in every build (`resolvedAlikeIn`) —
-	 * and, for a function nested in another, what it typed the enclosing one against, which gave the nested one its
-	 * expected type: a lambda's parameters are typed by the call it is handed to.
-	 */
-	private function contextAlike(g: CallGraph, node: FnNode, bodies: Array<FactNode>): Bool {
-		if (!bodies.foreach(resolvedAlikeIn)) return false;
-		final span: Null<Span> = node.span;
-		if (span == null || node.id.indexOf(NESTED_MARK) < 0) return true;
-		// the innermost function holding the text just before this one's: a sibling ends before a separator
-		final id: Null<String> = span.from > 0 ? g.functionAt(node.file, span.from - 1) : null;
-		final found: Null<FnNode> = id == null ? null : g.node(id);
-		final at: Null<Span> = found?.span;
-		final enclosing: Null<FnNode> = at != null && within(span, at) && wider(at, span) ? found : null;
-		final typed: Null<Array<FactNode>> = enclosing == null ? null : typedBodies(g, enclosing);
-		return enclosing != null && typed != null && contextAlike(g, enclosing, typed);
 	}
 
 	/**
@@ -267,13 +219,78 @@ final class FactsView {
 		return type == null ? null : simpleSource(type);
 	}
 
+	/** The property an accessor name serves (`get_x` -> `x`), or null for a name no accessor prefix starts. */
+	public function accessorProperty(name: String): Null<String> {
+		for (prefix in _scope.shape.accessorMethodPrefixes ?? []) if (name.startsWith(prefix)) return name.substr(prefix.length);
+		return null;
+	}
+
+	/** The index's file whose table key is `key`, or null. */
+	public function indexedFile(key: String): Null<FileInfo> {
+		var byKey: Null<Map<String, FileInfo>> = _byKey;
+		if (byKey == null) {
+			final built: Map<String, FileInfo> = [for (fi in _scope.index.allFiles()) table.keyOf(fi.file) => fi];
+			_byKey = built;
+			byKey = built;
+		}
+		return byKey[key];
+	}
+
+	/** Graph type name -> the typed types standing for it. */
+	public function bySimpleName(): Map<String, Array<String>> {
+		final held: Null<Map<String, Array<String>>> = _bySimpleName;
+		if (held != null) return held;
+		final out: Map<String, Array<String>> = [];
+		for (id in table.typeIds()) {
+			final simple: String = graphType(id);
+			final list: Array<String> = out[simple] ?? [];
+			list.push(id);
+			out[simple] = list;
+		}
+		_bySimpleName = out;
+		return out;
+	}
+
 	/**
-	 * A facts type string spelled as source declares it: every path by its simple name, an implementation class by its
-	 * abstract. Null for a type carrying an unknown or a type parameter, which names no declaration.
+	 * The outermost typed function bodies inside the span of `node`, when its text holds no directive and lies in no
+	 * conditional region; null otherwise, or when none was typed.
 	 */
-	public static function simpleSource(type: String): Null<String> {
-		if (type.indexOf('?') >= 0 || type.indexOf('$') >= 0) return null;
-		return IMPL_NAME.replace(PACKAGE_PREFIX.replace(type, ''), '$1');
+	private function typedBodies(g: CallGraph, node: FnNode): Null<Array<FactNode>> {
+		final span: Null<Span> = node.span;
+		final source: Null<String> = g.sourceOf(node.file);
+		if (span == null || source == null) return null;
+		if (conditional(node.file, source, span)) return null;
+		final inside: Array<FactNode> = [
+			for (n in table.nodesIn(node.file)) if (FUNCTION_KINDS.contains(n.kind) && !n.generated && within(n.at.span, span)) n
+		];
+		final outer: Array<FactNode> = [
+			for (n in inside) if (!inside.exists(o -> within(n.at.span, o.at.span) && wider(o.at.span, n.at.span))) n
+		];
+		// a body another graph node starts at is that node's: one nested in this one, whose own facts this one has none of
+		// (a local `inline function`, which the compiler types into its caller)
+		for (n in outer) {
+			final owner: Null<String> = g.functionAt(node.file, n.at.span.from);
+			if (owner != node.id && g.node(owner ?? '')?.span?.from == n.at.span.from) return null;
+		}
+		return outer.length == 0 ? null : outer;
+	}
+
+	/**
+	 * Whether what the compiler typed `node`'s bodies `bodies` against reads alike in every build (`resolvedAlikeIn`) —
+	 * and, for a function nested in another, what it typed the enclosing one against, which gave the nested one its
+	 * expected type: a lambda's parameters are typed by the call it is handed to.
+	 */
+	private function contextAlike(g: CallGraph, node: FnNode, bodies: Array<FactNode>): Bool {
+		if (!bodies.foreach(resolvedAlikeIn)) return false;
+		final span: Null<Span> = node.span;
+		if (span == null || node.id.indexOf(NESTED_MARK) < 0) return true;
+		// the innermost function holding the text just before this one's: a sibling ends before a separator
+		final id: Null<String> = span.from > 0 ? g.functionAt(node.file, span.from - 1) : null;
+		final found: Null<FnNode> = id == null ? null : g.node(id);
+		final at: Null<Span> = found?.span;
+		final enclosing: Null<FnNode> = at != null && within(span, at) && wider(at, span) ? found : null;
+		final typed: Null<Array<FactNode>> = enclosing == null ? null : typedBodies(g, enclosing);
+		return enclosing != null && typed != null && contextAlike(g, enclosing, typed);
 	}
 
 	/**
@@ -455,12 +472,6 @@ final class FactsView {
 		return pos == null || keys.exists(pos.file);
 	}
 
-	/** The property an accessor name serves (`get_x` -> `x`), or null for a name no accessor prefix starts. */
-	private function accessorProperty(name: String): Null<String> {
-		for (prefix in _scope.shape.accessorMethodPrefixes ?? []) if (name.startsWith(prefix)) return name.substr(prefix.length);
-		return null;
-	}
-
 	/**
 	 * Where the typed type `id` is declared — its file (a table key), text, range and the index's declaration of it when
 	 * the index holds that file — or null when its text cannot be read as the compile read it.
@@ -481,17 +492,6 @@ final class FactsView {
 		};
 	}
 
-	/** The index's file whose table key is `key`, or null. */
-	private function indexedFile(key: String): Null<FileInfo> {
-		var byKey: Null<Map<String, FileInfo>> = _byKey;
-		if (byKey == null) {
-			final built: Map<String, FileInfo> = [for (fi in _scope.index.allFiles()) table.keyOf(fi.file) => fi];
-			_byKey = built;
-			byKey = built;
-		}
-		return byKey[key];
-	}
-
 	/** Whether `span` of `file` holds a conditional directive or lies inside a conditional region. */
 	private function conditional(file: String, source: String, span: Span): Bool {
 		final held: ConditionalText = _conditional[file] ?? scanConditional(file, source);
@@ -510,19 +510,19 @@ final class FactsView {
 		return out;
 	}
 
-	/** Graph type name -> the typed types standing for it. */
-	private function bySimpleName(): Map<String, Array<String>> {
-		final held: Null<Map<String, Array<String>>> = _bySimpleName;
-		if (held != null) return held;
-		final out: Map<String, Array<String>> = [];
-		for (id in table.typeIds()) {
-			final simple: String = graphType(id);
-			final list: Array<String> = out[simple] ?? [];
-			list.push(id);
-			out[simple] = list;
-		}
-		_bySimpleName = out;
-		return out;
+	/** The view of `table` for `scope`; null when there is none, or a configuration left no facts: the table then holds less. */
+	public static function of(table: Null<CompilerFacts>, scope: ReachProject): Null<FactsView> {
+		if (table == null || table.dropped.length > 0 || table.configurations.length == 0) return null;
+		return new FactsView(table, scope);
+	}
+
+	/**
+	 * A facts type string spelled as source declares it: every path by its simple name, an implementation class by its
+	 * abstract. Null for a type carrying an unknown or a type parameter, which names no declaration.
+	 */
+	public static function simpleSource(type: String): Null<String> {
+		if (type.indexOf('?') >= 0 || type.indexOf('$') >= 0) return null;
+		return IMPL_NAME.replace(PACKAGE_PREFIX.replace(type, ''), '$1');
 	}
 
 	/** Whether `inner` lies within `outer`. */

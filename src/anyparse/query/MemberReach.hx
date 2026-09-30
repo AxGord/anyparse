@@ -8,6 +8,7 @@ import anyparse.query.CallGraph.UnresolvedAccess;
 import anyparse.query.CallGraph.UnresolvedCall;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.ImplicitSites.ImplicitSite;
+import anyparse.query.MemberTouchScan.FreshContext;
 import anyparse.query.MemberTouchScan.MemberTouches;
 import anyparse.query.MemberTouchScan.Occurrence;
 import anyparse.query.ReachAdmission.Admission;
@@ -147,6 +148,9 @@ final class MemberReach {
 	/** How many graph nodes the walk may visit before it gives up on a proof, by default. */
 	public static inline final MAX_VISITED: Int = 60000;
 
+	/** How deep a chain of calls handing a fresh value on (`freshCall`) is followed before the value counts as shared. */
+	private static inline final MAX_FRESH_DEPTH: Int = 4;
+
 	/** The step kind of a constructor the walk admitted through reflective instantiation. */
 	private static inline final REFLECTIVE_CONSTRUCTOR: String = 'reflective constructor';
 
@@ -231,7 +235,7 @@ final class MemberReach {
 		final carriers: ValueCarriers = new ValueCarriers(scope, classpathComplete ?? () -> false, () -> {
 			final held: Null<ValueEscapes> = escapes;
 			held == null ? null : held.escaped();
-		});
+		}, configurations != null && configurations.length > 0);
 		_carriers = carriers;
 		_touches = new MemberTouchScan(scope, _hazards, carriers, (file, span) -> {
 			final source: Null<String> = scope.sources[file];
@@ -388,7 +392,7 @@ final class MemberReach {
 		final rerun: Span = new Span(declSpan.from, _touches.rerunEnd(fn, region));
 		final blind: Null<ReachUnknown> = firstBlind(file, liveHazards(file, tree, source, rerun)) ?? _scope.facts?.blindIn(file, rerun);
 		if (blind != null) return Unknown(blind);
-		final escape: Null<Span> = _touches.localEscape(tree, source, fn, declaration, name, region);
+		final escape: Null<Span> = _touches.localEscape(tree, source, fn, declaration, name, region, freshCall.bind(file, _, 0));
 		if (escape == null) return Proven;
 		if (!_scopeKnown)
 			return Unknown(OutOfScope(
@@ -403,6 +407,127 @@ final class MemberReach {
 		if (culprit != null) return Unknown(Aliased(file, shared, file, culprit));
 		final change: Null<Occurrence> = reachedArrayChange(g, file, tree, region, callees);
 		return change == null ? Proven : Unknown(Aliased(file, shared, change.file, change.span));
+	}
+
+	/**
+	 * Whether the call `call` of `file` returns an object nothing else holds, so a local initialised by it starts
+	 * unshared: the call runs exactly one function (`soleTarget`), whose text answers for it (`answersByText`) and whose
+	 * every `return` hands out a fresh value (`returnsFresh`). The run must hold its whole project, every file of it
+	 * parsed: a file it does not read may declare an override the graph cannot see. `depth` bounds a chain of such calls.
+	 */
+	private function freshCall(file: String, call: QueryNode, depth: Int): Bool {
+		final at: Null<Span> = call.span;
+		if (at == null || depth >= MAX_FRESH_DEPTH || !_scopeKnown) return false;
+		if (graph().skippedFiles.exists(f -> _projectSources.exists(f))) return false;
+		final target: Null<FnNode> = soleTarget(file, at);
+		return target != null && answersByText(target) && returnsFresh(target, depth);
+	}
+
+	/**
+	 * The one function the call site `at` of `file` runs: every edge the graph records there is a plain `Call` to it — no
+	 * override reachable by dispatch, no function value, no unresolved reading of the site. Null otherwise.
+	 */
+	private function soleTarget(file: String, at: Span): Null<FnNode> {
+		final g: CallGraph = graph();
+		final from: Null<String> = g.functionAt(file, at.from);
+		if (from == null) return null;
+		final sited: Array<CallEdge> = [for (e in g.outEdges(from)) if (e.file == file && sameSpan(e.span, at)) e];
+		// a faceted body records the site twice, its syntax's edge and its facts', both to the one function
+		if (sited.length == 0 || !sited.foreach(e -> e.kind == Call && e.to == sited[0].to)) return null;
+		return g.unresolved.exists(u -> u.file == file && sameSpan(u.span, at)) ? null : g.node(sited[0].to);
+	}
+
+	/**
+	 * Whether the text of `target` is what runs: a project function with a body, not `dynamic`, declared once and outside
+	 * any conditional region in a type named once, whose every subtype the builds compile is known (`subtypesKnown`) and
+	 * none of which the index or the compiler facts see overriding it — and, under a build macro, a compiled body the facts
+	 * show is its text (`FactsProvenance.bodyIsSource`).
+	 */
+	private function answersByText(target: FnNode): Bool {
+		final type: Null<String> = target.typeName;
+		final name: Null<String> = target.name;
+		if (type == null || name == null || target.isExternal || target.isBodyless || target.isDynamic) return false;
+		final g: CallGraph = graph();
+		if (!_projectSources.exists(target.file) || g.types.declarationCount(type) != 1 || !declaredOnce(target.file, type, name))
+			return false;
+		if (!_carriers.subtypesKnown(type) || g.virtualTargets(type, name).length > 0 || overriddenInFacts(g, type, name)) return false;
+		return _g.buildMacroOn(type) == null || _scope.provenance()?.bodyIsSource(g, target) == true;
+	}
+
+	/**
+	 * Whether the type `type` of `file` declares `name` exactly once and outside any conditional region: a graph node
+	 * folds every declaration of a name into the first one's body, so a twin in another branch, or an overload, would go
+	 * unread.
+	 */
+	private function declaredOnce(file: String, type: String, name: String): Bool {
+		final members: Array<MemberInfo> = [
+			for (t in _index.fileInfo(file)?.types ?? []) if (t.name == type) for (m in t.members) if (m.name == name) m
+		];
+		return members.length == 1 && !members[0].guarded;
+	}
+
+	/** Whether the compiler facts know a subtype of any typed type the graph calls `type` that overrides `name`. */
+	private function overriddenInFacts(g: CallGraph, type: String, name: String): Bool {
+		final view: Null<FactsView> = _scope.facts;
+		return view != null && (view.bySimpleName()[type] ?? []).exists(id -> view.overrides(g, id, name).length > 0);
+	}
+
+	/**
+	 * Whether every `return` of the project function `target` hands out a fresh value (`returnHandsOutFresh`). A function
+	 * with no value `return`, or holding code the analysis is blind to, answers false.
+	 */
+	private function returnsFresh(target: FnNode, depth: Int): Bool {
+		final tree: Null<QueryNode> = _g.treeOf(target.file);
+		final source: Null<String> = _projectSources[target.file];
+		final span: Null<Span> = target.span;
+		if (tree == null || source == null || span == null) return false;
+		final fn: Null<QueryNode> = enclosingFunctionNode(tree, span);
+		if (fn == null || !sameSpan(fn.span, span)) return false;
+		if (
+			firstBlind(target.file, liveHazards(target.file, tree, source, span)) != null
+			|| _scope.facts?.blindIn(target.file, span) != null
+		)
+			return false;
+		final returns: Array<QueryNode> = valueReturns(fn);
+		final read: QueryNode = tree;
+		final text: String = source;
+		final ctx: FreshContext = { tree: read, source: text, call: freshCall.bind(target.file, _, depth + 1) };
+		final fnSpan: Span = span;
+		return returns.length > 0 && returns.foreach(r -> returnHandsOutFresh(r, ctx, fn, fnSpan));
+	}
+
+	/** The value `return`s of the function `fn`, outside the functions and lambdas nested in it: those return their own. */
+	private function valueReturns(fn: QueryNode): Array<QueryNode> {
+		final returnKinds: Array<String> = _shape.valueReturnKinds ?? [];
+		final nested: Array<String> = (_shape.functionKinds ?? []).concat(_shape.lambdaKinds ?? []).concat(_shape.localFunctionKinds ?? []);
+		final out: Array<QueryNode> = [];
+		function collect(node: QueryNode): Void {
+			for (c in node.children) if (!nested.contains(c.kind)) {
+				if (returnKinds.contains(c.kind)) out.push(c);
+				collect(c);
+			}
+		}
+		collect(fn);
+		return out;
+	}
+
+	/**
+	 * Whether the `return` `r` of the function `fn` (at `fnSpan`) hands out a fresh value: one `isFresh` accepts — a further
+	 * call through `ctx.call` included — or a local of `fn` whose initializer is fresh and which nothing lets go before
+	 * that `return` runs (`MemberTouchScan.localEscape`).
+	 */
+	private function returnHandsOutFresh(r: QueryNode, ctx: FreshContext, fn: QueryNode, fnSpan: Span): Bool {
+		final at: Null<Span> = r.span;
+		final raw: Null<QueryNode> = r.children.length > 0 ? r.children[0] : null;
+		if (at == null || raw == null) return false;
+		final value: QueryNode = BoolExprShape.unwrapParens(raw, _shape.parenKind);
+		if (_touches.isFresh(value, ctx)) return true;
+		final local: Null<String> = value.kind == _shape.identKind ? value.name : null;
+		final valueSpan: Null<Span> = value.span;
+		if (local == null || valueSpan == null) return false;
+		final decl: Null<QueryNode> = TypeResolver.bindingNodeFrom(local, valueSpan, ctx.tree, _shape);
+		if (decl == null || !within(decl.span, fnSpan)) return false;
+		return _touches.localEscape(ctx.tree, ctx.source, fn, decl, local, new Span(at.from, at.from), ctx.call) == null;
 	}
 
 	/** The innermost function or lambda node of `tree` whose span contains `span`. */
@@ -1407,6 +1532,16 @@ final class MemberReach {
 			if (scoped != null) host.setMemberReach(built);
 		}
 		return built;
+	}
+
+	/** Whether `inner` lies within `outer`. */
+	private static inline function within(inner: Null<Span>, outer: Span): Bool {
+		return inner != null && outer.from <= inner.from && inner.to <= outer.to;
+	}
+
+	/** Whether the site `span` is exactly `at`. */
+	private static inline function sameSpan(span: Null<Span>, at: Span): Bool {
+		return span != null && span.from == at.from && span.to == at.to;
 	}
 
 	/**

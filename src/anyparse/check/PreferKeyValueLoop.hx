@@ -85,8 +85,9 @@ using Lambda;
  * re-spelled `v` (`v` is the singular of `X` without its leading underscores). A body whose only reads of `i` are `X[i]` is
  * `prefer-value-loop`'s, and one that opens with the binding is the opener arm's whatever that arm decides. Beyond the gates
  * above it refuses an `X[i]` under a nested binder of `i` and any closure mentioning `X` - a closure reads the slot when it RUNS,
- * the binder holds it from the iteration that made it. Report-only when the binder name is taken anywhere in the enclosing
- * function or by a member, when the container is unresolved, and when the body runs code that may change `X`
+ * the binder holds it from the iteration that made it. Report-only when the binder name is taken - spelled in the loop, bound
+ * by a declaration visible where the loop stands (`ShadowingLocal.boundAt`; a sibling loop's binder is no clash), or
+ * declared by a member - when the container is unresolved, and when the body runs code that may change `X`
  * behind the loop's back (`ElementLoopRewrite.reachDecline`): such code can replace `X[i]` after the binder was
  * read, or grow `X`, which the key-value iterator follows. The opener arm takes the same report-only
  * gate, and an enclosing or nested indexed loop deriving the same binder name leaves either arm report-only.
@@ -139,10 +140,7 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final typed: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		return RunScan.collectWith(files, plugin, LoopScan.intervalSeamsOf(plugin.refShape()), (entry, tree, s, violations) -> {
-			walk(
-				tree, LoopScan.fileScanOf(tree, entry.source, typed?.declaredTypeSources(entry.source), plugin, s), null, entry.file,
-				violations
-			);
+			walk(tree, LoopScan.fileScanOf(tree, entry.source, typed?.declaredTypeSources(entry.source), plugin, s), entry.file, violations);
 		});
 	}
 
@@ -157,32 +155,29 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 		final gate: ReachGate = ElementLoopRewrite.gateFor(plugin, file, source, violations, RULE_ID);
 		return RunScan.walkedEdits(
 			plugin, source, LoopScan.intervalSeamsOf(plugin.refShape()), violations,
-			(tree, types, s, wanted, out) -> fixWalk(tree, LoopScan.fileScanOf(tree, source, types, plugin, s), null, wanted, out, gate)
+			(tree, types, s, wanted, out) -> fixWalk(tree, LoopScan.fileScanOf(tree, source, types, plugin, s), wanted, out, gate)
 		);
 	}
 
 	/** Descend `node`, testing it as a loop and recursing; a reification subtree is skipped wholesale. */
-	private static function walk(node: QueryNode, f: LoopFileScan, outerFn: Null<QueryNode>, file: String, out: Array<Violation>): Void {
+	private static function walk(node: QueryNode, f: LoopFileScan, file: String, out: Array<Violation>): Void {
 		if (f.seams.core.opaqueKinds.contains(node.kind)) return;
 		final opener: Null<Match> = analyze(node, f);
-		final reads: Null<ReadsMatch> = opener == null ? analyzeReads(node, f, outerFn) : null;
+		final reads: Null<ReadsMatch> = opener == null ? analyzeReads(node, f) : null;
 		if (opener != null)
 			out.push(finding(
 				file, opener.forSpan, 'this indexed loop can be for (${opener.keyVar} => ${opener.valueVar} in ${opener.collection})'
 			));
 		else if (reads != null)
 			out.push(finding(file, reads.forSpan, readsAdvice(reads)));
-		final fn: Null<QueryNode> = outerFn ?? enclosingFunctionAt(node, f);
-		for (c in node.children) walk(c, f, fn, file, out);
+		for (c in node.children) walk(c, f, file, out);
 	}
 
 	/**
 	 * Mirror of `walk` for the fix path: emit the header rewrite for each wanted, rewritable loop. The
 	 * body's reach (`ElementLoopRewrite.reachDecline`) is asked here only, after every cheaper gate passed.
 	 */
-	private static function fixWalk(
-		node: QueryNode, f: LoopFileScan, outerFn: Null<QueryNode>, wanted: Array<String>, out: Array<FixEdit>, gate: ReachGate
-	): Void {
+	private static function fixWalk(node: QueryNode, f: LoopFileScan, wanted: Array<String>, out: Array<FixEdit>, gate: ReachGate): Void {
 		if (f.seams.core.opaqueKinds.contains(node.kind)) return;
 		final m: Null<Match> = analyze(node, f);
 		if (m != null && wanted.contains('${m.forSpan.from}:${m.forSpan.to}')) {
@@ -192,11 +187,10 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 			else
 				ElementLoopRewrite.declineAt(gate.violations, RULE_ID, m.forSpan, decline);
 		}
-		final r: Null<ReadsMatch> = m == null ? analyzeReads(node, f, outerFn) : null;
+		final r: Null<ReadsMatch> = m == null ? analyzeReads(node, f) : null;
 		if (r != null && wanted.contains('${r.forSpan.from}:${r.forSpan.to}'))
 			ElementLoopRewrite.gatedEdits(buildReadEdits(r, f.source), gate, r.header, r.forSpan, r.decline, out);
-		final fn: Null<QueryNode> = outerFn ?? enclosingFunctionAt(node, f);
-		for (c in node.children) fixWalk(c, f, fn, wanted, out, gate);
+		for (c in node.children) fixWalk(c, f, wanted, out, gate);
 	}
 
 	/**
@@ -310,7 +304,7 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 	 * arm's claim whatever its other gates answer, and a body whose every read of `i` is an `X[i]` is
 	 * `prefer-value-loop`'s.
 	 */
-	private static function analyzeReads(forNode: QueryNode, f: LoopFileScan, outerFn: Null<QueryNode>): Null<ReadsMatch> {
+	private static function analyzeReads(forNode: QueryNode, f: LoopFileScan): Null<ReadsMatch> {
 		final core: LoopSeams = f.seams.core;
 		final h: Null<IndexedLoopHeader> = LoopScan.indexedHeaderOf(forNode, f.source, LENGTH_MEMBER, f.seams);
 		if (h == null || LoopScan.opensWithIndexBinding(h.body, h.collection, h.index, core)) return null;
@@ -325,7 +319,7 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 		if (forSpan == null || iterableSpan == null || readSpans == null) return null;
 		final collectionTypeSource: Null<String> = LoopScan.identTypeSource(h.sizeReceiver, f.root, f.types, core);
 		if (collectionTypeSource != null && NominalTypes.outerNominalOf(collectionTypeSource, f.typeSyntax) != ARRAY_TYPE) return null;
-		final binder: BinderChoice = binderOf(f, forNode, outerFn?.span ?? new Span(0, f.source.length), h.index, h.collection);
+		final binder: BinderChoice = binderOf(f, forNode, forSpan, h.index, h.collection);
 		return {
 			forSpan: forSpan,
 			iterableSpan: iterableSpan,
@@ -340,16 +334,21 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 
 	/**
 	 * The value binder the no-opener arm would write, or null. The singular of the collection name with
-	 * its leading underscores dropped (`_points` -> `point`), refused when the enclosing FUNCTION spells
-	 * it anywhere in active text (a parameter, an outer local, a use) or the file declares a member or a
-	 * module-level value of that name: the key-value binder would shadow it for the whole loop.
+	 * its leading underscores dropped (`_points` -> `point`), refused when the LOOP — its header and its
+	 * body, the only text the binder is in scope for — spells it anywhere in active text, when a declaration
+	 * of that name is visible where the loop stands (a parameter, an earlier local, an enclosing loop's
+	 * binder: the binder would shadow it), or when the file declares a member or a module-level value of
+	 * that name. A name declared only where the loop cannot see it — a sibling loop's own binder, a local
+	 * of another block — is no clash.
 	 */
 	private static function binderOf(f: LoopFileScan, forNode: QueryNode, scope: Span, index: String, collection: String): BinderChoice {
 		final choice: BinderChoice = ElementLoopRewrite.binderFor(
-			f, forNode, index, ElementLoopRewrite.withoutLeadingUnderscores(collection), scope, 'the enclosing function'
+			f, forNode, index, ElementLoopRewrite.withoutLeadingUnderscores(collection), scope, 'the loop'
 		);
 		final name: Null<String> = choice.name;
 		final shape: RefShape = f.seams.core.shape;
+		final hidden: Null<String> = name == null ? null : ShadowingLocal.boundAt(f.root, forNode, name, shape);
+		if (hidden != null) return { name: null, refusal: 'the element name `$name` would shadow a $hidden the loop can see' };
 		final valueDeclKinds: Array<String> = (shape.memberDeclKinds ?? []).concat(shape.moduleValueDeclKinds);
 		return name == null || !declaresValue(f.root, name, valueDeclKinds)
 			? choice
@@ -377,13 +376,6 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 			: ElementLoopRewrite.elementReadEdits(
 				source, r.forSpan, r.iterableSpan, 'for (${r.index} => $binder in ${r.collection}', r.readSpans, binder
 			);
-	}
-
-	/**
-	 * `node` when it opens a function, else null; the walk keeps the first one it enters, which is the outermost.
-	 */
-	private static function enclosingFunctionAt(node: QueryNode, f: LoopFileScan): Null<QueryNode> {
-		return (f.seams.core.shape.functionKinds ?? []).contains(node.kind) ? node : null;
 	}
 
 	/** One `Info` finding of this rule at `span`. */

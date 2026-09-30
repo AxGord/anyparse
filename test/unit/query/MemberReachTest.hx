@@ -658,6 +658,60 @@ class MemberReachTest extends Test {
 		assertMatch(askLocal(src, 'xs'), r -> r.match(Unknown(Aliased(_, _, _, _))));
 	}
 
+	public function testLocalFromAFreshReturningMethodIsUnshared(): Void {
+		// `all` builds a new array and hands out nothing but that: a local it initialises is as unshared as a literal
+		final src: String =
+			'class C { var line:Line; function f():Void { final xs:Array<Int> = line.all(); /*<*/ anything(xs[0]); /*>*/ } }';
+		final line: String = 'class Line { public function new() {} public function all():Array<Int> { final out:Array<Int> = [1]; '
+			+ 'out.push(2); return out; } }';
+		assertMatch(askLocalIn([src, line], 'xs'), r -> r.match(Proven));
+		final chained: String = 'class Line { public function new() {} public function all():Array<Int> return make(); '
+			+ 'function make():Array<Int> return []; }';
+		assertMatch(askLocalIn([src, chained], 'xs'), r -> r.match(Proven));
+	}
+
+	public function testAFreshReturnNeedsEveryReturnAndNoLeak(): Void {
+		// one `return` hands out a field, or the local is handed out before it is returned: the caller's local may be shared
+		final src: String =
+			'class C { var line:Line; function f():Void { final xs:Array<Int> = line.all(); /*<*/ anything(xs[0]); /*>*/ } }';
+		for (line in [
+			'class Line { var kept:Array<Int> = []; public function new() {} public function all():Array<Int> { if (kept.length > 0) '
+			+ 'return kept; return []; } }',
+			'class Line { var kept:Array<Int> = []; public function new() {} public function all():Array<Int> { final out:Array<Int> = []; '
+			+ 'kept = out; return out; } }',
+			'class Line { public function new() {} public function all():Array<Int> { final out:Array<Int> = []; keep(out); return out; } }',
+			'class Line { public function new() {} public dynamic function all():Array<Int> return []; }'
+		]) assertMatch(askLocalIn([src, line], 'xs'), r -> !r.match(Proven));
+	}
+
+	public function testAFreshSourceIsReadWholeAndAlone(): Void {
+		// a function nested in `all` returns its own value, not `all`'s; but a twin declaration in another branch, a project
+		// file that did not parse, or a project the run does not hold whole may each hide the `all` that runs
+		final src: String =
+			'class C { var line:Line; function f():Void { final xs:Array<Int> = line.all(); /*<*/ anything(xs[0]); /*>*/ } }';
+		final nested: String = 'class Line { var kept:Array<Int> = []; public function new() {} public function all():Array<Int> { '
+			+ 'final g = function() return kept; return []; } }';
+		assertMatch(askLocalIn([src, nested], 'xs'), r -> r.match(Proven));
+		final twin: String = 'class Line { var kept:Array<Int> = []; public function new() {}\n#if js\npublic function all():Array<Int> '
+			+ 'return [];\n#else\npublic function all():Array<Int> return kept;\n#end\n}';
+		assertMatch(askLocalIn([src, twin], 'xs'), r -> !r.match(Proven));
+		final line: String = 'class Line { public function new() {} public function all():Array<Int> return []; }';
+		assertMatch(askLocalIn([src, line, 'class Broken { function b() { '], 'xs'), r -> !r.match(Proven));
+		assertMatch(mutatesNamed(reachOf([src, line], null, false), src, 'xs'), r -> !r.match(Proven));
+	}
+
+	public function testAnOverriddenOrMacroBuiltMethodIsNoFreshSource(): Void {
+		// a subtype's override may run instead, and a build macro may rewrite the body that is read: without the compiler's
+		// facts neither answer is the text's
+		final src: String =
+			'class C { var line:Line; function f():Void { final xs:Array<Int> = line.all(); /*<*/ anything(xs[0]); /*>*/ } }';
+		final line: String = 'class Line { public function new() {} public function all():Array<Int> return []; }';
+		final sub: String = 'class Sub extends Line { var kept:Array<Int> = []; override public function all():Array<Int> return kept; }';
+		assertMatch(askLocalIn([src, line, sub], 'xs'), r -> !r.match(Proven));
+		final built: String = '@:build(Mac.build()) class Line { public function new() {} public function all():Array<Int> return []; }';
+		assertMatch(askLocalIn([src, built], 'xs'), r -> !r.match(Proven));
+	}
+
 	@:pin('control') @:killer('M-REACH-PARAM')
 	public function testParameterIsProvenOnlyWhenTheRegionRunsNothing(): Void {
 		// The caller may hold the same array, so any code the region runs could change it.

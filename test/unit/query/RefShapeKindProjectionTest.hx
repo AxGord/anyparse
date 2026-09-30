@@ -940,6 +940,9 @@ final class RefShapeKindProjectionTest extends Test {
 			{ kinds: ['ConditionalArgs'], source: 'class C { function f() { var a = [b, #if X c, d, #end e]; } }' },
 			{ kinds: ['CondSpliceOpExpr'], source: 'class C { function f() { var a = #if c b + #end d; } }' },
 			{ kinds: ['CondSpliceExpr'], source: 'class C { function f() { var a = #if c b + #else d + #end e; } }' },
+			{ kinds: ['CondSpliceCallOpenExpr'], source: 'class C { function f() { var a = #if c g(b, #else ( #end e); } }' },
+			{ kinds: ['CondSemiAssignStmt', 'CondSemiRegion'], source: 'class C { function f() { a = #if c 1; #else 2; #end } }' },
+			{ kinds: ['CondSigFnMember'], source: 'class C { function f(a:#if c A):A #else B):B #end {} }' },
 			{ kinds: ['CondSpliceMember'], source: 'class C { #if js function f(): Int #else function f(): String #end { return a; } }' },
 			{ kinds: ['MetaStmt'], source: 'class C { function f() { @:meta do { b(); } while (a); } }' }
 		]

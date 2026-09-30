@@ -18,7 +18,7 @@ package anyparse.grammar.haxe;
  * region. The swallow is silent in both directions because the writer re-emits the raw
  * fragment plus the absorbed tail verbatim, so only a reorder reveals the damage.
  *
- * The regex is `HxCondSpliceRaw`'s two-branch alternation — same nesting-aware first branch,
+ * The regex is `HxCondSpliceRaw`'s three-branch alternation — same nesting-aware branches,
  * same stop-at-first-`#end` fallback — with `;` required immediately before the closing
  * `#end` of each.
  *
@@ -33,7 +33,7 @@ package anyparse.grammar.haxe;
  * `@:rawString` — byte-exact round-trip through `_dt(value)`, no unescape pass; the writer
  * re-emits the fragment verbatim, one line at a time.
  */
-@:re('(?:(?:(?!#if|#end)[\\s\\S])*(?:#if(?:(?!#end)[\\s\\S])*#end(?:(?!#if|#end)[\\s\\S])*)*;\\s*#end|(?:(?!#end)[\\s\\S])*;\\s*#end)')
+@:re('(?:(?:(?!#if|#end)[\\s\\S])*(?:#if(?:(?!#if|#end)[\\s\\S])*(?:#if(?:(?!#if|#end)[\\s\\S])*(?:#if(?:(?!#if|#end)[\\s\\S])*(?:#if(?:(?!#if|#end)[\\s\\S])*#end(?:(?!#if|#end)[\\s\\S])*)*#end(?:(?!#if|#end)[\\s\\S])*)*#end(?:(?!#if|#end)[\\s\\S])*)*#end(?:(?!#if|#end)[\\s\\S])*)*;\\s*#end|(?:(?!#if|#end)[\\s\\S])*(?:#if(?:(?!#end)[\\s\\S])*#end(?:(?!#if|#end)[\\s\\S])*)*;\\s*#end|(?:(?!#end)[\\s\\S])*;\\s*#end)')
 @:rawString
 @:condRegionRaw
 @:writeNormalize('reindentBlock')
