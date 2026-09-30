@@ -5,6 +5,7 @@ import anyparse.check.ReachDefinesProbe;
 import anyparse.check.TypedFactsProbe;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
+import anyparse.query.CallGraph;
 import anyparse.query.CompilerFacts;
 import anyparse.query.MemberReach;
 import anyparse.query.ReachLiveness.ReachConfiguration;
@@ -14,6 +15,8 @@ import haxe.io.Path;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
+
+using Lambda;
 
 /**
  * `MemberReach` over the compiler's facts (`FactsView`, `CallGraphFacts`): each case compiles its fixture, reads the
@@ -39,6 +42,22 @@ class MemberReachFactsTest extends Test {
 	/** A class with the instance member `Main.items`, whose methods the build types though `main` calls none of them. */
 	private static inline final MEMBER_HEAD: String = 'class Main {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n'
 		+ '\tstatic function main() {}\n';
+
+	/**
+	 * `h.grow()` runs the `inline` `Helper.grow`, which changes `items` — `mk()` declares no return type, so the syntax
+	 * cannot resolve the call.
+	 */
+	private static final INLINED_GROW: String = LOOP_HEAD + '\tstatic function mk() return new Helper();\n'
+		+ '\tstatic function main() {\n\t\tvar h = mk();\n\t\tfor (i in 0...items.length) { /*<*/ h.grow(); /*>*/ }\n\t}\n}\n'
+		+ 'class Helper {\n\tpublic function new() {}\n\tpublic inline function grow():Void Main.items.push(9);\n}\n';
+
+	/** The region converts a `String` to a `Quiet` by the `inline` `@:from` `conversion`, a `@:from` of `Quiet`'s own. */
+	private static function inlineConversion(conversion: String): String {
+		return LOOP_HEAD + '\tstatic function main() {\n\t\tvar l:Loud = 1;\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ var q:Quiet = "x"; /*>*/ }\n\t}\n}\n'
+			+ 'abstract Quiet(String) {\n\t@:from static inline function of(s:String):Quiet ' + conversion + '\n}\n'
+			+ 'abstract Loud(Int) {\n\t@:from static function of(i:Int):Loud {\n\t\tMain.items.push(i);\n\t\treturn cast i;\n\t}\n}\n';
+	}
 
 	/** `main` calls the local `inline function` `helper`, which changes `items`. */
 	private static final LOCAL_INLINE: String = LOOP_HEAD
@@ -203,14 +222,106 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main]), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-FACTS-REACH-SPLICE')
+	@:pin('control') @:killer('M-FACTS-REACH-SPLICE') @:killer('M-FACTS-TRUTH-SPLICE-ALWAYS')
 	public function testAnInlinedCallKeepsItsBodysSyntax(): Void {
 		// the compiler splices `grow` into `main` at `grow`'s own range: no fact places it in the loop, so `main` is read by
-		// its syntax, which admits every `grow` — `mk()` declares no return type
-		final main: String = LOOP_HEAD + '\tstatic function mk() return new Helper();\n'
-			+ '\tstatic function main() {\n\t\tvar h = mk();\n\t\tfor (i in 0...items.length) { /*<*/ h.grow(); /*>*/ }\n\t}\n}\n'
-			+ 'class Helper {\n\tpublic function new() {}\n\tpublic inline function grow():Void Main.items.push(9);\n}\n';
-		assertMatch(ask(['Main.hx' => main]), r -> r.match(Reached(_)));
+		// its syntax, which admits every `grow`
+		assertMatch(ask(['Main.hx' => INLINED_GROW]), r -> r.match(Reached(_)));
+	}
+
+	@:pin('control') @:killer('M-REACH-TRUTH-SPLICED-SEEDS') @:killer('M-GRAPH-FACTS-SPLICED-SITE')
+	public function testUnderTheTruthAnInlinedCallIsReachedThroughItsEdge(): Void {
+		// under the whole list of builds `main` is read through its facts, the splice of `grow` among them: they place its
+		// `inlined` call at `grow`, not in the loop, so it is `main`'s wherever the region lies in it — the edge to `grow`,
+		// whose text changes `items`, is the only thing that says the region runs it
+		assertMatch(truthAsk(['Main.hx' => INLINED_GROW]), r -> r.match(Reached(_)));
+	}
+
+	@:pin('control') @:killer('M-FACTS-TRUTH-SPLICE') @:killer('M-FACTS-SPLICED-WITHIN') @:killer('M-FACTS-TRUTH-SITES-SPLICED')
+	public function testUnderTheTruthAnInlineConversionIsItsEdgeAlone(): Void {
+		// the `inline` `@:from` of `Quiet` is spliced into `main`, which its syntax alone does not spell: read by its syntax,
+		// `main` admits every conversion in play, `Loud`'s that changes `items` among them. Under the whole list of builds its
+		// facts name the one conversion that runs, which changes nothing
+		final main: String = inlineConversion('return cast s;');
+		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Proven));
+		assertMatch(ask(['Main.hx' => main]), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-REACH-TRUTH-SPLICED-SEEDS') @:killer('M-GRAPH-FACTS-SPLICED-SITE')
+	public function testUnderTheTruthAnInlineConversionThatChangesTheMemberIsReached(): Void {
+		// the facts place the spliced conversion at `Quiet.of`, not in the region: the region runs it all the same
+		final main: String = inlineConversion('{\n\t\tMain.items.push(1);\n\t\treturn cast s;\n\t}');
+		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Reached(_)));
+	}
+
+	@:pin('control') @:killer('M-GRAPH-FACTS-SPLICED-SITE')
+	public function testUnderTheTruthAnEdgeSplicedFromAnotherFileIsNoSiteOfItsCaller(): Void {
+		// `Helper.grow` is spliced into `run` at `Helper.hx`'s ranges, which in `Main.hx` fall in a branch no build compiles: an
+		// edge filed under `Main.hx` at such a range would be read as dead code there, and `run` as running nothing
+		final dead: String = '#if never\n/*' + StringTools.lpad('', 'x', 200) + '*/\n#end\n';
+		final main: String = dead + LOOP_HEAD + '\tstatic function mk() return new Helper();\n\tstatic function run():Void mk().grow();\n'
+			+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ run(); /*>*/ }\n\t}\n}\n';
+		final helper: String = 'class Helper {\n\tpublic function new() {}\n\tpublic inline function grow():Void Main.items.push(9);\n}\n';
+		assertMatch(truthAsk(['Main.hx' => main, 'Helper.hx' => helper]), r -> r.match(Reached(_)));
+	}
+
+	@:pin('control') @:killer('M-GRAPH-FACTS-SPLICED-SITE') @:killer('M-GRAPH-FACTS-SPLICED-FILE') @:killer('M-FACTS-TRUTH-SPLICE')
+	@:access(anyparse.query.MemberReach)
+	public function testAFunctionSplicedFromAnotherFileIsTheNodeItsCalleeDeclares(): Void {
+		// `Lib.wrap` is spliced into `run`, lambda and all, at `Lib.hx`'s ranges: the edges carry no site of `Main.hx`, and the
+		// lambda is the node the graph declares in `Lib.hx`
+		final main: String = MEMBER_HEAD + '\tfunction run():Void Lib.wrap(this);\n}\n';
+		final lib: String = 'class Lib {\n\tpublic static inline function wrap(m:Main):Void {\n\t\tvar f = () -> m.items.pop();\n'
+			+ '\t\tf();\n\t}\n}\n';
+		final edges: Array<{
+			to: String,
+			file: String,
+			kind: String,
+			placed: Bool
+		}> = withReach(['Main.hx' => main, 'Lib.hx' => lib], null, true, false, null, null, null, true, (reach, dir) -> {
+			final g: CallGraph = reach.graph();
+			[
+				for (e in g.outEdges('Main.run'))
+					{
+						to: e.to,
+						file: Path.withoutDirectory(g.node(e.to)?.file ?? ''),
+						kind: e.kind.label(),
+						placed: e.span != null
+					}
+			];
+		});
+		Assert.isTrue(edges.exists(e -> e.to == 'Lib.wrap' && e.kind == 'call' && !e.placed), 'the splice has a site: $edges');
+		Assert.isTrue(edges.exists(e -> e.to != 'Lib.wrap' && e.file == 'Lib.hx' && e.kind == 'ref' && !e.placed), 'no lambda: $edges');
+	}
+
+	@:pin('control') @:killer('M-FACTS-TRUTH-SPLICE') @:killer('M-FACTS-TRUTH-HAZARDS-SPLICED') @:killer('M-FACTS-SPLICED-WITHIN')
+	public function testUnderTheTruthUntypedCodeBesideAnInlinedCallIsReadThroughTheFacts(): Void {
+		// `h` is spliced into `f` at `h`'s own range: under the whole list of builds `f` is read through its facts all the same,
+		// which record the untyped field read beside it
+		final main: String = MEMBER_HEAD
+			+ '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ var z = untyped this.zz; h(); /*>*/ }\n\t}\n'
+			+ '\tinline function h():Void k();\n\tfunction k():Void {}\n}\n';
+		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Proven));
+		assertMatch(ask(['Main.hx' => main]), r -> r.match(Unknown(Untyped(_, _))));
+	}
+
+	@:pin('control') @:killer('M-FACTS-SPLICED-WITHIN-UNPLACED') @:killer('M-FACTS-TRUTH-SITES-SPLICED') @:killer('M-FACTS-SPLICED-WITHIN')
+	public function testUnderTheTruthASplicedStringConversionIsTheRegions(): Void {
+		// `b.add(o)` splices `StringBuf.add`, whose `+=` converts `o` to a string: the facts place that conversion in
+		// `StringBuf.hx`, and the region runs it — `Obj.toString` changes `items`
+		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tvar o = new Obj();\n\t\tvar b = new StringBuf();\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ b.add(o); /*>*/ }\n\t}\n}\n'
+			+ 'class Obj {\n\tpublic function new() {}\n\tpublic function toString():String {\n\t\tMain.items.push(1);\n\t\treturn "o";\n\t}\n}\n';
+		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Reached(_)));
+	}
+
+	@:pin('control') @:killer('M-FACTS-TRUTH-REFLECTION-INLINED')
+	public function testUnderTheTruthAnInlinedReflectiveCallIsADynamicName(): Void {
+		// `sf` is `Reflect.setField`, `inline` on js: its splice leaves no reflective call among the facts, and the syntax
+		// does not see one under another name
+		final main: String = 'import Reflect.setField as sf;\n' + MEMBER_HEAD + '\tfunction f():Void {\n\t\tvar n = "it" + "ems";\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ sf(this, n, [1]); /*>*/ }\n\t}\n}\n';
+		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Unknown(DynamicName(_, _))));
 	}
 
 	@:pin('control') @:killer('M-GRAPH-LOCAL-INLINE')
@@ -563,11 +674,10 @@ class MemberReachFactsTest extends Test {
 
 	@:pin('control') @:killer('M-FACTS-TRUTH-FACETED')
 	public function testABodyTheFactsDoNotDescribeWholeKeepsItsSyntacticHazards(): Void {
-		// `h` is spliced into `g` at `h`'s own range, where no fact of `g` is placed: `g` is read by its syntax, and its untyped
-		// expression stays a blind spot however whole the list of builds
+		// `g` is declared twice, one declaration per branch: the graph folds the two into one node, which no single body's
+		// facts describe, so `g` is read by its syntax and its untyped expression stays a blind spot however whole the list
 		final main: String = MEMBER_HEAD + '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ g(); /*>*/ }\n\t}\n'
-			+ '\tfunction g():Void {\n\t\tvar z = untyped this.zz;\n\t\th();\n\t}\n'
-			+ '\tinline function h():Void k();\n\tfunction k():Void {}\n}\n';
+			+ '#if !other\n\tfunction g():Void {\n\t\tvar z = untyped this.zz;\n\t}\n#else\n\tfunction g():Void {}\n#end\n}\n';
 		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Unknown(Untyped(_, _))));
 	}
 

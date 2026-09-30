@@ -2540,6 +2540,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testAConversionOfAnAbstractRunsWhatItsOwnConversionDoes :: control :: '
 				+ 'M-REACH-ABSTRACT-TEXT-ANY',
 			'unit.query.MemberReachFactsTest#testAFileTheRunWroteMayBeCompiled :: control :: M-FACTS-DEAD-FILE-REWRITTEN',
+			'unit.query.MemberReachFactsTest#testAFunctionSplicedFromAnotherFileIsTheNodeItsCalleeDeclares :: control :: '
+				+ 'M-GRAPH-FACTS-SPLICED-SITE,M-GRAPH-FACTS-SPLICED-FILE,M-FACTS-TRUTH-SPLICE',
 			'unit.query.MemberReachFactsTest#testAFunctionWithoutFactsOfItsOwnIsNotReadThroughANestedOnes :: control :: '
 				+ 'M-FACTS-REACH-NESTED-OWNER',
 			'unit.query.MemberReachFactsTest#testAGenericInstanceIsItsGenericClass :: control :: M-FACTS-REACH-GENERIC',
@@ -2570,7 +2572,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testAnExtensionAnotherBuildBringsInIsKeptFromTheSyntax :: control :: '
 				+ 'M-FACTS-REACH-SYNTAX-UNION,M-GRAPH-TRUTH-MUTE-ALWAYS',
 			'unit.query.MemberReachFactsTest#testAnExtensionOnlyAListedBuildBringsInIsReadFromItsFacts :: control :: M-GRAPH-TRUTH-MUTE',
-			'unit.query.MemberReachFactsTest#testAnInlinedCallKeepsItsBodysSyntax :: control :: M-FACTS-REACH-SPLICE',
+			'unit.query.MemberReachFactsTest#testAnInlinedCallKeepsItsBodysSyntax :: control :: '
+				+ 'M-FACTS-REACH-SPLICE,M-FACTS-TRUTH-SPLICE-ALWAYS',
 			'unit.query.MemberReachFactsTest#testAnUntypedIndexAccessKeepsItsHazardUnderTheTruth :: control :: '
 				+ 'M-FACTS-TRUTH-UNTYPED-ALL,M-FACTS-TRUTH-UNTYPED-SHAPE',
 			'unit.query.MemberReachFactsTest#testCodeNoBuildCompilesHasNoAnswerUnderTheTruth :: control :: '
@@ -2582,6 +2585,20 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-TRUTH-NATIVES,M-FACTS-TRUTH-NATIVE-CALLS-KEPT,M-FACTS-TRUTH-NATIVE-METAS-DROPPED',
 			'unit.query.MemberReachFactsTest#testTheTruthNeedsTheFactsToNameExactlyTheListedBuilds :: control :: '
 				+ 'M-FACTS-TRUTH-UNLISTED,M-FACTS-TRUTH-COUNT,M-FACTS-TRUTH-NAMES,M-FACTS-TRUTH-ORDER',
+			'unit.query.MemberReachFactsTest#testUnderTheTruthASplicedStringConversionIsTheRegions :: control :: '
+				+ 'M-FACTS-SPLICED-WITHIN-UNPLACED,M-FACTS-TRUTH-SITES-SPLICED,M-FACTS-SPLICED-WITHIN',
+			'unit.query.MemberReachFactsTest#testUnderTheTruthAnEdgeSplicedFromAnotherFileIsNoSiteOfItsCaller :: control :: '
+				+ 'M-GRAPH-FACTS-SPLICED-SITE',
+			'unit.query.MemberReachFactsTest#testUnderTheTruthAnInlineConversionIsItsEdgeAlone :: control :: '
+				+ 'M-FACTS-TRUTH-SPLICE,M-FACTS-SPLICED-WITHIN,M-FACTS-TRUTH-SITES-SPLICED',
+			'unit.query.MemberReachFactsTest#testUnderTheTruthAnInlineConversionThatChangesTheMemberIsReached :: control :: '
+				+ 'M-REACH-TRUTH-SPLICED-SEEDS,M-GRAPH-FACTS-SPLICED-SITE',
+			'unit.query.MemberReachFactsTest#testUnderTheTruthAnInlinedCallIsReachedThroughItsEdge :: control :: '
+				+ 'M-REACH-TRUTH-SPLICED-SEEDS,M-GRAPH-FACTS-SPLICED-SITE',
+			'unit.query.MemberReachFactsTest#testUnderTheTruthAnInlinedReflectiveCallIsADynamicName :: control :: '
+				+ 'M-FACTS-TRUTH-REFLECTION-INLINED',
+			'unit.query.MemberReachFactsTest#testUnderTheTruthUntypedCodeBesideAnInlinedCallIsReadThroughTheFacts :: control :: '
+				+ 'M-FACTS-TRUTH-SPLICE,M-FACTS-TRUTH-HAZARDS-SPLICED,M-FACTS-SPLICED-WITHIN',
 			'unit.query.MemberReachFactsTest#testUnderTheWholeListTheCallOfALocalInlineFunctionKeepsItsEdge :: control :: '
 				+ 'M-GRAPH-TRUTH-MUTE-UNTYPED',
 			'unit.query.MemberReachFactsTest#testUnderTheWholeListTheSyntaxsEdgeAtASiteTheFactsTypeIsDropped :: control :: '
@@ -3760,6 +3777,16 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-REACH-OVERRIDES',
 			'M-FACTS-REACH-VALUE',
 			'M-FACTS-REACH-SPLICE',
+			'M-FACTS-TRUTH-SPLICE',
+			'M-FACTS-TRUTH-SPLICE-ALWAYS',
+			'M-FACTS-SPLICED-WITHIN',
+			'M-FACTS-SPLICED-WITHIN-UNPLACED',
+			'M-FACTS-TRUTH-SITES-SPLICED',
+			'M-FACTS-TRUTH-HAZARDS-SPLICED',
+			'M-FACTS-TRUTH-REFLECTION-INLINED',
+			'M-REACH-TRUTH-SPLICED-SEEDS',
+			'M-GRAPH-FACTS-SPLICED-SITE',
+			'M-GRAPH-FACTS-SPLICED-FILE',
 			'M-FACTS-REACH-ESCAPE-TYPED',
 			'M-FACTS-REACH-TOUCH-TYPED',
 			'M-FACTS-REACH-MACRO',

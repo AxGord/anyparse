@@ -395,15 +395,16 @@ final class CompilerFacts {
 
 	/**
 	 * Every call site within `span` in `file`; null — Unknown — when a node there holds facts no range places: a spliced
-	 * body (`inline-site-unknown`, `macro-expansion`) not wholly inside `span`, or facts lost to a stale file.
+	 * body (`inline-site-unknown`, `macro-expansion`) not wholly inside `span`, or facts lost to a stale file. With
+	 * `spliced`, a body an inlined function was spliced into answers as `within` says.
 	 */
-	public function callsIn(file: String, span: Span): Null<Array<CallFact>> {
-		return within(file, span, n -> n.calls, c -> c.at);
+	public function callsIn(file: String, span: Span, spliced: Bool = false): Null<Array<CallFact>> {
+		return within(file, span, n -> n.calls, c -> c.at, spliced);
 	}
 
 	/** Every value flow within `span` in `file`; null — Unknown — as `callsIn` says. */
-	public function flowsIn(file: String, span: Span): Null<Array<FlowFact>> {
-		return within(file, span, n -> n.flows, f -> f.at);
+	public function flowsIn(file: String, span: Span, spliced: Bool = false): Null<Array<FlowFact>> {
+		return within(file, span, n -> n.flows, f -> f.at, spliced);
 	}
 
 	/**
@@ -592,17 +593,22 @@ final class CompilerFacts {
 	/**
 	 * The facts `pick` takes from the nodes of `file` meeting `span` that lie inside it; a node wholly inside `span`
 	 * gives all of them, wherever the compiler placed them. Null — Unknown — when one of those nodes cannot say where
-	 * some of its facts run (`callsIn`).
+	 * some of its facts run (`callsIn`). With `spliced`, a node an inlined function was spliced into (`inline-site-unknown`)
+	 * gives, beside those inside `span`, every fact it holds outside its own range (`placed`): each runs somewhere in the
+	 * node, maybe in `span`. What a macro expanded into, and facts lost to a stale file, stay Unknown.
 	 */
-	public function within<F>(file: String, span: Span, pick: (FactNode) -> Array<F>, at: (F) -> FactPos): Null<Array<F>> {
+	public function within<F>(
+		file: String, span: Span, pick: (FactNode) -> Array<F>, at: (F) -> FactPos, spliced: Bool = false
+	): Null<Array<F>> {
 		final key: String = _key(file);
 		function inside(where: FactPos): Bool return where.file == key && span.from <= where.span.from && where.span.to <= span.to;
 		final out: Array<F> = [];
 		for (n in nodesAround(file, span, true)) {
 			if (n.incomplete.contains('stale-foreign')) return null;
 			final whole: Bool = inside(n.at);
-			if (!whole && (n.incomplete.contains('inline-site-unknown') || n.incomplete.contains('macro-expansion'))) return null;
-			for (fact in pick(n)) if (whole || inside(at(fact))) out.push(fact);
+			final splice: Bool = n.incomplete.contains('inline-site-unknown');
+			if (!whole && (n.incomplete.contains('macro-expansion') || (splice && !spliced))) return null;
+			for (fact in pick(n)) if (whole || inside(at(fact)) || (splice && !placed(n, at(fact)))) out.push(fact);
 		}
 		return out;
 	}
@@ -793,6 +799,15 @@ final class CompilerFacts {
 	/** An empty table, which `add` fills one dump at a time: each dump's text can then be freed before the next is read. */
 	public static function create(read: (String) -> Null<String>, key: (String) -> String): CompilerFacts {
 		return new CompilerFacts(read, key);
+	}
+
+	/**
+	 * Whether the fact at `at` lies in the range of its node `n`: one outside it — in another file, or elsewhere in the
+	 * node's own — was spliced in by inlining, at its callee's positions (`TypedFactsProbe`), and runs at a site of the node
+	 * no range names.
+	 */
+	public static function placed(n: FactNode, at: FactPos): Bool {
+		return at.file == n.at.file && n.at.span.from <= at.span.from && at.span.to <= n.at.span.to;
 	}
 
 	/** The id of type string `type` without its type arguments. */

@@ -5692,8 +5692,8 @@
 			"name": "M-REACH-CALLS-ENTRY",
 			"type": "anyparse.query.MemberReach",
 			"method": "seedsOf",
-			"find": "seedsWhere(g, file, null, s -> s != null && starts.contains(s.from) && isLive(g, file, s));",
-			"replace": "seedsWhere(g, file, null, s -> s != null && isLive(g, file, s));",
+			"find": "seedsWhere(g, file, null, s -> s != null && starts.contains(s.from) && isLive(g, file, s), splicedInto(g, file, spans));",
+			"replace": "seedsWhere(g, file, null, s -> s != null && isLive(g, file, s), splicedInto(g, file, spans));",
 			"note": "a Calls entry starts at every call of the file, not the sites it names"
 		},
 		{
@@ -7266,7 +7266,7 @@
 			"name": "M-FACTS-SITE-UNKNOWN",
 			"type": "anyparse.query.CompilerFacts",
 			"method": "within",
-			"find": "if (!whole && (n.incomplete.contains('inline-site-unknown') || n.incomplete.contains('macro-expansion'))) return null;",
+			"find": "if (!whole && (n.incomplete.contains('macro-expansion') || (splice && !spliced))) return null;",
 			"replace": "",
 			"note": "a range query short of a spliced node answers as if its facts were placed"
 		},
@@ -7359,10 +7359,90 @@
 		{
 			"name": "M-FACTS-REACH-SPLICE",
 			"type": "anyparse.query.FactsView",
-			"method": "bodyFacts",
-			"find": "n.incomplete.exists(m -> UNPLACED.contains(m))",
-			"replace": "n.incomplete.contains(MACRO_EXPANSION)",
+			"method": "unplaced",
+			"find": "UNPLACED.contains(m) && !(truth && m == INLINE_SITE_UNKNOWN)",
+			"replace": "m == MACRO_EXPANSION",
 			"note": "a body with an inlined call is read through its facts, whose spliced facts sit at the callee and are missed by a range question"
+		},
+		{
+			"name": "M-FACTS-TRUTH-SPLICE",
+			"type": "anyparse.query.FactsView",
+			"method": "unplaced",
+			"find": "!(truth && m == INLINE_SITE_UNKNOWN)",
+			"replace": "true",
+			"note": "(precision) under the whole list of builds a body an inlined function was spliced into keeps its syntax, which admits every conversion in play"
+		},
+		{
+			"name": "M-FACTS-TRUTH-SPLICE-ALWAYS",
+			"type": "anyparse.query.FactsView",
+			"method": "unplaced",
+			"find": "!(truth && m == INLINE_SITE_UNKNOWN)",
+			"replace": "m != INLINE_SITE_UNKNOWN",
+			"note": "a body an inlined function was spliced into is read through its facts with no list of builds, where a range question cannot take the spliced facts"
+		},
+		{
+			"name": "M-FACTS-SPLICED-WITHIN",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "within",
+			"find": "(splice && !spliced)",
+			"replace": "splice",
+			"note": "(precision) a range question under the whole list of builds is Unknown in a body an inlined function was spliced into, so its syntax answers"
+		},
+		{
+			"name": "M-FACTS-SPLICED-WITHIN-UNPLACED",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "within",
+			"find": " || (splice && !placed(n, at(fact)))",
+			"replace": "",
+			"note": "a range question in a body an inlined function was spliced into drops the spliced facts, which sit at the callee yet run in the body"
+		},
+		{
+			"name": "M-FACTS-TRUTH-SITES-SPLICED",
+			"type": "anyparse.query.FactsView",
+			"method": "sitesIn",
+			"find": "n -> n.strings, s -> s.at, truth",
+			"replace": "n -> n.strings, s -> s.at",
+			"note": "the implicit-call sites of a region in a body an inlined function was spliced into are read off the syntax under the whole list of builds"
+		},
+		{
+			"name": "M-FACTS-TRUTH-HAZARDS-SPLICED",
+			"type": "anyparse.query.FactsView",
+			"method": "truthSites",
+			"find": "n -> n.natives, f -> f.at, true",
+			"replace": "n -> n.natives, f -> f.at",
+			"note": "(precision) the hazards of a region in a body an inlined function was spliced into are read off the syntax under the whole list of builds"
+		},
+		{
+			"name": "M-FACTS-TRUTH-REFLECTION-INLINED",
+			"type": "anyparse.query.FactsView",
+			"method": "blindIn",
+			"find": "if (truth && n.incomplete.contains(REFLECTION_INLINED)) return DynamicName(file, span);",
+			"replace": "",
+			"note": "a reflective call inlined into a faceted body is lost: the facts hold no reflective call, and the syntax misses one under another name"
+		},
+		{
+			"name": "M-REACH-TRUTH-SPLICED-SEEDS",
+			"type": "anyparse.query.MemberReach",
+			"method": "seedsWhere",
+			"find": " || (span == null && spliced.contains(from))",
+			"replace": "",
+			"note": "a region leaves out what an inlined body spliced into its function runs, which the facts place at the callee"
+		},
+		{
+			"name": "M-GRAPH-FACTS-SPLICED-SITE",
+			"type": "anyparse.query.CallGraphFacts",
+			"method": "siteOf",
+			"find": "at.file == view.table.keyOf(node.file) && CompilerFacts.placed(n, at) ? at.span : null",
+			"replace": "at.span",
+			"note": "a spliced fact files its edge under its caller's file at the callee's range, which a region or a dead branch there then claims"
+		},
+		{
+			"name": "M-GRAPH-FACTS-SPLICED-FILE",
+			"type": "anyparse.query.CallGraphFacts",
+			"method": "graphFile",
+			"find": "for (file in g._entries.keys()) if (view.table.keyOf(file) == key) return file;",
+			"replace": "",
+			"note": "a function spliced in from another file is looked up in its caller's file, where no graph node starts at its range"
 		},
 		{
 			"name": "M-FACTS-REACH-ESCAPE-TYPED",
@@ -7432,7 +7512,7 @@
 			"name": "M-FACTS-REACH-CONSTRUCTION",
 			"type": "anyparse.query.CallGraphFacts",
 			"method": "construction",
-			"find": "g._wiring.record({\ntypeName: type,\nfrom: node.id,\nkind: run,\nfile: node.file,\nspan: x.at.span,\nchainGrew: false,\ntarget: ctor\n});",
+			"find": "g._wiring.record({\ntypeName: type,\nfrom: node.id,\nkind: run,\nfile: node.file,\nspan: span,\nchainGrew: false,\ntarget: ctor\n});",
 			"replace": "",
 			"note": "a construction the facts record never runs the initializers of a generated constructor"
 		},

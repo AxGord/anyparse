@@ -47,9 +47,13 @@ using StringTools;
  * exactly the listed builds, none dropped, is the TRUTH (`truth`): a build the list does not name does not exist, so no
  * declaration can read differently in one, and the facts hold every branch of a conditional region some build takes,
  * the union of what each typed. Every test above that guards against such a build is then skipped: a body holding a
- * directive or lying in a conditional region is faceted, and nothing it resolved its sites through is examined. What
- * stays is what holds in every build as much as in one: the facts are whole and placed, the graph node stands for one
- * declaration, and a body another graph node starts at is that node's. A faceted body's syntax then records an edge
+ * directive or lying in a conditional region is faceted, and nothing it resolved its sites through is examined. What stays is what
+ * holds in every build as much as in one: the facts are whole, none lost to a macro's expansion or a stale file, the graph node
+ * stands for one declaration, and a body another graph node starts at is that node's. A body an inlined function was spliced into is
+ * faceted too: the splice's facts are the body's, at the callee's positions, so a range question takes each of them from every body
+ * it meets (`CompilerFacts.within`, `CallGraphFacts.siteOf`) — more than the range runs, never less — and the `inlined` call is an
+ * edge to the callee's own node, whose text still answers for it. A `Reflect`/`Type` body spliced in (`reflection-inlined`) leaves
+ * neither the call nor its name among the facts: a name computed at run time (`blindIn`). A faceted body's syntax then records an edge
  * only at a site its facts do not type (`CallGraphFacts.holdsBack`): at one they type, the compiler resolved the site
  * in every build there is. A local `inline function` keeps its edge under it: the compiler splices its body at its
  * declaration and types nothing at the site of its call. A faceted body's natives and reflective calls are then its
@@ -67,11 +71,17 @@ final class FactsView {
 	/** The marker of a body a macro expanded into: it may run code no fact names. */
 	private static inline final MACRO_EXPANSION: String = 'macro-expansion';
 
+	/** The marker of a body an inlined function was spliced into: those facts sit at the callee's positions. */
+	private static inline final INLINE_SITE_UNKNOWN: String = 'inline-site-unknown';
+
+	/** The marker of a body a `Reflect`/`Type` function was spliced into: that call, its name and its arguments are gone. */
+	private static inline final REFLECTION_INLINED: String = 'reflection-inlined';
+
 	/** The suffix of an abstract's implementation class: its statics are the abstract's members. */
 	private static inline final IMPL_SUFFIX: String = '_Impl_';
 
 	/** The markers that leave some fact of a node without a place: its body keeps the syntactic reading. */
-	private static final UNPLACED: Array<String> = [MACRO_EXPANSION, 'inline-site-unknown', 'stale-foreign'];
+	private static final UNPLACED: Array<String> = [MACRO_EXPANSION, INLINE_SITE_UNKNOWN, 'stale-foreign'];
 
 	/** The call accesses whose target is a field a type declares. */
 	private static final DECLARED_ACCESSES: Array<String> = ['FInstance', 'FStatic', 'FClosure', 'super', 'inlined', 'fieldValue'];
@@ -136,7 +146,7 @@ final class FactsView {
 	public function bodyFacts(g: CallGraph, node: FnNode, declarations: Int): Null<Array<FactNode>> {
 		final outer: Null<Array<FactNode>> = declarations == 1 ? typedBodies(g, node) : null;
 		if (outer == null) return null;
-		for (n in outer) if (n.incomplete.exists(m -> UNPLACED.contains(m))) return null;
+		for (n in outer) if (n.incomplete.exists(unplaced)) return null;
 		// under the truth no build the list does not name exists, to resolve the sites otherwise
 		return truth || contextAlike(g, node, outer) ? outer : null;
 	}
@@ -150,10 +160,10 @@ final class FactsView {
 	 */
 	public function sitesIn(g: CallGraph, file: String, span: Span): Null<Array<ImplicitSite>> {
 		if (!faceted(g, file, span)) return null;
-		final strings: Null<Array<StringFact>> = table.within(file, span, n -> n.strings, s -> s.at);
-		final iterations: Null<Array<IterationFact>> = table.within(file, span, n -> n.iterations, i -> i.at);
-		final calls: Null<Array<CallFact>> = table.callsIn(file, span);
-		final flows: Null<Array<FlowFact>> = table.flowsIn(file, span);
+		final strings: Null<Array<StringFact>> = table.within(file, span, n -> n.strings, s -> s.at, truth);
+		final iterations: Null<Array<IterationFact>> = table.within(file, span, n -> n.iterations, i -> i.at, truth);
+		final calls: Null<Array<CallFact>> = table.callsIn(file, span, truth);
+		final flows: Null<Array<FlowFact>> = table.flowsIn(file, span, truth);
 		if (strings == null || iterations == null || calls == null || flows == null) return null;
 		final out: Array<ImplicitSite> = [
 			for (s in strings) { family: Text, span: s.at.span, types: [simpleSource(s.operand)] }
@@ -161,8 +171,9 @@ final class FactsView {
 		for (c in calls) {
 			final target: Null<String> = c.target;
 			if (target == null || !convertsToString(target)) continue;
-			final argument: Null<FlowFact> = flows.find(f ->
-				f.via == 'arg' && c.at.span.from <= f.at.span.from && f.at.span.to <= c.at.span.to
+			// a spliced call and its argument may sit in another file than the call beside them
+			final argument: Null<FlowFact> = flows.find(
+				f -> f.via == 'arg' && f.at.file == c.at.file && c.at.span.from <= f.at.span.from && f.at.span.to <= c.at.span.to
 			);
 			out.push({ family: Text, span: c.at.span, types: [argument == null ? null : simpleSource(argument.from)] });
 		}
@@ -177,8 +188,8 @@ final class FactsView {
 	 */
 	public function truthSites(g: CallGraph, file: String, span: Span): Null<TruthSites> {
 		if (!truth || !faceted(g, file, span)) return null;
-		final natives: Null<Array<NativeFact>> = table.within(file, span, n -> n.natives, f -> f.at);
-		final reflection: Null<Array<ReflectionFact>> = table.within(file, span, n -> n.reflection, r -> r.at);
+		final natives: Null<Array<NativeFact>> = table.within(file, span, n -> n.natives, f -> f.at, true);
+		final reflection: Null<Array<ReflectionFact>> = table.within(file, span, n -> n.reflection, r -> r.at, true);
 		return natives == null || reflection == null ? null : { natives: natives, reflection: reflection };
 	}
 
@@ -193,13 +204,16 @@ final class FactsView {
 	 * A mark of code meeting `span` of `file` that makes any question about it Unknown, whether the code is faceted or
 	 * not: a macro's expansion, which may run code no fact and no syntax names, and a reflective member or class read as a
 	 * value, which whatever later calls it runs by a name nothing here sees. An inlined reflection body
-	 * (`reflection-inlined`) is none: it is a splice (`inline-site-unknown`), whose node keeps its syntax, which spells
-	 * the reflective call or the call of the function holding it.
+	 * (`reflection-inlined`) is none without the truth: it is a splice (`inline-site-unknown`), whose node keeps its
+	 * syntax, which spells the reflective call or the call of the function holding it. Under the truth it is one: its node
+	 * is faceted, and neither its facts, which lost the call and its name, nor its syntax, which spells the call only
+	 * where it is written in the body and by that name, says what it reaches.
 	 */
 	public function blindIn(file: String, span: Span): Null<ReachUnknown> {
 		for (n in table.nodesIn(file)) {
 			if (n.generated || !meets(n.at.span, span)) continue;
 			if (n.incomplete.contains(MACRO_EXPANSION)) return Reification(file, span);
+			if (truth && n.incomplete.contains(REFLECTION_INLINED)) return DynamicName(file, span);
 			for (r in n.reflection) if (r.isValue && meets(r.at.span, span)) return DynamicName(file, r.at.span);
 		}
 		return null;
@@ -285,6 +299,14 @@ final class FactsView {
 		}
 		_bySimpleName = out;
 		return out;
+	}
+
+	/**
+	 * Whether the marker `m` leaves some fact of its node without a place, so its body keeps the syntactic reading. Under
+	 * the truth a splice leaves none: its facts are the node's, which a range question takes wherever they sit (`within`).
+	 */
+	private function unplaced(m: String): Bool {
+		return UNPLACED.contains(m) && !(truth && m == INLINE_SITE_UNKNOWN);
 	}
 
 	/**
