@@ -83,6 +83,9 @@ final class CollapsePass {
 	public static function runWith(
 		decisions: CollapseRun, doc: Doc, width: Int, indentChar: IndentChar, tabWidth: Int, indentSize: Int = 1
 	): Doc {
+		// A `BreakCommit` answers by a break the renderer decides, so it is resolved by its own measure render first and
+		// the collapse decisions below are measured on the layout that will actually be emitted.
+		doc = BreakCommits.resolve(doc, width, indentChar, tabWidth, indentSize);
 		// Fast path: skip the measure render entirely when the Doc carries
 		// NONE of a forward collapse-candidate paren (`CollapseProbe`), an
 		// inverse inner-add-chain marker (`CollapseAddProbe`), an opBool
@@ -130,6 +133,41 @@ final class CollapsePass {
 		}
 		memo.set(d, found);
 		return found;
+	}
+
+	/**
+	 * The children a content question descends into. Read-only; used by the
+	 * candidate / open probes.
+	 */
+	public static function children(node: Doc): Array<Doc> {
+		return switch node {
+			case Empty, Text(_), Line(_), OptSpace(_), OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline,
+				OptSpaceSkipAfterHardline:
+				[];
+			case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), GroupWithRestProbe(inner), BodyGroup(inner),
+				Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner),
+				CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+				[inner];
+			case Concat(items):
+				items;
+			case IfIndentWidthExceeds(_, _, _, fl), IfGluedFirstLineExceeds(_, _, _, fl):
+				// ω-case-sym-linear + ω-glue-width: both `BodyFit` width probes are
+				// EXCLUDED from the both-branch descent. Their two branches wrap the
+				// SAME body object and differ only in the separator before it, so a
+				// question about subtree CONTENT sees one answer either way. See the
+				// ctor docs in `Doc` for the per-walker branch contract; a walker
+				// that is NOT content-only must decide for itself
+				// (`WrapList.startsWithHardline` reads the flat side of the glue
+				// probe for exactly that reason).
+				[fl];
+			case IfBreak(brk, fl), IfWidthExceeds(_, brk, fl), IfFirstLineExceeds(_, brk, fl), IfLineExceeds(_, brk, fl),
+				IfResidualLineExceeds(_, brk, fl), IfFullLineExceeds(_, brk, fl), IfNaturalFirstLineExceeds(_, brk, fl),
+				IfNaturalFirstLineExceedsWithRest(_, brk, fl), IfNaturalFirstLineFitsOpenDelim(_, brk, fl),
+				IfArrowContinuationFits(_, _, _, brk, fl), IfArrowContinuationFitsWithRest(_, _, _, brk, fl):
+				[brk, fl];
+			case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
+				items.concat([sep]);
+		};
 	}
 
 	/**
@@ -1053,41 +1091,6 @@ final class CollapsePass {
 	}
 
 	/**
-	 * The children a content question descends into. Read-only; used by the
-	 * candidate / open probes.
-	 */
-	private static function children(node: Doc): Array<Doc> {
-		return switch node {
-			case Empty, Text(_), Line(_), OptSpace(_), OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline,
-				OptSpaceSkipAfterHardline:
-				[];
-			case Nest(_, inner), LeadingBreak(_, inner), Group(inner), GroupWithRestProbe(inner), BodyGroup(inner), Flatten(inner),
-				WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
-				CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
-				[inner];
-			case Concat(items):
-				items;
-			case IfIndentWidthExceeds(_, _, _, fl), IfGluedFirstLineExceeds(_, _, _, fl):
-				// ω-case-sym-linear + ω-glue-width: both `BodyFit` width probes are
-				// EXCLUDED from the both-branch descent. Their two branches wrap the
-				// SAME body object and differ only in the separator before it, so a
-				// question about subtree CONTENT sees one answer either way. See the
-				// ctor docs in `Doc` for the per-walker branch contract; a walker
-				// that is NOT content-only must decide for itself
-				// (`WrapList.startsWithHardline` reads the flat side of the glue
-				// probe for exactly that reason).
-				[fl];
-			case IfBreak(brk, fl), IfWidthExceeds(_, brk, fl), IfFirstLineExceeds(_, brk, fl), IfLineExceeds(_, brk, fl),
-				IfResidualLineExceeds(_, brk, fl), IfFullLineExceeds(_, brk, fl), IfNaturalFirstLineExceeds(_, brk, fl),
-				IfNaturalFirstLineExceedsWithRest(_, brk, fl), IfNaturalFirstLineFitsOpenDelim(_, brk, fl),
-				IfArrowContinuationFits(_, _, _, brk, fl), IfArrowContinuationFitsWithRest(_, _, _, brk, fl):
-				[brk, fl];
-			case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
-				items.concat([sep]);
-		};
-	}
-
-	/**
 	 * Sister of `dotBrokenLastSegLine` for the self-rescue tier: the last
 	 * segment's dot-broken FIRST-line width assuming its own leading-break
 	 * callParameter wrap fires — `nestBase + cols + prefix-to-open-delim`.
@@ -1141,6 +1144,7 @@ final class CollapsePass {
 	private static function argsWrapBrk(d: Doc): Null<Doc> {
 		return switch d {
 			case WrapBoundary(inner): argsWrapBrk(inner);
+			case BreakCommit(_, flat): argsWrapBrk(flat);
 			case Group(IfBreak(brk, _)): argsBrkLeadingBreaks(brk) ? brk : null;
 			case IfLineExceeds(_, brk, _): argsBrkLeadingBreaks(brk) ? brk : null;
 			case _: null;
