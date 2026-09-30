@@ -355,9 +355,10 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(IMPORT_PER_BUILD), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TRUTH-CONTEXT')
 	public function testATypeInAFileImportingUnderAConditionIsReadFromTheListedBuilds(): Void {
-		// `b.T` has no conversion to run, until a listed build defines `other` and the call converts to `a.T`
+		// `b.T` has no conversion to run, until a listed build defines `other` and the call converts to `a.T`. Under `[[]]`
+		// two gates prove it each on its own - the skipped context test and `a/T.hx`, which no listed build compiles - so
+		// no single arm breaks it; a fixture where a build compiles `a.T` waits for the implicit admissions (S6)
 		assertMatch(ask(IMPORT_PER_BUILD, [[]], true, null, false, null, null, null, true), r -> r.match(Proven));
 		assertMatch(ask(IMPORT_PER_BUILD, [[], ['other']], true, null, false, null, null, null, true), r -> r.match(Reached(_)));
 	}

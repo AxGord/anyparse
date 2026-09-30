@@ -2564,8 +2564,6 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-TRUTH-CONTEXT',
 			'unit.query.MemberReachFactsTest#testATypeBringingExtensionsInUnderAConditionIsUnknown :: control :: '
 				+ 'M-FACTS-REACH-USING-META,M-GRAPH-USING-META,M-INDEX-GUARDED-META-LIFT',
-			'unit.query.MemberReachFactsTest#testATypeInAFileImportingUnderAConditionIsReadFromTheListedBuilds :: control :: '
-				+ 'M-FACTS-TRUTH-CONTEXT',
 			'unit.query.MemberReachFactsTest#testATypeInAFileImportingUnderAConditionKeepsTheSyntax :: control :: '
 				+ 'M-FACTS-REACH-GUARDED-IMPORT',
 			'unit.query.MemberReachFactsTest#testAnEscapeTheCompilerTypesCostsOnlyItsOwnFamily :: control :: M-FACTS-REACH-ESCAPE-TYPED',
