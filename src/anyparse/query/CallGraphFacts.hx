@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.CallGraph.CallEdge;
 import anyparse.query.CallGraph.EdgeKind;
 import anyparse.query.CallGraph.FnNode;
 import anyparse.query.CallGraph.UnresolvedReason;
@@ -15,7 +16,8 @@ using StringTools;
 
 /**
  * What a FACETED function node (`FactsView.bodyFacts`) contributes to a `CallGraph`
- * beside the edges its syntax records, and in place of its syntax's unresolved sites:
+ * beside the edges its syntax records — or, when the facts are the truth (`FactsView.truth`), in place
+ * of those at a site the facts type (`holdsBack`) — and in place of its syntax's unresolved sites:
  * an edge per call, construction, method read as a value and nested function the compiler typed — each instance call
  * with its override edges, over the typed subtypes and the ones the graph holds alike — an unresolved site per call
  * through a value, a structure, a dynamic receiver or a native identifier, and an unresolved access per property or
@@ -39,10 +41,14 @@ final class CallGraphFacts {
 	public final faceted: Map<String, Array<FactNode>> = [];
 
 	/**
-	 * The faceted nodes of the file whose edges the graph is collecting: their syntax records its edges, which the facts
-	 * only add to, but none of its unresolved sites and accesses, which the facts type.
+	 * The faceted nodes of the file whose edges the graph is collecting: their syntax records its
+	 * edges, which the facts only add to — under the truth, only those at a site the facts do not
+	 * type (`holdsBack`) — but none of its unresolved sites and accesses, which the facts type.
 	 */
 	public var muted(default, null): Map<String, Bool> = [];
+
+	/** The edges the syntax of a muted node recorded while the facts are the truth, until `recordMuted` sorts them. */
+	private final _heldBack: Array<CallEdge> = [];
 
 	public function new(view: FactsView) {
 		this.view = view;
@@ -67,15 +73,36 @@ final class CallGraphFacts {
 		return out;
 	}
 
-	/** Unmute, and record the facts `found` of each node `mute` muted in their syntax's place. */
+	/**
+	 * Unmute, and record the facts `found` of each node `mute` muted in their syntax's place — and of the syntax's edges
+	 * held back (`holdsBack`), those at a site the facts do not type.
+	 */
 	public function recordMuted(g: CallGraph, found: Map<String, Array<FactNode>>): Void {
 		muted = [];
+		final typed: Map<String, Array<String>> = [];
 		for (id => facts in found) {
 			final n: Null<FnNode> = g.nodes[id];
 			if (n == null) continue;
 			faceted[id] = facts;
+			typed[id] = typedSites(facts, view);
 			record(g, n, facts, view);
 		}
+		for (e in _heldBack) {
+			final at: Null<Span> = e.span;
+			if (at == null || !(typed[e.from] ?? []).contains(siteKey(at))) g.indexEdge(e);
+		}
+		_heldBack.resize(0);
+	}
+
+	/**
+	 * Whether the syntax's `edge` waits for `recordMuted` instead of joining the graph: when the facts are the truth
+	 * (`FactsView.truth`), an edge a muted node's syntax records at a site its facts type is the syntax's reading of a
+	 * site the compiler resolved in every build there is, and is dropped. Lexical containment is no reading of a site.
+	 */
+	public function holdsBack(edge: CallEdge): Bool {
+		if (!view.truth || edge.kind == Contains || !muted.exists(edge.from)) return false;
+		_heldBack.push(edge);
+		return true;
 	}
 
 	/** Forget the text of `file`, which left the graph, and the `removed` nodes it declared. */
@@ -282,6 +309,29 @@ final class CallGraphFacts {
 		// a node's span may run on over trailing trivia the compiler's range stops before: the two share their start
 		final found: Null<String> = g.functionAt(node.file, at.from);
 		return found != null && g.nodes[found]?.span?.from == at.from ? found : null;
+	}
+
+	/**
+	 * The sites the compiler typed in the bodies `facts` (`siteKey`): each call, construction and field access, and each
+	 * function nested there. A site the facts place elsewhere, or not at all, is none of them.
+	 */
+	private static function typedSites(facts: Array<FactNode>, view: FactsView): Array<String> {
+		final out: Array<String> = [];
+		for (n in facts) {
+			for (c in n.calls) out.push(siteKey(c.at.span));
+			for (x in n.news) out.push(siteKey(x.at.span));
+			for (f in n.fields) out.push(siteKey(f.at.span));
+			for (id in n.fns) {
+				final nested: Null<FactNode> = view.table.node(id);
+				if (nested != null) out.push(siteKey(nested.at.span));
+			}
+		}
+		return out;
+	}
+
+	/** A site by its exact range: a syntax edge is dropped only at a range the compiler typed itself. */
+	private static inline function siteKey(span: Span): String {
+		return '${span.from}:${span.to}';
 	}
 
 	/** The declaring type of a call target `pack.Type.field`. */

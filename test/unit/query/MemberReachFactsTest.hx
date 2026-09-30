@@ -1,8 +1,7 @@
 package unit.query;
 
 import anyparse.check.LintConfig.OracleConfig;
-import anyparse.check.OracleCoverage;
-import anyparse.check.OracleDeclaration;
+import anyparse.check.ReachDefinesProbe;
 import anyparse.check.TypedFactsProbe;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
@@ -37,6 +36,59 @@ class MemberReachFactsTest extends Test {
 	/** A loop in `Main.main` whose body is the region, over the static `Main.items`. */
 	private static inline final LOOP_HEAD: String = 'class Main {\n\tpublic static var items:Array<Int> = [1, 2];\n';
 
+	/** `main` calls the local `inline function` `helper`, which changes `items`. */
+	private static final LOCAL_INLINE: String = LOOP_HEAD
+		+ '\tstatic function main() {\n\t\tinline function helper():Void items.push(9);\n'
+		+ '\t\tfor (i in 0...items.length) { /*<*/ helper(); /*>*/ }\n\t}\n}\n';
+
+	/** `pick` returns a `Safe`, whose `grow` changes nothing, and in a build defining `other` a `Grower`, whose `grow` does. */
+	private static final CALLEE_PER_BUILD: String = LOOP_HEAD + '\tstatic function pick() {\n\t\t#if other\n\t\treturn new Grower();\n'
+		+ '\t\t#else\n\t\treturn new Safe();\n\t\t#end\n\t}\n'
+		+ '\tstatic function main() {\n\t\tvar s = pick();\n\t\tfor (i in 0...items.length) { /*<*/ s.grow(); /*>*/ }\n\t}\n}\n'
+		+ 'class Safe {\n\tpublic function new() {}\n\tpublic function grow():Void {}\n}\n'
+		+ 'class Grower {\n\tpublic function new() {}\n\tpublic function grow():Void Main.items.push(1);\n}\n';
+
+	/** `w.grow()` runs the extension `Ext.grow`, or in a build defining `other` the `grow` `W` declares there. */
+	private static final MEMBER_PER_BUILD: String = 'using Main.Ext;\n' + LOOP_HEAD + '\tstatic function mk() return new W();\n'
+		+ '\tstatic function main() {\n\t\tvar w = mk();\n' + '\t\tfor (i in 0...items.length) { /*<*/ w.grow(); /*>*/ }\n\t}\n}\n'
+		+ 'class W {\n\tpublic function new() {}\n\t#if other\n\tpublic function grow():Void Main.items.push(1);\n\t#end\n}\n'
+		+ 'class Ext {\n\tpublic static function grow(w:W):Void {}\n}\n';
+
+	/**
+	 * `w.go()` in `Runner.run` runs `Quiet.go`, or in a build defining `other`, which brings `Loud` in last, `Loud.go`,
+	 * which changes `Store.items`.
+	 */
+	private static final EXTENSION_PER_BUILD: Map<String, String> = [
+		'Main.hx' => 'import Ext.W;\nimport Ext.Store;\nusing Ext.Quiet;\n#if other\nusing Ext.Loud;\n#end\n'
+			+ 'class Main {\n\tstatic function main() {\n\t\tRunner.run(new W());\n\t}\n}\n'
+			+ 'class Runner {\n\tpublic static function run(w:W):Void {\n'
+			+ '\t\tfor (i in 0...Store.items.length) { /*<*/ w.go(); /*>*/ }\n\t}\n}\n',
+		'Ext.hx' => 'class Ext {}\n' + 'class W {\n\tpublic function new() {}\n}\n'
+			+ 'class Store {\n\tpublic static var items:Array<Int> = [1, 2];\n}\n'
+			+ 'class Quiet {\n\tpublic static function go(w:W):Void {}\n}\n'
+			+ 'class Loud {\n\tpublic static function go(w:W):Void Store.items.push(1);\n}\n'
+	];
+
+	/**
+	 * `R.f` takes the `T` its file imports: `b.T`, or in a build defining `other` `a.T`, whose `@:from` runs on the
+	 * argument and changes `items`.
+	 */
+	private static final IMPORT_PER_BUILD: Map<String, String> = [
+		'Main.hx' => LOOP_HEAD + '\tstatic function main() {\n\t\tvar o:Obj = new Obj();\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ R.f(o); /*>*/ }\n\t}\n}\n' + 'class Obj {\n\tpublic function new() {}\n}\n',
+		'R.hx' => '#if other\nimport a.T;\n#else\nimport b.T;\n#end\n\nclass R {\n\tpublic static function f(x:T):Void {}\n}\n',
+		'a/T.hx' => 'package a;\n\nabstract T(Dynamic) {\n\t@:from static function fromObj(o:Obj):T {\n\t\tMain.items.push(1);\n'
+			+ '\t\treturn cast o;\n\t}\n}\n',
+		'b/T.hx' => 'package b;\n\nabstract T(Dynamic) from Dynamic {}\n'
+	];
+
+	/** `w.go()` runs `Quiet.go`, or in a build defining `other`, which puts `@:using(Main.Loud)` on `W`, `Loud.go`. */
+	private static final USING_PER_BUILD: String = 'using Main.Quiet;\n' + LOOP_HEAD
+		+ '\tstatic function main() {\n\t\tvar w:W = new W();\n' + '\t\tfor (i in 0...items.length) { /*<*/ w.go(); /*>*/ }\n\t}\n}\n'
+		+ '#if other\n@:using(Main.Loud)\n#end\nclass W {\n\tpublic function new() {}\n}\n'
+		+ 'class Quiet {\n\tpublic static function go(w:W):Void {}\n}\n'
+		+ 'class Loud {\n\tpublic static function go(w:W):Void Main.items.push(1);\n}\n';
+
 	@:pin('control') @:killer('M-FACTS-REACH-EDGES')
 	public function testTheCompilerResolvesACallTheSyntaxCannot(): Void {
 		// `pick()` declares no return type, so the syntax cannot tell which `grow` runs and admits every one so named; the
@@ -47,6 +99,32 @@ class MemberReachFactsTest extends Test {
 			+ 'class Grower {\n\tpublic function new() {}\n\tpublic function grow():Void Main.items.push(1);\n}\n';
 		assertMatch(ask(['Main.hx' => main]), r -> r.match(Proven));
 		assertMatch(ask(['Main.hx' => main], null, false), r -> r.match(Reached(_)));
+	}
+
+	@:pin('control') @:killer('M-FACTS-TRUTH-CONDITIONAL') @:killer('M-FACTS-TRUTH-CONDITIONAL-ALWAYS')
+	public function testABodyHoldingADirectiveIsReadFromTheFactsOfTheListedBuilds(): Void {
+		// `main` holds a directive: a build the list does not name may type it otherwise, so only under the whole list of builds
+		// do the facts, the union of every branch a build takes, name `Safe.grow` for it
+		final main: String = LOOP_HEAD + '\tstatic function pick() return new Safe();\n'
+			+ '\tstatic function main() {\n\t\tvar s = pick();\n\t\t#if other\n\t\ttrace(s);\n\t\t#end\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ s.grow(); /*>*/ }\n\t\tnew Grower().grow();\n\t}\n}\n'
+			+ 'class Safe {\n\tpublic function new() {}\n\tpublic function grow():Void {}\n}\n'
+			+ 'class Grower {\n\tpublic function new() {}\n\tpublic function grow():Void Main.items.push(1);\n}\n';
+		assertMatch(ask(['Main.hx' => main], [[], ['other']], true, null, false, null, null, null, true), r -> r.match(Proven));
+		assertMatch(ask(['Main.hx' => main], [[], ['other']]), r -> r.match(Reached(_)));
+	}
+
+	@:pin('control') @:killer('M-GRAPH-TRUTH-MUTE')
+	public function testUnderTheWholeListTheSyntaxsEdgeAtASiteTheFactsTypeIsDropped(): Void {
+		// the syntax reads both `using`s and names `Loud.go` for `w.go()` as well as `Quiet.go`, which the compiler picks —
+		// `Loud.go` takes a `String`: `main` is read through its facts either way, but only under the whole list of builds does
+		// the syntax's edge at a site they type go
+		final main: String = 'using Main.Quiet;\nusing Main.Loud;\n' + LOOP_HEAD + '\tstatic function main() {\n\t\tvar w:W = new W();\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ w.go(); /*>*/ }\n\t}\n}\n' + 'class W {\n\tpublic function new() {}\n}\n'
+			+ 'class Quiet {\n\tpublic static function go(w:W):Void {}\n}\n'
+			+ 'class Loud {\n\tpublic static function go(s:String):Void Main.items.push(1);\n}\n';
+		assertMatch(ask(['Main.hx' => main], null, true, null, false, null, null, null, true), r -> r.match(Proven));
+		assertMatch(ask(['Main.hx' => main]), r -> !r.match(Proven));
 	}
 
 	@:pin('control') @:killer('M-FACTS-REACH-BIND')
@@ -60,27 +138,45 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main]), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-FACTS-REACH-ALIKE')
+	@:pin('control') @:killer('M-FACTS-REACH-ALIKE') @:killer('M-FACTS-TRUTH-CONTEXT-ALWAYS')
 	public function testACalleeTypedDifferentlyInAnotherBuildKeepsTheSyntax(): Void {
 		// `pick` returns a `Safe` in the build compiled here and a `Grower` in one the list does not name: the facts'
 		// `Safe.grow` answers for this build alone, and the syntax, which cannot type `s`, admits every `grow`
-		final main: String = LOOP_HEAD + '\tstatic function pick() {\n\t\t#if other\n\t\treturn new Grower();\n\t\t#else\n'
-			+ '\t\treturn new Safe();\n\t\t#end\n\t}\n'
-			+ '\tstatic function main() {\n\t\tvar s = pick();\n\t\tfor (i in 0...items.length) { /*<*/ s.grow(); /*>*/ }\n\t}\n}\n'
-			+ 'class Safe {\n\tpublic function new() {}\n\tpublic function grow():Void {}\n}\n'
-			+ 'class Grower {\n\tpublic function new() {}\n\tpublic function grow():Void Main.items.push(1);\n}\n';
-		assertMatch(ask(['Main.hx' => main]), r -> !r.match(Proven));
+		assertMatch(ask(['Main.hx' => CALLEE_PER_BUILD]), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-FACTS-TRUTH-CONTEXT')
+	public function testACalleeEveryListedBuildTypesIsReadFromTheirFacts(): Void {
+		// under the whole list of builds no other build exists: the facts of the listed ones name `Safe.grow` alone, and
+		// `Grower.grow` too once one of them defines `other`
+		assertMatch(ask(['Main.hx' => CALLEE_PER_BUILD], [[]], true, null, false, null, null, null, true), r -> r.match(Proven));
+		assertMatch(
+			ask(['Main.hx' => CALLEE_PER_BUILD], [[], ['other']], true, null, false, null, null, null, true), r -> r.match(Reached(_))
+		);
 	}
 
 	@:pin('control') @:killer('M-FACTS-REACH-GUARDED-NAME')
 	public function testAMemberAnotherBuildDeclaresShadowsAnExtension(): Void {
 		// in a build defining `other`, `W` declares `grow` itself, and `w.grow()` runs it instead of the extension; the syntax,
 		// which cannot type `w`, admits every `grow`
-		final main: String = 'using Main.Ext;\n' + LOOP_HEAD + '\tstatic function mk() return new W();\n'
-			+ '\tstatic function main() {\n\t\tvar w = mk();\n' + '\t\tfor (i in 0...items.length) { /*<*/ w.grow(); /*>*/ }\n\t}\n}\n'
-			+ 'class W {\n\tpublic function new() {}\n\t#if other\n\tpublic function grow():Void Main.items.push(1);\n\t#end\n}\n'
-			+ 'class Ext {\n\tpublic static function grow(w:W):Void {}\n}\n';
-		assertMatch(ask(['Main.hx' => main]), r -> !r.match(Proven));
+		assertMatch(ask(['Main.hx' => MEMBER_PER_BUILD]), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-FACTS-TRUTH-CONTEXT')
+	public function testAMemberOnlyAListedBuildDeclaresShadowsAnExtensionThere(): Void {
+		// the extension runs in every listed build, until one of them defines `other` and declares `W.grow` — where no listed
+		// build takes that branch, it is dead code whatever the facts say
+		assertMatch(ask(['Main.hx' => MEMBER_PER_BUILD], [[]], true, null, false, null, null, null, true), r -> r.match(Proven));
+		assertMatch(
+			ask(['Main.hx' => MEMBER_PER_BUILD], [[], ['other']], true, null, false, null, null, null, true), r -> r.match(Reached(_))
+		);
+		// a build defining `other` declares a `grow` on another type: every listed build's facts still name the extension,
+		// which only the truth lets answer — no other build exists to shadow it
+		final elsewhere: String = StringTools.replace(
+			MEMBER_PER_BUILD, 'W {\n\tpublic function new() {}\n\t#if other', 'W {\n\tpublic function new() {}\n}\nclass V {\n\t#if other'
+		);
+		assertMatch(ask(['Main.hx' => elsewhere], [[], ['other']], true, null, false, null, null, null, true), r -> r.match(Proven));
+		assertMatch(ask(['Main.hx' => elsewhere], [[], ['other']]), r -> !r.match(Proven));
 	}
 
 	@:pin('control') @:killer('M-FACTS-REACH-OVERRIDES')
@@ -117,9 +213,14 @@ class MemberReachFactsTest extends Test {
 	public function testALocalInlineFunctionKeepsItsBodysSyntax(): Void {
 		// a local `inline function` is spliced at its own declaration inside the same body, where no marker says so: its
 		// syntax is a function of its own, though the grammar gives it a kind apart from a local one, and the call is its edge
-		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tinline function helper():Void items.push(9);\n'
-			+ '\t\tfor (i in 0...items.length) { /*<*/ helper(); /*>*/ }\n\t}\n}\n';
-		assertMatch(ask(['Main.hx' => main]), r -> !r.match(Proven));
+		assertMatch(ask(['Main.hx' => LOCAL_INLINE]), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-GRAPH-TRUTH-MUTE-UNTYPED')
+	public function testUnderTheWholeListTheCallOfALocalInlineFunctionKeepsItsEdge(): Void {
+		// `main` is read through its facts, and the compiler types nothing at `helper()`, whose body it splices where it is
+		// declared: the syntax's edge there is the only thing that says the call runs it
+		assertMatch(ask(['Main.hx' => LOCAL_INLINE], null, true, null, false, null, null, null, true), r -> !r.match(Proven));
 	}
 
 	@:pin('control') @:killer('M-FACTS-REACH-NESTED-OWNER')
@@ -226,36 +327,35 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main]), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-FACTS-REACH-SYNTAX-UNION')
+	@:pin('control') @:killer('M-FACTS-REACH-SYNTAX-UNION') @:killer('M-GRAPH-TRUTH-MUTE-ALWAYS')
 	public function testAnExtensionAnotherBuildBringsInIsKeptFromTheSyntax(): Void {
 		// a build defining `other` brings in `Loud` last, and `w.go()` runs its `go`: the facts of `Runner.run`, which name
 		// no type of this file, say `Quiet.go`; the syntax reads both `using`s and records the edge the facts may not take away
-		final main: String = 'import Ext.W;\nimport Ext.Store;\nusing Ext.Quiet;\n#if other\nusing Ext.Loud;\n#end\n'
-			+ 'class Main {\n\tstatic function main() {\n\t\tRunner.run(new W());\n\t}\n}\n'
-			+ 'class Runner {\n\tpublic static function run(w:W):Void {\n'
-			+ '\t\tfor (i in 0...Store.items.length) { /*<*/ w.go(); /*>*/ }\n\t}\n}\n';
-		final ext: String = 'class Ext {}\n' + 'class W {\n\tpublic function new() {}\n}\n'
-			+ 'class Store {\n\tpublic static var items:Array<Int> = [1, 2];\n}\n'
-			+ 'class Quiet {\n\tpublic static function go(w:W):Void {}\n}\n'
-			+ 'class Loud {\n\tpublic static function go(w:W):Void Store.items.push(1);\n}\n';
 		final store: MemberRef = { owner: 'Store', name: 'items' };
-		assertMatch(ask(['Main.hx' => main, 'Ext.hx' => ext], null, true, store), r -> !r.match(Proven));
+		assertMatch(ask(EXTENSION_PER_BUILD, null, true, store), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-GRAPH-TRUTH-MUTE')
+	public function testAnExtensionOnlyAListedBuildBringsInIsReadFromItsFacts(): Void {
+		// `Runner.run` is read through its facts either way; under the whole list of builds the syntax's edge to `Loud.go`,
+		// which only a build defining `other` brings in, is its reading of a site every build typed, and is dropped
+		final store: MemberRef = { owner: 'Store', name: 'items' };
+		assertMatch(ask(EXTENSION_PER_BUILD, [[]], true, store, false, null, null, null, true), r -> r.match(Proven));
+		assertMatch(ask(EXTENSION_PER_BUILD, [[], ['other']], true, store, false, null, null, null, true), r -> r.match(Reached(_)));
 	}
 
 	@:pin('control') @:killer('M-FACTS-REACH-GUARDED-IMPORT')
 	public function testATypeInAFileImportingUnderAConditionKeepsTheSyntax(): Void {
 		// `R.f` takes the `T` its file imports: `b.T` here, and in a build defining `other` `a.T`, whose `@:from` runs on the
 		// argument and grows `items` — no edge names that conversion, and the facts of this build hold none
-		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tvar o:Obj = new Obj();\n'
-			+ '\t\tfor (i in 0...items.length) { /*<*/ R.f(o); /*>*/ }\n\t}\n}\n' + 'class Obj {\n\tpublic function new() {}\n}\n';
-		final files: Map<String, String> = [
-			'Main.hx' => main,
-			'R.hx' => '#if other\nimport a.T;\n#else\nimport b.T;\n#end\n\nclass R {\n\tpublic static function f(x:T):Void {}\n}\n',
-			'a/T.hx' => 'package a;\n\nabstract T(Dynamic) {\n\t@:from static function fromObj(o:Obj):T {\n\t\tMain.items.push(1);\n'
-				+ '\t\treturn cast o;\n\t}\n}\n',
-			'b/T.hx' => 'package b;\n\nabstract T(Dynamic) from Dynamic {}\n'
-		];
-		assertMatch(ask(files), r -> !r.match(Proven));
+		assertMatch(ask(IMPORT_PER_BUILD), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-FACTS-TRUTH-CONTEXT')
+	public function testATypeInAFileImportingUnderAConditionIsReadFromTheListedBuilds(): Void {
+		// `b.T` has no conversion to run, until a listed build defines `other` and the call converts to `a.T`
+		assertMatch(ask(IMPORT_PER_BUILD, [[]], true, null, false, null, null, null, true), r -> r.match(Proven));
+		assertMatch(ask(IMPORT_PER_BUILD, [[], ['other']], true, null, false, null, null, null, true), r -> r.match(Reached(_)));
 	}
 
 	@:pin('control') @:killer('M-FACTS-REACH-LIBRARY-DYNAMIC')
@@ -375,12 +475,16 @@ class MemberReachFactsTest extends Test {
 	public function testATypeBringingExtensionsInUnderAConditionIsUnknown(): Void {
 		// a build defining `other` puts `@:using(Main.Loud)` on `W`, and `w.go()` runs `Loud.go`: neither the facts nor the
 		// `using` the file spells name it
-		final main: String = 'using Main.Quiet;\n' + LOOP_HEAD + '\tstatic function main() {\n\t\tvar w:W = new W();\n'
-			+ '\t\tfor (i in 0...items.length) { /*<*/ w.go(); /*>*/ }\n\t}\n}\n'
-			+ '#if other\n@:using(Main.Loud)\n#end\nclass W {\n\tpublic function new() {}\n}\n'
-			+ 'class Quiet {\n\tpublic static function go(w:W):Void {}\n}\n'
-			+ 'class Loud {\n\tpublic static function go(w:W):Void Main.items.push(1);\n}\n';
-		assertMatch(ask(['Main.hx' => main]), r -> !r.match(Proven));
+		assertMatch(ask(['Main.hx' => USING_PER_BUILD]), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-FACTS-TRUTH-CONTEXT')
+	public function testATypeBringingExtensionsInUnderAConditionIsReadFromTheListedBuilds(): Void {
+		// `Quiet.go` runs in every listed build, until one of them defines `other` and puts `@:using(Main.Loud)` on `W`
+		assertMatch(ask(['Main.hx' => USING_PER_BUILD], [[]], true, null, false, null, null, null, true), r -> r.match(Proven));
+		assertMatch(
+			ask(['Main.hx' => USING_PER_BUILD], [[], ['other']], true, null, false, null, null, null, true), r -> r.match(Reached(_))
+		);
 	}
 
 	@:pin('control') @:killer('M-FACTS-REACH-UNREAD-IMPLICIT')
@@ -447,8 +551,7 @@ class MemberReachFactsTest extends Test {
 	 * the analysis's word that the index holds every type the builds compile. `library` files compile beside
 	 * them and are indexed, but are no part of the project: the walk reads one only when it follows code into it.
 	 * `unindexed` files are written and compiled but indexed by nothing — code only the compiler sees. `listed` hands the
-	 * analysis the builds as the whole list of them — one per define set, named as the probes name its oracle — compiling
-	 * every file of the fixture.
+	 * analysis the builds as the whole list of them — one per define set, as a run probes them (`ReachDefinesProbe`).
 	 */
 	private static function ask(
 		files: Map<String, String>, ?configurations: Array<Array<String>>, withFacts: Bool = true, ?member: MemberRef,
@@ -507,17 +610,8 @@ class MemberReachFactsTest extends Test {
 		final index: SymbolIndex = SymbolIndex.build(
 			project.concat(libraries).concat([{ file: 'std/Array.hx', source: STD_ARRAY }]), plugin
 		);
-		final cwd: String = Sys.getCwd();
-		final builds: Null<Array<ReachConfiguration>> = listed ? [
-			for (o in oracles)
-				{
-					name: OracleDeclaration.describeOracle(o),
-					defined: o.defines,
-					everDefined: o.defines,
-					compiled: [for (e in entries) OracleCoverage.canonical(cwd, Path.join([dir, e.name]))],
-					types: []
-				}
-		] : null;
+		// the builds as a run probes them: every define each one sees, the target's and the compiler's included
+		final builds: Null<Array<ReachConfiguration>> = listed ? ReachDefinesProbe.probeAll(oracles)?.configurations : null;
 		final reach: MemberReach = new MemberReach(
 			plugin, project, index, true, MemberReach.MAX_LIBRARY_FILES, MemberReach.MAX_VISITED, builds, () -> classpathComplete, facts
 		);
