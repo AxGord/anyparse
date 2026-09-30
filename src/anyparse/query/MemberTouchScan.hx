@@ -41,7 +41,8 @@ final class MemberTouchScan {
 	 * Every access of `name` that binds to the member `declaring` declares, over the project files the
 	 * graph holds: the functions that TOUCH it for `access`, the sites where its value escapes, and the
 	 * touch (if any) inside `region` of `regionFile` itself. Any project file that did not
-	 * parse, and a raw conditional region spelling the name, is recorded as a blind spot.
+	 * parse, and a raw conditional region spelling the name, is recorded as a blind spot. A file no build
+	 * runs (`ReachProject.runsInNoBuild`) is none the graph holds: it touches nothing and hides nothing.
 	 */
 	public function scan(
 		g: CallGraph, name: String, declaring: String, access: ReachAccess, arrayTyped: Bool, regionFile: String, region: Null<Span>

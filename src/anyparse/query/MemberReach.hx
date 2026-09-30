@@ -6,6 +6,7 @@ import anyparse.query.CallGraph.EdgeKind;
 import anyparse.query.CallGraph.FnNode;
 import anyparse.query.CallGraph.UnresolvedAccess;
 import anyparse.query.CallGraph.UnresolvedCall;
+import anyparse.query.FactsView.TruthSites;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.ImplicitSites.ImplicitSite;
 import anyparse.query.MemberTouchScan.FreshContext;
@@ -344,6 +345,11 @@ final class MemberReach {
 	/** `mayReach` under this analysis alone. */
 	private function answerReach(entry: ReachEntry, member: MemberRef, access: ReachAccess): ReachResult {
 		_g.startQuestion();
+		final entryFile: String = switch entry {
+			case Region(f, _), Calls(f, _): f;
+		};
+		final idle: Null<ReachUnknown> = idleEntry(entryFile);
+		if (idle != null) return Unknown(idle);
 		final g: CallGraph = graph();
 		final seeds: Seeds = seedsOf(g, entry);
 		final declaring: String = g.types.declaringTypeOf(member.owner, member.name) ?? member.owner;
@@ -392,6 +398,8 @@ final class MemberReach {
 	 */
 	private function answerLocal(file: String, fn: QueryNode, declaration: QueryNode, region: Span): ReachResult {
 		_g.startQuestion();
+		final idle: Null<ReachUnknown> = idleEntry(file);
+		if (idle != null) return Unknown(idle);
 		final tree: Null<QueryNode> = _g.treeOf(file);
 		final source: Null<String> = _projectSources[file];
 		final declSpan: Null<Span> = declaration.span;
@@ -608,6 +616,14 @@ final class MemberReach {
 		};
 	}
 
+	/**
+	 * Why a question about code of `file` has no answer here, or null: the file runs in no build (`ReachProject.runsInNoBuild`),
+	 * so the graph holds none of it and whatever it calls is never walked — the code runs nowhere a proof would hold.
+	 */
+	private function idleEntry(file: String): Null<ReachUnknown> {
+		return _scope.runsInNoBuild(file) ? OutOfScope('`$file` is compiled by no build the list names') : null;
+	}
+
 	/** The hazards inside the entry itself — the whole region, or each call site's own subtree. */
 	private function entryHazards(g: CallGraph, entry: ReachEntry): Array<{ file: String, hazard: ReachHazard }> {
 		return switch entry {
@@ -705,12 +721,22 @@ final class MemberReach {
 		return out;
 	}
 
+	/**
+	 * The hazards of the code at `spans` of `file` some configuration may compile (`liveHazards`), read off its syntax —
+	 * or, where its compiler facts are the truth, off them wherever they record what a hazard stands for (`FactsView.truthSites`,
+	 * `ReachHazards.underTruth`).
+	 */
 	private function hazardsOf(g: CallGraph, file: String, spans: Array<Span>): Array<{ file: String, hazard: ReachHazard }> {
 		final read: Null<{ tree: QueryNode, source: String }> = readOf(g, file);
 		if (read == null) return [];
-		return [
-			for (span in spans) for (h in liveHazards(file, read.tree, read.source, span)) { file: file, hazard: h }
-		];
+		final out: Array<{ file: String, hazard: ReachHazard }> = [];
+		for (span in spans) {
+			final syntactic: Array<ReachHazard> = liveHazards(file, read.tree, read.source, span);
+			final typed: Null<TruthSites> = _scope.facts?.truthSites(g, file, span);
+			final hazards: Array<ReachHazard> = typed == null ? syntactic : _hazards.underTruth(syntactic, typed, read.tree);
+			for (h in hazards) out.push({ file: file, hazard: h });
+		}
+		return out;
 	}
 
 	/**

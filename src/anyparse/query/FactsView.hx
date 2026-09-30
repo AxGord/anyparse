@@ -6,6 +6,8 @@ import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.CompilerFacts.FlowFact;
 import anyparse.query.CompilerFacts.IterationFact;
+import anyparse.query.CompilerFacts.NativeFact;
+import anyparse.query.CompilerFacts.ReflectionFact;
 import anyparse.query.CompilerFacts.StringFact;
 import anyparse.query.CompilerFacts.TypeFact;
 import anyparse.query.CondDirectives.CondBlock;
@@ -42,8 +44,9 @@ using StringTools;
  * it is such an edge.
  *
  * Under a list of builds declared to be every build the project ships (`reachConfigurationsComplete`), a table holding
- * exactly the listed builds, none dropped, is the TRUTH (`truth`): a build the list does not name does not exist, so no
- * declaration can read differently in one.
+ * exactly the listed builds, none dropped, is the TRUTH (`truth`): a build the list does not name does not
+ * exist, so no declaration can read differently in one. There a faceted body's natives and reflective calls are
+ * its facts' (`truthSites`), and a project file no listed build read runs in none (`ReachProject.runsInNoBuild`).
  */
 @:nullSafety(Strict)
 final class FactsView {
@@ -156,6 +159,18 @@ final class FactsView {
 		}
 		for (i in iterations) out.push({ family: Iteration, span: i.at.span, types: [simpleSource(i.iterated)] });
 		return out;
+	}
+
+	/**
+	 * The native sites and the reflective calls the compiler typed in the code at `span` of `file`, when the facts are the
+	 * truth (`truth`) and the innermost graph node holding `span` is faceted: every build's reading of that code is then
+	 * among them. Null otherwise, and when a fact there has no place (`CompilerFacts.within`): the syntax answers.
+	 */
+	public function truthSites(g: CallGraph, file: String, span: Span): Null<TruthSites> {
+		if (!truth || !faceted(g, file, span)) return null;
+		final natives: Null<Array<NativeFact>> = table.within(file, span, n -> n.natives, f -> f.at);
+		final reflection: Null<Array<ReflectionFact>> = table.within(file, span, n -> n.reflection, r -> r.at);
+		return natives == null || reflection == null ? null : { natives: natives, reflection: reflection };
 	}
 
 	/** Whether the innermost graph node holding `span` of `file` is faceted: its facts replace its syntax. */
@@ -555,6 +570,12 @@ final class FactsView {
 		return a.from < b.to && b.from < a.to;
 	}
 
+}
+
+/** The sites the syntax cannot be trusted to see in code whose facts are the truth (`FactsView.truthSites`). */
+typedef TruthSites = {
+	final natives: Array<NativeFact>;
+	final reflection: Array<ReflectionFact>;
 }
 
 /** The conditional compilation of a text: its directives, its top-level regions, and whether a region never closes. */

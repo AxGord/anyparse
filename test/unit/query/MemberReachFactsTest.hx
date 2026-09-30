@@ -37,6 +37,10 @@ class MemberReachFactsTest extends Test {
 	/** A loop in `Main.main` whose body is the region, over the static `Main.items`. */
 	private static inline final LOOP_HEAD: String = 'class Main {\n\tpublic static var items:Array<Int> = [1, 2];\n';
 
+	/** A class with the instance member `Main.items`, whose methods the build types though `main` calls none of them. */
+	private static inline final MEMBER_HEAD: String = 'class Main {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n'
+		+ '\tstatic function main() {}\n';
+
 	@:pin('control') @:killer('M-FACTS-REACH-EDGES')
 	public function testTheCompilerResolvesACallTheSyntaxCannot(): Void {
 		// `pick()` declares no return type, so the syntax cannot tell which `grow` runs and admits every one so named; the
@@ -441,6 +445,129 @@ class MemberReachFactsTest extends Test {
 		Assert.isFalse(MemberReach.factsAreTruth(facts, listed(['b.hxml', 'b.hxml -D z'])), 'facts of other builds were the truth');
 	}
 
+	@:pin('control') @:killer('M-FACTS-TRUTH-HAZARDS') @:killer('M-FACTS-TRUTH-HAZARDS-UNLISTED')
+	@:killer('M-FACTS-TRUTH-UNTYPED-KEPT')
+	public function testUntypedCodeTheFactsRecordIsReadThroughThemUnderTheTruth(): Void {
+		// `untyped this.zz` reads a field the class lacks: the compiler types it as a Dynamic field read, a fact like any
+		// other, so under the whole list of builds the untyped expression hides nothing; with no such list it stays blind
+		final main: String = MEMBER_HEAD
+			+ '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ var z = untyped this.zz; /*>*/ }\n\t}\n}\n';
+		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Proven));
+		assertMatch(ask(['Main.hx' => main]), r -> r.match(Unknown(Untyped(_, _))));
+	}
+
+	@:pin('control') @:killer('M-FACTS-TRUTH-FACETED')
+	public function testABodyTheFactsDoNotDescribeWholeKeepsItsSyntacticHazards(): Void {
+		// `h` is spliced into `g` at `h`'s own range, where no fact of `g` is placed: `g` is read by its syntax, and its untyped
+		// expression stays a blind spot however whole the list of builds
+		final main: String = MEMBER_HEAD + '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ g(); /*>*/ }\n\t}\n'
+			+ '\tfunction g():Void {\n\t\tvar z = untyped this.zz;\n\t\th();\n\t}\n'
+			+ '\tinline function h():Void k();\n\tfunction k():Void {}\n}\n';
+		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Unknown(Untyped(_, _))));
+	}
+
+	@:pin('control') @:killer('M-FACTS-TRUTH-UNTYPED-ALL') @:killer('M-FACTS-TRUTH-UNTYPED-SHAPE')
+	public function testAnUntypedIndexAccessKeepsItsHazardUnderTheTruth(): Void {
+		// on js `this["items"]` IS the field: no fact names it — the compiler records an index read and a Dynamic `push`
+		final main: String = MEMBER_HEAD
+			+ '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ untyped this["items"].push(1); /*>*/ }\n\t}\n}\n';
+		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Unknown(Untyped(_, _))));
+	}
+
+	@:pin('control') @:killer('M-FACTS-TRUTH-NATIVES') @:killer('M-FACTS-TRUTH-NATIVE-CALLS-KEPT')
+	@:killer('M-FACTS-TRUTH-NATIVE-METAS-DROPPED')
+	public function testTheFactsNameTheNativeCallsUnderTheTruth(): Void {
+		// the facts name `js.Syntax.code` whatever spells it; a class of the project merely named `Syntax` is no native code,
+		// though the syntax cannot tell; a native-code meta is nothing the facts record, so the syntax keeps it
+		function region(code: String): String {
+			return MEMBER_HEAD + '\tstatic function g():Void {}\n\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ ' + code
+				+ ' /*>*/ }\n\t}\n}\nclass Syntax {\n\tpublic static function code(s:String):Void {}\n}\n';
+		}
+		assertMatch(truthAsk(['Main.hx' => region('js.Syntax.code("0");')]), r -> r.match(Unknown(NativeCode(_, _))));
+		assertMatch(truthAsk(['Main.hx' => region('Syntax.code("0");')]), r -> r.match(Proven));
+		assertMatch(ask(['Main.hx' => region('Syntax.code("0");')]), r -> r.match(Unknown(NativeCode(_, _))));
+		assertMatch(truthAsk(['Main.hx' => region('@:functionCode("0") g();')]), r -> r.match(Unknown(NativeCode(_, _))));
+	}
+
+	@:pin('control') @:killer('M-FACTS-TRUTH-REFLECTION') @:killer('M-FACTS-TRUTH-REFLECTION-TWIN')
+	public function testAReflectiveCallTheSyntaxDoesNotSeeNamesNothingUnderTheTruth(): Void {
+		// `rf` is `Reflect.field` under another name: the facts see the call, and the literal they record is the first of any
+		// argument, not the name; a call the syntax sees keeps the literal name it reads
+		final main: String = 'import Reflect.field as rf;\n' + MEMBER_HEAD + '\tfunction f():Void {\n\t\tvar n = "it" + "ems";\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ rf(this, n); /*>*/ }\n\t}\n}\n';
+		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Unknown(DynamicName(_, _))));
+		final seen: String = MEMBER_HEAD
+			+ '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ Reflect.field(this, "other"); /*>*/ }\n\t}\n}\n';
+		assertMatch(truthAsk(['Main.hx' => seen]), r -> !r.match(Unknown(DynamicName(_, _))));
+	}
+
+	@:pin('control') @:killer('M-REACH-DEAD-FILE-SEEDS') @:killer('M-FACTS-DEAD-FILE-NEVER')
+	@:killer('M-FACTS-DEAD-FILE-UNTRUE')
+	public function testAProjectFileNoBuildCompilesRunsNothing(): Void {
+		// no build compiles `Dead.hx` — nothing imports it — so under the whole list of builds its touch runs nowhere and its
+		// text, which does not even parse, hides nothing; with no such list a build may compile it
+		final main: String = MEMBER_HEAD + '\tfunction f(s:Shape):Void {\n\t\tfor (i in 0...items.length) { /*<*/ s.draw(this); /*>*/ }\n'
+			+ '\t}\n}\ninterface Shape {\n\tfunction draw(m:Main):Void;\n}\n'
+			+ 'class Live implements Shape {\n\tpublic function new() {}\n\tpublic function draw(m:Main):Void {}\n}\n';
+		final dead: String = 'class Dead implements Shape {\n\tpublic function new() {}\n'
+			+ '\tpublic function draw(m:Main):Void {\n\t\tm.items.push(1);\n\t}\n}\n';
+		final files: Map<String, String> = ['Main.hx' => main, 'Dead.hx' => dead];
+		assertMatch(truthAsk(files), r -> r.match(Proven));
+		assertMatch(ask(files), r -> r.match(Reached(_)));
+		final broken: Map<String, String> = ['Main.hx' => main, 'Broken.hx' => 'class Broken {\n\tfunction f() { ( }\n}\n'];
+		assertMatch(truthAsk(broken), r -> r.match(Proven));
+		assertMatch(ask(broken), r -> r.match(Unknown(SkipParse(_))));
+	}
+
+	@:pin('control') @:killer('M-FACTS-DEAD-FILE-REWRITTEN')
+	@:access(anyparse.query.MemberReach)
+	public function testAFileTheRunWroteMayBeCompiled(): Void {
+		// a file the run wrote after the compiles — one a fix created, say — holds text no build read: it may be compiled
+		final broken: String = 'class Broken {\n\tfunction f() { ( }\n}\n';
+		final main: String = MEMBER_HEAD + '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ g(); /*>*/ }\n\t}\n'
+			+ '\tfunction g():Void {}\n}\n';
+		final result: ReachResult = withReach(
+			['Main.hx' => main, 'Broken.hx' => broken], null, true, false, null, null, null, true, (reach, dir) -> {
+				reach._scope.facts?.table.invalidate(Path.join([dir, 'Broken.hx']));
+				reach.mayReach(Region(Path.join([dir, 'Main.hx']), regionOf(main)), { owner: 'Main', name: 'items' }, Mutate);
+			}
+		);
+		assertMatch(result, r -> r.match(Unknown(SkipParse(_))));
+	}
+
+	@:pin('control') @:killer('M-FACTS-DEAD-FILE-VALUES')
+	public function testAProjectFileNoBuildCompilesLetsNoValueEscape(): Void {
+		// `o.items` is another type's `items`: it touches `Main.items` only if a `Main` may have escaped into an `Other`, which
+		// the escapes over the project answer — a file no build compiles, which the graph does not hold, is none of it
+		final main: String = MEMBER_HEAD + '\tfunction f(o:Other):Void {\n\t\tfor (i in 0...items.length) { /*<*/ Poker.poke(o); /*>*/ }\n'
+			+ '\t}\n}\nclass Other {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n}\n'
+			+ 'class Poker {\n\tpublic static function poke(o:Other):Void o.items.push(9);\n}\n';
+		final files: Map<String, String> = ['Main.hx' => main, 'Idle.hx' => 'class Idle {\n\tpublic function new() {}\n}\n'];
+		// the index is the analysis's word for the classpath, which `Array` would otherwise leave open
+		assertMatch(ask(files, null, true, null, true, null, null, null, true), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-REACH-DEAD-FILE-ENTRY') @:killer('M-REACH-DEAD-FILE-LOCAL-ENTRY')
+	public function testCodeNoBuildCompilesHasNoAnswerUnderTheTruth(): Void {
+		// the graph holds nothing of `Dead.hx`, so no call from it is walked: an answer would read "proven" off nothing
+		final main: String = MEMBER_HEAD + '\tpublic static function grow(xs:Array<Int>):Void {\n\t\txs.push(1);\n\t}\n'
+			+ '\tpublic static function touch():Void {\n\t\tnew Main().items.push(1);\n\t}\n}\n';
+		final dead: String =
+			'class Dead {\n\tstatic function run(xs:Array<Int>):Void {\n\t\t/*<*/ Main.touch(); Main.grow(xs); /*>*/\n\t}\n}\n';
+		function question(listed: Bool, local: Bool): ReachResult {
+			return withReach(['Main.hx' => main, 'Dead.hx' => dead], null, true, false, null, null, null, listed, (reach, dir) -> {
+				final file: String = Path.join([dir, 'Dead.hx']);
+				if (!local) return reach.mayReach(Region(file, regionOf(dead)), { owner: 'Main', name: 'items' }, Mutate);
+				final at: Int = dead.lastIndexOf('xs', dead.indexOf(REGION_CLOSE));
+				return reach.mayMutateNamed(file, 'xs', new Span(at, at + 2), regionOf(dead));
+			});
+		}
+		assertMatch(question(true, false), r -> r.match(Unknown(OutOfScope(_))));
+		assertMatch(question(false, false), r -> r.match(Reached(_)));
+		assertMatch(question(true, true), r -> r.match(Unknown(OutOfScope(_))));
+		assertMatch(question(false, true), r -> !r.match(Proven));
+	}
+
 	/**
 	 * The answer for `member` (by default `Main.items`) over the region of `Main.hx` among `files`, compiled by `build` under
 	 * each define set of `configurations` and read through the facts unless `withFacts` is false; `classpathComplete` is
@@ -459,6 +586,11 @@ class MemberReachFactsTest extends Test {
 			final source: String = files['Main.hx'] ?? '';
 			reach.mayReach(Region(Path.join([dir, 'Main.hx']), regionOf(source)), member ?? { owner: 'Main', name: 'items' }, Mutate);
 		});
+	}
+
+	/** `ask` of `files` under the whole list of their builds, where the facts are the truth (`FactsView.truth`). */
+	private static function truthAsk(files: Map<String, String>): ReachResult {
+		return ask(files, null, true, null, false, null, null, null, true);
 	}
 
 	/**

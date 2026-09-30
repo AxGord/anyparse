@@ -6693,6 +6693,149 @@
 			"note": "(precision) the facts must name the builds in the order the list does, so facts compiled in another order are never the truth"
 		},
 		{
+			"name": "M-FACTS-TRUTH-HAZARDS",
+			"type": "anyparse.query.MemberReach",
+			"method": "hazardsOf",
+			"find": "final typed: Null<TruthSites> = _scope.facts?.truthSites(g, file, span);",
+			"replace": "final typed: Null<TruthSites> = null;",
+			"note": "(precision) code whose facts are the truth keeps every hazard its syntax reads, so untyped code the compiler typed in full stays a blind spot"
+		},
+		{
+			"name": "M-FACTS-TRUTH-HAZARDS-UNLISTED",
+			"type": "anyparse.query.FactsView",
+			"method": "truthSites",
+			"find": "if (!truth || !faceted(g, file, span)) return null;",
+			"replace": "if (!faceted(g, file, span)) return null;",
+			"note": "the facts of the listed builds answer for hazards though the list is not every build, so untyped code a build it does not name reads otherwise hides nothing"
+		},
+		{
+			"name": "M-FACTS-TRUTH-FACETED",
+			"type": "anyparse.query.FactsView",
+			"method": "truthSites",
+			"find": "if (!truth || !faceted(g, file, span)) return null;",
+			"replace": "if (!truth) return null;",
+			"note": "the facts answer for the hazards of a body they do not describe whole, so untyped code beside a spliced inline call hides nothing"
+		},
+		{
+			"name": "M-FACTS-TRUTH-UNTYPED-KEPT",
+			"type": "anyparse.query.ReachHazards",
+			"method": "recordedWhole",
+			"find": "case Untyped: untypedRecorded(h.node);",
+			"replace": "case Untyped: false;",
+			"note": "(precision) an untyped expression the facts record in full stays a blind spot under the truth"
+		},
+		{
+			"name": "M-FACTS-TRUTH-UNTYPED-ALL",
+			"type": "anyparse.query.ReachHazards",
+			"method": "recordedWhole",
+			"find": "case Untyped: untypedRecorded(h.node);",
+			"replace": "case Untyped: true;",
+			"note": "every untyped expression is taken as recorded, so `untyped this[\"items\"]`, a field access by a name no fact holds, hides nothing"
+		},
+		{
+			"name": "M-FACTS-TRUTH-UNTYPED-SHAPE",
+			"type": "anyparse.query.ReachHazards",
+			"method": "untypedRecorded",
+			"find": "return kinds.contains(n.kind) && n.children.foreach(recorded);",
+			"replace": "return n.children.foreach(recorded);",
+			"note": "an untyped expression of any shape is taken as recorded, an index access by a field's name included"
+		},
+		{
+			"name": "M-FACTS-TRUTH-NATIVES",
+			"type": "anyparse.query.ReachHazards",
+			"method": "underTruth",
+			"find": "for (n in typed.natives) out.push({ kind: Native, span: n.at.span, node: root });",
+			"replace": "",
+			"note": "a native call the facts name is no hazard once the syntax's native calls give way to the facts, so `js.Syntax.code` hides nothing"
+		},
+		{
+			"name": "M-FACTS-TRUTH-NATIVE-CALLS-KEPT",
+			"type": "anyparse.query.ReachHazards",
+			"method": "recordedWhole",
+			"find": "case Native: h.node.kind == _shape.callKind;",
+			"replace": "case Native: false;",
+			"note": "(precision) a call of a project class merely named `Syntax` stays native code under the truth, though the facts say it is not"
+		},
+		{
+			"name": "M-FACTS-TRUTH-NATIVE-METAS-DROPPED",
+			"type": "anyparse.query.ReachHazards",
+			"method": "recordedWhole",
+			"find": "case Native: h.node.kind == _shape.callKind;",
+			"replace": "case Native: true;",
+			"note": "a native-code meta, which no fact records, is dropped with the native calls the facts replace"
+		},
+		{
+			"name": "M-FACTS-TRUTH-REFLECTION",
+			"type": "anyparse.query.ReachHazards",
+			"method": "underTruth",
+			"find": "if (named.exists(r.target) && !seen(r.at.span))",
+			"replace": "if (false)",
+			"note": "a reflective access by name only the facts see — `Reflect.field` under an alias — is no hazard"
+		},
+		{
+			"name": "M-FACTS-TRUTH-REFLECTION-TWIN",
+			"type": "anyparse.query.ReachHazards",
+			"method": "underTruth",
+			"find": "if (named.exists(r.target) && !seen(r.at.span))",
+			"replace": "if (named.exists(r.target))",
+			"note": "(precision) a reflective access the syntax reads a literal name off is also a computed name, so every reflective access is blind under the truth"
+		},
+		{
+			"name": "M-REACH-DEAD-FILE-SEEDS",
+			"type": "anyparse.query.ReachGraph",
+			"method": "graph",
+			"find": "final g: CallGraph = CallGraph.build(running, _scope.plugin, _scope.index, _scope.facts);",
+			"replace": "final g: CallGraph = CallGraph.build(_scope.files, _scope.plugin, _scope.index, _scope.facts);",
+			"note": "(precision) the graph holds project files no build compiles, so their code is walked and a file of them that does not parse blinds every answer"
+		},
+		{
+			"name": "M-FACTS-DEAD-FILE-UNTRUE",
+			"type": "anyparse.query.ReachProject",
+			"method": "runsInNoBuild",
+			"find": "return view != null && view.truth && !view.table.mayCompileNow(file);",
+			"replace": "return view != null && !view.table.mayCompileNow(file);",
+			"note": "a file the listed builds do not compile runs in no build though the list is not every build, so a touch there is never reached"
+		},
+		{
+			"name": "M-FACTS-DEAD-FILE-NEVER",
+			"type": "anyparse.query.ReachProject",
+			"method": "runsInNoBuild",
+			"force": "false",
+			"note": "(precision) every project file may run under the truth, the ones no build compiles included"
+		},
+		{
+			"name": "M-FACTS-DEAD-FILE-REWRITTEN",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "mayCompileNow",
+			"find": "return _expected.exists(key) || _stale.exists(key);",
+			"replace": "return _expected.exists(key);",
+			"note": "a file the run wrote after the compiles — one a fix created — counts as compiled by no build, so its touches are never reached"
+		},
+		{
+			"name": "M-FACTS-DEAD-FILE-VALUES",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "compute",
+			"find": "for (f in _scope.files) if (!_scope.runsInNoBuild(f.file)) {",
+			"replace": "for (f in _scope.files) {",
+			"note": "(precision) the escapes read a file no build compiles, which the graph holds no tree of, and give up: any value may be anywhere"
+		},
+		{
+			"name": "M-REACH-DEAD-FILE-ENTRY",
+			"type": "anyparse.query.MemberReach",
+			"method": "answerReach",
+			"find": "final idle: Null<ReachUnknown> = idleEntry(entryFile);",
+			"replace": "final idle: Null<ReachUnknown> = null;",
+			"note": "a region in a file no build compiles is proven off a graph that holds none of it, whatever it calls"
+		},
+		{
+			"name": "M-REACH-DEAD-FILE-LOCAL-ENTRY",
+			"type": "anyparse.query.MemberReach",
+			"method": "answerLocal",
+			"find": "final idle: Null<ReachUnknown> = idleEntry(file);",
+			"replace": "final idle: Null<ReachUnknown> = null;",
+			"note": "a local question in a file no build compiles is proven off a graph that holds none of it, whatever the region calls"
+		},
+		{
 			"name": "M-REACH-BASE-CLASSPATH",
 			"type": "anyparse.query.MemberReach",
 			"method": "forRun",

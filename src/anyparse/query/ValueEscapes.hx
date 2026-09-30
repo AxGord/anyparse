@@ -124,7 +124,8 @@ final class ValueEscapes {
 		final g: CallGraph = _g.graph();
 		for (skipped in g.skippedFiles) if (_scope.sources.exists(skipped)) return { types: null, raw: false };
 		final escape: String -> Bool = escapeType.bind(g, out, seen);
-		for (f in _scope.files) {
+		// a file no build runs lets nothing escape, and the graph holds no tree of it
+		for (f in _scope.files) if (!_scope.runsInNoBuild(f.file)) {
 			final fi: Null<FileInfo> = _scope.index.fileInfo(f.file);
 			final tree: Null<QueryNode> = g.treeOf(f.file);
 			if (fi == null || tree == null) return { types: null, raw: false };
