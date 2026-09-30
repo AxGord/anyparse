@@ -753,10 +753,12 @@ class MemberReachFactsTest extends Test {
 	@:pin('control') @:killer('M-FACTS-DEAD-FILE-VALUES')
 	public function testAProjectFileNoBuildCompilesLetsNoValueEscape(): Void {
 		// `o.items` is another type's `items`: it touches `Main.items` only if a `Main` may have escaped into an `Other`, which
-		// the escapes over the project answer — a file no build compiles, which the graph does not hold, is none of it
+		// the escapes over the project answer — a file no build compiles, which the graph does not hold, is none of it.
+		// `poke` calls a function named `items`, so its facts leave it to the syntax, which asks the escapes
 		final main: String = MEMBER_HEAD + '\tfunction f(o:Other):Void {\n\t\tfor (i in 0...items.length) { /*<*/ Poker.poke(o); /*>*/ }\n'
 			+ '\t}\n}\nclass Other {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n}\n'
-			+ 'class Poker {\n\tpublic static function poke(o:Other):Void o.items.push(9);\n}\n';
+			+ 'class Poker {\n\tstatic function items():Void {}\n'
+			+ '\tpublic static function poke(o:Other):Void {\n\t\titems();\n\t\to.items.push(9);\n\t}\n}\n';
 		final files: Map<String, String> = ['Main.hx' => main, 'Idle.hx' => 'class Idle {\n\tpublic function new() {}\n}\n'];
 		// the index is the analysis's word for the classpath, which `Array` would otherwise leave open
 		assertMatch(ask(files, null, true, null, true, null, null, null, true), r -> r.match(Proven));
