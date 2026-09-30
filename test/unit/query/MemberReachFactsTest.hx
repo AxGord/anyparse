@@ -131,7 +131,8 @@ class MemberReachFactsTest extends Test {
 	 * package from its own fields (tink's `SyntaxHub`), `rewrite` makes its class's `calm` push onto `Main.items`, `add`
 	 * gives its class an `added` doing so, `dyn` one calling what a dynamic value's `items` holds, `prop` makes its class's
 	 * `items` a property read through `get_items`, `recall` makes its class's `all` return `Main.make()`, positioned where
-	 * the old body was, and `loop` makes its class's `f` push onto `Store.items`.
+	 * the old body was, `loop` makes its class's `f` push onto `Store.items`, and `leak` makes its class's `g` store
+	 * `Main.items` in `Other.keep`. The expression macro `t` builds a call of `Words.tr` (TM's `Lang.t`).
 	 */
 	private static final BUILD_MACROS: String = 'import haxe.macro.Context;\nimport haxe.macro.Expr;\n\nclass Mac {\n'
 		+ '\tpublic static macro function keep():Array<Field> return Context.getBuildFields();\n\n'
@@ -156,7 +157,11 @@ class MemberReachFactsTest extends Test {
 		+ '\t\t\tkind: FFun({ args: [], ret: macro:Void, expr: macro (cast null : Dynamic).items(1) })\n\t\t});\n'
 		+ '\t\treturn fields;\n\t}\n\n' + '\tpublic static macro function loop():Array<Field> {\n'
 		+ '\t\tfinal fields:Array<Field> = Context.getBuildFields();\n\t\tfor (f in fields) if (f.name == "f") switch f.kind {\n'
-		+ '\t\t\tcase FFun(fn): fn.expr = macro Store.items.push(1);\n\t\t\tcase _:\n\t\t}\n\t\treturn fields;\n\t}\n}\n';
+		+ '\t\t\tcase FFun(fn): fn.expr = macro Store.items.push(1);\n\t\t\tcase _:\n\t\t}\n\t\treturn fields;\n\t}\n\n'
+		+ '\tpublic static macro function leak():Array<Field> {\n\t\tfinal fields:Array<Field> = Context.getBuildFields();\n'
+		+ '\t\tfor (f in fields) if (f.name == "g") switch f.kind {\n'
+		+ '\t\t\tcase FFun(fn): fn.expr = macro Other.keep = Main.items;\n\t\t\tcase _:\n\t\t}\n\t\treturn fields;\n\t}\n\n'
+		+ '\tpublic static macro function t(e:Expr):Expr return macro Words.tr($$e);\n}\n';
 
 	/**
 	 * A fixture whose region calls `region` on the `Helper` in `Main.main`, `Helper` extending a `Base` that carries
@@ -170,6 +175,36 @@ class MemberReachFactsTest extends Test {
 			'Base.hx' => '@:autoBuild(Mac.' + builder + '())\nclass Base {\n\tpublic function new() {}\n}\n',
 			'Mac.hx' => BUILD_MACROS
 		];
+	}
+
+	/** The build of a fixture every class of whose root package the global `Mac.hub` rebuilds from its own fields (tink's `SyntaxHub`). */
+	private static final HUB_BUILD: String = BUILD + '--macro addGlobalMetadata("", "@:build(Mac.hub())")\n';
+
+	/** The runtime of the expression macro `Mac.t` (`BUILD_MACROS`), and a function the code it builds is handed to. */
+	private static final WORDS: String = 'class Words {\n\tpublic static function tr(s:String):String return s;\n\n'
+		+ '\tpublic static function say(s:String):Void {}\n}\n';
+
+	/** A class holding `n`, and `q` read through a getter. */
+	private static final HOLDER: String = 'class Holder {\n\tpublic var n:Int = 0;\n\tpublic var q(get, never):Int;\n\n'
+		+ '\tpublic function new() {}\n\n\tfunction get_q():Int return n;\n}\n';
+
+	/**
+	 * A fixture whose region calls `Util.calm`, beside which `Util` declares `member` — code the walk never enters, but part
+	 * of what every build compiled of `Util`, which `HUB_BUILD` rebuilds — and `more` files.
+	 */
+	private static function utilWith(member: String, ?more: Map<String, String>): Map<String, String> {
+		final files: Map<String, String> = [
+			'Main.hx' => LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Util.calm(); /*>*/ }\n\t}\n}\n',
+			'Util.hx' => 'class Util {\n\tpublic static function calm():Void {}\n\n\t' + member + '\n}\n',
+			'Mac.hx' => BUILD_MACROS
+		];
+		for (name => text in more ?? []) files[name] = text;
+		return files;
+	}
+
+	/** `ask` of `files` built by `HUB_BUILD`, listed as the whole list of builds: the facts are the truth. */
+	private static function hubAsk(files: Map<String, String>): ReachResult {
+		return ask(files, null, true, null, false, HUB_BUILD, null, null, true);
 	}
 
 	@:pin('control') @:killer('M-FACTS-REACH-EDGES')
@@ -1189,6 +1224,129 @@ class MemberReachFactsTest extends Test {
 			'Mac.hx' => BUILD_MACROS
 		];
 		assertMatch(askLocal(files, 'xs'), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-FACTS-TEXT-EXPANSION') @:killer('M-FACTS-TEXT-EXPANSION-SPLICED')
+	@:killer('M-FACTS-EXPANSION-NESTED')
+	public function testAnExpressionMacroAnInlinedMethodCallsLeavesItsCallerItsTextUnderTheTruth(): Void {
+		// TM's `GridUtils.saveGridJSON`: the inlined `Shown.mask` calls the expression macro `Mac.t`, whose expansion lies in
+		// `Mac.hx`, in no range of `Util` nor of `Shown`. The call `Shown.mask` writes built it, so `Util` is its text still
+		final shown: String = 'class Shown {\n\tpublic static inline function mask():Void Words.say(\'$${Mac.t(\'Open\')}...\');\n}\n';
+		final files: Map<String, String> = utilWith(
+			'public static function other():Void {\n\t\tShown.mask();\n\t}', ['Shown.hx' => shown, 'Words.hx' => WORDS]
+		);
+		assertMatch(hubAsk(files), r -> r.match(Proven));
+		assertMatch(ask(files, null, true, null, false, HUB_BUILD), r -> r.match(Unknown(Reification(_, _))));
+	}
+
+	@:pin('control') @:killer('M-FACTS-TEXT-EXPANSION') @:killer('M-FACTS-TEXT-EXPANSION-BODY')
+	@:killer('M-FACTS-EXPANSION-RECORDED') @:killer('M-FACTS-MACRO-CALLEE')
+	public function testAnExpressionMacroTheTextCallsLeavesItsTypeItsTextUnderTheTruth(): Void {
+		// `Util.other` calls the expression macro `Mac.t` itself (TM's `t(...)` everywhere): the code its expansion holds is
+		// the text's, although no range of `Util` holds it
+		final files: Map<String, String> = utilWith('public static function other():Void Words.say(Mac.t(\'x\'));', ['Words.hx' => WORDS]);
+		assertMatch(hubAsk(files), r -> r.match(Proven));
+	}
+
+	public function testCodeABuildMacroBuiltIsNoExpansionTheTextWritesUnderTheTruth(): Void {
+		// `Mac.leak` makes `Main.g` store `items` in `Other.keep`: the code lies in the declared range of a macro — `leak`
+		// itself — as an expression macro's expansion would, but no text of `g` calls it. The escape is in no text, and the
+		// region changes what `Other.keep` holds. No pin: what reads the facts of `g` refuses it too, apart from
+		// `FactsProvenance.expansionWritten`, which answers only whether `Main` is its text
+		final main: String = 'class Main extends Base {\n\tpublic static var items:Array<Int> = [1, 2];\n'
+			+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Other.keep.push(1); /*>*/ }\n\t}\n'
+			+ '\tfunction g():Void {}\n}\n';
+		final files: Map<String, String> = [
+			'Main.hx' => main,
+			'Other.hx' => 'class Other {\n\tpublic static var keep:Array<Int> = [];\n}\n',
+			'Base.hx' => '@:autoBuild(Mac.leak())\nclass Base {\n\tpublic function new() {}\n}\n',
+			'Mac.hx' => BUILD_MACROS
+		];
+		assertMatch(truthAsk(files), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-FACTS-TEXT-LITERAL')
+	public function testAConstructionALiteralWritesIsItsTextUnderTheTruth(): Void {
+		// the compiler constructs an `EReg` at a regex literal and a `Map` at an array literal a map is expected of (TM's
+		// `GridUtils.loadGridJSON`, openfl's `TextField.set_htmlText`)
+		final files: Map<String, String> = utilWith(
+			'public static function other():Map<Int, String> {\n\t\tfinal r:EReg = ~/a+/;\n\t\tfinal m:Map<Int, String> = [];\n'
+			+ '\t\treturn m;\n\t}'
+		);
+		assertMatch(hubAsk(files), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-FACTS-TEXT-ABSTRACT-NEW')
+	public function testAConstructionOfAnAbstractIsItsTextUnderTheTruth(): Void {
+		// `new Map()` is a construction of `Map`'s implementation class (openfl's `DisplayObject.__broadcastEvents`)
+		final files: Map<String, String> = utilWith('public static function other():Map<String, Int> return new Map<String, Int>();');
+		assertMatch(hubAsk(files), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-FACTS-TEXT-PURE-CALL')
+	public function testATypeCheckTheCompilerCallsIsItsTextUnderTheTruth(): Void {
+		// `o is Util` is a call of `Std.isOfType`, which runs no project code (openfl's `DisplayObject.dispatchEvent`)
+		final files: Map<String, String> = utilWith('public static function other(o:Dynamic):Bool return o is Util;');
+		assertMatch(hubAsk(files), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-FACTS-TEXT-CONVERSION-CALL')
+	public function testAConversionTheCompilerCallsIsItsTextUnderTheTruth(): Void {
+		// a concatenated array is converted by a call of `Std.string`, which the truth reads as a conversion site
+		final files: Map<String, String> = utilWith('public static function other(a:Array<Int>):String return \'a\' + a;');
+		assertMatch(hubAsk(files), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-FACTS-TEXT-ACCESSOR-NAME')
+	public function testAnAccessorCalledByItsOwnNameIsItsTextUnderTheTruth(): Void {
+		// `set_v(2)` calls the setter by its own name, not through the property (openfl's `TextField.set_text`)
+		final files: Map<String, String> = utilWith(
+			'public static var v(get, set):Int;\n\n\tstatic function get_v():Int return 1;\n\n'
+			+ '\tstatic function set_v(x:Int):Int return x;\n\n\tpublic static function other():Void set_v(2);'
+		);
+		assertMatch(hubAsk(files), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-FACTS-TEXT-JOINED-SPLICES')
+	public function testAFieldTheCompilerPlacesAcrossTwoInlinedGettersIsItsTextUnderTheTruth(): Void {
+		// `a.nn` inlines `get_nn`, whose `base` inlines `get_base`: the compiler places the read of `n` from the one's code to
+		// the other's (TM's `FileSystemItemData.filePath`)
+		final ab: String = 'abstract Ab(Holder) from Holder {\n\tpublic var base(get, never):Holder;\n\n'
+			+ '\tinline function get_base():Holder return this;\n\n\tpublic var nn(get, never):Int;\n\n'
+			+ '\tinline function get_nn():Int return base.n;\n}\n';
+		final files: Map<String, String> = utilWith(
+			'public static function other(a:Ab):Int return a.nn;', ['Ab.hx' => ab, 'Holder.hx' => HOLDER]
+		);
+		assertMatch(hubAsk(files), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-FACTS-TEXT-JOINED-ACCESS')
+	public function testAMemberOfWhatAnInlinedGetterReturnsIsItsTextUnderTheTruth(): Void {
+		// `Mgr.instance` inlines `get_instance`: the compiler places the call of `get_q` from that code in `Mgr.hx` to the end of
+		// `.q` in `Util.hx` (TM's `PopupManager.instance.notification`, openfl's `textFormatRanges[i].end`)
+		final mgr: String = 'class Mgr {\n\tpublic static var instance(get, never):Holder;\n\n\tstatic var held:Null<Holder> = null;\n\n'
+			+ '\tstatic inline function get_instance():Holder return held ?? throw \'none\';\n}\n';
+		// the doc puts `.q` past every offset of `Mgr.hx`: the compiler keeps the larger end of the parts it joins, whatever
+		// their files, so the range ends in `Util.hx` only there, as in TM
+		final doc: String = '/**\n\t * The `q` of the manager\'s holder, read through `get_q` on what the inlined `get_instance` returns,\n'
+			+ '\t * past every offset of `Mgr.hx`.\n\t */\n\t';
+		final files: Map<String, String> = utilWith(
+			doc + 'public static function other():Int return Mgr.instance.q;', ['Mgr.hx' => mgr, 'Holder.hx' => HOLDER]
+		);
+		assertMatch(hubAsk(files), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-FACTS-TEXT-PURE-CALL') @:killer('M-FACTS-TEXT-ABSTRACT-NEW')
+	public function testALibraryClassTheWalkEntersIsItsTextUnderTheTruth(): Void {
+		// openfl's `DisplayObject`, rebuilt from its own fields by a global macro: the walk enters `Disp.calm`, of a class whose
+		// `check` tests a type and whose `made` constructs a `Map`
+		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfinal d:Disp = new Disp();\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ d.calm(); /*>*/ }\n\t}\n}\n';
+		final disp: String = 'class Disp {\n\tpublic function new() {}\n\n\tpublic function calm():Void {}\n\n'
+			+ '\tpublic function check(o:Dynamic):Bool return o is Disp;\n\n'
+			+ '\tpublic function made():Map<String, Int> return new Map<String, Int>();\n}\n';
+		final files: Map<String, String> = ['Main.hx' => main, 'Mac.hx' => BUILD_MACROS];
+		assertMatch(ask(files, null, true, null, false, HUB_BUILD, ['Disp.hx' => disp], null, true), r -> r.match(Proven));
 	}
 
 	@:pin('control') @:killer('M-REACH-REWRITTEN-TRUTH')

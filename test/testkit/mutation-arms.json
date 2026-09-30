@@ -7805,6 +7805,110 @@
 			"note": "every call is the text's wherever it sits, so a body a macro put at the old body's range calling what the text never names is taken for the text"
 		},
 		{
+			"name": "M-FACTS-TEXT-EXPANSION",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "factsOnText",
+			"find": "|| written.exists(x -> holds(x.declared, p))",
+			"replace": "",
+			"note": "code an expression macro built, in no range of the text, is never the text's, so every type whose code calls such a macro — TM's `t(...)` — keeps a build macro over it Unknown"
+		},
+		{
+			"name": "M-FACTS-TEXT-EXPANSION-BODY",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "expansionWritten",
+			"find": "? body.textAt(x.anchor)",
+			"replace": "? null",
+			"note": "an expression macro the body itself calls built nothing of the text's"
+		},
+		{
+			"name": "M-FACTS-TEXT-EXPANSION-SPLICED",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "expansionWritten",
+			"find": ": _view.table.sourceOf(x.anchor.file)?.substring(x.anchor.span.from, x.anchor.span.to);",
+			"replace": ": null;",
+			"note": "an expression macro an inlined method calls built nothing of the text's"
+		},
+		{
+			"name": "M-FACTS-EXPANSION-RECORDED",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "spliced",
+			"find": "expanded(_host.macroCallee(info.file, info.min, info.max), e.pos, _home, _site);",
+			"replace": "",
+			"note": "an expansion the body's own code holds is recorded nowhere, so the code it built is attributed to no call the text writes"
+		},
+		{
+			"name": "M-FACTS-EXPANSION-NESTED",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "nestedSplice",
+			"find": "expanded(expander, e.pos, splice.file, _spliceSite);",
+			"replace": "",
+			"note": "an expansion an inlined method's code holds is recorded nowhere, so the code it built is attributed to no call the text writes"
+		},
+		{
+			"name": "M-FACTS-MACRO-CALLEE",
+			"type": "anyparse.check.TypedFactsMacro",
+			"method": "collectFields",
+			"find": "case FMethod(MethMacro): _macros;",
+			"replace": "case FMethod(MethMacro): null;",
+			"note": "no macro method is known where it is declared, so no expansion is matched to the macro that built it"
+		},
+		{
+			"name": "M-FACTS-TEXT-LITERAL",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "factsOnText",
+			"find": "|| body.builds(x.at, built, constructions)",
+			"replace": "",
+			"note": "a construction at a regex or map literal spells no class, so a type holding one is not its text"
+		},
+		{
+			"name": "M-FACTS-TEXT-ABSTRACT-NEW",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "factsOnText",
+			"find": "final built: String = _view.graphType(x.type);",
+			"replace": "final built: String = simpleName(CompilerFacts.baseId(x.type));",
+			"note": "a construction of an abstract spells its implementation class, which no text names"
+		},
+		{
+			"name": "M-FACTS-TEXT-PURE-CALL",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "runsNoCode",
+			"find": " || (execution.pureLibraryCalls ?? []).contains(target)",
+			"replace": "",
+			"note": "a call of a function that runs no project code the compiler makes for `is` is no text's"
+		},
+		{
+			"name": "M-FACTS-TEXT-CONVERSION-CALL",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "runsNoCode",
+			"find": "(execution.stringConversionCalls ?? []).contains(target) || ",
+			"replace": "",
+			"note": "a conversion the compiler calls for a concatenated value is no text's"
+		},
+		{
+			"name": "M-FACTS-TEXT-ACCESSOR-NAME",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "callOnText",
+			"find": " || body.mentions(c.at, member)",
+			"replace": "",
+			"note": "an accessor called by its own name is read as a property access the text does not spell"
+		},
+		{
+			"name": "M-FACTS-TEXT-JOINED-SPLICES",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "joined",
+			"find": "spliced(p.span.to) || ",
+			"replace": "",
+			"note": "a range the compiler joined from two inlined bodies is no text's"
+		},
+		{
+			"name": "M-FACTS-TEXT-JOINED-ACCESS",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "joined",
+			"find": " || (name != null && body.endsAccess(p.span.to, name))",
+			"replace": "",
+			"note": "a range the compiler joined from an inlined getter's code to the text's member access is no text's"
+		},
+		{
 			"name": "M-GRAPH-ADOPT-NONE",
 			"type": "anyparse.query.CallGraphFacts",
 			"method": "adopt",
@@ -7944,8 +8048,8 @@
 			"name": "M-FACTS-CALL-SITE-INLINE",
 			"type": "anyparse.check.TypedFactsMacro",
 			"method": "collectFields",
-			"find": "if (f.kind.match(FMethod(MethInline | MethNormal))) {",
-			"replace": "if (f.kind.match(FMethod(MethInline))) {",
+			"find": "case FMethod(MethInline | MethNormal): _inlines;",
+			"replace": "case FMethod(MethInline): _inlines;",
 			"note": "only an `inline` method is matched to a splice, so a method its call site inlines reads as a macro expansion"
 		},
 		{

@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.CallGraph.FnNode;
 import anyparse.query.CompilerFacts.CallFact;
+import anyparse.query.CompilerFacts.ExpansionFact;
 import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.CompilerFacts.FieldDeclFact;
@@ -27,8 +28,8 @@ final class FactsProvenance {
 	/** The fact kinds of a type's own function body, as opposed to a function nested in one. */
 	private static final OWN_BODY_KINDS: Array<String> = ['method', 'ctor'];
 
-	/** The markers of a node some code of which a macro expanded into it or no text holds any more: its facts are no text's. */
-	private static final UNTEXTUAL_MARKERS: Array<String> = ['macro-expansion', 'stale-foreign'];
+	/** The marker of a node a fact of which lies in a file whose text the table no longer has (`CompilerFacts`). */
+	private static inline final STALE_FOREIGN: String = 'stale-foreign';
 
 	/**
 	 * The metadata of an abstract's field the compiler calls where the text writes an operator, a conversion, an index
@@ -99,9 +100,11 @@ final class FactsProvenance {
 	 * (`ReachGraph.rewrittenBy`): the one declaration of it the index holds is in the file each typed type standing for it
 	 * (`FactsView.bySimpleName`) was read from, every field those declare is one the text declares alike
 	 * (`declaredAlike`), and every body and initializer the compiler typed for them lies in its field's declaration with
-	 * every fact on text that spells it (`factsOnText`) — save the constructor the compiler made for a class the text
-	 * gives none, which only calls its super's. A body a macro placed elsewhere, expanded code into or put where no
-	 * declaration of its field is fails the test, and so does a type no build typed.
+	 * every fact on text that writes it (`factsOnText`) — save the constructor the compiler made for a class the text
+	 * gives none, which only calls its super's. What the compiler writes for the text in code no text holds counts: the
+	 * body of a method an inlined call spliced in, the expansion of an expression macro a call the text writes built,
+	 * a range it joined from such code. A body a macro placed elsewhere, rewrote to code its text does not write or put
+	 * where no declaration of its field is fails the test, and so does a type no build typed.
 	 */
 	public function typeIsItsText(g: CallGraph, type: String): Bool {
 		final site: Null<{ file: String, span: Span }> = _scope.siteOf(type);
@@ -177,23 +180,32 @@ final class FactsProvenance {
 
 	/**
 	 * Whether every fact of the typed body `n` sits on `body`'s text as its own — as `factsMatch` asks, save that what an
-	 * inlined method spliced in, positioned in that method's declared range (`CompilerFacts.spliceOf`), and the `inlined`
-	 * call itself are that method's text; that a native site and a reflective read count where `body` holds them; that a
-	 * call the compiler makes of an abstract's operator, conversion or index access (`implicitlyCalled`) or of a super
-	 * constructor sits on text spelling the construct; and that each function nested in `n` passes the same test or was
-	 * spliced in with an inlined body (`FactNode.inlinedFrom`).
+	 * inlined method spliced in, positioned in that method's declared range (`CompilerFacts.spliceOf`) or on a range the
+	 * compiler joined from such code (`joined`), and the `inlined` call itself are that method's text; that the code an
+	 * expression macro built, positioned in that macro's declared range, is the text of the call of it the compiler
+	 * replaced (`expansionWritten`); that a native site and a reflective read count where `body` holds them; that a call
+	 * the compiler makes of an abstract's operator, conversion or index access (`implicitlyCalled`), of a super
+	 * constructor, of a conversion or a library function that runs no project code (`runsNoCode`), and a construction of
+	 * a literal (`BodyText.builds`), sit on text writing the construct; and that each function nested in `n` passes the
+	 * same test or was spliced in with an inlined body (`FactNode.inlinedFrom`).
 	 */
 	private function factsOnText(n: FactNode, body: BodyText): Bool {
 		// noqa: complexity
-		// a marker says code of `n` came from a macro's expansion or was lost with its file: no position shows it
-		if (n.incomplete.exists(m -> UNTEXTUAL_MARKERS.contains(m))) return false;
-		function own(p: FactPos, onText: Bool): Bool {
-			return onText || CompilerFacts.spliceOf(n, p) != null;
+		// a marker says a fact was lost with its file: no position shows it. Code a macro expanded carries its own
+		// (`ExpansionFact`), and is the text's only where a call the text writes built it
+		if (n.incomplete.contains(STALE_FOREIGN)) return false;
+		final written: Array<ExpansionFact> = [for (x in n.expansions) if (expansionWritten(n, x, body)) x];
+		function own(p: FactPos, onText: Bool, ?name: String): Bool {
+			return onText || CompilerFacts.spliceOf(n, p) != null || joined(n, p, name, body) || written.exists(x -> holds(x.declared, p));
 		}
 		final iterationCalls: Array<String> = _scope.shape.execution?.implicitCallNames ?? [];
-		for (c in n.calls) if (c.access != INLINED && !own(c.at, callOnText(c, body, iterationCalls))) return false;
-		for (x in n.news) if (!own(x.at, body.spells(x.at, simpleName(CompilerFacts.baseId(x.type))))) return false;
-		for (f in n.fields) if (!own(f.at, body.holds(f.at) && (body.mentions(f.at, f.field) || (!f.write && body.lowered(f.at)))))
+		for (c in n.calls) if (c.access != INLINED && !own(c.at, callOnText(c, body, iterationCalls), calledName(c))) return false;
+		final constructions: Map<String, String> = _scope.shape.execution?.literalConstructions ?? [];
+		for (x in n.news) {
+			final built: String = _view.graphType(x.type);
+			if (!own(x.at, body.spells(x.at, built) || body.builds(x.at, built, constructions))) return false;
+		}
+		for (f in n.fields) if (!own(f.at, body.holds(f.at) && (body.mentions(f.at, f.field) || (!f.write && body.lowered(f.at))), f.field))
 			return false;
 		for (v in n.vars) if (!own(v.at, body.spells(v.at, v.name))) return false;
 		for (r in n.reads) if (!own(r.at, body.holds(r.at) && (body.bare(r.at) || body.lowered(r.at)))) return false;
@@ -211,10 +223,52 @@ final class FactsProvenance {
 	}
 
 	/**
+	 * Whether the expansion `x` of `n` is the text's: an expression macro (`ExpansionFact.expander`) whose call its anchor
+	 * spells — text of `body`, or of the declared range of a method an inlined call spliced into `n`, where the compiler
+	 * replaced that call. Code no macro is declared around is no text's.
+	 */
+	private function expansionWritten(n: FactNode, x: ExpansionFact, body: BodyText): Bool {
+		final expander: Null<String> = x.expander;
+		if (expander == null) return false;
+		final text: Null<String> = body.holds(x.anchor)
+			? body.textAt(x.anchor)
+			: CompilerFacts.spliceOf(n, x.anchor) == null
+				? null
+				: _view.table.sourceOf(x.anchor.file)?.substring(x.anchor.span.from, x.anchor.span.to);
+		return text != null && FactText.spellsCall(text, simpleName(expander));
+	}
+
+	/**
+	 * Whether the range of `p` is one the compiler joined from code an inlined call spliced into `n` — where the facts
+	 * keep the file of its start, the end of its last part — and the part it joined is that code again, or the access of
+	 * the member `name` the text of `body` ends there: a field of what an inlined getter or index access returned.
+	 */
+	private static function joined(n: FactNode, p: FactPos, name: Null<String>, body: BodyText): Bool {
+		function spliced(offset: Int): Bool {
+			return n.splices.exists(s -> s.body.file == p.file && s.body.span.from <= offset && offset <= s.body.span.to);
+		}
+		return spliced(p.span.from) && (spliced(p.span.to) || (name != null && body.endsAccess(p.span.to, name)));
+	}
+
+	/** Whether the range `outer` holds `p`; false for none. */
+	private static function holds(outer: Null<FactPos>, p: FactPos): Bool {
+		return outer != null && outer.file == p.file && outer.span.from <= p.span.from && p.span.to <= outer.span.to;
+	}
+
+	/** The member the text spells for the call `c`: an accessor's property; null for a call of no field. */
+	private function calledName(c: CallFact): Null<String> {
+		final target: Null<String> = c.target;
+		if (target == null || c.access == SUPER || c.access == 'value' || c.access == 'local' || c.access == 'ident') return null;
+		final member: String = simpleName(target);
+		return _view.accessorProperty(member) ?? member;
+	}
+
+	/**
 	 * Whether the call `c` sits on `body`'s text as its own: a call of a value or of a local or native function where the
 	 * text holds it, a super constructor's where it spells `super`, and a field's where it spells the field — the property,
-	 * for an accessor — or is a lowered loop running an iteration call (`iterationCalls`), or the construct the compiler
-	 * calls an abstract's field for (`implicitlyCalled`).
+	 * for an accessor, or the accessor itself — or is a lowered loop running an iteration call (`iterationCalls`), the
+	 * construct the compiler calls an abstract's field for (`implicitlyCalled`), or a call of a function that runs no project
+	 * code (`runsNoCode`).
 	 */
 	private function callOnText(c: CallFact, body: BodyText, iterationCalls: Array<String>): Bool {
 		final target: Null<String> = c.target;
@@ -223,7 +277,21 @@ final class FactsProvenance {
 		if (target == null || c.access == 'value' || c.access == 'local' || c.access == 'ident') return true;
 		final member: String = simpleName(target);
 		final spelled: String = _view.accessorProperty(member) ?? member;
-		return body.mentions(c.at, spelled) || (body.lowered(c.at) && iterationCalls.contains(member)) || implicitlyCalled(target);
+		return body.mentions(c.at, spelled) || body.mentions(c.at, member) || (body.lowered(c.at) && iterationCalls.contains(member))
+			|| implicitlyCalled(target) || runsNoCode(target);
+	}
+
+	/**
+	 * Whether the function `target` (`pack.Type.field`, as the compiler resolved it) converts a value to a string the way
+	 * the language does (`stringConversionCalls`), which the truth reads as a conversion site, or is library code that runs
+	 * no project code (`pureLibraryCalls`): the compiler calls such a function where the text writes an operator or a
+	 * conversion (`is`, a string concatenation or interpolation), and where the text writes nothing, it does nothing the
+	 * text does not show. The compiler's id is qualified, so a project's own type of the same simple name is none of them.
+	 */
+	private function runsNoCode(target: String): Bool {
+		final execution: Null<GrammarPlugin.ExecutionShape> = _scope.shape.execution;
+		return execution != null
+			&& ((execution.stringConversionCalls ?? []).contains(target) || (execution.pureLibraryCalls ?? []).contains(target));
 	}
 
 	/**
@@ -305,11 +373,17 @@ private final class BodyText {
 	private final _text: String;
 	private final _loops: Array<Span>;
 
-	private function new(key: String, span: Span, text: String, loops: Array<Span>) {
+	/** The literals inside the function whose construction the compiler may write as one (`builds`), with their kinds. */
+	private final _literals: Array<{ kind: String, span: Span }>;
+
+	private function new(
+		key: String, span: Span, text: String, loops: Array<Span>, literals: Array<{ kind: String, span: Span }>
+	) {
 		_key = key;
 		_span = span;
 		_text = text;
 		_loops = loops;
+		_literals = literals;
 	}
 
 	/** Whether `p` lies in this function, in its own file. */
@@ -327,6 +401,19 @@ private final class BodyText {
 		return FactText.bare(textAt(p).trim());
 	}
 
+	/** Whether the text of this function ends, at `end`, with an access of the member `name` (`FactText.endsAccess`). */
+	public function endsAccess(end: Int, name: String): Bool {
+		return _span.from < end && end <= _span.to && FactText.endsAccess(_text, end, name);
+	}
+
+	/**
+	 * Whether `p`, in this function, is exactly a literal of a kind whose construction the compiler writes as one of the
+	 * type `built` (`constructions`: `ExecutionShape.literalConstructions`).
+	 */
+	public function builds(p: FactPos, built: String, constructions: Map<String, String>): Bool {
+		return holds(p) && _literals.exists(l -> l.span.from == p.span.from && l.span.to == p.span.to && constructions[l.kind] == built);
+	}
+
 	/** Whether `p`, in this function, spells `name` or is a lowered loop's own. */
 	public function spells(p: FactPos, name: String): Bool {
 		return holds(p) && (mentions(p, name) || lowered(p));
@@ -337,23 +424,27 @@ private final class BodyText {
 		return _loops.exists(l -> l.from == p.span.from && p.span.to <= l.to);
 	}
 
-	private inline function textAt(p: FactPos): String {
+	/** The text at `p`, which lies in this function's file. */
+	public inline function textAt(p: FactPos): String {
 		return _text.substring(p.span.from, p.span.to);
 	}
 
 	/** The text at `span` of `source` (parsed as `tree`), whose file the facts key as `key`. */
 	public static function of(key: String, span: Span, source: String, tree: QueryNode, shape: GrammarPlugin.RefShape): BodyText {
 		final loopKinds: Array<String> = (shape.loopStatementKinds ?? []).concat(shape.iterationBindingKinds ?? []);
+		final constructed: Map<String, String> = shape.execution?.literalConstructions ?? [];
 		final loops: Array<Span> = [];
+		final literals: Array<{ kind: String, span: Span }> = [];
 		final body: Span = span;
 		function collect(n: QueryNode): Void {
 			final at: Null<Span> = n.span;
 			if (at != null && (at.to <= body.from || at.from >= body.to)) return;
 			if (at != null && loopKinds.contains(n.kind)) loops.push(at);
+			if (at != null && constructed.exists(n.kind)) literals.push({ kind: n.kind, span: at });
 			for (c in n.children) collect(c);
 		}
 		collect(tree);
-		return new BodyText(key, span, source, loops);
+		return new BodyText(key, span, source, loops, literals);
 	}
 
 }

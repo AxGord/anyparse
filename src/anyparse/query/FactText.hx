@@ -102,6 +102,32 @@ final class FactText {
 		return false;
 	}
 
+	/** Whether `text` holds a call of `name`: the whole word, then its argument list's `(`. */
+	public static function spellsCall(text: String, name: String): Bool {
+		var from: Int = text.indexOf(name);
+		while (from >= 0) {
+			final before: Int = from == 0 ? ' '.code : StringTools.fastCodeAt(text, from - 1);
+			var next: Int = from + name.length;
+			while (next < text.length && StringTools.isSpace(text, next)) next++;
+			if (!isWordChar(before) && next < text.length && StringTools.fastCodeAt(text, next) == '('.code) return true;
+			from = text.indexOf(name, from + 1);
+		}
+		return false;
+	}
+
+	/**
+	 * Whether `text` ends, at `end`, with an access of the member `name`: the whole word, preceded by the `.` of a field
+	 * access, spaces between allowed.
+	 */
+	public static function endsAccess(text: String, end: Int, name: String): Bool {
+		final from: Int = end - name.length;
+		if (from <= 0 || end > text.length || text.substring(from, end) != name) return false;
+		if (end < text.length && isWordChar(StringTools.fastCodeAt(text, end))) return false;
+		var dot: Int = from - 1;
+		while (dot > 0 && StringTools.isSpace(text, dot)) dot--;
+		return StringTools.fastCodeAt(text, dot) == '.'.code;
+	}
+
 	/** The name a call site's text spells for what it calls — an accessor's property, a local function's binder — or null. */
 	private static function calledMember(c: CallFact): Null<String> {
 		final target: Null<String> = c.target;

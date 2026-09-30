@@ -2547,13 +2547,19 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testACalleeTypedDifferentlyInAnotherBuildKeepsTheSyntax :: control :: '
 				+ 'M-FACTS-REACH-ALIKE,M-FACTS-TRUTH-CONTEXT-ALWAYS',
 			'unit.query.MemberReachFactsTest#testAConfigurationWithoutFactsLeavesTheSyntax :: control :: M-FACTS-REACH-DROPPED',
+			'unit.query.MemberReachFactsTest#testAConstructionALiteralWritesIsItsTextUnderTheTruth :: control :: M-FACTS-TEXT-LITERAL',
+			'unit.query.MemberReachFactsTest#testAConstructionOfAnAbstractIsItsTextUnderTheTruth :: control :: M-FACTS-TEXT-ABSTRACT-NEW',
 			'unit.query.MemberReachFactsTest#testAConstructionRunsTheInitializersOfItsGeneratedConstructor :: control :: '
 				+ 'M-FACTS-REACH-CONSTRUCTION',
 			'unit.query.MemberReachFactsTest#testAConstructorTouchingItsOwnObjectIsExcusedUnderTheTruth :: control :: M-TOUCH-TYPED-SELF',
 			'unit.query.MemberReachFactsTest#testAConversionOfAnAbstractRunsWhatItsOwnConversionDoes :: control :: '
 				+ 'M-REACH-ABSTRACT-TEXT-ANY',
+			'unit.query.MemberReachFactsTest#testAConversionTheCompilerCallsIsItsTextUnderTheTruth :: control :: '
+				+ 'M-FACTS-TEXT-CONVERSION-CALL',
 			'unit.query.MemberReachFactsTest#testAFieldTheCompilerCallsLeavesItsFunctionToTheSyntaxUnderTheTruth :: control :: '
 				+ 'M-TOUCH-TYPED-CALLED',
+			'unit.query.MemberReachFactsTest#testAFieldTheCompilerPlacesAcrossTwoInlinedGettersIsItsTextUnderTheTruth :: control :: '
+				+ 'M-FACTS-TEXT-JOINED-SPLICES',
 			'unit.query.MemberReachFactsTest#testAFileTheRunWroteMayBeCompiled :: control :: M-FACTS-DEAD-FILE-REWRITTEN',
 			'unit.query.MemberReachFactsTest#testAFunctionSplicedFromAnotherFileIsTheNodeItsCalleeDeclares :: control :: '
 				+ 'M-GRAPH-FACTS-SPLICED-SITE,M-GRAPH-FACTS-SPLICED-FILE,M-FACTS-TRUTH-SPLICE',
@@ -2562,6 +2568,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testAGenericInstanceIsItsGenericClass :: control :: M-FACTS-REACH-GENERIC',
 			'unit.query.MemberReachFactsTest#testAKeyValueLoopOverTheMemberLetsNothingEscapeUnderTheTruth :: control :: '
 				+ 'M-FACTS-INLINED-RECEIVER',
+			'unit.query.MemberReachFactsTest#testALibraryClassTheWalkEntersIsItsTextUnderTheTruth :: control :: '
+				+ 'M-FACTS-TEXT-PURE-CALL,M-FACTS-TEXT-ABSTRACT-NEW',
 			'unit.query.MemberReachFactsTest#testALibraryDynamicMethodNotReadYetIsFollowed :: control :: M-FACTS-REACH-LIBRARY-DYNAMIC',
 			'unit.query.MemberReachFactsTest#testALocalACalleeRebuiltInPlaceHandsOutIsNoProofUnderTheTruth :: control :: '
 				+ 'M-FACTS-TEXT-CALLS-ANY',
@@ -2575,6 +2583,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-RECEIVER-BLOCK,M-FACTS-RECEIVER-PARAM',
 			'unit.query.MemberReachFactsTest#testAMemberAnotherBuildDeclaresShadowsAnExtension :: control :: M-FACTS-REACH-GUARDED-NAME',
 			'unit.query.MemberReachFactsTest#testAMemberDeclaredInEachBranchIsReadByIdUnderTheTruth :: control :: M-FACTS-FOLDED-BY-ID',
+			'unit.query.MemberReachFactsTest#testAMemberOfWhatAnInlinedGetterReturnsIsItsTextUnderTheTruth :: control :: '
+				+ 'M-FACTS-TEXT-JOINED-ACCESS',
 			'unit.query.MemberReachFactsTest#testAMemberOnlyAListedBuildDeclaresShadowsAnExtensionThere :: control :: '
 				+ 'M-FACTS-TRUTH-CONTEXT',
 			'unit.query.MemberReachFactsTest#testAMethodABuildMacroAddedTheFactsCannotReadTouchesTheMemberUnderTheTruth :: control :: '
@@ -2604,6 +2614,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-TRUTH-CONTEXT',
 			'unit.query.MemberReachFactsTest#testATypeBringingExtensionsInUnderAConditionIsUnknown :: control :: '
 				+ 'M-FACTS-REACH-USING-META,M-GRAPH-USING-META,M-INDEX-GUARDED-META-LIFT',
+			'unit.query.MemberReachFactsTest#testATypeCheckTheCompilerCallsIsItsTextUnderTheTruth :: control :: M-FACTS-TEXT-PURE-CALL',
 			'unit.query.MemberReachFactsTest#testATypeDeclaredOncePerBuildIsOneTypeUnderTheTruth :: control :: '
 				+ 'M-FACTS-FOLDED-BY-ID,M-FACTS-SOLE-NEVER,M-REACH-AMBIGUOUS-SOLE-NONE',
 			'unit.query.MemberReachFactsTest#testATypeInAFileImportingUnderAConditionKeepsTheSyntax :: control :: '
@@ -2614,9 +2625,15 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-TEXT-FIELDS-ANY',
 			'unit.query.MemberReachFactsTest#testAWriteTheCompilerSeesStoringOnlyFreshValuesLetsNothingEscape :: control :: '
 				+ 'M-TOUCH-TYPED-FRESH,M-TOUCH-TYPED-SYNTAX-TOO',
+			'unit.query.MemberReachFactsTest#testAnAccessorCalledByItsOwnNameIsItsTextUnderTheTruth :: control :: '
+				+ 'M-FACTS-TEXT-ACCESSOR-NAME',
 			'unit.query.MemberReachFactsTest#testAnArrayMemberOfASubclassUnderAnAncestorsAutoBuildIsAnsweredUnderTheTruth :: control :: '
 				+ 'M-REACH-REWRITTEN-TRUTH,M-REACH-REWRITTEN-UNTRUE',
 			'unit.query.MemberReachFactsTest#testAnEscapeTheCompilerTypesCostsOnlyItsOwnFamily :: control :: M-FACTS-REACH-ESCAPE-TYPED',
+			'unit.query.MemberReachFactsTest#testAnExpressionMacroAnInlinedMethodCallsLeavesItsCallerItsTextUnderTheTruth :: control :: '
+				+ 'M-FACTS-TEXT-EXPANSION,M-FACTS-TEXT-EXPANSION-SPLICED,M-FACTS-EXPANSION-NESTED',
+			'unit.query.MemberReachFactsTest#testAnExpressionMacroTheTextCallsLeavesItsTypeItsTextUnderTheTruth :: control :: '
+				+ 'M-FACTS-TEXT-EXPANSION,M-FACTS-TEXT-EXPANSION-BODY,M-FACTS-EXPANSION-RECORDED,M-FACTS-MACRO-CALLEE',
 			'unit.query.MemberReachFactsTest#testAnExtensionAnotherBuildBringsInIsKeptFromTheSyntax :: control :: '
 				+ 'M-FACTS-REACH-SYNTAX-UNION,M-GRAPH-TRUTH-MUTE-ALWAYS',
 			'unit.query.MemberReachFactsTest#testAnExtensionOnlyAListedBuildBringsInIsReadFromItsFacts :: control :: M-GRAPH-TRUTH-MUTE',
@@ -3893,6 +3910,19 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-TEXT-FIELDS-ANY',
 			'M-FACTS-TEXT-SPELLED',
 			'M-FACTS-TEXT-CALLS-ANY',
+			'M-FACTS-TEXT-EXPANSION',
+			'M-FACTS-TEXT-EXPANSION-BODY',
+			'M-FACTS-TEXT-EXPANSION-SPLICED',
+			'M-FACTS-EXPANSION-RECORDED',
+			'M-FACTS-EXPANSION-NESTED',
+			'M-FACTS-MACRO-CALLEE',
+			'M-FACTS-TEXT-LITERAL',
+			'M-FACTS-TEXT-ABSTRACT-NEW',
+			'M-FACTS-TEXT-PURE-CALL',
+			'M-FACTS-TEXT-CONVERSION-CALL',
+			'M-FACTS-TEXT-ACCESSOR-NAME',
+			'M-FACTS-TEXT-JOINED-SPLICES',
+			'M-FACTS-TEXT-JOINED-ACCESS',
 			'M-GRAPH-ADOPT-NONE',
 			'M-GRAPH-ADOPT-UNRECORDED',
 			'M-TOUCH-ADOPTED-SYNTAX',
@@ -4393,6 +4423,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-SPLICE-SITE-INNERMOST :: anyparse.check.TypedFactsWalk#walk',
 			'M-FACTS-SPLICE-BODY :: anyparse.check.TypedFactsWalk#inlinedCall',
 			'M-FACTS-NESTED-SPLICE :: anyparse.check.TypedFactsWalk#walk',
+			'M-FACTS-EXPANSION-RECORDED :: anyparse.check.TypedFactsWalk#spliced',
+			'M-FACTS-EXPANSION-NESTED :: anyparse.check.TypedFactsWalk#nestedSplice',
+			'M-FACTS-MACRO-CALLEE :: anyparse.check.TypedFactsMacro#collectFields',
 			'M-FACTS-CALL-SITE-INLINE :: anyparse.check.TypedFactsMacro#collectFields',
 			'M-FACTS-SPLICE-OWN-ARGUMENTS :: anyparse.check.TypedFactsWalk#spliced',
 			'M-FACTS-ABSTRACT-THIS :: anyparse.check.TypedFactsWalk#walk',
