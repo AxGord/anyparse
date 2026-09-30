@@ -1986,8 +1986,11 @@ class TestDiscoveryParityTest extends Test {
 			'unit.core.RendererParenSiblingRestTest#testAProbeInAForceFlatFrameIsNoBreakPoint :: control :: '
 				+ 'M-PAREN-SIBLING-FORCE-FLAT-FRAME',
 			'unit.core.RendererParenSiblingRestTest#testARunOnBreakRouteWidensTheLine :: control :: M-PAREN-ALT-SURPLUS',
+			'unit.core.RendererParenSiblingRestTest#testARunOnRouteSuspendsPredictionsInsideItsNode :: control :: M-PAREN-RUNON-SUSPEND',
 			'unit.core.RendererParenSiblingRestTest#testASoftBreakUnderABoundaryInsideFlattenIsNotMeasured :: control :: '
 				+ 'M-PAREN-EXACT-SOFT-BOUNDARY',
+			'unit.core.RendererParenSiblingRestTest#testASuspensionEndsWithItsFrame :: control :: M-PAREN-RUNON-FRAME',
+			'unit.core.RendererParenSiblingRestTest#testASuspensionEndsWithTheNodeItCovers :: control :: M-PAREN-RUNON-RESUME',
 			'unit.core.RendererParenSiblingRestTest#testAnUnboundedBreakSideTakesTheWalkOffThePath :: control :: M-PAREN-SIBLING-OFF-PATH',
 			'unit.core.RendererParenSiblingRestTest#testConsecutiveHeldBackSpacesAllStayOutOfTheColumn :: control :: '
 				+ 'M-PAREN-PENDING-LAST-ONLY',
@@ -4041,7 +4044,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-PAREN-SIBLING-OFF-PATH',
 			'M-PAREN-PENDING-LAST-ONLY',
 			'M-PAREN-ALT-ROUTE',
-			'M-PAREN-ALT-SURPLUS'
+			'M-PAREN-ALT-SURPLUS',
+			'M-PAREN-RUNON-SUSPEND',
+			'M-PAREN-RUNON-RESUME',
+			'M-PAREN-RUNON-FRAME'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
