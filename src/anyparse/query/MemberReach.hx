@@ -204,12 +204,19 @@ final class MemberReach {
 	private var _reconfigure: Null<() -> Null<MemberReach>> = null;
 
 	/**
+	 * Whether the run's compiler facts may be the truth under its builds (`FactsView.truth`): every question this analysis
+	 * cannot prove is then asked under them (`escalation`), where the facts may prove it.
+	 */
+	private var _factsTruthAvailable: Bool = false;
+
+	/**
 	 * `project` is every file a toucher of a project member can live in; `index` resolves types over at
 	 * least that and, when wider, over the libraries the walk may grow into. `scopeKnown` false means the
 	 * project may hold files `project` does not, so only a fresh unshared local is ever `Proven`. `configurations`
 	 * are the builds an answer must hold under: a conditional branch none of them compiles is not walked, and with
 	 * none every branch is. `facts` are the compiler's facts of the run's builds: a function they describe whole is read
-	 * through them (`FactsView`), every other one through its syntax.
+	 * through them (`FactsView`), every other one through its syntax; facts naming exactly `configurations` are the truth
+	 * (`factsAreTruth`).
 	 */
 	public function new(
 		plugin: GrammarPlugin, project: Array<{ file: String, source: String }>, index: SymbolIndex, scopeKnown: Bool,
@@ -241,7 +248,7 @@ final class MemberReach {
 			final source: Null<String> = scope.sources[file];
 			source == null || live.live(file, source, span);
 		});
-		scope.facts = FactsView.of(facts, scope);
+		scope.facts = FactsView.of(facts, scope, factsAreTruth(facts, configurations));
 		_g = new ReachGraph(_scope, carriers, maxLibraryFiles);
 		_admission = new ReachAdmission(_scope, _g);
 		final built: ValueEscapes = new ValueEscapes(scope, _g, _hazards, live, carriers, scopeKnown);
@@ -320,10 +327,12 @@ final class MemberReach {
 	 * built on first need — or null. Only a question that met a raw conditional region, or whose answer rested on the
 	 * classpath (`ValueCarriers.metIncomplete`), escalates: the builds decide which branches any of them compiles and
 	 * which library code they compile at all, and learning them costs a compile per configuration, so every other
-	 * question keeps this analysis's answer, which holds under every build since it walks every branch.
+	 * question keeps this analysis's answer, which holds under every build since it walks every branch. With compiler
+	 * facts (`_factsTruthAvailable`) every unproved question escalates: under the builds the facts may be the truth.
 	 */
 	private function escalation(answer: ReachResult): Null<MemberReach> {
-		if (answer == Proven || !(_metRawRegion || _carriers.metIncomplete || answer.match(Unknown(OpaqueCond(_, _))))) return null;
+		final builds: Bool = _metRawRegion || _carriers.metIncomplete || answer.match(Unknown(OpaqueCond(_, _)));
+		if (answer == Proven || !(builds || _factsTruthAvailable)) return null;
 		final configure: Null<() -> Null<MemberReach>> = _configure;
 		if (configure != null) {
 			_configure = null;
@@ -1529,6 +1538,7 @@ final class MemberReach {
 			final configure: () -> Null<MemberReach> = configuredFor.bind(plugin, project, scoped != null, host);
 			built._configure = configure;
 			built._reconfigure = configure;
+			built._factsTruthAvailable = built._scope.facts != null;
 			if (scoped != null) host.setMemberReach(built);
 		}
 		return built;
@@ -1688,6 +1698,22 @@ final class MemberReach {
 			index, scopeKnown, MAX_LIBRARY_FILES, MAX_VISITED, compiled.configurations, declaresEveryType.bind(compiled, index),
 			host.compilerFacts()
 		);
+	}
+
+	/**
+	 * Whether `facts` are the truth under `configurations` (`FactsView.truth`): the configurations are the analysis's list
+	 * of builds — a run's is every build it ships (`configuredFor`) — and the facts name exactly them, as both probes name
+	 * a configuration (`OracleDeclaration.describeOracle`). A table that dropped one is no view at all (`FactsView.of`).
+	 */
+	private static function factsAreTruth(facts: Null<CompilerFacts>, configurations: Null<Array<ReachConfiguration>>): Bool {
+		if (facts == null || configurations == null) return false;
+		final typed: Array<String> = facts.configurations.copy();
+		final listed: Array<String> = [for (c in configurations) c.name];
+		typed.sort(Reflect.compare);
+		listed.sort(Reflect.compare);
+		if (typed.length != listed.length) return false;
+		for (i in 0...typed.length) if (typed[i] != listed[i]) return false;
+		return true;
 	}
 
 	/**

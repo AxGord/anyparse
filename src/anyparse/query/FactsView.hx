@@ -40,6 +40,10 @@ using StringTools;
  * so a name a build the list does not name resolves the way the syntax reads it is still followed. A local `inline
  * function` needs no test of its own for the same reason: its body is a graph node read by its syntax, and each use of
  * it is such an edge.
+ *
+ * Under a list of builds declared to be every build the project ships (`reachConfigurationsComplete`), a table holding
+ * exactly the listed builds, none dropped, is the TRUTH (`truth`): a build the list does not name does not exist, so no
+ * declaration can read differently in one.
  */
 @:nullSafety(Strict)
 final class FactsView {
@@ -74,6 +78,13 @@ final class FactsView {
 	/** The table read. */
 	public final table: CompilerFacts;
 
+	/**
+	 * Whether the table holds every build the project ships: the analysis runs under a list of builds declared complete
+	 * (`reachConfigurationsComplete`) and the table holds exactly those, none dropped. The union of the facts is then
+	 * what every build resolves, not only the listed ones.
+	 */
+	public final truth: Bool;
+
 	/** File -> its conditional directives and regions, scanned once. */
 	private final _conditional: Map<String, ConditionalText> = [];
 
@@ -94,9 +105,10 @@ final class FactsView {
 	/** Table key -> the index's file, built on first need. */
 	private var _byKey: Null<Map<String, FileInfo>> = null;
 
-	private function new(table: CompilerFacts, scope: ReachProject) {
+	private function new(table: CompilerFacts, scope: ReachProject, truth: Bool) {
 		this.table = table;
 		_scope = scope;
+		this.truth = truth;
 	}
 
 	/** Drop what was read off the text of `file`, which changed. */
@@ -510,10 +522,13 @@ final class FactsView {
 		return out;
 	}
 
-	/** The view of `table` for `scope`; null when there is none, or a configuration left no facts: the table then holds less. */
-	public static function of(table: Null<CompilerFacts>, scope: ReachProject): Null<FactsView> {
+	/**
+	 * The view of `table` for `scope`, the table holding every build when `truth`; null when there is none, or a
+	 * configuration left no facts: the table then holds less.
+	 */
+	public static function of(table: Null<CompilerFacts>, scope: ReachProject, truth: Bool): Null<FactsView> {
 		if (table == null || table.dropped.length > 0 || table.configurations.length == 0) return null;
-		return new FactsView(table, scope);
+		return new FactsView(table, scope, truth);
 	}
 
 	/**

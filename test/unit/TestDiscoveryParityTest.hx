@@ -2553,6 +2553,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testAnInlinedCallKeepsItsBodysSyntax :: control :: M-FACTS-REACH-SPLICE',
 			'unit.query.MemberReachFactsTest#testTheCompilerResolvesACallTheSyntaxCannot :: control :: M-FACTS-REACH-EDGES',
 			'unit.query.MemberReachFactsTest#testTheCompilersHierarchyReachesAnOverride :: control :: M-FACTS-REACH-OVERRIDES',
+			'unit.query.MemberReachFactsTest#testTheFactsAreTheTruthOnlyUnderTheWholeListOfTheirBuilds :: control :: M-FACTS-TRUTH-WIRED',
+			'unit.query.MemberReachFactsTest#testTheTruthNeedsTheFactsToNameExactlyTheListedBuilds :: control :: '
+				+ 'M-FACTS-TRUTH-UNLISTED,M-FACTS-TRUTH-COUNT,M-FACTS-TRUTH-NAMES,M-FACTS-TRUTH-ORDER',
 			'unit.query.MemberReachTest#testAClassNamedToTheClassValueProducerMayBeInstantiatedUntyped :: control :: M-ESCAPE-NAMED-CLASS',
 			'unit.query.MemberReachTest#testAClasspathTheIndexDoesNotHoldMayDeclareAnOverrideOrASubtype :: control :: '
 				+ 'M-REACH-CLASSPATH-DISPATCH,M-CARRY-CLASSPATH',
@@ -2584,6 +2587,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachTest#testCalleeWhoseBodyIsNotItsSourceIsRefused :: control :: '
 				+ 'M-REACH-CALLEE-REWRITTEN,M-REACH-CALLEE-AMBIGUOUS',
 			'unit.query.MemberReachTest#testCallsEntryStartsAtTheSitesOnly :: control :: M-REACH-CALLS-ENTRY',
+			'unit.query.MemberReachTest#testCompilerFactsSendEveryUnprovedQuestionToTheBuilds :: control :: '
+				+ 'M-REACH-ESCALATE-TRUTH-NEVER,M-REACH-ESCALATE-TRUTH-WITHOUT-FACTS,M-REACH-ESCALATE-TRUTH-DROPPED',
 			'unit.query.MemberReachTest#testCompoundAssignmentRunsTheBinaryOperatorOverload :: control :: M-REACH-COMPOUND-OPERATOR',
 			'unit.query.MemberReachTest#testConstructNobodyClassifiedIsUnknown :: control :: M-REACH-UNMODELLED',
 			'unit.query.MemberReachTest#testConstructingAnotherInstanceIsNotATouch :: control :: M-REACH-FRESH-OBJECT',
@@ -3630,6 +3635,14 @@ class TestDiscoveryParityTest extends Test {
 			'M-REACH-ESCALATE-NEVER',
 			'M-REACH-ESCALATE-ALWAYS',
 			'M-REACH-ESCALATE-INCOMPLETE',
+			'M-REACH-ESCALATE-TRUTH-NEVER',
+			'M-REACH-ESCALATE-TRUTH-WITHOUT-FACTS',
+			'M-REACH-ESCALATE-TRUTH-DROPPED',
+			'M-FACTS-TRUTH-WIRED',
+			'M-FACTS-TRUTH-UNLISTED',
+			'M-FACTS-TRUTH-COUNT',
+			'M-FACTS-TRUTH-NAMES',
+			'M-FACTS-TRUTH-ORDER',
 			'M-REACH-BASE-CLASSPATH',
 			'M-REACH-TYPES-HELD',
 			'M-GRAPH-READ-DECLARED',
