@@ -2597,6 +2597,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testAProjectFileNoBuildCompilesLetsNoValueEscape :: control :: M-FACTS-DEAD-FILE-VALUES',
 			'unit.query.MemberReachFactsTest#testAProjectFileNoBuildCompilesRunsNothing :: control :: '
 				+ 'M-REACH-DEAD-FILE-SEEDS,M-FACTS-DEAD-FILE-NEVER,M-FACTS-DEAD-FILE-UNTRUE',
+			'unit.query.MemberReachFactsTest#testAPropertyOneBuildReadsThroughAGetterIsNotReadStraight :: control :: M-FACTS-FIELD-KINDS',
 			'unit.query.MemberReachFactsTest#testAPropertyReadStraightFromItsStorageIsAnsweredUnderTheTruth :: control :: '
 				+ 'M-REACH-PROPERTY-STRAIGHT,M-REACH-PROPERTY-GETTER,M-REACH-FACTS-FIELDS-UNTRUE',
 			'unit.query.MemberReachFactsTest#testAReflectiveCallTheSyntaxDoesNotSeeNamesNothingUnderTheTruth :: control :: '
@@ -2606,6 +2607,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-REACH-ENTRY-REWRITTEN,M-REACH-ENTRY-MEMBER,M-REACH-TEXTUAL-ALWAYS',
 			'unit.query.MemberReachFactsTest#testAStoredFunctionValueMayConvertWhatItIsHanded :: control :: M-FACTS-REACH-UNREAD-VALUE',
 			'unit.query.MemberReachFactsTest#testAStoredFunctionValueMayRunAnOperatorOverload :: control :: M-FACTS-REACH-UNREAD-IMPLICIT',
+			'unit.query.MemberReachFactsTest#testATouchOnlyTheFactsSeeInASecondDeclarationIsFoundUnderTheTruth :: control :: '
+				+ 'M-TOUCH-FOLDED-ACCESSES',
 			'unit.query.MemberReachFactsTest#testATouchOnlyTheFactsSeeIsFoundUnderTheTruth :: control :: '
 				+ 'M-TOUCH-TYPED-NEVER,M-TOUCH-TYPED-SHAPE-NONE,M-TOUCH-TYPED-CALL,M-TOUCH-TYPED-OWNER',
 			'unit.query.MemberReachFactsTest#testATouchThroughAnInferredReceiverIsTypedByTheCompiler :: control :: '
@@ -2652,6 +2655,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testTheFactsAreTheTruthOnlyUnderTheWholeListOfTheirBuilds :: control :: M-FACTS-TRUTH-WIRED',
 			'unit.query.MemberReachFactsTest#testTheFactsNameTheNativeCallsUnderTheTruth :: control :: '
 				+ 'M-FACTS-TRUTH-NATIVES,M-FACTS-TRUTH-NATIVE-CALLS-KEPT,M-FACTS-TRUTH-NATIVE-METAS-DROPPED',
+			'unit.query.MemberReachFactsTest#testTheSecondDeclarationOfAFoldedMemberIsReadByItsText :: control :: M-REACH-FOLDED-BODIES',
 			'unit.query.MemberReachFactsTest#testTheTruthNeedsTheFactsToNameExactlyTheListedBuilds :: control :: '
 				+ 'M-FACTS-TRUTH-UNLISTED,M-FACTS-TRUTH-COUNT,M-FACTS-TRUTH-NAMES,M-FACTS-TRUTH-ORDER',
 			'unit.query.MemberReachFactsTest#testTwoTypesUnderOneNameStayAmbiguousUnderTheTruth :: control :: '
@@ -2688,7 +2692,11 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-REACH-CLASSPATH-DISPATCH,M-CARRY-CLASSPATH',
 			'unit.query.MemberReachTest#testAConstructedReceiverIsItsOwnType :: control :: M-ESCAPE-NEW-TYPE,M-ESCAPE-RECEIVER-CALL',
 			'unit.query.MemberReachTest#testAConversionOfATypedOperandRunsOnlyItsTypesMethod :: control :: M-REACH-TYPED-SITE',
+			'unit.query.MemberReachTest#testAFieldInitializerRunsWhatItHoldsThoughItCallsNothing :: control :: '
+				+ 'M-GRAPH-EAGER-INIT,M-REACH-INIT-BRANCHES',
 			'unit.query.MemberReachTest#testALibraryReadOfTheMemberByItsNameIsATouch :: control :: M-REACH-LIB-ACCESS',
+			'unit.query.MemberReachTest#testAMemberDeclaredInEachBranchIsWhatEveryDeclarationSays :: control :: '
+				+ 'M-GRAPH-JOINED-MEMBER,M-REACH-SHARED-INIT-BRANCHES,M-GRAPH-FOLDED-DYNAMIC',
 			'unit.query.MemberReachTest#testAPositionTypedOnlyOnTheOutsideHoldsAnything :: control :: '
 				+ 'M-CARRY-TYPED-ARGS,M-CARRY-TYPED-ARITY,M-ESCAPE-UNWRITTEN-ARGS',
 			'unit.query.MemberReachTest#testAReadNoReceiverTypeDeclaresReachesWhatItMayBe :: control :: '
@@ -2700,6 +2708,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachTest#testAnAccessThroughAnInterfaceTheOwnerImplementsIsATouch :: control :: '
 				+ 'M-REACH-RECEIVER-OWNER,M-CARRY-SUBTYPE-MEET',
 			'unit.query.MemberReachTest#testAnAnswerDoesNotDependOnTheQuestionsBeforeIt :: control :: M-REACH-QUESTION-ENTERED',
+			'unit.query.MemberReachTest#testAnEditToAFileOfANodeFoldedAcrossFilesRebuildsTheGraph :: control :: ' + 'M-REACH-REFRESH-FOLDED',
 			'unit.query.MemberReachTest#testAnInstanceThatLeftTheTypeSystemMayBeAnyType :: control :: '
 				+ 'M-CARRY-ESCAPES,M-ESCAPE-STORE,M-ESCAPE-CAST,M-ESCAPE-DECL,M-ESCAPE-PARAM,M-ESCAPE-RETURN,M-ESCAPE-LAMBDA,M-ESCAPE-THROW,M-ESCAPE-METHOD-VALUE,M-ESCAPE-HELD,M-ESCAPE-LIBRARY-SUPER,M-ESCAPE-NATIVE,M-ESCAPE-ANY',
 			'unit.query.MemberReachTest#testAssignmentUsedAsAValueSharesWhatItStores :: control :: M-REACH-ASSIGNMENT-VALUE-ALIAS',
@@ -2725,6 +2734,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachTest#testDynamicFunctionACalleeRunsIsRefused :: guard :: ',
 			'unit.query.MemberReachTest#testDynamicReceiverAdmitsBySameName :: control :: M-REACH-NAME-CHANNEL',
 			'unit.query.MemberReachTest#testEscapeLaterInAnEnclosingLoopPrecedesTheNextRun :: control :: M-REACH-RERUN-END',
+			'unit.query.MemberReachTest#testEveryDeclarationOfAMemberInEachBranchIsRead :: control :: '
+				+ 'M-REACH-FOLDED-BODIES,M-GRAPH-FOLDED-DECLARATIONS',
 			'unit.query.MemberReachTest#testEveryEscapeRuleLetsItsSoundTwinThrough :: control :: '
 				+ 'M-ESCAPE-P-STORE,M-ESCAPE-P-CAST,M-ESCAPE-P-THROW,M-ESCAPE-P-DECL,M-ESCAPE-P-PARAM,M-ESCAPE-P-RETURN,M-ESCAPE-P-LAMBDA,M-ESCAPE-P-METHOD-VALUE,M-ESCAPE-P-HELD,M-ESCAPE-P-LIBRARY-SUPER,M-ESCAPE-P-NATIVE,M-ESCAPE-P-TYPED-ARGS,M-ESCAPE-DECLARED-SOURCE,M-ESCAPE-LOCAL-INIT,M-ESCAPE-PRIMITIVE-PARAM,M-ESCAPE-ASSIGN-VALUE,M-ESCAPE-IF-VALUE,M-ESCAPE-BLOCK-VALUE,M-ESCAPE-MACRO-MEMBER,M-ESCAPE-MACRO-HAZARD,M-ESCAPE-REIFICATION,M-ESCAPE-THROW,M-ESCAPE-DECL,M-ESCAPE-PARAM,M-ESCAPE-LAMBDA,M-ESCAPE-STORE,M-ESCAPE-CAST,M-ESCAPE-METHOD-VALUE,M-ESCAPE-HELD,M-ESCAPE-LIBRARY-SUPER,M-ESCAPE-NATIVE',
 			'unit.query.MemberReachTest#testExplainNamesThePath :: control :: M-REACH-EXPLAIN-PATH',
@@ -3643,6 +3654,16 @@ class TestDiscoveryParityTest extends Test {
 			'M-REACH-VISITED-BUDGET',
 			'M-REACH-LOCAL-HAZARDS',
 			'M-REACH-AMBIGUOUS',
+			'M-REACH-FOLDED-BODIES',
+			'M-GRAPH-FOLDED-DECLARATIONS',
+			'M-GRAPH-EAGER-INIT',
+			'M-REACH-INIT-BRANCHES',
+			'M-GRAPH-JOINED-MEMBER',
+			'M-REACH-SHARED-INIT-BRANCHES',
+			'M-GRAPH-FOLDED-DYNAMIC',
+			'M-REACH-REFRESH-FOLDED',
+			'M-TOUCH-FOLDED-ACCESSES',
+			'M-FACTS-FIELD-KINDS',
 			'M-REACH-LOCAL-SCOPE',
 			'M-REACH-NOT-A-MEMBER',
 			'M-REACH-FRESH-METHOD',

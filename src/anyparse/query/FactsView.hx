@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.CallGraph.FnDeclaration;
 import anyparse.query.CallGraph.FnNode;
 import anyparse.query.CompilerFacts.CallFact;
 import anyparse.query.CompilerFacts.FactNode;
@@ -168,8 +169,8 @@ final class FactsView {
 	 * The facts of the function the graph node `node` declares when they replace its syntax (see the type
 	 * doc; under the truth, whatever a build the list does not name might read otherwise): the outermost
 	 * typed function bodies inside its span. Null keeps the syntactic reading. `declarations` is how many
-	 * declarations of `node` the graph folded into it in its own file: a node folding several — or of a type the index
-	 * declares more than once — is read, under the truth only, by its id (`foldedBodies`).
+	 * declarations the graph folded into `node`, in any file (`CallGraph.declarationsOf`): a node folding several — or
+	 * of a type the index declares more than once — is read, under the truth only, by its id (`foldedBodies`).
 	 */
 	public function bodyFacts(g: CallGraph, node: FnNode, declarations: Int): Null<Array<FactNode>> {
 		final type: Null<String> = node.typeName;
@@ -241,11 +242,13 @@ final class FactsView {
 		return dot > 0 && runsNoUserCode(g, graphType(callee.substr(0, dot)), callee.substr(dot + 1));
 	}
 
-	/** Whether the innermost graph node holding `span` of `file` is faceted: its facts replace its syntax. */
+	/**
+	 * Whether the innermost graph node holding `span` of `file` is faceted: its facts replace its syntax. What holds `span`
+	 * is one declaration of the node (`CallGraph.declarationAt`), which may be another than the one its `span` names.
+	 */
 	public function faceted(g: CallGraph, file: String, span: Span): Bool {
-		final id: Null<String> = g.functionAt(file, span.from);
-		final at: Null<Span> = id == null ? null : g.node(id)?.span;
-		return id != null && at != null && span.to <= at.to && g.facts?.faceted.exists(id) == true;
+		final at: Null<FnDeclaration> = g.declarationAt(file, span.from);
+		return at != null && span.to <= at.span.to && g.facts?.faceted.exists(at.id) == true;
 	}
 
 	/**
@@ -292,7 +295,10 @@ final class FactsView {
 		final out: Array<String> = [];
 		for (sub in table.subtypesOf(CompilerFacts.baseId(type))) {
 			final declared: Null<TypeFact> = table.type(sub);
-			if (declared == null || !declared.fields.exists(f -> f.name == name && !f.isStatic && METHOD_KINDS.contains(f.kind))) continue;
+			if (declared == null || !declared.fields.exists(f ->
+				f.name == name && !f.isStatic && f.kinds.exists(k -> METHOD_KINDS.contains(k))
+			))
+				continue;
 			final graphed: String = graphType(sub);
 			final id: String = g.ownMember(graphed, name) ?? g.externalNode(graphed, name);
 			if (!out.contains(id)) out.push(id);
@@ -300,9 +306,12 @@ final class FactsView {
 		return out;
 	}
 
-	/** Whether the typed type `owner` declares `name` as a method: a read of it is a function value. */
+	/** Whether the typed type `owner` declares `name` as a method in some build: a read of it there is a function value. */
 	public function isMethod(owner: String, name: String): Bool {
-		return table.type(CompilerFacts.baseId(owner))?.fields.exists(f -> f.name == name && METHOD_KINDS.contains(f.kind)) ?? false;
+		return
+			table.type(CompilerFacts.baseId(owner))?.fields.exists(f ->
+				f.name == name && f.kinds.exists(k -> METHOD_KINDS.contains(k))
+			) ?? false;
 	}
 
 	/** Whether a call of `target` converts its argument to a string (`ExecutionShape.stringConversionCalls`). */
@@ -425,17 +434,21 @@ final class FactsView {
 	}
 
 	/**
-	 * The outermost typed function bodies inside the span of `node`, when its text holds no directive and
-	 * lies in no conditional region, or the facts are the truth; null otherwise, or when none was typed.
+	 * The outermost typed function bodies inside the span of `node`, when it is the one declaration the node stands for
+	 * (`CallGraph.declarationsOf`: a node folding several is read by id, `foldedBodies`) and its text holds no directive and
+	 * lies in no conditional region, or the facts are the truth; null otherwise, or when none was typed. A typed body is
+	 * placed by its range in `node`'s own file: one a configuration read from another file is none of this text.
 	 */
 	private function typedBodies(g: CallGraph, node: FnNode): Null<Array<FactNode>> {
 		final span: Null<Span> = node.span;
 		final source: Null<String> = g.sourceOf(node.file);
-		if (span == null || source == null) return null;
+		if (span == null || source == null || g.declarationsOf(node.id).length != 1) return null;
 		// every build typed its own branch: under the truth their union is every branch that runs
 		if (!truth && conditional(node.file, source, span)) return null;
+		final key: String = table.keyOf(node.file);
 		final inside: Array<FactNode> = [
-			for (n in table.nodesIn(node.file)) if (FUNCTION_KINDS.contains(n.kind) && !n.generated && within(n.at.span, span)) n
+			for (n in table.nodesIn(node.file))
+				if (FUNCTION_KINDS.contains(n.kind) && !n.generated && n.at.file == key && within(n.at.span, span)) n
 		];
 		final outer: Array<FactNode> = [
 			for (n in inside) if (!inside.exists(o -> within(n.at.span, o.at.span) && wider(o.at.span, n.at.span))) n
@@ -443,8 +456,8 @@ final class FactsView {
 		// a body another graph node starts at is that node's: one nested in this one, whose own facts this one has none of
 		// (a local `inline function`, which the compiler types into its caller)
 		for (n in outer) {
-			final owner: Null<String> = g.functionAt(node.file, n.at.span.from);
-			if (owner != node.id && g.node(owner ?? '')?.span?.from == n.at.span.from) return null;
+			final owner: Null<FnDeclaration> = g.declarationAt(node.file, n.at.span.from);
+			if (owner != null && owner.id != node.id && owner.span.from == n.at.span.from) return null;
 		}
 		return outer.length == 0 ? null : outer;
 	}
@@ -459,9 +472,9 @@ final class FactsView {
 		final span: Null<Span> = node.span;
 		if (span == null || node.id.indexOf(NESTED_MARK) < 0) return true;
 		// the innermost function holding the text just before this one's: a sibling ends before a separator
-		final id: Null<String> = span.from > 0 ? g.functionAt(node.file, span.from - 1) : null;
-		final found: Null<FnNode> = id == null ? null : g.node(id);
-		final at: Null<Span> = found?.span;
+		final holding: Null<FnDeclaration> = span.from > 0 ? g.declarationAt(node.file, span.from - 1) : null;
+		final found: Null<FnNode> = holding == null ? null : g.node(holding.id);
+		final at: Null<Span> = holding?.span;
 		final enclosing: Null<FnNode> = at != null && within(span, at) && wider(at, span) ? found : null;
 		final typed: Null<Array<FactNode>> = enclosing == null ? null : typedBodies(g, enclosing);
 		return enclosing != null && typed != null && contextAlike(g, enclosing, typed);

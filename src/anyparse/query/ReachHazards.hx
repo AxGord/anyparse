@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.check.NativeCodeScan;
 import anyparse.query.FactsView.TruthSites;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.MemberBranchScan.MemberBranchSeams;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.runtime.Span;
@@ -84,11 +85,13 @@ final class ReachHazards {
 	}
 
 	/**
-	 * The spans of the field initializers of the type named `typeName` in `tree` — the instance ones, or with
-	 * `isStatic` the static ones: the code the `<init>` / `<static>` pseudo-node of the call graph runs. Null
-	 * when no single declaration of that name is found, which a caller reads as a blind spot.
+	 * The spans of the field initializers of the type named `typeName` in `tree` (the text `source`) — the instance ones,
+	 * or with `isStatic` the static ones: the code the `<init>` / `<static>` pseudo-node of the call graph runs. Every
+	 * branch of a conditional region declares its own (`MemberBranchScan.eachMember`), and a field whose modifier run
+	 * differs between branches is read as either. Null when no single declaration of that name is found, which a caller
+	 * reads as a blind spot.
 	 */
-	public function initializerSpans(tree: QueryNode, typeName: String, isStatic: Bool): Null<Array<Span>> {
+	public function initializerSpans(tree: QueryNode, source: String, typeName: String, isStatic: Bool): Null<Array<Span>> {
 		final decls: Array<QueryNode> = [];
 		function find(node: QueryNode): Void {
 			if (CallGraphNames.typeNameOf(node) == typeName) decls.push(node);
@@ -98,16 +101,15 @@ final class ReachHazards {
 		if (decls.length != 1) return null;
 		final fieldKinds: Array<String> = _shape.fieldDeclKinds ?? [];
 		final staticKind: Null<String> = _shape.staticModifierKind;
-		final boundary: QueryNode -> Bool = c -> c.children.length > 0 || c.name != null;
-		final kids: Array<QueryNode> = decls[0].children;
 		final out: Array<Span> = [];
-		for (i in 0...kids.length) {
-			final c: QueryNode = kids[i];
-			if (!fieldKinds.contains(c.kind) || MemberKinds.macroModifierPrecedes(kids, i, staticKind, boundary) != isStatic) continue;
-			final init: Null<QueryNode> = CtorFieldFold.declInitializer(c, _shape);
+		final seams: MemberBranchSeams = MemberBranchScan.seamsOf(_shape, source, _plugin.lexicalRegions.bind(source));
+		final host: QueryNode = RefactorSupport.typeDeclOf(decls[0])?.nameNode ?? decls[0];
+		MemberBranchScan.eachMember(seams, host, c -> MemberKinds.isMemberDeclKind(c.kind), (c, run, certain) -> {
+			final declaredStatic: Bool = staticKind != null && run.exists(m -> m.kind == staticKind);
+			final init: Null<QueryNode> = fieldKinds.contains(c.kind) ? CtorFieldFold.declInitializer(c, _shape) : null;
 			final span: Null<Span> = init?.span;
-			if (span != null) out.push(span);
-		}
+			if (span != null && (!certain || declaredStatic == isStatic)) out.push(span);
+		});
 		return out;
 	}
 

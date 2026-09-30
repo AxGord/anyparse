@@ -5417,8 +5417,8 @@
 			"name": "M-GRAPH-UPGRADE-EXTERNAL",
 			"type": "anyparse.query.CallGraph",
 			"method": "registerNode",
-			"find": "if (!nodes.exists(id) || nodes[id]?.isExternal == true) {",
-			"replace": "if (!nodes.exists(id)) {",
+			"find": "if (held == null || held.isExternal) {",
+			"replace": "if (held == null) {",
 			"note": "a file added later leaves the external placeholder of its declaration in place, so the body it brings is never linked"
 		},
 		{
@@ -5665,6 +5665,86 @@
 			"note": "a reached type sharing its simple name with another is taken for the one the graph merged, so the other's body is never seen"
 		},
 		{
+			"name": "M-REACH-FOLDED-BODIES",
+			"type": "anyparse.query.MemberReach",
+			"method": "bodySpans",
+			"find": "if (declared.length > 0) return [for (d in declared) { file: d.file, span: d.span }];",
+			"replace": "if (declared.length > 0) return [{ file: declared[0].file, span: declared[0].span }];",
+			"note": "a node folding a declaration per branch of a region is read by its first declaration's text only, so what another one runs is never seen"
+		},
+		{
+			"name": "M-GRAPH-FOLDED-DECLARATIONS",
+			"type": "anyparse.query.CallGraph",
+			"method": "registerNode",
+			"find": "inFile.push(declaration);",
+			"replace": "if (first) inFile.push(declaration);",
+			"note": "a further declaration of a node is no function of its file, so a touch inside it belongs to its type's initializers"
+		},
+		{
+			"name": "M-GRAPH-EAGER-INIT",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "\t\t\t\tif (frames.length == 0 && fieldKinds.contains(c.kind) && CtorFieldFold.declInitializer(c, shape) != null)\n\t\t\t\t\tinitNode(typeName ?? moduleType, file, inStaticInit); // noqa: unused-return-value\n",
+			"replace": "",
+			"note": "a type whose field initializers call nothing has no initializer node, so a construction never runs the touch, conversion or target code they hold"
+		},
+		{
+			"name": "M-REACH-INIT-BRANCHES",
+			"type": "anyparse.query.ReachHazards",
+			"method": "initializerSpans",
+			"find": "final seams: MemberBranchSeams = MemberBranchScan.seamsOf(_shape, source, _plugin.lexicalRegions.bind(source));",
+			"replace": "final seams: MemberBranchSeams = { source: source, condKind: null, elseKeywords: [], comments: [] };",
+			"note": "a field declared inside a conditional region has no initializer the construction runs"
+		},
+		{
+			"name": "M-GRAPH-JOINED-MEMBER",
+			"type": "anyparse.query.CallGraphTypes",
+			"method": "recordMembers",
+			"find": "final record: MemberInfo = held == null ? m : joined(held, m);",
+			"replace": "final record: MemberInfo = held ?? m;",
+			"note": "a member declared once per branch of a region is what its first declaration says: an accessor or a type only another declares is never seen"
+		},
+		{
+			"name": "M-REACH-SHARED-INIT-BRANCHES",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "sharedInitializer",
+			"find": "for (info in declared) {",
+			"replace": "for (info in declared.slice(0, 1)) {",
+			"note": "only the first declaration of a member is asked whether its initializer shares a value"
+		},
+		{
+			"name": "M-GRAPH-FOLDED-DYNAMIC",
+			"type": "anyparse.query.CallGraph",
+			"method": "registerNode",
+			"find": "if (isDynamic) held.isDynamic = true;",
+			"replace": "",
+			"note": "a node is `dynamic` only when its first declaration is, so a call of a method another branch declares replaceable runs its body alone"
+		},
+		{
+			"name": "M-REACH-REFRESH-FOLDED",
+			"type": "anyparse.query.MemberReach",
+			"method": "refresh",
+			"find": "if (_g.foldsAcrossFiles(changed)) return false;",
+			"replace": "",
+			"note": "an edit to a file holding one declaration of a node folded across files is taken in place, dropping the edges the other file's declaration recorded"
+		},
+		{
+			"name": "M-TOUCH-FOLDED-ACCESSES",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "declarationHolding",
+			"find": "return g.declarationsOf(id)",
+			"replace": "return g.declarationsOf(id).slice(0, 1)",
+			"note": "a typed access in a further declaration of a folded node is no access of the node, which its syntax then reads, blind to a touch only the facts name"
+		},
+		{
+			"name": "M-FACTS-FIELD-KINDS",
+			"type": "anyparse.query.FactMerge",
+			"method": "fields",
+			"find": "for (k in f.kinds) if (!known.kinds.contains(k)) known.kinds.push(k);\n",
+			"replace": "",
+			"note": "a field keeps the kind the first build gave it, so a property another build reads through a getter is read straight"
+		},
+		{
 			"name": "M-REACH-LOCAL-SCOPE",
 			"type": "anyparse.query.MemberReach",
 			"method": "answerLocal",
@@ -5808,7 +5888,7 @@
 			"name": "M-GRAPH-FN-TYPE-PARAM",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectNodes",
-			"find": "if (params != null) _facts.typeParams[fnId] = params;",
+			"find": "if (declaredParams.length > 0) _facts.typeParams[id] = declaredParams;",
 			"replace": "",
 			"note": "a function's own type parameters are not recorded, so a receiver typed by one becomes a phantom type"
 		},
@@ -6999,8 +7079,8 @@
 			"name": "M-REACH-PROPERTY-GETTER",
 			"type": "anyparse.query.MemberReach",
 			"method": "readStraight",
-			"find": "fields.foreach(f -> STRAIGHT_PROPERTY.match(f.kind))",
-			"replace": "fields.foreach(f -> STRAIGHT_PROPERTY.match(f.kind) || StringTools.startsWith(f.kind, 'var(call,'))",
+			"find": "fields.foreach(f -> f.kinds.foreach(k -> STRAIGHT_PROPERTY.match(k)))",
+			"replace": "fields.foreach(f -> f.kinds.foreach(k -> STRAIGHT_PROPERTY.match(k) || StringTools.startsWith(k, 'var(call,')))",
 			"note": "a property with a getter is taken as read straight from its storage, though the getter decides what a reader sees"
 		},
 		{
@@ -7784,8 +7864,8 @@
 			"name": "M-FACTS-TEXT-FIELDS-ANY",
 			"type": "anyparse.query.FactsProvenance",
 			"method": "declaredAlike",
-			"find": "return found.exists(",
-			"replace": "return true || found.exists(",
+			"find": "return f.kinds.foreach(kind -> {",
+			"replace": "return true || f.kinds.foreach(kind -> {",
 			"note": "a field declared as anything the text declares it as is alike, so a variable a macro made a property is read as the text's plain variable"
 		},
 		{
@@ -8168,7 +8248,7 @@
 			"name": "M-FACTS-REACH-NESTED-OWNER",
 			"type": "anyparse.query.FactsView",
 			"method": "typedBodies",
-			"find": "if (owner != node.id && g.node(owner ?? '')?.span?.from == n.at.span.from) return null;",
+			"find": "if (owner != null && owner.id != node.id && owner.span.from == n.at.span.from) return null;",
 			"replace": "",
 			"note": "a function with no typed body of its own is read through the facts of a function nested in it, which leave out what it runs itself"
 		},
@@ -10516,8 +10596,8 @@
 			"name": "M-GRAPH-FN-BOUND",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectNodes",
-			"find": "if (bounded != null) _facts.typeParamBounds[fnId] = bounded;",
-			"replace": "",
+			"find": "if (first && bounded != null)\n\t\t\t\t\t_facts.typeParamBounds[id] = bounded\n",
+			"replace": "if (first && bounded != null)\n\t\t\t\t\t{}\n",
 			"note": "a function's own parameter bounds are not recorded, so a receiver typed by one stays unresolved"
 		},
 		{
@@ -10540,7 +10620,7 @@
 			"name": "M-GRAPH-BOUND-DECL-SCOPE",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "final encloses: Bool = at != MEMBER_SCOPE && span != null && at >= span.from && at < span.to;",
+			"find": "final encloses: Bool = at != MEMBER_SCOPE && at >= span.from && at < span.to;",
 			"replace": "final encloses: Bool = true;",
 			"note": "a type parameter is looked up from the call site, so a function's own `T` captures the `T` a field or an outer parameter was declared with"
 		},

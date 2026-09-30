@@ -41,6 +41,17 @@ typedef FnNode = {
 }
 
 /**
+ * One declaration a graph node stands for. A node folds every declaration of its id into one — a member declared in
+ * each branch of a conditional region, an overload, a copy of its type per build — and each of them is code the node
+ * runs: its `span` of `file`, the body a reader of the node's text reads beside the node's own `span`.
+ */
+typedef FnDeclaration = {
+	var id: String;
+	var file: String;
+	var span: Span;
+}
+
+/**
  * One directed edge. `via` is set on `Ref` edges only: the id of the call
  * TARGET that received the callback (`Worker.spawn` for a lambda passed
  * to it) — the seam a thread-context analysis needs to classify callback
@@ -221,6 +232,13 @@ enum abstract EdgeKind(Int) {
  * Simple type names only (`SymbolIndex` models no packages): two types with
  * the same simple name merge into one graph node — acceptable for a finder,
  * listed as a known limit.
+ *
+ * A node FOLDS every declaration of its id: a member declared in each branch of a conditional region, an overload, a
+ * copy of its type per build or per package. Each is code the node runs (`declarationsOf`), a site inside any of them
+ * is the node's (`functionAt`, `declarationAt`), a `dynamic` or bodied declaration makes the node so, and what the
+ * declarations say of its types — the return, the parameters, their bounds — is the node's only where they all say
+ * it alike. A field initializer is code too, whether it calls anything or not: a type holding one has its
+ * `<init>` / `<static>` node, which runs the initializers of every file declaring the type (`initializerFiles`).
  */
 @:nullSafety(Strict)
 final class CallGraph {
@@ -263,8 +281,17 @@ final class CallGraph {
 	/** The types that gained a node during the current `addFiles`. */
 	private final _grownTypes: Array<String> = [];
 
-	/** File -> the function-like nodes declared in it, for `functionAt`. */
+	/** File -> the function-like nodes whose first declaration it holds: what taking the file out removes. */
 	private final _fileNodes: Map<String, Array<FnNode>> = [];
+
+	/** Node id -> every declaration it stands for (`declarationsOf`). */
+	private final _declarations: Map<String, Array<FnDeclaration>> = [];
+
+	/** File -> every declaration of a function-like node it holds, for `declarationAt`. */
+	private final _fileDeclarations: Map<String, Array<FnDeclaration>> = [];
+
+	/** Field-initializer pseudo-node id -> the files holding initializers it runs (`initializerFiles`). */
+	private final _initFiles: Map<String, Array<String>> = [];
 
 	/** File -> its parsed entry, for every file the graph holds. */
 	private final _entries: Map<String, ParsedEntry> = [];
@@ -335,16 +362,47 @@ final class CallGraph {
 		return _entries[CallGraphNames.normalizePath(file)]?.source;
 	}
 
-	/** The innermost function-like node of `file` whose span contains `offset`, or null outside every function. */
-	public function functionAt(file: String, offset: Int): Null<String> {
-		var best: Null<FnNode> = null;
-		for (n in _fileNodes[CallGraphNames.normalizePath(file)] ?? []) {
-			final span: Null<Span> = n.span;
-			if (span == null || offset < span.from || offset >= span.to) continue;
+	/** The innermost function-like node of `file` a declaration of which contains `offset`, or null outside every function. */
+	public inline function functionAt(file: String, offset: Int): Null<String> {
+		return declarationAt(file, offset)?.id;
+	}
+
+	/** The innermost declaration of a function-like node in `file` whose span contains `offset`, or null outside every function. */
+	public function declarationAt(file: String, offset: Int): Null<FnDeclaration> {
+		var best: Null<FnDeclaration> = null;
+		for (d in _fileDeclarations[CallGraphNames.normalizePath(file)] ?? []) {
+			final span: Span = d.span;
+			if (offset < span.from || offset >= span.to) continue;
 			final current: Null<Span> = best?.span;
-			if (current == null || span.to - span.from < current.to - current.from) best = n;
+			if (current == null || span.to - span.from < current.to - current.from) best = d;
 		}
-		return best?.id;
+		return best;
+	}
+
+	/**
+	 * Every declaration the node `id` stands for, in the order the graph read them: the one its `span` names first, then
+	 * every other the graph folded into it — each of them code the node runs. Empty for a node no text declares: an
+	 * external placeholder, a field-initializer pseudo-node (`initializerFiles`), a method a build macro made.
+	 */
+	public inline function declarationsOf(id: String): Array<FnDeclaration> {
+		return _declarations[id] ?? [];
+	}
+
+	/** The files whose field initializers the pseudo-node `id` (`INIT_NAME` / `STATIC_INIT_NAME`) runs, in the order the graph read them. */
+	public inline function initializerFiles(id: String): Array<String> {
+		return _initFiles[id] ?? [];
+	}
+
+	/**
+	 * Whether a node with a declaration in `file` has one in another file too: taking `file` out of the graph drops that
+	 * node, with every edge the other declaration's code recorded, which re-adding `file` alone does not bring back.
+	 */
+	public function foldsAcrossFiles(file: String): Bool {
+		final key: String = CallGraphNames.normalizePath(file);
+		for (d in _fileDeclarations[key] ?? []) if (declarationsOf(d.id).exists(o -> CallGraphNames.normalizePath(o.file) != key))
+			return true;
+		for (files in _initFiles) if (files.length > 1 && files.exists(f -> CallGraphNames.normalizePath(f) == key)) return true;
+		return false;
 	}
 
 	/**
@@ -431,7 +489,7 @@ final class CallGraph {
 		final adopted: Array<String> = reading == null ? [] : [for (p in parsed) for (id in reading.adopt(this, p.file)) id];
 		for (p in parsed) {
 			// a function the facts describe records its syntax's edges alone, none of its unresolved sites (`CallGraphFacts.mute`)
-			final faceted: Map<String, Array<FactNode>> = reading == null ? [] : reading.mute(this, p.file, p.fnBySpanFrom);
+			final faceted: Map<String, Array<FactNode>> = reading == null ? [] : reading.mute(this, p.file);
 			collectEdges(p);
 			if (reading != null) reading.recordMuted(this, faceted);
 		}
@@ -452,6 +510,15 @@ final class CallGraph {
 		_entries.remove(key);
 		final removed: Map<String, Bool> = [for (n in _fileNodes[key] ?? []) n.id => true];
 		_fileNodes.remove(key);
+		_fileDeclarations.remove(key);
+		for (id in [for (id in _declarations.keys()) id]) {
+			final kept: Array<FnDeclaration> = [for (d in declarationsOf(id)) if (CallGraphNames.normalizePath(d.file) != key) d];
+			if (kept.length == 0)
+				_declarations.remove(id)
+			else
+				_declarations[id] = kept;
+		}
+		for (id => files in _initFiles) _initFiles[id] = [for (f in files) if (CallGraphNames.normalizePath(f) != key) f];
 		for (id in removed.keys()) {
 			nodes.remove(id);
 			_facts.forget(id);
@@ -580,25 +647,29 @@ final class CallGraph {
 			if (span != null && name != null && fnKinds.contains(node.kind)) {
 				final owner: String = typeName ?? moduleType;
 				fnId = parentFn == null ? '$owner.$name' : '$parentFn#$name';
-				registerNode(
-					fnId, entry, parentFn == null ? owner : typeName, name, span, isDynamic && parentFn == null,
+				final id: String = fnId;
+				final first: Bool = registerNode(
+					id, entry, parentFn == null ? owner : typeName, name, span, isDynamic && parentFn == null,
 					noBodyKind != null && node.children.exists(c -> c.kind == noBodyKind)
 				);
-				if (parentFn == null) registerMember(owner, name, fnId);
-				final params: Null<Array<String>> = typeParams[span.from];
-				if (params != null) _facts.typeParams[fnId] = params;
+				if (parentFn == null) registerMember(owner, name, id);
+				// what the declarations say is the node's where they all say it: a name any of them declares a type parameter is one
+				final params: Array<String> = typeParams[span.from] ?? [];
+				final held: Array<String> = _facts.typeParams[id] ?? [];
+				final declaredParams: Array<String> = held.concat([for (p in params) if (!held.contains(p)) p]);
+				if (declaredParams.length > 0) _facts.typeParams[id] = declaredParams;
 				final bounded: Null<Map<String, Array<String>>> = bounds[span.from];
-				if (bounded != null) _facts.typeParamBounds[fnId] = bounded;
-				final returned: Null<String> = returnTypes[span.from];
-				if (returned != null && !_facts.returns.exists(fnId)) _facts.returns[fnId] = returned;
-				final written: Null<String> = CallGraphNames.returnSourceOf(node, entry.source, annotationKinds);
-				if (written != null && !_facts.returnSources.exists(fnId)) _facts.returnSources[fnId] = written;
+				if (first && bounded != null)
+					_facts.typeParamBounds[id] = bounded
+				else if (!first && !sameBounds(_facts.typeParamBounds[id], bounded))
+					_facts.typeParamBounds.remove(id);
+				settle(_facts.returns, id, returnTypes[span.from], first);
+				settle(_facts.returnSources, id, CallGraphNames.returnSourceOf(node, entry.source, annotationKinds), first);
 			} else if (span != null && lambdaKinds.contains(node.kind)) {
 				lambdaCounter++;
 				fnId = '${parentFn ?? (typeName ?? moduleType)}#$lambdaCounter';
-				registerNode(fnId, entry, typeName, null, span, false, false);
-				final returned: Null<String> = returnTypes[span.from];
-				if (returned != null && !_facts.returns.exists(fnId)) _facts.returns[fnId] = returned;
+				final id: String = fnId;
+				settle(_facts.returns, id, returnTypes[span.from], registerNode(id, entry, typeName, null, span, false, false));
 			}
 			final kids: Array<QueryNode> = node.children;
 			for (i in 0...kids.length) {
@@ -615,11 +686,24 @@ final class CallGraph {
 		walk(entry.tree, null, null, false);
 	}
 
+	/**
+	 * Register the declaration at `span` of `entry` as the node `id` — a new node, the one replacing the placeholder an
+	 * earlier file's call left for it, or a further declaration the node folds in (`declarationsOf`). True when it is the
+	 * node's first declaration.
+	 */
 	private function registerNode(
 		id: String, entry: ParsedEntry, typeName: Null<String>, name: Null<String>, span: Span, isDynamic: Bool, isBodyless: Bool
-	): Void {
+	): Bool {
+		final held: Null<FnNode> = nodes[id];
+		if (held != null && !held.isExternal) {
+			// a further declaration runs as the node: one the program may replace makes the node so, one with a body gives it one
+			if (isDynamic) held.isDynamic = true;
+			if (!isBodyless) held.isBodyless = false;
+			// facts read before it arrived describe the others alone: the node's syntax reads it now
+			facts?.faceted.remove(id);
+		}
 		// a declaration replaces the placeholder an earlier file's call left for it
-		if (!nodes.exists(id) || nodes[id]?.isExternal == true) {
+		if (held == null || held.isExternal) {
 			final created: FnNode = {
 				id: id,
 				file: entry.file,
@@ -638,10 +722,41 @@ final class CallGraph {
 			_fileNodes[key] = inFile;
 		}
 		entry.fnBySpanFrom[span.from] = id;
-		if (name == null) return;
-		final ids: Array<String> = _byMember[name] ?? [];
-		if (!ids.contains(id)) ids.push(id);
-		_byMember[name] = ids;
+		final key: String = CallGraphNames.normalizePath(entry.file);
+		final declared: Array<FnDeclaration> = _declarations[id] ?? [];
+		final first: Bool = declared.length == 0;
+		final declaration: FnDeclaration = { id: id, file: entry.file, span: span };
+		declared.push(declaration);
+		_declarations[id] = declared;
+		final inFile: Array<FnDeclaration> = _fileDeclarations[key] ?? [];
+		inFile.push(declaration);
+		_fileDeclarations[key] = inFile;
+		if (name != null) {
+			final ids: Array<String> = _byMember[name] ?? [];
+			if (!ids.contains(id)) ids.push(id);
+			_byMember[name] = ids;
+		}
+		return first;
+	}
+
+	/**
+	 * Keep `value` as the fact `facts` holds for the node `id` when `first` — its first declaration — and, for a further
+	 * declaration, only while that spells the same: a fact two declarations of one node disagree on is none.
+	 */
+	private static function settle(facts: Map<String, String>, id: String, value: Null<String>, first: Bool): Void {
+		if (first) {
+			if (value != null) facts[id] = value;
+		} else if (facts[id] != value) {
+			facts.remove(id);
+		}
+	}
+
+	/** Whether two declarations bound their type parameters alike: the same parameters, each with the same written bounds. */
+	private static function sameBounds(a: Null<Map<String, Array<String>>>, b: Null<Map<String, Array<String>>>): Bool {
+		if (a == null || b == null) return a == b;
+		for (name => written in a) if (!b.exists(name) || (b[name] ?? []).join('\n') != written.join('\n')) return false;
+		for (name in b.keys()) if (!a.exists(name)) return false;
+		return true;
 	}
 
 	/**
@@ -692,41 +807,72 @@ final class CallGraph {
 
 	/**
 	 * The written types of the parameters of function `id`, in order (`null` for one written without a
-	 * type), read off its declaration; for an external target only the first, from the index. Null when the
-	 * declaration cannot be read.
+	 * type), read off its declarations — the ones every declaration the node folds (`declarationsOf`) writes alike;
+	 * for an external target only the first, from the index. Null when a declaration cannot be read, or two of them
+	 * write the parameters differently: a call of the node may then run either.
 	 */
 	private function paramTypesOf(id: String): Null<Array<Null<String>>> {
 		final cached: Null<Array<Null<String>>> = _facts.paramTypes[id];
 		if (cached != null) return cached;
 		final n: Null<FnNode> = nodes[id];
 		if (n == null) return null;
-		final span: Null<Span> = n.span;
-		final entry: Null<ParsedEntry> = _entries[CallGraphNames.normalizePath(n.file)];
-		if (span == null || entry == null) {
+		final declared: Array<FnDeclaration> = declarationsOf(id);
+		if (declared.length == 0) {
 			final type: Null<String> = n.typeName;
 			final name: Null<String> = n.name;
 			return type == null || name == null ? null : [types.memberOnChain(type, name)?.firstParamTypeSource];
 		}
+		var out: Null<Array<Null<String>>> = null;
+		var rest: Bool = false;
+		for (d in declared) {
+			final read: Null<{ params: Array<Null<String>>, rest: Bool }> = declaredParams(d);
+			if (read == null) return null;
+			final held: Null<Array<Null<String>>> = out;
+			if (held == null) {
+				out = read.params;
+				rest = read.rest;
+			} else if (
+				read.rest != rest || read.params.length != held.length
+				|| [for (i in 0...held.length) held[i] == read.params[i]].contains(false)
+			) {
+				return null;
+			}
+		}
+		final params: Null<Array<Null<String>>> = out;
+		if (params == null) return null;
+		if (rest) _facts.restParams[id] = true;
+		_facts.paramTypes[id] = params;
+		return params;
+	}
+
+	/** The written types of the parameters the declaration `d` writes, and whether its last one is a rest parameter; null when unreadable. */
+	private function declaredParams(d: FnDeclaration): Null<{ params: Array<Null<String>>, rest: Bool }> {
+		final entry: Null<ParsedEntry> = _entries[CallGraphNames.normalizePath(d.file)];
+		if (entry == null) return null;
 		final paramKinds: Array<String> = _shape.paramKinds ?? [];
-		final found: Null<QueryNode> = CallGraphNames.functionNodeAt(entry.tree, span.from, _shape.functionKinds ?? []);
+		final found: Null<QueryNode> = CallGraphNames.functionNodeAt(entry.tree, d.span.from, _shape.functionKinds ?? []);
 		if (found == null) return null;
 		final sources: Map<Int, String> = _provider?.declaredTypeSources(entry.source) ?? [];
 		final params: Array<QueryNode> = [for (c in found.children) if (paramKinds.contains(c.kind)) c];
-		final out: Array<Null<String>> = [
-			for (c in params) {
-				final at: Null<Span> = c.span;
-				at == null ? null : sources[at.from];
-			}
-		];
-		if (params.length > 0 && params[params.length - 1].kind == _shape.restParamKind) _facts.restParams[id] = true;
-		_facts.paramTypes[id] = out;
-		return out;
+		return {
+			params: [
+				for (c in params) {
+					final at: Null<Span> = c.span;
+					at == null ? null : sources[at.from];
+				}
+			],
+			rest: params.length > 0 && params[params.length - 1].kind == _shape.restParamKind
+		};
 	}
 
 	/** Pseudo-node holding calls made from the instance (or, `isStatic`, the static) field initializers of `typeName`. */
 	private function initNode(typeName: String, file: String, isStatic: Bool = false): String {
 		final name: String = isStatic ? STATIC_INIT_NAME : INIT_NAME;
 		final id: String = '$typeName.$name';
+		final key: String = CallGraphNames.normalizePath(file);
+		final files: Array<String> = _initFiles[id] ?? [];
+		if (!files.exists(f -> CallGraphNames.normalizePath(f) == key)) files.push(file);
+		_initFiles[id] = files;
 		if (!nodes.exists(id) && !_grownTypes.contains(typeName)) _grownTypes.push(typeName);
 		if (!nodes.exists(id)) nodes[id] = {
 			id: id,
@@ -880,10 +1026,7 @@ final class CallGraph {
 
 		/** Whether a binding at `from` lies inside a function on the frame stack — a local or a parameter, not a member. */
 		function bindsLocally(from: Int): Bool {
-			for (f in frames) {
-				final span: Null<Span> = nodes[f.id]?.span;
-				if (span != null && from >= span.from && from < span.to) return true;
-			}
+			for (f in frames) if (from >= f.span.from && from < f.span.to) return true;
 			return false;
 		}
 
@@ -970,8 +1113,8 @@ final class CallGraph {
 			var i: Int = frames.length - 1;
 			while (i >= 0 && written == null) {
 				final id: String = frames[i].id;
-				final span: Null<Span> = nodes[id]?.span;
-				final encloses: Bool = at != MEMBER_SCOPE && span != null && at >= span.from && at < span.to;
+				final span: Span = frames[i].span;
+				final encloses: Bool = at != MEMBER_SCOPE && at >= span.from && at < span.to;
 				if (encloses && (_facts.typeParams[id] ?? []).contains(name)) written = _facts.typeParamBounds[id]?.get(name) ?? [];
 				i--;
 			}
@@ -1887,6 +2030,7 @@ final class CallGraph {
 				final id: Null<String> = entry.fnBySpanFrom[span.from];
 				if (id != null) {
 					final ownId: String = id;
+					final declared: Span = span;
 					final name: Null<String> = node.name;
 					if (name != null && localFnKinds.contains(node.kind) && frames.length > 0)
 						frames[frames.length - 1].localFns[name] = ownId;
@@ -1897,7 +2041,7 @@ final class CallGraph {
 						// enclosing frame — anchor it to the type's <init> pseudo-node so
 						// reach/callers can still traverse into its body
 						addEdge(initNode(typeName ?? moduleType, file, inStaticInit), ownId, Contains, null, file, span);
-					frames.push({ id: ownId, localFns: [] });
+					frames.push({ id: ownId, localFns: [], span: declared });
 					pushed = true;
 				}
 			}
@@ -1925,6 +2069,9 @@ final class CallGraph {
 				if (c.children.length > 0 || c.name != null) macroPending = false;
 				final savedStatic: Bool = inStaticInit;
 				if (frames.length == 0 && MemberKinds.macroModifierPrecedes(kids, i, staticKind, modifierBoundary)) inStaticInit = true;
+				// an initializer runs whatever it holds — a conversion, a touch, target code — though it calls nothing
+				if (frames.length == 0 && fieldKinds.contains(c.kind) && CtorFieldFold.declInitializer(c, shape) != null)
+					initNode(typeName ?? moduleType, file, inStaticInit); // noqa: unused-return-value
 				lineage.push(node);
 				lineageIndex.push(i);
 				walk(c, typeName, node, i, argumentSlot(node, i, inArgument));
@@ -1971,6 +2118,9 @@ private typedef ParsedEntry = {
 private typedef Frame = {
 	var id: String;
 	var localFns: Map<String, String>;
+
+	/** The declaration of `id` the walk is in: a node folding several has a frame per declaration. */
+	var span: Span;
 }
 
 /** A method referenced as a value: its node, and the receiver type an instance reference dispatches on (null for a static one). */

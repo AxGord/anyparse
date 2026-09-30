@@ -25,13 +25,17 @@ final class FactMerge {
 		if (into.kind != from.kind || into.isExtern != from.isExtern) into.alike = false;
 	}
 
-	/** `into` with every field of `from` it lacks, and every type `from` gives a field it has that it does not hold yet. */
+	/**
+	 * `into` with every field of `from` it lacks, and every kind, type and overload count `from` gives a field it has that
+	 * it does not hold yet.
+	 */
 	public static function fields(into: Array<FieldDeclFact>, from: Array<FieldDeclFact>): Void {
 		for (f in from) {
 			final known: Null<FieldDeclFact> = into.find(k -> k.name == f.name && k.isStatic == f.isStatic);
 			if (known == null)
 				into.push(f)
 			else {
+				for (k in f.kinds) if (!known.kinds.contains(k)) known.kinds.push(k);
 				if (!known.types.contains(f.type)) known.types.push(f.type);
 				for (n in f.overloads) if (!known.overloads.contains(n)) known.overloads.push(n);
 			}

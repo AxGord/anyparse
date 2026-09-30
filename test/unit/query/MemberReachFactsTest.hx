@@ -833,6 +833,52 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main]), r -> r.match(Unknown(Untyped(_, _))));
 	}
 
+	@:pin('control') @:killer('M-REACH-FOLDED-BODIES')
+	public function testTheSecondDeclarationOfAFoldedMemberIsReadByItsText(): Void {
+		// the branch holding the untyped read is the second declaration of `g`: read by its text wherever the facts do not
+		// replace the syntax — with no facts, and with facts the list of builds is not the whole of — and under the whole list
+		// by the facts of the one branch the builds compile, whose read the compiler typed
+		final main: String = MEMBER_HEAD + '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ g(); /*>*/ }\n\t}\n'
+			+ '#if other\n\tfunction g():Void {}\n#else\n\tfunction g():Void {\n\t\tvar z = untyped this.zz;\n\t}\n#end\n}\n';
+		assertMatch(ask(['Main.hx' => main], null, false), r -> r.match(Unknown(Untyped(_, _))));
+		assertMatch(ask(['Main.hx' => main]), r -> r.match(Unknown(Untyped(_, _))));
+		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-TOUCH-FOLDED-ACCESSES')
+	public function testATouchOnlyTheFactsSeeInASecondDeclarationIsFoundUnderTheTruth(): Void {
+		// `stuff` is `Main.items` imported under another name, pushed to by the declaration of `go` the build compiles — the
+		// second of the two the graph folds: the facts of that declaration are the node's, though its first holds none
+		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Other.go(); /*>*/ }\n'
+			+ '\t\tOther.go();\n\t}\n}\n';
+		final other: String = 'import Main.items as stuff;\n\nclass Other {\n#if other\n\tpublic static function go():Void {}\n#else\n'
+			+ '\tpublic static function go():Void stuff.push(1);\n#end\n}\n';
+		assertMatch(truthAsk(['Main.hx' => main, 'Other.hx' => other]), r -> r.match(Reached(_)));
+	}
+
+	@:pin('control') @:killer('M-FACTS-FIELD-KINDS')
+	public function testAPropertyOneBuildReadsThroughAGetterIsNotReadStraight(): Void {
+		// the build defining `other` declares `items` with a getter, the other one without: a reader of `items` there sees
+		// what the getter hands out, so the builds together do not read it straight from its storage
+		function fixture(other: String): Map<String, String> {
+			final main: String = 'class Main {\n#if other\n\t@:isVar public var items(' + other + '):Array<Int> = [];\n#else\n'
+				+ '\t@:isVar public var items(default, set):Array<Int> = [];\n#end\n\tpublic function new() {}\n'
+				+ '\tfunction set_items(v:Array<Int>):Array<Int> {\n\t\titems = v;\n\t\treturn v;\n\t}\n'
+				+ '\tfunction get_items():Array<Int> return items;\n'
+				+ '\tstatic function main() {\n\t\tvar m = new Main();\n\t\tm.f();\n\t}\n'
+				+ '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ h(); /*>*/ }\n\t}\n\tfunction h():Void {}\n}\n';
+			return ['Main.hx' => main];
+		}
+		function write(files: Map<String, String>): ReachResult {
+			return withReach(files, [[], ['other']], true, false, null, null, null, true, (reach, dir) -> {
+				final source: String = files['Main.hx'] ?? '';
+				reach.mayReach(Region(Path.join([dir, 'Main.hx']), regionOf(source)), { owner: 'Main', name: 'items' }, Write);
+			});
+		}
+		assertMatch(write(fixture('default, set')), r -> r.match(Proven));
+		assertMatch(write(fixture('get, set')), r -> r.match(Unknown(UnresolvedDispatch(_, _, _))));
+	}
+
 	@:pin('control') @:killer('M-FACTS-TRUTH-UNTYPED-ALL') @:killer('M-FACTS-TRUTH-UNTYPED-SHAPE')
 	public function testAnUntypedIndexAccessKeepsItsHazardUnderTheTruth(): Void {
 		// on js `this["items"]` IS the field: no fact names it — the compiler records an index read and a Dynamic `push`
