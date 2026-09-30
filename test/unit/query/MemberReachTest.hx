@@ -3,6 +3,7 @@ package unit.query;
 import anyparse.check.OracleCoverage;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
+import anyparse.query.CompilerFacts;
 import anyparse.query.MemberReach;
 import anyparse.query.QueryNode;
 import anyparse.query.ReachLiveness.ReachConfiguration;
@@ -1640,6 +1641,51 @@ class MemberReachTest extends Test {
 		Assert.equals(1, probes, 'a question that met a raw conditional region did not consult the builds exactly once');
 		assertMatch(plain.mayReach(Region('F0.hx', new Span(gBody, src.indexOf(';', gBody) + 1)), member, Mutate), r -> r.match(Proven));
 		assertMatch(reach(true).mayReach(Region('F0.hx', regionOf(src)), member, Mutate), r -> r.match(Reached(_)));
+	}
+
+	@:pin('control') @:killer('M-REACH-ESCALATE-TRUTH-NEVER') @:killer('M-REACH-ESCALATE-TRUTH-WITHOUT-FACTS')
+	@:killer('M-REACH-ESCALATE-TRUTH-DROPPED')
+	public function testCompilerFactsSendEveryUnprovedQuestionToTheBuilds(): Void {
+		// `h` changes `items` in plain sight: no raw region, no classpath question. With compiler facts the builds may make
+		// them the truth, so the unproved answer is asked again under the builds; facts missing a configuration cannot be
+		// the truth, and no facts at all keep the question off the builds (`testLibraryFileNoConfiguredBuildParsesIsNotInPlay`).
+		final src: String =
+			'class C { var items:Array<Int> = []; function f():Void { /*<*/ h(); /*>*/ } function h():Void { items.push(1); } }';
+		var probes: Int = 0;
+		function ask(dropped: Bool): ReachResult {
+			final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+			final project: Array<{ file: String, source: String }> = [{ file: 'F0.hx', source: src }];
+			final facts: CompilerFacts = CompilerFacts.create(file -> null, file -> file);
+			facts.configurations.push('b');
+			if (dropped) facts.dropped.push({ name: 'c', reason: 'it did not compile' });
+			final build: ReachConfiguration = {
+				name: 'b',
+				defined: [],
+				everDefined: [],
+				compiled: ['F0.hx'],
+				types: [{ name: 'C', file: OracleCoverage.canonical(Sys.getCwd(), 'F0.hx') }]
+			};
+			plugin.setResolutionScope({
+				declared: true,
+				sources: () -> {
+					report: project,
+					projectRoots: [],
+					library: new anyparse.query.LibrarySources([]),
+					rootsMatched: true,
+					rootsAllMatched: true
+				},
+				builds: () -> {
+					probes++;
+					{ configurations: [build], library: [] };
+				},
+				facts: () -> facts
+			});
+			return MemberReach.forRun(plugin, 'F0.hx', src).mayReach(Region('F0.hx', regionOf(src)), { owner: 'C', name: 'items' }, Mutate);
+		}
+		assertMatch(ask(true), r -> r.match(Reached(_)));
+		Assert.equals(0, probes, 'facts missing a configuration sent an unproved question to the builds');
+		assertMatch(ask(false), r -> r.match(Reached(_)));
+		Assert.equals(1, probes, 'with compiler facts an unproved question was not asked under the builds exactly once');
 	}
 
 	/** `ask` under the builds `configurations`. */

@@ -6611,7 +6611,7 @@
 			"name": "M-REACH-ESCALATE-ALWAYS",
 			"type": "anyparse.query.MemberReach",
 			"method": "escalation",
-			"find": "if (answer == Proven || !(_metRawRegion || _carriers.metIncomplete || answer.match(Unknown(OpaqueCond(_, _))))) return null;",
+			"find": "if (answer == Proven || !(builds || _factsTruthAvailable)) return null;",
 			"replace": "if (answer == Proven) return null;",
 			"note": "every unproved question consults the builds, so a run pays a compile per configuration it did not need"
 		},
@@ -6622,6 +6622,75 @@
 			"find": "_carriers.metIncomplete || ",
 			"replace": "",
 			"note": "(precision) a question whose answer rests on which library code is compiled never consults the builds"
+		},
+		{
+			"name": "M-REACH-ESCALATE-TRUTH-NEVER",
+			"type": "anyparse.query.MemberReach",
+			"method": "escalation",
+			"find": "!(builds || _factsTruthAvailable)",
+			"replace": "!builds",
+			"note": "(precision) an unproved question with compiler facts keeps the answer the syntax gives, so facts that are the truth under the builds never get to prove it"
+		},
+		{
+			"name": "M-REACH-ESCALATE-TRUTH-WITHOUT-FACTS",
+			"type": "anyparse.query.MemberReach",
+			"method": "forRun",
+			"find": "built._factsTruthAvailable = built._scope.facts != null;",
+			"replace": "built._factsTruthAvailable = true;",
+			"note": "every unproved question consults the builds even with no compiler facts to make the truth, so a run pays a compile per configuration it did not need"
+		},
+		{
+			"name": "M-REACH-ESCALATE-TRUTH-DROPPED",
+			"type": "anyparse.query.MemberReach",
+			"method": "forRun",
+			"find": "built._factsTruthAvailable = built._scope.facts != null;",
+			"replace": "built._factsTruthAvailable = host.compilerFacts() != null;",
+			"note": "facts missing a configuration, which can never be the truth, still send every unproved question to the builds"
+		},
+		{
+			"name": "M-FACTS-TRUTH-WIRED",
+			"type": "anyparse.query.FactsView",
+			"method": "of",
+			"find": "return new FactsView(table, scope, truth);",
+			"replace": "return new FactsView(table, scope, false);",
+			"note": "(precision) the facts are never the truth, even under the whole list of their builds"
+		},
+		{
+			"name": "M-FACTS-TRUTH-UNLISTED",
+			"type": "anyparse.query.MemberReach",
+			"method": "factsAreTruth",
+			"force": "facts != null",
+			"note": "facts are the truth whatever builds the analysis runs under, a list not declared whole or none included"
+		},
+		{
+			"name": "M-FACTS-TRUTH-COUNT",
+			"type": "anyparse.query.MemberReach",
+			"method": "factsAreTruth",
+			"find": "if (typed.length != listed.length) return false;",
+			"replace": "",
+			"note": "facts are the truth when their builds merely start the listed ones, so a listed build they never typed is vouched for"
+		},
+		{
+			"name": "M-FACTS-TRUTH-NAMES",
+			"type": "anyparse.query.MemberReach",
+			"method": "factsAreTruth",
+			"find": "for (i in 0...typed.length) if (typed[i] != listed[i]) return false;",
+			"replace": "",
+			"note": "facts are the truth when they count as many builds as the list, whichever builds those are"
+		},
+		{
+			"name": "M-FACTS-TRUTH-ORDER",
+			"type": "anyparse.query.MemberReach",
+			"method": "factsAreTruth",
+			"find": [
+				"typed.sort(Reflect.compare);",
+				"listed.sort(Reflect.compare);"
+			],
+			"replace": [
+				"",
+				""
+			],
+			"note": "(precision) the facts must name the builds in the order the list does, so facts compiled in another order are never the truth"
 		},
 		{
 			"name": "M-REACH-BASE-CLASSPATH",

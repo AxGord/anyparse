@@ -2,6 +2,7 @@ package unit.query;
 
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.OracleCoverage;
+import anyparse.check.OracleDeclaration;
 import anyparse.check.TypedFactsProbe;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
@@ -392,13 +393,62 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main]), r -> !r.match(Proven));
 	}
 
+	@:pin('control') @:killer('M-FACTS-TRUTH-WIRED')
+	@:access(anyparse.query.MemberReach)
+	public function testTheFactsAreTheTruthOnlyUnderTheWholeListOfTheirBuilds(): Void {
+		// the facts of every build of a list declared whole, none dropped, are what every build the project ships resolves;
+		// builds no list names vouch for nothing, and a configuration that left no facts leaves no view at all
+		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tBroken.f();\n\t}\n}\n'
+			+ 'class Broken {\n\tpublic static function f():Void {\n\t\t#if APQ_BROKEN nope(); #end\n\t}\n}\n';
+		function truth(configurations: Array<Array<String>>, listed: Bool): Null<Bool> {
+			return withReach(
+				['Main.hx' => main], configurations, true, false, null, null, null, listed, (reach, dir) -> reach._scope.facts?.truth
+			);
+		}
+		Assert.equals(true, truth([[], ['other']], true), 'the facts of the listed builds are not the truth');
+		Assert.equals(false, truth([[], ['other']], false), 'the facts are the truth with no list of builds');
+		Assert.isNull(truth([[], ['APQ_BROKEN']], true), 'a table missing a configuration made a view');
+	}
+
+	@:pin('control') @:killer('M-FACTS-TRUTH-UNLISTED') @:killer('M-FACTS-TRUTH-COUNT') @:killer('M-FACTS-TRUTH-NAMES')
+	@:killer('M-FACTS-TRUTH-ORDER')
+	@:access(anyparse.query.MemberReach)
+	public function testTheTruthNeedsTheFactsToNameExactlyTheListedBuilds(): Void {
+		final facts: CompilerFacts = CompilerFacts.create(file -> null, file -> file);
+		facts.configurations.push('b.hxml -D y');
+		facts.configurations.push('b.hxml');
+		function listed(names: Array<String>): Array<ReachConfiguration> {
+			return [
+				for (n in names)
+					{
+						name: n,
+						defined: [],
+						everDefined: [],
+						compiled: [],
+						types: []
+					}
+			];
+		}
+		Assert.isTrue(MemberReach.factsAreTruth(facts, listed(['b.hxml', 'b.hxml -D y'])), 'the order of the list counted');
+		Assert.isFalse(MemberReach.factsAreTruth(facts, null), 'facts were the truth with no list of builds');
+		Assert.isFalse(MemberReach.factsAreTruth(null, listed(['b.hxml'])), 'no facts were the truth');
+		Assert.isFalse(MemberReach.factsAreTruth(facts, listed([])), 'facts were the truth under an empty list');
+		Assert.isFalse(MemberReach.factsAreTruth(facts, listed(['b.hxml'])), 'facts of a build the list does not name were the truth');
+		Assert.isFalse(
+			MemberReach.factsAreTruth(facts, listed(['b.hxml', 'b.hxml -D y', 'b.hxml -D z'])),
+			'facts missing a listed build were the truth'
+		);
+		Assert.isFalse(MemberReach.factsAreTruth(facts, listed(['b.hxml', 'b.hxml -D z'])), 'facts of other builds were the truth');
+	}
+
 	/**
 	 * The answer for `member` (by default `Main.items`) over the region of `Main.hx` among `files`, compiled by `build` under
 	 * each define set of `configurations` and read through the facts unless `withFacts` is false; `classpathComplete` is
 	 * the analysis's word that the index holds every type the builds compile. `library` files compile beside
 	 * them and are indexed, but are no part of the project: the walk reads one only when it follows code into it.
 	 * `unindexed` files are written and compiled but indexed by nothing — code only the compiler sees. `listed` hands the
-	 * analysis the builds as the whole list of them, compiling every file of the fixture.
+	 * analysis the builds as the whole list of them — one per define set, named as the probes name its oracle — compiling
+	 * every file of the fixture.
 	 */
 	private static function ask(
 		files: Map<String, String>, ?configurations: Array<Array<String>>, withFacts: Bool = true, ?member: MemberRef,
@@ -427,11 +477,11 @@ class MemberReachFactsTest extends Test {
 	}
 
 	/** The fixture of `ask` written, compiled and indexed, `question` asked of its analysis, and the fixture removed. */
-	private static function withReach(
+	private static function withReach<T>(
 		files: Map<String, String>, configurations: Null<Array<Array<String>>>, withFacts: Bool, classpathComplete: Bool,
 		build: Null<String>, library: Null<Map<String, String>>, unindexed: Null<Map<String, String>>, listed: Bool,
-		question: (MemberReach, String) -> ReachResult
-	): ReachResult {
+		question: (MemberReach, String) -> T
+	): T {
 		final entries: Array<{ name: String, source: String }> = [for (name => text in files) { name: name, source: text }];
 		for (name => text in library ?? []) entries.push({ name: name, source: text });
 		for (name => text in unindexed ?? []) entries.push({ name: name, source: text });
@@ -459,18 +509,19 @@ class MemberReachFactsTest extends Test {
 		);
 		final cwd: String = Sys.getCwd();
 		final builds: Null<Array<ReachConfiguration>> = listed ? [
-			{
-				name: 'listed',
-				defined: [],
-				everDefined: [],
-				compiled: [for (e in entries) OracleCoverage.canonical(cwd, Path.join([dir, e.name]))],
-				types: []
-			}
+			for (o in oracles)
+				{
+					name: OracleDeclaration.describeOracle(o),
+					defined: o.defines,
+					everDefined: o.defines,
+					compiled: [for (e in entries) OracleCoverage.canonical(cwd, Path.join([dir, e.name]))],
+					types: []
+				}
 		] : null;
 		final reach: MemberReach = new MemberReach(
 			plugin, project, index, true, MemberReach.MAX_LIBRARY_FILES, MemberReach.MAX_VISITED, builds, () -> classpathComplete, facts
 		);
-		final result: ReachResult = question(reach, dir);
+		final result: T = question(reach, dir);
 		CliFixture.removeDir(dir);
 		return result;
 	}
