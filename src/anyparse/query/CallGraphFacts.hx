@@ -60,16 +60,15 @@ final class CallGraphFacts {
 
 	/**
 	 * The facts of each function node `file` declares that replace its syntax (`FactsView.bodyFacts`), which are muted
-	 * until `recordMuted`: none for a node the graph folded several declarations into (`fnBySpanFrom` names one id at
-	 * several starts), or of a type declared more than once.
+	 * until `recordMuted`: under the truth only, those of a node the graph folded several declarations into
+	 * (`fnBySpanFrom` names one id at several starts) or of a type declared more than once, and then only when every
+	 * declaration is the one type the builds typed (`FactsView.soleType`).
 	 */
 	public function mute(g: CallGraph, file: String, fnBySpanFrom: Map<Int, String>): Map<String, Array<FactNode>> {
 		final out: Map<String, Array<FactNode>> = [];
 		final declarations: Map<String, Int> = [];
 		for (id in fnBySpanFrom) declarations[id] = (declarations[id] ?? 0) + 1;
-		for (n in g._fileNodes[CallGraphNames.normalizePath(file)] ?? []) {
-			final type: Null<String> = n.typeName;
-			if (n.isExternal || n.isBodyless || (type != null && g.types.declarationCount(type) > 1)) continue;
+		for (n in g._fileNodes[CallGraphNames.normalizePath(file)] ?? []) if (!n.isExternal && !n.isBodyless) {
 			final found: Null<Array<FactNode>> = view.bodyFacts(g, n, declarations[n.id] ?? 0);
 			if (found != null) out[n.id] = found;
 		}

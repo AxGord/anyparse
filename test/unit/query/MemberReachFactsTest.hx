@@ -29,6 +29,13 @@ class MemberReachFactsTest extends Test {
 	/** The build every fixture compiles: a js target. */
 	private static inline final BUILD: String = '-cp .\n-main Main\n--js out.js\n';
 
+	/** `BUILD` with a classpath of its own per build (`PICK_CLASSPATH`): `other/` when `other` is defined, else `base/`. */
+	private static inline final PER_BUILD_CLASSPATH: String = '-cp .\n--macro Cp.pick()\n-main Main\n--js out.js\n';
+
+	/** The initialization macro of `PER_BUILD_CLASSPATH`, compiled by each build and indexed by nothing. */
+	private static inline final PICK_CLASSPATH: String = 'class Cp {\n\tpublic static function pick():Void\n'
+		+ '\t\thaxe.macro.Compiler.addClassPath(haxe.macro.Context.defined("other") ? "other" : "base");\n}\n';
+
 	/** The library declaration of the built-in array type the index resolves against. */
 	private static inline final STD_ARRAY: String = 'extern class Array<T> { public var length(default, null):Int; '
 		+ 'public function push(x:T):Int; public function pop():Null<T>; public function indexOf(x:T, ?fromIndex:Int):Int; }';
@@ -674,11 +681,23 @@ class MemberReachFactsTest extends Test {
 
 	@:pin('control') @:killer('M-FACTS-TRUTH-FACETED')
 	public function testABodyTheFactsDoNotDescribeWholeKeepsItsSyntacticHazards(): Void {
-		// `g` is declared twice, one declaration per branch: the graph folds the two into one node, which no single body's
-		// facts describe, so `g` is read by its syntax and its untyped expression stays a blind spot however whole the list
+		// `g` expands a macro, which may run code no fact places: `g` is read by its syntax, and its untyped expression stays a
+		// blind spot however whole the list of builds
+		final main: String = MEMBER_HEAD + '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ g(); /*>*/ }\n\t}\n'
+			+ '\tfunction g():Void {\n\t\tvar z = untyped this.zz;\n\t\tMac.nop();\n\t}\n}\n';
+		final mac: String = 'class Mac {\n\tpublic static macro function nop() return macro Math.abs(1);\n}\n';
+		assertMatch(truthAsk(['Main.hx' => main, 'Mac.hx' => mac]), r -> r.match(Unknown(Untyped(_, _))));
+	}
+
+	@:pin('control') @:killer('M-FACTS-FOLDED-BY-ID')
+	public function testAMemberDeclaredInEachBranchIsReadByIdUnderTheTruth(): Void {
+		// `g` is declared twice, one declaration per branch: the graph folds the two into one node, whose facts are those of
+		// `Main.g` over every build — under the whole list of them, only the first branch is compiled, and its untyped read is a
+		// field access the compiler typed. With no such list `g` is read by its syntax
 		final main: String = MEMBER_HEAD + '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ g(); /*>*/ }\n\t}\n'
 			+ '#if !other\n\tfunction g():Void {\n\t\tvar z = untyped this.zz;\n\t}\n#else\n\tfunction g():Void {}\n#end\n}\n';
-		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Unknown(Untyped(_, _))));
+		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Proven));
+		assertMatch(ask(['Main.hx' => main]), r -> r.match(Unknown(Untyped(_, _))));
 	}
 
 	@:pin('control') @:killer('M-FACTS-TRUTH-UNTYPED-ALL') @:killer('M-FACTS-TRUTH-UNTYPED-SHAPE')
@@ -753,10 +772,13 @@ class MemberReachFactsTest extends Test {
 	@:pin('control') @:killer('M-FACTS-DEAD-FILE-VALUES')
 	public function testAProjectFileNoBuildCompilesLetsNoValueEscape(): Void {
 		// `o.items` is another type's `items`: it touches `Main.items` only if a `Main` may have escaped into an `Other`, which
-		// the escapes over the project answer — a file no build compiles, which the graph does not hold, is none of it
+		// the escapes over the project answer — a file no build compiles, which the graph does not hold, is none of it. The
+		// touch is in a local `inline function`, which is read by its syntax whatever the builds: the facts, which name the
+		// field's owner, would not ask
 		final main: String = MEMBER_HEAD + '\tfunction f(o:Other):Void {\n\t\tfor (i in 0...items.length) { /*<*/ Poker.poke(o); /*>*/ }\n'
 			+ '\t}\n}\nclass Other {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n}\n'
-			+ 'class Poker {\n\tpublic static function poke(o:Other):Void o.items.push(9);\n}\n';
+			+ 'class Poker {\n\tpublic static function poke(o:Other):Void {\n\t\tinline function h():Void o.items.push(9);\n'
+			+ '\t\th();\n\t}\n}\n';
 		final files: Map<String, String> = ['Main.hx' => main, 'Idle.hx' => 'class Idle {\n\tpublic function new() {}\n}\n'];
 		// the index is the analysis's word for the classpath, which `Array` would otherwise leave open
 		assertMatch(ask(files, null, true, null, true, null, null, null, true), r -> r.match(Proven));
@@ -781,6 +803,90 @@ class MemberReachFactsTest extends Test {
 		assertMatch(question(false, false), r -> r.match(Reached(_)));
 		assertMatch(question(true, true), r -> r.match(Unknown(OutOfScope(_))));
 		assertMatch(question(false, true), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-FACTS-IDLE-INDEX')
+	public function testATypeNoBuildCompilesIsNoSecondDeclarationOfItsNameUnderTheTruth(): Void {
+		// nothing imports `dead/Main.hx` or `dead/Grid.hx`, so no build compiles the second `Main` or the second `Grid`: under
+		// the whole list of builds each name is the one type they typed, the member's owner and the type the walk enters
+		// alike. With no such list a build may compile the other one, and a name declared twice is ambiguous
+		final main: String = MEMBER_HEAD + '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ Grid.run(); /*>*/ }\n\t}\n}\n'
+			+ 'class Grid {\n\tpublic static function run():Void {}\n}\n';
+		final owner: Map<String, String> = [
+			'Main.hx' => main,
+			'dead/Main.hx' => 'package dead;\n\nclass Main {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n}\n'
+		];
+		assertMatch(truthAsk(owner), r -> r.match(Proven));
+		assertMatch(ask(owner), r -> r.match(Unknown(Ambiguous('Main'))));
+		final entered: Map<String, String> = [
+			'Main.hx' => main,
+			'dead/Grid.hx' => 'package dead;\n\nclass Grid {\n\tpublic static function run():Void {}\n}\n'
+		];
+		assertMatch(truthAsk(entered), r -> r.match(Proven));
+		assertMatch(ask(entered), r -> r.match(Unknown(Ambiguous('Grid'))));
+	}
+
+	@:pin('control') @:killer('M-REACH-AMBIGUOUS-SOLE-ANY') @:killer('M-FACTS-SOLE-TYPED-ONLY') @:killer('M-FACTS-SOLE-STANDS-ANY')
+	public function testTwoTypesUnderOneNameStayAmbiguousUnderTheTruth(): Void {
+		// the graph knows a type by its simple name: `a.Grid` and `b.Grid` are two types the builds compile, whose members it
+		// cannot tell apart; a `Grid` of a file a build compiles that no build typed (`#if never`) may still be one, under
+		// another name; and `c.Grid`, which the index does not hold, is a type the builds typed beside the one `Grid` whose
+		// copy per build it holds
+		function grid(pack: String): String {
+			return 'package $pack;\n\nclass Grid {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n}\n';
+		}
+		function question(made: String, files: Map<String, String>, ?build: String, ?unindexed: Map<String, String>): ReachResult {
+			files['Main.hx'] = MEMBER_HEAD + '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n\t}\n'
+				+ '\tfunction calm():Void {}\n\tstatic function other():Void {\n\t\t' + made + '\n\t}\n}\n';
+			final builds: Null<Array<Array<String>>> = build == null ? null : [[], ['other']];
+			return ask(files, builds, true, { owner: 'Grid', name: 'items' }, false, build, null, unindexed, true);
+		}
+		final two: ReachResult = question('new a.Grid();\n\t\tnew b.Grid();', ['a/Grid.hx' => grid('a'), 'b/Grid.hx' => grid('b')]);
+		assertMatch(two, r -> r.match(Unknown(Ambiguous('Grid'))));
+		final unbuilt: ReachResult = question('new a.Grid();\n\t\tnew b.Grid.Other();', [
+			'a/Grid.hx' => grid('a'),
+			'b/Grid.hx' => 'package b;\n\n#if never\nclass Grid {}\n#end\nclass Other {\n\tpublic function new() {}\n}\n'
+		]);
+		assertMatch(unbuilt, r -> r.match(Unknown(Ambiguous('Grid'))));
+		final base: String = 'class Grid {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n}\n';
+		final unheld: ReachResult = question(
+			'new Grid();\n\t\tnew c.Grid();', ['base/Grid.hx' => base, 'other/Grid.hx' => base], PER_BUILD_CLASSPATH,
+			['c/Grid.hx' => grid('c'), 'Cp.hx' => PICK_CLASSPATH]
+		);
+		assertMatch(unheld, r -> r.match(Unknown(Ambiguous('Grid'))));
+	}
+
+	@:pin('control') @:killer('M-FACTS-FOLDED-BY-ID') @:killer('M-FACTS-SOLE-NEVER') @:killer('M-REACH-AMBIGUOUS-SOLE-NONE')
+	public function testATypeDeclaredOncePerBuildIsOneTypeUnderTheTruth(): Void {
+		// `Grid` is declared once per build — in each branch of a region, or in a file of each build's own classpath — and each
+		// build types its own: all are `Grid`, one type. Under the whole list of builds the graph node folding the declarations
+		// of `run` is read by its id, its facts those of every build, each declaration's call; a question about its member is
+		// no ambiguity, only a type with no one declaration site. With no such list the syntax reads them, and a name the index
+		// declares twice is ambiguous
+		function grid(called: String): String {
+			return 'class Grid {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n\tpublic function run():Void ' + called
+				+ '();\n\tfunction ' + called + '():Void {}\n}\n';
+		}
+		final main: String = MEMBER_HEAD + '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n\t}\n'
+			+ '\tfunction calm():Void {}\n\tstatic function other():Void {\n\t\tnew Grid().run();\n\t}\n}\n';
+		final both: Array<Array<String>> = [[], ['other']];
+		final branches: Map<String, String> = ['Main.hx' => main + '#if other\n' + grid('a') + '#else\n' + grid('b') + '#end\n'];
+		final files: Map<String, String> = ['Main.hx' => main, 'base/Grid.hx' => grid('b'), 'other/Grid.hx' => grid('a')];
+		final picker: Map<String, String> = ['Cp.hx' => PICK_CLASSPATH];
+		function calls(fixture: Map<String, String>, ?build: String, ?unindexed: Map<String, String>, listed: Bool): Array<String> {
+			return withReach(fixture, both, true, false, build, null, unindexed, listed, (reach, dir) -> {
+				final facts: Array<FactNode> = reach.graph().facts?.faceted['Grid.run'] ?? [];
+				[for (n in facts) for (c in n.calls) c.target ?? ''];
+			});
+		}
+		for (read in [calls(branches, true), calls(files, PER_BUILD_CLASSPATH, picker, true)])
+			Assert.isTrue(read.contains('Grid.a') && read.contains('Grid.b'), 'read $read');
+		Assert.same([], calls(branches, false));
+		Assert.same([], calls(files, PER_BUILD_CLASSPATH, picker, false));
+		final member: MemberRef = { owner: 'Grid', name: 'items' };
+		final typed: ReachResult = ask(files, both, true, member, false, PER_BUILD_CLASSPATH, null, picker, true);
+		assertMatch(typed, r -> r.match(Unknown(OutOfScope(_))));
+		assertMatch(ask(files, both, true, member, false, PER_BUILD_CLASSPATH, null, picker), r -> r.match(Unknown(Ambiguous('Grid'))));
 	}
 
 	@:pin('control') @:killer('M-TOUCH-TYPED-NEVER') @:killer('M-TOUCH-TYPED-SHAPE-NONE') @:killer('M-TOUCH-TYPED-CALL')

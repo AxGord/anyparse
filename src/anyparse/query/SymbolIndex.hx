@@ -638,12 +638,16 @@ final class SymbolIndex {
 	/** `GrammarPlugin.typeSyntax` of the grammar that built the index — see `typeSyntax`. */
 	private final _typeSyntax: TypeSyntaxReader;
 
+	/** The grammar that built the index, for an index over part of its files (`without`). */
+	private final _plugin: GrammarPlugin;
+
 	private function new(
 		files: Array<FileInfo>, skipped: Array<String>, sources: Map<String, String>, plugin: GrammarPlugin, thirdParty: Map<String, Bool>
 	) {
 		_files = files;
 		_skipped = skipped;
 		_sources = sources;
+		_plugin = plugin;
 		_abstractKinds = plugin.refShape().underlyingThisTypeKinds ?? [];
 		_thirdParty = thirdParty;
 		_typeSyntax = plugin.typeSyntax;
@@ -676,6 +680,20 @@ final class SymbolIndex {
 	 */
 	public inline function isThirdParty(file: String): Bool {
 		return _thirdParty.exists(file);
+	}
+
+	/**
+	 * The index over every file of this one but `files`, parsed or skipped: what it answers is what this one would
+	 * answer had those files never been in scope. The files' declarations are not parsed again.
+	 */
+	public function without(files: Array<String>): SymbolIndex {
+		final sources: Map<String, String> = [for (file => source in _sources) if (!files.contains(file)) file => source];
+		final thirdParty: Map<String, Bool> = [for (file in _thirdParty.keys()) if (!files.contains(file)) file => true];
+		return new SymbolIndex(
+			[for (fi in _files) if (!files.contains(fi.file)) fi],
+			[for (file in _skipped) if (!files.contains(file)) file],
+			sources, _plugin, thirdParty
+		);
 	}
 
 	/** The `FileInfo` for `file`, or null when the file is not indexed. */

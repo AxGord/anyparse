@@ -93,7 +93,11 @@ enum ReachUnknown {
 	/** Reached code holds a construct the grammar does not declare modelled (`ExecutionShape.modelledKinds`). */
 	Unmodelled(file: String, span: Span, kind: String);
 
-	/** A type on the path shares its simple name with another declaration, so its members are not provably its own. */
+	/**
+	 * A type on the path shares its simple name with another declaration, so its members are
+	 * not provably its own. Under the truth a declaration in a file no build read is none,
+	 * and declarations of the one type the builds typed are that type (`FactsView.soleType`).
+	 */
 	Ambiguous(typeName: String);
 
 	/** The run does not hold every file a toucher could live in. */
@@ -223,8 +227,8 @@ final class MemberReach {
 	 * project may hold files `project` does not, so only a fresh unshared local is ever `Proven`. `configurations`
 	 * are the builds an answer must hold under: a conditional branch none of them compiles is not walked, and with
 	 * none every branch is. `facts` are the compiler's facts of the run's builds: a function they describe whole is read
-	 * through them (`FactsView`), every other one through its syntax; facts naming exactly `configurations` are the truth
-	 * (`factsAreTruth`).
+	 * through them (`FactsView`), every other one through its syntax; facts naming exactly `configurations` are the
+	 * truth (`factsAreTruth`), and then a project file no build read is out of `index` too (`ReachProject.readThrough`).
 	 */
 	public function new(
 		plugin: GrammarPlugin, project: Array<{ file: String, source: String }>, index: SymbolIndex, scopeKnown: Bool,
@@ -235,7 +239,6 @@ final class MemberReach {
 		final cached: GrammarPlugin = plugin is CachingGrammarPlugin ? plugin : new CachingGrammarPlugin(plugin);
 		_plugin = cached;
 		_shape = _plugin.refShape();
-		_index = index;
 		_project = project;
 		_scopeKnown = scopeKnown;
 		for (f in project) _projectSources[f.file] = f.source;
@@ -256,7 +259,9 @@ final class MemberReach {
 			final source: Null<String> = scope.sources[file];
 			source == null || live.live(file, source, span);
 		});
-		scope.facts = FactsView.of(facts, scope, factsAreTruth(facts, configurations));
+		// under the truth a project file no build runs declares nothing: the index the analysis reads leaves it out
+		scope.readThrough(FactsView.of(facts, scope, factsAreTruth(facts, configurations)));
+		_index = scope.index;
 		_g = new ReachGraph(_scope, carriers, maxLibraryFiles);
 		_admission = new ReachAdmission(_scope, _g);
 		final built: ValueEscapes = new ValueEscapes(scope, _g, _hazards, live, carriers, scopeKnown);
@@ -367,7 +372,8 @@ final class MemberReach {
 			return Unknown(
 				OutOfScope('the run declared no project roots that all matched, so a toucher may live in a file it did not read')
 			);
-		if (g.types.declarationCount(declaring) > 1) return Unknown(Ambiguous(declaring));
+		// declarations of the one type the builds typed, a copy per build, are that type (`FactsView.soleType`)
+		if (g.types.declarationCount(declaring) > 1 && _scope.facts?.soleType(declaring) == null) return Unknown(Ambiguous(declaring));
 		final ownerFile: Null<String> = _scope.siteOf(declaring)?.file;
 		if (ownerFile == null || !_projectSources.exists(ownerFile))
 			return Unknown(OutOfScope('`$declaring` is not declared in the project, so library code may name `${member.name}`'));
