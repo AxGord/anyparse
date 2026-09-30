@@ -3,6 +3,7 @@ package unit.query;
 import anyparse.check.OracleCoverage;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
+import anyparse.query.CallGraph;
 import anyparse.query.CompilerFacts;
 import anyparse.query.MemberReach;
 import anyparse.query.QueryNode;
@@ -765,6 +766,14 @@ class MemberReachTest extends Test {
 			+ 'function f():Void { /*<*/ Std.string(this); /*>*/ } }';
 		final std: String = 'extern class Std { public static function string(v:Dynamic):String; }';
 		assertReachedAt(ask([src], [std]), 'C.toString');
+		// the target code `Ext.run` runs, handed a value, may convert any value it holds — but no `Abs`, whose members are
+		// static calls where its name is written, and nothing the walk entered spells it yet. `helper`, entered after, does,
+		// and hands an `Abs` to `Std.string`, which converts it: only what that call is handed says so
+		final later: String = 'class C { public static var items:Array<Int> = []; function f():Void { /*<*/ Ext.run(0); helper(); /*>*/ } '
+			+ 'function helper():Void { var a:Abs = Abs.make(); Std.string(a); } }';
+		final abs: String = 'abstract Abs(Int) { public static function make():Abs return cast 0; '
+			+ 'public function toString():String { C.items.push(1); return ""; } }';
+		assertReachedAt(ask([later, abs], [std, 'extern class Ext { public static function run(v:Dynamic):Void; }']), 'Abs.toString');
 	}
 
 	@:pin('control') @:killer('M-REACH-UNMODELLED')
@@ -987,12 +996,89 @@ class MemberReachTest extends Test {
 
 	@:pin('control') @:killer('M-REACH-AMBIGUOUS')
 	public function testTypeSharingItsSimpleNameIsUnknown(): Void {
-		// Two `Helper`s in two packages merge into one graph node; which one `h.tick` reaches is not provable.
+		// Two `Helper`s in two packages merge into one graph node, which reads both declarations of `tick`: the second one's
+		// touch is found, whichever `Helper` `h` holds.
 		final src: String =
 			'import a.Helper; class C { public var items:Array<Int> = []; var h:Helper; function f():Void { /*<*/ h.tick(this); /*>*/ } }';
 		final a: String = 'package a; class Helper { public function tick(c:C):Void {} }';
 		final b: String = 'package b; class Helper { public function tick(c:C):Void c.items.push(0); }';
-		assertMatch(ask([src, a, b]), r -> r.match(Unknown(Ambiguous('Helper'))));
+		assertReachedAt(ask([src, a, b]), 'Helper.tick');
+		// Which one `h.tick` reaches is still not provable: the other `Helper` is extern, and its `tick` hands `c` to target
+		// code, which may call `grow` by name — no body of the merged node says so.
+		final grows: String = 'import a.Helper; class C { public var items:Array<Int> = []; var h:Helper; '
+			+ 'public function grow():Void items.push(0); function f():Void { /*<*/ h.tick(this); /*>*/ } }';
+		final foreign: String = 'package b; extern class Helper { public function tick(c:C):Void; }';
+		assertMatch(ask([grows, a, foreign]), r -> r.match(Unknown(Ambiguous('Helper'))));
+	}
+
+	@:pin('control') @:killer('M-REACH-FOLDED-BODIES') @:killer('M-GRAPH-FOLDED-DECLARATIONS')
+	public function testEveryDeclarationOfAMemberInEachBranchIsRead(): Void {
+		// `g` is declared once per branch of a region: the graph folds both into one node, and each is code a build runs —
+		// its untyped read, its touch, the conversion it makes are the node's, though its first declaration holds none
+		function region(twin: String): String {
+			return 'class C { public static var it:C; public var items:Array<Int> = []; var o:O; function f():Void { /*<*/ g(); /*>*/ }\n'
+				+ '#if other\nfunction g():Void {}\n#else\nfunction g():Void { ' + twin + ' }\n#end\n}';
+		}
+		final o: String = 'class O { public function new() {} public function toString():String { C.it.items.push(1); return ""; } }';
+		assertMatch(ask([region('var z:Dynamic = untyped this.zz;'), o]), r -> r.match(Unknown(Untyped(_, _))));
+		assertReachedAt(ask([region('items.push(1);'), o]), 'C.g');
+		assertReachedAt(ask([region('var s:String = "" + o;'), o]), 'O.toString');
+		// a shared collection's region calling `g` is refused for what the second declaration changes
+		final local: String = 'class C { static var all:Array<Int> = []; function f(xs:Array<Int>):Void { /*<*/ var y:Int = xs[0]; g(); /*>*/ }\n'
+			+ '#if other\nfunction g():Void {}\n#else\nfunction g():Void all[0] = 1;\n#end\n}';
+		assertMatch(askLocal(local, 'xs'), r -> r.match(Unknown(Aliased(_, _, _, _))));
+	}
+
+	@:pin('control') @:killer('M-GRAPH-EAGER-INIT') @:killer('M-REACH-INIT-BRANCHES')
+	public function testAFieldInitializerRunsWhatItHoldsThoughItCallsNothing(): Void {
+		// `new D()` runs `D`'s field initializers: an element write, a string conversion and untyped code call nothing, yet
+		// each is code the construction runs — in every branch of a region that declares the field
+		function construct(fields: String): String {
+			return 'class D { static var o:O; public function new() {}\n' + fields + '\n}';
+		}
+		final src: String =
+			'class C { public static var it:C; public var items:Array<Int> = []; function f():Void { /*<*/ new D(); /*>*/ } }';
+		final o: String = 'class O { public function new() {} public function toString():String { C.it.items.push(1); return ""; } }';
+		assertReachedAt(ask([src, construct('var k:Int = C.it.items[0] = 5;'), o]), 'D.<init>');
+		assertReachedAt(ask([src, construct('var k:String = "" + o;'), o]), 'O.toString');
+		assertMatch(ask([src, construct('var k:Dynamic = untyped zz;'), o]), r -> r.match(Unknown(Untyped(_, _))));
+		assertReachedAt(ask([
+			src,
+			construct('#if other\nvar k:String = "";\n#else\nvar k:String = "" + o;\n#end'),
+			o
+		]), 'O.toString');
+	}
+
+	@:pin('control') @:killer('M-GRAPH-JOINED-MEMBER') @:killer('M-REACH-SHARED-INIT-BRANCHES') @:killer('M-GRAPH-FOLDED-DYNAMIC')
+	public function testAMemberDeclaredInEachBranchIsWhatEveryDeclarationSays(): Void {
+		// one index record stands for both declarations of a member: an accessor either declares runs, a return type or a
+		// field type they spell differently types nothing, and a shared initializer in either branch shares the value; one
+		// graph node stands for both declarations of a method, which the program may replace when either is `dynamic`
+		final replaced: String = 'class C { public var items:Array<Int> = []; public function new() g = () -> items.push(1); '
+			+ 'function f():Void { /*<*/ g(); /*>*/ }\n#if other\nfunction g():Void {}\n#else\ndynamic function g():Void {}\n#end\n}';
+		assertMatch(ask([replaced]), r -> r.match(Reached(_)));
+		final getter: String = 'class P { var owner:C;\n#if other\npublic var x:Int = 0;\n#else\npublic var x(get, never):Int; '
+			+ 'function get_x():Int { owner.items.push(1); return 1; }\n#end\n}';
+		assertReachedAt(ask([
+			'class C { public var items:Array<Int> = []; var p:P; function f():Void { /*<*/ trace(p.x); /*>*/ } }',
+			getter
+		]), 'P.get_x');
+		final made: String =
+			'class Q {\n#if other\npublic function mk():A return null;\n#else\npublic function mk():B return null;\n#end\n}';
+		final ab: String =
+			'class A { public function go():Void {} } class B { public var owner:C; public function go():Void owner.items.push(1); }';
+		assertMatch(ask([
+			'class C { public var items:Array<Int> = []; var q:Q; function f():Void { /*<*/ q.mk().go(); /*>*/ } }',
+			made,
+			ab
+		]), r -> r.match(Reached(_)));
+		final bag: String = 'class Bag { public function new() {} public function indexOf(x:Int):Int return 0; }';
+		final typed: String = 'class C {\n#if other\nvar items:Array<Int> = [];\n#else\nvar items:Bag = null;\n#end\n'
+			+ 'function f():Void { /*<*/ g(); /*>*/ } function g():Void items.indexOf(1); }';
+		assertMatch(ask([typed, bag]), r -> !r.match(Proven));
+		final shared: String = 'class C { static final SHARED:Array<Int> = [];\n#if other\nvar items:Array<Int> = [];\n#else\n'
+			+ 'var items:Array<Int> = SHARED;\n#end\nfunction f():Void { /*<*/ helper(); /*>*/ } function helper():Void {} }';
+		assertMatch(ask([shared]), r -> r.match(Unknown(Escape(_, _))));
 	}
 
 	@:pin('control') @:killer('M-REACH-LOCAL-SCOPE')
@@ -1169,6 +1255,24 @@ class MemberReachTest extends Test {
 		assertMatch(reach.mayReach(Region('F0.hx', g), { owner: 'C', name: 'items' }, Mutate), r -> r.match(Proven));
 	}
 
+	@:pin('control') @:killer('M-REACH-REFRESH-FOLDED')
+	public function testAnEditToAFileOfANodeFoldedAcrossFilesRebuildsTheGraph(): Void {
+		// `H` is declared in two files and the graph folds both `run`s into one node: taking the first file out and back in
+		// would drop the node with the edge the second declaration's body records, so the edit is not taken in place
+		final src: String = 'class C { var items:Array<Int> = []; var h:H; public function grow():Void items.push(0); '
+			+ 'function f():Void { /*<*/ h.run(); /*>*/ } }';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'F0.hx', source: src },
+			{ file: 'F1.hx', source: 'class H { public var c:C; public function run():Void {} }' },
+			{ file: 'F2.hx', source: 'class H { public var c:C; public function run():Void c.grow(); }' }
+		];
+		final plugin: CachingGrammarPlugin = QueryTestHelpers.projectPlugin(files);
+		final grows: CallGraph -> Bool = g -> Lambda.exists(g.outEdges('H.run'), e -> e.file == 'F2.hx' && e.to == 'C.grow');
+		Assert.isTrue(grows(MemberReach.forRun(plugin, 'F0.hx', src).graph()), 'the second declaration records no edge');
+		files[1].source = 'class H { public var c:C; public function run():Void { trace(1); } }';
+		Assert.isTrue(grows(MemberReach.forRun(plugin, 'F0.hx', src).graph()), 'an edit to the first file lost the second\'s edge');
+	}
+
 	@:pin('control') @:killer('M-REACH-MEMO-EVERY-SOURCE') @:killer('M-REACH-INCREMENTAL-PURGE')
 	public function testMemoIsDroppedWhenAnyProjectFileChanged(): Void {
 		// An edit earlier in the pass to ANOTHER project file leaves the memoised graph describing code that is gone.
@@ -1206,11 +1310,14 @@ class MemberReachTest extends Test {
 
 	@:pin('control') @:killer('M-REACH-STRINGBUF-PURE')
 	public function testParameterRegionWritingAStringBufferIsProven(): Void {
-		// `add(x:T)` may run the `toString` of what it is handed — but a string literal runs nothing.
+		// `add(x:T)` converts what it is handed, as the std one does — so its body may run the `toString` of any value, and
+		// `Obj`'s changes an array — but a string literal runs nothing.
 		final src: String = 'class C { function f(xs:Array<Int>):Void { final b:StringBuf = new StringBuf(); '
 			+ '/*<*/ var y:Int = xs[0]; b.add("v"); /*>*/ } }';
-		final std: String = 'class StringBuf { public function new() {} public function add<T>(x:T):Void {} }';
-		final reach: MemberReach = reachOf([src], [std], true);
+		final obj: String = 'class Obj { public static var all:Array<Int> = []; public function new() {} '
+			+ 'public function toString():String { all.push(1); return ""; } }';
+		final std: String = 'class StringBuf { var s:String = ""; public function new() {} public function add<T>(x:T):Void s += x; }';
+		final reach: MemberReach = reachOf([src, obj], [std], true);
 		final at: Int = src.lastIndexOf('xs', src.indexOf(REGION_CLOSE));
 		assertMatch(reach.mayMutateNamed('F0.hx', 'xs', new Span(at, at + 2), regionOf(src)), r -> r.match(Proven));
 	}

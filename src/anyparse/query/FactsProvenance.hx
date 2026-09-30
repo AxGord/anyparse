@@ -77,14 +77,15 @@ final class FactsProvenance {
 	 * local's name, a read's identifier. The one text allowed to carry a fact it does not spell is a loop's own: the
 	 * compiler lowers a loop into reads, locals and iteration calls positioned at the whole loop. Code a macro put in —
 	 * positioned elsewhere, or on text that does not spell it — fails the test; a native site or a reflective value read
-	 * fails it outright.
+	 * fails it outright. The node must stand for that one declaration (`CallGraph.declarationsOf`): the body of another
+	 * the graph folded into it is text the test never read.
 	 */
 	public function bodyIsSource(g: CallGraph, node: FnNode): Bool {
 		final span: Null<Span> = node.span;
 		final source: Null<String> = g.sourceOf(node.file);
 		final tree: Null<QueryNode> = g.treeOf(node.file);
 		final name: Null<String> = node.name;
-		if (span == null || source == null || tree == null || name == null) return false;
+		if (span == null || source == null || tree == null || name == null || g.declarationsOf(node.id).length != 1) return false;
 		final body: BodyText = BodyText.of(_view.table.keyOf(node.file), span, source, tree, _scope.shape);
 		final bodies: Array<FactNode> = [
 			for (n in _view.table.nodesIn(node.file)) if (FactsView.FUNCTION_KINDS.contains(n.kind) && body.holds(n.at)) n
@@ -128,22 +129,24 @@ final class FactsProvenance {
 	}
 
 	/**
-	 * Whether the field `f` of the typed type `typed` is one `decl` declares alike: a member of its name — an abstract's
-	 * constructor is `_new` in its implementation class — that is a variable where `f` is one, with a getter and a setter
-	 * exactly where `f` reads and writes through a call, or a function where `f` is one; or the constructor the compiler
-	 * made for a class `decl` gives none.
+	 * Whether the field `f` of the typed type `typed` is one `decl` declares alike: for every kind a build gave it, a
+	 * member of its name — an abstract's constructor is `_new` in its implementation class — that is a variable where that
+	 * kind is one, with a getter and a setter exactly where it reads and writes through a call, or a function where it is
+	 * one; or the constructor the compiler made for a class `decl` gives none.
 	 */
 	private function declaredAlike(typed: TypeFact, f: FieldDeclFact, decl: TypeDeclInfo): Bool {
 		final name: String = _view.graphMember(typed.id, f.name);
 		final found: Array<MemberInfo> = [for (m in decl.members) if (m.name == name) m];
 		if (found.length == 0) return name == constructorName();
-		final variable: Bool = f.kind.startsWith('var(');
 		final variables: Array<String> = _scope.shape.fieldDeclKinds ?? [];
-		return found.exists(
-			m ->
-				variables.contains(m.kind) == variable
-				&& (!variable || (throughCall(f.kind, 0) == m.hasGetter && throughCall(f.kind, 1) == m.hasSetter))
-		);
+		return f.kinds.foreach(kind -> {
+			final variable: Bool = kind.startsWith('var(');
+			found.exists(
+				m ->
+					variables.contains(m.kind) == variable
+					&& (!variable || (throughCall(kind, 0) == m.hasGetter && throughCall(kind, 1) == m.hasSetter))
+			);
+		});
 	}
 
 	/**

@@ -202,7 +202,7 @@ final class StaticExtensionFacts {
 		if (declared.length != 1) return null;
 		final field: FieldDeclFact = declared[0];
 		if (
-			!field.isStatic || field.kind == MACRO_KIND || field.meta.contains(NO_USING_META) || field.overloads.exists(n -> n > 0)
+			!field.isStatic || field.kinds.contains(MACRO_KIND) || field.meta.contains(NO_USING_META) || field.overloads.exists(n -> n > 0)
 			|| field.types.length != 1
 		)
 			return null;

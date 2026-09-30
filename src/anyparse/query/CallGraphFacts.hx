@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.CallGraph.CallEdge;
 import anyparse.query.CallGraph.EdgeKind;
+import anyparse.query.CallGraph.FnDeclaration;
 import anyparse.query.CallGraph.FnNode;
 import anyparse.query.CallGraph.SplicedSite;
 import anyparse.query.CallGraph.UnresolvedReason;
@@ -85,16 +86,14 @@ final class CallGraphFacts {
 
 	/**
 	 * The facts of each function node `file` declares that replace its syntax (`FactsView.bodyFacts`), which are muted
-	 * until `recordMuted`: under the truth only, those of a node the graph folded several declarations into
-	 * (`fnBySpanFrom` names one id at several starts) or of a type declared more than once, and then only when every
+	 * until `recordMuted`: under the truth only, those of a node the graph folded several declarations into, in this
+	 * file or another (`CallGraph.declarationsOf`), or of a type declared more than once, and then only when every
 	 * declaration is the one type the builds typed (`FactsView.soleType`).
 	 */
-	public function mute(g: CallGraph, file: String, fnBySpanFrom: Map<Int, String>): Map<String, Array<FactNode>> {
+	public function mute(g: CallGraph, file: String): Map<String, Array<FactNode>> {
 		final out: Map<String, Array<FactNode>> = [];
-		final declarations: Map<String, Int> = [];
-		for (id in fnBySpanFrom) declarations[id] = (declarations[id] ?? 0) + 1;
 		for (n in g._fileNodes[CallGraphNames.normalizePath(file)] ?? []) if (!n.isExternal && !n.isBodyless) {
-			final found: Null<Array<FactNode>> = view.bodyFacts(g, n, declarations[n.id] ?? 0);
+			final found: Null<Array<FactNode>> = view.bodyFacts(g, n, g.declarationsOf(n.id).length);
 			if (found != null) out[n.id] = found;
 		}
 		muted = [for (id in out.keys()) id => true];
@@ -373,7 +372,7 @@ final class CallGraphFacts {
 		if (fact != null && target != null)
 			filed(
 				g, node, n, fact.at, view, null,
-				span -> g.addEdge(node.id, target, Ref, null, node.file, span == null ? null : g.nodes[target]?.span)
+				span -> g.addEdge(node.id, target, Ref, null, node.file, span == null ? null : g.declarationAt(node.file, span.from)?.span)
 			)
 		else if (fact != null && !fact.generated)
 			record(g, node, [fact], view, true)
@@ -417,9 +416,10 @@ final class CallGraphFacts {
 		final file: Null<String> = fact == null || fact.generated ? null : graphFile(g, node, fact.at.file, view);
 		if (fact == null || file == null) return null;
 		final at: Span = fact.at.span;
-		// a node's span may run on over trailing trivia the compiler's range stops before: the two share their start
-		final found: Null<String> = g.functionAt(file, at.from);
-		return found != null && g.nodes[found]?.span?.from == at.from ? found : null;
+		// a node's span may run on over trailing trivia the compiler's range stops before: the two share their start — the
+		// start of the declaration holding it, which for a node folding several may be another than its first
+		final found: Null<FnDeclaration> = g.declarationAt(file, at.from);
+		return found != null && found.span.from == at.from ? found.id : null;
 	}
 
 	/** The file of the graph whose table key is `key` — `node`'s own, or another the graph holds — or null for none. */
@@ -480,13 +480,15 @@ final class CallGraphFacts {
 		for (nodeId in table.nodeIdsOf(id)) {
 			final n: Null<FactNode> = table.node(nodeId);
 			final field: String = nodeId.substr(nodeId.lastIndexOf('.') + 1);
-			final kind: Null<String> = typed.fields.find(f -> f.name == field)?.kind;
-			if (n == null || n.kind != METHOD_KIND || n.overloadIndex > 0 || kind == MACRO_FIELD) continue;
+			final kinds: Array<String> = typed.fields.find(f -> f.name == field)?.kinds ?? [];
+			// a macro function in every build runs in no program; one a build may replace is a value there
+			if (n == null || n.kind != METHOD_KIND || n.overloadIndex > 0 || (kinds.length > 0 && kinds.foreach(k -> k == MACRO_FIELD)))
+				continue;
 			final name: String = view.graphMember(id, field);
 			final graphId: String = '$type.$name';
 			final declared: Bool = g.nodes[graphId]?.isExternal == false;
 			if (declared && !n.generated) continue;
-			if (!declared) g.adoptNode(graphId, file, type, name, kind == DYNAMIC_FIELD);
+			if (!declared) g.adoptNode(graphId, file, type, name, kinds.contains(DYNAMIC_FIELD));
 			adopted[graphId] = n;
 			out.push(graphId);
 		}

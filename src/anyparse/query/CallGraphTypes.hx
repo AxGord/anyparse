@@ -13,7 +13,9 @@ using Lambda;
  * superclass apart from the interfaces, each type's static members and member records, the type
  * parameters and typedef targets a receiver must see through, and which member names are properties with
  * an accessor somewhere. Simple type names, like the graph itself: every table UNIONS the declarations of a
- * name, and `declarationCount` tells a consumer when a name is ambiguous.
+ * name, and `declarationCount` tells a consumer when a name is ambiguous. A member name declared more than once —
+ * once per branch of a conditional region, an overload, by two types of one name — has ONE record joining them
+ * (`joined`): what either declaration says runs code, runs; a type they spell differently is none.
  */
 @:nullSafety(Strict)
 final class CallGraphTypes {
@@ -181,7 +183,12 @@ final class CallGraphTypes {
 	public function refreshFile(fi: FileInfo): Void {
 		for (t in fi.types) if (declarationCount(t.name) == 1) {
 			final table: Map<String, MemberInfo> = _members[t.name] ?? [];
-			for (m in t.members) table[m.name] = m;
+			final seen: Array<String> = [];
+			for (m in t.members) {
+				final held: Null<MemberInfo> = seen.contains(m.name) ? table[m.name] : null;
+				table[m.name] = held == null ? m : joined(held, m);
+				seen.push(m.name);
+			}
 			_members[t.name] = table;
 		}
 	}
@@ -273,14 +280,76 @@ final class CallGraphTypes {
 		final statics: Array<String> = _staticMembers[t.name] ?? [];
 		final table: Map<String, MemberInfo> = _members[t.name] ?? [];
 		for (m in t.members) {
-			if (m.isStatic && !statics.contains(m.name)) statics.push(m.name);
-			if (!table.exists(m.name)) table[m.name] = m;
+			final held: Null<MemberInfo> = table[m.name];
+			final record: MemberInfo = held == null ? m : joined(held, m);
+			table[m.name] = record;
+			// a member one declaration makes an instance one is dispatched on as one
+			if (record.isStatic && !statics.contains(m.name)) statics.push(m.name);
+			if (!record.isStatic) statics.remove(m.name);
 			if (m.hasGetter || m.hasSetter) unionInto(_propertyOwners, m.name, [t.name]);
 			if (_functionKinds.contains(m.kind)) _functionNames[m.name] = true;
 			if (_functionKinds.contains(m.kind) && m.isStatic) _staticFunctionNames[m.name] = true;
 		}
 		_staticMembers[t.name] = statics;
 		_members[t.name] = table;
+	}
+
+	/**
+	 * The one record standing for two declarations `a` and `b` of a member name — one per branch of a conditional region,
+	 * an overload, a declaration of another type of the same simple name — for a table keyed by that name. What makes a use
+	 * of the member run code is either's: an accessor, a replaceable body, an implicit call, an overload, an extern body; a
+	 * type or parameter the two spell differently is neither's (null), so nothing resolves through it; the member is an
+	 * instance one and runs at run time when either declaration makes it so. A field in one declaration and a function in
+	 * the other is a function the program may replace (`isDynamic`): a call of it runs the body or the value the field holds.
+	 */
+	private function joined(a: MemberInfo, b: MemberInfo): MemberInfo {
+		// noqa: complexity
+		final mixed: Bool = a.kind != b.kind && (_functionKinds.contains(a.kind) || _functionKinds.contains(b.kind));
+		final arity: Int = a.paramTypeSources.length > b.paramTypeSources.length ? a.paramTypeSources.length : b.paramTypeSources.length;
+		return {
+			name: a.name,
+			hasGetter: a.hasGetter || b.hasGetter,
+			hasSetter: a.hasSetter || b.hasSetter,
+			returnNominal: agreed(a.returnNominal, b.returnNominal),
+			returnSource: agreed(a.returnSource, b.returnSource),
+			hasOverloadMeta: a.hasOverloadMeta || b.hasOverloadMeta,
+			typeSource: agreed(a.typeSource, b.typeSource),
+			firstParamTypeSource: agreed(a.firstParamTypeSource, b.firstParamTypeSource),
+			paramTypeSources: [for (i in 0...arity) agreed(paramAt(a, i), paramAt(b, i))],
+			visibility: a.visibility,
+			isOverride: a.isOverride || b.isOverride,
+			kind: mixed && !_functionKinds.contains(a.kind) ? b.kind : a.kind,
+			declFrom: a.declFrom,
+			isStatic: a.isStatic && b.isStatic,
+			isInline: a.isInline && b.isInline,
+			isMacro: a.isMacro && b.isMacro,
+			operatorOverloads: union(a.operatorOverloads, b.operatorOverloads),
+			isImplicitConversion: a.isImplicitConversion || b.isImplicitConversion,
+			isImplicitCall: a.isImplicitCall || b.isImplicitCall,
+			implicitCallMetas: union(a.implicitCallMetas, b.implicitCallMetas),
+			isDynamic: a.isDynamic || b.isDynamic || mixed,
+			isExtern: a.isExtern || b.isExtern,
+			isOverload: a.isOverload || b.isOverload,
+			typeParamNames: union(a.typeParamNames, b.typeParamNames),
+			metaNames: union(a.metaNames, b.metaNames),
+			excludedFromExtensions: a.excludedFromExtensions && b.excludedFromExtensions,
+			guarded: a.guarded || b.guarded
+		};
+	}
+
+	/** `a` when `b` spells the same, else null: two declarations that type something differently type it as neither. */
+	private static inline function agreed(a: Null<String>, b: Null<String>): Null<String> {
+		return a == b ? a : null;
+	}
+
+	/** The written type of parameter `i` of `m`, null past its last one. */
+	private static inline function paramAt(m: MemberInfo, i: Int): Null<String> {
+		return i < m.paramTypeSources.length ? m.paramTypeSources[i] : null;
+	}
+
+	/** Every entry of `a`, then each of `b` it lacks. */
+	private static function union(a: Array<String>, b: Array<String>): Array<String> {
+		return a.concat([for (x in b) if (!a.contains(x)) x]);
 	}
 
 	public static function unionInto(map: Map<String, Array<String>>, key: String, values: Array<String>): Void {

@@ -99,7 +99,8 @@ final class ValueEscapes {
 		if (!kinds.contains(node.kind) || name == null || at == null) return false;
 		final type: Null<String> = MemberTouchScan.typeAt(tree, at.from);
 		final declared: Null<TypeDeclInfo> = type == null ? null : _scope.index.fileInfo(file)?.types.find(t -> t.name == type);
-		return declared != null && declared.members.exists(m -> m.name == name && m.isMacro);
+		// this declaration's own record: a twin in another branch of a conditional region may be a runtime one
+		return declared != null && declared.members.exists(m -> m.name == name && m.isMacro && m.declFrom == at.from);
 	}
 
 	/** The spans of the macro functions of `tree` (the text of `file`: `macroMember`). */

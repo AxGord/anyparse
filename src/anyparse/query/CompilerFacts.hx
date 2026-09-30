@@ -227,7 +227,17 @@ typedef FactSignature = {
 /** A declared field of a typed type. `kind` is `method`, `inline`, `dynamic`, `macro` or `var(<read>,<write>)`. */
 typedef FieldDeclFact = {
 	final name: String;
+
+	/** The first configuration's kind of the field (`var(get,set)`, `method`, `dynamic`, …): `kinds` holds every one. */
 	final kind: String;
+
+	/**
+	 * Every kind a configuration gave the field, `kind` first: more than one when builds declare it differently — a
+	 * variable in one branch of a conditional region and a property with an accessor in another. A reader deciding by
+	 * the kind reads them all.
+	 */
+	final kinds: Array<String>;
+
 	final type: String;
 	final isStatic: Bool;
 	final meta: Array<String>;
@@ -590,6 +600,7 @@ final class CompilerFacts {
 					{
 						name: f.n,
 						kind: f.k,
+						kinds: [f.k],
 						type: f.t,
 						isStatic: f.s ?? false,
 						meta: f.meta ?? [],

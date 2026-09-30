@@ -428,6 +428,16 @@ final class ReachGraph {
 	}
 
 	/**
+	 * Whether the graph, when built, folds a node from a declaration in one of `changed` and one in another file
+	 * (`CallGraph.foldsAcrossFiles`): taking the file out and back in (`refresh`) would lose what the other declaration
+	 * recorded, so such an edit rebuilds the analysis instead.
+	 */
+	public function foldsAcrossFiles(changed: Array<{ file: String, source: String }>): Bool {
+		final built: Null<CallGraph> = _graph;
+		return built != null && changed.exists(f -> built.foldsAcrossFiles(f.file));
+	}
+
+	/**
 	 * Take the new text of each of `changed` — project files whose declarations did not change — into the graph
 	 * (when it is built): each leaves and re-enters it, and every grouping computed over the old graph is dropped.
 	 */

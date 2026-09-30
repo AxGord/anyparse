@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.check.OracleCoverage;
 import anyparse.query.CallGraph.CallEdge;
 import anyparse.query.CallGraph.EdgeKind;
+import anyparse.query.CallGraph.FnDeclaration;
 import anyparse.query.CallGraph.FnNode;
 import anyparse.query.CallGraph.SplicedSite;
 import anyparse.query.CallGraph.UnresolvedAccess;
@@ -134,8 +135,9 @@ typedef MemberRef = {
  * anywhere else — an argument, a store, a `return` — or an assignment of a value that was not freshly
  * built, is an ESCAPE: an alias exists that code which never names M can change.
  *
- * `Proven` is POSITIVE: the entry and every body the walk reaches pass `ReachHazards`' whitelist of
- * modelled node kinds, and every way the graph shows them running code was followed. The walk goes forward
+ * `Proven` is POSITIVE: the entry and every body the walk reaches — each declaration a graph node folds, one per branch
+ * of a conditional region (`CallGraph.declarationsOf`), and every field initializer a construction runs — pass
+ * `ReachHazards`' whitelist of modelled node kinds, and every way the graph shows them running code was followed. The walk goes forward
  * over calls, constructors, overrides, accessors and function values, and grows the graph into library
  * files only when it reaches a target declared there. Code the graph cannot follow is admitted through
  * channels: an unresolved call (a function value, a Dynamic or untyped receiver, a body-less extern) may run
@@ -476,9 +478,9 @@ final class MemberReach {
 
 	/**
 	 * Whether the text of `target` is what runs: a project function with a body, not `dynamic`, declared once and outside
-	 * any conditional region in a type named once, whose every subtype the builds compile is known (`subtypesKnown`) and
-	 * none of which the index or the compiler facts see overriding it — and, under a build macro, a compiled body the facts
-	 * show is its text (`FactsProvenance.bodyIsSource`).
+	 * any conditional region in a type named once — the one declaration the graph node stands for (`CallGraph.declarationsOf`)
+	 * — whose every subtype the builds compile is known (`subtypesKnown`) and none of which the index or the compiler facts
+	 * see overriding it — and, under a build macro, a compiled body the facts show is its text (`FactsProvenance.bodyIsSource`).
 	 */
 	private function answersByText(target: FnNode): Bool {
 		final type: Null<String> = target.typeName;
@@ -487,6 +489,7 @@ final class MemberReach {
 		final g: CallGraph = graph();
 		if (!_projectSources.exists(target.file) || g.types.declarationCount(type) != 1 || !declaredOnce(target.file, type, name))
 			return false;
+		if (g.declarationsOf(target.id).length != 1) return false;
 		if (!_carriers.subtypesKnown(type) || g.virtualTargets(type, name).length > 0 || overriddenInFacts(g, type, name)) return false;
 		return _g.rewrittenBy(type) == null || _scope.provenance()?.bodyIsSource(g, target) == true;
 	}
@@ -651,11 +654,13 @@ final class MemberReach {
 		final facts: Null<CallGraphFacts> = g.facts;
 		if (_scope.facts?.truth != true || facts == null) return [];
 		final out: Array<String> = [];
-		for (id in facts.faceted.keys()) {
-			final node: Null<FnNode> = g.node(id);
-			final at: Null<Span> = node?.span;
-			if (node != null && at != null && node.file == file && spans.exists(s -> at.from < s.to && s.from < at.to)) out.push(id);
-		}
+		final key: String = CallGraphNames.normalizePath(file);
+		// every declaration the node folds is its code: a range meeting any of them may run what its facts filed off it
+		for (id in facts.faceted.keys()) if (
+			g.declarationsOf(id)
+				.exists(d -> CallGraphNames.normalizePath(d.file) == key && spans.exists(s -> d.span.from < s.to && s.from < d.span.to))
+		)
+			out.push(id);
 		return out;
 	}
 
@@ -683,7 +688,8 @@ final class MemberReach {
 	 */
 	private function readStraight(declaring: String, name: String): Bool {
 		final fields: Null<Array<FieldDeclFact>> = typedFields(declaring, name);
-		return fields != null && fields.foreach(f -> STRAIGHT_PROPERTY.match(f.kind));
+		// every kind a build gave it: a property one build declares with an accessor is read through it there
+		return fields != null && fields.foreach(f -> f.kinds.foreach(k -> STRAIGHT_PROPERTY.match(k)));
 	}
 
 	/**
@@ -747,7 +753,7 @@ final class MemberReach {
 	/** Record the code of the body `node` as entered (`ReachGraph.enter`); true when that widened what was. */
 	private function enterBody(g: CallGraph, node: FnNode): Bool {
 		var widened: Bool = false;
-		for (span in bodySpans(g, node) ?? []) if (_g.enter(g, node.file, span, node.typeName)) widened = true;
+		for (d in bodySpans(g, node) ?? []) if (_g.enter(g, d.file, d.span, node.typeName)) widened = true;
 		return widened;
 	}
 
@@ -828,6 +834,11 @@ final class MemberReach {
 			for (at in _g.sites.sitesIn(file, read.tree, read.source, span)) if (_live.live(file, read.source, at.span)) out.push(at);
 		}
 		return out;
+	}
+
+	/** The implicit-call sites of the code `declared` spans (`bodySpans`), each read in its own file (`sitesOf`). */
+	private function declaredSites(g: CallGraph, declared: Array<Occurrence>): Array<ImplicitSite> {
+		return [for (d in declared) for (at in sitesOf(g, d.file, [d.span])) at];
 	}
 
 	/**
@@ -1019,13 +1030,12 @@ final class MemberReach {
 				return { file: node.file, span: node.span ?? new Span(0, 0) };
 			g.virtualTargets(type, member);
 		} else {
-			final changed: Null<Span> = bodyChangesSharedArray(g, node);
-			if (changed != null) return { file: node.file, span: changed };
+			final changed: Null<Occurrence> = bodyChangesSharedArray(g, node);
+			if (changed != null) return changed;
 			if (liveUnresolved(g, node.id).length > 0 || liveAccess(g, node.id).length > 0)
 				return { file: node.file, span: node.span ?? new Span(0, 0) };
-			// what the body runs implicitly runs too
-			final spans: Null<Array<Span>> = bodySpans(g, node);
-			final bodySites: Array<ImplicitSite> = spans == null ? [] : sitesOf(g, node.file, spans);
+			// what the body runs implicitly runs too, in every declaration of it
+			final bodySites: Array<ImplicitSite> = declaredSites(g, bodySpans(g, node) ?? []);
 			for (at in bodySites) {
 				sites.push(at);
 				for (id in _g.idsAt(g, at)) push(id);
@@ -1062,15 +1072,19 @@ final class MemberReach {
 	private function benignEdge(g: CallGraph, node: FnNode, e: CallEdge): Bool {
 		if (e.spliced != null) return benignWhereWritten(g, e);
 		final target: Null<FnNode> = g.node(e.to);
-		final tree: Null<QueryNode> = g.treeOf(node.file);
-		final source: Null<String> = g.sourceOf(node.file);
-		final body: Null<Span> = node.span;
 		final at: Null<Span> = e.span;
+		final site: String = CallGraphNames.normalizePath(e.file);
+		// the declaration of the node the edge's site lies in: its locals are the ones the call may hold fresh
+		final body: Null<FnDeclaration> = at == null
+			? null
+			: g.declarationsOf(node.id).find(d -> CallGraphNames.normalizePath(d.file) == site && within(at, d.span));
+		final tree: Null<QueryNode> = body == null ? null : g.treeOf(body.file);
+		final source: Null<String> = body == null ? null : g.sourceOf(body.file);
 		if (target == null || !target.isExternal || e.kind == Ref || tree == null || source == null || body == null || at == null)
 			return false;
-		final fn: Null<QueryNode> = enclosingFunctionNode(tree, body);
+		final fn: Null<QueryNode> = enclosingFunctionNode(tree, body.span);
 		final call: Null<QueryNode> = _hazards.callsIn(tree, at).find(c -> c.span?.from == at.from);
-		return fn != null && benignCall(g, tree, source, fn, target, call, body);
+		return fn != null && benignCall(g, tree, source, fn, target, call, body.span);
 	}
 
 	/**
@@ -1115,20 +1129,26 @@ final class MemberReach {
 		return loaded == null || loaded.isExternal ? Opaque : Body(loaded);
 	}
 
-	/** Where `node`'s own body changes an array other code may hold, or holds a blind spot; null when it does neither. */
-	private function bodyChangesSharedArray(g: CallGraph, node: FnNode): Null<Span> {
-		final tree: Null<QueryNode> = g.treeOf(node.file);
-		final source: Null<String> = g.sourceOf(node.file);
-		final spans: Null<Array<Span>> = bodySpans(g, node);
-		if (tree == null || source == null || spans == null) return node.span ?? new Span(0, 0);
-		for (span in spans) if (_scope.facts?.blindIn(node.file, span) != null) return span;
-		final fn: Null<QueryNode> = node.span == null ? null : enclosingFunctionNode(tree, node.span ?? new Span(0, 0));
-		for (span in spans) for (h in liveHazards(node.file, tree, source, span)) switch h.kind {
-			case ArrayChange:
-				if (fn == null || !receiverIsFreshLocal(tree, source, fn, h.node, span)) return h.span;
-			case ReflectiveName(literal) if (literal != null):
-			case _:
-				return h.span;
+	/**
+	 * Where `node`'s own body — each declaration of it (`bodySpans`) — changes an array other code may hold, or holds a
+	 * blind spot; null when none does.
+	 */
+	private function bodyChangesSharedArray(g: CallGraph, node: FnNode): Null<Occurrence> {
+		final declared: Null<Array<Occurrence>> = bodySpans(g, node);
+		if (declared == null) return { file: node.file, span: node.span ?? new Span(0, 0) };
+		for (d in declared) {
+			final tree: Null<QueryNode> = g.treeOf(d.file);
+			final source: Null<String> = g.sourceOf(d.file);
+			if (tree == null || source == null || _scope.facts?.blindIn(d.file, d.span) != null) return d;
+			// the function this declaration is, whose fresh locals it may change freely: an initializer is none
+			final fn: Null<QueryNode> = node.span == null ? null : enclosingFunctionNode(tree, d.span);
+			for (h in liveHazards(d.file, tree, source, d.span)) switch h.kind {
+				case ArrayChange:
+					if (fn == null || !receiverIsFreshLocal(tree, source, fn, h.node, d.span)) return { file: d.file, span: h.span };
+				case ReflectiveName(literal) if (literal != null):
+				case _:
+					return { file: d.file, span: h.span };
+			}
 		}
 		return null;
 	}
@@ -1351,18 +1371,21 @@ final class MemberReach {
 				if (type != null && g.types.declarationCount(type) > 1) blind = blind ?? Ambiguous(type);
 				final rebuilt: Null<ReachUnknown> = type == null ? null : _g.rewrittenBy(type);
 				if (rebuilt != null) blind = blind ?? rebuilt;
-				final spans: Null<Array<Span>> = bodySpans(g, node);
+				final spans: Null<Array<Occurrence>> = bodySpans(g, node);
 				if (spans == null)
 					blind = blind ?? UnresolvedDispatch(node.file, null, 'the body of `${node.id}`, which the graph cannot locate');
 				else {
 					if (enterBody(g, node)) widened = true;
-					inspectAll(node.id, hazardsOf(g, node.file, spans));
-					for (span in spans) blind = blind ?? _scope.facts?.blindIn(node.file, span);
-					if (!_projectSources.exists(node.file)) for (access in libraryAccesses(g, node.file, spans, member))
-						libraryTouch(node.id, node.file, access.span, access.relation);
+					// every declaration the node folds runs as it: each is read whole
+					for (d in spans) {
+						inspectAll(node.id, hazardsOf(g, d.file, [d.span]));
+						blind = blind ?? _scope.facts?.blindIn(d.file, d.span);
+						if (!_projectSources.exists(d.file)) for (access in libraryAccesses(g, d.file, [d.span], member))
+							libraryTouch(node.id, d.file, access.span, access.relation);
+					}
 					final touch: Null<{ from: String, file: String, span: Span }> = libraryTouchAt;
 					if (touch != null) return Reached(pathTo(reach, touch.from, { file: touch.file, span: touch.span }));
-					final implicit: Array<ImplicitSite> = sitesOf(g, node.file, spans);
+					final implicit: Array<ImplicitSite> = declaredSites(g, spans);
 					admitAlways();
 					if (implicit.length > 0) admit({
 						from: node.id,
@@ -1397,20 +1420,28 @@ final class MemberReach {
 	}
 
 	/**
-	 * The source spans `node` runs: its own span, or for a field-initializer pseudo-node the initializers of
-	 * its type. Null when neither can be located.
+	 * The code `node` runs, as spans of files: every declaration the graph folded into it (`CallGraph.declarationsOf`) —
+	 * a member declared in each branch of a conditional region, an overload, a copy of its type per build — or, for a
+	 * field-initializer pseudo-node, the initializers of its type in every file holding some (`CallGraph.initializerFiles`).
+	 * A positive list: null — nothing the walk may prove — when some of that code cannot be located.
 	 */
-	private function bodySpans(g: CallGraph, node: FnNode): Null<Array<Span>> {
-		final span: Null<Span> = node.span;
-		if (span != null) return [span];
+	private function bodySpans(g: CallGraph, node: FnNode): Null<Array<Occurrence>> {
+		final declared: Array<FnDeclaration> = g.declarationsOf(node.id);
+		if (declared.length > 0) return [for (d in declared) { file: d.file, span: d.span }];
 		final type: Null<String> = node.typeName;
-		final tree: Null<QueryNode> = g.treeOf(node.file);
-		if (type == null || tree == null) return null;
-		return switch node.name {
-			case CallGraph.INIT_NAME: _hazards.initializerSpans(tree, type, false);
-			case CallGraph.STATIC_INIT_NAME: _hazards.initializerSpans(tree, type, true);
-			case _: null;
-		};
+		final files: Array<String> = g.initializerFiles(node.id);
+		final isStatic: Bool = node.name == CallGraph.STATIC_INIT_NAME;
+		if (type == null || files.length == 0 || !(isStatic || node.name == CallGraph.INIT_NAME)) return null;
+		final out: Array<Occurrence> = [];
+		for (file in files) {
+			final tree: Null<QueryNode> = g.treeOf(file);
+			final source: Null<String> = g.sourceOf(file);
+			final spans: Null<Array<Span>> =
+				tree == null || source == null ? null : _hazards.initializerSpans(tree, source, type, isStatic);
+			if (spans == null) return null;
+			for (span in spans) out.push({ file: file, span: span });
+		}
+		return out;
 	}
 
 	/**
@@ -1596,9 +1627,11 @@ final class MemberReach {
 	/**
 	 * Take the new text of `changed` into this analysis when none of them changed a declaration (`signatureOf`):
 	 * the graph re-reads just those files and every cache over them is dropped. False, touching nothing, when one
-	 * did — the caller builds a new analysis.
+	 * did, or when one holds a declaration of a graph node another file declares too (`ReachGraph.foldsAcrossFiles`) —
+	 * the caller builds a new analysis.
 	 */
 	private function refresh(changed: Array<{ file: String, source: String }>): Bool {
+		if (_g.foldsAcrossFiles(changed)) return false;
 		final infos: Array<FileInfo> = [];
 		for (f in changed) {
 			final before: Null<FileInfo> = _index.fileInfo(f.file);

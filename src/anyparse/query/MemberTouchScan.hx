@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.CallGraph.FnDeclaration;
 import anyparse.query.CallGraph.FnNode;
 import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FactPos;
@@ -312,7 +313,8 @@ final class MemberTouchScan {
 	 * The typed accesses of the member (see `typedAccesses`) in the faceted `node`, whose bodies are `bodies`: their own and
 	 * those of every function the compiler made inside them that the graph declares no node for (a `.bind` closure) — one it
 	 * does declare is read as that node is. Null — the syntax reads `node` — when such an access is of a shape `classifyTyped`
-	 * does not answer for, or lies outside `node`'s text, when a call names a field of the member's name (a call of the value
+	 * does not answer for, or lies outside the text of every declaration of `node` (`CallGraph.declarationsOf`), when a call
+	 * names a field of the member's name (a call of the value
 	 * a variable holds is a call fact, never a field one), or when a function inside it was placed by a macro. A body a build
 	 * macro made (`made`, `CallGraphFacts.adopted`) is read whole, wherever its facts lie and every function nested in it
 	 * with it: no text holds any of it.
@@ -321,9 +323,8 @@ final class MemberTouchScan {
 		g: CallGraph, node: FnNode, bodies: Array<FactNode>, name: String, declaring: String, owners: Array<String>, view: FactsView,
 		made: Bool
 	): Null<Array<FieldFact>> {
-		final span: Null<Span> = node.span;
-		if (span == null && !made) return null;
-		final home: String = view.table.keyOf(node.file);
+		final declared: Array<FnDeclaration> = g.declarationsOf(node.id);
+		if (declared.length == 0 && !made) return null;
 		final out: Array<FieldFact> = [];
 		final work: Array<FactNode> = bodies.copy();
 		while (work.length > 0) {
@@ -332,7 +333,7 @@ final class MemberTouchScan {
 			// a field the compiler calls — a function a variable holds, a dynamic receiver's field — is a call, no field fact
 			for (c in n.calls) if (calledField(c.target) == name) return null;
 			for (f in n.fields) if (f.field == name && bindsTo(f, declaring, owners)) {
-				if (!typedShape(f) || (!made && !inside(f.at, home, span))) return null;
+				if (!typedShape(f) || (!made && declarationHolding(g, node.id, f.at, view) == null)) return null;
 				out.push(f);
 			}
 			for (child in n.fns) {
@@ -389,12 +390,14 @@ final class MemberTouchScan {
 		regionFile: String, region: Null<Span>
 	): Void {
 		final held: Null<String> = g.node(id)?.file;
-		if (held == null) return;
+		final view: Null<FactsView> = g.facts?.view;
+		if (held == null || view == null) return;
 		// a body a build macro made lies in no text: none of it is the region's, and none is `this.name` spelled
 		final made: Bool = g.facts?.adopted.exists(id) == true;
-		final file: String = held;
 		for (f in accesses) {
 			final span: Span = f.at.span;
+			// the text of the declaration holding the access, which may be another than the node's first (`nodeAccesses`)
+			final file: String = made ? held : declarationHolding(g, id, f.at, view)?.file ?? held;
 			final verdict: Verdict = classifyTyped(f, access, arrayTyped);
 			if (verdict.escape) out.escapes.push({ file: made ? f.at.file : file, span: span });
 			if (!verdict.touch) continue;
@@ -625,18 +628,25 @@ final class MemberTouchScan {
 		];
 	}
 
-	/** The initializer of member `name` on `declaring` when it is not freshly built — its value is shared from the start. */
+	/**
+	 * The initializer of member `name` on `declaring` that is not freshly built — its value is shared from the start —
+	 * in any declaration of the member: one per branch of a conditional region, each of them what some build runs.
+	 */
 	private function sharedInitializer(g: CallGraph, declaring: String, name: String): Null<{ file: String, span: Span }> {
 		final site: Null<{ file: String, span: Span }> = _scope.siteOf(declaring);
 		if (site == null) return null;
 		final tree: Null<QueryNode> = g.treeOf(site.file);
-		final info: Null<MemberInfo> = g.types.memberOnChain(declaring, name);
-		if (tree == null || info == null) return null;
-		final decl: Null<QueryNode> = RefactorSupport.nodeAtFrom(tree, info.declFrom);
-		if (decl == null || decl.name != name) return null;
-		final init: Null<QueryNode> = CtorFieldFold.declInitializer(decl, _scope.shape);
-		final span: Null<Span> = init?.span;
-		return init == null || span == null || isFresh(init, null) ? null : { file: site.file, span: span };
+		if (tree == null) return null;
+		final declared: Array<MemberInfo> = [
+			for (t in _scope.index.fileInfo(site.file)?.types ?? []) if (t.name == declaring) for (m in t.members) if (m.name == name) m
+		];
+		for (info in declared) {
+			final decl: Null<QueryNode> = RefactorSupport.nodeAtFrom(tree, info.declFrom);
+			final init: Null<QueryNode> = decl == null || decl.name != name ? null : CtorFieldFold.declInitializer(decl, _scope.shape);
+			final span: Null<Span> = init?.span;
+			if (init != null && span != null && !isFresh(init, null)) return { file: site.file, span: span };
+		}
+		return null;
 	}
 
 	/** The innermost type declaration of `tree` enclosing `offset`. */
@@ -658,9 +668,10 @@ final class MemberTouchScan {
 		return target == null ? null : target.substr(target.lastIndexOf('.') + 1);
 	}
 
-	/** Whether `at` lies in `span` of the file the facts key as `home`; false when there is no span. */
-	private static function inside(at: FactPos, home: String, span: Null<Span>): Bool {
-		return span != null && at.file == home && span.from <= at.span.from && at.span.to <= span.to;
+	/** The declaration of the node `id` (`CallGraph.declarationsOf`) whose text holds the fact position `at`, or null. */
+	private static function declarationHolding(g: CallGraph, id: String, at: FactPos, view: FactsView): Null<FnDeclaration> {
+		return g.declarationsOf(id)
+			.find(d -> at.file == view.table.keyOf(d.file) && d.span.from <= at.span.from && at.span.to <= d.span.to);
 	}
 
 	/** Whether `span` shares a position with `region`; false when there is no region. */
