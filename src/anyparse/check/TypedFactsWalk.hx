@@ -57,6 +57,9 @@ final class TypedFactsWalk {
 	/** How the value of the expression `walk` is about to visit is used; `visit` takes it and resets it to `Value`. */
 	private var _use: FactUse = Value;
 
+	/** The range of the block the expression `walk` is about to visit is a statement of; `visit` takes it and resets it. */
+	private var _block: Null<Position> = null;
+
 	private var _ret: Null<Type> = null;
 	private var _home: String = '';
 
@@ -332,6 +335,8 @@ final class TypedFactsWalk {
 		// noqa: complexity
 		final use: FactUse = _use;
 		_use = Value;
+		final block: Null<Position> = _block;
+		_block = null;
 		switch e.expr {
 			case TFunction(_):
 				child(e, null);
@@ -350,10 +355,14 @@ final class TypedFactsWalk {
 				declare(v, e.pos);
 				if (init != null) {
 					flowInto(init, str(v.t), 'var', e.pos);
+					final called: Null<String> = receiverCall(v, e.pos, block);
 					switch init.expr {
 						case TFunction(_):
 							final made: String = child(init, v.name);
 							if (!_written.exists(v.id)) _locals[v.id] = made;
+						case _ if (called != null):
+							// the receiver of an inlined call: what the method's code then does with it is the call's
+							walkAs(init, Call(called));
 						case TField(_, _):
 							// the field's value goes wherever the local's reads take it: the compiler holds a lowered loop's
 							// array, and the receiver of a compound element write, in a local of its own. An unrolled loop
@@ -433,7 +442,10 @@ final class TypedFactsWalk {
 				walkAs(body, Statement);
 			case TBlock(exprs):
 				// every statement but the last is discarded; the last is the block's own value
-				for (i in 0...exprs.length) walkAs(exprs[i], i == exprs.length - 1 ? use : Statement);
+				for (i in 0...exprs.length) {
+					_block = e.pos;
+					walkAs(exprs[i], i == exprs.length - 1 ? use : Statement);
+				}
 			case TIf(condition, then, otherwise):
 				walk(condition);
 				walkAs(then, use);
@@ -454,6 +466,22 @@ final class TypedFactsWalk {
 			case _:
 				TypedExprTools.iter(e, walk);
 		}
+	}
+
+	/**
+	 * The method whose inlined call has the local `v`, declared at `p` in the block at `block`, for its receiver: the
+	 * compiler binds a receiver that is more than a local or a constant to a local of its own, named
+	 * `TypedFactsMacro.INLINED_RECEIVER` and declared at the spliced body's own range — the block holding it — in code
+	 * spliced from a method no parameter of which takes that name (`InlineMethod.receiver`). A local the method's code
+	 * declares stands at a statement inside that block. Null for any other local.
+	 */
+	private function receiverCall(v: TVar, p: Position, block: Null<Position>): Null<String> {
+		final method: Null<InlineMethod> = _splice;
+		if (method == null || block == null || !method.receiver || v.name != TypedFactsMacro.INLINED_RECEIVER) return null;
+		final at: { min: Int, max: Int, file: String } = Context.getPosInfos(p);
+		final around: { min: Int, max: Int, file: String } = Context.getPosInfos(block);
+		if (at.file != around.file || at.min != around.min || at.max != around.max) return null;
+		return method.id.substr(method.id.lastIndexOf('.') + 1);
 	}
 
 	/** Walk the receiver of a field access, its value used as `use`; a type named as one is no value, so it is not walked. */
@@ -656,7 +684,7 @@ private enum FactUse {
 	/** Discarded: a statement's own value. */
 	Statement;
 
-	/** The receiver of a call of its field `method`. */
+	/** The receiver of a call of its field `method`, or of an inlined call of it (`TypedFactsWalk.receiverCall`). */
 	Call(method: String);
 
 	/** An array indexed to read an element. */

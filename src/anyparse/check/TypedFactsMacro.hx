@@ -6,6 +6,7 @@ import haxe.macro.Context;
 import haxe.macro.Expr.MetadataEntry;
 import haxe.macro.Expr.Position;
 import haxe.macro.Type;
+import haxe.macro.TypeTools;
 import sys.io.File;
 import sys.io.FileOutput;
 
@@ -26,6 +27,12 @@ final class TypedFactsMacro {
 
 	/** This module: the probe itself is not the build's code. */
 	private static inline final OWN_MODULE: String = 'anyparse.check.TypedFactsMacro';
+
+	/**
+	 * The name the compiler gives the local it binds the receiver of an inlined instance method to, at the spliced body's
+	 * own range, when the receiver is more than a local or a constant: `var _this = this.items`.
+	 */
+	public static inline final INLINED_RECEIVER: String = '_this';
 
 	/** Whether each class path names a type parameter, decided once per path: reading a `Ref` decodes the whole class. */
 	private static final typeParams: Map<String, Bool> = [];
@@ -305,7 +312,8 @@ final class TypedFactsMacro {
 							file: info.file,
 							min: info.min,
 							max: info.max,
-							id: '$owner.${f.name}'
+							id: '$owner.${f.name}',
+							receiver: !takes(f, INLINED_RECEIVER)
 						});
 					}
 				}
@@ -425,6 +433,14 @@ final class TypedFactsMacro {
 		return ',"meta":' + arr([for (m in meta) q(m.name)]) + (builds.length == 0 ? '' : ',"builds":' + arr(builds));
 	}
 
+	/** Whether the method `f` may declare a parameter named `name`: it does, or its type is no function type. */
+	private static function takes(f: ClassField, name: String): Bool {
+		return switch TypeTools.follow(f.type) {
+			case TFun(args, _): Lambda.exists(args, a -> a.name == name);
+			case _: true;
+		};
+	}
+
 	private static function access(a: VarAccess): String {
 		return switch a {
 			case AccNormal: 'default';
@@ -445,5 +461,12 @@ typedef InlineMethod = {
 	final min: Int;
 	final max: Int;
 	final id: String;
+
+	/**
+	 * Whether a local named `TypedFactsMacro.INLINED_RECEIVER` the compiler binds at a splice of the body, at the body's own
+	 * range, is the receiver: no parameter of the method takes that name. The compiler gives that name to nothing else it
+	 * binds — a parameter keeps its own, a static method's and an abstract's `this` included.
+	 */
+	final receiver: Bool;
 }
 #end

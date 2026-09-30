@@ -69,7 +69,8 @@ typedef FieldFact = {
 	final at: FactPos;
 
 	/**
-	 * How a read's value is used (null for a write): `call` (the receiver of a call of `method`), `index`, `elemWrite`,
+	 * How a read's value is used (null for a write): `call` (the receiver of a call of `method`, an inlined one's too:
+	 * the local the compiler binds it to is the method's code, not a value handed on), `index`, `elemWrite`,
 	 * `member` (the receiver of a field read), `memberWrite`, `compare`, `iter`, `update` (the read half of a compound
 	 * write of the field) or `value` — anything else, an escape. A value the compiler holds in a local is read once per
 	 * use of that local, each a fact of its own at the same position (`TypedFactsProbe`).

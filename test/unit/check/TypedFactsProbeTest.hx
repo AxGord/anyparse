@@ -644,6 +644,38 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
+	@:pin('control') @:killer('M-FACTS-INLINED-RECEIVER') @:killer('M-FACTS-RECEIVER-BLOCK') @:killer('M-FACTS-RECEIVER-PARAM')
+	public function testAFieldReadAnInlinedMethodTakesAsItsReceiverIsTheCallsReceiver(): Void {
+		// the compiler binds the receiver of an inlined `items.keyValueIterator()` — a key-value loop — to a local of its
+		// own at the spliced body's range; a local the method's code names so, or a parameter so named, holds an argument
+		final source: String = 'class Main {\n\tvar items:Array<Int> = [];\n\tfunction new() {}\n'
+			+ '\tfunction use(k:Keeper) {\n\t\tfor (i => v in items) trace(v);\n\t\tvar it = items.iterator();\n'
+			+ '\t\tvar a = k.push(items);\n\t\tk.pop(items);\n\t}\n' + '\tstatic function main() new Main().use(new Keeper());\n}\n'
+			+ 'class Keeper {\n\tpublic var kept:Array<Int> = [];\n\tpublic var count:Int = 0;\n\tpublic function new() {}\n'
+			+ '\tpublic inline function push(a:Array<Int>):Array<Int> {\n\t\tvar _this = a;\n\t\treturn _this;\n\t}\n'
+			+ '\tpublic inline function pop(_this:Array<Int>):Void {\n\t\tkept = _this;\n\t\tcount = _this.length;\n\t}\n}\n';
+		final scratch: Scratch = compile(['Main.hx' => source]);
+		final node: Null<FactNode> = scratch.facts?.node('Main.use');
+		Assert.notNull(node);
+		if (node != null) {
+			final walked: FactNode = node;
+			function usesAt(at: String): String {
+				final from: Int = source.indexOf(at) + at.indexOf('items');
+				final uses: Array<String> = [
+					for (f in walked.fields) if (f.field == 'items' && !f.write && f.at.span.from == from)
+						f.use + (f.method == null ? '' : ':${f.method}')
+				];
+				uses.sort(Reflect.compare);
+				return uses.join(',');
+			}
+			Assert.equals('call:keyValueIterator', usesAt('in items)'), 'the key-value loop');
+			Assert.equals('call:iterator', usesAt('items.iterator'), 'an inlined reader');
+			Assert.equals('value', usesAt('push(items'), 'a local named as a receiver');
+			Assert.equals('member,value', usesAt('pop(items'), 'a parameter named as a receiver');
+		}
+		scratch.remove();
+	}
+
 	@:pin('control') @:killer('M-FACTS-FRESH') @:killer('M-FACTS-FRESH-DISCARDED')
 	public function testAWriteOfAValueBuiltThereAndHandedNowhereIsFresh(): Void {
 		final source: String = 'class Main {\n\tvar items:Null<Array<Int>> = [];\n\tvar copy:Array<Int> = [];\n\tfunction new() {}\n'

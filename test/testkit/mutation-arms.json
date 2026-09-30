@@ -7981,6 +7981,30 @@
 			"note": "a fresh value stored by an assignment used as a value counts as the field's alone, though the assignment hands it on"
 		},
 		{
+			"name": "M-FACTS-INLINED-RECEIVER",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "visit",
+			"find": "final called: Null<String> = receiverCall(v, e.pos, block);",
+			"replace": "final called: Null<String> = null;",
+			"note": "the receiver of an inlined method is held in the compiler's local like any value, so the key-value loop's array reads as handed to `new ArrayKeyValueIterator` and escapes"
+		},
+		{
+			"name": "M-FACTS-RECEIVER-BLOCK",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "receiverCall",
+			"find": "if (at.file != around.file || at.min != around.min || at.max != around.max) return null;",
+			"replace": "",
+			"note": "a local the inlined method's own code names `_this` counts as the compiler's receiver binding, so an argument it keeps reads as the receiver of a call of the array's own method"
+		},
+		{
+			"name": "M-FACTS-RECEIVER-PARAM",
+			"type": "anyparse.check.TypedFactsMacro",
+			"method": "collectFields",
+			"find": "receiver: !takes(f, INLINED_RECEIVER)",
+			"replace": "receiver: true",
+			"note": "a parameter named `_this`, bound by the compiler as it binds a receiver, counts as the receiver, so the argument it keeps reads as the receiver of a call of the array's own method"
+		},
+		{
 			"name": "M-FACTS-REACH-NESTED-OWNER",
 			"type": "anyparse.query.FactsView",
 			"method": "typedBodies",
