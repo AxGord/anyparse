@@ -5692,8 +5692,8 @@
 			"name": "M-REACH-CALLS-ENTRY",
 			"type": "anyparse.query.MemberReach",
 			"method": "seedsOf",
-			"find": "seedsWhere(g, file, null, s -> s != null && starts.contains(s.from) && isLive(g, file, s), splicedInto(g, file, spans));",
-			"replace": "seedsWhere(g, file, null, s -> s != null && isLive(g, file, s), splicedInto(g, file, spans));",
+			"find": "s -> s != null && starts.contains(s.from) && isLive(g, file, s)",
+			"replace": "s -> s != null && isLive(g, file, s)",
 			"note": "a Calls entry starts at every call of the file, not the sites it names"
 		},
 		{
@@ -7370,7 +7370,7 @@
 			"name": "M-FACTS-INLINED-CALL",
 			"type": "anyparse.check.TypedFactsWalk",
 			"method": "spliced",
-			"find": "add('calls', '{\"t\":${q(callee)},\"a\":\"inlined\",\"rt\":${q(str(e.t))},\"p\":${at(e.pos)}}');",
+			"find": "inlinedCall(callee, e.t, at(e.pos));",
 			"replace": "",
 			"note": "an inlined call leaves no call fact"
 		},
@@ -7512,24 +7512,24 @@
 			"name": "M-FACTS-SPLICED-WITHIN-UNPLACED",
 			"type": "anyparse.query.CompilerFacts",
 			"method": "within",
-			"find": " || (splice && !placed(n, at(fact)))",
-			"replace": "",
+			"find": "splice && spliced && !placed(n, where) ? runsIn(n, where) : whole || inside(where)",
+			"replace": "whole || inside(where)",
 			"note": "a range question in a body an inlined function was spliced into drops the spliced facts, which sit at the callee yet run in the body"
 		},
 		{
 			"name": "M-FACTS-TRUTH-SITES-SPLICED",
 			"type": "anyparse.query.FactsView",
 			"method": "sitesIn",
-			"find": "n -> n.strings, s -> s.at, truth",
-			"replace": "n -> n.strings, s -> s.at",
+			"find": "n -> n.strings, s -> s.at, truth, harmless",
+			"replace": "n -> n.strings, s -> s.at, false, harmless",
 			"note": "the implicit-call sites of a region in a body an inlined function was spliced into are read off the syntax under the whole list of builds"
 		},
 		{
 			"name": "M-FACTS-TRUTH-HAZARDS-SPLICED",
 			"type": "anyparse.query.FactsView",
 			"method": "truthSites",
-			"find": "n -> n.natives, f -> f.at, true",
-			"replace": "n -> n.natives, f -> f.at",
+			"find": "n -> n.natives, f -> f.at, true, harmless",
+			"replace": "n -> n.natives, f -> f.at, false, harmless",
 			"note": "(precision) the hazards of a region in a body an inlined function was spliced into are read off the syntax under the whole list of builds"
 		},
 		{
@@ -7544,7 +7544,7 @@
 			"name": "M-REACH-TRUTH-SPLICED-SEEDS",
 			"type": "anyparse.query.MemberReach",
 			"method": "seedsWhere",
-			"find": " || (span == null && spliced.contains(from))",
+			"find": " || (span == null && spliced.contains(from) && splicedAt(where, spans))",
 			"replace": "",
 			"note": "a region leaves out what an inlined body spliced into its function runs, which the facts place at the callee"
 		},
@@ -7563,6 +7563,134 @@
 			"find": "for (file in g._entries.keys()) if (view.table.keyOf(file) == key) return file;",
 			"replace": "",
 			"note": "a function spliced in from another file is looked up in its caller's file, where no graph node starts at its range"
+		},
+		{
+			"name": "M-FACTS-SPLICE-SITE",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "inlinedCall",
+			"find": ",\"s\":[${_site.min},${_site.max}]",
+			"replace": "",
+			"note": "an inlined call records no site, so all it spliced in may run anywhere in its caller"
+		},
+		{
+			"name": "M-FACTS-SPLICE-SITE-INNERMOST",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "walk",
+			"find": "_site = { min: info.min, max: info.max }",
+			"replace": "_site = { min: _min, max: _max }",
+			"note": "(precision) an inlined call ran anywhere in its caller's body, not in the innermost expression around its call site"
+		},
+		{
+			"name": "M-FACTS-SPLICE-BODY",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "inlinedCall",
+			"find": ",\"d\":$declared",
+			"replace": "",
+			"note": "an inlined call records no declared range, so nothing it spliced in is attributed to it"
+		},
+		{
+			"name": "M-FACTS-NESTED-SPLICE",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "walk",
+			"find": "nestedSplice(e, info);",
+			"replace": "{}",
+			"note": "a body a spliced body spliced in turn is no call of its own: its code is attributed to no call, or to a call of it elsewhere"
+		},
+		{
+			"name": "M-FACTS-SPLICE-SITES-MET",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "within",
+			"find": "splice.sites.exists(s -> s.from < span.to && span.from < s.to)",
+			"replace": "true",
+			"note": "(precision) what an inlined call spliced in runs in every range its caller meets, wherever the call stood"
+		},
+		{
+			"name": "M-FACTS-SPLICE-UNATTRIBUTED",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "within",
+			"find": "if (splice == null) return true;",
+			"replace": "if (splice == null) return false;",
+			"note": "a spliced fact no inlined call's body holds runs nowhere, though it may run anywhere in its node"
+		},
+		{
+			"name": "M-FACTS-SPLICE-HARMLESS",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "within",
+			"find": "!dropped(splice.callee) && ",
+			"replace": "",
+			"note": "(precision) what a method that runs no project code spliced in is its caller's own code, the target code its body spells among it"
+		},
+		{
+			"name": "M-FACTS-SPLICE-INNERMOST",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "spliceOf",
+			"find": "(best == null || body.to - body.from < best.body.span.to - best.body.span.from)",
+			"replace": "best == null",
+			"note": "a fact two declared ranges hold is attributed to the first splice, not the innermost, and runs at that splice's sites"
+		},
+		{
+			"name": "M-FACTS-SPLICE-SECOND-SITE",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "collectSplices",
+			"find": "known.sites.push(ran);",
+			"replace": "{}",
+			"note": "a method inlined at two sites of a node runs what it spliced in at the first alone"
+		},
+		{
+			"name": "M-GRAPH-FACTS-SPLICE-HARMLESS",
+			"type": "anyparse.query.CallGraphFacts",
+			"method": "filed",
+			"find": "if (inlined == null && splice != null && view.harmlessSplice(g, splice.callee)) return;",
+			"replace": "",
+			"note": "(precision) the edges and sites a method that runs no project code spliced in are its caller's own"
+		},
+		{
+			"name": "M-GRAPH-FACTS-SPLICE-TAG",
+			"type": "anyparse.query.CallGraphFacts",
+			"method": "filed",
+			"find": "for (i in edges ... g.edges.length) g.edges[i].spliced = where;",
+			"replace": "",
+			"note": "an edge filed off a spliced body says nothing of where it runs: every region meeting its function takes it, and it is asked at no range"
+		},
+		{
+			"name": "M-GRAPH-FACTS-INLINED-SITE",
+			"type": "anyparse.query.CallGraphFacts",
+			"method": "record",
+			"find": "own == null ? [] : [own.span]",
+			"replace": "[]",
+			"note": "(precision) an inlined call runs anywhere in its caller, not where it was called"
+		},
+		{
+			"name": "M-REACH-SPLICED-SITES",
+			"type": "anyparse.query.MemberReach",
+			"method": "splicedAt",
+			"find": "sites == null || sites.exists(s -> spans.exists(r -> s.from < r.to && r.from < s.to))",
+			"replace": "true",
+			"note": "(precision) a region takes what a splice anywhere in its function runs"
+		},
+		{
+			"name": "M-REACH-SPLICED-BENIGN",
+			"type": "anyparse.query.MemberReach",
+			"method": "benignEdge",
+			"find": "if (e.spliced != null) return benignWhereWritten(g, e);",
+			"replace": "",
+			"note": "(precision) an edge a callee's splice files is asked in the callee, where it has no range, instead of where the spliced body is written"
+		},
+		{
+			"name": "M-REACH-SPLICED-CULPRIT",
+			"type": "anyparse.query.MemberReach",
+			"method": "regionCulprit",
+			"find": "e.spliced == null ? benignCall(g, tree, source, fn, target, call, region) : benignWhereWritten(g, e)",
+			"replace": "benignCall(g, tree, source, fn, target, call, region)",
+			"note": "(precision) an edge a splice in the region files is asked in the region, where it has no call, instead of where the spliced body is written"
+		},
+		{
+			"name": "M-REACH-WHERE-WRITTEN-RANGE",
+			"type": "anyparse.query.MemberReach",
+			"method": "benignWhereWritten",
+			"find": "span: origin.span,",
+			"replace": "span: e.span,",
+			"note": "(precision) a spliced edge is asked in the method it is written in at no range of it"
 		},
 		{
 			"name": "M-FACTS-REACH-ESCAPE-TYPED",
@@ -7688,8 +7816,8 @@
 			"name": "M-FACTS-ABSTRACT-THIS",
 			"type": "anyparse.check.TypedFactsWalk",
 			"method": "walk",
-			"find": " && !straddles",
-			"replace": "",
+			"find": "final straddles: Bool = !inside && info.file == _home && info.min <= _max && info.max >= _min;",
+			"replace": "final straddles: Bool = false;",
 			"note": "a range meeting the body without lying inside it — an abstract method's own `this`, placed at the whole abstract — reads as a splice, and the method is marked as a macro expansion"
 		},
 		{
@@ -7832,8 +7960,8 @@
 			"name": "M-REACH-CALLEE-REFUSED",
 			"type": "anyparse.query.MemberReach",
 			"method": "regionCulprit",
-			"find": "if (!target.isExternal || !benignCall(g, tree, source, fn, target, call, region)) callees.push(e);",
-			"replace": "if (!target.isExternal || !benignCall(g, tree, source, fn, target, call, region)) return e.span ?? region;",
+			"find": "if (!target.isExternal || !benign) callees.push(e);",
+			"replace": "if (!target.isExternal || !benign) return e.span ?? region;",
 			"note": "every call a shared collection's region makes is a culprit again, so a region calling a pure project function is refused"
 		},
 		{

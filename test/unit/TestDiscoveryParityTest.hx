@@ -1851,6 +1851,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.TypedFactsProbeTest#testAnElementWriteIsAWriteThroughTheArrayAtItsOwnRead :: control :: M-FACTS-ELEMENT-WRITE',
 			'unit.check.TypedFactsProbeTest#testAnImplicitConstructorCallsSuperAndAnInitializerIsANode :: control :: M-FACTS-SUPER,M-FACTS-INITIALIZER',
 			'unit.check.TypedFactsProbeTest#testAnInlineCallIsNoCallSiteAndItsBodyKeepsTheCalleesPositions :: control :: M-FACTS-INLINE-POSITIONS,M-FACTS-SAME-FILE-INLINE',
+			'unit.check.TypedFactsProbeTest#testAnInlinedCallCarriesWhereItRanAndTheBodyItSplicedIn :: control :: '
+				+ 'M-FACTS-SPLICE-SITE,M-FACTS-SPLICE-SITE-INNERMOST,M-FACTS-SPLICE-BODY,M-FACTS-NESTED-SPLICE',
 			'unit.check.TypedFactsProbeTest#testCodeNoConfigurationCompiledIsAbsent :: control :: M-FACTS-ABSENT',
 			'unit.check.TypedFactsProbeTest#testEveryCallAndFieldAccessKind :: control :: M-FACTS-LOCAL-CALL,M-FACTS-FIELD-WRITE',
 			'unit.check.TypedFactsProbeTest#testEveryOverloadIsANodeAndACallNamesTheOneItChose :: control :: M-FACTS-OVERLOADS',
@@ -2435,6 +2437,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CommentWeldDeletionSliceTest#testWeldingAcrossTheRepeatedSeparatorIsStillRefused :: control :: '
 				+ 'M-COMMENT-WELD-BLIND',
 			'unit.query.CompilerFactsTest#testADumpWithoutItsClosingRecordContributesNothing :: control :: M-FACTS-INCOMPLETE',
+			'unit.query.CompilerFactsTest#testASplicedFactRunsAtTheSitesOfTheCallThatSplicedItIn :: control :: '
+				+ 'M-FACTS-SPLICE-SITES-MET,M-FACTS-SPLICE-UNATTRIBUTED,M-FACTS-SPLICE-HARMLESS,M-FACTS-SPLICE-INNERMOST,'
+				+ 'M-FACTS-SPLICE-SECOND-SITE',
 			'unit.query.CondQueryTest#testABranchBodyNeverCarriesADirective :: control :: M-COND-BODY-SWALLOWS-DIRECTIVES',
 			'unit.query.CondQueryTest#testAMetadataNameIsASymbolRowAndKeepsItsSigil :: control :: M-COND-NAMES-DROP-META-NAME',
 			'unit.query.CondQueryTest#testANestedRegionRunsInsideItsParentBranch :: control :: M-COND-INNERMOST-FRAME',
@@ -2598,6 +2603,11 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-TRUTH-NATIVES,M-FACTS-TRUTH-NATIVE-CALLS-KEPT,M-FACTS-TRUTH-NATIVE-METAS-DROPPED',
 			'unit.query.MemberReachFactsTest#testTheTruthNeedsTheFactsToNameExactlyTheListedBuilds :: control :: '
 				+ 'M-FACTS-TRUTH-UNLISTED,M-FACTS-TRUTH-COUNT,M-FACTS-TRUTH-NAMES,M-FACTS-TRUTH-ORDER',
+			'unit.query.MemberReachFactsTest#testUnderTheTruthASpliceElsewhereInTheFunctionIsNoneOfTheRegions :: control :: '
+				+ 'M-REACH-SPLICED-SITES,M-GRAPH-FACTS-SPLICE-TAG,M-GRAPH-FACTS-INLINED-SITE,M-FACTS-SPLICE-SITE,'
+				+ 'M-FACTS-SPLICE-SITE-INNERMOST,M-FACTS-SPLICE-BODY',
+			'unit.query.MemberReachFactsTest#testUnderTheTruthASplicedPushOnAFreshLocalOfItsMethodChangesNothingShared :: control :: '
+				+ 'M-REACH-SPLICED-BENIGN,M-REACH-SPLICED-CULPRIT,M-REACH-WHERE-WRITTEN-RANGE,M-GRAPH-FACTS-SPLICE-TAG',
 			'unit.query.MemberReachFactsTest#testUnderTheTruthASplicedStringConversionIsTheRegions :: control :: '
 				+ 'M-FACTS-SPLICED-WITHIN-UNPLACED,M-FACTS-TRUTH-SITES-SPLICED,M-FACTS-SPLICED-WITHIN',
 			'unit.query.MemberReachFactsTest#testUnderTheTruthAnEdgeSplicedFromAnotherFileIsNoSiteOfItsCaller :: control :: '
@@ -2612,6 +2622,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-TRUTH-REFLECTION-INLINED',
 			'unit.query.MemberReachFactsTest#testUnderTheTruthUntypedCodeBesideAnInlinedCallIsReadThroughTheFacts :: control :: '
 				+ 'M-FACTS-TRUTH-SPLICE,M-FACTS-TRUTH-HAZARDS-SPLICED,M-FACTS-SPLICED-WITHIN',
+			'unit.query.MemberReachFactsTest#testUnderTheTruthWhatAPureLibraryCallSplicedInIsNoneOfTheRegions :: control :: '
+				+ 'M-FACTS-SPLICE-HARMLESS,M-GRAPH-FACTS-SPLICE-HARMLESS,M-FACTS-SPLICE-SITE,M-FACTS-SPLICE-BODY',
 			'unit.query.MemberReachFactsTest#testUnderTheWholeListTheCallOfALocalInlineFunctionKeepsItsEdge :: control :: '
 				+ 'M-GRAPH-TRUTH-MUTE-UNTYPED',
 			'unit.query.MemberReachFactsTest#testUnderTheWholeListTheSyntaxsEdgeAtASiteTheFactsTypeIsDropped :: control :: '
@@ -3815,6 +3827,22 @@ class TestDiscoveryParityTest extends Test {
 			'M-REACH-TRUTH-SPLICED-SEEDS',
 			'M-GRAPH-FACTS-SPLICED-SITE',
 			'M-GRAPH-FACTS-SPLICED-FILE',
+			'M-FACTS-SPLICE-SITE',
+			'M-FACTS-SPLICE-SITE-INNERMOST',
+			'M-FACTS-SPLICE-BODY',
+			'M-FACTS-NESTED-SPLICE',
+			'M-FACTS-SPLICE-SITES-MET',
+			'M-FACTS-SPLICE-UNATTRIBUTED',
+			'M-FACTS-SPLICE-HARMLESS',
+			'M-FACTS-SPLICE-INNERMOST',
+			'M-FACTS-SPLICE-SECOND-SITE',
+			'M-GRAPH-FACTS-SPLICE-HARMLESS',
+			'M-GRAPH-FACTS-SPLICE-TAG',
+			'M-GRAPH-FACTS-INLINED-SITE',
+			'M-REACH-SPLICED-SITES',
+			'M-REACH-SPLICED-BENIGN',
+			'M-REACH-SPLICED-CULPRIT',
+			'M-REACH-WHERE-WRITTEN-RANGE',
 			'M-FACTS-REACH-ESCAPE-TYPED',
 			'M-FACTS-REACH-TOUCH-TYPED',
 			'M-FACTS-REACH-MACRO',
@@ -4301,6 +4329,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-IDENT-READ :: anyparse.check.TypedFactsWalk#visit',
 			'M-FACTS-BUILDS :: anyparse.check.TypedFactsMacro#metaList',
 			'M-FACTS-REFLECTION-PATH :: anyparse.check.TypedFactsMacro#reflectionModule',
+			'M-FACTS-SPLICE-SITE :: anyparse.check.TypedFactsWalk#inlinedCall',
+			'M-FACTS-SPLICE-SITE-INNERMOST :: anyparse.check.TypedFactsWalk#walk',
+			'M-FACTS-SPLICE-BODY :: anyparse.check.TypedFactsWalk#inlinedCall',
+			'M-FACTS-NESTED-SPLICE :: anyparse.check.TypedFactsWalk#walk',
 			'M-FACTS-CALL-SITE-INLINE :: anyparse.check.TypedFactsMacro#collectFields',
 			'M-FACTS-SPLICE-OWN-ARGUMENTS :: anyparse.check.TypedFactsWalk#spliced',
 			'M-FACTS-ABSTRACT-THIS :: anyparse.check.TypedFactsWalk#walk',

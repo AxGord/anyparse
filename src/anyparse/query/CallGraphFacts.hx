@@ -3,12 +3,14 @@ package anyparse.query;
 import anyparse.query.CallGraph.CallEdge;
 import anyparse.query.CallGraph.EdgeKind;
 import anyparse.query.CallGraph.FnNode;
+import anyparse.query.CallGraph.SplicedSite;
 import anyparse.query.CallGraph.UnresolvedReason;
 import anyparse.query.CompilerFacts.CallFact;
 import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.CompilerFacts.FieldFact;
 import anyparse.query.CompilerFacts.NewFact;
+import anyparse.query.CompilerFacts.SpliceFact;
 import anyparse.query.CompilerFacts.TypeFact;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.runtime.Span;
@@ -25,8 +27,11 @@ using StringTools;
  * method named off a structure or a dynamic receiver. A target is named in the graph's terms (`FactsView.graphType`),
  * a nested or local function by the node declared where the compiler typed it. A fact an inlined body spliced in sits at its
  * callee's range, maybe in another file: its edge, unresolved site or access has no site in the node's file
- * (`siteOf`): it is the whole node's, which a range question meeting the node takes (`MemberReach.splicedInto`) and
- * no dead branch of the file drops, and a function nested in it is the node the graph declares in the callee's file.
+ * (`siteOf`), which no dead branch of the file drops, and says where it runs instead (`SplicedSite`, `filed`): at the sites
+ * of the inlined calls whose method declares it, which a range question meeting one takes (`MemberReach.splicedAt`), or
+ * anywhere in the node when no such method does. What a method that runs no project code spliced in is not filed
+ * (`FactsView.harmlessSplice`): the `inlined` call of it answers for all it does. A function nested in a spliced body is
+ * the node the graph declares in the callee's file.
  */
 @:access(anyparse.query.CallGraph)
 @:nullSafety(Strict)
@@ -34,6 +39,9 @@ final class CallGraphFacts {
 
 	/** The prefix the compiler gives a native identifier (`` `trace ``), which the syntax spells without it. */
 	private static inline final NATIVE_PREFIX: String = '`';
+
+	/** The access of a call of a method the compiler spliced in (`CompilerFacts.CallFact`). */
+	private static inline final INLINED: String = 'inlined';
 
 	/** The view over the table the graph reads. */
 	public final view: FactsView;
@@ -122,11 +130,54 @@ final class CallGraphFacts {
 	 */
 	private static function record(g: CallGraph, node: FnNode, facts: Array<FactNode>, view: FactsView, deferred: Bool = false): Void {
 		for (n in facts) {
-			for (c in n.calls) call(g, node, c, siteOf(node, n, c.at, view), view, deferred);
-			for (x in n.news) construction(g, node, x, siteOf(node, n, x.at, view), view, deferred);
-			for (f in n.fields) field(g, node, f, siteOf(node, n, f.at, view), view);
+			for (c in n.calls) {
+				final own: Null<FactPos> = c.site;
+				final inlined: Null<Array<Span>> = c.access != INLINED ? null : own == null ? [] : [own.span];
+				filed(g, node, n, c.at, view, inlined, span -> call(g, node, c, span, view, deferred));
+			}
+			for (x in n.news) filed(g, node, n, x.at, view, null, span -> construction(g, node, x, span, view, deferred));
+			for (f in n.fields) filed(g, node, n, f.at, view, null, span -> field(g, node, f, span, view));
 			for (id in n.fns) nested(g, node, n, id, view);
 		}
+	}
+
+	/**
+	 * Record through `add` the fact of `node`'s body `n` at `at`, handed its site in `node`'s file (`siteOf`). What `add`
+	 * files for a fact a body spliced in carries where that runs (`splicedSite`) — or is not filed at all when the method
+	 * that spliced it in runs no project code (`FactsView.harmlessSplice`): the `inlined` call of the method answers for all
+	 * it does. That call itself (`inlined`: its own site, empty when the facts record none) runs where it was called.
+	 */
+	private static function filed(
+		g: CallGraph, node: FnNode, n: FactNode, at: FactPos, view: FactsView, inlined: Null<Array<Span>>, add: Null<Span> -> Void
+	): Void {
+		final span: Null<Span> = siteOf(node, n, at, view);
+		if (span != null) {
+			add(span);
+			return;
+		}
+		final splice: Null<SpliceFact> = CompilerFacts.spliceOf(n, at);
+		if (inlined == null && splice != null && view.harmlessSplice(g, splice.callee)) return;
+		final edges: Int = g.edges.length;
+		final unresolved: Int = g.unresolved.length;
+		final access: Int = g.unresolvedAccess.length;
+		add(null);
+		final where: SplicedSite = inlined == null
+			? splicedSite(g, at, splice, view)
+			: { sites: inlined.length == 0 ? null : inlined, origin: null };
+		for (i in edges ... g.edges.length) g.edges[i].spliced = where;
+		for (i in unresolved ... g.unresolved.length) g.unresolved[i].spliced = where;
+		for (i in access ... g.unresolvedAccess.length) g.unresolvedAccess[i].spliced = where;
+	}
+
+	/**
+	 * Where a fact at `at` that `splice` brought into a body runs: at a site of the splice, written in the graph node of its
+	 * method when the graph names one. No splice brought one the compiler put where no method is declared: anywhere.
+	 */
+	private static function splicedSite(g: CallGraph, at: FactPos, splice: Null<SpliceFact>, view: FactsView): SplicedSite {
+		if (splice == null) return { sites: null, origin: null };
+		final owner: String = ownerOf(splice.callee);
+		final written: Null<String> = g.memberOnChain(view.graphType(owner), splice.callee.substr(owner.length + 1));
+		return { sites: splice.sites, origin: written == null ? null : { node: written, file: at.file, span: at.span } };
 	}
 
 	/** The call `c` of `node`'s facts, at `span` of `node`'s file, or anywhere in `node` when null (`siteOf`). */
@@ -269,7 +320,10 @@ final class CallGraphFacts {
 		final fact: Null<FactNode> = view.table.node(id);
 		final target: Null<String> = fact == null || fact.generated ? null : graphNodeOf(g, node, id, view);
 		if (fact != null && target != null)
-			g.addEdge(node.id, target, Ref, null, node.file, siteOf(node, n, fact.at, view) == null ? null : g.nodes[target]?.span)
+			filed(
+				g, node, n, fact.at, view, null,
+				span -> g.addEdge(node.id, target, Ref, null, node.file, span == null ? null : g.nodes[target]?.span)
+			)
 		else if (fact != null && !fact.generated)
 			record(g, node, [fact], view, true)
 		else

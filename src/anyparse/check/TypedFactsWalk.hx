@@ -1,6 +1,7 @@
 package anyparse.check;
 
 #if macro
+import anyparse.check.TypedFactsMacro.InlineMethod;
 import anyparse.check.TypedFactsShapes.FieldRef;
 import haxe.Json;
 import haxe.macro.Context;
@@ -67,6 +68,15 @@ final class TypedFactsWalk {
 	/** Whether the innermost walked expression lies in the body's own range. */
 	private var _inBody: Bool = true;
 
+	/**
+	 * The range of the innermost walked expression that lies in the body's own range: it holds the call site a body
+	 * spliced below it replaced — the whole body while none does, and under a range that meets the body without lying in it.
+	 */
+	private var _site: { min: Int, max: Int } = { min: 0, max: 0 };
+
+	/** The method whose spliced body is being walked; null in the body's own code, and in a splice no method was found for. */
+	private var _splice: Null<InlineMethod> = null;
+
 	/** Extra header fields: `gen`, `gi`, `inl`, `ov`. */
 	private var _header: String = '';
 
@@ -104,6 +114,7 @@ final class TypedFactsWalk {
 		_home = info.file;
 		_min = info.min;
 		_max = info.max;
+		_site = { min: _min, max: _max };
 		_host.noteHome(_home);
 		final at: String = '[$_min,$_max]';
 		switch e.expr {
@@ -219,7 +230,9 @@ final class TypedFactsWalk {
 		// a function outside this body was spliced in: it runs here, but no range of its own file is where it runs. One
 		// bound straight to a local is reached without `walk`, so the splice is decided here too
 		final inside: Bool = info.file == _home && info.min >= _min && info.max <= _max;
+		final splice: Null<InlineMethod> = _splice;
 		if (_inBody && !inside) spliced(f, info);
+		_splice = splice;
 		if (!_inBody || !inside) nested._header += ',"inl":${q(id)}';
 		add('fns', q(nested.id));
 		nested.root(f);
@@ -233,18 +246,33 @@ final class TypedFactsWalk {
 	 * spliced code. A constant or a type expression is left out: the compiler places a default argument's value, or an
 	 * inlined constant, at its declaration. So is a range that meets the body without lying inside it: the compiler's
 	 * union of the body's own code with a range around it — an abstract method's `this` stands at the whole abstract, an
-	 * operand shares a range with an inlined sibling — whose parts are asked one by one.
+	 * operand shares a range with an inlined sibling — whose parts are asked one by one. Inside a spliced body, code of
+	 * another method is a body that one spliced in turn (`nestedSplice`).
 	 */
 	private function walk(e: TypedExpr): Void {
 		final info: { min: Int, max: Int, file: String } = Context.getPosInfos(e.pos);
 		final inside: Bool = info.file == _home && info.min >= _min && info.max <= _max;
 		final straddles: Bool = !inside && info.file == _home && info.min <= _max && info.max >= _min;
 		final saved: Bool = _inBody;
-		if (saved && !inside && !straddles && !e.expr.match(TConst(_) | TTypeExpr(_))) spliced(e, info);
+		final site: { min: Int, max: Int } = _site;
+		final splice: Null<InlineMethod> = _splice;
+		final code: Bool = !e.expr.match(TConst(_) | TTypeExpr(_));
+		if (inside)
+			_site = { min: info.min, max: info.max }
+		else if (straddles)
+			_site = { min: _min, max: _max };
+		if (inside || straddles)
+			_splice = null
+		else if (saved && code)
+			spliced(e, info)
+		else if (splice != null && code && !(info.file == splice.file && info.min >= splice.min && info.max <= splice.max))
+			nestedSplice(e, info);
 		// back inside, as the call site's own arguments are: a further splice there is a call of its own
 		_inBody = inside || straddles;
 		visit(e);
 		_inBody = saved;
+		_site = site;
+		_splice = splice;
 	}
 
 	/** Walk `e`, whose value is used as `use`. */
@@ -256,11 +284,12 @@ final class TypedFactsWalk {
 	/**
 	 * Record the spliced body rooted at `e`: the call of the method it came from — `inline`, or inlined by its call site — found at the root or, when
 	 * the root carries a position of its own — an abstract's `this` stands at the whole abstract — at the first
-	 * expression under it that lies in one; `macro-expansion` when none does.
+	 * expression under it that lies in one; `macro-expansion` when none does. The call carries where it ran, the range
+	 * of the innermost expression of the body around it (`_site`), and the method's declared range, which holds its code.
 	 */
 	private function spliced(e: TypedExpr, info: { min: Int, max: Int, file: String }): Void {
 		incomplete('inline-site-unknown');
-		var callee: Null<String> = _host.inlineCallee(info.file, info.min, info.max);
+		var callee: Null<InlineMethod> = _host.inlineCallee(info.file, info.min, info.max);
 		if (callee == null) {
 			final pending: Array<TypedExpr> = [];
 			TypedExprTools.iter(e, x -> pending.push(x));
@@ -277,7 +306,26 @@ final class TypedFactsWalk {
 			incomplete('macro-expansion');
 			return;
 		}
-		add('calls', '{"t":${q(callee)},"a":"inlined","rt":${q(str(e.t))},"p":${at(e.pos)}}');
+		inlinedCall(callee, e.t, at(e.pos));
+	}
+
+	/**
+	 * A spliced body walked below the one of `_splice` that is none of its method's code: a body that method's code spliced
+	 * in turn, run at the same site. Code no method holds stays the outer body's.
+	 */
+	private function nestedSplice(e: TypedExpr, info: { min: Int, max: Int, file: String }): Void {
+		final callee: Null<InlineMethod> = _host.inlineCallee(info.file, info.min, info.max);
+		if (callee != null) inlinedCall(callee, e.t, at(e.pos));
+	}
+
+	/**
+	 * The call of `callee`, whose body was spliced in at `where` with the result type `result`: the current site (`s`) and
+	 * the method's declared range (`d`). What is walked below it is that method's.
+	 */
+	private function inlinedCall(callee: InlineMethod, result: Type, where: String): Void {
+		final declared: String = _host.range(callee.file, callee.min, callee.max, _home);
+		add('calls', '{"t":${q(callee.id)},"a":"inlined","rt":${q(str(result))},"p":$where,"s":[${_site.min},${_site.max}],"d":$declared}');
+		_splice = callee;
 	}
 
 	private function visit(e: TypedExpr): Void {

@@ -38,6 +38,55 @@ class CompilerFactsTest extends Test {
 		Assert.equals(6, at?.span.from);
 	}
 
+	@:pin('control') @:killer('M-FACTS-SPLICE-SITES-MET') @:killer('M-FACTS-SPLICE-UNATTRIBUTED') @:killer('M-FACTS-SPLICE-HARMLESS')
+	@:killer('M-FACTS-SPLICE-INNERMOST') @:killer('M-FACTS-SPLICE-SECOND-SITE')
+	public function testASplicedFactRunsAtTheSitesOfTheCallThatSplicedItIn(): Void {
+		// `f` inlines `B.i` at `g();` and at `h();`, and `B.j`, whose declared range lies in `B.i`'s, at `k();`: code of `B.j`'s
+		// body is `B.j`'s, run at `k();` alone. A fact no declared range holds may run anywhere in `f`, and one a method that
+		// runs no project code spliced in is none of `f`'s
+		final a: String = 'class A { function f() { g(); h(); k(); } }';
+		final b: String = 'class B { inline function i() { x(); inline function j() { y(); } } }';
+		final c: String = 'class C {}';
+		function at(text: String, part: String): String {
+			final from: Int = text.indexOf(part);
+			return '$from,${from + part.length}';
+		}
+		final body: String = at(a, '{ g(); h(); k(); }');
+		final iRoot: String = at(b, '{ x();');
+		final iDeclared: String = at(b, 'inline function i() { x(); inline function j() { y(); } }');
+		final jRoot: String = at(b, '{ y(); }');
+		final jDeclared: String = at(b, 'inline function j() { y(); }');
+		final g: String = at(a, 'g();');
+		final h: String = at(a, 'h();');
+		final k: String = at(a, 'k();');
+		final x: String = at(b, 'x()');
+		final y: String = at(b, 'y()');
+		final inC: String = at(c, 'C');
+		final dump: String = '{"k":"facts","v":1,"inline":true}\n{"k":"file","i":0,"path":"B.hx"}\n{"k":"file","i":1,"path":"C.hx"}\n'
+			+ '{"k":"node","id":"A.f","f":"A.hx","p":[$body],"kind":"method","owner":"A","t":"()->Void","inc":["inline-site-unknown"],'
+			+ '"calls":[{"t":"B.i","a":"inlined","rt":"Void","p":[0,$iRoot],"s":[$g],"d":[0,$iDeclared]},'
+			+ '{"t":"B.i","a":"inlined","rt":"Void","p":[0,$iRoot],"s":[$h],"d":[0,$iDeclared]},'
+			+ '{"t":"B.j","a":"inlined","rt":"Void","p":[0,$jRoot],"s":[$k],"d":[0,$jDeclared]}],'
+			+ '"native":[{"w":"syntax","n":"x","p":[0,$x]},{"w":"syntax","n":"y","p":[0,$y]},'
+			+ '{"w":"syntax","n":"c","p":[1,$inC]}]}\n{"k":"end","nodes":1,"types":0}\n';
+		final facts: CompilerFacts = CompilerFacts.build(
+			[{ name: 'one', text: dump, file: path -> path }],
+			file -> file == 'A.hx' ? a : file == 'B.hx' ? b : file == 'C.hx' ? c : null, file -> file
+		);
+		function natives(part: String, ?harmless: (callee:String) -> Bool): Array<String> {
+			final from: Int = a.lastIndexOf(part);
+			final span: Span = new Span(from, from + part.length);
+			final found: Null<Array<NativeFact>> = facts.within('A.hx', span, n -> n.natives, n -> n.at, true, harmless);
+			return found == null ? ['null'] : [for (n in found) n.name];
+		}
+		Assert.same(['x', 'c'], natives('g();'));
+		Assert.same(['x', 'c'], natives('h();'));
+		Assert.same(['c'], natives(' } }'));
+		Assert.same(['y', 'c'], natives('k();'));
+		Assert.same(['c'], natives('g();', callee -> callee == 'B.i'));
+		Assert.isNull(facts.within('A.hx', new Span(a.indexOf('g();'), a.indexOf('h();')), n -> n.natives, n -> n.at));
+	}
+
 	private static function table(text: String): CompilerFacts {
 		return CompilerFacts.build([{ name: 'one', text: text, file: path -> path }], file -> file == 'A.hx' ? SOURCE : null, file -> file);
 	}

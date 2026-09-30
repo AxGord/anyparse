@@ -46,7 +46,7 @@ final class TypedFactsMacro {
 	private final _overloaded: Map<String, Bool> = [];
 	private final _replaceable: Map<String, Bool> = [];
 	private final _homes: Map<String, Bool> = [];
-	private final _inlines: Map<String, Array<{ min: Int, max: Int, id: String }>> = [];
+	private final _inlines: Map<String, Array<InlineMethod>> = [];
 	private final _reflectionFiles: Map<String, Bool> = [];
 	private final _out: FileOutput;
 
@@ -70,14 +70,19 @@ final class TypedFactsMacro {
 	 */
 	public function pos(p: Position, home: String): String {
 		final info: { min: Int, max: Int, file: String } = Context.getPosInfos(p);
-		if (info.file == home) return '[${info.min},${info.max}]';
-		var index: Null<Int> = _files[info.file];
+		return range(info.file, info.min, info.max, home);
+	}
+
+	/** `min`–`max` of `file` as a fact position of a record homed in `home`, as `pos` writes one. */
+	public function range(file: String, min: Int, max: Int, home: String): String {
+		if (file == home) return '[$min,$max]';
+		var index: Null<Int> = _files[file];
 		if (index == null) {
 			index = _fileCount++;
-			_files[info.file] = index;
-			line('{"k":"file","i":$index,"path":${Json.stringify(info.file)}}');
+			_files[file] = index;
+			line('{"k":"file","i":$index,"path":${Json.stringify(file)}}');
 		}
-		return '[$index,${info.min},${info.max}]';
+		return '[$index,$min,$max]';
 	}
 
 	/** `base`, made unique among the node ids this compile emitted. */
@@ -294,9 +299,14 @@ final class TypedFactsMacro {
 					if (f.overloads.get().length > 0) _overloaded['$owner.${f.name}'] = true;
 					if (f.kind.match(FMethod(MethInline | MethNormal))) {
 						final info: { min: Int, max: Int, file: String } = Context.getPosInfos(f.pos);
-						final list: Array<{ min: Int, max: Int, id: String }> = _inlines[info.file] ?? [];
+						final list: Array<InlineMethod> = _inlines[info.file] ?? [];
 						_inlines[info.file] = list;
-						list.push({ min: info.min, max: info.max, id: '$owner.${f.name}' });
+						list.push({
+							file: info.file,
+							min: info.min,
+							max: info.max,
+							id: '$owner.${f.name}'
+						});
 					}
 				}
 			case _:
@@ -304,10 +314,10 @@ final class TypedFactsMacro {
 	}
 
 	/** The method declared around `min`–`max` of `file` (the innermost), whose body was spliced from there; null for none. */
-	public function inlineCallee(file: String, min: Int, max: Int): Null<String> {
-		var best: Null<{ min: Int, max: Int, id: String }> = null;
+	public function inlineCallee(file: String, min: Int, max: Int): Null<InlineMethod> {
+		var best: Null<InlineMethod> = null;
 		for (f in _inlines[file] ?? []) if (f.min <= min && max <= f.max && (best == null || f.max - f.min < best.max - best.min)) best = f;
-		return best?.id;
+		return best;
 	}
 
 	/**
@@ -428,5 +438,12 @@ final class TypedFactsMacro {
 		};
 	}
 
+}
+/** A method declared in `file` at `min`–`max` whose body a call site may splice in: `inline`, or inlined by its call site. */
+typedef InlineMethod = {
+	final file: String;
+	final min: Int;
+	final max: Int;
+	final id: String;
 }
 #end

@@ -33,6 +33,12 @@ class MemberReachFactsTest extends Test {
 	private static inline final STD_ARRAY: String = 'extern class Array<T> { public var length(default, null):Int; '
 		+ 'public function push(x:T):Int; public function pop():Null<T>; public function indexOf(x:T, ?fromIndex:Int):Int; }';
 
+	/** The library declarations of `Std` and `StringTools` the index resolves against, where a test needs their pure calls known. */
+	private static final STD_STD: Map<String, String> = [
+		'std/Std.hx' => 'extern class Std { public static function parseFloat(x:String):Float; }',
+		'std/StringTools.hx' => 'extern class StringTools { public static function fastCodeAt(s:String, index:Int):Int; }'
+	];
+
 	private static inline final REGION_OPEN: String = '/*<*/';
 	private static inline final REGION_CLOSE: String = '/*>*/';
 
@@ -322,6 +328,50 @@ class MemberReachFactsTest extends Test {
 		final main: String = 'import Reflect.setField as sf;\n' + MEMBER_HEAD + '\tfunction f():Void {\n\t\tvar n = "it" + "ems";\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ sf(this, n, [1]); /*>*/ }\n\t}\n}\n';
 		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Unknown(DynamicName(_, _))));
+	}
+
+	@:pin('control') @:killer('M-FACTS-SPLICE-HARMLESS') @:killer('M-GRAPH-FACTS-SPLICE-HARMLESS')
+	@:killer('M-FACTS-SPLICE-SITE') @:killer('M-FACTS-SPLICE-BODY')
+	public function testUnderTheTruthWhatAPureLibraryCallSplicedInIsNoneOfTheRegions(): Void {
+		// `Std.parseFloat` is `inline` on js, its body a `js.Syntax.code`, and so is `StringTools.fastCodeAt`, its body a call
+		// of `charCodeAt` off a structure: each splice is a call of a function that runs no project code, whose edge answers
+		// for all it does — the target code and the unresolved call its body spells are none of the region's
+		final main: String = LOOP_HEAD + '\tstatic function main() {\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ var f = Std.parseFloat("1"); /*>*/ }\n\t}\n}\n';
+		assertMatch(ask(['Main.hx' => main], null, true, null, false, null, null, null, true, STD_STD), r -> r.match(Proven));
+		final local: String = 'class Main {\n\tstatic function main() run([1], "ab");\n'
+			+ '\tstatic function run(xs:Array<Int>, s:String):Void {\n'
+			+ '\t\tfor (i in 0...xs.length) { /*<*/ var c = StringTools.fastCodeAt(s, xs[i]); /*>*/ }\n\t}\n}\n';
+		assertMatch(askLocal(['Main.hx' => local], 'xs', true, false, null, STD_STD), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-REACH-SPLICED-SITES') @:killer('M-GRAPH-FACTS-SPLICE-TAG') @:killer('M-GRAPH-FACTS-INLINED-SITE')
+	@:killer('M-FACTS-SPLICE-SITE') @:killer('M-FACTS-SPLICE-SITE-INNERMOST') @:killer('M-FACTS-SPLICE-BODY')
+	public function testUnderTheTruthASpliceElsewhereInTheFunctionIsNoneOfTheRegions(): Void {
+		// the `inline` `@:from` of `Quiet` that changes `items` is spliced into `main` before the loop: it runs where its call
+		// stood, which the region does not hold. Read by its syntax, `main` admits every conversion in play
+		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tvar q:Quiet = "x";\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ k(); /*>*/ }\n\t}\n\tstatic function k():Void {}\n}\n'
+			+ 'abstract Quiet(String) {\n\t@:from static inline function of(s:String):Quiet {\n\t\tMain.items.push(1);\n'
+			+ '\t\treturn cast s;\n\t}\n}\n';
+		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Proven));
+		assertMatch(ask(['Main.hx' => main]), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-REACH-SPLICED-BENIGN') @:killer('M-REACH-SPLICED-CULPRIT') @:killer('M-REACH-WHERE-WRITTEN-RANGE')
+	@:killer('M-GRAPH-FACTS-SPLICE-TAG')
+	public function testUnderTheTruthASplicedPushOnAFreshLocalOfItsMethodChangesNothingShared(): Void {
+		// `Helper.count` is spliced into the region, and into `tally`, which the region calls: the array its body pushes to is
+		// a fresh local of `count`, a new one each time the body runs, as `count`'s own text says
+		final helper: String = 'class Helper {\n\tpublic static inline function count(n:Int):Int {\n\t\tfinal a:Array<Int> = [];\n'
+			+ '\t\ta.push(n);\n\t\treturn a.length;\n\t}\n}\n';
+		function run(region: String): String {
+			return 'class Main {\n\tstatic function main() run([1]);\n\tstatic function tally(n:Int):Int return Helper.count(n);\n'
+				+ '\tstatic function run(xs:Array<Int>):Void {\n\t\tfor (i in 0...xs.length) { /*<*/ var n = $region; /*>*/ }\n\t}\n}\n'
+				+ helper;
+		}
+		assertMatch(askLocal(['Main.hx' => run('Helper.count(xs[i])')], 'xs'), r -> r.match(Proven));
+		assertMatch(askLocal(['Main.hx' => run('tally(xs[i])')], 'xs'), r -> r.match(Proven));
 	}
 
 	@:pin('control') @:killer('M-GRAPH-LOCAL-INLINE')
@@ -889,16 +939,17 @@ class MemberReachFactsTest extends Test {
 	 * them and are indexed, but are no part of the project: the walk reads one only when it follows code into it.
 	 * `unindexed` files are written and compiled but indexed by nothing — code only the compiler sees. `listed` hands the
 	 * analysis the builds as the whole list of them — one per define set, as a run probes them (`ReachDefinesProbe`).
+	 * `declared` library declarations are indexed alone, as the built-in array type's is: written nowhere, compiled by nothing.
 	 */
 	private static function ask(
 		files: Map<String, String>, ?configurations: Array<Array<String>>, withFacts: Bool = true, ?member: MemberRef,
 		classpathComplete: Bool = false, ?build: String, ?library: Map<String, String>, ?unindexed: Map<String, String>,
-		listed: Bool = false
+		listed: Bool = false, ?declared: Map<String, String>
 	): ReachResult {
 		return withReach(files, configurations, withFacts, classpathComplete, build, library, unindexed, listed, (reach, dir) -> {
 			final source: String = files['Main.hx'] ?? '';
 			reach.mayReach(Region(Path.join([dir, 'Main.hx']), regionOf(source)), member ?? { owner: 'Main', name: 'items' }, Mutate);
-		});
+		}, declared);
 	}
 
 	/** `ask` of `files` for `access` instead of `Mutate`, under the whole list of their builds when `listed`. */
@@ -920,20 +971,21 @@ class MemberReachFactsTest extends Test {
 	 * holds every type they compile.
 	 */
 	private static function askLocal(
-		files: Map<String, String>, name: String, withFacts: Bool = true, classpathComplete: Bool = false, ?unindexed: Map<String, String>
+		files: Map<String, String>, name: String, withFacts: Bool = true, classpathComplete: Bool = false, ?unindexed: Map<String, String>,
+		?declared: Map<String, String>
 	): ReachResult {
 		return withReach(files, null, withFacts, classpathComplete, null, null, unindexed, !classpathComplete, (reach, dir) -> {
 			final source: String = files['Main.hx'] ?? '';
 			final at: Int = source.lastIndexOf(name, source.indexOf(REGION_CLOSE));
 			reach.mayMutateNamed(Path.join([dir, 'Main.hx']), name, new Span(at, at + name.length), regionOf(source));
-		});
+		}, declared);
 	}
 
 	/** The fixture of `ask` written, compiled and indexed, `question` asked of its analysis, and the fixture removed. */
 	private static function withReach<T>(
 		files: Map<String, String>, configurations: Null<Array<Array<String>>>, withFacts: Bool, classpathComplete: Bool,
 		build: Null<String>, library: Null<Map<String, String>>, unindexed: Null<Map<String, String>>, listed: Bool,
-		question: (MemberReach, String) -> T
+		question: (MemberReach, String) -> T, ?declared: Map<String, String>
 	): T {
 		final entries: Array<{ name: String, source: String }> = [for (name => text in files) { name: name, source: text }];
 		for (name => text in library ?? []) entries.push({ name: name, source: text });
@@ -957,9 +1009,9 @@ class MemberReachFactsTest extends Test {
 					source: text
 				}
 		];
-		final index: SymbolIndex = SymbolIndex.build(
-			project.concat(libraries).concat([{ file: 'std/Array.hx', source: STD_ARRAY }]), plugin
-		);
+		final std: Array<{ file: String, source: String }> = [{ file: 'std/Array.hx', source: STD_ARRAY }];
+		for (name => text in declared ?? []) std.push({ file: name, source: text });
+		final index: SymbolIndex = SymbolIndex.build(project.concat(libraries).concat(std), plugin);
 		// the builds as a run probes them: every define each one sees, the target's and the compiler's included
 		final builds: Null<Array<ReachConfiguration>> = listed ? ReachDefinesProbe.probeAll(oracles)?.configurations : null;
 		final reach: MemberReach = new MemberReach(

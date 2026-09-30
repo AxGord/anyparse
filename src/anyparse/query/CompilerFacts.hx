@@ -40,6 +40,15 @@ typedef CallFact = {
 
 	/** The signature the compiler chose, for a call of an overloaded field; null otherwise. */
 	final signature: Null<String>;
+
+	/**
+	 * For an `inlined` call, where it ran: the range of the node's own innermost expression around the call site the
+	 * compiler replaced (the whole body when none is); null otherwise, and in facts that do not record it.
+	 */
+	final site: Null<FactPos>;
+
+	/** For an `inlined` call, the called method's declared range, which holds the code it spliced in; null otherwise. */
+	final body: Null<FactPos>;
 }
 
 /** A `new`: the class and the instance type it makes. */
@@ -193,9 +202,22 @@ typedef FactNode = {
 	final vars: Array<VarFact>;
 	final reads: Array<LocalReadFact>;
 	final fns: Array<String>;
+
+	/** The bodies inlined calls spliced into this node, one per method's declared range (`spliceOf`). */
+	final splices: Array<SpliceFact>;
 }
 
-/** A node's signature and parameters as one configuration typed them. */
+/**
+ * The body of the method `callee` as inlined calls spliced it into a node: `body` is the method's declared range, which
+ * holds every fact of that code, and `sites` the ranges of the node's file its calls ran at, each holding a call site the
+ * compiler replaced — the code runs at one of them, never elsewhere in the node.
+ */
+typedef SpliceFact = {
+	final callee: String;
+	final body: FactPos;
+	final sites: Array<Span>;
+} /** A node's signature and parameters as one configuration typed them. */
+
 typedef FactSignature = {
 	final signature: String;
 	final params: Array<{ name: String, type: String }>;
@@ -260,6 +282,12 @@ typedef TypeFact = {
  */
 @:nullSafety(Strict)
 final class CompilerFacts {
+
+	/** The access of a call of a method the compiler spliced in (`CallFact.access`). */
+	private static inline final INLINED: String = 'inlined';
+
+	/** The marker of a node an inlined function was spliced into (`TypedFactsProbe`). */
+	private static inline final INLINE_SITE_UNKNOWN: String = 'inline-site-unknown';
 
 	/** The configurations that contributed nothing, and why — the table then holds less, and absence answers for it. */
 	public final dropped: Array<{ name: String, reason: String }> = [];
@@ -396,15 +424,15 @@ final class CompilerFacts {
 	/**
 	 * Every call site within `span` in `file`; null — Unknown — when a node there holds facts no range places: a spliced
 	 * body (`inline-site-unknown`, `macro-expansion`) not wholly inside `span`, or facts lost to a stale file. With
-	 * `spliced`, a body an inlined function was spliced into answers as `within` says.
+	 * `spliced`, a body an inlined function was spliced into answers as `within` says, `harmless` too.
 	 */
-	public function callsIn(file: String, span: Span, spliced: Bool = false): Null<Array<CallFact>> {
-		return within(file, span, n -> n.calls, c -> c.at, spliced);
+	public function callsIn(file: String, span: Span, spliced: Bool = false, ?harmless: (callee:String) -> Bool): Null<Array<CallFact>> {
+		return within(file, span, n -> n.calls, c -> c.at, spliced, harmless);
 	}
 
 	/** Every value flow within `span` in `file`; null — Unknown — as `callsIn` says. */
-	public function flowsIn(file: String, span: Span, spliced: Bool = false): Null<Array<FlowFact>> {
-		return within(file, span, n -> n.flows, f -> f.at, spliced);
+	public function flowsIn(file: String, span: Span, spliced: Bool = false, ?harmless: (callee:String) -> Bool): Null<Array<FlowFact>> {
+		return within(file, span, n -> n.flows, f -> f.at, spliced, harmless);
 	}
 
 	/**
@@ -594,21 +622,33 @@ final class CompilerFacts {
 	 * The facts `pick` takes from the nodes of `file` meeting `span` that lie inside it; a node wholly inside `span`
 	 * gives all of them, wherever the compiler placed them. Null — Unknown — when one of those nodes cannot say where
 	 * some of its facts run (`callsIn`). With `spliced`, a node an inlined function was spliced into (`inline-site-unknown`)
-	 * gives, beside those inside `span`, every fact it holds outside its own range (`placed`): each runs somewhere in the
-	 * node, maybe in `span`. What a macro expanded into, and facts lost to a stale file, stay Unknown.
+	 * gives, beside those inside `span`, each fact it holds outside its own range (`placed`) that may run in `span`: one
+	 * a splice brought (`spliceOf`) when a site of that splice meets `span` and the method is not `harmless` — it runs no
+	 * project code, and the `inlined` call of it answers for all it does — and one no splice brought wherever it lies, since
+	 * it may run anywhere in the node. What a macro expanded into, and facts lost to a stale file, stay Unknown.
 	 */
 	public function within<F>(
-		file: String, span: Span, pick: (FactNode) -> Array<F>, at: (F) -> FactPos, spliced: Bool = false
+		file: String, span: Span, pick: (FactNode) -> Array<F>, at: (F) -> FactPos, spliced: Bool = false,
+		?harmless: (callee:String) -> Bool
 	): Null<Array<F>> {
 		final key: String = _key(file);
+		final dropped: (callee:String) -> Bool = harmless ?? callee -> false;
 		function inside(where: FactPos): Bool return where.file == key && span.from <= where.span.from && where.span.to <= span.to;
+		function runsIn(n: FactNode, where: FactPos): Bool {
+			final splice: Null<SpliceFact> = spliceOf(n, where);
+			if (splice == null) return true;
+			return !dropped(splice.callee) && splice.sites.exists(s -> s.from < span.to && span.from < s.to);
+		}
 		final out: Array<F> = [];
 		for (n in nodesAround(file, span, true)) {
 			if (n.incomplete.contains('stale-foreign')) return null;
 			final whole: Bool = inside(n.at);
-			final splice: Bool = n.incomplete.contains('inline-site-unknown');
+			final splice: Bool = n.incomplete.contains(INLINE_SITE_UNKNOWN);
 			if (!whole && (n.incomplete.contains('macro-expansion') || (splice && !spliced))) return null;
-			for (fact in pick(n)) if (whole || inside(at(fact)) || (splice && !placed(n, at(fact)))) out.push(fact);
+			for (fact in pick(n)) {
+				final where: FactPos = at(fact);
+				if (splice && spliced && !placed(n, where) ? runsIn(n, where) : whole || inside(where)) out.push(fact);
+			}
 		}
 		return out;
 	}
@@ -670,7 +710,8 @@ final class CompilerFacts {
 			natives: [],
 			vars: [],
 			reads: [],
-			fns: []
+			fns: [],
+			splices: []
 		};
 	}
 
@@ -688,8 +729,10 @@ final class CompilerFacts {
 			FactMerge.variant(node.variants, record.t, [for (p in record.params ?? []) { name: p.n, type: p.t }]);
 			for (channel in record.inc ?? []) if (!node.incomplete.contains(channel)) node.incomplete.push(channel);
 
-			// a fact whose file the table cannot read any more — rewritten, or of another text — is lost to the node: say so
-			function place(p: Array<Int>): Null<FactPos> {
+			// a fact whose file the table cannot read any more — rewritten, or of another text — is lost to the node: say so. A
+			// position the record leaves out is none
+			function place(p: Null<Array<Int>>): Null<FactPos> {
+				if (p == null) return null;
 				final where: Null<FactPos> = position(home, p, files.paths);
 				if (where == null && !node.incomplete.contains('stale-foreign')) node.incomplete.push('stale-foreign');
 				return where;
@@ -707,10 +750,12 @@ final class CompilerFacts {
 					target: c.t,
 					access: c.a,
 					receiver: c.r,
-					receiverAt: c.rp == null ? null : place(c.rp),
+					receiverAt: place(c.rp),
 					result: c.rt,
 					at: where,
-					signature: c.sig
+					signature: c.sig,
+					site: place(c.s),
+					body: place(c.d)
 				}: CallFact),
 				node.calls
 			);
@@ -779,7 +824,28 @@ final class CompilerFacts {
 			);
 			for (f in record.fns ?? []) if (!node.fns.contains(f)) node.fns.push(f);
 		}
+		collectSplices(made);
 		return made;
+	}
+
+	/** The bodies the `inlined` calls of `node` spliced in, one per declared range with every site a call of it ran at. */
+	private static function collectSplices(node: Null<FactNode>): Void {
+		if (node == null) return;
+		for (c in node.calls) {
+			final body: Null<FactPos> = c.body;
+			final site: Null<FactPos> = c.site;
+			if (c.access == INLINED && body != null && site != null) {
+				final declared: FactPos = body;
+				final ran: Span = site.span;
+				final known: Null<SpliceFact> = node.splices.find(s ->
+					s.body.file == declared.file && sameSpan(s.body.span, declared.span)
+				);
+				if (known == null)
+					node.splices.push({ callee: c.target ?? '', body: declared, sites: [ran] })
+				else if (!known.sites.exists(s -> sameSpan(s, ran)))
+					known.sites.push(ran);
+			}
+		}
 	}
 
 	/**
@@ -808,6 +874,28 @@ final class CompilerFacts {
 	 */
 	public static function placed(n: FactNode, at: FactPos): Bool {
 		return at.file == n.at.file && n.at.span.from <= at.span.from && at.span.to <= n.at.span.to;
+	}
+
+	/**
+	 * The splice that brought the fact at `at` into `n`: the innermost declared range of a method an inlined call of `n`
+	 * spliced in that holds it (`FactNode.splices`) — the code runs at a site of that splice, and nowhere else in `n`. Null
+	 * for a fact `n` places itself, and for one no such range holds: the compiler put it where no method is declared, or
+	 * the facts record no site for the call (`CallFact.site`), and it may run anywhere in `n`.
+	 */
+	public static function spliceOf(n: FactNode, at: FactPos): Null<SpliceFact> {
+		if (placed(n, at)) return null;
+		var best: Null<SpliceFact> = null;
+		for (s in n.splices) {
+			final body: Span = s.body.span;
+			final holds: Bool = s.body.file == at.file && body.from <= at.span.from && at.span.to <= body.to;
+			if (holds && (best == null || body.to - body.from < best.body.span.to - best.body.span.from)) best = s;
+		}
+		return best;
+	}
+
+	/** Whether `a` and `b` are the same range. */
+	private static inline function sameSpan(a: Span, b: Span): Bool {
+		return a.from == b.from && a.to == b.to;
 	}
 
 	/** The id of type string `type` without its type arguments. */
@@ -883,6 +971,8 @@ private typedef CallRecord = {
 	final rt: String;
 	final ?sig: String;
 	final p: Array<Int>;
+	final ?s: Array<Int>;
+	final ?d: Array<Int>;
 }
 
 private typedef NodeRecord = {
