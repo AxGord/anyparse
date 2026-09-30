@@ -603,17 +603,37 @@ final class MemberReach {
 
 	/**
 	 * The graph facts the entry starts from: the edges, unresolved calls
-	 * and accesses at its sites, and the region its own touches are read in.
+	 * and accesses at its sites, and the region its own touches are read in —
+	 * with, where the facts are the truth, those of a faceted body meeting it that
+	 * have no site of their own (`splicedInto`).
 	 */
 	private function seedsOf(g: CallGraph, entry: ReachEntry): Seeds {
 		return switch entry {
 			case Region(file, span): seedsWhere(
-				g, file, span, s -> s != null && s.from >= span.from && s.to <= span.to && isLive(g, file, s)
+				g, file, span, s -> s != null && s.from >= span.from && s.to <= span.to && isLive(g, file, s), splicedInto(g, file, [span])
 			);
 			case Calls(file, sites):
 				final starts: Array<Int> = [for (s in sites) if (s.span != null) s.span.from];
-				seedsWhere(g, file, null, s -> s != null && starts.contains(s.from) && isLive(g, file, s));
+				final spans: Array<Span> = [for (s in sites) if (s.span != null) s.span];
+				seedsWhere(g, file, null, s -> s != null && starts.contains(s.from) && isLive(g, file, s), splicedInto(g, file, spans));
 		};
+	}
+
+	/**
+	 * The faceted nodes of `file` meeting one of `spans`, when the facts are the truth (`FactsView.truth`): what an inlined
+	 * body spliced into one of them runs, it runs at a site of it no range names (`CallGraphFacts.siteOf`), which may lie
+	 * in `spans`. Empty otherwise: such a body is read by its syntax.
+	 */
+	private function splicedInto(g: CallGraph, file: String, spans: Array<Span>): Array<String> {
+		final facts: Null<CallGraphFacts> = g.facts;
+		if (_scope.facts?.truth != true || facts == null) return [];
+		final out: Array<String> = [];
+		for (id in facts.faceted.keys()) {
+			final node: Null<FnNode> = g.node(id);
+			final at: Null<Span> = node?.span;
+			if (node != null && at != null && node.file == file && spans.exists(s -> at.from < s.to && s.from < at.to)) out.push(id);
+		}
+		return out;
 	}
 
 	/**
@@ -1674,14 +1694,19 @@ final class MemberReach {
 		};
 	}
 
-	/** The graph facts of `file` whose site `keep` admits. */
-	private static function seedsWhere(g: CallGraph, file: String, region: Null<Span>, keep: Null<Span> -> Bool): Seeds {
+	/** The graph facts of `file` whose site `keep` admits, and those with no site of the nodes `spliced` names (`splicedInto`). */
+	private static function seedsWhere(
+		g: CallGraph, file: String, region: Null<Span>, keep: Null<Span> -> Bool, spliced: Array<String>
+	): Seeds {
+		function admits(from: String, span: Null<Span>): Bool return keep(span) || (span == null && spliced.contains(from));
 		return {
 			file: file,
 			region: region,
-			edges: [for (e in g.edges) if (e.file == file && e.kind != Contains && keep(e.span)) e],
-			unresolved: [for (u in g.unresolved) if (u.file == file && keep(u.span)) u],
-			access: [for (a in g.unresolvedAccess) if (a.file == file && keep(a.span)) a]
+			edges: [
+				for (e in g.edges) if (e.file == file && e.kind != Contains && admits(e.from, e.span)) e
+			],
+			unresolved: [for (u in g.unresolved) if (u.file == file && admits(u.from, u.span)) u],
+			access: [for (a in g.unresolvedAccess) if (a.file == file && admits(a.from, a.span)) a]
 		};
 	}
 

@@ -6,6 +6,7 @@ import anyparse.query.CallGraph.FnNode;
 import anyparse.query.CallGraph.UnresolvedReason;
 import anyparse.query.CompilerFacts.CallFact;
 import anyparse.query.CompilerFacts.FactNode;
+import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.CompilerFacts.FieldFact;
 import anyparse.query.CompilerFacts.NewFact;
 import anyparse.query.CompilerFacts.TypeFact;
@@ -22,7 +23,10 @@ using StringTools;
  * with its override edges, over the typed subtypes and the ones the graph holds alike — an unresolved site per call
  * through a value, a structure, a dynamic receiver or a native identifier, and an unresolved access per property or
  * method named off a structure or a dynamic receiver. A target is named in the graph's terms (`FactsView.graphType`),
- * a nested or local function by the node declared where the compiler typed it.
+ * a nested or local function by the node declared where the compiler typed it. A fact an inlined body spliced in sits at its
+ * callee's range, maybe in another file: its edge, unresolved site or access has no site in the node's file
+ * (`siteOf`): it is the whole node's, which a range question meeting the node takes (`MemberReach.splicedInto`) and
+ * no dead branch of the file drops, and a function nested in it is the node the graph declares in the callee's file.
  */
 @:access(anyparse.query.CallGraph)
 @:nullSafety(Strict)
@@ -118,16 +122,16 @@ final class CallGraphFacts {
 	 */
 	private static function record(g: CallGraph, node: FnNode, facts: Array<FactNode>, view: FactsView, deferred: Bool = false): Void {
 		for (n in facts) {
-			for (c in n.calls) call(g, node, c, view, deferred);
-			for (x in n.news) construction(g, node, x, view, deferred);
-			for (f in n.fields) field(g, node, f, view);
-			for (id in n.fns) nested(g, node, id, view);
+			for (c in n.calls) call(g, node, c, siteOf(node, n, c.at, view), view, deferred);
+			for (x in n.news) construction(g, node, x, siteOf(node, n, x.at, view), view, deferred);
+			for (f in n.fields) field(g, node, f, siteOf(node, n, f.at, view), view);
+			for (id in n.fns) nested(g, node, n, id, view);
 		}
 	}
 
-	private static function call(g: CallGraph, node: FnNode, c: CallFact, view: FactsView, deferred: Bool): Void {
+	/** The call `c` of `node`'s facts, at `span` of `node`'s file, or anywhere in `node` when null (`siteOf`). */
+	private static function call(g: CallGraph, node: FnNode, c: CallFact, span: Null<Span>, view: FactsView, deferred: Bool): Void {
 		final run: EdgeKind = deferred ? Ref : Call;
-		final span: Span = c.at.span;
 		final target: Null<String> = c.target;
 		function unresolved(reason: UnresolvedReason): Void {
 			g.unresolved.push({
@@ -156,14 +160,14 @@ final class CallGraphFacts {
 			case 'super':
 				superCall(g, node, view.graphType(ownerOf(target ?? '')), span, run);
 			case 'FInstance', 'FStatic', 'FClosure', 'inlined', 'fieldValue' if (target != null):
-				declaredCall(g, node, c, target, view, deferred, unresolved);
+				declaredCall(g, node, c, target, span, view, deferred, unresolved);
 			case _:
 				unresolved(Unseen('a call the facts record as `${c.access}`'));
 		}
 	}
 
 	/** A `super(…)` call of the constructor of `type`: its edge and the run of the initializers it executes. */
-	private static function superCall(g: CallGraph, node: FnNode, type: String, span: Span, run: EdgeKind): Void {
+	private static function superCall(g: CallGraph, node: FnNode, type: String, span: Null<Span>, run: EdgeKind): Void {
 		final ctor: Null<String> = g.constructorTarget(type, g._shape.constructorName ?? 'new');
 		g._wiring.record({
 			typeName: type,
@@ -182,11 +186,11 @@ final class CallGraphFacts {
 	 * channel of a replaceable field. A string-conversion call is none (`FactsView.sitesIn`).
 	 */
 	private static function declaredCall(
-		g: CallGraph, node: FnNode, c: CallFact, target: String, view: FactsView, deferred: Bool, unresolved: UnresolvedReason -> Void
+		g: CallGraph, node: FnNode, c: CallFact, target: String, span: Null<Span>, view: FactsView, deferred: Bool,
+		unresolved: UnresolvedReason -> Void
 	): Void {
 		// a conversion call is the string-conversion site of its argument, not library code
 		if (view.convertsToString(target)) return;
-		final span: Span = c.at.span;
 		final owner: String = ownerOf(target);
 		final name: String = target.substr(target.lastIndexOf('.') + 1);
 		final type: String = view.graphType(owner);
@@ -207,17 +211,17 @@ final class CallGraphFacts {
 	}
 
 	/** A `new`: the edge to the constructor it names and the run of the initializers it executes, as `CallGraph` records one. */
-	private static function construction(g: CallGraph, node: FnNode, x: NewFact, view: FactsView, deferred: Bool): Void {
+	private static function construction(g: CallGraph, node: FnNode, x: NewFact, span: Null<Span>, view: FactsView, deferred: Bool): Void {
 		final run: EdgeKind = deferred ? Ref : New;
 		final type: String = view.graphType(x.type);
 		final ctor: Null<String> = g.constructorTarget(type, g._shape.constructorName ?? 'new');
-		if (ctor != null) g.addEdge(node.id, ctor, run, null, node.file, x.at.span);
+		if (ctor != null) g.addEdge(node.id, ctor, run, null, node.file, span);
 		g._wiring.record({
 			typeName: type,
 			from: node.id,
 			kind: run,
 			file: node.file,
-			span: x.at.span,
+			span: span,
 			chainGrew: false,
 			target: ctor
 		});
@@ -229,7 +233,7 @@ final class CallGraphFacts {
 	 * function of that name — an accessor may run there, or the method later as a value — and one read off a typed
 	 * structure when the structure's own declaration gives the name an accessor, as `CallGraph` reads a typed receiver.
 	 */
-	private static function field(g: CallGraph, node: FnNode, f: FieldFact, view: FactsView): Void {
+	private static function field(g: CallGraph, node: FnNode, f: FieldFact, span: Null<Span>, view: FactsView): Void {
 		final owner: Null<String> = f.owner;
 		final access: Bool = switch f.access {
 			case 'FDynamic':
@@ -241,7 +245,7 @@ final class CallGraphFacts {
 		};
 		if (access) g.unresolvedAccess.push({
 			file: node.file,
-			span: f.at.span,
+			span: span,
 			from: node.id,
 			member: f.field,
 			write: f.write,
@@ -251,20 +255,21 @@ final class CallGraphFacts {
 		final type: String = view.graphType(owner);
 		final id: String = g.memberOnChain(type, f.field) ?? g.externalNode(g.types.declaringTypeOf(type, f.field) ?? type, f.field);
 		final dispatch: Null<String> = f.access == 'FClosure' ? dispatchType(f.receiver, owner, view) : null;
-		g.addEdge(node.id, id, Ref, null, node.file, f.at.span, dispatch == null ? null : view.graphType(dispatch));
-		if (dispatch != null) virtualEdges(g, node, dispatch, f.field, f.at.span, Ref, view);
+		g.addEdge(node.id, id, Ref, null, node.file, span, dispatch == null ? null : view.graphType(dispatch));
+		if (dispatch != null) virtualEdges(g, node, dispatch, f.field, span, Ref, view);
 	}
 
 	/**
-	 * A function nested in `node`: a value from the moment it is made, whoever runs it later — a `Ref` to the node the
-	 * graph declares where it starts. One the compiler made (a `.bind` closure) has no such node: its facts are
-	 * `node`'s own, deferred (`record`). One a macro placed is code nothing here can follow.
+	 * A function nested in `node`'s body `n`: a value from the moment it is made, whoever runs it later — a `Ref` to the
+	 * node the graph declares where it starts, which for one spliced in with an inlined body lies in its callee (`siteOf`).
+	 * One the compiler made (a `.bind` closure) has no such node: its facts are `node`'s own, deferred (`record`). One a
+	 * macro placed is code nothing here can follow.
 	 */
-	private static function nested(g: CallGraph, node: FnNode, id: String, view: FactsView): Void {
+	private static function nested(g: CallGraph, node: FnNode, n: FactNode, id: String, view: FactsView): Void {
 		final fact: Null<FactNode> = view.table.node(id);
 		final target: Null<String> = fact == null || fact.generated ? null : graphNodeOf(g, node, id, view);
-		if (target != null)
-			g.addEdge(node.id, target, Ref, null, node.file, g.nodes[target]?.span)
+		if (fact != null && target != null)
+			g.addEdge(node.id, target, Ref, null, node.file, siteOf(node, n, fact.at, view) == null ? null : g.nodes[target]?.span)
 		else if (fact != null && !fact.generated)
 			record(g, node, [fact], view, true)
 		else
@@ -281,7 +286,7 @@ final class CallGraphFacts {
 	 * holds and those the facts type.
 	 */
 	private static function virtualEdges(
-		g: CallGraph, node: FnNode, dispatch: String, name: String, span: Span, kind: EdgeKind, view: FactsView
+		g: CallGraph, node: FnNode, dispatch: String, name: String, span: Null<Span>, kind: EdgeKind, view: FactsView
 	): Void {
 		final type: String = view.graphType(dispatch);
 		final targets: Array<String> = g.virtualTargets(type, name);
@@ -300,30 +305,49 @@ final class CallGraphFacts {
 
 	/**
 	 * The graph node declared where the compiler typed the function `id` — a local or nested function of `node`'s own
-	 * text — or null when no node of the graph starts where it does.
+	 * text, or of the callee an inlined body spliced it in from — or null when no node of the graph starts where it does.
 	 */
 	private static function graphNodeOf(g: CallGraph, node: FnNode, id: String, view: FactsView): Null<String> {
 		final fact: Null<FactNode> = view.table.node(id);
-		if (fact == null || fact.generated) return null;
+		final file: Null<String> = fact == null || fact.generated ? null : graphFile(g, node, fact.at.file, view);
+		if (fact == null || file == null) return null;
 		final at: Span = fact.at.span;
 		// a node's span may run on over trailing trivia the compiler's range stops before: the two share their start
-		final found: Null<String> = g.functionAt(node.file, at.from);
+		final found: Null<String> = g.functionAt(file, at.from);
 		return found != null && g.nodes[found]?.span?.from == at.from ? found : null;
+	}
+
+	/** The file of the graph whose table key is `key` — `node`'s own, or another the graph holds — or null for none. */
+	private static function graphFile(g: CallGraph, node: FnNode, key: String, view: FactsView): Null<String> {
+		if (view.table.keyOf(node.file) == key) return node.file;
+		for (file in g._entries.keys()) if (view.table.keyOf(file) == key) return file;
+		return null;
+	}
+
+	/**
+	 * Where in `node`'s file a fact of its body `n` at `at` sits: its range when `n` places it there (`CompilerFacts.placed`),
+	 * else null — a fact an inlined body spliced in sits at its callee, maybe in another file, and runs at a site of `node`
+	 * no range names. Such an edge, unresolved site or access belongs to the whole of `node`: no range of its file may
+	 * claim it, or drop it (`MemberReach.isLive`).
+	 */
+	private static function siteOf(node: FnNode, n: FactNode, at: FactPos, view: FactsView): Null<Span> {
+		return at.file == view.table.keyOf(node.file) && CompilerFacts.placed(n, at) ? at.span : null;
 	}
 
 	/**
 	 * The sites the compiler typed in the bodies `facts` (`siteKey`): each call, construction and field access, and each
-	 * function nested there. A site the facts place elsewhere, or not at all, is none of them.
+	 * function nested there. A site the facts place elsewhere, or not at all, is none of them — nor is one an inlined body
+	 * spliced in, which sits at its callee's range (`CompilerFacts.placed`).
 	 */
 	private static function typedSites(facts: Array<FactNode>, view: FactsView): Array<String> {
 		final out: Array<String> = [];
 		for (n in facts) {
-			for (c in n.calls) out.push(siteKey(c.at.span));
-			for (x in n.news) out.push(siteKey(x.at.span));
-			for (f in n.fields) out.push(siteKey(f.at.span));
+			for (c in n.calls) if (CompilerFacts.placed(n, c.at)) out.push(siteKey(c.at.span));
+			for (x in n.news) if (CompilerFacts.placed(n, x.at)) out.push(siteKey(x.at.span));
+			for (f in n.fields) if (CompilerFacts.placed(n, f.at)) out.push(siteKey(f.at.span));
 			for (id in n.fns) {
 				final nested: Null<FactNode> = view.table.node(id);
-				if (nested != null) out.push(siteKey(nested.at.span));
+				if (nested != null && CompilerFacts.placed(n, nested.at)) out.push(siteKey(nested.at.span));
 			}
 		}
 		return out;
