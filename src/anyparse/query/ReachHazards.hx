@@ -1,10 +1,13 @@
 package anyparse.query;
 
 import anyparse.check.NativeCodeScan;
+import anyparse.query.FactsView.TruthSites;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.runtime.Span;
+
+using Lambda;
 
 /**
  * The POSITIVE check a reachability walk runs over every body it enters: each node kind must be one the
@@ -12,7 +15,8 @@ import anyparse.runtime.Span;
  * — reflective member accesses (with the literal name when there is one), target-language carriers, untyped
  * code, raw conditional regions, and every site that changes SOME array (an element write, an
  * array-changing method on any receiver). A kind outside the whitelist is a blind spot of its own, so a
- * construct nobody classified fails closed.
+ * construct nobody classified fails closed. Where the compiler facts are the truth
+ * (`FactsView.truth`), `underTruth` trades the hazards they record in full for their own sites.
  */
 @:nullSafety(Strict)
 final class ReachHazards {
@@ -55,6 +59,28 @@ final class ReachHazards {
 		return [
 			for (h in hazardsOfFile(file, tree, source)) if (h.span.from >= span.from && h.span.to <= span.to) h
 		];
+	}
+
+	/**
+	 * The hazards of code whose compiler facts are the truth (`FactsView.truthSites`): `syntactic`, its hazards as the syntax
+	 * reads them, less those the facts record in full, plus a native site for each the facts name and a computed name for
+	 * each reflective access by name the syntax does not see (`typed`). The facts record a native call however it is
+	 * spelled — an alias, an import — and not one a class merely named `Syntax` makes, so the syntax's native calls go; an
+	 * `untyped` expression goes when it is built only of what the facts record (`untypedRecorded`). Every other hazard stays:
+	 * the facts do not say what they would stand for. A reflective call's recorded literal is the first of ANY argument,
+	 * not the name's, so one the syntax does not see names nothing. `root` is the tree the added hazards hang off.
+	 */
+	public function underTruth(syntactic: Array<ReachHazard>, typed: TruthSites, root: QueryNode): Array<ReachHazard> {
+		final out: Array<ReachHazard> = [for (h in syntactic) if (!recordedWhole(h)) h];
+		for (n in typed.natives) out.push({ kind: Native, span: n.at.span, node: root });
+		final named: Map<String, Int> = _shape.execution?.reflectiveNameCalls ?? [];
+		inline function seen(at: Span): Bool {
+			return syntactic.exists(h -> h.kind.match(ReflectiveName(_)) && same(h.span, at));
+		}
+		for (r in typed.reflection) if (named.exists(r.target) && !seen(r.at.span))
+			out.push({ kind: ReflectiveName(null), span: r.at.span, node: root });
+		out.sort((a, b) -> a.span.from - b.span.from);
+		return out;
 	}
 
 	/**
@@ -138,6 +164,37 @@ final class ReachHazards {
 		return out;
 	}
 
+	/** Whether the compiler facts of the code holding the syntactic hazard `h` record all it stands for (`underTruth`). */
+	private function recordedWhole(h: ReachHazard): Bool {
+		return switch h.kind {
+			case Native: h.node.kind == _shape.callKind;
+			case Untyped: untypedRecorded(h.node);
+			case ReflectiveName(_), Opaque, Unmodelled(_), ArrayChange: false;
+		};
+	}
+
+	/**
+	 * Whether the `untyped` expression `node` is built only of identifiers, field accesses, calls, parentheses and
+	 * constants: the compiler types each as a fact — a field read or write (a `Dynamic` one where untyped code names a field
+	 * the type lacks), a call, a native identifier (`TypedFactsWalk`). An index access there reads or writes a field by a
+	 * name no fact holds (`untyped this["items"]`), and any other construct is one nobody checked.
+	 */
+	private function untypedRecorded(node: QueryNode): Bool {
+		final kinds: Array<Null<String>> = [
+			_shape.identKind,
+			_shape.fieldAccessKind,
+			_shape.nullSafeAccessKind,
+			_shape.forceFieldAccessKind,
+			_shape.callKind,
+			_shape.parenKind
+		];
+		for (k in (_shape.inertTextLiteralKinds ?? []).concat(_shape.caseLiteralKinds ?? [])) kinds.push(k);
+		function recorded(n: QueryNode): Bool {
+			return kinds.contains(n.kind) && n.children.foreach(recorded);
+		}
+		return node.children.foreach(recorded);
+	}
+
 	/**
 	 * Whether `node` changes an array whatever its receiver is typed: a write through an index, or a call of a
 	 * method the built-in array type changes itself with (`ExecutionShape.mutatingArrayMethods`).
@@ -179,6 +236,11 @@ final class ReachHazards {
 	public static function lastSegments(path: String, count: Int): String {
 		final parts: Array<String> = path.split('.');
 		return parts.length <= count ? path : parts.slice(parts.length - count).join('.');
+	}
+
+	/** Whether `a` and `b` are the same range. */
+	private static inline function same(a: Span, b: Span): Bool {
+		return a.from == b.from && a.to == b.to;
 	}
 
 }

@@ -1656,7 +1656,12 @@ class MemberReachTest extends Test {
 			final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 			final project: Array<{ file: String, source: String }> = [{ file: 'F0.hx', source: src }];
 			final facts: CompilerFacts = CompilerFacts.create(file -> null, file -> file);
-			facts.configurations.push('b');
+			// the build read `F0.hx`: facts that are the truth say so, or the file runs in no build
+			facts.add({
+				name: 'b',
+				text: '{"k":"facts","v":1,"x":0}\n{"k":"src","path":"F0.hx","len":0,"md5":"0"}\n{"k":"end"}\n',
+				file: file -> file
+			});
 			if (dropped) facts.dropped.push({ name: 'c', reason: 'it did not compile' });
 			final build: ReachConfiguration = {
 				name: 'b',

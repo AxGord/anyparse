@@ -116,11 +116,15 @@ final class ReachGraph {
 		_implicit = null;
 	}
 
-	/** The call graph over the project, built on first demand and grown by the walk. */
+	/**
+	 * The call graph over the project files a build may run, built on first demand and grown by the walk.
+	 */
 	public function graph(): CallGraph {
 		final built: Null<CallGraph> = _graph;
 		if (built != null) return built;
-		final g: CallGraph = CallGraph.build(_scope.files, _scope.plugin, _scope.index, _scope.facts);
+		// a project file no build runs (`ReachProject.runsInNoBuild`) holds no function that runs and no touch
+		final running: Array<{ file: String, source: String }> = [for (f in _scope.files) if (!_scope.runsInNoBuild(f.file)) f];
+		final g: CallGraph = CallGraph.build(running, _scope.plugin, _scope.index, _scope.facts);
 		_graph = g;
 		return g;
 	}

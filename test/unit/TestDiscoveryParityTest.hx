@@ -2524,6 +2524,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.LiteralVocabularyTest#testTheContentSetFollowsTheVocabularyItIsHanded :: control :: M-LIT-CONTENT-KINDS-FROZEN',
 			'unit.query.LiteralVocabularyTest#testTheInertSegmentKindsComeFromTheShapeToo :: control :: M-INERT-SEGMENT-KINDS-HARDCODED',
 			'unit.query.MakeFinalSliceTest#testHalfIteratorShapeStillFinal :: control :: M-STRUCT-BUILTIN-BY-NAME',
+			'unit.query.MemberReachFactsTest#testABodyTheFactsDoNotDescribeWholeKeepsItsSyntacticHazards :: control :: '
+				+ 'M-FACTS-TRUTH-FACETED',
 			'unit.query.MemberReachFactsTest#testABoundMethodRunsWheneverItsClosureIsCalled :: control :: M-FACTS-REACH-BIND',
 			'unit.query.MemberReachFactsTest#testABuildMacroOnlyTheCompilerSawIsUnknown :: control :: M-FACTS-REACH-BUILDS',
 			'unit.query.MemberReachFactsTest#testACallOfAValueAdmitsTheValueChannel :: control :: M-FACTS-REACH-VALUE',
@@ -2533,6 +2535,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-REACH-CONSTRUCTION',
 			'unit.query.MemberReachFactsTest#testAConversionOfAnAbstractRunsWhatItsOwnConversionDoes :: control :: '
 				+ 'M-REACH-ABSTRACT-TEXT-ANY',
+			'unit.query.MemberReachFactsTest#testAFileTheRunWroteMayBeCompiled :: control :: M-FACTS-DEAD-FILE-REWRITTEN',
 			'unit.query.MemberReachFactsTest#testAFunctionWithoutFactsOfItsOwnIsNotReadThroughANestedOnes :: control :: '
 				+ 'M-FACTS-REACH-NESTED-OWNER',
 			'unit.query.MemberReachFactsTest#testAGenericInstanceIsItsGenericClass :: control :: M-FACTS-REACH-GENERIC',
@@ -2541,6 +2544,11 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testAMacroExpansionIsUnknown :: control :: M-FACTS-REACH-MACRO',
 			'unit.query.MemberReachFactsTest#testAMemberAnotherBuildDeclaresShadowsAnExtension :: control :: M-FACTS-REACH-GUARDED-NAME',
 			'unit.query.MemberReachFactsTest#testANativeIdentifierAdmitsWhatItMayCall :: control :: M-FACTS-REACH-NATIVE-IDENT',
+			'unit.query.MemberReachFactsTest#testAProjectFileNoBuildCompilesLetsNoValueEscape :: control :: M-FACTS-DEAD-FILE-VALUES',
+			'unit.query.MemberReachFactsTest#testAProjectFileNoBuildCompilesRunsNothing :: control :: '
+				+ 'M-REACH-DEAD-FILE-SEEDS,M-FACTS-DEAD-FILE-NEVER,M-FACTS-DEAD-FILE-UNTRUE',
+			'unit.query.MemberReachFactsTest#testAReflectiveCallTheSyntaxDoesNotSeeNamesNothingUnderTheTruth :: control :: '
+				+ 'M-FACTS-TRUTH-REFLECTION,M-FACTS-TRUTH-REFLECTION-TWIN',
 			'unit.query.MemberReachFactsTest#testAReflectiveMemberReadAsAValueIsUnknown :: control :: M-FACTS-REACH-REFLECT-VALUE',
 			'unit.query.MemberReachFactsTest#testAStoredFunctionValueMayConvertWhatItIsHanded :: control :: M-FACTS-REACH-UNREAD-VALUE',
 			'unit.query.MemberReachFactsTest#testAStoredFunctionValueMayRunAnOperatorOverload :: control :: M-FACTS-REACH-UNREAD-IMPLICIT',
@@ -2554,11 +2562,19 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testAnExtensionAnotherBuildBringsInIsKeptFromTheSyntax :: control :: '
 				+ 'M-FACTS-REACH-SYNTAX-UNION',
 			'unit.query.MemberReachFactsTest#testAnInlinedCallKeepsItsBodysSyntax :: control :: M-FACTS-REACH-SPLICE',
+			'unit.query.MemberReachFactsTest#testAnUntypedIndexAccessKeepsItsHazardUnderTheTruth :: control :: '
+				+ 'M-FACTS-TRUTH-UNTYPED-ALL,M-FACTS-TRUTH-UNTYPED-SHAPE',
+			'unit.query.MemberReachFactsTest#testCodeNoBuildCompilesHasNoAnswerUnderTheTruth :: control :: '
+				+ 'M-REACH-DEAD-FILE-ENTRY,M-REACH-DEAD-FILE-LOCAL-ENTRY',
 			'unit.query.MemberReachFactsTest#testTheCompilerResolvesACallTheSyntaxCannot :: control :: M-FACTS-REACH-EDGES',
 			'unit.query.MemberReachFactsTest#testTheCompilersHierarchyReachesAnOverride :: control :: M-FACTS-REACH-OVERRIDES',
 			'unit.query.MemberReachFactsTest#testTheFactsAreTheTruthOnlyUnderTheWholeListOfTheirBuilds :: control :: M-FACTS-TRUTH-WIRED',
+			'unit.query.MemberReachFactsTest#testTheFactsNameTheNativeCallsUnderTheTruth :: control :: '
+				+ 'M-FACTS-TRUTH-NATIVES,M-FACTS-TRUTH-NATIVE-CALLS-KEPT,M-FACTS-TRUTH-NATIVE-METAS-DROPPED',
 			'unit.query.MemberReachFactsTest#testTheTruthNeedsTheFactsToNameExactlyTheListedBuilds :: control :: '
 				+ 'M-FACTS-TRUTH-UNLISTED,M-FACTS-TRUTH-COUNT,M-FACTS-TRUTH-NAMES,M-FACTS-TRUTH-ORDER',
+			'unit.query.MemberReachFactsTest#testUntypedCodeTheFactsRecordIsReadThroughThemUnderTheTruth :: control :: '
+				+ 'M-FACTS-TRUTH-HAZARDS,M-FACTS-TRUTH-HAZARDS-UNLISTED,M-FACTS-TRUTH-UNTYPED-KEPT',
 			'unit.query.MemberReachTest#testAClassNamedToTheClassValueProducerMayBeInstantiatedUntyped :: control :: M-ESCAPE-NAMED-CLASS',
 			'unit.query.MemberReachTest#testAClasspathTheIndexDoesNotHoldMayDeclareAnOverrideOrASubtype :: control :: '
 				+ 'M-REACH-CLASSPATH-DISPATCH,M-CARRY-CLASSPATH',
@@ -3646,6 +3662,24 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-TRUTH-COUNT',
 			'M-FACTS-TRUTH-NAMES',
 			'M-FACTS-TRUTH-ORDER',
+			'M-FACTS-TRUTH-HAZARDS',
+			'M-FACTS-TRUTH-HAZARDS-UNLISTED',
+			'M-FACTS-TRUTH-FACETED',
+			'M-FACTS-TRUTH-UNTYPED-KEPT',
+			'M-FACTS-TRUTH-UNTYPED-ALL',
+			'M-FACTS-TRUTH-UNTYPED-SHAPE',
+			'M-FACTS-TRUTH-NATIVES',
+			'M-FACTS-TRUTH-NATIVE-CALLS-KEPT',
+			'M-FACTS-TRUTH-NATIVE-METAS-DROPPED',
+			'M-FACTS-TRUTH-REFLECTION',
+			'M-FACTS-TRUTH-REFLECTION-TWIN',
+			'M-REACH-DEAD-FILE-SEEDS',
+			'M-FACTS-DEAD-FILE-UNTRUE',
+			'M-FACTS-DEAD-FILE-NEVER',
+			'M-FACTS-DEAD-FILE-REWRITTEN',
+			'M-FACTS-DEAD-FILE-VALUES',
+			'M-REACH-DEAD-FILE-ENTRY',
+			'M-REACH-DEAD-FILE-LOCAL-ENTRY',
 			'M-REACH-BASE-CLASSPATH',
 			'M-REACH-TYPES-HELD',
 			'M-GRAPH-READ-DECLARED',

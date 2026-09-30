@@ -302,6 +302,17 @@ final class CompilerFacts {
 	}
 
 	/**
+	 * Whether a configuration may compile `file` as it is now: one read it — the file holds code or a type some
+	 * configuration typed, whose record names its text — or the run wrote it after the compiles (`invalidate`), so what a
+	 * build makes of the text it has now is not known: a fix may have created it. False only for a file no configuration
+	 * read, which no build the table holds compiles.
+	 */
+	public function mayCompileNow(file: String): Bool {
+		final key: String = _key(file);
+		return _expected.exists(key) || _stale.exists(key);
+	}
+
+	/**
 	 * Drop every fact of `file`: the run rewrote it (`--fix`), so no position the compile recorded names its text any more.
 	 * The file answers as never compiled from here on. `original` is the text it had before the run wrote it: kept when it is
 	 * the text the compile read, so `asCompiled` can still place its facts.

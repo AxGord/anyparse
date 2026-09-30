@@ -50,6 +50,16 @@ final class ReachProject {
 		return view == null || view.table.compiled(file) || typeHomes(view).exists(view.table.keyOf(file));
 	}
 
+	/**
+	 * Whether no build runs code of the project file `file`: the compiler facts are the truth (`FactsView.truth`) and no
+	 * listed build read the file as it is now (`CompilerFacts.mayCompileNow`). False otherwise: a build the list does not
+	 * name may compile it, and without the facts nothing says which files a build reads.
+	 */
+	public function runsInNoBuild(file: String): Bool {
+		final view: Null<FactsView> = facts;
+		return view != null && view.truth && !view.table.mayCompileNow(file);
+	}
+
 	/** What the compiler facts say the builds made of the index and the text; null without facts. */
 	public function provenance(): Null<FactsProvenance> {
 		final view: Null<FactsView> = facts;
