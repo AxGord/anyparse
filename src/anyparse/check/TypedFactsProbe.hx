@@ -52,8 +52,20 @@ import haxe.io.Path;
  *     field's overloads. `rt` is the result type. A property access IS a call of `get_x`/`set_x`; an abstract operator,
  *     `@:from` or `@:to` is a call of the implementation class's static.
  *   - `news`: `{t, ty, p}` — the class and the instance type.
- *   - `fields`: `{f, a, o?, r, t, p, w?}` — a field read (a write when `w`) that is not a callee; `o` is the declaring
- *     type, absent for a structure or a dynamic access.
+ *   - `fields`: `{f, a, o?, r, t, p, w?, u?, m?, fresh?}` — a field read (a write when `w`) that is not a callee; `o` is
+ *     the declaring type, absent for a structure or a dynamic access. A read has `u`, how its value is used: `call` (the
+ *     receiver of a call, `m` the called field), `index` (an array indexed to read), `elemWrite` (an array indexed to
+ *     write, see `elems`), `member` (the receiver of a field read that is no method closure), `memberWrite` (the
+ *     receiver of a field write), `compare` (an operand of a comparison, a `switch` subject), `iter` (the iterated value
+ *     of a kept `for`), `update` (the read half of a compound assignment or increment of the field) or `value` — anything
+ *     else: an argument, a stored, returned or thrown value, a method closure's receiver, a discarded value. A read the
+ *     compiler holds in a local — a lowered loop's array, a compound element write's receiver — or that a local is
+ *     initialized with, is used as the local is read: one fact per distinct use, all at the read's position, `value` for
+ *     a local never read or read from a nested function. A write has `fresh` when every value its right side produces is
+ *     an array literal, a `new Array` or `null` and the assignment's own value is discarded: the field alone holds it.
+ *   - `elems`: `{r, rp, p}` — an element write `a[i] = v`, `a[i] += v` or `a[i]++`, on any receiver; `r`/`rp` are the
+ *     array's type and position, which is its own read's, as a call's `rp` is: a `fields` read (`u` = `elemWrite`), a
+ *     `reads` entry, a call.
  *   - `flows`: `{s, d, c, p}` — a value of type `s` reaching a place of type `d`, `c` being `var`, `assign`, `arg`,
  *     `ret`, `arr`, `obj`, `throw` or `cast` (an unchecked cast, always kept). A branching value flows once per branch
  *     at the branch's own type; a place of no type is `Dynamic`, and so is every argument of a callee of no function

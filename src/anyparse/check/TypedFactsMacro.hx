@@ -172,7 +172,7 @@ final class TypedFactsMacro {
 	): Void {
 		if (body == null) return;
 		final walk: TypedFactsWalk = new TypedFactsWalk(
-			this, id, kind, owner, isStatic, signature, null, [], TypedFactsShapes.writtenLocals(body)
+			this, id, kind, owner, isStatic, signature, null, [], TypedFactsShapes.writtenLocals(body), []
 		);
 		if (fileOf(body.pos) != home) walk.flag('gen');
 		// a `@:generic` instance's body sits at the generic class's ranges, which that class's own nodes answer for

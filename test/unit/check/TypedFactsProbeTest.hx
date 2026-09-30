@@ -545,6 +545,96 @@ class TypedFactsProbeTest extends Test {
 		CliFixture.removeDir(dir);
 	}
 
+	@:pin('control') @:killer('M-FACTS-ELEMENT-WRITE')
+	public function testAnElementWriteIsAWriteThroughTheArrayAtItsOwnRead(): Void {
+		// an element write names no field: it is a write through the array, found at the array's own read — a field's, a
+		// local's, a call's — as a push is found at its receiver. A compound one is made through a local of the compiler's
+		final source: String = 'class Main {\n\tvar items:Array<Int> = [];\n\tfunction new() {}\n'
+			+ '\tfunction get():Array<Int> return items;\n' + '\tfunction write() {\n\t\titems[0] = 1; items[1] += 2; items[2]++;\n'
+			+ '\t\tvar loc = [1]; loc[0] = 3; get()[0] = 4;\n\t}\n' + '\tstatic function main() new Main().write();\n}\n';
+		final scratch: Scratch = compile(['Main.hx' => source]);
+		final node: Null<FactNode> = scratch.facts?.node('Main.write');
+		Assert.notNull(node);
+		if (node != null) {
+			final walked: FactNode = node;
+			function readOfItems(at: Null<FactPos>): Bool {
+				return at != null
+					&& walked.fields.exists(f -> f.field == 'items' && !f.write && f.use == 'elemWrite' && f.at.span.from == at.span.from);
+			}
+			Assert.equals(5, node.elementWrites.length, 'element writes: ${node.elementWrites}');
+			Assert.equals(3, node.elementWrites.filter(w -> readOfItems(w.receiverAt)).length, 'writes through the field');
+			final local: Int = source.indexOf('loc[0]');
+			Assert.isTrue(
+				node.elementWrites.exists(w -> w.receiverAt?.span.from == local && w.receiver == 'Array<Int>'),
+				'no write through the local'
+			);
+			Assert.isTrue(node.reads.exists(r -> r.at.span.from == local), 'the local is not read where the write points');
+			final call: Int = source.indexOf('get()[0]');
+			Assert.isTrue(node.elementWrites.exists(w -> w.receiverAt?.span.from == call), 'no write through a call result');
+		}
+		scratch.remove();
+	}
+
+	@:pin('control') @:killer('M-FACTS-USE') @:killer('M-FACTS-HELD') @:killer('M-FACTS-CAPTURE')
+	public function testAFieldReadSaysHowItsValueIsUsed(): Void {
+		// a value handed on as itself — an argument, a capture — is used as a `value`; a lowered loop reads its array
+		// through a local of the compiler's, whose reads are the field's uses
+		final source: String = 'class Main {\n\tvar items:Array<Int> = [];\n\tvar walker:Iterator<Int> = [1].iterator();\n'
+			+ '\tvar next:Null<Main> = null;\n\tvar count:Int = 0;\n\tfunction new() {}\n'
+			+ '\tstatic function keep(a:Array<Int>):Void {}\n'
+			+ '\tfunction use() {\n\t\titems.push(1); var a = items[0] + items.length; next.count = 2; count++;\n'
+			+ '\t\tif (items == null) return; for (x in walker) trace(x); keep(items);\n' + '\t\tfor (y in items) trace(y);\n'
+			+ '\t\tvar held = items; var f = () -> held.length;\n\t}\n' + '\tstatic function main() new Main().use();\n}\n';
+		final scratch: Scratch = compile(['Main.hx' => source]);
+		final node: Null<FactNode> = scratch.facts?.node('Main.use');
+		Assert.notNull(node);
+		if (node != null) {
+			final walked: FactNode = node;
+			function usesOf(field: String, ?at: String): Array<Null<String>> {
+				final from: Int = at == null ? -1 : source.indexOf(at) + at.length - field.length;
+				final uses: Array<Null<String>> = [
+					for (f in walked.fields) if (f.field == field && !f.write && (from < 0 || f.at.span.from == from)) f.use
+				];
+				uses.sort(Reflect.compare);
+				return uses;
+			}
+			final items: Array<Null<String>> = usesOf('items');
+			for (expected in ['call', 'index', 'member', 'compare', 'value'])
+				Assert.isTrue(items.contains(expected), '$expected is no use of items: $items');
+			Assert.isTrue(node.fields.exists(f -> f.use == 'call' && f.method == 'push'), 'a call receiver names no method');
+			Assert.equals('index,member', usesOf('items', 'in items').join(','), 'the lowered loop');
+			Assert.equals('value', usesOf('items', 'held = items').join(','), 'a captured local');
+			Assert.equals('value', usesOf('items', 'keep(items').join(','), 'an argument');
+			Assert.equals('memberWrite', usesOf('next').join(','));
+			Assert.equals('iter', usesOf('walker').join(','));
+			Assert.equals('update', usesOf('count').join(','));
+		}
+		scratch.remove();
+	}
+
+	@:pin('control') @:killer('M-FACTS-FRESH') @:killer('M-FACTS-FRESH-DISCARDED')
+	public function testAWriteOfAValueBuiltThereAndHandedNowhereIsFresh(): Void {
+		final source: String = 'class Main {\n\tvar items:Null<Array<Int>> = [];\n\tvar copy:Array<Int> = [];\n\tfunction new() {}\n'
+			+ '\tfunction reset(c:Bool) {\n\t\titems = [1]; items = new Array<Int>(); items = null; items = c ? [] : null;\n'
+			+ '\t\titems = copy; var z = (items = []); items = if (items != null) items else [];\n\t}\n'
+			+ '\tstatic function main() new Main().reset(true);\n}\n';
+		final scratch: Scratch = compile(['Main.hx' => source]);
+		final node: Null<FactNode> = scratch.facts?.node('Main.reset');
+		Assert.notNull(node);
+		if (node != null) {
+			final walked: FactNode = node;
+			function freshAt(text: String): Null<Bool> {
+				final from: Int = source.indexOf(text);
+				return walked.fields.find(f -> f.write && f.field == 'items' && f.at.span.from == from)?.fresh;
+			}
+			for (fresh in ['items = [1]', 'items = new', 'items = null', 'items = c ?'])
+				Assert.equals(true, freshAt(fresh), '`$fresh` is no fresh write');
+			// a value held elsewhere, or handed on by the assignment's own value, is not the field's alone
+			for (held in ['items = copy', 'items = []);', 'items = if']) Assert.equals(false, freshAt(held), '`$held` is a fresh write');
+		}
+		scratch.remove();
+	}
+
 	/** A compile of `files` (paths under one scratch directory) under each define set of `configurations`, by `build`. */
 	private static function compile(files: Map<String, String>, ?configurations: Array<Array<String>>, ?build: String): Scratch {
 		final entries: Array<{ name: String, source: String }> = [for (name => text in files) { name: name, source: text }];

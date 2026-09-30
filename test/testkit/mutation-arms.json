@@ -6730,8 +6730,8 @@
 			"name": "M-FACTS-FIELD-WRITE",
 			"type": "anyparse.check.TypedFactsWalk",
 			"method": "target",
-			"find": "fieldFact(lhs, receiver, fa, true);",
-			"replace": "fieldFact(lhs, receiver, fa, false);",
+			"find": "fieldFact(lhs, receiver, fa, true,",
+			"replace": "fieldFact(lhs, receiver, fa, false,",
 			"note": "an assigned field is recorded as read, never written"
 		},
 		{
@@ -7223,6 +7223,54 @@
 			"find": " && !straddles",
 			"replace": "",
 			"note": "a range meeting the body without lying inside it — an abstract method's own `this`, placed at the whole abstract — reads as a splice, and the method is marked as a macro expansion"
+		},
+		{
+			"name": "M-FACTS-ELEMENT-WRITE",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "target",
+			"find": "add('elems', '{\"r\":${q(str(array.t))},\"rp\":${at(array.pos)},\"p\":${at(lhs.pos)}}');",
+			"replace": "",
+			"note": "an element write leaves no fact, so an array written through its elements reads as never mutated"
+		},
+		{
+			"name": "M-FACTS-USE",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "visit",
+			"find": "fieldFact(e, receiver, fa, false, ',' + useText(use));",
+			"replace": "fieldFact(e, receiver, fa, false, ',' + useText(Value));",
+			"note": "every field read is used as a value, so no read says it only calls, indexes or compares"
+		},
+		{
+			"name": "M-FACTS-HELD",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "visit",
+			"find": "_aliases[v.id] = alias;",
+			"replace": "",
+			"note": "a field read held in a local is no longer followed through the local's reads, so a lowered loop's array reads as escaping"
+		},
+		{
+			"name": "M-FACTS-CAPTURE",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "visit",
+			"find": "alias.owner == id ? use : Value",
+			"replace": "use",
+			"note": "a local read from a nested function keeps its own use, so a captured field value reads as used in place"
+		},
+		{
+			"name": "M-FACTS-FRESH",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "target",
+			"find": "fresh ? ',\"fresh\":true' : ''",
+			"replace": "''",
+			"note": "no field write is fresh, so a member only ever reset to a new array reads as holding a shared one"
+		},
+		{
+			"name": "M-FACTS-FRESH-DISCARDED",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "visit",
+			"find": "use == Statement && TypedFactsShapes.isFresh(rhs)",
+			"replace": "TypedFactsShapes.isFresh(rhs)",
+			"note": "a fresh value stored by an assignment used as a value counts as the field's alone, though the assignment hands it on"
 		},
 		{
 			"name": "M-FACTS-REACH-NESTED-OWNER",

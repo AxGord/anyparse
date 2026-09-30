@@ -21,7 +21,7 @@ final class TypedFactsWalk {
 
 	/** The categories of a node line, in the order they are written. */
 	private static final CATEGORIES: Array<String> = [
-		'params', 'calls', 'news', 'fields', 'flows', 'strs', 'iters', 'refl', 'native', 'vars', 'reads', 'fns'
+		'params', 'calls', 'news', 'fields', 'elems', 'flows', 'strs', 'iters', 'refl', 'native', 'vars', 'reads', 'fns'
 	];
 
 	public final id: String;
@@ -44,6 +44,18 @@ final class TypedFactsWalk {
 	private final _locals: Map<Int, String>;
 	private final _written: Map<Int, Bool>;
 
+	/**
+	 * The locals initialized straight from a field read, shared with the nested walks: each read of one is a use of the
+	 * field's value, so the read is recorded once the uses are known. A read from a nested function captures the value.
+	 */
+	private final _aliases: Map<Int, Alias>;
+
+	/** The field reads held back until their local's uses are known: the fact without its use, and the local. */
+	private final _deferred: Array<{ fact: String, local: Int }> = [];
+
+	/** How the value of the expression `walk` is about to visit is used; `visit` takes it and resets it to `Value`. */
+	private var _use: FactUse = Value;
+
 	private var _ret: Null<Type> = null;
 	private var _home: String = '';
 
@@ -60,7 +72,7 @@ final class TypedFactsWalk {
 
 	public function new(
 		host: TypedFactsMacro, id: String, kind: String, owner: String, isStatic: Bool, signature: String, name: Null<String>,
-		locals: Map<Int, String>, written: Map<Int, Bool>
+		locals: Map<Int, String>, written: Map<Int, Bool>, aliases: Map<Int, Alias>
 	) {
 		this._host = host;
 		this.id = host.uniqueId(id);
@@ -71,6 +83,7 @@ final class TypedFactsWalk {
 		this._name = name;
 		this._locals = locals;
 		this._written = written;
+		this._aliases = aliases;
 	}
 
 	/** Mark the node with a header flag (`gen`: macro-placed; `gi`: a `@:generic` instance's copy), kept out of file ranges. */
@@ -97,9 +110,16 @@ final class TypedFactsWalk {
 			case TFunction(f):
 				_ret = f.t;
 				for (a in f.args) add('params', '{"n":${q(a.v.name)},"t":${q(localType(a.v))}}');
-				walk(f.expr);
+				// a function's body is never its value: a returned value is the operand of a `return`
+				walkAs(f.expr, Statement);
 			case _:
 				walk(e);
+		}
+		for (d in _deferred) {
+			final seen: Array<String> = _aliases[d.local]?.uses ?? [];
+			// a local never read is answered as any use the walk does not name
+			final uses: Array<String> = seen.length > 0 ? seen : [useText(Value)];
+			for (u in uses) add('fields', d.fact + ',' + u + '}');
 		}
 		final out: StringBuf = new StringBuf();
 		out.add('{"k":"node","id":${q(id)},"f":${q(_home)},"p":$at,"kind":"$_kind","owner":${q(_owner)},"t":${q(_signature)}');
@@ -193,7 +213,8 @@ final class TypedFactsWalk {
 	private function child(f: TypedExpr, localName: Null<String>): String {
 		final info: { min: Int, max: Int, file: String } = Context.getPosInfos(f.pos);
 		final nested: TypedFactsWalk = new TypedFactsWalk(
-			_host, '$id@${info.min}', localName == null ? 'fn' : 'local', _owner, _isStatic, str(f.t), localName, _locals, _written
+			_host, '$id@${info.min}', localName == null ? 'fn' : 'local', _owner, _isStatic, str(f.t), localName, _locals, _written,
+			_aliases
 		);
 		// a function outside this body was spliced in: it runs here, but no range of its own file is where it runs. One
 		// bound straight to a local is reached without `walk`, so the splice is decided here too
@@ -226,6 +247,12 @@ final class TypedFactsWalk {
 		_inBody = saved;
 	}
 
+	/** Walk `e`, whose value is used as `use`. */
+	private function walkAs(e: TypedExpr, use: FactUse): Void {
+		_use = use;
+		walk(e);
+	}
+
 	/**
 	 * Record the spliced body rooted at `e`: the call of the method it came from — `inline`, or inlined by its call site — found at the root or, when
 	 * the root carries a position of its own — an abstract's `this` stands at the whole abstract — at the first
@@ -254,11 +281,17 @@ final class TypedFactsWalk {
 	}
 
 	private function visit(e: TypedExpr): Void {
+		// noqa: complexity
+		final use: FactUse = _use;
+		_use = Value;
 		switch e.expr {
 			case TFunction(_):
 				child(e, null);
 			case TLocal(v):
 				if (!v.name.startsWith('`')) add('reads', '[${range(e.pos)},${q(localType(v))}]');
+				final alias: Null<Alias> = _aliases[v.id];
+				// a nested function holds the local, so the value goes wherever that function goes
+				if (alias != null) aliasUse(alias, alias.owner == id ? use : Value);
 			case TIdent(identifier):
 				add('native', '{"w":"ident","n":${q(identifier)},"p":${at(e.pos)}}');
 			case TTypeExpr(m):
@@ -273,6 +306,13 @@ final class TypedFactsWalk {
 						case TFunction(_):
 							final made: String = child(init, v.name);
 							if (!_written.exists(v.id)) _locals[v.id] = made;
+						case TField(_, _):
+							// the field's value goes wherever the local's reads take it: the compiler holds a lowered loop's
+							// array, and the receiver of a compound element write, in a local of its own. An unrolled loop
+							// declares one local once per copy, and every copy's reads are its uses
+							final alias: Alias = _aliases[v.id] ?? { owner: id, uses: [] };
+							_aliases[v.id] = alias;
+							walkAs(init, Held(v.id));
 						case _:
 							walk(init);
 					}
@@ -286,23 +326,36 @@ final class TypedFactsWalk {
 				if (ctor != null) argFlows(TypeTools.applyTypeParameters(ctor.get().type, cls.params, params), args);
 				for (a in args) walk(a);
 			case TField(receiver, fa):
-				fieldFact(e, receiver, fa, false);
+				switch use {
+					case Held(local):
+						_deferred.push({ fact: fieldHead(e, receiver, fa, false), local: local });
+					case _:
+						fieldFact(e, receiver, fa, false, ',' + useText(use));
+				}
 				reflectionValue(fa, e);
-				walkReceiver(receiver);
+				// a method closure holds its receiver; any other field access reads through it
+				walkReceiver(receiver, fa.match(FClosure(_, _)) ? Value : Member);
+			case TArray(array, index):
+				walkAs(array, Index);
+				walk(index);
 			case TBinop(OpAssign, lhs, rhs):
 				flowInto(rhs, str(lhs.t), 'assign', e.pos);
-				target(lhs, false);
+				// a fresh value stored by an assignment whose own value goes nowhere is held by its target alone
+				target(lhs, false, use == Statement && TypedFactsShapes.isFresh(rhs));
 				walk(rhs);
 			case TBinop(OpAssignOp(op), lhs, rhs):
 				if (op == OpAdd && TypedFactsShapes.isString(lhs.t) && !TypedFactsShapes.isString(rhs.t)) stringSite(rhs);
-				target(lhs, true);
+				target(lhs, true, false);
 				walk(rhs);
 			case TUnop(OpIncrement | OpDecrement, _, operand):
-				target(operand, true);
+				target(operand, true, false);
 			case TBinop(OpAdd, a, b) if (TypedFactsShapes.isString(e.t)):
 				for (operand in [a, b]) if (!TypedFactsShapes.isString(operand.t)) stringSite(operand);
 				walk(a);
 				walk(b);
+			case TBinop(OpEq | OpNotEq | OpLt | OpLte | OpGt | OpGte, a, b):
+				walkAs(a, Compare);
+				walkAs(b, Compare);
 			case TReturn(value):
 				if (value != null) {
 					flowInto(value, str(_ret), 'ret', e.pos);
@@ -325,16 +378,39 @@ final class TypedFactsWalk {
 			case TFor(v, it, body):
 				declare(v, e.pos);
 				add('iters', '{"v":${q(str(v.t))},"i":${q(str(it.t))},"p":${at(e.pos)}}');
-				walk(it);
-				walk(body);
+				walkAs(it, Iterable);
+				walkAs(body, Statement);
+			case TWhile(condition, body, _):
+				walk(condition);
+				walkAs(body, Statement);
+			case TBlock(exprs):
+				// every statement but the last is discarded; the last is the block's own value
+				for (i in 0...exprs.length) walkAs(exprs[i], i == exprs.length - 1 ? use : Statement);
+			case TIf(condition, then, otherwise):
+				walk(condition);
+				walkAs(then, use);
+				if (otherwise != null) walkAs(otherwise, use);
+			case TSwitch(subject, cases, otherwise):
+				// the subject is only compared with the patterns; each arm is the switch's own value
+				walkAs(subject, Compare);
+				for (c in cases) {
+					for (value in c.values) walk(value);
+					walkAs(c.expr, use);
+				}
+				if (otherwise != null) walkAs(otherwise, use);
+			case TTry(body, catches):
+				walkAs(body, use);
+				for (c in catches) walkAs(c.expr, use);
+			case TParenthesis(inner) | TMeta(_, inner):
+				walkAs(inner, use);
 			case _:
 				TypedExprTools.iter(e, walk);
 		}
 	}
 
-	/** Walk the receiver of a field access; a type named as one is no value, so it is not walked. */
-	private function walkReceiver(receiver: TypedExpr): Void {
-		if (!receiver.expr.match(TTypeExpr(_))) walk(receiver);
+	/** Walk the receiver of a field access, its value used as `use`; a type named as one is no value, so it is not walked. */
+	private function walkReceiver(receiver: TypedExpr, use: FactUse): Void {
+		if (!receiver.expr.match(TTypeExpr(_))) walkAs(receiver, use);
 	}
 
 	/** A `Reflect.*` / `Type.*` member read as a value rather than called: whatever calls it later is reflection. */
@@ -372,27 +448,37 @@ final class TypedFactsWalk {
 		add('strs', '{"o":${q(str(operand.t))},"p":${at(operand.pos)}}');
 	}
 
-	/** The written side of an assignment: a field is a write (and a read too when `alsoRead`), anything else is walked. */
-	private function target(lhs: TypedExpr, alsoRead: Bool): Void {
+	/**
+	 * The written side of an assignment: a field is a write (and a read too when `alsoRead`), an array element is a write
+	 * through the array holding it, anything else is walked. `fresh`: the target alone holds the value stored.
+	 */
+	private function target(lhs: TypedExpr, alsoRead: Bool, fresh: Bool): Void {
 		switch lhs.expr {
 			case TField(receiver, fa):
-				fieldFact(lhs, receiver, fa, true);
-				if (alsoRead) fieldFact(lhs, receiver, fa, false);
-				walkReceiver(receiver);
+				fieldFact(lhs, receiver, fa, true, fresh ? ',"fresh":true' : '');
+				if (alsoRead) fieldFact(lhs, receiver, fa, false, ',' + useText(Update));
+				walkReceiver(receiver, MemberWrite);
+			case TArray(array, index):
+				add('elems', '{"r":${q(str(array.t))},"rp":${at(array.pos)},"p":${at(lhs.pos)}}');
+				walkAs(array, ElementWrite);
+				walk(index);
 			case _:
 				walk(lhs);
 		}
 	}
 
-	private function fieldFact(e: TypedExpr, receiver: TypedExpr, fa: FieldAccess, write: Bool): Void {
+	/** Record a field access: `tail` ends its fact with how a read value is used, or what a write stores. */
+	private function fieldFact(e: TypedExpr, receiver: TypedExpr, fa: FieldAccess, write: Bool, tail: String): Void {
+		add('fields', fieldHead(e, receiver, fa, write) + tail + '}');
+	}
+
+	/** The fact of a field access up to its closing brace. */
+	private function fieldHead(e: TypedExpr, receiver: TypedExpr, fa: FieldAccess, write: Bool): String {
 		final access: FieldRef = TypedFactsShapes.describe(fa);
 		final declaring: Null<String> = access.owner;
 		final owned: String = declaring == null ? '' : ',"o":${q(declaring)}';
 		final written: String = write ? ',"w":true' : '';
-		add(
-			'fields',
-			'{"f":${q(access.field)},"a":"${access.kind}"$owned,"r":${q(str(receiver.t))},"t":${q(str(e.t))},"p":${at(e.pos)}$written}'
-		);
+		return '{"f":${q(access.field)},"a":"${access.kind}"$owned,"r":${q(str(receiver.t))},"t":${q(str(e.t))},"p":${at(e.pos)}$written';
 	}
 
 	private function call(e: TypedExpr, callee: TypedExpr, args: Array<TypedExpr>): Void {
@@ -408,7 +494,7 @@ final class TypedFactsWalk {
 					reflection(targetName, args, where);
 				if (access.kind == 'FStatic' && declaring != null && TypedFactsShapes.SYNTAX_CLASSES.contains(declaring))
 					add('native', '{"w":"syntax","n":${q(targetName)},"p":$where}');
-				walkReceiver(receiver);
+				walkReceiver(receiver, Call(access.field));
 				final kind: String = calledKind(fa, targetName, access.kind);
 				final chosen: String = _host.overloaded(targetName) ? ',"sig":${q(str(callee.t))}' : '';
 				'{"t":${q(targetName)},"a":"$kind"$chosen,"r":${q(str(receiver.t))},"rp":${at(receiver.pos)},$head}';
@@ -483,6 +569,27 @@ final class TypedFactsWalk {
 		}
 	}
 
+	/** Record `use` as one of the uses of the value `alias` holds. */
+	private static function aliasUse(alias: Alias, use: FactUse): Void {
+		final text: String = useText(use);
+		if (!alias.uses.contains(text)) alias.uses.push(text);
+	}
+
+	/** `use` as the keys of a field read's fact: `u`, and `m` for a call. */
+	private static function useText(use: FactUse): String {
+		return switch use {
+			case Call(method): '"u":"call","m":${q(method)}';
+			case Index: '"u":"index"';
+			case ElementWrite: '"u":"elemWrite"';
+			case Member: '"u":"member"';
+			case MemberWrite: '"u":"memberWrite"';
+			case Compare: '"u":"compare"';
+			case Iterable: '"u":"iter"';
+			case Update: '"u":"update"';
+			case Value | Statement | Held(_): '"u":"value"';
+		};
+	}
+
 	private static inline function str(t: Null<Type>): String {
 		return TypedFactsMacro.typeString(t, 0);
 	}
@@ -491,5 +598,47 @@ final class TypedFactsWalk {
 		return TypedFactsMacro.q(s);
 	}
 
+}
+/** How the value an expression produces is used where it is read: what a field read's `u` records (`TypedFactsProbe`). */
+private enum FactUse {
+
+	/** Anything the other constructors do not name — an argument, a stored or returned value — and a capture. */
+	Value;
+
+	/** Discarded: a statement's own value. */
+	Statement;
+
+	/** The receiver of a call of its field `method`. */
+	Call(method: String);
+
+	/** An array indexed to read an element. */
+	Index;
+
+	/** An array indexed to write an element: `a[i] = v`, `a[i] += v`, `a[i]++`. */
+	ElementWrite;
+
+	/** The receiver of a field read that is no method closure. */
+	Member;
+
+	/** The receiver of a field write. */
+	MemberWrite;
+
+	/** An operand of a comparison, or a `switch` subject. */
+	Compare;
+
+	/** The iterated value of a `for` the compiler kept. */
+	Iterable;
+
+	/** A field read by a compound assignment or an increment of that field, the read half of its write. */
+	Update;
+
+	/** The initializer of the local `id`: the local's reads are the uses. */
+	Held(id: Int);
+}
+
+/** A local initialized from a field read: the node that declared it, and the uses its reads made, as `useText`. */
+private typedef Alias = {
+	final owner: String;
+	final uses: Array<String>;
 }
 #end

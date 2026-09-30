@@ -58,6 +58,33 @@ typedef FieldFact = {
 	final type: String;
 	final write: Bool;
 	final at: FactPos;
+
+	/**
+	 * How a read's value is used (null for a write): `call` (the receiver of a call of `method`), `index`, `elemWrite`,
+	 * `member` (the receiver of a field read), `memberWrite`, `compare`, `iter`, `update` (the read half of a compound
+	 * write of the field) or `value` — anything else, an escape. A value the compiler holds in a local is read once per
+	 * use of that local, each a fact of its own at the same position (`TypedFactsProbe`).
+	 */
+	final use: Null<String>;
+
+	/** For a read used as a call receiver, the called field; null otherwise. */
+	final method: Null<String>;
+
+	/**
+	 * For a write, whether the field alone holds what it stores: every value the right side produces is built right
+	 * there (an array literal, a `new Array`, `null`), and the assignment's own value goes nowhere.
+	 */
+	final fresh: Bool;
+}
+
+/**
+ * An element write through an array — `a[i] = v`, `a[i] += v`, `a[i]++` — on any receiver: `receiverAt` is the position
+ * of the array's own read, the field read or local read found there; null when its file was lost (`stale-foreign`).
+ */
+typedef ElementWriteFact = {
+	final receiver: String;
+	final receiverAt: Null<FactPos>;
+	final at: FactPos;
 }
 
 /** A value of type `from` reaching a place of type `to` through `via`: `var`, `assign`, `arg`, `ret`, `arr`, `obj` or `cast`. */
@@ -157,6 +184,7 @@ typedef FactNode = {
 	final calls: Array<CallFact>;
 	final news: Array<NewFact>;
 	final fields: Array<FieldFact>;
+	final elementWrites: Array<ElementWriteFact>;
 	final flows: Array<FlowFact>;
 	final strings: Array<StringFact>;
 	final iterations: Array<IterationFact>;
@@ -617,6 +645,7 @@ final class CompilerFacts {
 			calls: [],
 			news: [],
 			fields: [],
+			elementWrites: [],
 			flows: [],
 			strings: [],
 			iterations: [],
@@ -680,9 +709,16 @@ final class CompilerFacts {
 					receiver: f.r,
 					type: f.t,
 					write: f.w ?? false,
-					at: where
+					at: where,
+					use: f.u,
+					method: f.m,
+					fresh: f.fresh ?? false
 				}: FieldFact),
 				node.fields
+			);
+			FactMerge.collect(
+				record.elems, x -> place(x.p), fresh.bind('elem'),
+				(x, where) -> ({receiver: x.r, receiverAt: place(x.rp), at: where }: ElementWriteFact), node.elementWrites
 			);
 			FactMerge.collect(
 				record.flows, f -> place(f.p), fresh.bind('flow'), (f, where) -> ({
@@ -846,8 +882,12 @@ private typedef NodeRecord = {
 		r: String,
 		t: String,
 		?w: Bool,
-		p: Array<Int>
+		p: Array<Int>,
+		?u: String,
+		?m: String,
+		?fresh: Bool
 	}>;
+	final ?elems: Array<{ r: String, rp: Array<Int>, p: Array<Int> }>;
 	final ?flows: Array<{
 		s: String,
 		d: String,

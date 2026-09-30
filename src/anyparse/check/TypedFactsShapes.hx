@@ -46,6 +46,22 @@ final class TypedFactsShapes {
 		}
 	}
 
+	/**
+	 * Whether every value `e` produces is built right there — an array literal, a `new Array`, `null` — so nothing but the
+	 * place it is stored into holds it.
+	 */
+	public static function isFresh(e: TypedExpr): Bool {
+		final leaves: Array<TypedExpr> = [];
+		collectLeaves(e, leaves);
+		return Lambda.foreach(
+			leaves, leaf -> switch leaf.expr {
+				case TArrayDecl(_) | TConst(TNull): true;
+				case TNew(c, _, _): c.toString() == 'Array';
+				case _: false;
+			}
+		);
+	}
+
 	public static function restElement(t: Type): Null<Type> {
 		return switch TypeTools.follow(t) {
 			case TAbstract(a, [element]) if (a.toString() == 'haxe.Rest' || a.toString() == 'haxe.extern.Rest'): element;
