@@ -2566,13 +2566,15 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-REACH-ABSTRACT-TEXT-ANY',
 			'unit.query.MemberReachFactsTest#testAConversionTheCompilerCallsIsItsTextUnderTheTruth :: control :: '
 				+ 'M-FACTS-TEXT-CONVERSION-CALL',
+			'unit.query.MemberReachFactsTest#testAConvertedValueOfTheParametersOwnTypeMayBeAnyObjectUnderTheTruth :: control :: '
+				+ 'M-FACTS-VIEW-CONVERSION-LEAF',
 			'unit.query.MemberReachFactsTest#testAFieldTheCompilerCallsLeavesItsFunctionToTheSyntaxUnderTheTruth :: control :: '
 				+ 'M-TOUCH-TYPED-CALLED',
 			'unit.query.MemberReachFactsTest#testAFieldTheCompilerPlacesAcrossTwoInlinedGettersIsItsTextUnderTheTruth :: control :: '
 				+ 'M-FACTS-TEXT-JOINED-SPLICES',
 			'unit.query.MemberReachFactsTest#testAFileTheRunWroteMayBeCompiled :: control :: M-FACTS-DEAD-FILE-REWRITTEN',
 			'unit.query.MemberReachFactsTest#testAFreshObjectConvertedRunsOnlyItsOwnClassToStringUnderTheTruth :: control :: '
-				+ 'M-FACTS-STRING-EXACT,M-REACH-EXACT-SITE,M-FACTS-VIEW-EXACT,M-FACTS-FLOW-EXACT,M-FACTS-VIEW-EXACT-CONVERSION,M-FACTS-EXACT-WRITTEN,M-FACTS-VIEW-EXACT-OPERAND',
+				+ 'M-FACTS-STRING-EXACT,M-REACH-EXACT-SITE,M-FACTS-VIEW-EXACT,M-FACTS-FLOW-EXACT,M-FACTS-VIEW-EXACT-CONVERSION,M-FACTS-EXACT-WRITTEN',
 			'unit.query.MemberReachFactsTest#testAFunctionSplicedFromAnotherFileIsTheNodeItsCalleeDeclares :: control :: '
 				+ 'M-GRAPH-FACTS-SPLICED-SITE,M-GRAPH-FACTS-SPLICED-FILE,M-FACTS-TRUTH-SPLICE',
 			'unit.query.MemberReachFactsTest#testAFunctionValueReadByItsSyntaxMayRunAnyOperatorOverloadUnderTheTruth :: control :: '
@@ -2585,8 +2587,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testALibraryClassTheWalkEntersIsItsTextUnderTheTruth :: control :: '
 				+ 'M-FACTS-TEXT-PURE-CALL,M-FACTS-TEXT-ABSTRACT-NEW',
 			'unit.query.MemberReachFactsTest#testALibraryDynamicMethodNotReadYetIsFollowed :: control :: M-FACTS-REACH-LIBRARY-DYNAMIC',
+			'unit.query.MemberReachFactsTest#testALibraryMemberAFactCallsIsItsOwnTypesUnderTheTruth :: control :: '
+				+ 'M-REACH-QUALIFIED-NONE,M-FACTS-QUALIFIED-HAZARDS,M-GRAPH-FACTS-TYPED-NONE',
 			'unit.query.MemberReachFactsTest#testALibraryMemberOnlyOneTypeOfItsNameDeclaresIsReadThroughItsFacts :: control :: '
-				+ 'M-FACTS-SOLE-MEMBER-NONE,M-REACH-SHARED-NAME-SOLE,M-REACH-ITERABLE-RETURNS',
+				+ 'M-FACTS-SOLE-MEMBER-NONE,M-REACH-ITERABLE-RETURNS',
 			'unit.query.MemberReachFactsTest#testALocalACalleeRebuiltInPlaceHandsOutIsNoProofUnderTheTruth :: control :: '
 				+ 'M-FACTS-TEXT-CALLS-ANY',
 			'unit.query.MemberReachFactsTest#testALocalInlineFunctionKeepsItsBodysSyntax :: control :: M-GRAPH-LOCAL-INLINE',
@@ -2612,6 +2616,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-GRAPH-ADOPT-NONE,M-TOUCH-ADOPTED-SYNTAX',
 			'unit.query.MemberReachFactsTest#testAMethodClosureOfTheMemberEscapesUnderTheTruth :: control :: '
 				+ 'M-TOUCH-TYPED-VALUE,M-TOUCH-TYPED-UNTRUE',
+			'unit.query.MemberReachFactsTest#testANameTwoTypesShareReachedByItsSyntaxStaysAmbiguousUnderTheTruth :: control :: '
+				+ 'M-REACH-QUALIFIED-UNNAMED,M-REACH-SHARED-NAME-SOLE',
 			'unit.query.MemberReachFactsTest#testANativeIdentifierAdmitsWhatItMayCall :: control :: M-FACTS-REACH-NATIVE-IDENT',
 			'unit.query.MemberReachFactsTest#testAProjectFileNoBuildCompilesLetsNoValueEscape :: control :: M-FACTS-DEAD-FILE-VALUES',
 			'unit.query.MemberReachFactsTest#testAProjectFileNoBuildCompilesRunsNothing :: control :: '
@@ -2696,6 +2702,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-ADMIT-SYNTAX-READ-UNTRUE',
 			'unit.query.MemberReachFactsTest#testLibraryCodeNotReadYetMayRunAnyOperatorOverloadUnderTheTruth :: control :: '
 				+ 'M-ADMIT-SYNTAX-READ-UNSEEN,M-REACH-UNREAD-RECHECK',
+			'unit.query.MemberReachFactsTest#testOnlyTheProjectTypeAFactCallsTouchesUnderTheTruth :: control :: '
+				+ 'M-REACH-QUALIFIED-NONE,M-REACH-QUALIFIED-SIMPLE-TOUCH,M-TOUCH-SCAN-NODE-UNRECORDED,M-FACTS-QUALIFIED-ANY-DECLARATION,M-REACH-QUALIFIED-ESCAPE',
 			'unit.query.MemberReachFactsTest#testProjectTargetCodeLetsAnyValueEscapeUnderTheTruth :: control :: '
 				+ 'M-ESCAPES-FACTS-PROJECT-NATIVE',
 			'unit.query.MemberReachFactsTest#testTheCompilerResolvesACallTheSyntaxCannot :: control :: M-FACTS-REACH-EDGES',
@@ -4085,7 +4093,6 @@ class TestDiscoveryParityTest extends Test {
 			'M-REACH-EXACT-SITE',
 			'M-FACTS-VIEW-EXACT',
 			'M-FACTS-VIEW-EXACT-CONVERSION',
-			'M-FACTS-VIEW-EXACT-OPERAND',
 			'M-FACTS-FLOW-EXACT',
 			'M-FACTS-TEXT-JOINED-CONVERSION',
 			'M-FACTS-TEXT-JOINED-PLACED',
@@ -4422,7 +4429,16 @@ class TestDiscoveryParityTest extends Test {
 			'M-PAREN-ALT-SURPLUS',
 			'M-PAREN-RUNON-SUSPEND',
 			'M-PAREN-RUNON-RESUME',
-			'M-PAREN-RUNON-FRAME'
+			'M-PAREN-RUNON-FRAME',
+			'M-REACH-QUALIFIED-NONE',
+			'M-REACH-QUALIFIED-UNNAMED',
+			'M-REACH-QUALIFIED-SIMPLE-TOUCH',
+			'M-FACTS-QUALIFIED-HAZARDS',
+			'M-FACTS-QUALIFIED-ANY-DECLARATION',
+			'M-GRAPH-FACTS-TYPED-NONE',
+			'M-TOUCH-SCAN-NODE-UNRECORDED',
+			'M-FACTS-VIEW-CONVERSION-LEAF',
+			'M-REACH-QUALIFIED-ESCAPE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

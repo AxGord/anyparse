@@ -79,6 +79,13 @@ typedef CallEdge = {
 
 	/** For an edge the compiler facts file off a body an inlined call spliced into `from`: where it runs (`SplicedSite`). */
 	@:optional var spliced: Null<SplicedSite>;
+
+	/**
+	 * For an edge the compiler facts record of a call or a method read as a value, the typed type they name as the
+	 * target's owner (`pack._Module.Name_Impl_` for an abstract's member): which of the types sharing the simple name
+	 * `to` is keyed by declares the code that runs (`CallGraphFacts.qualify`). Null on every other edge.
+	 */
+	@:optional var typed: Null<String>;
 }
 
 /**
@@ -231,7 +238,9 @@ enum abstract EdgeKind(Int) {
  *
  * Simple type names only (`SymbolIndex` models no packages): two types with
  * the same simple name merge into one graph node — acceptable for a finder,
- * listed as a known limit.
+ * listed as a known limit. Where the compiler facts are the truth, an edge they
+ * record names the typed owner of its target (`CallEdge.typed`), and a node of
+ * such a name may be read as that one type's member (`CallGraphFacts.qualify`).
  *
  * A node FOLDS every declaration of its id: a member declared in each branch of a conditional region, an overload, a
  * copy of its type per build or per package. Each is code the node runs (`declarationsOf`), a site inside any of them
@@ -509,6 +518,14 @@ final class CallGraph {
 		if (!_entries.exists(key)) return;
 		_entries.remove(key);
 		final removed: Map<String, Bool> = [for (n in _fileNodes[key] ?? []) n.id => true];
+		// a node read as one of the types sharing a name (`CallGraphFacts.qualify`) leaves with its node or any declaration it reads
+		final reading: Null<CallGraphFacts> = facts;
+		if (reading != null) for (variant => read in reading.qualified) if (
+			removed.exists(read.node) || declarationsOf(variant).exists(d -> CallGraphNames.normalizePath(d.file) == key)
+		) {
+			removed[variant] = true;
+			_declarations.remove(variant);
+		}
 		_fileNodes.remove(key);
 		_fileDeclarations.remove(key);
 		for (id in [for (id in _declarations.keys()) id]) {
@@ -889,7 +906,7 @@ final class CallGraph {
 
 	private function addEdge(
 		from: String, to: String, kind: EdgeKind, via: Null<String>, file: String, span: Null<Span>, ?dispatchType: String,
-		?receiverField: String
+		?receiverField: String, ?typed: String
 	): Void {
 		final edge: CallEdge = {
 			from: from,
@@ -901,6 +918,7 @@ final class CallGraph {
 			dispatchType: dispatchType,
 			receiverField: receiverField
 		};
+		if (typed != null) edge.typed = typed;
 		// a faceted function's syntax still records every edge it names, which the facts only add to — unless they are the
 		// truth: then its edge at a site they type is dropped (`CallGraphFacts.holdsBack`)
 		if (facts?.holdsBack(edge) != true) indexEdge(edge);

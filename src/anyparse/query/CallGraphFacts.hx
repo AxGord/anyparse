@@ -34,7 +34,10 @@ using StringTools;
  * anywhere in the node when no such method does. What a method that runs no project code spliced in is not filed
  * (`FactsView.harmlessSplice`): the `inlined` call of it answers for all it does. A function nested in a spliced
  * body is the node the graph declares in the callee's file. Under the truth, a method a build macro made — placed
- * outside its type's file, or where no declaration of the text is — is a node too, read by its id alone (`adopt`).
+ * outside its type's file, or where no declaration of the text is — is a node too, read by its id alone (`adopt`). An
+ * edge of a call or a method read as a value names the typed type the compiler resolved its target's owner to
+ * (`CallEdge.typed`): under the truth, the node of a simple name several typed types share is read as that one's member,
+ * a node of its own beside the folded one (`qualify`).
  */
 @:access(anyparse.query.CallGraph)
 @:nullSafety(Strict)
@@ -77,6 +80,12 @@ final class CallGraphFacts {
 	 */
 	public final adopted: Map<String, FactNode> = [];
 
+	/**
+	 * Node id -> the node it reads as one typed type's member (`qualify`), and that type: of the declarations that node
+	 * folds under a simple name several typed types share, those of the type, read through its facts.
+	 */
+	public final qualified: Map<String, QualifiedRead> = [];
+
 	/** The edges the syntax of a muted node recorded while the facts are the truth, until `recordMuted` sorts them. */
 	private final _heldBack: Array<CallEdge> = [];
 
@@ -114,17 +123,15 @@ final class CallGraphFacts {
 			typed[id] = typedSites(facts, view);
 			record(g, n, facts, view);
 		}
-		for (e in _heldBack) {
-			final at: Null<Span> = e.span;
-			if (at == null || !(typed[e.from] ?? []).contains(siteKey(at))) g.indexEdge(e);
-		}
+		for (e in _heldBack) if (!answered(g, e.from, typed[e.from] ?? [], e)) g.indexEdge(e);
 		_heldBack.resize(0);
 	}
 
 	/**
 	 * Whether the syntax's `edge` waits for `recordMuted` instead of joining the graph: when the facts are the truth
-	 * (`FactsView.truth`), an edge a muted node's syntax records at a site its facts type is the syntax's reading of a
-	 * site the compiler resolved in every build there is, and is dropped. Lexical containment is no reading of a site.
+	 * (`FactsView.truth`), an edge a muted node's syntax records at a site its facts type — or of a call they record the
+	 * compiler inlined there (`answered`) — is the syntax's reading of a site the compiler resolved in every build there
+	 * is, and is dropped. Lexical containment is no reading of a site.
 	 */
 	public function holdsBack(edge: CallEdge): Bool {
 		if (!view.truth || edge.kind == Contains || !muted.exists(edge.from)) return false;
@@ -164,11 +171,71 @@ final class CallGraphFacts {
 		}
 	}
 
+	/**
+	 * Under the truth, the node reading the graph node `id` as the member of the typed type `owner` alone — a call fact
+	 * names `owner` as its target's (`CallEdge.typed`) — when several typed types share the simple name `id` is keyed by:
+	 * of the declarations `id` folds, the ones `owner`'s own type holds (`FactsView.qualifiedDeclarations`), its body the
+	 * facts of `owner`'s member over every build (`FactsView.ownerBodies`). It is faceted: its edges, unresolved sites and
+	 * accesses are those facts', beside the edges the syntax of those declarations records at a site the facts do not type,
+	 * as a faceted node keeps them (`holdsBack`). Made once, kept in `qualified`; null when the facts cannot read it so: a
+	 * nested function, a body-less or library placeholder, a member `owner` holds no typed body of, or declarations of
+	 * its type the graph does not hold or cannot tell apart.
+	 */
+	public function qualify(g: CallGraph, id: String, owner: String): Null<String> {
+		final key: String = '$id@$owner';
+		if (qualified.exists(key)) return key;
+		final node: Null<FnNode> = g.nodes[id];
+		final name: Null<String> = node?.name;
+		if (!view.truth || node == null || name == null || node.isExternal || node.isBodyless || id.indexOf(FactsView.NESTED_MARK) >= 0)
+			return null;
+		final bodies: Null<Array<FactNode>> = view.ownerBodies(owner, name);
+		final declared: Null<Array<FnDeclaration>> = bodies == null ? null : view.qualifiedDeclarations(g, node, owner);
+		if (bodies == null || declared == null) return null;
+		final first: FnDeclaration = declared[0];
+		final made: FnNode = {
+			id: key,
+			file: first.file,
+			typeName: node.typeName,
+			name: name,
+			span: first.span,
+			isExternal: false,
+			isDynamic: node.isDynamic,
+			isBodyless: false
+		};
+		g.nodes[key] = made;
+		g._declarations[key] = [for (d in declared) { id: key, file: d.file, span: d.span }];
+		final read: QualifiedRead = { node: id, owner: owner };
+		qualified[key] = read;
+		faceted[key] = bodies;
+		record(g, made, bodies, view);
+		final typed: Array<String> = typedSites(bodies, view);
+		for (e in g.outEdges(id)) {
+			final at: Null<Span> = e.span;
+			final site: String = CallGraphNames.normalizePath(e.file);
+			if (at == null || e.kind == Contains || answered(g, key, typed, e)) continue;
+			final span: Span = at;
+			if (declared.exists(
+				d -> CallGraphNames.normalizePath(d.file) == site && d.span.from <= span.from && span.to <= d.span.to
+			)) g.indexEdge({
+				from: key,
+				to: e.to,
+				kind: e.kind,
+				via: e.via,
+				file: e.file,
+				span: e.span,
+				dispatchType: e.dispatchType,
+				receiverField: e.receiverField
+			});
+		}
+		return key;
+	}
+
 	/** Forget the text of `file`, which left the graph, and the `removed` nodes it declared. */
 	public function forget(file: String, removed: Map<String, Bool>): Void {
 		for (id in removed.keys()) {
 			faceted.remove(id);
 			adopted.remove(id);
+			qualified.remove(id);
 		}
 		view.forget(file);
 	}
@@ -307,7 +374,10 @@ final class CallGraphFacts {
 		if (field && !replaceable && known != null) return;
 		final instance: Bool = c.access == 'FInstance' || c.access == 'FClosure' || field;
 		final dispatch: Null<String> = instance ? dispatchType(c.receiver, owner, view) : null;
-		g.addEdge(node.id, id, deferred ? Ref : Call, null, node.file, span, dispatch == null ? null : view.graphType(dispatch));
+		g.addEdge(
+			node.id, id, deferred ? Ref : Call, null, node.file, span, dispatch == null ? null : view.graphType(dispatch), null,
+			CompilerFacts.baseId(owner)
+		);
 		if (dispatch != null) virtualEdges(g, node, dispatch, name, span, deferred ? Ref : Virtual, view);
 		if (!field && replaceable) unresolved(FunctionValue(name));
 	}
@@ -357,7 +427,9 @@ final class CallGraphFacts {
 		final type: String = view.graphType(owner);
 		final id: String = g.memberOnChain(type, f.field) ?? g.externalNode(g.types.declaringTypeOf(type, f.field) ?? type, f.field);
 		final dispatch: Null<String> = f.access == 'FClosure' ? dispatchType(f.receiver, owner, view) : null;
-		g.addEdge(node.id, id, Ref, null, node.file, span, dispatch == null ? null : view.graphType(dispatch));
+		g.addEdge(
+			node.id, id, Ref, null, node.file, span, dispatch == null ? null : view.graphType(dispatch), null, CompilerFacts.baseId(owner)
+		);
 		if (dispatch != null) virtualEdges(g, node, dispatch, f.field, span, Ref, view);
 	}
 
@@ -459,6 +531,20 @@ final class CallGraphFacts {
 		return out;
 	}
 
+	/**
+	 * Whether the facts of the faceted node `id`, which typed the sites `typed` (`typedSites`), answer for the edge `e` its
+	 * syntax records: they typed its site at exactly its range, or they record an inlined call (`CallEdge.typed`, its
+	 * `SplicedSite.sites`) of the very node `e` reaches whose call site holds `e`'s — the syntax's reading of that call,
+	 * which the compiler spliced in and put at the call site's expression rather than the call's own range.
+	 */
+	private static function answered(g: CallGraph, id: String, typed: Array<String>, e: CallEdge): Bool {
+		final at: Null<Span> = e.span;
+		if (at == null) return false;
+		final span: Span = at;
+		return typed.contains(siteKey(span)) || g.outEdges(id)
+			.exists(f -> f.typed != null && f.to == e.to && (f.spliced?.sites ?? []).exists(s -> s.from <= span.from && span.to <= s.to));
+	}
+
 	/** A site by its exact range: a syntax edge is dropped only at a range the compiler typed itself. */
 	private static inline function siteKey(span: Span): String {
 		return '${span.from}:${span.to}';
@@ -495,4 +581,10 @@ final class CallGraphFacts {
 		}
 	}
 
+}
+
+/** What a node `CallGraphFacts.qualify` made reads: the graph node `node` as the member of the typed type `owner`. */
+typedef QualifiedRead = {
+	final node: String;
+	final owner: String;
 }

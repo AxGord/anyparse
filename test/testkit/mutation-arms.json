@@ -4819,7 +4819,7 @@
 			"name": "M-REACH-TOUCHER-FOUND",
 			"type": "anyparse.query.MemberReach",
 			"method": "walk",
-			"find": "\t\t\t\tif (touchers.exists(id) && !freshlyConstructed(g, id, reach[id], scan, member))\n\t\t\t\t\treturn Reached(pathTo(reach, id, touchers[id]));\n",
+			"find": "\t\t\t\tif (!shared && touchers.exists(id) && !freshlyConstructed(g, id, step, scan, member))\n\t\t\t\t\treturn Reached(pathTo(reach, id, touchers[id]));\n",
 			"replace": "",
 			"note": "reaching a function that touches the member is not noticed, so a callee that grows the collection reads as harmless"
 		},
@@ -5660,8 +5660,8 @@
 			"name": "M-REACH-AMBIGUOUS",
 			"type": "anyparse.query.MemberReach",
 			"method": "walk",
-			"find": "if (type != null && sharedName(g, node)) blind = blind ?? Ambiguous(type);",
-			"replace": "",
+			"find": "blind = blind ?? Ambiguous(type);",
+			"replace": "{}",
 			"note": "a reached type sharing its simple name with another is taken for the one the graph merged, so the other's body is never seen"
 		},
 		{
@@ -6776,7 +6776,7 @@
 			"name": "M-FACTS-TRUTH-HAZARDS",
 			"type": "anyparse.query.MemberReach",
 			"method": "hazardsOf",
-			"find": "final typed: Null<TruthSites> = _scope.facts?.truthSites(g, file, span);",
+			"find": "final typed: Null<TruthSites> = _scope.facts?.truthSites(g, file, span, node);",
 			"replace": "final typed: Null<TruthSites> = null;",
 			"note": "(precision) code whose facts are the truth keeps every hazard its syntax reads, so untyped code the compiler typed in full stays a blind spot"
 		},
@@ -6784,15 +6784,15 @@
 			"name": "M-FACTS-TRUTH-HAZARDS-UNLISTED",
 			"type": "anyparse.query.FactsView",
 			"method": "truthSites",
-			"find": "if (!truth || !faceted(g, file, span)) return null;",
-			"replace": "if (!faceted(g, file, span)) return null;",
+			"find": "if (!truth || !faceted(g, file, span, node)) return null;",
+			"replace": "if (!faceted(g, file, span, node)) return null;",
 			"note": "the facts of the listed builds answer for hazards though the list is not every build, so untyped code a build it does not name reads otherwise hides nothing"
 		},
 		{
 			"name": "M-FACTS-TRUTH-FACETED",
 			"type": "anyparse.query.FactsView",
 			"method": "truthSites",
-			"find": "if (!truth || !faceted(g, file, span)) return null;",
+			"find": "if (!truth || !faceted(g, file, span, node)) return null;",
 			"replace": "if (!truth) return null;",
 			"note": "the facts answer for the hazards of a body they do not describe whole, so untyped code beside a spliced inline call hides nothing"
 		},
@@ -6967,7 +6967,7 @@
 			"name": "M-GRAPH-TRUTH-MUTE-UNTYPED",
 			"type": "anyparse.query.CallGraphFacts",
 			"method": "recordMuted",
-			"find": "if (at == null || !(typed[e.from] ?? []).contains(siteKey(at))) g.indexEdge(e);",
+			"find": "for (e in _heldBack) if (!answered(g, e.from, typed[e.from] ?? [], e)) g.indexEdge(e);",
 			"replace": "",
 			"note": "under the whole list of builds a faceted body drops every edge its syntax records, even at a site its facts do not type, which may be the only thing saying the site runs code"
 		},
@@ -7848,8 +7848,8 @@
 			"name": "M-REACH-TEXTUAL-ALWAYS",
 			"type": "anyparse.query.FactsProvenance",
 			"method": "typeIsItsText",
-			"find": "if (site == null || ids.length == 0 || g.types.declarationCount(type) != 1) return false;",
-			"replace": "if (site == null || ids.length == 0 || g.types.declarationCount(type) != 1 || true) return true;",
+			"find": "return site != null && ids.length > 0 && g.types.declarationCount(type) == 1 && textual(g, type, site.file, ids);",
+			"replace": "return true;",
 			"note": "every type is its text, so a body a build macro rewrote to touch the member is read by its syntax, which never names it"
 		},
 		{
@@ -8675,17 +8675,9 @@
 			"name": "M-FACTS-VIEW-EXACT-CONVERSION",
 			"type": "anyparse.query.FactsView",
 			"method": "sitesIn",
-			"find": "exact: operand && argument?.exact == true",
+			"find": "exact: argument?.exact == true",
 			"replace": "exact: false",
 			"note": "the exactness the facts record of the argument of a conversion call is dropped"
-		},
-		{
-			"name": "M-FACTS-VIEW-EXACT-OPERAND",
-			"type": "anyparse.query.FactsView",
-			"method": "sitesIn",
-			"find": "exact: operand && argument?.exact == true",
-			"replace": "exact: argument?.exact == true",
-			"note": "a conversion of a branching value is taken to convert the first branch's object alone"
 		},
 		{
 			"name": "M-FACTS-FLOW-EXACT",
@@ -11331,6 +11323,78 @@
 			"find": "routes.suspendedAbove.resize(0);",
 			"replace": "",
 			"note": "a run-on route's suspension survives its frame, so a later paren in the next frame no longer ends the line and the fitting asker opens"
+		},
+		{
+			"name": "M-REACH-QUALIFIED-NONE",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "final read: Null<FnNode> = typed == null ? null : qualifiedNode(g, node, typed, question, scan, seeds);",
+			"replace": "final read: Null<FnNode> = null;",
+			"note": "a name two types share stays Ambiguous where a fact names the target's owner (openfl's `Vector.get_length` beside `haxe.ds.Vector`)"
+		},
+		{
+			"name": "M-REACH-QUALIFIED-UNNAMED",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "typed == null ? null : qualifiedNode(g, node, typed, question, scan, seeds)",
+			"replace": "qualifiedNode(g, node, typed ?? 'b.Grid', question, scan, seeds)",
+			"note": "a visit no fact names an owner of — an edge of a body read by its syntax — is read as one of the types sharing the name anyway"
+		},
+		{
+			"name": "M-REACH-QUALIFIED-SIMPLE-TOUCH",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "if (!shared && touchers.exists(id)",
+			"replace": "if (touchers.exists(id)",
+			"note": "a qualified visit of a shared name takes the touch the syntax found in the other type's declaration"
+		},
+		{
+			"name": "M-FACTS-QUALIFIED-HAZARDS",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "inspectAll(node.id, hazardsOf(g, d.file, [d.span], node.id));",
+			"replace": "inspectAll(node.id, hazardsOf(g, d.file, [d.span]));",
+			"note": "a node read as one type's member keeps its declarations' syntactic hazards, an untyped read the compiler typed among them"
+		},
+		{
+			"name": "M-FACTS-QUALIFIED-ANY-DECLARATION",
+			"type": "anyparse.query.FactsView",
+			"method": "qualifiedDeclarations",
+			"find": "if (declaredId(fi, listed) == root) out.push(d);",
+			"replace": "out.push(d);",
+			"note": "a node read as one type's member keeps every declaration the name folds, the other type's code and touches among them"
+		},
+		{
+			"name": "M-GRAPH-FACTS-TYPED-NONE",
+			"type": "anyparse.query.CallGraphFacts",
+			"method": "declaredCall",
+			"find": "null,\n\t\t\tCompilerFacts.baseId(owner)\n\t\t);",
+			"replace": "null,\n\t\t\tnull\n\t\t);",
+			"note": "a call's edge no longer names the owner its fact resolved, so a name two types share stays Ambiguous where the call enters it"
+		},
+		{
+			"name": "M-TOUCH-SCAN-NODE-UNRECORDED",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "scanNode",
+			"find": "\t\trecordTyped(g, id, name, accesses, access, arrayTyped, out, regionFile, region);\n",
+			"replace": "",
+			"note": "a node read as one project type's member touches nothing, though its facts write the member"
+		},
+		{
+			"name": "M-FACTS-VIEW-CONVERSION-LEAF",
+			"type": "anyparse.query.FactsView",
+			"method": "conversionFlow",
+			"find": "return argument == null ? null : at(argument);",
+			"replace": "return flows.find(f -> f.via == 'arg' && f.at.file == c.at.file && c.at.span.from <= f.at.span.from && f.at.span.to <= c.at.span.to);",
+			"note": "the first argument flow inside a conversion call is the value converted, so a leaf of the parameter's own type (`Dynamic`), which records none, converts nothing"
+		},
+		{
+			"name": "M-REACH-QUALIFIED-ESCAPE",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "if (shown != null) blind = blind ?? Escape(shown.file, shown.span);",
+			"replace": "",
+			"note": "an escape only the facts of a node read as one type's member show, found after the question checked every escape, is dropped"
 		}
 	]
 }
