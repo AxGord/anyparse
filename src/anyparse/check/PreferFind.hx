@@ -6,6 +6,7 @@ import anyparse.query.BinderScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.NominalTypes;
+import anyparse.query.ParenGuard;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -182,7 +183,7 @@ final class PreferFind implements Check {
 				if (span == null) continue;
 				final cand: Null<FixCandidate> = byKey['${span.from}:${span.to}'];
 				if (cand == null) continue;
-				final candEdits: Null<Array<{ span: Span, text: String }>> = buildEdits(cand, source, s);
+				final candEdits: Null<Array<{ span: Span, text: String }>> = buildEdits(cand, source, s, plugin);
 				if (candEdits == null || CanonicalEdit.editsOverlapAny(candEdits, edits)) continue;
 				for (e in candEdits) edits.push(e);
 				accepted.push(v);
@@ -243,7 +244,6 @@ final class PreferFind implements Check {
 			forceFieldAccessKind: shape.forceFieldAccessKind,
 			indexAccessKind: shape.indexAccessKind,
 			parenKind: shape.parenKind,
-			ternaryKind: shape.ternaryKind,
 			blockKinds: blockKinds
 		};
 	}
@@ -625,7 +625,9 @@ final class PreferFind implements Check {
 	}
 
 	/** The span edits rewriting `cand`'s loop to `xs.find(v -> cond)`, or null when a fix gate refuses it (then it stays a finding). */
-	private static function buildEdits(cand: FixCandidate, source: String, s: Seams): Null<Array<{ span: Span, text: String }>> {
+	private static function buildEdits(
+		cand: FixCandidate, source: String, s: Seams, plugin: GrammarPlugin
+	): Null<Array<{ span: Span, text: String }>> {
 		if (!condIsPure(cand.cond, s)) return null;
 		final iterSpan: Null<Span> = cand.iterable.span;
 		final condSpan: Null<Span> = cand.cond.span;
@@ -657,15 +659,16 @@ final class PreferFind implements Check {
 		if (retSpan == null || ret.children.length < 1 || droppedRegionHasComment(source, forSpan, iterSpan, condSpan, retSpan))
 			return null;
 		final fallback: QueryNode = ret.children[0];
-		var tail: String = '';
-		if (fallback.kind != s.nullLitKind) {
-			final fbSpan: Null<Span> = fallback.span;
-			if (fbSpan == null) return null;
-			// `??` binds TIGHTER than the ternary `?:` (and assignment), so a looser fallback needs parens.
-			final looser: Bool = fallback.kind == s.ternaryKind || fallback.kind.endsWith('Assign');
-			tail = ' ?? ${parenthesizeUnless(source.substring(fbSpan.from, fbSpan.to), !looser)}';
-		}
-		return [{ span: new Span(forSpan.from, retSpan.to), text: 'return $findExpr$tail;' }];
+		final whole: Span = new Span(forSpan.from, retSpan.to);
+		if (fallback.kind == s.nullLitKind) return [{ span: whole, text: 'return $findExpr;' }];
+		final fbSpan: Null<Span> = fallback.span;
+		if (fbSpan == null) return null;
+		// The fallback is a hole for `ParenGuard`, which parenthesises it exactly where it would bind across
+		// `??` bare — a ternary, an assignment, a comparison, `&&` / `||` (`??` binds tighter than all of them).
+		final head: String = 'return $findExpr ?? ';
+		final fbSrc: String = source.substring(fbSpan.from, fbSpan.to);
+		final edit: GuardedEdit = { span: whole, text: '$head$fbSrc;', holes: [new Span(head.length, head.length + fbSrc.length)] };
+		return ParenGuard.guard(source, [edit], plugin);
 	}
 
 	/**
@@ -771,7 +774,6 @@ private typedef Seams = {
 	var forceFieldAccessKind: Null<String>;
 	var indexAccessKind: Null<String>;
 	var parenKind: Null<String>;
-	var ternaryKind: Null<String>;
 
 	/**
 	 * The STATEMENT-LIST kinds (`ControlFlowSupport.blockKinds`) whose direct children may be

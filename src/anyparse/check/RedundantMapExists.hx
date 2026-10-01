@@ -6,6 +6,7 @@ import anyparse.check.MapValueScan.ValueSeams;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
+import anyparse.query.ParenGuard;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
@@ -162,12 +163,20 @@ final class RedundantMapExists implements Check implements DefaultOff {
 			final declaredTypeSources: Map<Int, String> = c.typed.declaredTypeSources(source);
 			final proven: Map<String, Bool> = [];
 			final file: String = violations.length > 0 ? violations[0].file : '';
-			return CanonicalEdit.dropContainedEdits(CheckScan.applyBySpan(plugin, source, violations, [c.ternaryKind], (node, span) -> {
-				final m: Null<Match> = match(node, source, tree, declaredTypes, declaredTypeSources, c);
-				return m == null || !isProven(m, file, source, tree, valueSeams, report, plugin, proven)
-					? null
-					: { span: span, text: '${m.readSource} ?? ${m.fallbackSource}' };
-			}));
+			final guarded: Array<GuardedEdit> = [];
+			final plain: Array<{ span: Span, text: String }> = CheckScan.applyBySpan(
+				plugin, source, violations, [c.ternaryKind], (node, span) -> {
+					final m: Null<Match> = match(node, source, tree, declaredTypes, declaredTypeSources, c);
+					if (m == null || !isProven(m, file, source, tree, valueSeams, report, plugin, proven)) return null;
+					final edit: GuardedEdit = ParenGuard.binaryEdit(span, m.readSource, '??', m.fallbackSource);
+					guarded.push(edit);
+					return edit;
+				}
+			);
+			// `plain` and `guarded` hold the same edits in the same order, so a containment index of one is the other's.
+			return ParenGuard.guard(source, [
+				for (i in 0...guarded.length) if (!CanonicalEdit.isContainedEdit(plain, i)) guarded[i]
+			], plugin);
 		});
 	}
 
@@ -242,7 +251,7 @@ final class RedundantMapExists implements Check implements DefaultOff {
 			name: name,
 			bindingFrom: bindingFrom,
 			readSource: source.substring(readSpan.from, readSpan.to),
-			fallbackSource: fallback.kind == cfg.ternaryKind ? '($fallbackSource)' : fallbackSource
+			fallbackSource: fallbackSource
 		};
 	}
 

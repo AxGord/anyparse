@@ -145,7 +145,7 @@ class HxBitwiseSliceTest extends HxTestHelpers {
 
 	public function testBitOrTighterThanEq(): Void {
 		// a | b == c → Eq(BitOr(a, b), c). `|` at prec 6 binds
-		// tighter than `==` at prec 5. This is the Haxe-specific
+		// tighter than `==` at prec 4. This is the Haxe-specific
 		// deviation from the C convention (in C, bitwise binds looser
 		// than comparison — `a | b == c` parses as `a | (b == c)`).
 		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = a | b == c; }');
@@ -179,7 +179,7 @@ class HxBitwiseSliceTest extends HxTestHelpers {
 
 	public function testShortLtStillWorksWithShl(): Void {
 		// Regression guard: after adding `<<` at prec 7, the short
-		// `<` at prec 5 must still match cleanly on input with no
+		// `<` at prec 4 must still match cleanly on input with no
 		// trailing `<` or `=`. Without the length-desc sort the
 		// dispatch order is undefined and `<<` could be attempted
 		// first but peek-fail on `1 < 2`, which is fine — what we

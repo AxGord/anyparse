@@ -1998,6 +1998,11 @@ class MemberReachFactsTest extends Test {
 	public function testALocalTheCompilerBindsAValueTheTextWritesToIsItsTextUnderTheTruth(): Void {
 		// `n ?? 3` reads `n` once into a `tmp` the compiler declares at `n` (TM's `Typography`, `PlayerBase`)
 		assertMatch(hubAsk(utilWith('public static function other(n:Null<Int>):Int return n ?? 3;')), r -> r.match(Proven));
+		// `a ?? b ?? 3` binds its `tmp` to `a ?? b`: `??` is left-associative, so that is a node of the text (TM's
+		// `AIPanel`, `SharedFileMoveDetector`, `Image`)
+		assertMatch(
+			hubAsk(utilWith('public static function other(a:Null<Int>, b:Null<Int>):Int return a ?? b ?? 3;')), r -> r.match(Proven)
+		);
 		// `o.inner.n += 1` holds `o.inner` in an `fh` (TM's `RoundedButton`)
 		final outer: String = 'class Outer {\n\tpublic var inner:Holder = new Holder();\n\n\tpublic function new() {}\n}\n';
 		final compound: Map<String, String> = utilWith(

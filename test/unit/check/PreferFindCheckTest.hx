@@ -245,9 +245,17 @@ class PreferFindCheckTest extends Test {
 	}
 
 	public function testFixOrFallbackNotParenthesized(): Void {
-		// `+` (and `||`/`&&`/`==`) bind tighter than `??`, so no wrapping parens.
+		// `+` (and the bitwise, shift and multiplicative operators) bind tighter than `??`, so no wrapping parens.
 		final out: String = fixResult(file('for (x in xs) if (x > 2) return x;\n\t\treturn a + b;', 'Int', true));
 		Assert.isTrue(out.indexOf('return xs.find(x -> x > 2) ?? a + b;') != -1);
+	}
+
+	public function testFixComparisonAndLogicalFallbacksParenthesized(): Void {
+		// `??` binds TIGHTER than `==` and `||` (`x ?? a == b` is `(x ?? a) == b`), so those fallbacks keep their meaning in parens.
+		final eq: String = fixResult(file('for (x in xs) if (x > 2) return x;\n\t\treturn a == b;', 'Int', true));
+		Assert.isTrue(eq.indexOf('return xs.find(x -> x > 2) ?? (a == b);') != -1, eq);
+		final or: String = fixResult(file('for (x in xs) if (x > 2) return x;\n\t\treturn a || b;', 'Int', true));
+		Assert.isTrue(or.indexOf('return xs.find(x -> x > 2) ?? (a || b);') != -1, or);
 	}
 
 	public function testFixTernaryIterableParenthesized(): Void {

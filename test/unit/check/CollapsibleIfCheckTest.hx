@@ -61,6 +61,13 @@ class CollapsibleIfCheckTest extends Test {
 		Assert.equals('(a = next()) && b', edits[0].text);
 	}
 
+	public function testFixLeavesCoalescingOperandBare(): Void {
+		// `??` binds TIGHTER than `&&` (Haxe 4.3: `a ?? c && b` is `(a ?? c) && b`), so it needs no pair.
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tif (a ?? c) if (b) p();\n\t}\n}';
+		final edits: Array<{ span: Span, text: String }> = fixEdits(src);
+		Assert.equals('a ?? c && b', edits[0].text);
+	}
+
 	public function testRegisteredInBuiltins(): Void {
 		Assert.notNull(Linter.byId('collapsible-if'));
 		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];

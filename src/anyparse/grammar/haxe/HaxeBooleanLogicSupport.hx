@@ -311,9 +311,13 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 			// PREC_CMP may not sit bare in either of its slots: `c == (n >= 0)` de-parenthesised is
 			// `(c == n) >= 0`. Demanding the next tier up parenthesises exactly the PREC_CMP results
 			// and nothing else — anything binding tighter already sits at PREC_BINARY or above.
-			case 'Eq', 'NotEq', 'Lt', 'LtEq', 'Gt', 'GtEq': PREC_BINARY;
-			case 'Or', 'And', 'NullCoal', 'Ternary', 'Is', 'In', 'BitOr', 'BitXor', 'BitAnd', 'Shl', 'Shr', 'UShr', 'Add', 'Sub', 'Mul',
-				'Div', 'Mod', 'Interval', 'CastExpr':
+			case 'Eq', 'NotEq', 'Lt', 'LtEq', 'Gt', 'GtEq':
+				PREC_BINARY;
+			// `is` binds tighter than every binary operator (`a + b is T` is `a + (b is T)`), so only a
+			// prefix result may sit bare on its left.
+			case 'Is': PREC_NOT;
+			case 'Or', 'And', 'NullCoal', 'Ternary', 'In', 'BitOr', 'BitXor', 'BitAnd', 'Shl', 'Shr', 'UShr', 'Add', 'Sub', 'Mul', 'Div',
+				'Mod', 'Interval', 'CastExpr':
 				precedence(slotKind);
 			case _: null;
 		};
@@ -670,10 +674,12 @@ private enum abstract Precedence(Int) {
 	// so a join needs no extra parens. Kinds not listed in `precedence` default to PREC_ATOM;
 	// omitting one here would let `wrapNot` emit a bare `!` that captures only its left operand.
 	final PREC_BINARY = 60;
+	// `??` sits between the binary tier and the comparisons, left-associative: `a ?? b == c` is
+	// `(a ?? b) == c`, so a comparison in a `??` operand needs its parens.
+	final PREC_COALESCE = 55;
 	final PREC_CMP = 50;
 	final PREC_AND = 40;
 	final PREC_OR = 30;
-	final PREC_COALESCE = 20;
 	final PREC_TERNARY = 10;
 	final PREC_ASSIGN = 5;
 

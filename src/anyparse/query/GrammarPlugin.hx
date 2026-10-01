@@ -838,8 +838,8 @@ typedef RefShape = {
 
 	/**
 	 * Condition node kinds that bind no tighter than `&&`, so they need parentheses when
-	 * merged — `collapsible-if` wraps an outer/inner condition of one of these (`||`,
-	 * ternary, `??`, assignment) so `if (a || c) if (b)` collapses to `if ((a || c) && b)`, not the
+	 * merged — `collapsible-if` wraps an outer/inner condition of one of these (`||`, ternary, assignment; NOT
+	 * `??`, which binds tighter than `&&`) so `if (a || c) if (b)` collapses to `if ((a || c) && b)`, not the
 	 * mis-precedenced `if (a || c && b)`. Optional.
 	 */
 	@:optional var andLowerPrecedenceKinds: Array<String>;

@@ -152,10 +152,10 @@ final class WriterPrattLowering {
 	 */
 	private static function infixChainGatherSwitch(isChainBool: Bool, isChainNullCoal: Bool, threadBreaks: Bool, leafCall: Expr): Expr {
 		// noqa: complexity
-		// `??` is right-assoc (`NullCoal(a, NullCoal(b, c))`); the recurse-left /
-		// push-op / recurse-right gather still yields items in infix order with a
-		// per-gap `_afterComments` entry, so the flat chain-emit preserves the
-		// post-`??` line comments the plain infix path used to drop.
+		// `??` is left-assoc like the other chains (`NullCoal(NullCoal(a, b), c)`);
+		// the recurse-left / push-op / recurse-right gather yields items in infix
+		// order with a per-gap `_afterComments` entry, so the flat chain-emit
+		// preserves the post-`??` line comments the plain infix path used to drop.
 		return isChainNullCoal
 			? threadBreaks
 				? macro switch _e {
@@ -436,7 +436,7 @@ final class WriterPrattLowering {
 		final isChainNullCoal: Bool = opText == '??';
 		final isChainAddSub: Bool = opText == '+' || opText == '-';
 		final chainRulesField: String = isChainAddSub ? 'opAddSubChainWrap' : 'opBoolChainWrap';
-		// `??` (right-assoc null-coalescing) does NOT wrap at the operator: the fork
+		// `??` (null-coalescing) does NOT wrap at the operator: the fork
 		// keeps the chain glued and lets an overflowing operand break its own
 		// brackets. Route it through the chain engine only to preserve post-`??`
 		// line comments (the plain path dropped them) -- a comment forces the Keep

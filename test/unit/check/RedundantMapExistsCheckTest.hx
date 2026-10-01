@@ -148,6 +148,13 @@ class RedundantMapExistsCheckTest extends Test {
 		Assert.isTrue(out.indexOf('return m[k] ?? (a ? k : k);') != -1, out);
 	}
 
+	public function testFixParenthesizesALogicalFallback(): Void {
+		// `??` binds tighter than `||`: `m[k] ?? a || b` would read `(m[k] ?? a) || b`.
+		final source: String = cls('m', "'a' => 'b'", '', 'private', 'm.exists(k) ? m[k] : a || b')[0].source;
+		final out: String = fixResult([{ file: 'C.hx', source: source }], 'C.hx');
+		Assert.isTrue(out.indexOf('return m[k] ?? (a || b);') != -1, out);
+	}
+
 	/**
 	 * A file the grammar cannot parse leaves the REPORT scope incomplete — but only for a member it
 	 * SPELLS, since that is the only way it could hold a reference. This pins both halves, and which
