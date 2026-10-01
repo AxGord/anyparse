@@ -744,6 +744,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.grammar.haxe.HxPpCondDottedSliceTest',
 		'unit.grammar.haxe.HxPrattOpsTest',
 		'unit.grammar.haxe.HxPrattSliceTest',
+		'unit.grammar.haxe.HxPrecedenceTableTest',
 		'unit.grammar.haxe.HxPrefixSliceTest',
 		'unit.grammar.haxe.HxRegexLitSliceTest',
 		'unit.grammar.haxe.HxReturnBodySliceTest',

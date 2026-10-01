@@ -143,20 +143,16 @@ class ParenGuardSliceTest extends Test {
 	}
 
 	/**
-	 * The one residual, pinned so a grammar fix flips it VISIBLY rather than
-	 * quietly: the guard's oracle is this parser, and this parser models a bare
-	 * `cast e` as bounded while the compiler binds it to the right —
-	 * compile-proved: `final s:String = cast o * 2;` compiles (the cast takes
-	 * the product) and `(cast o) * 2` is "Int should be String". So the splice
-	 * below is faithful to the TREE and not to the compiler, and stays bare.
-	 * `@:meta e` — the other kind named alongside it in
-	 * `rightGreedyExprKinds` — is NOT affected: this parser models it greedily,
-	 * so the pair is added there.
+	 * A bare `cast e` takes a whole expression in the compiler — `final s:String = cast o * 2;`
+	 * compiles (the cast takes the product) and `(cast o) * 2` is "Int should be String" — and, since
+	 * `fix/grammar-precedence-rest`, in this parser too, so the guard's oracle sees the splice re-read
+	 * and adds the pair. This test used to pin the opposite as the one residual. `@:meta e` takes it
+	 * as well: this parser models the annotation greedily.
 	 */
-	public function testBareCastIsTheKnownResidual(): Void {
+	public function testBareCastTakesThePair(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\tfinal a = cast o;\n\t\tfinal b = @:privateAccess o;\n\t}\n}';
 		final text: String = okText(Rewrite.rewrite(src, "final $n = $A;", "final $n = $A * 2;", true, new HaxeQueryPlugin()));
-		Assert.isTrue(text.contains('final a = cast o * 2;'), 'the cast residual moved - got:\n$text');
+		Assert.isTrue(text.contains('final a = (cast o) * 2;'), 'cast must take the pair - got:\n$text');
 		Assert.isTrue(text.contains('final b = (@:privateAccess o) * 2;'), 'metadata must take the pair - got:\n$text');
 	}
 

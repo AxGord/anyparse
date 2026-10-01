@@ -447,17 +447,16 @@ final class WriterPolicyLowering {
 	 * operand binding (mirror of `bodyPolicy`'s value-arg dispatch in
 	 * the indent-wrap path).
 	 *
-	 * Consumed by `@:fmt(tightOnParenOperand('ParenExpr',
-	 * 'ECheckTypeExpr'))` on `HxExpr.CastExpr` (paired with
-	 * `@:fmt(atomOperand)` in Lowering so the operand binds at atom
-	 * level and the listed ctors actually appear as the operand's
-	 * runtime ctor — without atom-binding, `cast (x) is Bool` would
-	 * carry operand=`Is(...)` and the ctor match would never fire).
+	 * Consumed by `@:fmt(tightOnParenOperand('ParenExpr', 'ECheckTypeExpr'))` on `HxExpr.CastExpr`, whose operand is a whole expression:
+	 * the ctor tested is the operand's LEFTMOST one, reached through `leftOperandCtors` (every infix / postfix / ternary branch of the
+	 * operand's rule renders its first child first), so `cast (x) is Bool` — operand `Is(ParenExpr(x), Bool)` — still matches.
 	 * Emits tight `cast(x)` / `cast(x : Int)` per haxe-formatter's
 	 * cast-as-function-call convention, while bare `cast x` (operand =
 	 * `IdentExpr`) keeps the spaced shape.
 	 */
-	private static function kwTrailingSpaceOnOperandCtor(branch: ShapeNode, argNames: Array<String>): Null<Expr> {
+	private static function kwTrailingSpaceOnOperandCtor(
+		branch: ShapeNode, argNames: Array<String>, leftOperandCtors: Array<String>
+	): Null<Expr> {
 		final names: Null<Array<String>> = branch.fmtReadStringArgs('tightOnParenOperand');
 		if (names == null || names.length == 0) return null;
 		if (argNames.length == 0) return null;
@@ -468,8 +467,21 @@ final class WriterPolicyLowering {
 			final next: Expr = ctorEquals[i];
 			matchExpr = macro $matchExpr || $next;
 		}
+		// The operand's LEFTMOST token decides, not its root: `cast (x) is Bool` is
+		// `CastExpr(Is(ParenExpr(x), Bool))` and still writes `cast(x) is Bool`. Every operator
+		// branch renders its first child first, so the walk descends through those alone.
+		final descend: Expr = leftOperandCtors.length == 0 ? macro false : {
+			expr: ESwitch(macro _c, [{ values: [for (n in leftOperandCtors) macro $v{n}], expr: macro true }], macro false),
+			pos: Context.currentPos()
+		};
 		return macro {
-			final _ctor: String = Type.enumConstructor($operandAccess);
+			var _op: EnumValue = $operandAccess;
+			var _c: String = Type.enumConstructor(_op);
+			while ($descend) {
+				_op = Type.enumParameters(_op)[0];
+				_c = Type.enumConstructor(_op);
+			}
+			final _ctor: String = _c;
 			$matchExpr ? _de() : _dt(' ');
 		};
 	}

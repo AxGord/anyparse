@@ -15,11 +15,11 @@ import utest.Assert;
  *   cast. Wraps `HxTypedCast` typedef carrying `target:HxExpr` after
  *   `(` and `type:HxType` after `,` with closing `)`. Same field-pair
  *   pattern as `HxCatchClause` (`catch (name:Type)`).
- * - `CastExpr(operand:HxExpr)` — bare `cast x` unsafe cast. Operand
- *   parses at atom-level (Slice 46 `@:fmt(atomOperand)`), matching
- *   Haxe's unary-operator binding: `cast` binds tighter than any
- *   binary infix, so `cast a + b` is `Add(CastExpr(a), b)` and
- *   `cast (x) is Bool` is `Is(CastExpr(ParenExpr(x)), Bool)`.
+ * - `CastExpr(operand:HxExpr)` — bare `cast x` unsafe cast. The operand
+ *   is a whole expression, as Haxe 4.3.7 parses it: `cast a + b` is
+ *   `CastExpr(Add(a, b))`, `cast (x) is Bool` is
+ *   `CastExpr(Is(ParenExpr(x), Bool))`. Only a leading `(e : T)` ends it
+ *   (`@:fmt(atomOperandWhen('ECheckTypeExpr'))`).
  *
  * Source order in `HxExpr` puts `TypedCastExpr` before `CastExpr` so
  * the parenthesised form tries first; the `tryBranch` rollback in
@@ -187,46 +187,41 @@ class HxCastSliceTest extends HxTestHelpers {
 		}
 	}
 
-	public function testCastBindsAtomNotFullExpression(): Void {
-		// Slice 46: `cast a + b` — `cast` is a unary operator that binds
-		// tighter than any binary infix (Haxe semantics: `cast a` is the
-		// expression that becomes the left operand of `+`). Implementation:
-		// `@:fmt(atomOperand)` on `CastExpr` routes operand parse to
-		// `parseHxExprAtom`, so the trailing `+ b` stays for the outer
-		// Pratt loop. Pre-slice this parsed as `CastExpr(Add(a, b))`.
+	public function testCastTakesAWholeExpression(): Void {
+		// `cast a + b` is `cast (a + b)` — Haxe 4.3.7's own parse (`Context.parse`): the operand of
+		// a bare `cast` is a whole expression. Slice 46 bound it to an atom (`Add(CastExpr(a), b)`)
+		// on an unprobed reading of the compiler.
 		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = cast a + b; }');
 		switch decl.init {
-			case Add(CastExpr(IdentExpr(a)), IdentExpr(b)):
+			case CastExpr(Add(IdentExpr(a), IdentExpr(b))):
 				Assert.equals('a', (a: String));
 				Assert.equals('b', (b: String));
 			case null, _:
-				Assert.fail('expected Add(CastExpr(a), b), got ${decl.init}');
+				Assert.fail('expected CastExpr(Add(a, b)), got ${decl.init}');
 		}
 	}
 
-	public function testCastBindsTighterThanIs(): Void {
-		// Slice 46: `cast x is Bool` — atom-bound `cast x` becomes the
-		// left of `is`. Pre-slice parsed as `CastExpr(Is(x, Bool))`.
+	public function testCastTakesTheIsCheck(): Void {
+		// `cast x is Bool` is `cast (x is Bool)` in Haxe 4.3.7.
 		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Bool = cast x is Bool; }');
 		switch decl.init {
-			case Is(CastExpr(IdentExpr(name)), _):
+			case CastExpr(Is(IdentExpr(name), _)):
 				Assert.equals('x', (name: String));
 			case null, _:
-				Assert.fail('expected Is(CastExpr(x), Bool), got ${decl.init}');
+				Assert.fail('expected CastExpr(Is(x, Bool)), got ${decl.init}');
 		}
 	}
 
-	public function testCastParenIsBindsTighterThanIs(): Void {
-		// Slice 46: `cast (x) is Bool` — operand `(x)` is ParenExpr atom,
-		// then `is Bool` is the outer Pratt operator. The
-		// `tightOnParenOperand` writer knob then drops the kw trailing
-		// space (operand=ParenExpr) so output is `cast(x) is Bool`.
+	public function testCastParenTakesTheIsCheck(): Void {
+		// `cast (x) is Bool` is `cast ((x) is Bool)` in Haxe 4.3.7 — the pair is the first operand of
+		// what follows, not the end of the cast. The `tightOnParenOperand` writer knob reads the
+		// operand's LEFTMOST atom, so the output is still `cast(x) is Bool`.
 		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Bool = cast (x) is Bool; }');
 		switch decl.init {
-			case Is(CastExpr(ParenExpr(IdentExpr(name))), _):
+			case CastExpr(Is(ParenExpr(IdentExpr(name)), _)):
 				Assert.equals('x', (name: String));
 			case null, _:
-				Assert.fail('expected Is(CastExpr(ParenExpr(x)), Bool), got ${decl.init}');
+				Assert.fail('expected CastExpr(Is(ParenExpr(x), Bool)), got ${decl.init}');
 		}
 	}
 

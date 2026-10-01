@@ -188,9 +188,10 @@ class Build {
 
 		registerStrategies(shape, ctx);
 
-		final rules: Array<WriterLowering.WriterRule> = formatInfo.isBinary
+		final textLowering: Null<WriterLowering> = formatInfo.isBinary ? null : new WriterLowering(shape, formatInfo, ctx);
+		final rules: Array<WriterLowering.WriterRule> = textLowering == null
 			? new BinaryWriterLowering(shape).generate()
-			: new WriterLowering(shape, formatInfo, ctx).generate();
+			: textLowering.generate();
 
 		final rootSimple: String = simpleName(shape.root);
 		final rootNode: anyparse.core.ShapeTree.ShapeNode = shape.rules[shape.root];
@@ -205,6 +206,7 @@ class Build {
 			: TPath({ pack: packOf(shape.root), name: rootSimple, params: [] });
 		final rootFnName: String = rootBearing ? 'write${rootSimple}T' : 'write$rootSimple';
 		final fields: Array<Field> = WriterCodegen.emit(rules, shape.root, rootReturnCT, formatInfo, optionsTypePath, rootFnName);
+		if (textLowering != null) for (f in textLowering.extraFields) fields.push(f);
 
 		#if anyparse_dump
 		final printer: haxe.macro.Printer = new haxe.macro.Printer();

@@ -8,6 +8,7 @@ import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.ParenGuard;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
@@ -50,10 +51,9 @@ using StringTools;
  * ## Autofix
  *
  * `fix` replaces the `if`-statement-through-trailing-`return` span with
- * `return cond ? a : b;`. The condition is wrapped in parentheses only when it
- * binds no tighter than `?:` (a ternary, or an assignment) so precedence is
- * preserved; every tighter-binding condition (comparison, `&&` / `||`, `??`,
- * call, identifier) is emitted bare, per the user's no-redundant-parens
+ * `return cond ? a : b;`. The condition is a `ParenGuard` hole: it gains parentheses exactly where it would bind
+ * across `?` bare (a ternary, an assignment, an arrow lambda, `in`), so precedence is preserved; every other
+ * condition (comparison, `&&` / `||`, `??`, call, identifier) is emitted bare, per the user's no-redundant-parens
  * preference. The return values are copied verbatim.
  * `RefactorSupport.dropContainedEdits` keeps edits non-overlapping. Needs
  * `ControlFlowSupport` and `RefShape.returnStatementKind`; either unset makes
@@ -128,7 +128,7 @@ final class PreferTernaryReturn implements Check implements CarryingFix {
 		final flagged: Array<String> = RunScan.spanKeys(violations);
 		final edits: Array<CarryingEdit> = [];
 		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
-		collectFixes(tree, source, seams, null, flagged, edits, SourceComments.collectCommentTokens(regions), regions);
+		collectFixes(tree, source, seams, null, flagged, edits, SourceComments.collectCommentTokens(regions), regions, plugin);
 		final kept: Array<{ span: Span, text: String }> = CanonicalEdit.dropContainedEdits([
 			for (edit in edits)
 				{
@@ -176,7 +176,7 @@ final class PreferTernaryReturn implements Check implements CarryingFix {
 	/** Mirror `walk` — including its `retType` rebinding: collect one replacement edit per flagged `if`/`return` pair. */
 	private static function collectFixes(
 		node: QueryNode, source: String, s: Seams, retType: Null<String>, flagged: Array<String>, edits: Array<CarryingEdit>,
-		comments: Array<{ from: Int, to: Int, isLine: Bool }>, regions: Array<LexRegion>
+		comments: Array<{ from: Int, to: Int, isLine: Bool }>, regions: Array<LexRegion>, plugin: GrammarPlugin
 	): Void {
 		final childRetType: Null<String> = childReturnType(node, source, s, retType);
 		if (s.support.blockKinds().contains(node.kind)) {
@@ -186,11 +186,11 @@ final class PreferTernaryReturn implements Check implements CarryingFix {
 				if (match == null) continue;
 				final ifSpan: Null<Span> = match.ifNode.span;
 				if (!(ifSpan != null && flagged.contains('${ifSpan.from}:${ifSpan.to}'))) continue;
-				final edit: Null<CarryingEdit> = buildEdit(match, source, s.shape, regions);
+				final edit: Null<CarryingEdit> = buildEdit(match, source, regions, plugin);
 				if (edit != null) edits.push(edit);
 			}
 		}
-		for (c in node.children) collectFixes(c, source, s, childRetType, flagged, edits, comments, regions);
+		for (c in node.children) collectFixes(c, source, s, childRetType, flagged, edits, comments, regions, plugin);
 	}
 
 	/**
@@ -294,14 +294,16 @@ final class PreferTernaryReturn implements Check implements CarryingFix {
 	}
 
 	/** Build the `return cond ? a : b;` edit spanning the `if` through the trailing `return`. */
-	private static function buildEdit(match: TernaryMatch, source: String, shape: RefShape, regions: Array<LexRegion>): Null<CarryingEdit> {
+	private static function buildEdit(
+		match: TernaryMatch, source: String, regions: Array<LexRegion>, plugin: GrammarPlugin
+	): Null<CarryingEdit> {
 		final ifSpan: Null<Span> = match.ifNode.span;
 		final condSpan: Null<Span> = match.condition.span;
 		final thenSpan: Null<Span> = match.thenValue.span;
 		final elseSpan: Null<Span> = match.elseValue.span;
 		final nextSpan: Null<Span> = match.nextReturn.span;
 		if (ifSpan == null || condSpan == null || thenSpan == null || elseSpan == null || nextSpan == null) return null;
-		final condition: String = wrapCondition(source.substring(condSpan.from, condSpan.to), match.condition.kind, shape);
+		final condition: String = source.substring(condSpan.from, condSpan.to);
 		final thenSource: String = source.substring(thenSpan.from, thenSpan.to);
 		final elseSource: String = source.substring(elseSpan.from, elseSpan.to);
 		final split: PreservedComments = preservedComments(source, ifSpan, thenSpan, nextSpan, [condSpan, thenSpan, elseSpan], regions);
@@ -311,26 +313,22 @@ final class PreferTernaryReturn implements Check implements CarryingFix {
 		// rest of the ternary out) — actual indentation and re-flow are the
 		// writer's job, since `RefactorSupport.canonicalize` re-emits the whole
 		// spliced file.
+		final head: String = '${split.hoisted}return ';
 		final text: String = split.branchTrailing == null
-			? '${split.hoisted}return $condition ? $thenSource : $elseSource;'
-			: '${split.hoisted}return $condition\n? $thenSource ${split.branchTrailing}\n: $elseSource;';
+			? '$head$condition ? $thenSource : $elseSource;'
+			: '$head$condition\n? $thenSource ${split.branchTrailing}\n: $elseSource;';
+		final whole: Span = new Span(ifSpan.from, nextSpan.to);
+		// The condition is a `ParenGuard` hole: it gains a pair exactly where it would bind across
+		// `?` bare (a ternary, an assignment, an arrow lambda, `in`).
+		final guarded: Array<{ span: Span, text: String }> = ParenGuard.guard(source, [
+			{ span: whole, text: text, holes: [new Span(head.length, head.length + condition.length)] }
+		], plugin);
 		// The three ranges the replacement quotes byte for byte, in the order it puts them in —
 		// the same three `preservedComments` is handed to decide which comments it may leave
-		// alone, so the declaration is a list this function had already built. `wrapCondition` can
-		// put parentheses AROUND the condition; the source text is still inside the result, which
-		// is the whole of what a verbatim carry claims.
-		return { span: new Span(ifSpan.from, nextSpan.to), text: text, carried: [condSpan, thenSpan, elseSpan] };
-	}
-
-	/**
-	 * Parenthesise the condition iff it binds no tighter than `?:` — a ternary or
-	 * an assignment — so `cond ? a : b` keeps the original meaning. Every other
-	 * condition binds tighter and is emitted bare.
-	 */
-	private static function wrapCondition(source: String, kind: String, shape: RefShape): String {
-		final ternaryKind: Null<String> = shape.ternaryKind;
-		final needsParens: Bool = (ternaryKind != null && kind == ternaryKind) || shape.writeParentKinds.contains(kind);
-		return needsParens ? '($source)' : source;
+		// alone, so the declaration is a list this function had already built. The guard can put
+		// parentheses AROUND the condition; the source text is still inside the result, which is
+		// the whole of what a verbatim carry claims.
+		return { span: whole, text: guarded[0].text, carried: [condSpan, thenSpan, elseSpan] };
 	}
 
 	/**

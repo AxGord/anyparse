@@ -8,7 +8,7 @@ package anyparse.grammar.haxe;
  *
  *  - `for ($head) $body` — the whole head is one reification
  *  - `for ($i{_} in $_) $_` — the iterator var is a reification
- *    (`in` parses as the prec-0 infix `In`)
+ *    (`in` parses as the asymmetric infix `In`)
  *  - `for (key => $i{names[0]} in $i{ref}) …` — the map-iteration
  *    value slot is a reification (`=>` parses as the prec-0 infix
  *    `Arrow`)

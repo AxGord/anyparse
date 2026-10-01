@@ -269,7 +269,9 @@ final class CtorFieldFold {
 		)
 			return null;
 		final targetText: String = source.substring(init.target.from, init.target.to);
-		final condText: String = ternaryConditionText(source, init.condition, shape);
+		final condSpan: Null<Span> = init.condition.span;
+		if (condSpan == null) return null;
+		final condText: String = source.substring(condSpan.from, condSpan.to);
 		final valueText: String = source.substring(init.value.from, init.value.to);
 		final defaultText: String = source.substring(decl.initSpan.from, decl.initSpan.to);
 		// Asked LAST, once every gate has passed: `extract` may have side effects (a name ledger, a
@@ -283,12 +285,17 @@ final class CtorFieldFold {
 				defaultNode: decl.initNode,
 				defaultText: defaultText
 			})) ?? defaultText;
-		final folded: String = '$targetText = $condText ? $valueText : $elseText${init.terminator}';
+		// The condition is a `ParenGuard` hole: it gains a pair exactly where it would bind across `?`
+		// bare (a ternary, an assignment, an arrow lambda, `in`).
+		final head: String = '$targetText = ';
+		final condHole: Span = new Span(head.length, head.length + condText.length);
+		final folded: String = '$head$condText ? $valueText : $elseText${init.terminator}';
 		final edits: Array<{ span: Span, text: String }> = [{ span: decl.initDrop, text: '' }];
 		if (init.sole)
-			edits.push({ span: init.ifStmt, text: folded });
+			edits.push({ span: init.ifStmt, text: guardedText(source, init.ifStmt, folded, condHole, plugin) });
 		else {
-			edits.push({ span: new Span(guardFrom, guardFrom), text: '$folded\n' });
+			final at: Span = new Span(guardFrom, guardFrom);
+			edits.push({ span: at, text: guardedText(source, at, '$folded\n', condHole, plugin) });
 			edits.push({ span: ElementSpan.lineExtendedSpan(source, init.assignStmt), text: '' });
 		}
 		return edits;
@@ -693,13 +700,9 @@ final class CtorFieldFold {
 		return CondRegionScan.isConditionalKind(node.kind, shape) || node.children.exists(child -> holdsConditionalRegion(child, shape));
 	}
 
-	/** Parenthesise a folded ternary's condition iff it binds no tighter than `?:` (a ternary or an assignment). */
-	private static function ternaryConditionText(source: String, cond: QueryNode, shape: RefShape): String {
-		final span: Null<Span> = cond.span;
-		final text: String = span == null ? '' : source.substring(span.from, span.to);
-		final ternaryKind: Null<String> = shape.ternaryKind;
-		final needsParens: Bool = (ternaryKind != null && cond.kind == ternaryKind) || shape.writeParentKinds.contains(cond.kind);
-		return needsParens ? '($text)' : text;
+	/** `text` replacing `span`, with the source fragment at `hole` inside it parenthesised by `ParenGuard` exactly where it needs it. */
+	private static function guardedText(source: String, span: Span, text: String, hole: Span, plugin: GrammarPlugin): String {
+		return ParenGuard.guard(source, [{ span: span, text: text, holes: [hole] }], plugin)[0].text;
 	}
 
 	/** `branch` reduced to the statement it OPENS with, unwrapping one brace level, or null when it holds none. */

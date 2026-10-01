@@ -29,8 +29,8 @@ package anyparse.grammar.haxe;
  * position-restoring try/catch — so a `(...)` group with no arrow after it rolls the whole
  * lambda branch back and `ParenExpr` takes over: `(a = 1)` alone, `[(a = 1) => b]`, and
  * every call-arg / index / condition / case-pattern position keep their shape. The
- * paren-less thin form `x -> x = 1` never reaches this body — `HxExpr.ThinArrow` is a prec-0
- * right-assoc Pratt infix whose left operand is an already-parsed atom.
+ * paren-less thin form `x -> x = 1` never reaches this body — `HxExpr.ThinArrow` is an asymmetric Pratt
+ * infix (prec 13 on the left, a whole expression on the right) whose left operand is an already-parsed atom.
  *
  * Field order is `name` / `type` / `defaultValue`, byte-twin of `HxParamBody`: parse and emit
  * both walk a struct rule's fields in declaration order, the Haxe surface token order.

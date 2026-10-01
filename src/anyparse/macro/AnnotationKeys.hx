@@ -15,6 +15,7 @@ final class AnnotationKeys {
 	public static final TERNARY_SEP: String = 'ternary.sep';
 	public static final TERNARY_PREC: String = 'ternary.prec';
 	public static final PRATT_ASSOC: String = 'pratt.assoc';
+	public static final PRATT_RIGHT_PREC: String = 'pratt.rightPrec';
 	public static final PRATT_OP: String = 'pratt.op';
 	public static final TRIVIA_STAR_COLLECTS: String = 'trivia.starCollects';
 	public static final TRIVIA_BEARING: String = 'trivia.bearing';

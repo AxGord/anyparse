@@ -57,8 +57,31 @@ using anyparse.macro.MetaInspect;
 	anyparse.macro.WriterLoweringSupport, anyparse.macro.WriterPolicyLowering)
 final class WriterPrattLowering {
 
+	/** `<writeFn>OpenRight`'s answer for a value nothing written after it can join — see `WriterLowering.openRightField`. */
+	public static inline final OPEN_NONE: Int = 0x3FFFFFFF;
+
+	/** The generated `<writeFn>OpenRight` helper's name for the Pratt rule written by `writeFnName`. */
+	public static inline function openRightFnName(writeFnName: String): String {
+		return '${writeFnName}OpenRight';
+	}
+
 	/**
-	 * Assignment-class emit (`prec == 0`, non-tight): the flat per-level
+	 * `leftDoc` — the written LEFT operand `leftValue` of an operator binding at `followPrec` —
+	 * parenthesised when that operator would otherwise join its right spine: `(x -> b) + c` written
+	 * bare is `x -> (b + c)`, `(a ? b : c) = d` is `a ? b : (c = d)`. A pair the operand's own
+	 * precedence already asked for at `leftCtx` makes it closed, so it is never doubled. Parsed source
+	 * never reaches the pair: the parser would have read such an operand into the spine.
+	 */
+	private static function guardOpenLeft(writeFnName: String, leftValue: Expr, leftCtx: Int, followPrec: Int, leftDoc: Expr): Expr {
+		final openFn: String = openRightFnName(writeFnName);
+		return macro {
+			final _ld: anyparse.core.Doc = $leftDoc;
+			$i{openFn}($leftValue, $v{leftCtx}) <= $v{followPrec} ? _dc([_dt('('), _ld, _dt(')')]) : _ld;
+		};
+	}
+
+	/**
+	 * Assignment-class emit (right operand at precedence 0, non-tight): the flat per-level
 	 * `left = right` shape, plus — for a plain `=` — the runtime dispatch that
 	 * routes a genuine CHAIN through `BinaryChainEmit.emitAssignChain`.
 	 *
@@ -67,8 +90,7 @@ final class WriterPrattLowering {
 	 * whole chain NO break opportunity -- an overflowing chain rendered on one
 	 * over-long line and the writer still reported the file canonical.
 	 *
-	 * The gate is the operator TEXT, not `prec == 0`: that precedence also
-	 * carries `in` / `->` / `=>` / `+=` / `??=` and friends, none of which may
+	 * The gate is the operator TEXT, not the class: the class also carries `in` / `->` / `=>` / `+=` / `??=` and friends, none of which may
 	 * change shape here. `isAsymmetric` is excluded because the flatten is not
 	 * merely pointless there but ill-typed: a `case Assign(_, _)` pattern does
 	 * not match a right operand of a DIFFERENT rule type, and the tail write
@@ -121,7 +143,10 @@ final class WriterPrattLowering {
 		final argTypeCT: ComplexType = pc.ruleValueCT(c.typePath);
 		final rightArg: Expr = macro $i{c.argNames[1]};
 		final rightOpt: Expr = rightOptExpr ?? macro opt;
-		final leftItemCall: Expr = makeWriteCall(c.writeFnName, macro _l, c.hasPratt, leftCtx, macro _optR);
+		final leftItemCall: Expr = guardOpenLeft(
+			c.writeFnName, macro _l, leftCtx, (c.branch.annotations[AnnotationKeys.PRATT_PREC]: Int),
+			makeWriteCall(c.writeFnName, macro _l, c.hasPratt, leftCtx, macro _optR)
+		);
 		final tailItemCall: Expr = makeWriteCall(c.writeFnName, macro _e, c.hasPratt, rightCtx, macro _optR);
 		// The subject needs parens: bare `switch $rightArg {` parses the
 		// following block as a `$name{...}` reification form, not as the
@@ -274,10 +299,12 @@ final class WriterPrattLowering {
 		final assoc: String = (branch.annotations[AnnotationKeys.PRATT_ASSOC]: Null<String>) ?? 'Left';
 		final opText: String = getOperatorText(branch);
 		final leftCtx: Int = assoc == 'Right' ? prec + 1 : prec;
-		final rightCtx: Int = assoc == 'Right' ? prec : prec + 1;
+		final rightCtx: Int = branch.annotations[AnnotationKeys.PRATT_RIGHT_PREC];
 		final infixPolicyFlag: Null<String> = firstFmtFlag(branch, ['functionTypeHaxe3', 'intervalPolicy']);
 		final isTight: Bool = branch.fmtHasFlag('tight') || infixPolicyFlag != null;
-		final isAssign: Bool = prec == 0;
+		// Assignment-CLASS emit: the right operand takes a whole expression. Every assignment, `=>`, and
+		// the two asymmetric operators that bind tight on the left and greedy on the right (`->`, `in`).
+		final isAssign: Bool = rightCtx == 0;
 		final opWithSpaces: String = isTight ? opText : ' $opText ';
 		final isChainBool: Bool = opText == '||' || opText == '&&';
 		final isChainAddSub: Bool = opText == '+' || opText == '-';
@@ -293,7 +320,9 @@ final class WriterPrattLowering {
 		final rightRef: Null<String> = rightChild.kind == Ref ? rightChild.annotations[AnnotationKeys.BASE_REF] : null;
 		final isAsymmetric: Bool = rightRef != null && simpleName(rightRef) != simpleName(typePath);
 		final rightOptExpr: Null<Expr> = branch.fmtHasFlag('propagateExprPosition') ? macro _setExprPosition(opt) : null;
-		final leftCall: Expr = makeWriteCall(writeFnName, macro $i{argNames[0]}, hasPratt, leftCtx, null);
+		final leftCall: Expr = guardOpenLeft(
+			writeFnName, macro $i{argNames[0]}, leftCtx, prec, makeWriteCall(writeFnName, macro $i{argNames[0]}, hasPratt, leftCtx, null)
+		);
 		final rightCall: Expr = isAsymmetric
 			? makeWriteCall(pc.writeFnFor(rightRef), macro $i{argNames[1]}, false, -1, rightOptExpr)
 			: makeWriteCall(writeFnName, macro $i{argNames[1]}, hasPratt, rightCtx, rightOptExpr);
@@ -460,7 +489,14 @@ final class WriterPrattLowering {
 		// `f(a, b) + ...`). Suppress it so a chain operand wraps on its OWN
 		// overflow (plain Group); the chain absorbs the rest via its operator
 		// break / paren-open. Applies to every chain operand, `??` included.
-		final leafCall: Expr = makeWriteCall(writeFnName, macro _e, hasPratt, prec, macro _setSuppressCallRestProbe(opt, true));
+		final leafWrite: Expr = makeWriteCall(writeFnName, macro _e, hasPratt, prec, macro _setSuppressCallRestProbe(opt, true));
+		// Every leaf but the last is followed by a chain operator; `_leafOpen` records which of them
+		// would run on into it bare (see `guardOpenLeft`), for the pass after the gather.
+		final openFn: String = openRightFnName(writeFnName);
+		final leafCall: Expr = macro {
+			_leafOpen.push($i{openFn}(_e, $v{prec}) <= $v{prec});
+			$leafWrite;
+		};
 		// ω-keep-chain (increment 2): in Trivia mode the chain ctors
 		// Add/Sub/And/Or carry a 3rd `chainNewline:Bool` synth arg (the
 		// per-operand source-newline). Bind it (`_nl`) and push into the
@@ -614,8 +650,10 @@ final class WriterPrattLowering {
 			final _chainNestSuppress: Bool = _condWrapForced || opt._callArgChainNest || _keepChainInParen;
 			$headDecl;
 			final opt = $clearOptExpr;
+			final _leafOpen: Array<Bool> = [];
 			function _gather(_e: $argTypeCT): Void $gatherSwitch;
 			$gatherInvoke;
+			for (_i in 0..._items.length - 1) if (_leafOpen[_i]) _items[_i] = _dc([_dt('('), _items[_i], _dt(')')]);
 			final _inner: anyparse.core.Doc = $emitCall;
 			if ($v{prec} < ctxPrec)
 				_dc([_dt('('), _inner, _dt(')')])
@@ -626,7 +664,7 @@ final class WriterPrattLowering {
 
 	/**
 	 * Infix tight / assign sub-builder: tight operators (`...`, arrow
-	 * type) and assignment-class operators (prec 0) keep flat emission.
+	 * type) and assignment-class operators (right operand at precedence 0) keep flat emission.
 	 *
 	 */
 	private static function lowerInfixTightAssign(pc: PrattLoweringCtx, c: WriterLowering.LowerBranchCtx): Expr {
@@ -640,20 +678,24 @@ final class WriterPrattLowering {
 		final assoc: String = (branch.annotations[AnnotationKeys.PRATT_ASSOC]: Null<String>) ?? 'Left';
 		final opText: String = getOperatorText(branch);
 		final leftCtx: Int = assoc == 'Right' ? prec + 1 : prec;
-		final rightCtx: Int = assoc == 'Right' ? prec : prec + 1;
+		final rightCtx: Int = branch.annotations[AnnotationKeys.PRATT_RIGHT_PREC];
 		final infixPolicyFlag: Null<String> = firstFmtFlag(branch, ['functionTypeHaxe3', 'intervalPolicy']);
 		final isTight: Bool = branch.fmtHasFlag('tight') || infixPolicyFlag != null;
-		final isAssign: Bool = prec == 0;
+		// Assignment-CLASS emit: the right operand takes a whole expression. Every assignment, `=>`, and
+		// the two asymmetric operators that bind tight on the left and greedy on the right (`->`, `in`).
+		final isAssign: Bool = rightCtx == 0;
 		final opWithSpaces: String = isTight ? opText : ' $opText ';
 		final rightChild: ShapeNode = children[1];
 		final rightRef: Null<String> = rightChild.kind == Ref ? rightChild.annotations[AnnotationKeys.BASE_REF] : null;
 		final isAsymmetric: Bool = rightRef != null && simpleName(rightRef) != simpleName(typePath);
 		final rightOptExpr: Null<Expr> = rightOperandOptExpr(branch);
-		final leftCall: Expr = makeWriteCall(writeFnName, macro $i{argNames[0]}, hasPratt, leftCtx);
+		final leftCall: Expr = guardOpenLeft(
+			writeFnName, macro $i{argNames[0]}, leftCtx, prec, makeWriteCall(writeFnName, macro $i{argNames[0]}, hasPratt, leftCtx)
+		);
 		final rightCall: Expr = isAsymmetric
 			? makeWriteCall(pc.writeFnFor(rightRef), macro $i{argNames[1]}, false, -1, rightOptExpr)
 			: makeWriteCall(writeFnName, macro $i{argNames[1]}, hasPratt, rightCtx, rightOptExpr);
-		// Assign / arrow ops (prec 0, non-tight): split the trailing
+		// Assign / arrow ops (right operand at precedence 0, non-tight): split the trailing
 		// space into `_dop(' ')` (OptSpace) so the renderer drops it
 		// when the RHS emits a leading break-mode hardline (e.g.
 		// `dirty =\n\t\t\tdirty || ...` from a OnePerLine wrapping
@@ -1137,7 +1179,10 @@ final class WriterPrattLowering {
 		// break (`lowerInfixBranch` reads `opt._inTernaryCond`) -- the fork breaks
 		// the ternary `?`/`:`, not the compare. Only the cond opt carries the
 		// flag; `middleCall` / `rightCall` use the plain `opt`.
-		final condCall: Expr = makeWriteCall(writeFnName, macro $i{argNames[0]}, hasPratt, tPrec + 1, macro _setInTernaryCond(opt, true));
+		final condCall: Expr = guardOpenLeft(
+			writeFnName, macro $i{argNames[0]}, tPrec + 1, tPrec,
+			makeWriteCall(writeFnName, macro $i{argNames[0]}, hasPratt, tPrec + 1, macro _setInTernaryCond(opt, true))
+		);
 		final middleCall: Expr = makeWriteCall(writeFnName, macro $i{argNames[1]}, hasPratt, -1);
 		final rightCall: Expr = makeWriteCall(writeFnName, macro $i{argNames[2]}, hasPratt, -1);
 		// ω-ternary-wrap: dispatch to the chain-emit engine with a

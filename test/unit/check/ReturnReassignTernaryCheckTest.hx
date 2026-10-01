@@ -195,6 +195,13 @@ class ReturnReassignTernaryCheckTest extends Test {
 		Assert.equals('return (a ? b : c) ? 2 : x;', es[0].text);
 	}
 
+	/** An `untyped` condition would swallow the `? 2 : x` bare; `ParenGuard` gives it the pair. */
+	public function testUntypedConditionWrapped(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(fn('var x = 1;\n\t\tif (untyped c) x = 2;\n\t\treturn x;'));
+		Assert.equals(1, es.length);
+		Assert.equals('return (untyped c) ? 2 : x;', es[0].text);
+	}
+
 	public function testComparisonConditionNotWrapped(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(fn('var x = 1;\n\t\tif (n > 0) x = 2;\n\t\treturn x;'));
 		Assert.equals(1, es.length);

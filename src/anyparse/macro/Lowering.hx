@@ -1052,18 +1052,43 @@ class Lowering {
 		// Pratt), so a trailing binary operator stays for the outer
 		// Pratt loop instead of being swallowed into the operand.
 		// Mirrors `@:prefix` semantics for word-keyword unary operators
-		// without requiring the prefix-extension work. Consumed by
-		// `HxExpr.CastExpr` so `cast (x) is Bool` parses as
-		// `Is(CastExpr(ParenExpr(x)), Bool)` (Haxe-faithful), not as
-		// `CastExpr(Is(ParenExpr(x), Bool))`. The atom fn name pattern
+		// without requiring the prefix-extension work. No kw branch
+		// carries it today: `HxExpr.CastExpr` did until Haxe 4.3.7 was
+		// probed — the compiler gives `cast` a whole expression
+		// (`cast (x) is Bool` is `CastExpr(Is(ParenExpr(x), Bool))`). The atom fn name pattern
 		// `${baseFn}Atom` matches all three pipeline-mode fn-name
 		// conventions (`parseHxExpr` / `parseHxExprS` / `parseHxExprT`
 		// → `parseHxExprAtom` / `parseHxExprSAtom` / `parseHxExprTAtom`).
 		final atomOperand: Bool = branch.fmtHasFlag(ATOM_OPERAND_FLAG);
 		final subFnName: String = atomOperand ? '${parseFnName(refName)}Atom' : parseFnName(refName);
-		final callSub: Expr = {
+		final wholeCall: Expr = {
 			expr: ECall(macro $i{subFnName}, [macro ctx]),
 			pos: Context.currentPos()
+		};
+		// `@:fmt(atomOperandWhen('A', …))`: the operand is ONE atom (no postfix — the enclosing atom
+		// wrapper applies those to this ctor) when that atom is one of the listed ctors, and a whole
+		// expression otherwise. `HxExpr.CastExpr` lists `ECheckTypeExpr`: Haxe 4.3.7 ends a cast at
+		// a leading `(e : T)` (`cast (x : Int) is Bool` is `(cast (x : Int)) is Bool`) while giving
+		// it everything else (`cast (x) is Bool` is `cast ((x) is Bool)`).
+		final atomWhen: Null<Array<String>> = branch.fmtReadStringArgs('atomOperandWhen');
+		final callSub: Expr = if (atomWhen == null)
+			wholeCall
+		else {
+			final coreCall: Expr = { expr: ECall(macro $i{'${parseFnName(refName)}AtomCore'}, [macro ctx]), pos: Context.currentPos() };
+			final listed: Expr = { expr: EArrayDecl([for (n in atomWhen) macro $v{n}]), pos: Context.currentPos() };
+			macro {
+				final _atomStart: Int = ctx.pos;
+				var _operand = null;
+				try {
+					final _atom = $coreCall;
+					if ($listed.contains(Type.enumConstructor(_atom))) _operand = _atom;
+				} catch (_e: anyparse.runtime.ParseError) {}
+				if (_operand == null) {
+					ctx.pos = _atomStart;
+					_operand = $wholeCall;
+				}
+				_operand;
+			};
 		};
 		final trailOptional: Bool = branch.annotations[AnnotationKeys.LIT_TRAIL_OPTIONAL] == true;
 		// ω-trailopt-source-track: in trivia mode, paired Alt ctors

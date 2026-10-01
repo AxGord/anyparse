@@ -61,6 +61,12 @@ class FieldInitInConstructorCheckTest extends Test {
 		Assert.isTrue(out.indexOf('_cellsY = 1;') != -1);
 	}
 
+	/** An `untyped` condition would swallow the folded `? … : 20` bare; `ParenGuard` gives it the pair. */
+	public function testFixParenthesisesAnUntypedCondition(): Void {
+		final out: String = applyFixOnce(wrap(ONE_FIELD, '\t\tif (untyped palette) _cellsNumX = palette.length;'));
+		Assert.isTrue(out.indexOf('_cellsNumX = (untyped palette) ? palette.length : 20;') != -1, out);
+	}
+
 	public function testTwoPassesFoldBothFieldsAndDropTheIf(): Void {
 		final out: String = applyFixOnce(applyFixOnce(wrap(FIELDS, BODY)));
 		Assert.isTrue(out.indexOf('_cellsX = palette != null ? palette.length : 20;') != -1);

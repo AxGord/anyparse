@@ -315,9 +315,13 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 				PREC_BINARY;
 			// `is` binds tighter than every binary operator (`a + b is T` is `a + (b is T)`), so only a
 			// prefix result may sit bare on its left.
-			case 'Is': PREC_NOT;
-			case 'Or', 'And', 'NullCoal', 'Ternary', 'In', 'BitOr', 'BitXor', 'BitAnd', 'Shl', 'Shr', 'UShr', 'Add', 'Sub', 'Mul', 'Div',
-				'Mod', 'Interval', 'CastExpr':
+			case 'Is':
+				PREC_NOT;
+			// `in` binds tighter than every other binary operator on its LEFT (`x == y in b` is
+			// `x == (y in b)`), so both its slots demand the binary tier — the right one needlessly.
+			case 'In': PREC_BINARY;
+			case 'Or', 'And', 'NullCoal', 'Ternary', 'BitOr', 'BitXor', 'BitAnd', 'Shl', 'Shr', 'UShr', 'Add', 'Sub', 'Mul', 'Div', 'Mod',
+				'Interval', 'CastExpr':
 				precedence(slotKind);
 			case _: null;
 		};
@@ -608,10 +612,16 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 			case 'NullCoal': PREC_COALESCE;
 			case 'Ternary': PREC_TERNARY;
 			case 'Eq', 'NotEq', 'Lt', 'LtEq', 'Gt', 'GtEq': PREC_CMP;
-			case 'Is', 'In', 'BitOr', 'BitXor', 'BitAnd', 'Shl', 'Shr', 'UShr', 'Add', 'Sub', 'Mul', 'Div', 'Mod', 'Interval', 'CastExpr':
+			case 'Interval': PREC_INTERVAL;
+			case 'Is', 'BitOr', 'BitXor', 'BitAnd', 'Shl', 'Shr', 'UShr', 'Add', 'Sub', 'Mul', 'Div', 'Mod':
 				PREC_BINARY;
+			// `=>`, the two operators that bind tight on the left but take a whole expression on the
+			// right, and `cast`, whose operand is a whole expression: as an OPERAND each runs on into
+			// whatever follows it (`x -> b && c` is `x -> (b && c)`, `cast a && b` is `cast (a && b)`),
+			// so it ranks with the assignments.
 			case 'Assign', 'AddAssign', 'SubAssign', 'MulAssign', 'DivAssign', 'ModAssign', 'ShlAssign', 'ShrAssign', 'UShrAssign',
-				'BitOrAssign', 'BitAndAssign', 'BitXorAssign', 'NullCoalAssign', 'BoolAndAssign', 'BoolOrAssign':
+				'BitOrAssign', 'BitAndAssign', 'BitXorAssign', 'NullCoalAssign', 'BoolAndAssign', 'BoolOrAssign', 'Arrow', 'ThinArrow',
+				'In', 'CastExpr':
 				PREC_ASSIGN;
 			case _: PREC_ATOM;
 		};
@@ -669,7 +679,7 @@ private typedef Operand = {
 private enum abstract Precedence(Int) {
 	final PREC_ATOM = 100;
 	final PREC_NOT = 90;
-	// Any binary / type-check operator (is, in, bitwise, shift, arithmetic, ...) — binds
+	// Any binary / type-check operator (is, bitwise, shift, arithmetic, ...) — binds
 	// looser than unary `!`, so `negate` must wrap it `!(...)`, yet tighter than `&&` / `||`,
 	// so a join needs no extra parens. Kinds not listed in `precedence` default to PREC_ATOM;
 	// omitting one here would let `wrapNot` emit a bare `!` that captures only its left operand.
@@ -678,6 +688,9 @@ private enum abstract Precedence(Int) {
 	// `(a ?? b) == c`, so a comparison in a `??` operand needs its parens.
 	final PREC_COALESCE = 55;
 	final PREC_CMP = 50;
+	// `...` sits one tier looser than the comparisons and tighter than `&&`: `a ... b == c` is
+	// `a ... (b == c)`, `a && b ... c` is `a && (b ... c)`.
+	final PREC_INTERVAL = 45;
 	final PREC_AND = 40;
 	final PREC_OR = 30;
 	final PREC_TERNARY = 10;

@@ -182,6 +182,16 @@ final class ParenGuard {
 		return { span: span, text: text, holes: [new Span(0, left.length), new Span(text.length - right.length, text.length)] };
 	}
 
+	/**
+	 * `<head><cond> ? <then> : <els><tail>` replacing `span`, the condition registered as a hole: the
+	 * edit of a fix that folds a conditional into a ternary, so `guard` parenthesises the condition
+	 * exactly where it would bind across `?` bare — a ternary, an assignment, an arrow lambda, `in`.
+	 * The two branches are delimited by `?` / `:` and the slot's own end, and stay template text.
+	 */
+	public static function ternaryEdit(span: Span, head: String, cond: String, then: String, els: String, tail: String): GuardedEdit {
+		return { span: span, text: '$head$cond ? $then : $els$tail', holes: [new Span(head.length, head.length + cond.length)] };
+	}
+
 	private static inline function spanKey(from: Int, to: Int): String {
 		return '$from:$to';
 	}

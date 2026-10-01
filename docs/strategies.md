@@ -87,7 +87,7 @@ forms; everything else is bare.
 accessBrackets, afterFieldsWithDocComments, afterFileHeaderCommentBlanks, allmanIndentForCtor(…),
 anonFuncParens, anonTypeBracesClose, anonTypeBracesOpen, arrayMatrixWrap, arrowBodyLineWrap,
 arrowBodyOpenPadSuppress, arrowFunctions, arrowValueIfElemTrail, arrowValueIfReflow(…), arrowValueIfReflowSite,
-atomOperand, bareBodyBreaks(…), bareRefSepWhenPresent, beforeDocCommentEmptyLines, beforeDocCondLookThrough(…),
+atomOperand, atomOperandWhen(…), bareBodyBreaks(…), bareRefSepWhenPresent, beforeDocCommentEmptyLines, beforeDocCondLookThrough(…),
 beforeNewlineSlotFirst, beginEndType[(…)], betweenMultilineCommentsBlanks, blankAroundMultilineMembers(…),
 blankBeforeFinalDocCommentInLeading, blankBeforeLineCommentLed, blankBeforeOrphanLineCommentTrail,
 blankLinesAfterCtor(…), blankLinesAfterCtorIf(…), blankLinesAfterCtorIfTailLeafNull(…),
@@ -155,7 +155,7 @@ in an emit body that cares (`if (child.fmtHasFlag('nestBody'))`, `firstFmtFlag(n
 | `WriterKwRefLowering` | 31 |
 | `WriterTriviaStarEmitLowering` | 28 |
 | `WriterCtorBlankLowering` | 17 |
-| `WriterLowering` | 17 |
+| `WriterLowering` | 19 |
 | `WriterRefLeadLowering` | 17 |
 | `WriterPrattLowering` | 14 |
 | `WriterPolicyLowering` | 10 |
@@ -165,7 +165,7 @@ in an emit body that cares (`if (child.fmtHasFlag('nestBody'))`, `firstFmtFlag(n
 | `WriterBraceSymmetryLowering` | 6 |
 | `WriterFieldSepLowering` | 6 |
 | `PrattPostfixLowering` | 4 |
-| `Lowering` | 3 |
+| `Lowering` | 4 |
 | `StarFieldLowering` | 3 |
 | `WriterBodyPolicyLowering` | 3 |
 | `WriterCodegen` | 2 |

@@ -29,6 +29,15 @@ using Lambda;
  * of same-precedence operators fold: left-associative yields
  * `(a + b) + c`, right-associative yields `a = (b = c)`.
  *
+ *  - `@:infix("->", 13, "Right", 0)` — an ASYMMETRIC operator: the fourth
+ *    argument is the precedence its RIGHT operand is parsed at, here
+ *    lower than its own. The operator binds its left operand as tightly
+ *    as its precedence says and takes everything to its right: Haxe
+ *    reads `a ?? x -> b` as `a ?? (x -> b)` and `x -> b ?? c` as
+ *    `x -> (b ?? c)`. Omitted, it is `prec` for a right-associative
+ *    operator and `prec + 1` for a left-associative one; written into
+ *    `pratt.rightPrec` either way.
+ *
  * The strategy is annotate-only. It writes `pratt.op`, `pratt.prec`,
  * and `pratt.assoc` onto the branch `ShapeNode` and returns `null`
  * from `lower`. `Lowering` detects the presence of any `pratt.prec`
@@ -81,9 +90,10 @@ class Pratt implements Strategy {
 		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
 		if (meta == null) return;
 		for (entry in meta) if (entry.name == ':infix') {
-			if (entry.params.length < 2 || entry.params.length > 3) {
+			if (entry.params.length < 2 || entry.params.length > 4) {
 				Context.fatalError(
-					'@:infix expects two or three arguments: "op", precedence:Int, and optional associativity ("Left"/"Right")', entry.pos
+					'@:infix expects two to four arguments: "op", precedence:Int, optional associativity ("Left"/"Right") and an optional right-operand precedence:Int',
+					entry.pos
 				);
 			}
 			final opText: String = switch entry.params[0].expr {
@@ -107,9 +117,21 @@ class Pratt implements Strategy {
 				}
 			} else
 				'Left';
+			final rightPrecValue: Int = if (entry.params.length == 4) {
+				switch entry.params[3].expr {
+					case EConst(CInt(s)) if (Std.parseInt(s) <= precValue): Std.parseInt(s);
+					case _:
+						Context.fatalError(
+							'@:infix fourth argument must be an integer literal no greater than the precedence', entry.params[3].pos
+						);
+						throw 'unreachable';
+				}
+			} else
+				assocValue == 'Right' ? precValue : precValue + 1;
 			node.annotations[AnnotationKeys.PRATT_OP] = opText;
 			node.annotations[AnnotationKeys.PRATT_PREC] = precValue;
 			node.annotations[AnnotationKeys.PRATT_ASSOC] = assocValue;
+			node.annotations[AnnotationKeys.PRATT_RIGHT_PREC] = rightPrecValue;
 		}
 	}
 

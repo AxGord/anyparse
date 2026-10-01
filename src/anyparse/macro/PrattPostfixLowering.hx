@@ -74,8 +74,9 @@ final class PrattPostfixLowering {
 	 * inner gate and is re-taken by the outer loop iteration, folding
 	 * left. Right-associative branches recurse at `prec`, so a second
 	 * same-prec operator is absorbed by the inner recursion, folding
-	 * right. The per-branch choice is baked in at macro time — no
-	 * runtime switch on associativity.
+	 * right. An asymmetric branch (a fourth `@:infix` argument) recurses at that lower precedence
+	 * instead, so its right operand runs on past operators that bind tighter than it does on its left.
+	 * All three arrive as `pratt.rightPrec`, baked in at macro time — no runtime switch on associativity.
 	 */
 	private static function lowerPrattLoop(oc: PrattPostfixCtx, node: ShapeNode, typePath: String, simple: String): Expr {
 		final returnCT: ComplexType = oc.ruleReturnCT(typePath);
@@ -394,8 +395,9 @@ final class PrattPostfixLowering {
 			// right:HxType), recursing into the same loop is wrong — call
 			// the other type's parse function once at its default starting
 			// precedence and let outer Pratt iteration handle chaining.
-			final assocValue: String = branch.annotations[AnnotationKeys.PRATT_ASSOC];
-			final nextMinPrec: Int = assocValue == 'Right' ? precValue : precValue + 1;
+			// `pratt.rightPrec` — `prec` for a right-associative operator, `prec + 1` for a
+			// left-associative one, or the explicit fourth `@:infix` argument of an asymmetric one.
+			final nextMinPrec: Int = branch.annotations[AnnotationKeys.PRATT_RIGHT_PREC];
 			final rightChildren: Array<ShapeNode> = branch.children;
 			final rightChild: ShapeNode = rightChildren[1];
 			final rightRef: Null<String> = rightChild.kind == Ref ? rightChild.annotations[AnnotationKeys.BASE_REF] : null;
