@@ -768,6 +768,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				],
 				implicitCallMetaNames: ['@:op', '@:arrayAccess', '@:from', '@:to', '@:resolve'],
 				implicitCallNames: ['toString', 'iterator', 'hasNext', 'next', 'keyValueIterator'],
+				iterableMethodNames: ['iterator', 'keyValueIterator'],
 				implicitConstructionTypeMetaNames: ['@:structInit'],
 				extensionTypeMetaNames: ['@:using'],
 				extensionExcludingMetaNames: [NO_USING_META],

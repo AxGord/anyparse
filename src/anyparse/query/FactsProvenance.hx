@@ -371,6 +371,9 @@ final class FactsProvenance {
 @:nullSafety(Strict)
 private final class BodyText {
 
+	/** What may follow the range the compiler gives a literal's construction, inside the literal: a regular expression's flags. */
+	private static final FLAGS: EReg = ~/^[A-Za-z]*$/;
+
 	private final _key: String;
 	private final _span: Span;
 	private final _text: String;
@@ -410,11 +413,17 @@ private final class BodyText {
 	}
 
 	/**
-	 * Whether `p`, in this function, is exactly a literal of a kind whose construction the compiler writes as one of the
-	 * type `built` (`constructions`: `ExecutionShape.literalConstructions`).
+	 * Whether `p`, in this function, is a literal of a kind whose construction the compiler writes as one of the type
+	 * `built` (`constructions`: `ExecutionShape.literalConstructions`): exactly its range, or that range followed by
+	 * nothing but letters — the flags of a regular expression, which the compiler's position of the construction leaves out.
 	 */
 	public function builds(p: FactPos, built: String, constructions: Map<String, String>): Bool {
-		return holds(p) && _literals.exists(l -> l.span.from == p.span.from && l.span.to == p.span.to && constructions[l.kind] == built);
+		return holds(p)
+			&& _literals.exists(
+				l ->
+					l.span.from == p.span.from && p.span.to <= l.span.to && FLAGS.match(_text.substring(p.span.to, l.span.to))
+					&& constructions[l.kind] == built
+			);
 	}
 
 	/** Whether `p`, in this function, spells `name` or is a lowered loop's own. */

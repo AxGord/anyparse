@@ -144,7 +144,10 @@ typedef MemberRef = {
  * any function used as a value or overriding a library method, a call through an unknown receiver any
  * function of the same name, and ANY code any function the language calls implicitly — an operator,
  * conversion, index, string conversion, iteration, literal construction; every admission is narrowed to the
- * functions that can themselves reach a toucher, and re-run whenever the graph grew. Reflection by a literal
+ * functions that can themselves reach a toucher, and re-run whenever the graph grew. Where the compiler facts are
+ * the truth, code read through them runs an implicitly-called member without a call the graph holds only at a
+ * string conversion — a thrown value is one — or an iteration, so a channel that can run no code read by its syntax
+ * admits only those (`ReachAdmission.runsSyntaxRead`, `ReachGraph.typedImplicitIds`). Reflection by a literal
  * name is a hand-off it follows; by a computed name, native code, untyped code, a raw conditional region, an unmodelled
  * construct, a build macro, an ambiguous type name or an unparsed file is `Unknown` — a build macro, where the compiler facts
  * are the truth (`FactsView.truth`), only when they show the code it made of a type is not the text (`ReachGraph.rewrittenBy`);
@@ -213,7 +216,8 @@ final class MemberReach {
 
 	/**
 	 * Set when the current question entered code read by its syntax rather than its compiler facts: a conversion or a
-	 * field-name fallback may run there without a call the graph holds, so every such function is admitted.
+	 * field-name fallback may run there without a call the graph holds, so every such function is admitted. An admission of code the walk
+	 * never enters sets it too, unless the facts are the truth and that code is all read through them (`ReachAdmission.runsSyntaxRead`).
 	 */
 	private var _syntaxEntered: Bool = false;
 
@@ -1114,7 +1118,20 @@ final class MemberReach {
 	/** Whether the code that runs for `node` may not be its source: a build macro may rewrite its type, or two types share the name. */
 	private function bodyNotItsSource(g: CallGraph, node: FnNode): Bool {
 		final type: Null<String> = node.typeName;
-		return type != null && (g.types.declarationCount(type) > 1 || _g.rewrittenBy(type) != null);
+		return type != null && (sharedName(g, node) || _g.rewrittenBy(type) != null);
+	}
+
+	/**
+	 * Whether `node` may be another type's member than the one its body is: its type's simple name has several
+	 * declarations, unless, where the facts are the truth, every one of them is the one type the builds typed
+	 * (`FactsView.soleType`) or only one type the builds typed declares a member so named (`FactsView.soleMember`).
+	 */
+	private function sharedName(g: CallGraph, node: FnNode): Bool {
+		final type: Null<String> = node.typeName;
+		final name: Null<String> = node.name;
+		if (type == null || g.types.declarationCount(type) <= 1) return false;
+		final facts: Null<FactsView> = _scope.facts;
+		return facts == null || (facts.soleType(type) == null && (name == null || facts.soleMember(type, name) == null));
 	}
 
 	/** What the external `node` stands for once its library file is read: harmless, a body to walk, or nothing the walk can see. */
@@ -1214,6 +1231,10 @@ final class MemberReach {
 		// own family: the entry's here, each body's as it is entered
 		var alwaysAdmitted: Bool = false;
 		var unreadAdmitted: Bool = false;
+		// the sites whose unread admission was narrowed to what the facts leave implicit, one per set of channels: each is asked
+		// again whenever the graph grew, and widened once it holds code read by its syntax one of them may run (`admitUnread`)
+		final narrowed: Array<AdmissionSite> = [];
+		final narrowedChannels: Array<String> = [];
 		function admitAlways(): Void {
 			if (alwaysAdmitted || !_syntaxEntered) return;
 			alwaysAdmitted = true;
@@ -1231,30 +1252,42 @@ final class MemberReach {
 			sites.push(always);
 			apply(always);
 		}
+		// a channel may run code the walk never enters, since it reaches no toucher by an edge — code read by its syntax, a
+		// library's — which may run any implicitly-called member on any value it holds: a conversion, an iteration, an
+		// operator, an index access, a literal construction. Code read through its compiler facts, where they are the truth,
+		// runs one without a call the graph holds only at a string conversion or an iteration (`ReachGraph.typedImplicitIds`)
+		function admitUnread(site: AdmissionSite, again: Bool): Void {
+			if (unreadAdmitted || !runsUnreadCode(site)) return;
+			final channels: String = '${site.values} ${site.constructors} ${site.all == true}';
+			if (!again && narrowedChannels.contains(channels)) return;
+			final read: Bool = _admission.runsSyntaxRead(g, site.values, site.constructors, site.all == true);
+			if (!read && again) return;
+			if (read) {
+				unreadAdmitted = true;
+				_syntaxEntered = true;
+			} else {
+				narrowed.push(site);
+				narrowedChannels.push(channels);
+			}
+			final unread: AdmissionSite = {
+				from: site.from,
+				file: site.file,
+				span: site.span,
+				kind: 'implicit',
+				names: [],
+				values: false,
+				constructors: false,
+				always: true,
+				implicit: [],
+				ids: read ? _g.implicitIds(g) : _g.typedImplicitIds(g)
+			};
+			sites.push(unread);
+			apply(unread);
+		}
 		function admit(site: AdmissionSite): Void {
 			sites.push(site);
 			apply(site);
-			// a channel may run code the walk never enters, since it reaches no toucher by an edge — code read by its syntax, a
-			// library's — which may run any implicitly-called member on any value it holds: a conversion, an iteration, an
-			// operator, an index access, a literal construction
-			if (!unreadAdmitted && runsUnreadCode(site)) {
-				unreadAdmitted = true;
-				_syntaxEntered = true;
-				final unread: AdmissionSite = {
-					from: site.from,
-					file: site.file,
-					span: site.span,
-					kind: 'implicit',
-					names: [],
-					values: false,
-					constructors: false,
-					always: true,
-					implicit: [],
-					ids: _g.implicitIds(g)
-				};
-				sites.push(unread);
-				apply(unread);
-			}
+			admitUnread(site, false);
 			admitAlways();
 		}
 		function follow(e: CallEdge): Void {
@@ -1368,7 +1401,7 @@ final class MemberReach {
 						admit(externSite(g, node.id, reach[id]?.file ?? node.file, reach[id]?.span, type, name));
 					continue;
 				}
-				if (type != null && g.types.declarationCount(type) > 1) blind = blind ?? Ambiguous(type);
+				if (type != null && sharedName(g, node)) blind = blind ?? Ambiguous(type);
 				final rebuilt: Null<ReachUnknown> = type == null ? null : _g.rewrittenBy(type);
 				if (rebuilt != null) blind = blind ?? rebuilt;
 				final spans: Null<Array<Occurrence>> = bodySpans(g, node);
@@ -1413,6 +1446,8 @@ final class MemberReach {
 			placeholdersAt = _g.placeholders;
 			widened = false;
 			for (s in sites) apply(s);
+			for (s in narrowed) admitUnread(s, true);
+			admitAlways();
 			if (qi >= queue.length) break;
 		}
 		final stop: Null<ReachUnknown> = blind;

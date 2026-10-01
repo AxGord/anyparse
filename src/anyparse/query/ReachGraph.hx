@@ -391,6 +391,17 @@ final class ReachGraph {
 	}
 
 	/**
+	 * The implicitly-called members code read through its compiler facts may run without a call the graph holds: those of a
+	 * string conversion and of an iteration, which the facts keep as sites (`FactsView.sitesIn`) — every other implicit call
+	 * is a call or a construction they name, an edge. Every such member that may run at all (`counts`).
+	 */
+	public function typedImplicitIds(g: CallGraph): Array<String> {
+		return idsOf(g, [
+			for (c in indexImplicit()) if (c.family.match(TextMember | IterationMember) && counts(c)) c
+		]);
+	}
+
+	/**
 	 * Record that the current question's walk entered the code at `span` of `file`, inside the type `typeName`; true
 	 * when that widened what it had entered, which may widen the abstracts visible to it (`visibleAbstracts`) and so
 	 * what an implicit-call site admits. What is recorded is the whole MEMBER enclosing `span` — the declarations of
@@ -647,11 +658,14 @@ final class ReachGraph {
 
 	/**
 	 * The types whose members the site `at` may run, or null for any: the union over its operands of `runtimeTypes`,
-	 * an inert operand of a string conversion contributing none; for an iteration also the types the iterable's
-	 * iterator methods return, whose `hasNext` / `next` the loop runs.
+	 * an inert operand of a string conversion contributing none; for an iteration also the types the iterable's iterator methods
+	 * return, whose `hasNext` / `next` the loop runs — under the truth only those `ExecutionShape.iterableMethodNames` return.
 	 */
 	private function typesAt(g: CallGraph, at: ImplicitSite): Null<Array<String>> {
 		if (at.family == Literal) return null;
+		// what `next` returns is an element, which the loop runs nothing on: under the truth only an iterable's iterator is
+		// iterated in turn
+		final iterables: Null<Array<String>> = _scope.facts?.truth == true ? _scope.shape.execution?.iterableMethodNames : null;
 		final out: Array<String> = [];
 		for (t in at.types) {
 			if (t == null) return null;
@@ -660,7 +674,9 @@ final class ReachGraph {
 			if (types == null) return null;
 			for (x in types) if (!out.contains(x)) out.push(x);
 			if (at.family == Iteration) for (x in types) for (name in (_scope.shape.execution?.implicitCallNames ?? [])) {
-				final returned: Null<String> = g.types.memberOnChain(x, name)?.returnNominal;
+				final returned: Null<String> = iterables == null || iterables.contains(name)
+					? g.types.memberOnChain(x, name)?.returnNominal
+					: null;
 				if (returned == null) continue;
 				final more: Null<Array<String>> = runtimeTypes(g, returned, at.family);
 				if (more == null) return null;

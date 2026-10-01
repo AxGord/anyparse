@@ -52,6 +52,27 @@ class MemberReachFactsTest extends Test {
 	/** A loop in `Main.main` whose body is the region, over the static `Main.items`. */
 	private static inline final LOOP_HEAD: String = 'class Main {\n\tpublic static var items:Array<Int> = [1, 2];\n';
 
+	/** `Obj`, whose `toString` replaces `Main.items`. */
+	private static inline final CLEARING_OBJ: String = 'class Obj {\n\tpublic function new() {}\n\n'
+		+ '\tpublic function toString():String {\n\t\tMain.items = [];\n\t\treturn "o";\n\t}\n}\n';
+
+	/** `Walker`, an iterator whose `next` replaces `Main.items`. */
+	private static inline final CLEARING_WALKER: String = 'class Walker {\n\tpublic function new() {}\n\n'
+		+ '\tpublic function hasNext():Bool return false;\n\n\tpublic function next():Int {\n\t\tMain.items = [];\n\t\treturn 0;\n\t}\n}\n';
+
+	/**
+	 * The region runs `lib.Vec.splice` (`sharedNameLibrary`) through `Box.put`, and `Walker.next` replaces `Main.items`. The
+	 * walk reads `lib/Vec.hx` for `VecIter.zero`, called first: a simple name two types share names no one file to read.
+	 */
+	private static inline final SHARED_NAME_MAIN: String = 'import lib.Vec;\nimport lib.Vec.VecIter;\n\n' + LOOP_HEAD
+		+ '\tstatic function main() {\n\t\tvar w:Walker = new Walker();\n'
+		+ '\t\tfor (i in 0...items.length) { /*<*/ Box.put(); /*>*/ }\n\t}\n}\n'
+		+ 'class Box {\n\tpublic static function put():Void {\n\t\tVecIter.zero();\n\t\tVec.splice(1);\n\t}\n}\n' + CLEARING_WALKER;
+
+	/** `AE`, an abstract whose `==` replaces `Main.items`. */
+	private static inline final CLEARING_EQ: String = 'abstract AE(Int) {\n\tpublic function new(i:Int) this = i;\n\n'
+		+ '\t@:op(A == B) public function eq(b:AE):Bool {\n\t\tMain.items = [];\n\t\treturn true;\n\t}\n}\n';
+
 	/** A class with the instance member `Main.items`, whose methods the build types though `main` calls none of them. */
 	private static inline final MEMBER_HEAD: String = 'class Main {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n'
 		+ '\tstatic function main() {}\n';
@@ -753,6 +774,116 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main]), r -> !r.match(Proven));
 	}
 
+	@:pin('control') @:killer('M-REACH-TYPED-IMPLICIT-TEXT')
+	public function testAStoredFunctionValueMayConvertWhatItIsHandedUnderTheTruth(): Void {
+		// the lambda `fmt` holds is read through its facts, and still reaches no toucher by an edge: its concatenation is a
+		// string conversion the facts keep as a site, which the walk never enters
+		final main: String = LOOP_HEAD + '\tstatic var fmt:Dynamic -> String;\n'
+			+ '\tstatic function main() {\n\t\tfmt = v -> "<" + v;\n\t\tvar o:Obj = new Obj();\n\t\tvar s:String = "";\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ s += fmt(o); /*>*/ }\n\t}\n}\n' + CLEARING_OBJ;
+		assertMatch(truthAsk(['Main.hx' => main]), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-REACH-TYPED-IMPLICIT-ITER')
+	public function testAStoredFunctionValueMayIterateWhatItIsHandedUnderTheTruth(): Void {
+		// the lambda `f` holds iterates a structure, which runs the `next` of whatever it holds: a site the facts keep, in code
+		// the walk never enters
+		final main: String = LOOP_HEAD + '\tstatic var f:Iterator<Int> -> Int;\n'
+			+ '\tstatic function main() {\n\t\tf = it -> {\n\t\t\tvar n:Int = 0;\n\t\t\tfor (x in it) n++;\n\t\t\tn;\n\t\t};\n'
+			+ '\t\tvar w:Walker = new Walker();\n\t\tfor (i in 0...items.length) { /*<*/ f(w); /*>*/ }\n\t}\n}\n' + CLEARING_WALKER;
+		assertMatch(truthAsk(['Main.hx' => main]), r -> !r.match(Proven));
+	}
+
+	public function testAStoredFunctionValueMayRunAnOperatorOverloadOnlyThroughItsFactsUnderTheTruth(): Void {
+		// the lambda `f` holds runs `AE.eq` through the `==` its facts name as a call: an edge, by which it reaches the toucher
+		final main: String = LOOP_HEAD + '\tstatic var f:AE -> Bool;\n'
+			+ '\tstatic function main() {\n\t\tf = a -> a == a;\n\t\tfor (i in 0...items.length) { /*<*/ f(new AE(1)); /*>*/ }\n\t}\n}\n'
+			+ CLEARING_EQ;
+		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Reached(_)));
+	}
+
+	@:pin('control') @:killer('M-ADMIT-SYNTAX-READ-FIELD') @:killer('M-REACH-UNREAD-NARROWED')
+	@:killer('M-FACTS-ABSTRACT-CTOR-NAME')
+	public function testCodeReadThroughItsFactsRunsNoOperatorOverloadItNamesNoCallOfUnderTheTruth(): Void {
+		// the lambda `f` holds compares nothing: code read by its syntax might run `AE.eq` with no call the graph holds, code
+		// read through its facts, where they are the truth, names every operator it runs as a call
+		final main: String = LOOP_HEAD + '\tstatic var f:AE -> Bool;\n'
+			+ '\tstatic function main() {\n\t\tf = a -> true;\n\t\tfor (i in 0...items.length) { /*<*/ f(new AE(1)); /*>*/ }\n\t}\n}\n'
+			+ CLEARING_EQ;
+		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Proven));
+		assertMatch(ask(['Main.hx' => main]), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-ADMIT-SYNTAX-READ-UNTRUE')
+	public function testFactsThatAreNotTheTruthNarrowNothingCodeTheWalkNeverEntersRuns(): Void {
+		// the lambda `f` holds is read through facts that hold for every build either way; only under a list of builds declared
+		// whole does the walk take them for all that code it never enters runs
+		final main: String = LOOP_HEAD + '\tstatic var f:AE -> Bool;\n'
+			+ '\tstatic function main() {\n\t\tf = a -> true;\n\t\tvar a:AE = cast 1;\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ f(a); /*>*/ }\n\t}\n}\n' + CLEARING_EQ;
+		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Proven));
+		assertMatch(ask(['Main.hx' => main]), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-ADMIT-SYNTAX-READ-FACETED')
+	public function testAFunctionValueReadByItsSyntaxMayRunAnyOperatorOverloadUnderTheTruth(): Void {
+		// the lambda `f` holds is an expression macro's expansion, whose facts do not replace its syntax
+		final main: String = LOOP_HEAD + '\tstatic var f:AE -> Bool;\n'
+			+ '\tstatic function main() {\n\t\tf = a -> Mac.yes();\n\t\tfor (i in 0...items.length) { /*<*/ f(new AE(1)); /*>*/ }\n\t}\n}\n'
+			+ CLEARING_EQ;
+		final mac: String = 'class Mac {\n\tpublic static macro function yes() return macro Math.random() < 2;\n}\n';
+		assertMatch(truthAsk(['Main.hx' => main, 'Mac.hx' => mac]), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-ADMIT-SYNTAX-READ-UNSEEN') @:killer('M-REACH-UNREAD-RECHECK')
+	public function testLibraryCodeNotReadYetMayRunAnyOperatorOverloadUnderTheTruth(): Void {
+		// the string conversions the facts leave implicit may run the library `Thing.toString`, whose file the walk has not
+		// read: once the graph holds it, code the walk cannot see may run any implicitly-called member
+		final main: String = LOOP_HEAD + '\tstatic var f:AE -> Bool;\n\tstatic var t:lib.Thing = null;\n'
+			+ '\tstatic function main() {\n\t\tf = a -> true;\n\t\tfor (i in 0...items.length) { /*<*/ f(new AE(1)); /*>*/ }\n\t}\n}\n'
+			+ CLEARING_EQ;
+		final thing: String = 'package lib;\n\nclass Thing {\n\tpublic function new() {}\n\n'
+			+ '\tpublic function toString():String return "t";\n}\n';
+		assertMatch(ask(['Main.hx' => main], null, true, null, false, null, ['lib/Thing.hx' => thing], null, true), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-FACTS-THROW-TEXT') @:killer('M-SITES-THROW-TEXT')
+	public function testAThrownValueIsConvertedToAString(): Void {
+		// the exception wrapping the compiler adds after typing hands `o` to `Std.string`, which runs `Obj.toString`
+		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tvar o:Obj = new Obj();\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ try throw o catch (e:Dynamic) {} /*>*/ }\n\t}\n}\n' + CLEARING_OBJ;
+		assertMatch(truthAsk(['Main.hx' => main]), r -> !r.match(Proven));
+		assertMatch(ask(['Main.hx' => main]), r -> !r.match(Proven));
+		assertMatch(ask(['Main.hx' => main], null, false), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-FACTS-ITER')
+	public function testALoopOverAProjectIteratorRunsItsNextUnderTheTruth(): Void {
+		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tvar w:Walker = new Walker();\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ for (x in w) {} /*>*/ }\n\t}\n}\n' + CLEARING_WALKER;
+		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Reached(_)));
+	}
+
+	@:pin('control') @:killer('M-FACTS-SOLE-MEMBER-DECLARED')
+	public function testAMemberAnotherTypeOfItsNameMayDeclareKeepsTheNameShared(): Void {
+		// a declaration of `splice` no build typed may still run under another name (`@:genericBuild`): it leaves `Vec.splice`
+		// a name two types share
+		final dead: Map<String, String> = sharedNameLibrary();
+		dead['dead/Vec.hx'] = 'package dead;\n\nclass Vec {\n\tpublic static function splice(i:Int):Int return i;\n}\n';
+		assertMatch(ask(['Main.hx' => SHARED_NAME_MAIN], null, true, null, false, null, dead, null, true), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-FACTS-SOLE-MEMBER-NONE') @:killer('M-REACH-SHARED-NAME-SOLE') @:killer('M-REACH-ITERABLE-RETURNS')
+	public function testALibraryMemberOnlyOneTypeOfItsNameDeclaresIsReadThroughItsFacts(): Void {
+		// `lib.Vec` and `other.Vec` share a simple name, but only `lib.Vec` declares `splice`, whose loop the syntax cannot
+		// type — so it may run any `next`, `Walker`'s among them — and the facts type as `VecIter`'s (openfl's `Vector.splice`
+		// beside `haxe.ds.Vector`)
+		assertMatch(
+			ask(['Main.hx' => SHARED_NAME_MAIN], null, true, null, false, null, sharedNameLibrary(), null, true), r -> r.match(Proven)
+		);
+		assertMatch(ask(['Main.hx' => SHARED_NAME_MAIN], null, true, null, false, null, sharedNameLibrary()), r -> !r.match(Proven));
+	}
+
 	@:pin('control') @:killer('M-FACTS-TRUTH-WIRED')
 	@:access(anyparse.query.MemberReach)
 	public function testTheFactsAreTheTruthOnlyUnderTheWholeListOfTheirBuilds(): Void {
@@ -1322,6 +1453,14 @@ class MemberReachFactsTest extends Test {
 		assertMatch(hubAsk(files), r -> r.match(Proven));
 	}
 
+	@:pin('control') @:killer('M-FACTS-TEXT-LITERAL-FLAGS')
+	public function testARegexLiteralWithFlagsIsItsTextUnderTheTruth(): Void {
+		// the compiler's position of the `EReg` it constructs leaves the literal's flags out (openfl's
+		// `TextField.set_htmlText`: `~/\s+/g`)
+		final files: Map<String, String> = utilWith('public static function other():EReg return ~/a+/gi;');
+		assertMatch(hubAsk(files), r -> r.match(Proven));
+	}
+
 	@:pin('control') @:killer('M-FACTS-TEXT-ABSTRACT-NEW')
 	public function testAConstructionOfAnAbstractIsItsTextUnderTheTruth(): Void {
 		// `new Map()` is a construction of `Map`'s implementation class (openfl's `DisplayObject.__broadcastEvents`)
@@ -1467,6 +1606,23 @@ class MemberReachFactsTest extends Test {
 		final points: MemberRef = { owner: 'Main', name: '_points' };
 		for (use in ['Keeper.held = k.push(_points);', 'k.pop(_points);', 'k.it = new Walk(_points);'])
 			assertMatch(ask(fixture(use), null, true, points, false, null, null, null, true), r -> r.match(Unknown(Escape(_, _))));
+	}
+
+	/**
+	 * `lib.Vec`, whose static `splice` iterates a `VecIter` through `id`, which the syntax cannot type, and `other.Vec`, of
+	 * the same simple name, declaring no `splice`.
+	 */
+	private static function sharedNameLibrary(): Map<String, String> {
+		return [
+			'lib/Vec.hx' => 'package lib;\n\nclass VecIter {\n\tfinal a:Array<Int>;\n\tvar i:Int = 0;\n\n'
+				+ '\tpublic function new(a:Array<Int>) this.a = a;\n\n\tpublic function hasNext():Bool return i < a.length;\n\n'
+				+ '\tpublic function next():Int return a[i++];\n\n\tpublic static function zero():Int return 0;\n}\n\n'
+				+ 'class Vec {\n\tpublic static var peer:other.Vec = null;\n\n\tstatic var data:Array<Int> = [];\n\n'
+				+ '\tstatic function id<X>(x:X):X return x;\n\n'
+				+ '\tpublic static function splice(item:Int):Int {\n\t\tvar n:Int = 0;\n\t\tfor (x in id(new VecIter(data))) n++;\n'
+				+ '\t\treturn n;\n\t}\n}\n',
+			'other/Vec.hx' => 'package other;\n\nclass Vec {\n\tpublic function new() {}\n\n\tpublic function size():Int return 0;\n}\n'
+		];
 	}
 
 	/**

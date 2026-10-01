@@ -73,7 +73,8 @@ import haxe.io.Path;
  *     `ret`, `arr`, `obj`, `throw` or `cast` (an unchecked cast, always kept). A branching value flows once per branch
  *     at the branch's own type; a place of no type is `Dynamic`, and so is every argument of a callee of no function
  *     type; each rest argument flows into the rest element type. Otherwise kept only when the types differ beyond `Null<>`.
- *   - `strs`: `{o, p}` — a non-String operand of a String `+` or `+=`.
+ *   - `strs`: `{o, p}` — a non-String operand of a String `+` or `+=`, and a non-String thrown value, which the
+ *     exception wrapping the compiler adds after typing hands to `Std.string` (`haxe.ValueException`).
  *   - `iters`: `{v, i, p}` — a `for` the compiler kept (it lowers an Array loop to a `while` and unrolls a constant one).
  *   - `refl`: `{t, n?, c?, v?, p}` — a `Reflect.*`/`Type.*` call, its first literal string and its first type argument;
  *     `v` when the member, or the class itself, is read as a value — whatever calls it later is reflection.

@@ -5660,7 +5660,7 @@
 			"name": "M-REACH-AMBIGUOUS",
 			"type": "anyparse.query.MemberReach",
 			"method": "walk",
-			"find": "if (type != null && g.types.declarationCount(type) > 1) blind = blind ?? Ambiguous(type);",
+			"find": "if (type != null && sharedName(g, node)) blind = blind ?? Ambiguous(type);",
 			"replace": "",
 			"note": "a reached type sharing its simple name with another is taken for the one the graph merged, so the other's body is never seen"
 		},
@@ -8320,9 +8320,137 @@
 			"name": "M-FACTS-REACH-UNREAD-IMPLICIT",
 			"type": "anyparse.query.MemberReach",
 			"method": "walk",
-			"find": "ids: _g.implicitIds(g)",
-			"replace": "ids: []",
-			"note": "code the walk never enters is taken to run no operator, index or literal member, only conversions"
+			"find": "ids: read ? _g.implicitIds(g) : _g.typedImplicitIds(g)",
+			"replace": "ids: _g.typedImplicitIds(g)",
+			"note": "code the walk never enters, read by its syntax, is taken to run no operator, index or literal member, only conversions and iterations"
+		},
+		{
+			"name": "M-FACTS-SOLE-MEMBER-NONE",
+			"type": "anyparse.query.FactsView",
+			"method": "foldedBodies",
+			"find": ": soleMember(type, member);",
+			"replace": ": null;",
+			"note": "a member of a simple name several typed types share is never read by its id, so a library member only one of them declares keeps its syntax (openfl's `Vector.splice` beside `haxe.ds.Vector`)"
+		},
+		{
+			"name": "M-FACTS-SOLE-MEMBER-DECLARED",
+			"type": "anyparse.query.FactsView",
+			"method": "soleMember",
+			"find": "&& declaredId(fi, t) != root)",
+			"replace": "&& false)",
+			"note": "a declaration of the member no build typed, which may run under another name, leaves the name one type's member"
+		},
+		{
+			"name": "M-REACH-SHARED-NAME-SOLE",
+			"type": "anyparse.query.MemberReach",
+			"method": "sharedName",
+			"find": "(facts.soleType(type) == null && (name == null || facts.soleMember(type, name) == null))",
+			"replace": "facts.soleType(type) == null",
+			"note": "a member only one typed type of its name declares still makes the walk Ambiguous where it enters it"
+		},
+		{
+			"name": "M-ADMIT-SYNTAX-READ-UNTRUE",
+			"type": "anyparse.query.ReachAdmission",
+			"method": "runsSyntaxRead",
+			"find": "if (facts == null || !facts.view.truth) return true;",
+			"replace": "if (facts == null) return true;",
+			"note": "facts that are not the truth narrow what code the walk never enters runs implicitly"
+		},
+		{
+			"name": "M-ADMIT-SYNTAX-READ-FACETED",
+			"type": "anyparse.query.ReachAdmission",
+			"method": "runsSyntaxRead",
+			"find": "if (n.isExternal || n.isBodyless || facts.faceted.exists(id)) continue;",
+			"replace": "continue;",
+			"note": "a function value read by its syntax is taken to run implicitly only what code read through its facts does"
+		},
+		{
+			"name": "M-ADMIT-SYNTAX-READ-UNSEEN",
+			"type": "anyparse.query.ReachAdmission",
+			"method": "runsSyntaxRead",
+			"find": "if (runsUnseenCode(g, n) && !_scope.sources.exists(_scope.siteOf(n.typeName ?? '')?.file ?? '')) return true;",
+			"replace": "",
+			"note": "library code the walk has not read is taken to run implicitly only what code read through its facts does"
+		},
+		{
+			"name": "M-ADMIT-SYNTAX-READ-FIELD",
+			"type": "anyparse.query.ReachAdmission",
+			"method": "runsSyntaxRead",
+			"find": "&& !_scope.sources.exists(_scope.siteOf(n.typeName ?? '')?.file ?? '')",
+			"replace": "",
+			"note": "(precision) a project field holding a function value counts as library code not read, so the facts never narrow a stored function's call"
+		},
+		{
+			"name": "M-REACH-UNREAD-NARROWED",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "ids: read ? _g.implicitIds(g) : _g.typedImplicitIds(g)",
+			"replace": "ids: _g.implicitIds(g)",
+			"note": "(precision) code read through facts that are the truth is taken to run any implicitly-called member, as code read by its syntax may"
+		},
+		{
+			"name": "M-REACH-UNREAD-RECHECK",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "for (s in narrowed) admitUnread(s, true);",
+			"replace": "",
+			"note": "a narrowed unread admission is never widened once the graph grows to hold code read by its syntax or not read at all"
+		},
+		{
+			"name": "M-REACH-TYPED-IMPLICIT-TEXT",
+			"type": "anyparse.query.ReachGraph",
+			"method": "typedImplicitIds",
+			"find": "c.family.match(TextMember | IterationMember)",
+			"replace": "c.family.match(IterationMember)",
+			"note": "code read through its facts is taken to convert nothing to a string without a call the graph holds"
+		},
+		{
+			"name": "M-REACH-TYPED-IMPLICIT-ITER",
+			"type": "anyparse.query.ReachGraph",
+			"method": "typedImplicitIds",
+			"find": "c.family.match(TextMember | IterationMember)",
+			"replace": "c.family.match(TextMember)",
+			"note": "code read through its facts is taken to iterate nothing without a call the graph holds"
+		},
+		{
+			"name": "M-REACH-ITERABLE-RETURNS",
+			"type": "anyparse.query.ReachGraph",
+			"method": "typesAt",
+			"find": "_scope.facts?.truth == true ? _scope.shape.execution?.iterableMethodNames : null",
+			"replace": "null",
+			"note": "(precision) the element an iterator's `next` returns is iterated in turn, so an iterator of a type the index does not declare runs any `next`"
+		},
+		{
+			"name": "M-FACTS-THROW-TEXT",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "visit",
+			"find": "if (!TypedFactsShapes.isString(value.t)) stringSite(value);",
+			"replace": "",
+			"note": "a thrown value is recorded as converted to no string, though the exception wrapping hands it to `Std.string`"
+		},
+		{
+			"name": "M-SITES-THROW-TEXT",
+			"type": "anyparse.query.ImplicitSites",
+			"method": "sitesOfFile",
+			"find": "if (throws.contains(kind) && node.children.length > 0) add(Text, node, [node.children[0]]);",
+			"replace": "",
+			"note": "a `throw` is no string-conversion site of what it throws"
+		},
+		{
+			"name": "M-FACTS-ABSTRACT-CTOR-NAME",
+			"type": "anyparse.query.CallGraphFacts",
+			"method": "declaredCall",
+			"find": "view.graphMember(owner, target.substr(target.lastIndexOf('.') + 1))",
+			"replace": "target.substr(target.lastIndexOf('.') + 1)",
+			"note": "a call of an abstract's constructor names `_new`, which no type the graph holds declares, so every `new` of an abstract is an unresolved dispatch"
+		},
+		{
+			"name": "M-FACTS-TEXT-LITERAL-FLAGS",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "builds",
+			"find": "p.span.to <= l.span.to && FLAGS.match(_text.substring(p.span.to, l.span.to))",
+			"replace": "p.span.to == l.span.to",
+			"note": "a regular expression written with flags is no construction the text writes: the compiler's position of it leaves them out, so openfl's `TextField` is not its text"
 		},
 		{
 			"name": "M-REACH-CALLEE-WALK",
@@ -8359,7 +8487,7 @@
 			"name": "M-REACH-CALLEE-AMBIGUOUS",
 			"type": "anyparse.query.MemberReach",
 			"method": "bodyNotItsSource",
-			"find": "(g.types.declarationCount(type) > 1 || ",
+			"find": "(sharedName(g, node) || ",
 			"replace": "(",
 			"note": "a callee whose type name two declarations share is read as one of them"
 		},

@@ -469,6 +469,8 @@ final class TypedFactsWalk {
 				}
 			case TThrow(value):
 				flowInto(value, 'Dynamic', 'throw', e.pos);
+				// the exception wrapping the compiler adds after typing hands a thrown value to `Std.string` (`haxe.ValueException`)
+				if (!TypedFactsShapes.isString(value.t)) stringSite(value);
 				walk(value);
 			case TArrayDecl(items):
 				for (item in items) walk(item);

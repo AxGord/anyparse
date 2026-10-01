@@ -105,7 +105,10 @@ typedef FlowFact = {
 	final at: FactPos;
 }
 
-/** A non-String operand of a String concatenation: converted by its `toString`. */
+/**
+ * A non-String operand of a String concatenation, or a non-String thrown value
+ * (the exception wrapping hands it to `Std.string`): converted by its `toString`.
+ */
 typedef StringFact = {
 	final operand: String;
 	final at: FactPos;
