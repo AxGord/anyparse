@@ -40,7 +40,7 @@ class FactsFixGateE2ETest extends Test {
 	private static final TOSTRING_MAIN: String = 'import haxe.io.Path;\n' + '\n' + '@:nullSafety(Strict)\n' + 'class Main {\n'
 		+ '\tstatic function main() {\n' + '\t\tfinal p:Path = new Path(\'a/b.txt\');\n' + '\t\tSys.println(\'$${p.toString()}\');\n'
 		+ '\t\tSys.println(\'x\' + p.toString());\n' + '\t\tSys.println(\'d $${Date.now().toString()}\'.length);\n'
-		+ '\t\tfinal d:Date = Date.now();\n' + '\t\tfinal n:Named = new Named();\n'
+		+ '\t\tfinal d:Date = Date.now();\n' + '\t\tSys.println(\'at $${d.toString()}\'.length);\n' + '\t\tfinal n:Named = new Named();\n'
 		+ '\t\tSys.println(\'\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t$${d.toString()}$${n.label}\'.length);\n' + '\t}\n' + '}\n'
 		+ '\n' + 'class Named {\n' + '\tpublic final label:String = \'l\';\n' + '\n' + '\tpublic function new() {}\n' + '}\n';
 	private static final FAR_MAIN: String = 'import far.Path2;\n' + '\n' + 'abstract Dir(String) from String to String {\n'
@@ -152,7 +152,9 @@ class FactsFixGateE2ETest extends Test {
 	/**
 	 * A receiver of a class the resolution scope does not declare (`haxe.io.Path`) loses its `.toString()` once the facts
 	 * show every configuration compiled it as a non-extern class; an extern one (`Date` on `--interp`) keeps it — also
-	 * where, after fifteen escapes, the compiler places the read of `n` exactly at `d`'s range.
+	 * where, after fifteen escapes, the compiler places the read of `n` exactly at `d`'s range. `'at ${d.toString()}'` is
+	 * the site only the extern gate decides: `Date.now()` is not provably non-null while the unindexed `haxe.io.Path`
+	 * import may declare a `Date` of its own, and the escaped read is declined before its type is asked.
 	 */
 	@:pin('control') @:killer('M-TOSTRING-FACTS-CLASS') @:killer('M-TOSTRING-FACTS-EXTERN') @:killer('M-FACTS-ESCAPE-SHIFT')
 	public function testAReceiverTheFactsTypeAsANonExternClassLosesItsToString(): Void {
@@ -165,7 +167,8 @@ class FactsFixGateE2ETest extends Test {
 		Assert.isTrue(after.indexOf('Sys.println(\'$$p\');') >= 0, after);
 		Assert.isTrue(after.indexOf('Sys.println(\'x\' + p);') >= 0, after);
 		Assert.isTrue(after.indexOf('Date.now().toString()') >= 0, after);
-		Assert.isTrue(after.indexOf('$${d.toString()}') >= 0, after);
+		Assert.isTrue(after.indexOf('at $${d.toString()}') >= 0, after);
+		Assert.isTrue(after.indexOf('\\t$${d.toString()}') >= 0, after);
 		Assert.equals(before, run(dir), 'the program prints what it printed');
 		CliFixture.removeDir(dir);
 		#else
