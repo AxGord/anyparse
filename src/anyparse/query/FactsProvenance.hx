@@ -6,6 +6,7 @@ import anyparse.query.CompilerFacts.ExpansionFact;
 import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.CompilerFacts.FieldDeclFact;
+import anyparse.query.CompilerFacts.SpliceFact;
 import anyparse.query.CompilerFacts.TypeFact;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.MemberInfo;
@@ -45,6 +46,15 @@ final class FactsProvenance {
 
 	/** The access of a call of a super constructor (`CompilerFacts.CallFact`). */
 	private static inline final SUPER: String = 'super';
+
+	/** The kind of a typedef (`TypeFact.kind`). */
+	private static inline final TYPEDEF_KIND: String = 'typedef';
+
+	/** The kind of a variable's initializer (`FactNode.kind`). */
+	private static inline final VAR_KIND: String = 'var';
+
+	/** The flow of a value handed to a call as an argument (`FlowFact.via`). */
+	private static inline final ARG_FLOW: String = 'arg';
 
 	private final _view: FactsView;
 	private final _scope: ReachProject;
@@ -99,7 +109,8 @@ final class FactsProvenance {
 	/**
 	 * Whether what the builds compiled of the graph type `type` is its text, whatever build macro ran over it
 	 * (`ReachGraph.rewrittenBy`): the one declaration of it the index holds is in the file each typed type standing for it
-	 * (`FactsView.bySimpleName`) was read from, every field those declare is one the text declares alike
+	 * (`FactsView.bySimpleName`) was read from — a typedef aliasing it declares no code, wherever it is (`aliasOnly`) —
+	 * every field those declare is one the text declares alike
 	 * (`declaredAlike`), and every body and initializer the compiler typed for them lies in its field's declaration with
 	 * every fact on text that writes it (`factsOnText`) — save the constructor the compiler made for a class the text
 	 * gives none, which only calls its super's. What the compiler writes for the text in code no text holds counts: the
@@ -134,6 +145,7 @@ final class FactsProvenance {
 		final key: String = table.keyOf(file);
 		for (id in ids) {
 			final typed: Null<TypeFact> = table.type(id);
+			if (typed != null && aliasOnly(typed)) continue;
 			if (typed == null || table.typePosition(id)?.file != key) return false;
 			final declared: TypeFact = typed;
 			if (!declared.fields.foreach(f -> declaredAlike(declared, f, decl))) return false;
@@ -143,6 +155,14 @@ final class FactsProvenance {
 			}
 		}
 		return true;
+	}
+
+	/**
+	 * Whether the typed type `typed` is a typedef aliasing the type, declared wherever (tink's `typedef Any = std.Any`): it
+	 * declares no field and the builds typed no code of it.
+	 */
+	private function aliasOnly(typed: TypeFact): Bool {
+		return typed.kind == TYPEDEF_KIND && typed.fields.length == 0 && _view.table.nodeIdsOf(typed.id).length == 0;
 	}
 
 	/**
@@ -168,67 +188,127 @@ final class FactsProvenance {
 
 	/**
 	 * Whether the typed node `n` of a field of `typed` is text of `decl`, the declaration read from `source` (parsed as
-	 * `tree`) whose file the facts key as `key`: it starts in a declaration of its field and every fact of it sits on that
-	 * declaration's text, spelling it (`factsOnText`) — or it is the constructor the compiler made for a class the text
-	 * gives none (`madeConstructor`). A body a macro placed elsewhere (`FactNode.generated`) is text of no declaration
-	 * here: every fact of it lies in another file, which no text of `key` holds.
+	 * `tree`) whose file the facts key as `key`: it starts in a
+	 * declaration of its field — from its first modifier, where the compiler places an abstract's constructor
+	 * (`FactsView.declarationRange`) — and every fact of it sits on that declaration's text, spelling it (`factsOnText`);
+	 * or it is an initializer that is wholly the inlined call of a method its declaration's text calls (`inlinedWhole`);
+	 * or it is the constructor the compiler made for a class the text gives none (`madeConstructor`). A body a macro
+	 * placed elsewhere (`FactNode.generated`) is text of no declaration here: every fact of it lies in another file,
+	 * which no text of `key` holds.
 	 */
 	private function nodeOnText(n: FactNode, typed: TypeFact, decl: TypeDeclInfo, key: String, source: String, tree: QueryNode): Bool {
 		final name: String = _view.graphMember(typed.id, fieldOf(n.id));
 		final declared: Array<MemberInfo> = [for (m in decl.members) if (m.name == name) m];
 		if (declared.length == 0) return name == constructorName() && madeConstructor(n);
+		final bodies: Array<BodyText> = [];
 		for (m in declared) {
-			final at: Null<Span> = RefactorSupport.nodeAtFrom(tree, m.declFrom)?.span;
-			if (at != null && at.from <= n.at.span.from && n.at.span.from < at.to)
-				return factsOnText(n, BodyText.of(key, at, source, tree, _scope.shape));
+			final at: Null<Span> = FactsView.declarationRange(tree, m.declFrom);
+			if (at == null) continue;
+			final body: BodyText = BodyText.of(key, at, source, tree, _scope.shape);
+			if (n.at.file == key && at.from <= n.at.span.from && n.at.span.from < at.to) return factsOnText(n, body, null);
+			bodies.push(body);
+		}
+		for (body in bodies) {
+			final inlined: Null<(FactPos) -> Bool> = inlinedWhole(n, body);
+			if (inlined != null) return factsOnText(n, body, inlined);
 		}
 		return false;
 	}
 
 	/**
-	 * Whether the typed constructor `n` is one the compiler made for a class the text gives none: it calls its super's and
-	 * does nothing else — no construction, field access, flow, conversion, iteration, reflection, native code or function.
+	 * Where the initializer `n` is wholly the inlined call of a method the declaration's text `body` calls, the test of a
+	 * position being in the body of such a method — called by name, through the property it is an accessor of, by the
+	 * construct the compiler calls it for (`implicitlyCalled`), or, an abstract's constructor, by a construction of it: the compiler types such an initializer as the callee's
+	 * spliced code, at the callee's positions, and records no call; a build of another initializer — a `#if` operand
+	 * more — splices the body of another such method. Null for any other node.
+	 */
+	private function inlinedWhole(n: FactNode, body: BodyText): Null<(FactPos) -> Bool> {
+		if (n.kind != VAR_KIND) return null;
+		final verdicts: Map<String, Bool> = [];
+		function written(p: FactPos): Bool {
+			var callee: Null<FactNode> = null;
+			for (m in _view.table.nodesIn(p.file)) if (m != n && FactsView.FUNCTION_KINDS.contains(m.kind) && holds(m.at, p)) {
+				final best: Null<FactNode> = callee;
+				if (best == null || m.at.span.to - m.at.span.from < best.at.span.to - best.at.span.from) callee = m;
+			}
+			final method: Null<FactNode> = callee;
+			if (method == null) return false;
+			final known: Null<Bool> = verdicts[method.id];
+			if (known != null) return known;
+			final field: String = fieldOf(method.id);
+			final owner: String = method.id.substr(0, method.id.lastIndexOf('.'));
+			final property: Null<String> = _view.accessorProperty(field);
+			// an abstract's constructor, which the text calls by constructing the abstract
+			final constructed: Bool = _view.graphMember(owner, field) == constructorName()
+				&& body.spellsConstruction(constructorName(), _view.graphType(owner));
+			final verdict: Bool = body.spellsCall(field) || (property != null && body.spellsName(property)) || implicitlyCalled(method.id)
+				|| constructed;
+			verdicts[method.id] = verdict;
+			return verdict;
+		}
+		return written(n.at) ? written : null;
+	}
+
+	/**
+	 * Whether the typed constructor `n` is one the compiler made for a class the text gives none: it calls its super's —
+	 * handing it its own parameters, every such flow at the constructor's own range — and does nothing else: no
+	 * construction, field access, other flow, conversion, iteration, reflection, native code or function.
 	 */
 	private static function madeConstructor(n: FactNode): Bool {
+		final own: (FactPos) -> Bool = p -> p.file == n.at.file && p.span.from == n.at.span.from && p.span.to == n.at.span.to;
 		return n.kind == 'ctor' && n.calls.foreach(c -> c.access == SUPER) && n.news.length == 0 && n.fields.length == 0
-			&& n.elementWrites.length == 0 && n.flows.length == 0 && n.strings.length == 0 && n.iterations.length == 0
-			&& n.reflection.length == 0 && n.natives.length == 0 && n.fns.length == 0;
+			&& n.elementWrites.length == 0 && n.flows.foreach(f -> f.via == ARG_FLOW && own(f.at)) && n.strings.length == 0
+			&& n.iterations.length == 0 && n.reflection.length == 0 && n.natives.length == 0 && n.fns.length == 0;
 	}
 
 	/**
 	 * Whether every fact of the typed body `n` sits on `body`'s text as its own — as `factsMatch` asks, save that what an
-	 * inlined method spliced in, positioned in that method's declared range (`CompilerFacts.spliceOf`) or on a range the
-	 * compiler joined from such code (`joined`), and the `inlined` call itself are that method's text; that the code an
-	 * expression macro built, positioned in that macro's declared range, is the text of the call of it the compiler
-	 * replaced (`expansionWritten`); that a native site and a reflective read count where `body` holds them; that a call
-	 * the compiler makes of an abstract's operator, conversion or index access (`implicitlyCalled`), of a super
-	 * constructor, of a conversion or a library function that runs no project code (`runsNoCode`), and a construction of
-	 * a literal (`BodyText.builds`), sit on text writing the construct; and that each function nested in `n` passes the
-	 * same test or was spliced in with an inlined body (`FactNode.inlinedFrom`).
+	 * inlined method spliced in, positioned in that method's declared range (`CompilerFacts.spliceOf`), in the body of a
+	 * method `n` is wholly the inlined call of (`outer`, `inlinedWhole`)
+	 * or on a range the compiler joined from such code (`joined`), and the `inlined` call itself are that method's text;
+	 * that the code an expression macro built, positioned in that macro's declared range, is the text of the call of it
+	 * the compiler replaced (`expansionWritten`); that a native site and a reflective read count where `body` holds them;
+	 * that a call the compiler makes of an abstract's operator, conversion or index access (`implicitlyCalled`), of a
+	 * super constructor, of a conversion or a library function that runs no project code (`runsNoCode`), of the string
+	 * conversion of a value the text converts (`BodyText.converts`), for an element a comprehension yields
+	 * (`BodyText.comprehends`), a construction of a literal (`BodyText.builds`) and one of a type the text names by a
+	 * typedef the builds alias it to — an import alias among them, which the compiler types as one
+	 * (`FactsView.typedefsOf`) — sit on text
+	 * writing the construct; that a local the compiler binds a value the text writes to — a `??` operand, an inlined
+	 * call's argument, a partial application's bound value (`BodyText.binds`) — or one whose range is its declaration's
+	 * keyword (`BodyText.declares`) is the text's, and so is a read at an expression the text writes, which the compiler
+	 * reads a local it bound there at — a partial application's function reads what it binds, and its parameters, at the
+	 * application; and that each function nested in `n` passes the same test or was spliced in with an inlined
+	 * body (`FactNode.inlinedFrom`).
 	 */
-	private function factsOnText(n: FactNode, body: BodyText): Bool {
+	private function factsOnText(n: FactNode, body: BodyText, outer: Null<(FactPos) -> Bool>): Bool {
 		// noqa: complexity
 		// a marker says a fact was lost with its file: no position shows it. Code a macro expanded carries its own
 		// (`ExpansionFact`), and is the text's only where a call the text writes built it
 		if (n.incomplete.contains(STALE_FOREIGN)) return false;
-		final written: Array<ExpansionFact> = [for (x in n.expansions) if (expansionWritten(n, x, body)) x];
+		final written: Array<ExpansionFact> = [for (x in n.expansions) if (expansionWritten(n, x, body, outer)) x];
+		final inlined: (FactPos) -> Bool = outer ?? (_ -> false);
 		function own(p: FactPos, onText: Bool, ?name: String): Bool {
-			return onText || CompilerFacts.spliceOf(n, p) != null || joined(n, p, name, body) || written.exists(x -> holds(x.declared, p));
+			return onText || CompilerFacts.spliceOf(n, p) != null || inlined(p) || joined(n, p, name, body)
+				|| written.exists(x -> holds(x.declared, p));
 		}
 		final iterationCalls: Array<String> = _scope.shape.execution?.implicitCallNames ?? [];
 		for (c in n.calls) if (c.access != INLINED) {
-			final written: Bool = callOnText(c, body, iterationCalls) || convertsJoined(n, c, body);
-			if (!own(c.at, written, calledName(c))) return false;
+			final onText: Bool = callOnText(c, body, iterationCalls) || convertsJoined(n, c, body) || body.comprehends(c)
+				|| (convertsToString(c) && body.converts(c.at));
+			if (!own(c.at, onText, calledName(c))) return false;
 		}
 		final constructions: Map<String, String> = _scope.shape.execution?.literalConstructions ?? [];
 		for (x in n.news) {
 			final built: String = _view.graphType(x.type);
-			if (!own(x.at, body.spells(x.at, built) || body.builds(x.at, built, constructions))) return false;
+			final onText: Bool = body.spells(x.at, built) || body.builds(x.at, built, constructions)
+				|| _view.typedefsOf(x.type).exists(name -> body.mentions(x.at, name));
+			if (!own(x.at, onText)) return false;
 		}
 		for (f in n.fields) if (!own(f.at, body.holds(f.at) && (body.mentions(f.at, f.field) || (!f.write && body.lowered(f.at))), f.field))
 			return false;
-		for (v in n.vars) if (!own(v.at, body.spells(v.at, v.name))) return false;
-		for (r in n.reads) if (!own(r.at, body.holds(r.at) && (body.bare(r.at) || body.lowered(r.at)))) return false;
+		for (v in n.vars) if (!own(v.at, body.spells(v.at, v.name) || body.binds(v.at) || body.declares(v.at, v.name))) return false;
+		for (r in n.reads) if (!own(r.at, body.holds(r.at) && (body.bare(r.at) || body.lowered(r.at) || body.binds(r.at)))) return false;
 		final placed: Array<FactPos> = [for (f in n.flows) f.at].concat([for (s in n.strings) s.at])
 			.concat([for (i in n.iterations) i.at])
 			.concat([for (x in n.natives) x.at])
@@ -237,37 +317,100 @@ final class FactsProvenance {
 		if (!placed.foreach(p -> own(p, body.holds(p) || readJoined(n, p, body)))) return false;
 		for (child in n.fns) {
 			final nested: Null<FactNode> = _view.table.node(child);
-			if (nested == null || (nested.inlinedFrom == null && !factsOnText(nested, body))) return false;
+			if (nested == null || (nested.inlinedFrom == null && !factsOnText(nested, body, outer))) return false;
 		}
 		return true;
 	}
 
 	/**
-	 * Whether the expansion `x` of `n` is the text's: an expression macro (`ExpansionFact.expander`) whose call its anchor
-	 * spells — text of `body`, or of the declared range of a method an inlined call spliced into `n`, where the compiler
-	 * replaced that call. Code no macro is declared around is no text's.
+	 * Whether the call `c` is a string conversion the compiler makes of a value (`ExecutionShape.stringConversionMethodNames`
+	 * — an abstract's `toString`, called statically on the value).
 	 */
-	private function expansionWritten(n: FactNode, x: ExpansionFact, body: BodyText): Bool {
-		final expander: Null<String> = x.expander;
-		if (expander == null) return false;
-		final text: Null<String> = body.holds(x.anchor)
-			? body.textAt(x.anchor)
-			: CompilerFacts.spliceOf(n, x.anchor) == null
-				? null
-				: _view.table.sourceOf(x.anchor.file)?.substring(x.anchor.span.from, x.anchor.span.to);
-		return text != null && FactText.spellsCall(text, simpleName(expander));
+	private function convertsToString(c: CallFact): Bool {
+		final target: Null<String> = c.target;
+		return target != null && (_scope.shape.execution?.stringConversionMethodNames ?? []).contains(memberOf(target));
 	}
 
 	/**
-	 * Whether the range of `p` is one the compiler joined from code an inlined call spliced into `n` — where the facts
-	 * keep the file of its start, the end of its last part — and the part it joined is that code again, or the access of
-	 * the member `name` the text of `body` ends there: a field of what an inlined getter or index access returned.
+	 * Whether the expansion `x` of `n` is the text's: an expression macro (`ExpansionFact.expander`) whose call its anchor
+	 * spells — text of `body`, or of the declared range of a method an inlined call spliced into `n` (of `splices`), where
+	 * the compiler replaced that call — or, with the anchor in such a method's code, whose call a site of that inlined
+	 * call writes in `body`, or the code of another such method spliced at the same site writes (a setter inlined into
+	 * the method that assigns the macro's value): the macro's call is an argument the compiler put into the method's
+	 * code in place of a parameter. The anchor in a method the node is wholly the inlined call of (`outer`) is written
+	 * by the declaration's text. Code no macro is declared around is no text's.
 	 */
-	private static function joined(n: FactNode, p: FactPos, name: Null<String>, body: BodyText): Bool {
+	private function expansionWritten(n: FactNode, x: ExpansionFact, body: BodyText, outer: Null<(FactPos) -> Bool>): Bool {
+		final expander: Null<String> = x.expander;
+		if (expander == null) return false;
+		final macroName: String = simpleName(expander);
+		if (body.holds(x.anchor)) return FactText.spellsCall(body.textAt(x.anchor), macroName);
+		if (outer != null && outer(x.anchor)) return body.spellsCall(macroName);
+		final splice: Null<SpliceFact> = CompilerFacts.spliceOf(n, x.anchor);
+		if (splice == null) return false;
+		function spells(at: FactPos): Bool {
+			final text: Null<String> = _view.table.sourceOf(at.file)?.substring(at.span.from, at.span.to);
+			return switch text {
+				case null: false;
+				case written: FactText.spellsCall(written, macroName);
+			};
+		}
+		if (spells(x.anchor)) return true;
+		for (site in splice.sites) {
+			final at: FactPos = { file: n.at.file, span: site };
+			if (body.holds(at) && FactText.spellsCall(body.textAt(at), macroName)) return true;
+		}
+		return n.splices.exists(
+			other ->
+				other != splice && other.sites.exists(o -> splice.sites.exists(site -> site.from == o.from && site.to == o.to))
+				&& spells(other.body)
+		);
+	}
+
+	/**
+	 * Whether the range of `p` is one the compiler joined from code an inlined call spliced into `n` and a part of other
+	 * code — it keeps the file of the first part, the smallest start and the largest end, whatever their files — and the
+	 * part it joined is that code again, text of a site of that inlined call in `body` that spells the member `name`
+	 * (`siteSpells`) — a field of what an inlined getter or index access returned, or an assignment of one, whose value
+	 * the text writes there — or the access of `name` the code of another inlined call writes there, ending at the range's
+	 * end or starting at its start (`accessEnds`).
+	 */
+	private function joined(n: FactNode, p: FactPos, name: Null<String>, body: BodyText): Bool {
 		function spliced(offset: Int): Bool {
 			return n.splices.exists(s -> s.body.file == p.file && s.body.span.from <= offset && offset <= s.body.span.to);
 		}
-		return spliced(p.span.from) && (spliced(p.span.to) || (name != null && body.endsAccess(p.span.to, name)));
+		if (name == null) return spliced(p.span.from) && spliced(p.span.to);
+		final member: String = name;
+		if (spliced(p.span.from)) {
+			return spliced(p.span.to) || siteSpells(n, p, p.span.from, p.span.to, member, body) || accessEnds(n, p.span.to, member);
+		}
+		return spliced(p.span.to)
+			&& (siteSpells(n, p, p.span.to, p.span.from, member, body) || accessEnds(n, p.span.from + member.length, member));
+	}
+
+	/**
+	 * Whether the code another inlined call spliced into `n` ends, at the offset `end`, with an access of the member `name`
+	 * (`FactText.endsAccess`): the compiler joined a field read from one inlined body to the access another one writes, the
+	 * offset of whose file it kept under the first one's (openfl-style `list[i].frame` inside an inline method).
+	 */
+	private function accessEnds(n: FactNode, end: Int, name: String): Bool {
+		return n.splices.exists(s -> {
+			final text: Null<String> = s.body.span.from < end && end <= s.body.span.to ? _view.table.sourceOf(s.body.file) : null;
+			text != null && FactText.endsAccess(text, end, name);
+		});
+	}
+
+	/**
+	 * Whether the offset `other` of the range `p`, whose offset `spliced` lies in the code an inlined call spliced into `n`,
+	 * lies in a site of that call in `body` whose text spells the member `name`.
+	 */
+	private static function siteSpells(n: FactNode, p: FactPos, spliced: Int, other: Int, name: String, body: BodyText): Bool {
+		return n.splices.exists(s ->
+			s.body.file == p.file && s.body.span.from <= spliced && spliced <= s.body.span.to && s.sites.exists(site -> {
+				final at: FactPos = { file: n.at.file, span: site };
+				site.from <= other && other <= site.to && body.holds(at) && body.mentions(at, name);
+			})
+		);
 	}
 
 	/**
@@ -284,7 +427,7 @@ final class FactsProvenance {
 	 * Whether `p` is the range of a field read of `n` the compiler joined from code an inlined call spliced in and the text of
 	 * `body` (`joined`): a fact there — the read's conversion, the value it flows as — is that read's.
 	 */
-	private static function readJoined(n: FactNode, p: FactPos, body: BodyText): Bool {
+	private function readJoined(n: FactNode, p: FactPos, body: BodyText): Bool {
 		return n.fields.exists(
 			f ->
 				!f.write && f.at.file == p.file && f.at.span.from == p.span.from && f.at.span.to == p.span.to
@@ -301,14 +444,23 @@ final class FactsProvenance {
 	private function calledName(c: CallFact): Null<String> {
 		final target: Null<String> = c.target;
 		if (target == null || c.access == SUPER || c.access == 'value' || c.access == 'local' || c.access == 'ident') return null;
-		final member: String = simpleName(target);
+		final member: String = memberOf(target);
 		return _view.accessorProperty(member) ?? member;
+	}
+
+	/**
+	 * The member the text spells for the function `target` (`pack.Type.field`) — an abstract's constructor, which its
+	 * implementation class holds as `_new`, as `new` (`FactsView.graphMember`).
+	 */
+	private function memberOf(target: String): String {
+		final dot: Int = target.lastIndexOf('.');
+		return dot <= 0 ? target : _view.graphMember(target.substr(0, dot), target.substr(dot + 1));
 	}
 
 	/**
 	 * Whether the call `c` sits on `body`'s text as its own: a call of a value or of a local or native function where the
 	 * text holds it, a super constructor's where it spells `super`, and a field's where it spells the field — the property,
-	 * for an accessor, or the accessor itself — or is a lowered loop running an iteration call (`iterationCalls`), the
+	 * for an accessor, or the accessor itself, `new` for an abstract's constructor (`memberOf`) — or is a lowered loop running an iteration call (`iterationCalls`), the
 	 * construct the compiler calls an abstract's field for (`implicitlyCalled`), or a call of a function that runs no project
 	 * code (`runsNoCode`).
 	 */
@@ -317,7 +469,7 @@ final class FactsProvenance {
 		if (!body.holds(c.at)) return false;
 		if (c.access == SUPER) return body.mentions(c.at, SUPER);
 		if (target == null || c.access == 'value' || c.access == 'local' || c.access == 'ident') return true;
-		final member: String = simpleName(target);
+		final member: String = memberOf(target);
 		final spelled: String = _view.accessorProperty(member) ?? member;
 		return body.mentions(c.at, spelled) || body.mentions(c.at, member) || (body.lowered(c.at) && iterationCalls.contains(member))
 			|| implicitlyCalled(target) || runsNoCode(target);
@@ -348,7 +500,6 @@ final class FactsProvenance {
 			: owner.fields.find(f -> f.name == target.substr(dot + 1));
 		return field != null && field.meta.exists(m -> IMPLICITLY_CALLED_META.contains(m));
 	}
-
 
 	/** The name of a constructor (`RefShape.constructorName`). */
 	private inline function constructorName(): String {
@@ -406,7 +557,11 @@ final class FactsProvenance {
 
 }
 
-/** The text of one function a fact is checked against: its file's table key, its span, and the loops inside it. */
+/**
+ * The text of one function a fact is checked against: its file's table key, its span, the loops inside it, and what the
+ * compiler writes there that the text does not spell — the nodes it binds values at, the comprehensions it calls for, the
+ * values it converts to strings, and the positions it gives code inside an interpolated string (`Interpolation`).
+ */
 @:nullSafety(Strict)
 private final class BodyText {
 
@@ -421,14 +576,40 @@ private final class BodyText {
 	/** The literals inside the function whose construction the compiler may write as one (`builds`), with their kinds. */
 	private final _literals: Array<{ kind: String, span: Span }>;
 
+	/** Every node's range inside the function, as `from:to` (`binds`). */
+	private final _nodes: Array<String>;
+
+	/** The names of the named nodes inside the function, by their start (`declares`). */
+	private final _starts: Map<Int, Array<String>>;
+
+	/** The comprehensions inside the function, with the call the compiler makes for each element (`comprehends`). */
+	private final _comprehensions: Array<{ span: Span, call: String }>;
+
+	/** The interpolated strings inside the function holding an escape, with where the compiler places their code. */
+	private final _interpolations: Array<Interpolation>;
+
+	/** The ranges of the operands of the concatenations inside the function, which the text converts to strings. */
+	private final _operands: Array<Span>;
+
+	/** The ranges of the interpolated strings inside the function, quotes included. */
+	private final _strings: Array<Span>;
+
 	private function new(
-		key: String, span: Span, text: String, loops: Array<Span>, literals: Array<{ kind: String, span: Span }>
+		key: String, span: Span, text: String, loops: Array<Span>, literals: Array<{ kind: String, span: Span }>, nodes: Array<String>,
+		starts: Map<Int, Array<String>>, comprehensions: Array<{ span: Span, call: String }>, interpolations: Array<Interpolation>,
+		operands: Array<Span>, strings: Array<Span>
 	) {
 		_key = key;
 		_span = span;
 		_text = text;
 		_loops = loops;
 		_literals = literals;
+		_nodes = nodes;
+		_starts = starts;
+		_comprehensions = comprehensions;
+		_interpolations = interpolations;
+		_operands = operands;
+		_strings = strings;
 	}
 
 	/** Whether `p` lies in this function, in its own file. */
@@ -446,9 +627,19 @@ private final class BodyText {
 		return FactText.bare(textAt(p).trim());
 	}
 
-	/** Whether the text of this function ends, at `end`, with an access of the member `name` (`FactText.endsAccess`). */
-	public function endsAccess(end: Int, name: String): Bool {
-		return _span.from < end && end <= _span.to && FactText.endsAccess(_text, end, name);
+	/** Whether the whole text of this function writes a call of `name` (`FactText.spellsCall`). */
+	public function spellsCall(name: String): Bool {
+		return FactText.spellsCall(_text.substring(_span.from, _span.to), name);
+	}
+
+	/** Whether the whole text of this function constructs the type `name` with `keyword` (`FactText.spellsConstruction`). */
+	public function spellsConstruction(keyword: String, name: String): Bool {
+		return FactText.spellsConstruction(_text.substring(_span.from, _span.to), keyword, name);
+	}
+
+	/** Whether the whole text of this function holds `name` as a whole word. */
+	public function spellsName(name: String): Bool {
+		return FactText.mentions(_text.substring(_span.from, _span.to), name);
 	}
 
 	/**
@@ -465,6 +656,42 @@ private final class BodyText {
 			);
 	}
 
+	/**
+	 * Whether the call `c` is the one the compiler makes for an element a comprehension in this function yields: its
+	 * receiver is the comprehension's literal, exactly, and it calls what the literal's kind is lowered to call
+	 * (`ExecutionShape.comprehensionCalls`).
+	 */
+	public function comprehends(c: CallFact): Bool {
+		final receiver: Null<FactPos> = c.receiverAt;
+		return receiver != null && holds(c.at) && holds(receiver)
+			&& _comprehensions.exists(x -> x.span.from == receiver.span.from && x.span.to == receiver.span.to && x.call == c.target);
+	}
+
+	/**
+	 * Whether `p` is exactly the range of a node of this function — an expression the text writes, whose value a local the
+	 * compiler binds there holds (a `??` operand, an inlined call's argument, a partial application's bound value).
+	 */
+	public function binds(p: FactPos): Bool {
+		if (!holds(p)) return false;
+		final at: Span = sourceSpan(p);
+		return at.to > at.from && _nodes.contains('${at.from}:${at.to}');
+	}
+
+	/** Whether a node of this function naming `name` starts where `p` does: a declaration the compiler places at its keyword. */
+	public function declares(p: FactPos, name: String): Bool {
+		return holds(p) && (_starts[sourceSpan(p).from] ?? []).contains(name);
+	}
+
+	/**
+	 * Whether the value at `p` is one the text converts to a string: inside an interpolated string, or exactly an operand
+	 * of a concatenation (`ExecutionShape.concatenationKinds`).
+	 */
+	public function converts(p: FactPos): Bool {
+		if (!holds(p)) return false;
+		final at: Span = sourceSpan(p);
+		return _operands.exists(c -> c.from == at.from && c.to == at.to) || _strings.exists(s -> s.from < at.from && at.to < s.to);
+	}
+
 	/** Whether `p`, in this function, spells `name` or is a lowered loop's own. */
 	public function spells(p: FactPos, name: String): Bool {
 		return holds(p) && (mentions(p, name) || lowered(p));
@@ -475,27 +702,208 @@ private final class BodyText {
 		return _loops.exists(l -> l.from == p.span.from && p.span.to <= l.to);
 	}
 
-	/** The text at `p`, which lies in this function's file. */
-	public inline function textAt(p: FactPos): String {
-		return _text.substring(p.span.from, p.span.to);
+	/** The text at `p`, which lies in this function's file — inside an interpolated string, where it is in the text. */
+	public function textAt(p: FactPos): String {
+		final at: Span = sourceSpan(p);
+		return _text.substring(at.from, at.to);
+	}
+
+	/**
+	 * Where the range `p` of this function's file is in its text: as it is, but inside an interpolated string holding an
+	 * escape, where the compiler counts what the escapes stand for (`Interpolation.source`).
+	 */
+	private function sourceSpan(p: FactPos): Span {
+		if (p.file != _key) return p.span;
+		for (i in _interpolations) if (i.span.from < p.span.from && p.span.from < i.span.to) {
+			final from: Null<Int> = i.source(p.span.from);
+			final to: Null<Int> = i.source(p.span.to);
+			return from == null || to == null ? p.span : new Span(from, to);
+		}
+		return p.span;
 	}
 
 	/** The text at `span` of `source` (parsed as `tree`), whose file the facts key as `key`. */
 	public static function of(key: String, span: Span, source: String, tree: QueryNode, shape: GrammarPlugin.RefShape): BodyText {
+		// noqa: complexity
 		final loopKinds: Array<String> = (shape.loopStatementKinds ?? []).concat(shape.iterationBindingKinds ?? []);
 		final constructed: Map<String, String> = shape.execution?.literalConstructions ?? [];
+		final comprehended: Map<String, String> = shape.execution?.comprehensionCalls ?? [];
+		final comprehensionLoops: Array<String> = (shape.iterationBindingKinds ?? []).concat([for (k in [shape.whileExprKind]) if (
+			k != null
+		) k]);
+		final interpolating: Array<String> = shape.interpolatingStringKinds ?? [];
 		final loops: Array<Span> = [];
 		final literals: Array<{ kind: String, span: Span }> = [];
+		final nodes: Array<String> = [];
+		final starts: Map<Int, Array<String>> = [];
+		final comprehensions: Array<{ span: Span, call: String }> = [];
+		final interpolations: Array<Interpolation> = [];
+		final concatenations: Array<String> = shape.execution?.concatenationKinds ?? [];
+		final operands: Array<Span> = [];
+		final strings: Array<Span> = [];
 		final body: Span = span;
 		function collect(n: QueryNode): Void {
 			final at: Null<Span> = n.span;
 			if (at != null && (at.to <= body.from || at.from >= body.to)) return;
-			if (at != null && loopKinds.contains(n.kind)) loops.push(at);
-			if (at != null && constructed.exists(n.kind)) literals.push({ kind: n.kind, span: at });
+			if (at != null) {
+				if (loopKinds.contains(n.kind)) loops.push(at);
+				if (constructed.exists(n.kind)) literals.push({ kind: n.kind, span: at });
+				nodes.push('${at.from}:${trimmedEnd(source, at)}');
+				final name: Null<String> = n.name;
+				if (name != null) {
+					final named: Array<String> = starts[at.from] ?? [];
+					named.push(name);
+					starts[at.from] = named;
+				}
+				final call: Null<String> = comprehended[n.kind];
+				if (call != null && n.children.length == 1 && comprehensionLoops.contains(n.children[0].kind))
+					comprehensions.push({ span: at, call: call });
+				if (interpolating.contains(n.kind)) {
+					final read: Null<Interpolation> = Interpolation.read(source, at);
+					if (read != null) interpolations.push(read);
+					strings.push(at);
+					// the compiler places the concatenation an interpolated string is from inside its opening quote to the end of
+					// its last part: the text before the closing quote, or the code of a `${…}` ending it
+					final last: Null<QueryNode> = n.children.length == 0 ? null : n.children[n.children.length - 1];
+					final code: Null<QueryNode> = last != null && last.kind == shape.stringInterpBlockKind && last.children.length > 0
+						? last.children[0]
+						: last;
+					final end: Null<Span> = code?.span;
+					// a text segment ends where its text does, spaces and all; code, where its last token does
+					if (end != null) nodes.push('${at.from + 1}:${code == last ? end.to : trimmedEnd(source, end)}');
+				}
+				if (concatenations.contains(n.kind)) for (operand in n.children) {
+					final o: Null<Span> = operand.span;
+					if (o != null) operands.push(new Span(o.from, trimmedEnd(source, o)));
+				}
+			}
 			for (c in n.children) collect(c);
 		}
 		collect(tree);
-		return new BodyText(key, span, source, loops, literals);
+		return new BodyText(key, span, source, loops, literals, nodes, starts, comprehensions, interpolations, operands, strings);
+	}
+
+	/** The end of `span` of `source` without the whitespace after the node: the compiler's position of an expression has none. */
+	private static function trimmedEnd(source: String, span: Span): Int {
+		var end: Int = span.to;
+		while (end > span.from && StringTools.isSpace(source, end - 1)) end--;
+		return end;
+	}
+
+}
+
+/**
+ * An interpolated string holding an escape or a character past ASCII, and where the compiler places the code inside it
+ * (`format_string` in Haxe's `typer.ml`): from one past the opening quote it counts the BYTES of the string's value — its
+ * escapes resolved, its characters in UTF-8 — where the text counts characters, adding one for each `'` outside a
+ * `${…}`, which an escaped quote `\'` spells with two characters. Past any other escape the compiler's offsets fall
+ * short of the text's, and past a character UTF-8 writes in several bytes they run beyond it. Read on a positive
+ * whitelist: a string of characters of the basic plane whose escapes are the one-character `\n` `\r` `\t` `\\` `\"`
+ * `\'`; any other string is not read, and code inside it stays where the compiler put it.
+ */
+@:nullSafety(Strict)
+private final class Interpolation {
+
+	/** The escapes read, by the character after the backslash. */
+	private static final ESCAPES: Array<Int> = ['n'.code, 'r'.code, 't'.code, '\\'.code, '"'.code, '\''.code];
+
+	/** The first code UTF-8 writes in two bytes, the first it writes in three, and the bytes a basic-plane code takes at most. */
+	private static inline final TWO_BYTES: Int = 0x80;
+
+	private static inline final THREE_BYTES: Int = 0x800;
+
+	private static inline final MAX_WIDTH: Int = 3;
+
+	/** The first and the last code unit of a surrogate pair: a character past the basic plane. */
+	private static inline final SURROGATE_FIRST: Int = 0xd800;
+
+	private static inline final SURROGATE_LAST: Int = 0xdfff;
+
+	/** The string's range, quotes included. */
+	public final span: Span;
+
+	/** The compiler's offset -> the text's offset, for each character of the value and its end. */
+	private final _source: Map<Int, Int>;
+
+	private function new(span: Span, source: Map<Int, Int>) {
+		this.span = span;
+		_source = source;
+	}
+
+	/** Where in the text the compiler's offset `at` in this string lies; null for an offset it gives no character. */
+	public function source(at: Int): Null<Int> {
+		return _source[at];
+	}
+
+	/** The string at `span` of `text` read so, or null where its offsets are the text's or it is not read. */
+	public static function read(text: String, span: Span): Null<Interpolation> {
+		// noqa: complexity
+		final raw: String = text.substring(span.from, span.to);
+		final close: Int = raw.length == 0 ? -1 : raw.lastIndexOf(raw.charAt(0));
+		if (close <= 0) return null;
+		// the value's characters, where each stands in the text, and the bytes UTF-8 writes it in
+		final chars: Array<Int> = [];
+		final at: Array<Int> = [];
+		final widths: Array<Int> = [];
+		var shifted: Bool = false;
+		var i: Int = 1;
+		while (i < close) {
+			final code: Int = raw.fastCodeAt(i);
+			if (code >= SURROGATE_FIRST && code <= SURROGATE_LAST) return null;
+			if (code != '\\'.code) {
+				chars.push(code);
+				at.push(span.from + i);
+				final width: Int = code < TWO_BYTES ? 1 : code < THREE_BYTES ? 2 : MAX_WIDTH;
+				widths.push(width);
+				if (width > 1) shifted = true;
+				i++;
+				continue;
+			}
+			if (i + 1 >= close) return null;
+			final escaped: Int = raw.fastCodeAt(i + 1);
+			if (!ESCAPES.contains(escaped)) return null;
+			chars.push(escaped == 'n'.code || escaped == 'r'.code || escaped == 't'.code ? ' '.code : escaped);
+			at.push(span.from + i);
+			widths.push(1);
+			shifted = true;
+			i += 2;
+		}
+		if (!shifted) return null;
+		final source: Map<Int, Int> = [];
+		var quotes: Int = 0;
+		var bytes: Int = 0;
+		var pos: Int = 0;
+		final length: Int = chars.length;
+		function place(k: Int): Void {
+			source[span.from + 1 + bytes + quotes] = at[k];
+			bytes += widths[k];
+		}
+		while (pos < length) {
+			final code: Int = chars[pos];
+			place(pos);
+			if (code == '\''.code) quotes++;
+			pos++;
+			if (code != "$".code || pos == length) continue;
+			final next: Int = chars[pos];
+			if (next == "$".code) {
+				place(pos);
+				pos++;
+			} else if (next == '{'.code) {
+				// the group's code is placed as the value's offsets past the quotes counted before it
+				var depth: Int = 0;
+				var end: Int = pos;
+				while (end < length) {
+					if (chars[end] == '{'.code) depth++;
+					if (chars[end] == '}'.code && --depth == 0) break;
+					end++;
+				}
+				if (end >= length) return null;
+				for (k in pos ... end + 1) place(k);
+				pos = end + 1;
+			}
+		}
+		source[span.from + 1 + bytes + quotes] = span.from + close;
+		return new Interpolation(span, source);
 	}
 
 }

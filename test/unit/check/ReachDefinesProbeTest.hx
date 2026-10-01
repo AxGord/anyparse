@@ -38,6 +38,37 @@ class ReachDefinesProbeTest extends Test {
 		Assert.isNull(ReachDefinesProbe.parse('no-final.hxml', 'Defines: js\nAPQ-REACH-EARLY-DEFINES js\n'));
 	}
 
+	@:pin('control') @:killer('M-DEFINES-VALUES-STABLE')
+	public function testAValueIsTheDefinesWhereTheFirstAndLastSetsAgree(): Void {
+		// `v` holds `4.307` from the first initialization macro to the end of typing; `w` changed in between, so which value a
+		// file saw depends on when it was parsed; `late` was not defined for every file at all
+		final transcript: String = 'Defines: js\nAPQ-REACH-EARLY-DEFINES js;v;w\nAPQ-REACH-EARLY-VALUE ["v","4.307"]\n'
+			+ 'APQ-REACH-EARLY-VALUE ["w","1"]\nAPQ-REACH-FINAL-DEFINES js;v;w;late\nAPQ-REACH-FINAL-VALUE ["v","4.307"]\n'
+			+ 'APQ-REACH-FINAL-VALUE ["w","2"]\nAPQ-REACH-FINAL-VALUE ["late","1"]\n';
+		final read: Null<ReachConfiguration> = ReachDefinesProbe.parse('b.hxml', transcript);
+		Assert.notNull(read);
+		if (read != null) Assert.equals('v=4.307', [for (k => v in read.values) '$k=$v'].join(','));
+		Assert.isNull(ReachDefinesProbe.parse('broken.hxml', transcript + 'APQ-REACH-FINAL-VALUE ["v"]\n'));
+	}
+
+	@:pin('control') @:killer('M-DEFINES-VALUES-MACRO')
+	public function testTheProbeReadsTheValueEachDefineCarries(): Void {
+		// the compiler's own `haxe_ver`, a command-line value, and one an initialization macro changes, which has none
+		final dir: String = scratchDir();
+		write(dir, 'macro/Init.hx', 'class Init { public static function go() haxe.macro.Compiler.define("APQ_W", "2"); }');
+		write(dir, 'src/Main.hx', 'class Main { static function main() {} }');
+		write(dir, 'build.hxml', '-cp src\n-cp macro\n-main Main\n--interp\n-D APQ_V=4.5\n-D APQ_W=1\n--macro Init.go()\n');
+		final read: Null<ReachConfiguration> =
+			ReachDefinesProbe.probeAll([{ hxml: 'build.hxml', dir: dir, defines: [] }])?.configurations[0];
+		Assert.notNull(read);
+		if (read != null) {
+			Assert.equals('4.5', read.values['APQ_V']);
+			Assert.notNull(read.values['haxe_ver']);
+			Assert.isFalse(read.values.exists('APQ_W'), 'a value an initialization macro changed was read as every file\'s');
+		}
+		remove(dir);
+	}
+
 	@:pin('control') @:killer('M-DEFINES-EARLY')
 	public function testADefineAnInitializationMacroSetsIsNotDefinedForEveryFile(): Void {
 		// `first` types `B` before `second` defines `APQ_LATE`, so `B`'s `#if !APQ_LATE` IS compiled; a callback `first`

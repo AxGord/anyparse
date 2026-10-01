@@ -491,6 +491,7 @@ class MemberReachTest extends Test {
 						name: 'made',
 						defined: [],
 						everDefined: [],
+						values: [],
 						compiled: [for (f in files) OracleCoverage.canonical(cwd, f.file)],
 						types: [
 							for (t in [['C', 'F0.hx'], ['Other', 'F1.hx'], ['Poker', 'F2.hx'], ['Made', 'F0.hx']])
@@ -1677,6 +1678,7 @@ class MemberReachTest extends Test {
 			name: 'cpp',
 			defined: ['cpp', 'sys'],
 			everDefined: ['cpp', 'sys'],
+			values: [],
 			compiled: [],
 			types: []
 		};
@@ -1684,6 +1686,7 @@ class MemberReachTest extends Test {
 			name: 'js',
 			defined: ['js'],
 			everDefined: ['js'],
+			values: [],
 			compiled: [],
 			types: []
 		};
@@ -1692,6 +1695,31 @@ class MemberReachTest extends Test {
 		assertMatch(configuredAsk([native], [lib], []), r -> r.match(Unknown(_)));
 		assertMatch(configuredAsk([call], null, [cpp]), r -> r.match(Proven));
 		assertMatch(configuredAsk([call], null, [cpp, js]), r -> r.match(Reached(_)));
+	}
+
+	@:pin('control') @:killer('M-REACH-LIVE-VALUES')
+	public function testAVersionComparisonIsDecidedByTheValueEveryBuildGivesIt(): Void {
+		// `#if (haxe_ver >= 4.2)` keeps the safe branch under a build that proved `haxe_ver` 4.307, so the `#else` calling a
+		// function that changes `items` runs in none; under one that proved 4.1 the `#else` runs, and under one that names
+		// `haxe_ver` with no value proved for every file the comparison stays undecided — both branches may run
+		final call: String = 'class C { var items:Array<Int> = []; function f():Void { /*<*/ g(); /*>*/ } '
+			+ 'function g():Void { #if (haxe_ver >= 4.2) trace(1); #else h(); #end } function h():Void items.push(0); }';
+		function build(values: Map<String, String>): ReachConfiguration {
+			return {
+				name: 'b',
+				defined: ['haxe_ver'],
+				everDefined: ['haxe_ver'],
+				values: values,
+				compiled: [],
+				types: []
+			};
+		}
+		assertMatch(configuredAsk([call], null, [build(['haxe_ver' => '4.307'])]), r -> r.match(Proven));
+		assertMatch(configuredAsk([call], null, [build(['haxe_ver' => '4.105'])]), r -> r.match(Reached(_)));
+		assertMatch(configuredAsk([call], null, [build([])]), r -> r.match(Reached(_)));
+		assertMatch(
+			configuredAsk([call], null, [build(['haxe_ver' => '4.307']), build(['haxe_ver' => '4.105'])]), r -> r.match(Reached(_))
+		);
 	}
 
 	@:pin('control') @:killer('M-REACH-COMPILED-ONLY') @:killer('M-REACH-ESCALATE-NEVER') @:killer('M-REACH-ESCALATE-ALWAYS')
@@ -1714,6 +1742,7 @@ class MemberReachTest extends Test {
 				name: 'b',
 				defined: [],
 				everDefined: [],
+				values: [],
 				compiled: parsesLoud ? ['F0.hx', 'L0.hx'] : ['F0.hx'],
 				types: [
 					{
@@ -1774,6 +1803,7 @@ class MemberReachTest extends Test {
 				name: 'b',
 				defined: [],
 				everDefined: [],
+				values: [],
 				compiled: ['F0.hx'],
 				types: [{ name: 'C', file: OracleCoverage.canonical(Sys.getCwd(), 'F0.hx') }]
 			};

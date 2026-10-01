@@ -124,6 +124,72 @@ final class CondRegionLivenessTest extends Test {
 		Assert.isNull(CondRegionLiveness.evaluate('X && other', []));
 	}
 
+	// --- values: comparisons decided as the compiler decides them ---
+
+	/**
+	 * The defines of one build with the values it proved, as `-D v=4.307 -D lime=10.0.0 -D semv=1.2.0 -D flag -D num=4.50`
+	 * gave them to `haxe --interp`, and `undefinedx` never defined: every answer below is what that compile printed.
+	 */
+	private static final VALUED: DefineFacts = {
+		defined: ['v', 'lime', 'semv', 'flag', 'num', 'true'],
+		undefined: ['undefinedx'],
+		values: [
+			'v' => '4.307',
+			'lime' => '10.0.0',
+			'semv' => '1.2.0',
+			'flag' => '1',
+			'num' => '4.50',
+			'true' => '1'
+		]
+	};
+
+	@:pin('control') @:killer('M-COND-VALUES-NUMBER') @:killer('M-COND-VALUES-READ')
+	public function testAVersionDefineComparesAsANumber(): Void {
+		// `haxe_ver` is a number the compiler compares with a number literal: the string is read as one first
+		Assert.equals(true, CondRegionLiveness.evaluateFacts('(v >= 4.2)', VALUED));
+		Assert.equals(false, CondRegionLiveness.evaluateFacts('(v < 4.2)', VALUED));
+		Assert.equals(true, CondRegionLiveness.evaluateFacts('!(v < 4.2)', VALUED));
+		Assert.equals(true, CondRegionLiveness.evaluateFacts('(num == 4.5)', VALUED));
+		Assert.equals(false, CondRegionLiveness.evaluateFacts('0', VALUED));
+	}
+
+	@:pin('control') @:killer('M-COND-VALUES-TEXT')
+	public function testTwoStringsCompareByTheirCharacters(): Void {
+		// `lime >= "8.0.0"` is a string comparison, so 10.0.0 sorts before 8.0.0 — what the compiler does, not what a reader means
+		Assert.equals(false, CondRegionLiveness.evaluateFacts('(lime >= "8.0.0")', VALUED));
+		Assert.equals(true, CondRegionLiveness.evaluateFacts('(flag == "1")', VALUED));
+		Assert.equals(true, CondRegionLiveness.evaluateFacts('("")', VALUED));
+	}
+
+	@:pin('control') @:killer('M-COND-VALUES-UNDEFINED')
+	public function testAnUndefinedDefineMakesAComparisonFalseAndItsNegationTrue(): Void {
+		Assert.equals(false, CondRegionLiveness.evaluateFacts('(undefinedx == "a")', VALUED));
+		Assert.equals(true, CondRegionLiveness.evaluateFacts('(undefinedx != "a")', VALUED));
+		Assert.equals(false, CondRegionLiveness.evaluateFacts('((v >= 4.2) == true)', VALUED));
+	}
+
+	@:pin('control') @:killer('M-COND-VALUES-SEMVER')
+	public function testVersionsCompareBySemVerPrecedence(): Void {
+		Assert.equals(true, CondRegionLiveness.evaluateFacts('(version("1.2.3") > version("1.2.3-rc.1"))', VALUED));
+		Assert.equals(true, CondRegionLiveness.evaluateFacts('(semv > version("1.0.0"))', VALUED));
+		Assert.equals(true, CondRegionLiveness.evaluateFacts('(version("1.10.0") > version("1.9.0"))', VALUED));
+		Assert.equals(true, CondRegionLiveness.evaluateFacts('(version("1.0.0-alpha") < version("1.0.0-alpha.1"))', VALUED));
+		Assert.equals(true, CondRegionLiveness.evaluateFacts('(version("1.0.0-beta") > version("1.0.0-alpha.1"))', VALUED));
+		Assert.equals(true, CondRegionLiveness.evaluateFacts('(version("1.0.0-2") < version("1.0.0-alpha"))', VALUED));
+	}
+
+	public function testAComparisonTheCompilerRefusesOrCannotBeReadStaysUnknown(): Void {
+		// `Cannot compare string "8.2.3" and float 8` — no build compiles it; a value nobody proved; a number spelled in hex
+		final facts: DefineFacts = { defined: ['bad', 'set'], undefined: [], values: ['bad' => '8.2.3'] };
+		Assert.isNull(CondRegionLiveness.evaluateFacts('(bad >= 8)', facts));
+		Assert.isNull(CondRegionLiveness.evaluateFacts('(set >= 8)', facts));
+		Assert.isNull(CondRegionLiveness.evaluateFacts('(bad == 0x8)', facts));
+		Assert.isNull(CondRegionLiveness.evaluateFacts('(version("1.2") > version("1.0.0"))', facts));
+		// unknown as before: a define the set does not mention, and one it names without a value
+		Assert.isNull(CondRegionLiveness.evaluate('haxe_ver >= 4.0', ['haxe_ver']));
+		Assert.isNull(CondRegionLiveness.evaluateFacts('(other >= 4.0)', facts));
+	}
+
 	// --- unproven: the region walk ---
 
 	/** No conditional region at all: every offset is live, and the walk says so without a define set. */

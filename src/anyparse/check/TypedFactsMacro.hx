@@ -64,6 +64,10 @@ final class TypedFactsMacro {
 	private final _replaceable: Map<String, Bool> = [];
 	private final _homes: Map<String, Bool> = [];
 	private final _inlines: Map<String, Array<InlineMethod>> = [];
+
+	/** File -> its text, read once (`spellsAccess`); null for one that cannot be read. */
+	private final _texts: Map<String, Null<String>> = [];
+
 	private final _macros: Map<String, Array<InlineMethod>> = [];
 	private final _reflectionFiles: Map<String, Bool> = [];
 	private final _out: FileOutput;
@@ -360,6 +364,27 @@ final class TypedFactsMacro {
 				}
 			case _:
 		}
+	}
+
+	/**
+	 * Whether the text of `file` spells, at `at`, an access of the member `name`: the whole word after the `.` of a field
+	 * access, spaces between allowed.
+	 */
+	public function spellsAccess(file: String, at: Int, name: String): Bool {
+		if (!_texts.exists(file)) _texts[file] = try File.getContent(file) catch (exception: haxe.Exception) null;
+		final text: Null<String> = _texts[file];
+		if (text == null || at <= 0 || at + name.length > text.length || text.substr(at, name.length) != name) return false;
+		final after: Int = at + name.length;
+		if (after < text.length && isWordCode(StringTools.fastCodeAt(text, after))) return false;
+		var dot: Int = at - 1;
+		while (dot > 0 && StringTools.isSpace(text, dot)) dot--;
+		return StringTools.fastCodeAt(text, dot) == '.'.code;
+	}
+
+	/** Whether `code` may continue an identifier. */
+	private static function isWordCode(code: Int): Bool {
+		return code == '_'.code || (code >= '0'.code && code <= '9'.code) || (code >= 'a'.code && code <= 'z'.code)
+			|| (code >= 'A'.code && code <= 'Z'.code);
 	}
 
 	/** The method declared around `min`–`max` of `file` (the innermost), whose body was spliced from there; null for none. */

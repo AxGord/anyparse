@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.CondDirectives;
+import anyparse.query.CondValue;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
@@ -28,6 +29,13 @@ typedef CondBranchStep = {
 typedef DefineFacts = {
 	final defined: Array<String>;
 	final undefined: Array<String>;
+
+	/**
+	 * The value each define it names carries for every file, where the caller proved it (`ReachDefinesProbe`): a
+	 * comparison of such a value is decided as the compiler decides it (`CondValues`). A defined flag with no value here
+	 * is set to a value nobody knows: true, and of no known order.
+	 */
+	@:optional final values: Null<Map<String, String>>;
 };
 
 private typedef Frame = {
@@ -67,7 +75,9 @@ private typedef Cursor = {
  * `!flag` is therefore never provably TRUE for an unlisted flag, `#if sys` on a js
  * compile is UNKNOWN rather than dead, and every unknown answer costs a decline rather
  * than a wrong permission. A comparison (`haxe_ver >= 4.0`) is unknown for the same
- * reason one level down: the set carries names, not values.
+ * reason one level down: the set carries names, not values. Where a caller proved a define's
+ * value (`DefineFacts.values`) the comparison is decided as the compiler decides it
+ * (`CondValues`), and nothing else changes.
  *
  * What IS provable, and what closes the hole above: `#else` after an `#if` whose flag
  * the compiler listed is provably DEAD, because exactly one branch of a region is live.
@@ -89,6 +99,9 @@ private typedef Cursor = {
  */
 @:nullSafety(Strict)
 final class CondRegionLiveness {
+
+	/** The one call a condition may write: `version("…")`, a semantic version. */
+	private static inline final VERSION_CALL: String = 'version';
 
 	/** The comparison operators a condition may carry between two operands, longest first so `>` never shadows `>=`. */
 	private static final COMPARISONS: Array<String> = ['==', '!=', '>=', '<=', '>', '<'];
@@ -203,9 +216,9 @@ final class CondRegionLiveness {
 	 */
 	public static function evaluateFacts(condition: String, facts: DefineFacts): Null<Bool> {
 		final cursor: Cursor = { pos: 0, ok: true };
-		final value: Null<Bool> = parseOr(condition, cursor, facts);
+		final value: Null<CondValue> = parseOr(condition, cursor, facts);
 		skipSpace(condition, cursor);
-		return cursor.ok && cursor.pos >= condition.length ? value : null;
+		return cursor.ok && cursor.pos >= condition.length ? CondValues.truth(value) : null;
 	}
 
 	/**
@@ -353,47 +366,46 @@ final class CondRegionLiveness {
 	}
 
 	/** `&&` over `||`: the disjunction level, lowest precedence. */
-	private static function parseOr(text: String, cursor: Cursor, facts: DefineFacts): Null<Bool> {
-		var value: Null<Bool> = parseAnd(text, cursor, facts);
-		while (cursor.ok && matchOperator(text, cursor, '||')) value = orOf(value, parseAnd(text, cursor, facts));
+	private static function parseOr(text: String, cursor: Cursor, facts: DefineFacts): Null<CondValue> {
+		var value: Null<CondValue> = parseAnd(text, cursor, facts);
+		while (cursor.ok && matchOperator(text, cursor, '||'))
+			value = truthOf(orOf(CondValues.truth(value), CondValues.truth(parseAnd(text, cursor, facts))));
 		return value;
 	}
 
 	/** The conjunction level. */
-	private static function parseAnd(text: String, cursor: Cursor, facts: DefineFacts): Null<Bool> {
-		var value: Null<Bool> = parseCompare(text, cursor, facts);
-		while (cursor.ok && matchOperator(text, cursor, '&&')) value = andOf(value, parseCompare(text, cursor, facts));
+	private static function parseAnd(text: String, cursor: Cursor, facts: DefineFacts): Null<CondValue> {
+		var value: Null<CondValue> = parseCompare(text, cursor, facts);
+		while (cursor.ok && matchOperator(text, cursor, '&&'))
+			value = truthOf(andOf(CondValues.truth(value), CondValues.truth(parseCompare(text, cursor, facts))));
 		return value;
 	}
 
 	/**
-	 * The comparison level. A comparison PARSES — so the condition around it is not refused
-	 * as malformed — and evaluates to unknown: the define set carries names, not the values
-	 * a `haxe_ver >= 4.0` would need.
+	 * The comparison level: one comparison of two unary operands, decided as the compiler decides it
+	 * (`CondValues.compare`) — unknown wherever an operand's value is, so a define the set names but gives no value
+	 * leaves `haxe_ver >= 4.0` unknown as before.
 	 */
-	private static function parseCompare(text: String, cursor: Cursor, facts: DefineFacts): Null<Bool> {
-		final left: Null<Bool> = parseUnary(text, cursor, facts);
+	private static function parseCompare(text: String, cursor: Cursor, facts: DefineFacts): Null<CondValue> {
+		final left: Null<CondValue> = parseUnary(text, cursor, facts);
 		if (!cursor.ok) return null;
 		skipSpace(text, cursor);
 		final comparison: Null<String> = comparisonAt(text, cursor.pos);
 		if (comparison == null) return left;
 		cursor.pos += comparison.length;
-		// The right operand is parsed for its POSITION, not its value: consuming it is what keeps
-		// the enclosing condition on grammar, and its value could not change an unknown anyway.
-		parseUnary(text, cursor, facts); // noqa: unused-return-value
-		return null;
+		return CondValues.compare(comparison, left, parseUnary(text, cursor, facts));
 	}
 
 	/** The unary level: any run of `!` prefixes, then a primary. */
-	private static function parseUnary(text: String, cursor: Cursor, facts: DefineFacts): Null<Bool> {
+	private static function parseUnary(text: String, cursor: Cursor, facts: DefineFacts): Null<CondValue> {
 		skipSpace(text, cursor);
 		if (cursor.pos >= text.length || text.fastCodeAt(cursor.pos) != '!'.code) return parsePrimary(text, cursor, facts);
 		cursor.pos++;
-		return notOf(parseUnary(text, cursor, facts));
+		return truthOf(notOf(CondValues.truth(parseUnary(text, cursor, facts))));
 	}
 
-	/** A parenthesised condition, a possibly-dotted flag, a number, or a quoted string. */
-	private static function parsePrimary(text: String, cursor: Cursor, facts: DefineFacts): Null<Bool> {
+	/** A parenthesised condition, a `version("…")`, a possibly-dotted flag, a number, or a quoted string. */
+	private static function parsePrimary(text: String, cursor: Cursor, facts: DefineFacts): Null<CondValue> {
 		skipSpace(text, cursor);
 		if (cursor.pos >= text.length) {
 			cursor.ok = false;
@@ -402,41 +414,96 @@ final class CondRegionLiveness {
 		final code: Int = text.fastCodeAt(cursor.pos);
 		if (code == '('.code) {
 			cursor.pos++;
-			final inner: Null<Bool> = parseOr(text, cursor, facts);
-			skipSpace(text, cursor);
-			if (cursor.ok && cursor.pos < text.length && text.fastCodeAt(cursor.pos) == ')'.code) {
-				cursor.pos++;
-				return inner;
-			}
+			final inner: Null<CondValue> = parseOr(text, cursor, facts);
+			if (closeParen(text, cursor)) return inner;
 			cursor.ok = false;
 			return null;
 		}
 		if (CondDirectives.isIdentStart(code)) {
 			final from: Int = cursor.pos;
 			cursor.pos = flagEnd(text, cursor.pos);
-			// The one asymmetry `evaluate` rests on: a listed flag is PROVED, an unlisted one is
-			// unknown. Reading absence as `false` would let `#if !nothing_special` claim a region
-			// the compiler may never have compiled. A flag the CALLER put in `facts.undefined` is
-			// the one way to get a `false` here, and no compile output can produce that list.
 			final flag: String = text.substring(from, cursor.pos);
-			return if (facts.defined.contains(flag))
-				true;
-			else if (facts.undefined.contains(flag))
-				false;
-			else
-				null;
+			if (flag == VERSION_CALL && openParen(text, cursor)) return parseVersion(text, cursor);
+			return flagValue(flag, facts);
 		}
 		if (code == '"'.code || code == '\''.code) {
+			final from: Int = cursor.pos;
 			cursor.pos = quotedEnd(text, cursor.pos);
-			if (cursor.pos < 0) cursor.ok = false;
-			return null;
+			if (cursor.pos < 0) {
+				cursor.ok = false;
+				return null;
+			}
+			return CondValues.text(text.substring(from + 1, cursor.pos - 1));
 		}
 		if (code >= '0'.code && code <= '9'.code) {
+			final from: Int = cursor.pos;
 			cursor.pos = numberEnd(text, cursor.pos);
-			return null;
+			return CondValues.number(text.substring(from, cursor.pos));
 		}
 		cursor.ok = false;
 		return null;
+	}
+
+	/**
+	 * The value of the define `flag` under `facts`. The one asymmetry `evaluate` rests on: a listed flag is PROVED set, an
+	 * unlisted one is unknown — reading absence as undefined would let `#if !nothing_special` claim a region the compiler
+	 * may never have compiled. A flag the CALLER put in `facts.undefined` is the one way to get an undefined define, and no
+	 * compile output can produce that list. A set flag's value is known only where `facts.values` holds it.
+	 */
+	private static function flagValue(flag: String, facts: DefineFacts): Null<CondValue> {
+		final value: Null<String> = facts.values?.get(flag);
+		return if (value != null)
+			Text(value);
+		else if (facts.defined.contains(flag))
+			Set;
+		else if (facts.undefined.contains(flag))
+			Undefined;
+		else
+			null;
+	}
+
+	/**
+	 * The rest of a `version("…")` past its `(`: one string literal and `)`, the version it names (`CondValues.version`).
+	 * Anything else is no condition the compiler evaluates.
+	 */
+	private static function parseVersion(text: String, cursor: Cursor): Null<CondValue> {
+		skipSpace(text, cursor);
+		final quote: Int = cursor.pos < text.length ? text.fastCodeAt(cursor.pos) : 0;
+		final from: Int = cursor.pos;
+		final end: Int = quote == '"'.code || quote == '\''.code ? quotedEnd(text, cursor.pos) : -1;
+		if (end < 0) {
+			cursor.ok = false;
+			return null;
+		}
+		cursor.pos = end;
+		final raw: String = text.substring(from + 1, end - 1);
+		if (!closeParen(text, cursor)) {
+			cursor.ok = false;
+			return null;
+		}
+		return raw.indexOf('\\') >= 0 ? null : CondValues.version(raw);
+	}
+
+	/** Consume a `(` at the cursor (after spaces), reporting whether one was there; the cursor stays put when not. */
+	private static function openParen(text: String, cursor: Cursor): Bool {
+		var at: Int = cursor.pos;
+		while (at < text.length && (text.fastCodeAt(at) == ' '.code || text.fastCodeAt(at) == '\t'.code)) at++;
+		if (at >= text.length || text.fastCodeAt(at) != '('.code) return false;
+		cursor.pos = at + 1;
+		return true;
+	}
+
+	/** Consume a `)` at the cursor (after spaces), reporting whether one was there. */
+	private static function closeParen(text: String, cursor: Cursor): Bool {
+		skipSpace(text, cursor);
+		if (!cursor.ok || cursor.pos >= text.length || text.fastCodeAt(cursor.pos) != ')'.code) return false;
+		cursor.pos++;
+		return true;
+	}
+
+	/** A three-valued truth as a value: a boolean, or unknown. */
+	private static function truthOf(value: Null<Bool>): Null<CondValue> {
+		return value == null ? null : Truth(value);
 	}
 
 	/** Consume `wanted` when it sits at the cursor (after spaces), reporting whether it did. */

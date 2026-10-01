@@ -17,7 +17,10 @@ using StringTools;
  * initialization macro runs — an earlier one may type a module, and a later one define a name that module's `#if` did
  * not see — so only the command line's defines and the target's count as defined for every file. The second prints the
  * set once typing ended, when it holds every define the build ever set; the compiler never removes one, so a name
- * outside it was never defined, and one between the two sets is undecided either way. It also names every type the
+ * outside it was never defined, and one between the two sets is undecided either way. Each prints every define's
+ * value as well: a define of the first set whose value the second still gives it held that value for every file
+ * (`ReachConfiguration.values`), which decides a comparison such as `haxe_ver >= 4.2` (`CondValues`) — save a value a
+ * macro changed and changed back in between, which no probe can see. It also names every type the
  * build typed and its file: the index the analysis reads must declare each, or a type it cannot see may exist. `-v` counts the compile's arms:
  * the macros join the last arm only, so an hxml of several arms answers nothing, and so does any probe that fails. An
  * answer must hold in every configuration, so one unanswered configuration leaves the analysis with none (`probeAll`).
@@ -30,6 +33,12 @@ final class ReachDefinesProbe {
 
 	private static inline final EARLY_PREFIX: String = 'APQ-REACH-EARLY-DEFINES ';
 	private static inline final FINAL_PREFIX: String = 'APQ-REACH-FINAL-DEFINES ';
+
+	/** The probe's line naming one define and its value, as a JSON pair, at the first initialization macro. */
+	private static inline final EARLY_VALUE_PREFIX: String = 'APQ-REACH-EARLY-VALUE ';
+
+	/** The probe's line naming one define and its value, as a JSON pair, once typing ended. */
+	private static inline final FINAL_VALUE_PREFIX: String = 'APQ-REACH-FINAL-VALUE ';
 
 	/** The `haxe -v` line that opens one compile arm. */
 	private static inline final DEFINES_PREFIX: String = 'Defines:';
@@ -77,8 +86,9 @@ final class ReachDefinesProbe {
 
 	/**
 	 * The configuration a probe transcript reports: exactly one compile arm, the define set the first initialization
-	 * macro saw, the last one printed once typing ended, and every type the runtime context typed with the file that
-	 * declares it, as the compiler spells the path. Null for anything else. Pure.
+	 * macro saw, the last one printed once typing ended, the value of each define of the first set both gave alike, and
+	 * every type the runtime context typed with the file that declares it, as the compiler spells the path. Null for
+	 * anything else, a value line that is no pair of strings included. Pure.
 	 */
 	public static function parse(name: String, transcript: String): Null<ReachConfiguration> {
 		var arms: Int = 0;
@@ -87,9 +97,17 @@ final class ReachDefinesProbe {
 		final compiled: Array<String> = [];
 		final types: Array<{ name: String, file: String }> = [];
 		final seen: Map<String, Bool> = [];
+		final earlyValues: Map<String, String> = [];
+		final finalValues: Map<String, String> = [];
 		for (raw in transcript.split('\n')) {
 			final line: String = raw.trim();
-			if (line.startsWith(TYPE_PREFIX)) {
+			if (line.startsWith(EARLY_VALUE_PREFIX) || line.startsWith(FINAL_VALUE_PREFIX)) {
+				final early: Bool = line.startsWith(EARLY_VALUE_PREFIX);
+				final pair: Null<{ name: String, value: String }> =
+					valuePair(line.substr((early ? EARLY_VALUE_PREFIX : FINAL_VALUE_PREFIX).length));
+				if (pair == null) return null;
+				(early ? earlyValues : finalValues)[pair.name] = pair.value;
+			} else if (line.startsWith(TYPE_PREFIX)) {
 				final rest: String = line.substr(TYPE_PREFIX.length);
 				final gap: Int = rest.indexOf(' ');
 				if (gap <= 0) return null;
@@ -108,10 +126,16 @@ final class ReachDefinesProbe {
 		final early: Null<Array<String>> = defined;
 		final all: Null<Array<String>> = everDefined;
 		if (arms != 1 || early == null || all == null) return null;
+		final values: Map<String, String> = [];
+		for (d in early) {
+			final value: Null<String> = earlyValues[d];
+			if (value != null && finalValues[d] == value) values[d] = value;
+		}
 		return {
 			name: name,
 			defined: early,
 			everDefined: all,
+			values: values,
 			compiled: compiled,
 			types: types
 		};
@@ -119,7 +143,8 @@ final class ReachDefinesProbe {
 
 	/**
 	 * The probe macros' source: the define set before any other initialization macro (`early`), and once typing ended
-	 * the whole set and every type the build's runtime context typed, with its file (`run`) — the macro context parses
+	 * the whole set and every type the build's runtime context typed, with its file (`run`) — each set with every
+	 * define's value, one JSON pair per line (`values`) — the macro context parses
 	 * files of its own, which run in no build. Only the types that carry code are listed — classes, interfaces and
 	 * abstracts: an enum or a typedef runs nothing and is the supertype of nothing that does. An abstract's
 	 * implementation class and a generic class's instance are not listed either: the abstract and the generic class are,
@@ -130,10 +155,15 @@ final class ReachDefinesProbe {
 			'class $MACRO_CLASS {',
 			'\tpublic static function early():Void {',
 			'\t\tSys.println(\'$EARLY_PREFIX\' + [for (k in haxe.macro.Context.getDefines().keys()) k].join(\';\'));',
+			'\t\tvalues(\'$EARLY_VALUE_PREFIX\');',
+			'\t}',
+			'\tstatic function values(prefix:String):Void {',
+			'\t\tfor (k => v in haxe.macro.Context.getDefines()) Sys.println(prefix + haxe.Json.stringify([k, v]));',
 			'\t}',
 			'\tpublic static function run():Void {',
 			'\t\thaxe.macro.Context.onAfterTyping(types -> {',
 			'\t\t\tSys.println(\'$FINAL_PREFIX\' + [for (k in haxe.macro.Context.getDefines().keys()) k].join(\';\'));',
+			'\t\t\tvalues(\'$FINAL_VALUE_PREFIX\');',
 			'\t\t\tfor (t in types) {',
 			'\t\t\t\tfinal named:Null<{name:String, pos:haxe.macro.Expr.Position}> = switch t {',
 			'\t\t\t\t\tcase TClassDecl(c): switch c.get().kind {',
@@ -218,6 +248,15 @@ final class ReachDefinesProbe {
 		#end
 	}
 
+
+	/** The define and value one value line carries — a JSON array of two strings — or null for anything else. */
+	private static function valuePair(json: String): Null<{ name: String, value: String }> {
+		final read: Null<Dynamic> = try haxe.Json.parse(json) catch (exception: haxe.Exception) null;
+		if (read == null || !(read is Array)) return null;
+		final pair: Array<Dynamic> = read;
+		if (pair.length != 2 || !(pair[0] is String) || !(pair[1] is String)) return null;
+		return { name: Std.string(pair[0]), value: Std.string(pair[1]) };
+	}
 
 	private static function defines(list: String): Array<String> {
 		return [for (d in list.split(';')) if (d.trim() != '') d.trim()];

@@ -150,6 +150,9 @@ final class FactsView {
 	/** Graph type name -> the typed types standing for it, built on first need. */
 	private var _bySimpleName: Null<Map<String, Array<String>>> = null;
 
+	/** Typed id -> the simple names of the typedefs aliasing it (`typedefsOf`), built on first demand. */
+	private var _typedefs: Null<Map<String, Array<String>>> = null;
+
 	/** The names of the project's members declared in a conditional region (`guardedNames`), read on first need. */
 	private var _guarded: Null<Map<String, Bool>> = null;
 
@@ -484,6 +487,31 @@ final class FactsView {
 		return sole;
 	}
 
+	/**
+	 * The simple names of the typedefs the builds typed as an alias of the type `type` (a typed id): the name a text may
+	 * write for it — a typedef each build points at its own platform's class.
+	 */
+	public function typedefsOf(type: String): Array<String> {
+		var held: Null<Map<String, Array<String>>> = _typedefs;
+		if (held == null) {
+			final built: Map<String, Array<String>> = [];
+			for (ids in bySimpleName()) for (id in ids) {
+				final fact: Null<TypeFact> = table.type(id);
+				if (fact == null || fact.kind != TYPEDEF_KIND) continue;
+				for (target in fact.targets) {
+					final base: String = CompilerFacts.baseId(target);
+					final names: Array<String> = built[base] ?? [];
+					final name: String = graphType(id);
+					if (!names.contains(name)) names.push(name);
+					built[base] = names;
+				}
+			}
+			_typedefs = built;
+			held = built;
+		}
+		return held[CompilerFacts.baseId(type)] ?? [];
+	}
+
 	/** Graph type name -> the typed types standing for it. */
 	public function bySimpleName(): Map<String, Array<String>> {
 		final held: Null<Map<String, Array<String>>> = _bySimpleName;
@@ -635,7 +663,8 @@ final class FactsView {
 	 * The outermost typed function bodies inside the span of `node`, when it is the one declaration the node stands for
 	 * (`CallGraph.declarationsOf`: a node folding several is read by id, `foldedBodies`) and its text holds no directive and
 	 * lies in no conditional region, or the facts are the truth; null otherwise, or when none was typed. A typed body is
-	 * placed by its range in `node`'s own file: one a configuration read from another file is none of this text.
+	 * placed by its range in `node`'s own file — from the declaration's first modifier, where the compiler places an
+	 * abstract's constructor (`declarationRange`): one a configuration read from another file is none of this text.
 	 */
 	private function typedBodies(g: CallGraph, node: FnNode): Null<Array<FactNode>> {
 		final span: Null<Span> = node.span;
@@ -644,9 +673,11 @@ final class FactsView {
 		// every build typed its own branch: under the truth their union is every branch that runs
 		if (!truth && conditional(node.file, source, span)) return null;
 		final key: String = table.keyOf(node.file);
+		// the compiler places an abstract's constructor at the declaration's first modifier
+		final declared: Span = declaredIn(g.treeOf(node.file), span);
 		final inside: Array<FactNode> = [
 			for (n in table.nodesIn(node.file))
-				if (FUNCTION_KINDS.contains(n.kind) && !n.generated && n.at.file == key && within(n.at.span, span)) n
+				if (FUNCTION_KINDS.contains(n.kind) && !n.generated && n.at.file == key && within(n.at.span, declared)) n
 		];
 		final outer: Array<FactNode> = [
 			for (n in inside) if (!inside.exists(o -> within(n.at.span, o.at.span) && wider(o.at.span, n.at.span))) n
@@ -658,6 +689,32 @@ final class FactsView {
 			if (owner != null && owner.id != node.id && owner.span.from == n.at.span.from) return null;
 		}
 		return outer.length == 0 ? null : outer;
+	}
+
+	/** `span` from its declaration's first modifier (`declarationRange`), as it is where `tree` is not read. */
+	private static function declaredIn(tree: Null<QueryNode>, span: Span): Span {
+		return (tree == null ? null : declarationRange(tree, span.from)) ?? span;
+	}
+
+	/**
+	 * The range of the declaration starting at `from` in `tree`, from the start of the `@:meta` and modifier run before it
+	 * (`ElementSpan.declRunStart`): the compiler places a field from its first modifier, and an abstract's constructor —
+	 * `this = …` lowered into a function of the implementation class — at that very start. Null when no node starts there.
+	 */
+	public static function declarationRange(tree: QueryNode, from: Int): Null<Span> {
+		var found: Null<{ node: QueryNode, parent: Null<QueryNode> }> = null;
+		function walk(node: QueryNode, parent: Null<QueryNode>): Void {
+			if (found != null) return;
+			if (node.span?.from == from) {
+				found = { node: node, parent: parent };
+				return;
+			}
+			for (c in node.children) walk(c, node);
+		}
+		walk(tree, null);
+		final held: Null<{ node: QueryNode, parent: Null<QueryNode> }> = found;
+		final span: Null<Span> = held?.node.span;
+		return held == null || span == null ? null : new Span(ElementSpan.declRunStart(held.node, held.parent, span), span.to);
 	}
 
 	/**

@@ -267,7 +267,9 @@ final class TypedFactsWalk {
 	 * a spliced body: an inlined function, or a macro's expansion. The compiler keeps no range for the call site it
 	 * replaced, so the node says where it cannot: `inline-site-unknown`, and `macro-expansion` when no method holds the
 	 * spliced code. A constant or a type expression is left out: the compiler places a default argument's value, or an
-	 * inlined constant, at its declaration. So is a range that meets the body without lying inside it: the compiler's
+	 * inlined constant, at its declaration — save a constant inside a spliced body lying in the declared range of another
+	 * inline method (`splicedCode`): that method's code wrote it as an argument of the inline call it made, so its body
+	 * was spliced as well, although the constants are all of it the compiler kept (`return limit(v, 0, 1)`). So is a range that meets the body without lying inside it: the compiler's
 	 * union of the body's own code with a range around it — an abstract method's `this` stands at the whole abstract, an
 	 * operand shares a range with an inlined sibling — whose parts are asked one by one. Inside a spliced body, code of
 	 * another method is a body that one spliced in turn (`nestedSplice`).
@@ -291,7 +293,7 @@ final class TypedFactsWalk {
 			_expansion = null;
 		} else if (saved && code)
 			spliced(e, info)
-		else if (splice != null && code && !holds(splice, info) && (expansion == null || !holds(expansion, info)))
+		else if (splice != null && splicedCode(e, info, code) && !holds(splice, info) && (expansion == null || !holds(expansion, info)))
 			nestedSplice(e, info);
 		final current: Null<InlineMethod> = _splice;
 		if (current != null && holds(current, info)) _spliceSite = { min: info.min, max: info.max };
@@ -303,6 +305,37 @@ final class TypedFactsWalk {
 		_splice = splice;
 		_spliceSite = spliceSite;
 		_expansion = expansion;
+	}
+
+	/**
+	 * The inline method whose code writes the field access `e`, whose range `info` the compiler joined from its receiver's
+	 * code and the field it names (a getter's `base.folder`: what the inline `base` returned, then the getter's `.folder`),
+	 * keeping the receiver's file: the end the receiver does not supply is where that method's code spells `.` and the
+	 * field — a check the end must pass, since a field written in another file than the receiver's leaves an offset of
+	 * that file there. Null for any other expression.
+	 */
+	private function fieldWriter(e: TypedExpr, info: { min: Int, max: Int, file: String }): Null<InlineMethod> {
+		final field: Null<{ receiver: TypedExpr, name: String }> = switch e.expr {
+			case TField(receiver, access): { receiver: receiver, name: TypedFactsShapes.describe(access).field };
+			case _: null;
+		};
+		if (field == null) return null;
+		final receiver: { min: Int, max: Int, file: String } = Context.getPosInfos(field.receiver.pos);
+		if (receiver.file != info.file) return null;
+		final name: String = field.name;
+		if (info.max > receiver.max && _host.spellsAccess(info.file, info.max - name.length, name))
+			return _host.inlineCallee(info.file, info.max, info.max);
+		if (info.min < receiver.min && _host.spellsAccess(info.file, info.min, name))
+			return _host.inlineCallee(info.file, info.min, info.min);
+		return null;
+	}
+
+	/**
+	 * Whether `e`, at `info` in a spliced body, is code of a method spliced there: code (`code`), or a constant lying in
+	 * an inline method's declared range, which that method's code wrote as an argument of the inline call it made.
+	 */
+	private function splicedCode(e: TypedExpr, info: { min: Int, max: Int, file: String }, code: Bool): Bool {
+		return code || (e.expr.match(TConst(_)) && _host.inlineCallee(info.file, info.min, info.max) != null);
 	}
 
 	/** Whether `info` lies in the declared range of `method`. */
@@ -349,13 +382,19 @@ final class TypedFactsWalk {
 
 	/**
 	 * A spliced body walked below the one of `_splice` that is none of its method's code: a body that method's code spliced
-	 * in turn, run at the same site, or the expansion of a macro that code calls (`expanded`), at the innermost expression
-	 * of that code around it (`_spliceSite`). Code no method holds stays the outer body's.
+	 * in turn, run at the same site — the method declared around it, or the one writing a field access whose range the
+	 * compiler joined across two methods' code (`fieldWriter`) — or the expansion of a macro that code calls (`expanded`), at the innermost
+	 * expression of that code around it (`_spliceSite`). Code no method holds stays the outer body's.
 	 */
 	private function nestedSplice(e: TypedExpr, info: { min: Int, max: Int, file: String }): Void {
 		final callee: Null<InlineMethod> = _host.inlineCallee(info.file, info.min, info.max);
 		if (callee != null) {
 			inlinedCall(callee, e.t, at(e.pos));
+			return;
+		}
+		final written: Null<InlineMethod> = fieldWriter(e, info);
+		if (written != null && written != _splice) {
+			inlinedCall(written, e.t, at(e.pos));
 			return;
 		}
 		final splice: Null<InlineMethod> = _splice;
