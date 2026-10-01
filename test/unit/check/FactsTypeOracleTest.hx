@@ -34,7 +34,7 @@ class FactsTypeOracleTest extends Test {
 		Assert.isTrue(declinedWith(split, 'the oracle configurations type it differently'), 'got $split');
 	}
 
-	@:pin('control') @:killer('M-FACTS-SPELL-UNKNOWN')
+	@:pin('control') @:killer('M-FACTS-SPELL-UNKNOWN') @:killer('M-FACTS-TREE-OPTIONAL')
 	public function testAnUnknownDeclines(): Void {
 		Assert.same(Declined(FactsTypeOracle.DECLINE_UNKNOWN), local(table([dump('Array<?>')])));
 		Assert.same(Declined(FactsTypeOracle.DECLINE_UNKNOWN), FactsTypeSpelling.spell('(?)->Void', { owner: null, method: null }));

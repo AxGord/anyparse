@@ -658,7 +658,8 @@ final class ReachGraph {
 
 	/**
 	 * The types whose members the site `at` may run, or null for any: the union over its operands of `runtimeTypes`,
-	 * an inert operand of a string conversion contributing none; for an iteration also the types the iterable's iterator methods
+	 * an inert operand of a string conversion contributing none, an operand of exactly its class (`ImplicitSite.exact`) that
+	 * class and the types it extends (`exactTypes`); for an iteration also the types the iterable's iterator methods
 	 * return, whose `hasNext` / `next` the loop runs — under the truth only those `ExecutionShape.iterableMethodNames` return.
 	 */
 	private function typesAt(g: CallGraph, at: ImplicitSite): Null<Array<String>> {
@@ -670,7 +671,7 @@ final class ReachGraph {
 		for (t in at.types) {
 			if (t == null) return null;
 			if (at.family == Text && inertType(t)) continue;
-			final types: Null<Array<String>> = runtimeTypes(g, t, at.family);
+			final types: Null<Array<String>> = at.exact ? exactTypes(g, t) : runtimeTypes(g, t, at.family);
 			if (types == null) return null;
 			for (x in types) if (!out.contains(x)) out.push(x);
 			if (at.family == Iteration) for (x in types) for (name in (_scope.shape.execution?.implicitCallNames ?? [])) {
@@ -683,6 +684,23 @@ final class ReachGraph {
 				for (y in more) if (!out.contains(y)) out.push(y);
 			}
 		}
+		return out;
+	}
+
+	/**
+	 * The types an object built as an instance of exactly the class `type` names runs a member of: that class and every type
+	 * it extends or implements — no subtype, and no instance that left the type system. Null (any) for anything but a class
+	 * or an interface declared exactly once.
+	 */
+	private function exactTypes(g: CallGraph, type: String): Null<Array<String>> {
+		final nominal: Null<String> = NominalTypes.outerNominalOf(StringTools.trim(type), _scope.plugin.typeSyntax);
+		final decl: Null<TypeDeclInfo> = nominal == null ? null : declarationOf(nominal);
+		if (nominal == null || decl == null) return null;
+		final declared: TypeDeclInfo = decl;
+		if (declared.isAnonStruct || (_scope.shape.aliasingDeclKinds ?? []).contains(declared.kind)) return null;
+		final out: Array<String> = [nominal];
+		var i: Int = 0;
+		while (i < out.length) for (s in g.types.supertypesOf(out[i++])) if (!out.contains(s)) out.push(s);
 		return out;
 	}
 

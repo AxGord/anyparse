@@ -523,6 +523,150 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main], null, true, c, true), r -> r.match(Proven));
 	}
 
+	public function testAnEscapeTheCompilerTypesCostsOnlyItsOwnFamilyUnderTheTruth(): Void {
+		// the escapes read off the facts of every build say an `Other` escaped, which a `C` never is
+		final main: String = 'class Main {\n\tstatic function mk() return new Other();\n'
+			+ '\tstatic function main() {\n\t\tvar d:Dynamic = mk();\n\t\tvar o:Other = new Other();\n\t\tnew C().loop(o);\n\t}\n}\n'
+			+ 'class C {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n'
+			+ '\tpublic function loop(o:Other):Void {\n\t\tfor (i in 0...items.length) { /*<*/ Poker.poke(o); /*>*/ }\n\t}\n}\n'
+			+ 'class Other {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n}\n'
+			+ 'class Poker {\n\tpublic static function poke(o:Other):Void o.items.push(9);\n}\n';
+		final c: MemberRef = { owner: 'C', name: 'items' };
+		// the index is the analysis's word for the classpath, which `Array` would otherwise leave open
+		assertMatch(ask(['Main.hx' => main], null, true, c, true, null, null, null, true), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-ESCAPES-TRUTH-FACTS')
+	@:killer('M-ESCAPES-FACTS-REFLECTION-INLINED') @:killer('M-FACTS-ALIAS-TYPEDEF')
+	public function testEscapesReadOffEveryBuildsFactsLetAThrownValueRunOnlyItsOwnToString(): Void {
+		// `lib.Text.fail` throws a `Plain` it holds, whose conversion runs the `toString` of what a `Plain` may be: a
+		// `Plain`, or an instance that left the type system. `Obj` never did: `Text.keep` is library code the facts read,
+		// which lets nothing it is handed go anywhere — the syntax, which reads no library code, lets it escape
+		assertMatch(truthLibAsk('', 'throw last;'), r -> r.match(Proven));
+		assertMatch(ask(escapingObj(''), null, true, null, true, null, plainText('throw last;')), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-ESCAPES-FACTS-FLOW')
+	public function testAValueFlowingIntoACatchAllEscapesUnderTheTruth(): Void {
+		assertMatch(truthLibAsk('var d:Dynamic = o;', 'throw last;'), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-ESCAPES-FACTS-INSTANCES') @:killer('M-ESCAPES-FACTS-PARAMETER')
+	public function testAValueAGenericClassLetsGoEscapesUnderTheTruth(): Void {
+		// `Box<Obj>` binds `Box.T` to `Obj`, whose values `show` hands to a catch-all
+		final box: String = 'class Box<T> {\n\tvar v:T;\n\n\tpublic function new(v:T) this.v = v;\n\n'
+			+ '\tpublic function show():Void {\n\t\tvar d:Dynamic = v;\n\t}\n}\n';
+		assertMatch(truthLibAsk('new Box<Obj>(o).show();', 'throw last;', ['Box.hx' => box]), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-ESCAPES-FACTS-GENERIC-METHOD') @:killer('M-FACTS-GENS')
+	public function testAValueAGenericMethodLetsGoEscapesUnderTheTruth(): Void {
+		// the call binds `keep`'s `A` to `Obj`, whose value its body hands to a catch-all
+		final pick: String = 'class Pick {\n\tpublic static function keep<A>(x:A):Void {\n\t\tvar d:Dynamic = x;\n\t}\n}\n';
+		assertMatch(truthLibAsk('Pick.keep(o);', 'throw last;', ['Pick.hx' => pick]), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-ESCAPES-FACTS-HANDED') @:killer('M-FACTS-HANDS')
+	public function testAValueHandedToAnExternEscapesUnderTheTruth(): Void {
+		// target code, which no fact describes, may keep what it is handed and give it back untyped
+		final ext: String = '@:native("Object") extern class Ext {\n\tstatic function keep(o:Main.Obj):Void;\n}\n';
+		assertMatch(truthLibAsk('Ext.keep(o);', 'throw last;', ['Ext.hx' => ext]), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-ESCAPES-FACTS-CLOSURE')
+	public function testTheReceiverOfAMethodReadAsAValueEscapesUnderTheTruth(): Void {
+		assertMatch(truthLibAsk('var f:() -> String = o.toString;', 'throw last;'), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-ESCAPES-FACTS-DYNAMIC-RECEIVER')
+	public function testTheReceiverOfAFieldReachedByNameEscapesUnderTheTruth(): Void {
+		// untyped code reads a field of `o` by a name no declaration resolves: any of its fields may be what it reads
+		assertMatch(truthLibAsk('var u:Dynamic = untyped o.zz;', 'throw last;'), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-ESCAPES-FACTS-PRODUCED')
+	public function testAClassAProducerNamesEscapesUnderTheTruth(): Void {
+		// `js_enums_as_arrays` keeps `Type.resolveClass` a call (its default is inlined, which loses the name): the class a literal
+		// name names escapes, and only that one
+		final build: String = BUILD + '-D js_enums_as_arrays\n';
+		assertMatch(truthLibAsk('Type.createInstance(Type.resolveClass("Obj"), []);', 'throw last;', null, build), r -> !r.match(Proven));
+		assertMatch(truthLibAsk('Type.resolveClass("lib.Plain");', 'throw last;', null, build), r -> r.match(Proven));
+		assertMatch(
+			truthLibAsk('var n:String = "lib.Plain";\n\t\tType.resolveClass(n);', 'throw last;', null, build), r -> !r.match(Proven)
+		);
+	}
+
+	@:pin('control') @:killer('M-ESCAPES-FACTS-PROJECT-NATIVE')
+	public function testProjectTargetCodeLetsAnyValueEscapeUnderTheTruth(): Void {
+		assertMatch(truthLibAsk('js.Syntax.code("0");', 'throw last;'), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-ESCAPES-FACTS-TRACE') @:killer('M-ESCAPES-TRUTH-FACTS')
+	public function testATraceTheTargetLowersLetsOnlyWhatItIsHandedEscapeUnderTheTruth(): Void {
+		// js lowers `trace` to a native identifier, which makes nothing: the escapes stay known
+		assertMatch(truthLibAsk('trace(1);', 'throw last;'), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-ESCAPES-FACTS-EXTENDS-EXTERN')
+	public function testAnInstanceOfAClassExtendingAnExternEscapesUnderTheTruth(): Void {
+		// the extern's target code runs with a `Kid` as its own `this`
+		final kid: String = '@:native("Object") extern class ExtBase {\n\tfunction new();\n}\n\n'
+			+ 'class Kid extends ExtBase {\n\tpublic function new() super();\n\n'
+			+ '\tpublic function toString():String {\n\t\tMain.items = [];\n\t\treturn "k";\n\t}\n}\n';
+		assertMatch(truthLibAsk('var k:Kid = new Kid();', 'throw last;', ['Kid.hx' => kid]), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-ESCAPES-FACTS-FIELDS') @:killer('M-ESCAPES-FACTS-ENUM') @:killer('M-ESCAPES-FACTS-STRUCTURE')
+	@:killer('M-ESCAPES-FACTS-PLACE-ARGS') @:killer('M-ESCAPES-FACTS-TYPE-ARGS')
+	public function testWhatAnEscapedValueHoldsEscapesWithItUnderTheTruth(): Void {
+		// code holding an object without a type reaches what it holds by name: a variable, an enum value's argument, a
+		// structure's field, an element of an array handed on as one of catch-alls, the value of a box handed on as a box of
+		// a catch-all
+		final held: Map<String, String> = [
+			'Held.hx' => 'class Held {\n\tpublic var o:Main.Obj;\n\n\tpublic function new(o:Main.Obj) this.o = o;\n}\n',
+			'Wrap.hx' => 'enum Wrap {\n\tW(o:Main.Obj);\n}\n',
+			'Box.hx' => 'class Box<T> {\n\tpublic var v:T;\n\n\tpublic function new(v:T) this.v = v;\n}\n'
+		];
+		for (escape in [
+			'var d:Dynamic = new Held(o);',
+			'var d:Dynamic = Wrap.W(o);',
+			'var d:Dynamic = { o: o };',
+			'var objs:Array<Obj> = [o];\n\t\tvar all:Array<Dynamic> = objs;',
+			'var box:Box<Obj> = new Box(o);\n\t\tvar any:Box<Dynamic> = box;'
+		]) assertMatch(truthLibAsk(escape, 'throw last;', held), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-ESCAPES-FACTS-SUBTYPES')
+	public function testAnEscapedValueMayBeAnyOfItsSubtypesUnderTheTruth(): Void {
+		// a `Base` escaped, which a `Kid` may be
+		final kid: Map<String, String> = [
+			'Base.hx' => 'class Base {\n\tpublic function new() {}\n}\n',
+			'Kid.hx' => 'class Kid extends Base {\n\tpublic function new() super();\n\n'
+				+ '\tpublic function toString():String {\n\t\tMain.items = [];\n\t\treturn "k";\n\t}\n}\n'
+		];
+		assertMatch(truthLibAsk('var b:Base = new Kid();\n\t\tvar d:Dynamic = b;', 'throw last;', kid), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-FACTS-STRING-EXACT') @:killer('M-REACH-EXACT-SITE') @:killer('M-FACTS-VIEW-EXACT')
+	@:killer('M-FACTS-FLOW-EXACT') @:killer('M-FACTS-VIEW-EXACT-CONVERSION') @:killer('M-FACTS-EXACT-WRITTEN')
+	@:killer('M-FACTS-VIEW-EXACT-OPERAND')
+	public function testAFreshObjectConvertedRunsOnlyItsOwnClassToStringUnderTheTruth(): Void {
+		// `Obj` escaped, so a `Plain` read from a place may be one; a `Plain` just built never is — thrown from a local holding
+		// nothing else, or concatenated, which the compiler converts by a call of `Std.string`
+		assertMatch(truthLibAsk('var d:Dynamic = o;', 'var p:Plain = new Plain();\n\t\tthrow p;'), r -> r.match(Proven));
+		assertMatch(truthLibAsk('var d:Dynamic = o;', 'throw "" + new Plain();'), r -> r.match(Proven));
+		assertMatch(truthLibAsk('var d:Dynamic = o;', 'var p:Plain = new Plain();\n\t\tp = last;\n\t\tthrow p;'), r -> !r.match(Proven));
+		assertMatch(truthLibAsk('var d:Dynamic = o;', 'throw "" + (failing ? new Plain() : last);'), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-FACTS-THROW-EXCEPTION')
+	public function testAThrownExceptionIsConvertedToNoString(): Void {
+		// the exception wrapping throws an instance of a class extending `haxe.Exception` as it is: `Err.toString` never runs
+		final err: String = 'class Err extends haxe.Exception {\n\toverride public function toString():String {\n'
+			+ '\t\tMain.items = [];\n\t\treturn "e";\n\t}\n}\n';
+		assertMatch(truthLibAsk('', 'var e:Err = new Err("x");\n\t\tthrow e;', ['Err.hx' => err]), r -> r.match(Proven));
+	}
+
 	@:pin('control') @:killer('M-FACTS-REACH-TOUCH-TYPED')
 	public function testATouchThroughAnInferredReceiverIsTypedByTheCompiler(): Void {
 		// `o` declares no type: the syntax cannot tell whose `items` `poke` grows, the facts say an `Other`'s
@@ -1521,6 +1665,21 @@ class MemberReachFactsTest extends Test {
 		assertMatch(hubAsk(files), r -> r.match(Proven));
 	}
 
+	@:pin('control') @:killer('M-FACTS-TEXT-JOINED-CONVERSION') @:killer('M-FACTS-TEXT-JOINED-PLACED')
+	public function testAConversionOfAFieldOfWhatAnInlinedIndexReturnsIsItsTextUnderTheTruth(): Void {
+		// `${m[k].e}` inlines `Map.get`: the compiler places the conversion of `.e`, as the read of it, from that code in
+		// `Map.hx` to the end of `.e` in `Util.hx` (TM's `drill.Node.parse`)
+		final box: String = 'enum En {\n\tA;\n}\n\nclass Box {\n\tpublic var e:En = A;\n\n\tpublic function new() {}\n}\n';
+		// the doc puts `.e` past every offset of `Map.get` in `Map.hx`: the compiler keeps the smaller start and the larger end of
+		// the parts it joins, whatever their files, so the range starts in `Map.hx` and ends in `Util.hx` only then, as in TM
+		final doc: String = '/**\n\t * ' + [for (i in 0...70) 'The enum value of the box a key maps to, converted.'].join('\n\t * ')
+			+ '\n\t */\n\t';
+		final files: Map<String, String> = utilWith(
+			doc + 'public static function other(m:Map<String, Box>, k:String):String return \'x $${m[k].e}\';', ['Box.hx' => box]
+		);
+		assertMatch(hubAsk(files), r -> r.match(Proven));
+	}
+
 	@:pin('control') @:killer('M-FACTS-TEXT-PURE-CALL') @:killer('M-FACTS-TEXT-ABSTRACT-NEW')
 	public function testALibraryClassTheWalkEntersIsItsTextUnderTheTruth(): Void {
 		// openfl's `DisplayObject`, rebuilt from its own fields by a global macro: the walk enters `Disp.calm`, of a class whose
@@ -1606,6 +1765,47 @@ class MemberReachFactsTest extends Test {
 		final points: MemberRef = { owner: 'Main', name: '_points' };
 		for (use in ['Keeper.held = k.push(_points);', 'k.pop(_points);', 'k.it = new Walk(_points);'])
 			assertMatch(ask(fixture(use), null, true, points, false, null, null, null, true), r -> r.match(Unknown(Escape(_, _))));
+	}
+
+	/**
+	 * A fixture whose region calls `lib.Text.fail` (`plainText`) beside an `Obj` (`CLEARING_OBJ`), whose `toString` replaces
+	 * `Main.items`, held in `o` and handed to the library's `Text.keep`; `escape` is a statement of `main` that may let it go.
+	 */
+	private static function escapingObj(escape: String): Map<String, String> {
+		return [
+			'Main.hx' => 'import lib.Text;\n\n' + LOOP_HEAD + '\tstatic function main() {\n\t\tvar o:Obj = new Obj();\n'
+				+ '\t\tText.keep(o);\n\t\t' + escape + '\n\t\tfor (i in 0...items.length) { /*<*/ Text.fail(); /*>*/ }\n\t}\n}\n'
+				+ CLEARING_OBJ
+		];
+	}
+
+	/**
+	 * The library `lib.Text`, whose `fail` runs `thrown` when `failing`, beside `Plain`, a class with no `toString`, `last`, one,
+	 * and `keep`, a generic function that does nothing with what it is handed.
+	 */
+	private static function plainText(thrown: String): Map<String, String> {
+		return [
+			'lib/Text.hx' => 'package lib;\n\nclass Plain {\n\tpublic function new() {}\n}\n\nclass Text {\n'
+				+ '\tpublic static var last:Plain = new Plain();\n\n\tpublic static var failing:Bool = false;\n\n'
+				+ '\tpublic static function keep<A>(x:A):Void {}\n\n\tpublic static function fail():Void {\n' + '\t\tif (failing) {\n\t\t'
+				+ thrown + '\n\t\t}\n\t}\n}\n'
+		];
+	}
+
+	/**
+	 * `ask` of `escapingObj(escape)` beside `more`, `lib.Text.fail` running `thrown`, under the whole list of builds — which
+	 * must compile: a build that fails leaves no facts, and the answer would be the syntax's.
+	 */
+	@:access(anyparse.query.MemberReach)
+	private static function truthLibAsk(
+		escape: String, thrown: String, ?more: Map<String, String>, ?build: String, ?pos: haxe.PosInfos
+	): ReachResult {
+		final files: Map<String, String> = escapingObj(escape);
+		for (name => text in more ?? []) files[name] = text;
+		return withReach(files, null, true, false, build, plainText(thrown), null, true, (reach, dir) -> {
+			Assert.isTrue(reach._scope.facts?.truth == true, 'the fixture did not compile', pos);
+			reach.mayReach(Region(Path.join([dir, 'Main.hx']), regionOf(files['Main.hx'] ?? '')), { owner: 'Main', name: 'items' }, Mutate);
+		});
 	}
 
 	/**

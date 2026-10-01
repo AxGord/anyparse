@@ -32,6 +32,10 @@ using Lambda;
  * `null` means any instance may be anywhere: the project holds target-language, untyped, unmodelled or unparsed code,
  * a raw conditional region some build compiles, an escaping value whose type the declarations do not say, or the run
  * does not hold every project file.
+ *
+ * Under the truth (`FactsView.truth`) the escapes are read off the compiler's facts instead (`FactsEscapes`): every
+ * function every build typed, library code included, so a value handed to library code escapes only where that code
+ * lets it go, and the run's scope says nothing the facts do not.
  */
 @:nullSafety(Strict)
 final class ValueEscapes {
@@ -121,6 +125,9 @@ final class ValueEscapes {
 	private function compute(): { types: Null<Array<String>>, raw: Bool } {
 		final out: Array<String> = [];
 		final seen: Map<String, Bool> = [];
+		// under the truth every function the builds typed is read, the libraries' as much as the project's
+		final view: Null<FactsView> = _scope.facts;
+		if (view != null && view.truth) return { types: new FactsEscapes(view, _scope).compute(), raw: false };
 		if (!_scopeKnown) return { types: null, raw: false };
 		final g: CallGraph = _g.graph();
 		for (skipped in g.skippedFiles) if (_scope.sources.exists(skipped)) return { types: null, raw: false };

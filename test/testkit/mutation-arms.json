@@ -7214,8 +7214,8 @@
 			"name": "M-FACTS-SUPER",
 			"type": "anyparse.check.TypedFactsWalk",
 			"method": "call",
-			"find": "case TInst(c, _): ',\"t\":' + q(c.toString() + '.new');",
-			"replace": "case TInst(c, _): '';",
+			"find": "',\"t\":' + q(c.toString() + '.new');",
+			"replace": "'';",
 			"note": "a super call names no constructor, so the implicit constructor reaches nothing"
 		},
 		{
@@ -7238,7 +7238,7 @@
 			"name": "M-FACTS-STRING-OPERAND",
 			"type": "anyparse.check.TypedFactsWalk",
 			"method": "stringSite",
-			"find": "add('strs', '{\"o\":${q(str(operand.t))},\"p\":${at(operand.pos)}}');",
+			"find": "add('strs', '{\"o\":${q(str(operand.t))},\"p\":${at(operand.pos)}' + (exactObject(operand) ? ',\"x\":true}' : '}'));",
 			"replace": "",
 			"note": "a non-String operand of a concatenation is not recorded"
 		},
@@ -8424,7 +8424,7 @@
 			"name": "M-FACTS-THROW-TEXT",
 			"type": "anyparse.check.TypedFactsWalk",
 			"method": "visit",
-			"find": "if (!TypedFactsShapes.isString(value.t)) stringSite(value);",
+			"find": "if (!TypedFactsShapes.isString(value.t) && !thrownAsIs(value)) stringSite(value);",
 			"replace": "",
 			"note": "a thrown value is recorded as converted to no string, though the exception wrapping hands it to `Std.string`"
 		},
@@ -8451,6 +8451,272 @@
 			"find": "p.span.to <= l.span.to && FLAGS.match(_text.substring(p.span.to, l.span.to))",
 			"replace": "p.span.to == l.span.to",
 			"note": "a regular expression written with flags is no construction the text writes: the compiler's position of it leaves them out, so openfl's `TextField` is not its text"
+		},
+		{
+			"name": "M-FACTS-HANDS",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "handed",
+			"find": "for (leaf in leaves) add('hands', '{\"t\":${q(target)},\"s\":${q(sourceType(leaf))},\"d\":${q(declared)},\"p\":${at(leaf.pos)}}');",
+			"replace": "",
+			"note": "an argument handed to target code is recorded nowhere, so a value an extern keeps never escapes"
+		},
+		{
+			"name": "M-FACTS-GENS",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "instantiated",
+			"find": "if (field != null && field.params.length > 0) add('gens', '{\"d\":${q(str(field.type))},\"s\":${q(str(applied))},\"p\":${at(p)}}');",
+			"replace": "",
+			"note": "the instantiation of a generic method is recorded nowhere, so what its type parameters stand for is never known"
+		},
+		{
+			"name": "M-FACTS-STRING-EXACT",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "exactObject",
+			"force": "false",
+			"note": "no converted value is an object of exactly its own class, so a fresh one runs the conversion of whatever its type may hold"
+		},
+		{
+			"name": "M-FACTS-EXACT-WRITTEN",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "exactObject",
+			"find": "_built.exists(v.id) && !_written.exists(v.id);",
+			"replace": "_built.exists(v.id);",
+			"note": "a local initialized with a construction is taken to hold it even after it is written again"
+		},
+		{
+			"name": "M-FACTS-THROW-EXCEPTION",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "thrownAsIs",
+			"force": "false",
+			"note": "a thrown exception of exactly its class is recorded as converted to a string, though the wrapping throws it as it is"
+		},
+		{
+			"name": "M-FACTS-ALIAS-TYPEDEF",
+			"type": "anyparse.check.TypedFactsMacro",
+			"method": "run",
+			"find": "writer.printedAliases();",
+			"replace": "",
+			"note": "an import alias, which no module lists, gets no record, so a type naming it names no type the table holds"
+		},
+		{
+			"name": "M-FACTS-STATICS-TYPEDEF",
+			"type": "anyparse.check.TypedFactsMacro",
+			"method": "typeString",
+			"find": "StringTools.endsWith(name, '>') ? name : name + paramString(params, depth);",
+			"replace": "name + paramString(params, depth);",
+			"note": "the typedef of an enum's statics is printed with arguments after its name (`Enum<pack.E><?>`), which the type grammar does not read"
+		},
+		{
+			"name": "M-ESCAPES-TRUTH-FACTS",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "compute",
+			"find": "if (view != null && view.truth) return {",
+			"replace": "if (view != null && view.truth && false) return {",
+			"note": "under the truth the escapes are still read off the project's syntax, which counts every value handed to library code as escaped"
+		},
+		{
+			"name": "M-ESCAPES-FACTS-REFLECTION-INLINED",
+			"type": "anyparse.query.FactsEscapes",
+			"method": "harmlessReflection",
+			"force": "false",
+			"note": "any reflective body spliced in is taken to produce a class from a name it lost, so the escapes are never known"
+		},
+		{
+			"name": "M-ESCAPES-FACTS-FLOW",
+			"type": "anyparse.query.FactsEscapes",
+			"method": "escapesOf",
+			"find": "for (f in n.flows) if ((f.via == CAST || !keepsNominal(f.to)) && !escape(f.from)) return false;",
+			"replace": "",
+			"note": "a value flowing into a catch-all, a type parameter, a structure or through a cast is taken to stay in the type system"
+		},
+		{
+			"name": "M-ESCAPES-FACTS-HANDED",
+			"type": "anyparse.query.FactsEscapes",
+			"method": "escapesOf",
+			"find": "for (h in n.handed) if (!typeParameter(h.to) && !escape(h.from)) return false;",
+			"replace": "",
+			"note": "a value handed to target code is taken to stay in the type system"
+		},
+		{
+			"name": "M-ESCAPES-FACTS-CLOSURE",
+			"type": "anyparse.query.FactsEscapes",
+			"method": "byName",
+			"find": "return access == CLOSURE || access == DYNAMIC_ACCESS;",
+			"replace": "return access == DYNAMIC_ACCESS;",
+			"note": "the receiver of a method read as a value is taken to stay in the type system, though the bound function carries it"
+		},
+		{
+			"name": "M-ESCAPES-FACTS-DYNAMIC-RECEIVER",
+			"type": "anyparse.query.FactsEscapes",
+			"method": "byName",
+			"find": "return access == CLOSURE || access == DYNAMIC_ACCESS;",
+			"replace": "return access == CLOSURE;",
+			"note": "the receiver of a field reached by name in untyped code is taken to stay in the type system, though any of its fields may be read"
+		},
+		{
+			"name": "M-ESCAPES-FACTS-PRODUCED",
+			"type": "anyparse.query.FactsEscapes",
+			"method": "produced",
+			"force": "true",
+			"note": "a class a class-value producer names is taken never to be instantiated untyped"
+		},
+		{
+			"name": "M-ESCAPES-FACTS-PROJECT-NATIVE",
+			"type": "anyparse.query.FactsEscapes",
+			"method": "escapesOf",
+			"find": "return refuse('`$id` holds target-language code');",
+			"replace": "{}",
+			"note": "target-language code in the project is taken to let no value escape"
+		},
+		{
+			"name": "M-ESCAPES-FACTS-TRACE",
+			"type": "anyparse.query.FactsEscapes",
+			"method": "escapesOf",
+			"find": "n.natives.exists(x -> x.name != TRACE_IDENT)",
+			"replace": "n.natives.length > 0",
+			"note": "(precision) a `trace` the target lowers to a native identifier counts as target-language code, so the escapes of a project tracing anything are never known"
+		},
+		{
+			"name": "M-ESCAPES-FACTS-INSTANCES",
+			"type": "anyparse.query.FactsEscapes",
+			"method": "instances",
+			"find": "if (fact != null && fact.params.length == args.length) for (i => name in fact.params) bind('$id.$name', args[i]);",
+			"replace": "",
+			"note": "a type written with arguments binds nothing, so a value a generic class lets go is of no type"
+		},
+		{
+			"name": "M-ESCAPES-FACTS-PARAMETER",
+			"type": "anyparse.query.FactsEscapes",
+			"method": "escapeType",
+			"find": "if (bound != null) for (x in bound) if (!escapeType(x)) return false;",
+			"replace": "",
+			"note": "a value of a type parameter is taken to be of no type, so what its instantiations bind it to never escapes"
+		},
+		{
+			"name": "M-ESCAPES-FACTS-GENERIC-METHOD",
+			"type": "anyparse.query.FactsEscapes",
+			"method": "instances",
+			"find": "unify(declared, applied);",
+			"replace": "{}",
+			"note": "the instantiation of a generic method binds nothing, so a value it lets go is of no type"
+		},
+		{
+			"name": "M-ESCAPES-FACTS-EXTENDS-EXTERN",
+			"type": "anyparse.query.FactsEscapes",
+			"method": "extendsExtern",
+			"force": "false",
+			"note": "an instance of a class extending an extern is taken to stay in the type system, though target code runs with it as `this`"
+		},
+		{
+			"name": "M-ESCAPES-FACTS-FIELDS",
+			"type": "anyparse.query.FactsEscapes",
+			"method": "escapeInstance",
+			"find": "for (f in currentFact.fields) if (f.kinds.exists(k -> k.startsWith('var(')) && !within(f.types, currentBound)) return false;",
+			"replace": "",
+			"note": "what an escaped object's variables hold is taken to stay in the type system"
+		},
+		{
+			"name": "M-ESCAPES-FACTS-ENUM",
+			"type": "anyparse.query.FactsEscapes",
+			"method": "escapeType",
+			"find": "case 'enum': fact.constructors.foreach(c -> constructorEscapes(id, c.name, c.type, bound));",
+			"replace": "case 'enum': true;",
+			"note": "what an escaped enum value's constructor arguments hold is taken to stay in the type system"
+		},
+		{
+			"name": "M-ESCAPES-FACTS-STRUCTURE",
+			"type": "anyparse.query.FactsEscapes",
+			"method": "escapeType",
+			"find": "return fields.foreach(f -> escapeType(f.type));",
+			"replace": "return true;",
+			"note": "what an escaped structure's fields hold is taken to stay in the type system"
+		},
+		{
+			"name": "M-ESCAPES-FACTS-PLACE-ARGS",
+			"type": "anyparse.query.FactsEscapes",
+			"method": "placeKeeps",
+			"find": "NOMINAL_KINDS.contains(fact.kind) && args.length == fact.params.length && args.foreach(placeKeeps);",
+			"replace": "NOMINAL_KINDS.contains(fact.kind);",
+			"note": "a place of a nominal type is taken to keep the type of what it holds whatever its arguments, `Array<Dynamic>` included"
+		},
+		{
+			"name": "M-ESCAPES-FACTS-TYPE-ARGS",
+			"type": "anyparse.query.FactsEscapes",
+			"method": "escapeType",
+			"find": "if (!args.foreach(escapeType)) return false;",
+			"replace": "",
+			"note": "what an escaped container holds by its type arguments, which no variable of it declares, is taken to stay in the type system"
+		},
+		{
+			"name": "M-ESCAPES-FACTS-SUBTYPES",
+			"type": "anyparse.query.FactsEscapes",
+			"method": "escapeClass",
+			"find": "for (sub in _table.subtypesOf(CompilerFacts.baseId(id))) {",
+			"replace": "for (sub in ([] : Array<String>)) {",
+			"note": "an escaped value is taken to be of exactly its static class, never one of its subtypes"
+		},
+		{
+			"name": "M-REACH-EXACT-SITE",
+			"type": "anyparse.query.ReachGraph",
+			"method": "typesAt",
+			"find": "at.exact ? exactTypes(g, t) : runtimeTypes(g, t, at.family)",
+			"replace": "runtimeTypes(g, t, at.family)",
+			"note": "an object built right at a conversion site may be any subtype of its class, or any escaped instance"
+		},
+		{
+			"name": "M-FACTS-VIEW-EXACT",
+			"type": "anyparse.query.FactsView",
+			"method": "sitesIn",
+			"find": "exact: s.exact",
+			"replace": "exact: false",
+			"note": "the exactness the facts record of a converted operand is dropped"
+		},
+		{
+			"name": "M-FACTS-VIEW-EXACT-CONVERSION",
+			"type": "anyparse.query.FactsView",
+			"method": "sitesIn",
+			"find": "exact: operand && argument?.exact == true",
+			"replace": "exact: false",
+			"note": "the exactness the facts record of the argument of a conversion call is dropped"
+		},
+		{
+			"name": "M-FACTS-VIEW-EXACT-OPERAND",
+			"type": "anyparse.query.FactsView",
+			"method": "sitesIn",
+			"find": "exact: operand && argument?.exact == true",
+			"replace": "exact: argument?.exact == true",
+			"note": "a conversion of a branching value is taken to convert the first branch's object alone"
+		},
+		{
+			"name": "M-FACTS-FLOW-EXACT",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "flowInto",
+			"find": "flowText(sourceType(value), sink, how, p, exactObject(value));",
+			"replace": "flowText(sourceType(value), sink, how, p);",
+			"note": "the exactness of a value flowing whole is recorded nowhere"
+		},
+		{
+			"name": "M-FACTS-TEXT-JOINED-CONVERSION",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "convertsJoined",
+			"force": "false",
+			"note": "a conversion the compiler writes of a field read it placed across an inlined body and the text is no text's (TM's `drill.Node.parse`)"
+		},
+		{
+			"name": "M-FACTS-TEXT-JOINED-PLACED",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "factsOnText",
+			"find": "own(p, body.holds(p) || readJoined(n, p, body))",
+			"replace": "own(p, body.holds(p))",
+			"note": "the value a field read the compiler placed across an inlined body and the text flows as is no text's (TM's `drill.Node.parse`)"
+		},
+		{
+			"name": "M-FACTS-TREE-OPTIONAL",
+			"type": "anyparse.check.FactsTypeTree",
+			"method": "functionType",
+			"find": "final optional: Bool = peek() == '?'.code && !separatorAt(_pos + 1);",
+			"replace": "final optional: Bool = peek() == '?'.code;",
+			"note": "a lone `?` argument is read as an optional argument, so an unknown argument type reads as a malformed type"
 		},
 		{
 			"name": "M-REACH-CALLEE-WALK",
@@ -9192,8 +9458,8 @@
 			"name": "M-FACTS-SPELL-UNKNOWN",
 			"type": "anyparse.check.FactsTypeSpelling",
 			"method": "type",
-			"find": "case '?'.code: fail(FactsTypeOracle.DECLINE_UNKNOWN);",
-			"replace": "case '?'.code:\n\t\t\t\t_pos++;\n\t\t\t\t'Dynamic';",
+			"find": "case Unknown: fail(FactsTypeOracle.DECLINE_UNKNOWN);",
+			"replace": "case Unknown: 'Dynamic';",
 			"note": "an unbound monomorph is spelled Dynamic, so a type the compiler never pinned is written as one"
 		},
 		{

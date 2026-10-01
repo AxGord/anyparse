@@ -22,7 +22,8 @@ final class TypedFactsWalk {
 
 	/** The categories of a node line, in the order they are written. */
 	private static final CATEGORIES: Array<String> = [
-		'params', 'calls', 'news', 'fields', 'elems', 'flows', 'strs', 'iters', 'refl', 'native', 'vars', 'reads', 'exps', 'fns'
+		'params', 'calls', 'news', 'fields', 'elems', 'flows', 'hands', 'gens', 'strs', 'iters', 'refl', 'native', 'vars', 'reads', 'exps',
+		'fns'
 	];
 
 	public final id: String;
@@ -50,6 +51,12 @@ final class TypedFactsWalk {
 	 * field's value, so the read is recorded once the uses are known. A read from a nested function captures the value.
 	 */
 	private final _aliases: Map<Int, Alias>;
+
+	/**
+	 * The locals initialized with a construction of exactly their own type, by id: one never written again (`_written`)
+	 * holds that one object of that class for as long as it lives. Shared with the nested walks.
+	 */
+	private final _built: Map<Int, Bool>;
 
 	/** The field reads held back until their local's uses are known: the fact without its use, and the local. */
 	private final _deferred: Array<{ fact: String, local: Int }> = [];
@@ -94,7 +101,7 @@ final class TypedFactsWalk {
 
 	public function new(
 		host: TypedFactsMacro, id: String, kind: String, owner: String, isStatic: Bool, signature: String, name: Null<String>,
-		locals: Map<Int, String>, written: Map<Int, Bool>, aliases: Map<Int, Alias>
+		locals: Map<Int, String>, written: Map<Int, Bool>, aliases: Map<Int, Alias>, built: Map<Int, Bool>
 	) {
 		this._host = host;
 		this.id = host.uniqueId(id);
@@ -106,6 +113,7 @@ final class TypedFactsWalk {
 		this._locals = locals;
 		this._written = written;
 		this._aliases = aliases;
+		this._built = built;
 	}
 
 	/** Mark the node with a header flag (`gen`: macro-placed; `gi`: a `@:generic` instance's copy), kept out of file ranges. */
@@ -205,9 +213,9 @@ final class TypedFactsWalk {
 		final leaves: Array<TypedExpr> = [];
 		TypedFactsShapes.collectLeaves(value, leaves);
 		if (leaves.length == 1 && leaves[0] == value)
-			flowText(sourceType(value), sink, how, p);
+			flowText(sourceType(value), sink, how, p, exactObject(value));
 		else
-			for (leaf in leaves) flowText(sourceType(leaf), sink, how, leaf.pos);
+			for (leaf in leaves) flowText(sourceType(leaf), sink, how, leaf.pos, exactObject(leaf));
 	}
 
 	/**
@@ -227,17 +235,20 @@ final class TypedFactsWalk {
 		return written == '?' || written.indexOf('$') >= 0 ? own : written;
 	}
 
-	/** A value of type `s` reaching a place of type `d`, kept only when the two differ beyond nullability. */
-	private function flowText(s: String, d: String, how: String, p: Position): Void {
+	/**
+	 * A value of type `s` reaching a place of type `d`, kept only when the two differ beyond nullability; `x` when it is an
+	 * object of exactly its own class (`exactObject`).
+	 */
+	private function flowText(s: String, d: String, how: String, p: Position, exact: Bool = false): Void {
 		if (how != 'cast' && FactsTypeText.unwrapNull(s) == FactsTypeText.unwrapNull(d)) return;
-		add('flows', '{"s":${q(s)},"d":${q(d)},"c":"$how","p":${at(p)}}');
+		add('flows', '{"s":${q(s)},"d":${q(d)},"c":"$how","p":${at(p)}' + (exact ? ',"x":true}' : '}'));
 	}
 
 	private function child(f: TypedExpr, localName: Null<String>): String {
 		final info: { min: Int, max: Int, file: String } = Context.getPosInfos(f.pos);
 		final nested: TypedFactsWalk = new TypedFactsWalk(
 			_host, '$id@${info.min}', localName == null ? 'fn' : 'local', _owner, _isStatic, str(f.t), localName, _locals, _written,
-			_aliases
+			_aliases, _built
 		);
 		// a function outside this body was spliced in: it runs here, but no range of its own file is where it runs. One
 		// bound straight to a local is reached without `walk`, so the splice is decided here too
@@ -404,6 +415,7 @@ final class TypedFactsWalk {
 				declare(v, e.pos);
 				if (init != null) {
 					flowInto(init, str(v.t), 'var', e.pos);
+					if (constructed(init) && str(init.t) == localType(v)) _built[v.id] = true;
 					final called: Null<String> = receiverCall(v, e.pos, block);
 					switch init.expr {
 						case TFunction(_):
@@ -430,6 +442,7 @@ final class TypedFactsWalk {
 				final cls: ClassType = c.get();
 				final ctor: Null<Ref<ClassField>> = cls.constructor;
 				if (ctor != null) argFlows(TypeTools.applyTypeParameters(ctor.get().type, cls.params, params), args);
+				if (ctor != null) handed(cls, ctor.get(), '${c.toString()}.new', args);
 				for (a in args) walk(a);
 			case TField(receiver, fa):
 				switch use {
@@ -439,6 +452,7 @@ final class TypedFactsWalk {
 						fieldFact(e, receiver, fa, false, ',' + useText(use));
 				}
 				reflectionValue(fa, e);
+				instantiated(fa, e.t, e.pos);
 				// a method closure holds its receiver; any other field access reads through it
 				walkReceiver(receiver, fa.match(FClosure(_, _)) ? Value : Member);
 			case TArray(array, index):
@@ -470,7 +484,7 @@ final class TypedFactsWalk {
 			case TThrow(value):
 				flowInto(value, 'Dynamic', 'throw', e.pos);
 				// the exception wrapping the compiler adds after typing hands a thrown value to `Std.string` (`haxe.ValueException`)
-				if (!TypedFactsShapes.isString(value.t)) stringSite(value);
+				if (!TypedFactsShapes.isString(value.t) && !thrownAsIs(value)) stringSite(value);
 				walk(value);
 			case TArrayDecl(items):
 				for (item in items) walk(item);
@@ -549,6 +563,18 @@ final class TypedFactsWalk {
 		}
 	}
 
+	/**
+	 * The instantiation the compiler chose for a field declaring type parameters of its own, read or called through `fa`
+	 * as `applied`: its declared type and that one (`gens`), which say what each of its parameters stands for there.
+	 */
+	private function instantiated(fa: FieldAccess, applied: Type, p: Position): Void {
+		final field: Null<ClassField> = switch fa {
+			case FInstance(_, _, f) | FStatic(_, f) | FClosure(_, f): f.get();
+			case _: null;
+		};
+		if (field != null && field.params.length > 0) add('gens', '{"d":${q(str(field.type))},"s":${q(str(applied))},"p":${at(p)}}');
+	}
+
 	/** `p` without its brackets, for a fact written as a flat array. */
 	private function range(p: Position): String {
 		final full: String = at(p);
@@ -571,8 +597,39 @@ final class TypedFactsWalk {
 		}
 	}
 
+	/** A string conversion of `operand`, `x` when it is an object of exactly its own type (`exactObject`). */
 	private function stringSite(operand: TypedExpr): Void {
-		add('strs', '{"o":${q(str(operand.t))},"p":${at(operand.pos)}}');
+		add('strs', '{"o":${q(str(operand.t))},"p":${at(operand.pos)}' + (exactObject(operand) ? ',"x":true}' : '}'));
+	}
+
+	/**
+	 * Whether `e` yields an object built as an instance of exactly the class its type names: a construction, or a local
+	 * initialized with one of its own type and never written again (`_built`).
+	 */
+	private function exactObject(e: TypedExpr): Bool {
+		return switch e.expr {
+			case TParenthesis(inner) | TMeta(_, inner): exactObject(inner);
+			case TLocal(v):
+				_built.exists(v.id) && !_written.exists(v.id);
+			case _: constructed(e);
+		};
+	}
+
+	/**
+	 * Whether the exception wrapping throws `value` as it is, converting nothing (`haxe.Exception.thrown`): an object of
+	 * exactly a class extending `haxe.Exception` (`exactObject`). A value only typed so may be any object at run time.
+	 */
+	private function thrownAsIs(value: TypedExpr): Bool {
+		return exactObject(value) && TypedFactsShapes.isException(value.t);
+	}
+
+	/** Whether `e` is a construction, seen through parentheses and metadata. */
+	private static function constructed(e: TypedExpr): Bool {
+		return switch e.expr {
+			case TParenthesis(inner) | TMeta(_, inner): constructed(inner);
+			case TNew(_, _, _): true;
+			case _: false;
+		};
 	}
 
 	/**
@@ -622,12 +679,21 @@ final class TypedFactsWalk {
 				if (access.kind == 'FStatic' && declaring != null && TypedFactsShapes.SYNTAX_CLASSES.contains(declaring))
 					add('native', '{"w":"syntax","n":${q(targetName)},"p":$where}');
 				walkReceiver(receiver, Call(access.field));
+				instantiated(fa, callee.t, callee.pos);
+				switch fa {
+					case FInstance(c, _, cf) | FStatic(c, cf):
+						handed(c.get(), cf.get(), targetName, args);
+					case _:
+				}
 				final kind: String = calledKind(fa, targetName, access.kind);
 				final chosen: String = _host.overloaded(targetName) ? ',"sig":${q(str(callee.t))}' : '';
 				'{"t":${q(targetName)},"a":"$kind"$chosen,"r":${q(str(receiver.t))},"rp":${at(receiver.pos)},$head}';
 			case TConst(TSuper):
 				final sup: String = switch TypeTools.follow(callee.t) {
-					case TInst(c, _): ',"t":' + q(c.toString() + '.new');
+					case TInst(c, _):
+						final ctor: Null<Ref<ClassField>> = c.get().constructor;
+						if (ctor != null) handed(c.get(), ctor.get(), c.toString() + '.new', args);
+						',"t":' + q(c.toString() + '.new');
 					case _: '';
 				};
 				'{"a":"super"$sup,$head}';
@@ -693,6 +759,31 @@ final class TypedFactsWalk {
 			}
 			final sink: Null<String> = rest ?? (i < params.length ? str(params[i].t) : null);
 			if (sink != null) flowInto(args[i], sink, 'arg', args[i].pos);
+		}
+	}
+
+	/**
+	 * Each argument handed to `field` of the extern class `cls` (`target`): target code, which no fact describes. One
+	 * fact per value-producing leaf, at the type the field declares for its parameter — a rest parameter's element type
+	 * for every remaining argument — with the extern's own type parameters unapplied.
+	 */
+	private function handed(cls: ClassType, field: ClassField, target: String, args: Array<TypedExpr>): Void {
+		if (!cls.isExtern) return;
+		final params: Null<Array<{ name: String, opt: Bool, t: Type }>> = switch TypeTools.follow(field.type) {
+			case TFun(declared, _): declared;
+			case _: null;
+		};
+		var rest: Null<String> = null;
+		for (i in 0...args.length) {
+			if (params != null && rest == null && i < params.length) {
+				final element: Null<Type> = TypedFactsShapes.restElement(params[i].t);
+				if (element != null) rest = str(element);
+			}
+			final written: String = rest ?? (params != null && i < params.length ? str(params[i].t) : 'Dynamic');
+			final declared: String = written == '?' ? 'Dynamic' : written;
+			final leaves: Array<TypedExpr> = [];
+			TypedFactsShapes.collectLeaves(args[i], leaves);
+			for (leaf in leaves) add('hands', '{"t":${q(target)},"s":${q(sourceType(leaf))},"d":${q(declared)},"p":${at(leaf.pos)}}');
 		}
 	}
 
