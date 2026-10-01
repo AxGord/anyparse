@@ -14,8 +14,9 @@ import utest.Test;
  * Three `--fix` gates that decline where the run cannot type something, answered by the compiler's facts over a real
  * compile: an operand of a concatenation a type in scope could overload (`fold-adjacent-string-literals`), the `extends`
  * chain of a private member's class (`unused-private`) and the receiver of a redundant `.toString()`
- * (`redundant-tostring`). Each fixture also holds the case the facts must NOT clear, and the rewritten program prints what
- * the original printed.
+ * (`redundant-tostring`). Each fixture also holds the case the facts must NOT clear, and the rewritten
+ * program prints what the original printed. One more pins the `reflectiveClasses` declaration end to end:
+ * the declared classes a computed name may make bound the escapes a `prefer-keyvalue-loop` rewrite rests on.
  */
 class FactsFixGateE2ETest extends Test {
 
@@ -70,6 +71,17 @@ class FactsFixGateE2ETest extends Test {
 		+ '\tpublic function toString():String {\n' + '\t\treturn \'b\';\n' + '\t}\n' + '}\n' + '#end\n';
 	private static final SPLIT_BUILT: String = '#if js\n' + '@:autoBuild(Noop.build())\n' + '#end\n' + 'class Built {\n'
 		+ '\tpublic function new() {}\n' + '}\n';
+	private static final REFLECT_MAIN: String = 'import lib.Text;\n' + '\n' + 'class Main {\n'
+		+ '\tpublic static var items:Array<Int> = [1, 2];\n' + '\n' + '\tstatic function main() {\n' + '\t\tvar o:Obj = new Obj();\n'
+		+ '\t\tText.keep(o);\n' + '\t\tvar n:String = \'lib.Pla\' + \'in\';\n' + '\t\tType.createInstance(Type.resolveClass(n), []);\n'
+		+ '\t\tvar sum:Int = 0;\n' + '\t\tfor (i in 0...items.length) {\n' + '\t\t\tfinal v:Int = items[i];\n' + '\t\t\tsum += v;\n'
+		+ '\t\t\tText.fail();\n' + '\t\t}\n' + '\t\tSys.println(sum);\n' + '\t}\n' + '}\n' + '\n' + 'class Obj {\n'
+		+ '\tpublic function new() {}\n' + '\n' + '\tpublic function toString():String {\n' + '\t\tMain.items = [];\n'
+		+ '\t\treturn \'o\';\n' + '\t}\n' + '}\n';
+	private static final REFLECT_TEXT: String = 'package lib;\n' + '\n' + 'class Plain {\n' + '\tpublic function new() {}\n' + '}\n' + '\n'
+		+ 'class Text {\n' + '\tpublic static var last:Plain = new Plain();\n' + '\n' + '\tpublic static var failing:Bool = false;\n'
+		+ '\n' + '\tpublic static function keep<A>(x:A):Void {}\n' + '\n' + '\tpublic static function fail():Void {\n'
+		+ '\t\tif (failing) {\n' + '\t\t\tthrow last;\n' + '\t\t}\n' + '\t}\n' + '}\n';
 	private static final HXML: String = '-cp .\n-main Main\n--interp\n';
 	private static inline final APQLINT: String = '{"compilerOracle":[{"hxml":"check.hxml"}],"resolutionRoots":["."]}';
 	private static inline final BUFFER: Int = 1 << 20;
@@ -209,6 +221,43 @@ class FactsFixGateE2ETest extends Test {
 			'$dir/src'
 		]));
 		Assert.equals(SPLIT_MAIN, File.getContent('$dir/src/Main.hx'));
+		Assert.equals(before, run(dir), 'the program prints what it printed');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A class value made from a name computed at run time may be of any class, so a run knows nothing of what escapes and
+	 * the loop whose body may convert a value of no known type stays; declared `reflectiveClasses` bound it — `lib.Plain`,
+	 * which holds no `Obj` — and the loop is rewritten, while a declaration naming `Obj` keeps it. A glob matching no
+	 * class the builds typed is reported.
+	 */
+	@:pin('control') @:killer('M-REFLECTIVE-BUILDS') @:killer('M-REFLECTIVE-REACH') @:killer('M-REFLECTIVE-WARN')
+	@:killer('M-ESCAPES-FACTS-UNMATCHED')
+	public function testAComputedClassNameTheProjectBoundsLetsTheLoopRewrite(): Void {
+		#if (sys || nodejs)
+		final complete: String = '{"compilerOracle":[{"hxml":"check.hxml"}],"resolutionRoots":["."],"reachConfigurationsComplete":true';
+		final files: Array<{ name: String, source: String }> = [
+			{ name: 'Main.hx', source: REFLECT_MAIN },
+			{ name: 'lib/Text.hx', source: REFLECT_TEXT }
+		];
+		for (declared in ['', ',"reflectiveClasses":["lib.*","Obj"]']) {
+			final dir: Null<String> = tree('reflectkept', files, HXML, complete + declared + '}');
+			if (dir == null) return;
+			CliFixture.captureStderr(() -> Cli.run(['lint', '--fix', '--rule', 'prefer-keyvalue-loop', '$dir/Main.hx']));
+			Assert.equals(REFLECT_MAIN, File.getContent('$dir/Main.hx'), declared);
+			CliFixture.removeDir(dir);
+		}
+		final dir: Null<String> = tree('reflectbound', files, HXML, complete + ',"reflectiveClasses":["lib.*","nope.**"]}');
+		if (dir == null) return;
+		final before: String = run(dir);
+		final err: String = CliFixture.captureStderr(() -> Cli.run(['lint', '--fix', '--rule', 'prefer-keyvalue-loop', '$dir/Main.hx']));
+		final after: String = File.getContent('$dir/Main.hx');
+		Assert.isTrue(after.indexOf('for (i => v in items) {') >= 0, after);
+		Assert.isTrue(err.indexOf('reflectiveClasses "nope.**" matches no class the builds typed') >= 0, err);
+		Assert.isTrue(err.indexOf('"lib.*" matches no class') < 0, err);
 		Assert.equals(before, run(dir), 'the program prints what it printed');
 		CliFixture.removeDir(dir);
 		#else

@@ -397,9 +397,11 @@ final class CallGraphFacts {
 		if (field && !replaceable && known != null) return;
 		final instance: Bool = c.access == 'FInstance' || c.access == 'FClosure' || field;
 		final dispatch: Null<String> = instance ? dispatchType(c.receiver, owner, view) : null;
+		// an inlined call at a known site whose body's facts are filed here (`filed`) runs them, instantiated at this call
+		final spliced: Bool = c.access == INLINED && c.site != null && !view.harmlessSplice(g, target);
 		g.addEdge(
 			node.id, id, deferred ? Ref : Call, null, node.file, span, dispatch == null ? null : view.graphType(dispatch), null,
-			CompilerFacts.baseId(owner)
+			CompilerFacts.baseId(owner), spliced
 		);
 		if (dispatch != null) virtualEdges(g, node, dispatch, name, span, deferred ? Ref : Virtual, view);
 		if (!field && replaceable) unresolved(FunctionValue(name));

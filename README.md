@@ -451,7 +451,32 @@ class only through the reflective producers its callers name. And it reaches a
 member by a computed name, or runs a function with a receiver it is handed, only
 inside the reflection whose call sites the facts record. Target code whose text is
 computed rather than a string literal leaves the analysis without an answer, and
-so does a class value made from a name computed at run time (`Type.resolveClass(name)`).
+so does a class value made from a name computed at run time (`Type.resolveClass(name)`)
+— unless the project declares which classes such a name may make.
+
+**`reflectiveClasses`** is that declaration, and like `reachConfigurationsComplete`
+it is the project's responsibility: a list of globs over qualified type names
+(`pack.sub.Name`; `*` within one dotted segment, `**` across segments, `?` and
+`[…]` as in path globs). It names every class a class value may be of when the
+facts cannot read the name it was made from: a name computed at run time and
+handed to `Type.resolveClass`, a producer read as a value (`var f = Type.resolveClass`)
+and a class declaring one read as a value — the project's code and the libraries'
+alike, in every build it ships. A glob matches the class actually made, by its own
+name: declaring `drill.Node` declares none of its subtypes. A literal handed to a
+producer directly still names its one class whatever the list says, and a
+producer's body the compiler splices in (`Type.resolveClass` on js by default)
+lost its name — which may have been such a literal — so it still leaves the
+analysis without an answer. Read only under `reachConfigurationsComplete`; without
+the key such a name may name any class. A glob matching no class the builds typed
+is reported once per run (`reflectiveClasses "<glob>" matches no class the builds
+typed`): a misspelling, a class gone, or one no build compiles — which
+`Type.resolveClass` cannot find there either. A run whose linted paths declare
+different lists, or some none, takes such a name to name any class.
+
+```json
+{ "reachConfigurationsComplete": true,
+  "reflectiveClasses": ["drill.nodes.*", "swf.exporters.animate.AnimateLibrary", "__ASSET__fonts_*"] }
+```
 
 A top-level `"compilerOracleServer"` (boolean, default `false`) moves the
 REPORT-mode oracle onto a WARM Haxe compilation server shared by every `apq`

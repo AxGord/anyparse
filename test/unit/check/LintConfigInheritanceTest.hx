@@ -33,16 +33,18 @@ import utest.Test;
 @:nullSafety(Strict)
 class LintConfigInheritanceTest extends Test {
 
+	@:pin('control') @:killer('M-REFLECTIVE-MERGE')
 	public function testAnUnnamedKeyFallsThroughToTheAncestor(): Void {
 		#if (sys || nodejs)
 		final root: String = tree(
-			'{"compilerOracleServer": true, "resolutionLibs": ["utest"], "languageVersion": "4.3"}',
+			'{"compilerOracleServer": true, "resolutionLibs": ["utest"], "languageVersion": "4.3", "reflectiveClasses": ["drill.**"]}',
 			'{"rules": {"magic-number": {"enabled": false}}}'
 		);
 		final config: LintConfig = LintConfig.discover('$root/nested/Probe.hx');
 		Assert.isTrue(config.compilerOracleServer(), 'compilerOracleServer falls through');
 		Assert.same(['utest'], config.resolutionLibs(), 'resolutionLibs falls through');
 		Assert.equals('4.3', config.languageVersion(), 'languageVersion falls through');
+		Assert.same(['drill.**'], config.reflectiveClasses(), 'reflectiveClasses falls through');
 		Assert.isFalse(config.enabledFor('magic-number'), 'the nested document still disables its own rule');
 		CliFixture.removeDir(root);
 		#else

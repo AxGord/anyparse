@@ -86,6 +86,13 @@ typedef CallEdge = {
 	 * `to` is keyed by declares the code that runs (`CallGraphFacts.qualify`). Null on every other edge.
 	 */
 	@:optional var typed: Null<String>;
+
+	/**
+	 * For an edge the compiler facts record of a call they inlined at a known site, its body's facts filed in `from` as
+	 * the splice they made there (`CallGraphFacts.declaredCall`): what that body runs at the call is what `from`'s facts
+	 * say, at the types this call instantiated it at. Null on every other edge.
+	 */
+	@:optional var inlined: Null<Bool>;
 }
 
 /**
@@ -932,7 +939,7 @@ final class CallGraph {
 
 	private function addEdge(
 		from: String, to: String, kind: EdgeKind, via: Null<String>, file: String, span: Null<Span>, ?dispatchType: String,
-		?receiverField: String, ?typed: String
+		?receiverField: String, ?typed: String, ?inlined: Bool
 	): Void {
 		final edge: CallEdge = {
 			from: from,
@@ -945,6 +952,7 @@ final class CallGraph {
 			receiverField: receiverField
 		};
 		if (typed != null) edge.typed = typed;
+		if (inlined == true) edge.inlined = true;
 		// a faceted function's syntax still records every edge it names, which the facts only add to — unless they are the
 		// truth: then its edge at a site they type is dropped (`CallGraphFacts.holdsBack`)
 		if (facts?.holdsBack(edge) != true) indexEdge(edge);

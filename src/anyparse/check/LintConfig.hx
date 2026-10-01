@@ -94,6 +94,7 @@ typedef LintDocument = {
 	var ?compilerOracles: Array<OracleConfig>;
 	var ?compilerOracleServer: Bool;
 	var ?reachConfigurationsComplete: Bool;
+	var ?reflectiveClasses: Array<String>;
 	var ?resolutionRoots: Array<String>;
 	var ?resolutionLibs: Array<String>;
 	var ?resolutionStd: Bool;
@@ -160,6 +161,9 @@ final class LintConfig {
 	/** Whether the `compilerOracle` list covers every build the project ships (`reachConfigurationsComplete`); false unless declared. */
 	private final _reachConfigurationsComplete: Bool;
 
+	/** The globs naming every class made reflectively from a name the facts cannot read (`reflectiveClasses`); null unless declared. */
+	private final _reflectiveClasses: Null<Array<String>>;
+
 	/**
 	 * The declared source roots (`resolutionRoots`) — the project's own, see the accessor — each resolved
 	 * to absolute against the config directory; an empty array when the key is absent.
@@ -190,10 +194,12 @@ final class LintConfig {
 	public function new(
 		rules: Map<String, RuleConfig>, ?compilerOracles: Array<OracleConfig>, ?resolutionRoots: Array<String>,
 		?resolutionLibs: Array<String>, ?resolutionStd: Bool, ?compilerOracleServer: Bool, ?languageVersion: String,
-		?frameworks: Array<FrameworkContract>, ?drops: Array<String>, ?reachConfigurationsComplete: Bool, ?reportSummaryThreshold: Int
+		?frameworks: Array<FrameworkContract>, ?drops: Array<String>, ?reachConfigurationsComplete: Bool, ?reportSummaryThreshold: Int,
+		?reflectiveClasses: Array<String>
 	) {
 		_reportSummaryThreshold = reportSummaryThreshold ?? LintFormat.DEFAULT_REPORT_SUMMARY_THRESHOLD;
 		_reachConfigurationsComplete = reachConfigurationsComplete ?? false;
+		_reflectiveClasses = reflectiveClasses;
 		_rules = rules;
 		_compilerOracles = compilerOracles ?? [];
 		_compilerOracleServer = compilerOracleServer ?? false;
@@ -244,6 +250,19 @@ final class LintConfig {
 	 */
 	public function reachConfigurationsComplete(): Bool {
 		return _reachConfigurationsComplete;
+	}
+
+	/**
+	 * The classes the project declares a class value may be made of from a name the compiler facts cannot read
+	 * (`reflectiveClasses`): globs over qualified type names (`drill.**`, `__ASSET__*`), a star within one dotted segment
+	 * and a double star across segments (`Glob.qualifiedNames`). A name computed at run time and handed to
+	 * `Type.resolveClass`, a producer read as a value, a producer's body the compiler spliced in — each makes a class
+	 * value of a class one of the globs matches, by the qualified name of the class itself (a subtype is matched by its
+	 * own). Read under `reachConfigurationsComplete` only, by the member-reach analysis behind the loop rewrites
+	 * (`FactsEscapes`). Null when the key is absent: such a name may then name any class, which no escape analysis bounds.
+	 */
+	public function reflectiveClasses(): Null<Array<String>> {
+		return _reflectiveClasses;
 	}
 
 	/**
@@ -618,6 +637,7 @@ final class LintConfig {
 			compilerOracles: near.compilerOracles ?? far.compilerOracles,
 			compilerOracleServer: near.compilerOracleServer ?? far.compilerOracleServer,
 			reachConfigurationsComplete: near.reachConfigurationsComplete ?? far.reachConfigurationsComplete,
+			reflectiveClasses: near.reflectiveClasses ?? far.reflectiveClasses,
 			resolutionRoots: near.resolutionRoots ?? far.resolutionRoots,
 			resolutionLibs: near.resolutionLibs ?? far.resolutionLibs,
 			resolutionStd: near.resolutionStd ?? far.resolutionStd,
@@ -646,7 +666,8 @@ final class LintConfig {
 	private static function fromDocument(doc: LintDocument): LintConfig {
 		return new LintConfig(
 			doc.rules, doc.compilerOracles, doc.resolutionRoots, doc.resolutionLibs, doc.resolutionStd, doc.compilerOracleServer,
-			doc.languageVersion, doc.frameworks, doc.drops, doc.reachConfigurationsComplete, doc.reportSummaryThreshold
+			doc.languageVersion, doc.frameworks, doc.drops, doc.reachConfigurationsComplete, doc.reportSummaryThreshold,
+			doc.reflectiveClasses
 		);
 	}
 
@@ -684,6 +705,7 @@ final class LintConfig {
 			compilerOracles: oracles,
 			compilerOracleServer: config.compilerOracleServer,
 			reachConfigurationsComplete: config.reachConfigurationsComplete,
+			reflectiveClasses: config.reflectiveClasses,
 			resolutionRoots: roots,
 			resolutionLibs: config.resolutionLibs,
 			resolutionStd: config.resolutionStd,

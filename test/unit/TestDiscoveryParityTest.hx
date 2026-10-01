@@ -1209,6 +1209,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.EffectiveRulesTest#testTheRunSkipsWhatTheListingReportsOff :: control :: M-GATE-COLLECT-BYPASS',
 			'unit.check.ExtractRepeatedExpressionTest#testALiteralInteriorDifferenceSplitsTheGroup :: control :: '
 				+ 'M-EXTRACT-REPEAT-RENDER-SPLIT',
+			'unit.check.FactsFixGateE2ETest#testAComputedClassNameTheProjectBoundsLetsTheLoopRewrite :: control :: M-REFLECTIVE-BUILDS,M-REFLECTIVE-REACH,M-REFLECTIVE-WARN,M-ESCAPES-FACTS-UNMATCHED',
 			'unit.check.FactsFixGateE2ETest#testAPrivateMemberNoSupertypeDeclaresIsDeleted :: control :: M-UNUSED-PRIVATE-CHAIN-FACTS,M-UNUSED-PRIVATE-CHAIN-DECLARED,M-UNUSED-PRIVATE-CHAIN-AUTOBUILD',
 			'unit.check.FactsFixGateE2ETest#testAReceiverTheFactsTypeAsANonExternClassLosesItsToString :: control :: M-TOSTRING-FACTS-CLASS,M-TOSTRING-FACTS-EXTERN,M-FACTS-ESCAPE-SHIFT',
 			'unit.check.FactsFixGateE2ETest#testAnAbstractTheFactsTypeIsNeverJudgedByAnotherDeclarationOfItsName :: control :: M-FOLD-FACTS-PLAIN-KINDS',
@@ -1329,8 +1330,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.JoinSingleUseLocalCheckTest#testTrailingStatementWithoutInterpolationStillFlagged :: control :: '
 				+ 'M-JSUL-UNINDEXED-NAME-ALWAYS',
 			'unit.check.JoinSingleUseLocalCheckTest#testUnconditionalFieldChainStillFlagged :: control :: M-JSUL-PATH-ALWAYS-CONDITIONAL',
+			'unit.check.LintConfigInheritanceTest#testAnUnnamedKeyFallsThroughToTheAncestor :: control :: M-REFLECTIVE-MERGE',
 			'unit.check.LintConfigTest#testReachSkipsBranchesOnlyUnderADeclaredCompleteOracleList :: control :: M-REACH-CONFIGS-COMPLETE',
 			'unit.check.LintConfigTest#testReachTakesTheBuildsAsCompleteOnlyWhenEveryPathAgrees :: control :: M-REACH-CONFIGS-AGREE',
+			'unit.check.LintConfigTest#testTheReflectiveClassesAreTheRunsOnlyWhenEveryPathDeclaresThemAlike :: control :: M-REFLECTIVE-AGREE',
 			'unit.check.LintFixDeclineWiringSliceTest#testACrossFileRuleIsNotReportedAsSayingNothing :: control :: '
 				+ 'M-LEDGER-CROSS-FILE-MUTE',
 			'unit.check.LintFixDeclineWiringSliceTest#testAnAcceptedFileIsWrittenAndBlamesNobody :: control :: M-LINTFIX-ACCEPTED-BLAMED',
@@ -2564,6 +2567,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testACalleeEveryListedBuildTypesIsReadFromTheirFacts :: control :: M-FACTS-TRUTH-CONTEXT',
 			'unit.query.MemberReachFactsTest#testACalleeTypedDifferentlyInAnotherBuildKeepsTheSyntax :: control :: '
 				+ 'M-FACTS-REACH-ALIKE,M-FACTS-TRUTH-CONTEXT-ALWAYS',
+			'unit.query.MemberReachFactsTest#testAClassAComputedNameMakesIsOneTheProjectDeclaresUnderTheTruth :: control :: M-ESCAPES-FACTS-DECLARED-ANY,M-ESCAPES-FACTS-DECLARED-NONE,M-ESCAPES-FACTS-DECLARED-PRODUCED',
 			'unit.query.MemberReachFactsTest#testAClassAProducerNamesEscapesUnderTheTruth :: control :: M-ESCAPES-FACTS-PRODUCED',
 			'unit.query.MemberReachFactsTest#testAConfigurationWithoutFactsLeavesTheSyntax :: control :: M-FACTS-REACH-DROPPED',
 			'unit.query.MemberReachFactsTest#testAConstructionALiteralWritesIsItsTextUnderTheTruth :: control :: M-FACTS-TEXT-LITERAL',
@@ -2588,6 +2592,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testAConvertedValueOfTheParametersOwnTypeMayBeAnyObjectUnderTheTruth :: control :: '
 				+ 'M-FACTS-CALL-OPERAND-LEAF',
 			'unit.query.MemberReachFactsTest#testACoreTypeAsAValueHoldsNothingUnderTheTruth :: control :: M-ESCAPES-FACTS-ABSTRACT-REFUSED',
+			'unit.query.MemberReachFactsTest#testADeclaredGlobMatchesTheClassItselfByItsQualifiedNameUnderTheTruth :: control :: M-ESCAPES-FACTS-DECLARED-SUBTYPES,M-GLOB-QUALIFIED-SEGMENT',
 			'unit.query.MemberReachFactsTest#testAFieldInitializerIsReadThroughItsFactsUnderTheTruth :: control :: '
 				+ 'M-GRAPH-INIT-RECORD,M-FACTS-VIEW-INIT-FACETED',
 			'unit.query.MemberReachFactsTest#testAFieldReadJoinedAcrossTwoGettersInACallbackIsItsTextUnderTheTruth :: control :: '
@@ -2651,6 +2656,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testANameTwoTypesShareReachedByItsSyntaxRunsAsEachOfThemUnderTheTruth :: control :: '
 				+ 'M-REACH-QUALIFIED-UNNAMED,M-REACH-SHARED-OWNERS',
 			'unit.query.MemberReachFactsTest#testANativeIdentifierAdmitsWhatItMayCall :: control :: M-FACTS-REACH-NATIVE-IDENT',
+			'unit.query.MemberReachFactsTest#testAProducerReadAsAValueMakesOnlyADeclaredClassUnderTheTruth :: control :: M-ESCAPES-FACTS-DECLARED-PRODUCED,M-ESCAPES-FACTS-DECLARED-READER',
 			'unit.query.MemberReachFactsTest#testAProjectFileNoBuildCompilesLetsNoValueEscape :: control :: M-FACTS-DEAD-FILE-VALUES',
 			'unit.query.MemberReachFactsTest#testAProjectFileNoBuildCompilesRunsNothing :: control :: '
 				+ 'M-REACH-DEAD-FILE-SEEDS,M-FACTS-DEAD-FILE-NEVER,M-FACTS-DEAD-FILE-UNTRUE',
@@ -2755,6 +2761,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-TEXT-INLINED-CONSTRUCTION',
 			'unit.query.MemberReachFactsTest#testAnInlinedCallKeepsItsBodysSyntax :: control :: '
 				+ 'M-FACTS-REACH-SPLICE,M-FACTS-TRUTH-SPLICE-ALWAYS',
+			'unit.query.MemberReachFactsTest#testAnInlinedGenericBodyConvertsOnlyWhatEachCallHandsItUnderTheTruth :: control :: M-REACH-SPLICE-ONLY,M-FACTS-INLINED-EDGE',
+			'unit.query.MemberReachFactsTest#testAnInlinedLibraryBodyReadOnDemandStaysSplicedInUnderTheTruth :: control :: M-REACH-SPLICE-EXTERNAL',
 			'unit.query.MemberReachFactsTest#testAnInlinedMethodWhoseBodyIsAnInlinedCallOfConstantsIsItsTextUnderTheTruth :: control :: '
 				+ 'M-FACTS-WALK-WRITTEN-CONSTANT',
 			'unit.query.MemberReachFactsTest#testAnInstanceOfAClassExtendingAnExternEscapesUnderTheTruth :: control :: '
@@ -4628,7 +4636,22 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-NATIVE-CODE',
 			'M-FACTS-CODE-META',
 			'M-METHODS-NATIVE-REFUSED',
-			'M-ESCAPES-FACTS-ABSTRACT-REFUSED'
+			'M-ESCAPES-FACTS-ABSTRACT-REFUSED',
+			'M-ESCAPES-FACTS-DECLARED-ANY',
+			'M-ESCAPES-FACTS-DECLARED-NONE',
+			'M-ESCAPES-FACTS-DECLARED-SUBTYPES',
+			'M-ESCAPES-FACTS-DECLARED-PRODUCED',
+			'M-ESCAPES-FACTS-DECLARED-READER',
+			'M-ESCAPES-FACTS-UNMATCHED',
+			'M-GLOB-QUALIFIED-SEGMENT',
+			'M-REFLECTIVE-BUILDS',
+			'M-REFLECTIVE-REACH',
+			'M-REFLECTIVE-WARN',
+			'M-REFLECTIVE-AGREE',
+			'M-REFLECTIVE-MERGE',
+			'M-REACH-SPLICE-ONLY',
+			'M-FACTS-INLINED-EDGE',
+			'M-REACH-SPLICE-EXTERNAL'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

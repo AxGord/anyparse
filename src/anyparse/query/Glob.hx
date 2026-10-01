@@ -40,7 +40,7 @@ final class Glob {
 		final norm: String = stripTrailingSlash(spec);
 		if (isGlob(norm)) {
 			final base: String = globBase(norm);
-			final re: EReg = globToRegex(norm);
+			final re: EReg = globToRegex(norm, '/');
 			final fsRoot: String = base == '' ? '.' : base;
 			if (FileSystem.exists(fsRoot) && FileSystem.isDirectory(fsRoot)) collectMatching(fsRoot, base, re, out);
 		} else if (FileSystem.exists(norm)) {
@@ -120,12 +120,23 @@ final class Glob {
 		final lastSlash: Int = spec.substr(0, firstGlob).lastIndexOf('/');
 		return lastSlash < 0 ? '' : spec.substr(0, lastSlash);
 	}
+	#end
 
 	/**
-	 * Translate a glob pattern to a fully-anchored regex over the
-	 * printable path string.
+	 * A fully-anchored regex matching the qualified names (`pack.sub.Name`) the glob `spec` describes: star within one
+	 * dotted segment, double-star across segments (followed by a dot it also matches none), `?` one character of a
+	 * segment, `[...]` a character class.
 	 */
-	private static function globToRegex(spec: String): EReg {
+	public static inline function qualifiedNames(spec: String): EReg {
+		return globToRegex(spec, '.');
+	}
+
+	/**
+	 * Translate a glob pattern to a fully-anchored regex over a string whose segments `separator` (one character)
+	 * divides: the printable path string, or a qualified name.
+	 */
+	private static function globToRegex(spec: String, separator: String): EReg {
+		final sep: String = '\\$separator';
 		final buf: StringBuf = new StringBuf();
 		buf.add('^');
 		var i: Int = 0;
@@ -136,19 +147,19 @@ final class Glob {
 				case '*':
 					if (i + 1 < n && spec.charAt(i + 1) == '*') {
 						// `**` — across segments. `**/` also matches zero dirs.
-						if (i + 2 < n && spec.charAt(i + 2) == '/') {
-							buf.add('(?:.*/)?');
+						if (i + 2 < n && spec.charAt(i + 2) == separator) {
+							buf.add('(?:.*$sep)?');
 							i += 3; // noqa: magic-number
 						} else {
 							buf.add('.*');
 							i += 2;
 						}
 					} else {
-						buf.add('[^/]*');
+						buf.add('[^$sep]*');
 						i++;
 					}
 				case '?':
-					buf.add('[^/]');
+					buf.add('[^$sep]');
 					i++;
 				case '[':
 					final end: Int = spec.indexOf(']', i + 1);
@@ -172,6 +183,5 @@ final class Glob {
 		buf.add('$');
 		return new EReg(buf.toString(), '');
 	}
-	#end
 
 }

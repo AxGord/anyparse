@@ -11336,8 +11336,8 @@
 			"name": "M-GRAPH-FACTS-TYPED-NONE",
 			"type": "anyparse.query.CallGraphFacts",
 			"method": "declaredCall",
-			"find": "null,\n\t\t\tCompilerFacts.baseId(owner)\n\t\t);",
-			"replace": "null,\n\t\t\tnull\n\t\t);",
+			"find": "null,\n\t\t\tCompilerFacts.baseId(owner), spliced\n\t\t);",
+			"replace": "null,\n\t\t\tnull, spliced\n\t\t);",
 			"note": "a call's edge no longer names the owner its fact resolved, so a name two types share stays Ambiguous where the call enters it"
 		},
 		{
@@ -12095,6 +12095,126 @@
 			"find": "case Named(ABSTRACT_VALUE, [Named(id, _)]):",
 			"replace": "case Named(ABSTRACT_VALUE, [Named(id, _)]) if (false):",
 			"note": "(precision) an abstract as a value is no type a build typed, so the escapes of a program reading one are never known"
+		},
+		{
+			"name": "M-ESCAPES-FACTS-DECLARED-ANY",
+			"type": "anyparse.query.FactsEscapes",
+			"method": "anyClass",
+			"find": "final globs: Null<Array<String>> = _scope.reflectiveClasses;",
+			"replace": "final globs: Null<Array<String>> = null;",
+			"note": "(precision) the declared `reflectiveClasses` are ignored, so a class value made from a computed name may be of any class and the escapes are never known"
+		},
+		{
+			"name": "M-ESCAPES-FACTS-DECLARED-NONE",
+			"type": "anyparse.query.FactsEscapes",
+			"method": "anyClass",
+			"find": "if (fact != null && !escapeInstance(id, fact, [])) {",
+			"replace": "if (false) {",
+			"note": "a class the project declares a computed name may make is taken never to be made, so what it holds stays in the type system"
+		},
+		{
+			"name": "M-ESCAPES-FACTS-DECLARED-SUBTYPES",
+			"type": "anyparse.query.FactsEscapes",
+			"method": "anyClass",
+			"find": "!escapeInstance(id, fact, [])",
+			"replace": "!escapeType(Named(id, []))",
+			"note": "(precision) a declared class stands for its subtypes too, so a subtype the declaration leaves out is taken to be made by a computed name"
+		},
+		{
+			"name": "M-ESCAPES-FACTS-DECLARED-PRODUCED",
+			"type": "anyparse.query.FactsEscapes",
+			"method": "produced",
+			"find": "if (r.isValue || name == null) return anyClass(",
+			"replace": "if (r.isValue || name == null) return refuse(",
+			"note": "(precision) a computed name, or a producer read as a value, makes a class value of any class whatever the project declares"
+		},
+		{
+			"name": "M-ESCAPES-FACTS-DECLARED-READER",
+			"type": "anyparse.query.FactsEscapes",
+			"method": "produced",
+			"find": "return !declaring.fields.exists(producer) || anyClass(",
+			"replace": "return !declaring.fields.exists(producer) || refuse(",
+			"note": "(precision) a class declaring a producer, read as a value, makes a class value of any class whatever the project declares"
+		},
+		{
+			"name": "M-ESCAPES-FACTS-UNMATCHED",
+			"type": "anyparse.query.FactsEscapes",
+			"method": "unmatchedGlobs",
+			"find": "if (declaredClasses(table, [g]).length == 0) g",
+			"replace": "if (false) g",
+			"note": "a declared glob matching no class the builds typed goes unreported"
+		},
+		{
+			"name": "M-GLOB-QUALIFIED-SEGMENT",
+			"type": "anyparse.query.Glob",
+			"method": "globToRegex",
+			"find": "buf.add('[^$sep]*');",
+			"replace": "buf.add('.*');",
+			"note": "a star crosses segments, so `lib.*` also declares `lib.deep.Keeper`"
+		},
+		{
+			"name": "M-REFLECTIVE-BUILDS",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "withReachConfigurations",
+			"find": "if (found != null && reflective != null) found.reflectiveClasses = reflective;",
+			"replace": "",
+			"note": "the declared `reflectiveClasses` never reach the builds the reach analysis reads"
+		},
+		{
+			"name": "M-REFLECTIVE-REACH",
+			"type": "anyparse.query.MemberReach",
+			"method": "configuredFor",
+			"find": "host.compilerFacts(), compiled.reflectiveClasses",
+			"replace": "host.compilerFacts(), null",
+			"note": "the analysis under the builds drops the declared `reflectiveClasses`"
+		},
+		{
+			"name": "M-REFLECTIVE-WARN",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "withCompilerFacts",
+			"find": "for (glob in FactsEscapes.unmatchedGlobs(built, reflective ?? []))",
+			"replace": "for (glob in ([] : Array<String>))",
+			"note": "a declared glob matching no class the builds typed goes unreported"
+		},
+		{
+			"name": "M-REFLECTIVE-AGREE",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "reflectiveBound",
+			"find": "return alike ? first : null;",
+			"replace": "return first;",
+			"note": "the first path's declaration bounds the run, so a path declaring other classes, or none, is judged under the first's"
+		},
+		{
+			"name": "M-REFLECTIVE-MERGE",
+			"type": "anyparse.check.LintConfig",
+			"method": "mergeDocuments",
+			"find": "reflectiveClasses: near.reflectiveClasses ?? far.reflectiveClasses,",
+			"replace": "reflectiveClasses: near.reflectiveClasses,",
+			"note": "a nested document that leaves `reflectiveClasses` unsaid drops the ancestor's declaration"
+		},
+		{
+			"name": "M-REACH-SPLICE-ONLY",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "if (implicit.length > 0 && spliceOnly[node.id] == true)",
+			"replace": "if (false)",
+			"note": "(precision) a generic body only ever spliced in converts at its declared types, so a conversion of its `T` may run every escaped `toString`"
+		},
+		{
+			"name": "M-FACTS-INLINED-EDGE",
+			"type": "anyparse.query.CallGraphFacts",
+			"method": "declaredCall",
+			"find": "final spliced: Bool = c.access == INLINED && c.site != null && !view.harmlessSplice(g, target);",
+			"replace": "final spliced: Bool = false;",
+			"note": "(precision) an inlined call is no splice its caller holds, so the callee is read at its declared types"
+		},
+		{
+			"name": "M-REACH-SPLICE-EXTERNAL",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "final requeue: (String, ReachStep) -> Void = (to, s) -> enqueueTyped(to, s, null, spliced);",
+			"replace": "final requeue: (String, ReachStep) -> Void = enqueue;",
+			"note": "(precision) the library declaration read for a body only ever spliced in runs as itself, at its declared types"
 		}
 	]
 }

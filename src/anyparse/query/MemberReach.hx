@@ -253,11 +253,13 @@ final class MemberReach {
 	 * none every branch is. `facts` are the compiler's facts of the run's builds: a function they describe whole is read
 	 * through them (`FactsView`), every other one through its syntax; facts naming exactly `configurations` are the
 	 * truth (`factsAreTruth`), and then a project file no build read is out of `index` too (`ReachProject.readThrough`).
+	 * `reflectiveClasses` are the globs the project declares a class made from an unreadable name to match
+	 * (`ReachBuilds.reflectiveClasses`); null for any class.
 	 */
 	public function new(
 		plugin: GrammarPlugin, project: Array<{ file: String, source: String }>, index: SymbolIndex, scopeKnown: Bool,
 		maxLibraryFiles: Int = MAX_LIBRARY_FILES, maxVisited: Int = MAX_VISITED, ?configurations: Array<ReachConfiguration>,
-		?classpathComplete: () -> Bool, ?facts: CompilerFacts
+		?classpathComplete: () -> Bool, ?facts: CompilerFacts, ?reflectiveClasses: Array<String>
 	) {
 		_maxVisited = maxVisited;
 		final cached: GrammarPlugin = plugin is CachingGrammarPlugin ? plugin : new CachingGrammarPlugin(plugin);
@@ -267,7 +269,7 @@ final class MemberReach {
 		_scopeKnown = scopeKnown;
 		for (f in project) _projectSources[f.file] = f.source;
 		_hazards = new ReachHazards(_plugin);
-		final scope: ReachProject = new ReachProject(cached, index, project);
+		final scope: ReachProject = new ReachProject(cached, index, project, reflectiveClasses);
 		final live: ReachLiveness = new ReachLiveness(cached, configurations ?? []);
 		_scope = scope;
 		_live = live;
@@ -1259,6 +1261,13 @@ final class MemberReach {
 		final queueTyped: Array<Null<String>> = [];
 		final queueSteps: Array<Null<ReachStep>> = [];
 		final queued: Map<String, Bool> = [];
+		// under the truth, a node queued so far only by inlined calls whose bodies' facts their callers hold (`CallEdge.inlined`)
+		// runs nowhere as itself: each caller's splice runs its body at the types that call instantiated it at, so its own
+		// implicit-call sites — read at its declared, generic types — wait here until something else runs it (`pending`)
+		final truth: Bool = _scope.facts?.truth == true;
+		final spliceOnly: Map<String, Bool> = [];
+		final deferredSites: Map<String, AdmissionSite> = [];
+		final pending: Array<AdmissionSite> = [];
 		// a warm-up for its side effect: the members admitted anywhere become graph placeholders before the admission
 		// closure below is computed, so the closure can hold them
 		_g.alwaysIds(g); // noqa: unused-return-value
@@ -1269,7 +1278,16 @@ final class MemberReach {
 		final sites: Array<AdmissionSite> = [];
 		var widened: Bool = false;
 
-		function enqueueTyped(id: String, step: ReachStep, typed: Null<String>): Void {
+		function enqueueTyped(id: String, step: ReachStep, typed: Null<String>, inlined: Bool = false): Void {
+			if (!inlined || !truth) {
+				spliceOnly[id] = false;
+				final held: Null<AdmissionSite> = deferredSites[id];
+				if (held != null) {
+					deferredSites.remove(id);
+					pending.push(held);
+				}
+			} else if (!spliceOnly.exists(id))
+				spliceOnly[id] = true;
 			final owner: Null<String> = typed != null && mayShare(g, id) ? typed : null;
 			final key: String = owner == null ? id : '$id@$owner';
 			if (queued.exists(key)) return;
@@ -1400,7 +1418,7 @@ final class MemberReach {
 		}
 		function follow(e: CallEdge): Void {
 			if (boundedCall(e)) return;
-			enqueueTyped(e.to, edgeStep(e), e.typed);
+			enqueueTyped(e.to, edgeStep(e), e.typed, e.inlined == true);
 			final dispatch: Null<String> = e.dispatchType;
 			final target: Null<String> = g.node(e.to)?.name;
 			if (dispatch == null || target == null) return;
@@ -1490,7 +1508,12 @@ final class MemberReach {
 
 		var qi: Int = 0;
 		while (true) {
-			while (qi < queue.length) {
+			while (qi < queue.length || pending.length > 0) {
+				final released: Null<AdmissionSite> = pending.shift();
+				if (released != null) {
+					admit(released);
+					continue;
+				}
 				if (qi >= _maxVisited) return Unknown(blind ?? Budget('the walk visited more than $_maxVisited functions'));
 				final id: String = queue[qi];
 				final typed: Null<String> = queueTyped[qi];
@@ -1508,7 +1531,10 @@ final class MemberReach {
 				if (found == null) continue;
 				var node: FnNode = found;
 				if (node.isExternal) {
-					final more: Null<ReachUnknown> = expandExternal(g, node, reach[id], enqueue, (from, file, span, type, name) -> {
+					// the declaration read for a body only ever spliced in is that body: it stays spliced in
+					final spliced: Bool = spliceOnly[id] == true;
+					final requeue: (String, ReachStep) -> Void = (to, s) -> enqueueTyped(to, s, null, spliced);
+					final more: Null<ReachUnknown> = expandExternal(g, node, reach[id], requeue, (from, file, span, type, name) -> {
 						admit(externSite(g, from, file, span, type, name));
 					});
 					if (more != null) blind = blind ?? more;
@@ -1582,7 +1608,7 @@ final class MemberReach {
 					if (touch != null) return Reached(pathTo(reach, touch.from, { file: touch.file, span: touch.span }));
 					final implicit: Array<ImplicitSite> = declaredSites(g, spans, node.id);
 					admitAlways();
-					if (implicit.length > 0) admit({
+					final own: AdmissionSite = {
 						from: node.id,
 						file: node.file,
 						span: node.span,
@@ -1592,7 +1618,11 @@ final class MemberReach {
 						constructors: false,
 						always: false,
 						implicit: implicit
-					});
+					};
+					if (implicit.length > 0 && spliceOnly[node.id] == true)
+						deferredSites[node.id] = own
+					else if (implicit.length > 0)
+						admit(own);
 				}
 				for (e in liveEdges(g, node.id)) follow(e);
 				for (u in liveUnresolved(g, node.id)) admitUnresolved(u);
@@ -1610,7 +1640,8 @@ final class MemberReach {
 			for (s in sites) apply(s);
 			for (s in narrowed) admitUnread(s, true);
 			admitAlways();
-			if (qi >= queue.length) break;
+			// a body a re-asked admission ran as itself has its own sites still to admit (`pending`)
+			if (qi >= queue.length && pending.length == 0) break;
 		}
 		final stop: Null<ReachUnknown> = blind;
 		return stop == null ? Proven : Unknown(stop);
@@ -2153,7 +2184,7 @@ final class MemberReach {
 		return new MemberReach(
 			plugin, [for (f in project) f],
 			index, scopeKnown, MAX_LIBRARY_FILES, MAX_VISITED, compiled.configurations, declaresEveryType.bind(compiled, index),
-			host.compilerFacts()
+			host.compilerFacts(), compiled.reflectiveClasses
 		);
 	}
 
