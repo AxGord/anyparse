@@ -10,15 +10,25 @@
 # whether the suite caught it. SURVIVED is the finding the tool exists
 # for — a green suite over a mechanism no fixture reaches.
 #
-# Each track gets its own git worktree from a base commit (HEAD, unless
-# --base names another — see below) plus its own private build
+# Each track runs in a git worktree reset to a base commit (HEAD, unless
+# --base names another — see below) with its own private build
 # (tools/worker-build.sh), so tracks run in parallel and never touch
 # bin/apq.js or bin/test.js. Because the worktrees come from that ONE
 # commit, uncommitted work in the main tree is NOT seen unless --base
 # points at a snapshot that carries it — commit (or stash into the patch,
 # or pass --base) whatever the mutation is supposed to be measured against.
 #
+# Speed, and what each lever may not change (docs/testing.md § "Mutation
+# runs: slots, servers and the fixture cache"): one worktree per JOB SLOT,
+# not per track, each with a warm `haxe --wait` server, so a track's build
+# re-types only what its patch touched; and a content-addressed replay of
+# the reach probes' fixture compiles, shared by every track of the run.
+# `APQ_MUTATION_NO_SERVER=1` / `APQ_MUTATION_NO_FIXTURE_CACHE=1` turn either
+# off — the A/B arms a verdict comparison needs.
+#
 # Usage: tools/mutation-check.sh <manifest> [--jobs N] [--keep] [--build-only] [--base <ref>]
+#
+# --jobs N      job slots (default min(cores - 2, memory / 5 GiB), at least 1).
 #
 # --base <ref>  build every track worktree from <ref> instead of HEAD.
 #               `tools/mutation-arm.sh --working-tree` (T694) passes the
@@ -90,10 +100,11 @@
 # Exit 0 only when every track is KILLED; any other verdict exits 1.
 #
 # Every worktree this script created is removed on exit (including on
-# INT/TERM/HUP); a `worktree remove` that itself fails is swallowed so
-# one bad entry cannot strand the rest, which does mean a stuck worktree
-# can survive as a registered entry — `git worktree list` after a crashed
-# run is the check.
+# INT/TERM/HUP), and every slot server stopped — a server also stops itself
+# within seconds of a SIGKILLed parent (slot_server's watchdog); a
+# `worktree remove` that itself fails is swallowed so one bad entry cannot
+# strand the rest, which does mean a stuck worktree can survive as a
+# registered entry — `git worktree list` after a crashed run is the check.
 #
 # The workroot follows the run: removed when every track was KILLED,
 # kept — with its path printed — on any other exit or under `--keep`,
@@ -167,11 +178,35 @@ parse_manifest() {
 # child re-reads the manifest to find its own line so nothing has to
 # survive shell quoting. It ALWAYS exits 0, otherwise xargs aborts the
 # whole batch on the first failing mutation.
+#
+# The track runs in a SLOT (§ "Slots" in the parent section): the first
+# free worktree of the ones the parent created, taken with an atomic
+# `mkdir` and given back when the track is done. The slot is reset to the
+# base commit before the patch goes in, so the track sees the fresh
+# worktree it always had; what is reused is the PATH, and with it the
+# slot's warm compiler server.
 run_track() {
     local name=$1 manifest=$2 workroot=$3 build_only=${4:-0}
-    local row filter expected wt build log verdict_file
+    local slot="" s
+    while [ -z "$slot" ]; do
+        for s in $(cat "$workroot/slots"); do
+            if mkdir "$workroot/slot-$s.lock" 2>/dev/null; then
+                slot=$s
+                break
+            fi
+        done
+        [ -n "$slot" ] || sleep 1
+    done
+    run_in_slot "$name" "$manifest" "$workroot" "$build_only" "$slot"
+    rmdir "$workroot/slot-$slot.lock" 2>/dev/null || true
+    return 0
+}
+
+run_in_slot() {
+    local name=$1 manifest=$2 workroot=$3 build_only=$4 slot=$5
+    local row patch filter expected wt build log verdict_file path
     verdict_file="$workroot/$name.verdict"
-    wt="$workroot/wt-$name"
+    wt="$workroot/slot-$slot"
     build="$workroot/build-$name"
     log="$workroot/$name.log"
 
@@ -183,13 +218,33 @@ run_track() {
         write_verdict "$verdict_file" "RUN-FAIL" "track '$name' vanished from $manifest between the parent's parse and this child's"
         return 0
     fi
+    patch=$(printf '%s' "$row" | cut -f2)
     filter=$(printf '%s' "$row" | cut -f3)
     expected=$(printf '%s' "$row" | cut -f4)
 
-    if ! "$wt/tools/worker-build.sh" "$build" test > "$workroot/$name.build.log" 2>&1; then
+    # Back to the base commit: the previous track's patch and everything its
+    # run wrote, ignored files included, go. git rewrites only the files that
+    # DIFFER, so every other file keeps the mtime the slot's server cached it
+    # under.
+    if ! { git -C "$wt" reset --hard -q && git -C "$wt" clean -fdxq; } > "$workroot/$name.wt.log" 2>&1; then
+        write_verdict "$verdict_file" "WT-FAIL" "slot $slot could not be reset: $(tr '\n' ' ' < "$workroot/$name.wt.log")"
+        return 0
+    fi
+    # `--` so a patch path beginning with `-` is a path, not a flag.
+    if ! git -C "$wt" apply -- "$patch" 2>"$workroot/$name.apply.log"; then
+        write_verdict "$verdict_file" "PATCH-FAIL" "$(tr '\n' ' ' < "$workroot/$name.apply.log")"
+        return 0
+    fi
+
+    local started built
+    started=$(date +%s)
+    if ! build_track "$workroot" "$slot" "$wt" "$build" "$workroot/$name.build.log"; then
         write_verdict "$verdict_file" "BUILD-FAIL" "$(build_detail "$workroot/$name.build.log")"
         return 0
     fi
+    built=$(date +%s)
+    # `<build kind> <build s> <run s>`, summed by the parent's report.
+    printf '%s %s ' "$(build_kind "$workroot/$name.build.log")" "$((built - started))" > "$workroot/$name.timing"
 
     # `--build-only` asks whether the cut COMPILES and stops there. It claims
     # nothing about any fixture, which is why the verdict is not KILLED: an arm
@@ -200,11 +255,18 @@ run_track() {
         return 0
     fi
 
-    if [ "$filter" = "ALL" ]; then
-        ( cd "$wt" && env -u APQ_TEST node "$build/test.js" ) > "$log" 2>&1 || true
-    else
-        ( cd "$wt" && APQ_TEST="$filter" node "$build/test.js" ) > "$log" 2>&1 || true
+    # The fixture cache's `haxe` shim goes first on the PATH when the parent
+    # built one (§ "The fixture cache" in the parent section).
+    path=$PATH
+    if [ -x "$workroot/fixture-cache/bin/haxe" ]; then
+        path="$workroot/fixture-cache/bin:$PATH"
     fi
+    if [ "$filter" = "ALL" ]; then
+        ( cd "$wt" && env -u APQ_TEST PATH="$path" node "$build/test.js" ) > "$log" 2>&1 || true
+    else
+        ( cd "$wt" && APQ_TEST="$filter" PATH="$path" node "$build/test.js" ) > "$log" 2>&1 || true
+    fi
+    printf '%s\n' "$(($(date +%s) - built))" >> "$workroot/$name.timing"
 
     # Captured, not redirected straight into the file: `> "$verdict_file"`
     # truncates before classify runs, so an abort inside it would leave an
@@ -216,9 +278,9 @@ run_track() {
         return 0
     fi
     full=""
-    { IFS= read -r v; IFS= read -r d; IFS= read -r full || true; } <<EOF
+    { IFS= read -r v; IFS= read -r d; IFS= read -r full || true; } <<VERDICT
 $classified
-EOF
+VERDICT
     # The classifier reports WHY it could not judge; only the shell knows
     # WHERE the transcript is, and a RUN-FAIL row is read by someone about
     # to open it.
@@ -236,6 +298,115 @@ EOF
         printf '\n--- mutation-verdict: uncapped %s ---\n%s\n' "$v" "$full" >> "$log"
     fi
     write_verdict "$verdict_file" "$v" "$d"
+    return 0
+}
+
+# build_track <workroot> <slot> <worktree> <build-dir> <log> — the track's
+# private test.js, through the slot's warm server when there is one.
+#
+# A server answer is trusted only as a SUCCESS. Its known failure modes are
+# all failures, never a wrong success: a stale synthesized type after a
+# grammar module changed (`Type name … is redefined from module …`), stale
+# null-safety diagnostics, a silent hang (test-js.hxml's header; the
+# timeout). A failed warm build restarts the server and is repeated through
+# the FRESH one, whose first build compiles everything from scratch — and
+# leaves the slot warm again. Only when that fails too is the build repeated
+# with a plain cold `haxe`, and that compile's answer is the verdict: a
+# BUILD-FAIL row never rests on a server.
+build_track() {
+    local workroot=$1 slot=$2 wt=$3 build=$4 log=$5 port pid rss attempt
+    for attempt in warm restarted; do
+        port=$(slot_server "$workroot" "$slot")
+        [ -n "$port" ] || break
+        if APQ_HAXE_SERVER="127.0.0.1:$port" run_with_timeout "$BUILD_TIMEOUT" "$wt/tools/worker-build.sh" "$build" test > "$log" 2>&1; then
+            # A server grows with every build it answers; past the cap it is
+            # restarted before the next one rather than left to swap.
+            pid=$(slot_server_pid "$workroot" "$slot")
+            rss=$(ps -o rss= -p "$pid" 2>/dev/null | tr -d ' ' || true)
+            if [ -n "$rss" ] && [ "$rss" -gt "$SERVER_MAX_RSS_KB" ]; then
+                stop_slot_server "$workroot" "$slot"
+            fi
+            echo "$attempt" > "$log.kind"
+            return 0
+        fi
+        stop_slot_server "$workroot" "$slot"
+        mv "$log" "$log.$attempt"
+    done
+    # The log stays the compiler's own: `apq mutation-verdict --build` reads it.
+    echo cold > "$log.kind"
+    env -u APQ_HAXE_SERVER "$wt/tools/worker-build.sh" "$build" test > "$log" 2>&1
+}
+
+# How the track's build went, as build_track left it: `warm`, `restarted` (a
+# failed warm build repeated through a fresh server), or `cold`.
+build_kind() {
+    cat "$1.kind" 2>/dev/null || echo cold
+}
+
+# run_with_timeout <seconds> <cmd>... — <cmd> in its own process group,
+# killed WHOLE (the haxe client worker-build.sh backgrounds included) when
+# it outlives <seconds>; exit 124 then. Perl, because macOS ships no
+# `timeout`.
+run_with_timeout() {
+    perl -e '
+        my $t = shift;
+        my $pid = fork();
+        die "fork: $!" unless defined $pid;
+        if ($pid == 0) { setpgrp(0, 0); exec @ARGV or exit 127; }
+        local $SIG{ALRM} = sub { kill "KILL", -$pid; waitpid($pid, 0); exit 124; };
+        alarm $t;
+        waitpid($pid, 0);
+        exit($? & 127 ? 128 + ($? & 127) : $? >> 8);
+    ' "$@"
+}
+
+# `slot-<n>.server` holds `<pid> <port>` while the slot's server runs.
+slot_server_pid() {
+    awk '{ print $1 }' "$1/slot-$2.server" 2>/dev/null || true
+}
+
+stop_slot_server() {
+    local pid
+    pid=$(slot_server_pid "$1" "$2")
+    if [ -n "$pid" ]; then
+        kill "$pid" 2>/dev/null || true
+    fi
+    rm -f "$1/slot-$2.server"
+}
+
+# slot_server <workroot> <slot> -> the port of the slot's live server,
+# started on first use; empty when servers are off or none would start (the
+# build is then cold, which is only slower).
+slot_server() {
+    local workroot=$1 slot=$2 pid port try wait owner
+    [ -f "$workroot/servers" ] || return 0
+    owner=$(cat "$workroot/servers")
+    pid=$(slot_server_pid "$workroot" "$slot")
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+        awk '{ print $2 }' "$workroot/slot-$slot.server"
+        return 0
+    fi
+    for try in 1 2 3; do
+        port=$(node -e 'const s = require("net").createServer(); s.listen(0, "127.0.0.1", () => { console.log(s.address().port); s.close(); });')
+        haxe --wait "127.0.0.1:$port" > "$workroot/slot-$slot.server.log" 2>&1 &
+        pid=$!
+        # The server must not outlive the run: the parent's EXIT trap stops
+        # it, and this watchdog covers the SIGKILL no trap sees.
+        (
+            while kill -0 "$owner" 2>/dev/null && kill -0 "$pid" 2>/dev/null; do sleep 5; done
+            kill "$pid" 2>/dev/null
+        ) > /dev/null 2>&1 &
+        for wait in 1 2 3 4 5 6 7 8 9 10; do
+            if node -e 'const c = require("net").connect(+process.argv[1], "127.0.0.1"); c.on("connect", () => process.exit(0)); c.on("error", () => process.exit(1));' "$port" 2>/dev/null; then
+                printf '%s %s\n' "$pid" "$port" > "$workroot/slot-$slot.server"
+                printf '%s\n' "$port"
+                return 0
+            fi
+            kill -0 "$pid" 2>/dev/null || break
+            sleep 0.5
+        done
+        kill "$pid" 2>/dev/null || true
+    done
     return 0
 }
 
@@ -285,6 +456,15 @@ EOF
 }
 
 # --------------------------------------------------- child entry point
+
+# A warm build that has not answered in this many seconds is a hung server
+# (a cold build under full load takes about a minute); it is killed and the
+# build repeated cold.
+BUILD_TIMEOUT=${APQ_MUTATION_BUILD_TIMEOUT:-300}
+# A slot's server is restarted once its resident set passes this (KiB).
+SERVER_MAX_RSS_KB=${APQ_MUTATION_SERVER_MAX_RSS_KB:-6291456}
+# The memory one default job is budgeted (GiB): see the `--jobs` default.
+GIB_PER_JOB=5
 
 if [ "${1:-}" = "--track" ]; then
     if [ "$#" -lt 4 ] || [ "$#" -gt 5 ]; then
@@ -423,20 +603,32 @@ if [ -n "$jobs" ]; then
         exit 2
     fi
 else
-    # max(1, min(4, cores/2)) — the clamps here bound OUR arithmetic, not
-    # a request, so a single-core machine gets 1 rather than an error.
+    # min(cores - 2, memory / GIB_PER_JOB), at least 1 — the clamps bound
+    # OUR arithmetic, not a request, so a small machine gets 1 rather than
+    # an error. A job is one warm compiler server (~3-5 GB resident) plus a
+    # suite process, so memory is the binding term on a 16-core / 64 GB Mac;
+    # two cores stay free for the parent, git and the machine's other work.
+    # The old default, max(1, min(4, cores/2)), is what made a 139-arm
+    # `--fast` sweep take 45 minutes (docs/testing.md § "Mutation runs").
     if [ "$(uname -s)" = "Darwin" ]; then
         cores=$(sysctl -n hw.ncpu 2>/dev/null || echo 2)
+        mem_gib=$(( $(sysctl -n hw.memsize 2>/dev/null || echo 8589934592) / 1073741824 ))
     else
         cores=$(nproc 2>/dev/null || echo 2)
+        mem_gib=$(( $(awk '/^MemTotal:/ { print $2 }' /proc/meminfo 2>/dev/null || echo 8388608) / 1048576 ))
     fi
-    jobs=$((cores / 2))
-    if [ "$jobs" -gt 4 ]; then
-        jobs=4
+    jobs=$((cores - 2))
+    if [ "$jobs" -gt $((mem_gib / GIB_PER_JOB)) ]; then
+        jobs=$((mem_gib / GIB_PER_JOB))
     fi
     if [ "$jobs" -lt 1 ]; then
         jobs=1
     fi
+fi
+# More slots than tracks would only start servers nothing uses.
+track_count=$(printf '%s\n' "$rows" | wc -l | tr -d ' ')
+if [ "$jobs" -gt "$track_count" ]; then
+    jobs=$track_count
 fi
 
 # The sweep runs BEFORE the claim so this run's own directory is never one
@@ -446,12 +638,13 @@ tmpl_sweep "$repo"
 workroot=$(tmpl_claim anyparse-mutcheck)
 echo "workroot: $workroot"
 
-created=""
+slots=""
 exit_code=1
 cleanup() {
-    local wt
-    for wt in $created; do
-        git -C "$repo" worktree remove --force "$workroot/wt-$wt" >/dev/null 2>&1 || true
+    local s
+    for s in $slots; do
+        stop_slot_server "$workroot" "$s"
+        git -C "$repo" worktree remove --force "$workroot/slot-$s" >/dev/null 2>&1 || true
     done
     git -C "$repo" worktree prune >/dev/null 2>&1 || true
     # `exit_code` is 1 until the report has computed the real one, so every
@@ -482,33 +675,105 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT TERM HUP
 
+# Slots. A track used to get a worktree of its own, and so a build that
+# shared nothing with any other: 36 s of a cold `haxe test-js-common.hxml`
+# per track. Now `jobs` worktrees are created once, each track takes a free
+# one (run_track) and resets it to the base before applying its patch, and
+# each slot keeps one `haxe --wait` server across its tracks: the server's
+# module cache is keyed by file PATH, and a slot's paths are its own, so a
+# track re-types only what its patch touched and what depends on it.
+# `APQ_MUTATION_NO_SERVER=1` builds every track cold (the A/B arm).
+#
 # Worktree creation is SERIAL: parallel `git worktree add` races over
 # .git/worktrees. The expensive parts (build, test run) are the parallel
 # ones.
-runnable=""
-while IFS=$'\t' read -r name patch filter expected; do
-    if ! git -C "$repo" worktree add --detach --quiet "$workroot/wt-$name" "$base_ref" 2>"$workroot/$name.wt.log"; then
-        write_verdict "$workroot/$name.verdict" "WT-FAIL" "worktree add failed: $(tr '\n' ' ' < "$workroot/$name.wt.log")"
-        continue
+: > "$workroot/slots"
+for s in $(seq 1 "$jobs"); do
+    if git -C "$repo" worktree add --detach --quiet "$workroot/slot-$s" "$base_ref" 2>"$workroot/slot-$s.wt.log"; then
+        slots="$slots $s"
+        printf '%s\n' "$s" >> "$workroot/slots"
     fi
-    created="$created $name"
-    # `--` so a patch path beginning with `-` is a path, not a flag.
-    if ! git -C "$workroot/wt-$name" apply -- "$patch" 2>"$workroot/$name.apply.log"; then
-        write_verdict "$workroot/$name.verdict" "PATCH-FAIL" "$(tr '\n' ' ' < "$workroot/$name.apply.log")"
-        continue
-    fi
-    runnable="$runnable$name
-"
-done <<EOF
+done
+if [ -z "$slots" ]; then
+    while IFS=$'\t' read -r name patch filter expected; do
+        write_verdict "$workroot/$name.verdict" "WT-FAIL" "worktree add failed: $(tr '\n' ' ' < "$workroot/slot-1.wt.log")"
+    done <<EOF
 $rows
 EOF
+fi
+if [ -z "${APQ_MUTATION_NO_SERVER:-}" ]; then
+    # The owner every slot server's watchdog follows (slot_server).
+    printf '%s\n' "$$" > "$workroot/servers"
+fi
+
+# The fixture cache. A track pinning MemberReachFactsTest spent 63 of its 66
+# seconds in ~290 real compiles of tiny fixtures (the facts and defines
+# probes), the same fixtures in every track. `testkit.FixtureCompileCache`
+# replays such a compile from a content-addressed record — every input by
+# content, every path placeheld — shared by all tracks of this run and
+# discarded with the workroot. It is built from THIS tree, never from a
+# track's: the tracks' sources are the mutated ones. Its `haxe` shim goes
+# first on each suite run's PATH and hands every compile that is not a
+# probe compile straight to the real compiler.
+# `APQ_MUTATION_NO_FIXTURE_CACHE=1` runs every compile for real.
+if [ -z "${APQ_MUTATION_NO_FIXTURE_CACHE:-}" ] && [ "$build_only" -eq 0 ]; then
+    cache="$workroot/fixture-cache"
+    mkdir -p "$cache/bin" "$cache/entries"
+    real_haxe=$(command -v haxe || true)
+    if [ -n "$real_haxe" ]; then
+        real_haxe=$(cd -P "$(dirname "$real_haxe")" && pwd)/$(basename "$real_haxe")
+        # Follow a symlinked compiler to the binary it names: the stamp is
+        # the INSTALL, not a PATH entry that may later point elsewhere.
+        while [ -L "$real_haxe" ]; do
+            link=$(readlink "$real_haxe")
+            case "$link" in
+                /*) real_haxe=$link ;;
+                *) real_haxe=$(cd -P "$(dirname "$real_haxe")/$(dirname "$link")" && pwd)/$(basename "$link") ;;
+            esac
+        done
+    fi
+    if [ -n "$real_haxe" ] && ( cd "$repo" && haxe -cp test -main testkit.FixtureCompileCache -lib hxnodejs -D js-es=6 \
+        -js "$cache/fixture-cache.js" ) > "$cache/build.log" 2>&1; then
+        stamp="$real_haxe $("$real_haxe" -version 2>&1)"
+        # Paths are baked in rather than exported: a test that spawns the
+        # compiler under an environment of its own must still reach the cache.
+        {
+            printf '#!/bin/bash\n'
+            printf '# Generated by tools/mutation-check.sh: probe compiles go through the fixture cache.\n'
+            printf 'case "$*" in\n'
+            printf '    *anyparse.check.TypedFactsMacro.run\\(*|*AnyparseReachDefinesProbe.*)\n'
+            printf '        APQ_FIXTURE_CACHE_HAXE=%q APQ_FIXTURE_CACHE_STAMP=%q APQ_FIXTURE_CACHE_DIR=%q exec node %q "$@" ;;\n' \
+                "$real_haxe" "$stamp" "$cache/entries" "$cache/fixture-cache.js"
+            printf 'esac\n'
+            printf 'exec %q "$@"\n' "$real_haxe"
+        } > "$cache/bin/haxe"
+        chmod +x "$cache/bin/haxe"
+    else
+        echo "mutation-check.sh: the fixture cache could not be built ($cache/build.log) — every fixture compile runs for real" >&2
+    fi
+fi
 
 # Children always exit 0, so xargs failing here means xargs itself broke;
 # the report below turns a missing verdict into RUN-FAIL either way.
-if [ -n "$runnable" ]; then
-    if ! printf '%s' "$runnable" | xargs -P "$jobs" -I{} "$self" --track {} "$manifest" "$workroot" "$build_only"; then
+if [ -n "$slots" ]; then
+    if ! printf '%s\n' "$rows" | cut -f1 | xargs -P "$(wc -l < "$workroot/slots" | tr -d " ")" -I{} "$self" --track {} "$manifest" "$workroot" "$build_only"; then
         echo "mutation-check.sh: xargs reported a failure — see the per-track verdicts below" >&2
     fi
+fi
+# Where the time went: per build kind, how many tracks and their mean build
+# seconds, and the mean suite run. `restarted` counts a server failing a
+# build its fresh successor accepted — see build_track.
+if ls "$workroot"/*.timing > /dev/null 2>&1; then
+    cat "$workroot"/*.timing | awk '
+        { n[$1]++; b[$1] += $2; if ($3 != "") { runs++; r += $3 } }
+        END {
+            printf "timing:"
+            for (k in n) printf " %s builds %d (mean %.0fs),", k, n[k], b[k] / n[k]
+            printf " suite runs %d (mean %.0fs)\n", runs, runs ? r / runs : 0
+        }'
+fi
+if [ -f "$workroot/fixture-cache/entries/tally" ]; then
+    echo "fixture cache: $(sort "$workroot/fixture-cache/entries/tally" | uniq -c | awk '{ printf "%s%s %s", sep, $1, $2; sep = ", " }')"
 fi
 
 # ------------------------------------------------------------- report
