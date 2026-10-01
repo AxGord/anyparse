@@ -346,6 +346,28 @@ final class MemberTouchScan {
 	}
 
 	/**
+	 * Record into `out` how the faceted node `id` — one reading a name several types share as one type's member
+	 * (`CallGraphFacts.qualify`), made after `scan` — touches the member `declaring` declares as `name`, read through its
+	 * typed accesses (`nodeAccesses`, `recordTyped`) as `scan` reads every faceted function of the project. False when the
+	 * facts do not answer for them: the node is then none the walk can read as that type's.
+	 */
+	public function scanNode(
+		g: CallGraph, id: String, name: String, declaring: String, access: ReachAccess, arrayTyped: Bool, out: MemberTouches,
+		regionFile: String, region: Null<Span>
+	): Bool {
+		final facts: Null<CallGraphFacts> = g.facts;
+		final node: Null<FnNode> = g.node(id);
+		final bodies: Null<Array<FactNode>> = facts?.faceted[id];
+		if (facts == null || node == null || bodies == null || !facts.view.truth) return false;
+		final owners: Array<String> = facts.view.bySimpleName()[declaring] ?? [];
+		if (owners.length == 0) return false;
+		final accesses: Null<Array<FieldFact>> = nodeAccesses(g, node, bodies, name, declaring, owners, facts.view, false);
+		if (accesses == null) return false;
+		recordTyped(g, id, name, accesses, access, arrayTyped, out, regionFile, region);
+		return true;
+	}
+
+	/**
 	 * Record the method `id` a build macro made (`CallGraphFacts.adopted`) whose facts do not say how it accesses a name of
 	 * the member (`typedAccesses`): it touches the member, and — for `Mutate` — lets its value escape, both where its body is.
 	 */

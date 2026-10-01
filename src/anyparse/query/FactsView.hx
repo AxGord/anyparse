@@ -55,7 +55,10 @@ using StringTools;
  * of its type, one per build - is read by its id, the union of what every build typed under it, whichever declaration each read
  * (`foldedBodies`), when every declaration of its type is the one type the builds typed (`soleType`); a node of a name two types share
  * keeps its syntax — unless only one of those types declares the member, which
- * the node then is (`soleMember`). A body an inlined function was spliced into is
+ * the node then is (`soleMember`). A call whose fact names one of those types as its target's owner reads the node as
+ * that type's member alone (`CallGraphFacts.qualify`): of the declarations the node folds, those of that type
+ * (`qualifiedDeclarations`), every one of which the graph holds, faceted by the facts of the type's own member
+ * (`ownerBodies`). A body an inlined function was spliced into is
  * faceted too: the splice's facts are the body's, at the callee's positions, each run at a site of the `inlined` call whose method
  * declares it — the innermost expression of the body around the call — so a range question meeting such a site takes it, and one
  * no call's method declares from every body it meets (`CompilerFacts.within`, `CallGraphFacts.siteOf`): more than the range runs,
@@ -198,11 +201,13 @@ final class FactsView {
 	 * each non-String value thrown and of each argument a conversion call (`ExecutionShape.stringConversionCalls`) is handed, and the
 	 * iteration of each `for` the compiler kept. Every other implicit call — an operator, a conversion, an index, an
 	 * accessor, a literal construction — is a call or a construction the facts name, an edge of the graph. An operand the
-	 * facts show is an object of exactly its own class (`StringFact.exact`) makes its site `exact`. Null when the innermost
-	 * graph node holding `span` is not faceted: the syntactic sites answer.
+	 * facts show is an object of exactly its own class (`StringFact.exact`) makes its site `exact`. A conversion call's
+	 * argument is of the type a flow at exactly its range names (`conversionFlow`), and of any type otherwise: a leaf of
+	 * it of the parameter's own type records no flow. Null when the innermost graph node holding `span` — read as `node`
+	 * when it is that one read as one type's member (`CallGraphFacts.qualify`) — is not faceted: the syntactic sites answer.
 	 */
-	public function sitesIn(g: CallGraph, file: String, span: Span): Null<Array<ImplicitSite>> {
-		if (!faceted(g, file, span)) return null;
+	public function sitesIn(g: CallGraph, file: String, span: Span, ?node: String): Null<Array<ImplicitSite>> {
+		if (!faceted(g, file, span, node)) return null;
 		final harmless: (callee:String) -> Bool = harmlessSplice.bind(g);
 		final strings: Null<Array<StringFact>> = table.within(file, span, n -> n.strings, s -> s.at, truth, harmless);
 		final iterations: Null<Array<IterationFact>> = table.within(file, span, n -> n.iterations, i -> i.at, truth, harmless);
@@ -221,17 +226,13 @@ final class FactsView {
 		for (c in calls) {
 			final target: Null<String> = c.target;
 			if (target == null || !convertsToString(target)) continue;
-			// a spliced call and its argument may sit in another file than the call beside them
-			final argument: Null<FlowFact> = flows.find(
-				f -> f.via == 'arg' && f.at.file == c.at.file && c.at.span.from <= f.at.span.from && f.at.span.to <= c.at.span.to
-			);
-			// the conversion the compiler wrote for an operand sits at the operand's own range: then that one value is converted
-			final operand: Bool = argument != null && argument.at.span.from == c.at.span.from && argument.at.span.to == c.at.span.to;
+			// the flow of the whole value converted: an object of exactly its class when it says so
+			final argument: Null<FlowFact> = conversionFlow(g, file, c, flows);
 			out.push({
 				family: Text,
 				span: c.at.span,
 				types: [argument == null ? null : simpleSource(argument.from)],
-				exact: operand && argument?.exact == true
+				exact: argument?.exact == true
 			});
 		}
 		for (i in iterations) out.push({
@@ -249,8 +250,8 @@ final class FactsView {
 	 * truth (`truth`) and the innermost graph node holding `span` is faceted: every build's reading of that code is then
 	 * among them. Null otherwise, and when a fact there has no place (`CompilerFacts.within`): the syntax answers.
 	 */
-	public function truthSites(g: CallGraph, file: String, span: Span): Null<TruthSites> {
-		if (!truth || !faceted(g, file, span)) return null;
+	public function truthSites(g: CallGraph, file: String, span: Span, ?node: String): Null<TruthSites> {
+		if (!truth || !faceted(g, file, span, node)) return null;
 		final harmless: (callee:String) -> Bool = harmlessSplice.bind(g);
 		final natives: Null<Array<NativeFact>> = table.within(file, span, n -> n.natives, f -> f.at, true, harmless);
 		final reflection: Null<Array<ReflectionFact>> = table.within(file, span, n -> n.reflection, r -> r.at, true, harmless);
@@ -269,11 +270,45 @@ final class FactsView {
 
 	/**
 	 * Whether the innermost graph node holding `span` of `file` is faceted: its facts replace its syntax. What holds `span`
-	 * is one declaration of the node (`CallGraph.declarationAt`), which may be another than the one its `span` names.
+	 * is one declaration of the node (`CallGraph.declarationAt`), which may be another than the one its `span` names. A
+	 * node reading that one as one type's member (`CallGraphFacts.qualify`) is asked instead when `node` names it and that
+	 * declaration is one it reads.
 	 */
-	public function faceted(g: CallGraph, file: String, span: Span): Bool {
+	public function faceted(g: CallGraph, file: String, span: Span, ?node: String): Bool {
 		final at: Null<FnDeclaration> = g.declarationAt(file, span.from);
-		return at != null && span.to <= at.span.to && g.facts?.faceted.exists(at.id) == true;
+		if (at == null || span.to > at.span.to) return false;
+		final key: String = CallGraphNames.normalizePath(file);
+		final reads: Bool = node != null && g.facts?.qualified[node]?.node == at.id
+			&& g.declarationsOf(node).exists(d -> CallGraphNames.normalizePath(d.file) == key && sameRange(d.span, at.span));
+		return g.facts?.faceted.exists(reads && node != null ? node : at.id) == true;
+	}
+
+	/**
+	 * The flow handing the argument of the conversion call `c`, of the facts of `file`, to it: the one at exactly the range
+	 * of the argument the call's text holds — its receiver, for a static extension — or, for a conversion the compiler
+	 * wrote for an operand, at the call's own range. Null — a value of any type — when there is none: a leaf of the argument whose type is the parameter's records
+	 * no flow, so a flow inside the argument is one leaf of it, not the value converted.
+	 */
+	private function conversionFlow(g: CallGraph, file: String, c: CallFact, flows: Array<FlowFact>): Null<FlowFact> {
+		function at(range: Span): Null<FlowFact> {
+			return flows.find(f -> f.via == 'arg' && f.at.file == c.at.file && sameRange(f.at.span, range));
+		}
+		final operand: Null<FlowFact> = at(c.at.span);
+		if (operand != null) return operand;
+		// a spliced call sits in another file than the text read here
+		final tree: Null<QueryNode> = c.at.file == table.keyOf(file) ? g.treeOf(file) : null;
+		final call: Null<QueryNode> = tree == null ? null : nodeAt(tree, _scope.shape.callKind, c.at.span);
+		final callee: Null<QueryNode> = call == null || call.children.length == 0 ? null : call.children[0];
+		// a static extension (`using Std; x.string()`) is handed its receiver
+		final extension: Bool = callee != null && call?.children.length == 1 && callee.kind == _scope.shape.fieldAccessKind
+			&& callee.children.length > 0;
+		final argument: Null<Span> = if (call != null && call.children.length == 2)
+			call.children[1].span
+		else if (extension && callee != null)
+			callee.children[0].span
+		else
+			null;
+		return argument == null ? null : at(argument);
 	}
 
 	/**
@@ -421,16 +456,7 @@ final class FactsView {
 			if (body != null && FUNCTION_KINDS.contains(body.kind) && !body.generated) holders.push(t);
 		}
 		final holder: Null<String> = holders.length == 1 ? holders[0] : null;
-		final fact: Null<TypeFact> = holder == null ? null : table.type(holder);
-		final generic: Null<String> = fact?.genericOf;
-		final root: Null<String> = if (holder == null || fact == null)
-			null
-		else if (generic != null)
-			CompilerFacts.baseId(generic)
-		else if (fact.kind == IMPL_KIND)
-			implemented(holder)
-		else
-			holder;
+		final root: Null<String> = holder == null ? null : rootOf(holder);
 		var sole: Null<String> = root == null ? null : holder;
 		for (fi in _scope.index.allFiles())
 			for (t in fi.types)
@@ -473,8 +499,15 @@ final class FactsView {
 		final sole: Null<String> = whole != null && table.type(whole)?.fields.exists(f -> f.name == member) == true
 			? whole
 			: soleMember(type, member);
-		if (sole == null) return null;
-		final owner: String = sole;
+		return sole == null ? null : ownerBodies(sole, member);
+	}
+
+	/**
+	 * The facts of the member the graph calls `member` of the typed type `owner`: its body and each further overload of it,
+	 * every one the union over the builds that typed it, whichever declaration each build read. Null when `owner` declares
+	 * no such field, or one of those bodies was not typed as a function or was placed by a macro.
+	 */
+	public function ownerBodies(owner: String, member: String): Null<Array<FactNode>> {
 		final field: Null<FieldDeclFact> = table.type(owner)?.fields.find(f -> graphMember(owner, f.name) == member);
 		if (field == null) return null;
 		final own: String = field.name;
@@ -487,6 +520,76 @@ final class FactsView {
 			out.push(found);
 		}
 		return out;
+	}
+
+	/**
+	 * Of the declarations the graph node `node` folds (`CallGraph.declarationsOf`), the ones of the type `owner` is written
+	 * as (`rootOf`), when every one of them can be told: each lies in a type of the node's name its text declares and the
+	 * index lists in its file — every copy of a type in one module, one per branch of a region, being that one type — whose
+	 * package-qualified id is that type's or another's — and every declaration of `owner`'s type the index holds that
+	 * declares the member lies in a file among them, so none of its code is missing from the graph. Null otherwise, or when
+	 * none is `owner`'s.
+	 */
+	public function qualifiedDeclarations(g: CallGraph, node: FnNode, owner: String): Null<Array<FnDeclaration>> {
+		final type: Null<String> = node.typeName;
+		final name: Null<String> = node.name;
+		final root: Null<String> = rootOf(owner);
+		if (type == null || name == null || root == null) return null;
+		final out: Array<FnDeclaration> = [];
+		for (d in g.declarationsOf(node.id)) {
+			// the type its text declares it in: the index lists a type once per file, whatever branch of a region each copy is in
+			final fi: Null<FileInfo> = _scope.index.fileInfo(d.file);
+			final tree: Null<QueryNode> = g.treeOf(d.file);
+			final holder: Null<String> = tree == null ? null : MemberTouchScan.typeAt(tree, d.span.from);
+			final listed: Null<TypeDeclInfo> = fi?.types.find(t -> t.name == type);
+			if (fi == null || listed == null || holder != type) return null;
+			if (declaredId(fi, listed) == root) out.push(d);
+		}
+		final read: Array<String> = [for (d in out) CallGraphNames.normalizePath(d.file)];
+		for (file in ownerFiles(type, owner, name)) if (!read.contains(CallGraphNames.normalizePath(file))) return null;
+		return out.length == 0 ? null : out;
+	}
+
+	/** The typed types of the graph type `type` standing for the type `owner` is written as (`rootOf`, `standsFor`). */
+	public function standingFor(type: String, owner: String): Array<String> {
+		final root: Null<String> = rootOf(owner);
+		return root == null ? [] : [for (id in bySimpleName()[type] ?? []) if (standsFor(id, root)) id];
+	}
+
+	/**
+	 * Whether a build macro may rewrite the type the typed type `owner` is written as, of the several the graph type `type`
+	 * names: a typed type standing for it (`standingFor`), or one it extends or implements, records a `@:build`-family call.
+	 */
+	public function builtAs(type: String, owner: String): Bool {
+		for (id in standingFor(type, owner))
+			for (t in [id].concat(table.supertypesOf(CompilerFacts.baseId(id))))
+				if ((table.type(t)?.builds.length ?? 0) > 0) return true;
+		return false;
+	}
+
+	/**
+	 * The files of the index declaring the type `owner` is written as (`rootOf`) under the simple name `type` — only those
+	 * declaring a member `name` of it, when given.
+	 */
+	public function ownerFiles(type: String, owner: String, ?name: String): Array<String> {
+		final root: Null<String> = rootOf(owner);
+		final out: Array<String> = [];
+		function declares(fi: FileInfo, t: TypeDeclInfo): Bool {
+			return t.name == type && declaredId(fi, t) == root && (name == null || t.members.exists(m -> m.name == name));
+		}
+		if (root != null) for (fi in _scope.index.allFiles()) if (fi.types.exists(declares.bind(fi))) out.push(fi.file);
+		return out;
+	}
+
+	/**
+	 * The type a declaration of the typed type `typed` is written as: itself, the class of a `@:generic` instance, the
+	 * abstract of an implementation class; null for a typedef, which declares no member of its own.
+	 */
+	private function rootOf(typed: String): Null<String> {
+		final fact: Null<TypeFact> = table.type(typed);
+		if (fact == null || fact.kind == TYPEDEF_KIND) return null;
+		final generic: Null<String> = fact.genericOf;
+		return generic != null ? CompilerFacts.baseId(generic) : fact.kind == IMPL_KIND ? implemented(typed) : typed;
 	}
 
 	/**
@@ -800,6 +903,23 @@ final class FactsView {
 	/** Whether `a` is wider than `b`. */
 	private static inline function wider(a: Span, b: Span): Bool {
 		return a.to - a.from > b.to - b.from;
+	}
+
+	/** Whether `a` and `b` are one range. */
+	private static inline function sameRange(a: Span, b: Span): Bool {
+		return a.from == b.from && a.to == b.to;
+	}
+
+	/** The node of `kind` at exactly `range` in `tree`, or null. */
+	private static function nodeAt(tree: QueryNode, kind: Null<String>, range: Span): Null<QueryNode> {
+		final at: Null<Span> = tree.span;
+		if (at != null && (range.from < at.from || range.to > at.to)) return null;
+		if (tree.kind == kind && at != null && sameRange(at, range)) return tree;
+		for (c in tree.children) {
+			final found: Null<QueryNode> = nodeAt(c, kind, range);
+			if (found != null) return found;
+		}
+		return null;
 	}
 
 	/** Whether `a` and `b` share a position. */

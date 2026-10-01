@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.query.AbstractReach.InferredRef;
 import anyparse.query.AbstractReach.MemberRead;
 import anyparse.query.AbstractReach.SignatureWords;
+import anyparse.query.CallGraph.FnNode;
 import anyparse.query.CallGraph.UnresolvedAccess;
 import anyparse.query.CallGraph.UnresolvedCall;
 import anyparse.query.GrammarPlugin.RefShape;
@@ -575,6 +576,55 @@ final class ReachGraph {
 		// a type whose file the graph has not read yet is asked again once it has
 		if (held == null && (textual || g.treeOf(_scope.siteOf(typeName)?.file ?? '') != null)) _textual[typeName] = textual;
 		return textual ? null : built;
+	}
+
+	/**
+	 * Read into the graph every file of the index declaring the type the typed type `owner` is written as, under the simple
+	 * name of the node `id` (`FactsView.ownerFiles`): a call's fact names it as the target's owner, and the index, which
+	 * holds several declarations of the name, names no one site to read (`ReachProject.siteOf`). The budget refusal of the
+	 * first file past the cap is returned; null otherwise, and when the facts are not read.
+	 */
+	public function loadOwner(g: CallGraph, id: String, owner: String): Null<ReachUnknown> {
+		final facts: Null<CallGraphFacts> = g.facts;
+		final type: Null<String> = g.node(id)?.typeName;
+		if (facts == null || type == null) return null;
+		for (file in facts.view.ownerFiles(type, owner)) {
+			final refused: Null<ReachUnknown> = loadFile(g, file);
+			if (refused != null) return refused;
+		}
+		return null;
+	}
+
+	/**
+	 * The node reading `id` as the member of the typed type `owner` alone (`CallGraphFacts.qualify`), once every file of the
+	 * index declaring `owner`'s type is read into the graph; null when one cannot be, or the facts cannot read it so. Its
+	 * unresolved sites and accesses join what every grouping here is computed over.
+	 */
+	public function qualified(g: CallGraph, id: String, owner: String): Null<FnNode> {
+		final facts: Null<CallGraphFacts> = g.facts;
+		final type: Null<String> = g.node(id)?.typeName;
+		if (facts == null || type == null || loadOwner(g, id, owner) != null) return null;
+		for (file in facts.view.ownerFiles(type, owner)) if (g.treeOf(file) == null) return null;
+		final made: Null<String> = facts.qualify(g, id, owner);
+		_unresolvedFrom = null;
+		_accessFrom = null;
+		return made == null ? null : g.node(made);
+	}
+
+	/**
+	 * `rewrittenBy` of the node `node`, which reads the graph type `type`'s name as the typed type `owner`'s
+	 * (`CallGraphFacts.qualify`): a build macro of that one type (`FactsView.builtAs`) whose output the facts do not show
+	 * is its text (`FactsProvenance.typeIsItsTextAs`), sited at the node's file. The other types sharing the name are none
+	 * of its code.
+	 */
+	public function rewrittenAs(g: CallGraph, node: FnNode, type: String, owner: String): Null<ReachUnknown> {
+		final view: Null<FactsView> = _scope.facts;
+		if (view == null || !view.builtAs(type, owner)) return null;
+		final key: String = '$type@$owner';
+		final held: Null<Bool> = _textual[key];
+		final textual: Bool = held ?? _scope.provenance()?.typeIsItsTextAs(g, type, owner) == true;
+		_textual[key] = textual;
+		return textual ? null : Reification(node.file, null);
 	}
 
 	public function unresolvedFrom(g: CallGraph, id: String): Array<UnresolvedCall> {

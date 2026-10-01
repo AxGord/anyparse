@@ -110,8 +110,22 @@ final class FactsProvenance {
 	public function typeIsItsText(g: CallGraph, type: String): Bool {
 		final site: Null<{ file: String, span: Span }> = _scope.siteOf(type);
 		final ids: Array<String> = _view.bySimpleName()[type] ?? [];
-		if (site == null || ids.length == 0 || g.types.declarationCount(type) != 1) return false;
-		final file: String = site.file;
+		return site != null && ids.length > 0 && g.types.declarationCount(type) == 1 && textual(g, type, site.file, ids);
+	}
+
+	/**
+	 * `typeIsItsText` of the one type, of the several the graph type `type` names, the typed type `owner` is written as
+	 * (`FactsView.ownerFiles`): the typed types standing for it alone (`FactsView.standingFor`), against its one file of the
+	 * index — what a node reading the name as that type's (`CallGraphFacts.qualify`) runs.
+	 */
+	public function typeIsItsTextAs(g: CallGraph, type: String, owner: String): Bool {
+		final files: Array<String> = _view.ownerFiles(type, owner);
+		final ids: Array<String> = _view.standingFor(type, owner);
+		return files.length == 1 && ids.length > 0 && textual(g, type, files[0], ids);
+	}
+
+	/** `typeIsItsText` of the typed types `ids`, which the graph calls `type`, against its declaration in `file`. */
+	private function textual(g: CallGraph, type: String, file: String, ids: Array<String>): Bool {
 		final decl: Null<TypeDeclInfo> = _scope.index.fileInfo(file)?.types.find(d -> d.name == type);
 		final source: Null<String> = g.sourceOf(file);
 		final tree: Null<QueryNode> = g.treeOf(file);

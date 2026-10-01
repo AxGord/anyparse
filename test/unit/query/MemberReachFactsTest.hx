@@ -649,7 +649,6 @@ class MemberReachFactsTest extends Test {
 
 	@:pin('control') @:killer('M-FACTS-STRING-EXACT') @:killer('M-REACH-EXACT-SITE') @:killer('M-FACTS-VIEW-EXACT')
 	@:killer('M-FACTS-FLOW-EXACT') @:killer('M-FACTS-VIEW-EXACT-CONVERSION') @:killer('M-FACTS-EXACT-WRITTEN')
-	@:killer('M-FACTS-VIEW-EXACT-OPERAND')
 	public function testAFreshObjectConvertedRunsOnlyItsOwnClassToStringUnderTheTruth(): Void {
 		// `Obj` escaped, so a `Plain` read from a place may be one; a `Plain` just built never is — thrown from a local holding
 		// nothing else, or concatenated, which the compiler converts by a call of `Std.string`
@@ -1009,15 +1008,24 @@ class MemberReachFactsTest extends Test {
 	}
 
 	@:pin('control') @:killer('M-FACTS-SOLE-MEMBER-DECLARED')
+	@:access(anyparse.query.MemberReach)
 	public function testAMemberAnotherTypeOfItsNameMayDeclareKeepsTheNameShared(): Void {
 		// a declaration of `splice` no build typed may still run under another name (`@:genericBuild`): it leaves `Vec.splice`
-		// a name two types share
+		// a name two types share. The call of it in `Box.put` is still `lib.Vec`'s, its fact says: the walk reads that one
 		final dead: Map<String, String> = sharedNameLibrary();
 		dead['dead/Vec.hx'] = 'package dead;\n\nclass Vec {\n\tpublic static function splice(i:Int):Int return i;\n}\n';
-		assertMatch(ask(['Main.hx' => SHARED_NAME_MAIN], null, true, null, false, null, dead, null, true), r -> !r.match(Proven));
+		function sole(library: Map<String, String>): Null<String> {
+			return withReach(
+				['Main.hx' => SHARED_NAME_MAIN],
+				null, true, false, null, library, null, true, (reach, dir) -> reach._scope.facts?.soleMember('Vec', 'splice')
+			);
+		}
+		Assert.isNull(sole(dead));
+		Assert.equals('lib.Vec', sole(sharedNameLibrary()));
+		assertMatch(ask(['Main.hx' => SHARED_NAME_MAIN], null, true, null, false, null, dead, null, true), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-SOLE-MEMBER-NONE') @:killer('M-REACH-SHARED-NAME-SOLE') @:killer('M-REACH-ITERABLE-RETURNS')
+	@:pin('control') @:killer('M-FACTS-SOLE-MEMBER-NONE') @:killer('M-REACH-ITERABLE-RETURNS')
 	public function testALibraryMemberOnlyOneTypeOfItsNameDeclaresIsReadThroughItsFacts(): Void {
 		// `lib.Vec` and `other.Vec` share a simple name, but only `lib.Vec` declares `splice`, whose loop the syntax cannot
 		// type — so it may run any `next`, `Walker`'s among them — and the facts type as `VecIter`'s (openfl's `Vector.splice`
@@ -1340,6 +1348,96 @@ class MemberReachFactsTest extends Test {
 		final typed: ReachResult = ask(files, both, true, member, false, PER_BUILD_CLASSPATH, null, picker, true);
 		assertMatch(typed, r -> r.match(Unknown(OutOfScope(_))));
 		assertMatch(ask(files, both, true, member, false, PER_BUILD_CLASSPATH, null, picker), r -> r.match(Unknown(Ambiguous('Grid'))));
+	}
+
+	@:pin('control') @:killer('M-REACH-QUALIFIED-NONE') @:killer('M-FACTS-QUALIFIED-HAZARDS') @:killer('M-GRAPH-FACTS-TYPED-NONE')
+	public function testALibraryMemberAFactCallsIsItsOwnTypesUnderTheTruth(): Void {
+		// `lib.Vec` and `other.Vec` share a simple name and both declare `get_length` (openfl's `Vector` beside
+		// `haxe.ds.Vector`), so the graph folds both into one node; `Label.size` reads `length` of a `lib.Vec`, and the fact of
+		// that call names `lib.Vec`'s: the walk reads its declaration alone, whose `untyped` read the compiler typed, never
+		// `other.Vec`'s, which changes `Main.items`. With no whole list of builds nothing tells the two apart
+		function library(getter: String, other: String): Map<String, String> {
+			return [
+				'lib/Vec.hx' => 'package lib;\n\nabstract Vec(Array<Int>) {\n\tpublic var length(get, never):Int;\n\n'
+					+ '\tpublic function new() this = [];\n\n\t' + getter + '\n}\n',
+				'other/Vec.hx' => 'package other;\n\nabstract Vec(Array<Int>) {\n\tpublic var length(get, never):Int;\n\n'
+					+ '\tpublic function new() this = [];\n\n\tfunction get_length():Int {\n\t\t' + other
+					+ '\n\t\treturn this.length;\n\t}\n}\n',
+				'lib/Label.hx' => 'package lib;\n\nclass Label {\n\tpublic static var v:Vec = new Vec();\n\n'
+					+ '\tpublic static function size():Int return v.length;\n}\n'
+			];
+		}
+		final main: String = 'import lib.Label;\n\n' + LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Label.size(); /*>*/ }\n'
+			+ '\t\ttrace(new other.Vec().length);\n\t}\n}\n';
+		final inlined: String = 'inline function get_length():Int return this.length;';
+		final untypedRead: String = 'function get_length():Int return untyped this.length;';
+		for (getter in [inlined, untypedRead]) for (other in ['', 'Main.items.push(1);']) {
+			final files: Map<String, String> = ['Main.hx' => main];
+			assertMatch(ask(files, null, true, null, false, null, library(getter, other), null, true), r -> r.match(Proven));
+		}
+		assertMatch(ask(['Main.hx' => main], null, true, null, false, null, library(inlined, '')), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-REACH-QUALIFIED-NONE') @:killer('M-REACH-QUALIFIED-SIMPLE-TOUCH') @:killer('M-TOUCH-SCAN-NODE-UNRECORDED')
+	@:killer('M-FACTS-QUALIFIED-ANY-DECLARATION') @:killer('M-REACH-QUALIFIED-ESCAPE')
+	public function testOnlyTheProjectTypeAFactCallsTouchesUnderTheTruth(): Void {
+		// `a.Grid.run` changes `Main.items`, `b.Grid.run` does not; the graph folds both into `Grid.run`. Under the whole list
+		// of builds the call's fact names which one runs, so only that one's touch counts; with no such list either may. A
+		// `b.Grid.run` storing `Main.items` under a name no text of it spells lets its value go, which only its facts show
+		function files(called: String, other: String, ?bRuns: String): Map<String, String> {
+			return [
+				'Main.hx' => LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ ' + called
+					+ '.Grid.run(); /*>*/ }\n\t\t' + other + '.Grid.run();\n\t}\n}\n',
+				'a/Grid.hx' => 'package a;\n\nclass Grid {\n\tpublic static function run():Void Main.items.push(1);\n}\n',
+				'b/Grid.hx' => 'package b;\n\nimport Main.items as stuff;\n\nclass Grid {\n\tpublic static var keep:Array<Int> = null;\n\n'
+					+ '\tpublic static function run():Void {' + (bRuns ?? '') + '}\n}\n'
+			];
+		}
+		assertMatch(truthAsk(files('b', 'a')), r -> r.match(Proven));
+		assertMatch(truthAsk(files('a', 'b')), r -> r.match(Reached(_)));
+		assertMatch(ask(files('b', 'a')), r -> !r.match(Proven));
+		assertMatch(truthAsk(files('b', 'a', ' keep = stuff; ')), r -> r.match(Unknown(Escape(_, _))));
+	}
+
+	@:pin('control') @:killer('M-REACH-QUALIFIED-UNNAMED') @:killer('M-REACH-SHARED-NAME-SOLE')
+	public function testANameTwoTypesShareReachedByItsSyntaxStaysAmbiguousUnderTheTruth(): Void {
+		// the region lies in `a.Grid.go`, which `b.Grid` declares too: the node folding both is read by its syntax, whose call
+		// of `run` names the folded `Grid.run` and no owner, so either `run` may be the one that runs — unless `a.Grid` alone
+		// declares `run`, whose node is then its own. With `go` declared by `a.Grid` alone the node is read through its facts,
+		// whose call names `a.Grid`'s
+		function question(bDeclares: Array<String>): ReachResult {
+			final grid: String = 'package a;\n\nclass Grid {\n\tpublic static function go():Void {\n'
+				+ '\t\tfor (i in 0...Main.items.length) { /*<*/ run(); /*>*/ }\n\t}\n\n\tpublic static function run():Void {}\n}\n';
+			final members: String = [for (m in bDeclares) '\tpublic static function $m():Void {}\n'].join('');
+			final files: Map<String, String> = [
+				'Main.hx' => LOOP_HEAD + '\tstatic function main() {\n\t\ta.Grid.go();\n\t\tb.Grid.n++;\n\t}\n}\n',
+				'a/Grid.hx' => grid,
+				'b/Grid.hx' => 'package b;\n\nclass Grid {\n\tpublic static var n:Int = 0;\n' + members + '}\n'
+			];
+			return withReach(files, null, true, false, null, null, null, true, (reach, dir) -> {
+				final region: ReachEntry = Region(Path.join([dir, 'a/Grid.hx']), regionOf(grid));
+				reach.mayReach(region, { owner: 'Main', name: 'items' }, Mutate);
+			});
+		}
+		assertMatch(question(['go', 'run']), r -> r.match(Unknown(Ambiguous('Grid'))));
+		assertMatch(question(['go']), r -> r.match(Proven));
+		assertMatch(question(['run']), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-FACTS-VIEW-CONVERSION-LEAF')
+	public function testAConvertedValueOfTheParametersOwnTypeMayBeAnyObjectUnderTheTruth(): Void {
+		// `d` is `Dynamic`, `Std.string`'s parameter type, so handing it on records no flow: the flow of the other branch is one
+		// leaf of the argument, not the value converted, which may be an `Obj`, whose `toString` replaces `Main.items`
+		final main: String = 'import lib.Text;\n\n' + LOOP_HEAD + '\tstatic function main() {\n\t\tvar o:Obj = new Obj();\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ Text.fail(); /*>*/ }\n\t}\n}\n' + CLEARING_OBJ;
+		function converting(argument: String): ReachResult {
+			final thrown: String = 'var d:Dynamic = null;\n\t\tStd.string(' + argument + ');';
+			return ask(['Main.hx' => main], null, true, null, false, null, plainText(thrown), null, true);
+		}
+		assertMatch(converting('failing ? new Plain() : d'), r -> !r.match(Proven));
+		assertMatch(converting('d'), r -> !r.match(Proven));
+		assertMatch(converting('new Plain()'), r -> r.match(Proven));
 	}
 
 	@:pin('control') @:killer('M-TOUCH-TYPED-NEVER') @:killer('M-TOUCH-TYPED-SHAPE-NONE') @:killer('M-TOUCH-TYPED-CALL')

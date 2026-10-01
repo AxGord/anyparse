@@ -8,6 +8,7 @@ import anyparse.query.CallGraph.FnNode;
 import anyparse.query.CallGraph.SplicedSite;
 import anyparse.query.CallGraph.UnresolvedAccess;
 import anyparse.query.CallGraph.UnresolvedCall;
+import anyparse.query.CallGraphFacts.QualifiedRead;
 import anyparse.query.CompilerFacts.FieldDeclFact;
 import anyparse.query.FactsView.TruthSites;
 import anyparse.query.GrammarPlugin.RefShape;
@@ -98,7 +99,10 @@ enum ReachUnknown {
 	/**
 	 * A type on the path shares its simple name with another declaration, so its members are
 	 * not provably its own. Under the truth a declaration in a file no build read is none,
-	 * and declarations of the one type the builds typed are that type (`FactsView.soleType`).
+	 * declarations of the one type the builds typed are that type (`FactsView.soleType`), and
+	 * a call whose fact names the type it calls enters that type's member alone
+	 * (`CallGraphFacts.qualify`): the name stays shared only where the walk enters it by an
+	 * edge no fact names an owner of — the syntax's, a dispatch's, an admission's.
 	 */
 	Ambiguous(typeName: String);
 
@@ -151,7 +155,9 @@ typedef MemberRef = {
  * name is a hand-off it follows; by a computed name, native code, untyped code, a raw conditional region, an unmodelled
  * construct, a build macro, an ambiguous type name or an unparsed file is `Unknown` — a build macro, where the compiler facts
  * are the truth (`FactsView.truth`), only when they show the code it made of a type is not the text (`ReachGraph.rewrittenBy`);
- * what they show a method it made or placed elsewhere touching is found all the same (`CallGraphFacts.adopt`).
+ * what they show a method it made or placed elsewhere touching is found all the same (`CallGraphFacts.adopt`). Under the
+ * truth a call whose fact names which of the types sharing a name it calls enters that one's member alone — its
+ * declarations, facts, touches and build macros (`qualifiedNode`) — and the name is ambiguous only where no fact says.
  */
 @:nullSafety(Strict)
 final class MemberReach {
@@ -403,7 +409,13 @@ final class MemberReach {
 		}
 		final marked: Null<ReachUnknown> = enterEntry(g, entry);
 		if (marked != null) return Unknown(marked);
-		return walk(g, seeds, entryHazards(g, entry), entrySites(g, entry), scan, member);
+		final question: TouchQuestion = {
+			name: member.name,
+			declaring: declaring,
+			access: access,
+			arrayTyped: arrayTyped
+		};
+		return walk(g, seeds, entryHazards(g, entry), entrySites(g, entry), scan, member, question);
 	}
 
 	/**
@@ -824,12 +836,12 @@ final class MemberReach {
 	 * The implicit-call sites of the code at `spans` of `file`: its compiler facts' where they replace its syntax
 	 * (`FactsView.sitesIn`), else its syntax's — which marks the question as having entered code read by its syntax.
 	 */
-	private function sitesOf(g: CallGraph, file: String, spans: Array<Span>): Array<ImplicitSite> {
+	private function sitesOf(g: CallGraph, file: String, spans: Array<Span>, ?node: String): Array<ImplicitSite> {
 		final read: Null<{ tree: QueryNode, source: String }> = readOf(g, file);
 		if (read == null) return [];
 		final out: Array<ImplicitSite> = [];
 		for (span in spans) {
-			final typed: Null<Array<ImplicitSite>> = _scope.facts?.sitesIn(g, file, span);
+			final typed: Null<Array<ImplicitSite>> = _scope.facts?.sitesIn(g, file, span, node);
 			if (typed != null) {
 				for (at in typed) out.push(at);
 				continue;
@@ -840,23 +852,28 @@ final class MemberReach {
 		return out;
 	}
 
-	/** The implicit-call sites of the code `declared` spans (`bodySpans`), each read in its own file (`sitesOf`). */
-	private function declaredSites(g: CallGraph, declared: Array<Occurrence>): Array<ImplicitSite> {
-		return [for (d in declared) for (at in sitesOf(g, d.file, [d.span])) at];
+	/**
+	 * The implicit-call sites of the code `declared` spans (`bodySpans`), each read in its own file (`sitesOf`) — as the
+	 * node `node` reads it, when given.
+	 */
+	private function declaredSites(g: CallGraph, declared: Array<Occurrence>, ?node: String): Array<ImplicitSite> {
+		return [for (d in declared) for (at in sitesOf(g, d.file, [d.span], node)) at];
 	}
 
 	/**
 	 * The hazards of the code at `spans` of `file` some configuration may compile (`liveHazards`), read off its syntax —
 	 * or, where its compiler facts are the truth, off them wherever they record what a hazard stands for (`FactsView.truthSites`,
-	 * `ReachHazards.underTruth`).
+	 * `ReachHazards.underTruth`) — as the node `node` reads it, when given (`FactsView.faceted`).
 	 */
-	private function hazardsOf(g: CallGraph, file: String, spans: Array<Span>): Array<{ file: String, hazard: ReachHazard }> {
+	private function hazardsOf(
+		g: CallGraph, file: String, spans: Array<Span>, ?node: String
+	): Array<{ file: String, hazard: ReachHazard }> {
 		final read: Null<{ tree: QueryNode, source: String }> = readOf(g, file);
 		if (read == null) return [];
 		final out: Array<{ file: String, hazard: ReachHazard }> = [];
 		for (span in spans) {
 			final syntactic: Array<ReachHazard> = liveHazards(file, read.tree, read.source, span);
-			final typed: Null<TruthSites> = _scope.facts?.truthSites(g, file, span);
+			final typed: Null<TruthSites> = _scope.facts?.truthSites(g, file, span, node);
 			final hazards: Array<ReachHazard> = typed == null ? syntactic : _hazards.underTruth(syntactic, typed, read.tree);
 			for (h in hazards) out.push({ file: file, hazard: h });
 		}
@@ -1124,14 +1141,51 @@ final class MemberReach {
 	/**
 	 * Whether `node` may be another type's member than the one its body is: its type's simple name has several
 	 * declarations, unless, where the facts are the truth, every one of them is the one type the builds typed
-	 * (`FactsView.soleType`) or only one type the builds typed declares a member so named (`FactsView.soleMember`).
+	 * (`FactsView.soleType`), only one type the builds typed declares a member so named (`FactsView.soleMember`), or the
+	 * node reads the name as one of them (`CallGraphFacts.qualify`).
 	 */
 	private function sharedName(g: CallGraph, node: FnNode): Bool {
 		final type: Null<String> = node.typeName;
 		final name: Null<String> = node.name;
-		if (type == null || g.types.declarationCount(type) <= 1) return false;
+		if (type == null || g.types.declarationCount(type) <= 1 || g.facts?.qualified.exists(node.id) == true) return false;
 		final facts: Null<FactsView> = _scope.facts;
 		return facts == null || (facts.soleType(type) == null && (name == null || facts.soleMember(type, name) == null));
+	}
+
+	/**
+	 * The site of the build macro that may have made the code of `node`, of the type `type`, other than its text
+	 * (`ReachGraph.rewrittenBy`) — for a node reading the name as one type's member, of that type alone
+	 * (`ReachGraph.rewrittenAs`) — or null.
+	 */
+	private function rewrittenAt(g: CallGraph, node: FnNode, type: String): Null<ReachUnknown> {
+		final read: Null<QualifiedRead> = g.facts?.qualified[node.id];
+		return read == null ? _g.rewrittenBy(type) : _g.rewrittenAs(g, node, type, read.owner);
+	}
+
+	/**
+	 * Whether a fact naming the owner of the target `id` may tell which of the types sharing its name runs: the facts are
+	 * the truth and the index declares that name more than once.
+	 */
+	private function mayShare(g: CallGraph, id: String): Bool {
+		final type: Null<String> = g.node(id)?.typeName;
+		return type != null && _scope.facts?.truth == true && g.types.declarationCount(type) > 1;
+	}
+
+	/**
+	 * The node reading the graph node `node`, of a name several types share (`sharedName`), as the member of the typed type
+	 * `owner` a fact names its target's (`ReachGraph.qualified`) — when the facts read it so, and say how its body, if the
+	 * project's, touches the member `question` asks of (`MemberTouchScan.scanNode`), which `scan` then records. Null
+	 * otherwise: the name stays shared.
+	 */
+	private function qualifiedNode(
+		g: CallGraph, node: FnNode, owner: String, question: TouchQuestion, scan: MemberTouches, seeds: Seeds
+	): Null<FnNode> {
+		final made: Null<FnNode> = _g.qualified(g, node.id, owner);
+		if (made == null || !_projectSources.exists(made.file)) return made;
+		final touched: Bool = _touches.scanNode(
+			g, made.id, question.name, question.declaring, question.access, question.arrayTyped, scan, seeds.file, seeds.region
+		);
+		return touched ? made : null;
 	}
 
 	/** What the external `node` stands for once its library file is read: harmless, a body to walk, or nothing the walk can see. */
@@ -1174,13 +1228,18 @@ final class MemberReach {
 
 	private function walk(
 		g: CallGraph, seeds: Seeds, entry: Array<{ file: String, hazard: ReachHazard }>, entryImplicit: Array<ImplicitSite>,
-		scan: MemberTouches, member: MemberRef
+		scan: MemberTouches, member: MemberRef, question: TouchQuestion
 	): ReachResult {
 		// noqa: complexity
 		final touchers: Map<String, Occurrence> = scan.touchers;
 		var blind: Null<ReachUnknown> = scan.hidden;
 		final reach: Map<String, Null<ReachStep>> = [];
 		final queue: Array<String> = [];
+		// per queued node: the typed type a fact names its owner (`CallEdge.typed`) where its name may be shared, and the step
+		// that queued it then — such a node is queued once per owner, apart from its queueing by name
+		final queueTyped: Array<Null<String>> = [];
+		final queueSteps: Array<Null<ReachStep>> = [];
+		final queued: Map<String, Bool> = [];
 		// a warm-up for its side effect: the members admitted anywhere become graph placeholders before the admission
 		// closure below is computed, so the closure can hold them
 		_g.alwaysIds(g); // noqa: unused-return-value
@@ -1191,10 +1250,18 @@ final class MemberReach {
 		final sites: Array<AdmissionSite> = [];
 		var widened: Bool = false;
 
-		function enqueue(id: String, step: ReachStep): Void {
-			if (reach.exists(id)) return;
-			reach[id] = step;
+		function enqueueTyped(id: String, step: ReachStep, typed: Null<String>): Void {
+			final owner: Null<String> = typed != null && mayShare(g, id) ? typed : null;
+			final key: String = owner == null ? id : '$id@$owner';
+			if (queued.exists(key)) return;
+			queued[key] = true;
+			if (!reach.exists(id)) reach[id] = step;
 			queue.push(id);
+			queueTyped.push(owner);
+			queueSteps.push(step);
+		}
+		function enqueue(id: String, step: ReachStep): Void {
+			enqueueTyped(id, step, null);
 		}
 		function edgeStep(e: CallEdge): ReachStep {
 			return {
@@ -1291,7 +1358,7 @@ final class MemberReach {
 			admitAlways();
 		}
 		function follow(e: CallEdge): Void {
-			enqueue(e.to, edgeStep(e));
+			enqueueTyped(e.to, edgeStep(e), e.typed);
 			final dispatch: Null<String> = e.dispatchType;
 			final target: Null<String> = g.node(e.to)?.name;
 			if (dispatch == null || target == null) return;
@@ -1372,11 +1439,19 @@ final class MemberReach {
 		while (true) {
 			while (qi < queue.length) {
 				if (qi >= _maxVisited) return Unknown(blind ?? Budget('the walk visited more than $_maxVisited functions'));
-				final id: String = queue[qi++];
+				final id: String = queue[qi];
+				final typed: Null<String> = queueTyped[qi];
+				final step: Null<ReachStep> = typed == null ? reach[id] : queueSteps[qi];
+				qi++;
 				if (blind != null) _g.stopGrowing = true;
-				if (touchers.exists(id) && !freshlyConstructed(g, id, reach[id], scan, member))
-					return Reached(pathTo(reach, id, touchers[id]));
+				// the files of the type a fact names are read first: a name two types share names no one file to read
+				final unread: Null<ReachUnknown> = typed == null ? null : _g.loadOwner(g, id, typed);
+				if (unread != null) blind = blind ?? unread;
 				final found: Null<FnNode> = g.node(id);
+				// a qualified visit of a name two types share touches as the node read as its owner's member, below
+				final shared: Bool = typed != null && found != null && !found.isExternal && sharedName(g, found);
+				if (!shared && touchers.exists(id) && !freshlyConstructed(g, id, step, scan, member))
+					return Reached(pathTo(reach, id, touchers[id]));
 				if (found == null) continue;
 				var node: FnNode = found;
 				if (node.isExternal) {
@@ -1401,8 +1476,33 @@ final class MemberReach {
 						admit(externSite(g, node.id, reach[id]?.file ?? node.file, reach[id]?.span, type, name));
 					continue;
 				}
-				if (type != null && sharedName(g, node)) blind = blind ?? Ambiguous(type);
-				final rebuilt: Null<ReachUnknown> = type == null ? null : _g.rewrittenBy(type);
+				// a name two types share is read as the one a fact names the target's owner, or not at all (`ReachGraph.qualified`)
+				if (type != null && sharedName(g, node)) {
+					final escaped: Int = scan.escapes.length;
+					final read: Null<FnNode> = typed == null ? null : qualifiedNode(g, node, typed, question, scan, seeds);
+					// unread as its owner's, the name touches as every declaration of it does
+					if (read == null && shared && touchers.exists(id) && !freshlyConstructed(g, id, step, scan, member))
+						return Reached(pathTo(reach, id, touchers[id]));
+					if (read == null)
+						blind = blind ?? Ambiguous(type);
+					else {
+						final as: FnNode = read;
+						// an escape its facts show, which the question was asked before
+						final shown: Null<Occurrence> = scan.escapes.length > escaped ? scan.escapes[escaped] : null;
+						if (shown != null) blind = blind ?? Escape(shown.file, shown.span);
+						reach[as.id] = step == null ? null : {
+							from: step.from,
+							to: as.id,
+							kind: step.kind,
+							file: step.file,
+							span: step.span
+						};
+						if (touchers.exists(as.id) && !freshlyConstructed(g, as.id, reach[as.id], scan, member))
+							return Reached(pathTo(reach, as.id, touchers[as.id]));
+						node = as;
+					}
+				}
+				final rebuilt: Null<ReachUnknown> = type == null ? null : rewrittenAt(g, node, type);
 				if (rebuilt != null) blind = blind ?? rebuilt;
 				final spans: Null<Array<Occurrence>> = bodySpans(g, node);
 				if (spans == null)
@@ -1411,14 +1511,14 @@ final class MemberReach {
 					if (enterBody(g, node)) widened = true;
 					// every declaration the node folds runs as it: each is read whole
 					for (d in spans) {
-						inspectAll(node.id, hazardsOf(g, d.file, [d.span]));
+						inspectAll(node.id, hazardsOf(g, d.file, [d.span], node.id));
 						blind = blind ?? _scope.facts?.blindIn(d.file, d.span);
 						if (!_projectSources.exists(d.file)) for (access in libraryAccesses(g, d.file, [d.span], member))
 							libraryTouch(node.id, d.file, access.span, access.relation);
 					}
 					final touch: Null<{ from: String, file: String, span: Span }> = libraryTouchAt;
 					if (touch != null) return Reached(pathTo(reach, touch.from, { file: touch.file, span: touch.span }));
-					final implicit: Array<ImplicitSite> = declaredSites(g, spans);
+					final implicit: Array<ImplicitSite> = declaredSites(g, spans, node.id);
 					admitAlways();
 					if (implicit.length > 0) admit({
 						from: node.id,
@@ -2006,6 +2106,14 @@ private enum ImplicitTarget {
 }
 
 /** What the entry runs, as graph facts. `region` is set for a `Region` entry, whose own touches count too. */
+/** What `MemberTouchScan.scan` was asked of the member: the walk asks it again of a node it makes (`MemberReach.qualifiedNode`). */
+private typedef TouchQuestion = {
+	final name: String;
+	final declaring: String;
+	final access: ReachAccess;
+	final arrayTyped: Bool;
+}
+
 private typedef Seeds = {
 	var file: String;
 	var region: Null<Span>;
