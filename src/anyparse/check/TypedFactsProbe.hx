@@ -44,7 +44,7 @@ import haxe.io.Path;
  *   A `gen`, `gi` or `inl` node is found by id, never by a range of its file. `ov`: the overload index. `inc`: markers.
  *   The facts, each list deduplicated:
  *   - `params`: `{n, t}` — the function's parameters, in order; the compiler gives a parameter no position of its own.
- *   - `calls`: `{t?, a, sig?, r?, rp?, rt, p, s?, d?}` — `a` is the field access `FInstance`/`FStatic`/`FAnon`/`FDynamic`/
+ *   - `calls`: `{t?, a, sig?, r?, rp?, rt, p, s?, d?, o?, x?}` — `a` is the field access `FInstance`/`FStatic`/`FAnon`/`FDynamic`/
  *     `FClosure`/`FEnum` with `t` = `<declaring type>.<field>` (a bare name for `FAnon`/`FDynamic`) and `r`/`rp` the
  *     receiver's type and position; `fieldValue` for a field that holds a replaceable value (a variable of a function
  *     type, a `dynamic` method); `super` (`t` = `<super>.new`); `local` (`t` = the local function's node id); `ident`
@@ -54,7 +54,9 @@ import haxe.io.Path;
  *     the method's declared range, which holds the code the call spliced in; a body a spliced body spliced in turn is a
  *     call of its own at the same `s`). `sig` is the signature chosen among a field's overloads. `rt` is the result
  *     type. A property access IS a call of `get_x`/`set_x`; an abstract operator, `@:from` or `@:to` is a call of the
- *     implementation class's static.
+ *     implementation class's static. `o`: of a call handing its first argument to a `Dynamic` parameter, that argument's
+ *     type, with `x` when it is an object of exactly the class its type names, as a converted operand (`strs`) is: no
+ *     flow names a value of the parameter's own type, and a spliced call's argument lies in the text of another method.
  *   - `news`: `{t, ty, p}` — the class and the instance type.
  *   - `fields`: `{f, a, o?, r, t, p, w?, u?, m?, fresh?}` — a field read (a write when `w`) that is not a callee; `o` is
  *     the declaring type, absent for a structure or a dynamic access. A read has `u`, how its value is used: `call` (the
@@ -86,8 +88,10 @@ import haxe.io.Path;
  *     exactly the class its type names — a construction, or a local initialized with one of its own type and never
  *     written again.
  *   - `iters`: `{v, i, p}` — a `for` the compiler kept (it lowers an Array loop to a `while` and unrolls a constant one).
- *   - `refl`: `{t, n?, c?, v?, p}` — a `Reflect.*`/`Type.*` call, its first literal string and its first type argument;
- *     `v` when the member, or the class itself, is read as a value — whatever calls it later is reflection.
+ *   - `refl`: `{t, n?, c?, v?, r?, x?, h?, p}` — a `Reflect.*`/`Type.*` call, its first literal string and its first type
+ *     argument; `v` when the member, or the class itself, is read as a value — whatever calls it later is reflection. `r` is
+ *     the type of its first argument — the object an access by name acts on — with `x` when that is an object of exactly
+ *     the class its type names, `h` when it is `this`.
  *   - `native`: `{w, n, p}` — `syntax` for a `*.Syntax` call, `ident` for every native identifier, read or called.
  *   - `vars`: `{n, t, p}` — a local or loop binder (compiler temporaries are left out).
  *   - `reads`: `[min, max, type]` (foreign: `[i, min, max, type]`) — a read of a local, at the identifier.

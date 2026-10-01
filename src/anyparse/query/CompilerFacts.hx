@@ -49,6 +49,14 @@ typedef CallFact = {
 
 	/** For an `inlined` call, the called method's declared range, which holds the code it spliced in; null otherwise. */
 	final body: Null<FactPos>;
+
+	/**
+	 * For a call handing its first argument to a `Dynamic` parameter, the argument's type — `Dynamic` when it has none —
+	 * and whether it is an object of exactly the class that type names (`operandExact`); null for any other call.
+	 */
+	final operand: Null<String>;
+
+	final operandExact: Bool;
 }
 
 /** A `new`: the class and the instance type it makes. */
@@ -163,6 +171,16 @@ typedef ReflectionFact = {
 	/** Whether the member (or the class itself) is read as a value, not called: whatever calls it later is reflection. */
 	final isValue: Bool;
 	final at: FactPos;
+
+	/**
+	 * The type of the call's first argument — the object a reflective access by name acts on — or null when it has none
+	 * or the facts do not record it; `receiverExact` when that argument is an object of exactly the class its type names,
+	 * `receiverSelf` when it is `this`.
+	 */
+	final receiver: Null<String>;
+
+	final receiverExact: Bool;
+	final receiverSelf: Bool;
 }
 
 /** A native-code site: `syntax` for a `*.Syntax` call, `ident` for a `__js__`-style identifier. */
@@ -868,7 +886,9 @@ final class CompilerFacts {
 					at: where,
 					signature: c.sig,
 					site: place(c.s),
-					body: place(c.d)
+					body: place(c.d),
+					operand: c.o,
+					operandExact: c.x == true
 				}: CallFact),
 				node.calls
 			);
@@ -932,7 +952,10 @@ final class CompilerFacts {
 					name: r.n,
 					typeArgument: r.c,
 					isValue: r.v ?? false,
-					at: where
+					at: where,
+					receiver: r.r,
+					receiverExact: r.x == true,
+					receiverSelf: r.h == true
 				}: ReflectionFact),
 				node.reflection
 			);
@@ -1112,6 +1135,8 @@ private typedef CallRecord = {
 	final p: Array<Int>;
 	final ?s: Array<Int>;
 	final ?d: Array<Int>;
+	final ?o: String;
+	final ?x: Bool;
 }
 
 private typedef NodeRecord = {
@@ -1164,6 +1189,9 @@ private typedef NodeRecord = {
 		?n: String,
 		?c: String,
 		?v: Bool,
+		?r: String,
+		?x: Bool,
+		?h: Bool,
 		p: Array<Int>
 	}>;
 	final ?native: Array<{ w: String, n: String, p: Array<Int> }>;

@@ -6,6 +6,7 @@ import anyparse.query.AbstractReach.SignatureWords;
 import anyparse.query.CallGraph.FnNode;
 import anyparse.query.CallGraph.UnresolvedAccess;
 import anyparse.query.CallGraph.UnresolvedCall;
+import anyparse.query.CompilerFacts.ReflectionFact;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.ImplicitSites.ImplicitSite;
 import anyparse.query.ImplicitSites.SiteFamily;
@@ -1331,6 +1332,51 @@ final class ReachGraph {
 		}
 	}
 
+	/**
+	 * Under the truth, what a reflective access by a name it computes may reach on the object it acts on, which
+	 * `receivers` — the fact of it each build recorded (`ReflectionFact.receiver`) — type: the simple names of the types
+	 * whose members it may read, write or call, and their methods, an accessor a property access runs among them, each with
+	 * the typed type it is a member of. The object is an instance of the typed class or interface its type names
+	 * (`FactsView.objectClass`), of a typed subtype of it unless it is an object of exactly that class, and — unless it is
+	 * `this`, which only a dispatch on an instance of its method's class or of a subclass binds — of a type whose instances
+	 * escaped the type system (`ValueCarriers.escapedIds`); with each type those extend or implement. Null — any member of
+	 * any object — when the facts are not the truth, no fact names a receiver, one is of no such type, or the escapes are
+	 * not known.
+	 */
+	public function reflectedMembers(g: CallGraph, receivers: Array<ReflectionFact>): Null<ReflectedMembers> {
+		final view: Null<FactsView> = _scope.facts;
+		if (view == null || !view.truth || receivers.length == 0) return null;
+		final facts: FactsView = view;
+		final typed: Array<String> = [];
+		function note(id: String): Void {
+			if (!typed.contains(id)) typed.push(id);
+		}
+		var escapes: Bool = false;
+		for (r in receivers) {
+			final receiver: Null<String> = r.receiver;
+			final id: Null<String> = receiver == null ? null : facts.objectClass(receiver);
+			if (id == null) return null;
+			note(id);
+			if (r.receiverExact) continue;
+			for (sub in facts.table.subtypesOf(id)) note(sub);
+			if (!r.receiverSelf) escapes = true;
+		}
+		if (escapes) {
+			final escaped: Null<Array<String>> = carriers.escapedIds();
+			if (escaped == null) return null;
+			for (id in escaped) note(id);
+		}
+		for (id in typed.copy()) for (sup in facts.table.supertypesOf(id)) note(sup);
+		final types: Array<String> = [];
+		final ids: Array<OwnedId> = [];
+		for (id in typed) {
+			final type: String = facts.graphType(id);
+			if (!types.contains(type)) types.push(type);
+			for (member in facts.methodsOf(id)) ids.push({ id: g.ownMember(type, member) ?? placeholder(g, type, member), owner: id });
+		}
+		return { types: types, ids: ids };
+	}
+
 }
 
 /**
@@ -1340,6 +1386,15 @@ final class ReachGraph {
 typedef OwnedId = {
 	final id: String;
 	final owner: Null<String>;
+}
+
+/**
+ * What a reflective access by a computed name may reach (`ReachGraph.reflectedMembers`): the simple names of the types
+ * whose members it may touch, and the methods it may run, each with the typed type it is a member of.
+ */
+typedef ReflectedMembers = {
+	final types: Array<String>;
+	final ids: Array<OwnedId>;
 }
 
 /** An implicitly-called member the index declares, and the file declaring it. */

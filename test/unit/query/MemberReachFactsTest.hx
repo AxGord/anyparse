@@ -1,6 +1,7 @@
 package unit.query;
 
 import anyparse.check.LintConfig.OracleConfig;
+import anyparse.check.OracleCoverage;
 import anyparse.check.ReachDefinesProbe;
 import anyparse.check.TypedFactsProbe;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
@@ -9,6 +10,7 @@ import anyparse.query.CallGraph;
 import anyparse.query.CompilerFacts;
 import anyparse.query.MemberReach;
 import anyparse.query.ReachLiveness.ReachConfiguration;
+import anyparse.query.StdResolver;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import haxe.io.Path;
@@ -248,6 +250,28 @@ class MemberReachFactsTest extends Test {
 		];
 		for (name => text in more) files[name] = text;
 		return files;
+	}
+
+	/** `Other`, whose `dump` returns `access`: a member of its own object read by the name `n` it is handed. */
+	private static function reflectingOther(access: String): String {
+		return 'class Other {\n\tpublic function new() {}\n\n\tpublic function dump(n:String):Dynamic return ' + access + ';\n}\n';
+	}
+
+	/**
+	 * `truthAsk` of `files` with the std `Reflect` the build compiles declared where the build reads it: its accessors by name
+	 * reach members by the name they are handed in `untyped` code, which the walk enters as it does TM's. The fixture must
+	 * compile: a build that fails leaves no facts, and the syntax would answer.
+	 */
+	private static function reflectAsk(files: Map<String, String>, ?pos: haxe.PosInfos): ReachResult {
+		final std: Null<String> = StdResolver.stdDir();
+		if (std == null) {
+			Assert.fail('no Haxe std to read `Reflect` from', pos);
+			return Unknown(OutOfScope('no std'));
+		}
+		final path: String = OracleCoverage.canonical(Sys.getCwd(), Path.join([std, 'js/_std/Reflect.hx']));
+		final result: ReachResult = ask(files, null, true, null, false, null, null, null, true, [path => sys.io.File.getContent(path)]);
+		Assert.equals('', lastDropped.join('; '), 'the fixture did not compile', pos);
+		return result;
 	}
 
 	/** `WORDS` with `rep`, an inline function handing its first argument to a library call. */
@@ -693,7 +717,8 @@ class MemberReachFactsTest extends Test {
 	}
 
 	@:pin('control') @:killer('M-FACTS-STRING-EXACT') @:killer('M-REACH-EXACT-SITE') @:killer('M-FACTS-VIEW-EXACT')
-	@:killer('M-FACTS-FLOW-EXACT') @:killer('M-FACTS-VIEW-EXACT-CONVERSION') @:killer('M-FACTS-EXACT-WRITTEN')
+	@:killer('M-FACTS-VIEW-EXACT-CONVERSION') @:killer('M-FACTS-EXACT-WRITTEN')
+	@:killer('M-FACTS-CALL-OPERAND-EXACT')
 	public function testAFreshObjectConvertedRunsOnlyItsOwnClassToStringUnderTheTruth(): Void {
 		// `Obj` escaped, so a `Plain` read from a place may be one; a `Plain` just built never is — thrown from a local holding
 		// nothing else, or concatenated, which the compiler converts by a call of `Std.string`
@@ -1243,6 +1268,85 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthAsk(['Main.hx' => seen]), r -> !r.match(Unknown(DynamicName(_, _))));
 	}
 
+	@:pin('control') @:killer('M-REACH-REFLECT-BOUND-NONE') @:killer('M-HAZARDS-REFLECT-RECEIVERS')
+	@:killer('M-HAZARDS-REFLECT-RECEIVERS-ADDED') @:killer('M-FACTS-REFL-RECEIVER') @:killer('M-REACH-REFLECT-BODY')
+	public function testAReflectiveAccessOnAnObjectOfAnUnrelatedClassReachesNoneOfTheMemberUnderTheTruth(): Void {
+		// `Other.dump` reads a property of its own object by a name it is handed: under the truth that object is an `Other`,
+		// which carries no `items`; without it the name may be any member's
+		final main: String = MEMBER_HEAD + '\tfunction f(n:String):Void {\n\t\tvar o:Other = new Other();\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ o.dump(n); /*>*/ }\n\t}\n}\n';
+		final spelled: String = main + reflectingOther('Reflect.getProperty(this, n)');
+		assertMatch(reflectAsk(['Main.hx' => spelled]), r -> r.match(Proven));
+		assertMatch(ask(['Main.hx' => spelled]), r -> r.match(Unknown(DynamicName(_, _))));
+		// `using Reflect` (TM's `drill.Node`): only the facts see the call
+		assertMatch(reflectAsk(['Main.hx' => 'using Reflect;\n' + main + reflectingOther('this.getProperty(n)')]), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-REACH-REFLECT-RELATED') @:killer('M-GRAPH-REFLECT-SUBTYPES') @:killer('M-GRAPH-REFLECT-SUPERTYPES')
+	public function testAReflectiveAccessOnAnObjectThatMayCarryTheMemberIsADynamicNameUnderTheTruth(): Void {
+		// an `Other` extending `Main` carries `items` itself; `this` of `Base` may be a `Main`, which extends it
+		final sub: String = MEMBER_HEAD + '\tfunction f(n:String):Void {\n\t\tvar o:Other = new Other();\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ o.dump(n); /*>*/ }\n\t}\n}\n'
+			+ 'class Other extends Main {\n\tpublic function new() super();\n\n'
+			+ '\tpublic function dump(n:String):Dynamic return Reflect.getProperty(this, n);\n}\n';
+		assertMatch(reflectAsk(['Main.hx' => sub]), r -> r.match(Unknown(DynamicName(_, _))));
+		final base: String = 'class Main extends Base {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() super();\n'
+			+ '\tstatic function main() {}\n\tfunction f(n:String):Void {\n\t\tfor (i in 0...items.length) { /*<*/ dump(n); /*>*/ }\n\t}\n}\n'
+			+ 'class Base {\n\tpublic function new() {}\n\n\tpublic function dump(n:String):Dynamic return Reflect.getProperty(this, n);\n}\n';
+		assertMatch(reflectAsk(['Main.hx' => base]), r -> r.match(Unknown(DynamicName(_, _))));
+	}
+
+	@:pin('control') @:killer('M-GRAPH-REFLECT-UNTYPED')
+	public function testAReflectiveAccessOnAValueOfNoClassIsADynamicNameUnderTheTruth(): Void {
+		// a `Dynamic` value may be any object, a structure's has no class to read its members
+		// off (`setProperty`: js inlines `setField`, whose splice is blind of its own)
+		function region(code: String): String {
+			return MEMBER_HEAD + '\tfunction f(n:String, d:Dynamic, s:{ x:Int }):Void {\n' + '\t\tfor (i in 0...items.length) { /*<*/ '
+				+ code + ' /*>*/ }\n\t}\n}\n';
+		}
+		assertMatch(reflectAsk(['Main.hx' => region('Reflect.getProperty(d, n);')]), r -> r.match(Unknown(DynamicName(_, _))));
+		assertMatch(reflectAsk(['Main.hx' => region('Reflect.setProperty(s, n, 1);')]), r -> r.match(Unknown(DynamicName(_, _))));
+	}
+
+	@:pin('control') @:killer('M-GRAPH-REFLECT-ESCAPES') @:killer('M-GRAPH-REFLECT-SELF-ESCAPES') @:killer('M-FACTS-REFL-SELF')
+	public function testAReflectedObjectOtherThanThisMayBeAnyEscapedInstanceUnderTheTruth(): Void {
+		// a `Main` handed to `Dynamic` may come back typed as anything, an `Other` included; `this` of `Other` is an `Other`
+		function fixture(escape: String, region: String): String {
+			return
+				'class Main {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n\tstatic function sink(x:Dynamic):Void {}\n'
+					+ '\tstatic function main() {' + escape + '}\n\tfunction f(n:String):Void {\n\t\tvar o:Other = new Other();\n'
+					+ '\t\tfor (i in 0...items.length) { /*<*/ ' + region + ' /*>*/ }\n\t}\n}\n'
+					+ reflectingOther('Reflect.getProperty(this, n)')
+					+ 'class Peek {\n\tpublic static function at(o:Other, n:String):Dynamic return Reflect.getProperty(o, n);\n}\n';
+		}
+		assertMatch(reflectAsk(['Main.hx' => fixture('', 'Peek.at(o, n);')]), r -> r.match(Proven));
+		assertMatch(reflectAsk(['Main.hx' => fixture(' sink(new Main()); ', 'Peek.at(o, n);')]), r -> r.match(Unknown(DynamicName(_, _))));
+		assertMatch(reflectAsk(['Main.hx' => fixture(' sink(new Main()); ', 'o.dump(n);')]), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-GRAPH-REFLECT-EXACT') @:killer('M-FACTS-REFL-EXACT')
+	public function testAReflectedObjectOfExactlyItsClassIsNoSubclassUnderTheTruth(): Void {
+		// `Main` extends `Other`: an `Other` handed in may be a `Main`, one built here is an `Other`
+		function fixture(code: String): String {
+			return 'class Main extends Other {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() super();\n'
+				+ '\tstatic function main() {}\n\tfunction f(n:String, o:Other):Void {\n' + '\t\tfor (i in 0...items.length) { /*<*/ '
+				+ code + ' /*>*/ }\n\t}\n}\n' + 'class Other {\n\tpublic function new() {}\n}\n';
+		}
+		assertMatch(reflectAsk(['Main.hx' => fixture('Reflect.getProperty(new Other(), n);')]), r -> r.match(Proven));
+		assertMatch(reflectAsk(['Main.hx' => fixture('Reflect.getProperty(o, n);')]), r -> r.match(Unknown(DynamicName(_, _))));
+	}
+
+	@:pin('control') @:killer('M-REACH-REFLECT-ADMIT')
+	public function testAReflectiveAccessRunsTheAccessorsOfTheTypeItReachesUnderTheTruth(): Void {
+		// a property read by a name it computes may run `Other.get_v`, which changes `items` of a `Main` it holds
+		final main: String = MEMBER_HEAD + '\tfunction f(n:String):Void {\n\t\tvar o:Other = new Other();\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ o.dump(n); /*>*/ }\n\t}\n}\n'
+			+ 'class Other {\n\tpublic static var held:Main = new Main();\n\tpublic var v(get, never):Int;\n\n\tpublic function new() {}\n\n'
+			+ '\tfunction get_v():Int {\n\t\theld.items.push(1);\n\t\treturn 0;\n\t}\n\n'
+			+ '\tpublic function dump(n:String):Dynamic return Reflect.getProperty(this, n);\n}\n';
+		assertMatch(reflectAsk(['Main.hx' => main]), r -> r.match(Reached(_)));
+	}
+
 	@:pin('control') @:killer('M-REACH-DEAD-FILE-SEEDS') @:killer('M-FACTS-DEAD-FILE-NEVER')
 	@:killer('M-FACTS-DEAD-FILE-UNTRUE')
 	public function testAProjectFileNoBuildCompilesRunsNothing(): Void {
@@ -1471,7 +1575,7 @@ class MemberReachFactsTest extends Test {
 		assertMatch(question(['run']), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-VIEW-CONVERSION-LEAF')
+	@:pin('control') @:killer('M-FACTS-CALL-OPERAND-LEAF')
 	public function testAConvertedValueOfTheParametersOwnTypeMayBeAnyObjectUnderTheTruth(): Void {
 		// `d` is `Dynamic`, `Std.string`'s parameter type, so handing it on records no flow: the flow of the other branch is one
 		// leaf of the argument, not the value converted, which may be an `Obj`, whose `toString` replaces `Main.items`
@@ -1484,6 +1588,28 @@ class MemberReachFactsTest extends Test {
 		assertMatch(converting('failing ? new Plain() : d'), r -> !r.match(Proven));
 		assertMatch(converting('d'), r -> !r.match(Proven));
 		assertMatch(converting('new Plain()'), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-FACTS-CALL-OPERAND')
+	public function testAConversionAnInlinedBodySplicedFromAnotherFileConvertsItsOwnArgumentUnderTheTruth(): Void {
+		// `Buf.add` (cpp's `StringBuf.add`) converts what it is handed; inlined into `main`, the conversion lies in `Buf.hx`,
+		// whose text the facts of `main` do not hold, and the region hands it a `String`, whose conversion runs nothing —
+		// `Obj.toString` changes `items`, and runs when `show` converts an `Obj`. Each is inlined at its call, so its own body,
+		// read through its own facts, converts what its parameter declares
+		final buf: String = 'class Buf {\n\tpublic var s:String = "";\n\n\tpublic function new() {}\n\n'
+			+ '\tpublic function add(x:String):Void {\n\t\tif (s == null) s = Std.string(x); else s += Std.string(x);\n\t}\n\n'
+			+ '\tpublic function show(x:Main.Obj):Void {\n\t\tif (s == null) s = Std.string(x); else s += Std.string(x);\n\t}\n}\n';
+		function region(code: String): String {
+			return LOOP_HEAD + '\tstatic function main() {\n\t\tvar o:Obj = new Obj();\n\t\tvar b:Buf = new Buf();\n'
+				+ '\t\tfor (i in 0...items.length) { /*<*/ ' + code + ' /*>*/ }\n\t}\n}\n' + CLEARING_OBJ;
+		}
+
+		function question(code: String): ReachResult {
+			return ask(['Main.hx' => region(code), 'Buf.hx' => buf], null, true, null, false, null, null, null, true);
+		}
+		assertMatch(question('inline b.add("x");'), r -> r.match(Proven));
+		Assert.equals('', lastDropped.join('; '), 'the fixture did not compile');
+		assertMatch(question('inline b.show(o);'), r -> r.match(Reached(_)));
 	}
 
 	@:pin('control') @:killer('M-GRAPH-FACTS-INTERFACE-PLACEHOLDER') @:killer('M-GRAPH-VIRTUAL-OWN-ONLY')

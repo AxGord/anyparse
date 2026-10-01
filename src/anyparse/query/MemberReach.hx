@@ -18,6 +18,7 @@ import anyparse.query.MemberTouchScan.MemberTouches;
 import anyparse.query.MemberTouchScan.Occurrence;
 import anyparse.query.ReachAdmission.Admission;
 import anyparse.query.ReachGraph.OwnedId;
+import anyparse.query.ReachGraph.ReflectedMembers;
 import anyparse.query.ReachHazards.ReachHazard;
 import anyparse.query.ReachLiveness.ReachBuilds;
 import anyparse.query.ReachLiveness.ReachConfiguration;
@@ -154,8 +155,10 @@ typedef MemberRef = {
  * functions that can themselves reach a toucher, and re-run whenever the graph grew. Where the compiler facts are
  * the truth, code read through them runs an implicitly-called member without a call the graph holds only at a
  * string conversion — a thrown value is one — or an iteration, so a channel that can run no code read by its syntax
- * admits only those (`ReachAdmission.runsSyntaxRead`, `ReachGraph.typedImplicitIds`). Reflection by a literal
- * name is a hand-off it follows; by a computed name, native code, untyped code, a raw conditional region, an unmodelled
+ * admits only those (`ReachAdmission.runsSyntaxRead`, `ReachGraph.typedImplicitIds`). Reflection by a literal name is a hand-off
+ * it follows, and so, under the truth, is one by a computed name on an object the facts type as an instance of a class or
+ * interface, which runs only the methods of the types it may be (`ReachGraph.reflectedMembers`) and is a blind spot only where
+ * one of them carries the member; any other by a computed name, native code, untyped code, a raw conditional region, an unmodelled
  * construct, a build macro, an ambiguous type name or an unparsed file is `Unknown` — a build macro, where the compiler facts
  * are the truth (`FactsView.truth`), only when they show the code it made of a type is not the text (`ReachGraph.rewrittenBy`);
  * what they show a method it made or placed elsewhere touching is found all the same (`CallGraphFacts.adopt`). Under the
@@ -1247,6 +1250,7 @@ final class MemberReach {
 	): ReachResult {
 		// noqa: complexity
 		final touchers: Map<String, Occurrence> = scan.touchers;
+		final reflectiveNames: Map<String, Int> = _shape.execution?.reflectiveNameCalls ?? [];
 		var blind: Null<ReachUnknown> = scan.hidden;
 		final reach: Map<String, Null<ReachStep>> = [];
 		final queue: Array<String> = [];
@@ -1304,7 +1308,10 @@ final class MemberReach {
 				implicit.push(o.id)
 			else
 				owned.push(o);
+			// the methods of an object reflection reaches by name are each the member of the type the facts name
+			for (o in site.owned ?? []) owned.push(o);
 			for (id in implicit) if (admission.closure.exists(id) && !ids.contains(id)) ids.push(id);
+
 			function step(id: String): ReachStep {
 				return {
 					from: site.from,
@@ -1381,7 +1388,18 @@ final class MemberReach {
 			admitUnread(site, false);
 			admitAlways();
 		}
+		// the reflective accesses by a computed name whose object the facts type (`ReachGraph.reflectedMembers`): what a call of
+		// the accessor runs there is what its admission lets run, so its body, which reaches members by a name it is handed
+		// as any reflection does, is not entered from that call
+		final bounded: Array<Occurrence> = [];
+		function boundedCall(e: CallEdge): Bool {
+			final target: Null<FnNode> = g.node(e.to);
+			final at: Null<Span> = e.span;
+			if (target == null || at == null || !reflectiveNames.exists('${target.typeName}.${target.name}')) return false;
+			return bounded.exists(b -> b.file == e.file && sameSpan(b.span, at));
+		}
 		function follow(e: CallEdge): Void {
+			if (boundedCall(e)) return;
 			enqueueTyped(e.to, edgeStep(e), e.typed);
 			final dispatch: Null<String> = e.dispatchType;
 			final target: Null<String> = g.node(e.to)?.name;
@@ -1436,6 +1454,17 @@ final class MemberReach {
 						final names: Array<String> = [for (p in _shape.accessorMethodPrefixes ?? []) p + named];
 						names.push(named);
 						admit(site(from, entry.file, h.span, 'reflection', names, false));
+					case ReflectiveName(null):
+						// an object of a type the facts name reaches only its own type's members by a name it computes
+						final reached: Null<ReflectedMembers> = _g.reflectedMembers(g, h.receivers ?? []);
+						if (reached == null || reached.types.contains(question.declaring))
+							blind = blind ?? DynamicName(entry.file, h.span);
+						else {
+							final reflected: AdmissionSite = site(from, entry.file, h.span, 'reflection', [], false);
+							reflected.owned = reached.ids;
+							bounded.push({ file: entry.file, span: h.span });
+							admit(reflected);
+						}
 					case ArrayChange:
 					case _:
 						blind = blind ?? firstBlind(entry.file, [h]);
@@ -2170,4 +2199,7 @@ private typedef AdmissionSite = {
 
 	/** These functions: the members of an object handed to code that reaches them by name. */
 	@:optional var ids: Array<String>;
+
+	/** These functions, each the member of the typed type it names: the methods of an object reflection reaches by name. */
+	@:optional var owned: Array<OwnedId>;
 }

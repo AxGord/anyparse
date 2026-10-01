@@ -6,7 +6,6 @@ import anyparse.query.CompilerFacts.CallFact;
 import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.CompilerFacts.FieldDeclFact;
-import anyparse.query.CompilerFacts.FlowFact;
 import anyparse.query.CompilerFacts.IterationFact;
 import anyparse.query.CompilerFacts.NativeFact;
 import anyparse.query.CompilerFacts.ReflectionFact;
@@ -110,6 +109,9 @@ final class FactsView {
 	/** The field kinds that are methods (`TypedFactsProbe`): a read of one is a function value. */
 	private static final METHOD_KINDS: Array<String> = ['method', 'inline', 'dynamic'];
 
+	/** The typed kinds (`TypeFact.kind`) a value of which is an object of a class: its members are what that class declares. */
+	private static final OBJECT_KINDS: Array<String> = ['class', 'interface'];
+
 	/** A package-qualified path's package prefix, in a type string. */
 	private static final PACKAGE_PREFIX: EReg = ~/([A-Za-z_][A-Za-z0-9_]*\.)+(?=[A-Za-z_])/g;
 
@@ -205,8 +207,9 @@ final class FactsView {
 	 * iteration of each `for` the compiler kept. Every other implicit call — an operator, a conversion, an index, an
 	 * accessor, a literal construction — is a call or a construction the facts name, an edge of the graph. An operand the
 	 * facts show is an object of exactly its own class (`StringFact.exact`) makes its site `exact`. A conversion call's
-	 * argument is of the type a flow at exactly its range names (`conversionFlow`), and of any type otherwise: a leaf of
-	 * it of the parameter's own type records no flow. Each site names the typed type of each operand where the facts give
+	 * argument is of the type its fact names (`CallFact.operand`) — the whole value's, which a flow at its range would
+	 * not name when it is of the parameter's own type, nor find when an inlined body spliced the call in from another
+	 * file — and of any type when it names none. Each site names the typed type of each operand where the facts give
 	 * one (`ImplicitSite.owners`, `typedOwner`). Null when the innermost graph node holding `span` — read as `node`
 	 * when it is that one read as one type's member (`CallGraphFacts.qualify`) — is not faceted: the syntactic sites answer.
 	 */
@@ -216,8 +219,7 @@ final class FactsView {
 		final strings: Null<Array<StringFact>> = table.within(file, span, n -> n.strings, s -> s.at, truth, harmless);
 		final iterations: Null<Array<IterationFact>> = table.within(file, span, n -> n.iterations, i -> i.at, truth, harmless);
 		final calls: Null<Array<CallFact>> = table.callsIn(file, span, truth, harmless);
-		final flows: Null<Array<FlowFact>> = table.flowsIn(file, span, truth, harmless);
-		if (strings == null || iterations == null || calls == null || flows == null) return null;
+		if (strings == null || iterations == null || calls == null) return null;
 		final out: Array<ImplicitSite> = [
 			for (s in strings)
 				{
@@ -231,14 +233,14 @@ final class FactsView {
 		for (c in calls) {
 			final target: Null<String> = c.target;
 			if (target == null || !convertsToString(target)) continue;
-			// the flow of the whole value converted: an object of exactly its class when it says so
-			final argument: Null<FlowFact> = conversionFlow(g, file, c, flows);
+			// the value converted, as the call's fact names it: an object of exactly its class when it says so
+			final operand: Null<String> = c.operand;
 			out.push({
 				family: Text,
 				span: c.at.span,
-				types: [argument == null ? null : simpleSource(argument.from)],
-				exact: argument?.exact == true,
-				owners: [argument == null ? null : typedOwner(argument.from)]
+				types: [operand == null ? null : simpleSource(operand)],
+				exact: c.operandExact,
+				owners: [operand == null ? null : typedOwner(operand)]
 			});
 		}
 		for (i in iterations) out.push({
@@ -257,9 +259,7 @@ final class FactsView {
 	 * unknown, or a type no build typed.
 	 */
 	public function typedOwner(type: String): Null<String> {
-		final wrappers: Array<String> = _scope.shape.memberTransparentWrapperTypeNames ?? [];
-		var t: String = StringTools.trim(type);
-		while (t.endsWith('>') && wrappers.contains(CompilerFacts.baseId(t))) t = t.substring(t.indexOf('<') + 1, t.length - 1);
+		final t: String = unwrapped(type);
 		if (t.indexOf('?') >= 0 || t.indexOf('$') >= 0) return null;
 		final id: String = CompilerFacts.baseId(t);
 		return table.type(id) == null ? null : id;
@@ -302,34 +302,6 @@ final class FactsView {
 		final reads: Bool = node != null && g.facts?.qualified[node]?.node == at.id
 			&& g.declarationsOf(node).exists(d -> CallGraphNames.normalizePath(d.file) == key && sameRange(d.span, at.span));
 		return g.facts?.faceted.exists(reads && node != null ? node : at.id) == true;
-	}
-
-	/**
-	 * The flow handing the argument of the conversion call `c`, of the facts of `file`, to it: the one at exactly the range
-	 * of the argument the call's text holds — its receiver, for a static extension — or, for a conversion the compiler
-	 * wrote for an operand, at the call's own range. Null — a value of any type — when there is none: a leaf of the argument whose type is the parameter's records
-	 * no flow, so a flow inside the argument is one leaf of it, not the value converted.
-	 */
-	private function conversionFlow(g: CallGraph, file: String, c: CallFact, flows: Array<FlowFact>): Null<FlowFact> {
-		function at(range: Span): Null<FlowFact> {
-			return flows.find(f -> f.via == 'arg' && f.at.file == c.at.file && sameRange(f.at.span, range));
-		}
-		final operand: Null<FlowFact> = at(c.at.span);
-		if (operand != null) return operand;
-		// a spliced call sits in another file than the text read here
-		final tree: Null<QueryNode> = c.at.file == table.keyOf(file) ? g.treeOf(file) : null;
-		final call: Null<QueryNode> = tree == null ? null : nodeAt(tree, _scope.shape.callKind, c.at.span);
-		final callee: Null<QueryNode> = call == null || call.children.length == 0 ? null : call.children[0];
-		// a static extension (`using Std; x.string()`) is handed its receiver
-		final extension: Bool = callee != null && call?.children.length == 1 && callee.kind == _scope.shape.fieldAccessKind
-			&& callee.children.length > 0;
-		final argument: Null<Span> = if (call != null && call.children.length == 2)
-			call.children[1].span
-		else if (extension && callee != null)
-			callee.children[0].span
-		else
-			null;
-		return argument == null ? null : at(argument);
 	}
 
 	/**
@@ -985,18 +957,6 @@ final class FactsView {
 		return a.from == b.from && a.to == b.to;
 	}
 
-	/** The node of `kind` at exactly `range` in `tree`, or null. */
-	private static function nodeAt(tree: QueryNode, kind: Null<String>, range: Span): Null<QueryNode> {
-		final at: Null<Span> = tree.span;
-		if (at != null && (range.from < at.from || range.to > at.to)) return null;
-		if (tree.kind == kind && at != null && sameRange(at, range)) return tree;
-		for (c in tree.children) {
-			final found: Null<QueryNode> = nodeAt(c, kind, range);
-			if (found != null) return found;
-		}
-		return null;
-	}
-
 	/** Whether `a` and `b` share a position. */
 	private static inline function meets(a: Span, b: Span): Bool {
 		return a.from < b.to && b.from < a.to;
@@ -1025,6 +985,34 @@ final class FactsView {
 		if (!name.endsWith(IMPL_SUFFIX) || !pack.substr(module + 1).startsWith('_')) return impl;
 		final abstractName: String = name.substr(0, name.length - IMPL_SUFFIX.length);
 		return module < 0 ? abstractName : '${pack.substr(0, module)}.$abstractName';
+	}
+
+	/**
+	 * The typed class or interface whose instances — its own, or a subtype's — a value of the facts type string `type` is,
+	 * seen through a wrapper that keeps its members (`Null<T>`): its id, whatever type arguments it is written with, since
+	 * they change no member an instance has. Null for every other type — `Dynamic`, a structure, a function type, a type
+	 * parameter, an unknown, an abstract (a value of which is its underlying one), an enum — and for an extern class, whose
+	 * instances target code makes and may make of anything, or one the builds declare unalike.
+	 */
+	public function objectClass(type: String): Null<String> {
+		final id: String = CompilerFacts.baseId(unwrapped(type));
+		final declared: Null<TypeFact> = table.type(id);
+		return declared != null && declared.alike && !declared.isExtern && OBJECT_KINDS.contains(declared.kind) ? id : null;
+	}
+
+	/** The facts type string `type` seen through every wrapper that keeps its members (`Null<T>`). */
+	private function unwrapped(type: String): String {
+		final wrappers: Array<String> = _scope.shape.memberTransparentWrapperTypeNames ?? [];
+		var t: String = StringTools.trim(type);
+		while (t.endsWith('>') && wrappers.contains(CompilerFacts.baseId(t))) t = t.substring(t.indexOf('<') + 1, t.length - 1);
+		return t;
+	}
+
+	/** The graph's names (`graphMember`) of every method the typed type `id` declares, an accessor among them. */
+	public function methodsOf(id: String): Array<String> {
+		return [
+			for (f in table.type(id)?.fields ?? []) if (f.kinds.exists(k -> METHOD_KINDS.contains(k))) graphMember(id, f.name)
+		];
 	}
 
 }

@@ -707,7 +707,7 @@ final class TypedFactsWalk {
 	private function call(e: TypedExpr, callee: TypedExpr, args: Array<TypedExpr>): Void {
 		argFlows(callee.t, args);
 		final where: String = at(e.pos);
-		final head: String = '"rt":${q(str(e.t))},"p":$where';
+		final head: String = '"rt":${q(str(e.t))},"p":$where' + dynamicOperand(callee.t, args);
 		final fact: String = switch callee.expr {
 			case TField(receiver, fa):
 				final access: FieldRef = TypedFactsShapes.describe(fa);
@@ -772,7 +772,11 @@ final class TypedFactsWalk {
 				named = ',"c":' + q(TypedFactsShapes.moduleTypeId(m));
 			case _:
 		}
-		add('refl', '{"t":${q(targetName)}$literal$named,"p":$where}');
+		final first: Null<TypedExpr> = args.length > 0 ? args[0] : null;
+		final receiver: String = first == null
+			? ''
+			: ',"r":${q(sourceType(first))}' + (exactObject(first) ? ',"x":true' : '') + (isThis(first) ? ',"h":true' : '');
+		add('refl', '{"t":${q(targetName)}$literal$named$receiver,"p":$where}');
 	}
 
 	/**
@@ -853,6 +857,33 @@ final class TypedFactsWalk {
 
 	private static inline function q(s: String): String {
 		return TypedFactsMacro.q(s);
+	}
+
+	/**
+	 * The first argument of a call handing it to a `Dynamic` parameter, as the call fact's `o` — its type — and `x` — an
+	 * object of exactly its class (`exactObject`); empty for any other call. A value handed to a parameter of no type records
+	 * no flow when it has none either (`flowText`), and the argument of a call an inlined body spliced in lies in the text of
+	 * the method it came from, so nothing else says what the call was handed.
+	 */
+	private function dynamicOperand(fnType: Null<Type>, args: Array<TypedExpr>): String {
+		final params: Null<Array<{ name: String, opt: Bool, t: Type }>> = fnType == null
+			? null
+			: switch TypeTools.follow(fnType) {
+				case TFun(declared, _): declared;
+				case _: null;
+			};
+		final first: Null<TypedExpr> = args.length > 0 ? args[0] : null;
+		if (params == null || params.length == 0 || first == null || str(params[0].t) != 'Dynamic') return '';
+		return ',"o":${q(sourceType(first))}' + (exactObject(first) ? ',"x":true' : '');
+	}
+
+	/** Whether `e` is `this`, seen through parentheses and metadata. */
+	private static function isThis(e: TypedExpr): Bool {
+		return switch e.expr {
+			case TParenthesis(inner) | TMeta(_, inner): isThis(inner);
+			case TConst(TThis): true;
+			case _: false;
+		};
 	}
 
 }
