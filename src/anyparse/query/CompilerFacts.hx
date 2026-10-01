@@ -103,6 +103,33 @@ typedef FlowFact = {
 	final to: String;
 	final via: String;
 	final at: FactPos;
+
+	/**
+	 * Whether the value is an object of exactly the class `from` names: a construction, or a local initialized with one of
+	 * its own type and never written again. False in facts that do not record it.
+	 */
+	final exact: Bool;
+}
+
+/**
+ * A value of type `from` handed to `target` (`pack.Type.field`), a field of an extern class — target code, which no fact
+ * describes — at a parameter the field declares of type `to`, its own type parameters unapplied (`$pack.Type.T`).
+ */
+typedef HandFact = {
+	final target: String;
+	final from: String;
+	final to: String;
+	final at: FactPos;
+}
+
+/**
+ * A field declaring type parameters of its own (a generic method), read or called at `at`: its declared type `declared`,
+ * spelling them (`$name.T`), and the type `applied` the compiler instantiated it at there.
+ */
+typedef InstantiationFact = {
+	final declared: String;
+	final applied: String;
+	final at: FactPos;
 }
 
 /**
@@ -112,6 +139,12 @@ typedef FlowFact = {
 typedef StringFact = {
 	final operand: String;
 	final at: FactPos;
+
+	/**
+	 * Whether the operand is an object built as an instance of exactly the class `operand` names: a construction, or a
+	 * local initialized with one of its own type and never written again. False in facts that do not record it.
+	 */
+	final exact: Bool;
 }
 
 /** A `for` loop the compiler kept as one: the binder's type and the iterated value's. */
@@ -199,6 +232,8 @@ typedef FactNode = {
 	final fields: Array<FieldFact>;
 	final elementWrites: Array<ElementWriteFact>;
 	final flows: Array<FlowFact>;
+	final handed: Array<HandFact>;
+	final instantiations: Array<InstantiationFact>;
 	final strings: Array<StringFact>;
 	final iterations: Array<IterationFact>;
 	final reflection: Array<ReflectionFact>;
@@ -297,6 +332,15 @@ typedef TypeFact = {
 
 	/** For a `typedef`, every type a configuration aliased it to; empty for any other kind. */
 	final targets: Array<String>;
+
+	/** For an `abstract`, every type a configuration gave the value it wraps; empty for any other kind. */
+	final underlying: Array<String>;
+
+	/**
+	 * For an `enum`, every constructor a configuration declared, with its type: a function type returning the enum for one
+	 * taking arguments, the enum itself for one taking none. Empty for any other kind.
+	 */
+	final constructors: Array<{ name: String, type: String }>;
 }
 
 /**
@@ -428,6 +472,11 @@ final class CompilerFacts {
 		final made: Null<FactNode> = lines == null ? null : materialize(id, lines);
 		_nodeCache[id] = made;
 		return made;
+	}
+
+	/** The id of every node some configuration typed: every function and initializer, nested ones included. */
+	public inline function nodeIds(): Iterator<String> {
+		return _nodeLines.keys();
 	}
 
 	/**
@@ -629,7 +678,9 @@ final class CompilerFacts {
 			genericOf: record.of,
 			builds: record.builds ?? [],
 			alike: true,
-			targets: record.target == null ? [] : [record.target]
+			targets: record.target == null ? [] : [record.target],
+			underlying: record.under == null ? [] : [record.under],
+			constructors: [for (c in record.ctors ?? []) { name: c.n, type: c.t }]
 		};
 		final known: Null<TypeFact> = _types[record.id];
 		if (known == null) {
@@ -763,6 +814,8 @@ final class CompilerFacts {
 			fields: [],
 			elementWrites: [],
 			flows: [],
+			handed: [],
+			instantiations: [],
 			strings: [],
 			iterations: [],
 			reflection: [],
@@ -847,12 +900,27 @@ final class CompilerFacts {
 					from: f.s,
 					to: f.d,
 					via: f.c,
-					at: where
+					at: where,
+					exact: f.x == true
 				}: FlowFact),
 				node.flows
 			);
 			FactMerge.collect(
-				record.strs, s -> place(s.p), fresh.bind('str'), (s, where) -> ({operand: s.o, at: where }: StringFact), node.strings
+				record.hands, h -> place(h.p), fresh.bind('hand'), (h, where) -> ({
+					target: h.t,
+					from: h.s,
+					to: h.d,
+					at: where
+				}: HandFact),
+				node.handed
+			);
+			FactMerge.collect(
+				record.gens, x -> place(x.p), fresh.bind('gen'),
+				(x, where) -> ({declared: x.d, applied: x.s, at: where }: InstantiationFact), node.instantiations
+			);
+			FactMerge.collect(
+				record.strs, s -> place(s.p), fresh.bind('str'),
+				(s, where) -> ({operand: s.o, at: where, exact: s.x == true }: StringFact), node.strings
 			);
 			FactMerge.collect(
 				record.iters, i -> place(i.p), fresh.bind('iter'), (i, where) -> ({binder: i.v, iterated: i.i, at: where }: IterationFact),
@@ -1030,6 +1098,8 @@ private typedef TypeRecord = {
 	final ?ifaces: Array<String>;
 	final ?fields: Array<FieldRecord>;
 	final ?target: String;
+	final ?under: String;
+	final ?ctors: Array<{ n: String, t: String }>;
 }
 
 private typedef CallRecord = {
@@ -1077,9 +1147,17 @@ private typedef NodeRecord = {
 		s: String,
 		d: String,
 		c: String,
+		p: Array<Int>,
+		?x: Bool
+	}>;
+	final ?hands: Array<{
+		t: String,
+		s: String,
+		d: String,
 		p: Array<Int>
 	}>;
-	final ?strs: Array<{ o: String, p: Array<Int> }>;
+	final ?gens: Array<{ d: String, s: String, p: Array<Int> }>;
+	final ?strs: Array<{ o: String, p: Array<Int>, ?x: Bool }>;
 	final ?iters: Array<{ v: String, i: String, p: Array<Int> }>;
 	final ?refl: Array<{
 		t: String,

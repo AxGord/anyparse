@@ -202,7 +202,10 @@ final class FactsProvenance {
 			return onText || CompilerFacts.spliceOf(n, p) != null || joined(n, p, name, body) || written.exists(x -> holds(x.declared, p));
 		}
 		final iterationCalls: Array<String> = _scope.shape.execution?.implicitCallNames ?? [];
-		for (c in n.calls) if (c.access != INLINED && !own(c.at, callOnText(c, body, iterationCalls), calledName(c))) return false;
+		for (c in n.calls) if (c.access != INLINED) {
+			final written: Bool = callOnText(c, body, iterationCalls) || convertsJoined(n, c, body);
+			if (!own(c.at, written, calledName(c))) return false;
+		}
 		final constructions: Map<String, String> = _scope.shape.execution?.literalConstructions ?? [];
 		for (x in n.news) {
 			final built: String = _view.graphType(x.type);
@@ -217,7 +220,7 @@ final class FactsProvenance {
 			.concat([for (x in n.natives) x.at])
 			.concat([for (r in n.reflection) r.at])
 			.concat([for (e in n.elementWrites) e.at]);
-		if (!placed.foreach(p -> own(p, body.holds(p)))) return false;
+		if (!placed.foreach(p -> own(p, body.holds(p) || readJoined(n, p, body)))) return false;
 		for (child in n.fns) {
 			final nested: Null<FactNode> = _view.table.node(child);
 			if (nested == null || (nested.inlinedFrom == null && !factsOnText(nested, body))) return false;
@@ -251,6 +254,28 @@ final class FactsProvenance {
 			return n.splices.exists(s -> s.body.file == p.file && s.body.span.from <= offset && offset <= s.body.span.to);
 		}
 		return spliced(p.span.from) && (spliced(p.span.to) || (name != null && body.endsAccess(p.span.to, name)));
+	}
+
+	/**
+	 * Whether the call `c` of `n` is a conversion the compiler writes where the text writes one (`runsNoCode`) of a field read
+	 * at the very range it sits at, which the compiler joined from code an inlined call spliced in (`readJoined`): the read
+	 * the text writes — `${map[key].field}` — is what it converts.
+	 */
+	private function convertsJoined(n: FactNode, c: CallFact, body: BodyText): Bool {
+		final target: Null<String> = c.target;
+		return target != null && runsNoCode(target) && readJoined(n, c.at, body);
+	}
+
+	/**
+	 * Whether `p` is the range of a field read of `n` the compiler joined from code an inlined call spliced in and the text of
+	 * `body` (`joined`): a fact there — the read's conversion, the value it flows as — is that read's.
+	 */
+	private static function readJoined(n: FactNode, p: FactPos, body: BodyText): Bool {
+		return n.fields.exists(
+			f ->
+				!f.write && f.at.file == p.file && f.at.span.from == p.span.from && f.at.span.to == p.span.to
+				&& joined(n, f.at, f.field, body)
+		);
 	}
 
 	/** Whether the range `outer` holds `p`; false for none. */

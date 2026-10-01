@@ -39,6 +39,16 @@ final class TypedFactsMacro {
 
 	private static var installed: Bool = false;
 
+	/**
+	 * Every typedef a type string printed, by id and declaration: an import alias (`import pack.T as U`) is one no module
+	 * lists, so the compile's records are closed over them once the module types are written (`run`). Two aliases of one
+	 * name of one module share an id, and each gets a record: the table holds every target an id names.
+	 */
+	private static final printedTypedefs: Map<String, Ref<DefType>> = [];
+
+	/** The ids of the types a record was written for (`typeLine`), and the typedefs printed that got one (`printedAliases`). */
+	private final _written: Map<String, Bool> = [];
+
 	/** Milliseconds in a second: `Date.getTime` counts the one, `Sys.time` the other. */
 	private static inline final MS_PER_SECOND: Float = 1000;
 
@@ -185,7 +195,7 @@ final class TypedFactsMacro {
 	): Void {
 		if (body == null) return;
 		final walk: TypedFactsWalk = new TypedFactsWalk(
-			this, id, kind, owner, isStatic, signature, null, [], TypedFactsShapes.writtenLocals(body), []
+			this, id, kind, owner, isStatic, signature, null, [], TypedFactsShapes.writtenLocals(body), [], []
 		);
 		if (fileOf(body.pos) != home) walk.flag('gen');
 		// a `@:generic` instance's body sits at the generic class's ranges, which that class's own nodes answer for
@@ -219,6 +229,7 @@ final class TypedFactsMacro {
 		isExtern: Bool, extra: Array<String>
 	): Void {
 		_types++;
+		_written[typeId(pack, name)] = true;
 		final home: String = fileOf(p);
 		noteHome(home);
 		final out: StringBuf = new StringBuf();
@@ -245,9 +256,33 @@ final class TypedFactsMacro {
 			writer.line('{"k":"facts","v":$VERSION,"inline":${!Context.defined('no-inline')}}');
 			for (t in moduleTypes) writer.collectFields(t);
 			for (t in moduleTypes) writer.moduleType(t);
+			writer.printedAliases();
 			writer.line('{"k":"end","nodes":${writer.nodes},"types":${writer._types}}');
 			writer._out.close();
 		});
+	}
+
+	/**
+	 * A record for each typedef a type string printed that no module listed — an import alias — until none is left: its
+	 * target may print another.
+	 */
+	private function printedAliases(): Void {
+		var pending: Array<String> = [for (key => r in printedTypedefs) if (!printed(key, r)) key];
+		while (pending.length > 0) {
+			for (key in pending) {
+				final r: Null<Ref<DefType>> = printedTypedefs[key];
+				_written[key] = true;
+				if (r == null) continue;
+				final d: DefType = r.get();
+				typeLine(d.pack, d.name, 'typedef', d.pos, d.params, d.meta.get(), d.isExtern, [',"target":' + q(typeString(d.type, 0))]);
+			}
+			pending = [for (key => r in printedTypedefs) if (!printed(key, r)) key];
+		}
+	}
+
+	/** Whether the typedef `r`, printed under `key`, has a record: one of its own, or the one its module wrote. */
+	private function printed(key: String, r: Ref<DefType>): Bool {
+		return _written.exists(key) || _written.exists(r.toString());
 	}
 
 	/** Whether the field `target` (`<type>.<field>`) has overloads: a call of it then names the signature it chose. */
@@ -398,7 +433,11 @@ final class TypedFactsMacro {
 			case TLazy(f): typeString(f(), depth);
 			case TInst(c, params): instString(c, params, depth);
 			case TEnum(e, params): e.toString() + paramString(params, depth);
-			case TType(d, params): d.toString() + paramString(params, depth);
+			case TType(d, params):
+				// the compiler names the typedef of a type's statics after it (`Enum<pack.E>`), which carries no arguments of its own
+				final name: String = d.toString();
+				if (!StringTools.endsWith(name, '>')) printedTypedefs[name + '@' + Std.string(d.get().pos)] = d;
+				StringTools.endsWith(name, '>') ? name : name + paramString(params, depth);
 			case TAbstract(a, params): a.toString() + paramString(params, depth);
 			case TDynamic(null): 'Dynamic';
 			case TDynamic(inner): 'Dynamic<' + typeString(inner, depth + 1) + '>';

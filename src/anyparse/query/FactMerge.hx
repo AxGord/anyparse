@@ -22,6 +22,8 @@ final class FactMerge {
 		for (m in from.meta) if (!into.meta.contains(m)) into.meta.push(m);
 		absent(into.interfaces, from.interfaces);
 		absent(into.targets, from.targets);
+		absent(into.underlying, from.underlying);
+		for (c in from.constructors) if (!into.constructors.exists(k -> k.name == c.name && k.type == c.type)) into.constructors.push(c);
 		if (into.kind != from.kind || into.isExtern != from.isExtern) into.alike = false;
 	}
 

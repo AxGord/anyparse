@@ -197,8 +197,9 @@ final class FactsView {
 	 * The implicit-call sites the code in `span` of `file` runs, from its facts: a string conversion of each non-String operand, of
 	 * each non-String value thrown and of each argument a conversion call (`ExecutionShape.stringConversionCalls`) is handed, and the
 	 * iteration of each `for` the compiler kept. Every other implicit call — an operator, a conversion, an index, an
-	 * accessor, a literal construction — is a call or a construction the facts name, an edge of the graph. Null when
-	 * the innermost graph node holding `span` is not faceted: the syntactic sites answer.
+	 * accessor, a literal construction — is a call or a construction the facts name, an edge of the graph. An operand the
+	 * facts show is an object of exactly its own class (`StringFact.exact`) makes its site `exact`. Null when the innermost
+	 * graph node holding `span` is not faceted: the syntactic sites answer.
 	 */
 	public function sitesIn(g: CallGraph, file: String, span: Span): Null<Array<ImplicitSite>> {
 		if (!faceted(g, file, span)) return null;
@@ -209,7 +210,13 @@ final class FactsView {
 		final flows: Null<Array<FlowFact>> = table.flowsIn(file, span, truth, harmless);
 		if (strings == null || iterations == null || calls == null || flows == null) return null;
 		final out: Array<ImplicitSite> = [
-			for (s in strings) { family: Text, span: s.at.span, types: [simpleSource(s.operand)] }
+			for (s in strings)
+				{
+					family: Text,
+					span: s.at.span,
+					types: [simpleSource(s.operand)],
+					exact: s.exact
+				}
 		];
 		for (c in calls) {
 			final target: Null<String> = c.target;
@@ -218,11 +225,24 @@ final class FactsView {
 			final argument: Null<FlowFact> = flows.find(
 				f -> f.via == 'arg' && f.at.file == c.at.file && c.at.span.from <= f.at.span.from && f.at.span.to <= c.at.span.to
 			);
-			out.push({ family: Text, span: c.at.span, types: [argument == null ? null : simpleSource(argument.from)] });
+			// the conversion the compiler wrote for an operand sits at the operand's own range: then that one value is converted
+			final operand: Bool = argument != null && argument.at.span.from == c.at.span.from && argument.at.span.to == c.at.span.to;
+			out.push({
+				family: Text,
+				span: c.at.span,
+				types: [argument == null ? null : simpleSource(argument.from)],
+				exact: operand && argument?.exact == true
+			});
 		}
-		for (i in iterations) out.push({ family: Iteration, span: i.at.span, types: [simpleSource(i.iterated)] });
+		for (i in iterations) out.push({
+			family: Iteration,
+			span: i.at.span,
+			types: [simpleSource(i.iterated)],
+			exact: false
+		});
 		return out;
 	}
+
 
 	/**
 	 * The native sites and the reflective calls the compiler typed in the code at `span` of `file`, when the facts are the

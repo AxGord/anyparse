@@ -1,5 +1,6 @@
 package unit.check;
 
+import anyparse.check.FactsTypeTree;
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.TypedFactsProbe;
 import anyparse.query.CompilerFacts;
@@ -700,6 +701,80 @@ class TypedFactsProbeTest extends Test {
 	}
 
 	/** A compile of `files` (paths under one scratch directory) under each define set of `configurations`, by `build`. */
+	@:pin('control') @:killer('M-FACTS-HANDS') @:killer('M-FACTS-GENS')
+	public function testWhatExternCodeIsHandedAndWhatAGenericMethodIsInstantiatedAt(): Void {
+		// an argument of an extern's field is handed to target code at the type the field declares, its own type parameters
+		// unapplied, a same-type one too; a generic method's call and its read as a value name the instantiation chosen
+		final scratch: Scratch = compile([
+			'Main.hx' => '@:native("Object") extern class Ext<T> {\n\tfunction new(t:T);\n\tstatic function keep(o:Main):Void;\n'
+			+ '\tfunction put(t:T, n:Int):Void;\n}\n' + 'class Main { function new() {}\n'
+			+ '\tstatic function id<A>(a:A):A return a;\n\tstatic function main() {\n\t\tvar m = new Main(); Ext.keep(m);\n'
+			+ '\t\tvar e = new Ext<Main>(m); e.put(m, 1); id(m); var f:Main->Main = id;\n\t}\n}\n'
+		]);
+		final main: Null<FactNode> = scratch.facts?.node('Main.main');
+		Assert.notNull(main);
+		if (main != null) {
+			final handed: Array<String> = [for (h in main.handed) '${h.target}:${h.from}:${h.to}'];
+			for (expected in [
+				'Ext.keep:Main:Main',
+				'Ext.new:Main:$$Ext.T',
+				'Ext.put:Main:$$Ext.T',
+				'Ext.put:Int:Int'
+			]) Assert.isTrue(handed.contains(expected), '$expected is not handed: $handed');
+			final instantiated: Array<String> = [for (g in main.instantiations) '${g.declared}=>${g.applied}'];
+			Assert.isTrue(instantiated.contains('($$id.A)->$$id.A=>(Main)->Main'), 'the call is no instantiation: $instantiated');
+			Assert.equals(2, main.instantiations.length);
+		}
+		scratch.remove();
+	}
+
+	@:pin('control') @:killer('M-FACTS-STRING-EXACT') @:killer('M-FACTS-THROW-EXCEPTION') @:killer('M-FACTS-EXACT-WRITTEN')
+	@:killer('M-FACTS-FLOW-EXACT')
+	public function testAConvertedObjectOfExactlyItsClassAndAThrownException(): Void {
+		// a construction, and a local initialized with one of its own type never written again, are objects of exactly their
+		// class; a thrown one extending `haxe.Exception` is thrown as it is, and converted by nothing
+		final scratch: Scratch = compile([
+			'Main.hx' => 'class Err extends haxe.Exception {}\n' + 'class Main { function new() {}\n\tstatic function main() {\n'
+			+ '\t\tvar a = new Main(); var b = new Main(); b = a; var c:Dynamic = new Main();\n'
+			+ '\t\ttrace("" + a); trace("" + b); trace("" + new Main()); trace("" + c);\n'
+			+ '\t\tif (Math.random() < 0) { var e = new Err("x"); throw e; }\n'
+			+ '\t\tif (Math.random() < 0) { var e:haxe.Exception = new Err("y"); throw e; }\n'
+			+ '\t\tif (Math.random() < 0) throw new Main();\n\t}\n}\n'
+		]);
+		final main: Null<FactNode> = scratch.facts?.node('Main.main');
+		Assert.notNull(main);
+		if (main != null) {
+			// a concatenated instance is converted by a call of `Std.string`, which it flows into
+			final converted: Array<FlowFact> = main.flows.filter(f -> f.via == 'arg' && f.from == 'Main');
+			final exact: Array<String> = [for (f in converted) '${f.from}:${f.exact}'];
+			Assert.equals(2, converted.filter(f -> f.exact).length, 'exact: $exact');
+			Assert.equals(1, converted.filter(f -> !f.exact).length, 'exact: $exact');
+			final thrown: Array<String> = [for (s in main.strings) '${s.operand}:${s.exact}'];
+			// a local of a supertype holds an object of another class than its type names: converted, and not exactly
+			Assert.isTrue(main.strings.exists(s -> s.operand == 'haxe.Exception' && !s.exact), 'thrown: $thrown');
+			Assert.isFalse(main.strings.exists(s -> s.operand == 'Err'), 'a thrown exception was converted: $thrown');
+			Assert.isTrue(main.strings.exists(s -> s.operand == 'Main' && s.exact), 'thrown: $thrown');
+		}
+		scratch.remove();
+	}
+
+	@:pin('control') @:killer('M-FACTS-ALIAS-TYPEDEF') @:killer('M-FACTS-STATICS-TYPEDEF')
+	public function testAnImportAliasIsATypedefAndTheStaticsOfAnEnumReadAsAType(): Void {
+		// an import alias is a typedef no module lists: it gets a record of its own; the statics of an enum read as a value
+		// print as `Enum<…>` alone, which the type grammar reads
+		final scratch: Scratch = compile([
+			'Main.hx' => 'import haxe.ds.Option as Opt;\n\nclass Main {\n\tstatic function f(o:Opt<Int>):Void {}\n'
+			+ '\tstatic function main() {\n\t\tf(None);\n\t\tvar statics = haxe.ds.Option;\n\t}\n}\n'
+		]);
+		final facts: Null<CompilerFacts> = scratch.facts;
+		Assert.equals('typedef', facts?.type('haxe.ds._Option.Opt')?.kind);
+		Assert.equals('haxe.ds.Option<$$haxe.ds.Option.T>', facts?.type('haxe.ds._Option.Opt')?.targets[0]);
+		final statics: Null<VarFact> = facts?.node('Main.main')?.vars.find(v -> v.name == 'statics');
+		Assert.notNull(statics);
+		if (statics != null) Assert.notNull(FactsTypeTree.read(statics.type), 'unreadable: ${statics.type}');
+		scratch.remove();
+	}
+
 	private static function compile(files: Map<String, String>, ?configurations: Array<Array<String>>, ?build: String): Scratch {
 		final entries: Array<{ name: String, source: String }> = [for (name => text in files) { name: name, source: text }];
 		entries.push({ name: 'build.hxml', source: build ?? BUILD });

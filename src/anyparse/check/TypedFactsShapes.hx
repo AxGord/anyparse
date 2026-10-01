@@ -26,6 +26,12 @@ final class TypedFactsShapes {
 	/** The classes whose members are reflection, called or read as a value. */
 	public static final REFLECTION_CLASSES: Array<String> = ['Reflect', 'Type'];
 
+	/** The package of the class every exception the language throws as it is extends (`isException`). */
+	private static inline final EXCEPTION_PACKAGE: String = 'haxe';
+
+	/** The name of that class. */
+	private static inline final EXCEPTION_NAME: String = 'Exception';
+
 	public static function collectLeaves(e: TypedExpr, out: Array<TypedExpr>): Void {
 		switch e.expr {
 			case TIf(_, then, otherwise):
@@ -94,6 +100,23 @@ final class TypedFactsShapes {
 			case TInst(c, _): c.toString() == 'String';
 			case _: false;
 		};
+	}
+
+	/**
+	 * Whether `t` is a class extending `haxe.Exception`, or that class itself: the exception wrapping throws an instance of
+	 * one as it is (`haxe.Exception.thrown`), and converts nothing.
+	 */
+	public static function isException(t: Type): Bool {
+		var c: Null<ClassType> = switch TypeTools.follow(t) {
+			case TInst(ref, _): ref.get();
+			case _: null;
+		};
+		while (c != null) {
+			final current: ClassType = c;
+			if (current.pack.join('.') == EXCEPTION_PACKAGE && current.name == EXCEPTION_NAME) return true;
+			c = current.superClass?.t.get();
+		}
+		return false;
 	}
 
 	/** The locals `body` ever assigns after their declaration: a function held by one of them is no fixed call target. */

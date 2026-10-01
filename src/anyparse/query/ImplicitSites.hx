@@ -90,7 +90,12 @@ final class ImplicitSites {
 			final at: Null<Span> = node.span;
 			if (at == null) return;
 			final span: Span = at;
-			out.push({ family: family, span: span, types: [for (o in operands) typeOf(file, tree, source, o)] });
+			out.push({
+				family: family,
+				span: span,
+				types: [for (o in operands) typeOf(file, tree, source, o)],
+				exact: false
+			});
 		}
 		function walk(node: QueryNode): Void {
 			final kind: String = node.kind;
@@ -149,9 +154,14 @@ enum SiteFamily {
 
 }
 
-/** One implicit-call site: its family, its span, and the static type of each operand (null when not known). */
+/**
+ * One implicit-call site: its family, its span, and the static type of each operand (null when not known). `exact`: every
+ * operand is an object of exactly the class its type names — a construction, or a local holding only one — never a
+ * subtype of it, nor an instance that left the type system (`ValueEscapes`).
+ */
 typedef ImplicitSite = {
 	var family: SiteFamily;
 	var span: Span;
 	var types: Array<Null<String>>;
+	var exact: Bool;
 }

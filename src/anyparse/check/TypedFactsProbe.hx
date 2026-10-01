@@ -36,6 +36,7 @@ import haxe.io.Path;
  *   `var(<read>,<write>)` with the accessors `default`, `null`, `never`, `call`, `inline`, `resolve`, `require`, `ctor`.
  *   A `@:generic` instance is a class of its own with `of`, the generic class at its arguments. `builds`: the printed
  *   macro calls of `@:build`/`@:autoBuild`/`@:genericBuild`. A `macro` field is always reachable from outside the program.
+ *   An import alias (`import pack.T as U`), which no module lists, is a `typedef` of its own, a record per declaration.
  * - `{"k":"node","id","f","p","kind","owner","t", s?, name?, gen?, gi?, inl?, ov?, inc?, …facts}` — `kind` is `method`,
  *   `ctor`, `var` (an initializer), `init` (`__init__`), `fn` (a function expression) or `local` (a function bound to a
  *   local never assigned again). `p` is the body's range. `gen`: a macro placed the body outside its type's file. `gi`: a
@@ -69,12 +70,21 @@ import haxe.io.Path;
  *   - `elems`: `{r, rp, p}` — an element write `a[i] = v`, `a[i] += v` or `a[i]++`, on any receiver; `r`/`rp` are the
  *     array's type and position, which is its own read's, as a call's `rp` is: a `fields` read (`u` = `elemWrite`), a
  *     `reads` entry, a call.
- *   - `flows`: `{s, d, c, p}` — a value of type `s` reaching a place of type `d`, `c` being `var`, `assign`, `arg`,
+ *   - `flows`: `{s, d, c, p, x?}` — a value of type `s` reaching a place of type `d`, `c` being `var`, `assign`, `arg`,
  *     `ret`, `arr`, `obj`, `throw` or `cast` (an unchecked cast, always kept). A branching value flows once per branch
  *     at the branch's own type; a place of no type is `Dynamic`, and so is every argument of a callee of no function
  *     type; each rest argument flows into the rest element type. Otherwise kept only when the types differ beyond `Null<>`.
- *   - `strs`: `{o, p}` — a non-String operand of a String `+` or `+=`, and a non-String thrown value, which the
- *     exception wrapping the compiler adds after typing hands to `Std.string` (`haxe.ValueException`).
+ *     `x`: the value is an object of exactly the class its type names, as a converted operand's (`strs`) is.
+ *   - `hands`: `{t, s, d, p}` — a value of type `s` handed to `t`, a field of an extern class (target code, which no fact
+ *     describes), at a parameter it declares of type `d`, its own type parameters unapplied: one per value-producing leaf
+ *     of each argument of a call, a construction or a super constructor call, a rest argument at the rest element type.
+ *   - `gens`: `{d, s, p}` — a field declaring type parameters of its own (a generic method), read or called: its declared
+ *     type `d` and the type `s` the compiler instantiated it at there, which say what each of its parameters stands for.
+ *   - `strs`: `{o, p, x?}` — a non-String operand of a String `+` or `+=`, and a non-String thrown value, which the
+ *     exception wrapping the compiler adds after typing hands to `Std.string` (`haxe.ValueException`) — unless it is an
+ *     object of exactly a class extending `haxe.Exception`, which it throws as it is. `x`: the operand is an object of
+ *     exactly the class its type names — a construction, or a local initialized with one of its own type and never
+ *     written again.
  *   - `iters`: `{v, i, p}` — a `for` the compiler kept (it lowers an Array loop to a `while` and unrolls a constant one).
  *   - `refl`: `{t, n?, c?, v?, p}` — a `Reflect.*`/`Type.*` call, its first literal string and its first type argument;
  *     `v` when the member, or the class itself, is read as a value — whatever calls it later is reflection.
