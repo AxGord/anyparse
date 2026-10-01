@@ -5,6 +5,7 @@ import anyparse.check.Check.VersionGated;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
+import anyparse.query.ParenGuard;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
@@ -35,9 +36,10 @@ using Lambda;
  *   could be observable (`f() ?? y`, `new B() ?? y`, `i++ ?? y`). The gate is shared with
  *   `prefer-safe-nav-comparison` as `CheckScan.mutationKinds`, and is SYNTACTIC: it sees
  *   an explicit call or `new`, not a property getter behind a plain field read.
- * - `??` binds tighter than `?:`, so a fallback that is itself a bare ternary
- *   (`RefShape.ternaryKind`) is parenthesized in the rewrite; every other operand binds
- *   tighter than `??` and needs no parens.
+ * - An operand that would bind across `??` bare keeps its meaning through parentheses: the
+ *   rewrite goes through `ParenGuard`, which asks the parser rather than a precedence table, so
+ *   a ternary, an assignment, a comparison or a `&&` / `||` fallback is wrapped
+ *   (`x ?? (a == b)`, `x ?? (y = f())`) and nothing else is.
  *
  * ## Grammar-agnostic
  *
@@ -82,7 +84,8 @@ final class PreferNullCoalescing implements Check implements RiskyFix implements
 		final typed: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		return RunScan.editsWith(plugin, source, resolveSeams(plugin), (rootNode, seams) -> {
 			final declaredTypes: Null<Map<Int, String>> = typed?.declaredTypes(source);
-			return CheckScan.applyBySpan(plugin, source, violations, [seams.ternaryKind], (node, span) -> {
+			final guarded: Array<GuardedEdit> = [];
+			CheckScan.applyBySpan(plugin, source, violations, [seams.ternaryKind], (node, span) -> {
 				final m: Null<{ guarded: QueryNode, fallback: QueryNode }> = match(node, source, rootNode, shape, declaredTypes, seams);
 				if (m == null) return null;
 				final guardedSpan: Null<Span> = m.guarded.span;
@@ -90,9 +93,10 @@ final class PreferNullCoalescing implements Check implements RiskyFix implements
 				if (guardedSpan == null || fallbackSpan == null) return null;
 				final guardedSrc: String = source.substring(guardedSpan.from, guardedSpan.to);
 				final fallbackSrc: String = source.substring(fallbackSpan.from, fallbackSpan.to);
-				final fallbackText: String = needsParens(m.fallback, seams) ? '($fallbackSrc)' : fallbackSrc;
-				return { span: span, text: '$guardedSrc ?? $fallbackText' };
+				guarded.push(ParenGuard.binaryEdit(span, guardedSrc, '??', fallbackSrc));
+				return null;
 			});
+			return ParenGuard.guard(source, guarded, plugin);
 		});
 	}
 
@@ -175,19 +179,6 @@ final class PreferNullCoalescing implements Check implements RiskyFix implements
 	}
 
 	/**
-	 * Whether the fallback has to be parenthesized in the rewrite: it binds LOOSER than `??`.
-	 *
-	 * Two such operands exist. A bare ternary was already handled. An ASSIGNMENT was not, and
-	 * `_webp ?? _webp = f()` parses as `(_webp ?? _webp) = f()` — `Invalid assign`, from a fix
-	 * whose input compiled. A binary write kind is the discriminator: `writeParentKinds` also
-	 * holds the increments, and those are prefix or postfix (one child) and bind tighter, so
-	 * the child count tells them apart without a new seam.
-	 */
-	private static function needsParens(fallback: QueryNode, seams: Seams): Bool {
-		return fallback.kind == seams.ternaryKind || seams.writeKinds.contains(fallback.kind) && fallback.children.length == 2;
-	}
-
-	/**
 	 * Resolve the ternary / equality / null seam kinds plus the mutation-unsafe kinds, or null when any required kind is unset.
 	 *
 	 */
@@ -207,8 +198,7 @@ final class PreferNullCoalescing implements Check implements RiskyFix implements
 			eqKind: eqKind,
 			notEqKind: notEqKind,
 			nullKind: nullKind,
-			unsafeKinds: unsafeKinds,
-			writeKinds: shape.writeParentKinds
+			unsafeKinds: unsafeKinds
 		};
 	}
 
@@ -221,7 +211,4 @@ private typedef Seams = {
 	final notEqKind: String;
 	final nullKind: String;
 	final unsafeKinds: Array<String>;
-
-	/** `RefShape.writeParentKinds` — the binary members of it are the operands that bind looser than `??`. */
-	final writeKinds: Array<String>;
 };

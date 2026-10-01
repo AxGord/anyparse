@@ -827,9 +827,8 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	//  1. Case-pattern body (`HxCasePattern.expr`'s `@:fmt(suppressCallRestProbe)`):
 	//     a ctor pattern (`case Nest(_, _) | Concat(_):`) must NOT wrap its args
 	//     -- the fork breaks the `|` (BitOr) chain, not the ctor args.
-	//  2. `??` (Coalesce) operands (`lowerInfixBranch`): `??` is right-assoc and
-	//     renders via the non-chain infix path, so its outer-left operand carries
-	//     the whole rest-chain; the rest-probe would over-count and wrap operand
+	//  2. `??` (Coalesce) operands (`lowerInfixChain`, shared with item 3): an operand would
+	//     otherwise carry the whole rest-chain; the rest-probe would over-count and wrap operand
 	//     args the fork keeps glued (the fork packs left-to-right, breaking only
 	//     the overflowing operand's brackets). Reverts `??` operands to pristine
 	//     plain-Group (wrap-on-own-overflow), matching the self-canonical shape.

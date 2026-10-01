@@ -172,6 +172,16 @@ final class ParenGuard {
 		return !minimal.contains(true) ? plain : buildVariant(source, edits, minimal, delims).edits;
 	}
 
+	/**
+	 * `<left> <op> <right>` replacing `span`, both operands registered as holes: the edit of a
+	 * fix that joins two source fragments with one binary operator, so `guard` parenthesises an
+	 * operand exactly where it would bind across `op` bare (`x ?? a == b` is `(x ?? a) == b`).
+	 */
+	public static function binaryEdit(span: Span, left: String, op: String, right: String): GuardedEdit {
+		final text: String = '$left $op $right';
+		return { span: span, text: text, holes: [new Span(0, left.length), new Span(text.length - right.length, text.length)] };
+	}
+
 	private static inline function spanKey(from: Int, to: Int): String {
 		return '$from:$to';
 	}

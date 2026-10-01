@@ -16,8 +16,9 @@ import utest.Test;
  * ternary was already parenthesized for the one other operand that binds looser; the
  * assignment family was missed.
  *
- * The discriminator is the child count, not a new seam: `writeParentKinds` also holds the
- * increments, and those are prefix or postfix (one child) and bind TIGHTER than `??`.
+ * The decision is the parser's now (`ParenGuard`), not a kind list: every fallback binding looser
+ * than `??` — ternary, assignment, comparison, `&&` / `||` — takes a pair, and a tighter one (an
+ * increment, a bitwise operator) does not.
  */
 class PreferNullCoalescingParensTest extends Test {
 
@@ -36,6 +37,21 @@ class PreferNullCoalescingParensTest extends Test {
 	public function testAPostfixIncrementFallbackTakesNoParens(): Void {
 		// One child, and postfix binds tighter than `??` — parenthesising it would be noise.
 		Assert.stringContains('a ?? i++', fixed('return a != null ? a : i++;'));
+	}
+
+	public function testAComparisonFallbackIsParenthesized(): Void {
+		// `??` binds TIGHTER than `==` — `a ?? b == c` is `(a ?? b) == c`.
+		Assert.stringContains('a ?? (b == c)', fixed('return a != null ? a : b == c;'));
+	}
+
+	public function testALogicalFallbackIsParenthesized(): Void {
+		Assert.stringContains('a ?? (b && c)', fixed('return a != null ? a : b && c;'));
+		Assert.stringContains('a ?? (b || c)', fixed('return a != null ? a : b || c;'));
+	}
+
+	public function testABitwiseFallbackTakesNoParens(): Void {
+		// The bitwise tier binds tighter than `??` — `a ?? b | c` is `a ?? (b | c)`.
+		Assert.stringContains('a ?? b | c', fixed('return a != null ? a : b | c;'));
 	}
 
 	/** `body` inside a method, run through the check's own fix, returned as the rewritten source. */

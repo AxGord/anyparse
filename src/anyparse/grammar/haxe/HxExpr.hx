@@ -26,10 +26,11 @@ package anyparse.grammar.haxe;
  * / `!.` are one two-char literal each so `a != b`, `a ?? b` and `a ? b : c` fall through to the Pratt loop
  * untouched. The field suffix is `HxFieldNameLit` (an optional `$` for `obj.$name`).
  *
- * Infix tiers, tightest first: `%` alone (Haxe binds it TIGHTER than `*` `/`); `*` `/`; `+` `-`; shifts; `|`
- * `&` `^`; comparisons, `...` (`@:fmt(intervalPolicy)` — `whitespace.intervalPolicy`, default `none`) and `is`
- * (ASYMMETRIC — its right operand is `HxType`, routed through `parseHxType`; word-boundary dispatch so
- * `island` is not `is`); `&&`; `||`; `??` (right-assoc); the ternary `? :` (`@:ternary('?', ':', 1)`, both
+ * Infix tiers, tightest first: `is` (ASYMMETRIC — its right operand is `HxType`, routed through `parseHxType`;
+ * word-boundary dispatch so `island` is not `is`); `%` alone (Haxe binds it TIGHTER than `*` `/`); `*` `/`; `+` `-`;
+ * shifts; `|` `&` `^`; `??` (left-assoc — Haxe 4.3 places it between the bitwise tier and the comparisons); comparisons
+ * and `...` (`@:fmt(intervalPolicy)` — `whitespace.intervalPolicy`, default `none`; Haxe binds `...` one tier LOOSER
+ * than the comparisons, a divergence this grammar keeps); `&&`; `||`; the ternary `? :` (`@:ternary('?', ':', 1)`, both
  * trailing operands at `minPrec = 0`, so right-assoc is inherent; `captureTernaryTrail` keeps the same-line
  * comments before `?` and `:`); and prec 0 — every assignment, `=>` (right-assoc) and `in` (left-assoc,
  * reached only via a `macro $x in $y` reification). Declaration order within a tier is readability only:
@@ -351,38 +352,44 @@ enum HxExpr {
 	@:infix('^', 6) @:fmt(captureRhsTrail)
 	BitXor(left: HxExpr, right: HxExpr);
 
-	@:infix('==', 5) @:fmt(captureRhsTrail)
+	// Prec 5, between the bitwise tier and the comparisons, left-associative — where Haxe 4.3
+	// puts `??` (probed on 4.3.7): `a ?? b == c` is `(a ?? b) == c`, `a ?? b | c` is
+	// `a ?? (b | c)`, and `a ?? b ?? c` is `(a ?? b) ?? c`.
+	@:infix('??', 5) @:fmt(captureChainNewline)
+	NullCoal(left: HxExpr, right: HxExpr);
+
+	@:infix('==', 4) @:fmt(captureRhsTrail)
 	Eq(left: HxExpr, right: HxExpr);
 
-	@:infix('!=', 5) @:fmt(captureRhsTrail)
+	@:infix('!=', 4) @:fmt(captureRhsTrail)
 	NotEq(left: HxExpr, right: HxExpr);
 
-	@:infix('<=', 5) @:fmt(captureRhsTrail)
+	@:infix('<=', 4) @:fmt(captureRhsTrail)
 	LtEq(left: HxExpr, right: HxExpr);
 
-	@:infix('>=', 5) @:fmt(captureRhsTrail)
+	@:infix('>=', 4) @:fmt(captureRhsTrail)
 	GtEq(left: HxExpr, right: HxExpr);
 
-	@:infix('<', 5) @:fmt(captureRhsTrail)
+	@:infix('<', 4) @:fmt(captureRhsTrail)
 	Lt(left: HxExpr, right: HxExpr);
 
-	@:infix('>', 5) @:fmt(captureRhsTrail)
+	@:infix('>', 4) @:fmt(captureRhsTrail)
 	Gt(left: HxExpr, right: HxExpr);
 
-	@:infix('...', 5) @:fmt(intervalPolicy)
+	@:infix('...', 4) @:fmt(intervalPolicy)
 	Interval(left: HxExpr, right: HxExpr);
 
-	@:infix('is', 5) @:fmt(captureRhsTrail)
+	// Prec 11, above every other binary operator — Haxe 4.3 binds `is` tighter than all of them
+	// (`a + b is T` is `a + (b is T)`, `a ?? b is T` is `a ?? (b is T)`), while a prefix operator
+	// still binds first (`-a is T` is `(-a) is T`).
+	@:infix('is', 11) @:fmt(captureRhsTrail)
 	Is(left: HxExpr, right: HxType);
 
-	@:infix('&&', 4) @:fmt(captureChainNewline)
+	@:infix('&&', 3) @:fmt(captureChainNewline)
 	And(left: HxExpr, right: HxExpr);
 
-	@:infix('||', 3) @:fmt(captureChainNewline)
+	@:infix('||', 2) @:fmt(captureChainNewline)
 	Or(left: HxExpr, right: HxExpr);
-
-	@:infix('??', 2, 'Right') @:fmt(captureChainNewline)
-	NullCoal(left: HxExpr, right: HxExpr);
 
 	@:ternary('?', ':', 1) @:fmt(captureTernaryTrail)
 	Ternary(cond: HxExpr, thenExpr: HxExpr, elseExpr: HxExpr);

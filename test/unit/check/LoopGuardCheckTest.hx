@@ -304,8 +304,9 @@ class LoopGuardCheckTest extends Test {
 			wrap('for (x in xs) if (c && (p || q)) {\n\t\t\ttrace(x);\n\t\t}'),
 			applyFix(wrap('for (x in xs) if (c) {\n\t\t\tif (!(p || q)) continue;\n\t\t\ttrace(x);\n\t\t}'))
 		);
+		// `??` binds TIGHTER than `&&` (`c && p ?? q` is `c && (p ?? q)`), so its operand takes no pair.
 		Assert.equals(
-			wrap('for (x in xs) if (c && (p ?? q)) {\n\t\t\ttrace(x);\n\t\t}'),
+			wrap('for (x in xs) if (c && p ?? q) {\n\t\t\ttrace(x);\n\t\t}'),
 			applyFix(wrap('for (x in xs) if (c) {\n\t\t\tif (!(p ?? q)) continue;\n\t\t\ttrace(x);\n\t\t}'))
 		);
 		Assert.equals(

@@ -179,6 +179,13 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 		Assert.equals(wrap('var b = d == (a != b2);'), applyFix(wrap('var b = d == !(a == b2);')));
 	}
 
+	public function testFixParenthesisesFlippedComparisonInCoalescingSlot(): Void {
+		// `??` binds TIGHTER than a comparison (Haxe 4.3: `d ?? a != b2` is `(d ?? a) != b2`), so the
+		// flipped result keeps a pair in either operand of `??`.
+		Assert.equals(wrap('var b = d ?? (a != b2);'), applyFix(wrap('var b = d ?? !(a == b2);')));
+		Assert.equals(wrap('var b = (a != b2) ?? d;'), applyFix(wrap('var b = !(a == b2) ?? d;')));
+	}
+
 	public function testSingleComparisonFixIsIdempotent(): Void {
 		final once: String = applyFix(wrapTyped('var b = !(n < 0);', 'n:Int'));
 		Assert.equals(once, applyFix(once));

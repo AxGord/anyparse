@@ -1027,7 +1027,6 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			andLowerPrecedenceKinds: [
 				'Or',
 				'Ternary',
-				'NullCoal',
 				'Assign',
 				'AddAssign',
 				'SubAssign',
@@ -1532,7 +1531,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// `['Mod']` family would be sound (`(a % b) % c` re-parses to the tree it already
 			// had) but stays out of scope here.
 			leftAssociativeBinaryFamilies: [['Mul', 'Div'], ['Add', 'Sub']],
-			// The prec-5 tier's two VALUE comparisons apiece. `Is` (a type on the right)
+			// The prec-4 tier's two VALUE comparisons apiece. `Is` (a type on the right)
 			// and `Interval` (a `...` that abuts numeric-literal / field-access `.`
 			// lexing) share the tier but are deliberately not hosts.
 			comparisonOperandHostKinds: ['Eq', 'NotEq', 'Lt', 'LtEq', 'Gt', 'GtEq'],
