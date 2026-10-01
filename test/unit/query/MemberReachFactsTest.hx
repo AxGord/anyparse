@@ -63,6 +63,10 @@ class MemberReachFactsTest extends Test {
 	/** A loop in `Main.main` whose body is the region, over the static `Main.items`. */
 	private static inline final LOOP_HEAD: String = 'class Main {\n\tpublic static var items:Array<Int> = [1, 2];\n';
 
+	/** `lib.Buf`, whose inline generic `put` converts what it is handed to a string. */
+	private static inline final SPLICED_BUF: String = 'package lib;\n\nclass Buf {\n\tpublic var s:String = "";\n\n'
+		+ '\tpublic function new() {}\n\n\tpublic inline function put<T>(x:T):Void\n\t\ts += x;\n}\n';
+
 	/** `Obj`, whose `toString` replaces `Main.items`. */
 	private static inline final CLEARING_OBJ: String = 'class Obj {\n\tpublic function new() {}\n\n'
 		+ '\tpublic function toString():String {\n\t\tMain.items = [];\n\t\treturn "o";\n\t}\n}\n';
@@ -677,6 +681,82 @@ class MemberReachFactsTest extends Test {
 		assertMatch(
 			truthLibAsk('var n:String = "lib.Plain";\n\t\tType.resolveClass(n);', 'throw last;', null, build), r -> !r.match(Proven)
 		);
+	}
+
+	@:pin('control') @:killer('M-ESCAPES-FACTS-DECLARED-ANY') @:killer('M-ESCAPES-FACTS-DECLARED-NONE')
+	@:killer('M-ESCAPES-FACTS-DECLARED-PRODUCED')
+	public function testAClassAComputedNameMakesIsOneTheProjectDeclaresUnderTheTruth(): Void {
+		// a name computed at run time makes a class value of any class, unless the project declares which ones it may be
+		// (`reflectiveClasses`): then of those only, matched by their qualified names
+		final build: String = BUILD + '-D js_enums_as_arrays\n';
+		final computed: String = 'var n:String = "lib.Plain";\n\t\tType.createInstance(Type.resolveClass(n), []);';
+		assertMatch(truthLibAsk(computed, 'throw last;', null, build), r -> !r.match(Proven));
+		assertMatch(truthLibAsk(computed, 'throw last;', null, build, ['lib.*']), r -> r.match(Proven));
+		assertMatch(truthLibAsk(computed, 'throw last;', null, build, ['lib.*', 'Obj']), r -> !r.match(Proven));
+		// a literal name still names its one class, whatever the project declares
+		assertMatch(truthLibAsk('Type.resolveClass("Obj");', 'throw last;', null, build, ['lib.*']), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-ESCAPES-FACTS-DECLARED-PRODUCED') @:killer('M-ESCAPES-FACTS-DECLARED-READER')
+	public function testAProducerReadAsAValueMakesOnlyADeclaredClassUnderTheTruth(): Void {
+		// a producer read as a value, or the class declaring one, is handed names the facts cannot read
+		final build: String = BUILD + '-D js_enums_as_arrays\n';
+		final value: String = 'var f:String -> Class<Dynamic> = Type.resolveClass;\n\t\tf("lib.Plain");';
+		assertMatch(truthLibAsk(value, 'throw last;', null, build), r -> !r.match(Proven));
+		assertMatch(truthLibAsk(value, 'throw last;', null, build, ['lib.*']), r -> r.match(Proven));
+		final reader: String = 'var t:Dynamic = Type;\n\t\tt.resolveClass("lib.Plain");';
+		assertMatch(truthLibAsk(reader, 'throw last;', null, build), r -> !r.match(Proven));
+		assertMatch(truthLibAsk(reader, 'throw last;', null, build, ['lib.*']), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-ESCAPES-FACTS-DECLARED-SUBTYPES') @:killer('M-GLOB-QUALIFIED-SEGMENT')
+	public function testADeclaredGlobMatchesTheClassItselfByItsQualifiedNameUnderTheTruth(): Void {
+		// `lib.Base` declared lets no subtype of it be made by a computed name: `Holder`, which holds `o`, is matched by its
+		// own name; a star stays within one segment, so `lib.deep.*` matches no `lib.deep.inner.Keeper`, and a double star does
+		final build: String = BUILD + '-D js_enums_as_arrays\n';
+		final computed: String = 'var n:String = "lib.Base";\n\t\tType.createInstance(Type.resolveClass(n), []);\n'
+			+ '\t\tHolder.kept = o;\n\t\tlib.deep.inner.Keeper.kept = o;';
+		final more: Map<String, String> = [
+			'lib/Base.hx' => 'package lib;\n\nclass Base {\n\tpublic function new() {}\n}\n',
+			'Holder.hx' => 'class Holder extends lib.Base {\n\tpublic static var kept:Main.Obj;\n}\n',
+			'lib/deep/inner/Keeper.hx' => 'package lib.deep.inner;\n\nclass Keeper {\n\tpublic static var kept:Main.Obj;\n}\n'
+		];
+		assertMatch(truthLibAsk(computed, 'throw last;', more, build, ['lib.Base', 'lib.deep.*']), r -> r.match(Proven));
+		assertMatch(truthLibAsk(computed, 'throw last;', more, build, ['Holder']), r -> !r.match(Proven));
+		assertMatch(truthLibAsk(computed, 'throw last;', more, build, ['lib.deep.**']), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-REACH-SPLICE-ONLY') @:killer('M-FACTS-INLINED-EDGE')
+	public function testAnInlinedGenericBodyConvertsOnlyWhatEachCallHandsItUnderTheTruth(): Void {
+		// `Buf.put` converts its `T`, which may be any escaped object; spliced into `Text.fail` it converts what that call hands
+		// it: a string converts nothing, an `Obj` runs its `toString`
+		final buf: Map<String, String> = ['lib/Buf.hx' => SPLICED_BUF];
+		final escaped: String = 'var d:Dynamic = o;';
+		assertMatch(truthLibAsk(escaped, 'new Buf().put("x");', buf), r -> r.match(Proven));
+		assertMatch(truthLibAsk(escaped, 'new Buf().put(new Main.Obj());', buf), r -> !r.match(Proven));
+		// read as a value, its body is the closure the reading function holds, at its declared types: in the function holding
+		// the splice, and in one the walk reaches after it read the spliced body
+		final both: String = 'new Buf().put("y");\n\t\t\tvar f:String -> Void = new Buf().put;\n\t\t\tf("x");';
+		assertMatch(truthLibAsk(escaped, both, buf), r -> !r.match(Proven));
+		final later: Map<String, String> = buf.copy();
+		later['Later.hx'] = 'class Later {\n\tpublic static function run():Void {\n\t\tvar f:String -> Void = new lib.Buf().put;\n'
+			+ '\t\tf("x");\n\t}\n}\n';
+		assertMatch(truthLibAsk(escaped, 'new Buf().put("y");\n\t\t\tLater.run();', later), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-REACH-SPLICE-EXTERNAL')
+	@:access(anyparse.query.MemberReach)
+	public function testAnInlinedLibraryBodyReadOnDemandStaysSplicedInUnderTheTruth(): Void {
+		// `lib.Buf` is library code the walk reads only once a call reaches it: the declaration it reads then is the body the
+		// call spliced in, which converts the string that call hands it
+		final library: Map<String, String> = plainText('new Buf().put("x");');
+		library['lib/Buf.hx'] = SPLICED_BUF;
+		final files: Map<String, String> = escapingObj('var d:Dynamic = o;');
+		final result: ReachResult = withReach(files, null, true, false, null, library, null, true, (reach, dir) -> {
+			Assert.isTrue(reach._scope.facts?.truth == true, 'the fixture did not compile');
+			reach.mayReach(Region(Path.join([dir, 'Main.hx']), regionOf(files['Main.hx'] ?? '')), { owner: 'Main', name: 'items' }, Mutate);
+		});
+		assertMatch(result, r -> r.match(Proven));
 	}
 
 	@:pin('control') @:killer('M-ESCAPES-FACTS-NATIVE-REFUSED')
@@ -2714,14 +2794,14 @@ class MemberReachFactsTest extends Test {
 	 */
 	@:access(anyparse.query.MemberReach)
 	private static function truthLibAsk(
-		escape: String, thrown: String, ?more: Map<String, String>, ?build: String, ?pos: haxe.PosInfos
+		escape: String, thrown: String, ?more: Map<String, String>, ?build: String, ?reflective: Array<String>, ?pos: haxe.PosInfos
 	): ReachResult {
 		final files: Map<String, String> = escapingObj(escape);
 		for (name => text in more ?? []) files[name] = text;
 		return withReach(files, null, true, false, build, plainText(thrown), null, true, (reach, dir) -> {
 			Assert.isTrue(reach._scope.facts?.truth == true, 'the fixture did not compile', pos);
 			reach.mayReach(Region(Path.join([dir, 'Main.hx']), regionOf(files['Main.hx'] ?? '')), { owner: 'Main', name: 'items' }, Mutate);
-		});
+		}, null, reflective);
 	}
 
 	/**
@@ -2801,7 +2881,7 @@ class MemberReachFactsTest extends Test {
 	private static function withReach<T>(
 		files: Map<String, String>, configurations: Null<Array<Array<String>>>, withFacts: Bool, classpathComplete: Bool,
 		build: Null<String>, library: Null<Map<String, String>>, unindexed: Null<Map<String, String>>, listed: Bool,
-		question: (MemberReach, String) -> T, ?declared: Map<String, String>
+		question: (MemberReach, String) -> T, ?declared: Map<String, String>, ?reflective: Array<String>
 	): T {
 		final entries: Array<{ name: String, source: String }> = [for (name => text in files) { name: name, source: text }];
 		for (name => text in library ?? []) entries.push({ name: name, source: text });
@@ -2832,7 +2912,8 @@ class MemberReachFactsTest extends Test {
 		// the builds as a run probes them: every define each one sees, the target's and the compiler's included
 		final builds: Null<Array<ReachConfiguration>> = listed ? ReachDefinesProbe.probeAll(oracles)?.configurations : null;
 		final reach: MemberReach = new MemberReach(
-			plugin, project, index, true, MemberReach.MAX_LIBRARY_FILES, MemberReach.MAX_VISITED, builds, () -> classpathComplete, facts
+			plugin, project, index, true, MemberReach.MAX_LIBRARY_FILES, MemberReach.MAX_VISITED, builds, () -> classpathComplete, facts,
+			reflective
 		);
 		final result: T = question(reach, dir);
 		CliFixture.removeDir(dir);

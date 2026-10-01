@@ -24,6 +24,12 @@ final class ReachProject {
 	/** Project file -> its text. */
 	public final sources: Map<String, String> = [];
 
+	/**
+	 * The globs (`Glob.qualifiedNames`) the project declares every class made from a name the facts cannot read to match
+	 * (`ReachBuilds.reflectiveClasses`); null when it declares none, and such a name may then name any class.
+	 */
+	public final reflectiveClasses: Null<Array<String>>;
+
 	public final plugin: GrammarPlugin;
 	public final shape: RefShape;
 	public final files: Array<{ file: String, source: String }>;
@@ -34,8 +40,11 @@ final class ReachProject {
 	/** The files the builds typed a type in (`typeHomes`), read on first need. */
 	private var _typeHomes: Null<Map<String, Bool>> = null;
 
-	public function new(plugin: GrammarPlugin, index: SymbolIndex, files: Array<{ file: String, source: String }>) {
+	public function new(
+		plugin: GrammarPlugin, index: SymbolIndex, files: Array<{ file: String, source: String }>, ?reflectiveClasses: Array<String>
+	) {
 		this.plugin = plugin;
+		this.reflectiveClasses = reflectiveClasses;
 		shape = plugin.refShape();
 		this.index = index;
 		this.files = files;

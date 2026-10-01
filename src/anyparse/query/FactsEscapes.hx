@@ -27,7 +27,7 @@ using StringTools;
  *   (untyped code), which may be any of its fields;
  * - target-language code names it (`FactsNativeReach`, the stated assumption below);
  * - it is an instance of a class a class-value producer names (`producer`, `Type.resolveClass`): a literal name names one
- *   class, a computed name — or the producer read as a value — any;
+ *   class, a computed name — or the producer read as a value — any, or one the project declares (`anyClass`);
  * - it is an instance of a class extending an extern class, whose target code runs with it as its own `this`.
  *
  * What an escaped value holds escapes with it (`escapeType`): its type arguments, which an extern container's target code
@@ -95,6 +95,9 @@ final class FactsEscapes {
 	/** The kinds of a typed type a place keeps the nominal type of what it holds by (`TypeFact.kind`). */
 	private static final NOMINAL_KINDS: Array<String> = ['class', 'interface', 'enum'];
 
+	/** The kinds of a typed type a class value may be of (`TypeFact.kind`): an abstract's implementation class holds its statics. */
+	private static final CLASS_KINDS: Array<String> = ['class', 'interface', 'impl'];
+
 	/** Why the escapes are not known, once something says so (`compute`). */
 	public var failure(default, null): Null<String> = null;
 
@@ -119,6 +122,12 @@ final class FactsEscapes {
 
 	/** What target-language code reaches (the stated assumption, see the type doc). */
 	private final _native: FactsNativeReach;
+
+	/**
+	 * Whether every class the project declares a class value made from an unreadable name may be of (`declaredClasses`)
+	 * has escaped already: null until first asked, then the answer.
+	 */
+	private var _declaredEscaped: Null<Bool> = null;
 
 	/**
 	 * Type parameter (`pack.Type.T`, `method.T`) -> the types a value bound to it may have, by their text (`instances`); built on
@@ -194,6 +203,8 @@ final class FactsEscapes {
 	/**
 	 * Whether every reflective body spliced into `n` (`reflection-inlined`) is one its `inlined` calls name, and none of them
 	 * produces a class value (`producer`): what the others are handed flows into their parameters, which the facts record.
+	 * A producer's lost the name it was handed, which may have been a literal naming a class the project declares nowhere:
+	 * the declaration (`anyClass`) bounds only the names no literal hands a producer directly.
 	 */
 	private function harmlessReflection(n: FactNode): Bool {
 		var named: Bool = false;
@@ -210,23 +221,60 @@ final class FactsEscapes {
 	}
 
 	/**
+	 * Hand every class a class value made from a name the facts cannot read may be of to `escapeType`: each class the
+	 * project declares (`ReachProject.reflectiveClasses`, `declaredClasses`), as an instance of exactly it — a subtype is a
+	 * class it declares by its own name or none. Without a declaration such a name names any class: false, `reason` why.
+	 */
+	private function anyClass(reason: String): Bool {
+		final held: Null<Bool> = _declaredEscaped;
+		if (held != null) return held;
+		final globs: Null<Array<String>> = _scope.reflectiveClasses;
+		if (globs == null) return refuse(reason);
+		_declaredEscaped = true;
+		for (id in declaredClasses(_table, globs)) {
+			final fact: Null<TypeFact> = _table.type(id);
+			if (fact != null && !escapeInstance(id, fact, [])) {
+				_declaredEscaped = false;
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/** The typed classes of `table` (`CLASS_KINDS`) whose qualified name one of `globs` matches (`Glob.qualifiedNames`). */
+	private static function declaredClasses(table: CompilerFacts, globs: Array<String>): Array<String> {
+		final patterns: Array<EReg> = globs.map(Glob.qualifiedNames);
+		return [
+			for (id in table.typeIds()) {
+				final fact: Null<TypeFact> = table.type(id);
+				if (fact != null && CLASS_KINDS.contains(fact.kind) && patterns.exists(p -> p.match(id))) id;
+			}
+		];
+	}
+
+	/**
+	 * The globs of `globs` (`LintConfig.reflectiveClasses`) that match no class `table` holds (`declaredClasses`): a
+	 * declaration naming nothing the builds typed, a misspelling or a class long gone.
+	 */
+	public static function unmatchedGlobs(table: CompilerFacts, globs: Array<String>): Array<String> {
+		return [for (g in globs) if (declaredClasses(table, [g]).length == 0) g];
+	}
+
+	/**
 	 * Hand the classes the reflective call `r` may make an instance of to `escapeType`: none unless it is a class-value
-	 * producer (`producer`) — the one class a literal name names, which may be none — and any for a computed name, for a
-	 * producer read as a value and for a class declaring one read as a value.
+	 * producer (`producer`) — the one class a literal name names, which may be none — and for a computed name, for a
+	 * producer read as a value and for a class declaring one read as a value, any or those the project declares (`anyClass`).
 	 */
 	private function produced(r: ReflectionFact): Bool {
 		final target: String = r.target;
 		final declaring: Null<TypeFact> = _table.type(target);
 		// the reflective class itself read as a value: whatever later calls a member of it may call a producer
-		if (declaring != null) {
-			for (f in declaring.fields) if (producer(f))
-				return refuse('`$target`, which declares a class-value producer, is read as a value');
-			return true;
-		}
+		if (declaring != null)
+			return !declaring.fields.exists(producer) || anyClass('`$target`, which declares a class-value producer, is read as a value');
 		final field: Null<FieldDeclFact> = declaredField(target);
 		if (field == null || !producer(field)) return true;
 		final name: Null<String> = r.name;
-		if (r.isValue || name == null) return refuse('`$target` makes a class value of a name computed at run time in `${r.holder}`');
+		if (r.isValue || name == null) return anyClass('`$target` makes a class value of a name computed at run time in `${r.holder}`');
 		return _table.type(name) == null || escapeType(Named(name, []));
 	}
 

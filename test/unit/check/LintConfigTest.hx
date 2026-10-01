@@ -7,6 +7,7 @@ import anyparse.check.OracleDeclaration;
 import anyparse.check.Severity;
 import anyparse.check.UnusedImport;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -365,6 +366,29 @@ class LintConfigTest extends Test {
 		final oracles: Array<OracleConfig> = [{ hxml: 'build.hxml', dir: null, defines: [] }];
 		Assert.isNull(anyparse.query.cli.command.LintCommand.withReachConfigurations(scope, oracles, false, false)?.builds);
 		Assert.notNull(anyparse.query.cli.command.LintCommand.withReachConfigurations(scope, oracles, false, true)?.builds);
+	}
+
+	@:pin('control') @:killer('M-REFLECTIVE-AGREE')
+	@:access(anyparse.query.cli.command.LintCommand)
+	public function testTheReflectiveClassesAreTheRunsOnlyWhenEveryPathDeclaresThemAlike(): Void {
+		// absent, a computed class name may name any class; a run whose paths declare different globs, or some none, may
+		// create a class one of them leaves out
+		Assert.isNull(LintConfig.parse('{}').reflectiveClasses());
+		final drill: LintConfig = LintConfig.parse('{"reflectiveClasses": ["drill.**", "__ASSET__*"]}');
+		Assert.same(['drill.**', '__ASSET__*'], drill.reflectiveClasses());
+		final other: LintConfig = LintConfig.parse('{"reflectiveClasses": ["drill.**"]}');
+		final none: LintConfig = LintConfig.parse('{}');
+		final configs: Map<String, LintConfig> = ['a' => drill, 'b' => other, 'c' => none];
+		final resolve: String -> LintConfig = path -> configs[path] ?? none;
+		final bound: Array<String> -> Null<Array<String>> = paths -> {
+			var out: Null<Array<String>> = null;
+			CliFixture.captureStderr(() -> out = anyparse.query.cli.command.LintCommand.reflectiveBound(paths, resolve));
+			out;
+		};
+		Assert.same(['drill.**', '__ASSET__*'], bound(['a', 'a']));
+		Assert.isNull(bound(['a', 'b']));
+		Assert.isNull(bound(['a', 'c']));
+		Assert.isNull(bound(['c', 'c']));
 	}
 
 	@:pin('control') @:killer('M-REACH-CONFIGS-AGREE')

@@ -15,6 +15,7 @@ import anyparse.query.Address.TreeAddresser;
 import anyparse.query.CachingGrammarPlugin.LibrarySources;
 import anyparse.query.CachingGrammarPlugin.ResolutionScope;
 import anyparse.query.CompilerFacts;
+import anyparse.query.FactsEscapes;
 import anyparse.query.LintBaseline;
 import anyparse.query.LintDiff.LintDiffTally;
 import anyparse.query.LintDiff.LintMessageIdentities;
@@ -246,8 +247,10 @@ final class LintCommand implements CliCommand {
 		final oracleConfig: Null<LintConfig> = paths.length > 0 ? resolveConfig(paths[0]) : null;
 		final oracles: Array<OracleConfig> = oraclesOf(oracleConfig, o.noOracle, !o.fix, files);
 		final early: Null<FactsProbe> = earlyFacts(unconfigured != null, oracles, o);
+		final reflective: Null<Array<String>> = reflectiveBound(paths, resolveConfig);
 		final resolution: Null<ResolutionScope> = withCompilerFacts(
-			withReachConfigurations(unconfigured, oracles, o.noOracle, reachComplete(paths, resolveConfig)), oracles, o.noOracle, early
+			withReachConfigurations(unconfigured, oracles, o.noOracle, reachComplete(paths, resolveConfig), reflective), oracles,
+			o.noOracle, early, reflective
 		);
 
 		if (o.fix) {
@@ -362,7 +365,7 @@ final class LintCommand implements CliCommand {
 	 * one does. Unchanged with no oracle, or under `--no-oracle`, which runs no compile at all.
 	 */
 	private static function withReachConfigurations(
-		resolution: Null<ResolutionScope>, oracles: Array<OracleConfig>, noOracle: Bool, complete: Bool
+		resolution: Null<ResolutionScope>, oracles: Array<OracleConfig>, noOracle: Bool, complete: Bool, ?reflective: Array<String>
 	): Null<ResolutionScope> {
 		if (resolution == null || oracles.length == 0 || noOracle || !complete) return resolution;
 		var probed: Bool = false;
@@ -370,7 +373,9 @@ final class LintCommand implements CliCommand {
 		function probe(): Null<ReachBuilds> {
 			if (!probed) {
 				probed = true;
-				builds = ReachDefinesProbe.probeAll(oracles);
+				final found: Null<ReachBuilds> = ReachDefinesProbe.probeAll(oracles);
+				if (found != null && reflective != null) found.reflectiveClasses = reflective;
+				builds = found;
 			}
 			return builds;
 		}
@@ -414,7 +419,8 @@ final class LintCommand implements CliCommand {
 	 * (`factsEdited`). Unchanged with no oracle, or under `--no-oracle`.
 	 */
 	private static function withCompilerFacts(
-		resolution: Null<ResolutionScope>, oracles: Array<OracleConfig>, noOracle: Bool, early: Null<FactsProbe>
+		resolution: Null<ResolutionScope>, oracles: Array<OracleConfig>, noOracle: Bool, early: Null<FactsProbe>,
+		reflective: Null<Array<String>>
 	): Null<ResolutionScope> {
 		if (resolution == null || oracles.length == 0 || noOracle) return resolution;
 		var probed: Bool = false;
@@ -427,6 +433,8 @@ final class LintCommand implements CliCommand {
 				facts = built;
 				if (built != null) {
 					for (d in built.dropped) CliIo.stderr('apq lint: compilerOracle ${d.name}: no compiler facts — ${d.reason}\n');
+					for (glob in FactsEscapes.unmatchedGlobs(built, reflective ?? []))
+						CliIo.stderr('apq lint: reflectiveClasses "$glob" matches no class the builds typed\n');
 					for (e in edited) built.invalidate(e.file, e.original);
 				}
 			}
@@ -1417,6 +1425,29 @@ final class LintCommand implements CliCommand {
 		#else
 		return found;
 		#end
+	}
+
+	/**
+	 * The classes the run's reach analysis may take a class value made from an unreadable name to be of
+	 * (`LintConfig.reflectiveClasses`): the declaration every linted path's config makes alike. A run whose paths declare
+	 * different ones, or some none, takes such a name to name any class, and says so once when any of them declared one.
+	 */
+	private static function reflectiveBound(paths: Array<String>, resolveConfig: String -> LintConfig): Null<Array<String>> {
+		if (paths.length == 0) return null;
+		final first: Null<Array<String>> = resolveConfig(paths[0]).reflectiveClasses();
+		final key: Null<Array<String>> -> Null<String> = globs -> globs?.join('\n');
+		var declared: Bool = false;
+		var alike: Bool = true;
+		for (path in paths) {
+			final globs: Null<Array<String>> = resolveConfig(path).reflectiveClasses();
+			if (globs != null) declared = true;
+			if (key(globs) != key(first)) alike = false;
+		}
+		if (declared && !alike)
+			CliIo.stderr(
+				'apq lint: reflectiveClasses ignored — the linted paths declare different ones, so a computed class name may name any class\n'
+			);
+		return alike ? first : null;
 	}
 
 	/**

@@ -40,6 +40,13 @@ typedef ReachConfiguration = {
 typedef ReachBuilds = {
 	var configurations: Array<ReachConfiguration>;
 	var library: Array<{ file: String, source: String }>;
+
+	/**
+	 * The classes the project declares a class value made from a name the facts cannot read may be of
+	 * (`LintConfig.reflectiveClasses`), as globs over qualified type names; absent when it declares none, and then such a
+	 * name may name any class.
+	 */
+	var ?reflectiveClasses: Array<String>;
 }
 
 /**

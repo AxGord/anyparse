@@ -58,6 +58,8 @@ typedef ApqLintConfig = {
 
 	@:optional var reachConfigurationsComplete: Bool;
 
+	@:optional var reflectiveClasses: Array<String>;
+
 	@:optional var resolutionRoots: Array<String>;
 
 	@:optional var resolutionLibs: Array<String>;
