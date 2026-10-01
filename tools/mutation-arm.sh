@@ -26,7 +26,7 @@
 #   --fast   run only the test classes that pin the arm, instead of the whole
 #            suite. Cheap, and it forfeits the collateral census — an arm cuts
 #            shared engine code, so what ELSE went red is part of the reading.
-#   --jobs N passed to tools/mutation-check.sh (default: its own max(1,min(4,cores/2))).
+#   --jobs N passed to tools/mutation-check.sh (default: its own min(cores-2, memory/5GiB)).
 #   --list   print the registry and exit.
 #   --working-tree
 #            build the scratch worktree (and, since T694's mutation-check.sh
@@ -113,6 +113,7 @@
 set -euo pipefail
 
 script_dir=$(cd -P "$(dirname "$0")" && pwd)
+self="$script_dir/$(basename "$0")"
 repo=$(cd -P "$script_dir/.." && pwd)
 arms_json="$repo/test/testkit/mutation-arms.json"
 
@@ -195,16 +196,130 @@ arm_pins() {
     # No `cd` needed: `--list-pins` is a compile-time-embedded registry dump
     # with no CWD-relative read, measured (`cd /tmp && node <abs>/test.js
     # --list-pins` matches the in-repo count byte-for-byte) — which is what
-    # lets this honour a private `$test_bin` living anywhere.
-    node "$test_bin" --list-pins | awk -F' :: ' -v arm="$1" -v want="$2" '
+    # lets this honour a private `$test_bin` living anywhere. Dumped ONCE per
+    # run: loading the 27 MB runner costs ~0.3 s, and two lookups per arm
+    # made it a minute and a half of a 139-arm sweep's serial render phase.
+    if [ ! -s "$workroot/pins" ]; then
+        node "$test_bin" --list-pins > "$workroot/pins"
+    fi
+    awk -F' :: ' -v arm="$1" -v want="$2" '
         {
             n = split($3, killers, ",")
             for (i = 1; i <= n; i++) if (killers[i] == arm) {
                 if (want == "class") { sub("#.*", "", $1); print $1 }
                 else { sub("#", ".", $1); print $1 }
             }
-        }' | sort -u | tr '\n' ',' | sed 's/,$//'
+        }' "$workroot/pins" | sort -u | tr '\n' ',' | sed 's/,$//'
 }
+
+# render_arm <name> <workroot> <gen> <base-ref> — one arm's cut, rendered
+# READ-ONLY against the scratch worktree into `<workroot>/<name>.patch`, or
+# the reason it could not be into `<name>.renderfail` (`<name>.unknown`: no
+# such arm). Read-only is what lets every arm render at once: `hxq patch`
+# without `--write` prints the patched file — byte-identical to what
+# `--write` writes, measured — and `diff -u` against the untouched file is
+# the patch `git apply` takes in each track. The serial loop this replaced
+# wrote, diffed and checked out each file in turn: ~1 s an arm, over two
+# minutes of a 139-arm sweep before its first build.
+render_fail() {
+    printf '%s\n' "$2" > "$workroot/$1.renderfail"
+}
+
+render_arm() {
+    local name=$1 payload meta cut_kind type method node_kind force file root candidate
+    workroot=$2
+    gen=$3
+    base_ref=$4
+    payload="$workroot/$name.payload"
+    if ! meta=$(read_arm "$name" "$payload" 2> "$workroot/$name.unknown"); then
+        return 0
+    fi
+    cut_kind=$(printf '%s' "$meta" | cut -f1)
+    type=$(printf '%s' "$meta" | cut -f2)
+    method=$(printf '%s' "$meta" | cut -f3)
+    node_kind=$(printf '%s' "$meta" | cut -f4)
+    force=$(printf '%s' "$meta" | cut -f5)
+    # The two classpath roots `test-js.hxml` declares, in its order. An arm may
+    # cut the suite's own infrastructure as readily as the engine's, and both
+    # are addressed by type path rather than by a stored file name.
+    file=""
+    for root in src test; do
+        candidate="$root/$(printf '%s' "$type" | tr '.' '/').hx"
+        if [ -f "$gen/$candidate" ]; then
+            file="$candidate"
+            break
+        fi
+    done
+    if [ -z "$file" ]; then
+        render_fail "$name" "$name names $type, which is under neither src/ nor test/ at $base_ref" && return 0
+    fi
+
+    if [ "$cut_kind" = "FORCE" ]; then
+        # The member's signature, verbatim, up to and including the line the
+        # BODY opens on — the fragment `hxq patch` matches, and the anchor the
+        # forced `return` is spliced after. Taken from the tree rather than
+        # stored, so a signature change cannot silently stale the arm.
+        #
+        # The body brace is found by BALANCING the member's own braces, not by
+        # "the first line that ends in an open brace": a RETURN TYPE may open a
+        # brace of its own — `Null<{ … }>`, an inline anonymous structure — and
+        # the line-shape heuristic stopped at THAT brace, so the forced `return`
+        # landed inside the type and `hxq patch` refused the result as
+        # unparseable. S104 hit it twice and worked around it with
+        # `find`/`replace` both times. The body's brace is the LAST one that opens
+        # at depth 0, and its match has to be the member's final one; a member
+        # whose braces do not balance, or whose body opens mid-line, is refused BY
+        # NAME rather than rendered wrong.
+        ( cd "$gen" && "$repo/bin/hxq" show "$file" --select "$node_kind:$method" ) > "$workroot/$name.node"
+        if ! node -e '
+const fs = require("fs");
+const src = fs.readFileSync(process.argv[1], "utf8");
+// Braces inside a comment, a string, a char or a regex literal are not code —
+// a doc line naming a closing brace, a one-character literal, a regex class —
+// so those runs are skipped rather than counted. Char codes throughout: the
+// snippet is carried inside a single-quoted shell argument.
+const SL = 47, ST = 42, BS = 92, TL = 126, SQ = 39, DQ = 34, OB = 123, CB = 125;
+let depth = 0, open = -1, close = -1;
+for (let i = 0; i < src.length; i++) {
+    const c = src.charCodeAt(i), d = src.charCodeAt(i + 1);
+    if (c === SL && d === SL) { i = src.indexOf("\n", i); if (i < 0) break; continue; }
+    if (c === SL && d === ST) { const e = src.indexOf("*/", i + 2); i = e < 0 ? src.length : e + 1; continue; }
+    if (c === TL && d === SL) { i++; while (++i < src.length) { const r = src.charCodeAt(i); if (r === BS) i++; else if (r === SL) break; } continue; }
+    if (c === SQ || c === DQ) { while (++i < src.length) { const q = src.charCodeAt(i); if (q === BS) i++; else if (q === c) break; } continue; }
+    if (c === OB) { if (depth === 0) open = i; depth++; }
+    else if (c === CB) { depth--; if (depth === 0) close = i; }
+}
+if (open < 0 || depth !== 0 || close !== src.replace(/\s+$/, "").length - 1) process.exit(1);
+const nl = src.indexOf("\n", open);
+if (nl < 0 || src.slice(open + 1, nl).trim() !== "") process.exit(1);
+process.stdout.write(src.slice(0, nl + 1));
+' "$workroot/$name.node" > "$workroot/$name.hdr"; then
+            render_fail "$name" "$name: could not read the body brace of $type#$method out of $file — the member's braces do not balance, or its body opens mid-line" && return 0
+        fi
+        {
+            cat "$workroot/$name.hdr"
+            printf '====\n'
+            cat "$workroot/$name.hdr"
+            printf '\treturn %s;\n' "$force"
+        } > "$payload"
+    fi
+
+    if ! ( cd "$gen" && "$repo/bin/hxq" patch "$file" --select "$node_kind:$method" - < "$payload" ) \
+        > "$workroot/$name.new" 2> "$workroot/$name.apply.log"; then
+        render_fail "$name" "$name: the cut did not apply — $workroot/$name.apply.log"
+        return 0
+    fi
+    diff -u --label "a/$file" --label "b/$file" "$gen/$file" "$workroot/$name.new" > "$workroot/$name.patch" || true
+    if [ ! -s "$workroot/$name.patch" ]; then
+        render_fail "$name" "$name: the cut changed nothing — the registry describes the code as it already is"
+    fi
+    return 0
+}
+
+if [ "${1:-}" = "--render" ]; then
+    render_arm "$2" "$3" "$4" "$5"
+    exit 0
+fi
 
 # ---------------------------------------------------------------- arguments
 
@@ -397,94 +512,26 @@ fi
 export HXQ_BIN="$apq_bin"
 export APQ_NO_CONFIG_WARN=1
 
+if [ "$(uname -s)" = "Darwin" ]; then
+    render_jobs=$(sysctl -n hw.ncpu 2>/dev/null || echo 2)
+else
+    render_jobs=$(nproc 2>/dev/null || echo 2)
+fi
+# Every arm renders at once (render_arm); the manifest is then written in
+# the order the arms were named, so a refusal reads exactly as the serial
+# loop's did.
+printf '%s\n' $names | xargs -P "$render_jobs" -I{} "$self" --render {} "$workroot" "$gen" "$base_ref" || true
 for name in $names; do
-    payload="$workroot/$name.payload"
-    if ! meta=$(read_arm "$name" "$payload"); then
+    if [ ! -s "$workroot/$name.patch" ] && [ ! -f "$workroot/$name.renderfail" ] && [ ! -s "$workroot/$name.unknown" ]; then
+        render_fail "$name" "$name: rendering the cut died before it said why"
+    fi
+    if [ -s "$workroot/$name.unknown" ]; then
+        cat "$workroot/$name.unknown" >&2
         exit 2
     fi
-    cut_kind=$(printf '%s' "$meta" | cut -f1)
-    type=$(printf '%s' "$meta" | cut -f2)
-    method=$(printf '%s' "$meta" | cut -f3)
-    node_kind=$(printf '%s' "$meta" | cut -f4)
-    force=$(printf '%s' "$meta" | cut -f5)
-    # The two classpath roots `test-js.hxml` declares, in its order. An arm may
-    # cut the suite's own infrastructure as readily as the engine's, and both
-    # are addressed by type path rather than by a stored file name.
-    file=""
-    for root in src test; do
-        candidate="$root/$(printf '%s' "$type" | tr '.' '/').hx"
-        if [ -f "$gen/$candidate" ]; then
-            file="$candidate"
-            break
-        fi
-    done
-    if [ -z "$file" ]; then
-        gen_fail "$name" "$name names $type, which is under neither src/ nor test/ at $base_ref" && continue
+    if [ -f "$workroot/$name.renderfail" ]; then
+        gen_fail "$name" "$(cat "$workroot/$name.renderfail")" && continue
     fi
-
-    if [ "$cut_kind" = "FORCE" ]; then
-        # The member's signature, verbatim, up to and including the line the
-        # BODY opens on — the fragment `hxq patch` matches, and the anchor the
-        # forced `return` is spliced after. Taken from the tree rather than
-        # stored, so a signature change cannot silently stale the arm.
-        #
-        # The body brace is found by BALANCING the member's own braces, not by
-        # "the first line that ends in an open brace": a RETURN TYPE may open a
-        # brace of its own — `Null<{ … }>`, an inline anonymous structure — and
-        # the line-shape heuristic stopped at THAT brace, so the forced `return`
-        # landed inside the type and `hxq patch` refused the result as
-        # unparseable. S104 hit it twice and worked around it with
-        # `find`/`replace` both times. The body's brace is the LAST one that opens
-        # at depth 0, and its match has to be the member's final one; a member
-        # whose braces do not balance, or whose body opens mid-line, is refused BY
-        # NAME rather than rendered wrong.
-        ( cd "$gen" && "$repo/bin/hxq" show "$file" --select "$node_kind:$method" ) > "$workroot/$name.node"
-        if ! node -e '
-const fs = require("fs");
-const src = fs.readFileSync(process.argv[1], "utf8");
-// Braces inside a comment, a string, a char or a regex literal are not code —
-// a doc line naming a closing brace, a one-character literal, a regex class —
-// so those runs are skipped rather than counted. Char codes throughout: the
-// snippet is carried inside a single-quoted shell argument.
-const SL = 47, ST = 42, BS = 92, TL = 126, SQ = 39, DQ = 34, OB = 123, CB = 125;
-let depth = 0, open = -1, close = -1;
-for (let i = 0; i < src.length; i++) {
-    const c = src.charCodeAt(i), d = src.charCodeAt(i + 1);
-    if (c === SL && d === SL) { i = src.indexOf("\n", i); if (i < 0) break; continue; }
-    if (c === SL && d === ST) { const e = src.indexOf("*/", i + 2); i = e < 0 ? src.length : e + 1; continue; }
-    if (c === TL && d === SL) { i++; while (++i < src.length) { const r = src.charCodeAt(i); if (r === BS) i++; else if (r === SL) break; } continue; }
-    if (c === SQ || c === DQ) { while (++i < src.length) { const q = src.charCodeAt(i); if (q === BS) i++; else if (q === c) break; } continue; }
-    if (c === OB) { if (depth === 0) open = i; depth++; }
-    else if (c === CB) { depth--; if (depth === 0) close = i; }
-}
-if (open < 0 || depth !== 0 || close !== src.replace(/\s+$/, "").length - 1) process.exit(1);
-const nl = src.indexOf("\n", open);
-if (nl < 0 || src.slice(open + 1, nl).trim() !== "") process.exit(1);
-process.stdout.write(src.slice(0, nl + 1));
-' "$workroot/$name.node" > "$workroot/$name.hdr"; then
-            gen_fail "$name" "$name: could not read the body brace of $type#$method out of $file — the member's braces do not balance, or its body opens mid-line" && continue
-        fi
-        {
-            cat "$workroot/$name.hdr"
-            printf '====\n'
-            cat "$workroot/$name.hdr"
-            printf '\treturn %s;\n' "$force"
-        } > "$payload"
-    fi
-
-    if ! ( cd "$gen" && "$repo/bin/hxq" patch "$file" --select "$node_kind:$method" --write - < "$payload" ) \
-        > "$workroot/$name.apply.log" 2>&1; then
-        gen_fail "$name" "$name: the cut did not apply — $workroot/$name.apply.log" && continue
-    fi
-    git -C "$gen" diff -- "$file" > "$workroot/$name.patch"
-    if [ ! -s "$workroot/$name.patch" ]; then
-        gen_fail "$name" "$name: the cut changed nothing — the registry describes the code as it already is" && continue
-    fi
-    # Safe here and nowhere else: `$gen` is a worktree this script created from
-    # the base ref (HEAD, or a `--working-tree` snapshot) seconds ago, and the
-    # only uncommitted thing in it is the cut just made. Never spell this
-    # against a tree that holds work.
-    git -C "$gen" checkout -- "$file"
 
     # --check-apply asks the COMPILER, not the suite, so the arm needs no pin
     # yet — which is the whole point: an arm is authored cut-first, and the

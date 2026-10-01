@@ -84,16 +84,30 @@ if [ "$out" = "$repo/bin" ]; then
     fi
 fi
 
+# `APQ_HAXE_SERVER=<port>` compiles through a running `haxe --wait <port>`
+# instead of cold. Only `tools/mutation-check.sh` sets it: each of its job
+# slots owns one server and one worktree PATH, so the server's module cache is
+# keyed by paths no other slot writes, and a track re-types only what its
+# patch touched (a warm test build ~9 s against ~36 s cold). The flags are the
+# same hxml either way; the caller owns the server's lifetime and falls back
+# to a cold build when this one fails — a server answer is never the last word
+# on a BUILD-FAIL (docs/testing.md § "Mutation runs: slots, servers and the
+# fixture cache").
+connect=""
+if [ -n "${APQ_HAXE_SERVER:-}" ]; then
+    connect="--connect $APQ_HAXE_SERVER"
+fi
+
 apq_pid=""
 test_pid=""
 
 if [ "$target" = "both" ] || [ "$target" = "apq" ]; then
-    ( cd "$repo" && haxe bin/apq-js-common.hxml -js "$out/apq.js" ) > "$out/build-apq.log" 2>&1 &
+    ( cd "$repo" && haxe $connect bin/apq-js-common.hxml -js "$out/apq.js" ) > "$out/build-apq.log" 2>&1 &
     apq_pid=$!
 fi
 
 if [ "$target" = "both" ] || [ "$target" = "test" ]; then
-    ( cd "$repo" && haxe test-js-common.hxml -js "$out/test.js" ) > "$out/build-test.log" 2>&1 &
+    ( cd "$repo" && haxe $connect test-js-common.hxml -js "$out/test.js" ) > "$out/build-test.log" 2>&1 &
     test_pid=$!
 fi
 
