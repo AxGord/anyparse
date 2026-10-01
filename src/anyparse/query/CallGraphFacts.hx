@@ -177,6 +177,22 @@ final class CallGraphFacts {
 	}
 
 	/**
+	 * Record, as a faceted node's facts (`record`), the field initializers each pseudo-node of `ids` runs (`CallGraph.INIT_NAME`,
+	 * `STATIC_INIT_NAME`) where the facts read them (`FactsView.initializerBodies`): what they call implicitly — a conversion,
+	 * an operator, an accessor — is then an edge, as a method's is, and their code is read through its facts (`FactsView.faceted`).
+	 * A pseudo-node already faceted keeps its record.
+	 */
+	public function recordInitializers(g: CallGraph, ids: Array<String>): Void {
+		for (id in ids) if (!faceted.exists(id)) {
+			final node: Null<FnNode> = g.nodes[id];
+			final bodies: Null<Array<FactNode>> = node == null ? null : view.initializerBodies(node);
+			if (node == null || bodies == null) continue;
+			faceted[id] = bodies;
+			record(g, node, bodies, view);
+		}
+	}
+
+	/**
 	 * Under the truth, the node reading the graph node `id` as the member of the typed type `owner` alone — a call fact
 	 * names `owner` as its target's (`CallEdge.typed`) — when several typed types share the simple name `id` is keyed by:
 	 * of the declarations `id` folds, the ones `owner`'s own type holds (`FactsView.qualifiedDeclarations`), its body the

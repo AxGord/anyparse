@@ -503,6 +503,8 @@ final class CallGraph {
 			if (reading != null) reading.recordMuted(this, faceted);
 		}
 		if (reading != null) reading.recordAdopted(this, adopted);
+		// the field initializers of every type read so far, which the facts read whole once its files are in
+		if (reading != null) reading.recordInitializers(this, [for (id in _initFiles.keys()) id]);
 		_wiring.markGrownChains(_grownTypes);
 		_wiring.wire((from, to, kind, file, span) -> addEdge(from, to, kind, null, file, span));
 	}
@@ -535,7 +537,11 @@ final class CallGraph {
 			else
 				_declarations[id] = kept;
 		}
-		for (id => files in _initFiles) _initFiles[id] = [for (f in files) if (CallGraphNames.normalizePath(f) != key) f];
+		for (id => files in _initFiles) {
+			// the initializers of a file read again are recorded again (`CallGraphFacts.recordInitializers`)
+			if (files.exists(f -> CallGraphNames.normalizePath(f) == key)) facts?.faceted.remove(id);
+			_initFiles[id] = [for (f in files) if (CallGraphNames.normalizePath(f) != key) f];
+		}
 		for (id in removed.keys()) {
 			nodes.remove(id);
 			_facts.forget(id);

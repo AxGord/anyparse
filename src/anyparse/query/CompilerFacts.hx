@@ -181,6 +181,12 @@ typedef ReflectionFact = {
 
 	final receiverExact: Bool;
 	final receiverSelf: Bool;
+
+	/**
+	 * The id of the node whose code holds the call (`FactNode.id`): the function a `this` argument (`receiverSelf`) is the
+	 * `this` of — its outermost enclosing field's, for a nested function, which captures it.
+	 */
+	final holder: String;
 }
 
 /** A native-code site: `syntax` for a `*.Syntax` call, `ident` for a `__js__`-style identifier. */
@@ -955,7 +961,8 @@ final class CompilerFacts {
 					at: where,
 					receiver: r.r,
 					receiverExact: r.x == true,
-					receiverSelf: r.h == true
+					receiverSelf: r.h == true,
+					holder: id
 				}: ReflectionFact),
 				node.reflection
 			);

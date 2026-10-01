@@ -1539,9 +1539,15 @@ final class MemberReach {
 					// unread as its owner's, the name touches as every declaration of it does
 					if (read == null && shared && touchers.exists(id) && !freshlyConstructed(g, id, step, scan, member))
 						return Reached(pathTo(reach, id, touchers[id]));
-					if (read == null)
+					// admitted by its name alone, it runs as the member of each typed type so named that declares it, under the truth
+					final owners: Null<Array<String>> = typed == null ? _scope.facts?.ownersDeclaring(type, node.name ?? '') : null;
+					if (read == null && owners != null && step != null) {
+						for (o in owners) enqueueTyped(id, step, o);
+						continue;
+					}
+					if (read == null) {
 						blind = blind ?? Ambiguous(type);
-					else {
+					} else {
 						final as: FnNode = read;
 						// an escape its facts show, which the question was asked before
 						final shown: Null<Occurrence> = scan.escapes.length > escaped ? scan.escapes[escaped] : null;
@@ -1707,9 +1713,10 @@ final class MemberReach {
 	 * function value it was handed (`values`) and, for a reflective instantiation, any constructor. It also reaches a
 	 * program object's members BY NAME — a `toJSON`, a `toString`, a `then` — so every object the call hands it is a
 	 * reflective access with a computed name: the members its static type may carry at run time (`memberIdsOf`),
-	 * or every function the admission closure holds when that is not known. And a member that
-	 * returns the language's string type converts what it is handed, its receiver included, to one: a string
-	 * conversion of each of them.
+	 * or every function the admission closure holds when that is not known. And a member that returns the language's string
+	 * type converts what it is handed, its receiver included, to one: a string conversion of each of them. The built-in array's
+	 * own methods and constructor reach no member by name and call only a function value the call hands them; converting the
+	 * array converts its elements, of the type it is written with (the compiler's, where the syntax types no receiver).
 	 */
 	private function externSite(g: CallGraph, from: String, file: String, span: Null<Span>, type: String, name: String): AdmissionSite {
 		// noqa: complexity
@@ -1730,14 +1737,18 @@ final class MemberReach {
 		final call: Null<QueryNode> = span == null || tree == null ? null : invocationAt(tree, span);
 		final takesObject: Bool = _g.externTakesObject(g, type, name);
 		final onInstance: Bool = g.types.memberOnChain(type, name)?.isStatic == false;
-		if (call == null || tree == null || source == null || call.children.length == 0) {
+		// a construction's children are its arguments alone: it names a type, not a callee
+		final constructs: Bool = call?.kind == _shape.newExprKind;
+		if (call == null || tree == null || source == null || (!constructs && call.children.length == 0)) {
 			// the site is not in code the analysis read: nothing narrows what the call is handed, its receiver included
 			site.all = takesObject || onInstance;
 			return site;
 		}
-		final args: Array<QueryNode> = call.children.slice(1);
-		final callee: QueryNode = call.children[0];
-		final receiver: Null<QueryNode> = _hazards.isAccess(callee.kind) && callee.children.length > 0 ? callee.children[0] : null;
+		final args: Array<QueryNode> = constructs ? call.children : call.children.slice(1);
+		final callee: Null<QueryNode> = constructs ? null : call.children[0];
+		final receiver: Null<QueryNode> = callee != null && _hazards.isAccess(callee.kind) && callee.children.length > 0
+			? callee.children[0]
+			: null;
 		final lambdas: Array<String> = _shape.lambdaKinds ?? [];
 		function hand(t: Null<String>): Void {
 			if (t != null && _g.inertType(t)) return;
@@ -1750,10 +1761,18 @@ final class MemberReach {
 			for (id in members) if (!ids.contains(id)) ids.push(id);
 			site.ids = ids;
 		}
-		if (takesObject) for (arg in args) if (!lambdas.contains(arg.kind)) hand(_g.sites.typeOf(file, tree, source, arg));
+		// the built-in array's own methods, its constructor among them, reach what they hold or are handed only by converting
+		// it to a string (the implicit site below) or by calling a function value the call hands them: no member by name, of an
+		// element or of the array, and no function value it was handed before
+		final arrayOwn: Bool = (_shape.arrayTypeNames ?? []).contains(type)
+			&& ((_shape.execution?.nonMutatingArrayMethods ?? []).contains(name)
+				|| (_shape.execution?.mutatingArrayMethods ?? []).contains(name) || name == (_shape.constructorName ?? 'new'));
+		if (arrayOwn) site.values = _g.callsItsArgument(g, type, name);
+		if (takesObject && !arrayOwn) for (arg in args) if (!lambdas.contains(arg.kind)) hand(_g.sites.typeOf(file, tree, source, arg));
 		// an instance member's target code holds its receiver too — a program subclass's `this` when the call is bare —
-		// and reaches its members by name as it does an argument's (a native `toJSON` runs `this.toISOString()`)
-		if (onInstance)
+		// and reaches its members by name as it does an argument's (a native `toJSON` runs `this.toISOString()`). A
+		// construction's receiver is the object it makes, an instance of exactly the target class: no program object
+		if (onInstance && !arrayOwn && !constructs)
 			hand(receiver == null ? MemberTouchScan.typeAt(tree, call.span?.from ?? 0) : _g.sites.typeOf(file, tree, source, receiver));
 		// a type taking type parameters is a container whose elements a conversion reaches too: any
 		function containerFree(t: Null<String>): Null<String> {
@@ -1762,17 +1781,42 @@ final class MemberReach {
 		final returned: Null<String> = g.types.memberOnChain(type, name)?.returnNominal;
 		final stringType: Null<String> = _g.stringTypeName();
 		final at: Null<Span> = call.span;
+		// what a value is typed: its syntax's reading, else — under the truth — the type the compiler gave it there
+		final readTree: QueryNode = tree;
+		final readSource: String = source;
+		function typed(n: QueryNode): Null<String> {
+			final at: Null<Span> = n.span;
+			final own: Null<String> = _g.sites.typeOf(file, readTree, readSource, n);
+			return own ?? (at == null || _scope.facts?.truth != true ? null : _scope.facts?.table.typeOfExpressionAt(file, at));
+		}
+		// what converting a value converts: an array the built-in array's own method holds, its elements
+		function convertedType(n: QueryNode): Null<String> {
+			final t: Null<String> = typed(n);
+			final element: Null<String> = n == receiver && arrayOwn && t != null ? elementType(t) : null;
+			return containerFree(element ?? t);
+		}
 		if (returned != null && returned == stringType && at != null) {
 			final converted: Array<QueryNode> = receiver == null ? args : [receiver].concat(args);
 			final callSpan: Span = at;
 			site.implicit.push({
 				family: Text,
 				span: callSpan,
-				types: [for (o in converted) containerFree(_g.sites.typeOf(file, tree, source, o))],
+				types: [for (o in converted) convertedType(o)],
 				exact: false
 			});
 		}
 		return site;
+	}
+
+	/** The element type of a value typed `type` when that is the built-in array type written with it (`Array<T>`), else null. */
+	private function elementType(type: String): Null<String> {
+		final source: String = NominalTypes.unwrapNullable(
+			StringTools.trim(type), _shape.memberTransparentWrapperTypeNames ?? [], _scope.plugin.typeSyntax
+		);
+		final nominal: Null<String> = NominalTypes.outerNominalOf(source, _scope.plugin.typeSyntax);
+		if (nominal == null || !(_shape.arrayTypeNames ?? []).contains(nominal)) return null;
+		final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(source, _scope.plugin.typeSyntax);
+		return args == null || args.length != 1 ? null : args[0];
 	}
 
 	/** The call or constructor node of `tree` spanning exactly `span` — a chained call starting there is another node. */

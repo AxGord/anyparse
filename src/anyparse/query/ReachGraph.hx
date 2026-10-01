@@ -99,6 +99,9 @@ final class ReachGraph {
 	/** The members that produce an instance or a class value from a computed name (`reflectiveProducers`), read once. */
 	private var _producers: Null<Array<{ name: String, file: String }>> = null;
 
+	/** Which methods the program may obtain as values (`methodValues`), read off the facts once per text. */
+	private var _methodValues: Null<FactsMethodValues> = null;
+
 	public function new(scope: ReachProject, carriers: ValueCarriers, maxLibraryFiles: Int) {
 		_scope = scope;
 		this.carriers = carriers;
@@ -497,6 +500,7 @@ final class ReachGraph {
 		_implicit = null;
 		// what the index-wide scans read off the old text of those files
 		_mentions = null;
+		_methodValues = null;
 		_inPlay.clear();
 		_inferred.clear();
 		for (f in changed) sites.forget(f.file);
@@ -1338,8 +1342,9 @@ final class ReachGraph {
 	 * whose members it may read, write or call, and their methods, an accessor a property access runs among them, each with
 	 * the typed type it is a member of. The object is an instance of the typed class or interface its type names
 	 * (`FactsView.objectClass`), of a typed subtype of it unless it is an object of exactly that class, and — unless it is
-	 * `this`, which only a dispatch on an instance of its method's class or of a subclass binds — of a type whose instances
-	 * escaped the type system (`ValueCarriers.escapedIds`); with each type those extend or implement. Null — any member of
+	 * `this` of a method no code obtains as a value, which only a dispatch on an instance of its class or of a subclass then
+	 * binds (`FactsMethodValues.selfBound`) — of a type whose instances escaped the type system (`ValueCarriers.escapedIds`);
+	 * with each type those extend or implement. Null — any member of
 	 * any object — when the facts are not the truth, no fact names a receiver, one is of no such type, or the escapes are
 	 * not known.
 	 */
@@ -1359,7 +1364,8 @@ final class ReachGraph {
 			note(id);
 			if (r.receiverExact) continue;
 			for (sub in facts.table.subtypesOf(id)) note(sub);
-			if (!r.receiverSelf) escapes = true;
+			// `this` is its method's class's only while no code obtains the method as a value, which a call may rebind
+			if (!r.receiverSelf || !methodValues(facts).selfBound(r.holder)) escapes = true;
 		}
 		if (escapes) {
 			final escaped: Null<Array<String>> = carriers.escapedIds();
@@ -1375,6 +1381,15 @@ final class ReachGraph {
 			for (member in facts.methodsOf(id)) ids.push({ id: g.ownMember(type, member) ?? placeholder(g, type, member), owner: id });
 		}
 		return { types: types, ids: ids };
+	}
+
+	/** Which methods the program may obtain as values, read off the facts `view` once per text (`FactsMethodValues`). */
+	private function methodValues(view: FactsView): FactsMethodValues {
+		final held: Null<FactsMethodValues> = _methodValues;
+		if (held != null) return held;
+		final made: FactsMethodValues = new FactsMethodValues(view, _scope, () -> carriers.escapedIds());
+		_methodValues = made;
+		return made;
 	}
 
 }

@@ -6446,7 +6446,7 @@
 			"name": "M-REACH-EXTERN-OBJECT",
 			"type": "anyparse.query.MemberReach",
 			"method": "externSite",
-			"find": "if (takesObject) for (arg in args)",
+			"find": "if (takesObject && !arrayOwn) for (arg in args)",
 			"replace": "if (false) for (arg in args)",
 			"note": "an object handed to target code admits none of its members, so `JSON.stringify(this)` runs `toJSON` unseen"
 		},
@@ -6527,7 +6527,7 @@
 			"type": "anyparse.query.MemberReach",
 			"method": "externSite",
 			"find": [
-				"if (takesObject) for (arg in args)",
+				"if (takesObject && !arrayOwn) for (arg in args)",
 				"if (returned != null && returned == stringType && at != null) {"
 			],
 			"replace": [
@@ -6564,7 +6564,7 @@
 			"name": "M-REACH-EXTERN-RECEIVER",
 			"type": "anyparse.query.MemberReach",
 			"method": "externSite",
-			"find": "if (onInstance)",
+			"find": "if (onInstance && !arrayOwn && !constructs)",
 			"replace": "if (false)",
 			"note": "an extern instance method's target code does not hold its receiver, so a native `toJSON` calling `this.toISOString()` runs unseen"
 		},
@@ -8331,14 +8331,6 @@
 			"find": "&& declaredId(fi, t) != root)",
 			"replace": "&& false)",
 			"note": "a declaration of the member no build typed, which may run under another name, leaves the name one type's member"
-		},
-		{
-			"name": "M-REACH-SHARED-NAME-SOLE",
-			"type": "anyparse.query.MemberReach",
-			"method": "sharedName",
-			"find": "(facts.soleType(type) == null && (name == null || facts.soleMember(type, name) == null))",
-			"replace": "facts.soleType(type) == null",
-			"note": "a member only one typed type of its name declares still makes the walk Ambiguous where it enters it"
 		},
 		{
 			"name": "M-ADMIT-SYNTAX-READ-UNTRUE",
@@ -11879,7 +11871,7 @@
 			"name": "M-GRAPH-REFLECT-ESCAPES",
 			"type": "anyparse.query.ReachGraph",
 			"method": "reflectedMembers",
-			"find": "if (!r.receiverSelf) escapes = true;",
+			"find": "if (!r.receiverSelf || !methodValues(facts).selfBound(r.holder)) escapes = true;",
 			"replace": "",
 			"note": "an object reflection acts on is never an instance that left the type system, so a `Main` handed to `Dynamic` cannot come back as the `Other` it reads"
 		},
@@ -11887,7 +11879,7 @@
 			"name": "M-GRAPH-REFLECT-SELF-ESCAPES",
 			"type": "anyparse.query.ReachGraph",
 			"method": "reflectedMembers",
-			"find": "if (!r.receiverSelf) escapes = true;",
+			"find": "if (!r.receiverSelf || !methodValues(facts).selfBound(r.holder)) escapes = true;",
 			"replace": "escapes = true;",
 			"note": "(precision) `this` may be an escaped instance of any type, though only a dispatch on its own class binds it"
 		},
@@ -11898,6 +11890,118 @@
 			"find": "if (boundedCall(e)) return;",
 			"replace": "",
 			"note": "a reflective accessor's call whose object the facts bound enters the accessor's body, which reaches members by a name it is handed in `untyped` code: every such access is blind again (std's `Reflect.getProperty`)"
+		},
+		{
+			"name": "M-METHODS-SELF-BOUND",
+			"type": "anyparse.query.ReachGraph",
+			"method": "reflectedMembers",
+			"find": "if (!r.receiverSelf || !methodValues(facts).selfBound(r.holder)) escapes = true;",
+			"replace": "if (!r.receiverSelf) escapes = true;",
+			"note": "`this` is its method's class's wherever it runs, though a call handed the method as a value may run it with a receiver of its own (`Reflect.callMethod`)"
+		},
+		{
+			"name": "M-METHODS-REBINDS",
+			"type": "anyparse.query.FactsMethodValues",
+			"method": "selfBound",
+			"find": "if (!reads.rebinds) return true;",
+			"replace": "",
+			"note": "(precision) a program no call of which rebinds `this` still answers only for instance methods its code never reads as values"
+		},
+		{
+			"name": "M-METHODS-CLOSURE-READ",
+			"type": "anyparse.query.FactsMethodValues",
+			"method": "scan",
+			"find": "named(f.field, { receiver: f.receiver, exact: false });",
+			"replace": "null;",
+			"note": "a method read as a closure is no value a rebinding call may be handed"
+		},
+		{
+			"name": "M-METHODS-METHOD-ONLY",
+			"type": "anyparse.query.FactsMethodValues",
+			"method": "selfBound",
+			"find": "node.kind != METHOD_NODE || ",
+			"replace": "",
+			"note": "a constructor's `this` is the object it builds even where a rebinding call may be handed its class as a value"
+		},
+		{
+			"name": "M-FACTS-REFL-HOLDER",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "materialize",
+			"find": "holder: id",
+			"replace": "holder: ''",
+			"note": "(precision) a reflective call's fact names no function whose `this` it may hand"
+		},
+		{
+			"name": "M-METHODS-RECEIVER-BOUND",
+			"type": "anyparse.query.FactsMethodValues",
+			"method": "mayBeOf",
+			"find": "final receiver: Null<String> = read.receiver;",
+			"replace": "return true;\n\t\tfinal receiver: Null<String> = read.receiver;",
+			"note": "(precision) a read by a computed name off an object of an unrelated class may obtain any method"
+		},
+		{
+			"name": "M-REACH-ARRAY-OWN",
+			"type": "anyparse.query.MemberReach",
+			"method": "externSite",
+			"find": "final arrayOwn: Bool = (_shape.arrayTypeNames ?? []).contains(type)",
+			"replace": "final arrayOwn: Bool = false && (_shape.arrayTypeNames ?? []).contains(type)",
+			"note": "(precision) the built-in array's own methods reach what they hold and are handed by any member name"
+		},
+		{
+			"name": "M-REACH-ARRAY-CTOR",
+			"type": "anyparse.query.MemberReach",
+			"method": "externSite",
+			"find": " || name == (_shape.constructorName ?? 'new'));",
+			"replace": ");",
+			"note": "(precision) the built-in array's constructor may call any function value the program holds"
+		},
+		{
+			"name": "M-REACH-ARRAY-VALUES",
+			"type": "anyparse.query.MemberReach",
+			"method": "externSite",
+			"find": "if (arrayOwn) site.values = _g.callsItsArgument(g, type, name);",
+			"replace": "",
+			"note": "(precision) the built-in array's own methods may call any function value handed to target code before"
+		},
+		{
+			"name": "M-REACH-ARRAY-ELEMENTS",
+			"type": "anyparse.query.MemberReach",
+			"method": "externSite",
+			"find": "final element: Null<String> = n == receiver && arrayOwn && t != null ? elementType(t) : null;",
+			"replace": "final element: Null<String> = null;",
+			"note": "(precision) converting an array converts a value of any type, whatever its elements are typed"
+		},
+		{
+			"name": "M-REACH-EXTERN-FACTS-TYPE",
+			"type": "anyparse.query.MemberReach",
+			"method": "externSite",
+			"find": "return own ?? (at == null || _scope.facts?.truth != true ? null : _scope.facts?.table.typeOfExpressionAt(file, at));",
+			"replace": "return own;",
+			"note": "(precision) a value handed to target code the syntax cannot type is of any type, though the compiler typed it"
+		},
+		{
+			"name": "M-REACH-SHARED-OWNERS",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "final owners: Null<Array<String>> = typed == null ? _scope.facts?.ownersDeclaring(type, node.name ?? '') : null;",
+			"replace": "final owners: Null<Array<String>> = null;",
+			"note": "(precision) a member admitted by a name two typed types share is Ambiguous, though each type's own may be read"
+		},
+		{
+			"name": "M-GRAPH-INIT-RECORD",
+			"type": "anyparse.query.CallGraph",
+			"method": "addFiles",
+			"find": "if (reading != null) reading.recordInitializers(this, [for (id in _initFiles.keys()) id]);",
+			"replace": "",
+			"note": "(precision) a field initializer is read by its syntax, which admits every implicitly-called member"
+		},
+		{
+			"name": "M-FACTS-VIEW-INIT-FACETED",
+			"type": "anyparse.query.FactsView",
+			"method": "faceted",
+			"find": "final initializers: Null<Array<FactNode>> = pseudo != null && initializerNode(pseudo) ? g.facts?.faceted[pseudo.id] : null;",
+			"replace": "final initializers: Null<Array<FactNode>> = null;",
+			"note": "(precision) the code of a field initializer the facts read whole is still read by its syntax"
 		}
 	]
 }
