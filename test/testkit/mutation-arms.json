@@ -5101,8 +5101,8 @@
 			"name": "M-ESCAPE-ANY",
 			"type": "anyparse.query.ValueEscapes",
 			"method": "compute",
-			"find": "return { types: out, raw: false };",
-			"replace": "return { types: null, raw: false };",
+			"find": "return { types: out, raw: false, ids: null };",
+			"replace": "return { types: null, raw: false, ids: null };",
 			"note": "(precision) every instance may be anywhere, so no receiver ever rules out an owner"
 		},
 		{
@@ -5549,8 +5549,8 @@
 			"name": "M-REACH-IMPLICIT-ADMIT",
 			"type": "anyparse.query.MemberReach",
 			"method": "walk",
-			"find": "final implicit: Array<String> = site.always ? _g.alwaysIds(g).copy() : [];\n\t\t\tfor (at in site.implicit) for (id in _g.idsAt(g, at)) implicit.push(id);",
-			"replace": "final implicit: Array<String> = [];",
+			"find": "final implicit: Array<String> = site.always ? _g.alwaysIds(g).copy() : [];\n\t\t\t// a member the facts name the typed owner of is that type's, not every type's of its simple name\n\t\t\tfinal owned: Array<OwnedId> = [];\n\t\t\tfor (at in site.implicit) for (o in _g.ownedIdsAt(g, at)) if (o.owner == null)\n\t\t\t\timplicit.push(o.id)\n\t\t\telse\n\t\t\t\towned.push(o);",
+			"replace": "final implicit: Array<String> = [];\n\t\t\tfinal owned: Array<OwnedId> = [];",
 			"note": "an implicitly-called function that grows the member is never admitted from the entry"
 		},
 		{
@@ -8510,8 +8510,8 @@
 			"name": "M-ESCAPES-TRUTH-FACTS",
 			"type": "anyparse.query.ValueEscapes",
 			"method": "compute",
-			"find": "if (view != null && view.truth) return {",
-			"replace": "if (view != null && view.truth && false) return {",
+			"find": "if (view != null && view.truth) {",
+			"replace": "if (view != null && view.truth && false) {",
 			"note": "under the truth the escapes are still read off the project's syntax, which counts every value handed to library code as escaped"
 		},
 		{
@@ -11395,6 +11395,118 @@
 			"find": "if (shown != null) blind = blind ?? Escape(shown.file, shown.span);",
 			"replace": "",
 			"note": "an escape only the facts of a node read as one type's member show, found after the question checked every escape, is dropped"
+		},
+		{
+			"name": "M-GRAPH-FACTS-INTERFACE-PLACEHOLDER",
+			"type": "anyparse.query.CallGraphFacts",
+			"method": "declaredCall",
+			"find": "final dispatched: Bool = dispatchesOnly(g, owner, type, view);",
+			"replace": "final dispatched: Bool = false;",
+			"note": "a call the facts name of an interface's member no text declares (the accessor `get_x` its property implies, openfl's `IVector.get_length`) is a library placeholder no indexed type declares, an UnresolvedDispatch, not the body-less dispatch to the implementations"
+		},
+		{
+			"name": "M-GRAPH-VIRTUAL-OWN-ONLY",
+			"type": "anyparse.query.CallGraph",
+			"method": "virtualTargets",
+			"find": "final hit: Null<String> = _members[sub]?.get(member) ?? inheritedOffChain(typeName, sub, member);",
+			"replace": "final hit: Null<String> = _members[sub]?.get(member);",
+			"note": "a subtype that inherits the dispatched member from a superclass off the dispatched type's chain adds no dispatch target, so an interface's implementation its implementer inherits is never followed"
+		},
+		{
+			"name": "M-INDEX-ALTERNATE-DROPPED",
+			"type": "anyparse.query.SymbolIndexBuilder",
+			"method": "pushGuardedDecl",
+			"find": "out.push({ node: node, guarded: true, alternate: alternate });",
+			"replace": "if (!alternate) out.push({ node: node, guarded: true, alternate: alternate });",
+			"note": "another branch's declaration of a type a conditional region already declared is dropped from the index, so a property, a supertype or a member only it declares is no part of the type"
+		},
+		{
+			"name": "M-INDEX-ALTERNATE-MEMBERS",
+			"type": "anyparse.query.SymbolIndexBuilder",
+			"method": "withAlternate",
+			"find": "members: first.members.concat(alternate.members),",
+			"replace": "members: first.members,",
+			"note": "the members only another branch's declaration of a type declares are dropped, so a getter only the compiled branch gives a property never runs"
+		},
+		{
+			"name": "M-FACTS-SITE-OWNERS-NONE",
+			"type": "anyparse.query.FactsView",
+			"method": "sitesIn",
+			"find": "owners: [typedOwner(s.operand)]",
+			"replace": "owners: [null]",
+			"note": "a string conversion the facts typed names no operand's type, so a `toString` of a name two types share it admits stays Ambiguous"
+		},
+		{
+			"name": "M-REACH-OWNED-TYPES-NONE",
+			"type": "anyparse.query.ReachGraph",
+			"method": "ownedIdsAt",
+			"find": "final owned: Null<Map<String, Null<Array<String>>>> = ownedTypesAt(g, at);",
+			"replace": "final owned: Null<Map<String, Null<Array<String>>>> = null;",
+			"note": "an implicit-call site the facts typed is read by its operands' simple names, so an admitted member of a name two types share stays Ambiguous"
+		},
+		{
+			"name": "M-REACH-OWNED-UNTYPED",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "for (o in owned) if (admission.closure.exists(o.id)) enqueueTyped(o.id, step(o.id), o.owner);",
+			"replace": "for (o in owned) if (admission.closure.exists(o.id)) enqueue(o.id, step(o.id));",
+			"note": "a member an implicit-call site admits is queued by its simple name though the facts name its owner, so a name two types share stays Ambiguous"
+		},
+		{
+			"name": "M-REACH-OWNED-ESCAPES-KEPT",
+			"type": "anyparse.query.ReachGraph",
+			"method": "ownedTypesAt",
+			"find": "if (!at.exact) escapes = true;",
+			"replace": "",
+			"note": "an operand the facts type is never an instance that left the type system, so a `b.Color` slot holding an escaped `a.Color` runs only `b.Color.toString`"
+		},
+		{
+			"name": "M-GRAPH-ABSTRACT-THIS-STORAGE",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (recv.typeName != currentType) ownStorage = false;",
+			"replace": "",
+			"note": "an abstract's `this.x` inside its own accessor of `x` reads as the accessor's storage, though `this` is the value it wraps: the wrapped value's property accessor (openfl `Vector.get_length` reading `IVector.length`) never runs"
+		},
+		{
+			"name": "M-REACH-OVERRIDES-INHERITED-UNLOADED",
+			"type": "anyparse.query.ReachGraph",
+			"method": "loadOverrides",
+			"find": "final holder: Null<String> = inheritedFrom(g, type, sub, member);",
+			"replace": "final holder: Null<String> = null;",
+			"note": "the file of a superclass off the dispatched type's chain a library subtype inherits the member from is never read, so a dispatch to an implementation an implementer inherits finds no body"
+		},
+		{
+			"name": "M-REACH-DEAD-NODE-ENTERED",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "if (declared.length > 0 && !declared.exists(d -> isLive(g, d.file, d.span))) continue;",
+			"replace": "",
+			"note": "a node declared only in code no configuration compiles is entered like any other, so a build macro or a hazard of a type no build has (openfl's js-only `VectorData`) answers for a call no build runs"
+		},
+		{
+			"name": "M-LIVE-FRAGMENTED",
+			"type": "anyparse.query.ReachLiveness",
+			"method": "live",
+			"find": "return holdsLiveCode(file, source, span);",
+			"replace": "return deadOf(file, source).foreach(d -> !(span.from >= d.from && span.to <= d.to));",
+			"note": "a site no configuration compiles is live when a directive nested in it splits its range across several dead ranges"
+		},
+		{
+			"name": "M-FACTS-SITE-CONVERSION-OWNERS-NONE",
+			"type": "anyparse.query.FactsView",
+			"method": "sitesIn",
+			"find": "owners: [argument == null ? null : typedOwner(argument.from)]",
+			"replace": "owners: [null]",
+			"note": "a conversion call the facts typed names no type of the value it converts, so a `toString` of a name two types share it admits stays the simple name's"
+		},
+		{
+			"name": "M-REACH-REWRITTEN-SOLE-SIMPLE",
+			"type": "anyparse.query.MemberReach",
+			"method": "rewrittenAt",
+			"find": "final owner: Null<String> = read?.owner ?? sole;",
+			"replace": "final owner: Null<String> = read?.owner;",
+			"note": "a node the facts read as the one type of its shared name declaring the member asks for a build macro by the simple name, which `typeIsItsText` refuses for a shared name: any build macro of any type of the name is a Reification (TM's `Vector.splice`)"
 		}
 	]
 }

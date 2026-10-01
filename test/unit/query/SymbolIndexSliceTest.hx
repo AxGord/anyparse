@@ -405,11 +405,11 @@ class SymbolIndexSliceTest extends Test {
 
 	/**
 	 * Both branches of a `#if / #else` region project as siblings of one
-	 * wrapper, but no compilation sees more than one: the FIRST declaration of
-	 * a name is indexed and later same-named ones are dropped, so the name
-	 * never reads as ambiguous.
+	 * wrapper, but no compilation sees more than one: the name is ONE type,
+	 * listed once so it never reads as ambiguous, whose members are what any
+	 * branch declares — the later declaration folded into the first.
 	 */
-	public function testConditionalDuplicateNameKeepsFirstBranch(): Void {
+	public function testConditionalDuplicateNameIsOneTypeOfEveryBranch(): Void {
 		final source: String =
 			'package pkg;\n#if js\nclass Dup {\n\tpublic var jsOnly:Int;\n}\n#else\nclass Dup {\n\tpublic var cppOnly:Int;\n}\n#end\n';
 		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/pkg/Dup.hx', source: source }], plugin());
@@ -420,7 +420,7 @@ class SymbolIndexSliceTest extends Test {
 		final dup: TypeDeclInfo = fi.types[0];
 		Assert.equals('Dup', dup.name);
 		Assert.isTrue(dup.members.exists(m -> m.name == 'jsOnly'));
-		Assert.isFalse(dup.members.exists(m -> m.name == 'cppOnly'));
+		Assert.isTrue(dup.members.exists(m -> m.name == 'cppOnly'));
 	}
 
 	/** Two SIBLING regions declaring the same type collapse to one entry too. */
@@ -432,6 +432,7 @@ class SymbolIndexSliceTest extends Test {
 
 		Assert.equals(1, fi.types.length);
 		Assert.isTrue(fi.types[0].members.exists(m -> m.name == 'jsOnly'));
+		Assert.isTrue(fi.types[0].members.exists(m -> m.name == 'nativeOnly'));
 	}
 
 	/** Distinct names across `#if` / `#elseif` / `#else` branches are ALL indexed. */

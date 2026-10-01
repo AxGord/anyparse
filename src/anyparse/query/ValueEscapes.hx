@@ -51,8 +51,11 @@ final class ValueEscapes {
 	private final _carriers: ValueCarriers;
 	private final _scopeKnown: Bool;
 
-	/** The answer, once computed: the escaped types (null for any), and whether a raw region decided it. */
-	private var _answer: Null<{ types: Null<Array<String>>, raw: Bool }> = null;
+	/**
+	 * The answer, once computed: the escaped types (null for any), whether a raw region decided it, and — read off the facts
+	 * under the truth — the escaped types by their typed ids.
+	 */
+	private var _answer: Null<EscapeAnswer> = null;
 
 	/** What `memberFacts` read off the index. */
 	private var _facts: Null<MemberFacts> = null;
@@ -71,13 +74,26 @@ final class ValueEscapes {
 
 	/** The types whose instances may have escaped (see the type doc), or null when any may have; computed once. */
 	public function escaped(): Null<Array<String>> {
-		var answer: Null<{ types: Null<Array<String>>, raw: Bool }> = _answer;
+		return answered().types;
+	}
+
+	/**
+	 * The types whose instances may have escaped by their typed ids (`pack.Name`), when the facts are the truth and say
+	 * (`FactsEscapes`); null otherwise, and when any may have.
+	 */
+	public function escapedIds(): Null<Array<String>> {
+		return answered().ids;
+	}
+
+	/** The answer, computed once. */
+	private function answered(): EscapeAnswer {
+		var answer: Null<EscapeAnswer> = _answer;
 		if (answer == null) {
 			answer = compute();
 			_answer = answer;
 		}
 		if (answer.raw) onRaw();
-		return answer.types;
+		return answer;
 	}
 
 	/** Drop the answer: the project's text changed. */
@@ -122,23 +138,27 @@ final class ValueEscapes {
 		return out;
 	}
 
-	private function compute(): { types: Null<Array<String>>, raw: Bool } {
+	private function compute(): EscapeAnswer {
 		final out: Array<String> = [];
 		final seen: Map<String, Bool> = [];
 		// under the truth every function the builds typed is read, the libraries' as much as the project's
 		final view: Null<FactsView> = _scope.facts;
-		if (view != null && view.truth) return { types: new FactsEscapes(view, _scope).compute(), raw: false };
-		if (!_scopeKnown) return { types: null, raw: false };
+		if (view != null && view.truth) {
+			final read: FactsEscapes = new FactsEscapes(view, _scope);
+			final types: Null<Array<String>> = read.compute();
+			return { types: types, raw: false, ids: types == null ? null : read.typedIds() };
+		}
+		if (!_scopeKnown) return { types: null, raw: false, ids: null };
 		final g: CallGraph = _g.graph();
-		for (skipped in g.skippedFiles) if (_scope.sources.exists(skipped)) return { types: null, raw: false };
+		for (skipped in g.skippedFiles) if (_scope.sources.exists(skipped)) return { types: null, raw: false, ids: null };
 		final escape: String -> Bool = escapeType.bind(g, out, seen);
 		// a file no build runs lets nothing escape, and the graph holds no tree of it
 		for (f in _scope.files) if (!_scope.runsInNoBuild(f.file)) {
 			final fi: Null<FileInfo> = _scope.index.fileInfo(f.file);
 			final tree: Null<QueryNode> = g.treeOf(f.file);
-			if (fi == null || tree == null) return { types: null, raw: false };
+			if (fi == null || tree == null) return { types: null, raw: false, ids: null };
 			// a class inheriting library code runs it with the instance as `this`
-			for (t in fi.types) if (inheritsLibrary(g, t.name) && !escape(t.name)) return { types: null, raw: false };
+			for (t in fi.types) if (inheritsLibrary(g, t.name) && !escape(t.name)) return { types: null, raw: false, ids: null };
 			final compileTime: Array<Span> = macroSpans(f.file, tree);
 			for (h in _hazards.hazardsIn(f.file, tree, f.source, new Span(0, f.source.length))) {
 				// code no build compiles, and a macro function with its modifier, run in no program
@@ -146,16 +166,16 @@ final class ValueEscapes {
 				if (compileTime.exists(sp -> h.span.from >= sp.from && h.span.to <= sp.to)) continue;
 				switch h.kind {
 					case Native, Untyped, Unmodelled(_):
-						return { types: null, raw: false };
+						return { types: null, raw: false, ids: null };
 					case Opaque:
-						if (_live.holdsLiveCode(f.file, f.source, h.span)) return { types: null, raw: true };
+						if (_live.holdsLiveCode(f.file, f.source, h.span)) return { types: null, raw: true, ids: null };
 					case ReflectiveName(_), ArrayChange:
 				}
 			}
-			if (!scanFile(g, f.file, tree, f.source, escape)) return { types: null, raw: false };
+			if (!scanFile(g, f.file, tree, f.source, escape)) return { types: null, raw: false, ids: null };
 		}
-		if (!namedClasses(g, escape)) return { types: null, raw: false };
-		return { types: out, raw: false };
+		if (!namedClasses(g, escape)) return { types: null, raw: false, ids: null };
+		return { types: out, raw: false, ids: null };
 	}
 
 	/**
@@ -652,4 +672,11 @@ final class ValueEscapes {
 private typedef MemberFacts = {
 	var operators: Array<String>;
 	var functions: Map<String, Bool>;
+}
+
+/** What `ValueEscapes` answers: the escaped types (null for any), whether a raw region decided it, and their typed ids. */
+private typedef EscapeAnswer = {
+	final types: Null<Array<String>>;
+	final raw: Bool;
+	final ids: Null<Array<String>>;
 }

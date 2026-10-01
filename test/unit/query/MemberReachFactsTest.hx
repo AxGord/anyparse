@@ -1440,6 +1440,129 @@ class MemberReachFactsTest extends Test {
 		assertMatch(converting('new Plain()'), r -> r.match(Proven));
 	}
 
+	@:pin('control') @:killer('M-GRAPH-FACTS-INTERFACE-PLACEHOLDER') @:killer('M-GRAPH-VIRTUAL-OWN-ONLY')
+	@:killer('M-GRAPH-ABSTRACT-THIS-STORAGE') @:killer('M-REACH-OVERRIDES-INHERITED-UNLOADED')
+	public function testAnInterfacePropertyReadThroughAnInlinedAbstractRunsItsImplementations(): Void {
+		// openfl's `Vector` shape: the inlined `Vec.get_length` reads `length` of the interface `IVec`, whose accessor only the
+		// property implies — no text declares `IVec.get_length`. The read runs the implementations: `IntVec`'s own, and the one
+		// `Sub` inherits from `Base`, a class off `IVec`'s chain, whose file the walk must read though neither it nor
+		// `Sub.hx` spells `IVec` and the member both
+		function library(intVec: String, base: String, spelled: Bool): Map<String, String> {
+			return [
+				'lib/Vec.hx' => 'package lib;\n\nabstract Vec(IVec) {\n\tpublic var length(get, never):Int;\n\n'
+					+ '\tpublic inline function new(v:IVec) this = v;\n\n\tinline function get_length():Int return this.length;\n}\n\n'
+					+ 'interface IVec {\n\tvar length(get, never):Int;\n}\n',
+				'lib/IntVec.hx' => 'package lib;\n\nimport lib.Vec.IVec;\n\nclass IntVec implements IVec {\n'
+					+ '\tpublic var length(get, never):Int;\n\n\tpublic function new() {}\n\n\tfunction get_length():Int {\n\t\t' + intVec
+					+ '\n\t\treturn 0;\n\t}\n}\n',
+				'lib/Base.hx' => 'package lib;\n\nclass Base {\n\tpublic function new() {}\n\n\tfunction get_length():Int {\n\t\t' + base
+					+ '\n\t\treturn 0;\n\t}\n}\n',
+				'lib/Sub.hx' => 'package lib;\n\nimport lib.Vec.IVec;\n\nclass Sub extends Base implements IVec {\n'
+					+ '\tpublic var length(get, never):Int;\n' + (spelled ? '\t// the get_length it runs is Base\'s\n' : '') + '}\n',
+				'lib/Label.hx' => 'package lib;\n\nclass Label {\n\tpublic static var failing:Bool = false;\n\n'
+					+ '\tpublic static var v:Vec = new Vec(failing ? new IntVec() : new Sub());\n\n'
+					+ '\tpublic static function size():Int return v.length;\n}\n'
+			];
+		}
+		final main: String = 'import lib.Label;\n\n' + LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Label.size(); /*>*/ }\n\t}\n}\n';
+		final touch: String = 'Main.items.push(1);';
+		function truth(intVec: String, base: String): ReachResult {
+			return ask(['Main.hx' => main], null, true, null, false, null, library(intVec, base, false), null, true);
+		}
+		// library code changing the member is read by its name: never a proof, whichever reading finds it
+		assertMatch(truth('', ''), r -> r.match(Proven));
+		assertMatch(truth(touch, ''), r -> !r.match(Proven));
+		assertMatch(truth('', touch), r -> !r.match(Proven));
+		// the syntax's own reading, every type indexed: the accessor's dispatch reaches the inherited implementation too
+		function syntax(base: String, spelled: Bool): ReachResult {
+			return ask(['Main.hx' => main], null, false, null, true, null, library('', base, spelled));
+		}
+		assertMatch(syntax('', true), r -> r.match(Proven));
+		assertMatch(syntax(touch, true), r -> !r.match(Proven));
+		assertMatch(syntax(touch, false), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-INDEX-ALTERNATE-DROPPED') @:killer('M-INDEX-ALTERNATE-MEMBERS')
+	public function testAPropertyOnlyAnotherBranchsDeclarationOfATypeGivesRunsItsAccessor(): Void {
+		// the first branch declares `Box.size` a plain field, the branch the build compiles a property whose getter changes
+		// `Main.items`: the index lists one `Box`, which must hold both readings. A type only the second branch declares,
+		// under a name of its own, was always listed
+		final box: String = '#if never_defined\nclass Box {\n\tpublic function new() {}\n\n\tpublic var size:Int = 0;\n}\n#else\n'
+			+ 'class Box {\n\tpublic function new() {}\n\n\tpublic var size(get, never):Int;\n\n'
+			+ '\tfunction get_size():Int {\n\t\tMain.items.push(1);\n\t\treturn 0;\n\t}\n}\n#end\n';
+		final crate: String = '#if never_defined\nclass Bag {}\n#else\nclass Crate {\n\tpublic function new() {}\n\n'
+			+ '\tpublic var size(get, never):Int;\n\n\tfunction get_size():Int {\n\t\tMain.items.push(1);\n\t\treturn 0;\n\t}\n}\n#end\n';
+		function read(type: String, declared: String): ReachResult {
+			final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tvar b:' + type + ' = new ' + type + '();\n'
+				+ '\t\tfor (i in 0...items.length) { /*<*/ var n:Int = b.size; /*>*/ }\n\t}\n}\n';
+			return ask(['Main.hx' => main, type + '.hx' => declared], null, false, null, true);
+		}
+		assertMatch(read('Box', box), r -> r.match(Reached(_)));
+		assertMatch(read('Crate', crate), r -> r.match(Reached(_)));
+	}
+
+	@:pin('control') @:killer('M-REACH-REWRITTEN-SOLE-SIMPLE')
+	public function testAMemberOnlyOneTypeOfItsNameDeclaresAsksThatTypesBuildMacroUnderTheTruth(): Void {
+		// `lib.Vec` and `other.Vec` share a simple name, and only `lib.Vec` declares `splice`, so the walk reads `Vec.splice`
+		// as `lib.Vec`'s without qualifying it (openfl's `Vector.splice` beside `haxe.ds.Vector`); `lib.Vec`'s build macro hands
+		// its fields back as they are, which its facts show. Asked by the simple name, the build macro is any `Vec`'s
+		final files: Map<String, String> = [
+			'Main.hx' => LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ lib.Vec.splice(1); /*>*/ }\n'
+				+ '\t\ttrace(new other.Vec());\n\t}\n}\n',
+			'lib/Vec.hx' => 'package lib;\n\n@:build(Mac.keep())\nclass Vec {\n\tpublic static function splice(n:Int):Int return n;\n}\n',
+			'other/Vec.hx' => 'package other;\n\nclass Vec {\n\tpublic function new() {}\n}\n',
+			'Mac.hx' => BUILD_MACROS
+		];
+		assertMatch(truthAsk(files), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-REACH-DEAD-NODE-ENTERED') @:killer('M-LIVE-FRAGMENTED')
+	public function testCodeNoBuildCompilesRunsNothingUnderTheTruth(): Void {
+		// `haxe_ver >= 4.2` is no define a build's set decides, so its `#else` stays live, and its call of `Dead.go` is an edge:
+		// but `Dead` is declared only where no build compiles, so the node runs nothing — not even a build macro of its own. A
+		// call no build compiles is none either when a directive nested in it splits its range (openfl's
+		// `untyped #if haxe4 js.Syntax.code #else __js__ #end (…)`)
+		final lib: String = 'class Lib {\n\tpublic static function run():Void {\n\t\t#if (haxe_ver >= 4.2)\n\t\tcalm();\n\t\t#else\n'
+			+ '\t\tDead.go();\n\t\t#end\n\t\t#if never_defined\n\t\tClearing.go(#if haxe4 1 #else 2 #end);\n\t\t#end\n\t}\n\n'
+			+ '\tstatic function calm():Void {}\n}\n\n'
+			+ '#if never_defined\n@:build(Nope.build())\nclass Dead {\n\tpublic static function go():Void {}\n}\n#end\n';
+		final clearing: String = 'class Clearing {\n\tpublic static function go(n:Int):Void Main.items.push(n);\n}\n';
+		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Lib.run(); /*>*/ }\n'
+			+ '\t\tClearing.go(0);\n\t}\n}\n';
+		assertMatch(truthAsk(['Main.hx' => main, 'Lib.hx' => lib, 'Clearing.hx' => clearing]), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-FACTS-SITE-OWNERS-NONE') @:killer('M-FACTS-SITE-CONVERSION-OWNERS-NONE')
+	@:killer('M-REACH-OWNED-TYPES-NONE') @:killer('M-REACH-OWNED-UNTYPED')
+	@:killer('M-REACH-OWNED-ESCAPES-KEPT')
+	public function testAnAdmittedConversionOfANameTwoTypesShareIsTheOperandsTypesUnderTheTruth(): Void {
+		// `a.Color` and `b.Color` share a simple name, so the graph folds both `toString`s into one node. The region converts a
+		// `b.Color`, concatenated or thrown: the facts name its type, so only `b.Color.toString` may run — never `a.Color`'s.
+		// A `Dynamic` operand may be either: its node is read by the name alone, every declaration of it, `a.Color`'s among
+		// them; and so may an operand of a type an instance of the other escaped into
+		function files(converting: String, aBody: String, bBody: String, ?more: String): Map<String, String> {
+			return [
+				'Main.hx' => 'import b.Color;\n\n' + LOOP_HEAD + '\tstatic var c:Color = new Color();\n\n'
+					+ '\tstatic function main() {\n\t\tvar other:a.Color = new a.Color();\n\t\tvar d:Dynamic = null;\n' + (more ?? '')
+					+ '\t\tfor (i in 0...items.length) { /*<*/ ' + converting + ' /*>*/ }\n\t}\n}\n',
+				'Helper.hx' => 'class Helper {\n\tpublic static function clear():Void Main.items.push(1);\n}\n',
+				'a/Color.hx' => 'package a;\n\nclass Color {\n\tpublic function new() {}\n\n\tpublic function toString():String {\n\t\t'
+					+ aBody + '\n\t\treturn "a";\n\t}\n}\n',
+				'b/Color.hx' => 'package b;\n\nclass Color {\n\tpublic function new() {}\n\n\tpublic function toString():String {\n\t\t'
+					+ bBody + '\n\t\treturn "b";\n\t}\n}\n'
+			];
+		}
+		// `a.Color.toString` changes the member through `Helper.clear`, so its folded node reaches a function that does
+		final clearing: String = 'Helper.clear();';
+		final concatenated: String = 'var s:String = "" + c;';
+		assertMatch(truthAsk(files(concatenated, clearing, '')), r -> r.match(Proven));
+		assertMatch(truthAsk(files('try throw c catch (e:haxe.Exception) {}', clearing, '')), r -> r.match(Proven));
+		assertMatch(truthAsk(files(concatenated, '', 'Main.items.push(1);')), r -> r.match(Reached(_)));
+		assertMatch(truthAsk(files('var s:String = "" + d;', clearing, '')), r -> r.match(Reached(_)));
+		assertMatch(truthAsk(files(concatenated, clearing, '', '\t\td = other;\n')), r -> !r.match(Proven));
+	}
+
 	@:pin('control') @:killer('M-TOUCH-TYPED-NEVER') @:killer('M-TOUCH-TYPED-SHAPE-NONE') @:killer('M-TOUCH-TYPED-CALL')
 	@:killer('M-TOUCH-TYPED-OWNER')
 	public function testATouchOnlyTheFactsSeeIsFoundUnderTheTruth(): Void {

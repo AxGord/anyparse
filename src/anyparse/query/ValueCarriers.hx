@@ -48,6 +48,12 @@ final class ValueCarriers {
 
 	private var _completeMemo: Null<Bool> = null;
 
+	/**
+	 * The types whose instances may have escaped the type system by their typed ids (`ValueEscapes.escapedIds`), where the
+	 * compiler facts say; null for any, or where they do not.
+	 */
+	public var escapedIds: () -> Null<Array<String>> = () -> null;
+
 	public function new(scope: ReachProject, complete: () -> Bool, escaped: () -> Null<Array<String>>, buildsListed: Bool) {
 		_scope = scope;
 		_complete = complete;

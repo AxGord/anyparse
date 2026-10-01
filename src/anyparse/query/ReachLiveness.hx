@@ -53,6 +53,9 @@ final class ReachLiveness {
 	/** File -> the spans of its conditional-compilation directives, read with `_dead`. */
 	private final _directives: Map<String, Array<Span>> = [];
 
+	/** File -> `_dead` and `_directives` together, ordered by start (`skippedOf`). */
+	private final _skipped: Map<String, Array<Span>> = [];
+
 	private final _plugin: GrammarPlugin;
 	private final _shape: RefShape;
 	private final _configurations: Array<ReachConfiguration>;
@@ -67,12 +70,19 @@ final class ReachLiveness {
 	public function forget(file: String): Void {
 		_dead.remove(file);
 		_directives.remove(file);
+		_skipped.remove(file);
 	}
 
-	/** Whether code at `span` of `file` (whose text is `source`) may be compiled by some configuration. */
+	/**
+	 * Whether code at `span` of `file` (whose text is `source`) may be compiled by some configuration: it holds code outside
+	 * every range none compiles and every directive (`holdsLiveCode`). A span lying across several such ranges — a call
+	 * whose arguments a nested `#if` splits — is no more live than one inside a single range.
+	 */
 	public function live(file: String, source: String, span: Null<Span>): Bool {
 		if (span == null || _configurations.length == 0) return true;
-		return deadOf(file, source).foreach(d -> !(span.from >= d.from && span.to <= d.to));
+		// an empty span holds no code of its own: it is where it sits
+		if (span.to <= span.from) return deadOf(file, source).foreach(d -> !(span.from >= d.from && span.to <= d.to));
+		return holdsLiveCode(file, source, span);
 	}
 
 	/**
@@ -81,8 +91,7 @@ final class ReachLiveness {
 	 */
 	public function holdsLiveCode(file: String, source: String, span: Span): Bool {
 		if (_configurations.length == 0) return true;
-		final skipped: Array<Span> = deadOf(file, source).concat(_directives[file] ?? []);
-		skipped.sort((a, b) -> a.from - b.from);
+		final skipped: Array<Span> = skippedOf(file, source);
 		var i: Int = span.from;
 		var si: Int = 0;
 		while (i < span.to) {
@@ -97,6 +106,18 @@ final class ReachLiveness {
 			i++;
 		}
 		return false;
+	}
+
+	/** The ranges of `file` no configuration compiles and its directives, ordered by their start; computed once. */
+	private function skippedOf(file: String, source: String): Array<Span> {
+		final held: Null<Array<Span>> = _skipped[file];
+		if (held != null) return held;
+		// `deadOf` reads the directives: asked first, before they are taken
+		final dead: Array<Span> = deadOf(file, source);
+		final skipped: Array<Span> = dead.concat(_directives[file] ?? []);
+		skipped.sort((a, b) -> a.from - b.from);
+		_skipped[file] = skipped;
+		return skipped;
 	}
 
 	private function deadOf(file: String, source: String): Array<Span> {

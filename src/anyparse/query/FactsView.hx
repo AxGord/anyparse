@@ -203,7 +203,8 @@ final class FactsView {
 	 * accessor, a literal construction — is a call or a construction the facts name, an edge of the graph. An operand the
 	 * facts show is an object of exactly its own class (`StringFact.exact`) makes its site `exact`. A conversion call's
 	 * argument is of the type a flow at exactly its range names (`conversionFlow`), and of any type otherwise: a leaf of
-	 * it of the parameter's own type records no flow. Null when the innermost graph node holding `span` — read as `node`
+	 * it of the parameter's own type records no flow. Each site names the typed type of each operand where the facts give
+	 * one (`ImplicitSite.owners`, `typedOwner`). Null when the innermost graph node holding `span` — read as `node`
 	 * when it is that one read as one type's member (`CallGraphFacts.qualify`) — is not faceted: the syntactic sites answer.
 	 */
 	public function sitesIn(g: CallGraph, file: String, span: Span, ?node: String): Null<Array<ImplicitSite>> {
@@ -220,7 +221,8 @@ final class FactsView {
 					family: Text,
 					span: s.at.span,
 					types: [simpleSource(s.operand)],
-					exact: s.exact
+					exact: s.exact,
+					owners: [typedOwner(s.operand)]
 				}
 		];
 		for (c in calls) {
@@ -232,16 +234,32 @@ final class FactsView {
 				family: Text,
 				span: c.at.span,
 				types: [argument == null ? null : simpleSource(argument.from)],
-				exact: argument?.exact == true
+				exact: argument?.exact == true,
+				owners: [argument == null ? null : typedOwner(argument.from)]
 			});
 		}
 		for (i in iterations) out.push({
 			family: Iteration,
 			span: i.at.span,
 			types: [simpleSource(i.iterated)],
-			exact: false
+			exact: false,
+			owners: [typedOwner(i.iterated)]
 		});
 		return out;
+	}
+
+	/**
+	 * The typed type a facts type string `type` names, seen through a wrapper that keeps its members (`Null<T>`): its id
+	 * (`pack.Name`) when the table holds it, null for any other type — a function or structure type, a type parameter, an
+	 * unknown, or a type no build typed.
+	 */
+	public function typedOwner(type: String): Null<String> {
+		final wrappers: Array<String> = _scope.shape.memberTransparentWrapperTypeNames ?? [];
+		var t: String = StringTools.trim(type);
+		while (t.endsWith('>') && wrappers.contains(CompilerFacts.baseId(t))) t = t.substring(t.indexOf('<') + 1, t.length - 1);
+		if (t.indexOf('?') >= 0 || t.indexOf('$') >= 0) return null;
+		final id: String = CompilerFacts.baseId(t);
+		return table.type(id) == null ? null : id;
 	}
 
 

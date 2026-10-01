@@ -28,6 +28,12 @@ using Lambda;
 private typedef GuardedNode = {
 	var node: QueryNode;
 	var guarded: Bool;
+
+	/**
+	 * True for a type declaration a conditional region of the file already declared the name of — another branch's
+	 * declaration of the same type, which `extractFileInfo` folds into the one listed (`withAlternate`).
+	 */
+	var ?alternate: Bool;
 };
 
 /**
@@ -249,7 +255,7 @@ final class SymbolIndexBuilder {
 				final aliasPath: Null<String> = aliasTargetPathOf(source, typeDecl, node, gn.guarded, typeSyntax);
 				final isAbstract: Bool = abstractKinds.contains(typeDecl.kind);
 				final paramNames: Array<String> = declTypeParams(typeParams, typeDecl);
-				types.push({
+				final info: TypeDeclInfo = {
 					name: typeDecl.name,
 					kind: typeDecl.kind,
 					span: typeDecl.fullSpan,
@@ -279,7 +285,13 @@ final class SymbolIndexBuilder {
 					underlyingRaw: underlyingPathOf(typeDecl.nameNode, isAbstract, gn.guarded),
 					guarded: gn.guarded,
 					forwardedMembers: pendingForwarded
-				});
+				};
+				// another branch's declaration of a type already listed is the same type in another build: folded into it
+				final listed: Null<Int> = gn.alternate == true ? lastIndexNamed(types, typeDecl.name) : null;
+				if (listed == null)
+					types.push(info)
+				else
+					types[listed] = withAlternate(types[listed], info);
 				pendingMeta = [];
 				pendingForwarded = null;
 				pendingExtern = false;
@@ -871,12 +883,15 @@ final class SymbolIndexBuilder {
 	 * class X {...} #else class X {...} #end` region yields TWO `ClassDecl X`
 	 * children even though no compilation ever sees more than one of them.
 	 * Indexing both would make `declaringFiles` (and `apq declares`) report an
-	 * ambiguity that does not exist, so `pushGuardedDecl` keeps the FIRST
-	 * declaration of a name and drops later same-named ones - the same
-	 * "first branch live, alternates raw" rule the grammar already applies to
-	 * split-header regions (`HxCondSharedBodyDecl`). Distinct names across
-	 * branches (`#if js class A {} #elseif cpp class B {} #else typedef C =
-	 * Int; #end`) are all kept.
+	 * ambiguity that does not exist, so `pushGuardedDecl` marks every later
+	 * same-named declaration an ALTERNATE, which `extractFileInfo` folds into
+	 * the first one's record (`withAlternate`): ONE type of the name, whose
+	 * members, supertypes and code-running metadata are what any branch
+	 * declares. Dropping the alternate lost those - a property with a getter,
+	 * a supertype, only the second branch writes was no part of the type, and
+	 * a call graph built on the index followed no accessor and no dispatch
+	 * there. Distinct names across branches (`#if js class A {} #elseif cpp
+	 * class B {} #else typedef C = Int; #end`) are all kept.
 	 */
 	private static function collectGuardedDecls(
 		node: QueryNode, source: String, out: Array<GuardedNode>, guardedNames: Array<String>, seenImports: Array<String>,
@@ -904,9 +919,9 @@ final class SymbolIndexBuilder {
 	): Void {
 		final decl: Null<TypeDeclMatch> = typeDeclAt(node);
 		if (decl != null) {
-			if (guardedNames.contains(decl.name)) return;
-			guardedNames.push(decl.name);
-			out.push({ node: node, guarded: true });
+			final alternate: Bool = guardedNames.contains(decl.name);
+			if (!alternate) guardedNames.push(decl.name);
+			out.push({ node: node, guarded: true, alternate: alternate });
 			return;
 		}
 		// A guarded leading meta: lift it so it reaches `extractFileInfo`'s meta run and attaches to
@@ -935,6 +950,68 @@ final class SymbolIndexBuilder {
 		if (key == null || seenImports.contains(key)) return;
 		seenImports.push(key);
 		out.push({ node: node, guarded: true });
+	}
+
+	/** The index in `types` of the last declaration named `name`, or null. */
+	private static function lastIndexNamed(types: Array<TypeDeclInfo>, name: String): Null<Int> {
+		var i: Int = types.length;
+		while (i-- > 0) if (types[i].name == name) return i;
+		return null;
+	}
+
+	/**
+	 * The record of the type `first` lists once another branch of a conditional region declares it as `alternate`: one type,
+	 * of the first's name, kind, span and type parameters, holding what either branch says. Its members are both lists,
+	 * a name both declare twice (`CallGraphTypes` joins them); its supertypes the union; what makes code run or a member
+	 * set unknowable (an extern, a build macro, reflection, a rebinding abstract) either's; what narrows (an anonymous
+	 * structure, a module-private name) both's; an alias or a forwarded underlying both spell alike, else none.
+	 */
+	private static function withAlternate(first: TypeDeclInfo, alternate: TypeDeclInfo): TypeDeclInfo {
+		final supertypes: Array<String> = first.supertypes.copy();
+		final raw: Array<String> = first.supertypesRaw.copy();
+		for (i in 0...alternate.supertypesRaw.length) if (!raw.contains(alternate.supertypesRaw[i])) {
+			raw.push(alternate.supertypesRaw[i]);
+			supertypes.push(alternate.supertypes[i]);
+		}
+		final forwarded: Null<Array<String>> = first.forwardedMembers;
+		final alsoForwarded: Null<Array<String>> = alternate.forwardedMembers;
+		final sameAlias: Bool = first.aliasTargetRaw == alternate.aliasTargetRaw;
+		return {
+			name: first.name,
+			kind: first.kind,
+			span: first.span,
+			isMain: first.isMain,
+			isPrivate: first.isPrivate && alternate.isPrivate,
+			isExtern: first.isExtern || alternate.isExtern,
+			typeParamArity: first.typeParamArity,
+			typeParamNames: first.typeParamNames,
+			supertypes: supertypes,
+			supertypesRaw: raw,
+			supertypesWritten: union(first.supertypesWritten, alternate.supertypesWritten),
+			interfaces: union(first.interfaces, alternate.interfaces),
+			isAnonStruct: first.isAnonStruct && alternate.isAnonStruct,
+			aliasTargetNominal: sameAlias ? first.aliasTargetNominal : null,
+			aliasTargetRaw: sameAlias ? first.aliasTargetRaw : null,
+			hasRtti: first.hasRtti || alternate.hasRtti,
+			hasBuild: first.hasBuild || alternate.hasBuild,
+			hasAutoBuild: first.hasAutoBuild || alternate.hasAutoBuild,
+			hasKeep: first.hasKeep || alternate.hasKeep,
+			constructsFromLiteral: first.constructsFromLiteral || alternate.constructsFromLiteral,
+			bringsExtensions: first.bringsExtensions || alternate.bringsExtensions,
+			members: first.members.concat(alternate.members),
+			abstractSelfRebind: first.abstractSelfRebind || alternate.abstractSelfRebind,
+			abstractForwardUnderlying: first.abstractForwardUnderlying == alternate.abstractForwardUnderlying
+				? first.abstractForwardUnderlying
+				: null,
+			underlyingRaw: first.underlyingRaw == alternate.underlyingRaw ? first.underlyingRaw : null,
+			guarded: true,
+			forwardedMembers: forwarded == null || alsoForwarded == null ? null : union(forwarded, alsoForwarded)
+		};
+	}
+
+	/** Every entry of `a`, then each of `b` it lacks. */
+	private static function union(a: Array<String>, b: Array<String>): Array<String> {
+		return a.concat([for (x in b) if (!a.contains(x)) x]);
 	}
 
 	/**
