@@ -1123,6 +1123,7 @@ class Codegen {
 		}
 		final close: String = p.close;
 		final closeLen: Int = close.length;
+		final docRefusal: Expr = docEndsLineRefusal(p, macro _start - $v{open.length});
 		return macro if (matchLit(ctx, $v{open})) {
 			final _start: Int = ctx.pos;
 			var _found: Bool = false;
@@ -1137,10 +1138,47 @@ class Codegen {
 				}
 				ctx.pos++;
 			}
-			if (_found) return ctx.input.substring(_start, _end);
+			if (_found) {
+				$docRefusal;
+				return ctx.input.substring(_start, _end);
+			}
 			ctx.pos = _savedPos;
 			return (null: Null<String>);
 		}
+	}
+
+	/**
+	 * The trailing-capture refusal of a DOCUMENTATION comment: a block token that opens with the format's doc opener
+	 * (`CommentPattern.docOpen`, Haxe `/**`) and is followed by nothing but horizontal whitespace up to its line end
+	 * documents the declaration on the NEXT line — the compiler attaches it there, whatever code precedes it on its
+	 * own line — so it is rewound and left for that element's leading capture. Read as a trailing comment, it stayed
+	 * glued to the previous element's last token (`} /** doc *\/`) and the writer reproduced that as canonical.
+	 *
+	 * Both conditions are positive: a doc followed by more code on its line (`f(a /** c *\/, b)`) is inline and keeps
+	 * its trailing slot, and a plain block comment ending a line is still the previous element's note. The empty
+	 * `/**\/` token shares its stars with the closer and documents nothing, so a token must be at least as long as
+	 * the doc opener plus the closer. `tokenStart` is the offset of the token's opener; `ctx.pos` sits past its closer.
+	 */
+	private static function docEndsLineRefusal(p: FormatReader.CommentPattern, tokenStart: Expr): Expr {
+		final docOpen: Null<String> = p.docOpen;
+		if (docOpen == null) return macro {};
+		final docLen: Int = docOpen.length;
+		final minLen: Int = docLen + p.close.length;
+		return macro {
+			final _tokStart: Int = $tokenStart;
+			if (ctx.pos - _tokStart >= $v{minLen} && ctx.input.substring(_tokStart, _tokStart + $v{docLen}) == $v{docOpen}) {
+				var _k: Int = ctx.pos;
+				while (_k < ctx.input.length) {
+					final _h: Int = ctx.input.charCodeAt(_k);
+					if (_h != ' '.code && _h != '\t'.code && _h != '\r'.code) break;
+					_k++;
+				}
+				if (_k >= ctx.input.length || ctx.input.charCodeAt(_k) == '\n'.code) {
+					ctx.pos = _savedPos;
+					return (null: Null<String>);
+				}
+			}
+		};
 	}
 
 	/**
@@ -1225,6 +1263,7 @@ class Codegen {
 			return ctx.input.substring(_start, ctx.pos);
 		}
 		final close: String = p.close;
+		final docRefusal: Expr = docEndsLineRefusal(p, macro _start);
 		return macro if (matchLit(ctx, $v{open})) {
 			final _start: Int = ctx.pos - $v{open.length};
 			var _found: Bool = false;
@@ -1239,7 +1278,10 @@ class Codegen {
 				}
 				ctx.pos++;
 			}
-			if (_found) return ctx.input.substring(_start, _end);
+			if (_found) {
+				$docRefusal;
+				return ctx.input.substring(_start, _end);
+			}
 			ctx.pos = _savedPos;
 			return (null: Null<String>);
 		}

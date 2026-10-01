@@ -750,6 +750,41 @@ class HxTriviaWriteTest extends Test {
 		Assert.equals('class C {\n\tfunction f() {\n\t\tvar x = [\n\t\t\t\'A\',\n\t\t\t\'B\'\n\t\t];\n\t\treturn x;\n\t}\n}\n', out);
 	}
 
+	/**
+	 * A `/**` doc ending its line after code documents the declaration on the NEXT line — the compiler attaches it there
+	 * — so it is that declaration's leading trivia, on its own line. Read as the previous type's trailing comment it
+	 * stayed glued to the closing brace (`} /** doc *\/`), and `fmt` called that canonical.
+	 */
+	public function testDocEndingItsLineAfterATypeLeadsTheNextType(): Void {
+		assertRoundtrip('class A {} /** Doc of B. */\nclass B {}', 'class A {}\n\n/** Doc of B. */\nclass B {}\n');
+		assertRoundtrip(
+			'typedef A = {\n\tvar a:Int;\n} /** Doc of B. */\nclass B {}',
+			'typedef A = {\n\tvar a:Int;\n}\n\n/** Doc of B. */\nclass B {}\n'
+		);
+	}
+
+	/** The same at member level: the doc after `var x:Int;` documents `y`. */
+	public function testDocEndingItsLineAfterAMemberLeadsTheNextMember(): Void {
+		assertRoundtrip(
+			'class A {\n\tvar x:Int; /** Doc of y. */\n\tvar y:Int;\n}', 'class A {\n\tvar x:Int;\n\n\t/** Doc of y. */\n\tvar y:Int;\n}\n'
+		);
+	}
+
+	/** The relocated doc is a fixed point: a second pass leaves the first pass's output alone. */
+	public function testDocEndingItsLineSettlesInOnePass(): Void {
+		final once: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse('class A {} /** Doc of B. */\nclass B {}'));
+		Assert.equals(once, HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(once)));
+	}
+
+	/**
+	 * Where the doc rule does NOT fire, by each of its two conditions: a doc with more code after it on its line is inline and keeps its
+	 * trailing slot, and a PLAIN block comment ending a line is still the previous declaration's note.
+	 */
+	public function testInlineDocAndPlainBlockKeepTheirTrailingSlot(): Void {
+		assertRoundtrip('class C {\n\tvar x = f(a /** c */, b);\n}');
+		assertRoundtrip('class A {} /* plain */\nclass B {}');
+	}
+
 	private function assertRoundtrip(source: String, ?expected: String): Void {
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out: String = HaxeModuleTriviaWriter.write(ast);

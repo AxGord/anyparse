@@ -10,7 +10,14 @@ import anyparse.format.Format;
  */
 typedef BlockCommentDelims = {
 	open: String,
-	close: String
+	close: String,
+
+	/**
+	 * The opener of a DOCUMENTATION comment spelled with these delimiters (Haxe `/**`), absent when the format has
+	 * none. A doc documents the declaration that FOLLOWS it, so a doc ending its line after code is the next
+	 * element's leading trivia, never the previous element's trailing comment (`FormatReader.CommentPattern.docOpen`).
+	 */
+	?doc: String
 };
 
 /**

@@ -181,9 +181,15 @@ final class AddElement {
 		// defect in the other direction.
 		final before: Int = ElementSpan.docExtendedSpan(source, span, plugin.lexicalRegions(source), true).from;
 		final after: Int = ElementSpan.docExtendedSpan(source, new Span(span.to, span.to), plugin.lexicalRegions(source), true).from;
+		// The new element must end its own line whichever side of a line break the `After` offset lands
+		// on. Right after the target's last token (a member's tight span) the break goes first; at the
+		// START of a line — the next declaration's doc, or its first token where a module-level span is
+		// greedy — the element goes first and the break after it, so what followed (that doc above all)
+		// stays at the start of a line instead of trailing the element's last token: `} /** doc *\/`.
+		final afterText: String = SourceText.startsItsLine(source, after) ? '$trimmed\n' : '\n$trimmed';
 		final edit: { span: Span, text: String } = switch side {
 			case After:
-				{ span: new Span(after, after), text: isComma ? ', $trimmed' : '\n$trimmed' };
+				{ span: new Span(after, after), text: isComma ? ', $trimmed' : afterText };
 			case Before:
 				{ span: new Span(before, before), text: isComma ? '$trimmed, ' : '$trimmed\n' };
 		};
