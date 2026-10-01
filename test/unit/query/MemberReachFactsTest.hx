@@ -679,12 +679,85 @@ class MemberReachFactsTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-ESCAPES-FACTS-PROJECT-NATIVE')
-	public function testProjectTargetCodeLetsAnyValueEscapeUnderTheTruth(): Void {
-		assertMatch(truthLibAsk('js.Syntax.code("0");', 'throw last;'), r -> !r.match(Proven));
+	@:pin('control') @:killer('M-ESCAPES-FACTS-NATIVE-REFUSED')
+	public function testTargetCodeNamingNoValueLetsNothingEscapeUnderTheTruth(): Void {
+		// target code reaches only what it is handed: project code holding some leaves the escapes known
+		assertMatch(truthLibAsk('js.Syntax.code("console.log(1)");', 'throw last;'), r -> r.match(Proven));
+		assertMatch(truthLibAsk('js.Syntax.code("console.log({0})", 1);', 'throw last;'), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-ESCAPES-FACTS-TRACE') @:killer('M-ESCAPES-TRUTH-FACTS')
+	@:pin('control') @:killer('M-ESCAPES-FACTS-NATIVE-LOCALS') @:killer('M-FACTS-NATIVE-CODE')
+	public function testTargetCodeHandedAValueLetsItEscapeUnderTheTruth(): Void {
+		// an argument the code's placeholder takes, and a local its text names
+		assertMatch(truthLibAsk('js.Syntax.code("console.log({0})", o);', 'throw last;'), r -> !r.match(Proven));
+		assertMatch(truthLibAsk('var kept:Obj = o;\n\t\tjs.Syntax.code("console.log(kept)");', 'throw last;'), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-ESCAPES-FACTS-NATIVE-THIS') @:killer('M-ESCAPES-FACTS-NATIVE-MEMBERS')
+	@:killer('M-ESCAPES-FACTS-NATIVE-THIS-ALWAYS')
+	public function testTargetCodeNamingThisLetsItsObjectEscapeUnderTheTruth(): Void {
+		// a `Holder` holds `o`: code in its method naming `this`, or a member hxcpp reaches unqualified, hands it; code naming
+		// neither does not
+		function holder(code: String): Map<String, String> {
+			return [
+				'Holder.hx' => 'class Holder {\n\tvar held:Main.Obj;\n\n\tpublic function new(o:Main.Obj) this.held = o;\n\n'
+					+ '\tpublic function show():Void js.Syntax.code("' + code + '");\n}\n'
+			];
+		}
+		assertMatch(truthLibAsk('new Holder(o).show();', 'throw last;', holder('console.log(this)')), r -> !r.match(Proven));
+		assertMatch(truthLibAsk('new Holder(o).show();', 'throw last;', holder('console.log(held)')), r -> !r.match(Proven));
+		assertMatch(truthLibAsk('new Holder(o).show();', 'throw last;', holder('console.log(1)')), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-ESCAPES-FACTS-NATIVE-STATICS') @:killer('M-ESCAPES-FACTS-NATIVE-OWN-STATICS')
+	@:killer('M-ESCAPES-FACTS-NATIVE-STATIC-CLASS')
+	public function testTargetCodeNamingAStaticLetsWhatItHoldsEscapeUnderTheTruth(): Void {
+		// a static is named by its name beside its class's, or alone in its own class's code
+		final store: Map<String, String> = [
+			'Store.hx' => 'class Store {\n\tpublic static var kept:Main.Obj;\n\n'
+				+ '\tpublic static function show():Void js.Syntax.code("console.log(kept)");\n}\n'
+		];
+		final quiet: Map<String, String> = ['Store.hx' => 'class Store {\n\tpublic static var kept:Main.Obj;\n}\n'];
+		assertMatch(
+			truthLibAsk('Store.kept = o;\n\t\tjs.Syntax.code("console.log(Store.kept)");', 'throw last;', quiet), r -> !r.match(Proven)
+		);
+		assertMatch(truthLibAsk('Store.kept = o;\n\t\tStore.show();', 'throw last;', store), r -> !r.match(Proven));
+		// in `Main`'s code, a `kept` alone is none of `Store`'s
+		assertMatch(truthLibAsk('Store.kept = o;\n\t\tjs.Syntax.code("console.log(kept)");', 'throw last;', quiet), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-ESCAPES-FACTS-CODE-META') @:killer('M-FACTS-CODE-META') @:killer('M-ESCAPES-FACTS-NATIVE-COMPUTED')
+	public function testTargetCodeAMetadataPastesIsReadLikeACallsUnderTheTruth(): Void {
+		// `@:functionCode` pastes its text around the method's body: naming `this` hands it, and a text no literal gives may
+		// name anything
+		function holder(meta: String): Map<String, String> {
+			return [
+				'Holder.hx' => 'class Holder {\n\tvar held:Main.Obj;\n\n\tpublic function new(o:Main.Obj) this.held = o;\n\n'
+					+ '\t@:functionCode(' + meta + ')\n\tpublic function show():Void {}\n}\n'
+			];
+		}
+		assertMatch(truthLibAsk('new Holder(o).show();', 'throw last;', holder('"this"')), r -> !r.match(Proven));
+		assertMatch(truthLibAsk('new Holder(o).show();', 'throw last;', holder('CODE')), r -> !r.match(Proven));
+		assertMatch(truthLibAsk('new Holder(o).show();', 'throw last;', holder('"1"')), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-ESCAPES-FACTS-NATIVE-LOCALS')
+	@:access(anyparse.query.MemberReach)
+	public function testLibraryTargetCodeIsReadLikeTheProjectsUnderTheTruth(): Void {
+		// `keep`'s code names its parameter, which the call binds to an `Obj`: one assumption for the libraries and the project
+		final library: Map<String, String> = plainText('throw last;');
+		library['lib/Text.hx'] = StringTools.replace(
+			library['lib/Text.hx'] ?? '', 'keep<A>(x:A):Void {}', 'keep<A>(x:A):Void js.Syntax.code("console.log(x)");'
+		);
+		final files: Map<String, String> = escapingObj('');
+		final result: ReachResult = withReach(files, null, true, false, null, library, null, true, (reach, dir) -> {
+			Assert.isTrue(reach._scope.facts?.truth == true, 'the fixture did not compile');
+			reach.mayReach(Region(Path.join([dir, 'Main.hx']), regionOf(files['Main.hx'] ?? '')), { owner: 'Main', name: 'items' }, Mutate);
+		});
+		assertMatch(result, r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-ESCAPES-FACTS-NATIVE-REFUSED') @:killer('M-ESCAPES-TRUTH-FACTS')
 	public function testATraceTheTargetLowersLetsOnlyWhatItIsHandedEscapeUnderTheTruth(): Void {
 		// js lowers `trace` to a native identifier, which makes nothing: the escapes stay known
 		assertMatch(truthLibAsk('trace(1);', 'throw last;'), r -> r.match(Proven));
@@ -728,6 +801,14 @@ class MemberReachFactsTest extends Test {
 				+ '\tpublic function toString():String {\n\t\tMain.items = [];\n\t\treturn "k";\n\t}\n}\n'
 		];
 		assertMatch(truthLibAsk('var b:Base = new Kid();\n\t\tvar d:Dynamic = b;', 'throw last;', kid), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-ESCAPES-FACTS-ABSTRACT-REFUSED')
+	public function testACoreTypeAsAValueHoldsNothingUnderTheTruth(): Void {
+		// the interpreter hands `Int` itself to `Std.isOfType`, typed `Abstract<Int>`: a core type with no implementation class
+		// holds no static, so the escapes stay known
+		final isInt: String = 'var n:Int = 1;\n\t\tvar isInt:Bool = Std.isOfType(n, Int);';
+		assertMatch(truthLibAsk(isInt, 'throw last;', null, INTERP_BUILD), r -> r.match(Proven));
 	}
 
 	@:pin('control') @:killer('M-FACTS-STRING-EXACT') @:killer('M-REACH-EXACT-SITE') @:killer('M-FACTS-VIEW-EXACT')
@@ -1392,6 +1473,21 @@ class MemberReachFactsTest extends Test {
 			reflectAsk(fixture('new Third().calm', read + '\n\t\tReflect.field(o, n);'), true), r -> r.match(Unknown(DynamicName(_, _)))
 		);
 		assertMatch(reflectAsk(fixture('new Third().calm')), r -> r.match(Unknown(DynamicName(_, _))));
+	}
+
+	@:pin('control') @:killer('M-METHODS-NATIVE-REFUSED')
+	public function testProjectTargetCodeKeepsThisBoundUnderTheTruth(): Void {
+		// target code obtains a method's value only through the reflection the facts record: project code holding some still
+		// answers that `Other.dump`, which no code reads as a value, runs on an `Other`
+		final main: String = 'class Main {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n'
+			+ '\tstatic function sink(x:Dynamic):Void {}\n\tstatic function main() { sink(new Main()); }\n'
+			+ '\tfunction f(n:String):Void {\n\t\tvar o:Other = new Other();\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ o.dump(n); /*>*/ }\n\t}\n}\n'
+			+ 'class Other {\n\tpublic function new() {}\n\n\tpublic function dump(n:String):Void Reflect.setProperty(this, n, null);\n}\n'
+			+ 'class Third {\n\tpublic function new() {}\n\n\tpublic function calm():Void {}\n}\n'
+			+ 'class Rebind {\n\tpublic static function run():Void Reflect.callMethod(new Main(), new Third().calm, ["items"]);\n}\n'
+			+ 'class Nat {\n\tpublic static function go():Void untyped __js__("1");\n}\n';
+		assertMatch(reflectAsk(['Main.hx' => main], true), r -> r.match(Proven));
 	}
 
 	@:pin('control') @:killer('M-METHODS-REBINDS') @:killer('M-METHODS-METHOD-ONLY')

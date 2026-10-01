@@ -504,8 +504,10 @@ final class TypedFactsMacro {
 	}
 
 	/**
-	 * The metadata names, and `builds`: the macro calls of `@:build`/`@:autoBuild`/`@:genericBuild`, printed — code that
-	 * runs at compile time over the type. A `macro` field (`k: "macro"`) is always reachable from outside the program.
+	 * The metadata names; `builds`, the macro calls of `@:build`/`@:autoBuild`/`@:genericBuild`, printed — code that runs at
+	 * compile time over the type; and `code`, the argument of each metadata pasting target code into the output
+	 * (`TypedFactsShapes.CODE_METAS`), null for one that is no string literal. A `macro` field (`k: "macro"`) is always
+	 * reachable from outside the program.
 	 */
 	private static function metaList(meta: Array<MetadataEntry>): String {
 		if (meta.length == 0) return '';
@@ -513,7 +515,15 @@ final class TypedFactsMacro {
 			for (m in meta) if (m.name == ':build' || m.name == ':autoBuild' || m.name == ':genericBuild')
 				for (p in m.params ?? []) q(haxe.macro.ExprTools.toString(p))
 		];
-		return ',"meta":' + arr([for (m in meta) q(m.name)]) + (builds.length == 0 ? '' : ',"builds":' + arr(builds));
+		final code: Array<String> = [
+			for (m in meta) if (TypedFactsShapes.CODE_METAS.contains(m.name)) for (p in m.params ?? []) switch p.expr {
+				case EConst(CString(s, _)): Json.stringify(s);
+				case _: 'null';
+			}
+		];
+		return ',"meta":' + arr([for (m in meta) q(m.name)]) + (builds.length == 0 ? '' : ',"builds":' + arr(builds)) + (
+			code.length == 0 ? '' : ',"code":' + arr(code)
+		);
 	}
 
 	/** Whether the method `f` may declare a parameter named `name`: it does, or its type is no function type. */

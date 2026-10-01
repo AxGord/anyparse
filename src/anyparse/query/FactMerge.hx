@@ -20,6 +20,7 @@ final class FactMerge {
 	public static function type(into: TypeFact, from: TypeFact): Void {
 		fields(into.fields, from.fields);
 		for (m in from.meta) if (!into.meta.contains(m)) into.meta.push(m);
+		absent(into.code, from.code);
 		absent(into.interfaces, from.interfaces);
 		absent(into.targets, from.targets);
 		absent(into.underlying, from.underlying);
@@ -40,6 +41,7 @@ final class FactMerge {
 				for (k in f.kinds) if (!known.kinds.contains(k)) known.kinds.push(k);
 				if (!known.types.contains(f.type)) known.types.push(f.type);
 				for (n in f.overloads) if (!known.overloads.contains(n)) known.overloads.push(n);
+				absent(known.code, f.code);
 			}
 		}
 	}

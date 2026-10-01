@@ -437,6 +437,22 @@ still judge what they cover. `defines` go ahead of `--each`, so every `--next` a
 of the hxml sees them. Full contract: `docs/testing.md` § "The oracle answers for
 what it COMPILED, not for what you linted".
 
+**What the member-reach analysis assumes.** With `reachConfigurationsComplete`
+the member-reach analysis behind the loop rewrites reads the compilers' facts as
+the truth, and it states two assumptions about the code no fact describes, one for
+the project and the libraries alike. Target-language code — `__cpp__` / `__js__`,
+`*.Syntax.code`, the code `@:functionCode` / `@:cppFileCode` / `@:headerClassCode` /
+… paste, a native identifier — reaches only the values handed to it: its arguments
+(`{0}` placeholders) and what its text names — a local or parameter by its name,
+the object its method runs on by a spelling of `this` or the name of one of its
+members (hxcpp reaches one unqualified), a static variable by its name beside its
+class's or alone in its own class's code — and it makes an instance of a program
+class only through the reflective producers its callers name. And it reaches a
+member by a computed name, or runs a function with a receiver it is handed, only
+inside the reflection whose call sites the facts record. Target code whose text is
+computed rather than a string literal leaves the analysis without an answer, and
+so does a class value made from a name computed at run time (`Type.resolveClass(name)`).
+
 A top-level `"compilerOracleServer"` (boolean, default `false`) moves the
 REPORT-mode oracle onto a WARM Haxe compilation server shared by every `apq`
 process on the machine, instead of a fresh compile per run. The first lint

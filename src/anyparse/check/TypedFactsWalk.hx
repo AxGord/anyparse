@@ -715,8 +715,10 @@ final class TypedFactsWalk {
 				final targetName: String = declaring == null ? access.field : '$declaring.${access.field}';
 				if (access.kind == 'FStatic' && declaring != null && TypedFactsShapes.REFLECTION_CLASSES.contains(declaring))
 					reflection(targetName, args, where);
-				if (access.kind == 'FStatic' && declaring != null && TypedFactsShapes.SYNTAX_CLASSES.contains(declaring))
-					add('native', '{"w":"syntax","n":${q(targetName)},"p":$where}');
+				if (access.kind == 'FStatic' && declaring != null && TypedFactsShapes.SYNTAX_CLASSES.contains(declaring)) {
+					final code: String = TypedFactsShapes.nativeCode(args, TypedFactsShapes.SYNTAX_CODE_MEMBERS.contains(access.field));
+					add('native', '{"w":"syntax","n":${q(targetName)},"p":$where$code}');
+				}
 				walkReceiver(receiver, Call(access.field));
 				instantiated(fa, callee.t, callee.pos);
 				switch fa {
@@ -739,7 +741,8 @@ final class TypedFactsWalk {
 			case TLocal(v) if (_locals.exists(v.id)):
 				'{"t":${q(_locals[v.id] ?? '')},"a":"local",$head}';
 			case TIdent(identifier):
-				add('native', '{"w":"ident","n":${q(identifier)},"p":$where}');
+				final code: String = TypedFactsShapes.nativeCode(args, TypedFactsShapes.CODE_INTRINSICS.contains(identifier));
+				add('native', '{"w":"ident","n":${q(identifier)},"p":$where$code}');
 				'{"t":${q(identifier)},"a":"ident",$head}';
 			case _:
 				walk(callee);

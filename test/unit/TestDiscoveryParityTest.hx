@@ -2587,6 +2587,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-TEXT-CONVERSION-CALL',
 			'unit.query.MemberReachFactsTest#testAConvertedValueOfTheParametersOwnTypeMayBeAnyObjectUnderTheTruth :: control :: '
 				+ 'M-FACTS-CALL-OPERAND-LEAF',
+			'unit.query.MemberReachFactsTest#testACoreTypeAsAValueHoldsNothingUnderTheTruth :: control :: M-ESCAPES-FACTS-ABSTRACT-REFUSED',
 			'unit.query.MemberReachFactsTest#testAFieldInitializerIsReadThroughItsFactsUnderTheTruth :: control :: '
 				+ 'M-GRAPH-INIT-RECORD,M-FACTS-VIEW-INIT-FACETED',
 			'unit.query.MemberReachFactsTest#testAFieldReadJoinedAcrossTwoGettersInACallbackIsItsTextUnderTheTruth :: control :: '
@@ -2693,7 +2694,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testATouchThroughAnInferredReceiverIsTypedByTheCompiler :: control :: '
 				+ 'M-FACTS-REACH-TOUCH-TYPED',
 			'unit.query.MemberReachFactsTest#testATraceTheTargetLowersLetsOnlyWhatItIsHandedEscapeUnderTheTruth :: control :: '
-				+ 'M-ESCAPES-FACTS-TRACE,M-ESCAPES-TRUTH-FACTS',
+				+ 'M-ESCAPES-FACTS-NATIVE-REFUSED,M-ESCAPES-TRUTH-FACTS',
 			'unit.query.MemberReachFactsTest#testATypeBringingExtensionsInUnderAConditionIsReadFromTheListedBuilds :: control :: '
 				+ 'M-FACTS-TRUTH-CONTEXT',
 			'unit.query.MemberReachFactsTest#testATypeBringingExtensionsInUnderAConditionIsUnknown :: control :: '
@@ -2720,6 +2721,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-TEXT-JOINED-SITE',
 			'unit.query.MemberReachFactsTest#testAWriteTheCompilerSeesStoringOnlyFreshValuesLetsNothingEscape :: control :: '
 				+ 'M-TOUCH-TYPED-FRESH,M-TOUCH-TYPED-SYNTAX-TOO',
+
 			'unit.query.MemberReachFactsTest#testAnAbstractsConversionAnInterpolationCallsIsItsTextUnderTheTruth :: control :: '
 				+ 'M-FACTS-TEXT-CONVERTS',
 			'unit.query.MemberReachFactsTest#testAnAbstractsInlineConstructorIsItsTextUnderTheTruth :: control :: M-FACTS-DECLARATION-RUN',
@@ -2780,10 +2782,21 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-ADMIT-SYNTAX-READ-UNTRUE',
 			'unit.query.MemberReachFactsTest#testLibraryCodeNotReadYetMayRunAnyOperatorOverloadUnderTheTruth :: control :: '
 				+ 'M-ADMIT-SYNTAX-READ-UNSEEN,M-REACH-UNREAD-RECHECK',
+			'unit.query.MemberReachFactsTest#testLibraryTargetCodeIsReadLikeTheProjectsUnderTheTruth :: control :: '
+				+ 'M-ESCAPES-FACTS-NATIVE-LOCALS',
 			'unit.query.MemberReachFactsTest#testOnlyTheProjectTypeAFactCallsTouchesUnderTheTruth :: control :: '
 				+ 'M-REACH-QUALIFIED-NONE,M-REACH-QUALIFIED-SIMPLE-TOUCH,M-TOUCH-SCAN-NODE-UNRECORDED,M-FACTS-QUALIFIED-ANY-DECLARATION,M-REACH-QUALIFIED-ESCAPE',
-			'unit.query.MemberReachFactsTest#testProjectTargetCodeLetsAnyValueEscapeUnderTheTruth :: control :: '
-				+ 'M-ESCAPES-FACTS-PROJECT-NATIVE',
+			'unit.query.MemberReachFactsTest#testProjectTargetCodeKeepsThisBoundUnderTheTruth :: control :: M-METHODS-NATIVE-REFUSED',
+			'unit.query.MemberReachFactsTest#testTargetCodeAMetadataPastesIsReadLikeACallsUnderTheTruth :: control :: '
+				+ 'M-ESCAPES-FACTS-CODE-META,M-FACTS-CODE-META,M-ESCAPES-FACTS-NATIVE-COMPUTED',
+			'unit.query.MemberReachFactsTest#testTargetCodeHandedAValueLetsItEscapeUnderTheTruth :: control :: '
+				+ 'M-ESCAPES-FACTS-NATIVE-LOCALS,M-FACTS-NATIVE-CODE',
+			'unit.query.MemberReachFactsTest#testTargetCodeNamingAStaticLetsWhatItHoldsEscapeUnderTheTruth :: control :: '
+				+ 'M-ESCAPES-FACTS-NATIVE-STATICS,M-ESCAPES-FACTS-NATIVE-OWN-STATICS,M-ESCAPES-FACTS-NATIVE-STATIC-CLASS',
+			'unit.query.MemberReachFactsTest#testTargetCodeNamingNoValueLetsNothingEscapeUnderTheTruth :: control :: '
+				+ 'M-ESCAPES-FACTS-NATIVE-REFUSED',
+			'unit.query.MemberReachFactsTest#testTargetCodeNamingThisLetsItsObjectEscapeUnderTheTruth :: control :: '
+				+ 'M-ESCAPES-FACTS-NATIVE-THIS,M-ESCAPES-FACTS-NATIVE-MEMBERS,M-ESCAPES-FACTS-NATIVE-THIS-ALWAYS',
 			'unit.query.MemberReachFactsTest#testTheArraysOwnMethodReachesItsElementsOnlyByConvertingThemUnderTheTruth :: control :: '
 				+ 'M-REACH-ARRAY-OWN,M-REACH-ARRAY-ELEMENTS,M-REACH-EXTERN-FACTS-TYPE,M-REACH-ARRAY-VALUES',
 			'unit.query.MemberReachFactsTest#testTheCompilerResolvesACallTheSyntaxCannot :: control :: M-FACTS-REACH-EDGES',
@@ -4164,8 +4177,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-ESCAPES-FACTS-CLOSURE',
 			'M-ESCAPES-FACTS-DYNAMIC-RECEIVER',
 			'M-ESCAPES-FACTS-PRODUCED',
-			'M-ESCAPES-FACTS-PROJECT-NATIVE',
-			'M-ESCAPES-FACTS-TRACE',
+
 			'M-ESCAPES-FACTS-INSTANCES',
 			'M-ESCAPES-FACTS-PARAMETER',
 			'M-ESCAPES-FACTS-GENERIC-METHOD',
@@ -4602,7 +4614,21 @@ class TestDiscoveryParityTest extends Test {
 			'M-REACH-EXTERN-FACTS-TYPE',
 			'M-REACH-SHARED-OWNERS',
 			'M-GRAPH-INIT-RECORD',
-			'M-FACTS-VIEW-INIT-FACETED'
+			'M-FACTS-VIEW-INIT-FACETED',
+			'M-ESCAPES-FACTS-NATIVE-REFUSED',
+			'M-ESCAPES-FACTS-NATIVE-COMPUTED',
+			'M-ESCAPES-FACTS-NATIVE-LOCALS',
+			'M-ESCAPES-FACTS-NATIVE-THIS',
+			'M-ESCAPES-FACTS-NATIVE-MEMBERS',
+			'M-ESCAPES-FACTS-NATIVE-THIS-ALWAYS',
+			'M-ESCAPES-FACTS-NATIVE-STATICS',
+			'M-ESCAPES-FACTS-NATIVE-OWN-STATICS',
+			'M-ESCAPES-FACTS-NATIVE-STATIC-CLASS',
+			'M-ESCAPES-FACTS-CODE-META',
+			'M-FACTS-NATIVE-CODE',
+			'M-FACTS-CODE-META',
+			'M-METHODS-NATIVE-REFUSED',
+			'M-ESCAPES-FACTS-ABSTRACT-REFUSED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
@@ -4765,6 +4791,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-REFL-RECEIVER :: anyparse.check.TypedFactsWalk#reflection',
 			'M-FACTS-REFL-SELF :: anyparse.check.TypedFactsWalk#reflection',
 			'M-FACTS-REFL-EXACT :: anyparse.check.TypedFactsWalk#reflection',
+			'M-FACTS-NATIVE-CODE :: anyparse.check.TypedFactsShapes#nativeCode',
+			'M-FACTS-CODE-META :: anyparse.check.TypedFactsMacro#metaList',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 
