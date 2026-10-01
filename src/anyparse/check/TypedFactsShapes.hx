@@ -1,6 +1,7 @@
 package anyparse.check;
 
 #if macro
+import haxe.Json;
 import haxe.macro.Type;
 import haxe.macro.TypeTools;
 import haxe.macro.TypedExprTools;
@@ -23,8 +24,55 @@ final class TypedFactsShapes {
 		'eval.Syntax'
 	];
 
+	/** The `*.Syntax` members that paste their first argument into the output as target code. */
+	public static final SYNTAX_CODE_MEMBERS: Array<String> = ['code', 'plainCode'];
+
+	/** The target intrinsics whose first argument is target code pasted into the output. */
+	public static final CODE_INTRINSICS: Array<String> = [
+		'__cpp__',
+		'__js__',
+		'__php__',
+		'__python__',
+		'__lua__',
+		'__java__',
+		'__cs__',
+		'__hl__'
+	];
+
+	/** The metadata whose argument is target code pasted into the output: a field's, around its body, or a type's. */
+	public static final CODE_METAS: Array<String> = [
+		':functionCode',
+		':functionTailCode',
+		':cppFileCode',
+		':cppNamespaceCode',
+		':headerCode',
+		':headerClassCode',
+		':headerNamespaceCode',
+		':classCode'
+	];
+
 	/** The classes whose members are reflection, called or read as a value. */
 	public static final REFLECTION_CLASSES: Array<String> = ['Reflect', 'Type'];
+
+	/**
+	 * The target code a native call with the arguments `args` pastes into the output, as the tail of its `native` fact:
+	 * `c`, the text of its first argument when that is a string literal; `cc` when the call carries code (`carrying`) whose
+	 * text is computed; nothing for a call that carries none — a target function handed its arguments.
+	 */
+	public static function nativeCode(args: Array<TypedExpr>, carrying: Bool): String {
+		final text: Null<String> = args.length == 0 ? null : literalText(args[0]);
+		if (text != null) return ',"c":' + Json.stringify(text);
+		return carrying ? ',"cc":true' : '';
+	}
+
+	/** The text of `e` when it is a string literal, through parentheses, metadata and an unchecked cast; null otherwise. */
+	public static function literalText(e: TypedExpr): Null<String> {
+		return switch e.expr {
+			case TConst(TString(s)): s;
+			case TParenthesis(inner) | TMeta(_, inner) | TCast(inner, null): literalText(inner);
+			case _: null;
+		};
+	}
 
 	/** The package of the class every exception the language throws as it is extends (`isException`). */
 	private static inline final EXCEPTION_PACKAGE: String = 'haxe';

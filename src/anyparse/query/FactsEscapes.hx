@@ -25,6 +25,7 @@ using StringTools;
  *   which no fact describes, may keep it and give it back untyped;
  * - it is the receiver of a method read as a value, which the bound function carries, or of a field reached by name
  *   (untyped code), which may be any of its fields;
+ * - target-language code names it (`FactsNativeReach`, the stated assumption below);
  * - it is an instance of a class a class-value producer names (`producer`, `Type.resolveClass`): a literal name names one
  *   class, a computed name — or the producer read as a value — any;
  * - it is an instance of a class extending an extern class, whose target code runs with it as its own `this`.
@@ -32,17 +33,25 @@ using StringTools;
  * What an escaped value holds escapes with it (`escapeType`): its type arguments, which an extern container's target code
  * keeps; each subtype of its class, which it may be; every variable each declares, static and instance, at the type
  * arguments the value is written with; an abstract's underlying value, a typedef's target, an enum value's constructor
- * arguments, a structure's fields, the instances a reflective call makes of a class or an enum as a value. A value of a
- * type parameter is of a type some instantiation binds it to (`instances`): a type written with arguments, or the
- * instantiation the compiler chose for a generic method. A function value holds no object a name reaches.
+ * arguments, a structure's fields, the instances a reflective call makes of a class or an enum as a value, the statics of
+ * an abstract as a value (its implementation class's). A value of a type parameter is of a type some instantiation binds
+ * it to (`instances`): a type written with arguments, or the instantiation the compiler chose for a generic method. A
+ * function value holds no object a name reaches.
  *
  * A value typed by nothing (`?`) came through untyped code: a field reached by name on a receiver, which escapes then, or
- * target code. Null — any instance may be anywhere — when a fact needed is lost (a node no text places, `stale-foreign`),
- * a reflective body was spliced in that may produce a class value (`reflection-inlined`, which loses the call and the
- * name it was handed), project code holds target-language code (`native`; a lowered `trace` is none), or an escaping
- * value's type says nothing of what it holds: a type no build typed, a type string that does not read, a type parameter
- * an instantiation leaves unknown. The stated assumption: library target code reaches no program object it was not
- * handed, and makes an instance of a program class only through the producers its callers name.
+ * target code, which gives back only what it was handed. Null — any instance may be anywhere — when a fact needed is lost
+ * (a node no text places, `stale-foreign`), a reflective body was spliced in that may produce a class value
+ * (`reflection-inlined`, which loses the call and the name it was handed), target-language code has a text computed at run
+ * time, or an escaping value's type says nothing of what it holds: a type no build typed, a type string that does not
+ * read, a type parameter an instantiation leaves unknown.
+ *
+ * The stated assumption, one for the project and the libraries alike: target-language code — a `__cpp__`/`__js__` call,
+ * a `*.Syntax.code` call, the code a `@:functionCode`/`@:cppFileCode`/`@:headerClassCode`/… metadata pastes, a native
+ * identifier — reaches only the values handed to it, and makes an instance of a program class only through the producers
+ * its callers name. Handed are its arguments (its `{0}` placeholders), which flow into `Dynamic`, and what its text names
+ * (`FactsNativeReach`): a local or parameter by its name; the object its method runs on by a spelling of `this` or by the name
+ * of a member of it, which hxcpp reaches unqualified; a static variable by its name beside its class's, or alone in the
+ * code of its class or of one extending it.
  */
 @:nullSafety(Strict)
 final class FactsEscapes {
@@ -80,11 +89,8 @@ final class FactsEscapes {
 	/** The type of a class as a value: its statics, and the instances a reflective call makes of it. */
 	private static inline final CLASS_VALUE: String = 'Class';
 
-	/**
-	 * The compiler's own identifier for `trace` on a target that lowers the call to one: it hands its arguments to the
-	 * target's output, which flow into `Dynamic`, and makes nothing.
-	 */
-	private static inline final TRACE_IDENT: String = '`trace';
+	/** The type of an abstract as a value: its statics, which its implementation class holds. */
+	private static inline final ABSTRACT_VALUE: String = 'Abstract';
 
 	/** The kinds of a typed type a place keeps the nominal type of what it holds by (`TypeFact.kind`). */
 	private static final NOMINAL_KINDS: Array<String> = ['class', 'interface', 'enum'];
@@ -111,6 +117,9 @@ final class FactsEscapes {
 	/** The primitive types' ids: a value of one is no object. */
 	private final _inert: Array<String>;
 
+	/** What target-language code reaches (the stated assumption, see the type doc). */
+	private final _native: FactsNativeReach;
+
 	/**
 	 * Type parameter (`pack.Type.T`, `method.T`) -> the types a value bound to it may have, by their text (`instances`); built on
 	 * first need.
@@ -132,14 +141,17 @@ final class FactsEscapes {
 		_scope = scope;
 		_inert = [for (t in (scope.shape.literalTypeNames ?? []).iterator()) t].concat(scope.shape.nonNullableTypeNames ?? []);
 		_inert.push(scope.shape.voidTypeName ?? 'Void');
+		_native = new FactsNativeReach(_table, escape, escapeType, refuse);
 	}
 
 	/** The escaped types (see the type doc), by the graph's name, or null for any; `failure` then says why. */
 	public function compute(): Null<Array<String>> {
-		final projectKeys: Map<String, Bool> = [for (f in _scope.files) _table.keyOf(f.file) => true];
-		for (id in _table.nodeIds()) if (!escapesOf(id, projectKeys)) return null;
-		// a class extending an extern runs the extern's target code with its instance as `this`
-		for (id in _table.typeIds()) if (extendsExtern(id) && !escapeType(Named(id, []))) return null;
+		for (id in _table.nodeIds()) if (!escapesOf(id)) return null;
+		for (id in _table.typeIds()) {
+			// a class extending an extern runs the extern's target code with its instance as `this`
+			if (extendsExtern(id) && !escapeType(Named(id, []))) return null;
+			if (!_native.metadataEscapes(id)) return null;
+		}
 		return _out;
 	}
 
@@ -150,17 +162,16 @@ final class FactsEscapes {
 
 	/**
 	 * Hand every value the node `id` lets escape to `escape`; false when one says nothing of what it holds, when a fact of
-	 * the node is lost, and when it is project code (a file of `projectKeys`) holding target-language code.
+	 * the node is lost, and when it holds target-language code whose text is computed.
 	 */
-	private function escapesOf(id: String, projectKeys: Map<String, Bool>): Bool {
+	private function escapesOf(id: String): Bool {
 		final made: Null<FactNode> = _table.node(id);
 		if (made == null) return refuse('the facts of `$id` lie in a file whose text the table no longer has');
 		final n: FactNode = made;
 		if (n.incomplete.contains(STALE_FOREIGN)) return refuse('a fact of `$id` lies in a file whose text the table no longer has');
 		if (n.incomplete.contains(REFLECTION_INLINED) && !harmlessReflection(n))
 			return refuse('a reflective body spliced into `$id` lost the name it was handed');
-		if (projectKeys.exists(n.at.file) && n.natives.exists(x -> x.name != TRACE_IDENT))
-			return refuse('`$id` holds target-language code');
+		if (!_native.nodeEscapes(id, n)) return false;
 		for (f in n.flows) if ((f.via == CAST || !keepsNominal(f.to)) && !escape(f.from)) return false;
 		for (h in n.handed) if (!typeParameter(h.to) && !escape(h.from)) return false;
 		for (f in n.fields) if (byName(f.access) && !escape(f.receiver)) return false;
@@ -215,7 +226,7 @@ final class FactsEscapes {
 		final field: Null<FieldDeclFact> = declaredField(target);
 		if (field == null || !producer(field)) return true;
 		final name: Null<String> = r.name;
-		if (r.isValue || name == null) return refuse('`$target` makes a class value of a name computed at run time');
+		if (r.isValue || name == null) return refuse('`$target` makes a class value of a name computed at run time in `${r.holder}`');
 		return _table.type(name) == null || escapeType(Named(name, []));
 	}
 
@@ -314,7 +325,7 @@ final class FactsEscapes {
 		switch t {
 			case Unknown:
 				// a value typed by nothing came through untyped code: a field read by name on a receiver that escaped then, or
-				// target code — which the project holds none of, and a library's makes no program object
+				// target code, which hands back only what it was handed and makes no program object (see the type doc)
 				return true;
 			case Parameter(path):
 				final key: String = Std.string(t);
@@ -333,6 +344,11 @@ final class FactsEscapes {
 				return fields.foreach(f -> escapeType(f.type));
 			case Named(NULLABLE | ENUM_VALUE | CLASS_VALUE, [inner]):
 				return escapeType(inner);
+			case Named(ABSTRACT_VALUE, [Named(id, _)]):
+				final fact: Null<TypeFact> = _table.type(id);
+				if (fact == null) return refuse('the statics of `$id` escape, which no build typed');
+				final impl: Null<String> = fact.implementation;
+				return impl == null || escapeType(Named(impl, []));
 			case Named(id, args):
 				if (inert(id)) return true;
 				final key: String = Std.string(t);

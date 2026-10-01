@@ -24,13 +24,13 @@ using Lambda;
  * object is what the facts type it, a subtype of that unless it is an object of exactly its class, and an instance that
  * escaped the type system (`ValueEscapes`) — the method's own class does as soon as its `this` is handed to a reflective
  * call, so a read off an object of no class may then obtain any of its methods. A reflective member or class read as a
- * value, a reflective body spliced in whose name is lost (`reflection-inlined`), project code holding target-language
- * code and a fact lost to a stale file may obtain any method, and rebind any: no `this` is answered then.
+ * value, a reflective body spliced in whose name is lost (`reflection-inlined`) and a fact
+ * lost to a stale file may obtain any method, and rebind any: no `this` is answered then.
  *
  * Once a rebinding call exists, only an instance method's (`method`) code is answered: a constructor or an initializer
  * runs with `this` bound by a class value, which the program reads in more ways than a field read. The stated assumption,
- * after `FactsEscapes`: library target code reaches a member by a computed name, and runs a function with a receiver it is
- * handed, only inside the reflection whose call sites the facts record.
+ * after `FactsEscapes` and one for the project and the libraries alike: target-language code reaches a member by a computed
+ * name, and runs a function with a receiver it is handed, only inside the reflection whose call sites the facts record.
  */
 @:nullSafety(Strict)
 final class FactsMethodValues {
@@ -108,11 +108,6 @@ final class FactsMethodValues {
 	/** The type of a string: a reflective call's recorded literal may be its first argument, the object, not the name. */
 	private static inline final STRING_TYPE: String = 'String';
 
-	/**
-	 * The compiler's own identifier for `trace` on a target that lowers the call to one: it hands its arguments to the
-	 * target's output and reads no member.
-	 */
-	private static inline final TRACE_IDENT: String = '`trace';
 
 	/** The marker of a node a fact of which lies in a file whose text the table no longer has. */
 	private static inline final STALE_FOREIGN: String = 'stale-foreign';
@@ -122,7 +117,7 @@ final class FactsMethodValues {
 
 	private final _view: FactsView;
 	private final _table: CompilerFacts;
-	private final _scope: ReachProject;
+
 
 	/** The types whose instances may have escaped the type system by their typed ids, or null for any (`ValueEscapes`). */
 	private final _escaped: () -> Null<Array<String>>;
@@ -130,10 +125,9 @@ final class FactsMethodValues {
 	/** What every function the builds typed obtains (`scan`), read once. */
 	private var _reads: Null<MethodValueReads> = null;
 
-	public function new(view: FactsView, scope: ReachProject, escaped: () -> Null<Array<String>>) {
+	public function new(view: FactsView, escaped: () -> Null<Array<String>>) {
 		_view = view;
 		_table = view.table;
-		_scope = scope;
 		_escaped = escaped;
 	}
 
@@ -193,7 +187,7 @@ final class FactsMethodValues {
 			rebinds: false
 		};
 		_reads = out;
-		final projectKeys: Map<String, Bool> = [for (f in _scope.files) _table.keyOf(f.file) => true];
+
 		function named(name: String, read: MethodValueRead): Void {
 			final list: Array<MethodValueRead> = out.named[name] ?? [];
 			list.push(read);
@@ -210,8 +204,6 @@ final class FactsMethodValues {
 				'a fact of `$id` lies in a file whose text the table no longer has'
 			else if (n.incomplete.contains(REFLECTION_INLINED) && !namedReflection(n))
 				'a reflective body spliced into `$id` lost the name it was handed'
-			else if (projectKeys.exists(n.at.file) && n.natives.exists(x -> x.name != TRACE_IDENT))
-				'`$id` holds target-language code'
 			else
 				null;
 			if (lost != null) {

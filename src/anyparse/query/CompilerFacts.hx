@@ -189,11 +189,17 @@ typedef ReflectionFact = {
 	final holder: String;
 }
 
-/** A native-code site: `syntax` for a `*.Syntax` call, `ident` for a `__js__`-style identifier. */
+/** A native-code site: `syntax` for a `*.Syntax` call, `ident` for a `__js__`-style identifier, read or called. */
 typedef NativeFact = {
 	final kind: String;
 	final name: String;
 	final at: FactPos;
+
+	/** The target code the site pastes into the output, when its text is a string literal: what that code may name. */
+	final code: Null<String>;
+
+	/** Whether the site carries target code whose text is computed: what that code names is not known. */
+	final computed: Bool;
 }
 
 /** A local, parameter or loop binder, with the type the compiler gave it. */
@@ -320,6 +326,12 @@ typedef FieldDeclFact = {
 	final isStatic: Bool;
 	final meta: Array<String>;
 
+	/**
+	 * The target code each metadata pasting it around the field's body carries (`@:functionCode`), as any configuration
+	 * recorded it; null for one whose argument is no string literal.
+	 */
+	final code: Array<Null<String>>;
+
 	/** Every type a configuration gave the field, `type` first: more than one when the builds disagree. */
 	final types: Array<String>;
 
@@ -348,6 +360,15 @@ typedef TypeFact = {
 
 	/** The printed macro calls of the type's `@:build`/`@:autoBuild`/`@:genericBuild`: compile-time code run over it. */
 	final builds: Array<String>;
+
+	/** For an `abstract`, its implementation class (`impl`), which holds its statics; null for none, or another kind. */
+	final implementation: Null<String>;
+
+	/**
+	 * The target code each metadata pasting it into the output carries (`@:cppFileCode`, `@:headerClassCode`, …), as any
+	 * configuration recorded it; null for one whose argument is no string literal.
+	 */
+	final code: Array<Null<String>>;
 
 	/**
 	 * Whether every configuration that typed it recorded one declaration: one kind, extern in all or in none. `kind` and
@@ -687,21 +708,11 @@ final class CompilerFacts {
 			isExtern: record.ext ?? false,
 			superClass: record.sup,
 			interfaces: record.ifaces ?? [],
-			fields: [
-				for (f in record.fields ?? [])
-					{
-						name: f.n,
-						kind: f.k,
-						kinds: [f.k],
-						type: f.t,
-						isStatic: f.s ?? false,
-						meta: f.meta ?? [],
-						types: [f.t],
-						overloads: [f.over ?? 0]
-					}
-			],
+			fields: [for (f in record.fields ?? []) declaredField(f)],
 			genericOf: record.of,
 			builds: record.builds ?? [],
+			implementation: record.impl,
+			code: record.code ?? [],
 			alike: true,
 			targets: record.target == null ? [] : [record.target],
 			underlying: record.under == null ? [] : [record.under],
@@ -717,6 +728,21 @@ final class CompilerFacts {
 		final sup: Null<String> = record.sup;
 		if (sup != null) parents.push(sup);
 		for (parent in parents) link(record.id, baseId(parent));
+	}
+
+	/** The declared field a type record's field record `f` describes, as one configuration recorded it. */
+	private static function declaredField(f: FieldRecord): FieldDeclFact {
+		return {
+			name: f.n,
+			kind: f.k,
+			kinds: [f.k],
+			type: f.t,
+			isStatic: f.s ?? false,
+			meta: f.meta ?? [],
+			code: f.code ?? [],
+			types: [f.t],
+			overloads: [f.over ?? 0]
+		};
 	}
 
 	private function link(child: String, parent: String): Void {
@@ -968,7 +994,13 @@ final class CompilerFacts {
 				node.reflection
 			);
 			FactMerge.collect(
-				record.native, n -> place(n.p), fresh.bind('native'), (n, where) -> ({kind: n.w, name: n.n, at: where }: NativeFact),
+				record.native, n -> place(n.p), fresh.bind('native'), (n, where) -> ({
+					kind: n.w,
+					name: n.n,
+					at: where,
+					code: n.c,
+					computed: n.cc == true
+				}: NativeFact),
 				node.natives
 			);
 			FactMerge.collect(
@@ -1111,6 +1143,7 @@ private typedef FieldRecord = {
 	final t: String;
 	final ?s: Bool;
 	final ?meta: Array<String>;
+	final ?code: Array<Null<String>>;
 	final ?over: Int;
 }
 
@@ -1126,10 +1159,12 @@ private typedef TypeRecord = {
 	final ?sup: String;
 	final ?of: String;
 	final ?builds: Array<String>;
+	final ?code: Array<Null<String>>;
 	final ?ifaces: Array<String>;
 	final ?fields: Array<FieldRecord>;
 	final ?target: String;
 	final ?under: String;
+	final ?impl: String;
 	final ?ctors: Array<{ n: String, t: String }>;
 }
 
@@ -1202,7 +1237,13 @@ private typedef NodeRecord = {
 		?h: Bool,
 		p: Array<Int>
 	}>;
-	final ?native: Array<{ w: String, n: String, p: Array<Int> }>;
+	final ?native: Array<{
+		w: String,
+		n: String,
+		p: Array<Int>,
+		?c: String,
+		?cc: Bool
+	}>;
 	final ?vars: Array<{ n: String, t: String, p: Array<Int> }>;
 
 	/** `[min, max, type]`, or `[file index, min, max, type]` for a foreign position. */

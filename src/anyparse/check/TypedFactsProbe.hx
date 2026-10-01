@@ -35,7 +35,9 @@ import haxe.io.Path;
  *   `{n, k, t, p, s?, fin?, ext?, over?, meta?}`, `k` being `method`, `inline`, `dynamic`, `macro` or
  *   `var(<read>,<write>)` with the accessors `default`, `null`, `never`, `call`, `inline`, `resolve`, `require`, `ctor`.
  *   A `@:generic` instance is a class of its own with `of`, the generic class at its arguments. `builds`: the printed
- *   macro calls of `@:build`/`@:autoBuild`/`@:genericBuild`. A `macro` field is always reachable from outside the program.
+ *   macro calls of `@:build`/`@:autoBuild`/`@:genericBuild`. `code` (a type's or a field's): the
+ *   argument of each metadata pasting target code into the output (`TypedFactsShapes.CODE_METAS`), null for one that is no
+ *   string literal. A `macro` field is always reachable from outside the program.
  *   An import alias (`import pack.T as U`), which no module lists, is a `typedef` of its own, a record per declaration.
  * - `{"k":"node","id","f","p","kind","owner","t", s?, name?, gen?, gi?, inl?, ov?, inc?, …facts}` — `kind` is `method`,
  *   `ctor`, `var` (an initializer), `init` (`__init__`), `fn` (a function expression) or `local` (a function bound to a
@@ -92,7 +94,10 @@ import haxe.io.Path;
  *     argument; `v` when the member, or the class itself, is read as a value — whatever calls it later is reflection. `r` is
  *     the type of its first argument — the object an access by name acts on — with `x` when that is an object of exactly
  *     the class its type names, `h` when it is `this`.
- *   - `native`: `{w, n, p}` — `syntax` for a `*.Syntax` call, `ident` for every native identifier, read or called.
+ *   - `native`: `{w, n, p, c?, cc?}` — `syntax` for a `*.Syntax` call, `ident` for every native identifier, read or called.
+ *     `c` is the text of a call's first argument when that is a string literal: the target code a `__cpp__` or a
+ *     `Syntax.code` pastes, what that code may name. `cc` marks a call carrying code (`TypedFactsShapes.CODE_INTRINSICS`,
+ *     `SYNTAX_CODE_MEMBERS`) whose text is computed.
  *   - `vars`: `{n, t, p}` — a local or loop binder (compiler temporaries are left out).
  *   - `reads`: `[min, max, type]` (foreign: `[i, min, max, type]`) — a read of a local, at the identifier.
  *   - `exps`: `{p, a, t?, d?}` — code spliced in where no inlined method is declared, rooted at `p`: in the body's own
