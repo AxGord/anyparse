@@ -53,7 +53,8 @@ using StringTools;
  * graph node starts at is that node's. A node the graph folded from several declarations - of a member, one per branch of a region, or
  * of its type, one per build - is read by its id, the union of what every build typed under it, whichever declaration each read
  * (`foldedBodies`), when every declaration of its type is the one type the builds typed (`soleType`); a node of a name two types share
- * keeps its syntax. A body an inlined function was spliced into is
+ * keeps its syntax — unless only one of those types declares the member, which
+ * the node then is (`soleMember`). A body an inlined function was spliced into is
  * faceted too: the splice's facts are the body's, at the callee's positions, each run at a site of the `inlined` call whose method
  * declares it — the innermost expression of the body around the call — so a range question meeting such a site takes it, and one
  * no call's method declares from every body it meets (`CompilerFacts.within`, `CallGraphFacts.siteOf`): more than the range runs,
@@ -137,6 +138,9 @@ final class FactsView {
 	/** Graph type name -> the one typed type every declaration of it is (`soleType`), or null, settled once. */
 	private final _sole: Map<String, Null<String>> = [];
 
+	/** `Type.member` of the graph -> the typed type whose member it is alone (`soleMember`), or null, settled once. */
+	private final _soleMember: Map<String, Null<String>> = [];
+
 	private final _scope: ReachProject;
 
 	/** Graph type name -> the typed types standing for it, built on first need. */
@@ -162,6 +166,7 @@ final class FactsView {
 		_conditional.remove(file);
 		_alike.clear();
 		_sole.clear();
+		_soleMember.clear();
 	}
 
 	/**
@@ -188,8 +193,8 @@ final class FactsView {
 	}
 
 	/**
-	 * The implicit-call sites the code in `span` of `file` runs, from its facts: a string conversion of each non-String
-	 * operand and of each argument a conversion call (`ExecutionShape.stringConversionCalls`) is handed, and the
+	 * The implicit-call sites the code in `span` of `file` runs, from its facts: a string conversion of each non-String operand, of
+	 * each non-String value thrown and of each argument a conversion call (`ExecutionShape.stringConversionCalls`) is handed, and the
 	 * iteration of each `for` the compiler kept. Every other implicit call — an operator, a conversion, an index, an
 	 * accessor, a literal construction — is a call or a construction the facts name, an edge of the graph. Null when
 	 * the innermost graph node holding `span` is not faceted: the syntactic sites answer.
@@ -364,6 +369,48 @@ final class FactsView {
 		return sole;
 	}
 
+	/**
+	 * The typed type whose member `name` the graph's `type.name` is, when the facts are the truth and the simple name `type`
+	 * stands for several typed types (`soleType` answers null) of which only one holds a function body for a member so named,
+	 * and every declaration of a type so named the index holds that declares `name` is that one — itself, the class of a
+	 * `@:generic` instance, the abstract of an implementation class: the graph folded no other declaration's member into the
+	 * node, and a declaration no build typed, which may run under another name (`@:genericBuild`), declares none. A typed
+	 * type the index does not hold declaring the member with no body (an interface's) is none of it: a dispatch on it reaches
+	 * the implementations through the facts' own edges (`CallGraphFacts.virtualEdges`). Answers that typed type, whose node
+	 * the member's body is read by (`foldedBodies`); null otherwise.
+	 */
+	public function soleMember(type: String, name: String): Null<String> {
+		if (!truth) return null;
+		final key: String = '$type.$name';
+		if (_soleMember.exists(key)) return _soleMember[key];
+		final holders: Array<String> = [];
+		for (t in bySimpleName()[type] ?? []) {
+			final fact: Null<TypeFact> = table.type(t);
+			if (fact == null || !fact.fields.exists(f -> graphMember(t, f.name) == name)) continue;
+			final own: String = fact.kind == IMPL_KIND && name == (_scope.shape.constructorName ?? 'new') ? IMPL_CONSTRUCTOR : name;
+			final body: Null<FactNode> = table.node('$t.$own');
+			if (body != null && FUNCTION_KINDS.contains(body.kind) && !body.generated) holders.push(t);
+		}
+		final holder: Null<String> = holders.length == 1 ? holders[0] : null;
+		final fact: Null<TypeFact> = holder == null ? null : table.type(holder);
+		final generic: Null<String> = fact?.genericOf;
+		final root: Null<String> = if (holder == null || fact == null)
+			null
+		else if (generic != null)
+			CompilerFacts.baseId(generic)
+		else if (fact.kind == IMPL_KIND)
+			implemented(holder)
+		else
+			holder;
+		var sole: Null<String> = root == null ? null : holder;
+		for (fi in _scope.index.allFiles())
+			for (t in fi.types)
+				if (t.name == type && !CallGraphNames.selfAlias(t) && t.members.exists(m -> m.name == name) && declaredId(fi, t) != root)
+					sole = null;
+		_soleMember[key] = sole;
+		return sole;
+	}
+
 	/** Graph type name -> the typed types standing for it. */
 	public function bySimpleName(): Map<String, Array<String>> {
 		final held: Null<Map<String, Array<String>>> = _bySimpleName;
@@ -381,7 +428,8 @@ final class FactsView {
 
 	/**
 	 * The facts of the member `node` the graph folded from several declarations of one typed type (`soleType`), read by
-	 * id rather than by range: its body and each further overload of it, every one the union over the builds that typed
+	 * id rather than by range — or, where the name stands for several typed types, of the one of them that alone declares
+	 * the member (`soleMember`): its body and each further overload of it, every one the union over the builds that typed
 	 * it, whichever declaration each build read. Null when the node is a nested function, which has no id of its own to
 	 * read by, when the type is not one (`soleType`), or when one of those bodies was not typed as a function or was
 	 * placed by a macro.
@@ -389,14 +437,23 @@ final class FactsView {
 	private function foldedBodies(node: FnNode): Null<Array<FactNode>> {
 		final type: Null<String> = node.typeName;
 		final name: Null<String> = node.name;
-		final sole: Null<String> = type == null || name == null || node.id.indexOf(NESTED_MARK) >= 0 ? null : soleType(type);
-		final field: Null<FieldDeclFact> = sole == null ? null : table.type(sole)?.fields.find(f -> f.name == name);
-		if (sole == null || field == null) return null;
+		if (type == null || name == null || node.id.indexOf(NESTED_MARK) >= 0) return null;
+		final member: String = name;
+		final whole: Null<String> = soleType(type);
+		// a name several typed types share may still name one type's member (`soleMember`)
+		final sole: Null<String> = whole != null && table.type(whole)?.fields.exists(f -> f.name == member) == true
+			? whole
+			: soleMember(type, member);
+		if (sole == null) return null;
+		final owner: String = sole;
+		final field: Null<FieldDeclFact> = table.type(owner)?.fields.find(f -> graphMember(owner, f.name) == member);
+		if (field == null) return null;
+		final own: String = field.name;
 		var overloads: Int = 0;
 		for (n in field.overloads) if (n > overloads) overloads = n;
 		final out: Array<FactNode> = [];
 		for (i in 0...overloads + 1) {
-			final found: Null<FactNode> = table.node(i == 0 ? '$sole.$name' : '$sole.$name~$i');
+			final found: Null<FactNode> = table.node(i == 0 ? '$owner.$own' : '$owner.$own~$i');
 			if (found == null || found.generated || !FUNCTION_KINDS.contains(found.kind)) return null;
 			out.push(found);
 		}

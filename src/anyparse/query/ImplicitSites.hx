@@ -8,7 +8,8 @@ import anyparse.runtime.Span;
  * which implicitly-called members a reach walk must admit. A member of one family runs only from a site of that
  * family: a string conversion (`ExecutionShape.concatenationKinds`, an interpolated expression), a `for … in` over a value
  * that is not an interval, an index access, an operator of a kind some member overloads (a compound assignment applies
- * its binary operator too, `ExecutionShape.compoundAssignOperators`), an object literal. Each
+ * its binary operator too, `ExecutionShape.compoundAssignOperators`), an object literal,
+ * a `throw` (the exception wrapping the compiler adds converts what it throws). Each
  * site carries the static types of the operands the member would run on, as far as the declarations say; a null
  * type means "any", and costs the whole family.
  */
@@ -84,6 +85,7 @@ final class ImplicitSites {
 		final interpolating: Array<String> = _shape.interpolatingStringKinds ?? [];
 		final loops: Array<String> = _shape.iterationBindingKinds ?? [];
 		final binders: Array<String> = _shape.iterationValueBinderKinds ?? [];
+		final throws: Array<String> = _shape.throwKinds ?? [];
 		function add(family: SiteFamily, node: QueryNode, operands: Array<QueryNode>): Void {
 			final at: Null<Span> = node.span;
 			if (at == null) return;
@@ -107,6 +109,8 @@ final class ImplicitSites {
 			final applied: Null<String> = (_shape.execution?.compoundAssignOperators ?? [])[kind];
 			if (applied != null && _overloaded.exists(applied)) add(Operator(applied), node, node.children);
 			if (kind == _shape.objectLiteralKind) add(Literal, node, []);
+			// the exception wrapping the compiler adds after typing converts a thrown value to a string (`haxe.ValueException`)
+			if (throws.contains(kind) && node.children.length > 0) add(Text, node, [node.children[0]]);
 			for (c in node.children) walk(c);
 		}
 		walk(tree);

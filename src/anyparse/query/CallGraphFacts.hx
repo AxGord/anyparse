@@ -294,7 +294,8 @@ final class CallGraphFacts {
 		// a conversion call is the string-conversion site of its argument, not library code
 		if (view.convertsToString(target)) return;
 		final owner: String = ownerOf(target);
-		final name: String = target.substr(target.lastIndexOf('.') + 1);
+		// an abstract's constructor is `_new` in its implementation class
+		final name: String = view.graphMember(owner, target.substr(target.lastIndexOf('.') + 1));
 		final type: String = view.graphType(owner);
 		final id: String = g.memberOnChain(type, name) ?? g.externalNode(g.types.declaringTypeOf(type, name) ?? type, name);
 		final field: Bool = c.access == 'fieldValue';

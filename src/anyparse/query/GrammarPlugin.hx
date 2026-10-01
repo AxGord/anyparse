@@ -3442,6 +3442,13 @@ typedef ExecutionShape = {
 	@:optional var implicitCallNames: Array<String>;
 
 	/**
+	 * The iteration names among `implicitCallNames` a loop calls on the value it iterates for the iterator it then calls the
+	 * others on (Haxe `iterator`, `keyValueIterator`): only what these return is iterated in turn — what `next` returns is
+	 * an element, which the loop runs nothing on. Optional; unset means what any of them returns may be iterated.
+	 */
+	@:optional var iterableMethodNames: Array<String>;
+
+	/**
 	 * Type metadata under which the language CONSTRUCTS an instance without a `new` naming it (Haxe
 	 * `@:structInit`: an object literal typed as the class runs its constructor and field initializers).
 	 * Optional; unset leaves such construction unmodelled.

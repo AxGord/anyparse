@@ -69,6 +69,28 @@ final class ReachAdmission {
 		return { closure: closure, value: value, constructors: constructors };
 	}
 
+	/**
+	 * Whether a function an admission site lets run without the walk entering it — one that reaches no toucher by an edge —
+	 * may be read by its syntax rather than through its compiler facts, so may run an implicitly-called member no site of the
+	 * facts names: always, unless the facts are the truth (`FactsView.truth`). Then only when the graph holds a function of the
+	 * site's channels whose body is not faceted (`CallGraphFacts.faceted`) — a function value (`values`), a constructor or an
+	 * initializer run (`constructors`), any function (`all`) — or library code it has not read and that may run user code
+	 * (`runsUnseenCode`), for any channel.
+	 */
+	public function runsSyntaxRead(g: CallGraph, values: Bool, constructors: Bool, all: Bool): Bool {
+		final facts: Null<CallGraphFacts> = g.facts;
+		if (facts == null || !facts.view.truth) return true;
+		final ctorName: String = _scope.shape.constructorName ?? 'new';
+		final runs: Array<Null<String>> = [ctorName, CallGraph.INIT_NAME, CallGraph.STATIC_INIT_NAME];
+		for (id => n in g.nodes) {
+			// a project member with no body is a field holding a function value: what it runs is the value channel's
+			if (runsUnseenCode(g, n) && !_scope.sources.exists(_scope.siteOf(n.typeName ?? '')?.file ?? '')) return true;
+			if (n.isExternal || n.isBodyless || facts.faceted.exists(id)) continue;
+			if (all || (values && valueAdmitted(g, n)) || (constructors && runs.contains(n.name))) return true;
+		}
+		return false;
+	}
+
 	/** The names the walk admits functions by at an untyped access of `member`: its accessors, and the member itself. */
 	public function accessNames(member: String): Array<String> {
 		final out: Array<String> = [for (p in _scope.shape.accessorMethodPrefixes ?? []) p + member];
