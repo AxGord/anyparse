@@ -1,0 +1,292 @@
+package anyparse.query;
+
+import anyparse.query.CompilerFacts.FactNode;
+import anyparse.query.CompilerFacts.FieldDeclFact;
+import anyparse.query.CompilerFacts.TypeFact;
+
+using Lambda;
+
+/**
+ * Where `this` is what its method's class says it is, read off the compiler's facts under the truth (`FactsView.truth`):
+ * a dispatch on an instance of the class declaring a method, or of a subclass, binds `this` in its code — unless the
+ * program obtains the method as a function value and hands it to a call that runs a function with a receiver of its own
+ * (`REBINDING_CALLS`): `Reflect.callMethod(o, f, args)` runs `f` with `o` as its `this` (js `apply`, hxcpp `__SetThis`,
+ * neko `$call`), whatever object `o` is. Where no function any build typed calls one, splices one in or reads one as a
+ * value, every `this` is what a dispatch bound.
+ *
+ * A method's value is obtained, in the code of any function any build typed — a library's as much as the project's — by:
+ * - a field read that is not a call (`FieldFact`) naming it: a closure (`FClosure`, a `bind` included), a read by name on
+ *   a value of no class (`FDynamic`) or on a structure (`FAnon`), or an instance read of a field some build declares a
+ *   method (a `dynamic` one's value, `super`'s);
+ * - a reflective call (`ReflectionFact`) that may read a member's value by name — every `Reflect`/`Type` member not listed
+ *   in `MEMBERLESS_REFLECTION` — naming it by a literal, or by a name computed at run time.
+ * A read off an object that cannot be an instance of the method's class or of a subclass obtains another method: the
+ * object is what the facts type it, a subtype of that unless it is an object of exactly its class, and an instance that
+ * escaped the type system (`ValueEscapes`) — the method's own class does as soon as its `this` is handed to a reflective
+ * call, so a read off an object of no class may then obtain any of its methods. A reflective member or class read as a
+ * value, a reflective body spliced in whose name is lost (`reflection-inlined`), project code holding target-language
+ * code and a fact lost to a stale file may obtain any method, and rebind any: no `this` is answered then.
+ *
+ * Once a rebinding call exists, only an instance method's (`method`) code is answered: a constructor or an initializer
+ * runs with `this` bound by a class value, which the program reads in more ways than a field read. The stated assumption,
+ * after `FactsEscapes`: library target code reaches a member by a computed name, and runs a function with a receiver it is
+ * handed, only inside the reflection whose call sites the facts record.
+ */
+@:nullSafety(Strict)
+final class FactsMethodValues {
+
+	/** The node kind of an instance or static method's body (`FactNode.kind`). */
+	private static inline final METHOD_NODE: String = 'method';
+
+	/** The kind of a typed class (`TypeFact.kind`). */
+	private static inline final CLASS_KIND: String = 'class';
+
+	/** What separates a nested function's id from its parent's (`TypedFactsWalk`): `<parent id>@<offset>`. */
+	private static inline final NESTED_ID: String = '@';
+
+	/** What ends a field node's id before an overload index (`~n`) or a uniqueness suffix (`#n`). */
+	private static final ID_SUFFIXES: Array<String> = ['~', '#'];
+
+	/** The field accesses whose read yields no instance method's value: a static's, an enum constructor's. */
+	private static final VALUELESS_ACCESSES: Array<String> = ['FStatic', 'FEnum'];
+
+	/** The access of an instance field read (`FieldFact.access`): a method's value only when the field is a method. */
+	private static inline final INSTANCE_ACCESS: String = 'FInstance';
+
+	/** The access of a call of a method the compiler spliced in (`CallFact.access`). */
+	private static inline final INLINED: String = 'inlined';
+
+	/** The field kinds that are methods (`FieldDeclFact.kinds`). */
+	private static final METHOD_KINDS: Array<String> = ['method', 'inline', 'dynamic'];
+
+	/** The reflective calls that run a function with a receiver they are handed as its `this`. */
+	private static final REBINDING_CALLS: Array<String> = ['Reflect.callMethod'];
+
+	/** The classes whose members are reflection (`TypedFactsProbe`). */
+	private static final REFLECTION_CLASSES: Array<String> = ['Reflect', 'Type'];
+
+	/**
+	 * The reflective members whose result never holds a member's value read off an object: they test, write, list names,
+	 * compare, call (a called function's result is its own code's, which the facts read), or make and describe class and
+	 * enum values. Any other `Reflect`/`Type` member may read one.
+	 */
+	private static final MEMBERLESS_REFLECTION: Array<String> = [
+		'Reflect.hasField',
+		'Reflect.setField',
+		'Reflect.setProperty',
+		'Reflect.deleteField',
+		'Reflect.fields',
+		'Reflect.isFunction',
+		'Reflect.isObject',
+		'Reflect.isEnumValue',
+		'Reflect.compare',
+		'Reflect.compareMethods',
+		'Reflect.callMethod',
+		'Reflect.makeVarArgs',
+		'Type.getClass',
+		'Type.getEnum',
+		'Type.getSuperClass',
+		'Type.getClassName',
+		'Type.getEnumName',
+		'Type.resolveClass',
+		'Type.resolveEnum',
+		'Type.createInstance',
+		'Type.createEmptyInstance',
+		'Type.createEnum',
+		'Type.createEnumIndex',
+		'Type.getInstanceFields',
+		'Type.getClassFields',
+		'Type.getEnumConstructs',
+		'Type.typeof',
+		'Type.enumEq',
+		'Type.enumConstructor',
+		'Type.enumParameters',
+		'Type.enumIndex',
+		'Type.allEnums'
+	];
+
+	/** The type of a string: a reflective call's recorded literal may be its first argument, the object, not the name. */
+	private static inline final STRING_TYPE: String = 'String';
+
+	/**
+	 * The compiler's own identifier for `trace` on a target that lowers the call to one: it hands its arguments to the
+	 * target's output and reads no member.
+	 */
+	private static inline final TRACE_IDENT: String = '`trace';
+
+	/** The marker of a node a fact of which lies in a file whose text the table no longer has. */
+	private static inline final STALE_FOREIGN: String = 'stale-foreign';
+
+	/** The marker of a node a `Reflect`/`Type` body was spliced into: that call, its name and its arguments are gone. */
+	private static inline final REFLECTION_INLINED: String = 'reflection-inlined';
+
+	private final _view: FactsView;
+	private final _table: CompilerFacts;
+	private final _scope: ReachProject;
+
+	/** The types whose instances may have escaped the type system by their typed ids, or null for any (`ValueEscapes`). */
+	private final _escaped: () -> Null<Array<String>>;
+
+	/** What every function the builds typed obtains (`scan`), read once. */
+	private var _reads: Null<MethodValueReads> = null;
+
+	public function new(view: FactsView, scope: ReachProject, escaped: () -> Null<Array<String>>) {
+		_view = view;
+		_table = view.table;
+		_scope = scope;
+		_escaped = escaped;
+	}
+
+	/**
+	 * Whether `this` in the code of the facts node `holder` — a nested function's being its outermost enclosing field's,
+	 * which it captures — is an object of the class declaring that field or of a subclass: the field is an instance method
+	 * of a class the builds declare alike, and no function any of them typed may obtain it as a value (see the type doc).
+	 */
+	public function selfBound(holder: String): Bool {
+		final reads: MethodValueReads = scan();
+		if (reads.unknown != null) return false;
+		// no call hands a function a receiver of its own: every `this` is what a dispatch bound
+		if (!reads.rebinds) return true;
+		final nested: Int = holder.indexOf(NESTED_ID);
+		final root: String = nested < 0 ? holder : holder.substr(0, nested);
+		final node: Null<FactNode> = _table.node(root);
+		if (node == null || node.kind != METHOD_NODE || node.isStatic) return false;
+		final owner: Null<TypeFact> = _table.type(node.owner);
+		if (owner == null || owner.kind != CLASS_KIND || !owner.alike || owner.isExtern) return false;
+		var name: String = root.substr(node.owner.length + 1);
+		for (s in ID_SUFFIXES) {
+			final cut: Int = name.indexOf(s);
+			if (cut >= 0) name = name.substr(0, cut);
+		}
+		final hierarchy: Array<String> = [owner.id].concat(_table.subtypesOf(owner.id));
+		return !(reads.named[name] ?? []).exists(r -> mayBeOf(r, hierarchy)) && !reads.computed.exists(r -> mayBeOf(r, hierarchy));
+	}
+
+	/** Why any method's value may be obtained (see the type doc), or null. */
+	public function unknownReason(): Null<String> {
+		return scan().unknown;
+	}
+
+	/**
+	 * Whether the receiver of `read` may be an object of one of the classes `hierarchy` names: it is of no class the facts
+	 * type, of one of them or of a type one of them extends, or — unless it is an object of exactly its class — of a type
+	 * whose instances escaped (`_escaped`), which may then be in a place of any type.
+	 */
+	private function mayBeOf(read: MethodValueRead, hierarchy: Array<String>): Bool {
+		final receiver: Null<String> = read.receiver;
+		final id: Null<String> = receiver == null ? null : _view.objectClass(receiver);
+		if (id == null) return true;
+		if (read.exact) return hierarchy.contains(id);
+		if (hierarchy.contains(id) || _table.subtypesOf(id).exists(s -> hierarchy.contains(s))) return true;
+		final escaped: Null<Array<String>> = _escaped();
+		return escaped == null || escaped.exists(e -> hierarchy.contains(e));
+	}
+
+	/** Every read of a method value in the functions the builds typed (see the type doc), read once. */
+	private function scan(): MethodValueReads {
+		final held: Null<MethodValueReads> = _reads;
+		if (held != null) return held;
+		final out: MethodValueReads = {
+			named: [],
+			computed: [],
+			unknown: null,
+			rebinds: false
+		};
+		_reads = out;
+		final projectKeys: Map<String, Bool> = [for (f in _scope.files) _table.keyOf(f.file) => true];
+		function named(name: String, read: MethodValueRead): Void {
+			final list: Array<MethodValueRead> = out.named[name] ?? [];
+			list.push(read);
+			out.named[name] = list;
+		}
+		for (id in _table.nodeIds()) {
+			final made: Null<FactNode> = _table.node(id);
+			if (made == null) {
+				out.unknown = 'the facts of `$id` lie in a file whose text the table no longer has';
+				return out;
+			}
+			final n: FactNode = made;
+			final lost: Null<String> = if (n.incomplete.contains(STALE_FOREIGN))
+				'a fact of `$id` lies in a file whose text the table no longer has'
+			else if (n.incomplete.contains(REFLECTION_INLINED) && !namedReflection(n))
+				'a reflective body spliced into `$id` lost the name it was handed'
+			else if (projectKeys.exists(n.at.file) && n.natives.exists(x -> x.name != TRACE_IDENT))
+				'`$id` holds target-language code'
+			else
+				null;
+			if (lost != null) {
+				out.unknown = lost;
+				return out;
+			}
+			for (f in n.fields) if (!f.write && methodRead(f.access, f.owner, f.field))
+				named(f.field, { receiver: f.receiver, exact: false });
+			for (c in n.calls) if (c.access == INLINED && REBINDING_CALLS.contains(c.target ?? '')) out.rebinds = true;
+			for (r in n.reflection) {
+				final target: String = r.target;
+				if (REBINDING_CALLS.contains(target)) out.rebinds = true;
+				if (MEMBERLESS_REFLECTION.contains(target)) continue;
+				if (r.isValue || REFLECTION_CLASSES.contains(target)) {
+					out.unknown = '`$target` is read as a value in `$id`';
+					return out;
+				}
+				final read: MethodValueRead = { receiver: r.receiver, exact: r.receiverExact };
+				final literal: Null<String> = r.name;
+				// the literal recorded is the first of any argument: the object's own, when that is a string
+				if (literal == null || CompilerFacts.baseId(r.receiver ?? STRING_TYPE) == STRING_TYPE)
+					out.computed.push(read)
+				else
+					named(literal, read);
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * Whether every reflective body spliced into `n` (`reflection-inlined`) is one its `inlined` calls name, each of a member
+	 * that reads no member's value (`MEMBERLESS_REFLECTION`): what the others read is lost with their name.
+	 */
+	private static function namedReflection(n: FactNode): Bool {
+		var named: Bool = false;
+		for (c in n.calls) {
+			final target: Null<String> = c.target;
+			if (c.access != INLINED || target == null) continue;
+			final dot: Int = target.lastIndexOf('.');
+			if (dot < 0 || !REFLECTION_CLASSES.contains(target.substr(0, dot))) continue;
+			if (!MEMBERLESS_REFLECTION.contains(target)) return false;
+			named = true;
+		}
+		return named;
+	}
+
+	/**
+	 * Whether a field read through `access` of the field `field` of `owner` may yield an instance method's value: any read
+	 * but a static's or an enum constructor's, an instance read only of a field some build declares a method.
+	 */
+	private function methodRead(access: String, owner: Null<String>, field: String): Bool {
+		if (VALUELESS_ACCESSES.contains(access)) return false;
+		if (access != INSTANCE_ACCESS) return true;
+		final declaring: Null<TypeFact> = owner == null ? null : _table.type(owner);
+		final declared: Null<FieldDeclFact> = declaring?.fields.find(f -> f.name == field);
+		return declared == null || declared.kinds.exists(k -> METHOD_KINDS.contains(k));
+	}
+
+}
+
+/** A read that may obtain a method's value: the type of the object it reads off, and whether that is exactly its class. */
+typedef MethodValueRead = {
+	final receiver: Null<String>;
+	final exact: Bool;
+}
+
+/**
+ * What the functions the builds typed obtain (`FactsMethodValues.scan`): the reads by the member name they name, those by
+ * a name computed at run time, and why some read may obtain any method, or null.
+ */
+typedef MethodValueReads = {
+	final named: Map<String, Array<MethodValueRead>>;
+	final computed: Array<MethodValueRead>;
+	var unknown: Null<String>;
+
+	/** Whether some function hands a function a receiver of its own to run with (`REBINDING_CALLS`). */
+	var rebinds: Bool;
+}

@@ -37,7 +37,8 @@ using StringTools;
  * once, outside any conditional region, with no directive in what types it, no member it names is declared conditionally
  * anywhere in the project, and a function nested in it was typed against a body that passes the same test. A library
  * declaration is read as the index reads it, one copy for every build, as the syntactic reading reads it. Anything else
- * keeps the syntactic reading: absence of facts is never "no code".
+ * keeps the syntactic reading: absence of facts is never "no code". Under the truth, the pseudo-node running a type's
+ * field initializers is faceted by the initializer nodes of the one typed type its name stands for (`initializerBodies`).
  *
  * A faceted body keeps the edges its syntax records (`CallGraph.addEdge`): the facts add to them, never take one away,
  * so a name a build the list does not name resolves the way the syntax reads it is still followed. A local `inline
@@ -75,6 +76,9 @@ final class FactsView {
 
 	/** What the graph puts in the id of a function nested in another (`CallGraph`): a local function or a lambda. */
 	public static inline final NESTED_MARK: String = '#';
+
+	/** The node kind of a field's initializer (`TypedFactsProbe`). */
+	private static inline final VAR_KIND: String = 'var';
 
 	/** The node kinds that are the body of a function (`TypedFactsProbe`). */
 	public static final FUNCTION_KINDS: Array<String> = ['method', 'ctor', 'fn', 'local'];
@@ -296,6 +300,14 @@ final class FactsView {
 	 * declaration is one it reads.
 	 */
 	public function faceted(g: CallGraph, file: String, span: Span, ?node: String): Bool {
+		// a field initializer the pseudo-node of its type's initializers runs: faceted when a body that node is read by
+		// (`initializerBodies`) holds it whole
+		final pseudo: Null<FnNode> = node == null ? null : g.node(node);
+		final initializers: Null<Array<FactNode>> = pseudo != null && initializerNode(pseudo) ? g.facts?.faceted[pseudo.id] : null;
+		if (initializers != null) {
+			final key: String = table.keyOf(file);
+			return initializers.exists(n -> n.at.file == key && within(span, n.at.span));
+		}
 		final at: Null<FnDeclaration> = g.declarationAt(file, span.from);
 		if (at == null || span.to > at.span.to) return false;
 		final key: String = CallGraphNames.normalizePath(file);
@@ -460,6 +472,28 @@ final class FactsView {
 	}
 
 	/**
+	 * Every typed type whose member `name` the graph's `type.name` may be, when the facts are the truth: each type the simple
+	 * name `type` stands for (`bySimpleName`) that declares a member so named — when every declaration of a type so named the
+	 * index holds that declares `name` is one of them (`rootOf`), as `soleMember` asks of its one. Null otherwise, and when
+	 * none declares it.
+	 */
+	public function ownersDeclaring(type: String, name: String): Null<Array<String>> {
+		if (!truth) return null;
+		final owners: Array<String> = [
+			for (t in bySimpleName()[type] ?? []) if (table.type(t)?.fields.exists(f -> graphMember(t, f.name) == name) == true) t
+		];
+		if (owners.length == 0) return null;
+		final roots: Array<Null<String>> = [for (o in owners) rootOf(o)];
+		for (fi in _scope.index.allFiles())
+			for (t in fi.types)
+				if (t.name == type && !CallGraphNames.selfAlias(t) && t.members.exists(m ->
+					m.name == name
+				) && !roots.contains(declaredId(fi, t)))
+					return null;
+		return owners;
+	}
+
+	/**
 	 * The simple names of the typedefs the builds typed as an alias of the type `type` (a typed id): the name a text may
 	 * write for it — a typedef each build points at its own platform's class.
 	 */
@@ -518,6 +552,35 @@ final class FactsView {
 			? whole
 			: soleMember(type, member);
 		return sole == null ? null : ownerBodies(sole, member);
+	}
+
+	/**
+	 * Under the truth, the facts of the field initializers the pseudo-node `node` runs (`CallGraph.INIT_NAME`: the instance
+	 * ones; `STATIC_INIT_NAME`: the static ones): every initializer (`VAR_KIND`) of that staticness of the one typed type its
+	 * type name stands for (`soleType`) — the union over the builds, every branch some build takes. Null — the syntax reads
+	 * them — otherwise, and when one was placed by a macro or lost a fact's place. An initializer the syntax holds that none
+	 * of them holds whole stays the syntax's (`faceted`).
+	 */
+	public function initializerBodies(node: FnNode): Null<Array<FactNode>> {
+		final type: Null<String> = node.typeName;
+		if (!truth || type == null || !initializerNode(node)) return null;
+		final isStatic: Bool = node.name == CallGraph.STATIC_INIT_NAME;
+		final typed: Null<String> = soleType(type);
+		if (typed == null) return null;
+		final out: Array<FactNode> = [];
+		for (id in table.nodeIdsOf(typed)) {
+			final n: Null<FactNode> = table.node(id);
+			if (n == null) return null;
+			if (n.kind != VAR_KIND || n.isStatic != isStatic) continue;
+			if (n.generated || n.incomplete.exists(unplaced)) return null;
+			out.push(n);
+		}
+		return out;
+	}
+
+	/** Whether `node` is a pseudo-node running its type's field initializers (`CallGraph.INIT_NAME`, `STATIC_INIT_NAME`). */
+	private static function initializerNode(node: FnNode): Bool {
+		return node.span == null && (node.name == CallGraph.INIT_NAME || node.name == CallGraph.STATIC_INIT_NAME);
 	}
 
 	/**

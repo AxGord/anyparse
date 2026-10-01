@@ -31,6 +31,9 @@ class MemberReachFactsTest extends Test {
 	/** The build every fixture compiles: a js target. */
 	private static inline final BUILD: String = '-cp .\n-main Main\n--js out.js\n';
 
+	/** The build of a fixture whose std calls no rebinding `Reflect.callMethod` of its own: the interpreter. */
+	private static inline final INTERP_BUILD: String = '-cp .\n-main Main\n--interp\n';
+
 	/** `BUILD` with a classpath of its own per build (`PICK_CLASSPATH`): `other/` when `other` is defined, else `base/`. */
 	private static inline final PER_BUILD_CLASSPATH: String = '-cp .\n--macro Cp.pick()\n-main Main\n--js out.js\n';
 
@@ -40,7 +43,13 @@ class MemberReachFactsTest extends Test {
 
 	/** The library declaration of the built-in array type the index resolves against. */
 	private static inline final STD_ARRAY: String = 'extern class Array<T> { public var length(default, null):Int; '
-		+ 'public function push(x:T):Int; public function pop():Null<T>; public function indexOf(x:T, ?fromIndex:Int):Int; }';
+		+ 'public function push(x:T):Int; public function pop():Null<T>; public function indexOf(x:T, ?fromIndex:Int):Int; '
+		+ 'public function join(sep:String):String; public function new():Void; }';
+
+	/** The library declaration of the string type the index resolves against, where a test needs its `split` known. */
+	private static final STD_STRING: Map<String, String> = [
+		'std/String.hx' => 'extern class String { public var length(default, null):Int; public function split(delimiter:String):Array<String>; }'
+	];
 
 	/** The library declarations of `Std` and `StringTools` the index resolves against, where a test needs their pure calls known. */
 	private static final STD_STD: Map<String, String> = [
@@ -260,16 +269,21 @@ class MemberReachFactsTest extends Test {
 	/**
 	 * `truthAsk` of `files` with the std `Reflect` the build compiles declared where the build reads it: its accessors by name
 	 * reach members by the name they are handed in `untyped` code, which the walk enters as it does TM's. The fixture must
-	 * compile: a build that fails leaves no facts, and the syntax would answer.
+	 * compile: a build that fails leaves no facts, and the syntax would answer. With `interp` the build is `INTERP_BUILD`,
+	 * whose std calls no rebinding `Reflect.callMethod` of its own and reads no member by a computed name, as js's does
+	 * (`Type.createEnum`, `haxe.DynamicAccess`).
 	 */
-	private static function reflectAsk(files: Map<String, String>, ?pos: haxe.PosInfos): ReachResult {
+	private static function reflectAsk(files: Map<String, String>, interp: Bool = false, ?pos: haxe.PosInfos): ReachResult {
 		final std: Null<String> = StdResolver.stdDir();
 		if (std == null) {
 			Assert.fail('no Haxe std to read `Reflect` from', pos);
 			return Unknown(OutOfScope('no std'));
 		}
-		final path: String = OracleCoverage.canonical(Sys.getCwd(), Path.join([std, 'js/_std/Reflect.hx']));
-		final result: ReachResult = ask(files, null, true, null, false, null, null, null, true, [path => sys.io.File.getContent(path)]);
+		final path: String = OracleCoverage.canonical(Sys.getCwd(), Path.join([std, interp ? 'Reflect.hx' : 'js/_std/Reflect.hx']));
+		final result: ReachResult = ask(
+			files, null, true, null, false, interp ? INTERP_BUILD : null, null, null, true,
+			[path => sys.io.File.getContent(path)]
+		);
 		Assert.equals('', lastDropped.join('; '), 'the fixture did not compile', pos);
 		return result;
 	}
@@ -1310,7 +1324,8 @@ class MemberReachFactsTest extends Test {
 
 	@:pin('control') @:killer('M-GRAPH-REFLECT-ESCAPES') @:killer('M-GRAPH-REFLECT-SELF-ESCAPES') @:killer('M-FACTS-REFL-SELF')
 	public function testAReflectedObjectOtherThanThisMayBeAnyEscapedInstanceUnderTheTruth(): Void {
-		// a `Main` handed to `Dynamic` may come back typed as anything, an `Other` included; `this` of `Other` is an `Other`
+		// a `Main` handed to `Dynamic` may come back typed as anything, an `Other` included; `this` of `Other` is an `Other` where
+		// no call rebinds a method (`INTERP_BUILD`) — on js `Type.createEnum` does, and `dump` reads itself by the name it is handed
 		function fixture(escape: String, region: String): String {
 			return
 				'class Main {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n\tstatic function sink(x:Dynamic):Void {}\n'
@@ -1321,7 +1336,8 @@ class MemberReachFactsTest extends Test {
 		}
 		assertMatch(reflectAsk(['Main.hx' => fixture('', 'Peek.at(o, n);')]), r -> r.match(Proven));
 		assertMatch(reflectAsk(['Main.hx' => fixture(' sink(new Main()); ', 'Peek.at(o, n);')]), r -> r.match(Unknown(DynamicName(_, _))));
-		assertMatch(reflectAsk(['Main.hx' => fixture(' sink(new Main()); ', 'o.dump(n);')]), r -> r.match(Proven));
+		assertMatch(reflectAsk(['Main.hx' => fixture(' sink(new Main()); ', 'o.dump(n);')], true), r -> r.match(Proven));
+		assertMatch(reflectAsk(['Main.hx' => fixture(' sink(new Main()); ', 'o.dump(n);')]), r -> r.match(Unknown(DynamicName(_, _))));
 	}
 
 	@:pin('control') @:killer('M-GRAPH-REFLECT-EXACT') @:killer('M-FACTS-REFL-EXACT')
@@ -1338,13 +1354,135 @@ class MemberReachFactsTest extends Test {
 
 	@:pin('control') @:killer('M-REACH-REFLECT-ADMIT')
 	public function testAReflectiveAccessRunsTheAccessorsOfTheTypeItReachesUnderTheTruth(): Void {
-		// a property read by a name it computes may run `Other.get_v`, which changes `items` of a `Main` it holds
+		// a property read by a name it computes may run `Other.get_v`, which changes `items` of a `Main` it holds; `this` is an
+		// `Other` where no call rebinds a method (`INTERP_BUILD`)
 		final main: String = MEMBER_HEAD + '\tfunction f(n:String):Void {\n\t\tvar o:Other = new Other();\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ o.dump(n); /*>*/ }\n\t}\n}\n'
 			+ 'class Other {\n\tpublic static var held:Main = new Main();\n\tpublic var v(get, never):Int;\n\n\tpublic function new() {}\n\n'
 			+ '\tfunction get_v():Int {\n\t\theld.items.push(1);\n\t\treturn 0;\n\t}\n\n'
 			+ '\tpublic function dump(n:String):Dynamic return Reflect.getProperty(this, n);\n}\n';
-		assertMatch(reflectAsk(['Main.hx' => main]), r -> r.match(Reached(_)));
+		assertMatch(reflectAsk(['Main.hx' => main], true), r -> r.match(Reached(_)));
+	}
+
+	@:pin('control') @:killer('M-METHODS-SELF-BOUND') @:killer('M-METHODS-CLOSURE-READ') @:killer('M-FACTS-REFL-HOLDER') @:killer('M-METHODS-RECEIVER-BOUND')
+	public function testThisOfAMethodACallMayRebindIsAnyEscapedInstanceUnderTheTruth(): Void {
+		// `Reflect.callMethod` runs the function it is handed with the `Main` it is handed as `this`: once `Other.dump` is read
+		// as a value, its `this` may be the escaped `Main`, whose `items` the property write by name replaces. A method no code
+		// reads as a value keeps `this` an `Other` — not on js, whose std rebinds in `Type.createEnum` and reads members by a
+		// computed name off any object (`haxe.DynamicAccess`). A member read by a computed name off a `Third` just built reads
+		// no `Other` method; one off an `Other` may read `dump`
+		function fixture(taken: String, read: String = ''): Map<String, String> {
+			return [
+				'Main.hx' => 'class Main {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n'
+					+ '\tstatic function sink(x:Dynamic):Void {}\n\tstatic function main() { sink(new Main()); }\n'
+					+ '\tfunction f(n:String):Void {\n\t\tvar o:Other = new Other();\n'
+					+ '\t\tfor (i in 0...items.length) { /*<*/ o.dump(n); /*>*/ }\n\t}\n}\n'
+					+ 'class Other {\n\tpublic function new() {}\n\n\tpublic function dump(n:String):Void Reflect.setProperty(this, n, null);\n}\n'
+					+ 'class Third {\n\tpublic function new() {}\n\n\tpublic function calm():Void {}\n}\n'
+					+ 'class Rebind {\n\tpublic static function run(o:Other, n:String):Void {\n\t\t' + read
+					+ '\n\t\tReflect.callMethod(new Main(), ' + taken + ', ["items"]);\n\t}\n}\n'
+			];
+		}
+		assertMatch(reflectAsk(fixture('o.dump')), r -> r.match(Unknown(DynamicName(_, _))));
+		assertMatch(reflectAsk(fixture('o.dump'), true), r -> r.match(Unknown(DynamicName(_, _))));
+		assertMatch(reflectAsk(fixture('new Third().calm'), true), r -> r.match(Proven));
+		final read: String = 'Reflect.field(new Third(), n);';
+		assertMatch(reflectAsk(fixture('new Third().calm', read), true), r -> r.match(Proven));
+		assertMatch(
+			reflectAsk(fixture('new Third().calm', read + '\n\t\tReflect.field(o, n);'), true), r -> r.match(Unknown(DynamicName(_, _)))
+		);
+		assertMatch(reflectAsk(fixture('new Third().calm')), r -> r.match(Unknown(DynamicName(_, _))));
+	}
+
+	@:pin('control') @:killer('M-METHODS-REBINDS') @:killer('M-METHODS-METHOD-ONLY')
+	public function testThisOfAConstructorIsAnyEscapedInstanceOnceACallMayRebindUnderTheTruth(): Void {
+		// a constructor runs with `this` bound by a class value, which a rebinding call may be handed too; with no rebinding
+		// call in the program, `this` is what built it
+		function fixture(rebind: String): Map<String, String> {
+			return [
+				'Main.hx' => 'class Main {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n'
+					+ '\tstatic function sink(x:Dynamic):Void {}\n\tstatic function main() { sink(new Main()); }\n'
+					+ '\tfunction f(n:String):Void {\n\t\tfor (i in 0...items.length) { /*<*/ new Other(n); /*>*/ }\n\t}\n}\n'
+					+ 'class Other {\n\tpublic function new(n:String) Reflect.setProperty(this, n, null);\n}\n'
+					+ 'class Third {\n\tpublic function new() {}\n\n\tpublic function calm():Void {}\n}\n'
+					+ 'class Rebind {\n\tpublic static function run():Void ' + rebind + '\n}\n'
+			];
+		}
+		assertMatch(
+			reflectAsk(fixture('Reflect.callMethod(new Main(), new Third().calm, []);'), true), r -> r.match(Unknown(DynamicName(_, _)))
+		);
+		assertMatch(reflectAsk(fixture('new Third().calm();'), true), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-REACH-ARRAY-OWN') @:killer('M-REACH-ARRAY-ELEMENTS') @:killer('M-REACH-EXTERN-FACTS-TYPE')
+	@:killer('M-REACH-ARRAY-VALUES')
+	public function testTheArraysOwnMethodReachesItsElementsOnlyByConvertingThemUnderTheTruth(): Void {
+		// `a.join` is the built-in array's own method: it converts each element of `a`, which the compiler types `Array<String>`
+		// though the syntax cannot, and reaches no member by name — so neither `Obj.toString`, which changes `items`, nor any
+		// other function runs; an array of `Obj` converts one (`INTERP_BUILD`: js's std declares subtypes of `Array` the index
+		// does not hold)
+		function region(local: String): String {
+			return LOOP_HEAD + '\tstatic function main() {\n\t\tnew Obj();\n'
+				+ '\t\tfor (i in 0...items.length) { /*<*/ Util.go("a,b"); /*>*/ }\n\t}\n}\n'
+				+ 'class Util {\n\tpublic static function go(s:String):String {\n\t\t' + local + '\n\t\treturn a.join("");\n\t}\n}\n'
+				+ CLEARING_OBJ;
+		}
+		assertMatch(interpAsk(['Main.hx' => region('var a = s.split(",");')], STD_STRING), r -> r.match(Proven));
+		assertMatch(interpAsk(['Main.hx' => region('var a = [new Obj()];')], STD_STRING), r -> r.match(Reached(_)));
+	}
+
+	@:pin('control') @:killer('M-REACH-ARRAY-CTOR')
+	public function testAConstructionOfTheBuiltInArrayIsHandedNothingUnderTheTruth(): Void {
+		// `new Array()` names a type and hands its target code no argument, no receiver and no function value: neither
+		// `Obj.toString` nor `Clear.run`, read as a value, runs — though both change `items`
+		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tnew Obj();\n\t\tvar f:Void->Void = Clear.run;\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ Util.make(); /*>*/ }\n\t}\n}\n'
+			+ 'class Util {\n\tpublic static function make():Array<Int> return new Array<Int>();\n}\n'
+			+ 'class Clear {\n\tpublic static function run():Void Main.items = [];\n}\n' + CLEARING_OBJ;
+		assertMatch(interpAsk(['Main.hx' => main]), r -> r.match(Proven));
+	}
+
+	public function testAnExternConstructionIsHandedItsArgumentsAlone(): Void {
+		// a construction's children are its arguments: the target code of `new Ext(o)` holds `o`, an `Obj`, whose `toString`
+		// changes `items` — read by the syntax, where nothing else says so
+		function main(region: String): String {
+			return LOOP_HEAD + '\tstatic function main() {\n\t\tvar o:Obj = new Obj();\n' + '\t\tfor (i in 0...items.length) { /*<*/ '
+				+ region + ' /*>*/ }\n\t}\n}\n' + '@:native("Object") extern class Ext {\n\tpublic function new(?o:Obj);\n}\n'
+				+ CLEARING_OBJ;
+		}
+		assertMatch(ask(['Main.hx' => main('new Ext(o);')], null, false), r -> r.match(Reached(_)));
+	}
+
+	public function testAMemberAdmittedByItsNameAloneRunsAsEachTypeSoNamedUnderTheTruth(): Void {
+		// a value of any type converted may run the `toString` of either `Color`: each is read as its own, not as a name two
+		// types share, and `b.Color`'s changes `items`
+		function files(clears: Bool): Map<String, String> {
+			return [
+				'Main.hx' => LOOP_HEAD + '\tstatic function main() {\n\t\tnew a.Color();\n\t\tnew b.Color();\n\t\tvar d:Dynamic = 1;\n'
+					+ '\t\tfor (i in 0...items.length) { /*<*/ Std.string(d); /*>*/ }\n\t}\n}\n',
+				'a/Color.hx' => 'package a;\n\nclass Color {\n\tpublic function new() {}\n\n\tpublic function toString():String return "a";\n}\n',
+				'b/Color.hx' => 'package b;\n\nclass Color {\n\tpublic function new() {}\n\n\tpublic function toString():String {\n\t\t'
+					+ (clears ? 'Main.items = [];\n\t\t' : '') + 'return "b";\n\t}\n}\n'
+			];
+		}
+		assertMatch(truthAsk(files(false)), r -> r.match(Proven));
+		assertMatch(truthAsk(files(true)), r -> r.match(Reached(_)));
+	}
+
+	@:pin('control') @:killer('M-GRAPH-INIT-RECORD') @:killer('M-FACTS-VIEW-INIT-FACETED')
+	public function testAFieldInitializerIsReadThroughItsFactsUnderTheTruth(): Void {
+		// `Holder`'s initializers run when it is built: `0` runs nothing — read by its syntax it would admit every implicitly
+		// called member, `Obj.toString` and the `@:from` of `Loud` `main` runs among them — and the `@:from` of `Loud` the
+		// compiler calls for `1` changes `items`
+		function region(field: String): String {
+			return LOOP_HEAD + '\tstatic function main() {\n\t\tnew Obj();\n\t\tvar l:Loud = 2;\n'
+				+ '\t\tfor (i in 0...items.length) { /*<*/ new Holder(); /*>*/ }\n\t}\n}\n' + 'class Holder {\n\t' + field
+				+ '\n\n\tpublic function new() {}\n}\n'
+				+ 'abstract Loud(Int) {\n\t@:from static function of(i:Int):Loud {\n\t\tMain.items.push(i);\n\t\treturn cast i;\n\t}\n}\n'
+				+ CLEARING_OBJ;
+		}
+		assertMatch(truthAsk(['Main.hx' => region('var n:Int = 0;')]), r -> r.match(Proven));
+		assertMatch(truthAsk(['Main.hx' => region('var l:Loud = 1;')]), r -> r.match(Reached(_)));
 	}
 
 	@:pin('control') @:killer('M-REACH-DEAD-FILE-SEEDS') @:killer('M-FACTS-DEAD-FILE-NEVER')
@@ -1550,15 +1688,16 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthAsk(files('b', 'a', ' keep = stuff; ')), r -> r.match(Unknown(Escape(_, _))));
 	}
 
-	@:pin('control') @:killer('M-REACH-QUALIFIED-UNNAMED') @:killer('M-REACH-SHARED-NAME-SOLE')
-	public function testANameTwoTypesShareReachedByItsSyntaxStaysAmbiguousUnderTheTruth(): Void {
+	@:pin('control') @:killer('M-REACH-QUALIFIED-UNNAMED') @:killer('M-REACH-SHARED-OWNERS')
+	public function testANameTwoTypesShareReachedByItsSyntaxRunsAsEachOfThemUnderTheTruth(): Void {
 		// the region lies in `a.Grid.go`, which `b.Grid` declares too: the node folding both is read by its syntax, whose call
-		// of `run` names the folded `Grid.run` and no owner, so either `run` may be the one that runs — unless `a.Grid` alone
-		// declares `run`, whose node is then its own. With `go` declared by `a.Grid` alone the node is read through its facts,
-		// whose call names `a.Grid`'s
-		function question(bDeclares: Array<String>): ReachResult {
+		// of `run` names the folded `Grid.run` and no owner, so either `run` may be the one that runs — each read as its own
+		// type's, and `a.Grid`'s changes `items` when it calls `Push.one`. With `go` declared by `a.Grid` alone the node is read through
+		// its facts, whose call names `a.Grid`'s; with `run` declared by `a.Grid` alone, its node is its own
+		function question(bDeclares: Array<String>, pushes: Bool = false): ReachResult {
 			final grid: String = 'package a;\n\nclass Grid {\n\tpublic static function go():Void {\n'
-				+ '\t\tfor (i in 0...Main.items.length) { /*<*/ run(); /*>*/ }\n\t}\n\n\tpublic static function run():Void {}\n}\n';
+				+ '\t\tfor (i in 0...Main.items.length) { /*<*/ run(); /*>*/ }\n\t}\n\n\tpublic static function run():Void {'
+				+ (pushes ? ' Push.one(); ' : '') + '}\n}\n' + 'class Push {\n\tpublic static function one():Void Main.items.push(1);\n}\n';
 			final members: String = [for (m in bDeclares) '\tpublic static function $m():Void {}\n'].join('');
 			final files: Map<String, String> = [
 				'Main.hx' => LOOP_HEAD + '\tstatic function main() {\n\t\ta.Grid.go();\n\t\tb.Grid.n++;\n\t}\n}\n',
@@ -1570,7 +1709,8 @@ class MemberReachFactsTest extends Test {
 				reach.mayReach(region, { owner: 'Main', name: 'items' }, Mutate);
 			});
 		}
-		assertMatch(question(['go', 'run']), r -> r.match(Unknown(Ambiguous('Grid'))));
+		assertMatch(question(['go', 'run']), r -> r.match(Proven));
+		assertMatch(question(['go', 'run'], true), r -> r.match(Reached(_)));
 		assertMatch(question(['go']), r -> r.match(Proven));
 		assertMatch(question(['run']), r -> r.match(Proven));
 	}
@@ -2536,6 +2676,13 @@ class MemberReachFactsTest extends Test {
 	/** `ask` of `files` under the whole list of their builds, where the facts are the truth (`FactsView.truth`). */
 	private static function truthAsk(files: Map<String, String>): ReachResult {
 		return ask(files, null, true, null, false, null, null, null, true);
+	}
+
+	/** `truthAsk` of `files` built by `INTERP_BUILD`, which must compile, the library declarations `declared` indexed. */
+	private static function interpAsk(files: Map<String, String>, ?declared: Map<String, String>, ?pos: haxe.PosInfos): ReachResult {
+		final result: ReachResult = ask(files, null, true, null, false, INTERP_BUILD, null, null, true, declared);
+		Assert.equals('', lastDropped.join('; '), 'the fixture did not compile', pos);
+		return result;
 	}
 
 	/**
