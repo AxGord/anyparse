@@ -288,8 +288,9 @@ typedef SpliceFact = {
 	final callee: String;
 	final body: FactPos;
 	final sites: Array<Span>;
-} /** A node's signature and parameters as one configuration typed them. */
+}
 
+/** A node's signature and parameters as one configuration typed them. */
 typedef FactSignature = {
 	final signature: String;
 	final params: Array<{ name: String, type: String }>;

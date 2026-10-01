@@ -128,7 +128,14 @@ typedef FormatInfo = {
 typedef CommentPattern = {
 	open: String,
 	close: String,
-	lineTerminated: Bool
+	lineTerminated: Bool,
+
+	/**
+	 * The opener of a DOCUMENTATION comment spelled with this block pattern (Haxe `/**`), or null when the format
+	 * has none. A doc documents the declaration that FOLLOWS it, so trailing capture leaves a doc that ends its line
+	 * for the next element's leading trivia (`Codegen.trailingAttemptBlock`). Always null on a line pattern.
+	 */
+	docOpen: Null<String>
 };
 
 /**
@@ -161,23 +168,37 @@ class FormatReader {
 	 * Build `commentPatterns` by reading the format class's `lineComment`
 	 * (`Null<String>`) and `blockComment` (`Null<{open:String, close:String}>`)
 	 * fields. Missing or `null` fields contribute nothing — a format with
-	 * neither (e.g. JSON) yields an empty array.
+	 * neither (e.g. JSON) yields an empty array. The block pattern also
+	 * carries the delimiters' optional `doc` opener as its `docOpen`.
 	 */
 	private static function readCommentPatterns(cl: ClassType): Array<CommentPattern> {
 		final out: Array<CommentPattern> = [];
 		final line: Null<String> = readStringFieldOpt(cl, 'lineComment');
-		if (line != null) out.push({ open: line, close: '', lineTerminated: true });
-		final block: Null<{ open: String, close: String }> = readBlockCommentFieldOpt(cl, 'blockComment');
-		if (block != null) out.push({ open: block.open, close: block.close, lineTerminated: false });
+		if (line != null) out.push({
+			open: line,
+			close: '',
+			lineTerminated: true,
+			docOpen: null
+		});
+		final block: Null<{ open: String, close: String, doc: Null<String> }> = readBlockCommentFieldOpt(cl, 'blockComment');
+		if (block != null) out.push({
+			open: block.open,
+			close: block.close,
+			lineTerminated: false,
+			docOpen: block.doc
+		});
 		return out;
 	}
 
 	/**
-	 * Read a `{open:String, close:String}` struct-literal field
+	 * Read a `{open:String, close:String, ?doc:String}` struct-literal field
 	 * initializer. Returns `null` when the field is missing, `null`, or
-	 * its initializer does not have both sub-fields as string literals.
+	 * its initializer does not have both `open` and `close` as string
+	 * literals; `doc` is null when absent.
 	 */
-	private static function readBlockCommentFieldOpt(cl: ClassType, fieldName: String): Null<{ open: String, close: String }> {
+	private static function readBlockCommentFieldOpt(
+		cl: ClassType, fieldName: String
+	): Null<{ open: String, close: String, doc: Null<String> }> {
 		final fields: Array<ClassField> = cl.fields.get();
 		for (f in fields) if (f.name == fieldName) {
 			final texpr: Null<TypedExpr> = f.expr();
@@ -186,19 +207,22 @@ class FormatReader {
 		return null;
 	}
 
-	private static function extractBlockComment(texpr: TypedExpr): Null<{ open: String, close: String }> {
+	private static function extractBlockComment(texpr: TypedExpr): Null<{ open: String, close: String, doc: Null<String> }> {
 		return switch texpr.expr {
 			case TObjectDecl(fields):
 				var open: Null<String> = null;
 				var close: Null<String> = null;
+				var doc: Null<String> = null;
 				for (f in fields) switch f.name {
 					case 'open':
 						open = extractString(f.expr);
 					case 'close':
 						close = extractString(f.expr);
+					case 'doc':
+						doc = extractString(f.expr);
 				}
 				if (open != null && close != null)
-					{ open: open, close: close }
+					{ open: open, close: close, doc: doc }
 				else
 					null;
 			case TCast(inner, _): extractBlockComment(inner);

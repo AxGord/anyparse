@@ -85,7 +85,7 @@ final class HaxeFormat implements TextFormat {
 	public var astPreds(default, null): Bool = true;
 
 	public var lineComment(default, null): Null<String> = '//';
-	public var blockComment(default, null): Null<BlockCommentDelims> = { open: '/*', close: '*/' };
+	public var blockComment(default, null): Null<BlockCommentDelims> = { open: '/*', close: '*/', doc: '/**' };
 	public var keySyntax(default, null): KeySyntax = KeySyntax.Unquoted;
 	public var stringQuote(default, null): Array<String> = ['"', "'"];
 	public var fieldLookup(default, null): FieldLookup = FieldLookup.ByName;

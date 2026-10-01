@@ -370,6 +370,30 @@ class AddElementSliceTest extends Test {
 		assertAdd(source, 4, 1, After, 'typedef Mid = { var m: Int; }', true, expected);
 	}
 
+	/**
+	 * `--after` a module-level type whose neighbour has a ONE-LINE doc: the insert lands above the doc and must END ITS
+	 * LINE there. The splice used to put the insertion's closing brace on the doc's own line (`} /** Doc B. *\/`), and
+	 * a one-line block on a code line read as the insertion's trailing comment, so the writer kept it glued.
+	 */
+	public function testInsertAfterTypeLeavesTheNeighboursOneLineDocOnItsOwnLine(): Void {
+		final source: String = 'typedef A = {\n\tvar a: Int;\n}\n\n/** Doc B. */\ntypedef B = {\n\tvar b: Int;\n}\n';
+		final expected: String =
+			'typedef A = {\n\tvar a:Int;\n}\n\ntypedef Mid = {var m:Int;}\n\n/** Doc B. */\ntypedef B = {\n\tvar b:Int;\n}\n';
+		assertAdd(source, 1, 1, After, 'typedef Mid = { var m: Int; }', true, expected);
+	}
+
+	/**
+	 * The same splice where the doc shares its line with the declaration it documents (`/** Doc B. *\/ typedef B`), so
+	 * code follows the doc and the parser reads it as an inline comment rather than a line-ending doc. Only the splice
+	 * can keep it off the insertion's closing brace here: the insert has to end its own line.
+	 */
+	public function testInsertAfterTypeLeavesASameLineDocWithItsDeclaration(): Void {
+		final source: String = 'typedef A = {\n\tvar a: Int;\n}\n\n/** Doc B. */ typedef B = {\n\tvar b: Int;\n}\n';
+		final expected: String =
+			'typedef A = {\n\tvar a:Int;\n}\n\ntypedef Mid = {var m:Int;}\n\n/** Doc B. */\ntypedef B = {\n\tvar b:Int;\n}\n';
+		assertAdd(source, 1, 1, After, 'typedef Mid = { var m: Int; }', true, expected);
+	}
+
 	/** CONTROL — a type MEMBER's span is tight, so `--after` there never overshot. */
 	public function testInsertAfterMemberStillLandsBeforeTheNextDoc(): Void {
 		final source: String = 'class C {\n\n\tpublic function m1(): Int return 1;\n\n\t/**\n\t * Doc m2.\n\t */\n'
