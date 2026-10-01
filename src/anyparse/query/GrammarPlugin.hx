@@ -3340,6 +3340,14 @@ typedef ExecutionShape = {
 	@:optional var literalConstructions: Map<String, String>;
 
 	/**
+	 * The call the compiler makes for each element a comprehension yields, by the kind of the literal holding one — a
+	 * literal whose one child is a loop (`iterationBindingKinds`, `whileExprKind`): Haxe `ArrayExpr` -> `Array.push`,
+	 * positioned at the element, its receiver at the literal. Whether a build compiled a type as its text reads such a
+	 * call as the literal's own. Optional; unset makes none.
+	 */
+	@:optional var comprehensionCalls: Map<String, String>;
+
+	/**
 	 * The simple name of the language's CLASS-VALUE type (Haxe `Class`): a member returning or taking one may produce
 	 * an instance of a class no code names (`Type.resolveClass`, `Type.createInstance`). `MemberReach` reads the
 	 * producers off the declarations with it. Optional; unset means no class may be instantiated from a value.

@@ -116,6 +116,29 @@ final class FactText {
 	}
 
 	/**
+	 * Whether `text` writes a construction of the type `name`: the keyword `keyword` (Haxe `new`), spaces, then `name`, each
+	 * a whole word.
+	 */
+	public static function spellsConstruction(text: String, keyword: String, name: String): Bool {
+		var from: Int = text.indexOf(name);
+		while (from >= 0) {
+			final end: Int = from + name.length;
+			final bounded: Bool = (from == 0 || !isWordChar(StringTools.fastCodeAt(text, from - 1)))
+				&& (end >= text.length || !isWordChar(StringTools.fastCodeAt(text, end)));
+			var before: Int = from - 1;
+			while (before >= 0 && StringTools.isSpace(text, before)) before--;
+			final start: Int = before + 1 - keyword.length;
+			if (
+				bounded && before < from - 1 && start >= 0 && text.substring(start, before + 1) == keyword
+				&& (start == 0 || !isWordChar(StringTools.fastCodeAt(text, start - 1)))
+			)
+				return true;
+			from = text.indexOf(name, from + 1);
+		}
+		return false;
+	}
+
+	/**
 	 * Whether `text` ends, at `end`, with an access of the member `name`: the whole word, preceded by the `.` of a field
 	 * access, spaces between allowed.
 	 */

@@ -7896,16 +7896,16 @@
 			"name": "M-FACTS-TEXT-EXPANSION-BODY",
 			"type": "anyparse.query.FactsProvenance",
 			"method": "expansionWritten",
-			"find": "? body.textAt(x.anchor)",
-			"replace": "? null",
+			"find": "if (body.holds(x.anchor)) return FactText.spellsCall(body.textAt(x.anchor), macroName);",
+			"replace": "if (body.holds(x.anchor)) return false;",
 			"note": "an expression macro the body itself calls built nothing of the text's"
 		},
 		{
 			"name": "M-FACTS-TEXT-EXPANSION-SPLICED",
 			"type": "anyparse.query.FactsProvenance",
 			"method": "expansionWritten",
-			"find": ": _view.table.sourceOf(x.anchor.file)?.substring(x.anchor.span.from, x.anchor.span.to);",
-			"replace": ": null;",
+			"find": "if (spells(x.anchor)) return true;",
+			"replace": "",
 			"note": "an expression macro an inlined method calls built nothing of the text's"
 		},
 		{
@@ -7976,17 +7976,9 @@
 			"name": "M-FACTS-TEXT-JOINED-SPLICES",
 			"type": "anyparse.query.FactsProvenance",
 			"method": "joined",
-			"find": "spliced(p.span.to) || ",
-			"replace": "",
+			"find": "return spliced(p.span.to) || siteSpells(n, p, p.span.from, p.span.to, member, body) || accessEnds(n, p.span.to, member);",
+			"replace": "return siteSpells(n, p, p.span.from, p.span.to, member, body);",
 			"note": "a range the compiler joined from two inlined bodies is no text's"
-		},
-		{
-			"name": "M-FACTS-TEXT-JOINED-ACCESS",
-			"type": "anyparse.query.FactsProvenance",
-			"method": "joined",
-			"find": " || (name != null && body.endsAccess(p.span.to, name))",
-			"replace": "",
-			"note": "a range the compiler joined from an inlined getter's code to the text's member access is no text's"
 		},
 		{
 			"name": "M-GRAPH-ADOPT-NONE",
@@ -11507,6 +11499,269 @@
 			"find": "final owner: Null<String> = read?.owner ?? sole;",
 			"replace": "final owner: Null<String> = read?.owner;",
 			"note": "a node the facts read as the one type of its shared name declaring the member asks for a build macro by the simple name, which `typeIsItsText` refuses for a shared name: any build macro of any type of the name is a Reification (TM's `Vector.splice`)"
+		},
+		{
+			"name": "M-COND-VALUES-READ",
+			"type": "anyparse.query.CondRegionLiveness",
+			"method": "flagValue",
+			"find": "final value: Null<String> = facts.values?.get(flag);",
+			"replace": "final value: Null<String> = null;",
+			"note": "a define's proved value is never read, so `#if (haxe_ver >= 4.2)` stays undecided in every build"
+		},
+		{
+			"name": "M-COND-VALUES-NUMBER",
+			"type": "anyparse.query.CondValue",
+			"method": "number",
+			"find": "return DECIMAL.match(text) ? Number(Std.parseFloat(text)) : null;",
+			"replace": "return null;",
+			"note": "no number is read, so a version define compared with a number literal stays undecided"
+		},
+		{
+			"name": "M-COND-VALUES-TEXT",
+			"type": "anyparse.query.CondValue",
+			"method": "textOrder",
+			"find": "return Ordered(a < b ? -1 : a > b ? 1 : 0);",
+			"replace": "return Undecided;",
+			"note": "two strings have no order, so `lime >= \"8.0.0\"` stays undecided"
+		},
+		{
+			"name": "M-COND-VALUES-UNDEFINED",
+			"type": "anyparse.query.CondValue",
+			"method": "order",
+			"find": "case [Undefined, _] | [_, Undefined]: Never;",
+			"replace": "case [Undefined, _] | [_, Undefined]: Undecided;",
+			"note": "a comparison of an undefined define is undecided, where the compiler makes it false and `!=` true"
+		},
+		{
+			"name": "M-COND-VALUES-SEMVER",
+			"type": "anyparse.query.CondValue",
+			"method": "versionOrder",
+			"find": "Ordered(p2 == null ? 0 : 1);",
+			"replace": "Ordered(0);",
+			"note": "a release orders with its pre-release alike, where SemVer puts the release above"
+		},
+		{
+			"name": "M-DEFINES-VALUES-STABLE",
+			"type": "anyparse.check.ReachDefinesProbe",
+			"method": "parse",
+			"find": "if (value != null && finalValues[d] == value) values[d] = value;",
+			"replace": "if (value != null) values[d] = value;",
+			"note": "a value an initialization macro changed after the first one saw it is read as the value every file saw"
+		},
+		{
+			"name": "M-DEFINES-VALUES-MACRO",
+			"type": "anyparse.check.ReachDefinesProbe",
+			"method": "macroSource",
+			"find": "'\\t\\tvalues(\\'$EARLY_VALUE_PREFIX\\');',",
+			"replace": "",
+			"note": "the probe prints no value at the first initialization macro, so no define has one"
+		},
+		{
+			"name": "M-REACH-LIVE-VALUES",
+			"type": "anyparse.query.ReachLiveness",
+			"method": "deadOf",
+			"find": ", values: c.values }",
+			"replace": " }",
+			"note": "the builds' proved values never reach the liveness reading, so a version comparison keeps both branches live"
+		},
+		{
+			"name": "M-FACTS-DECLARATION-RUN",
+			"type": "anyparse.query.FactsView",
+			"method": "declarationRange",
+			"find": "new Span(ElementSpan.declRunStart(held.node, held.parent, span), span.to)",
+			"replace": "span",
+			"note": "a declaration starts at its function, so an abstract's constructor, which the compiler places at the first modifier, lies in none"
+		},
+		{
+			"name": "M-FACTS-MADE-FORWARDS",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "madeConstructor",
+			"find": "n.flows.foreach(f -> f.via == ARG_FLOW && own(f.at))",
+			"replace": "n.flows.length == 0",
+			"note": "a constructor the compiler made handing its parameters to its super's is no text's"
+		},
+		{
+			"name": "M-FACTS-TEXT-BINDING",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "factsOnText",
+			"find": "body.spells(v.at, v.name) || body.binds(v.at) || body.declares(v.at, v.name)",
+			"replace": "body.spells(v.at, v.name) || body.declares(v.at, v.name)",
+			"note": "a local the compiler binds a value the text writes to is no text's"
+		},
+		{
+			"name": "M-FACTS-TEXT-BINDING-TRIMMED",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "of",
+			"find": "nodes.push('${at.from}:${trimmedEnd(source, at)}');",
+			"replace": "nodes.push('${at.from}:${at.to}');",
+			"note": "a node's range runs on over the whitespace after it, so a binding at an operand written before another operator is at no node"
+		},
+		{
+			"name": "M-FACTS-TEXT-DECLARES",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "factsOnText",
+			"find": "body.spells(v.at, v.name) || body.binds(v.at) || body.declares(v.at, v.name)",
+			"replace": "body.spells(v.at, v.name) || body.binds(v.at)",
+			"note": "a local the compiler places at its declaration's keyword is no text's"
+		},
+		{
+			"name": "M-FACTS-TEXT-READ-AT-VALUE",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "factsOnText",
+			"find": "body.lowered(r.at) || body.binds(r.at))",
+			"replace": "body.lowered(r.at))",
+			"note": "a read of a local the compiler bound to an argument, at the argument the text writes, is no text's"
+		},
+		{
+			"name": "M-FACTS-TEXT-INTERPOLATED-VALUE",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "of",
+			"find": "if (end != null) nodes.push('${at.from + 1}:${code == last ? end.to : trimmedEnd(source, end)}');",
+			"replace": "",
+			"note": "an interpolated string's value, which the compiler places inside the quotes, is no expression the text writes"
+		},
+		{
+			"name": "M-FACTS-TEXT-COMPREHENSION",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "factsOnText",
+			"find": " || body.comprehends(c)",
+			"replace": "",
+			"note": "the push the compiler makes for each element a comprehension yields is no text's"
+		},
+		{
+			"name": "M-FACTS-TEXT-INTERPOLATION",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "sourceSpan",
+			"find": "return from == null || to == null ? p.span : new Span(from, to);",
+			"replace": "return p.span;",
+			"note": "code inside an interpolated string past an escape is read at the compiler's offsets, which fall short of the text's"
+		},
+		{
+			"name": "M-FACTS-TEXT-CONVERTS",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "factsOnText",
+			"find": "|| (convertsToString(c) && body.converts(c.at))",
+			"replace": "",
+			"note": "the conversion of an abstract an interpolation calls is no text's"
+		},
+		{
+			"name": "M-FACTS-TEXT-TYPEDEF-NEW",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "factsOnText",
+			"find": "|| _view.typedefsOf(x.type).exists(name -> body.mentions(x.at, name))",
+			"replace": "",
+			"note": "a construction through a typedef spells no class"
+		},
+		{
+			"name": "M-FACTS-TEXT-ABSTRACT-CTOR-CALL",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "memberOf",
+			"find": "return dot <= 0 ? target : _view.graphMember(target.substr(0, dot), target.substr(dot + 1));",
+			"replace": "return dot <= 0 ? target : target.substr(dot + 1);",
+			"note": "a call of an abstract's constructor spells `_new`, which no text does"
+		},
+		{
+			"name": "M-FACTS-TEXT-INLINED-WHOLE",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "nodeOnText",
+			"find": "final inlined: Null<(FactPos) -> Bool> = inlinedWhole(n, body);",
+			"replace": "final inlined: Null<(FactPos) -> Bool> = null;",
+			"note": "an initializer that is wholly an inlined call, at the callee's positions, lies in no declaration of its field"
+		},
+		{
+			"name": "M-FACTS-TEXT-EXPANSION-SITE",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "expansionWritten",
+			"find": "if (body.holds(at) && FactText.spellsCall(body.textAt(at), macroName)) return true;",
+			"replace": "",
+			"note": "an expression macro called in an inlined call's argument is no text's call"
+		},
+		{
+			"name": "M-FACTS-TEXT-EXPANSION-SIBLING",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "expansionWritten",
+			"find": "other != splice && other.sites.exists(",
+			"replace": "false && other.sites.exists(",
+			"note": "an expression macro whose value an inlined setter is handed, by another inlined method at the same site, is no text's call"
+		},
+		{
+			"name": "M-FACTS-TEXT-EXPANSION-OUTER",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "expansionWritten",
+			"find": "if (outer != null && outer(x.anchor)) return body.spellsCall(macroName);",
+			"replace": "",
+			"note": "an expression macro in an initializer that is wholly an inlined call is no text's call"
+		},
+		{
+			"name": "M-FACTS-TEXT-JOINED-SITE",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "joined",
+			"find": "(siteSpells(n, p, p.span.to, p.span.from, member, body) || ",
+			"replace": "(false || ",
+			"note": "a field write the compiler joined from the text's value to an inlined index access is no text's"
+		},
+		{
+			"name": "M-FACTS-WALK-WRITTEN-CONSTANT",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "splicedCode",
+			"find": "return code || (e.expr.match(TConst(_)) && _host.inlineCallee(info.file, info.min, info.max) != null);",
+			"replace": "return code;",
+			"note": "an inlined method of which the compiler kept only the constants it wrote as another inline call's arguments is no splice"
+		},
+		{
+			"name": "M-FACTS-TEXT-ALIAS-TYPEDEF",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "textual",
+			"find": "if (typed != null && aliasOnly(typed)) continue;",
+			"replace": "",
+			"note": "a typedef aliasing the type in another file is a type of the name read from another file"
+		},
+		{
+			"name": "M-FACTS-TEXT-INLINED-CONSTRUCTION",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "inlinedWhole",
+			"find": "|| constructed;",
+			"replace": ";",
+			"note": "an initializer that is wholly an abstract's inlined constructor is no call the text writes"
+		},
+		{
+			"name": "M-FACTS-WALK-JOINED-START",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "nestedSplice",
+			"find": "final written: Null<InlineMethod> = fieldWriter(e, info);",
+			"replace": "final written: Null<InlineMethod> = null;",
+			"note": "a field read the compiler joined across two methods' code records no splice of the method writing the field"
+		},
+		{
+			"name": "M-FACTS-VIEW-DECLARATION-RUN",
+			"type": "anyparse.query.FactsView",
+			"method": "typedBodies",
+			"find": "final declared: Span = declaredIn(g.treeOf(node.file), span);",
+			"replace": "final declared: Span = span;",
+			"note": "an abstract's constructor, whose facts the compiler places at the declaration's first modifier, has none, and the walk reads it by its syntax"
+		},
+		{
+			"name": "M-FACTS-TEXT-JOINED-ACCESS",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "joined",
+			"find": "spliced(p.span.to) || siteSpells(n, p, p.span.from, p.span.to, member, body)",
+			"replace": "spliced(p.span.to)",
+			"note": "a range the compiler joined from an inlined getter's code to the text's member access is no text's"
+		},
+		{
+			"name": "M-FACTS-TEXT-JOINED-OTHER-SPLICE",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "accessEnds",
+			"force": "false",
+			"note": "a read the compiler joined from one inlined body to the member access another one writes is no text's"
+		},
+		{
+			"name": "M-FACTS-TEXT-LITERAL-END",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "of",
+			"find": "code == last ? end.to : trimmedEnd(source, end)",
+			"replace": "trimmedEnd(source, end)",
+			"note": "a string's value that ends in spaces is placed short of them, at no expression the text writes"
 		}
 	]
 }

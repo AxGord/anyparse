@@ -13,12 +13,18 @@ using Lambda;
  * conditional compilation: `defined` holds for every file the build parses (set on the command line or by an
  * initialization macro), and `everDefined` is every define it set at any point, a build macro's included. A name
  * outside `everDefined` is never defined while the build parses anything, since the compiler never removes one.
- * `compiled` is every file it parses.
+ * `values` decides a comparison (`haxe_ver >= 4.2`) the way the compiler does. `compiled` is every file it parses.
  */
 typedef ReachConfiguration = {
 	var name: String;
 	var defined: Array<String>;
 	var everDefined: Array<String>;
+
+	/**
+	 * The value each define of `defined` carries for every file: the one the first initialization macro saw, where the
+	 * build held the same once typing ended. A define whose value a macro changed in between has none here.
+	 */
+	var values: Map<String, String>;
 
 	/** The absolute, link-resolved path of every source file the build parses: no other file's code runs in it. */
 	var compiled: Array<String>;
@@ -139,7 +145,7 @@ final class ReachLiveness {
 			}
 		}
 		final facts: Array<DefineFacts> = [
-			for (c in _configurations) { defined: c.defined, undefined: flags.filter(f -> !c.everDefined.contains(f)) }
+			for (c in _configurations) { defined: c.defined, undefined: flags.filter(f -> !c.everDefined.contains(f)), values: c.values }
 		];
 		final dead: Array<Span> = CondRegionLiveness.deadSpans(source, _shape, facts, regions);
 		_dead[file] = dead;

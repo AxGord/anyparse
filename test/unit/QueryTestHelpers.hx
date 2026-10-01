@@ -50,6 +50,7 @@ final class QueryTestHelpers {
 						name: 'complete',
 						defined: [],
 						everDefined: [],
+						values: [],
 						compiled: [for (f in all) OracleCoverage.canonical(cwd, f.file)],
 						types: types
 					}
