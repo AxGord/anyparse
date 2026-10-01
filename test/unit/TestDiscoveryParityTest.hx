@@ -2574,6 +2574,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testAConstructorTheCompilerMadeHandingItsParametersOnIsItsTextUnderTheTruth :: control :: '
 				+ 'M-FACTS-MADE-FORWARDS',
 			'unit.query.MemberReachFactsTest#testAConstructorTouchingItsOwnObjectIsExcusedUnderTheTruth :: control :: M-TOUCH-TYPED-SELF',
+			'unit.query.MemberReachFactsTest#testAConversionAnInlinedBodySplicedFromAnotherFileConvertsItsOwnArgumentUnderTheTruth :: control :: '
+				+ 'M-FACTS-CALL-OPERAND',
 			'unit.query.MemberReachFactsTest#testAConversionOfAFieldOfWhatAnInlinedIndexReturnsIsItsTextUnderTheTruth :: control :: '
 				+ 'M-FACTS-TEXT-JOINED-CONVERSION,M-FACTS-TEXT-JOINED-PLACED',
 			'unit.query.MemberReachFactsTest#testAConversionOfAnAbstractRunsWhatItsOwnConversionDoes :: control :: '
@@ -2581,7 +2583,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testAConversionTheCompilerCallsIsItsTextUnderTheTruth :: control :: '
 				+ 'M-FACTS-TEXT-CONVERSION-CALL',
 			'unit.query.MemberReachFactsTest#testAConvertedValueOfTheParametersOwnTypeMayBeAnyObjectUnderTheTruth :: control :: '
-				+ 'M-FACTS-VIEW-CONVERSION-LEAF',
+				+ 'M-FACTS-CALL-OPERAND-LEAF',
 			'unit.query.MemberReachFactsTest#testAFieldReadJoinedAcrossTwoGettersInACallbackIsItsTextUnderTheTruth :: control :: '
 				+ 'M-FACTS-WALK-JOINED-START',
 			'unit.query.MemberReachFactsTest#testAFieldReadJoinedFromAnIndexAccessToTheAccessAnotherInlinedMethodWritesIsItsTextUnderTheTruth :: control :: '
@@ -2592,7 +2594,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-TEXT-JOINED-SPLICES',
 			'unit.query.MemberReachFactsTest#testAFileTheRunWroteMayBeCompiled :: control :: M-FACTS-DEAD-FILE-REWRITTEN',
 			'unit.query.MemberReachFactsTest#testAFreshObjectConvertedRunsOnlyItsOwnClassToStringUnderTheTruth :: control :: '
-				+ 'M-FACTS-STRING-EXACT,M-REACH-EXACT-SITE,M-FACTS-VIEW-EXACT,M-FACTS-FLOW-EXACT,M-FACTS-VIEW-EXACT-CONVERSION,M-FACTS-EXACT-WRITTEN',
+				+ 'M-FACTS-STRING-EXACT,M-REACH-EXACT-SITE,M-FACTS-VIEW-EXACT,M-FACTS-VIEW-EXACT-CONVERSION,M-FACTS-EXACT-WRITTEN,M-FACTS-CALL-OPERAND-EXACT',
 			'unit.query.MemberReachFactsTest#testAFunctionSplicedFromAnotherFileIsTheNodeItsCalleeDeclares :: control :: '
 				+ 'M-GRAPH-FACTS-SPLICED-SITE,M-GRAPH-FACTS-SPLICED-FILE,M-FACTS-TRUTH-SPLICE',
 			'unit.query.MemberReachFactsTest#testAFunctionValueReadByItsSyntaxMayRunAnyOperatorOverloadUnderTheTruth :: control :: '
@@ -2653,6 +2655,18 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-REACH-PROPERTY-STRAIGHT,M-REACH-PROPERTY-GETTER,M-REACH-FACTS-FIELDS-UNTRUE',
 			'unit.query.MemberReachFactsTest#testAReadOfAnInlinedArgumentAtTheValueTheTextWritesIsItsTextUnderTheTruth :: control :: '
 				+ 'M-FACTS-TEXT-READ-AT-VALUE,M-FACTS-TEXT-INTERPOLATED-VALUE,M-FACTS-TEXT-LITERAL-END',
+			'unit.query.MemberReachFactsTest#testAReflectedObjectOfExactlyItsClassIsNoSubclassUnderTheTruth :: control :: '
+				+ 'M-GRAPH-REFLECT-EXACT,M-FACTS-REFL-EXACT',
+			'unit.query.MemberReachFactsTest#testAReflectedObjectOtherThanThisMayBeAnyEscapedInstanceUnderTheTruth :: control :: '
+				+ 'M-GRAPH-REFLECT-ESCAPES,M-GRAPH-REFLECT-SELF-ESCAPES,M-FACTS-REFL-SELF',
+			'unit.query.MemberReachFactsTest#testAReflectiveAccessOnAValueOfNoClassIsADynamicNameUnderTheTruth :: control :: '
+				+ 'M-GRAPH-REFLECT-UNTYPED',
+			'unit.query.MemberReachFactsTest#testAReflectiveAccessOnAnObjectOfAnUnrelatedClassReachesNoneOfTheMemberUnderTheTruth :: control :: '
+				+ 'M-REACH-REFLECT-BOUND-NONE,M-HAZARDS-REFLECT-RECEIVERS,M-HAZARDS-REFLECT-RECEIVERS-ADDED,M-FACTS-REFL-RECEIVER,M-REACH-REFLECT-BODY',
+			'unit.query.MemberReachFactsTest#testAReflectiveAccessOnAnObjectThatMayCarryTheMemberIsADynamicNameUnderTheTruth :: control :: '
+				+ 'M-REACH-REFLECT-RELATED,M-GRAPH-REFLECT-SUBTYPES,M-GRAPH-REFLECT-SUPERTYPES',
+			'unit.query.MemberReachFactsTest#testAReflectiveAccessRunsTheAccessorsOfTheTypeItReachesUnderTheTruth :: control :: '
+				+ 'M-REACH-REFLECT-ADMIT',
 			'unit.query.MemberReachFactsTest#testAReflectiveCallTheSyntaxDoesNotSeeNamesNothingUnderTheTruth :: control :: '
 				+ 'M-FACTS-TRUTH-REFLECTION,M-FACTS-TRUTH-REFLECTION-TWIN',
 			'unit.query.MemberReachFactsTest#testAReflectiveMemberReadAsAValueIsUnknown :: control :: M-FACTS-REACH-REFLECT-VALUE',
@@ -4499,7 +4513,6 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-QUALIFIED-ANY-DECLARATION',
 			'M-GRAPH-FACTS-TYPED-NONE',
 			'M-TOUCH-SCAN-NODE-UNRECORDED',
-			'M-FACTS-VIEW-CONVERSION-LEAF',
 			'M-REACH-QUALIFIED-ESCAPE',
 			'M-GRAPH-FACTS-INTERFACE-PLACEHOLDER',
 			'M-GRAPH-VIRTUAL-OWN-ONLY',
@@ -4547,7 +4560,25 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-VIEW-DECLARATION-RUN',
 			'M-FACTS-TEXT-JOINED-ACCESS',
 			'M-FACTS-TEXT-JOINED-OTHER-SPLICE',
-			'M-FACTS-TEXT-LITERAL-END'
+			'M-FACTS-TEXT-LITERAL-END',
+			'M-FACTS-CALL-OPERAND',
+			'M-FACTS-CALL-OPERAND-LEAF',
+			'M-FACTS-CALL-OPERAND-EXACT',
+			'M-FACTS-REFL-RECEIVER',
+			'M-FACTS-REFL-SELF',
+			'M-FACTS-REFL-EXACT',
+			'M-HAZARDS-REFLECT-RECEIVERS',
+			'M-HAZARDS-REFLECT-RECEIVERS-ADDED',
+			'M-REACH-REFLECT-BOUND-NONE',
+			'M-REACH-REFLECT-RELATED',
+			'M-REACH-REFLECT-ADMIT',
+			'M-GRAPH-REFLECT-UNTYPED',
+			'M-GRAPH-REFLECT-SUBTYPES',
+			'M-GRAPH-REFLECT-SUPERTYPES',
+			'M-GRAPH-REFLECT-EXACT',
+			'M-GRAPH-REFLECT-ESCAPES',
+			'M-GRAPH-REFLECT-SELF-ESCAPES',
+			'M-REACH-REFLECT-BODY'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
@@ -4704,6 +4735,12 @@ class TestDiscoveryParityTest extends Test {
 			'M-SPANINFO-BOUND-MORE :: anyparse.macro.SpanInfoLowering#constraintCollect',
 			'M-FACTS-WALK-WRITTEN-CONSTANT :: anyparse.check.TypedFactsWalk#splicedCode',
 			'M-FACTS-WALK-JOINED-START :: anyparse.check.TypedFactsWalk#nestedSplice',
+			'M-FACTS-CALL-OPERAND :: anyparse.check.TypedFactsWalk#dynamicOperand',
+			'M-FACTS-CALL-OPERAND-LEAF :: anyparse.check.TypedFactsWalk#dynamicOperand',
+			'M-FACTS-CALL-OPERAND-EXACT :: anyparse.check.TypedFactsWalk#dynamicOperand',
+			'M-FACTS-REFL-RECEIVER :: anyparse.check.TypedFactsWalk#reflection',
+			'M-FACTS-REFL-SELF :: anyparse.check.TypedFactsWalk#reflection',
+			'M-FACTS-REFL-EXACT :: anyparse.check.TypedFactsWalk#reflection',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

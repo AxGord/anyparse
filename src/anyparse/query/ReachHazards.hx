@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.check.NativeCodeScan;
+import anyparse.query.CompilerFacts.ReflectionFact;
 import anyparse.query.FactsView.TruthSites;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.MemberBranchScan.MemberBranchSeams;
@@ -21,6 +22,12 @@ using Lambda;
  */
 @:nullSafety(Strict)
 final class ReachHazards {
+
+	/**
+	 * The argument index of the name in a reflective access (`ExecutionShape.reflectiveNameCalls`) whose object is the
+	 * first argument, the one its fact's receiver types (`ReflectionFact.receiver`).
+	 */
+	private static inline final RECEIVER_NAME_INDEX: Int = 1;
 
 	/** File -> the hazards its tree carries, computed on first demand. */
 	private final _byFile: Map<String, Array<ReachHazard>> = [];
@@ -72,14 +79,31 @@ final class ReachHazards {
 	 * not the name's, so one the syntax does not see names nothing. `root` is the tree the added hazards hang off.
 	 */
 	public function underTruth(syntactic: Array<ReachHazard>, typed: TruthSites, root: QueryNode): Array<ReachHazard> {
-		final out: Array<ReachHazard> = [for (h in syntactic) if (!recordedWhole(h)) h];
-		for (n in typed.natives) out.push({ kind: Native, span: n.at.span, node: root });
 		final named: Map<String, Int> = _shape.execution?.reflectiveNameCalls ?? [];
+		// every build's fact of a reflective access by name at exactly `at`: what each says of the object it acts on
+		function receiversAt(at: Span): Array<ReflectionFact> {
+			return [
+				for (r in typed.reflection) if (named[r.target] == RECEIVER_NAME_INDEX && same(r.at.span, at)) r
+			];
+		}
+		final out: Array<ReachHazard> = [
+			for (h in syntactic) if (!recordedWhole(h)) h.kind.match(ReflectiveName(null)) ? {
+				kind: h.kind,
+				span: h.span,
+				node: h.node,
+				receivers: receiversAt(h.span)
+			} : h
+		];
+		for (n in typed.natives) out.push({ kind: Native, span: n.at.span, node: root });
 		inline function seen(at: Span): Bool {
 			return syntactic.exists(h -> h.kind.match(ReflectiveName(_)) && same(h.span, at));
 		}
-		for (r in typed.reflection) if (named.exists(r.target) && !seen(r.at.span))
-			out.push({ kind: ReflectiveName(null), span: r.at.span, node: root });
+		for (r in typed.reflection) if (named.exists(r.target) && !seen(r.at.span)) out.push({
+			kind: ReflectiveName(null),
+			span: r.at.span,
+			node: root,
+			receivers: receiversAt(r.at.span)
+		});
 		out.sort((a, b) -> a.span.from - b.span.from);
 		return out;
 	}
@@ -268,4 +292,11 @@ typedef ReachHazard = {
 	var kind: ReachHazardKind;
 	var span: Span;
 	var node: QueryNode;
+
+	/**
+	 * Of a reflective access by a computed name read where the compiler facts are the truth (`ReachHazards.underTruth`),
+	 * the fact of it each build recorded, which says what the object it acts on is (`ReflectionFact.receiver`); absent
+	 * elsewhere.
+	 */
+	@:optional var receivers: Array<ReflectionFact>;
 }

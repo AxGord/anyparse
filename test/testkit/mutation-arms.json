@@ -8667,7 +8667,7 @@
 			"name": "M-FACTS-VIEW-EXACT-CONVERSION",
 			"type": "anyparse.query.FactsView",
 			"method": "sitesIn",
-			"find": "exact: argument?.exact == true",
+			"find": "exact: c.operandExact",
 			"replace": "exact: false",
 			"note": "the exactness the facts record of the argument of a conversion call is dropped"
 		},
@@ -11373,14 +11373,6 @@
 			"note": "a node read as one project type's member touches nothing, though its facts write the member"
 		},
 		{
-			"name": "M-FACTS-VIEW-CONVERSION-LEAF",
-			"type": "anyparse.query.FactsView",
-			"method": "conversionFlow",
-			"find": "return argument == null ? null : at(argument);",
-			"replace": "return flows.find(f -> f.via == 'arg' && f.at.file == c.at.file && c.at.span.from <= f.at.span.from && f.at.span.to <= c.at.span.to);",
-			"note": "the first argument flow inside a conversion call is the value converted, so a leaf of the parameter's own type (`Dynamic`), which records none, converts nothing"
-		},
-		{
 			"name": "M-REACH-QUALIFIED-ESCAPE",
 			"type": "anyparse.query.MemberReach",
 			"method": "walk",
@@ -11488,7 +11480,7 @@
 			"name": "M-FACTS-SITE-CONVERSION-OWNERS-NONE",
 			"type": "anyparse.query.FactsView",
 			"method": "sitesIn",
-			"find": "owners: [argument == null ? null : typedOwner(argument.from)]",
+			"find": "owners: [operand == null ? null : typedOwner(operand)]",
 			"replace": "owners: [null]",
 			"note": "a conversion call the facts typed names no type of the value it converts, so a `toString` of a name two types share it admits stays the simple name's"
 		},
@@ -11762,6 +11754,150 @@
 			"find": "code == last ? end.to : trimmedEnd(source, end)",
 			"replace": "trimmedEnd(source, end)",
 			"note": "a string's value that ends in spaces is placed short of them, at no expression the text writes"
+		},
+		{
+			"name": "M-FACTS-CALL-OPERAND",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "dynamicOperand",
+			"find": "return ',\"o\":${q(sourceType(first))}' + (exactObject(first) ? ',\"x\":true' : '');",
+			"replace": "return '';",
+			"note": "a call handing a value to a `Dynamic` parameter records none of it, so a conversion an inlined body spliced in from another file converts a value of any type (TM's `StringBuf.add` in `EReg.replace`)"
+		},
+		{
+			"name": "M-FACTS-CALL-OPERAND-LEAF",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "dynamicOperand",
+			"find": "return ',\"o\":${q(sourceType(first))}'",
+			"replace": "final leaves: Array<TypedExpr> = [];\n\t\tTypedFactsShapes.collectLeaves(first, leaves);\n\t\treturn ',\"o\":${q(sourceType(leaves[0]))}'",
+			"note": "the first leaf of a value handed to a `Dynamic` parameter is the value, so `Std.string(c ? new Plain() : d)` converts a `Plain` only"
+		},
+		{
+			"name": "M-FACTS-CALL-OPERAND-EXACT",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "dynamicOperand",
+			"find": " + (exactObject(first) ? ',\"x\":true' : '')",
+			"replace": "",
+			"note": "the exactness of a value handed to a `Dynamic` parameter is recorded nowhere"
+		},
+		{
+			"name": "M-FACTS-REFL-RECEIVER",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "reflection",
+			"find": "add('refl', '{\"t\":${q(targetName)}$literal$named$receiver,\"p\":$where}');",
+			"replace": "add('refl', '{\"t\":${q(targetName)}$literal$named,\"p\":$where}');",
+			"note": "a reflective call records nothing of the object it acts on, so every access by a computed name may reach any member"
+		},
+		{
+			"name": "M-FACTS-REFL-SELF",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "reflection",
+			"find": " + (isThis(first) ? ',\"h\":true' : '')",
+			"replace": "",
+			"note": "(precision) `this` handed to a reflective call is any object of its type, an escaped instance of another type included"
+		},
+		{
+			"name": "M-FACTS-REFL-EXACT",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "reflection",
+			"find": " + (exactObject(first) ? ',\"x\":true' : '')",
+			"replace": "",
+			"note": "(precision) an object built of exactly its class and handed to a reflective call may be an instance of a subclass"
+		},
+		{
+			"name": "M-HAZARDS-REFLECT-RECEIVERS",
+			"type": "anyparse.query.ReachHazards",
+			"method": "underTruth",
+			"find": "receivers: receiversAt(h.span)",
+			"replace": "receivers: []",
+			"note": "(precision) a reflective access the syntax sees keeps no fact of the object it acts on under the truth"
+		},
+		{
+			"name": "M-HAZARDS-REFLECT-RECEIVERS-ADDED",
+			"type": "anyparse.query.ReachHazards",
+			"method": "underTruth",
+			"find": "receivers: receiversAt(r.at.span)",
+			"replace": "receivers: []",
+			"note": "(precision) a reflective access only the facts see keeps no fact of the object it acts on (TM's `using Reflect` in `drill.Node`)"
+		},
+		{
+			"name": "M-REACH-REFLECT-BOUND-NONE",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "final reached: Null<ReflectedMembers> = _g.reflectedMembers(g, h.receivers ?? []);",
+			"replace": "final reached: Null<ReflectedMembers> = null;",
+			"note": "(precision) a reflective access by a computed name may reach any member whatever its object's type"
+		},
+		{
+			"name": "M-REACH-REFLECT-RELATED",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "if (reached == null || reached.types.contains(question.declaring))",
+			"replace": "if (reached == null)",
+			"note": "a reflective access on an object of the member's own type, a subtype or a supertype of it reaches none of it"
+		},
+		{
+			"name": "M-REACH-REFLECT-ADMIT",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "admit(reflected);",
+			"replace": "",
+			"note": "a reflective access by a computed name runs none of the accessors and methods of the object it reaches"
+		},
+		{
+			"name": "M-GRAPH-REFLECT-UNTYPED",
+			"type": "anyparse.query.ReachGraph",
+			"method": "reflectedMembers",
+			"find": "if (id == null) return null;",
+			"replace": "if (id == null) continue;",
+			"note": "a reflective access on a value of no class — `Dynamic`, a structure — reaches nothing"
+		},
+		{
+			"name": "M-GRAPH-REFLECT-SUBTYPES",
+			"type": "anyparse.query.ReachGraph",
+			"method": "reflectedMembers",
+			"find": "for (sub in facts.table.subtypesOf(id)) note(sub);",
+			"replace": "",
+			"note": "an object reflection acts on is never an instance of a subtype of its type"
+		},
+		{
+			"name": "M-GRAPH-REFLECT-SUPERTYPES",
+			"type": "anyparse.query.ReachGraph",
+			"method": "reflectedMembers",
+			"find": "for (id in typed.copy()) for (sup in facts.table.supertypesOf(id)) note(sup);",
+			"replace": "",
+			"note": "an object reflection acts on carries no member its type inherits"
+		},
+		{
+			"name": "M-GRAPH-REFLECT-EXACT",
+			"type": "anyparse.query.ReachGraph",
+			"method": "reflectedMembers",
+			"find": "if (r.receiverExact) continue;",
+			"replace": "",
+			"note": "(precision) an object built of exactly its class may be an instance of a subclass"
+		},
+		{
+			"name": "M-GRAPH-REFLECT-ESCAPES",
+			"type": "anyparse.query.ReachGraph",
+			"method": "reflectedMembers",
+			"find": "if (!r.receiverSelf) escapes = true;",
+			"replace": "",
+			"note": "an object reflection acts on is never an instance that left the type system, so a `Main` handed to `Dynamic` cannot come back as the `Other` it reads"
+		},
+		{
+			"name": "M-GRAPH-REFLECT-SELF-ESCAPES",
+			"type": "anyparse.query.ReachGraph",
+			"method": "reflectedMembers",
+			"find": "if (!r.receiverSelf) escapes = true;",
+			"replace": "escapes = true;",
+			"note": "(precision) `this` may be an escaped instance of any type, though only a dispatch on its own class binds it"
+		},
+		{
+			"name": "M-REACH-REFLECT-BODY",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "if (boundedCall(e)) return;",
+			"replace": "",
+			"note": "a reflective accessor's call whose object the facts bound enters the accessor's body, which reaches members by a name it is handed in `untyped` code: every such access is blind again (std's `Reflect.getProperty`)"
 		}
 	]
 }
