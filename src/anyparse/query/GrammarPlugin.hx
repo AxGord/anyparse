@@ -837,8 +837,9 @@ typedef RefShape = {
 	@:optional var blockStmtKind: String;
 
 	/**
-	 * Condition node kinds that bind no tighter than `&&`, so they need parentheses when
-	 * merged — `collapsible-if` wraps an outer/inner condition of one of these (`||`, ternary, assignment; NOT
+	 * Condition node kinds that bind no tighter than `&&` on their RIGHT side — every operator looser than `&&`, plus the ones
+	 * that bind tight on the left but take a whole expression on the right (Haxe `->`, `in`, `=>`) — so they need parentheses
+	 * when merged — `collapsible-if` wraps an outer/inner condition of one of these (`||`, ternary, assignment; NOT
 	 * `??`, which binds tighter than `&&`) so `if (a || c) if (b)` collapses to `if ((a || c) && b)`, not the
 	 * mis-precedenced `if (a || c && b)`. Optional.
 	 */

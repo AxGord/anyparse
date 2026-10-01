@@ -5,6 +5,7 @@ import anyparse.query.BoolExprShape;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
+import anyparse.query.ParenGuard;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
@@ -59,10 +60,9 @@ import anyparse.runtime.Span;
  * The l-value and operator are copied verbatim from the then-branch, the two
  * r-values and the condition verbatim from their spans, so the one surviving
  * l-value evaluation (down from two textual occurrences -- the safe direction)
- * matches the original exactly. The condition is wrapped in parentheses only
- * when it binds no tighter than `?:` (a ternary or an assignment); every
- * tighter-binding condition is emitted bare, per the no-redundant-parens
- * preference. A comment inside a DROPPED region of the collapsed `if` (the
+ * matches the original exactly. The condition is a `ParenGuard` hole: it gains parentheses exactly where it
+ * would bind across `?` bare (a ternary, an assignment, an arrow lambda, `in`); every other condition is emitted
+ * bare, per the no-redundant-parens preference. A comment inside a DROPPED region of the collapsed `if` (the
  * header, the else l-value, the braces) would be lost, so such an `if` is left
  * unflagged -- following `prefer-safe-nav`'s comment guard. Needs
  * `ifStatementKinds`, `exprStatementKind`, `blockStmtKind` (any unset makes the
@@ -101,12 +101,18 @@ final class PreferTernaryAssignment implements Check {
 		final seams: Null<Seams> = readSeams(plugin.refShape());
 		if (seams == null) return [];
 		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
-		final edits: Array<{ span: Span, text: String }> =
+		final guarded: Array<GuardedEdit> = [];
+		final plain: Array<{ span: Span, text: String }> =
 			CheckScan.applyBySpan(plugin, source, violations, seams.ifKinds, (node, span) -> {
 				final m: Null<Match> = match(node, source, comments, seams);
-				return m == null ? null : buildEdit(m, source, span, seams);
+				final edit: Null<GuardedEdit> = m == null ? null : buildEdit(m, source, span);
+				if (edit != null) guarded.push(edit);
+				return edit;
 			});
-		return CanonicalEdit.dropContainedEdits(edits);
+		// `plain` and `guarded` hold the same edits in the same order, so a containment index of one is the other's.
+		return ParenGuard.guard(source, [
+			for (i in 0...guarded.length) if (!CanonicalEdit.isContainedEdit(plain, i)) guarded[i]
+		], plugin);
 	}
 
 	/** Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */
@@ -223,25 +229,17 @@ final class PreferTernaryAssignment implements Check {
 		return StringTools.trim((~/\s+/g).replace(s, ' '));
 	}
 
-	/** Build the `lhs op cond ? thenRhs : elseRhs;` edit replacing the whole `if`/`else` span. */
-	private static function buildEdit(m: Match, source: String, span: Span, s: Seams): Null<{ span: Span, text: String }> {
+	/** Build the `lhs op cond ? thenRhs : elseRhs;` edit replacing the whole `if`/`else` span, the condition a `ParenGuard` hole. */
+	private static function buildEdit(m: Match, source: String, span: Span): Null<GuardedEdit> {
 		final thenSpan: Null<Span> = m.thenAssign.span;
 		final thenRhsSpan: Null<Span> = m.thenRhs.span;
 		final condSpan: Null<Span> = m.condition.span;
 		final elseRhsSpan: Null<Span> = m.elseRhs.span;
 		if (thenSpan == null || thenRhsSpan == null || condSpan == null || elseRhsSpan == null) return null;
 		final prefix: String = source.substring(thenSpan.from, thenRhsSpan.from);
-		final condition: String = wrapCondition(source.substring(condSpan.from, condSpan.to), m.condition.kind, s.shape);
 		final thenRhs: String = source.substring(thenRhsSpan.from, thenRhsSpan.to);
 		final elseRhs: String = source.substring(elseRhsSpan.from, elseRhsSpan.to);
-		return { span: span, text: '${prefix + condition} ? $thenRhs : $elseRhs;' };
-	}
-
-	/** Parenthesise the condition iff it binds no tighter than `?:` (a ternary or an assignment); else emit it bare. */
-	private static function wrapCondition(source: String, kind: String, shape: RefShape): String {
-		final ternaryKind: Null<String> = shape.ternaryKind;
-		final needsParens: Bool = (ternaryKind != null && kind == ternaryKind) || shape.writeParentKinds.contains(kind);
-		return needsParens ? '($source)' : source;
+		return ParenGuard.ternaryEdit(span, prefix, source.substring(condSpan.from, condSpan.to), thenRhs, elseRhs, ';');
 	}
 
 	/**

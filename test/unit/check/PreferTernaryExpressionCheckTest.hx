@@ -111,6 +111,14 @@ class PreferTernaryExpressionCheckTest extends Test {
 		Assert.equals('(a ? b : c) ? 1 : 2', es[0].text);
 	}
 
+	/** An `untyped` condition would swallow the `? 1 : 2` bare; `ParenGuard` gives it the pair. */
+	public function testUntypedConditionParenthesised(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f():Void {\n\t\tvar x = if (untyped c) 1 else 2;\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('(untyped c) ? 1 : 2', es[0].text);
+	}
+
 	public function testComparisonConditionBare(): Void {
 		final es: Array<{ span: Span, text: String }> =
 			edits('class C {\n\tfunction f():Void {\n\t\tvar x = if (a > 1 && b) 1 else 2;\n\t}\n}');

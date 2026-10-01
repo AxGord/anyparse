@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.ParenGuard;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SourceComments;
@@ -89,9 +90,9 @@ import anyparse.runtime.Span;
  *
  * `fix` replaces the `if`-expression with `cond ? then : else` -- no trailing `;`, the node
  * being an expression, so the enclosing statement's terminator is untouched. The three pieces
- * are copied verbatim from their spans. The condition is wrapped in parentheses only when it
- * binds no tighter than `?:` (a ternary or an assignment), per the user's no-redundant-parens
- * preference; the branches are copied bare, which the branch whitelist is what makes safe.
+ * are copied verbatim from their spans. The condition is a `ParenGuard` hole: it gains parentheses exactly
+ * where it would bind across `?` bare (a ternary, an assignment, an arrow lambda, `in`), per the user's
+ * no-redundant-parens preference; the branches are copied bare, which the branch whitelist is what makes safe.
  *
  * The replaced region stops at the ELSE-BRANCH's end, not at the node's own: an
  * `if`-expression span runs on through the trivia after its last token, and splicing that
@@ -145,9 +146,15 @@ final class PreferTernaryExpression implements Check {
 		final resolveIndex: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex([{ file: '', source: source }], plugin, index);
 		final byKey: Map<String, Match> = [];
 		for (m in collect(plugin, source, seams, resolveIndex)) byKey['${m.span.from}:${m.span.to}'] = m;
-		return CanonicalEdit.dropContainedEdits(
-			CheckScan.collectSpanEdits(violations, byKey, (m, _) -> ({ span: m.editSpan, text: m.text }))
-		);
+		final guarded: Array<GuardedEdit> = [];
+		final plain: Array<{ span: Span, text: String }> = CheckScan.collectSpanEdits(violations, byKey, (m, _) -> {
+			guarded.push(m.edit);
+			return m.edit;
+		});
+		// `plain` and `guarded` hold the same edits in the same order, so a containment index of one is the other's.
+		return ParenGuard.guard(source, [
+			for (i in 0...guarded.length) if (!CanonicalEdit.isContainedEdit(plain, i)) guarded[i]
+		], plugin);
 	}
 
 	/**
@@ -257,21 +264,14 @@ final class PreferTernaryExpression implements Check {
 		if (span == null || condSpan == null || thenSpan == null || elseSpan == null) return null;
 		if (IfExpressionChain.droppedComment(span, [condSpan, thenSpan, elseSpan], scan.comments)) return null;
 		final src: String = scan.source;
-		final cond: String = wrapCondition(src.substring(condSpan.from, condSpan.to), condition.kind, s.shape);
 		final thenSource: String = src.substring(thenSpan.from, thenSpan.to);
 		final elseSource: String = src.substring(elseSpan.from, elseSpan.to);
 		return {
 			span: span,
-			editSpan: new Span(span.from, elseSpan.to),
-			text: '$cond ? $thenSource : $elseSource'
+			edit: ParenGuard.ternaryEdit(
+				new Span(span.from, elseSpan.to), '', src.substring(condSpan.from, condSpan.to), thenSource, elseSource, ''
+			)
 		};
-	}
-
-	/** Parenthesise the condition iff it binds no tighter than `?:` (a ternary or an assignment); else emit it bare. */
-	private static function wrapCondition(source: String, kind: String, shape: RefShape): String {
-		final ternaryKind: Null<String> = shape.ternaryKind;
-		final needsParens: Bool = (ternaryKind != null && kind == ternaryKind) || shape.writeParentKinds.contains(kind);
-		return needsParens ? '($source)' : source;
 	}
 
 }
@@ -289,8 +289,9 @@ private typedef Seams = {
 /** A rewritable `if`-expression: the finding key span, the (trivia-trimmed) replaced span, and the ternary text. */
 private typedef Match = {
 	var span: Span;
-	var editSpan: Span;
-	var text: String;
+
+	/** `cond ? then : else` over the `if`-expression up to its else-branch's end, the condition a `ParenGuard` hole. */
+	var edit: GuardedEdit;
 }
 
 /** The per-file walk state: the parsed tree, its source and comment tokens, the seams, and the lazy symbol index. */

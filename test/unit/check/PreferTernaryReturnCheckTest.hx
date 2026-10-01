@@ -102,6 +102,17 @@ class PreferTernaryReturnCheckTest extends Test {
 		Assert.equals('return (x = g()) ? 1 : 0;', es[0].text);
 	}
 
+	/**
+	 * An `untyped` condition takes a whole expression, so bare it would swallow the `? 1 : 0`; the
+	 * pair comes from `ParenGuard` asking the parser, not from a list of loose kinds.
+	 */
+	public function testFixUntypedConditionWrapped(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f():Int {\n\t\tif (untyped c) return 1;\n\t\treturn 0;\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('return (untyped c) ? 1 : 0;', es[0].text);
+	}
+
 	public function testSkipParseNoCrash(): Void {
 		Assert.equals(0, violations('class Bad { function f() { ').length);
 	}

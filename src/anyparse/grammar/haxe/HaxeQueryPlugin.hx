@@ -1027,6 +1027,14 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			andLowerPrecedenceKinds: [
 				'Or',
 				'Ternary',
+				// `=>` and the two asymmetric operators bind tight on the left but take everything to
+				// their right, so as the LEFT operand of `&&` they swallow it: `x -> b && c` is
+				// `x -> (b && c)`. `HaxeAndLowerPrecedenceTest` derives this list from the parser.
+				'Arrow',
+				'ThinArrow',
+				'In',
+				// `cast` takes a whole expression: `cast a && b` is `cast (a && b)`.
+				'CastExpr',
 				'Assign',
 				'AddAssign',
 				'SubAssign',
@@ -1527,15 +1535,15 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// One tier each, left-associative, so `(a * b) / c` and `a * b / c` parse
 			// alike. `Mod` is deliberately in NO family: Haxe binds `%` TIGHTER
 			// than `*` and `/` (`2 * 7 % 4` is 6), and the grammar models that as its own
-			// prec-10 tier, so `%` never shares a tier with another operator. A single-member
+			// prec-11 tier, so `%` never shares a tier with another operator. A single-member
 			// `['Mod']` family would be sound (`(a % b) % c` re-parses to the tree it already
 			// had) but stays out of scope here.
 			leftAssociativeBinaryFamilies: [['Mul', 'Div'], ['Add', 'Sub']],
-			// The prec-4 tier's two VALUE comparisons apiece. `Is` (a type on the right)
-			// and `Interval` (a `...` that abuts numeric-literal / field-access `.`
-			// lexing) share the tier but are deliberately not hosts.
+			// The prec-5 tier's two VALUE comparisons apiece. `Is` (a type on the right, and its own
+			// tier above every binary operator) and `Interval` (one tier looser, and a `...` that abuts
+			// numeric-literal / field-access `.` lexing) are deliberately not hosts.
 			comparisonOperandHostKinds: ['Eq', 'NotEq', 'Lt', 'LtEq', 'Gt', 'GtEq'],
-			// The arithmetic core plus the POSTFIX in/decrements: tiers 8-10 and the
+			// The arithmetic core plus the POSTFIX in/decrements: tiers 9-11 and the
 			// postfix chain links, strictly tighter than a comparison here AND in every
 			// C-family language, so the drop is right on both readings. `PostIncr` /
 			// `PostDecr` are what `while ((a++) < 36)` needs; their own `++` / `--`
@@ -1546,23 +1554,23 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// mere absence from this ROOT whitelist, not by the gate that keeps `Neg` out:
 			// `unaryMinusKinds` refuses a leading minus at ANY depth and has no prefix
 			// in/decrement analogue, so `(--b * c) > d` is a `Mul` root and still drops.
-			// The BITWISE tier (6) is out for CORRECTNESS — C binds
+			// The BITWISE tier (7) is out for CORRECTNESS — C binds
 			// `& | ^` LOOSER than `==`, so `(x & m) != 0` reads differently there once
-			// the pair is gone. The SHIFT tier (7) binds tighter than a comparison in C
+			// the pair is gone. The SHIFT tier (8) binds tighter than a comparison in C
 			// exactly as it does here and WOULD be provable; it is out on READABILITY
 			// alone, since a shift operand is habitually parenthesized. Atoms are the
 			// `atoms` arm's; the two converge over `lint --fix` passes. `Neg` USED to be
 			// here as a root; `unaryMinusKinds` now owns the whole leading-minus rule,
 			// so listing it as well would be a whitelist entry nothing can pass.
 			comparisonOperandUnwrapKinds: ['Add', 'Sub', 'Mul', 'Div', 'Mod', 'PostIncr', 'PostDecr'],
-			// The prec-8 tier. NOT the multiplicative one above it: Haxe binds `%` tighter
+			// The prec-9 tier. NOT the multiplicative one above it: Haxe binds `%` tighter
 			// than `*` and `/`, but C makes the three ONE tier, so a bare `a * b % c` reads
 			// `(a * b) % c` to a C-trained eye and the pair in `a * (b % c)` is what makes
 			// the two readings agree. Bitwise and shift are no hosts either — not for
 			// correctness (`(a * b) & c` bare re-parses the same here and in C) but on the
 			// READABILITY ground that keeps shifts off the comparison whitelist.
 			additiveOperandHostKinds: ['Add', 'Sub'],
-			// Tiers 9 and 10 and the POSTFIX in/decrements — strictly tighter than `+` / `-`
+			// Tiers 10 and 11 and the POSTFIX in/decrements — strictly tighter than `+` / `-`
 			// here AND in C, so the drop is right on both readings; `(a++) + b` bare is the
 			// tree it already had. The SAME tier (`Add` / `Sub`) is out for CORRECTNESS:
 			// `a + (b - c)` bare is `(a + b) - c`, a different value. `Neg` is provable and
@@ -1575,14 +1583,20 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			additiveOperandUnwrapKinds: ['Mul', 'Div', 'Mod', 'PostIncr', 'PostDecr'],
 			// Everything whose extent runs to the enclosing bracket. Probed one shape
 			// apiece: each of these swallows a trailing `- d` that a parenthesis would
-			// have kept out. `CastExpr` is here on the COMPILER's answer, not this
-			// parser's — `x + b * cast c - d` is 7 there and this grammar models the
-			// cast as bounded; `MetaExpr` diverges the same way. Deliberately absent:
+			// have kept out (`x + b * cast c - d` is `x + b * cast (c - d)`). `MetaExpr`
+			// is here on the COMPILER's answer, not this parser's: the compiler binds the
+			// annotation to the immediate primary, this grammar over everything that
+			// follows. The two asymmetric
+			// operators `->` and `in` are here too: their root binds tighter than any
+			// other binary operator on the LEFT, yet `(x -> b) + c` bare is
+			// `x -> (b + c)`. Deliberately absent:
 			// the brace- and bracket-closed forms (`switch`, a block, an object or
 			// array literal, `cast(e, T)`, `(e : T)`, `macro class`, `new T(…)`) and
 			// the tight unary prefixes (`-`, `!`, `~`, `++`, `--`), none of which reach
 			// past their own last token.
 			rightGreedyExprKinds: [
+				'ThinArrow',
+				'In',
 				'UntypedExpr',
 				'MacroExpr',
 				'MetaExpr',

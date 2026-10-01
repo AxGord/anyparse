@@ -671,7 +671,9 @@ final class WriterKwRefLowering {
 		// ω-cast-tight-on-paren: `@:fmt(tightOnParenOperand(...))`
 		// suppresses the kw trailing space at runtime when the operand's
 		// enum ctor matches the list (`cast(x)` vs `cast x`).
-		final ctorTightSpace: Null<Expr> = stripKwTrailingSpace ? null : kwTrailingSpaceOnOperandCtor(branch, argNames);
+		final ctorTightSpace: Null<Expr> = stripKwTrailingSpace
+			? null
+			: kwTrailingSpaceOnOperandCtor(branch, argNames, leftOperandCtors(kw, refName));
 		return { strip: stripKwTrailingSpace, space: kwSidePolicySpace ?? parenSidePolicySpace ?? ctorTightSpace };
 	}
 
@@ -965,6 +967,24 @@ final class WriterKwRefLowering {
 	private static function subStructStartsWithTightLead(kw: KwRefCtx, refName: String): Bool {
 		final first: Null<ShapeNode> = firstFieldOfSubSeq(kw, refName);
 		return first != null && kw.isTightLead(first.readMetaString(':lead'));
+	}
+
+	/**
+	 * The ctors of `refName` whose rendering starts with their FIRST child — every infix, postfix
+	 * and ternary branch — so the operand's leftmost token is that child's. Empty for a rule with no
+	 * operator branches.
+	 */
+	private static function leftOperandCtors(kw: KwRefCtx, refName: String): Array<String> {
+		final rule: Null<ShapeNode> = kw.shape.rules[refName];
+		if (rule == null || rule.kind != Alt) return [];
+		return [
+			for (b in rule.children)
+				if (
+					b.annotations.get(AnnotationKeys.PRATT_PREC) != null || b.annotations.get(AnnotationKeys.POSTFIX_OP) != null
+					|| b.annotations.get(AnnotationKeys.TERNARY_OP) != null
+				)
+					(b.annotations.get(AnnotationKeys.BASE_CTOR): String)
+		];
 	}
 
 	/**

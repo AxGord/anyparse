@@ -107,6 +107,14 @@ class PreferTernaryAssignmentCheckTest extends Test {
 		Assert.equals('x = (a ? b : c) ? 1 : 2;', es[0].text);
 	}
 
+	/** An `untyped` condition would swallow the `? 1 : 2` bare; `ParenGuard` gives it the pair. */
+	public function testUntypedConditionWrapped(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f() {\n\t\tif (untyped c) x = 1;\n\t\telse x = 2;\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('x = (untyped c) ? 1 : 2;', es[0].text);
+	}
+
 	public function testComparisonConditionNotWrapped(): Void {
 		final es: Array<{ span: Span, text: String }> =
 			edits('class C {\n\tfunction f() {\n\t\tif (x > 0) a = 1;\n\t\telse a = 2;\n\t}\n}');

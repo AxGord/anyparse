@@ -7,6 +7,7 @@ import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
 import anyparse.query.NodeShape;
+import anyparse.query.ParenGuard;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
 import anyparse.query.SourceComments;
@@ -79,9 +80,9 @@ using Lambda;
  *
  * `fix` replaces the `if`-statement-through-`return` span with `return cond ? e : x;`,
  * copying the condition, the r-value and the returned identifier verbatim from their
- * spans. The condition is wrapped in parentheses only when it binds no tighter than `?:`
- * (a ternary, or an assignment) so precedence is preserved; every tighter-binding
- * condition is emitted bare, per the no-redundant-parens preference. The replacement is
+ * spans. The condition is a `ParenGuard` hole: it gains parentheses exactly where it would bind
+ * across `?` bare (a ternary, an assignment, an arrow lambda, `in`), so precedence is preserved;
+ * every other condition is emitted bare, per the no-redundant-parens preference. The replacement is
  * emitted on ONE line and the WRITER lays it out -- an over-long merge wraps into the
  * project's ternary layout through the same `RefactorSupport.canonicalize` every fix
  * goes through, so this check owns no wrapping policy.
@@ -151,7 +152,7 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 					span: m.ifSpan,
 					rule: RULE_ID,
 					severity: Severity.Info,
-					message: m.text == null ? MSG_COMMENT : MSG_FIXABLE
+					message: m.edit == null ? MSG_COMMENT : MSG_FIXABLE
 				}
 		];
 	}
@@ -164,11 +165,17 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 		final byKey: Map<String, Match> = [];
 		for (m in matchesIn(source, plugin, seams)) byKey['${m.ifSpan.from}:${m.ifSpan.to}'] = m;
 
-		return CanonicalEdit.dropContainedEdits(CheckScan.collectSpanEdits(violations, byKey, (m, _) -> {
-			final text: Null<String> = m.text;
+		final guarded: Array<GuardedEdit> = [];
+		final plain: Array<{ span: Span, text: String }> = CheckScan.collectSpanEdits(violations, byKey, (m, _) -> {
+			final edit: Null<GuardedEdit> = m.edit;
 			// A dropped comment leaves the finding report-only: no edit for this site.
-			return text == null ? null : { span: m.editSpan, text: text };
-		}));
+			if (edit != null) guarded.push(edit);
+			return edit;
+		});
+		// `plain` and `guarded` hold the same edits in the same order, so a containment index of one is the other's.
+		return ParenGuard.guard(source, [
+			for (i in 0...guarded.length) if (!CanonicalEdit.isContainedEdit(plain, i)) guarded[i]
+		], plugin);
 	}
 
 	/** Every collapsible pair in `source` -- the one traversal `run` and `fix` share. */
@@ -273,12 +280,14 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 
 		final kept: Array<Span> = [condSpan, rhsSpan, retIdentSpan];
 		final blocked: Bool = droppedComment(ifSpan.from, retSpan.to, kept, comments);
-		final merged: String = 'return ${wrapCondition(source.substring(condSpan.from, condSpan.to), condition.kind, s.shape)} ? '
-			+ '${source.substring(rhsSpan.from, rhsSpan.to)} : ${source.substring(retIdentSpan.from, retIdentSpan.to)};';
 		return {
 			ifSpan: ifSpan,
-			editSpan: new Span(ifSpan.from, retSpan.to),
-			text: blocked ? null : merged
+			edit: blocked
+				? null
+				: ParenGuard.ternaryEdit(
+					new Span(ifSpan.from, retSpan.to), 'return ', source.substring(condSpan.from, condSpan.to),
+					source.substring(rhsSpan.from, rhsSpan.to), source.substring(retIdentSpan.from, retIdentSpan.to), ';'
+				)
 		};
 	}
 
@@ -325,12 +334,6 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 		return true;
 	}
 
-	/** Parenthesise the condition iff it binds no tighter than `?:` (a ternary or an assignment); else emit it bare. */
-	private static function wrapCondition(source: String, kind: String, shape: RefShape): String {
-		final ternaryKind: Null<String> = shape.ternaryKind;
-		final needsParens: Bool = (ternaryKind != null && kind == ternaryKind) || shape.writeParentKinds.contains(kind);
-		return needsParens ? '($source)' : source;
-	}
 
 	/**
 	 * Whether a comment sits inside the collapsed region `[from, to)` but outside every
@@ -398,6 +401,7 @@ private typedef Seams = {
 /** A collapsible pair: the `if` span (finding key), the replaced span, and the merged text (null = report-only). */
 private typedef Match = {
 	var ifSpan: Span;
-	var editSpan: Span;
-	var text: Null<String>;
+
+	/** The ternary `return` replacing the pair, its condition a `ParenGuard` hole; null when a comment would be dropped. */
+	var edit: Null<GuardedEdit>;
 }
