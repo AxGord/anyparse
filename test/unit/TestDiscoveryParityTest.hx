@@ -2610,6 +2610,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-TEXT-JOINED-ACCESS',
 			'unit.query.MemberReachFactsTest#testAMemberOnlyAListedBuildDeclaresShadowsAnExtensionThere :: control :: '
 				+ 'M-FACTS-TRUTH-CONTEXT',
+			'unit.query.MemberReachFactsTest#testAMemberOnlyOneTypeOfItsNameDeclaresAsksThatTypesBuildMacroUnderTheTruth :: control :: '
+				+ 'M-REACH-REWRITTEN-SOLE-SIMPLE',
 			'unit.query.MemberReachFactsTest#testAMethodABuildMacroAddedTheFactsCannotReadTouchesTheMemberUnderTheTruth :: control :: '
 				+ 'M-TOUCH-ADOPTED-UNREAD',
 			'unit.query.MemberReachFactsTest#testAMethodABuildMacroAddedTouchingTheMemberReachesItUnderTheTruth :: control :: '
@@ -2623,6 +2625,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testAProjectFileNoBuildCompilesRunsNothing :: control :: '
 				+ 'M-REACH-DEAD-FILE-SEEDS,M-FACTS-DEAD-FILE-NEVER,M-FACTS-DEAD-FILE-UNTRUE',
 			'unit.query.MemberReachFactsTest#testAPropertyOneBuildReadsThroughAGetterIsNotReadStraight :: control :: M-FACTS-FIELD-KINDS',
+			'unit.query.MemberReachFactsTest#testAPropertyOnlyAnotherBranchsDeclarationOfATypeGivesRunsItsAccessor :: control :: '
+				+ 'M-INDEX-ALTERNATE-DROPPED,M-INDEX-ALTERNATE-MEMBERS',
 			'unit.query.MemberReachFactsTest#testAPropertyReadStraightFromItsStorageIsAnsweredUnderTheTruth :: control :: '
 				+ 'M-REACH-PROPERTY-STRAIGHT,M-REACH-PROPERTY-GETTER,M-REACH-FACTS-FIELDS-UNTRUE',
 			'unit.query.MemberReachFactsTest#testAReflectiveCallTheSyntaxDoesNotSeeNamesNothingUnderTheTruth :: control :: '
@@ -2671,6 +2675,9 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-TOUCH-TYPED-FRESH,M-TOUCH-TYPED-SYNTAX-TOO',
 			'unit.query.MemberReachFactsTest#testAnAccessorCalledByItsOwnNameIsItsTextUnderTheTruth :: control :: '
 				+ 'M-FACTS-TEXT-ACCESSOR-NAME',
+			'unit.query.MemberReachFactsTest#testAnAdmittedConversionOfANameTwoTypesShareIsTheOperandsTypesUnderTheTruth :: control :: '
+				+ 'M-FACTS-SITE-OWNERS-NONE,M-FACTS-SITE-CONVERSION-OWNERS-NONE,M-REACH-OWNED-TYPES-NONE,M-REACH-OWNED-UNTYPED,'
+				+ 'M-REACH-OWNED-ESCAPES-KEPT',
 			'unit.query.MemberReachFactsTest#testAnArrayMemberOfASubclassUnderAnAncestorsAutoBuildIsAnsweredUnderTheTruth :: control :: '
 				+ 'M-REACH-REWRITTEN-TRUTH,M-REACH-REWRITTEN-UNTRUE',
 			'unit.query.MemberReachFactsTest#testAnEscapeTheCompilerTypesCostsOnlyItsOwnFamily :: control :: M-FACTS-REACH-ESCAPE-TYPED',
@@ -2686,6 +2693,9 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-REACH-SPLICE,M-FACTS-TRUTH-SPLICE-ALWAYS',
 			'unit.query.MemberReachFactsTest#testAnInstanceOfAClassExtendingAnExternEscapesUnderTheTruth :: control :: '
 				+ 'M-ESCAPES-FACTS-EXTENDS-EXTERN',
+			'unit.query.MemberReachFactsTest#testAnInterfacePropertyReadThroughAnInlinedAbstractRunsItsImplementations :: control :: '
+				+ 'M-GRAPH-FACTS-INTERFACE-PLACEHOLDER,M-GRAPH-VIRTUAL-OWN-ONLY,M-GRAPH-ABSTRACT-THIS-STORAGE,'
+				+ 'M-REACH-OVERRIDES-INHERITED-UNLOADED',
 			'unit.query.MemberReachFactsTest#testAnUnannotatedArrayMemberIsAnArrayUnderTheTruth :: control :: '
 				+ 'M-REACH-TYPED-ARRAY-NEVER,M-REACH-TYPED-ARRAY-ANY',
 			'unit.query.MemberReachFactsTest#testAnUntypedIndexAccessKeepsItsHazardUnderTheTruth :: control :: '
@@ -2694,6 +2704,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-REACH-REWRITTEN-TRUTH,M-REACH-REWRITTEN-UNTRUE',
 			'unit.query.MemberReachFactsTest#testCodeNoBuildCompilesHasNoAnswerUnderTheTruth :: control :: '
 				+ 'M-REACH-DEAD-FILE-ENTRY,M-REACH-DEAD-FILE-LOCAL-ENTRY',
+			'unit.query.MemberReachFactsTest#testCodeNoBuildCompilesRunsNothingUnderTheTruth :: control :: '
+				+ 'M-REACH-DEAD-NODE-ENTERED,M-LIVE-FRAGMENTED',
 			'unit.query.MemberReachFactsTest#testCodeReadThroughItsFactsRunsNoOperatorOverloadItNamesNoCallOfUnderTheTruth :: control :: '
 				+ 'M-ADMIT-SYNTAX-READ-FIELD,M-REACH-UNREAD-NARROWED,M-FACTS-ABSTRACT-CTOR-NAME',
 			'unit.query.MemberReachFactsTest#testEscapesReadOffEveryBuildsFactsLetAThrownValueRunOnlyItsOwnToString :: control :: '
@@ -4438,7 +4450,21 @@ class TestDiscoveryParityTest extends Test {
 			'M-GRAPH-FACTS-TYPED-NONE',
 			'M-TOUCH-SCAN-NODE-UNRECORDED',
 			'M-FACTS-VIEW-CONVERSION-LEAF',
-			'M-REACH-QUALIFIED-ESCAPE'
+			'M-REACH-QUALIFIED-ESCAPE',
+			'M-GRAPH-FACTS-INTERFACE-PLACEHOLDER',
+			'M-GRAPH-VIRTUAL-OWN-ONLY',
+			'M-INDEX-ALTERNATE-DROPPED',
+			'M-INDEX-ALTERNATE-MEMBERS',
+			'M-FACTS-SITE-OWNERS-NONE',
+			'M-REACH-OWNED-TYPES-NONE',
+			'M-REACH-OWNED-UNTYPED',
+			'M-REACH-OWNED-ESCAPES-KEPT',
+			'M-GRAPH-ABSTRACT-THIS-STORAGE',
+			'M-REACH-OVERRIDES-INHERITED-UNLOADED',
+			'M-REACH-DEAD-NODE-ENTERED',
+			'M-LIVE-FRAGMENTED',
+			'M-FACTS-SITE-CONVERSION-OWNERS-NONE',
+			'M-REACH-REWRITTEN-SOLE-SIMPLE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

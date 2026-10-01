@@ -555,7 +555,11 @@ final class CallGraph {
 		return owner == null ? null : _members[owner]?.get(member);
 	}
 
-	/** Transitive loaded subtypes of `typeName` that declare `member` — virtual dispatch targets, recomputable after the graph grew. */
+	/**
+	 * The virtual dispatch targets of `member` on `typeName`, recomputable after the graph grew: for each transitive loaded
+	 * subtype, the member it declares — or, lacking one, the one it inherits from a superclass off `typeName`'s own chain (a
+	 * class implementing an interface with a method its superclass declares), which a dispatch on `typeName` runs too.
+	 */
 	public function virtualTargets(typeName: String, member: String): Array<String> {
 		final result: Array<String> = [];
 		final queue: Array<String> = [typeName];
@@ -567,12 +571,28 @@ final class CallGraph {
 			visited.push(t);
 			for (sub in types.subtypesOf(t)) {
 				queue.push(sub);
-				final table: Null<Map<String, String>> = _members[sub];
-				final hit: Null<String> = table == null ? null : table[member];
+				final hit: Null<String> = _members[sub]?.get(member) ?? inheritedOffChain(typeName, sub, member);
 				if (hit != null && !result.contains(hit)) result.push(hit);
 			}
 		}
 		return result;
+	}
+
+	/**
+	 * The `member` the superclass chain of `sub` declares first, when that superclass is off `typeName`'s own chain — one on
+	 * it is the dispatched member itself — or null.
+	 */
+	private function inheritedOffChain(typeName: String, sub: String, member: String): Null<String> {
+		final seen: Array<String> = [sub];
+		var at: Null<String> = types.superclassOf(sub);
+		while (at != null && !seen.contains(at)) {
+			final holder: String = at;
+			final hit: Null<String> = _members[holder]?.get(member);
+			if (hit != null) return types.firstOnChain(typeName, t -> t == holder) == null ? hit : null;
+			seen.push(holder);
+			at = types.superclassOf(holder);
+		}
+		return null;
 	}
 
 	/**
@@ -1968,6 +1988,8 @@ final class CallGraph {
 				}
 				owner = recv.typeName;
 				isValue = recv.isValue;
+				// an abstract's `this` is the value it wraps: that value's property is no storage of the accessor's own
+				if (recv.typeName != currentType) ownStorage = false;
 			}
 			if (owner == null) return;
 			final ownerType: String = owner;

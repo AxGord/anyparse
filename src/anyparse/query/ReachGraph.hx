@@ -28,6 +28,9 @@ using Lambda;
 @:nullSafety(Strict)
 final class ReachGraph {
 
+	/** The kinds of a typed type (`CompilerFacts.TypeFact`) a value of which is an instance of it or of a subtype. */
+	private static final NOMINAL_KINDS: Array<String> = ['class', 'interface'];
+
 	/**
 	 * How many placeholders for implicitly-called library members this analysis has added to the graph — a node the
 	 * admission closure did not hold when it was computed, so a walk re-asks its admissions when this moves.
@@ -373,14 +376,41 @@ final class ReachGraph {
 
 	/**
 	 * The implicitly-called functions the site `at` may run: the members of its family declared on the types its
-	 * operands may have at run time (`typesAt`) — a class's own chain and its subtypes, an abstract's own members — or,
-	 * when an operand's type is not known, every member of the family in play (`counts`).
+	 * operands may have at run time (`typesAt`, or `ownedTypesAt` where the facts name each operand's type) — a class's own
+	 * chain and its subtypes, an abstract's own members — or, when an operand's type is not known, every member of the
+	 * family in play (`counts`).
 	 */
 	public function idsAt(g: CallGraph, at: ImplicitSite): Array<String> {
-		final scope: Null<Array<String>> = typesAt(g, at);
-		return idsOf(g, [
-			for (c in indexImplicit()) if (matches(c.family, at.family) && (scope == null ? counts(c) : scope.contains(c.type))) c
-		]);
+		final out: Array<String> = [];
+		for (o in ownedIdsAt(g, at)) if (!out.contains(o.id)) out.push(o.id);
+		return out;
+	}
+
+	/**
+	 * The implicitly-called functions the site `at` may run (`idsAt`), each with the typed type it is the member of when
+	 * the facts name it (`ownedTypesAt`): which of the types sharing its type's simple name runs it — one entry for each of
+	 * them that declares the member. One with no owner is reached by its simple name alone.
+	 */
+	public function ownedIdsAt(g: CallGraph, at: ImplicitSite): Array<OwnedId> {
+		final owned: Null<Map<String, Null<Array<String>>>> = ownedTypesAt(g, at);
+		final scope: Null<Array<String>> = owned == null ? typesAt(g, at) : [for (t in owned.keys()) t];
+		final view: Null<FactsView> = _scope.facts;
+		final out: Array<OwnedId> = [];
+		function add(id: String, owner: Null<String>): Void {
+			if (!out.exists(o -> o.id == id && o.owner == owner)) out.push({ id: id, owner: owner });
+		}
+		for (c in indexImplicit()) if (matches(c.family, at.family) && (scope == null ? counts(c) : scope.contains(c.type))) {
+			final id: String = idsOf(g, [c])[0];
+			final owners: Null<Array<String>> = owned == null ? null : owned[c.type];
+			if (owners == null || view == null) {
+				add(id, null);
+				continue;
+			}
+			final facts: FactsView = view;
+			// a type of the name that declares no such member runs none of the others'
+			for (o in owners) if (facts.table.type(o)?.fields.exists(f -> facts.graphMember(o, f.name) == c.member) == true) add(id, o);
+		}
+		return out;
 	}
 
 	/**
@@ -516,9 +546,10 @@ final class ReachGraph {
 
 	/**
 	 * Add the library files declaring a subtype of `type` that spell `member` — the overrides a dispatch on
-	 * `type` can reach. The budget refusal of the first file past the cap is returned: an override not loaded
-	 * is an override not seen. A library file that did not parse declares nothing the index could list, so one
-	 * spelling `type` or `member` anywhere may hold an override: it is a blind spot.
+	 * `type` can reach — and the file of each superclass off `type`'s chain a subtype inherits the member from, which
+	 * no file of the subtype spells (`CallGraph.virtualTargets`). The budget refusal of the first file past the cap is
+	 * returned: an override not loaded is an override not seen. A library file that did not parse declares nothing the
+	 * index could list, so one spelling `type` or `member` anywhere may hold an override: it is a blind spot.
 	 */
 	public function loadOverrides(g: CallGraph, type: String, member: String): Null<ReachUnknown> {
 		final unparsed: Null<String> = unparsedLibraryMentioning([type, member]);
@@ -535,6 +566,32 @@ final class ReachGraph {
 			if (source == null || !RawSourceScan.mentionsWord(source, member)) continue;
 			final budget: Null<ReachUnknown> = loadFile(g, file);
 			if (budget != null) return budget;
+		}
+		for (sub in _scope.index.subtypes.subtypeNames(type)) {
+			final holder: Null<String> = inheritedFrom(g, type, sub, member);
+			final file: Null<String> = holder == null ? null : _scope.siteOf(holder)?.file;
+			if (file == null || g.treeOf(file) != null) continue;
+			if (g.skippedFiles.contains(file)) return SkipParse(file);
+			final budget: Null<ReachUnknown> = loadFile(g, file);
+			if (budget != null) return budget;
+		}
+		return null;
+	}
+
+	/**
+	 * The superclass of `sub`, off `type`'s own chain, that the index says declares the `member` `sub` runs: the first on
+	 * its superclass chain declaring one, when `sub` declares none itself. Null otherwise.
+	 */
+	private function inheritedFrom(g: CallGraph, type: String, sub: String, member: String): Null<String> {
+		if (g.types.declaringTypeOf(sub, member) == sub) return null;
+		final seen: Array<String> = [sub];
+		var at: Null<String> = g.types.superclassOf(sub);
+		while (at != null && !seen.contains(at)) {
+			final holder: String = at;
+			if (g.types.declaringTypeOf(holder, member) == holder)
+				return g.types.firstOnChain(type, t -> t == holder) == null ? holder : null;
+			seen.push(holder);
+			at = g.types.superclassOf(holder);
 		}
 		return null;
 	}
@@ -615,7 +672,7 @@ final class ReachGraph {
 	 * `rewrittenBy` of the node `node`, which reads the graph type `type`'s name as the typed type `owner`'s
 	 * (`CallGraphFacts.qualify`): a build macro of that one type (`FactsView.builtAs`) whose output the facts do not show
 	 * is its text (`FactsProvenance.typeIsItsTextAs`), sited at the node's file. The other types sharing the name are none
-	 * of its code.
+	 * of its code. A refusal is asked again once every file declaring that type is read, as `rewrittenBy`'s is.
 	 */
 	public function rewrittenAs(g: CallGraph, node: FnNode, type: String, owner: String): Null<ReachUnknown> {
 		final view: Null<FactsView> = _scope.facts;
@@ -623,7 +680,7 @@ final class ReachGraph {
 		final key: String = '$type@$owner';
 		final held: Null<Bool> = _textual[key];
 		final textual: Bool = held ?? _scope.provenance()?.typeIsItsTextAs(g, type, owner) == true;
-		_textual[key] = textual;
+		if (held == null && (textual || view.ownerFiles(type, owner).foreach(f -> g.treeOf(f) != null))) _textual[key] = textual;
 		return textual ? null : Reification(node.file, null);
 	}
 
@@ -732,6 +789,63 @@ final class ReachGraph {
 				final more: Null<Array<String>> = runtimeTypes(g, returned, at.family);
 				if (more == null) return null;
 				for (y in more) if (!out.contains(y)) out.push(y);
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * Under the truth, the types whose members the site `at` — one the compiler facts typed (`ImplicitSite.owners`) — may
+	 * run, by simple name, each with the typed types it stands for there, or null when its simple name alone is known: for
+	 * each operand of a typed class or interface, that type and — unless it is an object of exactly its class — every
+	 * subtype the builds typed, with every type they extend or implement; then every typed type whose instances may have
+	 * left the type system (`ValueCarriers.escapedIds`), with the types it extends or implements; and for an iteration
+	 * what its iterator methods return, by their simple names. Null — `typesAt` answers — when the facts are not the
+	 * truth, some operand is of no such type, or the escapes are not known by type.
+	 */
+	private function ownedTypesAt(g: CallGraph, at: ImplicitSite): Null<Map<String, Null<Array<String>>>> {
+		// noqa: complexity
+		final view: Null<FactsView> = _scope.facts;
+		final owners: Null<Array<Null<String>>> = at.owners;
+		if (view == null || !view.truth || owners == null || !(at.family == Text || at.family == Iteration)) return null;
+		final facts: FactsView = view;
+		final out: Map<String, Null<Array<String>>> = [];
+		function note(name: String, owner: Null<String>): Void {
+			final held: Null<Array<String>> = out.exists(name) ? out[name] : [];
+			if (held != null && owner != null && !held.contains(owner)) held.push(owner);
+			out[name] = owner == null ? null : held;
+		}
+		function noteTyped(ids: Array<String>): Void {
+			final typed: Array<String> = ids.copy();
+			for (v in ids) for (s in facts.table.supertypesOf(v)) if (!typed.contains(s)) typed.push(s);
+			for (id in typed) note(facts.graphType(id), id);
+		}
+		var escapes: Bool = false;
+		for (i in 0...at.types.length) {
+			final t: Null<String> = at.types[i];
+			if (t == null) return null;
+			if (at.family == Text && inertType(t)) continue;
+			final owner: Null<String> = i < owners.length ? owners[i] : null;
+			final kind: Null<String> = owner == null ? null : view.table.type(owner)?.kind;
+			if (owner == null || !NOMINAL_KINDS.contains(kind ?? '')) return null;
+			noteTyped(at.exact ? [owner] : [owner].concat(view.table.subtypesOf(owner)));
+			if (!at.exact) escapes = true;
+		}
+		if (escapes) {
+			final escaped: Null<Array<String>> = carriers.escapedIds();
+			if (escaped == null) return null;
+			noteTyped(escaped);
+		}
+		if (at.family == Iteration) {
+			final iterables: Null<Array<String>> = _scope.shape.execution?.iterableMethodNames;
+			for (x in [for (k in out.keys()) k]) for (name in (_scope.shape.execution?.implicitCallNames ?? [])) {
+				final returned: Null<String> = iterables == null || iterables.contains(name)
+					? g.types.memberOnChain(x, name)?.returnNominal
+					: null;
+				if (returned == null) continue;
+				final more: Null<Array<String>> = runtimeTypes(g, returned, at.family);
+				if (more == null) return null;
+				for (y in more) note(y, null);
 			}
 		}
 		return out;
@@ -1217,6 +1331,15 @@ final class ReachGraph {
 		}
 	}
 
+}
+
+/**
+ * A function an implicit-call site may run (`ReachGraph.ownedIdsAt`): its graph id, and the typed type whose member it is
+ * when the compiler facts say so — null when only its simple name says.
+ */
+typedef OwnedId = {
+	final id: String;
+	final owner: Null<String>;
 }
 
 /** An implicitly-called member the index declares, and the file declaring it. */

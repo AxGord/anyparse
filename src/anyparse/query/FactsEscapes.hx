@@ -99,6 +99,9 @@ final class FactsEscapes {
 	/** The escaped types, by the graph's name (`FactsView.graphType`). */
 	private final _out: Array<String> = [];
 
+	/** The escaped types, by their typed id (`pack.Name`): which of the types sharing a graph name escaped. */
+	private final _typed: Array<String> = [];
+
 	/** The closed types already escaped (`escapeType`), by their structure. */
 	private final _done: Map<String, Bool> = [];
 
@@ -138,6 +141,11 @@ final class FactsEscapes {
 		// a class extending an extern runs the extern's target code with its instance as `this`
 		for (id in _table.typeIds()) if (extendsExtern(id) && !escapeType(Named(id, []))) return null;
 		return _out;
+	}
+
+	/** The escaped types `compute` found, by their typed id rather than the graph's name. */
+	public inline function typedIds(): Array<String> {
+		return _typed;
 	}
 
 	/**
@@ -523,6 +531,7 @@ final class FactsEscapes {
 			seen.push(currentId);
 			final name: String = _view.graphType(currentId);
 			if (!_out.contains(name)) _out.push(name);
+			if (!_typed.contains(currentId)) _typed.push(currentId);
 			for (f in currentFact.fields) if (f.kinds.exists(k -> k.startsWith('var(')) && !within(f.types, currentBound)) return false;
 			final sup: Null<String> = currentFact.superClass;
 			if (sup == null) break;

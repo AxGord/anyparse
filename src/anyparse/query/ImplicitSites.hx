@@ -164,4 +164,10 @@ typedef ImplicitSite = {
 	var span: Span;
 	var types: Array<Null<String>>;
 	var exact: Bool;
+
+	/**
+	 * For a site the compiler facts typed (`FactsView.sitesIn`), the typed type (`pack.Name`) of each operand, parallel to
+	 * `types` — null where it names none: which of the types sharing a simple name each operand is. Absent elsewhere.
+	 */
+	var ?owners: Array<Null<String>>;
 }

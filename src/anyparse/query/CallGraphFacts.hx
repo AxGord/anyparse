@@ -24,7 +24,9 @@ using StringTools;
  * beside the edges its syntax records — or, when the facts are the truth (`FactsView.truth`), in place
  * of those at a site the facts type (`holdsBack`) — and in place of its syntax's unresolved sites:
  * an edge per call, construction, method read as a value and nested function the compiler typed — each instance call
- * with its override edges, over the typed subtypes and the ones the graph holds alike — an unresolved site per call
+ * with its override edges, over the typed subtypes and the ones the graph holds alike, a call of an interface's member
+ * no text declares (the accessor its property implies) the body-less dispatch to them (`dispatchesOnly`) — an
+ * unresolved site per call
  * through a value, a structure, a dynamic receiver or a native identifier, and an unresolved access per property or
  * method named off a structure or a dynamic receiver. A target is named in the graph's terms (`FactsView.graphType`),
  * a nested or local function by the node declared where the compiler typed it. A fact an inlined body spliced in sits at its
@@ -54,6 +56,9 @@ final class CallGraphFacts {
 
 	/** The field kind of a macro function (`TypeFact.fields`): its body runs while compiling, in no program. */
 	private static inline final MACRO_FIELD: String = 'macro';
+
+	/** The kind of a typed interface (`TypeFact.kind`). */
+	private static inline final INTERFACE_KIND: String = 'interface';
 
 	/** The field kind of a method the program may reassign (`TypeFact.fields`). */
 	private static inline final DYNAMIC_FIELD: String = 'dynamic';
@@ -363,7 +368,9 @@ final class CallGraphFacts {
 		// an abstract's constructor is `_new` in its implementation class
 		final name: String = view.graphMember(owner, target.substr(target.lastIndexOf('.') + 1));
 		final type: String = view.graphType(owner);
-		final id: String = g.memberOnChain(type, name) ?? g.externalNode(g.types.declaringTypeOf(type, name) ?? type, name);
+		// an interface's member runs nothing of its own, declared or implied by a property (`get_x` of `x(get, …)`)
+		final dispatched: Bool = dispatchesOnly(g, owner, type, view);
+		final id: String = g.memberOnChain(type, name) ?? g.externalNode(g.types.declaringTypeOf(type, name) ?? type, name, dispatched);
 		final field: Bool = c.access == 'fieldValue';
 		// the index knows a library member before the graph reads its body
 		final known: Null<MemberInfo> = g.types.memberOnChain(type, name);
@@ -469,6 +476,17 @@ final class CallGraphFacts {
 		final targets: Array<String> = g.virtualTargets(type, name);
 		for (v in view.overrides(g, dispatch, name)) if (!targets.contains(v)) targets.push(v);
 		for (v in targets) g.addEdge(node.id, v, kind, null, node.file, span, type);
+	}
+
+	/**
+	 * Whether the typed type `owner`, which the graph calls `type`, is an interface in every build that typed it: a call of
+	 * a member of it — one it declares, or an accessor its property implies, which no text declares — dispatches to the
+	 * implementations (`virtualEdges`) and runs nothing of its own. Under the truth its facts say so; otherwise the index
+	 * must say so too.
+	 */
+	private static function dispatchesOnly(g: CallGraph, owner: String, type: String, view: FactsView): Bool {
+		final fact: Null<TypeFact> = view.table.type(CompilerFacts.baseId(owner));
+		return fact != null && fact.kind == INTERFACE_KIND && fact.alike && (view.truth || g.types.isInterface(type));
 	}
 
 	/**

@@ -17,6 +17,7 @@ import anyparse.query.MemberTouchScan.FreshContext;
 import anyparse.query.MemberTouchScan.MemberTouches;
 import anyparse.query.MemberTouchScan.Occurrence;
 import anyparse.query.ReachAdmission.Admission;
+import anyparse.query.ReachGraph.OwnedId;
 import anyparse.query.ReachHazards.ReachHazard;
 import anyparse.query.ReachLiveness.ReachBuilds;
 import anyparse.query.ReachLiveness.ReachConfiguration;
@@ -101,8 +102,10 @@ enum ReachUnknown {
 	 * not provably its own. Under the truth a declaration in a file no build read is none,
 	 * declarations of the one type the builds typed are that type (`FactsView.soleType`), and
 	 * a call whose fact names the type it calls enters that type's member alone
-	 * (`CallGraphFacts.qualify`): the name stays shared only where the walk enters it by an
-	 * edge no fact names an owner of — the syntax's, a dispatch's, an admission's.
+	 * (`CallGraphFacts.qualify`), as does an implicit-call site whose facts name its operands'
+	 * types (`ReachGraph.ownedIdsAt`): the name stays shared only where the walk enters it by
+	 * an edge or an admission no fact names an owner of — the syntax's, a dispatch's, one of a
+	 * value of any type.
 	 */
 	Ambiguous(typeName: String);
 
@@ -157,7 +160,10 @@ typedef MemberRef = {
  * are the truth (`FactsView.truth`), only when they show the code it made of a type is not the text (`ReachGraph.rewrittenBy`);
  * what they show a method it made or placed elsewhere touching is found all the same (`CallGraphFacts.adopt`). Under the
  * truth a call whose fact names which of the types sharing a name it calls enters that one's member alone — its
- * declarations, facts, touches and build macros (`qualifiedNode`) — and the name is ambiguous only where no fact says.
+ * declarations, facts, touches and build macros (`qualifiedNode`) — and so does a member a string conversion or an
+ * iteration the facts typed admits, of each type a value of the operand's type may be (`ReachGraph.ownedIdsAt`): the name
+ * is ambiguous only where no fact says. A node every declaration of which lies in code no configured build compiles
+ * runs nothing (`ReachLiveness.live`), however the walk came to it.
  */
 @:nullSafety(Strict)
 final class MemberReach {
@@ -286,6 +292,7 @@ final class MemberReach {
 		final built: ValueEscapes = new ValueEscapes(scope, _g, _hazards, live, carriers, scopeKnown);
 		escapes = built;
 		_escapes = built;
+		carriers.escapedIds = built.escapedIds;
 		built.onRaw = () -> _metRawRegion = true;
 	}
 
@@ -1154,12 +1161,20 @@ final class MemberReach {
 
 	/**
 	 * The site of the build macro that may have made the code of `node`, of the type `type`, other than its text
-	 * (`ReachGraph.rewrittenBy`) — for a node reading the name as one type's member, of that type alone
-	 * (`ReachGraph.rewrittenAs`) — or null.
+	 * (`ReachGraph.rewrittenBy`) — for a node whose code is one typed type's alone, of that type alone
+	 * (`ReachGraph.rewrittenAs`): a node reading the name as one type's member (`CallGraphFacts.qualify`), or, of a name
+	 * declared more than once, one the facts read as the one type every declaration is (`FactsView.soleType`) or as the
+	 * one type declaring the member (`FactsView.soleMember`) — or null.
 	 */
 	private function rewrittenAt(g: CallGraph, node: FnNode, type: String): Null<ReachUnknown> {
 		final read: Null<QualifiedRead> = g.facts?.qualified[node.id];
-		return read == null ? _g.rewrittenBy(type) : _g.rewrittenAs(g, node, type, read.owner);
+		final name: Null<String> = node.name;
+		final facts: Null<FactsView> = _scope.facts;
+		final sole: Null<String> = facts == null || g.types.declarationCount(type) <= 1
+			? null
+			: facts.soleType(type) ?? (name == null ? null : facts.soleMember(type, name));
+		final owner: Null<String> = read?.owner ?? sole;
+		return owner == null ? _g.rewrittenBy(type) : _g.rewrittenAs(g, node, type, owner);
 	}
 
 	/**
@@ -1283,15 +1298,24 @@ final class MemberReach {
 					if (admission.closure.exists(target.id) && !ids.contains(target.id)) ids.push(target.id);
 			if (site.constructors) for (c in admission.constructors) if (!ids.contains(c)) ids.push(c);
 			final implicit: Array<String> = site.always ? _g.alwaysIds(g).copy() : [];
-			for (at in site.implicit) for (id in _g.idsAt(g, at)) implicit.push(id);
+			// a member the facts name the typed owner of is that type's, not every type's of its simple name
+			final owned: Array<OwnedId> = [];
+			for (at in site.implicit) for (o in _g.ownedIdsAt(g, at)) if (o.owner == null)
+				implicit.push(o.id)
+			else
+				owned.push(o);
 			for (id in implicit) if (admission.closure.exists(id) && !ids.contains(id)) ids.push(id);
-			for (id in ids) enqueue(id, {
-				from: site.from,
-				to: id,
-				kind: site.kind,
-				file: site.file,
-				span: site.span
-			});
+			function step(id: String): ReachStep {
+				return {
+					from: site.from,
+					to: id,
+					kind: site.kind,
+					file: site.file,
+					span: site.span
+				};
+			}
+			for (id in ids) enqueue(id, step(id));
+			for (o in owned) if (admission.closure.exists(o.id)) enqueueTyped(o.id, step(o.id), o.owner);
 		}
 		// a conversion or a field-name fallback can run from any code the walk enters that is read by its syntax — code read
 		// through its compiler facts spells each as a call — and every other implicitly-called function from a site of its
@@ -1465,6 +1489,9 @@ final class MemberReach {
 					node = upgraded;
 				}
 				final type: Null<String> = node.typeName;
+				// code no configuration compiles runs in no build: a node every declaration of which lies there runs nothing
+				final declared: Array<FnDeclaration> = g.declarationsOf(node.id);
+				if (declared.length > 0 && !declared.exists(d -> isLive(g, d.file, d.span))) continue;
 				if (node.isBodyless) {
 					// an interface or abstract declaration only dispatches — its implementations came through the edge — and an
 					// abstract's operator forwards to its underlying value; an extern runs target code, which may call any
