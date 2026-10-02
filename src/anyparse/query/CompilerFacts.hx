@@ -200,6 +200,15 @@ typedef NativeFact = {
 
 	/** Whether the site carries target code whose text is computed: what that code names is not known. */
 	final computed: Bool;
+
+	/**
+	 * The types of the values a call of the site hands its target code — the call's arguments, each value of a branching
+	 * one apart — whatever the type the untyped call gave its callee; empty for none, and in facts that do not record them.
+	 */
+	final handed: Array<String>;
+
+	/** The id of the node whose code holds the site (`FactNode.id`): whose locals, parameters and `this` its text may name. */
+	final holder: String;
 }
 
 /** A local, parameter or loop binder, with the type the compiler gave it. */
@@ -999,7 +1008,9 @@ final class CompilerFacts {
 					name: n.n,
 					at: where,
 					code: n.c,
-					computed: n.cc == true
+					computed: n.cc == true,
+					handed: n.h ?? [],
+					holder: id
 				}: NativeFact),
 				node.natives
 			);
@@ -1242,7 +1253,8 @@ private typedef NodeRecord = {
 		n: String,
 		p: Array<Int>,
 		?c: String,
-		?cc: Bool
+		?cc: Bool,
+		?h: Array<String>
 	}>;
 	final ?vars: Array<{ n: String, t: String, p: Array<Int> }>;
 

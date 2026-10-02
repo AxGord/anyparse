@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.check.NativeCodeScan;
+import anyparse.query.CompilerFacts.NativeFact;
 import anyparse.query.CompilerFacts.ReflectionFact;
 import anyparse.query.FactsView.TruthSites;
 import anyparse.query.GrammarPlugin.RefShape;
@@ -71,7 +72,8 @@ final class ReachHazards {
 
 	/**
 	 * The hazards of code whose compiler facts are the truth (`FactsView.truthSites`): `syntactic`, its hazards as the syntax
-	 * reads them, less those the facts record in full, plus a native site for each the facts name and a computed name for
+	 * reads them, less those the facts record in full, plus a native site for each the
+	 * facts name, carrying its fact (`ReachHazard.native`), and a computed name for
 	 * each reflective access by name the syntax does not see (`typed`). The facts record a native call however it is
 	 * spelled — an alias, an import — and not one a class merely named `Syntax` makes, so the syntax's native calls go; an
 	 * `untyped` expression goes when it is built only of what the facts record (`untypedRecorded`). Every other hazard stays:
@@ -94,7 +96,12 @@ final class ReachHazards {
 				receivers: receiversAt(h.span)
 			} : h
 		];
-		for (n in typed.natives) out.push({ kind: Native, span: n.at.span, node: root });
+		for (n in typed.natives) out.push({
+			kind: Native,
+			span: n.at.span,
+			node: root,
+			native: n
+		});
 		inline function seen(at: Span): Bool {
 			return syntactic.exists(h -> h.kind.match(ReflectiveName(_)) && same(h.span, at));
 		}
@@ -299,4 +306,10 @@ typedef ReachHazard = {
 	 * elsewhere.
 	 */
 	@:optional var receivers: Array<ReflectionFact>;
+
+	/**
+	 * Of a native site read where the compiler facts are the truth (`ReachHazards.underTruth`), the fact of it: what its code
+	 * is handed and names (`NativeSiteReach`); absent elsewhere.
+	 */
+	@:optional var native: NativeFact;
 }

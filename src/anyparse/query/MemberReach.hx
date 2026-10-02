@@ -10,12 +10,14 @@ import anyparse.query.CallGraph.UnresolvedAccess;
 import anyparse.query.CallGraph.UnresolvedCall;
 import anyparse.query.CallGraphFacts.QualifiedRead;
 import anyparse.query.CompilerFacts.FieldDeclFact;
+import anyparse.query.CompilerFacts.NativeFact;
 import anyparse.query.FactsView.TruthSites;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.ImplicitSites.ImplicitSite;
 import anyparse.query.MemberTouchScan.FreshContext;
 import anyparse.query.MemberTouchScan.MemberTouches;
 import anyparse.query.MemberTouchScan.Occurrence;
+import anyparse.query.NativeSiteReach.NativeVerdict;
 import anyparse.query.ReachAdmission.Admission;
 import anyparse.query.ReachGraph.OwnedId;
 import anyparse.query.ReachGraph.ReflectedMembers;
@@ -158,7 +160,9 @@ typedef MemberRef = {
  * admits only those (`ReachAdmission.runsSyntaxRead`, `ReachGraph.typedImplicitIds`). Reflection by a literal name is a hand-off
  * it follows, and so, under the truth, is one by a computed name on an object the facts type as an instance of a class or
  * interface, which runs only the methods of the types it may be (`ReachGraph.reflectedMembers`) and is a blind spot only where
- * one of them carries the member; any other by a computed name, native code, untyped code, a raw conditional region, an unmodelled
+ * one of them carries the member; any other by a computed name, native code — under the truth only one whose text is
+ * computed or names the member, or that reaches an object carrying it (`NativeSiteReach`), any other admitting the function
+ * values and the members by name of the objects it is handed — untyped code, a raw conditional region, an unmodelled
  * construct, a build macro, an ambiguous type name or an unparsed file is `Unknown` — a build macro, where the compiler facts
  * are the truth (`FactsView.truth`), only when they show the code it made of a type is not the text (`ReachGraph.rewrittenBy`);
  * what they show a method it made or placed elsewhere touching is found all the same (`CallGraphFacts.adopt`). Under the
@@ -219,6 +223,9 @@ final class MemberReach {
 
 	/** The types whose instances may have left the type system, which `_carriers` adds to every value's. */
 	private final _escapes: ValueEscapes;
+
+	/** What a native site may do to a member under the truth (`nativeVerdict`), built on first need. */
+	private var _nativeSites: Null<NativeSiteReach> = null;
 
 	/** Builds the analysis under the run's configured builds (`escalation`), or answers null when the run has none; dropped once called. */
 	private var _configure: Null<() -> Null<MemberReach>> = null;
@@ -1416,8 +1423,14 @@ final class MemberReach {
 			if (target == null || at == null || !reflectiveNames.exists('${target.typeName}.${target.name}')) return false;
 			return bounded.exists(b -> b.file == e.file && sameSpan(b.span, at));
 		}
+		// the native sites the facts read that reach no object carrying the member: what the call there runs is what their
+		// admission lets run (`nativeSite`), so the call is not followed again
+		final judged: Array<Occurrence> = [];
+		function judgedAt(file: String, span: Null<Span>): Bool {
+			return span != null && judged.exists(j -> j.file == file && sameSpan(j.span, span));
+		}
 		function follow(e: CallEdge): Void {
-			if (boundedCall(e)) return;
+			if (boundedCall(e) || judgedAt(e.file, e.span)) return;
 			enqueueTyped(e.to, edgeStep(e), e.typed, e.inlined == true);
 			final dispatch: Null<String> = e.dispatchType;
 			final target: Null<String> = g.node(e.to)?.name;
@@ -1435,6 +1448,7 @@ final class MemberReach {
 			});
 		}
 		function admitUnresolved(u: UnresolvedCall): Void {
+			if (judgedAt(u.file, u.span)) return;
 			switch u.reason {
 				case Unseen(what):
 					// code the compiler resolved and the graph holds no node for: nothing can say what it touches
@@ -1484,6 +1498,19 @@ final class MemberReach {
 							admit(reflected);
 						}
 					case ArrayChange:
+					case Native:
+						// target code the facts read reaches only what it is handed: what reaches no object carrying the member runs
+						// at most what the objects and function values it is handed let it run
+						final x: Null<NativeFact> = h.native;
+						final verdict: NativeVerdict = x == null ? Blind : nativeVerdict(x, ownNames, question.declaring);
+						switch verdict {
+							case Blind:
+								blind = blind ?? NativeCode(x?.at.file ?? entry.file, h.span);
+							case Hands(types):
+								judged.push({ file: entry.file, span: h.span });
+								if (types == null || types.length > 0)
+									admit(nativeSite(g, from, entry.file, h.span, types));
+						}
 					case _:
 						blind = blind ?? firstBlind(entry.file, [h]);
 				}
@@ -2026,6 +2053,45 @@ final class MemberReach {
 	 */
 	private static inline function runsUnreadCode(site: AdmissionSite): Bool {
 		return !site.always && (site.values || site.all == true || site.constructors);
+	}
+
+	/**
+	 * What the native site `x`, read where the compiler facts are the truth, may do to the member `names` spell, of a type
+	 * `declaring` declares (`NativeSiteReach`): an object carrying it may have left the type system when the escapes are not
+	 * known, or a type a value of which carries it (`ValueCarriers.declaredValueTypes`) escaped.
+	 */
+	private function nativeVerdict(x: NativeFact, names: Array<String>, declaring: String): NativeVerdict {
+		final view: Null<FactsView> = _scope.facts;
+		if (view == null) return Blind;
+		final sites: NativeSiteReach = _nativeSites ?? new NativeSiteReach(view.table, FactsEscapes.inertIds(_shape));
+		_nativeSites = sites;
+		final owners: Null<Array<String>> = _carriers.declaredValueTypes(declaring);
+		final escaped: Null<Array<String>> = _escapes.escaped();
+		final known: Array<String> = escaped ?? [];
+		return sites.judge(x, names, owners == null || escaped == null || owners.exists(o -> known.contains(o)));
+	}
+
+	/**
+	 * The admission of the target code at `span` of `file`, which reaches no object carrying the member: it may call any
+	 * function value it is handed, and a member by its name of each object it is handed — of the types `types` spell, or of
+	 * any when null (`ReachGraph.handedMemberIds`).
+	 */
+	private function nativeSite(g: CallGraph, from: String, file: String, span: Span, types: Null<Array<String>>): AdmissionSite {
+		final out: AdmissionSite = site(from, file, span, 'native', [], true);
+		final ids: Array<String> = [];
+		for (t in types ?? []) {
+			final members: Null<Array<String>> = _g.handedMemberIds(g, t);
+			if (members == null) {
+				out.all = true;
+				return out;
+			}
+			for (id in members) if (!ids.contains(id)) ids.push(id);
+		}
+		if (types == null)
+			out.all = true
+		else
+			out.ids = ids;
+		return out;
 	}
 
 	/** The tree and text of `file` as the graph holds them, or null when it holds neither. */

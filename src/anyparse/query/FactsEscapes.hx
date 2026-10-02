@@ -7,6 +7,8 @@ import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FieldDeclFact;
 import anyparse.query.CompilerFacts.ReflectionFact;
 import anyparse.query.CompilerFacts.TypeFact;
+import anyparse.query.FactsNativeReach.NativeHand;
+import anyparse.query.GrammarPlugin.RefShape;
 
 using Lambda;
 using StringTools;
@@ -47,11 +49,12 @@ using StringTools;
  *
  * The stated assumption, one for the project and the libraries alike: target-language code — a `__cpp__`/`__js__` call,
  * a `*.Syntax.code` call, the code a `@:functionCode`/`@:cppFileCode`/`@:headerClassCode`/… metadata pastes, a native
- * identifier — reaches only the values handed to it, and makes an instance of a program class only through the producers
- * its callers name. Handed are its arguments (its `{0}` placeholders), which flow into `Dynamic`, and what its text names
- * (`FactsNativeReach`): a local or parameter by its name; the object its method runs on by a spelling of `this` or by the name
- * of a member of it, which hxcpp reaches unqualified; a static variable by its name beside its class's, or alone in the
- * code of its class or of one extending it.
+ * identifier — reaches only the values handed to it, and makes an instance of a program class only through the
+ * producers its callers name. Handed are what a call of it hands it (`NativeFact.handed`: its arguments, its `{0}`
+ * placeholders among them, a call's through a chain of names untyped code leaves to the target included) and what its
+ * text names, that chain's names among it (`FactsNativeReach`): a local or parameter by its name; the object its method
+ * runs on by a spelling of `this` or by the name of a member of it, which hxcpp reaches unqualified; a static variable
+ * by its name beside its class's, or alone in the code of its class or of one extending it.
  */
 @:nullSafety(Strict)
 final class FactsEscapes {
@@ -123,6 +126,9 @@ final class FactsEscapes {
 	/** What target-language code reaches (the stated assumption, see the type doc). */
 	private final _native: FactsNativeReach;
 
+	/** What target-language code reaches escapes (`escape`, `escapeType`). */
+	private final _hand: NativeHand;
+
 	/**
 	 * Whether every class the project declares a class value made from an unreadable name may be of (`declaredClasses`)
 	 * has escaped already: null until first asked, then the answer.
@@ -148,9 +154,9 @@ final class FactsEscapes {
 		_view = view;
 		_table = view.table;
 		_scope = scope;
-		_inert = [for (t in (scope.shape.literalTypeNames ?? []).iterator()) t].concat(scope.shape.nonNullableTypeNames ?? []);
-		_inert.push(scope.shape.voidTypeName ?? 'Void');
-		_native = new FactsNativeReach(_table, escape, escapeType, refuse);
+		_inert = inertIds(scope.shape);
+		_native = new FactsNativeReach(_table);
+		_hand = { escape: escape, escapeType: escapeType, refuse: refuse };
 	}
 
 	/** The escaped types (see the type doc), by the graph's name, or null for any; `failure` then says why. */
@@ -159,7 +165,7 @@ final class FactsEscapes {
 		for (id in _table.typeIds()) {
 			// a class extending an extern runs the extern's target code with its instance as `this`
 			if (extendsExtern(id) && !escapeType(Named(id, []))) return null;
-			if (!_native.metadataEscapes(id)) return null;
+			if (!_native.metadataEscapes(id, _hand)) return null;
 		}
 		return _out;
 	}
@@ -180,7 +186,7 @@ final class FactsEscapes {
 		if (n.incomplete.contains(STALE_FOREIGN)) return refuse('a fact of `$id` lies in a file whose text the table no longer has');
 		if (n.incomplete.contains(REFLECTION_INLINED) && !harmlessReflection(n))
 			return refuse('a reflective body spliced into `$id` lost the name it was handed');
-		if (!_native.nodeEscapes(id, n)) return false;
+		if (!_native.nodeEscapes(id, n, _hand)) return false;
 		for (f in n.flows) if ((f.via == CAST || !keepsNominal(f.to)) && !escape(f.from)) return false;
 		for (h in n.handed) if (!typeParameter(h.to) && !escape(h.from)) return false;
 		for (f in n.fields) if (byName(f.access) && !escape(f.receiver)) return false;
@@ -616,14 +622,14 @@ final class FactsEscapes {
 	}
 
 	/** The arguments `args` of the typed type `id` (`fact`), by the path a type parameter of it is spelled with (`$id.T`). */
-	private static function bindings(id: String, fact: TypeFact, args: Array<FactsType>): Map<String, FactsType> {
+	public static function bindings(id: String, fact: TypeFact, args: Array<FactsType>): Map<String, FactsType> {
 		final out: Map<String, FactsType> = [];
 		if (args.length == fact.params.length) for (i => name in fact.params) out['$id.$name'] = args[i];
 		return out;
 	}
 
 	/** `t` with each type parameter `bound` binds replaced by what it binds. */
-	private static function substitute(t: FactsType, bound: Map<String, FactsType>): FactsType {
+	public static function substitute(t: FactsType, bound: Map<String, FactsType>): FactsType {
 		return switch t {
 			case Parameter(path): bound[path] ?? t;
 			case Named(name, args): Named(name, [for (a in args) substitute(a, bound)]);
@@ -635,6 +641,16 @@ final class FactsEscapes {
 				]);
 			case Unknown: Unknown;
 		};
+	}
+
+	/**
+	 * The ids of the primitive types `shape` declares — its literals', its non-nullable ones and its no-value type: no value of
+	 * one is an object.
+	 */
+	public static function inertIds(shape: RefShape): Array<String> {
+		final out: Array<String> = [for (t in (shape.literalTypeNames ?? []).iterator()) t].concat(shape.nonNullableTypeNames ?? []);
+		out.push(shape.voidTypeName ?? 'Void');
+		return out;
 	}
 
 	/** Whether the typed type `id` is a primitive: a value of it is no object. */

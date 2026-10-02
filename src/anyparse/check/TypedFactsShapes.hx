@@ -80,6 +80,38 @@ final class TypedFactsShapes {
 	/** The name of that class. */
 	private static inline final EXCEPTION_NAME: String = 'Exception';
 
+	/**
+	 * The native identifier the chain of field accesses `e` is rooted at, through parentheses and metadata: target code the
+	 * chain spells (`untyped __global__.String`). Null for any other expression, a bare identifier included.
+	 */
+	public static function nativeRoot(e: TypedExpr): Null<TypedExpr> {
+		return switch e.expr {
+			case TField(receiver, _): identRoot(receiver);
+			case TParenthesis(inner) | TMeta(_, inner): nativeRoot(inner);
+			case _: null;
+		};
+	}
+
+	/** The text of the field chain `e` rooted at a native identifier (`nativeRoot`): its names joined by dots. */
+	public static function chainText(e: TypedExpr): String {
+		return switch e.expr {
+			case TIdent(name): name;
+			case TField(receiver, fa): chainText(receiver) + '.' + describe(fa).field;
+			case TParenthesis(inner) | TMeta(_, inner): chainText(inner);
+			case _: '';
+		};
+	}
+
+	/** The native identifier `e` is, or the chain of field accesses `e` is rooted at; null otherwise. */
+	private static function identRoot(e: TypedExpr): Null<TypedExpr> {
+		return switch e.expr {
+			case TIdent(_): e;
+			case TField(receiver, _): identRoot(receiver);
+			case TParenthesis(inner) | TMeta(_, inner): identRoot(inner);
+			case _: null;
+		};
+	}
+
 	public static function collectLeaves(e: TypedExpr, out: Array<TypedExpr>): Void {
 		switch e.expr {
 			case TIf(_, then, otherwise):

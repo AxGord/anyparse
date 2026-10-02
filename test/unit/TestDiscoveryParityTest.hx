@@ -2799,12 +2799,17 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-ESCAPES-FACTS-CODE-META,M-FACTS-CODE-META,M-ESCAPES-FACTS-NATIVE-COMPUTED',
 			'unit.query.MemberReachFactsTest#testTargetCodeHandedAValueLetsItEscapeUnderTheTruth :: control :: '
 				+ 'M-ESCAPES-FACTS-NATIVE-LOCALS,M-FACTS-NATIVE-CODE',
+			'unit.query.MemberReachFactsTest#testTargetCodeHandedOnlyValuesReachesNoObjectUnderTheTruth :: control :: '
+				+ 'M-NATIVE-SITE-INERT,M-NATIVE-SITE-CORE-TYPE,M-NATIVE-SITE-ALIAS',
 			'unit.query.MemberReachFactsTest#testTargetCodeNamingAStaticLetsWhatItHoldsEscapeUnderTheTruth :: control :: '
 				+ 'M-ESCAPES-FACTS-NATIVE-STATICS,M-ESCAPES-FACTS-NATIVE-OWN-STATICS,M-ESCAPES-FACTS-NATIVE-STATIC-CLASS',
 			'unit.query.MemberReachFactsTest#testTargetCodeNamingNoValueLetsNothingEscapeUnderTheTruth :: control :: '
 				+ 'M-ESCAPES-FACTS-NATIVE-REFUSED',
 			'unit.query.MemberReachFactsTest#testTargetCodeNamingThisLetsItsObjectEscapeUnderTheTruth :: control :: '
 				+ 'M-ESCAPES-FACTS-NATIVE-THIS,M-ESCAPES-FACTS-NATIVE-MEMBERS,M-ESCAPES-FACTS-NATIVE-THIS-ALWAYS',
+			'unit.query.MemberReachFactsTest#testTargetCodeReachesTheMemberOnlyThroughWhatItIsHandedUnderTheTruth :: control :: '
+				+ 'M-NATIVE-SITE-BLIND,M-NATIVE-SITE-NAMES,M-NATIVE-SITE-ESCAPED,M-NATIVE-SITE-COMPUTED,M-NATIVE-SITE-VALUES,M-FACTS-NATIVE-HANDED,'
+				+ 'M-FACTS-NATIVE-CHAIN,M-ESCAPES-FACTS-NATIVE-HANDED',
 			'unit.query.MemberReachFactsTest#testTheArraysOwnMethodReachesItsElementsOnlyByConvertingThemUnderTheTruth :: control :: '
 				+ 'M-REACH-ARRAY-OWN,M-REACH-ARRAY-ELEMENTS,M-REACH-EXTERN-FACTS-TYPE,M-REACH-ARRAY-VALUES',
 			'unit.query.MemberReachFactsTest#testTheCompilerResolvesACallTheSyntaxCannot :: control :: M-FACTS-REACH-EDGES',
@@ -4651,7 +4656,18 @@ class TestDiscoveryParityTest extends Test {
 			'M-REFLECTIVE-MERGE',
 			'M-REACH-SPLICE-ONLY',
 			'M-FACTS-INLINED-EDGE',
-			'M-REACH-SPLICE-EXTERNAL'
+			'M-REACH-SPLICE-EXTERNAL',
+			'M-NATIVE-SITE-BLIND',
+			'M-NATIVE-SITE-NAMES',
+			'M-NATIVE-SITE-ESCAPED',
+			'M-NATIVE-SITE-COMPUTED',
+			'M-NATIVE-SITE-VALUES',
+			'M-NATIVE-SITE-INERT',
+			'M-NATIVE-SITE-CORE-TYPE',
+			'M-NATIVE-SITE-ALIAS',
+			'M-FACTS-NATIVE-HANDED',
+			'M-FACTS-NATIVE-CHAIN',
+			'M-ESCAPES-FACTS-NATIVE-HANDED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
@@ -4816,6 +4832,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-REFL-EXACT :: anyparse.check.TypedFactsWalk#reflection',
 			'M-FACTS-NATIVE-CODE :: anyparse.check.TypedFactsShapes#nativeCode',
 			'M-FACTS-CODE-META :: anyparse.check.TypedFactsMacro#metaList',
+			'M-FACTS-NATIVE-HANDED :: anyparse.check.TypedFactsWalk#handedText',
+			'M-FACTS-NATIVE-CHAIN :: anyparse.check.TypedFactsWalk#nativeChain',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 
