@@ -94,10 +94,12 @@ import haxe.io.Path;
  *     argument; `v` when the member, or the class itself, is read as a value — whatever calls it later is reflection. `r` is
  *     the type of its first argument — the object an access by name acts on — with `x` when that is an object of exactly
  *     the class its type names, `h` when it is `this`.
- *   - `native`: `{w, n, p, c?, cc?}` — `syntax` for a `*.Syntax` call, `ident` for every native identifier, read or called.
- *     `c` is the text of a call's first argument when that is a string literal: the target code a `__cpp__` or a
- *     `Syntax.code` pastes, what that code may name. `cc` marks a call carrying code (`TypedFactsShapes.CODE_INTRINSICS`,
- *     `SYNTAX_CODE_MEMBERS`) whose text is computed.
+ *   - `native`: `{w, n, p, c?, cc?, h?}` — `syntax` for a `*.Syntax` call, `ident` for every native identifier, read or
+ *     called. `c` is the text of a call's first argument when that is a string literal: the target code a `__cpp__` or a
+ *     `Syntax.code` pastes, what that code may name; for an identifier a chain of field accesses is rooted at
+ *     (`untyped __global__.String`), the chain itself. `cc` marks a call carrying code (`TypedFactsShapes.CODE_INTRINSICS`,
+ *     `SYNTAX_CODE_MEMBERS`) whose text is computed. `h` lists the types of the values a call of the site, or one through
+ *     such a chain, hands its target code.
  *   - `vars`: `{n, t, p}` — a local or loop binder (compiler temporaries are left out).
  *   - `reads`: `[min, max, type]` (foreign: `[i, min, max, type]`) — a read of a local, at the identifier.
  *   - `exps`: `{p, a, t?, d?}` — code spliced in where no inlined method is declared, rooted at `p`: in the body's own

@@ -449,7 +449,15 @@ members (hxcpp reaches one unqualified), a static variable by its name beside it
 class's or alone in its own class's code — and it makes an instance of a program
 class only through the reflective producers its callers name. And it reaches a
 member by a computed name, or runs a function with a receiver it is handed, only
-inside the reflection whose call sites the facts record. Target code whose text is
+inside the reflection whose call sites the facts record. The same assumption
+decides what target code met on the way may do to the member a rewrite asks about:
+its arguments include those of a call through a chain of names untyped code leaves
+to the target (`untyped __global__.String(p, n)`), whose names count as its text,
+and a value of a type the compiler represents itself and never null (`Int`,
+`cpp.Char`) is no object. A site whose text names the member, or that reaches an
+object carrying it — any object, once an object of that type may have left the type
+system — answers nothing; any other site runs only the function values it is handed
+and the members of the objects it is handed by their names. Target code whose text is
 computed rather than a string literal leaves the analysis without an answer, and
 so does a class value made from a name computed at run time (`Type.resolveClass(name)`)
 — unless the project declares which classes such a name may make.

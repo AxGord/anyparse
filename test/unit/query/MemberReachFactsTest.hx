@@ -1425,10 +1425,52 @@ class MemberReachFactsTest extends Test {
 			return MEMBER_HEAD + '\tstatic function g():Void {}\n\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ ' + code
 				+ ' /*>*/ }\n\t}\n}\nclass Syntax {\n\tpublic static function code(s:String):Void {}\n}\n';
 		}
-		assertMatch(truthAsk(['Main.hx' => region('js.Syntax.code("0");')]), r -> r.match(Unknown(NativeCode(_, _))));
-		assertMatch(truthAsk(['Main.hx' => region('Syntax.code("0");')]), r -> r.match(Proven));
+		assertMatch(truthAsk(['Main.hx' => region('js.Syntax.code("items");')]), r -> r.match(Unknown(NativeCode(_, _))));
+		assertMatch(truthAsk(['Main.hx' => region('Syntax.code("items");')]), r -> r.match(Proven));
 		assertMatch(ask(['Main.hx' => region('Syntax.code("0");')]), r -> r.match(Unknown(NativeCode(_, _))));
 		assertMatch(truthAsk(['Main.hx' => region('@:functionCode("0") g();')]), r -> r.match(Unknown(NativeCode(_, _))));
+	}
+
+	@:pin('control') @:killer('M-NATIVE-SITE-BLIND') @:killer('M-NATIVE-SITE-NAMES') @:killer('M-NATIVE-SITE-ESCAPED')
+	@:killer('M-NATIVE-SITE-COMPUTED') @:killer('M-NATIVE-SITE-VALUES') @:killer('M-FACTS-NATIVE-HANDED')
+	@:killer('M-FACTS-NATIVE-CHAIN') @:killer('M-ESCAPES-FACTS-NATIVE-HANDED')
+	public function testTargetCodeReachesTheMemberOnlyThroughWhatItIsHandedUnderTheTruth(): Void {
+		// target code reaches only what it is handed and what its text names: naming nothing, it reaches no `Main`; naming
+		// `items` — even in `peek`, which runs on no object — reaching a `Main` — the static `last`, by its name in a string or
+		// in a chain of names untyped code leaves to the target, or `this`, handed to a call through such a chain — or of a
+		// text computed at run time, it may; handed what `cb` holds, `g`, which nothing the walk enters reads, it may call it,
+		// and `g` changes `items`. Without the truth every native site is a blind spot
+		function region(code: String, held: String = 'null'): String {
+			return MEMBER_HEAD + '\tstatic var last:Main;\n\n\tstatic var cb:Void->Void = ' + held + ';\n\n'
+				+ '\tstatic function g():Void\n\t\tlast.items.push(1);\n\n\tstatic function peek():Void\n\t\tjs.Syntax.code("items");\n\n'
+				+ '\tfunction f():Void {\n\t\tvar c:String = "0";\n\t\tfor (i in 0...items.length) { /*<*/ ' + code + ' /*>*/ }\n\t}\n}\n';
+		}
+		assertMatch(truthAsk(['Main.hx' => region('js.Syntax.code("0");')]), r -> r.match(Proven));
+		assertMatch(truthAsk(['Main.hx' => region('untyped console.log(1);')]), r -> r.match(Proven));
+		assertMatch(truthAsk(['Main.hx' => region('js.Syntax.code("items");')]), r -> r.match(Unknown(NativeCode(_, _))));
+		assertMatch(truthAsk(['Main.hx' => region('peek();')]), r -> r.match(Unknown(NativeCode(_, _))));
+		assertMatch(truthAsk(['Main.hx' => region('untyped document.last;')]), r -> r.match(Unknown(NativeCode(_, _))));
+		assertMatch(truthAsk(['Main.hx' => region('js.Syntax.code("last");')]), r -> r.match(Unknown(NativeCode(_, _))));
+		assertMatch(truthAsk(['Main.hx' => region('untyped console.log(this);')]), r -> r.match(Unknown(NativeCode(_, _))));
+		assertMatch(truthAsk(['Main.hx' => region('js.Syntax.code(c);')]), r -> r.match(Unknown(NativeCode(_, _))));
+		assertMatch(truthAsk(['Main.hx' => region('js.Syntax.code("{0}()", cb);', 'g')]), r -> r.match(Reached(_)));
+		assertMatch(ask(['Main.hx' => region('js.Syntax.code("0");')]), r -> r.match(Unknown(NativeCode(_, _))));
+	}
+
+	@:pin('control') @:killer('M-NATIVE-SITE-INERT') @:killer('M-NATIVE-SITE-CORE-TYPE') @:killer('M-NATIVE-SITE-ALIAS')
+	public function testTargetCodeHandedOnlyValuesReachesNoObjectUnderTheTruth(): Void {
+		// a `Main` left the type system through `leak`, so a value of any type handed to target code may be one — but an `Int`,
+		// a `Tiny` (a type the compiler represents itself and no value of which is null, as `Int` is) and a `Small`, a nullable
+		// `Tiny` behind an alias, are no object at all
+		function region(code: String): String {
+			return MEMBER_HEAD + '\tstatic function leak(m:Main):Dynamic\n\t\treturn m;\n\n'
+				+ '\tfunction f(t:Small, o:Other):Void {\n\t\tfor (i in 0...items.length) { /*<*/ ' + code + ' /*>*/ }\n\t}\n}\n'
+				+ '@:coreType @:notNull abstract Tiny from Int to Int {}\ntypedef Small = Null<Tiny>;\n'
+				+ 'class Other {\n\tpublic function new() {}\n}\n';
+		}
+		assertMatch(truthAsk(['Main.hx' => region('js.Syntax.code("{0}", 1);')]), r -> r.match(Proven));
+		assertMatch(truthAsk(['Main.hx' => region('js.Syntax.code("{0}", t);')]), r -> r.match(Proven));
+		assertMatch(truthAsk(['Main.hx' => region('js.Syntax.code("{0}", o);')]), r -> r.match(Unknown(NativeCode(_, _))));
 	}
 
 	@:pin('control') @:killer('M-FACTS-TRUTH-REFLECTION') @:killer('M-FACTS-TRUTH-REFLECTION-TWIN')

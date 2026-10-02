@@ -3,25 +3,29 @@ package anyparse.query;
 import anyparse.check.FactsTypeTree;
 import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FieldDeclFact;
+import anyparse.query.CompilerFacts.NativeFact;
 import anyparse.query.CompilerFacts.TypeFact;
 
 using Lambda;
 using StringTools;
 
 /**
- * What target-language code reaches, read off the compiler's facts for `FactsEscapes`, under its stated assumption — one
- * for the project and the libraries alike: target code reaches only the values handed to it. Handed are its arguments
- * (its `{0}` placeholders), which flow into `Dynamic` and so escape already, and what its text names (`reach`): a local or
- * parameter by its name — of the function holding the code and of each one it is nested in; the object its method runs on
- * by a spelling of `this` (`THIS_SPELLINGS`) or by the name of a member of it (`memberNames`), which hxcpp reaches
- * unqualified; a static variable by its name beside its class's (`classNamed`), or alone in the code of its class or of
- * one extending it. Every word of the text counts, a string's or a comment's included, and a name a target mangled
+ * What target-language code reaches, read off the compiler's facts, under the stated assumption `FactsEscapes` makes — one
+ * for the project and the libraries alike: target code reaches only the values handed to it. Handed are the values a call of
+ * it hands it (`NativeFact.handed`: its arguments, its `{0}` placeholders among them, a call's through a chain of names
+ * untyped code leaves to the target included) and what its text names (`reach`): a local or parameter by its name — of the
+ * function holding the code and of each one it is nested in; the object its method runs on by a spelling of `this`
+ * (`THIS_SPELLINGS`) or by the name of a member of it (`memberNames`), which hxcpp reaches unqualified; a static variable by
+ * its name beside its class's (`classNamed`), or alone in the code of its class or of one extending it. Every word of the
+ * text counts, a string's or a comment's included, the names of such a chain among them, and a name a target mangled
  * (`MANGLED`) stands for the name behind it. Code whose text is computed names what is not known.
  *
  * The code is a native call's (`NativeFact`: `__cpp__`, `Syntax.code`, a native identifier) or a metadata's pasting it
  * into the output (`TypeFact.code`, `FieldDeclFact.code`): around a field's body (`@:functionCode`), in that field's
  * code, or outside any function (`@:cppFileCode`, `@:headerClassCode`, …), where it holds no value of the program's but
- * what it names. Each value reached goes to the escapes' callbacks, which answer false when what it holds is not known.
+ * what it names. Each value reached goes to a reader (`NativeHand`) — the escapes (`FactsEscapes`), or what a native site
+ * the member-reach walk meets may do to its member (`NativeSiteReach`) — which answers false when what it holds is not known
+ * or is what the reader looks for.
  */
 @:nullSafety(Strict)
 final class FactsNativeReach {
@@ -40,47 +44,43 @@ final class FactsNativeReach {
 
 	private final _table: CompilerFacts;
 
-	/** Record the type a type string spells, and what a value of it holds, as escaped; false when that is not known. */
-	private final _escape: (String) -> Bool;
-
-	/** Record a read type, and what a value of it holds, as escaped; false when that is not known. */
-	private final _escapeType: (FactsType) -> Bool;
-
-	/** Record why the escapes are not known: false, for the caller to answer. */
-	private final _refuse: (String) -> Bool;
-
 	/** Static variable name -> each declaration of one: its class and the types it is given (`reach`); built on first need. */
 	private var _statics: Null<Map<String, Array<{ owner: String, types: Array<String> }>>> = null;
 
 	/** Class id -> the names target code in its methods reaches a member of `this` by (`memberNames`), read once per class. */
 	private final _members: Map<String, Array<String>> = [];
 
-	public function new(
-		table: CompilerFacts, escape: (String) -> Bool, escapeType: (FactsType) -> Bool, refuse: (String) -> Bool
-	) {
+	public function new(table: CompilerFacts) {
 		_table = table;
-		_escape = escape;
-		_escapeType = escapeType;
-		_refuse = refuse;
 	}
 
-	/** Hand what the target code the node `id` (`n`) holds reaches to the escapes; false when that is not known. */
-	public function nodeEscapes(id: String, n: FactNode): Bool {
+	/** Hand what the target code the node `id` (`n`) holds reaches to `hand`; false when that is not known. */
+	public function nodeEscapes(id: String, n: FactNode, hand: NativeHand): Bool {
 		if (n.natives.length == 0) return true;
 		final self: Null<String> = selfOf(id);
 		final locals: Array<{ name: String, type: String }> = localsOf(id);
-		for (x in n.natives) if (!reach(id, n.owner, self, locals, x.code, x.computed)) return false;
+		for (x in n.natives) if (!handed(x, hand) || !reach(id, n.owner, self, locals, x.code, x.computed, hand)) return false;
 		return true;
+	}
+
+	/**
+	 * Hand what the target code at the native site `x` reaches to `hand`: what a call of it is handed, and what its text names
+	 * in the code of the node holding it (`NativeFact.holder`). False when that is not known.
+	 */
+	public function siteEscapes(x: NativeFact, hand: NativeHand): Bool {
+		final home: Null<String> = _table.node(x.holder)?.owner;
+		if (home == null) return hand.refuse('the facts of `${x.holder}`, which holds target-language code, are lost');
+		return handed(x, hand) && reach(x.holder, home, selfOf(x.holder), localsOf(x.holder), x.code, x.computed, hand);
 	}
 
 	/**
 	 * Hand what the target code the metadata of the typed type `id` pastes into the output reaches to the escapes: around a
 	 * field's body, in the code of that field's nodes, and outside any function. False when that is not known.
 	 */
-	public function metadataEscapes(id: String): Bool {
+	public function metadataEscapes(id: String, hand: NativeHand): Bool {
 		final fact: Null<TypeFact> = _table.type(id);
 		if (fact == null) return true;
-		for (code in fact.code) if (!reach(id, id, null, [], code, code == null)) return false;
+		for (code in fact.code) if (!reach(id, id, null, [], code, code == null, hand)) return false;
 		for (f in fact.fields) if (f.code.length > 0) {
 			final base: String = '$id.${f.name}';
 			final ids: Array<String> = [base];
@@ -89,9 +89,9 @@ final class FactsNativeReach {
 				final self: Null<String> = f.isStatic ? null : id;
 				final described: Bool = _table.node(node) != null;
 				// a body no build typed declares parameters under names no fact keeps: the code may name any of them
-				if (!described && !signatureParams(f)) return false;
+				if (!described && !signatureParams(f, hand)) return false;
 				final locals: Array<{ name: String, type: String }> = described ? localsOf(node) : [];
-				for (code in f.code) if (!reach(node, id, self, locals, code, code == null)) return false;
+				for (code in f.code) if (!reach(node, id, self, locals, code, code == null, hand)) return false;
 			}
 		}
 		return true;
@@ -104,29 +104,35 @@ final class FactsNativeReach {
 	 * computed (`computed`): what it names is not known.
 	 */
 	private function reach(
-		where: String, home: String, self: Null<String>, locals: Array<{ name: String, type: String }>, code: Null<String>, computed: Bool
+		where: String, home: String, self: Null<String>, locals: Array<{ name: String, type: String }>, code: Null<String>, computed: Bool,
+		hand: NativeHand
 	): Bool {
-		if (computed) return _refuse('`$where` holds target-language code whose text is computed');
+		if (computed) return hand.refuse('`$where` holds target-language code whose text is computed');
 		if (code == null) return true;
 		final names: Array<String> = targetNames(code);
 		if (names.length == 0) return true;
 		if (self != null) {
 			final members: Array<String> = memberNames(self);
-			if (names.exists(x -> THIS_SPELLINGS.contains(x) || members.contains(x)) && !_escapeType(Named(self, []))) return false;
+			if (names.exists(x -> THIS_SPELLINGS.contains(x) || members.contains(x)) && !hand.escapeType(Named(self, []))) return false;
 		}
-		for (l in locals) if (names.contains(l.name) && !_escape(l.type)) return false;
+		for (l in locals) if (names.contains(l.name) && !hand.escape(l.type)) return false;
 		final statics: Map<String, Array<{ owner: String, types: Array<String> }>> = staticsByName();
 		for (x in names) for (s in statics[x] ?? []) {
-			if ((hierarchyOf(home).contains(s.owner) || classNamed(s.owner, names)) && !s.types.foreach(_escape)) return false;
+			if ((hierarchyOf(home).contains(s.owner) || classNamed(s.owner, names)) && !s.types.foreach(hand.escape)) return false;
 		}
 		return true;
 	}
 
-	/** Hand the type of every parameter of every type a build gave the method `f` to the escapes. */
-	private function signatureParams(f: FieldDeclFact): Bool {
+	/** Hand the type of each value a call of the native site `x` hands its target code to `hand`. */
+	private static function handed(x: NativeFact, hand: NativeHand): Bool {
+		return x.handed.foreach(hand.escape);
+	}
+
+	/** Hand the type of every parameter of every type a build gave the method `f` to `hand`. */
+	private function signatureParams(f: FieldDeclFact, hand: NativeHand): Bool {
 		for (t in f.types) switch FactsTypeTree.read(t) {
 			case Function(args, _):
-				if (!args.foreach(a -> _escapeType(a.type))) return false;
+				if (!args.foreach(a -> hand.escapeType(a.type))) return false;
 			case _:
 		}
 		return true;
@@ -216,7 +222,7 @@ final class FactsNativeReach {
 	}
 
 	/** The identifiers the target code `code` spells, and the Haxe name behind each one a target mangled (`MANGLED`). */
-	private static function targetNames(code: String): Array<String> {
+	public static function targetNames(code: String): Array<String> {
 		final out: Array<String> = [];
 		var start: Int = -1;
 		for (i in 0...code.length + 1) {
@@ -234,4 +240,20 @@ final class FactsNativeReach {
 		return out;
 	}
 
+}
+
+/**
+ * What a reader of target code does with what the code reaches (`FactsNativeReach`): each answers false when that is not
+ * known, or when what is reached is what the reader looks for.
+ */
+typedef NativeHand = {
+
+	/** A value of the type a type string spells, and what it holds, is reached. */
+	final escape: (String) -> Bool;
+
+	/** A value of a read type, and what it holds, is reached. */
+	final escapeType: (FactsType) -> Bool;
+
+	/** What the code reaches is not known, for the reason given. */
+	final refuse: (String) -> Bool;
 }

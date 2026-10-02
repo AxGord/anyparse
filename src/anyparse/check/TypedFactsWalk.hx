@@ -99,6 +99,12 @@ final class TypedFactsWalk {
 	/** Extra header fields: `gen`, `gi`, `inl`, `ov`. */
 	private var _header: String = '';
 
+	/**
+	 * The field chain rooted at a native identifier being walked (`nativeChain`): the identifier, the target code the chain
+	 * spells, and the arguments a call through it hands that code; null otherwise.
+	 */
+	private var _nativeChain: Null<NativeChain> = null;
+
 	public function new(
 		host: TypedFactsMacro, id: String, kind: String, owner: String, isStatic: Bool, signature: String, name: Null<String>,
 		locals: Map<Int, String>, written: Map<Int, Bool>, aliases: Map<Int, Alias>, built: Map<Int, Bool>
@@ -445,7 +451,10 @@ final class TypedFactsWalk {
 				// a nested function holds the local, so the value goes wherever that function goes
 				if (alias != null) aliasUse(alias, alias.owner == id ? use : Value);
 			case TIdent(identifier):
-				add('native', '{"w":"ident","n":${q(identifier)},"p":${at(e.pos)}}');
+				// the root of a field chain spells the chain as its code, and is handed what a call through it is
+				final chain: Null<NativeChain> = _nativeChain;
+				final rooted: String = chain != null && chain.root == e ? ',"c":${q(chain.text)}' + handedText(chain.handed) : '';
+				add('native', '{"w":"ident","n":${q(identifier)},"p":${at(e.pos)}$rooted}');
 			case TTypeExpr(m):
 				// a reflection class read as a value takes every one of its members along
 				final name: String = TypedFactsShapes.moduleTypeId(m);
@@ -492,8 +501,10 @@ final class TypedFactsWalk {
 				}
 				reflectionValue(fa, e);
 				instantiated(fa, e.t, e.pos);
+				final chained: Bool = nativeChain(e, []);
 				// a method closure holds its receiver; any other field access reads through it
 				walkReceiver(receiver, fa.match(FClosure(_, _)) ? Value : Member);
+				if (chained) _nativeChain = null;
 			case TArray(array, index):
 				walkAs(array, Index);
 				walk(index);
@@ -717,9 +728,11 @@ final class TypedFactsWalk {
 					reflection(targetName, args, where);
 				if (access.kind == 'FStatic' && declaring != null && TypedFactsShapes.SYNTAX_CLASSES.contains(declaring)) {
 					final code: String = TypedFactsShapes.nativeCode(args, TypedFactsShapes.SYNTAX_CODE_MEMBERS.contains(access.field));
-					add('native', '{"w":"syntax","n":${q(targetName)},"p":$where$code}');
+					add('native', '{"w":"syntax","n":${q(targetName)},"p":$where$code${handedText(args)}}');
 				}
+				final chained: Bool = nativeChain(callee, args);
 				walkReceiver(receiver, Call(access.field));
+				if (chained) _nativeChain = null;
 				instantiated(fa, callee.t, callee.pos);
 				switch fa {
 					case FInstance(c, _, cf) | FStatic(c, cf):
@@ -742,7 +755,7 @@ final class TypedFactsWalk {
 				'{"t":${q(_locals[v.id] ?? '')},"a":"local",$head}';
 			case TIdent(identifier):
 				final code: String = TypedFactsShapes.nativeCode(args, TypedFactsShapes.CODE_INTRINSICS.contains(identifier));
-				add('native', '{"w":"ident","n":${q(identifier)},"p":$where$code}');
+				add('native', '{"w":"ident","n":${q(identifier)},"p":$where$code${handedText(args)}}');
 				'{"t":${q(identifier)},"a":"ident",$head}';
 			case _:
 				walk(callee);
@@ -780,6 +793,28 @@ final class TypedFactsWalk {
 			? ''
 			: ',"r":${q(sourceType(first))}' + (exactObject(first) ? ',"x":true' : '') + (isThis(first) ? ',"h":true' : '');
 		add('refl', '{"t":${q(targetName)}$literal$named$receiver,"p":$where}');
+	}
+
+	/**
+	 * Start the field chain `e` when it is rooted at a native identifier and no chain is being walked (`_nativeChain`): the
+	 * identifier is then recorded with the chain as its code, handed `args`. Whether it started one, which the caller ends.
+	 */
+	private function nativeChain(e: TypedExpr, args: Array<TypedExpr>): Bool {
+		if (_nativeChain != null) return false;
+		final root: Null<TypedExpr> = TypedFactsShapes.nativeRoot(e);
+		if (root == null) return false;
+		_nativeChain = { root: root, text: TypedFactsShapes.chainText(e), handed: args };
+		return true;
+	}
+
+	/**
+	 * The types of the values `args` hands target code, each value of a branching expression apart (`collectLeaves`), as a
+	 * `h` field; empty for none.
+	 */
+	private function handedText(args: Array<TypedExpr>): String {
+		final leaves: Array<TypedExpr> = [];
+		for (a in args) TypedFactsShapes.collectLeaves(a, leaves);
+		return leaves.length == 0 ? '' : ',"h":[${[for (leaf in leaves) q(sourceType(leaf))].join(',')}]';
 	}
 
 	/**
@@ -931,5 +966,11 @@ private enum FactUse {
 private typedef Alias = {
 	final owner: String;
 	final uses: Array<String>;
+}
+/** A field chain rooted at a native identifier (`TypedFactsWalk.nativeChain`): the identifier, its text, what a call through it hands. */
+private typedef NativeChain = {
+	final root: TypedExpr;
+	final text: String;
+	final handed: Array<TypedExpr>;
 }
 #end

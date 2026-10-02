@@ -6824,8 +6824,8 @@
 			"name": "M-FACTS-TRUTH-NATIVES",
 			"type": "anyparse.query.ReachHazards",
 			"method": "underTruth",
-			"find": "for (n in typed.natives) out.push({ kind: Native, span: n.at.span, node: root });",
-			"replace": "",
+			"find": "for (n in typed.natives) out.push({",
+			"replace": "for (n in ([]: Array<NativeFact>)) out.push({",
 			"note": "a native call the facts name is no hazard once the syntax's native calls give way to the facts, so `js.Syntax.code` hides nothing"
 		},
 		{
@@ -7270,7 +7270,7 @@
 			"name": "M-FACTS-NATIVE",
 			"type": "anyparse.check.TypedFactsWalk",
 			"method": "call",
-			"find": "add('native', '{\"w\":\"syntax\",\"n\":${q(targetName)},\"p\":$where$code}');",
+			"find": "add('native', '{\"w\":\"syntax\",\"n\":${q(targetName)},\"p\":$where$code${handedText(args)}}');",
 			"replace": "{}",
 			"note": "a Syntax.code call is no native site"
 		},
@@ -7553,7 +7553,7 @@
 			"name": "M-FACTS-IDENT-READ",
 			"type": "anyparse.check.TypedFactsWalk",
 			"method": "visit",
-			"find": "add('native', '{\"w\":\"ident\",\"n\":${q(identifier)},\"p\":${at(e.pos)}}');",
+			"find": "add('native', '{\"w\":\"ident\",\"n\":${q(identifier)},\"p\":${at(e.pos)}$rooted}');",
 			"replace": "",
 			"note": "a native identifier read is no native site"
 		},
@@ -11871,8 +11871,8 @@
 			"name": "M-REACH-REFLECT-BODY",
 			"type": "anyparse.query.MemberReach",
 			"method": "walk",
-			"find": "if (boundedCall(e)) return;",
-			"replace": "",
+			"find": "if (boundedCall(e) || judgedAt(e.file, e.span)) return;",
+			"replace": "if (judgedAt(e.file, e.span)) return;",
 			"note": "a reflective accessor's call whose object the facts bound enters the accessor's body, which reaches members by a name it is handed in `untyped` code: every such access is blind again (std's `Reflect.getProperty`)"
 		},
 		{
@@ -11911,8 +11911,8 @@
 			"name": "M-FACTS-REFL-HOLDER",
 			"type": "anyparse.query.CompilerFacts",
 			"method": "materialize",
-			"find": "holder: id",
-			"replace": "holder: ''",
+			"find": "receiverSelf: r.h == true,\n\t\t\t\t\tholder: id",
+			"replace": "receiverSelf: r.h == true,\n\t\t\t\t\tholder: ''",
 			"note": "(precision) a reflective call's fact names no function whose `this` it may hand"
 		},
 		{
@@ -11991,23 +11991,23 @@
 			"name": "M-ESCAPES-FACTS-NATIVE-REFUSED",
 			"type": "anyparse.query.FactsNativeReach",
 			"method": "reach",
-			"find": "if (computed) return _refuse(",
-			"replace": "if (true) return _refuse(",
+			"find": "if (computed) return hand.refuse(",
+			"replace": "if (true) return hand.refuse(",
 			"note": "(precision) every target-code site leaves the escapes unknown, whatever its text names"
 		},
 		{
 			"name": "M-ESCAPES-FACTS-NATIVE-COMPUTED",
 			"type": "anyparse.query.FactsNativeReach",
 			"method": "reach",
-			"find": "if (computed) return _refuse(",
-			"replace": "if (false) return _refuse(",
+			"find": "if (computed) return hand.refuse(",
+			"replace": "if (false) return hand.refuse(",
 			"note": "target code whose text is computed is taken to name nothing"
 		},
 		{
 			"name": "M-ESCAPES-FACTS-NATIVE-LOCALS",
 			"type": "anyparse.query.FactsNativeReach",
 			"method": "reach",
-			"find": "for (l in locals) if (names.contains(l.name) && !_escape(l.type)) return false;",
+			"find": "for (l in locals) if (names.contains(l.name) && !hand.escape(l.type)) return false;",
 			"replace": "",
 			"note": "a local or parameter target code names by its name is taken to stay in the type system"
 		},
@@ -12215,6 +12215,92 @@
 			"find": "final requeue: (String, ReachStep) -> Void = (to, s) -> enqueueTyped(to, s, null, spliced);",
 			"replace": "final requeue: (String, ReachStep) -> Void = enqueue;",
 			"note": "(precision) the library declaration read for a body only ever spliced in runs as itself, at its declared types"
+		},
+		{
+			"name": "M-NATIVE-SITE-BLIND",
+			"type": "anyparse.query.NativeSiteReach",
+			"method": "judge",
+			"find": "return Hands(any ? null : handed);",
+			"replace": "return Blind;",
+			"note": "(precision) every native site is a blind spot under the truth, whatever it is handed and names"
+		},
+		{
+			"name": "M-NATIVE-SITE-NAMES",
+			"type": "anyparse.query.NativeSiteReach",
+			"method": "judge",
+			"find": "if (code != null && FactsNativeReach.targetNames(code).exists(n -> names.contains(n))) return Blind;",
+			"replace": "",
+			"note": "target code naming the member is taken to reach it only through what it is handed"
+		},
+		{
+			"name": "M-NATIVE-SITE-ESCAPED",
+			"type": "anyparse.query.NativeSiteReach",
+			"method": "judge",
+			"find": "if (ownerEscaped) return false;",
+			"replace": "",
+			"note": "a value handed to target code is taken to be no object carrying the member although such an object left the type system"
+		},
+		{
+			"name": "M-NATIVE-SITE-COMPUTED",
+			"type": "anyparse.query.NativeSiteReach",
+			"method": "judge",
+			"find": "refuse: reason -> false",
+			"replace": "refuse: reason -> true",
+			"note": "target code whose text is computed is taken to name nothing"
+		},
+		{
+			"name": "M-NATIVE-SITE-VALUES",
+			"type": "anyparse.query.MemberReach",
+			"method": "nativeSite",
+			"find": "site(from, file, span, 'native', [], true)",
+			"replace": "site(from, file, span, 'native', [], false)",
+			"note": "target code is taken to call no function value it is handed"
+		},
+		{
+			"name": "M-NATIVE-SITE-INERT",
+			"type": "anyparse.query.NativeSiteReach",
+			"method": "noObject",
+			"find": "if (id.indexOf('.') < 0 && _inert.contains(id))",
+			"replace": "if (false)",
+			"note": "(precision) a primitive handed to target code is taken to be an object"
+		},
+		{
+			"name": "M-NATIVE-SITE-CORE-TYPE",
+			"type": "anyparse.query.NativeSiteReach",
+			"method": "noObject",
+			"find": "fact.kind == 'abstract' && fact.meta.contains(CORE_TYPE) && fact.meta.contains(NOT_NULL)",
+			"replace": "false",
+			"note": "(precision) a value of a type the compiler represents itself, never null, is taken to be an object"
+		},
+		{
+			"name": "M-NATIVE-SITE-ALIAS",
+			"type": "anyparse.query.NativeSiteReach",
+			"method": "noObject",
+			"find": "else if (fact.kind == 'typedef')",
+			"replace": "else if (false)",
+			"note": "(precision) an alias of a type no value of which is an object is not read through"
+		},
+		{
+			"name": "M-FACTS-NATIVE-HANDED",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "handedText",
+			"find": "for (a in args) TypedFactsShapes.collectLeaves(a, leaves);",
+			"replace": "",
+			"note": "a native site records no value a call of it hands its target code"
+		},
+		{
+			"name": "M-FACTS-NATIVE-CHAIN",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "nativeChain",
+			"force": "false",
+			"note": "a field chain rooted at a native identifier is recorded as the bare identifier: no text, nothing handed"
+		},
+		{
+			"name": "M-ESCAPES-FACTS-NATIVE-HANDED",
+			"type": "anyparse.query.FactsNativeReach",
+			"method": "handed",
+			"force": "true",
+			"note": "a value a call hands target code is taken to stay in the type system"
 		}
 	]
 }
