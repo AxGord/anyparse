@@ -12739,6 +12739,14 @@
 			"find": "(next != null && hosts.beforeAnother.contains(parent.kind))",
 			"replace": "hosts.beforeAnother.contains(parent.kind)",
 			"note": "an else-less chain ending a nested block, possibly its value, closes with case _"
+		},
+		{
+			"name": "M-SWITCH-FIX-REPORT-INDEX-FIRST",
+			"type": "anyparse.check.SwitchChain",
+			"method": "lazyIndexOf",
+			"find": "RefactorSupport.resolutionIndexOf(plugin) ?? given ?? SymbolIndex.build(files, plugin)",
+			"replace": "given ?? RefactorSupport.resolutionIndexOf(plugin) ?? SymbolIndex.build(files, plugin)",
+			"note": "the report-scoped index a --fix hands the check wins over the resolution index, so a constant declared outside the report scope is unprovable in fix though run proved it"
 		}
 	]
 }

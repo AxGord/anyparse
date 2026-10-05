@@ -352,10 +352,13 @@ final class SwitchChain {
 
 	/**
 	 * A memoised resolver for the cross-file `SymbolIndex` a qualified-static pattern is
-	 * proved against: the caller's `given` index when it has one, else the plugin's
-	 * resolution-scope index, else one built from `files`. Returned as a THUNK so a run
-	 * whose chains are all literal never builds anything — `scan` calls it only after a
-	 * structural qualified-reference pre-check has already matched.
+	 * proved against: the plugin's resolution-scope index (report UNION library) when it has
+	 * one, else the caller's `given` index, else one built from `files`. Resolution FIRST, because
+	 * the `index` a lint `--fix` hands a check is REPORT-scoped (`LintFixDriver`): a constant
+	 * declared outside the report scope — the enum abstract in a sibling module of a one-file
+	 * `--fix` — resolved in `run` and not in `fix`, so the chain was reported and never fixed.
+	 * Returned as a THUNK so a run whose chains are all literal never builds anything — `scan`
+	 * calls it only after a structural qualified-reference pre-check has already matched.
 	 *
 	 * Public because a rule that DEFERS to the switch claim (`claims`) has to ask with the
 	 * same resolver the switch rule itself would use; a weaker one under-reports the claim,
@@ -364,11 +367,11 @@ final class SwitchChain {
 	public static function lazyIndexOf(
 		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?given: SymbolIndex
 	): () -> Null<SymbolIndex> {
-		var cached: Null<SymbolIndex> = given;
+		var cached: Null<SymbolIndex> = null;
 		function resolve(): Null<SymbolIndex> {
 			final have: Null<SymbolIndex> = cached;
 			if (have != null) return have;
-			final built: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? SymbolIndex.build(files, plugin);
+			final built: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? given ?? SymbolIndex.build(files, plugin);
 			cached = built;
 			return built;
 		}

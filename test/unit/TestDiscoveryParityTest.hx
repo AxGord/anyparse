@@ -1675,6 +1675,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PreferSwitchCheckTest#testNoTrailingElseClosesWithAnEmptyWildcard :: control :: M-SWITCH-ELSELESS-REFUSED',
 			'unit.check.PreferSwitchCheckTest#testOverloadedEqualityDiscriminantNotFlagged :: control :: M-SWITCH-DISC-EQ-OVERLOAD-IGNORED',
 			'unit.check.PreferSwitchCheckTest#testOverloadedEqualityPatternNotFlagged :: control :: M-SWITCH-PATTERN-EQ-OVERLOAD-IGNORED',
+			'unit.check.PreferSwitchCheckTest#testReportScopedFixIndexStillResolvesTheConstant :: control :: M-SWITCH-FIX-REPORT-INDEX-FIRST',
 			'unit.check.PreferSwitchCheckTest#testTerminatedBranchBodiesAreNotDoubled :: control :: M-SWITCH-TERMINATED-BODY-DOUBLED',
 			'unit.check.PreferSwitchCheckTest#testUnknownConstantValueNotFlagged :: control :: M-SWITCH-UNKNOWN-VALUE-ACCEPTED',
 			'unit.check.PreferSwitchCheckTest#testValueChainInALambdaBlockGainsTerminators :: control :: M-SWITCH-BARE-BODY-VERBATIM',
@@ -4766,7 +4767,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-SWITCH-ELSELESS-REFUSED',
 			'M-SWITCH-ELSELESS-GUARDED-ELSE',
 			'M-SWITCH-ELSELESS-ANY-HOST',
-			'M-SWITCH-ELSELESS-LAST-IN-VALUE-BLOCK'
+			'M-SWITCH-ELSELESS-LAST-IN-VALUE-BLOCK',
+			'M-SWITCH-FIX-REPORT-INDEX-FIRST'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

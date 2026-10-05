@@ -1079,3 +1079,8 @@ decided the question; it may not become a record of runs.
   and the wildcard makes every subject exhaustive (compiled and run on `--interp` and `-js`, same
   output). What remains structural: the head must stand in a statement list and must not be
   followed by an `#if` region that may hold its `else` — branch `feat/prefer-switch-enum-abstract`
+- the switch rules' `fix` proving constants against the `index` the lint driver hands it → that
+  index is REPORT-scoped, so a one-file `--fix` could not see the enum abstract in a sibling module
+  that `run` had resolved through the resolution scope: TM's `GridScale.hx:105` reported and fixed
+  nothing (`0 edit(s)`); `SwitchChain.lazyIndexOf` now asks the resolution index first — branch
+  `feat/prefer-switch-enum-abstract`

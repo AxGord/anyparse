@@ -5,6 +5,8 @@ import anyparse.check.Linter;
 import anyparse.check.PreferSwitch;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CachingGrammarPlugin;
+import anyparse.query.CachingGrammarPlugin.LibrarySources;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import utest.Assert;
@@ -504,6 +506,29 @@ class PreferSwitchCheckTest extends Test {
 		Assert.isTrue(fixed.indexOf('switch (mode) {') >= 0, fixed);
 		Assert.isTrue(fixed.indexOf('case Mode.POINTS:') >= 0, fixed);
 		Assert.isTrue(fixed.indexOf('\tcase _:\n}\n\t\tg();') >= 0, fixed);
+	}
+
+	/**
+	 * The `index` a lint `--fix` hands a check is REPORT-scoped: a one-file `--fix` of the chain
+	 * leaves the enum abstract's module out of it. The constant proof asks the plugin's resolution
+	 * index first, as `run` does, so the finding `run` reported is also fixed.
+	 */
+	@:pin('control')
+	@:killer('M-SWITCH-FIX-REPORT-INDEX-FIRST')
+	public function testReportScopedFixIndexStillResolvesTheConstant(): Void {
+		final src: String = wrapWithParams('k:Mode', 'if (k == Mode.LINES) p(); else if (k == Mode.POINTS) q(); else r();');
+		final modes: String = 'enum abstract Mode(Int) {\n\tvar LINES = 1;\n\tvar POINTS = 2;\n}';
+		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		final files: Array<{ file: String, source: String }> = entries(src, modes);
+		plugin.setResolutionScope({
+			declared: true,
+			sources: () -> {report: files, projectRoots: [], library: new LibrarySources([]) }
+		});
+		final check: PreferSwitch = new PreferSwitch();
+		final own: Array<Violation> = check.run(files, plugin).filter(v -> v.file == 'C.hx');
+		Assert.equals(1, own.length);
+		final reportScoped: SymbolIndex = SymbolIndex.build([{ file: 'C.hx', source: src }], plugin);
+		Assert.equals(1, check.fix(src, own, plugin, reportScoped).length);
 	}
 
 	private inline function wrap(body: String): String {
