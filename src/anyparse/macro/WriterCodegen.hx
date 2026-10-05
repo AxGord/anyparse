@@ -1029,7 +1029,19 @@ class WriterCodegen {
 	 */
 	private static function kwBeforeTrailingDocField(): Field {
 		final body: Expr = macro {
-			return trailing == null ? sepDoc : _dc([trailingCommentDoc(trailing, opt), sepDoc]);
+			if (trailing == null) return sepDoc;
+			// The comment is a `//` one by construction, so whatever follows it must start a new
+			// line. A FLAT gap (`sameLine.expressionIf: same` answers a plain space before a value
+			// `if`'s `else`) is turned into a hardline, every other gap gets the forward-looking
+			// guard that drops when it already opens with one — so every gap that was sound before
+			// renders byte-identically, and one that glued the keyword onto the comment's line (a
+			// comment loss the round trip refused) now keeps the comment.
+			final _gap: anyparse.core.Doc = switch sepDoc {
+				case Text(_s, _) if (StringTools.trim(_s) == ''): _dhl();
+				case Line(_), OptSpace(_), OptSpaceSkipAfterHardline: _dhl();
+				case _: _dc([_dohsbh(), sepDoc]);
+			};
+			return _dc([trailingCommentDoc(trailing, opt), _gap]);
 		};
 		return {
 			name: 'kwBeforeTrailingDoc',
