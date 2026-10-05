@@ -5668,8 +5668,8 @@
 			"name": "M-REACH-FOLDED-BODIES",
 			"type": "anyparse.query.MemberReach",
 			"method": "bodySpans",
-			"find": "if (declared.length > 0) return [for (d in declared) { file: d.file, span: d.span }];",
-			"replace": "if (declared.length > 0) return [{ file: declared[0].file, span: declared[0].span }];",
+			"find": "? null : [for (d in declared) { file: d.file, span: d.span }];",
+			"replace": "? null : [{ file: declared[0].file, span: declared[0].span }];",
 			"note": "a node folding a declaration per branch of a region is read by its first declaration's text only, so what another one runs is never seen"
 		},
 		{
@@ -7840,7 +7840,7 @@
 			"name": "M-REACH-TEXTUAL-ALWAYS",
 			"type": "anyparse.query.FactsProvenance",
 			"method": "typeIsItsText",
-			"find": "return site != null && ids.length > 0 && g.types.declarationCount(type) == 1 && textual(g, type, site.file, ids);",
+			"find": "return site != null && ids.length > 0 && g.types.declarationCount(type) == 1 && textual(g, type, [site.file], ids);",
 			"replace": "return true;",
 			"note": "every type is its text, so a body a build macro rewrote to touch the member is read by its syntax, which never names it"
 		},
@@ -12629,6 +12629,86 @@
 			"find": " && holdsOwnCode(exprs[index], site) ? site : outer;",
 			"replace": " ? site : outer;",
 			"note": "a splice is placed between the statements around it although a statement the compiler bound at the whole block bounds it: the site holds none of the call's text, so an expression macro in its arguments reads as no text's call"
+		},
+		{
+			"name": "M-FACTS-COPY-UNVOUCHED",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "textual",
+			"find": "return coded ? keys.foreach(k -> vouched.contains(k)) : files.foreach(f -> declarationIn(type, f) != null);",
+			"replace": "return true;",
+			"note": "a declaration of the type no build read is never asked to be a copy some build vouches for: the graph folds its text into the type's, which no facts say a build macro left alone"
+		},
+		{
+			"name": "M-FACTS-COPY-UNHELD",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "textual",
+			"find": "if (at < 0 || home.at == null || !builtAsText(",
+			"replace": "if (at < 0) continue;\n\t\t\t\tif (home.at == null || !builtAsText(",
+			"note": "a copy a build read that the index does not hold is skipped: what a build macro made of it is never compared with any text"
+		},
+		{
+			"name": "M-FACTS-COPY-UNION",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "builtAsText",
+			"find": "final n: Null<FactNode> = table.nodeAsBuiltBy(nodeId, builds);",
+			"replace": "final n: Null<FactNode> = table.node(nodeId);",
+			"note": "each copy is judged by every build's facts, the other copies' code at their own positions included, which no text of this copy holds: a type each build reads from its own copy is never its text"
+		},
+		{
+			"name": "M-FACTS-COPY-NESTED-UNION",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "factsOnText",
+			"find": "final nested: Null<FactNode> = _view.table.nodeAsBuiltBy(child, builds);",
+			"replace": "final nested: Null<FactNode> = _view.table.node(child);",
+			"note": "a function nested in a copy's body is judged by every build's facts of it, the other copies' among them"
+		},
+		{
+			"name": "M-FACTS-COPY-HOMED-UNION",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "homedIn",
+			"find": "if (lines.foreach(own)) return node(id);",
+			"replace": "return node(id);",
+			"note": "a range of one copy reads the node every build typed, placed in the first build's copy: a question about another copy's range measures one file's offsets against another's text"
+		},
+		{
+			"name": "M-FACTS-COPY-LINE-HOME",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "addNode",
+			"find": "v.text == line && v.home == home &&",
+			"replace": "v.text == line &&",
+			"note": "a line two builds wrote alike is one although it names a file relative to each build's own directory, so the second build's copy holds none of its code"
+		},
+		{
+			"name": "M-FACTS-COPY-TYPE-HOMES",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "addHome",
+			"find": "homes.find(h -> h.home == home && h.p.join(',') == p.join(','))",
+			"replace": "homes.find(h -> true)",
+			"note": "a type keeps the first build's declaration alone, every other build counted as reading it there: a copy is judged by the facts of builds that read another, and the other copies are vouched for by none"
+		},
+		{
+			"name": "M-REACH-COPY-ELSEWHERE",
+			"type": "anyparse.query.FactsView",
+			"method": "typedElsewhere",
+			"find": "if (!keys.contains(home)) return true;",
+			"replace": "if (!keys.contains(home) && false) return true;",
+			"note": "a build that typed the member in a copy of its type the graph does not hold ran code the walk never reads"
+		},
+		{
+			"name": "M-GRAPH-REFACET-FURTHER",
+			"type": "anyparse.query.CallGraphFacts",
+			"method": "mute",
+			"find": "for (d in g._fileDeclarations[CallGraphNames.normalizePath(file)] ?? []) {",
+			"replace": "for (d in g._fileNodes[CallGraphNames.normalizePath(file)] ?? []) {",
+			"note": "a node a further declaration in another file un-faceted is never asked again, so a copy of its type per build leaves it read by its syntax"
+		},
+		{
+			"name": "M-GRAPH-REFACET-RETRACT",
+			"type": "anyparse.query.CallGraphFacts",
+			"method": "recordMuted",
+			"find": "if (_recorded.exists(id)) retract(g, id);",
+			"replace": "",
+			"note": "the sites the facts could not resolve before every copy was read stay beside the ones they resolve now"
 		}
 	]
 }

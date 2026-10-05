@@ -1697,11 +1697,13 @@ final class MemberReach {
 	 * The code `node` runs, as spans of files: every declaration the graph folded into it (`CallGraph.declarationsOf`) —
 	 * a member declared in each branch of a conditional region, an overload, a copy of its type per build — or, for a
 	 * field-initializer pseudo-node, the initializers of its type in every file holding some (`CallGraph.initializerFiles`).
-	 * A positive list: null — nothing the walk may prove — when some of that code cannot be located.
+	 * A positive list: null — nothing the walk may prove — when some of that code cannot be located: a build typed the
+	 * node's code in a copy of its type the graph does not hold (`FactsView.typedElsewhere`).
 	 */
 	private function bodySpans(g: CallGraph, node: FnNode): Null<Array<Occurrence>> {
 		final declared: Array<FnDeclaration> = g.declarationsOf(node.id);
-		if (declared.length > 0) return [for (d in declared) { file: d.file, span: d.span }];
+		if (declared.length > 0)
+			return _scope.facts?.typedElsewhere(g, node, declared) == true ? null : [for (d in declared) { file: d.file, span: d.span }];
 		final type: Null<String> = node.typeName;
 		final files: Array<String> = g.initializerFiles(node.id);
 		final isStatic: Bool = node.name == CallGraph.STATIC_INIT_NAME;

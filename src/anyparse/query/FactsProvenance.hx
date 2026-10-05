@@ -108,9 +108,10 @@ final class FactsProvenance {
 
 	/**
 	 * Whether what the builds compiled of the graph type `type` is its text, whatever build macro ran over it
-	 * (`ReachGraph.rewrittenBy`): the one declaration of it the index holds is in the file each typed type standing for it
-	 * (`FactsView.bySimpleName`) was read from — a typedef aliasing it declares no code, wherever it is (`aliasOnly`) —
-	 * every field those declare is one the text declares alike
+	 * (`ReachGraph.rewrittenBy`): the one declaration of it the index holds is in a file each typed type standing for it
+	 * (`FactsView.bySimpleName`) was read from, and every file a build read one from is one the index holds (`textual`) —
+	 * a typedef aliasing it declares no code, wherever it is (`aliasOnly`) — every field those declare is one the text
+	 * declares alike
 	 * (`declaredAlike`), and every body and initializer the compiler typed for them lies in its field's declaration with
 	 * every fact on text that writes it (`factsOnText`) — save the constructor the compiler made for a class the text
 	 * gives none, which only calls its super's. What the compiler writes for the text in code no text holds counts: the
@@ -121,40 +122,77 @@ final class FactsProvenance {
 	public function typeIsItsText(g: CallGraph, type: String): Bool {
 		final site: Null<{ file: String, span: Span }> = _scope.siteOf(type);
 		final ids: Array<String> = _view.bySimpleName()[type] ?? [];
-		return site != null && ids.length > 0 && g.types.declarationCount(type) == 1 && textual(g, type, site.file, ids);
+		return site != null && ids.length > 0 && g.types.declarationCount(type) == 1 && textual(g, type, [site.file], ids);
 	}
 
 	/**
 	 * `typeIsItsText` of the one type, of the several the graph type `type` names, the typed type `owner` is written as
-	 * (`FactsView.ownerFiles`): the typed types standing for it alone (`FactsView.standingFor`), against its one file of the
-	 * index — what a node reading the name as that type's (`CallGraphFacts.qualify`) runs.
+	 * (`FactsView.ownerFiles`): the typed types standing for it alone (`FactsView.standingFor`), against its files of the
+	 * index — one, or a copy per build (`textual`) — what a node reading the name as that type's (`CallGraphFacts.qualify`)
+	 * runs.
 	 */
 	public function typeIsItsTextAs(g: CallGraph, type: String, owner: String): Bool {
 		final files: Array<String> = _view.ownerFiles(type, owner);
 		final ids: Array<String> = _view.standingFor(type, owner);
-		return files.length == 1 && ids.length > 0 && textual(g, type, files[0], ids);
+		return files.length > 0 && ids.length > 0 && textual(g, type, files, ids);
 	}
 
-	/** `typeIsItsText` of the typed types `ids`, which the graph calls `type`, against its declaration in `file`. */
-	private function textual(g: CallGraph, type: String, file: String, ids: Array<String>): Bool {
-		final decl: Null<TypeDeclInfo> = _scope.index.fileInfo(file)?.types.find(d -> d.name == type);
-		final source: Null<String> = g.sourceOf(file);
-		final tree: Null<QueryNode> = g.treeOf(file);
-		if (decl == null || source == null || tree == null) return false;
+	/**
+	 * `typeIsItsText` of the typed types `ids`, which the graph calls `type`, against its declarations of the index in
+	 * `files`: one, or one per build where each build reads its own copy (a source it generates into its own directory). The
+	 * facts carry, for each typed type, every file a build read it from and which builds read it there
+	 * (`CompilerFacts.typeHomes`): each such file must be one of `files`, readable as the compile read it, and what those
+	 * builds alone typed of the type must be that copy's text (`builtAsText`) — each build's facts judged against its own
+	 * copy, never against another build's, whose text may differ. Every one of `files` must be a copy some build read: a
+	 * declaration no build's facts vouch for is text no build compiled, which the graph, folding every declaration of the
+	 * name, would read as the type's.
+	 */
+	private function textual(g: CallGraph, type: String, files: Array<String>, ids: Array<String>): Bool {
 		final table: CompilerFacts = _view.table;
-		final key: String = table.keyOf(file);
+		final keys: Array<String> = [for (f in files) table.keyOf(f)];
+		final vouched: Array<String> = [];
+		var coded: Bool = false;
 		for (id in ids) {
 			final typed: Null<TypeFact> = table.type(id);
 			if (typed != null && aliasOnly(typed)) continue;
-			if (typed == null || table.typePosition(id)?.file != key) return false;
-			final declared: TypeFact = typed;
-			if (!declared.fields.foreach(f -> declaredAlike(declared, f, decl))) return false;
-			for (nodeId in table.nodeIdsOf(id)) {
-				final n: Null<FactNode> = table.node(nodeId);
-				if (n == null || !nodeOnText(n, declared, decl, key, source, tree)) return false;
+			if (typed == null) return false;
+			coded = true;
+			// every build that typed code of it typed the type too, so its homes hold every build's code
+			for (home in table.typeHomes(id)) {
+				final at: Int = keys.indexOf(home.file);
+				if (at < 0 || home.at == null || !builtAsText(g, type, files[at], typed, home.builds)) return false;
+				if (!vouched.contains(home.file)) vouched.push(home.file);
 			}
 		}
+		// aliases alone declare no code: each file need only declare the type
+		return coded ? keys.foreach(k -> vouched.contains(k)) : files.foreach(f -> declarationIn(type, f) != null);
+	}
+
+	/**
+	 * Whether what the builds `builds` typed of the typed type `typed` is the text of its declaration in `file`, which the
+	 * graph calls `type` and holds: every field they declare is one that text declares alike (`declaredAlike`) and every
+	 * node they typed of it is that text (`nodeOnText`), read as those builds alone typed it (`CompilerFacts.nodeAsBuiltBy`).
+	 */
+	private function builtAsText(g: CallGraph, type: String, file: String, typed: TypeFact, builds: Array<Int>): Bool {
+		final decl: Null<TypeDeclInfo> = declarationIn(type, file);
+		final source: Null<String> = g.sourceOf(file);
+		final tree: Null<QueryNode> = g.treeOf(file);
+		if (decl == null || source == null || tree == null) return false;
+		final declared: TypeDeclInfo = decl;
+		if (!typed.fields.foreach(f -> declaredAlike(typed, f, declared))) return false;
+		final table: CompilerFacts = _view.table;
+		final key: String = table.keyOf(file);
+		for (nodeId in table.nodeIdsOf(typed.id)) {
+			if (!table.buildsTyping(nodeId).exists(b -> builds.contains(b))) continue;
+			final n: Null<FactNode> = table.nodeAsBuiltBy(nodeId, builds);
+			if (n == null || !nodeOnText(n, typed, declared, key, source, tree, builds)) return false;
+		}
 		return true;
+	}
+
+	/** The index's declaration of the graph type `type` in `file`, or null. */
+	private function declarationIn(type: String, file: String): Null<TypeDeclInfo> {
+		return _scope.index.fileInfo(file)?.types.find(d -> d.name == type);
 	}
 
 	/**
@@ -196,7 +234,9 @@ final class FactsProvenance {
 	 * placed elsewhere (`FactNode.generated`) is text of no declaration here: every fact of it lies in another file,
 	 * which no text of `key` holds.
 	 */
-	private function nodeOnText(n: FactNode, typed: TypeFact, decl: TypeDeclInfo, key: String, source: String, tree: QueryNode): Bool {
+	private function nodeOnText(
+		n: FactNode, typed: TypeFact, decl: TypeDeclInfo, key: String, source: String, tree: QueryNode, builds: Array<Int>
+	): Bool {
 		final name: String = _view.graphMember(typed.id, fieldOf(n.id));
 		final declared: Array<MemberInfo> = [for (m in decl.members) if (m.name == name) m];
 		if (declared.length == 0) return name == constructorName() && madeConstructor(n);
@@ -205,12 +245,12 @@ final class FactsProvenance {
 			final at: Null<Span> = FactsView.declarationRange(tree, m.declFrom);
 			if (at == null) continue;
 			final body: BodyText = BodyText.of(key, at, source, tree, _scope.shape);
-			if (n.at.file == key && at.from <= n.at.span.from && n.at.span.from < at.to) return factsOnText(n, body, null);
+			if (n.at.file == key && at.from <= n.at.span.from && n.at.span.from < at.to) return factsOnText(n, body, null, builds);
 			bodies.push(body);
 		}
 		for (body in bodies) {
 			final inlined: Null<(FactPos) -> Bool> = inlinedWhole(n, body);
-			if (inlined != null) return factsOnText(n, body, inlined);
+			if (inlined != null) return factsOnText(n, body, inlined, builds);
 		}
 		return false;
 	}
@@ -281,7 +321,7 @@ final class FactsProvenance {
 	 * application; and that each function nested in `n` passes the same test or was spliced in with an inlined
 	 * body (`FactNode.inlinedFrom`).
 	 */
-	private function factsOnText(n: FactNode, body: BodyText, outer: Null<(FactPos) -> Bool>): Bool {
+	private function factsOnText(n: FactNode, body: BodyText, outer: Null<(FactPos) -> Bool>, builds: Array<Int>): Bool {
 		// noqa: complexity
 		// a marker says a fact was lost with its file: no position shows it. Code a macro expanded carries its own
 		// (`ExpansionFact`), and is the text's only where a call the text writes built it
@@ -316,8 +356,9 @@ final class FactsProvenance {
 			.concat([for (e in n.elementWrites) e.at]);
 		if (!placed.foreach(p -> own(p, body.holds(p) || readJoined(n, p, body)))) return false;
 		for (child in n.fns) {
-			final nested: Null<FactNode> = _view.table.node(child);
-			if (nested == null || (nested.inlinedFrom == null && !factsOnText(nested, body, outer))) return false;
+			// as the same builds typed it: another build's copy places its code in its own file
+			final nested: Null<FactNode> = _view.table.nodeAsBuiltBy(child, builds);
+			if (nested == null || (nested.inlinedFrom == null && !factsOnText(nested, body, outer, builds))) return false;
 		}
 		return true;
 	}

@@ -292,6 +292,55 @@ class MemberReachFactsTest extends Test {
 		return files;
 	}
 
+	/**
+	 * The answer for a region running `Gen.calm()` where each build (`a`, `b`) reads `Gen` from its own copy, `gen/<build>`,
+	 * a library the index holds — lime's `ApplicationMain`, generated into each build's own directory. `copies` holds each
+	 * copy's text: one no build names is indexed and read by none, one `unread` names is read by its build but indexed by
+	 * nothing. `Mac.hub` rebuilds every root-package class unless `plain`. With `ownDirs` each build runs in its copy's
+	 * directory, which its facts then name the copy relative to (an iOS build's Xcode directory). Under the whole list of
+	 * builds when `listed`.
+	 */
+	private static function copiesAsk(
+		copies: Map<String, String>, listed: Bool, ownDirs: Bool = false, plain: Bool = false, ?unread: Array<String>
+	): ReachResult {
+		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Gen.calm(); /*>*/ }\n\t}\n}\n';
+		final hub: String = plain ? '' : '--macro addGlobalMetadata("", "@:build(Mac.hub())")\n';
+		// in build order: the first build's copy is where its facts place a node first
+		final names: Array<String> = [for (b in ['a', 'b']) ownDirs ? 'gen/$b/build_$b.hxml' : 'build_$b.hxml'];
+		final hxmls: Map<String, String> = [];
+		for (b in ['a', 'b']) {
+			if (ownDirs)
+				hxmls['gen/$b/build_$b.hxml'] = '-cp ../..\n-cp .\n-main Main\n--js out.js\n' + hub
+			else
+				hxmls['build_$b.hxml'] = '-cp .\n-cp gen/$b\n-main Main\n--js out_$b.js\n' + hub;
+		}
+		final library: Map<String, String> = [];
+		final unindexed: Map<String, String> = [for (name => text in hxmls) name => text];
+		for (name => text in copies) {
+			if ((unread ?? []).contains(name))
+				unindexed['gen/$name/Gen.hx'] = text
+			else
+				library['gen/$name/Gen.hx'] = text;
+		}
+		final result: ReachResult = ask(
+			['Main.hx' => main, 'Mac.hx' => BUILD_MACROS, 'Words.hx' => WORDS],
+			null, true, null, false, null, library, unindexed, listed, null, null, names
+		);
+		Assert.equals('', lastDropped.join('; '), 'the fixture did not compile');
+		return result;
+	}
+
+	/**
+	 * A copy of `copiesAsk`'s `Gen` whose `label` is `label`, carrying `meta` before its declaration, whose `calm` runs
+	 * `body` — by default, an expression macro's expansion and a local function reading `label` — after `idle`.
+	 */
+	private static function genCopy(label: String, ?meta: String, ?body: String): String {
+		return (meta ?? '') + 'class Gen {\n\tpublic static var label:String = "' + label + '";\n\n'
+			+ '\tpublic static function idle():Void {\n\t\ttrace("an idle method of a length past the copies\' difference");\n\t}\n\n'
+			+ '\tpublic static function calm():Void {\n\t\t'
+			+ (body ?? 'Words.say(Mac.t("x"));\n\t\tfinal f:Int->Int = n -> n + label.length;\n\t\ttrace(f(1));') + '\n\t}\n}\n';
+	}
+
 	/** `Other`, whose `dump` returns `access`: a member of its own object read by the name `n` it is handed. */
 	private static function reflectingOther(access: String): String {
 		return 'class Other {\n\tpublic function new() {}\n\n\tpublic function dump(n:String):Dynamic return ' + access + ';\n}\n';
@@ -2326,6 +2375,70 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthAsk(files), r -> r.match(Proven));
 	}
 
+	@:pin('control') @:killer('M-FACTS-COPY-UNION') @:killer('M-FACTS-COPY-HOMED-UNION') @:killer('M-FACTS-COPY-TYPE-HOMES') @:killer('M-GRAPH-REFACET-FURTHER')
+	@:killer('M-GRAPH-REFACET-RETRACT')
+	public function testATypeEachBuildReadsFromItsOwnCopyIsItsTextUnderTheTruth(): Void {
+		// each build reads `Gen` from its own directory, the copies differing in a value and so in every position after it —
+		// `a`'s `calm` starts inside `b`'s `idle`, as TM's `mas-debug` copy of `ApplicationMain` is shifted: each build's
+		// facts are its own copy's text, the macro's expansion and the local function included, so the build macro every
+		// class carries changed nothing the text does not say. Without the whole list of builds, a build the list does not
+		// name may read a copy otherwise
+		final copies: Map<String, String> = ['a' => genCopy('a'), 'b' => genCopy(StringTools.lpad('', 'b', 60))];
+		assertMatch(copiesAsk(copies, true), r -> r.match(Proven));
+		assertMatch(copiesAsk(copies, false), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-FACTS-COPY-LINE-HOME') @:killer('M-FACTS-COPY-NESTED-UNION')
+	public function testACopyEachBuildReadsFromItsOwnDirectoryIsItsTextUnderTheTruth(): Void {
+		// each build runs in its copy's directory, so its facts name `Gen.hx` alike, at alike positions: the same line of
+		// two builds names two files, each build's own copy
+		final copies: Map<String, String> = ['a' => genCopy('a'), 'b' => genCopy('b')];
+		assertMatch(copiesAsk(copies, true, true), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-FACTS-COPY-UNVOUCHED')
+	public function testACopyOfATypeNoBuildReadsIsNoProofUnderTheTruth(): Void {
+		// `gen/c` declares `Gen` too, and no build reads it: the graph folds its text into the type's, and no build's facts
+		// say what a build macro made of it
+		final copies: Map<String, String> = ['a' => genCopy('a'), 'b' => genCopy('bb'), 'c' => genCopy('c')];
+		assertMatch(copiesAsk(copies, true), r -> r.match(Unknown(Reification(_, _))));
+	}
+
+	public function testACopyABuildMacroRewroteIsNoProofUnderTheTruth(): Void {
+		// build `b`'s copy has `Mac.rewrite` make `calm` push onto `items`, which that copy's text never names
+		final copies: Map<String, String> = ['a' => genCopy('a'), 'b' => genCopy('bb', '@:build(Mac.rewrite())\n')];
+		assertMatch(copiesAsk(copies, true), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-FACTS-COPY-UNHELD')
+	public function testARegionOfATypeABuildReadsFromACopyTheIndexDoesNotHoldIsNoProofUnderTheTruth(): Void {
+		// build `b` reads `Main` from `gen/b`, which no index holds and whose loop grows `items`: the region's text is one copy
+		// of the type, and what a build macro made of the other no text the analysis reads says
+		final region: String -> String = body ->
+			LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ ' + body + ' /*>*/ }\n\t}\n}\n';
+		final hub: String = '--macro addGlobalMetadata("", "@:build(Mac.hub())")\n';
+		final unindexed: Map<String, String> = [
+			'gen/b/Main.hx' => region('items.push(1);'),
+			'build_a.hxml' => '-cp .\n-main Main\n--js out_a.js\n' + hub,
+			'build_b.hxml' => '-cp .\n-cp gen/b\n-main Main\n--js out_b.js\n' + hub
+		];
+		final files: Map<String, String> = ['Main.hx' => region('var k:Int = i;'), 'Mac.hx' => BUILD_MACROS];
+		final result: ReachResult = ask(
+			files, null, true, null, false, null, null, unindexed, true, null, null, ['build_a.hxml', 'build_b.hxml']
+		);
+		Assert.equals('', lastDropped.join('; '), 'the fixture did not compile');
+		assertMatch(result, r -> r.match(Unknown(Reification(_, _))));
+	}
+
+	@:pin('control') @:killer('M-REACH-COPY-ELSEWHERE')
+	public function testACopyTheIndexDoesNotHoldIsNoProofUnderTheTruth(): Void {
+		// build `b` reads a copy of `Gen` no index holds, whose `calm` pushes onto `items`: no declaration of the graph holds
+		// the code that build runs, whether a build macro ran over it or not
+		final copies: Map<String, String> = ['a' => genCopy('a'), 'b' => genCopy('b', null, 'Main.items.push(1);')];
+		assertMatch(copiesAsk(copies, true, false, true, ['b']), r -> !r.match(Proven));
+		assertMatch(copiesAsk(copies, true, false, false, ['b']), r -> !r.match(Proven));
+	}
+
 	@:pin('control') @:killer('M-REACH-DEAD-NODE-ENTERED') @:killer('M-LIVE-FRAGMENTED')
 	public function testCodeNoBuildCompilesRunsNothingUnderTheTruth(): Void {
 		// `haxe_ver >= 4.2` is no define a build's set decides, so its `#else` stays live, and its call of `Dead.go` is an edge:
@@ -3162,16 +3275,18 @@ class MemberReachFactsTest extends Test {
 	 * `unindexed` files are written and compiled but indexed by nothing — code only the compiler sees. `listed` hands the
 	 * analysis the builds as the whole list of them — one per define set, as a run probes them (`ReachDefinesProbe`).
 	 * `declared` library declarations are indexed alone, as the built-in array type's is: written nowhere, compiled by nothing.
+	 * `hxmls` names one build per file among `unindexed`, each compiled as it is from its own directory, in place of `build`
+	 * under `configurations`.
 	 */
 	private static function ask(
 		files: Map<String, String>, ?configurations: Array<Array<String>>, withFacts: Bool = true, ?member: MemberRef,
 		classpathComplete: Bool = false, ?build: String, ?library: Map<String, String>, ?unindexed: Map<String, String>,
-		listed: Bool = false, ?declared: Map<String, String>, ?holders: Array<String>
+		listed: Bool = false, ?declared: Map<String, String>, ?holders: Array<String>, ?hxmls: Array<String>
 	): ReachResult {
 		return withReach(files, configurations, withFacts, classpathComplete, build, library, unindexed, listed, (reach, dir) -> {
 			final source: String = files['Main.hx'] ?? '';
 			reach.mayReach(Region(Path.join([dir, 'Main.hx']), regionOf(source)), member ?? { owner: 'Main', name: 'items' }, Mutate);
-		}, declared, null, holders);
+		}, declared, null, holders, hxmls);
 	}
 
 	/** `ask` of `files` for `access` instead of `Mutate`, under the whole list of their builds when `listed`. */
@@ -3238,14 +3353,23 @@ class MemberReachFactsTest extends Test {
 	private static function withReach<T>(
 		files: Map<String, String>, configurations: Null<Array<Array<String>>>, withFacts: Bool, classpathComplete: Bool,
 		build: Null<String>, library: Null<Map<String, String>>, unindexed: Null<Map<String, String>>, listed: Bool,
-		question: (MemberReach, String) -> T, ?declared: Map<String, String>, ?reflective: Array<String>, ?holders: Array<String>
+		question: (MemberReach, String) -> T, ?declared: Map<String, String>, ?reflective: Array<String>, ?holders: Array<String>,
+		?hxmls: Array<String>
 	): T {
 		final entries: Array<{ name: String, source: String }> = [for (name => text in files) { name: name, source: text }];
 		for (name => text in library ?? []) entries.push({ name: name, source: text });
 		for (name => text in unindexed ?? []) entries.push({ name: name, source: text });
 		entries.push({ name: 'build.hxml', source: build ?? BUILD });
 		final dir: String = CliFixture.writeTree('reach_facts', entries);
-		final oracles: Array<OracleConfig> = [for (d in configurations ?? [[]]) { hxml: 'build.hxml', dir: dir, defines: d }];
+		final oracles: Array<OracleConfig> =
+			hxmls == null ? [for (d in configurations ?? [[]]) { hxml: 'build.hxml', dir: dir, defines: d }] : [
+				for (h in hxmls)
+					{
+						hxml: Path.withoutDirectory(h),
+						dir: Path.directory(h) == '' ? dir : Path.join([dir, Path.directory(h)]),
+						defines: []
+					}
+			];
 		final facts: Null<CompilerFacts> = withFacts ? TypedFactsProbe.probeAll(oracles) : null;
 		lastDropped = facts == null ? [] : [for (d in facts.dropped) '${d.name}: ${d.reason}'];
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());

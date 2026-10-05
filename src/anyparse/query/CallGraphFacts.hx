@@ -92,6 +92,9 @@ final class CallGraphFacts {
 	 */
 	public final qualified: Map<String, QualifiedRead> = [];
 
+	/** Node id -> the facts `recordMuted` recorded for it last, whose edges the graph holds. */
+	private final _recorded: Map<String, Array<FactNode>> = [];
+
 	/** The edges the syntax of a muted node recorded while the facts are the truth, until `recordMuted` sorts them. */
 	private final _heldBack: Array<CallEdge> = [];
 
@@ -103,11 +106,15 @@ final class CallGraphFacts {
 	 * The facts of each function node `file` declares that replace its syntax (`FactsView.bodyFacts`), which are muted
 	 * until `recordMuted`: under the truth only, those of a node the graph folded several declarations into, in this
 	 * file or another (`CallGraph.declarationsOf`), or of a type declared more than once, and then only when every
-	 * declaration is the one type the builds typed (`FactsView.soleType`).
+	 * declaration is the one type the builds typed (`FactsView.soleType`). A node an earlier file declared is asked again
+	 * when `file` brings a further declaration of it (`CallGraph.registerNode` dropped its facts): read by its id, a copy
+	 * of its type per build arriving one file at a time is the same node.
 	 */
 	public function mute(g: CallGraph, file: String): Map<String, Array<FactNode>> {
 		final out: Map<String, Array<FactNode>> = [];
-		for (n in g._fileNodes[CallGraphNames.normalizePath(file)] ?? []) if (!n.isExternal && !n.isBodyless) {
+		for (d in g._fileDeclarations[CallGraphNames.normalizePath(file)] ?? []) {
+			final n: Null<FnNode> = g.nodes[d.id];
+			if (n == null || n.isExternal || n.isBodyless || out.exists(n.id)) continue;
 			final found: Null<Array<FactNode>> = view.bodyFacts(g, n, g.declarationsOf(n.id).length);
 			if (found != null) out[n.id] = found;
 		}
@@ -127,6 +134,11 @@ final class CallGraphFacts {
 			if (n == null) continue;
 			faceted[id] = facts;
 			typed[id] = typedSites(facts, view);
+			// asked again with a further declaration (`mute`), the node records its facts again: a site they name in a file read
+			// since — a local function of another copy of its type — resolves now. Its unresolved sites and accesses are its
+			// facts' alone, as a faceted node's are: the ones recorded before go
+			if (_recorded.exists(id)) retract(g, id);
+			_recorded[id] = facts;
 			record(g, n, facts, view);
 		}
 		for (e in _heldBack) if (!answered(g, e.from, typed[e.from] ?? [], e) && !expandedAt(g, found[e.from] ?? [], e)) g.indexEdge(e);
@@ -252,12 +264,21 @@ final class CallGraphFacts {
 		return key;
 	}
 
+	/** Drop the unresolved sites and accesses of the node `id`, which its facts are about to record again. */
+	private static function retract(g: CallGraph, id: String): Void {
+		var i: Int = g.unresolved.length;
+		while (i-- > 0) if (g.unresolved[i].from == id) g.unresolved.splice(i, 1);
+		i = g.unresolvedAccess.length;
+		while (i-- > 0) if (g.unresolvedAccess[i].from == id) g.unresolvedAccess.splice(i, 1);
+	}
+
 	/** Forget the text of `file`, which left the graph, and the `removed` nodes it declared. */
 	public function forget(file: String, removed: Map<String, Bool>): Void {
 		for (id in removed.keys()) {
 			faceted.remove(id);
 			adopted.remove(id);
 			qualified.remove(id);
+			_recorded.remove(id);
 		}
 		view.forget(file);
 	}

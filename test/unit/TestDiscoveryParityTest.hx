@@ -2604,6 +2604,10 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-TEXT-CONVERSION-CALL',
 			'unit.query.MemberReachFactsTest#testAConvertedValueOfTheParametersOwnTypeMayBeAnyObjectUnderTheTruth :: control :: '
 				+ 'M-FACTS-CALL-OPERAND-LEAF',
+			'unit.query.MemberReachFactsTest#testACopyEachBuildReadsFromItsOwnDirectoryIsItsTextUnderTheTruth :: control :: '
+				+ 'M-FACTS-COPY-LINE-HOME,M-FACTS-COPY-NESTED-UNION',
+			'unit.query.MemberReachFactsTest#testACopyOfATypeNoBuildReadsIsNoProofUnderTheTruth :: control :: ' + 'M-FACTS-COPY-UNVOUCHED',
+			'unit.query.MemberReachFactsTest#testACopyTheIndexDoesNotHoldIsNoProofUnderTheTruth :: control :: M-REACH-COPY-ELSEWHERE',
 			'unit.query.MemberReachFactsTest#testACoreTypeAsAValueHoldsNothingUnderTheTruth :: control :: M-ESCAPES-FACTS-ABSTRACT-REFUSED',
 			'unit.query.MemberReachFactsTest#testADeclaredGlobMatchesTheClassItselfByItsQualifiedNameUnderTheTruth :: control :: M-ESCAPES-FACTS-DECLARED-SUBTYPES,M-GLOB-QUALIFIED-SEGMENT',
 			'unit.query.MemberReachFactsTest#testADeclaredMethodHolderIsMatchedByTheClassOfTheObjectItselfUnderTheTruth :: control :: M-METHODS-HOLDERS-OWN-NAME',
@@ -2710,6 +2714,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testARegexLiteralWithFlagsIsItsTextUnderTheTruth :: control :: M-FACTS-TEXT-LITERAL-FLAGS',
 			'unit.query.MemberReachFactsTest#testARegionOfABodyABuildMacroReplacedIsNoProofUnderTheTruth :: control :: '
 				+ 'M-REACH-ENTRY-REWRITTEN,M-REACH-ENTRY-MEMBER,M-REACH-TEXTUAL-ALWAYS',
+			'unit.query.MemberReachFactsTest#testARegionOfATypeABuildReadsFromACopyTheIndexDoesNotHoldIsNoProofUnderTheTruth :: control :: '
+				+ 'M-FACTS-COPY-UNHELD',
 			'unit.query.MemberReachFactsTest#testAStoredFunctionValueMayConvertWhatItIsHanded :: control :: M-FACTS-REACH-UNREAD-VALUE',
 			'unit.query.MemberReachFactsTest#testAStoredFunctionValueMayConvertWhatItIsHandedUnderTheTruth :: control :: '
 				+ 'M-REACH-TYPED-IMPLICIT-TEXT',
@@ -2734,6 +2740,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testATypeCheckTheCompilerCallsIsItsTextUnderTheTruth :: control :: M-FACTS-TEXT-PURE-CALL',
 			'unit.query.MemberReachFactsTest#testATypeDeclaredOncePerBuildIsOneTypeUnderTheTruth :: control :: '
 				+ 'M-FACTS-FOLDED-BY-ID,M-FACTS-SOLE-NEVER,M-REACH-AMBIGUOUS-SOLE-NONE',
+			'unit.query.MemberReachFactsTest#testATypeEachBuildReadsFromItsOwnCopyIsItsTextUnderTheTruth :: control :: '
+				+ 'M-FACTS-COPY-UNION,M-FACTS-COPY-HOMED-UNION,M-FACTS-COPY-TYPE-HOMES,M-GRAPH-REFACET-FURTHER,M-GRAPH-REFACET-RETRACT',
 			'unit.query.MemberReachFactsTest#testATypeInAFileImportingUnderAConditionKeepsTheSyntax :: control :: '
 				+ 'M-FACTS-REACH-GUARDED-IMPORT',
 			'unit.query.MemberReachFactsTest#testATypeNoBuildCompilesIsNoSecondDeclarationOfItsNameUnderTheTruth :: control :: '
@@ -4737,7 +4745,17 @@ class TestDiscoveryParityTest extends Test {
 			'M-HOLDERS-READ',
 			'M-HOLDERS-MERGE',
 			'M-HOLDERS-PARSE',
-			'M-FACTS-SITE-HOLDS-OWN-CODE'
+			'M-FACTS-SITE-HOLDS-OWN-CODE',
+			'M-FACTS-COPY-UNVOUCHED',
+			'M-FACTS-COPY-UNHELD',
+			'M-FACTS-COPY-UNION',
+			'M-FACTS-COPY-NESTED-UNION',
+			'M-FACTS-COPY-HOMED-UNION',
+			'M-FACTS-COPY-LINE-HOME',
+			'M-FACTS-COPY-TYPE-HOMES',
+			'M-REACH-COPY-ELSEWHERE',
+			'M-GRAPH-REFACET-FURTHER',
+			'M-GRAPH-REFACET-RETRACT'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
