@@ -372,7 +372,8 @@ final class StructFieldTrailLowering {
 	 * lifted from `lowerStruct`.
 	 */
 	private static function emitFieldLeadIn(
-		parseSteps: Array<Expr>, isStar: Bool, isOptional: Bool, kwLead: Null<String>, leadText: Null<String>, hasCondOpenNewlineSlot: Bool
+		parseSteps: Array<Expr>, isStar: Bool, isOptional: Bool, kwLead: Null<String>, leadText: Null<String>,
+		hasCondOpenNewlineSlot: Bool, beforeLeadLocal: Null<String>
 	): Void {
 		if (isStar || isOptional) return;
 		if (kwLead != null) {
@@ -380,6 +381,9 @@ final class StructFieldTrailLowering {
 			parseSteps.push(macro expectKw(ctx, $v{kwLead}));
 		}
 		if (leadText == null) return;
+		// ω-before-lead: a BLOCK comment right before the lead literal
+		// (`{x /* c */ : 1}`) is captured before `skipWs` swallows it.
+		if (beforeLeadLocal != null) parseSteps.push(macro $i{beforeLeadLocal} = collectTrailingBlock(ctx));
 		parseSteps.push(macro skipWs(ctx));
 		parseSteps.push(macro expectLit(ctx, $v{leadText}));
 		// ω-condition-wrap-keep: record the byte position right

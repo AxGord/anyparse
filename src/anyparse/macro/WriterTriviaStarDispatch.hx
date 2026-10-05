@@ -358,7 +358,7 @@ final class WriterTriviaStarDispatch {
 		final caseSiblingStructuralFn: Null<Expr> = caseSiblingStructuralFnExpr(tc, caseSymArgs, elemRefName);
 		final caseSiblingControlFlowFn: Null<Expr> = caseSiblingControlFlowFnExpr(tc, caseSymArgs, elemRefName);
 		final blockStar: Expr = TriviaBlockLowering.triviaBlockStarExpr(
-			fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, openText ?? '', closeText, false,
+			fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, openText ?? '', closeText,
 			afterDocComments, keepBetweenFields, beforeDocComments, interMemberInfo, indentCaseLabelsGate, emptyCurlyBreak, beginEndType,
 			keepCurlyBlanks, lineCommentTrailBlank, blankBeforeFinalDocInLeading, staticVarSubdivInfo, betweenMultilineCommentsBlanks,
 			uniformBetweenOptField, anonFnClear, emptyCurlyKnob, rightCurlyKnob, rightCurlyAnonFnKnob, blockEndedFlag ? sepText : null,

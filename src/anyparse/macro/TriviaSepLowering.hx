@@ -399,7 +399,7 @@ final class TriviaSepLowering {
 					_dt($v{openText}),
 					_openDoc,
 					_dt($v{closeText}),
-					trailingCommentDocVerbatim(_trailClose, opt)
+					trailingCommentDocGuarded(_trailClose, opt)
 				]);
 			else
 				_dc([_dt($v{openText}), _openDoc, _dt($v{closeText})]);

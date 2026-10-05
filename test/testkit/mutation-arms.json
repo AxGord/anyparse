@@ -13817,6 +13817,86 @@
 			"find": "if (!types.foreach(t -> FactsTypeText.unwrapNull(t) == UNBOUND || builtinEquality(FactsTypeTree.read(t), 0))) return false;",
 			"replace": "// cut",
 			"note": "(soundness) an abstract's own `!=` answers a test against null as the language would"
+		},
+		{
+			"name": "M-CLOSE-TRAIL-BLOCK-BREAKS",
+			"type": "anyparse.macro.TriviaBlockLowering",
+			"method": "triviaBlockElseBody",
+			"find": "_parts.push(trailingCommentDocGuarded(_trailClose, opt));",
+			"replace": "_parts.push(trailingCommentDocGuarded(_trailClose, opt));\n_parts.push(_dohsbh());",
+			"note": "a close-trailing comment is followed by a forward hardline whatever its style again, so `} /* c */` breaks before a same-line `else` / `while` / `catch`"
+		},
+		{
+			"name": "M-CLOSE-TRAIL-EMPTY-HARD",
+			"type": "anyparse.macro.TriviaBlockLowering",
+			"method": "triviaBlockStarExpr",
+			"find": "final emptyTrailExpr: Expr = macro _dc([_dt($v{emptyText}), trailingCommentDocGuarded(_trailClose, opt)]);",
+			"replace": "final emptyTrailExpr: Expr = macro _dc([_dt($v{emptyText}), trailingCommentDocVerbatim(_trailClose, opt), _dhl()]);",
+			"note": "an empty block's close-trailing comment is followed by a hard newline again, so a block comment breaks and a line comment pushes the keyword one space out"
+		},
+		{
+			"name": "M-CATCH-CLOSE-TRAIL-ANY",
+			"type": "anyparse.macro.WriterTriviaStarEmitLowering",
+			"method": "buildCloseTrailingFirstSepOverride",
+			"find": "guard: macro _ct != null && StringTools.startsWith(_ct, '//')",
+			"replace": "guard: macro _ct != null",
+			"note": "the first-catch separator is dropped after ANY close-trailing comment again, so `} /* c */catch` loses its gap under every policy"
+		},
+		{
+			"name": "M-OPEN-TRAIL-EMPTY-UNGUARDED",
+			"type": "anyparse.macro.TriviaBlockLowering",
+			"method": "triviaBlockMainExpr",
+			"find": "trailingCommentDocGuarded(_trailClose, opt)",
+			"replace": "trailingCommentDocVerbatim(_trailClose, opt)",
+			"note": "`{ /* n */ } // c` emits its line comment with no forward break, so the keyword after it is swallowed into the comment"
+		},
+		{
+			"name": "M-OPEN-TRAIL-SEP-UNGUARDED",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepEmptyOpenTrailExpr",
+			"find": "trailingCommentDocGuarded(_trailClose, opt)",
+			"replace": "trailingCommentDocVerbatim(_trailClose, opt)",
+			"note": "`(/* n */) // c` emits its line comment with no forward break, so the function body's `{` is swallowed into the comment"
+		},
+		{
+			"name": "M-FNBODY-GAP-COMMENT-NONE",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "emitLeftCurlyBody",
+			"find": "if (hasBeforeLeadingSlot) {",
+			"replace": "if (false) {",
+			"note": "the function body's `BeforeLeading` slot goes unread again, so `function f():Int /* c */ {` drops the comment"
+		},
+		{
+			"name": "M-BEFORE-LEAD-CAPTURE-NONE",
+			"type": "anyparse.macro.StructSeqLowering",
+			"method": "emitOptionalRefLeadCommit",
+			"find": "$i{beforeLeadLocal} = _leadGapComment;",
+			"replace": "$i{beforeLeadLocal} = null;",
+			"note": "an optional lead commit forgets the block comment before its lead, so `var x /* c */ = 1` drops it"
+		},
+		{
+			"name": "M-BEFORE-LEAD-MANDATORY-NONE",
+			"type": "anyparse.macro.StructFieldTrailLowering",
+			"method": "emitFieldLeadIn",
+			"find": "if (beforeLeadLocal != null) parseSteps.push(macro $i{beforeLeadLocal} = collectTrailingBlock(ctx));",
+			"replace": "if (false) parseSteps.push(macro $i{beforeLeadLocal} = collectTrailingBlock(ctx));",
+			"note": "a mandatory lead skips the block comment before it as whitespace again, so `{x /* c */:Int}` drops it"
+		},
+		{
+			"name": "M-BEFORE-LEAD-WRITER-OPT-NONE",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "emitOptionalRefField",
+			"find": "if (beforeLead != null) optParts.push(beforeLeadDoc(beforeLead));",
+			"replace": "if (false) optParts.push(beforeLeadDoc(beforeLead));",
+			"note": "an optional lead's captured comment is never written, so `var x /* c */ = 1` drops it"
+		},
+		{
+			"name": "M-BEFORE-LEAD-WRITER-MANDATORY-NONE",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "emitFieldLeadIn",
+			"find": "if (beforeLead != null) parts.push(beforeLeadDoc(beforeLead));",
+			"replace": "if (false) parts.push(beforeLeadDoc(beforeLead));",
+			"note": "a mandatory lead's captured comment is never written, so `{x /* c */:Int}` drops it"
 		}
 	]
 }

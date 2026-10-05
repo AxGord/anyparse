@@ -543,7 +543,7 @@ final class WriterTriviaStarEmitLowering {
 				expr: ECall(ctorRef, patternArgs),
 				pos: Context.currentPos()
 			};
-			cases.push({ values: [pattern], guard: macro _ct != null, expr: macro _de() });
+			cases.push({ values: [pattern], guard: macro _ct != null && StringTools.startsWith(_ct, '//'), expr: macro _de() });
 		}
 		if (cases.length == 0) return null;
 		cases.push({ values: [macro _], guard: null, expr: sepExpr });

@@ -152,6 +152,19 @@ class TriviaTypeSynth {
 	public static inline final BEFORE_TRAIL_SUFFIX: String = 'BeforeTrail';
 
 	/**
+	 * ω-before-lead — a BLOCK comment captured in the gap between the preceding token and a Ref field's
+	 * own `@:lead(LIT)` literal: the `/* c *\/` in `var x /* c *\/ = 1`, `var x:Int /* c *\/ = 1`,
+	 * `f(a /* c *\/ = 1)`, `var x /* c *\/:Int` (optional leads) and `{x /* c *\/:Int}` (a mandatory
+	 * one). Both lead paths skipped that gap as whitespace before the literal, so the comment was gone,
+	 * and the writer round trip refused the file. Hosts: `TriviaPairSlots.isBeforeLeadRef`.
+	 *
+	 * The writer re-emits the slot immediately before the lead literal. LINE comments stay uncaptured
+	 * for the same reason `BeforeTrail` leaves them: a `//` runs to the newline, and nothing after it
+	 * may share the line, so the lead and its value would have to move with no slot recording where.
+	 */
+	public static inline final BEFORE_LEAD_SUFFIX: String = 'BeforeLead';
+
+	/**
 	 * ω-issue-48-v2 — source-shape slot synthesised on paired Seq types
 	 * alongside bare non-first Ref fields (no `@:optional`, no `@:kw`, no
 	 * `@:lead`). Records whether the source had a newline in the gap
@@ -590,6 +603,10 @@ class TriviaTypeSynth {
 					// literal — a block comment sitting between the field's last
 					// token and its `@:trail` close. See BEFORE_TRAIL_SUFFIX.
 					if (TriviaPairSlots.isBeforeTrailRef(child)) fields.push(TriviaPairSlots.buildBeforeTrailSlot(child, pos));
+					// ω-before-lead: a block comment sitting between the preceding token and an
+					// optional Ref's `@:lead` commit literal. See BEFORE_LEAD_SUFFIX.
+					if (TriviaPairSlots.isBeforeLeadRef(child, child == origNode.children[0]))
+						fields.push(TriviaPairSlots.buildBeforeLeadSlot(child, pos));
 					// ω-cond-comp-expr-multiline: bare Ref fields opted in via
 					// `@:fmt(captureSourceNewlineAfter)` grow a `NewlineAfter:Bool`
 					// slot capturing whether the source had a newline AFTER

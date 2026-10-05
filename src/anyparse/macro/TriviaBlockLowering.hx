@@ -457,13 +457,13 @@ final class TriviaBlockLowering {
 	@:access(anyparse.macro.WriterLowering)
 	private static function triviaBlockStarExpr(
 		fieldAccess: Expr, trailBBAccess: Null<Expr>, trailLCAccess: Null<Expr>, trailCloseAccess: Null<Expr>, trailOpenAccess: Null<Expr>,
-		elemFn: String, openText: String, closeText: String, appendHardlineAfterTrail: Bool = false,
-		afterFieldsWithDocComments: Bool = false, existingBetweenFields: Bool = false, beforeDocCommentEmptyLines: Bool = false,
-		?interMemberInfo: WriterLowering.InterMemberClassifyInfo, indentCaseLabelsGate: Bool = false, emptyCurlyBreak: Bool = false,
-		beginEndType: Bool = false, keepCurlyBlanks: Bool = false, lineCommentTrailBlank: Bool = false,
-		blankBeforeFinalDocInLeading: Bool = false, ?staticVarSubdivInfo: WriterLowering.StaticVarSubdivisionInfo,
-		betweenMultilineCommentsBlanks: Bool = false, ?uniformBetweenOptField: String, clearAnonFnBodyOnElems: Bool = false,
-		?emptyCurlyKnob: String, ?rightCurlyKnob: String, ?rightCurlyAnonFnKnob: String,
+		elemFn: String, openText: String, closeText: String, afterFieldsWithDocComments: Bool = false, existingBetweenFields: Bool = false,
+		beforeDocCommentEmptyLines: Bool = false, ?interMemberInfo: WriterLowering.InterMemberClassifyInfo,
+		indentCaseLabelsGate: Bool = false, emptyCurlyBreak: Bool = false, beginEndType: Bool = false, keepCurlyBlanks: Bool = false,
+		lineCommentTrailBlank: Bool = false, blankBeforeFinalDocInLeading: Bool = false,
+		?staticVarSubdivInfo: WriterLowering.StaticVarSubdivisionInfo, betweenMultilineCommentsBlanks: Bool = false,
+		?uniformBetweenOptField: String, clearAnonFnBodyOnElems: Bool = false, ?emptyCurlyKnob: String, ?rightCurlyKnob: String,
+		?rightCurlyAnonFnKnob: String,
 		// ω-blockended-trivia (Session 3): when the Star carries
 		// `@:sep('text', tailRelax, blockEnded)`, the block-mode emit
 		// gains between-element sep emission, gated on
@@ -578,32 +578,16 @@ final class TriviaBlockLowering {
 		// sites forward null. Verbatim emission preserves block-vs-line
 		// style.
 		final trailOpen: Expr = trailOpenAccess ?? macro (null: Null<String>);
-		// ω-close-trailing-alt: Alt-branch sites pass true so the trailing
-		// line comment is followed by a hardline — line comments terminate
-		// at \n semantically, and the Alt's parent struct may emit a space
-		// sep next (e.g. HxTryCatchStmt.body→catches with sameLineCatch),
-		// which would glue the next sibling onto the same line as the
-		// comment. Seq-struct sites pass false: their close-trailing slot
-		// always lives on the LAST field of its containing struct, where
-		// the parent Star's element separator already supplies a hardline.
-		//
-		// ω-opthardlineskipbeforehardline (slice B opt-in): emit
-		// `_dohsbh()` instead of `_dhl()`. Forward-looking opt-hardline
-		// drops when the next non-OptSpace emit is itself a hardline —
-		// closes the spurious-blank-line bug between two consecutive
-		// `} // comment` / `<next stmt>` BlockStmt-Alt siblings where
-		// the parent stmt-list Star's per-element sep emits a hardline.
-		// In the sameLineCatch case the parent emits a content/space
-		// follower, so `_dohsbh()` still fires (lands `\n+indent` for
-		// the next-line catch placement). See target fixtures
-		// `lineends/issue_445_curly_with_comment{,_both}`.
-		final trailFollowExpr: Expr = appendHardlineAfterTrail ? macro _parts.push(_dohsbh()) : macro {};
-		// Head -> body seam: without the explicit `_dhl()` the block-Star's
-		// close-trailing comment is followed by whatever the parent struct
-		// emits next, so a LINE comment needs the forward-looking guard.
-		final emptyTrailExpr: Expr = appendHardlineAfterTrail
-			? macro _dc([_dt($v{emptyText}), trailingCommentDocVerbatim(_trailClose, opt), _dhl()])
-			: macro _dc([_dt($v{emptyText}), trailingCommentDocGuarded(_trailClose, opt)]);
+		// ω-close-trailing-block-glue: the close-trailing comment is emitted by
+		// `trailingCommentDocGuarded` on every site, empty block included. A LINE
+		// comment carries its own forward hardline (`_dohsbh()`, dropped before a
+		// following break), so whatever the parent emits next — the space before a
+		// same-line `else` / `while` / `catch` — cannot land on the comment's line.
+		// A BLOCK comment carries none: it ends where it closes, so `} /* c */ else`
+		// stays glued under a same-line policy and the policy alone decides the seam.
+		// The Alt-branch sites used to append `_dohsbh()` regardless of style, which
+		// forced `} /* c */` onto its own line ahead of every continuation keyword.
+		final emptyTrailExpr: Expr = macro _dc([_dt($v{emptyText}), trailingCommentDocGuarded(_trailClose, opt)]);
 		// ω-C-empty-lines-doc / ω-C-empty-lines-between-fields /
 		// ω-C-empty-lines-before-doc: when the grammar field carries any
 		// of the empty-line flags
@@ -676,7 +660,6 @@ final class TriviaBlockLowering {
 			trailLC: trailLC,
 			trailClose: trailClose,
 			trailOpen: trailOpen,
-			trailFollowExpr: trailFollowExpr,
 			emptyTrailExpr: emptyTrailExpr,
 			blankBeforeExpr: blankBeforeExpr,
 			trackDocCommentExpr: leaf.trackDocCommentExpr,
@@ -1170,7 +1153,6 @@ final class TriviaBlockLowering {
 		final endTypeExpr: Expr = c.endTypeExpr;
 		final innerWrapExpr: Expr = c.innerWrapExpr;
 		final beforeCloseHardlineExpr: Expr = c.beforeCloseHardlineExpr;
-		final trailFollowExpr: Expr = c.trailFollowExpr;
 		final openText: String = c.openText;
 		final closeText: String = c.closeText;
 		return macro {
@@ -1211,19 +1193,13 @@ final class TriviaBlockLowering {
 			_parts.push($beforeCloseHardlineExpr);
 			_parts.push(_dt($v{closeText}));
 			if (_trailClose != null) {
-				// Group-closer seam: `$trailFollowExpr` supplies the break only
-				// for the Alt-branch arm; the Seq-struct arm assumes the parent
-				// Star emits the next hardline, which holds for a STATEMENT-list
-				// parent but not for a block that is itself an element of an
-				// inline group - `g(function() {\n\th();\n} // c\n)` puts the
-				// call's `)` right after the comment on the same Doc line and it
-				// is swallowed. The guarded emitter carries its own forward-
-				// looking hardline for LINE style; when the Alt arm pushes one
-				// too the second simply overwrites the un-committed slot, so
-				// that arm stays byte-identical, and a block comment keeps its
-				// legal glue in both.
+				// Group-closer seam: a block that is itself an element of an
+				// inline group - `g(function() {\n\th();\n} // c\n)` - puts the
+				// call's `)` right after the comment on the same Doc line, where a
+				// LINE comment swallows it. The guarded emitter carries its own
+				// forward-looking hardline for LINE style; a block comment keeps
+				// its legal glue.
 				_parts.push(trailingCommentDocGuarded(_trailClose, opt));
-				$trailFollowExpr;
 			}
 			// ω-break-group / ω-force-flat-engine sister-coverage: wrap the block
 			// body in BodyGroup so a surrounding Group does not see the body's
@@ -1269,7 +1245,7 @@ final class TriviaBlockLowering {
 						_dt($v{openText}),
 						_openDoc,
 						_dt($v{closeText}),
-						trailingCommentDocVerbatim(_trailClose, opt)
+						trailingCommentDocGuarded(_trailClose, opt)
 					]);
 				else
 					_dc([_dt($v{openText}), _openDoc, _dt($v{closeText})]);
