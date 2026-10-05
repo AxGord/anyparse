@@ -1217,6 +1217,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-EXTRACT-REPEAT-RENDER-SPLIT',
 			'unit.check.FactsFixGateE2ETest#testAComputedClassNameTheProjectBoundsLetsTheLoopRewrite :: control :: M-REFLECTIVE-BUILDS,M-REFLECTIVE-REACH,M-REFLECTIVE-WARN,M-ESCAPES-FACTS-UNMATCHED',
 			'unit.check.FactsFixGateE2ETest#testAComputedMemberNameTheProjectBoundsLetsTheLoopRewrite :: control :: M-HOLDERS-BUILDS,M-HOLDERS-REACH,M-HOLDERS-WARN,M-HOLDERS-READ',
+			'unit.check.FactsFixGateE2ETest#testAMapHandedToMethodsThatKeepNothingLosesItsKeyUnderTheTruth :: control :: '
+				+ 'M-FACTS-ARGUMENT-USE,M-FACTS-ARGUMENT-CAST,M-FACTS-ABSTRACT-WRAPPED-CAST,M-TOUCH-ARGUMENT-USES',
 			'unit.check.FactsFixGateE2ETest#testAMapTheLoopLeavesUnchangedLosesItsKeyFromItsSyntax :: control :: M-TOUCH-MAP-METHODS-UNKNOWN',
 			'unit.check.FactsFixGateE2ETest#testAMapTheLoopLeavesUnchangedLosesItsKeyUnderTheTruth :: control :: M-GRAPH-MAP-USER-CODE,M-FACTS-IDENTITY-CAST-VALUE,M-TOUCH-MAP-METHODS-UNKNOWN,M-REACH-LOCAL-MAP-ALIAS-ARRAY',
 			'unit.check.FactsFixGateE2ETest#testAPrivateMemberNoSupertypeDeclaresIsDeleted :: control :: M-UNUSED-PRIVATE-CHAIN-FACTS,M-UNUSED-PRIVATE-CHAIN-DECLARED,M-UNUSED-PRIVATE-CHAIN-AUTOBUILD',
@@ -2929,6 +2931,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testAnAdmittedConversionOfANameTwoTypesShareIsTheOperandsTypesUnderTheTruth :: control :: '
 				+ 'M-FACTS-SITE-OWNERS-NONE,M-FACTS-SITE-CONVERSION-OWNERS-NONE,M-REACH-OWNED-TYPES-NONE,M-REACH-OWNED-UNTYPED,'
 				+ 'M-REACH-OWNED-ESCAPES-KEPT',
+			'unit.query.MemberReachFactsTest#testAnArgumentAMethodKeepsNothingOfLetsNothingEscapeUnderTheTruth :: control :: '
+				+ 'M-FACTS-ARGUMENT-USE,M-FACTS-PARAM-ALIAS,M-ARGUMENT-USES-ONWARD,M-ARGUMENT-USES-OVERRIDES,M-TOUCH-ARGUMENT-USES,'
+				+ 'M-TOUCH-ARGUMENT-LEAVES',
 			'unit.query.MemberReachFactsTest#testAnArrayMemberOfASubclassUnderAnAncestorsAutoBuildIsAnsweredUnderTheTruth :: control :: '
 				+ 'M-REACH-REWRITTEN-TRUTH,M-REACH-REWRITTEN-UNTRUE',
 			'unit.query.MemberReachFactsTest#testAnEscapeTheCompilerTypesCostsOnlyItsOwnFamily :: control :: M-FACTS-REACH-ESCAPE-TYPED',
@@ -5100,7 +5105,15 @@ class TestDiscoveryParityTest extends Test {
 			'M-GRAPH-MAP-USER-CODE',
 			'M-FACTS-IDENTITY-CAST-VALUE',
 			'M-TOUCH-NEW-MAP-NOT-FRESH',
-			'M-ULB-KEYED-UNPROVED-DROPPED'
+			'M-ULB-KEYED-UNPROVED-DROPPED',
+			'M-FACTS-ARGUMENT-USE',
+			'M-FACTS-PARAM-ALIAS',
+			'M-FACTS-ARGUMENT-CAST',
+			'M-ARGUMENT-USES-ONWARD',
+			'M-ARGUMENT-USES-OVERRIDES',
+			'M-TOUCH-ARGUMENT-USES',
+			'M-TOUCH-ARGUMENT-LEAVES',
+			'M-FACTS-ABSTRACT-WRAPPED-CAST'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
@@ -5310,6 +5323,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-BEFORE-LEAD-WRITER-OPT-NONE :: anyparse.macro.WriterRefFieldLowering#emitOptionalRefField',
 			'M-BEFORE-LEAD-WRITER-MANDATORY-NONE :: anyparse.macro.WriterRefFieldLowering#emitFieldLeadIn',
 			'M-FACTS-IDENTITY-CAST-VALUE :: anyparse.check.TypedFactsWalk#visit',
+			'M-FACTS-ARGUMENT-USE :: anyparse.check.TypedFactsWalk#call',
+			'M-FACTS-PARAM-ALIAS :: anyparse.check.TypedFactsWalk#root',
+			'M-FACTS-ARGUMENT-CAST :: anyparse.check.TypedFactsWalk#visit',
+			'M-FACTS-ABSTRACT-WRAPPED-CAST :: anyparse.check.TypedFactsWalk#visit',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

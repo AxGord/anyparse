@@ -2,10 +2,12 @@ package anyparse.query;
 
 import anyparse.query.CallGraph.FnDeclaration;
 import anyparse.query.CallGraph.FnNode;
+import anyparse.query.CompilerFacts.ArgumentFact;
 import anyparse.query.CompilerFacts.ExpansionFact;
 import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.CompilerFacts.FieldFact;
+import anyparse.query.CompilerFacts.ParamUse;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.MemberReach.ReachAccess;
 import anyparse.query.MemberReach.ReachStep;
@@ -486,7 +488,8 @@ final class MemberTouchScan {
 					use: f.use,
 					method: f.method,
 					fresh: f.fresh,
-					held: f.held
+					held: f.held,
+					argument: f.argument
 				}
 		];
 	}
@@ -571,7 +574,7 @@ final class MemberTouchScan {
 			// the text of the declaration holding the access, which may be another than the node's first (`nodeAccesses`)
 			final holding: Null<FnDeclaration> = made ? null : declarationHolding(g, id, f.at, view);
 			final file: String = holding?.file ?? home;
-			final verdict: Verdict = classifyTyped(f, access, owns);
+			final verdict: Verdict = classifyTyped(f, access, owns, view);
 			if (verdict.escape) out.escapes.push({ file: made ? f.at.file : file, span: span });
 			if (!verdict.touch) continue;
 			// the compiler may place what it made of an expression at a range wider than the expression's own; a local holding
@@ -592,22 +595,43 @@ final class MemberTouchScan {
 	/**
 	 * What the typed access `f` of the member does for `access` — `classify`, read off the facts: a write touches, and for
 	 * `Mutate` escapes unless it stores a value only the field holds (`FieldFact.fresh`); a read touches for `Read`, and for
-	 * `Mutate` touches and escapes by its use: an element write or a write of a field of the member's value touches, a
-	 * method call is a read only for one of the array type's own readers on an array-typed member (the facts name the
-	 * method the receiver's type declares, never an extension), and a value handed on escapes.
+	 * `Mutate` touches and escapes by its use (`classifyUse`). Under the truth a value handed to a method as an argument
+	 * (`FieldFact.argument`) does what that method's code does with its parameter (`ArgumentUses`): each use there is read
+	 * as this one, and a method the facts do not answer for lets it escape.
 	 */
-	private function classifyTyped(f: FieldFact, access: ReachAccess, owns: OwnMethods): Verdict {
+	private function classifyTyped(f: FieldFact, access: ReachAccess, owns: OwnMethods, view: FactsView): Verdict {
 		if (f.write) return switch access {
 			case Read: { touch: false, escape: false };
 			case Write: { touch: true, escape: false };
 			case Mutate: { touch: true, escape: !f.fresh };
 		};
 		if (access != Mutate) return { touch: access == Read, escape: false };
-		return switch f.use {
+		final handed: Null<ArgumentFact> = f.argument;
+		if (handed == null || !view.truth) return classifyUse(f.use, f.method, owns);
+		// handed to a parameter: what the code it is handed to does with it is what this read does
+		final met: Null<Array<ParamUse>> = view.argumentUses().uses(handed);
+		if (met == null) return { touch: false, escape: true };
+		var touch: Bool = false;
+		var escape: Bool = false;
+		for (u in met) {
+			final one: Verdict = TYPED_USES.contains(u.use) ? classifyUse(u.use, u.method, owns) : { touch: true, escape: true };
+			touch = touch || one.touch;
+			escape = escape || one.escape;
+		}
+		return { touch: touch, escape: escape };
+	}
+
+	/**
+	 * What a read of the member's value used as `use` does for `Mutate` (`FieldFact.use`): a method call is a read only for one
+	 * of the container's own readers (the facts name the method the receiver's type declares, never an extension), a change
+	 * without an escape only for one of its own changers; an element or member write touches; a value handed on escapes.
+	 */
+	private static function classifyUse(use: Null<String>, method: Null<String>, owns: OwnMethods): Verdict {
+		return switch use {
 			case 'call':
-				final method: String = f.method ?? '';
-				final reads: Bool = owns.reads.contains(method);
-				final own: Bool = reads || owns.changes.contains(method);
+				final called: String = method ?? '';
+				final reads: Bool = owns.reads.contains(called);
+				final own: Bool = reads || owns.changes.contains(called);
 				{ touch: !reads, escape: !own };
 			case 'elemWrite', 'memberWrite': { touch: true, escape: false };
 			case 'value': { touch: false, escape: true };

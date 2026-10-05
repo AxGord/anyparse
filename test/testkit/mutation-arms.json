@@ -7006,7 +7006,7 @@
 		{
 			"name": "M-TOUCH-TYPED-CALL",
 			"type": "anyparse.query.MemberTouchScan",
-			"method": "classifyTyped",
+			"method": "classifyUse",
 			"find": "{ touch: !reads, escape: !own };",
 			"replace": "{ touch: false, escape: false };",
 			"note": "a method called on the member touches nothing, so `stuff.push(1)` changes nothing"
@@ -7030,7 +7030,7 @@
 		{
 			"name": "M-TOUCH-TYPED-VALUE",
 			"type": "anyparse.query.MemberTouchScan",
-			"method": "classifyTyped",
+			"method": "classifyUse",
 			"find": "case 'value': { touch: false, escape: true };",
 			"replace": "case 'value': { touch: false, escape: false };",
 			"note": "the member's value handed on - a method closure read off it - lets nothing escape"
@@ -14115,8 +14115,8 @@
 			"name": "M-FACTS-IDENTITY-CAST-VALUE",
 			"type": "anyparse.check.TypedFactsWalk",
 			"method": "visit",
-			"find": "if (sink != '?' && sink == str(inner.t))",
-			"replace": "if (false)",
+			"find": "sink == str(inner.t) ||",
+			"replace": "",
 			"note": "a value read through an identity cast is handed on, so every inlined Map method's receiver escapes in the facts"
 		},
 		{
@@ -14134,6 +14134,70 @@
 			"find": "ValueIterationProof.keyedDecline(built, file, keyed.iterable, keyed.body, s.shape) == null;",
 			"replace": "true;",
 			"note": "an unread key over a map is dropped without the reach, so a loop that removes an entry switches to the iterator that yields its stale value"
+		},
+		{
+			"name": "M-FACTS-ARGUMENT-USE",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "call",
+			"find": "walkAs(args[i], Argument(to, handedVia, i))",
+			"replace": "walk(args[i])",
+			"note": "an argument of a declared method is recorded as a plain value, so no read names the parameter it is handed to and every argument escapes again"
+		},
+		{
+			"name": "M-FACTS-PARAM-ALIAS",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "root",
+			"find": "_aliases[a.v.id] = param;",
+			"replace": "",
+			"note": "a parameter is no local of its node, so its reads record no use and every method reads as keeping nothing of what it is handed — a store into a static among them"
+		},
+		{
+			"name": "M-FACTS-ARGUMENT-CAST",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "visit",
+			"find": "|| use.match(Argument(_, _, _))",
+			"replace": "",
+			"note": "an argument the compiler casts (a Map handed to an Iterable) is a plain value under the cast, so passing a map to Lambda.count escapes again"
+		},
+		{
+			"name": "M-ARGUMENT-USES-ONWARD",
+			"type": "anyparse.query.ArgumentUses",
+			"method": "followed",
+			"find": "work.push(onward)",
+			"replace": "{}",
+			"note": "a parameter handed on to another method adds nothing, so a method that hands its argument to one storing it keeps nothing"
+		},
+		{
+			"name": "M-ARGUMENT-USES-OVERRIDES",
+			"type": "anyparse.query.ArgumentUses",
+			"method": "runs",
+			"find": "onInstance ? _table.subtypesOf(owner) : []",
+			"replace": "[]",
+			"note": "a call on an instance runs only the declared method, so an override that stores its argument is never asked"
+		},
+		{
+			"name": "M-TOUCH-ARGUMENT-USES",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "classifyTyped",
+			"find": "if (handed == null || !view.truth)",
+			"replace": "if (handed == null || true)",
+			"note": "an argument is an escape whatever the method it is handed to does with it, as before the parameter uses"
+		},
+		{
+			"name": "M-TOUCH-ARGUMENT-LEAVES",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "classifyTyped",
+			"find": "touch = touch || one.touch;",
+			"replace": "",
+			"note": "a change the method an argument is handed to makes through its parameter is no touch where it is called, so a push onto the member there is missed"
+		},
+		{
+			"name": "M-FACTS-ABSTRACT-WRAPPED-CAST",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "visit",
+			"find": "|| sink == str(wrapped(inner.t))",
+			"replace": "",
+			"note": "a local spliced into an inlined abstract method as its this is cast from the abstract to the type it wraps, and that cast hands the value on, so a Map parameter a method only iterates escapes"
 		}
 	]
 }

@@ -26,6 +26,9 @@ final class TypedFactsWalk {
 		'fns'
 	];
 
+	/** The accesses of a call of a method a type declares, whose parameters take its arguments (`Argument`). */
+	private static final DECLARED_CALLS: Array<String> = ['FStatic', 'FInstance'];
+
 	public final id: String;
 
 	private final _facts: Map<String, Array<String>> = [];
@@ -165,10 +168,15 @@ final class TypedFactsWalk {
 					add('params', '{"n":${q(a.v.name)},"t":${q(localType(a.v))}}');
 					// no code of the body assigns it and no default replaces a null handed to it: it holds what the call hands
 					if (a.value == null && !_written.exists(a.v.id)) kept.push(i);
+					// a parameter is a local of this node: its reads are the uses of what a call hands it
+					final param: Alias = { owner: id, uses: [], links: [] };
+					_aliases[a.v.id] = param;
 				}
 				if (kept.length > 0) _header += ',"pk":[${kept.join(',')}]';
 				// a function's body is never its value: a returned value is the operand of a `return`
 				walkAs(f.expr, Statement);
+				final handed: Array<String> = [for (a in f.args) '[' + [for (u in aliasUses(a.v.id)) '{$u}'].join(',') + ']'];
+				_header += ',"pu":[${handed.join(',')}]';
 			case _:
 				walk(e);
 		}
@@ -627,8 +635,12 @@ final class TypedFactsWalk {
 				final sink: String = str(e.t);
 				flowText(sourceType(inner), sink == '?' ? 'Dynamic' : sink, 'cast', e.pos);
 				// one to the type the value already has changes nothing, so the value is used as the cast is: an inlined
-				// abstract method reads its `this` through one (`Map.get` calls `(cast this).get(key)`)
-				if (sink != '?' && sink == str(inner.t))
+				// abstract method reads its `this` through one (`Map.get` calls `(cast this).get(key)`), and a local spliced in as
+				// that `this` is cast from the abstract to the type it wraps, which is what it is at run time. An argument stays
+				// the object it was whatever it is cast to — the compiler casts a `Map` handed to an `Iterable` — and the
+				// parameter's uses name what is done to that object
+				final same: Bool = sink == str(inner.t) || sink == str(wrapped(inner.t));
+				if ((sink != '?' && same) || use.match(Argument(_, _, _)))
 					walkAs(inner, use)
 				else
 					walk(inner);
@@ -933,6 +945,9 @@ final class TypedFactsWalk {
 		argFlows(callee.t, args);
 		final where: String = at(e.pos);
 		final head: String = '"rt":${q(str(e.t))},"p":$where' + dynamicOperand(callee.t, args);
+		// the method a declared field names, whose parameters take the arguments: its own facts follow each (`Argument`)
+		var handedTo: Null<String> = null;
+		var handedVia: String = '';
 		final fact: String = switch callee.expr {
 			case TField(receiver, fa):
 				final access: FieldRef = TypedFactsShapes.describe(fa);
@@ -954,6 +969,13 @@ final class TypedFactsWalk {
 					case _:
 				}
 				final kind: String = calledKind(fa, targetName, access.kind);
+				if (
+					declaring != null && kind == access.kind && DECLARED_CALLS.contains(kind)
+					&& !TypedFactsShapes.REFLECTION_CLASSES.contains(declaring) && !TypedFactsShapes.SYNTAX_CLASSES.contains(declaring)
+				) {
+					handedTo = targetName;
+					handedVia = kind;
+				}
 				final chosen: String = _host.overloaded(targetName) ? ',"sig":${q(str(callee.t))}' : '';
 				'{"t":${q(targetName)},"a":"$kind"$chosen,"r":${q(str(receiver.t))},"rp":${at(receiver.pos)},$head}';
 			case TConst(TSuper):
@@ -976,7 +998,17 @@ final class TypedFactsWalk {
 				'{"a":"value","r":${q(str(callee.t))},"rp":${at(callee.pos)},$head}';
 		};
 		add('calls', fact);
-		for (a in args) walk(a);
+		final to: Null<String> = handedTo;
+		final declared: Null<Array<{ name: String, opt: Bool, t: Type }>> = parametersOf(callee.t);
+		var handed: Bool = to != null && declared != null;
+		for (i in 0...args.length) {
+			// a rest parameter takes the arguments into an array the compiler builds, which no parameter use follows
+			if (declared == null || i >= declared.length || TypedFactsShapes.restElement(declared[i].t) != null) handed = false;
+			if (handed && to != null)
+				walkAs(args[i], Argument(to, handedVia, i))
+			else
+				walk(args[i]);
+		}
 	}
 
 	/**
@@ -1038,12 +1070,7 @@ final class TypedFactsWalk {
 	 * of no function type — `Dynamic`, a native identifier — takes every argument as `Dynamic`.
 	 */
 	private function argFlows(fnType: Null<Type>, args: Array<TypedExpr>): Void {
-		final params: Null<Array<{ name: String, opt: Bool, t: Type }>> = fnType == null
-			? null
-			: switch TypeTools.follow(fnType) {
-				case TFun(declared, _): declared;
-				case _: null;
-			};
+		final params: Null<Array<{ name: String, opt: Bool, t: Type }>> = parametersOf(fnType);
 		if (params == null) {
 			for (a in args) flowInto(a, 'Dynamic', 'arg', a.pos);
 			return;
@@ -1101,6 +1128,7 @@ final class TypedFactsWalk {
 			case Compare: '"u":"compare"';
 			case Iterable: '"u":"iter"';
 			case Update: '"u":"update"';
+			case Argument(target, access, index): '"u":"value","ag":${q(target)},"aa":"$access","ai":$index';
 			case Value | Statement | Held(_) | Assigned: '"u":"value"';
 		};
 	}
@@ -1120,15 +1148,29 @@ final class TypedFactsWalk {
 	 * the method it came from, so nothing else says what the call was handed.
 	 */
 	private function dynamicOperand(fnType: Null<Type>, args: Array<TypedExpr>): String {
-		final params: Null<Array<{ name: String, opt: Bool, t: Type }>> = fnType == null
+		final params: Null<Array<{ name: String, opt: Bool, t: Type }>> = parametersOf(fnType);
+		final first: Null<TypedExpr> = args.length > 0 ? args[0] : null;
+		if (params == null || params.length == 0 || first == null || str(params[0].t) != 'Dynamic') return '';
+		return ',"o":${q(sourceType(first))}' + (exactObject(first) ? ',"x":true' : '');
+	}
+
+	/** The type the abstract `t` wraps, at its arguments — what its value is at run time; null for any other type and a core type. */
+	private static function wrapped(t: Type): Null<Type> {
+		return switch TypeTools.follow(t) {
+			case TAbstract(a, params) if (!a.get().meta.has(':coreType')):
+				TypeTools.applyTypeParameters(a.get().type, a.get().params, params);
+			case _: null;
+		};
+	}
+
+	/** The parameters a callee of type `fnType` declares; null for no function type. */
+	private static function parametersOf(fnType: Null<Type>): Null<Array<{ name: String, opt: Bool, t: Type }>> {
+		return fnType == null
 			? null
 			: switch TypeTools.follow(fnType) {
 				case TFun(declared, _): declared;
 				case _: null;
 			};
-		final first: Null<TypedExpr> = args.length > 0 ? args[0] : null;
-		if (params == null || params.length == 0 || first == null || str(params[0].t) != 'Dynamic') return '';
-		return ',"o":${q(sourceType(first))}' + (exactObject(first) ? ',"x":true' : '');
 	}
 
 	/** Whether `e` is `this`, seen through parentheses and metadata. */
@@ -1179,6 +1221,13 @@ private enum FactUse {
 
 	/** The local an assignment writes: no use of the value it held. */
 	Assigned;
+
+	/**
+	 * The `index`-th argument of a call of the method `target` through the field access `access` (`FStatic`, `FInstance`):
+	 * the value goes to that parameter, which the method's own facts follow (`pu`). Recorded as a `value` use, so a reader
+	 * that does not follow the parameter keeps reading an escape.
+	 */
+	Argument(target: String, access: String, index: Int);
 }
 
 /**

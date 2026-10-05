@@ -20,7 +20,8 @@ import utest.Test;
  * rewrite rests on, and another the `reflectiveMethodHolders` one: the declared classes
  * whose methods a computed name may obtain bound the function values a call of a value runs. Another pins a field value stored in a
  * local and only iterated through it: the loop over the field is rewritten, and a push, a hand-off or a capture through the local keeps it.
- * The last two pin a discarded map key dropped where the body provably leaves the map unchanged, under the facts and from the syntax.
+ * Two pin a discarded map key dropped where the body provably leaves the map unchanged, under the facts and
+ * from the syntax, and the last two one dropped where the map is handed only to methods that keep nothing of it.
  */
 class FactsFixGateE2ETest extends Test {
 
@@ -177,6 +178,20 @@ class FactsFixGateE2ETest extends Test {
 		+ '\t\tfinal got:Array<Null<Int>> = [];\n\t\tfor (_ => n in shared) {\n\t\t\tgot.push(n);\n'
 		+ '\t\t\tHolder.poke();\n\t\t}\n\t\tSys.println(got.join(\',\'));\n\t\tSys.println(r.replacing());\n'
 		+ '\t\tSys.println(r.removing());\n\t\tSys.println(r.clearing());\n\t}\n}\n';
+	private static final ARG_MAIN: String = 'using Lambda;\n\nclass Holder {\n\tpublic static var kept:Map<String, Int> = [];\n\n'
+		+ '\tpublic static function keep(m:Map<String, Int>):Void {\n\t\tkept = m;\n\t}\n\n'
+		+ '\tpublic static function poke():Void {\n\t\tkept.set(\'b\', 20);\n\t}\n}\n\nclass Registry {\n'
+		+ '\tprivate final _counts:Map<String, Int> = [\'a\' => 1, \'b\' => 2, \'c\' => 3];\n'
+		+ '\tprivate final _shared:Map<String, Int> = [\'a\' => 1, \'b\' => 2, \'c\' => 3];\n\n'
+		+ '\tpublic function new() {}\n\n\tpublic function total():String {\n\t\tfinal out:Array<Int> = [];\n'
+		+ '\t\tfor (_ => n in _counts) out.push(n);\n'
+		+ '\t\treturn out.join(\',\') + \'/\' + _counts.count() + \'/\' + widest(_counts);\n\t}\n\n'
+		+ '\tpublic function shared():String {\n\t\tHolder.keep(_shared);\n\t\tfinal out:Array<Null<Int>> = [];\n'
+		+ '\t\tfor (_ => n in _shared) {\n\t\t\tout.push(n);\n\t\t\tHolder.poke();\n\t\t}\n'
+		+ '\t\treturn out.join(\',\');\n\t}\n\n\tprivate static function widest(m:Map<String, Int>):Int {\n'
+		+ '\t\tvar most:Int = 0;\n\t\tfor (n in m) if (n > most) most = n;\n\t\treturn most;\n\t}\n}\n\n'
+		+ 'class Main {\n\tstatic function main() {\n\t\tfinal r:Registry = new Registry();\n'
+		+ '\t\tSys.println(r.total());\n\t\tSys.println(r.shared());\n\t}\n}\n';
 	private static final HXML: String = '-cp .\n-main Main\n--interp\n';
 	private static inline final APQLINT: String = '{"compilerOracle":[{"hxml":"check.hxml"}],"resolutionRoots":["."]}';
 	private static inline final BUFFER: Int = 1 << 20;
@@ -505,6 +520,31 @@ class FactsFixGateE2ETest extends Test {
 		#end
 	}
 
+	/**
+	 * A map handed to `Lambda.count` (by `using`, the compiler casting it to an `Iterable`) and to a method that only iterates
+	 * it is kept by neither: under the compiler facts the loop over it drops its key, and the program prints what it printed. A
+	 * map handed to `Holder.keep`, which stores it where `Holder.poke` replaces a value inside the loop, keeps its key — the
+	 * value iterator would print `3,2,1` where it printed `3,20,1`.
+	 */
+	@:pin('control') @:killer('M-FACTS-ARGUMENT-USE') @:killer('M-FACTS-ARGUMENT-CAST') @:killer('M-FACTS-ABSTRACT-WRAPPED-CAST')
+	@:killer('M-TOUCH-ARGUMENT-USES')
+	public function testAMapHandedToMethodsThatKeepNothingLosesItsKeyUnderTheTruth(): Void {
+		#if (sys || nodejs)
+		argumentKeysDropped('{"compilerOracle":[{"hxml":"check.hxml"}],"resolutionRoots":["."],"reachConfigurationsComplete":true}', true);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** The same fixture with no list of builds declared complete: the syntax reads every argument as an escape, and nothing changes. */
+	public function testAMapHandedToAMethodKeepsItsKeyWithoutTheTruth(): Void {
+		#if (sys || nodejs)
+		argumentKeysDropped('{"compilerOracle":[{"hxml":"check.hxml"}],"resolutionRoots":["."]}', false);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
 	/** The map fixture fixed by both key-dropping rules under `apqlint`: exactly the three provable loops change, and the output does not. */
 	private static function mapKeysDropped(apqlint: String): Void {
@@ -529,6 +569,19 @@ class FactsFixGateE2ETest extends Test {
 			Assert.isTrue(expected.indexOf(pair[0]) >= 0, pair[0]);
 			expected = StringTools.replace(expected, pair[0], pair[1]);
 		}
+		Assert.equals(expected, File.getContent('$dir/Main.hx'));
+		Assert.equals(before, run(dir), 'the program prints what it printed');
+		CliFixture.removeDir(dir);
+	}
+	/** The argument fixture fixed by `redundant-map-iter-key` under `apqlint`: the `_counts` loop changes when `dropped`, and the output does not. */
+	private static function argumentKeysDropped(apqlint: String, dropped: Bool): Void {
+		final dir: Null<String> = tree('argkeys', [{ name: 'Main.hx', source: ARG_MAIN }], HXML, apqlint);
+		if (dir == null) return;
+		final before: String = run(dir);
+		CliFixture.captureStderr(() -> Cli.run(['lint', '--fix', '--rule', 'redundant-map-iter-key', '$dir/Main.hx']));
+		final from: String = 'for (_ => n in _counts) out';
+		Assert.isTrue(ARG_MAIN.indexOf(from) >= 0, from);
+		final expected: String = dropped ? StringTools.replace(ARG_MAIN, from, 'for (n in _counts) out') : ARG_MAIN;
 		Assert.equals(expected, File.getContent('$dir/Main.hx'));
 		Assert.equals(before, run(dir), 'the program prints what it printed');
 		CliFixture.removeDir(dir);
