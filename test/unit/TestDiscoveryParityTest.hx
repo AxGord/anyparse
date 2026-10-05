@@ -2584,7 +2584,11 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testAComputedNameRunsOnlyAMethodOfAClassTheProjectDeclaresUnderTheTruth :: control :: M-REFLECTED-HOLDERS-METHODS,M-REFLECTED-HOLDERS-ACCESSORS,M-REFLECTED-HOLDERS-INHERITED',
 			'unit.query.MemberReachFactsTest#testAComputedNameStillReadsAVariableOfAnyClassWhateverTheProjectDeclaresUnderTheTruth :: control :: M-HOLDERS-FIELDS-UNBOUNDED,M-GRAPH-REFLECT-SUPERTYPES',
 			'unit.query.MemberReachFactsTest#testAConfigurationWithoutFactsLeavesTheSyntax :: control :: M-FACTS-REACH-DROPPED',
+			'unit.query.MemberReachFactsTest#testAConstructionABuildMacroSwappedForAnotherGenericBuildIsNoTextUnderTheTruth :: control :: '
+				+ 'M-FACTS-GENERIC-BUILT,M-FACTS-ROUNDS',
 			'unit.query.MemberReachFactsTest#testAConstructionALiteralWritesIsItsTextUnderTheTruth :: control :: M-FACTS-TEXT-LITERAL',
+			'unit.query.MemberReachFactsTest#testAConstructionOfAGenericBuildIsItsTextUnderTheTruth :: control :: '
+				+ 'M-FACTS-TEXT-GENERIC-BUILD,M-FACTS-GENERIC-RECORDED',
 			'unit.query.MemberReachFactsTest#testAConstructionOfAnAbstractIsItsTextUnderTheTruth :: control :: M-FACTS-TEXT-ABSTRACT-NEW',
 			'unit.query.MemberReachFactsTest#testAConstructionOfTheBuiltInArrayIsHandedNothingUnderTheTruth :: control :: '
 				+ 'M-REACH-ARRAY-CTOR',
@@ -4743,7 +4747,11 @@ class TestDiscoveryParityTest extends Test {
 			'M-METHODS-MEMBERLESS-RESULT',
 			'M-REFLECTED-HOLDERS-METHODS',
 			'M-REFLECTED-HOLDERS-ACCESSORS',
-			'M-REFLECTED-HOLDERS-INHERITED'
+			'M-REFLECTED-HOLDERS-INHERITED',
+			'M-FACTS-TEXT-GENERIC-BUILD',
+			'M-FACTS-GENERIC-RECORDED',
+			'M-FACTS-GENERIC-BUILT',
+			'M-FACTS-ROUNDS'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
@@ -4912,6 +4920,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-NATIVE-CHAIN :: anyparse.check.TypedFactsWalk#nativeChain',
 			'M-FACTS-WALK-BLOCK-GAP :: anyparse.check.TypedFactsWalk#visit',
 			'M-FACTS-SITE-HOLDS-OWN-CODE :: anyparse.check.TypedFactsWalk#between',
+			'M-FACTS-GENERIC-RECORDED :: anyparse.check.TypedFactsWalk#visit',
+			'M-FACTS-GENERIC-BUILT :: anyparse.check.TypedFactsMacro#genericBuilt',
+			'M-FACTS-ROUNDS :: anyparse.check.TypedFactsMacro#run',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

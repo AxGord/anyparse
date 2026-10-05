@@ -268,6 +268,49 @@ class MemberReachFactsTest extends Test {
 		return files;
 	}
 
+	/**
+	 * `gen.Ev<T>`, a `@:genericBuild` class whose macro (`GENERIC_BUILDER`) defines one class per type argument, as lime's
+	 * `Event<T>` does: a construction the text writes `new Ev<…>()` constructs that class, whose name no text spells.
+	 */
+	private static final GENERIC_EV: String = 'package gen;\n\n@:genericBuild(gen.Gen.build())\nclass Ev<T> {\n'
+		+ '\tpublic function new() {}\n\n\tpublic function add(x:T):Void {}\n}\n';
+
+	/**
+	 * The macros of `GENERIC_EV`: `build` defines `gen._Ev_<argument>` once per type argument, holding `Ev`'s fields and
+	 * `fire`, which pushes onto `Main.items` (lime's `dispatch`); `swap`, a build macro, constructs an `Ev<String>` wherever
+	 * the text of its type constructs an `Ev<Int>`, at that construction's position.
+	 */
+	private static final GENERIC_BUILDER: String = 'package gen;\n\nimport haxe.macro.Context;\nimport haxe.macro.Expr;\n'
+		+ 'import haxe.macro.Type;\n\nclass Gen {\n\tpublic static function build():ComplexType {\n'
+		+ '\t\tfinal arg:Type = switch Context.getLocalType() {\n\t\t\tcase TInst(_, [t]): t;\n\t\t\tcase _: throw "arity";\n\t\t}\n'
+		+ '\t\tfinal name:String = "_Ev_" + ~/[^A-Za-z0-9]/g.replace(haxe.macro.TypeTools.toString(arg), "_");\n'
+		+ '\t\tif (!defined(name)) {\n\t\t\tfinal fields:Array<Field> = Context.getBuildFields();\n'
+		+ '\t\t\tfields.push({name: "fire", access: [APublic], pos: Context.currentPos(), '
+		+ 'kind: FFun({args: [], ret: macro :Void, expr: macro Main.items.push(1)})});\n'
+		+ '\t\t\tContext.defineType({pos: Context.currentPos(), pack: ["gen"], name: name, kind: TDClass(), fields: fields, '
+		+ 'params: [{name: "T"}]});\n\t\t}\n'
+		+ '\t\treturn TPath({pack: ["gen"], name: name, params: [TPType(Context.toComplexType(arg))]});\n\t}\n\n'
+		+ '\tstatic function defined(name:String):Bool {\n'
+		+ '\t\treturn try {\n\t\t\tContext.getType("gen." + name);\n\t\t\ttrue;\n\t\t} catch (e:haxe.Exception) false;\n\t}\n\n'
+		+ '\tpublic static function swap():Array<Field> {\n\t\tfinal fields:Array<Field> = Context.getBuildFields();\n'
+		+ '\t\tfunction rewrite(e:Expr):Expr {\n\t\t\treturn switch e.expr {\n'
+		+ '\t\t\t\tcase ENew({name: "Ev", params: [TPType(TPath({name: "Int"}))]}, args):\n'
+		+ '\t\t\t\t\t{expr: ENew({pack: [], name: "Ev", params: [TPType(macro :String)]}, args), pos: e.pos};\n'
+		+ '\t\t\t\tcase _: haxe.macro.ExprTools.map(e, rewrite);\n\t\t\t}\n\t\t}\n'
+		+ '\t\tfor (f in fields) switch f.kind {\n\t\t\tcase FFun(fn) if (fn.expr != null): fn.expr = rewrite(fn.expr);\n'
+		+ '\t\t\tcase _:\n\t\t}\n\t\treturn fields;\n\t}\n}\n';
+
+	/**
+	 * `utilWith(member)`, `Util` importing `gen.Ev` (`GENERIC_EV`) and carrying `meta`, the region calling `Util.calm`; with
+	 * `region`, the region runs that instead.
+	 */
+	private static function genericFixture(member: String, meta: String = '', ?region: String): Map<String, String> {
+		final files: Map<String, String> = utilWith(member, ['gen/Ev.hx' => GENERIC_EV, 'gen/Gen.hx' => GENERIC_BUILDER]);
+		files['Util.hx'] = 'import gen.Ev;\n\n' + meta + (files['Util.hx'] ?? '');
+		if (region != null) files['Main.hx'] = StringTools.replace(files['Main.hx'] ?? '', 'Util.calm();', region);
+		return files;
+	}
+
 	/** Why each configuration the last `withReach` probed has no facts: a fixture that does not compile. */
 	private static var lastDropped: Array<String> = [];
 
@@ -2688,6 +2731,36 @@ class MemberReachFactsTest extends Test {
 		// `new Map()` is a construction of `Map`'s implementation class (openfl's `DisplayObject.__broadcastEvents`)
 		final files: Map<String, String> = utilWith('public static function other():Map<String, Int> return new Map<String, Int>();');
 		assertMatch(hubAsk(files), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-FACTS-TEXT-GENERIC-BUILD') @:killer('M-FACTS-GENERIC-RECORDED')
+	public function testAConstructionOfAGenericBuildIsItsTextUnderTheTruth(): Void {
+		// lime's and openfl's `Preloader`: `new Event<Void->Void>()` constructs the class `Event`'s `@:genericBuild` defined
+		// for `Void->Void`, whose name no text spells — imported and qualified alike
+		final files: Map<String, String> = genericFixture(
+			'public static function other():Void {\n\t\tfinal a:Ev<Void->Void> = new Ev<Void->Void>();\n'
+			+ '\t\tfinal b:gen.Ev<Int->Int->Void> = new gen.Ev<Int->Int->Void>();\n\t}'
+		);
+		assertMatch(hubAsk(files), r -> r.match(Proven));
+		assertMatch(ask(files, null, true, null, false, HUB_BUILD), r -> r.match(Unknown(Reification(_, _))));
+	}
+
+	@:pin('control') @:killer('M-FACTS-GENERIC-BUILT') @:killer('M-FACTS-ROUNDS')
+	public function testAConstructionABuildMacroSwappedForAnotherGenericBuildIsNoTextUnderTheTruth(): Void {
+		// `Gen.swap` constructs `Ev<String>` where the text writes `Ev<Int>`: what the text names builds another class
+		final files: Map<String, String> = genericFixture(
+			'public static function other():Void {\n\t\tfinal a:Dynamic = new Ev<Int>();\n\t}', '@:build(gen.Gen.swap())\n'
+		);
+		assertMatch(hubAsk(files), r -> r.match(Unknown(Reification(_, _))));
+	}
+
+	public function testAMethodAGenericBuildMadeRunsItsFactsUnderTheTruth(): Void {
+		// `fire` is a method `Gen.build` wrote into the class it defined for `Int`: no text of `Ev` declares it, and it grows
+		// `items` (lime's `Event.dispatch`)
+		final files: Map<String, String> = genericFixture('', '', 'new Ev<Int>().fire();');
+		files['Main.hx'] = 'import gen.Ev;\n\n' + (files['Main.hx'] ?? '');
+		assertMatch(compiledTruthAsk(files), r -> !r.match(Proven));
+		assertMatch(hubAsk(files), r -> !r.match(Proven));
 	}
 
 	@:pin('control') @:killer('M-FACTS-TEXT-PURE-CALL')

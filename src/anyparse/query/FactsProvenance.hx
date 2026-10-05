@@ -273,7 +273,8 @@ final class FactsProvenance {
 	 * conversion of a value the text converts (`BodyText.converts`), for an element a comprehension yields
 	 * (`BodyText.comprehends`), a construction of a literal (`BodyText.builds`) and one of a type the text names by a
 	 * typedef the builds alias it to — an import alias among them, which the compiler types as one
-	 * (`FactsView.typedefsOf`) — sit on text
+	 * (`FactsView.typedefsOf`) — and one of the class a `@:genericBuild` class the text constructs built there, at the
+	 * type arguments the text writes (`NewFact.generic`), sit on text
 	 * writing the construct; that a local the compiler binds a value the text writes to — a `??` operand, an inlined
 	 * call's argument, a partial application's bound value (`BodyText.binds`) — or one whose range is its declaration's
 	 * keyword (`BodyText.declares`) is the text's, and so is a read at an expression the text writes, which the compiler
@@ -301,8 +302,10 @@ final class FactsProvenance {
 		final constructions: Map<String, String> = _scope.shape.execution?.literalConstructions ?? [];
 		for (x in n.news) {
 			final built: String = _view.graphType(x.type);
+			final generic: Null<String> = x.generic;
 			final onText: Bool = body.spells(x.at, built) || body.builds(x.at, built, constructions)
-				|| _view.typedefsOf(x.type).exists(name -> body.mentions(x.at, name));
+				|| _view.typedefsOf(x.type).exists(name -> body.mentions(x.at, name))
+				|| (generic != null && body.spells(x.at, _view.graphType(generic)));
 			if (!own(x.at, onText)) return false;
 		}
 		for (f in n.fields) if (!own(f.at, body.holds(f.at) && (body.mentions(f.at, f.field) || (!f.write && body.lowered(f.at))), f.field))

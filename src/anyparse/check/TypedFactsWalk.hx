@@ -523,7 +523,12 @@ final class TypedFactsWalk {
 			case TCall(callee, args):
 				call(e, callee, args);
 			case TNew(c, params, args):
-				add('news', '{"t":${q(c.toString())},"ty":${q(str(e.t))},"p":${at(e.pos)}}');
+				// the `@:genericBuild` class the text constructs, of which the compiler built `c`
+				final generic: Null<String> = _host.genericBuilt(c, e.pos);
+				add(
+					'news',
+					'{"t":${q(c.toString())},"ty":${q(str(e.t))},"p":${at(e.pos)}' + (generic == null ? '' : ',"gb":${q(generic)}') + '}'
+				);
 				final cls: ClassType = c.get();
 				final ctor: Null<Ref<ClassField>> = cls.constructor;
 				if (ctor != null) argFlows(TypeTools.applyTypeParameters(ctor.get().type, cls.params, params), args);

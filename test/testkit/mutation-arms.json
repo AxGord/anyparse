@@ -12661,6 +12661,38 @@
 			"find": "for (id in held) for (sup in facts.table.supertypesOf(id)) if (!owners.contains(sup)) owners.push(sup);",
 			"replace": "",
 			"note": "an object of a declared class runs only the methods its own class declares, none it inherits"
+		},
+		{
+			"name": "M-FACTS-TEXT-GENERIC-BUILD",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "factsOnText",
+			"find": "|| (generic != null && body.spells(x.at, _view.graphType(generic)));",
+			"replace": "|| false;",
+			"note": "a construction of the class a `@:genericBuild` class the text constructs built there is no text: lime's and openfl's `Preloader` construct `Event<Void->Void>`"
+		},
+		{
+			"name": "M-FACTS-GENERIC-RECORDED",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "visit",
+			"find": "(generic == null ? '' : ',\"gb\":${q(generic)}')",
+			"replace": "''",
+			"note": "a construction is written without the `@:genericBuild` class its text constructs"
+		},
+		{
+			"name": "M-FACTS-GENERIC-BUILT",
+			"type": "anyparse.check.TypedFactsMacro",
+			"method": "genericBuilt",
+			"find": "if (_genericBuilds[key] == built.toString()) return id;",
+			"replace": "if (_genericBuilds[key] != null) return id;",
+			"note": "a `@:genericBuild` class the text names is recorded whatever class its build at the text's type arguments resolves to: a build macro that constructs another class there leaves its type its text"
+		},
+		{
+			"name": "M-FACTS-ROUNDS",
+			"type": "anyparse.check.TypedFactsMacro",
+			"method": "run",
+			"find": "final earlier: Null<TypedFactsMacro> = current;",
+			"replace": "final earlier: Null<TypedFactsMacro> = null;",
+			"note": "each round of the hook rewrites the facts file with only the types defined since the last: a type a `@:genericBuild` asked again defines leaves the facts of that one type"
 		}
 	]
 }

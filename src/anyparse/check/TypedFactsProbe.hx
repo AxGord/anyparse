@@ -25,7 +25,8 @@ import haxe.io.Path;
  * the static initializer `__init__`, a further overload `field~n`), a nested function `<enclosing node id>@<min>`,
  * suffixed `#n` in the rare case two share an offset.
  *
- * - `{"k":"facts","v":1,"inline":B}` first; `{"k":"end","nodes":N,"types":N}` last — a file without it is incomplete.
+ * - `{"k":"facts","v":1,"inline":B}` first; `{"k":"end","nodes":N,"types":N}` last — a file without it is incomplete;
+ *   one closes each round of the hook, which the compiler runs again over the types defined after it ran.
  *   The compile keeps `keep-inline-positions`, so an inlined body stays at its callee's positions.
  * - `{"k":"file","i":N,"path":S}`; `{"k":"src","path":S,"len":N,"md5":S}` — the UTF-8 length and MD5 of every
  *   file a record is homed in, as the compile read it: a table reading another text has no facts for the file.
@@ -59,7 +60,8 @@ import haxe.io.Path;
  *     implementation class's static. `o`: of a call handing its first argument to a `Dynamic` parameter, that argument's
  *     type, with `x` when it is an object of exactly the class its type names, as a converted operand (`strs`) is: no
  *     flow names a value of the parameter's own type, and a spliced call's argument lies in the text of another method.
- *   - `news`: `{t, ty, p}` — the class and the instance type.
+ *   - `news`: `{t, ty, p, gb?}` — the class and the instance type; `gb`, the `@:genericBuild` class the text constructs,
+ *     whose build the compiler resolves, at the type arguments the text writes, to `t` (`TypedFactsMacro.genericBuilt`).
  *   - `fields`: `{f, a, o?, r, t, p, w?, u?, m?, fresh?}` — a field read (a write when `w`) that is not a callee; `o` is
  *     the declaring type, absent for a structure or a dynamic access. A read has `u`, how its value is used: `call` (the
  *     receiver of a call, `m` the called field), `index` (an array indexed to read), `elemWrite` (an array indexed to
