@@ -3892,4 +3892,139 @@ class MemberReachFactsTest extends Test {
 		assertMatch(reflectAsk(['Main.hx' => property], true), r -> r.match(Unknown(DynamicName(_, _))));
 	}
 
+	/**
+	 * lime's `ApplicationMain` in miniature: `Boot.boot` hands `create` to `register` as a value and calls `create(null)`;
+	 * `register` stores the value in an element of the static `entries` (`register`), and `create` reflects over its
+	 * parameter behind a null guard (`create`). `Main` escaped, so a name computed at run time on a `Dynamic` may reach
+	 * `items`; the region calls `Boot.create(null)`. `main`'s code runs after `Main` escaped, `extra` joins `Boot`.
+	 */
+	private static function guardedFixture(?main: String, ?register: String, ?create: String, ?extra: String): String {
+		final store: String = 'if (entries == null) entries = new Map();\n\t\tentries[name] = entry;';
+		final reflect: String =
+			'if (config != null) for (field in Reflect.fields(config)) Reflect.setField(attributes, field, Reflect.field(config, field));';
+		return 'class Main {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n'
+			+ '\tstatic function main() { var e:Dynamic = new Main(); ${main ?? 'Boot.boot();'} }\n'
+			+ '\tfunction f(n:String):Void {\n\t\tfor (i in 0...items.length) { /*<*/ Boot.create(null); /*>*/ }\n\t}\n}\n'
+			+ 'class Boot {\n\tstatic var entries:Map<String, Dynamic -> Void>;\n'
+			+ '\tpublic static function boot():Void {\n\t\tregister("app", create);\n\t\tcreate(null);\n\t}\n'
+			+ '\tstatic function register(name:String, entry:Dynamic -> Void):Void {\n\t\t${register ?? store}\n\t}\n'
+			+ '\tpublic static function create(config:Dynamic):Void {\n\t\tvar attributes:Dynamic = {};\n\t\t${create ?? reflect}\n\t}\n'
+			+ '${extra ?? ''}}\n';
+	}
+
+	/** `guardedFixture`'s body of `create` with `guard` for its condition: `config != null`'s replacement. */
+	private static function guardedBy(guard: String): String {
+		return 'if ($guard) for (field in Reflect.fields(config)) Reflect.setField(attributes, field, Reflect.field(config, field));';
+	}
+
+	/** Whether `source` answers `Proven`, or `DynamicName` when `proven` is false, under the interpreter's facts. */
+	private static function assertGuarded(
+		source: String, proven: Bool, ?holders: Array<String>, listed: Bool = true, ?pos: haxe.PosInfos
+	): Void {
+		final result: ReachResult = reflectAsk(['Main.hx' => source], true, holders, listed, pos);
+		Assert.isTrue(proven ? result.match(Proven) : result.match(Unknown(DynamicName(_, _))), 'got $result', pos);
+	}
+
+	@:pin('control') @:killer('M-FACTS-FRESH-MAP') @:killer('M-GUARDED-AND') @:killer('M-GUARDED-ELSE')
+	@:killer('M-GUARDED-HOP') @:killer('M-GUARDED-ASSUMED')
+	public function testANullGuardOfAParameterOnlyEverHandedNullKeepsItsBranchFromRunningUnderTheTruth(): Void {
+		// every invocation of `create` hands `config` null: the call, and the value stored where no code reads it again — so
+		// the reflection behind `config != null` never runs (lime's `ApplicationMain.create`, registered as an entry point)
+		assertGuarded(guardedFixture(), true);
+		assertGuarded(guardedFixture(null, null, 'if (config == null) {} else ' + guardedBy('true').substr('if (true) '.length)), true);
+		assertGuarded(guardedFixture(null, null, guardedBy('config != null && attributes != null')), true);
+		// the value goes through a second method's parameter, into a variable, into an `Array`, to a method no override calls it
+		final hop: String = '\tstatic function store(key:String, value:Dynamic -> Void):Void {\n'
+			+ '\t\tif (entries == null) entries = new Map();\n\t\tentries[key] = value;\n\t}\n';
+		assertGuarded(guardedFixture(null, 'store(name, entry);', null, hop), true);
+		assertGuarded(guardedFixture(null, 'keep = entry;', null, '\tstatic var keep:Dynamic -> Void;\n'), true);
+		final list: String = '\tstatic var list:Array<Dynamic -> Void>;\n';
+		assertGuarded(guardedFixture(null, 'if (list == null) list = [];\n\t\tlist[0] = entry;', null, list), true);
+		final adder: String = 'class Reg {\n\tpublic function new() {}\n\tpublic function add(f:Dynamic -> Void):Void {}\n}\n';
+		assertGuarded(guardedFixture('Boot.boot(); var r:Reg = new Reg(); r.add(Boot.create);') + adder, true);
+		// `Boot` as a value escaped: only the reflection the guard keeps from running may read `entries` off it
+		assertGuarded(guardedFixture('Boot.boot(); var c:Dynamic = Boot;'), true, ['Main']);
+		assertGuarded(
+			guardedFixture('Boot.boot(); var c:Dynamic = Boot; var n:String = "entries"; trace(Reflect.field(c, n));'), false, ['Main']
+		);
+		// without the truth no fact says what invokes `create`
+		assertGuarded(guardedFixture(), false, null, false);
+	}
+
+	@:pin('control') @:killer('M-GUARDED-NEVER-CALLED') @:killer('M-GUARDED-OVERRIDES')
+	@:killer('M-GUARDED-PLAIN-CALLS') @:killer('M-GUARDED-PLAIN-READS') @:killer('M-GUARDED-CONTAINER')
+	@:killer('M-GUARDED-CONTAINER-FRESH') @:killer('M-GUARDED-CONTAINER-READS') @:killer('M-GUARDED-REFLECTED')
+	@:killer('M-GUARDED-TARGET-CODE') @:killer('M-GUARDED-OBTAINED')
+	public function testAMethodValueSomeCodeMayCallLeavesItsParameterUnknownUnderTheTruth(): Void {
+		// the stored value is read and called, with an object `Main` escaped into
+		final fire: String = '\tpublic static function fire():Void entries["app"]({ items: [] });\n';
+		assertGuarded(guardedFixture('Boot.boot(); Boot.fire();', null, null, fire), false);
+		final keep: String = '\tpublic static var keep:Dynamic -> Void;\n';
+		assertGuarded(
+			guardedFixture(
+				'Boot.boot(); Boot.fire();', 'keep = entry;', null, keep + '\tpublic static function fire():Void keep({ items: [] });\n'
+			),
+			false
+		);
+		assertGuarded(
+			guardedFixture('Boot.boot(); var k:Dynamic -> Void = Boot.keep; k({ items: [] });', 'keep = entry;', null, keep), false
+		);
+		// an accessor, or an element store of an abstract, runs code of its own with the value
+		final setter: String = '\tstatic var keep(default, set):Dynamic -> Void;\n'
+			+ '\tstatic function set_keep(v:Dynamic -> Void):Dynamic -> Void {\n\t\tv({ items: [] });\n\t\treturn v;\n\t}\n';
+		assertGuarded(guardedFixture(null, 'keep = entry;', null, setter), false);
+		final calls: String = 'abstract Calls(Array<Dynamic -> Void>) {\n\tpublic inline function new() this = [];\n'
+			+ '\t@:arrayAccess function set(k:Int, v:Dynamic -> Void):Dynamic -> Void {\n\t\tv({ items: [] });\n\t\treturn v;\n\t}\n}\n';
+		assertGuarded(guardedFixture(null, 'calls[0] = entry;', null, '\tstatic var calls:Calls = new Calls();\n') + calls, false);
+		// target code, a capture, a local, an override may call it
+		assertGuarded(
+			guardedFixture(null, 'Native.keep(entry);') + 'extern class Native {\n\tpublic static function keep(f:Dynamic):Void;\n}\n',
+			false
+		);
+		assertGuarded(guardedFixture(null, 'if (entries == null) entries = new Map();\n\t\tentries[name] = c -> entry(c);'), false);
+		assertGuarded(guardedFixture('Boot.boot(); var g = Boot.create; g({ items: [] });'), false);
+		final caller: String = 'class Reg {\n\tpublic function new() {}\n\tpublic function add(f:Dynamic -> Void):Void {}\n}\n'
+			+ 'class Caller extends Reg {\n\toverride public function add(f:Dynamic -> Void):Void f({ items: [] });\n}\n';
+		assertGuarded(guardedFixture('Boot.boot(); var r:Reg = new Caller(); r.add(Boot.create);') + caller, false);
+		final hold: String = '@:headerCode("void hold() { Boot_obj::create(null); }") class Hold {\n\tpublic function new() {}\n}\n';
+		assertGuarded(guardedFixture('Boot.boot(); new Hold();') + hold, false);
+		// another holder of the container, or a read of it or of `create` by a name
+		final adopt: String = '\tpublic static function adopt(m:Map<String, Dynamic -> Void>):Void entries = m;\n';
+		final shared: String = 'Boot.boot(); var m:Map<String, Dynamic -> Void> = new Map(); Boot.adopt(m); m["app"]({ items: [] });';
+		assertGuarded(guardedFixture(shared, null, null, adopt), false);
+		final written: String =
+			'var m:Map<String, Dynamic -> Void> = new Map(); Reflect.setField(Boot, "entries", m); Boot.boot(); m["app"]({ items: [] });';
+		assertGuarded(guardedFixture(written), false);
+		assertGuarded(guardedFixture('Boot.boot(); trace(Reflect.field(Boot, "entries"));'), false);
+		assertGuarded(guardedFixture('Boot.boot(); trace(Reflect.field(Boot, "create"));'), false);
+	}
+
+	@:pin('control') @:killer('M-GUARDED-HANDS-NULL') @:killer('M-GUARDED-KEPT') @:killer('M-FACTS-KEPT-DEFAULT') @:killer('M-FACTS-KEPT-WRITTEN')
+	@:killer('M-FACTS-KEPT-BUILDS') @:killer('M-GUARDED-EQUALITY')
+	public function testAParameterAnotherValueMayReachKeepsItsGuardLiveUnderTheTruth(): Void {
+		// a call handing it an object, an assignment, a default value replacing a null, a local of the same name
+		assertGuarded(guardedFixture('Boot.boot(); Boot.create({ items: [] });'), false);
+		assertGuarded(guardedFixture(null, null, 'config = new Main();\n\t\t' + guardedBy('config != null')), false);
+		assertGuarded(StringTools.replace(guardedFixture(), 'config:Dynamic', 'config:Dynamic = 1'), false);
+		assertGuarded(guardedFixture(null, null, 'var config:Dynamic = new Main();\n\t\t' + guardedBy('config != null')), false);
+		// an abstract may define its own `!=`
+		final odd: String =
+			'abstract Odd(Dynamic) from Dynamic to Dynamic {\n\t@:op(A != B) static function ne(a:Odd, b:Odd):Bool return true;\n}\n';
+		final unstored: String = 'if (entries == null) entries = new Map();\n\t\tentries[name] = c -> {};';
+		// the reflection reads off `held`, not off `config`: an abstract may hold any class as a value, `Boot` among them
+		final held: String = 'if (config != null) for (field in Reflect.fields(held)) Reflect.setField(held, field, 1);';
+		final odds: String = guardedFixture(null, unstored, held, '\tstatic var held:Dynamic = {};\n');
+		assertGuarded(StringTools.replace(odds, 'config:Dynamic', 'config:Odd') + odd, false);
+		// a build that assigns it: a parameter is kept only where every build keeps it
+		final std: Null<String> = StdResolver.stdDir();
+		final path: String = OracleCoverage.canonical(Sys.getCwd(), Path.join([std ?? '', 'Reflect.hx']));
+		final assigned: String = guardedFixture(null, null, '#if other config = new Main(); #end\n\t\t' + guardedBy('config != null'));
+		final result: ReachResult = ask(
+			['Main.hx' => assigned], [[], ['other']], true, null, false, INTERP_BUILD,
+			[path => sys.io.File.getContent(path)],
+			null, true
+		);
+		assertMatch(result, r -> r.match(Unknown(DynamicName(_, _))));
+	}
+
 }

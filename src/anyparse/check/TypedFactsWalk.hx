@@ -160,7 +160,13 @@ final class TypedFactsWalk {
 		switch e.expr {
 			case TFunction(f):
 				_ret = f.t;
-				for (a in f.args) add('params', '{"n":${q(a.v.name)},"t":${q(localType(a.v))}}');
+				final kept: Array<Int> = [];
+				for (i => a in f.args) {
+					add('params', '{"n":${q(a.v.name)},"t":${q(localType(a.v))}}');
+					// no code of the body assigns it and no default replaces a null handed to it: it holds what the call hands
+					if (a.value == null && !_written.exists(a.v.id)) kept.push(i);
+				}
+				if (kept.length > 0) _header += ',"pk":[${kept.join(',')}]';
 				// a function's body is never its value: a returned value is the operand of a `return`
 				walkAs(f.expr, Statement);
 			case _:

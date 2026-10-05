@@ -6604,8 +6604,8 @@
 			"name": "M-REACH-LIVE-HAZARDS",
 			"type": "anyparse.query.MemberReach",
 			"method": "liveHazards",
-			"find": "if (_live.live(file, source, h.span) && (h.kind != Opaque || _live.holdsLiveCode(file, source, h.span))) h",
-			"replace": "h",
+			"find": "_live.live(file, source, h.span) && (h.kind != Opaque || _live.holdsLiveCode(file, source, h.span))",
+			"replace": "true",
 			"note": "(precision) a hazard inside a branch no configured build compiles still refuses the proof"
 		},
 		{
@@ -6792,8 +6792,8 @@
 			"name": "M-FACTS-TRUTH-HAZARDS",
 			"type": "anyparse.query.MemberReach",
 			"method": "hazardsOf",
-			"find": "final typed: Null<TruthSites> = _scope.facts?.truthSites(g, file, span, node);",
-			"replace": "final typed: Null<TruthSites> = null;",
+			"find": "final sites: Null<TruthSites> = _scope.facts?.truthSites(g, file, span, node);",
+			"replace": "final sites: Null<TruthSites> = null;",
 			"note": "(precision) code whose facts are the truth keeps every hazard its syntax reads, so untyped code the compiler typed in full stays a blind spot"
 		},
 		{
@@ -13651,6 +13651,172 @@
 			"find": "LintFixDriver.bumpReason(LintFixDriver.ledgerFor(ledger, group.rule).refusals, refusal, 1);",
 			"replace": "if (false) LintFixDriver.bumpReason(LintFixDriver.ledgerFor(ledger, group.rule).refusals, refusal, 1);",
 			"note": "an assisted refusal reaches no ledger row, so the gate-refusal block never names the rule"
+		},
+		{
+			"name": "M-FACTS-KEPT-DEFAULT",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "root",
+			"find": "if (a.value == null && !_written.exists(a.v.id)) kept.push(i);",
+			"replace": "if (!_written.exists(a.v.id)) kept.push(i);",
+			"note": "(soundness) a parameter a default value replaces a null for is recorded as holding what each call hands it"
+		},
+		{
+			"name": "M-FACTS-KEPT-WRITTEN",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "root",
+			"find": "if (a.value == null && !_written.exists(a.v.id)) kept.push(i);",
+			"replace": "if (a.value == null) kept.push(i);",
+			"note": "(soundness) a parameter the body assigns is recorded as holding what each call hands it"
+		},
+		{
+			"name": "M-FACTS-FRESH-MAP",
+			"type": "anyparse.check.TypedFactsShapes",
+			"method": "isFresh",
+			"find": "FRESH_CLASSES.contains(c.toString())",
+			"replace": "c.toString() == 'Array'",
+			"note": "(precision) a `new Map()` stored by an assignment is not recorded as held by its target alone"
+		},
+		{
+			"name": "M-FACTS-KEPT-BUILDS",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "materialize",
+			"find": "if (made != null) for (i in node.keptParams.copy()) if (!(record.pk ?? []).contains(i)) node.keptParams.remove(i);",
+			"replace": "// cut",
+			"note": "(soundness) a parameter one build keeps is kept though another build assigns it"
+		},
+		{
+			"name": "M-GUARDED-AND",
+			"type": "anyparse.query.NullGuardedCode",
+			"method": "testedNotNull",
+			"find": "if (direct != null || condition.kind != _shape.logicalAndKind) return direct;",
+			"replace": "return direct;",
+			"note": "(precision) a not-null test inside an `&&` decides nothing"
+		},
+		{
+			"name": "M-GUARDED-ELSE",
+			"type": "anyparse.query.NullGuardedCode",
+			"method": "guardedBranches",
+			"find": "if (equal != null && node.children.length > 2) guards.push({ node: node, ident: equal, branch: 2 });",
+			"replace": "// cut",
+			"note": "(precision) the `else` of a test that a parameter is null is not decided"
+		},
+		{
+			"name": "M-GUARDED-HOP",
+			"type": "anyparse.query.NullGuardedCode",
+			"method": "storedNowhereRead",
+			"find": "if (parent.kind == _shape.callKind) return neverCalled(node, at, depth);",
+			"replace": "if (parent.kind == _shape.callKind) return false;",
+			"note": "(precision) a function value handed on to a further method is never followed"
+		},
+		{
+			"name": "M-GUARDED-ASSUMED",
+			"type": "anyparse.query.NullGuardedCode",
+			"method": "assumedDead",
+			"force": "false",
+			"note": "(precision) the reflection a guard of the asked parameter keeps from running still reads a container off an escaped class"
+		},
+		{
+			"name": "M-GUARDED-NEVER-CALLED",
+			"type": "anyparse.query.NullGuardedCode",
+			"method": "staticInvocations",
+			"find": "if (read.fact.use != VALUE || read.fact.held || !neverCalled(read.node, read.fact.at, 0)) return false;",
+			"replace": "if (read.fact.use != VALUE || read.fact.held) return false;",
+			"note": "(soundness) a method read as a value is never invoked through it"
+		},
+		{
+			"name": "M-GUARDED-OVERRIDES",
+			"type": "anyparse.query.NullGuardedCode",
+			"method": "neverCalled",
+			"find": "if (call.access != STATIC_ACCESS) for (sub in table.subtypesOf(owner)) {",
+			"replace": "if (false) for (sub in table.subtypesOf(owner)) {",
+			"note": "(soundness) a function value handed to an instance method runs only its declared body, not an override"
+		},
+		{
+			"name": "M-GUARDED-PLAIN-CALLS",
+			"type": "anyparse.query.NullGuardedCode",
+			"method": "plainStatic",
+			"find": "if (gathered().calls.exists('$owner.$field')) return false;",
+			"replace": "// cut",
+			"note": "(soundness) a call of the value a variable holds is no read of it"
+		},
+		{
+			"name": "M-GUARDED-PLAIN-READS",
+			"type": "anyparse.query.NullGuardedCode",
+			"method": "fieldSealed",
+			"find": ".foreach(a -> a.fact.write || a.fact.use == COMPARE)",
+			"replace": ".foreach(a -> true)",
+			"note": "(soundness) a variable read as a value still holds a value no code reads"
+		},
+		{
+			"name": "M-GUARDED-CONTAINER",
+			"type": "anyparse.query.NullGuardedCode",
+			"method": "containerSealed",
+			"find": "if (declared == null || !declared.types.foreach(t -> container(t))) return false;",
+			"replace": "if (declared == null) return false;",
+			"note": "(soundness) an element store of an abstract with an `@:arrayAccess` of its own stores like an `Array`"
+		},
+		{
+			"name": "M-GUARDED-CONTAINER-FRESH",
+			"type": "anyparse.query.NullGuardedCode",
+			"method": "containerSealed",
+			"find": "a.fact.write ? !a.fact.fresh :",
+			"replace": "a.fact.write ? false :",
+			"note": "(soundness) a container another holder shares is sealed"
+		},
+		{
+			"name": "M-GUARDED-CONTAINER-READS",
+			"type": "anyparse.query.NullGuardedCode",
+			"method": "containerSealed",
+			"find": "&& !elementStoreReceiver(a.fact.at)",
+			"replace": "&& false",
+			"note": "(soundness) an element of a container read and called still counts as never read"
+		},
+		{
+			"name": "M-GUARDED-REFLECTED",
+			"type": "anyparse.query.NullGuardedCode",
+			"method": "reachedByName",
+			"force": "false",
+			"note": "(soundness) a reflective read of a variable by its name is no read of it"
+		},
+		{
+			"name": "M-GUARDED-TARGET-CODE",
+			"type": "anyparse.query.NullGuardedCode",
+			"method": "staticInvocations",
+			"find": "if (namedByTargetCode(name) || namesInNode(node, param)) return false;",
+			"replace": "if (namesInNode(node, param)) return false;",
+			"note": "(soundness) target code naming the method is no way to invoke it"
+		},
+		{
+			"name": "M-GUARDED-OBTAINED",
+			"type": "anyparse.query.NullGuardedCode",
+			"method": "staticInvocations",
+			"find": "if (_methods().obtainedUntyped(name, hierarchy, _escapedTypes(), _bindings, true)) return false;",
+			"replace": "// cut",
+			"note": "(soundness) a method read by its name through reflection is invoked only by its typed calls"
+		},
+		{
+			"name": "M-GUARDED-HANDS-NULL",
+			"type": "anyparse.query.NullGuardedCode",
+			"method": "staticInvocations",
+			"find": "call.access != STATIC_ACCESS || !handsNull(call.at, index, count)",
+			"replace": "call.access != STATIC_ACCESS",
+			"note": "(soundness) a typed call handing the parameter an object counts as handing it null"
+		},
+		{
+			"name": "M-GUARDED-KEPT",
+			"type": "anyparse.query.NullGuardedCode",
+			"method": "staticInvocations",
+			"find": "|| !field.isStatic || !node.keptParams.contains(index)) return false;",
+			"replace": "|| !field.isStatic || false) return false;",
+			"note": "(soundness) a parameter the body assigns, or a default replaces, holds what the calls hand it"
+		},
+		{
+			"name": "M-GUARDED-EQUALITY",
+			"type": "anyparse.query.NullGuardedCode",
+			"method": "staticInvocations",
+			"find": "if (!types.foreach(t -> FactsTypeText.unwrapNull(t) == UNBOUND || builtinEquality(FactsTypeTree.read(t), 0))) return false;",
+			"replace": "// cut",
+			"note": "(soundness) an abstract's own `!=` answers a test against null as the language would"
 		}
 	]
 }

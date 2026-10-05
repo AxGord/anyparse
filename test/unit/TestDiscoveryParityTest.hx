@@ -2768,9 +2768,15 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-TOUCH-TYPED-VALUE,M-TOUCH-TYPED-UNTRUE',
 			'unit.query.MemberReachFactsTest#testAMethodOfAnObjectThatNeverEscapedIsNoValueAComputedNameReads :: control :: '
 				+ 'M-METHODS-HOLD-CLASSLESS',
+			'unit.query.MemberReachFactsTest#testAMethodValueSomeCodeMayCallLeavesItsParameterUnknownUnderTheTruth :: control :: '
+				+ 'M-GUARDED-NEVER-CALLED,M-GUARDED-OVERRIDES,M-GUARDED-PLAIN-CALLS,M-GUARDED-PLAIN-READS,M-GUARDED-CONTAINER,M-GUARDED-CONTAINER-FRESH,M-GUARDED-CONTAINER-READS,M-GUARDED-REFLECTED,M-GUARDED-TARGET-CODE,M-GUARDED-OBTAINED',
 			'unit.query.MemberReachFactsTest#testANameTwoTypesShareReachedByItsSyntaxRunsAsEachOfThemUnderTheTruth :: control :: '
 				+ 'M-REACH-QUALIFIED-UNNAMED,M-REACH-SHARED-OWNERS',
 			'unit.query.MemberReachFactsTest#testANativeIdentifierAdmitsWhatItMayCall :: control :: M-FACTS-REACH-NATIVE-IDENT',
+			'unit.query.MemberReachFactsTest#testANullGuardOfAParameterOnlyEverHandedNullKeepsItsBranchFromRunningUnderTheTruth :: control :: '
+				+ 'M-FACTS-FRESH-MAP,M-GUARDED-AND,M-GUARDED-ELSE,M-GUARDED-HOP,M-GUARDED-ASSUMED',
+			'unit.query.MemberReachFactsTest#testAParameterAnotherValueMayReachKeepsItsGuardLiveUnderTheTruth :: control :: '
+				+ 'M-GUARDED-HANDS-NULL,M-GUARDED-KEPT,M-FACTS-KEPT-DEFAULT,M-FACTS-KEPT-WRITTEN,M-FACTS-KEPT-BUILDS,M-GUARDED-EQUALITY',
 			'unit.query.MemberReachFactsTest#testAPinnedOwnerAsksItsOwnBuildMacroAndNoOtherUnderTheTruth :: control :: '
 				+ 'M-REACH-PINNED-NONE,M-REACH-PINNED-REWRITTEN-SIMPLE,M-REACH-PINNED-REWRITTEN-NONE,M-FACTS-PINNED-OWNER-FILES',
 			'unit.query.MemberReachFactsTest#testAProducerReadAsAValueMakesOnlyADeclaredClassUnderTheTruth :: control :: M-ESCAPES-FACTS-DECLARED-PRODUCED,M-ESCAPES-FACTS-DECLARED-READER',
@@ -4973,7 +4979,28 @@ class TestDiscoveryParityTest extends Test {
 			'M-ASSISTED-SPLIT-NONE',
 			'M-ASSISTED-SALVAGED-COUNT-ALL',
 			'M-ASSISTED-REFUSAL-SILENT',
-			'M-ASSISTED-REFUSAL-LEDGER-NONE'
+			'M-ASSISTED-REFUSAL-LEDGER-NONE',
+			'M-FACTS-KEPT-DEFAULT',
+			'M-FACTS-KEPT-WRITTEN',
+			'M-FACTS-FRESH-MAP',
+			'M-FACTS-KEPT-BUILDS',
+			'M-GUARDED-AND',
+			'M-GUARDED-ELSE',
+			'M-GUARDED-HOP',
+			'M-GUARDED-ASSUMED',
+			'M-GUARDED-NEVER-CALLED',
+			'M-GUARDED-OVERRIDES',
+			'M-GUARDED-PLAIN-CALLS',
+			'M-GUARDED-PLAIN-READS',
+			'M-GUARDED-CONTAINER',
+			'M-GUARDED-CONTAINER-FRESH',
+			'M-GUARDED-CONTAINER-READS',
+			'M-GUARDED-REFLECTED',
+			'M-GUARDED-TARGET-CODE',
+			'M-GUARDED-OBTAINED',
+			'M-GUARDED-HANDS-NULL',
+			'M-GUARDED-KEPT',
+			'M-GUARDED-EQUALITY'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
@@ -5169,6 +5196,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-ASSIGN-HELD-THROUGH :: anyparse.check.TypedFactsWalk#storedLocal',
 			'M-KWTRAIL-FLAT-GAP-KEPT :: anyparse.macro.WriterCodegen#kwBeforeTrailingDocField',
 			'M-KWTRAIL-GUARD-HARD :: anyparse.macro.WriterCodegen#kwBeforeTrailingDocField',
+			'M-FACTS-KEPT-DEFAULT :: anyparse.check.TypedFactsWalk#root',
+			'M-FACTS-KEPT-WRITTEN :: anyparse.check.TypedFactsWalk#root',
+			'M-FACTS-FRESH-MAP :: anyparse.check.TypedFactsShapes#isFresh',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

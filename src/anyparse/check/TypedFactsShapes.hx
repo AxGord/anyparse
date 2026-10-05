@@ -80,6 +80,9 @@ final class TypedFactsShapes {
 	/** The name of that class. */
 	private static inline final EXCEPTION_NAME: String = 'Exception';
 
+	/** The classes a construction of which only the place it is stored into holds (`isFresh`): a `new Map` makes its implementation. */
+	private static final FRESH_CLASSES: Array<String> = ['Array', 'haxe.ds._Map.Map_Impl_'];
+
 	/**
 	 * The native identifier the chain of field accesses `e` is rooted at, through parentheses and metadata: target code the
 	 * chain spells (`untyped __global__.String`). Null for any other expression, a bare identifier included.
@@ -133,8 +136,8 @@ final class TypedFactsShapes {
 	}
 
 	/**
-	 * Whether every value `e` produces is built right there — an array literal, a `new Array`, `null` — so nothing but the
-	 * place it is stored into holds it.
+	 * Whether every value `e` produces is built right there — an array literal, a `new Array`, a `new Map`, `null` — so
+	 * nothing but the place it is stored into holds it.
 	 */
 	public static function isFresh(e: TypedExpr): Bool {
 		final leaves: Array<TypedExpr> = [];
@@ -142,7 +145,7 @@ final class TypedFactsShapes {
 		return Lambda.foreach(
 			leaves, leaf -> switch leaf.expr {
 				case TArrayDecl(_) | TConst(TNull): true;
-				case TNew(c, _, _): c.toString() == 'Array';
+				case TNew(c, _, _): FRESH_CLASSES.contains(c.toString());
 				case _: false;
 			}
 		);
