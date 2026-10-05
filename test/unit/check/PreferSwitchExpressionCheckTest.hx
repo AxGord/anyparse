@@ -112,9 +112,9 @@ class PreferSwitchExpressionCheckTest extends Test {
 	}
 
 	/**
-	 * An if-expression chain with no final `else` is skipped. `SwitchChain` gate 7 requires the
-	 * else-slot of EVERY chain, statement or value, so this rule contributes no policy of its
-	 * own here — but value position would demand it regardless:
+	 * An if-expression chain with no final `else` is skipped. This rule hands `SwitchChain` no else-less host, so
+	 * gate 7 never closes one of its chains with an empty `case _:`, and value position would refuse
+	 * a wildcard-less switch regardless:
 	 * `var v = switch (n) { case 1: 10; case 2: 20; }` over an `Int` is `Unmatched patterns: _`
 	 * (verified on 4.3.7) where the same wildcard-less switch in STATEMENT position compiles.
 	 */
@@ -441,6 +441,22 @@ class PreferSwitchExpressionCheckTest extends Test {
 	 */
 	public function testDottedReceiverConstantNotFlagged(): Void {
 		Assert.equals(0, violations(wrap('return k == pkg.NodeMeta.ALPHA ? p : k == pkg.NodeMeta.BETA ? q : r;'), CONSTANTS).length);
+	}
+
+	/**
+	 * Gates 9 and 10 live in the shared scanner, so the value-position rule refuses the same chains
+	 * the statement rule does: two names for one enum-abstract value, and a constant of an abstract
+	 * overloading `==`. The distinct twin over the same module converts.
+	 */
+	@:pin('control')
+	@:killer('M-SWITCH-VALUES-NOT-DISTINCT')
+	public function testSharedValueAndOperatorGates(): Void {
+		final modes: String = 'enum abstract Mode(Int) {\n\tfinal DEFAULT = 0;\n\tfinal AUTO = 0;\n\tfinal LINES = 1;\n}';
+		final overloading: String = 'enum abstract Mode(Int) from Int to Int {\n\tvar A = 1;\n\tvar B = 2;\n\n'
+			+ '\t@:op(A == B) static function eq(a:Mode, b:Mode):Bool {\n\t\treturn true;\n\t}\n}';
+		Assert.equals(0, violations(wrap('return k == Mode.DEFAULT ? 1 : k == Mode.AUTO ? 2 : 3;'), modes).length);
+		Assert.equals(1, violations(wrap('return k == Mode.DEFAULT ? 1 : k == Mode.LINES ? 2 : 3;'), modes).length);
+		Assert.equals(0, violations(wrap('return k == Mode.A ? 1 : k == Mode.B ? 2 : 3;'), overloading).length);
 	}
 
 	private function wrap(body: String): String {

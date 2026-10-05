@@ -1664,8 +1664,22 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PreferStaticExtensionFactsTest#testTheFirstParameterOfAFactsSignature :: control :: M-PSE-FIRST-PARAM',
 			'unit.check.PreferStaticExtensionFactsTest#testTheRewrittenProgramPrintsWhatItPrinted :: guard :: ',
 			'unit.check.PreferSwitchCheckTest#testBareBranchBodiesGainATerminator :: control :: M-SWITCH-BARE-BODY-VERBATIM',
+			'unit.check.PreferSwitchCheckTest#testDuplicateValueAcrossSpellingsNotFlagged :: control :: M-SWITCH-VALUES-NOT-DISTINCT',
+			'unit.check.PreferSwitchCheckTest#testElselessBracelessBodyNotFlagged :: control :: M-SWITCH-ELSELESS-ANY-HOST',
+			'unit.check.PreferSwitchCheckTest#testElselessEnumAbstractChainFixed :: control :: M-SWITCH-ELSELESS-REFUSED',
+			'unit.check.PreferSwitchCheckTest#testElselessLastInNestedBlockNotFlagged :: control :: M-SWITCH-ELSELESS-LAST-IN-VALUE-BLOCK',
+			'unit.check.PreferSwitchCheckTest#testEnumAbstractDuplicateValueNotFlagged :: control :: M-SWITCH-VALUES-NOT-DISTINCT',
+			'unit.check.PreferSwitchCheckTest#testGuardedTrailingElseNotFlagged :: control :: M-SWITCH-ELSELESS-GUARDED-ELSE',
+			'unit.check.PreferSwitchCheckTest#testImplicitEnumAbstractValues :: control :: '
+				+ 'M-CASEVALUE-IMPLICIT-NOT-COUNTED,M-CASEVALUE-NAMING-UNKNOWN',
+			'unit.check.PreferSwitchCheckTest#testNoTrailingElseClosesWithAnEmptyWildcard :: control :: M-SWITCH-ELSELESS-REFUSED',
+			'unit.check.PreferSwitchCheckTest#testOverloadedEqualityDiscriminantNotFlagged :: control :: M-SWITCH-DISC-EQ-OVERLOAD-IGNORED',
+			'unit.check.PreferSwitchCheckTest#testOverloadedEqualityPatternNotFlagged :: control :: M-SWITCH-PATTERN-EQ-OVERLOAD-IGNORED',
+			'unit.check.PreferSwitchCheckTest#testReportScopedFixIndexStillResolvesTheConstant :: control :: M-SWITCH-FIX-REPORT-INDEX-FIRST',
 			'unit.check.PreferSwitchCheckTest#testTerminatedBranchBodiesAreNotDoubled :: control :: M-SWITCH-TERMINATED-BODY-DOUBLED',
+			'unit.check.PreferSwitchCheckTest#testUnknownConstantValueNotFlagged :: control :: M-SWITCH-UNKNOWN-VALUE-ACCEPTED',
 			'unit.check.PreferSwitchCheckTest#testValueChainInALambdaBlockGainsTerminators :: control :: M-SWITCH-BARE-BODY-VERBATIM',
+			'unit.check.PreferSwitchExpressionCheckTest#testSharedValueAndOperatorGates :: control :: M-SWITCH-VALUES-NOT-DISTINCT',
 			'unit.check.PreferTernaryReturnCheckTest#testOwnLineCommentInACascadeDefersTheTail :: control :: '
 				+ 'M-PTR-RIDES-NEVER,M-PTR-CASCADE-NEVER-STRANDS',
 			'unit.check.PreferTernaryReturnCheckTest#testTheRunOfOneHoistIsRefusedAtTheSeam :: control :: M-COMMENT-HOIST-BLIND',
@@ -4756,7 +4770,18 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-TEXT-GENERIC-BUILD',
 			'M-FACTS-GENERIC-RECORDED',
 			'M-FACTS-GENERIC-BUILT',
-			'M-FACTS-ROUNDS'
+			'M-FACTS-ROUNDS',
+			'M-SWITCH-VALUES-NOT-DISTINCT',
+			'M-SWITCH-UNKNOWN-VALUE-ACCEPTED',
+			'M-CASEVALUE-IMPLICIT-NOT-COUNTED',
+			'M-CASEVALUE-NAMING-UNKNOWN',
+			'M-SWITCH-PATTERN-EQ-OVERLOAD-IGNORED',
+			'M-SWITCH-DISC-EQ-OVERLOAD-IGNORED',
+			'M-SWITCH-ELSELESS-REFUSED',
+			'M-SWITCH-ELSELESS-GUARDED-ELSE',
+			'M-SWITCH-ELSELESS-ANY-HOST',
+			'M-SWITCH-ELSELESS-LAST-IN-VALUE-BLOCK',
+			'M-SWITCH-FIX-REPORT-INDEX-FIRST'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

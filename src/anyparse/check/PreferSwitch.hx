@@ -20,10 +20,10 @@ import anyparse.runtime.Span;
  * `if`'s else-slot, so an inner `else if` rung is never re-reported) that
  * `SwitchChain` accepts: at least two rungs, every rung's condition a
  * conjunction of equalities over the SAME call-free discriminant tuple, every
- * constant a valid `case` pattern, and a trailing `else`. The full gate
- * catalogue, with the reason for each gate and the two documented behaviour
- * deltas, lives on `SwitchChain` — this rule contributes the chain kinds and the
- * report.
+ * constant a valid `case` pattern with a proved value, no two rungs testing one
+ * value, and the language's own `==`. The full gate catalogue, with the reason
+ * for each gate and the two documented behaviour deltas, lives on `SwitchChain`
+ * — this rule contributes the chain kinds, the else-less hosts and the report.
  *
  * VALUE-position chains are NOT matched here: a value-position `if`
  * (`var y = if (…) …`) and a ternary are different node kinds, and rewriting
@@ -36,14 +36,12 @@ import anyparse.runtime.Span;
  * `--fix` replaces the chain span with `switch (D) { case P1: B1; …; case _: E }`
  * — the discriminant, each rung's constant and its then-branch body taken
  * verbatim, and the trailing `else` body as `case _`. A chain with NO trailing
- * `else` is not flagged at all, and so is never converted: the wildcard-less
- * switch it would emit compiles only when the SUBJECT's type is one the compiler
- * does not enumerate, and no structural check can decide that. `SwitchChain`'s
- * gate 7 carries the reproduced miscompiles a waiver leaked — a `Bool` subject,
- * an enum-abstract subject, a name-shadowed built-in reached three different
- * ways, a `#if`-guarded `else` that never lands in the `if`'s else-slot — and
- * names the `OracleAssisted` / `RiskyFix` machinery as the only sound home for
- * restoring the conversion. A body is taken with its own terminator, and a `;` is appended to
+ * `else` closes with an EMPTY `case _:` (it does nothing when no rung matches,
+ * and neither does that arm) when it stands in a statement list and no
+ * conditional region follows it — this rule is the one that hands `SwitchChain`
+ * those hosts. The wildcard is never omitted: a waiver that left it out for an
+ * open-looking subject type leaked non-compiling output (`SwitchChain` gate 7
+ * carries the cases). A body is taken with its own terminator, and a `;` is appended to
  * one that has none: the `;` before an `else` is elided, so `if (c) a else b;` hands over a bare
  * `a`, and the `;` after `b` belonged to the whole chain. The generated source is re-parsed and
  * reformatted by the canonical pipeline; a chain whose pieces resist a clean
@@ -94,7 +92,7 @@ final class PreferSwitch implements Check {
 
 	/** This rule's chain configuration: statement-position `if` kinds, a bare body given a `;`. */
 	private static function seamsOf(plugin: GrammarPlugin): Null<ChainSeams> {
-		return SwitchChain.seamsOf(plugin, plugin.refShape().ifStatementKinds ?? [], BODY_TERMINATOR, SELF_TERMINATING_ENDINGS);
+		return SwitchChain.seamsOf(plugin, plugin.refShape().ifStatementKinds ?? [], BODY_TERMINATOR, SELF_TERMINATING_ENDINGS, true);
 	}
 
 	/** A statement chain reads well as a switch wherever it stands, so every host is accepted. */

@@ -1133,6 +1133,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			expressionBodyKinds: ['ExprBody'],
 			enumAbstractDeclKind: 'EnumAbstractDecl',
 			enumAbstractMetaName: '@:enum',
+			enumAbstractImplicitValues: { counting: ['Int', 'UInt'], naming: ['String'] },
 			operatorOverloadMetaName: '@:op',
 			signatureOverloadMetaName: '@:overload',
 			overloadModifierKind: 'Overload',

@@ -324,6 +324,8 @@ final class CallGraphTypes {
 			isInline: a.isInline && b.isInline,
 			isMacro: a.isMacro && b.isMacro,
 			operatorOverloads: union(a.operatorOverloads, b.operatorOverloads),
+			initializerKind: a.initializerSource == b.initializerSource ? agreed(a.initializerKind, b.initializerKind) : null,
+			initializerSource: agreed(a.initializerSource, b.initializerSource),
 			isImplicitConversion: a.isImplicitConversion || b.isImplicitConversion,
 			isImplicitCall: a.isImplicitCall || b.isImplicitCall,
 			implicitCallMetas: union(a.implicitCallMetas, b.implicitCallMetas),

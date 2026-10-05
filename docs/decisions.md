@@ -1072,3 +1072,26 @@ decided the question; it may not become a record of runs.
 - asking a `@:genericBuild` again after typing runs project macro code, which can fail the facts compile: an uncaught throw, `Context.error`, `Context.reportError`, `Context.fatalError` or a redefined type all end it non-zero (measured; none is caught by the walk's `try`). Accepted: the walk asks only at a construction the text writes, at the arguments it writes, of a class of that name the compiler built there through the same macro — and the compiler runs a genericBuild at every type reference, so a macro that cannot answer the same arguments twice fails every program writing its type twice. TM's five such classes (lime `Event`, `HTTPRequest`, tink `DirectType`, `TestSuite`, hx4compat `Proxy`) look the class up before defining it (`Context.getType`, tink's `BuildCache`) — branch `facts/s22`
 - the product's own members: a call reached through it (`new Ev<Int>().fire()`, lime's `Event.dispatch`) answers `UnresolvedDispatch` ("`_Ev_Int.fire`, which no indexed type declares") with the truth and without: neither the generic's text nor the product's facts are read for it (the index declares no product). Sound; open: reading the members of a class a macro defined off its facts — branch `facts/s22`
 - TM's `GridScale.hx:61` after this slice: unchanged answer, `Reification` at the generated `ApplicationMain.hx:144` (S21's per-build copies; with `rewrittenAs` forced past `ApplicationMain`/`ManifestResources`/`__ASSET__*` in a traced engine the decline stays at `ApplicationMain.hx:144` with a span, through another path). Traced on the same walk: `typeIsItsTextAs(Preloader, lime.utils.Preloader)` and `(…, openfl.display.Preloader)` false → true, the refused fact having been each one's `onComplete` construction of `lime.app._Event_Void_Void`; `:111` still rewrites — branch `facts/s22`
+- the switch rules converting every `==` chain whose constants are proven → an abstract declaring
+  `@:op(A == B)` is bypassed by a switch, which matches by the built-in equality (`m = Op.B` took the
+  `A` rung as a chain and the `B` case as a switch); and `OperatorSelection` cannot answer the
+  PATTERN half, binding no type to a qualified `T.M`, so every such pattern reads `Unproven` in any
+  scope holding the std `UInt` — gate 10 asks it for the discriminant only and proves the pattern
+  from its own declaration — branch `feat/prefer-switch-enum-abstract`
+- two `case` patterns with different TEXT denoting different values → `DEFAULT = 0; AUTO = 0`,
+  `16` / `0x10` and `M.LINES` / `1` collide; the switch keeps the chain's first-match answer but
+  carries a `case` the compiler reports unused, so values are now proved (`CaseValueKey`, with the
+  member's initializer recorded by the index) and must be distinct — gate 9 — branch
+  `feat/prefer-switch-enum-abstract`
+- an else-less `if` chain needing the COMPILER's answer about its subject's type before it can
+  become a switch (the gate-7 retreat, after a waiver that omitted the wildcard miscompiled a
+  `Bool`, an enum-abstract and a tuple subject) → closing it with an EMPTY `case _:` asks no
+  type question at all: the chain does nothing when no rung matches and neither does that arm,
+  and the wildcard makes every subject exhaustive (compiled and run on `--interp` and `-js`, same
+  output). What remains structural: the head must stand in a statement list and must not be
+  followed by an `#if` region that may hold its `else` — branch `feat/prefer-switch-enum-abstract`
+- the switch rules' `fix` proving constants against the `index` the lint driver hands it → that
+  index is REPORT-scoped, so a one-file `--fix` could not see the enum abstract in a sibling module
+  that `run` had resolved through the resolution scope: TM's `GridScale.hx:105` reported and fixed
+  nothing (`0 edit(s)`); `SwitchChain.lazyIndexOf` now asks the resolution index first — branch
+  `feat/prefer-switch-enum-abstract`

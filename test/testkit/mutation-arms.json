@@ -12709,6 +12709,92 @@
 			"find": "final earlier: Null<TypedFactsMacro> = current;",
 			"replace": "final earlier: Null<TypedFactsMacro> = null;",
 			"note": "each round of the hook rewrites the facts file with only the types defined since the last: a type a `@:genericBuild` asked again defines leaves the facts of that one type"
+		},
+		{
+			"name": "M-SWITCH-VALUES-NOT-DISTINCT",
+			"type": "anyparse.check.SwitchChain",
+			"method": "distinctValues",
+			"find": "\t\tif (seen.contains(key)) return false;\n",
+			"replace": "",
+			"note": "two rungs testing one value tuple pass gate 9, so the switch carries a case the compiler reports unused"
+		},
+		{
+			"name": "M-SWITCH-UNKNOWN-VALUE-ACCEPTED",
+			"type": "anyparse.check.SwitchChain",
+			"method": "distinctValues",
+			"find": "if (value == null) return false;",
+			"replace": "if (value == null) continue;",
+			"note": "a pattern whose value is not proved is keyed as empty instead of refusing the chain, so its distinctness is never established"
+		},
+		{
+			"name": "M-CASEVALUE-IMPLICIT-NOT-COUNTED",
+			"type": "anyparse.check.CaseValueKey",
+			"method": "countedValue",
+			"find": ": value + 1;",
+			"replace": ": value;",
+			"note": "an uninitialized counting enum-abstract value repeats the previous value instead of adding one"
+		},
+		{
+			"name": "M-CASEVALUE-NAMING-UNKNOWN",
+			"type": "anyparse.check.CaseValueKey",
+			"method": "ofMember",
+			"find": "\tif (seams.namingTypes.contains(underlying)) return STRING_PREFIX + member.name;\n",
+			"replace": "",
+			"note": "an uninitialized String enum-abstract value is no longer read as its own name, so every chain testing one is refused"
+		},
+		{
+			"name": "M-SWITCH-PATTERN-EQ-OVERLOAD-IGNORED",
+			"type": "anyparse.check.SwitchChain",
+			"method": "selectsBuiltinEq",
+			"force": "true",
+			"note": "a pattern whose declaring abstract overloads == passes gate 10, and the switch bypasses the overload the chain called"
+		},
+		{
+			"name": "M-SWITCH-DISC-EQ-OVERLOAD-IGNORED",
+			"type": "anyparse.check.SwitchChain",
+			"method": "scopeOf",
+			"find": "operandBuiltin: builtin }",
+			"replace": "operandBuiltin: _ -> true }",
+			"note": "a discriminant declared as an abstract overloading == passes gate 10, and the switch bypasses the overload the chain called"
+		},
+		{
+			"name": "M-SWITCH-ELSELESS-REFUSED",
+			"type": "anyparse.check.SwitchChain",
+			"method": "closesWithWildcard",
+			"force": "false",
+			"note": "no else-less chain may close with an empty case _, so a chain without a trailing else is never converted"
+		},
+		{
+			"name": "M-SWITCH-ELSELESS-GUARDED-ELSE",
+			"type": "anyparse.check.SwitchChain",
+			"method": "closesWithWildcard",
+			"find": "\tif (next != null && CondRegionScan.isConditionalKind(next.kind, seams.shape)) return false;\n",
+			"replace": "",
+			"note": "a chain followed by a #if region carrying its else closes with case _, stranding the guarded else"
+		},
+		{
+			"name": "M-SWITCH-ELSELESS-ANY-HOST",
+			"type": "anyparse.check.SwitchChain",
+			"method": "closesWithWildcard",
+			"find": "return hosts.anywhere.contains(parent.kind) || (next != null && hosts.beforeAnother.contains(parent.kind));",
+			"replace": "return true;",
+			"note": "an else-less chain that is a brace-less body of another construct closes with case _ too"
+		},
+		{
+			"name": "M-SWITCH-ELSELESS-LAST-IN-VALUE-BLOCK",
+			"type": "anyparse.check.SwitchChain",
+			"method": "closesWithWildcard",
+			"find": "(next != null && hosts.beforeAnother.contains(parent.kind))",
+			"replace": "hosts.beforeAnother.contains(parent.kind)",
+			"note": "an else-less chain ending a nested block, possibly its value, closes with case _"
+		},
+		{
+			"name": "M-SWITCH-FIX-REPORT-INDEX-FIRST",
+			"type": "anyparse.check.SwitchChain",
+			"method": "lazyIndexOf",
+			"find": "RefactorSupport.resolutionIndexOf(plugin) ?? given ?? SymbolIndex.build(files, plugin)",
+			"replace": "given ?? RefactorSupport.resolutionIndexOf(plugin) ?? SymbolIndex.build(files, plugin)",
+			"note": "the report-scoped index a --fix hands the check wins over the resolution index, so a constant declared outside the report scope is unprovable in fix though run proved it"
 		}
 	]
 }
