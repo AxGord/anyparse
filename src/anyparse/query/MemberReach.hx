@@ -240,6 +240,9 @@ final class MemberReach {
 	/** Which functions a call of a value of a type may run (`functionValues`), built on first need. */
 	private var _functionValues: Null<FunctionValueTypes> = null;
 
+	/** The code null guards keep from running (`guardedDead`), built on first need. */
+	private var _guarded: Null<NullGuardedCode> = null;
+
 	/** Builds the analysis under the run's configured builds (`escalation`), or answers null when the run has none; dropped once called. */
 	private var _configure: Null<() -> Null<MemberReach>> = null;
 
@@ -864,7 +867,11 @@ final class MemberReach {
 	private function liveHazards(file: String, tree: QueryNode, source: String, span: Span): Array<ReachHazard> {
 		final out: Array<ReachHazard> = [
 			for (h in _hazards.hazardsIn(file, tree, source, span))
-				if (_live.live(file, source, h.span) && (h.kind != Opaque || _live.holdsLiveCode(file, source, h.span))) h
+				if (
+					_live.live(file, source, h.span) && (h.kind != Opaque || _live.holdsLiveCode(file, source, h.span))
+					&& !guardedDead(file, tree, h.span)
+				)
+					h
 		];
 		if (out.exists(h -> h.kind == Opaque)) _metRawRegion = true;
 		return out;
@@ -873,7 +880,19 @@ final class MemberReach {
 	/** Whether code at `span` of `file` may be compiled by some configuration. */
 	private function isLive(g: CallGraph, file: String, span: Null<Span>): Bool {
 		final source: Null<String> = g.sourceOf(file) ?? _projectSources[file];
-		return source == null || _live.live(file, source, span);
+		return source == null || (_live.live(file, source, span) && !guardedDead(file, g.treeOf(file), span));
+	}
+
+	/** Whether code at `span` of `file` lies in a branch a null guard keeps from running, under the truth (`NullGuardedCode`). */
+	private function guardedDead(file: String, tree: Null<QueryNode>, span: Null<Span>): Bool {
+		final held: Null<FactsView> = _scope.facts;
+		if (held == null || !held.truth) return false;
+		final view: FactsView = held;
+		final made: NullGuardedCode = _guarded ?? new NullGuardedCode(
+			view, _scope, _escapes.escapedIds, _escapes.parameterBindings, () -> _g.methodValues(view)
+		);
+		_guarded = made;
+		return made.dead(file, tree, span);
 	}
 
 	/** The edges out of node `id` that run code — lexical containment aside — at a site some configuration compiles. */
@@ -938,7 +957,16 @@ final class MemberReach {
 		final out: Array<{ file: String, hazard: ReachHazard }> = [];
 		for (span in spans) {
 			final syntactic: Array<ReachHazard> = liveHazards(file, read.tree, read.source, span);
-			final typed: Null<TruthSites> = _scope.facts?.truthSites(g, file, span, node);
+			final sites: Null<TruthSites> = _scope.facts?.truthSites(g, file, span, node);
+			// a fact of this file's own code a null guard keeps from running is none (`guardedDead`)
+			final key: Null<String> = _scope.facts?.table.keyOf(file);
+			inline function kept(at: FactPos): Bool {
+				return at.file != key || !guardedDead(file, read.tree, at.span);
+			}
+			final typed: Null<TruthSites> = sites == null ? null : {
+				natives: [for (n in sites.natives) if (kept(n.at)) n],
+				reflection: [for (r in sites.reflection) if (kept(r.at)) r]
+			};
 			final hazards: Array<ReachHazard> = typed == null ? syntactic : _hazards.underTruth(syntactic, typed, read.tree);
 			for (h in hazards) out.push({ file: file, hazard: h });
 		}

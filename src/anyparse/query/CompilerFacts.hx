@@ -291,6 +291,12 @@ typedef FactNode = {
 	final params: Array<{ name: String, type: String }>;
 
 	/**
+	 * The indexes of the parameters that hold what each call hands them for the whole run, in every configuration: no code
+	 * of the body assigns one, and no default value replaces a null handed to it. Empty in facts that do not record it.
+	 */
+	final keptParams: Array<Int>;
+
+	/**
 	 * The signature and parameters each configuration gave the node, one entry per distinct pair: `signature` and
 	 * `params` are the first configuration's, and a second entry is a build that typed the node differently.
 	 */
@@ -999,6 +1005,7 @@ final class CompilerFacts {
 			inlinedFrom: record.inl,
 			overloadIndex: record.ov ?? 0,
 			params: [for (p in record.params ?? []) { name: p.n, type: p.t }],
+			keptParams: (record.pk ?? []).copy(),
 			variants: [],
 			calls: [],
 			news: [],
@@ -1029,6 +1036,8 @@ final class CompilerFacts {
 			final at: Null<FactPos> = position(home, record.p, files.paths);
 			if (at == null) continue;
 			final node: FactNode = made ?? emptyNode(id, record, at);
+			// a parameter is kept only where every configuration keeps it
+			if (made != null) for (i in node.keptParams.copy()) if (!(record.pk ?? []).contains(i)) node.keptParams.remove(i);
 			made = node;
 			FactMerge.variant(node.variants, record.t, [for (p in record.params ?? []) { name: p.n, type: p.t }]);
 			for (channel in record.inc ?? []) if (!node.incomplete.contains(channel)) node.incomplete.push(channel);
@@ -1398,6 +1407,7 @@ private typedef NodeRecord = {
 	final ?gen: Bool;
 	final ?inl: String;
 	final ?ov: Int;
+	final ?pk: Array<Int>;
 	final ?params: Array<{ n: String, t: String }>;
 	final ?calls: Array<CallRecord>;
 	final ?news: Array<{
