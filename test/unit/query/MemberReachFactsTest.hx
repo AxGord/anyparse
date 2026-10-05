@@ -2731,6 +2731,38 @@ class MemberReachFactsTest extends Test {
 		}
 	}
 
+	@:pin('control') @:killer('M-FACTS-HELD-THROUGH-IF') @:killer('M-FACTS-HELD-THROUGH-SWITCH') @:killer('M-FACTS-HELD-THROUGH-PAREN')
+	@:killer('M-FACTS-HELD-THROUGH-BLOCK') @:killer('M-FACTS-HELD-THROUGH-TRY') @:killer('M-FACTS-ASSIGN-HELD-THROUGH')
+	public function testALocalHoldingTheMemberThroughAValueConstructIsFollowedUnderTheTruth(): Void {
+		// what `prefer-if-expression-assignment` writes for `var l = null; if (c) l = items;`: the field is a BRANCH VALUE of
+		// an if-expression, a ternary, a switch, parentheses or a try — declared or stored — that the local holds just as a
+		// plain store; a push through the local still reaches the member, and an argument still escapes. The switch has two
+		// cases: the typer turns a one-case switch into an `if`
+		final stores: Array<String> = [
+			'final l:Array<Int> = if (c == "h") items else null;',
+			'final l:Array<Int> = c == "h" ? items : null;',
+			'final l:Array<Int> = switch c {\n\t\t\tcase "h": items;\n\t\t\tcase "v": items;\n\t\t\tcase _: null;\n\t\t};',
+			'final l:Array<Int> = (items);',
+			'final l:Array<Int> = try items catch (e:haxe.Exception) null;',
+			'var l:Array<Int> = null;\n\t\tl = if (c == "h") items else null;'
+		];
+		for (store in stores) {
+			function files(use: String, region: String = 'calm();'): Map<String, String> {
+				return [
+					'Main.hx' => LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ $region /*>*/ }\n'
+						+ '\t\twalk("h");\n\t}\n\tstatic function calm():Void {}\n\tstatic function keep(a:Array<Int>):Void {}\n'
+						+ '\tstatic function walk(c:String):Void {\n\t\t$store\n\t\tfor (x in l) trace(x + l.length + l[0]);\n\t\t$use\n\t}\n}\n'
+				];
+			}
+			final proven: ReachResult = ask(files(''), null, true, null, true, null, null, null, true);
+			Assert.isTrue(proven.match(Proven), '$store: got $proven');
+			final pushed: ReachResult = compiledTruthAsk(files('l.push(1);', 'walk("h");'));
+			Assert.isTrue(pushed.match(Reached(_)), '$store: got $pushed');
+			final handed: ReachResult = compiledTruthAsk(files('keep(l);'));
+			Assert.isTrue(handed.match(Unknown(Escape(_, _))), '$store: got $handed');
+		}
+	}
+
 	@:pin('control') @:killer('M-TOUCH-TYPED-CALLED')
 	public function testAFieldTheCompilerCallsLeavesItsFunctionToTheSyntaxUnderTheTruth(): Void {
 		// `d.items(1)` calls whatever a dynamic receiver's `items` holds: the facts record a call and no field read, so `poke`

@@ -258,25 +258,12 @@ final class AssignmentTreeHoist {
 	public static function ifChainValue(
 		chain: IfChain, ref: LvalueRef, source: String, s: TreeSeams, unrollTerminal: Bool, ?carried: Carried
 	): Null<UnitValue> {
-		final kept: Array<Span> = [];
-		final gaps: Array<CarryGap> = [];
-		final built: Array<{ cond: String, value: String }> = [];
-		final seatParts: Array<{ cond: Null<Span>, atom: Null<Span> }> = [];
-		var leafCount: Int = 0;
-		for (b in chain.branches) {
-			if (IfExpressionChain.holdsElseLessConditional(b.stmt, s.conditionalKinds)) return null;
-			final unit: Null<UnitValue> = unitValue(b.stmt, ref, source, s, carried);
-			if (unit == null) return null;
-			final condSrc: Null<String> = slice(source, b.cond);
-			if (condSrc == null) return null;
-			built.push({ cond: condSrc, value: unit.text });
-			final condSpan: Null<Span> = b.cond.span;
-			if (condSpan != null) kept.push(condSpan);
-			for (k in unit.kept) kept.push(k);
-			for (g in unit.gaps) gaps.push(g);
-			seatParts.push({ cond: condSpan, atom: unit.atom });
-			leafCount += unit.leafCount;
-		}
+		final head: Null<BranchValues> = branchValues(chain.branches, ref, source, s, carried);
+		if (head == null) return null;
+		final kept: Array<Span> = head.kept;
+		final gaps: Array<CarryGap> = head.gaps;
+		final built: Array<{ cond: String, value: String }> = head.built;
+		var leafCount: Int = head.leafCount;
 		final term: Null<UnitValue> = unitValue(chain.terminal, ref, source, s, carried);
 		if (term == null) return null;
 		// The terminal r-value's own ternary SPINE becomes rungs of this chain when the caller says
@@ -310,7 +297,7 @@ final class AssignmentTreeHoist {
 			leafCount++;
 			terminalText = source.substring(tailSpan.from, tailSpan.to);
 		}
-		for (g in seatGaps(seatParts, chain.terminal)) gaps.push(g);
+		for (g in seatGaps(head.seats, chain.terminal.span)) gaps.push(g);
 		return {
 			text: IfExpressionChain.buildValue(built, terminalText),
 			kept: kept,
@@ -318,6 +305,69 @@ final class AssignmentTreeHoist {
 			atom: null,
 			leafCount: leafCount
 		};
+	}
+
+	/**
+	 * The if-expression value of an ELSE-LESS chain whose missing path yields `fallback` — the
+	 * initializer of the declaration the chain overwrites (`DeclFallbackChain`):
+	 * `if (c1) v1 else if (c2) v2 … else <fallback>`. The fallback is lent VERBATIM (`verbatimUnit`,
+	 * which performs no write, so `leafCount` counts the branches' leaves alone), and the caller has
+	 * proved it relocatable: it now evaluates after the conditions instead of before them.
+	 *
+	 * Every branch is NON-terminal here — the rebuild welds ` else <fallback>` after the last one —
+	 * so all of them take `ifChainValue`'s else-less gate, the last included. The last branch opens
+	 * no comment seat either: the slot behind its value is where the lent fallback lands, a text with
+	 * no source position between the two, so a comment there fails the site closed rather than
+	 * being carried to a place it never was.
+	 */
+	public static function fallbackChainValue(
+		branches: Array<{ cond: QueryNode, stmt: QueryNode }>, fallback: QueryNode, ref: LvalueRef, source: String, s: TreeSeams,
+		?carried: Carried
+	): Null<UnitValue> {
+		final head: Null<BranchValues> = branchValues(branches, ref, source, s, carried);
+		final lent: Null<UnitValue> = verbatimUnit(fallback, source);
+		if (head == null || lent == null) return null;
+		return {
+			text: IfExpressionChain.buildValue(head.built, lent.text),
+			kept: head.kept.concat(lent.kept),
+			gaps: head.gaps.concat(seatGaps(head.seats, null)),
+			atom: null,
+			leafCount: head.leafCount
+		};
+	}
+
+	/**
+	 * The values of a chain's NON-terminal branches — each a hoistable unit (`unitValue`) under its
+	 * verbatim condition — with the spans they copy, the comment slots their nested chains open, and
+	 * one seat per branch for `seatGaps`. Null when a branch is not a hoistable unit, or holds an
+	 * else-less conditional the ` else ` emitted after its value would re-parent onto (see
+	 * `ifChainValue`).
+	 */
+	private static function branchValues(
+		branches: Array<{ cond: QueryNode, stmt: QueryNode }>, ref: LvalueRef, source: String, s: TreeSeams, ?carried: Carried
+	): Null<BranchValues> {
+		final out: BranchValues = {
+			built: [],
+			kept: [],
+			gaps: [],
+			seats: [],
+			leafCount: 0
+		};
+		for (b in branches) {
+			if (IfExpressionChain.holdsElseLessConditional(b.stmt, s.conditionalKinds)) return null;
+			final unit: Null<UnitValue> = unitValue(b.stmt, ref, source, s, carried);
+			if (unit == null) return null;
+			final condSrc: Null<String> = slice(source, b.cond);
+			if (condSrc == null) return null;
+			out.built.push({ cond: condSrc, value: unit.text });
+			final condSpan: Null<Span> = b.cond.span;
+			if (condSpan != null) out.kept.push(condSpan);
+			for (k in unit.kept) out.kept.push(k);
+			for (g in unit.gaps) out.gaps.push(g);
+			out.seats.push({ cond: condSpan, atom: unit.atom });
+			out.leafCount += unit.leafCount;
+		}
+		return out;
 	}
 
 	/**
@@ -544,15 +594,14 @@ final class AssignmentTreeHoist {
 	/**
 	 * The comment slots of a chain's branches: one seat per branch whose value is ONE copied span
 	 * (a plain-assign leaf), running from that branch's condition end to where the NEXT copied
-	 * piece starts — the following branch's condition, or the terminal statement. A branch whose
+	 * piece starts — the following branch's condition, or the terminal statement (`terminalSpan`; null
+	 * for a chain with none, whose LAST branch then opens no seat — `fallbackChainValue`). A branch whose
 	 * value is a nested construct opens no seat: its text is several pieces, so there is no single
 	 * slot a comment could ride, and the site keeps failing closed. The TERMINAL branch opens none
 	 * either — the gap in front of it is the previous branch's trailing gap, and the region behind
 	 * it belongs to whatever the enclosing rule welds on (a `;` a line comment would swallow).
 	 */
-	private static function seatGaps(parts: Array<{ cond: Null<Span>, atom: Null<Span> }>, terminal: QueryNode): Array<CarryGap> {
-		final terminalSpan: Null<Span> = terminal.span;
-		if (terminalSpan == null) return [];
+	private static function seatGaps(parts: Array<{ cond: Null<Span>, atom: Null<Span> }>, terminalSpan: Null<Span>): Array<CarryGap> {
 		final seats: Array<CarrySeat> = [];
 		for (i in 0...parts.length) {
 			final cond: Null<Span> = parts[i].cond;
@@ -616,6 +665,15 @@ typedef TreeSeams = {
 /** A mutable holder threading the common l-value through the recursion (set by the leftmost leaf). */
 typedef LvalueRef = {
 	var lvalue: Null<QueryNode>;
+}
+
+/** A chain's non-terminal branches as `branchValues` builds them: the `(cond, value)` texts, the copied spans, the comment slots, one seat per branch, and the leaf-assignment count. */
+private typedef BranchValues = {
+	var built: Array<{ cond: String, value: String }>;
+	var kept: Array<Span>;
+	var gaps: Array<CarryGap>;
+	var seats: Array<{ cond: Null<Span>, atom: Null<Span> }>;
+	var leafCount: Int;
 }
 
 /** A recognised hoistable unit's built value expression, the verbatim-copied spans (comment-drop guard), and its leaf-assignment count. */

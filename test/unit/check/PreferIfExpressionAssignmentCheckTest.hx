@@ -427,6 +427,141 @@ class PreferIfExpressionAssignmentCheckTest extends Test {
 		Assert.equals(0, violations(wrap('if (a) x = 1;\n\t\telse if (b) x = 2;\n\t\telse x = if (q) 3;')).length);
 	}
 
+	/**
+	 * The decl arm: a declaration whose initializer is the missing `else` of the chain right after it
+	 * folds into one initialized declaration, keyed on the declaration (TM `Grid.hx:698`'s shape).
+	 */
+	@:pin('control') @:killer('M-DECLCHAIN-OWNED-BY-TERNARY')
+	public function testDeclElseLessChainFolded(): Void {
+		final src: String = wrap(
+			'var lineArray:Array<Int> = null;\n\t\tif (a == 1)\n\t\t\tlineArray = p;\n\t\telse if (a == 2)\n\t\t\tlineArray = q;'
+		);
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals(
+			'this declaration and the else-less if/else-if assignment chain after it can be a single if-expression initializer',
+			vs[0].message
+		);
+		Assert.equals(src.indexOf('var lineArray'), vs[0].span?.from);
+		Assert.equals('var lineArray:Array<Int> = if (a == 1) p else if (a == 2) q else null;', soleEdit(src));
+	}
+
+	/** Every relocatable literal is a fallback: a negative number, a string, a hex number, a bool. */
+	public function testDeclChainLiteralInitsFolded(): Void {
+		for (init in ['-1', "'none'", '0x10', 'true'])
+			Assert.equals(
+				'var x:T = if (a) 1 else if (b) 2 else $init;',
+				soleEdit(wrap('var x:T = $init;\n\t\tif (a) x = 1;\n\t\telse if (b) x = 2;')), init
+			);
+	}
+
+	/**
+	 * Without a written `:Type` the declaration would be typed from the if-expression's unified
+	 * type instead of from its first write — measured, `var x = 1; if (c) x = (1:UInt);` is `Int`
+	 * but `var x = c ? (1:UInt) : 1;` is `UInt`, and a subclass in the first branch makes the
+	 * collapsed form fail to compile at all.
+	 */
+	@:pin('control') @:killer('M-DECLCHAIN-UNTYPED')
+	public function testDeclChainUntypedNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('var x = null;\n\t\tif (a) x = p;\n\t\telse if (b) x = q;')).length);
+		Assert.equals(1, violations(wrap('var x:A = null;\n\t\tif (a) x = p;\n\t\telse if (b) x = q;')).length);
+	}
+
+	/**
+	 * The initializer moves from BEFORE every condition to the fallback path after them, so it must
+	 * read and do nothing: a call, a field or local read a condition could change, an allocation, an
+	 * interpolating string are all refused.
+	 */
+	@:pin('control') @:killer('M-DECLCHAIN-INIT-ANY')
+	public function testDeclChainImpureInitNotFlagged(): Void {
+		for (init in ['g()', 'this.count', 'other', 'new A()', '[]', "'$v'"])
+			Assert.equals(0, violations(wrap('var x:T = $init;\n\t\tif (a) x = 1;\n\t\telse if (b) x = 2;')).length, init);
+	}
+
+	/** After the fold the chain IS the initializer: any read of the target in it names a variable not declared yet. */
+	@:pin('control') @:killer('M-DECLCHAIN-OCCURRENCE-COUNT')
+	public function testDeclChainTargetReadNotFlagged(): Void {
+		for (chain in [
+			'if (x > 0) x = 1;\n\t\telse if (b) x = 2;',
+			'if (a) x = x + 1;\n\t\telse if (b) x = 2;',
+			"if (a) x = 1;\n\t\telse if (b) x = g('$x');",
+			'if (a) x = 1;\n\t\telse if (b) x = go(() -> x);'
+		]) Assert.equals(0, violations(wrap('var x:Int = 0;\n\t\t$chain')).length, chain);
+	}
+
+	/** A nested WRITE is no read, but it still uses a variable the fold has not declared yet. */
+	@:pin('control') @:killer('M-DECLCHAIN-OCCURRENCE-COUNT')
+	public function testDeclChainNestedWriteNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('var x:Int = 0;\n\t\tif (a) x = go(() -> x = 5);\n\t\telse if (b) x = 2;')).length);
+	}
+
+	/**
+	 * Every leaf assigns ANOTHER target here, and the declared one is written exactly once per leaf
+	 * inside the value — the occurrence count alone cannot tell, the hoisted l-value has to.
+	 */
+	@:pin('control') @:killer('M-DECLCHAIN-LVALUE')
+	public function testDeclChainOtherTargetNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('var x:Int = 0;\n\t\tif (a) y = (x = 5);\n\t\telse if (b) y = (x = 6);')).length);
+	}
+
+	/** Only the IMMEDIATELY following statement pairs: a statement, a `#if` region or a comment between them refuses. */
+	@:pin('control') @:killer('M-DECLIF-CARRY')
+	public function testDeclChainNotAdjacentNotFlagged(): Void {
+		for (between in ['trace(1);\n\t\t', '#if foo trace(1); #end\n\t\t', '// why\n\t\t'])
+			Assert.equals(0, violations(wrap('var x:Int = 0;\n\t\t${between}if (a) x = 1;\n\t\telse if (b) x = 2;')).length, between);
+	}
+
+	/** A comment inside the copied declaration prefix rides along; one ENDING it would swallow the value. */
+	@:pin('control') @:killer('M-DECLIF-PREFIX-KEPT') @:killer('M-DECLCHAIN-PREFIX-DANGLING')
+	public function testDeclChainPrefixComments(): Void {
+		Assert.equals(
+			'var x /* kept */:Int = if (a) 1 else if (b) 2 else 0;',
+			soleEdit(wrap('var x /* kept */:Int = 0;\n\t\tif (a) x = 1;\n\t\telse if (b) x = 2;'))
+		);
+		Assert.equals(0, violations(wrap('var x:Int // why\n\t\t\t= 0;\n\t\tif (a) x = 1;\n\t\telse if (b) x = 2;')).length);
+	}
+
+	/** A comment trailing a NON-last branch rides it; past the last value the fallback lands, so none can ride there. */
+	public function testDeclChainBranchComments(): Void {
+		Assert.equals(
+			'var x:Int = if (a) 1 // one\nelse if (b) 2 else 0;',
+			soleEdit(wrap('var x:Int = 0;\n\t\tif (a) x = 1; // one\n\t\telse if (b) x = 2;'))
+		);
+		Assert.equals(0, violations(wrap('var x:Int = 0;\n\t\tif (a) x = 1;\n\t\telse if (b) x = 2 /* two */;')).length);
+	}
+
+	/** The LAST branch is followed by the welded ` else <init>`, so it takes the else-less gate the ordinary terminal is exempt from. */
+	public function testDeclChainElseLessLastBranchNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('var x:Int = 0;\n\t\tif (a) x = 1;\n\t\telse if (b) x = k + if (q) 2;')).length);
+	}
+
+	/** A chain WITH a final `else` is the ordinary arm's: the initializer is dead there, and only the chain is reported. */
+	public function testDeclChainWithFinalElseIsTheOrdinaryArm(): Void {
+		final vs: Array<Violation> = violations(wrap('var x:Int = 0;\n\t\tif (a) x = 1;\n\t\telse if (b) x = 2;\n\t\telse x = 3;'));
+		Assert.equals(1, vs.length);
+		Assert.equals('this if/else-if assignment chain can be a single if-expression assignment', vs[0].message);
+	}
+
+	/** One plain branch is two values with the initializer — `prefer-ternary-assignment`'s; one CONSTRUCT branch is this rule's. */
+	public function testDeclChainSingleBranchSplit(): Void {
+		Assert.equals(0, violations(wrap('var x:Int = 0;\n\t\tif (a) x = 1;')).length);
+		Assert.equals(
+			'var x:Int = if (a) switch s { case 1: 1; case _: 2; } else 0;',
+			soleEdit(wrap('var x:Int = 0;\n\t\tif (a) switch s {\n\t\t\tcase 1: x = 1;\n\t\t\tcase _: x = 2;\n\t\t}'))
+		);
+	}
+
+	/** `var a, b` is two declarations: the prefix would carry both into one initializer. */
+	public function testDeclChainMultiDeclaratorNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('var y:Int = 1, x:Int = 0;\n\t\tif (a) x = 1;\n\t\telse if (b) x = 2;')).length);
+	}
+
+	/** A `while` after the `else` is no `else if`: its condition is not a branch condition. */
+	@:pin('control') @:killer('M-ELSELESS-FINAL-ELSE')
+	public function testDeclChainElseWhileNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('var x:Int = 0;\n\t\tif (a) x = 1;\n\t\telse while (b) x = 3;')).length);
+	}
+
 	/** Run `fix` and re-emit through the canonical writer — the `lint --fix` path in one pass. */
 	private function applyFixOnce(src: String): String {
 		return switch CanonicalEdit.canonicalize(src, edits(src), true, new HaxeQueryPlugin(), null) {

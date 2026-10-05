@@ -219,6 +219,47 @@ class PreferTernaryAssignmentCheckTest extends Test {
 		Assert.equals(1, violations(laidOut).length, 'a newline+indent run and a single space still normalise equal');
 	}
 
+	/** The decl arm: the declaration supplies the value of the missing `else`, keyed on the declaration. */
+	public function testDeclSinglePlainBranchFolded(): Void {
+		final src: String = 'class C {\n\tfunction f() {\n\t\tvar k:Int = -1;\n\t\tif (id == 1) k = 5;\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals('this declaration and the else-less if assignment after it can be a single ternary initializer', vs[0].message);
+		Assert.equals(src.indexOf('var k'), vs[0].span?.from);
+		final es: Array<{ span: Span, text: String }> = edits(src);
+		Assert.equals(1, es.length);
+		Assert.equals('var k:Int = id == 1 ? 5 : -1;', es[0].text);
+	}
+
+	/** The condition stays a `ParenGuard` hole in the decl arm too. */
+	public function testDeclConditionParenthesised(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f() {\n\t\tvar k:Int = 0;\n\t\tif (p ? q : r) k = 5;\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('var k:Int = (p ? q : r) ? 5 : 0;', es[0].text);
+	}
+
+	/** Two or more branches are `prefer-if-expression-assignment`'s decl arm — the split is `DeclFallbackChain.ownedByTernary`. */
+	public function testDeclChainNotFlagged(): Void {
+		Assert.equals(
+			0, violations('class C {\n\tfunction f() {\n\t\tvar k:Int = 0;\n\t\tif (a) k = 5;\n\t\telse if (b) k = 6;\n\t}\n}').length
+		);
+	}
+
+	/** The ordinary arm's narrowing refusal: a bool-literal collapse would hand the guard to a flattening that loses it. */
+	@:pin('control') @:killer('M-DECLTERN-NARROWING')
+	public function testDeclNullNarrowingBoolNotFlagged(): Void {
+		Assert.equals(
+			0, violations('class C {\n\tfunction f() {\n\t\tvar b:Bool = false;\n\t\tif (o != null && o.f) b = true;\n\t}\n}').length
+		);
+	}
+
+	/** A comment in a region the rebuild drops (the `if` header, the target) refuses the site. */
+	@:pin('control') @:killer('M-DECLTERN-COMMENT')
+	public function testDeclDroppedCommentNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f() {\n\t\tvar k:Int = 0;\n\t\tif (a) /* why */ k = 5;\n\t}\n}').length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new PreferTernaryAssignment().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

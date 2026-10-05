@@ -2893,7 +2893,7 @@
 		},
 		{
 			"name": "M-TRIVGET-MOVABLE-LITERAL-FALSE",
-			"type": "anyparse.check.TrivialGetter",
+			"type": "anyparse.query.MemberKinds",
 			"method": "isMovableLiteral",
 			"force": "false",
 			"note": "no literal is ever movable, so a ctor-init that should relocate to the field's own default (a plain single-quoted string among them, the shape `SingleStringExpr` misclassified before its `node.name` read was replaced with a children-are-all-Literal check) is treated as an external write and pushed off the clean (default, set) collapse — onto the @:bypassAccessor arm, or, once that extra write carries the count past the bypass cap, onto the inline-getter arm, which keeps the field and writes a different fix"
@@ -3001,7 +3001,7 @@
 		},
 		{
 			"name": "M-TRIVGET-NO-NEGATION-DESCENT",
-			"type": "anyparse.check.TrivialGetter",
+			"type": "anyparse.query.MemberKinds",
 			"method": "isMovableLiteral",
 			"find": "negation != null && node.kind == negation",
 			"replace": "false",
@@ -13071,9 +13071,9 @@
 		{
 			"name": "M-FACTS-HELD-LOCAL",
 			"type": "anyparse.check.TypedFactsWalk",
-			"method": "visit",
-			"find": "case TField(_, _) | TLocal(_):",
-			"replace": "case TField(_, _):",
+			"method": "heldValue",
+			"find": "case TField(_, _) | TLocal(_): true;",
+			"replace": "case TField(_, _): true;",
 			"note": "a local initialized with another local is walked as a value, so the first local's value escapes there"
 		},
 		{
@@ -13131,6 +13131,142 @@
 			"find": "final at: Null<Span> = f.held ? holding?.span ?? node?.span : span;",
 			"replace": "final at: Null<Span> = span;",
 			"note": "a touch through a local holding the member is placed at the store, so a push through it inside the region, stored before it, is missed"
+		},
+		{
+			"name": "M-FACTS-HELD-THROUGH-IF",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "heldValue",
+			"find": "otherwise != null && (heldValue(then) || heldValue(otherwise));",
+			"replace": "false;",
+			"note": "a field read in a branch of an if-expression (a ternary is one) initializing or assigned to a local is a value read again, so `final l = if (c) items else null;` escapes where `l = items;` in a branch of a statement `if` is followed"
+		},
+		{
+			"name": "M-FACTS-HELD-THROUGH-SWITCH",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "heldValue",
+			"find": "for (c in cases) held = held || heldValue(c.expr);",
+			"replace": "",
+			"note": "a field read in an arm of a switch-expression initializing a local is a value read again, so the local's value escapes there"
+		},
+		{
+			"name": "M-FACTS-HELD-THROUGH-PAREN",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "heldValue",
+			"find": "heldValue(inner);",
+			"replace": "false;",
+			"note": "a parenthesised field read initializing a local is a value read, so `var l = (items);` escapes where `var l = items;` is followed"
+		},
+		{
+			"name": "M-FACTS-HELD-THROUGH-BLOCK",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "heldValue",
+			"find": "exprs.length > 0 && heldValue(exprs[exprs.length - 1]);",
+			"replace": "false;",
+			"note": "the block the typer wraps each branch of an if- or switch-expression in hands nothing on, so every such branch read is a value read again"
+		},
+		{
+			"name": "M-FACTS-HELD-THROUGH-TRY",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "heldValue",
+			"find": "var held: Bool = heldValue(body);",
+			"replace": "var held: Bool = false;",
+			"note": "a field read as the body of a try-expression initializing a local is a value read again, so the local's value escapes there"
+		},
+		{
+			"name": "M-FACTS-ASSIGN-HELD-THROUGH",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "storedLocal",
+			"find": "if (!heldValue(rhs)) return null;",
+			"replace": "if (!rhs.expr.match(TField(_, _) | TLocal(_))) return null;",
+			"note": "an assignment statement storing an if-expression whose branch reads a field is no store of that value any more, so `l = if (c) items else null;` escapes where the declaration form is followed"
+		},
+		{
+			"name": "M-DECLCHAIN-UNTYPED",
+			"type": "anyparse.check.DeclFallbackChain",
+			"method": "match",
+			"find": " || !types.exists(declSpan.from)",
+			"replace": "",
+			"note": "an unannotated declaration folds too, so its type comes from the if-expression's unified type rather than from its first write - measured to differ (`UInt` vs `Int`) and to stop compiling for a subclass in the first branch"
+		},
+		{
+			"name": "M-DECLCHAIN-INIT-ANY",
+			"type": "anyparse.check.DeclFallbackChain",
+			"method": "match",
+			"find": "if (!MemberKinds.isMovableLiteral(init, s.shape)) return null;",
+			"replace": "",
+			"note": "any initializer is relocated past the conditions, so a call, a read a condition could change, or an allocation runs after them instead of before"
+		},
+		{
+			"name": "M-DECLCHAIN-OCCURRENCE-COUNT",
+			"type": "anyparse.check.DeclFallbackChain",
+			"method": "match",
+			"find": "if (Refs.find(name, head, s.shape).length != probe.leafCount) return null;",
+			"replace": "",
+			"note": "any further occurrence of the target in the chain - a read in a condition or a value, a capture, a nested write - survives the fold, naming the variable inside its own initializer"
+		},
+		{
+			"name": "M-DECLCHAIN-LVALUE",
+			"type": "anyparse.check.DeclFallbackChain",
+			"method": "match",
+			"find": "if (lvalue.kind != s.tree.identKind || lvalue.name != name) return null;",
+			"replace": "",
+			"note": "a chain assigning another target folds into the declaration, which then takes that target's values"
+		},
+		{
+			"name": "M-DECLCHAIN-PREFIX-DANGLING",
+			"type": "anyparse.check.DeclFallbackChain",
+			"method": "match",
+			"find": "TryExpressionShape.danglingLineComment(source, new Span(declSpan.from, declSpan.from + prefix.text.length), comments)",
+			"replace": "false",
+			"note": "a line comment ending the copied declaration prefix swallows the rebuilt ` = <value>;`"
+		},
+		{
+			"name": "M-DECLCHAIN-OWNED-BY-TERNARY",
+			"type": "anyparse.check.DeclFallbackChain",
+			"method": "ownedByTernary",
+			"find": "m.branches.length == 1 && ",
+			"replace": "",
+			"note": "every chain of plain assignments goes to the ternary rule, which builds its edit from the first branch alone, and the if-expression rule reports none"
+		},
+		{
+			"name": "M-ELSELESS-FINAL-ELSE",
+			"type": "anyparse.check.IfExpressionChain",
+			"method": "collectElseLess",
+			"find": " || !ifKinds.contains(elseBranch.kind)",
+			"replace": "",
+			"note": "whatever follows an `else` is read as another `if` link, so `else while (b) x = 3;` becomes a branch guarded by the loop's condition"
+		},
+		{
+			"name": "M-DECLIF-CARRY",
+			"type": "anyparse.check.PreferIfExpressionAssignment",
+			"method": "declEdits",
+			"find": "final carried: Null<Carried> = IfExpressionChain.carriedComments(m.region, kept, m.probe.gaps, source, comments);",
+			"replace": "final carried: Null<Carried> = IfExpressionChain.noCarry();",
+			"note": "the decl arm stops classifying the comments in its region, so one between the declaration and the chain is dropped by the rebuild"
+		},
+		{
+			"name": "M-DECLIF-PREFIX-KEPT",
+			"type": "anyparse.check.PreferIfExpressionAssignment",
+			"method": "declEdits",
+			"find": "kept.push(new Span(m.declSpan.from, m.prefix.keptTo));",
+			"replace": "",
+			"note": "the copied declaration prefix is no longer a kept span, so a comment inside it - which the prefix carries - refuses the site"
+		},
+		{
+			"name": "M-DECLTERN-NARROWING",
+			"type": "anyparse.check.PreferTernaryAssignment",
+			"method": "declEdits",
+			"find": "if (BoolExprShape.refusesNullNarrowingBoolCollapse(value, m.init, cond, d.shape)) continue;",
+			"replace": "",
+			"note": "the decl arm collapses a null-narrowing guard onto bool literals, which the boolean simplification then flattens out of its narrowing"
+		},
+		{
+			"name": "M-DECLTERN-COMMENT",
+			"type": "anyparse.check.PreferTernaryAssignment",
+			"method": "declEdits",
+			"find": "if (IfExpressionChain.droppedComment(m.region, kept, comments)) continue;",
+			"replace": "",
+			"note": "the decl arm ignores comments outside its copied spans, so one in the `if` header is dropped by the rebuild"
 		}
 	]
 }

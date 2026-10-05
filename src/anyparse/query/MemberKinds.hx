@@ -412,6 +412,32 @@ final class MemberKinds {
 	}
 
 	/**
+	 * Whether `node` is a compile-time literal safe to RELOCATE — to a field-initializer position
+	 * (`trivial-getter`) or past the conditions of the chain it falls back from
+	 * (`prefer-if-expression-assignment` / `prefer-ternary-assignment`, `DeclFallbackChain`): an
+	 * allocation-free literal (`isPlainLiteral`), or one under a single negation. Evaluating it reads
+	 * nothing and writes nothing, so WHEN it is evaluated can never change its value or anything else.
+	 *
+	 * The RHS travels as a VERBATIM span splice, so anything the grammar declares a constant literal
+	 * is relocatable — which is why the kinds are read off the shape rather than spelled here. Both
+	 * ways of spelling them by hand cost a correct rewrite: `HexLit` stood unlisted until review found
+	 * `_mask = 0xFF;` taking the `@:bypassAccessor` path a byte-equivalent `= 255;` did not, and a
+	 * `'$$'` / `'$'` segment read as non-text sent `_currency = '$';` the same way.
+	 *
+	 * The negation arm is one level and numeric-only, the shape `ConstantFieldScan.isScalarLiteral`
+	 * already uses: `-1` projects as `negationKind(IntLit 1)`, so without it every negative default
+	 * (`_mask = -1;`) took the bypass path while `255` folded clean. `- -1` is not admitted — one level
+	 * is what the projection produces for a written negative literal, and a deeper chain is not a
+	 * literal any grammar declares.
+	 */
+	public static function isMovableLiteral(node: QueryNode, shape: RefShape): Bool {
+		final negation: Null<String> = shape.negationKind;
+		return negation != null && node.kind == negation
+			? node.children.length == 1 && (shape.numericLiteralKinds ?? []).contains(node.children[0].kind)
+			: isPlainLiteral(node, shape);
+	}
+
+	/**
 	 * Whether a member of a `declKind` type is static WITHOUT saying so — the grammar's
 	 * `RefShape.implicitStaticFieldHostKinds` answer, narrowed to data members because an
 	 * abstract's METHODS may be either and there the modifier still decides.
