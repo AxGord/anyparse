@@ -571,7 +571,7 @@ final class MemberTouchScan {
 	}
 
 	/** Whether the text at `span` of `file` spells the member `name` on its own `this`: the bare name, or `this.name`. */
-	private function onSelf(g: CallGraph, file: String, span: Span, name: String): Bool {
+	public function onSelf(g: CallGraph, file: String, span: Span, name: String): Bool {
 		final shape: RefShape = _scope.shape;
 		var found: Bool = false;
 		function walk(node: QueryNode): Void {

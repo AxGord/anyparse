@@ -9,8 +9,10 @@ import anyparse.query.CallGraph.SplicedSite;
 import anyparse.query.CallGraph.UnresolvedAccess;
 import anyparse.query.CallGraph.UnresolvedCall;
 import anyparse.query.CallGraphFacts.QualifiedRead;
+import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.CompilerFacts.FieldDeclFact;
+import anyparse.query.CompilerFacts.FieldFact;
 import anyparse.query.CompilerFacts.NativeFact;
 import anyparse.query.FactsView.TruthSites;
 import anyparse.query.GrammarPlugin.RefShape;
@@ -132,6 +134,28 @@ enum ReachResult {
 }
 
 /**
+ * What `MemberReach.freshOnlyReads` found: code that writes nothing but objects it built, with every member of shared state
+ * it may read, or the first site where it may write anything else or the walk cannot see — `file` a path or a facts table
+ * key, `what` one line saying which.
+ */
+enum FreshOnlyAnswer {
+
+	Confined(reads: Array<SharedRead>);
+	Unconfined(file: String, span: Null<Span>, what: String);
+
+}
+
+/**
+ * A member of shared state code may read: the graph's simple name of its declaring type, its name, and whether its value is
+ * inert (`ReachGraph.inertType`) — a string, number or boolean, which only a write of the member itself can change.
+ */
+typedef SharedRead = {
+	final owner: String;
+	final name: String;
+	final inert: Bool;
+}
+
+/**
  * A member by its declaring owner's simple name and its own name — and, optionally, a read of it at `site` in the entry's
  * file, by which the compiler facts may name which of several types sharing that simple name declares it
  * (`FactsView.pinnedOwner`).
@@ -190,6 +214,12 @@ final class MemberReach {
 
 	/** How deep a chain of calls handing a fresh value on (`freshCall`) is followed before the value counts as shared. */
 	private static inline final MAX_FRESH_DEPTH: Int = 4;
+
+	/** The fact kind of a class constructor's body (`TypedFactsProbe`). */
+	private static inline final FACT_CONSTRUCTOR: String = 'ctor';
+
+	/** The fact kind of a field's initializer (`TypedFactsProbe`). */
+	private static inline final FACT_INITIALIZER: String = 'var';
 
 	/** The step kind of a constructor the walk admitted through reflective instantiation. */
 	private static inline final REFLECTIVE_CONSTRUCTOR: String = 'reflective constructor';
@@ -379,6 +409,82 @@ final class MemberReach {
 		if (graph().types.declaringTypeOf(ownerName, name) == null)
 			return Unknown(OutOfScope('`$name` is not a member of `$ownerName` or its supertypes — an import or a module-level value'));
 		return mayReach(Region(file, region), { owner: ownerName, name: name, site: at }, Mutate);
+	}
+
+	/**
+	 * The analysis whose compiler facts are the truth (`FactsView.truth`): this one, or the one under the run's configured
+	 * builds (`escalation`), built on first need — or null when neither's are. A consumer whose proof must not rest on the
+	 * syntax's reading asks every question of it there.
+	 */
+	public function underTruth(): Null<MemberReach> {
+		if (_scope.facts?.truth == true) return this;
+		if (!_factsTruthAvailable) return null;
+		final configure: Null<() -> Null<MemberReach>> = _configure;
+		if (configure != null) {
+			_configure = null;
+			_configured = configure();
+		}
+		final configured: Null<MemberReach> = _configured;
+		return configured?._scope.facts?.truth == true ? configured : null;
+	}
+
+	/**
+	 * What the code at `span` of `file`, and everything it runs, may READ of state it did not build — when it provably
+	 * WRITES nothing but objects it built itself: `Confined` with those reads, else `Unconfined` naming the first site that
+	 * may write anything else, or that the walk cannot see through. Asked only where the compiler facts are the truth
+	 * (`FactsView.truth`, `underTruth`); anywhere else the answer is `Unconfined`.
+	 *
+	 * The walk follows what `reachedArrayChange` follows — every call, construction, override, accessor, function value and
+	 * implicit call, into library bodies — and reads each body through its compiler facts, which it must have (a body the
+	 * facts do not describe is `Unconfined`). A positive list of what passes:
+	 *
+	 * - a field WRITE only on `this` inside a constructor or the instance-field initializers of a class (a body every typed
+	 *   piece of which is a class constructor, or the `<init>` node's initializers), spelled there as the bare name or
+	 *   `this.name` (`MemberTouchScan.onSelf`) in the body's own text. Any constructor the walk enters builds an object the
+	 *   entry's code allocated — a construction there, or the base half of one — so that `this` is fresh. A write anywhere
+	 *   else, a method's own `this` included, is `Unconfined`: a method may run on an object other code holds.
+	 * - a field READ of an instance or static member, recorded once as a `SharedRead` — unless it is such a fresh `this`.
+	 *   A method read as a value, an enum constructor, and nothing else, reads no state; a structure's or a dynamic field is
+	 *   `Unconfined`.
+	 * - a library call only when it runs no user code and is no `ExecutionShape.statefulLibraryCalls` entry, or when its
+	 *   library body passes the same list.
+	 *
+	 * Every hazard a body holds is `Unconfined` — target code, untyped code, a raw conditional region, an unmodelled
+	 * construct, reflection, an array change on anything but a fresh local (`bodyChangesSharedArray`) — and so is an
+	 * unresolved call or access, a build macro that may rewrite a body, a name several types share, and a walk past its bound.
+	 * A read of a member a later write may change is the caller's to judge: `mayReach` answers whether other code writes it.
+	 */
+	public function freshOnlyReads(file: String, span: Span): FreshOnlyAnswer {
+		final found: Null<FactsView> = _scope.facts;
+		if (found == null || !found.truth) return Unconfined(file, span, 'the compiler facts are not the truth');
+		final view: FactsView = found;
+		_metRawRegion = false;
+		_syntaxEntered = false;
+		_carriers.startQuestion();
+		_g.startQuestion();
+		final idle: Null<ReachUnknown> = idleEntry(file);
+		if (idle != null) return Unconfined(file, span, blindText(idle));
+		final g: CallGraph = graph();
+		final tree: Null<QueryNode> = _g.treeOf(file);
+		if (tree == null) return Unconfined(file, span, '$file did not parse');
+		final blind: Null<ReachUnknown> = entryRewritten(g, file, [span]) ?? view.blindIn(file, span, g);
+		if (blind != null) return Unconfined(file, span, blindText(blind));
+		for (h in hazardsOf(g, file, [span])) return Unconfined(h.file, h.hazard.span, 'code the walk cannot see through');
+		// a file the run rewrote holds no facts any more (`CompilerFacts.invalidate`): nothing would say what the code reads
+		if (!view.faceted(g, file, span)) return Unconfined(file, span, 'the compiler facts do not describe the code');
+		final entryFacts: Null<Array<FieldFact>> = view.table.within(
+			file, span, n -> n.fields, f -> f.at, true, view.harmlessSplice.bind(g)
+		);
+		if (entryFacts == null) return Unconfined(file, span, 'a fact of the code has no place');
+		final reads: Array<SharedRead> = [];
+		for (f in entryFacts) {
+			final why: Null<FreshOnlyAnswer> = sharedAccess(f, false, reads);
+			if (why != null) return why;
+		}
+		final seeds: Seeds = seedsOf(g, Region(file, span));
+		if (seeds.unresolved.length > 0 || seeds.access.length > 0) return Unconfined(file, span, 'a call no graph edge resolves');
+		final entryNode: Null<FnNode> = g.node(g.functionAt(file, span.from) ?? '');
+		return freshOnlyWalk(g, file, tree, span, seeds.edges, entryNode, reads);
 	}
 
 	/** One line saying why `result` is not `Proven`, with `file:line` positions; empty for `Proven`. */
@@ -1275,9 +1381,10 @@ final class MemberReach {
 
 	/**
 	 * Where `node`'s own body — each declaration of it (`bodySpans`) — changes an array other code may hold, or holds a
-	 * blind spot; null when none does.
+	 * blind spot; null when none does. A reflective access by a literal name is followed by the walk asking, and is no blind
+	 * spot unless `literalReflection` says it is: a walk that follows no reflection by name (`freshOnlyReads`) counts it.
 	 */
-	private function bodyChangesSharedArray(g: CallGraph, node: FnNode): Null<Occurrence> {
+	private function bodyChangesSharedArray(g: CallGraph, node: FnNode, literalReflection: Bool = false): Null<Occurrence> {
 		final declared: Null<Array<Occurrence>> = bodySpans(g, node);
 		if (declared == null) return { file: node.file, span: node.span ?? new Span(0, 0) };
 		for (d in declared) {
@@ -1289,12 +1396,231 @@ final class MemberReach {
 			for (h in liveHazards(d.file, tree, source, d.span)) switch h.kind {
 				case ArrayChange:
 					if (fn == null || !receiverIsFreshLocal(tree, source, fn, h.node, d.span)) return { file: d.file, span: h.span };
-				case ReflectiveName(literal) if (literal != null):
+				case ReflectiveName(literal) if (literal != null && !literalReflection):
 				case _:
 					return { file: d.file, span: h.span };
 			}
 		}
 		return null;
+	}
+
+	// -- fresh-only effects -----------------------------------------------------------------------
+
+	/**
+	 * `freshOnlyReads`' walk from the entry at `span` of `file` (parsed `tree`), whose resolved invocations are `edges` and
+	 * whose enclosing graph node is `entryNode`: each node is queued once, every body is read by `freshOnlyBody`, and what
+	 * it reads is added to `reads`. Mirrors `reachedArrayChange`: the implicit-call sites of every body entered are asked
+	 * again whenever entering more code may have widened what they admit.
+	 */
+	private function freshOnlyWalk(
+		g: CallGraph, file: String, tree: QueryNode, span: Span, edges: Array<CallEdge>, entryNode: Null<FnNode>, reads: Array<SharedRead>
+	): FreshOnlyAnswer {
+		final queue: Array<String> = [];
+		final seen: Map<String, Bool> = [];
+		final sites: Array<ImplicitSite> = sitesOf(g, file, [span]);
+		function push(id: String): Void {
+			if (seen.exists(id)) return;
+			seen[id] = true;
+			queue.push(id);
+		}
+		function admitAll(): Void {
+			if (_syntaxEntered) for (id in _g.alwaysIds(g)) push(id);
+			for (at in sites) for (id in _g.idsAt(g, at)) push(id);
+		}
+		// whether it widened anything does not matter: every site is asked right after
+		_g.enter(g, file, span, MemberTouchScan.typeAt(tree, span.from)); // noqa: unused-return-value
+		admitAll();
+		final entered: Null<FreshOnlyAnswer> = followUnlessBenign(g, entryNode, edges, push);
+		if (entered != null) return entered;
+		var qi: Int = 0;
+		while (qi < queue.length) {
+			if (qi >= _maxVisited) return Unconfined(file, span, 'the walk visited more than $_maxVisited functions');
+			final id: String = queue[qi++];
+			final found: Null<FnNode> = g.node(id);
+			if (found == null) return Unconfined(file, span, 'a call of `$id`, which the graph holds no node for');
+			if (found.isExternal && statelessLibrary(g, found.typeName, found.name)) continue;
+			final loaded: Null<FnNode> = found.isExternal ? libraryBodyOf(g, found) : found;
+			if (loaded == null) return Unconfined(found.file, found.span, 'library code `${found.id}` the walk cannot read');
+			final node: FnNode = loaded;
+			// the placeholder upgraded in place IS this id; another declaration found for it may be seen already
+			if (node.id != id && seen.exists(node.id)) continue;
+			seen[node.id] = true;
+			if (bodyNotItsSource(g, node)) return Unconfined(node.file, node.span, 'the code `${node.id}` runs may not be its text');
+			final syntaxBefore: Bool = _syntaxEntered;
+			final why: Null<FreshOnlyAnswer> = freshOnlyBody(g, node, push, sites, reads);
+			if (why != null) return why;
+			if (enterBody(g, node) || _syntaxEntered != syntaxBefore) admitAll();
+		}
+		return Confined(reads);
+	}
+
+	/**
+	 * Why the body of `node` breaks `freshOnlyReads`' list, or null after recording what it reads in `reads`, queueing
+	 * (`push`) what it runs and adding its implicit-call sites to `sites`. A body-less declaration dispatches to its
+	 * implementations unless it is extern target code.
+	 */
+	private function freshOnlyBody(
+		g: CallGraph, node: FnNode, push: String -> Void, sites: Array<ImplicitSite>, reads: Array<SharedRead>
+	): Null<FreshOnlyAnswer> {
+		if (node.isBodyless) return bodylessDispatch(g, node, push);
+		final changed: Null<Occurrence> = bodyChangesSharedArray(g, node, true);
+		if (changed != null) return Unconfined(changed.file, changed.span, 'code that may change shared state the walk cannot follow');
+		if (liveUnresolved(g, node.id).length > 0 || liveAccess(g, node.id).length > 0)
+			return Unconfined(node.file, node.span, 'a call in `${node.id}` no graph edge resolves');
+		final read: Null<FreshOnlyAnswer> = freshOnlyFacts(g, node, reads);
+		if (read != null) return read;
+		// what the body runs implicitly runs too, in every declaration of it
+		for (at in declaredSites(g, bodySpans(g, node) ?? [])) {
+			sites.push(at);
+			for (id in _g.idsAt(g, at)) push(id);
+		}
+		return followUnlessBenign(g, node, liveEdges(g, node.id), push);
+	}
+
+	/**
+	 * What a body-less declaration `node` runs: the implementations it dispatches to, queued (`push`) — or, for an extern,
+	 * target code no walk can read.
+	 */
+	private function bodylessDispatch(g: CallGraph, node: FnNode, push: String -> Void): Null<FreshOnlyAnswer> {
+		final type: Null<String> = node.typeName;
+		final name: Null<String> = node.name;
+		if (type == null || name == null || g.types.meta.isExtern(type))
+			return Unconfined(node.file, node.span, 'target code behind `${node.id}`');
+		for (v in g.virtualTargets(type, name)) push(v);
+		return null;
+	}
+
+	/**
+	 * Why the typed field accesses of the body of `node` break `freshOnlyReads`' list (`sharedAccess`), or null after
+	 * recording its reads of shared state in `reads`. The body's own `this` is fresh when every typed piece of it is a class
+	 * constructor or, for the `<init>` node, an instance-field initializer; a function nested in it that is no graph node
+	 * of its own is read with it, on no fresh `this`.
+	 */
+	private function freshOnlyFacts(g: CallGraph, node: FnNode, reads: Array<SharedRead>): Null<FreshOnlyAnswer> {
+		final bodies: Null<Array<FactNode>> = g.facts?.faceted[node.id];
+		final view: Null<FactsView> = _scope.facts;
+		if (bodies == null || bodies.length == 0 || view == null)
+			return Unconfined(node.file, node.span, 'the compiler facts do not describe the body of `${node.id}`');
+		// a class constructor, or the initializers it runs first, works on the object a construction of the walk built
+		final constructs: Bool = bodies.foreach(n ->
+			n.kind == FACT_CONSTRUCTOR || (node.name == CallGraph.INIT_NAME && n.kind == FACT_INITIALIZER)
+		);
+		final work: Array<{ n: FactNode, fresh: Bool }> = [for (n in bodies) { n: n, fresh: constructs }];
+		while (work.length > 0) {
+			final item: Null<{ n: FactNode, fresh: Bool }> = work.pop();
+			if (item == null) break;
+			final n: FactNode = item.n;
+			for (f in n.fields) {
+				final why: Null<FreshOnlyAnswer> = sharedAccess(
+					f, item.fresh && CompilerFacts.placed(n, f.at) && freshThisAt(g, node, f), reads
+				);
+				if (why != null) return why;
+			}
+			for (child in n.fns) {
+				final nested: Null<FactNode> = view.table.node(child);
+				if (nested == null) return Unconfined(node.file, node.span, 'a function nested in `${node.id}` has no facts');
+				if (CallGraphFacts.graphNodeOf(g, node, child, view) == null) work.push({ n: nested, fresh: false });
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Queue (`push`) the target of each of `edges` out of the body `from` that is not `freshOnlyBenign` — every one when
+	 * `from` is unknown — or say why one cannot be followed.
+	 */
+	private function followUnlessBenign(
+		g: CallGraph, from: Null<FnNode>, edges: Array<CallEdge>, push: String -> Void
+	): Null<FreshOnlyAnswer> {
+		for (e in edges) if (from == null || !freshOnlyBenign(g, from, e)) {
+			final unknown: Null<Occurrence> = followEdge(g, e, push);
+			if (unknown != null) return Unconfined(unknown.file, unknown.span, 'a dispatch whose overrides cannot all be read');
+		}
+		return null;
+	}
+
+	/**
+	 * Why the typed field access `f` breaks `freshOnlyReads`' list, or null after recording a read of shared state in
+	 * `reads`. `onFresh` says the access is on the `this` of an object the walk built (`freshOnlyFacts`).
+	 */
+	private function sharedAccess(f: FieldFact, onFresh: Bool, reads: Array<SharedRead>): Null<FreshOnlyAnswer> {
+		final owner: Null<String> = f.owner;
+		if (f.write) return onFresh ? null : Unconfined(f.at.file, f.at.span, 'it writes `${owner ?? '?'}.${f.field}`');
+		if (onFresh) return null;
+		final view: Null<FactsView> = _scope.facts;
+		return switch f.access {
+			case 'FEnum':
+				null;
+			case 'FClosure' if (owner != null && immutableMethod(owner, f.field)):
+				null;
+			case 'FInstance', 'FStatic' if (owner != null && view != null):
+				final graphOwner: String = view.graphType(owner);
+				final source: Null<String> = FactsView.simpleSource(f.type);
+				if (!reads.exists(r -> r.owner == graphOwner && r.name == f.field))
+					reads.push({ owner: graphOwner, name: f.field, inert: source != null && _g.inertType(source) });
+				null;
+			case _:
+				Unconfined(f.at.file, f.at.span, 'it reads `${f.field}` off a value of no class');
+		};
+	}
+
+	/** Whether every build declares `name` of the typed type `owner` a method no code can reassign (`method` or `inline`). */
+	private function immutableMethod(owner: String, name: String): Bool {
+		final declared: Null<FieldDeclFact> = _scope.facts?.table.type(CompilerFacts.baseId(owner))?.fields.find(d -> d.name == name);
+		return declared != null && declared.kinds.foreach(k -> k == 'method' || k == 'inline');
+	}
+
+	/**
+	 * Whether the instance access `f` of the body of `node` is on its own `this`: an `FInstance` access whose text, in the
+	 * file of `node` the fact lies in, spells the bare name or `this.name` (`MemberTouchScan.onSelf`).
+	 */
+	private function freshThisAt(g: CallGraph, node: FnNode, f: FieldFact): Bool {
+		if (f.access != 'FInstance') return false;
+		final key: String = f.at.file;
+		final table: Null<CompilerFacts> = _scope.facts?.table;
+		if (table == null) return false;
+		final files: Array<String> = [node.file].concat([for (d in g.declarationsOf(node.id)) d.file]).concat(g.initializerFiles(node.id));
+		final file: Null<String> = files.find(f -> table.keyOf(f) == key);
+		return file != null && _touches.onSelf(g, file, f.at.span, f.field);
+	}
+
+	/**
+	 * The body the external `node` stands for once its library file is read, or null when there is none to walk: no
+	 * declaration with a body found, or a type the graph cannot load.
+	 */
+	private function libraryBodyOf(g: CallGraph, node: FnNode): Null<FnNode> {
+		final type: Null<String> = node.typeName;
+		final name: Null<String> = node.name;
+		if (type == null || name == null || _g.loadType(g, type, []) != null) return null;
+		final resolved: Null<String> = g.memberOnChain(type, name);
+		final loaded: Null<FnNode> = resolved == null ? null : g.node(resolved);
+		return loaded == null || loaded.isExternal ? null : loaded;
+	}
+
+	/**
+	 * Whether a call of the library member `type.name` changes and reads no state at all: it runs no user code — a pure
+	 * library call, or a reading method of the built-in array (`ReachGraph.runsNoUserCode`) — and it is no
+	 * `ExecutionShape.statefulLibraryCalls` entry; with that seam undeclared, none is.
+	 */
+	private function statelessLibrary(g: CallGraph, type: Null<String>, name: Null<String>): Bool {
+		final stateful: Null<Array<String>> = _shape.execution?.statefulLibraryCalls;
+		if (type == null || name == null || stateful == null) return false;
+		final member: String = '$type.$name';
+		return !stateful.contains(member) && _g.runsNoUserCode(g, type, name, false);
+	}
+
+	/**
+	 * Whether the edge `e` out of the body `node` invokes library code that leaves every state alone: `benignEdge`'s call —
+	 * a pure call, a built-in array method on a fresh local of the body — that is no `statefulLibraryCalls` entry.
+	 */
+	private function freshOnlyBenign(g: CallGraph, node: FnNode, e: CallEdge): Bool {
+		final target: Null<FnNode> = g.node(e.to);
+		final stateful: Null<Array<String>> = _shape.execution?.statefulLibraryCalls;
+		final type: Null<String> = target?.typeName;
+		final name: Null<String> = target?.name;
+		if (type == null || name == null || stateful == null) return false;
+		final member: String = '$type.$name';
+		return !stateful.contains(member) && benignEdge(g, node, e);
 	}
 
 	// -- the walk ---------------------------------------------------------------------------------

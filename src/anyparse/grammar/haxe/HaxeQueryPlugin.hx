@@ -786,6 +786,13 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 					'StringBuf.addSub',
 					'StringBuf.toString'
 				],
+				statefulLibraryCalls: [
+					'Std.random',
+					'Math.random',
+					'StringBuf.add',
+					'StringBuf.addChar',
+					'StringBuf.addSub'
+				],
 				freshReturningMethods: ['Array' => ['copy', 'concat', 'map', 'filter', 'slice'], 'String' => ['split']],
 				modelledKinds: [
 					'Abstract',

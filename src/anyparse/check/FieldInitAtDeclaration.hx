@@ -7,6 +7,7 @@ import anyparse.query.ElementSpan;
 import anyparse.query.FieldWriteIndex;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
+import anyparse.query.MemberReach;
 import anyparse.query.QueryNode;
 import anyparse.query.RawSourceScan;
 import anyparse.query.RefactorSupport;
@@ -127,6 +128,34 @@ using Lambda;
  * PART of the project (a subclass under a directory no root names) leave that part unscanned —
  * the roots are the user's statement of what the project is, and a narrow lint then disagrees
  * with a whole-project one.
+ *
+ * PROVING the crossing (`crossingProven`). Where the run declared its builds complete
+ * (`reachConfigurationsComplete`) and the compiler facts are the truth, a crossing the narrowings above refuse — a `new T()`,
+ * a call — is still accepted on the SOLE-write path when the move is shown unobservable rather than made to fault. The
+ * code it is hoisted across is every top-level constructor statement before the init, `super(...)` among them, plus the
+ * prologue it joins; then, with the field not public:
+ *
+ * - NO EARLY READER: `MemberReach.mayReach` over that region answers `Proven` for a READ of the field — through the base
+ *   constructor chain, the overrides it dispatches to, every function value the region hands out (a listener a later
+ *   statement fires), into library code. Any `Unknown` — an escape, a computed name, a build macro rewriting a body, a raw
+ *   region, an ambiguous type — refuses.
+ * - COMMUTATION: `MemberReach.freshOnlyReads` over the right-hand side answers `Confined` — everything it runs writes only
+ *   the `this` of a constructor or field initializer it entered, i.e. objects it allocated, reads no structure or dynamic
+ *   field, calls no stateful library member (`ExecutionShape.statefulLibraryCalls`: a random draw), and its every body is
+ *   read through the facts — and for each member of shared state it reads, `mayReach` over the region answers `Proven` for a
+ *   WRITE (a string, number or boolean member) or a MUTATION (any other). The right-hand side then changes nothing the region
+ *   can see and sees nothing the region changes, so the two commute; two crossing inits of one constructor commute for the
+ *   same reason, since neither writes shared state.
+ *
+ * The prologue needs no region of its own: the graph wires a constructor's own field initializers to it as a call with no
+ * site, which every region of the constructor seeds, so the right-hand side's walk reads them as its own code — a write
+ * there refuses, a read is checked like the right-hand side's. RESIDUAL: an exception or a non-terminating loop in the
+ * right-hand side now pre-empts the region's effects, which a caller catching it could observe; a move whose file the same
+ * `--fix` run already rewrote is refused (its facts no longer describe the text), so such an init moves on the next run.
+ * Deliberately coarse, so it refuses more than it must: a method's `this` is never fresh (a construction calling
+ * `init()`, or an inlined setter, that writes its own fields refuses), nor is an object a constructor stores and then
+ * changes through the field (`_tf = new TextField(); _tf.text = …`), and a read of shared state the region also only
+ * reads is still asked of it.
  *
  * A field whose cross-file write count DIFFERS FROM ONE (a `dispose()` null-out, say)
  * can still move, on the ACCEPTED-CANDIDATE CHAIN: every top-level constructor
@@ -301,7 +330,9 @@ final class FieldInitAtDeclaration implements Check {
 			final tree: Null<QueryNode> = try plugin.parseFile(entry.source) catch (_: Exception) null;
 			if (tree == null) continue;
 			final root: QueryNode = tree;
-			final earlyInitSafe: EarlyInitProof = crossingAdmitted.bind(files, plugin, entry.file, entry.source, root);
+			final earlyInitSafe: EarlyInitProof = (member, container, ctor, rhs, at) ->
+				crossingAdmitted(files, plugin, entry.file, entry.source, root, member, container, rhs)
+					|| crossingProven(plugin, entry.file, entry.source, root, member, container, ctor, rhs, at);
 			walk(tree, entry.file, entry.source, shape, classLike, writeIndex, lazyIndex, earlyInitSafe, violations);
 		}
 		return violations;
@@ -846,7 +877,7 @@ final class FieldInitAtDeclaration implements Check {
 		// included, so an init hoisted across one runs before the base constructor. That is admitted
 		// only on the SOLE-write path and only when the early-init narrowings hold (the class doc's
 		// "CROSSING `super(...)`"); the chain path never crosses, since `acceptableCoMover` refuses it.
-		if (hoistCrossesSuper(ctor, container, at, shape) && !(sole && earlyInitSafe(member, container, write.rhs))) return null;
+		if (hoistCrossesSuper(ctor, container, at, shape) && !(sole && earlyInitSafe(member, container, ctor, write.rhs, at))) return null;
 		final unsafeRead: Bool = readBeforeInit(ctor, mv.span.from, mv.name, at, container, shape);
 		// `allowStatics = false`: an in-class STATIC read is refused along with the parameters, locals
 		// and instance members. The permissive spelling was the live regression — a right-hand side
@@ -952,6 +983,51 @@ final class FieldInitAtDeclaration implements Check {
 			&& !fieldExposed(tree, member, container, plugin, shape)
 			&& !ReflectionScan.runtimeName(ReflectionScan.reflectionSurface(files, plugin), name)
 			&& !readObservableInScope(files, plugin, scope, file, name, span.from);
+	}
+
+	/**
+	 * Whether hoisting the SOLE write of `member` (a field of `container`, declared in `file` whose parsed `tree` and `source`
+	 * are given) across an explicit `super(...)` is PROVEN unobservable — the class doc's "PROVING the crossing". Asked only
+	 * where the run declared its builds complete (`SymbolIndexHost.reachBuilds`) and the compiler facts are the truth
+	 * (`MemberReach.underTruth`); anywhere else false, the narrowings of `crossingAdmitted` alone deciding as before. The
+	 * write is the constructor `ctor`'s at `at`, its right-hand side `rhs`; the code it is hoisted across is every top-level
+	 * statement before it. The instance-field initializers already in the prologue it joins need no region of their own: the
+	 * graph wires them to the constructor as a call with no site (`ConstructorWiring`), which every region of the constructor
+	 * seeds — the crossed one and the right-hand side's alike.
+	 */
+	private static function crossingProven(
+		plugin: GrammarPlugin, file: String, source: String, tree: QueryNode, member: QueryNode, container: QueryNode, ctor: QueryNode,
+		rhs: QueryNode, at: Int
+	): Bool {
+		final shape: RefShape = plugin.refShape();
+		final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;
+		final name: Null<String> = member.name;
+		final owner: Null<String> = container.name;
+		final value: Null<Span> = rhs.span;
+		final first: Null<QueryNode> = ctorStatements(ctor, shape)[0];
+		final from: Null<Int> = first?.span?.from;
+		if (name == null || owner == null || value == null || from == null) return false;
+		// no list of builds declared complete: the facts are never the truth, and nothing is asked of them
+		if (host == null || host.reachBuilds() == null || fieldExposed(tree, member, container, plugin, shape)) return false;
+		final ownerName: String = owner;
+		final fieldName: String = name;
+		final field: MemberRef = { owner: ownerName, name: fieldName };
+		final reach: Null<MemberReach> = MemberReach.forRun(plugin, file, source).underTruth();
+		if (reach == null) return false;
+		final truth: MemberReach = reach;
+		final crossed: Span = new Span(from, at);
+		// 1. no code the hoist crosses may read the field: it would see the value where it saw nothing
+		if (truth.mayReach(Region(file, crossed), field, Read) != Proven) return false;
+		// 2. the right-hand side commutes with that code: it changes only what it builds, and reads nothing the code changes
+		final reads: Array<SharedRead> = switch truth.freshOnlyReads(file, value) {
+			case Confined(r): r;
+			case Unconfined(_, _, _): return false;
+		};
+		for (r in reads) {
+			final changes: ReachAccess = r.inert ? Write : Mutate;
+			if (truth.mayReach(Region(file, crossed), { owner: r.owner, name: r.name }, changes) != Proven) return false;
+		}
+		return true;
 	}
 
 	/**
@@ -1196,12 +1272,12 @@ private typedef Candidates = {
 }
 
 /**
- * The early-init narrowings of one file's run, as `candidateFor` asks them: whether the sole write of
- * the field `member` of `container`, right-hand side `rhs`, may be hoisted across an explicit
- * `super(...)`. `FieldInitAtDeclaration.crossingAdmitted`, bound to the run's files and plugin
- * and to the candidate's file, source and parsed tree.
+ * The early-init proofs of one file's run, as `candidateFor` asks them: whether the sole write of the field `member` of
+ * `container`, right-hand side `rhs`, written at `at` in the constructor `ctor`, may be hoisted across an explicit
+ * `super(...)` — `FieldInitAtDeclaration.crossingAdmitted`'s narrowings, else `crossingProven`'s proof, both bound to the
+ * run's files and plugin and to the candidate's file, source and parsed tree.
  */
-private typedef EarlyInitProof = (member:QueryNode, container:QueryNode, rhs:QueryNode) -> Bool;
+private typedef EarlyInitProof = (member:QueryNode, container:QueryNode, ctor:QueryNode, rhs:QueryNode, at:Int) -> Bool;
 
 /**
  * The invariants of one early-read scan over one scope file: the field (`name`, declared at

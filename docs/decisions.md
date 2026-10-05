@@ -337,6 +337,11 @@ decided the question; it may not become a record of runs.
   → a `super` call need not be a top-level statement (a branch-conditional one is legal Haxe), so
   "precedes THE super call" often has no answer; the coarse gate's one lost cleanup per hundreds
   of files is the accepted price — `508172fc`
+- field-init-at-declaration: the coarse super gate (`508172fc`) and the early-init narrowing (`d383325d`) as the only ways
+  across `super(...)` → PARTIALLY REVERSED: where the builds are declared complete and the facts are the truth, a crossing is
+  proven instead — no crossed code reads the field (`mayReach`), and the right-hand side writes only what it allocates and
+  reads nothing the crossed code changes (`freshOnlyReads`); the narrowing stays for the run without the truth, and the
+  coarse gate for the chain path — branch `feat/field-init-across-super`
 - `DocMeasure.flatTokenWidth` descending a `BodyGroup` to close the convergence tail → closes
   three files and opens one, reformats dozens of this tree's files and makes `CollapsePass.hx`
   itself a two-rewrite file — `f57325e5`
