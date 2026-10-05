@@ -262,6 +262,46 @@ class MemberReachFactsTest extends Test {
 		return valueCallFixture('(Rx)->String', '(x:Rx) -> { items.push(1); return "k"; }', more, region, base, map);
 	}
 
+	/**
+	 * `Main.hx` whose region releases a value into `p`, a `Pool` constructed with `args`, whose `release` calls its `dynamic`
+	 * `clean`, which its constructor replaces with its `clean` parameter when handed one, and `set` with its own, which no
+	 * call here hands anything; `Main.grow`, which grows `items`,
+	 * is read as a value into `Main.keep`; `more` statements run before the loop.
+	 */
+	private static function poolFixture(args: String, more: String): String {
+		return LOOP_HEAD + '\tpublic static var keep:Null<(Int)->Void> = null;\n\n\tstatic function grow(x:Int):Void items.push(x);\n\n'
+			+ '\tstatic function main() {\n\t\tkeep = grow;\n\t\tfinal p:Pool = new Pool(' + args + ');\n' + more
+			+ '\t\tfor (i in 0...items.length) { /*<*/ p.release(1); /*>*/ }\n\t}\n}\n'
+			+ 'class Pool {\n\tpublic function new(?make:()->Int, ?clean:(Int)->Void) {\n\t\tif (clean != null) this.clean = clean;\n\t}\n\n'
+			+ '\tpublic dynamic function clean(x:Int):Void {}\n\n\tpublic function release(x:Int):Void clean(x);\n\n'
+			+ '\tpublic function set(c:(Int)->Void):Void this.clean = c;\n}\n';
+	}
+
+	/**
+	 * `poolFixture` constructing `p` with no argument, running `more` first, of a `Pool` declaring no `set`: a construction by
+	 * reflection lets a `Pool` leave the type system, and untyped code may then invoke a `set` with anything.
+	 */
+	private static function settlessPool(more: String): String {
+		return StringTools.replace(poolFixture('', more), '\n\n\tpublic function set(c:(Int)->Void):Void this.clean = c;', '');
+	}
+
+	/**
+	 * `Main.hx` whose region fires `h`, a `Hook`, whose `fire` calls its `dynamic` `run`, which `main` replaces with a
+	 * function expression growing nothing; `Main.grow`, which grows `items`, is read as a value into `Main.keep`; `more`
+	 * statements run before the loop.
+	 */
+	private static function hookFixture(more: String): String {
+		return LOOP_HEAD + '\tpublic static var keep:Null<(Int)->Void> = null;\n\n\tstatic function grow(x:Int):Void items.push(x);\n\n'
+			+ '\tstatic function main() {\n\t\tkeep = grow;\n\t\tfinal h:Hook = new Hook();\n\t\th.run = x -> {};\n' + more
+			+ '\t\tfor (i in 0...items.length) { /*<*/ h.fire(); /*>*/ }\n\t}\n}\n'
+			+ 'class Hook {\n\tpublic function new() {}\n\n\tpublic dynamic function run(x:Int):Void {}\n\n'
+			+ '\tpublic function fire():Void run(1);\n}\n';
+	}
+
+	/** Statements of `hookFixture` storing `keep` into `h`'s `run` by a name computed at run time. */
+	private static inline final COMPUTED_STORE: String =
+		'\t\tvar d:Dynamic = h;\n\t\tvar n:String = "run";\n\t\tReflect.setField(d, n, keep);\n';
+
 	/** `Rx.map` calling a local copy of its parameter (`valueCallFixture`): what it calls is no parameter. */
 	private static inline final BY_TYPE: String =
 		'public function map(f:(Rx)->String):String {\n\t\tfinal h:(Rx)->String = f;\n\t\treturn h(this);\n\t}';
@@ -1165,6 +1205,88 @@ class MemberReachFactsTest extends Test {
 			matching('', null, null, 'public dynamic function map(f:(Rx)->String):String return f(this);')
 		];
 		for (main in reached) assertMatch(compiledTruthAsk(['Main.hx' => main]), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-REACH-VALUE-STORED') @:killer('M-GRAPH-FACTS-VALUE-STORED') @:killer('M-VALUE-CTOR-ARITY')
+	@:killer('M-VALUE-STORED-COMPUTED') @:killer('M-VALUE-ESCAPED-ONLY') @:killer('M-VALUE-CTOR-REFLECTIVE-CLASS')
+	public function testACallOfADynamicMethodRunsOnlyTheValuesStoredIntoItUnderTheTruth(): Void {
+		// `Pool.release` calls its `dynamic` `clean`, which only `Pool`'s constructor stores into, from its parameter: every
+		// construction hands it nothing, a function expression, or one of an arity no `(Int)->Void` has (`make`'s), so
+		// `Main.grow`, a function read as a value, never runs there — the facts say so only under the truth
+		final quiet: Array<String> = [
+			poolFixture('', ''),
+			poolFixture('null, x -> {}', ''),
+			poolFixture('() -> {\n\t\t\titems.push(1);\n\t\t\treturn 1;\n\t\t}', '')
+		];
+		for (main in quiet) assertMatch(compiledTruthAsk(['Main.hx' => main]), r -> r.match(Proven));
+		// `Hook.run` holds the function expressions stored into it, by its type or, once a `Hook` left the type system, by its
+		// name — and a name computed at run time names a method only of a class the project declares
+		final dynamicStore: String = '\t\tvar d:Dynamic = h;\n\t\td.run = x -> {};\n';
+		assertMatch(compiledTruthAsk(['Main.hx' => hookFixture('')]), r -> r.match(Proven));
+		assertMatch(compiledTruthAsk(['Main.hx' => hookFixture(dynamicStore)]), r -> r.match(Proven));
+		assertMatch(interpAsk(['Main.hx' => hookFixture(COMPUTED_STORE)], null, ['Main']), r -> r.match(Proven));
+		// a reflective construction hands `clean` what its argument array holds there
+		final reflective: Array<String> = [
+			settlessPool('\t\tType.createInstance(Pool, [null, x -> {}]);\n'),
+			// out of an array no literal spells, only a function value that escaped: `() -> {}` did, `grow` did not
+			settlessPool('\t\tvar a:Array<Dynamic> = [null, () -> {}];\n\t\tType.createInstance(Pool, a);\n')
+		];
+		for (main in reflective) assertMatch(compiledTruthAsk(['Main.hx' => main]), r -> r.match(Proven));
+		// one of another class hands `Pool`'s constructor nothing, whatever its array holds
+		final other: String = poolFixture('', '\t\tType.createInstance(Other, [null, keep]);\n')
+			+ 'class Other {\n\tpublic function new(a:Dynamic, b:Dynamic) {}\n}\n';
+		assertMatch(compiledTruthAsk(['Main.hx' => other]), r -> r.match(Proven));
+		assertMatch(ask(['Main.hx' => poolFixture('null, x -> {}', '')]), r -> r.match(Reached(_)));
+	}
+
+	@:pin('control') @:killer('M-VALUE-STORED-UNTYPED') @:killer('M-VALUE-STORED-NATIVE') @:killer('M-VALUE-CTOR-REFLECTIVE')
+	@:killer('M-VALUE-ESCAPED-SENTINEL') @:killer('M-VALUE-STORED-WRITES') @:killer('M-VALUE-STORED-OWN') @:killer('M-VALUE-CTOR-SUBTYPES')
+	@:killer('M-VALUE-CTOR-ARGUMENT') @:killer('M-VALUE-CTOR-SKIPPED') @:killer('M-VALUE-CTOR-REFLECTIVE-ARGS')
+	public function testACallOfADynamicMethodRunsAnyValueWhenAStoreIsNotKnown(): Void {
+		// `grow` may be `clean` once it is stored into it directly, through a `Dynamic`, by reflection — by a literal name or a
+		// computed one —, by a construction, reflective or through a subclass's `super`, or by `set` spliced in at a call that
+		// inlines it, or once a construction leaving `make` out hands `clean` a function that grows `items`
+		final sub: String = 'class Sub extends Pool {\n\tpublic function new() super(null, Main.keep);\n}\n';
+		final reached: Array<String> = [
+			poolFixture('', '\t\tp.clean = keep;\n'),
+			poolFixture('', '\t\tvar d:Dynamic = p;\n\t\td.clean = keep;\n'),
+			poolFixture('', '\t\tReflect.setField(p, "clean", keep);\n'),
+			poolFixture('', '\t\tvar n:String = "clean";\n\t\tReflect.setField(p, n, keep);\n'),
+			poolFixture('null, grow', ''),
+			poolFixture('x -> {\n\t\t\titems.push(x);\n\t\t}', ''),
+			settlessPool('\t\tType.createInstance(Pool, [null, keep]);\n'),
+			poolFixture('', '\t\tnew Sub();\n') + sub,
+			poolFixture('', '\t\tinline p.set(keep);\n')
+		];
+		for (main in reached) assertMatch(compiledTruthAsk(['Main.hx' => main]), r -> !r.match(Proven));
+		// a `Hook` that left the type system may have its field written by its name: off a `Dynamic`, by target code naming
+		// it, or by a name computed at run time, which no declaration bounds here
+		final escaped: Array<String> = [
+			hookFixture('\t\tvar d:Dynamic = h;\n\t\td.run = keep;\n'),
+			hookFixture('\t\tvar d:Dynamic = h;\n\t\tjs.Syntax.code("{0}.run = {1}", d, keep);\n')
+		];
+		for (main in escaped) assertMatch(compiledTruthAsk(['Main.hx' => main]), r -> !r.match(Proven));
+		assertMatch(interpAsk(['Main.hx' => hookFixture(COMPUTED_STORE)]), r -> !r.match(Proven));
+		// a reflective construction handing `clean` an array no literal spells
+		final handed: String = settlessPool('\t\tvar a:Array<Dynamic> = [null, keep];\n\t\tType.createInstance(Pool, a);\n');
+		assertMatch(compiledTruthAsk(['Main.hx' => handed]), r -> !r.match(Proven));
+		// a store only another build compiles is one of the builds' stores
+		final other: String = poolFixture('', '\t\t#if other\n\t\tp.clean = keep;\n\t\t#end\n');
+		assertMatch(ask(['Main.hx' => other], [[], ['other']], true, null, false, null, null, null, true), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-VALUE-CTOR-ROUTE')
+	public function testACallOfAConstructorParameterRunsWhatItsConstructionsHandIt(): Void {
+		// `Runner`'s constructor calls its parameter `f`, which the region's construction hands `keep`, holding `grow`: a
+		// constructor is invoked by a `new`, which no call fact records — and once the one construction hands it a function
+		// expression that grows nothing, nothing else is `f`
+		final main: String = LOOP_HEAD + '\tpublic static var keep:Null<(Int)->Void> = null;\n\n'
+			+ '\tstatic function grow(x:Int):Void items.push(x);\n\n\tstatic function main() {\n\t\tkeep = grow;\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ new Runner(keep); /*>*/ }\n\t}\n}\n'
+			+ 'class Runner {\n\tpublic function new(f:Null<(Int)->Void>) f(1);\n}\n';
+		assertMatch(compiledTruthAsk(['Main.hx' => main]), r -> r.match(Reached(_)));
+		final quiet: String = StringTools.replace(main, 'new Runner(keep)', 'new Runner(x -> {})');
+		assertMatch(compiledTruthAsk(['Main.hx' => quiet]), r -> r.match(Proven));
 	}
 
 	@:pin('control') @:killer('M-ESCAPES-FUNCTION-FLOW-TYPED')

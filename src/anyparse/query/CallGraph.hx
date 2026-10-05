@@ -144,6 +144,12 @@ typedef UnresolvedCall = {
 	/** With `called`: the range of the expression whose value is called, in the file of the facts (`CallFact.receiverAt`). */
 	@:optional var calledAt: Null<FactPos>;
 
+	/**
+	 * For a call of a `dynamic` method the compiler facts name (`pack.Type.field`): the values stored into that field, which
+	 * the facts may say (`FunctionValueTypes.storedIn`), are what it may run beside its declared bodies.
+	 */
+	@:optional var stored: Null<String>;
+
 	/** For a site the compiler facts file off a body an inlined call spliced into `from`: where it runs (`SplicedSite`). */
 	@:optional var spliced: Null<SplicedSite>;
 }

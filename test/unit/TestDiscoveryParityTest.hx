@@ -2580,6 +2580,13 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-REACH-REWRITTEN-TRUTH',
 			'unit.query.MemberReachFactsTest#testABuildMacroOnlyTheCompilerSawIsUnknown :: control :: '
 				+ 'M-FACTS-REACH-BUILDS,M-REACH-REWRITTEN-UNTRUE',
+			'unit.query.MemberReachFactsTest#testACallOfAConstructorParameterRunsWhatItsConstructionsHandIt :: control :: M-VALUE-CTOR-ROUTE',
+			'unit.query.MemberReachFactsTest#testACallOfADynamicMethodRunsAnyValueWhenAStoreIsNotKnown :: control :: '
+				+ 'M-VALUE-STORED-UNTYPED,M-VALUE-STORED-NATIVE,M-VALUE-CTOR-REFLECTIVE,M-VALUE-ESCAPED-SENTINEL,M-VALUE-STORED-WRITES,'
+				+ 'M-VALUE-STORED-OWN,M-VALUE-CTOR-SUBTYPES,M-VALUE-CTOR-ARGUMENT,M-VALUE-CTOR-SKIPPED,M-VALUE-CTOR-REFLECTIVE-ARGS',
+			'unit.query.MemberReachFactsTest#testACallOfADynamicMethodRunsOnlyTheValuesStoredIntoItUnderTheTruth :: control :: '
+				+ 'M-REACH-VALUE-STORED,M-GRAPH-FACTS-VALUE-STORED,M-VALUE-CTOR-ARITY,M-VALUE-STORED-COMPUTED,M-VALUE-ESCAPED-ONLY,'
+				+ 'M-VALUE-CTOR-REFLECTIVE-CLASS',
 			'unit.query.MemberReachFactsTest#testACallOfAFunctionValueRunsAFunctionOfAMatchingType :: control :: ' + 'M-VALUE-TYPE-FLOWS',
 			'unit.query.MemberReachFactsTest#testACallOfAFunctionValueRunsAFunctionValueThatEscaped :: control :: '
 				+ 'M-VALUE-TYPE-ESCAPED,M-ESCAPES-FUNCTION-RECORDED',
@@ -4769,6 +4776,23 @@ class TestDiscoveryParityTest extends Test {
 			'M-VALUE-ARG-SUPERTYPES',
 			'M-VALUE-ARG-COUNT',
 			'M-VALUE-ARG-LAMBDA',
+			'M-REACH-VALUE-STORED',
+			'M-GRAPH-FACTS-VALUE-STORED',
+			'M-VALUE-STORED-UNTYPED',
+			'M-VALUE-STORED-COMPUTED',
+			'M-VALUE-STORED-NATIVE',
+			'M-VALUE-CTOR-REFLECTIVE',
+			'M-VALUE-CTOR-REFLECTIVE-CLASS',
+			'M-VALUE-CTOR-REFLECTIVE-ARGS',
+			'M-VALUE-ESCAPED-SENTINEL',
+			'M-VALUE-ESCAPED-ONLY',
+			'M-VALUE-STORED-WRITES',
+			'M-VALUE-STORED-OWN',
+			'M-VALUE-CTOR-ROUTE',
+			'M-VALUE-CTOR-SUBTYPES',
+			'M-VALUE-CTOR-ARGUMENT',
+			'M-VALUE-CTOR-SKIPPED',
+			'M-VALUE-CTOR-ARITY',
 			'M-VALUE-TYPE-FLOWS',
 			'M-VALUE-TYPE-GENERIC',
 			'M-VALUE-TYPE-ESCAPED',

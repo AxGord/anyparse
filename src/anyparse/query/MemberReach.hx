@@ -1365,9 +1365,15 @@ final class MemberReach {
 		function apply(site: AdmissionSite): Void {
 			final called: Null<String> = site.called;
 			final values: Null<FunctionValueTypes> = called == null ? null : functionValues();
-			final ids: Array<String> = !site.values
-				? []
-				: called == null || values == null ? admission.value.copy() : values.admitted(g, admission.value, called, site.calledAt);
+			final stored: Null<String> = site.stored;
+			final held: Null<Array<String>> = stored == null ? null : functionValues()?.storedIn(g, admission.value, stored);
+			// of the functions used as values, those stored into a `dynamic` method, else those of the type called
+			inline function typed(): Array<String> {
+				return called == null || values == null
+					? admission.value.copy()
+					: values.admitted(g, admission.value, called, site.calledAt);
+			}
+			final ids: Array<String> = !site.values ? [] : held ?? typed();
 			if (site.all == true)
 				for (id in admission.closure.keys())
 					if (g.node(id)?.isExternal == false && !ids.contains(id)) ids.push(id);
@@ -1506,6 +1512,7 @@ final class MemberReach {
 				case _:
 					final unresolved: AdmissionSite = site(u.from, u.file, u.span, 'unresolved', ReachAdmission.admittedNames(u), true);
 					unresolved.called = u.called;
+					unresolved.stored = u.stored;
 					// a site filed off a body spliced in is that body's code, whose parameters are the caller's locals there
 					if (u.spliced == null) unresolved.calledAt = u.calledAt;
 					admit(unresolved);
@@ -2471,6 +2478,12 @@ private typedef AdmissionSite = {
 
 	/** With `called`, for a site the facts place in its function's own code: the range of the expression whose value is called. */
 	@:optional var calledAt: Null<FactPos>;
+
+	/**
+	 * For a call of a `dynamic` method the facts name (`pack.Type.field`): of the functions used as values (`values`), only
+	 * those stored into it, where the facts say which (`FunctionValueTypes.storedIn`).
+	 */
+	@:optional var stored: Null<String>;
 }
 
 /** The names code reads members by (`MemberReach.reflectedNames`), and the graph's size it was read at. */
