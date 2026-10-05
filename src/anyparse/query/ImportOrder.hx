@@ -98,7 +98,12 @@ private typedef RunChoice = {
  * `using`, a wildcard / alias import, a `#if` region, a block comment, an import sharing its
  * source line with other code. Each run carries its OWN order and is inserted into on its own.
  *
- * This is what a whole-list reading got wrong. A block split by a `using` into two individually
+ * A WILDCARD import is the one exception to "anything between ends the run": `runsIn` admits one
+ * as an ordinary member wherever `WildcardImportGate` proves its position decides no simple name,
+ * and both the seat (`insertionFor`, over the host's resolution index) and the `import-order` rule
+ * read the runs through it.
+ *
+ * The run split is what a whole-list reading got wrong. A block split by a `using` into two individually
  * sorted runs reads as unsorted when concatenated, so every fresh import was appended past the
  * whole file's last import — landing in the LAST run regardless of where it sorts, and inverting
  * that run whenever it belonged earlier. The `import-order` rule then flagged the line the
@@ -235,12 +240,13 @@ final class ImportOrder {
 		final header: QueryNode = headerRootOf(root, source, plugin);
 		if (path != null) {
 			final slots: Array<ImportSlot> = slotsOf(header);
-			final slot: Int = insertOffset(source, slots, path);
+			final runs: Array<Array<ImportLine>> = runsIn(source, header, WildcardImportGate.forPlugin(plugin));
+			final slot: Int = insertOffset(source, slots, path, runs);
 			if (slot >= 0) return {
 				offset: slot,
 				lead: '',
 				trail: '',
-				order: orderAt(source, slots, slot)
+				order: orderAt(source, slots, slot, runs)
 			};
 		}
 		var anchorEnd: Int = lastHeaderEnd(header);
@@ -402,6 +408,27 @@ final class ImportOrder {
 	}
 
 	/**
+	 * `root`'s import RUNS with the wildcard imports `gate` admits as MEMBERS — the split the
+	 * `import-order` rule judges a file by and the insert seat places a fresh line by, so the two
+	 * keep reading one shape. The candidate runs are read over plain AND wildcard statements by the
+	 * same adjacency `runsOf` uses, and `gate` cuts every wildcard whose position could decide what
+	 * a simple name means (`WildcardImportGate` — its doc holds the measured precedence). A null
+	 * `gate` is the pre-gate reading exactly: `runsOf` over the plain imports, every wildcard a
+	 * boundary.
+	 *
+	 * A wildcard line sorts by its full text (`tink.unit.Assert.*`) under the same `compare` as any
+	 * other line, so `*` sorts below every letter and the dot: `p.C.*` ahead of `p.C.f`, and after
+	 * `p.C` itself.
+	 */
+	@:access(anyparse.query.ModuleScan)
+	public static function runsIn(source: String, root: QueryNode, gate: Null<WildcardImportGate>): Array<Array<ImportLine>> {
+		if (gate == null) return runsOf(source, slotsOf(root));
+		final slots: Array<ImportSlot> = slotsOf(root).concat(slotsOfKind(root, ModuleScan.WILDCARD_IMPORT_KIND));
+		slots.sort((a, b) -> a.from - b.from);
+		return [for (run in runsOf(source, slots)) for (piece in gate.split(run)) piece];
+	}
+
+	/**
 	 * The offset at which `path` joins the run it belongs to (see the class doc for the choice of
 	 * run and of slot inside it), or -1 when the caller must append past every run: a file with no
 	 * runs at all, or a simple name an existing import already binds.
@@ -410,11 +437,14 @@ final class ImportOrder {
 	 * were read from — the run split is a question about the text BETWEEN two statements, which
 	 * the slots alone cannot answer. The returned offset is always a LINE START, so a caller
 	 * splices `'import <path>;\n'` at it.
+	 *
+	 * `runs` is the run split to choose from when the caller already read one that admits wildcard
+	 * members (`runsIn`); omitted, it is `runsOf(source, block)`, where every wildcard is a boundary.
 	 */
-	public static function insertOffset(source: String, block: Array<ImportSlot>, path: String): Int {
+	public static function insertOffset(source: String, block: Array<ImportSlot>, path: String, ?runs: Array<Array<ImportLine>>): Int {
 		final simple: String = SourceText.lastSegment(path);
 		if (block.exists(slot -> SourceText.lastSegment(slot.path) == simple)) return -1;
-		final chosen: Null<RunChoice> = chooseRun(runsOf(source, block), path);
+		final chosen: Null<RunChoice> = chooseRun(runs ?? runsOf(source, block), path);
 		if (chosen == null) return -1;
 		final run: Array<ImportLine> = chosen.run;
 		return chosen.slot < 0 ? run[run.length - 1].chunkTo : SourceText.startOfLine(source, run[chosen.slot].declFrom);
@@ -427,10 +457,11 @@ final class ImportOrder {
 	 * default; every offset `insertOffset` returns does anchor one.
 	 *
 	 * Two paths that produced the same anchor are in the same run by construction: runs occupy
-	 * disjoint offset ranges, since a run's own end is what separates it from the next.
+	 * disjoint offset ranges, since a run's own end is what separates it from the next. `runs` is
+	 * the split the anchor was chosen from, as in `insertOffset`.
 	 */
-	public static function orderAt(source: String, block: Array<ImportSlot>, at: Int): Int {
-		for (run in runsOf(source, block)) {
+	public static function orderAt(source: String, block: Array<ImportSlot>, at: Int, ?runs: Array<Array<ImportLine>>): Int {
+		for (run in runs ?? runsOf(source, block)) {
 			final anchored: Bool = run[run.length - 1].chunkTo == at
 				|| run.exists(line -> SourceText.startOfLine(source, line.declFrom) == at);
 			if (anchored) return orderOf(pathsOf(run));

@@ -77,12 +77,6 @@ final class TypeNameBinding {
 		return path.substr(path.lastIndexOf('.') + 1);
 	}
 
-	/** `path` without its last segment: `a.b.C` -> `a.b`, `a.*` -> `a`, `C` -> ``. */
-	private static inline function parentPath(path: String): String {
-		final dot: Int = path.lastIndexOf('.');
-		return dot < 0 ? '' : path.substring(0, dot);
-	}
-
 	/** The explicit imports of one statement list: the last one binding `name` wins. */
 	private static function explicitTier(name: String, imports: Array<ImportInfo>, index: SymbolIndex): Tier {
 		var i: Int = imports.length;
@@ -111,7 +105,7 @@ final class TypeNameBinding {
 		final path: String = imp.raw;
 		if (lastSegment(path) == name) return imp.guarded ? Unknown : boundOrUnknown(index.refs.resolveQualifiedRefAll(path));
 		final module: Array<FileInfo> = index.allFiles().filter(f -> f.module == path);
-		if (module.length == 0) return index.allFiles().exists(f -> f.module == parentPath(path)) ? Free : Unknown;
+		if (module.length == 0) return index.allFiles().exists(f -> f.module == SourceText.parentPath(path)) ? Free : Unknown;
 		final sub: Array<ResolvedType> = [
 			for (f in module) for (t in f.types) if (t.name == name && !t.isPrivate) { file: f, type: t }
 		];
@@ -129,7 +123,7 @@ final class TypeNameBinding {
 		for (group in fi.ambientImports) for (i in group.imports) if (i.kind == ImportKind.Wild) wilds.push(i);
 		final found: Array<ResolvedType> = [];
 		for (w in wilds) {
-			final pkg: String = parentPath(w.raw);
+			final pkg: String = SourceText.parentPath(w.raw);
 			final files: Array<FileInfo> = index.allFiles().filter(f -> f.pkg == pkg);
 			if (files.length == 0 && !index.allFiles().exists(f -> f.module == pkg)) return Unknown;
 			final mains: Array<ResolvedType> = mainTypesNamed(name, files);
@@ -151,7 +145,7 @@ final class TypeNameBinding {
 			final scope: String = p;
 			final mains: Array<ResolvedType> = mainTypesNamed(name, index.allFiles().filter(f -> f.pkg == scope));
 			if (mains.length > 0) return Bound(mains);
-			p = parentPath(p);
+			p = SourceText.parentPath(p);
 		}
 		final top: Array<ResolvedType> = [
 			for (f in index.allFiles()) if (f.pkg == '') for (t in f.types) if (t.name == name && !t.isPrivate) { file: f, type: t }

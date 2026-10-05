@@ -13411,6 +13411,163 @@
 			"find": "case _: _dc([_dohsbh(), sepDoc]);",
 			"replace": "case _: _dc([_dhl(), sepDoc]);",
 			"note": "a gap that already opens with a break gets a second one, so a trailing comment followed by an own-line comment gains a blank line"
+		},
+		{
+			"name": "M-WILDGATE-NEVER-JOINS",
+			"type": "anyparse.query.WildcardImportGate",
+			"method": "joins",
+			"force": "false",
+			"note": "no wildcard is ever a member, so a wildcard ends every run it touches again and `import tink.unit.Assert.*;` above a sorted block is a fixed point"
+		},
+		{
+			"name": "M-RUN-GATE-NO-INDEX",
+			"type": "anyparse.check.ImportBlockOrder",
+			"method": "run",
+			"find": "new WildcardImportGate(RefactorSupport.lazySymbolIndex(files, plugin), plugin)",
+			"replace": "new WildcardImportGate(() -> null, plugin)",
+			"note": "the report reads no index, so it never admits a wildcard the fix would sort"
+		},
+		{
+			"name": "M-FIX-GATE-NO-INDEX",
+			"type": "anyparse.check.ImportBlockOrder",
+			"method": "fix",
+			"find": "new WildcardImportGate(RefactorSupport.lazySymbolIndex([], plugin, index), plugin)",
+			"replace": "new WildcardImportGate(() -> null, plugin)",
+			"note": "the fix reads no index, so it splits a reported block at the wildcard and sorts each piece instead of the block"
+		},
+		{
+			"name": "M-WILDGATE-PACKAGE-ASKS-EXPLICIT",
+			"type": "anyparse.query.WildcardImportGate",
+			"method": "joins",
+			"find": "if (mine.values.length == 0) continue;",
+			"replace": "",
+			"note": "a package wildcard asks an explicit member for value names it cannot collide with, so an unindexed explicit import cuts it"
+		},
+		{
+			"name": "M-WILDGATE-INSTANCE-BOUND",
+			"type": "anyparse.query.WildcardImportGate",
+			"method": "readBinding",
+			"find": "if (!statics || m.isStatic) m.name",
+			"replace": "m.name",
+			"note": "a class wildcard is read as binding its INSTANCE members too, so an instance name shared with another line cuts a free wildcard"
+		},
+		{
+			"name": "M-WILDGATE-PACKAGE-NAMES-IGNORED",
+			"type": "anyparse.query.WildcardImportGate",
+			"method": "joins",
+			"find": "shares(mine.types, theirs.types) || ",
+			"replace": "",
+			"note": "two package wildcards binding one module name are read as free, though the LAST one wins the name"
+		},
+		{
+			"name": "M-WILDGATE-EXPLICIT-VALUES-IGNORED",
+			"type": "anyparse.query.WildcardImportGate",
+			"method": "joins",
+			"find": "if (values == null || shares(mine.values, values)) return false;",
+			"replace": "if (values == null) return false;",
+			"note": "a field wildcard sharing a value name with an explicit field import or a module-level field is read as free, though the LAST statement wins"
+		},
+		{
+			"name": "M-WILDGATE-FIELD-IMPORT-NO-NAME",
+			"type": "anyparse.query.WildcardImportGate",
+			"method": "readExplicitValues",
+			"find": "? [leaf] : null",
+			"replace": "? [] : null",
+			"note": "an explicit FIELD import is read as binding no value, so a field wildcard sharing its name joins the run"
+		},
+		{
+			"name": "M-WILDGATE-WILDCARD-VALUES-IGNORED",
+			"type": "anyparse.query.WildcardImportGate",
+			"method": "joins",
+			"find": " || shares(mine.values, theirs.values)",
+			"replace": "",
+			"note": "two field wildcards binding one static are read as free, though the LAST one wins — the reorder changes what the program prints"
+		},
+		{
+			"name": "M-ORDER-WILDCARD-NAMED-STAR",
+			"type": "anyparse.check.ImportBlockOrder",
+			"method": "reorderRefusal",
+			"find": "if (!WildcardImportGate.isWildcard(line.path)) ",
+			"replace": "",
+			"note": "a wildcard member is read as binding the simple name `*`, so a block holding two of them is refused as a name collision"
+		},
+		{
+			"name": "M-WILDGATE-MODULE-FIELDS-NONE",
+			"type": "anyparse.query.WildcardImportGate",
+			"method": "moduleFieldsOf",
+			"force": "[]",
+			"note": "a module import is read as bringing no module-level field in, so a field wildcard sharing one with it joins the run"
+		},
+		{
+			"name": "M-WILDGATE-ENUM-STATICS-ONLY",
+			"type": "anyparse.query.WildcardImportGate",
+			"method": "readBinding",
+			"find": "final statics: Bool = CLASS_KINDS.contains(type.kind);",
+			"replace": "final statics: Bool = true;",
+			"note": "an enum wildcard is read as binding only static members, which drops its constructors from the collision check"
+		},
+		{
+			"name": "M-WILDGATE-EXPLICIT-UNKNOWN-FREE",
+			"type": "anyparse.query.WildcardImportGate",
+			"method": "joins",
+			"find": "if (values == null || shares(mine.values, values)) return false;",
+			"replace": "if (values != null && shares(mine.values, values)) return false;",
+			"note": "an explicit member the index cannot enumerate is read as binding nothing, so a field wildcard joins beside a module whose fields nobody listed"
+		},
+		{
+			"name": "M-WILDGATE-UNKNOWN-TYPE-JOINS",
+			"type": "anyparse.query.WildcardImportGate",
+			"method": "joins",
+			"find": "if (mine == null) return false;",
+			"replace": "if (mine == null) return true;",
+			"note": "a wildcard the index cannot enumerate joins the run on no evidence"
+		},
+		{
+			"name": "M-WILDGATE-SUPERTYPE-READ",
+			"type": "anyparse.query.WildcardImportGate",
+			"method": "readBinding",
+			"find": " || type.supertypes.length > 0",
+			"replace": "",
+			"note": "a subclass's statics are read from its own body, though an inherited `@:autoBuild` may add more"
+		},
+		{
+			"name": "M-WILDGATE-BUILD-READ",
+			"type": "anyparse.query.WildcardImportGate",
+			"method": "readBinding",
+			"find": " || type.hasBuild",
+			"replace": "",
+			"note": "a type carrying `@:build` is read as declaring only the statics its source spells"
+		},
+		{
+			"name": "M-WILDGATE-TYPEDEF-READ",
+			"type": "anyparse.query.WildcardImportGate",
+			"method": "readBinding",
+			"find": "OPAQUE_KINDS.contains(type.kind) || ",
+			"replace": "",
+			"note": "a typedef is read as declaring no static, though its wildcard imports the statics of what it aliases"
+		},
+		{
+			"name": "M-WEDGE-WILDCARD-LIFTED",
+			"type": "anyparse.check.ImportBlockOrder",
+			"method": "stayingBelow",
+			"force": "[]",
+			"note": "a wildcard member below a wedged `using` is lifted into the merged block above the group"
+		},
+		{
+			"name": "M-WEDGE-WILDCARD-CROSSES-USING",
+			"type": "anyparse.check.ImportBlockOrder",
+			"method": "mergeable",
+			"find": "if (stayingBelow(wedge).exists(line -> line.declFrom < lastUsing)) return false;",
+			"replace": "",
+			"note": "a wildcard between two wedged `using` groups is left below the merged group, crossing the later one"
+		},
+		{
+			"name": "M-SEAT-WILDCARD-BLIND",
+			"type": "anyparse.query.ImportOrder",
+			"method": "insertionFor",
+			"find": "WildcardImportGate.forPlugin(plugin)",
+			"replace": "null",
+			"note": "the insert seat reads every wildcard as a boundary while the rule reads it as a member, so a fresh import lands past it and is reported"
 		}
 	]
 }

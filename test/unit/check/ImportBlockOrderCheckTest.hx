@@ -1,15 +1,21 @@
 package unit.check;
 
 import anyparse.check.Check;
+import anyparse.check.HaxeSpawn;
 import anyparse.check.ImportBlockOrder;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
+import anyparse.query.ImportOrder;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeRefPrinter;
 import anyparse.runtime.Span;
+import sys.io.File;
+import unit.QueryTestHelpers;
+import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -23,7 +29,9 @@ using StringTools;
  *
  * Plus the `using` WEDGE and its `usingAfterImports` opt-out: import runs a `using` group is
  * wedged between are ONE block, merged and sorted with the group moved below them — and the four
- * refusals that keep a merge from rebinding a name or misattributing a comment.
+ * refusals that keep a merge from rebinding a name or misattributing a comment. And the WILDCARD members
+ * `WildcardImportGate` admits into a block: each measured precedence pair, each refusal of what the index cannot
+ * enumerate, the insert seat reading the same runs, and one end-to-end compile and run of a reordered block.
  */
 class ImportBlockOrderCheckTest extends Test {
 
@@ -41,6 +49,50 @@ class ImportBlockOrderCheckTest extends Test {
 
 	/** The `usingAfterImports` opt-out — the pre-wedge reading, where a `using` is an immovable run boundary. */
 	private static inline final KEEP_USING: String = '{"rules":{"import-order":{"usingAfterImports":false}}}';
+
+	/**
+	 * The library the WILDCARD fixtures resolve against. A wildcard joins a run only on evidence, so
+	 * every module a fixture's wildcard or explicit run member names is here — `mystery.*` is
+	 * deliberately absent, which is what makes the unknown-module refusals testable. `p.C` holds a
+	 * static `f`, a static `Foo` named like the TYPE `q.Foo`, and an INSTANCE `g`; `q.D` the statics
+	 * `f`, `g` and `Red`; `p.Col` the enum constructor `Red`; `v.Fns` a MODULE-LEVEL field `f`; and
+	 * `s.Sub` / `s.Built` / `s.Alias` the three types whose static set the gate refuses to read.
+	 */
+	private static final WILD_LIBS: Array<{ file: String, source: String }> = [
+		{ file: 'a/Alpha.hx', source: 'package a;\n\nclass Alpha {}\n' },
+		{ file: 'b/Bee.hx', source: 'package b;\n\nclass Bee {}\n' },
+		{ file: 'z/Zeta.hx', source: 'package z;\n\nclass Zeta {}\n' },
+		{ file: 'fs/FSUtil.hx', source: 'package fs;\n\nclass FSUtil {}\n' },
+		{ file: 'haxe/io/Path.hx', source: 'package haxe.io;\n\nclass Path {}\n' },
+		{
+			file: 'tink/unit/Assert.hx',
+			source: 'package tink.unit;\n\nclass Assert {\n\tpublic static function assert(b: Bool): Bool {\n\t\treturn b;\n\t}\n}\n'
+		},
+		{ file: 'tink/testrunner/Assertion.hx', source: 'package tink.testrunner;\n\nclass Assertion {}\n' },
+		{ file: 'p/T.hx', source: 'package p;\n\nclass T {}\n' },
+		{ file: 'q/T.hx', source: 'package q;\n\nclass T {}\n' },
+		{ file: 'q/U.hx', source: 'package q;\n\nclass U {}\n' },
+		{ file: 'q/Foo.hx', source: 'package q;\n\nclass Foo {}\n' },
+		{
+			file: 'p/C.hx',
+			source: 'package p;\n\nclass C {\n\tpublic static var f: Int = 1;\n\tpublic static var Foo: Int = 2;\n'
+				+ '\tpublic var g: Int = 3;\n}\n'
+		},
+		{ file: 'p/Col.hx', source: 'package p;\n\nenum Col {\n\tRed;\n}\n' },
+		{
+			file: 'q/D.hx',
+			source: 'package q;\n\nclass D {\n\tpublic static var f: Int = 1;\n\tpublic static var g: Int = 2;\n'
+				+ '\tpublic static var Red: Int = 3;\n}\n'
+		},
+		{ file: 'r/E.hx', source: 'package r;\n\nclass E {\n\tpublic static var f: Int = 1;\n}\n' },
+		{ file: 'r/G.hx', source: 'package r;\n\nclass G {\n\tpublic static var g: Int = 1;\n}\n' },
+		{ file: 'v/Fns.hx', source: 'package v;\n\nfunction f(): Void {}\n\nclass Fns {}\n' },
+		{ file: 'v/Plain.hx', source: 'package v;\n\nclass Plain {}\n' },
+		{ file: 's/Base.hx', source: 'package s;\n\nclass Base {}\n' },
+		{ file: 's/Sub.hx', source: 'package s;\n\nclass Sub extends Base {\n\tpublic static var h: Int = 1;\n}\n' },
+		{ file: 's/Built.hx', source: 'package s;\n\n@:build(s.Macro.build())\nclass Built {\n\tpublic static var h: Int = 1;\n}\n' },
+		{ file: 's/Alias.hx', source: 'package s;\n\ntypedef Alias = Built;\n' }
+	];
 
 	public function testAppendedImportFlagged(): Void {
 		final vs: Array<Violation> = violations(APPENDED);
@@ -125,12 +177,232 @@ class ImportBlockOrderCheckTest extends Test {
 		);
 	}
 
+	@:pin('control') @:killer('M-WILDGATE-UNKNOWN-TYPE-JOINS')
 	public function testWildcardSplitsTheBlock(): Void {
 		Assert.equals(0, violations('package app;\n\nimport z.Zeta;\nimport other.*;\nimport a.Alpha;\n\nclass C {}\n').length);
 	}
 
 	public function testAliasSplitsTheBlock(): Void {
 		Assert.equals(0, violations('package app;\n\nimport z.Zeta;\nimport other.Thing as T;\nimport a.Alpha;\n\nclass C {}\n').length);
+	}
+
+	// --- wildcard MEMBERS: a wildcard joins the block when its position decides nothing ---
+
+	/**
+	 * The incident, `TM/src/tests/unit/FolderWatcherTest.hx`'s header: a field wildcard written ABOVE
+	 * the block it sorts into. `tink.unit.Assert` declares one static, which no other line binds, so
+	 * the wildcard is a line like any other and the block is reported and sorted with it.
+	 */
+	@:pin('control') @:killer('M-WILDGATE-NEVER-JOINS', 'M-RUN-GATE-NO-INDEX', 'M-FIX-GATE-NO-INDEX')
+	public function testAFieldWildcardWithFreeNamesJoinsTheBlock(): Void {
+		final src: String = 'package tests.unit;\n\n#if !UNIT_TESTS\n#error "unit only"\n#end\nimport tink.unit.Assert.*;\n'
+			+ 'import fs.FSUtil;\nimport haxe.io.Path;\nimport tink.testrunner.Assertion;\n\nusing tink.CoreApi;\n\nclass C {}\n';
+		final vs: Array<Violation> = violations(src, null, WILD_LIBS);
+		Assert.equals(1, vs.length);
+		if (vs.length == 1) Assert.isTrue(vs[0].message.contains("'fs.FSUtil'"), vs[0].message);
+		final expected: String = 'package tests.unit;\n\n#if !UNIT_TESTS\n#error "unit only"\n#end\nimport fs.FSUtil;\n'
+			+ 'import haxe.io.Path;\nimport tink.testrunner.Assertion;\nimport tink.unit.Assert.*;\n\n'
+			+ 'using tink.CoreApi;\n\nclass C {}\n';
+		Assert.equals(expected, fixed(src, null, WILD_LIBS));
+		Assert.equals(0, violations(expected, null, WILD_LIBS).length, 'the fix converges in one pass');
+	}
+
+	@:pin('control') @:killer('M-WILDGATE-NEVER-JOINS')
+	public function testAPackageWildcardJoinsTheBlock(): Void {
+		final src: String = module('import z.Zeta;\nimport q.*;\nimport a.Alpha;\n');
+		Assert.equals(1, violations(src, null, WILD_LIBS).length);
+		Assert.equals(module('import a.Alpha;\nimport q.*;\nimport z.Zeta;\n'), fixed(src, null, WILD_LIBS));
+	}
+
+	/** `*` is below every letter and the dot, so a wildcard sorts after its own type and ahead of that type's fields. */
+	public function testAWildcardSortsByItsFullText(): Void {
+		final src: String = module('import p.C.*;\nimport p.C;\n');
+		Assert.equals(1, violations(src, null, WILD_LIBS).length);
+		Assert.equals(module('import p.C;\nimport p.C.*;\n'), fixed(src, null, WILD_LIBS));
+	}
+
+	/** An explicit import outranks a package wildcard in EITHER statement order, so a shared type name is no block. */
+	public function testAnExplicitImportOfTheSameTypeNeverBlocksAPackageWildcard(): Void {
+		final src: String = module('import z.Zeta;\nimport p.*;\nimport q.T;\n');
+		Assert.equals(1, violations(src, null, WILD_LIBS).length);
+		Assert.equals(module('import p.*;\nimport q.T;\nimport z.Zeta;\n'), fixed(src, null, WILD_LIBS));
+	}
+
+	/** A package wildcard binds no value, so even an explicit member the index cannot see never blocks it. */
+	@:pin('control') @:killer('M-WILDGATE-PACKAGE-ASKS-EXPLICIT')
+	public function testAnUnindexedExplicitImportNeverBlocksAPackageWildcard(): Void {
+		Assert.equals(1, violations(module('import z.Zeta;\nimport q.*;\nimport mystery.Box;\n'), null, WILD_LIBS).length);
+	}
+
+	/** In expression position a VALUE outranks a TYPE of the same name in either order: `p.C`'s static `Foo` meets `q.Foo` nowhere. */
+	public function testAStaticNamedLikeAnImportedTypeNeverBlocks(): Void {
+		Assert.equals(1, violations(module('import z.Zeta;\nimport p.C.*;\nimport q.Foo;\n'), null, WILD_LIBS).length);
+	}
+
+	/** Only a STATIC is imported by a field wildcard: `p.C`'s instance `g` does not meet `q.D`'s static `g`. */
+	@:pin('control') @:killer('M-WILDGATE-INSTANCE-BOUND')
+	public function testAnInstanceMemberIsNoNameTheWildcardBinds(): Void {
+		Assert.equals(1, violations(module('import z.Zeta;\nimport p.C.*;\nimport q.D.g;\n'), null, WILD_LIBS).length);
+	}
+
+	/** Two package wildcards binding one module name: the LAST wins, so their order is load-bearing and both stay boundaries. */
+	@:pin('control') @:killer('M-WILDGATE-PACKAGE-NAMES-IGNORED')
+	public function testTwoPackageWildcardsSharingAModuleNameStayBoundaries(): Void {
+		Assert.equals(0, violations(module('import z.Zeta;\nimport q.*;\nimport p.*;\n'), null, WILD_LIBS).length);
+	}
+
+	/** A field wildcard and an explicit FIELD import of one name: the LAST wins. */
+	@:pin('control') @:killer('M-WILDGATE-EXPLICIT-VALUES-IGNORED', 'M-WILDGATE-FIELD-IMPORT-NO-NAME')
+	public function testAFieldWildcardSharingAStaticWithAFieldImportStaysABoundary(): Void {
+		Assert.equals(0, violations(module('import z.Zeta;\nimport p.C.*;\nimport q.D.f;\n'), null, WILD_LIBS).length);
+	}
+
+	/** Two field wildcards of one static name: the LAST wins — and `r.G`, sharing none with `p.C`, joins. */
+	@:pin('control') @:killer('M-WILDGATE-WILDCARD-VALUES-IGNORED', 'M-ORDER-WILDCARD-NAMED-STAR')
+	public function testTwoFieldWildcardsSharingAStaticStayBoundaries(): Void {
+		Assert.equals(0, violations(module('import z.Zeta;\nimport p.C.*;\nimport r.E.*;\n'), null, WILD_LIBS).length);
+		final free: String = module('import z.Zeta;\nimport p.C.*;\nimport r.G.*;\n');
+		Assert.equals(1, violations(free, null, WILD_LIBS).length);
+		Assert.equals(
+			module('import p.C.*;\nimport r.G.*;\nimport z.Zeta;\n'), fixed(free, null, WILD_LIBS),
+			'two wildcard members bind no shared name'
+		);
+	}
+
+	/** A module import brings the module's module-level FIELDS in, and against a field wildcard the LAST wins. */
+	@:pin('control') @:killer('M-WILDGATE-EXPLICIT-VALUES-IGNORED', 'M-WILDGATE-MODULE-FIELDS-NONE')
+	public function testAModuleLevelFieldOfAnExplicitImportBlocksAFieldWildcard(): Void {
+		Assert.equals(0, violations(module('import z.Zeta;\nimport p.C.*;\nimport v.Fns;\n'), null, WILD_LIBS).length);
+		Assert.equals(1, violations(module('import z.Zeta;\nimport p.C.*;\nimport v.Plain;\n'), null, WILD_LIBS).length);
+	}
+
+	/** An enum's wildcard binds its constructors, which a static of the same name meets. */
+	@:pin('control') @:killer('M-WILDGATE-ENUM-STATICS-ONLY')
+	public function testAnEnumConstructorIsANameTheWildcardBinds(): Void {
+		Assert.equals(0, violations(module('import z.Zeta;\nimport p.Col.*;\nimport q.D.Red;\n'), null, WILD_LIBS).length);
+	}
+
+	// --- wildcard refusals: what the index cannot enumerate stays a boundary ---
+
+	/** An explicit member the index cannot see may bring module-level fields of any name in. */
+	@:pin('control') @:killer('M-WILDGATE-EXPLICIT-UNKNOWN-FREE')
+	public function testAnUnindexedExplicitMemberKeepsAFieldWildcardABoundary(): Void {
+		Assert.equals(
+			0, violations(module('import tink.unit.Assert.*;\nimport fs.FSUtil;\nimport mystery.Box;\n'), null, WILD_LIBS).length
+		);
+	}
+
+	@:pin('control') @:killer('M-WILDGATE-UNKNOWN-TYPE-JOINS')
+	public function testAWildcardOfAnUnindexedTypeStaysABoundary(): Void {
+		Assert.equals(0, violations(module('import z.Zeta;\nimport mystery.Thing.*;\nimport a.Alpha;\n'), null, WILD_LIBS).length);
+	}
+
+	/** A supertype may carry an `@:autoBuild` that adds statics no index lists. */
+	@:pin('control') @:killer('M-WILDGATE-SUPERTYPE-READ')
+	public function testAWildcardOfASubclassStaysABoundary(): Void {
+		Assert.equals(0, violations(module('import z.Zeta;\nimport s.Sub.*;\nimport a.Alpha;\n'), null, WILD_LIBS).length);
+	}
+
+	@:pin('control') @:killer('M-WILDGATE-BUILD-READ')
+	public function testAWildcardOfABuiltTypeStaysABoundary(): Void {
+		Assert.equals(0, violations(module('import z.Zeta;\nimport s.Built.*;\nimport a.Alpha;\n'), null, WILD_LIBS).length);
+	}
+
+	/** A typedef's wildcard reads the statics of whatever it aliases. */
+	@:pin('control') @:killer('M-WILDGATE-TYPEDEF-READ')
+	public function testAWildcardOfATypedefStaysABoundary(): Void {
+		Assert.equals(0, violations(module('import z.Zeta;\nimport s.Alias.*;\nimport a.Alpha;\n'), null, WILD_LIBS).length);
+	}
+
+	/**
+	 * A wildcard member the merge would otherwise lift ABOVE a wedged `using` stays BELOW the group:
+	 * what a `using` binds against a wildcard was never measured, while its order against the imports
+	 * that do move up is free (the gate admitted it into their run). One ABOVE the `using` sorts into
+	 * the block like any line.
+	 */
+	@:pin('control') @:killer('M-WEDGE-WILDCARD-LIFTED')
+	public function testAWildcardBelowAWedgedUsingStaysBelowIt(): Void {
+		final below: String = module('import a.Alpha;\nimport z.Zeta;\nusing ext.One;\nimport b.Bee;\nimport q.*;\n');
+		Assert.equals(1, violations(below, null, WILD_LIBS).length);
+		final merged: String = module('import a.Alpha;\nimport b.Bee;\nimport z.Zeta;\n\nusing ext.One;\nimport q.*;\n');
+		Assert.equals(merged, fixed(below, null, WILD_LIBS));
+		Assert.equals(0, violations(merged, null, WILD_LIBS).length, 'the fix converges in one pass');
+		final above: String = module('import q.*;\nimport z.Zeta;\nusing ext.One;\nimport a.Alpha;\n');
+		Assert.equals(module('import a.Alpha;\nimport q.*;\nimport z.Zeta;\n\nusing ext.One;\n'), fixed(above, null, WILD_LIBS));
+	}
+
+	/** A wildcard BETWEEN two wedged `using` groups could stay below only by crossing the later one, so the merge is refused. */
+	@:pin('control') @:killer('M-WEDGE-WILDCARD-CROSSES-USING')
+	public function testAWildcardBetweenTwoWedgedUsingsRefusesTheMerge(): Void {
+		final src: String = module('import z.Zeta;\nusing ext.One;\nimport b.Bee;\nimport q.*;\nusing ext.Two;\nimport a.Alpha;\n');
+		Assert.equals(1, violations(src, null, WILD_LIBS).length);
+		Assert.equals(0, edits(src, null, WILD_LIBS).length);
+	}
+
+	/** The insert seat reads the same runs: a fresh import lands BEFORE the member wildcard it sorts ahead of. */
+	@:pin('control') @:killer('M-SEAT-WILDCARD-BLIND')
+	public function testTheInsertSeatSortsAroundAMemberWildcard(): Void {
+		final src: String = module('import a.Alpha;\nimport q.*;\nimport z.Zeta;\n');
+		final plugin: CachingGrammarPlugin = QueryTestHelpers.projectPlugin([{ file: 'app/C.hx', source: src }], WILD_LIBS);
+		final anchor: ImportAnchor = ImportOrder.insertionFor(src, plugin.parseFile(src), plugin, 'b.Bee');
+		Assert.equals(
+			module('import a.Alpha;\nimport b.Bee;\nimport q.*;\nimport z.Zeta;\n'),
+			'${src.substring(0, anchor.offset) + anchor.lead}import b.Bee;\n${anchor.trail}${src.substring(anchor.offset)}'
+		);
+	}
+
+	/**
+	 * End to end: a block holding a package and a field wildcard is reordered and the program prints
+	 * the same line, compiled and run on `--interp`; the refused pair is load-bearing — swapping the
+	 * two field wildcards that share `hello` by hand changes what it prints.
+	 */
+	@:pin('control') @:killer('M-WILDGATE-NEVER-JOINS', 'M-WILDGATE-WILDCARD-VALUES-IGNORED')
+	public function testAReorderedWildcardBlockRunsTheSame(): Void {
+		#if (sys || nodejs)
+		final main: String = 'import z.Zed;\nimport r.*;\nimport q.T;\nimport p.Tools.*;\nimport a.Alpha;\n\n'
+			+ 'import s.Two.*;\nimport b.Bee;\nimport s.One.*;\n\nclass Main {\n\tstatic function main() {\n'
+			+ '\t\tSys.println(T.id() + " " + greet() + " " + Zed.id() + " " + Alpha.id() + " " + hello() + " " + Bee.id());\n\t}\n}\n';
+		final libs: Array<{ name: String, source: String }> = [
+			{ name: 'z/Zed.hx', source: idClass('z', 'Zed') },
+			{ name: 'r/T.hx', source: idClass('r', 'T') },
+			{ name: 'q/T.hx', source: idClass('q', 'T') },
+			{ name: 'a/Alpha.hx', source: idClass('a', 'Alpha') },
+			{ name: 'b/Bee.hx', source: idClass('b', 'Bee') },
+			{ name: 'p/Tools.hx', source: staticClass('p', 'Tools', 'greet') },
+			{ name: 's/One.hx', source: staticClass('s', 'One', 'hello') },
+			{ name: 's/Two.hx', source: staticClass('s', 'Two', 'hello') }
+		];
+		final dir: String = CliFixture.writeTree('wildorder', libs.concat([{ name: 'Main.hx', source: main }]));
+		final before: HaxeRun = runMain(dir);
+		if (before.status != 0) {
+			CliFixture.removeDir(dir);
+			Assert.pass('haxe unavailable — skipped: ${before.err}${before.failure}');
+			return;
+		}
+		final files: Array<{ file: String, source: String }> = [for (f in libs) { file: '$dir/${f.name}', source: f.source }];
+		files.push({ file: '$dir/Main.hx', source: main });
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final check: ImportBlockOrder = configured(null);
+		final own: Array<Violation> = check.run(files, plugin).filter(v -> v.file == '$dir/Main.hx');
+		final reordered: String = CanonicalEdit.applyEdits(main, check.fix(main, own, plugin, SymbolIndex.build(files, plugin)));
+		Assert.isTrue(
+			reordered.startsWith('import a.Alpha;\nimport p.Tools.*;\nimport q.T;\nimport r.*;\nimport z.Zed;\n\nimport s.Two.*;\n'),
+			reordered
+		);
+		File.saveContent('$dir/Main.hx', reordered);
+		final after: HaxeRun = runMain(dir);
+		File.saveContent(
+			'$dir/Main.hx',
+			main.replace('import s.Two.*;\nimport b.Bee;\nimport s.One.*;', 'import s.One.*;\nimport b.Bee;\nimport s.Two.*;')
+		);
+		final swapped: HaxeRun = runMain(dir);
+		CliFixture.removeDir(dir);
+		Assert.equals('q.T p.Tools.greet z.Zed a.Alpha s.One.hello b.Bee', before.out.trim(), before.err);
+		Assert.equals(before.out, after.out, after.err);
+		Assert.notEquals(before.out, swapped.out, 'the refused pair decides what `hello` means: ${swapped.err}');
+		#else
+		Assert.pass('non-sys target');
+		#end
 	}
 
 	public function testBlockCommentEndsTheRun(): Void {
@@ -545,26 +817,31 @@ class ImportBlockOrderCheckTest extends Test {
 	 * all — `mystery.Facade` is deliberately absent, which is what makes that refusal testable.
 	 * `ext.Shadow` declares a SECONDARY `Alpha`, the collision the overtake refusal reads.
 	 */
-	private function scope(src: String): Array<{ file: String, source: String }> {
-		return [
+	private function scope(src: String, ?libs: Array<{ file: String, source: String }>): Array<{ file: String, source: String }> {
+		return (libs ?? []).concat([
 			{ file: 'app/C.hx', source: src },
 			{ file: 'ext/One.hx', source: 'package ext;\n\nclass One {}\n' },
 			{ file: 'ext/Two.hx', source: 'package ext;\n\nclass Two {}\n' },
 			{ file: 'ext/Three.hx', source: 'package ext;\n\nclass Three {}\n' },
 			{ file: 'ext/Shadow.hx', source: 'package ext;\n\nclass Shadow {}\n\nclass Alpha {}\n' },
 			{ file: 'tink/CoreApi.hx', source: 'package tink;\n\nclass CoreApi {}\n' }
-		];
+		]);
 	}
 
-	/** The check's findings for `src`, with `config` (raw `apqlint.json` text) in effect when given. */
-	private function violations(src: String, ?config: String): Array<Violation> {
+	/**
+	 * The check's findings for `src`, with `config` (raw `apqlint.json` text) in effect when given and `libs` joined to
+	 * the stub library.
+	 */
+	private function violations(src: String, ?config: String, ?libs: Array<{ file: String, source: String }>): Array<Violation> {
 		final check: ImportBlockOrder = configured(config);
-		return check.run(scope(src), new HaxeQueryPlugin()).filter(v -> v.file == 'app/C.hx');
+		return check.run(scope(src, libs), new HaxeQueryPlugin()).filter(v -> v.file == 'app/C.hx');
 	}
 
-	/** The check's autofix edits for `src`, resolved against the stub-library index. */
-	private function edits(src: String, ?config: String): Array<{ span: Span, text: String }> {
-		final files: Array<{ file: String, source: String }> = scope(src);
+	/** The check's autofix edits for `src`, resolved against the stub-library index plus `libs`. */
+	private function edits(
+		src: String, ?config: String, ?libs: Array<{ file: String, source: String }>
+	): Array<{ span: Span, text: String }> {
+		final files: Array<{ file: String, source: String }> = scope(src, libs);
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: ImportBlockOrder = configured(config);
 		final own: Array<Violation> = check.run(files, plugin).filter(v -> v.file == 'app/C.hx');
@@ -572,8 +849,8 @@ class ImportBlockOrderCheckTest extends Test {
 	}
 
 	/** `src` with the check's raw edits spliced in — the reorder verbatim, before any writer pass. */
-	private function fixed(src: String, ?config: String): String {
-		return CanonicalEdit.applyEdits(src, edits(src, config));
+	private function fixed(src: String, ?config: String, ?libs: Array<{ file: String, source: String }>): String {
+		return CanonicalEdit.applyEdits(src, edits(src, config, libs));
 	}
 
 	/** A check carrying `config` (raw `apqlint.json` text) as its per-file resolver, or the default one. */
@@ -584,6 +861,26 @@ class ImportBlockOrderCheckTest extends Test {
 			check.setConfigResolver(file -> parsed);
 		}
 		return check;
+	}
+
+	/** `imports` as the header of an `app` module declaring one class. */
+	private static function module(imports: String): String {
+		return 'package app;\n\n$imports\nclass C {}\n';
+	}
+
+	/** A fixture module `pack.Name` whose class answers `id()` with its own path. */
+	private static function idClass(pack: String, name: String): String {
+		return 'package $pack;\n\nclass $name {\n\tpublic static function id() return "$pack.$name";\n}\n';
+	}
+
+	/** A fixture module `pack.Name` whose class declares ONE static function `fn`, answering with its own path. */
+	private static function staticClass(pack: String, name: String, fn: String): String {
+		return 'package $pack;\n\nclass $name {\n\tpublic static function $fn() return "$pack.$name.$fn";\n}\n';
+	}
+
+	/** Compile and run `dir`'s `Main` on `--interp`. */
+	private static function runMain(dir: String): HaxeRun {
+		return HaxeSpawn.run(['-cp', '.', '-main', 'Main', '--interp'], dir, 1 << 20);
 	}
 
 }
