@@ -486,6 +486,35 @@ different lists, or some none, takes such a name to name any class.
   "reflectiveClasses": ["drill.nodes.*", "swf.exporters.animate.AnimateLibrary", "__ASSET__fonts_*"] }
 ```
 
+**`reflectiveMethodHolders`** is the same kind of declaration for the other half of
+reflection by a computed name: which classes' METHODS such a read may obtain as
+function values. A method read by a name computed at run time (`Reflect.field(o, name)`,
+`Reflect.getProperty`, any `Reflect`/`Type` member that may read a member's value)
+is a value of no type, so a call of a value of any function type may run it; without
+the key it may be any method of any object the read may be handed. With it, such a
+read — and a reflective member or `Reflect`/`Type` itself read as a value, which
+whatever calls it later hands a computed name — obtains a method only off an object
+of a class one of the globs matches (or off such a class as a value, for a static).
+Globs as in `reflectiveClasses`, matched against the class of the object read by its
+own qualified name: declaring a class declares neither its subclasses nor its
+superclass (where the facts cannot tell the two apart — an escaped instance of a
+subclass counts as one of each class it extends — the answer stays the conservative
+one). It bounds methods only: a variable is read whatever the list says, and a name a
+literal spells still names its one member. The project's responsibility, read only
+under `reachConfigurationsComplete`, for the project's code and the libraries' alike;
+list the classes whose methods code obtains by a name it computes — a callback
+dispatcher calling the handler objects it was handed (lime's `JNI.onCallback`), a copy
+over `Type.getInstanceFields` — and no others: a read of parsed data, a structure or
+a JSON value obtains no method, and neither does one over the names `Reflect.fields`
+lists where that lists an instance's variables only (hxcpp, js). A glob
+matching no class the builds typed is reported once per run, and a run whose linted
+paths declare different lists, or some none, takes such a read to obtain any method.
+
+```json
+{ "reflectiveMethodHolders": ["lime._internal.backend.native._NativeApplication.OrientationChangeListener",
+    "extension.filesave._FileSave.AndroidHandler", "openfl.filesystem.File"] }
+```
+
 A top-level `"compilerOracleServer"` (boolean, default `false`) moves the
 REPORT-mode oracle onto a WARM Haxe compilation server shared by every `apq`
 process on the machine, instead of a fresh compile per run. The first lint

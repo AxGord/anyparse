@@ -60,6 +60,8 @@ typedef ApqLintConfig = {
 
 	@:optional var reflectiveClasses: Array<String>;
 
+	@:optional var reflectiveMethodHolders: Array<String>;
+
 	@:optional var resolutionRoots: Array<String>;
 
 	@:optional var resolutionLibs: Array<String>;

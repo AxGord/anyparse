@@ -47,6 +47,13 @@ typedef ReachBuilds = {
 	 * name may name any class.
 	 */
 	var ?reflectiveClasses: Array<String>;
+
+	/**
+	 * The classes the project declares a method of which a read by a name the facts cannot read may obtain as a value
+	 * (`LintConfig.reflectiveMethodHolders`), as globs over qualified type names; absent when it declares none, and then
+	 * such a read may obtain any method.
+	 */
+	var ?reflectiveMethodHolders: Array<String>;
 }
 
 /**

@@ -33,11 +33,12 @@ import utest.Test;
 @:nullSafety(Strict)
 class LintConfigInheritanceTest extends Test {
 
-	@:pin('control') @:killer('M-REFLECTIVE-MERGE')
+	@:pin('control') @:killer('M-REFLECTIVE-MERGE') @:killer('M-HOLDERS-MERGE')
 	public function testAnUnnamedKeyFallsThroughToTheAncestor(): Void {
 		#if (sys || nodejs)
 		final root: String = tree(
-			'{"compilerOracleServer": true, "resolutionLibs": ["utest"], "languageVersion": "4.3", "reflectiveClasses": ["drill.**"]}',
+			'{"compilerOracleServer": true, "resolutionLibs": ["utest"], "languageVersion": "4.3", "reflectiveClasses": ["drill.**"], '
+			+ '"reflectiveMethodHolders": ["ui.Handler"]}',
 			'{"rules": {"magic-number": {"enabled": false}}}'
 		);
 		final config: LintConfig = LintConfig.discover('$root/nested/Probe.hx');
@@ -45,6 +46,7 @@ class LintConfigInheritanceTest extends Test {
 		Assert.same(['utest'], config.resolutionLibs(), 'resolutionLibs falls through');
 		Assert.equals('4.3', config.languageVersion(), 'languageVersion falls through');
 		Assert.same(['drill.**'], config.reflectiveClasses(), 'reflectiveClasses falls through');
+		Assert.same(['ui.Handler'], config.reflectiveMethodHolders(), 'reflectiveMethodHolders falls through');
 		Assert.isFalse(config.enabledFor('magic-number'), 'the nested document still disables its own rule');
 		CliFixture.removeDir(root);
 		#else

@@ -304,7 +304,9 @@ class MemberReachFactsTest extends Test {
 	 * whose std calls no rebinding `Reflect.callMethod` of its own and reads no member by a computed name, as js's does
 	 * (`Type.createEnum`, `haxe.DynamicAccess`).
 	 */
-	private static function reflectAsk(files: Map<String, String>, interp: Bool = false, ?pos: haxe.PosInfos): ReachResult {
+	private static function reflectAsk(
+		files: Map<String, String>, interp: Bool = false, ?holders: Array<String>, ?pos: haxe.PosInfos
+	): ReachResult {
 		final std: Null<String> = StdResolver.stdDir();
 		if (std == null) {
 			Assert.fail('no Haxe std to read `Reflect` from', pos);
@@ -313,7 +315,8 @@ class MemberReachFactsTest extends Test {
 		final path: String = OracleCoverage.canonical(Sys.getCwd(), Path.join([std, interp ? 'Reflect.hx' : 'js/_std/Reflect.hx']));
 		final result: ReachResult = ask(
 			files, null, true, null, false, interp ? INTERP_BUILD : null, null, null, true,
-			[path => sys.io.File.getContent(path)]
+			[path => sys.io.File.getContent(path)],
+			holders
 		);
 		Assert.equals('', lastDropped.join('; '), 'the fixture did not compile', pos);
 		return result;
@@ -1125,6 +1128,80 @@ class MemberReachFactsTest extends Test {
 		assertMatch(interpAsk(['Main.hx' => main]), r -> !r.match(Proven));
 		// without the whole list of builds, the syntax says the same: `Reflect.field` names `grow`
 		assertMatch(ask(['Main.hx' => main], null, false), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-METHODS-HOLDERS-DECLARED') @:killer('M-METHODS-HOLDERS-OBTAINED')
+	@:killer('M-HOLDERS-GRAPH')
+	public function testAMethodAComputedNameReadsIsOneOfAClassTheProjectDeclaresUnderTheTruth(): Void {
+		// `Grower.grow` read off a value of no type by a name computed at run time may be any method of any escaped object,
+		// unless the project declares whose methods such a name may obtain (`reflectiveMethodHolders`): then of those only
+		final read: String = '\t\tvar o:Dynamic = new Grower();\n\t\tvar n:String = "grow";\n\t\tkeep = Reflect.field(o, n);\n';
+		final grower: String =
+			'class Grower {\n\tpublic function new() {}\n\n\tpublic function grow(s:String):Void Main.items.push(1);\n}\n';
+		final main: String = valueCallFixture('(Rx)->String', 'null', read, 'r.map(keep);', null, BY_TYPE) + grower;
+		assertMatch(interpAsk(['Main.hx' => main]), r -> !r.match(Proven));
+		assertMatch(interpAsk(['Main.hx' => main], null, ['Rx']), r -> r.match(Proven));
+		assertMatch(interpAsk(['Main.hx' => main], null, ['Rx', 'Grower']), r -> !r.match(Proven));
+		// a literal still names its one member, whatever the project declares
+		final named: String = valueCallFixture(
+				'(Rx)->String', 'null', '\t\tvar o:Dynamic = new Grower();\n\t\tkeep = Reflect.field(o, "grow");\n', 'r.map(keep);', null,
+				BY_TYPE
+			) + grower;
+		assertMatch(interpAsk(['Main.hx' => named], null, ['Rx']), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-METHODS-HOLDERS-OWN-NAME')
+	public function testADeclaredMethodHolderIsMatchedByTheClassOfTheObjectItselfUnderTheTruth(): Void {
+		// the object read is exactly a `Grower`: declaring its subclass `Sub`, which inherits `grow`, declares no `Grower` —
+		// each class is declared by its own name
+		final read: String = '\t\tvar n:String = "grow";\n\t\tkeep = Reflect.field(new Grower(), n);\n';
+		final grower: String = 'class Grower {\n\tpublic function new() {}\n\n\tpublic function grow(s:String):Void Main.items.push(1);\n}\n'
+			+ 'class Sub extends Grower {}\n';
+		final main: String = valueCallFixture('(Rx)->String', 'null', read, 'r.map(keep);', null, BY_TYPE) + grower;
+		assertMatch(interpAsk(['Main.hx' => main], null, ['Sub']), r -> r.match(Proven));
+		assertMatch(interpAsk(['Main.hx' => main], null, ['Grower']), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-METHODS-HOLDERS-VALUE')
+	public function testAReflectiveMemberReadAsAValueObtainsOnlyADeclaredClassesMethodsUnderTheTruth(): Void {
+		// `f` is `Reflect.field`: whatever calls it hands it a name computed there, so it may obtain any method — or one of a
+		// class the project declares
+		final read: String = '\t\tvar o:Dynamic = new Grower();\n\t\tvar f:Dynamic = Reflect.field;\n\t\tkeep = f(o, "grow");\n';
+		final grower: String =
+			'class Grower {\n\tpublic function new() {}\n\n\tpublic function grow(s:String):Void Main.items.push(1);\n}\n';
+		final main: String = valueCallFixture('(Rx)->String', 'null', read, 'r.map(keep);', null, BY_TYPE) + grower;
+		assertMatch(interpAsk(['Main.hx' => main]), r -> !r.match(Proven));
+		assertMatch(interpAsk(['Main.hx' => main], null, ['Rx']), r -> r.match(Proven));
+		assertMatch(interpAsk(['Main.hx' => main], null, ['Grower']), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-METHODS-HOLDERS-SELF') @:killer('M-METHODS-HOLDERS-REBIND')
+	public function testAThisNoDeclaredClassLetsAComputedNameObtainIsBoundByItsDispatchUnderTheTruth(): Void {
+		// on js `Type.createEnum` rebinds a function's `this`, and `dump` reads its own object by the name it is handed: that
+		// may obtain `dump` itself, so `this` may be any object — unless `Other` is no class the project declares; on the
+		// interpreter a `Reflect` read as a value may rebind
+		final main: String = 'class Main {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n'
+			+ '\tstatic function sink(x:Dynamic):Void {}\n\tstatic function main() { sink(new Main()); }\n'
+			+ '\tfunction f(n:String):Void {\n\t\tvar o:Other = new Other();\n\t\tfor (i in 0...items.length) { /*<*/ o.dump(n); /*>*/ }\n'
+			+ '\t}\n}\n' + reflectingOther('Reflect.getProperty(this, n)');
+		assertMatch(reflectAsk(['Main.hx' => main]), r -> r.match(Unknown(DynamicName(_, _))));
+		assertMatch(reflectAsk(['Main.hx' => main], false, ['Main']), r -> r.match(Proven));
+		assertMatch(reflectAsk(['Main.hx' => main], false, ['Other']), r -> r.match(Unknown(DynamicName(_, _))));
+		final rebinding: String = StringTools.replace(main, 'sink(new Main()); }', 'sink(new Main()); var t:Dynamic = Reflect; }');
+		assertMatch(reflectAsk(['Main.hx' => main], true, ['Other']), r -> r.match(Proven));
+		assertMatch(reflectAsk(['Main.hx' => rebinding], true, ['Other']), r -> r.match(Unknown(DynamicName(_, _))));
+	}
+
+	@:pin('control') @:killer('M-HOLDERS-FIELDS-UNBOUNDED')
+	public function testAComputedNameStillReadsAVariableOfAnyClassWhateverTheProjectDeclaresUnderTheTruth(): Void {
+		// the declaration bounds the methods such a name obtains, not the variables it reads: an `Other` extending `Main`
+		// carries `items`, which `dump` may read
+		final sub: String = MEMBER_HEAD + '\tfunction f(n:String):Void {\n\t\tvar o:Other = new Other();\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ o.dump(n); /*>*/ }\n\t}\n}\n'
+			+ 'class Other extends Main {\n\tpublic function new() super();\n\n'
+			+ '\tpublic function dump(n:String):Dynamic return Reflect.getProperty(this, n);\n}\n';
+		assertMatch(reflectAsk(['Main.hx' => sub], false, ['Main']), r -> r.match(Unknown(DynamicName(_, _))));
+		assertMatch(reflectAsk(['Main.hx' => sub], false, ['nothing.*']), r -> r.match(Unknown(DynamicName(_, _))));
 	}
 
 	@:pin('control') @:killer('M-FACTS-REACH-DROPPED')
@@ -3073,12 +3150,12 @@ class MemberReachFactsTest extends Test {
 	private static function ask(
 		files: Map<String, String>, ?configurations: Array<Array<String>>, withFacts: Bool = true, ?member: MemberRef,
 		classpathComplete: Bool = false, ?build: String, ?library: Map<String, String>, ?unindexed: Map<String, String>,
-		listed: Bool = false, ?declared: Map<String, String>
+		listed: Bool = false, ?declared: Map<String, String>, ?holders: Array<String>
 	): ReachResult {
 		return withReach(files, configurations, withFacts, classpathComplete, build, library, unindexed, listed, (reach, dir) -> {
 			final source: String = files['Main.hx'] ?? '';
 			reach.mayReach(Region(Path.join([dir, 'Main.hx']), regionOf(source)), member ?? { owner: 'Main', name: 'items' }, Mutate);
-		}, declared);
+		}, declared, null, holders);
 	}
 
 	/** `ask` of `files` for `access` instead of `Mutate`, under the whole list of their builds when `listed`. */
@@ -3117,8 +3194,10 @@ class MemberReachFactsTest extends Test {
 	}
 
 	/** `truthAsk` of `files` built by `INTERP_BUILD`, which must compile, the library declarations `declared` indexed. */
-	private static function interpAsk(files: Map<String, String>, ?declared: Map<String, String>, ?pos: haxe.PosInfos): ReachResult {
-		final result: ReachResult = ask(files, null, true, null, false, INTERP_BUILD, null, null, true, declared);
+	private static function interpAsk(
+		files: Map<String, String>, ?declared: Map<String, String>, ?holders: Array<String>, ?pos: haxe.PosInfos
+	): ReachResult {
+		final result: ReachResult = ask(files, null, true, null, false, INTERP_BUILD, null, null, true, declared, holders);
 		Assert.equals('', lastDropped.join('; '), 'the fixture did not compile', pos);
 		return result;
 	}
@@ -3143,7 +3222,7 @@ class MemberReachFactsTest extends Test {
 	private static function withReach<T>(
 		files: Map<String, String>, configurations: Null<Array<Array<String>>>, withFacts: Bool, classpathComplete: Bool,
 		build: Null<String>, library: Null<Map<String, String>>, unindexed: Null<Map<String, String>>, listed: Bool,
-		question: (MemberReach, String) -> T, ?declared: Map<String, String>, ?reflective: Array<String>
+		question: (MemberReach, String) -> T, ?declared: Map<String, String>, ?reflective: Array<String>, ?holders: Array<String>
 	): T {
 		final entries: Array<{ name: String, source: String }> = [for (name => text in files) { name: name, source: text }];
 		for (name => text in library ?? []) entries.push({ name: name, source: text });
@@ -3175,7 +3254,7 @@ class MemberReachFactsTest extends Test {
 		final builds: Null<Array<ReachConfiguration>> = listed ? ReachDefinesProbe.probeAll(oracles)?.configurations : null;
 		final reach: MemberReach = new MemberReach(
 			plugin, project, index, true, MemberReach.MAX_LIBRARY_FILES, MemberReach.MAX_VISITED, builds, () -> classpathComplete, facts,
-			reflective
+			reflective, holders
 		);
 		final result: T = question(reach, dir);
 		CliFixture.removeDir(dir);
