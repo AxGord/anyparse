@@ -18,8 +18,9 @@ import utest.Test;
  * program prints what the original printed. One more pins the `reflectiveClasses` declaration end to end:
  * the declared classes a computed name may make bound the escapes a `prefer-keyvalue-loop`
  * rewrite rests on, and another the `reflectiveMethodHolders` one: the declared classes
- * whose methods a computed name may obtain bound the function values a call of a value runs. A last one pins a field value stored in a
+ * whose methods a computed name may obtain bound the function values a call of a value runs. Another pins a field value stored in a
  * local and only iterated through it: the loop over the field is rewritten, and a push, a hand-off or a capture through the local keeps it.
+ * The last two pin a discarded map key dropped where the body provably leaves the map unchanged, under the facts and from the syntax.
  */
 class FactsFixGateE2ETest extends Test {
 
@@ -148,6 +149,34 @@ class FactsFixGateE2ETest extends Test {
 		+ '\tpublic function run():Void {\n\t\tvar l:Array<Line> = null;\n\t\tl = items;\n'
 		+ '\t\tfor (i in 0...items.length) {\n\t\t\titems[i].redraw();\n'
 		+ '\t\t\tif (l.length < 3) l.push(new Line());\n\t\t}\n\t\tSys.println(items.length);\n\t}\n}\n';
+	private static final MAP_MAIN: String = 'class Holder {\n\tpublic static var kept:Map<String, Int> = [];\n\n'
+		+ '\tpublic static function keep(m:Map<String, Int>):Void {\n\t\tkept = m;\n\t}\n\n'
+		+ '\tpublic static function poke():Void {\n\t\tkept.set(\'x\', 20);\n\t}\n}\n\nclass Registry {\n'
+		+ '\tprivate final _byId:Map<Int, Array<String>> = [];\n'
+		+ '\tprivate final _counts:Map<String, Int> = [\'a\' => 1, \'b\' => 2, \'c\' => 3];\n\n'
+		+ '\tpublic function new() {}\n\n\tpublic function add(id:Int, s:String):Void {\n'
+		+ '\t\tfinal items:Null<Array<String>> = _byId[id];\n\t\tif (items != null)\n\t\t\titems.push(s);\n'
+		+ '\t\telse\n\t\t\t_byId[id] = [s];\n\t\tif (_byId.exists(-1)) _byId.remove(-1);\n\t}\n\n'
+		+ '\tpublic function wipe():Void {\n\t\t_counts.clear();\n\t}\n\n\tpublic function total():Int {\n'
+		+ '\t\tvar sum:Int = 0;\n\t\tfor (_ => items in _byId) sum += items.length;\n\t\treturn sum;\n\t}\n\n'
+		+ '\tpublic function widest():Int {\n\t\tvar most:Int = 0;\n'
+		+ '\t\tfor (id => items in _byId) if (items.length > most) most = items.length;\n\t\treturn most;\n'
+		+ '\t}\n\n\tpublic function removing():String {\n\t\tfinal out:Array<Null<Int>> = [];\n'
+		+ '\t\tfor (_ => n in _counts) {\n\t\t\tout.push(n);\n\t\t\t_counts.remove(\'a\');\n\t\t}\n'
+		+ '\t\treturn out.join(\',\');\n\t}\n\n\tpublic function replacing():String {\n'
+		+ '\t\tfinal out:Array<Null<Int>> = [];\n\t\tfor (_ => n in _counts) {\n\t\t\tout.push(n);\n'
+		+ '\t\t\t_counts[\'b\'] = 20;\n\t\t}\n\t\treturn out.join(\',\');\n\t}\n\n'
+		+ '\tpublic function clearing():String {\n\t\tfinal out:Array<Null<Int>> = [];\n'
+		+ '\t\tfor (_ => n in _counts) {\n\t\t\tout.push(n);\n\t\t\twipe();\n\t\t}\n'
+		+ '\t\treturn out.join(\',\');\n\t}\n}\n\nclass Main {\n\tstatic function main() {\n'
+		+ '\t\tfinal r:Registry = new Registry();\n\t\tr.add(1, \'a\');\n\t\tr.add(2, \'b\');\n'
+		+ '\t\tr.add(2, \'c\');\n\t\tSys.println(r.total());\n\t\tSys.println(r.widest());\n'
+		+ '\t\tfinal fresh:Map<String, Int> = [\'p\' => 1, \'q\' => 2];\n\t\tfinal seen:Array<Int> = [];\n'
+		+ '\t\tfor (_ => n in fresh) seen.push(n);\n\t\tSys.println(seen.length);\n'
+		+ '\t\tfinal shared:Map<String, Int> = [\'x\' => 1, \'y\' => 2];\n\t\tHolder.keep(shared);\n'
+		+ '\t\tfinal got:Array<Null<Int>> = [];\n\t\tfor (_ => n in shared) {\n\t\t\tgot.push(n);\n'
+		+ '\t\t\tHolder.poke();\n\t\t}\n\t\tSys.println(got.join(\',\'));\n\t\tSys.println(r.replacing());\n'
+		+ '\t\tSys.println(r.removing());\n\t\tSys.println(r.clearing());\n\t}\n}\n';
 	private static final HXML: String = '-cp .\n-main Main\n--interp\n';
 	private static inline final APQLINT: String = '{"compilerOracle":[{"hxml":"check.hxml"}],"resolutionRoots":["."]}';
 	private static inline final BUFFER: Int = 1 << 20;
@@ -447,6 +476,64 @@ class FactsFixGateE2ETest extends Test {
 		Assert.pass('non-sys target');
 		#end
 	}
+
+	/**
+	 * A discarded key over a standard map goes where `MemberReach` proves nothing the loop body runs changes the map —
+	 * the field `_byId`, which only `add` writes, for both `redundant-map-iter-key` and `unused-loop-binder`, and a local
+	 * map built in place — under the compiler facts as the truth. A body that removes an entry, replaces a value, calls a
+	 * method that clears the map, or changes a local map through the static another function stored it in keeps its key:
+	 * each would read through the key what the value iterator does not (rewritten, the program prints `3,2,1` / `3,20` /
+	 * `2,1` where it printed `3,20,1` / `3,null` / `2,20`).
+	 */
+	@:pin('control') @:killer('M-GRAPH-MAP-USER-CODE') @:killer('M-FACTS-IDENTITY-CAST-VALUE')
+	@:killer('M-TOUCH-MAP-METHODS-UNKNOWN') @:killer('M-REACH-LOCAL-MAP-ALIAS-ARRAY')
+	public function testAMapTheLoopLeavesUnchangedLosesItsKeyUnderTheTruth(): Void {
+		#if (sys || nodejs)
+		mapKeysDropped('{"compilerOracle":[{"hxml":"check.hxml"}],"resolutionRoots":["."],"reachConfigurationsComplete":true}');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** The same proofs and refusals read from the syntax alone, with no compiler facts. */
+	@:pin('control') @:killer('M-TOUCH-MAP-METHODS-UNKNOWN')
+	public function testAMapTheLoopLeavesUnchangedLosesItsKeyFromItsSyntax(): Void {
+		#if (sys || nodejs)
+		mapKeysDropped('{"resolutionRoots":["."]}');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	#if (sys || nodejs)
+	/** The map fixture fixed by both key-dropping rules under `apqlint`: exactly the three provable loops change, and the output does not. */
+	private static function mapKeysDropped(apqlint: String): Void {
+		final dir: Null<String> = tree('mapkeys', [{ name: 'Main.hx', source: MAP_MAIN }], HXML, apqlint);
+		if (dir == null) return;
+		final before: String = run(dir);
+		CliFixture.captureStderr(() -> Cli.run([
+			'lint',
+			'--fix',
+			'--rule',
+			'redundant-map-iter-key',
+			'--rule',
+			'unused-loop-binder',
+			'$dir/Main.hx'
+		]));
+		var expected: String = MAP_MAIN;
+		for (pair in [
+			['for (_ => items in _byId) sum', 'for (items in _byId) sum'],
+			['for (id => items in _byId) if', 'for (items in _byId) if'],
+			['for (_ => n in fresh)', 'for (n in fresh)']
+		]) {
+			Assert.isTrue(expected.indexOf(pair[0]) >= 0, pair[0]);
+			expected = StringTools.replace(expected, pair[0], pair[1]);
+		}
+		Assert.equals(expected, File.getContent('$dir/Main.hx'));
+		Assert.equals(before, run(dir), 'the program prints what it printed');
+		CliFixture.removeDir(dir);
+	}
+	#end
 
 	#if (sys || nodejs)
 	/** The fixture tree, or null — the test passed as skipped — when no `haxe` typechecks it. */

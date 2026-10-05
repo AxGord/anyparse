@@ -626,7 +626,12 @@ final class TypedFactsWalk {
 				// an unchecked cast is recorded whatever the two types: its source is what escapes
 				final sink: String = str(e.t);
 				flowText(sourceType(inner), sink == '?' ? 'Dynamic' : sink, 'cast', e.pos);
-				walk(inner);
+				// one to the type the value already has changes nothing, so the value is used as the cast is: an inlined
+				// abstract method reads its `this` through one (`Map.get` calls `(cast this).get(key)`)
+				if (sink != '?' && sink == str(inner.t))
+					walkAs(inner, use)
+				else
+					walk(inner);
 			case TFor(v, it, body):
 				declare(v, e.pos);
 				add('iters', '{"v":${q(str(v.t))},"i":${q(str(it.t))},"p":${at(e.pos)}}');

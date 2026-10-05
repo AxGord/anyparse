@@ -3,10 +3,12 @@ package anyparse.check;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.Violation;
+import anyparse.check.ValueIterationProof.ValueIteration;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.CondRegionScan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.MemberReach;
 import anyparse.query.NominalTypes;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
@@ -30,10 +32,11 @@ using Lambda;
  * ## The key of a key-value loop
  *
  * An unread KEY is dropped (`for (k => v in xs)` → `for (v in xs)`) only when
- * `NominalTypes.valueIterationProvable` holds; everything else spells it `_`. `Map` never
- * qualifies: its `keyValueIterator` re-reads each value by key, so an entry the body removes reads
- * `null` there and the stale value through `iterator()`. Both binders unread follow the same proof:
- * `for (_ in xs)` or `for (_ => _ in m)`.
+ * `ValueIterationProof` proves it: an `Array` or `List` always, a standard map only when
+ * `MemberReach` proves at fix time that nothing the body runs changes it — its `keyValueIterator`
+ * re-reads each value by key, so an entry the body removes reads `null` there and the stale value
+ * through `iterator()`. Everything else, and a map the reach cannot prove, spells it `_`. Both
+ * binders unread follow the same proof: `for (_ in xs)` or `for (_ => _ in m)`.
  *
  * ## What counts as a read
  *
@@ -106,11 +109,20 @@ final class UnusedLoopBinder implements Check implements DefaultOff {
 			);
 			final byKey: Map<String, Candidate> = [];
 			for (c in collect(fileCtxOf(tree, source, file, s, plugin, symbols))) byKey['${c.span.from}:${c.span.to}'] = c;
+			var reach: Null<MemberReach> = null;
 			final edits: Array<FixEdit> = [];
 			for (v in violations) {
 				final span: Null<Span> = v.span;
 				final c: Null<Candidate> = span == null ? null : byKey['${span.from}:${span.to}'];
-				if (c != null) edits.push(v.message == c.message ? c.edit : c.fallback ?? c.edit);
+				if (c == null) continue;
+				final keyed: Null<KeyedLoop> = c.keyed;
+				// a map's key goes only where the reach proves the body leaves the map unchanged; else it is renamed
+				final proved: Bool = v.message == c.message && (keyed == null || {
+					final built: MemberReach = reach ?? MemberReach.forRun(plugin, file, source);
+					reach = built;
+					ValueIterationProof.keyedDecline(built, file, keyed.iterable, keyed.body, s.shape) == null;
+				});
+				edits.push(proved ? c.edit : c.fallback ?? c.edit);
 			}
 			return CanonicalEdit.dropContainedEdits(edits);
 		});
@@ -265,7 +277,7 @@ final class UnusedLoopBinder implements Check implements DefaultOff {
 		ctx: FileCtx, iterable: QueryNode, body: QueryNode, bodySpan: Span, unreadKey: Null<String>, keyToken: Span,
 		valueName: Null<String>, valueSpan: Span, out: Array<Candidate>
 	): Void {
-		if (unreadKey != null) out.push(keyCandidate(ctx, iterable, unreadKey, keyToken, valueSpan, valueName ?? WILDCARD));
+		if (unreadKey != null) out.push(keyCandidate(ctx, iterable, bodySpan, unreadKey, keyToken, valueSpan, valueName ?? WILDCARD));
 		valueCandidate(ctx, body, bodySpan, valueName, valueSpan, out);
 	}
 
@@ -279,24 +291,32 @@ final class UnusedLoopBinder implements Check implements DefaultOff {
 
 	/**
 	 * An unread KEY: dropped with its arrow when the iterable provably iterates the same values
-	 * (`valueIterationProvable`) and no comment sits in the dropped text, otherwise renamed to `_`.
+	 * (`ValueIterationProof`) and no comment sits in the dropped text, otherwise renamed to `_`. Over a
+	 * map the drop is the fix's to prove (`Candidate.keyed`), and its message says so.
 	 */
 	private static function keyCandidate(
-		ctx: FileCtx, iterable: QueryNode, keyName: String, keyToken: Span, valueSpan: Span, valueName: String
+		ctx: FileCtx, iterable: QueryNode, bodySpan: Span, keyName: String, keyToken: Span, valueSpan: Span, valueName: String
 	): Candidate {
 		final drop: Span = new Span(keyToken.from, valueSpan.from);
-		return if (
-			!CheckScan.hasCommentMarker(ctx.source, drop.from, drop.to)
-			&& NominalTypes.valueIterationProvable(iterable, ctx.root, ctx.s.shape, ctx.types(), ctx.index(), ctx.file, ctx.importMap())
-		)
-			{
-				span: keyToken,
-				message: 'key binder \'$keyName\' is never read; iterate the values alone: for ($valueName in …)',
-				edit: { span: drop, text: '' },
-				fallback: { span: keyToken, text: WILDCARD }
-			}
-		else
-			renamed(keyToken, 'key binder \'$keyName\' is never read; rename it to _');
+		final kind: ValueIteration = CheckScan.hasCommentMarker(ctx.source, drop.from, drop.to)
+			? Unprovable
+			: ValueIterationProof.kindOf(iterable, ctx.root, ctx.s.shape, ctx.types(), ctx.index(), ctx.file, ctx.importMap());
+		final dropped: (message:String, keyed:Null<KeyedLoop>) -> Candidate = (message, keyed) -> {
+			span: keyToken,
+			message: message,
+			edit: { span: drop, text: '' },
+			fallback: { span: keyToken, text: WILDCARD },
+			keyed: keyed
+		};
+		return switch kind {
+			case Provable: dropped('key binder \'$keyName\' is never read; iterate the values alone: for ($valueName in …)', null);
+			case Keyed:
+				dropped(
+					'key binder \'$keyName\' is never read; drop it if nothing the loop runs changes the map, else rename it to _',
+					{ iterable: iterable, body: bodySpan }
+				);
+			case Unprovable: renamed(keyToken, 'key binder \'$keyName\' is never read; rename it to _');
+		};
 	}
 
 	/** A finding at `span` whose edit spells the binder there as `_`. */
@@ -305,7 +325,8 @@ final class UnusedLoopBinder implements Check implements DefaultOff {
 			span: span,
 			message: message,
 			edit: { span: span, text: WILDCARD },
-			fallback: null
+			fallback: null,
+			keyed: null
 		};
 	}
 
@@ -439,4 +460,13 @@ private typedef Candidate = {
 
 	/** The rename a DROP falls back to when the report pass did not prove it; null for a rename. */
 	var fallback: Null<FixEdit>;
+
+	/** The loop a map key's drop asks `MemberReach` about before it is made; null for any other finding. */
+	var keyed: Null<KeyedLoop>;
+};
+
+/** A key-value loop over a map: its iterable and the body whose reach decides whether the key may go. */
+private typedef KeyedLoop = {
+	var iterable: QueryNode;
+	var body: Span;
 };

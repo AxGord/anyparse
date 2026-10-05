@@ -405,15 +405,46 @@ final class NominalTypes {
 		iterable: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: Null<SymbolIndex>, file: String,
 		importMap: Map<String, String>
 	): Bool {
-		final types: Null<Map<String, String>> = shape.valueIterationTypes;
+		return standardContainer(shape.valueIterationTypes, iterable, root, shape, declaredTypes, index, file, importMap) != null;
+	}
+
+	/**
+	 * Whether `iterable` is one of the standard KEYED containers (`RefShape.keyedIterationTypes`, a map) under the gates
+	 * `valueIterationProvable` applies, and no type outside the standard library extends a class a value of that type
+	 * may be at run time (`RefShape.keyedIterationHolders`; the type itself when it has no entry): a subclass may
+	 * override the iterators. Dropping the key of a loop over one is sound only when nothing the loop body runs changes
+	 * the container — the question `ValueIterationProof` asks `MemberReach`.
+	 */
+	public static function keyedIterationContainer(
+		iterable: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: Null<SymbolIndex>, file: String,
+		importMap: Map<String, String>
+	): Bool {
+		final nominal: Null<String> = standardContainer(
+			shape.keyedIterationTypes, iterable, root, shape, declaredTypes, index, file, importMap
+		);
+		if (nominal == null || index == null) return false;
+		final holders: Array<String> = shape.keyedIterationHolders?.get(nominal) ?? [nominal];
+		return !holders.exists(holder -> index.subtypes.subtypeFiles(holder).exists(f -> !StdResolver.isStdFile(f)));
+	}
+
+	/**
+	 * The simple name of the one of `types` (simple name to standard path) `iterable`'s type resolves to, when the file
+	 * does not rebind it and the iterable is not a local written in its scope — the gates `valueIterationProvable`'s doc
+	 * gives — or null.
+	 */
+	private static function standardContainer(
+		types: Null<Map<String, String>>, iterable: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>,
+		index: Null<SymbolIndex>, file: String, importMap: Map<String, String>
+	): Null<String> {
 		final nominal: Null<String> = expressionTypeNominal(iterable, root, shape, declaredTypes, index, file);
-		if (types == null || nominal == null || index == null) return false;
+		if (types == null || nominal == null || index == null) return null;
 		final stdPath: Null<String> = types[nominal];
-		if (stdPath == null || shadowedByNonStdType(index, nominal)) return false;
+		if (stdPath == null || shadowedByNonStdType(index, nominal)) return null;
 		final imported: Null<String> = importMap[nominal];
-		if (imported != null && imported != stdPath) return false;
+		if (imported != null && imported != stdPath) return null;
 		final aliasKinds: Array<String> = shape.importAliasKinds ?? [];
-		return !root.children.exists(c -> aliasKinds.contains(c.kind) && c.name == nominal) && !reassignedLocal(iterable, root, shape);
+		final rebound: Bool = root.children.exists(c -> aliasKinds.contains(c.kind) && c.name == nominal);
+		return rebound || reassignedLocal(iterable, root, shape) ? null : nominal;
 	}
 
 	/**

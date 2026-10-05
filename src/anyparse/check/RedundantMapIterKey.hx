@@ -1,7 +1,9 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.check.ValueIterationProof.ValueIteration;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberReach;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
@@ -16,8 +18,9 @@ using Lambda;
  * Flags a key-value `for` loop that discards its key with `_` — `for (_ => v in m)`
  * — which reads as `for (v in m)`, since Haxe iterates values by default. `Info` (a
  * modernization matching the idiom), with an autofix that drops the `_ => ` prefix where the iterable is provably an
- * `Array` or `List` (`UnusedLoopBinder.valueIterationProvable`); elsewhere the finding is report-only, since a `Map`
- * re-reads each value by key in `keyValueIterator` and so diverges from `iterator()` once the body removes an entry.
+ * `Array` or `List`, or a standard map nothing the loop body runs can change (`ValueIterationProof`); elsewhere the
+ * finding is report-only, since a map re-reads each value by key in `keyValueIterator` and so diverges from
+ * `iterator()` once the body removes an entry or replaces a value.
  *
  * A value-discarding `for (_ in m)` (no `=>`) is a legitimate "iterate, ignore the
  * value" loop and is NOT flagged — only the key-value form with a discarded key is.
@@ -44,10 +47,14 @@ final class RedundantMapIterKey implements Check {
 
 	/** Why a finding over an iterable of unproven type carries no edit. */
 	private static inline final UNPROVEN_DECLINE: String =
-		'the iterable is not provably an Array or List, whose iterator() yields exactly the values keyValueIterator() does';
+		'the iterable is not provably an Array, a List or a standard map, whose iterator() yields exactly the values keyValueIterator() does';
 
 	/** The finding where the key provably can go. */
 	private static inline final PROVEN_MESSAGE: String = 'this loop discards its key — iterate the values directly: for (v in …)';
+
+	/** The finding over a map: the key may go when the loop leaves the map unchanged, which only the fix asks. */
+	private static inline final KEYED_MESSAGE: String =
+		'this loop discards its key — dropping it iterates the same values only while nothing the loop runs changes the map';
 
 	/** The finding where it cannot be proved to — described, not prescribed. */
 	private static inline final UNPROVEN_MESSAGE: String =
@@ -75,10 +82,10 @@ final class RedundantMapIterKey implements Check {
 	/**
 	 * Drop the `_ => ` discarded-key prefix from each flagged loop header — only where the iterable
 	 * provably iterates the same values through `iterator()` as through `keyValueIterator()`
-	 * (`NominalTypes.valueIterationProvable`), both when the finding was reported and now. Elsewhere
-	 * the finding stays report-only with a
-	 * `declineReason`: a `Map`'s two iterators diverge once the body removes an entry, and a type of
-	 * unknown shape may have no `iterator()` at all.
+	 * (`ValueIterationProof`), both when the finding was reported and now: an `Array` or `List`, or a
+	 * map `MemberReach` proves the loop body cannot change. Elsewhere the finding stays report-only
+	 * with a `declineReason`: a map's two iterators diverge once the body removes an entry or replaces a
+	 * value, and a type of unknown shape may have no `iterator()` at all.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
@@ -88,12 +95,20 @@ final class RedundantMapIterKey implements Check {
 		return RunScan.editsWith(plugin, source, readSeams(plugin.refShape()), (tree, s) -> {
 			final nodeByKey: Map<String, QueryNode> = [];
 			indexFor(tree, s.forStmtKind, nodeByKey);
-			final provable: (loop:QueryNode, valueBinderKinds:Array<String>) -> Bool = proofOf(
+			final kindOf: (
+				loop:QueryNode, valueBinderKinds:Array<String>
+			) -> ValueIteration = proofOf(
 				tree, source, file, plugin,
 				RefactorSupport.lazySymbolIndex(
 					[{ file: file, source: source }], plugin, RefactorSupport.resolutionIndexOf(plugin) ?? index
 				)
 			);
+			var reach: Null<MemberReach> = null;
+			final reachOf: () -> MemberReach = () -> {
+				final built: MemberReach = reach ?? MemberReach.forRun(plugin, file, source);
+				reach = built;
+				built;
+			};
 			final edits: Array<{ span: Span, text: String }> = [];
 			for (v in violations) {
 				final span: Null<Span> = v.span;
@@ -101,11 +116,15 @@ final class RedundantMapIterKey implements Check {
 				if (node == null) continue;
 				final cut: Null<Span> = keyPrefixSpan(node, source, s.valueBinderKinds);
 				if (cut == null) continue;
-				if (v.message != PROVEN_MESSAGE || !provable(node, s.valueBinderKinds)) {
-					v.declineReason = UNPROVEN_DECLINE;
-					continue;
-				}
-				edits.push({ span: cut, text: '' });
+				final decline: Null<String> = switch kindOf(node, s.valueBinderKinds) {
+					case Provable if (v.message == PROVEN_MESSAGE): null;
+					case Keyed if (v.message == KEYED_MESSAGE): keyedDecline(reachOf(), file, node, s);
+					case _: UNPROVEN_DECLINE;
+				};
+				if (decline == null)
+					edits.push({ span: cut, text: '' })
+				else
+					v.declineReason = decline;
 			}
 			return edits;
 		});
@@ -114,23 +133,37 @@ final class RedundantMapIterKey implements Check {
 	/** The loop kind and the value-binder kinds, or null when the grammar names no `for` statement (the check is then a no-op). */
 	private static function readSeams(shape: RefShape): Null<Seams> {
 		final forStmtKind: Null<String> = shape.forStmtKind;
-		return forStmtKind == null ? null : { forStmtKind: forStmtKind, valueBinderKinds: shape.iterationValueBinderKinds ?? [] };
+		return forStmtKind == null
+			? null
+			: { forStmtKind: forStmtKind, valueBinderKinds: shape.iterationValueBinderKinds ?? [], shape: shape };
 	}
 
 	/**
-	 * Whether a loop's key may be dropped — `NominalTypes.valueIterationProvable` over its iterable,
-	 * with the file's declared types and import map read on first demand.
+	 * Why `MemberReach` cannot prove the body of `loop`, a loop over a map, leaves the map unchanged — or null when it
+	 * proves it (`ValueIterationProof.keyedDecline`).
+	 */
+	private static function keyedDecline(reach: MemberReach, file: String, loop: QueryNode, s: Seams): Null<String> {
+		final iterable: Null<QueryNode> = NominalTypes.iterationIterable(loop, s.valueBinderKinds);
+		final body: Null<Span> = loop.children[loop.children.length - 1].span;
+		return iterable == null || body == null
+			? ValueIterationProof.KEYED_DECLINE
+			: ValueIterationProof.keyedDecline(reach, file, iterable, body, s.shape);
+	}
+
+	/**
+	 * What a loop's key drop rests on — `ValueIterationProof.kindOf` over its iterable, with the
+	 * file's declared types and import map read on first demand.
 	 */
 	private static function proofOf(
 		tree: QueryNode, source: String, file: String, plugin: GrammarPlugin, index: () -> Null<SymbolIndex>
-	): (loop:QueryNode, valueBinderKinds:Array<String>) -> Bool {
+	): (loop:QueryNode, valueBinderKinds:Array<String>) -> ValueIteration {
 		final typed: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		final facts: Array<{ types: Map<Int, String>, imports: Map<String, String> }> = [];
 		return (loop, valueBinderKinds) -> {
 			final iterable: Null<QueryNode> = NominalTypes.iterationIterable(loop, valueBinderKinds);
-			if (iterable == null) return false;
+			if (iterable == null) return Unprovable;
 			if (facts.length == 0) facts.push(factsOf(typed, source, file));
-			return NominalTypes.valueIterationProvable(iterable, tree, plugin.refShape(), facts[0].types, index(), file, facts[0].imports);
+			return ValueIterationProof.kindOf(iterable, tree, plugin.refShape(), facts[0].types, index(), file, facts[0].imports);
 		};
 	}
 
@@ -143,7 +176,7 @@ final class RedundantMapIterKey implements Check {
 
 	private static function walk(
 		out: Array<Violation>, file: String, source: String, node: QueryNode, s: Seams,
-		provable: (loop:QueryNode, valueBinderKinds:Array<String>) -> Bool
+		kindOf: (loop:QueryNode, valueBinderKinds:Array<String>) -> ValueIteration
 	): Void {
 		if (node.kind == s.forStmtKind && node.name == '_' && keyPrefixSpan(node, source, s.valueBinderKinds) != null) {
 			final span: Null<Span> = node.span;
@@ -152,13 +185,17 @@ final class RedundantMapIterKey implements Check {
 				span: span,
 				rule: RULE_ID,
 				severity: Severity.Info,
-				message: provable(node, s.valueBinderKinds) ? PROVEN_MESSAGE : UNPROVEN_MESSAGE
+				message: switch kindOf(node, s.valueBinderKinds) {
+					case Provable: PROVEN_MESSAGE;
+					case Keyed: KEYED_MESSAGE;
+					case Unprovable: UNPROVEN_MESSAGE;
+				}
 			});
 		}
 		// Descend regardless of a match: a discarded-key loop can nest inside another
 		// (`for (_ => v in m) for (_ => w in v) …`), and the two are independent — fixing
 		// the outer header does nothing for the inner — so both must be reported.
-		for (c in node.children) walk(out, file, source, c, s, provable);
+		for (c in node.children) walk(out, file, source, c, s, kindOf);
 	}
 
 	/**
@@ -214,4 +251,5 @@ final class RedundantMapIterKey implements Check {
 private typedef Seams = {
 	var forStmtKind: String;
 	var valueBinderKinds: Array<String>;
+	var shape: RefShape;
 };

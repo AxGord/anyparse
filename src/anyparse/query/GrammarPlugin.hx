@@ -2894,6 +2894,26 @@ typedef RefShape = {
 	@:optional var valueIterationTypes: Map<String, String>;
 
 	/**
+	 * The containers whose key-value iteration RE-READS each value by key (a map), keyed by SIMPLE
+	 * name and mapped to the standard path exactly as `valueIterationTypes` is. Their single-binder
+	 * iteration yields the same values in the same order only while nothing changes the container:
+	 * an entry the body removes, or a value it replaces, reads differently through the two. A
+	 * key-value loop over one may drop its unread key when `MemberReach` proves the body cannot
+	 * change it (`ValueIterationProof`). A class a value of such a type may be at run time must not be
+	 * extended outside the standard library — `NominalTypes.keyedIterationContainer` vetoes it, since
+	 * a subclass may override the iterators. Optional; unset admits none.
+	 */
+	@:optional var keyedIterationTypes: Map<String, String>;
+
+	/**
+	 * For a `keyedIterationTypes` entry that is not itself the class its values are — an abstract over
+	 * several (Haxe `Map`, whose value is an `IntMap`, a `StringMap`, an `ObjectMap` or an
+	 * `EnumValueMap`) — the simple names of the classes it may hold, whose subclasses
+	 * `NominalTypes.keyedIterationContainer` vetoes. A type with no entry holds only itself. Optional.
+	 */
+	@:optional var keyedIterationHolders: Map<String, Array<String>>;
+
+	/**
 	 * Module-level declarations that bind an imported type under a LOCAL name — Haxe's
 	 * `import a.B as C;` and `import a.B in C;` — whose node `name` is that local name. A question
 	 * about which type a SIMPLE name denotes in a file must consult them: the alias hides any
@@ -3446,6 +3466,20 @@ typedef ExecutionShape = {
 
 	/** See `nonMutatingArrayMethods`. */
 	@:optional var mutatingArrayMethods: Array<String>;
+
+	/**
+	 * The SIMPLE names of the grammar's built-in map types (Haxe `Map`, `IntMap`, …), whose own methods
+	 * `nonMutatingMapMethods` / `mutatingMapMethods` list exactly as the array lists do for the array type:
+	 * a method in neither may be a static extension handed the map itself. Optional; unset makes every
+	 * method call on a map a change and an escape.
+	 */
+	@:optional var mapTypeNames: Array<String>;
+
+	/** See `mapTypeNames`. */
+	@:optional var nonMutatingMapMethods: Array<String>;
+
+	/** See `mapTypeNames`. */
+	@:optional var mutatingMapMethods: Array<String>;
 
 	/**
 	 * The metadata that makes a function one the language calls IMPLICITLY — through an operator, an index
