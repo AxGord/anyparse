@@ -3,8 +3,11 @@ package anyparse.check;
 #if macro
 import haxe.Json;
 import haxe.macro.Context;
+import haxe.macro.Expr.ComplexType;
 import haxe.macro.Expr.MetadataEntry;
 import haxe.macro.Expr.Position;
+import haxe.macro.Expr.TypeParam;
+import haxe.macro.Expr.TypePath;
 import haxe.macro.Type;
 import haxe.macro.TypeTools;
 import sys.io.File;
@@ -39,6 +42,9 @@ final class TypedFactsMacro {
 
 	private static var installed: Bool = false;
 
+	/** The writer of the compile's facts once the hook first ran (`run`), which every later round of it continues. */
+	private static var current: Null<TypedFactsMacro> = null;
+
 	/**
 	 * Every typedef a type string printed, by id and declaration: an import alias (`import pack.T as U`) is one no module
 	 * lists, so the compile's records are closed over them once the module types are written (`run`). Two aliases of one
@@ -68,9 +74,20 @@ final class TypedFactsMacro {
 	/** File -> its text, read once (`spellsAccess`); null for one that cannot be read. */
 	private final _texts: Map<String, Null<String>> = [];
 
+	/** File -> its bytes, read once (`genericBuilt`): the compiler's offsets count bytes; null for one that cannot be read. */
+	private final _bytes: Map<String, Null<haxe.io.Bytes>> = [];
+
+	/** The `@:genericBuild` classes of the compile by simple name (`collectFields`): typed under no name of their own. */
+	private final _generics: Map<String, Array<ClassType>> = [];
+
+	/** The class a `@:genericBuild` type at type arguments resolves to (`genericBuilt`), by the type and the arguments printed. */
+	private final _genericBuilds: Map<String, Null<String>> = [];
+
 	private final _macros: Map<String, Array<InlineMethod>> = [];
 	private final _reflectionFiles: Map<String, Bool> = [];
-	private final _out: FileOutput;
+
+	/** Where the facts go: the file is opened anew for each round of the hook (`run`). */
+	private var _out: FileOutput;
 
 	private var _fileCount: Int = 0;
 	private var _types: Int = 0;
@@ -256,8 +273,15 @@ final class TypedFactsMacro {
 		// an init macro runs before any module is parsed: a file written after this was not the text the compile read
 		started = Sys.time();
 		Context.onAfterTyping(moduleTypes -> {
-			final writer: TypedFactsMacro = new TypedFactsMacro(File.write(path, false));
-			writer.line('{"k":"facts","v":$VERSION,"inline":${!Context.defined('no-inline')}}');
+			// the compiler runs the hook again over the types defined since it last ran — by another hook, or by the
+			// `@:genericBuild` the walk asked again (`genericBuilt`): their records follow, each round closed by an `end`
+			final earlier: Null<TypedFactsMacro> = current;
+			final writer: TypedFactsMacro = earlier ?? new TypedFactsMacro(File.write(path, false));
+			if (earlier == null) {
+				current = writer;
+				writer.line('{"k":"facts","v":$VERSION,"inline":${!Context.defined('no-inline')}}');
+			} else
+				writer._out = File.append(path, false);
 			for (t in moduleTypes) writer.collectFields(t);
 			for (t in moduleTypes) writer.moduleType(t);
 			writer.printedAliases();
@@ -339,6 +363,11 @@ final class TypedFactsMacro {
 			case TClassDecl(r):
 				final c: ClassType = r.get();
 				final owner: String = typeId(c.pack, c.name);
+				if (c.kind.match(KGenericBuild)) {
+					final named: Array<ClassType> = _generics[c.name] ?? [];
+					_generics[c.name] = named;
+					named.push(c);
+				}
 				final ctor: Null<ClassField> = c.constructor?.get();
 				final all: Array<ClassField> = c.fields.get().concat(c.statics.get());
 				if (ctor != null) all.push(ctor);
@@ -385,6 +414,74 @@ final class TypedFactsMacro {
 	private static function isWordCode(code: Int): Bool {
 		return code == '_'.code || (code >= '0'.code && code <= '9'.code) || (code >= 'a'.code && code <= 'z'.code)
 			|| (code >= 'A'.code && code <= 'Z'.code);
+	}
+
+	/**
+	 * The `@:genericBuild` class the text at `p`, a construction of the class `built`, constructs, when the compiler
+	 * resolves it, at the type arguments that text writes, to `built`: the text is parsed as a construction, each such class
+	 * of the name it writes — of its package, where it writes one — is resolved at those arguments, and the class the
+	 * compiler's genericBuild of it answers must be `built`. Null for any other construction, a text that does not parse as
+	 * one, or arguments that do not resolve here: the compile resolves them in no module's imports. A construction the
+	 * compiler typed where its text writes one ran the build at those arguments, which a build macro of the kind answers
+	 * again alike — the compiler calls it at each type reference — so asking again types nothing new; where a build macro
+	 * changed the construction, the build at the text's arguments may define a class, whose records a later round of the
+	 * hook writes (`run`), and answers another class than `built`.
+	 */
+	public function genericBuilt(built: Ref<ClassType>, p: Position): Null<String> {
+		final path: Null<TypePath> = _generics.keys().hasNext() ? constructed(p) : null;
+		if (path == null) return null;
+		final written: TypePath = path;
+		final name: String = written.sub ?? written.name;
+		// a construction of the class itself
+		if (name == built.get().name) return null;
+		final printer: haxe.macro.Printer = new haxe.macro.Printer();
+		for (g in _generics[name] ?? []) if (writes(written, g)) {
+			final id: String = typeId(g.pack, g.name);
+			final key: String = id + '<' + [for (t in written.params ?? []) printer.printTypeParam(t)].join(',') + '>';
+			if (!_genericBuilds.exists(key)) _genericBuilds[key] = resolvedClass(g, written.params ?? [], p);
+			if (_genericBuilds[key] == built.toString()) return id;
+		}
+		return null;
+	}
+
+	/**
+	 * The type path of the construction the text at `p` writes, when it names a `@:genericBuild` class's name; null for
+	 * any other text.
+	 */
+	private function constructed(p: Position): Null<TypePath> {
+		final info: { min: Int, max: Int, file: String } = Context.getPosInfos(p);
+		if (!_bytes.exists(info.file)) _bytes[info.file] = try File.getBytes(info.file) catch (exception: haxe.Exception) null;
+		final bytes: Null<haxe.io.Bytes> = _bytes[info.file];
+		if (bytes == null || info.min < 0 || info.max > bytes.length || info.min >= info.max) return null;
+		final text: Null<String> = try bytes.getString(info.min, info.max - info.min) catch (exception: haxe.Exception) null;
+		if (text == null) return null;
+		if (!Lambda.exists(_generics, named -> text.indexOf(named[0].name) >= 0)) return null;
+		return switch (try Context.parse(text, p) catch (exception: haxe.Exception) null)?.expr {
+			case ENew(t, _): t;
+			case _: null;
+		};
+	}
+
+	/** Whether the type path `written` names the class `g`: its name, and its package and module where it writes them. */
+	private static function writes(written: TypePath, g: ClassType): Bool {
+		final module: String = g.module.substr(g.module.lastIndexOf('.') + 1);
+		return (written.pack.length == 0 || written.pack.join('.') == g.pack.join('.')) && (written.sub == null || written.name == module);
+	}
+
+	/** The class the `@:genericBuild` class `g` at the type arguments `params` resolves to; null when it resolves to none. */
+	private static function resolvedClass(g: ClassType, params: Array<TypeParam>, p: Position): Null<String> {
+		final module: String = g.module.substr(g.module.lastIndexOf('.') + 1);
+		final ct: ComplexType = TPath({
+			pack: g.pack,
+			name: module,
+			sub: g.name,
+			params: params
+		});
+		final resolved: Null<Type> = try Context.follow(Context.resolveType(ct, p)) catch (exception: haxe.Exception) null;
+		return switch resolved {
+			case TInst(c, _): c.toString();
+			case _: null;
+		};
 	}
 
 	/** The method declared around `min`–`max` of `file` (the innermost), whose body was spliced from there; null for none. */

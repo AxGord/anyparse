@@ -64,6 +64,12 @@ typedef NewFact = {
 	final type: String;
 	final instance: String;
 	final at: FactPos;
+
+	/**
+	 * The `@:genericBuild` class the text constructs there — whose build the compiler resolves, at the type arguments the
+	 * text writes, to `type`, a class no text names — and null for any other construction (`TypedFactsMacro.genericBuilt`).
+	 */
+	final generic: Null<String>;
 }
 
 /** A field read or write that is not the callee of a call; a compound assignment is both. */
@@ -940,7 +946,12 @@ final class CompilerFacts {
 				node.calls
 			);
 			FactMerge.collect(
-				record.news, x -> place(x.p), fresh.bind('new'), (x, where) -> ({type: x.t, instance: x.ty, at: where }: NewFact),
+				record.news, x -> place(x.p), fresh.bind('new'), (x, where) -> ({
+					type: x.t,
+					instance: x.ty,
+					at: where,
+					generic: x.gb
+				}: NewFact),
 				node.news
 			);
 			FactMerge.collect(
@@ -1255,7 +1266,12 @@ private typedef NodeRecord = {
 	final ?ov: Int;
 	final ?params: Array<{ n: String, t: String }>;
 	final ?calls: Array<CallRecord>;
-	final ?news: Array<{ t: String, ty: String, p: Array<Int> }>;
+	final ?news: Array<{
+		t: String,
+		ty: String,
+		p: Array<Int>,
+		?gb: String
+	}>;
 	final ?fields: Array<{
 		?o: String,
 		f: String,
