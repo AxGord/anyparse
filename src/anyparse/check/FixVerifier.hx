@@ -216,8 +216,9 @@ enum FixRevertCause {
  * candidate, and the complement confirm when one ran. A probe the writer REFUSED never
  * reached a compiler and is not counted — it still costs the search BUDGET,
  * which is a different quantity and the one `spent` carries. Emitted
- * only for the bisect path; a fully-applied file or a single-unit file carries no
- * entry.
+ * only for the bisect path and for a set the writer refused in part (`writerNarrowed`,
+ * where the refused units count as reverted); a fully-applied file or a single-unit file
+ * carries no entry.
  */
 typedef FixVerifyPartial = {
 	var file: String;
@@ -589,7 +590,7 @@ final class FixVerifier {
 			case Ok(text) if (text != before): text;
 			case Ok(_): return NoChange;
 			case Err(message): return CanonicalEdit.isWriterCanonical(before, plugin, opts)
-				? Reverted(NotCanonical(message))
+				? writerNarrowed(entry, edits, message, plugin, opts, usable, excluded, write)
 				: SourceNotCanonical;
 		};
 		// The candidate exists; WHICH configurations could ever judge it is a separate question,
@@ -731,6 +732,47 @@ final class FixVerifier {
 				entry.source = before;
 				write(entry.file, before);
 				Partial(0, edits.length, spawnsBeforeConfirm, NotCanonical(message));
+		};
+	}
+
+	/**
+	 * The full set was refused by the WRITER on a canonical source, so no candidate exists to
+	 * typecheck and no compile has been spent. Before this the set was reverted whole
+	 * (`NotCanonical`), so one un-writable unit cost every writable one beside it.
+	 *
+	 * The refused units are found by the writer alone — a unit is kept when the units kept before it
+	 * still canonicalise with it, the safe loop's salvage order — and the kept set then takes the
+	 * ordinary path: one typecheck when it builds, the compile bisect when it does not. So a file
+	 * the writer accepts pays nothing here, and a refused one pays writer round trips plus exactly
+	 * what its writable part would have cost on its own. Not the compile bisect: there every
+	 * probe that canonicalises is a compile, spent to find what a round trip answers for free.
+	 *
+	 * Anything that lands nothing answers as before (`NotCanonical`); an unavailable oracle keeps
+	 * its own cause, because it says nothing about the writer.
+	 */
+	private static function writerNarrowed(
+		entry: { file: String, source: String }, edits: Array<GroupedEdit>, message: String, plugin: GrammarPlugin, opts: Null<String>,
+		usable: UsableCoverage, excluded: Array<OracleExclusion>, write: (String, String) -> Void
+	): EntryVerdict {
+		final whole: EntryVerdict = Reverted(NotCanonical(message));
+		final units: Array<Array<Int>> = unitsOf(edits);
+		final kept: Array<Int> = [];
+		for (u in 0...units.length) {
+			kept.push(u);
+			if (!CanonicalEdit.canonicalize(entry.source, editsOfUnits(edits, units, kept), false, plugin, opts).match(Ok(_))) kept.pop();
+		}
+		if (kept.length == 0 || kept.length == units.length) return whole;
+		final flat: Array<Int> = [for (u in kept) for (i in units[u]) i];
+		flat.sort((a, b) -> a - b);
+		final keptEdits: Array<GroupedEdit> = [for (i in flat) edits[i]];
+		final refused: Int = edits.length - keptEdits.length;
+		final spentBefore: Int = CompilerOracle.invocations;
+		final inner: EntryVerdict = verifyEntry(entry, keptEdits, plugin, opts, usable, excluded, write);
+		return switch inner {
+			case Applied: Partial(keptEdits.length, refused, CompilerOracle.invocations - spentBefore, NotCanonical(message));
+			case Partial(landed, dropped, spawns, cause) if (landed > 0): Partial(landed, dropped + refused, spawns, cause);
+			case Reverted(OracleUnavailable(reason)): Reverted(OracleUnavailable(reason));
+			case _: whole;
 		};
 	}
 

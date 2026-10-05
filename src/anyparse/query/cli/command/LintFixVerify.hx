@@ -15,6 +15,7 @@ import anyparse.check.OracleDeclaration;
 import anyparse.core.EnvFlag;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
+import anyparse.query.Cli.RuleEdits;
 import anyparse.query.Cli.RuleFixOutcome;
 import anyparse.query.CompilerFacts;
 import anyparse.query.EditJournal;
@@ -499,7 +500,7 @@ final class LintFixVerify {
 	public static function applyOracleAssistedFixes(
 		files: Array<{ file: String, source: String }>, oracleChecks: Array<Check>, plugin: GrammarPlugin, oracles: Array<OracleConfig>,
 		optsByFile: Map<String, Null<String>>, changedFiles: Array<String>, resolveConfig: (String) -> LintConfig, applyEnablement: Bool,
-		coverage: Array<ConfigCoverage>
+		coverage: Array<ConfigCoverage>, ledger: Map<String, RuleFixOutcome>
 	): AssistedOutcome {
 		if (oracleChecks.length == 0) return { tail: '', appliedCount: 0, excluded: [] };
 		if (oracles.length == 0) return {
@@ -567,8 +568,11 @@ final class LintFixVerify {
 		};
 		final oracle: Null<TypeOracle> = assistedOracle(plugin, display, files);
 		if (oracle == null) return { tail: ', oracle-assisted skipped (display server unavailable)', appliedCount: 0, excluded: excluded };
+		// The files whose edits the WRITER refused, in whole or in part — one line each, like a decline.
+		final refusals: Array<{ file: String, reason: String, edits: Int }> = [];
 		for (entry in files) {
-			final allEdits: Array<{ span: Span, text: String }> = assistedEdits(entry, findingsByCheck, plugin, oracle);
+			final groups: Array<RuleEdits> = assistedGroups(entry, findingsByCheck, plugin, oracle);
+			final allEdits: Array<{ span: Span, text: String }> = [for (group in groups) for (e in group.edits) e];
 			if (allEdits.length == 0) continue;
 			final gap: Null<String> = assistedEditsAreVerifiable(current.coverages, excluded, entry, allEdits, plugin);
 			if (gap != null) {
@@ -579,12 +583,17 @@ final class LintFixVerify {
 				});
 				continue;
 			}
-			editsPerFile[entry.file] = allEdits.length;
-			switch CanonicalEdit.canonicalize(entry.source, allEdits, false, plugin, optsByFile[entry.file]) {
-				case Ok(text) if (text != entry.source):
-					candidates.push({ file: entry.file, before: entry.source, after: text });
-				case _:
-			}
+			final blamed: Array<String> = [];
+			final settled: Null<{ text: String, edits: Int }> = settleAssistedFile(
+				entry.source, groups, plugin, optsByFile[entry.file], blamed,
+				assistedSplitter(entry.source, findingsByCheck, plugin, oracle)
+			);
+			// A refusal used to fall through `case _:` and take the file's whole edit set with it, with no
+			// line, no count and no ledger row: the findings simply stayed unfixed.
+			assistedRefusal(entry.file, groups, blamed, ledger, refusals);
+			if (settled == null) continue;
+			editsPerFile[entry.file] = settled.edits;
+			candidates.push({ file: entry.file, before: entry.source, after: settled.text });
 		}
 		display.server?.stop();
 		for (line in assistedDeclineLines(findingsByCheck)) CliIo.stderr(line);
@@ -592,19 +601,11 @@ final class LintFixVerify {
 		// decline: a count leaves the reader to guess which of hundreds of files this hxml never
 		// typechecks, which is the search those lines exist to remove. Capped for the same reason
 		// too: on a partially-covered tree a decline is the common case, not the rare one.
-		var declinedEdits: Int = 0;
-		for (i in 0...declines.length) {
-			declinedEdits += declines[i].edits;
-			if (i >= LintFixDriver.DECLINE_LINES_SHOWN) continue;
-			CliIo.stderr(
-				'apq lint --fix: oracle-assisted DECLINED ${declines[i].file}: ${declines[i].reason}'
-				+ ' — ${declines[i].edits} edit(s) left report-only\n'
-			);
-		}
-		if (declines.length > LintFixDriver.DECLINE_LINES_SHOWN)
-			CliIo.stderr(
-				'apq lint --fix: … and ${declines.length - LintFixDriver.DECLINE_LINES_SHOWN} more oracle-assisted decline(s) not listed\n'
-			);
+		final declinedEdits: Int = printAssistedFileLines('DECLINED', 'decline', declines);
+		final refusedEdits: Int = printAssistedFileLines('REFUSED', 'refusal', refusals);
+		final refusedTail: String = refusals.length == 0
+			? ''
+			: ', ${refusals.length} file(s) REFUSED by the writer ($refusedEdits edit(s) left report-only)';
 		final declinedTail: String = declines.length == 0
 			? ''
 			: ', ${declines.length} file(s) DECLINED unverifiable ($declinedEdits edit(s) the oracle does not typecheck)';
@@ -615,7 +616,7 @@ final class LintFixVerify {
 			? { tail: ', oracle-assisted: 0 applied', appliedCount: 0 }
 			: commitAssisted(candidates, measured.judging, files, changedFiles, editsPerFile);
 		return {
-			tail: applied.tail + declinedTail + excludedTail(excluded),
+			tail: applied.tail + refusedTail + declinedTail + excludedTail(excluded),
 			appliedCount: applied.appliedCount,
 			excluded: excluded
 		};
@@ -734,20 +735,124 @@ final class LintFixVerify {
 	}
 
 	/**
-	 * Every annotation the oracle-assisted checks propose for ONE file, from findings already
-	 * collected across the whole set. Empty when none of them has anything to say here.
+	 * Push to `into` the report row for one file's groups the writer-emit gate refused (nothing
+	 * when it refused none), and hand each refusal to its rule's ledger row (`refusals`, edit
+	 * sets), the block the safe loop's refusals land in. `blamed` names the parts the salvage could
+	 * single out; a source the writer cannot round-trip blames none, and its one sentence speaks
+	 * for the file.
 	 */
-	private static function assistedEdits(
+	private static function assistedRefusal(
+		file: String, groups: Array<RuleEdits>, blamed: Array<String>, ledger: Map<String, RuleFixOutcome>,
+		into: Array<{ file: String, reason: String, edits: Int }>
+	): Void {
+		var edits: Int = 0;
+		var first: Null<String> = null;
+		for (group in groups) {
+			final refusal: Null<String> = group.refusal;
+			if (refusal == null) continue;
+			first ??= refusal;
+			edits += group.edits.length;
+			LintFixDriver.bumpReason(LintFixDriver.ledgerFor(ledger, group.rule).refusals, refusal, 1);
+		}
+		if (first != null) into.push({ file: file, reason: blamed.length == 0 ? first : blamed.join('; '), edits: edits });
+	}
+
+	/**
+	 * One line per file in `rows` under `verb` (`DECLINED` / `REFUSED`), capped by
+	 * `DECLINE_LINES_SHOWN` with a count of the rest, and the edits the rows left report-only.
+	 */
+	private static function printAssistedFileLines(
+		verb: String, noun: String, rows: Array<{ file: String, reason: String, edits: Int }>
+	): Int {
+		var edits: Int = 0;
+		for (i in 0...rows.length) {
+			edits += rows[i].edits;
+			if (i >= LintFixDriver.DECLINE_LINES_SHOWN) continue;
+			CliIo.stderr(
+				'apq lint --fix: oracle-assisted $verb ${rows[i].file}: ${rows[i].reason} — ${rows[i].edits} edit(s) left report-only\n'
+			);
+		}
+		if (rows.length > LintFixDriver.DECLINE_LINES_SHOWN)
+			CliIo.stderr(
+				'apq lint --fix: … and ${rows.length - LintFixDriver.DECLINE_LINES_SHOWN} more oracle-assisted $noun(s) not listed\n'
+			);
+		return edits;
+	}
+
+	/**
+	 * Every annotation the oracle-assisted checks propose for ONE file, from findings already
+	 * collected across the whole set — one group per check that has findings here, so a writer
+	 * refusal can be attributed to a rule and the rest kept (`settleAssistedFile`).
+	 */
+	private static function assistedGroups(
 		entry: { file: String, source: String }, findingsByCheck: Array<{ check: Check, all: Array<Violation> }>, plugin: GrammarPlugin,
 		oracle: TypeOracle
-	): Array<{ span: Span, text: String }> {
-		final out: Array<{ span: Span, text: String }> = [];
+	): Array<RuleEdits> {
+		final out: Array<RuleEdits> = [];
 		for (byCheck in findingsByCheck) {
 			final own: Array<Violation> = byCheck.all.filter(v -> v.file == entry.file);
-			if (own.length == 0) continue;
-			for (edit in (cast byCheck.check: OracleAssisted).fixWithOracle(entry.source, own, plugin, oracle)) out.push(edit);
+			if (own.length > 0) out.push(assistedGroup(byCheck.check, entry.source, own, plugin, oracle));
 		}
 		return out;
+	}
+
+	/** What `check`'s oracle seam answers for `own`, as the group the writer-emit salvage reads. */
+	private static function assistedGroup(
+		check: Check, source: String, own: Array<Violation>, plugin: GrammarPlugin, oracle: TypeOracle
+	): RuleEdits {
+		return {
+			rule: check.id(),
+			findings: own,
+			edits: (cast check: OracleAssisted).fixWithOracle(source, own, plugin, oracle),
+			carried: [],
+			overlapped: false,
+			refusal: null
+		};
+	}
+
+	/**
+	 * The assisted twin of `LintFixDriver.findingSplitter`: a refused group's check is re-asked ONE
+	 * finding at a time through its oracle seam. Sound on the same contract — `fixWithOracle`, like
+	 * `fix`, answers any subset of a file's findings, so one finding's edits stand alone.
+	 */
+	private static function assistedSplitter(
+		source: String, findingsByCheck: Array<{ check: Check, all: Array<Violation> }>, plugin: GrammarPlugin, oracle: TypeOracle
+	): (RuleEdits) -> Array<RuleEdits> {
+		return group -> {
+			final byCheck: Null<{ check: Check, all: Array<Violation> }> = findingsByCheck.find(b -> b.check.id() == group.rule);
+			return byCheck == null ? [] : [
+				for (v in group.findings) assistedGroup(byCheck.check, source, [v], plugin, oracle)
+			];
+		};
+	}
+
+	/**
+	 * One file's oracle-assisted groups through the writer-emit gate: the text the batch should
+	 * verify and the edit count it carries, or null when nothing here changes the file.
+	 *
+	 * The whole set is asked first, which is the one round trip a file nothing refuses pays. On a
+	 * refusal the groups go through the safe loop's own salvage — a rule at a time, a refused rule a
+	 * finding at a time (`split`) — so one un-writable annotation costs only itself. Every group the
+	 * gate refused comes back with its sentence in `refusal`, and `blamed` names each one the salvage
+	 * could single out; a source the writer cannot round-trip refuses every group and blames none.
+	 */
+	public static function settleAssistedFile(
+		source: String, groups: Array<RuleEdits>, plugin: GrammarPlugin, optsJson: Null<String>, blamed: Array<String>,
+		?split: (RuleEdits) -> Array<RuleEdits>
+	): Null<{ text: String, edits: Int }> {
+		final all: Array<{ span: Span, text: String }> = [for (group in groups) for (e in group.edits) e];
+		switch CanonicalEdit.canonicalize(source, all, false, plugin, optsJson) {
+			case Ok(text, _):
+				return text == source ? null : { text: text, edits: all.length };
+			case Err(why):
+				final settled: Null<{ text: String, rewrites: Null<Int> }> = LintFixDriver.salvageFileLintEdits(
+					source, groups, why, plugin, optsJson, blamed, split
+				);
+				if (settled == null || settled.text == source) return null;
+				var edits: Int = 0;
+				for (group in groups) if (group.refusal == null && !group.overlapped) edits += group.edits.length;
+				return { text: settled.text, edits: edits };
+		}
 	}
 
 	/**

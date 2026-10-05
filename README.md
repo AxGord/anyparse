@@ -268,7 +268,12 @@ original bytes:
   the refused edit set is re-asked one rule at a time and then one FINDING at a time, so
   every other rule's fixes and the same rule's other findings still land, and the stderr
   line names the refused finding (`modifier-order at 5:2: …`). A finding's own edits stay
-  atomic (a signature with its call sites is one finding). A source the writer cannot
+  atomic (a signature with its call sites is one finding). The two oracle phases narrow it
+  too: the oracle-assisted pass takes the same rule-then-finding salvage and names each
+  refused file on its own line (`oracle-assisted REFUSED <file>: …`, counted on the summary
+  line and in the ledger's gate-refusal block), and a risky rule's edit set the writer refuses
+  is split by writer round trips alone before its writable units are typechecked — the
+  compile count is what those units would have cost on their own. A source the writer cannot
   round-trip at all is still skipped whole — no subset of edits changes that answer;
 - `new` / `new --raw` reject the content instead of creating a file that lost part of it.
 
