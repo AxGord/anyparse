@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.ImportBindings;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
@@ -40,7 +41,12 @@ using Lambda;
  *    module declares it, an alias of that name, a duplicate of this very path, or a type the file
  *    itself declares. Haxe accepts two imports of one simple name and lets the LAST win, so removing
  *    one where a second binder exists could change what the name means. A wildcard is measured to be
- *    outranked by the surviving module import and is deliberately NOT a binder (`bindsElsewhere`).
+ *    outranked by the surviving module import and is deliberately NOT a binder (`bindsElsewhere`);
+ *  - nothing else binds one of the sub-type's VALUE names either: an enum's constructors and an
+ *    enum abstract's values come with the import, the LAST binder of one wins, and constructors of
+ *    another module sharing a name are a third binder the deletion can promote
+ *    (`valuesBoundElsewhere`, reading `ImportBindings`). The AMBIENT arm below keeps a statement that
+ *    binds any value at all — its identity argument is made per type name.
  *
  * ## Why `RiskyFix`, not a trusted deletion
  *
@@ -82,10 +88,13 @@ final class RedundantImport implements Check implements RiskyFix {
 		// What a statement naming a MODULE brings into scope, built once: the ambient arm asks it per
 		// statement per file, and a module import's SIBLINGS are the names the leaf reading lost.
 		final publicTypes: Map<String, Array<String>> = SymbolIndex.publicTypesByModule(resolveIndex);
+		// The VALUE names a statement binds, from the reader the import-moving checks share: a deletion
+		// that changes no TYPE can still hand a bare constructor or module-level field to another binder.
+		final bindings: ImportBindings = new ImportBindings(() -> resolveIndex, plugin);
 		final violations: Array<Violation> = [];
 		for (info in index.allFiles()) for (imp in info.imports) {
-			final module: Null<String> = redundantModuleOf(info, imp, resolveIndex);
-			final ambient: Null<String> = module != null ? null : ambientProviderOf(info, imp, resolveIndex, publicTypes);
+			final module: Null<String> = redundantModuleOf(info, imp, resolveIndex, bindings);
+			final ambient: Null<String> = module != null ? null : ambientProviderOf(info, imp, resolveIndex, publicTypes, bindings);
 			if (module != null)
 				violations.push({
 					file: info.file,
@@ -155,11 +164,17 @@ final class RedundantImport implements Check implements RiskyFix {
 	 * statement load-bearing, and it is the case this refuses on.
 	 */
 	private static function ambientProviderOf(
-		info: FileInfo, imp: ImportInfo, index: SymbolIndex, publicTypes: Map<String, Array<String>>
+		info: FileInfo, imp: ImportInfo, index: SymbolIndex, publicTypes: Map<String, Array<String>>, bindings: ImportBindings
 	): Null<String> {
 		if (imp.guarded || !info.ambientImportsBounded) return null;
 		if (imp.kind != ImportKind.Import && imp.kind != ImportKind.Using) return null;
 		if (imp.kind == ImportKind.Using && usingCompetitorInScope(info, imp)) return null;
+		// The identity argument below is made per TYPE name. A statement that also binds a VALUE — a
+		// constructor, an enum-abstract value, a module-level field — would need it made per value,
+		// against a precedence where constructors outrank fields across the ambient boundary; until
+		// it is, such a statement stays.
+		if (!ImportBindings.bindsNoValue(imp.kind == ImportKind.Using ? bindings.ofUsing(imp.raw) : bindings.ofImport(imp.raw)))
+			return null;
 		// EVERY name the statement brings, never only its leaf: a statement naming a MODULE binds every
 		// type that module declares, and the chain can decide a SIBLING name somewhere else entirely, so
 		// deleting the file's own statement hands that sibling to a nearer ambient group's declaration.
@@ -214,7 +229,7 @@ final class RedundantImport implements Check implements RiskyFix {
 	 * provably redundant sub-module type import. See the class doc for the gate set; each one fails
 	 * closed.
 	 */
-	private static function redundantModuleOf(info: FileInfo, imp: ImportInfo, index: SymbolIndex): Null<String> {
+	private static function redundantModuleOf(info: FileInfo, imp: ImportInfo, index: SymbolIndex, bindings: ImportBindings): Null<String> {
 		if (imp.guarded || imp.kind != ImportKind.Import) return null;
 		final dot: Int = imp.raw.lastIndexOf('.');
 		if (dot <= 0) return null;
@@ -229,7 +244,7 @@ final class RedundantImport implements Check implements RiskyFix {
 			null
 		else if (!moduleDeclaresType(index, module, simple))
 			null
-		else if (bindsElsewhere(info, imp, module, simple, index))
+		else if (bindsElsewhere(info, imp, module, simple, index) || valuesBoundElsewhere(info, imp, module, bindings))
 			null
 		else
 			module;
@@ -264,6 +279,36 @@ final class RedundantImport implements Check implements RiskyFix {
 			case _:
 				if (SourceText.lastSegment(o.raw) == name) return true;
 				if (o.raw != module && moduleDeclaresType(index, o.raw, name)) return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Whether deleting `imp` could hand one of the VALUE names it binds — a constructor or enum-abstract
+	 * value of the sub-type it names — to a line other than the qualifying `module` import. That import
+	 * binds the very same values, so where it is the next binder nothing changes; a THIRD line binding
+	 * one at the same rank (`ImportBindings.collision`: an enum of another module sharing a constructor
+	 * name, an alias nobody listed) may be the one that wins instead. A sub-type whose values cannot be
+	 * listed refuses beside any line binding a value at that rank. A wildcard binds no constructor at
+	 * this rank and is no binder here.
+	 */
+	private static function valuesBoundElsewhere(info: FileInfo, imp: ImportInfo, module: String, bindings: ImportBindings): Bool {
+		final values: Null<Array<String>> = bindings.ofImport(imp.raw)?.typeValues;
+		if (values != null && values.length == 0) return false;
+		final mine: ImportBinding = {
+			types: [],
+			wildcardTypes: [],
+			typeValues: values,
+			fieldValues: []
+		};
+		for (o in info.imports) if ((o.span.from != imp.span.from || o.span.to != imp.span.to) && !providesModule(o, module)) {
+			final theirs: Null<ImportBinding> = switch o.kind {
+				case ImportKind.Wild: null;
+				case ImportKind.Alias: bindings.ofAlias(o.alias ?? o.raw);
+				case ImportKind.Using: bindings.ofUsing(o.raw);
+				case _: bindings.ofImport(o.raw);
+			};
+			if (theirs != null && ImportBindings.collision(mine, imp.raw, theirs, o.raw) != null) return true;
 		}
 		return false;
 	}

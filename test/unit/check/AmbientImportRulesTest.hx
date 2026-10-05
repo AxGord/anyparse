@@ -137,6 +137,17 @@ class AmbientImportRulesTest extends Test {
 		}
 	];
 
+	/** An own enum import the ambient source repeats, beside an own import of another enum sharing its constructor `Red`. */
+	private static final CTOR_RIVAL_TREE: Array<{ name: String, source: String }> = [
+		{ name: 'src/p/Col.hx', source: 'package p;\n\nenum Col {\n\tRed;\n}\n' },
+		{ name: 'src/p/Col2.hx', source: 'package p;\n\nenum Col2 {\n\tRed;\n}\n' },
+		{ name: 'src/lib/import.hx', source: 'import p.Col;\n' },
+		{
+			name: 'src/lib/Modq.hx',
+			source: 'package lib;\n\nimport p.Col2;\nimport p.Col;\n\nclass Modq {\n\n\tvar c: Col = Red;\n\tvar d: Col2;\n\n}\n'
+		}
+	];
+
 	@:pin('control')
 	@:killer('M-AMBIENT-GOVERNANCE-BLIND')
 	public function testAnAmbientImportAModuleUnderItUsesIsNotReported(): Void {
@@ -267,6 +278,25 @@ class AmbientImportRulesTest extends Test {
 		Assert.equals(
 			'src/lib/Modq.hx:a.Sqq', redundantFindings(USING_RIVAL_CONTROL, 'src/lib/Modq.hx'),
 			'with no rival `using` the ambient statement holds the same position'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * An own enum import the ambient source repeats, with an own import of another enum sharing a
+	 * constructor ABOVE it. An ambient statement reads as written ahead of every own one, so
+	 * deleting the own copy hands the bare `Red` to `p.Col2` — the identity argument holds per TYPE name
+	 * only, and a statement binding a value stays.
+	 */
+	@:pin('control')
+	@:killer('M-REDUNDANT-AMBIENT-VALUES')
+	public function testAnOwnStatementBindingAConstructorIsKeptBesideTheAmbientCopy(): Void {
+		#if (sys || nodejs)
+		Assert.equals(
+			'', redundantFindings(CTOR_RIVAL_TREE, 'src/lib/Modq.hx'),
+			'deleting the own `import p.Col;` would hand `Red` to the own `import p.Col2;` written above it'
 		);
 		#else
 		Assert.pass('non-sys target');

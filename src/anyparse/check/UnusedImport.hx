@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.ImportBindings;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.LexicalRegions.LexRegionKind;
 import anyparse.query.OccurrenceScan;
@@ -72,10 +73,12 @@ private typedef FileScan = {
  * statements the import is unused → `Warning` — except a plain module import
  * whose module is IN the lint file set: it binds every top-level type of the
  * module, so a reference to any SECONDARY type keeps it (see
- * `secondaryTypeReferenced`), and a reference to a bare CONSTRUCTOR of an
- * in-set enum / enum-abstract type keeps it too (`enumCtorReferenced` —
- * resolved only when the enum module is itself in the lint set, so run
- * `--fix` project-wide). The remaining forms:
+ * `secondaryTypeReferenced`), and so does a bare reference to any VALUE it
+ * binds (`valuesKeepAlive`, reading `ImportBindings`): a constructor or enum-abstract value of any
+ * non-private type of the module — a secondary enum's too, a typedef's target's too — and a
+ * MODULE-LEVEL field (`modfn()` keeps `import v.Fns;`). A known module whose value names cannot be
+ * listed stays an `Info`. Resolved only when the module is in the lint set or the resolution scope,
+ * so run `--fix` project-wide. The remaining forms:
  *
  *  - `import pkg.Type.*;` (static wildcard) — when `Type` is in the lint set
  *    its static fields / enum(-abstract) values / constructors are known, so
@@ -120,6 +123,10 @@ final class UnusedImport implements Check {
 	/** The suffix `make` appends when it caps a guarded `Warning` at `Info`. */
 	private static inline final MSG_GUARDED: String = '`#if`-guarded, so advisory only: delete it by hand';
 
+	/** The value arm's own words for "a name set behind this import cannot be listed". */
+	private static inline final MSG_VALUES_UNLISTED: String =
+		'its constructors or module-level fields cannot be listed, cannot verify unused';
+
 	/**
 	 * Why `fix` produced nothing for a finding, per arm — the sentence `apq lint --fix` prints after
 	 * `fix DECLINED — `. Each one OPENS with the constant its own message is built from, so the two
@@ -146,6 +153,11 @@ final class UnusedImport implements Check {
 	private static final DECLINE_GUARDED: String = '$MSG_GUARDED — the verdict holds in every branch (the scan reads the raw text of '
 		+ 'all of them), but the canonicaliser normalises the module-level import block ONLY, so deleting a span inside a `#if` region '
 		+ 'leaves the emptied line behind as a second blank';
+
+	/** Why an import whose value names cannot be listed is never deleted. */
+	private static final DECLINE_VALUES_UNLISTED: String = '$MSG_VALUES_UNLISTED — a module the index knows declares an enum carrying a '
+		+ 'build macro, a typedef whose target does not resolve, or a source that does not parse, so a bare constructor or module-level '
+		+ 'field of it could be the reference that keeps the import alive';
 
 	public function new() {}
 
@@ -175,16 +187,10 @@ final class UnusedImport implements Check {
 		// binds ALL of them, so the used-check must consult every name.
 		final moduleTypes: Map<String, Array<String>> = [];
 		for (info in resolveIndex.allFiles()) moduleTypes[info.module] = [for (t in info.types) t.name];
-		// Enum-constructor names per importable path (a main type binds under its
-		// module, a sub-module type under `module.Type`) — a bare `import pkg.Enum;`
-		// is in use when one of its constructors is referenced bare, even if `Enum`
-		// itself never appears.
-		final enumKinds: Array<String> = plugin.refShape().bareConstructorTypeKinds ?? [];
-		final enumCtorsByPath: Map<String, Array<String>> = [];
-		for (info in resolveIndex.allFiles()) for (t in info.types) if (enumKinds.contains(t.kind)) {
-			final path: String = t.isMain ? info.module : '${info.module}.${t.name}';
-			enumCtorsByPath[path] = [for (m in t.members) m.name];
-		}
+		// The VALUE names each statement binds — the constructors / enum-abstract values of every type
+		// it imports and a module's module-level fields — read by the one reader the import-moving
+		// checks share, over the same resolution index.
+		final bindings: ImportBindings = new ImportBindings(() -> resolveIndex, plugin);
 		// Members keyed by importable path from the resolution index — drives the
 		// named-import existence gate (a module resolvable in the report set OR the
 		// library is verifiable).
@@ -207,7 +213,7 @@ final class UnusedImport implements Check {
 			final ignoreModules: Array<String> = plugin.checkOverrides(info.file)?.unusedImportIgnoreModules ?? [];
 			for (imp in info.imports) if (!moduleIgnored(imp, ignoreModules))
 				addViolation(
-					violations, info.file, imp, readersOf(scans, imp, info.file, resolveIndex), plugin, moduleTypes, enumCtorsByPath,
+					violations, info.file, imp, readersOf(scans, imp, info.file, resolveIndex), plugin, moduleTypes, bindings,
 					membersByPath, reportMembersByPath, reportMembersByModule
 				);
 		}
@@ -345,7 +351,7 @@ final class UnusedImport implements Check {
 	 */
 	private static function addViolation(
 		out: Array<Violation>, file: String, imp: ImportInfo, scans: Array<FileScan>, plugin: GrammarPlugin,
-		moduleTypes: Map<String, Array<String>>, enumCtorsByPath: Map<String, Array<String>>, membersByPath: Map<String, Array<String>>,
+		moduleTypes: Map<String, Array<String>>, bindings: ImportBindings, membersByPath: Map<String, Array<String>>,
 		reportMembersByPath: Map<String, Array<String>>, reportMembersByModule: Map<String, Array<String>>
 	): Void {
 		switch imp.kind {
@@ -365,10 +371,12 @@ final class UnusedImport implements Check {
 				// unconfigured haxelib) falls back to the bound-name verdict. An
 				// alias import binds just the alias — never widened.
 				if (imp.kind == ImportKind.Import && secondaryTypeReferenced(imp.raw, bound, scans, moduleTypes)) return;
-				// A bare `import pkg.Enum;` whose constructor is used as a bare
-				// identifier (`Assert.equals(Private, m)`, expected-type resolved)
-				// is in use even though `Enum` itself is never named.
-				if (imp.kind == ImportKind.Import && enumCtorReferenced(imp.raw, scans, enumCtorsByPath)) return;
+				// The VALUES a plain import binds keep it as surely as its types: a bare constructor
+				// or enum-abstract value of any type it imports (`Assert.equals(Private, m)`, a
+				// secondary enum's too) and a module-level field of the module (`modfn()` needs
+				// `import v.Fns;` though `Fns` is never named) — deleting the only binder breaks the
+				// build, deleting the LAST of two silently hands the name to the other.
+				if (imp.kind == ImportKind.Import && valuesKeepAlive(out, file, imp, scans, bindings, membersByPath)) return;
 				if (imp.kind == ImportKind.Import && !membersByPath.exists(imp.raw)) {
 					out.push(make(file, imp, Severity.Info, 'import \'${imp.raw}\': $MSG_NOT_IN_SCOPE', DECLINE_NOT_IN_SCOPE));
 					return;
@@ -453,10 +461,24 @@ final class UnusedImport implements Check {
 		out.push(make(file, imp, Severity.Warning, 'unused using \'${imp.raw}\''));
 	}
 
-	/** True when any constructor of the enum-type imported by `raw` is referenced bare in the file (outside the imports). */
-	private static function enumCtorReferenced(raw: String, scans: Array<FileScan>, enumCtorsByPath: Map<String, Array<String>>): Bool {
-		final ctors: Null<Array<String>> = enumCtorsByPath[raw];
-		return ctors != null && ctors.exists(name -> referenced(scans, name));
+	/**
+	 * Whether the VALUE names the plain import `imp` binds settle its verdict: true when one of them is
+	 * referenced bare in the file, and true — after recording an `Info` — when the module is known
+	 * but a value set of it cannot be listed (`ImportBindings`: an enum carrying a build macro, a typedef
+	 * whose target does not resolve, a module source that does not parse), since no reference test can
+	 * then prove the import dead. An import the index never saw is left to the scope arm.
+	 */
+	private static function valuesKeepAlive(
+		out: Array<Violation>, file: String, imp: ImportInfo, scans: Array<FileScan>, bindings: ImportBindings,
+		membersByPath: Map<String, Array<String>>
+	): Bool {
+		final binding: Null<ImportBinding> = bindings.ofImport(imp.raw);
+		final typeValues: Null<Array<String>> = binding?.typeValues;
+		final fieldValues: Null<Array<String>> = binding?.fieldValues;
+		for (names in [typeValues, fieldValues]) if (names != null && names.exists(name -> referenced(scans, name))) return true;
+		if (!membersByPath.exists(imp.raw) || typeValues != null && fieldValues != null) return false;
+		out.push(make(file, imp, Severity.Info, 'import \'${imp.raw}\': $MSG_VALUES_UNLISTED', DECLINE_VALUES_UNLISTED));
+		return true;
 	}
 
 	/**

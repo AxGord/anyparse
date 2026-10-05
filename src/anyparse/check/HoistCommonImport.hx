@@ -10,6 +10,7 @@ import anyparse.check.Check.VolatileMessage;
 import anyparse.query.AddImport;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.ImportBindings;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
@@ -75,6 +76,9 @@ private typedef HoistContext = {
 
 	/** Every non-private top-level type name each module declares — what a statement naming one brings into scope. */
 	final publicTypes: Map<String, Array<String>>;
+
+	/** What each statement binds, by rank — the reader the import-moving checks share. */
+	final bindings: ImportBindings;
 }
 
 /**
@@ -266,7 +270,7 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 			if (info == null) continue;
 			final held: Array<String> = inForce(info);
 			for (imp in info.imports) {
-				final statement: Null<Hoistable> = hoistableOf(imp, allow, ctx.publicTypes);
+				final statement: Null<Hoistable> = hoistableOf(imp, allow, ctx.publicTypes, ctx.bindings);
 				if (statement == null) continue;
 				final key: String = keyOf(statement);
 				if (!census.byKey.exists(key)) {
@@ -418,6 +422,7 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 		// chain, which is the shape that would read as a redundant import of its own parent. The sort
 		// is stable, so ties keep discovery order and the plan is deterministic.
 		ArraySort.sort(sites, (a, b) -> (governedAt[b] ?? []).length - (governedAt[a] ?? []).length);
+		final widest: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? report;
 		return {
 			sites: sites,
 			governedAt: governedAt,
@@ -425,7 +430,8 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 			ladderOf: ladderOf,
 			existingAt: existingAt,
 			decided: [],
-			publicTypes: SymbolIndex.publicTypesByModule(RefactorSupport.resolutionIndexOf(plugin) ?? report)
+			publicTypes: SymbolIndex.publicTypesByModule(widest),
+			bindings: new ImportBindings(() -> widest, plugin)
 		};
 	}
 
@@ -565,7 +571,9 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 	 * `imp` as a hoistable statement, or null when its shape is one this rule cannot reason about:
 	 * a guarded statement, an alias, a wildcard, a member import, or a `using` off the allow-list.
 	 */
-	private static function hoistableOf(imp: ImportInfo, allow: Array<String>, publicTypes: Map<String, Array<String>>): Null<Hoistable> {
+	private static function hoistableOf(
+		imp: ImportInfo, allow: Array<String>, publicTypes: Map<String, Array<String>>, bindings: ImportBindings
+	): Null<Hoistable> {
 		if (imp.guarded) return null;
 		final simple: String = SourceText.lastSegment(imp.raw);
 		final shaped: Bool = switch imp.kind {
@@ -577,6 +585,13 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 		// A statement whose bound-name set could not be established is not a candidate: the criterion
 		// is about what each of those names means in every governed module, and there is nothing to ask.
 		final names: Null<Array<String>> = SymbolIndex.namesBoundBy(imp, publicTypes);
+		// Nor is one binding a VALUE name — a constructor, an enum-abstract value, a module-level field
+		// (`ImportBindings`). The criterion below is made per TYPE name, while the ambient copy lands
+		// AHEAD of every module's own imports and a constructor outranks a field import or a field
+		// wildcard in either order: the addition could retarget a bare name in a module that never
+		// spelled the statement, and the removal hand one to an own import that used to lose it.
+		final binding: Null<ImportBinding> = imp.kind == ImportKind.Using ? bindings.ofUsing(imp.raw) : bindings.ofImport(imp.raw);
+		if (!ImportBindings.bindsNoValue(binding)) return null;
 		return names == null || names.length == 0 ? null : {
 			path: imp.raw,
 			isUsing: imp.kind == ImportKind.Using,

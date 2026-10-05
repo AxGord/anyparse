@@ -57,6 +57,59 @@ class LintModuleSecondaryTypeSliceTest extends Test {
 		Assert.equals(0, vs.length);
 	}
 
+	/** A bare constructor of a SECONDARY enum keeps the module import even though no type of it is named. */
+	public function testSecondaryEnumConstructorAloneKeepsModuleImport(): Void {
+		final mod: String = 'package a.b;\n\nenum ModAction {\n\tGo;\n\tStop;\n}\n\nclass Mod {}';
+		final use: String = 'package pkg;\n\nimport a.b.Mod;\n\nclass C {\n\tfunction f(): Dynamic return Go;\n}';
+		Assert.equals(
+			0, new UnusedImport().run([
+				{ file: 'a/b/Mod.hx', source: mod },
+				{ file: 'pkg/C.hx', source: use }
+			], plugin()).length
+		);
+	}
+
+	/** A MODULE-LEVEL field is bound by the module's import (Haxe 4.2): `modfn()` needs `import v.Fns;` though `Fns` is never named. */
+	@:pin('control') @:killer('M-UNUSED-VALUES-BLIND', 'M-WILDGATE-MODULE-FIELDS-NONE')
+	public function testModuleLevelFieldUseKeepsModuleImport(): Void {
+		final mod: String = 'package v;\n\nfunction modfn(): Void {}\n\nclass Fns {}\n';
+		final use: String = 'package pkg;\n\nimport v.Fns;\n\nclass C {\n\tfunction f(): Void {\n\t\tmodfn();\n\t}\n}\n';
+		Assert.equals(
+			0, new UnusedImport().run([
+				{ file: 'v/Fns.hx', source: mod },
+				{ file: 'pkg/C.hx', source: use }
+			], plugin()).length
+		);
+	}
+
+	/**
+	 * Two modules each declaring `modfn`: a bare call runs the LAST import's, so that import is in use even
+	 * though nothing names its type — deleting it would silently hand the call to the other module.
+	 */
+	@:pin('control') @:killer('M-UNUSED-VALUES-BLIND')
+	public function testTheLastBinderOfAModuleLevelFieldIsKept(): Void {
+		final use: String =
+			'package pkg;\n\nimport v.Fns;\nimport v.Fns2;\n\nclass C {\n\tfunction f(): Void {\n\t\tnew Fns();\n\t\tmodfn();\n\t}\n}\n';
+		Assert.equals(
+			0, new UnusedImport().run([
+				{ file: 'v/Fns.hx', source: 'package v;\n\nfunction modfn(): Void {}\n\nclass Fns {\n\tpublic function new() {}\n}\n' },
+				{ file: 'v/Fns2.hx', source: 'package v;\n\nfunction modfn(): Void {}\n\nclass Fns2 {}\n' },
+				{ file: 'pkg/C.hx', source: use }
+			], plugin()).length
+		);
+	}
+
+	/** A module whose enum carries a build macro may bind constructors no source spells, so it stays advisory. */
+	@:pin('control') @:killer('M-UNUSED-VALUES-UNLISTED-DELETED')
+	public function testAModuleWhoseConstructorsCannotBeListedStaysAdvisory(): Void {
+		final vs: Array<Violation> = new UnusedImport().run([
+			{ file: 'p/Built.hx', source: 'package p;\n\n@:build(p.Macro.build())\nenum Built {\n\tTeal;\n}\n' },
+			{ file: 'pkg/C.hx', source: 'package pkg;\n\nimport p.Built;\n\nclass C {}\n' }
+		], plugin());
+		Assert.equals(1, vs.length);
+		if (vs.length == 1) Assert.equals(Severity.Info, vs[0].severity);
+	}
+
 	/** No type of the in-set module referenced at all — still a Warning. */
 	public function testWhollyUnusedModuleImportStillFlagged(): Void {
 		final mod: String = 'package a.b;\n\ntypedef ModExtra = {\n\tvar id: Int;\n}\n\nclass Mod {}';

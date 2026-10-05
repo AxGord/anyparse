@@ -2,11 +2,21 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.ImportBindings;
 import anyparse.query.ImportOrder;
 import anyparse.query.ModuleScan;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+
+using Lambda;
+
+/** One module's header lines on one side of the guard, split into imports and `using` lines. */
+private typedef HeaderHalves = {
+	final imports: Array<ImportLine>;
+	final usings: Array<ImportLine>;
+}
 
 /**
  * Flags an `import` / `using` written ABOVE the `#if … #end` region that guards the module's
@@ -70,6 +80,9 @@ final class ImportOutsideGuard implements Check {
 	/** The `using` kind alone — its position among the other `using` lines IS semantics, so it moves on its own terms. */
 	private static final USING_KINDS: Array<String> = [UsingScan.USING_DECL_KIND];
 
+	/** The aliased import kinds — the lines whose bound names this rule cannot read, so a move that flips one refuses. */
+	private static final ALIAS_KINDS: Array<String> = ['ImportAliasDecl', 'ImportAliasInDecl'];
+
 	public function new() {}
 
 	public function id(): String {
@@ -105,7 +118,9 @@ final class ImportOutsideGuard implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return violations.length == 0 ? [] : relocationEdits(source, plugin);
+		return violations.length == 0
+			? []
+			: relocationEdits(source, plugin, new ImportBindings(RefactorSupport.lazySymbolIndex([], plugin, index), plugin));
 	}
 
 	/**
@@ -134,7 +149,9 @@ final class ImportOutsideGuard implements Check {
 	}
 
 	/** The delete + insert pairs that move the stranded header inside the guard, or none when any refusal applies. */
-	private static function relocationEdits(source: String, plugin: GrammarPlugin): Array<{ span: Span, text: String }> {
+	private static function relocationEdits(
+		source: String, plugin: GrammarPlugin, bindings: ImportBindings
+	): Array<{ span: Span, text: String }> {
 		final guarded: Null<{ tree: QueryNode, guard: QueryNode }> = guardedModule(source, plugin);
 		if (guarded == null) return [];
 		final guardSpan: Null<Span> = guarded.guard.span;
@@ -157,6 +174,16 @@ final class ImportOutsideGuard implements Check {
 			innerImports[innerImports.length - 1].chunkTo;
 		else
 			bodyStart;
+		final aliases: Null<Array<ImportLine>> = ImportOrder.linesOfKinds(source, guarded.tree, ALIAS_KINDS);
+		final innerAliases: Null<Array<ImportLine>> = ImportOrder.linesOfKinds(source, guarded.guard, ALIAS_KINDS);
+		if (aliases == null || innerAliases == null) return [];
+		final aliasStarts: Array<Int> = [for (line in aliases.concat(innerAliases)) line.declFrom];
+		// Re-bound: a null check does not narrow a field of an anonymous-structure literal.
+		final guardedImports: Array<ImportLine> = innerImports;
+		final guardedUsings: Array<ImportLine> = innerUsings;
+		final moved: HeaderHalves = { imports: movedImports, usings: movedUsings };
+		final kept: HeaderHalves = { imports: guardedImports, usings: guardedUsings };
+		if (rebindsAName(moved, kept, [importAt, usingAt], aliasStarts, bindings)) return [];
 		final edits: Array<{ span: Span, text: String }> = [
 			for (line in movedImports.concat(movedUsings)) { span: new Span(line.chunkFrom, line.chunkTo), text: '' }
 		];
@@ -178,6 +205,49 @@ final class ImportOutsideGuard implements Check {
 		final buf: StringBuf = new StringBuf();
 		for (line in lines) buf.add(source.substring(line.chunkFrom, line.chunkTo));
 		return buf.toString();
+	}
+
+	/**
+	 * Whether the move flips the order of two lines that bind one simple name at one rank. Each header
+	 * line gets its key in the NEW order — its anchor offset (`anchors`: where the moved imports and the
+	 * moved `using` lines land), then a moved line ahead of the guarded line it is inserted before. The
+	 * stranded imports keep their order against the guarded imports, but a stranded `using` lands BELOW
+	 * every guarded import, and a stranded import below a guarded `using` written ahead of them; for such
+	 * a pair the LAST statement wins, so the relocation would rebind the name — a type, a constructor, a
+	 * module-level field (`ImportBindings.collision`). A line whose names cannot be read at all (an alias
+	 * at `aliasStarts`, an unenumerable wildcard) refuses any flip.
+	 */
+	private static function rebindsAName(
+		moved: HeaderHalves, inner: HeaderHalves, anchors: Array<Int>, aliasStarts: Array<Int>, bindings: ImportBindings
+	): Bool {
+		final placed: Array<{ line: ImportLine, key: Array<Int>, binding: Null<ImportBinding> }> = [];
+		inline function place(line: ImportLine, key: Array<Int>, isUsing: Bool): Void {
+			final binding: Null<ImportBinding> = if (isUsing)
+				bindings.ofUsing(line.path)
+			else if (aliasStarts.contains(line.declFrom))
+				null
+			else
+				bindings.ofImport(line.path);
+			placed.push({ line: line, key: key, binding: binding });
+		}
+		final usingBase: Int = anchors[0] == anchors[1] ? moved.imports.length : 0;
+		for (i => line in moved.imports) place(line, [anchors[0], 0, i], false);
+		for (j => line in moved.usings) place(line, [anchors[1], 0, usingBase + j], true);
+		for (line in inner.imports) place(line, [line.chunkFrom, 1, 0], false);
+		for (line in inner.usings) place(line, [line.chunkFrom, 1, 0], true);
+		for (a in placed) for (b in placed) if (a.line.declFrom < b.line.declFrom && after(a.key, b.key)) {
+			final first: Null<ImportBinding> = a.binding;
+			final second: Null<ImportBinding> = b.binding;
+			if (first == null || second == null) return true;
+			if (ImportBindings.collision(first, a.line.path, second, b.line.path) != null) return true;
+		}
+		return false;
+	}
+
+	/** Whether the key `a` sorts after `b`, element by element. */
+	private static function after(a: Array<Int>, b: Array<Int>): Bool {
+		for (i => value in a) if (value != b[i]) return value > b[i];
+		return false;
 	}
 
 }

@@ -6,6 +6,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
+import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
@@ -62,6 +63,29 @@ class ImportOutsideGuardCheckTest extends Test {
 		Assert.equals(
 			'package debug;\n\n\n#if FLAG\nimport sub.Widget;\n\nusing ext.One;\nusing ext.Two;\n\nclass C {}\n#end\n',
 			fixedRaw('package debug;\n\nusing ext.One;\n\n#if FLAG\nimport sub.Widget;\n\nusing ext.Two;\n\nclass C {}\n#end\n')
+		);
+	}
+
+	/**
+	 * A stranded `using` lands BELOW the guarded imports, and a `using` binds its module's types and
+	 * constructors: with `p.Col2` guarded, `Red` means `Col2.Red` today and would mean `Col.Red`
+	 * after the move (the LAST statement wins), so the move is refused. A `using` binding nothing
+	 * the guarded import binds still moves.
+	 */
+	@:pin('control') @:killer('M-GUARD-REBIND-BLIND')
+	public function testAMoveThatRebindsAConstructorIsRefused(): Void {
+		final libs: Array<{ file: String, source: String }> = [
+			{ file: 'p/Col.hx', source: 'package p;\n\nenum Col {\n\tRed;\n}\n' },
+			{ file: 'p/Col2.hx', source: 'package p;\n\nenum Col2 {\n\tRed;\n}\n' },
+			{ file: 'p/Plain.hx', source: 'package p;\n\nclass Plain {}\n' }
+		];
+		Assert.equals(0, editsWith('package debug;\n\nusing p.Col;\n\n#if FLAG\nimport p.Col2;\n\nclass C {}\n#end\n', libs).length);
+		Assert.equals(
+			'package debug;\n\n\n#if FLAG\nimport p.Plain;\nusing p.Col;\n\nclass C {}\n#end\n',
+			CanonicalEdit.applyEdits(
+				'package debug;\n\nusing p.Col;\n\n#if FLAG\nimport p.Plain;\n\nclass C {}\n#end\n',
+				editsWith('package debug;\n\nusing p.Col;\n\n#if FLAG\nimport p.Plain;\n\nclass C {}\n#end\n', libs)
+			)
 		);
 	}
 
@@ -144,6 +168,14 @@ class ImportOutsideGuardCheckTest extends Test {
 				Assert.fail('canonicalize Err: $message');
 		}
 		return '';
+	}
+
+	/** The check's autofix edits for `src`'s own findings, resolved against an index over `src` and `libs`. */
+	private function editsWith(src: String, libs: Array<{ file: String, source: String }>): Array<{ span: Span, text: String }> {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final check: ImportOutsideGuard = new ImportOutsideGuard();
+		final files: Array<{ file: String, source: String }> = libs.concat([{ file: 'C.hx', source: src }]);
+		return check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin, SymbolIndex.build(files, plugin));
 	}
 
 }

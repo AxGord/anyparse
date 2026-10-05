@@ -145,6 +145,28 @@ class HoistCommonImportTest extends Test {
 	}
 
 	/**
+	 * An ENUM import binds its constructors, and the ambient copy would outrank a module's own field
+	 * import of the same name in either order: `FourQq`'s bare `Rqqwq` means
+	 * `Kqqwwee.Rqqwq` today and would mean the constructor after the hoist. A statement binding a value
+	 * is no candidate.
+	 */
+	@:pin('control')
+	@:killer('M-HOIST-VALUES-BLIND')
+	public function testRefusesAStatementBindingAConstructor(): Void {
+		Assert.equals('', planned([
+			{ name: 'src/qqz/Zqqwwee.hx', source: 'package qqz;\n\nenum Zqqwwee {\n\tRqqwq;\n}\n' },
+			{ name: 'src/qqz/Kqqwwee.hx', source: 'package qqz;\n\nclass Kqqwwee {\n\n\tpublic static final Rqqwq: Int = 1;\n\n}\n' },
+			carrying('OneQq', 'import qqz.Zqqwwee;', 'Zqqwwee'),
+			carrying('TwoQq', 'import qqz.Zqqwwee;', 'Zqqwwee'),
+			carrying('ThreeQq', 'import qqz.Zqqwwee;', 'Zqqwwee'),
+			{
+				name: 'src/aqq/FourQq.hx',
+				source: 'package aqq;\n\nimport qqz.Kqqwwee.Rqqwq;\n\nclass FourQq {\n\n\tvar b: Int = Rqqwq;\n\n}\n'
+			}
+		]));
+	}
+
+	/**
 	 * A `#if`-guarded statement decides a BUILD, so it cannot decide what a name means under a whole
 	 * directory. Over-determined on purpose: the candidate filter refuses it, and so would the
 	 * second-binder gate — which is why the arm for chain guardedness hangs on its own fixture below.

@@ -4,12 +4,12 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.ImportBindings;
 import anyparse.query.ImportOrder;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
-import anyparse.query.SymbolIndexHost;
 import anyparse.query.WildcardImportGate;
 import anyparse.runtime.Span;
 import haxe.ds.ArraySort;
@@ -103,14 +103,17 @@ private typedef UsingWedge = {
  * The reorder is REFUSED (finding stays report-only) when order is load-bearing or a comment
  * cannot be attributed:
  *
- *  - two imports in the run bind the same SIMPLE name (`a.Widget` + `b.Widget`): Haxe accepts
- *    both and lets the LAST one win, so their relative order decides which type the short name
- *    means. A plain module import binds EVERY type its module declares, so the name set is read
- *    from the resolution index — this is what catches two modules that each declare a same-named
- *    SECONDARY type, which the module paths alone do not reveal (`import flash.events.MouseEvent;`
- *    beside `import pony.ui.touch.Mouse;`, whose module declares a secondary `typedef
- *    MouseEvent`). A duplicated path is the same refusal by construction (deleting it is
- *    `duplicate-import`'s call, not a reorder's);
+ *  - two imports in the run bind the same SIMPLE name at one RANK (`a.Widget` + `b.Widget`): Haxe
+ *    accepts both and lets the LAST one win, so their relative order decides which declaration the
+ *    short name means. The names are read by `ImportBindings` from the resolution index, never from
+ *    the paths: a plain module import binds EVERY type its module declares (two modules each
+ *    declaring a same-named SECONDARY type — `import flash.events.MouseEvent;` beside `import
+ *    pony.ui.touch.Mouse;`, whose module declares a secondary `typedef MouseEvent`), the
+ *    constructors and enum-abstract values of those types, and its MODULE-LEVEL fields (`import
+ *    v.Fns;` and `import v.Fns2;` each declaring `function modfn()` call the LAST one's). A
+ *    module whose names at a rank cannot be listed refuses beside any line binding a name there. A
+ *    duplicated path is the same refusal by construction (deleting it is `duplicate-import`'s
+ *    call, not a reorder's);
  *  - the run's FIRST import carries a whole-line comment above it — that comment belongs to the
  *    block, not to one import (a header, a license banner, a `CHECKSTYLE:OFF` marker, a group
  *    label), and a reorder can neither move it nor leave it behind without saying something
@@ -134,11 +137,10 @@ private typedef UsingWedge = {
  * finding is one of them. So a zero fix count here is the guard working, not a missing fixer.
  * What the run does NOT do is SAY which refusal fired — the finding message reads the same
  * whether the reorder is available or refused. The `prefer-typed-throw` treatment (a second,
- * report-only message once its whole-scope gate closes) is the shape to copy, and the reason it
- * has not been copied is a LENS mismatch, not effort: `run` has no `index` parameter, and
- * answering the refusal from the resolution-scoped index would predict MORE collisions than the
- * report-scoped one `fix` is handed, so the report would claim report-only on findings the fixer
- * then rewrites. Give the two seats one index before giving the message two spellings.
+ * report-only message once its whole-scope gate closes) is the shape to copy, and the
+ * LENS mismatch that kept it from being copied is gone: `run` and `fix` both build their
+ * `ImportBindings` over `RefactorSupport.lazySymbolIndex`, the resolution index whenever the host
+ * carries one, so the report could now spell the refusal the fixer would meet.
  *
  * ## Options
  *
@@ -183,7 +185,7 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		// One gate for the whole run, over the index `fix` reads too: the report and the fix must split a
 		// file into the SAME runs, or a fix would sort a block no finding described.
-		final gate: WildcardImportGate = new WildcardImportGate(RefactorSupport.lazySymbolIndex(files, plugin), plugin);
+		final gate: WildcardImportGate = new WildcardImportGate(new ImportBindings(RefactorSupport.lazySymbolIndex(files, plugin), plugin));
 		return RunScan.collect(files, plugin, (entry, tree, violations) -> {
 			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
 			final requested: Int = requestedOrder(config);
@@ -225,17 +227,19 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 				final requested: Int = requestedOrder(config);
 				final header: QueryNode = ImportOrder.headerRootOf(tree, source, plugin);
 				final flagged: Array<Int> = RunScan.spanStarts(violations);
-				final moduleTypes: Map<String, Array<String>> = moduleTypesOf(index);
-				final gate: WildcardImportGate = new WildcardImportGate(RefactorSupport.lazySymbolIndex([], plugin, index), plugin);
+				// ONE reader for the wildcard gate and both refusals, over the RESOLUTION index when the host
+				// carries one — the lens that sees a library module's secondary types, constructors and
+				// module-level fields, and every extra file it reads can only make a refusal fire MORE.
+				final bindings: ImportBindings = new ImportBindings(RefactorSupport.lazySymbolIndex([], plugin, index), plugin);
+				final gate: WildcardImportGate = new WildcardImportGate(bindings);
 				final edits: Array<{ span: Span, text: String }> = [];
 				// A merged wedge REWRITES the region its runs live in, so a run it takes over must not also
 				// get the per-run reorder edit below: the two spans overlap and the caller batches both.
 				final merged: Array<Int> = [];
 				final wedges: Array<UsingWedge> = wedgesOf(source, header, config, gate);
-				final scopeTypes: Map<String, Array<String>> = wedges.length == 0 ? moduleTypes : moduleTypesOf(widestIndex(plugin, index));
 				for (wedge in wedges) {
 					if (!flagged.contains(wedge.usings[0].declFrom)) continue;
-					if (!mergeable(wedge, source, scopeTypes)) continue;
+					if (!mergeable(wedge, source, bindings)) continue;
 					final staying: Array<ImportLine> = stayingBelow(wedge);
 					final sorted: Array<ImportLine> = wedge.imports.filter(line -> !staying.contains(line));
 					final order: Int = fixOrder(requested, ImportOrder.pathsOf(sorted));
@@ -253,7 +257,7 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 					// A refusal is the ANSWER to "why did this rule not fix my file", and until it was
 					// written down here the run answered it with silence — which two readers took for
 					// "this rule has no autofix" while the guard below was doing exactly its job.
-					final refusal: Null<String> = reorderRefusal(block, source, moduleTypes);
+					final refusal: Null<String> = reorderRefusal(block, source, bindings);
 					if (refusal != null) {
 						noteDecline(violations, block, refusal);
 						continue;
@@ -347,21 +351,23 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 	 *    absorbed comment labelled that run while the run was its own block, and the merge would
 	 *    either carry the label into the block's middle or strand it above a different import —
 	 *    the same misattribution `reorderRefusal` refuses at the block's top, one run down;
-	 *  - a wedged `using` may not OVERTAKE an import that binds a name its module also declares.
-	 *    Below that import today the import wins the name; above it the `using` would, so the move
-	 *    is a silent rebind rather than a relayout;
-	 *  - the wedged `using`'s own module must be KNOWN to the index. Its type names are what the
-	 *    previous refusal is computed from, and `boundNames`' last-segment fallback would answer
-	 *    "no collision" on no evidence — precisely for the multi-type facade modules a project
-	 *    writes `using` for (`tink.CoreApi` re-exports `Error`, `Future`, `Outcome`, …). Declare
+	 *  - a wedged `using` may not OVERTAKE an import that binds a name its module also binds at one
+	 *    rank — a type, or a constructor / enum-abstract value (a `using` brings no module-level
+	 *    field, measured). Below that import today the import wins the name; above it the `using`
+	 *    would, so the move is a silent rebind rather than a relayout;
+	 *  - the wedged `using`'s own module must be KNOWN to the index. Its names are what the
+	 *    previous refusal is computed from, and an unknown module's residual reading
+	 *    (`ImportBindings`: its last segment, unlisted values) would answer "no collision" on no
+	 *    evidence — precisely for the multi-type facade modules a project writes `using` for
+	 *    (`tink.CoreApi` re-exports `Error`, `Future`, `Outcome`, …). Declare
 	 *    the library in `resolutionLibs` and the merge unlocks; the Haxe std is always in scope, so
 	 *    `using StringTools` / `using Lambda` need no declaration;
 	 *  - a wildcard MEMBER written between two wedged `using` groups. One below every `using` stays
 	 *    below the merged group (`stayingBelow`); one between them could only do so by crossing the
 	 *    later group, and a `using`'s precedence against a wildcard was never measured.
 	 */
-	private static function mergeable(wedge: UsingWedge, source: String, moduleTypes: Map<String, Array<String>>): Bool {
-		if (reorderRefusal(wedge.imports, source, moduleTypes) != null) return false;
+	private static function mergeable(wedge: UsingWedge, source: String, bindings: ImportBindings): Bool {
+		if (reorderRefusal(wedge.imports, source, bindings) != null) return false;
 		// `<`, matching `reorderRefusal`: an `ImportLine`'s `chunkFrom` can only reach BACKWARD off its
 		// line start (`ImportOrder.withLeadingComments`), so this asks the one question it can answer —
 		// does this run's head carry an absorbed leading comment. Spelled `!=`, it read as a
@@ -373,14 +379,11 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 		final lastUsing: Int = wedge.usings[wedge.usings.length - 1].declFrom;
 		if (stayingBelow(wedge).exists(line -> line.declFrom < lastUsing)) return false;
 		for (statement in wedge.usings) {
-			final names: Null<Array<String>> = moduleTypes[statement.path];
-			if (names == null || names.length == 0) return false;
-			for (line in wedge.imports) {
-				if (
-					line.declFrom > statement.declFrom && !WildcardImportGate.isWildcard(line.path)
-					&& boundNames(line.path, moduleTypes).exists(name -> names.contains(name))
-				)
-					return false;
+			if (!bindings.indexesModule(statement.path)) return false;
+			final used: ImportBinding = bindings.ofUsing(statement.path);
+			for (line in wedge.imports) if (line.declFrom > statement.declFrom && !WildcardImportGate.isWildcard(line.path)) {
+				final imported: Null<ImportBinding> = bindings.ofImport(line.path);
+				if (imported == null || ImportBindings.collision(used, statement.path, imported, line.path) != null) return false;
 			}
 		}
 		return true;
@@ -396,25 +399,6 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 	private static function stayingBelow(wedge: UsingWedge): Array<ImportLine> {
 		final firstUsing: Int = wedge.usings[0].declFrom;
 		return wedge.imports.filter(line -> WildcardImportGate.isWildcard(line.path) && line.declFrom > firstUsing);
-	}
-
-	/**
-	 * The WIDEST module index a fix may reason about: the resolution-scoped one (report files UNION
-	 * the declared libraries, plus the implicit Haxe std) when the host offers it, else the
-	 * report-scoped one the caller passed.
-	 *
-	 * The wedge merge asks what a `using`'s MODULE declares — a resolution question, not a
-	 * confinement one, so the report scope is the wrong lens for it: it is exactly the scope that
-	 * cannot see `StringTools`, `Lambda` or any library module a project actually writes `using`
-	 * for. Every extra file can only make the refusal gates FIRE MORE, never less.
-	 */
-	private static function widestIndex(plugin: GrammarPlugin, index: Null<SymbolIndex>): Null<SymbolIndex> {
-		final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;
-		if (host != null && host.hasAnyResolutionScope()) {
-			final wider: Null<SymbolIndex> = host.resolutionIndex();
-			if (wider != null) return wider;
-		}
-		return index;
 	}
 
 	/**
@@ -446,13 +430,14 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 	/**
 	 * Whether the block's lines may be permuted at all — see the class doc's refusal list.
 	 *
-	 * Two refusals. ORDER IS LOAD-BEARING when two imports bind one simple NAME: Haxe accepts
-	 * both and lets the LAST win, so permuting them silently rebinds that name (a duplicated
-	 * path is the same refusal by construction — it binds the same names twice — and deleting
-	 * it is `duplicate-import`'s call, not a reorder's). The name set of a plain module import
-	 * is EVERY type that module declares, not just its main one, so it is read from the
-	 * resolution index; a module the index does not know contributes only its own last segment,
-	 * which is the pre-index reading and the residual limit of this gate.
+	 * Two refusals. ORDER IS LOAD-BEARING when two imports bind one simple NAME at one rank: Haxe
+	 * accepts both and lets the LAST win, so permuting them silently rebinds that name (a duplicated
+	 * path is the same refusal by construction — it binds the same names twice — and deleting it is
+	 * `duplicate-import`'s call, not a reorder's). What each line binds — every type of a module,
+	 * the constructors and enum-abstract values of those types, its module-level fields, a field
+	 * import's leaf, a wildcard member's set — is `ImportBindings`' answer over the resolution index,
+	 * which names the residual: a module the index does not know contributes its own last segment as
+	 * its only type and unlisted values, and two unlisted sets are not read as colliding.
 	 *
 	 * The block's FIRST member must carry no absorbed leading comment. Such a comment sits above
 	 * the whole block — a file header, a license banner, a `CHECKSTYLE:OFF` marker, a group label
@@ -460,9 +445,7 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 	 * while leaving it behind would strand it above a different import. Neither is a permutation
 	 * of the block's meaning, so the block stays report-only.
 	 */
-	private static function reorderRefusal(
-		block: Array<ImportLine>, source: String, moduleTypes: Map<String, Array<String>>
-	): Null<String> {
+	private static function reorderRefusal(block: Array<ImportLine>, source: String, bindings: ImportBindings): Null<String> {
 		// The condition is `<`, and the ONE thing it can mean is a leading comment: `ImportOrder.lineOf`
 		// sets `chunkFrom = withLeadingComments(source, lineStart)`, which starts AT the line start and
 		// only ever walks backward, so `chunkFrom > lineStart` is unreachable — and the case that would
@@ -473,14 +456,24 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 		if (block[0].chunkFrom < SourceText.startOfLine(source, block[0].declFrom))
 			return 'the block\'s first import carries an absorbed leading comment, written directly above it — such a comment belongs to '
 				+ 'the whole block, so permuting the block would relocate it into the middle or strand it above a different import';
-		final bound: Array<String> = [];
-		// A wildcard member's names were already proved free of every other member's by the gate that
-		// admitted it (`WildcardImportGate`), and its last segment is `*`, which is no name at all.
-		for (line in block) if (!WildcardImportGate.isWildcard(line.path)) for (name in boundNames(line.path, moduleTypes)) {
-			if (bound.contains(name))
-				return 'two imports in the block bind the simple name "$name", which Haxe resolves to the LAST '
-					+ 'of them — reordering would silently change which type the file means';
-			bound.push(name);
+		// Every PAIR, wildcard members included: the gate that admitted a wildcard asked it the same question,
+		// so for one of them this only re-reads an answer the reader memoised.
+		final read: Array<{ line: ImportLine, binding: ImportBinding }> = [];
+		for (line in block) {
+			final binding: Null<ImportBinding> = bindings.ofImport(line.path);
+			if (binding == null) return 'what \'${line.path}\' binds cannot be enumerated, so no reorder can be shown to keep every name';
+			for (earlier in read) {
+				final hit: Null<BindingCollision> = ImportBindings.collision(earlier.binding, earlier.line.path, binding, line.path);
+				if (hit == null) continue;
+				final unlisted: Null<String> = hit.unlisted;
+				final cause: String = unlisted == null
+					? 'two imports in the block bind the simple name "${hit.name}"'
+					: 'the names \'$unlisted\' binds cannot be listed, while another import in the block binds "${hit.name}" '
+						+ 'at the same rank';
+				return '$cause — Haxe resolves such a name to the LAST import binding it, so reordering could silently change which '
+					+ 'declaration the file means';
+			}
+			read.push({ line: line, binding: binding });
 		}
 		return null;
 	}
@@ -496,22 +489,6 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 			if (span == null) continue;
 			if (lines.exists(line -> line.declFrom == span.from)) v.declineReason = reason;
 		}
-	}
-
-	/** Module path -> the simple names it declares, from the resolution index; empty without one. */
-	private static function moduleTypesOf(index: Null<SymbolIndex>): Map<String, Array<String>> {
-		final out: Map<String, Array<String>> = [];
-		if (index != null) for (info in index.allFiles()) out[info.module] = [for (t in info.types) t.name];
-		return out;
-	}
-
-	/**
-	 * The simple names `import <path>;` binds: every type of the MODULE it names, or — for a
-	 * sub-module path (`pkg.Mod.Sub`) and for a module the index never saw — its own last segment.
-	 */
-	private static function boundNames(path: String, moduleTypes: Map<String, Array<String>>): Array<String> {
-		final types: Null<Array<String>> = moduleTypes[path];
-		return types == null || types.length == 0 ? [SourceText.lastSegment(path)] : types;
 	}
 
 	/**

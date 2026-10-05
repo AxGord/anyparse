@@ -147,6 +147,23 @@ class RedundantImportCheckTest extends Test {
 		Assert.equals(0, new RedundantImport().run(files, new HaxeQueryPlugin()).length);
 	}
 
+	/**
+	 * A sub-type import binds its enum's CONSTRUCTORS too, and the LAST binder of one wins: with `p.Col`
+	 * between the module import and this one, deleting `import p.M.MSub;` hands the bare `Red` to `p.Col`
+	 * — so it stays. Without the rival the same import is redundant.
+	 */
+	@:pin('control') @:killer('M-REDUNDANT-VALUES-BLIND')
+	public function testAThirdLineBindingOneOfItsConstructorsKeepsIt(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'p/M.hx', source: 'package p;\n\nclass M {}\n\nenum MSub {\n\tRed;\n\tPink;\n}\n' },
+			{ file: 'p/Col.hx', source: 'package p;\n\nenum Col {\n\tRed;\n}\n' }
+		];
+		final rival: String = 'package app;\n\nimport p.M;\nimport p.Col;\nimport p.M.MSub;\n\nclass C {\n\n\tvar s:MSub = Red;\n\n}\n';
+		final free: String = 'package app;\n\nimport p.M;\nimport p.M.MSub;\n\nclass C {\n\n\tvar s:MSub = Red;\n\n}\n';
+		Assert.equals(0, new RedundantImport().run(files.concat([{ file: 'app/C.hx', source: rival }]), new HaxeQueryPlugin()).length);
+		Assert.equals(1, new RedundantImport().run(files.concat([{ file: 'app/C.hx', source: free }]), new HaxeQueryPlugin()).length);
+	}
+
 	/** A type the file itself declares under that name outranks every import — leave the statement alone. */
 	public function testModuleLocalTypeOfTheSameNameKeepsIt(): Void {
 		final src: String = 'package app;\n\nimport pkg.deep.Mod;\nimport pkg.deep.Mod.Sub;\n\nclass C {}\n\ntypedef Sub = String;\n';

@@ -13909,96 +13909,72 @@
 			"name": "M-RUN-GATE-NO-INDEX",
 			"type": "anyparse.check.ImportBlockOrder",
 			"method": "run",
-			"find": "new WildcardImportGate(RefactorSupport.lazySymbolIndex(files, plugin), plugin)",
-			"replace": "new WildcardImportGate(() -> null, plugin)",
+			"find": "new ImportBindings(RefactorSupport.lazySymbolIndex(files, plugin), plugin)",
+			"replace": "new ImportBindings(() -> null, plugin)",
 			"note": "the report reads no index, so it never admits a wildcard the fix would sort"
 		},
 		{
 			"name": "M-FIX-GATE-NO-INDEX",
 			"type": "anyparse.check.ImportBlockOrder",
 			"method": "fix",
-			"find": "new WildcardImportGate(RefactorSupport.lazySymbolIndex([], plugin, index), plugin)",
-			"replace": "new WildcardImportGate(() -> null, plugin)",
+			"find": "new ImportBindings(RefactorSupport.lazySymbolIndex([], plugin, index), plugin)",
+			"replace": "new ImportBindings(() -> null, plugin)",
 			"note": "the fix reads no index, so it splits a reported block at the wildcard and sorts each piece instead of the block"
 		},
 		{
 			"name": "M-WILDGATE-PACKAGE-ASKS-EXPLICIT",
-			"type": "anyparse.query.WildcardImportGate",
-			"method": "joins",
-			"find": "if (mine.values.length == 0) continue;",
-			"replace": "",
-			"note": "a package wildcard asks an explicit member for value names it cannot collide with, so an unindexed explicit import cuts it"
+			"type": "anyparse.query.ImportBindings",
+			"method": "rankCollision",
+			"find": "if (b == null) return a.length > 0 ?",
+			"replace": "if (b == null) return a.length >= 0 ?",
+			"note": "a line binding NO name at a rank collides with an unlisted one there, so a package wildcard (no value at all) is cut beside an unindexed explicit import"
 		},
 		{
 			"name": "M-WILDGATE-INSTANCE-BOUND",
-			"type": "anyparse.query.WildcardImportGate",
-			"method": "readBinding",
+			"type": "anyparse.query.ImportBindings",
+			"method": "readWildcard",
 			"find": "if (!statics || m.isStatic) m.name",
 			"replace": "m.name",
 			"note": "a class wildcard is read as binding its INSTANCE members too, so an instance name shared with another line cuts a free wildcard"
 		},
 		{
 			"name": "M-WILDGATE-PACKAGE-NAMES-IGNORED",
-			"type": "anyparse.query.WildcardImportGate",
-			"method": "joins",
-			"find": "shares(mine.types, theirs.types) || ",
+			"type": "anyparse.query.ImportBindings",
+			"method": "collision",
+			"find": "{ mine: a.wildcardTypes, theirs: b.wildcardTypes },",
 			"replace": "",
 			"note": "two package wildcards binding one module name are read as free, though the LAST one wins the name"
 		},
 		{
-			"name": "M-WILDGATE-EXPLICIT-VALUES-IGNORED",
-			"type": "anyparse.query.WildcardImportGate",
-			"method": "joins",
-			"find": "if (values == null || shares(mine.values, values)) return false;",
-			"replace": "if (values == null) return false;",
-			"note": "a field wildcard sharing a value name with an explicit field import or a module-level field is read as free, though the LAST statement wins"
-		},
-		{
 			"name": "M-WILDGATE-FIELD-IMPORT-NO-NAME",
-			"type": "anyparse.query.WildcardImportGate",
-			"method": "readExplicitValues",
-			"find": "? [leaf] : null",
-			"replace": "? [] : null",
+			"type": "anyparse.query.ImportBindings",
+			"method": "readExplicit",
+			"find": "fieldValues: [leaf]",
+			"replace": "fieldValues: []",
 			"note": "an explicit FIELD import is read as binding no value, so a field wildcard sharing its name joins the run"
 		},
 		{
-			"name": "M-WILDGATE-WILDCARD-VALUES-IGNORED",
-			"type": "anyparse.query.WildcardImportGate",
-			"method": "joins",
-			"find": " || shares(mine.values, theirs.values)",
-			"replace": "",
-			"note": "two field wildcards binding one static are read as free, though the LAST one wins — the reorder changes what the program prints"
-		},
-		{
-			"name": "M-ORDER-WILDCARD-NAMED-STAR",
-			"type": "anyparse.check.ImportBlockOrder",
-			"method": "reorderRefusal",
-			"find": "if (!WildcardImportGate.isWildcard(line.path)) ",
-			"replace": "",
-			"note": "a wildcard member is read as binding the simple name `*`, so a block holding two of them is refused as a name collision"
-		},
-		{
 			"name": "M-WILDGATE-MODULE-FIELDS-NONE",
-			"type": "anyparse.query.WildcardImportGate",
+			"type": "anyparse.query.ImportBindings",
 			"method": "moduleFieldsOf",
 			"force": "[]",
-			"note": "a module import is read as bringing no module-level field in, so a field wildcard sharing one with it joins the run"
+			"note": "a module import is read as bringing no module-level field in, so a field wildcard sharing one with it joins the run and two modules declaring one `modfn` are reordered"
 		},
 		{
 			"name": "M-WILDGATE-ENUM-STATICS-ONLY",
-			"type": "anyparse.query.WildcardImportGate",
-			"method": "readBinding",
+			"type": "anyparse.query.ImportBindings",
+			"method": "readWildcard",
 			"find": "final statics: Bool = CLASS_KINDS.contains(type.kind);",
 			"replace": "final statics: Bool = true;",
 			"note": "an enum wildcard is read as binding only static members, which drops its constructors from the collision check"
 		},
 		{
 			"name": "M-WILDGATE-EXPLICIT-UNKNOWN-FREE",
-			"type": "anyparse.query.WildcardImportGate",
-			"method": "joins",
-			"find": "if (values == null || shares(mine.values, values)) return false;",
-			"replace": "if (values != null && shares(mine.values, values)) return false;",
-			"note": "an explicit member the index cannot enumerate is read as binding nothing, so a field wildcard joins beside a module whose fields nobody listed"
+			"type": "anyparse.query.ImportBindings",
+			"method": "rankCollision",
+			"find": "if (b == null) return a.length > 0 ? { name: a[0], unlisted: pathB } : null;",
+			"replace": "if (b == null) return null;",
+			"note": "a later line whose names at a rank cannot be listed is read as binding nothing there, so a field wildcard joins beside a module whose fields nobody listed"
 		},
 		{
 			"name": "M-WILDGATE-UNKNOWN-TYPE-JOINS",
@@ -14010,25 +13986,25 @@
 		},
 		{
 			"name": "M-WILDGATE-SUPERTYPE-READ",
-			"type": "anyparse.query.WildcardImportGate",
-			"method": "readBinding",
+			"type": "anyparse.query.ImportBindings",
+			"method": "readWildcard",
 			"find": " || type.supertypes.length > 0",
 			"replace": "",
 			"note": "a subclass's statics are read from its own body, though an inherited `@:autoBuild` may add more"
 		},
 		{
 			"name": "M-WILDGATE-BUILD-READ",
-			"type": "anyparse.query.WildcardImportGate",
-			"method": "readBinding",
+			"type": "anyparse.query.ImportBindings",
+			"method": "readWildcard",
 			"find": " || type.hasBuild",
 			"replace": "",
 			"note": "a type carrying `@:build` is read as declaring only the statics its source spells"
 		},
 		{
 			"name": "M-WILDGATE-TYPEDEF-READ",
-			"type": "anyparse.query.WildcardImportGate",
-			"method": "readBinding",
-			"find": "OPAQUE_KINDS.contains(type.kind) || ",
+			"type": "anyparse.query.ImportBindings",
+			"method": "readWildcard",
+			"find": "type.kind == TYPEDEF_KIND || ",
 			"replace": "",
 			"note": "a typedef is read as declaring no static, though its wildcard imports the statics of what it aliases"
 		},
@@ -14054,6 +14030,146 @@
 			"find": "WildcardImportGate.forPlugin(plugin)",
 			"replace": "null",
 			"note": "the insert seat reads every wildcard as a boundary while the rule reads it as a member, so a fresh import lands past it and is reported"
+		},
+		{
+			"name": "M-BIND-FIELD-RANK-IGNORED",
+			"type": "anyparse.query.ImportBindings",
+			"method": "collision",
+			"find": "{ mine: a.fieldValues, theirs: b.fieldValues }",
+			"replace": "{ mine: a.types, theirs: b.types }",
+			"note": "two lines sharing a module-level field, a field import or a field wildcard's static are read as free, though the LAST statement wins — two modules declaring `modfn` are reordered and the program prints the other one"
+		},
+		{
+			"name": "M-BIND-TYPE-VALUE-RANK-IGNORED",
+			"type": "anyparse.query.ImportBindings",
+			"method": "collision",
+			"find": "{ mine: a.typeValues, theirs: b.typeValues },",
+			"replace": "",
+			"note": "two type imports sharing a constructor or enum-abstract value are read as free, though the LAST one wins the bare name"
+		},
+		{
+			"name": "M-BIND-RANKS-MERGED",
+			"type": "anyparse.query.ImportBindings",
+			"method": "collision",
+			"find": "{ mine: a.fieldValues, theirs: b.fieldValues }",
+			"replace": "{ mine: a.fieldValues, theirs: b.fieldValues }, { mine: a.typeValues, theirs: b.fieldValues }, { mine: a.fieldValues, theirs: b.typeValues }",
+			"note": "a constructor and a module-level field of one name are read as colliding, though the constructor wins in either order — a free block is refused"
+		},
+		{
+			"name": "M-BIND-UNLISTED-FREE-LEFT",
+			"type": "anyparse.query.ImportBindings",
+			"method": "rankCollision",
+			"find": "if (a == null) return b != null && b.length > 0 ? { name: b[0], unlisted: pathA } : null;",
+			"replace": "if (a == null) return null;",
+			"note": "an EARLIER line whose names at a rank cannot be listed is read as binding nothing there, so an unindexed module is reordered against one declaring a module-level field"
+		},
+		{
+			"name": "M-BIND-TYPE-VALUES-NONE",
+			"type": "anyparse.query.ImportBindings",
+			"method": "typeValuesOf",
+			"force": "[]",
+			"note": "a type import is read as binding no constructor, so two enums sharing one are reordered"
+		},
+		{
+			"name": "M-BIND-PRIVATE-TYPE-VALUES",
+			"type": "anyparse.query.ImportBindings",
+			"method": "readExplicit",
+			"find": "if (!t.isPrivate) typeValues",
+			"replace": "typeValues",
+			"note": "a PRIVATE enum's constructors are read as bound by the module import, though they are not — a free block is refused"
+		},
+		{
+			"name": "M-BIND-TYPEDEF-NOT-FOLLOWED",
+			"type": "anyparse.query.ImportBindings",
+			"method": "typeValuesOf",
+			"find": "typeValuesOf(next.type, next.file, seen.concat([type]))",
+			"replace": "[]",
+			"note": "a typedef aliasing an enum is read as binding no constructor, though the compiler binds the target's"
+		},
+		{
+			"name": "M-BIND-NULL-WRAPPER-FOLLOWED",
+			"type": "anyparse.query.ImportBindings",
+			"method": "typeValuesOf",
+			"find": "target == null || (shape.nullableWrapperTypeNames ?? []).contains(SourceText.lastSegment(target))",
+			"replace": "target == null",
+			"note": "a typedef of `Null<Col>` is followed to `Null` itself, which declares no value, though the compiler follows through to `Col`'s constructors"
+		},
+		{
+			"name": "M-BIND-ABSTRACT-STATICS",
+			"type": "anyparse.query.ImportBindings",
+			"method": "typeValuesOf",
+			"find": "!m.isStatic && fields.contains(m.kind)",
+			"replace": "fields.contains(m.kind)",
+			"note": "an enum abstract's STATIC field is read as a value the import binds, though only its values are — a free block is refused"
+		},
+		{
+			"name": "M-BIND-ENUM-BUILD-LISTED",
+			"type": "anyparse.query.ImportBindings",
+			"method": "typeValuesOf",
+			"find": "if (type.hasBuild || type.hasAutoBuild) return null;",
+			"replace": "",
+			"note": "an enum carrying a build macro is read as declaring only the constructors its source spells"
+		},
+		{
+			"name": "M-BIND-USING-FIELDS",
+			"type": "anyparse.query.ImportBindings",
+			"method": "ofUsing",
+			"find": "fieldValues: []",
+			"replace": "fieldValues: imported?.fieldValues",
+			"note": "a `using` is read as binding its module's module-level fields, though it is measured not to — a free wedge merge is refused"
+		},
+		{
+			"name": "M-BIND-FIELD-IMPORT-MODULE-FIELD",
+			"type": "anyparse.query.ImportBindings",
+			"method": "readExplicit",
+			"find": "ownerFields.contains(leaf) || ",
+			"replace": "",
+			"note": "an explicit import of a MODULE-LEVEL field is read as an unknown module, so it collides with every line binding any field value"
+		},
+		{
+			"name": "M-UNUSED-VALUES-BLIND",
+			"type": "anyparse.check.UnusedImport",
+			"method": "valuesKeepAlive",
+			"force": "false",
+			"note": "a module import kept alive only by a bare module-level field or constructor is deleted — the only binder breaks the build, the LAST of two silently rebinds"
+		},
+		{
+			"name": "M-UNUSED-VALUES-UNLISTED-DELETED",
+			"type": "anyparse.check.UnusedImport",
+			"method": "valuesKeepAlive",
+			"find": "if (!membersByPath.exists(imp.raw) || typeValues != null && fieldValues != null) return false;",
+			"replace": "return false;",
+			"note": "a known module whose constructors cannot be listed is deleted on its type names alone"
+		},
+		{
+			"name": "M-REDUNDANT-VALUES-BLIND",
+			"type": "anyparse.check.RedundantImport",
+			"method": "valuesBoundElsewhere",
+			"force": "false",
+			"note": "a sub-type import is deleted though a third line binds one of its constructors, so the bare name moves to that line"
+		},
+		{
+			"name": "M-REDUNDANT-AMBIENT-VALUES",
+			"type": "anyparse.check.RedundantImport",
+			"method": "ambientProviderOf",
+			"find": "if (!ImportBindings.bindsNoValue(",
+			"replace": "if (false && !ImportBindings.bindsNoValue(",
+			"note": "an own enum import duplicated by the ambient source is deleted, though an own import of another enum sharing a constructor then wins it"
+		},
+		{
+			"name": "M-HOIST-VALUES-BLIND",
+			"type": "anyparse.check.HoistCommonImport",
+			"method": "hoistableOf",
+			"find": "if (!ImportBindings.bindsNoValue(binding)) return null;",
+			"replace": "if (false && !ImportBindings.bindsNoValue(binding)) return null;",
+			"note": "an enum import is hoisted into the ambient source, where its constructors outrank a module's own field imports in either order"
+		},
+		{
+			"name": "M-GUARD-REBIND-BLIND",
+			"type": "anyparse.check.ImportOutsideGuard",
+			"method": "rebindsAName",
+			"force": "false",
+			"note": "a stranded `using` is moved below a guarded import binding the same name, so the LAST statement — and the meaning — changes"
 		}
 	]
 }
