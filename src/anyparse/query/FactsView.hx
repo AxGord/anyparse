@@ -1,5 +1,7 @@
 package anyparse.query;
 
+import anyparse.check.FactsTypeTree;
+import anyparse.check.FactsTypeTree.FactsType;
 import anyparse.query.CallGraph.FnDeclaration;
 import anyparse.query.CallGraph.FnNode;
 import anyparse.query.CompilerFacts.CallFact;
@@ -117,6 +119,22 @@ final class FactsView {
 
 	/** The kind of a typed typedef (`TypeFact.kind`). */
 	private static inline final TYPEDEF_KIND: String = 'typedef';
+
+	/** The catch-all type: a value of it is an object of no class unless it escaped (`classless`). */
+	private static inline final CATCH_ALL: String = 'Dynamic';
+
+	/** The nullable wrapper: a value of it is one of its argument's, or null. */
+	private static inline final NULLABLE: String = 'Null';
+
+	/** How many typedefs `classless` reads through before it answers that a type may be a class. */
+	private static inline final MAX_TYPEDEF_DEPTH: Int = 8;
+
+	/**
+	 * The reflective accesses by name that act on a field of the object itself and run nothing it holds. A property access
+	 * (`getProperty`, `setProperty`) runs an accessor, which a structure may hold as a function value (js reads it off
+	 * `__properties__`), so it is none.
+	 */
+	public static final FIELD_ACCESSES: Array<String> = ['Reflect.field', 'Reflect.setField', 'Reflect.hasField', 'Reflect.deleteField'];
 
 	/** The markers that leave some fact of a node without a place: its body keeps the syntactic reading. */
 	private static final UNPLACED: Array<String> = [MACRO_EXPANSION, INLINE_SITE_UNKNOWN, 'stale-foreign'];
@@ -1189,6 +1207,34 @@ final class FactsView {
 		final id: String = CompilerFacts.baseId(unwrapped(type));
 		final declared: Null<TypeFact> = table.type(id);
 		return declared != null && declared.alike && !declared.isExtern && OBJECT_KINDS.contains(declared.kind) ? id : null;
+	}
+
+	/**
+	 * Whether a value of the facts type string `type` is an object of no class unless it is an instance that left the type
+	 * system (`ValueEscapes`): a structure, the catch-all, or a typedef every build declares alike whose every target is one,
+	 * seen through `Null<T>`. A class instance reaches a place of such a type only by escaping, so what a name computed at
+	 * run time reaches on it is a structure's own field — no class member — or a member of an escaped class. A positive
+	 * whitelist: an unknown, a type parameter, an abstract, a function type, an enum and every other type are not.
+	 */
+	public function classless(type: String): Bool {
+		final read: Null<FactsType> = FactsTypeTree.read(StringTools.trim(type));
+		return read != null && classlessType(read, 0);
+	}
+
+	private function classlessType(t: FactsType, depth: Int): Bool {
+		return switch t {
+			case Structure(_): true;
+			case Named(CATCH_ALL, []): true;
+			case Named(NULLABLE, [inner]): classlessType(inner, depth);
+			case Named(id, _) if (depth < MAX_TYPEDEF_DEPTH):
+				final declared: Null<TypeFact> = table.type(id);
+				declared != null && declared.alike && declared.kind == TYPEDEF_KIND && declared.targets.length > 0
+					&& declared.targets.foreach(target -> {
+						final read: Null<FactsType> = FactsTypeTree.read(target);
+						read != null && classlessType(read, depth + 1);
+					});
+			case _: false;
+		};
 	}
 
 	/** The facts type string `type` seen through every wrapper that keeps its members (`Null<T>`). */

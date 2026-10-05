@@ -59,6 +59,12 @@ final class TypedFactsWalk {
 	 */
 	private final _built: Map<Int, Bool>;
 
+	/**
+	 * The locals initialized with an object literal, by id: one never written again (`_written`) holds that one structure,
+	 * no instance of a class, for as long as it lives. Shared with the nested walks.
+	 */
+	private final _literals: Map<Int, Bool>;
+
 	/** The field reads held back until their local's uses are known: the fact without its use, and the local. */
 	private final _deferred: Array<{ fact: String, local: Int }> = [];
 
@@ -114,7 +120,7 @@ final class TypedFactsWalk {
 
 	public function new(
 		host: TypedFactsMacro, id: String, kind: String, owner: String, isStatic: Bool, signature: String, name: Null<String>,
-		locals: Map<Int, String>, written: Map<Int, Bool>, aliases: Map<Int, Alias>, built: Map<Int, Bool>
+		locals: Map<Int, String>, written: Map<Int, Bool>, aliases: Map<Int, Alias>, built: Map<Int, Bool>, literals: Map<Int, Bool>
 	) {
 		this._host = host;
 		this.id = host.uniqueId(id);
@@ -127,6 +133,7 @@ final class TypedFactsWalk {
 		this._written = written;
 		this._aliases = aliases;
 		this._built = built;
+		this._literals = literals;
 	}
 
 	/** Mark the node with a header flag (`gen`: macro-placed; `gi`: a `@:generic` instance's copy), kept out of file ranges. */
@@ -270,7 +277,7 @@ final class TypedFactsWalk {
 		final info: { min: Int, max: Int, file: String } = Context.getPosInfos(f.pos);
 		final nested: TypedFactsWalk = new TypedFactsWalk(
 			_host, '$id@${info.min}', localName == null ? 'fn' : 'local', _owner, _isStatic, str(f.t), localName, _locals, _written,
-			_aliases, _built
+			_aliases, _built, _literals
 		);
 		// a function outside this body was spliced in: it runs here, but no range of its own file is where it runs. One
 		// bound straight to a local is reached without `walk`, so the splice is decided here too
@@ -522,6 +529,7 @@ final class TypedFactsWalk {
 				if (init != null) {
 					flowInto(init, str(v.t), 'var', e.pos);
 					if (constructed(init) && str(init.t) == localType(v)) _built[v.id] = true;
+					if (objectLiteral(init)) _literals[v.id] = true;
 					final called: Null<String> = receiverCall(v, e.pos, block);
 					switch init.expr {
 						case TFunction(_):
@@ -743,6 +751,28 @@ final class TypedFactsWalk {
 		return exactObject(value) && TypedFactsShapes.isException(value.t);
 	}
 
+	/**
+	 * Whether `e` yields a structure built where it is acted on: an object literal, or a local initialized with one and never
+	 * written again (`_literals`), which holds that one object for as long as it lives — no instance of any class.
+	 */
+	private function freshStructure(e: TypedExpr): Bool {
+		return switch e.expr {
+			case TParenthesis(inner) | TMeta(_, inner): freshStructure(inner);
+			case TLocal(v):
+				_literals.exists(v.id) && !_written.exists(v.id);
+			case _: objectLiteral(e);
+		};
+	}
+
+	/** Whether `e` is an object literal, seen through parentheses and metadata. */
+	private static function objectLiteral(e: TypedExpr): Bool {
+		return switch e.expr {
+			case TParenthesis(inner) | TMeta(_, inner): objectLiteral(inner);
+			case TObjectDecl(_): true;
+			case _: false;
+		};
+	}
+
 	/** Whether `e` is a construction, seen through parentheses and metadata. */
 	private static function constructed(e: TypedExpr): Bool {
 		return switch e.expr {
@@ -929,7 +959,9 @@ final class TypedFactsWalk {
 		final first: Null<TypedExpr> = args.length > 0 ? args[0] : null;
 		final receiver: String = first == null
 			? ''
-			: ',"r":${q(sourceType(first))}' + (exactObject(first) ? ',"x":true' : '') + (isThis(first) ? ',"h":true' : '');
+			: ',"r":${q(sourceType(first))}' + (exactObject(first) ? ',"x":true' : '') + (isThis(first) ? ',"h":true' : '') + (
+				freshStructure(first) ? ',"o":true' : ''
+			);
 		add('refl', '{"t":${q(targetName)}$literal$named$receiver,"p":$where}');
 	}
 

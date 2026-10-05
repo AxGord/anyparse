@@ -426,7 +426,7 @@ class MemberReachFactsTest extends Test {
 	 * (`Type.createEnum`, `haxe.DynamicAccess`).
 	 */
 	private static function reflectAsk(
-		files: Map<String, String>, interp: Bool = false, ?holders: Array<String>, ?pos: haxe.PosInfos
+		files: Map<String, String>, interp: Bool = false, ?holders: Array<String>, listed: Bool = true, ?pos: haxe.PosInfos
 	): ReachResult {
 		final std: Null<String> = StdResolver.stdDir();
 		if (std == null) {
@@ -435,7 +435,7 @@ class MemberReachFactsTest extends Test {
 		}
 		final path: String = OracleCoverage.canonical(Sys.getCwd(), Path.join([std, interp ? 'Reflect.hx' : 'js/_std/Reflect.hx']));
 		final result: ReachResult = ask(
-			files, null, true, null, false, interp ? INTERP_BUILD : null, null, null, true,
+			files, null, true, null, false, interp ? INTERP_BUILD : null, null, null, listed,
 			[path => sys.io.File.getContent(path)],
 			holders
 		);
@@ -1974,12 +1974,14 @@ class MemberReachFactsTest extends Test {
 	}
 
 	@:pin('control') @:killer('M-GRAPH-REFLECT-UNTYPED')
-	public function testAReflectiveAccessOnAValueOfNoClassIsADynamicNameUnderTheTruth(): Void {
-		// a `Dynamic` value may be any object, a structure's has no class to read its members
-		// off (`setProperty`: js inlines `setField`, whose splice is blind of its own)
+	public function testAReflectiveAccessOnAValueOfNoClassIsADynamicNameOnceTheClassEscapedUnderTheTruth(): Void {
+		// a `Dynamic` value, or a structure's, may be any object that left the type system: a `Main` handed to `Dynamic` is
+		// one, and `items` is then a member a computed name may reach on either
 		function region(code: String): String {
-			return MEMBER_HEAD + '\tfunction f(n:String, d:Dynamic, s:{ x:Int }):Void {\n' + '\t\tfor (i in 0...items.length) { /*<*/ '
-				+ code + ' /*>*/ }\n\t}\n}\n';
+			return 'class Main {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n'
+				+ '\tstatic function main() { var e:Dynamic = new Main(); }\n'
+				+ '\tfunction f(n:String, d:Dynamic, s:{ x:Int }):Void {\n\t\tfor (i in 0...items.length) { /*<*/ ' + code
+				+ ' /*>*/ }\n\t}\n}\n';
 		}
 		assertMatch(reflectAsk(['Main.hx' => region('Reflect.getProperty(d, n);')]), r -> r.match(Unknown(DynamicName(_, _))));
 		assertMatch(reflectAsk(['Main.hx' => region('Reflect.setProperty(s, n, 1);')]), r -> r.match(Unknown(DynamicName(_, _))));
@@ -3663,6 +3665,77 @@ class MemberReachFactsTest extends Test {
 
 	private static function assertMatch(result: ReachResult, expected: ReachResult -> Bool, ?pos: haxe.PosInfos): Void {
 		Assert.isTrue(expected(result), 'got $result', pos);
+	}
+
+	@:pin('control') @:killer('M-REFLECTED-CLASSLESS') @:killer('M-REFLECTED-CLASSLESS-ESCAPES') @:killer('M-CLASSLESS-STRUCTURE')
+	@:killer('M-CLASSLESS-CATCH-ALL') @:killer('M-CLASSLESS-NULLABLE') @:killer('M-CLASSLESS-TYPEDEF') @:killer('M-REFLECTED-CLASSLESS-PLAIN')
+	public function testAComputedNameOnAnObjectOfNoClassReachesOnlyAnEscapedClassUnderTheTruth(): Void {
+		// `o` is typed by no class, and no literal here: a structure, whose fields no class declares, or an instance that left the type system —
+		// so a name computed at run time reaches `items` on it only once a `Main` escaped (as lime's `ApplicationMain.create`
+		// writes the window attributes it built by the names of a configuration). The interpreter's `Reflect.setField` is no
+		// splice (js inlines it, which is blind of its own)
+		function fixture(type: String, init: String, ?main: String, ?value: String): String {
+			return 'class Main {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n'
+				+ '\tstatic function main() { ${main ?? ''} }\n\tstatic function make():$type return $init;\n'
+				+ '\tfunction f(n:String):Void {\n\t\tvar o:$type = make();\n'
+				+ '\t\tfor (i in 0...items.length) { /*<*/ Reflect.setField(o, n, ${value ?? 'i'}); /*>*/ }\n\t}\n}\n'
+				+ 'typedef Shape = { x:Int };\ntypedef Built = Main;\n';
+		}
+		assertMatch(reflectAsk(['Main.hx' => fixture('{ x:Int }', '{ x: 1 }')], true), r -> r.match(Proven));
+		assertMatch(reflectAsk(['Main.hx' => fixture('Null<Shape>', '{ x: 1 }')], true), r -> r.match(Proven));
+		assertMatch(reflectAsk(['Main.hx' => fixture('Dynamic', '{}')], true), r -> r.match(Proven));
+		// a `Main` stored where no class follows it may be the object any such name acts on
+		final escaped: String = fixture('{ x:Int }', '{ x: 1 }', 'var s:{ items:Array<Int> } = new Main();');
+		assertMatch(reflectAsk(['Main.hx' => escaped], true), r -> r.match(Unknown(DynamicName(_, _))));
+		final caught: String = fixture('Dynamic', '{}', 'var d:Dynamic = new Main();');
+		assertMatch(reflectAsk(['Main.hx' => caught], true), r -> r.match(Unknown(DynamicName(_, _))));
+		// a property access runs an accessor, which a structure may hold as a function value
+		final property: String = StringTools.replace(fixture('Dynamic', '{}'), 'Reflect.setField(o, n, i)', 'Reflect.getProperty(o, n)');
+		assertMatch(reflectAsk(['Main.hx' => property], true), r -> r.match(Unknown(DynamicName(_, _))));
+		// a typedef of a class names that class: its object carries `items` (and an object handed to the call escapes there)
+		assertMatch(reflectAsk(['Main.hx' => fixture('Built', 'new Main()')], true), r -> r.match(Unknown(DynamicName(_, _))));
+		// the member's own value written into the structure is shared, whatever the receiver is
+		assertMatch(reflectAsk(['Main.hx' => fixture('{ x:Int }', '{ x: 1 }', null, 'items')], true), r -> !r.match(Proven));
+		// a parameter of no class holds what its callers hand it: a structure, or a `Main` that escaped there
+		function handed(argument: String): String {
+			return 'class Main {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n'
+				+ '\tstatic function main() { new Main().f("x", $argument); }\n'
+				+ '\tfunction f(n:String, o:{ items:Array<Int> }):Void {\n'
+				+ '\t\tfor (i in 0...items.length) { /*<*/ Reflect.setField(o, n, i); /*>*/ }\n\t}\n}\n';
+		}
+		assertMatch(reflectAsk(['Main.hx' => handed('{ items: [] }')], true), r -> r.match(Proven));
+		assertMatch(reflectAsk(['Main.hx' => handed('new Main()')], true), r -> r.match(Unknown(DynamicName(_, _))));
+		// without the truth no fact types the object
+		final unlisted: ReachResult = reflectAsk(['Main.hx' => fixture('{ x:Int }', '{ x: 1 }')], true, null, false);
+		assertMatch(unlisted, r -> r.match(Unknown(DynamicName(_, _))));
+	}
+
+	@:pin('control') @:killer('M-REFLECTED-FRESH') @:killer('M-REFLECTED-FRESH-PLAIN') @:killer('M-FACTS-REFL-FRESH')
+	@:killer('M-FACTS-REFL-FRESH-LOCAL') @:killer('M-FACTS-REFL-FRESH-WRITTEN') @:killer('M-FACTS-REFL-FRESH-ANY')
+	public function testAComputedNameOnAStructureTheCodeBuiltReachesNoClassUnderTheTruth(): Void {
+		// a `Main` escaped, so a value of no class may be one — but an object literal, or a local holding one and never written
+		// again, is that structure: a name computed at run time reaches its own fields alone (lime's `ApplicationMain.create`
+		// writes the window attributes it built so). The interpreter's `Reflect.setField` is no splice
+		function fixture(decl: String, access: String): String {
+			return 'class Main {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n'
+				+ '\tstatic function main() { var e:Dynamic = new Main(); }\n'
+				+ '\tfunction f(n:String):Void {\n\t\t$decl\n\t\tfor (i in 0...items.length) { /*<*/ $access; /*>*/ }\n\t}\n}\n';
+		}
+		assertMatch(
+			reflectAsk(['Main.hx' => fixture('var o:{ x:Int } = { x: 1 };', 'Reflect.setField(o, n, i)')], true), r -> r.match(Proven)
+		);
+		assertMatch(reflectAsk(['Main.hx' => fixture('', 'Reflect.setField({ x: 1 }, n, i)')], true), r -> r.match(Proven));
+		// a local another value was assigned to holds that value too
+		final written: String = fixture('var o:Dynamic = {};\n\t\to = new Main();', 'Reflect.setField(o, n, i)');
+		assertMatch(reflectAsk(['Main.hx' => written], true), r -> r.match(Unknown(DynamicName(_, _))));
+		// a field of the literal holds what a write by a computed name may have put there
+		final inner: String = fixture(
+			'var o:Dynamic = { inner: {} };\n\t\tReflect.setField(o, n, new Main());', 'Reflect.setField(o.inner, n, i)'
+		);
+		assertMatch(reflectAsk(['Main.hx' => inner], true), r -> r.match(Unknown(DynamicName(_, _))));
+		// a property access runs an accessor, which a structure may hold as a function value
+		final property: String = fixture('var o:{ x:Int } = { x: 1 };', 'Reflect.getProperty(o, n)');
+		assertMatch(reflectAsk(['Main.hx' => property], true), r -> r.match(Unknown(DynamicName(_, _))));
 	}
 
 }

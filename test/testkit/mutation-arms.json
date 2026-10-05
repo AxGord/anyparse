@@ -11879,9 +11879,9 @@
 			"name": "M-GRAPH-REFLECT-UNTYPED",
 			"type": "anyparse.query.ReachGraph",
 			"method": "reflectedMembers",
-			"find": "if (id == null) return null;",
-			"replace": "if (id == null) continue;",
-			"note": "a reflective access on a value of no class — `Dynamic`, a structure — reaches nothing"
+			"find": "if (receiver == null || !plain || !facts.classless(receiver)) return null;\nescapes = true;",
+			"replace": "",
+			"note": "a reflective access on a value of no class reaches nothing — `Dynamic`, a structure, and a typedef of a class or an abstract alike"
 		},
 		{
 			"name": "M-GRAPH-REFLECT-SUBTYPES",
@@ -11967,8 +11967,8 @@
 			"name": "M-FACTS-REFL-HOLDER",
 			"type": "anyparse.query.CompilerFacts",
 			"method": "materialize",
-			"find": "receiverSelf: r.h == true,\n\t\t\t\t\tholder: id",
-			"replace": "receiverSelf: r.h == true,\n\t\t\t\t\tholder: ''",
+			"find": "receiverFresh: r.o == true,\n\t\t\t\t\tholder: id",
+			"replace": "receiverFresh: r.o == true,\n\t\t\t\t\tholder: ''",
 			"note": "(precision) a reflective call's fact names no function whose `this` it may hand"
 		},
 		{
@@ -12725,6 +12725,110 @@
 			"find": "for (id in held) for (sup in facts.table.supertypesOf(id)) if (!owners.contains(sup)) owners.push(sup);",
 			"replace": "",
 			"note": "an object of a declared class runs only the methods its own class declares, none it inherits"
+		},
+		{
+			"name": "M-REFLECTED-CLASSLESS",
+			"type": "anyparse.query.ReachGraph",
+			"method": "reflectedMembers",
+			"find": "if (receiver == null || !plain || !facts.classless(receiver)) return null;",
+			"replace": "return null;",
+			"note": "(precision) a reflective access by a computed name on an object of no class — a structure, the catch-all — may reach any member of any object"
+		},
+		{
+			"name": "M-REFLECTED-CLASSLESS-ESCAPES",
+			"type": "anyparse.query.ReachGraph",
+			"method": "reflectedMembers",
+			"find": "if (receiver == null || !plain || !facts.classless(receiver)) return null;\nescapes = true;",
+			"replace": "if (receiver == null || !plain || !facts.classless(receiver)) return null;",
+			"note": "an object of no class reaches no member of an instance that escaped the type system, as if a structure could hold none"
+		},
+		{
+			"name": "M-CLASSLESS-STRUCTURE",
+			"type": "anyparse.query.FactsView",
+			"method": "classlessType",
+			"find": "case Structure(_): true;",
+			"replace": "case Structure(_): false;",
+			"note": "(precision) a value of a structure type may be an object of any class"
+		},
+		{
+			"name": "M-CLASSLESS-CATCH-ALL",
+			"type": "anyparse.query.FactsView",
+			"method": "classlessType",
+			"find": "case Named(CATCH_ALL, []): true;",
+			"replace": "case Named(CATCH_ALL, []): false;",
+			"note": "(precision) a value of the catch-all may be an object of any class, escaped or not"
+		},
+		{
+			"name": "M-CLASSLESS-NULLABLE",
+			"type": "anyparse.query.FactsView",
+			"method": "classlessType",
+			"find": "case Named(NULLABLE, [inner]): classlessType(inner, depth);",
+			"replace": "",
+			"note": "(precision) a nullable structure is read as the typedef `Null`, which is none"
+		},
+		{
+			"name": "M-CLASSLESS-TYPEDEF",
+			"type": "anyparse.query.FactsView",
+			"method": "classlessType",
+			"find": "declared != null && declared.alike && declared.kind == TYPEDEF_KIND && declared.targets.length > 0",
+			"replace": "false && declared != null && declared.alike && declared.kind == TYPEDEF_KIND && declared.targets.length > 0",
+			"note": "(precision) a typedef of a structure (lime's `WindowAttributes`) may be an object of any class"
+		},
+		{
+			"name": "M-REFLECTED-FRESH",
+			"type": "anyparse.query.ReachGraph",
+			"method": "reflectedMembers",
+			"find": "if (r.receiverFresh && plain) continue;",
+			"replace": "",
+			"note": "(precision) a structure the code built where a computed name acts on it may be an object of any class"
+		},
+		{
+			"name": "M-REFLECTED-FRESH-PLAIN",
+			"type": "anyparse.query.ReachGraph",
+			"method": "reflectedMembers",
+			"find": "if (r.receiverFresh && plain) continue;",
+			"replace": "if (r.receiverFresh) continue;",
+			"note": "a property access by a computed name on a structure the code built runs none of the functions its fields hold"
+		},
+		{
+			"name": "M-REFLECTED-CLASSLESS-PLAIN",
+			"type": "anyparse.query.ReachGraph",
+			"method": "reflectedMembers",
+			"find": "if (receiver == null || !plain || !facts.classless(receiver)) return null;",
+			"replace": "if (receiver == null || !facts.classless(receiver)) return null;",
+			"note": "a property access by a computed name on a value of no class runs none of the functions a structure's fields hold"
+		},
+		{
+			"name": "M-FACTS-REFL-FRESH",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "reflection",
+			"find": "freshStructure(first) ? ',\"o\":true' : ''",
+			"replace": "false ? ',\"o\":true' : ''",
+			"note": "(precision) an object literal handed to a reflective call is recorded as any value of its type"
+		},
+		{
+			"name": "M-FACTS-REFL-FRESH-LOCAL",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "visit",
+			"find": "if (objectLiteral(init)) _literals[v.id] = true;",
+			"replace": "",
+			"note": "(precision) a local initialized with an object literal holds any value of its type"
+		},
+		{
+			"name": "M-FACTS-REFL-FRESH-WRITTEN",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "freshStructure",
+			"find": "_literals.exists(v.id) && !_written.exists(v.id);",
+			"replace": "_literals.exists(v.id);",
+			"note": "a local initialized with an object literal holds that structure even after code assigns it another value"
+		},
+		{
+			"name": "M-FACTS-REFL-FRESH-ANY",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "freshStructure",
+			"find": "case _: objectLiteral(e);",
+			"replace": "case _: true;",
+			"note": "any expression handed to a reflective call — a field of a literal another write may replace, a call — is a structure the code built"
 		},
 		{
 			"name": "M-FACTS-TEXT-GENERIC-BUILD",

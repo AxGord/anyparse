@@ -1345,7 +1345,10 @@ final class ReachGraph {
 	 * (`FactsView.objectClass`), of a typed subtype of it unless it is an object of exactly that class, and — unless it is
 	 * `this` of a method no code obtains as a value, which only a dispatch on an instance of its class or of a subclass then
 	 * binds (`FactsMethodValues.selfBound`) — of a type whose instances escaped the type system (`ValueCarriers.escapedIds`);
-	 * with each type those extend or implement. The methods it may run are, unless the project declares the classes whose
+	 * with each type those extend or implement. An object whose type names no class (`FactsView.classless`: a
+	 * structure, the catch-all) is a structure, whose fields are no class members, or an instance that escaped: of an escaped type alone;
+	 * a structure the code built where it acts on it (`ReflectionFact.receiverFresh`) is of no type at all — both only for an access of a
+	 * field of the object itself (`FactsView.FIELD_ACCESSES`). The methods it may run are, unless the project declares the classes whose
 	 * methods a name computed at run time may obtain (`reflectiveMethodHolders`, `FactsMethodValues.declaredHolders`),
 	 * every one of those types; then only the accessors of any of them, and every method of a declared class each object
 	 * may be of, by its own name, and of the types it extends — its variables stay any. Null — any member of
@@ -1362,9 +1365,18 @@ final class ReachGraph {
 		}
 		var escapes: Bool = false;
 		for (r in receivers) {
+			// a structure acted on by its own fields alone runs none of the functions they hold (`FactsView.FIELD_ACCESSES`)
+			final plain: Bool = FactsView.FIELD_ACCESSES.contains(r.target);
+			// a structure the code built where it acts on it is no instance of any class: the name reaches its own fields
+			if (r.receiverFresh && plain) continue;
 			final receiver: Null<String> = r.receiver;
 			final id: Null<String> = receiver == null ? null : facts.objectClass(receiver);
-			if (id == null) return null;
+			if (id == null) {
+				// a value of no class is a structure, whose fields no class declares, or an instance that left the type system
+				if (receiver == null || !plain || !facts.classless(receiver)) return null;
+				escapes = true;
+				continue;
+			}
 			note(id);
 			if (r.receiverExact) continue;
 			for (sub in facts.table.subtypesOf(id)) note(sub);
