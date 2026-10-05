@@ -353,7 +353,9 @@ final class TypedFactsWalk {
 	/**
 	 * The range of the body's own code between the statements of `exprs` around the `index`-th — the end of the last one
 	 * before it that is own code (`ownCode`) to the start of the first one after it — within `outer`, the range of the
-	 * innermost own code holding them all.
+	 * innermost own code holding them all; `outer` itself unless that range holds every own code of the statement
+	 * (`holdsOwnCode`): the compiler places code of its own at the whole block — the `this` a closure among an inlined
+	 * call's arguments captures, bound ahead of the splice — and a range bounded by it is no text the call is written in.
 	 */
 	private function between(exprs: Array<TypedExpr>, index: Int, outer: { min: Int, max: Int }): { min: Int, max: Int } {
 		var min: Int = outer.min;
@@ -366,7 +368,17 @@ final class TypedFactsWalk {
 			max = Context.getPosInfos(exprs[j].pos).min;
 			break;
 		}
-		return min <= max && outer.min <= min && max <= outer.max ? { min: min, max: max } : outer;
+		final site: { min: Int, max: Int } = { min: min, max: max };
+		return min <= max && outer.min <= min && max <= outer.max && holdsOwnCode(exprs[index], site) ? site : outer;
+	}
+
+	/** Whether `site` holds the range of every expression of `e` that is own code (`ownCode`), `e` among them. */
+	private function holdsOwnCode(e: TypedExpr, site: { min: Int, max: Int }): Bool {
+		final info: { min: Int, max: Int, file: String } = Context.getPosInfos(e.pos);
+		if (ownCode(e) && (info.min < site.min || info.max > site.max)) return false;
+		var held: Bool = true;
+		TypedExprTools.iter(e, x -> if (held && !holdsOwnCode(x, site)) held = false);
+		return held;
 	}
 
 	/** Whether `info` lies in the declared range of `method`. */
