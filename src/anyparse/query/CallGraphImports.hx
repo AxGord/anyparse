@@ -23,6 +23,9 @@ final class CallGraphImports {
 	/** File -> the simple names of the types its `using` statements (own and ambient) bring in, nearest first. */
 	private final _usings: Map<String, Array<String>> = [];
 
+	/** File -> the statics its `import p.T.member as alias;` statements (own and ambient) bind under another name. */
+	private final _fieldAliases: Map<String, Array<FieldAlias>> = [];
+
 	private final _enumConstructorKinds: Array<String>;
 
 	/** Whether a type declares a member static — the tables that answer it live with the types. */
@@ -64,6 +67,21 @@ final class CallGraphImports {
 		}
 		_usings[key] = usings;
 		_imports[key] = imports;
+		final aliases: Array<FieldAlias> = [];
+		for (imp in imports) {
+			final alias: Null<FieldAlias> = imp.kind == ImportKind.Alias ? fieldAliasOf(imp) : null;
+			if (alias != null) aliases.push(alias);
+		}
+		_fieldAliases[key] = aliases;
+	}
+
+	/**
+	 * The statics the imports of `file` bind under a name of their own (`import p.T.member as alias;`) — each with the
+	 * type the path names as the member's owner — and every alias whose path does not decode, with no owner and no member:
+	 * that one may stand for any static. A plain `import p.T.member;` or a wildcard binds a static under its own name.
+	 */
+	public inline function fieldAliases(file: String): Array<FieldAlias> {
+		return _fieldAliases[CallGraphNames.normalizePath(file)] ?? [];
 	}
 
 	/**
@@ -94,7 +112,6 @@ final class CallGraphImports {
 		for (imp in _imports[CallGraphNames.normalizePath(file)] ?? []) {
 			final path: Null<String> = switch imp.kind {
 				case Import: imp.raw;
-				case Alias: imp.alias == name ? imp.aliasTarget : null;
 				case Wild: imp.raw.substring(0, imp.raw.length - 2);
 				case _: null;
 			};
@@ -112,12 +129,30 @@ final class CallGraphImports {
 						out.unknown = true;
 				case Import if (last == name && before != '' && CallGraphNames.isTypeLike(before)):
 					bind(before, last);
-				case Alias if (before != '' && CallGraphNames.isTypeLike(before)):
-					bind(before, last);
 				case _:
 			}
 		}
+		for (a in fieldAliases(file)) {
+			final owner: Null<String> = a.owner;
+			final member: Null<String> = a.member;
+			if (a.alias == name && owner != null && member != null) bind(owner, member);
+		}
 		return out;
+	}
+
+	/**
+	 * The static an alias statement binds — `importedStatics` binds no other: a path whose segment before the last
+	 * names a type (`p.T.member`). Null for an alias of a type or a module; an alias whose path did not decode is one with
+	 * no owner and no member.
+	 */
+	private static function fieldAliasOf(imp: ImportInfo): Null<FieldAlias> {
+		final alias: Null<String> = imp.alias;
+		if (alias == null) return null;
+		final path: Null<String> = imp.aliasTarget;
+		if (path == null) return { alias: alias, owner: null, member: null };
+		final segs: Array<String> = path.split('.');
+		if (segs.length < 2 || !CallGraphNames.isTypeLike(segs[segs.length - 2])) return null;
+		return { alias: alias, owner: segs[segs.length - 2], member: segs[segs.length - 1] };
 	}
 
 }
@@ -126,4 +161,14 @@ final class CallGraphImports {
 typedef ImportedName = {
 	var statics: Array<{ owner: String, member: String }>;
 	var unknown: Bool;
+}
+
+/**
+ * A static an import binds under a name of its own (`import p.T.member as alias;`): `owner` is the type the path names,
+ * both null when the path did not decode.
+ */
+typedef FieldAlias = {
+	var alias: String;
+	var owner: Null<String>;
+	var member: Null<String>;
 }

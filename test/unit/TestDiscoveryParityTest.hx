@@ -1214,6 +1214,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.FactsFixGateE2ETest#testAPrivateMemberNoSupertypeDeclaresIsDeleted :: control :: M-UNUSED-PRIVATE-CHAIN-FACTS,M-UNUSED-PRIVATE-CHAIN-DECLARED,M-UNUSED-PRIVATE-CHAIN-AUTOBUILD',
 			'unit.check.FactsFixGateE2ETest#testAProofTheTruthContradictsKeepsTheLoop :: control :: M-REACH-PROVEN-TRUTH',
 			'unit.check.FactsFixGateE2ETest#testAReceiverTheFactsTypeAsANonExternClassLosesItsToString :: control :: M-TOSTRING-FACTS-CLASS,M-TOSTRING-FACTS-EXTERN,M-FACTS-ESCAPE-SHIFT',
+			'unit.check.FactsFixGateE2ETest#testAStaticImportedUnderAnotherNameKeepsTheLoopWithoutTheTruth :: control :: M-REACH-IMPORT-ALIAS,M-REACH-IMPORT-ALIAS-WORDS',
 			'unit.check.FactsFixGateE2ETest#testAnAbstractTheFactsTypeIsNeverJudgedByAnotherDeclarationOfItsName :: control :: M-FOLD-FACTS-PLAIN-KINDS',
 			'unit.check.FactsFixGateE2ETest#testAnOperandTheFactsTypeLetsTheMergeThrough :: control :: M-FOLD-FACTS-OPERAND,M-FACTS-VALUE-TYPE-FLOWS',
 			'unit.check.FactsFixGateE2ETest#testWhatTheConfigurationsRecordDifferentlyKeepsEveryFixOff :: control :: M-FACTS-ALIKE-FOLD,M-FACTS-ALIKE-TOSTRING,M-FACTS-META-UNION',
@@ -2928,10 +2929,14 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachTest#testALibraryReadOfTheMemberByItsNameIsATouch :: control :: M-REACH-LIB-ACCESS',
 			'unit.query.MemberReachTest#testAMemberDeclaredInEachBranchIsWhatEveryDeclarationSays :: control :: '
 				+ 'M-GRAPH-JOINED-MEMBER,M-REACH-SHARED-INIT-BRANCHES,M-GRAPH-FOLDED-DYNAMIC',
+			'unit.query.MemberReachTest#testANameAnImportDoesNotBindToTheMemberIsNoTouch :: control :: M-REACH-IMPORT-ALIAS-OTHER-TYPE,M-REACH-IMPORT-ALIAS-LOCAL,M-REACH-IMPORT-ALIAS-MEMBER',
 			'unit.query.MemberReachTest#testAPositionTypedOnlyOnTheOutsideHoldsAnything :: control :: '
 				+ 'M-CARRY-TYPED-ARGS,M-CARRY-TYPED-ARITY,M-ESCAPE-UNWRITTEN-ARGS',
+			'unit.query.MemberReachTest#testARawRegionSpellingOnlyTheAliasIsABlindSpot :: control :: M-REACH-IMPORT-ALIAS-OPAQUE',
 			'unit.query.MemberReachTest#testAReadNoReceiverTypeDeclaresReachesWhatItMayBe :: control :: '
 				+ 'M-REACH-EXTENSION-READ,M-REACH-GENERATED-READ,M-REACH-FILE-IMPORTS,M-GRAPH-READ-DECLARED',
+			'unit.query.MemberReachTest#testAStaticImportedUnderAnotherNameIsTouchedThroughTheAlias :: control :: M-REACH-IMPORT-ALIAS,M-REACH-IMPORT-ALIAS-SELF',
+			'unit.query.MemberReachTest#testAStaticImportedUnderItsOwnNameIsTouched :: guard :: ',
 			'unit.query.MemberReachTest#testAValueOfAnInterfaceOnlyASubtypeSharesCarriesTheMember :: control :: M-CARRY-SUBTYPE-MEET',
 			'unit.query.MemberReachTest#testAVersionComparisonIsDecidedByTheValueEveryBuildGivesIt :: control :: M-REACH-LIVE-VALUES',
 			'unit.query.MemberReachTest#testAliasWrittenInTheRegionItselfIsRefused :: control :: M-REACH-ESCAPE-GATE',
@@ -2941,6 +2946,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-REACH-RECEIVER-OWNER,M-CARRY-SUBTYPE-MEET',
 			'unit.query.MemberReachTest#testAnAnswerDoesNotDependOnTheQuestionsBeforeIt :: control :: M-REACH-QUESTION-ENTERED',
 			'unit.query.MemberReachTest#testAnEditToAFileOfANodeFoldedAcrossFilesRebuildsTheGraph :: control :: ' + 'M-REACH-REFRESH-FOLDED',
+			'unit.query.MemberReachTest#testAnImportedFunctionReadAsAValueIsAdmittedAtAValueCall :: control :: M-CALLGRAPH-ALIAS-VALUE,M-CALLGRAPH-IMPORTED-VALUE',
 			'unit.query.MemberReachTest#testAnInstanceThatLeftTheTypeSystemMayBeAnyType :: control :: '
 				+ 'M-CARRY-ESCAPES,M-ESCAPE-STORE,M-ESCAPE-CAST,M-ESCAPE-DECL,M-ESCAPE-PARAM,M-ESCAPE-RETURN,M-ESCAPE-LAMBDA,M-ESCAPE-THROW,M-ESCAPE-METHOD-VALUE,M-ESCAPE-HELD,M-ESCAPE-LIBRARY-SUPER,M-ESCAPE-NATIVE,M-ESCAPE-ANY',
 			'unit.query.MemberReachTest#testAssignmentUsedAsAValueSharesWhatItStores :: control :: M-REACH-ASSIGNMENT-VALUE-ALIAS',
@@ -4790,7 +4796,16 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-SPLICED-REFLECTION-FROM',
 			'M-FACTS-SPLICED-REFLECTION-MEMBERLESS',
 			'M-FACTS-SPLICED-REFLECTION-NAMED',
-			'M-REACH-PROVEN-TRUTH'
+			'M-REACH-PROVEN-TRUTH',
+			'M-REACH-IMPORT-ALIAS',
+			'M-REACH-IMPORT-ALIAS-SELF',
+			'M-REACH-IMPORT-ALIAS-WORDS',
+			'M-REACH-IMPORT-ALIAS-OPAQUE',
+			'M-REACH-IMPORT-ALIAS-OTHER-TYPE',
+			'M-REACH-IMPORT-ALIAS-LOCAL',
+			'M-REACH-IMPORT-ALIAS-MEMBER',
+			'M-CALLGRAPH-ALIAS-VALUE',
+			'M-CALLGRAPH-IMPORTED-VALUE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

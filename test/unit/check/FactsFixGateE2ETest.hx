@@ -102,6 +102,9 @@ class FactsFixGateE2ETest extends Test {
 		+ '\tstatic var done:Bool = false;\n' + '\n' + '\t#if other\n' + '\tpublic static function go():Void {}\n' + '\t#else\n'
 		+ '\tpublic static function go():Void {\n' + '\t\tif (!done) {\n' + '\t\t\tdone = true;\n' + '\t\t\tstuff.push(5);\n' + '\t\t}\n'
 		+ '\t}\n' + '\t#end\n' + '}\n';
+	private static final REPLACE_OTHER: String = 'class Other {\n' + '\tstatic var done:Bool = false;\n' + '\n'
+		+ '\tpublic static function go():Void {\n' + '\t\tif (!done) {\n' + '\t\t\tdone = true;\n' + '\t\t\tstuff = [10, 20, 30, 40];\n'
+		+ '\t\t}\n' + '\t}\n' + '}\n';
 	private static final HXML: String = '-cp .\n-main Main\n--interp\n';
 	private static inline final APQLINT: String = '{"compilerOracle":[{"hxml":"check.hxml"}],"resolutionRoots":["."]}';
 	private static inline final BUFFER: Int = 1 << 20;
@@ -337,6 +340,39 @@ class FactsFixGateE2ETest extends Test {
 		Assert.equals(ALIAS_MAIN, File.getContent('$dir/Main.hx'));
 		Assert.equals(before, run(dir), 'the program prints what it printed');
 		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * With no list of builds to answer it, the syntax reads `stuff` — `Main.items` imported under another name, in the file
+	 * spelling it or in an `import.hx` beside it — as the member: the `go` the loop calls replaces it, so the loop, whose
+	 * element iterator would keep walking the old one, stays (rewritten, the program printed 3 instead of 21).
+	 */
+	@:pin('control') @:killer('M-REACH-IMPORT-ALIAS') @:killer('M-REACH-IMPORT-ALIAS-WORDS')
+	public function testAStaticImportedUnderAnotherNameKeepsTheLoopWithoutTheTruth(): Void {
+		#if (sys || nodejs)
+		final apqlint: String = '{"compilerOracle":[{"hxml":"check.hxml"}],"resolutionRoots":["."]}';
+		final own: Array<{ name: String, source: String }> = [
+			{
+				name: 'Other.hx',
+				source: 'import Main.items as stuff;\n\n' + REPLACE_OTHER
+			}
+		];
+		final ambient: Array<{ name: String, source: String }> = [
+			{ name: 'Other.hx', source: REPLACE_OTHER },
+			{ name: 'import.hx', source: 'import Main.items as stuff;\n' }
+		];
+		for (other in [own, ambient]) {
+			final dir: Null<String> = tree('aliasreplace', [{ name: 'Main.hx', source: ALIAS_MAIN }].concat(other), HXML, apqlint);
+			if (dir == null) return;
+			final before: String = run(dir);
+			CliFixture.captureStderr(() -> Cli.run(['lint', '--fix', '--rule', 'prefer-keyvalue-loop', '$dir/Main.hx']));
+			Assert.equals(ALIAS_MAIN, File.getContent('$dir/Main.hx'), other[other.length - 1].name);
+			Assert.equals(before, run(dir), 'the program prints what it printed');
+			CliFixture.removeDir(dir);
+		}
 		#else
 		Assert.pass('non-sys target');
 		#end

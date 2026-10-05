@@ -97,12 +97,19 @@ final class MemberTouchScan {
 		final typed: Map<String, Array<FieldFact>> = typedAccesses(g, name, declaring, unread) ?? [];
 		for (f in _scope.files) {
 			final tree: Null<QueryNode> = g.treeOf(f.file);
-			if (tree == null || !RawSourceScan.mentionsWord(f.source, name)) continue;
-			final opaque: Null<Span> = CondRegionScan.opaqueCondRegionMentioning(tree, f.source, name, _scope.shape);
-			// a raw region no configured build compiles hides nothing
-			final hides: Bool = opaque != null && _live(f.file, opaque);
-			if (opaque != null && hides && out.hidden == null) out.hidden = OpaqueCond(f.file, opaque);
-			scanFile(g, f.file, f.source, tree, name, declaring, access, arrayTyped, out, f.file == regionFile ? region : null, typed);
+			if (tree == null) continue;
+			// the member is spelled by its own name, or by a name an import of the file binds it to
+			final aliases: Array<String> = aliasesIn(g, f.file, name, declaring);
+			final words: Array<String> = [name].concat(aliases);
+			if (!words.exists(w -> RawSourceScan.mentionsWord(f.source, w))) continue;
+			for (w in words) {
+				final opaque: Null<Span> = CondRegionScan.opaqueCondRegionMentioning(tree, f.source, w, _scope.shape);
+				// a raw region no configured build compiles hides nothing
+				if (opaque != null && _live(f.file, opaque) && out.hidden == null) out.hidden = OpaqueCond(f.file, opaque);
+			}
+			scanFile(
+				g, f.file, f.source, tree, name, aliases, declaring, access, arrayTyped, out, f.file == regionFile ? region : null, typed
+			);
 		}
 		for (id => accesses in typed) recordTyped(g, id, name, accesses, access, arrayTyped, out, regionFile, region);
 		for (id in unread) recordUnread(g, id, access, out);
@@ -186,18 +193,24 @@ final class MemberTouchScan {
 	}
 
 	private function scanFile(
-		g: CallGraph, file: String, source: String, tree: QueryNode, name: String, declaring: String, access: ReachAccess,
-		arrayTyped: Bool, out: MemberTouches, region: Null<Span>, factsRead: Map<String, Array<FieldFact>>
+		g: CallGraph, file: String, source: String, tree: QueryNode, name: String, aliases: Array<String>, declaring: String,
+		access: ReachAccess, arrayTyped: Bool, out: MemberTouches, region: Null<Span>, factsRead: Map<String, Array<FieldFact>>
 	): Void {
 		// noqa: complexity
 		final shape: RefShape = _scope.shape;
 		final identKind: String = shape.identKind;
 		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
 		final bindings: Map<Int, Int> = [];
-		for (h in Refs.findMulti([name], tree, shape)[name] ?? []) bindings[h.span.from] = h.bindingSpan?.from ?? -1;
+		for (hits in Refs.findMulti([name].concat(aliases), tree, shape)) for (h in hits) bindings[h.span.from] = h.bindingSpan?.from ?? -1;
 		final provider: Null<TypeInfoProvider> = _scope.plugin is TypeInfoProvider ? cast _scope.plugin : null;
 		var declaredTypes: Null<Map<Int, String>> = null;
 		final stringFold: Null<StringFoldSupport> = _scope.plugin.stringFoldSupport();
+
+		/** Whether the name at `span` binds to a local or a parameter of a function. */
+		function boundLocally(span: Span): Bool {
+			final bound: Null<Int> = bindings[span.from];
+			return bound != null && bound >= 0 && g.functionAt(file, bound) != null;
+		}
 
 		function receiverOwns(receiver: QueryNode): Bool {
 			// a receiver naming a TYPE (`Store.items`) reaches that type's static member, not an instance one
@@ -235,9 +248,10 @@ final class MemberTouchScan {
 				file: file,
 				span: span
 			};
-			final onSelf: Bool = node.kind == shape.identKind || (
+			// an imported name is a static's, never a member of the object under construction
+			final onSelf: Bool = node.name == name && (node.kind == shape.identKind || (
 				node.children.length > 0 && node.children[0].kind == shape.identKind && node.children[0].name == shape.selfReferenceText
-			);
+			));
 			for (id in touchingNodes(g, file, span.from)) {
 				out.touchers[id] = { file: file, span: span };
 				if (!onSelf && !out.notOnSelf.exists(id)) out.notOnSelf[id] = { file: file, span: span };
@@ -250,15 +264,18 @@ final class MemberTouchScan {
 			if (opaqueKinds.contains(node.kind)) return;
 			final current: Null<String> = CallGraphNames.typeNameOf(node) ?? type;
 			final span: Null<Span> = node.span;
-			if (node.name == name && span != null) {
+			final spelled: Null<String> = node.name;
+			if (spelled == name && span != null) {
 				if (node.kind == identKind) {
-					final bound: Null<Int> = bindings[span.from];
-					final local: Bool = bound != null && bound >= 0 && g.functionAt(file, bound) != null;
 					final owner: Null<String> = current == null ? null : g.types.declaringTypeOf(current, name);
-					if (!local && (owner == null || owner == declaring)) record(node, parent, grand, index, parentIndex);
+					if (!boundLocally(span) && (owner == null || owner == declaring)) record(node, parent, grand, index, parentIndex);
 				} else if (_hazards.isAccess(node.kind) && node.children.length > 0 && receiverOwns(node.children[0])) {
 					record(node, parent, grand, index, parentIndex);
 				}
+			} else if (spelled != null && span != null && node.kind == identKind && aliases.contains(spelled)) {
+				// the import binds the name only where neither a local nor a member of the enclosing type does
+				final member: Bool = current != null && g.types.declaringTypeOf(current, spelled) != null;
+				if (!boundLocally(span) && !member) record(node, parent, grand, index, parentIndex);
 			}
 			final reflected: Null<String> = _hazards.reflectiveNameWith(node, source, stringFold);
 			if (reflected == name && span != null && _live(file, span)) {
@@ -280,6 +297,24 @@ final class MemberTouchScan {
 			lineage.pop();
 		}
 		walk(tree, null, null, 0, 0, null);
+	}
+
+	/**
+	 * The names the imports of `file` give the static `name` of `declaring` besides its own (`CallGraphImports.fieldAliases`):
+	 * every alias but one whose path names a type proven not to be `declaring` — one declared once, declaring `name` itself.
+	 * An alias whose path did not decode may name any static.
+	 */
+	private static function aliasesIn(g: CallGraph, file: String, name: String, declaring: String): Array<String> {
+		final out: Array<String> = [];
+		for (a in g.types.imports.fieldAliases(file)) {
+			final owner: Null<String> = a.owner;
+			final member: Null<String> = a.member;
+			final other: Bool = (member != null && member != name) || (
+				owner != null && owner != declaring && g.types.declarationCount(owner) == 1 && g.types.declaringTypeOf(owner, name) == owner
+			);
+			if (!other && a.alias != name && !out.contains(a.alias)) out.push(a.alias);
+		}
+		return out;
 	}
 
 	/**

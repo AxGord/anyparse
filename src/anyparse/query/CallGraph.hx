@@ -1143,8 +1143,30 @@ final class CallGraph {
 		}
 
 
-		/** Resolve an identifier that NAMES a function — a local one, a scope-bound declaration, or a member on the type chain. */
-		function identTarget(name: String, span: Null<Span>, currentType: Null<String>): Null<String> {
+		/**
+		 * The static function an import of the file binds `name` to (`import p.T.f;`, `import p.T.f as name;`, `import p.T.*;`),
+		 * read as a value at `span`: the first, each further one a `Ref` edge of its own — a placeholder for one the graph has
+		 * not loaded, or one a type whose chain the index does not hold may declare. A static that is no function is none.
+		 */
+		function importedFunction(name: String, span: Span, currentType: Null<String>): Null<String> {
+			final targets: Array<String> = [];
+			for (s in types.imports.importedStatics(file, name).statics) {
+				final id: Null<String> = memberOnChain(s.owner, s.member) ?? (
+					types.functionOnChain(s.owner, s.member) || !types.chainFullyIndexed(s.owner)
+						? externalNode(types.declaringTypeOf(s.owner, s.member) ?? s.owner, s.member)
+						: null
+				);
+				if (id != null && !targets.contains(id)) targets.push(id);
+			}
+			for (i in 1...targets.length) addEdge(frameId(currentType), targets[i], Ref, null, file, span);
+			return targets.length == 0 ? null : targets[0];
+		}
+
+		/**
+		 * Resolve an identifier that NAMES a function — a local one, a scope-bound declaration, or a member on the type chain —
+		 * and, with `imported`, a static an import of the file binds the name to (`importedFunction`).
+		 */
+		function identTarget(name: String, span: Null<Span>, currentType: Null<String>, imported: Bool = false): Null<String> {
 			if (span == null) return null;
 			final local: Null<String> = localFn(name);
 			if (local != null) return local;
@@ -1154,7 +1176,7 @@ final class CallGraph {
 			else if (currentType == null)
 				null
 			else
-				memberOnChain(currentType, name);
+				memberOnChain(currentType, name) ?? (imported ? importedFunction(name, span, currentType) : null);
 		}
 
 		/** The written `:Type` of `member` on `typeName`'s chain, from the index — null when no indexed type declares it. */
@@ -1559,7 +1581,7 @@ final class CallGraph {
 			final name: Null<String> = arg.name;
 			if (name == null) return null;
 			if (arg.kind == identKind) {
-				final target: Null<String> = identTarget(name, arg.span, currentType);
+				final target: Null<String> = identTarget(name, arg.span, currentType, true);
 				if (target == null) return null;
 				final member: Bool = currentType != null && memberOnChain(currentType, name) == target;
 				final dispatch: Null<String> = member && !types.isStatic(nodes[target]?.typeName ?? '', name) ? currentType : null;
@@ -2048,6 +2070,15 @@ final class CallGraph {
 		}
 
 		/**
+		 * Whether an import of the file binds `name` to a static that may be a function (`import p.T.f as name;`): one
+		 * whose name some indexed type gives a function, or one whose path did not decode.
+		 */
+		function aliasesFunction(name: String): Bool {
+			return types.imports.fieldAliases(file)
+				.exists(a -> a.alias == name && (a.member == null || types.hasFunctionNamed(a.member ?? '')));
+		}
+
+		/**
 		 * A function used as a VALUE anywhere a call argument does not already cover — an assignment
 		 * right-hand side, a `return`, an array or object literal, a local initializer: the `Ref` edge
 		 * a later invocation of that value needs. Callee, argument, constructor-argument and receiver
@@ -2067,8 +2098,11 @@ final class CallGraph {
 				return;
 			}
 			final rawName: Null<String> = node.name;
-			if (rawName == null || !(_byMember.exists(rawName) || localFn(rawName) != null || types.hasFunctionNamed(rawName))) return;
-			final name: String = rawName;
+			if (
+				rawName == null
+				|| !(_byMember.exists(rawName) || localFn(rawName) != null || types.hasFunctionNamed(rawName) || aliasesFunction(rawName))
+			)
+				return;
 			final ref: Null<MethodRef> = methodRef(node, currentType);
 			if (ref != null)
 				refEdges(frameId(currentType), ref, null, span);
