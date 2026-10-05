@@ -327,6 +327,10 @@ class MemberReachFactsTest extends Test {
 		+ '\tpublic static function say(s:Dynamic):Void {}\n\n'
 		+ '\tpublic static inline function rep(s:String, a:String, b:String):String return StringTools.replace(s, a, b);\n}\n';
 
+	/** `Shown.run`, an inline function calling the closure it is handed and handing its string to a library call. */
+	private static final SHOWN_RUN: String = 'class Shown {\n\tpublic static inline function run(f:() -> Void, s:String):Void {\n'
+		+ '\t\tf();\n\t\tWords.say(s);\n\t}\n}\n';
+
 	/**
 	 * TM's `FileSystemItemData`: an abstract over an enum whose getters inline into each other — `children` and `folder`
 	 * read a field of what the inline `base` returns — with `count`, an inline counting what it is handed, `childCount`
@@ -2895,6 +2899,18 @@ class MemberReachFactsTest extends Test {
 		// (TM's `StringUtil.replace(t(…), …)`)
 		final files: Map<String, String> = utilWith(
 			'public static function other():String return Words.rep(Mac.t(\'x\'), \'a\', \'b\');', ['Words.hx' => WORDS_REP]
+		);
+		assertMatch(hubAsk(files), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-FACTS-SITE-HOLDS-OWN-CODE')
+	public function testAnExpressionMacroInAnInlinedCallBesideACapturedThisIsItsTextUnderTheTruth(): Void {
+		// a method's one statement `Shown.run(() -> self(), Mac.t('x'))`: the closure among the inlined call's arguments
+		// captures `this`, which the compiler binds ahead of the splice at the whole block (TM's `Editor.saveAs`)
+		final files: Map<String, String> = utilWith(
+			'public function new() {}\n\n\tfunction self():Void {}\n\n\tpublic function other():Void {\n'
+			+ '\t\tShown.run(() -> self(), Mac.t(\'x\'));\n\t}',
+			['Shown.hx' => SHOWN_RUN, 'Words.hx' => WORDS_REP]
 		);
 		assertMatch(hubAsk(files), r -> r.match(Proven));
 	}

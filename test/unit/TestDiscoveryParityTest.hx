@@ -2774,6 +2774,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-TEXT-EXPANSION-SIBLING',
 			'unit.query.MemberReachFactsTest#testAnExpressionMacroInAWhollyInlinedInitializerIsItsTextUnderTheTruth :: control :: '
 				+ 'M-FACTS-TEXT-EXPANSION-OUTER',
+			'unit.query.MemberReachFactsTest#testAnExpressionMacroInAnInlinedCallBesideACapturedThisIsItsTextUnderTheTruth :: control :: '
+				+ 'M-FACTS-SITE-HOLDS-OWN-CODE',
 			'unit.query.MemberReachFactsTest#testAnExpressionMacroInAnInlinedCallsArgumentIsItsTextUnderTheTruth :: control :: '
 				+ 'M-FACTS-TEXT-EXPANSION-SITE',
 			'unit.query.MemberReachFactsTest#testAnExpressionMacroTheTextCallsLeavesItsTypeItsTextUnderTheTruth :: control :: '
@@ -2785,6 +2787,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-TEXT-INLINED-WHOLE',
 			'unit.query.MemberReachFactsTest#testAnInitializerThatIsWhollyAnInlinedConstructorIsItsTextUnderTheTruth :: control :: '
 				+ 'M-FACTS-TEXT-INLINED-CONSTRUCTION',
+
 			'unit.query.MemberReachFactsTest#testAnInlinedCallKeepsItsBodysSyntax :: control :: '
 				+ 'M-FACTS-REACH-SPLICE,M-FACTS-TRUTH-SPLICE-ALWAYS',
 			'unit.query.MemberReachFactsTest#testAnInlinedGenericBodyConvertsOnlyWhatEachCallHandsItUnderTheTruth :: control :: M-REACH-SPLICE-ONLY,M-FACTS-INLINED-EDGE',
@@ -4733,7 +4736,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-HOLDERS-WARN',
 			'M-HOLDERS-READ',
 			'M-HOLDERS-MERGE',
-			'M-HOLDERS-PARSE'
+			'M-HOLDERS-PARSE',
+			'M-FACTS-SITE-HOLDS-OWN-CODE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
@@ -4901,6 +4905,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-NATIVE-HANDED :: anyparse.check.TypedFactsWalk#handedText',
 			'M-FACTS-NATIVE-CHAIN :: anyparse.check.TypedFactsWalk#nativeChain',
 			'M-FACTS-WALK-BLOCK-GAP :: anyparse.check.TypedFactsWalk#visit',
+			'M-FACTS-SITE-HOLDS-OWN-CODE :: anyparse.check.TypedFactsWalk#between',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

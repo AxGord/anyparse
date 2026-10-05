@@ -12621,6 +12621,14 @@
 			"find": "reflectiveMethodHolders: config.reflectiveMethodHolders,",
 			"replace": "",
 			"note": "`reflectiveMethodHolders` is never read out of `apqlint.json`"
+		},
+		{
+			"name": "M-FACTS-SITE-HOLDS-OWN-CODE",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "between",
+			"find": " && holdsOwnCode(exprs[index], site) ? site : outer;",
+			"replace": " ? site : outer;",
+			"note": "a splice is placed between the statements around it although a statement the compiler bound at the whole block bounds it: the site holds none of the call's text, so an expression macro in its arguments reads as no text's call"
 		}
 	]
 }
