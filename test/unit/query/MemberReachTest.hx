@@ -134,6 +134,74 @@ class MemberReachTest extends Test {
 		assertMatch(ask([src]), r -> r.match(Proven));
 	}
 
+	@:pin('control') @:killer('M-REACH-IMPORT-ALIAS') @:killer('M-REACH-IMPORT-ALIAS-SELF')
+	public function testAStaticImportedUnderAnotherNameIsTouchedThroughTheAlias(): Void {
+		// `stuff` is `C.items` wherever the file holding `import F0.C.items as stuff;` spells it: no text of `D.go` spells `items`
+		final region: String = 'class C { public static var items:Array<Int> = []; static function f():Void { /*<*/ D.go(); /*>*/ } }';
+		final aliased: String = 'import F0.C.items as stuff;\nclass D { public static function go():Void stuff.push(1); }';
+		assertReachedAt(ask([region, aliased]), 'D.go');
+		// in the declaration one branch of an `#if` holds, and through an import that branch holds
+		final guarded: String = 'import F0.C.items as stuff;\nclass D {\n#if other\n\tpublic static function go():Void {}\n#else\n'
+			+ '\tpublic static function go():Void stuff.push(1);\n#end\n}';
+		assertReachedAt(ask([region, guarded]), 'D.go');
+		final guardedImport: String = '#if other\nimport F0.C.other as stuff;\n#else\nimport F0.C.items as stuff;\n#end\n'
+			+ 'class D { public static function go():Void stuff.push(1); }';
+		assertReachedAt(ask([region, guardedImport]), 'D.go');
+		// the object a constructor builds is never what an imported name stands for
+		final instance: String = 'class C { var items:Array<Int> = []; function f():Void { /*<*/ new D(); /*>*/ } }';
+		final constructing: String = 'import F0.C.items as stuff;\nclass D { public function new() stuff.push(1); }';
+		assertReachedAt(ask([instance, constructing]), 'D.new');
+	}
+
+	@:pin('guard')
+	public function testAStaticImportedUnderItsOwnNameIsTouched(): Void {
+		final region: String = 'class C { public static var items:Array<Int> = []; static function f():Void { /*<*/ D.go(); /*>*/ } }';
+		for (imported in ['import F0.C.items;', 'import F0.C.*;'])
+			assertReachedAt(ask([region, '$imported\nclass D { public static function go():Void items.push(1); }']), 'D.go');
+	}
+
+	@:pin('control') @:killer('M-REACH-IMPORT-ALIAS-OTHER-TYPE') @:killer('M-REACH-IMPORT-ALIAS-LOCAL')
+	@:killer('M-REACH-IMPORT-ALIAS-MEMBER')
+	public function testANameAnImportDoesNotBindToTheMemberIsNoTouch(): Void {
+		final region: String = 'class C { public static var items:Array<Int> = []; function new() items.push(1); '
+			+ 'static function f():Void { /*<*/ D.go(); /*>*/ } }';
+		// another type's own static of the same name
+		final other: String = 'import F1.Bag.items as stuff;\nclass D { public static function go():Void stuff.push(1); }\n'
+			+ 'class Bag { public static var items:Array<Int> = []; }';
+		proven(ask([region, other]), 'an alias of `Bag.items`');
+		// a local, and a member of the enclosing type, bind the name before the import does
+		final local: String = 'import F0.C.items as stuff;\nclass D { public static function go():Void { var stuff:Array<Int> = []; '
+			+ 'stuff.push(1); } }';
+		proven(ask([region, local]), 'a local `stuff`');
+		final member: String = 'import F0.C.items as stuff;\nclass D { static var stuff:Array<Int> = []; '
+			+ 'public static function go():Void stuff.push(1); }';
+		proven(ask([region, member]), 'a member `stuff`');
+	}
+
+	@:pin('control') @:killer('M-REACH-IMPORT-ALIAS-OPAQUE')
+	public function testARawRegionSpellingOnlyTheAliasIsABlindSpot(): Void {
+		// the region runs nothing: what the raw region of `D.other` holds is code no reading sees
+		final region: String = 'class C { public static var items:Array<Int> = []; static function f():Void { /*<*/ D.calm(); /*>*/ } }';
+		final raw: String = 'import F0.C.items as stuff;\nclass D { public static function calm():Void {} '
+			+ 'public static function other(c:Bool):Void { #if js if (c) { stuff.push(1); } else #end trace(1); } }';
+		assertMatch(ask([region, raw]), r -> r.match(Unknown(OpaqueCond(_, _))));
+	}
+
+	@:pin('control') @:killer('M-CALLGRAPH-ALIAS-VALUE') @:killer('M-CALLGRAPH-IMPORTED-VALUE')
+	public function testAnImportedFunctionReadAsAValueIsAdmittedAtAValueCall(): Void {
+		// `cb()` may run whatever was stored in it: `D.grow`, read as a value through an import of it into another type
+		final region: String = 'class C { public static var items:Array<Int> = []; public static var cb:() -> Void; '
+			+ 'static function f():Void { /*<*/ cb(); /*>*/ } }';
+		final grower: String = 'class D { public static function grow():Void F0.C.items.push(1); }';
+		for (stored in [
+			'import F1.D.grow as g;\nclass E { public static function register():Void F0.C.cb = g; }',
+			'import F1.D.grow as g;\nclass E { public static function register():Void keep(g); static function keep(f:() -> Void):Void '
+			+ 'F0.C.cb = f; }',
+			'import F1.D.grow;\nclass E { public static function register():Void F0.C.cb = grow; }',
+			'import F1.D.*;\nclass E { public static function register():Void F0.C.cb = grow; }'
+		]) assertReachedAt(ask([region, grower, stored]), 'D.grow');
+	}
+
 	@:pin('control') @:killer('M-REACH-NAME-CHANNEL')
 	public function testDynamicReceiverAdmitsBySameName(): Void {
 		final src: String = 'class C { var items:Array<Int> = []; function f(d:Dynamic):Void { /*<*/ d.grow(); /*>*/ } '

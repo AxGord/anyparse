@@ -5369,7 +5369,7 @@
 			"name": "M-REACH-LOCAL-SHADOW",
 			"type": "anyparse.query.MemberTouchScan",
 			"method": "scanFile",
-			"find": "if (!local && (owner == null || owner == declaring))",
+			"find": "if (!boundLocally(span) && (owner == null || owner == declaring))",
 			"replace": "if (owner == null || owner == declaring)",
 			"note": "a same-named local counts as a touch of the member"
 		},
@@ -12883,6 +12883,78 @@
 			"find": "if (proven ? !_factsTruthAvailable : !(builds || _factsTruthAvailable)) return null;",
 			"replace": "if (proven || !(builds || _factsTruthAvailable)) return null;",
 			"note": "a question the reading asked first proves stays proved under the truth, though the facts see a reach it cannot (a static member imported under another name)"
+		},
+		{
+			"name": "M-REACH-IMPORT-ALIAS",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "scanFile",
+			"find": "node.kind == identKind && aliases.contains(spelled)",
+			"replace": "node.kind == identKind && false",
+			"note": "a static imported under another name (`import p.T.items as stuff;`) is not read as the member where the alias spells it"
+		},
+		{
+			"name": "M-REACH-IMPORT-ALIAS-SELF",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "scanFile",
+			"find": "final onSelf: Bool = node.name == name && (",
+			"replace": "final onSelf: Bool = (",
+			"note": "a bare alias of a static reads as the constructed object's own member, so a constructor touching it through the alias is excused"
+		},
+		{
+			"name": "M-REACH-IMPORT-ALIAS-WORDS",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "scan",
+			"find": "if (!words.exists(w -> RawSourceScan.mentionsWord(f.source, w))) continue;",
+			"replace": "if (!RawSourceScan.mentionsWord(f.source, name)) continue;",
+			"note": "a file spelling only an alias an ambient `import.hx` binds is skipped as one that does not mention the member"
+		},
+		{
+			"name": "M-REACH-IMPORT-ALIAS-OPAQUE",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "scan",
+			"find": "for (w in words) {",
+			"replace": "for (w in [name]) {",
+			"note": "a raw conditional region spelling only an alias of the member is no blind spot"
+		},
+		{
+			"name": "M-REACH-IMPORT-ALIAS-OTHER-TYPE",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "aliasesIn",
+			"find": "owner != null && owner != declaring && g.types.declarationCount(owner) == 1 && g.types.declaringTypeOf(owner, name) == owner",
+			"replace": "false",
+			"note": "an alias of another type's own static of the same name is read as the member"
+		},
+		{
+			"name": "M-REACH-IMPORT-ALIAS-LOCAL",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "scanFile",
+			"find": "if (!boundLocally(span) && !member) record",
+			"replace": "if (!member) record",
+			"note": "a local named like an alias is read as the imported member"
+		},
+		{
+			"name": "M-REACH-IMPORT-ALIAS-MEMBER",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "scanFile",
+			"find": "if (!boundLocally(span) && !member) record",
+			"replace": "if (!boundLocally(span)) record",
+			"note": "a member of the enclosing type named like an alias is read as the imported member"
+		},
+		{
+			"name": "M-CALLGRAPH-ALIAS-VALUE",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": " || aliasesFunction(rawName)",
+			"replace": "",
+			"note": "a static function imported under another name and read as a value gets no `Ref` edge, so a call of a value never admits it"
+		},
+		{
+			"name": "M-CALLGRAPH-IMPORTED-VALUE",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "(imported ? importedFunction(name, span, currentType) : null)",
+			"replace": "null",
+			"note": "a static function an import binds (`import p.T.f;`, an alias, a wildcard) read as a value in another type gets no `Ref` edge, so a call of a value never admits it"
 		}
 	]
 }
