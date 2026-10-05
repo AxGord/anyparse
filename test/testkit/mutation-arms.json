@@ -7664,8 +7664,8 @@
 			"name": "M-FACTS-REACH-VALUE",
 			"type": "anyparse.query.CallGraphFacts",
 			"method": "declaredCall",
-			"find": "if (field) unresolved(FunctionValue(name));",
-			"replace": "if (field && name == '') unresolved(FunctionValue(name));",
+			"find": "if (field) holds();",
+			"replace": "if (field && name == '') holds();",
 			"note": "a call of a field holding a function value records nothing, so the value channel never admits what the field may hold"
 		},
 		{
@@ -12485,6 +12485,142 @@
 			"find": "span == null || !(shape.lambdaKinds ?? []).contains(value.kind)",
 			"replace": "span == null",
 			"note": "an argument of any shape is read as the function written there"
+		},
+		{
+			"name": "M-REACH-VALUE-STORED",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "unresolved.stored = u.stored;",
+			"replace": "",
+			"note": "a call of a dynamic method admits every function value, whatever is stored into it"
+		},
+		{
+			"name": "M-GRAPH-FACTS-VALUE-STORED",
+			"type": "anyparse.query.CallGraphFacts",
+			"method": "declaredCall",
+			"find": "stored: field || replaceable ? target : null",
+			"replace": "stored: null",
+			"note": "a call of a dynamic method names no field the values stored into which it may run, so it admits every function value"
+		},
+		{
+			"name": "M-VALUE-STORED-UNTYPED",
+			"type": "anyparse.query.FunctionValueTypes",
+			"method": "readStored",
+			"find": "if (escaped.exists(e -> hierarchy.contains(e)) && !untypedStores(name, hierarchy, out)) return null;",
+			"replace": "",
+			"note": "an object that left the type system is taken to have its dynamic field written only where a typed write names it"
+		},
+		{
+			"name": "M-VALUE-STORED-COMPUTED",
+			"type": "anyparse.query.FunctionValueTypes",
+			"method": "untypedStores",
+			"find": "if (computed && computedNames) return false;",
+			"replace": "if (computed) return false;",
+			"note": "a write by a name computed at run time is taken to reach any dynamic method, whatever classes the project declares such a name names"
+		},
+		{
+			"name": "M-VALUE-STORED-NATIVE",
+			"type": "anyparse.query.FunctionValueTypes",
+			"method": "untypedStores",
+			"find": "for (x in n.natives) if (x.computed || named(x.code ?? x.name)) return false;",
+			"replace": "",
+			"note": "target code naming a dynamic method is taken to store nothing into it"
+		},
+		{
+			"name": "M-VALUE-CTOR-REFLECTIVE",
+			"type": "anyparse.query.FunctionValueTypes",
+			"method": "constructedWith",
+			"find": "reflectiveConstructions(owner, index, arity, out);",
+			"replace": "",
+			"note": "a constructor is taken to run only at a `new`, never at a reflective construction"
+		},
+		{
+			"name": "M-VALUE-CTOR-REFLECTIVE-CLASS",
+			"type": "anyparse.query.FunctionValueTypes",
+			"method": "mayConstruct",
+			"find": "case Named(CLASS_VALUE, [held]): classMayBe(held, owner, depth);",
+			"replace": "case Named(CLASS_VALUE, [held]): true;",
+			"note": "a class value of another class is taken to construct any class"
+		},
+		{
+			"name": "M-VALUE-CTOR-REFLECTIVE-ARGS",
+			"type": "anyparse.query.FunctionValueTypes",
+			"method": "reflectiveConstructions",
+			"find": "if (args == null || args.kind != shape.arrayLiteralKind) {",
+			"replace": "if (args == null) {",
+			"note": "a reflective construction handed an array no literal spells is taken to hand the constructor nothing"
+		},
+		{
+			"name": "M-VALUE-ESCAPED-SENTINEL",
+			"type": "anyparse.query.FunctionValueTypes",
+			"method": "writtenAt",
+			"find": "|| (escaped && escapedValue(g, id))",
+			"replace": "",
+			"note": "the place standing for every function value that escaped admits none"
+		},
+		{
+			"name": "M-VALUE-ESCAPED-ONLY",
+			"type": "anyparse.query.FunctionValueTypes",
+			"method": "escapedValue",
+			"find": "return obtainedUntyped(g, id);",
+			"replace": "return true;",
+			"note": "every function value is taken to have escaped, so a reflective construction may hand a constructor any"
+		},
+		{
+			"name": "M-VALUE-STORED-WRITES",
+			"type": "anyparse.query.FunctionValueTypes",
+			"method": "readStored",
+			"find": "if (!f.write || f.field != name || !related.contains(CompilerFacts.baseId(declaring))) continue;",
+			"replace": "continue;",
+			"note": "no write is read, so a dynamic method is taken to hold nothing but its declared body"
+		},
+		{
+			"name": "M-VALUE-STORED-OWN",
+			"type": "anyparse.query.FunctionValueTypes",
+			"method": "storedValue",
+			"find": "return own ? readArguments(where) : null;",
+			"replace": "return readArguments(where);",
+			"note": "a write a call spliced in reads the parameter of the method declaring it, which that call binds to its own argument"
+		},
+		{
+			"name": "M-VALUE-CTOR-ROUTE",
+			"type": "anyparse.query.FunctionValueTypes",
+			"method": "readArguments",
+			"find": "? constructedWith(typed[0], method.index, method.count, declared)",
+			"replace": "? invokedWith(typed[0], fnName, method.index, method.count)",
+			"note": "a constructor's parameter holds what its call facts hand it, of which a `new` records none"
+		},
+		{
+			"name": "M-VALUE-CTOR-SUBTYPES",
+			"type": "anyparse.query.FunctionValueTypes",
+			"method": "constructedWith",
+			"find": "|| table.subtypesOf(owner).length > 0)",
+			"replace": ")",
+			"note": "a constructor a subclass runs through `super` is taken to run only at a `new` of its own class"
+		},
+		{
+			"name": "M-VALUE-CTOR-ARGUMENT",
+			"type": "anyparse.query.FunctionValueTypes",
+			"method": "boundArguments",
+			"find": "if (where == null || !(shape.lambdaKinds ?? []).contains(value.kind)) return null;",
+			"replace": "if (where == null) return null;",
+			"note": "a construction's argument of any shape is read as the function written there"
+		},
+		{
+			"name": "M-VALUE-CTOR-SKIPPED",
+			"type": "anyparse.query.FunctionValueTypes",
+			"method": "boundArguments",
+			"find": "if (j <= index && index <= j + skipped)",
+			"replace": "if (j == index)",
+			"note": "an argument is taken to bind its own position only, though the compiler skips an optional parameter it does not unify with"
+		},
+		{
+			"name": "M-VALUE-CTOR-ARITY",
+			"type": "anyparse.query.FunctionValueTypes",
+			"method": "boundArguments",
+			"find": "if (arity == null || parameterCount(value) == arity) out.push(where);",
+			"replace": "out.push(where);",
+			"note": "a function expression of another arity than the parameter's is taken to bind it"
 		},
 		{
 			"name": "M-VALUE-TYPE-FLOWS",

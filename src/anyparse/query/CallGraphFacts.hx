@@ -426,8 +426,18 @@ final class CallGraphFacts {
 		// the index knows a library member before the graph reads its body
 		final known: Null<MemberInfo> = g.types.memberOnChain(type, name);
 		final replaceable: Bool = g.nodes[id]?.isDynamic == true || known?.isDynamic == true;
-		// a replaceable field runs whatever value it holds: a `dynamic` method's own body is one of them
-		if (field) unresolved(FunctionValue(name));
+		// a replaceable field runs whatever value it holds: a `dynamic` method's own body is one of them, the values stored
+		// into it the others (`FunctionValueTypes.storedIn`)
+		inline function holds(): Void {
+			g.unresolved.push({
+				file: node.file,
+				span: span,
+				from: node.id,
+				reason: FunctionValue(name),
+				stored: field || replaceable ? target : null
+			});
+		}
+		if (field) holds();
 		// a field no declaration read so far says is a `dynamic` method may still be one, whose body the edge reads
 		if (field && !replaceable && known != null) return;
 		final instance: Bool = c.access == 'FInstance' || c.access == 'FClosure' || field;
@@ -439,7 +449,7 @@ final class CallGraphFacts {
 			CompilerFacts.baseId(owner), spliced
 		);
 		if (dispatch != null) virtualEdges(g, node, dispatch, name, span, deferred ? Ref : Virtual, view);
-		if (!field && replaceable) unresolved(FunctionValue(name));
+		if (!field && replaceable) holds();
 	}
 
 	/** A `new`: the edge to the constructor it names and the run of the initializers it executes, as `CallGraph` records one. */
