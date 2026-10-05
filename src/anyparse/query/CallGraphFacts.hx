@@ -7,6 +7,7 @@ import anyparse.query.CallGraph.FnNode;
 import anyparse.query.CallGraph.SplicedSite;
 import anyparse.query.CallGraph.UnresolvedReason;
 import anyparse.query.CompilerFacts.CallFact;
+import anyparse.query.CompilerFacts.ExpansionFact;
 import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.CompilerFacts.FieldFact;
@@ -128,7 +129,7 @@ final class CallGraphFacts {
 			typed[id] = typedSites(facts, view);
 			record(g, n, facts, view);
 		}
-		for (e in _heldBack) if (!answered(g, e.from, typed[e.from] ?? [], e)) g.indexEdge(e);
+		for (e in _heldBack) if (!answered(g, e.from, typed[e.from] ?? [], e) && !expandedAt(g, found[e.from] ?? [], e)) g.indexEdge(e);
 		_heldBack.resize(0);
 	}
 
@@ -300,7 +301,7 @@ final class CallGraphFacts {
 		final access: Int = g.unresolvedAccess.length;
 		add(null);
 		final where: SplicedSite = inlined == null
-			? splicedSite(g, at, splice, view)
+			? splicedSite(g, n, at, splice, view)
 			: { sites: inlined.length == 0 ? null : inlined, origin: null };
 		for (i in edges ... g.edges.length) g.edges[i].spliced = where;
 		for (i in unresolved ... g.unresolved.length) g.unresolved[i].spliced = where;
@@ -308,11 +309,16 @@ final class CallGraphFacts {
 	}
 
 	/**
-	 * Where a fact at `at` that `splice` brought into a body runs: at a site of the splice, written in the graph node of its
-	 * method when the graph names one. No splice brought one the compiler put where no method is declared: anywhere.
+	 * Where a fact at `at` of the body `n` that `splice` brought into it runs: at a site of the splice, written in the graph
+	 * node of its method when the graph names one. One an expression macro's expansion brought runs where the call of the
+	 * macro was (`CompilerFacts.expansionSites`), written in no method; one neither brought — the compiler put it where no
+	 * method is declared, or the expansion's call has no site — anywhere.
 	 */
-	private static function splicedSite(g: CallGraph, at: FactPos, splice: Null<SpliceFact>, view: FactsView): SplicedSite {
-		if (splice == null) return { sites: null, origin: null };
+	private static function splicedSite(g: CallGraph, n: FactNode, at: FactPos, splice: Null<SpliceFact>, view: FactsView): SplicedSite {
+		if (splice == null) {
+			final expansion: Null<ExpansionFact> = CompilerFacts.expansionOf(n, at);
+			return { sites: expansion == null ? null : CompilerFacts.expansionSites(n, expansion), origin: null };
+		}
 		final owner: String = ownerOf(splice.callee);
 		final written: Null<String> = g.memberOnChain(view.graphType(owner), splice.callee.substr(owner.length + 1));
 		return { sites: splice.sites, origin: written == null ? null : { node: written, file: at.file, span: at.span } };
@@ -333,7 +339,15 @@ final class CallGraphFacts {
 		switch c.access {
 			case 'FEnum':
 			case 'value':
-				unresolved(FunctionValue('a value of type ${c.receiver ?? '?'}'));
+				// the type of the value called says which functions it may be (`FunctionValueTypes`)
+				g.unresolved.push({
+					file: node.file,
+					span: span,
+					from: node.id,
+					reason: FunctionValue('a value of type ${c.receiver ?? '?'}'),
+					called: c.receiver,
+					calledAt: c.receiverAt
+				});
 			case 'FAnon':
 				unresolved(UnresolvedReceiver(target ?? ''));
 			case 'FDynamic':
@@ -579,6 +593,28 @@ final class CallGraphFacts {
 		final span: Span = at;
 		return typed.contains(siteKey(span)) || g.outEdges(id)
 			.exists(f -> f.typed != null && f.to == e.to && (f.spliced?.sites ?? []).exists(s -> s.from <= span.from && span.to <= s.to));
+	}
+
+	/**
+	 * Whether the syntax's edge `e` is a call of an expression macro the compiler replaced by an expansion the facts `bodies`
+	 * hold (`FactNode.expansions`): the edge runs into the macro's own code, which runs while compiling, in no program — what
+	 * runs is the expansion, read through those facts. Its site lies in the expansion's anchor, in the function's own file.
+	 */
+	private function expandedAt(g: CallGraph, bodies: Array<FactNode>, e: CallEdge): Bool {
+		final at: Null<Span> = e.span;
+		if (at == null) return false;
+		final site: Span = at;
+		final key: String = view.table.keyOf(e.file);
+		for (n in bodies) for (x in n.expansions) {
+			final expander: Null<String> = x.expander;
+			if (expander == null || x.anchor.file != key || site.from < x.anchor.span.from || x.anchor.span.to < site.to) continue;
+			// the graph holds no node for a macro function: the edge names it by its type's and its own name
+			final owner: String = ownerOf(expander);
+			final type: String = view.graphType(owner);
+			final name: String = expander.substr(owner.length + 1);
+			if (e.to == '$type.$name' || g.memberOnChain(type, name) == e.to) return true;
+		}
+		return false;
 	}
 
 	/** A site by its exact range: a syntax edge is dropped only at a range the compiler typed itself. */

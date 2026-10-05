@@ -5512,8 +5512,8 @@
 			"name": "M-REACH-CTOR-NOT-DISPATCHED",
 			"type": "anyparse.query.ReachAdmission",
 			"method": "valueAdmitted",
-			"find": "(node.name != ctorName && overridesLibrary(g, node))",
-			"replace": "overridesLibrary(g, node)",
+			"find": "(node.name != ctorName && (overridesLibrary(g, node) || obtainedUntyped(g, node)))",
+			"replace": "(overridesLibrary(g, node) || obtainedUntyped(g, node))",
 			"note": "a project constructor counts as overriding its library supertype's, so any unresolved call in library code admits it"
 		},
 		{
@@ -6789,14 +6789,6 @@
 			"note": "the facts of the listed builds answer for hazards though the list is not every build, so untyped code a build it does not name reads otherwise hides nothing"
 		},
 		{
-			"name": "M-FACTS-TRUTH-FACETED",
-			"type": "anyparse.query.FactsView",
-			"method": "truthSites",
-			"find": "if (!truth || !faceted(g, file, span, node)) return null;",
-			"replace": "if (!truth) return null;",
-			"note": "the facts answer for the hazards of a body they do not describe whole, so untyped code beside a spliced inline call hides nothing"
-		},
-		{
 			"name": "M-FACTS-TRUTH-UNTYPED-KEPT",
 			"type": "anyparse.query.ReachHazards",
 			"method": "recordedWhole",
@@ -6967,7 +6959,7 @@
 			"name": "M-GRAPH-TRUTH-MUTE-UNTYPED",
 			"type": "anyparse.query.CallGraphFacts",
 			"method": "recordMuted",
-			"find": "for (e in _heldBack) if (!answered(g, e.from, typed[e.from] ?? [], e)) g.indexEdge(e);",
+			"find": "for (e in _heldBack) if (!answered(g, e.from, typed[e.from] ?? [], e) && !expandedAt(g, found[e.from] ?? [], e)) g.indexEdge(e);",
 			"replace": "",
 			"note": "under the whole list of builds a faceted body drops every edge its syntax records, even at a site its facts do not type, which may be the only thing saying the site runs code"
 		},
@@ -7015,8 +7007,8 @@
 			"name": "M-TOUCH-TYPED-CALLED",
 			"type": "anyparse.query.MemberTouchScan",
 			"method": "nodeAccesses",
-			"find": "for (c in n.calls) if (calledField(c.target) == name) return null;",
-			"replace": "",
+			"find": "for (c in n.calls) if (calledField(c.target) == name) {",
+			"replace": "for (c in n.calls) if (false) {",
 			"note": "a function calling a field of the member's name - a dynamic receiver's, a variable holding a function - is read through facts that record the call and no access, so the member's value handed to the call escapes nowhere"
 		},
 		{
@@ -7522,7 +7514,7 @@
 			"name": "M-FACTS-SITE-UNKNOWN",
 			"type": "anyparse.query.CompilerFacts",
 			"method": "within",
-			"find": "if (!whole && (n.incomplete.contains('macro-expansion') || (splice && !spliced))) return null;",
+			"find": "if (!whole && !spliced && (n.incomplete.contains('macro-expansion') || splice)) return null;",
 			"replace": "",
 			"note": "a range query short of a spliced node answers as if its facts were placed"
 		},
@@ -7616,7 +7608,7 @@
 			"name": "M-FACTS-REACH-SPLICE",
 			"type": "anyparse.query.FactsView",
 			"method": "unplaced",
-			"find": "UNPLACED.contains(m) && !(truth && m == INLINE_SITE_UNKNOWN)",
+			"find": "UNPLACED.contains(m) && !(truth && (m == INLINE_SITE_UNKNOWN || m == MACRO_EXPANSION))",
 			"replace": "m == MACRO_EXPANSION",
 			"note": "a body with an inlined call is read through its facts, whose spliced facts sit at the callee and are missed by a range question"
 		},
@@ -7624,24 +7616,24 @@
 			"name": "M-FACTS-TRUTH-SPLICE",
 			"type": "anyparse.query.FactsView",
 			"method": "unplaced",
-			"find": "!(truth && m == INLINE_SITE_UNKNOWN)",
-			"replace": "true",
+			"find": "!(truth && (m == INLINE_SITE_UNKNOWN || m == MACRO_EXPANSION))",
+			"replace": "!(truth && m == MACRO_EXPANSION)",
 			"note": "(precision) under the whole list of builds a body an inlined function was spliced into keeps its syntax, which admits every conversion in play"
 		},
 		{
 			"name": "M-FACTS-TRUTH-SPLICE-ALWAYS",
 			"type": "anyparse.query.FactsView",
 			"method": "unplaced",
-			"find": "!(truth && m == INLINE_SITE_UNKNOWN)",
-			"replace": "m != INLINE_SITE_UNKNOWN",
+			"find": "!(truth && (m == INLINE_SITE_UNKNOWN || m == MACRO_EXPANSION))",
+			"replace": "m != INLINE_SITE_UNKNOWN && !(truth && m == MACRO_EXPANSION)",
 			"note": "a body an inlined function was spliced into is read through its facts with no list of builds, where a range question cannot take the spliced facts"
 		},
 		{
 			"name": "M-FACTS-SPLICED-WITHIN",
 			"type": "anyparse.query.CompilerFacts",
 			"method": "within",
-			"find": "(splice && !spliced)",
-			"replace": "splice",
+			"find": "if (!whole && !spliced && (n.incomplete.contains('macro-expansion') || splice)) return null;",
+			"replace": "if (!whole && (splice || (!spliced && n.incomplete.contains('macro-expansion')))) return null;",
 			"note": "(precision) a range question under the whole list of builds is Unknown in a body an inlined function was spliced into, so its syntax answers"
 		},
 		{
@@ -7736,16 +7728,16 @@
 			"name": "M-FACTS-SPLICE-SITES-MET",
 			"type": "anyparse.query.CompilerFacts",
 			"method": "within",
-			"find": "splice.sites.exists(s -> s.from < span.to && span.from < s.to)",
-			"replace": "true",
+			"find": "if (splice != null) return !dropped(splice.callee) && meets(splice.sites);",
+			"replace": "if (splice != null) return !dropped(splice.callee);",
 			"note": "(precision) what an inlined call spliced in runs in every range its caller meets, wherever the call stood"
 		},
 		{
 			"name": "M-FACTS-SPLICE-UNATTRIBUTED",
 			"type": "anyparse.query.CompilerFacts",
 			"method": "within",
-			"find": "if (splice == null) return true;",
-			"replace": "if (splice == null) return false;",
+			"find": "return sites == null || meets(sites);",
+			"replace": "return sites != null && meets(sites);",
 			"note": "a spliced fact no inlined call's body holds runs nowhere, though it may run anywhere in its node"
 		},
 		{
@@ -8000,8 +7992,8 @@
 			"name": "M-TOUCH-ADOPTED-SYNTAX",
 			"type": "anyparse.query.MemberTouchScan",
 			"method": "nodeAccesses",
-			"find": "if (n == null || (n.generated && !made)) return null;",
-			"replace": "if (n == null || n.generated) return null;",
+			"find": "if (n.generated && !made) return BySyntax;",
+			"replace": "if (n.generated) return BySyntax;",
 			"note": "a body a build macro placed outside its type's file is left to its text, which holds none of it, so its touch is only a guess"
 		},
 		{
@@ -8056,8 +8048,8 @@
 			"name": "M-FACTS-REACH-MACRO",
 			"type": "anyparse.query.FactsView",
 			"method": "blindIn",
-			"find": "if (n.incomplete.contains(MACRO_EXPANSION)) return Reification(file, span);",
-			"replace": "",
+			"find": "return Reification(file, span);",
+			"replace": "{}",
 			"note": "a macro's expansion is no blind spot, so the code it adds is never accounted for"
 		},
 		{
@@ -8509,8 +8501,8 @@
 			"name": "M-ESCAPES-FACTS-FLOW",
 			"type": "anyparse.query.FactsEscapes",
 			"method": "escapesOf",
-			"find": "for (f in n.flows) if ((f.via == CAST || !keepsNominal(f.to)) && !escape(f.from)) return false;",
-			"replace": "",
+			"find": "(f.via == CAST || !keepsNominal(f.to)) && !(f.via != CAST && functionTyped(f.from) && functionTyped(f.to)) && !escape(f.from)",
+			"replace": "false",
 			"note": "a value flowing into a catch-all, a type parameter, a structure or through a cast is taken to stay in the type system"
 		},
 		{
@@ -11895,7 +11887,7 @@
 			"name": "M-METHODS-CLOSURE-READ",
 			"type": "anyparse.query.FactsMethodValues",
 			"method": "scan",
-			"find": "named(f.field, { receiver: f.receiver, exact: false });",
+			"find": "named(f.field, { receiver: f.receiver, exact: false, typeless: f.access == DYNAMIC_ACCESS });",
 			"replace": "null;",
 			"note": "a method read as a closure is no value a rebinding call may be handed"
 		},
@@ -12301,6 +12293,222 @@
 			"method": "handed",
 			"force": "true",
 			"note": "a value a call hands target code is taken to stay in the type system"
+		},
+		{
+			"name": "M-FACTS-EXPANSION-PLACED",
+			"type": "anyparse.query.FactsView",
+			"method": "unplaced",
+			"find": "(m == INLINE_SITE_UNKNOWN || m == MACRO_EXPANSION)",
+			"replace": "m == INLINE_SITE_UNKNOWN",
+			"note": "an expression macro's expansion leaves facts with no place under the truth too, so its body keeps the syntax"
+		},
+		{
+			"name": "M-FACTS-EXPANSION-BLIND",
+			"type": "anyparse.query.FactsView",
+			"method": "blindIn",
+			"find": " && !(truth && g != null && faceted(g, file, n.at.span))",
+			"replace": "",
+			"note": "a macro's expansion is a blind spot to a facts-driven reader too, whatever the facts hold"
+		},
+		{
+			"name": "M-FACTS-WITHIN-EXPANSION",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "within",
+			"find": "return sites == null || meets(sites);",
+			"replace": "return true;",
+			"note": "a fact an expansion brought runs anywhere in its node, not where the call of the macro was"
+		},
+		{
+			"name": "M-FACTS-WITHIN-EXPANSION-NULL",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "within",
+			"find": "if (!whole && !spliced && (n.incomplete.contains('macro-expansion') || splice)) return null;",
+			"replace": "if (!whole && (n.incomplete.contains('macro-expansion') || (splice && !spliced))) return null;",
+			"note": "a range question meeting an expansion answers Unknown under the truth too"
+		},
+		{
+			"name": "M-GRAPH-FACTS-EXPANSION-SITE",
+			"type": "anyparse.query.CallGraphFacts",
+			"method": "splicedSite",
+			"find": "sites: expansion == null ? null : CompilerFacts.expansionSites(n, expansion)",
+			"replace": "sites: null",
+			"note": "an edge an expansion's facts make runs anywhere in its function"
+		},
+		{
+			"name": "M-FACTS-EXPANSION-SPLICE-SITES",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "expansionSites",
+			"find": "if (splice != null) return splice.sites;",
+			"replace": "if (splice != null) return null;",
+			"note": "an expansion written in an inlined method's code runs anywhere in the function it was spliced into"
+		},
+		{
+			"name": "M-TOUCH-EXPANSION-RUNS",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "expansionRuns",
+			"find": "(expansion == null ? null : CompilerFacts.expansionSites(n, expansion)) ?? [n.at.span]",
+			"replace": "[n.at.span]",
+			"note": "a touch an expansion makes is read over its whole function, not where the call of the macro was"
+		},
+		{
+			"name": "M-TOUCH-EXPANSION-CODE",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "nodeAccesses",
+			"find": "final expanded: Bool = !made && expansionCode(g, node, n, f.at, view);",
+			"replace": "final expanded: Bool = false;",
+			"note": "an access in an expansion's code leaves its function to the syntax, which spells only the macro's call"
+		},
+		{
+			"name": "M-FACTS-WALK-BLOCK-GAP",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "visit",
+			"find": "if (!ownCode(exprs[i])) _site = between(exprs, i, site);",
+			"replace": "",
+			"note": "a statement a splice or an expansion replaced is placed at its whole block"
+		},
+		{
+			"name": "M-GRAPH-FACTS-VALUE-CALLED",
+			"type": "anyparse.query.CallGraphFacts",
+			"method": "call",
+			"find": "called: c.receiver,",
+			"replace": "called: null,",
+			"note": "a call of a value carries no type, so every function value may be it"
+		},
+		{
+			"name": "M-REACH-VALUE-CALLED",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "unresolved.called = u.called;",
+			"replace": "",
+			"note": "an unresolved call of a value admits every function value, whatever its type"
+		},
+		{
+			"name": "M-VALUE-ARG-WRITTEN",
+			"type": "anyparse.query.FunctionValueTypes",
+			"method": "readArguments",
+			"find": "if (hits.exists(h -> h.kind == Write && h.bindingSpan?.from == binding.from && h.bindingSpan?.to == binding.to)) return null;",
+			"replace": "",
+			"note": "a parameter its method assigns holds only what the invocations hand it"
+		},
+		{
+			"name": "M-VALUE-ARG-ESCAPED",
+			"type": "anyparse.query.FunctionValueTypes",
+			"method": "invokedWith",
+			"find": "if (escaped == null || escaped.exists(e -> hierarchy.contains(e))) return null;",
+			"replace": "",
+			"note": "a method of a class that escaped runs only at the typed calls of it"
+		},
+		{
+			"name": "M-VALUE-ARG-SUPERTYPES",
+			"type": "anyparse.query.FunctionValueTypes",
+			"method": "invokedWith",
+			"find": "final callers: Array<String> = [owner].concat(table.supertypesOf(owner));",
+			"replace": "final callers: Array<String> = [owner];",
+			"note": "a call of the supertype's member a method overrides invokes no override"
+		},
+		{
+			"name": "M-VALUE-ARG-COUNT",
+			"type": "anyparse.query.FunctionValueTypes",
+			"method": "handed",
+			"find": "if (call == null || call.children.length != count + 1) return null;",
+			"replace": "if (call == null) return null;",
+			"note": "a call leaving an optional argument out hands each written argument the parameter at its index"
+		},
+		{
+			"name": "M-VALUE-ARG-LAMBDA",
+			"type": "anyparse.query.FunctionValueTypes",
+			"method": "handed",
+			"find": "span == null || !(shape.lambdaKinds ?? []).contains(value.kind)",
+			"replace": "span == null",
+			"note": "an argument of any shape is read as the function written there"
+		},
+		{
+			"name": "M-VALUE-TYPE-FLOWS",
+			"type": "anyparse.query.FunctionValueTypes",
+			"method": "typedAs",
+			"find": "while (i < out.length) for (to in flows[out[i++]] ?? []) if (!out.contains(to)) out.push(to);",
+			"replace": "",
+			"note": "a function value is held only as its own type, whatever flows carry it into"
+		},
+		{
+			"name": "M-VALUE-TYPE-GENERIC",
+			"type": "anyparse.query.FunctionValueTypes",
+			"method": "sameOrGeneric",
+			"find": "if (held.indexOf(PARAMETER) < 0 && place.indexOf(PARAMETER) < 0) return false;",
+			"replace": "return false;",
+			"note": "a type parameter binds no type no text spells"
+		},
+		{
+			"name": "M-VALUE-TYPE-ESCAPED",
+			"type": "anyparse.query.FunctionValueTypes",
+			"method": "mayRun",
+			"find": " || escaped.exists(e -> sameOrGeneric(t, e))",
+			"replace": "",
+			"note": "a function value that left the type system reaches only places of its own types"
+		},
+		{
+			"name": "M-VALUE-TYPE-BIND",
+			"type": "anyparse.query.FunctionValueTypes",
+			"method": "valueTypes",
+			"find": "for (own in ids) for (t in callers[own] ?? []) if (!texts.contains(t)) texts.push(t);",
+			"replace": "",
+			"note": "a `.bind` closure of a method is taken to be of the method's own type"
+		},
+		{
+			"name": "M-VALUE-TYPE-UNTYPED",
+			"type": "anyparse.query.FunctionValueTypes",
+			"method": "mayRun",
+			"find": "return obtainedUntyped(g, id);",
+			"replace": "return false;",
+			"note": "a method read by a name off a value of no type reaches only calls of its own type"
+		},
+		{
+			"name": "M-ADMIT-OBTAINED",
+			"type": "anyparse.query.ReachAdmission",
+			"method": "valueAdmitted",
+			"find": "overridesLibrary(g, node) || obtainedUntyped(g, node)",
+			"replace": "overridesLibrary(g, node)",
+			"note": "a method read by a name as a value is no function value the walk may admit"
+		},
+		{
+			"name": "M-REACH-READ-BY-NAME",
+			"type": "anyparse.query.MemberReach",
+			"method": "obtainedUntyped",
+			"find": ": readByName(g, node);",
+			"replace": ": false;",
+			"note": "without the truth a method read by a name off an untyped receiver is no function value"
+		},
+		{
+			"name": "M-METHODS-HOLD-CLASSLESS",
+			"type": "anyparse.query.FactsMethodValues",
+			"method": "mayHold",
+			"find": "case Named(CATCH_ALL | ANY, _) | Structure(_): left;",
+			"replace": "case Named(CATCH_ALL | ANY, _) | Structure(_): true;",
+			"note": "a value of no class may hold an object of a class that never escaped"
+		},
+		{
+			"name": "M-ESCAPES-FUNCTION-RECORDED",
+			"type": "anyparse.query.FactsEscapes",
+			"method": "escapeType",
+			"find": "_functions.push(t);",
+			"replace": "",
+			"note": "a function value placed where no function type types it is not recorded as escaped"
+		},
+		{
+			"name": "M-ESCAPES-FUNCTION-FLOW-TYPED",
+			"type": "anyparse.query.FactsEscapes",
+			"method": "escapesOf",
+			"find": " && !(f.via != CAST && functionTyped(f.from) && functionTyped(f.to))",
+			"replace": "",
+			"note": "a function value placed in a place of another function type escapes"
+		},
+		{
+			"name": "M-GRAPH-FACTS-EXPANSION-CALL",
+			"type": "anyparse.query.CallGraphFacts",
+			"method": "recordMuted",
+			"find": " && !expandedAt(g, found[e.from] ?? [], e)",
+			"replace": "",
+			"note": "the syntax's call of an expression macro an expansion replaced runs the macro's own code"
 		}
 	]
 }

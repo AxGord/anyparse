@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.CallGraphImports.ImportedName;
 import anyparse.query.CompilerFacts.FactNode;
+import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.SymbolIndex.MemberInfo;
@@ -133,6 +134,15 @@ typedef UnresolvedCall = {
 	var span: Null<Span>;
 	var from: String;
 	var reason: UnresolvedReason;
+
+	/**
+	 * For a call of a value the compiler facts typed (`FunctionValue`): the facts type of the value called, which says which
+	 * functions it may be (`FunctionValueTypes`).
+	 */
+	@:optional var called: Null<String>;
+
+	/** With `called`: the range of the expression whose value is called, in the file of the facts (`CallFact.receiverAt`). */
+	@:optional var calledAt: Null<FactPos>;
 
 	/** For a site the compiler facts file off a body an inlined call spliced into `from`: where it runs (`SplicedSite`). */
 	@:optional var spliced: Null<SplicedSite>;
@@ -371,6 +381,11 @@ final class CallGraph {
 	/** The parsed tree of `file`, or null when the graph does not hold it. */
 	public function treeOf(file: String): Null<QueryNode> {
 		return _entries[CallGraphNames.normalizePath(file)]?.tree;
+	}
+
+	/** Every file the graph holds, with its text and its tree. */
+	public function heldFiles(): Array<{ file: String, source: String, tree: QueryNode }> {
+		return [for (e in _entries) { file: e.file, source: e.source, tree: e.tree }];
 	}
 
 	/** The source of `file`, or null when the graph does not hold it. */

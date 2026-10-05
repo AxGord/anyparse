@@ -344,6 +344,31 @@ final class TypedFactsWalk {
 		return code || (e.expr.match(TConst(_)) && _host.inlineCallee(info.file, info.min, info.max) != null);
 	}
 
+	/** Whether `e` lies in the body's own range: code of the body's text. */
+	private function ownCode(e: TypedExpr): Bool {
+		final info: { min: Int, max: Int, file: String } = Context.getPosInfos(e.pos);
+		return info.file == _home && info.min >= _min && info.max <= _max;
+	}
+
+	/**
+	 * The range of the body's own code between the statements of `exprs` around the `index`-th — the end of the last one
+	 * before it that is own code (`ownCode`) to the start of the first one after it — within `outer`, the range of the
+	 * innermost own code holding them all.
+	 */
+	private function between(exprs: Array<TypedExpr>, index: Int, outer: { min: Int, max: Int }): { min: Int, max: Int } {
+		var min: Int = outer.min;
+		var max: Int = outer.max;
+		for (j in 0...index) if (ownCode(exprs[j])) {
+			final end: Int = Context.getPosInfos(exprs[j].pos).max;
+			if (end > min) min = end;
+		}
+		for (j in index + 1...exprs.length) if (ownCode(exprs[j])) {
+			max = Context.getPosInfos(exprs[j].pos).min;
+			break;
+		}
+		return min <= max && outer.min <= min && max <= outer.max ? { min: min, max: max } : outer;
+	}
+
 	/** Whether `info` lies in the declared range of `method`. */
 	private static inline function holds(method: InlineMethod, info: { min: Int, max: Int, file: String }): Bool {
 		return info.file == method.file && info.min >= method.min && info.max <= method.max;
@@ -559,7 +584,12 @@ final class TypedFactsWalk {
 				// every statement but the last is discarded; the last is the block's own value
 				for (i in 0...exprs.length) {
 					_block = e.pos;
+					final site: { min: Int, max: Int } = _site;
+					// a statement at no range of the body's own code — a body spliced in, a macro's expansion — replaced the call
+					// written between the statements of that code around it, which keep their order
+					if (!ownCode(exprs[i])) _site = between(exprs, i, site);
 					walkAs(exprs[i], i == exprs.length - 1 ? use : Statement);
+					_site = site;
 				}
 			case TIf(condition, then, otherwise):
 				walk(condition);

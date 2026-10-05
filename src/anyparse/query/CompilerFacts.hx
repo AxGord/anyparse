@@ -794,8 +794,10 @@ final class CompilerFacts {
 	 * some of its facts run (`callsIn`). With `spliced`, a node an inlined function was spliced into (`inline-site-unknown`)
 	 * gives, beside those inside `span`, each fact it holds outside its own range (`placed`) that may run in `span`: one
 	 * a splice brought (`spliceOf`) when a site of that splice meets `span` and the method is not `harmless` — it runs no
-	 * project code, and the `inlined` call of it answers for all it does — and one no splice brought wherever it lies, since
-	 * it may run anywhere in the node. What a macro expanded into, and facts lost to a stale file, stay Unknown.
+	 * project code, and the `inlined` call of it answers for all it does — one an expression macro's expansion brought
+	 * (`expansionOf`) when a site it runs at (`expansionSites`) meets `span`, and one neither brought wherever it lies, since
+	 * it may run anywhere in the node. Without `spliced`, what a macro expanded into stays Unknown, and so, always, do facts
+	 * lost to a stale file.
 	 */
 	public function within<F>(
 		file: String, span: Span, pick: (FactNode) -> Array<F>, at: (F) -> FactPos, spliced: Bool = false,
@@ -804,17 +806,20 @@ final class CompilerFacts {
 		final key: String = _key(file);
 		final dropped: (callee:String) -> Bool = harmless ?? callee -> false;
 		function inside(where: FactPos): Bool return where.file == key && span.from <= where.span.from && where.span.to <= span.to;
+		function meets(sites: Array<Span>): Bool return sites.exists(s -> s.from < span.to && span.from < s.to);
 		function runsIn(n: FactNode, where: FactPos): Bool {
 			final splice: Null<SpliceFact> = spliceOf(n, where);
-			if (splice == null) return true;
-			return !dropped(splice.callee) && splice.sites.exists(s -> s.from < span.to && span.from < s.to);
+			if (splice != null) return !dropped(splice.callee) && meets(splice.sites);
+			final expansion: Null<ExpansionFact> = expansionOf(n, where);
+			final sites: Null<Array<Span>> = expansion == null ? null : expansionSites(n, expansion);
+			return sites == null || meets(sites);
 		}
 		final out: Array<F> = [];
 		for (n in nodesAround(file, span, true)) {
 			if (n.incomplete.contains('stale-foreign')) return null;
 			final whole: Bool = inside(n.at);
 			final splice: Bool = n.incomplete.contains(INLINE_SITE_UNKNOWN);
-			if (!whole && (n.incomplete.contains('macro-expansion') || (splice && !spliced))) return null;
+			if (!whole && !spliced && (n.incomplete.contains('macro-expansion') || splice)) return null;
 			for (fact in pick(n)) {
 				final where: FactPos = at(fact);
 				if (splice && spliced && !placed(n, where) ? runsIn(n, where) : whole || inside(where)) out.push(fact);
@@ -1102,6 +1107,48 @@ final class CompilerFacts {
 			if (holds && (best == null || body.to - body.from < best.body.span.to - best.body.span.from)) best = s;
 		}
 		return best;
+	}
+
+	/**
+	 * The expansion of an expression macro that brought the fact at `at` into `n`: the innermost one whose macro's declared
+	 * range holds it (`ExpansionFact.declared`) — the code that macro built, which runs where the compiler replaced the call
+	 * of it (`expansionSites`). Null for a fact `n` places itself, for one a splice brought (`spliceOf`), and for one no such
+	 * range holds.
+	 */
+	public static function expansionOf(n: FactNode, at: FactPos): Null<ExpansionFact> {
+		if (placed(n, at) || spliceOf(n, at) != null) return null;
+		var best: Null<ExpansionFact> = null;
+		for (x in n.expansions) {
+			final declared: Null<FactPos> = x.declared;
+			if (declared == null || declared.file != at.file || at.span.from < declared.span.from || declared.span.to < at.span.to)
+				continue;
+			final size: Int = declared.span.to - declared.span.from;
+			final known: Null<FactPos> = best?.declared;
+			if (known == null || size < known.span.to - known.span.from) best = x;
+		}
+		return best;
+	}
+
+	/**
+	 * Where in the file of `n` the code the expansion `x` built runs: at its anchor, the expression around the call of the
+	 * macro the compiler replaced, when `n` places it; at the sites of the inlined call whose method's code holds the anchor
+	 * (`spliceOf`); or where the expansion whose code holds the anchor runs, in turn. Null when none of these says: the code
+	 * may run anywhere in `n`.
+	 */
+	public static function expansionSites(n: FactNode, x: ExpansionFact): Null<Array<Span>> {
+		final seen: Array<ExpansionFact> = [];
+		var current: ExpansionFact = x;
+		while (!seen.contains(current)) {
+			seen.push(current);
+			final anchor: FactPos = current.anchor;
+			if (placed(n, anchor)) return [anchor.span];
+			final splice: Null<SpliceFact> = spliceOf(n, anchor);
+			if (splice != null) return splice.sites;
+			final outer: Null<ExpansionFact> = expansionOf(n, anchor);
+			if (outer == null) return null;
+			current = outer;
+		}
+		return null;
 	}
 
 	/** Whether `a` and `b` are the same range. */

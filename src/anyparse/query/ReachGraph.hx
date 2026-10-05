@@ -1384,7 +1384,7 @@ final class ReachGraph {
 	}
 
 	/** Which methods the program may obtain as values, read off the facts `view` once per text (`FactsMethodValues`). */
-	private function methodValues(view: FactsView): FactsMethodValues {
+	public function methodValues(view: FactsView): FactsMethodValues {
 		final held: Null<FactsMethodValues> = _methodValues;
 		if (held != null) return held;
 		final made: FactsMethodValues = new FactsMethodValues(view, () -> carriers.escapedIds());

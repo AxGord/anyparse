@@ -323,12 +323,17 @@ final class FactsView {
 	 * (`reflection-inlined`) is none without the truth: it is a splice (`inline-site-unknown`), whose node keeps its
 	 * syntax, which spells the reflective call or the call of the function holding it. Under the truth it is one: its node
 	 * is faceted, and neither its facts, which lost the call and its name, nor its syntax, which spells the call only
-	 * where it is written in the body and by that name, says what it reaches.
+	 * where it is written in the body and by that name, says what it reaches. A macro's expansion is none either, under the
+	 * truth, to a reader `g` hands its graph for — one reading a faceted body through its facts alone, its touches, edges,
+	 * hazards and implicit calls — when the graph node holding the expansion's body is faceted (`faceted`): the facts hold the
+	 * expanded code every build compiled, which runs where the call of the macro was (`CompilerFacts.expansionSites`). A
+	 * reader of the syntax gets no graph: a macro's code may name a local of the code calling it, which no fact relates.
 	 */
-	public function blindIn(file: String, span: Span): Null<ReachUnknown> {
+	public function blindIn(file: String, span: Span, ?g: CallGraph): Null<ReachUnknown> {
 		for (n in table.nodesIn(file)) {
 			if (n.generated || !meets(n.at.span, span)) continue;
-			if (n.incomplete.contains(MACRO_EXPANSION)) return Reification(file, span);
+			if (n.incomplete.contains(MACRO_EXPANSION) && !(truth && g != null && faceted(g, file, n.at.span)))
+				return Reification(file, span);
 			if (truth && n.incomplete.contains(REFLECTION_INLINED)) return DynamicName(file, span);
 			for (r in n.reflection) if (r.isValue && meets(r.at.span, span)) return DynamicName(file, r.at.span);
 		}
@@ -688,10 +693,11 @@ final class FactsView {
 
 	/**
 	 * Whether the marker `m` leaves some fact of its node without a place, so its body keeps the syntactic reading. Under
-	 * the truth a splice leaves none: its facts are the node's, which a range question takes wherever they sit (`within`).
+	 * the truth neither a splice nor an expression macro's expansion leaves one: the expansion is code every build compiled,
+	 * typed among the node's facts, and they are the node's, which a range question takes where they run (`within`).
 	 */
 	private function unplaced(m: String): Bool {
-		return UNPLACED.contains(m) && !(truth && m == INLINE_SITE_UNKNOWN);
+		return UNPLACED.contains(m) && !(truth && (m == INLINE_SITE_UNKNOWN || m == MACRO_EXPANSION));
 	}
 
 	/**

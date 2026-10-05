@@ -1,5 +1,7 @@
 package anyparse.query;
 
+import anyparse.check.FactsTypeTree;
+import anyparse.check.FactsTypeTree.FactsType;
 import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FieldDeclFact;
 import anyparse.query.CompilerFacts.TypeFact;
@@ -49,6 +51,9 @@ final class FactsMethodValues {
 
 	/** The field accesses whose read yields no instance method's value: a static's, an enum constructor's. */
 	private static final VALUELESS_ACCESSES: Array<String> = ['FStatic', 'FEnum'];
+
+	/** The access of a field read off a value of no class (`FieldFact.access`): its value is typed by nothing. */
+	private static inline final DYNAMIC_ACCESS: String = 'FDynamic';
 
 	/** The access of an instance field read (`FieldFact.access`): a method's value only when the field is a method. */
 	private static inline final INSTANCE_ACCESS: String = 'FInstance';
@@ -105,6 +110,33 @@ final class FactsMethodValues {
 		'Type.allEnums'
 	];
 
+	/** The type of an enum as a value: it holds no instance of a class. */
+	private static inline final ENUM_VALUE: String = 'Enum';
+
+	/** The type of a class as a value: it holds its statics, no instance. */
+	private static inline final CLASS_VALUE: String = 'Class';
+
+	/** The type of an abstract as a value: it holds its statics, no instance. */
+	private static inline final ABSTRACT_VALUE: String = 'Abstract';
+
+	/** The kind of a typed enum (`TypeFact.kind`): its values are no object of a class. */
+	private static inline final ENUM_KIND: String = 'enum';
+
+	/** How deep `mayHold` reads through wrappers and type parameters before it answers that a value may be anything. */
+	private static inline final MAX_DEPTH: Int = 8;
+
+	/** The typed kinds a value of which is an object of a class (`TypeFact.kind`). */
+	private static final OBJECT_KINDS: Array<String> = ['class', 'interface'];
+
+	/** The catch-all type: a value of it is of no class. */
+	private static inline final CATCH_ALL: String = 'Dynamic';
+
+	/** The type any value unifies with: a value of it is of no class. */
+	private static inline final ANY: String = 'Any';
+
+	/** The nullable wrapper: a value of it is what it wraps. */
+	private static inline final NULLABLE: String = 'Null';
+
 	/** The type of a string: a reflective call's recorded literal may be its first argument, the object, not the name. */
 	private static inline final STRING_TYPE: String = 'String';
 
@@ -154,6 +186,64 @@ final class FactsMethodValues {
 		}
 		final hierarchy: Array<String> = [owner.id].concat(_table.subtypesOf(owner.id));
 		return !(reads.named[name] ?? []).exists(r -> mayBeOf(r, hierarchy)) && !reads.computed.exists(r -> mayBeOf(r, hierarchy));
+	}
+
+	/**
+	 * Whether a function any build typed may obtain the method `name` of an object of a class `hierarchy` names as a value
+	 * of no type the program declares — a read of it off a value of no class (`FDynamic`), or a reflective read naming it or
+	 * computing the name, on an object that may be one (`mayHold`) — or any read may obtain any method (`unknownReason`).
+	 * Such a value may then reach a call of a value of any type. A `statics` method is read off its class as a value, any
+	 * other off an instance. `escaped` and `bound` are `mayHold`'s.
+	 */
+	public function obtainedUntyped(
+		name: String, hierarchy: Array<String>, escaped: Null<Array<String>>, bound: (path:String) -> Null<Array<FactsType>>, statics: Bool
+	): Bool {
+		final reads: MethodValueReads = scan();
+		if (reads.unknown != null) return true;
+		function may(r: MethodValueRead): Bool {
+			final receiver: Null<String> = r.receiver;
+			final read: Null<FactsType> = receiver == null ? null : FactsTypeTree.read(receiver);
+			return r.typeless && (read == null || mayHold(read, r.exact, hierarchy, escaped, bound, statics, 0));
+		}
+		return (reads.named[name] ?? []).exists(may) || reads.computed.exists(may);
+	}
+
+	/**
+	 * Whether a value of the type `t` may be an object of a class `hierarchy` names — of exactly the class it names, when
+	 * `exact` — or, for `statics`, that class itself as a value. A class or an interface, an extern's included, holds an
+	 * instance of it or of a subtype, and one that escaped (`escaped`, the escaped types by typed id, null for any), which may
+	 * be in a place of any type; a class as a value (`Class<T>`, an abstract's `Abstract<T>`) holds that class; a place no
+	 * class types — `Dynamic`, `Any`, a structure — holds an object, or a class as a value, that escaped (an escaped class
+	 * value escapes its class, `FactsEscapes`): one no flow let leave the type system is in none. A type parameter holds what
+	 * an instantiation binds it to (`bound`, null when that is not known); an enum value, an enum as a value and a function
+	 * hold none. Any other type — an abstract, one the facts do not type — may hold either.
+	 */
+	private function mayHold(
+		t: FactsType, exact: Bool, hierarchy: Array<String>, escaped: Null<Array<String>>, bound: (path:String) -> Null<Array<FactsType>>,
+		statics: Bool, depth: Int
+	): Bool {
+		final left: Bool = escaped == null || escaped.exists(e -> hierarchy.contains(e));
+		if (depth > MAX_DEPTH) return true;
+		return switch t {
+			case Named(NULLABLE, [inner]): mayHold(inner, exact, hierarchy, escaped, bound, statics, depth + 1);
+			case Named(CLASS_VALUE | ABSTRACT_VALUE, [Named(id, _)]):
+				statics && hierarchy.contains(id);
+			case Named(CLASS_VALUE | ABSTRACT_VALUE, _): statics;
+			case Named(ENUM_VALUE, _) | Function(_, _): false;
+			case Named(CATCH_ALL | ANY, _) | Structure(_): left;
+			case Named(id, _):
+				final declared: Null<TypeFact> = _table.type(id);
+				if (declared == null || !declared.alike)
+					true
+				else if (OBJECT_KINDS.contains(declared.kind))
+					!statics && (hierarchy.contains(id) || (!exact && (left || _table.subtypesOf(id).exists(s -> hierarchy.contains(s)))))
+				else
+					declared.kind != ENUM_KIND;
+			case Parameter(path):
+				final types: Null<Array<FactsType>> = bound(path);
+				types == null || types.exists(b -> mayHold(b, false, hierarchy, escaped, bound, statics, depth + 1));
+			case Unknown: true;
+		};
 	}
 
 	/** Why any method's value may be obtained (see the type doc), or null. */
@@ -211,7 +301,7 @@ final class FactsMethodValues {
 				return out;
 			}
 			for (f in n.fields) if (!f.write && methodRead(f.access, f.owner, f.field))
-				named(f.field, { receiver: f.receiver, exact: false });
+				named(f.field, { receiver: f.receiver, exact: false, typeless: f.access == DYNAMIC_ACCESS });
 			for (c in n.calls) if (c.access == INLINED && REBINDING_CALLS.contains(c.target ?? '')) out.rebinds = true;
 			for (r in n.reflection) {
 				final target: String = r.target;
@@ -221,7 +311,7 @@ final class FactsMethodValues {
 					out.unknown = '`$target` is read as a value in `$id`';
 					return out;
 				}
-				final read: MethodValueRead = { receiver: r.receiver, exact: r.receiverExact };
+				final read: MethodValueRead = { receiver: r.receiver, exact: r.receiverExact, typeless: true };
 				final literal: Null<String> = r.name;
 				// the literal recorded is the first of any argument: the object's own, when that is a string
 				if (literal == null || CompilerFacts.baseId(r.receiver ?? STRING_TYPE) == STRING_TYPE)
@@ -268,6 +358,9 @@ final class FactsMethodValues {
 typedef MethodValueRead = {
 	final receiver: Null<String>;
 	final exact: Bool;
+
+	/** Whether the value read is of no type the program declares: a read off a value of no class (`FDynamic`), or reflection. */
+	final typeless: Bool;
 }
 
 /**

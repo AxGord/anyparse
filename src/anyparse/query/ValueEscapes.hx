@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.check.FactsTypeTree.FactsType;
 import anyparse.query.CallGraph.CallEdge;
 import anyparse.query.CallGraph.FnNode;
 import anyparse.query.GrammarPlugin.RefShape;
@@ -57,6 +58,9 @@ final class ValueEscapes {
 	 */
 	private var _answer: Null<EscapeAnswer> = null;
 
+	/** The escapes read off the compiler's facts by the last `compute`, under the truth; null otherwise. */
+	private var _read: Null<FactsEscapes> = null;
+
 	/** What `memberFacts` read off the index. */
 	private var _facts: Null<MemberFacts> = null;
 
@@ -85,6 +89,23 @@ final class ValueEscapes {
 		return answered().ids;
 	}
 
+	/**
+	 * The function types of the function values that may have left the type system, when the facts are the truth and say
+	 * (`FactsEscapes.functionTypes`); null otherwise, and when any value may have.
+	 */
+	public function escapedFunctions(): Null<Array<FactsType>> {
+		return answered().functions;
+	}
+
+	/**
+	 * The types a value of the type parameter `path` may have, when the facts are the truth and say (`FactsEscapes.parameterTypes`);
+	 * null otherwise.
+	 */
+	public function parameterBindings(path: String): Null<Array<FactsType>> {
+		answered(); // noqa: unused-return-value
+		return _read?.parameterTypes(path);
+	}
+
 	/** The answer, computed once. */
 	private function answered(): EscapeAnswer {
 		var answer: Null<EscapeAnswer> = _answer;
@@ -99,6 +120,7 @@ final class ValueEscapes {
 	/** Drop the answer: the project's text changed. */
 	public function forget(): Void {
 		_answer = null;
+		_read = null;
 	}
 
 	/** Whether a value stored in a position declared `type` keeps a nominal type the analysis follows (`ValueCarriers.typedNominal`). */
@@ -145,8 +167,14 @@ final class ValueEscapes {
 		final view: Null<FactsView> = _scope.facts;
 		if (view != null && view.truth) {
 			final read: FactsEscapes = new FactsEscapes(view, _scope);
+			_read = read;
 			final types: Null<Array<String>> = read.compute();
-			return { types: types, raw: false, ids: types == null ? null : read.typedIds() };
+			return {
+				types: types,
+				raw: false,
+				ids: types == null ? null : read.typedIds(),
+				functions: types == null ? null : read.functionTypes()
+			};
 		}
 		if (!_scopeKnown) return { types: null, raw: false, ids: null };
 		final g: CallGraph = _g.graph();
@@ -679,4 +707,7 @@ private typedef EscapeAnswer = {
 	final types: Null<Array<String>>;
 	final raw: Bool;
 	final ids: Null<Array<String>>;
+
+	/** The function types of the function values that escaped (`FactsEscapes.functionTypes`); null when not known. */
+	final ?functions: Array<FactsType>;
 }
