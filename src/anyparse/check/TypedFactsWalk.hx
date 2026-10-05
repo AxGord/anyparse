@@ -174,11 +174,20 @@ final class TypedFactsWalk {
 		_host.line(out.toString());
 	}
 
-	/** `p` as a fact position: `[min,max]` in the node's file, else `[i,min,max]`. */
+	/**
+	 * `p` as a fact position: `[min,max]` in the node's file, else `[i,min,max]`. A position in a `Reflect`/`Type` module
+	 * marks the node `reflection-inlined`, and names the method whose declared code holds it (`reflection-from:<id>`), or
+	 * says none does (`reflection-unattributed`).
+	 */
 	private function at(p: Position): String {
 		final info: { min: Int, max: Int, file: String } = Context.getPosInfos(p);
 		if (info.file == _home) return '[${info.min},${info.max}]';
-		if (_host.reflectionModule(info.file)) incomplete('reflection-inlined');
+		if (_host.reflectionModule(info.file)) {
+			incomplete('reflection-inlined');
+			// the method whose declared code holds the fact: the reflective body it stands in, or none that says
+			final from: Null<InlineMethod> = _host.inlineCallee(info.file, info.min, info.max);
+			incomplete(from == null ? 'reflection-unattributed' : 'reflection-from:' + from.id);
+		}
 		return _host.pos(p, _home);
 	}
 

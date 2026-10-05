@@ -118,7 +118,9 @@ import haxe.io.Path;
  * - `macro-expansion`: a spliced body no method could be matched to — an expression macro's expansion, or
  *   an inlined piece that carries only its declaring type's range (an abstract's `this`); as above, and no callee is named.
  *   Each such body is an `exps` record.
- * - `reflection-inlined`: a `Reflect`/`Type` body was inlined; its call, name and arguments are gone.
+ * - `reflection-inlined`: a `Reflect`/`Type` body was inlined; its call, name and arguments are gone. Each fact of such a
+ *   body also names the method whose declared code holds it, `reflection-from:<pack.Type.method>`, or says that none does,
+ *   `reflection-unattributed`: what a consumer may still read off the members a node spliced in.
  * - `stale-foreign` (added by the table): a fact positioned in a file whose text the table no longer has was dropped.
  *
  * ## Type strings

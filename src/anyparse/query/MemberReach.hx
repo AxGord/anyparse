@@ -390,17 +390,22 @@ final class MemberReach {
 	 * classpath (`ValueCarriers.metIncomplete`), escalates: the builds decide which branches any of them compiles and
 	 * which library code they compile at all, and learning them costs a compile per configuration, so every other
 	 * question keeps this analysis's answer, which holds under every build since it walks every branch. With compiler
-	 * facts (`_factsTruthAvailable`) every unproved question escalates: under the builds the facts may be the truth.
+	 * facts (`_factsTruthAvailable`) every unproved question escalates: under the builds the facts may be the truth. A
+	 * proved one does too, and takes that analysis's answer when its facts ARE the truth (`FactsView.truth`): the facts see
+	 * what this reading cannot — a static member imported under another name, a body or a member a build macro made, a
+	 * method a reflective value obtains — so the truth answers every question it can.
 	 */
 	private function escalation(answer: ReachResult): Null<MemberReach> {
 		final builds: Bool = _metRawRegion || _carriers.metIncomplete || answer.match(Unknown(OpaqueCond(_, _)));
-		if (answer == Proven || !(builds || _factsTruthAvailable)) return null;
+		final proven: Bool = answer == Proven;
+		if (proven ? !_factsTruthAvailable : !(builds || _factsTruthAvailable)) return null;
 		final configure: Null<() -> Null<MemberReach>> = _configure;
 		if (configure != null) {
 			_configure = null;
 			_configured = configure();
 		}
-		return _configured;
+		final configured: Null<MemberReach> = _configured;
+		return proven && configured?._scope.facts?.truth != true ? null : configured;
 	}
 
 	/** `mayReach` under this analysis alone. */

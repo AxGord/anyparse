@@ -344,7 +344,7 @@ final class FactsMethodValues {
 			for (r in n.reflection) {
 				final target: String = r.target;
 				if (REBINDING_CALLS.contains(target)) out.rebinds = true;
-				if (memberless(target)) continue;
+				if (memberless(_table, target)) continue;
 				if (r.isValue || REFLECTION_CLASSES.contains(target)) {
 					// whatever calls it later hands it a name computed there, and any object: the project's declaration bounds
 					// what that obtains (`declaredHolders`); a reflective class as a value may also rebind
@@ -369,34 +369,26 @@ final class FactsMethodValues {
 	}
 
 	/**
-	 * Whether every reflective body spliced into `n` (`reflection-inlined`) is one its `inlined` calls name, each of a member
-	 * that reads no member's value (`memberless`): what the others read is lost with their name.
+	 * Whether every reflective body spliced into `n` (`reflection-inlined`) is of a member the facts name
+	 * (`FactsView.splicedReflection`) that reads no member's value (`memberless`): what any other reads is lost with its name.
 	 */
 	private function inlinedMemberless(n: FactNode): Bool {
-		var named: Bool = false;
-		for (c in n.calls) {
-			final target: Null<String> = c.target;
-			if (c.access != INLINED || target == null) continue;
-			final dot: Int = target.lastIndexOf('.');
-			if (dot < 0 || !REFLECTION_CLASSES.contains(target.substr(0, dot))) continue;
-			if (!memberless(target)) return false;
-			named = true;
-		}
-		return named;
+		final members: Null<Array<String>> = FactsView.splicedReflection(n);
+		return members != null && members.foreach(m -> memberless(_table, m));
 	}
 
 	/**
 	 * Whether the reflective member `target` (`Reflect.field`, `Type.getEnumValueIndex`) hands the program no member's value
-	 * read off an object: it is one that never does (`MEMBERLESS_REFLECTION`), or every build declares it a function, of one
-	 * signature, returning a value of no function (`VALUE_RESULTS`). A class read as a value, and a member no build declares,
-	 * may hand one.
+	 * read off an object, in the builds `table` holds: it is one that never does (`MEMBERLESS_REFLECTION`), or every build
+	 * declares it a function, of one signature, returning a value of no function (`VALUE_RESULTS`). A class read as a value,
+	 * and a member no build declares, may hand one.
 	 */
-	private function memberless(target: String): Bool {
+	public static function memberless(table: CompilerFacts, target: String): Bool {
 		if (MEMBERLESS_REFLECTION.contains(target)) return true;
 		final dot: Int = target.lastIndexOf('.');
 		final declared: Null<FieldDeclFact> = dot < 0
 			? null
-			: _table.type(target.substr(0, dot))?.fields.find(f -> f.name == target.substr(dot + 1));
+			: table.type(target.substr(0, dot))?.fields.find(f -> f.name == target.substr(dot + 1));
 		return declared != null && declared.types.length > 0 && !declared.overloads.exists(o -> o > 0)
 			&& declared.types.foreach(t -> switch FactsTypeTree.read(t) {
 				case Function(_, Named(result, [])): VALUE_RESULTS.contains(result);

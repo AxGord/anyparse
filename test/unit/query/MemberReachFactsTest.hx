@@ -598,7 +598,7 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TRUTH-REFLECTION-INLINED')
+	@:pin('control') @:killer('M-FACTS-TRUTH-REFLECTION-INLINED') @:killer('M-FACTS-SPLICED-REFLECTION-NAMED')
 	public function testUnderTheTruthAnInlinedReflectiveCallIsADynamicName(): Void {
 		// `sf` is `Reflect.setField`, `inline` on js: its splice leaves no reflective call among the facts, and the syntax
 		// does not see one under another name
@@ -1258,6 +1258,21 @@ class MemberReachFactsTest extends Test {
 		assertMatch(builtAsk(CPP_BUILD, ['Main.hx' => compared('Type.enumEq(a, a)')]), r -> r.match(Proven));
 		// a read whose result may be a member's value still obtains one
 		assertMatch(builtAsk(CPP_BUILD, ['Main.hx' => compared('Reflect.field(a, Std.string(a)) != null')]), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-FACTS-SPLICED-REFLECTION-READ') @:killer('M-FACTS-SPLICED-REFLECTION-FROM')
+	@:killer('M-FACTS-SPLICED-REFLECTION-MEMBERLESS')
+	public function testUnderTheTruthASplicedReflectiveBodyThatReachesNoMemberLeavesItsFunctionReadable(): Void {
+		// hxcpp splices `Type.enumIndex` into `main`: the facts name the member, which names none and reads no member's value,
+		// so the loop beside it is read through the facts (an index of a constant the compiler folds, so `mk` hands one).
+		// `Reflect.copy`, spliced by its call site, returns the object it copied, a value that may hold a member's: no
+		// declaration clears it
+		function fixture(spliced: String): String {
+			return LOOP_HEAD + '\tstatic function mk():E return E.A;\n\tstatic function main() {\n\t\tvar k:Dynamic = $spliced;\n'
+				+ '\t\tfor (i in 0...items.length) { /*<*/ k = i; /*>*/ }\n\t}\n}\nenum E {\n\tA;\n}\n';
+		}
+		assertMatch(builtAsk(CPP_BUILD, ['Main.hx' => fixture('Type.enumIndex(mk())')]), r -> r.match(Proven));
+		assertMatch(builtAsk(CPP_BUILD, ['Main.hx' => fixture('inline Reflect.copy({ a: 1 })')]), r -> r.match(Unknown(DynamicName(_, _))));
 	}
 
 	@:pin('control') @:killer('M-HOLDERS-FIELDS-UNBOUNDED') @:killer('M-GRAPH-REFLECT-SUPERTYPES')
