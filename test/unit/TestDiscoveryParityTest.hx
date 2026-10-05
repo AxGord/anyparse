@@ -2688,6 +2688,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testANameTwoTypesShareReachedByItsSyntaxRunsAsEachOfThemUnderTheTruth :: control :: '
 				+ 'M-REACH-QUALIFIED-UNNAMED,M-REACH-SHARED-OWNERS',
 			'unit.query.MemberReachFactsTest#testANativeIdentifierAdmitsWhatItMayCall :: control :: M-FACTS-REACH-NATIVE-IDENT',
+			'unit.query.MemberReachFactsTest#testAPinnedOwnerAsksItsOwnBuildMacroAndNoOtherUnderTheTruth :: control :: '
+				+ 'M-REACH-PINNED-NONE,M-REACH-PINNED-REWRITTEN-SIMPLE,M-REACH-PINNED-REWRITTEN-NONE,M-FACTS-PINNED-OWNER-FILES',
 			'unit.query.MemberReachFactsTest#testAProducerReadAsAValueMakesOnlyADeclaredClassUnderTheTruth :: control :: M-ESCAPES-FACTS-DECLARED-PRODUCED,M-ESCAPES-FACTS-DECLARED-READER',
 			'unit.query.MemberReachFactsTest#testAProjectFileNoBuildCompilesLetsNoValueEscape :: control :: M-FACTS-DEAD-FILE-VALUES',
 			'unit.query.MemberReachFactsTest#testAProjectFileNoBuildCompilesRunsNothing :: control :: '
@@ -2857,6 +2859,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-TRUTH-NATIVES,M-FACTS-TRUTH-NATIVE-CALLS-KEPT,M-FACTS-TRUTH-NATIVE-METAS-DROPPED',
 			'unit.query.MemberReachFactsTest#testTheFunctionAPartialApplicationMakesIsItsTextUnderTheTruth :: control :: '
 				+ 'M-FACTS-TEXT-READ-AT-VALUE,M-FACTS-TEXT-BINDING',
+			'unit.query.MemberReachFactsTest#testTheOwnerTheFactsPinAtTheLoopIsOneOfTwoTypesUnderOneNameUnderTheTruth :: control :: '
+				+ 'M-REACH-PINNED-NONE,M-FACTS-PINNED-UNTRUE,M-REACH-ENTRY-OWN-NONE,M-REACH-PINNED-REWRITTEN-SIMPLE',
 			'unit.query.MemberReachFactsTest#testThePushesOfAComprehensionAreItsTextUnderTheTruth :: control :: M-FACTS-TEXT-COMPREHENSION',
 			'unit.query.MemberReachFactsTest#testTheReceiverOfAFieldReachedByNameEscapesUnderTheTruth :: control :: '
 				+ 'M-ESCAPES-FACTS-DYNAMIC-RECEIVER',
@@ -4049,6 +4053,12 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-IDLE-INDEX',
 			'M-REACH-AMBIGUOUS-SOLE-ANY',
 			'M-REACH-AMBIGUOUS-SOLE-NONE',
+			'M-REACH-PINNED-NONE',
+			'M-REACH-PINNED-REWRITTEN-SIMPLE',
+			'M-REACH-PINNED-REWRITTEN-NONE',
+			'M-REACH-ENTRY-OWN-NONE',
+			'M-FACTS-PINNED-UNTRUE',
+			'M-FACTS-PINNED-OWNER-FILES',
 			'M-FACTS-SOLE-TYPED-ONLY',
 			'M-FACTS-SOLE-STANDS-ANY',
 			'M-FACTS-SOLE-NEVER',

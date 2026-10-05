@@ -216,6 +216,32 @@ class MemberReachFactsTest extends Test {
 		];
 	}
 
+	/**
+	 * `a.Grid`, built by `Mac.<mine>()` when given, and `b.Grid`, by `Mac.<other>()`, share a simple name, and each declares
+	 * `items` and `calm` (`BUILD_MACROS`); `a.Grid.f` loops over its `items`, and `Main.main` over `g.items` of an `a.Grid`,
+	 * each region running nothing. With `base`, the declaration of `a.Base`, `a.Grid` extends it and declares no `items`.
+	 */
+	private static function pinnedGrids(mine: Null<String>, other: Null<String>, ?base: String): Map<String, String> {
+		function built(by: Null<String>): String {
+			return by == null ? '' : '@:build(Mac.' + by + '())\n';
+		}
+		final head: String = base == null
+			? 'class Grid {\n\tpublic var items:Array<Int> = [];\n\n\tpublic function new() {}\n'
+			: 'class Grid extends Base {\n\tpublic function new() super();\n';
+		final files: Map<String, String> = [
+			'Main.hx' => LOOP_HEAD + '\tstatic function main() {\n\t\tfinal g:a.Grid = new a.Grid();\n\t\tg.f();\n'
+				+ '\t\tfor (i in 0...g.items.length) { /*<*/ var n:Int = i; /*>*/ }\n\t\tnew b.Grid().calm();\n\t}\n}\n',
+			'a/Grid.hx' => 'package a;\n\n' + built(mine) + head
+				+ '\n\tpublic function f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ var n:Int = i; /*>*/ }\n\t}\n\n'
+				+ '\tpublic function calm():Void {}\n}\n',
+			'b/Grid.hx' => 'package b;\n\n' + built(other)
+				+ 'class Grid {\n\tpublic var items:Array<Int> = [];\n\n\tpublic function new() {}\n\n\tpublic function calm():Void {}\n}\n',
+			'Mac.hx' => BUILD_MACROS
+		];
+		if (base != null) files['a/Base.hx'] = base;
+		return files;
+	}
+
 	/** The build of a fixture every class of whose root package the global `Mac.hub` rebuilds from its own fields (tink's `SyntaxHub`). */
 	private static final HUB_BUILD: String = BUILD + '--macro addGlobalMetadata("", "@:build(Mac.hub())")\n';
 
@@ -2191,6 +2217,50 @@ class MemberReachFactsTest extends Test {
 			['c/Grid.hx' => grid('c'), 'Cp.hx' => PICK_CLASSPATH]
 		);
 		assertMatch(unheld, r -> r.match(Unknown(Ambiguous('Grid'))));
+	}
+
+	@:pin('control') @:killer('M-REACH-PINNED-NONE') @:killer('M-FACTS-PINNED-UNTRUE') @:killer('M-REACH-ENTRY-OWN-NONE')
+	@:killer('M-REACH-PINNED-REWRITTEN-SIMPLE')
+	public function testTheOwnerTheFactsPinAtTheLoopIsOneOfTwoTypesUnderOneNameUnderTheTruth(): Void {
+		// `a.Grid` and `b.Grid` share a simple name; `a.Grid.f` loops over its own `items`, and the compiler resolved that read
+		// on `a.Grid`: the member is that type's, and the region its text, though `b.Grid`'s build macro rewrites `calm`. With
+		// no whole list of builds nothing tells the two apart
+		function question(listed: Bool, ?other: String): ReachResult {
+			final files: Map<String, String> = pinnedGrids(null, other);
+			return withReach(files, null, true, false, null, null, null, listed, (reach, dir) -> {
+				final grid: String = files['a/Grid.hx'] ?? '';
+				final at: Int = grid.indexOf('items.length');
+				reach.mayMutateNamed(Path.join([dir, 'a/Grid.hx']), 'items', new Span(at, at + 'items'.length), regionOf(grid));
+			});
+		}
+		assertMatch(question(true), r -> r.match(Proven));
+		assertMatch(question(false), r -> r.match(Unknown(Ambiguous('Grid'))));
+		assertMatch(question(true, 'rewrite'), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-REACH-PINNED-NONE') @:killer('M-REACH-PINNED-REWRITTEN-SIMPLE') @:killer('M-REACH-PINNED-REWRITTEN-NONE')
+	@:killer('M-FACTS-PINNED-OWNER-FILES')
+	public function testAPinnedOwnerAsksItsOwnBuildMacroAndNoOtherUnderTheTruth(): Void {
+		// `Main` reads `g.items` of an `a.Grid`, whose compiler fact pins `a.Grid` among the two `Grid`s: a build macro of
+		// `b.Grid` is none of its code, one of `a.Grid` that rewrites `calm` is. A read the compiler resolved on a type the
+		// index declares under another name — `a.Base`, which `a.Grid` extends — pins no `Grid`, and none is the site's: the
+		// question has no site at all
+		function question(mine: Null<String>, other: Null<String>, ?base: String, site: Bool = true): ReachResult {
+			final files: Map<String, String> = pinnedGrids(mine, other, base);
+			final main: String = files['Main.hx'] ?? '';
+			final at: Int = main.indexOf('g.items');
+			final member: MemberRef = site ? { owner: 'Grid', name: 'items', site: new Span(at, at + 'g.items'.length) } : {
+				owner: 'Grid',
+				name: 'items'
+			};
+			return ask(files, null, true, member, false, null, null, null, true);
+		}
+		assertMatch(question(null, null), r -> r.match(Proven));
+		assertMatch(question(null, null, null, false), r -> r.match(Unknown(Ambiguous('Grid'))));
+		assertMatch(question(null, 'rewrite'), r -> r.match(Proven));
+		assertMatch(question('rewrite', null), r -> r.match(Unknown(Reification(_, _))));
+		final base: String = 'package a;\n\nclass Base {\n\tpublic var items:Array<Int> = [];\n\n\tpublic function new() {}\n}\n';
+		assertMatch(question(null, null, base), r -> r.match(Unknown(Ambiguous('Grid'))));
 	}
 
 	@:pin('control') @:killer('M-FACTS-FOLDED-BY-ID') @:killer('M-FACTS-SOLE-NEVER') @:killer('M-REACH-AMBIGUOUS-SOLE-NONE')

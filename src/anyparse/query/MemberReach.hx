@@ -109,7 +109,8 @@ enum ReachUnknown {
 	 * (`CallGraphFacts.qualify`), as does an implicit-call site whose facts name its operands'
 	 * types (`ReachGraph.ownedIdsAt`): the name stays shared only where the walk enters it by
 	 * an edge or an admission no fact names an owner of — the syntax's, a dispatch's, one of a
-	 * value of any type.
+	 * value of any type. The member's own owner is the type the fact of the question's read
+	 * names (`MemberRef.site`, `FactsView.pinnedOwner`).
 	 */
 	Ambiguous(typeName: String);
 
@@ -130,10 +131,15 @@ enum ReachResult {
 
 }
 
-/** A member by its declaring owner's simple name and its own name. */
+/**
+ * A member by its declaring owner's simple name and its own name — and, optionally, a read of it at `site` in the entry's
+ * file, by which the compiler facts may name which of several types sharing that simple name declares it
+ * (`FactsView.pinnedOwner`).
+ */
 typedef MemberRef = {
 	var owner: String;
 	var name: String;
+	@:optional var site: Null<Span>;
 }
 
 /**
@@ -372,7 +378,7 @@ final class MemberReach {
 		final ownerName: String = owner;
 		if (graph().types.declaringTypeOf(ownerName, name) == null)
 			return Unknown(OutOfScope('`$name` is not a member of `$ownerName` or its supertypes — an import or a module-level value'));
-		return mayReach(Region(file, region), { owner: ownerName, name: name }, Mutate);
+		return mayReach(Region(file, region), { owner: ownerName, name: name, site: at }, Mutate);
 	}
 
 	/** One line saying why `result` is not `Proven`, with `file:line` positions; empty for `Proven`. */
@@ -421,17 +427,22 @@ final class MemberReach {
 			return Unknown(
 				OutOfScope('the run declared no project roots that all matched, so a toucher may live in a file it did not read')
 			);
-		// declarations of the one type the builds typed, a copy per build, are that type (`FactsView.soleType`)
-		if (g.types.declarationCount(declaring) > 1 && _scope.facts?.soleType(declaring) == null) return Unknown(Ambiguous(declaring));
-		final ownerFile: Null<String> = _scope.siteOf(declaring)?.file;
-		if (ownerFile == null || !_projectSources.exists(ownerFile))
+		// declarations of the one type the builds typed, a copy per build, are that type (`FactsView.soleType`); of several
+		// types, the owner is the one the compiler resolved the member's read at the question's site on (`FactsView.pinnedOwner`)
+		final shared: Bool = g.types.declarationCount(declaring) > 1 && _scope.facts?.soleType(declaring) == null;
+		final site: Null<Span> = member.site;
+		final pinned: Null<String> = shared && site != null ? _scope.facts?.pinnedOwner(g, entryFile, site, declaring, member.name) : null;
+		if (shared && pinned == null) return Unknown(Ambiguous(declaring));
+		final ownerFile: Null<String> = ownerFileOf(declaring, pinned);
+		if (ownerFile == null)
 			return Unknown(OutOfScope('`$declaring` is not declared in the project, so library code may name `${member.name}`'));
 		final info: Null<MemberInfo> = g.types.memberOnChain(declaring, member.name);
 		if (info != null && (info.hasGetter || info.hasSetter) && !readStraight(declaring, member.name))
 			return Unknown(UnresolvedDispatch(
 				ownerFile, null, '`${member.name}` is a property whose accessor stands between the reader and the storage'
 			));
-		final built: Null<ReachUnknown> = _g.rewrittenBy(declaring) ?? entryRewritten(entryFile, entrySpans(entry));
+		final rewritten: Null<ReachUnknown> = pinned == null ? _g.rewrittenBy(declaring) : _g.rewrittenAs(g, ownerFile, declaring, pinned);
+		final built: Null<ReachUnknown> = rewritten ?? entryRewritten(g, entryFile, entrySpans(entry));
 		if (built != null) return Unknown(built);
 		if (access == Mutate && scan.escapes.length > 0) {
 			final at: Occurrence = scan.escapes[0];
@@ -446,6 +457,21 @@ final class MemberReach {
 			arrayTyped: arrayTyped
 		};
 		return walk(g, seeds, entryHazards(g, entry), entrySites(g, entry), scan, member, question);
+	}
+
+	/**
+	 * The project file declaring `declaring`, the member's owner: the index's one declaration site of the name
+	 * (`ReachProject.siteOf`) — or, for the one of several types of that name the compiler facts pin (`pinned`,
+	 * `FactsView.pinnedOwner`), a file declaring that type, when every one of them is a project file. Null otherwise.
+	 */
+	private function ownerFileOf(declaring: String, pinned: Null<String>): Null<String> {
+		final facts: Null<FactsView> = _scope.facts;
+		if (pinned == null || facts == null) {
+			final site: Null<String> = _scope.siteOf(declaring)?.file;
+			return site != null && _projectSources.exists(site) ? site : null;
+		}
+		final homes: Array<String> = facts.ownerFiles(declaring, pinned);
+		return homes.length > 0 && homes.foreach(f -> _projectSources.exists(f)) ? homes[0] : null;
 	}
 
 	/**
@@ -472,7 +498,7 @@ final class MemberReach {
 		final name: Null<String> = declaration.name;
 		if (tree == null || source == null) return Unknown(SkipParse(file));
 		if (declSpan == null || name == null) return Unknown(OutOfScope('the declaration of the collection carries no span'));
-		final rebuilt: Null<ReachUnknown> = entryRewritten(file, [region]);
+		final rebuilt: Null<ReachUnknown> = entryRewritten(graph(), file, [region]);
 		if (rebuilt != null) return Unknown(rebuilt);
 		final rerun: Span = new Span(declSpan.from, _touches.rerunEnd(fn, region));
 		final blind: Null<ReachUnknown> = firstBlind(file, liveHazards(file, tree, source, rerun)) ?? _scope.facts?.blindIn(file, rerun);
@@ -782,15 +808,19 @@ final class MemberReach {
 	/**
 	 * Under the truth (`FactsView.truth`), the site of the build macro that made the code of a type holding one of `spans`
 	 * of `file` other than its text (`ReachGraph.rewrittenBy`), or null: an entry is text, which may be none of what the
-	 * builds compiled there. Without the truth, null: the walk asks every build macro of the code it enters, the entry's
-	 * among it only as the member's owner.
+	 * builds compiled there. A name several types share is asked as the one `file` declares (`ReachGraph.rewrittenAs`), when
+	 * the builds typed it (`FactsView.typedIn`). Without the truth, null: the walk asks every build macro of the code it
+	 * enters, the entry's among it only as the member's owner.
 	 */
-	private function entryRewritten(file: String, spans: Array<Span>): Null<ReachUnknown> {
+	private function entryRewritten(g: CallGraph, file: String, spans: Array<Span>): Null<ReachUnknown> {
 		final tree: Null<QueryNode> = _g.treeOf(file);
-		if (_scope.facts?.truth != true || tree == null) return null;
+		final facts: Null<FactsView> = _scope.facts;
+		if (facts == null || !facts.truth || tree == null) return null;
 		for (span in spans) {
 			final type: Null<String> = MemberTouchScan.typeAt(tree, span.from);
-			final built: Null<ReachUnknown> = type == null ? null : _g.rewrittenBy(type);
+			if (type == null) continue;
+			final own: Null<String> = g.types.declarationCount(type) > 1 ? facts.typedIn(file, type) : null;
+			final built: Null<ReachUnknown> = own == null ? _g.rewrittenBy(type) : _g.rewrittenAs(g, file, type, own);
 			if (built != null) return built;
 		}
 		return null;
@@ -1197,7 +1227,7 @@ final class MemberReach {
 			? null
 			: facts.soleType(type) ?? (name == null ? null : facts.soleMember(type, name));
 		final owner: Null<String> = read?.owner ?? sole;
-		return owner == null ? _g.rewrittenBy(type) : _g.rewrittenAs(g, node, type, owner);
+		return owner == null ? _g.rewrittenBy(type) : _g.rewrittenAs(g, node.file, type, owner);
 	}
 
 	/**
