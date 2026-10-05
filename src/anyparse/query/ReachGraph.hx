@@ -7,6 +7,7 @@ import anyparse.query.CallGraph.FnNode;
 import anyparse.query.CallGraph.UnresolvedAccess;
 import anyparse.query.CallGraph.UnresolvedCall;
 import anyparse.query.CompilerFacts.ReflectionFact;
+import anyparse.query.GrammarPlugin.ExecutionShape;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.ImplicitSites.ImplicitSite;
 import anyparse.query.ImplicitSites.SiteFamily;
@@ -179,15 +180,25 @@ final class ReachGraph {
 	/**
 	 * Whether a call of the library member `type.name` runs no project code: a pure library call, or a method
 	 * of the built-in array type that calls no argument and returns no string — any of them, or with `mutatorsToo`
-	 * false only the non-mutating ones.
+	 * false only the non-mutating ones. A built-in map's own methods (`ExecutionShape.mapTypeNames`) answer the same way,
+	 * while no project type extends the map type: a subclass may override what the method calls (`BalancedTree.compare`).
 	 */
 	public function runsNoUserCode(g: CallGraph, type: String, name: String, mutatorsToo: Bool): Bool {
 		if (isPureLibrary(g, type, name)) return true;
-		if (!(_scope.shape.arrayTypeNames ?? []).contains(type) || callsItsArgument(g, type, name)) return false;
+		final execution: Null<ExecutionShape> = _scope.shape.execution;
+		final array: Bool = (_scope.shape.arrayTypeNames ?? []).contains(type);
+		final map: Bool = !array && (execution?.mapTypeNames ?? []).contains(type) && !projectSubtype(type);
+		if (!(array || map) || callsItsArgument(g, type, name)) return false;
 		// a method returning a string converts the elements to one (`join`): an element's `toString` runs
 		if (g.types.memberOnChain(type, name)?.returnNominal == stringTypeName()) return false;
-		return (_scope.shape.execution?.nonMutatingArrayMethods ?? []).contains(name)
-			|| (mutatorsToo && (_scope.shape.execution?.mutatingArrayMethods ?? []).contains(name));
+		final reads: Null<Array<String>> = array ? execution?.nonMutatingArrayMethods : execution?.nonMutatingMapMethods;
+		final changes: Null<Array<String>> = array ? execution?.mutatingArrayMethods : execution?.mutatingMapMethods;
+		return (reads ?? []).contains(name) || (mutatorsToo && (changes ?? []).contains(name));
+	}
+
+	/** Whether a type declared outside the standard library extends or implements `type`. */
+	private function projectSubtype(type: String): Bool {
+		return _scope.index.subtypes.subtypeFiles(type).exists(f -> !StdResolver.isStdFile(f));
 	}
 
 	/**

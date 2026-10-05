@@ -78,7 +78,7 @@ final class MemberTouchScan {
 	 * function touches as its compiler facts say (`typedAccesses`, `recordTyped`), its syntax aside, reflective names excepted.
 	 */
 	public function scan(
-		g: CallGraph, name: String, declaring: String, access: ReachAccess, arrayTyped: Bool, regionFile: String, region: Null<Span>
+		g: CallGraph, name: String, declaring: String, access: ReachAccess, owns: OwnMethods, regionFile: String, region: Null<Span>
 	): MemberTouches {
 		final out: MemberTouches = {
 			touchers: [],
@@ -107,11 +107,9 @@ final class MemberTouchScan {
 				// a raw region no configured build compiles hides nothing
 				if (opaque != null && _live(f.file, opaque) && out.hidden == null) out.hidden = OpaqueCond(f.file, opaque);
 			}
-			scanFile(
-				g, f.file, f.source, tree, name, aliases, declaring, access, arrayTyped, out, f.file == regionFile ? region : null, typed
-			);
+			scanFile(g, f.file, f.source, tree, name, aliases, declaring, access, owns, out, f.file == regionFile ? region : null, typed);
 		}
-		for (id => accesses in typed) recordTyped(g, id, name, accesses, access, arrayTyped, out, regionFile, region);
+		for (id => accesses in typed) recordTyped(g, id, name, accesses, access, owns, out, regionFile, region);
 		for (id in unread) recordUnread(g, id, access, out);
 		// a field initializer that is not freshly built shares its value from the start
 		if (access == Mutate) {
@@ -129,8 +127,10 @@ final class MemberTouchScan {
 	 * built, escapes at once.
 	 */
 	public function localEscape(
-		tree: QueryNode, source: String, fn: QueryNode, declaration: QueryNode, name: String, region: Span, ?freshCall: QueryNode -> Bool
+		tree: QueryNode, source: String, fn: QueryNode, declaration: QueryNode, name: String, region: Span, ?freshCall: QueryNode -> Bool,
+		?owns: OwnMethods
 	): Null<Span> {
+		final methods: OwnMethods = owns ?? arrayMethods(_scope.shape);
 		final shape: RefShape = _scope.shape;
 		final declSpan: Null<Span> = declaration.span;
 		if (declSpan == null) return fn.span ?? region;
@@ -151,7 +151,7 @@ final class MemberTouchScan {
 			if (span.from >= end) return;
 			final closure: Bool = inClosure || closures.contains(node.kind);
 			if (node.kind == shape.identKind && node.name == name && span.from > declFrom) {
-				final verdict: Verdict = classify(node, parent, grand, lineage, index, parentIndex, Mutate, true);
+				final verdict: Verdict = classify(node, parent, grand, lineage, index, parentIndex, Mutate, methods);
 				if (closure || verdict.escape) found = span;
 			}
 			lineage.push(node);
@@ -160,6 +160,48 @@ final class MemberTouchScan {
 		}
 		walk(fn, null, null, 0, 0, false);
 		return found;
+	}
+
+	/**
+	 * The first site in `region` of `fn` that changes, or may change, the object the local `name` declared at `declFrom`
+	 * holds BY ITS NAME: a write, an own changer of the container it holds (`owns`), a method that is not one of its own
+	 * (a static extension may change it), or any mention inside a closure. Null when none does. `localEscape` answers for
+	 * changes through ANOTHER name; this is the direct half. A mention counts whatever it binds, so a shadowing local of
+	 * the same name refuses rather than proves.
+	 */
+	public function localTouch(fn: QueryNode, name: String, declFrom: Int, region: Span, owns: OwnMethods): Null<Span> {
+		final shape: RefShape = _scope.shape;
+		final closures: Array<String> = (shape.lambdaKinds ?? []).concat(shape.localFunctionKinds ?? []);
+		var found: Null<Span> = null;
+		final lineage: Array<QueryNode> = [];
+		function walk(
+			node: QueryNode, parent: Null<QueryNode>, grand: Null<QueryNode>, index: Int, parentIndex: Int, inClosure: Bool
+		): Void {
+			final at: Null<Span> = node.span;
+			if (found != null || at == null) return;
+			final span: Span = at;
+			if (span.to <= region.from || span.from >= region.to) return;
+			final closure: Bool = inClosure || closures.contains(node.kind);
+			if (node.kind == shape.identKind && node.name == name && span.from > declFrom && within(span, region)) {
+				final verdict: Verdict = classify(node, parent, grand, lineage, index, parentIndex, Mutate, owns);
+				if (closure || verdict.touch || verdict.escape) found = span;
+			}
+			lineage.push(node);
+			for (i in 0...node.children.length) walk(node.children[i], node, parent, i, index, closure);
+			lineage.pop();
+		}
+		walk(fn, null, null, 0, 0, false);
+		return found;
+	}
+
+	/** The own methods of the grammar's built-in array type (`RefShape.arrayTypeNames`). */
+	public static function arrayMethods(shape: RefShape): OwnMethods {
+		return { reads: shape.execution?.nonMutatingArrayMethods ?? [], changes: shape.execution?.mutatingArrayMethods ?? [] };
+	}
+
+	/** The own methods of the grammar's built-in map types (`ExecutionShape.mapTypeNames`). */
+	public static function mapMethods(shape: RefShape): OwnMethods {
+		return { reads: shape.execution?.nonMutatingMapMethods ?? [], changes: shape.execution?.mutatingMapMethods ?? [] };
 	}
 
 	/** Where code that can run before `region` runs again ends: `region.to`, or the end of the outermost loop of `fn` enclosing it. */
@@ -178,14 +220,17 @@ final class MemberTouchScan {
 
 	/**
 	 * Whether `value` builds a fresh object nothing else holds: an array literal or comprehension, `null`, `new`
-	 * of an array type, or — with `ctx` to type the receiver — a call of a method the receiver's built-in array
-	 * or string type declares as returning a new object (`xs.copy()`, `'a,b'.split(',')`, `freshResult`), or a call
+	 * of an array or a map type, or — with `ctx` to type the receiver — a call of a method the receiver's built-in
+	 * array or string type declares as returning a new object (`xs.copy()`, `'a,b'.split(',')`, `freshResult`), or a call
 	 * `ctx.call` proves returns one (a project function whose every `return` hands out a fresh value).
 	 */
 	public function isFresh(raw: QueryNode, ctx: Null<FreshContext>): Bool {
 		final value: QueryNode = BoolExprShape.unwrapParens(raw, _scope.shape.parenKind);
 		if (value.kind == _scope.shape.arrayLiteralKind || value.kind == _scope.shape.nullLiteralKind) return true;
-		if (value.kind == _scope.shape.newExprKind) return (_scope.shape.arrayTypeNames ?? []).contains(lastSegment(value.name ?? ''));
+		if (value.kind == _scope.shape.newExprKind) {
+			final built: String = lastSegment(value.name ?? '');
+			return (_scope.shape.arrayTypeNames ?? []).contains(built) || (_scope.shape.execution?.mapTypeNames ?? []).contains(built);
+		}
 		if (ctx == null) return false;
 		if (freshResult(value, ctx)) return true;
 		final call: Null<QueryNode -> Bool> = ctx.call;
@@ -194,7 +239,7 @@ final class MemberTouchScan {
 
 	private function scanFile(
 		g: CallGraph, file: String, source: String, tree: QueryNode, name: String, aliases: Array<String>, declaring: String,
-		access: ReachAccess, arrayTyped: Bool, out: MemberTouches, region: Null<Span>, factsRead: Map<String, Array<FieldFact>>
+		access: ReachAccess, owns: OwnMethods, out: MemberTouches, region: Null<Span>, factsRead: Map<String, Array<FieldFact>>
 	): Void {
 		// noqa: complexity
 		final shape: RefShape = _scope.shape;
@@ -238,7 +283,7 @@ final class MemberTouchScan {
 			final span: Span = at;
 			// a function read through its compiler facts touches as they say (`recordTyped`), not as its syntax reads
 			if (!_live(file, span) || factsRead.exists(g.functionAt(file, span.from) ?? '')) return;
-			final verdict: Verdict = classify(node, parent, grand, lineage, index, parentIndex, access, arrayTyped);
+			final verdict: Verdict = classify(node, parent, grand, lineage, index, parentIndex, access, owns);
 			if (verdict.escape) out.escapes.push({ file: file, span: span });
 			if (!verdict.touch) return;
 			if (within(span, region) && out.inRegion == null) out.inRegion = {
@@ -453,7 +498,7 @@ final class MemberTouchScan {
 	 * facts do not answer for them: the node is then none the walk can read as that type's.
 	 */
 	public function scanNode(
-		g: CallGraph, id: String, name: String, declaring: String, access: ReachAccess, arrayTyped: Bool, out: MemberTouches,
+		g: CallGraph, id: String, name: String, declaring: String, access: ReachAccess, owns: OwnMethods, out: MemberTouches,
 		regionFile: String, region: Null<Span>
 	): Bool {
 		final facts: Null<CallGraphFacts> = g.facts;
@@ -464,7 +509,7 @@ final class MemberTouchScan {
 		if (owners.length == 0) return false;
 		return switch nodeAccesses(g, node, bodies, name, declaring, owners, facts.view, false) {
 			case Typed(accesses):
-				recordTyped(g, id, name, accesses, access, arrayTyped, out, regionFile, region);
+				recordTyped(g, id, name, accesses, access, owns, out, regionFile, region);
 				true;
 			case BySyntax, Unread: false;
 		};
@@ -512,7 +557,7 @@ final class MemberTouchScan {
 	 * facts are code a listed build compiled, so no liveness is asked of them.
 	 */
 	private function recordTyped(
-		g: CallGraph, id: String, name: String, accesses: Array<FieldFact>, access: ReachAccess, arrayTyped: Bool, out: MemberTouches,
+		g: CallGraph, id: String, name: String, accesses: Array<FieldFact>, access: ReachAccess, owns: OwnMethods, out: MemberTouches,
 		regionFile: String, region: Null<Span>
 	): Void {
 		final node: Null<FnNode> = g.node(id);
@@ -526,7 +571,7 @@ final class MemberTouchScan {
 			// the text of the declaration holding the access, which may be another than the node's first (`nodeAccesses`)
 			final holding: Null<FnDeclaration> = made ? null : declarationHolding(g, id, f.at, view);
 			final file: String = holding?.file ?? home;
-			final verdict: Verdict = classifyTyped(f, access, arrayTyped);
+			final verdict: Verdict = classifyTyped(f, access, owns);
 			if (verdict.escape) out.escapes.push({ file: made ? f.at.file : file, span: span });
 			if (!verdict.touch) continue;
 			// the compiler may place what it made of an expression at a range wider than the expression's own; a local holding
@@ -551,7 +596,7 @@ final class MemberTouchScan {
 	 * method call is a read only for one of the array type's own readers on an array-typed member (the facts name the
 	 * method the receiver's type declares, never an extension), and a value handed on escapes.
 	 */
-	private function classifyTyped(f: FieldFact, access: ReachAccess, arrayTyped: Bool): Verdict {
+	private function classifyTyped(f: FieldFact, access: ReachAccess, owns: OwnMethods): Verdict {
 		if (f.write) return switch access {
 			case Read: { touch: false, escape: false };
 			case Write: { touch: true, escape: false };
@@ -561,8 +606,8 @@ final class MemberTouchScan {
 		return switch f.use {
 			case 'call':
 				final method: String = f.method ?? '';
-				final reads: Bool = arrayTyped && (_scope.shape.execution?.nonMutatingArrayMethods ?? []).contains(method);
-				final own: Bool = arrayTyped && (reads || (_scope.shape.execution?.mutatingArrayMethods ?? []).contains(method));
+				final reads: Bool = owns.reads.contains(method);
+				final own: Bool = reads || owns.changes.contains(method);
 				{ touch: !reads, escape: !own };
 			case 'elemWrite', 'memberWrite': { touch: true, escape: false };
 			case 'value': { touch: false, escape: true };
@@ -606,12 +651,14 @@ final class MemberTouchScan {
 	 * What an occurrence of the member does for `access`: `touch` when it is the kind of access asked
 	 * about, `escape` when (for `Mutate`) the member's value leaves for a place the analysis does not
 	 * follow, or a value that was not freshly built is stored into it. A method call on the member is a
-	 * read only when the member is an ARRAY (`arrayTyped`) and the method one of the array type's own
-	 * readers; a method the array type does not declare may be a static extension handed the array itself.
+	 * read only when it is one of the readers of the built-in container the member holds (`owns`: an
+	 * array's or a map's own methods), and a change without an escape only when it is one of that
+	 * container's own changers; a method the container does not declare may be a static extension
+	 * handed the container itself.
 	 */
 	private function classify(
 		node: QueryNode, parent: Null<QueryNode>, grand: Null<QueryNode>, lineage: Array<QueryNode>, index: Int, parentIndex: Int,
-		access: ReachAccess, arrayTyped: Bool
+		access: ReachAccess, owns: OwnMethods
 	): Verdict {
 		// noqa: complexity
 		final shape: RefShape = _scope.shape;
@@ -632,16 +679,15 @@ final class MemberTouchScan {
 		if (_hazards.isAccess(pk) && index == 0) {
 			if (grand != null && grand.kind == shape.callKind && parentIndex == 0) {
 				final method: String = parent.name ?? '';
-				final reads: Bool = arrayTyped && (shape.execution?.nonMutatingArrayMethods ?? []).contains(method);
-				final own: Bool = arrayTyped && (reads || (shape.execution?.mutatingArrayMethods ?? []).contains(method));
+				final reads: Bool = owns.reads.contains(method);
+				final own: Bool = reads || owns.changes.contains(method);
 				return { touch: !reads, escape: !own };
 			}
 			return { touch: writes(grand, parentIndex), escape: false };
 		}
 		if (pk == shape.forStmtKind && isIterableOf(parent, node)) return { touch: false, escape: false };
 		if ((shape.equalityKinds ?? []).contains(pk)) return { touch: false, escape: false };
-		if (pk == shape.parenKind)
-			return classify(parent, grand, null, lineage.slice(0, lineage.length - 1), parentIndex, 0, access, arrayTyped);
+		if (pk == shape.parenKind) return classify(parent, grand, null, lineage.slice(0, lineage.length - 1), parentIndex, 0, access, owns);
 		return { touch: false, escape: true };
 	}
 
@@ -833,6 +879,17 @@ final class MemberTouchScan {
 		return dot < 0 ? path : path.substring(dot + 1);
 	}
 
+}
+
+/**
+ * The methods of the built-in container a value holds that the language resolves to the container itself, never to a
+ * static extension: the ones that only READ it and hand out nothing that could change it, and the ones that CHANGE it
+ * without letting it go anywhere. Both empty for a value of any other type, whose every method call is a change and an
+ * escape (`MemberTouchScan.classify`).
+ */
+typedef OwnMethods = {
+	final reads: Array<String>;
+	final changes: Array<String>;
 }
 
 /** A site of a member occurrence. */

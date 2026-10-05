@@ -1212,6 +1212,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-EXTRACT-REPEAT-RENDER-SPLIT',
 			'unit.check.FactsFixGateE2ETest#testAComputedClassNameTheProjectBoundsLetsTheLoopRewrite :: control :: M-REFLECTIVE-BUILDS,M-REFLECTIVE-REACH,M-REFLECTIVE-WARN,M-ESCAPES-FACTS-UNMATCHED',
 			'unit.check.FactsFixGateE2ETest#testAComputedMemberNameTheProjectBoundsLetsTheLoopRewrite :: control :: M-HOLDERS-BUILDS,M-HOLDERS-REACH,M-HOLDERS-WARN,M-HOLDERS-READ',
+			'unit.check.FactsFixGateE2ETest#testAMapTheLoopLeavesUnchangedLosesItsKeyFromItsSyntax :: control :: M-TOUCH-MAP-METHODS-UNKNOWN',
+			'unit.check.FactsFixGateE2ETest#testAMapTheLoopLeavesUnchangedLosesItsKeyUnderTheTruth :: control :: M-GRAPH-MAP-USER-CODE,M-FACTS-IDENTITY-CAST-VALUE,M-TOUCH-MAP-METHODS-UNKNOWN,M-REACH-LOCAL-MAP-ALIAS-ARRAY',
 			'unit.check.FactsFixGateE2ETest#testAPrivateMemberNoSupertypeDeclaresIsDeleted :: control :: M-UNUSED-PRIVATE-CHAIN-FACTS,M-UNUSED-PRIVATE-CHAIN-DECLARED,M-UNUSED-PRIVATE-CHAIN-AUTOBUILD',
 			'unit.check.FactsFixGateE2ETest#testAProofTheTruthContradictsKeepsTheLoop :: control :: M-REACH-PROVEN-TRUTH',
 			'unit.check.FactsFixGateE2ETest#testAReceiverTheFactsTypeAsANonExternClassLosesItsToString :: control :: M-TOSTRING-FACTS-CLASS,M-TOSTRING-FACTS-EXTERN,M-FACTS-ESCAPE-SHIFT',
@@ -1742,9 +1744,12 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-ISVAR-SCOPE-REPORT-ONLY',
 			'unit.check.RedundantIsVarCheckTest#testSubclassOverrideWritingStorageNotFlagged :: control :: M-ISVAR-ACCESSOR-BODY-BLIND',
 			'unit.check.RedundantIsVarCheckTest#testUnresolvedSupertypeNotFlagged :: control :: M-ISVAR-CHAIN-UNRESOLVED-ADMITTED',
+			'unit.check.RedundantMapIterKeyCheckTest#testFixDeclinedOverANonStandardMap :: control :: M-MAPITER-SUBTYPE-VETO-OFF',
 			'unit.check.RedundantMapIterKeyCheckTest#testFixDeclinedOverAliasedList :: control :: M-ULB-IMPORT-ALIAS-BLIND',
 			'unit.check.RedundantMapIterKeyCheckTest#testFixDeclinedOverMapAndUnknownIterable :: control :: M-MAPITERKEY-UNPROVEN-DROPPED',
 			'unit.check.RedundantMapIterKeyCheckTest#testFixDeclinedOverReassignedLocal :: control :: M-ULB-REASSIGNED-LOCAL-BLIND',
+			'unit.check.RedundantMapIterKeyCheckTest#testFixDeclinedWhereTheBodyChangesALocalMap :: control :: M-MAPITER-REACH-SKIPPED,M-REACH-LOCAL-TOUCH-BLIND',
+			'unit.check.RedundantMapIterKeyCheckTest#testFixDropsKeyOverALocalMapTheLoopLeavesUnchanged :: control :: M-MAPITER-KEYED-NEVER,M-TOUCH-NEW-MAP-NOT-FRESH',
 			'unit.check.RedundantMapIterKeyCheckTest#testMessageRecommendsTheDropOnlyWhenProved :: control :: '
 				+ 'M-MAPITERKEY-MESSAGE-ALWAYS-PROVEN',
 			'unit.check.RedundantNullCoalescingCheckTest#testTypedefOfNullLeftNotFlagged :: control :: M-PROVER-NULLITY-SKIPPED',
@@ -1960,6 +1965,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.UnusedLoopBinderCheckTest#testShadowInBodyWithoutReadFlagged :: control :: M-ULB-SHADOW-COUNTED-AS-READ',
 			'unit.check.UnusedLoopBinderCheckTest#testSimpleInterpolationRefuses :: control :: M-ULB-INTERP-BLIND',
 			'unit.check.UnusedLoopBinderCheckTest#testUnboundOuterWildcardRefuses :: control :: M-ULB-UNBOUND-WILDCARD-ADMITTED',
+			'unit.check.UnusedLoopBinderCheckTest#testUnreadKeyOverALocalMapDroppedOnlyWhereTheLoopLeavesItUnchanged :: control :: M-ULB-KEYED-UNPROVED-DROPPED',
 			'unit.check.UnusedLoopBinderCheckTest#testUnreadKeyOverArrayOrListDropped :: control :: M-ULB-VALUE-ITERATION-NEVER',
 			'unit.check.UnusedLoopBinderCheckTest#testUnreadKeyOverMapOrUnknownRenamed :: control :: M-ULB-VALUE-ITERATION-ALWAYS',
 			'unit.check.UnusedLoopBinderCheckTest#testUntypedMentionRefuses :: control :: M-ULB-UNTYPED-BLIND',
@@ -4906,7 +4912,17 @@ class TestDiscoveryParityTest extends Test {
 			'M-LINTFIX-GUARD-SPLIT-NONE',
 			'M-LINTFIX-BLAME-SITE-ALWAYS',
 			'M-KWTRAIL-FLAT-GAP-KEPT',
-			'M-KWTRAIL-GUARD-HARD'
+			'M-KWTRAIL-GUARD-HARD',
+			'M-MAPITER-KEYED-NEVER',
+			'M-MAPITER-REACH-SKIPPED',
+			'M-MAPITER-SUBTYPE-VETO-OFF',
+			'M-REACH-LOCAL-TOUCH-BLIND',
+			'M-REACH-LOCAL-MAP-ALIAS-ARRAY',
+			'M-TOUCH-MAP-METHODS-UNKNOWN',
+			'M-GRAPH-MAP-USER-CODE',
+			'M-FACTS-IDENTITY-CAST-VALUE',
+			'M-TOUCH-NEW-MAP-NOT-FRESH',
+			'M-ULB-KEYED-UNPROVED-DROPPED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
@@ -5102,6 +5118,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-ASSIGN-HELD-THROUGH :: anyparse.check.TypedFactsWalk#storedLocal',
 			'M-KWTRAIL-FLAT-GAP-KEPT :: anyparse.macro.WriterCodegen#kwBeforeTrailingDocField',
 			'M-KWTRAIL-GUARD-HARD :: anyparse.macro.WriterCodegen#kwBeforeTrailingDocField',
+			'M-FACTS-IDENTITY-CAST-VALUE :: anyparse.check.TypedFactsWalk#visit',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

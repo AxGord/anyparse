@@ -4280,9 +4280,9 @@
 		{
 			"name": "M-ULB-VALUE-ITERATION-SHADOW-BLIND",
 			"type": "anyparse.query.NominalTypes",
-			"method": "valueIterationProvable",
-			"find": "if (stdPath == null || shadowedByNonStdType(index, nominal)) return false;",
-			"replace": "if (stdPath == null) return false;",
+			"method": "standardContainer",
+			"find": "if (stdPath == null || shadowedByNonStdType(index, nominal)) return null;",
+			"replace": "if (stdPath == null) return null;",
 			"note": "a project type named List is taken for the std one, so its key is dropped against an iterator() it may not have"
 		},
 		{
@@ -4389,8 +4389,8 @@
 			"name": "M-MAPITERKEY-UNPROVEN-DROPPED",
 			"type": "anyparse.check.RedundantMapIterKey",
 			"method": "fix",
-			"find": "if (v.message != PROVEN_MESSAGE || !provable(node, s.valueBinderKinds)) {",
-			"replace": "if (false) {",
+			"find": "case _: UNPROVEN_DECLINE;",
+			"replace": "case _: null;",
 			"note": "the key prefix is dropped over any iterable, so a Map loop whose body removes an entry switches to the iterator that yields its stale value"
 		},
 		{
@@ -4403,16 +4403,16 @@
 		{
 			"name": "M-ULB-IMPORT-ALIAS-BLIND",
 			"type": "anyparse.query.NominalTypes",
-			"method": "valueIterationProvable",
-			"find": "!root.children.exists(c -> aliasKinds.contains(c.kind) && c.name == nominal) && ",
-			"replace": "",
+			"method": "standardContainer",
+			"find": "final rebound: Bool = root.children.exists(c -> aliasKinds.contains(c.kind) && c.name == nominal);",
+			"replace": "final rebound: Bool = false;",
 			"note": "an import alias spelling List is taken for the std List, so a key is dropped over the aliased Map"
 		},
 		{
 			"name": "M-ULB-IMPORT-REBIND-BLIND",
 			"type": "anyparse.query.NominalTypes",
-			"method": "valueIterationProvable",
-			"find": "if (imported != null && imported != stdPath) return false;",
+			"method": "standardContainer",
+			"find": "if (imported != null && imported != stdPath) return null;",
 			"replace": "",
 			"note": "an import binding List to another module is taken for the std List"
 		},
@@ -4452,8 +4452,8 @@
 			"name": "M-MAPITERKEY-MESSAGE-ALWAYS-PROVEN",
 			"type": "anyparse.check.RedundantMapIterKey",
 			"method": "walk",
-			"find": "provable(node, s.valueBinderKinds) ? PROVEN_MESSAGE : UNPROVEN_MESSAGE",
-			"replace": "PROVEN_MESSAGE",
+			"find": "case Unprovable: UNPROVEN_MESSAGE;",
+			"replace": "case Unprovable: PROVEN_MESSAGE;",
 			"note": "every finding recommends for (v in …), including over a Map where the fix declines because the drop is unsafe"
 		},
 		{
@@ -11400,7 +11400,7 @@
 			"name": "M-TOUCH-SCAN-NODE-UNRECORDED",
 			"type": "anyparse.query.MemberTouchScan",
 			"method": "scanNode",
-			"find": "\t\trecordTyped(g, id, name, accesses, access, arrayTyped, out, regionFile, region);\n",
+			"find": "\t\trecordTyped(g, id, name, accesses, access, owns, out, regionFile, region);\n",
 			"replace": "",
 			"note": "a node read as one project type's member touches nothing, though its facts write the member"
 		},
@@ -13411,6 +13411,86 @@
 			"find": "case _: _dc([_dohsbh(), sepDoc]);",
 			"replace": "case _: _dc([_dhl(), sepDoc]);",
 			"note": "a gap that already opens with a break gets a second one, so a trailing comment followed by an own-line comment gains a blank line"
+		},
+		{
+			"name": "M-MAPITER-KEYED-NEVER",
+			"type": "anyparse.check.ValueIterationProof",
+			"method": "kindOf",
+			"find": "else if (NominalTypes.keyedIterationContainer(iterable, root, shape, declaredTypes, index, file, importMap))",
+			"replace": "else if (false)",
+			"note": "a standard map is never a keyed container, so a loop over one the body provably leaves unchanged keeps its discarded key"
+		},
+		{
+			"name": "M-MAPITER-REACH-SKIPPED",
+			"type": "anyparse.check.ValueIterationProof",
+			"method": "keyedDecline",
+			"find": "final result: ReachResult = reach.mayMutateNamed(file, name, at, body, MemberTouchScan.mapMethods(shape));",
+			"replace": "final result: ReachResult = Proven;",
+			"note": "a map's key is dropped without asking whether the body changes the map, so a loop that removes an entry starts yielding its stale value"
+		},
+		{
+			"name": "M-MAPITER-SUBTYPE-VETO-OFF",
+			"type": "anyparse.query.NominalTypes",
+			"method": "keyedIterationContainer",
+			"find": "return !holders.exists(holder -> index.subtypes.subtypeFiles(holder).exists(f -> !StdResolver.isStdFile(f)));",
+			"replace": "return true;",
+			"note": "a project subclass of a standard map no longer vetoes the drop, though its overridden iterator() may yield anything"
+		},
+		{
+			"name": "M-REACH-LOCAL-TOUCH-BLIND",
+			"type": "anyparse.query.MemberReach",
+			"method": "answerLocal",
+			"find": "final direct: Null<Span> = owns == null ? null : _touches.localTouch(fn, name, declSpan.from, region, owns);",
+			"replace": "final direct: Null<Span> = null;",
+			"note": "a local map the region changes by its own name is proved unchanged, so a body that removes from it loses its key"
+		},
+		{
+			"name": "M-REACH-LOCAL-MAP-ALIAS-ARRAY",
+			"type": "anyparse.query.MemberReach",
+			"method": "answerLocal",
+			"find": "if (owns != null) return Unknown(Escape(file, escape));",
+			"replace": "",
+			"note": "a local map shared through another name is judged by the array alias analysis, which does not know a map's set() changes it"
+		},
+		{
+			"name": "M-TOUCH-MAP-METHODS-UNKNOWN",
+			"type": "anyparse.query.MemberReach",
+			"method": "memberOwnMethods",
+			"find": "MemberTouchScan.mapMethods(_shape)",
+			"replace": "{ reads: [], changes: [] }",
+			"note": "a map member's own get()/exists() read as escapes, so no field map is ever proved unchanged"
+		},
+		{
+			"name": "M-GRAPH-MAP-USER-CODE",
+			"type": "anyparse.query.ReachGraph",
+			"method": "runsNoUserCode",
+			"find": "final map: Bool = !array && (execution?.mapTypeNames ?? []).contains(type) && !projectSubtype(type);",
+			"replace": "final map: Bool = false;",
+			"note": "a standard map's own methods may run project code, so under the compiler facts the iteration the loop splices in reaches every function an extern map method admits"
+		},
+		{
+			"name": "M-FACTS-IDENTITY-CAST-VALUE",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "visit",
+			"find": "if (sink != '?' && sink == str(inner.t))",
+			"replace": "if (false)",
+			"note": "a value read through an identity cast is handed on, so every inlined Map method's receiver escapes in the facts"
+		},
+		{
+			"name": "M-TOUCH-NEW-MAP-NOT-FRESH",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "isFresh",
+			"find": "|| (_scope.shape.execution?.mapTypeNames ?? []).contains(built)",
+			"replace": "",
+			"note": "a local initialised by new Map() starts shared, so no loop over one is proved"
+		},
+		{
+			"name": "M-ULB-KEYED-UNPROVED-DROPPED",
+			"type": "anyparse.check.UnusedLoopBinder",
+			"method": "fix",
+			"find": "ValueIterationProof.keyedDecline(built, file, keyed.iterable, keyed.body, s.shape) == null;",
+			"replace": "true;",
+			"note": "an unread key over a map is dropped without the reach, so a loop that removes an entry switches to the iterator that yields its stale value"
 		}
 	]
 }

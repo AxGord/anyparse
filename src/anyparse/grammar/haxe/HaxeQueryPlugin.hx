@@ -767,6 +767,9 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 					'splice',
 					'unshift'
 				],
+				mapTypeNames: ['Map', 'IntMap', 'StringMap', 'ObjectMap', 'EnumValueMap', 'BalancedTree'],
+				nonMutatingMapMethods: ['copy', 'exists', 'get', 'iterator', 'keyValueIterator', 'keys', 'toString'],
+				mutatingMapMethods: ['arrayWrite', 'clear', 'remove', 'set'],
 				implicitCallMetaNames: ['@:op', '@:arrayAccess', '@:from', '@:to', '@:resolve'],
 				implicitCallNames: ['toString', 'iterator', 'hasNext', 'next', 'keyValueIterator'],
 				iterableMethodNames: ['iterator', 'keyValueIterator'],
@@ -1351,6 +1354,18 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// `Array` and `haxe.ds.List` walk one index / node chain in both iterators; a map's
 			// key-value iterator re-reads by key, so it diverges once the body removes an entry.
 			valueIterationTypes: ['Array' => 'Array', 'List' => 'haxe.ds.List'],
+			// measured equal to the value iteration — in values and order — on --interp, js and hxcpp for a map the
+			// loop leaves unchanged (docs/decisions.md); `WeakMap` is not, its iterators are null off hxcpp
+			keyedIterationTypes: [
+				'Map' => 'haxe.ds.Map',
+				'IntMap' => 'haxe.ds.IntMap',
+				'StringMap' => 'haxe.ds.StringMap',
+				'ObjectMap' => 'haxe.ds.ObjectMap',
+				'EnumValueMap' => 'haxe.ds.EnumValueMap',
+				'BalancedTree' => 'haxe.ds.BalancedTree'
+			],
+			// the classes a `Map` value may be: the ones its `@:from` conversions take, and the one it builds for enum keys
+			keyedIterationHolders: ['Map' => ['IntMap', 'StringMap', 'ObjectMap', 'EnumValueMap']],
 			importAliasKinds: ['ImportAliasDecl', 'ImportAliasInDecl'],
 			untypedKinds: ['UntypedExpr'],
 			casePatternBinderKinds: ['Capture'],

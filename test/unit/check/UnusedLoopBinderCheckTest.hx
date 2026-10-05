@@ -10,7 +10,7 @@ import utest.Test;
 
 /**
  * The `unused-loop-binder` check: a `for` binder the body never reads becomes `_`, and an unread key
- * over an `Array` / `List` is dropped. Every refusal is paired with the finding it would otherwise be:
+ * over an `Array` / `List`, or a map the loop provably leaves unchanged, is dropped. Every refusal is paired with the finding it would otherwise be:
  * most fixtures SHADOW the binder in the body, so the resolver alone would call it unread and only the
  * gate under test refuses.
  */
@@ -62,6 +62,27 @@ import utest.Test;
 	public function testUnreadKeyOverMapOrUnknownRenamed(): Void {
 		Assert.equals(wrap('for (_ => v in m) { m.remove(\'a\'); g(v); }'), applyFix(wrap('for (k => v in m) { m.remove(\'a\'); g(v); }')));
 		Assert.equals(wrap('for (_ => v in f()) g(v);'), applyFix(wrap('for (k => v in f()) g(v);')));
+	}
+
+	/**
+	 * Over a LOCAL map the drop waits for the fix's reach: a body that leaves the map unchanged loses the key, one that
+	 * removes an entry keeps it as `_` — the key-value iterator would read that entry's `null` where `iterator()` yields
+	 * its stale value. The report says the drop is conditional.
+	 */
+	@:pin('control') @:killer('M-ULB-KEYED-UNPROVED-DROPPED')
+	public function testUnreadKeyOverALocalMapDroppedOnlyWhereTheLoopLeavesItUnchanged(): Void {
+		final decl: String = 'final mm:Map<String, Int> = [\'a\' => 1];\n\t\t';
+		Assert.equals(wrap(decl + 'for (v in mm) g(v);'), applyFix(wrap(decl + 'for (k => v in mm) g(v);')));
+		Assert.equals(
+			wrap(decl + 'for (_ => v in mm) { mm.remove(\'a\'); g(v); }'),
+			applyFix(wrap(decl + 'for (k => v in mm) { mm.remove(\'a\'); g(v); }'))
+		);
+		final vs: Array<Violation> = violations(wrap(decl + 'for (k => v in mm) g(v);'));
+		Assert.equals(1, vs.length);
+		if (vs.length == 1)
+			Assert.equals(
+				'key binder \'k\' is never read; drop it if nothing the loop runs changes the map, else rename it to _', vs[0].message
+			);
 	}
 
 	@:pin('control') @:killer('M-ULB-VALUE-ITERATION-SHADOW-BLIND')

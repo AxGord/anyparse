@@ -18,6 +18,7 @@ import anyparse.query.ImplicitSites.ImplicitSite;
 import anyparse.query.MemberTouchScan.FreshContext;
 import anyparse.query.MemberTouchScan.MemberTouches;
 import anyparse.query.MemberTouchScan.Occurrence;
+import anyparse.query.MemberTouchScan.OwnMethods;
 import anyparse.query.NativeSiteReach.NativeVerdict;
 import anyparse.query.ReachAdmission.Admission;
 import anyparse.query.ReachGraph.OwnedId;
@@ -347,31 +348,34 @@ final class MemberReach {
 	/**
 	 * The LOCAL-collection question: may the code in `region` change the object the local (or parameter) declared by
 	 * `declaration` in `fn` holds? See `answerLocal`; a question that met a raw conditional region is asked again under
-	 * the configured builds (`escalation`).
+	 * the configured builds (`escalation`). `owns` names the container the local holds when the caller proved it is not
+	 * an array (`answerLocal`); null keeps the array question.
 	 */
-	public function localMutation(file: String, fn: QueryNode, declaration: QueryNode, region: Span): ReachResult {
+	public function localMutation(file: String, fn: QueryNode, declaration: QueryNode, region: Span, ?owns: OwnMethods): ReachResult {
 		_metRawRegion = false;
 		_syntaxEntered = false;
 		_carriers.startQuestion();
-		final answer: ReachResult = answerLocal(file, fn, declaration, region);
+		final answer: ReachResult = answerLocal(file, fn, declaration, region, owns);
 		final configured: Null<MemberReach> = escalation(answer);
-		return configured == null ? answer : configured.localMutation(file, fn, declaration, region);
+		return configured == null ? answer : configured.localMutation(file, fn, declaration, region, owns);
 	}
 
 	/**
 	 * May the code in `region` of `file` change the collection the identifier `name` read at `at`
 	 * binds to? A local or a parameter takes `localMutation`, a field `mayReach` with a `Region` entry
 	 * and `Mutate`, owned by the type enclosing `region`. A name that binds to nothing and that the enclosing
-	 * type does not declare (an imported static, a module-level value) is not a member this can follow.
+	 * type does not declare (an imported static, a module-level value) is not a member this can follow. `localOwns` is
+	 * the container a LOCAL holds when the caller proved it a non-array one (`localMutation`); a field's container is
+	 * read off its declaration (`memberOwnMethods`).
 	 */
-	public function mayMutateNamed(file: String, name: String, at: Span, region: Span): ReachResult {
+	public function mayMutateNamed(file: String, name: String, at: Span, region: Span, ?localOwns: OwnMethods): ReachResult {
 		final tree: Null<QueryNode> = _g.treeOf(file);
 		if (tree == null) return Unknown(SkipParse(file));
 		final decl: Null<QueryNode> = TypeResolver.bindingNodeFrom(name, at, tree, _shape);
 		final declSpan: Null<Span> = decl?.span;
 		if (decl != null && declSpan != null && !(_shape.fieldDeclKinds ?? []).contains(decl.kind)) {
 			final fn: Null<QueryNode> = enclosingFunctionNode(tree, declSpan);
-			return fn == null ? Unknown(Escape(file, declSpan)) : localMutation(file, fn, decl, region);
+			return fn == null ? Unknown(Escape(file, declSpan)) : localMutation(file, fn, decl, region, localOwns);
 		}
 		final owner: Null<String> = MemberTouchScan.typeAt(tree, region.from);
 		if (owner == null) return Unknown(OutOfScope('`$name` belongs to no type the analysis can name'));
@@ -425,8 +429,8 @@ final class MemberReach {
 		final g: CallGraph = graph();
 		final seeds: Seeds = seedsOf(g, entry);
 		final declaring: String = g.types.declaringTypeOf(member.owner, member.name) ?? member.owner;
-		final arrayTyped: Bool = memberIsArray(g, declaring, member.name);
-		final scan: MemberTouches = _touches.scan(g, member.name, declaring, access, arrayTyped, seeds.file, seeds.region);
+		final owns: OwnMethods = memberOwnMethods(g, declaring, member.name);
+		final scan: MemberTouches = _touches.scan(g, member.name, declaring, access, owns, seeds.file, seeds.region);
 		if (scan.inRegion != null) return Reached([scan.inRegion]);
 		if (!_scopeKnown)
 			return Unknown(
@@ -459,7 +463,7 @@ final class MemberReach {
 			name: member.name,
 			declaring: declaring,
 			access: access,
-			arrayTyped: arrayTyped
+			owns: owns
 		};
 		return walk(g, seeds, entryHazards(g, entry), entrySites(g, entry), scan, member, question);
 	}
@@ -493,7 +497,7 @@ final class MemberReach {
 	 * code, the receiver of a built-in array method included, leaves the type system (`ValueEscapes`), and then an array
 	 * of any element type may be this one.
 	 */
-	private function answerLocal(file: String, fn: QueryNode, declaration: QueryNode, region: Span): ReachResult {
+	private function answerLocal(file: String, fn: QueryNode, declaration: QueryNode, region: Span, owns: Null<OwnMethods>): ReachResult {
 		_g.startQuestion();
 		final idle: Null<ReachUnknown> = idleEntry(file);
 		if (idle != null) return Unknown(idle);
@@ -508,8 +512,23 @@ final class MemberReach {
 		final rerun: Span = new Span(declSpan.from, _touches.rerunEnd(fn, region));
 		final blind: Null<ReachUnknown> = firstBlind(file, liveHazards(file, tree, source, rerun)) ?? _scope.facts?.blindIn(file, rerun);
 		if (blind != null) return Unknown(blind);
-		final escape: Null<Span> = _touches.localEscape(tree, source, fn, declaration, name, region, freshCall.bind(file, _, 0));
+		// a container named by the caller is changed by its own name in the region too, where an array question's rule
+		// has already refused every mention but an element read
+		final direct: Null<Span> = owns == null ? null : _touches.localTouch(fn, name, declSpan.from, region, owns);
+		if (direct != null) {
+			final step: ReachStep = {
+				from: 'entry',
+				to: declaration.name ?? '',
+				kind: 'touch',
+				file: file,
+				span: direct
+			};
+			return Reached([step]);
+		}
+		final escape: Null<Span> = _touches.localEscape(tree, source, fn, declaration, name, region, freshCall.bind(file, _, 0), owns);
 		if (escape == null) return Proven;
+		// what follows asks how an ARRAY shared through another name is changed, which says nothing of another container
+		if (owns != null) return Unknown(Escape(file, escape));
 		if (!_scopeKnown)
 			return Unknown(OutOfScope(
 				'the run declared no project roots that all matched, so a function called implicitly may live in a file it did not read'
@@ -746,6 +765,26 @@ final class MemberReach {
 	 * `var items = []` included, which the index cannot type — the facts, being the truth (`FactsView.truth`), type it one
 	 * in every build: each typed type standing for `declaring` declares it, and every type a build gave it is the array type.
 	 */
+	private function memberOwnMethods(g: CallGraph, declaring: String, name: String): OwnMethods {
+		return if (memberIsArray(g, declaring, name))
+			MemberTouchScan.arrayMethods(_shape)
+		else if (memberIsMap(g, declaring, name))
+			MemberTouchScan.mapMethods(_shape)
+		else
+			{ reads: [], changes: [] };
+	}
+
+	/**
+	 * Whether the member `name` of `declaring` is DECLARED one of the built-in maps (`ExecutionShape.mapTypeNames`) under
+	 * a name no project type rebinds: only the standard map's own methods are the ones the lists name. Unlike
+	 * `memberIsArray` an unannotated member is none, so each method call on it stays a change and an escape.
+	 */
+	private function memberIsMap(g: CallGraph, declaring: String, name: String): Bool {
+		final typeSource: Null<String> = g.types.memberOnChain(declaring, name)?.typeSource;
+		final outer: Null<String> = typeSource == null ? null : NominalTypes.outerNominalOf(typeSource, _plugin.typeSyntax);
+		return outer != null && (_shape.execution?.mapTypeNames ?? []).contains(outer) && !NominalTypes.shadowedByNonStdType(_index, outer);
+	}
+
 	private function memberIsArray(g: CallGraph, declaring: String, name: String): Bool {
 		final arrays: Array<String> = _shape.arrayTypeNames ?? [];
 		final typeSource: Null<String> = g.types.memberOnChain(declaring, name)?.typeSource;
@@ -1256,7 +1295,7 @@ final class MemberReach {
 		final made: Null<FnNode> = _g.qualified(g, node.id, owner);
 		if (made == null || !_projectSources.exists(made.file)) return made;
 		final touched: Bool = _touches.scanNode(
-			g, made.id, question.name, question.declaring, question.access, question.arrayTyped, scan, seeds.file, seeds.region
+			g, made.id, question.name, question.declaring, question.access, question.owns, scan, seeds.file, seeds.region
 		);
 		return touched ? made : null;
 	}
@@ -2427,7 +2466,7 @@ private typedef TouchQuestion = {
 	final name: String;
 	final declaring: String;
 	final access: ReachAccess;
-	final arrayTyped: Bool;
+	final owns: OwnMethods;
 }
 
 private typedef Seeds = {
