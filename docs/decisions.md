@@ -618,6 +618,12 @@ decided the question; it may not become a record of runs.
   capturing `X[i]` sees a later slot, and a callee reached through the instance, a type or a constructor can
   grow `X`; closures refuse, such calls leave the finding report-only, and nested loops deriving one binder
   are not both fixed — `d383325d`
+- the element binder derived only from a plural at the END of the collection name → `gridLinesVertical`,
+  `itemsById` are as plural as `points` and had no binder; `singularOf` asks its whole-name rules at every
+  camelCase word end from the last back, so the last plural word is singularized in place and an end that
+  is plural answers exactly as before. A stop list for `s`-final non-plurals ahead of a non-plural tail
+  (`posList`, `wasVisited`) was not built: no such name occurs among the loop findings of the haxelib
+  corpus or of TM, and a list of exceptions is a guess at English — branch `feat/binder-inner-plural`
 - a compiler-oracle configuration whose compiled set cannot be probed excluded "like a red one" → its
   baseline is green, so it cannot vouch for an edit but can still refuse one; dropping it from verification
   applied a shared-code edit that compiled on mac and broke the other build — `d383325d`
