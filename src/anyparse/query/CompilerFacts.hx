@@ -24,6 +24,17 @@ typedef FactPos = {
 }
 
 /**
+ * One declaration of a type some configurations typed (`CompilerFacts.typeHomes`): the table key of its file, its range
+ * there — null when that file's text is not the one the compile read — and the configurations that read it there, as
+ * indexes into `CompilerFacts.configurations`.
+ */
+typedef TypeHome = {
+	final file: String;
+	final at: Null<FactPos>;
+	final builds: Array<Int>;
+}
+
+/**
  * A call site. `target` is the called field's declaring type and name (`pack.Type.field`), a structure or dynamic
  * field's bare name, a local function's node id, or the identifier of a native call; absent for a call of a value.
  * `access` is `FInstance`, `FStatic`, `FAnon`, `FDynamic`, `FClosure`, `FEnum`, `fieldValue`, `super`, `local`, `ident`,
@@ -432,8 +443,15 @@ final class CompilerFacts {
 	private final _nodeLines: Map<String, Array<NodeLine>> = [];
 	private final _nodeFiles: Map<String, Array<NodeRange>> = [];
 	private final _nodeCache: Map<String, Null<FactNode>> = [];
+
+	/**
+	 * `id|builds` -> the node as those configurations alone typed it (`nodeAsBuiltBy`), `id@home` -> as those that homed it
+	 * in a file typed it (`homedIn`), made on first demand.
+	 */
+	private final _builtCache: Map<String, Null<FactNode>> = [];
+
 	private final _types: Map<String, TypeFact> = [];
-	private final _typeHomes: Map<String, { home: String, p: Array<Int> }> = [];
+	private final _typeHomes: Map<String, Array<HomeRecord>> = [];
 	private final _supers: Map<String, Array<String>> = [];
 	private final _subs: Map<String, Array<String>> = [];
 	private final _indexes: Map<String, Null<CodepointIndex>> = [];
@@ -500,6 +518,7 @@ final class CompilerFacts {
 		_sources.remove(key);
 		_indexes.remove(key);
 		_nodeCache.clear();
+		_builtCache.clear();
 	}
 
 	/**
@@ -535,6 +554,28 @@ final class CompilerFacts {
 		return made;
 	}
 
+	/** The configurations (indexes into `configurations`) that typed the node `id`; empty when none did. */
+	public function buildsTyping(id: String): Array<Int> {
+		final out: Array<Int> = [];
+		for (line in _nodeLines[id] ?? []) for (b in line.builds) if (!out.contains(b)) out.push(b);
+		return out;
+	}
+
+	/**
+	 * The node `id` as the configurations `builds` (indexes into `configurations`) typed it, its facts unioned over them
+	 * alone; null when none of them typed it, or no fact of what they typed can be placed.
+	 */
+	public function nodeAsBuiltBy(id: String, builds: Array<Int>): Null<FactNode> {
+		final key: String = '$id|${builds.join(',')}';
+		if (_builtCache.exists(key)) return _builtCache[key];
+		final lines: Array<NodeLine> = [
+			for (line in _nodeLines[id] ?? []) if (line.builds.exists(b -> builds.contains(b))) line
+		];
+		final made: Null<FactNode> = lines.length == 0 ? null : materialize(id, lines);
+		_builtCache[key] = made;
+		return made;
+	}
+
 	/** The id of every node some configuration typed: every function and initializer, nested ones included. */
 	public inline function nodeIds(): Iterator<String> {
 		return _nodeLines.keys();
@@ -564,15 +605,45 @@ final class CompilerFacts {
 		return byOwner[typeId] ?? [];
 	}
 
-	/** Every node of `file`, outermost first. */
+	/** Every node of `file`, outermost first, as the configurations that read it from `file` typed it (`homedIn`). */
 	public function nodesIn(file: String): Array<FactNode> {
-		final ranges: Array<NodeRange> = _nodeFiles[_key(file)] ?? [];
+		final home: String = _key(file);
+		final ranges: Array<NodeRange> = _nodeFiles[home] ?? [];
 		final out: Array<FactNode> = [];
 		for (range in ranges) {
-			final made: Null<FactNode> = node(range.id);
+			final made: Null<FactNode> = homedIn(range.id, home);
 			if (made != null) out.push(made);
 		}
 		return out;
+	}
+
+	/** The files the configurations typed the node `id` at a range of (`nodesIn`): a body a macro placed has none. */
+	public function rangedHomes(id: String): Array<String> {
+		final out: Array<String> = [];
+		for (l in _nodeLines[id] ?? []) if (!out.contains(l.home) && (_nodeFiles[l.home] ?? []).exists(r -> r.id == id)) out.push(l.home);
+		return out;
+	}
+
+	/**
+	 * The node `id` of the file keyed `home`: unioned over every configuration — save what configurations typed of it in
+	 * another file where it has a range of its own, a copy of its type each build reads from its own (`typeHomes`): that
+	 * copy is a declaration of its own, asked by its own file's ranges, and its code, at its own positions, is no code of
+	 * a range here. The node is then placed in `home`, not in the first build's copy. A body a macro placed elsewhere, which
+	 * no range holds, stays.
+	 */
+	private function homedIn(id: String, home: String): Null<FactNode> {
+		final lines: Array<NodeLine> = _nodeLines[id] ?? [];
+		function own(l: NodeLine): Bool {
+			return l.home == home || !(_nodeFiles[l.home] ?? []).exists(r -> r.id == id);
+		}
+		if (lines.foreach(own)) return node(id);
+		final key: String = '$id@$home';
+		if (_builtCache.exists(key)) return _builtCache[key];
+		// a line homed here first: the node is placed where the first line places it
+		final kept: Array<NodeLine> = [for (l in lines) if (l.home == home) l].concat([for (l in lines) if (l.home != home && own(l)) l]);
+		final made: Null<FactNode> = kept.length == 0 ? null : materialize(id, kept);
+		_builtCache[key] = made;
+		return made;
 	}
 
 	/** The innermost node of `file` whose range contains `span`; null when no configuration typed code there. */
@@ -639,10 +710,24 @@ final class CompilerFacts {
 		return _types.keys();
 	}
 
-	/** Where the type `id` is declared; null when no configuration typed it or its file cannot be read. */
+	/**
+	 * Where the type `id` is declared, as the first configuration that typed it read it; null when none typed it or that
+	 * file cannot be read. A type each build reads from its own copy (`typeHomes`) is declared in several files.
+	 */
 	public function typePosition(id: String): Null<FactPos> {
-		final declared: Null<{ home: String, p: Array<Int> }> = _typeHomes[id];
+		final declared: Null<HomeRecord> = (_typeHomes[id] ?? [])[0];
 		return declared == null ? null : position(declared.home, declared.p, []);
+	}
+
+	/**
+	 * Every declaration of the type `id` some configuration typed, one per file and range: a type each build reads from its
+	 * own copy — a source a build generates into its own directory — has one per copy. Each names the configurations that
+	 * read it there (`nodeAsBuiltBy` reads a node as those alone typed it); empty when none typed it.
+	 */
+	public function typeHomes(id: String): Array<TypeHome> {
+		return [
+			for (h in _typeHomes[id] ?? []) { file: h.home, at: position(h.home, h.p, []), builds: h.builds.copy() }
+		];
 	}
 
 	/** Every type `id` extends or implements, directly or not, over the whole typed set; by id, without type arguments. */
@@ -674,7 +759,7 @@ final class CompilerFacts {
 			if (line.startsWith('{"k":"node"'))
 				addNode(line, index, dump)
 			else if (line.startsWith('{"k":"type"'))
-				addType(Json.parse(line), dump)
+				addType(Json.parse(line), dump, index)
 			else if (line.startsWith('{"k":"src"'))
 				addSource(Json.parse(line), dump)
 			else if (line.startsWith('{"k":"file"')) {
@@ -690,10 +775,21 @@ final class CompilerFacts {
 		final id: String = head.id;
 		final variants: Array<NodeLine> = _nodeLines[id] ?? [];
 		_nodeLines[id] = variants;
-		if (!variants.exists(v -> v.text == line && (!head.foreign || v.dump == index))) variants.push({ dump: index, text: line });
+		// a line two configurations wrote alike is one, when it names the same file in both: a path relative to each build's
+		// own directory names that build's copy
+		final home: String = dump.file(head.file);
+		final same: Null<NodeLine> = variants.find(v -> v.text == line && v.home == home && (!head.foreign || v.dump == index));
+		if (same == null)
+			variants.push({
+				dump: index,
+				text: line,
+				home: home,
+				builds: [index]
+			})
+		else if (!same.builds.contains(index))
+			same.builds.push(index);
 		// a macro-generated body lies outside its type's file, where no range of that file may claim it
 		if (head.generated) return;
-		final home: String = dump.file(head.file);
 		final ranges: Array<NodeRange> = _nodeFiles[home] ?? [];
 		_nodeFiles[home] = ranges;
 		// keyed by range too: two `#if` variants of one node sit at different ranges and both must be found
@@ -713,7 +809,7 @@ final class CompilerFacts {
 			_expected[file] = hash;
 	}
 
-	private function addType(record: TypeRecord, dump: FactsDump): Void {
+	private function addType(record: TypeRecord, dump: FactsDump, build: Int): Void {
 		final made: TypeFact = {
 			id: record.id,
 			kind: record.kind,
@@ -734,15 +830,26 @@ final class CompilerFacts {
 			constructors: [for (c in record.ctors ?? []) { name: c.n, type: c.t }]
 		};
 		final known: Null<TypeFact> = _types[record.id];
-		if (known == null) {
-			_types[record.id] = made;
-			_typeHomes[record.id] = { home: dump.file(record.f), p: record.p };
-		} else
+		if (known == null)
+			_types[record.id] = made
+		else
 			FactMerge.type(known, made);
+		addHome(record.id, dump.file(record.f), record.p, build);
 		final parents: Array<String> = (record.ifaces ?? []).copy();
 		final sup: Null<String> = record.sup;
 		if (sup != null) parents.push(sup);
 		for (parent in parents) link(record.id, baseId(parent));
+	}
+
+	/** Record that the configuration `build` typed the type `id` at `p` of `home` (`typeHomes`). */
+	private function addHome(id: String, home: String, p: Array<Int>, build: Int): Void {
+		final homes: Array<HomeRecord> = _typeHomes[id] ?? [];
+		_typeHomes[id] = homes;
+		final same: Null<HomeRecord> = homes.find(h -> h.home == home && h.p.join(',') == p.join(','));
+		if (same == null)
+			homes.push({ home: home, p: p, builds: [build] })
+		else if (!same.builds.contains(build))
+			same.builds.push(build);
 	}
 
 	/** The declared field a type record's field record `f` describes, as one configuration recorded it. */
@@ -784,7 +891,7 @@ final class CompilerFacts {
 		ranges.sort((a, b) -> a.min != b.min ? a.min - b.min : b.max - a.max);
 		final out: Array<FactNode> = [];
 		for (r in ranges) {
-			final made: Null<FactNode> = node(r.id);
+			final made: Null<FactNode> = homedIn(r.id, home);
 			if (made != null) out.push(made);
 		}
 		return out;
@@ -1175,10 +1282,22 @@ final class CompilerFacts {
 
 }
 
-/** A node's line in one dump: the text, and the dump whose file table its foreign positions index. */
+/**
+ * A node's line: the text, the dump whose file table its foreign positions index, the file it is homed in, and every dump
+ * that wrote it naming the same files (`dump` first).
+ */
 private typedef NodeLine = {
 	final dump: Int;
 	final text: String;
+	final home: String;
+	final builds: Array<Int>;
+}
+
+/** Where one or more dumps typed a type: its home file, its range there, and those dumps. */
+private typedef HomeRecord = {
+	final home: String;
+	final p: Array<Int>;
+	final builds: Array<Int>;
 }
 
 /** A node's range in its home file, in the compiler's codepoints. */

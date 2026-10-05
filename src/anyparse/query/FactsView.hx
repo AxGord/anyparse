@@ -754,6 +754,42 @@ final class FactsView {
 	}
 
 	/**
+	 * Whether a build typed the code of the graph node `node`, whose declarations are `declared`, in a file none of them
+	 * lies in: a copy of its type each build reads from its own (`CompilerFacts.typeHomes`) the graph does not hold. Each
+	 * copy's code is read at its own ranges (`CompilerFacts.nodesIn`), which no declaration here asks of. Asked of the
+	 * typed types the declarations' own types are written as (`rootOf`) — the graph's other types of the name are none of
+	 * the node's — each body and overload of the member they type at a range of a file; one a macro placed, at no range,
+	 * is read by its id. False for a nested function, whose enclosing node answers.
+	 */
+	public function typedElsewhere(g: CallGraph, node: FnNode, declared: Array<FnDeclaration>): Bool {
+		final type: Null<String> = node.typeName;
+		final name: Null<String> = node.name;
+		if (type == null || name == null || node.id.indexOf(NESTED_MARK) >= 0) return false;
+		final keys: Array<String> = [];
+		final roots: Array<String> = [];
+		for (d in declared) {
+			keys.push(table.keyOf(d.file));
+			final fi: Null<FileInfo> = _scope.index.fileInfo(d.file);
+			final t: Null<TypeDeclInfo> = fi?.types.find(x -> x.name == type);
+			final id: Null<String> = fi == null || t == null ? null : declaredId(fi, t);
+			if (id != null && !roots.contains(id)) roots.push(id);
+		}
+		for (t in bySimpleName()[type] ?? []) {
+			final root: Null<String> = rootOf(t);
+			final field: Null<FieldDeclFact> = root == null || !roots.contains(root)
+				? null
+				: table.type(t)?.fields.find(f -> graphMember(t, f.name) == name);
+			if (field == null) continue;
+			var overloads: Int = 0;
+			for (n in field.overloads) if (n > overloads) overloads = n;
+			for (i in 0...overloads + 1)
+				for (home in table.rangedHomes(i == 0 ? '$t.${field.name}' : '$t.${field.name}~$i'))
+					if (!keys.contains(home)) return true;
+		}
+		return false;
+	}
+
+	/**
 	 * The type a declaration of the typed type `typed` is written as: itself, the class of a `@:generic` instance, the
 	 * abstract of an implementation class; null for a typedef, which declares no member of its own.
 	 */
