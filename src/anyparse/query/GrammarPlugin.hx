@@ -3543,6 +3543,15 @@ typedef ExecutionShape = {
 	@:optional var pureLibraryTypes: Array<String>;
 
 	/**
+	 * Of the `pureLibraryCalls` / `pureLibraryTypes` members, those that read or advance state no field holds — a random
+	 * generator — or change their receiver (Haxe `Std.random`, `Math.random`, `StringBuf.add`): a call of one runs no user
+	 * code, yet two calls of it, or one and a call reading what it changed, do not commute. A walk proving that code changes
+	 * nothing it did not build (`MemberReach.freshOnlyReads`) admits the other pure calls only. Optional; unset admits none
+	 * of them — every library call is then followed or refused there.
+	 */
+	@:optional var statefulLibraryCalls: Array<String>;
+
+	/**
 	 * Per built-in type (the array type, the string type), the methods that type declares as returning a NEW
 	 * object (Haxe `Array` => `copy`, `concat`, `map`, `filter`, `slice`; `String` => `split`): a local
 	 * initialised from such a call on a value KNOWN to be of that type holds a value no other code shares. The

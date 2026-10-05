@@ -4152,6 +4152,68 @@
 			"note": "a declared `resolutionRoots` entry matching no `.hx` counts as a working root, so the crossing path admits an init over a scope that is the report alone"
 		},
 		{
+			"name": "M-FIAD-PROVEN-NEVER",
+			"type": "anyparse.check.FieldInitAtDeclaration",
+			"method": "crossingProven",
+			"force": "false",
+			"note": "no crossing is ever proven, so an init after `super(...)` whose move nothing can observe is refused again whenever its right-hand side is no inert collection"
+		},
+		{
+			"name": "M-FIAD-PROVEN-ALWAYS",
+			"type": "anyparse.check.FieldInitAtDeclaration",
+			"method": "crossingProven",
+			"force": "true",
+			"note": "every crossing counts as proven, with or without the truth: an init an override, a listener or a shared static can observe is hoisted ahead of the base constructor"
+		},
+		{
+			"name": "M-FIAD-PROVEN-NO-READER",
+			"type": "anyparse.check.FieldInitAtDeclaration",
+			"method": "crossingProven",
+			"find": "if (truth.mayReach(Region(file, crossed), field, Read) != Proven) return false;",
+			"replace": "if (false && truth.mayReach(Region(file, crossed), field, Read) != Proven) return false;",
+			"note": "the crossed code is never asked whether it can read the field, so a base constructor calling an override that reads it, or a listener the prefix fires, sees the value instead of nothing"
+		},
+		{
+			"name": "M-FIAD-PROVEN-NO-COMMUTE",
+			"type": "anyparse.check.FieldInitAtDeclaration",
+			"method": "crossingProven",
+			"find": "if (truth.mayReach(Region(file, crossed), { owner: r.owner, name: r.name }, changes) != Proven) return false;",
+			"replace": "",
+			"note": "what the right-hand side reads is never checked against what the crossed code writes, so a construction reading a static the prefix sets runs before the prefix sets it"
+		},
+		{
+			"name": "M-FIAD-PROVEN-EXPOSED",
+			"type": "anyparse.check.FieldInitAtDeclaration",
+			"method": "crossingProven",
+			"find": "host.reachBuilds() == null || fieldExposed(tree, member, container, plugin, shape)",
+			"replace": "host.reachBuilds() == null",
+			"note": "a public field crosses too, though code outside the project may read it before the base constructor returns"
+		},
+		{
+			"name": "M-FRESH-ONLY-WRITES-ADMITTED",
+			"type": "anyparse.query.MemberReach",
+			"method": "sharedAccess",
+			"find": "if (f.write) return onFresh ? null : Unconfined(",
+			"replace": "if (f.write) return true ? null : Unconfined(",
+			"note": "a write of shared state the right-hand side's code makes is admitted, so a construction setting a static the base constructor reads moves ahead of the read"
+		},
+		{
+			"name": "M-FRESH-ONLY-STATEFUL-LIBRARY",
+			"type": "anyparse.query.MemberReach",
+			"method": "freshOnlyBenign",
+			"find": "return !stateful.contains(member) && benignEdge(g, node, e);",
+			"replace": "return benignEdge(g, node, e);",
+			"note": "a pure library call that advances hidden state (`Math.random`) is skipped as harmless, so two draws the move reorders are taken to commute"
+		},
+		{
+			"name": "M-FRESH-ONLY-ENTRY-FACETED",
+			"type": "anyparse.query.MemberReach",
+			"method": "freshOnlyReads",
+			"find": "if (!view.faceted(g, file, span)) return Unconfined(file, span, 'the compiler facts do not describe the code');",
+			"replace": "",
+			"note": "a right-hand side in a file the run rewrote reads as reading nothing, so the next `--fix` pass hoists an init whose static read the base constructor changes"
+		},
+		{
 			"name": "M-ISVAR-SLOTS-ANY",
 			"type": "anyparse.check.RedundantIsVar",
 			"method": "candidateOf",
@@ -6078,8 +6140,8 @@
 			"name": "M-REACH-STRINGBUF-PURE",
 			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
 			"method": "refShape",
-			"find": "\t\t\t\t'StringBuf.add',\n",
-			"replace": "",
+			"find": "\t\t\t\t\t'Std.isOfType',\n\t\t\t\t\t'StringBuf.add',\n",
+			"replace": "\t\t\t\t\t'Std.isOfType',\n",
 			"note": "a string buffer write counts as code that may change the caller's array"
 		},
 		{
