@@ -1,12 +1,12 @@
 # fixture-cache.sh — sourced, never run: the `haxe` shim that puts
 # `testkit.FixtureCompileCache` in front of the probe compiles of a suite run.
 #
-# Two callers, two lifetimes:
-#   - tools/mutation-check.sh keeps the cache for ONE run (its workroot), shared
-#     by every track: a mutation changes what the engine does with the
-#     compiler's answer, not the answer.
-#   - tools/suite-shard.sh keeps it ACROSS runs, under
-#     ${XDG_CACHE_HOME:-$HOME/.cache}/anyparse/fixture-cache: the fixture
+# Two callers, one store, kept ACROSS runs under
+#     ${APQ_SUITE_FIXTURE_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/anyparse/fixture-cache}:
+#   - tools/mutation-check.sh, every track of a run sharing it: a mutation
+#     changes what the engine does with the compiler's answer, not the answer
+#     (a mutated probe macro is a different key).
+#   - tools/suite-shard.sh: the fixture
 #     compiles are most of the suite's CPU (MemberReachFactsTest alone ran 1007
 #     of them, 265 of its 271 s) and an engine edit that leaves the probe
 #     macros alone leaves every key alone. An entry no run has hit for

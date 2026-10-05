@@ -711,15 +711,21 @@ fi
 # seconds in ~290 real compiles of tiny fixtures (the facts and defines
 # probes), the same fixtures in every track. `testkit.FixtureCompileCache`
 # replays such a compile from a content-addressed record — every input by
-# content, every path placeheld — shared by all tracks of this run and
-# discarded with the workroot. It is built from THIS tree, never from a
-# track's: the tracks' sources are the mutated ones. Its `haxe` shim goes
-# first on each suite run's PATH and hands every compile that is not a
-# probe compile straight to the real compiler.
-# `APQ_MUTATION_NO_FIXTURE_CACHE=1` runs every compile for real.
+# content, every path placeheld — shared by every track of this run AND by
+# every run and every suite-shard.sh run before it (the store
+# tools/fixture-cache.sh keeps; why keeping it is sound is documented there).
+# A mutated facts macro is a different key, so it compiles for real. The
+# replay program is built from THIS tree, never from a track's: the tracks'
+# sources are the mutated ones. Its `haxe` shim goes first on each suite
+# run's PATH and hands every compile that is not a probe compile straight to
+# the real compiler. `APQ_MUTATION_NO_FIXTURE_CACHE=1` runs every compile for
+# real.
 if [ -z "${APQ_MUTATION_NO_FIXTURE_CACHE:-}" ] && [ "$build_only" -eq 0 ]; then
     cache="$workroot/fixture-cache"
-    if ! fc_shim "$repo" "$cache/entries" "$cache/bin"; then
+    fc_entries="${APQ_SUITE_FIXTURE_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/anyparse/fixture-cache}"
+    fc_prune "$fc_entries"
+    mkdir -p "$cache"
+    if ! fc_shim "$repo" "$fc_entries" "$cache/bin" "$cache/tally"; then
         echo "mutation-check.sh: the fixture cache could not be set up — every fixture compile runs for real" >&2
     fi
 fi
@@ -743,8 +749,8 @@ if ls "$workroot"/*.timing > /dev/null 2>&1; then
             printf " suite runs %d (mean %.0fs)\n", runs, runs ? r / runs : 0
         }'
 fi
-if [ -f "$workroot/fixture-cache/entries/tally" ]; then
-    echo "fixture cache: $(fc_tally "$workroot/fixture-cache/entries/tally")"
+if [ -f "$workroot/fixture-cache/tally" ]; then
+    echo "fixture cache: $(fc_tally "$workroot/fixture-cache/tally")"
 fi
 
 # ------------------------------------------------------------- report
