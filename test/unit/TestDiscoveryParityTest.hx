@@ -1590,6 +1590,15 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-PFPF-MACRO-SILENT',
 			'unit.check.PreferFinalMacroOwnerTest#testTheFoldIsNeverAdmittedOnAMacroBuiltOwner :: control :: M-FINAL-MACRO-FOLD-ADMITTED',
 			'unit.check.PreferFindCheckTest#testFixRefusedWhenTheOnlyUsingIsGuarded :: control :: M-GUARDED-USING-ABSENT',
+			'unit.check.PreferIfExpressionAssignmentCheckTest#testDeclChainElseWhileNotFlagged :: control :: M-ELSELESS-FINAL-ELSE',
+			'unit.check.PreferIfExpressionAssignmentCheckTest#testDeclChainImpureInitNotFlagged :: control :: M-DECLCHAIN-INIT-ANY',
+			'unit.check.PreferIfExpressionAssignmentCheckTest#testDeclChainNestedWriteNotFlagged :: control :: M-DECLCHAIN-OCCURRENCE-COUNT',
+			'unit.check.PreferIfExpressionAssignmentCheckTest#testDeclChainNotAdjacentNotFlagged :: control :: M-DECLIF-CARRY',
+			'unit.check.PreferIfExpressionAssignmentCheckTest#testDeclChainOtherTargetNotFlagged :: control :: M-DECLCHAIN-LVALUE',
+			'unit.check.PreferIfExpressionAssignmentCheckTest#testDeclChainPrefixComments :: control :: M-DECLIF-PREFIX-KEPT,M-DECLCHAIN-PREFIX-DANGLING',
+			'unit.check.PreferIfExpressionAssignmentCheckTest#testDeclChainTargetReadNotFlagged :: control :: M-DECLCHAIN-OCCURRENCE-COUNT',
+			'unit.check.PreferIfExpressionAssignmentCheckTest#testDeclChainUntypedNotFlagged :: control :: M-DECLCHAIN-UNTYPED',
+			'unit.check.PreferIfExpressionAssignmentCheckTest#testDeclElseLessChainFolded :: control :: M-DECLCHAIN-OWNED-BY-TERNARY',
 			'unit.check.PreferIfExpressionAssignmentCheckTest#testFlatTwoBranchStillNotFlagged :: control :: M-TERMINAL-RUNGS-ANY',
 			'unit.check.PreferIfExpressionChainCheckTest#testBooleanReducibleUnfoldedRungStillConverts :: control :: '
 				+ 'M-PIEC-SPINE-CLAIM-ANY',
@@ -1683,6 +1692,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PreferSwitchCheckTest#testUnknownConstantValueNotFlagged :: control :: M-SWITCH-UNKNOWN-VALUE-ACCEPTED',
 			'unit.check.PreferSwitchCheckTest#testValueChainInALambdaBlockGainsTerminators :: control :: M-SWITCH-BARE-BODY-VERBATIM',
 			'unit.check.PreferSwitchExpressionCheckTest#testSharedValueAndOperatorGates :: control :: M-SWITCH-VALUES-NOT-DISTINCT',
+			'unit.check.PreferTernaryAssignmentCheckTest#testDeclDroppedCommentNotFlagged :: control :: M-DECLTERN-COMMENT',
+			'unit.check.PreferTernaryAssignmentCheckTest#testDeclNullNarrowingBoolNotFlagged :: control :: M-DECLTERN-NARROWING',
 			'unit.check.PreferTernaryReturnCheckTest#testOwnLineCommentInACascadeDefersTheTail :: control :: '
 				+ 'M-PTR-RIDES-NEVER,M-PTR-CASCADE-NEVER-STRANDS',
 			'unit.check.PreferTernaryReturnCheckTest#testTheRunOfOneHoistIsRefusedAtTheSeam :: control :: M-COMMENT-HOIST-BLIND',
@@ -2673,6 +2684,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-SOLE-MEMBER-NONE,M-REACH-ITERABLE-RETURNS',
 			'unit.query.MemberReachFactsTest#testALocalACalleeRebuiltInPlaceHandsOutIsNoProofUnderTheTruth :: control :: '
 				+ 'M-FACTS-TEXT-CALLS-ANY',
+			'unit.query.MemberReachFactsTest#testALocalHoldingTheMemberThroughAValueConstructIsFollowedUnderTheTruth :: control :: M-FACTS-HELD-THROUGH-IF,M-FACTS-HELD-THROUGH-SWITCH,M-FACTS-HELD-THROUGH-PAREN,M-FACTS-HELD-THROUGH-BLOCK,M-FACTS-HELD-THROUGH-TRY,M-FACTS-ASSIGN-HELD-THROUGH',
 			'unit.query.MemberReachFactsTest#testALocalInlineFunctionKeepsItsBodysSyntax :: control :: M-GRAPH-LOCAL-INLINE',
 			'unit.query.MemberReachFactsTest#testALocalOfABodyABuildMacroReplacedIsNoProofUnderTheTruth :: control :: '
 				+ 'M-REACH-ENTRY-REWRITTEN,M-REACH-ENTRY-LOCAL',
@@ -4866,7 +4878,24 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-ASSIGN-STATEMENT',
 			'M-FACTS-ASSIGN-OWNER',
 			'M-FACTS-HELD-FLAG',
-			'M-TOUCH-TYPED-HELD-REGION'
+			'M-TOUCH-TYPED-HELD-REGION',
+			'M-FACTS-HELD-THROUGH-IF',
+			'M-FACTS-HELD-THROUGH-SWITCH',
+			'M-FACTS-HELD-THROUGH-PAREN',
+			'M-FACTS-HELD-THROUGH-BLOCK',
+			'M-FACTS-HELD-THROUGH-TRY',
+			'M-FACTS-ASSIGN-HELD-THROUGH',
+			'M-DECLCHAIN-UNTYPED',
+			'M-DECLCHAIN-INIT-ANY',
+			'M-DECLCHAIN-OCCURRENCE-COUNT',
+			'M-DECLCHAIN-LVALUE',
+			'M-DECLCHAIN-PREFIX-DANGLING',
+			'M-DECLCHAIN-OWNED-BY-TERNARY',
+			'M-ELSELESS-FINAL-ELSE',
+			'M-DECLIF-CARRY',
+			'M-DECLIF-PREFIX-KEPT',
+			'M-DECLTERN-NARROWING',
+			'M-DECLTERN-COMMENT'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
@@ -5047,13 +5076,19 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-ASSIGNED-NO-USE :: anyparse.check.TypedFactsWalk#localRead',
 			'M-FACTS-ASSIGNED-TARGET :: anyparse.check.TypedFactsWalk#target',
 			'M-FACTS-ALIAS-LINK :: anyparse.check.TypedFactsWalk#localRead',
-			'M-FACTS-HELD-LOCAL :: anyparse.check.TypedFactsWalk#visit',
+			'M-FACTS-HELD-LOCAL :: anyparse.check.TypedFactsWalk#heldValue',
 			'M-FACTS-SUBSTITUTED-RECEIVER :: anyparse.check.TypedFactsWalk#localRead',
 			'M-FACTS-SUBSTITUTED-ARITY :: anyparse.check.TypedFactsWalk#substitutedReceiver',
 			'M-FACTS-SUBSTITUTED-OWNER :: anyparse.check.TypedFactsWalk#substitutedReceiver',
 			'M-FACTS-ASSIGN-STATEMENT :: anyparse.check.TypedFactsWalk#visit',
 			'M-FACTS-ASSIGN-OWNER :: anyparse.check.TypedFactsWalk#storedLocal',
 			'M-FACTS-HELD-FLAG :: anyparse.check.TypedFactsWalk#root',
+			'M-FACTS-HELD-THROUGH-IF :: anyparse.check.TypedFactsWalk#heldValue',
+			'M-FACTS-HELD-THROUGH-SWITCH :: anyparse.check.TypedFactsWalk#heldValue',
+			'M-FACTS-HELD-THROUGH-PAREN :: anyparse.check.TypedFactsWalk#heldValue',
+			'M-FACTS-HELD-THROUGH-BLOCK :: anyparse.check.TypedFactsWalk#heldValue',
+			'M-FACTS-HELD-THROUGH-TRY :: anyparse.check.TypedFactsWalk#heldValue',
+			'M-FACTS-ASSIGN-HELD-THROUGH :: anyparse.check.TypedFactsWalk#storedLocal',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

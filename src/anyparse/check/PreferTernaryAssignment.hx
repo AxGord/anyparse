@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.check.DeclFallbackChain.DeclSeams;
 import anyparse.query.BoolExprShape;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
@@ -27,6 +28,17 @@ import anyparse.runtime.Span;
  * The deferral ASKS that rule (`PreferIfExpressionAssignment.claims`), gates and all, rather than
  * mirroring its shape: a site it refuses -- a comment in a folded region, an else-less conditional
  * in a rung -- keeps its finding here instead of falling through to nobody.
+ *
+ * ## The decl arm
+ *
+ * `var x:T = init;` followed IMMEDIATELY by an else-less `if (c) x = a;` collapses to
+ * `var x:T = c ? a : init;` -- the declaration supplies the value of the missing `else`. It is the
+ * two-value case of the decl arm `prefer-if-expression-assignment` has for longer else-less chains,
+ * and both ask ONE predicate, `DeclFallbackChain` (an explicit `:T`, a relocatable literal `init`,
+ * adjacency, no other occurrence of `x` in the `if`); its `ownedByTernary` gives this rule the
+ * sites whose single branch is a plain assignment. The finding is keyed on the declaration; the
+ * narrowing-guard and dropped-comment refusals are the ordinary arm's. The `var` is kept;
+ * `prefer-final` upgrades it.
  *
  * ## What is flagged
  *
@@ -77,6 +89,10 @@ final class PreferTernaryAssignment implements Check {
 	/** A binary assignment node has exactly [l-value, r-value] children. */
 	private static inline final ASSIGN_CHILD_COUNT: Int = 2;
 
+	/** The finding message for the decl arm (a declaration and the one-branch `if` after it). */
+	private static inline final DECL_MESSAGE: String =
+		'this declaration and the else-less if assignment after it can be a single ternary initializer';
+
 	public function new() {}
 
 	public function id(): String {
@@ -88,10 +104,18 @@ final class PreferTernaryAssignment implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		final decl: Null<DeclSeams> = DeclFallbackChain.readSeams(plugin, AssignmentTreeHoist.readTreeSeams(plugin.refShape()));
 		return RunScan.collectWith(files, plugin, readSeams(plugin.refShape()), (entry, tree, seams, violations) -> {
 			final comments: Array<{ from: Int, to: Int, isLine: Bool }> =
 				SourceComments.collectCommentTokens(plugin.lexicalRegions(entry.source));
 			walk(tree, violations, entry.file, entry.source, comments, seams);
+			if (decl != null) for (e in declEdits(tree, entry.source, comments, decl)) violations.push({
+				file: entry.file,
+				span: e.key,
+				rule: 'prefer-ternary-assignment',
+				severity: Severity.Info,
+				message: DECL_MESSAGE
+			});
 		});
 	}
 
@@ -109,6 +133,18 @@ final class PreferTernaryAssignment implements Check {
 				if (edit != null) guarded.push(edit);
 				return edit;
 			});
+		final decl: Null<DeclSeams> = DeclFallbackChain.readSeams(plugin, AssignmentTreeHoist.readTreeSeams(plugin.refShape()));
+		final tree: Null<QueryNode> = decl == null ? null : CheckScan.parseOrNull(plugin, source);
+		if (decl != null && tree != null) {
+			final byKey: Map<String, GuardedEdit> = [];
+			for (e in declEdits(tree, source, comments, decl)) byKey['${e.key.from}:${e.key.to}'] = e.edit;
+			for (v in violations) {
+				final edit: Null<GuardedEdit> = v.span == null ? null : byKey['${v.span.from}:${v.span.to}'];
+				if (edit == null) continue;
+				guarded.push(edit);
+				plain.push(edit);
+			}
+		}
 		// `plain` and `guarded` hold the same edits in the same order, so a containment index of one is the other's.
 		return ParenGuard.guard(source, [
 			for (i in 0...guarded.length) if (!CanonicalEdit.isContainedEdit(plain, i)) guarded[i]
@@ -240,6 +276,40 @@ final class PreferTernaryAssignment implements Check {
 		final thenRhs: String = source.substring(thenRhsSpan.from, thenRhsSpan.to);
 		final elseRhs: String = source.substring(elseRhsSpan.from, elseRhsSpan.to);
 		return ParenGuard.ternaryEdit(span, prefix, source.substring(condSpan.from, condSpan.to), thenRhs, elseRhs, ';');
+	}
+
+	/**
+	 * The decl arm's edits under `tree`, keyed by the declaration's span (the finding's): each pair
+	 * `DeclFallbackChain` matches and hands to this rule (`ownedByTernary` — one plain-assignment
+	 * branch), rebuilt as `var x:T = c ? a : init;` with the condition a `ParenGuard` hole. The same two
+	 * refusals as the ordinary arm: a null-narrowing condition when a value is a bool literal, and a
+	 * comment anywhere in the replaced region outside the copied prefix, condition, value and
+	 * initializer.
+	 */
+	private static function declEdits(
+		tree: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, d: DeclSeams
+	): Array<{ key: Span, edit: GuardedEdit }> {
+		final out: Array<{ key: Span, edit: GuardedEdit }> = [];
+		for (m in DeclFallbackChain.collect(tree, source, comments, d)) if (DeclFallbackChain.ownedByTernary(m, d)) {
+			final cond: QueryNode = m.branches[0].cond;
+			final assign: Null<QueryNode> = AssignmentTreeHoist.plainAssign(m.branches[0].stmt, d.tree);
+			final value: Null<QueryNode> = assign?.children[1];
+			final condSpan: Null<Span> = cond.span;
+			final valueSpan: Null<Span> = value?.span;
+			final initSpan: Null<Span> = m.init.span;
+			if (value == null || condSpan == null || valueSpan == null || initSpan == null) continue;
+			if (BoolExprShape.refusesNullNarrowingBoolCollapse(value, m.init, cond, d.shape)) continue;
+			final kept: Array<Span> = [new Span(m.declSpan.from, m.prefix.keptTo), condSpan, valueSpan, initSpan];
+			if (IfExpressionChain.droppedComment(m.region, kept, comments)) continue;
+			out.push({
+				key: m.declSpan,
+				edit: ParenGuard.ternaryEdit(
+					m.region, '${m.prefix.text} = ', source.substring(condSpan.from, condSpan.to),
+					source.substring(valueSpan.from, valueSpan.to), source.substring(initSpan.from, initSpan.to), ';'
+				)
+			});
+		}
+		return out;
 	}
 
 	/**

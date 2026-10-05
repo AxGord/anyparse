@@ -202,6 +202,28 @@ final class IfExpressionChain {
 	}
 
 	/**
+	 * The branches of an `if / else if / …` chain with NO final `else` — the shape `collect` refuses —
+	 * each a `(condition, single statement)` pair, head first. Null when a branch body is not a single
+	 * statement, or when the chain DOES end in a plain `else` (that one is `collect`'s, and a value-less
+	 * path is exactly what makes this one different). A lone `if` with no `else` is a one-branch chain.
+	 */
+	public static function collectElseLess(
+		head: QueryNode, ifKinds: Array<String>, blockStmtKind: String
+	): Null<Array<{ cond: QueryNode, stmt: QueryNode }>> {
+		final branches: Array<{ cond: QueryNode, stmt: QueryNode }> = [];
+		var current: QueryNode = head;
+		while (true) {
+			final thenStmt: Null<QueryNode> = current.children.length < 2 ? null : singleStmt(current.children[1], blockStmtKind);
+			if (thenStmt == null) return null;
+			branches.push({ cond: current.children[0], stmt: thenStmt });
+			if (current.children.length == 2) return branches;
+			final elseBranch: QueryNode = current.children[2];
+			if (current.children.length != IF_ELSE_CHILD_COUNT || !ifKinds.contains(elseBranch.kind)) return null;
+			current = elseBranch;
+		}
+	}
+
+	/**
 	 * Recognise the FALL-THROUGH cascade that starts at `kids[at]`: the longest run of consecutive
 	 * no-`else` `if`s, each with a single-statement then-branch, plus the sibling that follows the run
 	 * as the terminal. Returns null when the run is shorter than `minBranches` or reaches the end of

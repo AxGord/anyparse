@@ -4,6 +4,7 @@ import anyparse.check.AssignmentTreeHoist.LvalueRef;
 import anyparse.check.AssignmentTreeHoist.TreeSeams;
 import anyparse.check.AssignmentTreeHoist.UnitValue;
 import anyparse.check.Check.Violation;
+import anyparse.check.DeclFallbackChain.DeclSeams;
 import anyparse.check.IfExpressionChain.Carried;
 import anyparse.check.IfExpressionChain.IfChain;
 import anyparse.query.CanonicalEdit;
@@ -49,6 +50,20 @@ import anyparse.runtime.Span;
  * text that fix had just written. Unrolled here (`AssignmentTreeHoist.terminalTernaryRungs`
  * decides, `ifChainValue` emits) the same site reaches the canon in ONE edit, at the SAME
  * line:col the ternary rule reported, so nothing is orphaned.
+ *
+ * ## The decl arm
+ *
+ * A chain with NO final `else` has no value on that path — unless the declaration right before
+ * it supplies one. `var x:T = init;` followed IMMEDIATELY by `if (c1) x = a; else if (c2) x = b;`
+ * collapses to `var x:T = if (c1) a else if (c2) b else init;`, keyed on the declaration. Every
+ * gate — an explicit `:T`, a relocatable literal `init`, adjacency, no other occurrence of `x` in
+ * the chain — lives in `DeclFallbackChain`, the predicate this arm SHARES with
+ * `prefer-ternary-assignment`, which owns the two-value case (one plain-assignment branch, so
+ * `var x:T = c1 ? a : init;`); this arm takes two or more branches, or one that is a nested
+ * construct. The branch values are built by the same recursion as the ordinary arm
+ * (`AssignmentTreeHoist.fallbackChainValue`), so the unit, else-less and comment rules are the
+ * same, except that the LAST branch is no longer terminal and opens no comment slot. The `var` is
+ * kept; `prefer-final` upgrades it.
  *
  * ## What is flagged
  *
@@ -119,6 +134,10 @@ final class PreferIfExpressionAssignment implements Check {
 	/** A real chain is a head plus at least one `else if` -- a 2-branch `if`/`else` (one branch) is `prefer-ternary-assignment`'s. */
 	private static inline final MIN_CHAIN_BRANCHES: Int = 2;
 
+	/** The finding message for the decl arm (a declaration and the else-less chain after it). */
+	private static inline final DECL_MESSAGE: String =
+		'this declaration and the else-less if/else-if assignment chain after it can be a single if-expression initializer';
+
 	public function new() {}
 
 	public function id(): String {
@@ -130,10 +149,19 @@ final class PreferIfExpressionAssignment implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		return RunScan.collectWith(files, plugin, readSeams(plugin.refShape()), (entry, tree, seams, violations) -> {
+		final read: Null<Seams> = readSeams(plugin.refShape());
+		final decl: Null<DeclSeams> = DeclFallbackChain.readSeams(plugin, read?.tree);
+		return RunScan.collectWith(files, plugin, read, (entry, tree, seams, violations) -> {
 			final comments: Array<{ from: Int, to: Int, isLine: Bool }> =
 				SourceComments.collectCommentTokens(plugin.lexicalRegions(entry.source));
 			walk(tree, violations, entry.file, entry.source, comments, seams);
+			if (decl != null) for (e in declEdits(tree, entry.source, comments, decl)) violations.push({
+				file: entry.file,
+				span: e.key,
+				rule: 'prefer-if-expression-assignment',
+				severity: Severity.Info,
+				message: DECL_MESSAGE
+			});
 		});
 	}
 
@@ -148,6 +176,13 @@ final class PreferIfExpressionAssignment implements Check {
 				final m: Null<Match> = match(node, source, comments, seams);
 				return m == null ? null : buildEdit(m, source, span);
 			});
+		final decl: Null<DeclSeams> = DeclFallbackChain.readSeams(plugin, seams.tree);
+		final tree: Null<QueryNode> = decl == null ? null : CheckScan.parseOrNull(plugin, source);
+		if (decl != null && tree != null) {
+			final byKey: Map<String, { span: Span, text: String }> = [];
+			for (e in declEdits(tree, source, comments, decl)) byKey['${e.key.from}:${e.key.to}'] = e.edit;
+			for (edit in CheckScan.collectSpanEdits(violations, byKey, (edit, _) -> edit)) edits.push(edit);
+		}
 		return CanonicalEdit.dropContainedEdits(edits);
 	}
 
@@ -241,6 +276,30 @@ final class PreferIfExpressionAssignment implements Check {
 	private static function buildEdit(m: Match, source: String, span: Span): Null<{ span: Span, text: String }> {
 		final lvalueSrc: Null<String> = AssignmentTreeHoist.slice(source, m.lvalue);
 		return lvalueSrc == null ? null : { span: span, text: '$lvalueSrc = ${m.value};' };
+	}
+
+	/**
+	 * The decl arm's edits under `tree`, keyed by the declaration's span (the finding's): each pair
+	 * `DeclFallbackChain` matches and does not leave to `prefer-ternary-assignment`, rebuilt as
+	 * `var x:T = if (c1) v1 else if (c2) v2 … else init;`. Comments ride their branch slots exactly as
+	 * in the ordinary arm (`IfExpressionChain.carriedComments`, two passes); one anywhere else in the
+	 * replaced region — between the two statements, around the `=` — leaves the pair unflagged.
+	 */
+	private static function declEdits(
+		tree: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, d: DeclSeams
+	): Array<{ key: Span, edit: { span: Span, text: String } }> {
+		final out: Array<{ key: Span, edit: { span: Span, text: String } }> = [];
+		for (m in DeclFallbackChain.collect(tree, source, comments, d)) if (!DeclFallbackChain.ownedByTernary(m, d)) {
+			final kept: Array<Span> = m.probe.kept.copy();
+			kept.push(new Span(m.declSpan.from, m.prefix.keptTo));
+			final carried: Null<Carried> = IfExpressionChain.carriedComments(m.region, kept, m.probe.gaps, source, comments);
+			if (carried == null) continue;
+			final unit: Null<UnitValue> = AssignmentTreeHoist.fallbackChainValue(
+				m.branches, m.init, { lvalue: null }, source, d.tree, carried
+			);
+			if (unit != null) out.push({ key: m.declSpan, edit: { span: m.region, text: '${m.prefix.text} = ${unit.text};' } });
+		}
+		return out;
 	}
 
 }

@@ -538,9 +538,10 @@ final class TypedFactsWalk {
 						case _ if (called != null):
 							// the receiver of an inlined call: what the method's code then does with it is the call's
 							walkAs(init, Call(called));
-						case TField(_, _) | TLocal(_):
+						case _ if (heldValue(init)):
 							// the value goes wherever the local's reads take it: the compiler holds a lowered loop's array, and the
-							// receiver of a compound element write, in a local of its own
+							// receiver of a compound element write, in a local of its own; a branch of an if-expression hands its
+							// value on just as directly
 							walkAs(init, Held(v.id));
 						case _:
 							walk(init);
@@ -806,12 +807,46 @@ final class TypedFactsWalk {
 
 	/**
 	 * The id of the local `lhs` writes when it is one this node declared (`_aliases`) and `rhs`, what it stores, a field's
-	 * or a local's value; null otherwise.
+	 * or a local's value as it is (`heldValue`); null otherwise.
 	 */
 	private function storedLocal(lhs: TypedExpr, rhs: TypedExpr): Null<Int> {
-		return switch [lhs.expr, rhs.expr] {
-			case [TLocal(v), TField(_, _) | TLocal(_)] if (_aliases[v.id]?.owner == id): v.id;
+		if (!heldValue(rhs)) return null;
+		return switch lhs.expr {
+			case TLocal(v) if (_aliases[v.id]?.owner == id): v.id;
 			case _: null;
+		};
+	}
+
+	/**
+	 * Whether `e` hands a field's or a local's value on AS IT IS, so the local initialized with it or assigned it holds that
+	 * value: the read itself, or a VALUE-TRANSPARENT construct at least one of whose value positions does — parentheses,
+	 * metadata, a block by its last expression (the typer wraps every branch of an if- or switch-expression in one), an
+	 * `if` with an `else` (a ternary is one), a `switch`, a `try`. Those are exactly the constructs `visit`
+	 * walks every value position of with the use it was handed, the condition, subject and patterns with their own, so a
+	 * `Held` reaches a read in a branch and nothing else: `final l = if (c) items else null;` holds `items` as
+	 * `l = items;` in a branch of a statement `if` does. Measured: without the block step the typed `if (c) items else null` is
+	 * `TIf(c, TBlock([items]), TBlock([null]))` and the read stays a value. A positive list: a cast, a call, an operator or anything
+	 * else hands on some other value, or one the facts cannot follow, and the read stays a value.
+	 */
+	private static function heldValue(e: TypedExpr): Bool {
+		return switch e.expr {
+			case TField(_, _) | TLocal(_): true;
+			case TParenthesis(inner) | TMeta(_, inner):
+				heldValue(inner);
+			// the typer wraps every branch of an if- / switch-expression in a block whose last expression is its value
+			case TBlock(exprs):
+				exprs.length > 0 && heldValue(exprs[exprs.length - 1]);
+			case TIf(_, then, otherwise):
+				otherwise != null && (heldValue(then) || heldValue(otherwise));
+			case TSwitch(_, cases, otherwise):
+				var held: Bool = otherwise != null && heldValue(otherwise);
+				for (c in cases) held = held || heldValue(c.expr);
+				held;
+			case TTry(body, catches):
+				var held: Bool = heldValue(body);
+				for (c in catches) held = held || heldValue(c.expr);
+				held;
+			case _: false;
 		};
 	}
 

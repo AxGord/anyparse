@@ -996,32 +996,9 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		if (assign.kind != 'Assign' || assign.children.length != 2 || FieldRefScan.fieldRefName(assign.children[0], shape) != field)
 			return null;
 		final rhs: QueryNode = assign.children[1];
-		if (!isMovableLiteral(rhs, shape)) return null;
+		if (!MemberKinds.isMovableLiteral(rhs, shape)) return null;
 		final rhsSpan: Null<Span> = rhs.span;
 		return rhsSpan == null ? null : { stmt: stmt, assign: assign, rhsSpan: rhsSpan };
-	}
-
-	/**
-	 * Whether `node` is a compile-time literal safe to relocate to a field-initializer position: an
-	 * allocation-free literal (`MemberKinds.isPlainLiteral`), or one under a single negation.
-	 *
-	 * The RHS travels as a VERBATIM span splice, so anything the grammar declares a constant literal
-	 * is relocatable — which is why the kinds are read off the shape rather than spelled here. Both
-	 * ways of spelling them by hand cost a correct rewrite: `HexLit` stood unlisted until review found
-	 * `_mask = 0xFF;` taking the `@:bypassAccessor` path a byte-equivalent `= 255;` did not, and a
-	 * `'$$'` / `'$'` segment read as non-text sent `_currency = '$';` the same way.
-	 *
-	 * The negation arm is one level and numeric-only, the shape `ConstantFieldScan.isScalarLiteral`
-	 * already uses: `-1` projects as `negationKind(IntLit 1)`, so without it every negative default
-	 * (`_mask = -1;`) took the bypass path while `255` folded clean. `- -1` is not admitted — one level
-	 * is what the projection produces for a written negative literal, and a deeper chain is not a
-	 * literal any grammar declares.
-	 */
-	private static function isMovableLiteral(node: QueryNode, shape: RefShape): Bool {
-		final negation: Null<String> = shape.negationKind;
-		return negation != null && node.kind == negation
-			? node.children.length == 1 && (shape.numericLiteralKinds ?? []).contains(node.children[0].kind)
-			: MemberKinds.isPlainLiteral(node, shape);
 	}
 
 	/**
