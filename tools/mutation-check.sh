@@ -259,13 +259,18 @@ run_in_slot() {
     # The fixture cache's `haxe` shim goes first on the PATH when the parent
     # built one (§ "The fixture cache" in the parent section).
     path=$PATH
+    std=""
     if [ -x "$workroot/fixture-cache/bin/haxe" ]; then
         path="$workroot/fixture-cache/bin:$PATH"
+        # the std a plain run's StdResolver finds — see fc_std_injection
+        std=$(fc_std_injection)
     fi
     if [ "$filter" = "ALL" ]; then
-        ( cd "$wt" && env -u APQ_TEST PATH="$path" node "$build/test.js" ) > "$log" 2>&1 || true
+        ( cd "$wt" && if [ -n "$std" ]; then export HAXE_STD_PATH="$std" APQ_FC_STD_INJECTED=1; fi \
+            && env -u APQ_TEST PATH="$path" node "$build/test.js" ) > "$log" 2>&1 || true
     else
-        ( cd "$wt" && APQ_TEST="$filter" PATH="$path" node "$build/test.js" ) > "$log" 2>&1 || true
+        ( cd "$wt" && if [ -n "$std" ]; then export HAXE_STD_PATH="$std" APQ_FC_STD_INJECTED=1; fi \
+            && APQ_TEST="$filter" PATH="$path" node "$build/test.js" ) > "$log" 2>&1 || true
     fi
     printf '%s\n' "$(($(date +%s) - built))" >> "$workroot/$name.timing"
 

@@ -364,12 +364,14 @@ now_ms() {
 # `APQ_SUITE_NO_FIXTURE_CACHE=1` runs every compile for real — the run to make
 # when the compiler itself is what is in question.
 shard_path=$PATH
+shard_std=""
 cache_note="fixture cache: off (APQ_SUITE_NO_FIXTURE_CACHE)"
 if [ -z "${APQ_SUITE_NO_FIXTURE_CACHE:-}" ]; then
     fc_entries="${APQ_SUITE_FIXTURE_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/anyparse/fixture-cache}"
     fc_prune "$fc_entries"
     if fc_shim "$repo" "$fc_entries" "$work/fixture-cache-bin" "$work/fixture-cache.tally"; then
         shard_path="$work/fixture-cache-bin:$PATH"
+        shard_std=$(fc_std_injection)
         cache_note=""
     else
         cache_note="fixture cache: unavailable, every compile ran for real"
@@ -383,6 +385,9 @@ while [ "$s" -lt "$shards" ]; do
     (
         shard_started=$(now_ms)
         shard_status=0
+        if [ -n "$shard_std" ]; then
+            export HAXE_STD_PATH="$shard_std" APQ_FC_STD_INJECTED=1
+        fi
         PATH=$shard_path APQ_TEST="$(cat "$work/shard$s.filter")" APQ_TEST_TIMING="$work/shard$s.timing" \
             node "$test_js" > "$work/shard$s.log" 2>&1 || shard_status=$?
         echo $(( $(now_ms) - shard_started )) > "$work/shard$s.ms"
