@@ -333,8 +333,8 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 	}
 
 	/**
-	 * The value binder the no-opener arm would write, or null. The singular of the collection name with
-	 * its leading underscores dropped (`_points` -> `point`), refused when the LOOP — its header and its
+	 * The value binder the no-opener arm would write, or null. The element name `ElementLoopRewrite.binderFor`
+	 * derives for both element-loop rules (`_points` -> `point`), refused when the LOOP — its header and its
 	 * body, the only text the binder is in scope for — spells it anywhere in active text, when a declaration
 	 * of that name is visible where the loop stands (a parameter, an earlier local, an enclosing loop's
 	 * binder: the binder would shadow it), or when the file declares a member or a module-level value of
@@ -342,9 +342,7 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 	 * of another block — is no clash.
 	 */
 	private static function binderOf(f: LoopFileScan, forNode: QueryNode, scope: Span, index: String, collection: String): BinderChoice {
-		final choice: BinderChoice = ElementLoopRewrite.binderFor(
-			f, forNode, index, ElementLoopRewrite.withoutLeadingUnderscores(collection), scope, 'the loop'
-		);
+		final choice: BinderChoice = ElementLoopRewrite.binderFor(f, forNode, index, collection, scope, 'the loop');
 		final name: Null<String> = choice.name;
 		final shape: RefShape = f.seams.core.shape;
 		final hidden: Null<String> = name == null ? null : ShadowingLocal.boundAt(f.root, forNode, name, shape);

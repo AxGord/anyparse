@@ -1619,7 +1619,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PreferKeyValueLoopCheckTest#testNoOpenerClosureReadNotFlagged :: control :: '
 				+ 'M-ELEMENT-LOOP-CLOSURE,M-KV-NOOPENER-BODY-GATES',
 			'unit.check.PreferKeyValueLoopCheckTest#testNoOpenerFieldLoopRewritten :: control :: '
-				+ 'M-KV-NOOPENER-UNDERSCORE,M-VALUE-LOOP-READS-UNSPLICED',
+				+ 'M-ELEMENT-LOOP-UNDERSCORE,M-VALUE-LOOP-READS-UNSPLICED',
 			'unit.check.PreferKeyValueLoopCheckTest#testNoOpenerIndexWriteNotFlagged :: control :: M-KV-NOOPENER-INDEX-WRITE',
 			'unit.check.PreferKeyValueLoopCheckTest#testNoOpenerLengthChangeNotFlagged :: control :: M-ELEMENT-LOOP-UNSTABLE',
 			'unit.check.PreferKeyValueLoopCheckTest#testNoOpenerNonArrayNotFlagged :: control :: M-KV-NOOPENER-NON-ARRAY',
@@ -1692,6 +1692,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PreferValueLoopCheckTest#testMethodOfAnotherObjectHoldingTheCollectionIsReportOnly :: control :: '
 				+ 'M-REACH-ESCAPE-ARGUMENT',
 			'unit.check.PreferValueLoopCheckTest#testNestedLoopsDerivingOneBinderAreReportOnly :: control :: M-ELEMENT-LOOP-NESTED-BINDER',
+			'unit.check.PreferValueLoopCheckTest#testPrivateFieldCollectionDropsItsUnderscore :: control :: M-ELEMENT-LOOP-UNDERSCORE',
 			'unit.check.PreferValueLoopCheckTest#testSingularOfReadsTheLastPluralWord :: control :: '
 				+ 'M-SINGULAR-INNER-WORD,M-SINGULAR-WORD-END-ANYWHERE',
 			'unit.check.PreferValueLoopCheckTest#testStaticAndConstructorCallsThatGrowTheCollectionAreReportOnly :: control :: '
@@ -3512,7 +3513,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-KV-NOOPENER-INDEX-WRITE',
 			'M-KV-NOOPENER-SELF-CALL',
 			'M-KV-NOOPENER-NON-ARRAY',
-			'M-KV-NOOPENER-UNDERSCORE',
+			'M-ELEMENT-LOOP-UNDERSCORE',
 			'M-KV-NOOPENER-TAKEN-SCOPE',
 			'M-KV-NOOPENER-TAKEN-MEMBER',
 			'M-LINTDIFF-RULE-SUMMARY-BLANK',
