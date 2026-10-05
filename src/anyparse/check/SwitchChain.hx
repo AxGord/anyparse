@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.CaseValueKey.CaseValueSeams;
 import anyparse.check.Check.Violation;
 import anyparse.query.BoolExprShape;
 import anyparse.query.GrammarPlugin;
@@ -153,6 +154,28 @@ using StringTools;
  *    between rungs live in trivia the verbatim-body rebuild would drop, and losing one is
  *    worse than leaving the chain alone. Enforced in `editsOf`, so the finding still
  *    reports.
+ * 9. **Distinct, KNOWN values.** Every pattern's value must be proved (`CaseValueKey`) and no
+ *    two rungs may test the same value tuple. A repeated value is already dead in the chain
+ *    and stays dead in the switch — first match wins in both — so the behaviour is kept, but
+ *    the switch carries a `case` the compiler reports unused (`WUnusedPattern`), and the duplicate is invisible in the text: under
+ *    `enum abstract M(Int) { var DEFAULT = 0; var AUTO = 0; var LINES = 1; }`, `M.DEFAULT`
+ *    and `M.AUTO` are one value, and so are `M.LINES` and `1`, or `16` and `0x10`. A member's
+ *    value is read off its initializer (`MemberInfo.initializerKind` / `initializerSource`)
+ *    or, for an enum-abstract value written without one, off the value the language fills in
+ *    (`RefShape.enumAbstractImplicitValues`). Unknown means refused: a reference initializer
+ *    (`var B = A;`), an escape in a string, a literal suffix, a build-macro declaration.
+ * 10. **The language's own `==`.** A switch matches a pattern by the BUILT-IN comparison, so
+ *    an abstract overloading `==` (`@:op(A == B)`) is bypassed: over
+ *    `enum abstract Op(Int) { var A = 1; var B = 2; }` declaring an `@:op(A == B)` that
+ *    answers `true`, `m = Op.B` takes the `A` rung as a chain and the `B` case as a switch,
+ *    on `--interp` and `-js` alike. Two halves. The DISCRIMINANT is asked of
+ *    `OperatorSelection` through `ChainScope` — free where no type overloads `==`, bound by
+ *    the operand's declared type where one does. The PATTERN is proved from its own
+ *    declaration (`selectsBuiltinEq`): a literal, an enum-abstract value of a type
+ *    overloading no `==` and carrying no build macro, or a `static inline` field of a
+ *    built-in type. It cannot go through `OperatorSelection`, which binds no type to a
+ *    qualified `T.M` and so answers `Unproven` for every one of them in any scope whose std
+ *    declares an `==` overload.
  *
  * ## Rendering
  *
@@ -240,7 +263,9 @@ final class SwitchChain {
 			identKind: shape.identKind,
 			enumAbstractDeclKind: shape.enumAbstractDeclKind,
 			tuple: shape.tuplePatternDelimiters,
-			stringFold: plugin.stringFoldSupport()
+			stringFold: plugin.stringFoldSupport(),
+			values: CaseValueKey.seamsOf(shape),
+			builtinTypeNames: OperandBinder.builtinNamesOf(shape)
 		};
 	}
 
@@ -255,10 +280,11 @@ final class SwitchChain {
 		rule: String, message: (String) -> String
 	): Array<Violation> {
 		final resolveIndex: () -> Null<SymbolIndex> = lazyIndexOf(files, plugin);
+		final selection: Null<OperatorSelection> = OperatorSelection.of(plugin, files);
 		return RunScan.collect(files, plugin, (entry, tree, out) -> {
 			final file: String = entry.file;
 			final source: String = entry.source;
-			final scope: ChainScope = { root: tree, resolveIndex: resolveIndex };
+			final scope: ChainScope = scopeOf(plugin, file, source, tree, resolveIndex, selection);
 			eachHead(tree, seams, hostAccepts, head -> {
 				final span: Null<Span> = head.span;
 				final scanned: Null<ChainScan> = span == null ? null : scan(source, head, seams, scope);
@@ -295,7 +321,12 @@ final class SwitchChain {
 		final parsed: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (parsed == null) return [];
 		final tree: QueryNode = parsed;
-		final scope: ChainScope = { root: tree, resolveIndex: lazyIndexOf([{ file: '', source: source }], plugin, index) };
+		// Every flagged violation names the file `source` came from; gate 10 binds operand types in it.
+		final file: String = violations[0].file;
+		final files: Array<{ file: String, source: String }> = [{ file: file, source: source }];
+		final scope: ChainScope = scopeOf(
+			plugin, file, source, tree, lazyIndexOf(files, plugin, index), OperatorSelection.of(plugin, files)
+		);
 		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
 		final edits: Array<{ span: Span, text: String }> = [];
 		eachHead(tree, seams, hostAccepts, head -> {
@@ -357,6 +388,31 @@ final class SwitchChain {
 	}
 
 	/**
+	 * The `ChainScope` of ONE file: its parsed `root`, the run's `resolveIndex`, and gate 10 asked of
+	 * `selection` — the run's `OperatorSelection` (`OperatorSelection.of`), null when the grammar
+	 * declares no operator-overload annotation and every `==` is therefore the language's own.
+	 *
+	 * Public for the same reason `lazyIndexOf` is: a rule deferring to `claims` must ask with the scope
+	 * the switch rule itself would build, or a chain the switch refuses for an overloaded `==` reads
+	 * as claimed and neither rule reports it.
+	 */
+	public static function scopeOf(
+		plugin: GrammarPlugin, file: String, source: String, root: QueryNode, resolveIndex: () -> Null<SymbolIndex>,
+		selection: Null<OperatorSelection>
+	): ChainScope {
+		final eqKind: Null<String> = plugin.refShape().eqKind;
+		final eqKinds: Array<String> = eqKind == null ? [] : [eqKind];
+		if (selection == null) return { root: root, resolveIndex: resolveIndex, operandBuiltin: _ -> true };
+		final operators: OperatorSelection = selection;
+		// `declared` first: a scope where nothing overloads `==` never binds an operand's type at all.
+		function builtin(operand: QueryNode): Bool {
+			return !operators.declared(eqKinds)
+				|| operators.verdictOfOperands([operand], eqKinds, operators.typingFor(file, source, root)).match(Builtin);
+		}
+		return { root: root, resolveIndex: resolveIndex, operandBuiltin: builtin };
+	}
+
+	/**
 	 * Visit every chain HEAD under `node`: a `chainKinds` node NOT reached as another
 	 * chain node's else-slot (so an inner rung is never re-reported as its own head)
 	 * and whose PARENT kind `hostAccepts`. The parent kind is null at the root only.
@@ -404,6 +460,8 @@ final class SwitchChain {
 			final pairs: Null<Array<EqPair>> = conditionPairs(cur.children[0], seams, scope, source);
 			// A tuple subject cannot be spelled without the grammar's delimiters.
 			if (pairs == null || (pairs.length > 1 && seams.tuple == null) || cannotProveEvaluationSafe(pairs, seams)) return null;
+			// Gate 10: a `switch` matches by the language's own equality, so an overloaded `==` is bypassed.
+			if (!pairs.foreach(p -> p.patternBuiltin && scope.operandBuiltin(p.disc))) return null;
 			final nullableBody: Null<Span> = cur.children[1].span;
 			if (nullableBody == null) return null;
 			// Re-bind to a non-null local — Strict null-safety takes a struct literal's
@@ -417,7 +475,7 @@ final class SwitchChain {
 				discTexts = texts;
 			} else if (!sameDiscriminants(known, pairs, source))
 				return null;
-			rungs.push({ patterns: [for (p in pairs) p.pattern], body: bodySpan });
+			rungs.push({ patterns: [for (p in pairs) p.pattern], values: [for (p in pairs) p.value], body: bodySpan });
 			final elseChild: Null<QueryNode> = cur.children.length >= CHAIN_WITH_ELSE_CHILD_COUNT ? cur.children[ELSE_SLOT_INDEX] : null;
 			if (elseChild == null) break;
 			if (seams.chainKinds.contains(elseChild.kind)) {
@@ -489,7 +547,7 @@ final class SwitchChain {
 	 * on every `ChainScan` and `render` emits `case _` unconditionally.
 	 */
 	private static function completeScan(discTexts: Null<Array<String>>, rungs: Array<ChainRung>, elseBody: Null<Span>): Null<ChainScan> {
-		return discTexts == null || rungs.length < 2 || elseBody == null ? null : {
+		return discTexts == null || rungs.length < 2 || elseBody == null || !distinctValues(rungs) ? null : {
 			discTexts: discTexts,
 			rungs: rungs,
 			elseBody: elseBody
@@ -586,51 +644,63 @@ final class SwitchChain {
 		if (node.kind != seams.eqKind || node.children.length != BINARY_CHILD_COUNT) return null;
 		final a: QueryNode = node.children[0];
 		final b: QueryNode = node.children[1];
-		final aPattern: Null<String> = patternTextOf(a, seams, scope, source);
-		final bPattern: Null<String> = patternTextOf(b, seams, scope, source);
+		final aPattern: Null<CasePattern> = patternOf(a, seams, scope, source);
+		final bPattern: Null<CasePattern> = patternOf(b, seams, scope, source);
 		return if (aPattern != null && bPattern == null)
-			{ pattern: aPattern, disc: b }
+			{
+				pattern: aPattern.text,
+				value: aPattern.value,
+				disc: b,
+				patternBuiltin: aPattern.builtinEq
+			}
 		else if (bPattern != null && aPattern == null)
-			{ pattern: bPattern, disc: a }
+			{
+				pattern: bPattern.text,
+				value: bPattern.value,
+				disc: a,
+				patternBuiltin: bPattern.builtinEq
+			}
 		else
 			null;
 	}
 
 	/**
-	 * The verbatim `case`-pattern source for `node` when it is a pattern-valid constant
-	 * (gate 6 of the type doc), else null.
+	 * `node` as a `case` pattern when it is a pattern-valid constant (gate 6 of the type doc): its
+	 * verbatim source and its `CaseValueKey` (gate 9), else null. A constant MEMBER's value is read off
+	 * every declaration the index resolves it to, and is known only when they all agree.
 	 */
-	private static function patternTextOf(node: QueryNode, seams: ChainSeams, scope: ChainScope, source: String): Null<String> {
+	private static function patternOf(node: QueryNode, seams: ChainSeams, scope: ChainScope, source: String): Null<CasePattern> {
 		final span: Null<Span> = node.span;
-		return if (span == null)
-			null
-		else if (seams.stringFold?.literalOf(node, source) != null || seams.litKinds.contains(node.kind))
-			spanText(source, span)
-		else if (provesConstantReference(node, seams, scope) || provesBareConstant(node, span, seams, scope))
-			spanText(source, span)
-		else
-			null;
+		if (span == null) return null;
+		final text: String = spanText(source, span);
+		if (seams.stringFold?.literalOf(node, source) != null || seams.litKinds.contains(node.kind))
+			return { text: text, value: CaseValueKey.of(node.kind, text, seams.values), builtinEq: true };
+		final decls: Null<Array<MemberDecl>> = constantReferenceDecls(node, seams, scope) ?? bareConstantDecls(node, span, seams, scope);
+		return decls == null
+			? null
+			: { text: text, value: agreedValue(decls, seams), builtinEq: decls.foreach(d -> selectsBuiltinEq(d, seams)) };
 	}
 
 	/**
-	 * Whether `node` is a `T.M` reference the index proves usable as a `case` pattern: a
+	 * The declarations of `T.M` when `node` is a `T.M` reference the index proves usable as a `case` pattern, else null: a
 	 * `fieldAccessKind` over a bare `identKind` receiver whose `T.M` the index resolves to at
 	 * least one member declaration, every one of which passes `isPatternConstant`. An empty
 	 * resolution means "unknown", never "absent", so it is a rejection too. Every structural
 	 * test runs BEFORE the index is demanded, so a chain with no such candidate never
 	 * triggers the build.
 	 */
-	private static function provesConstantReference(node: QueryNode, seams: ChainSeams, scope: ChainScope): Bool {
+	private static function constantReferenceDecls(node: QueryNode, seams: ChainSeams, scope: ChainScope): Null<Array<MemberDecl>> {
 		final accessKind: Null<String> = seams.fieldAccessKind;
-		if (accessKind == null || node.kind != accessKind || node.children.length != 1) return false;
+		if (accessKind == null || node.kind != accessKind || node.children.length != 1) return null;
 		final memberName: Null<String> = node.name;
 		final typeName: Null<String> = node.children[0].name;
-		return memberName != null && typeName != null && node.children[0].kind == seams.identKind
-			&& provesConstantMember(typeName, memberName, seams, scope);
+		return memberName == null || typeName == null || node.children[0].kind != seams.identKind
+			? null
+			: constantMemberDecls(typeName, memberName, seams, scope);
 	}
 
 	/**
-	 * Whether `node` is a BARE identifier the resolver proves usable as a `case` pattern: an
+	 * The declarations `node` binds to when it is a BARE identifier the resolver proves usable as a `case` pattern, else null: an
 	 * `identKind` leaf whose occurrence BINDS to a `fieldKinds` declaration
 	 * (`TypeResolver.bareFieldOwner`), that declaration's owning type resolving through the
 	 * index to members that all pass `isPatternConstant`.
@@ -649,25 +719,27 @@ final class SwitchChain {
 	 * touched, and the resolver runs against `shape.refsCache` in a real lint run, so the walk
 	 * is one memoised `Refs.findMulti` per file rather than one per candidate.
 	 */
-	private static function provesBareConstant(node: QueryNode, span: Span, seams: ChainSeams, scope: ChainScope): Bool {
-		if (node.kind != seams.identKind || node.children.length != 0) return false;
+	private static function bareConstantDecls(node: QueryNode, span: Span, seams: ChainSeams, scope: ChainScope): Null<Array<MemberDecl>> {
+		if (node.kind != seams.identKind || node.children.length != 0) return null;
 		final name: Null<String> = node.name;
-		if (name == null) return false;
+		if (name == null) return null;
 		final owner: Null<String> = TypeResolver.bareFieldOwner(name, span, scope.root, seams.shape, seams.fieldKinds);
-		return owner != null && provesConstantMember(owner, name, seams, scope);
+		return owner == null ? null : constantMemberDecls(owner, name, seams, scope);
 	}
 
 	/**
-	 * Whether `T.M` resolves through the index to at least one member declaration, EVERY one of
-	 * which `isPatternConstant` accepts. An empty resolution means "unknown", never "absent", so
+	 * The declarations of `T.M` when the index resolves it to at least one, EVERY one of which
+	 * `isPatternConstant` accepts; else null. An empty resolution means "unknown", never "absent", so
 	 * it is a rejection too. Shared by the qualified and the bare arm so the two spellings of one
 	 * constant can never disagree about whether it is a legal pattern.
 	 */
-	private static function provesConstantMember(typeName: String, memberName: String, seams: ChainSeams, scope: ChainScope): Bool {
+	private static function constantMemberDecls(
+		typeName: String, memberName: String, seams: ChainSeams, scope: ChainScope
+	): Null<Array<MemberDecl>> {
 		final index: Null<SymbolIndex> = scope.resolveIndex();
-		if (index == null) return false;
-		final decls: Array<{ type: TypeDeclInfo, member: MemberInfo }> = index.members.memberDeclarationsOf(typeName, memberName);
-		return decls.length != 0 && decls.foreach(decl -> isPatternConstant(decl.type, decl.member, seams));
+		if (index == null) return null;
+		final decls: Array<MemberDecl> = index.members.memberDeclarationsOf(typeName, memberName);
+		return decls.length != 0 && decls.foreach(decl -> isPatternConstant(decl.type, decl.member, seams)) ? decls : null;
 	}
 
 	/**
@@ -690,11 +762,57 @@ final class SwitchChain {
 		return member.isStatic && member.isInline;
 	}
 
+	/**
+	 * Gate 9: whether every rung's patterns have a KNOWN value and no two rungs test the same value tuple.
+	 * A tuple is keyed by its values length-prefixed, so no two different tuples can spell one key.
+	 */
+	private static function distinctValues(rungs: Array<ChainRung>): Bool {
+		final seen: Array<String> = [];
+		for (rung in rungs) {
+			var key: String = '';
+			for (value in rung.values) {
+				if (value == null) return false;
+				key += '${value.length}:$value';
+			}
+			if (seen.contains(key)) return false;
+			seen.push(key);
+		}
+		return true;
+	}
+
+	/**
+	 * The `CaseValueKey` every one of `decls` agrees on, or null when one is unknown or two differ: a name the
+	 * index resolves to several declarations (one per same-named type) denotes whichever the compiler binds,
+	 * so only a value they all share is known.
+	 */
+	private static function agreedValue(decls: Array<MemberDecl>, seams: ChainSeams): Null<String> {
+		final values: Array<Null<String>> = [for (decl in decls) CaseValueKey.ofMember(decl.type, decl.member, seams.values)];
+		final first: Null<String> = values[0];
+		return first != null && values.foreach(v -> v == first) ? first : null;
+	}
+
+	/**
+	 * Gate 10's pattern half: whether a constant declared as `decl` leaves the language's `==` selected. Its
+	 * declaring type must overload no `==` and carry no build macro (whose members no index sees), and the
+	 * constant's own TYPE must be one that cannot overload — the enum abstract itself for a value, a built-in
+	 * type for a `static inline` field: written, or inferred from the literal initializer gate 9 demands.
+	 */
+	private static function selectsBuiltinEq(decl: MemberDecl, seams: ChainSeams): Bool {
+		final type: TypeDeclInfo = decl.type;
+		if (type.hasBuild || type.members.exists(m -> m.operatorOverloads.contains(seams.eqKind))) return false;
+		if (type.kind == seams.enumAbstractDeclKind && !decl.member.isStatic) return true;
+		final written: Null<String> = decl.member.typeSource;
+		return written == null ? decl.member.initializerKind != null : seams.builtinTypeNames.contains(written);
+	}
+
 }
 
 /** One rung of a scanned chain: the `case`-pattern text per discriminant position, and the branch body's source range. */
 private typedef ChainRung = {
 	final patterns: Array<String>;
+
+	/** The value key of each pattern, parallel to `patterns` (null = unknown). */
+	final values: Array<Null<String>>;
 	final body: Span;
 };
 
@@ -725,6 +843,15 @@ private typedef ChainScan = {
 typedef ChainScope = {
 	final root: QueryNode;
 	final resolveIndex: () -> Null<SymbolIndex>;
+
+	/**
+	 * Whether an equality with this DISCRIMINANT operand selects the LANGUAGE's `==` as far as the
+	 * discriminant's type decides it — gate 10's discriminant half (the pattern half is proved from the
+	 * constant's own declaration). Built by `SwitchChain.scopeOf` from the run's `OperatorSelection`,
+	 * so it is free in a scope where no type overloads `==` and binds the operand's declared type only
+	 * where one does.
+	 */
+	final operandBuiltin: (QueryNode) -> Bool;
 };
 
 /**
@@ -771,6 +898,12 @@ typedef ChainSeams = {
 	final enumAbstractDeclKind: Null<String>;
 	final tuple: Null<{ open: String, close: String }>;
 	final stringFold: Null<StringFoldSupport>;
+
+	/** What a `case` pattern's VALUE is read through — gate 9's distinctness proof. */
+	final values: CaseValueSeams;
+
+	/** The built-in type names (`OperandBinder.builtinNamesOf`), none of which can overload `==` — gate 10. */
+	final builtinTypeNames: Array<String>;
 };
 
 /**
@@ -780,4 +913,22 @@ typedef ChainSeams = {
 private typedef EqPair = {
 	final pattern: String;
 	final disc: QueryNode;
+
+	/** The pattern's `CaseValueKey`, or null when its value is not provably known — gate 9 then refuses the chain. */
+	final value: Null<String>;
+
+	/** Whether the PATTERN leaves the language's `==` selected — gate 10's pattern half (`CasePattern.builtinEq`). */
+	final patternBuiltin: Bool;
 };
+
+/** A pattern-valid operand: its verbatim `case`-pattern source and its `CaseValueKey` (null = unknown). */
+private typedef CasePattern = {
+	final text: String;
+	final value: Null<String>;
+
+	/** Whether the pattern's own type leaves the language's `==` selected (`selectsBuiltinEq`). */
+	final builtinEq: Bool;
+};
+
+/** One declaration a constant reference resolves to, as `MemberLookup.memberDeclarationsOf` returns it. */
+private typedef MemberDecl = { type: TypeDeclInfo, member: MemberInfo };

@@ -1664,8 +1664,16 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PreferStaticExtensionFactsTest#testTheFirstParameterOfAFactsSignature :: control :: M-PSE-FIRST-PARAM',
 			'unit.check.PreferStaticExtensionFactsTest#testTheRewrittenProgramPrintsWhatItPrinted :: guard :: ',
 			'unit.check.PreferSwitchCheckTest#testBareBranchBodiesGainATerminator :: control :: M-SWITCH-BARE-BODY-VERBATIM',
+			'unit.check.PreferSwitchCheckTest#testDuplicateValueAcrossSpellingsNotFlagged :: control :: M-SWITCH-VALUES-NOT-DISTINCT',
+			'unit.check.PreferSwitchCheckTest#testEnumAbstractDuplicateValueNotFlagged :: control :: M-SWITCH-VALUES-NOT-DISTINCT',
+			'unit.check.PreferSwitchCheckTest#testImplicitEnumAbstractValues :: control :: '
+				+ 'M-CASEVALUE-IMPLICIT-NOT-COUNTED,M-CASEVALUE-NAMING-UNKNOWN',
+			'unit.check.PreferSwitchCheckTest#testOverloadedEqualityDiscriminantNotFlagged :: control :: M-SWITCH-DISC-EQ-OVERLOAD-IGNORED',
+			'unit.check.PreferSwitchCheckTest#testOverloadedEqualityPatternNotFlagged :: control :: M-SWITCH-PATTERN-EQ-OVERLOAD-IGNORED',
 			'unit.check.PreferSwitchCheckTest#testTerminatedBranchBodiesAreNotDoubled :: control :: M-SWITCH-TERMINATED-BODY-DOUBLED',
+			'unit.check.PreferSwitchCheckTest#testUnknownConstantValueNotFlagged :: control :: M-SWITCH-UNKNOWN-VALUE-ACCEPTED',
 			'unit.check.PreferSwitchCheckTest#testValueChainInALambdaBlockGainsTerminators :: control :: M-SWITCH-BARE-BODY-VERBATIM',
+			'unit.check.PreferSwitchExpressionCheckTest#testSharedValueAndOperatorGates :: control :: M-SWITCH-VALUES-NOT-DISTINCT',
 			'unit.check.PreferTernaryReturnCheckTest#testOwnLineCommentInACascadeDefersTheTail :: control :: '
 				+ 'M-PTR-RIDES-NEVER,M-PTR-CASCADE-NEVER-STRANDS',
 			'unit.check.PreferTernaryReturnCheckTest#testTheRunOfOneHoistIsRefusedAtTheSeam :: control :: M-COMMENT-HOIST-BLIND',
@@ -4743,7 +4751,13 @@ class TestDiscoveryParityTest extends Test {
 			'M-METHODS-MEMBERLESS-RESULT',
 			'M-REFLECTED-HOLDERS-METHODS',
 			'M-REFLECTED-HOLDERS-ACCESSORS',
-			'M-REFLECTED-HOLDERS-INHERITED'
+			'M-REFLECTED-HOLDERS-INHERITED',
+			'M-SWITCH-VALUES-NOT-DISTINCT',
+			'M-SWITCH-UNKNOWN-VALUE-ACCEPTED',
+			'M-CASEVALUE-IMPLICIT-NOT-COUNTED',
+			'M-CASEVALUE-NAMING-UNKNOWN',
+			'M-SWITCH-PATTERN-EQ-OVERLOAD-IGNORED',
+			'M-SWITCH-DISC-EQ-OVERLOAD-IGNORED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

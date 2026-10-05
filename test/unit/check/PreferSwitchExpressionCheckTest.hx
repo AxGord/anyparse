@@ -443,6 +443,22 @@ class PreferSwitchExpressionCheckTest extends Test {
 		Assert.equals(0, violations(wrap('return k == pkg.NodeMeta.ALPHA ? p : k == pkg.NodeMeta.BETA ? q : r;'), CONSTANTS).length);
 	}
 
+	/**
+	 * Gates 9 and 10 live in the shared scanner, so the value-position rule refuses the same chains
+	 * the statement rule does: two names for one enum-abstract value, and a constant of an abstract
+	 * overloading `==`. The distinct twin over the same module converts.
+	 */
+	@:pin('control')
+	@:killer('M-SWITCH-VALUES-NOT-DISTINCT')
+	public function testSharedValueAndOperatorGates(): Void {
+		final modes: String = 'enum abstract Mode(Int) {\n\tfinal DEFAULT = 0;\n\tfinal AUTO = 0;\n\tfinal LINES = 1;\n}';
+		final overloading: String = 'enum abstract Mode(Int) from Int to Int {\n\tvar A = 1;\n\tvar B = 2;\n\n'
+			+ '\t@:op(A == B) static function eq(a:Mode, b:Mode):Bool {\n\t\treturn true;\n\t}\n}';
+		Assert.equals(0, violations(wrap('return k == Mode.DEFAULT ? 1 : k == Mode.AUTO ? 2 : 3;'), modes).length);
+		Assert.equals(1, violations(wrap('return k == Mode.DEFAULT ? 1 : k == Mode.LINES ? 2 : 3;'), modes).length);
+		Assert.equals(0, violations(wrap('return k == Mode.A ? 1 : k == Mode.B ? 2 : 3;'), overloading).length);
+	}
+
 	private function wrap(body: String): String {
 		return 'class C {\n\tfunction f():Void {\n\t\t$body\n\t}\n}';
 	}

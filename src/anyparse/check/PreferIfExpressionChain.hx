@@ -329,7 +329,9 @@ final class PreferIfExpressionChain implements Check {
 			return boolClaims ?? [];
 		}
 		return {
-			switchScope: { root: root, resolveIndex: resolveIndex },
+			switchScope: SwitchChain.scopeOf(
+				plugin, file, source, root, resolveIndex, OperatorSelection.of(plugin, [{ file: file, source: source }])
+			),
 			types: types,
 			boolTernaryClaims: boolTernaryClaims
 		};

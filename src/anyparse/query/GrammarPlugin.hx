@@ -1242,6 +1242,20 @@ typedef RefShape = {
 	@:optional var enumAbstractMetaName: String;
 
 	/**
+	 * The underlying type NAMES whose enum-abstract values the language fills in when a value is written
+	 * WITHOUT an initializer: a `counting` one gives such a value the previous value plus one (the first
+	 * value `0`), a `naming` one gives it the value's own name. Haxe: `Int` / `UInt` count and `String`
+	 * names. The count follows the PREVIOUS value, not the largest — under
+	 * `enum abstract E(Int) { var A = 5; var B = 1; var C; }`, `C` is `2` — and a `Float` underlying
+	 * refuses a value with no initializer at all (`Value required`).
+	 *
+	 * `prefer-switch` reads it to know what an uninitialized value EQUALS, which is what decides whether two
+	 * `case` patterns it would emit denote one value. Optional; unset leaves every uninitialized value
+	 * unknown, so a chain testing one is refused rather than proved distinct.
+	 */
+	@:optional var enumAbstractImplicitValues: { counting: Array<String>, naming: Array<String> };
+
+	/**
 	 * The sigil(s) a metadata name is written with — Haxe `@:` for a compiler annotation and `@`
 	 * for a user one. A name slot holding one of these followed by an identifier path is a
 	 * metadata NAME: a compile-time symbol, not a binding and not a reference to one.

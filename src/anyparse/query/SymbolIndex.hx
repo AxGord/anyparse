@@ -216,6 +216,22 @@ typedef MemberInfo = {
 	var operatorOverloads: Array<String>;
 
 	/**
+	 * The node KIND of a FIELD member's initializer (`final A = 1;` → the grammar's integer-literal
+	 * kind), or null for a field written without one (`var A;`, `var a: Int;`) and for every member
+	 * that is not a field (`RefShape.fieldDeclKinds`). A `#if` value spliced into the initializer
+	 * projects as its own region kind, never as a literal, so a reader whitelisting literal kinds
+	 * refuses it by construction.
+	 *
+	 * With `initializerSource`, the one fact a check needs to KNOW a constant's value — what an
+	 * enum-abstract value or a `static inline` field equals — without re-parsing the declaring file:
+	 * `prefer-switch` reads it to prove that no two `case` patterns it would emit denote one value.
+	 */
+	var initializerKind: Null<String>;
+
+	/** The VERBATIM source of the initializer `initializerKind` describes; null exactly when that is. */
+	var initializerSource: Null<String>;
+
+	/**
 	 * True when the member carries the grammar's implicit-conversion annotation
 	 * (`ExecutionShape.implicitConversionMetaName`) — a `@:from` on an abstract, whose body the
 	 * compiler RUNS wherever a value of the source type is written where this type is

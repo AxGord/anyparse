@@ -1061,3 +1061,14 @@ decided the question; it may not become a record of runs.
 - found imprecise, not changed: `FactsView.blindIn` answers `DynamicName` under the truth for any region meeting a node marked `reflection-inlined`, whatever reflective body was spliced in — even one `scan` reads as memberless by its recorded `inlined` call (`Type.enumIndex`, `Type.enumEq`, both `inline` on hxcpp). A loop in a function that inlines `Type.enumIndex` on cpp therefore declines (`DynamicName`) though nothing it reaches is read by name. The same `inlinedMemberless` reading could apply there — branch `facts/s20`
 - pin repaired: `M-GRAPH-REFLECT-SUPERTYPES` was already a MISMATCH on `94a826ea` — its pinned killer `testAReflectiveAccessOnAnObjectThatMayCarryTheMemberIsADynamicNameUnderTheTruth` answers `DynamicName` without the supertypes too (`this` of `Other` handed to reflection escapes `Other`, an escaped instance counts as one of every class it extends, so `Main` is reached through the escapes); the test that kills it is `testAComputedNameStillReadsAVariableOfAnyClassWhateverTheProjectDeclaresUnderTheTruth`, which now carries the pin — branch `facts/s20`
 - TM's `GridScale.hx:61` after this slice: unchanged, still `Reification` at `Editor.hx:106` (this slice is precision, not that blocker); line 111 is rewritten as before — branch `facts/s20`
+- the switch rules converting every `==` chain whose constants are proven → an abstract declaring
+  `@:op(A == B)` is bypassed by a switch, which matches by the built-in equality (`m = Op.B` took the
+  `A` rung as a chain and the `B` case as a switch); and `OperatorSelection` cannot answer the
+  PATTERN half, binding no type to a qualified `T.M`, so every such pattern reads `Unproven` in any
+  scope holding the std `UInt` — gate 10 asks it for the discriminant only and proves the pattern
+  from its own declaration — branch `feat/prefer-switch-enum-abstract`
+- two `case` patterns with different TEXT denoting different values → `DEFAULT = 0; AUTO = 0`,
+  `16` / `0x10` and `M.LINES` / `1` collide; the switch keeps the chain's first-match answer but
+  carries a `case` the compiler reports unused, so values are now proved (`CaseValueKey`, with the
+  member's initializer recorded by the index) and must be distinct — gate 9 — branch
+  `feat/prefer-switch-enum-abstract`

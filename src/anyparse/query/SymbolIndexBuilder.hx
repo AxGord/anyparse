@@ -69,6 +69,9 @@ private typedef MemberSeams = {
 	final conditionalKind: Null<String>;
 	final paramKinds: Array<String>;
 	final functionKinds: Array<String>;
+
+	/** The FIELD member kinds (`RefShape.fieldDeclKinds`) — the only members an initializer is recorded for. */
+	final fieldKinds: Array<String>;
 	final annotationKinds: Array<String>;
 };
 
@@ -566,6 +569,8 @@ final class SymbolIndexBuilder {
 						// literal's field type from the declared type, not the narrowed one.
 						final memberName: String = nm;
 						final typeKey: Int = typeInfoKeyOf(child, sp);
+						final init: Null<QueryNode> = initializerOf(child, seams);
+						final initSpan: Null<Span> = init?.span;
 						out.push({
 							name: memberName,
 							hasGetter: accessors[typeKey] ?? false,
@@ -586,6 +591,8 @@ final class SymbolIndexBuilder {
 							isInline: runInline,
 							isMacro: runMacro,
 							operatorOverloads: runOperators,
+							initializerKind: initSpan == null ? null : init?.kind,
+							initializerSource: initSpan == null ? null : source.substring(initSpan.from, initSpan.to),
 							isImplicitConversion: runImplicitConversion,
 							isImplicitCall: runImplicitCall,
 							implicitCallMetas: runImplicitMetas,
@@ -749,6 +756,7 @@ final class SymbolIndexBuilder {
 			conditionalKind: shape.conditionalMemberKind,
 			paramKinds: shape.paramKinds ?? [],
 			functionKinds: shape.functionKinds ?? [],
+			fieldKinds: shape.fieldDeclKinds ?? [],
 			annotationKinds: shape.typeAnnotationKinds ?? []
 		};
 	}
@@ -1213,6 +1221,17 @@ final class SymbolIndexBuilder {
 			).imports;
 		extracted[ambient.file] = imports;
 		return imports;
+	}
+
+	/**
+	 * The initializer of the FIELD member `member` — its last child when that child is not a type
+	 * annotation — or null for a field written without one and for every non-field member (a function's
+	 * last child is its body, an enum constructor's its last parameter).
+	 */
+	private static function initializerOf(member: QueryNode, seams: MemberSeams): Null<QueryNode> {
+		if (!seams.fieldKinds.contains(member.kind) || member.children.length == 0) return null;
+		final last: QueryNode = member.children[member.children.length - 1];
+		return seams.annotationKinds.contains(last.kind) ? null : last;
 	}
 
 }

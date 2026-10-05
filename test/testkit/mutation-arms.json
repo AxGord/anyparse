@@ -12661,6 +12661,53 @@
 			"find": "for (id in held) for (sup in facts.table.supertypesOf(id)) if (!owners.contains(sup)) owners.push(sup);",
 			"replace": "",
 			"note": "an object of a declared class runs only the methods its own class declares, none it inherits"
+		},
+		{
+			"name": "M-SWITCH-VALUES-NOT-DISTINCT",
+			"type": "anyparse.check.SwitchChain",
+			"method": "distinctValues",
+			"find": "\t\tif (seen.contains(key)) return false;\n",
+			"replace": "",
+			"note": "two rungs testing one value tuple pass gate 9, so the switch carries a case the compiler reports unused"
+		},
+		{
+			"name": "M-SWITCH-UNKNOWN-VALUE-ACCEPTED",
+			"type": "anyparse.check.SwitchChain",
+			"method": "distinctValues",
+			"find": "if (value == null) return false;",
+			"replace": "if (value == null) continue;",
+			"note": "a pattern whose value is not proved is keyed as empty instead of refusing the chain, so its distinctness is never established"
+		},
+		{
+			"name": "M-CASEVALUE-IMPLICIT-NOT-COUNTED",
+			"type": "anyparse.check.CaseValueKey",
+			"method": "countedValue",
+			"find": ": value + 1;",
+			"replace": ": value;",
+			"note": "an uninitialized counting enum-abstract value repeats the previous value instead of adding one"
+		},
+		{
+			"name": "M-CASEVALUE-NAMING-UNKNOWN",
+			"type": "anyparse.check.CaseValueKey",
+			"method": "ofMember",
+			"find": "\tif (seams.namingTypes.contains(underlying)) return STRING_PREFIX + member.name;\n",
+			"replace": "",
+			"note": "an uninitialized String enum-abstract value is no longer read as its own name, so every chain testing one is refused"
+		},
+		{
+			"name": "M-SWITCH-PATTERN-EQ-OVERLOAD-IGNORED",
+			"type": "anyparse.check.SwitchChain",
+			"method": "selectsBuiltinEq",
+			"force": "true",
+			"note": "a pattern whose declaring abstract overloads == passes gate 10, and the switch bypasses the overload the chain called"
+		},
+		{
+			"name": "M-SWITCH-DISC-EQ-OVERLOAD-IGNORED",
+			"type": "anyparse.check.SwitchChain",
+			"method": "scopeOf",
+			"find": "operandBuiltin: builtin }",
+			"replace": "operandBuiltin: _ -> true }",
+			"note": "a discriminant declared as an abstract overloading == passes gate 10, and the switch bypasses the overload the chain called"
 		}
 	]
 }

@@ -46,6 +46,13 @@ class PreferSwitchCheckTest extends Test {
 	 */
 	private static final ENUM_ABSTRACT: String = 'enum abstract NodeMeta(Int) {\n\tfinal ALPHA = 0;\n\tvar BETA = 1;\n\tvar GAMMA = 2;\n}';
 
+	/** Two values sharing one underlying value, beside a distinct one — gate 9's fixture. */
+	private static final MODES: String = 'enum abstract Mode(Int) {\n\tfinal DEFAULT = 0;\n\tfinal AUTO = 0;\n\tfinal LINES = 1;\n}';
+
+	/** An enum abstract overloading `==` — gate 10's fixture. */
+	private static final OVERLOADING: String = 'enum abstract Mode(Int) from Int to Int {\n\tvar A = 1;\n\tvar B = 2;\n\n'
+		+ '\t@:op(A == B) static function eq(a:Mode, b:Mode):Bool {\n\t\treturn true;\n\t}\n}';
+
 	/** Rewriting a chain inside a REIFICATION subtree changes the `EIf` tree the macro emits into an `ESwitch`. */
 	public function testMacroQuotationNotFlagged(): Void {
 		Assert.equals(0, linted(QUOTED).length);
@@ -360,6 +367,99 @@ class PreferSwitchCheckTest extends Test {
 				"class C {\n\tstatic function f(text:String):Void {\n\t\tfinal target = 'a';\n\t\tfinal other = 'b';\n"
 				+ '\t\tif (text == target) p(); else if (text == other) q(); else r();\n\t}\n}'
 			).length
+		);
+	}
+
+	/**
+	 * Gate 9: two enum-abstract values written with different NAMES can be one value
+	 * (`DEFAULT = 0; AUTO = 0`). The chain is dead past its first match and so would the switch
+	 * be, but the switch carries a `case` the compiler reports unused. The distinct twin over the
+	 * SAME module converts, so the refusal cannot pass on a dead enum-abstract arm.
+	 */
+	@:pin('control')
+	@:killer('M-SWITCH-VALUES-NOT-DISTINCT')
+	public function testEnumAbstractDuplicateValueNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('if (k == Mode.DEFAULT) p(); else if (k == Mode.AUTO) q(); else r();'), MODES).length);
+		Assert.equals(1, violations(wrap('if (k == Mode.DEFAULT) p(); else if (k == Mode.LINES) q(); else r();'), MODES).length);
+	}
+
+	/**
+	 * The duplicate is decided by VALUE across spellings: a hexadecimal and a decimal literal, and
+	 * a literal against the enum-abstract value it equals (`LINES = 1`).
+	 */
+	@:pin('control')
+	@:killer('M-SWITCH-VALUES-NOT-DISTINCT')
+	public function testDuplicateValueAcrossSpellingsNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('if (x == 16) a(); else if (x == 0x10) b(); else c();')).length);
+		Assert.equals(0, violations(wrap('if (k == Mode.LINES) p(); else if (k == 1) q(); else r();'), MODES).length);
+	}
+
+	/**
+	 * A constant whose value cannot be PROVED refuses the chain — here a `static inline` field
+	 * initialized from another one. A rung against a known literal sits beside it, so the two
+	 * value keys can only collide if the unknown one is wrongly given one.
+	 */
+	@:pin('control')
+	@:killer('M-SWITCH-UNKNOWN-VALUE-ACCEPTED')
+	public function testUnknownConstantValueNotFlagged(): Void {
+		final consts: String =
+			'class NodeMeta {\n\tpublic static inline final ALPHA:Int = 1;\n\tpublic static inline final BETA:Int = ALPHA;\n}';
+		Assert.equals(0, violations(wrap('if (k == NodeMeta.BETA) p(); else if (k == 5) q(); else r();'), consts).length);
+	}
+
+	/**
+	 * An enum-abstract value written WITHOUT an initializer has the value the language fills in:
+	 * the previous value plus one over `Int` (`var I0; var I1 = 5; var I2;` counts 0, 5, 6),
+	 * its own name over `String`. `I0` / `I2` are distinct and convert; `I2` against `6` is the
+	 * same value and is refused, which pins the count to the previous value rather than to the
+	 * member's position.
+	 */
+	@:pin('control')
+	@:killer('M-CASEVALUE-IMPLICIT-NOT-COUNTED')
+	@:killer('M-CASEVALUE-NAMING-UNKNOWN')
+	public function testImplicitEnumAbstractValues(): Void {
+		final counted: String = 'enum abstract Mode(Int) {\n\tvar I0;\n\tvar I1 = 5;\n\tvar I2;\n}';
+		final named: String = "enum abstract Mode(String) {\n\tvar X;\n\tvar Y;\n\tvar Z = 'X';\n}";
+		Assert.equals(1, violations(wrap('if (k == Mode.I0) p(); else if (k == Mode.I2) q(); else r();'), counted).length);
+		Assert.equals(0, violations(wrap('if (k == Mode.I2) p(); else if (k == 6) q(); else r();'), counted).length);
+		Assert.equals(1, violations(wrap('if (k == Mode.X) p(); else if (k == Mode.Y) q(); else r();'), named).length);
+		Assert.equals(0, violations(wrap('if (k == Mode.X) p(); else if (k == Mode.Z) q(); else r();'), named).length);
+	}
+
+	/**
+	 * Gate 10's PATTERN half: a switch compares by the built-in equality, so an abstract
+	 * overloading `==` is bypassed — `m = Op.B` takes the `A` rung as a chain and the `B` case
+	 * as a switch (`--interp` and `-js`). The discriminant is an `Int` parameter, so only the
+	 * pattern's own declaration can refuse it.
+	 */
+	@:pin('control')
+	@:killer('M-SWITCH-PATTERN-EQ-OVERLOAD-IGNORED')
+	public function testOverloadedEqualityPatternNotFlagged(): Void {
+		Assert.equals(
+			0, violations(wrapWithParams('k:Int', 'if (k == Mode.A) p(); else if (k == Mode.B) q(); else r();'), OVERLOADING).length
+		);
+	}
+
+	/**
+	 * Gate 10's DISCRIMINANT half: literal patterns, a discriminant DECLARED as the overloading
+	 * abstract — only its type can refuse the chain.
+	 */
+	@:pin('control')
+	@:killer('M-SWITCH-DISC-EQ-OVERLOAD-IGNORED')
+	public function testOverloadedEqualityDiscriminantNotFlagged(): Void {
+		Assert.equals(0, violations(wrapWithParams('k:Mode', 'if (k == 1) p(); else if (k == 2) q(); else r();'), OVERLOADING).length);
+	}
+
+	/**
+	 * An `==` overload ELSEWHERE in scope is not a reason to refuse: the pattern half is proved
+	 * from the constant's own declaration, so an enum-abstract value of a type overloading
+	 * nothing still converts beside an unrelated overloading type — the shape every scope holding
+	 * the std `UInt` (which declares `@:op(A == B)`) is in.
+	 */
+	public function testUnrelatedOverloadDoesNotRefuse(): Void {
+		final both: String = '$OVERLOADING\n\nenum abstract Plain(Int) {\n\tvar P = 1;\n\tvar Q = 2;\n}';
+		Assert.equals(
+			1, violations(wrapWithParams('k:Plain', 'if (k == Plain.P) p(); else if (k == Plain.Q) q(); else r();'), both).length
 		);
 	}
 
