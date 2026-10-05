@@ -34,6 +34,9 @@ class MemberReachFactsTest extends Test {
 	/** The build of a fixture whose std calls no rebinding `Reflect.callMethod` of its own: the interpreter. */
 	private static inline final INTERP_BUILD: String = '-cp .\n-main Main\n--interp\n';
 
+	/** The build of a fixture whose std is hxcpp's, typechecked only: C++. */
+	private static inline final CPP_BUILD: String = '-cp .\n-main Main\n-cpp out\n';
+
 	/** `BUILD` with a classpath of its own per build (`PICK_CLASSPATH`): `other/` when `other` is defined, else `base/`. */
 	private static inline final PER_BUILD_CLASSPATH: String = '-cp .\n--macro Cp.pick()\n-main Main\n--js out.js\n';
 
@@ -1196,7 +1199,25 @@ class MemberReachFactsTest extends Test {
 		assertMatch(reflectAsk(['Main.hx' => rebinding], true, ['Other']), r -> r.match(Unknown(DynamicName(_, _))));
 	}
 
-	@:pin('control') @:killer('M-HOLDERS-FIELDS-UNBOUNDED')
+	@:pin('control') @:killer('M-METHODS-MEMBERLESS-RESULT')
+	public function testAReflectiveMemberWhoseResultHoldsNoMemberValueObtainsNoMethodUnderTheTruth(): Void {
+		// hxcpp's `Type.enumEq` and `Type.enumIndex` call `nativeEnumEq` and `getEnumValueIndex`, private externs of `Type` the
+		// portable API does not declare, in every build's std: each returns a `Bool` or an `Int`, so handing one an escaped
+		// `Grower` obtains no `grow` for the value `keep` reads off an object by name to be
+		final grower: String =
+			'class Grower {\n\tpublic function new() {}\n\n\tpublic function grow(s:String):Void Main.items.push(1);\n}\n';
+		final read: String = '\t\tvar o:Dynamic = new Grower();\n\t\tkeep = Reflect.field(o, "look");\n\t\tCmp.same(o);\n'
+			+ '\t\tnew Grower().grow("x");\n';
+		function compared(body: String): String {
+			return valueCallFixture('(Rx)->String', 'null', read, 'r.map(keep);', null, BY_TYPE) + grower
+				+ 'class Cmp {\n\tpublic static function same(a:Dynamic):Bool return $body;\n}\n';
+		}
+		assertMatch(builtAsk(CPP_BUILD, ['Main.hx' => compared('Type.enumEq(a, a)')]), r -> r.match(Proven));
+		// a read whose result may be a member's value still obtains one
+		assertMatch(builtAsk(CPP_BUILD, ['Main.hx' => compared('Reflect.field(a, Std.string(a)) != null')]), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-HOLDERS-FIELDS-UNBOUNDED') @:killer('M-GRAPH-REFLECT-SUPERTYPES')
 	public function testAComputedNameStillReadsAVariableOfAnyClassWhateverTheProjectDeclaresUnderTheTruth(): Void {
 		// the declaration bounds the methods such a name obtains, not the variables it reads: an `Other` extending `Main`
 		// carries `items`, which `dump` may read
@@ -1206,6 +1227,33 @@ class MemberReachFactsTest extends Test {
 			+ '\tpublic function dump(n:String):Dynamic return Reflect.getProperty(this, n);\n}\n';
 		assertMatch(reflectAsk(['Main.hx' => sub], false, ['Main']), r -> r.match(Unknown(DynamicName(_, _))));
 		assertMatch(reflectAsk(['Main.hx' => sub], false, ['nothing.*']), r -> r.match(Unknown(DynamicName(_, _))));
+	}
+
+	@:pin('control') @:killer('M-REFLECTED-HOLDERS-METHODS') @:killer('M-REFLECTED-HOLDERS-ACCESSORS')
+	@:killer('M-REFLECTED-HOLDERS-INHERITED')
+	public function testAComputedNameRunsOnlyAMethodOfAClassTheProjectDeclaresUnderTheTruth(): Void {
+		// `dump` reads its own `Other` by the name it is handed: that may run any method of `Other`, `grow` among them — unless
+		// the project declares whose methods such a name obtains (`reflectiveMethodHolders`) and `Other` is none of them
+		final head: String = 'class Main {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n'
+			+ '\tstatic function sink(x:Dynamic):Void {}\n\tstatic function main() { sink(new Main()); }\n'
+			+ '\tfunction f(n:String):Void {\n\t\tvar o:Other = new Other();\n\t\tfor (i in 0...items.length) { /*<*/ o.dump(n); /*>*/ }\n'
+			+ '\t}\n}\n';
+		final dump: String = '\tpublic function dump(n:String):Dynamic return Reflect.getProperty(this, n);\n';
+		final growing: String = head + 'class Other {\n\tpublic function new() {}\n\n' + dump
+			+ '\n\tpublic function grow(m:Main):Void m.items.push(1);\n}\n';
+		assertMatch(reflectAsk(['Main.hx' => growing]), r -> !r.match(Proven));
+		assertMatch(reflectAsk(['Main.hx' => growing], false, ['Main']), r -> r.match(Proven));
+		assertMatch(reflectAsk(['Main.hx' => growing], false, ['Other']), r -> !r.match(Proven));
+		// a property access by that name runs the accessor of any class, declared or not
+		final getting: String = head + 'class Other {\n\tpublic static var shared:Main = null;\n\n\tpublic var size(get, never):Int;\n\n'
+			+ '\tpublic function new() {}\n\n\tfunction get_size():Int {\n\t\tshared.items.push(1);\n\t\treturn 0;\n\t}\n\n' + dump + '}\n';
+		assertMatch(reflectAsk(['Main.hx' => getting], false, ['Main']), r -> !r.match(Proven));
+		// an object of exactly a declared class runs the methods it inherits too
+		final inherited: String = StringTools.replace(head, 'o.dump(n);', 'Reflect.getProperty(o, n);')
+			+ 'class Base {\n\tpublic function new() {}\n\n\tpublic function grow(m:Main):Void m.items.push(1);\n}\n'
+			+ 'class Other extends Base {\n\tpublic function new() super();\n}\n';
+		assertMatch(reflectAsk(['Main.hx' => inherited], true, ['Main']), r -> r.match(Proven));
+		assertMatch(reflectAsk(['Main.hx' => inherited], true, ['Other']), r -> !r.match(Proven));
 	}
 
 	@:pin('control') @:killer('M-FACTS-REACH-DROPPED')
@@ -1778,7 +1826,7 @@ class MemberReachFactsTest extends Test {
 		assertMatch(reflectAsk(['Main.hx' => 'using Reflect;\n' + main + reflectingOther('this.getProperty(n)')]), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-REFLECT-RELATED') @:killer('M-GRAPH-REFLECT-SUBTYPES') @:killer('M-GRAPH-REFLECT-SUPERTYPES')
+	@:pin('control') @:killer('M-REACH-REFLECT-RELATED') @:killer('M-GRAPH-REFLECT-SUBTYPES')
 	public function testAReflectiveAccessOnAnObjectThatMayCarryTheMemberIsADynamicNameUnderTheTruth(): Void {
 		// an `Other` extending `Main` carries `items` itself; `this` of `Base` may be a `Main`, which extends it
 		final sub: String = MEMBER_HEAD + '\tfunction f(n:String):Void {\n\t\tvar o:Other = new Other();\n'
@@ -3213,7 +3261,14 @@ class MemberReachFactsTest extends Test {
 	private static function interpAsk(
 		files: Map<String, String>, ?declared: Map<String, String>, ?holders: Array<String>, ?pos: haxe.PosInfos
 	): ReachResult {
-		final result: ReachResult = ask(files, null, true, null, false, INTERP_BUILD, null, null, true, declared, holders);
+		return builtAsk(INTERP_BUILD, files, declared, holders, pos);
+	}
+
+	/** `truthAsk` of `files` built by `build`, which must compile, the library declarations `declared` indexed. */
+	private static function builtAsk(
+		build: String, files: Map<String, String>, ?declared: Map<String, String>, ?holders: Array<String>, ?pos: haxe.PosInfos
+	): ReachResult {
+		final result: ReachResult = ask(files, null, true, null, false, build, null, null, true, declared, holders);
 		Assert.equals('', lastDropped.join('; '), 'the fixture did not compile', pos);
 		return result;
 	}

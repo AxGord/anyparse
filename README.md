@@ -499,8 +499,11 @@ Globs as in `reflectiveClasses`, matched against the class of the object read by
 own qualified name: declaring a class declares neither its subclasses nor its
 superclass (where the facts cannot tell the two apart — an escaped instance of a
 subclass counts as one of each class it extends — the answer stays the conservative
-one). It bounds methods only: a variable is read whatever the list says, and a name a
-literal spells still names its one member. The project's responsibility, read only
+one). The same bound holds for what such an access RUNS: a method other than an
+accessor runs off an object only when its class is declared (it runs that class's
+methods and those it inherits), while `Reflect.getProperty`/`setProperty` still run the
+getter or setter of an object of any class. It bounds methods only: a variable is read
+whatever the list says, and a name a literal spells still names its one member. The project's responsibility, read only
 under `reachConfigurationsComplete`, for the project's code and the libraries' alike;
 list the classes whose methods code obtains by a name it computes — a callback
 dispatcher calling the handler objects it was handed (lime's `JNI.onCallback`), a copy

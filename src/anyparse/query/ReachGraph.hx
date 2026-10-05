@@ -1344,7 +1344,10 @@ final class ReachGraph {
 	 * (`FactsView.objectClass`), of a typed subtype of it unless it is an object of exactly that class, and — unless it is
 	 * `this` of a method no code obtains as a value, which only a dispatch on an instance of its class or of a subclass then
 	 * binds (`FactsMethodValues.selfBound`) — of a type whose instances escaped the type system (`ValueCarriers.escapedIds`);
-	 * with each type those extend or implement. Null — any member of
+	 * with each type those extend or implement. The methods it may run are, unless the project declares the classes whose
+	 * methods a name computed at run time may obtain (`reflectiveMethodHolders`, `FactsMethodValues.declaredHolders`),
+	 * every one of those types; then only the accessors of any of them, and every method of a declared class each object
+	 * may be of, by its own name, and of the types it extends — its variables stay any. Null — any member of
 	 * any object — when the facts are not the truth, no fact names a receiver, one is of no such type, or the escapes are
 	 * not known.
 	 */
@@ -1372,13 +1375,21 @@ final class ReachGraph {
 			if (escaped == null) return null;
 			for (id in escaped) note(id);
 		}
-		for (id in typed.copy()) for (sup in facts.table.supertypesOf(id)) note(sup);
+		final objects: Array<String> = typed.copy();
+		for (id in objects) for (sup in facts.table.supertypesOf(id)) note(sup);
+		// a method other than an accessor is obtained off an object of a class the project declares (`reflectiveMethodHolders`),
+		// each by its own name, and is one of that class or of a class it extends; an accessor runs off an object of any class
+		final held: Array<String> = methodValues(facts).declaredHolders(objects);
+		final owners: Array<String> = held.copy();
+		for (id in held) for (sup in facts.table.supertypesOf(id)) if (!owners.contains(sup)) owners.push(sup);
+		final accessors: Array<String> = _scope.shape.accessorMethodPrefixes ?? [];
 		final types: Array<String> = [];
 		final ids: Array<OwnedId> = [];
 		for (id in typed) {
 			final type: String = facts.graphType(id);
 			if (!types.contains(type)) types.push(type);
-			for (member in facts.methodsOf(id)) ids.push({ id: g.ownMember(type, member) ?? placeholder(g, type, member), owner: id });
+			for (member in facts.methodsOf(id)) if (owners.contains(id) || accessors.exists(p -> StringTools.startsWith(member, p)))
+				ids.push({ id: g.ownMember(type, member) ?? placeholder(g, type, member), owner: id });
 		}
 		return { types: types, ids: ids };
 	}
