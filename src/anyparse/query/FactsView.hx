@@ -6,6 +6,7 @@ import anyparse.query.CompilerFacts.CallFact;
 import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.CompilerFacts.FieldDeclFact;
+import anyparse.query.CompilerFacts.FieldFact;
 import anyparse.query.CompilerFacts.IterationFact;
 import anyparse.query.CompilerFacts.NativeFact;
 import anyparse.query.CompilerFacts.ReflectionFact;
@@ -528,6 +529,28 @@ final class FactsView {
 	}
 
 	/**
+	 * The typed type declaring the member `name` whose read at `span` of `file` the compiler resolved, when the facts are the
+	 * truth and pin it as one of the types the graph's simple name `type` stands for: every field fact of `name` placed at
+	 * exactly that range — at least one — names the same declaring type, written (`rootOf`) as a type the index declares
+	 * under the name `type` (`ownerFiles`). Null otherwise: no build typed the read there, the builds typed it on different
+	 * types, or on one the index declares under another name — a supertype's member, a typedef.
+	 */
+	public function pinnedOwner(g: CallGraph, file: String, span: Span, type: String, name: String): Null<String> {
+		if (!truth) return null;
+		final key: String = table.keyOf(file);
+		final facts: Null<Array<FieldFact>> = table.within(file, span, n -> n.fields, f -> f.at, true, harmlessSplice.bind(g));
+		var owner: Null<String> = null;
+		for (f in facts ?? []) if (f.field == name && f.at.file == key && sameRange(f.at.span, span)) {
+			final declared: Null<String> = f.owner;
+			final root: Null<String> = declared == null ? null : rootOf(declared);
+			if (root == null || (owner != null && owner != root)) return null;
+			owner = root;
+		}
+		final pinned: Null<String> = owner;
+		return pinned != null && ownerFiles(type, pinned).length > 0 ? pinned : null;
+	}
+
+	/**
 	 * Every typed type whose member `name` the graph's `type.name` may be, when the facts are the truth: each type the simple
 	 * name `type` stands for (`bySimpleName`) that declares a member so named — when every declaration of a type so named the
 	 * index holds that declares `name` is one of them (`rootOf`), as `soleMember` asks of its one. Null otherwise, and when
@@ -685,6 +708,18 @@ final class FactsView {
 		final read: Array<String> = [for (d in out) CallGraphNames.normalizePath(d.file)];
 		for (file in ownerFiles(type, owner, name)) if (!read.contains(CallGraphNames.normalizePath(file))) return null;
 		return out.length == 0 ? null : out;
+	}
+
+	/**
+	 * The package-qualified id of the type the index lists in `file` under the simple name `type`, when the builds typed it
+	 * (`standingFor`); null otherwise — the file declares no type so named, or no build typed the one it does.
+	 */
+	public function typedIn(file: String, type: String): Null<String> {
+		final fi: Null<FileInfo> = _scope.index.fileInfo(file);
+		final listed: Null<TypeDeclInfo> = fi?.types.find(t -> t.name == type);
+		if (fi == null || listed == null) return null;
+		final id: String = declaredId(fi, listed);
+		return standingFor(type, id).length > 0 ? id : null;
 	}
 
 	/** The typed types of the graph type `type` standing for the type `owner` is written as (`rootOf`, `standsFor`). */

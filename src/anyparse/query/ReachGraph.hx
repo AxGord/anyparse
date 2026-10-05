@@ -674,19 +674,20 @@ final class ReachGraph {
 	}
 
 	/**
-	 * `rewrittenBy` of the node `node`, which reads the graph type `type`'s name as the typed type `owner`'s
-	 * (`CallGraphFacts.qualify`): a build macro of that one type (`FactsView.builtAs`) whose output the facts do not show
-	 * is its text (`FactsProvenance.typeIsItsTextAs`), sited at the node's file. The other types sharing the name are none
-	 * of its code. A refusal is asked again once every file declaring that type is read, as `rewrittenBy`'s is.
+	 * `rewrittenBy` of the one type, of the several the graph type `type` names, the typed type `owner` is written as — the
+	 * type a node reads the name as (`CallGraphFacts.qualify`), the owner of a member the facts pin (`FactsView.pinnedOwner`),
+	 * the type a file declares: a build macro of that one type (`FactsView.builtAs`) whose output the facts do not show is
+	 * its text (`FactsProvenance.typeIsItsTextAs`), sited at `file`. The other types sharing the name are none of its code.
+	 * A refusal is asked again once every file declaring that type is read, as `rewrittenBy`'s is.
 	 */
-	public function rewrittenAs(g: CallGraph, node: FnNode, type: String, owner: String): Null<ReachUnknown> {
+	public function rewrittenAs(g: CallGraph, file: String, type: String, owner: String): Null<ReachUnknown> {
 		final view: Null<FactsView> = _scope.facts;
 		if (view == null || !view.builtAs(type, owner)) return null;
 		final key: String = '$type@$owner';
 		final held: Null<Bool> = _textual[key];
 		final textual: Bool = held ?? _scope.provenance()?.typeIsItsTextAs(g, type, owner) == true;
 		if (held == null && (textual || view.ownerFiles(type, owner).foreach(f -> g.treeOf(f) != null))) _textual[key] = textual;
-		return textual ? null : Reification(node.file, null);
+		return textual ? null : Reification(file, null);
 	}
 
 	public function unresolvedFrom(g: CallGraph, id: String): Array<UnresolvedCall> {

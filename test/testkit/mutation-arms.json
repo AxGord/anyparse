@@ -7111,17 +7111,65 @@
 			"name": "M-REACH-AMBIGUOUS-SOLE-ANY",
 			"type": "anyparse.query.MemberReach",
 			"method": "answerReach",
-			"find": "if (g.types.declarationCount(declaring) > 1 && _scope.facts?.soleType(declaring) == null) return Unknown(Ambiguous(declaring));",
-			"replace": "if (false) return Unknown(Ambiguous(declaring));",
+			"find": "final shared: Bool = g.types.declarationCount(declaring) > 1 && _scope.facts?.soleType(declaring) == null;",
+			"replace": "final shared: Bool = false;",
 			"note": "two types sharing the member owner's simple name are answered as one, whose members the graph cannot tell apart"
 		},
 		{
 			"name": "M-REACH-AMBIGUOUS-SOLE-NONE",
 			"type": "anyparse.query.MemberReach",
 			"method": "answerReach",
-			"find": "if (g.types.declarationCount(declaring) > 1 && _scope.facts?.soleType(declaring) == null) return Unknown(Ambiguous(declaring));",
-			"replace": "if (g.types.declarationCount(declaring) > 1) return Unknown(Ambiguous(declaring));",
+			"find": "final shared: Bool = g.types.declarationCount(declaring) > 1 && _scope.facts?.soleType(declaring) == null;",
+			"replace": "final shared: Bool = g.types.declarationCount(declaring) > 1;",
 			"note": "(precision) a type declared once per branch, the one type every build typed, is ambiguous under the truth too"
+		},
+		{
+			"name": "M-REACH-PINNED-NONE",
+			"type": "anyparse.query.MemberReach",
+			"method": "answerReach",
+			"find": "final pinned: Null<String> = shared && site != null ? _scope.facts?.pinnedOwner(g, entryFile, site, declaring, member.name) : null;",
+			"replace": "final pinned: Null<String> = null;",
+			"note": "(precision) the owner of a member a loop reads is never told by the compiler's fact at the read, so a name two types share stays Ambiguous (TM's `editor.pitch.grid.Grid` beside `common.ui.Grid`)"
+		},
+		{
+			"name": "M-REACH-PINNED-REWRITTEN-SIMPLE",
+			"type": "anyparse.query.MemberReach",
+			"method": "answerReach",
+			"find": "pinned == null ? _g.rewrittenBy(declaring) : _g.rewrittenAs(g, ownerFile, declaring, pinned);",
+			"replace": "_g.rewrittenBy(declaring);",
+			"note": "(precision) a pinned owner asks for a build macro by its simple name, so any build macro of another type of that name is a Reification"
+		},
+		{
+			"name": "M-REACH-PINNED-REWRITTEN-NONE",
+			"type": "anyparse.query.MemberReach",
+			"method": "answerReach",
+			"find": "pinned == null ? _g.rewrittenBy(declaring) : _g.rewrittenAs(g, ownerFile, declaring, pinned);",
+			"replace": "pinned == null ? _g.rewrittenBy(declaring) : null;",
+			"note": "a pinned owner's own build macro is never asked, so code it made other than its text is read off the text"
+		},
+		{
+			"name": "M-REACH-ENTRY-OWN-NONE",
+			"type": "anyparse.query.MemberReach",
+			"method": "entryRewritten",
+			"find": "final own: Null<String> = g.types.declarationCount(type) > 1 ? facts.typedIn(file, type) : null;",
+			"replace": "final own: Null<String> = null;",
+			"note": "(precision) an entry in a type whose name another type shares asks for a build macro by the simple name, so the other type's is the entry's"
+		},
+		{
+			"name": "M-FACTS-PINNED-UNTRUE",
+			"type": "anyparse.query.FactsView",
+			"method": "pinnedOwner",
+			"find": "if (!truth) return null;",
+			"replace": "if (false) return null;",
+			"note": "a read's owner is pinned by the facts of builds that are not every build, one of which may resolve the name to the other type"
+		},
+		{
+			"name": "M-FACTS-PINNED-OWNER-FILES",
+			"type": "anyparse.query.FactsView",
+			"method": "pinnedOwner",
+			"find": "return pinned != null && ownerFiles(type, pinned).length > 0 ? pinned : null;",
+			"replace": "return pinned;",
+			"note": "a read the compiler resolved on a supertype the index declares under another name pins it as the owner of the shared name"
 		},
 		{
 			"name": "M-FACTS-SOLE-TYPED-ONLY",
@@ -8024,15 +8072,15 @@
 			"name": "M-REACH-ENTRY-REWRITTEN",
 			"type": "anyparse.query.MemberReach",
 			"method": "entryRewritten",
-			"find": "if (_scope.facts?.truth != true || tree == null) return null;",
-			"replace": "if (tree == null || true) return null;",
+			"find": "if (facts == null || !facts.truth || tree == null) return null;",
+			"replace": "if (facts == null || tree == null || true) return null;",
 			"note": "an entry in code a build macro replaced is read as its text, which is none of what runs"
 		},
 		{
 			"name": "M-REACH-ENTRY-MEMBER",
 			"type": "anyparse.query.MemberReach",
 			"method": "answerReach",
-			"find": " ?? entryRewritten(entryFile, entrySpans(entry))",
+			"find": " ?? entryRewritten(g, entryFile, entrySpans(entry))",
 			"replace": "",
 			"note": "a member question's region in code a build macro replaced is read as its text, which is none of what runs"
 		},
