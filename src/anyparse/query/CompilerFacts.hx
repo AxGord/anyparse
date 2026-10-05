@@ -117,6 +117,29 @@ typedef FieldFact = {
 	 * anywhere in the node, not at this position.
 	 */
 	final held: Bool;
+
+	/**
+	 * For a read whose value is handed to a method a type declares as an argument, that method's parameter (`use` stays
+	 * `value`: a reader that does not follow the parameter reads an escape); null otherwise.
+	 */
+	final argument: Null<ArgumentFact>;
+}
+
+/**
+ * The parameter a value is handed to as an argument: the `index`-th of the method `target` (`pack.Type.field`), called
+ * through `access` (`FStatic`, `FInstance` — on an instance, any override may run).
+ */
+typedef ArgumentFact = {
+	final target: String;
+	final access: String;
+	final index: Int;
+}
+
+/** One use a parameter's reads make of what a call hands it, as a field read's (`FieldFact.use`, `method`, `argument`). */
+typedef ParamUse = {
+	final use: String;
+	final method: Null<String>;
+	final argument: Null<ArgumentFact>;
 }
 
 /**
@@ -295,6 +318,13 @@ typedef FactNode = {
 	 * of the body assigns one, and no default value replaces a null handed to it. Empty in facts that do not record it.
 	 */
 	final keptParams: Array<Int>;
+
+	/**
+	 * Per parameter, every use its reads make of what a call hands it, unioned over the configurations (`ParamUse`): a read
+	 * from a nested function is a `value`, and a value stored in a local of the node is used as that local's reads are.
+	 * Null when a configuration recorded none, or two gave the node different parameters.
+	 */
+	var paramUses: Null<Array<Array<ParamUse>>>;
 
 	/**
 	 * The signature and parameters each configuration gave the node, one entry per distinct pair: `signature` and
@@ -1006,6 +1036,7 @@ final class CompilerFacts {
 			overloadIndex: record.ov ?? 0,
 			params: [for (p in record.params ?? []) { name: p.n, type: p.t }],
 			keptParams: (record.pk ?? []).copy(),
+			paramUses: paramUsesOf(record),
 			variants: [],
 			calls: [],
 			news: [],
@@ -1038,6 +1069,7 @@ final class CompilerFacts {
 			final node: FactNode = made ?? emptyNode(id, record, at);
 			// a parameter is kept only where every configuration keeps it
 			if (made != null) for (i in node.keptParams.copy()) if (!(record.pk ?? []).contains(i)) node.keptParams.remove(i);
+			if (made != null) node.paramUses = joinedParamUses(node.paramUses, paramUsesOf(record));
 			made = node;
 			FactMerge.variant(node.variants, record.t, [for (p in record.params ?? []) { name: p.n, type: p.t }]);
 			for (channel in record.inc ?? []) if (!node.incomplete.contains(channel)) node.incomplete.push(channel);
@@ -1095,7 +1127,8 @@ final class CompilerFacts {
 					use: f.u,
 					method: f.m,
 					fresh: f.fresh ?? false,
-					held: f.h ?? false
+					held: f.h ?? false,
+					argument: argumentOf(f)
 				}: FieldFact),
 				node.fields
 			);
@@ -1184,6 +1217,37 @@ final class CompilerFacts {
 		}
 		collectSplices(made);
 		return made;
+	}
+
+	/** The parameter `use` hands its value to (`FieldFact.argument`), or null for any other use. */
+	private static function argumentOf(use: UseRecord): Null<ArgumentFact> {
+		final target: Null<String> = use.ag;
+		final access: Null<String> = use.aa;
+		final index: Null<Int> = use.ai;
+		return target == null || access == null || index == null ? null : { target: target, access: access, index: index };
+	}
+
+	/** The uses `record` gives each parameter of its node (`FactNode.paramUses`), or null when it records none. */
+	private static function paramUsesOf(record: NodeRecord): Null<Array<Array<ParamUse>>> {
+		final recorded: Null<Array<Array<UseRecord>>> = record.pu;
+		if (recorded == null || recorded.length != (record.params ?? []).length) return null;
+		return [
+			for (uses in recorded) [for (u in uses) { use: u.u ?? '', method: u.m, argument: argumentOf(u) }]
+		];
+	}
+
+	/** The uses `known` and `more` give a node's parameters, joined per parameter; null when either is, or they disagree on the count. */
+	private static function joinedParamUses(
+		known: Null<Array<Array<ParamUse>>>, more: Null<Array<Array<ParamUse>>>
+	): Null<Array<Array<ParamUse>>> {
+		if (known == null || more == null) return null;
+		final added: Array<Array<ParamUse>> = more;
+		if (known.length != added.length) return null;
+		for (i in 0...known.length) {
+			final into: Array<ParamUse> = known[i];
+			for (u in added[i]) if (!into.exists(k -> Json.stringify(k) == Json.stringify(u))) into.push(u);
+		}
+		return known;
 	}
 
 	/** The bodies the `inlined` calls of `node` spliced in, one per declared range with every site a call of it ran at. */
@@ -1394,6 +1458,15 @@ private typedef CallRecord = {
 	final ?x: Bool;
 }
 
+/** How a read's value is used, as a field record and a parameter's use record spell it. */
+private typedef UseRecord = {
+	var ?u: String;
+	var ?m: String;
+	var ?ag: String;
+	var ?aa: String;
+	var ?ai: Int;
+}
+
 private typedef NodeRecord = {
 	final id: String;
 	final f: String;
@@ -1408,6 +1481,7 @@ private typedef NodeRecord = {
 	final ?inl: String;
 	final ?ov: Int;
 	final ?pk: Array<Int>;
+	final ?pu: Array<Array<UseRecord>>;
 	final ?params: Array<{ n: String, t: String }>;
 	final ?calls: Array<CallRecord>;
 	final ?news: Array<{
@@ -1427,7 +1501,10 @@ private typedef NodeRecord = {
 		?u: String,
 		?m: String,
 		?fresh: Bool,
-		?h: Bool
+		?h: Bool,
+		?ag: String,
+		?aa: String,
+		?ai: Int
 	}>;
 	final ?elems: Array<{ r: String, rp: Array<Int>, p: Array<Int> }>;
 	final ?flows: Array<{

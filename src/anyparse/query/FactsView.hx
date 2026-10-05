@@ -200,6 +200,9 @@ final class FactsView {
 	/** Table key -> the index's file, built on first need. */
 	private var _byKey: Null<Map<String, FileInfo>> = null;
 
+	/** What the code an argument is handed to does with it (`argumentUses`), made on first need. */
+	private var _argumentUses: Null<ArgumentUses> = null;
+
 	private function new(table: CompilerFacts, scope: ReachProject, truth: Bool) {
 		this.table = table;
 		_scope = scope;
@@ -212,6 +215,14 @@ final class FactsView {
 		_alike.clear();
 		_sole.clear();
 		_soleMember.clear();
+		_argumentUses = null;
+	}
+
+	/** What the code a value is handed to as an argument does with it, read off the table once per argument (`ArgumentUses`). */
+	public function argumentUses(): ArgumentUses {
+		final made: ArgumentUses = _argumentUses ?? new ArgumentUses(table);
+		_argumentUses = made;
+		return made;
 	}
 
 	/**

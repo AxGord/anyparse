@@ -2821,7 +2821,7 @@ class MemberReachFactsTest extends Test {
 		// (`walk` run by the region), handing it on, capturing it, returning it, or a push on the outer `l` past a block
 		// declaring a `l` of its own, does change or share the member
 		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ REGION /*>*/ }\n'
-			+ '\t\twalk("h");\n\t}\n\tstatic function calm():Void {}\n\tstatic function keep(a:Array<Int>):Void {}\n'
+			+ '\t\twalk("h");\n\t}\n\tstatic function calm():Void {}\n\tstatic var kept:Array<Int> = null;\n\tstatic function keep(a:Array<Int>):Void kept = a;\n'
 			+ '\tstatic function walk(c:String):Array<Int> {\n'
 			+ '\t\tvar other:Array<Int> = [3];\n\t\tvar l:Array<Int> = null;\n\t\tif (c == "h") l = items; else if (c == "v") l = other;\n'
 			+ '\t\tfor (i => v in l) trace(i + v);\n\t\tvar copy:Array<Int> = l;\n\t\tfor (x in copy) trace(x + copy.length + copy[0]);\n'
@@ -2860,7 +2860,7 @@ class MemberReachFactsTest extends Test {
 	public function testALocalHoldingTheMemberThroughAValueConstructIsFollowedUnderTheTruth(): Void {
 		// what `prefer-if-expression-assignment` writes for `var l = null; if (c) l = items;`: the field is a BRANCH VALUE of
 		// an if-expression, a ternary, a switch, parentheses or a try — declared or stored — that the local holds just as a
-		// plain store; a push through the local still reaches the member, and an argument still escapes. The switch has two
+		// plain store; a push through the local still reaches the member, and an argument a method stores still escapes. The switch has two
 		// cases: the typer turns a one-case switch into an `if`
 		final stores: Array<String> = [
 			'final l:Array<Int> = if (c == "h") items else null;',
@@ -2874,7 +2874,7 @@ class MemberReachFactsTest extends Test {
 			function files(use: String, region: String = 'calm();'): Map<String, String> {
 				return [
 					'Main.hx' => LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ $region /*>*/ }\n'
-						+ '\t\twalk("h");\n\t}\n\tstatic function calm():Void {}\n\tstatic function keep(a:Array<Int>):Void {}\n'
+						+ '\t\twalk("h");\n\t}\n\tstatic function calm():Void {}\n\tstatic var kept:Array<Int> = null;\n\tstatic function keep(a:Array<Int>):Void kept = a;\n'
 						+ '\tstatic function walk(c:String):Void {\n\t\t$store\n\t\tfor (x in l) trace(x + l.length + l[0]);\n\t\t$use\n\t}\n}\n'
 				];
 			}
@@ -2885,6 +2885,60 @@ class MemberReachFactsTest extends Test {
 			final handed: ReachResult = compiledTruthAsk(files('keep(l);'));
 			Assert.isTrue(handed.match(Unknown(Escape(_, _))), '$store: got $handed');
 		}
+	}
+
+	@:pin('control') @:killer('M-FACTS-ARGUMENT-USE') @:killer('M-FACTS-PARAM-ALIAS') @:killer('M-ARGUMENT-USES-ONWARD')
+	@:killer('M-ARGUMENT-USES-OVERRIDES') @:killer('M-TOUCH-ARGUMENT-USES') @:killer('M-TOUCH-ARGUMENT-LEAVES')
+	public function testAnArgumentAMethodKeepsNothingOfLetsNothingEscapeUnderTheTruth(): Void {
+		// `sum` only iterates, indexes and measures what it is handed, `relay` hands it on to `sum`, `down` to itself, `Lambda.count`
+		// (by `using`) only iterates it, and `Plain.read` — no override — measures it: under the truth none keeps the member's
+		// value, while the syntax reads every argument as an escape. A method that stores it, returns it, captures it, hands it to
+		// an extern or to a method that stores it, or an override that stores it, does let it escape; one that pushes onto it
+		// changes it where it is called
+		final main: String = 'using Lambda;\n\n' + LOOP_HEAD
+			+ '\tstatic var kept:Array<Int> = null;\n\n\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ REGION /*>*/ }\n'
+			+ '\t\tUSE\n\t}\n\n\tstatic function calm():Void {}\n\n'
+			+ '\tstatic function sum(a:Array<Int>):Int {\n\t\tvar n:Int = 0;\n\t\tfor (x in a) n += x;\n\t\treturn n + a.length + a[0];\n\t}\n\n'
+			+ '\tstatic function relay(a:Array<Int>):Int return sum(a);\n\n'
+			+ '\tstatic function down(a:Array<Int>, k:Int):Int return k <= 0 ? a.length : down(a, k - 1);\n\n'
+			+ '\tstatic function store(a:Array<Int>):Void kept = a;\n\n\tstatic function give(a:Array<Int>):Array<Int> return a;\n\n'
+			+ '\tstatic function capture(a:Array<Int>):Int {\n\t\tfinal f:() -> Int = () -> a.length;\n\t\treturn f();\n\t}\n\n'
+			+ '\tstatic function viaStore(a:Array<Int>):Int {\n\t\tstore(a);\n\t\treturn 0;\n\t}\n\n'
+			+ '\tstatic function grow(a:Array<Int>):Void a.push(1);\n}\n\n'
+			+ 'class Plain {\n\tpublic function new() {}\n\n\tpublic function read(a:Array<Int>):Int return a.length;\n}\n\n'
+			+ 'class Reader {\n\tpublic function new() {}\n\n\tpublic function read(a:Array<Int>):Int return a.length;\n}\n\n'
+			+ 'class Keeper extends Reader {\n\tpublic static var held:Array<Int> = null;\n\n'
+			+ '\toverride public function read(a:Array<Int>):Int {\n\t\theld = a;\n\t\treturn 0;\n\t}\n}\n\n'
+			+ 'extern class Ext {\n\tpublic static function take(a:Array<Int>):Void;\n}\n';
+		function files(use: String, region: String = 'calm();'): Map<String, String> {
+			return [
+				'Main.hx' => StringTools.replace(StringTools.replace(main, 'USE', use), 'REGION', region)
+			];
+		}
+		for (use in [
+			'sum(items);',
+			'relay(items);',
+			'down(items, 2);',
+			'items.count();',
+			'new Plain().read(items);'
+		]) {
+			// the index is the analysis's word for the classpath, which `Array` would otherwise leave open
+			final proven: ReachResult = ask(files(use), null, true, null, true, null, null, null, true);
+			Assert.isTrue(proven.match(Proven), '$use: got $proven');
+		}
+		assertMatch(ask(files('sum(items);')), r -> r.match(Unknown(Escape(_, _))));
+		for (use in [
+			'store(items);',
+			'give(items);',
+			'capture(items);',
+			'viaStore(items);',
+			'Ext.take(items);',
+			'final r:Reader = new Keeper();\n\t\tr.read(items);'
+		]) {
+			final escaped: ReachResult = compiledTruthAsk(files(use));
+			Assert.isTrue(escaped.match(Unknown(Escape(_, _))), '$use: got $escaped');
+		}
+		assertMatch(compiledTruthAsk(files('', 'grow(items);')), r -> r.match(Reached(_)));
 	}
 
 	@:pin('control') @:killer('M-TOUCH-TYPED-CALLED')
