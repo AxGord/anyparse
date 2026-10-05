@@ -1387,7 +1387,7 @@ final class ReachGraph {
 	public function methodValues(view: FactsView): FactsMethodValues {
 		final held: Null<FactsMethodValues> = _methodValues;
 		if (held != null) return held;
-		final made: FactsMethodValues = new FactsMethodValues(view, () -> carriers.escapedIds());
+		final made: FactsMethodValues = new FactsMethodValues(view, () -> carriers.escapedIds(), _scope.reflectiveMethodHolders);
 		_methodValues = made;
 		return made;
 	}

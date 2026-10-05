@@ -12171,7 +12171,7 @@
 		{
 			"name": "M-REFLECTIVE-AGREE",
 			"type": "anyparse.query.cli.command.LintCommand",
-			"method": "reflectiveBound",
+			"method": "declaredBound",
 			"find": "return alike ? first : null;",
 			"replace": "return first;",
 			"note": "the first path's declaration bounds the run, so a path declaring other classes, or none, is judged under the first's"
@@ -12509,6 +12509,118 @@
 			"find": " && !expandedAt(g, found[e.from] ?? [], e)",
 			"replace": "",
 			"note": "the syntax's call of an expression macro an expansion replaced runs the macro's own code"
+		},
+		{
+			"name": "M-METHODS-HOLDERS-DECLARED",
+			"type": "anyparse.query.FactsMethodValues",
+			"method": "declaredHolders",
+			"find": "final holders: Null<Array<EReg>> = _holders;",
+			"replace": "final holders: Null<Array<EReg>> = null;",
+			"note": "(precision) the declared `reflectiveMethodHolders` are ignored, so a name computed at run time may obtain any method"
+		},
+		{
+			"name": "M-METHODS-HOLDERS-OBTAINED",
+			"type": "anyparse.query.FactsMethodValues",
+			"method": "obtainedUntyped",
+			"find": "(held.length > 0 && reads.computed.exists(r -> may(r, held)))",
+			"replace": "reads.computed.exists(r -> may(r, hierarchy))",
+			"note": "(precision) a read by a computed name obtains a method of any class, declared or not"
+		},
+		{
+			"name": "M-METHODS-HOLDERS-SELF",
+			"type": "anyparse.query.FactsMethodValues",
+			"method": "selfBound",
+			"find": "(held.length == 0 || !reads.computed.exists(r -> mayBeOf(r, held)))",
+			"replace": "!reads.computed.exists(r -> mayBeOf(r, hierarchy))",
+			"note": "(precision) a read by a computed name may obtain the method of an undeclared class, so its `this` may be rebound to any object"
+		},
+		{
+			"name": "M-METHODS-HOLDERS-OWN-NAME",
+			"type": "anyparse.query.FactsMethodValues",
+			"method": "declaredHolders",
+			"find": "[for (id in hierarchy) if (holders.exists(p -> p.match(id))) id]",
+			"replace": "hierarchy.exists(id -> holders.exists(p -> p.match(id))) ? hierarchy : []",
+			"note": "a declared class declares its subclasses too, so a computed name obtains the method off an object of a subclass the project left out"
+		},
+		{
+			"name": "M-METHODS-HOLDERS-VALUE",
+			"type": "anyparse.query.FactsMethodValues",
+			"method": "scan",
+			"find": "if (_holders == null) {",
+			"replace": "if (true) {",
+			"note": "(precision) a reflective member read as a value may obtain any method whatever the project declares"
+		},
+		{
+			"name": "M-METHODS-HOLDERS-REBIND",
+			"type": "anyparse.query.FactsMethodValues",
+			"method": "scan",
+			"find": "if (REFLECTION_CLASSES.contains(target)) out.rebinds = true;",
+			"replace": "",
+			"note": "a reflective class read as a value rebinds no function, though whatever calls it may call `Reflect.callMethod`"
+		},
+		{
+			"name": "M-HOLDERS-GRAPH",
+			"type": "anyparse.query.ReachGraph",
+			"method": "methodValues",
+			"find": ", _scope.reflectiveMethodHolders)",
+			"replace": ")",
+			"note": "the method values are read without the declared `reflectiveMethodHolders`"
+		},
+		{
+			"name": "M-HOLDERS-FIELDS-UNBOUNDED",
+			"type": "anyparse.query.ReachGraph",
+			"method": "reflectedMembers",
+			"find": "if (view == null || !view.truth || receivers.length == 0) return null;",
+			"replace": "if (view == null || !view.truth || receivers.length == 0) return null;\n\t\tif (_scope.reflectiveMethodHolders != null) return { types: [], ids: [] };",
+			"note": "the declaration of method holders also bounds the variables a computed name reads, so a reflective access on an object carrying the member reaches none"
+		},
+		{
+			"name": "M-HOLDERS-BUILDS",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "withReachConfigurations",
+			"find": "if (found != null && holders != null) found.reflectiveMethodHolders = holders;",
+			"replace": "",
+			"note": "the declared `reflectiveMethodHolders` never reach the builds the reach analysis reads"
+		},
+		{
+			"name": "M-HOLDERS-REACH",
+			"type": "anyparse.query.MemberReach",
+			"method": "configuredFor",
+			"find": "compiled.reflectiveClasses, compiled.reflectiveMethodHolders",
+			"replace": "compiled.reflectiveClasses, null",
+			"note": "the analysis under the builds drops the declared `reflectiveMethodHolders`"
+		},
+		{
+			"name": "M-HOLDERS-WARN",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "withCompilerFacts",
+			"find": "for (glob in FactsEscapes.unmatchedGlobs(built, holders ?? []))",
+			"replace": "for (glob in ([] : Array<String>))",
+			"note": "a declared method-holder glob matching no class the builds typed goes unreported"
+		},
+		{
+			"name": "M-HOLDERS-READ",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "runLint",
+			"find": "c -> c.reflectiveMethodHolders()",
+			"replace": "c -> null",
+			"note": "the run never reads the declared `reflectiveMethodHolders`"
+		},
+		{
+			"name": "M-HOLDERS-MERGE",
+			"type": "anyparse.check.LintConfig",
+			"method": "mergeDocuments",
+			"find": "reflectiveMethodHolders: near.reflectiveMethodHolders ?? far.reflectiveMethodHolders,",
+			"replace": "reflectiveMethodHolders: near.reflectiveMethodHolders,",
+			"note": "a nested document that leaves `reflectiveMethodHolders` unsaid drops the ancestor's declaration"
+		},
+		{
+			"name": "M-HOLDERS-PARSE",
+			"type": "anyparse.check.LintConfig",
+			"method": "parseDocument",
+			"find": "reflectiveMethodHolders: config.reflectiveMethodHolders,",
+			"replace": "",
+			"note": "`reflectiveMethodHolders` is never read out of `apqlint.json`"
 		}
 	]
 }

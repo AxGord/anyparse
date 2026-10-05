@@ -30,6 +30,13 @@ final class ReachProject {
 	 */
 	public final reflectiveClasses: Null<Array<String>>;
 
+	/**
+	 * The globs (`Glob.qualifiedNames`) the project declares every class whose methods a read by a name the facts cannot
+	 * read may obtain as values to match (`ReachBuilds.reflectiveMethodHolders`); null when it declares none, and such a
+	 * read may then obtain any method.
+	 */
+	public final reflectiveMethodHolders: Null<Array<String>>;
+
 	public final plugin: GrammarPlugin;
 	public final shape: RefShape;
 	public final files: Array<{ file: String, source: String }>;
@@ -41,10 +48,12 @@ final class ReachProject {
 	private var _typeHomes: Null<Map<String, Bool>> = null;
 
 	public function new(
-		plugin: GrammarPlugin, index: SymbolIndex, files: Array<{ file: String, source: String }>, ?reflectiveClasses: Array<String>
+		plugin: GrammarPlugin, index: SymbolIndex, files: Array<{ file: String, source: String }>, ?reflectiveClasses: Array<String>,
+		?reflectiveMethodHolders: Array<String>
 	) {
 		this.plugin = plugin;
 		this.reflectiveClasses = reflectiveClasses;
+		this.reflectiveMethodHolders = reflectiveMethodHolders;
 		shape = plugin.refShape();
 		this.index = index;
 		this.files = files;

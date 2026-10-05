@@ -95,6 +95,7 @@ typedef LintDocument = {
 	var ?compilerOracleServer: Bool;
 	var ?reachConfigurationsComplete: Bool;
 	var ?reflectiveClasses: Array<String>;
+	var ?reflectiveMethodHolders: Array<String>;
 	var ?resolutionRoots: Array<String>;
 	var ?resolutionLibs: Array<String>;
 	var ?resolutionStd: Bool;
@@ -165,6 +166,12 @@ final class LintConfig {
 	private final _reflectiveClasses: Null<Array<String>>;
 
 	/**
+	 * The globs naming every class whose methods a read by a name the facts cannot read may obtain as values
+	 * (`reflectiveMethodHolders`); null unless declared.
+	 */
+	private final _reflectiveMethodHolders: Null<Array<String>>;
+
+	/**
 	 * The declared source roots (`resolutionRoots`) — the project's own, see the accessor — each resolved
 	 * to absolute against the config directory; an empty array when the key is absent.
 	 */
@@ -195,11 +202,12 @@ final class LintConfig {
 		rules: Map<String, RuleConfig>, ?compilerOracles: Array<OracleConfig>, ?resolutionRoots: Array<String>,
 		?resolutionLibs: Array<String>, ?resolutionStd: Bool, ?compilerOracleServer: Bool, ?languageVersion: String,
 		?frameworks: Array<FrameworkContract>, ?drops: Array<String>, ?reachConfigurationsComplete: Bool, ?reportSummaryThreshold: Int,
-		?reflectiveClasses: Array<String>
+		?reflectiveClasses: Array<String>, ?reflectiveMethodHolders: Array<String>
 	) {
 		_reportSummaryThreshold = reportSummaryThreshold ?? LintFormat.DEFAULT_REPORT_SUMMARY_THRESHOLD;
 		_reachConfigurationsComplete = reachConfigurationsComplete ?? false;
 		_reflectiveClasses = reflectiveClasses;
+		_reflectiveMethodHolders = reflectiveMethodHolders;
 		_rules = rules;
 		_compilerOracles = compilerOracles ?? [];
 		_compilerOracleServer = compilerOracleServer ?? false;
@@ -263,6 +271,19 @@ final class LintConfig {
 	 */
 	public function reflectiveClasses(): Null<Array<String>> {
 		return _reflectiveClasses;
+	}
+
+	/**
+	 * The classes the project declares a method of which a reflective read by a name the compiler facts cannot read may
+	 * obtain as a value (`reflectiveMethodHolders`): globs over qualified type names, as `reflectiveClasses`. Such a read
+	 * — `Reflect.field(o, name)`, `Reflect.getProperty`, a reflective member read as a value — obtains a method only off an
+	 * object of a class one of the globs matches by its own qualified name (a subtype is matched by its own), or off one of
+	 * those classes as a value for a static; a variable is read whatever the list says. Read under
+	 * `reachConfigurationsComplete` only, by the member-reach analysis behind the loop rewrites (`FactsMethodValues`).
+	 * Null when the key is absent: such a read may then obtain any method of any object it may be handed.
+	 */
+	public function reflectiveMethodHolders(): Null<Array<String>> {
+		return _reflectiveMethodHolders;
 	}
 
 	/**
@@ -638,6 +659,7 @@ final class LintConfig {
 			compilerOracleServer: near.compilerOracleServer ?? far.compilerOracleServer,
 			reachConfigurationsComplete: near.reachConfigurationsComplete ?? far.reachConfigurationsComplete,
 			reflectiveClasses: near.reflectiveClasses ?? far.reflectiveClasses,
+			reflectiveMethodHolders: near.reflectiveMethodHolders ?? far.reflectiveMethodHolders,
 			resolutionRoots: near.resolutionRoots ?? far.resolutionRoots,
 			resolutionLibs: near.resolutionLibs ?? far.resolutionLibs,
 			resolutionStd: near.resolutionStd ?? far.resolutionStd,
@@ -667,7 +689,7 @@ final class LintConfig {
 		return new LintConfig(
 			doc.rules, doc.compilerOracles, doc.resolutionRoots, doc.resolutionLibs, doc.resolutionStd, doc.compilerOracleServer,
 			doc.languageVersion, doc.frameworks, doc.drops, doc.reachConfigurationsComplete, doc.reportSummaryThreshold,
-			doc.reflectiveClasses
+			doc.reflectiveClasses, doc.reflectiveMethodHolders
 		);
 	}
 
@@ -706,6 +728,7 @@ final class LintConfig {
 			compilerOracleServer: config.compilerOracleServer,
 			reachConfigurationsComplete: config.reachConfigurationsComplete,
 			reflectiveClasses: config.reflectiveClasses,
+			reflectiveMethodHolders: config.reflectiveMethodHolders,
 			resolutionRoots: roots,
 			resolutionLibs: config.resolutionLibs,
 			resolutionStd: config.resolutionStd,

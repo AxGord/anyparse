@@ -25,9 +25,14 @@ using Lambda;
  * A read off an object that cannot be an instance of the method's class or of a subclass obtains another method: the
  * object is what the facts type it, a subtype of that unless it is an object of exactly its class, and an instance that
  * escaped the type system (`ValueEscapes`) — the method's own class does as soon as its `this` is handed to a reflective
- * call, so a read off an object of no class may then obtain any of its methods. A reflective member or class read as a
- * value, a reflective body spliced in whose name is lost (`reflection-inlined`) and a fact
- * lost to a stale file may obtain any method, and rebind any: no `this` is answered then.
+ * call, so a read off an object of no class may then obtain any of its methods. A reflective body spliced in whose name is lost
+ * (`reflection-inlined`) and a fact lost to a stale file may obtain any method, and rebind any: no `this` is answered then; so may a
+ * reflective member or class read as a value, unless the project declares the classes whose methods a name computed at run time may
+ * obtain (`reflectiveMethodHolders`, `declaredHolders`). Then a read by such a name, and a reflective member or class read as a value,
+ * which whatever calls it later hands one, obtains a method only off an object of a declared class, each matched by its own qualified
+ * name (a subclass of one is declared by its own name or not at all), or off a declared class as a
+ * value for a static. The declaration bounds methods only — a variable is read whatever it says — and a
+ * name a literal spells still names its one member; a reflective class read as a value may also rebind.
  *
  * Once a rebinding call exists, only an instance method's (`method`) code is answered: a constructor or an initializer
  * runs with `this` bound by a class value, which the program reads in more ways than a field read. The stated assumption,
@@ -157,10 +162,21 @@ final class FactsMethodValues {
 	/** What every function the builds typed obtains (`scan`), read once. */
 	private var _reads: Null<MethodValueReads> = null;
 
-	public function new(view: FactsView, escaped: () -> Null<Array<String>>) {
+	/**
+	 * The classes a read by a name computed at run time may obtain a method of (`ReachProject.reflectiveMethodHolders`), as
+	 * the patterns their globs make (`Glob.qualifiedNames`); null for any.
+	 */
+	private final _holders: Null<Array<EReg>>;
+
+	/**
+	 * `holders` are the globs the project declares every class whose methods a read by a computed name may obtain as values
+	 * to match (`ReachProject.reflectiveMethodHolders`), null for any class.
+	 */
+	public function new(view: FactsView, escaped: () -> Null<Array<String>>, ?holders: Array<String>) {
 		_view = view;
 		_table = view.table;
 		_escaped = escaped;
+		_holders = holders?.map(Glob.qualifiedNames);
 	}
 
 	/**
@@ -185,7 +201,9 @@ final class FactsMethodValues {
 			if (cut >= 0) name = name.substr(0, cut);
 		}
 		final hierarchy: Array<String> = [owner.id].concat(_table.subtypesOf(owner.id));
-		return !(reads.named[name] ?? []).exists(r -> mayBeOf(r, hierarchy)) && !reads.computed.exists(r -> mayBeOf(r, hierarchy));
+		final held: Array<String> = declaredHolders(hierarchy);
+		return !(reads.named[name] ?? []).exists(r -> mayBeOf(r, hierarchy))
+			&& (held.length == 0 || !reads.computed.exists(r -> mayBeOf(r, held)));
 	}
 
 	/**
@@ -200,12 +218,23 @@ final class FactsMethodValues {
 	): Bool {
 		final reads: MethodValueReads = scan();
 		if (reads.unknown != null) return true;
-		function may(r: MethodValueRead): Bool {
+		function may(r: MethodValueRead, of: Array<String>): Bool {
 			final receiver: Null<String> = r.receiver;
 			final read: Null<FactsType> = receiver == null ? null : FactsTypeTree.read(receiver);
-			return r.typeless && (read == null || mayHold(read, r.exact, hierarchy, escaped, bound, statics, 0));
+			return r.typeless && (read == null || mayHold(read, r.exact, of, escaped, bound, statics, 0));
 		}
-		return (reads.named[name] ?? []).exists(may) || reads.computed.exists(may);
+		final held: Array<String> = declaredHolders(hierarchy);
+		return (reads.named[name] ?? []).exists(r -> may(r, hierarchy)) || (held.length > 0 && reads.computed.exists(r -> may(r, held)));
+	}
+
+	/**
+	 * The classes of `hierarchy` a read by a name computed at run time may obtain a method of: those the project declares
+	 * (`_holders`), each by its own qualified name — a subclass of a declared class is declared by its own name or not at all
+	 * — or all of them when it declares none.
+	 */
+	private function declaredHolders(hierarchy: Array<String>): Array<String> {
+		final holders: Null<Array<EReg>> = _holders;
+		return holders == null ? hierarchy : [for (id in hierarchy) if (holders.exists(p -> p.match(id))) id];
 	}
 
 	/**
@@ -308,8 +337,15 @@ final class FactsMethodValues {
 				if (REBINDING_CALLS.contains(target)) out.rebinds = true;
 				if (MEMBERLESS_REFLECTION.contains(target)) continue;
 				if (r.isValue || REFLECTION_CLASSES.contains(target)) {
-					out.unknown = '`$target` is read as a value in `$id`';
-					return out;
+					// whatever calls it later hands it a name computed there, and any object: the project's declaration bounds
+					// what that obtains (`declaredHolders`); a reflective class as a value may also rebind
+					if (_holders == null) {
+						out.unknown = '`$target` is read as a value in `$id`';
+						return out;
+					}
+					if (REFLECTION_CLASSES.contains(target)) out.rebinds = true;
+					out.computed.push({ receiver: null, exact: false, typeless: true });
+					continue;
 				}
 				final read: MethodValueRead = { receiver: r.receiver, exact: r.receiverExact, typeless: true };
 				final literal: Null<String> = r.name;

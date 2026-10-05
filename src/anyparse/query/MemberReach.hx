@@ -268,12 +268,14 @@ final class MemberReach {
 	 * through them (`FactsView`), every other one through its syntax; facts naming exactly `configurations` are the
 	 * truth (`factsAreTruth`), and then a project file no build read is out of `index` too (`ReachProject.readThrough`).
 	 * `reflectiveClasses` are the globs the project declares a class made from an unreadable name to match
-	 * (`ReachBuilds.reflectiveClasses`); null for any class.
+	 * (`ReachBuilds.reflectiveClasses`); null for any class. `reflectiveMethodHolders` are the globs it declares every
+	 * class whose methods a read by an unreadable name may obtain as values to match (`ReachBuilds.reflectiveMethodHolders`);
+	 * null for any class.
 	 */
 	public function new(
 		plugin: GrammarPlugin, project: Array<{ file: String, source: String }>, index: SymbolIndex, scopeKnown: Bool,
 		maxLibraryFiles: Int = MAX_LIBRARY_FILES, maxVisited: Int = MAX_VISITED, ?configurations: Array<ReachConfiguration>,
-		?classpathComplete: () -> Bool, ?facts: CompilerFacts, ?reflectiveClasses: Array<String>
+		?classpathComplete: () -> Bool, ?facts: CompilerFacts, ?reflectiveClasses: Array<String>, ?reflectiveMethodHolders: Array<String>
 	) {
 		_maxVisited = maxVisited;
 		final cached: GrammarPlugin = plugin is CachingGrammarPlugin ? plugin : new CachingGrammarPlugin(plugin);
@@ -283,7 +285,7 @@ final class MemberReach {
 		_scopeKnown = scopeKnown;
 		for (f in project) _projectSources[f.file] = f.source;
 		_hazards = new ReachHazards(_plugin);
-		final scope: ReachProject = new ReachProject(cached, index, project, reflectiveClasses);
+		final scope: ReachProject = new ReachProject(cached, index, project, reflectiveClasses, reflectiveMethodHolders);
 		final live: ReachLiveness = new ReachLiveness(cached, configurations ?? []);
 		_scope = scope;
 		_live = live;
@@ -2330,7 +2332,7 @@ final class MemberReach {
 		return new MemberReach(
 			plugin, [for (f in project) f],
 			index, scopeKnown, MAX_LIBRARY_FILES, MAX_VISITED, compiled.configurations, declaresEveryType.bind(compiled, index),
-			host.compilerFacts(), compiled.reflectiveClasses
+			host.compilerFacts(), compiled.reflectiveClasses, compiled.reflectiveMethodHolders
 		);
 	}
 

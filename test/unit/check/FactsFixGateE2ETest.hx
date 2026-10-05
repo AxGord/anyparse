@@ -16,7 +16,9 @@ import utest.Test;
  * chain of a private member's class (`unused-private`) and the receiver of a redundant `.toString()`
  * (`redundant-tostring`). Each fixture also holds the case the facts must NOT clear, and the rewritten
  * program prints what the original printed. One more pins the `reflectiveClasses` declaration end to end:
- * the declared classes a computed name may make bound the escapes a `prefer-keyvalue-loop` rewrite rests on.
+ * the declared classes a computed name may make bound the escapes a `prefer-keyvalue-loop`
+ * rewrite rests on, and another the `reflectiveMethodHolders` one: the declared classes
+ * whose methods a computed name may obtain bound the function values a call of a value runs.
  */
 class FactsFixGateE2ETest extends Test {
 
@@ -82,6 +84,16 @@ class FactsFixGateE2ETest extends Test {
 		+ 'class Text {\n' + '\tpublic static var last:Plain = new Plain();\n' + '\n' + '\tpublic static var failing:Bool = false;\n'
 		+ '\n' + '\tpublic static function keep<A>(x:A):Void {}\n' + '\n' + '\tpublic static function fail():Void {\n'
 		+ '\t\tif (failing) {\n' + '\t\t\tthrow last;\n' + '\t\t}\n' + '\t}\n' + '}\n';
+	private static final HOLDER_MAIN: String = 'class Main {\n' + '\tpublic static var items:Array<Int> = [1, 2];\n'
+		+ '\tpublic static var keep:Null<(Rx) -> String> = null;\n' + '\n' + '\tstatic function main() {\n'
+		+ '\t\tvar g:Dynamic = new Grower();\n' + '\t\tvar o:Dynamic = new Plain();\n' + '\t\tvar n:String = \'lo\' + \'ok\';\n'
+		+ '\t\tkeep = Reflect.field(o, n);\n' + '\t\tfinal r:Rx = new Rx();\n' + '\t\tvar sum:Int = 0;\n'
+		+ '\t\tfor (i in 0...items.length) {\n' + '\t\t\tfinal v:Int = items[i];\n' + '\t\t\tsum += v;\n' + '\t\t\tr.map(keep);\n'
+		+ '\t\t}\n' + '\t\tSys.println(sum);\n' + '\t}\n' + '}\n' + '\n' + 'class Rx {\n' + '\tpublic function new() {}\n' + '\n'
+		+ '\tpublic function map(f:(Rx) -> String):String {\n' + '\t\tfinal h:(Rx) -> String = f;\n' + '\t\treturn h(this);\n' + '\t}\n'
+		+ '}\n' + '\n' + 'class Plain {\n' + '\tpublic function new() {}\n' + '\n' + '\tpublic function look(s:String):Void {}\n' + '}\n'
+		+ '\n' + 'class Grower {\n' + '\tpublic function new() {}\n' + '\n' + '\tpublic function grow(s:String):Void {\n'
+		+ '\t\tMain.items = [];\n' + '\t}\n' + '}\n';
 	private static final HXML: String = '-cp .\n-main Main\n--interp\n';
 	private static inline final APQLINT: String = '{"compilerOracle":[{"hxml":"check.hxml"}],"resolutionRoots":["."]}';
 	private static inline final BUFFER: Int = 1 << 20;
@@ -258,6 +270,39 @@ class FactsFixGateE2ETest extends Test {
 		Assert.isTrue(after.indexOf('for (i => v in items) {') >= 0, after);
 		Assert.isTrue(err.indexOf('reflectiveClasses "nope.**" matches no class the builds typed') >= 0, err);
 		Assert.isTrue(err.indexOf('"lib.*" matches no class') < 0, err);
+		Assert.equals(before, run(dir), 'the program prints what it printed');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A method read by a name computed at run time may be any method of any escaped object — `Grower.grow`, which empties
+	 * the list, among them — so the loop whose body calls a function value stays; declared `reflectiveMethodHolders`
+	 * bound it — `Plain`, whose `look` the name makes — and the loop is rewritten, while a declaration naming `Grower` keeps
+	 * it. A glob matching no class the builds typed is reported.
+	 */
+	@:pin('control') @:killer('M-HOLDERS-BUILDS') @:killer('M-HOLDERS-REACH') @:killer('M-HOLDERS-WARN') @:killer('M-HOLDERS-READ')
+	public function testAComputedMemberNameTheProjectBoundsLetsTheLoopRewrite(): Void {
+		#if (sys || nodejs)
+		final complete: String = '{"compilerOracle":[{"hxml":"check.hxml"}],"resolutionRoots":["."],"reachConfigurationsComplete":true';
+		final files: Array<{ name: String, source: String }> = [{ name: 'Main.hx', source: HOLDER_MAIN }];
+		for (declared in ['', ',"reflectiveMethodHolders":["Plain","Grower"]']) {
+			final dir: Null<String> = tree('holderkept', files, HXML, complete + declared + '}');
+			if (dir == null) return;
+			CliFixture.captureStderr(() -> Cli.run(['lint', '--fix', '--rule', 'prefer-keyvalue-loop', '$dir/Main.hx']));
+			Assert.equals(HOLDER_MAIN, File.getContent('$dir/Main.hx'), declared);
+			CliFixture.removeDir(dir);
+		}
+		final dir: Null<String> = tree('holderbound', files, HXML, complete + ',"reflectiveMethodHolders":["Plain","nope.**"]}');
+		if (dir == null) return;
+		final before: String = run(dir);
+		final err: String = CliFixture.captureStderr(() -> Cli.run(['lint', '--fix', '--rule', 'prefer-keyvalue-loop', '$dir/Main.hx']));
+		final after: String = File.getContent('$dir/Main.hx');
+		Assert.isTrue(after.indexOf('for (i => v in items) {') >= 0, after);
+		Assert.isTrue(err.indexOf('reflectiveMethodHolders "nope.**" matches no class the builds typed') >= 0, err);
+		Assert.isTrue(err.indexOf('"Plain" matches no class') < 0, err);
 		Assert.equals(before, run(dir), 'the program prints what it printed');
 		CliFixture.removeDir(dir);
 		#else

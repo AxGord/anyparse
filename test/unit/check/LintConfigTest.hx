@@ -368,27 +368,33 @@ class LintConfigTest extends Test {
 		Assert.notNull(anyparse.query.cli.command.LintCommand.withReachConfigurations(scope, oracles, false, true)?.builds);
 	}
 
-	@:pin('control') @:killer('M-REFLECTIVE-AGREE')
+	@:pin('control') @:killer('M-REFLECTIVE-AGREE') @:killer('M-HOLDERS-PARSE')
 	@:access(anyparse.query.cli.command.LintCommand)
 	public function testTheReflectiveClassesAreTheRunsOnlyWhenEveryPathDeclaresThemAlike(): Void {
-		// absent, a computed class name may name any class; a run whose paths declare different globs, or some none, may
-		// create a class one of them leaves out
-		Assert.isNull(LintConfig.parse('{}').reflectiveClasses());
-		final drill: LintConfig = LintConfig.parse('{"reflectiveClasses": ["drill.**", "__ASSET__*"]}');
-		Assert.same(['drill.**', '__ASSET__*'], drill.reflectiveClasses());
-		final other: LintConfig = LintConfig.parse('{"reflectiveClasses": ["drill.**"]}');
-		final none: LintConfig = LintConfig.parse('{}');
-		final configs: Map<String, LintConfig> = ['a' => drill, 'b' => other, 'c' => none];
-		final resolve: String -> LintConfig = path -> configs[path] ?? none;
-		final bound: Array<String> -> Null<Array<String>> = paths -> {
-			var out: Null<Array<String>> = null;
-			CliFixture.captureStderr(() -> out = anyparse.query.cli.command.LintCommand.reflectiveBound(paths, resolve));
-			out;
-		};
-		Assert.same(['drill.**', '__ASSET__*'], bound(['a', 'a']));
-		Assert.isNull(bound(['a', 'b']));
-		Assert.isNull(bound(['a', 'c']));
-		Assert.isNull(bound(['c', 'c']));
+		// absent, a computed class name may name any class, and a computed member name obtain any method; a run whose paths
+		// declare different globs, or some none, may create a class — or obtain a method of one — one of them leaves out
+		for (key in ['reflectiveClasses', 'reflectiveMethodHolders']) {
+			final read: LintConfig -> Null<Array<String>> = c ->
+				key == 'reflectiveClasses' ? c.reflectiveClasses() : c.reflectiveMethodHolders();
+			Assert.isNull(read(LintConfig.parse('{}')), key);
+			final drill: LintConfig = LintConfig.parse('{"$key": ["drill.**", "__ASSET__*"]}');
+			Assert.same(['drill.**', '__ASSET__*'], read(drill), key);
+			final other: LintConfig = LintConfig.parse('{"$key": ["drill.**"]}');
+			final none: LintConfig = LintConfig.parse('{}');
+			final configs: Map<String, LintConfig> = ['a' => drill, 'b' => other, 'c' => none];
+			final resolve: String -> LintConfig = path -> configs[path] ?? none;
+			final bound: Array<String> -> Null<Array<String>> = paths -> {
+				var out: Null<Array<String>> = null;
+				CliFixture.captureStderr(
+					() -> out = anyparse.query.cli.command.LintCommand.declaredBound(paths, resolve, read, key, 'unbounded')
+				);
+				out;
+			};
+			Assert.same(['drill.**', '__ASSET__*'], bound(['a', 'a']), key);
+			Assert.isNull(bound(['a', 'b']), key);
+			Assert.isNull(bound(['a', 'c']), key);
+			Assert.isNull(bound(['c', 'c']), key);
+		}
 	}
 
 	@:pin('control') @:killer('M-REACH-CONFIGS-AGREE')
