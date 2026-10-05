@@ -387,7 +387,8 @@ final class TypedFactsMacro {
 							min: info.min,
 							max: info.max,
 							id: '$owner.${f.name}',
-							receiver: !takes(f, INLINED_RECEIVER)
+							receiver: !takes(f, INLINED_RECEIVER),
+							arity: arity(f)
 						});
 					}
 				}
@@ -631,6 +632,14 @@ final class TypedFactsMacro {
 		};
 	}
 
+	/** How many parameters the method `f` declares, optional ones included; -1 for a field of no function type. */
+	private static function arity(f: ClassField): Int {
+		return switch TypeTools.follow(f.type) {
+			case TFun(args, _): args.length;
+			case _: -1;
+		};
+	}
+
 	private static function access(a: VarAccess): String {
 		return switch a {
 			case AccNormal: 'default';
@@ -658,5 +667,11 @@ typedef InlineMethod = {
 	 * binds — a parameter keeps its own, a static method's and an abstract's `this` included.
 	 */
 	final receiver: Bool;
+
+	/**
+	 * How many parameters the method declares (-1 for none of a function type): a method of none takes no value from its
+	 * call site but its receiver, so a value of that code spliced into its body is the receiver.
+	 */
+	final arity: Int;
 }
 #end

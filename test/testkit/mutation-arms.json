@@ -8247,9 +8247,9 @@
 		{
 			"name": "M-FACTS-CAPTURE",
 			"type": "anyparse.check.TypedFactsWalk",
-			"method": "visit",
-			"find": "alias.owner == id ? use : Value",
-			"replace": "use",
+			"method": "localRead",
+			"find": "if (alias.owner != id) {",
+			"replace": "if (false) {",
 			"note": "a local read from a nested function keeps its own use, so a captured field value reads as used in place"
 		},
 		{
@@ -13035,6 +13035,102 @@
 			"find": "if (_recorded.exists(id)) retract(g, id);",
 			"replace": "",
 			"note": "the sites the facts could not resolve before every copy was read stay beside the ones they resolve now"
+		},
+		{
+			"name": "M-FACTS-ASSIGN-HELD",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "visit",
+			"find": "walkAs(rhs, Held(into));",
+			"replace": "walk(rhs);",
+			"note": "a field's value an assignment statement stores in a local is used as a value, so a local assigned in branches reads as an escape"
+		},
+		{
+			"name": "M-FACTS-ASSIGNED-NO-USE",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "localRead",
+			"find": "case Assigned:",
+			"replace": "case Assigned: aliasUse(alias, Value);",
+			"note": "a write of a local holding the value is a use of it as a value, so every assigned local escapes"
+		},
+		{
+			"name": "M-FACTS-ASSIGNED-TARGET",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "target",
+			"find": "walkAs(lhs, Assigned);",
+			"replace": "walk(lhs);",
+			"note": "the local an assignment writes is walked as a read used as a value, so every assigned local escapes"
+		},
+		{
+			"name": "M-FACTS-ALIAS-LINK",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "localRead",
+			"find": "if (!alias.links.contains(other)) alias.links.push(other);",
+			"replace": "aliasUse(alias, Value);",
+			"note": "a local stored in another local is used as a value, so its reads through the second local are never followed"
+		},
+		{
+			"name": "M-FACTS-HELD-LOCAL",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "visit",
+			"find": "case TField(_, _) | TLocal(_):",
+			"replace": "case TField(_, _):",
+			"note": "a local initialized with another local is walked as a value, so the first local's value escapes there"
+		},
+		{
+			"name": "M-FACTS-SUBSTITUTED-RECEIVER",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "localRead",
+			"find": "aliasUse(alias, method == null ? use : Call(method));",
+			"replace": "aliasUse(alias, use);",
+			"note": "a local an inline method of no parameter was spliced in with is used as that method's code uses it, so a key-value loop over a local hands it to `new ArrayKeyValueIterator`"
+		},
+		{
+			"name": "M-FACTS-SUBSTITUTED-ARITY",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "substitutedReceiver",
+			"find": "substituted.arity != 0",
+			"replace": "false",
+			"note": "a local spliced into an inline method's body as an argument is taken for its receiver, a call of that method"
+		},
+		{
+			"name": "M-FACTS-SUBSTITUTED-OWNER",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "substitutedReceiver",
+			"find": "case TInst(c, _) if (TypedFactsMacro.typeId(c.get().pack, c.get().name) == substituted.id.substr(0, dot)): name;",
+			"replace": "case TInst(c, _): name;",
+			"note": "a local spliced into an inline method of another class than its own is taken for that method's receiver"
+		},
+		{
+			"name": "M-FACTS-ASSIGN-STATEMENT",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "visit",
+			"find": "use == Statement ? storedLocal(lhs, rhs) : null",
+			"replace": "storedLocal(lhs, rhs)",
+			"note": "an assignment whose own value goes on still stores the value only in its local, so `keep(l = items)` hands nothing on"
+		},
+		{
+			"name": "M-FACTS-ASSIGN-OWNER",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "storedLocal",
+			"find": "if (_aliases[v.id]?.owner == id)",
+			"replace": "if (_aliases.exists(v.id))",
+			"note": "a store into a local of an enclosing function is followed through the reads that function made so far, never the later ones"
+		},
+		{
+			"name": "M-FACTS-HELD-FLAG",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "root",
+			"find": "',\"h\":true,'",
+			"replace": "','",
+			"note": "a field read held in a local no longer says so, so the touch through the local is placed at the store"
+		},
+		{
+			"name": "M-TOUCH-TYPED-HELD-REGION",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "recordTyped",
+			"find": "final at: Null<Span> = f.held ? holding?.span ?? node?.span : span;",
+			"replace": "final at: Null<Span> = span;",
+			"note": "a touch through a local holding the member is placed at the store, so a push through it inside the region, stored before it, is missed"
 		}
 	]
 }

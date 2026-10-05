@@ -47,8 +47,9 @@ final class TypedFactsWalk {
 	private final _written: Map<Int, Bool>;
 
 	/**
-	 * The locals initialized straight from a field read, shared with the nested walks: each read of one is a use of the
-	 * field's value, so the read is recorded once the uses are known. A read from a nested function captures the value.
+	 * Every local a `var` of the walked code declares, by id, with the uses its reads make, shared with the nested walks:
+	 * a field read stored in one (`Held`) is used as each of them, so the read is recorded once the uses are known. A read
+	 * from a nested function captures the value.
 	 */
 	private final _aliases: Map<Int, Alias>;
 
@@ -63,6 +64,12 @@ final class TypedFactsWalk {
 
 	/** How the value of the expression `walk` is about to visit is used; `visit` takes it and resets it to `Value`. */
 	private var _use: FactUse = Value;
+
+	/**
+	 * The method whose spliced body the expression `walk` is about to visit was substituted into from its call site — code
+	 * of the body's own text directly under that method's code — or null; `visit` takes it and resets it.
+	 */
+	private var _substituted: Null<InlineMethod> = null;
 
 	/** The range of the block the expression `walk` is about to visit is a statement of; `visit` takes it and resets it. */
 	private var _block: Null<Position> = null;
@@ -153,10 +160,10 @@ final class TypedFactsWalk {
 				walk(e);
 		}
 		for (d in _deferred) {
-			final seen: Array<String> = _aliases[d.local]?.uses ?? [];
+			final seen: Array<String> = aliasUses(d.local);
 			// a local never read is answered as any use the walk does not name
 			final uses: Array<String> = seen.length > 0 ? seen : [useText(Value)];
-			for (u in uses) add('fields', d.fact + ',' + u + '}');
+			for (u in uses) add('fields', d.fact + ',"h":true,' + u + '}');
 		}
 		final out: StringBuf = new StringBuf();
 		out.add('{"k":"node","id":${q(id)},"f":${q(_home)},"p":$at,"kind":"$_kind","owner":${q(_owner)},"t":${q(_signature)}');
@@ -314,6 +321,7 @@ final class TypedFactsWalk {
 		if (current != null && holds(current, info)) _spliceSite = { min: info.min, max: info.max };
 		// back inside, as the call site's own arguments are: a further splice there is a call of its own
 		_inBody = inside || straddles;
+		_substituted = inside && !saved ? splice : null;
 		visit(e);
 		_inBody = saved;
 		_site = site;
@@ -488,14 +496,15 @@ final class TypedFactsWalk {
 		_use = Value;
 		final block: Null<Position> = _block;
 		_block = null;
+		final substituted: Null<InlineMethod> = _substituted;
+		_substituted = null;
 		switch e.expr {
 			case TFunction(_):
 				child(e, null);
 			case TLocal(v):
 				if (!v.name.startsWith('`')) add('reads', '[${range(e.pos)},${q(localType(v))}]');
 				final alias: Null<Alias> = _aliases[v.id];
-				// a nested function holds the local, so the value goes wherever that function goes
-				if (alias != null) aliasUse(alias, alias.owner == id ? use : Value);
+				if (alias != null) localRead(alias, v, use, substituted);
 			case TIdent(identifier):
 				// the root of a field chain spells the chain as its code, and is handed what a call through it is
 				final chain: Null<NativeChain> = _nativeChain;
@@ -507,6 +516,9 @@ final class TypedFactsWalk {
 				if (TypedFactsShapes.REFLECTION_CLASSES.contains(name)) add('refl', '{"t":${q(name)},"v":true,"p":${at(e.pos)}}');
 			case TVar(v, init):
 				declare(v, e.pos);
+				// an unrolled loop declares one local once per copy, and every copy's reads are its uses
+				final alias: Alias = _aliases[v.id] ?? { owner: id, uses: [], links: [] };
+				_aliases[v.id] = alias;
 				if (init != null) {
 					flowInto(init, str(v.t), 'var', e.pos);
 					if (constructed(init) && str(init.t) == localType(v)) _built[v.id] = true;
@@ -518,12 +530,9 @@ final class TypedFactsWalk {
 						case _ if (called != null):
 							// the receiver of an inlined call: what the method's code then does with it is the call's
 							walkAs(init, Call(called));
-						case TField(_, _):
-							// the field's value goes wherever the local's reads take it: the compiler holds a lowered loop's
-							// array, and the receiver of a compound element write, in a local of its own. An unrolled loop
-							// declares one local once per copy, and every copy's reads are its uses
-							final alias: Alias = _aliases[v.id] ?? { owner: id, uses: [] };
-							_aliases[v.id] = alias;
+						case TField(_, _) | TLocal(_):
+							// the value goes wherever the local's reads take it: the compiler holds a lowered loop's array, and the
+							// receiver of a compound element write, in a local of its own
 							walkAs(init, Held(v.id));
 						case _:
 							walk(init);
@@ -563,7 +572,12 @@ final class TypedFactsWalk {
 				flowInto(rhs, str(lhs.t), 'assign', e.pos);
 				// a fresh value stored by an assignment whose own value goes nowhere is held by its target alone
 				target(lhs, false, use == Statement && TypedFactsShapes.isFresh(rhs));
-				walk(rhs);
+				// a field's or a local's value stored by such an assignment in a local of this node goes where the local's reads take it
+				final into: Null<Int> = use == Statement ? storedLocal(lhs, rhs) : null;
+				if (into == null)
+					walk(rhs)
+				else
+					walkAs(rhs, Held(into));
 			case TBinop(OpAssignOp(op), lhs, rhs):
 				if (op == OpAdd && TypedFactsShapes.isString(lhs.t) && !TypedFactsShapes.isString(rhs.t)) stringSite(rhs);
 				target(lhs, true, false);
@@ -752,9 +766,77 @@ final class TypedFactsWalk {
 				add('elems', '{"r":${q(str(array.t))},"rp":${at(array.pos)},"p":${at(lhs.pos)}}');
 				walkAs(array, ElementWrite);
 				walk(index);
+			case TLocal(_) if (!alsoRead):
+				// a write of the local, no use of the value it held
+				walkAs(lhs, Assigned);
 			case _:
 				walk(lhs);
 		}
+	}
+
+	/**
+	 * The id of the local `lhs` writes when it is one this node declared (`_aliases`) and `rhs`, what it stores, a field's
+	 * or a local's value; null otherwise.
+	 */
+	private function storedLocal(lhs: TypedExpr, rhs: TypedExpr): Null<Int> {
+		return switch [lhs.expr, rhs.expr] {
+			case [TLocal(v), TField(_, _) | TLocal(_)] if (_aliases[v.id]?.owner == id): v.id;
+			case _: null;
+		};
+	}
+
+	/**
+	 * Record a read of the local `v`, whose value `alias` holds, used as `use`: a read from a nested function captures the
+	 * value; one stored in another local of this node (`Held`) is used as that local's reads are (`Alias.links`); a write
+	 * is no use; and the receiver an inline method of no parameter was spliced in with (`substitutedReceiver`) is the
+	 * receiver of a call of that method, as `receiverCall`'s is.
+	 */
+	private function localRead(alias: Alias, v: TVar, use: FactUse, substituted: Null<InlineMethod>): Void {
+		// a nested function holds the local, so the value goes wherever that function goes
+		if (alias.owner != id) {
+			aliasUse(alias, Value);
+			return;
+		}
+		switch use {
+			case Held(other) if (_aliases[other]?.owner == id):
+				if (!alias.links.contains(other)) alias.links.push(other);
+			case Assigned:
+			case _:
+				final method: Null<String> = substitutedReceiver(v, substituted);
+				aliasUse(alias, method == null ? use : Call(method));
+		}
+	}
+
+	/**
+	 * The method an inlined call of which had the local `v` for its receiver, read directly under that method's spliced code
+	 * (`substituted`): one declaring no parameter, so that no value of the call site but its receiver reaches its body, of
+	 * the class of `v`'s type; null otherwise.
+	 */
+	private static function substitutedReceiver(v: TVar, substituted: Null<InlineMethod>): Null<String> {
+		if (substituted == null || substituted.arity != 0) return null;
+		final dot: Int = substituted.id.lastIndexOf('.');
+		final name: String = substituted.id.substr(dot + 1);
+		return switch TypeTools.followWithAbstracts(v.t) {
+			case TInst(c, _) if (TypedFactsMacro.typeId(c.get().pack, c.get().name) == substituted.id.substr(0, dot)): name;
+			case _: null;
+		};
+	}
+
+	/** The uses of the value the local `local` holds: its reads', and those of every local it is stored in, in turn. */
+	private function aliasUses(local: Int): Array<String> {
+		final out: Array<String> = [];
+		final pending: Array<Int> = [local];
+		final seen: Array<Int> = [];
+		while (pending.length > 0) {
+			final next: Int = pending.pop() ?? local;
+			if (seen.contains(next)) continue;
+			seen.push(next);
+			final alias: Null<Alias> = _aliases[next];
+			if (alias == null) continue;
+			for (u in alias.uses) if (!out.contains(u)) out.push(u);
+			for (l in alias.links) pending.push(l);
+		}
+		return out;
 	}
 
 	/** Record a field access: `tail` ends its fact with how a read value is used, or what a write stores. */
@@ -941,7 +1023,7 @@ final class TypedFactsWalk {
 			case Compare: '"u":"compare"';
 			case Iterable: '"u":"iter"';
 			case Update: '"u":"update"';
-			case Value | Statement | Held(_): '"u":"value"';
+			case Value | Statement | Held(_) | Assigned: '"u":"value"';
 		};
 	}
 
@@ -1014,14 +1096,21 @@ private enum FactUse {
 	/** A field read by a compound assignment or an increment of that field, the read half of its write. */
 	Update;
 
-	/** The initializer of the local `id`: the local's reads are the uses. */
+	/** The initializer of the local `id`, or a value an assignment statement stores in it: the local's reads are the uses. */
 	Held(id: Int);
+
+	/** The local an assignment writes: no use of the value it held. */
+	Assigned;
 }
 
-/** A local initialized from a field read: the node that declared it, and the uses its reads made, as `useText`. */
+/**
+ * A local a `var` declares: the node that declared it, the uses its reads made, as `useText`,
+ * and the locals of that node a read of it was stored in, whose reads are uses of its value too.
+ */
 private typedef Alias = {
 	final owner: String;
 	final uses: Array<String>;
+	final links: Array<Int>;
 }
 /** A field chain rooted at a native identifier (`TypedFactsWalk.nativeChain`): the identifier, its text, what a call through it hands. */
 private typedef NativeChain = {

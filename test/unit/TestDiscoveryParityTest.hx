@@ -1215,6 +1215,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.FactsFixGateE2ETest#testAProofTheTruthContradictsKeepsTheLoop :: control :: M-REACH-PROVEN-TRUTH',
 			'unit.check.FactsFixGateE2ETest#testAReceiverTheFactsTypeAsANonExternClassLosesItsToString :: control :: M-TOSTRING-FACTS-CLASS,M-TOSTRING-FACTS-EXTERN,M-FACTS-ESCAPE-SHIFT',
 			'unit.check.FactsFixGateE2ETest#testAStaticImportedUnderAnotherNameKeepsTheLoopWithoutTheTruth :: control :: M-REACH-IMPORT-ALIAS,M-REACH-IMPORT-ALIAS-WORDS',
+			'unit.check.FactsFixGateE2ETest#testAValueStoredInALocalOnlyIteratedLetsTheLoopRewrite :: control :: M-FACTS-ASSIGN-HELD,M-TOUCH-TYPED-HELD-REGION',
 			'unit.check.FactsFixGateE2ETest#testAnAbstractTheFactsTypeIsNeverJudgedByAnotherDeclarationOfItsName :: control :: M-FOLD-FACTS-PLAIN-KINDS',
 			'unit.check.FactsFixGateE2ETest#testAnOperandTheFactsTypeLetsTheMergeThrough :: control :: M-FOLD-FACTS-OPERAND,M-FACTS-VALUE-TYPE-FLOWS',
 			'unit.check.FactsFixGateE2ETest#testWhatTheConfigurationsRecordDifferentlyKeepsEveryFixOff :: control :: M-FACTS-ALIKE-FOLD,M-FACTS-ALIKE-TOSTRING,M-FACTS-META-UNION',
@@ -1874,6 +1875,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.TypedFactsProbeTest#testAFieldReadAnInlinedMethodTakesAsItsReceiverIsTheCallsReceiver :: control :: '
 				+ 'M-FACTS-INLINED-RECEIVER,M-FACTS-RECEIVER-BLOCK,M-FACTS-RECEIVER-PARAM',
 			'unit.check.TypedFactsProbeTest#testAFieldReadSaysHowItsValueIsUsed :: control :: M-FACTS-USE,M-FACTS-HELD,M-FACTS-CAPTURE',
+			'unit.check.TypedFactsProbeTest#testAFieldValueStoredInALocalIsUsedAsTheLocalsReads :: control :: M-FACTS-ASSIGN-HELD,M-FACTS-ASSIGNED-NO-USE,M-FACTS-ASSIGNED-TARGET,M-FACTS-ALIAS-LINK,M-FACTS-HELD-LOCAL,M-FACTS-SUBSTITUTED-RECEIVER,M-FACTS-SUBSTITUTED-ARITY,M-FACTS-SUBSTITUTED-OWNER,M-FACTS-ASSIGN-STATEMENT,M-FACTS-ASSIGN-OWNER,M-FACTS-HELD-FLAG',
 			'unit.check.TypedFactsProbeTest#testAFileWrittenWhileTheCompileRanIsStale :: control :: M-FACTS-WRITTEN-DURING,M-FACTS-CHANGED-STALE',
 			'unit.check.TypedFactsProbeTest#testALostSplicedFactMarksItsNodeAndOnlyTheStdIsReflection :: control :: M-FACTS-STALE-FOREIGN,M-FACTS-REFLECTION-PATH',
 			'unit.check.TypedFactsProbeTest#testARangeMeetingTheBodyIsItsOwnCode :: control :: M-FACTS-ABSTRACT-THIS',
@@ -2674,6 +2676,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-TEXT-DECLARES',
 			'unit.query.MemberReachFactsTest#testALocalTheCompilerBindsAValueTheTextWritesToIsItsTextUnderTheTruth :: control :: '
 				+ 'M-FACTS-TEXT-BINDING',
+			'unit.query.MemberReachFactsTest#testALocalTheMemberIsStoredInIsFollowedThroughItsReadsUnderTheTruth :: control :: M-FACTS-ASSIGN-HELD,M-FACTS-SUBSTITUTED-RECEIVER,M-FACTS-ALIAS-LINK,M-FACTS-CAPTURE',
 			'unit.query.MemberReachFactsTest#testALoopOverAProjectIteratorRunsItsNextUnderTheTruth :: control :: M-FACTS-ITER',
 			'unit.query.MemberReachFactsTest#testAMacroBuiltTypeAnswersFromItsTextOnlyWhenItsFactsAreItsText :: control :: '
 				+ 'M-FACTS-TEXT-SPELLED',
@@ -2720,6 +2723,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-INDEX-ALTERNATE-DROPPED,M-INDEX-ALTERNATE-MEMBERS',
 			'unit.query.MemberReachFactsTest#testAPropertyReadStraightFromItsStorageIsAnsweredUnderTheTruth :: control :: '
 				+ 'M-REACH-PROPERTY-STRAIGHT,M-REACH-PROPERTY-GETTER,M-REACH-FACTS-FIELDS-UNTRUE',
+			'unit.query.MemberReachFactsTest#testAPushThroughALocalHoldingTheMemberInsideTheRegionReachesItUnderTheTruth :: control :: M-TOUCH-TYPED-HELD-REGION,M-FACTS-HELD-FLAG',
 			'unit.query.MemberReachFactsTest#testAReadOfAnInlinedArgumentAtTheValueTheTextWritesIsItsTextUnderTheTruth :: control :: '
 				+ 'M-FACTS-TEXT-READ-AT-VALUE,M-FACTS-TEXT-INTERPOLATED-VALUE,M-FACTS-TEXT-LITERAL-END',
 			'unit.query.MemberReachFactsTest#testAReflectedObjectOfExactlyItsClassIsNoSubclassUnderTheTruth :: control :: '
@@ -4833,7 +4837,19 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-COPY-TYPE-HOMES',
 			'M-REACH-COPY-ELSEWHERE',
 			'M-GRAPH-REFACET-FURTHER',
-			'M-GRAPH-REFACET-RETRACT'
+			'M-GRAPH-REFACET-RETRACT',
+			'M-FACTS-ASSIGN-HELD',
+			'M-FACTS-ASSIGNED-NO-USE',
+			'M-FACTS-ASSIGNED-TARGET',
+			'M-FACTS-ALIAS-LINK',
+			'M-FACTS-HELD-LOCAL',
+			'M-FACTS-SUBSTITUTED-RECEIVER',
+			'M-FACTS-SUBSTITUTED-ARITY',
+			'M-FACTS-SUBSTITUTED-OWNER',
+			'M-FACTS-ASSIGN-STATEMENT',
+			'M-FACTS-ASSIGN-OWNER',
+			'M-FACTS-HELD-FLAG',
+			'M-TOUCH-TYPED-HELD-REGION'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
@@ -4968,7 +4984,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-ELEMENT-WRITE :: anyparse.check.TypedFactsWalk#target',
 			'M-FACTS-USE :: anyparse.check.TypedFactsWalk#visit',
 			'M-FACTS-HELD :: anyparse.check.TypedFactsWalk#visit',
-			'M-FACTS-CAPTURE :: anyparse.check.TypedFactsWalk#visit',
+			'M-FACTS-CAPTURE :: anyparse.check.TypedFactsWalk#localRead',
 			'M-FACTS-FRESH :: anyparse.check.TypedFactsWalk#target',
 			'M-FACTS-FRESH-DISCARDED :: anyparse.check.TypedFactsWalk#visit',
 			'M-FACTS-INLINED-RECEIVER :: anyparse.check.TypedFactsWalk#visit',
@@ -5006,6 +5022,17 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-GENERIC-BUILT :: anyparse.check.TypedFactsMacro#genericBuilt',
 			'M-FACTS-ROUNDS :: anyparse.check.TypedFactsMacro#run',
 			'M-FACTS-SPLICED-REFLECTION-FROM :: anyparse.check.TypedFactsWalk#at',
+			'M-FACTS-ASSIGN-HELD :: anyparse.check.TypedFactsWalk#visit',
+			'M-FACTS-ASSIGNED-NO-USE :: anyparse.check.TypedFactsWalk#localRead',
+			'M-FACTS-ASSIGNED-TARGET :: anyparse.check.TypedFactsWalk#target',
+			'M-FACTS-ALIAS-LINK :: anyparse.check.TypedFactsWalk#localRead',
+			'M-FACTS-HELD-LOCAL :: anyparse.check.TypedFactsWalk#visit',
+			'M-FACTS-SUBSTITUTED-RECEIVER :: anyparse.check.TypedFactsWalk#localRead',
+			'M-FACTS-SUBSTITUTED-ARITY :: anyparse.check.TypedFactsWalk#substitutedReceiver',
+			'M-FACTS-SUBSTITUTED-OWNER :: anyparse.check.TypedFactsWalk#substitutedReceiver',
+			'M-FACTS-ASSIGN-STATEMENT :: anyparse.check.TypedFactsWalk#visit',
+			'M-FACTS-ASSIGN-OWNER :: anyparse.check.TypedFactsWalk#storedLocal',
+			'M-FACTS-HELD-FLAG :: anyparse.check.TypedFactsWalk#root',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

@@ -97,8 +97,9 @@ typedef FieldFact = {
 	 * How a read's value is used (null for a write): `call` (the receiver of a call of `method`, an inlined one's too:
 	 * the local the compiler binds it to is the method's code, not a value handed on), `index`, `elemWrite`,
 	 * `member` (the receiver of a field read), `memberWrite`, `compare`, `iter`, `update` (the read half of a compound
-	 * write of the field) or `value` — anything else, an escape. A value the compiler holds in a local is read once per
-	 * use of that local, each a fact of its own at the same position (`TypedFactsProbe`).
+	 * write of the field) or `value` — anything else, an escape. A value held in a local — by the compiler or by a `var`
+	 * or an assignment of the text — is read once per use of that local, each a fact of its own at the same position
+	 * (`TypedFactsProbe`, `held`).
 	 */
 	final use: Null<String>;
 
@@ -110,6 +111,12 @@ typedef FieldFact = {
 	 * there (an array literal, a `new Array`, `null`), and the assignment's own value goes nowhere.
 	 */
 	final fresh: Bool;
+
+	/**
+	 * For a read, whether its value was held in a local and `use` is a use of a read of that local: one that may lie
+	 * anywhere in the node, not at this position.
+	 */
+	final held: Bool;
 }
 
 /**
@@ -1072,7 +1079,8 @@ final class CompilerFacts {
 					at: where,
 					use: f.u,
 					method: f.m,
-					fresh: f.fresh ?? false
+					fresh: f.fresh ?? false,
+					held: f.h ?? false
 				}: FieldFact),
 				node.fields
 			);
@@ -1401,7 +1409,8 @@ private typedef NodeRecord = {
 		p: Array<Int>,
 		?u: String,
 		?m: String,
-		?fresh: Bool
+		?fresh: Bool,
+		?h: Bool
 	}>;
 	final ?elems: Array<{ r: String, rp: Array<Int>, p: Array<Int> }>;
 	final ?flows: Array<{

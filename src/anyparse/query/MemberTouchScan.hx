@@ -440,7 +440,8 @@ final class MemberTouchScan {
 					at: { file: n.at.file, span: s },
 					use: f.use,
 					method: f.method,
-					fresh: f.fresh
+					fresh: f.fresh,
+					held: f.held
 				}
 		];
 	}
@@ -505,28 +506,33 @@ final class MemberTouchScan {
 
 	/**
 	 * Record the typed accesses `accesses` of the member in the function `id` (`typedAccesses`): each touch, escape and
-	 * touch meeting `region` of `regionFile`, as `classifyTyped` reads it. A touch is on the function's own `this` only
-	 * where its text spells the bare name or `this.name` (`onSelf`). The facts are code a listed build compiled, so no
-	 * liveness is asked of them.
+	 * touch meeting `region` of `regionFile`, as `classifyTyped` reads it — a touch through a local holding the value
+	 * (`FieldFact.held`) wherever the declaration holding it holds the region, since the local's reads may lie anywhere in
+	 * it. A touch is on the function's own `this` only where its text spells the bare name or `this.name` (`onSelf`). The
+	 * facts are code a listed build compiled, so no liveness is asked of them.
 	 */
 	private function recordTyped(
 		g: CallGraph, id: String, name: String, accesses: Array<FieldFact>, access: ReachAccess, arrayTyped: Bool, out: MemberTouches,
 		regionFile: String, region: Null<Span>
 	): Void {
-		final held: Null<String> = g.node(id)?.file;
+		final node: Null<FnNode> = g.node(id);
+		final home: Null<String> = node?.file;
 		final view: Null<FactsView> = g.facts?.view;
-		if (held == null || view == null) return;
+		if (home == null || view == null) return;
 		// a body a build macro made lies in no text: none of it is the region's, and none is `this.name` spelled
 		final made: Bool = g.facts?.adopted.exists(id) == true;
 		for (f in accesses) {
 			final span: Span = f.at.span;
 			// the text of the declaration holding the access, which may be another than the node's first (`nodeAccesses`)
-			final file: String = made ? held : declarationHolding(g, id, f.at, view)?.file ?? held;
+			final holding: Null<FnDeclaration> = made ? null : declarationHolding(g, id, f.at, view);
+			final file: String = holding?.file ?? home;
 			final verdict: Verdict = classifyTyped(f, access, arrayTyped);
 			if (verdict.escape) out.escapes.push({ file: made ? f.at.file : file, span: span });
 			if (!verdict.touch) continue;
-			// the compiler may place what it made of an expression at a range wider than the expression's own
-			if (!made && file == regionFile && meets(span, region) && out.inRegion == null) out.inRegion = {
+			// the compiler may place what it made of an expression at a range wider than the expression's own; a local holding
+			// the value is read anywhere in the function
+			final at: Null<Span> = f.held ? holding?.span ?? node?.span : span;
+			if (!made && file == regionFile && meets(at, region) && out.inRegion == null) out.inRegion = {
 				from: 'entry',
 				to: name,
 				kind: 'touch',
@@ -798,9 +804,9 @@ final class MemberTouchScan {
 			.find(d -> at.file == view.table.keyOf(d.file) && d.span.from <= at.span.from && at.span.to <= d.span.to);
 	}
 
-	/** Whether `span` shares a position with `region`; false when there is no region. */
-	private static function meets(span: Span, region: Null<Span>): Bool {
-		return region != null && span.from < region.to && region.from < span.to;
+	/** Whether `span` shares a position with `region`; false when either is missing. */
+	private static function meets(span: Null<Span>, region: Null<Span>): Bool {
+		return span != null && region != null && span.from < region.to && region.from < span.to;
 	}
 
 	/**

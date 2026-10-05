@@ -775,6 +775,58 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
+	@:pin('control') @:killer('M-FACTS-ASSIGN-HELD') @:killer('M-FACTS-ASSIGNED-NO-USE') @:killer('M-FACTS-ASSIGNED-TARGET')
+	@:killer('M-FACTS-ALIAS-LINK') @:killer('M-FACTS-HELD-LOCAL') @:killer('M-FACTS-SUBSTITUTED-RECEIVER')
+	@:killer('M-FACTS-SUBSTITUTED-ARITY') @:killer('M-FACTS-SUBSTITUTED-OWNER') @:killer('M-FACTS-ASSIGN-STATEMENT')
+	@:killer('M-FACTS-ASSIGN-OWNER') @:killer('M-FACTS-HELD-FLAG')
+	public function testAFieldValueStoredInALocalIsUsedAsTheLocalsReads(): Void {
+		// a value an assignment statement stores in a local of the node, in any branch and beside other values, is used as
+		// every read of that local and of the locals a read of it is stored in: the receiver of a key-value loop's inlined
+		// `keyValueIterator`, an index, a `length`; a write of the local is no use. A store whose own value goes on, one into a
+		// local of another node, and a local spliced in as an inline method's argument, or as the receiver of a method of
+		// another class than its own, use the value as a value
+		final source: String = 'class Main {\n\tvar items:Array<Int> = [1];\n\tvar others:Array<Int> = [2];\n'
+			+ '\tvar head:Node = new Node();\n\tvar sub:Sub = new Sub();\n\tfunction new() {}\n'
+			+ '\tstatic function keep(a:Array<Int>):Void {}\n' + '\tfunction use(c:String) {\n\t\tvar l:Array<Int> = null;\n'
+			+ '\t\tif (c == "h") l = items; else if (c == "v") l = others;\n\t\tfor (i => v in l) trace(i + v);\n'
+			+ '\t\tvar copy:Array<Int> = l;\n\t\ttrace(copy[0] + copy.length);\n'
+			+ '\t\tvar p:Array<Int> = null;\n\t\tp = items;\n\t\tp.push(1);\n'
+			+ '\t\tvar h:Array<Int> = null;\n\t\tkeep(h = items);\n\t\ttrace(h.length);\n'
+			+ '\t\tvar q:Array<Int> = null;\n\t\ttrace(q.length);\n\t\tvar f = function() {\n\t\t\tq = items;\n\t\t};\n'
+			+ '\t\tvar n:Node = new Node();\n\t\tvar m:Node = null;\n\t\tm = head;\n\t\tn.link(m);\n'
+			+ '\t\tvar s:Sub = null;\n\t\ts = sub;\n\t\ts.grab();\n\t}\n' + '\tpublic static function keepAny(b:Base):Void {}\n'
+			+ '\tstatic function main() new Main().use("h");\n}\n'
+			+ 'class Node {\n\tpublic var next:Null<Node> = null;\n\tpublic function new() {}\n'
+			+ '\tpublic inline function link(other:Node):Void next = other;\n}\n'
+			+ 'class Base {\n\tpublic function new() {}\n\tpublic inline function grab():Void Main.keepAny(this);\n}\n'
+			+ 'class Sub extends Base {}\n';
+		final scratch: Scratch = compile(['Main.hx' => source]);
+		final node: Null<FactNode> = scratch.facts?.node('Main.use');
+		Assert.notNull(node);
+		if (node != null) {
+			// the store from the nested function is a fact of that function's own node
+			final walked: Array<FieldFact> = node.fields.concat([for (id in node.fns) for (f in scratch.facts?.node(id)?.fields ?? []) f]);
+			function usesAt(field: String, at: String): String {
+				final from: Int = source.indexOf(at) + at.indexOf(field);
+				final uses: Array<String> = [];
+				for (f in walked) if (f.field == field && !f.write && f.at.span.from == from) {
+					final use: String = f.use + (f.method == null ? '' : ':${f.method}') + (f.held ? '' : '!');
+					if (!uses.contains(use)) uses.push(use);
+				}
+				uses.sort(Reflect.compare);
+				return uses.join(',');
+			}
+			Assert.equals('call:keyValueIterator,index,member', usesAt('items', 'l = items'), 'the stored value');
+			Assert.equals('call:keyValueIterator,index,member', usesAt('others', 'l = others'), 'the other branch');
+			Assert.equals('call:push', usesAt('items', 'p = items'), 'a push on the local');
+			Assert.equals('value!', usesAt('items', 'keep(h = items'), 'an assignment used as a value');
+			Assert.equals('value!', usesAt('items', 'q = items'), 'a store from a nested function');
+			Assert.equals('value', usesAt('head', 'm = head'), 'an inline method\'s argument');
+			Assert.equals('value', usesAt('sub', 's = sub'), 'the receiver of another class\'s method');
+		}
+		scratch.remove();
+	}
+
 	private static function compile(files: Map<String, String>, ?configurations: Array<Array<String>>, ?build: String): Scratch {
 		final entries: Array<{ name: String, source: String }> = [for (name => text in files) { name: name, source: text }];
 		entries.push({ name: 'build.hxml', source: build ?? BUILD });
