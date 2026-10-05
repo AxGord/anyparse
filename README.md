@@ -498,8 +498,8 @@ different lists, or some none, takes such a name to name any class.
 ```
 
 **`reflectiveMethodHolders`** is the same kind of declaration for the other half of
-reflection by a computed name: which classes' METHODS such a read may obtain as
-function values. A method read by a name computed at run time (`Reflect.field(o, name)`,
+reflection by a computed name: which classes' METHODS such a name may name — read
+as function values, or written over. A method read by a name computed at run time (`Reflect.field(o, name)`,
 `Reflect.getProperty`, any `Reflect`/`Type` member that may read a member's value)
 is a value of no type, so a call of a value of any function type may run it; without
 the key it may be any method of any object the read may be handed. With it, such a
@@ -513,12 +513,19 @@ subclass counts as one of each class it extends — the answer stays the conserv
 one). The same bound holds for what such an access RUNS: a method other than an
 accessor runs off an object only when its class is declared (it runs that class's
 methods and those it inherits), while `Reflect.getProperty`/`setProperty` still run the
-getter or setter of an object of any class. It bounds methods only: a variable is read
+getter or setter of an object of any class. The same bound holds for a WRITE by a
+computed name (`Reflect.setField`/`setProperty` handed a name computed at run time, or
+`Reflect` read as a value): it may replace a `dynamic` method only of an object of a
+declared class, so a call of a `dynamic` method of any other class runs its declared
+bodies and the values the facts see stored into it, by a typed write, by a write naming
+it, or through its constructor's parameter (without the key, such a write may store
+anything into any of them). It bounds methods only: a variable is read
 whatever the list says, and a name a literal spells still names its one member. The project's responsibility, read only
 under `reachConfigurationsComplete`, for the project's code and the libraries' alike;
-list the classes whose methods code obtains by a name it computes — a callback
-dispatcher calling the handler objects it was handed (lime's `JNI.onCallback`), a copy
-over `Type.getInstanceFields` — and no others: a read of parsed data, a structure or
+list the classes whose methods code obtains — or whose `dynamic` methods it replaces —
+by a name it computes: a callback dispatcher calling the handler objects it was handed
+(lime's `JNI.onCallback`), a copy over `Type.getInstanceFields`, a decoder setting the
+fields a payload names on an object of a class with a `dynamic` method — and no others: a read of parsed data, a structure or
 a JSON value obtains no method, and neither does one over the names `Reflect.fields`
 lists where that lists an instance's variables only (hxcpp, js). A glob
 matching no class the builds typed is reported once per run, and a run whose linted
