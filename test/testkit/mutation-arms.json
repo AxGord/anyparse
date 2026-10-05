@@ -11831,7 +11831,7 @@
 			"name": "M-GRAPH-REFLECT-SUPERTYPES",
 			"type": "anyparse.query.ReachGraph",
 			"method": "reflectedMembers",
-			"find": "for (id in typed.copy()) for (sup in facts.table.supertypesOf(id)) note(sup);",
+			"find": "for (id in objects) for (sup in facts.table.supertypesOf(id)) note(sup);",
 			"replace": "",
 			"note": "an object reflection acts on carries no member its type inherits"
 		},
@@ -12076,8 +12076,8 @@
 			"name": "M-METHODS-NATIVE-REFUSED",
 			"type": "anyparse.query.FactsMethodValues",
 			"method": "scan",
-			"find": "else if (n.incomplete.contains(REFLECTION_INLINED) && !namedReflection(n))",
-			"replace": "else if (n.natives.length > 0)\n\t\t\t\t'native'\n\t\t\telse if (n.incomplete.contains(REFLECTION_INLINED) && !namedReflection(n))",
+			"find": "else if (n.incomplete.contains(REFLECTION_INLINED) && !inlinedMemberless(n))",
+			"replace": "else if (n.natives.length > 0)\n\t\t\t\t'native'\n\t\t\telse if (n.incomplete.contains(REFLECTION_INLINED) && !inlinedMemberless(n))",
 			"note": "(precision) target code is taken to obtain any method as a value and rebind it, so no `this` is answered in a program holding any"
 		},
 		{
@@ -12621,6 +12621,38 @@
 			"find": "reflectiveMethodHolders: config.reflectiveMethodHolders,",
 			"replace": "",
 			"note": "`reflectiveMethodHolders` is never read out of `apqlint.json`"
+		},
+		{
+			"name": "M-METHODS-MEMBERLESS-RESULT",
+			"type": "anyparse.query.FactsMethodValues",
+			"method": "memberless",
+			"find": "case Function(_, Named(result, [])): VALUE_RESULTS.contains(result);",
+			"replace": "case Function(_, Named(result, [])): false;",
+			"note": "(precision) a reflective member the portable API does not list may read a member's value whatever its declared result, so hxcpp's `Type.nativeEnumEq` / `Type.getEnumValueIndex` obtain any method"
+		},
+		{
+			"name": "M-REFLECTED-HOLDERS-METHODS",
+			"type": "anyparse.query.ReachGraph",
+			"method": "reflectedMembers",
+			"find": "final held: Array<String> = methodValues(facts).declaredHolders(objects);",
+			"replace": "final held: Array<String> = objects;",
+			"note": "(precision) a reflective access by a computed name runs every method of every object it acts on, whatever `reflectiveMethodHolders` declares"
+		},
+		{
+			"name": "M-REFLECTED-HOLDERS-ACCESSORS",
+			"type": "anyparse.query.ReachGraph",
+			"method": "reflectedMembers",
+			"find": "if (owners.contains(id) || accessors.exists(p -> StringTools.startsWith(member, p)))",
+			"replace": "if (owners.contains(id))",
+			"note": "a property access by a computed name runs no accessor of an undeclared class"
+		},
+		{
+			"name": "M-REFLECTED-HOLDERS-INHERITED",
+			"type": "anyparse.query.ReachGraph",
+			"method": "reflectedMembers",
+			"find": "for (id in held) for (sup in facts.table.supertypesOf(id)) if (!owners.contains(sup)) owners.push(sup);",
+			"replace": "",
+			"note": "an object of a declared class runs only the methods its own class declares, none it inherits"
 		}
 	]
 }

@@ -20,8 +20,9 @@ using Lambda;
  * - a field read that is not a call (`FieldFact`) naming it: a closure (`FClosure`, a `bind` included), a read by name on
  *   a value of no class (`FDynamic`) or on a structure (`FAnon`), or an instance read of a field some build declares a
  *   method (a `dynamic` one's value, `super`'s);
- * - a reflective call (`ReflectionFact`) that may read a member's value by name — every `Reflect`/`Type` member not listed
- *   in `MEMBERLESS_REFLECTION` — naming it by a literal, or by a name computed at run time.
+ * - a reflective call (`ReflectionFact`) that may read a member's value by name — every `Reflect`/`Type`
+ *   member but one whose result never holds one (`memberless`: listed in `MEMBERLESS_REFLECTION`, or declared returning a
+ *   value of no function, `VALUE_RESULTS`) — naming it by a literal, or by a name computed at run time.
  * A read off an object that cannot be an instance of the method's class or of a subclass obtains another method: the
  * object is what the facts type it, a subtype of that unless it is an object of exactly its class, and an instance that
  * escaped the type system (`ValueEscapes`) — the method's own class does as soon as its `this` is handed to a reflective
@@ -76,9 +77,10 @@ final class FactsMethodValues {
 	private static final REFLECTION_CLASSES: Array<String> = ['Reflect', 'Type'];
 
 	/**
-	 * The reflective members whose result never holds a member's value read off an object: they test, write, list names,
-	 * compare, call (a called function's result is its own code's, which the facts read), or make and describe class and
-	 * enum values. Any other `Reflect`/`Type` member may read one.
+	 * The reflective members whose result never holds a member's value read off an object, though its type could: they
+	 * list names, call (a called function's result is its own code's, which the facts read), or make and describe class and
+	 * enum values. A member whose declared result holds no function value (`VALUE_RESULTS`) reads none either (`memberless`);
+	 * any other `Reflect`/`Type` member may read one.
 	 */
 	private static final MEMBERLESS_REFLECTION: Array<String> = [
 		'Reflect.hasField',
@@ -114,6 +116,13 @@ final class FactsMethodValues {
 		'Type.enumIndex',
 		'Type.allEnums'
 	];
+
+	/**
+	 * The result types no value of which is a function's: a reflective member every build declares returning one of them
+	 * hands the program no member's value (`memberless`) — a target's own, such as hxcpp's `Type.getEnumValueIndex` and
+	 * `Type.nativeEnumEq`, the portable API leaves undeclared.
+	 */
+	private static final VALUE_RESULTS: Array<String> = ['Void', 'Bool', 'Int', 'Float', 'String'];
 
 	/** The type of an enum as a value: it holds no instance of a class. */
 	private static inline final ENUM_VALUE: String = 'Enum';
@@ -232,7 +241,7 @@ final class FactsMethodValues {
 	 * (`_holders`), each by its own qualified name — a subclass of a declared class is declared by its own name or not at all
 	 * — or all of them when it declares none.
 	 */
-	private function declaredHolders(hierarchy: Array<String>): Array<String> {
+	public function declaredHolders(hierarchy: Array<String>): Array<String> {
 		final holders: Null<Array<EReg>> = _holders;
 		return holders == null ? hierarchy : [for (id in hierarchy) if (holders.exists(p -> p.match(id))) id];
 	}
@@ -321,7 +330,7 @@ final class FactsMethodValues {
 			final n: FactNode = made;
 			final lost: Null<String> = if (n.incomplete.contains(STALE_FOREIGN))
 				'a fact of `$id` lies in a file whose text the table no longer has'
-			else if (n.incomplete.contains(REFLECTION_INLINED) && !namedReflection(n))
+			else if (n.incomplete.contains(REFLECTION_INLINED) && !inlinedMemberless(n))
 				'a reflective body spliced into `$id` lost the name it was handed'
 			else
 				null;
@@ -335,7 +344,7 @@ final class FactsMethodValues {
 			for (r in n.reflection) {
 				final target: String = r.target;
 				if (REBINDING_CALLS.contains(target)) out.rebinds = true;
-				if (MEMBERLESS_REFLECTION.contains(target)) continue;
+				if (memberless(target)) continue;
 				if (r.isValue || REFLECTION_CLASSES.contains(target)) {
 					// whatever calls it later hands it a name computed there, and any object: the project's declaration bounds
 					// what that obtains (`declaredHolders`); a reflective class as a value may also rebind
@@ -361,19 +370,38 @@ final class FactsMethodValues {
 
 	/**
 	 * Whether every reflective body spliced into `n` (`reflection-inlined`) is one its `inlined` calls name, each of a member
-	 * that reads no member's value (`MEMBERLESS_REFLECTION`): what the others read is lost with their name.
+	 * that reads no member's value (`memberless`): what the others read is lost with their name.
 	 */
-	private static function namedReflection(n: FactNode): Bool {
+	private function inlinedMemberless(n: FactNode): Bool {
 		var named: Bool = false;
 		for (c in n.calls) {
 			final target: Null<String> = c.target;
 			if (c.access != INLINED || target == null) continue;
 			final dot: Int = target.lastIndexOf('.');
 			if (dot < 0 || !REFLECTION_CLASSES.contains(target.substr(0, dot))) continue;
-			if (!MEMBERLESS_REFLECTION.contains(target)) return false;
+			if (!memberless(target)) return false;
 			named = true;
 		}
 		return named;
+	}
+
+	/**
+	 * Whether the reflective member `target` (`Reflect.field`, `Type.getEnumValueIndex`) hands the program no member's value
+	 * read off an object: it is one that never does (`MEMBERLESS_REFLECTION`), or every build declares it a function, of one
+	 * signature, returning a value of no function (`VALUE_RESULTS`). A class read as a value, and a member no build declares,
+	 * may hand one.
+	 */
+	private function memberless(target: String): Bool {
+		if (MEMBERLESS_REFLECTION.contains(target)) return true;
+		final dot: Int = target.lastIndexOf('.');
+		final declared: Null<FieldDeclFact> = dot < 0
+			? null
+			: _table.type(target.substr(0, dot))?.fields.find(f -> f.name == target.substr(dot + 1));
+		return declared != null && declared.types.length > 0 && !declared.overloads.exists(o -> o > 0)
+			&& declared.types.foreach(t -> switch FactsTypeTree.read(t) {
+				case Function(_, Named(result, [])): VALUE_RESULTS.contains(result);
+				case _: false;
+			});
 	}
 
 	/**

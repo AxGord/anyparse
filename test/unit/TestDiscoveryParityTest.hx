@@ -2581,7 +2581,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-REACH-ALIKE,M-FACTS-TRUTH-CONTEXT-ALWAYS',
 			'unit.query.MemberReachFactsTest#testAClassAComputedNameMakesIsOneTheProjectDeclaresUnderTheTruth :: control :: M-ESCAPES-FACTS-DECLARED-ANY,M-ESCAPES-FACTS-DECLARED-NONE,M-ESCAPES-FACTS-DECLARED-PRODUCED',
 			'unit.query.MemberReachFactsTest#testAClassAProducerNamesEscapesUnderTheTruth :: control :: M-ESCAPES-FACTS-PRODUCED',
-			'unit.query.MemberReachFactsTest#testAComputedNameStillReadsAVariableOfAnyClassWhateverTheProjectDeclaresUnderTheTruth :: control :: M-HOLDERS-FIELDS-UNBOUNDED',
+			'unit.query.MemberReachFactsTest#testAComputedNameRunsOnlyAMethodOfAClassTheProjectDeclaresUnderTheTruth :: control :: M-REFLECTED-HOLDERS-METHODS,M-REFLECTED-HOLDERS-ACCESSORS,M-REFLECTED-HOLDERS-INHERITED',
+			'unit.query.MemberReachFactsTest#testAComputedNameStillReadsAVariableOfAnyClassWhateverTheProjectDeclaresUnderTheTruth :: control :: M-HOLDERS-FIELDS-UNBOUNDED,M-GRAPH-REFLECT-SUPERTYPES',
 			'unit.query.MemberReachFactsTest#testAConfigurationWithoutFactsLeavesTheSyntax :: control :: M-FACTS-REACH-DROPPED',
 			'unit.query.MemberReachFactsTest#testAConstructionALiteralWritesIsItsTextUnderTheTruth :: control :: M-FACTS-TEXT-LITERAL',
 			'unit.query.MemberReachFactsTest#testAConstructionOfAnAbstractIsItsTextUnderTheTruth :: control :: M-FACTS-TEXT-ABSTRACT-NEW',
@@ -2700,13 +2701,14 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testAReflectiveAccessOnAnObjectOfAnUnrelatedClassReachesNoneOfTheMemberUnderTheTruth :: control :: '
 				+ 'M-REACH-REFLECT-BOUND-NONE,M-HAZARDS-REFLECT-RECEIVERS,M-HAZARDS-REFLECT-RECEIVERS-ADDED,M-FACTS-REFL-RECEIVER,M-REACH-REFLECT-BODY',
 			'unit.query.MemberReachFactsTest#testAReflectiveAccessOnAnObjectThatMayCarryTheMemberIsADynamicNameUnderTheTruth :: control :: '
-				+ 'M-REACH-REFLECT-RELATED,M-GRAPH-REFLECT-SUBTYPES,M-GRAPH-REFLECT-SUPERTYPES',
+				+ 'M-REACH-REFLECT-RELATED,M-GRAPH-REFLECT-SUBTYPES',
 			'unit.query.MemberReachFactsTest#testAReflectiveAccessRunsTheAccessorsOfTheTypeItReachesUnderTheTruth :: control :: '
 				+ 'M-REACH-REFLECT-ADMIT',
 			'unit.query.MemberReachFactsTest#testAReflectiveCallTheSyntaxDoesNotSeeNamesNothingUnderTheTruth :: control :: '
 				+ 'M-FACTS-TRUTH-REFLECTION,M-FACTS-TRUTH-REFLECTION-TWIN',
 			'unit.query.MemberReachFactsTest#testAReflectiveMemberReadAsAValueIsUnknown :: control :: M-FACTS-REACH-REFLECT-VALUE',
 			'unit.query.MemberReachFactsTest#testAReflectiveMemberReadAsAValueObtainsOnlyADeclaredClassesMethodsUnderTheTruth :: control :: M-METHODS-HOLDERS-VALUE',
+			'unit.query.MemberReachFactsTest#testAReflectiveMemberWhoseResultHoldsNoMemberValueObtainsNoMethodUnderTheTruth :: control :: M-METHODS-MEMBERLESS-RESULT',
 			'unit.query.MemberReachFactsTest#testARegexLiteralWithFlagsIsItsTextUnderTheTruth :: control :: M-FACTS-TEXT-LITERAL-FLAGS',
 			'unit.query.MemberReachFactsTest#testARegionOfABodyABuildMacroReplacedIsNoProofUnderTheTruth :: control :: '
 				+ 'M-REACH-ENTRY-REWRITTEN,M-REACH-ENTRY-MEMBER,M-REACH-TEXTUAL-ALWAYS',
@@ -4733,7 +4735,11 @@ class TestDiscoveryParityTest extends Test {
 			'M-HOLDERS-WARN',
 			'M-HOLDERS-READ',
 			'M-HOLDERS-MERGE',
-			'M-HOLDERS-PARSE'
+			'M-HOLDERS-PARSE',
+			'M-METHODS-MEMBERLESS-RESULT',
+			'M-REFLECTED-HOLDERS-METHODS',
+			'M-REFLECTED-HOLDERS-ACCESSORS',
+			'M-REFLECTED-HOLDERS-INHERITED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
