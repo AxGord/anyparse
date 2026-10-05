@@ -88,9 +88,7 @@ final class RedundantMapIterKey implements Check {
 		return RunScan.editsWith(plugin, source, readSeams(plugin.refShape()), (tree, s) -> {
 			final nodeByKey: Map<String, QueryNode> = [];
 			indexFor(tree, s.forStmtKind, nodeByKey);
-			final provable: (
-				loop:QueryNode, valueBinderKinds:Array<String>
-			) -> Bool = proofOf(
+			final provable: (loop:QueryNode, valueBinderKinds:Array<String>) -> Bool = proofOf(
 				tree, source, file, plugin,
 				RefactorSupport.lazySymbolIndex(
 					[{ file: file, source: source }], plugin, RefactorSupport.resolutionIndexOf(plugin) ?? index
