@@ -220,6 +220,33 @@ class MemberReachFactsTest extends Test {
 	private static final WORDS: String = 'class Words {\n\tpublic static function tr(s:String):String return s;\n\n'
 		+ '\tpublic static function say(s:String):Void {}\n}\n';
 
+	/**
+	 * The expression macros of `Mac`: `gen` expands to a push onto `Main.items`, `t` to a call of `Words.tr` (TM's `Lang.t`),
+	 * `show` to a call of `Words.say` handed `Main.obj` converted to a string.
+	 */
+	private static final EXPRESSION_MACROS: String = 'class Mac {\n\tpublic static macro function gen() return macro Main.items.push(1);\n\n'
+		+ '\tpublic static macro function t(e:haxe.macro.Expr) return macro Words.tr($$e);\n\n'
+		+ '\tpublic static macro function show() return macro Words.say("" + Main.obj);\n}\n';
+
+	/** `valueCallFixture` storing a callback of the type `Rx.map` calls, which grows `items`. */
+	private static function matching(more: String, ?region: String, ?base: String, ?map: String): String {
+		return valueCallFixture('(Rx)->String', '(x:Rx) -> { items.push(1); return "k"; }', more, region, base, map);
+	}
+
+	/** `Rx.map` calling a local copy of its parameter (`valueCallFixture`): what it calls is no parameter. */
+	private static inline final BY_TYPE: String =
+		'public function map(f:(Rx)->String):String {\n\t\tfinal h:(Rx)->String = f;\n\t\treturn h(this);\n\t}';
+
+	/**
+	 * `Main.hx` whose `main` runs `statement` before its loop over `items`, whose region runs nothing; `Main.obj` holds a
+	 * `Clear`, whose `toString` grows `items`.
+	 */
+	private static function expandedBefore(statement: String): String {
+		return LOOP_HEAD + '\tpublic static var obj:Clear = new Clear();\n\n\tstatic function main() {\n\t\t' + statement + '\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ var n:Int = i; /*>*/ }\n\t}\n}\n'
+			+ 'class Clear {\n\tpublic function new() {}\n\n\tpublic function toString():String {\n\t\tMain.items.push(1);\n\t\treturn "c";\n\t}\n}\n';
+	}
+
 	/** A class holding `n`, and `q` read through a getter. */
 	private static final HOLDER: String = 'class Holder {\n\tpublic var n:Int = 0;\n\tpublic var q(get, never):Int;\n\n'
 		+ '\tpublic function new() {}\n\n\tfunction get_q():Int return n;\n}\n';
@@ -931,6 +958,175 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main, 'Mac.hx' => mac]), r -> r.match(Unknown(Reification(_, _))));
 	}
 
+	@:pin('control') @:killer('M-TOUCH-EXPANSION-CODE') @:killer('M-FACTS-WITHIN-EXPANSION-NULL')
+	public function testAMacroExpansionRunsItsTypedCodeAtItsCallUnderTheTruth(): Void {
+		// every build compiled what `Mac.gen()` expanded to: its facts, at `Mac.hx`'s positions, run where the call was — in
+		// `Util.f`, which the region calls, and in the region itself; so does the conversion of `Main.obj` `Mac.show()` builds
+		final called: String = LOOP_HEAD
+			+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Util.f(); /*>*/ }\n\t}\n}\n'
+			+ 'class Util {\n\tpublic static function f():Void Mac.gen();\n}\n';
+		assertMatch(compiledTruthAsk(['Main.hx' => called, 'Mac.hx' => EXPRESSION_MACROS]), r -> r.match(Reached(_)));
+		final direct: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Mac.gen(); /*>*/ }\n\t}\n}\n';
+		assertMatch(compiledTruthAsk(['Main.hx' => direct, 'Mac.hx' => EXPRESSION_MACROS]), r -> r.match(Reached(_)));
+		final shown: String = StringTools.replace(expandedBefore(''), 'var n:Int = i;', 'Mac.show();');
+		assertMatch(compiledTruthAsk(['Main.hx' => shown, 'Mac.hx' => EXPRESSION_MACROS, 'Words.hx' => WORDS]), r -> r.match(Reached(_)));
+	}
+
+	@:pin('control') @:killer('M-FACTS-EXPANSION-PLACED') @:killer('M-FACTS-EXPANSION-BLIND')
+	@:killer('M-GRAPH-FACTS-EXPANSION-CALL')
+	public function testAMacroExpansionIsAnsweredFromItsFactsUnderTheTruth(): Void {
+		// TM's `t('…')`: the expansion calls `Words.tr`, which changes nothing — and, in the twin, `Loud.tr`, which does
+		final quiet: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Util.f(); /*>*/ }\n\t}\n}\n'
+			+ 'class Util {\n\tpublic static function f():Void Words.say(Mac.t(\'x\'));\n}\n';
+		assertMatch(compiledTruthAsk(['Main.hx' => quiet, 'Mac.hx' => EXPRESSION_MACROS, 'Words.hx' => WORDS]), r -> r.match(Proven));
+		// written in the region itself, beside a `Clear` whose `toString` grows `items`: the expansion converts nothing
+		final region: String = StringTools.replace(expandedBefore(''), 'var n:Int = i;', 'Words.say(Mac.t(\'x\'));');
+		assertMatch(compiledTruthAsk(['Main.hx' => region, 'Mac.hx' => EXPRESSION_MACROS, 'Words.hx' => WORDS]), r -> r.match(Proven));
+		final loud: String = 'class Words {\n\tpublic static function tr(s:String):String {\n\t\tMain.items.push(1);\n\t\treturn s;\n\t}\n\n'
+			+ '\tpublic static function say(s:String):Void {}\n}\n';
+		assertMatch(compiledTruthAsk(['Main.hx' => quiet, 'Mac.hx' => EXPRESSION_MACROS, 'Words.hx' => loud]), r -> r.match(Reached(_)));
+	}
+
+	@:pin('control') @:killer('M-FACTS-WITHIN-EXPANSION')
+	@:killer('M-GRAPH-FACTS-EXPANSION-SITE') @:killer('M-FACTS-EXPANSION-SPLICE-SITES') @:killer('M-TOUCH-EXPANSION-RUNS')
+	@:killer('M-FACTS-WALK-BLOCK-GAP')
+	public function testAMacroExpansionRunsWhereItsCallIsUnderTheTruth(): Void {
+		// each expansion lies before the loop, in `main`'s own code or in the code of the inlined `Shown.mask`: what it does —
+		// grow `items`, call `Words.tr`, convert a `Clear` to a string — it does where its call was, which the region is not
+		final loud: String = 'class Words {\n\tpublic static function tr(s:String):String {\n\t\tMain.items.push(1);\n\t\treturn s;\n\t}\n\n'
+			+ '\tpublic static function say(s:String):Void {}\n}\n';
+		final shown: String = 'class Shown {\n\tpublic static inline function mask():Void Words.say(Mac.t(\'Open\'));\n}\n';
+		for (statement in ['Mac.gen();', 'Words.say(Mac.t(\'x\'));', 'Mac.show();', 'Shown.mask();']) {
+			final files: Map<String, String> = [
+				'Main.hx' => expandedBefore(statement),
+				'Mac.hx' => EXPRESSION_MACROS,
+				'Words.hx' => loud,
+				'Shown.hx' => shown
+			];
+			assertMatch(compiledTruthAsk(files), r -> r.match(Proven));
+		}
+	}
+
+	@:pin('control') @:killer('M-GRAPH-FACTS-VALUE-CALLED') @:killer('M-REACH-VALUE-CALLED')
+	public function testACallOfAParameterRunsOnlyTheFunctionsItsInvocationsHandItUnderTheTruth(): Void {
+		// `Rx.map` calls its parameter `f`, which its one invocation hands `x -> "a"`: the stored `(Rx)->String` that grows
+		// `items` is never `f` — although a computed name reads a member off a value of no class, which an `Rx` never is
+		final read: String = '\t\tvar o:Dynamic = {};\n\t\tvar n:String = "x";\n\t\tReflect.field(o, n);\n';
+		assertMatch(compiledTruthAsk(['Main.hx' => matching(read)]), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-VALUE-ARG-WRITTEN') @:killer('M-VALUE-ARG-ESCAPED') @:killer('M-VALUE-ARG-SUPERTYPES')
+	@:killer('M-VALUE-ARG-COUNT') @:killer('M-VALUE-ARG-LAMBDA')
+	public function testACallOfAParameterOfAMethodInvokedOtherwiseRunsWhatItsTypeAdmits(): Void {
+		// the stored `(Rx)->String` may be `f` once an `Rx` leaves the type system, once `map` is read as a value, once an
+		// invocation — of `map`, or of the `Base.map` it overrides — hands `f` something else, once `map` assigns `f`, takes an
+		// optional argument its invocation leaves out, or is `dynamic`
+		final reached: Array<String> = [
+			matching('\t\tvar d:Dynamic = new Rx();\n'),
+			matching('\t\tvar m:((Rx)->String)->String = new Rx().map;\n'),
+			matching('\t\tnew Rx().map(keep);\n'),
+			matching(
+				'\t\tvar b:Base = new Rx();\n\t\tb.map(keep);\n', null,
+				'class Base {\n\tpublic function new() {}\n\n\tpublic function map(f:(Rx)->String):String return "";\n}\n',
+				'override public function map(f:(Rx)->String):String return f(this);'
+			),
+			matching(
+				'', null, null, 'public function map(f:(Rx)->String):String {\n\t\tif (f == null) f = Main.keep;\n\t\treturn f(this);\n\t}'
+			),
+			matching('', null, null, 'public function map(f:(Rx)->String, ?n:Int):String return f(this);'),
+			matching('', null, null, 'public dynamic function map(f:(Rx)->String):String return f(this);')
+		];
+		for (main in reached) assertMatch(compiledTruthAsk(['Main.hx' => main]), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-ESCAPES-FUNCTION-FLOW-TYPED')
+	public function testACallOfAFunctionValueRunsOnlyTheFunctionsItsTypeAdmitsUnderTheTruth(): Void {
+		// `h`, a local `(Rx)->String`, holds what `map` is handed: the stored callback that grows `items` cannot be it — it
+		// returns nothing, takes a `String`, which an `Rx` is not, takes two arguments, or is a `(Base)->Void` stored where a
+		// `(Rx)->Void` is wanted
+		final proven: Array<String> = [
+			valueCallFixture('(Rx)->Void', '(x:Rx) -> { items.push(1); }', '', null, null, BY_TYPE),
+			valueCallFixture('(String)->String', '(s:String) -> { items.push(1); return s; }', '', null, null, BY_TYPE),
+			valueCallFixture('(Rx, Int)->String', '(x:Rx, n:Int) -> { items.push(1); return "k"; }', '', null, null, BY_TYPE),
+			valueCallFixture('(Rx)->Void', '(x:Base) -> { items.push(1); }', '', null, null, BY_TYPE)
+		];
+		for (main in proven) assertMatch(interpAsk(['Main.hx' => main]), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-VALUE-TYPE-FLOWS')
+	public function testACallOfAFunctionValueRunsAFunctionOfAMatchingType(): Void {
+		// the stored callback is a `(Rx)->String` itself, which any place of that type may hold — `h` among them — or one taking
+		// what an `Rx` is, which the region hands `map`
+		assertMatch(interpAsk(['Main.hx' => matching('', null, null, BY_TYPE)]), r -> r.match(Reached(_)));
+		final wider: String = valueCallFixture(
+			'(Base)->String', '(x:Base) -> { items.push(1); return "k"; }', '', 'r.map(keep);', null, BY_TYPE
+		);
+		assertMatch(interpAsk(['Main.hx' => wider]), r -> r.match(Reached(_)));
+	}
+
+	@:pin('control') @:killer('M-VALUE-TYPE-GENERIC') @:killer('M-VALUE-TYPE-BIND')
+	public function testACallOfAFunctionValueRunsWhatAnInitializerABindOrAGenericBodyHandsIt(): Void {
+		// a field's initializer stores `Grower.put`, a `(Grower)->Void`, in a `Dynamic`; `Grower.grow.bind(1)` is a `(Rx)->String` that runs
+		// `grow`; `apply`'s `f` is a `(A)->String`, which an `(Rx)->String` is once `A` is bound
+		final initialized: String = 'class Main {\n\tpublic static var items:Array<Int> = [1, 2];\n'
+			+ '\tstatic var d:Dynamic = Grower.put;\n\n\tstatic function main() {\n\t\tfinal r:Rx = new Rx();\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ r.map(x -> "a"); /*>*/ }\n\t}\n}\n' + 'class Rx {\n\tpublic function new() {}\n\n\t'
+			+ BY_TYPE + '\n}\n';
+		final grower: String = 'class Grower {\n\tpublic function new() {}\n\n'
+			+ '\tpublic static function put(g:Grower):Void Main.items.push(1);\n\n'
+			+ '\tpublic function grow(n:Int, x:Rx):String {\n\t\tMain.items.push(n);\n\t\treturn "";\n\t}\n}\n';
+		assertMatch(interpAsk(['Main.hx' => initialized + grower]), r -> !r.match(Proven));
+		final bound: String = valueCallFixture('(Rx)->String', 'new Grower().grow.bind(1)', '', 'r.map(keep);', null, BY_TYPE) + grower;
+		assertMatch(interpAsk(['Main.hx' => bound]), r -> !r.match(Proven));
+		final generic: String = 'class Main {\n\tpublic static var items:Array<Int> = [1, 2];\n\n'
+			+ '\tstatic function apply<A>(f:(A)->String, a:A):String return f(a);\n\n\tstatic function main() {\n'
+			+ '\t\tfinal r:Rx = new Rx();\n\t\tapply((x:Rx) -> { items.push(1); return "k"; }, r);\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ apply((x:Rx) -> "a", r); /*>*/ }\n\t}\n}\n'
+			+ 'class Rx {\n\tpublic function new() {}\n}\n';
+		assertMatch(interpAsk(['Main.hx' => generic]), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-VALUE-TYPE-ESCAPED') @:killer('M-ESCAPES-FUNCTION-RECORDED')
+	public function testACallOfAFunctionValueRunsAFunctionValueThatEscaped(): Void {
+		// the `(String)->Void` callback is put in a `Dynamic`, or held by a `Holder` that is: from there it may be handed
+		// anywhere, `h` included
+		final escaped: String = valueCallFixture(
+			'(String)->Void', '(s:String) -> { items.push(1); }', '\t\tvar d:Dynamic = keep;\n', null, null, BY_TYPE
+		);
+		assertMatch(interpAsk(['Main.hx' => escaped]), r -> !r.match(Proven));
+		final holder: String = 'class Holder {\n\tpublic var cb:Null<(String)->Void> = null;\n\n\tpublic function new() {}\n}\n';
+		final held: String = valueCallFixture(
+				'(String)->Void', '(s:String) -> { items.push(1); }',
+				'\t\tfinal o:Holder = new Holder();\n\t\to.cb = keep;\n\t\tvar d:Dynamic = o;\n', null, null, BY_TYPE
+			) + holder;
+		assertMatch(interpAsk(['Main.hx' => held]), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-METHODS-HOLD-CLASSLESS')
+	public function testAMethodOfAnObjectThatNeverEscapedIsNoValueAComputedNameReads(): Void {
+		// a name computed at run time reads a member off a value of no class: `Quiet.grow` is none of its, a `Quiet` never
+		// leaving the type system — and once one does, it may be, and `h` may run it
+		final quiet: String = 'class Quiet {\n\tpublic function new() {}\n\n\tpublic function grow(s:String):Void Main.items.push(1);\n}\n';
+		final read: String = '\t\tvar q:Quiet = new Quiet();\n\t\tvar o:Dynamic = {};\n\t\tvar n:String = "x";\n\t\tReflect.field(o, n);\n';
+		final kept: String = valueCallFixture('(Rx)->String', 'null', read, 'r.map(keep);', null, BY_TYPE) + quiet;
+		assertMatch(interpAsk(['Main.hx' => kept]), r -> r.match(Proven));
+		final left: String = valueCallFixture('(Rx)->String', 'null', read + '\t\to = q;\n', 'r.map(keep);', null, BY_TYPE) + quiet;
+		assertMatch(interpAsk(['Main.hx' => left]), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-VALUE-TYPE-UNTYPED') @:killer('M-ADMIT-OBTAINED') @:killer('M-REACH-READ-BY-NAME')
+	public function testACallOfAFunctionValueRunsAMethodReadByAName(): Void {
+		// `Grower.grow`, a `(String)->Void`, is read by its name off a value of no type and stored as the `(Rx)->String` the
+		// region hands `Rx.map`: `h` is that method
+		final read: String = '\t\tvar o:Dynamic = new Grower();\n\t\tkeep = Reflect.field(o, "grow");\n';
+		final grower: String =
+			'class Grower {\n\tpublic function new() {}\n\n\tpublic function grow(s:String):Void Main.items.push(1);\n}\n';
+		final main: String = valueCallFixture('(Rx)->String', 'null', read, 'r.map(keep);', null, BY_TYPE) + grower;
+		assertMatch(interpAsk(['Main.hx' => main]), r -> !r.match(Proven));
+		// without the whole list of builds, the syntax says the same: `Reflect.field` names `grow`
+		assertMatch(ask(['Main.hx' => main], null, false), r -> !r.match(Proven));
+	}
+
 	@:pin('control') @:killer('M-FACTS-REACH-DROPPED')
 	public function testAConfigurationWithoutFactsLeavesTheSyntax(): Void {
 		// one configuration fails to compile: the table holds less than the builds do, so nothing is read through it — not
@@ -1341,13 +1537,14 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main]), r -> r.match(Unknown(Untyped(_, _))));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TRUTH-FACETED')
 	public function testABodyTheFactsDoNotDescribeWholeKeepsItsSyntacticHazards(): Void {
-		// `g` expands a macro, which may run code no fact places: `g` is read by its syntax, and its untyped expression stays a
-		// blind spot however whole the list of builds
+		// `g` expands a macro that places the code it builds in a file no build read: a fact of `g` has no place
+		// (`stale-foreign`), so `g` is read by its syntax, and its untyped expression stays a blind spot however whole the list
+		// of builds
 		final main: String = MEMBER_HEAD + '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ g(); /*>*/ }\n\t}\n'
 			+ '\tfunction g():Void {\n\t\tvar z = untyped this.zz;\n\t\tMac.nop();\n\t}\n}\n';
-		final mac: String = 'class Mac {\n\tpublic static macro function nop() return macro Math.abs(1);\n}\n';
+		final mac: String = 'class Mac {\n\tpublic static macro function nop()\n'
+			+ '\t\treturn macro @:pos(haxe.macro.Context.makePosition({ file: "Gone.hx", min: 0, max: 1 })) Math.abs(1);\n}\n';
 		assertMatch(truthAsk(['Main.hx' => main, 'Mac.hx' => mac]), r -> r.match(Unknown(Untyped(_, _))));
 	}
 
@@ -1451,7 +1648,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthAsk(['Main.hx' => region('peek();')]), r -> r.match(Unknown(NativeCode(_, _))));
 		assertMatch(truthAsk(['Main.hx' => region('untyped document.last;')]), r -> r.match(Unknown(NativeCode(_, _))));
 		assertMatch(truthAsk(['Main.hx' => region('js.Syntax.code("last");')]), r -> r.match(Unknown(NativeCode(_, _))));
-		assertMatch(truthAsk(['Main.hx' => region('untyped console.log(this);')]), r -> r.match(Unknown(NativeCode(_, _))));
+		// handed `this`, target code may reach `g`, which a computed name off an escaped `Main`'s class reads as a value
+		assertMatch(truthAsk(['Main.hx' => region('untyped console.log(this);')]), r -> !r.match(Proven));
 		assertMatch(truthAsk(['Main.hx' => region('js.Syntax.code(c);')]), r -> r.match(Unknown(NativeCode(_, _))));
 		assertMatch(truthAsk(['Main.hx' => region('js.Syntax.code("{0}()", cb);', 'g')]), r -> r.match(Reached(_)));
 		assertMatch(ask(['Main.hx' => region('js.Syntax.code("0");')]), r -> r.match(Unknown(NativeCode(_, _))));
@@ -2894,6 +3092,28 @@ class MemberReachFactsTest extends Test {
 	/** `ask` of `files` under the whole list of their builds, where the facts are the truth (`FactsView.truth`). */
 	private static function truthAsk(files: Map<String, String>): ReachResult {
 		return ask(files, null, true, null, false, null, null, null, true);
+	}
+
+	/** `truthAsk` of `files`, which must compile: a build that fails leaves no facts, and the syntax would answer. */
+	private static function compiledTruthAsk(files: Map<String, String>, ?pos: haxe.PosInfos): ReachResult {
+		final result: ReachResult = truthAsk(files);
+		Assert.equals('', lastDropped.join('; '), 'the fixture did not compile: ${files['Main.hx']}', pos);
+		return result;
+	}
+
+	/**
+	 * `Main.hx` whose region runs `region` — by default `r.map(x -> "a")` — on `r`, an `Rx`, while `Main.keep`, of the type
+	 * `type`, holds the callback `stored`, never called; `more` statements run first in `main`. `Rx` extends `base` (a `Base`
+	 * declaring nothing, by default), and declares `map` (calling the `(Rx)->String` it is handed, by default).
+	 */
+	private static function valueCallFixture(
+		type: String, stored: String, more: String, ?region: String, ?base: String, ?map: String
+	): String {
+		return 'class Main {\n\tpublic static var items:Array<Int> = [1, 2];\n\tpublic static var keep:Null<' + type + '> = null;\n\n'
+			+ '\tstatic function main() {\n\t\tkeep = ' + stored + ';\n' + more + '\t\tfinal r:Rx = new Rx();\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ ' + (region ?? 'r.map(x -> "a");') + ' /*>*/ }\n\t}\n}\n'
+			+ (base ?? 'class Base {\n\tpublic function new() {}\n}\n') + 'class Rx extends Base {\n\tpublic function new() super();\n\n\t'
+			+ (map ?? 'public function map(f:(Rx)->String):String return f(this);') + '\n}\n';
 	}
 
 	/** `truthAsk` of `files` built by `INTERP_BUILD`, which must compile, the library declarations `declared` indexed. */

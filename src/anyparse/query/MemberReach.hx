@@ -9,6 +9,7 @@ import anyparse.query.CallGraph.SplicedSite;
 import anyparse.query.CallGraph.UnresolvedAccess;
 import anyparse.query.CallGraph.UnresolvedCall;
 import anyparse.query.CallGraphFacts.QualifiedRead;
+import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.CompilerFacts.FieldDeclFact;
 import anyparse.query.CompilerFacts.NativeFact;
 import anyparse.query.FactsView.TruthSites;
@@ -227,6 +228,12 @@ final class MemberReach {
 	/** What a native site may do to a member under the truth (`nativeVerdict`), built on first need. */
 	private var _nativeSites: Null<NativeSiteReach> = null;
 
+	/** What code the graph holds reads by a name (`reflectedNames`), as of the files and accesses it held then. */
+	private var _reflected: Null<ReflectedNames> = null;
+
+	/** Which functions a call of a value of a type may run (`functionValues`), built on first need. */
+	private var _functionValues: Null<FunctionValueTypes> = null;
+
 	/** Builds the analysis under the run's configured builds (`escalation`), or answers null when the run has none; dropped once called. */
 	private var _configure: Null<() -> Null<MemberReach>> = null;
 
@@ -306,6 +313,8 @@ final class MemberReach {
 		_escapes = built;
 		carriers.escapedIds = built.escapedIds;
 		built.onRaw = () -> _metRawRegion = true;
+		// a method code reads by a name off a value of no class is a function value the walk cannot follow
+		_admission.obtainedUntyped = obtainedUntyped;
 	}
 
 	/** The call graph over the project, built on first demand and grown by the walk. */
@@ -805,7 +814,7 @@ final class MemberReach {
 		var marked: Null<ReachUnknown> = null;
 		for (span in spans) {
 			_g.enter(g, file, span, tree == null ? null : MemberTouchScan.typeAt(tree, span.from));
-			marked = marked ?? _scope.facts?.blindIn(file, span);
+			marked = marked ?? _scope.facts?.blindIn(file, span, g);
 		}
 		return marked;
 	}
@@ -1317,7 +1326,11 @@ final class MemberReach {
 			};
 		}
 		function apply(site: AdmissionSite): Void {
-			final ids: Array<String> = site.values ? admission.value.copy() : [];
+			final called: Null<String> = site.called;
+			final values: Null<FunctionValueTypes> = called == null ? null : functionValues();
+			final ids: Array<String> = !site.values
+				? []
+				: called == null || values == null ? admission.value.copy() : values.admitted(g, admission.value, called, site.calledAt);
 			if (site.all == true)
 				for (id in admission.closure.keys())
 					if (g.node(id)?.isExternal == false && !ids.contains(id)) ids.push(id);
@@ -1454,7 +1467,11 @@ final class MemberReach {
 					// code the compiler resolved and the graph holds no node for: nothing can say what it touches
 					blind = blind ?? UnresolvedDispatch(u.file, u.span, what);
 				case _:
-					admit(site(u.from, u.file, u.span, 'unresolved', ReachAdmission.admittedNames(u), true));
+					final unresolved: AdmissionSite = site(u.from, u.file, u.span, 'unresolved', ReachAdmission.admittedNames(u), true);
+					unresolved.called = u.called;
+					// a site filed off a body spliced in is that body's code, whose parameters are the caller's locals there
+					if (u.spliced == null) unresolved.calledAt = u.calledAt;
+					admit(unresolved);
 			}
 		}
 		function admitAccess(a: UnresolvedAccess): Void {
@@ -1627,7 +1644,7 @@ final class MemberReach {
 					// every declaration the node folds runs as it: each is read whole
 					for (d in spans) {
 						inspectAll(node.id, hazardsOf(g, d.file, [d.span], node.id));
-						blind = blind ?? _scope.facts?.blindIn(d.file, d.span);
+						blind = blind ?? _scope.facts?.blindIn(d.file, d.span, g);
 						if (!_projectSources.exists(d.file)) for (access in libraryAccesses(g, d.file, [d.span], member))
 							libraryTouch(node.id, d.file, access.span, access.relation);
 					}
@@ -2072,6 +2089,69 @@ final class MemberReach {
 	}
 
 	/**
+	 * Whether code may obtain the method `node` as a value of no type: as the compiler facts say, where they are the truth
+	 * (`FunctionValueTypes.obtainedUntyped`), else as its syntax does (`readByName`).
+	 */
+	private function obtainedUntyped(g: CallGraph, node: FnNode): Bool {
+		return _scope.facts?.truth == true ? functionValues()?.obtainedUntyped(g, node.id) == true : readByName(g, node);
+	}
+
+	/**
+	 * Whether code the graph holds may obtain the method `node` as a value of no type, read off its syntax: a reflective
+	 * access naming it — or computing a name — or a read of its name off a receiver the graph cannot type
+	 * (`CallGraph.unresolvedAccess`), anywhere (`reflectedNames`). Where the compiler facts are the truth, they say instead
+	 * (`FunctionValueTypes.obtainedUntyped`).
+	 */
+	private function readByName(g: CallGraph, node: FnNode): Bool {
+		final name: Null<String> = node.name;
+		if (name == null || node.id.indexOf(FactsView.NESTED_MARK) >= 0) return false;
+		final read: ReflectedNames = reflectedNames(g);
+		return read.any || read.names.exists(name);
+	}
+
+	/**
+	 * The names code the graph holds reads by reflection or off a receiver it cannot type, and whether some reflective access
+	 * computes the name; read again once the graph holds more files or unresolved accesses.
+	 */
+	private function reflectedNames(g: CallGraph): ReflectedNames {
+		final held: Array<{ file: String, source: String, tree: QueryNode }> = g.heldFiles();
+		final known: Null<ReflectedNames> = _reflected;
+		if (known != null && known.files == held.length && known.accesses == g.unresolvedAccess.length) return known;
+		final out: ReflectedNames = {
+			names: [],
+			any: false,
+			files: held.length,
+			accesses: g.unresolvedAccess.length
+		};
+		for (f in held) for (h in _hazards.hazardsIn(f.file, f.tree, f.source, new Span(0, f.source.length))) switch h.kind {
+			case ReflectiveName(literal):
+				if (literal == null)
+					out.any = true
+				else
+					out.names[literal] = true;
+			case _:
+		}
+		for (a in g.unresolvedAccess) if (!a.write) out.names[a.member] = true;
+		_reflected = out;
+		return out;
+	}
+
+	/**
+	 * Which functions a call of a value of a type may run, read off the compiler facts (`FunctionValueTypes`): null without
+	 * them, when every function value is admitted.
+	 */
+	private function functionValues(): Null<FunctionValueTypes> {
+		final held: Null<FactsView> = _scope.facts;
+		if (held == null) return null;
+		final view: FactsView = held;
+		final made: FunctionValueTypes = _functionValues ?? new FunctionValueTypes(
+			view, _scope, _escapes.escapedFunctions, _escapes.escapedIds, _escapes.parameterBindings, () -> _g.methodValues(view)
+		);
+		_functionValues = made;
+		return made;
+	}
+
+	/**
 	 * The admission of the target code at `span` of `file`, which reaches no object carrying the member: it may call any
 	 * function value it is handed, and a member by its name of each object it is handed — of the types `types` spell, or of
 	 * any when null (`ReachGraph.handedMemberIds`).
@@ -2343,4 +2423,21 @@ private typedef AdmissionSite = {
 
 	/** These functions, each the member of the typed type it names: the methods of an object reflection reaches by name. */
 	@:optional var owned: Array<OwnedId>;
+
+	/**
+	 * The facts type of the value an unresolved call calls, where the facts give it: of the functions used as values
+	 * (`values`), only those a value of it may be (`FunctionValueTypes`).
+	 */
+	@:optional var called: Null<String>;
+
+	/** With `called`, for a site the facts place in its function's own code: the range of the expression whose value is called. */
+	@:optional var calledAt: Null<FactPos>;
+}
+
+/** The names code reads members by (`MemberReach.reflectedNames`), and the graph's size it was read at. */
+private typedef ReflectedNames = {
+	final names: Map<String, Bool>;
+	var any: Bool;
+	final files: Int;
+	final accesses: Int;
 }

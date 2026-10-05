@@ -2552,13 +2552,24 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-TEXT-BINDING-TRIMMED',
 			'unit.query.MemberReachFactsTest#testABodyHoldingADirectiveIsReadFromTheFactsOfTheListedBuilds :: control :: '
 				+ 'M-FACTS-TRUTH-CONDITIONAL,M-FACTS-TRUTH-CONDITIONAL-ALWAYS',
-			'unit.query.MemberReachFactsTest#testABodyTheFactsDoNotDescribeWholeKeepsItsSyntacticHazards :: control :: '
-				+ 'M-FACTS-TRUTH-FACETED',
 			'unit.query.MemberReachFactsTest#testABoundMethodRunsWheneverItsClosureIsCalled :: control :: M-FACTS-REACH-BIND',
 			'unit.query.MemberReachFactsTest#testABuildMacroOnlyTheCompilerSawChangingNothingIsNoneUnderTheTruth :: control :: '
 				+ 'M-REACH-REWRITTEN-TRUTH',
 			'unit.query.MemberReachFactsTest#testABuildMacroOnlyTheCompilerSawIsUnknown :: control :: '
 				+ 'M-FACTS-REACH-BUILDS,M-REACH-REWRITTEN-UNTRUE',
+			'unit.query.MemberReachFactsTest#testACallOfAFunctionValueRunsAFunctionOfAMatchingType :: control :: ' + 'M-VALUE-TYPE-FLOWS',
+			'unit.query.MemberReachFactsTest#testACallOfAFunctionValueRunsAFunctionValueThatEscaped :: control :: '
+				+ 'M-VALUE-TYPE-ESCAPED,M-ESCAPES-FUNCTION-RECORDED',
+			'unit.query.MemberReachFactsTest#testACallOfAFunctionValueRunsAMethodReadByAName :: control :: '
+				+ 'M-VALUE-TYPE-UNTYPED,M-ADMIT-OBTAINED,M-REACH-READ-BY-NAME',
+			'unit.query.MemberReachFactsTest#testACallOfAFunctionValueRunsOnlyTheFunctionsItsTypeAdmitsUnderTheTruth :: control :: '
+				+ 'M-ESCAPES-FUNCTION-FLOW-TYPED',
+			'unit.query.MemberReachFactsTest#testACallOfAFunctionValueRunsWhatAnInitializerABindOrAGenericBodyHandsIt :: control :: '
+				+ 'M-VALUE-TYPE-GENERIC,M-VALUE-TYPE-BIND',
+			'unit.query.MemberReachFactsTest#testACallOfAParameterOfAMethodInvokedOtherwiseRunsWhatItsTypeAdmits :: control :: '
+				+ 'M-VALUE-ARG-WRITTEN,M-VALUE-ARG-ESCAPED,M-VALUE-ARG-SUPERTYPES,M-VALUE-ARG-COUNT,M-VALUE-ARG-LAMBDA',
+			'unit.query.MemberReachFactsTest#testACallOfAParameterRunsOnlyTheFunctionsItsInvocationsHandItUnderTheTruth :: control :: '
+				+ 'M-GRAPH-FACTS-VALUE-CALLED,M-REACH-VALUE-CALLED',
 			'unit.query.MemberReachFactsTest#testACallOfAValueAdmitsTheValueChannel :: control :: M-FACTS-REACH-VALUE',
 			'unit.query.MemberReachFactsTest#testACallOfAnAbstractsConstructorIsItsTextUnderTheTruth :: control :: '
 				+ 'M-FACTS-TEXT-ABSTRACT-CTOR-CALL',
@@ -2634,7 +2645,14 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testALoopOverAProjectIteratorRunsItsNextUnderTheTruth :: control :: M-FACTS-ITER',
 			'unit.query.MemberReachFactsTest#testAMacroBuiltTypeAnswersFromItsTextOnlyWhenItsFactsAreItsText :: control :: '
 				+ 'M-FACTS-TEXT-SPELLED',
+			'unit.query.MemberReachFactsTest#testAMacroExpansionIsAnsweredFromItsFactsUnderTheTruth :: control :: '
+				+ 'M-FACTS-EXPANSION-PLACED,M-FACTS-EXPANSION-BLIND,M-GRAPH-FACTS-EXPANSION-CALL',
 			'unit.query.MemberReachFactsTest#testAMacroExpansionIsUnknown :: control :: M-FACTS-REACH-MACRO',
+			'unit.query.MemberReachFactsTest#testAMacroExpansionRunsItsTypedCodeAtItsCallUnderTheTruth :: control :: '
+				+ 'M-TOUCH-EXPANSION-CODE,M-FACTS-WITHIN-EXPANSION-NULL',
+			'unit.query.MemberReachFactsTest#testAMacroExpansionRunsWhereItsCallIsUnderTheTruth :: control :: '
+				+ 'M-FACTS-WITHIN-EXPANSION,M-GRAPH-FACTS-EXPANSION-SITE,M-FACTS-EXPANSION-SPLICE-SITES,'
+				+ 'M-TOUCH-EXPANSION-RUNS,M-FACTS-WALK-BLOCK-GAP',
 			'unit.query.MemberReachFactsTest#testAMemberAnInlinedMethodTakesAsAnArgumentStillEscapesUnderTheTruth :: control :: '
 				+ 'M-FACTS-RECEIVER-BLOCK,M-FACTS-RECEIVER-PARAM',
 			'unit.query.MemberReachFactsTest#testAMemberAnotherBuildDeclaresShadowsAnExtension :: control :: M-FACTS-REACH-GUARDED-NAME',
@@ -2653,6 +2671,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-GRAPH-ADOPT-NONE,M-TOUCH-ADOPTED-SYNTAX',
 			'unit.query.MemberReachFactsTest#testAMethodClosureOfTheMemberEscapesUnderTheTruth :: control :: '
 				+ 'M-TOUCH-TYPED-VALUE,M-TOUCH-TYPED-UNTRUE',
+			'unit.query.MemberReachFactsTest#testAMethodOfAnObjectThatNeverEscapedIsNoValueAComputedNameReads :: control :: '
+				+ 'M-METHODS-HOLD-CLASSLESS',
 			'unit.query.MemberReachFactsTest#testANameTwoTypesShareReachedByItsSyntaxRunsAsEachOfThemUnderTheTruth :: control :: '
 				+ 'M-REACH-QUALIFIED-UNNAMED,M-REACH-SHARED-OWNERS',
 			'unit.query.MemberReachFactsTest#testANativeIdentifierAdmitsWhatItMayCall :: control :: M-FACTS-REACH-NATIVE-IDENT',
@@ -3969,7 +3989,6 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-TRUTH-ORDER',
 			'M-FACTS-TRUTH-HAZARDS',
 			'M-FACTS-TRUTH-HAZARDS-UNLISTED',
-			'M-FACTS-TRUTH-FACETED',
 			'M-FACTS-TRUTH-UNTYPED-KEPT',
 			'M-FACTS-TRUTH-UNTYPED-ALL',
 			'M-FACTS-TRUTH-UNTYPED-SHAPE',
@@ -4667,7 +4686,34 @@ class TestDiscoveryParityTest extends Test {
 			'M-NATIVE-SITE-ALIAS',
 			'M-FACTS-NATIVE-HANDED',
 			'M-FACTS-NATIVE-CHAIN',
-			'M-ESCAPES-FACTS-NATIVE-HANDED'
+			'M-ESCAPES-FACTS-NATIVE-HANDED',
+			'M-FACTS-EXPANSION-PLACED',
+			'M-FACTS-EXPANSION-BLIND',
+			'M-FACTS-WITHIN-EXPANSION',
+			'M-FACTS-WITHIN-EXPANSION-NULL',
+			'M-GRAPH-FACTS-EXPANSION-SITE',
+			'M-FACTS-EXPANSION-SPLICE-SITES',
+			'M-TOUCH-EXPANSION-RUNS',
+			'M-TOUCH-EXPANSION-CODE',
+			'M-FACTS-WALK-BLOCK-GAP',
+			'M-GRAPH-FACTS-VALUE-CALLED',
+			'M-REACH-VALUE-CALLED',
+			'M-VALUE-ARG-WRITTEN',
+			'M-VALUE-ARG-ESCAPED',
+			'M-VALUE-ARG-SUPERTYPES',
+			'M-VALUE-ARG-COUNT',
+			'M-VALUE-ARG-LAMBDA',
+			'M-VALUE-TYPE-FLOWS',
+			'M-VALUE-TYPE-GENERIC',
+			'M-VALUE-TYPE-ESCAPED',
+			'M-VALUE-TYPE-BIND',
+			'M-VALUE-TYPE-UNTYPED',
+			'M-ADMIT-OBTAINED',
+			'M-REACH-READ-BY-NAME',
+			'M-METHODS-HOLD-CLASSLESS',
+			'M-ESCAPES-FUNCTION-RECORDED',
+			'M-ESCAPES-FUNCTION-FLOW-TYPED',
+			'M-GRAPH-FACTS-EXPANSION-CALL'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
@@ -4834,6 +4880,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-CODE-META :: anyparse.check.TypedFactsMacro#metaList',
 			'M-FACTS-NATIVE-HANDED :: anyparse.check.TypedFactsWalk#handedText',
 			'M-FACTS-NATIVE-CHAIN :: anyparse.check.TypedFactsWalk#nativeChain',
+			'M-FACTS-WALK-BLOCK-GAP :: anyparse.check.TypedFactsWalk#visit',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

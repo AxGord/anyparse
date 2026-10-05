@@ -17,6 +17,13 @@ final class ReachAdmission {
 	private final _scope: ReachProject;
 	private final _g: ReachGraph;
 
+	/**
+	 * Whether a method may be obtained as a value of no type — by its name off a value of no class, or by reflection — which
+	 * code the graph cannot follow may then call (`FunctionValueTypes.obtainedUntyped`). No method is, until the analysis
+	 * owning the admission says so.
+	 */
+	public var obtainedUntyped: (g:CallGraph, node:FnNode) -> Bool = (g, node) -> false;
+
 	public function new(scope: ReachProject, g: ReachGraph) {
 		_scope = scope;
 		_g = g;
@@ -125,13 +132,14 @@ final class ReachAdmission {
 
 	/**
 	 * Whether code the graph cannot follow may call `node` — a lambda, a `dynamic` method, a function used as
-	 * a value, or an override of a method a library type declares (never a constructor).
+	 * a value, an override of a method a library type declares, or a method code may obtain as a value of no type
+	 * (`obtainedUntyped`) — never a constructor.
 	 */
 	private function valueAdmitted(g: CallGraph, node: FnNode): Bool {
 		if (node.isExternal) return false;
 		final ctorName: String = _scope.shape.constructorName ?? 'new';
 		return node.name == null || node.id.indexOf('#') >= 0 || node.isDynamic || g.inEdges(node.id).exists(e -> e.kind == Ref)
-			|| (node.name != ctorName && overridesLibrary(g, node));
+			|| (node.name != ctorName && (overridesLibrary(g, node) || obtainedUntyped(g, node)));
 	}
 
 	/**

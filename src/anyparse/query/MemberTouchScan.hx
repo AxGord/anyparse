@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.CallGraph.FnDeclaration;
 import anyparse.query.CallGraph.FnNode;
+import anyparse.query.CompilerFacts.ExpansionFact;
 import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.CompilerFacts.FieldFact;
@@ -48,6 +49,9 @@ final class MemberTouchScan {
 	 * or a dynamic receiver.
 	 */
 	private static final TYPED_ACCESSES: Array<String> = ['FInstance', 'FStatic', 'FAnon', 'FDynamic'];
+
+	/** The marker of a typed body an expression macro expanded into (`TypedFactsProbe`). */
+	private static inline final MACRO_EXPANSION: String = 'macro-expansion';
 
 	private final _scope: ReachProject;
 	private final _hazards: ReachHazards;
@@ -286,7 +290,9 @@ final class MemberTouchScan {
 	 * `declaring` (`FactsView.bySimpleName`), or, off a structure or a dynamic receiver, when the receiver's value may carry
 	 * the member (`ValueCarriers.relation`). Null without the truth, or when no typed type stands for `declaring`. A method a
 	 * build macro made (`CallGraphFacts.adopted`) has no text to fall back on: when its accesses are not all of a shape the
-	 * facts answer for, its id goes to `unread`, and it touches the member and lets it escape (`recordUnread`).
+	 * facts answer for, its id goes to `unread`, and it touches the member and lets it escape (`recordUnread`) — and so does a
+	 * function whose such access lies in the code an expression macro's expansion built (`nodeAccesses`), which no text holds
+	 * either.
 	 */
 	private function typedAccesses(
 		g: CallGraph, name: String, declaring: String, unread: Array<String>
@@ -300,11 +306,13 @@ final class MemberTouchScan {
 			final node: Null<FnNode> = g.node(id);
 			if (node == null || !_scope.sources.exists(node.file)) continue;
 			final made: Bool = facts.adopted.exists(id);
-			final accesses: Null<Array<FieldFact>> = nodeAccesses(g, node, bodies, name, declaring, owners, facts.view, made);
-			if (accesses != null)
-				out[id] = accesses;
-			else if (made)
-				unread.push(id);
+			switch nodeAccesses(g, node, bodies, name, declaring, owners, facts.view, made) {
+				case Typed(accesses):
+					out[id] = accesses;
+				case Unread:
+					unread.push(id);
+				case BySyntax:
+			}
 		}
 		return out;
 	}
@@ -312,37 +320,94 @@ final class MemberTouchScan {
 	/**
 	 * The typed accesses of the member (see `typedAccesses`) in the faceted `node`, whose bodies are `bodies`: their own and
 	 * those of every function the compiler made inside them that the graph declares no node for (a `.bind` closure) — one it
-	 * does declare is read as that node is. Null — the syntax reads `node` — when such an access is of a shape `classifyTyped`
-	 * does not answer for, or lies outside the text of every declaration of `node` (`CallGraph.declarationsOf`), when a call
-	 * names a field of the member's name (a call of the value
-	 * a variable holds is a call fact, never a field one), or when a function inside it was placed by a macro. A body a build
-	 * macro made (`made`, `CallGraphFacts.adopted`) is read whole, wherever its facts lie and every function nested in it
-	 * with it: no text holds any of it.
+	 * does declare is read as that node is. `BySyntax` — the syntax reads `node` — when such an access is of a shape
+	 * `classifyTyped` does not answer for, or lies outside the text of every declaration of `node` (`CallGraph.declarationsOf`),
+	 * when a call names a field of the member's name (a call of the value a variable holds is a call fact, never a field
+	 * one), or when a function inside it was placed by a macro. A body a build macro made (`made`, `CallGraphFacts.adopted`)
+	 * is read whole, wherever its facts lie and every function nested in it with it: no text holds any of it, so where that
+	 * reading fails it is `Unread`. So is the code an expression macro's expansion built (`expansionCode`), which no text
+	 * holds either: an access there is read where the call of the macro was (`expansionRuns`), and one that cannot be read —
+	 * of a shape `classifyTyped` does not answer for, a call of a field of the member's name, a function the macro placed
+	 * that names it — leaves the node `Unread`.
 	 */
 	private function nodeAccesses(
 		g: CallGraph, node: FnNode, bodies: Array<FactNode>, name: String, declaring: String, owners: Array<String>, view: FactsView,
 		made: Bool
-	): Null<Array<FieldFact>> {
+	): TypedTouches {
 		final declared: Array<FnDeclaration> = g.declarationsOf(node.id);
-		if (declared.length == 0 && !made) return null;
+		if (declared.length == 0 && !made) return BySyntax;
+		final unreadable: TypedTouches = made ? Unread : BySyntax;
 		final out: Array<FieldFact> = [];
 		final work: Array<FactNode> = bodies.copy();
+		var unread: Bool = false;
 		while (work.length > 0) {
 			final n: Null<FactNode> = work.pop();
-			if (n == null || (n.generated && !made)) return null;
+			if (n == null) return unreadable;
+			if (n.generated && !made) return BySyntax;
 			// a field the compiler calls — a function a variable holds, a dynamic receiver's field — is a call, no field fact
-			for (c in n.calls) if (calledField(c.target) == name) return null;
+			for (c in n.calls) if (calledField(c.target) == name) {
+				if (made || !expansionCode(g, node, n, c.at, view)) return unreadable;
+				unread = true;
+			}
 			for (f in n.fields) if (f.field == name && bindsTo(f, declaring, owners)) {
-				if (!typedShape(f) || (!made && declarationHolding(g, node.id, f.at, view) == null)) return null;
-				out.push(f);
+				final expanded: Bool = !made && expansionCode(g, node, n, f.at, view);
+				if (!typedShape(f)) {
+					if (!expanded) return unreadable;
+					unread = true;
+				} else if (expanded)
+					for (run in expansionRuns(n, f)) out.push(run)
+				else if (made || declarationHolding(g, node.id, f.at, view) != null)
+					out.push(f)
+				else
+					return BySyntax;
 			}
 			for (child in n.fns) {
 				final nested: Null<FactNode> = view.table.node(child);
-				if (nested == null) return null;
-				if (made || CallGraphFacts.graphNodeOf(g, node, child, view) == null) work.push(nested);
+				if (nested == null) return unreadable;
+				// a function an expansion placed outside its type's file runs whenever its value is called: what it does to a
+				// name of the member no reading places
+				if (!made && nested.generated && expansionCode(g, node, n, nested.at, view)) {
+					if (nested.fields.exists(f -> f.field == name) || nested.calls.exists(c -> calledField(c.target) == name))
+						unread = true;
+				} else if (made || CallGraphFacts.graphNodeOf(g, node, child, view) == null)
+					work.push(nested);
 			}
 		}
-		return out;
+		return unread ? Unread : Typed(out);
+	}
+
+	/**
+	 * Whether the fact at `at` of `node`'s body `n` lies in code an expression macro's expansion built, under the truth: `n`
+	 * holds an expansion (`macro-expansion`), and `at` lies outside the text of every declaration of `node` and in no body
+	 * an inlined call spliced in (`CompilerFacts.spliceOf`), whose method's own text answers for it.
+	 */
+	private static function expansionCode(g: CallGraph, node: FnNode, n: FactNode, at: FactPos, view: FactsView): Bool {
+		return view.truth && n.incomplete.contains(MACRO_EXPANSION) && declarationHolding(g, node.id, at, view) == null
+			&& CompilerFacts.spliceOf(n, at) == null;
+	}
+
+	/**
+	 * The typed access `f` of code an expression macro's expansion built into `n`, read where it runs: at each site the
+	 * expansion holding it runs at (`CompilerFacts.expansionSites`), or over the whole of `n` when none is known.
+	 */
+	private static function expansionRuns(n: FactNode, f: FieldFact): Array<FieldFact> {
+		final expansion: Null<ExpansionFact> = CompilerFacts.expansionOf(n, f.at);
+		final sites: Array<Span> = (expansion == null ? null : CompilerFacts.expansionSites(n, expansion)) ?? [n.at.span];
+		return [
+			for (s in sites)
+				{
+					owner: f.owner,
+					field: f.field,
+					access: f.access,
+					receiver: f.receiver,
+					type: f.type,
+					write: f.write,
+					at: { file: n.at.file, span: s },
+					use: f.use,
+					method: f.method,
+					fresh: f.fresh
+				}
+		];
 	}
 
 	/**
@@ -361,10 +426,12 @@ final class MemberTouchScan {
 		if (facts == null || node == null || bodies == null || !facts.view.truth) return false;
 		final owners: Array<String> = facts.view.bySimpleName()[declaring] ?? [];
 		if (owners.length == 0) return false;
-		final accesses: Null<Array<FieldFact>> = nodeAccesses(g, node, bodies, name, declaring, owners, facts.view, false);
-		if (accesses == null) return false;
-		recordTyped(g, id, name, accesses, access, arrayTyped, out, regionFile, region);
-		return true;
+		return switch nodeAccesses(g, node, bodies, name, declaring, owners, facts.view, false) {
+			case Typed(accesses):
+				recordTyped(g, id, name, accesses, access, arrayTyped, out, regionFile, region);
+				true;
+			case BySyntax, Unread: false;
+		};
 	}
 
 	/**
@@ -760,4 +827,18 @@ typedef FreshContext = {
 private typedef Verdict = {
 	var touch: Bool;
 	var escape: Bool;
+}
+
+/** How the typed accesses of a member in a faceted function are read (`MemberTouchScan.nodeAccesses`). */
+private enum TypedTouches {
+
+	/** Through these accesses, each where it runs. */
+	Typed(accesses: Array<FieldFact>);
+
+	/** Through the function's syntax: some access is of a shape the facts do not answer for, and its text holds it. */
+	BySyntax;
+
+	/** By neither: such an access lies in code no text holds — a build macro's method, an expression macro's expansion. */
+	Unread;
+
 }

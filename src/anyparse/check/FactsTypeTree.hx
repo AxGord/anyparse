@@ -61,6 +61,17 @@ final class FactsTypeTree {
 		return reader._pos == text.length ? type : null;
 	}
 
+	/** `t` spelled in the facts type grammar, as the facts spell it: `read(text(t))` is `t`. */
+	public static function text(t: FactsType): String {
+		return switch t {
+			case Unknown: '?';
+			case Parameter(path): '$$' + path;
+			case Named(name, args): args.length == 0 ? name : '$name<${args.map(text).join(',')}>';
+			case Function(args, result): '(${[for (a in args) (a.optional ? '?' : '') + text(a.type)].join(',')})->${text(result)}';
+			case Structure(fields): '{${[for (f in fields) (f.optional ? '?' : '') + f.name + ':' + text(f.type)].join(',')}}';
+		};
+	}
+
 	/** The type at `_pos`; null when the text is malformed. */
 	private function type(): Null<FactsType> {
 		if (_pos >= _text.length) return null;

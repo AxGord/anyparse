@@ -114,6 +114,15 @@ final class FactsEscapes {
 	/** The escaped types, by their typed id (`pack.Name`): which of the types sharing a graph name escaped. */
 	private final _typed: Array<String> = [];
 
+	/**
+	 * The function types of the function values that escaped (`escapeType`): a function value of a type the compiler may
+	 * unify with one of them may have reached a place of no function type, from which it may arrive at any call.
+	 */
+	private final _functions: Array<FactsType> = [];
+
+	/** The keys of `_functions`, by their structure. */
+	private final _functionKeys: Map<String, Bool> = [];
+
 	/** The closed types already escaped (`escapeType`), by their structure. */
 	private final _done: Map<String, Bool> = [];
 
@@ -176,6 +185,22 @@ final class FactsEscapes {
 	}
 
 	/**
+	 * The types a value of the type parameter `path` (`pack.Type.T`, `method.T`) may have (`instances`): those some
+	 * instantiation binds it to. Null when they are not known: a type the facts hold does not read, or an instantiation
+	 * leaves the parameter unknown.
+	 */
+	public function parameterTypes(path: String): Null<Array<FactsType>> {
+		final bound: Null<Map<String, FactsType>> = instances()[path];
+		if (_unread || _unresolved.exists(path)) return null;
+		return bound == null ? [] : [for (t in bound) t];
+	}
+
+	/** The function types of the function values `compute` found escaping (`_functions`). */
+	public inline function functionTypes(): Array<FactsType> {
+		return _functions;
+	}
+
+	/**
 	 * Hand every value the node `id` lets escape to `escape`; false when one says nothing of what it holds, when a fact of
 	 * the node is lost, and when it holds target-language code whose text is computed.
 	 */
@@ -187,7 +212,11 @@ final class FactsEscapes {
 		if (n.incomplete.contains(REFLECTION_INLINED) && !harmlessReflection(n))
 			return refuse('a reflective body spliced into `$id` lost the name it was handed');
 		if (!_native.nodeEscapes(id, n, _hand)) return false;
-		for (f in n.flows) if ((f.via == CAST || !keepsNominal(f.to)) && !escape(f.from)) return false;
+		// a function value placed where a function type types it stays typed: its own type unifies with the place's
+		for (f in n.flows) if (
+			(f.via == CAST || !keepsNominal(f.to)) && !(f.via != CAST && functionTyped(f.from) && functionTyped(f.to)) && !escape(f.from)
+		)
+			return false;
 		for (h in n.handed) if (!typeParameter(h.to) && !escape(h.from)) return false;
 		for (f in n.fields) if (byName(f.access) && !escape(f.receiver)) return false;
 		for (c in n.calls) {
@@ -355,6 +384,14 @@ final class FactsEscapes {
 		};
 	}
 
+	/** Whether the type `text` is a function type, nullable or not: a value of it is a function value, which holds no object. */
+	private static function functionTyped(text: String): Bool {
+		return switch FactsTypeTree.read(text) {
+			case Function(_, _) | Named(NULLABLE, [Function(_, _)]): true;
+			case _: false;
+		};
+	}
+
 	/** Whether the type `text` is a type parameter, nullable or not: an extern handed a value there gives it back as one. */
 	private static function typeParameter(text: String): Bool {
 		return switch FactsTypeTree.read(text) {
@@ -392,7 +429,15 @@ final class FactsEscapes {
 					return refuse('a value of the type parameter `$path` escapes, which an instantiation leaves unknown');
 				if (bound != null) for (x in bound) if (!escapeType(x)) return false;
 				return true;
-			case Function(_, _) | Named(CATCH_ALL, _):
+			case Function(_, _):
+				// a function value holds no object a name reaches, but it is itself a value of no known place now
+				final key: String = Std.string(t);
+				if (!_functionKeys.exists(key)) {
+					_functionKeys[key] = true;
+					_functions.push(t);
+				}
+				return true;
+			case Named(CATCH_ALL, _):
 				return true;
 			case Structure(fields):
 				return fields.foreach(f -> escapeType(f.type));
