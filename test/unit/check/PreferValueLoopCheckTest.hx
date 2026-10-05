@@ -412,6 +412,68 @@ class PreferValueLoopCheckTest extends Test {
 		);
 	}
 
+	@:pin('control') @:killer('M-SINGULAR-INNER-WORD') @:killer('M-SINGULAR-WORD-END-ANYWHERE')
+	public function testSingularOfReadsTheLastPluralWord(): Void {
+		// The whole-name answers, unchanged: a plural at the end is still read as it always was.
+		final cases: Array<Array<Null<String>>> = [
+			['points', 'point'],
+			['properties', 'property'],
+			['bodies', 'body'],
+			['movies', 'movy'],
+			['boxes', 'box'],
+			['matches', 'match'],
+			['xs', 'x'],
+			['vec3s', 'vec3'],
+			['imageURLs', 'imageURL'],
+			['class', null],
+			['status', null],
+			['axis', null],
+			['stuff', null],
+			['s', null],
+			['ies', null],
+			['_items', null],
+			['Items', null],
+			// An earlier word, when the end is no plural; the rest of the name kept verbatim.
+			['gridLinesVertical', 'gridLineVertical'],
+			['itemsById', 'itemById'],
+			['pointsScale', 'pointScale'],
+			['pointsX', 'pointX'],
+			['points2d', 'point2d'],
+			['items_by_id', 'item_by_id'],
+			['userIDsByName', 'userIDByName'],
+			['bodiesTable', 'bodyTable'],
+			['statusesList', 'statusList'],
+			['pointsStatus', 'pointStatus'],
+			// The LAST plural word wins, and only a lower-case letter before an end closes a word.
+			['pointsLabels', 'pointsLabel'],
+			['classNames', 'className'],
+			['nodesPosition', 'nodePosition'],
+			['useHTTPSList', null],
+			['statusList', null],
+			['childrenByName', null]
+		];
+		for (c in cases) Assert.equals(c[1], ElementLoopRewrite.singularOf(c[0] ?? ''), 'singularOf(${c[0]})');
+	}
+
+	@:pin('control') @:killer('M-SINGULAR-INNER-WORD')
+	public function testInnerPluralWordNamesTheBinder(): Void {
+		final src: String = 'class C {\n\tfinal gridLinesVertical:Array<Line> = [];\n\n\tfunction f():Void {\n'
+			+ '\t\tfor (i in 0...gridLinesVertical.length) gridLinesVertical[i].redraw();\n\t}\n}\n\n'
+			+ 'class Line {\n\tpublic function new() {}\n\n\tpublic function redraw():Void {}\n}';
+		Assert.equals('this indexed loop can be for (gridLineVertical in gridLinesVertical)', violations(src)[0]?.message);
+		assertFixCanonical(src, ['for (gridLineVertical in gridLinesVertical) gridLineVertical.redraw();'], ['[i]']);
+	}
+
+	public function testInnerPluralBinderTakenIsReportOnly(): Void {
+		Assert.equals(
+			'the element name `gridLineVertical` is already spelled in the loop body',
+			declineOf(wrap(
+				'gridLinesVertical:Array<Item>, sink:Sink',
+				'for (i in 0...gridLinesVertical.length) sink.use(gridLinesVertical[i], gridLineVertical);'
+			))
+		);
+	}
+
 	public function testSkipParseNoCrash(): Void {
 		Assert.equals(0, violations('class Bad { function f() { for (i in 0...items.length) { use(items[i]);').length);
 	}

@@ -72,9 +72,36 @@ final class ElementLoopRewrite {
 	 * The singular of a plural collection name, or null when no rule applies. An English
 	 * identifier convention, so it lives here rather than in the grammar seam: a plural is a
 	 * property of how people name collections, not of the language being parsed.
+	 *
+	 * The plural may be any WORD of a camelCase name, not only its last: `gridLinesVertical` ->
+	 * `gridLineVertical`, `itemsById` -> `itemById`. A word ends at the end of the name and before
+	 * every character that is not a lower-case letter (an upper-case letter, a digit, an underscore).
+	 * The ends are tried from the LAST one back, `singularOfEnding` asked of the prefix each closes,
+	 * and the first answer wins with the rest of the name kept verbatim. So a name whose end is a
+	 * plural is answered exactly as the whole-name rules always answered it, and a later plural word
+	 * beats an earlier one (`pointsLabels` -> `pointsLabel`). Every ending the rules know is lower
+	 * case, so a word closing on an upper-case letter is never a plural (`HTTPS`, `useHTTPSList` has
+	 * no singular) while an acronym taking a lower-case `s` is (`imageURLs` -> `imageURL`,
+	 * `userIDsByName` -> `userIDByName`). Only word ENDS are located, never word starts — the rules
+	 * read endings — so a one-letter word needs no case of its own: `pointsX` keeps its `X` (an
+	 * upper-case close) and singularizes `points`, and `xs` -> `x` is the whole-name answer.
 	 */
 	public static function singularOf(name: String): Null<String> {
 		if (!COLLECTION_NAME_PATTERN.match(name)) return null;
+		var end: Int = name.length;
+		while (end > 0) {
+			final singular: Null<String> = endsWord(name, end) ? singularOfEnding(name.substring(0, end)) : null;
+			if (singular != null) return singular + name.substring(end);
+			end--;
+		}
+		return null;
+	}
+
+	/**
+	 * The singular of `name` read as a plural at its very end, or null when no rule applies — the
+	 * whole-name rules `singularOf` asks of every word end.
+	 */
+	private static function singularOfEnding(name: String): Null<String> {
 		if (name.endsWith(PLURAL_IES)) {
 			// A `…y` singular pluralises through a consonant (`property`, `body`); a stem already
 			// ending in a vowel had an `…ie` singular, which loses only the `s`.
@@ -253,6 +280,12 @@ final class ElementLoopRewrite {
 			if (h != null && singularOf(withoutLeadingUnderscores(h.collection)) == candidate) return true;
 		}
 		return node.children.exists(c -> nestingLoopDerives(c, loop, candidate, f));
+	}
+
+	/** Whether a word of `name` ends at `end`: the end of the name, or before a character that is not a lower-case letter. */
+	private static inline function endsWord(name: String, end: Int): Bool {
+		final next: Int = end < name.length ? name.fastCodeAt(end) : -1;
+		return next < 'a'.code || next > 'z'.code;
 	}
 
 	/** Whether one of the two nodes' spans contains the other's. */

@@ -2624,6 +2624,22 @@
 			"note": "an outer and an inner indexed loop that derive one binder are both fixed in one pass, and the inner binder shadows the outer for the whole inner body"
 		},
 		{
+			"name": "M-SINGULAR-INNER-WORD",
+			"type": "anyparse.check.ElementLoopRewrite",
+			"method": "singularOf",
+			"find": "final singular: Null<String> = endsWord(name, end) ? singularOfEnding",
+			"replace": "final singular: Null<String> = end == name.length ? singularOfEnding",
+			"note": "only the end of a name is read as a plural, so gridLinesVertical has no singular and its loop keeps no binder"
+		},
+		{
+			"name": "M-SINGULAR-WORD-END-ANYWHERE",
+			"type": "anyparse.check.ElementLoopRewrite",
+			"method": "endsWord",
+			"find": "return next < 'a'.code || next > 'z'.code;",
+			"replace": "return true;",
+			"note": "every position is a word end, so an s inside a word reads as a plural and nodesPosition becomes nodesPoition"
+		},
+		{
 			"name": "M-ELEMENT-LOOP-TYPE-CALLEE",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",

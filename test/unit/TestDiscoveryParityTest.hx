@@ -1672,10 +1672,13 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PreferValueLoopCheckTest#testBodyThatMayChangeTheCollectionIsReportOnly :: control :: M-VALUE-LOOP-SELF-CALL',
 			'unit.check.PreferValueLoopCheckTest#testClosureReadNotFlagged :: control :: M-ELEMENT-LOOP-CLOSURE,M-VALUE-LOOP-BODY-GATES',
 			'unit.check.PreferValueLoopCheckTest#testFixRewritesBlockBody :: control :: M-VALUE-LOOP-READS-UNSPLICED',
+			'unit.check.PreferValueLoopCheckTest#testInnerPluralWordNamesTheBinder :: control :: M-SINGULAR-INNER-WORD',
 			'unit.check.PreferValueLoopCheckTest#testMacroIndexReadNotFlagged :: control :: M-VALUE-LOOP-INDEX-TEXT-BLIND',
 			'unit.check.PreferValueLoopCheckTest#testMethodOfAnotherObjectHoldingTheCollectionIsReportOnly :: control :: '
 				+ 'M-REACH-ESCAPE-ARGUMENT',
 			'unit.check.PreferValueLoopCheckTest#testNestedLoopsDerivingOneBinderAreReportOnly :: control :: M-ELEMENT-LOOP-NESTED-BINDER',
+			'unit.check.PreferValueLoopCheckTest#testSingularOfReadsTheLastPluralWord :: control :: '
+				+ 'M-SINGULAR-INNER-WORD,M-SINGULAR-WORD-END-ANYWHERE',
 			'unit.check.PreferValueLoopCheckTest#testStaticAndConstructorCallsThatGrowTheCollectionAreReportOnly :: control :: '
 				+ 'M-ELEMENT-LOOP-TYPE-CALLEE,M-ELEMENT-LOOP-NEW-EXPR',
 			'unit.check.PreferValueLoopCheckTest#testThisQualifiedCollectionNotFlagged :: control :: M-ELEMENT-LOOP-REBIND',
@@ -3477,6 +3480,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-KV-NOOPENER-BODY-GATES',
 			'M-VALUE-LOOP-BODY-GATES',
 			'M-ELEMENT-LOOP-NESTED-BINDER',
+			'M-SINGULAR-INNER-WORD',
+			'M-SINGULAR-WORD-END-ANYWHERE',
 			'M-ELEMENT-LOOP-TYPE-CALLEE',
 			'M-ELEMENT-LOOP-NEW-EXPR',
 			'M-KV-OPENER-SELF-CALL',
