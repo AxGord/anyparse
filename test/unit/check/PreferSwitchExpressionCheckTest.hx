@@ -112,9 +112,9 @@ class PreferSwitchExpressionCheckTest extends Test {
 	}
 
 	/**
-	 * An if-expression chain with no final `else` is skipped. `SwitchChain` gate 7 requires the
-	 * else-slot of EVERY chain, statement or value, so this rule contributes no policy of its
-	 * own here — but value position would demand it regardless:
+	 * An if-expression chain with no final `else` is skipped. This rule hands `SwitchChain` no else-less host, so
+	 * gate 7 never closes one of its chains with an empty `case _:`, and value position would refuse
+	 * a wildcard-less switch regardless:
 	 * `var v = switch (n) { case 1: 10; case 2: 20; }` over an `Int` is `Unmatched patterns: _`
 	 * (verified on 4.3.7) where the same wildcard-less switch in STATEMENT position compiles.
 	 */

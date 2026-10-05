@@ -20,11 +20,10 @@ import utest.Test;
  * is not flagged; neither is a qualified static the `SymbolIndex` cannot prove constant (a
  * plain `static var`, a `#if`-guarded declaration).
  *
- * A chain with NO trailing `else` is not flagged either, whatever its subject: gate 7 is
- * unconditional, so every converted chain carries `case _`. `testNoTrailingElseNotFlagged`
- * pins that across the shapes an earlier subject-type waiver did and did not convert, and
- * `testGuardedTrailingElseNotFlagged` pins the `#if`-guarded `else`, which never reaches
- * the `if`'s else-slot at all.
+ * A chain with NO trailing `else` closes with an EMPTY `case _:` (gate 7) when it stands in a
+ * statement list and no conditional region follows it: `testNoTrailingElseClosesWithAnEmptyWildcard`
+ * pins the subjects an earlier wildcard-less waiver miscompiled, and `testGuardedTrailingElseNotFlagged`
+ * the `#if`-guarded `else`, which never reaches the `if`'s else-slot at all.
  *
  * Value-position chains belong to `prefer-switch-expression` and are not matched here.
  */
@@ -189,17 +188,16 @@ class PreferSwitchCheckTest extends Test {
 	}
 
 	/**
-	 * Gate 7 is UNCONDITIONAL: a chain with no trailing `else` is never flagged, whatever its
-	 * subject, so every converted chain carries `case _`. The fixtures cover both sides of the
-	 * waiver this replaced — an `Int` local and an `Int` PARAMETER over cross-file constants,
-	 * which the waiver did convert, and a `Bool`, an enum-abstract subject and a tuple, which
-	 * it never did. Each shape has a with-`else` positive twin elsewhere in this class showing
-	 * it converts once the `else` is there, so none of these can pass on a dead scanner.
-	 * Restoring the else-less conversion needs the COMPILER's answer about the subject's type,
-	 * not a resolver's — its home is the `OracleAssisted` / `RiskyFix` machinery; gate 7 on
-	 * `SwitchChain` carries the reproduced miscompiles a structural guard leaked.
+	 * Gate 7: a chain with no trailing `else` closes with an EMPTY `case _:` — the chain does nothing
+	 * when no rung matches, and neither does that arm. The wildcard is what makes every such switch
+	 * compile: without it a `Bool`, an enum-abstract or a tuple subject is exhaustiveness-checked and
+	 * the switch fails (`Unmatched patterns`), which is why an earlier waiver that OMITTED it kept
+	 * leaking non-compiling output. The fixtures are those shapes — an `Int` local, an `Int` parameter
+	 * over cross-file constants, a `Bool`, an enum-abstract subject and a tuple — each now converted.
 	 */
-	public function testNoTrailingElseNotFlagged(): Void {
+	@:pin('control')
+	@:killer('M-SWITCH-ELSELESS-REFUSED')
+	public function testNoTrailingElseClosesWithAnEmptyWildcard(): Void {
 		final consts: String = 'class NodeMeta {\n\tpublic static inline final ALPHA:Int = 0;\n\tpublic static inline final BETA:Int = 1;\n'
 			+ '\tpublic static inline final GAMMA:Int = 2;\n}';
 		final params: String = wrapWithParams(
@@ -207,23 +205,26 @@ class PreferSwitchCheckTest extends Test {
 			'if (stripes == NodeMeta.ALPHA) p(); else if (stripes == NodeMeta.BETA) q(); else if (stripes == NodeMeta.GAMMA) r();'
 		);
 		final tuple: String = wrap('var a:Int = 1;\n\t\tvar b:Int = 2;\n\t\tif (a == 1 && b == 2) p(); else if (a == 3 && b == 4) q();');
-		Assert.equals(0, violations(wrap('var r:Int = 1;\n\t\tif (r == 1) a(); else if (r == 2) b();')).length);
-		Assert.equals(0, violations(params, consts).length);
-		Assert.equals(0, violations(wrap('var b:Bool = true;\n\t\tif (b == true) p(); else if (b == null) q();')).length);
+		Assert.equals(1, violations(wrap('var r:Int = 1;\n\t\tif (r == 1) a(); else if (r == 2) b();')).length);
+		Assert.equals(1, violations(params, consts).length);
+		Assert.equals(1, violations(wrap('var b:Bool = true;\n\t\tif (b == true) p(); else if (b == null) q();')).length);
 		Assert.equals(
-			0, violations(wrap('var k:NodeMeta = NodeMeta.ALPHA;\n\t\tif (k == 1) p(); else if (k == 2) q();'), ENUM_ABSTRACT).length
+			1, violations(wrap('var k:NodeMeta = NodeMeta.ALPHA;\n\t\tif (k == 1) p(); else if (k == 2) q();'), ENUM_ABSTRACT).length
 		);
-		Assert.equals(0, violations(tuple).length);
+		Assert.equals(1, violations(tuple).length);
+		final fixed: String = fixedSource(tuple);
+		Assert.isTrue(fixed.indexOf('case [3, 4]: q();\n\tcase _:\n}') >= 0, fixed);
 	}
 
 	/**
-	 * A `#if`-guarded trailing `else` does NOT reach the `if`'s else-slot: it projects as a
-	 * SIBLING `Conditional` wrapping an `OrphanElseStmt` —
+	 * A `#if`-guarded trailing `else` does NOT reach the `if`'s else-slot: it projects as a SIBLING
+	 * `Conditional` wrapping an `OrphanElseStmt` —
 	 * `(IfStmt cond then (IfStmt …)) (Conditional (OrphanElseStmt …))` — so the chain reads as
-	 * else-less. The old waiver converted it for an open-typed subject and the stranded `#if`
-	 * block no longer parsed (`Expected }`); the unconditional gate 7 refuses the chain, which
-	 * closes the shape by construction rather than by a check that knows about `#if`.
+	 * else-less. Closing it with `case _:` would strand the `#if` block, which no longer parses
+	 * (`Expected }`), so gate 7 refuses an else-less chain whose next sibling is a conditional region.
 	 */
+	@:pin('control')
+	@:killer('M-SWITCH-ELSELESS-GUARDED-ELSE')
 	public function testGuardedTrailingElseNotFlagged(): Void {
 		Assert.equals(0, violations(wrap('var n:Int = 1;\n\t\tif (n == 1) a(); else if (n == 2) b(); #if js else c(); #end')).length);
 	}
@@ -261,8 +262,7 @@ class PreferSwitchCheckTest extends Test {
 
 	/**
 	 * A rung testing a different second discriminant is not a uniform tuple. The
-	 * trailing `else` is load-bearing: without it gate 7 would reject the chain first and
-	 * this fixture would pass on a dead uniform-tuple gate.
+	 * trailing `else` keeps gate 7 out of the question, so only the uniform-tuple gate can refuse.
 	 */
 	public function testNonUniformTupleNotFlagged(): Void {
 		Assert.equals(0, violations(wrap('if (a == 1 && b == 2) p(); else if (a == 3 && c == 4) q(); else r();')).length);
@@ -272,7 +272,7 @@ class PreferSwitchCheckTest extends Test {
 	 * A conjunct that is not an EQUALITY rejects the whole chain. `n > 0` is a two-operand
 	 * comparison with exactly one constant operand, so neither the operand-arity check nor
 	 * the one-constant-per-equality gate can reject it first — the `eqKind` test is the one
-	 * under test. The trailing `else` keeps gate 7 out of the way too.
+	 * under test. The trailing `else` keeps gate 7 out of the question too.
 	 */
 	public function testExtraConjunctNotFlagged(): Void {
 		Assert.equals(0, violations(wrap('if (a == 1 && n > 0) p(); else if (a == 2 && n > 0) q(); else r();')).length);
@@ -461,6 +461,49 @@ class PreferSwitchCheckTest extends Test {
 		Assert.equals(
 			1, violations(wrapWithParams('k:Plain', 'if (k == Plain.P) p(); else if (k == Plain.Q) q(); else r();'), both).length
 		);
+	}
+
+	/**
+	 * Gate 7's host: an else-less chain that is the brace-less BODY of another `if` is refused —
+	 * as a switch it would no longer hold the `else` a later reader could attach, and the parent is
+	 * no statement list. The same chain in a block converts.
+	 */
+	@:pin('control')
+	@:killer('M-SWITCH-ELSELESS-ANY-HOST')
+	public function testElselessBracelessBodyNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('if (c) if (x == 1) a(); else if (x == 2) b();')).length);
+		Assert.equals(1, violations(wrap('if (c) {\n\t\t\tif (x == 1) a(); else if (x == 2) b();\n\t\t\tg();\n\t\t}')).length);
+	}
+
+	/**
+	 * Gate 7's position: the LAST statement of a nested block may be that block's value, which an
+	 * else-less `if` and a switch with an empty arm do not type alike, so it is refused there; the same
+	 * chain with a statement after it converts, and so does one ending a function's block body.
+	 */
+	@:pin('control')
+	@:killer('M-SWITCH-ELSELESS-LAST-IN-VALUE-BLOCK')
+	public function testElselessLastInNestedBlockNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('for (i in xs) {\n\t\t\tif (x == 1) a(); else if (x == 2) b();\n\t\t}')).length);
+		Assert.equals(1, violations(wrap('for (i in xs) {\n\t\t\tif (x == 1) a(); else if (x == 2) b();\n\t\t\tg();\n\t\t}')).length);
+		Assert.equals(1, violations(wrap('g();\n\t\tif (x == 1) a(); else if (x == 2) b();')).length);
+	}
+
+	/**
+	 * The reported shape (a GridScale chain): a property-typed enum-abstract subject, braced bodies,
+	 * a statement after the chain — converted with an empty `case _:` closing it.
+	 */
+	@:pin('control')
+	@:killer('M-SWITCH-ELSELESS-REFUSED')
+	public function testElselessEnumAbstractChainFixed(): Void {
+		final src: String = 'class C {\n\tpublic var mode(default, set):Mode;\n\n\tfunction f():Void {\n'
+			+ '\t\tif (mode == Mode.LINES) {\n\t\t\tp();\n\t\t} else if (mode == Mode.POINTS) {\n\t\t\tq();\n\t\t}\n\t\tg();\n\t}\n}';
+		final modes: String =
+			'enum abstract Mode(UInt) {\n\tfinal DEFAULT = 0;\n\tfinal AUTO = 0;\n\tfinal LINES = 1;\n\tfinal POINTS = 2;\n}';
+		Assert.equals(1, violations(src, modes).length);
+		final fixed: String = fixedSource(src, modes);
+		Assert.isTrue(fixed.indexOf('switch (mode) {') >= 0, fixed);
+		Assert.isTrue(fixed.indexOf('case Mode.POINTS:') >= 0, fixed);
+		Assert.isTrue(fixed.indexOf('\tcase _:\n}\n\t\tg();') >= 0, fixed);
 	}
 
 	private inline function wrap(body: String): String {

@@ -36,12 +36,12 @@ import anyparse.runtime.Span;
  *    makes a real site worse needs a narrower precondition, not a caveat.
  * 2. **A trailing else-slot value**, rendered as `case _`. A switch EXPRESSION has
  *    to produce a value on every path, so a chain without one (an `if` expression
- *    with no `else`) could not be converted anyway. `SwitchChain` gate 7 requires
- *    the else-slot of EVERY chain, statement or value, so this rule contributes no
- *    policy of its own here — value position merely makes the requirement doubly
- *    obvious, `var x = switch (n) { case 1: 'a'; case 2: 'b'; }` over an `Int`
- *    being `Unmatched patterns: _` (verified on 4.3.7) where the same
- *    wildcard-less switch in STATEMENT position compiles.
+ *    with no `else`) could not be converted anyway. This rule hands `SwitchChain`
+ *    no else-less host (`ChainSeams.elselessHosts`), so gate 7 never closes one of
+ *    its chains with the empty `case _:` the statement rule uses — that arm has no
+ *    value — and a wildcard-less switch is out too:
+ *    `var x = switch (n) { case 1: 'a'; case 2: 'b'; }` over an `Int` is
+ *    `Unmatched patterns: _` (verified on 4.3.7).
  * 3. **Everything `SwitchChain` requires** — at least two rungs, each condition a
  *    conjunction of equalities over the SAME call-free discriminant tuple, each
  *    constant a valid `case` pattern (a literal, or a qualified static the

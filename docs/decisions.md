@@ -1072,3 +1072,10 @@ decided the question; it may not become a record of runs.
   carries a `case` the compiler reports unused, so values are now proved (`CaseValueKey`, with the
   member's initializer recorded by the index) and must be distinct — gate 9 — branch
   `feat/prefer-switch-enum-abstract`
+- an else-less `if` chain needing the COMPILER's answer about its subject's type before it can
+  become a switch (the gate-7 retreat, after a waiver that omitted the wildcard miscompiled a
+  `Bool`, an enum-abstract and a tuple subject) → closing it with an EMPTY `case _:` asks no
+  type question at all: the chain does nothing when no rung matches and neither does that arm,
+  and the wildcard makes every subject exhaustive (compiled and run on `--interp` and `-js`, same
+  output). What remains structural: the head must stand in a statement list and must not be
+  followed by an `#if` region that may hold its `else` — branch `feat/prefer-switch-enum-abstract`
