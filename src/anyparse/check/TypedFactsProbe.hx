@@ -62,17 +62,20 @@ import haxe.io.Path;
  *     flow names a value of the parameter's own type, and a spliced call's argument lies in the text of another method.
  *   - `news`: `{t, ty, p, gb?}` — the class and the instance type; `gb`, the `@:genericBuild` class the text constructs,
  *     whose build the compiler resolves, at the type arguments the text writes, to `t` (`TypedFactsMacro.genericBuilt`).
- *   - `fields`: `{f, a, o?, r, t, p, w?, u?, m?, fresh?}` — a field read (a write when `w`) that is not a callee; `o` is
+ *   - `fields`: `{f, a, o?, r, t, p, w?, u?, m?, fresh?, h?}` — a field read (a write when `w`) that is not a callee; `o` is
  *     the declaring type, absent for a structure or a dynamic access. A read has `u`, how its value is used: `call` (the
  *     receiver of a call, `m` the called field), `index` (an array indexed to read), `elemWrite` (an array indexed to
  *     write, see `elems`), `member` (the receiver of a field read that is no method closure), `memberWrite` (the
  *     receiver of a field write), `compare` (an operand of a comparison, a `switch` subject), `iter` (the iterated value
  *     of a kept `for`), `update` (the read half of a compound assignment or increment of the field) or `value` — anything
  *     else: an argument, a stored, returned or thrown value, a method closure's receiver, a discarded value. A read the
- *     compiler holds in a local — a lowered loop's array, a compound element write's receiver — or that a local is
- *     initialized with, is used as the local is read: one fact per distinct use, all at the read's position, `value` for
- *     a local never read or read from a nested function. A write has `fresh` when every value its right side produces is
- *     an array literal, a `new Array` or `null` and the assignment's own value is discarded: the field alone holds it.
+ *     compiler holds in a local — a lowered loop's array, a compound element write's receiver — or that a local of the
+ *     node is initialized with or an assignment statement stores in one, is used as the local is read, and as each local
+ *     of the node a read of it is stored in: one fact per distinct use, all at the read's position and marked `h`,
+ *     `value` for a local never read or read from a nested function. A local read spliced into an inline method of its
+ *     own class declaring no parameter is the receiver of a call of that method. A write has `fresh` when every value its
+ *     right side produces is an array literal, a `new Array` or `null` and the assignment's own value is discarded: the
+ *     field alone holds it.
  *   - `elems`: `{r, rp, p}` — an element write `a[i] = v`, `a[i] += v` or `a[i]++`, on any receiver; `r`/`rp` are the
  *     array's type and position, which is its own read's, as a call's `rp` is: a `fields` read (`u` = `elemWrite`), a
  *     `reads` entry, a call.

@@ -2576,6 +2576,48 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main]), r -> r.match(Proven));
 	}
 
+	@:pin('control') @:killer('M-FACTS-ASSIGN-HELD') @:killer('M-FACTS-SUBSTITUTED-RECEIVER') @:killer('M-FACTS-ALIAS-LINK')
+	@:killer('M-FACTS-CAPTURE')
+	public function testALocalTheMemberIsStoredInIsFollowedThroughItsReadsUnderTheTruth(): Void {
+		// `walk` stores `items` — or another array — in `l`, in either branch, and in `copy` after it, and only iterates and
+		// reads them: under the truth no value escapes, while the syntax sees a store into a local. A push on either local
+		// (`walk` run by the region), handing it on, capturing it, returning it, or a push on the outer `l` past a block
+		// declaring a `l` of its own, does change or share the member
+		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ REGION /*>*/ }\n'
+			+ '\t\twalk("h");\n\t}\n\tstatic function calm():Void {}\n\tstatic function keep(a:Array<Int>):Void {}\n'
+			+ '\tstatic function walk(c:String):Array<Int> {\n'
+			+ '\t\tvar other:Array<Int> = [3];\n\t\tvar l:Array<Int> = null;\n\t\tif (c == "h") l = items; else if (c == "v") l = other;\n'
+			+ '\t\tfor (i => v in l) trace(i + v);\n\t\tvar copy:Array<Int> = l;\n\t\tfor (x in copy) trace(x + copy.length + copy[0]);\n'
+			+ '\t\tUSE\n\t\treturn null;\n\t}\n}\n';
+		function files(use: String, region: String = 'calm();'): Map<String, String> {
+			return [
+				'Main.hx' => StringTools.replace(StringTools.replace(main, 'USE', use), 'REGION', region)
+			];
+		}
+		// the index is the analysis's word for the classpath, which `Array` would otherwise leave open
+		for (use in ['', '{ var l:Array<Int> = [5]; l.push(6); }'])
+			assertMatch(ask(files(use), null, true, null, true, null, null, null, true), r -> r.match(Proven));
+		assertMatch(ask(files('')), r -> r.match(Unknown(Escape(_, _))));
+		for (use in [
+			'l.push(1);',
+			'copy.push(1);',
+			'{ var l:Array<Int> = [5]; trace(l.length); } l.push(1);'
+		]) assertMatch(compiledTruthAsk(files(use, 'walk("h");')), r -> r.match(Reached(_)));
+		for (use in ['keep(l);', 'var f = () -> copy.length; f();', 'if (c == "r") return l;'])
+			assertMatch(compiledTruthAsk(files(use)), r -> r.match(Unknown(Escape(_, _))));
+	}
+
+	@:pin('control') @:killer('M-TOUCH-TYPED-HELD-REGION') @:killer('M-FACTS-HELD-FLAG')
+	public function testAPushThroughALocalHoldingTheMemberInsideTheRegionReachesItUnderTheTruth(): Void {
+		// the store lies before the loop and the push through the local inside it: the touch the facts record at the store is
+		// one of a local read anywhere in the function, the region's included
+		for (store in ['var l:Array<Int> = items;', 'var l:Array<Int> = null;\n\t\tl = items;']) {
+			final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\t' + store
+				+ '\n\t\tfor (i in 0...items.length) { /*<*/ if (l.length < 3) l.push(1); /*>*/ }\n\t}\n}\n';
+			assertMatch(compiledTruthAsk(['Main.hx' => main]), r -> r.match(Reached(_)));
+		}
+	}
+
 	@:pin('control') @:killer('M-TOUCH-TYPED-CALLED')
 	public function testAFieldTheCompilerCallsLeavesItsFunctionToTheSyntaxUnderTheTruth(): Void {
 		// `d.items(1)` calls whatever a dynamic receiver's `items` holds: the facts record a call and no field read, so `poke`

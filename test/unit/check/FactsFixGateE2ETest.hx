@@ -18,7 +18,8 @@ import utest.Test;
  * program prints what the original printed. One more pins the `reflectiveClasses` declaration end to end:
  * the declared classes a computed name may make bound the escapes a `prefer-keyvalue-loop`
  * rewrite rests on, and another the `reflectiveMethodHolders` one: the declared classes
- * whose methods a computed name may obtain bound the function values a call of a value runs.
+ * whose methods a computed name may obtain bound the function values a call of a value runs. A last one pins a field value stored in a
+ * local and only iterated through it: the loop over the field is rewritten, and a push, a hand-off or a capture through the local keeps it.
  */
 class FactsFixGateE2ETest extends Test {
 
@@ -102,6 +103,48 @@ class FactsFixGateE2ETest extends Test {
 		+ '\tstatic var done:Bool = false;\n' + '\n' + '\t#if other\n' + '\tpublic static function go():Void {}\n' + '\t#else\n'
 		+ '\tpublic static function go():Void {\n' + '\t\tif (!done) {\n' + '\t\t\tdone = true;\n' + '\t\t\tstuff.push(5);\n' + '\t\t}\n'
 		+ '\t}\n' + '\t#end\n' + '}\n';
+	private static final HELD_MAIN: String = 'class Main {\n\tstatic function main() {\n\t\tnew Grid().run();\n\t\tnew Pushed().run();\n'
+		+ '\t\tnew Handed().run();\n\t\tnew Captured().run();\n\t\tnew Returned().run();\n'
+		+ '\t\tnew Shadowed().run();\n\t\tnew Region().run();\n\t}\n}\n\nclass Line {\n'
+		+ '\tpublic var n:Int = 0;\n\n\tpublic function new() {}\n\n\tpublic function redraw():Void {\n'
+		+ '\t\tn++;\n\t}\n}\n\nclass Grid {\n\tvar verticals:Array<Line> = [new Line(), new Line()];\n'
+		+ '\tvar horizontals:Array<Line> = [new Line()];\n\n\tpublic function new() {}\n\n'
+		+ '\tfunction move(c:String):Void {\n\t\tvar lines:Array<Line> = null;\n\t\tif (c == \'h\')\n'
+		+ '\t\t\tlines = verticals;\n\t\telse if (c == \'v\')\n\t\t\tlines = horizontals;\n'
+		+ '\t\tfor (i => line in lines) line.n += i;\n\t\tvar copy:Array<Line> = lines;\n'
+		+ '\t\tfor (l in copy) l.n += copy.length;\n\t}\n\n\tpublic function run():Void {\n\t\tmove(\'h\');\n'
+		+ '\t\tfor (i in 0...verticals.length) verticals[i].redraw();\n'
+		+ '\t\tfor (l in verticals) Sys.println(l.n);\n\t}\n}\n\nclass Pushed {\n'
+		+ '\tvar items:Array<Line> = [new Line()];\n\n\tpublic function new() {}\n\n\tfunction grow():Void {\n'
+		+ '\t\tvar l:Array<Line> = null;\n\t\tl = items;\n\t\tif (l.length < 3) l.push(new Line());\n\t}\n\n'
+		+ '\tpublic function run():Void {\n\t\tfor (i in 0...items.length) {\n\t\t\titems[i].redraw();\n'
+		+ '\t\t\tgrow();\n\t\t}\n\t\tSys.println(items.length);\n\t}\n}\n\nclass Handed {\n'
+		+ '\tstatic var kept:Array<Line> = [];\n\n\tvar items:Array<Line> = [new Line()];\n\n'
+		+ '\tpublic function new() {}\n\n\tstatic function keep(a:Array<Line>):Void {\n\t\tkept = a;\n\t}\n\n'
+		+ '\tfunction hand():Void {\n\t\tvar l:Array<Line> = null;\n\t\tl = items;\n\t\tkeep(l);\n\t}\n\n'
+		+ '\tpublic function run():Void {\n\t\thand();\n\t\tfor (i in 0...items.length) {\n'
+		+ '\t\t\titems[i].redraw();\n\t\t\tif (kept.length < 3) kept.push(new Line());\n\t\t}\n'
+		+ '\t\tSys.println(items.length);\n\t}\n}\n\nclass Captured {\n'
+		+ '\tvar items:Array<Line> = [new Line()];\n\tvar later:Null<() -> Void> = null;\n\n'
+		+ '\tpublic function new() {}\n\n\tfunction hold():Void {\n\t\tvar l:Array<Line> = null;\n'
+		+ '\t\tl = items;\n\t\tlater = () -> if (l.length < 3) l.push(new Line());\n\t}\n\n'
+		+ '\tpublic function run():Void {\n\t\thold();\n\t\tfor (i in 0...items.length) {\n'
+		+ '\t\t\titems[i].redraw();\n\t\t\tlater();\n\t\t}\n\t\tSys.println(items.length);\n\t}\n}\n\n'
+		+ 'class Returned {\n\tvar items:Array<Line> = [new Line()];\n\n\tpublic function new() {}\n\n'
+		+ '\tfunction get():Array<Line> {\n\t\tvar l:Array<Line> = null;\n\t\tl = items;\n\t\treturn l;\n\t}\n'
+		+ '\n\tpublic function run():Void {\n\t\tfinal g:Array<Line> = get();\n'
+		+ '\t\tfor (i in 0...items.length) {\n\t\t\titems[i].redraw();\n'
+		+ '\t\t\tif (g.length < 3) g.push(new Line());\n\t\t}\n\t\tSys.println(items.length);\n\t}\n}\n\n'
+		+ 'class Shadowed {\n\tstatic var kept:Array<Line> = [];\n\n\tvar items:Array<Line> = [new Line()];\n\n'
+		+ '\tpublic function new() {}\n\n\tfunction hand():Void {\n\t\tvar l:Array<Line> = null;\n'
+		+ '\t\tl = items;\n\t\t{\n\t\t\tvar l:Array<Line> = [new Line()];\n\t\t\tfor (x in l) x.redraw();\n'
+		+ '\t\t}\n\t\tkept = l;\n\t}\n\n\tpublic function run():Void {\n\t\thand();\n'
+		+ '\t\tfor (i in 0...items.length) {\n\t\t\titems[i].redraw();\n'
+		+ '\t\t\tif (kept.length < 3) kept.push(new Line());\n\t\t}\n\t\tSys.println(items.length);\n\t}\n}\n\n'
+		+ 'class Region {\n\tvar items:Array<Line> = [new Line()];\n\n\tpublic function new() {}\n\n'
+		+ '\tpublic function run():Void {\n\t\tvar l:Array<Line> = null;\n\t\tl = items;\n'
+		+ '\t\tfor (i in 0...items.length) {\n\t\t\titems[i].redraw();\n'
+		+ '\t\t\tif (l.length < 3) l.push(new Line());\n\t\t}\n\t\tSys.println(items.length);\n\t}\n}\n';
 	private static final HXML: String = '-cp .\n-main Main\n--interp\n';
 	private static inline final APQLINT: String = '{"compilerOracle":[{"hxml":"check.hxml"}],"resolutionRoots":["."]}';
 	private static inline final BUFFER: Int = 1 << 20;
@@ -335,6 +378,33 @@ class FactsFixGateE2ETest extends Test {
 		final before: String = run(dir);
 		CliFixture.captureStderr(() -> Cli.run(['lint', '--fix', '--rule', 'prefer-keyvalue-loop', '$dir/Main.hx']));
 		Assert.equals(ALIAS_MAIN, File.getContent('$dir/Main.hx'));
+		Assert.equals(before, run(dir), 'the program prints what it printed');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * `Grid.move` stores `verticals` — or `horizontals` — in a local, in either branch, and in another local after it, and
+	 * only iterates them: under the truth the loop over `verticals` is rewritten. A push through such a local, handing it
+	 * on, capturing it, returning it, or handing on the outer local past a block that declares one of its name, keeps the
+	 * loop, and so does a push through the local inside the loop, whose store lies before it: each would make the rewritten
+	 * loop see an element it did not see.
+	 */
+	@:pin('control') @:killer('M-FACTS-ASSIGN-HELD') @:killer('M-TOUCH-TYPED-HELD-REGION')
+	public function testAValueStoredInALocalOnlyIteratedLetsTheLoopRewrite(): Void {
+		#if (sys || nodejs)
+		final complete: String = '{"compilerOracle":[{"hxml":"check.hxml"}],"resolutionRoots":["."],"reachConfigurationsComplete":true}';
+		final dir: Null<String> = tree('heldlocal', [{ name: 'Main.hx', source: HELD_MAIN }], HXML, complete);
+		if (dir == null) return;
+		final before: String = run(dir);
+		CliFixture.captureStderr(() -> Cli.run(['lint', '--fix', '--rule', 'prefer-value-loop', '$dir/Main.hx']));
+		final expected: String = StringTools.replace(
+			HELD_MAIN, 'for (i in 0...verticals.length) verticals[i].redraw();', 'for (vertical in verticals) vertical.redraw();'
+		);
+		Assert.notEquals(HELD_MAIN, expected);
+		Assert.equals(expected, File.getContent('$dir/Main.hx'));
 		Assert.equals(before, run(dir), 'the program prints what it printed');
 		CliFixture.removeDir(dir);
 		#else
