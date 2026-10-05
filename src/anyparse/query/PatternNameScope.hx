@@ -100,7 +100,7 @@ final class PatternNameScope {
 				final target: Null<String> = imp.aliasTarget;
 				imp.alias == name || (target == null ? true : typeMayCarry(target, name, false));
 			case ImportKind.Wild:
-				final prefix: String = parentPath(imp.raw);
+				final prefix: String = SourceText.parentPath(imp.raw);
 				lastSegment(imp.raw) == WILDCARD_SEGMENT && SourceText.isUpperInitial(lastSegment(prefix))
 					&& typeMayCarry(prefix, name, true);
 			case _:
@@ -157,11 +157,6 @@ final class PatternNameScope {
 
 	private static inline function lastSegment(path: String): String {
 		return path.substr(path.lastIndexOf('.') + 1);
-	}
-
-	private static inline function parentPath(path: String): String {
-		final dot: Int = path.lastIndexOf('.');
-		return dot < 0 ? '' : path.substring(0, dot);
 	}
 
 }

@@ -6,9 +6,11 @@ import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.ImportOrder;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.SymbolIndexHost;
+import anyparse.query.WildcardImportGate;
 import anyparse.runtime.Span;
 import haxe.ds.ArraySort;
 
@@ -42,20 +44,30 @@ private typedef UsingWedge = {
  *
  * ## What counts as a block
  *
- * A maximal run of TOP-LEVEL plain `import` statements on consecutive lines — `ImportOrder.runsOf`,
+ * A maximal run of TOP-LEVEL plain `import` statements on consecutive lines — `ImportOrder.runsIn`,
  * the same split the inserting fixers place a fresh line by, so the seat and this rule cannot
  * disagree about what a block is. A run ENDS at:
  *
  *  - a blank line (the visual groups a project separates its imports into are preserved —
  *    each group is ordered on its own, and no line ever crosses a group boundary);
- *  - any other top-level declaration between two imports — a `using`, a wildcard `import
- *    pkg.*;`, an aliased `import a.B as C;`, a `#if` region, a type declaration;
+ *  - any other top-level declaration between two imports — a `using`, a wildcard that is not a
+ *    MEMBER (below), an aliased `import a.B as C;`, a `#if` region, a type declaration;
  *  - a BLOCK comment between two imports (only whole-line `//` comments are pinned; see below).
  *
  * A `using` is never part of a run and its ordering WITHIN the `using` group is never touched:
  * Haxe ranks static extensions in REVERSE declaration order, so one `using`'s position relative
- * to another is semantics rather than layout. A wildcard and an alias split a run for the same
- * reason in miniature — both bind names the ordering cannot see.
+ * to another is semantics rather than layout. An alias splits a run for the same reason in
+ * miniature — it binds a name the ordering cannot see.
+ *
+ * A WILDCARD is a member of the run, sorted by its full text like any line, exactly when
+ * `WildcardImportGate` proves no permutation of the run can change what a simple name means —
+ * from the compiler's precedence (an explicit import outranks a package wildcard in either order;
+ * a value outranks a type of the same name; between field wildcards, explicit field imports and
+ * the module-level fields a module import brings in, the LAST wins) and the names the resolution
+ * index lists for it. What the index cannot enumerate keeps the wildcard a boundary, the pre-gate
+ * reading. Both `run` and `fix` read the same index (`RefactorSupport.lazySymbolIndex`), so a fix
+ * never sorts a block no finding described. A wildcard member written BELOW a wedged `using` stays
+ * below the group when the wedge merges, and one between two wedged groups refuses the merge.
  *
  * ## The `using` WEDGE
  *
@@ -169,13 +181,16 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		// One gate for the whole run, over the index `fix` reads too: the report and the fix must split a
+		// file into the SAME runs, or a fix would sort a block no finding described.
+		final gate: WildcardImportGate = new WildcardImportGate(RefactorSupport.lazySymbolIndex(files, plugin), plugin);
 		return RunScan.collect(files, plugin, (entry, tree, violations) -> {
 			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
 			final requested: Int = requestedOrder(config);
 			// A module whose whole body is `#if`-guarded keeps its import block inside the region, so the
 			// blocks are read from the HEADER root — at the top level such a file offers none at all.
 			final header: QueryNode = ImportOrder.headerRootOf(tree, entry.source, plugin);
-			for (wedge in wedgesOf(entry.source, header, config)) {
+			for (wedge in wedgesOf(entry.source, header, config, gate)) {
 				final first: ImportLine = wedge.usings[0];
 				violations.push({
 					file: entry.file,
@@ -185,7 +200,7 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 					message: 'using \'${first.path}\' splits the import block; using statements belong after every import'
 				});
 			}
-			for (block in blocksOf(entry.source, header)) {
+			for (block in blocksOf(entry.source, header, gate)) {
 				final paths: Array<String> = ImportOrder.pathsOf(block);
 				if (acceptable(paths, requested)) continue;
 				final offender: ImportLine = firstOutOfPlace(block, fixOrder(requested, paths));
@@ -211,25 +226,28 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 				final header: QueryNode = ImportOrder.headerRootOf(tree, source, plugin);
 				final flagged: Array<Int> = RunScan.spanStarts(violations);
 				final moduleTypes: Map<String, Array<String>> = moduleTypesOf(index);
+				final gate: WildcardImportGate = new WildcardImportGate(RefactorSupport.lazySymbolIndex([], plugin, index), plugin);
 				final edits: Array<{ span: Span, text: String }> = [];
 				// A merged wedge REWRITES the region its runs live in, so a run it takes over must not also
 				// get the per-run reorder edit below: the two spans overlap and the caller batches both.
 				final merged: Array<Int> = [];
-				final wedges: Array<UsingWedge> = wedgesOf(source, header, config);
+				final wedges: Array<UsingWedge> = wedgesOf(source, header, config, gate);
 				final scopeTypes: Map<String, Array<String>> = wedges.length == 0 ? moduleTypes : moduleTypesOf(widestIndex(plugin, index));
 				for (wedge in wedges) {
 					if (!flagged.contains(wedge.usings[0].declFrom)) continue;
 					if (!mergeable(wedge, source, scopeTypes)) continue;
-					final order: Int = fixOrder(requested, ImportOrder.pathsOf(wedge.imports));
-					final sorted: Array<ImportLine> = wedge.imports.copy();
+					final staying: Array<ImportLine> = stayingBelow(wedge);
+					final sorted: Array<ImportLine> = wedge.imports.filter(line -> !staying.contains(line));
+					final order: Int = fixOrder(requested, ImportOrder.pathsOf(sorted));
 					ArraySort.sort(sorted, (a, b) -> ImportOrder.compare(order, a.path, b.path));
 					final block: String = [for (line in sorted) source.substring(line.chunkFrom, line.chunkTo)].join('');
 					final group: String = [for (line in wedge.usings) source.substring(line.chunkFrom, line.chunkTo)].join('');
-					final text: String = '$block\n$group';
+					final below: String = [for (line in staying) source.substring(line.chunkFrom, line.chunkTo)].join('');
+					final text: String = '$block\n$group$below';
 					for (line in wedge.imports) merged.push(line.declFrom);
 					edits.push({ span: new Span(wedge.from, wedge.to), text: text });
 				}
-				for (block in blocksOf(source, header)) {
+				for (block in blocksOf(source, header, gate)) {
 					if (block.exists(line -> merged.contains(line.declFrom))) continue;
 					if (!block.exists(line -> flagged.contains(line.declFrom))) continue;
 					// A refusal is the ANSWER to "why did this rule not fix my file", and until it was
@@ -269,9 +287,9 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 	 * (`ImportOrder.usingLinesOf`): a file carrying one such statement is one whose `using` group cannot
 	 * be moved intact, so no wedge in it may be repaired.
 	 */
-	private static function wedgesOf(source: String, tree: QueryNode, config: LintConfig): Array<UsingWedge> {
+	private static function wedgesOf(source: String, tree: QueryNode, config: LintConfig, gate: WildcardImportGate): Array<UsingWedge> {
 		if (config.boolOption(RULE_ID, OPTION_USING_AFTER) == false) return [];
-		final runs: Array<Array<ImportLine>> = ImportOrder.runsOf(source, ImportOrder.slotsOf(tree));
+		final runs: Array<Array<ImportLine>> = ImportOrder.runsIn(source, tree, gate);
 		if (runs.length < 2) return [];
 		final usings: Null<Array<ImportLine>> = ImportOrder.usingLinesOf(source, tree);
 		if (usings == null || usings.length == 0) return [];
@@ -320,7 +338,7 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 	}
 
 	/**
-	 * Whether `wedge` may be merged. Four refusals:
+	 * Whether `wedge` may be merged. Five refusals:
 	 *
 	 *  - the two `reorderRefusal` makes over the merged import union — an absorbed leading comment on
 	 *    the block's first line, and two of the merged imports binding one simple name (the gate
@@ -337,7 +355,10 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 	 *    "no collision" on no evidence — precisely for the multi-type facade modules a project
 	 *    writes `using` for (`tink.CoreApi` re-exports `Error`, `Future`, `Outcome`, …). Declare
 	 *    the library in `resolutionLibs` and the merge unlocks; the Haxe std is always in scope, so
-	 *    `using StringTools` / `using Lambda` need no declaration.
+	 *    `using StringTools` / `using Lambda` need no declaration;
+	 *  - a wildcard MEMBER written between two wedged `using` groups. One below every `using` stays
+	 *    below the merged group (`stayingBelow`); one between them could only do so by crossing the
+	 *    later group, and a `using`'s precedence against a wildcard was never measured.
 	 */
 	private static function mergeable(wedge: UsingWedge, source: String, moduleTypes: Map<String, Array<String>>): Bool {
 		if (reorderRefusal(wedge.imports, source, moduleTypes) != null) return false;
@@ -346,15 +367,35 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 		// does this run's head carry an absorbed leading comment. Spelled `!=`, it read as a
 		// line-boundary check, which is a question `ImportOrder.lineOf` has already refused to hand it.
 		for (head in wedge.heads) if (head.chunkFrom < SourceText.startOfLine(source, head.declFrom)) return false;
+		// A wildcard BELOW the group stays below it (`stayingBelow`), so it must sit below EVERY wedged
+		// `using`: one between two of them would cross the later one, and what a `using` binds against a
+		// wildcard's names was never measured.
+		final lastUsing: Int = wedge.usings[wedge.usings.length - 1].declFrom;
+		if (stayingBelow(wedge).exists(line -> line.declFrom < lastUsing)) return false;
 		for (statement in wedge.usings) {
 			final names: Null<Array<String>> = moduleTypes[statement.path];
 			if (names == null || names.length == 0) return false;
 			for (line in wedge.imports) {
-				if (line.declFrom > statement.declFrom && boundNames(line.path, moduleTypes).exists(name -> names.contains(name)))
+				if (
+					line.declFrom > statement.declFrom && !WildcardImportGate.isWildcard(line.path)
+					&& boundNames(line.path, moduleTypes).exists(name -> names.contains(name))
+				)
 					return false;
 			}
 		}
 		return true;
+	}
+
+	/**
+	 * The wildcard members of `wedge` written BELOW its first `using` — the lines the merge leaves
+	 * below the group, in source order, instead of lifting them into the sorted block. Lifting one
+	 * would move it above a `using`, a relative order the measured precedence says nothing about;
+	 * leaving it is sound because the gate admitted it into its run, so its order against the
+	 * imports that DO move up is free, and against every line above the group it is unchanged.
+	 */
+	private static function stayingBelow(wedge: UsingWedge): Array<ImportLine> {
+		final firstUsing: Int = wedge.usings[0].declFrom;
+		return wedge.imports.filter(line -> WildcardImportGate.isWildcard(line.path) && line.declFrom > firstUsing);
 	}
 
 	/**
@@ -433,7 +474,9 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 			return 'the block\'s first import carries an absorbed leading comment, written directly above it — such a comment belongs to '
 				+ 'the whole block, so permuting the block would relocate it into the middle or strand it above a different import';
 		final bound: Array<String> = [];
-		for (line in block) for (name in boundNames(line.path, moduleTypes)) {
+		// A wildcard member's names were already proved free of every other member's by the gate that
+		// admitted it (`WildcardImportGate`), and its last segment is `*`, which is no name at all.
+		for (line in block) if (!WildcardImportGate.isWildcard(line.path)) for (name in boundNames(line.path, moduleTypes)) {
 			if (bound.contains(name))
 				return 'two imports in the block bind the simple name "$name", which Haxe resolves to the LAST '
 					+ 'of them — reordering would silently change which type the file means';
@@ -475,8 +518,8 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 	 * The file's plain-import BLOCKS — `ImportOrder.runsOf` minus the runs of ONE, which have no
 	 * order to be out of and nothing to permute.
 	 */
-	private static function blocksOf(source: String, tree: QueryNode): Array<Array<ImportLine>> {
-		return ImportOrder.runsOf(source, ImportOrder.slotsOf(tree)).filter(run -> run.length > 1);
+	private static function blocksOf(source: String, tree: QueryNode, gate: WildcardImportGate): Array<Array<ImportLine>> {
+		return ImportOrder.runsIn(source, tree, gate).filter(run -> run.length > 1);
 	}
 
 }

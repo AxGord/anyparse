@@ -41,6 +41,12 @@ final class SourceText {
 		return dot < 0 ? dotted : dotted.substring(dot + 1);
 	}
 
+	/** `dotted` without its last segment — `a.b.C` -> `a.b`, `a.*` -> `a`, `C` -> `` — the counterpart of `lastSegment`. */
+	public static inline function parentPath(dotted: String): String {
+		final dot: Int = dotted.lastIndexOf('.');
+		return dot < 0 ? '' : dotted.substring(0, dot);
+	}
+
 	/** A name is renameable when it is a valid identifier and not `this`. */
 	public static inline function isRenameableName(name: Null<String>): Bool {
 		return name != null && name != 'this' && isIdentifier(name);

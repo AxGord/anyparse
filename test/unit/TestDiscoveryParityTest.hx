@@ -1329,6 +1329,34 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.HoistCommonImportTest#testWithholdsBelowTheMinimumModuleCount :: control :: M-HOIST-MIN-MODULES',
 			'unit.check.HoistCommonImportTest#testWithholdsOnAnUnboundedChain :: control :: M-HOIST-SHORT-CHAIN',
 			'unit.check.HoistCommonImportTest#testWithholdsWhereTheChainCarriesAGuardedStatement :: control :: M-HOIST-GUARDED-BLIND',
+			'unit.check.ImportBlockOrderCheckTest#testAFieldWildcardSharingAStaticWithAFieldImportStaysABoundary :: control :: '
+				+ 'M-WILDGATE-EXPLICIT-VALUES-IGNORED,M-WILDGATE-FIELD-IMPORT-NO-NAME',
+			'unit.check.ImportBlockOrderCheckTest#testAFieldWildcardWithFreeNamesJoinsTheBlock :: control :: '
+				+ 'M-WILDGATE-NEVER-JOINS,M-RUN-GATE-NO-INDEX,M-FIX-GATE-NO-INDEX',
+			'unit.check.ImportBlockOrderCheckTest#testAModuleLevelFieldOfAnExplicitImportBlocksAFieldWildcard :: control :: '
+				+ 'M-WILDGATE-EXPLICIT-VALUES-IGNORED,M-WILDGATE-MODULE-FIELDS-NONE',
+			'unit.check.ImportBlockOrderCheckTest#testAPackageWildcardJoinsTheBlock :: control :: M-WILDGATE-NEVER-JOINS',
+			'unit.check.ImportBlockOrderCheckTest#testAReorderedWildcardBlockRunsTheSame :: control :: '
+				+ 'M-WILDGATE-NEVER-JOINS,M-WILDGATE-WILDCARD-VALUES-IGNORED',
+			'unit.check.ImportBlockOrderCheckTest#testAWildcardBelowAWedgedUsingStaysBelowIt :: control :: M-WEDGE-WILDCARD-LIFTED',
+			'unit.check.ImportBlockOrderCheckTest#testAWildcardBetweenTwoWedgedUsingsRefusesTheMerge :: control :: '
+				+ 'M-WEDGE-WILDCARD-CROSSES-USING',
+			'unit.check.ImportBlockOrderCheckTest#testAWildcardOfABuiltTypeStaysABoundary :: control :: M-WILDGATE-BUILD-READ',
+			'unit.check.ImportBlockOrderCheckTest#testAWildcardOfASubclassStaysABoundary :: control :: M-WILDGATE-SUPERTYPE-READ',
+			'unit.check.ImportBlockOrderCheckTest#testAWildcardOfATypedefStaysABoundary :: control :: M-WILDGATE-TYPEDEF-READ',
+			'unit.check.ImportBlockOrderCheckTest#testAWildcardOfAnUnindexedTypeStaysABoundary :: control :: M-WILDGATE-UNKNOWN-TYPE-JOINS',
+			'unit.check.ImportBlockOrderCheckTest#testAnEnumConstructorIsANameTheWildcardBinds :: control :: M-WILDGATE-ENUM-STATICS-ONLY',
+			'unit.check.ImportBlockOrderCheckTest#testAnInstanceMemberIsNoNameTheWildcardBinds :: control :: M-WILDGATE-INSTANCE-BOUND',
+			'unit.check.ImportBlockOrderCheckTest#testAnUnindexedExplicitImportNeverBlocksAPackageWildcard :: control :: '
+				+ 'M-WILDGATE-PACKAGE-ASKS-EXPLICIT',
+			'unit.check.ImportBlockOrderCheckTest#testAnUnindexedExplicitMemberKeepsAFieldWildcardABoundary :: control :: '
+				+ 'M-WILDGATE-EXPLICIT-UNKNOWN-FREE',
+			'unit.check.ImportBlockOrderCheckTest#testTheInsertSeatSortsAroundAMemberWildcard :: control :: M-SEAT-WILDCARD-BLIND',
+			'unit.check.ImportBlockOrderCheckTest#testTwoFieldWildcardsSharingAStaticStayBoundaries :: control :: '
+				+ 'M-WILDGATE-WILDCARD-VALUES-IGNORED,M-ORDER-WILDCARD-NAMED-STAR',
+			'unit.check.ImportBlockOrderCheckTest#testTwoPackageWildcardsSharingAModuleNameStayBoundaries :: control :: '
+				+ 'M-WILDGATE-PACKAGE-NAMES-IGNORED',
+			'unit.check.ImportBlockOrderCheckTest#testWildcardSplitsTheBlock :: control :: M-WILDGATE-UNKNOWN-TYPE-JOINS',
 			'unit.check.ImpossibleCastTest#testUnrelatedClassesFlagged :: control :: M-UNRELATED-FALSE',
 			'unit.check.ImpossibleIsCheckTest#testUnrelatedClassesFlagged :: control :: M-UNRELATED-FALSE',
 			'unit.check.JoinSingleUseLocalCheckTest#testAnnotationRestatesSourceFlagged :: control :: M-JSUL-ANNOTATION-NEVER-NEUTRAL',
@@ -5036,7 +5064,27 @@ class TestDiscoveryParityTest extends Test {
 			'M-BEFORE-LEAD-CAPTURE-NONE',
 			'M-BEFORE-LEAD-MANDATORY-NONE',
 			'M-BEFORE-LEAD-WRITER-OPT-NONE',
-			'M-BEFORE-LEAD-WRITER-MANDATORY-NONE'
+			'M-BEFORE-LEAD-WRITER-MANDATORY-NONE',
+			'M-WILDGATE-NEVER-JOINS',
+			'M-RUN-GATE-NO-INDEX',
+			'M-FIX-GATE-NO-INDEX',
+			'M-WILDGATE-PACKAGE-ASKS-EXPLICIT',
+			'M-WILDGATE-INSTANCE-BOUND',
+			'M-WILDGATE-PACKAGE-NAMES-IGNORED',
+			'M-WILDGATE-EXPLICIT-VALUES-IGNORED',
+			'M-WILDGATE-FIELD-IMPORT-NO-NAME',
+			'M-WILDGATE-WILDCARD-VALUES-IGNORED',
+			'M-ORDER-WILDCARD-NAMED-STAR',
+			'M-WILDGATE-MODULE-FIELDS-NONE',
+			'M-WILDGATE-ENUM-STATICS-ONLY',
+			'M-WILDGATE-EXPLICIT-UNKNOWN-FREE',
+			'M-WILDGATE-UNKNOWN-TYPE-JOINS',
+			'M-WILDGATE-SUPERTYPE-READ',
+			'M-WILDGATE-BUILD-READ',
+			'M-WILDGATE-TYPEDEF-READ',
+			'M-WEDGE-WILDCARD-LIFTED',
+			'M-WEDGE-WILDCARD-CROSSES-USING',
+			'M-SEAT-WILDCARD-BLIND'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
