@@ -2718,11 +2718,11 @@
 			"note": "a container resolved to something other than Array is reported with a key-value form it has no iterator for"
 		},
 		{
-			"name": "M-KV-NOOPENER-UNDERSCORE",
+			"name": "M-ELEMENT-LOOP-UNDERSCORE",
 			"type": "anyparse.check.ElementLoopRewrite",
 			"method": "withoutLeadingUnderscores",
 			"force": "name",
-			"note": "the private-member prefix stays on the collection name, the singularizer refuses it, and the rewrite of _points is withheld"
+			"note": "the private-member prefix stays on the collection name, the singularizer refuses it, and both element-loop rules withhold the rewrite of _points"
 		},
 		{
 			"name": "M-KV-NOOPENER-TAKEN-SCOPE",

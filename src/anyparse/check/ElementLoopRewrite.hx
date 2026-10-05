@@ -122,6 +122,7 @@ final class ElementLoopRewrite {
 
 	/**
 	 * The name a value binder derived from `collection` would take, or why a loop rewrite may not write one.
+	 * The candidate is `elementNameOf(collection)`, the one derivation both element-loop rules use.
 	 * A candidate spelled ANYWHERE in ACTIVE text inside `scan` (named `where` in the refusal) is refused - a masked
 	 * TEXT scan, because a name that occurs only in a `macro` quotation is just as capturable as one in plain code,
 	 * while a comment naming it cannot capture anything.
@@ -135,7 +136,7 @@ final class ElementLoopRewrite {
 	public static function binderFor(
 		f: LoopFileScan, forNode: QueryNode, index: String, collection: String, scan: Span, where: String
 	): BinderChoice {
-		final candidate: Null<String> = singularOf(collection);
+		final candidate: Null<String> = elementNameOf(collection);
 		final refusal: Null<String> = if (candidate == null)
 			'no singular of `$collection` names the element'
 		else if (candidate == index)
@@ -247,8 +248,16 @@ final class ElementLoopRewrite {
 			null;
 	}
 
+	/**
+	 * The element name derived from a collection named `collection`: the singular of the name with its
+	 * leading underscores dropped (`_points` -> `point`), or null when it has none.
+	 */
+	private static inline function elementNameOf(collection: String): Null<String> {
+		return singularOf(withoutLeadingUnderscores(collection));
+	}
+
 	/** `name` with every leading underscore dropped — the private-member prefix a binder does not carry. */
-	public static function withoutLeadingUnderscores(name: String): String {
+	private static function withoutLeadingUnderscores(name: String): String {
 		var at: Int = 0;
 		while (at < name.length && name.charAt(at) == UNDERSCORE) at++;
 		return name.substring(at);
@@ -269,15 +278,14 @@ final class ElementLoopRewrite {
 
 	/**
 	 * Whether an indexed `for` that encloses `loop` or sits inside it derives `candidate` as its own
-	 * element name — with its collection's leading underscores dropped, the wider of the two rules'
-	 * spellings, so the answer covers a loop either rule may rewrite. Sibling loops never collide: each
-	 * binder is scoped to its own loop.
+	 * element name, by the derivation both rules share (`elementNameOf`), so the answer covers a loop
+	 * either rule may rewrite. Sibling loops never collide: each binder is scoped to its own loop.
 	 */
 	private static function nestingLoopDerives(node: QueryNode, loop: QueryNode, candidate: String, f: LoopFileScan): Bool {
 		if (f.seams.core.opaqueKinds.contains(node.kind)) return false;
 		if (node != loop && nests(node, loop)) {
 			final h: Null<IndexedLoopHeader> = LoopScan.indexedHeaderOf(node, f.source, LENGTH_MEMBER, f.seams);
-			if (h != null && singularOf(withoutLeadingUnderscores(h.collection)) == candidate) return true;
+			if (h != null && elementNameOf(h.collection) == candidate) return true;
 		}
 		return node.children.exists(c -> nestingLoopDerives(c, loop, candidate, f));
 	}

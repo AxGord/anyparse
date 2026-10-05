@@ -464,6 +464,15 @@ class PreferValueLoopCheckTest extends Test {
 		assertFixCanonical(src, ['for (gridLineVertical in gridLinesVertical) gridLineVertical.redraw();'], ['[i]']);
 	}
 
+	@:pin('control') @:killer('M-ELEMENT-LOOP-UNDERSCORE')
+	public function testPrivateFieldCollectionDropsItsUnderscore(): Void {
+		// The derivation `prefer-keyvalue-loop` uses, so `_points` names its element `point` under both rules.
+		final src: String = 'class C {\n\tfinal _points:Array<Item> = [];\n\n\tfinal sink:Sink = new Sink();\n\n'
+			+ '\tfunction f():Void {\n\t\tfor (i in 0..._points.length) sink.use(_points[i]);\n\t}\n}$SUPPORT';
+		Assert.equals('this indexed loop can be for (point in _points)', violations(src)[0]?.message);
+		assertFixCanonical(src, ['for (point in _points) sink.use(point);'], ['[i]']);
+	}
+
 	public function testInnerPluralBinderTakenIsReportOnly(): Void {
 		Assert.equals(
 			'the element name `gridLineVertical` is already spelled in the loop body',

@@ -218,7 +218,7 @@ class PreferKeyValueLoopCheckTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-KV-NOOPENER-UNDERSCORE') @:killer('M-VALUE-LOOP-READS-UNSPLICED')
+	@:pin('control') @:killer('M-ELEMENT-LOOP-UNDERSCORE') @:killer('M-VALUE-LOOP-READS-UNSPLICED')
 	public function testNoOpenerFieldLoopRewritten(): Void {
 		// No `final p = X[i];` to consume and the index feeds a second array, so neither the opener arm
 		// nor prefer-value-loop claims it; every `_points[i]` becomes the binder, `value[i]` stays.

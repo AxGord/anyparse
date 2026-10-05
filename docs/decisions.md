@@ -624,6 +624,9 @@ decided the question; it may not become a record of runs.
   is plural answers exactly as before. A stop list for `s`-final non-plurals ahead of a non-plural tail
   (`posList`, `wasVisited`) was not built: no such name occurs among the loop findings of the haxelib
   corpus or of TM, and a list of exceptions is a guess at English — branch `feat/binder-inner-plural`
+- prefer-value-loop deriving its binder from the collection name as spelled → `_points` had "no singular"
+  while prefer-keyvalue-loop, and the nested-binder clash both rules ask, read it as `points`; the leading
+  underscores are dropped inside `binderFor`, the one derivation both rules use — branch `feat/binder-inner-plural`
 - a compiler-oracle configuration whose compiled set cannot be probed excluded "like a red one" → its
   baseline is green, so it cannot vouch for an edit but can still refuse one; dropping it from verification
   applied a shared-code edit that compiled on mac and broke the other build — `d383325d`
