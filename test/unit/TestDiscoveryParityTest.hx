@@ -1094,6 +1094,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-AMBIENT-GOVERNANCE-BLIND',
 			'unit.check.AmbientImportRulesTest#testAnAmbientImportNoModuleUnderItUsesIsStillReported :: control :: '
 				+ 'M-AMBIENT-GOVERNANCE-SHORT',
+			'unit.check.AmbientImportRulesTest#testAnOwnStatementBindingAConstructorIsKeptBesideTheAmbientCopy :: control :: '
+				+ 'M-REDUNDANT-AMBIENT-VALUES',
 			'unit.check.AmbientImportRulesTest#testAnOwnUsingIsKeptWhereAnotherUsingCouldTakeItsPosition :: control :: '
 				+ 'M-AMBIENT-REDUNDANT-USING-POSITION',
 			'unit.check.AmbientImportRulesTest#testTheDeclaringModuleIsAReaderOfAnAmbientUsingOfItself :: control :: '
@@ -1329,21 +1331,30 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.HoistCommonImportTest#testRefusesAPackageWildcard :: guard :: ',
 			'unit.check.HoistCommonImportTest#testRefusesARootPackageNamesake :: control :: M-HOIST-RETARGET-BAND',
 			'unit.check.HoistCommonImportTest#testRefusesASamePackageNamesake :: control :: M-HOIST-RETARGET-BAND',
+			'unit.check.HoistCommonImportTest#testRefusesAStatementBindingAConstructor :: control :: M-HOIST-VALUES-BLIND',
 			'unit.check.HoistCommonImportTest#testRefusesAStaticWildcard :: guard :: ',
 			'unit.check.HoistCommonImportTest#testRefusesAUsingOffTheAllowList :: guard :: ',
 			'unit.check.HoistCommonImportTest#testRefusesAnAlias :: guard :: ',
 			'unit.check.HoistCommonImportTest#testWithholdsBelowTheMinimumModuleCount :: control :: M-HOIST-MIN-MODULES',
 			'unit.check.HoistCommonImportTest#testWithholdsOnAnUnboundedChain :: control :: M-HOIST-SHORT-CHAIN',
 			'unit.check.HoistCommonImportTest#testWithholdsWhereTheChainCarriesAGuardedStatement :: control :: M-HOIST-GUARDED-BLIND',
+			'unit.check.ImportBlockOrderCheckTest#testAConstructorAndAModuleLevelFieldOfOneNameNeverBlock :: control :: '
+				+ 'M-BIND-RANKS-MERGED',
+			'unit.check.ImportBlockOrderCheckTest#testAFieldImportOfAModuleLevelFieldIsListed :: control :: '
+				+ 'M-BIND-FIELD-IMPORT-MODULE-FIELD',
 			'unit.check.ImportBlockOrderCheckTest#testAFieldWildcardSharingAStaticWithAFieldImportStaysABoundary :: control :: '
-				+ 'M-WILDGATE-EXPLICIT-VALUES-IGNORED,M-WILDGATE-FIELD-IMPORT-NO-NAME',
+				+ 'M-BIND-FIELD-RANK-IGNORED,M-WILDGATE-FIELD-IMPORT-NO-NAME',
 			'unit.check.ImportBlockOrderCheckTest#testAFieldWildcardWithFreeNamesJoinsTheBlock :: control :: '
 				+ 'M-WILDGATE-NEVER-JOINS,M-RUN-GATE-NO-INDEX,M-FIX-GATE-NO-INDEX',
 			'unit.check.ImportBlockOrderCheckTest#testAModuleLevelFieldOfAnExplicitImportBlocksAFieldWildcard :: control :: '
-				+ 'M-WILDGATE-EXPLICIT-VALUES-IGNORED,M-WILDGATE-MODULE-FIELDS-NONE',
+				+ 'M-BIND-FIELD-RANK-IGNORED,M-WILDGATE-MODULE-FIELDS-NONE',
 			'unit.check.ImportBlockOrderCheckTest#testAPackageWildcardJoinsTheBlock :: control :: M-WILDGATE-NEVER-JOINS',
+			'unit.check.ImportBlockOrderCheckTest#testAPrivateEnumConstructorIsNotBound :: control :: M-BIND-PRIVATE-TYPE-VALUES',
 			'unit.check.ImportBlockOrderCheckTest#testAReorderedWildcardBlockRunsTheSame :: control :: '
-				+ 'M-WILDGATE-NEVER-JOINS,M-WILDGATE-WILDCARD-VALUES-IGNORED',
+				+ 'M-WILDGATE-NEVER-JOINS,M-BIND-FIELD-RANK-IGNORED',
+			'unit.check.ImportBlockOrderCheckTest#testATypedefBindsTheConstructorsOfWhatItAliases :: control :: '
+				+ 'M-BIND-TYPEDEF-NOT-FOLLOWED,M-BIND-NULL-WRAPPER-FOLLOWED',
+			'unit.check.ImportBlockOrderCheckTest#testAUsingBindsNoModuleLevelField :: control :: M-BIND-USING-FIELDS',
 			'unit.check.ImportBlockOrderCheckTest#testAWildcardBelowAWedgedUsingStaysBelowIt :: control :: M-WEDGE-WILDCARD-LIFTED',
 			'unit.check.ImportBlockOrderCheckTest#testAWildcardBetweenTwoWedgedUsingsRefusesTheMerge :: control :: '
 				+ 'M-WEDGE-WILDCARD-CROSSES-USING',
@@ -1351,18 +1362,29 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ImportBlockOrderCheckTest#testAWildcardOfASubclassStaysABoundary :: control :: M-WILDGATE-SUPERTYPE-READ',
 			'unit.check.ImportBlockOrderCheckTest#testAWildcardOfATypedefStaysABoundary :: control :: M-WILDGATE-TYPEDEF-READ',
 			'unit.check.ImportBlockOrderCheckTest#testAWildcardOfAnUnindexedTypeStaysABoundary :: control :: M-WILDGATE-UNKNOWN-TYPE-JOINS',
+			'unit.check.ImportBlockOrderCheckTest#testAnEnumAbstractStaticIsNotAValueItsImportBinds :: control :: M-BIND-ABSTRACT-STATICS',
+			'unit.check.ImportBlockOrderCheckTest#testAnEnumCarryingABuildMacroIsUnlisted :: control :: M-BIND-ENUM-BUILD-LISTED',
 			'unit.check.ImportBlockOrderCheckTest#testAnEnumConstructorIsANameTheWildcardBinds :: control :: M-WILDGATE-ENUM-STATICS-ONLY',
 			'unit.check.ImportBlockOrderCheckTest#testAnInstanceMemberIsNoNameTheWildcardBinds :: control :: M-WILDGATE-INSTANCE-BOUND',
 			'unit.check.ImportBlockOrderCheckTest#testAnUnindexedExplicitImportNeverBlocksAPackageWildcard :: control :: '
 				+ 'M-WILDGATE-PACKAGE-ASKS-EXPLICIT',
 			'unit.check.ImportBlockOrderCheckTest#testAnUnindexedExplicitMemberKeepsAFieldWildcardABoundary :: control :: '
 				+ 'M-WILDGATE-EXPLICIT-UNKNOWN-FREE',
+			'unit.check.ImportBlockOrderCheckTest#testAnUnindexedModuleRefusesBesideAModuleLevelField :: control :: '
+				+ 'M-BIND-UNLISTED-FREE-LEFT',
 			'unit.check.ImportBlockOrderCheckTest#testTheInsertSeatSortsAroundAMemberWildcard :: control :: M-SEAT-WILDCARD-BLIND',
 			'unit.check.ImportBlockOrderCheckTest#testTwoFieldWildcardsSharingAStaticStayBoundaries :: control :: '
-				+ 'M-WILDGATE-WILDCARD-VALUES-IGNORED,M-ORDER-WILDCARD-NAMED-STAR',
+				+ 'M-BIND-FIELD-RANK-IGNORED',
+			'unit.check.ImportBlockOrderCheckTest#testTwoModulesBindingOneModuleLevelFieldKeepTheirOrderWhenRun :: control :: '
+				+ 'M-BIND-FIELD-RANK-IGNORED,M-WILDGATE-MODULE-FIELDS-NONE',
+			'unit.check.ImportBlockOrderCheckTest#testTwoModulesDeclaringOneModuleLevelFieldAreNotReordered :: control :: '
+				+ 'M-BIND-FIELD-RANK-IGNORED,M-WILDGATE-MODULE-FIELDS-NONE',
 			'unit.check.ImportBlockOrderCheckTest#testTwoPackageWildcardsSharingAModuleNameStayBoundaries :: control :: '
 				+ 'M-WILDGATE-PACKAGE-NAMES-IGNORED',
+			'unit.check.ImportBlockOrderCheckTest#testTwoTypeImportsSharingAConstructorAreNotReordered :: control :: '
+				+ 'M-BIND-TYPE-VALUE-RANK-IGNORED,M-BIND-TYPE-VALUES-NONE',
 			'unit.check.ImportBlockOrderCheckTest#testWildcardSplitsTheBlock :: control :: M-WILDGATE-UNKNOWN-TYPE-JOINS',
+			'unit.check.ImportOutsideGuardCheckTest#testAMoveThatRebindsAConstructorIsRefused :: control :: M-GUARD-REBIND-BLIND',
 			'unit.check.ImpossibleCastTest#testUnrelatedClassesFlagged :: control :: M-UNRELATED-FALSE',
 			'unit.check.ImpossibleIsCheckTest#testUnrelatedClassesFlagged :: control :: M-UNRELATED-FALSE',
 			'unit.check.JoinSingleUseLocalCheckTest#testAnnotationRestatesSourceFlagged :: control :: M-JSUL-ANNOTATION-NEVER-NEUTRAL',
@@ -1386,6 +1408,11 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.LintFixDeclineWiringSliceTest#testARefusedRuleCostsOnlyItsOwnEdits :: control :: M-LINTFIX-BLAME-SITE-ALWAYS',
 			'unit.check.LintFixDeclineWiringSliceTest#testAnAcceptedFileIsWrittenAndBlamesNobody :: control :: M-LINTFIX-ACCEPTED-BLAMED',
 			'unit.check.LintLanguageVersionGateTest#testAnExplicitRuleSelectionKeepsTheVersionFloor :: control :: M-VERSION-LIFTED-BY-RULE',
+			'unit.check.LintModuleSecondaryTypeSliceTest#testAModuleWhoseConstructorsCannotBeListedStaysAdvisory :: control :: '
+				+ 'M-UNUSED-VALUES-UNLISTED-DELETED',
+			'unit.check.LintModuleSecondaryTypeSliceTest#testModuleLevelFieldUseKeepsModuleImport :: control :: '
+				+ 'M-UNUSED-VALUES-BLIND,M-WILDGATE-MODULE-FIELDS-NONE',
+			'unit.check.LintModuleSecondaryTypeSliceTest#testTheLastBinderOfAModuleLevelFieldIsKept :: control :: M-UNUSED-VALUES-BLIND',
 			'unit.check.LintReportChannelSliceTest#testASummaryIsPerRuleAndOneRuleIsByFile :: control :: M-LINT-SUMMARY-ONE-SHAPE',
 			'unit.check.LintReportChannelSliceTest#testATextRunOverTheThresholdPrintsTheSummary :: control :: '
 				+ 'M-LINT-SUMMARY-THRESHOLD-UNREAD',
@@ -1765,6 +1792,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ReachDefinesProbeTest#testOnlyAOneArmTranscriptWithBothSetsAnswers :: control :: M-DEFINES-ONE-ARM',
 			'unit.check.ReachDefinesProbeTest#testOverlappingProbesAnswerInTheOraclesOrder :: control :: M-SPAWN-ORDER',
 			'unit.check.ReachDefinesProbeTest#testTheProbeReadsTheValueEachDefineCarries :: control :: M-DEFINES-VALUES-MACRO',
+			'unit.check.RedundantImportCheckTest#testAThirdLineBindingOneOfItsConstructorsKeepsIt :: control :: M-REDUNDANT-VALUES-BLIND',
 			'unit.check.RedundantImportCheckTest#testSubTypeImportBesideItsModuleImportIsRedundant :: control :: M-DECLARINGFILES-EMPTY',
 			'unit.check.RedundantIsVarCheckTest#testBypassAccessorNotFlagged :: control :: M-ISVAR-BYPASS-BLIND',
 			'unit.check.RedundantIsVarCheckTest#testCppCodeOutsideAnAccessorNotFlagged :: control :: M-ISVAR-NATIVE-BLIND',
@@ -5089,10 +5117,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-WILDGATE-PACKAGE-ASKS-EXPLICIT',
 			'M-WILDGATE-INSTANCE-BOUND',
 			'M-WILDGATE-PACKAGE-NAMES-IGNORED',
-			'M-WILDGATE-EXPLICIT-VALUES-IGNORED',
 			'M-WILDGATE-FIELD-IMPORT-NO-NAME',
-			'M-WILDGATE-WILDCARD-VALUES-IGNORED',
-			'M-ORDER-WILDCARD-NAMED-STAR',
 			'M-WILDGATE-MODULE-FIELDS-NONE',
 			'M-WILDGATE-ENUM-STATICS-ONLY',
 			'M-WILDGATE-EXPLICIT-UNKNOWN-FREE',
@@ -5112,7 +5137,25 @@ class TestDiscoveryParityTest extends Test {
 			'M-GRAPH-MAP-USER-CODE',
 			'M-FACTS-IDENTITY-CAST-VALUE',
 			'M-TOUCH-NEW-MAP-NOT-FRESH',
-			'M-ULB-KEYED-UNPROVED-DROPPED'
+			'M-ULB-KEYED-UNPROVED-DROPPED',
+			'M-BIND-FIELD-RANK-IGNORED',
+			'M-BIND-TYPE-VALUE-RANK-IGNORED',
+			'M-BIND-RANKS-MERGED',
+			'M-BIND-UNLISTED-FREE-LEFT',
+			'M-BIND-TYPE-VALUES-NONE',
+			'M-BIND-PRIVATE-TYPE-VALUES',
+			'M-BIND-TYPEDEF-NOT-FOLLOWED',
+			'M-BIND-NULL-WRAPPER-FOLLOWED',
+			'M-BIND-ABSTRACT-STATICS',
+			'M-BIND-ENUM-BUILD-LISTED',
+			'M-BIND-USING-FIELDS',
+			'M-BIND-FIELD-IMPORT-MODULE-FIELD',
+			'M-UNUSED-VALUES-BLIND',
+			'M-UNUSED-VALUES-UNLISTED-DELETED',
+			'M-REDUNDANT-VALUES-BLIND',
+			'M-REDUNDANT-AMBIENT-VALUES',
+			'M-HOIST-VALUES-BLIND',
+			'M-GUARD-REBIND-BLIND'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

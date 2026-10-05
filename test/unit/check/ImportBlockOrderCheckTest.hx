@@ -94,6 +94,35 @@ class ImportBlockOrderCheckTest extends Test {
 		{ file: 's/Alias.hx', source: 'package s;\n\ntypedef Alias = Built;\n' }
 	];
 
+	/**
+	 * The library the BINDING fixtures resolve against — every module a fixture names is here except
+	 * `mystery.*`, so each line binds what its source declares. `v.Fns` / `v.Fns2` each declare a
+	 * MODULE-LEVEL `modfn`, `v.Reds` a module-level `Red` and `w.Other` a module-level `other`; `p.Col` /
+	 * `p.Col2` share the constructor `Red`, which `p.M`'s SECONDARY enum and `p.Pm`'s PRIVATE one declare
+	 * too; `p.Ab3` holds the value `Blue` and a STATIC field `Red`; `p.TAlias` / `p.TNull` alias `p.Col2` (the
+	 * second through `Null<T>`, stubbed at the root as the std declares it); `p.Built` carries a build macro.
+	 */
+	private static final BIND_LIBS: Array<{ file: String, source: String }> = [
+		{ file: 'a/Alpha.hx', source: 'package a;\n\nclass Alpha {}\n' },
+		{ file: 'z/Zeta.hx', source: 'package z;\n\nclass Zeta {}\n' },
+		{ file: 'v/Fns.hx', source: 'package v;\n\nfunction modfn(): Void {}\n\nclass Fns {}\n' },
+		{ file: 'v/Fns2.hx', source: 'package v;\n\nfunction modfn(): Void {}\n\nclass Fns2 {}\n' },
+		{ file: 'v/Reds.hx', source: 'package v;\n\nfunction Red(): Void {}\n\nclass Reds {}\n' },
+		{ file: 'w/Other.hx', source: 'package w;\n\nfunction other(): Void {}\n\nclass Other {}\n' },
+		{ file: 'p/Col.hx', source: 'package p;\n\nenum Col {\n\tRed;\n\tGreen;\n}\n' },
+		{ file: 'p/Col2.hx', source: 'package p;\n\nenum Col2 {\n\tRed;\n\tBlue;\n}\n' },
+		{ file: 'p/M.hx', source: 'package p;\n\nclass M {}\n\nenum MSub {\n\tRed;\n\tPink;\n}\n' },
+		{ file: 'p/Pm.hx', source: 'package p;\n\nclass Pm {}\n\nprivate enum PE {\n\tRed;\n}\n' },
+		{
+			file: 'p/Ab3.hx',
+			source: 'package p;\n\nenum abstract Ab3(String) {\n\tvar Blue = \'b\';\n\n\tpublic static final Red: String = \'r\';\n}\n'
+		},
+		{ file: 'p/TAlias.hx', source: 'package p;\n\ntypedef TAlias = Col2;\n' },
+		{ file: 'p/TNull.hx', source: 'package p;\n\ntypedef TNull = Null<Col2>;\n' },
+		{ file: 'Null.hx', source: '@:coreType abstract Null<T> {}\n' },
+		{ file: 'p/Built.hx', source: 'package p;\n\n@:build(p.Macro.build())\nenum Built {\n\tTeal;\n}\n' }
+	];
+
 	public function testAppendedImportFlagged(): Void {
 		final vs: Array<Violation> = violations(APPENDED);
 		Assert.equals(1, vs.length);
@@ -252,13 +281,13 @@ class ImportBlockOrderCheckTest extends Test {
 	}
 
 	/** A field wildcard and an explicit FIELD import of one name: the LAST wins. */
-	@:pin('control') @:killer('M-WILDGATE-EXPLICIT-VALUES-IGNORED', 'M-WILDGATE-FIELD-IMPORT-NO-NAME')
+	@:pin('control') @:killer('M-BIND-FIELD-RANK-IGNORED', 'M-WILDGATE-FIELD-IMPORT-NO-NAME')
 	public function testAFieldWildcardSharingAStaticWithAFieldImportStaysABoundary(): Void {
 		Assert.equals(0, violations(module('import z.Zeta;\nimport p.C.*;\nimport q.D.f;\n'), null, WILD_LIBS).length);
 	}
 
 	/** Two field wildcards of one static name: the LAST wins — and `r.G`, sharing none with `p.C`, joins. */
-	@:pin('control') @:killer('M-WILDGATE-WILDCARD-VALUES-IGNORED', 'M-ORDER-WILDCARD-NAMED-STAR')
+	@:pin('control') @:killer('M-BIND-FIELD-RANK-IGNORED')
 	public function testTwoFieldWildcardsSharingAStaticStayBoundaries(): Void {
 		Assert.equals(0, violations(module('import z.Zeta;\nimport p.C.*;\nimport r.E.*;\n'), null, WILD_LIBS).length);
 		final free: String = module('import z.Zeta;\nimport p.C.*;\nimport r.G.*;\n');
@@ -270,7 +299,7 @@ class ImportBlockOrderCheckTest extends Test {
 	}
 
 	/** A module import brings the module's module-level FIELDS in, and against a field wildcard the LAST wins. */
-	@:pin('control') @:killer('M-WILDGATE-EXPLICIT-VALUES-IGNORED', 'M-WILDGATE-MODULE-FIELDS-NONE')
+	@:pin('control') @:killer('M-BIND-FIELD-RANK-IGNORED', 'M-WILDGATE-MODULE-FIELDS-NONE')
 	public function testAModuleLevelFieldOfAnExplicitImportBlocksAFieldWildcard(): Void {
 		Assert.equals(0, violations(module('import z.Zeta;\nimport p.C.*;\nimport v.Fns;\n'), null, WILD_LIBS).length);
 		Assert.equals(1, violations(module('import z.Zeta;\nimport p.C.*;\nimport v.Plain;\n'), null, WILD_LIBS).length);
@@ -356,7 +385,7 @@ class ImportBlockOrderCheckTest extends Test {
 	 * the same line, compiled and run on `--interp`; the refused pair is load-bearing — swapping the
 	 * two field wildcards that share `hello` by hand changes what it prints.
 	 */
-	@:pin('control') @:killer('M-WILDGATE-NEVER-JOINS', 'M-WILDGATE-WILDCARD-VALUES-IGNORED')
+	@:pin('control') @:killer('M-WILDGATE-NEVER-JOINS', 'M-BIND-FIELD-RANK-IGNORED')
 	public function testAReorderedWildcardBlockRunsTheSame(): Void {
 		#if (sys || nodejs)
 		final main: String = 'import z.Zed;\nimport r.*;\nimport q.T;\nimport p.Tools.*;\nimport a.Alpha;\n\n'
@@ -403,6 +432,148 @@ class ImportBlockOrderCheckTest extends Test {
 		#else
 		Assert.pass('non-sys target');
 		#end
+	}
+
+	// --- plain pairs: what a module import binds besides its types (`ImportBindings`) ---
+
+	/**
+	 * Two module imports each declaring a MODULE-LEVEL `modfn`: Haxe calls the LAST one's, so the block is
+	 * reported but not sorted — a name only the module's source spells, which the type names never showed.
+	 * A block whose module-level fields are disjoint still sorts.
+	 */
+	@:pin('control') @:killer('M-BIND-FIELD-RANK-IGNORED', 'M-WILDGATE-MODULE-FIELDS-NONE')
+	public function testTwoModulesDeclaringOneModuleLevelFieldAreNotReordered(): Void {
+		final src: String = module('import v.Fns2;\nimport v.Fns;\n');
+		final vs: Array<Violation> = violations(src, null, BIND_LIBS);
+		Assert.equals(1, vs.length);
+		Assert.equals(0, edits(src, null, BIND_LIBS).length, 'the reorder would change which `modfn` a bare call runs');
+		final free: String = module('import w.Other;\nimport v.Fns2;\n');
+		Assert.equals(module('import v.Fns2;\nimport w.Other;\n'), fixed(free, null, BIND_LIBS));
+	}
+
+	/**
+	 * End to end: the refused block compiled and run on `--interp` prints the module-level field of the
+	 * LAST import, and the order the rule would have sorted it into prints the other one — so the
+	 * refusal is what keeps the program meaning what it says.
+	 */
+	@:pin('control') @:killer('M-BIND-FIELD-RANK-IGNORED', 'M-WILDGATE-MODULE-FIELDS-NONE')
+	public function testTwoModulesBindingOneModuleLevelFieldKeepTheirOrderWhenRun(): Void {
+		#if (sys || nodejs)
+		final main: String =
+			'import v.Fns2;\nimport v.Fns;\n\nclass Main {\n\tstatic function main() {\n\t\tSys.println(modfn());\n\t}\n}\n';
+		final libs: Array<{ name: String, source: String }> = [
+			{ name: 'v/Fns.hx', source: moduleField('v', 'Fns', 'modfn') },
+			{ name: 'v/Fns2.hx', source: moduleField('v', 'Fns2', 'modfn') }
+		];
+		final dir: String = CliFixture.writeTree('modfieldorder', libs.concat([{ name: 'Main.hx', source: main }]));
+		final before: HaxeRun = runMain(dir);
+		if (before.status != 0) {
+			CliFixture.removeDir(dir);
+			Assert.pass('haxe unavailable — skipped: ${before.err}${before.failure}');
+			return;
+		}
+		final files: Array<{ file: String, source: String }> = [for (f in libs) { file: '$dir/${f.name}', source: f.source }];
+		files.push({ file: '$dir/Main.hx', source: main });
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final check: ImportBlockOrder = configured(null);
+		final own: Array<Violation> = check.run(files, plugin).filter(v -> v.file == '$dir/Main.hx');
+		final sortedEdits: Array<{ span: Span, text: String }> = check.fix(main, own, plugin, SymbolIndex.build(files, plugin));
+		File.saveContent('$dir/Main.hx', main.replace('import v.Fns2;\nimport v.Fns;', 'import v.Fns;\nimport v.Fns2;'));
+		final sorted: HaxeRun = runMain(dir);
+		CliFixture.removeDir(dir);
+		Assert.equals('v.Fns.modfn', before.out.trim(), before.err);
+		Assert.equals('v.Fns2.modfn', sorted.out.trim(), 'the sorted order runs the other `modfn`: ${sorted.err}');
+		Assert.equals(1, own.length);
+		Assert.equals(0, sortedEdits.length, 'the reorder is refused');
+		if (own.length == 1) Assert.isTrue((own[0].declineReason ?? '').contains('"modfn"'), own[0].declineReason);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * Two TYPE imports sharing a constructor: the LAST binds it (an enum's and a SECONDARY
+	 * enum's alike — `import p.M;` binds `MSub.Red`), so neither block is sorted.
+	 */
+	@:pin('control') @:killer('M-BIND-TYPE-VALUE-RANK-IGNORED', 'M-BIND-TYPE-VALUES-NONE')
+	public function testTwoTypeImportsSharingAConstructorAreNotReordered(): Void {
+		Assert.equals(0, edits(module('import p.Col2;\nimport p.Col;\n'), null, BIND_LIBS).length);
+		Assert.equals(0, edits(module('import p.M;\nimport p.Col;\n'), null, BIND_LIBS).length, 'a secondary enum binds its constructors');
+	}
+
+	/** A constructor outranks a module-level field of the same name in EITHER order, so the two never block. */
+	@:pin('control') @:killer('M-BIND-RANKS-MERGED')
+	public function testAConstructorAndAModuleLevelFieldOfOneNameNeverBlock(): Void {
+		Assert.equals(module('import p.Col;\nimport v.Reds;\n'), fixed(module('import v.Reds;\nimport p.Col;\n'), null, BIND_LIBS));
+	}
+
+	/** A PRIVATE enum's constructors are not bound by its module's import, so they block nothing. */
+	@:pin('control') @:killer('M-BIND-PRIVATE-TYPE-VALUES')
+	public function testAPrivateEnumConstructorIsNotBound(): Void {
+		Assert.equals(module('import p.Col;\nimport p.Pm;\n'), fixed(module('import p.Pm;\nimport p.Col;\n'), null, BIND_LIBS));
+	}
+
+	/** An enum abstract binds its VALUES, not its statics: `Ab3`'s static `Red` meets `Col.Red` nowhere. */
+	@:pin('control') @:killer('M-BIND-ABSTRACT-STATICS')
+	public function testAnEnumAbstractStaticIsNotAValueItsImportBinds(): Void {
+		Assert.equals(module('import p.Ab3;\nimport p.Col;\n'), fixed(module('import p.Col;\nimport p.Ab3;\n'), null, BIND_LIBS));
+	}
+
+	/**
+	 * A typedef binds the constructors of what it aliases (through `Null<T>` too), so an
+	 * alias of `Col2` meets `Col` on `Red`; one whose target the compiler unwraps is unlisted.
+	 */
+	@:pin('control') @:killer('M-BIND-TYPEDEF-NOT-FOLLOWED', 'M-BIND-NULL-WRAPPER-FOLLOWED')
+	public function testATypedefBindsTheConstructorsOfWhatItAliases(): Void {
+		Assert.equals(0, edits(module('import p.TAlias;\nimport p.Col;\n'), null, BIND_LIBS).length);
+		Assert.equals(0, edits(module('import p.TNull;\nimport p.Col;\n'), null, BIND_LIBS).length);
+	}
+
+	/** An enum carrying a build macro may hold constructors no source spells, so it refuses beside any other. */
+	@:pin('control') @:killer('M-BIND-ENUM-BUILD-LISTED')
+	public function testAnEnumCarryingABuildMacroIsUnlisted(): Void {
+		Assert.equals(0, edits(module('import p.Col2;\nimport p.Built;\n'), null, BIND_LIBS).length);
+	}
+
+	/**
+	 * A module the index never saw may declare any module-level field, so it refuses beside one that
+	 * declares one. Two such modules are the documented residual: neither set can be listed, and they
+	 * sort as before.
+	 */
+	@:pin('control') @:killer('M-BIND-UNLISTED-FREE-LEFT')
+	public function testAnUnindexedModuleRefusesBesideAModuleLevelField(): Void {
+		final src: String = module('import z.Zeta;\nimport mystery.Box;\nimport v.Fns;\n');
+		Assert.equals(1, violations(src, null, BIND_LIBS).length);
+		Assert.equals(0, edits(src, null, BIND_LIBS).length);
+		Assert.equals(
+			module('import mystery.Box;\nimport mystery.Two;\n'),
+			fixed(module('import mystery.Two;\nimport mystery.Box;\n'), null, BIND_LIBS)
+		);
+	}
+
+	/** An explicit import of a MODULE-LEVEL field binds that field, and nothing the line beside it binds. */
+	@:pin('control') @:killer('M-BIND-FIELD-IMPORT-MODULE-FIELD')
+	public function testAFieldImportOfAModuleLevelFieldIsListed(): Void {
+		Assert.equals(
+			module('import v.Fns.modfn;\nimport w.Other;\n'), fixed(module('import w.Other;\nimport v.Fns.modfn;\n'), null, BIND_LIBS)
+		);
+		Assert.equals(0, edits(module('import v.Fns2;\nimport v.Fns.modfn;\n'), null, BIND_LIBS).length);
+	}
+
+	/** A wedged `using` binds its module's constructors, and moving it below an import sharing one would rebind it. */
+	public function testAWedgedUsingOvertakingAConstructorBinderRefusesTheMerge(): Void {
+		final src: String = module('import a.Alpha;\nusing p.Col;\nimport p.Col2;\n');
+		Assert.equals(1, violations(src, null, BIND_LIBS).length);
+		Assert.equals(0, edits(src, null, BIND_LIBS).length);
+	}
+
+	/** A `using` brings no module-level field, so it may overtake an import declaring the same one. */
+	@:pin('control') @:killer('M-BIND-USING-FIELDS')
+	public function testAUsingBindsNoModuleLevelField(): Void {
+		Assert.equals(
+			module('import v.Fns;\nimport z.Zeta;\n\nusing v.Fns2;\n'),
+			fixed(module('import z.Zeta;\nusing v.Fns2;\nimport v.Fns;\n'), null, BIND_LIBS)
+		);
 	}
 
 	public function testBlockCommentEndsTheRun(): Void {
@@ -881,6 +1052,11 @@ class ImportBlockOrderCheckTest extends Test {
 	/** Compile and run `dir`'s `Main` on `--interp`. */
 	private static function runMain(dir: String): HaxeRun {
 		return HaxeSpawn.run(['-cp', '.', '-main', 'Main', '--interp'], dir, 1 << 20);
+	}
+
+	/** A fixture module `pack.Name` declaring one MODULE-LEVEL function `fn`, answering with its own path. */
+	private static function moduleField(pack: String, name: String, fn: String): String {
+		return 'package $pack;\n\nfunction $fn(): String {\n\treturn "$pack.$name.$fn";\n}\n\nclass $name {}\n';
 	}
 
 }
