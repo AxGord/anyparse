@@ -3325,6 +3325,13 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-SETMOD-GUARDED-ANY-VISIBILITY',
 			'unit.query.SetModifierSliceTest#testAnEnumAbstractMemberStillTakesPublic :: control :: M-SETMOD-MODULE-BY-TYPE-KINDS',
 			'unit.query.SetModifierSliceTest#testPrivateOnAFinalClassPrecedesTheFinal :: control :: M-DECLSPAN-FINAL-WRAPPER-BLIND',
+			'unit.query.ShardPlanTest#testAClassHeavierThanAShardIsDealtAsSlices :: control :: M-SHARD-SPLIT-NEVER,M-SHARD-SPLIT-SLICE-WEIGHT',
+			'unit.query.ShardPlanTest#testAMalformedSliceTokenIsRefused :: control :: M-SHARD-FILTER-PARSE-RANGE',
+			'unit.query.ShardPlanTest#testAPinnedClassIsNeverSliced :: control :: M-SHARD-SPLIT-STICKY',
+			'unit.query.ShardPlanTest#testAWholeTokenSelectsEveryTest :: control :: M-SHARD-FILTER-WHOLE-AS-SLICE',
+			'unit.query.ShardPlanTest#testSlicesAreBoundedByTheTestCount :: control :: M-SHARD-SPLIT-NO-TEST-CAP,M-SHARD-SPLIT-UNKNOWN-COUNT',
+			'unit.query.ShardPlanTest#testTheSlicesOfAClassCoverItsTestsExactlyOnce :: control :: M-SHARD-FILTER-SLICE-ALL,M-SHARD-FILTER-SLICE-UNSORTED',
+			'unit.query.ShardPlanTest#testTimingRowsOfOneClassAreSummed :: control :: M-SHARD-WEIGHTS-LAST-ROW',
 			'unit.query.SpanTypeInfoPinTest#testTypeParamConstraintsAreKeyedByDeclarationAndName :: control :: M-SPANINFO-BOUND-MORE',
 			'unit.query.StdResolverTest#testMultiEntryEnvAnswersTheStdEntry :: control :: M-STD-ENV-ENTRIES',
 			'unit.query.StdResolverTest#testTheStdBesideTheCompilerIsFoundInEitherLayout :: control :: M-STD-SIBLING-HOMEBREW',
@@ -5168,7 +5175,17 @@ class TestDiscoveryParityTest extends Test {
 			'M-ARGUMENT-USES-OVERRIDES',
 			'M-TOUCH-ARGUMENT-USES',
 			'M-TOUCH-ARGUMENT-LEAVES',
-			'M-FACTS-ABSTRACT-WRAPPED-CAST'
+			'M-FACTS-ABSTRACT-WRAPPED-CAST',
+			'M-SHARD-SPLIT-NEVER',
+			'M-SHARD-SPLIT-SLICE-WEIGHT',
+			'M-SHARD-SPLIT-NO-TEST-CAP',
+			'M-SHARD-SPLIT-UNKNOWN-COUNT',
+			'M-SHARD-SPLIT-STICKY',
+			'M-SHARD-FILTER-SLICE-ALL',
+			'M-SHARD-FILTER-SLICE-UNSORTED',
+			'M-SHARD-FILTER-WHOLE-AS-SLICE',
+			'M-SHARD-FILTER-PARSE-RANGE',
+			'M-SHARD-WEIGHTS-LAST-ROW'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

@@ -1,5 +1,6 @@
 package anyparse.query.cli.command;
 
+import anyparse.query.ShardPlan.ClassWeight;
 import anyparse.query.ShardPlan.ShardPlacement;
 import anyparse.query.ShardPlan.ShardPlanResult;
 import anyparse.query.cli.CliArgs;
@@ -52,6 +53,7 @@ final class ShardPlanCommand implements CliCommand {
 	private static function runShardPlan(args: Array<String>): Int {
 		var runner: Null<String> = null;
 		var classesPath: Null<String> = null;
+		var weightsPath: Null<String> = null;
 		var shardsText: Null<String> = null;
 		var format: String = 'lines';
 		var lang: String = 'haxe';
@@ -63,6 +65,8 @@ final class ShardPlanCommand implements CliCommand {
 					runner = CliArgs.expectValue(args, ++i, '--runner');
 				case '--classes':
 					classesPath = CliArgs.expectValue(args, ++i, '--classes');
+				case '--weights':
+					weightsPath = CliArgs.expectValue(args, ++i, '--weights');
 				case '--shards':
 					shardsText = CliArgs.expectValue(args, ++i, '--shards');
 				case '--format':
@@ -112,7 +116,9 @@ final class ShardPlanCommand implements CliCommand {
 			final listed: Array<String> = [
 				for (line in CliIo.readFile(classes).split('\n')) if (line.trim() != '') line.trim()
 			];
-			return renderShardPlan(ShardPlan.planClasses(listed, shardCount, classes), format, shardCount);
+			final weights: Null<String> = weightsPath;
+			final measured: Null<Map<String, ClassWeight>> = weights == null ? null : ShardPlan.parseWeights(CliIo.readFile(weights));
+			return renderShardPlan(ShardPlan.planClasses(listed, shardCount, classes, measured), format, shardCount);
 		}
 		if (runner == null) {
 			CliIo.stderr('apq shard-plan: one of --runner <path> or --classes <path> is required\n');
@@ -161,7 +167,7 @@ final class ShardPlanCommand implements CliCommand {
 	/** `apq shard-plan --help`. */
 	private static function printShardPlanUsage(): Void {
 		CliIo.sysPrint('Usage: apq shard-plan (--runner <RunTests.hx> | --classes <list>) --shards <N>\n');
-		CliIo.sysPrint('                      [--format lines|filters]\n');
+		CliIo.sysPrint('                      [--weights <timings>] [--format lines|filters]\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Deal N APQ_TEST shards for tools/suite-shard.sh, from one of two class lists.\n');
 		CliIo.sysPrint('\n');
@@ -173,7 +179,8 @@ final class ShardPlanCommand implements CliCommand {
 		CliIo.sysPrint('                    dotted-vs-bare names are structure rather than text.\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Output:\n');
-		CliIo.sysPrint('  lines    (default) one "<shard>\\t<class>" row per registered class\n');
+		CliIo.sysPrint('  lines    (default) one "<shard>\\t<class>" row per registered class, or one\n');
+		CliIo.sysPrint('           "<shard>\\t<class>#<i>/<k>" row per slice of a class heavier than a shard\n');
 		CliIo.sysPrint('  filters  N lines, line i being the comma-joined APQ_TEST value of shard i\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Exits 1, printing the reason on stderr, for a registration it cannot name, a\n');
@@ -185,6 +192,8 @@ final class ShardPlanCommand implements CliCommand {
 		CliIo.sysPrint('Options:\n');
 		CliIo.sysPrint('  --runner <path>  utest runner to read the registrations from (required)\n');
 		CliIo.sysPrint('  --shards <N>     How many shards to deal onto (required, >= 1)\n');
+		CliIo.sysPrint('  --weights <file> "<ms>\\t<tests>\\t<class>" rows (APQ_TEST_TIMING) overriding the\n');
+		CliIo.sysPrint('                   built-in weights; with --classes only\n');
 		CliIo.sysPrint('  --format <fmt>   lines (default) or filters\n');
 		CliIo.sysPrint('  -h, --help       Show this help\n');
 	}

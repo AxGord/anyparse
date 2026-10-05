@@ -263,7 +263,7 @@ Measured on that machine, the same arm sets, verdict rows compared byte for byte
 
 `--fast` still runs every pinned CLASS, not just the pinned methods: a method-level filter would cut the `MemberReachFactsTest` run further, but the `+extra` collateral a row reports is part of the reading, and it would shrink.
 
-**The whole suite** is a separate question — none of the above applies to `node bin/test.js`, where real compiles are the point. Measured on the same machine at 15882 tests: the monolith `node test.js` 215 s, `tools/suite-shard.sh` (4 shards, the default) 115 s, `-n 8` 96 s. Past eight shards the floor is the slowest single class — `MemberReachFactsTest` alone is ~66 s, ~290 real compiles — and `ShardPlan.CLASS_WEIGHTS` predates it (a stale weight costs balance, never correctness). The mid-slice fast path is `tools/suite-shard.sh -n 8`; the monolith stays the final pre-commit run (§ "Parallel shards: one suite, N processes").
+**The whole suite** is a separate question — none of the above applies to `node bin/test.js`, where real compiles are the point. Measured on the same machine at 15882 tests: the monolith `node test.js` 215 s, `tools/suite-shard.sh` (4 shards, the default) 115 s, `-n 8` 96 s. Past eight shards the floor used to be the slowest single class; since 2026-10-05 a class heavier than a shard's share is dealt as `<class>#<i>/<k>` slices instead (§ "Parallel shards"), which took `-n 8` from 297 s to 73 s at 16132 tests, load ~17 — `MemberReachFactsTest` alone measured 271 s in-suite, 1007 real compiles, and held one shard while seven idled. The mid-slice fast path is `tools/suite-shard.sh -n 8`; the monolith stays the final pre-commit run (§ "Parallel shards: one suite, N processes").
 
 ### Manifest format
 
@@ -632,7 +632,10 @@ tools/suite-shard.sh --expect <T>/<A>     # + compare to YOUR last known-good pa
 tools/suite-shard.sh --plan-only          # print the plan, run nothing
 tools/suite-shard.sh --bin /tmp/w1/test.js  # a private worker build (previous section)
 tools/suite-shard.sh --keep               # keep the work directory even on success
+tools/suite-shard.sh --timings t.tsv      # + every class's in-suite ms, slowest first
 ```
+
+**Weights and slices.** The plan balances on measured in-suite wall times: each shard runs with `APQ_TEST_TIMING=<file>` (`RunTests.recordTimings` charges a class the time from the previous test's completion to each of its own, so its `setupClass` and child compiles count), the shards' rows are summed per class, and a green complete run writes them to `bin/.suite-timings.tsv` — the next plan's `apq shard-plan --weights`. Without that file the built-in `ShardPlan.CLASS_WEIGHTS` answers. A non-pinned class heavier than `total / N` whose test count is known is dealt as `k = min(⌈weight / share⌉, N, tests)` slices; the token `<class>#<i>/<k>` runs the tests whose index in the SORTED method-name list is `i` mod `k` (`ShardFilter`), so the slices are disjoint and cover the class, and two slices of one class in one shard's filter run as their union (utest refuses a class added twice). Parity then reads per class: placed whole once, or every slice `0..k-1` exactly once.
 
 `--verify` and `--expect` are mutually exclusive — the first measures the pair the second asserts. Do not copy a literal into `--expect` out of this document: the totals move with every slice. The default stays at 4 because past the knee the curve is flat — what remains is the sticky group plus the per-process warm-up each shard re-pays.
 
