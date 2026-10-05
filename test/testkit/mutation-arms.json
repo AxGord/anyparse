@@ -13547,6 +13547,62 @@
 			"find": "case _: _dc([_dohsbh(), sepDoc]);",
 			"replace": "case _: _dc([_dhl(), sepDoc]);",
 			"note": "a gap that already opens with a break gets a second one, so a trailing comment followed by an own-line comment gains a blank line"
+		},
+		{
+			"name": "M-PENDING-HARDLINE-BLANK-FLUSHED",
+			"type": "anyparse.core.Renderer",
+			"method": "absorbedByPendingHardline",
+			"find": "return !verbatim && ctx.pendingHardline >= 0 && trailBlankStart(s) == 0;",
+			"replace": "return false;",
+			"note": "a blank gap flushes a pending forward hardline and is written after it, so the keyword after `} // c` lands one space past the indent"
+		},
+		{
+			"name": "M-WRITER-NARROW-NONE",
+			"type": "anyparse.check.FixVerifier",
+			"method": "verifyEntry",
+			"find": "? writerNarrowed(entry, edits, message, plugin, opts, usable, excluded, write)",
+			"replace": "? Reverted(NotCanonical(message))",
+			"note": "a risky edit set the writer refuses is reverted whole again, so its writable units go with the refused one"
+		},
+		{
+			"name": "M-ASSISTED-SALVAGE-NONE",
+			"type": "anyparse.query.cli.command.LintFixVerify",
+			"method": "settleAssistedFile",
+			"find": "if (settled == null || settled.text == source) return null;",
+			"replace": "if (settled == null || settled.text == source || true) return null;",
+			"note": "a refused oracle-assisted edit set keeps nothing, so one un-writable annotation costs the file every other"
+		},
+		{
+			"name": "M-ASSISTED-SPLIT-NONE",
+			"type": "anyparse.query.cli.command.LintFixVerify",
+			"method": "settleAssistedFile",
+			"find": "source, groups, why, plugin, optsJson, blamed, split",
+			"replace": "source, groups, why, plugin, optsJson, blamed",
+			"note": "a refused assisted rule is never re-asked a finding at a time, so one refused finding costs the rule its others in the file"
+		},
+		{
+			"name": "M-ASSISTED-SALVAGED-COUNT-ALL",
+			"type": "anyparse.query.cli.command.LintFixVerify",
+			"method": "settleAssistedFile",
+			"find": "for (group in groups) if (group.refusal == null && !group.overlapped) edits += group.edits.length;",
+			"replace": "for (group in groups) edits += group.edits.length;",
+			"note": "a salvaged file reports the edits it was asked for, the refused ones included, as applied"
+		},
+		{
+			"name": "M-ASSISTED-REFUSAL-SILENT",
+			"type": "anyparse.query.cli.command.LintFixVerify",
+			"method": "assistedRefusal",
+			"find": "if (first != null) into.push(",
+			"replace": "if (first != null && false) into.push(",
+			"note": "an assisted refusal is dropped without a line or a summary count again"
+		},
+		{
+			"name": "M-ASSISTED-REFUSAL-LEDGER-NONE",
+			"type": "anyparse.query.cli.command.LintFixVerify",
+			"method": "assistedRefusal",
+			"find": "LintFixDriver.bumpReason(LintFixDriver.ledgerFor(ledger, group.rule).refusals, refusal, 1);",
+			"replace": "if (false) LintFixDriver.bumpReason(LintFixDriver.ledgerFor(ledger, group.rule).refusals, refusal, 1);",
+			"note": "an assisted refusal reaches no ledger row, so the gate-refusal block never names the rule"
 		}
 	]
 }

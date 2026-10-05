@@ -197,7 +197,7 @@ final class LintFixDriver {
 		// (verifyOracleBatch). No oracle / no such check → inert.
 		final oracleAssisted: Array<Check> = [for (c in checks) if (c is OracleAssisted) c];
 		final oa: AssistedOutcome = LintFixVerify.applyOracleAssistedFixes(
-			files, oracleAssisted, cached, oracles, optsByFile, changedFiles, resolveConfig, applyEnablement, risky.coverage
+			files, oracleAssisted, cached, oracles, optsByFile, changedFiles, resolveConfig, applyEnablement, risky.coverage, ledger
 		);
 		fixedCount += oa.appliedCount;
 		nameExclusions(named, oa.excluded);

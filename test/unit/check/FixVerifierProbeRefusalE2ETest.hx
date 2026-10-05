@@ -115,6 +115,15 @@ final class FixVerifierProbeRefusalE2ETest extends Test {
 		{ find: '"ddd"', text: '"DDD"' }
 	];
 
+	/**
+	 * The body deletion of `TABLE` WITHOUT its lead, beside the benign rewrite: the writer refuses
+	 * the whole set, and the rewrite alone is writable and builds.
+	 */
+	private static final HALF_WRITABLE: Array<FakeEdit> = [
+		{ find: 'trace("in");', text: '' },
+		{ find: '"aaa"', text: '"AAA"' }
+	];
+
 	private static final HXML: String = '-cp .\n-main Main\n';
 	#end
 
@@ -360,6 +369,47 @@ final class FixVerifierProbeRefusalE2ETest extends Test {
 			'the compiler read this complement and refused it — an earlier writer refusal says nothing about it'
 		);
 		Assert.equals(WIDE_MAIN, File.getContent('$dir/Main.hx'), 'disk is byte-identical to the input');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A full set the WRITER refuses keeps its writable units.
+	 *
+	 * `verifyEntry` reverted such a set whole (`NotCanonical`) without asking anything further, so
+	 * the benign rewrite went with the un-writable deletion. The refused unit is now found by writer
+	 * round trips alone and the rest takes the ordinary path, which costs exactly ONE typecheck here
+	 * — the same as a set the writer had accepted.
+	 */
+	@:pin('control')
+	@:killer('M-WRITER-NARROW-NONE')
+	public function testAWriterRefusedSetKeepsItsWritableUnits(): Void {
+		#if (sys || nodejs)
+		if (!oracleWorks()) {
+			Assert.pass('haxe unavailable — skipped');
+			return;
+		}
+		final dir: String = CliFixture.writeDir('fixverifrefusal', [
+			{ name: 'Main.hx', source: MAIN },
+			{ name: 'check.hxml', source: HXML }
+		]);
+		final files: Array<{ file: String, source: String }> = [{ file: '$dir/Main.hx', source: MAIN }];
+		final result: FixVerifyResult = FixVerifier.verify(
+			files,
+			[new TableFake(HALF_WRITABLE)],
+			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], File.saveContent
+		);
+		Assert.isTrue(result.baseline.match(Confirmed), 'the oracle baseline must confirm — else these negatives are vacuous');
+		final after: String = File.getContent('$dir/Main.hx');
+		Assert.equals(1, result.appliedEdits, 'the writable rewrite is applied');
+		Assert.equals(0, result.reverted.length, 'the file is not reverted whole');
+		Assert.equals(1, result.partials.length, 'the set was narrowed, not decided whole');
+		Assert.equals(1, result.partials[0].revertedEdits, 'the refused deletion counts as reverted');
+		Assert.equals(1, result.partials[0].oracleInvocations, 'one typecheck: the writable part alone');
+		Assert.notEquals(-1, after.indexOf('"AAA"'), 'the rewrite lands');
+		Assert.notEquals(-1, after.indexOf('if (flag) trace("in");'), 'the refused deletion does not');
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');

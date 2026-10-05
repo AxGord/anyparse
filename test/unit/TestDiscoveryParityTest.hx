@@ -253,6 +253,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.OperandBindingTest',
 		'unit.check.OperatorOverloadGateTest',
 		'unit.check.OptionalParamShorthandCheckTest',
+		'unit.check.OracleAssistedRefusalTest',
 		'unit.check.OracleBatchRevertReasonTest',
 		'unit.check.OracleCacheTest',
 		'unit.check.OracleConfigListE2ETest',
@@ -558,6 +559,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.grammar.haxe.HxChainFillBoundaryCallOperandTest',
 		'unit.grammar.haxe.HxChainOuterOperatorWrapSliceTest',
 		'unit.grammar.haxe.HxChainStaircaseSliceTest',
+		'unit.grammar.haxe.HxCloseTrailKeywordWriteTest',
 		'unit.grammar.haxe.HxCompareOperandBreakSliceTest',
 		'unit.grammar.haxe.HxComplexItemWrapTest',
 		'unit.grammar.haxe.HxComprehensionAllmanFixedPointTest',
@@ -1292,6 +1294,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.FieldWriteResolutionScopeTest#testThirdPartySubtypeWriteVetoesFinal :: control :: M-WRITEINDEX-PROJECT-FINAL',
 			'unit.check.FieldWriteResolutionScopeTest#testThirdPartySubtypeWriteVetoesReadOnly :: control :: M-WRITEINDEX-PROJECT-READONLY',
 			'unit.check.FieldWriteResolutionScopeTest#testThirdPartyUnresolvedWriteDoesNotVeto :: control :: M-ADMITS-TRUE',
+			'unit.check.FixVerifierProbeRefusalE2ETest#testAWriterRefusedSetKeepsItsWritableUnits :: control :: M-WRITER-NARROW-NONE',
 			'unit.check.FoldStringLiteralsCheckTest#testConstantOperandMergesAsText :: control :: M-FOLD-CONSTANT-AS-EXPRESSION',
 			'unit.check.HaxeSpawnTest#testACancelledShellJobTakesItsChildrenWithIt :: control :: ' + 'M-DRIVER-KILLS-ONLY-THE-SHELL',
 			'unit.check.HaxeSpawnTest#testAFailureEndsTheJobsDeclaredAfterIt :: control :: ' + 'M-DRIVER-NEVER-STOPS',
@@ -1392,6 +1395,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.OperandBindingTest#testUndecidedCaptureShadowsTheOuterBinding :: control :: M-OPERAND-CASE-CAPTURE',
 			'unit.check.OperandBindingTest#testWildcardOverUnindexedPackageOutranksSamePackageClass :: control :: M-BINDING-UNINDEXED-WILDCARD-FREE',
 			'unit.check.OptionalParamShorthandCheckTest#testCommentInsideTheWrapperIsKept :: control :: M-OPTPARAM-COMMENT-DROPPED',
+			'unit.check.OracleAssistedRefusalTest#testARefusedFindingCostsItsAssistedRuleNothingElse :: control :: '
+				+ 'M-ASSISTED-SPLIT-NONE,M-ASSISTED-SALVAGE-NONE,M-ASSISTED-SALVAGED-COUNT-ALL',
+			'unit.check.OracleAssistedRefusalTest#testAnAssistedRefusalIsReported :: control :: '
+				+ 'M-ASSISTED-REFUSAL-SILENT,M-ASSISTED-REFUSAL-LEDGER-NONE',
 			'unit.check.OracleCacheTest#testAFingerprintReadsItsSourcesThroughTheMemo :: control :: ' + 'M-ORACLE-CACHE-MEMO-UNREAD',
 			'unit.check.OracleCacheTest#testAVerdictIsNotFiledUnderAFingerprintTheTreeLeft :: control :: '
 				+ 'M-ORACLE-CACHE-STORES-A-MOVED-FINGERPRINT',
@@ -2091,6 +2098,15 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxChainStaircaseSliceTest#testIsIdempotentAcrossThreePasses :: control :: M-CHAIN-STAIRCASE-OFF',
 			'unit.grammar.haxe.HxChainStaircaseSliceTest#testTornConditionParenIsGone :: control :: M-CHAIN-STAIRCASE-OFF',
 			'unit.grammar.haxe.HxChainStaircaseSliceTest#testWholeChainOverTheLimitStaircases :: control :: M-CHAIN-STAIRCASE-OFF',
+			'unit.grammar.haxe.HxCloseTrailKeywordWriteTest#testDoWhileKeepsItsIndent :: control :: M-PENDING-HARDLINE-BLANK-FLUSHED',
+			'unit.grammar.haxe.HxCloseTrailKeywordWriteTest#testStatementCatchKeepsItsIndent :: guard :: ',
+			'unit.grammar.haxe.HxCloseTrailKeywordWriteTest#testStatementElseIfChainKeepsItsIndent :: control :: '
+				+ 'M-PENDING-HARDLINE-BLANK-FLUSHED',
+			'unit.grammar.haxe.HxCloseTrailKeywordWriteTest#testStatementElseKeepsItsIndent :: control :: M-PENDING-HARDLINE-BLANK-FLUSHED',
+			'unit.grammar.haxe.HxCloseTrailKeywordWriteTest#testValueCatchKeepsItsIndent :: control :: M-PENDING-HARDLINE-BLANK-FLUSHED',
+			'unit.grammar.haxe.HxCloseTrailKeywordWriteTest#testValueElseIfChainKeepsItsIndent :: control :: '
+				+ 'M-PENDING-HARDLINE-BLANK-FLUSHED',
+			'unit.grammar.haxe.HxCloseTrailKeywordWriteTest#testValueElseKeepsItsIndent :: control :: M-PENDING-HARDLINE-BLANK-FLUSHED',
 			'unit.grammar.haxe.HxComprehensionCuddledOpenTest#testAFlatItemThatStillOverflowsCuddlesItsHead :: control :: '
 				+ 'M-CUDDLE-FLATONLY',
 			'unit.grammar.haxe.HxComprehensionCuddledOpenTest#testAnItemOverflowingTheGlueColumnCuddlesAndDropsItsBody :: control :: '
@@ -4930,7 +4946,14 @@ class TestDiscoveryParityTest extends Test {
 			'M-LINTFIX-GUARD-SPLIT-NONE',
 			'M-LINTFIX-BLAME-SITE-ALWAYS',
 			'M-KWTRAIL-FLAT-GAP-KEPT',
-			'M-KWTRAIL-GUARD-HARD'
+			'M-KWTRAIL-GUARD-HARD',
+			'M-PENDING-HARDLINE-BLANK-FLUSHED',
+			'M-WRITER-NARROW-NONE',
+			'M-ASSISTED-SALVAGE-NONE',
+			'M-ASSISTED-SPLIT-NONE',
+			'M-ASSISTED-SALVAGED-COUNT-ALL',
+			'M-ASSISTED-REFUSAL-SILENT',
+			'M-ASSISTED-REFUSAL-LEDGER-NONE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
