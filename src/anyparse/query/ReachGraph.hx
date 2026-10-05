@@ -902,8 +902,13 @@ final class ReachGraph {
 		final values: Null<Array<String>> = escaped ? carriers.valueTypes(type) : carriers.declaredValueTypes(type);
 		if (values == null) return null;
 		final out: Array<String> = values.copy();
+		// a set beside the list: `out.contains` made the closure quadratic in the value types, every escaped one among them
+		final seen: Map<String, Bool> = [for (t in out) t => true];
 		var i: Int = 0;
-		while (i < out.length) for (s in g.types.supertypesOf(out[i++])) if (!out.contains(s)) out.push(s);
+		while (i < out.length) for (s in g.types.supertypesOf(out[i++])) if (!seen.exists(s)) {
+			seen[s] = true;
+			out.push(s);
+		}
 		return out;
 	}
 

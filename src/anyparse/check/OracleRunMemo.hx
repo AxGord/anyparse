@@ -86,11 +86,12 @@ final class OracleRunMemo {
 	 */
 	public function fingerprints(oracles: Array<OracleConfig>): Array<Null<String>> {
 		final contents: Map<String, String> = [];
+		final walks: Map<String, Map<String, String>> = [];
 		var written: Null<String> = null;
 		return [
 			for (oracle in oracles) {
 				final scan: Null<{ fingerprint: String, roots: Array<String> }> = oracle.unavailable == null
-					? OracleCache.scanned(oracle.hxml, oracle.dir, oracle.defines, contents)
+					? OracleCache.scanned(oracle.hxml, oracle.dir, oracle.defines, contents, walks)
 					: null;
 				if (scan == null)
 					null

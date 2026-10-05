@@ -371,4 +371,37 @@ final class OracleCacheTest extends Test {
 		#end
 	}
 
+	/**
+	 * Configurations fingerprinted together share one walk of each directory (`OracleRunMemo.fingerprints`) and still
+	 * fingerprint exactly as each does alone: a nested `-cp` and one outside the compile root included, in either order.
+	 */
+	@:pin('control') @:killer('M-ORACLE-CACHE-WALK-FIRST-ONLY')
+	public function testFingerprintsSharingOneWalkEqualTheirOwn(): Void {
+		#if (sys || nodejs)
+		final ext: String = CliFixture.writeTree('oraclecacheext', [{ name: 'Ext.hx', source: 'class Ext {}\n' }]);
+		final dir: String = CliFixture.writeTree('oraclecachewalk', [
+			{ name: 'Good.hx', source: VALID },
+			{ name: 'sub/Inner.hx', source: 'class Inner {}\n' },
+			{ name: 'a.hxml', source: '-cp .\n-cp $ext\n-main Good\n' },
+			{ name: 'b.hxml', source: '-cp .\n-cp sub\n-main Good\n' }
+		]);
+		final alone: Array<Null<String>> = [for (h in ['b.hxml', 'a.hxml']) OracleCache.fingerprint(h, dir)];
+		if (alone[0] == null) {
+			Assert.pass('no fingerprint on this host — skipped');
+		} else {
+			final contents: Map<String, String> = [];
+			final walks: Map<String, Map<String, String>> = [];
+			final shared: Array<Null<String>> = [
+				for (h in ['b.hxml', 'a.hxml']) OracleCache.scanned(h, dir, [], contents, walks)?.fingerprint
+			];
+			Assert.equals(alone.join(','), shared.join(','));
+			Assert.notEquals(alone[0], alone[1], 'the outside classpath is in the second key alone');
+		}
+		CliFixture.removeDir(dir);
+		CliFixture.removeDir(ext);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 }

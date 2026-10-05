@@ -1469,6 +1469,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.OracleCacheTest#testAFingerprintReadsItsSourcesThroughTheMemo :: control :: ' + 'M-ORACLE-CACHE-MEMO-UNREAD',
 			'unit.check.OracleCacheTest#testAVerdictIsNotFiledUnderAFingerprintTheTreeLeft :: control :: '
 				+ 'M-ORACLE-CACHE-STORES-A-MOVED-FINGERPRINT',
+			'unit.check.OracleCacheTest#testFingerprintsSharingOneWalkEqualTheirOwn :: control :: M-ORACLE-CACHE-WALK-FIRST-ONLY',
 			'unit.check.OracleConfigListE2ETest#testAConfigurationWithAnUnknownCompiledSetStillVetoesAnEdit :: control :: '
 				+ 'M-ORACLE-UNKNOWN-COVERAGE-NO-VETO',
 			'unit.check.OracleConfigListE2ETest#testARedBaselineExcludesItsConfigurationRatherThanThePhase :: control :: '
@@ -3339,6 +3340,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.StructuralMembershipTest#testAliasTargetPairAgrees :: control :: M-ALIAS-TARGET-SIMPLE-NAME',
 			'unit.query.SymbolIndexRunMemoSliceTest#testConfinementGateReadsTheIndexGrantSlot :: control :: M-GRANT-SLOT-UNREAD',
 			'unit.query.SymbolIndexRunMemoSliceTest#testSupertypeNameUnionIsBuiltOncePerIndex :: control :: M-SUPERTYPE-UNION-NOMEMO',
+			'unit.query.SymbolIndexSliceTest#testDeclaringFilesCount :: control :: M-TYPEREF-NAMED-FIRST-TYPE',
 		];
 		final actualPins: Array<String> = TestRegistry.pins();
 		Assert.same(
@@ -5187,7 +5189,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-SHARD-FILTER-WHOLE-AS-SLICE',
 			'M-SHARD-FILTER-PARSE-RANGE',
 			'M-SHARD-WEIGHTS-LAST-ROW',
-			'M-FIXTURE-CACHE-CWD-WRITE'
+			'M-FIXTURE-CACHE-CWD-WRITE',
+			'M-ORACLE-CACHE-WALK-FIRST-ONLY',
+			'M-TYPEREF-NAMED-FIRST-TYPE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

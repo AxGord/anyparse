@@ -5078,8 +5078,8 @@
 			"name": "M-CARRY-ESCAPES",
 			"type": "anyparse.query.ValueCarriers",
 			"method": "valueTypes",
-			"find": "for (t in escaped) if (!out.contains(t)) out.push(t);",
-			"replace": "",
+			"find": "for (t in escaped) if (!seen.exists(t)) {",
+			"replace": "for (t in new Array<String>()) if (!seen.exists(t)) {",
 			"note": "a value's types are its static type's alone, so an instance that left the type system through a Dynamic or a cast is never the object an unrelated receiver holds"
 		},
 		{
@@ -6452,7 +6452,7 @@
 			"name": "M-REACH-SITE-SELF-ALIAS",
 			"type": "anyparse.query.ReachProject",
 			"method": "siteOf",
-			"find": "return found.length == 1 ? found[0] : null;",
+			"find": "return found != null && found.length == 1 ? found[0] : null;",
 			"replace": "return null;",
 			"note": "(precision) a type re-exported by a same-named typedef has no declaration site, so its implicit members are opaque"
 		},
@@ -12752,7 +12752,7 @@
 			"name": "M-VALUE-TYPE-ESCAPED",
 			"type": "anyparse.query.FunctionValueTypes",
 			"method": "mayRun",
-			"find": " || escaped.exists(e -> sameOrGeneric(t, e))",
+			"find": " || meetsEscaped(t, escaped)",
 			"replace": "",
 			"note": "a function value that left the type system reaches only places of its own types"
 		},
@@ -14463,6 +14463,22 @@
 			"find": "if (r == 0 && changed(before[0], after[0])) return null;",
 			"replace": "",
 			"note": "a compile writing into the fixture it shares with the compiles beside it is recorded, and its replay overwrites the lines a concurrent writer appended"
+		},
+		{
+			"name": "M-ORACLE-CACHE-WALK-FIRST-ONLY",
+			"type": "anyparse.check.OracleCache",
+			"method": "mergeDir",
+			"find": "if (!walks.exists(dir)) {",
+			"replace": "if (!walks.keys().hasNext()) {",
+			"note": "a run's shared walk reads only the first directory it is asked for, so a classpath outside the compile root drops out of every later configuration's fingerprint and an edit there is answered from the memo"
+		},
+		{
+			"name": "M-TYPEREF-NAMED-FIRST-TYPE",
+			"type": "anyparse.query.TypeRefIndex",
+			"method": "named",
+			"find": "for (t in fi.types) {",
+			"replace": "for (t in fi.types.slice(0, 1)) {",
+			"note": "the by-name table reads only the first declaration of each file, so a sub-module type is declared nowhere"
 		}
 	]
 }

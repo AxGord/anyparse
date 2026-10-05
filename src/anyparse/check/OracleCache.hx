@@ -190,7 +190,7 @@ final class OracleCache {
 	 * is one the fingerprint cannot see; `OracleRunMemo` asks this to know when it may not answer.
 	 */
 	public static function scanned(
-		hxml: String, cwd: Null<String>, ?defines: Array<String>, ?memo: Map<String, String>
+		hxml: String, cwd: Null<String>, ?defines: Array<String>, ?memo: Map<String, String>, ?walks: Map<String, Map<String, String>>
 	): Null<{ fingerprint: String, roots: Array<String> }> {
 		#if (sys || nodejs)
 		final root: String = cwd ?? Sys.getCwd();
@@ -199,7 +199,7 @@ final class OracleCache {
 		final probe: CompilerProbe = compilerProbe(root, chain.libs);
 		if (!probe.ok) return null;
 		return {
-			fingerprint: md5(buildManifest(root, chain, probe, defines ?? [], memo).join('\n')),
+			fingerprint: md5(buildManifest(root, chain, probe, defines ?? [], memo, walks).join('\n')),
 			roots: [root].concat(chain.classPaths).concat([for (dir in probe.dirs) absolute(root, dir)])
 		};
 		#else
@@ -430,16 +430,17 @@ final class OracleCache {
 	 * chain, then every reachable `.hx` file by path and content hash, sorted by path.
 	 */
 	private static function buildManifest(
-		root: String, chain: HxmlChain, probe: CompilerProbe, defines: Array<String>, memo: Null<Map<String, String>>
+		root: String, chain: HxmlChain, probe: CompilerProbe, defines: Array<String>, memo: Null<Map<String, String>>,
+		walks: Null<Map<String, Map<String, String>>>
 	): Array<String> {
 		final files: Map<String, String> = [];
 		// The compile directory is on the compiler's classpath IMPLICITLY — it is the empty
 		// entry in the `Classpath:` line, which `probeDirs` drops. A module dropped next to the
 		// hxml is compiled like any other, so it has to enter the key; walking the root first
 		// also means the declared `-cp` roots beneath it cost only their directory scan.
-		mergeDir(files, root, false, memo);
-		for (dir in chain.classPaths) mergeDir(files, dir, false, memo);
-		for (dir in probe.dirs) mergeDir(files, absolute(root, dir), true, memo);
+		mergeDir(files, root, false, memo, walks);
+		for (dir in chain.classPaths) mergeDir(files, dir, false, memo, walks);
+		for (dir in probe.dirs) mergeDir(files, absolute(root, dir), true, memo, walks);
 		final fileLines: Array<String> = [for (path => hash in files) '$path $hash'];
 		fileLines.sort(compareStrings);
 		return [FORMAT_TAG, probe.defines, 'oracle-defines ${defines.join(' ')}'].concat(chain.lines).concat(fileLines);
@@ -455,13 +456,29 @@ final class OracleCache {
 	 * every oracle test. The hxml's own `-cp` roots are never memoised: they ARE the
 	 * tree under lint, and re-reading them every time is the whole point of the key.
 	 */
-	private static function mergeDir(into: Map<String, String>, dir: String, memoise: Bool, memo: Null<Map<String, String>>): Void {
-		if (!memoise) {
+	private static function mergeDir(
+		into: Map<String, String>, dir: String, memoise: Bool, memo: Null<Map<String, String>>,
+		walks: Null<Map<String, Map<String, String>>>
+	): Void {
+		if (!memoise && walks == null) {
 			// Straight into the shared set, so a file an enclosing root already hashed is
 			// skipped instead of read a second time — which is what makes NESTED roots (the
 			// compile directory and the `-cp` entries under it) cost a directory scan and
 			// nothing more.
 			walkDir(dir, into, 0, memo);
+			return;
+		}
+		if (!memoise && walks != null) {
+			// One walk per directory for every configuration a caller fingerprints at once
+			// (`OracleRunMemo.fingerprints`): thirteen TM builds share the project root, and
+			// walking it per build was 43 of a 533 s `--fix` run. The union is the same —
+			// a file a nested root shares with its enclosing one hashes the same either way.
+			final walked: Map<String, String> = walks[dir] ?? [];
+			if (!walks.exists(dir)) {
+				walkDir(dir, walked, 0, memo);
+				walks[dir] = walked;
+			}
+			for (path => hash in walked) if (!into.exists(path)) into[path] = hash;
 			return;
 		}
 		for (path => hash in memoDir(dir)) into[path] = hash;
