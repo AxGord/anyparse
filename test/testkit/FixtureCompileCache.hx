@@ -8,6 +8,7 @@ import js.node.Buffer;
 import js.node.ChildProcess;
 import js.node.Crypto;
 import js.node.Fs;
+import js.node.Zlib;
 import js.node.fs.Stats;
 
 using StringTools;
@@ -39,7 +40,9 @@ using StringTools;
  * - **What the compile wrote is a diff of the roots**, taken around the real run; a file outside the roots cannot be
  *   written by a whitelisted compile, because no whitelisted path leads there.
  *
- * The cache lives for ONE mutation run (the runner's workroot): it never has to survive a compiler upgrade.
+ * A mutation run keeps the cache for that run (its workroot); `tools/suite-shard.sh` keeps it across runs, renewing
+ * an entry on every hit and dropping one unused for a week (`tools/fixture-cache.sh`). A cache that outlives a run
+ * outlives the compiler install it recorded, so that runner's stamp names the binary by path, version, size and mtime.
  */
 @:nullSafety(Strict)
 final class FixtureCompileCache {
@@ -112,8 +115,11 @@ final class FixtureCompileCache {
 	/** The placeholder bracket: a byte no path and no compiler output carries. */
 	private static inline final MARK: String = '\x01';
 
-	/** The version of the key and entry layout. */
-	private static inline final LAYOUT: Int = 1;
+	/**
+	 * The version of the key and entry layout, bumped whenever what may be recorded changes, since a kept cache outlives
+	 * the rule it was written under: 2 gzips an entry, 3 records no compile that writes into its cwd.
+	 */
+	private static inline final LAYOUT: Int = 3;
 
 	/**
 	 * The shim's entry point: `APQ_FIXTURE_CACHE_HAXE` is the real compiler, `APQ_FIXTURE_CACHE_STAMP` its identity,
@@ -147,9 +153,11 @@ final class FixtureCompileCache {
 			return spawn(real, cwd, args);
 		}
 		final id: String = key(stamp, compile, before);
-		final entry: String = Path.join([dir, '$id.json']);
-		final stored: Null<String> = try Fs.readFileSync(entry, { encoding: 'utf8' }) catch (exception: Exception) null;
+		final entry: String = Path.join([dir, '$id.json.gz']);
+		final stored: Null<String> = try Zlib.gunzipSync(Fs.readFileSync(entry)).toString('utf8') catch (exception: Exception) null;
 		if (stored != null) {
+			// a hit renews the entry, so a cache that outlives one run ages out by disuse (`tools/fixture-cache.sh`)
+			try Fs.utimesSync(entry, Date.now(), Date.now()) catch (exception: Exception) {} // noqa: swallowed-exception
 			note(dir, 'hit');
 			return replay(Json.parse(stored), compile.roots);
 		}
@@ -161,7 +169,8 @@ final class FixtureCompileCache {
 			return outcome;
 		}
 		final temporary: String = '$entry.${Node.process.pid}.tmp';
-		Fs.writeFileSync(temporary, Json.stringify(recorded));
+		// gzipped: a probe's `-v` names every std module it parsed, ~240 KB of JSON a cache kept across runs pays per entry
+		Fs.writeFileSync(temporary, Zlib.gzipSync(Json.stringify(recorded)));
 		Fs.renameSync(temporary, entry);
 		note(dir, 'miss');
 		return outcome;
@@ -332,6 +341,10 @@ final class FixtureCompileCache {
 		if (out == null || err == null) return null;
 		final files: Array<{ root: Int, path: String, text: Null<String> }> = [];
 		for (r in 0...roots.length) {
+			// the compile's cwd is the fixture, which the test and the compiles beside this one write too: a replay writes a
+			// whole file where the compile may have appended to it, losing a concurrent writer's lines, so a compile writing
+			// there is not recorded — the probes write only into their own directories
+			if (r == 0 && changed(before[0], after[0])) return null;
 			for (path => sum in after[r]) if (before[r][path] != sum) {
 				final content: Null<String> = text(Fs.readFileSync(Path.join([roots[r], path])));
 				if (content == null) return null;
@@ -396,9 +409,20 @@ final class FixtureCompileCache {
 		return try Fs.realpathSync(path) catch (exception: Exception) null;
 	}
 
-	/** One line of the cache's tally — `hit`, `miss` or `pass` — for the runner's report. */
+	/**
+	 * One line of the cache's tally — `hit`, `miss` or `pass` — for the runner's report: in `APQ_FIXTURE_CACHE_TALLY` when
+	 * set (a cache kept across runs, counted per run), else beside the entries.
+	 */
 	private static function note(dir: String, what: String): Void {
-		try Fs.appendFileSync(Path.join([dir, 'tally']), '$what\n') catch (exception: Exception) {} // noqa: swallowed-exception
+		final tally: String = Sys.getEnv('APQ_FIXTURE_CACHE_TALLY') ?? Path.join([dir, 'tally']);
+		try Fs.appendFileSync(tally, '$what\n') catch (exception: Exception) {} // noqa: swallowed-exception
+	}
+
+	/** Whether a file of the root `after` describes was created, changed or deleted since `before`. */
+	private static function changed(before: Map<String, String>, after: Map<String, String>): Bool {
+		for (path => sum in after) if (before[path] != sum) return true;
+		for (path in before.keys()) if (!after.exists(path)) return true;
+		return false;
 	}
 
 }

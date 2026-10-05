@@ -1058,6 +1058,7 @@ class TestDiscoveryParityTest extends Test {
 	 */
 	public function testThePilotPinsReachTheGeneratedRegistry(): Void {
 		final expectedPins: Array<String> = [
+			'unit.FixtureCompileCacheTest#testACompileWritingIntoItsCwdIsNotRecorded :: control :: M-FIXTURE-CACHE-CWD-WRITE',
 			'unit.MutationArmAddressTest#testEveryDeclaredArmAddressesALiveMember :: control :: M-ARM-PATH-FLAT,M-ARM-KIND-UNSPELLED',
 			'unit.MutationArmAddressTest#testEveryFragmentArmStillCutsItsNode :: control :: M-ARM-FRAGMENT-NONE',
 			'unit.MutationArmAddressTest#testTheDeferredArmsAreTheOnesTheWalkAnswersFor :: control :: M-ARM-PATH-FLAT',
@@ -5185,7 +5186,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-SHARD-FILTER-SLICE-UNSORTED',
 			'M-SHARD-FILTER-WHOLE-AS-SLICE',
 			'M-SHARD-FILTER-PARSE-RANGE',
-			'M-SHARD-WEIGHTS-LAST-ROW'
+			'M-SHARD-WEIGHTS-LAST-ROW',
+			'M-FIXTURE-CACHE-CWD-WRITE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

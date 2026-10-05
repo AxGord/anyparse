@@ -14455,6 +14455,14 @@
 			"find": "out[cls] = { ms: before.ms + ms, tests: before.tests + tests };",
 			"replace": "out[cls] = { ms: ms, tests: tests };",
 			"note": "a class timed as slices on several shards keeps only its last slice's row, so it reads as light and is dealt whole the next run"
+		},
+		{
+			"name": "M-FIXTURE-CACHE-CWD-WRITE",
+			"type": "testkit.FixtureCompileCache",
+			"method": "record",
+			"find": "if (r == 0 && changed(before[0], after[0])) return null;",
+			"replace": "",
+			"note": "a compile writing into the fixture it shares with the compiles beside it is recorded, and its replay overwrites the lines a concurrent writer appended"
 		}
 	]
 }

@@ -186,6 +186,7 @@ fi
 # SIGKILL left behind, and the predicate that keeps a sibling's live run
 # safe from it — all live in one place. See tools/tmp-lifecycle.sh.
 . "$script_dir/tmp-lifecycle.sh"
+. "$script_dir/fixture-cache.sh"
 tmpl_sweep "$repo"
 
 work=$(tmpl_claim apq-suite-shard)
@@ -357,6 +358,24 @@ now_ms() {
     fi
 }
 
+# The fixture cache (tools/fixture-cache.sh): the probe compiles every shard
+# runs are replayed from a content-addressed record kept across runs, so a
+# run whose probe macros and fixtures did not change compiles none of them.
+# `APQ_SUITE_NO_FIXTURE_CACHE=1` runs every compile for real — the run to make
+# when the compiler itself is what is in question.
+shard_path=$PATH
+cache_note="fixture cache: off (APQ_SUITE_NO_FIXTURE_CACHE)"
+if [ -z "${APQ_SUITE_NO_FIXTURE_CACHE:-}" ]; then
+    fc_entries="${APQ_SUITE_FIXTURE_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/anyparse/fixture-cache}"
+    fc_prune "$fc_entries"
+    if fc_shim "$repo" "$fc_entries" "$work/fixture-cache-bin" "$work/fixture-cache.tally"; then
+        shard_path="$work/fixture-cache-bin:$PATH"
+        cache_note=""
+    else
+        cache_note="fixture cache: unavailable, every compile ran for real"
+    fi
+fi
+
 started=$(now_ms)
 pids=""
 s=0
@@ -364,7 +383,7 @@ while [ "$s" -lt "$shards" ]; do
     (
         shard_started=$(now_ms)
         shard_status=0
-        APQ_TEST="$(cat "$work/shard$s.filter")" APQ_TEST_TIMING="$work/shard$s.timing" \
+        PATH=$shard_path APQ_TEST="$(cat "$work/shard$s.filter")" APQ_TEST_TIMING="$work/shard$s.timing" \
             node "$test_js" > "$work/shard$s.log" 2>&1 || shard_status=$?
         echo $(( $(now_ms) - shard_started )) > "$work/shard$s.ms"
         exit "$shard_status"
@@ -545,6 +564,11 @@ done
 printf -- '--- suite-shard: %d classes / %d tests / %d assertions / %d failures / %d errors in %d.%03ds across %d shards ---\n' \
     "$total_classes" "$sum_tests" "$sum_asserts" "$sum_fail" "$sum_err" \
     "$((elapsed_ms / 1000))" "$((elapsed_ms % 1000))" "$shards"
+
+if [ -z "$cache_note" ]; then
+    cache_note="fixture cache: $(fc_tally "$work/fixture-cache.tally")"
+fi
+echo "$cache_note"
 
 if [ "$partial" -eq 1 ]; then
     echo "suite-shard.sh: the totals above are a SUM OF WHAT RAN, not a total — at least one shard did not finish" >&2
