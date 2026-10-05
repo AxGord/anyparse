@@ -559,6 +559,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.grammar.haxe.HxChainFillBoundaryCallOperandTest',
 		'unit.grammar.haxe.HxChainOuterOperatorWrapSliceTest',
 		'unit.grammar.haxe.HxChainStaircaseSliceTest',
+		'unit.grammar.haxe.HxCloseTrailBlockCommentWriteTest',
 		'unit.grammar.haxe.HxCloseTrailKeywordWriteTest',
 		'unit.grammar.haxe.HxCompareOperandBreakSliceTest',
 		'unit.grammar.haxe.HxComplexItemWrapTest',
@@ -611,6 +612,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.grammar.haxe.HxContainerItemWrapTest',
 		'unit.grammar.haxe.HxControlFlowPoliciesOptionsTest',
 		'unit.grammar.haxe.HxControlFlowSliceTest',
+		'unit.grammar.haxe.HxDeclCommentSlotWriteTest',
 		'unit.grammar.haxe.HxDeclHeaderEqBreakOverflowTest',
 		'unit.grammar.haxe.HxDeclInitMultilineStringCuddleTest',
 		'unit.grammar.haxe.HxDoWhileThrowTryCatchSliceTest',
@@ -2098,6 +2100,21 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxChainStaircaseSliceTest#testIsIdempotentAcrossThreePasses :: control :: M-CHAIN-STAIRCASE-OFF',
 			'unit.grammar.haxe.HxChainStaircaseSliceTest#testTornConditionParenIsGone :: control :: M-CHAIN-STAIRCASE-OFF',
 			'unit.grammar.haxe.HxChainStaircaseSliceTest#testWholeChainOverTheLimitStaircases :: control :: M-CHAIN-STAIRCASE-OFF',
+			'unit.grammar.haxe.HxCloseTrailBlockCommentWriteTest#testDoWhileKeepsTheKeywordGlued :: control :: M-CLOSE-TRAIL-BLOCK-BREAKS',
+			'unit.grammar.haxe.HxCloseTrailBlockCommentWriteTest#testEmptyBlockKeepsTheKeywordGlued :: control :: M-CLOSE-TRAIL-EMPTY-HARD',
+			'unit.grammar.haxe.HxCloseTrailBlockCommentWriteTest#testEmptyBlockLineCommentKeepsTheKeywordAtItsIndent :: control :: '
+				+ 'M-CLOSE-TRAIL-EMPTY-HARD',
+			'unit.grammar.haxe.HxCloseTrailBlockCommentWriteTest#testOpenCommentBlockLineCommentBreaks :: control :: '
+				+ 'M-OPEN-TRAIL-EMPTY-UNGUARDED',
+			'unit.grammar.haxe.HxCloseTrailBlockCommentWriteTest#testOpenCommentParamsLineCommentBreaks :: control :: '
+				+ 'M-OPEN-TRAIL-SEP-UNGUARDED',
+			'unit.grammar.haxe.HxCloseTrailBlockCommentWriteTest#testStatementCatchKeepsItsGap :: control :: '
+				+ 'M-CLOSE-TRAIL-BLOCK-BREAKS,M-CATCH-CLOSE-TRAIL-ANY',
+			'unit.grammar.haxe.HxCloseTrailBlockCommentWriteTest#testStatementElseChainKeepsTheKeywordGlued :: control :: '
+				+ 'M-CLOSE-TRAIL-BLOCK-BREAKS',
+			'unit.grammar.haxe.HxCloseTrailBlockCommentWriteTest#testValueCatchKeepsTheKeywordGlued :: control :: M-CLOSE-TRAIL-BLOCK-BREAKS',
+			'unit.grammar.haxe.HxCloseTrailBlockCommentWriteTest#testValueElseChainKeepsTheKeywordGlued :: control :: '
+				+ 'M-CLOSE-TRAIL-BLOCK-BREAKS',
 			'unit.grammar.haxe.HxCloseTrailKeywordWriteTest#testDoWhileKeepsItsIndent :: control :: M-PENDING-HARDLINE-BLANK-FLUSHED',
 			'unit.grammar.haxe.HxCloseTrailKeywordWriteTest#testStatementCatchKeepsItsIndent :: guard :: ',
 			'unit.grammar.haxe.HxCloseTrailKeywordWriteTest#testStatementElseIfChainKeepsItsIndent :: control :: '
@@ -2149,6 +2166,15 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxCondUnbalancedRegionSliceTest#testOpenerCloserPairKeepsOpenerACondSpliceStmt :: control :: '
 				+ 'M-COND-BLOCK-TAIL-NEVER',
 			'unit.grammar.haxe.HxConditionalExprFitSliceTest#testOverwideGluedBreaksAtDirectiveSeams :: control :: M-NEWLINE-SIGNALS-NONE',
+			'unit.grammar.haxe.HxDeclCommentSlotWriteTest#testMandatoryLeadKeepsTheComment :: control :: '
+				+ 'M-BEFORE-LEAD-MANDATORY-NONE,M-BEFORE-LEAD-WRITER-MANDATORY-NONE',
+			'unit.grammar.haxe.HxDeclCommentSlotWriteTest#testOptionalLeadKeepsTheComment :: control :: '
+				+ 'M-BEFORE-LEAD-CAPTURE-NONE,M-BEFORE-LEAD-WRITER-OPT-NONE',
+			'unit.grammar.haxe.HxDeclCommentSlotWriteTest#testReturnTypeLineCommentBreaksBeforeTheBody :: control :: '
+				+ 'M-FNBODY-GAP-COMMENT-NONE',
+			'unit.grammar.haxe.HxDeclCommentSlotWriteTest#testReturnTypeToBlockBodyKeepsTheComment :: control :: M-FNBODY-GAP-COMMENT-NONE',
+			'unit.grammar.haxe.HxDeclCommentSlotWriteTest#testReturnTypeToExpressionBodyKeepsTheComment :: control :: '
+				+ 'M-FNBODY-GAP-COMMENT-NONE',
 			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testBareBodyElseIfTrailsCommentAfterCondition :: control :: '
 				+ 'M-EICR-AFTERCOND-RESET',
 			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testBracedElseIfGluesAndTrailsCommentAfterOpenCurly :: control :: '
@@ -4953,7 +4979,17 @@ class TestDiscoveryParityTest extends Test {
 			'M-ASSISTED-SPLIT-NONE',
 			'M-ASSISTED-SALVAGED-COUNT-ALL',
 			'M-ASSISTED-REFUSAL-SILENT',
-			'M-ASSISTED-REFUSAL-LEDGER-NONE'
+			'M-ASSISTED-REFUSAL-LEDGER-NONE',
+			'M-CLOSE-TRAIL-BLOCK-BREAKS',
+			'M-CLOSE-TRAIL-EMPTY-HARD',
+			'M-CATCH-CLOSE-TRAIL-ANY',
+			'M-OPEN-TRAIL-EMPTY-UNGUARDED',
+			'M-OPEN-TRAIL-SEP-UNGUARDED',
+			'M-FNBODY-GAP-COMMENT-NONE',
+			'M-BEFORE-LEAD-CAPTURE-NONE',
+			'M-BEFORE-LEAD-MANDATORY-NONE',
+			'M-BEFORE-LEAD-WRITER-OPT-NONE',
+			'M-BEFORE-LEAD-WRITER-MANDATORY-NONE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
@@ -5149,6 +5185,16 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-ASSIGN-HELD-THROUGH :: anyparse.check.TypedFactsWalk#storedLocal',
 			'M-KWTRAIL-FLAT-GAP-KEPT :: anyparse.macro.WriterCodegen#kwBeforeTrailingDocField',
 			'M-KWTRAIL-GUARD-HARD :: anyparse.macro.WriterCodegen#kwBeforeTrailingDocField',
+			'M-CLOSE-TRAIL-BLOCK-BREAKS :: anyparse.macro.TriviaBlockLowering#triviaBlockElseBody',
+			'M-CLOSE-TRAIL-EMPTY-HARD :: anyparse.macro.TriviaBlockLowering#triviaBlockStarExpr',
+			'M-CATCH-CLOSE-TRAIL-ANY :: anyparse.macro.WriterTriviaStarEmitLowering#buildCloseTrailingFirstSepOverride',
+			'M-OPEN-TRAIL-EMPTY-UNGUARDED :: anyparse.macro.TriviaBlockLowering#triviaBlockMainExpr',
+			'M-OPEN-TRAIL-SEP-UNGUARDED :: anyparse.macro.TriviaSepLowering#triviaSepEmptyOpenTrailExpr',
+			'M-FNBODY-GAP-COMMENT-NONE :: anyparse.macro.WriterRefFieldLowering#emitLeftCurlyBody',
+			'M-BEFORE-LEAD-CAPTURE-NONE :: anyparse.macro.StructSeqLowering#emitOptionalRefLeadCommit',
+			'M-BEFORE-LEAD-MANDATORY-NONE :: anyparse.macro.StructFieldTrailLowering#emitFieldLeadIn',
+			'M-BEFORE-LEAD-WRITER-OPT-NONE :: anyparse.macro.WriterRefFieldLowering#emitOptionalRefField',
+			'M-BEFORE-LEAD-WRITER-MANDATORY-NONE :: anyparse.macro.WriterRefFieldLowering#emitFieldLeadIn',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

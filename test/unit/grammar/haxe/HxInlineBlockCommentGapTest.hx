@@ -24,7 +24,20 @@ using StringTools;
 class HxInlineBlockCommentGapTest extends Test {
 
 	/** Captured seams outside a function body — same contract, other hosts. */
-	private static final CAPTURED_DECLS: Array<Array<String>> = [['meta_arg', 'class Foo {\n\t@:meta(/* m */ 1) var x: Int;\n}\n']];
+	private static final CAPTURED_DECLS: Array<Array<String>> = [
+		['meta_arg', 'class Foo {\n\t@:meta(/* m */ 1) var x: Int;\n}\n'],
+		// ω-before-lead: the gap before a `@:lead` literal — optional (`=`, `:`)
+		// and mandatory (an anonymous structure's `:`).
+		['var_name_init', 'class Foo {\n\tvar x /* c */ = 1;\n}\n'],
+		['param_default', 'class Foo {\n\tfunction bar(a /* c */ = 1) {}\n}\n'],
+		['anon_short_field', 'typedef T = {\n\ta /* a */: Int,\n}\n'],
+		// ω-head-body-gap-comment: the body's `BeforeLeading` slot, now read by
+		// the brace-placement seat. A comment between the `:` and the type
+		// reaches it too (the lead commit stashes it), so it is KEPT, moved
+		// after the type: `function bar():Void /* r */ {}`.
+		['return_type_body_gap', 'class Foo {\n\tfunction bar(): Int /* r */ {}\n}\n'],
+		['return_type', 'class Foo {\n\tfunction bar(): /* r */ Void {}\n}\n']
+	];
 
 	/** Seams the Trivia parser captures — the round trip keeps the comment. */
 	private static final CAPTURED: Array<Array<String>> = [
@@ -115,7 +128,6 @@ class HxInlineBlockCommentGapTest extends Test {
 	private static final SLOT_LESS_DECLS: Array<Array<String>> = [
 		['field_init', 'class Foo {\n\tvar x: Int = /* f */ 1;\n}\n'],
 		['typeparam', 'class Foo {\n\tvar x: Array</* t */ Int>;\n}\n'],
-		['return_type', 'class Foo {\n\tfunction bar(): /* r */ Void {}\n}\n'],
 		['extends_lead', 'class Foo extends /* e */ Bar {}\n'],
 		['enum_ctor_arg', 'enum Foo {\n\tA(/* c */ x: Int);\n}\n'],
 		['anon_field', 'typedef T = {\n\ta: /* a */ Int,\n}\n']

@@ -202,6 +202,28 @@ final class TriviaPairSlots {
 	}
 
 	/**
+	 * Hosts of `<field>BeforeLead`: a Ref carrying a `@:lead` literal — mandatory, or optional with the
+	 * lead as its commit point — and no `@:kw` (a kw-led field's gap sits between the kw and the lead,
+	 * and its pre-kw gap has `BeforeKwLeading` / `BeforeKwTrailing`) and no `@:absentOn` /
+	 * `@:absentOnEof` (an absence peek, not a lead, decides that field). One predicate for the three
+	 * sides — the synth here, the parse capture (`StructFieldTrailLowering.emitFieldLeadIn` for a
+	 * mandatory lead, `StructSeqLowering.emitOptionalRefLeadCommit` for an optional one) and the writer
+	 * seats in `WriterRefFieldLowering` — so they cannot disagree on a field.
+	 *
+	 * Never the FIRST field: the gap before it is the enclosing rule's (`while /* c *\/ (`), and the
+	 * capture would run before the lead the rule's first-token claim promises.
+	 */
+	public static function isBeforeLeadRef(child: ShapeNode, isFirstField: Bool): Bool {
+		return !isFirstField && child.kind == Ref && child.readMetaString(':kw') == null && child.readMetaString(':lead') != null
+			&& child.readMetaStringArgs(':absentOn') == null && !child.hasMeta(':absentOnEof');
+	}
+
+	/** The `<field>BeforeLead:Null<String>` slot — see `TriviaTypeSynth.BEFORE_LEAD_SUFFIX`. */
+	public static inline function buildBeforeLeadSlot(child: ShapeNode, pos: Position): Field {
+		return buildNullStringSlot(child, pos, TriviaTypeSynth.BEFORE_LEAD_SUFFIX);
+	}
+
+	/**
 	 * Build the `<field>TrailPresent` slot for struct typedef fields gated
 	 * by `isStructFieldTrailOpt`. Slot is `@:optional Null<Bool>` so
 	 * paired-struct construction in `Lowering` may omit it (`null` = "no

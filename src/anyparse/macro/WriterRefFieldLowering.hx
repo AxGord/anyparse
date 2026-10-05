@@ -71,6 +71,29 @@ final class WriterRefFieldLowering {
 	}
 
 	/**
+	 * The `value.<field>BeforeLead` access for a `@:lead`-carrying Ref (mandatory or optional) in a
+	 * trivia-bearing rule, or null when the field has no such slot. The host is
+	 * `TriviaPairSlots.isBeforeLeadRef`, the same predicate the synth and the parse capture read.
+	 */
+	private static function beforeLeadSlotAccess(
+		ctx: RefFieldCtx, child: ShapeNode, isFirstField: Bool, fieldAccess: Expr, typePath: String
+	): Null<Expr> {
+		if (!ctx.ctx.trivia || !ctx.isTriviaBearing(typePath) || !TriviaPairSlots.isBeforeLeadRef(child, isFirstField)) return null;
+		return switch fieldAccess.expr {
+			case EField(base, name): { expr: EField(base, name + TriviaTypeSynth.BEFORE_LEAD_SUFFIX), pos: fieldAccess.pos };
+			case _: null;
+		};
+	}
+
+	/** The Doc for a `<field>BeforeLead` slot read through `access`: ` /* c *\/`, or nothing when it is null. */
+	private static function beforeLeadDoc(access: Expr): Expr {
+		return macro {
+			final _bl: Null<String> = $access;
+			_bl == null ? _de() : trailingCommentDocVerbatim(_bl, opt);
+		};
+	}
+
+	/**
 	 * Emit an optional Ref struct field (the `case Ref if (isOptional)` arm of
 	 * `lowerStruct`). Builds the descendant writeCall (opt-fanout flags +
 	 * indentValueIfCtor), dispatches the optional body emission across the kw-led
@@ -139,12 +162,17 @@ final class WriterRefFieldLowering {
 				prevBodyField, typePath, prevPadTrailing, indentObjArgs
 			);
 			pushTrailOptKeep(optParts, child, trailOptText, structTrailOptAccess, fieldAccess);
-		} else if (leadText != null)
+		} else if (leadText != null) {
+			// ω-before-lead: the block comment the source wrote just before the
+			// lead literal (`var x /* c */ = 1`), re-emitted ahead of the lead's own
+			// separator so it stays where the author put it.
+			final beforeLead: Null<Expr> = beforeLeadSlotAccess(ctx, child, child == node.children[0], fieldAccess, typePath);
+			if (beforeLead != null) optParts.push(beforeLeadDoc(beforeLead));
 			emitOptionalRefLead(
 				ctx, child, optParts, leadText, writeCall, prevBodyField, typePath, prevPadTrailing, trailText, trailOptText,
 				hasStructFieldTrailOptSlot, structTrailOptAccess
 			);
-		else if (bodyPolicyFlag != null)
+		} else if (bodyPolicyFlag != null)
 			emitOptionalBodyPolicyOnly(
 				ctx, child, optParts, bodyPolicyFlag, bodyPolicyExprFlag, writeCall, refName, hasElseIf, elseFieldName, indentObjArgs,
 				prevTrailFieldName
@@ -1490,6 +1518,24 @@ final class WriterRefFieldLowering {
 	): Void {
 		final ctorExpr: Expr = macro Type.enumConstructor($fieldAccess);
 		final sepExpr: Expr = buildLeftCurlySepExpr(ctx, refName, lcCtors, ctorExpr, lcSep);
+		// ω-head-body-gap-comment: the comments the parser captured in the gap
+		// before the body's first token (`<field>BeforeLeading`, the bare non-first
+		// Ref slot) — `function f():Int /* c */ {`, `function f():Int // c` +
+		// newline `{`. With no return type the same comment trails the params'
+		// `)` and rides that Star's close-trailing slot; after a return type it
+		// lands here, and this seat used to ignore the slot, so the writer dropped
+		// it. Each is re-emitted on the signature line, a LINE comment with its
+		// forward hardline, so the brace / body placement that follows is decided
+		// exactly as it would be after the params' close-trailing comment.
+		final hasBeforeLeadingSlot: Bool = ctx.ctx.trivia && ctx.isTriviaBearing(typePath) && !isFirstField && kwLead == null
+			&& leadText == null;
+		if (hasBeforeLeadingSlot) {
+			final leadAccess: Expr = beforeLeadingAccess(fieldName);
+			parts.push(macro {
+				final _gapCm: Array<String> = $leadAccess;
+				_gapCm.length == 0 ? _de() : _dc([for (_c in _gapCm) trailingCommentDocGuarded(_c, opt)]);
+			});
+		}
 		// ω-untyped-keep / ω-fnbody-keep: `@:fmt(bodyPolicyForCtor('<ctor>',
 		// '<flagName>'))` (repeatable) runtime-replaces the per-ctor
 		// `sep + writeCall` pair with a `bodyPolicyWrap` for each matched
@@ -1502,9 +1548,7 @@ final class WriterRefFieldLowering {
 		// to the pre-slice inner-branch emission.
 		final bodyPolicyForCtorPairs: Array<Array<String>> = child.fmtReadStringArgsAll('bodyPolicyForCtor');
 		if (bodyPolicyForCtorPairs.length > 0) {
-			final hasBeforeNlSlot: Bool = ctx.ctx.trivia && ctx.isTriviaBearing(typePath) && !isFirstField && kwLead == null
-				&& leadText == null;
-			final wrapBodyOnSameLineExpr: Null<Expr> = hasBeforeNlSlot ? beforeNewlineNotAccess(fieldName) : null;
+			final wrapBodyOnSameLineExpr: Null<Expr> = hasBeforeLeadingSlot ? beforeNewlineNotAccess(fieldName) : null;
 			// ω-fnbody-meta-block-glue: `@:fmt(metaBlockGlue('<exprBodyCtor>',
 			// '<metaCtor>', '<blockCtor>'))` names the runtime descent so
 			// `bodyPolicyWrap` can route a metadata-wrapped block body
@@ -1787,7 +1831,13 @@ final class WriterRefFieldLowering {
 		// D61: non-optional lead — no space before lead. The end-field of a
 		// condWrap span cannot push its own `@:lead` (the open paren is owned by
 		// the start field and emitted via the splice's emitCondition wrap).
-		if (leadText != null && !isOptional && !hasCondWrap && !hasCondWrapEnd) emitMandatoryLead(child, parts, leadText, fieldAccess);
+		if (leadText != null && !isOptional && !hasCondWrap && !hasCondWrapEnd) {
+			// ω-before-lead: the block comment captured just before the lead
+			// literal (`{x /* c */ : 1}`), ahead of the lead's own spacing.
+			final beforeLead: Null<Expr> = beforeLeadSlotAccess(ctx, child, isFirstField, fieldAccess, typePath);
+			if (beforeLead != null) parts.push(beforeLeadDoc(beforeLead));
+			emitMandatoryLead(child, parts, leadText, fieldAccess);
+		}
 	}
 
 	/**

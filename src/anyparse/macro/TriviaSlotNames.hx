@@ -100,6 +100,9 @@ final class TriviaSlotNames {
 
 	public static inline function beforeBlankLocalName(fieldName: String): String return '_beforeBlank_$fieldName';
 
+	/** ω-before-lead — the `Null<String>` local carrying an optional lead-led Ref's `<field>BeforeLead` slot value. */
+	public static inline function beforeLeadLocalName(fieldName: String): String return '_beforeLead_$fieldName';
+
 	/**
 	 * Name of the `Bool` local that records whether a tryparse+nestBody
 	 * Star's stashed orphan trail run was followed by a blank line

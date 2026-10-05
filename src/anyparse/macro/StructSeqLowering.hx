@@ -131,7 +131,12 @@ final class StructSeqLowering {
 			// the writer's single-Ref condWrap emit under `WrapMode.Keep`.
 			final hasCondOpenNewlineSlot: Bool = hasCondOpenNewlineField(sc, child, typePath, isStar, isOptional, leadText);
 			final condOpenNewlineLocal: String = '_condOpenNewline_$fieldName';
-			emitFieldLeadIn(parseSteps, isStar, isOptional, kwLead, leadText, hasCondOpenNewlineSlot);
+			// ω-before-lead: pre-declared null so a lead commit can fill it on a hit
+			// while a miss (and the absent value) leave it null. The mandatory lead
+			// fills it in `emitFieldLeadIn`, the optional one in its commit branch.
+			final beforeLeadLocal: Null<String> = hasBeforeLeadSlotField(sc, child, node, typePath) ? beforeLeadLocalName(fieldName) : null;
+			if (beforeLeadLocal != null) parseSteps.push(macro var $beforeLeadLocal: Null<String> = null);
+			emitFieldLeadIn(parseSteps, isStar, isOptional, kwLead, leadText, hasCondOpenNewlineSlot, beforeLeadLocal);
 			// Field value — by kind.
 			final localName: String = '_f_$fieldName';
 			// Suppress the pre-field `skipWs` only for a trivia-collecting
@@ -240,7 +245,7 @@ final class StructSeqLowering {
 			emitFieldValueByKind(
 				sc, child, node, fieldName, localName, parseSteps, isOptional, kwLead, leadText, trailText, absentOnLits, absentOnEof,
 				hasOptionalRefAfterTrailSlot, captureTrailPresentExpr, hasKwTriviaSlots, afterKwLocal, kwLeadingLocal, beforeKwNlLocal,
-				bodyOnSameLineLocal, beforeKwLeadingLocal, beforeKwTrailingLocal, lenPrefix, hasBeforeNewlineSlot
+				bodyOnSameLineLocal, beforeKwLeadingLocal, beforeKwTrailingLocal, lenPrefix, hasBeforeNewlineSlot, beforeLeadLocal
 			);
 			// Per-field trail. Skipped for Star fields — `emitStarFieldSteps`
 			// already emitted the close literal as part of the loop wrappers.
@@ -306,6 +311,8 @@ final class StructSeqLowering {
 				newlineAfterLocal, hasCondOpenNewlineSlot, condOpenNewlineLocal, hasKwTriviaSlots, afterKwLocal, kwLeadingLocal,
 				beforeKwNlLocal, bodyOnSameLineLocal, beforeKwLeadingLocal, beforeKwTrailingLocal, hasBeforeTrailSlot, beforeTrailLocal
 			);
+			if (beforeLeadLocal != null)
+				structFields.push({ field: fieldName + TriviaTypeSynth.BEFORE_LEAD_SUFFIX, expr: macro $i{beforeLeadLocal} });
 			// pushStructFieldEntries pushes the field value + every applicable
 			// trivia/source-shape sidecar slot (TrailPresent / AfterTrail /
 			// BeforeNewline / BeforeLeading / NewlineAfter / CondOpenNewline / the
@@ -703,7 +710,7 @@ final class StructSeqLowering {
 		leadText: Null<String>, trailText: Null<String>, absentOnLits: Null<Array<String>>, absentOnEof: Bool,
 		hasOptionalRefAfterTrailSlot: Bool, captureTrailPresentExpr: Expr, hasKwTriviaSlots: Bool, afterKwLocal: String,
 		kwLeadingLocal: String, beforeKwNlLocal: String, bodyOnSameLineLocal: String, beforeKwLeadingLocal: String,
-		beforeKwTrailingLocal: String, hasBeforeSlots: Bool
+		beforeKwTrailingLocal: String, hasBeforeSlots: Bool, beforeLeadLocal: Null<String>
 	): Void {
 		if (kwLead == null && leadText == null && absentOnLits == null && !absentOnEof) {
 			Context.fatalError(
@@ -782,7 +789,7 @@ final class StructSeqLowering {
 		} else {
 			emitOptionalRefLeadCommit(
 				sc, parseSteps, localName, fieldCT, subCall, kwLead, leadText, hasKwTriviaSlots, afterKwLocal, kwLeadingLocal,
-				beforeKwNlLocal, bodyOnSameLineLocal, beforeKwLeadingLocal, beforeKwTrailingLocal
+				beforeKwNlLocal, bodyOnSameLineLocal, beforeKwLeadingLocal, beforeKwTrailingLocal, beforeLeadLocal
 			);
 		}
 	}
@@ -1143,14 +1150,15 @@ final class StructSeqLowering {
 		isOptional: Bool, kwLead: Null<String>, leadText: Null<String>, trailText: Null<String>, absentOnLits: Null<Array<String>>,
 		absentOnEof: Bool, hasOptionalRefAfterTrailSlot: Bool, captureTrailPresentExpr: Expr, hasKwTriviaSlots: Bool, afterKwLocal: String,
 		kwLeadingLocal: String, beforeKwNlLocal: String, bodyOnSameLineLocal: String, beforeKwLeadingLocal: String,
-		beforeKwTrailingLocal: String, lenPrefix: Null<{ width: Int, encoding: String }>, hasBeforeSlots: Bool
+		beforeKwTrailingLocal: String, lenPrefix: Null<{ width: Int, encoding: String }>, hasBeforeSlots: Bool,
+		beforeLeadLocal: Null<String>
 	): Void {
 		switch child.kind {
 			case Ref if (isOptional):
 				emitOptionalRefField(
 					sc, child, fieldName, localName, parseSteps, kwLead, leadText, trailText, absentOnLits, absentOnEof,
 					hasOptionalRefAfterTrailSlot, captureTrailPresentExpr, hasKwTriviaSlots, afterKwLocal, kwLeadingLocal, beforeKwNlLocal,
-					bodyOnSameLineLocal, beforeKwLeadingLocal, beforeKwTrailingLocal, hasBeforeSlots
+					bodyOnSameLineLocal, beforeKwLeadingLocal, beforeKwTrailingLocal, hasBeforeSlots, beforeLeadLocal
 				);
 			case Ref:
 				final refName: String = child.annotations[AnnotationKeys.BASE_REF];
@@ -1316,6 +1324,14 @@ final class StructSeqLowering {
 	}
 
 	/**
+	 * ω-before-lead: whether this field grows a `<field>BeforeLead:Null<String>` slot — an optional
+	 * lead-committed Ref (`TriviaPairSlots.isBeforeLeadRef`) in a trivia-bearing rule.
+	 */
+	private static function hasBeforeLeadSlotField(sc: StructSeqCtx, child: ShapeNode, node: ShapeNode, typePath: String): Bool {
+		return sc.ctx.trivia && sc.isTriviaBearing(typePath) && TriviaPairSlots.isBeforeLeadRef(child, child == node.children[0]);
+	}
+
+	/**
 	 * Compute the two bare-trivia-Ref/Star BeforeNewline / BeforeLeading slot
 	 * flags for a struct field. `hasBeforeNewlineSlot` captures the source
 	 * newline in the gap before the field's first token (bare non-first Ref, or
@@ -1353,7 +1369,7 @@ final class StructSeqLowering {
 	private static function emitOptionalRefLeadCommit(
 		sc: StructSeqCtx, parseSteps: Array<Expr>, localName: String, fieldCT: ComplexType, subCall: Expr, kwLead: Null<String>,
 		leadText: Null<String>, hasKwTriviaSlots: Bool, afterKwLocal: String, kwLeadingLocal: String, beforeKwNlLocal: String,
-		bodyOnSameLineLocal: String, beforeKwLeadingLocal: String, beforeKwTrailingLocal: String
+		bodyOnSameLineLocal: String, beforeKwLeadingLocal: String, beforeKwTrailingLocal: String, beforeLeadLocal: Null<String>
 	): Void {
 		// The commit point peeks the lead literal or keyword —
 		// on hit, consume and parse the sub-rule; on miss,
@@ -1452,6 +1468,26 @@ final class StructSeqLowering {
 				if ($commitCheck) {
 					$i{beforeKwTrailingLocal} = _trailComment;
 					for (_c in _preTrivia.leadingComments) $i{beforeKwLeadingLocal}.push(_c);
+					$preCommitCapture;
+					$innerCommitAction;
+					$subCall;
+				} else {
+					ctx.pos = _wsPos;
+					null;
+				}
+			}
+		else if (beforeLeadLocal != null)
+			// ω-before-lead: a BLOCK comment between the preceding token and the
+			// lead literal (`var x /* c */ = 1`) is captured before `skipWs` would
+			// swallow it. A miss rewinds over it, so the enclosing rule still sees
+			// it; only a commit keeps it, for the writer to re-emit before the lead.
+			macro {
+				final _wsPos: Int = ctx.pos;
+				final _leadGapComment: Null<String> = collectTrailingBlock(ctx);
+				skipWs(ctx);
+				final _kwStartPos: Int = ctx.pos;
+				if ($commitCheck) {
+					$i{beforeLeadLocal} = _leadGapComment;
 					$preCommitCapture;
 					$innerCommitAction;
 					$subCall;

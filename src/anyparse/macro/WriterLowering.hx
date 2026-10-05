@@ -2333,7 +2333,6 @@ typedef BlockStarCtx = {
 	final trailLC: Expr;
 	final trailClose: Expr;
 	final trailOpen: Expr;
-	final trailFollowExpr: Expr;
 	final emptyTrailExpr: Expr;
 	final blankBeforeExpr: Expr;
 	final trackDocCommentExpr: Expr;
