@@ -2601,6 +2601,10 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-REACH-ALIKE,M-FACTS-TRUTH-CONTEXT-ALWAYS',
 			'unit.query.MemberReachFactsTest#testAClassAComputedNameMakesIsOneTheProjectDeclaresUnderTheTruth :: control :: M-ESCAPES-FACTS-DECLARED-ANY,M-ESCAPES-FACTS-DECLARED-NONE,M-ESCAPES-FACTS-DECLARED-PRODUCED',
 			'unit.query.MemberReachFactsTest#testAClassAProducerNamesEscapesUnderTheTruth :: control :: M-ESCAPES-FACTS-PRODUCED',
+			'unit.query.MemberReachFactsTest#testAComputedNameOnAStructureTheCodeBuiltReachesNoClassUnderTheTruth :: control :: '
+				+ 'M-REFLECTED-FRESH,M-REFLECTED-FRESH-PLAIN,M-FACTS-REFL-FRESH,M-FACTS-REFL-FRESH-LOCAL,M-FACTS-REFL-FRESH-WRITTEN,M-FACTS-REFL-FRESH-ANY',
+			'unit.query.MemberReachFactsTest#testAComputedNameOnAnObjectOfNoClassReachesOnlyAnEscapedClassUnderTheTruth :: control :: '
+				+ 'M-REFLECTED-CLASSLESS,M-REFLECTED-CLASSLESS-ESCAPES,M-CLASSLESS-STRUCTURE,M-CLASSLESS-CATCH-ALL,M-CLASSLESS-NULLABLE,M-CLASSLESS-TYPEDEF,M-REFLECTED-CLASSLESS-PLAIN',
 			'unit.query.MemberReachFactsTest#testAComputedNameRunsOnlyAMethodOfAClassTheProjectDeclaresUnderTheTruth :: control :: M-REFLECTED-HOLDERS-METHODS,M-REFLECTED-HOLDERS-ACCESSORS,M-REFLECTED-HOLDERS-INHERITED',
 			'unit.query.MemberReachFactsTest#testAComputedNameStillReadsAVariableOfAnyClassWhateverTheProjectDeclaresUnderTheTruth :: control :: M-HOLDERS-FIELDS-UNBOUNDED,M-GRAPH-REFLECT-SUPERTYPES',
 			'unit.query.MemberReachFactsTest#testAConfigurationWithoutFactsLeavesTheSyntax :: control :: M-FACTS-REACH-DROPPED',
@@ -2726,7 +2730,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-GRAPH-REFLECT-EXACT,M-FACTS-REFL-EXACT',
 			'unit.query.MemberReachFactsTest#testAReflectedObjectOtherThanThisMayBeAnyEscapedInstanceUnderTheTruth :: control :: '
 				+ 'M-GRAPH-REFLECT-ESCAPES,M-GRAPH-REFLECT-SELF-ESCAPES,M-FACTS-REFL-SELF',
-			'unit.query.MemberReachFactsTest#testAReflectiveAccessOnAValueOfNoClassIsADynamicNameUnderTheTruth :: control :: '
+			'unit.query.MemberReachFactsTest#testAReflectiveAccessOnAValueOfNoClassIsADynamicNameOnceTheClassEscapedUnderTheTruth :: control :: '
 				+ 'M-GRAPH-REFLECT-UNTYPED',
 			'unit.query.MemberReachFactsTest#testAReflectiveAccessOnAnObjectOfAnUnrelatedClassReachesNoneOfTheMemberUnderTheTruth :: control :: '
 				+ 'M-REACH-REFLECT-BOUND-NONE,M-HAZARDS-REFLECT-RECEIVERS,M-HAZARDS-REFLECT-RECEIVERS-ADDED,M-FACTS-REFL-RECEIVER,M-REACH-REFLECT-BODY',
@@ -4795,6 +4799,19 @@ class TestDiscoveryParityTest extends Test {
 			'M-REFLECTED-HOLDERS-METHODS',
 			'M-REFLECTED-HOLDERS-ACCESSORS',
 			'M-REFLECTED-HOLDERS-INHERITED',
+			'M-REFLECTED-CLASSLESS',
+			'M-REFLECTED-CLASSLESS-ESCAPES',
+			'M-CLASSLESS-STRUCTURE',
+			'M-CLASSLESS-CATCH-ALL',
+			'M-CLASSLESS-NULLABLE',
+			'M-CLASSLESS-TYPEDEF',
+			'M-REFLECTED-FRESH',
+			'M-REFLECTED-FRESH-PLAIN',
+			'M-REFLECTED-CLASSLESS-PLAIN',
+			'M-FACTS-REFL-FRESH',
+			'M-FACTS-REFL-FRESH-LOCAL',
+			'M-FACTS-REFL-FRESH-WRITTEN',
+			'M-FACTS-REFL-FRESH-ANY',
 			'M-FACTS-TEXT-GENERIC-BUILD',
 			'M-FACTS-GENERIC-RECORDED',
 			'M-FACTS-GENERIC-BUILT',
@@ -5002,6 +5019,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-NATIVE-CHAIN :: anyparse.check.TypedFactsWalk#nativeChain',
 			'M-FACTS-WALK-BLOCK-GAP :: anyparse.check.TypedFactsWalk#visit',
 			'M-FACTS-SITE-HOLDS-OWN-CODE :: anyparse.check.TypedFactsWalk#between',
+			'M-FACTS-REFL-FRESH :: anyparse.check.TypedFactsWalk#reflection',
+			'M-FACTS-REFL-FRESH-LOCAL :: anyparse.check.TypedFactsWalk#visit',
+			'M-FACTS-REFL-FRESH-WRITTEN :: anyparse.check.TypedFactsWalk#freshStructure',
+			'M-FACTS-REFL-FRESH-ANY :: anyparse.check.TypedFactsWalk#freshStructure',
 			'M-FACTS-GENERIC-RECORDED :: anyparse.check.TypedFactsWalk#visit',
 			'M-FACTS-GENERIC-BUILT :: anyparse.check.TypedFactsMacro#genericBuilt',
 			'M-FACTS-ROUNDS :: anyparse.check.TypedFactsMacro#run',

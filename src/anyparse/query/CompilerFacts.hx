@@ -200,6 +200,12 @@ typedef ReflectionFact = {
 	final receiverSelf: Bool;
 
 	/**
+	 * Whether that argument is a structure built where it is acted on — an object literal, or a local initialized with one
+	 * and never written again — so no instance of a class: false in facts that do not record it.
+	 */
+	final receiverFresh: Bool;
+
+	/**
 	 * The id of the node whose code holds the call (`FactNode.id`): the function a `this` argument (`receiverSelf`) is the
 	 * `this` of — its outermost enclosing field's, for a nested function, which captures it.
 	 */
@@ -1121,6 +1127,7 @@ final class CompilerFacts {
 					receiver: r.r,
 					receiverExact: r.x == true,
 					receiverSelf: r.h == true,
+					receiverFresh: r.o == true,
 					holder: id
 				}: ReflectionFact),
 				node.reflection
@@ -1428,6 +1435,7 @@ private typedef NodeRecord = {
 		?r: String,
 		?x: Bool,
 		?h: Bool,
+		?o: Bool,
 		p: Array<Int>
 	}>;
 	final ?native: Array<{
