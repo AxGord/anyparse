@@ -873,19 +873,21 @@ final class FieldInitAtDeclaration implements Check {
 		// is the one that needed it.
 		if (!CtorFieldWrite.ctorPrefixUnconditional(ctor, at, shape)) return null;
 		final sole: Bool = writeIndex.writeCount(owner, mv.name) == 1;
-		// Haxe emits declaration initializers ahead of the constructor BODY, an explicit `super()`
-		// included, so an init hoisted across one runs before the base constructor. That is admitted
-		// only on the SOLE-write path and only when the early-init narrowings hold (the class doc's
-		// "CROSSING `super(...)`"); the chain path never crosses, since `acceptableCoMover` refuses it.
-		if (hoistCrossesSuper(ctor, container, at, shape) && !(sole && earlyInitSafe(member, container, ctor, write.rhs, at))) return null;
-		final unsafeRead: Bool = readBeforeInit(ctor, mv.span.from, mv.name, at, container, shape);
 		// `allowStatics = false`: an in-class STATIC read is refused along with the parameters, locals
 		// and instance members. The permissive spelling was the live regression — a right-hand side
 		// reading a static the constructor FILLS one statement earlier (`ns.push(7); _x = ns[0];`)
 		// hoisted ahead of that statement and observed the empty value. `final` on the static proves
 		// nothing: the binding is immutable, its contents are not. Both acceptance paths inherit the
 		// gate from here, so a candidate is order-safe by construction and needs no second tier.
-		return !CtorFieldWrite.contextFreeRhs(write.rhs, container, statics, shape, false, mayBeInherited) || unsafeRead ? null : {
+		if (!CtorFieldWrite.contextFreeRhs(write.rhs, container, statics, shape, false, mayBeInherited)) return null;
+		if (readBeforeInit(ctor, mv.span.from, mv.name, at, container, shape)) return null;
+		// Haxe emits declaration initializers ahead of the constructor BODY, an explicit `super()`
+		// included, so an init hoisted across one runs before the base constructor. That is admitted
+		// only on the SOLE-write path and only when the early-init narrowings hold (the class doc's
+		// "CROSSING `super(...)`"); the chain path never crosses, since `acceptableCoMover` refuses it.
+		// Asked last: its proof walks whole call graphs, which a candidate the cheap gates above refuse
+		// never needs.
+		return hoistCrossesSuper(ctor, container, at, shape) && !(sole && earlyInitSafe(member, container, ctor, write.rhs, at)) ? null : {
 			name: mv.name,
 			stmtFrom: at,
 			span: mv.span,
@@ -1016,13 +1018,15 @@ final class FieldInitAtDeclaration implements Check {
 		if (reach == null) return false;
 		final truth: MemberReach = reach;
 		final crossed: Span = new Span(from, at);
-		// 1. no code the hoist crosses may read the field: it would see the value where it saw nothing
-		if (truth.mayReach(Region(file, crossed), field, Read) != Proven) return false;
-		// 2. the right-hand side commutes with that code: it changes only what it builds, and reads nothing the code changes
+		// the right-hand side changes only what it builds — asked first: its walk stops at the first shared write, which a
+		// construction of a display object meets at once, while the question below walks all the crossed code reaches
 		final reads: Array<SharedRead> = switch truth.freshOnlyReads(file, value) {
 			case Confined(r): r;
 			case Unconfined(_, _, _): return false;
 		};
+		// no code the hoist crosses may read the field: it would see the value where it saw nothing
+		if (truth.mayReach(Region(file, crossed), field, Read) != Proven) return false;
+		// and that code changes nothing the right-hand side reads, so the two commute
 		for (r in reads) {
 			final changes: ReachAccess = r.inert ? Write : Mutate;
 			if (truth.mayReach(Region(file, crossed), { owner: r.owner, name: r.name }, changes) != Proven) return false;
