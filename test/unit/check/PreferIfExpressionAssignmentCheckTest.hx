@@ -135,6 +135,24 @@ class PreferIfExpressionAssignmentCheckTest extends Test {
 	}
 
 	/**
+	 * The carried trailing comment survives the `--fix` WRITE, not just the edit text: the gate
+	 * `lint --fix` runs is the writer round trip under the project's layout, and under the compiled
+	 * default (`sameLine.expressionIf: same`) it refused this very edit — the writer glued `else` onto
+	 * the comment's line — so the rule's claim held only under `next` / `fitLine` / `keep`. RED at base.
+	 */
+	public function testTrailingLineCommentSurvivesTheWriteGate(): Void {
+		final src: String = 'class C {\n\tfunction f() {\n\t\tif (a) x = 1; // one\n\t\telse if (b) x = 2;\n\t\telse x = 3;\n\t}\n}\n';
+		final es: Array<{ span: Span, text: String }> = edits(src);
+		Assert.equals(1, es.length);
+		switch CanonicalEdit.canonicalize(src, es, false, new HaxeQueryPlugin()) {
+			case Ok(text, _):
+				Assert.equals('class C {\n\tfunction f() {\n\t\tx = if (a) 1 // one\n\t\telse if (b) 2 else 3;\n\t}\n}\n', text);
+			case Err(message):
+				Assert.fail('the writer refused the carried comment: $message');
+		}
+	}
+
+	/**
 	 * A comment on its own line BEFORE the `else` still describes the branch
 	 * that ends there — it rides the trailing slot and keeps its line.
 	 */

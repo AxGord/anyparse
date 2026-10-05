@@ -198,9 +198,11 @@ class LintFixDeclineWiringSliceTest extends Test {
 	 * down with it, on every pass, and the file was written not at all. Over the external corpora
 	 * a couple of files threw away hundreds of landable edits from twenty-odd rules between them.
 	 *
-	 * RED at base on every assertion — `salvageFileLintEdits` does not exist there, so the file
-	 * does not compile.
+	 * RED at base on every assertion — `salvageFileLintEdits` does not exist there, so the file does not compile. The blame line
+	 * of a WHOLE group stays the bare rule id (only a split part names its site), which arm `M-LINTFIX-BLAME-SITE-ALWAYS` breaks.
 	 */
+	@:pin('control')
+	@:killer('M-LINTFIX-BLAME-SITE-ALWAYS')
 	public function testARefusedRuleCostsOnlyItsOwnEdits(): Void {
 		#if (sys || nodejs)
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
@@ -967,5 +969,119 @@ class LintFixDeclineWiringSliceTest extends Test {
 		};
 	}
 	#end
+
+	/**
+	 * One refused FINDING costs its rule nothing else in the file.
+	 *
+	 * The salvage judged a rule's edits as one set, so `modifier-order`'s reorder across a
+	 * `/*inline*\/` comment took the same rule's clean reorder of `g` down with it, on every pass.
+	 * The refused set is now re-asked one finding at a time: `g` is reordered, `f` is left as it was,
+	 * the run blames the rule AT `f`'s site, and the ledger declines one finding rather than two.
+	 * RED at base, where `g` stays unordered and both findings are declined.
+	 */
+	@:pin('control')
+	@:killer('M-LINTFIX-FINDING-SPLIT-NONE')
+	public function testARefusedFindingCostsItsRuleNothingElse(): Void {
+		#if (sys || nodejs)
+		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		final check: Null<Check> = Linter.byId('modifier-order');
+		if (check == null) {
+			Assert.fail('modifier-order is not registered');
+			return;
+		}
+		final source: String = 'package p;\n\nclass G {\n\n\tfinal private /*inline*/ function f():String {\n\t\treturn "x";\n\t}\n\n'
+			+ '\tfinal private function g():String {\n\t\treturn "y";\n\t}\n\n}\n';
+		final files: Array<{ file: String, source: String }> = [{ file: 'G.hx', source: source }];
+		Assert.equals(2, check.run(files, plugin).length, 'the fixture reports both modifier runs');
+		final noted: Array<String> = [];
+		final ledger: Map<String, RuleFixOutcome> = [];
+		LintFixDriver.applyLintPass(
+			files, files, plugin, [check],
+			[], [check], _ -> LintConfig.parse('{}'), false, ['G.hx' => null], 1, noted, [], [], ledger, [], null
+		);
+		final written: String = files[0].source;
+		// ONE assertion over both halves, so neither can be satisfied alone.
+		Assert.isTrue(
+			written.indexOf('\tprivate final function g()') != -1 && written.indexOf('final private /*inline*/ function f()') != -1,
+			'the clean finding landed and the refused one did not: $written'
+		);
+		Assert.isTrue(noted.contains('G.hx'), 'the refusal is still reported for the file');
+		final row: Null<RuleFixOutcome> = ledger['modifier-order'];
+		if (row == null) {
+			Assert.fail('the rule has no ledger row');
+			return;
+		}
+		Assert.equals(1, row.declined, 'only the refused finding is declined');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * The blame line of a split part names the finding's SITE, and the refused part keeps the gate's
+	 * sentence — the line `lint --fix` prints is the one report a user gets of which `f` it was.
+	 * RED at base, which has no `split` argument to pass.
+	 */
+	public function testARefusedPartIsBlamedAtItsSite(): Void {
+		#if (sys || nodejs)
+		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		final check: Null<Check> = Linter.byId('modifier-order');
+		if (check == null) {
+			Assert.fail('modifier-order is not registered');
+			return;
+		}
+		final source: String = 'package p;\n\nclass G {\n\n\tfinal private /*inline*/ function f():String {\n\t\treturn "x";\n\t}\n\n'
+			+ '\tfinal private function g():String {\n\t\treturn "y";\n\t}\n\n}\n';
+		final files: Array<{ file: String, source: String }> = [{ file: 'G.hx', source: source }];
+		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final groups: Array<RuleEdits> = LintFixDriver.collectFileLintEdits(source, check.run(files, plugin), [check], plugin, index);
+		final blamed: Array<String> = [];
+		final settled: Null<{ text: String, rewrites: Null<Int> }> = LintFixDriver.salvageFileLintEdits(
+			source, groups, 'FILE LEVEL SENTENCE', plugin, null, blamed, LintFixDriver.findingSplitter(source, [check], plugin, index)
+		);
+		Assert.notNull(settled, 'the clean part was written');
+		Assert.equals(1, blamed.length, 'one part is blamed: $blamed');
+		Assert.isTrue(blamed[0].indexOf('modifier-order at 5:2: ') == 0, 'at the refused finding\'s site: $blamed');
+		Assert.equals(2, groups.length, 'the refused group was replaced by its two parts: $groups');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A GUARD refusal costs only the finding the guard names, too: `unused-local`'s finding inside a
+	 * brace-less `if` empties the body slot, and its clean sibling in the same function is removed
+	 * all the same. RED at base, where the check's whole edit set was dropped.
+	 */
+	@:pin('control')
+	@:killer('M-LINTFIX-GUARD-SPLIT-NONE')
+	public function testAGuardRefusedFindingCostsItsRuleNothingElse(): Void {
+		#if (sys || nodejs)
+		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		final check: Null<Check> = Linter.byId('unused-local');
+		if (check == null) {
+			Assert.fail('unused-local is not registered');
+			return;
+		}
+		final source: String =
+			'package p;\n\nclass U {\n\tpublic function f(c:Bool):Void {\n\t\tif (c) var y:Int = 1;\n\t\tvar z:Int = 2;\n\t}\n}\n';
+		final files: Array<{ file: String, source: String }> = [{ file: 'U.hx', source: source }];
+		final own: Array<Violation> = check.run(files, plugin);
+		Assert.equals(2, own.length, 'the fixture reports both locals');
+		final ledger: Map<String, RuleFixOutcome> = [];
+		final groups: Array<RuleEdits> = LintFixDriver.collectFileLintEdits(source, own, [check], plugin, SymbolIndex.build(files, plugin));
+		LintFixDriver.ledgerFileLintEdits(ledger, groups, true);
+		final written: String = CanonicalEdit.applyEdits(source, LintFixDriver.contributedEdits(groups));
+		// ONE assertion over both halves, so neither can be satisfied alone.
+		Assert.isTrue(
+			written.indexOf('var z') == -1 && written.indexOf('if (c) var y:Int = 1;') != -1,
+			'the clean local is removed and the guarded one is kept: $written'
+		);
+		final row: Null<RuleFixOutcome> = ledger['unused-local'];
+		Assert.equals(1, row?.declined, 'only the guarded finding is declined');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
 
 }

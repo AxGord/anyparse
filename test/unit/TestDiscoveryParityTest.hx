@@ -818,6 +818,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.grammar.haxe.HxUntypedBodyPolicySliceTest',
 		'unit.grammar.haxe.HxValueIfBracketHugSliceTest',
 		'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest',
+		'unit.grammar.haxe.HxValueIfElseTrailCommentWriteTest',
 		'unit.grammar.haxe.HxValueIfFitSliceTest',
 		'unit.grammar.haxe.HxVarInitBreakAfterEqOverflowTest',
 		'unit.grammar.haxe.HxVarNoTypeSliceTest',
@@ -1340,6 +1341,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.LintConfigTest#testTheReflectiveClassesAreTheRunsOnlyWhenEveryPathDeclaresThemAlike :: control :: M-REFLECTIVE-AGREE,M-HOLDERS-PARSE',
 			'unit.check.LintFixDeclineWiringSliceTest#testACrossFileRuleIsNotReportedAsSayingNothing :: control :: '
 				+ 'M-LEDGER-CROSS-FILE-MUTE',
+			'unit.check.LintFixDeclineWiringSliceTest#testAGuardRefusedFindingCostsItsRuleNothingElse :: control :: M-LINTFIX-GUARD-SPLIT-NONE',
+			'unit.check.LintFixDeclineWiringSliceTest#testARefusedFindingCostsItsRuleNothingElse :: control :: M-LINTFIX-FINDING-SPLIT-NONE',
+			'unit.check.LintFixDeclineWiringSliceTest#testARefusedRuleCostsOnlyItsOwnEdits :: control :: M-LINTFIX-BLAME-SITE-ALWAYS',
 			'unit.check.LintFixDeclineWiringSliceTest#testAnAcceptedFileIsWrittenAndBlamesNobody :: control :: M-LINTFIX-ACCEPTED-BLAMED',
 			'unit.check.LintLanguageVersionGateTest#testAnExplicitRuleSelectionKeepsTheVersionFloor :: control :: M-VERSION-LIFTED-BY-RULE',
 			'unit.check.LintReportChannelSliceTest#testASummaryIsPerRuleAndOneRuleIsByFile :: control :: M-LINT-SUMMARY-ONE-SHAPE',
@@ -2317,6 +2321,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testTheSemicolonBeforeElseGoesWithTheJoin :: control :: '
 				+ 'M-EXPR-ELSE-KEEP,M-EXPR-ELSE-PLAIN-SAME',
 			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testTheStatementTwinKeepsTheLayoutItAlwaysHad :: guard :: ',
+			'unit.grammar.haxe.HxValueIfElseTrailCommentWriteTest#testAGapOpeningWithABreakIsUnchanged :: control :: M-KWTRAIL-GUARD-HARD',
+			'unit.grammar.haxe.HxValueIfElseTrailCommentWriteTest#testUnderSameTheCommentKeepsItsLine :: control :: M-KWTRAIL-FLAT-GAP-KEPT',
 			'unit.lowering.BeforeLeadingCommentSlotTest#testAMemberWithNoGapCommentIsUnchanged :: guard :: ',
 			'unit.lowering.BeforeLeadingCommentSlotTest#testAMultilineGapCommentReachesTheOutput :: control :: '
 				+ 'M-BEFORE-LEADING-COMMENT-DROP',
@@ -4895,7 +4901,12 @@ class TestDiscoveryParityTest extends Test {
 			'M-DECLIF-CARRY',
 			'M-DECLIF-PREFIX-KEPT',
 			'M-DECLTERN-NARROWING',
-			'M-DECLTERN-COMMENT'
+			'M-DECLTERN-COMMENT',
+			'M-LINTFIX-FINDING-SPLIT-NONE',
+			'M-LINTFIX-GUARD-SPLIT-NONE',
+			'M-LINTFIX-BLAME-SITE-ALWAYS',
+			'M-KWTRAIL-FLAT-GAP-KEPT',
+			'M-KWTRAIL-GUARD-HARD'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
@@ -5089,6 +5100,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-HELD-THROUGH-BLOCK :: anyparse.check.TypedFactsWalk#heldValue',
 			'M-FACTS-HELD-THROUGH-TRY :: anyparse.check.TypedFactsWalk#heldValue',
 			'M-FACTS-ASSIGN-HELD-THROUGH :: anyparse.check.TypedFactsWalk#storedLocal',
+			'M-KWTRAIL-FLAT-GAP-KEPT :: anyparse.macro.WriterCodegen#kwBeforeTrailingDocField',
+			'M-KWTRAIL-GUARD-HARD :: anyparse.macro.WriterCodegen#kwBeforeTrailingDocField',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

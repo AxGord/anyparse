@@ -13371,6 +13371,46 @@
 			"find": "if (IfExpressionChain.droppedComment(m.region, kept, comments)) continue;",
 			"replace": "",
 			"note": "the decl arm ignores comments outside its copied spans, so one in the `if` header is dropped by the rebuild"
+		},
+		{
+			"name": "M-LINTFIX-FINDING-SPLIT-NONE",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "salvageFileLintEdits",
+			"find": "final pieces: Array<RuleEdits> = split == null || group.findings.length < 2 ? [] : split(group);",
+			"replace": "final pieces: Array<RuleEdits> = [];",
+			"note": "a refused edit set is never re-asked a finding at a time, so one refused finding costs its rule every other finding in the file"
+		},
+		{
+			"name": "M-LINTFIX-GUARD-SPLIT-NONE",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "collectFileLintEdits",
+			"find": "if (whole.refusal == null || own.length < 2)",
+			"replace": "if (true)",
+			"note": "a guard refusal drops the check's whole edit set again, so the finding the guard names costs its clean siblings their fix"
+		},
+		{
+			"name": "M-LINTFIX-BLAME-SITE-ALWAYS",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "salvageFileLintEdits",
+			"find": "${parts.contains(group) ? findingAt(source, group) : ''}",
+			"replace": "${findingAt(source, group)}",
+			"note": "a whole group's blame line names a site too, so the bare rule id the reader keys on changes shape whenever the group holds one finding"
+		},
+		{
+			"name": "M-KWTRAIL-FLAT-GAP-KEPT",
+			"type": "anyparse.macro.WriterCodegen",
+			"method": "kwBeforeTrailingDocField",
+			"find": "case Text(_s, _) if (StringTools.trim(_s) == ''): _dhl();",
+			"replace": "case Text(_s, _) if (StringTools.trim(_s) == ''): sepDoc;",
+			"note": "a flat gap after a trailing line comment stays flat, so `else` lands on the comment's line and the round trip refuses the file"
+		},
+		{
+			"name": "M-KWTRAIL-GUARD-HARD",
+			"type": "anyparse.macro.WriterCodegen",
+			"method": "kwBeforeTrailingDocField",
+			"find": "case _: _dc([_dohsbh(), sepDoc]);",
+			"replace": "case _: _dc([_dhl(), sepDoc]);",
+			"note": "a gap that already opens with a break gets a second one, so a trailing comment followed by an own-line comment gains a blank line"
 		}
 	]
 }

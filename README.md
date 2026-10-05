@@ -263,7 +263,13 @@ original bytes:
 - every op that canonicalises through `RefactorSupport` — `add-member`, `rename`,
   `set-doc`, … and `lint --fix` — refuses its edit rather than writing the file without the
   comment. One slot-less comment therefore makes a whole file un-editable by the ops until
-  the comment moves; that is the trade, and the message names the comment;
+  the comment moves; that is the trade, and the message names the comment. `lint --fix`
+  narrows the refusal when the comment is lost by an EDIT rather than by the file itself:
+  the refused edit set is re-asked one rule at a time and then one FINDING at a time, so
+  every other rule's fixes and the same rule's other findings still land, and the stderr
+  line names the refused finding (`modifier-order at 5:2: …`). A finding's own edits stay
+  atomic (a signature with its call sites is one finding). A source the writer cannot
+  round-trip at all is still skipped whole — no subset of edits changes that answer;
 - `new` / `new --raw` reject the content instead of creating a file that lost part of it.
 
 Freezing a file's formatting is recoverable; deleting an author's comment is not. Set

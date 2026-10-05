@@ -348,7 +348,10 @@ final class LintFixDriver {
 					// edit from every other rule in the file. The salvage runs ONLY here, so a file
 					// nothing refuses pays exactly the one round trip it always did.
 					final blamed: Array<String> = [];
-					settled = salvageFileLintEdits(entry.source, groups, message, cached, optsByFile[entry.file], blamed);
+					settled = salvageFileLintEdits(
+						entry.source, groups, message, cached, optsByFile[entry.file], blamed,
+						findingSplitter(entry.source, checks, cached, index)
+					);
 					// EVERY pass, not just the first: `noted` already dedupes per file, so the
 					// `passes == 1` this used to also carry bought nothing and cost the one place a
 					// slot emptied BETWEEN two checks can land — a per-check look cannot see that
@@ -532,7 +535,8 @@ final class LintFixDriver {
 	}
 
 	/**
-	 * Ask every check for its fix edits over one file's violations, returning ONE GROUP PER CHECK —
+	 * Ask every check for its fix edits over one file's violations, returning ONE GROUP PER CHECK
+	 * (one per FINDING for a check a guard refused, so the refusal costs only the finding it names) —
 	 * the edits, the findings they answer, whether an earlier check this pass already claimed an
 	 * overlapping region, and the sentence of any gate that refused them.
 	 *
@@ -545,61 +549,97 @@ final class LintFixDriver {
 	): Array<RuleEdits> {
 		final groups: Array<RuleEdits> = [];
 		final edits: Array<{ span: Span, text: String }> = [];
+		function accept(group: RuleEdits): Void {
+			if (contributes(group)) for (e in group.edits) edits.push(e);
+			groups.push(group);
+		}
 		for (check in checks) {
 			final own: Array<Violation> = fileViolations.filter(v -> v.rule == check.id());
 			if (own.length == 0) continue;
-			// A `CarryingFix` is asked ONCE, through the richer seam, and its `fix` is the pure
-			// projection of what comes back — asking both would run the same analysis twice and let
-			// the two answers disagree, which is exactly what that interface's contract forbids.
-			final carrying: Array<CarryingEdit> = check is CarryingFix
-				? (cast check: CarryingFix).fixCarrying(source, own, cached, index)
-				: [];
-			final checkEdits: Array<{ span: Span, text: String }> = check is CarryingFix
-				? [for (edit in carrying) { span: edit.span, text: edit.text }]
-				: check.fix(source, own, cached, index);
-			// The guard runs BEFORE the ledger, because the ledger's subject is what the check
-			// ACHIEVED and a refused edit set achieves nothing. Counting it as `edits` claimed the rule
-			// had fixed these findings, so the run reported no decline for them at all — and the one
-			// sentence anyone had about why, the guard's own message, was computed right here and
-			// thrown away against `null`. A refusal is now the row's verdict, in the guard's words.
-			//
-			// It also now runs for an edit set the overlap test below would have short-circuited past.
-			// That is the point: an overlap is temporary and the deferred check fires cleanly next
-			// pass, while a gate refusal is a standing fact about those edits, so recording the
-			// refusal rather than "1 edit produced" is the truer of the two readings.
-			final refused: Null<String> = checkEdits.length > 0
-				? BodySlotGuard.emptiedSlot(source, checkEdits, cached) ?? DefiniteAssignmentGuard.unassignedRead(
-					source, checkEdits, cached
-				)
-				: null;
-			// Accept a check's edits only when none overlaps an edit already accepted from
-			// an earlier check this pass — applying a subset would break an atomic fix
-			// (e.g. unused-parameter's signature edit without its call-site arg edit, when
-			// prefer-ternary-return rewrites the enclosing region). A deferred check fires
-			// cleanly on the next fixed-point pass.
-			// Drop a check's edits when they would empty a brace-less construct's body slot,
-			// the same way an overlap does — per CHECK, so one `unused-local` inside an
-			// `if (c) var y = 1;` costs its own fix and not the other rules' work on the file.
-			// `canonicalize` refuses the same shape for the whole file; that stays the backstop
-			// for a slot two checks empty between them, which no per-check look can see —
-			// and `salvageFileLintEdits` now asks it per check when it fires.
-			final overlapped: Bool = checkEdits.length > 0 && refused == null && CanonicalEdit.editsOverlapAny(checkEdits, edits);
-			final group: RuleEdits = {
-				rule: check.id(),
-				findings: own,
-				edits: checkEdits,
-				// Only a NON-EMPTY carry is worth passing on: an edit that quotes nothing cannot have
-				// moved anything across it, and the guard's first test is the array length.
-				carried: [
-					for (edit in carrying) if (edit.carried.length > 0) { edit: edit.span, spans: edit.carried }
-				],
-				overlapped: overlapped,
-				refusal: refused
-			};
-			if (contributes(group)) for (e in checkEdits) edits.push(e);
-			groups.push(group);
+			final whole: RuleEdits = ruleEditsFor(check, source, own, cached, index, edits);
+			// A guard refusal is a fact about SOME of the check's edits, and one finding's
+			// emptied slot used to cost the check every other finding in the file. Re-asked one
+			// finding at a time, so only the finding the guard names is refused — the same
+			// per-finding split `salvageFileLintEdits` makes for a writer refusal, and sound for
+			// the same reason (see `findingSplitter`).
+			if (whole.refusal == null || own.length < 2)
+				accept(whole)
+			else
+				for (v in own) accept(ruleEditsFor(check, source, [v], cached, index, edits));
 		}
 		return groups;
+	}
+
+	/**
+	 * One check's group over `own`: its edits, the carry they declare, the guard sentence that refused
+	 * them, and whether they overlap an edit already in `accepted`.
+	 */
+	private static function ruleEditsFor(
+		check: Check, source: String, own: Array<Violation>, cached: GrammarPlugin, index: SymbolIndex,
+		accepted: Array<{ span: Span, text: String }>
+	): RuleEdits {
+		// A `CarryingFix` is asked ONCE, through the richer seam, and its `fix` is the pure
+		// projection of what comes back — asking both would run the same analysis twice and let
+		// the two answers disagree, which is exactly what that interface's contract forbids.
+		final carrying: Array<CarryingEdit> = check is CarryingFix ? (cast check: CarryingFix).fixCarrying(source, own, cached, index) : [];
+		final checkEdits: Array<{ span: Span, text: String }> = check is CarryingFix
+			? [for (edit in carrying) { span: edit.span, text: edit.text }]
+			: check.fix(source, own, cached, index);
+		// The guard runs BEFORE the ledger, because the ledger's subject is what the check
+		// ACHIEVED and a refused edit set achieves nothing. Counting it as `edits` claimed the rule
+		// had fixed these findings, so the run reported no decline for them at all — and the one
+		// sentence anyone had about why, the guard's own message, was computed right here and
+		// thrown away against `null`. A refusal is now the row's verdict, in the guard's words.
+		//
+		// It also now runs for an edit set the overlap test below would have short-circuited past.
+		// That is the point: an overlap is temporary and the deferred check fires cleanly next
+		// pass, while a gate refusal is a standing fact about those edits, so recording the
+		// refusal rather than "1 edit produced" is the truer of the two readings.
+		final refused: Null<String> = checkEdits.length > 0
+			? BodySlotGuard.emptiedSlot(source, checkEdits, cached) ?? DefiniteAssignmentGuard.unassignedRead(source, checkEdits, cached)
+			: null;
+		// Accept a check's edits only when none overlaps an edit already accepted from
+		// an earlier check this pass — applying a subset would break an atomic fix
+		// (e.g. unused-parameter's signature edit without its call-site arg edit, when
+		// prefer-ternary-return rewrites the enclosing region). A deferred check fires
+		// cleanly on the next fixed-point pass.
+		// Drop a check's edits when they would empty a brace-less construct's body slot,
+		// the same way an overlap does. `canonicalize` refuses the same shape for the whole
+		// file; that stays the backstop for a slot two checks empty between them, which no
+		// per-check look can see — and `salvageFileLintEdits` asks it per check when it fires.
+		return {
+			rule: check.id(),
+			findings: own,
+			edits: checkEdits,
+			// Only a NON-EMPTY carry is worth passing on: an edit that quotes nothing cannot have
+			// moved anything across it, and the guard's first test is the array length.
+			carried: [
+				for (edit in carrying) if (edit.carried.length > 0) { edit: edit.span, spans: edit.carried }
+			],
+			overlapped: checkEdits.length > 0 && refused == null && CanonicalEdit.editsOverlapAny(checkEdits, accepted),
+			refusal: refused
+		};
+	}
+
+	/**
+	 * Re-ask a refused group's check ONE FINDING at a time: the splitter `salvageFileLintEdits` takes,
+	 * over this file's `source`.
+	 *
+	 * Sound without any new contract, because the one it leans on is already load-bearing: `--range`
+	 * hands `Check.fix` an arbitrary subset of a file's findings, so every check's answer for ONE
+	 * finding is an edit set that stands on its own — inseparable edits (a signature and its call
+	 * sites, an `import` and the rewrite needing it) belong to one finding and travel inside it. What
+	 * the split can NOT do is separate the edits OF one finding, and it does not try: a single finding
+	 * the gate refuses is refused whole. A rule this cannot find (none of `checks` answers to it)
+	 * splits into nothing, which leaves the group refused whole, as before the split existed.
+	 */
+	public static function findingSplitter(
+		source: String, checks: Array<Check>, cached: GrammarPlugin, index: SymbolIndex
+	): (RuleEdits) -> Array<RuleEdits> {
+		return group -> {
+			final check: Null<Check> = checks.find(c -> c.id() == group.rule);
+			return check == null ? [] : [for (v in group.findings) ruleEditsFor(check, source, [v], cached, index, [])];
+		};
 	}
 
 	/**
@@ -662,14 +702,17 @@ final class LintFixDriver {
 	 * files `apq fmt --write` refuses — which is why "the rule proposed what the writer refuses"
 	 * explains almost none of this defect.
 	 *
-	 * The granularity is the CHECK, not the edit, because that is where a fix is atomic: splitting one
-	 * check's set would apply a signature edit without its call-site edits. Greedy in check order, so
+	 * The granularity is the CHECK first, then the FINDING, never the bare edit: splitting one check's set by edit would apply a
+	 * signature edit without its call-site edits, while one finding's edits are atomic by the `--range` contract (`findingSplitter`). A
+	 * refused group of two or more findings is re-asked through `split` a finding at a time and each part judged on its own, so one
+	 * refused finding costs only itself; without `split` (or for a single finding) the group is refused whole. Greedy in check order, so
 	 * the surviving set is MAXIMAL rather than maximum (checks whose pairs A+B and A+C are refused
 	 * while B+C is fine keep A and blame both others), and a refusal caused by the COMBINATION of two
 	 * checks is charged to the later one — the same first-come rule the overlap test applies.
 	 */
 	public static function salvageFileLintEdits(
-		source: String, groups: Array<RuleEdits>, message: String, cached: GrammarPlugin, optsJson: Null<String>, blamed: Array<String>
+		source: String, groups: Array<RuleEdits>, message: String, cached: GrammarPlugin, optsJson: Null<String>, blamed: Array<String>,
+		?split: (RuleEdits) -> Array<RuleEdits>
 	): Null<{ text: String, rewrites: Null<Int> }> {
 		switch CanonicalEdit.canonicalize(source, [], false, cached, optsJson) {
 			case Ok(_, _):
@@ -692,7 +735,16 @@ final class LintFixDriver {
 		final kept: Array<RuleEdits> = [];
 		final keptEdits: Array<{ span: Span, text: String }> = [];
 		var settled: Null<{ text: String, rewrites: Null<Int> }> = null;
-		for (group in groups) if (group.edits.length > 0 && group.refusal == null) {
+		// The parts a split put in, so their blame lines can name the SITE: a whole group's rule id is the
+		// whole answer to "which", a part's is not, since its siblings may have landed.
+		final parts: Array<RuleEdits> = [];
+		// An index walk, not a `for`: a refused group is REPLACED in `groups` by its per-finding parts,
+		// which the walk then offers next. In place, because `groups` is what the ledger reads after
+		// this returns, and a part a finding was refused in is that finding's row.
+		var i: Int = 0;
+		while (i < groups.length) {
+			final group: RuleEdits = groups[i++];
+			if (group.edits.length == 0 || group.refusal != null) continue;
 			if (CanonicalEdit.editsOverlapAny(group.edits, keptEdits)) {
 				group.overlapped = true;
 				continue;
@@ -705,11 +757,33 @@ final class LintFixDriver {
 					for (e in group.edits) keptEdits.push(e);
 				case Err(why):
 					kept.pop();
+					// One refused FINDING no longer costs the rule's others in this file: the group is
+					// re-asked a finding at a time and each part takes its own verdict. Only a group of
+					// two or more findings splits, and every part holds ONE, so a part never splits again.
+					final pieces: Array<RuleEdits> = split == null || group.findings.length < 2 ? [] : split(group);
+					if (pieces.length > 1) {
+						groups.splice(--i, 1);
+						for (k in 0...pieces.length) groups.insert(i + k, pieces[k]);
+						for (part in pieces) parts.push(part);
+						continue;
+					}
 					group.refusal = why;
-					blamed.push('${group.rule}: $why');
+					blamed.push('${group.rule}${parts.contains(group) ? findingAt(source, group) : ''}: $why');
 			}
 		}
 		return settled;
+	}
+
+	/**
+	 * ` at <line>:<col>` naming a ONE-finding group's site in a blame line, or nothing for a whole
+	 * group, whose rule id is the whole answer to "which".
+	 */
+	private static function findingAt(source: String, group: RuleEdits): String {
+		if (group.findings.length != 1) return '';
+		final at: Null<Span> = group.findings[0].span;
+		if (at == null) return '';
+		final pos: Position = at.lineCol(source);
+		return ' at ${pos.line}:${pos.col}';
 	}
 
 	/**
