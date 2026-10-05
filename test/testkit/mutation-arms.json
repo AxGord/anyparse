@@ -11296,8 +11296,8 @@
 			"name": "M-PAREN-SIBLING-OFF-PATH",
 			"type": "anyparse.core.Renderer",
 			"method": "siblingRestStep",
-			"find": "case IfFullLineExceeds(_, breakDoc, _) if (onPath):",
-			"replace": "case IfFullLineExceeds(_, breakDoc, _):",
+			"find": "case IfFullLineExceeds(_, breakDoc, _) if (onPath && !sibling.groupAsker):",
+			"replace": "case IfFullLineExceeds(_, breakDoc, _) if (!sibling.groupAsker):",
 			"note": "a paren on the flat side of an unresolved probe counts as a break point, though render may take that probe's break side and run the line on"
 		},
 		{
@@ -11347,6 +11347,54 @@
 			"find": "routes.suspendedAbove.resize(0);",
 			"replace": "",
 			"note": "a run-on route's suspension survives its frame, so a later paren in the next frame no longer ends the line and the fitting asker opens"
+		},
+		{
+			"name": "M-RESTPROBE-COLUMN-GUESS",
+			"type": "anyparse.core.Renderer",
+			"method": "pushStructural",
+			"find": "exactCol: true,",
+			"replace": "exactCol: false,",
+			"note": "a rest-aware group predicts nothing about the rest of its line, so an anon type hint is weighed against the full flat width of an initializer that breaks anyway and breaks itself"
+		},
+		{
+			"name": "M-RESTPROBE-COLUMN-FLAT",
+			"type": "anyparse.core.Renderer",
+			"method": "pushStructural",
+			"find": "col: f.indent < col ? f.indent : col,",
+			"replace": "col: col + pendingSpace + DocMeasure.flatTokenWidth(inner),",
+			"note": "a rest-aware group predicts the rest from its flat-layout column, so a trailing list that breaks only because the group stayed flat is taken as a break of its own and the group stays flat over it"
+		},
+		{
+			"name": "M-RESTPROBE-FULL-LINE",
+			"type": "anyparse.core.Renderer",
+			"method": "siblingRestStep",
+			"find": "if (onPath && !sibling.groupAsker):",
+			"replace": "if (onPath):",
+			"note": "a later full-line probe ends a rest-aware group's line too, so a call stays flat and its chain link breaks, opening only because the call did not"
+		},
+		{
+			"name": "M-REST-FORCEFLAT-FRAME-INEXACT",
+			"type": "anyparse.core.Renderer",
+			"method": "flatTokenWidthOfRestStack",
+			"find": "if (f.forceFlat && !rendersAsMeasured(Flatten(f.doc), groupAsker)) exact = false;",
+			"replace": "if (f.forceFlat) exact = false;",
+			"note": "a force-flat frame ends the column predictions even when it renders as measured, so an anon nested in a flat hint is weighed against the literal behind the hint and breaks inside it"
+		},
+		{
+			"name": "M-REST-GROUP-FRAME-INEXACT",
+			"type": "anyparse.core.Renderer",
+			"method": "rendersAsMeasured",
+			"find": "case GroupWithRestProbe(_) if (!e.forceFlat && !restProbeEnds):",
+			"replace": "case GroupWithRestProbe(_) if (!e.forceFlat):",
+			"note": "a force-flat tail holding a second nested anon ends the column predictions for a group asker, so the first nested anon breaks inside a flat hint"
+		},
+		{
+			"name": "M-REST-GROUP-NODE-INEXACT",
+			"type": "anyparse.core.Renderer",
+			"method": "keepsColumnExact",
+			"find": "case GroupWithRestProbe(_) if (restProbeEnds): true;\n",
+			"replace": "",
+			"note": "a rest-aware group in a group asker's rest ends the column predictions, so a later literal that breaks by itself is measured flat"
 		},
 		{
 			"name": "M-REACH-QUALIFIED-NONE",

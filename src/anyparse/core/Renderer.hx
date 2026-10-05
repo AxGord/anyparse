@@ -59,16 +59,28 @@ private typedef EmbeddedLineWidths = {
 };
 
 /**
- * The `IfFullLineExceeds` probe a rest-of-stack walk measures FOR
+ * The probe a sibling-aware rest-of-stack walk measures FOR
  * (`Renderer.siblingRestStep`): `width` is the render budget, `col` the column
- * the rest starts at when the probe keeps its content glued, and `exactCol`
- * whether that column, and every column the walk derives from it, is the one
- * render will reach, which the column-dependent predictions need.
+ * the rest starts at when the probe keeps its content glued, or a lower bound
+ * of it, and `exactCol` whether every column the walk derives from `col` is the
+ * one render will reach or a lower bound of it, which the column-dependent
+ * predictions need: each asks whether a later construct does NOT fit from its
+ * column, so a lower column only makes the prediction stricter.
+ *
+ * `groupAsker` says the asker is a `GroupWithRestProbe` rather than an
+ * `IfFullLineExceeds`, and it changes two things. A later full-line probe is
+ * not a break point: it opens on the width of its whole line, which holds the
+ * group's own flat content, so it may open only BECAUSE the group stayed flat,
+ * and charging the group just its head would trade the group's break for a
+ * worse one later on the line. And a later rest-aware group keeps the column:
+ * it renders flat as measured, or it breaks and so ends the asker's line before
+ * anything after it, where no column matters to the asker any more.
  */
 private typedef RestSibling = {
 	final width: Int;
 	final col: Int;
 	final exactCol: Bool;
+	final groupAsker: Bool;
 };
 
 /**
@@ -1349,6 +1361,7 @@ class Renderer {
 		// everything measured so far renders as measured (`rendersAsMeasured` for
 		// the asker's own content, `keepsColumnExact` for each rest node).
 		var exact: Bool = sibling != null && sibling.exactCol;
+		final groupAsker: Bool = sibling != null && sibling.groupAsker;
 		// What the routes the walk did not take add to the line (`recordRoute`).
 		final routes: RestRoutes = {
 			onPath: true,
@@ -1386,7 +1399,10 @@ class Renderer {
 			// A force-flat frame renders every probe in it on its flat side, so none
 			// of them is a break point.
 			final frameSibling: Null<RestSibling> = f.forceFlat ? null : sibling;
-			if (f.forceFlat) exact = false;
+			// For the same reason it keeps the column whenever that flat side
+			// renders as measured — the tail of a flat anon type an asker nested
+			// in it is reached through such frames.
+			if (f.forceFlat && !rendersAsMeasured(Flatten(f.doc), groupAsker)) exact = false;
 			routes.suspendedAbove.resize(0);
 			final inner: Array<{ doc: Doc, mode: Mode }> = [{ doc: f.doc, mode: f.mode }];
 			while (inner.length > 0 && !aborted) {
@@ -1401,7 +1417,7 @@ class Renderer {
 					);
 				final step: { add: Int, aborted: Bool } = predicted ?? restNodeWidth(node, inner, false);
 				if (predicted == null) recordRoute(routes, node, exact, total, height);
-				exact = exact && keepsColumnExact(node.doc, predicted != null);
+				exact = exact && keepsColumnExact(node.doc, predicted != null, groupAsker);
 				total += step.add;
 				aborted = step.aborted;
 				if (aborted && predicted != null) routes.endedByPrediction = true;
@@ -2434,7 +2450,8 @@ class Renderer {
 					final restWidth: Int = flatTokenWidthOfRestStack(stack, {
 						width: width,
 						col: col + pendingSpace + flatWidth,
-						exactCol: opensDelimiterAlone(breakDoc) && rendersAsMeasured(flatDoc)
+						exactCol: opensDelimiterAlone(breakDoc) && rendersAsMeasured(flatDoc),
+						groupAsker: false
 					});
 					final fullLineCrosses: Bool = col + effPending + flatWidth + restWidth >= fireAt;
 					// ω-collapse-commit: record the open/glued decision at
@@ -2573,10 +2590,30 @@ class Renderer {
 				// Verified no output flip beyond the target shape: `fmt --list`
 				// over anyparse `src`+`test` and over the whole TM tree moves only
 				// the two `maxLineLength + 1` ternary declarations.
+				//
+				// The rest ends where a later construct on the line breaks BY
+				// ITSELF (`siblingRestStep`): one whose content does not fit flat
+				// even from the column it reaches once this group breaks. Such a
+				// construct breaks whatever this group does, so only its head up to
+				// its own opening break rides this line — the object literal after
+				// `final x:{ … } = {`, whose `{` is the line's last token in either
+				// layout. Its flat width is not this group's to pay for. A
+				// construct that would fit after this group breaks is still
+				// measured flat: its break is the one this group's break buys. The
+				// predictions run from `min(col, f.indent)`, a lower bound of where
+				// the rest starts in BOTH layouts (flat: past `col`; broken: the
+				// closing line sits at the group's indent), so each "does not fit"
+				// holds for the flat layout as well and the line this group keeps
+				// flat is never wider than the limit.
 				if (f.forceFlat) {
 					stack.push(new Frame(f.indent, MFlat, inner, true, f.hardFlat));
 				} else {
-					final restW: Int = flatTokenWidthOfRestStack(stack);
+					final restW: Int = flatTokenWidthOfRestStack(stack, {
+						width: width,
+						col: f.indent < col ? f.indent : col,
+						exactCol: true,
+						groupAsker: true
+					});
 					if (fitsFlat(width - col - pendingSpace - restW, f.indent, inner)) {
 						stack.push(new Frame(f.indent, MFlat, inner));
 					} else {
@@ -3922,7 +3959,7 @@ class Renderer {
 				renderCol + DocMeasure.flatTokenWidth(flatDoc) >= n ? broken(breakDoc) : null;
 			case IfFirstLineExceeds(n, breakDoc, flatDoc) if (renderCol >= 0):
 				renderCol + flatTokenWidthFirstLine(flatDoc) >= n ? broken(breakDoc) : null;
-			case IfFullLineExceeds(_, breakDoc, _) if (onPath):
+			case IfFullLineExceeds(_, breakDoc, _) if (onPath && !sibling.groupAsker):
 				final open: { width: Int, broke: Bool } = flatTokenWidthFirstLineWithBreak(breakDoc, false);
 				open.broke && findCollapseProbe(breakDoc) == null ? { add: open.width, aborted: true } : null;
 			case Flatten(innerDoc), HardFlatten(innerDoc):
@@ -3949,10 +3986,11 @@ class Renderer {
 	 * render-transparent markers. Everything else answers false: a hardline or a
 	 * verbatim multi-line token, a deferred body (not counted in the width), a soft
 	 * break outside a group (it follows the enclosing frame's mode), and every
-	 * probe that reads the rest of the line or its own threshold, which may break
-	 * against a rest the asker no longer counts.
+	 * probe that reads the rest of the line or its own threshold, which may break against a rest the asker no longer
+	 * counts. With `restProbeEnds` (a `GroupWithRestProbe` asker, `RestSibling.groupAsker`) a rest-aware group counts
+	 * as measured too: it renders flat as measured, or it breaks and ends the line before any column after it matters.
 	 */
-	private static function rendersAsMeasured(d: Doc): Bool {
+	private static function rendersAsMeasured(d: Doc, restProbeEnds: Bool = false): Bool {
 		final stack: Array<RouteEntry> = [
 			{
 				doc: d,
@@ -3969,8 +4007,9 @@ class Renderer {
 					if (s.indexOf('\n') >= 0) return false;
 				case Line(flat):
 					if (!e.grouped || flat.charAt(0) == '\n') return false;
-				case GroupWithRestProbe(_):
-					// Its fit also weighs the tail after it, so fitting content may still break.
+				case GroupWithRestProbe(_) if (!e.forceFlat && !restProbeEnds):
+					// Its fit also weighs the tail after it, so fitting content may still
+					// break. A force-flat region renders it flat without asking.
 					return false;
 				case LeadingBreak(_, _) if (!e.forceFlat):
 					// Its break is rendered everywhere but in a force-flat region.
@@ -3992,12 +4031,14 @@ class Renderer {
 	 * exact only when its content is. Of the rest, only the leaves and transparent
 	 * wrappers, and the column-deciding nodes that were evaluated at an exact
 	 * column and came out flat (a group or width probe answering null), stay exact;
-	 * anything measured on a guessed flat side does not.
+	 * anything measured on a guessed flat side does not, except, under
+	 * `restProbeEnds`, a rest-aware group, for the reason `rendersAsMeasured` gives.
 	 */
-	private static function keepsColumnExact(d: Doc, predicted: Bool): Bool {
+	private static function keepsColumnExact(d: Doc, predicted: Bool, restProbeEnds: Bool = false): Bool {
 		return switch d {
-			case Flatten(_), HardFlatten(_): rendersAsMeasured(d);
+			case Flatten(_), HardFlatten(_): rendersAsMeasured(d, restProbeEnds);
 			case _ if (predicted): true;
+			case GroupWithRestProbe(_) if (restProbeEnds): true;
 			case Empty, OptSpace(_), OptSpaceSkipAfterHardline, Line(_), Concat(_), Nest(_, _), WrapBoundary(_), BreakCommit(_, _),
 				CollapseProbe(_), CollapseAddProbe(_), CollapseBoolProbe(_), CollapseChainProbe(_), ConditionalMarkerZero(_),
 				ConditionalMarkerDecrease(_), IfBreak(_, _), Group(_), IfWidthExceeds(_, _, _), IfFirstLineExceeds(_, _, _):
