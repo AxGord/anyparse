@@ -6691,8 +6691,8 @@
 			"name": "M-REACH-ESCALATE-ALWAYS",
 			"type": "anyparse.query.MemberReach",
 			"method": "escalation",
-			"find": "if (answer == Proven || !(builds || _factsTruthAvailable)) return null;",
-			"replace": "if (answer == Proven) return null;",
+			"find": "if (proven ? !_factsTruthAvailable : !(builds || _factsTruthAvailable)) return null;",
+			"replace": "if (proven && !_factsTruthAvailable) return null;",
 			"note": "every unproved question consults the builds, so a run pays a compile per configuration it did not need"
 		},
 		{
@@ -7434,7 +7434,7 @@
 			"name": "M-FACTS-REFLECTION-INLINED",
 			"type": "anyparse.check.TypedFactsWalk",
 			"method": "at",
-			"find": "if (_host.reflectionModule(info.file)) incomplete('reflection-inlined');",
+			"find": "incomplete('reflection-inlined');",
 			"replace": "",
 			"note": "an inlined Reflect call leaves no mark"
 		},
@@ -7664,7 +7664,7 @@
 			"name": "M-FACTS-TRUTH-REFLECTION-INLINED",
 			"type": "anyparse.query.FactsView",
 			"method": "blindIn",
-			"find": "if (truth && n.incomplete.contains(REFLECTION_INLINED)) return DynamicName(file, span);",
+			"find": "if (truth && n.incomplete.contains(REFLECTION_INLINED) && !splicedReachesNoMember(n)) return DynamicName(file, span);",
 			"replace": "",
 			"note": "a reflective call inlined into a faceted body is lost: the facts hold no reflective call, and the syntax misses one under another name"
 		},
@@ -12661,6 +12661,46 @@
 			"find": "for (id in held) for (sup in facts.table.supertypesOf(id)) if (!owners.contains(sup)) owners.push(sup);",
 			"replace": "",
 			"note": "an object of a declared class runs only the methods its own class declares, none it inherits"
+		},
+		{
+			"name": "M-FACTS-SPLICED-REFLECTION-READ",
+			"type": "anyparse.query.FactsView",
+			"method": "blindIn",
+			"find": "if (truth && n.incomplete.contains(REFLECTION_INLINED) && !splicedReachesNoMember(n)) return DynamicName(file, span);",
+			"replace": "if (truth && n.incomplete.contains(REFLECTION_INLINED)) return DynamicName(file, span);",
+			"note": "(precision) any reflective body spliced into a function makes every region of it a name computed at run time, even hxcpp's `Type.enumIndex`, which names no member and reads none"
+		},
+		{
+			"name": "M-FACTS-SPLICED-REFLECTION-FROM",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "at",
+			"find": "incomplete(from == null ? 'reflection-unattributed' : 'reflection-from:' + from.id);",
+			"replace": "incomplete('reflection-unattributed');",
+			"note": "(precision) the facts never name the method a spliced reflective fact lies in, so no such body is read"
+		},
+		{
+			"name": "M-FACTS-SPLICED-REFLECTION-MEMBERLESS",
+			"type": "anyparse.query.FactsView",
+			"method": "splicedReachesNoMember",
+			"find": " && FactsMethodValues.memberless(table, m)",
+			"replace": "",
+			"note": "a spliced reflective body whose result may hold a member's value (`Reflect.copy`, spliced by its call site) leaves its function's regions readable"
+		},
+		{
+			"name": "M-FACTS-SPLICED-REFLECTION-NAMED",
+			"type": "anyparse.query.FactsView",
+			"method": "splicedReachesNoMember",
+			"find": "!named.exists(ReachHazards.lastSegments(m, 2)) && ",
+			"replace": "",
+			"note": "a spliced reflective access by name (js `Reflect.setField`, listed memberless: it reads no member's value) leaves its function's regions readable, though its lost call wrote a member by a computed name"
+		},
+		{
+			"name": "M-REACH-PROVEN-TRUTH",
+			"type": "anyparse.query.MemberReach",
+			"method": "escalation",
+			"find": "if (proven ? !_factsTruthAvailable : !(builds || _factsTruthAvailable)) return null;",
+			"replace": "if (proven || !(builds || _factsTruthAvailable)) return null;",
+			"note": "a question the reading asked first proves stays proved under the truth, though the facts see a reach it cannot (a static member imported under another name)"
 		}
 	]
 }

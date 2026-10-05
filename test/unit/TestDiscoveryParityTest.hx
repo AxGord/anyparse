@@ -1212,6 +1212,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.FactsFixGateE2ETest#testAComputedClassNameTheProjectBoundsLetsTheLoopRewrite :: control :: M-REFLECTIVE-BUILDS,M-REFLECTIVE-REACH,M-REFLECTIVE-WARN,M-ESCAPES-FACTS-UNMATCHED',
 			'unit.check.FactsFixGateE2ETest#testAComputedMemberNameTheProjectBoundsLetsTheLoopRewrite :: control :: M-HOLDERS-BUILDS,M-HOLDERS-REACH,M-HOLDERS-WARN,M-HOLDERS-READ',
 			'unit.check.FactsFixGateE2ETest#testAPrivateMemberNoSupertypeDeclaresIsDeleted :: control :: M-UNUSED-PRIVATE-CHAIN-FACTS,M-UNUSED-PRIVATE-CHAIN-DECLARED,M-UNUSED-PRIVATE-CHAIN-AUTOBUILD',
+			'unit.check.FactsFixGateE2ETest#testAProofTheTruthContradictsKeepsTheLoop :: control :: M-REACH-PROVEN-TRUTH',
 			'unit.check.FactsFixGateE2ETest#testAReceiverTheFactsTypeAsANonExternClassLosesItsToString :: control :: M-TOSTRING-FACTS-CLASS,M-TOSTRING-FACTS-EXTERN,M-FACTS-ESCAPE-SHIFT',
 			'unit.check.FactsFixGateE2ETest#testAnAbstractTheFactsTypeIsNeverJudgedByAnotherDeclarationOfItsName :: control :: M-FOLD-FACTS-PLAIN-KINDS',
 			'unit.check.FactsFixGateE2ETest#testAnOperandTheFactsTypeLetsTheMergeThrough :: control :: M-FOLD-FACTS-OPERAND,M-FACTS-VALUE-TYPE-FLOWS',
@@ -2869,6 +2870,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-SPLICE-SITE-INNERMOST,M-FACTS-SPLICE-BODY',
 			'unit.query.MemberReachFactsTest#testUnderTheTruthASplicedPushOnAFreshLocalOfItsMethodChangesNothingShared :: control :: '
 				+ 'M-REACH-SPLICED-BENIGN,M-REACH-SPLICED-CULPRIT,M-REACH-WHERE-WRITTEN-RANGE,M-GRAPH-FACTS-SPLICE-TAG',
+			'unit.query.MemberReachFactsTest#testUnderTheTruthASplicedReflectiveBodyThatReachesNoMemberLeavesItsFunctionReadable :: control :: '
+				+ 'M-FACTS-SPLICED-REFLECTION-READ,M-FACTS-SPLICED-REFLECTION-FROM,M-FACTS-SPLICED-REFLECTION-MEMBERLESS',
 			'unit.query.MemberReachFactsTest#testUnderTheTruthASplicedStringConversionIsTheRegions :: control :: '
 				+ 'M-FACTS-SPLICED-WITHIN-UNPLACED,M-FACTS-TRUTH-SITES-SPLICED,M-FACTS-SPLICED-WITHIN',
 			'unit.query.MemberReachFactsTest#testUnderTheTruthAnEdgeSplicedFromAnotherFileIsNoSiteOfItsCaller :: control :: '
@@ -2880,7 +2883,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testUnderTheTruthAnInlinedCallIsReachedThroughItsEdge :: control :: '
 				+ 'M-REACH-TRUTH-SPLICED-SEEDS,M-GRAPH-FACTS-SPLICED-SITE',
 			'unit.query.MemberReachFactsTest#testUnderTheTruthAnInlinedReflectiveCallIsADynamicName :: control :: '
-				+ 'M-FACTS-TRUTH-REFLECTION-INLINED',
+				+ 'M-FACTS-TRUTH-REFLECTION-INLINED,M-FACTS-SPLICED-REFLECTION-NAMED',
 			'unit.query.MemberReachFactsTest#testUnderTheTruthUntypedCodeBesideAnInlinedCallIsReadThroughTheFacts :: control :: '
 				+ 'M-FACTS-TRUTH-SPLICE,M-FACTS-TRUTH-HAZARDS-SPLICED,M-FACTS-SPLICED-WITHIN',
 			'unit.query.MemberReachFactsTest#testUnderTheTruthWhatAPureLibraryCallSplicedInIsNoneOfTheRegions :: control :: '
@@ -4743,7 +4746,12 @@ class TestDiscoveryParityTest extends Test {
 			'M-METHODS-MEMBERLESS-RESULT',
 			'M-REFLECTED-HOLDERS-METHODS',
 			'M-REFLECTED-HOLDERS-ACCESSORS',
-			'M-REFLECTED-HOLDERS-INHERITED'
+			'M-REFLECTED-HOLDERS-INHERITED',
+			'M-FACTS-SPLICED-REFLECTION-READ',
+			'M-FACTS-SPLICED-REFLECTION-FROM',
+			'M-FACTS-SPLICED-REFLECTION-MEMBERLESS',
+			'M-FACTS-SPLICED-REFLECTION-NAMED',
+			'M-REACH-PROVEN-TRUTH'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
@@ -4912,6 +4920,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-NATIVE-CHAIN :: anyparse.check.TypedFactsWalk#nativeChain',
 			'M-FACTS-WALK-BLOCK-GAP :: anyparse.check.TypedFactsWalk#visit',
 			'M-FACTS-SITE-HOLDS-OWN-CODE :: anyparse.check.TypedFactsWalk#between',
+			'M-FACTS-SPLICED-REFLECTION-FROM :: anyparse.check.TypedFactsWalk#at',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

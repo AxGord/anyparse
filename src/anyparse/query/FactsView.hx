@@ -64,7 +64,8 @@ using StringTools;
  * no call's method declares from every body it meets (`CompilerFacts.within`, `CallGraphFacts.siteOf`): more than the range runs,
  * never less. What a method that runs no project code spliced in is none of the body's (`harmlessSplice`); the `inlined` call is an
  * edge to the callee's own node, whose text still answers for it. A `Reflect`/`Type` body spliced in (`reflection-inlined`) leaves
- * neither the call nor its name among the facts: a name computed at run time (`blindIn`). A faceted body's syntax then records an edge
+ * neither the call nor its name among the facts: a name computed at run time (`blindIn`), unless the facts name each
+ * member spliced in and none reaches a member (`splicedReachesNoMember`). A faceted body's syntax then records an edge
  * only at a site its facts do not type (`CallGraphFacts.holdsBack`): at one they type, the compiler resolved the site
  * in every build there is. A local `inline function` keeps its edge under it: the compiler splices its body at its
  * declaration and types nothing at the site of its call. A faceted body's natives and reflective calls are then its
@@ -91,6 +92,18 @@ final class FactsView {
 
 	/** The marker of a body a `Reflect`/`Type` function was spliced into: that call, its name and its arguments are gone. */
 	private static inline final REFLECTION_INLINED: String = 'reflection-inlined';
+
+	/** The prefix of the marker naming the method whose declared code holds a fact of a spliced `Reflect`/`Type` body. */
+	private static inline final REFLECTION_FROM: String = 'reflection-from:';
+
+	/** The marker of a fact of a spliced `Reflect`/`Type` body that no method's declared code holds. */
+	private static inline final REFLECTION_UNATTRIBUTED: String = 'reflection-unattributed';
+
+	/** The classes whose members are reflection (`TypedFactsProbe`). */
+	private static final REFLECTION_CLASSES: Array<String> = ['Reflect', 'Type'];
+
+	/** The access of a call of a method the compiler spliced in (`CallFact.access`). */
+	private static inline final INLINED: String = 'inlined';
 
 	/** The suffix of an abstract's implementation class: its statics are the abstract's members. */
 	private static inline final IMPL_SUFFIX: String = '_Impl_';
@@ -323,7 +336,8 @@ final class FactsView {
 	 * (`reflection-inlined`) is none without the truth: it is a splice (`inline-site-unknown`), whose node keeps its
 	 * syntax, which spells the reflective call or the call of the function holding it. Under the truth it is one: its node
 	 * is faceted, and neither its facts, which lost the call and its name, nor its syntax, which spells the call only
-	 * where it is written in the body and by that name, says what it reaches. A macro's expansion is none either, under the
+	 * where it is written in the body and by that name, says what it reaches — unless the facts name every member whose
+	 * body was spliced in and none reaches a member (`splicedReachesNoMember`). A macro's expansion is none either, under the
 	 * truth, to a reader `g` hands its graph for — one reading a faceted body through its facts alone, its touches, edges,
 	 * hazards and implicit calls — when the graph node holding the expansion's body is faceted (`faceted`): the facts hold the
 	 * expanded code every build compiled, which runs where the call of the macro was (`CompilerFacts.expansionSites`). A
@@ -334,10 +348,47 @@ final class FactsView {
 			if (n.generated || !meets(n.at.span, span)) continue;
 			if (n.incomplete.contains(MACRO_EXPANSION) && !(truth && g != null && faceted(g, file, n.at.span)))
 				return Reification(file, span);
-			if (truth && n.incomplete.contains(REFLECTION_INLINED)) return DynamicName(file, span);
+			if (truth && n.incomplete.contains(REFLECTION_INLINED) && !splicedReachesNoMember(n)) return DynamicName(file, span);
 			for (r in n.reflection) if (r.isValue && meets(r.at.span, span)) return DynamicName(file, r.at.span);
 		}
 		return null;
+	}
+
+	/**
+	 * Whether no `Reflect`/`Type` body spliced into `n` reaches a member: each is of a member the facts name
+	 * (`splicedReflection`) that is no access by name (`ExecutionShape.reflectiveNameCalls`, whose lost call the reading of
+	 * the node's facts would miss) and reads no member's value (`FactsMethodValues.memberless`). What else the bodies run,
+	 * their calls and accesses, is among the node's facts.
+	 */
+	private function splicedReachesNoMember(n: FactNode): Bool {
+		final members: Null<Array<String>> = splicedReflection(n);
+		final named: Map<String, Int> = _scope.shape.execution?.reflectiveNameCalls ?? [];
+		return members != null
+			&& members.foreach(m -> !named.exists(ReachHazards.lastSegments(m, 2)) && FactsMethodValues.memberless(table, m));
+	}
+
+	/**
+	 * The `Reflect`/`Type` members whose bodies were spliced into `n` (`reflection-inlined`): every method a fact of that
+	 * code lies in the declared code of (`reflection-from:`, `TypedFactsWalk`) and every one an `inlined` call of the node
+	 * names. Null when a fact of such code lies in no method's declared code (`reflection-unattributed`), or none is named:
+	 * what that code stands in for is lost.
+	 */
+	public static function splicedReflection(n: FactNode): Null<Array<String>> {
+		if (n.incomplete.contains(REFLECTION_UNATTRIBUTED)) return null;
+		final out: Array<String> = [
+			for (c in n.incomplete) if (c.startsWith(REFLECTION_FROM)) c.substr(REFLECTION_FROM.length)
+		];
+		if (out.length == 0) return null;
+		for (c in n.calls) {
+			final target: Null<String> = c.target;
+			final dot: Int = target == null ? -1 : target.lastIndexOf('.');
+			if (
+				target != null && c.access == INLINED && dot > 0 && REFLECTION_CLASSES.contains(target.substr(0, dot))
+				&& !out.contains(target)
+			)
+				out.push(target);
+		}
+		return out;
 	}
 
 	/**

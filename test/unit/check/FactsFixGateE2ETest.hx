@@ -94,6 +94,14 @@ class FactsFixGateE2ETest extends Test {
 		+ '}\n' + '\n' + 'class Plain {\n' + '\tpublic function new() {}\n' + '\n' + '\tpublic function look(s:String):Void {}\n' + '}\n'
 		+ '\n' + 'class Grower {\n' + '\tpublic function new() {}\n' + '\n' + '\tpublic function grow(s:String):Void {\n'
 		+ '\t\tMain.items = [];\n' + '\t}\n' + '}\n';
+	private static final ALIAS_MAIN: String = 'class Main {\n' + '\tpublic static var items:Array<Int> = [1, 2];\n' + '\n'
+		+ '\tstatic function main() {\n' + '\t\tvar sum:Int = 0;\n' + '\t\tfor (i in 0...items.length) {\n'
+		+ '\t\t\tfinal v:Int = items[i];\n' + '\t\t\tsum += v;\n' + '\t\t\tOther.go();\n' + '\t\t}\n' + '\t\tSys.println(sum);\n' + '\t}\n'
+		+ '}\n';
+	private static final ALIAS_OTHER: String = 'import Main.items as stuff;\n' + '\n' + 'class Other {\n'
+		+ '\tstatic var done:Bool = false;\n' + '\n' + '\t#if other\n' + '\tpublic static function go():Void {}\n' + '\t#else\n'
+		+ '\tpublic static function go():Void {\n' + '\t\tif (!done) {\n' + '\t\t\tdone = true;\n' + '\t\t\tstuff.push(5);\n' + '\t\t}\n'
+		+ '\t}\n' + '\t#end\n' + '}\n';
 	private static final HXML: String = '-cp .\n-main Main\n--interp\n';
 	private static inline final APQLINT: String = '{"compilerOracle":[{"hxml":"check.hxml"}],"resolutionRoots":["."]}';
 	private static inline final BUFFER: Int = 1 << 20;
@@ -303,6 +311,30 @@ class FactsFixGateE2ETest extends Test {
 		Assert.isTrue(after.indexOf('for (i => v in items) {') >= 0, after);
 		Assert.isTrue(err.indexOf('reflectiveMethodHolders "nope.**" matches no class the builds typed') >= 0, err);
 		Assert.isTrue(err.indexOf('"Plain" matches no class') < 0, err);
+		Assert.equals(before, run(dir), 'the program prints what it printed');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * The reading a run asks first proves the loop — it does not see that `stuff`, pushed to once by the `go` the build
+	 * compiles, is `Main.items` imported under another name — but the facts do: under the truth they answer a proved
+	 * question too, and the loop, whose element iterator would follow the push, stays.
+	 */
+	@:pin('control') @:killer('M-REACH-PROVEN-TRUTH')
+	public function testAProofTheTruthContradictsKeepsTheLoop(): Void {
+		#if (sys || nodejs)
+		final complete: String = '{"compilerOracle":[{"hxml":"check.hxml"}],"resolutionRoots":["."],"reachConfigurationsComplete":true}';
+		final dir: Null<String> = tree('aliasproof', [
+			{ name: 'Main.hx', source: ALIAS_MAIN },
+			{ name: 'Other.hx', source: ALIAS_OTHER }
+		], HXML, complete);
+		if (dir == null) return;
+		final before: String = run(dir);
+		CliFixture.captureStderr(() -> Cli.run(['lint', '--fix', '--rule', 'prefer-keyvalue-loop', '$dir/Main.hx']));
+		Assert.equals(ALIAS_MAIN, File.getContent('$dir/Main.hx'));
 		Assert.equals(before, run(dir), 'the program prints what it printed');
 		CliFixture.removeDir(dir);
 		#else
