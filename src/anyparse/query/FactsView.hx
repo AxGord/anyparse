@@ -228,7 +228,7 @@ final class FactsView {
 		final outer: Null<Array<FactNode>> = if (single)
 			typedBodies(g, node)
 		else if (truth && declarations > 0)
-			foldedBodies(node)
+			foldedBodies(node) ?? (nestedOwner(g, node) == null ? null : typedBodies(g, node))
 		else
 			null;
 		if (outer == null) return null;
@@ -570,17 +570,24 @@ final class FactsView {
 
 	/**
 	 * Every typed type whose member `name` the graph's `type.name` may be, when the facts are the truth: each type the simple
-	 * name `type` stands for (`bySimpleName`) that declares a member so named — when every declaration of a type so named the
-	 * index holds that declares `name` is one of them (`rootOf`), as `soleMember` asks of its one. Null otherwise, and when
-	 * none declares it.
+	 * name `type` stands for (`bySimpleName`) that declares a method so named in some build — a variable so named is no code
+	 * of the node: a read of it runs nothing, a call of it what it holds — when every declaration of a type so named the
+	 * index holds that declares `name` is a type the builds typed (`rootOf`). Null otherwise, and when none declares it.
 	 */
 	public function ownersDeclaring(type: String, name: String): Null<Array<String>> {
 		if (!truth) return null;
+		final typed: Array<String> = bySimpleName()[type] ?? [];
 		final owners: Array<String> = [
-			for (t in bySimpleName()[type] ?? []) if (table.type(t)?.fields.exists(f -> graphMember(t, f.name) == name) == true) t
+			for (t in typed)
+				if (
+					table.type(t)?.fields.exists(f ->
+						graphMember(t, f.name) == name && f.kinds.exists(k -> METHOD_KINDS.contains(k))
+					) == true
+				)
+					t
 		];
 		if (owners.length == 0) return null;
-		final roots: Array<Null<String>> = [for (o in owners) rootOf(o)];
+		final roots: Array<Null<String>> = [for (t in typed) rootOf(t)];
 		for (fi in _scope.index.allFiles())
 			for (t in fi.types)
 				if (t.name == type && !CallGraphNames.selfAlias(t) && t.members.exists(m ->
@@ -653,19 +660,19 @@ final class FactsView {
 
 	/**
 	 * Under the truth, the facts of the field initializers the pseudo-node `node` runs (`CallGraph.INIT_NAME`: the instance
-	 * ones; `STATIC_INIT_NAME`: the static ones): every initializer (`VAR_KIND`) of that staticness of the one typed type its
-	 * type name stands for (`soleType`) — the union over the builds, every branch some build takes. Null — the syntax reads
-	 * them — otherwise, and when one was placed by a macro or lost a fact's place. An initializer the syntax holds that none
-	 * of them holds whole stays the syntax's (`faceted`).
+	 * ones; `STATIC_INIT_NAME`: the static ones): every initializer (`VAR_KIND`) of that staticness of each typed type its
+	 * type name stands for (`initializerOwners`) — the union over the builds, every branch some build takes. Null — the
+	 * syntax reads them — otherwise, and when one was placed by a macro or lost a fact's place. An initializer the syntax
+	 * holds that none of them holds whole stays the syntax's (`faceted`).
 	 */
 	public function initializerBodies(node: FnNode): Null<Array<FactNode>> {
 		final type: Null<String> = node.typeName;
 		if (!truth || type == null || !initializerNode(node)) return null;
 		final isStatic: Bool = node.name == CallGraph.STATIC_INIT_NAME;
-		final typed: Null<String> = soleType(type);
-		if (typed == null) return null;
+		final owners: Null<Array<String>> = initializerOwners(type);
+		if (owners == null) return null;
 		final out: Array<FactNode> = [];
-		for (id in table.nodeIdsOf(typed)) {
+		for (typed in owners) for (id in table.nodeIdsOf(typed)) {
 			final n: Null<FactNode> = table.node(id);
 			if (n == null) return null;
 			if (n.kind != VAR_KIND || n.isStatic != isStatic) continue;
@@ -675,8 +682,28 @@ final class FactsView {
 		return out;
 	}
 
+	/**
+	 * Under the truth, the typed types whose field initializers the pseudo-nodes of the graph type `type` run
+	 * (`CallGraph.INIT_NAME`, `STATIC_INIT_NAME`): the one type every declaration of the name is (`soleType`) — or, of a name
+	 * several typed types share, every one of them, when each declaration of the name the index holds is one of them
+	 * (`rootOf`). Such a node no call names by a member of its type: a construction or an admission by its name runs the
+	 * initializers of whichever type so named it is, so the union of theirs is all it may run. Null otherwise: a declaration
+	 * no build typed may run under another name (`@:genericBuild`).
+	 */
+	public function initializerOwners(type: String): Null<Array<String>> {
+		if (!truth) return null;
+		final sole: Null<String> = soleType(type);
+		if (sole != null) return [sole];
+		final owners: Array<String> = bySimpleName()[type] ?? [];
+		final roots: Array<Null<String>> = [for (o in owners) rootOf(o)];
+		for (fi in _scope.index.allFiles())
+			for (t in fi.types)
+				if (t.name == type && !CallGraphNames.selfAlias(t) && !roots.contains(declaredId(fi, t))) return null;
+		return owners.length == 0 ? null : owners;
+	}
+
 	/** Whether `node` is a pseudo-node running its type's field initializers (`CallGraph.INIT_NAME`, `STATIC_INIT_NAME`). */
-	private static function initializerNode(node: FnNode): Bool {
+	public static function initializerNode(node: FnNode): Bool {
 		return node.span == null && (node.name == CallGraph.INIT_NAME || node.name == CallGraph.STATIC_INIT_NAME);
 	}
 
@@ -726,6 +753,22 @@ final class FactsView {
 		final read: Array<String> = [for (d in out) CallGraphNames.normalizePath(d.file)];
 		for (file in ownerFiles(type, owner, name)) if (!read.contains(CallGraphNames.normalizePath(file))) return null;
 		return out.length == 0 ? null : out;
+	}
+
+	/**
+	 * Under the truth, the typed type whose code the function nested in a member (`NESTED_MARK`) the graph node `node` is,
+	 * read off where its text lies: its one declaration lies in the type of the node's simple name its file declares, and the
+	 * builds typed that type (`typedIn`). Such a node no call names: a function value, a local function, reached from the
+	 * code holding it or by the value channel, so the name other types share stands for none of theirs. Null otherwise — a
+	 * node several declarations fold, one in a type of another name, a file whose type no build typed.
+	 */
+	public function nestedOwner(g: CallGraph, node: FnNode): Null<String> {
+		final type: Null<String> = node.typeName;
+		final declared: Array<FnDeclaration> = g.declarationsOf(node.id);
+		if (!truth || type == null || node.id.indexOf(NESTED_MARK) < 0 || declared.length != 1) return null;
+		final tree: Null<QueryNode> = g.treeOf(declared[0].file);
+		if (tree == null || MemberTouchScan.typeAt(tree, declared[0].span.from) != type) return null;
+		return typedIn(declared[0].file, type);
 	}
 
 	/**

@@ -14312,6 +14312,78 @@
 			"method": "rebindsAName",
 			"force": "false",
 			"note": "a stranded `using` is moved below a guarded import binding the same name, so the LAST statement — and the meaning — changes"
+		},
+		{
+			"name": "M-FACTS-NESTED-OWNER-NONE",
+			"type": "anyparse.query.FactsView",
+			"method": "nestedOwner",
+			"find": "return typedIn(declared[0].file, type);",
+			"replace": "return null;",
+			"note": "(precision) a function nested in a type of a shared name is never its file's type's code: entered by its name alone, it stays Ambiguous"
+		},
+		{
+			"name": "M-FACTS-NESTED-BODIES-NONE",
+			"type": "anyparse.query.FactsView",
+			"method": "bodyFacts",
+			"find": "foldedBodies(node) ?? (nestedOwner(g, node) == null ? null : typedBodies(g, node))",
+			"replace": "foldedBodies(node)",
+			"note": "(precision) a function nested in a type of a shared name keeps its syntax, so it stays shared though its file pins its type"
+		},
+		{
+			"name": "M-REACH-OWN-TYPES-NONE",
+			"type": "anyparse.query.MemberReach",
+			"method": "sharedName",
+			"find": "&& ownTypes(g, node) == null;",
+			"replace": ";",
+			"note": "(precision) a nested function or an initializer run read through its facts stays a name two types share"
+		},
+		{
+			"name": "M-REACH-OWN-TYPES-INIT-NONE",
+			"type": "anyparse.query.MemberReach",
+			"method": "ownTypes",
+			"find": "return facts.initializerOwners(type);",
+			"replace": "return null;",
+			"note": "(precision) the field initializers of a name several typed types share stay Ambiguous though each is read through its facts"
+		},
+		{
+			"name": "M-REACH-REWRITTEN-OWN-SIMPLE",
+			"type": "anyparse.query.MemberReach",
+			"method": "rewrittenAt",
+			"find": "final own: Null<Array<String>> = g.types.declarationCount(type) <= 1 ? null : ownTypes(g, node);",
+			"replace": "final own: Null<Array<String>> = null;",
+			"note": "(precision) a nested function of one typed type asks the build macro of every type of its simple name"
+		},
+		{
+			"name": "M-FACTS-INIT-OWNERS-SOLE",
+			"type": "anyparse.query.FactsView",
+			"method": "initializerOwners",
+			"find": "return owners.length == 0 ? null : owners;",
+			"replace": "return null;",
+			"note": "(precision) only a name every declaration of which is one typed type has its initializers read through the facts"
+		},
+		{
+			"name": "M-FACTS-QUALIFY-SITELESS",
+			"type": "anyparse.query.CallGraphFacts",
+			"method": "qualify",
+			"find": "if (at == null || declared.exists(",
+			"replace": "if (at != null && declared.exists(",
+			"note": "(soundness) a constructor read as one of the types sharing its name loses the run of its field initializers"
+		},
+		{
+			"name": "M-FACTS-OWNERS-VARIABLES",
+			"type": "anyparse.query.FactsView",
+			"method": "ownersDeclaring",
+			"find": "graphMember(t, f.name) == name && f.kinds.exists(k -> METHOD_KINDS.contains(k))",
+			"replace": "graphMember(t, f.name) == name",
+			"note": "(precision) a variable of another type of the name counts as code a member admitted by its name may run"
+		},
+		{
+			"name": "M-FACTS-OWNERS-ROOTS-OWN",
+			"type": "anyparse.query.FactsView",
+			"method": "ownersDeclaring",
+			"find": "final roots: Array<Null<String>> = [for (t in typed) rootOf(t)];",
+			"replace": "final roots: Array<Null<String>> = [for (t in owners) rootOf(t)];",
+			"note": "(precision) a typed type declaring a variable of the name refuses the owners of the method so named"
 		}
 	]
 }

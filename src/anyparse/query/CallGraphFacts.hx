@@ -246,10 +246,11 @@ final class CallGraphFacts {
 		for (e in g.outEdges(id)) {
 			final at: Null<Span> = e.span;
 			final site: String = CallGraphNames.normalizePath(e.file);
-			if (at == null || e.kind == Contains || answered(g, key, typed, e)) continue;
-			final span: Span = at;
-			if (declared.exists(
-				d -> CallGraphNames.normalizePath(d.file) == site && d.span.from <= span.from && span.to <= d.span.to
+			if (e.kind == Contains || answered(g, key, typed, e)) continue;
+			// an edge of no site is no reading of one declaration's code but a run of the node's own — a constructor's of its
+			// type's field initializers (`ConstructorWiring`): it is the qualified node's too
+			if (at == null || declared.exists(d ->
+				CallGraphNames.normalizePath(d.file) == site && d.span.from <= at.from && at.to <= d.span.to
 			)) g.indexEdge({
 				from: key,
 				to: e.to,

@@ -2534,6 +2534,107 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthAsk(files('b', 'a', ' keep = stuff; ')), r -> r.match(Unknown(Escape(_, _))));
 	}
 
+	@:pin('control') @:killer('M-FACTS-NESTED-OWNER-NONE') @:killer('M-FACTS-NESTED-BODIES-NONE') @:killer('M-REACH-OWN-TYPES-NONE')
+	@:killer('M-REACH-REWRITTEN-OWN-SIMPLE')
+	public function testAFunctionNestedInATypeOfASharedNameIsItsFilesTypesCodeUnderTheTruth(): Void {
+		// `Runner.run` calls a function value of `Int->Void`, which may be the lambda `b.Grid.make` stores: the walk enters it by
+		// its name alone, `Grid.make#1`, of a simple name `a.Grid` shares. Its one declaration lies in `b/Grid.hx`, whose `Grid`
+		// the builds typed, so its code is `b.Grid`'s, read through its facts, and only `b.Grid`'s build macro may rewrite it,
+		// never `a.Grid`'s; it calls a value of `Bool->Void`, which `grow` — changing `Main.items` through a `String->Void` —
+		// is not. With no whole list of builds nothing tells the two apart
+		function files(body: String, twin: Bool, built: Bool): Map<String, String> {
+			final out: Map<String, String> = [
+				'Main.hx' => LOOP_HEAD + '\tpublic static function grow(s:String):Void items.push(1);\n\n\tstatic function main() {\n'
+					+ '\t\tHook.keep = grow;\n\t\tb.Grid.make();\n' + (twin ? '\t\ta.Grid.make();\n' : '')
+					+ '\t\tfor (i in 0...items.length) { /*<*/ Runner.run(); /*>*/ }\n\t}\n}\n'
+					+ 'class Hook {\n\tpublic static var keep:String->Void;\n\tpublic static var flag:Bool->Void;\n}\n'
+					+ 'class Runner {\n\tpublic static var call:Int->Void;\n\n\tpublic static function run():Void {\n'
+					+ '\t\tfinal c:Int->Void = call;\n\t\tc(1);\n\t}\n}\n',
+				'b/Grid.hx' => 'package b;\n\nimport Main.Hook;\nimport Main.Runner;\n\nclass Grid {\n\tpublic static function make():Void {\n'
+					+ '\t\tRunner.call = n -> {\n\t\t\t' + body + '\n\t\t};\n\t}\n}\n',
+				'Mac.hx' => BUILD_MACROS
+			];
+			if (twin)
+				out['a/Grid.hx'] = 'package a;\n\n' + (built ? '@:build(Mac.rewrite())\n' : '')
+					+ 'class Grid {\n\tpublic static function make():Void {}\n\n\tpublic static function calm():Void {}\n}\n';
+			return out;
+		}
+		function question(body: String, twin: Bool, listed: Bool = true, built: Bool = false): ReachResult {
+			return ask(files(body, twin, built), null, true, null, false, INTERP_BUILD, null, null, listed);
+		}
+		final calm: String = 'final f:Bool->Void = Hook.flag;\n\t\t\tf(n > 0);';
+		assertMatch(question(calm, false), r -> r.match(Proven));
+		Assert.equals('', lastDropped.join('; '), 'the fixture did not compile');
+		assertMatch(question(calm, true), r -> r.match(Proven));
+		assertMatch(question(calm, true, true, true), r -> r.match(Proven));
+		assertMatch(question('Main.grow("x");', true), r -> r.match(Reached(_)));
+		assertMatch(question(calm, true, false), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-REACH-OWN-TYPES-INIT-NONE') @:killer('M-FACTS-INIT-OWNERS-SOLE')
+	@:killer('M-FACTS-QUALIFY-SITELESS')
+	public function testTheInitializersOfATypeOfASharedNameAreEachTypedTypesUnderTheTruth(): Void {
+		// `new b.Grid()` runs `Grid.<init>`, the field initializers of a `Grid`, which the graph knows by the simple name `a.Grid`
+		// shares. Every declaration of the name is a type the builds typed, so the node runs the union of their initializers,
+		// each read through its facts: neither changes `Main.items` until `a.Grid`'s calls `grow`. A declaration no build
+		// typed may be the code of another name; with no whole list of builds nothing tells the two apart
+		function files(initial: String, twin: Bool, unbuilt: Bool, mine: String): Map<String, String> {
+			final out: Map<String, String> = [
+				'Main.hx' => 'class Main {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n'
+					+ '\tpublic function grow():Int {\n\t\titems.push(1);\n\t\treturn 0;\n\t}\n\n\tstatic function main() {\n'
+					+ '\t\tfinal m:Main = new Main();\n\t\tHook.main = m;\n' + (twin ? '\t\tnew a.Grid();\n' : '')
+					+ (unbuilt ? '\t\tc.Grid.Other.f();\n' : '')
+					+ '\t\tfor (i in 0...m.items.length) { /*<*/ new b.Grid(); /*>*/ }\n\t}\n}\n'
+					+ 'class Hook {\n\tpublic static var main:Main;\n}\n',
+				'b/Grid.hx' => 'package b;\n\nimport Main.Hook;\n\nclass Grid {\n\tpublic var xs:Int = ' + mine
+					+ ';\n\n\tpublic function new() {}\n}\n'
+			];
+			if (twin)
+				out['a/Grid.hx'] = 'package a;\n\nimport Main.Hook;\n\nclass Grid {\n\tpublic var n:Int = ' + initial
+					+ ';\n\n\tpublic function new() {}\n}\n';
+			if (unbuilt)
+				out['c/Grid.hx'] = 'package c;\n\n#if never\nclass Grid {\n\tpublic var k:Int = 1;\n}\n#end\n'
+					+ 'class Other {\n\tpublic static function f():Void {}\n}\n';
+			return out;
+		}
+		function question(initial: String, twin: Bool, listed: Bool = true, unbuilt: Bool = false, mine: String = '1'): ReachResult {
+			return ask(files(initial, twin, unbuilt, mine), null, true, null, false, INTERP_BUILD, null, null, listed);
+		}
+		assertMatch(question('0', false), r -> r.match(Proven));
+		Assert.equals('', lastDropped.join('; '), 'the fixture did not compile');
+		assertMatch(question('0', true), r -> r.match(Proven));
+		assertMatch(question('Hook.main.grow()', true), r -> r.match(Reached(_)));
+		assertMatch(question('0', true, false), r -> !r.match(Proven));
+		assertMatch(question('0', true, true, true), r -> !r.match(Proven));
+		assertMatch(question('0', true, true, false, 'Hook.main.grow()'), r -> r.match(Reached(_)));
+		assertMatch(question('0', false, true, false, 'Hook.main.grow()'), r -> r.match(Reached(_)));
+	}
+
+	@:pin('control') @:killer('M-FACTS-OWNERS-VARIABLES') @:killer('M-FACTS-OWNERS-ROOTS-OWN')
+	public function testAMemberAdmittedByItsNameIsNoVariableOfAnotherTypeOfTheNameUnderTheTruth(): Void {
+		// the region reads `send` off a `Dynamic`, which admits every function named `send`: `b.Grid.send`, a method, and no
+		// code of `a.Grid`, whose `send` is a variable — a value read off it runs nothing, a call of it runs what it holds,
+		// the value channel's. Read as `b.Grid`'s alone, `send` calls a value of `Bool->Void`, which `grow` is not
+		function question(other: String, listed: Bool = true): ReachResult {
+			final files: Map<String, String> = [
+				'Main.hx' => 'class Main {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n'
+					+ '\tpublic function grow(s:String):Void items.push(1);\n\tstatic function main() {\n\t\tfinal m:Main = new Main();\n'
+					+ '\t\tHook.keep = m.grow;\n\t\tnew b.Grid().send();\n\t\tnew a.Grid();\n\t\tfinal d:Dynamic = Hook.any;\n'
+					+ '\t\tfor (i in 0...m.items.length) { /*<*/ final x:Dynamic = d.send; /*>*/ }\n\t}\n}\n'
+					+ 'class Hook {\n\tpublic static var keep:String->Void;\n\tpublic static var flag:Bool->Void;\n'
+					+ '\tpublic static var any:Dynamic;\n}\n',
+				'b/Grid.hx' => 'package b;\n\nimport Main.Hook;\n\nclass Grid {\n\tpublic function new() {}\n\n'
+					+ '\tpublic function send():Void {\n\t\tfinal f:Bool->Void = Hook.flag;\n\t\tf(true);\n\t}\n}\n',
+				'a/Grid.hx' => 'package a;\n\nclass Grid {\n\t' + other + '\n\n\tpublic function new() {}\n}\n'
+			];
+			return ask(files, null, true, null, false, INTERP_BUILD, null, null, listed);
+		}
+		assertMatch(question('public var send:Int = 0;'), r -> r.match(Proven));
+		Assert.equals('', lastDropped.join('; '), 'the fixture did not compile');
+		assertMatch(question('public function send():Void {}'), r -> r.match(Proven));
+		assertMatch(question('public var send:Int = 0;', false), r -> !r.match(Proven));
+	}
+
 	@:pin('control') @:killer('M-REACH-QUALIFIED-UNNAMED') @:killer('M-REACH-SHARED-OWNERS')
 	public function testANameTwoTypesShareReachedByItsSyntaxRunsAsEachOfThemUnderTheTruth(): Void {
 		// the region lies in `a.Grid.go`, which `b.Grid` declares too: the node folding both is read by its syntax, whose call

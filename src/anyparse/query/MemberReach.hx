@@ -1379,15 +1379,37 @@ final class MemberReach {
 	/**
 	 * Whether `node` may be another type's member than the one its body is: its type's simple name has several
 	 * declarations, unless, where the facts are the truth, every one of them is the one type the builds typed
-	 * (`FactsView.soleType`), only one type the builds typed declares a member so named (`FactsView.soleMember`), or the
-	 * node reads the name as one of them (`CallGraphFacts.qualify`).
+	 * (`FactsView.soleType`), only one type the builds typed declares a member so named (`FactsView.soleMember`), the
+	 * node reads the name as one of them (`CallGraphFacts.qualify`), or it is code no call names by such a member — a
+	 * nested function, a field-initializer run — read through its facts as theirs (`ownTypes`).
 	 */
 	private function sharedName(g: CallGraph, node: FnNode): Bool {
 		final type: Null<String> = node.typeName;
 		final name: Null<String> = node.name;
 		if (type == null || g.types.declarationCount(type) <= 1 || g.facts?.qualified.exists(node.id) == true) return false;
 		final facts: Null<FactsView> = _scope.facts;
-		return facts == null || (facts.soleType(type) == null && (name == null || facts.soleMember(type, name) == null));
+		if (facts == null) return true;
+		return facts.soleType(type) == null && (name == null || facts.soleMember(type, name) == null) && ownTypes(g, node) == null;
+	}
+
+	/**
+	 * The typed types whose code `node` is, for a node no call names by a member another type of its name may declare, read
+	 * through its facts, not its syntax (`CallGraphFacts.faceted`) — a syntax resolving a name several types share may have
+	 * picked another's member: a function nested in a member, the one type its file pins (`FactsView.nestedOwner`); a
+	 * field-initializer pseudo-node every initializer of which the facts read (`FactsView.faceted`), each typed type of its
+	 * name (`FactsView.initializerOwners`), whose union is all it runs. Null otherwise.
+	 */
+	private function ownTypes(g: CallGraph, node: FnNode): Null<Array<String>> {
+		final facts: Null<FactsView> = _scope.facts;
+		final type: Null<String> = node.typeName;
+		if (facts == null || type == null || g.facts?.faceted.exists(node.id) != true) return null;
+		if (!FactsView.initializerNode(node)) {
+			final nested: Null<String> = facts.nestedOwner(g, node);
+			return nested == null ? null : [nested];
+		}
+		final spans: Null<Array<Occurrence>> = bodySpans(g, node);
+		if (spans == null || !spans.foreach(d -> facts.faceted(g, d.file, d.span, node.id))) return null;
+		return facts.initializerOwners(type);
 	}
 
 	/**
@@ -1395,7 +1417,8 @@ final class MemberReach {
 	 * (`ReachGraph.rewrittenBy`) — for a node whose code is one typed type's alone, of that type alone
 	 * (`ReachGraph.rewrittenAs`): a node reading the name as one type's member (`CallGraphFacts.qualify`), or, of a name
 	 * declared more than once, one the facts read as the one type every declaration is (`FactsView.soleType`) or as the
-	 * one type declaring the member (`FactsView.soleMember`) — or null.
+	 * one type declaring the member (`FactsView.soleMember`) — or, for a node whose code is each of several typed types'
+	 * (`ownTypes`), of any of them — or null.
 	 */
 	private function rewrittenAt(g: CallGraph, node: FnNode, type: String): Null<ReachUnknown> {
 		final read: Null<QualifiedRead> = g.facts?.qualified[node.id];
@@ -1405,7 +1428,14 @@ final class MemberReach {
 			? null
 			: facts.soleType(type) ?? (name == null ? null : facts.soleMember(type, name));
 		final owner: Null<String> = read?.owner ?? sole;
-		return owner == null ? _g.rewrittenBy(type) : _g.rewrittenAs(g, node.file, type, owner);
+		if (owner != null) return _g.rewrittenAs(g, node.file, type, owner);
+		final own: Null<Array<String>> = g.types.declarationCount(type) <= 1 ? null : ownTypes(g, node);
+		if (own == null) return _g.rewrittenBy(type);
+		for (o in own) {
+			final rewritten: Null<ReachUnknown> = _g.rewrittenAs(g, node.file, type, o);
+			if (rewritten != null) return rewritten;
+		}
+		return null;
 	}
 
 	/**
