@@ -6721,6 +6721,14 @@
 			"note": "a made node records no file it read, so a rewrite of its own file leaves it answering for a text that is gone"
 		},
 		{
+			"name": "M-BUILDS-WITH-FACTS",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "startBuildsWithFacts",
+			"find": "if (factsEarly && start != null) start();",
+			"replace": "",
+			"note": "the builds' probe compiles wait for the first reach question, which then waits on them alone half-way through the first pass"
+		},
+		{
 			"name": "M-SPAWN-ORDER",
 			"type": "anyparse.check.HaxeSpawn",
 			"method": "runAllTimed",
