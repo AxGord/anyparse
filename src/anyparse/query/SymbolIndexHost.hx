@@ -94,6 +94,12 @@ interface SymbolIndexHost {
 	function reachBuilds(): Null<ReachBuilds>;
 
 	/**
+	 * Start `reachBuilds`' compiles in the background, so a run about to wait on its compiler facts waits on both at once;
+	 * `reachBuilds` then answers from them, unless the run wrote first. Nothing for a run that has no builds.
+	 */
+	function reachBuildsAhead(): Void;
+
+	/**
 	 * What the configured compiler oracles typed, unioned over their configurations (`CompilerFacts`), compiled on first
 	 * demand and once per run — or null when the run configured no oracle, declined it (`--no-oracle`), or no
 	 * configuration answered. Independent of `reachConfigurationsComplete`: code no configuration compiled has no facts,

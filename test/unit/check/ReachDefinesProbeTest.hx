@@ -2,6 +2,7 @@ package unit.check;
 
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.ReachDefinesProbe;
+import anyparse.check.ReachDefinesProbe.AheadBuilds;
 import anyparse.core.TempScratch;
 import anyparse.query.ReachLiveness.ReachConfiguration;
 import haxe.Exception;
@@ -187,6 +188,67 @@ class ReachDefinesProbeTest extends Test {
 			final main: Null<{ name: String, file: String }> = read.types.find(t -> t.name == 'Main');
 			Assert.isTrue(main != null && StringTools.endsWith(main.file, 'src/Main.hx'), 'Main was reported against ${main?.file}');
 		}
+		remove(dir);
+	}
+
+	/**
+	 * Builds a run started ahead of its first question (`buildsAhead`) answer that question themselves — one compile, not
+	 * two — but only when it comes before the run's first write: once the run writes (`buildsSettled`) they are dropped
+	 * and the builds are probed on demand, reading the tree the write left, as they always were. The flag file stands for
+	 * the write: a macro defines a name when it exists.
+	 */
+	@:pin('control') @:killer('M-AHEAD-NEVER-READ') @:killer('M-AHEAD-READ-AFTER-WRITE')
+	@:access(anyparse.query.cli.command.LintCommand)
+	public function testBuildsStartedAheadAnswerOnlyAQuestionBeforeTheFirstWrite(): Void {
+		final dir: String = scratchDir();
+		final flag: String = Path.join([dir, 'flag.txt']);
+		write(
+			dir, 'macro/Init.hx',
+			'class Init { public static function go() if (sys.FileSystem.exists("$flag")) ' + 'haxe.macro.Compiler.define("APQ_FLAG"); }'
+		);
+		write(dir, 'macro/Counter.hx', unit.check.CompileCounter.SOURCE);
+		write(dir, 'src/Main.hx', 'class Main { static function main() {} }');
+		write(dir, 'build.hxml', '-cp src\n-cp macro\n-main Main\n--interp\n--macro Init.go()\n' + unit.check.CompileCounter.MACRO);
+		final oracles: Array<OracleConfig> = [{ hxml: 'build.hxml', dir: dir, defines: [] }];
+		final base: anyparse.query.CachingGrammarPlugin.ResolutionScope = {
+			declared: true,
+			sources: () -> {
+				report: [],
+				projectRoots: [],
+				library: new anyparse.query.CachingGrammarPlugin.LibrarySources([]),
+				rootsMatched: true,
+				rootsAllMatched: true
+			}
+		};
+		function scopeOf(ahead: AheadBuilds): anyparse.query.CachingGrammarPlugin.ResolutionScope {
+			final scope: Null<anyparse.query.CachingGrammarPlugin.ResolutionScope> =
+				anyparse.query.cli.command.LintCommand.withReachConfigurations(base, oracles, false, true, ahead);
+			if (scope == null) throw 'no scope';
+			return scope;
+		}
+		function started(ahead: AheadBuilds, scope: anyparse.query.CachingGrammarPlugin.ResolutionScope): Void {
+			final start: Null<() -> Void> = scope.buildsAhead;
+			if (start != null) start();
+			// ended before anything reads it, so what follows does not race the compile
+			ahead.probe?.runs?.await();
+		}
+		final read: AheadBuilds = { probe: null };
+		final first: anyparse.query.CachingGrammarPlugin.ResolutionScope = scopeOf(read);
+		started(read, first);
+		Assert.notNull(read.probe, 'the compiles started ahead');
+		final firstBuilds: Null<() -> Null<anyparse.query.ReachLiveness.ReachBuilds>> = first.builds;
+		Assert.notNull(firstBuilds == null ? null : firstBuilds());
+		Assert.equals(1, unit.check.CompileCounter.count(dir), 'the question read the compile started ahead');
+		final dropped: AheadBuilds = { probe: null };
+		final second: anyparse.query.CachingGrammarPlugin.ResolutionScope = scopeOf(dropped);
+		started(dropped, second);
+		File.saveContent(flag, '');
+		final settle: Null<() -> Void> = second.buildsSettled;
+		if (settle != null) settle();
+		Assert.isNull(dropped.probe, 'a write drops the compiles started ahead');
+		final secondBuilds: Null<() -> Null<anyparse.query.ReachLiveness.ReachBuilds>> = second.builds;
+		final after: Null<ReachConfiguration> = (secondBuilds == null ? null : secondBuilds())?.configurations[0];
+		Assert.isTrue(after?.everDefined.contains('APQ_FLAG') ?? false, 'the builds read the tree before the write');
 		remove(dir);
 	}
 

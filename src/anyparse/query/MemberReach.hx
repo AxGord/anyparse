@@ -2506,6 +2506,9 @@ final class MemberReach {
 		final changed: Null<Array<{ file: String, source: String }>> = memo?.changedFiles(project);
 		if (memo != null && changed != null && (changed.length == 0 || memo.refresh(changed))) return memo;
 		final index: SymbolIndex = host?.resolutionIndex() ?? SymbolIndex.build(project, plugin);
+		// an analysis reading compiler facts escalates on its first question (`escalation`), which probes the builds: their
+		// compiles start now, beside the facts this waits on below, instead of after them
+		host?.reachBuildsAhead();
 		// the resolution scope is what the project declares, not what its builds compile: only the builds can say that no
 		// subtype or override lies outside the index (`configuredFor`)
 		final built: MemberReach = new MemberReach(

@@ -14783,6 +14783,22 @@
 			"find": "Path.normalize(Path.join([dir, '..', 'share', 'haxe', 'std'])),",
 			"replace": "",
 			"note": "the compiler's own share/haxe/std is not searched, so that layout falls through to the known locations"
+		},
+		{
+			"name": "M-AHEAD-NEVER-READ",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "withReachConfigurations",
+			"find": "final found: Null<ReachBuilds> = pending == null ? ReachDefinesProbe.probeAll(oracles) : ReachDefinesProbe.finish(pending);",
+			"replace": "final found: Null<ReachBuilds> = ReachDefinesProbe.probeAll(oracles);",
+			"note": "the compiles started ahead are never read, so every run that escalates pays the builds twice"
+		},
+		{
+			"name": "M-AHEAD-READ-AFTER-WRITE",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "withReachConfigurations",
+			"find": "\t\tdropAhead(ahead);\n",
+			"replace": "",
+			"note": "the compiles started ahead answer a question asked after the run wrote, so the builds describe a tree that is gone"
 		}
 	]
 }

@@ -1794,6 +1794,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PreferValueLoopCheckTest#testThisQualifiedCollectionNotFlagged :: control :: M-ELEMENT-LOOP-REBIND',
 			'unit.check.ReachDefinesProbeTest#testADefineAnInitializationMacroSetsIsNotDefinedForEveryFile :: control :: M-DEFINES-EARLY',
 			'unit.check.ReachDefinesProbeTest#testAValueIsTheDefinesWhereTheFirstAndLastSetsAgree :: control :: M-DEFINES-VALUES-STABLE',
+			'unit.check.ReachDefinesProbeTest#testBuildsStartedAheadAnswerOnlyAQuestionBeforeTheFirstWrite :: control :: M-AHEAD-NEVER-READ,M-AHEAD-READ-AFTER-WRITE',
 			'unit.check.ReachDefinesProbeTest#testEveryTypedTypeIsReportedWithItsFile :: control :: M-DEFINES-TYPES,M-DEFINES-IMPL',
 			'unit.check.ReachDefinesProbeTest#testOnlyAOneArmTranscriptWithBothSetsAnswers :: control :: M-DEFINES-ONE-ARM',
 			'unit.check.ReachDefinesProbeTest#testOverlappingProbesAnswerInTheOraclesOrder :: control :: M-SPAWN-ORDER',
@@ -5274,7 +5275,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-OWNERS-VARIABLES',
 			'M-FACTS-OWNERS-ROOTS-OWN',
 			'M-STD-FIRST-HAXE-ONLY',
-			'M-STD-COMPILER-SEARCH-NONE'
+			'M-STD-COMPILER-SEARCH-NONE',
+			'M-AHEAD-NEVER-READ',
+			'M-AHEAD-READ-AFTER-WRITE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

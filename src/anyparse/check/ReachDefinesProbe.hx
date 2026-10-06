@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.HaxeSpawn.HaxeRun;
+import anyparse.check.HaxeSpawn.SpawnJob;
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.core.TempScratch;
 import anyparse.query.ReachLiveness.ReachBuilds;
@@ -9,6 +10,18 @@ import haxe.io.Path;
 
 using Lambda;
 using StringTools;
+
+/** A batch of define probes `ReachDefinesProbe.start` began: the configurations, their probe directories, the compiles. */
+typedef DefinesProbe = {
+	oracles: Array<OracleConfig>,
+	ready: Null<Array<{ dir: String, args: Array<String> }>>,
+	runs: Null<PendingRuns>
+};
+
+/** The define probes a run began ahead of its first question (`ReachDefinesProbe.start`) and has not read or dropped yet. */
+typedef AheadBuilds = {
+	probe: Null<DefinesProbe>
+};
 
 /**
  * What each configured compiler oracle DEFINES, for the reach analysis to decide conditional compilation with
@@ -58,12 +71,57 @@ final class ReachDefinesProbe {
 	 * any of them compiles (one that cannot be read is left out); null when any of them cannot be probed.
 	 */
 	public static function probeAll(oracles: Array<OracleConfig>): Null<ReachBuilds> {
+		final ready: Null<Array<{ dir: String, args: Array<String> }>> = prepareAll(oracles);
+		return answerAll(oracles, ready, ready == null ? [] : HaxeSpawn.runAll(jobsOf(oracles, ready), BUFFER, HaxeSpawn.parallelism()));
+	}
+
+	/**
+	 * `probeAll`'s compiles started in the background, to overlap compiles the run is waiting on anyway (the facts): a run
+	 * that will ask the builds starts them as soon as it knows, and `finish` answers what `probeAll` would have answered
+	 * once they end. The library sources are read at `finish`, as `probeAll` reads them after its compiles.
+	 */
+	public static function start(oracles: Array<OracleConfig>): DefinesProbe {
+		final ready: Null<Array<{ dir: String, args: Array<String> }>> = prepareAll(oracles);
+		return {
+			oracles: oracles,
+			ready: ready,
+			runs: ready == null ? null : HaxeSpawn.startAll(jobsOf(oracles, ready), BUFFER, HaxeSpawn.parallelism())
+		};
+	}
+
+	/** What the compiles `start` began answer: `probeAll`'s answer for the same configurations. */
+	public static function finish(probe: DefinesProbe): Null<ReachBuilds> {
+		final runs: Null<PendingRuns> = probe.runs;
+		return answerAll(probe.oracles, probe.ready, runs == null ? [] : runs.await());
+	}
+
+	/** End the compiles `start` began, unread, and delete their probe directories: a run that never asked the builds. */
+	public static function abandon(probe: DefinesProbe): Void {
+		probe.runs?.cancel();
+		for (p in probe.ready ?? []) discard(p.dir);
+	}
+
+	/** Every configuration's probe directory and arguments, or null when any of them cannot be prepared (and none is kept). */
+	private static function prepareAll(oracles: Array<OracleConfig>): Null<Array<{ dir: String, args: Array<String> }>> {
 		final prepared: Array<Null<{ dir: String, args: Array<String> }>> = [for (i in 0...oracles.length) prepare(oracles[i], i)];
 		final ready: Array<{ dir: String, args: Array<String> }> = [for (p in prepared) if (p != null) p];
-		final runs: Array<HaxeRun> = ready.length == oracles.length
-			? HaxeSpawn.runAll([for (i in 0...ready.length) { args: ready[i].args, cwd: oracles[i].dir }], BUFFER, HaxeSpawn.parallelism())
-			: [];
+		if (ready.length == oracles.length) return ready;
 		for (p in ready) discard(p.dir);
+		return null;
+	}
+
+	private static function jobsOf(oracles: Array<OracleConfig>, ready: Array<{ dir: String, args: Array<String> }>): Array<SpawnJob> {
+		return [for (i in 0...ready.length) { args: ready[i].args, cwd: oracles[i].dir }];
+	}
+
+	/**
+	 * The builds the probe compiles `runs` of `oracles` (prepared as `ready`, null when they could not be) report, the
+	 * probe directories deleted; null when any configuration answers nothing.
+	 */
+	private static function answerAll(
+		oracles: Array<OracleConfig>, ready: Null<Array<{ dir: String, args: Array<String> }>>, runs: Array<HaxeRun>
+	): Null<ReachBuilds> {
+		for (p in ready ?? []) discard(p.dir);
 		if (runs.length != oracles.length || oracles.length == 0) return null;
 		final out: Array<ReachConfiguration> = [];
 		for (i in 0...oracles.length) {

@@ -9,6 +9,8 @@ import anyparse.check.OracleDeclaration;
 import anyparse.check.OracleGeneration;
 import anyparse.check.OracleRunMemo;
 import anyparse.check.ReachDefinesProbe;
+import anyparse.check.ReachDefinesProbe.AheadBuilds;
+import anyparse.check.ReachDefinesProbe.DefinesProbe;
 import anyparse.check.Severity;
 import anyparse.check.TypedFactsProbe;
 import anyparse.query.Address.TreeAddresser;
@@ -253,6 +255,7 @@ final class LintCommand implements CliCommand {
 		final oracleConfig: Null<LintConfig> = paths.length > 0 ? resolveConfig(paths[0]) : null;
 		final oracles: Array<OracleConfig> = oraclesOf(oracleConfig, o.noOracle, !o.fix, files);
 		final early: Null<FactsProbe> = earlyFacts(unconfigured != null, oracles, o);
+		final ahead: AheadBuilds = { probe: null };
 		final reflective: Null<Array<String>> = declaredBound(
 			paths, resolveConfig, c -> c.reflectiveClasses(), REFLECTIVE_CLASSES, 'a computed class name may name any class'
 		);
@@ -261,13 +264,13 @@ final class LintCommand implements CliCommand {
 			'a computed member name may obtain any method'
 		);
 		final resolution: Null<ResolutionScope> = withCompilerFacts(
-			withReachConfigurations(unconfigured, oracles, o.noOracle, reachComplete(paths, resolveConfig), reflective, holders), oracles,
-			o.noOracle, early, reflective, holders
+			withReachConfigurations(unconfigured, oracles, o.noOracle, reachComplete(paths, resolveConfig), ahead, reflective, holders),
+			oracles, o.noOracle, early, reflective, holders
 		);
 
 		if (o.fix) {
 			return endingCompiles(
-				early, oracles,
+				early, ahead, oracles,
 				() ->
 					LintFixDriver.runLintFix(
 						files, activeChecks, plugin, resolveConfig, applyEnablement, resolution, LintFixVerify.verifiable(oracles),
@@ -301,7 +304,7 @@ final class LintCommand implements CliCommand {
 		final oracleExit: Null<Int> = o.noOracle
 			? LintFixVerify.oracleSkippedNote(oracles)
 			: LintFixVerify.reportModeOracle(oracles, paths, oracleConfig?.compilerOracleServer() ?? false);
-		endCompiles(early, oracles);
+		endCompiles(early, ahead, oracles);
 		if (oracleExit != null) return oracleExit;
 
 		final failOn: Null<Severity> = o.failOn;
@@ -370,30 +373,49 @@ final class LintCommand implements CliCommand {
 	}
 
 	/**
-	 * `resolution` carrying the builds the configured compiler oracles describe (`ReachDefinesProbe`), probed on first
-	 * demand and once per run — only when the project declares the oracle list complete (`reachConfigurationsComplete`):
+	 * `resolution` carrying the builds the configured compiler oracles describe (`ReachDefinesProbe`), probed once per run: on
+	 * first demand, or from compiles `buildsAhead` started when a question was about to wait on the facts anyway
+	 * (`MemberReach.forRun`) — read only if no write came first (`buildsSettled`), so the tree they read is the one an
+	 * on-demand probe would have read — only when the project declares the oracle list complete (`reachConfigurationsComplete`):
 	 * a `MemberReach` answer may then hold under their conditional compilation and read exactly the code they compile.
 	 * An oracle list not declared complete vouches for nothing, since a build it leaves out may compile code no listed
 	 * one does. Unchanged with no oracle, or under `--no-oracle`, which runs no compile at all.
 	 */
 	private static function withReachConfigurations(
-		resolution: Null<ResolutionScope>, oracles: Array<OracleConfig>, noOracle: Bool, complete: Bool, ?reflective: Array<String>,
-		?holders: Array<String>
+		resolution: Null<ResolutionScope>, oracles: Array<OracleConfig>, noOracle: Bool, complete: Bool, ahead: AheadBuilds,
+		?reflective: Array<String>, ?holders: Array<String>
 	): Null<ResolutionScope> {
 		if (resolution == null || oracles.length == 0 || noOracle || !complete) return resolution;
 		var probed: Bool = false;
 		var builds: Null<ReachBuilds> = null;
+		// once the run writes, the builds are compiled on demand, as they read the tree then: none starts ahead of a write
+		var writing: Bool = false;
 		function probe(): Null<ReachBuilds> {
 			if (!probed) {
 				probed = true;
-				final found: Null<ReachBuilds> = ReachDefinesProbe.probeAll(oracles);
+				final pending: Null<DefinesProbe> = ahead.probe;
+				ahead.probe = null;
+				final found: Null<ReachBuilds> = pending == null ? ReachDefinesProbe.probeAll(oracles) : ReachDefinesProbe.finish(pending);
 				if (found != null && reflective != null) found.reflectiveClasses = reflective;
 				if (found != null && holders != null) found.reflectiveMethodHolders = holders;
 				builds = found;
 			}
 			return builds;
 		}
-		return { declared: resolution.declared, sources: resolution.sources, builds: probe };
+		function start(): Void {
+			if (!probed && !writing && ahead.probe == null) ahead.probe = ReachDefinesProbe.start(oracles);
+		}
+		function settled(): Void {
+			writing = true;
+			dropAhead(ahead);
+		}
+		return {
+			declared: resolution.declared,
+			sources: resolution.sources,
+			builds: probe,
+			buildsAhead: start,
+			buildsSettled: settled
+		};
 	}
 
 	/** The facts compiles a run starts before its first pass (`startsFactsEarly`), or null for a run that asks on demand. */
@@ -407,12 +429,14 @@ final class LintCommand implements CliCommand {
 	 * `body`'s answer, with the run's compiles ended (`endCompiles`) on every way out, a throw included: an early facts
 	 * batch must not run on after a failed run.
 	 */
-	private static function endingCompiles(early: Null<FactsProbe>, oracles: Array<OracleConfig>, body: () -> Int): Int {
+	private static function endingCompiles(
+		early: Null<FactsProbe>, ahead: AheadBuilds, oracles: Array<OracleConfig>, body: () -> Int
+	): Int {
 		final answer: Int = try body() catch (exception: Exception) {
-			endCompiles(early, oracles);
+			endCompiles(early, ahead, oracles);
 			throw exception;
 		};
-		endCompiles(early, oracles);
+		endCompiles(early, ahead, oracles);
 		return answer;
 	}
 
@@ -420,9 +444,17 @@ final class LintCommand implements CliCommand {
 	 * Every compile of the run is done: end the facts compiles no check asked for (`early`), then release the builds, so
 	 * another run may regenerate them.
 	 */
-	private static function endCompiles(early: Null<FactsProbe>, oracles: Array<OracleConfig>): Void {
+	private static function endCompiles(early: Null<FactsProbe>, ahead: AheadBuilds, oracles: Array<OracleConfig>): Void {
 		if (early != null) TypedFactsProbe.abandon(early);
+		dropAhead(ahead);
 		OracleGeneration.release(oracles);
+	}
+
+	/** End the builds' compiles `ahead` holds, started and never read (`withReachConfigurations`). */
+	private static function dropAhead(ahead: AheadBuilds): Void {
+		final pending: Null<DefinesProbe> = ahead.probe;
+		ahead.probe = null;
+		if (pending != null) ReachDefinesProbe.abandon(pending);
 	}
 
 	/**
@@ -469,7 +501,9 @@ final class LintCommand implements CliCommand {
 			builds: resolution.builds,
 			facts: probe,
 			factsEdited: touched,
-			factsSettled: () -> if (early != null) probe()
+			factsSettled: () -> if (early != null) probe(),
+			buildsAhead: resolution.buildsAhead,
+			buildsSettled: resolution.buildsSettled
 		};
 	}
 
