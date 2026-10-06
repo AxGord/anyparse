@@ -106,7 +106,7 @@ final class FactsProvenance {
 	/**
 	 * Whether what the builds compiled of the graph type `type` is its text, whatever build macro ran over it
 	 * (`ReachGraph.rewrittenBy`): the one declaration of it the index holds is in a file each typed type standing for it
-	 * (`FactsView.bySimpleName`) was read from, and every file a build read one from is one the index holds (`textual`) —
+	 * (`FactsView.provenanceTypes`) was read from, and every file a build read one from is one the index holds (`textual`) —
 	 * a typedef aliasing it declares no code, wherever it is (`aliasOnly`) — every field those declare is one the text
 	 * declares alike
 	 * (`declaredAlike`), and every body and initializer the compiler typed for them lies in its field's declaration with
@@ -118,7 +118,7 @@ final class FactsProvenance {
 	 */
 	public function typeIsItsText(g: CallGraph, type: String): Bool {
 		final site: Null<{ file: String, span: Span }> = _scope.siteOf(type);
-		final ids: Array<String> = _view.bySimpleName()[type] ?? [];
+		final ids: Array<String> = _view.provenanceTypes(type);
 		return site != null && ids.length > 0 && g.types.declarationCount(type) == 1 && textual(g, type, [site.file], ids);
 	}
 

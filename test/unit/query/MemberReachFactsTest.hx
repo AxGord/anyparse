@@ -2713,6 +2713,38 @@ class MemberReachFactsTest extends Test {
 		assertMatch(question(null, null, base), r -> r.match(Unknown(Ambiguous('Grid'))));
 	}
 
+	@:pin('control') @:killer('M-FACTS-PROVENANCE-SIMPLE') @:killer('M-FACTS-PROVENANCE-UNTRUE') @:killer('M-FACTS-TEXT-PROVENANCE-SIMPLE')
+	public function testTheOneDeclarationOfANameAsksItsOwnBuildMacroUnderTheTruth(): Void {
+		// the region runs `a.Endian.calm`, of an enum abstract the index declares once; `b.Endian`, a class the builds compile
+		// and the index does not hold, shares the simple name (lime's `Endian` beside openfl's) and carries a build macro.
+		// Under the truth only the type the declaration is may rewrite its code: `b.Endian`'s build is none of it, whether
+		// `a.Endian` carries one that keeps its text (tink's hub builds both) or none; `a.Endian`'s own `rewrite` is, and the
+		// facts show the push it made. A region running `b.Endian`'s rewritten `calm` is no text of `a.Endian`. With no whole
+		// list of builds every typed type of the name is asked
+		function question(mine: Null<String>, other: String, listed: Bool, region: String = 'a.Endian.calm();'): ReachResult {
+			final built: String = mine == null ? '' : '@:build(Mac.' + mine + '())\n';
+			final files: Map<String, String> = [
+				'Main.hx' => LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ ' + region + ' /*>*/ }\n'
+					+ '\t\tnew b.Endian().calm();\n\t}\n}\n',
+				'a/Endian.hx' => 'package a;\n\n' + built + 'enum abstract Endian(Null<Int>) {\n\tvar BIG = 0;\n\tvar LITTLE = 1;\n\n'
+					+ '\tpublic static function calm():Void {}\n}\n',
+				'Mac.hx' => BUILD_MACROS
+			];
+			final unindexed: Map<String, String> = [
+				'b/Endian.hx' => 'package b;\n\n@:build(Mac.' + other + '())\nclass Endian {\n\tpublic function new() {}\n\n'
+					+ '\tpublic function calm():Void {}\n}\n'
+			];
+			final result: ReachResult = ask(files, null, true, null, false, null, null, unindexed, listed);
+			Assert.equals('', lastDropped.join('; '), 'the fixture did not compile');
+			return result;
+		}
+		assertMatch(question(null, 'rewrite', true), r -> r.match(Proven));
+		assertMatch(question('keep', 'keep', true), r -> r.match(Proven));
+		assertMatch(question('rewrite', 'keep', true), r -> r.match(Reached(_)));
+		assertMatch(question(null, 'rewrite', true, 'new b.Endian().calm();'), r -> !r.match(Proven));
+		assertMatch(question(null, 'rewrite', false), r -> r.match(Unknown(Reification(_, _))));
+	}
+
 	@:pin('control') @:killer('M-FACTS-FOLDED-BY-ID') @:killer('M-FACTS-SOLE-NEVER') @:killer('M-REACH-AMBIGUOUS-SOLE-NONE')
 	public function testATypeDeclaredOncePerBuildIsOneTypeUnderTheTruth(): Void {
 		// `Grid` is declared once per build — in each branch of a region, or in a file of each build's own classpath — and each

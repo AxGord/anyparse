@@ -3108,6 +3108,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-TEXT-READ-AT-VALUE,M-FACTS-TEXT-BINDING',
 			'unit.query.MemberReachFactsTest#testTheInitializersOfATypeOfASharedNameAreEachTypedTypesUnderTheTruth :: control :: '
 				+ 'M-REACH-OWN-TYPES-INIT-NONE,M-FACTS-INIT-OWNERS-SOLE,M-FACTS-QUALIFY-SITELESS',
+			'unit.query.MemberReachFactsTest#testTheOneDeclarationOfANameAsksItsOwnBuildMacroUnderTheTruth :: control :: '
+				+ 'M-FACTS-PROVENANCE-SIMPLE,M-FACTS-PROVENANCE-UNTRUE,M-FACTS-TEXT-PROVENANCE-SIMPLE',
 			'unit.query.MemberReachFactsTest#testTheOwnerTheFactsPinAtTheLoopIsOneOfTwoTypesUnderOneNameUnderTheTruth :: control :: '
 				+ 'M-REACH-PINNED-NONE,M-FACTS-PINNED-UNTRUE,M-REACH-ENTRY-OWN-NONE,M-REACH-PINNED-REWRITTEN-SIMPLE',
 			'unit.query.MemberReachFactsTest#testThePushesOfAComprehensionAreItsTextUnderTheTruth :: control :: M-FACTS-TEXT-COMPREHENSION',
@@ -4345,6 +4347,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-SOLE-TYPED-ONLY',
 			'M-FACTS-SOLE-STANDS-ANY',
 			'M-FACTS-SOLE-NEVER',
+			'M-FACTS-PROVENANCE-SIMPLE',
+			'M-FACTS-PROVENANCE-UNTRUE',
+			'M-FACTS-TEXT-PROVENANCE-SIMPLE',
 			'M-FACTS-FOLDED-BY-ID',
 			'M-REACH-BASE-CLASSPATH',
 			'M-REACH-TYPES-HELD',

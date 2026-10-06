@@ -7258,6 +7258,30 @@
 			"note": "(precision) a type declared once per branch is several types under the truth too: its members keep their syntax and its member questions are ambiguous"
 		},
 		{
+			"name": "M-FACTS-PROVENANCE-SIMPLE",
+			"type": "anyparse.query.FactsView",
+			"method": "provenanceTypes",
+			"find": "return own == null ? bySimpleName()[type] ?? [] : standingFor(type, own);",
+			"replace": "return bySimpleName()[type] ?? [];",
+			"note": "(precision) the code of a name the index declares once is asked for a build macro as every typed type of the name, so another type's macro (lime's `Endian` beside openfl's) is a Reification of it"
+		},
+		{
+			"name": "M-FACTS-PROVENANCE-UNTRUE",
+			"type": "anyparse.query.FactsView",
+			"method": "declaredTyped",
+			"find": "if (!truth) return null;",
+			"replace": "if (false) return null;",
+			"note": "the type the declaration is pins the build macros of its code under builds that are not every build, one of which may compile the other type of the name there"
+		},
+		{
+			"name": "M-FACTS-TEXT-PROVENANCE-SIMPLE",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "typeIsItsText",
+			"find": "final ids: Array<String> = _view.provenanceTypes(type);",
+			"replace": "final ids: Array<String> = _view.bySimpleName()[type] ?? [];",
+			"note": "(precision) whether a type's code is its text is asked of every typed type of its name, so one the index does not hold, read from no file of it, makes any build macro over the one it does a Reification"
+		},
+		{
 			"name": "M-FACTS-FOLDED-BY-ID",
 			"type": "anyparse.query.FactsView",
 			"method": "bodyFacts",
