@@ -1251,7 +1251,17 @@ decided the question; it may not become a record of runs.
   re-emits the tree it parsed, so the count cannot grow and the refusal would only make the file
   unformattable; it is formatted as it stands, and the gate refuses only a GROWING count —
   branch `fix/orphan-else-leniency`
-- found WRONG, not changed: `HxCondBlockCloseRaw`'s doc says the `else if` after a
-  block-closing region's `}` "reaches `HxStatement.OrphanElseStmt`"; it binds to the enclosing
-  `if`'s own else slot (`IfStmt … (BlockStmt … CondSpliceBlockClose) (IfStmt …)`), so that shape
-  produces no orphan at all — branch `fix/orphan-else-leniency`
+- `HxCondBlockCloseRaw`'s doc said the `else if` after a block-closing region's `}` "reaches
+  `HxStatement.OrphanElseStmt`" → it binds to the enclosing `if`'s own else slot (`IfStmt …
+  (BlockStmt … CondSpliceBlockClose) (IfStmt …)`), so that shape produces no orphan at all; the
+  doc now says so — branch `fix/orphan-else-leniency`
+- `editKeepingCanonical`'s fallback for a drifted source was believed to need only the bare splice
+  ("reformatting a file the user never formatted is not a span-splice op's business") → it also
+  threw away every refusal `canonicalize` asks of the EDIT, so `extract-superclass` on a file one
+  stray space from canonical welded two comments its canonical twin refused. Every edit question
+  (emptied slot, split doc, welded or hoisted comment, stranded `else`) is a fact about source,
+  edits and splice, and is now asked of the fallback splice too; only the writer's own questions
+  (comment loss in re-emission, convergence) have nothing to ask there. `extract-interface`'s one
+  edit (` implements I`, zero-width, no newline) and `introduce-parameter-object`'s (non-empty
+  replacements plus an EOF append) cannot trip any of them, so only `extract-superclass` was
+  observably exposed — branch `fix/orphan-else-leniency`

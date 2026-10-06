@@ -906,6 +906,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.DeleteBlankLineSliceTest',
 		'unit.query.DocOwnerGuardSliceTest',
 		'unit.query.EditJournalTest',
+		'unit.query.EditKeepingCanonicalGateTest',
 		'unit.query.ElementSpanOwnedLinesTest',
 		'unit.query.EncapsulateFieldSliceTest',
 		'unit.query.ExtractConstantSliceTest',
@@ -2680,6 +2681,11 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.EditJournalTest#testSwappedIdenticalBodiesKeepTheirOwnIdentity :: control :: M-JOURNAL-INTERIOR',
 			'unit.query.EditJournalTest#testTheCanonicalizerRecordsWhatItSettled :: control :: M-JOURNAL-RECORD',
 			'unit.query.EditJournalTest#testUntouchedTextMapsByTheShiftOfTheEditsBefore :: control :: M-JOURNAL-SHIFT',
+			'unit.query.EditKeepingCanonicalGateTest#testExtractSuperclassOnADriftedFileRefusesAWeld :: control :: M-KEEP-CANON-FALLBACK-UNGUARDED,M-GUARDED-SPLICE-NO-REFUSAL',
+			'unit.query.EditKeepingCanonicalGateTest#testTheFallbackRefusesASplitDoc :: control :: M-KEEP-CANON-FALLBACK-UNGUARDED',
+			'unit.query.EditKeepingCanonicalGateTest#testTheFallbackRefusesAStrandedElse :: control :: M-KEEP-CANON-FALLBACK-UNGUARDED,M-GUARDED-SPLICE-NO-REFUSAL',
+			'unit.query.EditKeepingCanonicalGateTest#testTheFallbackRefusesAnEmptiedSlot :: control :: M-KEEP-CANON-FALLBACK-UNGUARDED',
+			'unit.query.EditKeepingCanonicalGateTest#testTheFallbackStillSplicesAHarmlessEdit :: control :: M-GUARDED-SPLICE-ALWAYS-REFUSES',
 			'unit.query.ExtractInterfaceSliceTest#testAlreadyImplementsRefused :: control :: M-EI-DUP-IMPL-ALLOWED',
 			'unit.query.ExtractInterfaceSliceTest#testGuardedImplementsRefused :: control :: M-EI-DUP-IMPL-ALLOWED,M-EI-GUARD-FLAT-SCAN',
 			'unit.query.ExtractInterfaceSliceTest#testQualifiedSameNameDoesNotBlock :: control :: M-EI-IMPL-ANY-REFUSED',
@@ -5200,7 +5206,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-ORPHAN-SEAM-END-SELF-ONLY',
 			'M-ORPHAN-SEAM-END-UNTRIMMED',
 			'M-ORPHAN-ANY-PARENT',
-			'M-ORPHAN-NO-CASE-ARMS'
+			'M-ORPHAN-NO-CASE-ARMS',
+			'M-KEEP-CANON-FALLBACK-UNGUARDED',
+			'M-GUARDED-SPLICE-NO-REFUSAL',
+			'M-GUARDED-SPLICE-ALWAYS-REFUSES'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

@@ -14420,7 +14420,7 @@
 		{
 			"name": "M-ORPHAN-GATE-OFF",
 			"type": "anyparse.query.CanonicalEdit",
-			"method": "spliceRefusal",
+			"method": "editRefusal",
 			"find": "return hoisted ?? OrphanContinuation.introduced(source, spliced, plugin);",
 			"replace": "return hoisted;",
 			"note": "the writer-emit gate never asks the orphan question, so a patch or an inserted element that strands an else is written as a success again"
@@ -14504,6 +14504,30 @@
 			"find": "\t\tfor (arm in [shape.caseBranchKind, shape.defaultBranchKind]) if (arm != null) kinds.push(arm);\n",
 			"replace": "",
 			"note": "a case arm is not a statement sequence, so an else after a #if region inside a case body counts as stranded"
+		},
+		{
+			"name": "M-KEEP-CANON-FALLBACK-UNGUARDED",
+			"type": "anyparse.query.CanonicalEdit",
+			"method": "editKeepingCanonical",
+			"find": "guardedSplice(source, edits, plugin)",
+			"replace": "Ok(applyEdits(source, edits))",
+			"note": "the fallback for a drifted source is the bare splice again, so every refusal canonicalize asks of an edit is thrown away and extract-superclass welds two comments the canonical twin keeps apart"
+		},
+		{
+			"name": "M-GUARDED-SPLICE-NO-REFUSAL",
+			"type": "anyparse.query.CanonicalEdit",
+			"method": "guardedSplice",
+			"find": "return refused == null ? Ok(spliced) : Err(refused);",
+			"replace": "return Ok(spliced);",
+			"note": "the fallback splice asks the edit questions and ignores the answer, so a drifted file takes a weld or a stranded else"
+		},
+		{
+			"name": "M-GUARDED-SPLICE-ALWAYS-REFUSES",
+			"type": "anyparse.query.CanonicalEdit",
+			"method": "guardedSplice",
+			"find": "return refused == null ? Ok(spliced) : Err(refused);",
+			"replace": "return Err('refused');",
+			"note": "the fallback refuses every edit on a drifted source, so the span-splice ops stop working on any file nobody ran fmt over"
 		}
 	]
 }

@@ -24,10 +24,9 @@ package anyparse.grammar.haxe;
  *
  * The owning ctor `HxStatement.CondSpliceBlockClose` takes the raw fragment as its ENTIRE
  * payload — there is no tail field. What follows `#end` is the enclosing block's own `}`,
- * which that block's `@:trail('}')` consumes, and the if-chain then continues in the
- * enclosing statement Star (`else if (view != null) ...` reaches
- * `HxStatement.OrphanElseStmt`). A `{raw, tail}` shape would have to name `}` as a statement,
- * which no production does.
+ * which that block's `@:trail('}')` consumes. It is the `else if (array != null)` body, so the
+ * `else if (view != null)` after it is that `if`'s own `elseBody` — no `OrphanElseStmt` is
+ * involved. A `{raw, tail}` shape would have to name `}` as a statement, which no production does.
  *
  * WHY A DEDICATED TERMINAL rather than reusing `HxCondSpliceRaw`: a payload-only raw ctor is
  * maximally greedy — it matches ANY region that reaches it. The leading-`}` constraint keeps
