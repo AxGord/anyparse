@@ -155,12 +155,6 @@ final class FactsMethodValues {
 	private static inline final STRING_TYPE: String = 'String';
 
 
-	/** The marker of a node a fact of which lies in a file whose text the table no longer has. */
-	private static inline final STALE_FOREIGN: String = 'stale-foreign';
-
-	/** The marker of a node a `Reflect`/`Type` body was spliced into: that call, its name and its arguments are gone. */
-	private static inline final REFLECTION_INLINED: String = 'reflection-inlined';
-
 	private final _view: FactsView;
 	private final _table: CompilerFacts;
 
@@ -328,12 +322,18 @@ final class FactsMethodValues {
 				return out;
 			}
 			final n: FactNode = made;
-			final lost: Null<String> = if (n.incomplete.contains(STALE_FOREIGN))
-				'a fact of `$id` lies in a file whose text the table no longer has'
-			else if (n.incomplete.contains(REFLECTION_INLINED) && !inlinedMemberless(n))
-				'a reflective body spliced into `$id` lost the name it was handed'
-			else
-				null;
+			final lost: Null<String> = FactMarkers.first(
+				n, m -> switch m {
+					case StaleForeign: 'a fact of `$id` lies in a file whose text the table no longer has';
+					case ReflectionInlined: inlinedMemberless(n)
+						? null
+						: 'a reflective body spliced into `$id` lost the name it was handed';
+					case Unknown(text):
+						FactMarkers.unknownReason(id, text);
+					// a splice's and an expansion's facts are the node's own, wherever they sit
+					case InlineSite | MacroExpansion | ReflectionUnattributed | ReflectionFrom(_): null;
+				}
+			);
 			if (lost != null) {
 				out.unknown = lost;
 				return out;

@@ -8,6 +8,8 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CallGraph;
 import anyparse.query.CompilerFacts;
+import anyparse.query.FactsView;
+import anyparse.query.FunctionValueTypes;
 import anyparse.query.MemberReach;
 import anyparse.query.MemberTouchScan;
 import anyparse.query.ReachLiveness.ReachConfiguration;
@@ -63,6 +65,9 @@ class MemberReachFactsTest extends Test {
 
 	private static inline final REGION_OPEN: String = '/*<*/';
 	private static inline final REGION_CLOSE: String = '/*>*/';
+
+	/** A node marker no reader knows (`FactMarker.Unknown`): what a facts producer grown past this reader may write. */
+	private static inline final FUTURE_MARKER: String = 'future-marker';
 
 	/** A loop in `Main.main` whose body is the region, over the static `Main.items`. */
 	private static inline final LOOP_HEAD: String = 'class Main {\n\tpublic static var items:Array<Int> = [1, 2];\n';
@@ -3001,21 +3006,110 @@ class MemberReachFactsTest extends Test {
 
 	@:pin('control') @:killer('M-FACTS-UNPLACED-UNKNOWN')
 	public function testAMarkerTheFactsReaderDoesNotKnowKeepsItsBodysSyntaxUnderTheTruth(): Void {
-		// a node's markers are a closed list (`FactNode.incomplete`): one this reader does not name may say a fact of the node
-		// lost its place, so the body keeps its syntax — where `sum(items)`, an argument, escapes — instead of its facts
+		// a node's markers are a closed list (`FactMarker`): one no reader names may say a fact of the node lost its place, so
+		// `other` keeps its syntax — where `sum(items)`, an argument, escapes — instead of its facts
 		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n'
-			+ '\t\tsum(items);\n\t}\n\n\tstatic function calm():Void {}\n\n'
+			+ '\t\tother();\n\t}\n\n\tstatic function calm():Void {}\n\n\tstatic function other():Void {\n\t\tsum(items);\n\t}\n\n'
 			+ '\tstatic function sum(a:Array<Int>):Int return a.length;\n}\n';
-		function ask(marker: Null<String>): ReachResult {
-			return rewrittenTruth(
-				['Main.hx' => main],
-				(id, text) -> id != 'Main.main' || marker == null ? text : text.substr(0, text.length - 1) + ',"inc":["$marker"]}',
-				(reach, dir) ->
-					reach.mayReach(Region(Path.join([dir, 'Main.hx']), regionOf(main)), { owner: 'Main', name: 'items' }, Mutate)
-			);
+		assertMatch(compiledTruthAsk(['Main.hx' => main]), r -> r.match(Proven));
+		assertMatch(
+			rewritten(marking('Main.other', FUTURE_MARKER), () -> compiledTruthAsk(['Main.hx' => main])),
+			r -> r.match(Unknown(Escape(_, _)))
+		);
+	}
+
+	@:pin('control') @:killer('M-FACTS-BLIND-UNKNOWN')
+	public function testAMarkerTheFactsReaderDoesNotKnowIsABlindSpotUnderTheTruth(): Void {
+		// a node meeting the region whose marker no reader names may stand for code no text holds, as a macro's expansion does:
+		// its syntax, which changes nothing, answers for nothing
+		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n'
+			+ '\t}\n\n\tstatic function calm():Void {}\n}\n';
+		assertMatch(compiledTruthAsk(['Main.hx' => main]), r -> r.match(Proven));
+		assertMatch(
+			rewritten(marking('Main.main', FUTURE_MARKER), () -> compiledTruthAsk(['Main.hx' => main])),
+			r -> r.match(Unknown(Unmodelled(_, _, _)))
+		);
+	}
+
+	@:pin('control') @:killer('M-ESCAPES-FACTS-MARKER-UNKNOWN')
+	public function testAMarkerTheFactsReaderDoesNotKnowLetsWhatItsNodeIsHandedEscapeUnderTheTruth(): Void {
+		// `lib.Text.keep` lets nothing it is handed go anywhere — until it carries a marker no reader names, which may say a fact
+		// of what it does was lost
+		assertMatch(truthLibAsk('', 'throw last;'), r -> r.match(Proven));
+		assertMatch(rewritten(marking('lib.Text.keep', FUTURE_MARKER), () -> truthLibAsk('', 'throw last;')), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-ESCAPES-FACTS-CTOR-SHAPE')
+	public function testAConstructorTypedAsNoFunctionAndNoEnumHoldsAnythingUnderTheTruth(): Void {
+		// an escaped `Mark` holds what its constructors' arguments hold: `Plain`, typed as a `Mark`, holds nothing — typed as
+		// anything else, here a type the facts could not print, it may hold anything
+		final mark: Map<String, String> = ['Mark.hx' => 'enum Mark {\n\tPlain;\n\tNum(i:Int);\n}\n'];
+		final escape: String = 'var d:Dynamic = Mark.Plain;';
+		assertMatch(truthLibAsk(escape, 'throw last;', mark), r -> r.match(Proven));
+		function unread(table: CompilerFacts): Void {
+			for (c in table.type('Mark')?.constructors ?? []) if (c.name == 'Plain') Reflect.setField(c, 'type', '?');
 		}
-		assertMatch(ask(null), r -> r.match(Proven));
-		assertMatch(ask('future-marker'), r -> r.match(Unknown(Escape(_, _))));
+		assertMatch(rewritten(unread, () -> truthLibAsk(escape, 'throw last;', mark)), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-METHODS-MARKER-UNKNOWN')
+	public function testAMarkerTheFactsReaderDoesNotKnowLeavesTheMethodValuesUnknownUnderTheTruth(): Void {
+		// no code reads `Other.dump` as a value, so it runs on an `Other` — while every function the builds typed says which
+		// method values it reads: one carrying a marker no reader names may read any
+		final main: String = 'class Main {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n'
+			+ '\tstatic function sink(x:Dynamic):Void {}\n\tstatic function main() { sink(new Main()); }\n'
+			+ '\tfunction f(n:String):Void {\n\t\tvar o:Other = new Other();\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ o.dump(n); /*>*/ }\n\t}\n}\n'
+			+ 'class Other {\n\tpublic function new() {}\n\n\tpublic function dump(n:String):Void Reflect.setProperty(this, n, null);\n}\n'
+			+ 'class Third {\n\tpublic function new() {}\n\n\tpublic function calm():Void {}\n}\n'
+			+ 'class Rebind {\n\tpublic static function run():Void Reflect.callMethod(new Main(), new Third().calm, ["items"]);\n}\n'
+			+ 'class Nat {\n\tpublic static function go():Void untyped __js__("1");\n}\n';
+		assertMatch(reflectAsk(['Main.hx' => main], true), r -> r.match(Proven));
+		assertMatch(rewritten(marking('Third.calm', FUTURE_MARKER), () -> reflectAsk(['Main.hx' => main], true)), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-VALUE-STORED-MARKER-UNKNOWN') @:killer('M-VALUE-CTOR-MARKER-UNKNOWN')
+	@:access(anyparse.query.MemberReach)
+	@:access(anyparse.query.FunctionValueTypes)
+	public function testAMarkerTheFactsReaderDoesNotKnowLeavesWhatAFunctionFieldHoldsUnknownUnderTheTruth(): Void {
+		// a function carrying a marker no reader names may write a `Hook`'s `run` by its name once a `Hook` left the type
+		// system, and hand `Pool`'s constructor anything through a reflective construction. Asked of `FunctionValueTypes`
+		// itself, every `Hook` escaped: in a question the escape set, read first, refuses such a node already (`escapesOf`)
+		function values(main: String, marked: Bool, read: FunctionValueTypes -> Bool): Bool {
+			function run(): Bool {
+				return withReach(['Main.hx' => main], null, true, false, null, null, null, true, (reach, dir) -> {
+					final view: Null<FactsView> = reach._scope.facts;
+					if (view == null) throw 'the fixture did not compile';
+					final facts: FactsView = view;
+					read(new FunctionValueTypes(
+						facts, reach._scope, () -> [], () -> ['Hook'], path -> null, () -> reach._g.methodValues(facts)
+					));
+				});
+			}
+			return marked ? rewritten(marking('Main.grow', FUTURE_MARKER), run) : run();
+		}
+		function stored(v: FunctionValueTypes): Bool {
+			return v.readStored('Hook.run') != null;
+		}
+		final hook: String = hookFixture('');
+		Assert.isTrue(values(hook, false, stored), 'the stores into `run` were not known');
+		Assert.isFalse(values(hook, true, stored), 'a function carrying an unknown marker wrote nothing into `run` by its name');
+		function escaped(v: FunctionValueTypes): Bool {
+			final out: Array<FactPos> = [];
+			v.reflectiveConstructions('Pool', 1, 1, out);
+			return out.contains(FunctionValueTypes.ESCAPED_VALUES);
+		}
+		final pool: String = settlessPool('\t\tType.createInstance(Pool, [null, x -> {}]);\n');
+		Assert.isFalse(values(pool, false, escaped), 'the reflective construction handed an escaped value');
+		Assert.isTrue(values(pool, true, escaped), 'a function carrying an unknown marker constructed nothing by reflection');
+	}
+
+	@:pin('control') @:killer('M-FACTS-TEXT-MARKER-UNKNOWN')
+	public function testAMarkerTheFactsReaderDoesNotKnowIsNoTextUnderTheTruth(): Void {
+		// `Util.other`'s facts are its text — until it carries a marker no reader names, which may say a fact of it was lost
+		final files: Map<String, String> = utilWith('public static function other():Map<String, Int> return new Map<String, Int>();');
+		assertMatch(hubAsk(files), r -> r.match(Proven));
+		assertMatch(rewritten(marking('Util.other', FUTURE_MARKER), () -> hubAsk(files)), r -> !r.match(Proven));
 	}
 
 	@:pin('control') @:killer('M-GRAPH-FIELD-ACCESS-UNKNOWN')
@@ -3864,28 +3958,54 @@ class MemberReachFactsTest extends Test {
 	}
 
 	/**
-	 * `question` over the truth of `files`' builds, each node record of their facts first rewritten by `rewrite` (handed the
-	 * node's id and its record): what a facts producer grown past this reader may write.
+	 * What `withReach` does to the facts it reads next, before any question: a record a facts producer grown past this reader
+	 * may write. Null for none; set only around one fixture (`rewritten`).
 	 */
-	@:access(anyparse.query.MemberReach)
+	private static var factsEdit: Null<CompilerFacts -> Void> = null;
+
+	/** `run`, the facts of its fixture edited by `edit` first (`factsEdit`). */
+	private static function rewritten<T>(edit: CompilerFacts -> Void, run: () -> T): T {
+		factsEdit = edit;
+		final result: T = run();
+		factsEdit = null;
+		return result;
+	}
+
+	/** The edit rewriting each node record of the facts by `rewrite`, handed the node's id and its record. */
 	@:access(anyparse.query.CompilerFacts)
+	private static function nodes(rewrite: (String, String) -> String): CompilerFacts -> Void {
+		return table -> {
+			for (id => lines in table._nodeLines) for (i in 0...lines.length) lines[i] = {
+				dump: lines[i].dump,
+				text: rewrite(id, lines[i].text),
+				home: lines[i].home,
+				builds: lines[i].builds
+			};
+			table._nodeCache.clear();
+			table._builtCache.clear();
+		};
+	}
+
+	/** The edit adding the marker `marker` to the records of the node `id`. */
+	private static function marking(id: String, marker: String): CompilerFacts -> Void {
+		return nodes((node, text) ->
+			if (node != id)
+				text
+			else if (text.indexOf('"inc":[') >= 0)
+				StringTools.replace(text, '"inc":[', '"inc":["$marker",')
+			else
+				text.substr(0, text.length - 1) + ',"inc":["$marker"]}'
+		);
+	}
+
+	/**
+	 * `question` over the truth of `files`' builds, each node record of their facts first rewritten by `rewrite` (handed the
+	 * node's id and its record).
+	 */
 	private static function rewrittenTruth<T>(
 		files: Map<String, String>, rewrite: (String, String) -> String, question: (MemberReach, String) -> T, ?pos: haxe.PosInfos
 	): T {
-		final result: T = withReach(files, null, true, false, null, null, null, true, (reach, dir) -> {
-			final table: Null<CompilerFacts> = reach._scope.facts?.table;
-			if (table != null) {
-				for (id => lines in table._nodeLines) for (i in 0...lines.length) lines[i] = {
-					dump: lines[i].dump,
-					text: rewrite(id, lines[i].text),
-					home: lines[i].home,
-					builds: lines[i].builds
-				};
-				table._nodeCache.clear();
-				table._builtCache.clear();
-			}
-			question(reach, dir);
-		});
+		final result: T = rewritten(nodes(rewrite), () -> withReach(files, null, true, false, null, null, null, true, question));
 		Assert.equals('', lastDropped.join('; '), 'the fixture did not compile: ${files['Main.hx']}', pos);
 		return result;
 	}
@@ -3959,6 +4079,8 @@ class MemberReachFactsTest extends Test {
 					}
 			];
 		final facts: Null<CompilerFacts> = withFacts ? TypedFactsProbe.probeAll(oracles) : null;
+		final edit: Null<CompilerFacts -> Void> = factsEdit;
+		if (facts != null && edit != null) edit(facts);
 		lastDropped = facts == null ? [] : [for (d in facts.dropped) '${d.name}: ${d.reason}'];
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		final project: Array<{ file: String, source: String }> = [

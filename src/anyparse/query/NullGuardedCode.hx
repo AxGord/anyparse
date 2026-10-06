@@ -86,9 +86,6 @@ final class NullGuardedCode {
 	/** The metadata making a field callable by code outside the program. */
 	private static inline final EXPOSE: String = ':expose';
 
-	/** The node markers a body whose parameters its text names alone may carry: inlined code takes values as arguments. */
-	private static final READABLE_BODY: Array<String> = ['inline-site-unknown'];
-
 	/** The containers whose element store holds the value stored and calls nothing (`containerSealed`), by typed id. */
 	private static final CONTAINERS: Array<String> = ['Array', 'haxe.ds.Map'];
 
@@ -367,7 +364,7 @@ final class NullGuardedCode {
 	private function parameterNeverCalls(id: String, index: Int, count: Int, depth: Int): Bool {
 		final node: Null<FactNode> = _view.table.node(id);
 		if (node == null || node.kind != METHOD_KIND || node.params.length != count || !node.keptParams.contains(index)) return false;
-		if (node.variants.exists(v -> v.params.length != count) || !node.incomplete.foreach(m -> READABLE_BODY.contains(m))) return false;
+		if (node.variants.exists(v -> v.params.length != count) || FactMarkers.carries(node, m -> !m.match(InlineSite))) return false;
 		final name: String = node.params[index].name;
 		if (namesInNode(node, name)) return false;
 		final read: Null<ParsedText> = parsed(node.at.file);

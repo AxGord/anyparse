@@ -52,9 +52,6 @@ final class MemberTouchScan {
 	 */
 	private static final TYPED_ACCESSES: Array<String> = ['FInstance', 'FStatic', 'FAnon', 'FDynamic'];
 
-	/** The marker of a typed body an expression macro expanded into (`TypedFactsProbe`). */
-	private static inline final MACRO_EXPANSION: String = 'macro-expansion';
-
 	private final _scope: ReachProject;
 	private final _hazards: ReachHazards;
 
@@ -464,7 +461,7 @@ final class MemberTouchScan {
 	 * an inlined call spliced in (`CompilerFacts.spliceOf`), whose method's own text answers for it.
 	 */
 	private static function expansionCode(g: CallGraph, node: FnNode, n: FactNode, at: FactPos, view: FactsView): Bool {
-		return view.truth && n.incomplete.contains(MACRO_EXPANSION) && declarationHolding(g, node.id, at, view) == null
+		return view.truth && FactMarkers.carries(n, m -> m.match(MacroExpansion)) && declarationHolding(g, node.id, at, view) == null
 			&& CompilerFacts.spliceOf(n, at) == null;
 	}
 

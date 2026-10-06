@@ -2620,6 +2620,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-COMMENT-WELD-BLIND',
 			'unit.query.CompilerFactsTest#testADumpHoldingARecordNoReaderKnowsContributesNothing :: control :: M-FACTS-RECORD-KIND',
 			'unit.query.CompilerFactsTest#testADumpWithoutItsClosingRecordContributesNothing :: control :: M-FACTS-INCOMPLETE',
+			'unit.query.CompilerFactsTest#testARangeMeetingANodeWithAMarkerNoReaderKnowsIsUnknown :: control :: '
+				+ 'M-FACTS-WITHIN-MARKER-UNKNOWN',
 			'unit.query.CompilerFactsTest#testASplicedFactRunsAtTheSitesOfTheCallThatSplicedItIn :: control :: '
 				+ 'M-FACTS-SPLICE-SITES-MET,M-FACTS-SPLICE-UNATTRIBUTED,M-FACTS-SPLICE-HARMLESS,M-FACTS-SPLICE-INNERMOST,'
 				+ 'M-FACTS-SPLICE-SECOND-SITE',
@@ -2783,6 +2785,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testAConstructorTheCompilerMadeHandingItsParametersOnIsItsTextUnderTheTruth :: control :: '
 				+ 'M-FACTS-MADE-FORWARDS',
 			'unit.query.MemberReachFactsTest#testAConstructorTouchingItsOwnObjectIsExcusedUnderTheTruth :: control :: M-TOUCH-TYPED-SELF',
+			'unit.query.MemberReachFactsTest#testAConstructorTypedAsNoFunctionAndNoEnumHoldsAnythingUnderTheTruth :: control :: '
+				+ 'M-ESCAPES-FACTS-CTOR-SHAPE',
 			'unit.query.MemberReachFactsTest#testAConversionAnInlinedBodySplicedFromAnotherFileConvertsItsOwnArgumentUnderTheTruth :: control :: '
 				+ 'M-FACTS-CALL-OPERAND',
 			'unit.query.MemberReachFactsTest#testAConversionOfAFieldOfWhatAnInlinedIndexReturnsIsItsTextUnderTheTruth :: control :: '
@@ -2853,8 +2857,18 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testAMacroExpansionRunsWhereItsCallIsUnderTheTruth :: control :: '
 				+ 'M-FACTS-WITHIN-EXPANSION,M-GRAPH-FACTS-EXPANSION-SITE,M-FACTS-EXPANSION-SPLICE-SITES,'
 				+ 'M-TOUCH-EXPANSION-RUNS,M-FACTS-WALK-BLOCK-GAP',
+			'unit.query.MemberReachFactsTest#testAMarkerTheFactsReaderDoesNotKnowIsABlindSpotUnderTheTruth :: control :: '
+				+ 'M-FACTS-BLIND-UNKNOWN',
+			'unit.query.MemberReachFactsTest#testAMarkerTheFactsReaderDoesNotKnowIsNoTextUnderTheTruth :: control :: '
+				+ 'M-FACTS-TEXT-MARKER-UNKNOWN',
 			'unit.query.MemberReachFactsTest#testAMarkerTheFactsReaderDoesNotKnowKeepsItsBodysSyntaxUnderTheTruth :: control :: '
 				+ 'M-FACTS-UNPLACED-UNKNOWN',
+			'unit.query.MemberReachFactsTest#testAMarkerTheFactsReaderDoesNotKnowLeavesTheMethodValuesUnknownUnderTheTruth :: control :: '
+				+ 'M-METHODS-MARKER-UNKNOWN',
+			'unit.query.MemberReachFactsTest#testAMarkerTheFactsReaderDoesNotKnowLeavesWhatAFunctionFieldHoldsUnknownUnderTheTruth :: control :: '
+				+ 'M-VALUE-STORED-MARKER-UNKNOWN,M-VALUE-CTOR-MARKER-UNKNOWN',
+			'unit.query.MemberReachFactsTest#testAMarkerTheFactsReaderDoesNotKnowLetsWhatItsNodeIsHandedEscapeUnderTheTruth :: control :: '
+				+ 'M-ESCAPES-FACTS-MARKER-UNKNOWN',
 			'unit.query.MemberReachFactsTest#testAMemberAnInlinedMethodTakesAsAnArgumentStillEscapesUnderTheTruth :: control :: '
 				+ 'M-FACTS-RECEIVER-BLOCK,M-FACTS-RECEIVER-PARAM',
 			'unit.query.MemberReachFactsTest#testAMemberAnotherBuildDeclaresShadowsAnExtension :: control :: M-FACTS-REACH-GUARDED-NAME',
@@ -5232,7 +5246,15 @@ class TestDiscoveryParityTest extends Test {
 			'M-TYPEREF-NAMED-FIRST-TYPE',
 			'M-KEEP-CANON-FALLBACK-UNGUARDED',
 			'M-GUARDED-SPLICE-NO-REFUSAL',
-			'M-GUARDED-SPLICE-ALWAYS-REFUSES'
+			'M-GUARDED-SPLICE-ALWAYS-REFUSES',
+			'M-FACTS-BLIND-UNKNOWN',
+			'M-ESCAPES-FACTS-MARKER-UNKNOWN',
+			'M-ESCAPES-FACTS-CTOR-SHAPE',
+			'M-METHODS-MARKER-UNKNOWN',
+			'M-VALUE-STORED-MARKER-UNKNOWN',
+			'M-VALUE-CTOR-MARKER-UNKNOWN',
+			'M-FACTS-TEXT-MARKER-UNKNOWN',
+			'M-FACTS-WITHIN-MARKER-UNKNOWN'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

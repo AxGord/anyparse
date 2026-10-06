@@ -480,9 +480,6 @@ final class CompilerFacts {
 	/** The access of a call of a method the compiler spliced in (`CallFact.access`). */
 	private static inline final INLINED: String = 'inlined';
 
-	/** The marker of a node an inlined function was spliced into (`TypedFactsProbe`). */
-	private static inline final INLINE_SITE_UNKNOWN: String = 'inline-site-unknown';
-
 	/**
 	 * The records a facts file holds (`TypedFactsMacro`): its header, the end of each round, a node, a type, a home
 	 * file's text and a foreign file's index. A POSITIVE list: a file holding any other is none this reader can read.
@@ -993,10 +990,18 @@ final class CompilerFacts {
 		}
 		final out: Array<F> = [];
 		for (n in nodesAround(file, span, true)) {
-			if (n.incomplete.contains('stale-foreign')) return null;
+			// a fact lost with its file runs where no position says, and a marker no reader knows may say the same
+			final lost: Bool = FactMarkers.carries(
+				n, m -> switch m {
+					case StaleForeign | Unknown(_): true;
+					case InlineSite | MacroExpansion | ReflectionInlined | ReflectionUnattributed | ReflectionFrom(_): false;
+				}
+			);
+			if (lost) return null;
 			final whole: Bool = inside(n.at);
-			final splice: Bool = n.incomplete.contains(INLINE_SITE_UNKNOWN);
-			if (!whole && !spliced && (n.incomplete.contains('macro-expansion') || splice)) return null;
+			final splice: Bool = FactMarkers.carries(n, m -> m.match(InlineSite));
+			final expanded: Bool = FactMarkers.carries(n, m -> m.match(MacroExpansion));
+			if (!whole && !spliced && (expanded || splice)) return null;
 			for (fact in pick(n)) {
 				final where: FactPos = at(fact);
 				if (splice && spliced && !placed(n, where) ? runsIn(n, where) : whole || inside(where)) out.push(fact);
