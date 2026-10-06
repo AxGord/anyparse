@@ -1,10 +1,13 @@
 package unit.check;
 
 import anyparse.check.CompilerOracle;
+import anyparse.check.CompilerOracle.OracleBaseline;
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.OracleCoverage;
 import anyparse.check.OracleRunMemo;
 import anyparse.check.TypedFactsProbe;
+import anyparse.query.LintFixSafePass.SafePassOutcome;
+import anyparse.query.cli.command.LintFixDriver;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -42,6 +45,33 @@ final class OracleRunMemoTest extends Test {
 		final coverage: OracleCoverage = OracleCoverage.probeAll(oracles)[0];
 		Assert.isTrue(coverage.covers('$dir/Main.hx'), 'the reused run still names what the compile read');
 		Assert.equals(1, CompileCounter.count(dir), 'one compile answered both the baseline and the probe');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * The safe-write net's after-write typecheck compiles with `-v`: the risky phase's coverage probe asks about exactly
+	 * that tree next, and is answered by the net's own compile.
+	 */
+	@:pin('control')
+	@:killer('M-SAFE-NET-PLAIN')
+	@:access(anyparse.query.cli.command.LintFixDriver)
+	public function testTheSafeWriteNetCompilesTheTreeTheCoverageProbeAsksAbout(): Void {
+		#if (sys || nodejs)
+		final dir: Null<String> = scratch(GOOD, BUILD);
+		if (dir == null) return;
+		final oracles: Array<OracleConfig> = remembering(dir);
+		final main: String = '$dir/Main.hx';
+		final pre: OracleBaseline = CompilerOracle.judging(oracles);
+		sys.io.File.saveContent(main, OTHER);
+		final net: SafePassOutcome = LintFixDriver.reconcileSafePass(
+			[{ file: main, source: OTHER }], [main], [main => GOOD], [], pre, oracles, []
+		);
+		Assert.isFalse(net.reverted, 'a green write is kept');
+		Assert.isTrue(OracleCoverage.probeAll(oracles)[0].covers(main), 'the probe names what the compile read');
+		Assert.equals(2, CompileCounter.count(dir), 'the probe of the written tree cost no compile of its own');
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');

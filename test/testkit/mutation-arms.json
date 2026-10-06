@@ -6729,6 +6729,14 @@
 			"note": "the builds' probe compiles wait for the first reach question, which then waits on them alone half-way through the first pass"
 		},
 		{
+			"name": "M-SAFE-NET-PLAIN",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "reconcileSafePass",
+			"find": "CompilerOracle.typecheckAll(judging, true)",
+			"replace": "CompilerOracle.typecheckAll(judging)",
+			"note": "the safe-write net compiles the written tree plainly, so the risky phase's coverage probe compiles every configuration of it again with -v"
+		},
+		{
 			"name": "M-SPAWN-ORDER",
 			"type": "anyparse.check.HaxeSpawn",
 			"method": "runAllTimed",

@@ -986,8 +986,10 @@ final class LintFixDriver {
 		// verified phases take their baselines by.
 		final judging: Array<OracleConfig> = measured.judging;
 		final resolved: OracleOutcome = measured.verdict;
+		// with `-v`: the risky phase's coverage probe (`OracleCoverage.probedOnce`) asks about exactly this tree next, and a
+		// green `-v` compile answers it from the run's memo instead of compiling every configuration again
 		final decision: SafePassDecision = LintFixSafePass.classify(
-			resolved, LintFixSafePass.isConfirmed(resolved) ? CompilerOracle.typecheckAll(judging) : null
+			resolved, LintFixSafePass.isConfirmed(resolved) ? CompilerOracle.typecheckAll(judging, true) : null
 		);
 		final errors: String = switch decision {
 			case Proceed: return {

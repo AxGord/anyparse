@@ -182,14 +182,16 @@ final class CompilerOracle {
 	 * failure ends the ones declared after it (`typecheckEach`), so the verdict is the one a
 	 * sequential loop gives while a rejection still costs no compile that could not change it.
 	 * Configurations after the first `unavailable` one are never asked: its verdict is already
-	 * decided. An empty list is `Unavailable`: no configuration means nothing was proved, which is
+	 * decided.
+	 * `verbose` compiles with `-v` in a run that remembers (`typecheckEach`), for a tree a
+	 * coverage probe is about to ask about. An empty list is `Unavailable`: no configuration means nothing was proved, which is
 	 * not the same answer as a build that typechecks.
 	 */
-	public static function typecheckAll(oracles: Array<OracleConfig>): OracleOutcome {
+	public static function typecheckAll(oracles: Array<OracleConfig>, verbose: Bool = false): OracleOutcome {
 		if (oracles.length == 0) return Unavailable('no compiler oracle is configured');
 		final cut: Int = oracles.findIndex(oracle -> oracle.unavailable != null);
 		final asked: Array<OracleConfig> = cut < 0 ? oracles : oracles.slice(0, cut + 1);
-		for (outcome in typecheckEach(asked, true)) if (outcome != null && !outcome.match(Confirmed)) return outcome;
+		for (outcome in typecheckEach(asked, true, verbose)) if (outcome != null && !outcome.match(Confirmed)) return outcome;
 		return Confirmed;
 	}
 
