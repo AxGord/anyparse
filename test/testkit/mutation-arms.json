@@ -6705,6 +6705,22 @@
 			"note": "(precision) an abstract's implementation class is reported, which no source declares, so every build with an abstract reads as incomplete"
 		},
 		{
+			"name": "M-FACTS-MADE-FROM-ALL",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "invalidate",
+			"find": "\tfor (made in _madeFrom[key] ?? []) if (made.startsWith(NODE_ENTRY))\n\t\t_nodeCache.remove(made.substr(NODE_ENTRY.length))\n\telse\n\t\t_builtCache.remove(made.substr(BUILT_ENTRY.length));",
+			"replace": "\t_nodeCache.clear();\n\t_builtCache.clear();",
+			"note": "a rewrite of any file drops every made node, so each --fix pass makes the whole table again"
+		},
+		{
+			"name": "M-FACTS-MADE-FROM-NONE",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "indexOf",
+			"find": "if (reading != null) reading[file] = true;",
+			"replace": "",
+			"note": "a made node records no file it read, so a rewrite of its own file leaves it answering for a text that is gone"
+		},
+		{
 			"name": "M-SPAWN-ORDER",
 			"type": "anyparse.check.HaxeSpawn",
 			"method": "runAllTimed",

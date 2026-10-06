@@ -7,6 +7,7 @@ import anyparse.check.FactsTypeOracle;
 import anyparse.check.FactsTypeSpelling;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CompilerFacts;
+import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.EditJournal;
 import anyparse.query.FactText;
 import anyparse.runtime.Span;
@@ -139,6 +140,19 @@ class FactsTypeOracleTest extends Test {
 		other.invalidate('A.hx', SRC.replace('class A', 'class  A'));
 		Assert.isNull(other.sourceOf('A.hx'));
 		Assert.isNull(other.asCompiled().sourceOf('A.hx'), 'a text the compile never read was kept as the original');
+	}
+
+	@:pin('control') @:killer('M-FACTS-MADE-FROM-ALL') @:killer('M-FACTS-MADE-FROM-NONE')
+	public function testARewriteDropsOnlyTheNodesThatReadIt(): Void {
+		// a `--fix` pass rewrites a few files: a node placed in another file's text is the one made before, a node placed in
+		// the rewritten one is made again — and, its text no longer the compiled one, has no facts
+		final facts: CompilerFacts = table([dump('Int')]);
+		final made: Null<FactNode> = facts.node('A.f');
+		Assert.notNull(made);
+		facts.invalidate('B.hx');
+		Assert.equals(made, facts.node('A.f'), 'a rewrite of a file the node never read made it again');
+		facts.invalidate('A.hx');
+		Assert.isNull(facts.node('A.f'), 'a rewrite of the file the node lies in kept its facts');
 	}
 
 	@:pin('control') @:killer('M-CODEPOINT-NATIVE')

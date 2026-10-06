@@ -489,6 +489,12 @@ final class CompilerFacts {
 	/** The access of a call of a method the compiler spliced in (`CallFact.access`). */
 	private static inline final INLINED: String = 'inlined';
 
+	/** The `_madeFrom` prefix of a `_nodeCache` id. */
+	private static inline final NODE_ENTRY: String = 'node:';
+
+	/** The `_madeFrom` prefix of a `_builtCache` key. */
+	private static inline final BUILT_ENTRY: String = 'built:';
+
 	/**
 	 * The records a facts file holds (`TypedFactsMacro`): its header, the end of each round, a node, a type, a home
 	 * file's text and a foreign file's index. A POSITIVE list: a file holding any other is none this reader can read.
@@ -516,6 +522,17 @@ final class CompilerFacts {
 	 * in a file typed it (`homedIn`), made on first demand.
 	 */
 	private final _builtCache: Map<String, Null<FactNode>> = [];
+
+	/**
+	 * Table key -> the `_nodeCache` ids (`node:` prefix) and `_builtCache` keys (`built:` prefix) whose making read that
+	 * file's text (`indexOf`): what `invalidate` drops. A made node is a function of the texts it placed its facts in and
+	 * of nothing else `invalidate` changes, so dropping every made node for one rewritten file — each `--fix` pass drops a
+	 * few — re-made the whole table every pass (TM: 15.8 s of a 200 s `--fix`).
+	 */
+	private final _madeFrom: Map<String, Array<String>> = [];
+
+	/** The files the node being made has read so far (`indexOf`), while one is being made. */
+	private var _reading: Null<Map<String, Bool>> = null;
 
 	private final _types: Map<String, TypeFact> = [];
 	private final _typeHomes: Map<String, Array<HomeRecord>> = [];
@@ -584,8 +601,11 @@ final class CompilerFacts {
 		_stale[key] = true;
 		_sources.remove(key);
 		_indexes.remove(key);
-		_nodeCache.clear();
-		_builtCache.clear();
+		for (made in _madeFrom[key] ?? []) if (made.startsWith(NODE_ENTRY))
+			_nodeCache.remove(made.substr(NODE_ENTRY.length))
+		else
+			_builtCache.remove(made.substr(BUILT_ENTRY.length));
+		_madeFrom.remove(key);
 	}
 
 	/**
@@ -617,7 +637,7 @@ final class CompilerFacts {
 	public function node(id: String): Null<FactNode> {
 		if (_nodeCache.exists(id)) return _nodeCache[id];
 		final lines: Null<Array<NodeLine>> = _nodeLines[id];
-		final made: Null<FactNode> = lines == null ? null : materialize(id, lines);
+		final made: Null<FactNode> = lines == null ? null : materializeAs(NODE_ENTRY + id, id, lines);
 		_nodeCache[id] = made;
 		return made;
 	}
@@ -639,7 +659,7 @@ final class CompilerFacts {
 		final lines: Array<NodeLine> = [
 			for (line in _nodeLines[id] ?? []) if (line.builds.exists(b -> builds.contains(b))) line
 		];
-		final made: Null<FactNode> = lines.length == 0 ? null : materialize(id, lines);
+		final made: Null<FactNode> = lines.length == 0 ? null : materializeAs(BUILT_ENTRY + key, id, lines);
 		_builtCache[key] = made;
 		return made;
 	}
@@ -709,7 +729,7 @@ final class CompilerFacts {
 		if (_builtCache.exists(key)) return _builtCache[key];
 		// a line homed here first: the node is placed where the first line places it
 		final kept: Array<NodeLine> = [for (l in lines) if (l.home == home) l].concat([for (l in lines) if (l.home != home && own(l)) l]);
-		final made: Null<FactNode> = kept.length == 0 ? null : materialize(id, kept);
+		final made: Null<FactNode> = kept.length == 0 ? null : materializeAs(BUILT_ENTRY + key, id, kept);
 		_builtCache[key] = made;
 		return made;
 	}
@@ -1031,6 +1051,8 @@ final class CompilerFacts {
 	}
 
 	private function indexOf(file: String): Null<CodepointIndex> {
+		final reading: Null<Map<String, Bool>> = _reading;
+		if (reading != null) reading[file] = true;
 		if (_indexes.exists(file)) return _indexes[file];
 		final source: Null<String> = sourceOf(file);
 		final index: Null<CodepointIndex> = source == null ? null : CodepointIndex.of(source);
@@ -1095,6 +1117,23 @@ final class CompilerFacts {
 			splices: [],
 			expansions: []
 		};
+	}
+
+	/** `materialize`, filed under `entry` in `_madeFrom` for every file the making read. */
+	private function materializeAs(entry: String, id: String, lines: Array<NodeLine>): Null<FactNode> {
+		final reading: Map<String, Bool> = [];
+		_reading = reading;
+		final made: Null<FactNode> = try materialize(id, lines) catch (exception: haxe.Exception) {
+			_reading = null;
+			throw exception;
+		};
+		_reading = null;
+		for (file in reading.keys()) {
+			final list: Array<String> = _madeFrom[file] ?? [];
+			list.push(entry);
+			_madeFrom[file] = list;
+		}
+		return made;
 	}
 
 	private function materialize(id: String, lines: Array<NodeLine>): Null<FactNode> {
