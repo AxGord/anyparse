@@ -787,11 +787,15 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 					'StringBuf.add',
 					'StringBuf.addChar',
 					'StringBuf.addSub',
-					'StringBuf.toString'
+					'StringBuf.toString',
+					// reads the process environment: no callback, on every target
+					'Sys.getEnv'
 				],
 				statefulLibraryCalls: [
 					'Std.random',
 					'Math.random',
+					// what it reads, `Sys.putEnv` writes
+					'Sys.getEnv',
 					'StringBuf.add',
 					'StringBuf.addChar',
 					'StringBuf.addSub'

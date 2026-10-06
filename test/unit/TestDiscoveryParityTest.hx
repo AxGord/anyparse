@@ -2733,6 +2733,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-REACH-REWRITTEN-TRUTH',
 			'unit.query.MemberReachFactsTest#testABuildMacroOnlyTheCompilerSawIsUnknown :: control :: '
 				+ 'M-FACTS-REACH-BUILDS,M-REACH-REWRITTEN-UNTRUE',
+			'unit.query.MemberReachFactsTest#testACallAChainOfTargetNamesMakesIsItsTargetCodesUnderTheTruth :: control :: '
+				+ 'M-GRAPH-FACTS-NATIVE-CHAIN-SKIP,M-GRAPH-FACTS-NATIVE-CHAIN-ANY',
 			'unit.query.MemberReachFactsTest#testACallOfAConstructorParameterRunsWhatItsConstructionsHandIt :: control :: M-VALUE-CTOR-ROUTE',
 			'unit.query.MemberReachFactsTest#testACallOfADynamicMethodRunsAnyValueWhenAStoreIsNotKnown :: control :: '
 				+ 'M-VALUE-STORED-UNTYPED,M-VALUE-STORED-NATIVE,M-VALUE-CTOR-REFLECTIVE,M-VALUE-ESCAPED-SENTINEL,M-VALUE-STORED-WRITES,'
@@ -2754,6 +2756,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testACallOfAParameterRunsOnlyTheFunctionsItsInvocationsHandItUnderTheTruth :: control :: '
 				+ 'M-GRAPH-FACTS-VALUE-CALLED,M-REACH-VALUE-CALLED',
 			'unit.query.MemberReachFactsTest#testACallOfAValueAdmitsTheValueChannel :: control :: M-FACTS-REACH-VALUE',
+			'unit.query.MemberReachFactsTest#testACallOfAValueRunsOnlyTheImplicitCallsOfTheCodeItRunsUnderTheTruth :: control :: '
+				+ 'M-REACH-RUN-EDGES,M-REACH-RUN-LOAD,M-REACH-RUN-VALUE-FILES,M-REACH-RUN-SITES,M-REACH-RUN-ALWAYS,M-REACH-RUN-IDS,'
+				+ 'M-REACH-RUN-UNREAD',
 			'unit.query.MemberReachFactsTest#testACallOfAnAbstractsConstructorIsItsTextUnderTheTruth :: control :: '
 				+ 'M-FACTS-TEXT-ABSTRACT-CTOR-CALL',
 			'unit.query.MemberReachFactsTest#testACalleeABuildMacroRewroteToTouchTheMemberReachesItUnderTheTruth :: control :: '
@@ -2903,6 +2908,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-FRESH-MAP,M-GUARDED-AND,M-GUARDED-ELSE,M-GUARDED-HOP,M-GUARDED-ASSUMED',
 			'unit.query.MemberReachFactsTest#testAParameterAnotherValueMayReachKeepsItsGuardLiveUnderTheTruth :: control :: '
 				+ 'M-GUARDED-HANDS-NULL,M-GUARDED-KEPT,M-FACTS-KEPT-DEFAULT,M-FACTS-KEPT-WRITTEN,M-FACTS-KEPT-BUILDS,M-GUARDED-EQUALITY',
+			'unit.query.MemberReachFactsTest#testAParameterOfAMethodOfAnEscapedObjectHoldsWhatItsCallsByNameHandItUnderTheTruth :: control :: '
+				+ 'M-VALUE-ARG-ESCAPED,M-VALUE-UNTYPED-VALUE-READ,M-VALUE-UNTYPED-CALLS,M-VALUE-UNTYPED-ACCESS-UNKNOWN,M-VALUE-UNTYPED-NATIVE',
 			'unit.query.MemberReachFactsTest#testAPinnedOwnerAsksItsOwnBuildMacroAndNoOtherUnderTheTruth :: control :: '
 				+ 'M-REACH-PINNED-NONE,M-REACH-PINNED-REWRITTEN-SIMPLE,M-REACH-PINNED-REWRITTEN-NONE,M-FACTS-PINNED-OWNER-FILES',
 			'unit.query.MemberReachFactsTest#testAProducerReadAsAValueMakesOnlyADeclaredClassUnderTheTruth :: control :: M-ESCAPES-FACTS-DECLARED-PRODUCED,M-ESCAPES-FACTS-DECLARED-READER',
@@ -3002,6 +3009,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-TOUCH-ARGUMENT-LEAVES',
 			'unit.query.MemberReachFactsTest#testAnArrayMemberOfASubclassUnderAnAncestorsAutoBuildIsAnsweredUnderTheTruth :: control :: '
 				+ 'M-REACH-REWRITTEN-TRUTH,M-REACH-REWRITTEN-UNTRUE',
+			'unit.query.MemberReachFactsTest#testAnEnvironmentReadRunsNoProjectCodeUnderTheTruth :: control :: '
+				+ 'M-SHAPE-PURE-GETENV,M-REACH-RUN-QUIET',
 			'unit.query.MemberReachFactsTest#testAnEscapeTheCompilerTypesCostsOnlyItsOwnFamily :: control :: M-FACTS-REACH-ESCAPE-TYPED',
 			'unit.query.MemberReachFactsTest#testAnEscapedValueMayBeAnyOfItsSubtypesUnderTheTruth :: control :: M-ESCAPES-FACTS-SUBTYPES',
 			'unit.query.MemberReachFactsTest#testAnExpressionMacroAnInlinedMethodCallsLeavesItsCallerItsTextUnderTheTruth :: control :: '
@@ -5269,7 +5278,22 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-INIT-OWNERS-SOLE',
 			'M-FACTS-QUALIFY-SITELESS',
 			'M-FACTS-OWNERS-VARIABLES',
-			'M-FACTS-OWNERS-ROOTS-OWN'
+			'M-FACTS-OWNERS-ROOTS-OWN',
+			'M-VALUE-UNTYPED-VALUE-READ',
+			'M-VALUE-UNTYPED-CALLS',
+			'M-VALUE-UNTYPED-ACCESS-UNKNOWN',
+			'M-VALUE-UNTYPED-NATIVE',
+			'M-REACH-RUN-EDGES',
+			'M-REACH-RUN-LOAD',
+			'M-REACH-RUN-VALUE-FILES',
+			'M-REACH-RUN-QUIET',
+			'M-REACH-RUN-SITES',
+			'M-REACH-RUN-ALWAYS',
+			'M-REACH-RUN-IDS',
+			'M-REACH-RUN-UNREAD',
+			'M-GRAPH-FACTS-NATIVE-CHAIN-SKIP',
+			'M-GRAPH-FACTS-NATIVE-CHAIN-ANY',
+			'M-SHAPE-PURE-GETENV'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

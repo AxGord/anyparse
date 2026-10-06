@@ -1192,11 +1192,11 @@ class MemberReachFactsTest extends Test {
 	@:pin('control') @:killer('M-VALUE-ARG-WRITTEN') @:killer('M-VALUE-ARG-ESCAPED') @:killer('M-VALUE-ARG-SUPERTYPES')
 	@:killer('M-VALUE-ARG-COUNT') @:killer('M-VALUE-ARG-LAMBDA')
 	public function testACallOfAParameterOfAMethodInvokedOtherwiseRunsWhatItsTypeAdmits(): Void {
-		// the stored `(Rx)->String` may be `f` once an `Rx` leaves the type system, once `map` is read as a value, once an
-		// invocation — of `map`, or of the `Base.map` it overrides — hands `f` something else, once `map` assigns `f`, takes an
-		// optional argument its invocation leaves out, or is `dynamic`
+		// the stored `(Rx)->String` may be `f` once an `Rx` that left the type system has `map` called by its name with it, once
+		// `map` is read as a value, once an invocation — of `map`, or of the `Base.map` it overrides — hands `f` something else,
+		// once `map` assigns `f`, takes an optional argument its invocation leaves out, or is `dynamic`
 		final reached: Array<String> = [
-			matching('\t\tvar d:Dynamic = new Rx();\n'),
+			matching('\t\tvar d:Dynamic = new Rx();\n\t\td.map(keep);\n'),
 			matching('\t\tvar m:((Rx)->String)->String = new Rx().map;\n'),
 			matching('\t\tnew Rx().map(keep);\n'),
 			matching(
@@ -1211,6 +1211,53 @@ class MemberReachFactsTest extends Test {
 			matching('', null, null, 'public dynamic function map(f:(Rx)->String):String return f(this);')
 		];
 		for (main in reached) assertMatch(compiledTruthAsk(['Main.hx' => main]), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-VALUE-ARG-ESCAPED') @:killer('M-VALUE-UNTYPED-VALUE-READ') @:killer('M-VALUE-UNTYPED-CALLS')
+	@:killer('M-VALUE-UNTYPED-ACCESS-UNKNOWN') @:killer('M-VALUE-UNTYPED-NATIVE')
+	public function testAParameterOfAMethodOfAnEscapedObjectHoldsWhatItsCallsByNameHandItUnderTheTruth(): Void {
+		// `Rx.rework` calls its parameter `f`: an `Rx` left the type system, so `rework` may be called by its name too — off a
+		// value of no class, a structure, by target code naming it — but no such call is written, or the one there hands `f` a
+		// function expression: the stored `(Rx)->String` that grows `items` is never `f`. A name computed at run time obtains a
+		// method of no class here (`holders`), as in a project declaring its reflective method holders
+		function fixture(more: String): String {
+			return valueCallFixture(
+				'(Rx)->String', '(x:Rx) -> { items.push(1); return "k"; }', more, 'r.rework(x -> "a");', null,
+				'public function rework(f:(Rx)->String):String return f(this);'
+			);
+		}
+		function question(main: String): (MemberReach, String) -> ReachResult {
+			return (reach, dir) ->
+				reach.mayReach(Region(Path.join([dir, 'Main.hx']), regionOf(main)), { owner: 'Main', name: 'items' }, Mutate);
+		}
+		function heldAsk(main: String, ?rewrite: (String, String) -> String): ReachResult {
+			final run: () -> ReachResult = () ->
+				withReach(['Main.hx' => main], null, true, false, null, null, null, true, question(main), null, null, []);
+			final result: ReachResult = rewrite == null ? run() : rewritten(nodes(rewrite), run);
+			Assert.equals('', lastDropped.join('; '), 'the fixture did not compile: $main');
+			return result;
+		}
+		final escaped: String = '\t\tvar d:Dynamic = new Rx();\n';
+		final called: String = fixture(escaped + '\t\td.rework(x -> "b");\n');
+		for (main in [fixture(escaped), called]) assertMatch(heldAsk(main), r -> r.match(Proven));
+		// it may be once a call by its name hands `f` anything else — off a `Dynamic`, off a structure, from target code naming
+		// it —, or once `rework` is read as a value, by its name or by reflection: whatever calls that value may hand it anything
+		final reached: Array<String> = [
+			fixture(escaped + '\t\td.rework(keep);\n'),
+			fixture('\t\tvar s:{function rework(f:(Rx)->String):String;} = new Rx();\n\t\ts.rework(keep);\n'),
+			fixture(escaped + '\t\tjs.Syntax.code("window.d = {0}; window.k = {1}; window.d.rework(window.k);", d, keep);\n'),
+			fixture(escaped + '\t\tvar m:Dynamic = d.rework;\n'),
+			fixture(escaped + '\t\tReflect.field(d, "rework");\n')
+		];
+		for (main in reached) assertMatch(heldAsk(main), r -> !r.match(Proven));
+		// a call of an access no reader knows may run it with anything
+		final future: (
+			String, String
+		) -> String = (id, text) ->
+			id == 'Main.main' ? StringTools.replace(text, '"t":"rework","a":"FDynamic"', '"t":"rework","a":"future"') : text;
+		assertMatch(heldAsk(called, future), r -> !r.match(Proven));
+		// without the truth, an escaped `Rx` is reason enough
+		assertMatch(ask(['Main.hx' => fixture(escaped)]), r -> !r.match(Proven));
 	}
 
 	@:pin('control') @:killer('M-REACH-VALUE-STORED') @:killer('M-GRAPH-FACTS-VALUE-STORED') @:killer('M-VALUE-CTOR-ARITY')
@@ -1788,6 +1835,89 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main]), r -> !r.match(Proven));
 	}
 
+	@:pin('control') @:killer('M-REACH-RUN-EDGES') @:killer('M-REACH-RUN-LOAD') @:killer('M-REACH-RUN-VALUE-FILES')
+	@:killer('M-REACH-RUN-SITES') @:killer('M-REACH-RUN-ALWAYS') @:killer('M-REACH-RUN-IDS') @:killer('M-REACH-RUN-UNREAD')
+	public function testACallOfAValueRunsOnlyTheImplicitCallsOfTheCodeItRunsUnderTheTruth(): Void {
+		// `Runner.apply` calls its parameter `f`, handed `x -> x + 1` here and what `lib.Caller.go` hands it, read through their
+		// facts: neither converts anything or iterates anything, so neither `Obj.toString` nor the conversion `Conv.fromString`,
+		// each replacing `items`, runs there — though both are implicitly-called members, `apply` spells `Conv`, and `lib.Thing`,
+		// `Ext` and `Std` hold code the walk cannot read. A name computed at run time obtains a method of no class here
+		// (`holders`), as in a project declaring its reflective method holders
+		function fixture(stored: String): String {
+			return LOOP_HEAD + '\tstatic function touch():Void\n\t\tnew lib.Thing();\n\n'
+				+ '\tstatic function show(x:Int):Int {\n\t\tvar s:String = "" + new Obj();\n\t\treturn x;\n\t}\n\n'
+				+ '\tstatic function main() {\n\t\tlib.Caller.go();\n' + '\t\tfor (i in 0...items.length) { /*<*/ new Runner().apply('
+				+ stored + '); /*>*/ }\n\t}\n}\n'
+				+ 'class Runner {\n\tpublic function new() {}\n\n\tpublic function apply(f:Int -> Int):Int {\n\t\tvar c:Null<Conv> = null;\n'
+				+ '\t\treturn f(1);\n\t}\n}\n' + CLEARING_OBJ + 'abstract Conv(Int) {\n\tinline function new(i:Int) this = i;\n\n'
+				+ '\t@:from static function fromString(s:String):Conv {\n\t\tMain.items = [];\n\t\treturn new Conv(0);\n\t}\n}\n'
+				+ 'class Base {\n\tpublic function new() {}\n\n\tpublic function show():Void {}\n}\n'
+				+ 'class Sub extends Base {\n\tpublic function new() super();\n\n'
+				+ '\toverride public function show():Void {\n\t\tvar s:String = "" + new Obj();\n\t}\n}\n'
+				+ 'extern class Ext {\n\tpublic static function run(o:Dynamic):Void;\n}\n';
+		}
+		final thing: String =
+			'package lib;\n\nclass Thing {\n\tpublic function new() {}\n\n\tpublic function toString():String return "t";\n}\n';
+		final text: String = 'package lib;\n\nclass Text {\n\tpublic static function show(x:Int):Int {\n'
+			+ '\t\tvar s:String = "" + new Main.Obj();\n\t\treturn x;\n\t}\n\n\tpublic static function calm(x:Int):Int\n\t\treturn x;\n}\n';
+		function caller(handed: String): String {
+			return 'package lib;\n\nclass Caller {\n\tpublic static function go():Int\n\t\treturn new Main.Runner().apply(' + handed
+				+ ');\n}\n';
+		}
+		function truthAsk(main: String, handed: String = 'x -> x * 2'): ReachResult {
+			final library: Map<String, String> = [
+				'lib/Thing.hx' => thing,
+				'lib/Text.hx' => text,
+				'lib/Caller.hx' => caller(handed)
+			];
+			return ask(['Main.hx' => main], null, true, null, false, null, library, null, true, STD_STD, []);
+		}
+		final quiet: Array<String> = [
+			fixture('x -> x + 1'),
+			fixture('x -> {\n\t\t\tStd.parseFloat("1");\n\t\t\tx;\n\t\t}'),
+			fixture('x -> lib.Text.calm(x)')
+		];
+		for (main in quiet) assertMatch(truthAsk(main), r -> r.match(Proven));
+		// it may once the code it runs converts an `Obj`: itself, in a function it calls, in an override its dispatch reaches,
+		// in target code it hands an `Obj` to, in library code, or in what another invocation hands `f`
+		final reached: Array<String> = [
+			fixture('x -> {\n\t\t\tvar s:String = "" + new Obj();\n\t\t\tx;\n\t\t}'),
+			fixture('x -> show(x)'),
+			fixture('x -> {\n\t\t\tvar b:Base = new Sub();\n\t\t\tb.show();\n\t\t\tx;\n\t\t}'),
+			fixture('x -> {\n\t\t\tExt.run(new Obj());\n\t\t\tx;\n\t\t}'),
+			fixture('x -> lib.Text.show(x)')
+		];
+		for (main in reached) assertMatch(truthAsk(main), r -> !r.match(Proven));
+		assertMatch(truthAsk(fixture('x -> x + 1'), 'x -> lib.Text.show(x)'), r -> !r.match(Proven));
+		// without the truth the lambda is read by its syntax, which may run any implicitly-called member
+		final library: Map<String, String> = [
+			'lib/Thing.hx' => thing,
+			'lib/Text.hx' => text,
+			'lib/Caller.hx' => caller('x -> x')
+		];
+		assertMatch(ask(['Main.hx' => fixture('x -> x + 1')], null, true, null, false, null, library), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-SHAPE-PURE-GETENV') @:killer('M-REACH-RUN-QUIET')
+	public function testAnEnvironmentReadRunsNoProjectCodeUnderTheTruth(): Void {
+		// `Sys.getEnv` reads the process environment, no callback on any target: the function `Runner.apply` is handed runs no
+		// conversion of an `Obj`, whose `toString` replaces `items` — as it may once it hands one to `Sys.println`
+		function fixture(stored: String): String {
+			return LOOP_HEAD + '\tstatic function main() {\n\t\tnew Obj();\n'
+				+ '\t\tfor (i in 0...items.length) { /*<*/ new Runner().apply(' + stored + '); /*>*/ }\n\t}\n}\n'
+				+ 'class Runner {\n\tpublic function new() {}\n\n\tpublic function apply(f:Int -> Int):Int\n\t\treturn f(1);\n}\n'
+				+ CLEARING_OBJ;
+		}
+		final sys: Map<String, String> = [
+			'std/Sys.hx' => 'extern class Sys {\n\tpublic static function getEnv(s:String):String;\n\n'
+				+ '\tpublic static function println(v:Dynamic):Void;\n}\n'
+		];
+		assertMatch(interpAsk(['Main.hx' => fixture('x -> {\n\t\t\tSys.getEnv("HOME");\n\t\t\tx;\n\t\t}')], sys, []), r -> r.match(Proven));
+		assertMatch(
+			interpAsk(['Main.hx' => fixture('x -> {\n\t\t\tSys.println(new Obj());\n\t\t\tx;\n\t\t}')], sys, []), r -> !r.match(Proven)
+		);
+	}
+
 	@:pin('control') @:killer('M-ADMIT-SYNTAX-READ-UNTRUE')
 	public function testFactsThatAreNotTheTruthNarrowNothingCodeTheWalkNeverEntersRuns(): Void {
 		// the lambda `f` holds is read through facts that hold for every build either way; only under a list of builds declared
@@ -2059,6 +2189,20 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthAsk(['Main.hx' => region('js.Syntax.code("{0}", 1);')]), r -> r.match(Proven));
 		assertMatch(truthAsk(['Main.hx' => region('js.Syntax.code("{0}", t);')]), r -> r.match(Proven));
 		assertMatch(truthAsk(['Main.hx' => region('js.Syntax.code("{0}", o);')]), r -> r.match(Unknown(NativeCode(_, _))));
+	}
+
+	@:pin('control') @:killer('M-GRAPH-FACTS-NATIVE-CHAIN-SKIP') @:killer('M-GRAPH-FACTS-NATIVE-CHAIN-ANY')
+	public function testACallAChainOfTargetNamesMakesIsItsTargetCodesUnderTheTruth(): Void {
+		// `console.log(1)` is target code handed `1`: no dynamic call by a name that may run a function value, so `g`, which `cb`
+		// holds and which changes `items`, does not run there — as it may at a call by name off a value of no class
+		function region(code: String): String {
+			return MEMBER_HEAD + '\tstatic var last:Main;\n\n\tstatic var cb:Void->Void = g;\n\n\tstatic function g():Void\n'
+				+ '\t\tlast.items.push(1);\n\n\tfunction f():Void {\n\t\tvar c:String = "0";\n'
+				+ '\t\tfor (i in 0...items.length) { /*<*/ ' + code + ' /*>*/ }\n\t}\n}\n';
+		}
+		assertMatch(compiledTruthAsk(['Main.hx' => region('untyped console.log(1);')]), r -> r.match(Proven));
+		assertMatch(compiledTruthAsk(['Main.hx' => region('(cast c : Dynamic).log(1);')]), r -> r.match(Reached(_)));
+		assertMatch(ask(['Main.hx' => region('untyped console.log(1);')]), r -> !r.match(Proven));
 	}
 
 	@:pin('control') @:killer('M-FACTS-TRUTH-REFLECTION') @:killer('M-FACTS-TRUTH-REFLECTION-TWIN')

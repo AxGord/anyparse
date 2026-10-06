@@ -203,10 +203,21 @@ final class FactsMethodValues {
 			final cut: Int = name.indexOf(s);
 			if (cut >= 0) name = name.substr(0, cut);
 		}
-		final hierarchy: Array<String> = [owner.id].concat(_table.subtypesOf(owner.id));
+		return !readAsValue(name, [owner.id].concat(_table.subtypesOf(owner.id)));
+	}
+
+	/**
+	 * Whether a function any build typed may obtain the method `name` of an object of a class `hierarchy` names as a value —
+	 * by any read of it but a call: a closure, a read by its name off a value of no class or a structure, reflection naming
+	 * it, or reflection computing the name off a class the project declares (`declaredHolders`) — or any read may obtain any
+	 * method (`unknownReason`). Whatever calls such a value later may hand it anything.
+	 */
+	public function readAsValue(name: String, hierarchy: Array<String>): Bool {
+		final reads: MethodValueReads = scan();
+		if (reads.unknown != null) return true;
 		final held: Array<String> = declaredHolders(hierarchy);
-		return !(reads.named[name] ?? []).exists(r -> mayBeOf(r, hierarchy))
-			&& (held.length == 0 || !reads.computed.exists(r -> mayBeOf(r, held)));
+		return (reads.named[name] ?? []).exists(r -> mayBeOf(r, hierarchy))
+			|| (held.length > 0 && reads.computed.exists(r -> mayBeOf(r, held)));
 	}
 
 	/**
