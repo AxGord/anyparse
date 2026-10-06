@@ -230,6 +230,9 @@ final class MemberReach {
 	/** The step kind of a constructor the walk admitted through reflective instantiation. */
 	private static inline final REFLECTIVE_CONSTRUCTOR: String = 'reflective constructor';
 
+	/** The admissions of target code by target code (`AdmissionSite.kind`): what it hands on, it was handed (`admitTarget`). */
+	private static final TARGET_ADMISSIONS: Array<String> = ['extern', 'native'];
+
 	/**
 	 * A typed variable's kind (`FieldDeclFact.kind`) read straight from its storage (`readStraight`): a `default` or `null`
 	 * read, and a write that is a field write, a setter call, or none.
@@ -1749,10 +1752,11 @@ final class MemberReach {
 		final spliceOnly: Map<String, Bool> = [];
 		final deferredSites: Map<String, AdmissionSite> = [];
 		final pending: Array<AdmissionSite> = [];
-		// under the truth an extern's admission reads what one caller's calls of it hand its target code (`externHanded`), and
-		// every other node calling it hands its own: each caller that queued it, before its admission (`callers`) and after
-		// (`externRevisits`), is read in turn — but a caller that runs nowhere as itself (`spliceOnly`), whose calls run
-		// spliced into its callers at the types they hand, only once something else runs it (`waitingExterns`)
+		// an extern's admission reads what one caller's calls of it hand its target code — under the truth all of them
+		// (`externHanded`), else the one call its syntax holds at a site — and every other caller or call hands its own: each
+		// that queued it, before its admission (`callers`) and after (`externRevisits`), is read in turn — but a caller that
+		// runs nowhere as itself (`spliceOnly`), whose calls run spliced into its callers at the types they hand, only once
+		// something else runs it (`waitingExterns`)
 		final callers: Map<String, Array<ReachStep>> = [];
 		final externs: Map<String, { type: String, name: String }> = [];
 		final externRevisits: Array<{ id: String, step: ReachStep }> = [];
@@ -1784,13 +1788,13 @@ final class MemberReach {
 				spliceOnly[id] = true;
 			final owner: Null<String> = typed != null && mayShare(g, id) ? typed : null;
 			final key: String = owner == null ? id : '$id@$owner';
-			if (truth) {
-				final known: Array<ReachStep> = callers[id] ?? [];
-				if (step.from != id && !known.exists(s -> s.from == step.from)) {
-					known.push(step);
-					callers[id] = known;
-					if (externs.exists(id)) externRevisits.push({ id: id, step: step });
-				}
+			final known: Array<ReachStep> = callers[id] ?? [];
+			final read: ReachStep -> Bool = s ->
+				s.from == step.from && (truth || (s.file == step.file && s.span?.from == step.span?.from && s.span?.to == step.span?.to));
+			if (step.from != id && !known.exists(read)) {
+				known.push(step);
+				callers[id] = known;
+				if (externs.exists(id)) externRevisits.push({ id: id, step: step });
 			}
 			if (queued.exists(key)) return;
 			queued[key] = true;
@@ -2011,6 +2015,13 @@ final class MemberReach {
 			admitUnread(site, false);
 			admitAlways();
 		}
+		// an extern's admission, and its blind spot when its target code may write the member by its name — where program code
+		// hands it values (`via`): target code that runs it was handed no more than it hands on, and was judged where it was
+		function admitTarget(site: AdmissionSite, via: Null<String>): Void {
+			if (site.blind == true && !TARGET_ADMISSIONS.contains(via ?? ''))
+				blind = blind ?? NativeCode(site.file, site.span ?? new Span(0, 0));
+			admit(site);
+		}
 		// the extern `id`'s admission for the caller `s` queued it from, unless that caller runs nowhere as itself yet
 		function admitExternFrom(id: String, s: ReachStep): Void {
 			final target: Null<{ type: String, name: String }> = externs[id];
@@ -2021,15 +2032,15 @@ final class MemberReach {
 				waitingExterns[s.from] = waiting;
 				return;
 			}
-			admit(externSite(g, id, s.file, s.span, target.type, target.name, s.from, question.declaring));
+			admitTarget(externSite(g, id, s.file, s.span, target.type, target.name, s.from, question.declaring), s.kind);
 		}
-		// the admission of the target code of the extern `type.name`, the node `id`, met at `file`/`span`: under the truth once
-		// for every node that queued it (`callers`), each read by what its calls of it hand (`externSite`), and again for each
-		// that queues it later (`externRevisits`)
+		// the admission of the target code of the extern `type.name`, the node `id`, met at `file`/`span`: once for every node —
+		// without the truth, every call site — that queued it (`callers`), each read by what its calls of it hand (`externSite`),
+		// and again for each that queues it later (`externRevisits`)
 		function admitExtern(id: String, from: String, file: String, span: Null<Span>, type: String, name: String): Void {
-			final steps: Array<ReachStep> = truth ? (callers[id] ?? []).copy() : [];
+			final steps: Array<ReachStep> = (callers[id] ?? []).copy();
 			if (steps.length == 0) {
-				admit(externSite(g, from, file, span, type, name, reach[id]?.from, question.declaring));
+				admitTarget(externSite(g, from, file, span, type, name, reach[id]?.from, question.declaring), reach[id]?.kind);
 				return;
 			}
 			externs[id] = { type: type, name: name };
@@ -2453,6 +2464,18 @@ final class MemberReach {
 			&& ((_shape.execution?.nonMutatingArrayMethods ?? []).contains(name)
 				|| (_shape.execution?.mutatingArrayMethods ?? []).contains(name) || name == (_shape.constructorName ?? 'new'));
 		if (arrayOwn) site.values = _g.callsItsArgument(g, type, name);
+		// target code handed an object carrying the member may write it by its name — a blind spot, as at a code site — unless it
+		// writes no member by name: the built-in array's own methods, which store and convert what they hold, a call known to run
+		// no code of the program's (`ReachGraph.runsNoUserCode`), and a reflective access by a name, which the walk judges by the
+		// name it is handed (`ExecutionShape.reflectiveNameCalls`, `ReachHazard.ReflectiveName`)
+		final reflective: Map<String, Int> = _shape.execution?.reflectiveNameCalls ?? [];
+		final namesNoMember: Bool = arrayOwn || _g.runsNoUserCode(g, type, name, true) || reflective.exists('$type.$name');
+		// read by the syntax: a value its type may carry the member in, or a primitive once an object carrying it left the type
+		// system, which the syntax then reads as one that may be anything
+		function carried(t: Null<String>): Void {
+			if (namesNoMember || (t != null && _carriers.primitive(t) && !ownerMayHaveEscaped(declaring))) return;
+			if (_carriers.relation(t, declaring) != CannotCarry) site.blind = true;
+		}
 		final returned: Null<String> = g.types.memberOnChain(type, name)?.returnNominal;
 		final stringType: Null<String> = _g.stringTypeName();
 		// under the truth the compiler says what the caller's calls of it hand its target code, the receiver included, wherever
@@ -2460,6 +2483,7 @@ final class MemberReach {
 		// The built-in array's own methods call only a function value they are handed, and reach a member by name only converting
 		// what they hold to a string
 		final handed: Null<NativeHands> = externHanded(g, caller, type, name, declaring);
+		if (handed?.blind == true && !namesNoMember) site.blind = true;
 		if (handed != null && !arrayOwn) site.values = handed.values;
 		if (handed != null && (!arrayOwn || (returned != null && returned == stringType))) {
 			final types: Null<Array<String>> = handed.types;
@@ -2471,6 +2495,7 @@ final class MemberReach {
 		if (call == null || tree == null || source == null || (!constructs && call.children.length == 0)) {
 			// the site is not in code the analysis read: nothing narrows what the call is handed, its receiver included
 			if (handed == null) site.all = takesObject || onInstance;
+			if (handed == null && (takesObject || onInstance)) carried(null);
 			return site;
 		}
 		final args: Array<QueryNode> = constructs ? call.children : call.children.slice(1);
@@ -2479,14 +2504,21 @@ final class MemberReach {
 			? callee.children[0]
 			: null;
 		final lambdas: Array<String> = _shape.lambdaKinds ?? [];
-		if (handed == null && takesObject && !arrayOwn)
-			for (arg in args)
-				if (!lambdas.contains(arg.kind)) hand(_g.sites.typeOf(file, tree, source, arg));
+		// a literal is no object, whatever the syntax reads the type of what else is handed as
+		final literals: Array<String> = (_shape.inlineConstantLiteralKinds ?? []).concat(_shape.stringLiteralKinds ?? []);
+		if (handed == null && takesObject) for (arg in args) if (!lambdas.contains(arg.kind)) {
+			final t: Null<String> = _g.sites.typeOf(file, tree, source, arg);
+			if (!literals.contains(arg.kind) && arg.kind != _shape.nullLiteralKind) carried(t);
+			if (!arrayOwn) hand(t);
+		}
 		// an instance member's target code holds its receiver too — a program subclass's `this` when the call is bare —
 		// and reaches its members by name as it does an argument's (a native `toJSON` runs `this.toISOString()`). A
 		// construction's receiver is the object it makes, an instance of exactly the target class: no program object
-		if (handed == null && onInstance && !arrayOwn && !constructs)
-			hand(receiver == null ? MemberTouchScan.typeAt(tree, call.span?.from ?? 0) : _g.sites.typeOf(file, tree, source, receiver));
+		final receiverType: Null<String> = receiver == null
+			? MemberTouchScan.typeAt(tree, call.span?.from ?? 0)
+			: _g.sites.typeOf(file, tree, source, receiver);
+		if (handed == null && onInstance && !constructs) carried(receiverType);
+		if (handed == null && onInstance && !arrayOwn && !constructs) hand(receiverType);
 		// a type taking type parameters is a container whose elements a conversion reaches too: any
 		function containerFree(t: Null<String>): Null<String> {
 			return t == null || g.types.generics.typeParamsOf(t).length > 0 ? null : t;
@@ -2523,8 +2555,10 @@ final class MemberReach {
 	 * What the calls of the extern member `type.name` in the code of the graph node `caller` hand its target code, where the
 	 * compiler facts are the truth (`FactsView.externCalls`): each value an argument hands it and each call's receiver, read
 	 * positively (`NativeSiteReach.take`) — any object (`types` null) once one of them may be an object carrying a member of
-	 * a type `declaring` declares. Null — the syntax reads the call — without the truth or a caller, when a declaration of
-	 * the caller is not faceted or a fact there has no place, and when its facts hold no call of the member.
+	 * a type `declaring` declares, which the target code may then write by its name (`NativeHands.blind`): one of any type that
+	 * is an object once such an object left the type system, one of a type carrying the member while none did. Null — the
+	 * syntax reads the call — without the truth or a caller, when a declaration of the caller is not faceted or a fact there
+	 * has no place, and when its facts hold no call of the member.
 	 */
 	private function externHanded(g: CallGraph, caller: Null<String>, type: String, name: String, declaring: String): Null<NativeHands> {
 		final view: Null<FactsView> = _scope.facts;
@@ -2533,25 +2567,56 @@ final class MemberReach {
 		final targets: Array<String> = [for (id in facts.bySimpleName()[type] ?? []) '$id.$name'];
 		final declared: Array<FnDeclaration> = g.declarationsOf(caller);
 		if (targets.length == 0 || declared.length == 0) return null;
-		final handed: Array<String> = [];
-		final receivers: Array<Null<String>> = [];
+		final handed: Array<Null<String>> = [];
 		var count: Int = 0;
 		for (d in declared) {
 			final read: Null<ExternCalls> = facts.externCalls(g, d.file, d.span, targets, caller);
 			if (read == null) return null;
 			for (h in read.handed) handed.push(h);
-			for (r in read.receivers) receivers.push(r);
+			for (r in read.receivers) handed.push(r);
 			count += read.count;
 		}
 		if (count == 0) return null;
 		final sites: NativeSiteReach = nativeSites(facts);
 		final escaped: Bool = ownerMayHaveEscaped(declaring);
+		final any: Bool = anyMayHaveEscaped();
 		final into: NativeHands = { types: [], values: false };
-		function take(text: Null<String>): Bool {
-			final read: Null<FactsType> = text == null ? null : FactsTypeTree.read(text);
-			return text == null || (read != null && sites.take(read, escaped, into));
+		// a value that may be an object carrying the member: one of any type once such an object left the type system, one of a
+		// type that carries it while none did — a value no object by its type then holds only one that left it
+		function take(text: Null<String>): Void {
+			if (text == null) return;
+			final read: Null<FactsType> = FactsTypeTree.read(text);
+			if (read == null || !sites.take(read, escaped, any, into)) {
+				into.types = null;
+				into.values = true;
+				into.blind = true;
+			} else if (!escaped && !facts.unchecked().byType(read) && declaredCarrier(g, read, declaring))
+				into.blind = true;
 		}
-		return handed.foreach(take) && receivers.foreach(take) ? into : { types: null, values: true };
+		for (h in handed) take(h);
+		return into;
+	}
+
+	/**
+	 * Whether a value of the facts type `t` may be or hold an object carrying a member of the type `declaring` while none left
+	 * the type system: a type it is written with — itself or a type argument, whose values it may hold — is one carrying it
+	 * (`ValueCarriers.declaredValueTypes`) or a supertype of one, or those are not known. A catch-all, a structure and a
+	 * function type hold only what left it.
+	 */
+	private function declaredCarrier(g: CallGraph, t: FactsType, declaring: String): Bool {
+		final owners: Null<Array<String>> = _carriers.declaredValueTypes(declaring);
+		if (owners == null) return true;
+		final related: Array<String> = owners.copy();
+		var i: Int = 0;
+		while (i < related.length) for (s in g.types.supertypesOf(related[i++])) if (!related.contains(s)) related.push(s);
+		function carries(type: FactsType): Bool {
+			return switch type {
+				case Named(id, args):
+					related.contains(FactsView.simpleSource(id) ?? '') || args.exists(carries);
+				case _: false;
+			};
+		}
+		return carries(t);
 	}
 
 	/** The element type of a value typed `type` when that is the built-in array type written with it (`Array<T>`), else null. */
@@ -2761,14 +2826,12 @@ final class MemberReach {
 		final view: Null<FactsView> = _scope.facts;
 		if (view == null) return Blind;
 		final sites: NativeSiteReach = nativeSites(view);
-		return sites.judge(x, names, ownerMayHaveEscaped(declaring));
+		return sites.judge(x, names, ownerMayHaveEscaped(declaring), anyMayHaveEscaped());
 	}
 
 	/** What native sites may do to a member under the truth (`NativeSiteReach`), read off `view`; built on first need. */
 	private function nativeSites(view: FactsView): NativeSiteReach {
-		final sites: NativeSiteReach = _nativeSites ?? new NativeSiteReach(
-			view.table, FactsEscapes.inertIds(_shape), _shape.arrayTypeNames ?? []
-		);
+		final sites: NativeSiteReach = _nativeSites ?? new NativeSiteReach(view);
 		_nativeSites = sites;
 		return sites;
 	}
@@ -2782,6 +2845,12 @@ final class MemberReach {
 		final escaped: Null<Array<String>> = _escapes.escaped();
 		final known: Array<String> = escaped ?? [];
 		return owners == null || escaped == null || owners.exists(o -> known.contains(o));
+	}
+
+	/** Whether any object may have left the type system: the escapes are not known, or name a type (`ValueEscapes.escaped`). */
+	private function anyMayHaveEscaped(): Bool {
+		final escaped: Null<Array<String>> = _escapes.escaped();
+		return escaped == null || escaped.length > 0;
 	}
 
 	/**
@@ -3146,6 +3215,9 @@ private typedef AdmissionSite = {
 	 * those stored into it, where the facts say which (`FunctionValueTypes.storedIn`).
 	 */
 	@:optional var stored: Null<String>;
+
+	/** Whether the target code admitted may write the member by its name: a blind spot (`MemberReach.externSite`). */
+	@:optional var blind: Bool;
 }
 
 /** The names code reads members by (`MemberReach.reflectedNames`), and the graph's size it was read at. */

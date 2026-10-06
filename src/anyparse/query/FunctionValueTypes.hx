@@ -22,8 +22,10 @@ using Lambda;
  * A value called that is a PARAMETER of an instance method, which the method never assigns, holds what the invocations of
  * the method hand it (`argumentValues`). When the method's class and its subclasses never left the type system (no escaped
  * type is one, `ValueEscapes.escapedIds`) — reading a method as a value, or any field by a name, lets the object it is read
- * off escape (`FactsEscapes`), and target code reaches only the objects handed to it — the method runs only where a typed
- * call of it, or of a member of a supertype it overrides, is written: each such call fact (`CallFact`, `INVOKING`) names it.
+ * off escape (`FactsEscapes`), and target code reaches only the objects handed to it — the method runs only where a typed call
+ * of it, or of a member of a supertype of a class of its hierarchy, is written: each such call fact (`CallFact`, `INVOKING`)
+ * names it — and a call naming another class runs on an instance of that class, unless an unchecked conversion may put an
+ * instance of the hierarchy that left the type system where that class is written (`UncheckedConversions.holdsForeign`).
  * Each must
  * hand that parameter a function expression, read off the call's text at the call's own range with exactly as many
  * arguments as the method takes; the parameter then holds exactly those functions, by where each is written. A call of
@@ -38,7 +40,9 @@ using Lambda;
  *
  * A call of a `dynamic` method runs its declared bodies, by its edges, and the values stored into it (`storedIn`): when no
  * class of the hierarchy declaring it escaped, an assignment the facts type names it is the only way one gets there, and
- * each must store `null`, a function expression, or a parameter of the function writing it read as above.
+ * each must store `null`, a function expression, or a parameter of the function writing it read as
+ * above. A write naming another class writes an instance of that class, unless an unchecked conversion
+ * may put an instance of the hierarchy where that class is written (`UncheckedConversions.holdsForeign`).
  *
  * By its TYPE, a value reaches a place only as a value of a type the compiler unified with the place's, unless it passed
  * through a place no function type types — `Dynamic`, `Any`, a type parameter, a structure, target code — or an unchecked
@@ -298,12 +302,17 @@ final class FunctionValueTypes {
 		final related: Array<String> = hierarchy.concat(table.supertypesOf(owner));
 		final out: Array<FactPos> = [];
 		// an object that left the type system may have the field written by its name too
-		if (escaped.exists(e -> hierarchy.contains(e)) && !untypedStores(name, hierarchy, out)) return null;
+		final left: Bool = escaped.exists(e -> hierarchy.contains(e));
+		if (left && !untypedStores(name, hierarchy, out)) return null;
 		for (id in table.nodeIds()) {
 			final n: Null<FactNode> = table.node(id);
 			if (n != null) for (f in n.fields) {
-				final declaring: String = f.owner ?? '';
-				if (!f.write || f.field != name || !related.contains(CompilerFacts.baseId(declaring))) continue;
+				final declaring: String = CompilerFacts.baseId(f.owner ?? '');
+				if (!f.write || f.field != name) continue;
+				// a write naming another class writes an instance of it, unless an unchecked conversion put one of the hierarchy that
+				// left the type system where that class is written (`UncheckedConversions.holdsForeign`)
+				if (!related.contains(declaring) && left && f.owner != null && _view.unchecked().holdsForeign(declaring)) return null;
+				if (!related.contains(declaring)) continue;
 				final values: Null<Array<FactPos>> = storedBy(n, f.at);
 				if (values == null) return null;
 				for (v in values) out.push(v);
@@ -718,11 +727,19 @@ final class FunctionValueTypes {
 		final out: Array<FactPos> = [];
 		// an object no flow let leave the type system is invoked only where its type is written: a method read as a value, or a
 		// field read by a name off it, lets it escape (`FactsEscapes`); one that left it may be invoked by the method's name too
-		if (escaped.exists(e -> hierarchy.contains(e)) && !untypedInvocations(name, hierarchy, index, count, out)) return null;
-		final callers: Array<String> = [owner].concat(table.supertypesOf(owner));
+		final left: Bool = escaped.exists(e -> hierarchy.contains(e));
+		if (left && !untypedInvocations(name, hierarchy, index, count, out)) return null;
+		// a typed call names a class an instance of the hierarchy is: one of it, or a supertype of one — an interface only a
+		// subclass implements among them
+		final callers: Array<String> = hierarchy.copy();
+		for (h in hierarchy) for (s in table.supertypesOf(h)) if (!callers.contains(s)) callers.push(s);
 		for (call in invocationsOf(name)) {
 			final target: String = call.target ?? '';
-			if (!callers.contains(CompilerFacts.baseId(target.substr(0, target.lastIndexOf('.'))))) continue;
+			final named: String = CompilerFacts.baseId(target.substr(0, target.lastIndexOf('.')));
+			// a call naming another class runs on an instance of it, unless an unchecked conversion put one of the hierarchy that
+			// left the type system where that class is written (`UncheckedConversions.holdsForeign`)
+			if (!callers.contains(named) && left && _view.unchecked().holdsForeign(named)) return null;
+			if (!callers.contains(named)) continue;
 			final value: Null<FactPos> = handed(call.at, index, count);
 			if (value == null) return null;
 			out.push(value);
@@ -737,8 +754,9 @@ final class FunctionValueTypes {
 	 * a value (`FactsMethodValues.readAsValue` — a closure, a read by its name, reflection — which whatever calls it later
 	 * may hand anything), by target code whose text is computed or names it (`FactsNativeReach.targetNames`: target code
 	 * calls a method only by its name or through the reflection whose call sites the facts record), by a call of an access no
-	 * reader knows (`CALL_ACCESSES`), or by such a call handing that parameter anything but a function expression. A typed
-	 * call names the class whose method it runs (`invokedWith` reads those).
+	 * reader knows (`CALL_ACCESSES`), or by such a call handing that parameter anything but a function
+	 * expression. A typed call names the class whose method it runs, unless an unchecked conversion
+	 * may put an object of another one where that class is written (`invokedWith` reads those).
 	 */
 	private function untypedInvocations(name: String, hierarchy: Array<String>, index: Int, count: Int, out: Array<FactPos>): Bool {
 		if (_methods().readAsValue(name, hierarchy) || targetCodeNames(name)) return false;

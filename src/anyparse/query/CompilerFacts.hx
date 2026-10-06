@@ -493,13 +493,19 @@ final class CompilerFacts {
 	 * The records a facts file holds (`TypedFactsMacro`): its header, the end of each round, a node, a type, a home
 	 * file's text and a foreign file's index. A POSITIVE list: a file holding any other is none this reader can read.
 	 */
-	private static final RECORD_KINDS: Array<String> = ['facts', 'end', 'node', 'type', 'src', 'file'];
+	private static final RECORD_KINDS: Array<String> = ['facts', 'target', 'end', 'node', 'type', 'src', 'file'];
 
 	/** The configurations that contributed nothing, and why — the table then holds less, and absence answers for it. */
 	public final dropped: Array<{ name: String, reason: String }> = [];
 
 	/** The configurations whose facts the table holds, by name. */
 	public final configurations: Array<String> = [];
+
+	/**
+	 * The target each configuration generates code for (`target.name`: `cpp`, `js`, `eval`, …), by its index in
+	 * `configurations`; null where its facts do not say.
+	 */
+	public final targets: Array<Null<String>> = [];
 
 	private final _nodeLines: Map<String, Array<NodeLine>> = [];
 	private final _nodeFiles: Map<String, Array<NodeRange>> = [];
@@ -594,6 +600,7 @@ final class CompilerFacts {
 		final twin: CompilerFacts = new CompilerFacts(file -> originals[file] ?? read(file), _key);
 		for (d in dropped) twin.dropped.push(d);
 		for (c in configurations) twin.configurations.push(c);
+		for (t in targets) twin.targets.push(t);
 		for (d in _dumps) twin._dumps.push(d);
 		for (k => v in _nodeLines) twin._nodeLines[k] = v;
 		for (k => v in _nodeFiles) twin._nodeFiles[k] = v;
@@ -823,6 +830,7 @@ final class CompilerFacts {
 		final files: DumpFiles = { paths: [], file: dump.file };
 		_dumps.push(files);
 		configurations.push(dump.name);
+		targets.push(null);
 
 		for (raw in lines) {
 			final line: String = FactText.detached(raw);
@@ -832,7 +840,10 @@ final class CompilerFacts {
 				addType(Json.parse(line), dump, index)
 			else if (line.startsWith('{"k":"src"'))
 				addSource(Json.parse(line), dump)
-			else if (line.startsWith('{"k":"file"')) {
+			else if (line.startsWith('{"k":"target"')) {
+				final record: TargetRecord = Json.parse(line);
+				targets[index] = record.n;
+			} else if (line.startsWith('{"k":"file"')) {
 				final record: FileRecord = Json.parse(line);
 				files.paths[record.i] = dump.file(record.path);
 			}
@@ -1448,6 +1459,11 @@ private typedef SourceRecord = {
 private typedef FileRecord = {
 	final i: Int;
 	final path: String;
+}
+
+/** The target a configuration generates code for (`{"k":"target","n":S}`). */
+private typedef TargetRecord = {
+	final n: String;
 }
 
 private typedef FieldRecord = {

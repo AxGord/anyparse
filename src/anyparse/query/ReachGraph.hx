@@ -57,6 +57,9 @@ final class ReachGraph {
 	/** Extern type -> whether it is closed over inert values (`externClosed`). */
 	private final _externClosed: Map<String, Bool> = [];
 
+	/** Type -> whether a program type extending it overrides a method (`overriddenBelow`), settled on first need. */
+	private final _overriddenBelow: Map<String, Bool> = [];
+
 	/** Library class -> whether an instance of it may exist while the program runs (`constructible`), settled on first demand. */
 	private final _inPlay: Map<String, Bool> = [];
 
@@ -267,13 +270,31 @@ final class ReachGraph {
 	 * type is closed over inert values (`externClosed`), or it is a method the language calls IMPLICITLY — a
 	 * conversion, an iteration step, an operator — that takes no value it could call (`callsItsArgument`). The
 	 * second rests on a stated assumption: target code the language runs implicitly converts or steps its own
-	 * receiver and calls back into the program only through a function value it is handed.
+	 * receiver and calls back into the program only through a function value it is handed. Neither holds for an
+	 * instance member whose receiver may be an instance of a program class overriding a method (`overriddenBelow`):
+	 * target code running on it may call that method, as a virtual dispatch does.
 	 */
 	public function externQuiet(g: CallGraph, type: String, name: String): Bool {
-		if (externClosed(g, type)) return true;
 		final info: Null<MemberInfo> = g.types.memberOnChain(type, name);
+		if (info != null && !info.isStatic && overriddenBelow(type)) return false;
+		if (externClosed(g, type)) return true;
 		final byName: Bool = info != null && !info.isStatic && (_scope.shape.execution?.implicitCallNames ?? []).contains(name);
 		return info != null && (info.isImplicitCall || byName) && !callsItsArgument(g, type, name);
+	}
+
+	/**
+	 * Whether a type extending `type` that is no extern overrides a method — an instance of it is one of `type`, whose target
+	 * code may call the override — or a type extending it is not declared once, so nothing here says.
+	 */
+	private function overriddenBelow(type: String): Bool {
+		final cached: Null<Bool> = _overriddenBelow[type];
+		if (cached != null) return cached;
+		final found: Bool = _scope.index.subtypes.subtypeNames(type).exists(s -> {
+			final decl: Null<TypeDeclInfo> = declarationOf(s);
+			decl == null || (!decl.isExtern && decl.members.exists(m -> m.isOverride));
+		});
+		_overriddenBelow[type] = found;
+		return found;
 	}
 
 	/**

@@ -827,7 +827,7 @@ class MemberReachTest extends Test {
 		assertReachedAt(ask([viaValue, pt]), 'Pt.new');
 	}
 
-	@:pin('control') @:killer('M-REACH-EXTERN-HANDS')
+	@:pin('control') @:killer('M-REACH-EXTERN-HANDS') @:killer('M-EXTERN-BLIND-SYNTAX-LITERAL')
 	public function testBodylessLibraryCallAdmitsImplicitlyCalledMethods(): Void {
 		// `Std.string(this)` has no body the graph holds, and it calls `toString` on its argument — an implicitly-called method
 		// the walk admits from any code.

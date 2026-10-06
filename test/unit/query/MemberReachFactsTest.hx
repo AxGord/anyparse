@@ -2150,8 +2150,9 @@ class MemberReachFactsTest extends Test {
 	}
 
 	@:pin('control') @:killer('M-NATIVE-SITE-BLIND') @:killer('M-NATIVE-SITE-NAMES') @:killer('M-NATIVE-SITE-ESCAPED')
-	@:killer('M-NATIVE-SITE-COMPUTED') @:killer('M-NATIVE-SITE-VALUES') @:killer('M-FACTS-NATIVE-HANDED')
-	@:killer('M-FACTS-NATIVE-CHAIN') @:killer('M-ESCAPES-FACTS-NATIVE-HANDED')
+	@:killer('M-NATIVE-SITE-VALUES') @:killer('M-FACTS-NATIVE-HANDED')
+	@:killer('M-FACTS-NATIVE-CHAIN') @:killer('M-ESCAPES-FACTS-NATIVE-HANDED') @:killer('M-NATIVE-LITERAL-CODE')
+	@:killer('M-NATIVE-LITERAL-CHAIN')
 	public function testTargetCodeReachesTheMemberOnlyThroughWhatItIsHandedUnderTheTruth(): Void {
 		// target code reaches only what it is handed and what its text names: naming nothing, it reaches no `Main`; naming
 		// `items` — even in `peek`, which runs on no object — reaching a `Main` — the static `last`, by its name in a string or
@@ -2164,7 +2165,7 @@ class MemberReachFactsTest extends Test {
 				+ '\tfunction f():Void {\n\t\tvar c:String = "0";\n\t\tfor (i in 0...items.length) { /*<*/ ' + code + ' /*>*/ }\n\t}\n}\n';
 		}
 		assertMatch(truthAsk(['Main.hx' => region('js.Syntax.code("0");')]), r -> r.match(Proven));
-		assertMatch(truthAsk(['Main.hx' => region('untyped console.log(1);')]), r -> r.match(Proven));
+		assertMatch(truthAsk(['Main.hx' => region('untyped console.log();')]), r -> r.match(Proven));
 		assertMatch(truthAsk(['Main.hx' => region('js.Syntax.code("items");')]), r -> r.match(Unknown(NativeCode(_, _))));
 		assertMatch(truthAsk(['Main.hx' => region('peek();')]), r -> r.match(Unknown(NativeCode(_, _))));
 		assertMatch(truthAsk(['Main.hx' => region('untyped document.last;')]), r -> r.match(Unknown(NativeCode(_, _))));
@@ -2176,20 +2177,29 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => region('js.Syntax.code("0");')]), r -> r.match(Unknown(NativeCode(_, _))));
 	}
 
-	@:pin('control') @:killer('M-NATIVE-SITE-INERT') @:killer('M-NATIVE-SITE-CORE-TYPE') @:killer('M-NATIVE-SITE-ALIAS')
+	@:pin('control') @:killer('M-NATIVE-SITE-CORE-TYPE') @:killer('M-UNCHECKED-TARGET')
+	@:killer('M-UNCHECKED-BOXED') @:killer('M-NATIVE-SITE-COMPUTED')
 	public function testTargetCodeHandedOnlyValuesReachesNoObjectUnderTheTruth(): Void {
-		// a `Main` left the type system through `leak`, so a value of any type handed to target code may be one — but an `Int`,
-		// a `Tiny` (a type the compiler represents itself and no value of which is null, as `Int` is) and a `Small`, a nullable
-		// `Tiny` behind an alias, are no object at all
+		// a `Main` left the type system through `leak`, so a value handed to target code may be one wherever the build keeps
+		// what lands at the place the value is held. hxcpp converts into an `Int` and a `Tiny` (a type the compiler represents
+		// itself and no value of which is null, as `Int` is): no object at all. It boxes a `Small`, a nullable `Tiny` behind an
+		// alias, and js keeps whatever lands anywhere — a write by its name may have put a `Main` in an `Int` field. Code whose
+		// text is computed, `c`, names what is not known
 		function region(code: String): String {
 			return MEMBER_HEAD + '\tstatic function leak(m:Main):Dynamic\n\t\treturn m;\n\n'
-				+ '\tfunction f(t:Small, o:Other):Void {\n\t\tfor (i in 0...items.length) { /*<*/ ' + code + ' /*>*/ }\n\t}\n}\n'
-				+ '@:coreType @:notNull abstract Tiny from Int to Int {}\ntypedef Small = Null<Tiny>;\n'
+				+ '\tfunction f(t:Small, n:Tiny, o:Other, c:String):Void {\n\t\tfor (i in 0...items.length) { /*<*/ ' + code
+				+ ' /*>*/ }\n\t}\n}\n' + '@:coreType @:notNull abstract Tiny from Int to Int {}\ntypedef Small = Null<Tiny>;\n'
 				+ 'class Other {\n\tpublic function new() {}\n}\n';
 		}
-		assertMatch(truthAsk(['Main.hx' => region('js.Syntax.code("{0}", 1);')]), r -> r.match(Proven));
-		assertMatch(truthAsk(['Main.hx' => region('js.Syntax.code("{0}", t);')]), r -> r.match(Proven));
-		assertMatch(truthAsk(['Main.hx' => region('js.Syntax.code("{0}", o);')]), r -> r.match(Unknown(NativeCode(_, _))));
+		function cpp(code: String): ReachResult {
+			return builtAsk(CPP_BUILD, ['Main.hx' => region(code)]);
+		}
+		assertMatch(cpp('untyped __cpp__("{0}", 1);'), r -> r.match(Proven));
+		assertMatch(cpp('untyped __cpp__("{0}", n);'), r -> r.match(Proven));
+		assertMatch(cpp('untyped __cpp__("{0}", t);'), r -> r.match(Unknown(NativeCode(_, _))));
+		assertMatch(cpp('untyped __cpp__("{0}", o);'), r -> r.match(Unknown(NativeCode(_, _))));
+		assertMatch(cpp('untyped __cpp__(c);'), r -> r.match(Unknown(NativeCode(_, _))));
+		assertMatch(truthAsk(['Main.hx' => region('js.Syntax.code("{0}", 1);')]), r -> r.match(Unknown(NativeCode(_, _))));
 	}
 
 	@:pin('control') @:killer('M-EXTERN-HANDED-FACTS') @:killer('M-EXTERN-HANDED-RECEIVER') @:killer('M-EXTERN-CALLERS')
@@ -2257,16 +2267,107 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main], null, true, null, false, CPP_BUILD, null, null, false, declared), r -> !r.match(Proven));
 	}
 
+	@:pin('control') @:killer('M-REACH-CLOSED-EXTERN-OVERRIDE')
+	public function testAClosedExternRunsWhatAProgramSubclassOverridesUnderTheTruth(): Void {
+		// `Peer`'s target code takes and gives only integers, but it runs on its receiver: `poke` may call `other` as a virtual
+		// dispatch does, and on a `Sub` that runs the override, which grows `items`. A `Sub` overriding nothing runs nothing
+		function closed(sub: String): String {
+			return 'class Main {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n\n'
+				+ '\tpublic static var last:Main = new Main();\n\n\tstatic function main()\n\t\tnew Main().f();\n\n'
+				+ '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ new Sub().poke(1); /*>*/ }\n\t}\n}\n'
+				+ '@:native("Peer") extern class Peer {\n\tpublic function new();\n\n\tpublic function poke(x:Int):Void;\n\n'
+				+ '\tpublic function other():Void;\n}\n' + 'class Sub extends Peer {\n\tpublic function new()\n\t\tsuper();\n\n\t' + sub
+				+ '\n}\n';
+		}
+		final grow: String = '\n\t\tMain.last.items.push(1);';
+		assertMatch(builtAsk(CPP_BUILD, ['Main.hx' => closed('override public function other():Void' + grow)]), r -> r.match(Reached(_)));
+		assertMatch(builtAsk(CPP_BUILD, ['Main.hx' => closed('public function grow():Void' + grow)]), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-EXTERN-BLIND-HANDED') @:killer('M-EXTERN-BLIND-NAMES-NO-MEMBER') @:killer('M-EXTERN-BLIND-DECLARED')
+	@:killer('M-EXTERN-BLIND-SYNTAX') @:killer('M-EXTERN-BLIND-REPORT')
+	public function testAnExternHandedAnObjectCarryingTheMemberMayWriteItByNameUnderTheTruth(): Void {
+		// target code handed a `Main` may write its `items` by the name, as code handed one may: a blind spot — handed the
+		// object itself, which leaves the type system there, or, where nothing else let a `Main` leave it (the interpreter's
+		// std), at a parameter the extern's own type parameter types: a `Main`, an array of them. The built-in array's own
+		// methods write no member by name; an `Int` is no object. The syntax reads the call the same way
+		function handing(code: String): String {
+			return 'class Main {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n\n'
+				+ '\tstatic function main()\n\t\tnew Main().f();\n\n'
+				+ '\tfunction f():Void {\n\t\tvar a:Array<Main> = [];\n\t\tvar box:Box<Main> = new Box<Main>();\n'
+				+ '\t\tvar bag:Box<Array<Main>> = new Box<Array<Main>>();\n' + '\t\tfor (i in 0...items.length) { /*<*/ ' + code
+				+ ' /*>*/ }\n\t}\n}\n' + 'extern class Native {\n\t@:native("dyn") public static function dyn(a:Dynamic):Void;\n}\n'
+				+ '@:native("Box") extern class Box<T> {\n\tpublic function new();\n\n\tpublic function put(x:T):Void;\n}\n';
+		}
+		assertMatch(builtAsk(CPP_BUILD, ['Main.hx' => handing('Native.dyn(this);')]), r -> r.match(Unknown(NativeCode(_, _))));
+		assertMatch(builtAsk(CPP_BUILD, ['Main.hx' => handing('Native.dyn(1);')]), r -> r.match(Proven));
+		assertMatch(interpAsk(['Main.hx' => handing('box.put(this);')]), r -> r.match(Unknown(NativeCode(_, _))));
+		assertMatch(interpAsk(['Main.hx' => handing('bag.put(a);')]), r -> r.match(Unknown(NativeCode(_, _))));
+		assertMatch(interpAsk(['Main.hx' => handing('a.join(",");')]), r -> r.match(Proven));
+		final syntax: ReachResult = ask(['Main.hx' => handing('box.put(this);')], null, true, null, false, CPP_BUILD);
+		assertMatch(syntax, r -> r.match(Unknown(NativeCode(_, _))));
+	}
+
+	@:pin('control') @:killer('M-EXTERN-EVERY-CALLER-SYNTAX') @:killer('M-EXTERN-EVERY-CALL-SYNTAX')
+	public function testAnExternReadsEveryCallOfItWithoutTheTruth(): Void {
+		// read by its syntax, the extern's admission reads each call of it, of each caller: `h1` hands an `Int`, `h2` an `Other`,
+		// whose `run` grows `items` and which target code may call by its name; `h` hands both
+		function calling(region: String): String {
+			return 'class Main {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n\n'
+				+ '\tpublic static var last:Main = new Main();\n\n\tstatic function main()\n\t\tnew Main().f();\n\n'
+				+ '\tstatic function h1():Void\n\t\tNative.obj(1);\n\n\tstatic function h2():Void\n\t\tNative.obj(new Other());\n\n'
+				+ '\tstatic function h():Void {\n\t\tNative.obj(1);\n\t\tNative.obj(new Other());\n\t}\n\n'
+				+ '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ ' + region + ' /*>*/ }\n\t}\n}\n'
+				+ 'class Other {\n\tpublic function new() {}\n\n\tpublic function run():Void\n\t\tMain.last.items.push(1);\n}\n'
+				+ 'extern class Native {\n\t@:native("obj") public static function obj(o:Dynamic):Void;\n}\n';
+		}
+		assertMatch(ask(['Main.hx' => calling('h1(); h2();')], null, true, null, false, CPP_BUILD), r -> r.match(Reached(_)));
+		assertMatch(ask(['Main.hx' => calling('h();')], null, true, null, false, CPP_BUILD), r -> r.match(Reached(_)));
+	}
+
+	@:pin('control') @:killer('M-VALUE-INVOKED-FOREIGN') @:killer('M-VALUE-INVOKED-SUBTYPE-SUPERS') @:killer('M-UNCHECKED-HOLDS')
+	public function testATypedCallOfAnotherClassMayRunTheMethodOfAnObjectPutThereUnderTheTruth(): Void {
+		// `r.visitRx` calls what the invocations of `visitRx` hand it. A call through `I`, which only `Sub` implements, is one;
+		// so is a call naming `Other` once an `Rx` was cast to one: the interpreter keeps the object a cast puts there, where
+		// hxcpp's checked conversion would leave null (`UncheckedConversionsTest`)
+		final base: String = 'class Base {\n\tpublic function new() {}\n}\n'
+			+ 'class Other {\n\tpublic function new() {}\n\n\tpublic function visitRx(f:(Rx)->String):String\n\t\treturn "";\n}\n'
+			+ 'interface I {\n\tfunction visitRx(f:(Rx)->String):String;\n}\nclass Sub extends Rx implements I {}\n';
+		function fixture(more: String): String {
+			return valueCallFixture(
+				'Int', '0', more, 'r.visitRx(x -> "a");', base, 'public function visitRx(f:(Rx)->String):String return f(this);'
+			);
+		}
+		final grow: String = 'x -> {\n\t\t\tMain.items.push(1);\n\t\t\t"b";\n\t\t}';
+		final converted: String = '\t\tvar o:Other = cast new Rx();\n\t\to.visitRx(' + grow + ');\n';
+		final through: String = '\t\tvar s:I = new Sub();\n\t\ts.visitRx(' + grow + ');\n';
+		assertMatch(compiledTruthAsk(['Main.hx' => fixture('')]), r -> r.match(Proven));
+		assertMatch(interpAsk(['Main.hx' => fixture('')]), r -> r.match(Proven));
+		assertMatch(interpAsk(['Main.hx' => fixture(converted)]), r -> r.match(Reached(_)));
+		assertMatch(compiledTruthAsk(['Main.hx' => fixture(through)]), r -> r.match(Reached(_)));
+	}
+
+	@:pin('control') @:killer('M-VALUE-STORED-FOREIGN')
+	public function testATypedWriteOfAnotherClassMayReplaceTheMethodOfAnObjectPutThereUnderTheTruth(): Void {
+		// the interpreter keeps a `Hook` cast to an `Other` with its own `run`, so `o.run = keep` replaces it with `grow`, which
+		// `fire` then calls; hxcpp's checked conversion would leave null there (`UncheckedConversionsTest`)
+		final other: String = 'class Other {\n\tpublic function new() {}\n\n\tpublic var run:(Int)->Void = null;\n}\n';
+		assertMatch(interpAsk(['Main.hx' => hookFixture('\t\tvar o:Other = cast h;\n') + other]), r -> r.match(Proven));
+		assertMatch(interpAsk([
+			'Main.hx' => hookFixture('\t\tvar o:Other = cast h;\n\t\to.run = keep;\n') + other
+		]), r -> r.match(Reached(_)));
+	}
+
 	@:pin('control') @:killer('M-GRAPH-FACTS-NATIVE-CHAIN-SKIP') @:killer('M-GRAPH-FACTS-NATIVE-CHAIN-ANY')
 	public function testACallAChainOfTargetNamesMakesIsItsTargetCodesUnderTheTruth(): Void {
-		// `console.log(1)` is target code handed `1`: no dynamic call by a name that may run a function value, so `g`, which `cb`
-		// holds and which changes `items`, does not run there — as it may at a call by name off a value of no class
+		// `console.log()` is target code handed nothing: no dynamic call by a name that may run a function value, so `g`, which
+		// `cb` holds and which changes `items`, does not run there — as it may at a call by name off a value of no class
 		function region(code: String): String {
 			return MEMBER_HEAD + '\tstatic var last:Main;\n\n\tstatic var cb:Void->Void = g;\n\n\tstatic function g():Void\n'
 				+ '\t\tlast.items.push(1);\n\n\tfunction f():Void {\n\t\tvar c:String = "0";\n'
 				+ '\t\tfor (i in 0...items.length) { /*<*/ ' + code + ' /*>*/ }\n\t}\n}\n';
 		}
-		assertMatch(compiledTruthAsk(['Main.hx' => region('untyped console.log(1);')]), r -> r.match(Proven));
+		assertMatch(compiledTruthAsk(['Main.hx' => region('untyped console.log();')]), r -> r.match(Proven));
 		assertMatch(compiledTruthAsk(['Main.hx' => region('(cast c : Dynamic).log(1);')]), r -> r.match(Reached(_)));
 		assertMatch(ask(['Main.hx' => region('untyped console.log(1);')]), r -> !r.match(Proven));
 	}
@@ -2285,6 +2386,7 @@ class MemberReachFactsTest extends Test {
 
 	@:pin('control') @:killer('M-FACTS-REFL-MEMBER-NAME') @:killer('M-FACTS-REFL-MEMBER-NAME-ANY')
 	@:killer('M-HAZARDS-TRUTH-LITERAL-NAME') @:killer('M-HAZARDS-TRUTH-LITERAL-FIRST-STRING')
+	@:killer('M-EXTERN-BLIND-REFLECTIVE') @:killer('M-EXTERN-BLIND-TARGET-ADMISSION')
 	public function testAReflectiveAccessSplicedInNamesTheLiteralItsNameArgumentHoldsUnderTheTruth(): Void {
 		// `Peek.has` splices `Reflect.hasField(this, name)` into the region, where the typed tree hands it `o` and the literal
 		// `"other"`: one member, not `items`. `o` may be any object that left the type system, a `Main` among them, so a name
@@ -2480,16 +2582,17 @@ class MemberReachFactsTest extends Test {
 	public function testTheArraysOwnMethodReachesItsElementsOnlyByConvertingThemUnderTheTruth(): Void {
 		// `a.join` is the built-in array's own method: it converts each element of `a`, which the compiler types `Array<String>`
 		// though the syntax cannot, and reaches no member by name — so neither `Obj.toString`, which changes `items`, nor any
-		// other function runs; an array of `Obj` converts one (`INTERP_BUILD`: js's std declares subtypes of `Array` the index
-		// does not hold)
+		// other function runs; an array of `Obj` converts one. hxcpp converts what lands in a `String`; the interpreter keeps
+		// it, so an element may be any object that left the type system there
 		function region(local: String): String {
 			return LOOP_HEAD + '\tstatic function main() {\n\t\tnew Obj();\n'
 				+ '\t\tfor (i in 0...items.length) { /*<*/ Util.go("a,b"); /*>*/ }\n\t}\n}\n'
 				+ 'class Util {\n\tpublic static function go(s:String):String {\n\t\t' + local + '\n\t\treturn a.join("");\n\t}\n}\n'
 				+ CLEARING_OBJ;
 		}
-		assertMatch(interpAsk(['Main.hx' => region('var a = s.split(",");')], STD_STRING), r -> r.match(Proven));
-		assertMatch(interpAsk(['Main.hx' => region('var a = [new Obj()];')], STD_STRING), r -> r.match(Reached(_)));
+		assertMatch(builtAsk(CPP_BUILD, ['Main.hx' => region('var a = s.split(",");')], STD_STRING), r -> r.match(Proven));
+		assertMatch(builtAsk(CPP_BUILD, ['Main.hx' => region('var a = [new Obj()];')], STD_STRING), r -> r.match(Reached(_)));
+		assertMatch(interpAsk(['Main.hx' => region('var a = s.split(",");')], STD_STRING), r -> !r.match(Proven));
 	}
 
 	@:pin('control') @:killer('M-REACH-ARRAY-CTOR') @:killer('M-REACH-ARRAY-OWN') @:killer('M-FACTS-UNHELD-STAND-IN')

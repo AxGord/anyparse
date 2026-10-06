@@ -2,7 +2,6 @@ package anyparse.query;
 
 import anyparse.check.FactsTypeTree;
 import anyparse.query.CompilerFacts.NativeFact;
-import anyparse.query.CompilerFacts.TypeFact;
 import anyparse.query.FactsNativeReach.NativeHand;
 
 using Lambda;
@@ -14,14 +13,16 @@ using Lambda;
  * names (`FactsNativeReach`): a local or parameter, the object its method runs on, a static variable.
  *
  * The site is a blind spot (`Blind`) when its text is computed, when its text names the member or an accessor of it, and
- * when a value it reaches may be an object carrying the member: one of no value type (`noObject`), while an object of a type
- * carrying the member may have left the type system — target code is handed nothing that did not leave it
- * (`FactsEscapes`), and a value of any type may be such an object once it has (`ValueCarriers.valueTypes`). Any other site
+ * when a value it reaches may be an object carrying the member: any but one that is no object (`noObject`), once an object carrying
+ * the member may have left the type system — target code is handed nothing that did not leave it (`FactsEscapes`), and a value of
+ * any type may be such an object once it has (`ValueCarriers.valueTypes`). A type says its values are no object only where the facts prove
+ * it (`UncheckedConversions`): every build converts a value put where one is held into one of the type, as hxcpp does. Any other site
  * enters the program, at most, through a positive list (`Hands`), the same for every target and for both kinds of site the
  * walk meets — a call carrying code (`__cpp__`, `Syntax.code`, a native identifier) and a call of an extern
  * (`MemberReach.externSite`): (a) what it is handed, read by type (`take`): a function value; an object, whose members it may
  * call by a name and whose function values it may call; the elements of a value of the built-in array, whose own methods run
- * no code of the program's; nothing through a value that is no object; (b) what its text names globally: a class of the
+ * no code of the program's; nothing through a value that is no object (`noObject`), and through one that is
+ * none only by its type an object of any type (`types` null); (b) what its text names globally: a class of the
  * program (`FactsNativeReach.classesNamed`), whose statics and constructor it may run as Haxe code naming the class does, and
  * an instance of which it may then hold; (c) reflection by name: only on what it holds — its members by name, (a) — since it
  * makes a class from a name only inside the reflection whose calls the facts record (`FactsEscapes`). Anything the list
@@ -30,36 +31,22 @@ using Lambda;
 @:nullSafety(Strict)
 final class NativeSiteReach {
 
-	/** The nullable wrapper: a value of it is one of its argument, or null. */
-	private static inline final NULLABLE: String = 'Null';
-
-	/** The metadata of a type the compiler represents itself (`TypeFact.meta`). */
-	private static inline final CORE_TYPE: String = ':coreType';
-
-	/** The metadata of a type no value of which is null (`TypeFact.meta`). */
-	private static inline final NOT_NULL: String = ':notNull';
-
-	private final _table: CompilerFacts;
 	private final _native: FactsNativeReach;
 
-	/** The primitive types' ids: a value of one is no object. */
-	private final _inert: Array<String>;
+	/** The facts read: which values are no object, as they prove it (`FactsView.unchecked`). */
+	private final _view: FactsView;
 
-	/** The built-in array's ids (`ExecutionShape.arrayTypeNames`): a value of one holds its elements and runs no code of its own. */
-	private final _arrays: Array<String>;
-
-	public function new(table: CompilerFacts, inert: Array<String>, arrays: Array<String>) {
-		_table = table;
-		_native = new FactsNativeReach(table);
-		_inert = inert;
-		_arrays = arrays;
+	public function new(view: FactsView) {
+		_native = new FactsNativeReach(view.table);
+		_view = view;
 	}
 
 	/**
 	 * What the target code at `x` may do to the member `names` spell — its own name and those of its accessors — when an
-	 * object carrying it may have left the type system (`ownerEscaped`): see the type doc.
+	 * object carrying it may have left the type system (`ownerEscaped`), or any object may have (`anyEscaped`): see the type
+	 * doc.
 	 */
-	public function judge(x: NativeFact, names: Array<String>, ownerEscaped: Bool): NativeVerdict {
+	public function judge(x: NativeFact, names: Array<String>, ownerEscaped: Bool, anyEscaped: Bool): NativeVerdict {
 		final code: Null<String> = x.code;
 		final words: Array<String> = code == null ? [] : FactsNativeReach.targetNames(code);
 		if (words.exists(n -> names.contains(n))) return Blind;
@@ -67,9 +54,9 @@ final class NativeSiteReach {
 		final hand: NativeHand = {
 			escape: text -> {
 				final read: Null<FactsType> = FactsTypeTree.read(text);
-				read != null && take(read, ownerEscaped, into);
+				read != null && take(read, ownerEscaped, anyEscaped, into);
 			},
-			escapeType: t -> take(t, ownerEscaped, into),
+			escapeType: t -> take(t, ownerEscaped, anyEscaped, into),
 			refuse: reason -> false
 		};
 		if (!_native.siteEscapes(x, hand)) return Blind;
@@ -80,17 +67,19 @@ final class NativeSiteReach {
 	 * Note in `into` what target code handed a value of the facts type `t` may run with it (see the type doc): nothing for a
 	 * value that is no object (`noObject`); for a function value, that value, and for an object, the function values it may
 	 * hold (`NativeHands.values`) and its members by name — of the type its source spells (`ReachGraph.handedMemberIds` reads
-	 * a function type, and an array's elements, from it), any (`types` null) when none does. False when the value may be an
-	 * object carrying the member: one of any type once such an object left the type system (`ownerEscaped`).
+	 * a function type, and an array's elements, from it), any (`types` null) when none does, or when its type says it is no
+	 * object but a value that left the type system may be where it is held. False when the value may be an object carrying
+	 * the member: one of any type once such an object left the type system (`ownerEscaped`); `anyEscaped` says whether any
+	 * object may have.
 	 */
-	public function take(t: FactsType, ownerEscaped: Bool, into: NativeHands): Bool {
-		if (noObject(t, [])) return true;
+	public function take(t: FactsType, ownerEscaped: Bool, anyEscaped: Bool, into: NativeHands): Bool {
+		if (noObject(t, anyEscaped)) return true;
 		if (ownerEscaped) return false;
 		into.values = true;
 		final types: Null<Array<String>> = into.types;
 		final source: Null<String> = FactsView.simpleSource(FactsTypeTree.text(t));
 		if (types == null) return true;
-		if (source == null)
+		if (source == null || _view.unchecked().byType(t))
 			into.types = null
 		else if (!types.contains(source))
 			types.push(source);
@@ -98,30 +87,14 @@ final class NativeSiteReach {
 	}
 
 	/**
-	 * Whether a value of the type `t` is never an object: a primitive (`_inert`), a type the compiler represents itself no value
-	 * of which is null — `Int`'s kind, which a platform's own value types share (`cpp.Char`) — a nullable one of those, an
-	 * alias of one, or the built-in array (`_arrays`) of one, whose own methods are target code running no code of the
-	 * program's. `seen` holds the aliases already read through.
+	 * Whether a value of the type `t` is never an object: a primitive, a type the compiler represents itself no value of which
+	 * is null — `Int`'s kind, which a platform's own value types share (`cpp.Char`) — a nullable one of those, an alias of one,
+	 * or the built-in array of one, whose own methods are target code running no code of the program's; and the facts prove no
+	 * value that left the type system sits where it is held — none did (`anyEscaped` false), or every build converts a value
+	 * put there (`UncheckedConversions`).
 	 */
-	private function noObject(t: FactsType, seen: Array<String>): Bool {
-		return switch t {
-			case Named(NULLABLE, [inner]): noObject(inner, seen);
-			case Named(id, [element]) if (_arrays.contains(id)): noObject(element, seen);
-			case Named(id, args):
-				final fact: Null<TypeFact> = _table.type(id);
-				if (id.indexOf('.') < 0 && _inert.contains(id))
-					true
-				else if (fact == null || !fact.alike || seen.contains(id))
-					false
-				else if (fact.kind == 'typedef')
-					fact.targets.length > 0 && fact.targets.foreach(target -> {
-						final read: Null<FactsType> = FactsTypeTree.read(target);
-						read != null && noObject(FactsEscapes.substitute(read, FactsEscapes.bindings(id, fact, args)), seen.concat([id]));
-					})
-				else
-					fact.kind == 'abstract' && fact.meta.contains(CORE_TYPE) && fact.meta.contains(NOT_NULL);
-			case _: false;
-		};
+	private inline function noObject(t: FactsType, anyEscaped: Bool): Bool {
+		return _view.unchecked().none(t, anyEscaped);
 	}
 
 }
@@ -150,4 +123,10 @@ typedef NativeHands = {
 
 	/** Whether it is handed a function value, or an object that may hold one. */
 	var values: Bool;
+
+	/**
+	 * Whether it is handed a value that may be an object carrying the member, whose field the target code may then write by
+	 * its name (`MemberReach.externSite`); absent for none.
+	 */
+	@:optional var blind: Bool;
 }

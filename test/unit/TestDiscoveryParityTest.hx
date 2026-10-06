@@ -995,6 +995,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.TypeRefPrinterTest',
 		'unit.query.TypeResolverSliceTest',
 		'unit.query.TypeSyntaxTest',
+		'unit.query.UncheckedConversionsTest',
 		'unit.runtime.CommonPrefixTest',
 		'unit.runtime.InputTest',
 		'unit.runtime.ParseErrorTest',
@@ -2773,6 +2774,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-REACH-ALIKE,M-FACTS-TRUTH-CONTEXT-ALWAYS',
 			'unit.query.MemberReachFactsTest#testAClassAComputedNameMakesIsOneTheProjectDeclaresUnderTheTruth :: control :: M-ESCAPES-FACTS-DECLARED-ANY,M-ESCAPES-FACTS-DECLARED-NONE,M-ESCAPES-FACTS-DECLARED-PRODUCED',
 			'unit.query.MemberReachFactsTest#testAClassAProducerNamesEscapesUnderTheTruth :: control :: M-ESCAPES-FACTS-PRODUCED',
+			'unit.query.MemberReachFactsTest#testAClosedExternRunsWhatAProgramSubclassOverridesUnderTheTruth :: control :: '
+				+ 'M-REACH-CLOSED-EXTERN-OVERRIDE',
 			'unit.query.MemberReachFactsTest#testAComputedNameOnAStructureTheCodeBuiltReachesNoClassUnderTheTruth :: control :: '
 				+ 'M-REFLECTED-FRESH,M-REFLECTED-FRESH-PLAIN,M-FACTS-REFL-FRESH,M-FACTS-REFL-FRESH-LOCAL,M-FACTS-REFL-FRESH-WRITTEN,M-FACTS-REFL-FRESH-ANY',
 			'unit.query.MemberReachFactsTest#testAComputedNameOnAnObjectOfNoClassReachesOnlyAnEscapedClassUnderTheTruth :: control :: '
@@ -2944,7 +2947,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testAReflectiveAccessRunsTheAccessorsOfTheTypeItReachesUnderTheTruth :: control :: '
 				+ 'M-REACH-REFLECT-ADMIT',
 			'unit.query.MemberReachFactsTest#testAReflectiveAccessSplicedInNamesTheLiteralItsNameArgumentHoldsUnderTheTruth :: control :: '
-				+ 'M-FACTS-REFL-MEMBER-NAME,M-FACTS-REFL-MEMBER-NAME-ANY,M-HAZARDS-TRUTH-LITERAL-NAME,M-HAZARDS-TRUTH-LITERAL-FIRST-STRING',
+				+ 'M-FACTS-REFL-MEMBER-NAME,M-FACTS-REFL-MEMBER-NAME-ANY,M-HAZARDS-TRUTH-LITERAL-NAME,'
+				+ 'M-HAZARDS-TRUTH-LITERAL-FIRST-STRING,M-EXTERN-BLIND-REFLECTIVE,M-EXTERN-BLIND-TARGET-ADMISSION',
 			'unit.query.MemberReachFactsTest#testAReflectiveAccessTheSyntaxReadsAsComputedNamesTheLiteralTheTypedTreeHandsItUnderTheTruth :: control :: '
 				+ 'M-HAZARDS-TRUTH-LITERAL-SEEN,M-HAZARDS-TRUTH-LITERAL-AGREE',
 			'unit.query.MemberReachFactsTest#testAReflectiveCallTheSyntaxDoesNotSeeNamesNothingUnderTheTruth :: control :: '
@@ -2989,6 +2993,10 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-REACH-GUARDED-IMPORT',
 			'unit.query.MemberReachFactsTest#testATypeNoBuildCompilesIsNoSecondDeclarationOfItsNameUnderTheTruth :: control :: '
 				+ 'M-FACTS-IDLE-INDEX',
+			'unit.query.MemberReachFactsTest#testATypedCallOfAnotherClassMayRunTheMethodOfAnObjectPutThereUnderTheTruth :: control :: '
+				+ 'M-VALUE-INVOKED-FOREIGN,M-VALUE-INVOKED-SUBTYPE-SUPERS,M-UNCHECKED-HOLDS',
+			'unit.query.MemberReachFactsTest#testATypedWriteOfAnotherClassMayReplaceTheMethodOfAnObjectPutThereUnderTheTruth :: control :: '
+				+ 'M-VALUE-STORED-FOREIGN',
 			'unit.query.MemberReachFactsTest#testATypedefAliasingTheTypeElsewhereIsNoneOfItsCodeUnderTheTruth :: control :: '
 				+ 'M-FACTS-TEXT-ALIAS-TYPEDEF',
 			'unit.query.MemberReachFactsTest#testAUseTheFactsReaderDoesNotKnowIsAnEscapeUnderTheTruth :: control :: '
@@ -3006,7 +3014,6 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-TEXT-JOINED-SITE',
 			'unit.query.MemberReachFactsTest#testAWriteTheCompilerSeesStoringOnlyFreshValuesLetsNothingEscape :: control :: '
 				+ 'M-TOUCH-TYPED-FRESH,M-TOUCH-TYPED-SYNTAX-TOO',
-
 			'unit.query.MemberReachFactsTest#testAnAbstractsConversionAnInterpolationCallsIsItsTextUnderTheTruth :: control :: '
 				+ 'M-FACTS-TEXT-CONVERTS',
 			'unit.query.MemberReachFactsTest#testAnAbstractsInlineConstructorIsItsTextUnderTheTruth :: control :: M-FACTS-DECLARATION-RUN',
@@ -3041,13 +3048,17 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testAnExtensionAnotherBuildBringsInIsKeptFromTheSyntax :: control :: '
 				+ 'M-FACTS-REACH-SYNTAX-UNION,M-GRAPH-TRUTH-MUTE-ALWAYS',
 			'unit.query.MemberReachFactsTest#testAnExtensionOnlyAListedBuildBringsInIsReadFromItsFacts :: control :: M-GRAPH-TRUTH-MUTE',
+			'unit.query.MemberReachFactsTest#testAnExternHandedAnObjectCarryingTheMemberMayWriteItByNameUnderTheTruth :: control :: '
+				+ 'M-EXTERN-BLIND-HANDED,M-EXTERN-BLIND-NAMES-NO-MEMBER,M-EXTERN-BLIND-DECLARED,M-EXTERN-BLIND-SYNTAX,'
+				+ 'M-EXTERN-BLIND-REPORT',
+			'unit.query.MemberReachFactsTest#testAnExternReadsEveryCallOfItWithoutTheTruth :: control :: '
+				+ 'M-EXTERN-EVERY-CALLER-SYNTAX,M-EXTERN-EVERY-CALL-SYNTAX',
 			'unit.query.MemberReachFactsTest#testAnExternRunsOnlyWhatTheValuesItsCallersHandItLetItRunUnderTheTruth :: control :: '
 				+ 'M-EXTERN-HANDED-FACTS,M-EXTERN-HANDED-RECEIVER,M-EXTERN-CALLERS,M-EXTERN-REVISIT,M-NATIVE-SITE-TAKEN-VALUES,M-NATIVE-SITE-ARRAY-ELEMENTS',
 			'unit.query.MemberReachFactsTest#testAnInitializerThatIsWhollyAnInlinedCallIsItsTextUnderTheTruth :: control :: '
 				+ 'M-FACTS-TEXT-INLINED-WHOLE',
 			'unit.query.MemberReachFactsTest#testAnInitializerThatIsWhollyAnInlinedConstructorIsItsTextUnderTheTruth :: control :: '
 				+ 'M-FACTS-TEXT-INLINED-CONSTRUCTION',
-
 			'unit.query.MemberReachFactsTest#testAnInlinedCallKeepsItsBodysSyntax :: control :: '
 				+ 'M-FACTS-REACH-SPLICE,M-FACTS-TRUTH-SPLICE-ALWAYS',
 			'unit.query.MemberReachFactsTest#testAnInlinedGenericBodyConvertsOnlyWhatEachCallHandsItUnderTheTruth :: control :: M-REACH-SPLICE-ONLY,M-FACTS-INLINED-EDGE',
@@ -3092,7 +3103,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testTargetCodeHandedAValueLetsItEscapeUnderTheTruth :: control :: '
 				+ 'M-ESCAPES-FACTS-NATIVE-LOCALS,M-FACTS-NATIVE-CODE',
 			'unit.query.MemberReachFactsTest#testTargetCodeHandedOnlyValuesReachesNoObjectUnderTheTruth :: control :: '
-				+ 'M-NATIVE-SITE-INERT,M-NATIVE-SITE-CORE-TYPE,M-NATIVE-SITE-ALIAS',
+				+ 'M-NATIVE-SITE-CORE-TYPE,M-UNCHECKED-TARGET,M-UNCHECKED-BOXED,M-NATIVE-SITE-COMPUTED',
 			'unit.query.MemberReachFactsTest#testTargetCodeNamingAClassRunsWhatTheClassHoldsUnderTheTruth :: control :: '
 				+ 'M-NATIVE-CLASSES-NAMED',
 			'unit.query.MemberReachFactsTest#testTargetCodeNamingAStaticLetsWhatItHoldsEscapeUnderTheTruth :: control :: '
@@ -3102,8 +3113,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testTargetCodeNamingThisLetsItsObjectEscapeUnderTheTruth :: control :: '
 				+ 'M-ESCAPES-FACTS-NATIVE-THIS,M-ESCAPES-FACTS-NATIVE-MEMBERS,M-ESCAPES-FACTS-NATIVE-THIS-ALWAYS',
 			'unit.query.MemberReachFactsTest#testTargetCodeReachesTheMemberOnlyThroughWhatItIsHandedUnderTheTruth :: control :: '
-				+ 'M-NATIVE-SITE-BLIND,M-NATIVE-SITE-NAMES,M-NATIVE-SITE-ESCAPED,M-NATIVE-SITE-COMPUTED,M-NATIVE-SITE-VALUES,M-FACTS-NATIVE-HANDED,'
-				+ 'M-FACTS-NATIVE-CHAIN,M-ESCAPES-FACTS-NATIVE-HANDED',
+				+ 'M-NATIVE-SITE-BLIND,M-NATIVE-SITE-NAMES,M-NATIVE-SITE-ESCAPED,'
+				+ 'M-NATIVE-SITE-VALUES,M-FACTS-NATIVE-HANDED,M-FACTS-NATIVE-CHAIN,M-ESCAPES-FACTS-NATIVE-HANDED,'
+				+ 'M-NATIVE-LITERAL-CODE,M-NATIVE-LITERAL-CHAIN',
 			'unit.query.MemberReachFactsTest#testTheArraysOwnMethodReachesItsElementsOnlyByConvertingThemUnderTheTruth :: control :: '
 				+ 'M-REACH-EXTERN-FACTS-TYPE,M-REACH-ARRAY-VALUES',
 			'unit.query.MemberReachFactsTest#testTheCompilerResolvesACallTheSyntaxCannot :: control :: M-FACTS-REACH-EDGES',
@@ -3197,7 +3209,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachTest#testAnInstanceThatLeftTheTypeSystemMayBeAnyType :: control :: '
 				+ 'M-CARRY-ESCAPES,M-ESCAPE-STORE,M-ESCAPE-CAST,M-ESCAPE-DECL,M-ESCAPE-PARAM,M-ESCAPE-RETURN,M-ESCAPE-LAMBDA,M-ESCAPE-THROW,M-ESCAPE-METHOD-VALUE,M-ESCAPE-HELD,M-ESCAPE-LIBRARY-SUPER,M-ESCAPE-NATIVE,M-ESCAPE-ANY',
 			'unit.query.MemberReachTest#testAssignmentUsedAsAValueSharesWhatItStores :: control :: M-REACH-ASSIGNMENT-VALUE-ALIAS',
-			'unit.query.MemberReachTest#testBodylessLibraryCallAdmitsImplicitlyCalledMethods :: control :: M-REACH-EXTERN-HANDS',
+			'unit.query.MemberReachTest#testBodylessLibraryCallAdmitsImplicitlyCalledMethods :: control :: '
+				+ 'M-REACH-EXTERN-HANDS,M-EXTERN-BLIND-SYNTAX-LITERAL',
 			'unit.query.MemberReachTest#testBranchNoConfiguredBuildCompilesIsNotWalked :: control :: '
 				+ 'M-REACH-LIVE-HAZARDS,M-REACH-LIVE-EDGES',
 			'unit.query.MemberReachTest#testBuildMacroOnTheOwnerIsUnknown :: control :: M-REACH-BUILD-MACRO',
@@ -3419,6 +3432,13 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.SymbolIndexRunMemoSliceTest#testConfinementGateReadsTheIndexGrantSlot :: control :: M-GRANT-SLOT-UNREAD',
 			'unit.query.SymbolIndexRunMemoSliceTest#testSupertypeNameUnionIsBuiltOncePerIndex :: control :: M-SUPERTYPE-UNION-NOMEMO',
 			'unit.query.SymbolIndexSliceTest#testDeclaringFilesCount :: control :: M-TYPEREF-NAMED-FIRST-TYPE',
+			'unit.query.UncheckedConversionsTest#testAFactsFileSaysTheTargetItsBuildGeneratesCodeFor :: control :: M-FACTS-TARGET-RECORD',
+			'unit.query.UncheckedConversionsTest#testAValueThatLeftTheTypeSystemSitsOnlyWhereSomeBuildKeepsIt :: control :: '
+				+ 'M-UNCHECKED-TARGET,M-UNCHECKED-ESCAPED,M-UNCHECKED-BOXED,M-UNCHECKED-STRING,M-UNCHECKED-ARRAY,'
+				+ 'M-UNCHECKED-POINTER,M-UNCHECKED-ALIAS,M-UNCHECKED-ALIAS-PLACE,M-UNCHECKED-BOXED-ALIAS,'
+				+ 'M-NATIVE-SITE-INERT,M-NATIVE-SITE-CORE-TYPE,M-NATIVE-SITE-ALIAS,M-NATIVE-SITE-ARRAY-ELEMENTS',
+			'unit.query.UncheckedConversionsTest#testAnInstanceOfAnotherClassSitsOnlyWhereSomeBuildKeepsIt :: control :: '
+				+ 'M-UNCHECKED-CLASS-EXTERN,M-UNCHECKED-ALIKE',
 		];
 		final actualPins: Array<String> = TestRegistry.pins();
 		Assert.same(
@@ -5356,7 +5376,36 @@ class TestDiscoveryParityTest extends Test {
 			'M-HAZARDS-TRUTH-LITERAL-NAME',
 			'M-HAZARDS-TRUTH-LITERAL-FIRST-STRING',
 			'M-HAZARDS-TRUTH-LITERAL-SEEN',
-			'M-HAZARDS-TRUTH-LITERAL-AGREE'
+			'M-HAZARDS-TRUTH-LITERAL-AGREE',
+			'M-UNCHECKED-TARGET',
+			'M-UNCHECKED-ESCAPED',
+			'M-UNCHECKED-BOXED',
+			'M-UNCHECKED-BOXED-ALIAS',
+			'M-UNCHECKED-STRING',
+			'M-UNCHECKED-ARRAY',
+			'M-UNCHECKED-POINTER',
+			'M-UNCHECKED-ALIAS',
+			'M-UNCHECKED-ALIAS-PLACE',
+			'M-UNCHECKED-CLASS-EXTERN',
+			'M-UNCHECKED-ALIKE',
+			'M-UNCHECKED-HOLDS',
+			'M-FACTS-TARGET-RECORD',
+			'M-NATIVE-LITERAL-CODE',
+			'M-NATIVE-LITERAL-CHAIN',
+			'M-EXTERN-BLIND-HANDED',
+			'M-EXTERN-BLIND-REPORT',
+			'M-EXTERN-BLIND-NAMES-NO-MEMBER',
+			'M-EXTERN-BLIND-DECLARED',
+			'M-EXTERN-BLIND-SYNTAX',
+			'M-EXTERN-EVERY-CALLER-SYNTAX',
+			'M-EXTERN-EVERY-CALL-SYNTAX',
+			'M-REACH-CLOSED-EXTERN-OVERRIDE',
+			'M-VALUE-INVOKED-FOREIGN',
+			'M-VALUE-INVOKED-SUBTYPE-SUPERS',
+			'M-VALUE-STORED-FOREIGN',
+			'M-EXTERN-BLIND-REFLECTIVE',
+			'M-EXTERN-BLIND-TARGET-ADMISSION',
+			'M-EXTERN-BLIND-SYNTAX-LITERAL'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
