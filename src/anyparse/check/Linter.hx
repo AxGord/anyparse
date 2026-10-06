@@ -10,6 +10,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.Check.VolatileMessage;
 import anyparse.check.SimplifyBooleanTernary;
 import anyparse.check.SimplifyNegatedCompound;
+import anyparse.core.PhaseTimings;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.GrammarPlugin;
 
@@ -548,7 +549,9 @@ final class Linter {
 	private static function runGated(
 		check: Check, files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, resolveConfig: Null<(String) -> LintConfig>
 	): Array<Violation> {
-		final found: Array<Violation> = check.run(scannedBy(check, files, resolveConfig), plugin);
+		final found: Array<Violation> = PhaseTimings.measure(
+			'rule ${check.id()}', () -> check.run(scannedBy(check, files, resolveConfig), plugin)
+		);
 		if (!(check is GraphScoped)) return found;
 		final gated: GraphScoped = cast check;
 		return found.filter(v -> v.file == '' || gated.skipReason(v.file, LintConfig.resolveWith(resolveConfig, v.file)) == null);

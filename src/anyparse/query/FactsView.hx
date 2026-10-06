@@ -192,6 +192,12 @@ final class FactsView {
 	/** Typed id -> whether the index holds no text of it under a name it declares (`unheld`), settled once. */
 	private final _unheld: Map<String, Bool> = [];
 
+	/**
+	 * `type\nname` -> its typed overriders (`overriders`), settled once: the types and their subtype edges are the table's
+	 * as the builds typed it, which a rewrite never changes, and the question is asked per call site of the graph.
+	 */
+	private final _overriders: Map<String, Array<String>> = [];
+
 	/** An abstract's implementation class -> the abstract, as the facts type them (`implemented`), built on first need. */
 	private var _implementing: Null<Map<String, String>> = null;
 
@@ -630,7 +636,10 @@ final class FactsView {
 
 	/** The typed subtypes of `type` that declare an instance method `name`, by typed id (`overrides`). */
 	public function overriders(type: String, name: String): Array<String> {
-		return [
+		final key: String = '$type\n$name';
+		final held: Null<Array<String>> = _overriders[key];
+		if (held != null) return held.copy();
+		final found: Array<String> = [
 			for (sub in table.subtypesOf(CompilerFacts.baseId(type)))
 				if (
 					table.type(sub)?.fields.exists(f ->
@@ -639,6 +648,8 @@ final class FactsView {
 				)
 					sub
 		];
+		_overriders[key] = found;
+		return found.copy();
 	}
 
 	/**

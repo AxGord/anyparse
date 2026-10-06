@@ -903,7 +903,7 @@ final class LintFixVerify {
 		// three rollback CAUSES below are environment-shaped (a compiler that will not launch, an
 		// error text naming no candidate, a batch that never settles) and a fixture cannot stage
 		// them against a real haxe. A test supplies canned verdicts; production passes nothing.
-		final verdict: (Array<OracleConfig>) -> OracleOutcome = typecheck ?? CompilerOracle.typecheckAll;
+		final verdict: (Array<OracleConfig>) -> OracleOutcome = typecheck ?? configs -> CompilerOracle.typecheckAll(configs);
 		CliIo.writeFiles([for (c in candidates) { path: c.file, content: c.after }]);
 		final reverted: Array<String> = [];
 		var confirmed: Bool = false;

@@ -1,10 +1,14 @@
 package unit.check;
 
 import anyparse.check.CompilerOracle;
+import anyparse.check.CompilerOracle.OracleBaseline;
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.OracleCoverage;
 import anyparse.check.OracleRunMemo;
+import anyparse.check.OracleServerPool;
 import anyparse.check.TypedFactsProbe;
+import anyparse.query.LintFixSafePass.SafePassOutcome;
+import anyparse.query.cli.command.LintFixDriver;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -45,6 +49,91 @@ final class OracleRunMemoTest extends Test {
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * The safe-write net's after-write typecheck compiles with `-v`: the risky phase's coverage probe asks about exactly
+	 * that tree next, and is answered by the net's own compile.
+	 */
+	@:pin('control')
+	@:killer('M-SAFE-NET-PLAIN')
+	@:access(anyparse.query.cli.command.LintFixDriver)
+	public function testTheSafeWriteNetCompilesTheTreeTheCoverageProbeAsksAbout(): Void {
+		#if (sys || nodejs)
+		final dir: Null<String> = scratch(GOOD, BUILD);
+		if (dir == null) return;
+		final oracles: Array<OracleConfig> = remembering(dir);
+		final main: String = '$dir/Main.hx';
+		final pre: OracleBaseline = CompilerOracle.judging(oracles);
+		sys.io.File.saveContent(main, OTHER);
+		final net: SafePassOutcome = LintFixDriver.reconcileSafePass(
+			[{ file: main, source: OTHER }], [main], [main => GOOD], [], pre, oracles, []
+		);
+		Assert.isFalse(net.reverted, 'a green write is kept');
+		Assert.isTrue(OracleCoverage.probeAll(oracles)[0].covers(main), 'the probe names what the compile read');
+		Assert.equals(2, CompileCounter.count(dir), 'the probe of the written tree cost no compile of its own');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A run's warm server answers a tree the run rewrote inside the very second it last compiled: the pool hands it every
+	 * path whose TEXT moved, while the server's own check compares modification times, which here do not move at all.
+	 */
+	@:pin('control')
+	@:killer('M-POOL-NO-INVALIDATE')
+	public function testAWarmServerReadsATreeRewrittenWithinTheSecond(): Void {
+		#if nodejs
+		final dir: Null<String> = scratch(GOOD, BUILD);
+		if (dir == null) return;
+		final oracles: Array<OracleConfig> = remembering(dir);
+		final pool: Null<OracleServerPool> = OracleRunMemo.of(oracles)?.servers;
+		pool?.start(oracles);
+		Assert.isTrue(pool?.running() ?? false, 'the server did not start');
+		Assert.equals(0, pool?.compile(oracles)[0]?.status, 'the warm server compiles the first text');
+		final main: String = '$dir/Main.hx';
+		final stamp: Date = js.node.Fs.statSync(main).mtime;
+		sys.io.File.saveContent(main, BAD);
+		js.node.Fs.utimesSync(main, stamp, stamp);
+		Assert.isTrue(CompilerOracle.typecheckAll(oracles).match(Rejected(_)), 'the warm server answered the text that is gone');
+		pool?.stop();
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('not a node target');
+		#end
+	}
+
+	/**
+	 * A warm rejection is never the verdict: the configuration is compiled again cold. Staged by keeping from the server
+	 * that the text moved back, so it answers the rejected text it still holds.
+	 */
+	@:pin('control')
+	@:killer('M-POOL-TRUSTS-WARM-RED')
+	@:access(anyparse.check.OracleServerPool)
+	public function testAWarmRejectionIsCompiledAgainCold(): Void {
+		#if nodejs
+		final dir: Null<String> = scratch(GOOD, BUILD);
+		if (dir == null) return;
+		final oracles: Array<OracleConfig> = remembering(dir);
+		final pool: Null<OracleServerPool> = OracleRunMemo.of(oracles)?.servers;
+		pool?.start(oracles);
+		pool?.compile(oracles);
+		final main: String = '$dir/Main.hx';
+		final stamp: Date = js.node.Fs.statSync(main).mtime;
+		sys.io.File.saveContent(main, BAD);
+		js.node.Fs.utimesSync(main, stamp, stamp);
+		Assert.isTrue(CompilerOracle.typecheckAll(oracles).match(Rejected(_)), 'the rejected text is rejected');
+		sys.io.File.saveContent(main, GOOD);
+		js.node.Fs.utimesSync(main, stamp, stamp);
+		if (pool != null) for (server in pool._servers) server.seen = pool.texts();
+		Assert.isTrue(CompilerOracle.typecheckAll(oracles).match(Confirmed), 'a stale warm rejection was taken as the verdict');
+		pool?.stop();
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('not a node target');
 		#end
 	}
 

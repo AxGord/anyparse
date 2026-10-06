@@ -252,4 +252,42 @@ class ReachDefinesProbeTest extends Test {
 		remove(dir);
 	}
 
+
+	/**
+	 * A `--fix` run that starts the facts compiles before its first pass starts the builds' probe compiles once a check waits
+	 * on the facts, so its first reach question does not wait on them alone; a run that asks for the facts on demand leaves
+	 * the builds to that question.
+	 */
+	@:pin('control') @:killer('M-BUILDS-WITH-FACTS')
+	@:access(anyparse.query.cli.command.LintCommand)
+	public function testTheBuildsStartBesideFactsStartedEarly(): Void {
+		final dir: String = scratchDir();
+		write(dir, 'src/Main.hx', 'class Main { static function main() {} }');
+		write(dir, 'build.hxml', '-cp src\n-main Main\n--interp\n');
+		final oracles: Array<OracleConfig> = [{ hxml: 'build.hxml', dir: dir, defines: [] }];
+		final base: anyparse.query.CachingGrammarPlugin.ResolutionScope = {
+			declared: true,
+			sources: () -> {
+				report: [],
+				projectRoots: [],
+				library: new anyparse.query.CachingGrammarPlugin.LibrarySources([]),
+				rootsMatched: true,
+				rootsAllMatched: true
+			}
+		};
+		final early: AheadBuilds = { probe: null };
+		anyparse.query.cli.command.LintCommand.startBuildsWithFacts(
+			true, anyparse.query.cli.command.LintCommand.withReachConfigurations(base, oracles, false, true, early)
+		);
+		final started: Null<anyparse.check.ReachDefinesProbe.DefinesProbe> = early.probe;
+		Assert.notNull(started, 'the builds did not start beside the facts');
+		if (started != null) ReachDefinesProbe.abandon(started);
+		final onDemand: AheadBuilds = { probe: null };
+		anyparse.query.cli.command.LintCommand.startBuildsWithFacts(
+			false, anyparse.query.cli.command.LintCommand.withReachConfigurations(base, oracles, false, true, onDemand)
+		);
+		Assert.isNull(onDemand.probe, 'the builds started ahead of a run that asks for the facts on demand');
+		remove(dir);
+	}
+
 }

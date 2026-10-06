@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.check.FactsTypeTree;
 import anyparse.check.FactsTypeTree.FactsType;
 import anyparse.check.OracleCoverage;
+import anyparse.core.PhaseTimings;
 import anyparse.query.CallGraph.CallEdge;
 import anyparse.query.CallGraph.EdgeKind;
 import anyparse.query.CallGraph.FnDeclaration;
@@ -382,8 +383,8 @@ final class MemberReach {
 		_metRawRegion = false;
 		_syntaxEntered = false;
 		_carriers.startQuestion();
-		final answer: ReachResult = answerReach(entry, member, access);
-		final configured: Null<MemberReach> = escalation(answer);
+		final answer: ReachResult = PhaseTimings.measure('reach answer', () -> answerReach(entry, member, access));
+		final configured: Null<MemberReach> = PhaseTimings.measure('reach escalation', () -> escalation(answer));
 		return configured == null ? answer : configured.mayReach(entry, member, access);
 	}
 

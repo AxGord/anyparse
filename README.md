@@ -569,13 +569,28 @@ dead pid, no free port, or a port that answers as something other than a
 compilation server) falls back to the cold compile, so the key changes what a
 verdict COSTS, never what it is.
 
-Two exclusions are deliberate. The `--fix` risky-fix verification always uses a
-fresh compile: a compilation server compares modification times at one-second
+Two exclusions are deliberate. The `--fix` verification never uses that shared
+server: a compilation server compares modification times at one-second
 granularity, so a file written in the same second as the compile that read it
 stays frozen at its previous content — exactly the question a post-write
 verification asks. For the same reason every linted file modified since the last
 compile is `server/invalidate`d before the typecheck, which leaves as a residual
 only a file OUTSIDE the linted set written within that same second.
+
+A `--fix` run given every rule starts servers of its OWN instead — one `haxe
+--wait` per configuration, once the compiler-facts compiles are in, each
+warming with a first compile in the background, all ended with the run (they
+are jobs of the run's process driver, so they also die with a killed `apq`;
+`OracleServerPool`). Its plain typechecks — the risky fix's covering compile
+and bisect probes, the oracle-assisted batch — go through them, and every path
+the run may write whose TEXT moved since a server's last compile is
+`server/invalidate`d first, so the one-second granularity cannot freeze a file.
+Only a warm ACCEPTANCE is believed: a configuration a server rejects is
+compiled again cold, its first one beside the warm compiles, because a server
+can re-emit a stale null-safety diagnostic. The `-v` compiles (baselines,
+coverage) stay cold. TM: the risky phase 45.9 → 37.1 s. `APQ_NO_ORACLE_SERVER`
+declines these too, as does a machine whose compile budget cannot hold one
+server per configuration.
 
 ```json
 { "resolutionLibs": ["openfl"] }

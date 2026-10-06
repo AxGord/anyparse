@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.HaxeSpawn.HaxeRun;
 import anyparse.check.LintConfig.OracleConfig;
+import anyparse.core.PhaseTimings;
 
 using Lambda;
 using StringTools;
@@ -181,14 +182,16 @@ final class CompilerOracle {
 	 * failure ends the ones declared after it (`typecheckEach`), so the verdict is the one a
 	 * sequential loop gives while a rejection still costs no compile that could not change it.
 	 * Configurations after the first `unavailable` one are never asked: its verdict is already
-	 * decided. An empty list is `Unavailable`: no configuration means nothing was proved, which is
+	 * decided.
+	 * `verbose` compiles with `-v` in a run that remembers (`typecheckEach`), for a tree a
+	 * coverage probe is about to ask about. An empty list is `Unavailable`: no configuration means nothing was proved, which is
 	 * not the same answer as a build that typechecks.
 	 */
-	public static function typecheckAll(oracles: Array<OracleConfig>): OracleOutcome {
+	public static function typecheckAll(oracles: Array<OracleConfig>, verbose: Bool = false): OracleOutcome {
 		if (oracles.length == 0) return Unavailable('no compiler oracle is configured');
 		final cut: Int = oracles.findIndex(oracle -> oracle.unavailable != null);
 		final asked: Array<OracleConfig> = cut < 0 ? oracles : oracles.slice(0, cut + 1);
-		for (outcome in typecheckEach(asked, true)) if (outcome != null && !outcome.match(Confirmed)) return outcome;
+		for (outcome in typecheckEach(asked, true, verbose)) if (outcome != null && !outcome.match(Confirmed)) return outcome;
 		return Confirmed;
 	}
 
@@ -259,6 +262,13 @@ final class CompilerOracle {
 	private static function remembered(
 		memo: OracleRunMemo, oracles: Array<OracleConfig>, stopAfterFailure: Bool, verbose: Bool
 	): Array<Null<OracleOutcome>> {
+		return PhaseTimings.measure('oracle typecheck', () -> rememberedTimed(memo, oracles, stopAfterFailure, verbose));
+	}
+
+	/** `remembered`, untimed. */
+	private static function rememberedTimed(
+		memo: OracleRunMemo, oracles: Array<OracleConfig>, stopAfterFailure: Bool, verbose: Bool
+	): Array<Null<OracleOutcome>> {
 		final before: Array<Null<String>> = memo.fingerprints(oracles);
 		final out: Array<Null<OracleOutcome>> = [
 			for (i in 0...oracles.length) {
@@ -268,9 +278,11 @@ final class CompilerOracle {
 		];
 		final decided: Int = stopAfterFailure ? firstHeldFailure(oracles, out) : oracles.length;
 		final compiled: Array<Int> = [for (i in 0...oracles.length) if (out[i] == null && i < decided) i];
-		final runs: Array<HaxeRun> = HaxeSpawn.runAll([
-			for (i in compiled) { args: argsOf(oracles[i], verbose), cwd: oracles[i].dir }
-		], ORACLE_BUFFER, HaxeSpawn.parallelism(), stopAfterFailure);
+		final runs: Array<HaxeRun> = verbose
+			? HaxeSpawn.runAll([
+				for (i in compiled) { args: argsOf(oracles[i], verbose), cwd: oracles[i].dir }
+			], ORACLE_BUFFER, HaxeSpawn.parallelism(), stopAfterFailure)
+			: warmFirst(memo, [for (i in compiled) oracles[i]], stopAfterFailure);
 		for (run in runs) if (run.unstarted != true) invocations++;
 		// a failing `-v` compile is asked again plainly: its streams are what a rejection quotes
 		final retried: Array<Int> = verbose ? [for (k in 0...compiled.length) if (answered(runs[k]) && runs[k].status != 0) k] : [];
@@ -287,6 +299,63 @@ final class CompilerOracle {
 			out[i] = again >= 0 ? retriedOutcome(plain[again]) : runs[k].cancelled == true ? null : outcomeOf(runs[k]);
 		}
 		return out;
+	}
+
+	/**
+	 * The plain typechecks of `asked`, in order: through the run's warm servers (`OracleServerPool`), and cold for every
+	 * configuration whose warm compile did not answer green. A warm rejection is never the verdict (a server may re-emit a
+	 * stale diagnostic), so a rejection is always a cold compile's, and its streams are what it quotes; a warm acceptance
+	 * is, the server having re-read every path the run moved. With no server running every configuration is compiled cold,
+	 * exactly as before the pool existed.
+	 *
+	 * Under `stopAfterFailure` the verdict is the first failure in order, and a rejected tree is almost always rejected by
+	 * every configuration, the first included: that one is compiled cold BESIDE the warm compiles (`speculated`), so a red
+	 * verdict costs one cold compile alone instead of every configuration's at once. It is cancelled unread when the first
+	 * configuration answers green warm.
+	 */
+	private static function warmFirst(memo: OracleRunMemo, asked: Array<OracleConfig>, stopAfterFailure: Bool): Array<HaxeRun> {
+		final speculated: Null<PendingRuns> = stopAfterFailure && asked.length > 0 && memo.servers.running()
+			? HaxeSpawn.startAll([{ args: argsOf(asked[0], false), cwd: asked[0].dir }], ORACLE_BUFFER, 1)
+			: null;
+		final warm: Array<Null<HaxeRun>> = memo.servers.compile(asked);
+		final cold: Array<Int> = [for (k in 0...asked.length) if (warm[k]?.status != 0) k];
+		final first: Null<HaxeRun> = speculated != null && cold.length > 0 && cold[0] == 0 ? speculated.await()[0] : null;
+		if (first == null) speculated?.cancel();
+		final failedFirst: Bool = first != null && first.failure == '' && first.status != null && first.status != 0;
+		final rest: Array<Int> = first == null ? cold : cold.slice(1);
+		final restRuns: Array<HaxeRun> = failedFirst
+			? [for (_ in rest) unstartedRun()]
+			: HaxeSpawn.runAll(
+				[for (k in rest) { args: argsOf(asked[k], false), cwd: asked[k].dir }],
+				ORACLE_BUFFER, HaxeSpawn.parallelism(), stopAfterFailure
+			);
+		return [
+			for (k in 0...asked.length) {
+				final held: Null<HaxeRun> = warm[k];
+				final r: Int = rest.indexOf(k);
+				if (r >= 0)
+					restRuns[r]
+				else if (k == 0 && first != null)
+					first
+				else if (held != null)
+					held
+				else
+					throw new haxe.Exception('configuration $k has neither a warm nor a cold run');
+			}
+		];
+	}
+
+	/** The run of a job a failure before it left unstarted, as `HaxeSpawn.runAll` answers one under `stopAfterFailure`. */
+	private static function unstartedRun(): HaxeRun {
+		return {
+			status: null,
+			out: '',
+			err: '',
+			failure: HaxeSpawn.NOT_STARTED,
+			overflowed: false,
+			cancelled: true,
+			unstarted: true
+		};
 	}
 
 	/**

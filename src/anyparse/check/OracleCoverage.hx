@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.CompilerOracle.OracleExclusion;
 import anyparse.check.HaxeSpawn.HaxeRun;
 import anyparse.check.LintConfig.OracleConfig;
+import anyparse.core.PhaseTimings;
 import anyparse.query.CondRegionLiveness;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
@@ -509,6 +510,11 @@ final class OracleCoverage {
 	 * takes — is answered from it, since the probe IS that compile; every probe spawned is filed for a later baseline.
 	 */
 	private static function remembered(asked: Array<OracleConfig>): Array<HaxeRun> {
+		return PhaseTimings.measure('oracle coverage', () -> rememberedTimed(asked));
+	}
+
+	/** `remembered`, untimed. */
+	private static function rememberedTimed(asked: Array<OracleConfig>): Array<HaxeRun> {
 		final memo: Null<OracleRunMemo> = OracleRunMemo.of(asked);
 		final before: Array<Null<String>> = memo == null ? [for (_ in asked) null] : memo.fingerprints(asked);
 		final held: Array<Null<HaxeRun>> = [for (i in 0...asked.length) memo?.run(asked[i], true, before[i])];

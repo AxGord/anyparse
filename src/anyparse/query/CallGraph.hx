@@ -596,17 +596,23 @@ final class CallGraph {
 	 */
 	public function virtualTargets(typeName: String, member: String): Array<String> {
 		final result: Array<String> = [];
+		// sets beside the lists, whose order is the answer: the `contains` scans were quadratic over a wide hierarchy (TM's
+		// display list), and this runs per call site
+		final found: Map<String, Bool> = [];
 		final queue: Array<String> = [typeName];
-		final visited: Array<String> = [];
+		final visited: Map<String, Bool> = [];
 		var qi: Int = 0;
 		while (qi < queue.length) {
 			final t: String = queue[qi++];
-			if (visited.contains(t)) continue;
-			visited.push(t);
+			if (visited.exists(t)) continue;
+			visited[t] = true;
 			for (sub in types.subtypesOf(t)) {
 				queue.push(sub);
 				final hit: Null<String> = _members[sub]?.get(member) ?? inheritedOffChain(typeName, sub, member);
-				if (hit != null && !result.contains(hit)) result.push(hit);
+				if (hit != null && !found.exists(hit)) {
+					found[hit] = true;
+					result.push(hit);
+				}
 			}
 		}
 		return result;

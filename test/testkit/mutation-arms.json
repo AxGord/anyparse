@@ -6707,7 +6707,7 @@
 		{
 			"name": "M-SPAWN-ORDER",
 			"type": "anyparse.check.HaxeSpawn",
-			"method": "runAll",
+			"method": "runAllTimed",
 			"find": "if (answer != null && answer.length == jobs.length) return answer;",
 			"replace": "if (answer != null && answer.length == jobs.length) return [for (k in 0...answer.length) answer[answer.length - 1 - k]];",
 			"note": "overlapping compiles answer in the order they finished, so one configuration's defines decide another's branches"
@@ -9224,7 +9224,7 @@
 		{
 			"name": "M-RUNMEMO-PROBE-RECOMPILES",
 			"type": "anyparse.check.OracleCoverage",
-			"method": "remembered",
+			"method": "rememberedTimed",
 			"find": "final held: Array<Null<HaxeRun>> = [for (i in 0...asked.length) memo?.run(asked[i], true, before[i])];",
 			"replace": "final held: Array<Null<HaxeRun>> = [for (i in 0...asked.length) null];",
 			"note": "the coverage probe compiles the tree its baseline just compiled with -v, paying a second compile per configuration"
@@ -9240,7 +9240,7 @@
 		{
 			"name": "M-RUNMEMO-QUOTES-THE-VERBOSE-STREAMS",
 			"type": "anyparse.check.CompilerOracle",
-			"method": "remembered",
+			"method": "rememberedTimed",
 			"find": "final retried: Array<Int> = verbose ? [for (k in 0...compiled.length) if (answered(runs[k]) && runs[k].status != 0) k] : [];",
 			"replace": "final retried: Array<Int> = [];",
 			"note": "a failing -v baseline is quoted with its -v lines, so a rejection's text names every parsed file"
@@ -15696,6 +15696,53 @@
 			"find": "final type: Null<String> = typeOf(file, tree, source, value);",
 			"replace": "final type: Null<String> = null;",
 			"note": "(precision) a value the syntax types as a string may be an object that left the type system"
+		},
+		{
+			"name": "M-FACTS-MADE-FROM-ALL",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "invalidate",
+			"find": "\tfor (made in _madeFrom[key] ?? []) if (made.startsWith(NODE_ENTRY))\n\t\t_nodeCache.remove(made.substr(NODE_ENTRY.length))\n\telse\n\t\t_builtCache.remove(made.substr(BUILT_ENTRY.length));",
+			"replace": "\t_nodeCache.clear();\n\t_builtCache.clear();",
+			"note": "a rewrite of any file drops every made node, so each --fix pass makes the whole table again"
+		},
+		{
+			"name": "M-FACTS-MADE-FROM-NONE",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "indexOf",
+			"find": "if (reading != null) reading[file] = true;",
+			"replace": "",
+			"note": "a made node records no file it read, so a rewrite of its own file leaves it answering for a text that is gone"
+		},
+		{
+			"name": "M-BUILDS-WITH-FACTS",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "startBuildsWithFacts",
+			"find": "if (factsEarly && start != null) start();",
+			"replace": "",
+			"note": "the builds' probe compiles wait for the first reach question, which then waits on them alone half-way through the first pass"
+		},
+		{
+			"name": "M-SAFE-NET-PLAIN",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "reconcileSafePass",
+			"find": "CompilerOracle.typecheckAll(judging, true)",
+			"replace": "CompilerOracle.typecheckAll(judging)",
+			"note": "the safe-write net compiles the written tree plainly, so the risky phase's coverage probe compiles every configuration of it again with -v"
+		},
+		{
+			"name": "M-POOL-NO-INVALIDATE",
+			"type": "anyparse.check.OracleServerPool",
+			"method": "moved",
+			"force": "[]",
+			"note": "the pool tells a server nothing moved, so a text the run rewrote within the second the server last compiled is answered as it was"
+		},
+		{
+			"name": "M-POOL-TRUSTS-WARM-RED",
+			"type": "anyparse.check.CompilerOracle",
+			"method": "warmFirst",
+			"find": "if (warm[k]?.status != 0) k];",
+			"replace": "if (warm[k] == null) k];",
+			"note": "a warm rejection is the verdict, so a server re-emitting a stale diagnostic reverts a sound fix"
 		}
 	]
 }

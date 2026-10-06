@@ -13,6 +13,7 @@ import anyparse.check.ReachDefinesProbe.AheadBuilds;
 import anyparse.check.ReachDefinesProbe.DefinesProbe;
 import anyparse.check.Severity;
 import anyparse.check.TypedFactsProbe;
+import anyparse.core.PhaseTimings;
 import anyparse.query.Address.TreeAddresser;
 import anyparse.query.CachingGrammarPlugin.LibrarySources;
 import anyparse.query.CachingGrammarPlugin.ResolutionScope;
@@ -145,7 +146,9 @@ final class LintCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runLint(args);
+		final status: Int = PhaseTimings.measure('lint', () -> runLint(args));
+		PhaseTimings.report(CliIo.stderr);
+		return status;
 	}
 
 	public function usage(): Void {
@@ -418,6 +421,19 @@ final class LintCommand implements CliCommand {
 		};
 	}
 
+	/**
+	 * Start the builds' probe compiles (`ResolutionScope.buildsAhead`) when a check first waits on the facts, in a run that
+	 * started the facts compiles early (`factsEarly`, `startsFactsEarly`). Such a run nearly always asks a reach question, and
+	 * its first one escalates to the builds (`MemberReach.escalation`): started only when that question came, mid-way through
+	 * the first pass, the probes were waited on alone (TM: 11 s). Started with the facts at the run's start instead, they took
+	 * the cores the first pass and the facts needed and bought nothing; started here they compile while the run waits anyway.
+	 * A write before the question still drops them unread (`buildsSettled`).
+	 */
+	public static function startBuildsWithFacts(factsEarly: Bool, resolution: Null<ResolutionScope>): Void {
+		final start: Null<() -> Void> = resolution?.buildsAhead;
+		if (factsEarly && start != null) start();
+	}
+
 	/** The facts compiles a run starts before its first pass (`startsFactsEarly`), or null for a run that asks on demand. */
 	private static function earlyFacts(scoped: Bool, oracles: Array<OracleConfig>, o: LintOpts): Null<FactsProbe> {
 		return startsFactsEarly(scoped, oracles.length, o.noOracle, o.ruleFilters.length > 0, o.fix)
@@ -446,6 +462,7 @@ final class LintCommand implements CliCommand {
 	 */
 	private static function endCompiles(early: Null<FactsProbe>, ahead: AheadBuilds, oracles: Array<OracleConfig>): Void {
 		if (early != null) TypedFactsProbe.abandon(early);
+		OracleRunMemo.of(oracles)?.servers.stop();
 		dropAhead(ahead);
 		OracleGeneration.release(oracles);
 	}
@@ -472,10 +489,14 @@ final class LintCommand implements CliCommand {
 		var probed: Bool = false;
 		var facts: Null<CompilerFacts> = null;
 		final edited: Array<{ file: String, original: Null<String> }> = [];
-		function probe(): Null<CompilerFacts> {
+		function read(settling: Bool): Null<CompilerFacts> {
 			if (!probed) {
 				probed = true;
+				// a check waits on the facts here, and a question it asks may escalate to the builds: they compile meanwhile
+				if (!settling) startBuildsWithFacts(early != null, resolution);
 				final built: Null<CompilerFacts> = TypedFactsProbe.finish(early ?? TypedFactsProbe.start(oracles));
+				// the facts compiles are done and their cores free: the run's warm servers start, and compile, now
+				if (early != null) OracleRunMemo.of(oracles)?.servers.start(oracles);
 				facts = built;
 				if (built != null) {
 					for (d in built.dropped) CliIo.stderr('apq lint: compilerOracle ${d.name}: no compiler facts — ${d.reason}\n');
@@ -499,9 +520,9 @@ final class LintCommand implements CliCommand {
 			declared: resolution.declared,
 			sources: resolution.sources,
 			builds: resolution.builds,
-			facts: probe,
+			facts: () -> read(false),
 			factsEdited: touched,
-			factsSettled: () -> if (early != null) probe(),
+			factsSettled: () -> if (early != null) read(true),
 			buildsAhead: resolution.buildsAhead,
 			buildsSettled: resolution.buildsSettled
 		};
