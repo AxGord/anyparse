@@ -2870,7 +2870,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testAMarkerTheFactsReaderDoesNotKnowLeavesWhatAFunctionFieldHoldsUnknownUnderTheTruth :: control :: '
 				+ 'M-VALUE-STORED-MARKER-UNKNOWN,M-VALUE-CTOR-MARKER-UNKNOWN',
 			'unit.query.MemberReachFactsTest#testAMarkerTheFactsReaderDoesNotKnowLetsWhatItsNodeIsHandedEscapeUnderTheTruth :: control :: '
-				+ 'M-ESCAPES-FACTS-MARKER-UNKNOWN',,
+				+ 'M-ESCAPES-FACTS-MARKER-UNKNOWN',
 			'unit.query.MemberReachFactsTest#testAMemberAdmittedByItsNameIsNoVariableOfAnotherTypeOfTheNameUnderTheTruth :: control :: '
 				+ 'M-FACTS-OWNERS-VARIABLES,M-FACTS-OWNERS-ROOTS-OWN',
 			'unit.query.MemberReachFactsTest#testAMemberAnInlinedMethodTakesAsAnArgumentStillEscapesUnderTheTruth :: control :: '
