@@ -465,6 +465,17 @@ final class RefactorSupport {
 		return best;
 	}
 
+	/**
+	 * The name of the module `file` declares: its basename (`baseNameOf`) up to its first dot. A module name holds no dot,
+	 * so a file whose basename does is a platform variant of the module before it (`Sqlite.cpp.hx` is `Sqlite` where the
+	 * build targets cpp, as the compiler loads it).
+	 */
+	public static function moduleNameOf(file: String): String {
+		final base: String = baseNameOf(file);
+		final dot: Int = base.indexOf('.');
+		return dot > 0 ? base.substr(0, dot) : base;
+	}
+
 	/** File basename: the path tail after the last `/`, with a `.hx` suffix removed. */
 	public static function baseNameOf(file: String): String {
 		final slash: Int = file.lastIndexOf('/');

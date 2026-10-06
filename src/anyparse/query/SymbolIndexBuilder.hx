@@ -223,7 +223,7 @@ final class SymbolIndexBuilder {
 		returnTypes: Map<Int, String>, typeSources: Map<Int, String>, typeParams: Map<Int, Array<String>>, shape: RefShape,
 		memberSeams: MemberSeams, abstractKinds: Array<String>, typeSyntax: TypeSyntaxReader
 	): FileInfo {
-		final basename: String = RefactorSupport.baseNameOf(file);
+		final basename: String = RefactorSupport.moduleNameOf(file);
 		var pkg: String = '';
 		final imports: Array<ImportInfo> = [];
 		final types: Array<TypeDeclInfo> = [];
@@ -242,7 +242,7 @@ final class SymbolIndexBuilder {
 		final privateModifierKinds: Array<String> = privateVisibilityKinds(shape);
 		var pendingPrivate: Bool = false;
 
-		for (gn in declNodes(tree, source, externModifierKind)) {
+		for (gn in declNodes(tree, source, externModifierKind, privateModifierKinds)) {
 			final node: QueryNode = gn.node;
 			if (externModifierKind != null && node.kind == externModifierKind) {
 				pendingExtern = true;
@@ -860,8 +860,17 @@ final class SymbolIndexBuilder {
 	 * this target only" idiom) - is lifted like a guarded leading meta, instead
 	 * of being dropped as an ordinary modifier. Null when the grammar names no
 	 * extern modifier kind, matching every other `shape`-gated seam here.
+	 *
+	 * A guarded module-private modifier (`privateKinds`) is lifted only when the
+	 * region holds the declaration it marks (`#if cpp private extern class P {}
+	 * #end`): that declaration is private in every build compiling it, and its id
+	 * carries its module (`pkg._Module.P`). One SPLIT from its declaration
+	 * (`#if cpp private #end class P {}`) marks it in some builds only, and is
+	 * dropped: a type public in any build keeps the binding a public one has.
 	 */
-	private static function declNodes(tree: QueryNode, source: String, externModifierKind: Null<String>): Array<GuardedNode> {
+	private static function declNodes(
+		tree: QueryNode, source: String, externModifierKind: Null<String>, privateKinds: Array<String>
+	): Array<GuardedNode> {
 		final out: Array<GuardedNode> = [];
 		final guardedNames: Array<String> = [];
 		// Every top-level import's dedup key, seeded up front so a guarded import
@@ -874,7 +883,7 @@ final class SymbolIndexBuilder {
 		}
 		for (node in tree.children) switch node.kind {
 			case 'Conditional':
-				collectGuardedDecls(node, source, out, guardedNames, seenImports, externModifierKind);
+				collectGuardedDecls(node, source, out, guardedNames, seenImports, externModifierKind, privateKinds);
 			case 'CondSharedBodyDecl':
 				pushGuardedDecl(node, source, out, guardedNames, seenImports, externModifierKind);
 			case _:
@@ -903,12 +912,22 @@ final class SymbolIndexBuilder {
 	 */
 	private static function collectGuardedDecls(
 		node: QueryNode, source: String, out: Array<GuardedNode>, guardedNames: Array<String>, seenImports: Array<String>,
-		externModifierKind: Null<String>
+		externModifierKind: Null<String>, privateKinds: Array<String>
 	): Void {
-		for (child in node.children) if (child.kind == 'Conditional')
-			collectGuardedDecls(child, source, out, guardedNames, seenImports, externModifierKind);
-		else
-			pushGuardedDecl(child, source, out, guardedNames, seenImports, externModifierKind);
+		final children: Array<QueryNode> = node.children;
+		for (i in 0...children.length) {
+			final child: QueryNode = children[i];
+			if (child.kind == 'Conditional')
+				collectGuardedDecls(child, source, out, guardedNames, seenImports, externModifierKind, privateKinds)
+			else if (privateKinds.contains(child.kind)) {
+				// lifted only onto a declaration the region holds, past the other modifiers marking it (`declNodes`)
+				var next: Int = i + 1;
+				while (next < children.length && (children[next].kind == externModifierKind || privateKinds.contains(children[next].kind)))
+					next++;
+				if (next < children.length && typeDeclAt(children[next]) != null) out.push({ node: child, guarded: true });
+			} else
+				pushGuardedDecl(child, source, out, guardedNames, seenImports, externModifierKind);
+		}
 	}
 
 	/**
@@ -953,7 +972,8 @@ final class SymbolIndexBuilder {
 		// A guarded import / using: lift it so it joins the per-file import scope,
 		// deduped against every import already seen (a top-level one seeded up
 		// front, or an earlier guarded branch). A non-import, non-declaration node
-		// (a lifted modifier other than `extern`) has no key and is dropped.
+		// (a lifted modifier other than `extern` and a private one, `collectGuardedDecls`)
+		// has no key and is dropped.
 		final key: Null<String> = importDedupKey(node, source);
 		if (key == null || seenImports.contains(key)) return;
 		seenImports.push(key);

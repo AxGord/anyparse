@@ -1724,7 +1724,7 @@ class MemberReachTest extends Test {
 		assertMatch(ask([head + 'function f():Void { /*<*/ var y:Int = n; /*>*/ } }', loud], lib), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-COMPOUND-OPERATOR')
+	@:pin('control') @:killer('M-REACH-COMPOUND-OPERATOR') @:killer('M-REACH-UNDECLARED-PRIMITIVE')
 	public function testCompoundAssignmentRunsTheBinaryOperatorOverload(): Void {
 		// `acc += 1` runs an `@:op(A + B)` overload: no `+` node is written.
 		final acc: String = 'abstract Acc(Int) from Int { public static var cb:() -> Void; '
