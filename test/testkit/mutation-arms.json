@@ -14767,6 +14767,22 @@
 			"find": "final roots: Array<Null<String>> = [for (t in typed) rootOf(t)];",
 			"replace": "final roots: Array<Null<String>> = [for (t in owners) rootOf(t)];",
 			"note": "(precision) a typed type declaring a variable of the name refuses the owners of the method so named"
+		},
+		{
+			"name": "M-STD-FIRST-HAXE-ONLY",
+			"type": "anyparse.query.StdResolver",
+			"method": "firstSiblingStd",
+			"find": "for (bin in bins) {",
+			"replace": "for (bin in bins.slice(0, 1)) {",
+			"note": "only the first haxe on PATH is asked, so a wrapper there sends the std lookup to the known locations"
+		},
+		{
+			"name": "M-STD-COMPILER-SEARCH-NONE",
+			"type": "anyparse.query.StdResolver",
+			"method": "firstSiblingStd",
+			"find": "Path.normalize(Path.join([dir, '..', 'share', 'haxe', 'std'])),",
+			"replace": "",
+			"note": "the compiler's own share/haxe/std is not searched, so that layout falls through to the known locations"
 		}
 	]
 }

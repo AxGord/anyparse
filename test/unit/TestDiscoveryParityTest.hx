@@ -3377,7 +3377,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.ShardPlanTest#testTheSlicesOfAClassCoverItsTestsExactlyOnce :: control :: M-SHARD-FILTER-SLICE-ALL,M-SHARD-FILTER-SLICE-UNSORTED',
 			'unit.query.ShardPlanTest#testTimingRowsOfOneClassAreSummed :: control :: M-SHARD-WEIGHTS-LAST-ROW',
 			'unit.query.SpanTypeInfoPinTest#testTypeParamConstraintsAreKeyedByDeclarationAndName :: control :: M-SPANINFO-BOUND-MORE',
+			'unit.query.StdResolverTest#testAWrapperFirstOnPathYieldsToTheCompilerAfterIt :: control :: M-STD-FIRST-HAXE-ONLY',
+			'unit.query.StdResolverTest#testHomebrewIsProbedBeforeUsrLocal :: guard :: ',
 			'unit.query.StdResolverTest#testMultiEntryEnvAnswersTheStdEntry :: control :: M-STD-ENV-ENTRIES',
+			'unit.query.StdResolverTest#testTheCompilersOwnSearchAnswersBesideAnUnresolvedLink :: control :: M-STD-COMPILER-SEARCH-NONE',
 			'unit.query.StdResolverTest#testTheStdBesideTheCompilerIsFoundInEitherLayout :: control :: M-STD-SIBLING-HOMEBREW',
 			'unit.query.StructuralMembershipTest#testAliasTargetPairAgrees :: control :: M-ALIAS-TARGET-SIMPLE-NAME',
 			'unit.query.SymbolIndexRunMemoSliceTest#testConfinementGateReadsTheIndexGrantSlot :: control :: M-GRANT-SLOT-UNREAD',
@@ -5269,7 +5272,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-INIT-OWNERS-SOLE',
 			'M-FACTS-QUALIFY-SITELESS',
 			'M-FACTS-OWNERS-VARIABLES',
-			'M-FACTS-OWNERS-ROOTS-OWN'
+			'M-FACTS-OWNERS-ROOTS-OWN',
+			'M-STD-FIRST-HAXE-ONLY',
+			'M-STD-COMPILER-SEARCH-NONE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

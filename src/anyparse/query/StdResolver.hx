@@ -18,8 +18,9 @@ import sys.FileSystem;
  * instead of hardcoded, machine-specific paths. Priority, first existing hit wins:
  *
  *  1. the `HAXE_STD_PATH` environment variable — the entry holding the std when it lists several (`stdEntryOf`);
- *  2. the std beside the real `haxe` binary (`which haxe`, symlinks resolved): `../std`, or Homebrew's `../lib/haxe/std`;
- *  3. the known install locations (`/usr/local/lib/haxe/std`, `/opt/homebrew/lib/haxe/std`).
+ *  2. the std beside the first `haxe` on PATH that has one (`which -a haxe`, `firstSiblingStd`): `../std` or
+ *     Homebrew's `../lib/haxe/std` of its symlinks resolved, then the compiler's own search from its spelling;
+ *  3. the known install locations (`/opt/homebrew/lib/haxe/std`, then `/usr/local/lib/haxe/std`).
  *
  * `APQ_NO_STD` (any value but empty or `0`) DECLINES the whole channel before any of
  * that runs — the process-wide opt-out for a project targeting a different Haxe
@@ -45,8 +46,13 @@ import sys.FileSystem;
 @:nullSafety(Strict)
 final class StdResolver {
 
-	/** Known Haxe install prefixes whose `std` is probed last — after `HAXE_STD_PATH` and the `which haxe` sibling. */
-	public static final KNOWN_LOCATIONS: Array<String> = ['/usr/local/lib/haxe/std', '/opt/homebrew/lib/haxe/std'];
+	/**
+	 * Known Haxe install prefixes whose `std` is probed last — after `HAXE_STD_PATH` and the std beside a `haxe` on PATH
+	 * (`firstSiblingStd`). Homebrew's (Apple Silicon) ahead of `/usr/local`, where an older installer or an Intel
+	 * Homebrew may have left a second Haxe: this machine carries one, and a run that reached this list — any `haxe`
+	 * wrapper first on PATH did — indexed its std, not the one the compiler reads.
+	 */
+	public static final KNOWN_LOCATIONS: Array<String> = ['/opt/homebrew/lib/haxe/std', '/usr/local/lib/haxe/std'];
 
 	/** Impure discoveries that actually ran the lookup — a cached hit leaves this untouched (the caching-invariant tests read it). */
 	public static var discoveries(default, null): Int = 0;
@@ -229,19 +235,25 @@ final class StdResolver {
 	}
 
 	/**
-	 * The std that ships beside the real `haxe` binary: `which haxe`, then the binary's symlink chain resolved, then
-	 * `siblingStdOf` that path. Null on any failure (no `haxe` on PATH, a non-zero exit).
+	 * The std that ships beside the compiler on PATH: `firstSiblingStd` over every `haxe` `which -a`
+	 * names. Null on any failure (no `haxe` on PATH, a non-zero exit, none with a std beside it).
 	 */
 	private static function whichHaxeSiblingStd(): Null<String> {
-		final bin: Null<String> = whichHaxe();
-		if (bin == null) return null;
-		return siblingStdOf(resolveSymlink(bin), dirExists);
+		return firstSiblingStd(whichHaxe(), resolveSymlink, dirExists);
 	}
 
-	/** Spawn `which haxe` and return its trimmed stdout on a zero exit, or null on any failure (mirrors `HaxelibResolver.runLibpath`). */
-	private static function whichHaxe(): Null<String> {
+	/**
+	 * Spawn `which -a haxe` and return every `haxe` on PATH, in PATH order, on a zero exit — none on any failure (mirrors
+	 * `HaxelibResolver.runLibpath`).
+	 */
+	private static function whichHaxe(): Array<String> {
+		final out: Null<String> = whichAll();
+		return out == null ? [] : [for (line in out.split('\n')) if (line.trim() != '') line.trim()];
+	}
+
+	private static function whichAll(): Null<String> {
 		#if nodejs
-		final res: ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync('which', ['haxe'], { encoding: 'utf8' });
+		final res: ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync('which', ['-a', 'haxe'], { encoding: 'utf8' });
 		final launchError: Null<Dynamic> = (res.error: Dynamic);
 		if (launchError != null) return null;
 		final status: Null<Int> = (res.status: Null<Int>);
@@ -251,7 +263,7 @@ final class StdResolver {
 		return s == null || s == '' ? null : s;
 		#elseif sys
 		try {
-			final process: sys.io.Process = new sys.io.Process('which', ['haxe']);
+			final process: sys.io.Process = new sys.io.Process('which', ['-a', 'haxe']);
 			final out: String = process.stdout.readAll().toString();
 			// `exitCode()` is `Null<Int>`: null only in the non-blocking form, which this
 			// call is not; a null still means "no status", so it falls through to null like
@@ -290,6 +302,28 @@ final class StdResolver {
 	/** Whether `path` exists AND is a directory — the injected `exists` predicate for the real filesystem. */
 	private static function dirExists(path: String): Bool {
 		return #if (sys || nodejs) FileSystem.exists(path) && FileSystem.isDirectory(path) #else false #end;
+	}
+
+	/**
+	 * The std beside the first `haxe` of `bins` — every `haxe` on PATH, in PATH order — that has one: `siblingStdOf` its
+	 * symlink chain resolved (`resolve`), else the places the compiler itself searches from its own spelling
+	 * (`<dir>/../lib/haxe/std`, `<dir>/../share/haxe/std`, `<dir>/std`, as its `-v` `Classpath:` line lists them). Null
+	 * when none `exists`. A `haxe` with no std beside it is a wrapper — a test harness's shim, a version manager's script —
+	 * that hands the build to a compiler later on PATH, whose std is the one read; stopping at it fell through to the known
+	 * locations and indexed whichever install they name first.
+	 */
+	public static function firstSiblingStd(bins: Array<String>, resolve: (String) -> String, exists: (String) -> Bool): Null<String> {
+		for (bin in bins) {
+			final dir: String = Path.directory(bin);
+			final candidates: Array<String> = [
+				siblingStdOf(resolve(bin), exists),
+				Path.normalize(Path.join([dir, '..', 'lib', 'haxe', 'std'])),
+				Path.normalize(Path.join([dir, '..', 'share', 'haxe', 'std'])),
+				Path.normalize(Path.join([dir, 'std']))
+			];
+			for (c in candidates) if (exists(c)) return c;
+		}
+		return null;
 	}
 
 }
