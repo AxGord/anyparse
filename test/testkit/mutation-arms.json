@@ -7282,6 +7282,118 @@
 			"note": "(precision) whether a type's code is its text is asked of every typed type of its name, so one the index does not hold, read from no file of it, makes any build macro over the one it does a Reification"
 		},
 		{
+			"name": "M-FACTS-UNHELD-CALL",
+			"type": "anyparse.query.CallGraphFacts",
+			"method": "declaredCall",
+			"find": "if (view.unheld(owner)) {",
+			"replace": "if (false) {",
+			"note": "a call the facts name a type the index holds no text of runs the graph's node of its simple name: a never-compiled twin's calm `calm` answers for the root `Endian`'s rewritten one"
+		},
+		{
+			"name": "M-FACTS-UNHELD-SUPER",
+			"type": "anyparse.query.CallGraphFacts",
+			"method": "call",
+			"find": "if (view.unheld(owner))\n\t\t\t\t\tunresolved(",
+			"replace": "if (false)\n\t\t\t\t\tunresolved(",
+			"note": "a super constructor of a type the index holds no text of runs the constructor of its namesake"
+		},
+		{
+			"name": "M-FACTS-UNHELD-NEW",
+			"type": "anyparse.query.CallGraphFacts",
+			"method": "construction",
+			"find": "if (view.unheld(x.type)) {",
+			"replace": "if (false) {",
+			"note": "a construction of a type the index holds no text of runs the constructor and initializers of its namesake"
+		},
+		{
+			"name": "M-FACTS-UNHELD-VALUE",
+			"type": "anyparse.query.CallGraphFacts",
+			"method": "field",
+			"find": "if (view.unheld(owner)) {",
+			"replace": "if (false) {",
+			"note": "a method of a type the index holds no text of read as a value is its namesake's method"
+		},
+		{
+			"name": "M-FACTS-UNHELD-OVERRIDE",
+			"type": "anyparse.query.CallGraphFacts",
+			"method": "virtualEdges",
+			"find": "if (unheld != null) {",
+			"replace": "if (false) {",
+			"note": "an override in a type the index holds no text of is its namesake's member, which a dispatch then reaches instead"
+		},
+		{
+			"name": "M-REACH-UNHELD-IMPLICIT",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "if (unheld != null)\n\t\t\t\t\tblind = blind ?? UnresolvedDispatch(",
+			"replace": "if (false)\n\t\t\t\t\tblind = blind ?? UnresolvedDispatch(",
+			"note": "a string conversion of a value of a type the index holds no text of runs only the implicit members the index declares, none of which is its `toString`"
+		},
+		{
+			"name": "M-REACH-UNHELD-REFLECTED",
+			"type": "anyparse.query.ReachGraph",
+			"method": "reflectedMembers",
+			"find": "if (typed.exists(facts.unheld)) return null;",
+			"replace": "if (false) return null;",
+			"note": "a method reflection reaches by a computed name off a type the index holds no text of is its namesake's method"
+		},
+		{
+			"name": "M-FACTS-UNHELD-HOMES",
+			"type": "anyparse.query.FactsView",
+			"method": "unheld",
+			"find": "final held: Bool = declared.exists(d -> homes.contains(d.key) || (!d.read && types.contains(d.id)));",
+			"replace": "final held: Bool = declared.exists(d -> !d.read && types.contains(d.id));",
+			"note": "(control) a type the index holds in a file a build read it from is read as its own text, not refused as unheld"
+		},
+		{
+			"name": "M-FACTS-UNHELD-STAND-IN",
+			"type": "anyparse.query.FactsView",
+			"method": "unheld",
+			"find": "final held: Bool = declared.exists(d -> homes.contains(d.key) || (!d.read && types.contains(d.id)));",
+			"replace": "final held: Bool = declared.exists(d -> homes.contains(d.key));",
+			"note": "(control) a type whose index declaration is a stand-in in a file no build read (the built-in array type's) is refused as unheld: every call of its methods is unseen"
+		},
+		{
+			"name": "M-FACTS-UNHELD-UNTRUE",
+			"type": "anyparse.query.FactsView",
+			"method": "unheld",
+			"find": "if (!truth) return false;",
+			"replace": "if (false) return false;",
+			"note": "under builds that are not every build, a type the index holds no text of may be compiled from a declaration the list does not name: the syntax's reading stands"
+		},
+		{
+			"name": "M-FACTS-UNHELD-NAMED",
+			"type": "anyparse.query.FactsView",
+			"method": "unheld",
+			"find": "declared.length > 0 && ",
+			"replace": "",
+			"note": "(control) a type the index declares nowhere is a library placeholder the walk reads by its own rules, not a namesake's code"
+		},
+		{
+			"name": "M-FACTS-SUBTYPES-PROVENANCE",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "subtypesIndexed",
+			"find": "for (id in _view.provenanceTypes(type))",
+			"replace": "for (id in _view.bySimpleName()[type] ?? [])",
+			"note": "(precision) the subtypes of a type the index declares once are asked of every typed type of its name, so an unheld namesake's subtype the index does not hold refuses it"
+		},
+		{
+			"name": "M-FACTS-RAW-REGION",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "case Opaque if (_scope.facts?.rawRegionRead(g, entry.file, h.span, from, ownNames) == true):",
+			"replace": "case Opaque if (false):",
+			"note": "(precision) a raw conditional region of a faceted function is a blind spot though its facts hold each build's branch"
+		},
+		{
+			"name": "M-FACTS-RAW-REGION-NAMES",
+			"type": "anyparse.query.FactsView",
+			"method": "rawRegionRead",
+			"find": "return !fields.exists(f -> names.contains(f.field)) && !calls.exists(c -> named(c.target));",
+			"replace": "return true;",
+			"note": "a raw conditional region of library code touching the member by its name hides the touch: library code is searched for it by its text alone"
+		},
+		{
 			"name": "M-FACTS-FOLDED-BY-ID",
 			"type": "anyparse.query.FactsView",
 			"method": "bodyFacts",

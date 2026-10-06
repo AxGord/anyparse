@@ -418,6 +418,28 @@ final class ReachGraph {
 	}
 
 	/**
+	 * Under the truth, a typed type whose member the site `at` may run and whose text the index does not hold under the name
+	 * it declares (`FactsView.unheld`), or null: of the types the facts name there (`ownedTypesAt`) — or, where those are not
+	 * told, each operand's own type and every subtype the builds typed. The implicitly-called members the site runs are
+	 * the index's (`ownedIdsAt`), so such a type's are none of them, and its namesake's are not its code.
+	 */
+	public function unheldAt(g: CallGraph, at: ImplicitSite): Null<String> {
+		final view: Null<FactsView> = _scope.facts;
+		if (view == null || !view.truth) return null;
+		final facts: FactsView = view;
+		final owned: Null<Map<String, Null<Array<String>>>> = ownedTypesAt(g, at);
+		final ids: Array<String> = [];
+		if (owned != null)
+			for (list in owned) for (id in list ?? []) ids.push(id);
+		else
+			for (o in at.owners ?? []) if (o != null) {
+				ids.push(o);
+				for (sub in facts.table.subtypesOf(o)) ids.push(sub);
+			}
+		return ids.find(facts.unheld);
+	}
+
+	/**
 	 * The implicitly-called functions the site `at` may run (`idsAt`), each with the typed type it is the member of when
 	 * the facts name it (`ownedTypesAt`): which of the types sharing its type's simple name runs it — one entry for each of
 	 * them that declares the member. One with no owner is reached by its simple name alone.
@@ -1384,8 +1406,8 @@ final class ReachGraph {
 	 * methods a name computed at run time may obtain (`reflectiveMethodHolders`, `FactsMethodValues.declaredHolders`),
 	 * every one of those types; then only the accessors of any of them, and every method of a declared class each object
 	 * may be of, by its own name, and of the types it extends — its variables stay any. Null — any member of
-	 * any object — when the facts are not the truth, no fact names a receiver, one is of no such type, or the escapes are
-	 * not known.
+	 * any object — when the facts are not the truth, no fact names a receiver, one is of no such type, the escapes are
+	 * not known, or one of the types is one whose text the index does not hold (`FactsView.unheld`).
 	 */
 	public function reflectedMembers(g: CallGraph, receivers: Array<ReflectionFact>): Null<ReflectedMembers> {
 		final view: Null<FactsView> = _scope.facts;
@@ -1422,6 +1444,8 @@ final class ReachGraph {
 		}
 		final objects: Array<String> = typed.copy();
 		for (id in objects) for (sup in facts.table.supertypesOf(id)) note(sup);
+		// a type whose text the index does not hold has no node of its own: its namesake's are not its methods
+		if (typed.exists(facts.unheld)) return null;
 		// a method other than an accessor is obtained off an object of a class the project declares (`reflectiveMethodHolders`),
 		// each by its own name, and is one of that class or of a class it extends; an accessor runs off an object of any class
 		final held: Array<String> = methodValues(facts).declaredHolders(objects);

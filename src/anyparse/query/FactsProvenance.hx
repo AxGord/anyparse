@@ -62,13 +62,15 @@ final class FactsProvenance {
 	}
 
 	/**
-	 * Whether every typed subtype of every typed type the graph calls `type` is declared in the index, in the file the
-	 * compiler read it from. A subtype a macro defined, or one in a file the index does not hold, may override what the
-	 * index cannot see; a type no build typed has no typed subtype.
+	 * Whether every typed subtype of every typed type the graph calls `type` — under the truth, of the types its one
+	 * declaration the builds typed stands for (`FactsView.provenanceTypes`): another type of the name the index does not
+	 * hold is none of that code, and its subtypes override none of it — is declared in the index, in the file the compiler
+	 * read it from. A subtype a macro defined, or one in a file the index does not hold, may override what the index cannot
+	 * see; a type no build typed has no typed subtype.
 	 */
 	public function subtypesIndexed(type: String): Bool {
 		final table: CompilerFacts = _view.table;
-		for (id in _view.bySimpleName()[type] ?? []) for (sub in table.subtypesOf(CompilerFacts.baseId(id))) {
+		for (id in _view.provenanceTypes(type)) for (sub in table.subtypesOf(CompilerFacts.baseId(id))) {
 			final at: Null<FactPos> = table.typePosition(sub);
 			final declaring: Null<FileInfo> = at == null ? null : _view.indexedFile(at.file);
 			final simple: String = _view.graphType(sub);
