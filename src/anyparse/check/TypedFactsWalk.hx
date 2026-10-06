@@ -29,6 +29,12 @@ final class TypedFactsWalk {
 	/** The accesses of a call of a method a type declares, whose parameters take its arguments (`Argument`). */
 	private static final DECLARED_CALLS: Array<String> = ['FStatic', 'FInstance'];
 
+	/**
+	 * An abstract, by path, -> the type it wraps and its type parameters, or null for a `@:coreType` one (`wrapped`). An
+	 * abstract's declaration is the same for the whole compile, every round of the hook included.
+	 */
+	private static final abstractBodies: Map<String, Null<{ type: Type, params: Array<TypeParameter> }>> = [];
+
 	public final id: String;
 
 	private final _facts: Map<String, Array<String>> = [];
@@ -382,38 +388,39 @@ final class TypedFactsWalk {
 		return code || (e.expr.match(TConst(_)) && _host.inlineCallee(info.file, info.min, info.max) != null);
 	}
 
-	/** Whether `e` lies in the body's own range: code of the body's text. */
-	private function ownCode(e: TypedExpr): Bool {
-		final info: { min: Int, max: Int, file: String } = Context.getPosInfos(e.pos);
+	/** Whether the range `info` of an expression lies in the body's own range: code of the body's text. */
+	private inline function own(info: { min: Int, max: Int, file: String }): Bool {
 		return info.file == _home && info.min >= _min && info.max <= _max;
 	}
 
 	/**
 	 * The range of the body's own code between the statements of `exprs` around the `index`-th — the end of the last one
-	 * before it that is own code (`ownCode`) to the start of the first one after it — within `outer`, the range of the
+	 * before it that is own code (`own`) to the start of the first one after it — within `outer`, the range of the
 	 * innermost own code holding them all; `outer` itself unless that range holds every own code of the statement
 	 * (`holdsOwnCode`): the compiler places code of its own at the whole block — the `this` a closure among an inlined
 	 * call's arguments captures, bound ahead of the splice — and a range bounded by it is no text the call is written in.
 	 */
-	private function between(exprs: Array<TypedExpr>, index: Int, outer: { min: Int, max: Int }): { min: Int, max: Int } {
+	private function between(
+		exprs: Array<TypedExpr>, ranges: Array<{ min: Int, max: Int, file: String }>, index: Int, outer: { min: Int, max: Int }
+	): { min: Int, max: Int } {
 		var min: Int = outer.min;
 		var max: Int = outer.max;
-		for (j in 0...index) if (ownCode(exprs[j])) {
-			final end: Int = Context.getPosInfos(exprs[j].pos).max;
+		for (j in 0...index) if (own(ranges[j])) {
+			final end: Int = ranges[j].max;
 			if (end > min) min = end;
 		}
-		for (j in index + 1...exprs.length) if (ownCode(exprs[j])) {
-			max = Context.getPosInfos(exprs[j].pos).min;
+		for (j in index + 1...exprs.length) if (own(ranges[j])) {
+			max = ranges[j].min;
 			break;
 		}
 		final site: { min: Int, max: Int } = { min: min, max: max };
 		return min <= max && outer.min <= min && max <= outer.max && holdsOwnCode(exprs[index], site) ? site : outer;
 	}
 
-	/** Whether `site` holds the range of every expression of `e` that is own code (`ownCode`), `e` among them. */
+	/** Whether `site` holds the range of every expression of `e` that is own code (`own`), `e` among them. */
 	private function holdsOwnCode(e: TypedExpr, site: { min: Int, max: Int }): Bool {
 		final info: { min: Int, max: Int, file: String } = Context.getPosInfos(e.pos);
-		if (ownCode(e) && (info.min < site.min || info.max > site.max)) return false;
+		if (own(info) && (info.min < site.min || info.max > site.max)) return false;
 		var held: Bool = true;
 		TypedExprTools.iter(e, x -> if (held && !holdsOwnCode(x, site)) held = false);
 		return held;
@@ -653,13 +660,15 @@ final class TypedFactsWalk {
 				walk(condition);
 				walkAs(body, Statement);
 			case TBlock(exprs):
-				// every statement but the last is discarded; the last is the block's own value
+				// every statement but the last is discarded; the last is the block's own value. Each statement's range is
+				// read once for the block: `between` asks every other one's, per statement not of the body's own code
+				final ranges: Array<{ min: Int, max: Int, file: String }> = [for (x in exprs) Context.getPosInfos(x.pos)];
 				for (i in 0...exprs.length) {
 					_block = e.pos;
 					final site: { min: Int, max: Int } = _site;
 					// a statement at no range of the body's own code — a body spliced in, a macro's expansion — replaced the call
 					// written between the statements of that code around it, which keep their order
-					if (!ownCode(exprs[i])) _site = between(exprs, i, site);
+					if (!own(ranges[i])) _site = between(exprs, ranges, i, site);
 					walkAs(exprs[i], i == exprs.length - 1 ? use : Statement);
 					_site = site;
 				}
@@ -1157,8 +1166,15 @@ final class TypedFactsWalk {
 	/** The type the abstract `t` wraps, at its arguments — what its value is at run time; null for any other type and a core type. */
 	private static function wrapped(t: Type): Null<Type> {
 		return switch TypeTools.follow(t) {
-			case TAbstract(a, params) if (!a.get().meta.has(':coreType')):
-				TypeTools.applyTypeParameters(a.get().type, a.get().params, params);
+			case TAbstract(a, params):
+				// read once per abstract: each `a.get()` decodes the whole abstract, and a TM build asks ~47k times (11% of the macro)
+				final key: String = a.toString();
+				if (!abstractBodies.exists(key)) {
+					final read: AbstractType = a.get();
+					abstractBodies[key] = read.meta.has(':coreType') ? null : { type: read.type, params: read.params };
+				}
+				final body: Null<{ type: Type, params: Array<TypeParameter> }> = abstractBodies[key];
+				body == null ? null : TypeTools.applyTypeParameters(body.type, body.params, params);
 			case _: null;
 		};
 	}

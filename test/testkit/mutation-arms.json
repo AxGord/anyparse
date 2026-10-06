@@ -12536,7 +12536,7 @@
 			"name": "M-FACTS-WALK-BLOCK-GAP",
 			"type": "anyparse.check.TypedFactsWalk",
 			"method": "visit",
-			"find": "if (!ownCode(exprs[i])) _site = between(exprs, i, site);",
+			"find": "if (!own(ranges[i])) _site = between(exprs, ranges, i, site);",
 			"replace": "",
 			"note": "a statement a splice or an expansion replaced is placed at its whole block"
 		},
