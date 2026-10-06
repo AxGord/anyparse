@@ -1241,6 +1241,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.FactsTypeOracleE2ETest#testTheFirstWriteWaitsForTheFactsCompile :: guard :: ',
 			'unit.check.FactsTypeOracleTest#testAFieldTheConfigurationsTypeApartDeclines :: control :: M-FACTS-FIELD-TYPES',
 			'unit.check.FactsTypeOracleTest#testAFinalClassIsItsOwnHome :: control :: M-ORACLE-HOME-MODIFIED-TYPE',
+			'unit.check.FactsTypeOracleTest#testARewriteDropsOnlyTheNodesThatReadIt :: control :: M-FACTS-MADE-FROM-ALL,M-FACTS-MADE-FROM-NONE',
 			'unit.check.FactsTypeOracleTest#testARewrittenFileIsReadAtTheTextTheCompileRead :: control :: M-FACTS-ORACLE-ORIGINAL,M-JOURNAL-SHIFT',
 			'unit.check.FactsTypeOracleTest#testASignatureTheConfigurationsTypeApartDeclines :: control :: M-FACTS-SIGNATURE-VARIANTS',
 			'unit.check.FactsTypeOracleTest#testASiteAfterNonAsciiTextIsFound :: control :: M-CODEPOINT-NATIVE',
@@ -1571,6 +1572,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.OracleRunMemoTest#testAVerdictIsReusedForTheSameContentOnly :: control :: M-RUNMEMO-KEY-IGNORES-CONTENT',
 			'unit.check.OracleRunMemoTest#testTheCoverageProbeReusesTheBaselineCompile :: control :: M-RUNMEMO-PROBE-RECOMPILES',
 			'unit.check.OracleRunMemoTest#testTheFactsCompileBringsTheBaselineAlong :: control :: M-RUNMEMO-NO-BASELINE-AHEAD',
+			'unit.check.OracleRunMemoTest#testTheSafeWriteNetCompilesTheTreeTheCoverageProbeAsksAbout :: control :: M-SAFE-NET-PLAIN',
 			'unit.check.OracleRunWiringTest#testAFixRunGivenEveryRuleStartsTheFactsEarly :: control :: M-FACTS-NEVER-EARLY',
 			'unit.check.OracleRunWiringTest#testALintRunCompilesEachTreeOnce :: control :: M-RUNMEMO-NOT-ATTACHED',
 			'unit.check.OracleRunWiringTest#testAReportANarrowedOrAnOracleLessRunAsksOnDemand :: guard :: ',
@@ -1800,6 +1802,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ReachDefinesProbeTest#testEveryTypedTypeIsReportedWithItsFile :: control :: M-DEFINES-TYPES,M-DEFINES-IMPL',
 			'unit.check.ReachDefinesProbeTest#testOnlyAOneArmTranscriptWithBothSetsAnswers :: control :: M-DEFINES-ONE-ARM',
 			'unit.check.ReachDefinesProbeTest#testOverlappingProbesAnswerInTheOraclesOrder :: control :: M-SPAWN-ORDER',
+			'unit.check.ReachDefinesProbeTest#testTheBuildsStartBesideFactsStartedEarly :: control :: M-BUILDS-WITH-FACTS',
 			'unit.check.ReachDefinesProbeTest#testTheProbeReadsTheValueEachDefineCarries :: control :: M-DEFINES-VALUES-MACRO',
 			'unit.check.RedundantImportCheckTest#testAThirdLineBindingOneOfItsConstructorsKeepsIt :: control :: M-REDUNDANT-VALUES-BLIND',
 			'unit.check.RedundantImportCheckTest#testSubTypeImportBesideItsModuleImportIsRedundant :: control :: M-DECLARINGFILES-EMPTY',
@@ -5471,7 +5474,11 @@ class TestDiscoveryParityTest extends Test {
 			'M-REACH-ARRAY-OWN-HANDS',
 			'M-SITES-LANDING-KEEPING-PLACE',
 			'M-SITES-LANDING-CLASS-PLACE',
-			'M-SITES-LANDING-TYPED-VALUE'
+			'M-SITES-LANDING-TYPED-VALUE',
+			'M-FACTS-MADE-FROM-ALL',
+			'M-FACTS-MADE-FROM-NONE',
+			'M-BUILDS-WITH-FACTS',
+			'M-SAFE-NET-PLAIN'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
