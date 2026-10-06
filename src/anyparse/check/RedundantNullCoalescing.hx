@@ -12,7 +12,8 @@ import anyparse.runtime.Span;
 /**
  * Flags a null-coalescing whose left operand is provably non-null —
  * `nonNull ?? fallback` — so the right operand is dead. `Severity.Info`; `fix`
- * unwraps it to the left operand.
+ * unwraps it to the left operand. A second arm needs no type: `x ?? null` is `x`
+ * whatever `x` is — `??` types as its left operand, and a null one yields the same null.
  *
  * ## Type-aware, conservative
  *
@@ -35,13 +36,14 @@ final class RedundantNullCoalescing implements Check {
 	}
 
 	public function description(): String {
-		return 'a null-coalescing whose left operand is never null';
+		return 'a null-coalescing whose left operand is never null, or whose right operand is null';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = resolveSeams(plugin);
 		if (seams == null) return [];
 		final coalKind: String = seams.coalKind;
+		final nullKind: Null<String> = seams.nullKind;
 		final opaqueKinds: Array<String> = seams.opaqueKinds;
 		final shape: RefShape = seams.shape;
 		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
@@ -52,12 +54,18 @@ final class RedundantNullCoalescing implements Check {
 				if (opaqueKinds.contains(node.kind)) return;
 				if (node.kind == coalKind && node.children.length == 2) {
 					final span: Null<Span> = node.span;
-					if (span != null && TypeResolver.isProvablyNonNull(node.children[0], root, shape, types)) violations.push({
+					final message: String = if (nullKind != null && node.children[1].kind == nullKind)
+						'`?? null` is a no-op — the result is the left operand';
+					else if (TypeResolver.isProvablyNonNull(node.children[0], root, shape, types))
+						'right operand is dead — left operand is never null';
+					else
+						'';
+					if (span != null && message != '') violations.push({
 						file: entry.file,
 						span: span,
 						rule: 'redundant-null-coalescing',
 						severity: Severity.Info,
-						message: 'right operand is dead — left operand is never null'
+						message: message
 					});
 				}
 				for (c in node.children) walk(c);
@@ -83,7 +91,12 @@ final class RedundantNullCoalescing implements Check {
 	private static function resolveSeams(plugin: GrammarPlugin): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
 		final nullCoalesceKind: Null<String> = shape.nullCoalesceKind;
-		return nullCoalesceKind == null ? null : { coalKind: nullCoalesceKind, opaqueKinds: shape.opaqueKinds ?? [], shape: shape };
+		return nullCoalesceKind == null ? null : {
+			coalKind: nullCoalesceKind,
+			nullKind: shape.nullLiteralKind,
+			opaqueKinds: shape.opaqueKinds ?? [],
+			shape: shape
+		};
 	}
 
 }
@@ -94,6 +107,7 @@ final class RedundantNullCoalescing implements Check {
  */
 private typedef Seams = {
 	final coalKind: String;
+	final nullKind: Null<String>;
 	final opaqueKinds: Array<String>;
 	final shape: RefShape;
 };

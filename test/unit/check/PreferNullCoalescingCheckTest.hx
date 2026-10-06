@@ -58,6 +58,16 @@ class PreferNullCoalescingCheckTest extends Test {
 		Assert.equals('a ?? b', fixText(wrap('a != null ? a : b')));
 	}
 
+	/** A `null` fallback makes the ternary its guarded value: the rewrite is `a`, never the no-op `a ?? null`. */
+	@:pin('control') @:killer('M-NULLCOAL-NULL-FALLBACK')
+	public function testNullFallbackIsTheGuardedValue(): Void {
+		final vs: Array<Violation> = violations(wrap('a != null ? a : null'));
+		Assert.equals(1, vs.length);
+		Assert.equals('this null-guard ternary falls back to null, so it is just its guarded value', vs[0].message);
+		Assert.equals('a', fixText(wrap('a != null ? a : null')));
+		Assert.equals('a.b', fixText(wrap('a.b == null ? null : a.b')));
+	}
+
 	public function testFixEqShape(): Void {
 		Assert.equals('a ?? b', fixText(wrap('a == null ? b : a')));
 	}

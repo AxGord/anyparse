@@ -3479,6 +3479,23 @@ typedef ExecutionShape = {
 	@:optional var mutatingArrayMethods: Array<String>;
 
 	/**
+	 * The fully qualified paths of the grammar's FIXED-LENGTH array types (Haxe `haxe.ds.Vector`): a
+	 * construction `new T(n)` holds exactly `n` elements for as long as the value lives, and an index
+	 * write never resizes it. A path, not a simple name, because the simple name is shared — OpenFL's
+	 * `openfl.Vector` grows on `push` and on a write one past its end. Optional; unset makes no
+	 * construction's length known.
+	 */
+	@:optional var fixedLengthArrayTypes: Array<String>;
+
+	/**
+	 * The integer arithmetic a binary node kind performs, by kind, as one of `add`, `subtract`,
+	 * `multiply` — what a check folding a constant bound (`0...N + 1`) evaluates. Named, not spelled as
+	 * the operator: the value is a meaning, and a punctuation token here would be a token slot no parse
+	 * captures. Optional; unset folds literals alone.
+	 */
+	@:optional var integerFoldOperators: Map<String, String>;
+
+	/**
 	 * The SIMPLE names of the grammar's built-in map types (Haxe `Map`, `IntMap`, …), whose own methods
 	 * `nonMutatingMapMethods` / `mutatingMapMethods` list exactly as the array lists do for the array type:
 	 * a method in neither may be a static extension handed the map itself. Optional; unset makes every

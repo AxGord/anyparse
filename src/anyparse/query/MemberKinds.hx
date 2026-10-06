@@ -710,6 +710,16 @@ final class MemberKinds {
 	}
 
 	/**
+	 * `base` with each kind of `optional` the grammar sets appended — how a seam bundle folds the
+	 * optional `RefShape` kinds of one family into a list.
+	 */
+	public static function withSetKinds(base: Array<String>, optional: Array<Null<String>>): Array<String> {
+		final out: Array<String> = base.copy();
+		for (k in optional) if (k != null) out.push(k);
+		return out;
+	}
+
+	/**
 	 * Collect the `from` of every static member under `host` into `out`, returning the modifier-run
 	 * state the host's children leave behind. Descends into every nested member host — a
 	 * member-position `#if` region above all — carrying `incoming` in, because a `static` written

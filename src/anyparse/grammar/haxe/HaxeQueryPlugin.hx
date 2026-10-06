@@ -767,6 +767,8 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 					'splice',
 					'unshift'
 				],
+				fixedLengthArrayTypes: ['haxe.ds.Vector'],
+				integerFoldOperators: ['Add' => 'add', 'Sub' => 'subtract', 'Mul' => 'multiply'],
 				mapTypeNames: ['Map', 'IntMap', 'StringMap', 'ObjectMap', 'EnumValueMap', 'BalancedTree'],
 				nonMutatingMapMethods: ['copy', 'exists', 'get', 'iterator', 'keyValueIterator', 'keys', 'toString'],
 				mutatingMapMethods: ['arrayWrite', 'clear', 'remove', 'set'],

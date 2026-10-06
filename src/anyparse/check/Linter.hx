@@ -298,6 +298,8 @@ final class Linter {
 			// `redundant-map-iter-key`'s, so registry order is free.
 			new UnusedLoopBinder(),
 			new RedundantReplaceLoop(),
+			new LoopBoundLengthMismatch(),
+			new ScratchField(),
 			new TrivialGetter(),
 			// Also drops an `@:isVar`, and the two can never claim the same one: `trivial-getter`'s
 			// self-backed arm needs a getter that returns the property's own name, which this rule's
