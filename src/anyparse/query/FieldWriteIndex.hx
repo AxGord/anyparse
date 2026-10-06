@@ -705,7 +705,8 @@ final class FieldWriteIndex {
 
 	/** Every indexed type declaration named `name`, across all files. */
 	private static function declsNamedIn(index: SymbolIndex, name: String): Array<TypeDeclInfo> {
-		return [for (fi in index.allFiles()) for (t in fi.types) if (t.name == name) t];
+		// the index's by-name table, in index order: a scan of every type of every file per write was 4 s of a TM `--fix`
+		return index.refs.declsNamed(name);
 	}
 
 	/** Whether the symbol index has a type declaration named `name`. */

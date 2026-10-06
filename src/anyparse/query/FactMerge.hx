@@ -56,10 +56,13 @@ final class FactMerge {
 	/** Every node `edges` reaches from `from`, directly or not, `from` itself excepted. */
 	public static function closure(edges: Map<String, Array<String>>, from: String): Array<String> {
 		final out: Array<String> = [];
+		// beside `out`, whose order is the answer: an `out.contains` per edge was quadratic over openfl's display-list subtypes
+		final reached: Map<String, Bool> = [];
 		final work: Array<String> = [from];
 		while (work.length > 0) {
 			final next: String = work.pop() ?? '';
-			for (to in edges[next] ?? []) if (to != from && !out.contains(to)) {
+			for (to in edges[next] ?? []) if (to != from && !reached.exists(to)) {
+				reached[to] = true;
 				out.push(to);
 				work.push(to);
 			}
