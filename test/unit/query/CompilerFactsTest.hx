@@ -23,6 +23,29 @@ class CompilerFactsTest extends Test {
 		Assert.isNull(table(cut).node('A.f'));
 	}
 
+	@:pin('control') @:killer('M-FACTS-RECORD-KIND')
+	public function testADumpHoldingARecordNoReaderKnowsContributesNothing(): Void {
+		// the records a facts file holds are a closed list: one of a kind this reader does not know may say what a fact it
+		// does read leaves out, so the whole file is of another version and the configuration is dropped, saying why
+		final node: String = '{"k":"node","id":"A.f","f":"A.hx","p":[10,27],"kind":"method","owner":"A","t":"()->Void",'
+			+ '"calls":[{"t":"A.g","a":"FInstance","r":"A","rp":[23,24],"rt":"Void","p":[23,26]}]}';
+		function dump(extra: String): String {
+			return '{"k":"facts","v":1,"inline":true}\n$node\n$extra{"k":"end","nodes":1,"types":0}\n';
+		}
+		Assert.equals(1, table(dump('')).configurations.length);
+		final grown: CompilerFacts = table(dump('{"k":"future","id":"A.f"}\n'));
+		Assert.equals(0, grown.configurations.length);
+		Assert.isNull(grown.node('A.f'));
+		Assert.same(
+			[
+				'one: its facts file holds a record of the kind `future`, which no reader here knows'
+			],
+			[
+				for (d in grown.dropped) '${d.name}: ${d.reason}'
+			]
+		);
+	}
+
 	public function testAForeignPositionResolvesThroughItsDumpsFileTable(): Void {
 		// code inlined from another file carries that file's index; two dumps may number their files differently
 		final other: String = 'class B {}';

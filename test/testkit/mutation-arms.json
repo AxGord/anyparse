@@ -7734,8 +7734,8 @@
 			"name": "M-FACTS-REACH-SPLICE",
 			"type": "anyparse.query.FactsView",
 			"method": "unplaced",
-			"find": "UNPLACED.contains(m) && !(truth && (m == INLINE_SITE_UNKNOWN || m == MACRO_EXPANSION))",
-			"replace": "m == MACRO_EXPANSION",
+			"find": "return !(truth && (m == INLINE_SITE_UNKNOWN || m == MACRO_EXPANSION));",
+			"replace": "return m == MACRO_EXPANSION;",
 			"note": "a body with an inlined call is read through its facts, whose spliced facts sit at the callee and are missed by a range question"
 		},
 		{
@@ -14376,6 +14376,46 @@
 			"find": "|| sink == str(wrapped(inner.t))",
 			"replace": "",
 			"note": "a local spliced into an inlined abstract method as its this is cast from the abstract to the type it wraps, and that cast hands the value on, so a Map parameter a method only iterates escapes"
+		},
+		{
+			"name": "M-TOUCH-USE-UNKNOWN",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "classifyUse",
+			"find": "case _: { touch: true, escape: true };",
+			"replace": "case _: { touch: false, escape: false };",
+			"note": "a use no reader names (a code a grown facts producer writes, an empty one) is harmless, so a parameter handed the member and used that way keeps nothing of it"
+		},
+		{
+			"name": "M-TOUCH-USE-KNOWN-READS",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "classifyUse",
+			"find": "case 'index', 'member', 'compare', 'iter', 'update': { touch: false, escape: false };",
+			"replace": "",
+			"note": "(precision) an index, a member read, a comparison, an iteration and a compound write's read half fall to the unknown use, so a method that only iterates what it is handed lets it escape"
+		},
+		{
+			"name": "M-FACTS-UNPLACED-UNKNOWN",
+			"type": "anyparse.query.FactsView",
+			"method": "unplaced",
+			"find": "return !(truth && (m == INLINE_SITE_UNKNOWN || m == MACRO_EXPANSION));",
+			"replace": "return [MACRO_EXPANSION, INLINE_SITE_UNKNOWN, 'stale-foreign'].contains(m) && !(truth && (m == INLINE_SITE_UNKNOWN || m == MACRO_EXPANSION));",
+			"note": "the markers that leave a fact without a place are a negative list again, so a node carrying one no reader knows is read through its facts"
+		},
+		{
+			"name": "M-GRAPH-FIELD-ACCESS-UNKNOWN",
+			"type": "anyparse.query.CallGraphFacts",
+			"method": "field",
+			"find": "case _: true;",
+			"replace": "case _: false;",
+			"note": "a field read through an access no reader names is resolved, so no accessor its name may run is admitted"
+		},
+		{
+			"name": "M-FACTS-RECORD-KIND",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "add",
+			"find": "lines.find(l -> !RECORD_KINDS.contains(recordKind(l)))",
+			"replace": "null",
+			"note": "a facts file holding a record of a kind no reader knows is read as a whole one, whatever that record says the rest leaves out"
 		}
 	]
 }

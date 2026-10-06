@@ -2614,6 +2614,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CommentWeldDeletionSliceTest#testHoistingInsideAReplacementIsStillRefused :: control :: M-COMMENT-WELD-BLIND',
 			'unit.query.CommentWeldDeletionSliceTest#testWeldingAcrossTheRepeatedSeparatorIsStillRefused :: control :: '
 				+ 'M-COMMENT-WELD-BLIND',
+			'unit.query.CompilerFactsTest#testADumpHoldingARecordNoReaderKnowsContributesNothing :: control :: M-FACTS-RECORD-KIND',
 			'unit.query.CompilerFactsTest#testADumpWithoutItsClosingRecordContributesNothing :: control :: M-FACTS-INCOMPLETE',
 			'unit.query.CompilerFactsTest#testASplicedFactRunsAtTheSitesOfTheCallThatSplicedItIn :: control :: '
 				+ 'M-FACTS-SPLICE-SITES-MET,M-FACTS-SPLICE-UNATTRIBUTED,M-FACTS-SPLICE-HARMLESS,M-FACTS-SPLICE-INNERMOST,'
@@ -2790,6 +2791,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testACoreTypeAsAValueHoldsNothingUnderTheTruth :: control :: M-ESCAPES-FACTS-ABSTRACT-REFUSED',
 			'unit.query.MemberReachFactsTest#testADeclaredGlobMatchesTheClassItselfByItsQualifiedNameUnderTheTruth :: control :: M-ESCAPES-FACTS-DECLARED-SUBTYPES,M-GLOB-QUALIFIED-SEGMENT',
 			'unit.query.MemberReachFactsTest#testADeclaredMethodHolderIsMatchedByTheClassOfTheObjectItselfUnderTheTruth :: control :: M-METHODS-HOLDERS-OWN-NAME',
+			'unit.query.MemberReachFactsTest#testAFieldAccessTheFactsReaderDoesNotKnowIsUnresolvedUnderTheTruth :: control :: '
+				+ 'M-GRAPH-FIELD-ACCESS-UNKNOWN',
 			'unit.query.MemberReachFactsTest#testAFieldInitializerIsReadThroughItsFactsUnderTheTruth :: control :: '
 				+ 'M-GRAPH-INIT-RECORD,M-FACTS-VIEW-INIT-FACETED',
 			'unit.query.MemberReachFactsTest#testAFieldReadJoinedAcrossTwoGettersInACallbackIsItsTextUnderTheTruth :: control :: '
@@ -2841,6 +2844,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testAMacroExpansionRunsWhereItsCallIsUnderTheTruth :: control :: '
 				+ 'M-FACTS-WITHIN-EXPANSION,M-GRAPH-FACTS-EXPANSION-SITE,M-FACTS-EXPANSION-SPLICE-SITES,'
 				+ 'M-TOUCH-EXPANSION-RUNS,M-FACTS-WALK-BLOCK-GAP',
+			'unit.query.MemberReachFactsTest#testAMarkerTheFactsReaderDoesNotKnowKeepsItsBodysSyntaxUnderTheTruth :: control :: '
+				+ 'M-FACTS-UNPLACED-UNKNOWN',
 			'unit.query.MemberReachFactsTest#testAMemberAnInlinedMethodTakesAsAnArgumentStillEscapesUnderTheTruth :: control :: '
 				+ 'M-FACTS-RECEIVER-BLOCK,M-FACTS-RECEIVER-PARAM',
 			'unit.query.MemberReachFactsTest#testAMemberAnotherBuildDeclaresShadowsAnExtension :: control :: M-FACTS-REACH-GUARDED-NAME',
@@ -2939,6 +2944,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-IDLE-INDEX',
 			'unit.query.MemberReachFactsTest#testATypedefAliasingTheTypeElsewhereIsNoneOfItsCodeUnderTheTruth :: control :: '
 				+ 'M-FACTS-TEXT-ALIAS-TYPEDEF',
+			'unit.query.MemberReachFactsTest#testAUseTheFactsReaderDoesNotKnowIsAnEscapeUnderTheTruth :: control :: '
+				+ 'M-TOUCH-USE-UNKNOWN,M-TOUCH-USE-KNOWN-READS',
 			'unit.query.MemberReachFactsTest#testAValueAGenericClassLetsGoEscapesUnderTheTruth :: control :: '
 				+ 'M-ESCAPES-FACTS-INSTANCES,M-ESCAPES-FACTS-PARAMETER',
 			'unit.query.MemberReachFactsTest#testAValueAGenericMethodLetsGoEscapesUnderTheTruth :: control :: '
@@ -5168,7 +5175,12 @@ class TestDiscoveryParityTest extends Test {
 			'M-ARGUMENT-USES-OVERRIDES',
 			'M-TOUCH-ARGUMENT-USES',
 			'M-TOUCH-ARGUMENT-LEAVES',
-			'M-FACTS-ABSTRACT-WRAPPED-CAST'
+			'M-FACTS-ABSTRACT-WRAPPED-CAST',
+			'M-TOUCH-USE-UNKNOWN',
+			'M-TOUCH-USE-KNOWN-READS',
+			'M-FACTS-UNPLACED-UNKNOWN',
+			'M-GRAPH-FIELD-ACCESS-UNKNOWN',
+			'M-FACTS-RECORD-KIND'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

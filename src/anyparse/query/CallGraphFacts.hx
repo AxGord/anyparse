@@ -473,7 +473,8 @@ final class CallGraphFacts {
 	 * A field read or write that is no call. A method read as a value is a `Ref` to it (and its overrides, off an
 	 * instance). A name read off a dynamic receiver is an unresolved access when some type declares a property or a
 	 * function of that name — an accessor may run there, or the method later as a value — and one read off a typed
-	 * structure when the structure's own declaration gives the name an accessor, as `CallGraph` reads a typed receiver.
+	 * structure when the structure's own declaration gives the name an accessor, as `CallGraph` reads a typed receiver. A
+	 * POSITIVE list: one through an access the facts producer has grown since, which no case here reads, is unresolved too.
 	 */
 	private static function field(g: CallGraph, node: FnNode, f: FieldFact, span: Null<Span>, view: FactsView): Void {
 		final owner: Null<String> = f.owner;
@@ -483,7 +484,8 @@ final class CallGraphFacts {
 			case 'FAnon':
 				final property: Null<{ info: MemberInfo, owner: String }> = g.types.propertyOnChain(view.graphType(f.receiver), f.field);
 				property != null && (property.info.hasGetter || property.info.hasSetter);
-			case _: false;
+			case 'FInstance', 'FStatic', 'FClosure', 'FEnum': false;
+			case _: true;
 		};
 		if (access) g.unresolvedAccess.push({
 			file: node.file,
