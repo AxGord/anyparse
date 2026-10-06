@@ -15743,6 +15743,113 @@
 			"find": "if (warm[k]?.status != 0) k];",
 			"replace": "if (warm[k] == null) k];",
 			"note": "a warm rejection is the verdict, so a server re-emitting a stale diagnostic reverts a sound fix"
+		},
+		{
+			"name": "M-IDIOM-GETTER-HOP",
+			"type": "anyparse.check.PreferApiIdiom",
+			"method": "fieldType",
+			"find": "m.hasGetter || ",
+			"replace": "",
+			"note": "a getter hop in a receiver path reads as a plain field, so a call that runs the getter once replaces writes that ran it once each"
+		},
+		{
+			"name": "M-IDIOM-NO-PURITY",
+			"type": "anyparse.check.PreferApiIdiom",
+			"method": "windowMatch",
+			"find": "!PurityScan.isPure(window[k].rhs, ctx.purity) || ",
+			"replace": "",
+			"note": "an impure right-hand side is carried into the call, where every argument is evaluated before any write"
+		},
+		{
+			"name": "M-IDIOM-NO-EARLIER-READ-GATE",
+			"type": "anyparse.check.PreferApiIdiom",
+			"method": "windowMatch",
+			"find": " || mentionsAny(window[k].rhs, earlier, ctx.seams)",
+			"replace": "",
+			"note": "a right-hand side reading a field written above it reads the NEW value today and the old one in the call"
+		},
+		{
+			"name": "M-IDIOM-SUBTYPES-ALWAYS",
+			"type": "anyparse.check.PreferApiIdiom",
+			"method": "receiverMatches",
+			"find": "|| idiom.spec.subtypes",
+			"replace": "|| true",
+			"note": "a subclass receiver matches without the opt-in, though its override of the method may not be the declared equivalence"
+		},
+		{
+			"name": "M-IDIOM-NO-COMMENT-GATE",
+			"type": "anyparse.check.PreferApiIdiom",
+			"method": "carriedOnly",
+			"force": "true",
+			"note": "a comment between the writes, or trailing the last one, is deleted with them or left describing the whole call"
+		},
+		{
+			"name": "M-IDIOM-NO-SELF-TYPE-GATE",
+			"type": "anyparse.check.PreferApiIdiom",
+			"method": "windowMatch",
+			"find": "if (host == null || ConfiguredTypes.inherits(ctx.index, host, idiom.type) != false) return null;",
+			"replace": "",
+			"note": "the declared method's own body is rewritten into a call of itself, which recurses forever"
+		},
+		{
+			"name": "M-IDIOM-READER-LENIENT",
+			"type": "anyparse.check.RuleDeclaration",
+			"method": "parseEntry",
+			"find": "if (distinct.length != declaredFields.length) {",
+			"replace": "if (false) {",
+			"note": "an idiom naming a field twice survives the reader, so a window writing one field twice is matched against a two-field method"
+		},
+		{
+			"name": "M-IDIOM-VALIDATE-TRUSTS",
+			"type": "anyparse.check.PreferApiIdiom",
+			"method": "isPlainField",
+			"force": "true",
+			"note": "a declared field that is a property with an accessor, or a static, is trusted as the plain field the equivalence needs"
+		},
+		{
+			"name": "M-EVENT-NO-MISMATCH",
+			"type": "anyparse.check.TypedEventConstant",
+			"method": "mismatchOf",
+			"force": "null",
+			"note": "a listener typed for another event class is not reported, and its constant is retyped into a compile error"
+		},
+		{
+			"name": "M-EVENT-ABSTRACT-TRUSTED",
+			"type": "anyparse.check.TypedEventConstant",
+			"method": "isStringAbstract",
+			"force": "true",
+			"note": "an abstract without the String conversions is trusted, so every comparison or String use of a retyped constant stops compiling"
+		},
+		{
+			"name": "M-EVENT-NO-BASE-GATE",
+			"type": "anyparse.check.TypedEventConstant",
+			"method": "collectCandidates",
+			"find": "&& ConfiguredTypes.inherits(index, decl, types.base) == true",
+			"replace": "",
+			"note": "a String constant of a class that is no event is retyped to an event type"
+		},
+		{
+			"name": "M-EVENT-NO-USE-GATE",
+			"type": "anyparse.check.TypedEventConstant",
+			"method": "run",
+			"find": "if (found != null) report(candidate, found, types, index, seams, out);",
+			"replace": "report(candidate, found ?? [], types, index, seams, out);",
+			"note": "a constant never used as an event type is reported and retyped"
+		},
+		{
+			"name": "M-EVENT-STATIC-VAR",
+			"type": "anyparse.check.TypedEventConstant",
+			"method": "candidateOf",
+			"find": "!seams.finalKinds.contains(member.kind)",
+			"replace": "!seams.fieldKinds.contains(member.kind)",
+			"note": "a mutable static var is retyped as if it were a constant"
+		},
+		{
+			"name": "M-EVENT-ANY-NEW-IS-A-USE",
+			"type": "anyparse.check.TypedEventConstant",
+			"method": "isEventUse",
+			"force": "true",
+			"note": "a string handed to the constructor of a class that is no event counts as a dispatch, and is reported as one of the wrong class"
 		}
 	]
 }
