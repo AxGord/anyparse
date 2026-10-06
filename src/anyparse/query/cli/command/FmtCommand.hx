@@ -6,6 +6,7 @@ import anyparse.query.Cli.FmtRunResult;
 import anyparse.query.CondRegionScan.OpaqueCondRegion;
 import anyparse.query.FormatFixedPoint.FormatFixedPointResult;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.OrphanContinuation;
 import anyparse.query.cli.CliContext;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -501,6 +502,18 @@ final class FmtCommand implements CliCommand {
 		// of the WRITER.
 		final unsettled: Bool = onePass && fixedPoint.rewrites > 1;
 		final isCanonical: Bool = formatted == source;
+		// The writer-emit gate's orphan question, asked of the writer itself: the output must be at
+		// least as valid as the input. The writer re-emits the tree it parsed, so a correct writer
+		// never trips it — it is the net under a writer defect that re-associates an `else`
+		// (a de-brace, a dropped `if`), and it costs a parse only for a file `fmt` would change.
+		// Every mode refuses, as for an unsettled file, so `--list` and `--write` cannot disagree.
+		// An input that ALREADY holds an orphan `else` is formatted as it stands: the count does not
+		// grow, and `fmt` is not the compiler.
+		final stranded: Null<String> = isCanonical ? null : OrphanContinuation.introduced(source, formatted, plugin);
+		if (stranded != null) {
+			CliIo.stderr('apq fmt: $path: $stranded; left unchanged\n');
+			return { changed: false, failed: true, fatalExit: null };
+		}
 		if (verify) {
 			// A file already at its fixed point cannot diverge, so the scan is skipped
 			// for the overwhelming majority of a canonical tree.

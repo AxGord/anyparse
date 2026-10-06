@@ -1232,6 +1232,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// guarding the list checked the same convention it did.
 			opaqueCondRegionKinds: HaxeQueryWalker.opaqueCondRegionKinds(),
 			conditionalRegionKinds: HaxeQueryWalker.conditionalRegionKinds(),
+			orphanContinuationKinds: ['OrphanElseStmt'],
 			condOperandRunKinds: ['CondSpliceOpExpr'],
 			stringInterpIdentKind: 'Ident',
 			stringInterpBlockKind: 'Block',

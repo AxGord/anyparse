@@ -1763,6 +1763,17 @@ typedef RefShape = {
 	@:optional var conditionalRegionKinds: Array<String>;
 
 	/**
+	 * Node kinds of an ORPHAN CONTINUATION — a clause the grammar accepts on its own although
+	 * the language only allows it after the construct it continues (Haxe `OrphanElseStmt`: an
+	 * `else` with no `if` in front of it). The grammar admits it for conditional compilation, where
+	 * a `#if` seam can cut an if-chain in half (`if (a) f(); #if x else g(); #end`), and the parser
+	 * cannot tell that from an `else` an edit stranded. `OrphanContinuation` can: one is JUSTIFIED
+	 * only next to such a seam, and the writer-emit gate refuses a result holding more unjustified
+	 * ones than its input. Optional; unset makes that gate inert.
+	 */
+	@:optional var orphanContinuationKinds: Array<String>;
+
+	/**
 	 * Node kinds of an OPERAND-RUN conditional-compilation splice — a region whose
 	 * fragment is a run of complete operands each followed by an operator, and whose
 	 * children project as those operands followed by ONE post-directive TAIL operand

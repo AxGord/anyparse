@@ -282,6 +282,21 @@ Freezing a file's formatting is recoverable; deleting an author's comment is not
 process-wide and re-arms the deletion on the write paths too, so `fmt` and `lint --fix`
 print a warning when they run under it.
 
+**A rewrite may not strand an `else` — the output must be at least as valid as the input.**
+The grammar accepts an `else` with no `if` in front of it (`OrphanElseStmt`) on purpose:
+conditional compilation cuts if-chains in half (`if (a) f(); #if x else g(); #end`, or
+parallel `if` heads in `#if a if (x) #else if (y) #end`), and such files must parse. So
+"it re-parses" does not mean "it compiles": a `patch` that duplicated an `} else if (c)`
+header without its `{` wrote `if (c) else if (c) { … }` and reported success. Every op that
+canonicalises through `CanonicalEdit` (the addressed ops, `lint --fix`, `FixVerifier`) and
+`fmt` therefore count the orphan `else`s that NO `#if` seam explains — one that does not
+open a branch of a `#if` region and does not follow a statement ending in one — and refuse a
+result holding more of them than the input did, naming the line. The input's own count is
+the floor, not zero: a file that already carries such an `else` still formats (as it stands)
+and still takes edits that leave it alone. Whether a seam-adjacent `else` compiles depends
+on the defines (`#if a if (c) f(); #end else g();` compiles only with `-D a`), which no
+whole-file parse knows, so a seam makes an `else` acceptable, never proven valid.
+
 ### Analysis (lint)
 
 `lint <scope> [--rule <id>] [--fix]` runs grammar-agnostic checks and reports violations
