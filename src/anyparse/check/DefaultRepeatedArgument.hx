@@ -50,11 +50,18 @@ using Lambda;
  * fields), and it is also the one that would reach a LIBRARY signature if the scope gate were
  * missing — nothing about `gl.disable(gl.BLEND)` should ever be rewritten by a linter.
  *
- * Two gates carry the correctness of the rewrite itself:
+ * Three gates carry the correctness of the rewrite itself:
  *
  * - the parameter must be TRAILING, or every parameter after it must already have a default.
  *   Otherwise the argument cannot be dropped without Haxe's type-directed skipping deciding what
  *   the remaining arguments mean, which is a different program;
+ * - a call site counts only when the constant is its LAST argument, and that argument sits inside
+ *   the leading run of required parameters. Haxe binds by position, so cutting an earlier argument
+ *   slides every later one into the slot before it (`d(K.T, 1)` becomes `d(1)`, which compiles when
+ *   the types agree), and past an optional parameter the argument's slot may have been skipped by
+ *   type. A site that fails this keeps all its arguments. The census is rebuilt on every `--fix`
+ *   pass, so a second pass that defaults an earlier parameter judges each call against the signature
+ *   the first pass left;
  * - the function must be referenced NOWHERE as a value. Adding a default changes its type —
  *   `(Int) -> Void` becomes `(?Int) -> Void`, and the two do not unify — so a `.bind`,
  *   a method value or any non-callee occurrence of the name refuses the whole finding.
@@ -185,40 +192,48 @@ final class DefaultRepeatedArgument implements Check implements DefaultOff imple
 			final member: Null<MemberInfo> = resolveCallee(call, owner, entry, scope, seams);
 			if (member == null) return;
 			final args: Array<QueryNode> = [for (i in 1...call.children.length) call.children[i]];
-			// Argument index equals PARAMETER index only when the call fills every slot. Haxe skips
-			// an already-defaulted parameter by TYPE, so a shorter argument list can bind its values
-			// to a different set of parameters than their positions suggest, and the census would
-			// then attribute a constant to the wrong one.
-			if (args.length != member.params.length) return;
-			for (i in 0...args.length) {
-				final constant: Null<String> = constantSpelling(args[i], owner, member.owner, entry, scope, seams);
-				if (constant == null) continue;
-				final key: String = '${member.owner}.${member.name}#$i';
-				final byConstant: Map<String, Array<CallSite>> = census[key] ?? [];
-				final sites: Array<CallSite> = byConstant[constant] ?? [];
-				final site: Null<CallSite> = callSite(entry.file, args, i);
-				if (site == null) continue;
-				sites.push(site);
-				byConstant[constant] = sites;
-				census[key] = byConstant;
-			}
+			// Only the LAST argument is a candidate: Haxe binds arguments by position, so cutting any
+			// earlier one slides every argument after it into the slot before — `d(K.T, 1)` becomes
+			// `d(1)` — which compiles whenever the types agree and is a different call.
+			final last: Int = args.length - 1;
+			// And argument `last` is parameter `last` only across the leading run of REQUIRED
+			// parameters. Past an optional one Haxe may have skipped a slot by type, and the census
+			// would attribute the constant to a parameter it never reached.
+			if (last >= requiredPrefix(member, seams)) return;
+			final constant: Null<String> = constantSpelling(args[last], owner, member.owner, entry, scope, seams);
+			if (constant == null) return;
+			final site: Null<CallSite> = callSite(entry.file, args);
+			if (site == null) return;
+			final key: String = '${member.owner}.${member.name}#$last';
+			final byConstant: Map<String, Array<CallSite>> = census[key] ?? [];
+			final sites: Array<CallSite> = byConstant[constant] ?? [];
+			sites.push(site);
+			byConstant[constant] = sites;
+			census[key] = byConstant;
 		}, seams);
 	}
 
-	/**
-	 * The deletion span for argument `i` — the argument plus the comma that separates it from its
-	 * neighbour, so removing it leaves a well-formed list. A sole argument cuts only itself.
-	 */
-	private static function callSite(file: String, args: Array<QueryNode>, i: Int): Null<CallSite> {
-		final span: Null<Span> = args[i].span;
-		if (span == null) return null;
-		if (i > 0) {
-			final previous: Null<Span> = args[i - 1].span;
-			return previous == null ? null : { file: file, cutFrom: previous.to, cutTo: span.to };
+	/** How many leading parameters are `required` — Haxe never skips one, so in that run argument `j` IS parameter `j`. */
+	private static function requiredPrefix(member: MemberInfo, seams: Seams): Int {
+		var count: Int = 0;
+		for (param in member.params) {
+			if (!required(param, seams)) break;
+			count++;
 		}
-		if (args.length <= 1) return { file: file, cutFrom: span.from, cutTo: span.to };
-		final next: Null<Span> = args[i + 1].span;
-		return next == null ? null : { file: file, cutFrom: span.from, cutTo: next.from };
+		return count;
+	}
+
+	/**
+	 * The deletion span for the LAST argument — the argument plus the comma before it, so removing it
+	 * leaves a well-formed list. A sole argument cuts only itself.
+	 */
+	private static function callSite(file: String, args: Array<QueryNode>): Null<CallSite> {
+		final last: Int = args.length - 1;
+		final span: Null<Span> = args[last].span;
+		if (span == null) return null;
+		if (last == 0) return { file: file, cutFrom: span.from, cutTo: span.to };
+		final previous: Null<Span> = args[last - 1].span;
+		return previous == null ? null : { file: file, cutFrom: previous.to, cutTo: span.to };
 	}
 
 	/** The constant at least two sites agree on, or null when no single spelling reaches two. */
@@ -238,13 +253,14 @@ final class DefaultRepeatedArgument implements Check implements DefaultOff imple
 
 	/** Whether parameter `index` can lose its argument — it is last, or every later one already defaults. */
 	private static function defaultable(member: MemberInfo, index: Int, seams: Seams): Bool {
-		final param: QueryNode = member.params[index];
-		if (param.children.length != 0 || param.kind == seams.optionalParamKind || param.kind == seams.restParamKind) return false;
-		for (i in index + 1...member.params.length) {
-			final later: QueryNode = member.params[i];
-			if (later.children.length == 0 && later.kind != seams.optionalParamKind && later.kind != seams.restParamKind) return false;
-		}
+		if (!required(member.params[index], seams)) return false;
+		for (i in index + 1...member.params.length) if (required(member.params[i], seams)) return false;
 		return true;
+	}
+
+	/** Whether a parameter must be passed — no default, not optional, not rest. */
+	private static function required(param: QueryNode, seams: Seams): Bool {
+		return param.children.length == 0 && param.kind != seams.optionalParamKind && param.kind != seams.restParamKind;
 	}
 
 	/**

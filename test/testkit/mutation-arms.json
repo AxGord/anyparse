@@ -15850,6 +15850,21 @@
 			"method": "isEventUse",
 			"force": "true",
 			"note": "a string handed to the constructor of a class that is no event counts as a dispatch, and is reported as one of the wrong class"
+		},
+		{
+			"name": "M-DRA-MIDDLE-ARGUMENT",
+			"type": "anyparse.check.DefaultRepeatedArgument",
+			"method": "collectCalls",
+			"find": "final last: Int = args.length - 1;",
+			"replace": "final last: Int = 0;",
+			"note": "a constant that is not the call's last argument is counted, so the fix cuts it and every later argument slides one slot left"
+		},
+		{
+			"name": "M-DRA-SKIPPED-SLOT",
+			"type": "anyparse.check.DefaultRepeatedArgument",
+			"method": "requiredPrefix",
+			"force": "member.params.length",
+			"note": "an argument past an optional parameter is attributed to the parameter at its own index, though Haxe may have skipped a slot by type"
 		}
 	]
 }

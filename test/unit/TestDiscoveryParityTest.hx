@@ -1192,6 +1192,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.DeadSafeNavTest#testUnreadableOracleHxmlKeepsNoFix :: control :: M-DSN-HXML-UNREADABLE-PLAIN',
 			'unit.check.DeadSafeNavTest#testVisibleProofSurvivesAnUnseenRenarrowing :: control :: M-DSN-RENARROW-HIDES',
 			'unit.check.DeadSafeNavTest#testWrittenNameIsNotRestored :: control :: M-NULLFLOW-SHADOW-RESTORES-WRITTEN',
+			'unit.check.DefaultRepeatedArgumentCheckTest#testArgumentPastAnOptionalParameterNotCounted :: control :: M-DRA-SKIPPED-SLOT',
+			'unit.check.DefaultRepeatedArgumentCheckTest#testMiddleArgumentNeverDropped :: control :: M-DRA-MIDDLE-ARGUMENT',
 			'unit.check.DocLengthCheckTest#testOnlyADocBlockIsMeasured :: control :: M-DOC-LENGTH-ANY-COMMENT',
 			'unit.check.DocLengthCheckTest#testTheDeclaredMaximumIsRead :: control :: M-DOC-LENGTH-CONFIG-BLIND',
 			'unit.check.DocMeasurementClaimCheckTest#testANumericContractIsNotAReading :: control :: M-DOC-CLAIM-BARE-NUMBER',
@@ -5518,7 +5520,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-EVENT-NO-BASE-GATE',
 			'M-EVENT-NO-USE-GATE',
 			'M-EVENT-STATIC-VAR',
-			'M-EVENT-ANY-NEW-IS-A-USE'
+			'M-EVENT-ANY-NEW-IS-A-USE',
+			'M-DRA-MIDDLE-ARGUMENT',
+			'M-DRA-SKIPPED-SLOT'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
