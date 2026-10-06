@@ -1976,6 +1976,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.TypedFactsProbeTest#testAFileWrittenWhileTheCompileRanIsStale :: control :: M-FACTS-WRITTEN-DURING,M-FACTS-CHANGED-STALE',
 			'unit.check.TypedFactsProbeTest#testALostSplicedFactMarksItsNodeAndOnlyTheStdIsReflection :: control :: M-FACTS-STALE-FOREIGN,M-FACTS-REFLECTION-PATH',
 			'unit.check.TypedFactsProbeTest#testARangeMeetingTheBodyIsItsOwnCode :: control :: M-FACTS-ABSTRACT-THIS',
+			'unit.check.TypedFactsProbeTest#testAReflectiveCallRecordsTheLiteralItsNameArgumentHolds :: control :: '
+				+ 'M-FACTS-REFL-MEMBER-NAME,M-FACTS-REFL-MEMBER-NAME-ANY,M-FACTS-REFL-MEMBER-NAME-TABLE',
 			'unit.check.TypedFactsProbeTest#testAWriteOfAValueBuiltThereAndHandedNowhereIsFresh :: control :: M-FACTS-FRESH,M-FACTS-FRESH-DISCARDED',
 			'unit.check.TypedFactsProbeTest#testAbstractOperatorsConversionsAndAccessorsAreCallsOfTheirImplementations :: control :: M-FACTS-CALL-TARGET',
 			'unit.check.TypedFactsProbeTest#testAnElementWriteIsAWriteThroughTheArrayAtItsOwnRead :: control :: M-FACTS-ELEMENT-WRITE',
@@ -2937,6 +2939,10 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-REACH-REFLECT-RELATED,M-GRAPH-REFLECT-SUBTYPES',
 			'unit.query.MemberReachFactsTest#testAReflectiveAccessRunsTheAccessorsOfTheTypeItReachesUnderTheTruth :: control :: '
 				+ 'M-REACH-REFLECT-ADMIT',
+			'unit.query.MemberReachFactsTest#testAReflectiveAccessSplicedInNamesTheLiteralItsNameArgumentHoldsUnderTheTruth :: control :: '
+				+ 'M-FACTS-REFL-MEMBER-NAME,M-FACTS-REFL-MEMBER-NAME-ANY,M-HAZARDS-TRUTH-LITERAL-NAME,M-HAZARDS-TRUTH-LITERAL-FIRST-STRING',
+			'unit.query.MemberReachFactsTest#testAReflectiveAccessTheSyntaxReadsAsComputedNamesTheLiteralTheTypedTreeHandsItUnderTheTruth :: control :: '
+				+ 'M-HAZARDS-TRUTH-LITERAL-SEEN,M-HAZARDS-TRUTH-LITERAL-AGREE',
 			'unit.query.MemberReachFactsTest#testAReflectiveCallTheSyntaxDoesNotSeeNamesNothingUnderTheTruth :: control :: '
 				+ 'M-FACTS-TRUTH-REFLECTION,M-FACTS-TRUTH-REFLECTION-TWIN',
 			'unit.query.MemberReachFactsTest#testAReflectiveMemberReadAsAValueIsUnknown :: control :: M-FACTS-REACH-REFLECT-VALUE',
@@ -5301,7 +5307,14 @@ class TestDiscoveryParityTest extends Test {
 			'M-REACH-RUN-UNREAD',
 			'M-GRAPH-FACTS-NATIVE-CHAIN-SKIP',
 			'M-GRAPH-FACTS-NATIVE-CHAIN-ANY',
-			'M-SHAPE-PURE-GETENV'
+			'M-SHAPE-PURE-GETENV',
+			'M-FACTS-REFL-MEMBER-NAME',
+			'M-FACTS-REFL-MEMBER-NAME-ANY',
+			'M-FACTS-REFL-MEMBER-NAME-TABLE',
+			'M-HAZARDS-TRUTH-LITERAL-NAME',
+			'M-HAZARDS-TRUTH-LITERAL-FIRST-STRING',
+			'M-HAZARDS-TRUTH-LITERAL-SEEN',
+			'M-HAZARDS-TRUTH-LITERAL-AGREE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
@@ -5515,6 +5528,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-PARAM-ALIAS :: anyparse.check.TypedFactsWalk#root',
 			'M-FACTS-ARGUMENT-CAST :: anyparse.check.TypedFactsWalk#visit',
 			'M-FACTS-ABSTRACT-WRAPPED-CAST :: anyparse.check.TypedFactsWalk#visit',
+			'M-FACTS-REFL-MEMBER-NAME :: anyparse.check.TypedFactsWalk#reflection',
+			'M-FACTS-REFL-MEMBER-NAME-ANY :: anyparse.check.TypedFactsWalk#reflection',
+			'M-FACTS-REFL-MEMBER-NAME-TABLE :: anyparse.check.TypedFactsWalk#reflection',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

@@ -1043,13 +1043,17 @@ final class TypedFactsWalk {
 				named = ',"c":' + q(TypedFactsShapes.moduleTypeId(m));
 			case _:
 		}
+		// the member the call names: the literal its name argument holds, through what leaves a value as it is
+		final at: Null<Int> = TypedFactsShapes.NAME_ARGUMENTS[targetName];
+		final member: Null<String> = at == null || at >= args.length ? null : TypedFactsShapes.literalText(args[at]);
+		final spelled: String = member == null ? '' : ',"m":' + Json.stringify(member);
 		final first: Null<TypedExpr> = args.length > 0 ? args[0] : null;
 		final receiver: String = first == null
 			? ''
 			: ',"r":${q(sourceType(first))}' + (exactObject(first) ? ',"x":true' : '') + (isThis(first) ? ',"h":true' : '') + (
 				freshStructure(first) ? ',"o":true' : ''
 			);
-		add('refl', '{"t":${q(targetName)}$literal$named$receiver,"p":$where}');
+		add('refl', '{"t":${q(targetName)}$literal$spelled$named$receiver,"p":$where}');
 	}
 
 	/**

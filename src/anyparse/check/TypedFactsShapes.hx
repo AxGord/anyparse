@@ -55,6 +55,20 @@ final class TypedFactsShapes {
 	public static final REFLECTION_CLASSES: Array<String> = ['Reflect', 'Type'];
 
 	/**
+	 * The reflective members that name a member of the object they act on, each with the index of its argument holding the
+	 * name (`Reflect.field(o, name)` -> 1): the grammar's `reflectiveNameCalls`, which the facts' reader holds. A positive list:
+	 * a call of any other names no member, whatever literal it is handed.
+	 */
+	public static final NAME_ARGUMENTS: Map<String, Int> = [
+		'Reflect.field' => 1,
+		'Reflect.setField' => 1,
+		'Reflect.getProperty' => 1,
+		'Reflect.setProperty' => 1,
+		'Reflect.hasField' => 1,
+		'Reflect.deleteField' => 1
+	];
+
+	/**
 	 * The target code a native call with the arguments `args` pastes into the output, as the tail of its `native` fact:
 	 * `c`, the text of its first argument when that is a string literal; `cc` when the call carries code (`carrying`) whose
 	 * text is computed; nothing for a call that carries none — a target function handed its arguments.

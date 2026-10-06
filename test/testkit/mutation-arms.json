@@ -11925,8 +11925,8 @@
 			"name": "M-FACTS-REFL-RECEIVER",
 			"type": "anyparse.check.TypedFactsWalk",
 			"method": "reflection",
-			"find": "add('refl', '{\"t\":${q(targetName)}$literal$named$receiver,\"p\":$where}');",
-			"replace": "add('refl', '{\"t\":${q(targetName)}$literal$named,\"p\":$where}');",
+			"find": "add('refl', '{\"t\":${q(targetName)}$literal$spelled$named$receiver,\"p\":$where}');",
+			"replace": "add('refl', '{\"t\":${q(targetName)}$literal$spelled$named,\"p\":$where}');",
 			"note": "a reflective call records nothing of the object it acts on, so every access by a computed name may reach any member"
 		},
 		{
@@ -14918,6 +14918,62 @@
 			"find": "'StringBuf.toString',\n\t\t\t\t\t// reads the process environment: no callback, on every target\n\t\t\t\t\t'Sys.getEnv'\n",
 			"replace": "'StringBuf.toString'\n",
 			"note": "(precision) an environment read may run project code"
+		},
+		{
+			"name": "M-FACTS-REFL-MEMBER-NAME",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "reflection",
+			"find": "$literal$spelled$named$receiver",
+			"replace": "$literal$named$receiver",
+			"note": "(precision) a reflective call records no member its name argument names by a literal"
+		},
+		{
+			"name": "M-FACTS-REFL-MEMBER-NAME-ANY",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "reflection",
+			"find": "TypedFactsShapes.literalText(args[at])",
+			"replace": "TypedFactsShapes.literalText(args[args.length - 1])",
+			"note": "the member a reflective call names is its last argument's literal: the value `setField` stores"
+		},
+		{
+			"name": "M-FACTS-REFL-MEMBER-NAME-TABLE",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "reflection",
+			"find": "final at: Null<Int> = TypedFactsShapes.NAME_ARGUMENTS[targetName];",
+			"replace": "final at: Null<Int> = TypedFactsShapes.NAME_ARGUMENTS[targetName] ?? 1;",
+			"note": "every reflective call names a member by its second argument: `Type.createEnum`'s constructor name too"
+		},
+		{
+			"name": "M-HAZARDS-TRUTH-LITERAL-NAME",
+			"type": "anyparse.query.ReachHazards",
+			"method": "underTruth",
+			"find": "kind: ReflectiveName(r.memberName),",
+			"replace": "kind: ReflectiveName(null),",
+			"note": "(precision) a reflective access only the facts see computes its name, a literal its name argument holds too"
+		},
+		{
+			"name": "M-HAZARDS-TRUTH-LITERAL-FIRST-STRING",
+			"type": "anyparse.query.ReachHazards",
+			"method": "underTruth",
+			"find": "kind: ReflectiveName(r.memberName),",
+			"replace": "kind: ReflectiveName(r.name),",
+			"note": "a reflective access only the facts see names the first literal of any argument: the value `setField` stores"
+		},
+		{
+			"name": "M-HAZARDS-TRUTH-LITERAL-SEEN",
+			"type": "anyparse.query.ReachHazards",
+			"method": "underTruth",
+			"find": "kind: ReflectiveName(literalAt(h.span)),",
+			"replace": "kind: h.kind,",
+			"note": "(precision) a reflective access the syntax reads a computed name off computes it, whatever literal the typed tree hands it"
+		},
+		{
+			"name": "M-HAZARDS-TRUTH-LITERAL-AGREE",
+			"type": "anyparse.query.ReachHazards",
+			"method": "underTruth",
+			"find": "return first != null && facts.foreach(r -> r.memberName == first) ? first : null;",
+			"replace": "return first;",
+			"note": "a reflective access the syntax reads a computed name off names the literal one fact of it names, while another computes it"
 		}
 	]
 }
