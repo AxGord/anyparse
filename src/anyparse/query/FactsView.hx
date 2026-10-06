@@ -173,6 +173,12 @@ final class FactsView {
 	/** `Type.member` of the graph -> the typed type whose member it is alone (`soleMember`), or null, settled once. */
 	private final _soleMember: Map<String, Null<String>> = [];
 
+	/** Typed id -> whether the index holds no text of it under a name it declares (`unheld`), settled once. */
+	private final _unheld: Map<String, Bool> = [];
+
+	/** Simple name -> the index's declarations of a type so named (`declarationsNamed`), built on first need. */
+	private var _declarationsNamed: Null<Map<String, Array<IndexedDeclaration>>> = null;
+
 	private final _scope: ReachProject;
 
 	/** Graph type name -> the typed types standing for it, built on first need. */
@@ -205,6 +211,8 @@ final class FactsView {
 		_alike.clear();
 		_sole.clear();
 		_soleMember.clear();
+		_unheld.clear();
+		_declarationsNamed = null;
 		_argumentUses = null;
 	}
 
@@ -356,6 +364,26 @@ final class FactsView {
 	}
 
 	/**
+	 * Under the truth, whether the raw conditional region `span` of `file` — one the syntax does not parse — hides nothing
+	 * the facts do not show: the innermost graph node holding it whole is faceted (`faceted`), read through what every build
+	 * compiling it typed there, the branch each took among it, and no fact in the region names one of `names` by a field
+	 * access or a call — library code is searched for an access of a member by its text alone
+	 * (`MemberReach.libraryAccesses`), which the region keeps from the syntax. `node` is the graph node the code holding the
+	 * region is read as (`faceted`). False otherwise, and when a fact there has no place (`CompilerFacts.within`).
+	 */
+	public function rawRegionRead(g: CallGraph, file: String, span: Span, node: String, names: Array<String>): Bool {
+		if (!truth || !faceted(g, file, span, node)) return false;
+		final harmless: (callee:String) -> Bool = harmlessSplice.bind(g);
+		final fields: Null<Array<FieldFact>> = table.within(file, span, n -> n.fields, f -> f.at, true, harmless);
+		final calls: Null<Array<CallFact>> = table.callsIn(file, span, true, harmless);
+		if (fields == null || calls == null) return false;
+		inline function named(target: Null<String>): Bool {
+			return target != null && names.contains(target.substr(target.lastIndexOf('.') + 1));
+		}
+		return !fields.exists(f -> names.contains(f.field)) && !calls.exists(c -> named(c.target));
+	}
+
+	/**
 	 * Whether the innermost graph node holding `span` of `file` is faceted: its facts replace its syntax. What holds `span`
 	 * is one declaration of the node (`CallGraph.declarationAt`), which may be another than the one its `span` names. A
 	 * node reading that one as one type's member (`CallGraphFacts.qualify`) is asked instead when `node` names it and that
@@ -474,16 +502,73 @@ final class FactsView {
 	/** The typed subtypes of `type` that declare an instance method `name`, by graph id: overrides a dispatch on it reaches. */
 	public function overrides(g: CallGraph, type: String, name: String): Array<String> {
 		final out: Array<String> = [];
-		for (sub in table.subtypesOf(CompilerFacts.baseId(type))) {
-			final declared: Null<TypeFact> = table.type(sub);
-			if (declared == null || !declared.fields.exists(f ->
-				f.name == name && !f.isStatic && f.kinds.exists(k -> METHOD_KINDS.contains(k))
-			))
-				continue;
+		for (sub in overriders(type, name)) {
 			final graphed: String = graphType(sub);
 			final id: String = g.ownMember(graphed, name) ?? g.externalNode(graphed, name);
 			if (!out.contains(id)) out.push(id);
 		}
+		return out;
+	}
+
+	/** The typed subtypes of `type` that declare an instance method `name`, by typed id (`overrides`). */
+	public function overriders(type: String, name: String): Array<String> {
+		return [
+			for (sub in table.subtypesOf(CompilerFacts.baseId(type)))
+				if (
+					table.type(sub)?.fields.exists(f ->
+						f.name == name && !f.isStatic && f.kinds.exists(k -> METHOD_KINDS.contains(k))
+					) == true
+				)
+					sub
+		];
+	}
+
+	/**
+	 * Under the truth, whether the typed type `owner` is code the index holds no text of while it declares the simple name
+	 * the graph calls `owner` by (`graphType`): no declaration of that name the index holds lies in a file a build read the
+	 * type from (`CompilerFacts.typeHomes`, of `owner` or of the type it is written as, `rootOf`) — the one it holds is in a
+	 * branch no build compiles of another file, or another package's type — nor is one a stand-in for it: a declaration of
+	 * its very id in a file no build read (the built-in array type's, written nowhere). The graph's node of that name is
+	 * then another type's code, never `owner`'s, and a fact naming `owner` must not be read as it. A file holds one package,
+	 * and the index folds the declarations of a name in the branches of one file into one: a declaration in a file the type
+	 * was read from is its text, whatever id the index spells it with. False without the truth, for a name the index
+	 * declares nowhere — the graph reads such a type as a library placeholder, by its own rules — and for a typedef, which
+	 * declares no code.
+	 */
+	public function unheld(owner: String): Bool {
+		if (!truth) return false;
+		final id: String = CompilerFacts.baseId(owner);
+		final known: Null<Bool> = _unheld[id];
+		if (known != null) return known;
+		final root: Null<String> = rootOf(id);
+		final declared: Array<IndexedDeclaration> = declarationsNamed()[graphType(id)] ?? [];
+		final types: Array<String> = root == null || root == id ? [id] : [id, root];
+		final homes: Array<String> = [for (t in types) for (h in table.typeHomes(t)) h.file];
+		final held: Bool = declared.exists(d -> homes.contains(d.key) || (!d.read && types.contains(d.id)));
+		final answer: Bool = table.type(id)?.kind != TYPEDEF_KIND && declared.length > 0 && !held;
+		_unheld[id] = answer;
+		return answer;
+	}
+
+	/**
+	 * Simple name -> the index's declarations of a type so named: the package-qualified id of each (`declaredId`), its
+	 * file's table key, and whether a build read that file (`CompilerFacts.mayCompileNow`). A typedef aliasing a type of
+	 * its own name (`CallGraphNames.selfAlias`) declares none. Built once.
+	 */
+	private function declarationsNamed(): Map<String, Array<IndexedDeclaration>> {
+		final held: Null<Map<String, Array<IndexedDeclaration>>> = _declarationsNamed;
+		if (held != null) return held;
+		final out: Map<String, Array<IndexedDeclaration>> = [];
+		for (fi in _scope.index.allFiles()) {
+			final key: String = table.keyOf(fi.file);
+			final read: Bool = table.mayCompileNow(fi.file);
+			for (t in fi.types) if (!CallGraphNames.selfAlias(t)) {
+				final list: Array<IndexedDeclaration> = out[t.name] ?? [];
+				list.push({ id: declaredId(fi, t), key: key, read: read });
+				out[t.name] = list;
+			}
+		}
+		_declarationsNamed = out;
 		return out;
 	}
 
@@ -1412,4 +1497,14 @@ private typedef TypeText = {
 	final source: String;
 	final span: Span;
 	final info: Null<TypeDeclInfo>;
+}
+
+/**
+ * A declaration of a type the index holds (`FactsView.declarationsNamed`): its package-qualified id as the index spells it,
+ * its file's table key, and whether a build read that file.
+ */
+private typedef IndexedDeclaration = {
+	final id: String;
+	final key: String;
+	final read: Bool;
 }

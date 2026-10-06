@@ -1914,6 +1914,14 @@ final class MemberReach {
 				implicit.push(o.id)
 			else
 				owned.push(o);
+			for (at in site.implicit) {
+				// a type whose text the index does not hold runs members no implicit candidate stands for (`ReachGraph.unheldAt`)
+				final unheld: Null<String> = _g.unheldAt(g, at);
+				if (unheld != null)
+					blind = blind ?? UnresolvedDispatch(
+						site.file, at.span, 'the implicit calls of `$unheld`, a type whose text the index does not hold'
+					);
+			}
 			// the methods of an object reflection reaches by name are each the member of the type the facts name
 			for (o in site.owned ?? []) owned.push(o);
 			for (id in implicit) if (admission.closure.exists(id) && !ids.contains(id)) ids.push(id);
@@ -2130,6 +2138,8 @@ final class MemberReach {
 								if (types == null || types.length > 0 || values || classes.length > 0)
 									admit(nativeSite(g, from, entry.file, h.span, types, values, classes));
 						}
+					// a raw conditional region the facts read whole holds each build's branch among them (`FactsView.rawRegionRead`)
+					case Opaque if (_scope.facts?.rawRegionRead(g, entry.file, h.span, from, ownNames) == true):
 					case _:
 						blind = blind ?? firstBlind(entry.file, [h]);
 				}

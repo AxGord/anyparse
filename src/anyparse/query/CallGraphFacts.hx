@@ -404,12 +404,26 @@ final class CallGraphFacts {
 				else
 					g.addEdge(node.id, id, run, null, node.file, span);
 			case 'super':
-				superCall(g, node, view.graphType(ownerOf(target ?? '')), span, run);
+				final owner: String = ownerOf(target ?? '');
+				if (view.unheld(owner))
+					unresolved(Unseen('the super constructor of `$owner`, a type whose text the index does not hold'))
+				else
+					superCall(g, node, view.graphType(owner), span, run);
 			case 'FInstance', 'FStatic', 'FClosure', 'inlined', 'fieldValue' if (target != null):
 				declaredCall(g, node, c, target, span, view, deferred, unresolved);
 			case _:
 				unresolved(Unseen('a call the facts record as `${c.access}`'));
 		}
+	}
+
+	/** Record, from `node` at `span`, a site whose code the graph holds no node for (`Unseen`): `what` it runs. */
+	private static function unseen(g: CallGraph, node: FnNode, span: Null<Span>, what: String): Void {
+		g.unresolved.push({
+			file: node.file,
+			span: span,
+			from: node.id,
+			reason: Unseen(what)
+		});
 	}
 
 	/** A `super(…)` call of the constructor of `type`: its edge and the run of the initializers it executes. */
@@ -438,6 +452,11 @@ final class CallGraphFacts {
 		// a conversion call is the string-conversion site of its argument, not library code
 		if (view.convertsToString(target)) return;
 		final owner: String = ownerOf(target);
+		// a type the index holds no text of runs none of its namesake's code (`FactsView.unheld`)
+		if (view.unheld(owner)) {
+			unresolved(Unseen('`$target`, of a type whose text the index does not hold'));
+			return;
+		}
 		// an abstract's constructor is `_new` in its implementation class
 		final name: String = view.graphMember(owner, target.substr(target.lastIndexOf('.') + 1));
 		final type: String = view.graphType(owner);
@@ -476,6 +495,10 @@ final class CallGraphFacts {
 
 	/** A `new`: the edge to the constructor it names and the run of the initializers it executes, as `CallGraph` records one. */
 	private static function construction(g: CallGraph, node: FnNode, x: NewFact, span: Null<Span>, view: FactsView, deferred: Bool): Void {
+		if (view.unheld(x.type)) {
+			unseen(g, node, span, '`new ${CompilerFacts.baseId(x.type)}`, of a type whose text the index does not hold');
+			return;
+		}
 		final run: EdgeKind = deferred ? Ref : New;
 		final type: String = view.graphType(x.type);
 		final ctor: Null<String> = g.constructorTarget(type, g._shape.constructorName ?? 'new');
@@ -518,6 +541,11 @@ final class CallGraphFacts {
 			dynamicReceiver: f.access == 'FDynamic'
 		});
 		if (owner == null || !view.isMethod(owner, f.field)) return;
+		// a type the index holds no text of runs none of its namesake's code (`FactsView.unheld`)
+		if (view.unheld(owner)) {
+			unseen(g, node, span, '`$owner.${f.field}` read as a value, of a type whose text the index does not hold');
+			return;
+		}
 		final type: String = view.graphType(owner);
 		final id: String = g.memberOnChain(type, f.field) ?? g.externalNode(g.types.declaringTypeOf(type, f.field) ?? type, f.field);
 		final dispatch: Null<String> = f.access == 'FClosure' ? dispatchType(f.receiver, owner, view) : null;
@@ -559,6 +587,12 @@ final class CallGraphFacts {
 	private static function virtualEdges(
 		g: CallGraph, node: FnNode, dispatch: String, name: String, span: Null<Span>, kind: EdgeKind, view: FactsView
 	): Void {
+		// an override of a type the index holds no text of is none of its namesake's code (`FactsView.unheld`)
+		final unheld: Null<String> = view.overriders(dispatch, name).find(view.unheld);
+		if (unheld != null) {
+			unseen(g, node, span, '`$unheld.$name`, an override in a type whose text the index does not hold');
+			return;
+		}
 		final type: String = view.graphType(dispatch);
 		final targets: Array<String> = g.virtualTargets(type, name);
 		for (v in view.overrides(g, dispatch, name)) if (!targets.contains(v)) targets.push(v);

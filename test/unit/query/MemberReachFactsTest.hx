@@ -2492,7 +2492,7 @@ class MemberReachFactsTest extends Test {
 		assertMatch(interpAsk(['Main.hx' => region('var a = [new Obj()];')], STD_STRING), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-REACH-ARRAY-CTOR') @:killer('M-REACH-ARRAY-OWN')
+	@:pin('control') @:killer('M-REACH-ARRAY-CTOR') @:killer('M-REACH-ARRAY-OWN') @:killer('M-FACTS-UNHELD-STAND-IN')
 	public function testAConstructionOfTheBuiltInArrayIsHandedNothingUnderTheTruth(): Void {
 		// `new Array()` names a type and hands its target code no argument, no receiver and no function value: neither
 		// `Obj.toString` nor `Clear.run`, read as a value, runs — though both change `items`. The compiler's reading of what an
@@ -2743,6 +2743,135 @@ class MemberReachFactsTest extends Test {
 		assertMatch(question('rewrite', 'keep', true), r -> r.match(Reached(_)));
 		assertMatch(question(null, 'rewrite', true, 'new b.Endian().calm();'), r -> !r.match(Proven));
 		assertMatch(question(null, 'rewrite', false), r -> r.match(Unknown(Reification(_, _))));
+	}
+
+	@:pin('control') @:killer('M-FACTS-UNHELD-CALL') @:killer('M-FACTS-UNHELD-UNTRUE')
+	public function testACallOfATypeTheIndexDoesNotHoldIsNoCallOfItsNamesakeUnderTheTruth(): Void {
+		// the region calls `Endian.calm()`, which the builds type as the root package's `Endian` — rewritten to push onto
+		// `Main.items`. The index's one `Endian` is another: declared in `#if never` of a file the builds compile, or
+		// `a.Endian`, typed too, in another package. Neither is the type the call runs, so its code answers nothing about it.
+		// With no whole list of builds nothing changes
+		function question(declaration: String, indexed: Bool, build: String = 'rewrite', listed: Bool = true): ReachResult {
+			final root: String = '@:build(Mac.' + build + '())\nclass Endian {\n\tpublic static function calm():Void {}\n}\n';
+			final files: Map<String, String> = [
+				'Main.hx' => LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Endian.calm(); /*>*/ }\n'
+					+ '\t\tnew a.Endian.Holder();\n\t}\n}\n',
+				'a/Endian.hx' => 'package a;\n\n' + declaration + 'class Holder {\n\tpublic function new() {}\n}\n',
+				'Mac.hx' => BUILD_MACROS
+			];
+			if (indexed) files['Endian.hx'] = root;
+			final unindexed: Map<String, String> = indexed ? [] : ['Endian.hx' => root];
+			final result: ReachResult = ask(files, null, true, null, false, null, null, unindexed, listed);
+			Assert.equals('', lastDropped.join('; '), 'the fixture did not compile');
+			return result;
+		}
+		final never: String = '#if never\nclass Endian {\n\tpublic static function calm():Void {}\n}\n#end\n';
+		final elsewhere: String = 'class Endian {\n\tpublic static function calm():Void {}\n}\n\n';
+		assertMatch(question(never, false), r -> !r.match(Proven));
+		assertMatch(question(elsewhere, false), r -> !r.match(Proven));
+		// held, the root `Endian` is read as itself: its kept text answers, its rewritten one does not
+		assertMatch(question(never, true, 'keep'), r -> r.match(Proven));
+		assertMatch(question(never, true), r -> !r.match(Proven));
+		assertMatch(question(never, false, 'rewrite', false), r -> r.match(Unknown(Reification(_, _))));
+	}
+
+	@:pin('control') @:killer('M-FACTS-RAW-REGION') @:killer('M-FACTS-RAW-REGION-NAMES')
+	public function testARawConditionalRegionOfAFacetedFunctionIsItsFactsUnderTheTruth(): Void {
+		// `lib.Stack.str` returns through an expression-level conditional the syntax does not parse (tink's `Stack.toString`):
+		// a raw region. Under the truth the facts of `str`, read in its syntax's place, hold what each build compiled there,
+		// so the region hides nothing — unless a fact of `str` has no place (it is then read by its syntax), a fact in the
+		// region names the member (library code is scanned for an access of it by its text alone), or no whole list of builds
+		// is given
+		function question(branch: String, listed: Bool = true, marked: Bool = false): ReachResult {
+			final main: String = LOOP_HEAD
+				+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ lib.Stack.str(); /*>*/ }\n' + '\t}\n}\n';
+			final stack: String = 'package lib;\n\nclass Stack {\n\tpublic static function str():String\n\t\treturn\n\t\t\t#if never\n'
+				+ '\t\t\t\t"a";\n\t\t\t#else\n\t\t\t\t' + branch + ';\n\t\t\t#end\n}\n';
+			function run(): ReachResult {
+				final result: ReachResult = ask(
+					['Main.hx' => main], null, true, null, false, null, ['lib/Stack.hx' => stack], null, listed
+				);
+				Assert.equals('', lastDropped.join('; '), 'the fixture did not compile');
+				return result;
+			}
+			return marked ? rewritten(marking('lib.Stack.str', FUTURE_MARKER), run) : run();
+		}
+		assertMatch(question('"b"'), r -> r.match(Proven));
+		assertMatch(question('"b"', false), r -> r.match(Unknown(OutOfScope(_))));
+		assertMatch(question('"b"', true, true), r -> r.match(Unknown(OpaqueCond(_, _))));
+		assertMatch(question('{ Main.items = []; "b"; }'), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-FACTS-SUBTYPES-PROVENANCE')
+	public function testTheSubtypesOfTheOneDeclarationOfANameAreItsOwnUnderTheTruth(): Void {
+		// `xs` is what `a.Line.all` returns, a fresh array, so the region changes nothing it holds — when no subtype overrides
+		// `all`. `b.Line`, which the builds compile and the index does not hold, shares the simple name and has a subtype the
+		// index does not hold either: under the truth it is none of `a.Line`'s, whose own unheld subtype still refuses
+		function question(sub: String): ReachResult {
+			final files: Map<String, String> = [
+				'Main.hx' => 'class Main {\n\tpublic static var kept:Array<Int> = [1];\n\tstatic function main() {\n'
+					+ '\t\tfinal xs:Array<Int> = new a.Line().all();\n\t\tfor (i in 0...xs.length) { /*<*/ kept.push(xs[i]); /*>*/ }\n'
+					+ '\t\tnew b.Kid();\n\t}\n}\n',
+				'a/Line.hx' => 'package a;\n\nclass Line {\n\tpublic function new() {}\n\n'
+					+ '\tpublic function all():Array<Int> return [1];\n}\n'
+			];
+			final unindexed: Map<String, String> = [
+				'b/Line.hx' => 'package b;\n\nclass Line {\n\tpublic function new() {}\n}\n',
+				'b/Kid.hx' => 'package b;\n\nclass Kid extends ' + sub + ' {\n\tpublic function new() super();\n}\n'
+			];
+			final result: ReachResult = askLocal(files, 'xs', true, false, unindexed);
+			Assert.equals('', lastDropped.join('; '), 'the fixture did not compile');
+			return result;
+		}
+		assertMatch(question('b.Line'), r -> r.match(Proven));
+		assertMatch(question('a.Line'), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-FACTS-UNHELD-SUPER') @:killer('M-FACTS-UNHELD-NEW') @:killer('M-FACTS-UNHELD-VALUE')
+	@:killer('M-FACTS-UNHELD-OVERRIDE') @:killer('M-REACH-UNHELD-IMPLICIT') @:killer('M-REACH-UNHELD-REFLECTED')
+	@:killer('M-FACTS-UNHELD-HOMES') @:killer('M-FACTS-UNHELD-NAMED')
+	public function testNoReadOfATypeTheIndexDoesNotHoldIsOneOfItsNamesakeUnderTheTruth(): Void {
+		// the root package's `Endian` and `Sub`, which the builds compile, push onto `Main.items` wherever they run; the index
+		// holds neither, only a calm twin of each in `#if never` of `a/Endian.hx`, a file the builds compile. A construction, a
+		// super constructor, a method read as a value, an override a dispatch reaches, a string conversion and a method
+		// reflection reaches by a computed name each run the
+		// root type's code, none of the twin's. Held by the index alone, the root types answer as their text says
+		function question(region: String, ?before: String, ?more: String, ?indexed: Bool, ?loud: Bool): ReachResult {
+			final push: String = loud == false ? '' : 'Main.items.push(1); ';
+			final endian: String = 'class Endian {\n\tpublic function new() { ' + push + '}\n\n'
+				+ '\tpublic static function calm():Void { ' + push + '}\n\n' + '\tpublic function toString():String { ' + push
+				+ 'return ""; }\n}\n';
+			final sub: String = 'class Sub extends Base {\n\tpublic function new() super();\n\n' + '\toverride public function f():Void { '
+				+ push + '}\n}\n';
+			final twins: String = '#if never\nclass Endian {\n\tpublic function new() {}\n\n\tpublic static function calm():Void {}\n\n'
+				+ '\tpublic function toString():String return "";\n}\n\nclass Sub extends Base {\n\tpublic function new() super();\n\n'
+				+ '\toverride public function f():Void {}\n}\n#end\n';
+			final files: Map<String, String> = [
+				'Main.hx' => LOOP_HEAD + '\tstatic function main() {\n' + (
+					before ?? ''
+				) + '\t\tfor (i in 0...items.length) { /*<*/ ' + region + ' /*>*/ }\n\t\tnew a.Endian.Holder();\n\t}\n}\n\n' + (more ?? ''),
+				'Base.hx' => 'class Base {\n\tpublic function new() {}\n\n\tpublic function f():Void {}\n}\n',
+				'a/Endian.hx' => 'package a;\n\n' + (indexed == true ? '' : twins) + 'class Holder {\n\tpublic function new() {}\n}\n'
+			];
+			final roots: Map<String, String> = ['Endian.hx' => endian, 'Sub.hx' => sub];
+			if (indexed == true) for (name => text in roots) files[name] = text;
+			final result: ReachResult = ask(files, null, true, null, false, null, null, indexed == true ? [] : roots, true);
+			Assert.equals('', lastDropped.join('; '), 'the fixture did not compile');
+			return result;
+		}
+		final kid: String = 'class Kid extends Endian {\n\tpublic function new() super();\n}\n';
+		final made: String = '\t\tfinal e:Endian = new Endian();\n\t\tfinal b:Base = new Sub();\n';
+		function each(region: String, ?before: String, ?more: String, ?pos: haxe.PosInfos): Void {
+			assertMatch(question(region, before, more), r -> !r.match(Proven), pos);
+			assertMatch(question(region, before, more, true), r -> r.match(Reached(_)), pos);
+			assertMatch(question(region, before, more, true, false), r -> r.match(Proven), pos);
+		}
+		each('new Endian();');
+		each('new Kid();', null, kid);
+		each('final f:() -> Void = Endian.calm; f();');
+		each('b.f();', made);
+		each('final s:String = "" + e;', made);
+		each('Reflect.field(e, "c" + i);', made);
 	}
 
 	@:pin('control') @:killer('M-FACTS-FOLDED-BY-ID') @:killer('M-FACTS-SOLE-NEVER') @:killer('M-REACH-AMBIGUOUS-SOLE-NONE')
