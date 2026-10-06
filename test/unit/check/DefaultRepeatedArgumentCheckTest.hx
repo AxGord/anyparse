@@ -5,6 +5,8 @@ import anyparse.check.Check.Violation;
 import anyparse.check.DefaultRepeatedArgument;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CanonicalEdit;
+import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
 
@@ -84,12 +86,69 @@ class DefaultRepeatedArgumentCheckTest extends Test {
 
 	/**
 	 * Dropping the argument of a NON-trailing parameter would leave Haxe's type-directed skipping to
-	 * decide what the remaining arguments mean. The twin differs only in the later parameter's default.
+	 * decide what the remaining arguments mean. Both fixtures call with the constant LAST, so only the
+	 * later parameter's default differs.
 	 */
 	public function testNonTrailingParameterNotFlagged(): Void {
-		final call: String = 'class U {\n\tfunction f():Void {\n\t\tS.d(K.T, 1);\n\t\tS.d(K.T, 2);\n\t}\n}';
+		final call: String = 'class U {\n\tfunction f():Void {\n\t\tS.d(K.T);\n\t\tS.d(K.T);\n\t}\n}';
 		Assert.equals(0, violations('${CONST}class S {\n\tpublic static function d(ms:Int, o:Int):Bool return true;\n}\n$call').length);
 		Assert.equals(1, violations('${CONST}class S {\n\tpublic static function d(ms:Int, o:Int = 0):Bool return true;\n}\n$call').length);
+	}
+
+	/**
+	 * Haxe binds arguments by POSITION, so only a TRAILING argument can be dropped: cutting `K.T` out of
+	 * `S.d(K.T, 1)` leaves `S.d(1)`, which hands `1` to `ms`. Both types are `Int`, so it compiles and
+	 * silently changes what the call means. The twin passes the constant last and is flagged.
+	 */
+	@:pin('control')
+	@:killer('M-DRA-MIDDLE-ARGUMENT')
+	public function testMiddleArgumentNeverDropped(): Void {
+		final head: String = '${CONST}class S {\n\tpublic static function d(ms:Int, o:Int = 0):Bool return true;\n}\n';
+		Assert.equals(0, violations('${head}class U {\n\tfunction f():Void {\n\t\tS.d(K.T, 1);\n\t\tS.d(K.T, 2);\n\t}\n}').length);
+		Assert.equals(1, violations('${head}class U {\n\tfunction f():Void {\n\t\tS.d(K.T);\n\t\tS.d(K.T);\n\t}\n}').length);
+	}
+
+	/**
+	 * The TM shape, across fix passes. Pass one defaults `step` and drops the trailing `COARSE_STEP`; the
+	 * next pass must not then default `bottom` from the two `WIDE_*` calls, whose `WIDE_BOTTOM` is
+	 * followed by an explicit `WIDE_STEP` — dropping it bound `WIDE_STEP` to `bottom`. Every later pass
+	 * may only take a trailing argument off the shortened calls.
+	 */
+	public function testFixPassesNeverShiftArguments(): Void {
+		final wide: String = 'samples(WIDE_LEFT, WIDE_TOP, WIDE_RIGHT, WIDE_BOTTOM, WIDE_STEP)';
+		final fixed: String = fixToFixpoint(
+			'class G {\n\tstatic inline final W:Float = 800;\n\tstatic inline final H:Float = 600;\n\tstatic inline final COARSE_STEP:Float = 8;\n'
+			+ '\tstatic inline final WIDE_LEFT:Float = -1;\n\tstatic inline final WIDE_TOP:Float = -2;\n\tstatic inline final WIDE_RIGHT:Float = 9;\n'
+			+ '\tstatic inline final WIDE_BOTTOM:Float = 7;\n\tstatic inline final WIDE_STEP:Float = 4;\n'
+			+ '\tstatic function samples(left:Float, top:Float, right:Float, bottom:Float, step:Float):Int return 0;\n'
+			+ '\tfunction f():Void {\n\t\tsamples(0, 0, W, H, COARSE_STEP);\n\t\tsamples(0, 0, W, H, COARSE_STEP);\n'
+			+ '\t\tsamples(0, 0, W, H, COARSE_STEP);\n\t\t$wide;\n\t\t$wide;\n\t}\n}'
+		);
+		Assert.equals(2, fixed.split(wide).length - 1);
+		Assert.isTrue(fixed.contains('step:Float = COARSE_STEP'));
+		Assert.isFalse(fixed.contains('bottom:Float = WIDE_BOTTOM'));
+	}
+
+	/**
+	 * Argument `j` is parameter `j` only across the leading run of REQUIRED parameters: past an optional
+	 * one Haxe may have skipped a slot by type. In `S.d(1, K.T)` against `(?s:String, x:Int, y:Int = 9)`
+	 * the `1` skips `s` and `K.T` lands on `y`, so defaulting `x` and dropping `K.T` would turn `y` into
+	 * `9`. The twin differs only in the `?`.
+	 */
+	@:pin('control')
+	@:killer('M-DRA-SKIPPED-SLOT')
+	public function testArgumentPastAnOptionalParameterNotCounted(): Void {
+		final call: String = 'class U {\n\tfunction f():Void {\n\t\tS.d(%, K.T);\n\t\tS.d(%, K.T);\n\t}\n}';
+		final decl: String = '${CONST}class S {\n\tpublic static function d(%s:String, x:Int, y:Int = 9):Bool return true;\n}\n';
+		Assert.equals(0, violations(decl.replace('%', '?') + call.replace('%', '1')).length);
+		Assert.equals(1, violations(decl.replace('%', '') + call.replace('%', '"a"')).length);
+	}
+
+	/** A rest parameter takes the arguments after the dropped one, so `S.d(K.T, 1)` must keep its `K.T`. */
+	public function testArgumentBeforeRestNotDropped(): Void {
+		final head: String = '${CONST}class S {\n\tpublic static function d(ms:Int, ...r:Int):Bool return true;\n}\n';
+		Assert.equals(0, violations('${head}class U {\n\tfunction f():Void {\n\t\tS.d(K.T, 1);\n\t\tS.d(K.T, 1);\n\t}\n}').length);
+		Assert.equals(1, violations('${head}class U {\n\tfunction f():Void {\n\t\tS.d(K.T);\n\t\tS.d(K.T);\n\t}\n}').length);
 	}
 
 	/**
@@ -137,15 +196,15 @@ class DefaultRepeatedArgumentCheckTest extends Test {
 	}
 
 	/**
-	 * A call that does not fill every slot may have bound its values by Haxe's type-directed
-	 * SKIPPING, so argument index and parameter index need not agree — such a call is not counted.
-	 * The full-arity twin is flagged.
+	 * A call that leaves a defaulted parameter out still binds its leading REQUIRED arguments by
+	 * position, so its trailing constant counts. The full-arity calls carry `"y"` after the constant and
+	 * are refused — their `K.T` is not trailing.
 	 */
-	public function testPartialArgumentListNotCounted(): Void {
+	public function testShortCallTrailingArgumentCounted(): Void {
 		final tail: String = 'class U {\n\tfunction f():Void {\n\t\tS.d(%);\n\t\tS.d(%);\n\t}\n}';
 		final head: String = '${CONST}class S {\n\tpublic static function d(ms:Int, o:String = "x"):Bool return true;\n}\n';
-		Assert.equals(0, violations(head + tail.replace('%', 'K.T')).length);
-		Assert.equals(1, violations(head + tail.replace('%', 'K.T, "y"')).length);
+		Assert.equals(1, violations(head + tail.replace('%', 'K.T')).length);
+		Assert.equals(0, violations(head + tail.replace('%', 'K.T, "y"')).length);
 	}
 
 	/** A parameter that ALREADY has a default is not this rule's business, however often it is overridden. */
@@ -161,6 +220,23 @@ class DefaultRepeatedArgumentCheckTest extends Test {
 
 	private function violations(src: String): Array<Violation> {
 		return new DefaultRepeatedArgument().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	/** `src` after applying the cross-file fix pass after pass until a pass finds nothing — the `--fix` loop. */
+	private function fixToFixpoint(src: String): String {
+		var text: String = src;
+		for (_ in 0...8) {
+			final check: DefaultRepeatedArgument = new DefaultRepeatedArgument();
+			final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: text }];
+			final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+			final edits: Array<{ span: Span, text: String }> = [];
+			for (group in check.crossFileFix(files, check.run(files, plugin), plugin))
+				for (slice in group)
+					for (e in slice.edits) edits.push(e);
+			if (edits.length == 0) return text;
+			text = CanonicalEdit.applyEdits(text, edits);
+		}
+		return text;
 	}
 
 	/** How many edits the cross-file fix would make for `src` — one default plus one per agreeing site. */
