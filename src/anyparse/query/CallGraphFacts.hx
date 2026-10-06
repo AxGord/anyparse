@@ -64,6 +64,9 @@ final class CallGraphFacts {
 	/** The field kind of a method the program may reassign (`TypeFact.fields`). */
 	private static inline final DYNAMIC_FIELD: String = 'dynamic';
 
+	/** The call accesses by a name off a value of no class or a structure (`CallFact.access`). */
+	private static final DYNAMIC_CALLS: Array<String> = ['FDynamic', 'FAnon'];
+
 	/** The view over the table the graph reads. */
 	public final view: FactsView;
 
@@ -291,7 +294,7 @@ final class CallGraphFacts {
 	 */
 	private static function record(g: CallGraph, node: FnNode, facts: Array<FactNode>, view: FactsView, deferred: Bool = false): Void {
 		for (n in facts) {
-			for (c in n.calls) {
+			for (c in n.calls) if (!view.truth || !nativeChained(n, c)) {
 				final own: Null<FactPos> = c.site;
 				final inlined: Null<Array<Span>> = c.access != INLINED ? null : own == null ? [] : [own.span];
 				filed(g, node, n, c.at, view, inlined, span -> call(g, node, c, span, view, deferred));
@@ -300,6 +303,24 @@ final class CallGraphFacts {
 			for (f in n.fields) filed(g, node, n, f.at, view, null, span -> field(g, node, f, span, view));
 			for (id in n.fns) nested(g, node, n, id, view);
 		}
+	}
+
+	/**
+	 * Whether the call `c` of `n` is the call a field chain rooted at a native identifier makes (`__global__.String.create(…)`,
+	 * a call by name off an object of target code): the native fact at the chain's root, whose code spells the chain down to
+	 * the called name and which is handed the call's arguments, answers for it under the truth, where that fact is read as a
+	 * native site — target code reaches only what it is handed (`MemberReach`'s native verdict), so the call is no dispatch
+	 * by name on a program object.
+	 */
+	private static function nativeChained(n: FactNode, c: CallFact): Bool {
+		final receiver: Null<FactPos> = c.receiverAt;
+		final target: Null<String> = c.target;
+		if (receiver == null || target == null || !DYNAMIC_CALLS.contains(c.access)) return false;
+		return n.natives.exists(x -> {
+			final code: Null<String> = x.code;
+			code != null && !x.computed && StringTools.endsWith(code, '.$target') && x.at.file == receiver.file
+			&& x.at.span.from == receiver.span.from;
+		});
 	}
 
 	/**

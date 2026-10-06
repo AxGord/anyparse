@@ -1785,6 +1785,82 @@ final class MemberReach {
 				span: e.span
 			};
 		}
+
+		// the implicit-call sites of the code a call at `site` may run without the walk entering it, when it may run nothing but
+		// the function expressions the invocations of its method hand the parameter it calls (`FunctionValueTypes.handedValues`)
+		// and all of that code is read through its compiler facts, where they are the truth: those functions and every function
+		// they invoke or hand on as values, a dispatch's overrides among them, each file read as the walk would read it. Code the
+		// walk does not enter reaches no toucher by an edge or a channel (`ReachAdmission.of`), so only an implicit call there
+		// may: a string conversion or an iteration its facts spell (`FactsView.sitesIn`). Null when some of it is not so read —
+		// library code whose file does not read, a body-less member that may run code, a name several types share, a dispatch on
+		// a library type whose overrides do not read — or the site has another channel (`onlyValues`)
+		function sitesRunBy(site: AdmissionSite): Null<Array<ImplicitSite>> {
+			final facts: Null<FactsView> = _scope.facts;
+			final values: Null<Array<FactPos>> = facts == null || !onlyValues(site) ? null : functionValues()?.handedValues(site.calledAt);
+			if (facts == null || values == null) return null;
+			final toRead: Array<String> = [];
+			for (v in values) {
+				// a function written in a file the graph has not read yet is read now: its code is what the call runs
+				final indexed: Null<FileInfo> = facts.indexedFile(v.file);
+				if (indexed == null || _g.loadFile(g, indexed.file) != null) return null;
+				final written: Array<String> = [
+					for (id in g.nodes.keys())
+						if (g.declarationsOf(id).exists(d -> facts.table.keyOf(d.file) == v.file && d.span.from == v.span.from)) id
+				];
+				if (written.length == 0) return null;
+				for (id in written) if (!toRead.contains(id)) toRead.push(id);
+			}
+			final seen: Map<String, Bool> = [for (id in toRead) id => true];
+			final out: Array<ImplicitSite> = [];
+			var i: Int = 0;
+			while (i < toRead.length) {
+				final id: String = toRead[i++];
+				final found: Null<FnNode> = g.node(id);
+				if (found == null) return null;
+				final type: Null<String> = found.typeName;
+				final name: Null<String> = found.name;
+				// library code that runs no project code runs no implicit call of it either, read or not
+				if (type != null && name != null && (found.isExternal || found.isBodyless) && _g.runsNoUserCode(g, type, name, true))
+					continue;
+				// library code not read yet is read now, from the file declaring its type
+				final owner: Null<String> = !found.isExternal || type == null ? null : _scope.siteOf(type)?.file;
+				if (owner != null && _g.loadFile(g, owner) != null) return null;
+				final node: Null<FnNode> = owner == null ? found : g.node(id);
+				if (node == null || node.isExternal || sharedName(g, node)) return null;
+				// a body-less member the walk runs nothing for (`walk`): a declaration that only dispatches, a quiet extern's
+				if (node.isBodyless) {
+					if (type == null || name == null) return null;
+					if (g.types.meta.isExtern(type) && !_g.externQuiet(g, type, name)) return null;
+					continue;
+				}
+				final spans: Null<Array<Occurrence>> = bodySpans(g, node);
+				if (spans == null) return null;
+				for (d in spans) {
+					final typed: Null<Array<ImplicitSite>> = facts.sitesIn(g, d.file, d.span, node.id);
+					if (typed == null) return null;
+					for (at in typed) out.push(at);
+				}
+				for (e in g.outEdges(node.id)) if (e.kind.isInvocation() || e.kind == Ref) {
+					final targets: Array<String> = [e.to];
+					final dispatch: Null<String> = e.dispatchType;
+					final dispatched: Null<String> = g.node(e.to)?.name;
+					if (dispatch != null && dispatched != null) {
+						// a library type's overrides are read as a walk following the dispatch reads them (`follow`), unless the builds
+						// type no subtype of it
+						final typed: Array<String> = facts.bySimpleName()[dispatch] ?? [];
+						final extended: Bool = typed.length == 0 || typed.exists(t -> facts.table.subtypesOf(t).length > 0);
+						final library: Bool = !_projectSources.exists(_scope.siteOf(dispatch)?.file ?? '');
+						if (library && extended && _g.loadOverrides(g, dispatch, dispatched) != null) return null;
+						for (v in g.virtualTargets(dispatch, dispatched)) targets.push(v);
+					}
+					for (t in targets) if (!seen.exists(t)) {
+						seen[t] = true;
+						toRead.push(t);
+					}
+				}
+			}
+			return out;
+		}
 		function apply(site: AdmissionSite): Void {
 			final called: Null<String> = site.called;
 			final values: Null<FunctionValueTypes> = called == null ? null : functionValues();
@@ -1837,6 +1913,8 @@ final class MemberReach {
 		// again whenever the graph grew, and widened once it holds code read by its syntax one of them may run (`admitUnread`)
 		final narrowed: Array<AdmissionSite> = [];
 		final narrowedChannels: Array<String> = [];
+		// a value call's range -> the implicit-call sites of the code it runs (`sitesRunBy`), asked once
+		final ran: Map<String, Null<Array<ImplicitSite>>> = [];
 		function admitAlways(): Void {
 			if (alwaysAdmitted || !_syntaxEntered) return;
 			alwaysAdmitted = true;
@@ -1860,9 +1938,15 @@ final class MemberReach {
 		// runs one without a call the graph holds only at a string conversion or an iteration (`ReachGraph.typedImplicitIds`)
 		function admitUnread(site: AdmissionSite, again: Bool): Void {
 			if (unreadAdmitted || !runsUnreadCode(site)) return;
-			final channels: String = '${site.values} ${site.constructors} ${site.all == true}';
+			// a call of a value whose code is all read through its compiler facts runs the implicit calls they spell, and no
+			// other: no code read by its syntax, nor library code not read yet, elsewhere in the graph is code it may run
+			final calledAt: Null<FactPos> = site.calledAt;
+			final valueKey: String = '${site.called} ${calledAt?.file}:${calledAt?.span.from}:${calledAt?.span.to}';
+			if (onlyValues(site) && !ran.exists(valueKey)) ran[valueKey] = sitesRunBy(site);
+			final run: Null<Array<ImplicitSite>> = onlyValues(site) ? ran[valueKey] : null;
+			final channels: String = '${site.values} ${site.constructors} ${site.all == true}' + (run == null ? '' : ' $valueKey');
 			if (!again && narrowedChannels.contains(channels)) return;
-			final read: Bool = _admission.runsSyntaxRead(g, site.values, site.constructors, site.all == true);
+			final read: Bool = run == null && _admission.runsSyntaxRead(g, site.values, site.constructors, site.all == true);
 			if (!read && again) return;
 			if (read) {
 				unreadAdmitted = true;
@@ -1879,9 +1963,10 @@ final class MemberReach {
 				names: [],
 				values: false,
 				constructors: false,
-				always: true,
-				implicit: [],
-				ids: read ? _g.implicitIds(g) : _g.typedImplicitIds(g)
+				// code read through its facts spells every conversion as a call (`admitAlways`)
+				always: run == null,
+				implicit: run ?? [],
+				ids: read ? _g.implicitIds(g) : run == null ? _g.typedImplicitIds(g) : []
 			};
 			sites.push(unread);
 			apply(unread);
@@ -2542,6 +2627,12 @@ final class MemberReach {
 	 */
 	private static inline function runsUnreadCode(site: AdmissionSite): Bool {
 		return !site.always && (site.values || site.all == true || site.constructors);
+	}
+
+	/** Whether `site` runs nothing but the function values a call of a value of a function type, no `dynamic` method's, may run. */
+	private static inline function onlyValues(site: AdmissionSite): Bool {
+		return site.values && site.called != null && site.stored == null && !site.constructors && site.all != true
+			&& site.names.length == 0 && (site.ids ?? []).length == 0 && (site.owned ?? []).length == 0;
 	}
 
 	/**

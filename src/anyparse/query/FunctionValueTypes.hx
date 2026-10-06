@@ -79,6 +79,26 @@ final class FunctionValueTypes {
 	/** The field accesses of a write by name on a value of no class or on a structure (`FieldFact.access`). */
 	private static final UNTYPED_ACCESSES: Array<String> = ['FDynamic', 'FAnon'];
 
+	/**
+	 * Every call access the facts write (`CallFact.access`): a typed field's (`FInstance`, `FStatic`, `FClosure`, `FEnum`,
+	 * a replaceable field's `fieldValue`, a splice's `inlined`, `super`), one by name (`UNTYPED_ACCESSES`), and the calls
+	 * naming no field (`local`, `ident` — target code, read as such — and `value`). A call of any other access may run anything.
+	 */
+	private static final CALL_ACCESSES: Array<String> = [
+		'FInstance',
+		'FStatic',
+		'FClosure',
+		'FEnum',
+		'fieldValue',
+		'inlined',
+		'super',
+		'FDynamic',
+		'FAnon',
+		'local',
+		'ident',
+		'value'
+	];
+
 	/** The reflective members that write a field an object's name names. */
 	private static final REFLECTIVE_WRITERS: Array<String> = ['Reflect.setField', 'Reflect.setProperty'];
 
@@ -200,6 +220,16 @@ final class FunctionValueTypes {
 	public function admitted(g: CallGraph, candidates: Array<String>, called: String, at: Null<FactPos>): Array<String> {
 		final values: Null<Array<FactPos>> = at == null || !_view.truth ? null : argumentValues(at);
 		return values == null ? [for (id in candidates) if (mayRun(g, id, called)) id] : writtenAt(g, candidates, values);
+	}
+
+	/**
+	 * Where exactly the functions a call of the value read at `at` may run are written, under the truth, when that value is a
+	 * parameter its method's invocations hand function expressions (`argumentValues`); null when it is no such parameter and
+	 * when it may hold a function value that escaped (`ESCAPED_VALUES`).
+	 */
+	public function handedValues(at: Null<FactPos>): Null<Array<FactPos>> {
+		final values: Null<Array<FactPos>> = at == null || !_view.truth ? null : argumentValues(at);
+		return values == null || values.contains(ESCAPED_VALUES) ? null : values;
 	}
 
 	/**
@@ -330,9 +360,7 @@ final class FunctionValueTypes {
 	private function untypedStores(name: String, hierarchy: Array<String>, out: Array<FactPos>): Bool {
 		final table: CompilerFacts = _view.table;
 		final computedNames: Bool = _methods().declaredHolders(hierarchy).length > 0;
-		function named(code: Null<String>): Bool {
-			return code == null || FactsNativeReach.targetNames(code).contains(name);
-		}
+		if (targetCodeNames(name)) return false;
 		for (id in table.nodeIds()) {
 			final made: Null<FactNode> = table.node(id);
 			if (made == null) return false;
@@ -364,11 +392,6 @@ final class FunctionValueTypes {
 				if (values == null) return false;
 				for (v in values) out.push(v);
 			}
-			for (x in n.natives) if (x.computed || named(x.code ?? x.name)) return false;
-		}
-		for (tid in table.typeIds()) {
-			final fact: Null<TypeFact> = table.type(tid);
-			if (fact != null && (fact.code.exists(named) || fact.fields.exists(f -> f.code.exists(named)))) return false;
 		}
 		return true;
 	}
@@ -694,11 +717,12 @@ final class FunctionValueTypes {
 		if (!field.types.foreach(t -> arity(t) == count)) return null;
 		final hierarchy: Array<String> = [owner].concat(table.subtypesOf(owner));
 		final escaped: Null<Array<String>> = _escapedTypes();
-		// an object no flow let leave the type system is invoked only where its type is written: a method read as a value, or a
-		// field read by a name off it, lets it escape (`FactsEscapes`)
-		if (escaped == null || escaped.exists(e -> hierarchy.contains(e))) return null;
-		final callers: Array<String> = [owner].concat(table.supertypesOf(owner));
+		if (escaped == null) return null;
 		final out: Array<FactPos> = [];
+		// an object no flow let leave the type system is invoked only where its type is written: a method read as a value, or a
+		// field read by a name off it, lets it escape (`FactsEscapes`); one that left it may be invoked by the method's name too
+		if (escaped.exists(e -> hierarchy.contains(e)) && !untypedInvocations(name, hierarchy, index, count, out)) return null;
+		final callers: Array<String> = [owner].concat(table.supertypesOf(owner));
 		for (call in invocationsOf(name)) {
 			final target: String = call.target ?? '';
 			if (!callers.contains(CompilerFacts.baseId(target.substr(0, target.lastIndexOf('.'))))) continue;
@@ -707,6 +731,57 @@ final class FunctionValueTypes {
 			out.push(value);
 		}
 		return out;
+	}
+
+	/**
+	 * Add to `out` where the function expressions every call of the method `name` by its name hands its `index`-th of `count`
+	 * parameters are written, any of which may run on an object of a class `hierarchy` names that left the type system: a
+	 * call off a value of no class or a structure (`UNTYPED_ACCESSES`). False when the method may run otherwise: obtained as
+	 * a value (`FactsMethodValues.readAsValue` — a closure, a read by its name, reflection — which whatever calls it later
+	 * may hand anything), by target code whose text is computed or names it (`FactsNativeReach.targetNames`: target code
+	 * calls a method only by its name or through the reflection whose call sites the facts record), by a call of an access no
+	 * reader knows (`CALL_ACCESSES`), or by such a call handing that parameter anything but a function expression. A typed
+	 * call names the class whose method it runs (`invokedWith` reads those).
+	 */
+	private function untypedInvocations(name: String, hierarchy: Array<String>, index: Int, count: Int, out: Array<FactPos>): Bool {
+		if (_methods().readAsValue(name, hierarchy) || targetCodeNames(name)) return false;
+		final table: CompilerFacts = _view.table;
+		for (id in table.nodeIds()) {
+			final made: Null<FactNode> = table.node(id);
+			if (made == null) return false;
+			for (c in made.calls) {
+				final target: String = c.target ?? '';
+				if (target.substr(target.lastIndexOf('.') + 1) != name) continue;
+				if (!CALL_ACCESSES.contains(c.access)) return false;
+				if (!UNTYPED_ACCESSES.contains(c.access)) continue;
+				final value: Null<FactPos> = handed(c.at, index, count);
+				if (value == null) return false;
+				out.push(value);
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * Whether target code of the builds — a native site's, a type's or a field's metadata pasting code — names `name` or
+	 * has a text computed at run time (`FactsNativeReach.targetNames`): such code reaches a field of an object it holds by
+	 * its name, or through the reflection whose call sites the facts record. A node whose facts are lost may hold any.
+	 */
+	private function targetCodeNames(name: String): Bool {
+		final table: CompilerFacts = _view.table;
+		function named(code: Null<String>): Bool {
+			return code == null || FactsNativeReach.targetNames(code).contains(name);
+		}
+		for (id in table.nodeIds()) {
+			final n: Null<FactNode> = table.node(id);
+			if (n == null) return true;
+			for (x in n.natives) if (x.computed || named(x.code ?? x.name)) return true;
+		}
+		for (tid in table.typeIds()) {
+			final fact: Null<TypeFact> = table.type(tid);
+			if (fact != null && (fact.code.exists(named) || fact.fields.exists(f -> f.code.exists(named)))) return true;
+		}
+		return false;
 	}
 
 	/**

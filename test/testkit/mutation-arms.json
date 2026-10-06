@@ -8430,8 +8430,8 @@
 			"name": "M-FACTS-REACH-UNREAD-IMPLICIT",
 			"type": "anyparse.query.MemberReach",
 			"method": "walk",
-			"find": "ids: read ? _g.implicitIds(g) : _g.typedImplicitIds(g)",
-			"replace": "ids: _g.typedImplicitIds(g)",
+			"find": "ids: read ? _g.implicitIds(g) : run == null ? _g.typedImplicitIds(g) : []",
+			"replace": "ids: run == null ? _g.typedImplicitIds(g) : []",
 			"note": "code the walk never enters, read by its syntax, is taken to run no operator, index or literal member, only conversions and iterations"
 		},
 		{
@@ -8486,7 +8486,7 @@
 			"name": "M-REACH-UNREAD-NARROWED",
 			"type": "anyparse.query.MemberReach",
 			"method": "walk",
-			"find": "ids: read ? _g.implicitIds(g) : _g.typedImplicitIds(g)",
+			"find": "ids: read ? _g.implicitIds(g) : run == null ? _g.typedImplicitIds(g) : []",
 			"replace": "ids: _g.implicitIds(g)",
 			"note": "(precision) code read through facts that are the truth is taken to run any implicitly-called member, as code read by its syntax may"
 		},
@@ -12568,9 +12568,9 @@
 			"name": "M-VALUE-ARG-ESCAPED",
 			"type": "anyparse.query.FunctionValueTypes",
 			"method": "invokedWith",
-			"find": "if (escaped == null || escaped.exists(e -> hierarchy.contains(e))) return null;",
+			"find": "if (escaped.exists(e -> hierarchy.contains(e)) && !untypedInvocations(name, hierarchy, index, count, out)) return null;",
 			"replace": "",
-			"note": "a method of a class that escaped runs only at the typed calls of it"
+			"note": "a method of a class that escaped runs only at the typed calls of it, whatever is called by its name"
 		},
 		{
 			"name": "M-VALUE-ARG-SUPERTYPES",
@@ -12632,7 +12632,7 @@
 			"name": "M-VALUE-STORED-NATIVE",
 			"type": "anyparse.query.FunctionValueTypes",
 			"method": "untypedStores",
-			"find": "for (x in n.natives) if (x.computed || named(x.code ?? x.name)) return false;",
+			"find": "if (targetCodeNames(name)) return false;",
 			"replace": "",
 			"note": "target code naming a dynamic method is taken to store nothing into it"
 		},
@@ -12839,9 +12839,9 @@
 		{
 			"name": "M-METHODS-HOLDERS-SELF",
 			"type": "anyparse.query.FactsMethodValues",
-			"method": "selfBound",
-			"find": "(held.length == 0 || !reads.computed.exists(r -> mayBeOf(r, held)))",
-			"replace": "!reads.computed.exists(r -> mayBeOf(r, hierarchy))",
+			"method": "readAsValue",
+			"find": "(held.length > 0 && reads.computed.exists(r -> mayBeOf(r, held)))",
+			"replace": "reads.computed.exists(r -> mayBeOf(r, hierarchy))",
 			"note": "(precision) a read by a computed name may obtain the method of an undeclared class, so its `this` may be rebound to any object"
 		},
 		{
@@ -14799,6 +14799,125 @@
 			"find": "\t\tdropAhead(ahead);\n",
 			"replace": "",
 			"note": "the compiles started ahead answer a question asked after the run wrote, so the builds describe a tree that is gone"
+		},
+		{
+			"name": "M-VALUE-UNTYPED-VALUE-READ",
+			"type": "anyparse.query.FunctionValueTypes",
+			"method": "untypedInvocations",
+			"find": "if (_methods().readAsValue(name, hierarchy) || targetCodeNames(name)) return false;",
+			"replace": "if (targetCodeNames(name)) return false;",
+			"note": "a method of an escaped class read as a value, by its name or by reflection, is never called with anything else"
+		},
+		{
+			"name": "M-VALUE-UNTYPED-CALLS",
+			"type": "anyparse.query.FunctionValueTypes",
+			"method": "untypedInvocations",
+			"find": "if (!UNTYPED_ACCESSES.contains(c.access)) continue;",
+			"replace": "continue;",
+			"note": "a call by the method's name off a value of no class or a structure hands its parameter nothing"
+		},
+		{
+			"name": "M-VALUE-UNTYPED-ACCESS-UNKNOWN",
+			"type": "anyparse.query.FunctionValueTypes",
+			"method": "untypedInvocations",
+			"find": "if (!CALL_ACCESSES.contains(c.access)) return false;",
+			"replace": "",
+			"note": "a call of an access no reader knows, naming the method, runs nothing of it"
+		},
+		{
+			"name": "M-VALUE-UNTYPED-NATIVE",
+			"type": "anyparse.query.FunctionValueTypes",
+			"method": "untypedInvocations",
+			"find": "if (_methods().readAsValue(name, hierarchy) || targetCodeNames(name)) return false;",
+			"replace": "if (_methods().readAsValue(name, hierarchy)) return false;",
+			"note": "target code naming the method of an escaped object never calls it"
+		},
+		{
+			"name": "M-REACH-RUN-EDGES",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "for (e in g.outEdges(node.id)) if (e.kind.isInvocation() || e.kind == Ref) {",
+			"replace": "for (e in g.outEdges(node.id)) if (false) {",
+			"note": "a function value a call runs runs none of the functions it calls"
+		},
+		{
+			"name": "M-REACH-RUN-LOAD",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "final owner: Null<String> = !found.isExternal || type == null ? null : _scope.siteOf(type)?.file;",
+			"replace": "final owner: Null<String> = null;",
+			"note": "(precision) library code a value call runs, not read yet, is not read"
+		},
+		{
+			"name": "M-REACH-RUN-VALUE-FILES",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "if (indexed == null || _g.loadFile(g, indexed.file) != null) return null;",
+			"replace": "if (indexed == null) return null;",
+			"note": "(precision) a function a value call runs, written in a file not read yet, is not read"
+		},
+		{
+			"name": "M-REACH-RUN-QUIET",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "(found.isExternal || found.isBodyless) && _g.runsNoUserCode(g, type, name, true)",
+			"replace": "false",
+			"note": "(precision) a pure library call a value call runs leaves its code unknown"
+		},
+		{
+			"name": "M-REACH-RUN-SITES",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "for (at in typed) out.push(at);",
+			"replace": "",
+			"note": "the conversions and iterations of code a value call runs run nothing"
+		},
+		{
+			"name": "M-REACH-RUN-ALWAYS",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "always: run == null,",
+			"replace": "always: true,",
+			"note": "(precision) code read through its facts may still run a conversion it names no call of"
+		},
+		{
+			"name": "M-REACH-RUN-IDS",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "ids: read ? _g.implicitIds(g) : run == null ? _g.typedImplicitIds(g) : []",
+			"replace": "ids: read ? _g.implicitIds(g) : _g.typedImplicitIds(g)",
+			"note": "(precision) a value call whose code is all read runs every conversion and iteration of the program"
+		},
+		{
+			"name": "M-REACH-RUN-UNREAD",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "final read: Bool = run == null && ",
+			"replace": "final read: Bool = ",
+			"note": "(precision) library code not read elsewhere in the graph may run at a value call whose code is all read"
+		},
+		{
+			"name": "M-GRAPH-FACTS-NATIVE-CHAIN-SKIP",
+			"type": "anyparse.query.CallGraphFacts",
+			"method": "record",
+			"find": "for (c in n.calls) if (!view.truth || !nativeChained(n, c)) {",
+			"replace": "for (c in n.calls) {",
+			"note": "(precision) a call through a chain of target names is a dynamic call by its name too"
+		},
+		{
+			"name": "M-GRAPH-FACTS-NATIVE-CHAIN-ANY",
+			"type": "anyparse.query.CallGraphFacts",
+			"method": "nativeChained",
+			"force": "true",
+			"note": "every call by name off a value of no class is target code's"
+		},
+		{
+			"name": "M-SHAPE-PURE-GETENV",
+			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
+			"method": "refShape",
+			"find": "'StringBuf.toString',\n\t\t\t\t\t// reads the process environment: no callback, on every target\n\t\t\t\t\t'Sys.getEnv'\n",
+			"replace": "'StringBuf.toString'\n",
+			"note": "(precision) an environment read may run project code"
 		}
 	]
 }

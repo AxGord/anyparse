@@ -1302,7 +1302,7 @@ final class ReachGraph {
 		return out;
 	}
 
-	private function loadFile(g: CallGraph, file: String): Null<ReachUnknown> {
+	public function loadFile(g: CallGraph, file: String): Null<ReachUnknown> {
 		if (!_scope.sources.exists(file) && !_questionFiles.exists(file)) {
 			_questionFiles[file] = true;
 			if (++_questionFileCount > _maxLibraryFiles) return Budget('the walk grew into more than $_maxLibraryFiles library files');
