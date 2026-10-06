@@ -472,7 +472,8 @@ class MemberReachFactsTest extends Test {
 	 * (`Type.createEnum`, `haxe.DynamicAccess`).
 	 */
 	private static function reflectAsk(
-		files: Map<String, String>, interp: Bool = false, ?holders: Array<String>, listed: Bool = true, ?pos: haxe.PosInfos
+		files: Map<String, String>, interp: Bool = false, ?holders: Array<String>, listed: Bool = true,
+		?configurations: Array<Array<String>>, ?library: Map<String, String>, ?pos: haxe.PosInfos
 	): ReachResult {
 		final std: Null<String> = StdResolver.stdDir();
 		if (std == null) {
@@ -481,7 +482,7 @@ class MemberReachFactsTest extends Test {
 		}
 		final path: String = OracleCoverage.canonical(Sys.getCwd(), Path.join([std, interp ? 'Reflect.hx' : 'js/_std/Reflect.hx']));
 		final result: ReachResult = ask(
-			files, null, true, null, false, interp ? INTERP_BUILD : null, null, null, listed,
+			files, configurations, true, null, false, interp ? INTERP_BUILD : null, library, null, listed,
 			[path => sys.io.File.getContent(path)],
 			holders
 		);
@@ -2207,14 +2208,58 @@ class MemberReachFactsTest extends Test {
 
 	@:pin('control') @:killer('M-FACTS-TRUTH-REFLECTION') @:killer('M-FACTS-TRUTH-REFLECTION-TWIN')
 	public function testAReflectiveCallTheSyntaxDoesNotSeeNamesNothingUnderTheTruth(): Void {
-		// `rf` is `Reflect.field` under another name: the facts see the call, and the literal they record is the first of any
-		// argument, not the name; a call the syntax sees keeps the literal name it reads
+		// `rf` is `Reflect.field` under another name: the facts see the call, and a name computed at run time names nothing; a
+		// call the syntax sees keeps the literal name it reads
 		final main: String = 'import Reflect.field as rf;\n' + MEMBER_HEAD + '\tfunction f():Void {\n\t\tvar n = "it" + "ems";\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ rf(this, n); /*>*/ }\n\t}\n}\n';
 		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Unknown(DynamicName(_, _))));
 		final seen: String = MEMBER_HEAD
 			+ '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ Reflect.field(this, "other"); /*>*/ }\n\t}\n}\n';
 		assertMatch(truthAsk(['Main.hx' => seen]), r -> !r.match(Unknown(DynamicName(_, _))));
+	}
+
+	@:pin('control') @:killer('M-FACTS-REFL-MEMBER-NAME') @:killer('M-FACTS-REFL-MEMBER-NAME-ANY')
+	@:killer('M-HAZARDS-TRUTH-LITERAL-NAME') @:killer('M-HAZARDS-TRUTH-LITERAL-FIRST-STRING')
+	public function testAReflectiveAccessSplicedInNamesTheLiteralItsNameArgumentHoldsUnderTheTruth(): Void {
+		// `Peek.has` splices `Reflect.hasField(this, name)` into the region, where the typed tree hands it `o` and the literal
+		// `"other"`: one member, not `items`. `o` may be any object that left the type system, a `Main` among them, so a name
+		// computed at run time may be `items`, and so may `put`'s, whose only literal is the value `setField` stores. `Peek`'s
+		// own body reads its own `this`, a `Peek`; without the whole list of builds the syntax answers, and it sees no reflection
+		// in the region
+		function region(code: String): Map<String, String> {
+			return [
+				'Main.hx' => 'class Main {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n'
+					+ '\tstatic function main() { var e:Dynamic = new Main(); }\n\tfunction f(n:String, o:Peek):Void {\n'
+					+ '\t\tfor (i in 0...items.length) { /*<*/ ' + code + ' /*>*/ }\n\t}\n}\n',
+				'Peek.hx' => 'class Peek {\n\tpublic function new() {}\n\n'
+					+ '\tpublic inline function has(name:String):Bool return Reflect.hasField(this, name);\n\n'
+					+ '\tpublic inline function put(name:String):Void Reflect.setField(this, name, "v");\n}\n'
+			];
+		}
+		assertMatch(reflectAsk(region('o.has("other");'), true), r -> r.match(Proven));
+		assertMatch(reflectAsk(region('o.has(n);'), true), r -> r.match(Unknown(DynamicName(_, _))));
+		assertMatch(reflectAsk(region('o.put(n);'), true), r -> r.match(Unknown(DynamicName(_, _))));
+		assertMatch(reflectAsk(region('o.has("other");'), true, null, false), r -> r.match(Unknown(DynamicName(_, _))));
+	}
+
+	@:pin('control') @:killer('M-HAZARDS-TRUTH-LITERAL-SEEN') @:killer('M-HAZARDS-TRUTH-LITERAL-AGREE')
+	public function testAReflectiveAccessTheSyntaxReadsAsComputedNamesTheLiteralTheTypedTreeHandsItUnderTheTruth(): Void {
+		// `NAME` is an inline constant: the syntax reads an identifier, the typed tree the literal `"other"` it stands for; `n`
+		// is a name computed at run time in both. Where a build defining `other` declares `NAME` a variable, that build reads a
+		// name computed at run time at the same call
+		function region(code: String, name: String = 'static inline final NAME:String = "other";'): String {
+			return MEMBER_HEAD + '\t' + name + '\n\n\tfunction f(n:String):Void {\n\t\tfor (i in 0...items.length) { /*<*/ ' + code
+				+ ' /*>*/ }\n\t}\n}\n';
+		}
+		final named: String = 'Reflect.hasField(this, NAME);';
+		assertMatch(reflectAsk(['Main.hx' => region(named)], true), r -> r.match(Proven));
+		assertMatch(reflectAsk(['Main.hx' => region('Reflect.hasField(this, n);')], true), r -> r.match(Unknown(DynamicName(_, _))));
+		final varying: String = '#if other\n\tstatic var NAME:String = "x" + Std.random(2);\n\t#else\n'
+			+ '\tstatic inline final NAME:String = "other";\n\t#end';
+		assertMatch(
+			reflectAsk(['Main.hx' => region(named, varying)], true, null, true, [[], ['other']]), r -> r.match(Unknown(DynamicName(_, _)))
+		);
+		assertMatch(reflectAsk(['Main.hx' => region(named)], true, null, false), r -> r.match(Unknown(DynamicName(_, _))));
 	}
 
 	@:pin('control') @:killer('M-REACH-REFLECT-BOUND-NONE') @:killer('M-HAZARDS-REFLECT-RECEIVERS')

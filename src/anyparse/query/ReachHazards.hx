@@ -72,13 +72,14 @@ final class ReachHazards {
 
 	/**
 	 * The hazards of code whose compiler facts are the truth (`FactsView.truthSites`): `syntactic`, its hazards as the syntax
-	 * reads them, less those the facts record in full, plus a native site for each the
-	 * facts name, carrying its fact (`ReachHazard.native`), and a computed name for
-	 * each reflective access by name the syntax does not see (`typed`). The facts record a native call however it is
-	 * spelled — an alias, an import — and not one a class merely named `Syntax` makes, so the syntax's native calls go; an
-	 * `untyped` expression goes when it is built only of what the facts record (`untypedRecorded`). Every other hazard stays:
-	 * the facts do not say what they would stand for. A reflective call's recorded literal is the first of ANY argument,
-	 * not the name's, so one the syntax does not see names nothing. `root` is the tree the added hazards hang off.
+	 * reads them, less those the facts record in full, plus a native site for each the facts name, carrying its fact
+	 * (`ReachHazard.native`), and a reflective access by name for each one the syntax does not see (`typed`). The facts record
+	 * a native call however it is spelled — an alias, an import — and not one a class merely named `Syntax` makes, so the
+	 * syntax's native calls go; an `untyped` expression goes when it is built only of what the facts record (`untypedRecorded`).
+	 * Every other hazard stays: the facts do not say what they would stand for. A reflective access by name, seen or not, names
+	 * the member every build's fact of it names (`ReflectionFact.memberName`: the literal its name argument holds in the typed
+	 * tree, where an inlined call put it too); while one names none, the name is computed. `root` is the tree the added hazards
+	 * hang off.
 	 */
 	public function underTruth(syntactic: Array<ReachHazard>, typed: TruthSites, root: QueryNode): Array<ReachHazard> {
 		final named: Map<String, Int> = _shape.execution?.reflectiveNameCalls ?? [];
@@ -88,9 +89,15 @@ final class ReachHazards {
 				for (r in typed.reflection) if (named[r.target] == RECEIVER_NAME_INDEX && same(r.at.span, at)) r
 			];
 		}
+		// the member every build's fact at `at` names by the literal its name argument holds (`ReflectionFact.memberName`)
+		function literalAt(at: Span): Null<String> {
+			final facts: Array<ReflectionFact> = receiversAt(at);
+			final first: Null<String> = facts.length == 0 ? null : facts[0].memberName;
+			return first != null && facts.foreach(r -> r.memberName == first) ? first : null;
+		}
 		final out: Array<ReachHazard> = [
 			for (h in syntactic) if (!recordedWhole(h)) h.kind.match(ReflectiveName(null)) ? {
-				kind: h.kind,
+				kind: ReflectiveName(literalAt(h.span)),
 				span: h.span,
 				node: h.node,
 				receivers: receiversAt(h.span)
@@ -106,7 +113,7 @@ final class ReachHazards {
 			return syntactic.exists(h -> h.kind.match(ReflectiveName(_)) && same(h.span, at));
 		}
 		for (r in typed.reflection) if (named.exists(r.target) && !seen(r.at.span)) out.push({
-			kind: ReflectiveName(null),
+			kind: ReflectiveName(r.memberName),
 			span: r.at.span,
 			node: root,
 			receivers: receiversAt(r.at.span)

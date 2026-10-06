@@ -213,6 +213,15 @@ typedef IterationFact = {
 typedef ReflectionFact = {
 	final target: String;
 	final name: Null<String>;
+
+	/**
+	 * The member an access by name (`Reflect.field`, `setField`, `hasField`,
+	 * `TypedFactsShapes.NAME_ARGUMENTS`) names: the literal string its NAME argument
+	 * holds in the typed tree, after an inlined call put its argument there; null when that name is computed, for a call
+	 * that names no member, and in facts that do not record it.
+	 */
+	final memberName: Null<String>;
+
 	final typeArgument: Null<String>;
 
 	/** Whether the member (or the class itself) is read as a value, not called: whatever calls it later is reflection. */
@@ -1191,6 +1200,7 @@ final class CompilerFacts {
 				record.refl, r -> place(r.p), fresh.bind('refl'), (r, where) -> ({
 					target: r.t,
 					name: r.n,
+					memberName: r.m,
 					typeArgument: r.c,
 					isValue: r.v ?? false,
 					at: where,
@@ -1553,6 +1563,7 @@ private typedef NodeRecord = {
 	final ?refl: Array<{
 		t: String,
 		?n: String,
+		?m: String,
 		?c: String,
 		?v: Bool,
 		?r: String,

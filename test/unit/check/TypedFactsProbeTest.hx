@@ -210,6 +210,36 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
+	@:pin('control') @:killer('M-FACTS-REFL-MEMBER-NAME') @:killer('M-FACTS-REFL-MEMBER-NAME-ANY')
+	@:killer('M-FACTS-REFL-MEMBER-NAME-TABLE')
+	public function testAReflectiveCallRecordsTheLiteralItsNameArgumentHolds(): Void {
+		// the member a call names is the literal at its name argument: not a value `setField` stores, not an argument of a
+		// call that names no member (`Type.resolveClass` names a class, `Type.createEnum` a constructor). The interpreter's
+		// `Reflect` inlines none of them, as js's does `hasField` and `setField`
+		final scratch: Scratch = compile([
+			'Main.hx' => 'enum E { A; }\nclass Main { function new() {} static function main() {\n'
+			+ '\tvar m = new Main(); var n = "y" + Std.random(2);\n'
+			+ '\tReflect.hasField(m, "x"); Reflect.setField(m, n, "v"); Reflect.field(m, n); Type.resolveClass("Main");\n'
+			+ '\tType.createEnum(E, "A");\n} }\n'
+		], null, '-cp .\n-main Main\n--interp\n');
+		final main: Null<FactNode> = scratch.facts?.node('Main.main');
+		Assert.notNull(main);
+		if (main != null) {
+			Assert.isTrue(main.reflection.exists(r -> r.target == 'Reflect.hasField' && r.memberName == 'x'), 'a literal name');
+			Assert.isTrue(
+				main.reflection.exists(r -> r.target == 'Reflect.setField' && r.memberName == null && r.name == 'v'), 'a literal value'
+			);
+			Assert.isTrue(main.reflection.exists(r -> r.target == 'Reflect.field' && r.memberName == null), 'a computed name');
+			Assert.isTrue(
+				main.reflection.exists(r -> r.target == 'Type.resolveClass' && r.memberName == null && r.name == 'Main'), 'no member named'
+			);
+			Assert.isTrue(
+				main.reflection.exists(r -> r.target == 'Type.createEnum' && r.memberName == null && r.name == 'A'), 'a constructor named'
+			);
+		}
+		scratch.remove();
+	}
+
 	@:pin('control') @:killer('M-FACTS-FLOW-CAST') @:killer('M-FACTS-TYPE-PARAMETER')
 	public function testFlowsIntoOtherTypes(): Void {
 		final scratch: Scratch = compile([
