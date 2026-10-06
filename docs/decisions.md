@@ -1233,3 +1233,18 @@ decided the question; it may not become a record of runs.
 - two casts the argument meets on its way (measured): `Lambda.count(m)` with `m:Map<K, V>` is typed `Lambda.count(cast m)` to `Iterable<V>`, and a `Map` PARAMETER iterated in the callee is spliced into `Map.iterator` as `(cast m : IMap<K, V>).iterator()`. An argument now passes through any unchecked cast (`TCast(_, null)`: the object is the one handed, and its uses name what is done to it by name), and an unchecked cast from an abstract to the type it wraps is an identity like a cast to the value's own type (`TypedFactsWalk.wrapped`, the abstract's declared type at its arguments — `TypeTools.followWithAbstracts` resolves `@:multiType` `Map<String, Int>` to `StringMap<Int>`, not `IMap`, so it cannot answer). A side effect of parameters being locals: an assignment statement storing a field in a parameter (`p = items;`) now follows `p`'s reads, as one into a `var` did — branch `facts/s31`
 - fixtures re-cut: S26's `keep(a:Array<Int>):Void {}` stood for "an argument escapes" and now keeps nothing; it stores the argument in a static instead, as the escape it pins. `M-FACTS-IDENTITY-CAST-VALUE` re-cut on the widened condition (it now drops only the own-type comparison); `M-TOUCH-TYPED-CALL` / `M-TOUCH-TYPED-VALUE` re-addressed to `classifyUse`, where their fragments moved; all KILLED again. Observed, not changed: with `tools/mutation-check.sh`'s fixture cache on (`--jobs 3`) each track cutting `TypedFactsWalk` also failed `FactsFixGateE2ETest.testAMapTheLoopLeavesUnchangedLosesItsKeyUnderTheTruth` as collateral, which the same cut's own `test.js` passes, and so does the track under `APQ_MUTATION_NO_FIXTURE_CACHE=1` (server on or off, `--jobs` 1-2): a collateral reading of the cache or of concurrency, unattributed — branch `facts/s31`
 - TM after this slice (`src/fs/FileSystemLinksRegistry.hx:236`, oracle on, the truth): `for (_ => items in _itemsByCloudId)` → `for (items in _itemsByCloudId)`; `Lambda.count`'s `it` is only `it.iterator()`, a reader of the map's own — branch `facts/s31`
+- `OrphanElseStmt` was to be restricted in the GRAMMAR (or by a validator inside the parse) to
+  `#if` seams → a PEG alternative cannot see the statement in front of it; a parse-time validator
+  needs a second, span-carrying parse inside every `writeRoundTrip` (the Trivia tree has no spans),
+  would turn a mid-edit file unreadable for every read-only tool, and the compiler's own verdict
+  is define-dependent (`#if a if (c) f(); #end else g();` compiles only under `-D a`). The
+  predicate (`OrphanContinuation`) instead runs at the write gate and compares the result to its
+  input — branch `fix/orphan-else-leniency`
+- `fmt` was to refuse an input that already holds an unjustified orphan `else` → the writer
+  re-emits the tree it parsed, so the count cannot grow and the refusal would only make the file
+  unformattable; it is formatted as it stands, and the gate refuses only a GROWING count —
+  branch `fix/orphan-else-leniency`
+- found WRONG, not changed: `HxCondBlockCloseRaw`'s doc says the `else if` after a
+  block-closing region's `}` "reaches `HxStatement.OrphanElseStmt`"; it binds to the enclosing
+  `if`'s own else slot (`IfStmt … (BlockStmt … CondSpliceBlockClose) (IfStmt …)`), so that shape
+  produces no orphan at all — branch `fix/orphan-else-leniency`

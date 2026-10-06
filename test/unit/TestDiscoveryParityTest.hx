@@ -953,6 +953,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.NodeShapeTest',
 		'unit.query.OccurrenceScanMatchMaskTest',
 		'unit.query.OpaqueCondRegionScanTest',
+		'unit.query.OrphanContinuationTest',
 		'unit.query.ParenGuardSliceTest',
 		'unit.query.ParseFailureLocusTest',
 		'unit.query.PatchSliceTest',
@@ -3299,6 +3300,14 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.OpaqueCondRegionScanTest#testTheNoteNamesTheLineTheRegionAndTheReason :: control :: M-OPAQUE-REGION-NONE',
 			'unit.query.OpaqueCondRegionScanTest#testTheQuoteIsTheGapsAndNotTheNodeSpan :: control :: M-OPAQUE-REGION-NODE-SPAN',
 			'unit.query.OpaqueCondRegionScanTest#testTheSplitTryReportsBothOfItsRegions :: control :: M-OPAQUE-REGION-NONE',
+			'unit.query.OrphanContinuationTest#testAddElementOfABareElseIsRefused :: control :: M-ORPHAN-GATE-OFF',
+			'unit.query.OrphanContinuationTest#testAnOrphanTheSourceAlreadyHadDoesNotBlockAnEdit :: control :: M-ORPHAN-FLOOR-ZERO',
+			'unit.query.OrphanContinuationTest#testCompilerRejectedShapesAreUnjustified :: control :: M-ORPHAN-SEAM-END-ANY,M-ORPHAN-ANY-PARENT',
+			'unit.query.OrphanContinuationTest#testFmtKeepsAnOrphanTheInputAlreadyHad :: control :: M-ORPHAN-FLOOR-ZERO',
+			'unit.query.OrphanContinuationTest#testFmtRefusesAWriterThatStrandsAnElse :: control :: M-ORPHAN-FMT-GATE-OFF',
+			'unit.query.OrphanContinuationTest#testPatchStrandingAnElseIsRefused :: control :: M-ORPHAN-GATE-OFF',
+			'unit.query.OrphanContinuationTest#testRefusalNamesTheClauseTheEditMade :: control :: M-ORPHAN-NEW-CLAUSE-FIRST',
+			'unit.query.OrphanContinuationTest#testSeamShapesAreJustified :: control :: M-ORPHAN-BRANCH-OPEN-NEVER,M-ORPHAN-SEAM-END-NEVER,M-ORPHAN-SEAM-END-SELF-ONLY,M-ORPHAN-SEAM-END-UNTRIMMED,M-ORPHAN-NO-CASE-ARMS',
 			'unit.query.PatchSliceTest#testATransferUnderADocRewrittenByTheSamePayloadRefused :: control :: '
 				+ 'M-PATCH-STRADDLED-DOC-UNWATCHED',
 			'unit.query.PatchSliceTest#testDocCodeSampleIndentationSurvives :: control :: M-PATCH-COMMENT-SHAPE-CHECKED',
@@ -5168,7 +5177,18 @@ class TestDiscoveryParityTest extends Test {
 			'M-ARGUMENT-USES-OVERRIDES',
 			'M-TOUCH-ARGUMENT-USES',
 			'M-TOUCH-ARGUMENT-LEAVES',
-			'M-FACTS-ABSTRACT-WRAPPED-CAST'
+			'M-FACTS-ABSTRACT-WRAPPED-CAST',
+			'M-ORPHAN-GATE-OFF',
+			'M-ORPHAN-FMT-GATE-OFF',
+			'M-ORPHAN-FLOOR-ZERO',
+			'M-ORPHAN-NEW-CLAUSE-FIRST',
+			'M-ORPHAN-BRANCH-OPEN-NEVER',
+			'M-ORPHAN-SEAM-END-NEVER',
+			'M-ORPHAN-SEAM-END-ANY',
+			'M-ORPHAN-SEAM-END-SELF-ONLY',
+			'M-ORPHAN-SEAM-END-UNTRIMMED',
+			'M-ORPHAN-ANY-PARENT',
+			'M-ORPHAN-NO-CASE-ARMS'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

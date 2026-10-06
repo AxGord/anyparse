@@ -151,26 +151,9 @@ final class CanonicalEdit {
 
 		final spliced: String = applyEdits(source, edits);
 
-		// The third question, and the last thing this seam can ask that the re-parse cannot: a
-		// comment left standing above code it never documented. `docSplittingEdit` above covers the
-		// INSERT that steals a doc; this covers the REPLACEMENT that hoists a comment past the
-		// statement it explains, which is what `prefer-ternary-return`'s march up a guard cascade did
-		// to this repo's own `MemberOrder.reorderRefusal` — two per-gate explanations stacked above a
-		// seven-level ternary pyramid, one of them the note warning against that transformation.
-		// Asked on the SPLICE rather than the settled text: the writer re-emits a comment interior
-		// verbatim and never moves one across code, so the fixed-point loop below can only re-indent
-		// what this already judged.
-		final detached: Null<String> = CommentOwnerGuard.detachedComment(source, edits, spliced, regions, plugin);
-		if (detached != null) return Err(detached);
-
-		// The fourth question, and the one that needs the caller's COOPERATION: an edit that
-		// quotes source fragments verbatim and moves a comment across one of them. The three
-		// above are decidable from the two texts; this one is not, because an in-place rewrite
-		// changes the same bytes a hoist does — so the edit has to declare what it carried, and
-		// only an edit that does gets the answer. Every other caller passes nothing and is judged
-		// exactly as before.
-		final hoisted: Null<String> = carried == null ? null : CommentOwnerGuard.hoistedComment(source, edits, carried, regions);
-		if (hoisted != null) return Err(hoisted);
+		// The third, fourth and fifth questions, all asked of the SPLICE — see `spliceRefusal`.
+		final refused: Null<String> = spliceRefusal(source, edits, spliced, regions, plugin, carried);
+		if (refused != null) return Err(refused);
 
 		// ω-canonical-fixed-point: the result has to satisfy the gate the NEXT writer-emit op puts on it,
 		// and that gate is `writeRoundTrip(s) == s` after ONE pass. The writer does not always land there
@@ -450,6 +433,45 @@ final class CanonicalEdit {
 			if (contains && (strictlyBigger || j < i)) return true;
 		}
 		return false;
+	}
+
+	/**
+	 * The questions `canonicalize` asks of the SPLICE, before the writer settles it — the first
+	 * refusal, or null. Their own function so the gate's sequence stays readable; each is
+	 * explained where it is asked.
+	 */
+	private static function spliceRefusal(
+		source: String, edits: Array<{ span: Span, text: String }>, spliced: String, regions: Array<LexRegion>, plugin: GrammarPlugin,
+		carried: Null<Array<CarriedEdit>>
+	): Null<String> {
+		// The third question, and the last thing this seam can ask that the re-parse cannot: a
+		// comment left standing above code it never documented. `docSplittingEdit` (asked first) covers the
+		// INSERT that steals a doc; this covers the REPLACEMENT that hoists a comment past the
+		// statement it explains, which is what `prefer-ternary-return`'s march up a guard cascade did
+		// to this repo's own `MemberOrder.reorderRefusal` — two per-gate explanations stacked above a
+		// seven-level ternary pyramid, one of them the note warning against that transformation.
+		// Asked on the SPLICE rather than the settled text: the writer re-emits a comment interior
+		// verbatim and never moves one across code, so `canonicalize`'s fixed-point loop can only re-indent
+		// what this already judged.
+		final detached: Null<String> = CommentOwnerGuard.detachedComment(source, edits, spliced, regions, plugin);
+		if (detached != null) return detached;
+
+		// The fourth question, and the one that needs the caller's COOPERATION: an edit that
+		// quotes source fragments verbatim and moves a comment across one of them. The three
+		// before it are decidable from the two texts; this one is not, because an in-place rewrite
+		// changes the same bytes a hoist does — so the edit has to declare what it carried, and
+		// only an edit that does gets the answer. Every other caller passes nothing and is judged
+		// exactly as before.
+		final hoisted: Null<String> = carried == null ? null : CommentOwnerGuard.hoistedComment(source, edits, carried, regions);
+
+		// The fifth question, and one the re-parse answers WRONG rather than not at all: the
+		// grammar accepts an `else` with no `if` in front of it (`OrphanElseStmt`), because conditional
+		// compilation can cut an if-chain in half, so a `patch` that duplicated an `else if (c)` header
+		// re-parsed cleanly and wrote `if (c) else if (c) …`, which the compiler rejects. Asked on the
+		// SPLICE for the same reason as the comment questions: the writer re-emits the tree it parsed,
+		// so the fixed point can only re-indent what this judged. The source's own count is the floor —
+		// the result must be at least as valid as the input, not valid.
+		return hoisted ?? OrphanContinuation.introduced(source, spliced, plugin);
 	}
 
 }

@@ -14376,6 +14376,94 @@
 			"find": "|| sink == str(wrapped(inner.t))",
 			"replace": "",
 			"note": "a local spliced into an inlined abstract method as its this is cast from the abstract to the type it wraps, and that cast hands the value on, so a Map parameter a method only iterates escapes"
+		},
+		{
+			"name": "M-ORPHAN-GATE-OFF",
+			"type": "anyparse.query.CanonicalEdit",
+			"method": "spliceRefusal",
+			"find": "return hoisted ?? OrphanContinuation.introduced(source, spliced, plugin);",
+			"replace": "return hoisted;",
+			"note": "the writer-emit gate never asks the orphan question, so a patch or an inserted element that strands an else is written as a success again"
+		},
+		{
+			"name": "M-ORPHAN-FMT-GATE-OFF",
+			"type": "anyparse.query.cli.command.FmtCommand",
+			"method": "formatOneFile",
+			"find": "final stranded: Null<String> = isCanonical ? null : OrphanContinuation.introduced(source, formatted, plugin);",
+			"replace": "final stranded: Null<String> = null;",
+			"note": "fmt writes whatever the writer emits, so a writer defect that strands an else rewrites the file to code the compiler rejects"
+		},
+		{
+			"name": "M-ORPHAN-FLOOR-ZERO",
+			"type": "anyparse.query.OrphanContinuation",
+			"method": "introduced",
+			"find": "\t\tif (stranded.length <= before.length) return null;\n",
+			"replace": "",
+			"note": "the floor becomes zero instead of the input's own count, so a file that already holds an orphan else can no longer be edited or formatted at all"
+		},
+		{
+			"name": "M-ORPHAN-NEW-CLAUSE-FIRST",
+			"type": "anyparse.query.OrphanContinuation",
+			"method": "firstUnmatched",
+			"find": "for (node in stranded) if (!known.remove(textOf(node, result))) return node;",
+			"replace": "return stranded[0];",
+			"note": "the refusal names the first stranded else in the file, which is one the source already had, instead of the one the edit made"
+		},
+		{
+			"name": "M-ORPHAN-BRANCH-OPEN-NEVER",
+			"type": "anyparse.query.OrphanContinuation",
+			"method": "justified",
+			"find": "return runs != null && runs.exists(run -> run.nodes[0] == orphan);",
+			"replace": "return false;",
+			"note": "an else opening a #if branch is no longer justified, so a region carrying the else half of a chain counts as stranded"
+		},
+		{
+			"name": "M-ORPHAN-SEAM-END-NEVER",
+			"type": "anyparse.query.OrphanContinuation",
+			"method": "justified",
+			"find": "\t\tif (i > 0 && endsAtSeam(parent.children[i - 1], ctx)) return true;\n",
+			"replace": "",
+			"note": "an else after a statement that ends in a #if region is no longer justified, so every parallel-if-heads splice counts as stranded"
+		},
+		{
+			"name": "M-ORPHAN-SEAM-END-ANY",
+			"type": "anyparse.query.OrphanContinuation",
+			"method": "endsAtSeam",
+			"find": "return node == stmt || (end != null && region != null && trimmedEnd(region, ctx) == trimmedEnd(end, ctx));",
+			"replace": "return true;",
+			"note": "a region merely nested in the previous statement justifies the else, so `{ #if a f(); #end } else g();` passes though no build compiles it"
+		},
+		{
+			"name": "M-ORPHAN-SEAM-END-SELF-ONLY",
+			"type": "anyparse.query.OrphanContinuation",
+			"method": "endsAtSeam",
+			"find": "return node == stmt || (end != null && region != null && trimmedEnd(region, ctx) == trimmedEnd(end, ctx));",
+			"replace": "return node == stmt;",
+			"note": "only a statement that IS a region justifies, so the openfl shape whose value closes on a spliced region counts as stranded"
+		},
+		{
+			"name": "M-ORPHAN-SEAM-END-UNTRIMMED",
+			"type": "anyparse.query.OrphanContinuation",
+			"method": "endsAtSeam",
+			"find": "trimmedEnd(region, ctx) == trimmedEnd(end, ctx)",
+			"replace": "region.to == end.to",
+			"note": "the ends are compared raw, and a statement span that runs on over the trivia to the else never equals the region end, so the openfl shape counts as stranded"
+		},
+		{
+			"name": "M-ORPHAN-ANY-PARENT",
+			"type": "anyparse.query.OrphanContinuation",
+			"method": "justified",
+			"find": "\t\tif (!regionParent && !ctx.sequenceKinds.contains(parent.kind)) return false;\n",
+			"replace": "",
+			"note": "an else in a body SLOT is judged by the slot before it, so `if (#if a c #else d #end) else g();` passes on its conditional condition"
+		},
+		{
+			"name": "M-ORPHAN-NO-CASE-ARMS",
+			"type": "anyparse.query.OrphanContinuation",
+			"method": "sequenceKinds",
+			"find": "\t\tfor (arm in [shape.caseBranchKind, shape.defaultBranchKind]) if (arm != null) kinds.push(arm);\n",
+			"replace": "",
+			"note": "a case arm is not a statement sequence, so an else after a #if region inside a case body counts as stranded"
 		}
 	]
 }
