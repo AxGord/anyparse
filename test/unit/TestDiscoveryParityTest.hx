@@ -2995,13 +2995,13 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-REACH-GUARDED-IMPORT',
 			'unit.query.MemberReachFactsTest#testATypeNoBuildCompilesIsNoSecondDeclarationOfItsNameUnderTheTruth :: control :: '
 				+ 'M-FACTS-IDLE-INDEX',
+			'unit.query.MemberReachFactsTest#testATypeTheIndexDeclaresNowhereRunsWhatItsMembersRun :: control :: '
+				+ 'M-FACTS-TEXTLESS,M-FACTS-IMPLICIT-MEMBERS,M-FACTS-IMPLICIT-STATIC,M-REACH-UNHELD-OWNED,M-REACH-UNHELD-ANYWHERE,'
+				+ 'M-REACH-TEXTLESS-IN-PLAY,M-REACH-UNDECLARED-OPERAND,M-REACH-REFLECT-TEXTLESS,M-FACTS-IMPLICIT-INTERFACE',
 			'unit.query.MemberReachFactsTest#testATypedCallOfAnotherClassMayRunTheMethodOfAnObjectPutThereUnderTheTruth :: control :: '
 				+ 'M-VALUE-INVOKED-FOREIGN,M-VALUE-INVOKED-SUBTYPE-SUPERS,M-UNCHECKED-HOLDS',
 			'unit.query.MemberReachFactsTest#testATypedWriteOfAnotherClassMayReplaceTheMethodOfAnObjectPutThereUnderTheTruth :: control :: '
 				+ 'M-VALUE-STORED-FOREIGN',
-			'unit.query.MemberReachFactsTest#testATypeTheIndexDeclaresNowhereRunsWhatItsMembersRun :: control :: '
-				+ 'M-FACTS-TEXTLESS,M-FACTS-IMPLICIT-MEMBERS,M-FACTS-IMPLICIT-STATIC,M-REACH-UNHELD-OWNED,M-REACH-UNHELD-ANYWHERE,'
-				+ 'M-REACH-TEXTLESS-IN-PLAY,M-REACH-UNDECLARED-OPERAND,M-REACH-REFLECT-TEXTLESS,M-FACTS-IMPLICIT-INTERFACE',
 			'unit.query.MemberReachFactsTest#testATypedefAliasingTheTypeElsewhereIsNoneOfItsCodeUnderTheTruth :: control :: '
 				+ 'M-FACTS-TEXT-ALIAS-TYPEDEF',
 			'unit.query.MemberReachFactsTest#testAUseTheFactsReaderDoesNotKnowIsAnEscapeUnderTheTruth :: control :: '
@@ -3447,17 +3447,17 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.SymbolIndexRunMemoSliceTest#testConfinementGateReadsTheIndexGrantSlot :: control :: M-GRANT-SLOT-UNREAD',
 			'unit.query.SymbolIndexRunMemoSliceTest#testSupertypeNameUnionIsBuiltOncePerIndex :: control :: M-SUPERTYPE-UNION-NOMEMO',
 			'unit.query.SymbolIndexSliceTest#testDeclaringFilesCount :: control :: M-TYPEREF-NAMED-FIRST-TYPE',
+			'unit.query.SymbolIndexSliceTest#testIsPrivateGuardedTypeIsPrivate :: control :: '
+				+ 'M-INDEX-GUARDED-PRIVATE-SPLIT,M-INDEX-GUARDED-PRIVATE-PAST-MODIFIERS',
+			'unit.query.SymbolIndexSliceTest#testPlatformFileDeclaresTheModuleBeforeItsDot :: control :: '
+				+ 'M-MODULE-PLATFORM,M-MODULE-SCAN-PLATFORM',
 			'unit.query.UncheckedConversionsTest#testAFactsFileSaysTheTargetItsBuildGeneratesCodeFor :: control :: M-FACTS-TARGET-RECORD',
 			'unit.query.UncheckedConversionsTest#testAValueThatLeftTheTypeSystemSitsOnlyWhereSomeBuildKeepsIt :: control :: '
 				+ 'M-UNCHECKED-TARGET,M-UNCHECKED-ESCAPED,M-UNCHECKED-BOXED,M-UNCHECKED-STRING,M-UNCHECKED-ARRAY,'
 				+ 'M-UNCHECKED-POINTER,M-UNCHECKED-ALIAS,M-UNCHECKED-ALIAS-PLACE,M-UNCHECKED-BOXED-ALIAS,'
 				+ 'M-NATIVE-SITE-INERT,M-NATIVE-SITE-CORE-TYPE,M-NATIVE-SITE-ALIAS,M-NATIVE-SITE-ARRAY-ELEMENTS',
 			'unit.query.UncheckedConversionsTest#testAnInstanceOfAnotherClassSitsOnlyWhereSomeBuildKeepsIt :: control :: '
-				+ 'M-UNCHECKED-CLASS-EXTERN,M-UNCHECKED-ALIKE',
-			'unit.query.SymbolIndexSliceTest#testIsPrivateGuardedTypeIsPrivate :: control :: '
-				+ 'M-INDEX-GUARDED-PRIVATE-SPLIT,M-INDEX-GUARDED-PRIVATE-PAST-MODIFIERS',
-			'unit.query.SymbolIndexSliceTest#testPlatformFileDeclaresTheModuleBeforeItsDot :: control :: '
-				+ 'M-MODULE-PLATFORM,M-MODULE-SCAN-PLATFORM',
+				+ 'M-UNCHECKED-CLASS-EXTERN,M-UNCHECKED-ALIKE'
 		];
 		final actualPins: Array<String> = TestRegistry.pins();
 		Assert.same(
