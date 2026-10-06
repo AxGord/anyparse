@@ -417,6 +417,14 @@ final class LintConfig {
 	}
 
 	/**
+	 * A rule-specific option as the raw JSON the document wrote, or null when unset — for an option whose shape no typed
+	 * accessor reads (`prefer-api-idiom`'s list of objects), so the owning check validates it entry by entry itself.
+	 */
+	public function jsonOption(id: String, key: String): Null<JValue> {
+		return propOf(id, key);
+	}
+
+	/**
 	 * Whether a rule requiring language version `minimum` may run for this config.
 	 *
 	 * True when the project declares no `languageVersion` — an undeclared floor constrains

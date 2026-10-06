@@ -271,6 +271,10 @@ final class Linter {
 			// stepped by an increment, where they need a boolean literal.
 			new PreferCount(),
 			new PreferStaticExtension(),
+			// Inert without an `idioms` declaration. It claims a run of adjacent `R.f = rhs;` statements, which no other
+			// rule rewrites as a WINDOW: `field-init-at-declaration` moves one constructor write onto its own field, and a
+			// receiver of an idiom type is never the class whose constructor that is. Registry order is free.
+			new PreferApiIdiom(),
 			new LoopGuard(),
 			new GuardContinue(),
 			new GuardReturn(),
@@ -331,6 +335,10 @@ final class Linter {
 			// contain the other's. Both are report-only, so registry order carries no meaning.
 			new DuplicateCodeRenamed(),
 			new ListenerSymmetry(),
+			// Inert without its `eventBase` / `typeAbstract` declaration. Its one edit is the written `String` of a static
+			// final field, a type no other rule rewrites — `shorten-type-ref` only touches a QUALIFIED reference, which is
+			// what this rule writes when the abstract is not yet imported, so the two compose across passes.
+			new TypedEventConstant(),
 			new StringLiteralDup(),
 			// The TYPE-level twin of `string-literal-dup`, and the two can never claim the same
 			// node: that rule groups string LITERALS, this one anonymous structure TYPES. Both are
