@@ -74,12 +74,6 @@ final class FactsEscapes {
 	/** The flow of an unchecked cast (`FlowFact.via`). */
 	private static inline final CAST: String = 'cast';
 
-	/** The marker of a node a fact of which lies in a file whose text the table no longer has. */
-	private static inline final STALE_FOREIGN: String = 'stale-foreign';
-
-	/** The marker of a node a `Reflect`/`Type` body was spliced into: that call, its name and its arguments are gone. */
-	private static inline final REFLECTION_INLINED: String = 'reflection-inlined';
-
 	/** The catch-all type: what it holds escaped already. */
 	private static inline final CATCH_ALL: String = 'Dynamic';
 
@@ -208,9 +202,17 @@ final class FactsEscapes {
 		final made: Null<FactNode> = _table.node(id);
 		if (made == null) return refuse('the facts of `$id` lie in a file whose text the table no longer has');
 		final n: FactNode = made;
-		if (n.incomplete.contains(STALE_FOREIGN)) return refuse('a fact of `$id` lies in a file whose text the table no longer has');
-		if (n.incomplete.contains(REFLECTION_INLINED) && !harmlessReflection(n))
-			return refuse('a reflective body spliced into `$id` lost the name it was handed');
+		final lost: Null<String> = FactMarkers.first(
+			n, m -> switch m {
+				case StaleForeign: 'a fact of `$id` lies in a file whose text the table no longer has';
+				case ReflectionInlined: harmlessReflection(n) ? null : 'a reflective body spliced into `$id` lost the name it was handed';
+				case Unknown(text):
+					FactMarkers.unknownReason(id, text);
+				// a splice's and an expansion's facts are the node's own, wherever they sit
+				case InlineSite | MacroExpansion | ReflectionUnattributed | ReflectionFrom(_): null;
+			}
+		);
+		if (lost != null) return refuse(lost);
 		if (!_native.nodeEscapes(id, n, _hand)) return false;
 		// a function value placed where a function type types it stays typed: its own type unifies with the place's
 		for (f in n.flows) if (
@@ -468,13 +470,19 @@ final class FactsEscapes {
 		}
 	}
 
-	/** `escapeType` of each argument the constructor `name` of the enum `id`, of the type `type`, takes, bound by `bound`. */
+	/**
+	 * `escapeType` of each argument the constructor `name` of the enum `id`, of the type `type`, takes, bound by `bound`. A
+	 * POSITIVE list: a constructor of no arguments, typed as its enum, holds nothing; a type that reads as neither refuses.
+	 */
 	private function constructorEscapes(id: String, name: String, type: String, bound: Map<String, FactsType>): Bool {
 		final read: Null<FactsType> = FactsTypeTree.read(type);
 		if (read == null) return refuse('the constructor `$id.$name` has a type that does not read');
 		return switch read {
-			case Function(held, _): held.foreach(a -> escapeType(substitute(a.type, bound)));
-			case _: true;
+			case Function(held, _):
+				held.foreach(a -> escapeType(substitute(a.type, bound)));
+			// a constructor of no arguments is a value of its enum, which holds nothing
+			case Named(_, _): true;
+			case Unknown | Parameter(_) | Structure(_): refuse('the constructor `$id.$name` has a type that is no function and no enum');
 		};
 	}
 

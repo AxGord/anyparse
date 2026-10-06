@@ -7640,7 +7640,7 @@
 			"name": "M-FACTS-SITE-UNKNOWN",
 			"type": "anyparse.query.CompilerFacts",
 			"method": "within",
-			"find": "if (!whole && !spliced && (n.incomplete.contains('macro-expansion') || splice)) return null;",
+			"find": "if (!whole && !spliced && (expanded || splice)) return null;",
 			"replace": "",
 			"note": "a range query short of a spliced node answers as if its facts were placed"
 		},
@@ -7734,32 +7734,32 @@
 			"name": "M-FACTS-REACH-SPLICE",
 			"type": "anyparse.query.FactsView",
 			"method": "unplaced",
-			"find": "return !(truth && (m == INLINE_SITE_UNKNOWN || m == MACRO_EXPANSION));",
-			"replace": "return m == MACRO_EXPANSION;",
+			"find": "case InlineSite | MacroExpansion: !truth;",
+			"replace": "case InlineSite: false;\n\t\t\tcase MacroExpansion: true;",
 			"note": "a body with an inlined call is read through its facts, whose spliced facts sit at the callee and are missed by a range question"
 		},
 		{
 			"name": "M-FACTS-TRUTH-SPLICE",
 			"type": "anyparse.query.FactsView",
 			"method": "unplaced",
-			"find": "!(truth && (m == INLINE_SITE_UNKNOWN || m == MACRO_EXPANSION))",
-			"replace": "!(truth && m == MACRO_EXPANSION)",
+			"find": "case InlineSite | MacroExpansion: !truth;",
+			"replace": "case InlineSite: true;\n\t\t\tcase MacroExpansion: !truth;",
 			"note": "(precision) under the whole list of builds a body an inlined function was spliced into keeps its syntax, which admits every conversion in play"
 		},
 		{
 			"name": "M-FACTS-TRUTH-SPLICE-ALWAYS",
 			"type": "anyparse.query.FactsView",
 			"method": "unplaced",
-			"find": "!(truth && (m == INLINE_SITE_UNKNOWN || m == MACRO_EXPANSION))",
-			"replace": "m != INLINE_SITE_UNKNOWN && !(truth && m == MACRO_EXPANSION)",
+			"find": "case InlineSite | MacroExpansion: !truth;",
+			"replace": "case InlineSite: false;\n\t\t\tcase MacroExpansion: !truth;",
 			"note": "a body an inlined function was spliced into is read through its facts with no list of builds, where a range question cannot take the spliced facts"
 		},
 		{
 			"name": "M-FACTS-SPLICED-WITHIN",
 			"type": "anyparse.query.CompilerFacts",
 			"method": "within",
-			"find": "if (!whole && !spliced && (n.incomplete.contains('macro-expansion') || splice)) return null;",
-			"replace": "if (!whole && (splice || (!spliced && n.incomplete.contains('macro-expansion')))) return null;",
+			"find": "if (!whole && !spliced && (expanded || splice)) return null;",
+			"replace": "if (!whole && (splice || (!spliced && expanded))) return null;",
 			"note": "(precision) a range question under the whole list of builds is Unknown in a body an inlined function was spliced into, so its syntax answers"
 		},
 		{
@@ -7790,8 +7790,8 @@
 			"name": "M-FACTS-TRUTH-REFLECTION-INLINED",
 			"type": "anyparse.query.FactsView",
 			"method": "blindIn",
-			"find": "if (truth && n.incomplete.contains(REFLECTION_INLINED) && !splicedReachesNoMember(n)) return DynamicName(file, span);",
-			"replace": "",
+			"find": "truth && !splicedReachesNoMember(n) ? DynamicName(file, span) : null;",
+			"replace": "null;",
 			"note": "a reflective call inlined into a faceted body is lost: the facts hold no reflective call, and the syntax misses one under another name"
 		},
 		{
@@ -8174,8 +8174,8 @@
 			"name": "M-FACTS-REACH-MACRO",
 			"type": "anyparse.query.FactsView",
 			"method": "blindIn",
-			"find": "return Reification(file, span);",
-			"replace": "{}",
+			"find": "truth && g != null && faceted(g, file, n.at.span) ? null : Reification(file, span);",
+			"replace": "null;",
 			"note": "a macro's expansion is no blind spot, so the code it adds is never accounted for"
 		},
 		{
@@ -12250,8 +12250,8 @@
 			"name": "M-METHODS-NATIVE-REFUSED",
 			"type": "anyparse.query.FactsMethodValues",
 			"method": "scan",
-			"find": "else if (n.incomplete.contains(REFLECTION_INLINED) && !inlinedMemberless(n))",
-			"replace": "else if (n.natives.length > 0)\n\t\t\t\t'native'\n\t\t\telse if (n.incomplete.contains(REFLECTION_INLINED) && !inlinedMemberless(n))",
+			"find": "final lost: Null<String> = FactMarkers.first(",
+			"replace": "final lost: Null<String> = n.natives.length > 0 ? 'native' : FactMarkers.first(",
 			"note": "(precision) target code is taken to obtain any method as a value and rebind it, so no `this` is answered in a program holding any"
 		},
 		{
@@ -12472,16 +12472,16 @@
 			"name": "M-FACTS-EXPANSION-PLACED",
 			"type": "anyparse.query.FactsView",
 			"method": "unplaced",
-			"find": "(m == INLINE_SITE_UNKNOWN || m == MACRO_EXPANSION)",
-			"replace": "m == INLINE_SITE_UNKNOWN",
+			"find": "case InlineSite | MacroExpansion: !truth;",
+			"replace": "case InlineSite: !truth;\n\t\t\tcase MacroExpansion: true;",
 			"note": "an expression macro's expansion leaves facts with no place under the truth too, so its body keeps the syntax"
 		},
 		{
 			"name": "M-FACTS-EXPANSION-BLIND",
 			"type": "anyparse.query.FactsView",
 			"method": "blindIn",
-			"find": " && !(truth && g != null && faceted(g, file, n.at.span))",
-			"replace": "",
+			"find": "truth && g != null && faceted(g, file, n.at.span) ? null : Reification(file, span);",
+			"replace": "Reification(file, span);",
 			"note": "a macro's expansion is a blind spot to a facts-driven reader too, whatever the facts hold"
 		},
 		{
@@ -12496,8 +12496,8 @@
 			"name": "M-FACTS-WITHIN-EXPANSION-NULL",
 			"type": "anyparse.query.CompilerFacts",
 			"method": "within",
-			"find": "if (!whole && !spliced && (n.incomplete.contains('macro-expansion') || splice)) return null;",
-			"replace": "if (!whole && (n.incomplete.contains('macro-expansion') || (splice && !spliced))) return null;",
+			"find": "if (!whole && !spliced && (expanded || splice)) return null;",
+			"replace": "if (!whole && (expanded || (splice && !spliced))) return null;",
 			"note": "a range question meeting an expansion answers Unknown under the truth too"
 		},
 		{
@@ -13198,8 +13198,8 @@
 			"name": "M-FACTS-SPLICED-REFLECTION-READ",
 			"type": "anyparse.query.FactsView",
 			"method": "blindIn",
-			"find": "if (truth && n.incomplete.contains(REFLECTION_INLINED) && !splicedReachesNoMember(n)) return DynamicName(file, span);",
-			"replace": "if (truth && n.incomplete.contains(REFLECTION_INLINED)) return DynamicName(file, span);",
+			"find": "truth && !splicedReachesNoMember(n) ? DynamicName(file, span) : null;",
+			"replace": "truth ? DynamicName(file, span) : null;",
 			"note": "(precision) any reflective body spliced into a function makes every region of it a name computed at run time, even hxcpp's `Type.enumIndex`, which names no member and reads none"
 		},
 		{
@@ -14397,8 +14397,8 @@
 			"name": "M-FACTS-UNPLACED-UNKNOWN",
 			"type": "anyparse.query.FactsView",
 			"method": "unplaced",
-			"find": "return !(truth && (m == INLINE_SITE_UNKNOWN || m == MACRO_EXPANSION));",
-			"replace": "return [MACRO_EXPANSION, INLINE_SITE_UNKNOWN, 'stale-foreign'].contains(m) && !(truth && (m == INLINE_SITE_UNKNOWN || m == MACRO_EXPANSION));",
+			"find": "case StaleForeign | Unknown(_): true;",
+			"replace": "case StaleForeign: true;\n\t\t\tcase Unknown(_): false;",
 			"note": "the markers that leave a fact without a place are a negative list again, so a node carrying one no reader knows is read through its facts"
 		},
 		{
@@ -14416,6 +14416,70 @@
 			"find": "lines.find(l -> !RECORD_KINDS.contains(recordKind(l)))",
 			"replace": "null",
 			"note": "a facts file holding a record of a kind no reader knows is read as a whole one, whatever that record says the rest leaves out"
+		},
+		{
+			"name": "M-FACTS-BLIND-UNKNOWN",
+			"type": "anyparse.query.FactsView",
+			"method": "blindIn",
+			"find": "case Unknown(text): Unmodelled(file, span, 'facts marker $text');",
+			"replace": "case Unknown(_): null;",
+			"note": "a node meeting the region whose marker no reader names is no blind spot, so the code it may stand for is never accounted for"
+		},
+		{
+			"name": "M-ESCAPES-FACTS-MARKER-UNKNOWN",
+			"type": "anyparse.query.FactsEscapes",
+			"method": "escapesOf",
+			"find": "FactMarkers.unknownReason(id, text);",
+			"replace": "null;",
+			"note": "a node carrying a marker no reader names is read whole, so what a lost fact of it lets escape is missed"
+		},
+		{
+			"name": "M-ESCAPES-FACTS-CTOR-SHAPE",
+			"type": "anyparse.query.FactsEscapes",
+			"method": "constructorEscapes",
+			"find": "case Unknown | Parameter(_) | Structure(_): refuse('the constructor `$id.$name` has a type that is no function and no enum');",
+			"replace": "case Unknown | Parameter(_) | Structure(_): true;",
+			"note": "a constructor whose type reads as no function and no enum holds nothing, whatever it holds"
+		},
+		{
+			"name": "M-METHODS-MARKER-UNKNOWN",
+			"type": "anyparse.query.FactsMethodValues",
+			"method": "scan",
+			"find": "FactMarkers.unknownReason(id, text);",
+			"replace": "null;",
+			"note": "a node carrying a marker no reader names is read whole, so a method value a lost fact of it reads is missed"
+		},
+		{
+			"name": "M-VALUE-STORED-MARKER-UNKNOWN",
+			"type": "anyparse.query.FunctionValueTypes",
+			"method": "untypedStores",
+			"find": "case Unknown(_): true;",
+			"replace": "case Unknown(_): false;",
+			"note": "a node carrying a marker no reader names stores nothing by a name, so a store a lost fact of it makes is missed"
+		},
+		{
+			"name": "M-VALUE-CTOR-MARKER-UNKNOWN",
+			"type": "anyparse.query.FunctionValueTypes",
+			"method": "reflectiveConstructions",
+			"find": "case Unknown(_): true;",
+			"replace": "case Unknown(_): false;",
+			"note": "a node carrying a marker no reader names constructs nothing by reflection, so the arguments a lost construction hands are missed"
+		},
+		{
+			"name": "M-FACTS-TEXT-MARKER-UNKNOWN",
+			"type": "anyparse.query.FactsProvenance",
+			"method": "factsOnText",
+			"find": "case StaleForeign | Unknown(_): true;",
+			"replace": "case StaleForeign: true;\n\t\t\tcase Unknown(_): false;",
+			"note": "a body carrying a marker no reader names is its text, though a fact of it may lie where no position shows"
+		},
+		{
+			"name": "M-FACTS-WITHIN-MARKER-UNKNOWN",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "within",
+			"find": "case StaleForeign | Unknown(_): true;",
+			"replace": "case StaleForeign: true;\n\t\t\t\tcase Unknown(_): false;",
+			"note": "a range question meeting a node carrying a marker no reader names takes its facts as placed"
 		}
 	]
 }

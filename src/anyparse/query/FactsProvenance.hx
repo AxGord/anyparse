@@ -29,9 +29,6 @@ final class FactsProvenance {
 	/** The fact kinds of a type's own function body, as opposed to a function nested in one. */
 	private static final OWN_BODY_KINDS: Array<String> = ['method', 'ctor'];
 
-	/** The marker of a node a fact of which lies in a file whose text the table no longer has (`CompilerFacts`). */
-	private static inline final STALE_FOREIGN: String = 'stale-foreign';
-
 	/**
 	 * The metadata of an abstract's field the compiler calls where the text writes an operator, a conversion, an index
 	 * access or a field no declaration names, and never the field's name.
@@ -324,9 +321,15 @@ final class FactsProvenance {
 	 */
 	private function factsOnText(n: FactNode, body: BodyText, outer: Null<(FactPos) -> Bool>, builds: Array<Int>): Bool {
 		// noqa: complexity
-		// a marker says a fact was lost with its file: no position shows it. Code a macro expanded carries its own
-		// (`ExpansionFact`), and is the text's only where a call the text writes built it
-		if (n.incomplete.contains(STALE_FOREIGN)) return false;
+		// a marker says a fact was lost with its file: no position shows it, and one no reader knows may say the same. Code a
+		// macro expanded carries its own (`ExpansionFact`), and is the text's only where a call the text writes built it
+		if (FactMarkers.carries(
+			n, m -> switch m {
+				case StaleForeign | Unknown(_): true;
+				case InlineSite | MacroExpansion | ReflectionInlined | ReflectionUnattributed | ReflectionFrom(_): false;
+			}
+		))
+			return false;
 		final written: Array<ExpansionFact> = [for (x in n.expansions) if (expansionWritten(n, x, body, outer)) x];
 		final inlined: (FactPos) -> Bool = outer ?? (_ -> false);
 		function own(p: FactPos, onText: Bool, ?name: String): Bool {

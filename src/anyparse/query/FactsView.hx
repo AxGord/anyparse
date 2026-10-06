@@ -87,21 +87,6 @@ final class FactsView {
 	/** The node kinds that are the body of a function (`TypedFactsProbe`). */
 	public static final FUNCTION_KINDS: Array<String> = ['method', 'ctor', 'fn', 'local'];
 
-	/** The marker of a body a macro expanded into: it may run code no fact names. */
-	private static inline final MACRO_EXPANSION: String = 'macro-expansion';
-
-	/** The marker of a body an inlined function was spliced into: those facts sit at the callee's positions. */
-	private static inline final INLINE_SITE_UNKNOWN: String = 'inline-site-unknown';
-
-	/** The marker of a body a `Reflect`/`Type` function was spliced into: that call, its name and its arguments are gone. */
-	private static inline final REFLECTION_INLINED: String = 'reflection-inlined';
-
-	/** The prefix of the marker naming the method whose declared code holds a fact of a spliced `Reflect`/`Type` body. */
-	private static inline final REFLECTION_FROM: String = 'reflection-from:';
-
-	/** The marker of a fact of a spliced `Reflect`/`Type` body that no method's declared code holds. */
-	private static inline final REFLECTION_UNATTRIBUTED: String = 'reflection-unattributed';
-
 	/** The classes whose members are reflection (`TypedFactsProbe`). */
 	private static final REFLECTION_CLASSES: Array<String> = ['Reflect', 'Type'];
 
@@ -373,9 +358,17 @@ final class FactsView {
 	public function blindIn(file: String, span: Span, ?g: CallGraph): Null<ReachUnknown> {
 		for (n in table.nodesIn(file)) {
 			if (n.generated || !meets(n.at.span, span)) continue;
-			if (n.incomplete.contains(MACRO_EXPANSION) && !(truth && g != null && faceted(g, file, n.at.span)))
-				return Reification(file, span);
-			if (truth && n.incomplete.contains(REFLECTION_INLINED) && !splicedReachesNoMember(n)) return DynamicName(file, span);
+			final blind: Null<ReachUnknown> = FactMarkers.first(
+				n, m -> switch m {
+					case MacroExpansion: truth && g != null && faceted(g, file, n.at.span) ? null : Reification(file, span);
+					case ReflectionInlined:
+						truth && !splicedReachesNoMember(n) ? DynamicName(file, span) : null;
+					// a marker no reader knows may stand for code no text holds, as an expansion does
+					case Unknown(text): Unmodelled(file, span, 'facts marker $text');
+					case StaleForeign | InlineSite | ReflectionUnattributed | ReflectionFrom(_): null;
+				}
+			);
+			if (blind != null) return blind;
 			for (r in n.reflection) if (r.isValue && meets(r.at.span, span)) return DynamicName(file, r.at.span);
 		}
 		return null;
@@ -401,10 +394,13 @@ final class FactsView {
 	 * what that code stands in for is lost.
 	 */
 	public static function splicedReflection(n: FactNode): Null<Array<String>> {
-		if (n.incomplete.contains(REFLECTION_UNATTRIBUTED)) return null;
-		final out: Array<String> = [
-			for (c in n.incomplete) if (c.startsWith(REFLECTION_FROM)) c.substr(REFLECTION_FROM.length)
-		];
+		if (FactMarkers.carries(n, m -> m.match(ReflectionUnattributed))) return null;
+		final out: Array<String> = [];
+		for (c in n.incomplete) switch FactMarkers.read(c) {
+			case ReflectionFrom(method):
+				out.push(method);
+			case StaleForeign | InlineSite | MacroExpansion | ReflectionInlined | ReflectionUnattributed | Unknown(_):
+		}
 		if (out.length == 0) return null;
 		for (c in n.calls) {
 			final target: Null<String> = c.target;
@@ -847,8 +843,11 @@ final class FactsView {
 	 * other — a fact lost with its file (`stale-foreign`), a marker the facts producer has grown since — leaves one.
 	 */
 	private function unplaced(m: String): Bool {
-		if (m == REFLECTION_INLINED || m == REFLECTION_UNATTRIBUTED || m.startsWith(REFLECTION_FROM)) return false;
-		return !(truth && (m == INLINE_SITE_UNKNOWN || m == MACRO_EXPANSION));
+		return switch FactMarkers.read(m) {
+			case ReflectionInlined | ReflectionUnattributed | ReflectionFrom(_): false;
+			case InlineSite | MacroExpansion: !truth;
+			case StaleForeign | Unknown(_): true;
+		};
 	}
 
 	/**

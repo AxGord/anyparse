@@ -45,9 +45,6 @@ final class ArgumentUses {
 	/** The kind of an interface, which declares a method and runs none (`TypeFact.kind`). */
 	private static inline final INTERFACE_KIND: String = 'interface';
 
-	/** The only marker a node answered for may carry: an inlined body's facts are its own, at the callee's positions. */
-	private static inline final INLINE_SITE_UNKNOWN: String = 'inline-site-unknown';
-
 	private final _table: CompilerFacts;
 
 	/** Argument key -> the uses the value meets, or null when the facts do not answer; settled once. */
@@ -158,7 +155,7 @@ final class ArgumentUses {
 	private function whole(node: FactNode, seen: Array<String>): Bool {
 		if (seen.contains(node.id)) return true;
 		seen.push(node.id);
-		if (node.natives.length > 0 || node.incomplete.exists(i -> i != INLINE_SITE_UNKNOWN)) return false;
+		if (node.natives.length > 0 || FactMarkers.carries(node, m -> !m.match(InlineSite))) return false;
 		for (child in node.fns) {
 			final nested: Null<FactNode> = _table.node(child);
 			if (nested == null || !whole(nested, seen)) return false;

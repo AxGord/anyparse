@@ -97,9 +97,6 @@ final class FunctionValueTypes {
 	/** The type of a string: a reflective call's recorded literal may be its first argument, the object, not the name. */
 	private static inline final STRING_TYPE: String = 'String';
 
-	/** The marker of a node a `Reflect`/`Type` body was spliced into: that call, its name and its arguments are gone. */
-	private static inline final REFLECTION_INLINED: String = 'reflection-inlined';
-
 	/** The kind of a typed typedef (`TypeFact.kind`). */
 	private static inline final TYPEDEF_KIND: String = 'typedef';
 
@@ -326,8 +323,18 @@ final class FunctionValueTypes {
 			final made: Null<FactNode> = table.node(id);
 			if (made == null) return false;
 			final n: FactNode = made;
-			final spliced: Null<Array<String>> = n.incomplete.contains(REFLECTION_INLINED) ? FactsView.splicedReflection(n) : [];
-			if (spliced == null || spliced.exists(m -> REFLECTIVE_WRITERS.contains(m))) return false;
+			final lost: Bool = FactMarkers.carries(
+				n, m -> switch m {
+					// a reflective writer spliced in lost the name it was handed
+					case ReflectionInlined:
+						final spliced: Null<Array<String>> = FactsView.splicedReflection(n);
+						spliced == null || spliced.exists(s -> REFLECTIVE_WRITERS.contains(s));
+					// a marker no reader knows may say a write's name was lost
+					case Unknown(_): true;
+					case StaleForeign | InlineSite | MacroExpansion | ReflectionUnattributed | ReflectionFrom(_): false;
+				}
+			);
+			if (lost) return false;
 			for (f in n.fields) if (f.write && f.field == name && UNTYPED_ACCESSES.contains(f.access)) {
 				final values: Null<Array<FactPos>> = storedBy(n, f.at);
 				if (values == null) return false;
@@ -553,12 +560,22 @@ final class FunctionValueTypes {
 			if (!out.contains(ESCAPED_VALUES)) out.push(ESCAPED_VALUES);
 		}
 		for (id in table.nodeIds()) {
-			final n: Null<FactNode> = table.node(id);
-			final spliced: Null<Array<String>> = n == null || !n.incomplete.contains(REFLECTION_INLINED)
-				? []
-				: FactsView.splicedReflection(n);
-			if (spliced == null || spliced.contains(CONSTRUCTING)) escaped();
-			for (r in n?.reflection ?? []) if (r.target == TYPE || r.target == CONSTRUCTING) {
+			final made: Null<FactNode> = table.node(id);
+			if (made == null) continue;
+			final n: FactNode = made;
+			final lost: Bool = FactMarkers.carries(
+				n, m -> switch m {
+					// a construction spliced in lost the arguments it was handed
+					case ReflectionInlined:
+						final spliced: Null<Array<String>> = FactsView.splicedReflection(n);
+						spliced == null || spliced.contains(CONSTRUCTING);
+					// a marker no reader knows may say a construction's arguments were lost
+					case Unknown(_): true;
+					case StaleForeign | InlineSite | MacroExpansion | ReflectionUnattributed | ReflectionFrom(_): false;
+				}
+			);
+			if (lost) escaped();
+			for (r in n.reflection) if (r.target == TYPE || r.target == CONSTRUCTING) {
 				if (r.target == TYPE || r.isValue) {
 					escaped();
 					continue;

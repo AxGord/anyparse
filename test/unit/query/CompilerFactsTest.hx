@@ -46,6 +46,23 @@ class CompilerFactsTest extends Test {
 		);
 	}
 
+	@:pin('control') @:killer('M-FACTS-WITHIN-MARKER-UNKNOWN')
+	public function testARangeMeetingANodeWithAMarkerNoReaderKnowsIsUnknown(): Void {
+		// a node's markers are a closed list (`FactMarker`): one no reader names may say a fact of the node runs where no
+		// position says, so a range question meeting the node is Unknown, as one meeting a fact lost with its file is
+		function node(inc: String): String {
+			return '{"k":"node","id":"A.f","f":"A.hx","p":[10,27],"kind":"method","owner":"A","t":"()->Void"$inc,'
+				+ '"calls":[{"t":"A.g","a":"FInstance","r":"A","rp":[23,24],"rt":"Void","p":[23,26]}]}';
+		}
+		function calls(inc: String): Null<Array<CallFact>> {
+			final dump: String = '{"k":"facts","v":1,"inline":true}\n${node(inc)}\n{"k":"end","nodes":1,"types":0}\n';
+			return table(dump).within('A.hx', new Span(23, 26), n -> n.calls, c -> c.at);
+		}
+		Assert.equals(1, calls('')?.length);
+		Assert.isNull(calls(',"inc":["future-marker"]'));
+		Assert.isNull(calls(',"inc":["stale-foreign"]'));
+	}
+
 	public function testAForeignPositionResolvesThroughItsDumpsFileTable(): Void {
 		// code inlined from another file carries that file's index; two dumps may number their files differently
 		final other: String = 'class B {}';
