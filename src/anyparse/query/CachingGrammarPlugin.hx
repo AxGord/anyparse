@@ -313,6 +313,12 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		return read == null ? null : read();
 	}
 
+	/** `SymbolIndexHost`: start the builds' compiles in the background (`ResolutionScope.buildsAhead`), when the run has any. */
+	public function reachBuildsAhead(): Void {
+		final start: Null<() -> Void> = _resolutionScope?.buildsAhead;
+		if (start != null) start();
+	}
+
 	/**
 	 * The run's record of every rewrite `CanonicalEdit.canonicalize` settled through this plugin, or null — the default, for a
 	 * run that asks no question of an earlier text of a file. A `--fix` run that reads compiler facts sets one.
@@ -325,8 +331,13 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		return read == null ? null : read();
 	}
 
-	/** Let the facts compiles the run started ahead finish before it writes (`ResolutionScope.factsSettled`). */
+	/**
+	 * Let the facts compiles the run started ahead finish before it writes (`ResolutionScope.factsSettled`), and drop the
+	 * builds' compiles no question read yet (`ResolutionScope.buildsSettled`).
+	 */
 	public function compilerFactsSettled(): Void {
+		final dropBuilds: Null<() -> Void> = _resolutionScope?.buildsSettled;
+		if (dropBuilds != null) dropBuilds();
 		final settle: Null<() -> Void> = _resolutionScope?.factsSettled;
 		if (settle != null) settle();
 	}
@@ -758,6 +769,12 @@ typedef ResolutionScope = {
 	@:optional final builds: () -> Null<ReachBuilds>;
 
 	/**
+	 * Start `builds`' compiles in the background when they have not run: a run that is about to wait on its facts and then
+	 * ask the builds overlaps the two (`MemberReach.forRun`). Absent with `builds`.
+	 */
+	@:optional final buildsAhead: () -> Void;
+
+	/**
 	 * What the run's compiler oracles typed, read on first demand and once per run (`TypedFactsProbe`); absent when the
 	 * run configured no oracle or declined it. Unlike `builds` it needs no complete oracle list: code no configuration
 	 * compiled simply has no facts.
@@ -775,4 +792,10 @@ typedef ResolutionScope = {
 	 * reads a file half way through a rewrite. A run that started none compiles on demand, after its writes.
 	 */
 	@:optional final factsSettled: () -> Void;
+
+	/**
+	 * The run is about to write: drop the builds' compiles `buildsAhead` began and nobody has read, so `builds` compiles
+	 * the tree as it is when first asked, as it always did. Absent with `builds`.
+	 */
+	@:optional final buildsSettled: () -> Void;
 };

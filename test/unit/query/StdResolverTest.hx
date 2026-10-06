@@ -296,4 +296,39 @@ class StdResolverTest extends Test {
 		Assert.equals('/opt/haxe/std', StdResolver.siblingStdOf('/opt/haxe/bin/haxe', installer));
 	}
 
+	/**
+	 * A `haxe` first on PATH with no std beside it is a wrapper (a test harness's shim): the std is the one beside the next
+	 * `haxe`, the compiler the wrapper hands the build to — never a known location, which on a machine carrying a second
+	 * install under `/usr/local` named that one.
+	 */
+	@:pin('control') @:killer('M-STD-FIRST-HAXE-ONLY')
+	public function testAWrapperFirstOnPathYieldsToTheCompilerAfterIt(): Void {
+		final resolve: String -> String = bin -> bin == '/brew/bin/haxe' ? '/brew/Cellar/haxe/4/bin/haxe' : bin;
+		final exists: String -> Bool = path -> path == '/brew/Cellar/haxe/4/lib/haxe/std';
+		Assert.equals(
+			'/brew/Cellar/haxe/4/lib/haxe/std', StdResolver.firstSiblingStd(['/shim/bin/haxe', '/brew/bin/haxe'], resolve, exists)
+		);
+		Assert.isNull(StdResolver.firstSiblingStd(['/shim/bin/haxe'], resolve, exists));
+	}
+
+	/**
+	 * Where the resolved link has no std beside it, the places the compiler searches from its own spelling answer: an
+	 * installer's `/usr/local/bin/haxe` -> `/usr/local/lib/haxe/haxe`, and a `share/haxe/std` layout.
+	 */
+	@:pin('control') @:killer('M-STD-COMPILER-SEARCH-NONE')
+	public function testTheCompilersOwnSearchAnswersBesideAnUnresolvedLink(): Void {
+		final installer: String -> String = bin -> '/usr/local/lib/haxe/haxe';
+		Assert.equals(
+			'/usr/local/lib/haxe/std',
+			StdResolver.firstSiblingStd(['/usr/local/bin/haxe'], installer, path -> path == '/usr/local/lib/haxe/std')
+		);
+		Assert.equals('/x/share/haxe/std', StdResolver.firstSiblingStd(['/x/bin/haxe'], bin -> bin, path -> path == '/x/share/haxe/std'));
+	}
+
+	/** Homebrew's std is probed before `/usr/local`'s, where a second, older install may sit. */
+	@:pin('guard')
+	public function testHomebrewIsProbedBeforeUsrLocal(): Void {
+		Assert.equals('/opt/homebrew/lib/haxe/std', StdResolver.discover(null, null, StdResolver.KNOWN_LOCATIONS, _ -> true));
+	}
+
 }

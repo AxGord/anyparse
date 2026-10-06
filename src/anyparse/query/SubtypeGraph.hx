@@ -426,7 +426,13 @@ final class SubtypeGraph {
 	 */
 	public function subtypeFiles(owner: String): Array<String> {
 		final out: Array<String> = [];
-		eachSubtype(owner, sub -> if (!out.contains(sub.file.file)) out.push(sub.file.file));
+		final seen: Map<String, Bool> = [];
+		eachSubtype(
+			owner, sub -> if (!seen.exists(sub.file.file)) {
+				seen[sub.file.file] = true;
+				out.push(sub.file.file);
+			}
+		);
 		return out;
 	}
 
@@ -437,7 +443,14 @@ final class SubtypeGraph {
 	 */
 	public function subtypeNames(owner: String, ?fromFile: String): Array<String> {
 		final out: Array<String> = [];
-		eachSubtype(owner, sub -> if (!out.contains(sub.type.name)) out.push(sub.type.name), fromFile);
+		final seen: Map<String, Bool> = [];
+		eachSubtype(
+			owner, sub -> if (!seen.exists(sub.type.name)) {
+				seen[sub.type.name] = true;
+				out.push(sub.type.name);
+			},
+			fromFile
+		);
 		return out;
 	}
 
@@ -461,12 +474,18 @@ final class SubtypeGraph {
 			eachSubtypeOfDecl(start, visit);
 			return;
 		}
+		// a set beside the worklist: `closure.contains` made the walk quadratic in a type's subtypes, and TM's widest
+		// (openfl's display list) are asked per question (`declaredValueTypes`, `ReachGraph.loadOverrides`)
 		final closure: Array<String> = [owner];
+		final queued: Map<String, Bool> = [owner => true];
 		var i: Int = 0;
 		while (i < closure.length) {
 			final parent: String = closure[i++];
 			for (sub in subtypesOf(parent)) {
-				if (!closure.contains(sub.type.name)) closure.push(sub.type.name);
+				if (!queued.exists(sub.type.name)) {
+					queued[sub.type.name] = true;
+					closure.push(sub.type.name);
+				}
 				visit(sub);
 			}
 		}
