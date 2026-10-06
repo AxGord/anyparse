@@ -167,6 +167,9 @@ final class FactsView {
 	/** Graph type name -> the one typed type every declaration of it is (`soleType`), or null, settled once. */
 	private final _sole: Map<String, Null<String>> = [];
 
+	/** Graph type name -> the typed type the index's one declaration of it is (`declaredTyped`), or null, settled once. */
+	private final _declaredTyped: Map<String, Null<String>> = [];
+
 	/** `Type.member` of the graph -> the typed type whose member it is alone (`soleMember`), or null, settled once. */
 	private final _soleMember: Map<String, Null<String>> = [];
 
@@ -497,9 +500,38 @@ final class FactsView {
 		return (_scope.shape.execution?.stringConversionCalls ?? []).contains(target);
 	}
 
-	/** Whether a build macro may rewrite a typed type the graph calls `type`: one of them records a `@:build`-family call. */
+	/**
+	 * Whether a build macro may rewrite a typed type the graph calls `type`, of those whose code its text is
+	 * (`provenanceTypes`): one of them records a `@:build`-family call.
+	 */
 	public function built(type: String): Bool {
-		return (bySimpleName()[type] ?? []).exists(id -> (table.type(id)?.builds.length ?? 0) > 0);
+		return provenanceTypes(type).exists(id -> (table.type(id)?.builds.length ?? 0) > 0);
+	}
+
+	/**
+	 * The typed types the graph type `type` stands for in a question of whether its code is its text (`built`,
+	 * `FactsProvenance.typeIsItsText`): under the truth, the ones standing for the type the index's one declaration of
+	 * the name is, when the builds typed it (`declaredTyped`) — a type of the name the index does not hold (lime's `Endian`
+	 * beside openfl's) is none of that text's code, and its build macro rewrites none of it. Every typed type of the name
+	 * otherwise: without the truth a build no list names may type another one there.
+	 */
+	public function provenanceTypes(type: String): Array<String> {
+		final own: Null<String> = declaredTyped(type);
+		return own == null ? bySimpleName()[type] ?? [] : standingFor(type, own);
+	}
+
+	/**
+	 * Under the truth, the typed type every declaration of the graph type `type` the index holds is — one declaration, or a
+	 * copy of it per build, all naming one type (`declaredIds`) — when the builds typed it; null otherwise. Unlike `soleType`,
+	 * a typed type of the name the index does not hold may stand beside it.
+	 */
+	public function declaredTyped(type: String): Null<String> {
+		if (!truth) return null;
+		if (_declaredTyped.exists(type)) return _declaredTyped[type];
+		final declared: Array<String> = declaredIds(type);
+		final own: Null<String> = declared.length == 1 && standingFor(type, declared[0]).length > 0 ? declared[0] : null;
+		_declaredTyped[type] = own;
+		return own;
 	}
 
 	/**
@@ -539,11 +571,7 @@ final class FactsView {
 	public function soleType(type: String): Null<String> {
 		if (!truth) return null;
 		if (_sole.exists(type)) return _sole[type];
-		final declared: Array<String> = [];
-		for (fi in _scope.index.allFiles()) for (t in fi.types) if (t.name == type && !CallGraphNames.selfAlias(t)) {
-			final named: String = declaredId(fi, t);
-			if (!declared.contains(named)) declared.push(named);
-		}
+		final declared: Array<String> = declaredIds(type);
 		final id: Null<String> = declared.length == 1 ? declared[0] : null;
 		final typed: Array<String> = bySimpleName()[type] ?? [];
 		final sole: Null<String> = id != null && table.type(id) != null && typed.foreach(t -> standsFor(t, id)) ? id : null;
@@ -886,6 +914,20 @@ final class FactsView {
 					if (!keys.contains(home)) return true;
 		}
 		return false;
+	}
+
+	/**
+	 * The package-qualified ids of the index's declarations of the graph type `type`, each once: a copy per build, or one in
+	 * each branch of a conditional region, is one. A typedef aliasing a type of its own name (`CallGraphNames.selfAlias`)
+	 * declares none.
+	 */
+	private function declaredIds(type: String): Array<String> {
+		final declared: Array<String> = [];
+		for (fi in _scope.index.allFiles()) for (t in fi.types) if (t.name == type && !CallGraphNames.selfAlias(t)) {
+			final named: String = declaredId(fi, t);
+			if (!declared.contains(named)) declared.push(named);
+		}
+		return declared;
 	}
 
 	/**
