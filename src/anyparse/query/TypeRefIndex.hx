@@ -26,6 +26,7 @@ using Lambda;
  * produces, so its identity is this layer's to define.
  */
 @:nullSafety(Strict)
+@:allow(anyparse.query.MemberLookup)
 final class TypeRefIndex {
 
 	/** The strongest precedence tier: a module's own declarations and its own explicit imports — see `tierOf`. */

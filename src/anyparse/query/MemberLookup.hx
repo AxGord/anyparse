@@ -23,15 +23,15 @@ using Lambda;
 @:allow(anyparse.query.MemberPathWalk)
 final class MemberLookup {
 
-	/** Every indexed file's `FileInfo`, handed over by the owning index. */
-	private final _files: Array<FileInfo>;
-
-	/** The name -> declaration layer this one resolves every written member and supertype reference through. */
+	/**
+	 * The name -> declaration layer this one resolves every written member and supertype reference through, and the
+	 * table every lookup by simple name reads (`TypeRefIndex.named`) — each of them a scan of every type of every file
+	 * before, `supertypeDeclares` and `typeDeclaresMember` alone 12 s of a TM `--fix`.
+	 */
 	private final _refs: TypeRefIndex;
 
 	/** Built once by the owning `SymbolIndex`, which hands over the shared, immutable index data. */
-	public function new(files: Array<FileInfo>, refs: TypeRefIndex) {
-		_files = files;
+	public function new(refs: TypeRefIndex) {
 		_refs = refs;
 	}
 
@@ -121,8 +121,8 @@ final class MemberLookup {
 	 */
 	public function memberGetter(typeName: String, field: String): Null<Bool> {
 		var found: Null<Bool> = null;
-		for (fi in _files) for (t in fi.types) if (t.name == typeName) {
-			final r: Null<Bool> = memberGetterWalk({ file: fi, type: t }, field, false, []);
+		for (decl in _refs.named(typeName)) {
+			final r: Null<Bool> = memberGetterWalk({ file: decl.file, type: decl.type }, field, false, []);
 			if (r == true) return true;
 			if (r == false) found = false;
 		}
@@ -160,7 +160,7 @@ final class MemberLookup {
 	public function memberTypeSourceOf(typeName: String, memberName: String): Null<String> {
 		var found: Null<String> = null;
 		var count: Int = 0;
-		for (fi in _files) for (t in fi.types) if (t.name == typeName) for (m in t.members) if (m.name == memberName) {
+		for (decl in _refs.named(typeName)) for (m in decl.type.members) if (m.name == memberName) {
 			final ts: Null<String> = m.typeSource;
 			if (ts == null) return null;
 			if (count == 0)
@@ -189,8 +189,8 @@ final class MemberLookup {
 	 */
 	public function memberDeclarationsOf(typeName: String, memberName: String): Array<{ type: TypeDeclInfo, member: MemberInfo }> {
 		return [
-			for (fi in _files) for (t in fi.types) if (t.name == typeName)
-				for (m in t.members) if (m.name == memberName) { type: t, member: m }
+			for (decl in _refs.named(typeName))
+				for (m in decl.type.members) if (m.name == memberName) { type: decl.type, member: m }
 		];
 	}
 
@@ -326,7 +326,7 @@ final class MemberLookup {
 	 * hit as "do not rewrite".
 	 */
 	public function typeDeclaresMember(typeName: String, member: String): Bool {
-		for (fi in _files) for (t in fi.types) if (t.name == typeName && t.members.exists(m -> m.name == member)) return true;
+		for (decl in _refs.named(typeName)) if (decl.type.members.exists(m -> m.name == member)) return true;
 		return false;
 	}
 
@@ -377,8 +377,8 @@ final class MemberLookup {
 	 */
 	public function declarationsOf(typeName: String, member: String): Array<OverrideFamilyMember> {
 		return [
-			for (fi in _files) for (t in fi.types) if (t.name == typeName)
-				for (m in t.members) if (m.name == member) { file: fi.file, typeName: t.name, declFrom: m.declFrom }
+			for (decl in _refs.named(typeName))
+				for (m in decl.type.members) if (m.name == member) { file: decl.file.file, typeName: decl.type.name, declFrom: m.declFrom }
 		];
 	}
 
@@ -518,11 +518,9 @@ final class MemberLookup {
 	private function supertypeDeclares(typeName: String, field: String, seen: Array<String>): Bool {
 		if (seen.contains(typeName)) return false;
 		seen.push(typeName);
-		for (fi in _files)
-			for (t in fi.types)
-				if (t.name == typeName)
-					for (sup in t.supertypes)
-						if (typeDeclaresMember(sup, field) || supertypeDeclares(sup, field, seen)) return true;
+		for (decl in _refs.named(typeName))
+			for (sup in decl.type.supertypes)
+				if (typeDeclaresMember(sup, field) || supertypeDeclares(sup, field, seen)) return true;
 		return false;
 	}
 
@@ -685,7 +683,7 @@ final class MemberLookup {
 		seen.push(typeName);
 		var found: Null<String> = null;
 		var direct: Int = 0;
-		for (fi in _files) for (t in fi.types) if (t.name == typeName) for (m in t.members) if (m.name == memberName) {
+		for (decl in _refs.named(typeName)) for (m in decl.type.members) if (m.name == memberName) {
 			if (direct == 0)
 				found = m.returnNominal;
 			else if (m.returnNominal != found)
@@ -695,7 +693,7 @@ final class MemberLookup {
 		if (direct > 0) return found;
 		var inherited: Null<String> = null;
 		var supers: Int = 0;
-		for (fi in _files) for (t in fi.types) if (t.name == typeName) for (sup in t.supertypes) {
+		for (decl in _refs.named(typeName)) for (sup in decl.type.supertypes) {
 			final rn: Null<String> = returnNominalWalk(sup, memberName, seen);
 			if (rn == null) continue;
 			if (supers == 0)
@@ -720,7 +718,7 @@ final class MemberLookup {
 		var direct: Null<String> = null;
 		var directCount: Int = 0;
 		var deferring: Bool = false;
-		for (fi in _files) for (t in fi.types) if (t.name == typeName) for (m in t.members) if (m.name == memberName) {
+		for (decl in _refs.named(typeName)) for (m in decl.type.members) if (m.name == memberName) {
 			final v: Null<String> = m.visibility;
 			if (v == null) {
 				if (!m.isOverride) return null;
@@ -734,7 +732,7 @@ final class MemberLookup {
 		if (directCount > 0) return deferring ? null : direct;
 		var inherited: Null<String> = null;
 		var supers: Int = 0;
-		for (fi in _files) for (t in fi.types) if (t.name == typeName) for (sup in t.supertypes) {
+		for (decl in _refs.named(typeName)) for (sup in decl.type.supertypes) {
 			final v: Null<String> = memberVisibilityWalk(sup, memberName, seen);
 			if (v == null) continue;
 			if (supers > 0 && v != inherited) return null;

@@ -669,7 +669,7 @@ final class SymbolIndex {
 		_typeSyntax = plugin.typeSyntax;
 		refs = new TypeRefIndex(files);
 		subtypes = new SubtypeGraph(files, sources, refs);
-		members = new MemberLookup(files, refs);
+		members = new MemberLookup(refs);
 		structural = new StructuralTypes(files, refs, subtypes, members, plugin.typeSyntax);
 		paths = new MemberPathWalk(files, refs, members, plugin.typeSyntax);
 		text = new RawSourceScan(files, skipped, sources, plugin, thirdParty);
