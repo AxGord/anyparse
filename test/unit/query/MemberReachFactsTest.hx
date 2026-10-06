@@ -2192,6 +2192,71 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthAsk(['Main.hx' => region('js.Syntax.code("{0}", o);')]), r -> r.match(Unknown(NativeCode(_, _))));
 	}
 
+	@:pin('control') @:killer('M-EXTERN-HANDED-FACTS') @:killer('M-EXTERN-HANDED-RECEIVER') @:killer('M-EXTERN-CALLERS')
+	@:killer('M-EXTERN-REVISIT') @:killer('M-NATIVE-SITE-TAKEN-VALUES') @:killer('M-NATIVE-SITE-ARRAY-ELEMENTS')
+	public function testAnExternRunsOnlyWhatTheValuesItsCallersHandItLetItRunUnderTheTruth(): Void {
+		// target code reaches only what it is handed: an `Int`, an `Array<Int>` (the built-in array's own methods run no code
+		// of the program's, its elements are no object — after a `Main` left the type system too) and nothing let it run
+		// nothing — not `g`, which `cb` holds as a value. A function value, an object (its members by name, the function values
+		// it holds), a receiver, a `Dynamic` let it run them; so does what any other caller hands it, before the walk admits it
+		// or after. Without the truth the syntax reads the call
+		function cpp(code: String, ?main: String): ReachResult {
+			return builtAsk(CPP_BUILD, ['Main.hx' => targetFixture(code, main)]);
+		}
+		assertMatch(cpp('Native.dyn(1);'), r -> r.match(Proven));
+		assertMatch(cpp('Native.arr(a);'), r -> r.match(Proven));
+		assertMatch(cpp('h1();'), r -> r.match(Proven));
+		assertMatch(cpp('Native.fn(cb);'), r -> r.match(Reached(_)));
+		assertMatch(cpp('Native.dyn(new Other());'), r -> r.match(Reached(_)));
+		assertMatch(cpp('Native.dyn(new Holder());'), r -> r.match(Reached(_)));
+		assertMatch(cpp('new Sub().poke(1);'), r -> r.match(Reached(_)));
+		assertMatch(cpp('peer.poke(1);'), r -> r.match(Reached(_)));
+		assertMatch(cpp('Native.dyn(d);'), r -> r.match(Reached(_)));
+		assertMatch(cpp('h1(); h2();'), r -> r.match(Reached(_)));
+		assertMatch(cpp('h1(); k();'), r -> r.match(Reached(_)));
+		assertMatch(cpp('Native.arr(a);', 'var e:Dynamic = new Main();'), r -> r.match(Proven));
+
+		assertMatch(ask(['Main.hx' => targetFixture('Native.dyn(1);')], null, true, null, false, CPP_BUILD), r -> r.match(Reached(_)));
+	}
+
+	@:pin('control') @:killer('M-NATIVE-CLASSES-NAMED')
+	public function testTargetCodeNamingAClassRunsWhatTheClassHoldsUnderTheTruth(): Void {
+		// code that names a class reaches its statics and its constructor as Haxe code naming it does — not an extern's, whose
+		// members are target code themselves; handed an `Array<Int>` it reaches no object, handed `cb` it may run `g`
+		function cpp(code: String): ReachResult {
+			return builtAsk(CPP_BUILD, ['Main.hx' => targetFixture(code)]);
+		}
+		assertMatch(cpp('untyped __cpp__("0");'), r -> r.match(Proven));
+		assertMatch(cpp('untyped __cpp__("::Main_obj::g()");'), r -> r.match(Reached(_)));
+		assertMatch(cpp('untyped __cpp__("::Maker_obj::__new()");'), r -> r.match(Reached(_)));
+		assertMatch(cpp('untyped __cpp__("::Native_obj::fn(0)");'), r -> r.match(Proven));
+		assertMatch(cpp('untyped __cpp__("{0}", a);'), r -> r.match(Proven));
+		assertMatch(cpp('untyped __cpp__("{0}()", cb);'), r -> r.match(Reached(_)));
+	}
+
+	@:pin('control') @:killer('M-NATIVE-CLASSES-EXTERN')
+	public function testAStringBufHandsItsTargetCodeNoObjectUnderTheTruth(): Void {
+		// hxcpp's `StringBuf.flush` hands `cpp.Pointer.nativeArrayElem` its `Array<cpp.Char>` through two inline splices, and
+		// `__global__.String` a `cpp.Star<cpp.Char>` and an `Int`: target code handed only characters runs nothing, so not `g`,
+		// which `cb` holds (TM's `GridScale.hx:61`). Without the truth the extern may run any function value
+		final main: String = targetFixture('var b:StringBuf = new StringBuf();\n\t\t\tb.addChar(65);\n\t\t\tvar s:String = b.toString();');
+		final std: String = StdResolver.stdDir() ?? '';
+		final declared: Map<String, String> = [];
+		for (f in [
+			'cpp/_std/StringBuf.hx',
+			'cpp/NativeArray.hx',
+			'cpp/Pointer.hx',
+			'cpp/NativeString.hx',
+			'cpp/ConstPointer.hx',
+			'cpp/Char.hx'
+		]) {
+			final path: String = OracleCoverage.canonical(Sys.getCwd(), Path.join([std, f]));
+			declared[path] = sys.io.File.getContent(path);
+		}
+		assertMatch(builtAsk(CPP_BUILD, ['Main.hx' => main], declared), r -> r.match(Proven));
+		assertMatch(ask(['Main.hx' => main], null, true, null, false, CPP_BUILD, null, null, false, declared), r -> !r.match(Proven));
+	}
+
 	@:pin('control') @:killer('M-GRAPH-FACTS-NATIVE-CHAIN-SKIP') @:killer('M-GRAPH-FACTS-NATIVE-CHAIN-ANY')
 	public function testACallAChainOfTargetNamesMakesIsItsTargetCodesUnderTheTruth(): Void {
 		// `console.log(1)` is target code handed `1`: no dynamic call by a name that may run a function value, so `g`, which `cb`
@@ -2411,8 +2476,7 @@ class MemberReachFactsTest extends Test {
 		assertMatch(reflectAsk(fixture('new Third().calm();'), true), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-ARRAY-OWN') @:killer('M-REACH-ARRAY-ELEMENTS') @:killer('M-REACH-EXTERN-FACTS-TYPE')
-	@:killer('M-REACH-ARRAY-VALUES')
+	@:pin('control') @:killer('M-REACH-EXTERN-FACTS-TYPE') @:killer('M-REACH-ARRAY-VALUES')
 	public function testTheArraysOwnMethodReachesItsElementsOnlyByConvertingThemUnderTheTruth(): Void {
 		// `a.join` is the built-in array's own method: it converts each element of `a`, which the compiler types `Array<String>`
 		// though the syntax cannot, and reaches no member by name — so neither `Obj.toString`, which changes `items`, nor any
@@ -2428,15 +2492,18 @@ class MemberReachFactsTest extends Test {
 		assertMatch(interpAsk(['Main.hx' => region('var a = [new Obj()];')], STD_STRING), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-REACH-ARRAY-CTOR')
+	@:pin('control') @:killer('M-REACH-ARRAY-CTOR') @:killer('M-REACH-ARRAY-OWN')
 	public function testAConstructionOfTheBuiltInArrayIsHandedNothingUnderTheTruth(): Void {
 		// `new Array()` names a type and hands its target code no argument, no receiver and no function value: neither
-		// `Obj.toString` nor `Clear.run`, read as a value, runs — though both change `items`
+		// `Obj.toString` nor `Clear.run`, read as a value, runs — though both change `items`. The compiler's reading of what an
+		// extern is handed says so (`MemberReach.externHanded`); without the truth the syntax does, for the built-in array's own
+		// constructor
 		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tnew Obj();\n\t\tvar f:Void->Void = Clear.run;\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ Util.make(); /*>*/ }\n\t}\n}\n'
 			+ 'class Util {\n\tpublic static function make():Array<Int> return new Array<Int>();\n}\n'
 			+ 'class Clear {\n\tpublic static function run():Void Main.items = [];\n}\n' + CLEARING_OBJ;
 		assertMatch(interpAsk(['Main.hx' => main]), r -> r.match(Proven));
+		assertMatch(ask(['Main.hx' => main], null, true, null, true, INTERP_BUILD), r -> r.match(Proven));
 	}
 
 	public function testAnExternConstructionIsHandedItsArgumentsAlone(): Void {
@@ -4506,6 +4573,32 @@ class MemberReachFactsTest extends Test {
 		return 'if ($guard) for (field in Reflect.fields(config)) Reflect.setField(attributes, field, Reflect.field(config, field));';
 	}
 
+	/**
+	 * hxcpp target code in miniature, `code` the region and `main` run first: `g` changes `items` through `last`, and `cb`
+	 * holds it as a value; `Other.run` calls it, `Holder` holds it in a field, `Maker`'s constructor and `Sub`, extending the
+	 * extern `Peer`, call it. `Native` is target code, handed what its parameters say; `h1` hands it an `Int`, `h2` an `Other`,
+	 * and `k` reaches `h2` a call later.
+	 */
+	private static function targetFixture(code: String, ?main: String): String {
+		return 'class Main {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n'
+			+ '\tstatic var last:Main = new Main();\n\tstatic var cb:Void->Void = g;\n\tstatic var peer:Peer = new Sub();\n'
+			+ '\tpublic static function g():Void\n\t\tlast.items.push(1);\n\n'
+			+ '\tstatic function h1():Void\n\t\tNative.dyn(1);\n\n\tstatic function h2():Void\n\t\tNative.dyn(new Other());\n\n'
+			+ '\tstatic function k():Void\n\t\th2();\n\n'
+			+ '\tstatic function main() {\n\t\t${main ?? ''}\n\t\tnew Main().f();\n\t\tcb();\n\t\th1();\n\t\tk();\n'
+			+ '\t\tnew Holder();\n\t\tnew Maker();\n\t\tnew Sub().run();\n\t}\n\n'
+			+ '\tfunction f():Void {\n\t\tvar d:Dynamic = 1;\n\t\tvar a:Null<Array<Int>> = [1];\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ ' + code + ' /*>*/ }\n\t}\n}\n'
+			+ 'class Other {\n\tpublic function new() {}\n\n\tpublic function run():Void\n\t\tMain.g();\n}\n'
+			+ 'class Holder {\n\tpublic var f:Void->Void = Main.g;\n\n\tpublic function new() {}\n}\n'
+			+ 'class Maker {\n\tpublic function new()\n\t\tMain.g();\n}\n'
+			+ '@:native("Peer") extern class Peer {\n\tpublic function new();\n\n\tpublic function poke(x:Dynamic):Void;\n}\n'
+			+ 'class Sub extends Peer {\n\tpublic function run():Void\n\t\tMain.g();\n}\n'
+			+ 'extern class Native {\n\t@:native("fn") public static function fn(f:Void->Void):Void;\n\n'
+			+ '\t@:native("arr") public static function arr(a:Null<Array<Int>>):Void;\n\n'
+			+ '\t@:native("dyn") public static function dyn(a:Dynamic):Void;\n}\n';
+	}
+
 	/** Whether `source` answers `Proven`, or `DynamicName` when `proven` is false, under the interpreter's facts. */
 	private static function assertGuarded(
 		source: String, proven: Bool, ?holders: Array<String>, listed: Bool = true, ?pos: haxe.PosInfos
@@ -4543,7 +4636,7 @@ class MemberReachFactsTest extends Test {
 	@:pin('control') @:killer('M-GUARDED-NEVER-CALLED') @:killer('M-GUARDED-OVERRIDES')
 	@:killer('M-GUARDED-PLAIN-CALLS') @:killer('M-GUARDED-PLAIN-READS') @:killer('M-GUARDED-CONTAINER')
 	@:killer('M-GUARDED-CONTAINER-FRESH') @:killer('M-GUARDED-CONTAINER-READS') @:killer('M-GUARDED-REFLECTED')
-	@:killer('M-GUARDED-TARGET-CODE') @:killer('M-GUARDED-OBTAINED')
+	@:killer('M-GUARDED-TARGET-CODE') @:killer('M-GUARDED-OBTAINED') @:killer('M-GUARDED-MEMBER-NAME')
 	public function testAMethodValueSomeCodeMayCallLeavesItsParameterUnknownUnderTheTruth(): Void {
 		// the stored value is read and called, with an object `Main` escaped into
 		final fire: String = '\tpublic static function fire():Void entries["app"]({ items: [] });\n';
@@ -4584,6 +4677,11 @@ class MemberReachFactsTest extends Test {
 		final written: String =
 			'var m:Map<String, Dynamic -> Void> = new Map(); Reflect.setField(Boot, "entries", m); Boot.boot(); m["app"]({ items: [] });';
 		assertGuarded(guardedFixture(written), false);
+		// a write by a computed name may replace the container, whatever literal it stores: the value names nothing (one by
+		// another name does not)
+		final computed: String = 'Boot.boot(); var n:String = Std.string(Math.random()); Reflect.setField(Boot, n, "v");';
+		assertGuarded(guardedFixture(computed), false, ['Main']);
+		assertGuarded(guardedFixture('Boot.boot(); Reflect.setField(Boot, "other", "v");'), true, ['Main']);
 		assertGuarded(guardedFixture('Boot.boot(); trace(Reflect.field(Boot, "entries"));'), false);
 		assertGuarded(guardedFixture('Boot.boot(); trace(Reflect.field(Boot, "create"));'), false);
 	}

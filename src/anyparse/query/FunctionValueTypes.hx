@@ -114,9 +114,6 @@ final class FunctionValueTypes {
 	/** The reflective member that runs a class value's constructor with the arguments an array hands it. */
 	private static inline final CONSTRUCTING: String = 'Type.createInstance';
 
-	/** The type of a string: a reflective call's recorded literal may be its first argument, the object, not the name. */
-	private static inline final STRING_TYPE: String = 'String';
-
 	/** The kind of a typed typedef (`TypeFact.kind`). */
 	private static inline final TYPEDEF_KIND: String = 'typedef';
 
@@ -383,9 +380,9 @@ final class FunctionValueTypes {
 				for (v in values) out.push(v);
 			}
 			for (r in n.reflection) if (r.target == REFLECT || REFLECTIVE_WRITERS.contains(r.target)) {
-				final literal: Null<String> = r.name;
-				final computed: Bool = r.target == REFLECT || r.isValue || literal == null
-					|| CompilerFacts.baseId(r.receiver ?? STRING_TYPE) == STRING_TYPE;
+				// the literal at the call's NAME argument; another argument's (the value written) names nothing
+				final literal: Null<String> = r.memberName;
+				final computed: Bool = r.target == REFLECT || r.isValue || literal == null;
 				if (computed && computedNames) return false;
 				if (computed || literal != name) continue;
 				final values: Null<Array<FactPos>> = reflectiveStore(n, r.at);

@@ -36,6 +36,9 @@ final class FactsNativeReach {
 	/** The prefix a target gives a Haxe name it cannot spell as it is (hxcpp's `_hx_new`): the name stands behind it. */
 	private static inline final MANGLED: String = '_hx_';
 
+	/** The kinds of a typed type whose statics and constructor code naming it may run (`classesNamed`). */
+	private static final CLASS_KINDS: Array<String> = ['class', 'impl'];
+
 	/** What separates a nested function's id from its parent's (`TypedFactsWalk`): `<parent id>@<offset>`. */
 	private static inline final NESTED_ID: String = '@';
 
@@ -49,6 +52,9 @@ final class FactsNativeReach {
 
 	/** Class id -> the names target code in its methods reaches a member of `this` by (`memberNames`), read once per class. */
 	private final _members: Map<String, Array<String>> = [];
+
+	/** The typed classes whose code target code may run by naming them (`classesNamed`); listed on first need. */
+	private var _classes: Null<Array<String>> = null;
 
 	public function new(table: CompilerFacts) {
 		_table = table;
@@ -121,6 +127,26 @@ final class FactsNativeReach {
 			if ((hierarchyOf(home).contains(s.owner) || classNamed(s.owner, names)) && !s.types.foreach(hand.escape)) return false;
 		}
 		return true;
+	}
+
+	/**
+	 * The classes of the program's code (`programClass`) target code spelling `words` (`targetNames`) names (`classNamed`):
+	 * code that names a class reaches what the class holds globally — its statics, its constructor — as Haxe code naming it
+	 * does.
+	 */
+	public function classesNamed(words: Array<String>): Array<String> {
+		if (words.length == 0) return [];
+		final listed: Array<String> = _classes ?? [for (id in _table.typeIds()) if (programClass(_table.type(id))) id];
+		_classes = listed;
+		return [for (id in listed) if (classNamed(id, words)) id];
+	}
+
+	/**
+	 * Whether the typed type `fact` is a class of the program's code: a class or an abstract's implementation that is no
+	 * extern — an extern's members are target code themselves, its `inline` ones spliced where Haxe code calls them.
+	 */
+	private static function programClass(fact: Null<TypeFact>): Bool {
+		return fact != null && CLASS_KINDS.contains(fact.kind) && !fact.isExtern;
 	}
 
 	/** Hand the type of each value a call of the native site `x` hands its target code to `hand`. */
