@@ -197,10 +197,10 @@ final class ModuleScan {
 		return '';
 	}
 
-	/** The module `file` declares, read from its own `package` declaration and its basename. */
+	/** The module `file` declares, read from its own `package` declaration and its name (`RefactorSupport.moduleNameOf`). */
 	public static function moduleOf(root: QueryNode, file: String): ModulePath {
 		final pkg: String = packageOf(root);
-		final base: String = RefactorSupport.baseNameOf(file);
+		final base: String = RefactorSupport.moduleNameOf(file);
 		return { path: pkg == '' ? base : '$pkg.$base', pkg: pkg, base: base };
 	}
 

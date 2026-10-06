@@ -20,6 +20,7 @@ import anyparse.query.FactsView.ExternCalls;
 import anyparse.query.FactsView.TruthSites;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.ImplicitSites.ImplicitSite;
+import anyparse.query.ImplicitSites.SiteFamily;
 import anyparse.query.MemberTouchScan.FreshContext;
 import anyparse.query.MemberTouchScan.MemberTouches;
 import anyparse.query.MemberTouchScan.Occurrence;
@@ -1914,12 +1915,18 @@ final class MemberReach {
 				implicit.push(o.id)
 			else
 				owned.push(o);
+			// a conversion of a type whose text the index does not hold is no candidate the index holds (`ReachGraph.unheldInPlay`)
+			final converted: Null<String> = site.always ? _g.unheldInPlay([], true) : null;
+			if (converted != null)
+				blind = blind ?? UnresolvedDispatch(
+					site.file, site.span, 'the conversions of `$converted`, a type no candidate the index holds stands for'
+				);
 			for (at in site.implicit) {
 				// a type whose text the index does not hold runs members no implicit candidate stands for (`ReachGraph.unheldAt`)
 				final unheld: Null<String> = _g.unheldAt(g, at);
 				if (unheld != null)
 					blind = blind ?? UnresolvedDispatch(
-						site.file, at.span, 'the implicit calls of `$unheld`, a type whose text the index does not hold'
+						site.file, at.span, 'the implicit calls of `$unheld`, a type no candidate the index holds stands for'
 					);
 			}
 			// the methods of an object reflection reaches by name are each the member of the type the facts name
@@ -1989,6 +1996,17 @@ final class MemberReach {
 				narrowed.push(site);
 				narrowedChannels.push(channels);
 			}
+			// code the walk does not read may run an implicitly-called member of a type whose text the index does not hold
+			final typed: Array<SiteFamily> = [SiteFamily.Text, SiteFamily.Iteration];
+			final families: Array<SiteFamily> = read
+				? typed.concat([SiteFamily.Index, SiteFamily.Operator(''), SiteFamily.Literal])
+				: run == null ? typed : [];
+			final textless: Null<String> = _g.unheldInPlay(families, false);
+			if (textless != null)
+				blind = blind ?? UnresolvedDispatch(
+					site.file, site.span,
+					'the implicit calls of `$textless` code the walk does not read may run, a type no candidate the index holds stands for'
+				);
 			final unread: AdmissionSite = {
 				from: site.from,
 				file: site.file,

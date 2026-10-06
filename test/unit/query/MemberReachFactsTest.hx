@@ -52,6 +52,17 @@ class MemberReachFactsTest extends Test {
 		+ 'public function push(x:T):Int; public function pop():Null<T>; public function indexOf(x:T, ?fromIndex:Int):Int; '
 		+ 'public function join(sep:String):String; public function new():Void; }';
 
+	/**
+	 * The library declarations every fixture's index holds in place of the std's: the array type, and the std classes the
+	 * builds type and let escape, whose code would otherwise be text the index holds nothing of (`FactsView.textless`).
+	 */
+	private static final STD_STAND_INS: Map<String, String> = [
+		'std/Array.hx' => STD_ARRAY,
+		'std/HxOverrides.hx' => 'class HxOverrides {}',
+		'std/haxe/Exception.hx' => 'package haxe;\n\nclass Exception {}',
+		'std/haxe/ValueException.hx' => 'package haxe;\n\nclass ValueException extends Exception {}'
+	];
+
 	/** The library declaration of the string type the index resolves against, where a test needs its `split` known. */
 	private static final STD_STRING: Map<String, String> = [
 		'std/String.hx' => 'extern class String { public var length(default, null):Int; public function split(delimiter:String):Array<String>; }'
@@ -826,7 +837,7 @@ class MemberReachFactsTest extends Test {
 	}
 
 	@:pin('control') @:killer('M-ESCAPES-TRUTH-FACTS')
-	@:killer('M-ESCAPES-FACTS-REFLECTION-INLINED') @:killer('M-FACTS-ALIAS-TYPEDEF')
+	@:killer('M-ESCAPES-FACTS-REFLECTION-INLINED') @:killer('M-FACTS-ALIAS-TYPEDEF') @:killer('M-FACTS-IMPLICIT-EXTERN') @:killer('M-REACH-TEXT-EXTERN-INLINE')
 	public function testEscapesReadOffEveryBuildsFactsLetAThrownValueRunOnlyItsOwnToString(): Void {
 		// `lib.Text.fail` throws a `Plain` it holds, whose conversion runs the `toString` of what a `Plain` may be: a
 		// `Plain`, or an instance that left the type system. `Obj` never did: `Text.keep` is library code the facts read,
@@ -2328,7 +2339,7 @@ class MemberReachFactsTest extends Test {
 	}
 
 	@:pin('control') @:killer('M-REACH-REFLECT-BOUND-NONE') @:killer('M-HAZARDS-REFLECT-RECEIVERS')
-	@:killer('M-HAZARDS-REFLECT-RECEIVERS-ADDED') @:killer('M-FACTS-REFL-RECEIVER') @:killer('M-REACH-REFLECT-BODY')
+	@:killer('M-HAZARDS-REFLECT-RECEIVERS-ADDED') @:killer('M-FACTS-REFL-RECEIVER') @:killer('M-REACH-REFLECT-BODY') @:killer('M-REACH-REFLECT-EXTERN')
 	public function testAReflectiveAccessOnAnObjectOfAnUnrelatedClassReachesNoneOfTheMemberUnderTheTruth(): Void {
 		// `Other.dump` reads a property of its own object by a name it is handed: under the truth that object is an `Other`,
 		// which carries no `items`; without it the name may be any member's
@@ -2872,6 +2883,161 @@ class MemberReachFactsTest extends Test {
 		each('b.f();', made);
 		each('final s:String = "" + e;', made);
 		each('Reflect.field(e, "c" + i);', made);
+	}
+
+	@:pin('control') @:killer('M-FACTS-TEXTLESS') @:killer('M-FACTS-IMPLICIT-MEMBERS') @:killer('M-FACTS-IMPLICIT-STATIC')
+	@:killer('M-REACH-UNHELD-OWNED') @:killer('M-REACH-UNHELD-ANYWHERE') @:killer('M-REACH-TEXTLESS-IN-PLAY')
+	@:killer('M-REACH-UNDECLARED-OPERAND') @:killer('M-REACH-REFLECT-TEXTLESS')
+	@:killer('M-FACTS-IMPLICIT-INTERFACE')
+	public function testATypeTheIndexDeclaresNowhereRunsWhatItsMembersRun(): Void {
+		// the root package's `Endian`, which the builds compile, pushes onto `Main.items` from its `toString` and `calm`; the
+		// index declares no type of that name anywhere. A string conversion of one — typed so, or as the catch-all — and a
+		// method reflection reaches by a computed name each run its code, which no candidate the index holds stands for: under
+		// the truth they refuse, as a value typed so does read by the syntax alone. Held by the index, `Endian` answers as its
+		// text says; a type declaring no such member runs none, nor does one no code the index reads names
+		function question(region: String, mode: String, ?members: String, ?more: String): ReachResult {
+			final push: String = mode == 'calm' ? '' : 'Main.items.push(1); ';
+			final endian: String = 'class Endian {\n\tpublic function new() {}\n\n' + (
+				members ?? '\tpublic static function calm():Void { ' + push + '}\n\n\tpublic function toString():String { ' + push
+					+ 'return ""; }\n'
+			) + '}\n' + (more ?? '');
+			final files: Map<String, String> = [
+				'Main.hx' => LOOP_HEAD + '\tstatic function main() {\n\t\tfinal e:Endian = new Endian();\n'
+					+ '\t\tfor (i in 0...items.length) { /*<*/ ' + region + ' /*>*/ }\n\t}\n}\n'
+			];
+			final indexed: Bool = mode != 'unindexed' && mode != 'syntax' && mode != 'plain';
+			if (indexed) files['Endian.hx'] = endian;
+			final unindexed: Map<String, String> = indexed ? [] : ['Endian.hx' => endian];
+			final result: ReachResult = ask(files, null, mode != 'syntax', null, false, null, null, unindexed, mode != 'plain');
+			Assert.equals('', lastDropped.join('; '), 'the fixture did not compile');
+			return result;
+		}
+		final converted: String = 'final s:String = "" + e;';
+		final widened: String = 'final d:Dynamic = e; final s:String = "" + d;';
+		for (region in [converted, 'Reflect.field(e, "c" + i);', widened]) {
+			assertMatch(question(region, 'unindexed'), r -> !r.match(Proven));
+			assertMatch(question(region, 'loud'), r -> r.match(Reached(_)));
+			assertMatch(question(region, 'calm'), r -> r.match(Proven));
+		}
+		for (region in [converted, 'Reflect.field(e, "c" + i);']) {
+			assertMatch(question(region, 'plain'), r -> !r.match(Proven));
+			assertMatch(question(region, 'syntax'), r -> !r.match(Proven));
+		}
+		// a type the index declares nowhere whose methods are none a conversion runs: no `toString`, or a static one
+		assertMatch(question(converted, 'unindexed', '\tpublic var n:Int = 0;\n'), r -> r.match(Proven));
+		assertMatch(
+			question(converted, 'unindexed', '\tpublic static function toString():String { Main.items.push(1); return ""; }\n'),
+			r -> r.match(Proven)
+		);
+		// `Ghost`, compiled and declared nowhere, converts loudly — but nothing the index reads names it: no value is one
+		final ghost: String = '\nclass Ghost {\n\tpublic function toString():String { Main.items.push(1); return ""; }\n}\n';
+		assertMatch(
+			question('final d:Dynamic = 1; final s:String = "" + d;', 'unindexed', '\tpublic static var g:Ghost = null;\n', ghost),
+			r -> r.match(Proven)
+		);
+		// an interface the index declares nowhere declares no code: a conversion of a held type implementing it runs the
+		// held type's own `toString`
+		final shown: Map<String, String> = ['Shown.hx' => 'interface Shown {\n\tfunction toString():String;\n}\n'];
+		final implementing: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfinal o:Obj = new Obj();\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ final s:String = "" + o; /*>*/ }\n\t}\n}\n\n'
+			+ 'class Obj implements Shown {\n\tpublic function new() {}\n\n\tpublic function toString():String return "o";\n}\n';
+		assertMatch(ask(['Main.hx' => implementing], null, true, null, false, null, null, shown, true), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-INDEX-GUARDED-PRIVATE') @:killer('M-INDEX-MODULE-PLATFORM') @:killer('M-FACTS-IMPLEMENTED-TYPED')
+	@:access(anyparse.query.MemberReach) @:access(anyparse.query.FactsView)
+	public function testTheIndexSpellsEachDeclarationAsTheBuildsTypeIt(): Void {
+		// a private type in a conditional region (TM's `SharedMutex.hx`), a private type of a platform variant of a module
+		// (`Sqlite.cpp.hx` is the module `Sqlite`) and a private abstract, whose implementation class keeps its module: the
+		// index's id of each declaration is the one the builds typed
+		final files: Map<String, String> = [
+			'Main.hx' => 'class Main {\n\tstatic function main() {\n\t\tpkg.M.make();\n\t\tpkg.M.take(null);\n'
+				+ '\t\tpkg.Sqlite.row();\n\t\tpkg.Acc.go();\n\t}\n}\n',
+			'pkg/M.hx' => 'package pkg;\n\n#if js\nprivate extern class P {}\n\nprivate class Q {\n\tpublic function new() {}\n}\n#end\n\n'
+				+ 'class M {\n\tpublic static function make():Dynamic return new Q();\n\n\tpublic static function take(p:P):Void {}\n}\n',
+			'pkg/Sqlite.js.hx' => 'package pkg;\n\nprivate class Row {\n\tpublic function new() {}\n}\n\n'
+				+ 'class Sqlite {\n\tpublic static function row():Dynamic return new Row();\n}\n',
+			'pkg/Acc.hx' => 'package pkg;\n\nprivate abstract A(Int) {\n\tpublic inline function new(i:Int) this = i;\n\n'
+				+ '\tpublic function f():Int return this;\n}\n\nclass Acc {\n\tpublic static function go():Int return new A(1).f();\n}\n'
+		];
+		withReach(files, null, true, false, null, null, null, true, (reach, dir) -> {
+			Assert.equals('', lastDropped.join('; '), 'the fixture did not compile');
+			final facts: Null<FactsView> = reach._scope.facts;
+			Assert.notNull(facts);
+			if (facts == null) return;
+			for (typed in ['pkg._M.P', 'pkg._M.Q', 'pkg._Sqlite.Row', 'pkg._Acc.A']) {
+				Assert.notNull(facts.table.type(typed), 'the builds type $typed');
+				Assert.equals(typed, facts.declaredIds(typed.substr(typed.lastIndexOf('.') + 1)).join(', '));
+			}
+			Assert.equals('pkg._Acc.A', facts.implemented('pkg._Acc.A_Impl_'));
+		});
+	}
+
+	@:pin('control') @:killer('M-REACH-UNREAD-TEXTLESS')
+	public function testCodeTheWalkDoesNotReadMayRunTheImplicitMembersOfATypeTheIndexDeclaresNowhere(): Void {
+		// `fmt`'s lambda converts what it is handed, a site the facts keep in code the walk never enters: the `toString` of
+		// every type in play may run there — `Obj`'s, which the builds compile and the index declares nowhere, among them.
+		// A type the index declares nowhere that declares no `toString` runs none
+		function question(indexed: Bool, members: String): ReachResult {
+			final obj: String = 'class Obj {\n\tpublic function new() {}\n' + members + '}\n';
+			final main: String = LOOP_HEAD + '\tstatic var fmt:Dynamic -> String;\n'
+				+ '\tstatic function main() {\n\t\tfmt = v -> "<" + v;\n\t\tvar o:Obj = new Obj();\n\t\tvar s:String = "";\n'
+				+ '\t\tfor (i in 0...items.length) { /*<*/ s += fmt(o); /*>*/ }\n\t}\n}\n';
+			final files: Map<String, String> = ['Main.hx' => main];
+			if (indexed) files['Obj.hx'] = obj;
+			final result: ReachResult = ask(files, null, true, null, false, null, null, indexed ? [] : ['Obj.hx' => obj], true);
+			Assert.equals('', lastDropped.join('; '), 'the fixture did not compile');
+			return result;
+		}
+		final loud: String = '\n\tpublic function toString():String {\n\t\tMain.items = [];\n\t\treturn "o";\n\t}\n';
+		final calm: String = '\n\tpublic function toString():String return "o";\n';
+		assertMatch(question(false, loud), r -> !r.match(Proven));
+		assertMatch(question(true, loud), r -> !r.match(Proven));
+		assertMatch(question(true, calm), r -> r.match(Proven));
+		assertMatch(question(false, ''), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-REACH-UNREAD-READ-FAMILIES')
+	public function testLibraryCodeNotReadYetMayRunTheOperatorOverloadOfATypeTheIndexDeclaresNowhere(): Void {
+		// the walk has not read the library `Thing`, so code it cannot see may run any implicitly-called member: `AE`'s `==`,
+		// which the builds compile and the index declares nowhere, among them
+		function question(indexed: Bool): ReachResult {
+			final main: String = LOOP_HEAD + '\tstatic var f:AE -> Bool;\n\tstatic var t:lib.Thing = null;\n'
+				+ '\tstatic var ae:AE = new AE(1);\n\tstatic function main() {\n\t\tf = a -> true;\n'
+				+ '\t\tfor (i in 0...items.length) { /*<*/ f(ae); /*>*/ }\n\t}\n}\n';
+			final thing: String = 'package lib;\n\nclass Thing {\n\tpublic function new() {}\n\n'
+				+ '\tpublic function toString():String return "t";\n}\n';
+			final files: Map<String, String> = ['Main.hx' => main];
+			if (indexed) files['AE.hx'] = CLEARING_EQ;
+			final unindexed: Map<String, String> = indexed ? [] : ['AE.hx' => CLEARING_EQ];
+			final result: ReachResult = ask(files, null, true, null, false, null, ['lib/Thing.hx' => thing], unindexed, true);
+			Assert.equals('', lastDropped.join('; '), 'the fixture did not compile');
+			return result;
+		}
+		assertMatch(question(false), r -> !r.match(Proven));
+		assertMatch(question(true), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-REACH-ALWAYS-TEXTLESS') @:killer('M-REACH-MENTIONS-TYPED')
+	public function testCodeReadByItsSyntaxMayRunTheConversionsOfATypeTheIndexDeclaresNowhere(): Void {
+		// `run` is a local inline function the compiler types into its caller, so its body is read by its syntax, where a
+		// conversion of any value in play may run — `Wrap`'s, which the builds compile and the index declares nowhere, among
+		// them. Held by the index, `Wrap` answers as its text says
+		function question(indexed: Bool, loud: Bool): ReachResult {
+			final wrap: String = 'abstract Wrap(Int) {\n\tpublic function new(i:Int) this = i;\n\n\t@:to public function text():String {\n\t\t'
+				+ (loud ? 'Main.items.push(1);\n\t\t' : '') + 'return "w";\n\t}\n}\n';
+			final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tvar w:Wrap = new Wrap(1);\n'
+				+ '\t\tinline function run():Void {\n\t\t\tvar n:Int = 1;\n\t\t}\n'
+				+ '\t\tfor (i in 0...items.length) { /*<*/ run(); /*>*/ }\n\t}\n}\n';
+			final files: Map<String, String> = ['Main.hx' => main];
+			if (indexed) files['Wrap.hx'] = wrap;
+			final result: ReachResult = ask(files, null, true, null, false, null, null, indexed ? [] : ['Wrap.hx' => wrap], true);
+			Assert.equals('', lastDropped.join('; '), 'the fixture did not compile');
+			return result;
+		}
+		assertMatch(question(false, true), r -> !r.match(Proven));
+		assertMatch(question(true, true), r -> r.match(Reached(_)));
+		assertMatch(question(true, false), r -> r.match(Proven));
 	}
 
 	@:pin('control') @:killer('M-FACTS-FOLDED-BY-ID') @:killer('M-FACTS-SOLE-NEVER') @:killer('M-REACH-AMBIGUOUS-SOLE-NONE')
@@ -4615,7 +4781,7 @@ class MemberReachFactsTest extends Test {
 					source: text
 				}
 		];
-		final std: Array<{ file: String, source: String }> = [{ file: 'std/Array.hx', source: STD_ARRAY }];
+		final std: Array<{ file: String, source: String }> = [for (name => text in STD_STAND_INS) { file: name, source: text }];
 		for (name => text in declared ?? []) std.push({ file: name, source: text });
 		final index: SymbolIndex = SymbolIndex.build(project.concat(libraries).concat(std), plugin);
 		// the builds as a run probes them: every define each one sees, the target's and the compiler's included

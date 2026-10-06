@@ -453,6 +453,7 @@ class PreferKeyValueLoopCheckTest extends Test {
 		Assert.equals(nestedDecline('key'), vs[0].declineReason);
 	}
 
+	@:pin('control') @:killer('M-REACH-UNDECLARED-BUILTIN')
 	public function testASiblingLoopsBinderIsNoClash(): Void {
 		// `item` is bound by the loop after it, which the loop being fixed cannot see: nothing is shadowed
 		final text: String = fixedAll(

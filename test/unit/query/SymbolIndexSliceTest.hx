@@ -1,6 +1,7 @@
 package unit.query;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.ModuleScan;
 import anyparse.query.SymbolIndex;
 import utest.Assert;
 import utest.Test;
@@ -603,6 +604,44 @@ class SymbolIndexSliceTest extends Test {
 		final nt: TypeDeclInfo = fi.types[0];
 		Assert.equals('NativeThing', nt.name);
 		Assert.isTrue(nt.isExtern, 'a split guarded extern modifier must mark the unconditional decl that follows it');
+	}
+
+	/**
+	 * A GUARDED `private` type — `#if cpp private extern class P {} #end` (TM's `SharedMutex.hx`, openfl's `IVector`) — is
+	 * module-private in every build compiling it: the modifier is lifted onto the declaration the region holds, past the
+	 * `extern` between them, as `extern` is. One SPLIT from its declaration marks it in some builds only and is dropped; a
+	 * guarded `private` with no declaration after it in its region marks nothing that follows.
+	 */
+	@:pin('control') @:killer('M-INDEX-GUARDED-PRIVATE-SPLIT') @:killer('M-INDEX-GUARDED-PRIVATE-PAST-MODIFIERS')
+	public function testIsPrivateGuardedTypeIsPrivate(): Void {
+		final source: String = 'package pkg;\n#if cpp\nprivate extern class P {}\nprivate class Q {}\n#end\n'
+			+ '#if js\nprivate\n#end\nclass Split {}\n#if cpp\nprivate\n#end\nclass Open {}\nclass M {}\n';
+		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/pkg/M.hx', source: source }], plugin());
+		final fi: FileInfo = fileInfoOf(index, 'src/pkg/M.hx');
+		inline function isPrivate(name: String): Bool {
+			return fi.types.find(t -> t.name == name)?.isPrivate == true;
+		}
+		Assert.isTrue(isPrivate('P'), 'a guarded private extern class must be indexed private');
+		Assert.isTrue(isPrivate('Q'), 'a guarded private class must be indexed private');
+		Assert.isTrue(fi.types.find(t -> t.name == 'P')?.isExtern == true, 'the extern beside it is still lifted');
+		Assert.isFalse(isPrivate('Split'), 'a split guarded private modifier marks the type in some builds only');
+		Assert.isFalse(isPrivate('Open'));
+		Assert.isFalse(isPrivate('M'));
+	}
+
+	/**
+	 * A platform variant of a module — `Sqlite.cpp.hx`, which the compiler loads as the module `Sqlite` where the build
+	 * targets cpp — declares the module before its first dot: its private types are `pkg._Sqlite.T`, its type of the
+	 * module's name is the main one.
+	 */
+	@:pin('control') @:killer('M-MODULE-PLATFORM') @:killer('M-MODULE-SCAN-PLATFORM')
+	public function testPlatformFileDeclaresTheModuleBeforeItsDot(): Void {
+		final source: String = 'package pkg;\nclass Sqlite {}\nprivate class Row {}\n';
+		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/pkg/Sqlite.cpp.hx', source: source }], plugin());
+		final fi: FileInfo = fileInfoOf(index, 'src/pkg/Sqlite.cpp.hx');
+		Assert.equals('pkg.Sqlite', fi.module);
+		Assert.isTrue(fi.types.find(t -> t.name == 'Sqlite')?.isMain == true);
+		Assert.equals('pkg.Sqlite', ModuleScan.moduleOf(plugin().parseFile(source), 'src/pkg/Sqlite.cpp.hx').path);
 	}
 
 	/**

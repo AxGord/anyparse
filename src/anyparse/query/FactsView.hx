@@ -101,6 +101,15 @@ final class FactsView {
 	/** The kind of an abstract's implementation class (`TypeFact.kind`). */
 	private static inline final IMPL_KIND: String = 'impl';
 
+	/** The kind of a typed abstract (`TypeFact.kind`): its methods are its implementation class's statics. */
+	private static inline final ABSTRACT_KIND: String = 'abstract';
+
+	/** The kind of a typed interface (`TypeFact.kind`): it declares no code of its own. */
+	private static inline final INTERFACE_KIND: String = 'interface';
+
+	/** The kind of an inline field (`FieldDeclFact.kind`): an extern type's inline method has a body. */
+	private static inline final INLINE_FIELD_KIND: String = 'inline';
+
 	/** The name an abstract's constructor takes in its implementation class. */
 	private static inline final IMPL_CONSTRUCTOR: String = '_new';
 
@@ -176,6 +185,12 @@ final class FactsView {
 	/** Typed id -> whether the index holds no text of it under a name it declares (`unheld`), settled once. */
 	private final _unheld: Map<String, Bool> = [];
 
+	/** An abstract's implementation class -> the abstract, as the facts type them (`implemented`), built on first need. */
+	private var _implementing: Null<Map<String, String>> = null;
+
+	/** A description of an implicit call (`implicitUnheldAnywhere`'s key) -> the types it finds, settled once. */
+	private final _implicitUnheldAnywhere: Map<String, Array<String>> = [];
+
 	/** Simple name -> the index's declarations of a type so named (`declarationsNamed`), built on first need. */
 	private var _declarationsNamed: Null<Map<String, Array<IndexedDeclaration>>> = null;
 
@@ -212,6 +227,8 @@ final class FactsView {
 		_sole.clear();
 		_soleMember.clear();
 		_unheld.clear();
+		_implicitUnheldAnywhere.clear();
+		_implementing = null;
 		_declarationsNamed = null;
 		_argumentUses = null;
 	}
@@ -548,6 +565,74 @@ final class FactsView {
 		final answer: Bool = table.type(id)?.kind != TYPEDEF_KIND && declared.length > 0 && !held;
 		_unheld[id] = answer;
 		return answer;
+	}
+
+	/**
+	 * Under the truth, whether the typed type `owner` is code the index declares nothing of: no type of the simple name the
+	 * graph calls it by (`graphType`) is declared in any file the index reads, so no node and no implicit candidate the index
+	 * holds stands for a member of it. False without the truth, for a type no build typed and for a typedef, which declares
+	 * no code.
+	 */
+	public function textless(owner: String): Bool {
+		if (!truth) return false;
+		final id: String = CompilerFacts.baseId(owner);
+		final fact: Null<TypeFact> = table.type(id);
+		return fact != null && fact.kind != TYPEDEF_KIND && !declarationsNamed().exists(graphType(id));
+	}
+
+	/**
+	 * Under the truth, whether a value of the typed type `owner` may run, through an implicit call `members` describes, code
+	 * the index holds no text of: the type is one whose text the index does not hold (`unheld`) or holds nothing of
+	 * (`textless`), and either the language constructs it from a literal by a metadata `members` names, or it declares —
+	 * itself, or for an abstract its implementation class — a method of such a call: one named as `members` names (an
+	 * instance method, but for an abstract, whose methods are its implementation's statics) or carrying a metadata it names.
+	 * An interface declares no code (each type implementing it is a type of its own); an extern type's body-less method runs
+	 * target code alone (`ReachGraph.externQuiet`), and its inline one only where `members` says the call is the compiler's
+	 * (`ImplicitMembers.externInline`) — a conversion the target runs calls the target's own method.
+	 */
+	public function implicitUnheld(owner: String, members: ImplicitMembers): Bool {
+		if (!unheld(owner) && !textless(owner)) return false;
+		final fact: Null<TypeFact> = table.type(CompilerFacts.baseId(owner));
+		if (fact == null) return true;
+		if (fact.meta.exists(m -> members.typeMetas.contains(m))) return true;
+		if (fact.kind == INTERFACE_KIND && fact.alike) return false;
+		final abstractLike: Bool = fact.kind == ABSTRACT_KIND || fact.kind == IMPL_KIND;
+		final quiet: Bool = fact.isExtern && fact.alike;
+		final implementation: Null<String> = fact.implementation;
+		final fields: Array<FieldDeclFact> = fact.fields.concat(
+			implementation == null ? [] : table.type(CompilerFacts.baseId(implementation))?.fields ?? []
+		);
+		inline function runs(f: FieldDeclFact): Bool {
+			final called: Bool = (members.names.contains(f.name) && (abstractLike || !f.isStatic))
+				|| f.meta.exists(m -> members.metas.contains(m));
+			return called && (!quiet || (members.externInline && f.kinds.contains(INLINE_FIELD_KIND)));
+		}
+		return fields.exists(f -> f.kinds.exists(k -> METHOD_KINDS.contains(k)) && runs(f));
+	}
+
+	/**
+	 * Whether `member` of the typed type `owner` is a method of a type extern in every build: target code — an inline one is
+	 * no field the target holds — which what it is handed decides (`MemberReach.nativeVerdict`), not text the index lacks.
+	 */
+	public function externMethod(owner: String, member: String): Bool {
+		final fact: Null<TypeFact> = table.type(CompilerFacts.baseId(owner));
+		return fact != null && fact.isExtern && fact.alike
+			&& fact.fields.exists(f -> f.name == member && f.kinds.exists(k -> METHOD_KINDS.contains(k)));
+	}
+
+	/**
+	 * Under the truth, every type the builds typed — what a value of a type not known may be — a value of which may run,
+	 * through an implicit call `members` describes, code the index holds no text of (`implicitUnheld`). Settled once per
+	 * description.
+	 */
+	public function implicitUnheldAnywhere(members: ImplicitMembers): Array<String> {
+		if (!truth) return [];
+		final key: String = '${members.names.join(',')}|${members.metas.join(',')}|${members.typeMetas.join(',')}|${members.externInline}';
+		final known: Null<Array<String>> = _implicitUnheldAnywhere[key];
+		if (known != null) return known;
+		final found: Array<String> = [for (id in table.typeIds()) if (implicitUnheld(id, members)) id];
+		_implicitUnheldAnywhere[key] = found;
+		return found;
 	}
 
 	/**
@@ -1397,10 +1482,23 @@ final class FactsView {
 	}
 
 	/**
-	 * The abstract the implementation class `impl` (`pack._Module.Name_Impl_`) implements: `pack.Name`, or `impl` itself
-	 * when the id is not spelled so.
+	 * The abstract the implementation class `impl` implements: the typed abstract whose implementation the facts say it is
+	 * (`TypeFact.implementation`) — a private abstract's id keeps its module (`pack._Module.Name`), a public one's does not
+	 * (`pack.Name`), and both implementations are `pack._Module.Name_Impl_` — else, for a class no build typed as one, the
+	 * public spelling of the id, or `impl` itself when it is not spelled so.
 	 */
-	private static function implemented(impl: String): String {
+	private function implemented(impl: String): String {
+		final held: Null<Map<String, String>> = _implementing;
+		final byImpl: Map<String, String> = held ?? [
+			for (id in table.typeIds()) {
+				final fact: Null<TypeFact> = table.type(id);
+				final implementation: Null<String> = fact?.kind == ABSTRACT_KIND ? fact?.implementation : null;
+				if (implementation != null) CompilerFacts.baseId(implementation) => id;
+			}
+		];
+		_implementing = byImpl;
+		final typed: Null<String> = byImpl[impl];
+		if (typed != null) return typed;
 		final dot: Int = impl.lastIndexOf('.');
 		final name: String = impl.substr(dot + 1);
 		final pack: String = dot < 0 ? '' : impl.substr(0, dot);
@@ -1507,4 +1605,17 @@ private typedef IndexedDeclaration = {
 	final id: String;
 	final key: String;
 	final read: Bool;
+}
+
+/**
+ * The members an implicit call of one family runs (`FactsView.implicitUnheld`), as the facts spell them: the methods it calls
+ * by name, the metadata marking a method it calls, and the metadata of a type the language constructs from a literal.
+ */
+typedef ImplicitMembers = {
+	final names: Array<String>;
+	final metas: Array<String>;
+	final typeMetas: Array<String>;
+
+	/** Whether the compiler makes the call itself, so an extern type's inline method runs its body there. */
+	final externInline: Bool;
 }

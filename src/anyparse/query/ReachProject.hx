@@ -117,6 +117,11 @@ final class ReachProject {
 		return found != null && found.length == 1 ? found[0] : null;
 	}
 
+	/** Whether the index declares a type of the simple name `type` anywhere, a typedef aliasing a namesake aside. */
+	public function declaresAnywhere(type: String): Bool {
+		return declarationsByName().exists(type);
+	}
+
 	/**
 	 * Every declaration of the index that is no self-alias, by simple name, in index order: `siteOf`'s fallback, built once
 	 * per index. It scanned every type of every file per question, and on TM that was a quarter of a `--fix` run (147 of

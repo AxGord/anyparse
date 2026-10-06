@@ -7333,8 +7333,8 @@
 			"name": "M-REACH-UNHELD-REFLECTED",
 			"type": "anyparse.query.ReachGraph",
 			"method": "reflectedMembers",
-			"find": "if (typed.exists(facts.unheld)) return null;",
-			"replace": "if (false) return null;",
+			"find": "final textless: Bool = facts.unheld(id) || facts.textless(id);",
+			"replace": "final textless: Bool = facts.textless(id);",
 			"note": "a method reflection reaches by a computed name off a type the index holds no text of is its namesake's method"
 		},
 		{
@@ -7392,6 +7392,206 @@
 			"find": "return !fields.exists(f -> names.contains(f.field)) && !calls.exists(c -> named(c.target));",
 			"replace": "return true;",
 			"note": "a raw conditional region of library code touching the member by its name hides the touch: library code is searched for it by its text alone"
+		},
+		{
+			"name": "M-FACTS-TEXTLESS",
+			"type": "anyparse.query.FactsView",
+			"method": "textless",
+			"find": "return fact != null && fact.kind != TYPEDEF_KIND && !declarationsNamed().exists(graphType(id));",
+			"replace": "return false;",
+			"note": "a typed type the index declares no type of its name anywhere is read as a library placeholder: its `toString` and the methods reflection reaches run nothing, though they push onto `Main.items`"
+		},
+		{
+			"name": "M-FACTS-IMPLICIT-MEMBERS",
+			"type": "anyparse.query.FactsView",
+			"method": "implicitUnheld",
+			"find": "return fields.exists(f -> f.kinds.exists(k -> METHOD_KINDS.contains(k)) && runs(f));",
+			"replace": "return true;",
+			"note": "(precision) a type whose text the index does not hold runs an implicit member whether or not it declares one: a conversion of one with no `toString` refuses"
+		},
+		{
+			"name": "M-FACTS-IMPLICIT-STATIC",
+			"type": "anyparse.query.FactsView",
+			"method": "implicitUnheld",
+			"find": "(members.names.contains(f.name) && (abstractLike || !f.isStatic))",
+			"replace": "(members.names.contains(f.name))",
+			"note": "(precision) a class's static `toString` is taken for the one a conversion calls on an instance"
+		},
+		{
+			"name": "M-FACTS-IMPLICIT-INTERFACE",
+			"type": "anyparse.query.FactsView",
+			"method": "implicitUnheld",
+			"find": "if (fact.kind == INTERFACE_KIND && fact.alike) return false;",
+			"replace": "",
+			"note": "(precision) an interface the index does not hold runs the methods it declares, which have no body: std's `haxe.IMap` refuses every conversion of a value of any type"
+		},
+		{
+			"name": "M-FACTS-IMPLICIT-EXTERN",
+			"type": "anyparse.query.FactsView",
+			"method": "implicitUnheld",
+			"find": "return called && (!quiet || (members.externInline && f.kinds.contains(INLINE_FIELD_KIND)));",
+			"replace": "return called;",
+			"note": "(precision) an extern type's method runs code of the program through an implicit call: js's `Date`, whose instances escape, refuses every conversion"
+		},
+		{
+			"name": "M-REACH-TEXT-EXTERN-INLINE",
+			"type": "anyparse.query.ReachGraph",
+			"method": "implicitMembers",
+			"find": "case Text: described(text, [], [], false);",
+			"replace": "case Text: described(text, [], [], true);",
+			"note": "(precision) a conversion the target runs is taken to call an extern's inline `toString`: js's `Date`, whose instances escape, refuses every conversion"
+		},
+		{
+			"name": "M-REACH-UNHELD-OWNED",
+			"type": "anyparse.query.ReachGraph",
+			"method": "unheldAt",
+			"find": "return ids.find(id -> facts.implicitUnheld(id, members));",
+			"replace": "return null;",
+			"note": "a conversion of a value the facts type as a type the index declares nowhere runs only the index's candidates, none of which is its `toString`"
+		},
+		{
+			"name": "M-REACH-UNHELD-ANYWHERE",
+			"type": "anyparse.query.ReachGraph",
+			"method": "unheldAt",
+			"find": "return facts.implicitUnheldAnywhere(members).find(id -> textlessInPlay(facts, id));",
+			"replace": "return null;",
+			"note": "a conversion of a value of a type not known runs only the index's candidates: a `Dynamic` holding a type the index declares nowhere runs nothing"
+		},
+		{
+			"name": "M-REACH-TEXTLESS-IN-PLAY",
+			"type": "anyparse.query.ReachGraph",
+			"method": "textlessInPlay",
+			"find": "return facts.table.type(id)?.isExtern == true || reflectiveProducers().exists(p -> mentioned(p.name, p.file))",
+			"replace": "return true || facts.table.type(id)?.isExtern == true || reflectiveProducers().exists(p -> mentioned(p.name, p.file))",
+			"note": "(precision) a type no code the index reads names is taken to be any value of a type not known"
+		},
+		{
+			"name": "M-REACH-MENTIONS-TYPED",
+			"type": "anyparse.query.ReachGraph",
+			"method": "mentions",
+			"find": "if (view != null && view.truth) for (id in view.table.typeIds()) wanted[view.graphType(id)] = true;",
+			"replace": "",
+			"note": "a type the index declares nowhere is never in play by its name: what a value of a type not known may be leaves it out"
+		},
+		{
+			"name": "M-REACH-UNDECLARED-OPERAND",
+			"type": "anyparse.query.ReachGraph",
+			"method": "unheldAt",
+			"find": "if (view == null || !view.truth) return undeclaredOperand(at);",
+			"replace": "if (view == null || !view.truth) return null;",
+			"note": "read by its syntax, a value typed as a type the index declares nowhere is \"any type\", which stands only for the index's candidates"
+		},
+		{
+			"name": "M-REACH-UNDECLARED-BUILTIN",
+			"type": "anyparse.query.ReachGraph",
+			"method": "undeclaredOperand",
+			"find": "if (nominal != null && !builtIn.contains(nominal) && !_scope.declaresAnywhere(nominal)) return nominal;",
+			"replace": "if (nominal != null && !_scope.declaresAnywhere(nominal)) return nominal;",
+			"note": "(precision) read by its syntax, an iteration of the built-in array, which an index of the project alone does not declare, refuses"
+		},
+		{
+			"name": "M-REACH-UNDECLARED-PRIMITIVE",
+			"type": "anyparse.query.ReachGraph",
+			"method": "undeclaredOperand",
+			"find": "for (t in at.types) if (t != null && !carriers.primitive(t)) {",
+			"replace": "for (t in at.types) if (t != null) {",
+			"note": "(precision) read by its syntax, an operator on an `Int`, which an index of the project alone does not declare, refuses"
+		},
+		{
+			"name": "M-REACH-REFLECT-TEXTLESS",
+			"type": "anyparse.query.ReachGraph",
+			"method": "reflectedMembers",
+			"find": "final textless: Bool = facts.unheld(id) || facts.textless(id);",
+			"replace": "final textless: Bool = facts.unheld(id);",
+			"note": "a method reflection reaches by a computed name off a type the index declares nowhere is a placeholder, which runs nothing"
+		},
+		{
+			"name": "M-REACH-REFLECT-EXTERN",
+			"type": "anyparse.query.ReachGraph",
+			"method": "reflectedMembers",
+			"find": "if (textless && !facts.externMethod(id, member)) return null;",
+			"replace": "if (textless) return null;",
+			"note": "(precision) an escaped extern's method reflection reaches is code of the program the index lacks: js's `Symbol` refuses every reflection"
+		},
+		{
+			"name": "M-REACH-UNREAD-TEXTLESS",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "if (textless != null)\n\t\t\t\tblind = blind ?? UnresolvedDispatch(",
+			"replace": "if (false)\n\t\t\t\tblind = blind ?? UnresolvedDispatch(",
+			"note": "code the walk does not read runs only the implicit members the index declares: a type it declares nowhere converts nothing"
+		},
+		{
+			"name": "M-REACH-UNREAD-READ-FAMILIES",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "? typed.concat([SiteFamily.Index, SiteFamily.Operator(''), SiteFamily.Literal])",
+			"replace": "? typed",
+			"note": "library code not read yet runs no operator of a type the index declares nowhere"
+		},
+		{
+			"name": "M-REACH-ALWAYS-TEXTLESS",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "if (converted != null)\n\t\t\t\tblind = blind ?? UnresolvedDispatch(",
+			"replace": "if (false)\n\t\t\t\tblind = blind ?? UnresolvedDispatch(",
+			"note": "code read by its syntax runs only the conversions the index declares: a type it declares nowhere converts nothing"
+		},
+		{
+			"name": "M-INDEX-GUARDED-PRIVATE",
+			"type": "anyparse.query.SymbolIndexBuilder",
+			"method": "collectGuardedDecls",
+			"find": "if (next < children.length && typeDeclAt(children[next]) != null) out.push({ node: child, guarded: true });",
+			"replace": "if (false) out.push({ node: child, guarded: true });",
+			"note": "a module-private type in a conditional region is indexed public: its id drops its module (TM's `utils._SharedMutex.StdUniquePointer_SharedMutex`, openfl's `IVector`)"
+		},
+		{
+			"name": "M-INDEX-GUARDED-PRIVATE-SPLIT",
+			"type": "anyparse.query.SymbolIndexBuilder",
+			"method": "collectGuardedDecls",
+			"find": "if (next < children.length && typeDeclAt(children[next]) != null) out.push({ node: child, guarded: true });",
+			"replace": "out.push({ node: child, guarded: true });",
+			"note": "a guarded private modifier split from its declaration marks a type public in the other builds private"
+		},
+		{
+			"name": "M-INDEX-GUARDED-PRIVATE-PAST-MODIFIERS",
+			"type": "anyparse.query.SymbolIndexBuilder",
+			"method": "collectGuardedDecls",
+			"find": "while (next < children.length && (children[next].kind == externModifierKind || privateKinds.contains(children[next].kind)))",
+			"replace": "while (false)",
+			"note": "a guarded `private extern` type is indexed public: the `extern` between the modifier and the declaration hides it"
+		},
+		{
+			"name": "M-MODULE-PLATFORM",
+			"type": "anyparse.query.RefactorSupport",
+			"method": "moduleNameOf",
+			"find": "return dot > 0 ? base.substr(0, dot) : base;",
+			"replace": "return base;",
+			"note": "a platform variant of a module (`Sqlite.cpp.hx`) is the module `Sqlite.cpp`: its private types are `_cpp.T`, its main type is none"
+		},
+		{
+			"name": "M-INDEX-MODULE-PLATFORM",
+			"type": "anyparse.query.SymbolIndexBuilder",
+			"method": "extractFileInfo",
+			"find": "final basename: String = RefactorSupport.moduleNameOf(file);",
+			"replace": "final basename: String = RefactorSupport.baseNameOf(file);",
+			"note": "the index reads a platform variant of a module (`Sqlite.cpp.hx`) as the module `Sqlite.cpp`"
+		},
+		{
+			"name": "M-MODULE-SCAN-PLATFORM",
+			"type": "anyparse.query.ModuleScan",
+			"method": "moduleOf",
+			"find": "final base: String = RefactorSupport.moduleNameOf(file);",
+			"replace": "final base: String = RefactorSupport.baseNameOf(file);",
+			"note": "the module a platform variant (`Sqlite.cpp.hx`) declares is `Sqlite.cpp` to a move or a rename"
+		},
+		{
+			"name": "M-FACTS-IMPLEMENTED-TYPED",
+			"type": "anyparse.query.FactsView",
+			"method": "implemented",
+			"find": "if (typed != null) return typed;",
+			"replace": "if (false && typed != null) return typed;",
+			"note": "a private abstract's implementation class implements the public spelling of its id: `haxe.xml._Access.AttribAccess_Impl_` is read as `haxe.xml.AttribAccess`"
 		},
 		{
 			"name": "M-FACTS-FOLDED-BY-ID",
