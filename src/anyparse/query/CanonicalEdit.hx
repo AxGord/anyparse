@@ -110,49 +110,10 @@ final class CanonicalEdit {
 				);
 		}
 
-		// A re-parse gate cannot see a deletion that empties a brace-less construct's body slot: the result
-		// parses, because the construct pulls the FOLLOWING statement in. `remove-element` on the body of
-		// `if (flag) log.push("in-branch");` writes `if (flag) log.push("after");` and reports success, and
-		// `lint --fix`'s `unused-local` reaches the same result from `if (c) var y: Int = 1;`. Both
-		// compile. This is the ONLY structural question the gate asks, and it is asked HERE because every
-		// writer-emit op and every `--fix` wave funnels through this one function.
-		final emptied: Null<String> = BodySlotGuard.emptiedSlot(source, edits, plugin);
-		if (emptied != null) return Err(emptied);
-
-		// The second question, asked here for the same reason as the first: a doc
-		// comment re-attributed by an insert survives every gate this project owns —
-		// the result parses, it is byte-canonical, and no lint rule reads a comment's
-		// owner. `add-element --before` did exactly that for as long as it has
-		// existed, and the loss was found by a human re-reading a file, not by a run.
-		//
-		// "Every writer-emit op" is the seventeen that reach a write THROUGH here —
-		// every addressed op, plus both `lint --fix` paths and `FixVerifier`. The whole MOVE
-		// and EXTRACT family does NOT bypass this. `ExtractInterface`, `ExtractSuperclass` and
-		// `IntroduceParameterObject` reach here through `editKeepingCanonical`, and
-		// `NewFile` has no edit list to ask about — it round-trips a whole file. The
-		// three that genuinely splice with `applyEdits` and never arrive are
-		// `MoveMember`, `MoveSymbol` (`apq move`) and `InheritanceMove`
-		// (pull-up / push-down).
-		//
-		// The question finds nothing on either side, and that is a fact about the
-		// OFFSETS rather than the routing: every insertion that family makes lands at the
-		// end of a member list or at the end of the module, so the byte after it is a `}`
-		// or EOF and the positive criterion below never fires.
-		// `unit.query.MoveExtractDocCensusTest` pins that by outcome, per op, so an offset
-		// change is what flips it.
-		//
-		// One real limit, in `editKeepingCanonical` rather than here: on a source that is
-		// NOT writer-canonical it answers `Ok(applyEdits(...))` on the `Err` path, so a
-		// refusal this function returns — this one included — is discarded for those
-		// three callers. The guard is advisory on a drifted file.
-		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
-		final splitDoc: Null<String> = docSplittingEdit(source, edits, regions);
-		if (splitDoc != null) return Err(splitDoc);
-
 		final spliced: String = applyEdits(source, edits);
 
-		// The third, fourth and fifth questions, all asked of the SPLICE — see `spliceRefusal`.
-		final refused: Null<String> = spliceRefusal(source, edits, spliced, regions, plugin, carried);
+		// Every question about the EDIT rather than about the writer — see `editRefusal`.
+		final refused: Null<String> = editRefusal(source, edits, spliced, plugin, carried);
 		if (refused != null) return Err(refused);
 
 		// ω-canonical-fixed-point: the result has to satisfy the gate the NEXT writer-emit op puts on it,
@@ -225,10 +186,20 @@ final class CanonicalEdit {
 	 * A refusal about the RESULT — an emptied body slot, a parse failure, a comment
 	 * loss, a splice the writer cannot settle — propagates as `Err`. A source the
 	 * writer cannot round-trip AT ALL falls back to the splice like a merely-drifted
-	 * one, because `isWriterCanonical` catches and answers `false` for it: that is the
-	 * pre-existing behaviour of these ops and this helper does not narrow it.
+	 * one, because `isWriterCanonical` catches and answers `false` for it.
 	 * `isWriterCanonical` re-asks the input gate rather than matching on the message
 	 * text, which would break the day the wording changes.
+	 *
+	 * The fallback splice is NOT unguarded. It used to be — `Ok(applyEdits(...))` straight
+	 * off the `Err`, which threw away every refusal along with the canonical-gate one that
+	 * caused it, so `extract-superclass` on a drifted file welded `// about a` onto
+	 * `// about b` where the canonical file was refused. Per gate, on a splice the writer never
+	 * sees: every question about the EDIT (`editRefusal` — emptied slot, split doc, welded or
+	 * hoisted comment, stranded `else`) is a fact about the source, the edits and their splice
+	 * alone, so it is asked exactly as `canonicalize` asks it. The writer's own questions — a
+	 * comment the re-emission would drop, a result that never settles — have nothing to ask
+	 * of bytes the writer does not touch. The result's PARSE is the caller's: all three
+	 * callers re-parse what this returns and refuse in their own words.
 	 */
 	public static function editKeepingCanonical(
 		source: String, edits: Array<{ span: Span, text: String }>, plugin: GrammarPlugin, ?optsJson: String
@@ -239,7 +210,7 @@ final class CanonicalEdit {
 			// The FALLBACK below carries no `rewrites` argument: the writer loop never ran on
 			// that path, and `null` is what `EditResult.Ok` documents for it. A `0` would read
 			// as a measurement.
-			case Err(message): isWriterCanonical(source, plugin, optsJson) ? Err(message) : Ok(applyEdits(source, edits));
+			case Err(message): isWriterCanonical(source, plugin, optsJson) ? Err(message) : guardedSplice(source, edits, plugin);
 		};
 	}
 
@@ -435,17 +406,63 @@ final class CanonicalEdit {
 		return false;
 	}
 
+	/** The fallback of `editKeepingCanonical`: the raw splice, refused on every question `editRefusal` asks. */
+	private static function guardedSplice(source: String, edits: Array<{ span: Span, text: String }>, plugin: GrammarPlugin): EditResult {
+		final spliced: String = applyEdits(source, edits);
+		final refused: Null<String> = editRefusal(source, edits, spliced, plugin, null);
+		return refused == null ? Ok(spliced) : Err(refused);
+	}
+
 	/**
-	 * The questions `canonicalize` asks of the SPLICE, before the writer settles it — the first
-	 * refusal, or null. Their own function so the gate's sequence stays readable; each is
-	 * explained where it is asked.
+	 * Every question `canonicalize` asks of an EDIT rather than of the writer — the first refusal,
+	 * or null: an emptied body slot, a doc comment split from its owner, two comment blocks welded,
+	 * a carried comment hoisted, an `else` stranded. Each is decidable from the source, the edits and
+	 * their raw splice alone, which is why `editKeepingCanonical` asks the same function of a splice
+	 * the writer never sees. Each is explained where it is asked.
 	 */
-	private static function spliceRefusal(
-		source: String, edits: Array<{ span: Span, text: String }>, spliced: String, regions: Array<LexRegion>, plugin: GrammarPlugin,
+	private static function editRefusal(
+		source: String, edits: Array<{ span: Span, text: String }>, spliced: String, plugin: GrammarPlugin,
 		carried: Null<Array<CarriedEdit>>
 	): Null<String> {
+		// A re-parse gate cannot see a deletion that empties a brace-less construct's body slot: the result
+		// parses, because the construct pulls the FOLLOWING statement in. `remove-element` on the body of
+		// `if (flag) log.push("in-branch");` writes `if (flag) log.push("after");` and reports success, and
+		// `lint --fix`'s `unused-local` reaches the same result from `if (c) var y: Int = 1;`. Both
+		// compile. Asked here because every writer-emit op and every `--fix` wave funnels through
+		// `canonicalize` or `editKeepingCanonical`, and both call this function.
+		final emptied: Null<String> = BodySlotGuard.emptiedSlot(source, edits, plugin);
+		if (emptied != null) return emptied;
+
+		// The second question, asked for the same reason as the first: a doc
+		// comment re-attributed by an insert survives every gate this project owns —
+		// the result parses, it is byte-canonical, and no lint rule reads a comment's
+		// owner. `add-element --before` did exactly that for as long as it has
+		// existed, and the loss was found by a human re-reading a file, not by a run.
+		//
+		// "Every writer-emit op" is the seventeen that reach a write THROUGH here —
+		// every addressed op, plus both `lint --fix` paths and `FixVerifier`. The whole MOVE
+		// and EXTRACT family does NOT bypass this. `ExtractInterface`, `ExtractSuperclass` and
+		// `IntroduceParameterObject` reach here through `editKeepingCanonical`, and
+		// `NewFile` has no edit list to ask about — it round-trips a whole file. The
+		// three that genuinely splice with `applyEdits` and never arrive are
+		// `MoveMember`, `MoveSymbol` (`apq move`) and `InheritanceMove`
+		// (pull-up / push-down).
+		//
+		// The question finds nothing on either side, and that is a fact about the
+		// OFFSETS rather than the routing: every insertion that family makes lands at the
+		// end of a member list or at the end of the module, so the byte after it is a `}`
+		// or EOF and the positive criterion below never fires.
+		// `unit.query.MoveExtractDocCensusTest` pins that by outcome, per op, so an offset
+		// change is what flips it.
+		//
+		// On a source that is NOT writer-canonical those three get no writer pass, but they still get
+		// every question here: `editKeepingCanonical` asks `editRefusal` of the raw splice.
+		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
+		final splitDoc: Null<String> = docSplittingEdit(source, edits, regions);
+		if (splitDoc != null) return splitDoc;
+
 		// The third question, and the last thing this seam can ask that the re-parse cannot: a
-		// comment left standing above code it never documented. `docSplittingEdit` (asked first) covers the
+		// comment left standing above code it never documented. `docSplittingEdit` (just above) covers the
 		// INSERT that steals a doc; this covers the REPLACEMENT that hoists a comment past the
 		// statement it explains, which is what `prefer-ternary-return`'s march up a guard cascade did
 		// to this repo's own `MemberOrder.reorderRefusal` — two per-gate explanations stacked above a
