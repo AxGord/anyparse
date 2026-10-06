@@ -6,6 +6,7 @@ import anyparse.check.DefiniteAssignmentGuard;
 import anyparse.check.FixVerifier;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
+import anyparse.core.PhaseTimings;
 import anyparse.query.CachingGrammarPlugin.ResolutionScope;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.Cli.RuleEdits;
@@ -140,9 +141,14 @@ final class LintFixDriver {
 					break;
 				}
 				passes++;
-				final pass: LintPassResult = applyLintPass(
-					active, files, cached, split.activeScope, split.fullScope, split.safe, resolveConfig, applyEnablement, optsByFile,
-					passes, noted, notedRewrites, changedFiles, ledger, coupled, range, created, baselineBeforeCreate, originalOf
+				final pass: LintPassResult = PhaseTimings.measure(
+					'fix pass',
+					() ->
+						applyLintPass(
+							active, files, cached, split.activeScope, split.fullScope, split.safe, resolveConfig, applyEnablement,
+							optsByFile, passes, noted, notedRewrites, changedFiles, ledger, coupled, range, created, baselineBeforeCreate,
+							originalOf
+						)
 				);
 				fixedCount += pass.fixedDelta;
 				active = pass.nextActive;
@@ -162,7 +168,9 @@ final class LintFixDriver {
 		// it was needed.
 		// no disk write before this one but a create, which settled the facts compiles already
 		cached.compilerFactsSettled();
-		final safePass: SafePassOutcome = commitSafeWrites(files, changedFiles, originalOf, coupled, oracles, created, preWrite.baseline);
+		final safePass: SafePassOutcome = PhaseTimings.measure(
+			'fix safe writes', () -> commitSafeWrites(files, changedFiles, originalOf, coupled, oracles, created, preWrite.baseline)
+		);
 		// WHICH configurations judged nothing, and why — named by every phase, and once per run:
 		// see `nameExclusions`. Printed as each phase learns them, so an aborting run names them
 		// too, and ahead of the summary line whose tails point back at them.
@@ -183,8 +191,12 @@ final class LintFixDriver {
 		// candidate is typechecked and reverted if it breaks the build (FixVerifier);
 		// otherwise left report-only. With no risky check present this block is a
 		// no-op, so a real run (no risky builtin) is byte-identical to before the key.
-		final risky: RiskyFixOutcome = LintFixVerify.verifyRiskyFixes(
-			files, split.risky, cached, oracles, optsByFile, changedFiles, ledger, resolveConfig, applyEnablement
+		final risky: RiskyFixOutcome = PhaseTimings.measure(
+			'fix risky',
+			() ->
+				LintFixVerify.verifyRiskyFixes(
+					files, split.risky, cached, oracles, optsByFile, changedFiles, ledger, resolveConfig, applyEnablement
+				)
 		);
 		fixedCount += risky.appliedCount;
 		nameExclusions(named, risky.excluded);
@@ -196,8 +208,13 @@ final class LintFixDriver {
 		// re-typechecked, and any that break the build are reverted to report-only
 		// (verifyOracleBatch). No oracle / no such check → inert.
 		final oracleAssisted: Array<Check> = [for (c in checks) if (c is OracleAssisted) c];
-		final oa: AssistedOutcome = LintFixVerify.applyOracleAssistedFixes(
-			files, oracleAssisted, cached, oracles, optsByFile, changedFiles, resolveConfig, applyEnablement, risky.coverage, ledger
+		final oa: AssistedOutcome = PhaseTimings.measure(
+			'fix oracle-assisted',
+			() ->
+				LintFixVerify.applyOracleAssistedFixes(
+					files, oracleAssisted, cached, oracles, optsByFile, changedFiles, resolveConfig, applyEnablement, risky.coverage,
+					ledger
+				)
 		);
 		fixedCount += oa.appliedCount;
 		nameExclusions(named, oa.excluded);
@@ -205,12 +222,14 @@ final class LintFixDriver {
 
 		// The follow-up convergence round: `followUpRound` re-enters the loop over whatever the two
 		// verified phases above rewrote, since both of them write AFTER it has already converged.
-		final followUp: SafePassOutcome = followUpRound(files, settledOf, list -> {
-			final before: Int = fixedCount;
-			active = list;
-			converge(maxPasses);
-			return fixedCount - before;
-		}, coupled, changedFiles, oracles, created);
+		final followUp: SafePassOutcome = PhaseTimings.measure(
+			'fix follow-up', () -> followUpRound(files, settledOf, list -> {
+				final before: Int = fixedCount;
+				active = list;
+				converge(maxPasses);
+				return fixedCount - before;
+			}, coupled, changedFiles, oracles, created)
+		);
 		nameExclusions(named, followUp.excluded);
 		if (followUp.reverted) {
 			CliIo.stderr(followUp.notice);
@@ -283,19 +302,28 @@ final class LintFixDriver {
 		// resolution-scoped index (report UNION library) rides the HOST instead, so a check's
 		// resolution gate (naming's inherited-member proof) resolves a library supertype through
 		// `SymbolIndexHost.resolutionIndex()`. Both rebuild per pass over this pass's sources.
-		final index: SymbolIndex = SymbolIndex.build(files, cached);
-		final resolutionFiles: Null<Array<{ file: String, source: String }>> = cached.resolutionFiles();
-		if (resolutionFiles != null) cached.setResolutionIndex(SymbolIndex.build(resolutionFiles, cached, cached.thirdPartyFiles()));
+		final index: SymbolIndex = PhaseTimings.measure('pass report index', () -> SymbolIndex.build(files, cached));
+		final resolutionFiles: Null<Array<{ file: String, source: String }>> = PhaseTimings.measure(
+			'pass resolution files', () -> cached.resolutionFiles()
+		);
+		if (resolutionFiles != null)
+			PhaseTimings.time(
+				'pass resolution index',
+				() -> cached.setResolutionIndex(SymbolIndex.build(resolutionFiles, cached, cached.thirdPartyFiles()))
+			);
 		// The `--range` window is applied HERE, on the pass's own sources, and nowhere else in
 		// the fix path: one filter point is what keeps the flag from meaning different things to
 		// the report and to the fixer. Re-measured every pass, because a pass rewrites the file
 		// it reads — see `LintRange` for the drift that buys and why it is bounded.
 		final sourceOf: (String) -> Null<String> = f -> fileSourceOf(files, f);
 		final violations: Array<Violation> = LintCommand.withinRange(
-			Linter.run(active, cached, activeScopeChecks, resolveConfig, applyEnablement), sourceOf, range
+			PhaseTimings.measure('pass lint active', () -> Linter.run(active, cached, activeScopeChecks, resolveConfig, applyEnablement)),
+			sourceOf, range
 		);
-		for (v in LintCommand.withinRange(Linter.run(files, cached, fullScopeChecks, resolveConfig, applyEnablement), sourceOf, range))
-			violations.push(v);
+		final whole: Array<Violation> = PhaseTimings.measure(
+			'pass lint full-scope', () -> Linter.run(files, cached, fullScopeChecks, resolveConfig, applyEnablement)
+		);
+		for (v in LintCommand.withinRange(whole, sourceOf, range)) violations.push(v);
 		// The FIRST pass's report is the one a reader compares `fixed N` against: later passes see
 		// only what an earlier edit exposed. Recorded here so the run can say WHICH rules reported
 		// and — through the decline half of the same ledger, filled in below where each `fix` is

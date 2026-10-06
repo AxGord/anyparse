@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.core.PhaseTimings;
 #if nodejs
 import js.node.ChildProcess.ChildProcessSpawnSyncResult;
 #end
@@ -200,6 +201,13 @@ final class HaxeSpawn {
 	 * would have seen, which is what lets a caller keep first-failure semantics while overlapping the compiles.
 	 */
 	public static function runAll(jobs: Array<SpawnJob>, maxBuffer: Int, parallel: Int, ?stopAfterFailure: Bool): Array<HaxeRun> {
+		return PhaseTimings.measure('haxe runAll', () -> runAllTimed(jobs, maxBuffer, parallel, stopAfterFailure));
+	}
+
+	/** `runAll`, untimed. */
+	private static function runAllTimed(
+		jobs: Array<SpawnJob>, maxBuffer: Int, parallel: Int, stopAfterFailure: Null<Bool>
+	): Array<HaxeRun> {
 		final stop: Bool = stopAfterFailure ?? false;
 		#if nodejs
 		// a shell job always goes through the driver: only there does a kill reach its whole process group

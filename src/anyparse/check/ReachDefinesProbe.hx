@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.HaxeSpawn.HaxeRun;
 import anyparse.check.HaxeSpawn.SpawnJob;
 import anyparse.check.LintConfig.OracleConfig;
+import anyparse.core.PhaseTimings;
 import anyparse.core.TempScratch;
 import anyparse.query.ReachLiveness.ReachBuilds;
 import anyparse.query.ReachLiveness.ReachConfiguration;
@@ -72,7 +73,10 @@ final class ReachDefinesProbe {
 	 */
 	public static function probeAll(oracles: Array<OracleConfig>): Null<ReachBuilds> {
 		final ready: Null<Array<{ dir: String, args: Array<String> }>> = prepareAll(oracles);
-		return answerAll(oracles, ready, ready == null ? [] : HaxeSpawn.runAll(jobsOf(oracles, ready), BUFFER, HaxeSpawn.parallelism()));
+		return PhaseTimings.measure(
+			'reach defines probe',
+			() -> answerAll(oracles, ready, ready == null ? [] : HaxeSpawn.runAll(jobsOf(oracles, ready), BUFFER, HaxeSpawn.parallelism()))
+		);
 	}
 
 	/**
@@ -92,7 +96,9 @@ final class ReachDefinesProbe {
 	/** What the compiles `start` began answer: `probeAll`'s answer for the same configurations. */
 	public static function finish(probe: DefinesProbe): Null<ReachBuilds> {
 		final runs: Null<PendingRuns> = probe.runs;
-		return answerAll(probe.oracles, probe.ready, runs == null ? [] : runs.await());
+		return PhaseTimings.measure(
+			'reach defines probe (started ahead)', () -> answerAll(probe.oracles, probe.ready, runs == null ? [] : runs.await())
+		);
 	}
 
 	/** End the compiles `start` began, unread, and delete their probe directories: a run that never asked the builds. */

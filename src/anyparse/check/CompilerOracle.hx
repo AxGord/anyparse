@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.HaxeSpawn.HaxeRun;
 import anyparse.check.LintConfig.OracleConfig;
+import anyparse.core.PhaseTimings;
 
 using Lambda;
 using StringTools;
@@ -257,6 +258,13 @@ final class CompilerOracle {
 	 * `stopAfterFailure` a configuration after one the memo answered as failing is not compiled at all.
 	 */
 	private static function remembered(
+		memo: OracleRunMemo, oracles: Array<OracleConfig>, stopAfterFailure: Bool, verbose: Bool
+	): Array<Null<OracleOutcome>> {
+		return PhaseTimings.measure('oracle typecheck', () -> rememberedTimed(memo, oracles, stopAfterFailure, verbose));
+	}
+
+	/** `remembered`, untimed. */
+	private static function rememberedTimed(
 		memo: OracleRunMemo, oracles: Array<OracleConfig>, stopAfterFailure: Bool, verbose: Bool
 	): Array<Null<OracleOutcome>> {
 		final before: Array<Null<String>> = memo.fingerprints(oracles);

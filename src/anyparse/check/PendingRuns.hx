@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.HaxeSpawn.HaxeRun;
 import anyparse.check.HaxeSpawn.SpawnJob;
+import anyparse.core.PhaseTimings;
 import haxe.Exception;
 
 using StringTools;
@@ -125,6 +126,11 @@ final class PendingRuns {
 	#if nodejs
 	/** Block until driver `pid` wrote its answer, or died without one, and read it. */
 	private function collect(pid: Int): Array<HaxeRun> {
+		return PhaseTimings.measure('haxe await background batch', () -> collectTimed(pid));
+	}
+
+	/** `collect`, untimed. */
+	private function collectTimed(pid: Int): Array<HaxeRun> {
 		var polls: Int = 0;
 		while (!sys.FileSystem.exists(_result)) {
 			if (++polls % POLLS_PER_PROBE == 0 && !living(pid)) break;

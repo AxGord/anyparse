@@ -6707,7 +6707,7 @@
 		{
 			"name": "M-SPAWN-ORDER",
 			"type": "anyparse.check.HaxeSpawn",
-			"method": "runAll",
+			"method": "runAllTimed",
 			"find": "if (answer != null && answer.length == jobs.length) return answer;",
 			"replace": "if (answer != null && answer.length == jobs.length) return [for (k in 0...answer.length) answer[answer.length - 1 - k]];",
 			"note": "overlapping compiles answer in the order they finished, so one configuration's defines decide another's branches"
@@ -9224,7 +9224,7 @@
 		{
 			"name": "M-RUNMEMO-PROBE-RECOMPILES",
 			"type": "anyparse.check.OracleCoverage",
-			"method": "remembered",
+			"method": "rememberedTimed",
 			"find": "final held: Array<Null<HaxeRun>> = [for (i in 0...asked.length) memo?.run(asked[i], true, before[i])];",
 			"replace": "final held: Array<Null<HaxeRun>> = [for (i in 0...asked.length) null];",
 			"note": "the coverage probe compiles the tree its baseline just compiled with -v, paying a second compile per configuration"
@@ -9240,7 +9240,7 @@
 		{
 			"name": "M-RUNMEMO-QUOTES-THE-VERBOSE-STREAMS",
 			"type": "anyparse.check.CompilerOracle",
-			"method": "remembered",
+			"method": "rememberedTimed",
 			"find": "final retried: Array<Int> = verbose ? [for (k in 0...compiled.length) if (answered(runs[k]) && runs[k].status != 0) k] : [];",
 			"replace": "final retried: Array<Int> = [];",
 			"note": "a failing -v baseline is quoted with its -v lines, so a rejection's text names every parsed file"

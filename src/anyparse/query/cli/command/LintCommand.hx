@@ -13,6 +13,7 @@ import anyparse.check.ReachDefinesProbe.AheadBuilds;
 import anyparse.check.ReachDefinesProbe.DefinesProbe;
 import anyparse.check.Severity;
 import anyparse.check.TypedFactsProbe;
+import anyparse.core.PhaseTimings;
 import anyparse.query.Address.TreeAddresser;
 import anyparse.query.CachingGrammarPlugin.LibrarySources;
 import anyparse.query.CachingGrammarPlugin.ResolutionScope;
@@ -145,7 +146,9 @@ final class LintCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runLint(args);
+		final status: Int = PhaseTimings.measure('lint', () -> runLint(args));
+		PhaseTimings.report(CliIo.stderr);
+		return status;
 	}
 
 	public function usage(): Void {
