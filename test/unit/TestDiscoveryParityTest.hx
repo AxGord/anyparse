@@ -2819,6 +2819,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testAFileTheRunWroteMayBeCompiled :: control :: M-FACTS-DEAD-FILE-REWRITTEN',
 			'unit.query.MemberReachFactsTest#testAFreshObjectConvertedRunsOnlyItsOwnClassToStringUnderTheTruth :: control :: '
 				+ 'M-FACTS-STRING-EXACT,M-REACH-EXACT-SITE,M-FACTS-VIEW-EXACT,M-FACTS-VIEW-EXACT-CONVERSION,M-FACTS-EXACT-WRITTEN,M-FACTS-CALL-OPERAND-EXACT',
+			'unit.query.MemberReachFactsTest#testAFunctionNestedInATypeOfASharedNameIsItsFilesTypesCodeUnderTheTruth :: control :: '
+				+ 'M-FACTS-NESTED-OWNER-NONE,M-FACTS-NESTED-BODIES-NONE,M-REACH-OWN-TYPES-NONE,M-REACH-REWRITTEN-OWN-SIMPLE',
 			'unit.query.MemberReachFactsTest#testAFunctionSplicedFromAnotherFileIsTheNodeItsCalleeDeclares :: control :: '
 				+ 'M-GRAPH-FACTS-SPLICED-SITE,M-GRAPH-FACTS-SPLICED-FILE,M-FACTS-TRUTH-SPLICE',
 			'unit.query.MemberReachFactsTest#testAFunctionValueReadByItsSyntaxMayRunAnyOperatorOverloadUnderTheTruth :: control :: '
@@ -2868,7 +2870,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testAMarkerTheFactsReaderDoesNotKnowLeavesWhatAFunctionFieldHoldsUnknownUnderTheTruth :: control :: '
 				+ 'M-VALUE-STORED-MARKER-UNKNOWN,M-VALUE-CTOR-MARKER-UNKNOWN',
 			'unit.query.MemberReachFactsTest#testAMarkerTheFactsReaderDoesNotKnowLetsWhatItsNodeIsHandedEscapeUnderTheTruth :: control :: '
-				+ 'M-ESCAPES-FACTS-MARKER-UNKNOWN',
+				+ 'M-ESCAPES-FACTS-MARKER-UNKNOWN',,
+			'unit.query.MemberReachFactsTest#testAMemberAdmittedByItsNameIsNoVariableOfAnotherTypeOfTheNameUnderTheTruth :: control :: '
+				+ 'M-FACTS-OWNERS-VARIABLES,M-FACTS-OWNERS-ROOTS-OWN',
 			'unit.query.MemberReachFactsTest#testAMemberAnInlinedMethodTakesAsAnArgumentStillEscapesUnderTheTruth :: control :: '
 				+ 'M-FACTS-RECEIVER-BLOCK,M-FACTS-RECEIVER-PARAM',
 			'unit.query.MemberReachFactsTest#testAMemberAnotherBuildDeclaresShadowsAnExtension :: control :: M-FACTS-REACH-GUARDED-NAME',
@@ -3080,6 +3084,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-TRUTH-NATIVES,M-FACTS-TRUTH-NATIVE-CALLS-KEPT,M-FACTS-TRUTH-NATIVE-METAS-DROPPED',
 			'unit.query.MemberReachFactsTest#testTheFunctionAPartialApplicationMakesIsItsTextUnderTheTruth :: control :: '
 				+ 'M-FACTS-TEXT-READ-AT-VALUE,M-FACTS-TEXT-BINDING',
+			'unit.query.MemberReachFactsTest#testTheInitializersOfATypeOfASharedNameAreEachTypedTypesUnderTheTruth :: control :: '
+				+ 'M-REACH-OWN-TYPES-INIT-NONE,M-FACTS-INIT-OWNERS-SOLE,M-FACTS-QUALIFY-SITELESS',
 			'unit.query.MemberReachFactsTest#testTheOwnerTheFactsPinAtTheLoopIsOneOfTwoTypesUnderOneNameUnderTheTruth :: control :: '
 				+ 'M-REACH-PINNED-NONE,M-FACTS-PINNED-UNTRUE,M-REACH-ENTRY-OWN-NONE,M-REACH-PINNED-REWRITTEN-SIMPLE',
 			'unit.query.MemberReachFactsTest#testThePushesOfAComprehensionAreItsTextUnderTheTruth :: control :: M-FACTS-TEXT-COMPREHENSION',
@@ -5254,7 +5260,16 @@ class TestDiscoveryParityTest extends Test {
 			'M-VALUE-STORED-MARKER-UNKNOWN',
 			'M-VALUE-CTOR-MARKER-UNKNOWN',
 			'M-FACTS-TEXT-MARKER-UNKNOWN',
-			'M-FACTS-WITHIN-MARKER-UNKNOWN'
+			'M-FACTS-WITHIN-MARKER-UNKNOWN',
+			'M-FACTS-NESTED-OWNER-NONE',
+			'M-FACTS-NESTED-BODIES-NONE',
+			'M-REACH-OWN-TYPES-NONE',
+			'M-REACH-OWN-TYPES-INIT-NONE',
+			'M-REACH-REWRITTEN-OWN-SIMPLE',
+			'M-FACTS-INIT-OWNERS-SOLE',
+			'M-FACTS-QUALIFY-SITELESS',
+			'M-FACTS-OWNERS-VARIABLES',
+			'M-FACTS-OWNERS-ROOTS-OWN'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
