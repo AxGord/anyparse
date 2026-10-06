@@ -1,5 +1,7 @@
 package anyparse.query;
 
+import anyparse.check.FactsTypeTree;
+import anyparse.check.FactsTypeTree.FactsType;
 import anyparse.check.OracleCoverage;
 import anyparse.query.CallGraph.CallEdge;
 import anyparse.query.CallGraph.EdgeKind;
@@ -14,6 +16,7 @@ import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.CompilerFacts.FieldDeclFact;
 import anyparse.query.CompilerFacts.FieldFact;
 import anyparse.query.CompilerFacts.NativeFact;
+import anyparse.query.FactsView.ExternCalls;
 import anyparse.query.FactsView.TruthSites;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.ImplicitSites.ImplicitSite;
@@ -21,6 +24,7 @@ import anyparse.query.MemberTouchScan.FreshContext;
 import anyparse.query.MemberTouchScan.MemberTouches;
 import anyparse.query.MemberTouchScan.Occurrence;
 import anyparse.query.MemberTouchScan.OwnMethods;
+import anyparse.query.NativeSiteReach.NativeHands;
 import anyparse.query.NativeSiteReach.NativeVerdict;
 import anyparse.query.ReachAdmission.Admission;
 import anyparse.query.ReachGraph.OwnedId;
@@ -193,8 +197,9 @@ typedef MemberRef = {
  * it follows, and so, under the truth, is one by a computed name on an object the facts type as an instance of a class or
  * interface, which runs only the methods of the types it may be (`ReachGraph.reflectedMembers`) and is a blind spot only where
  * one of them carries the member; any other by a computed name, native code — under the truth only one whose text is
- * computed or names the member, or that reaches an object carrying it (`NativeSiteReach`), any other admitting the function
- * values and the members by name of the objects it is handed — untyped code, a raw conditional region, an unmodelled
+ * computed or names the member, or that reaches an object carrying it (`NativeSiteReach`), any other admitting what it may enter the
+ * program through: the function values and the members by name of what it is handed, and what the classes its text names hold; under the
+ * truth a call of an extern admits the same, read off what each caller hands it — untyped code, a raw conditional region, an unmodelled
  * construct, a build macro, an ambiguous type name or an unparsed file is `Unknown` — a build macro, where the compiler facts
  * are the truth (`FactsView.truth`), only when they show the code it made of a type is not the text (`ReachGraph.rewrittenBy`);
  * what they show a method it made or placed elsewhere touching is found all the same (`CallGraphFacts.adopt`). Under the
@@ -1744,6 +1749,14 @@ final class MemberReach {
 		final spliceOnly: Map<String, Bool> = [];
 		final deferredSites: Map<String, AdmissionSite> = [];
 		final pending: Array<AdmissionSite> = [];
+		// under the truth an extern's admission reads what one caller's calls of it hand its target code (`externHanded`), and
+		// every other node calling it hands its own: each caller that queued it, before its admission (`callers`) and after
+		// (`externRevisits`), is read in turn — but a caller that runs nowhere as itself (`spliceOnly`), whose calls run
+		// spliced into its callers at the types they hand, only once something else runs it (`waitingExterns`)
+		final callers: Map<String, Array<ReachStep>> = [];
+		final externs: Map<String, { type: String, name: String }> = [];
+		final externRevisits: Array<{ id: String, step: ReachStep }> = [];
+		final waitingExterns: Map<String, Array<{ id: String, step: ReachStep }>> = [];
 		// a warm-up for its side effect: the members admitted anywhere become graph placeholders before the admission
 		// closure below is computed, so the closure can hold them
 		_g.alwaysIds(g); // noqa: unused-return-value
@@ -1762,10 +1775,23 @@ final class MemberReach {
 					deferredSites.remove(id);
 					pending.push(held);
 				}
+				final waiting: Null<Array<{ id: String, step: ReachStep }>> = waitingExterns[id];
+				if (waiting != null) {
+					waitingExterns.remove(id);
+					for (w in waiting) externRevisits.push(w);
+				}
 			} else if (!spliceOnly.exists(id))
 				spliceOnly[id] = true;
 			final owner: Null<String> = typed != null && mayShare(g, id) ? typed : null;
 			final key: String = owner == null ? id : '$id@$owner';
+			if (truth) {
+				final known: Array<ReachStep> = callers[id] ?? [];
+				if (step.from != id && !known.exists(s -> s.from == step.from)) {
+					known.push(step);
+					callers[id] = known;
+					if (externs.exists(id)) externRevisits.push({ id: id, step: step });
+				}
+			}
 			if (queued.exists(key)) return;
 			queued[key] = true;
 			if (!reach.exists(id)) reach[id] = step;
@@ -1977,6 +2003,30 @@ final class MemberReach {
 			admitUnread(site, false);
 			admitAlways();
 		}
+		// the extern `id`'s admission for the caller `s` queued it from, unless that caller runs nowhere as itself yet
+		function admitExternFrom(id: String, s: ReachStep): Void {
+			final target: Null<{ type: String, name: String }> = externs[id];
+			if (target == null) return;
+			if (spliceOnly[s.from] == true) {
+				final waiting: Array<{ id: String, step: ReachStep }> = waitingExterns[s.from] ?? [];
+				waiting.push({ id: id, step: s });
+				waitingExterns[s.from] = waiting;
+				return;
+			}
+			admit(externSite(g, id, s.file, s.span, target.type, target.name, s.from, question.declaring));
+		}
+		// the admission of the target code of the extern `type.name`, the node `id`, met at `file`/`span`: under the truth once
+		// for every node that queued it (`callers`), each read by what its calls of it hand (`externSite`), and again for each
+		// that queues it later (`externRevisits`)
+		function admitExtern(id: String, from: String, file: String, span: Null<Span>, type: String, name: String): Void {
+			final steps: Array<ReachStep> = truth ? (callers[id] ?? []).copy() : [];
+			if (steps.length == 0) {
+				admit(externSite(g, from, file, span, type, name, reach[id]?.from, question.declaring));
+				return;
+			}
+			externs[id] = { type: type, name: name };
+			for (s in steps) admitExternFrom(id, s);
+		}
 		// the reflective accesses by a computed name whose object the facts type (`ReachGraph.reflectedMembers`): what a call of
 		// the accessor runs there is what its admission lets run, so its body, which reaches members by a name it is handed
 		// as any reflection does, is not entered from that call
@@ -2075,10 +2125,10 @@ final class MemberReach {
 						switch verdict {
 							case Blind:
 								blind = blind ?? NativeCode(x?.at.file ?? entry.file, h.span);
-							case Hands(types):
+							case Hands(types, values, classes):
 								judged.push({ file: entry.file, span: h.span });
-								if (types == null || types.length > 0)
-									admit(nativeSite(g, from, entry.file, h.span, types));
+								if (types == null || types.length > 0 || values || classes.length > 0)
+									admit(nativeSite(g, from, entry.file, h.span, types, values, classes));
 						}
 					case _:
 						blind = blind ?? firstBlind(entry.file, [h]);
@@ -2104,10 +2154,15 @@ final class MemberReach {
 
 		var qi: Int = 0;
 		while (true) {
-			while (qi < queue.length || pending.length > 0) {
+			while (qi < queue.length || pending.length > 0 || externRevisits.length > 0) {
 				final released: Null<AdmissionSite> = pending.shift();
 				if (released != null) {
 					admit(released);
+					continue;
+				}
+				final revisit: Null<{ id: String, step: ReachStep }> = externRevisits.shift();
+				if (revisit != null) {
+					admitExternFrom(revisit.id, revisit.step);
 					continue;
 				}
 				if (qi >= _maxVisited) return Unknown(blind ?? Budget('the walk visited more than $_maxVisited functions'));
@@ -2131,7 +2186,7 @@ final class MemberReach {
 					final spliced: Bool = spliceOnly[id] == true;
 					final requeue: (String, ReachStep) -> Void = (to, s) -> enqueueTyped(to, s, null, spliced);
 					final more: Null<ReachUnknown> = expandExternal(g, node, reach[id], requeue, (from, file, span, type, name) -> {
-						admit(externSite(g, from, file, span, type, name));
+						admitExtern(id, from, file, span, type, name);
 					});
 					if (more != null) blind = blind ?? more;
 					// the file just read may have declared this very id, which is then a body to walk
@@ -2151,7 +2206,7 @@ final class MemberReach {
 					if (type == null || name == null)
 						blind = blind ?? UnresolvedDispatch(node.file, null, 'a call to `${node.id}`');
 					else if (g.types.meta.isExtern(type) && !_g.externQuiet(g, type, name))
-						admit(externSite(g, node.id, reach[id]?.file ?? node.file, reach[id]?.span, type, name));
+						admitExtern(id, node.id, reach[id]?.file ?? node.file, reach[id]?.span, type, name);
 					continue;
 				}
 				// a name two types share is read as the one a fact names the target's owner, or not at all (`ReachGraph.qualified`)
@@ -2347,7 +2402,9 @@ final class MemberReach {
 	 * own methods and constructor reach no member by name and call only a function value the call hands them; converting the
 	 * array converts its elements, of the type it is written with (the compiler's, where the syntax types no receiver).
 	 */
-	private function externSite(g: CallGraph, from: String, file: String, span: Null<Span>, type: String, name: String): AdmissionSite {
+	private function externSite(
+		g: CallGraph, from: String, file: String, span: Null<Span>, type: String, name: String, caller: Null<String>, declaring: String
+	): AdmissionSite {
 		// noqa: complexity
 		final site: AdmissionSite = {
 			from: from,
@@ -2368,17 +2425,6 @@ final class MemberReach {
 		final onInstance: Bool = g.types.memberOnChain(type, name)?.isStatic == false;
 		// a construction's children are its arguments alone: it names a type, not a callee
 		final constructs: Bool = call?.kind == _shape.newExprKind;
-		if (call == null || tree == null || source == null || (!constructs && call.children.length == 0)) {
-			// the site is not in code the analysis read: nothing narrows what the call is handed, its receiver included
-			site.all = takesObject || onInstance;
-			return site;
-		}
-		final args: Array<QueryNode> = constructs ? call.children : call.children.slice(1);
-		final callee: Null<QueryNode> = constructs ? null : call.children[0];
-		final receiver: Null<QueryNode> = callee != null && _hazards.isAccess(callee.kind) && callee.children.length > 0
-			? callee.children[0]
-			: null;
-		final lambdas: Array<String> = _shape.lambdaKinds ?? [];
 		function hand(t: Null<String>): Void {
 			if (t != null && _g.inertType(t)) return;
 			final members: Null<Array<String>> = t == null ? null : _g.handedMemberIds(g, t);
@@ -2397,18 +2443,44 @@ final class MemberReach {
 			&& ((_shape.execution?.nonMutatingArrayMethods ?? []).contains(name)
 				|| (_shape.execution?.mutatingArrayMethods ?? []).contains(name) || name == (_shape.constructorName ?? 'new'));
 		if (arrayOwn) site.values = _g.callsItsArgument(g, type, name);
-		if (takesObject && !arrayOwn) for (arg in args) if (!lambdas.contains(arg.kind)) hand(_g.sites.typeOf(file, tree, source, arg));
+		final returned: Null<String> = g.types.memberOnChain(type, name)?.returnNominal;
+		final stringType: Null<String> = _g.stringTypeName();
+		// under the truth the compiler says what the caller's calls of it hand its target code, the receiver included, wherever
+		// the syntax sees the call or not: read positively (`externHanded`), it replaces the syntax's reading of the arguments.
+		// The built-in array's own methods call only a function value they are handed, and reach a member by name only converting
+		// what they hold to a string
+		final handed: Null<NativeHands> = externHanded(g, caller, type, name, declaring);
+		if (handed != null && !arrayOwn) site.values = handed.values;
+		if (handed != null && (!arrayOwn || (returned != null && returned == stringType))) {
+			final types: Null<Array<String>> = handed.types;
+			if (types == null)
+				site.all = true
+			else
+				for (t in types) hand(t);
+		}
+		if (call == null || tree == null || source == null || (!constructs && call.children.length == 0)) {
+			// the site is not in code the analysis read: nothing narrows what the call is handed, its receiver included
+			if (handed == null) site.all = takesObject || onInstance;
+			return site;
+		}
+		final args: Array<QueryNode> = constructs ? call.children : call.children.slice(1);
+		final callee: Null<QueryNode> = constructs ? null : call.children[0];
+		final receiver: Null<QueryNode> = callee != null && _hazards.isAccess(callee.kind) && callee.children.length > 0
+			? callee.children[0]
+			: null;
+		final lambdas: Array<String> = _shape.lambdaKinds ?? [];
+		if (handed == null && takesObject && !arrayOwn)
+			for (arg in args)
+				if (!lambdas.contains(arg.kind)) hand(_g.sites.typeOf(file, tree, source, arg));
 		// an instance member's target code holds its receiver too — a program subclass's `this` when the call is bare —
 		// and reaches its members by name as it does an argument's (a native `toJSON` runs `this.toISOString()`). A
 		// construction's receiver is the object it makes, an instance of exactly the target class: no program object
-		if (onInstance && !arrayOwn && !constructs)
+		if (handed == null && onInstance && !arrayOwn && !constructs)
 			hand(receiver == null ? MemberTouchScan.typeAt(tree, call.span?.from ?? 0) : _g.sites.typeOf(file, tree, source, receiver));
 		// a type taking type parameters is a container whose elements a conversion reaches too: any
 		function containerFree(t: Null<String>): Null<String> {
 			return t == null || g.types.generics.typeParamsOf(t).length > 0 ? null : t;
 		}
-		final returned: Null<String> = g.types.memberOnChain(type, name)?.returnNominal;
-		final stringType: Null<String> = _g.stringTypeName();
 		final at: Null<Span> = call.span;
 		// what a value is typed: its syntax's reading, else — under the truth — the type the compiler gave it there
 		final readTree: QueryNode = tree;
@@ -2435,6 +2507,41 @@ final class MemberReach {
 			});
 		}
 		return site;
+	}
+
+	/**
+	 * What the calls of the extern member `type.name` in the code of the graph node `caller` hand its target code, where the
+	 * compiler facts are the truth (`FactsView.externCalls`): each value an argument hands it and each call's receiver, read
+	 * positively (`NativeSiteReach.take`) — any object (`types` null) once one of them may be an object carrying a member of
+	 * a type `declaring` declares. Null — the syntax reads the call — without the truth or a caller, when a declaration of
+	 * the caller is not faceted or a fact there has no place, and when its facts hold no call of the member.
+	 */
+	private function externHanded(g: CallGraph, caller: Null<String>, type: String, name: String, declaring: String): Null<NativeHands> {
+		final view: Null<FactsView> = _scope.facts;
+		if (view == null || !view.truth || caller == null) return null;
+		final facts: FactsView = view;
+		final targets: Array<String> = [for (id in facts.bySimpleName()[type] ?? []) '$id.$name'];
+		final declared: Array<FnDeclaration> = g.declarationsOf(caller);
+		if (targets.length == 0 || declared.length == 0) return null;
+		final handed: Array<String> = [];
+		final receivers: Array<Null<String>> = [];
+		var count: Int = 0;
+		for (d in declared) {
+			final read: Null<ExternCalls> = facts.externCalls(g, d.file, d.span, targets, caller);
+			if (read == null) return null;
+			for (h in read.handed) handed.push(h);
+			for (r in read.receivers) receivers.push(r);
+			count += read.count;
+		}
+		if (count == 0) return null;
+		final sites: NativeSiteReach = nativeSites(facts);
+		final escaped: Bool = ownerMayHaveEscaped(declaring);
+		final into: NativeHands = { types: [], values: false };
+		function take(text: Null<String>): Bool {
+			final read: Null<FactsType> = text == null ? null : FactsTypeTree.read(text);
+			return text == null || (read != null && sites.take(read, escaped, into));
+		}
+		return handed.foreach(take) && receivers.foreach(take) ? into : { types: null, values: true };
 	}
 
 	/** The element type of a value typed `type` when that is the built-in array type written with it (`Array<T>`), else null. */
@@ -2643,12 +2750,28 @@ final class MemberReach {
 	private function nativeVerdict(x: NativeFact, names: Array<String>, declaring: String): NativeVerdict {
 		final view: Null<FactsView> = _scope.facts;
 		if (view == null) return Blind;
-		final sites: NativeSiteReach = _nativeSites ?? new NativeSiteReach(view.table, FactsEscapes.inertIds(_shape));
+		final sites: NativeSiteReach = nativeSites(view);
+		return sites.judge(x, names, ownerMayHaveEscaped(declaring));
+	}
+
+	/** What native sites may do to a member under the truth (`NativeSiteReach`), read off `view`; built on first need. */
+	private function nativeSites(view: FactsView): NativeSiteReach {
+		final sites: NativeSiteReach = _nativeSites ?? new NativeSiteReach(
+			view.table, FactsEscapes.inertIds(_shape), _shape.arrayTypeNames ?? []
+		);
 		_nativeSites = sites;
+		return sites;
+	}
+
+	/**
+	 * Whether an object carrying a member of a type `declaring` declares may have left the type system: the escapes are not
+	 * known, or a type a value of which carries it (`ValueCarriers.declaredValueTypes`) escaped.
+	 */
+	private function ownerMayHaveEscaped(declaring: String): Bool {
 		final owners: Null<Array<String>> = _carriers.declaredValueTypes(declaring);
 		final escaped: Null<Array<String>> = _escapes.escaped();
 		final known: Array<String> = escaped ?? [];
-		return sites.judge(x, names, owners == null || escaped == null || owners.exists(o -> known.contains(o)));
+		return owners == null || escaped == null || owners.exists(o -> known.contains(o));
 	}
 
 	/**
@@ -2715,13 +2838,25 @@ final class MemberReach {
 	}
 
 	/**
-	 * The admission of the target code at `span` of `file`, which reaches no object carrying the member: it may call any
-	 * function value it is handed, and a member by its name of each object it is handed — of the types `types` spell, or of
-	 * any when null (`ReachGraph.handedMemberIds`).
+	 * The admission of the target code at `span` of `file`, which reaches no object carrying the member: it may call the
+	 * function values it is handed or an object it is handed holds (`values`), a member by its name of each object it is handed
+	 * — of the types `types` spell, or of any when null (`ReachGraph.handedMemberIds`) — and what each class its text names
+	 * (`classes`, typed ids) holds globally: its statics, its constructor, an instance's members (`ReachGraph.namedClassIds`).
 	 */
-	private function nativeSite(g: CallGraph, from: String, file: String, span: Span, types: Null<Array<String>>): AdmissionSite {
-		final out: AdmissionSite = site(from, file, span, 'native', [], true);
+	private function nativeSite(
+		g: CallGraph, from: String, file: String, span: Span, types: Null<Array<String>>, values: Bool, classes: Array<String>
+	): AdmissionSite {
+		final out: AdmissionSite = site(from, file, span, 'native', [], values);
 		final ids: Array<String> = [];
+		final named: Array<Null<String>> = [for (c in classes) FactsView.simpleSource(c)];
+		for (c in named) {
+			final members: Null<Array<String>> = c == null ? null : _g.namedClassIds(g, c);
+			if (members == null) {
+				out.all = true;
+				return out;
+			}
+			for (id in members) if (!ids.contains(id)) ids.push(id);
+		}
 		for (t in types ?? []) {
 			final members: Null<Array<String>> = _g.handedMemberIds(g, t);
 			if (members == null) {

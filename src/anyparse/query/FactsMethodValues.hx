@@ -151,9 +151,6 @@ final class FactsMethodValues {
 	/** The nullable wrapper: a value of it is what it wraps. */
 	private static inline final NULLABLE: String = 'Null';
 
-	/** The type of a string: a reflective call's recorded literal may be its first argument, the object, not the name. */
-	private static inline final STRING_TYPE: String = 'String';
-
 
 	private final _view: FactsView;
 	private final _table: CompilerFacts;
@@ -368,9 +365,9 @@ final class FactsMethodValues {
 					continue;
 				}
 				final read: MethodValueRead = { receiver: r.receiver, exact: r.receiverExact, typeless: true };
-				final literal: Null<String> = r.name;
-				// the literal recorded is the first of any argument: the object's own, when that is a string
-				if (literal == null || CompilerFacts.baseId(r.receiver ?? STRING_TYPE) == STRING_TYPE)
+				// the literal at the call's NAME argument: a call naming no member, or a computed name, may obtain any
+				final literal: Null<String> = r.memberName;
+				if (literal == null)
 					out.computed.push(read)
 				else
 					named(literal, read);

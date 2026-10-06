@@ -60,9 +60,6 @@ final class NullGuardedCode {
 	/** The reflective members that write a member by its name: a value they store replaces the one it held. */
 	private static final WRITERS: Array<String> = ['Reflect.setField', 'Reflect.setProperty'];
 
-	/** The type of a string: a reflective call's recorded literal may be its first argument, the object, not the name. */
-	private static inline final STRING_TYPE: String = 'String';
-
 	/** The kinds of a typed type a test of whose values against null is the language's own (`builtinEquality`). */
 	private static final NOMINAL_KINDS: Array<String> = ['class', 'interface', 'enum'];
 
@@ -483,9 +480,9 @@ final class NullGuardedCode {
 		}
 		for (r in facts.reflection) {
 			if (FactsMethodValues.memberless(table, r.target) && !WRITERS.contains(r.target)) continue;
-			// the literal recorded is the first of any argument: the object's own, when that is a string
-			final named: Bool = r.name != null && CompilerFacts.baseId(r.receiver ?? STRING_TYPE) != STRING_TYPE;
-			if ((named && r.name != field) || assumedDead(r.at)) continue;
+			// the member the literal at the call's NAME argument names; null — a computed name, or a call naming no member — is any
+			final named: Null<String> = r.memberName;
+			if ((named != null && named != field) || assumedDead(r.at)) continue;
 			if (r.isValue || holdsClassValue(r.receiver, hierarchy, escaped)) return true;
 		}
 		return false;

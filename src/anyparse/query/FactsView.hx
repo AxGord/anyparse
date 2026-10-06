@@ -9,8 +9,10 @@ import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.CompilerFacts.FieldDeclFact;
 import anyparse.query.CompilerFacts.FieldFact;
+import anyparse.query.CompilerFacts.HandFact;
 import anyparse.query.CompilerFacts.IterationFact;
 import anyparse.query.CompilerFacts.NativeFact;
+import anyparse.query.CompilerFacts.NewFact;
 import anyparse.query.CompilerFacts.ReflectionFact;
 import anyparse.query.CompilerFacts.StringFact;
 import anyparse.query.CompilerFacts.TypeFact;
@@ -101,6 +103,9 @@ final class FactsView {
 
 	/** The name an abstract's constructor takes in its implementation class. */
 	private static inline final IMPL_CONSTRUCTOR: String = '_new';
+
+	/** The access of a call of a static field (`CallFact.access`): it runs on no receiver. */
+	private static inline final STATIC_ACCESS: String = 'FStatic';
 
 	/** The kind of a typed typedef (`TypeFact.kind`). */
 	private static inline final TYPEDEF_KIND: String = 'typedef';
@@ -306,6 +311,35 @@ final class FactsView {
 		final natives: Null<Array<NativeFact>> = table.within(file, span, n -> n.natives, f -> f.at, true, harmless);
 		final reflection: Null<Array<ReflectionFact>> = table.within(file, span, n -> n.reflection, r -> r.at, true, harmless);
 		return natives == null || reflection == null ? null : { natives: natives, reflection: reflection };
+	}
+
+	/**
+	 * What the code at `span` of `file` hands the target code of the extern members `targets` (`pack.Type.field`), when the
+	 * facts are the truth and the innermost graph node holding `span` is faceted: the type of each value an argument hands it
+	 * (`HandFact.from`), and of each call or construction of one of them, its receiver — null for none: a static call, a
+	 * construction (whose receiver is the object it makes) — and how many there are. Every splice is read, a harmless one's
+	 * too. Null otherwise, and when a fact there has no place (`CompilerFacts.within`).
+	 */
+	public function externCalls(g: CallGraph, file: String, span: Span, targets: Array<String>, ?node: String): Null<ExternCalls> {
+		if (!truth || !faceted(g, file, span, node)) return null;
+		final constructor: String = _scope.shape.constructorName ?? 'new';
+		function handedTo(n: FactNode): Array<HandFact> {
+			return [for (h in n.handed) if (targets.contains(h.target)) h];
+		}
+		function callsOf(n: FactNode): Array<CallFact> {
+			return [for (c in n.calls) if (targets.contains(c.target ?? '')) c];
+		}
+		function constructionsOf(n: FactNode): Array<NewFact> {
+			return [
+				for (x in n.news) if (targets.contains('${CompilerFacts.baseId(x.type)}.$constructor')) x
+			];
+		}
+		final hands: Null<Array<HandFact>> = table.within(file, span, handedTo, h -> h.at, true);
+		final calls: Null<Array<CallFact>> = table.within(file, span, callsOf, c -> c.at, true);
+		final made: Null<Array<NewFact>> = table.within(file, span, constructionsOf, x -> x.at, true);
+		if (hands == null || calls == null || made == null) return null;
+		final receivers: Array<Null<String>> = [for (c in calls) c.access == STATIC_ACCESS ? null : c.receiver];
+		return { handed: [for (h in hands) h.from], receivers: receivers, count: calls.length + made.length };
 	}
 
 	/**
@@ -1311,6 +1345,16 @@ final class FactsView {
 typedef TruthSites = {
 	final natives: Array<NativeFact>;
 	final reflection: Array<ReflectionFact>;
+}
+
+/**
+ * What code hands the target code of extern members (`FactsView.externCalls`): the type of each value an argument hands
+ * it, each call's receiver (null for none), and how many calls and constructions of them there are.
+ */
+typedef ExternCalls = {
+	final handed: Array<String>;
+	final receivers: Array<Null<String>>;
+	final count: Int;
 }
 
 /** The conditional compilation of a text: its directives, its top-level regions, and whether a region never closes. */

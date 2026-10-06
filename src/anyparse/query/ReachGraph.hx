@@ -358,6 +358,22 @@ final class ReachGraph {
 		return out;
 	}
 
+	/**
+	 * The graph ids of every function target code naming the class `type` may run: what code handed an instance of it may
+	 * (`handedMemberIds`, which counts every function the class and its supertypes declare, its static ones and its
+	 * constructor among them), and the generated constructor of a class that declares none. Null when that set is not known.
+	 */
+	public function namedClassIds(g: CallGraph, type: String): Null<Array<String>> {
+		final decl: Null<TypeDeclInfo> = declarationOf(type);
+		final members: Null<Array<String>> = decl == null ? null : handedMemberIds(g, type);
+		if (decl == null || members == null) return null;
+		if (decl.members.exists(m -> m.name == (_scope.shape.constructorName ?? 'new'))) return members;
+		// a class that declares no constructor has a generated one: its initializers, then its superclass's constructor
+		final out: Array<String> = members.copy();
+		for (id in generatedConstructor(g, type)) if (!out.contains(id)) out.push(id);
+		return out;
+	}
+
 	/** The language's string type: what a string literal is (`RefShape.literalTypeNames`). */
 	public function stringTypeName(): Null<String> {
 		return (_scope.shape.literalTypeNames ?? [])[(_scope.shape.stringLiteralKinds ?? [])[0] ?? ''];

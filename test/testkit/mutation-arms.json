@@ -6524,7 +6524,7 @@
 			"name": "M-REACH-EXTERN-OBJECT",
 			"type": "anyparse.query.MemberReach",
 			"method": "externSite",
-			"find": "if (takesObject && !arrayOwn) for (arg in args)",
+			"find": "if (handed == null && takesObject && !arrayOwn)",
 			"replace": "if (false) for (arg in args)",
 			"note": "an object handed to target code admits none of its members, so `JSON.stringify(this)` runs `toJSON` unseen"
 		},
@@ -6605,7 +6605,7 @@
 			"type": "anyparse.query.MemberReach",
 			"method": "externSite",
 			"find": [
-				"if (takesObject && !arrayOwn) for (arg in args)",
+				"if (handed == null && takesObject && !arrayOwn)",
 				"if (returned != null && returned == stringType && at != null) {"
 			],
 			"replace": [
@@ -6642,7 +6642,7 @@
 			"name": "M-REACH-EXTERN-RECEIVER",
 			"type": "anyparse.query.MemberReach",
 			"method": "externSite",
-			"find": "if (onInstance && !arrayOwn && !constructs)",
+			"find": "if (handed == null && onInstance && !arrayOwn && !constructs)",
 			"replace": "if (false)",
 			"note": "an extern instance method's target code does not hold its receiver, so a native `toJSON` calling `this.toISOString()` runs unseen"
 		},
@@ -12114,14 +12114,6 @@
 			"note": "(precision) the built-in array's own methods may call any function value handed to target code before"
 		},
 		{
-			"name": "M-REACH-ARRAY-ELEMENTS",
-			"type": "anyparse.query.MemberReach",
-			"method": "externSite",
-			"find": "final element: Null<String> = n == receiver && arrayOwn && t != null ? elementType(t) : null;",
-			"replace": "final element: Null<String> = null;",
-			"note": "(precision) converting an array converts a value of any type, whatever its elements are typed"
-		},
-		{
 			"name": "M-REACH-EXTERN-FACTS-TYPE",
 			"type": "anyparse.query.MemberReach",
 			"method": "externSite",
@@ -12386,7 +12378,7 @@
 			"name": "M-NATIVE-SITE-BLIND",
 			"type": "anyparse.query.NativeSiteReach",
 			"method": "judge",
-			"find": "return Hands(any ? null : handed);",
+			"find": "return Hands(into.types, into.values, _native.classesNamed(words));",
 			"replace": "return Blind;",
 			"note": "(precision) every native site is a blind spot under the truth, whatever it is handed and names"
 		},
@@ -12394,14 +12386,14 @@
 			"name": "M-NATIVE-SITE-NAMES",
 			"type": "anyparse.query.NativeSiteReach",
 			"method": "judge",
-			"find": "if (code != null && FactsNativeReach.targetNames(code).exists(n -> names.contains(n))) return Blind;",
+			"find": "if (words.exists(n -> names.contains(n))) return Blind;",
 			"replace": "",
 			"note": "target code naming the member is taken to reach it only through what it is handed"
 		},
 		{
 			"name": "M-NATIVE-SITE-ESCAPED",
 			"type": "anyparse.query.NativeSiteReach",
-			"method": "judge",
+			"method": "take",
 			"find": "if (ownerEscaped) return false;",
 			"replace": "",
 			"note": "a value handed to target code is taken to be no object carrying the member although such an object left the type system"
@@ -12418,7 +12410,7 @@
 			"name": "M-NATIVE-SITE-VALUES",
 			"type": "anyparse.query.MemberReach",
 			"method": "nativeSite",
-			"find": "site(from, file, span, 'native', [], true)",
+			"find": "site(from, file, span, 'native', [], values)",
 			"replace": "site(from, file, span, 'native', [], false)",
 			"note": "target code is taken to call no function value it is handed"
 		},
@@ -12445,6 +12437,70 @@
 			"find": "else if (fact.kind == 'typedef')",
 			"replace": "else if (false)",
 			"note": "(precision) an alias of a type no value of which is an object is not read through"
+		},
+		{
+			"name": "M-NATIVE-SITE-TAKEN-VALUES",
+			"type": "anyparse.query.NativeSiteReach",
+			"method": "take",
+			"find": "into.values = true;",
+			"replace": "",
+			"note": "target code handed a function value, or an object holding one, is taken to call none"
+		},
+		{
+			"name": "M-NATIVE-SITE-ARRAY-ELEMENTS",
+			"type": "anyparse.query.NativeSiteReach",
+			"method": "noObject",
+			"find": "case Named(id, [element]) if (_arrays.contains(id)): noObject(element, seen);",
+			"replace": "",
+			"note": "(precision) a built-in array of values that are no object is taken to be an object"
+		},
+		{
+			"name": "M-NATIVE-CLASSES-NAMED",
+			"type": "anyparse.query.NativeSiteReach",
+			"method": "judge",
+			"find": "return Hands(into.types, into.values, _native.classesNamed(words));",
+			"replace": "return Hands(into.types, into.values, []);",
+			"note": "target code naming a class is taken to run none of its statics or its constructor"
+		},
+		{
+			"name": "M-NATIVE-CLASSES-EXTERN",
+			"type": "anyparse.query.FactsNativeReach",
+			"method": "programClass",
+			"find": " && !fact.isExtern",
+			"replace": "",
+			"note": "(precision) target code naming an extern class may run any code of the program's the class's statics cannot be read for"
+		},
+		{
+			"name": "M-EXTERN-HANDED-FACTS",
+			"type": "anyparse.query.MemberReach",
+			"method": "externSite",
+			"find": "final handed: Null<NativeHands> = externHanded(g, caller, type, name, declaring);",
+			"replace": "final handed: Null<NativeHands> = null;",
+			"note": "(precision) under the truth an extern's call is read by its syntax, which a call spliced in hands nothing it can read"
+		},
+		{
+			"name": "M-EXTERN-HANDED-RECEIVER",
+			"type": "anyparse.query.MemberReach",
+			"method": "externHanded",
+			"find": "return handed.foreach(take) && receivers.foreach(take) ? into : { types: null, values: true };",
+			"replace": "return handed.foreach(take) ? into : { types: null, values: true };",
+			"note": "an extern instance method's target code is taken not to hold its receiver"
+		},
+		{
+			"name": "M-EXTERN-CALLERS",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "final steps: Array<ReachStep> = truth ? (callers[id] ?? []).copy() : [];",
+			"replace": "final steps: Array<ReachStep> = truth ? (callers[id] ?? []).slice(0, 1) : [];",
+			"note": "an extern's admission reads only the first caller that queued it, not every other one"
+		},
+		{
+			"name": "M-EXTERN-REVISIT",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "if (externs.exists(id)) externRevisits.push({ id: id, step: step });",
+			"replace": "",
+			"note": "a caller that queues an extern after its admission hands it nothing"
 		},
 		{
 			"name": "M-FACTS-NATIVE-HANDED",
@@ -13839,6 +13895,14 @@
 			"method": "reachedByName",
 			"force": "false",
 			"note": "(soundness) a reflective read of a variable by its name is no read of it"
+		},
+		{
+			"name": "M-GUARDED-MEMBER-NAME",
+			"type": "anyparse.query.NullGuardedCode",
+			"method": "reachedByName",
+			"find": "final named: Null<String> = r.memberName;",
+			"replace": "final named: Null<String> = r.name;",
+			"note": "(soundness) a reflective write by a computed name is read as naming the literal it stores"
 		},
 		{
 			"name": "M-GUARDED-TARGET-CODE",
