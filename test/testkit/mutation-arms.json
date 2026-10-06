@@ -8865,7 +8865,7 @@
 			"type": "anyparse.query.ImplicitSites",
 			"method": "sitesOfFile",
 			"find": "if (throws.contains(kind) && node.children.length > 0) add(Text, node, [node.children[0]]);",
-			"replace": "",
+			"replace": "if (throws.contains(kind) && node.children.length < 0) add(Text, node, [node.children[0]]);",
 			"note": "a `throw` is no string-conversion site of what it throws"
 		},
 		{
