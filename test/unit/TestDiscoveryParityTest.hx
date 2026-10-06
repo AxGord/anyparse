@@ -2826,6 +2826,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-WALK-JOINED-START',
 			'unit.query.MemberReachFactsTest#testAFieldReadJoinedFromAnIndexAccessToTheAccessAnotherInlinedMethodWritesIsItsTextUnderTheTruth :: control :: '
 				+ 'M-FACTS-TEXT-JOINED-OTHER-SPLICE',
+			'unit.query.MemberReachFactsTest#testAFieldSetByItsNameConvertsTheValueOnHxcppUnderTheTruth :: control :: '
+				+ 'M-FACTS-CONVERSION-WRITES,M-FACTS-CONVERSION-FIELD-WRITES',
 			'unit.query.MemberReachFactsTest#testAFieldTheCompilerCallsLeavesItsFunctionToTheSyntaxUnderTheTruth :: control :: '
 				+ 'M-TOUCH-TYPED-CALLED',
 			'unit.query.MemberReachFactsTest#testAFieldTheCompilerPlacesAcrossTwoInlinedGettersIsItsTextUnderTheTruth :: control :: '
@@ -3013,6 +3015,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testAValueFlowingIntoACatchAllEscapesUnderTheTruth :: control :: M-ESCAPES-FACTS-FLOW',
 			'unit.query.MemberReachFactsTest#testAValueHandedToAnExternEscapesUnderTheTruth :: control :: '
 				+ 'M-ESCAPES-FACTS-HANDED,M-FACTS-HANDS',
+			'unit.query.MemberReachFactsTest#testAValuePutAtAStringPlaceRunsItsToStringOnHxcppUnderTheTruth :: control :: '
+				+ 'M-FACTS-CONVERSION-FLOWS,M-FACTS-CONVERSION-TARGET,M-FACTS-CONVERSION-ANY-TARGET,M-UNCHECKED-STRING-ELEMENTS',
 			'unit.query.MemberReachFactsTest#testAVariableABuildMacroMadeAPropertyKeepsItsOwnerUnknownUnderTheTruth :: control :: '
 				+ 'M-FACTS-TEXT-FIELDS-ANY',
 			'unit.query.MemberReachFactsTest#testAWriteOfAFieldOfAnInlinedIndexAccessIsItsTextUnderTheTruth :: control :: '
@@ -3087,6 +3091,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-REACH-DEAD-FILE-ENTRY,M-REACH-DEAD-FILE-LOCAL-ENTRY',
 			'unit.query.MemberReachFactsTest#testCodeNoBuildCompilesRunsNothingUnderTheTruth :: control :: '
 				+ 'M-REACH-DEAD-NODE-ENTERED,M-LIVE-FRAGMENTED',
+			'unit.query.MemberReachFactsTest#testCodeReadByItsSyntaxConvertsAValueThatLeftTheTypeSystem :: control :: '
+				+ 'M-REACH-SYNTAX-CONVERSION,M-SITES-LANDING-KEEPING-PLACE,M-SITES-LANDING-CLASS-PLACE,M-SITES-LANDING-TYPED-VALUE',
 			'unit.query.MemberReachFactsTest#testCodeReadByItsSyntaxMayRunTheConversionsOfATypeTheIndexDeclaresNowhere :: control :: '
 				+ 'M-REACH-ALWAYS-TEXTLESS,M-REACH-MENTIONS-TYPED',
 			'unit.query.MemberReachFactsTest#testCodeReadThroughItsFactsRunsNoOperatorOverloadItNamesNoCallOfUnderTheTruth :: control :: '
@@ -3098,6 +3104,10 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-REACH-TEXT-EXTERN-INLINE',
 			'unit.query.MemberReachFactsTest#testFactsThatAreNotTheTruthNarrowNothingCodeTheWalkNeverEntersRuns :: control :: '
 				+ 'M-ADMIT-SYNTAX-READ-UNTRUE',
+			'unit.query.MemberReachFactsTest#testJoiningAFieldOfStringsConvertsNothingOnHxcppUnderTheTruth :: control :: '
+				+ 'M-REACH-HANDED-CONVERTED',
+			'unit.query.MemberReachFactsTest#testJoiningAnArrayRunsItsElementsToStringAloneUnderTheTruth :: control :: '
+				+ 'M-REACH-ARRAY-OWN-HANDS',
 			'unit.query.MemberReachFactsTest#testLibraryCodeNotReadYetMayRunAnyOperatorOverloadUnderTheTruth :: control :: '
 				+ 'M-ADMIT-SYNTAX-READ-UNSEEN,M-REACH-UNREAD-RECHECK',
 			'unit.query.MemberReachFactsTest#testLibraryCodeNotReadYetMayRunTheOperatorOverloadOfATypeTheIndexDeclaresNowhere :: control :: '
@@ -5449,7 +5459,19 @@ class TestDiscoveryParityTest extends Test {
 			'M-VALUE-STORED-FOREIGN',
 			'M-EXTERN-BLIND-REFLECTIVE',
 			'M-EXTERN-BLIND-TARGET-ADMISSION',
-			'M-EXTERN-BLIND-SYNTAX-LITERAL'
+			'M-EXTERN-BLIND-SYNTAX-LITERAL',
+			'M-FACTS-CONVERSION-FLOWS',
+			'M-FACTS-CONVERSION-TARGET',
+			'M-FACTS-CONVERSION-ANY-TARGET',
+			'M-UNCHECKED-STRING-ELEMENTS',
+			'M-FACTS-CONVERSION-WRITES',
+			'M-FACTS-CONVERSION-FIELD-WRITES',
+			'M-REACH-SYNTAX-CONVERSION',
+			'M-REACH-HANDED-CONVERTED',
+			'M-REACH-ARRAY-OWN-HANDS',
+			'M-SITES-LANDING-KEEPING-PLACE',
+			'M-SITES-LANDING-CLASS-PLACE',
+			'M-SITES-LANDING-TYPED-VALUE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

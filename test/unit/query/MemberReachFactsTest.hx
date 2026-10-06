@@ -2589,6 +2589,92 @@ class MemberReachFactsTest extends Test {
 		assertMatch(reflectAsk(fixture('new Third().calm();'), true), r -> r.match(Proven));
 	}
 
+	@:pin('control') @:killer('M-FACTS-CONVERSION-FLOWS') @:killer('M-FACTS-CONVERSION-TARGET') @:killer('M-FACTS-CONVERSION-ANY-TARGET')
+	@:killer('M-UNCHECKED-STRING-ELEMENTS')
+	public function testAValuePutAtAStringPlaceRunsItsToStringOnHxcppUnderTheTruth(): Void {
+		// hxcpp converts a value put at a `String` place by its `toString` (`String::String(const Dynamic &)`), an array copied
+		// into an array of strings element by element; js and eval keep the value there. `d` holds an `Obj`, whose `toString`
+		// replaces `items`: each place converts it on C++ alone
+		function region(code: String): String {
+			return LOOP_HEAD + '\tstatic var d:Dynamic = null;\n\tstatic var held:String = null;\n\n'
+				+ '\tstatic function takes(s:String):Void {}\n\n\tstatic function gives():String return d;\n\n'
+				+ '\tstatic function main() {\n\t\td = new Obj();\n\t\tfor (i in 0...items.length) { /*<*/ ' + code + ' /*>*/ }\n\t}\n}\n'
+				+ CLEARING_OBJ;
+		}
+		for (code in [
+			'var s:String = d;',
+			'held = d;',
+			'takes(d);',
+			'gives();',
+			'var s:String = cast new Obj();',
+			'var a:Array<Dynamic> = [d];\n\t\tvar b:Array<String> = cast a;',
+			'var a:Array<String> = [d];'
+		]) {
+			assertMatch(builtAsk(CPP_BUILD, ['Main.hx' => region(code)]), r -> r.match(Reached(_)));
+			assertMatch(interpAsk(['Main.hx' => region(code)]), r -> r.match(Proven));
+		}
+	}
+
+	@:pin('control') @:killer('M-FACTS-CONVERSION-WRITES') @:killer('M-FACTS-CONVERSION-FIELD-WRITES')
+	public function testAFieldSetByItsNameConvertsTheValueOnHxcppUnderTheTruth(): Void {
+		// `H.s` is a `String`: hxcpp's `__SetField` converts what a reflective write or a write through a catch-all puts there, so
+		// `Obj.toString`, which replaces `items`, runs; the interpreter keeps the value
+		function region(code: String): String {
+			return LOOP_HEAD + '\tstatic var d:Dynamic = null;\n\tstatic var h:Dynamic = null;\n\n'
+				+ '\tstatic function main() {\n\t\td = new Obj();\n\t\th = new H();\n\t\tfor (i in 0...items.length) { /*<*/ ' + code
+				+ ' /*>*/ }\n\t}\n}\nclass H {\n\tpublic var s:String = null;\n\n\tpublic function new() {}\n}\n' + CLEARING_OBJ;
+		}
+		for (code in ['Reflect.setField(h, "s", d);', 'h.s = d;']) {
+			assertMatch(builtAsk(CPP_BUILD, ['Main.hx' => region(code)]), r -> r.match(Reached(_)));
+			assertMatch(interpAsk(['Main.hx' => region(code)]), r -> !r.match(Reached(_)));
+		}
+	}
+
+	@:pin('control') @:killer('M-REACH-SYNTAX-CONVERSION') @:killer('M-SITES-LANDING-KEEPING-PLACE') @:killer('M-SITES-LANDING-CLASS-PLACE')
+	@:killer('M-SITES-LANDING-TYPED-VALUE')
+	public function testCodeReadByItsSyntaxConvertsAValueThatLeftTheTypeSystem(): Void {
+		// a C++ build converts a value put at a `String` place by its `toString`, and the syntax does not type `d`: only a value
+		// that left the type system can be an object there, of any type — `Obj`, whose `toString` replaces `items`, among them. A
+		// place of a catch-all, of a primitive other than the string type or of a class converts nothing, and nor does a value
+		// the syntax types as a string
+		function region(code: String): String {
+			return LOOP_HEAD + '\tstatic var d:Dynamic = null;\n\tstatic var held:String = null;\n\n'
+				+ '\tstatic function takes(s:String):Void {}\n\n\tstatic function main() {\n\t\td = new Obj();\n'
+				+ '\t\tfor (i in 0...items.length) { /*<*/ ' + code + ' /*>*/ }\n\t}\n}\n' + CLEARING_OBJ;
+		}
+		for (code in ['held = d;', 'var s:String = d;', 'takes(d);'])
+			assertMatch(ask(['Main.hx' => region(code)], null, false), r -> r.match(Reached(_)));
+		for (code in ['var n:Int = d;', 'var k:Dynamic = d;', 'var o:Obj = d;', 'var s:String = held;'])
+			assertMatch(ask(['Main.hx' => region(code)], null, false), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-REACH-HANDED-CONVERTED')
+	public function testJoiningAFieldOfStringsConvertsNothingOnHxcppUnderTheTruth(): Void {
+		// `Buf.b` is an `Array<String>`, which on hxcpp holds strings alone: converted where they landed. Its `join` converts
+		// them, which runs no `toString` — though `Obj`'s, which replaces `items`, is in play, and the syntax reads `b` as an
+		// array of elements of no known type. The interpreter keeps whatever lands there, any object that left the type system
+		function main(): String {
+			return LOOP_HEAD + '\tstatic var d:Dynamic = null;\n\n\tstatic function main() {\n\t\td = new Obj();\n'
+				+ '\t\tfor (i in 0...items.length) { /*<*/ new Buf().text(); /*>*/ }\n\t}\n}\n'
+				+ 'class Buf {\n\tprivate var b:Array<String>;\n\n\tpublic function new() b = ["a"];\n\n'
+				+ '\tpublic function text():String return b.join("");\n}\n' + CLEARING_OBJ;
+		}
+		assertMatch(builtAsk(CPP_BUILD, ['Main.hx' => main()]), r -> r.match(Proven));
+		assertMatch(interpAsk(['Main.hx' => main()]), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-REACH-ARRAY-OWN-HANDS')
+	public function testJoiningAnArrayRunsItsElementsToStringAloneUnderTheTruth(): Void {
+		// the built-in array's `join` converts each element of `a`, a `Calm`: its `toString` runs, and no other member of it by its
+		// name — `grow`, which replaces `items`, never does
+		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Util.go(); /*>*/ }\n'
+			+ '\t}\n}\nclass Util {\n\tpublic static function go():String {\n\t\tvar a = [new Calm()];\n\t\treturn a.join("");\n\t}\n}\n'
+			+ 'class Calm {\n\tpublic function new() {}\n\n\tpublic function toString():String return "c";\n\n'
+			+ '\tpublic function grow():Void Main.items = [];\n}\n';
+		assertMatch(interpAsk(['Main.hx' => main]), r -> r.match(Proven));
+		assertMatch(builtAsk(CPP_BUILD, ['Main.hx' => main]), r -> r.match(Proven));
+	}
+
 	@:pin('control') @:killer('M-REACH-EXTERN-FACTS-TYPE') @:killer('M-REACH-ARRAY-VALUES')
 	public function testTheArraysOwnMethodReachesItsElementsOnlyByConvertingThemUnderTheTruth(): Void {
 		// `a.join` is the built-in array's own method: it converts each element of `a`, which the compiler types `Array<String>`
@@ -3224,6 +3310,15 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthAsk(files('a', 'b')), r -> r.match(Reached(_)));
 		assertMatch(ask(files('b', 'a')), r -> !r.match(Proven));
 		assertMatch(truthAsk(files('b', 'a', ' keep = stuff; ')), r -> r.match(Unknown(Escape(_, _))));
+		// stored through the expansion of a library macro, which no project text spells: the escape only the facts of the node
+		// read as `b.Grid`'s member show, found after the question checked every escape the project's text and facts hold
+		final macroLibrary: Map<String, String> = [
+			'Mac.hx' => 'import haxe.macro.Expr;\n\nclass Mac {\n\tpublic static macro function grab():Expr return macro Main.items;\n}\n'
+		];
+		assertMatch(
+			ask(files('b', 'a', ' keep = Mac.grab(); '), null, true, null, false, null, macroLibrary, null, true),
+			r -> r.match(Unknown(Escape(_, _)))
+		);
 	}
 
 	@:pin('control') @:killer('M-FACTS-NESTED-OWNER-NONE') @:killer('M-FACTS-NESTED-BODIES-NONE') @:killer('M-REACH-OWN-TYPES-NONE')

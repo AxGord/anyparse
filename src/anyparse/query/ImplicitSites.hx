@@ -3,6 +3,8 @@ package anyparse.query;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
 
+using Lambda;
+
 /**
  * The places in code where the language runs a member IMPLICITLY — the positive, syntactic half of the question
  * which implicitly-called members a reach walk must admit. A member of one family runs only from a site of that
@@ -97,7 +99,8 @@ final class ImplicitSites {
 				exact: false
 			});
 		}
-		function walk(node: QueryNode): Void {
+		final functions: Array<String> = (_shape.functionKinds ?? []).concat(_shape.lambdaKinds ?? []);
+		function walk(node: QueryNode, fn: Null<QueryNode>): Void {
 			final kind: String = node.kind;
 			if (concat.contains(kind)) add(Text, node, node.children);
 			if (interpolating.contains(kind)) for (c in node.children) {
@@ -116,10 +119,114 @@ final class ImplicitSites {
 			if (kind == _shape.objectLiteralKind) add(Literal, node, []);
 			// the exception wrapping the compiler adds after typing converts a thrown value to a string (`haxe.ValueException`)
 			if (throws.contains(kind) && node.children.length > 0) add(Text, node, [node.children[0]]);
-			for (c in node.children) walk(c);
+			// a value a build may convert to a string where it lands (`landings`): of the operand of an unchecked cast, any
+			for (value in landings(file, tree, source, node, fn)) {
+				final unchecked: Bool = value.kind == _shape.uncheckedCastKind && value.children.length > 0;
+				final at: Null<Span> = value.span;
+				if (at == null) continue;
+				final span: Span = at;
+				out.push({
+					family: Text,
+					span: span,
+					types: [unchecked ? typeOf(file, tree, source, value.children[0]) : null],
+					exact: false,
+					landing: true
+				});
+			}
+			final inner: Null<QueryNode> = functions.contains(kind) ? node : fn;
+			for (c in node.children) walk(c, inner);
 		}
-		walk(tree);
+		walk(tree, null);
 		return out;
+	}
+
+	/**
+	 * The values `node` — inside the function `fn` — puts at a place a build may convert them to a string at: hxcpp runs the
+	 * `toString` of an object put at a `String` place (`UncheckedConversions`), which the syntax does not type. Only a value
+	 * that left the type system can be an object there, so a value is one when the syntax reads it as an unchecked cast,
+	 * untyped code, a value of a catch-all, of the built-in array (whose elements it does not type) or of no known type
+	 * (`mayBeForeign`). A place is one a build may convert at (`mayConvertAt`) unless the syntax reads its declared type as
+	 * one that converts no value to a string: an initialized declaration's (an unannotated one is typed as its value, and
+	 * nothing lands at another type), an assignment's left side, the return type of a returned value's function (a lambda's
+	 * is its caller's, unknown here; an unannotated one returns what it returns) and the parameter each argument of a call or
+	 * a construction lands at, which the syntax does not read here.
+	 */
+	private function landings(file: String, tree: QueryNode, source: String, node: QueryNode, fn: Null<QueryNode>): Array<QueryNode> {
+		// noqa: complexity
+		final kind: String = node.kind;
+		final out: Array<QueryNode> = [];
+		function land(value: Null<QueryNode>, place: Null<String>): Void {
+			if (value != null && mayBeForeign(file, tree, source, value) && mayConvertAt(place)) out.push(value);
+		}
+		final decls: Array<String> = (_shape.localDeclKinds ?? []).concat(_shape.fieldDeclKinds ?? []);
+		final annotations: Array<String> = _shape.typeAnnotationKinds ?? [];
+		if (decls.contains(kind) && node.children.length > 0) {
+			final value: QueryNode = node.children[node.children.length - 1];
+			final declared: Null<String> = declaredBefore(file, source, node, value);
+			if (declared != null) land(value, declared);
+		}
+		if (kind == _shape.assignKind && node.children.length == 2) land(node.children[1], typeOf(file, tree, source, node.children[0]));
+		if (kind == _shape.returnStatementKind && node.children.length > 0) {
+			final written: Null<QueryNode> = fn == null || (_shape.lambdaKinds ?? []).contains(fn.kind)
+				? null
+				: fn.children.find(c -> annotations.contains(c.kind));
+			if (fn == null || (_shape.lambdaKinds ?? []).contains(fn.kind))
+				land(node.children[0], null)
+			else if (written != null && written.name != null)
+				land(node.children[0], written.name);
+		}
+		if (kind == _shape.callKind) for (i in 1...node.children.length) land(node.children[i], null);
+		if (kind == _shape.newExprKind) for (arg in node.children) land(arg, null);
+		return out;
+	}
+
+	/**
+	 * Whether the syntax reads `value` as one that may be an object that left the type system: an unchecked cast, untyped
+	 * code, or of a catch-all, of the built-in array, or of no known type (`landings`).
+	 */
+	private function mayBeForeign(file: String, tree: QueryNode, source: String, value: QueryNode): Bool {
+		// noqa: complexity
+		final kind: String = value.kind;
+		if (kind == _shape.uncheckedCastKind || (_shape.untypedKinds ?? []).contains(kind)) return true;
+		// a comparison or a negation is a boolean, an interpolated string a string
+		if (
+			(_shape.comparisonKinds ?? []).contains(kind) || kind == _shape.notKind
+			|| (_shape.interpolatingStringKinds ?? []).contains(kind)
+		)
+			return false;
+		if (kind == _shape.parenKind && value.children.length == 1) return mayBeForeign(file, tree, source, value.children[0]);
+		if (kind == _shape.ternaryKind && value.children.length == 3)
+			return mayBeForeign(file, tree, source, value.children[1]) || mayBeForeign(file, tree, source, value.children[2]);
+		// a concatenation with a string is a string; of no string, of the type its operands give it
+		final strings: Null<String> = (_shape.literalTypeNames ?? [])[(_shape.stringLiteralKinds ?? [])[0] ?? ''];
+		if ((_shape.execution?.concatenationKinds ?? []).contains(kind))
+			return !value.children.exists(c -> typeOf(file, tree, source, c) == strings)
+				&& value.children.exists(c -> mayBeForeign(file, tree, source, c));
+		final type: Null<String> = typeOf(file, tree, source, value);
+		return type == null || (_shape.catchAllTypeNames ?? []).contains(type) || (_shape.arrayTypeNames ?? []).contains(type);
+	}
+
+	/**
+	 * Whether a build may convert a value put at a place whose declared type the syntax reads as the simple name `place` (null:
+	 * not known) to a string: unless it is a catch-all, which keeps what it is handed, a primitive other than the string type,
+	 * or a class, an interface or an enum the index declares once other than the built-in array, a pointer whose conversion is
+	 * checked (`landings`).
+	 */
+	private function mayConvertAt(place: Null<String>): Bool {
+		if (place == null) return true;
+		if ((_shape.catchAllTypeNames ?? []).contains(place) || (_shape.nonNullableTypeNames ?? []).contains(place)) return false;
+		return (_shape.arrayTypeNames ?? []).contains(place) || !_index.resolvesToPlainNominal(place);
+	}
+
+	/**
+	 * The simple name of the type the declaration `node` writes for the binding whose value is `value`
+	 * (`TypeInfoProvider.declaredTypes`), or null when it writes none — or none nominal, which no value converts at.
+	 */
+	private function declaredBefore(file: String, source: String, node: QueryNode, value: QueryNode): Null<String> {
+		final from: Int = node.span?.from ?? 0;
+		final to: Int = value.span?.from ?? 0;
+		for (at => type in declaredOf(file, source)) if (at >= from && at < to) return type;
+		return null;
 	}
 
 	/**
@@ -170,4 +277,10 @@ typedef ImplicitSite = {
 	 * `types` — null where it names none: which of the types sharing a simple name each operand is. Absent elsewhere.
 	 */
 	var ?owners: Array<Null<String>>;
+
+	/**
+	 * Whether the site is a conversion only a build converting what lands at a typed place makes (`ImplicitSites.landings`,
+	 * `UncheckedConversions.convertsSomewhere`); absent for one every build makes.
+	 */
+	var ?landing: Bool;
 }
