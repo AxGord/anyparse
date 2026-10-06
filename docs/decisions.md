@@ -1375,3 +1375,12 @@ decided the question; it may not become a record of runs.
 - the option readers were to live in the two rules → a rule module naming `anyparse.grammar` breaks the
   grammar-agnostic seam (`LexicalRegionsSeamTest`); the JSON walk lives in `RuleDeclaration` on the
   config side and the rules receive plain records — `21ff42da`
+- `default-repeated-argument` was to be safe once the parameter was trailing or followed only by
+  defaulted ones, with full-arity calls standing in for positional binding → a full-arity call
+  passes the LATER arguments explicitly, so cutting the constant slid them one slot left (TM's
+  `samples(…, WIDE_BOTTOM, WIDE_STEP)` lost `WIDE_BOTTOM` on the second `--fix` pass); only a call's
+  last argument, inside the leading run of required parameters, may be dropped — `776917c5`
+- the same argument-slide was suspected in the other ops that edit argument lists → `remove-param` /
+  `unused-parameter`, `change-sig`, `introduce-parameter-object` and `inline-method` all demand
+  full arity and move the parameter and the argument as one slot, `add-param` only appends a
+  defaulted parameter and touches no call — `776917c5`
