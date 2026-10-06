@@ -5078,8 +5078,8 @@
 			"name": "M-CARRY-ESCAPES",
 			"type": "anyparse.query.ValueCarriers",
 			"method": "valueTypes",
-			"find": "for (t in escaped) if (!out.contains(t)) out.push(t);",
-			"replace": "",
+			"find": "for (t in escaped) if (!seen.exists(t)) {",
+			"replace": "for (t in new Array<String>()) if (!seen.exists(t)) {",
 			"note": "a value's types are its static type's alone, so an instance that left the type system through a Dynamic or a cast is never the object an unrelated receiver holds"
 		},
 		{
@@ -6452,7 +6452,7 @@
 			"name": "M-REACH-SITE-SELF-ALIAS",
 			"type": "anyparse.query.ReachProject",
 			"method": "siteOf",
-			"find": "return found.length == 1 ? found[0] : null;",
+			"find": "return found != null && found.length == 1 ? found[0] : null;",
 			"replace": "return null;",
 			"note": "(precision) a type re-exported by a same-named typedef has no declaration site, so its implicit members are opaque"
 		},
@@ -12752,7 +12752,7 @@
 			"name": "M-VALUE-TYPE-ESCAPED",
 			"type": "anyparse.query.FunctionValueTypes",
 			"method": "mayRun",
-			"find": " || escaped.exists(e -> sameOrGeneric(t, e))",
+			"find": " || meetsEscaped(t, escaped)",
 			"replace": "",
 			"note": "a function value that left the type system reaches only places of its own types"
 		},
@@ -14504,6 +14504,109 @@
 			"find": "\t\tfor (arm in [shape.caseBranchKind, shape.defaultBranchKind]) if (arm != null) kinds.push(arm);\n",
 			"replace": "",
 			"note": "a case arm is not a statement sequence, so an else after a #if region inside a case body counts as stranded"
+		},
+		{
+			"name": "M-SHARD-SPLIT-NEVER",
+			"type": "anyparse.query.ShardPlan",
+			"method": "split",
+			"force": "1",
+			"note": "every class is dealt whole again, so one class heavier than a shard holds the whole plan up (MemberReachFactsTest: 271 s on one shard while seven idled)"
+		},
+		{
+			"name": "M-SHARD-SPLIT-SLICE-WEIGHT",
+			"type": "anyparse.query.ShardPlan",
+			"method": "deal",
+			"find": "weight: Math.ceil(weights[i].ms / parts),",
+			"replace": "weight: weights[i].ms,",
+			"note": "each slice is weighed as the whole class, so the slices crowd every lighter class onto one shard"
+		},
+		{
+			"name": "M-SHARD-SPLIT-NO-TEST-CAP",
+			"type": "anyparse.query.ShardPlan",
+			"method": "split",
+			"find": "final bound: Int = shards < w.tests ? shards : w.tests;",
+			"replace": "final bound: Int = shards;",
+			"note": "a class is cut into more slices than it has tests, so a slice selects no test and a shard holding only it makes the runner exit 1"
+		},
+		{
+			"name": "M-SHARD-SPLIT-UNKNOWN-COUNT",
+			"type": "anyparse.query.ShardPlan",
+			"method": "split",
+			"find": "if (w.tests < 2 || w.ms <= share) return 1;",
+			"replace": "if (w.ms <= share) return 1;",
+			"note": "a class whose test count is unknown is sliced anyway, and the cap of zero tests deals it as no slice at all"
+		},
+		{
+			"name": "M-SHARD-SPLIT-STICKY",
+			"type": "anyparse.query.ShardPlan",
+			"method": "deal",
+			"find": "final parts: Int = sticky ? 1 : split(weights[i], share, shards);",
+			"replace": "final parts: Int = split(weights[i], share, shards);",
+			"note": "a pinned class is sliced like any other once it is measured heavy"
+		},
+		{
+			"name": "M-SHARD-FILTER-SLICE-ALL",
+			"type": "anyparse.query.ShardFilter",
+			"method": "selected",
+			"find": "if (i % token.parts == token.part && !out.contains(sorted[i]))",
+			"replace": "if (!out.contains(sorted[i]))",
+			"note": "every slice token selects every test of its class, so a class dealt as k slices runs k times"
+		},
+		{
+			"name": "M-SHARD-FILTER-SLICE-UNSORTED",
+			"type": "anyparse.query.ShardFilter",
+			"method": "selected",
+			"find": "sorted.sort((a, b) -> a < b ? -1 : a > b ? 1 : 0);",
+			"replace": "",
+			"note": "a slice is cut from the names in the order the runner lists them, so two processes listing them differently can run a test twice or never"
+		},
+		{
+			"name": "M-SHARD-FILTER-WHOLE-AS-SLICE",
+			"type": "anyparse.query.ShardFilter",
+			"method": "selected",
+			"find": "if (token.parts == 1) return null;",
+			"replace": "",
+			"note": "a whole-class token is read as the one slice of one, so the runner registers the class through a name pattern rather than whole"
+		},
+		{
+			"name": "M-SHARD-FILTER-PARSE-RANGE",
+			"type": "anyparse.query.ShardFilter",
+			"method": "parse",
+			"find": "if (part < 0 || part >= parts)",
+			"replace": "if (part < 0)",
+			"note": "a slice index past its count is accepted, a token selecting no test at all"
+		},
+		{
+			"name": "M-SHARD-WEIGHTS-LAST-ROW",
+			"type": "anyparse.query.ShardPlan",
+			"method": "parseWeights",
+			"find": "out[cls] = { ms: before.ms + ms, tests: before.tests + tests };",
+			"replace": "out[cls] = { ms: ms, tests: tests };",
+			"note": "a class timed as slices on several shards keeps only its last slice's row, so it reads as light and is dealt whole the next run"
+		},
+		{
+			"name": "M-FIXTURE-CACHE-CWD-WRITE",
+			"type": "testkit.FixtureCompileCache",
+			"method": "record",
+			"find": "if (r == 0 && changed(before[0], after[0])) return null;",
+			"replace": "",
+			"note": "a compile writing into the fixture it shares with the compiles beside it is recorded, and its replay overwrites the lines a concurrent writer appended"
+		},
+		{
+			"name": "M-ORACLE-CACHE-WALK-FIRST-ONLY",
+			"type": "anyparse.check.OracleCache",
+			"method": "mergeDir",
+			"find": "if (!walks.exists(dir)) {",
+			"replace": "if (!walks.keys().hasNext()) {",
+			"note": "a run's shared walk reads only the first directory it is asked for, so a classpath outside the compile root drops out of every later configuration's fingerprint and an edit there is answered from the memo"
+		},
+		{
+			"name": "M-TYPEREF-NAMED-FIRST-TYPE",
+			"type": "anyparse.query.TypeRefIndex",
+			"method": "named",
+			"find": "for (t in fi.types) {",
+			"replace": "for (t in fi.types.slice(0, 1)) {",
+			"note": "the by-name table reads only the first declaration of each file, so a sub-module type is declared nowhere"
 		}
 	]
 }

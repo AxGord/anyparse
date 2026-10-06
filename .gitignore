@@ -12,3 +12,4 @@ dump/
 .DS_Store
 .claude/
 bin/parse-prof-cpp/
+bin/.suite-timings.tsv

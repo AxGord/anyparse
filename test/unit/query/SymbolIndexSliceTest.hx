@@ -181,6 +181,7 @@ class SymbolIndexSliceTest extends Test {
 	}
 
 	/** `declaringFiles` reports 0 / 1 / many declarers of a type name. */
+	@:pin('control') @:killer('M-TYPEREF-NAMED-FIRST-TYPE')
 	public function testDeclaringFilesCount(): Void {
 		final index: SymbolIndex = SymbolIndex.build([
 			{ file: 'src/pkg/A.hx', source: 'package pkg;\nclass A {}' },

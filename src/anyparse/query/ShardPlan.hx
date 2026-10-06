@@ -5,10 +5,21 @@ import anyparse.runtime.Span;
 using Lambda;
 using StringTools;
 
-/** One class placed on one shard — the `<shard>\t<class>` row `--format lines` prints. */
+/**
+ * One class, or one slice of it, placed on one shard — the `<shard>\t<token>` row `--format lines` prints. A whole
+ * class has `parts` 1; a class dealt as `parts` slices is placed once per `part` (`ShardFilter`).
+ */
 typedef ShardPlacement = {
 	shard: Int,
-	cls: String
+	cls: String,
+	part: Int,
+	parts: Int
+};
+
+/** A class's measured in-suite cost: its wall time in milliseconds and how many tests it ran (0 when unknown). */
+typedef ClassWeight = {
+	ms: Int,
+	tests: Int
 };
 
 /**
@@ -29,11 +40,13 @@ enum ShardPlanResult {
 	Refused(message: String);
 }
 
-/** One registered class carrying the two keys the scheduler orders on. */
+/** One registered class, or one slice of it, carrying the two keys the scheduler orders on. */
 private typedef ShardEntry = {
 	sticky: Bool,
 	weight: Int,
-	cls: String
+	cls: String,
+	part: Int,
+	parts: Int
 };
 
 /**
@@ -139,12 +152,11 @@ final class ShardPlan {
 	private static inline final RANK_OTHER: Int = 1000;
 
 	/**
-	 * In-suite self-times from a suite profile, in milliseconds. In-suite rather than isolated: an isolated
-	 * run re-pays the resolution warm-up that the monolith pays once, which overstates every class touching
-	 * the resolution library and produces a worse split.
-	 *
-	 * `unit.ApqDxTier5CliTest` reads far below its profiled cost: `testSelfStatusSourceFlagAccepted`
-	 * walked the whole `src/` to assert one exit code, and has been scoped to a fixture since.
+	 * In-suite self-times from a suite profile, in milliseconds, with the number of tests each class ran — the 24 heaviest
+	 * classes of `tools/suite-shard.sh -n 8 --timings` on 2026-10-05 (901 classes, 470 s in all; the other 877 average
+	 * 37 ms). In-suite rather than isolated: an isolated run re-pays the resolution warm-up that the monolith pays once,
+	 * which overstates every class touching the resolution library and produces a worse split. A run's own measurement
+	 * (`--weights`, which `tools/suite-shard.sh` refreshes after every green run) overrides a row here.
 	 *
 	 * Stale weights cost BALANCE, never correctness — no gate reads them, so
 	 * a class whose cost has drifted lands on a busier shard and nothing else.
@@ -152,27 +164,31 @@ final class ShardPlan {
 	 * a property the TESTS have to preserve too: assert that the split is
 	 * balanced, never that a particular class count vector comes out.
 	 */
-	private static final CLASS_WEIGHTS: Map<String, Int> = [
-		'unit.cli.ApqDxTier5CliTest' => 40,
-		'unit.cli.LintConfigCliTest' => 2370,
-		'unit.check.CompilerOracleE2ETest' => 2100,
-		'unit.check.ExplicitLocalTypeOracleE2ETest' => 1900,
-		'unit.grammar.haxe.HxFormatterCorpusTest' => 1400,
-		'unit.check.ExplicitTypeReturnOracleTest' => 1310,
-		'unit.cli.ApqDxTier4CliTest' => 1180,
-		'unit.check.AvoidDynamicBagOracleE2ETest' => 950,
-		'unit.check.PreferInlineOracleTest' => 730,
-		'unit.cli.LintFixFixedPointCliTest' => 530,
-		'unit.check.FixVerifierGroupE2ETest' => 520,
-		'unit.cli.ResolutionScopeCliTest' => 500,
-		'unit.cli.LintPerFileConfigCliTest' => 350,
-		'unit.check.PreferCaseGuardOracleE2ETest' => 280,
-		'unit.check.AvoidDynamicRiskyFixE2ETest' => 280,
-		'unit.query.ResolutionLibraryCacheTest' => 250,
-		'unit.query.ImplicitStdScopeTest' => 210,
-		'unit.check.GuardContinueCheckTest' => 190,
-		'unit.check.FixVerifierScopeE2ETest' => 170,
-		'unit.check.PreferStaticExtensionCheckTest' => 150
+	private static final CLASS_WEIGHTS: Map<String, ClassWeight> = [
+		'unit.query.MemberReachFactsTest' => { ms: 271163, tests: 229 },
+		'unit.check.CrossScopeSoundnessTest' => { ms: 29086, tests: 8 },
+		'unit.check.OracleGenerationTest' => { ms: 16137, tests: 45 },
+		'unit.check.TypedFactsProbeTest' => { ms: 14707, tests: 30 },
+		'unit.check.FactsFixGateE2ETest' => { ms: 14493, tests: 10 },
+		'unit.check.PreferStaticExtensionFactsTest' => { ms: 13904, tests: 22 },
+		'unit.query.ApqAstIntegrationTest' => { ms: 10632, tests: 1 },
+		'unit.check.FactsTypeOracleE2ETest' => { ms: 10521, tests: 3 },
+		'unit.check.PendingRunsTest' => { ms: 7064, tests: 3 },
+		'unit.check.OracleConfigListE2ETest' => { ms: 6472, tests: 13 },
+		'unit.check.HaxeSpawnTest' => { ms: 5261, tests: 9 },
+		'unit.LexicalRegionAgreementTest' => { ms: 4402, tests: 12 },
+		'unit.check.OracleParallelVerdictTest' => { ms: 4355, tests: 1 },
+		'unit.check.CompilerOracleE2ETest' => { ms: 4132, tests: 13 },
+		'unit.MutationArmAddressTest' => { ms: 3153, tests: 4 },
+		'unit.check.OracleRunMemoTest' => { ms: 3084, tests: 7 },
+		'unit.check.ExplicitLocalTypeOracleAbstainTest' => { ms: 3012, tests: 14 },
+		'unit.check.ExplicitLocalTypeOracleE2ETest' => { ms: 2864, tests: 4 },
+		'unit.check.AvoidDynamicRiskyFixE2ETest' => { ms: 2726, tests: 7 },
+		'unit.check.ExplicitTypeReturnOracleTest' => { ms: 2183, tests: 11 },
+		'unit.check.OracleRunWiringTest' => { ms: 2030, tests: 5 },
+		'unit.check.OracleCacheTest' => { ms: 1980, tests: 11 },
+		'unit.check.AvoidDynamicBagOracleE2ETest' => { ms: 1918, tests: 2 },
+		'unit.check.PreferInlineOracleTest' => { ms: 1772, tests: 7 }
 	];
 
 	/**
@@ -223,9 +239,14 @@ final class ShardPlan {
 	 * The sticky group goes onto shard 0 as one block before the greedy pass
 	 * starts filling it; every other class then goes to whichever shard is
 	 * lightest so far. Greedy longest-processing-time-first is within 4/3 of
-	 * optimal and needs no search.
+	 * optimal and needs no search — but only over pieces no heavier than a
+	 * shard, so a class heavier than its share is dealt as slices first
+	 * (`split`). `measured` (a run's own `--weights`) overrides `CLASS_WEIGHTS`
+	 * row by row.
 	 */
-	public static function planClasses(registered: Array<String>, shards: Int, source: String): ShardPlanResult {
+	public static function planClasses(
+		registered: Array<String>, shards: Int, source: String, ?measured: Map<String, ClassWeight>
+	): ShardPlanResult {
 		if (shards < 1) return Refused('${TAG}--shards must be >= 1, got $shards');
 		if (registered.length == 0) return Refused('$TAG$source names no test classes');
 		// Bounded here rather than only by the empty-shard gate below: a wild
@@ -255,15 +276,15 @@ final class ShardPlan {
 		for (sticky in STICKY_CLASSES) if (!unique.contains(sticky))
 			return Refused('${TAG}pinned class $sticky is not registered in $source — renamed or removed? update the sticky list');
 
-		final placements: Array<ShardPlacement> = deal(unique, shards);
+		final placements: Array<ShardPlacement> = deal(unique, shards, measured ?? []);
 		final parity: Null<String> = checkParity(unique, placements, shards);
 		return parity == null ? Planned(placements) : Refused(parity);
 	}
 
-	/** `<shard>\t<class>` per line, in placement order. */
+	/** `<shard>\t<token>` per line, in placement order — the token a slice's `ShardFilter.render`. */
 	public static function renderLines(placements: Array<ShardPlacement>): String {
 		final buf: StringBuf = new StringBuf();
-		for (p in placements) buf.add('${p.shard}\t${p.cls}\n');
+		for (p in placements) buf.add('${p.shard}\t${ShardFilter.render(p.cls, p.part, p.parts)}\n');
 		return buf.toString();
 	}
 
@@ -271,7 +292,9 @@ final class ShardPlan {
 	public static function renderFilters(placements: Array<ShardPlacement>, shards: Int): String {
 		final buf: StringBuf = new StringBuf();
 		for (s in 0...shards) {
-			final names: Array<String> = [for (p in placements) if (p.shard == s) p.cls];
+			final names: Array<String> = [
+				for (p in placements) if (p.shard == s) ShardFilter.render(p.cls, p.part, p.parts)
+			];
 			buf.add('${names.join(',')}\n');
 		}
 		return buf.toString();
@@ -410,11 +433,24 @@ final class ShardPlan {
 		];
 	}
 
-	/** Sticky group onto shard 0 as one block, then greedy longest-processing-time-first. */
-	private static function deal(names: Array<String>, shards: Int): Array<ShardPlacement> {
-		final entries: Array<ShardEntry> = [
-			for (name in names) { sticky: STICKY_CLASSES.contains(name), weight: weightOf(name), cls: name }
-		];
+	/** Sticky group onto shard 0 as one block, then greedy longest-processing-time-first over the pieces `split` cuts. */
+	private static function deal(names: Array<String>, shards: Int, measured: Map<String, ClassWeight>): Array<ShardPlacement> {
+		final weights: Array<ClassWeight> = [for (name in names) weightOf(name, measured)];
+		var total: Int = 0;
+		for (w in weights) total += w.ms;
+		final share: Int = Math.ceil(total / shards);
+		final entries: Array<ShardEntry> = [];
+		for (i in 0...names.length) {
+			final sticky: Bool = STICKY_CLASSES.contains(names[i]);
+			final parts: Int = sticky ? 1 : split(weights[i], share, shards);
+			for (part in 0...parts) entries.push({
+				sticky: sticky,
+				weight: Math.ceil(weights[i].ms / parts),
+				cls: names[i],
+				part: part,
+				parts: parts
+			});
+		}
 		entries.sort(compareEntries);
 
 		final load: Array<Int> = [for (s in 0...shards) 0];
@@ -423,47 +459,77 @@ final class ShardPlan {
 			var target: Int = 0;
 			if (!entry.sticky) for (s in 1...shards) if (load[s] < load[target]) target = s;
 			load[target] += entry.weight;
-			out.push({ shard: target, cls: entry.cls });
+			out.push({
+				shard: target,
+				cls: entry.cls,
+				part: entry.part,
+				parts: entry.parts
+			});
 		}
 		return out;
 	}
 
-	/** Sticky first at any weight, then heaviest first, then by name. */
+	/** Sticky first at any weight, then heaviest first, then by name, then by slice. */
 	private static function compareEntries(a: ShardEntry, b: ShardEntry): Int {
+		final byName: Int = compareNames(a.cls, b.cls);
 		return if (a.sticky != b.sticky)
 			a.sticky ? -1 : 1
 		else if (a.weight != b.weight)
 			a.weight > b.weight ? -1 : 1
+		else if (byName != 0)
+			byName
 		else
-			compareNames(a.cls, b.cls);
+			a.part - b.part;
 	}
 
-	/** The measured weight of `name`, or the flat-tail default. */
-	private static function weightOf(name: String): Int {
-		final measured: Null<Int> = CLASS_WEIGHTS[name];
-		return measured ?? DEFAULT_WEIGHT;
+	/** The measured weight of `name` — this run's own, else the table's — or the flat-tail default. */
+	private static function weightOf(name: String, measured: Map<String, ClassWeight>): ClassWeight {
+		return measured[name] ?? CLASS_WEIGHTS[name] ?? { ms: DEFAULT_WEIGHT, tests: 0 };
+	}
+
+	/**
+	 * How many slices a class weighing `w` is dealt as: enough that none outweighs `share`, a shard's part of the total, but
+	 * at most one per shard and one per test. A class of unknown test count (`tests` 0) stays whole, since a slice must
+	 * hold a test: a shard whose whole filter selects none makes the runner exit 1.
+	 */
+	private static function split(w: ClassWeight, share: Int, shards: Int): Int {
+		if (w.tests < 2 || w.ms <= share) return 1;
+		final wanted: Int = Math.ceil(w.ms / share);
+		final bound: Int = shards < w.tests ? shards : w.tests;
+		return wanted < bound ? wanted : bound;
 	}
 
 	/**
 	 * The plan's own post-conditions. Returns the refusal text, or null when
 	 * the plan is sound.
 	 *
-	 * Two of them are STRUCTURAL: `deal` pushes exactly once per input, so the
-	 * count and the set comparison cannot fail as it is written today. They
-	 * stay as the contract any future scheduler still owes, not as live gates,
-	 * and they cost one sort. The three that ARE live are the ones `deal` can
-	 * break on its own: a shard index out of range, a pinned class off shard 0,
-	 * and a shard nothing was dealt to.
+	 * Every class must be placed whole exactly once, or as `k` slices each
+	 * placed exactly once (`#0/k` … `#k-1/k`, one `k` per class): a slice
+	 * placed twice runs its tests twice, one missing runs them never. The
+	 * coverage comparison is STRUCTURAL as `deal` is written today and stays
+	 * as the contract any future scheduler still owes. The live ones are the
+	 * gates `deal` can break on its own: a shard index out of range, a pinned
+	 * class off shard 0, and a shard nothing was dealt to.
 	 */
 	private static function checkParity(expected: Array<String>, placements: Array<ShardPlacement>, shards: Int): Null<String> {
-		final placed: Array<String> = [for (p in placements) p.cls];
+		final slices: Map<String, Array<Int>> = [];
+		final counts: Map<String, Int> = [];
+		for (p in placements) {
+			final seen: Array<Int> = slices[p.cls] ?? [];
+			final dealt: Null<Int> = counts[p.cls];
+			if (dealt != null && dealt != p.parts) return '${TAG}PARITY FAIL — ${p.cls} dealt as both $dealt and ${p.parts} slices';
+			if (p.part < 0 || p.part >= p.parts || seen.contains(p.part))
+				return '${TAG}PARITY FAIL — ${ShardFilter.render(p.cls, p.part, p.parts)} placed twice or out of range';
+			seen.push(p.part);
+			slices[p.cls] = seen;
+			counts[p.cls] = p.parts;
+		}
+		final placed: Array<String> = [for (cls => seen in slices) if (seen.length == (counts[cls] ?? 0)) cls];
 		placed.sort(compareNames);
-		final placedUnique: Array<String> = dedupe(placed);
-		if (placed.length != expected.length || placedUnique.length != expected.length)
-			return
-				'${TAG}PARITY FAIL — ${expected.length} registered classes, ${placed.length} placements, ${placedUnique.length} distinct';
-		for (i in 0...expected.length) if (placedUnique[i] != expected[i])
-			return '${TAG}PARITY FAIL — the shard plan does not cover the registered class list (${expected[i]} vs ${placedUnique[i]})';
+		if (placed.length != expected.length || placed.length != [for (cls in slices.keys()) cls].length)
+			return '${TAG}PARITY FAIL — ${expected.length} registered classes, ${placed.length} placed whole or in every slice';
+		for (i in 0...expected.length) if (placed[i] != expected[i])
+			return '${TAG}PARITY FAIL — the shard plan does not cover the registered class list (${expected[i]} vs ${placed[i]})';
 		for (p in placements) {
 			if (p.shard < 0 || p.shard >= shards) return '${TAG}PARITY FAIL — ${p.cls} placed on shard ${p.shard} of $shards';
 			if (p.shard != 0 && STICKY_CLASSES.contains(p.cls))
@@ -501,6 +567,25 @@ final class ShardPlan {
 	/** The tiebreak once primaries agree: lowercase sorts before uppercase. */
 	private static function caseWeight(code: Int): Int {
 		return code >= 'A'.code && code <= 'Z'.code ? 1 : 0;
+	}
+
+	/**
+	 * The weights a timing file holds: `<ms>\t<tests>\t<class>` rows, what a runner writes under `APQ_TEST_TIMING`. A class
+	 * run as slices on several shards has a row per slice, summed here into the class's. A row of any other shape is
+	 * skipped — a weight only balances the split, so a damaged file costs balance and never correctness.
+	 */
+	public static function parseWeights(text: String): Map<String, ClassWeight> {
+		final out: Map<String, ClassWeight> = [];
+		for (line in text.split('\n')) {
+			final cells: Array<String> = line.split('\t');
+			final ms: Int = (cells.length == 3 ? Std.parseInt(cells[0]) : null) ?? -1;
+			final tests: Int = (cells.length == 3 ? Std.parseInt(cells[1]) : null) ?? -1;
+			if (ms < 0 || tests < 0) continue;
+			final cls: String = cells[2].trim();
+			final before: ClassWeight = out[cls] ?? { ms: 0, tests: 0 };
+			out[cls] = { ms: before.ms + ms, tests: before.tests + tests };
+		}
+		return out;
 	}
 
 }

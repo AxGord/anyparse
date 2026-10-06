@@ -2,6 +2,7 @@ package unit.query;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.QueryNode;
+import anyparse.query.ShardFilter;
 import anyparse.query.ShardPlan;
 import testkit.TestRegistry;
 import utest.Assert;
@@ -243,10 +244,9 @@ class ShardPlanTest extends Test {
 	public function testTheRealRegistryPlansWithoutRefusal(): Void {
 		final registered: Array<String> = TestRegistry.classNames();
 		final rows: Array<ShardPlacement> = unwrap(ShardPlan.planClasses(registered, 4, 'testkit.TestRegistry'));
-		final placed: Array<String> = names(rows);
+		final placed: Array<String> = distinct(names(rows));
 		Assert.equals(registered.length, placed.length);
 		Assert.isTrue(placed.length > MIN_REAL_REGISTRATIONS);
-		Assert.equals(placed.length, distinct(placed).length);
 		Assert.isTrue(placed.contains('unit.query.ShardPlanTest'));
 	}
 
@@ -390,6 +390,102 @@ class ShardPlanTest extends Test {
 	/** A runner that imports `path` and registers it by its bare simple name. */
 	private function runnerImporting(path: String): String {
 		return 'import $path;\n\n${build(ShardPlan.STICKY_CLASSES, ['addCase(new ${bareName(path)}());'])}';
+	}
+
+	/**
+	 * A class heavier than a shard's share is dealt as slices, one per shard it needs, each placed once — the shape that
+	 * took `MemberReachFactsTest` (271 s of a 470 s suite) off a single shard. Every lighter class stays whole.
+	 */
+	@:pin('control') @:killer('M-SHARD-SPLIT-NEVER') @:killer('M-SHARD-SPLIT-SLICE-WEIGHT')
+	public function testAClassHeavierThanAShardIsDealtAsSlices(): Void {
+		final listed: Array<String> = ShardPlan.STICKY_CLASSES.concat(['unit.HeavyTest']).concat(generated(12).map(n -> 'unit.$n'));
+		final measured: Map<String, ClassWeight> = ['unit.HeavyTest' => { ms: 3000, tests: 40 }];
+		for (n in generated(12)) measured['unit.$n'] = { ms: 100, tests: 3 };
+		final rows: Array<ShardPlacement> = unwrap(ShardPlan.planClasses(listed, 4, 'a list', measured));
+		final heavy: Array<ShardPlacement> = rows.filter(r -> r.cls == 'unit.HeavyTest');
+		// total 4200 over 4 shards is a share of 1050: 3000 needs three slices, and each lands on a shard of its own
+		Assert.equals(3, heavy.length);
+		Assert.equals(3, distinct([for (r in heavy) '${r.shard}']).length);
+		for (r in heavy) Assert.equals(3, r.parts);
+		Assert.equals('0,1,2', [for (r in heavy) r.part].join(','));
+		for (r in rows) if (r.cls != 'unit.HeavyTest') Assert.equals(1, r.parts);
+		// each slice weighs a third of the class: weighed whole, the three would leave every light class to shard 0
+		Assert.isTrue(distinct([for (r in rows) if (r.cls.indexOf('unit.Gen') == 0) '${r.shard}']).length > 1);
+		Assert.stringContains('unit.HeavyTest#1/3', ShardPlan.renderLines(rows));
+		Assert.stringContains('unit.HeavyTest#2/3', ShardPlan.renderFilters(rows, 4));
+	}
+
+	/** A slice must hold a test, so a heavy class is cut into no more slices than it has tests, and one of unknown count stays whole. */
+	@:pin('control') @:killer('M-SHARD-SPLIT-NO-TEST-CAP') @:killer('M-SHARD-SPLIT-UNKNOWN-COUNT')
+	public function testSlicesAreBoundedByTheTestCount(): Void {
+		final listed: Array<String> = ShardPlan.STICKY_CLASSES.concat(['unit.PairTest', 'unit.BlindTest'])
+			.concat(generated(12).map(n -> 'unit.$n'));
+		final measured: Map<String, ClassWeight> = [
+			'unit.PairTest' => { ms: 5000, tests: 2 },
+			'unit.BlindTest' => { ms: 5000, tests: 0 }
+		];
+		final rows: Array<ShardPlacement> = unwrap(ShardPlan.planClasses(listed, 8, 'a list', measured));
+		Assert.equals(2, rows.filter(r -> r.cls == 'unit.PairTest').length);
+		Assert.equals(1, rows.filter(r -> r.cls == 'unit.BlindTest').length);
+	}
+
+	/** A pinned class shares a temp file with its group, so it is never sliced however heavy it is measured. */
+	@:pin('control') @:killer('M-SHARD-SPLIT-STICKY')
+	public function testAPinnedClassIsNeverSliced(): Void {
+		final listed: Array<String> = ShardPlan.STICKY_CLASSES.concat(generated(12).map(n -> 'unit.$n'));
+		final measured: Map<String, ClassWeight> = [for (s in ShardPlan.STICKY_CLASSES) s => { ms: 9000, tests: 20 }];
+		final rows: Array<ShardPlacement> = unwrap(ShardPlan.planClasses(listed, 4, 'a list', measured));
+		for (s in ShardPlan.STICKY_CLASSES) Assert.equals(1, rows.filter(r -> r.cls == s).length);
+	}
+
+	/** The `k` slice tokens of a class select every test name exactly once between them, whatever order the names come in. */
+	@:pin('control') @:killer('M-SHARD-FILTER-SLICE-ALL') @:killer('M-SHARD-FILTER-SLICE-UNSORTED')
+	public function testTheSlicesOfAClassCoverItsTestsExactlyOnce(): Void {
+		final names: Array<String> = ['testE', 'testA', 'testD', 'testB', 'testC', 'testF', 'testG'];
+		final reversed: Array<String> = names.copy();
+		reversed.reverse();
+		final seen: Array<String> = [];
+		for (part in 0...3) {
+			final token: ShardToken = ShardFilter.parse(ShardFilter.render('unit.SomeTest', part, 3));
+			final slice: Null<Array<String>> = ShardFilter.selected('unit.SomeTest', names, [token]);
+			Assert.equals(Std.string(slice), Std.string(ShardFilter.selected('unit.SomeTest', reversed, [token])));
+			for (name in slice ?? []) {
+				Assert.isFalse(seen.contains(name), '$name selected by two slices');
+				seen.push(name);
+			}
+		}
+		Assert.equals(names.length, seen.length);
+		// two slices of one class in ONE shard's filter run both: the runner adds a class once
+		final both: Null<Array<String>> = ShardFilter.selected(
+			'unit.SomeTest', names,
+			[ShardFilter.parse('SomeTest#0/3'), ShardFilter.parse('SomeTest#2/3')]
+		);
+		Assert.equals(5, (both ?? []).length);
+	}
+
+	/** A whole-class token runs every test (null), and a token naming another class selects nothing. */
+	@:pin('control') @:killer('M-SHARD-FILTER-WHOLE-AS-SLICE')
+	public function testAWholeTokenSelectsEveryTest(): Void {
+		final names: Array<String> = ['testA', 'testB'];
+		Assert.isNull(ShardFilter.selected('unit.SomeTest', names, [ShardFilter.parse('SomeTest#0/2'), ShardFilter.parse('SomeTest')]));
+		Assert.equals(0, (ShardFilter.selected('unit.SomeTest', names, [ShardFilter.parse('OtherTest#0/2')]) ?? ['x']).length);
+	}
+
+	/** A slice that is not `#<i>/<k>` with `0 <= i < k` is refused loudly, never read as a class substring matching nothing. */
+	@:pin('control') @:killer('M-SHARD-FILTER-PARSE-RANGE')
+	public function testAMalformedSliceTokenIsRefused(): Void {
+		for (bad in ['A#3/3', 'A#1', 'A#x/2', 'A#0/0', 'A#-1/2']) Assert.raises(() -> ShardFilter.parse(bad), String, bad);
+		final ok: ShardToken = ShardFilter.parse('unit.A#2/3');
+		Assert.equals('unit.A 2 3', '${ok.cls} ${ok.part} ${ok.parts}');
+	}
+
+	/** A class run as slices on several shards has a row per slice in the merged timings, summed into one weight. */
+	@:pin('control') @:killer('M-SHARD-WEIGHTS-LAST-ROW')
+	public function testTimingRowsOfOneClassAreSummed(): Void {
+		final weights: Map<String, ClassWeight> = ShardPlan.parseWeights('100\t3\tunit.A\n250\t4\tunit.A\nbad row\n7\t1\tunit.B\n');
+		final a: Null<ClassWeight> = weights['unit.A'];
+		Assert.equals('350/7', a == null ? 'none' : '${a.ms}/${a.tests}');
+		Assert.isFalse(weights.exists('bad row'));
 	}
 
 }

@@ -34,6 +34,12 @@ final class TypeRefIndex {
 	/** Every indexed file's `FileInfo`, handed over by the owning index. */
 	private final _files: Array<FileInfo>;
 
+	/** Every declaration by simple name, with its file, in index order (`named`): built on first need. */
+	private var _byName: Null<Map<String, Array<ResolvedType>>> = null;
+
+	/** Simple name -> each file entry declaring it once, in index order (`declaringFiles`): built with `_byName`. */
+	private final _filesByName: Map<String, Array<FileInfo>> = [];
+
 	/** Built once by the owning `SymbolIndex`, before any layer that resolves through it. */
 	public function new(files: Array<FileInfo>) {
 		_files = files;
@@ -62,7 +68,8 @@ final class TypeRefIndex {
 	 * proceeding.
 	 */
 	public function declaringFiles(typeName: String): Array<FileInfo> {
-		return _files.filter(f -> f.types.exists(t -> t.name == typeName));
+		named(typeName);
+		return (_filesByName[typeName] ?? []).copy();
 	}
 
 	/** Every indexed type decl whose simple name is `name`, across all files. */
@@ -74,9 +81,7 @@ final class TypeRefIndex {
 	 * Every indexed decl named `typeName` (simple name), each paired with its declaring file.
 	 */
 	public function resolvedDeclsNamed(typeName: String): Array<ResolvedType> {
-		return [
-			for (fi in _files) for (t in fi.types) if (t.name == typeName) { file: fi, type: t }
-		];
+		return [for (r in named(typeName)) { file: r.file, type: r.type }];
 	}
 
 	/** The `{file, type}` for the type named `typeName` declared in `file`, or null. */
@@ -130,11 +135,11 @@ final class TypeRefIndex {
 		final simple: String = raw.substr(raw.lastIndexOf('.') + 1);
 		final matches: Array<ResolvedType> = [];
 		final seen: Array<String> = [];
-		for (fi in _files) for (t in fi.types) if (t.name == simple && importPathFor(fi, t) == raw) {
-			final key: String = '${fi.file}#${t.name}';
+		for (r in named(simple)) if (importPathFor(r.file, r.type) == raw) {
+			final key: String = '${r.file.file}#${r.type.name}';
 			if (!seen.contains(key)) {
 				seen.push(key);
-				matches.push({ file: fi, type: t });
+				matches.push({ file: r.file, type: r.type });
 			}
 		}
 		return matches;
@@ -177,10 +182,10 @@ final class TypeRefIndex {
 		// Whether a tier only the CHAIN can fill has a member. Nothing else may collapse the tiers: a
 		// file with no ambient binding must get the set this layer always answered, ambiguity included.
 		var chainFilled: Bool = false;
-		for (fi in _files) for (t in fi.types) if (t.name == raw) {
-			final tier: Int = tierOf(fromFile, fi, t, guardedVisible);
+		for (r in named(raw)) {
+			final tier: Int = tierOf(fromFile, r.file, r.type, guardedVisible);
 			if (tier >= 0) {
-				tiers[tier].push({ file: fi, type: t });
+				tiers[tier].push({ file: r.file, type: r.type });
 				if (chainTier(tier, chain)) chainFilled = true;
 			}
 		}
@@ -206,13 +211,11 @@ final class TypeRefIndex {
 		final prefix: String = raw.substring(0, dot);
 		final matches: Array<ResolvedType> = [];
 		final seen: Array<String> = [];
-		for (fi in _files) for (t in fi.types) if (
-			!t.isMain && t.name == simple && moduleSimpleName(fi.module) == prefix && moduleRefInScope(fromFile, fi)
-		) {
-			final key: String = '${fi.file}#${t.name}';
+		for (r in named(simple)) if (!r.type.isMain && moduleSimpleName(r.file.module) == prefix && moduleRefInScope(fromFile, r.file)) {
+			final key: String = '${r.file.file}#${r.type.name}';
 			if (!seen.contains(key)) {
 				seen.push(key);
-				matches.push({ file: fi, type: t });
+				matches.push({ file: r.file, type: r.type });
 			}
 		}
 		return matches;
@@ -391,6 +394,36 @@ final class TypeRefIndex {
 	/** Whether `tier` is one only the ambient chain of `chain` groups can fill — see `tierOf`. */
 	private static function chainTier(tier: Int, chain: Int): Bool {
 		return tier != OWN_EXPLICIT_TIER && tier != ownWildTier(chain) && tier != localTier(chain);
+	}
+
+	/**
+	 * The declarations named `name`, each with its file, in index order — what every lookup by simple name opened with
+	 * as a scan of every type of every file. On TM that scan, through `declaringFiles` alone, was 140 of a 360 s
+	 * `--fix`. The files are the owning index's, which never changes them (`SymbolIndex.without` builds a new index), so
+	 * the table is built once. Iterated, never handed out: a caller gets its own array.
+	 */
+	private function named(name: String): Array<ResolvedType> {
+		var table: Null<Map<String, Array<ResolvedType>>> = _byName;
+		if (table == null) {
+			final built: Map<String, Array<ResolvedType>> = [];
+			for (fi in _files) {
+				final own: Array<String> = [];
+				for (t in fi.types) {
+					final list: Array<ResolvedType> = built[t.name] ?? [];
+					list.push({ file: fi, type: t });
+					built[t.name] = list;
+					if (!own.contains(t.name)) own.push(t.name);
+				}
+				for (n in own) {
+					final declaring: Array<FileInfo> = _filesByName[n] ?? [];
+					declaring.push(fi);
+					_filesByName[n] = declaring;
+				}
+			}
+			_byName = built;
+			table = built;
+		}
+		return table[name] ?? [];
 	}
 
 }

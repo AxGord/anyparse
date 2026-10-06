@@ -152,6 +152,26 @@ class FixtureCompileCacheTest extends Test {
 		return FileSystem.exists(path) ? File.getContent(path).trim().split('\n').join(',') : '';
 	}
 
+	/**
+	 * A probe compile that writes into its cwd — the fixture, which a compile running beside it may append to as well — is
+	 * never recorded: a replay rewrites whole files, so the other writer's lines would be lost (`OracleRunMemoTest` counts
+	 * compiles through exactly such a log, and read 1 where two compiles ran).
+	 */
+	@:pin('control') @:killer('M-FIXTURE-CACHE-CWD-WRITE')
+	public function testACompileWritingIntoItsCwdIsNotRecorded(): Void {
+		final cache: String = CliFixture.writeTree('fcc_cache', []);
+		final writer: String = 'class AnyparseReachDefinesProbe {\n\tpublic static function run(out:String):Void {\n'
+			+ '\t\tsys.io.File.saveContent(out, "x");\n\t\tsys.io.File.saveContent("log.txt", "ran");\n\t}\n}\n';
+		final first: Fixture = fixture(writer, MAIN);
+		final second: Fixture = fixture(writer, MAIN);
+		CliFixture.always(() -> for (dir in [cache, first.dir, first.probe, second.dir, second.probe]) CliFixture.removeDir(dir), () -> {
+			FixtureCompileCache.run('haxe', 'stamp', cache, first.dir, args(first));
+			FixtureCompileCache.run('haxe', 'stamp', cache, second.dir, args(second));
+			Assert.equals('pass,pass', tally(cache));
+			Assert.equals('ran', File.getContent(Path.join([second.dir, 'log.txt'])));
+		});
+	}
+
 }
 
 private typedef Fixture = {

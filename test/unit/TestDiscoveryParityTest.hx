@@ -1059,6 +1059,7 @@ class TestDiscoveryParityTest extends Test {
 	 */
 	public function testThePilotPinsReachTheGeneratedRegistry(): Void {
 		final expectedPins: Array<String> = [
+			'unit.FixtureCompileCacheTest#testACompileWritingIntoItsCwdIsNotRecorded :: control :: M-FIXTURE-CACHE-CWD-WRITE',
 			'unit.MutationArmAddressTest#testEveryDeclaredArmAddressesALiveMember :: control :: M-ARM-PATH-FLAT,M-ARM-KIND-UNSPELLED',
 			'unit.MutationArmAddressTest#testEveryFragmentArmStillCutsItsNode :: control :: M-ARM-FRAGMENT-NONE',
 			'unit.MutationArmAddressTest#testTheDeferredArmsAreTheOnesTheWalkAnswersFor :: control :: M-ARM-PATH-FLAT',
@@ -1469,6 +1470,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.OracleCacheTest#testAFingerprintReadsItsSourcesThroughTheMemo :: control :: ' + 'M-ORACLE-CACHE-MEMO-UNREAD',
 			'unit.check.OracleCacheTest#testAVerdictIsNotFiledUnderAFingerprintTheTreeLeft :: control :: '
 				+ 'M-ORACLE-CACHE-STORES-A-MOVED-FINGERPRINT',
+			'unit.check.OracleCacheTest#testFingerprintsSharingOneWalkEqualTheirOwn :: control :: M-ORACLE-CACHE-WALK-FIRST-ONLY',
 			'unit.check.OracleConfigListE2ETest#testAConfigurationWithAnUnknownCompiledSetStillVetoesAnEdit :: control :: '
 				+ 'M-ORACLE-UNKNOWN-COVERAGE-NO-VETO',
 			'unit.check.OracleConfigListE2ETest#testARedBaselineExcludesItsConfigurationRatherThanThePhase :: control :: '
@@ -3341,12 +3343,20 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-SETMOD-GUARDED-ANY-VISIBILITY',
 			'unit.query.SetModifierSliceTest#testAnEnumAbstractMemberStillTakesPublic :: control :: M-SETMOD-MODULE-BY-TYPE-KINDS',
 			'unit.query.SetModifierSliceTest#testPrivateOnAFinalClassPrecedesTheFinal :: control :: M-DECLSPAN-FINAL-WRAPPER-BLIND',
+			'unit.query.ShardPlanTest#testAClassHeavierThanAShardIsDealtAsSlices :: control :: M-SHARD-SPLIT-NEVER,M-SHARD-SPLIT-SLICE-WEIGHT',
+			'unit.query.ShardPlanTest#testAMalformedSliceTokenIsRefused :: control :: M-SHARD-FILTER-PARSE-RANGE',
+			'unit.query.ShardPlanTest#testAPinnedClassIsNeverSliced :: control :: M-SHARD-SPLIT-STICKY',
+			'unit.query.ShardPlanTest#testAWholeTokenSelectsEveryTest :: control :: M-SHARD-FILTER-WHOLE-AS-SLICE',
+			'unit.query.ShardPlanTest#testSlicesAreBoundedByTheTestCount :: control :: M-SHARD-SPLIT-NO-TEST-CAP,M-SHARD-SPLIT-UNKNOWN-COUNT',
+			'unit.query.ShardPlanTest#testTheSlicesOfAClassCoverItsTestsExactlyOnce :: control :: M-SHARD-FILTER-SLICE-ALL,M-SHARD-FILTER-SLICE-UNSORTED',
+			'unit.query.ShardPlanTest#testTimingRowsOfOneClassAreSummed :: control :: M-SHARD-WEIGHTS-LAST-ROW',
 			'unit.query.SpanTypeInfoPinTest#testTypeParamConstraintsAreKeyedByDeclarationAndName :: control :: M-SPANINFO-BOUND-MORE',
 			'unit.query.StdResolverTest#testMultiEntryEnvAnswersTheStdEntry :: control :: M-STD-ENV-ENTRIES',
 			'unit.query.StdResolverTest#testTheStdBesideTheCompilerIsFoundInEitherLayout :: control :: M-STD-SIBLING-HOMEBREW',
 			'unit.query.StructuralMembershipTest#testAliasTargetPairAgrees :: control :: M-ALIAS-TARGET-SIMPLE-NAME',
 			'unit.query.SymbolIndexRunMemoSliceTest#testConfinementGateReadsTheIndexGrantSlot :: control :: M-GRANT-SLOT-UNREAD',
 			'unit.query.SymbolIndexRunMemoSliceTest#testSupertypeNameUnionIsBuiltOncePerIndex :: control :: M-SUPERTYPE-UNION-NOMEMO',
+			'unit.query.SymbolIndexSliceTest#testDeclaringFilesCount :: control :: M-TYPEREF-NAMED-FIRST-TYPE',
 		];
 		final actualPins: Array<String> = TestRegistry.pins();
 		Assert.same(
@@ -5200,7 +5210,20 @@ class TestDiscoveryParityTest extends Test {
 			'M-ORPHAN-SEAM-END-SELF-ONLY',
 			'M-ORPHAN-SEAM-END-UNTRIMMED',
 			'M-ORPHAN-ANY-PARENT',
-			'M-ORPHAN-NO-CASE-ARMS'
+			'M-ORPHAN-NO-CASE-ARMS',
+			'M-SHARD-SPLIT-NEVER',
+			'M-SHARD-SPLIT-SLICE-WEIGHT',
+			'M-SHARD-SPLIT-NO-TEST-CAP',
+			'M-SHARD-SPLIT-UNKNOWN-COUNT',
+			'M-SHARD-SPLIT-STICKY',
+			'M-SHARD-FILTER-SLICE-ALL',
+			'M-SHARD-FILTER-SLICE-UNSORTED',
+			'M-SHARD-FILTER-WHOLE-AS-SLICE',
+			'M-SHARD-FILTER-PARSE-RANGE',
+			'M-SHARD-WEIGHTS-LAST-ROW',
+			'M-FIXTURE-CACHE-CWD-WRITE',
+			'M-ORACLE-CACHE-WALK-FIRST-ONLY',
+			'M-TYPEREF-NAMED-FIRST-TYPE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

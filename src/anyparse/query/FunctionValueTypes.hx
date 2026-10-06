@@ -157,6 +157,20 @@ final class FunctionValueTypes {
 	/** The escaped function types as the facts spell them (`escapedTexts`), read on first need. */
 	private var _escapedText: Null<Array<String>> = null;
 
+	/**
+	 * A facts type text -> the function type it reads as (`functionText`), null for one that is none. It reads only the
+	 * text and the table's typedefs, which an edit of the run does not change (`CompilerFacts.invalidate` drops sources,
+	 * never types); `mayRun` parsed the same texts once per escaped function type per value type held, 72 of TM's 533
+	 * `--fix` seconds.
+	 */
+	private final _functionTexts: Map<String, Null<FactsType>> = [];
+
+	/**
+	 * A type held -> whether a value of it may be one of the escaped function values (`meetsEscaped`): keyed by its one
+	 * varying input, the escaped list being read once (`escapedTexts`).
+	 */
+	private final _meetsEscaped: Map<String, Bool> = [];
+
 	/** Facts node id -> the signatures of the function expressions calling it (`callerSignatures`), built on first need. */
 	private var _callers: Null<Map<String, Array<String>>> = null;
 
@@ -370,7 +384,7 @@ final class FunctionValueTypes {
 		if (!_view.truth || functionOf(FactsTypeTree.read(target)) == null || escaped == null) return true;
 		final own: Null<Array<String>> = valueTypes(g, id);
 		if (own == null) return true;
-		for (s in own) for (t in typedAs(s)) if (sameOrGeneric(t, target) || escaped.exists(e -> sameOrGeneric(t, e))) return true;
+		for (s in own) for (t in typedAs(s)) if (sameOrGeneric(t, target) || meetsEscaped(t, escaped)) return true;
 		return obtainedUntyped(g, id);
 	}
 
@@ -382,8 +396,8 @@ final class FunctionValueTypes {
 	private function sameOrGeneric(held: String, place: String): Bool {
 		if (held == place) return true;
 		if (held.indexOf(PARAMETER) < 0 && place.indexOf(PARAMETER) < 0) return false;
-		final a: Null<FactsType> = functionOf(FactsTypeTree.read(held));
-		final b: Null<FactsType> = functionOf(FactsTypeTree.read(place));
+		final a: Null<FactsType> = functionText(held);
+		final b: Null<FactsType> = functionText(place);
 		if (a == null || b == null) return true;
 		return mayUnify(a, b);
 	}
@@ -923,6 +937,23 @@ final class FunctionValueTypes {
 	/** Whether `t` is the result type of a function that returns nothing. */
 	private function isVoid(t: FactsType): Bool {
 		return aliased(t).match(Named(VOID, []));
+	}
+
+	/** Whether a value held as `t` may be one of `escaped`, the escaped function types `escapedTexts` read once: asked once per type. */
+	private function meetsEscaped(t: String, escaped: Array<String>): Bool {
+		final known: Null<Bool> = _meetsEscaped[t];
+		if (known != null) return known;
+		final out: Bool = escaped.exists(e -> sameOrGeneric(t, e));
+		_meetsEscaped[t] = out;
+		return out;
+	}
+
+	/** The function type the facts type text `text` reads as, through its typedefs (`functionOf`), parsed once per text. */
+	private function functionText(text: String): Null<FactsType> {
+		if (_functionTexts.exists(text)) return _functionTexts[text];
+		final out: Null<FactsType> = functionOf(FactsTypeTree.read(text));
+		_functionTexts[text] = out;
+		return out;
 	}
 
 }

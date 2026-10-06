@@ -47,6 +47,11 @@ final class ReachProject {
 	/** The files the builds typed a type in (`typeHomes`), read on first need. */
 	private var _typeHomes: Null<Map<String, Bool>> = null;
 
+	/** `declarationsByName`'s table, and the index it was built from. */
+	private var _declarations: Null<Map<String, Array<{ file: String, span: Span }>>> = null;
+
+	private var _declarationsOf: Null<SymbolIndex> = null;
+
 	public function new(
 		plugin: GrammarPlugin, index: SymbolIndex, files: Array<{ file: String, source: String }>, ?reflectiveClasses: Array<String>,
 		?reflectiveMethodHolders: Array<String>
@@ -108,11 +113,27 @@ final class ReachProject {
 	public function siteOf(type: String): Null<{ file: String, span: Span }> {
 		final direct: Null<{ file: String, span: Span }> = index.declarationSiteOf(type);
 		if (direct != null) return direct;
-		final found: Array<{ file: String, span: Span }> = [];
-		for (fi in index.allFiles())
-			for (t in fi.types)
-				if (t.name == type && !CallGraphNames.selfAlias(t)) found.push({ file: fi.file, span: t.span });
-		return found.length == 1 ? found[0] : null;
+		final found: Null<Array<{ file: String, span: Span }>> = declarationsByName()[type];
+		return found != null && found.length == 1 ? found[0] : null;
+	}
+
+	/**
+	 * Every declaration of the index that is no self-alias, by simple name, in index order: `siteOf`'s fallback, built once
+	 * per index. It scanned every type of every file per question, and on TM that was a quarter of a `--fix` run (147 of
+	 * 533 s). The index is immutable and replaced whole (`readThrough`), so the table is rebuilt when it is.
+	 */
+	private function declarationsByName(): Map<String, Array<{ file: String, span: Span }>> {
+		final held: Null<Map<String, Array<{ file: String, span: Span }>>> = _declarations;
+		if (held != null && _declarationsOf == index) return held;
+		final out: Map<String, Array<{ file: String, span: Span }>> = [];
+		for (fi in index.allFiles()) for (t in fi.types) if (!CallGraphNames.selfAlias(t)) {
+			final named: Array<{ file: String, span: Span }> = out[t.name] ?? [];
+			named.push({ file: fi.file, span: t.span });
+			out[t.name] = named;
+		}
+		_declarations = out;
+		_declarationsOf = index;
+		return out;
 	}
 
 	/**

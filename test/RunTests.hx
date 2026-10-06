@@ -1,3 +1,4 @@
+import anyparse.query.ShardFilter;
 import testkit.TestRegistry;
 import unit.cli.CliFixture;
 import utest.Runner;
@@ -40,9 +41,11 @@ class RunTests {
 		// every case (the full suite, e.g. before a commit). Substring match,
 		// so `APQ_TEST=RemoveParam` runs RemoveParamSliceTest and `APQ_TEST=Apq`
 		// runs all `Apq*` tests; comma-separated to run a slice + its siblings.
+		// A token `<class>#<i>/<k>` runs one slice of a class's tests (`ShardFilter`):
+		// `tools/suite-shard.sh` deals a class heavier than a shard as several.
 		final filterEnv: Null<String> = Sys.getEnv('APQ_TEST');
-		final filters: Array<String> = filterEnv == null ? [] : [
-			for (f in filterEnv.split(',')) if (StringTools.trim(f) != '') StringTools.trim(f)
+		final filters: Array<ShardToken> = filterEnv == null ? [] : [
+			for (f in filterEnv.split(',')) if (StringTools.trim(f) != '') ShardFilter.parse(StringTools.trim(f))
 		];
 		function addCase(testCase: utest.Test): Void {
 			if (filters.length == 0) {
@@ -50,10 +53,14 @@ class RunTests {
 				return;
 			}
 			final className: String = Type.getClassName(Type.getClass(testCase));
-			for (filter in filters) if (className.indexOf(filter) >= 0) {
-				runner.addCase(testCase);
-				return;
-			}
+			final names: Null<Array<String>> = ShardFilter.selected(className, testNames(testCase), filters);
+			if (names == null)
+				runner.addCase(testCase)
+			else if (names.length > 0)
+				runner.addCase(
+					testCase, 'setup', 'teardown', 'test',
+					new EReg('^${EReg.escape(className)}\\.(${names.map(EReg.escape).join('|')})$', '')
+				);
 		}
 		TestRegistry.addAll(addCase);
 		// Quiet by DEFAULT. utest's own default is `ShowSuccessResultsWithNoErrors`,
@@ -128,6 +135,8 @@ class RunTests {
 		var executed: Int = 0;
 		runner.onTestComplete.add(_ -> executed++);
 		runner.onComplete.add(_ -> Sys.println('tests executed: $executed'));
+		final timingPath: Null<String> = Sys.getEnv('APQ_TEST_TIMING');
+		if (timingPath != null && timingPath != '') recordTimings(runner, timingPath);
 		// Registered here for the same reason as the line above: `Report.create`'s own
 		// `onComplete` handler exits the process from inside the dispatch, so a scratch
 		// teardown added after it would never run. `removeScratchRoot` rather than `removeDir`
@@ -171,6 +180,42 @@ class RunTests {
 		if (lines == null) return false;
 		for (line in lines) Sys.println(line);
 		return true;
+	}
+
+	/**
+	 * `APQ_TEST_TIMING=<path>`: write each class's in-suite wall time to `<path>` as `<ms>\t<tests>\t<class>` rows,
+	 * slowest first. A class is charged the time from the previous test's completion to each of its own, so its
+	 * `setupClass`, its per-test setup/teardown and any wait on a child process all land on it. In-suite, not isolated:
+	 * this is the number `ShardPlan` balances on.
+	 */
+	private static function recordTimings(runner: Runner, path: String): Void {
+		final millis: Map<String, Float> = [];
+		final counts: Map<String, Int> = [];
+		var last: Float = haxe.Timer.stamp();
+		runner.onTestComplete.add(h -> {
+			final now: Float = haxe.Timer.stamp();
+			final cls: String = Type.getClassName(Type.getClass(h.fixture.target));
+			millis[cls] = (millis[cls] ?? 0.0) + (now - last) * 1000;
+			counts[cls] = (counts[cls] ?? 0) + 1;
+			last = now;
+		});
+		runner.onComplete.add(_ -> {
+			final classes: Array<String> = [for (cls in millis.keys()) cls];
+			classes.sort((a, b) -> Reflect.compare(millis[b], millis[a]));
+			sys.io.File.saveContent(path, [for (cls in classes) '${Math.round(millis[cls] ?? 0.0)}\t${counts[cls]}\t$cls\n'].join(''));
+		});
+	}
+
+	/** The methods of `testCase` utest runs as tests: every instance method named `test…` or `spec…`. */
+	private static function testNames(testCase: utest.Test): Array<String> {
+		return [
+			for (name in Type.getInstanceFields(Type.getClass(testCase)))
+				if (
+					(StringTools.startsWith(name, 'test') || StringTools.startsWith(name, 'spec'))
+					&& Reflect.isFunction(Reflect.field(testCase, name))
+				)
+					name
+		];
 	}
 
 }

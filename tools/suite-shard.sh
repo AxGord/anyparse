@@ -26,6 +26,11 @@
 # default is 4 because the extra shards buy ~1.5 s at the price of that
 # warm-up multiplied again: ask for -n 6 on a many-core box, do not assume it.
 #
+# Those numbers predate the fixture-compiling classes. On 2026-10-05, at 16132
+# tests, ONE class (MemberReachFactsTest, 271 s in-suite) held -n 8 at 297 s
+# while seven shards idled; the plan now deals such a class as `#i/k` slices
+# (ShardPlan / ShardFilter) and -n 8 measured 73.5 s at load ~17.
+#
 # Usage:
 #   tools/suite-shard.sh                     # 4 shards, class parity only
 #   tools/suite-shard.sh -n 8                # 8 shards
@@ -37,6 +42,7 @@
 #   tools/suite-shard.sh --plan-only         # print the shard plan, run nothing
 #   tools/suite-shard.sh --bin /tmp/w1/test.js   # a private worker build
 #   tools/suite-shard.sh --keep              # keep the work directory on success
+#   tools/suite-shard.sh --timings t.tsv     # + per-class in-suite ms, slowest first
 #
 # The LAST line is always a verdict — `suite-shard: PASS — ...` or
 # `suite-shard: FAILED — <reason>; <reason>`. Read that one; every other
@@ -65,6 +71,7 @@ expect=""
 plan_only=0
 keep=0
 test_js=""
+timings=""
 
 # A value-taking flag given as the LAST argument would otherwise reach
 # `shift 2` with one argument left, and bash's own "shift count out of
@@ -104,6 +111,11 @@ while [ "$#" -gt 0 ]; do
         --keep)
             keep=1
             shift
+            ;;
+        --timings)
+            need_value "$1" "$#"
+            timings=$2
+            shift 2
             ;;
         -h|--help)
             sed -n '2,/^set -euo/p' "$0" | sed -e 's/^# \{0,1\}//' -e '/^set -euo/d'
@@ -174,6 +186,7 @@ fi
 # SIGKILL left behind, and the predicate that keeps a sibling's live run
 # safe from it — all live in one place. See tools/tmp-lifecycle.sh.
 . "$script_dir/tmp-lifecycle.sh"
+. "$script_dir/fixture-cache.sh"
 tmpl_sweep "$repo"
 
 work=$(tmpl_claim apq-suite-shard)
@@ -249,8 +262,18 @@ if ! node "$test_js" --list-classes > "$work/classes.txt" 2> "$work/classes.err"
     exit 1
 fi
 
+# The weights the plan balances on: the last green run's own per-class
+# timings (`bin/.suite-timings.tsv`, refreshed at the end of every green run)
+# when there is one, else the table built into `ShardPlan`. A weight only
+# balances the split, so a stale or foreign file costs balance, never a test.
+weights_file="$repo/bin/.suite-timings.tsv"
+weights_args=()
+if [ -s "$weights_file" ]; then
+    weights_args=(--weights "$weights_file")
+fi
+
 plan_or_die() {
-    if ! hxq shard-plan --classes "$work/classes.txt" --shards "$shards" --format "$1" \
+    if ! hxq shard-plan --classes "$work/classes.txt" --shards "$shards" --format "$1" "${weights_args[@]+"${weights_args[@]}"}" \
             > "$2" 2> "$work/plan.err"; then
         cat "$work/plan.err" >&2
         rc=1
@@ -261,7 +284,9 @@ plan_or_die() {
 plan_or_die lines "$work/assigned.txt"
 plan_or_die filters "$work/filters.txt"
 
-total_classes=$(wc -l < "$work/assigned.txt" | tr -d '[:space:]')
+# A class heavier than a shard is dealt as `<class>#<i>/<k>` slices, one row
+# each, so the classes are the DISTINCT names, not the rows.
+total_classes=$(cut -f2 "$work/assigned.txt" | sed 's/#.*//' | sort -u | wc -l | tr -d '[:space:]')
 
 # --- producer-side count check ------------------------------------------
 #
@@ -333,11 +358,41 @@ now_ms() {
     fi
 }
 
+# The fixture cache (tools/fixture-cache.sh): the probe compiles every shard
+# runs are replayed from a content-addressed record kept across runs, so a
+# run whose probe macros and fixtures did not change compiles none of them.
+# `APQ_SUITE_NO_FIXTURE_CACHE=1` runs every compile for real — the run to make
+# when the compiler itself is what is in question.
+shard_path=$PATH
+shard_std=""
+cache_note="fixture cache: off (APQ_SUITE_NO_FIXTURE_CACHE)"
+if [ -z "${APQ_SUITE_NO_FIXTURE_CACHE:-}" ]; then
+    fc_entries="${APQ_SUITE_FIXTURE_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/anyparse/fixture-cache}"
+    fc_prune "$fc_entries"
+    if fc_shim "$repo" "$fc_entries" "$work/fixture-cache-bin" "$work/fixture-cache.tally"; then
+        shard_path="$work/fixture-cache-bin:$PATH"
+        shard_std=$(fc_std_injection)
+        cache_note=""
+    else
+        cache_note="fixture cache: unavailable, every compile ran for real"
+    fi
+fi
+
 started=$(now_ms)
 pids=""
 s=0
 while [ "$s" -lt "$shards" ]; do
-    ( APQ_TEST="$(cat "$work/shard$s.filter")" node "$test_js" > "$work/shard$s.log" 2>&1 ) &
+    (
+        shard_started=$(now_ms)
+        shard_status=0
+        if [ -n "$shard_std" ]; then
+            export HAXE_STD_PATH="$shard_std" APQ_FC_STD_INJECTED=1
+        fi
+        PATH=$shard_path APQ_TEST="$(cat "$work/shard$s.filter")" APQ_TEST_TIMING="$work/shard$s.timing" \
+            node "$test_js" > "$work/shard$s.log" 2>&1 || shard_status=$?
+        echo $(( $(now_ms) - shard_started )) > "$work/shard$s.ms"
+        exit "$shard_status"
+    ) &
     pids="$pids $s:$!"
     s=$((s + 1))
 done
@@ -485,8 +540,9 @@ while [ "$s" -lt "$shards" ]; do
         note='  <-- did NOT finish: these counts are partial'
         add_reason "shard $s exited $shard_exit with no failing test in its report — it did not finish"
     fi
-    printf 'shard %d: %4d classes / %5d tests / %6d assertions / %d failures / %d errors (exit %s)%s\n' \
-        "$s" "$classes" "$t" "$a" "$f" "$e" "$shard_exit" "$note"
+    shard_ms=$(cat "$work/shard$s.ms" 2> /dev/null || echo 0)
+    printf 'shard %d: %4d classes / %5d tests / %6d assertions / %d failures / %d errors (exit %s) in %d.%01ds%s\n' \
+        "$s" "$classes" "$t" "$a" "$f" "$e" "$shard_exit" "$((shard_ms / 1000))" "$(((shard_ms % 1000) / 100))" "$note"
     # The locus `test-summary` already computed for a red shard, which this
     # script used to compute and throw away — without it, localising a
     # failure means opening the shard log by hand.
@@ -513,6 +569,11 @@ done
 printf -- '--- suite-shard: %d classes / %d tests / %d assertions / %d failures / %d errors in %d.%03ds across %d shards ---\n' \
     "$total_classes" "$sum_tests" "$sum_asserts" "$sum_fail" "$sum_err" \
     "$((elapsed_ms / 1000))" "$((elapsed_ms % 1000))" "$shards"
+
+if [ -z "$cache_note" ]; then
+    cache_note="fixture cache: $(fc_tally "$work/fixture-cache.tally")"
+fi
+echo "$cache_note"
 
 if [ "$partial" -eq 1 ]; then
     echo "suite-shard.sh: the totals above are a SUM OF WHAT RAN, not a total — at least one shard did not finish" >&2
@@ -574,6 +635,27 @@ elif [ -n "$expect" ]; then
         shard_rc=1
         add_reason "count parity FAILED — shards $sum_tests/$sum_asserts vs --expect $expect_tests/$expect_asserts"
         parity_note="counts DIVERGED from --expect $expect"
+    fi
+fi
+
+# Every shard wrote `<ms>\t<tests>\t<class>` rows (`APQ_TEST_TIMING`, see
+# RunTests.recordTimings); merged slowest-first they are the per-class profile
+# --timings asks for, and the weights `apq shard-plan --weights` balances on.
+# A sliced class has a row per shard that ran a slice of it; summed back here
+# into one row per class. The merge refreshes the plan's own weights file only
+# after a green, complete run: a red or partial one under-weights what it
+# never finished.
+merge_timings() {
+    cat "$work"/shard*.timing 2> /dev/null \
+        | awk -F '\t' 'NF == 3 { ms[$3] += $1; n[$3] += $2 } END { for (c in ms) printf "%d\t%d\t%s\n", ms[c], n[c], c }' \
+        | sort -t "$(printf '\t')" -k1,1nr -k3,3 > "$1"
+}
+if [ -n "$timings" ]; then
+    merge_timings "$timings" || true
+fi
+if [ "$shard_rc" -eq 0 ] && [ "$partial" -eq 0 ]; then
+    if merge_timings "$work/timings.merged" && [ -s "$work/timings.merged" ]; then
+        mv "$work/timings.merged" "$weights_file" || true
     fi
 fi
 
