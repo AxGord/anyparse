@@ -6604,7 +6604,7 @@
 			"name": "M-REACH-EXTERN-HANDS",
 			"type": "anyparse.query.MemberReach",
 			"method": "externSite",
-			"find": ["if (!arrayOwn) hand(t);", "if (returned != null && returned == stringType && at != null) {"],
+			"find": ["if (!arrayOwn) hand(t);", "if (handed == null && returned != null && returned == stringType && at != null) {"],
 			"replace": ["", "if (at != null && false) {"],
 			"note": "target code handed an object neither reaches its members by name nor converts it, so `Std.string(this)` runs `toString` unseen"
 		},
@@ -11695,7 +11695,7 @@
 		{
 			"name": "M-REACH-OWNED-TYPES-NONE",
 			"type": "anyparse.query.ReachGraph",
-			"method": "ownedIdsAt",
+			"method": "ownedIdsRead",
 			"find": "final owned: Null<Map<String, Null<Array<String>>>> = ownedTypesAt(g, at);",
 			"replace": "final owned: Null<Map<String, Null<Array<String>>>> = null;",
 			"note": "an implicit-call site the facts typed is read by its operands' simple names, so an admitted member of a name two types share stays Ambiguous"
@@ -15341,8 +15341,8 @@
 			"name": "M-EXTERN-EVERY-CALL-SYNTAX",
 			"type": "anyparse.query.MemberReach",
 			"method": "walk",
-			"find": "s.from == step.from && (truth || (s.file == step.file && s.span?.from == step.span?.from && s.span?.to == step.span?.to));",
-			"replace": "s.from == step.from;",
+			"find": "final callerKey: String = truth ? '$id\\n${step.from}' : '$id\\n${step.from}\\n${step.file}\\n${step.span?.from}\\n${step.span?.to}';",
+			"replace": "final callerKey: String = '$id\\n${step.from}';",
 			"note": "without the truth an extern's admission reads one call of each caller, which the syntax reads alone"
 		},
 		{
@@ -15400,6 +15400,102 @@
 			"find": "if (!literals.contains(arg.kind) && arg.kind != _shape.nullLiteralKind) carried(t);",
 			"replace": "carried(t);",
 			"note": "(precision) read by its syntax, a literal handed to an extern is taken to be a value that may be an object carrying the member"
+		},
+		{
+			"name": "M-FACTS-CONVERSION-FLOWS",
+			"type": "anyparse.query.FactsView",
+			"method": "conversionSitesIn",
+			"find": "for (f in flows) for (o in conversionOperands(f.from, f.to)) add(o, f.at.span, f.exact && o == f.from);",
+			"replace": "",
+			"note": "a value a flow puts at a `String` place is converted by nothing, though hxcpp runs its `toString` there"
+		},
+		{
+			"name": "M-FACTS-CONVERSION-TARGET",
+			"type": "anyparse.query.FactsView",
+			"method": "conversionSitesIn",
+			"find": "if (truth && !unchecked().convertsSomewhere()) return [];",
+			"replace": "if (truth) return [];",
+			"note": "under the truth no build converts what lands at a typed place, though a C++ build does"
+		},
+		{
+			"name": "M-FACTS-CONVERSION-ANY-TARGET",
+			"type": "anyparse.query.FactsView",
+			"method": "conversionSitesIn",
+			"find": "if (truth && !unchecked().convertsSomewhere()) return [];",
+			"replace": "if (false) return [];",
+			"note": "(precision) a build of a target that keeps what lands at a typed place converts it as hxcpp does"
+		},
+		{
+			"name": "M-UNCHECKED-STRING-ELEMENTS",
+			"type": "anyparse.query.UncheckedConversions",
+			"method": "operandsAt",
+			"find": "case Named(held, [each]) if (_arrays.contains(held)): operandsAt(each, element, seen);",
+			"replace": "case Named(held, [each]) if (_arrays.contains(held)): [];",
+			"note": "an array copied into an array of strings converts none of its elements, though hxcpp copies them one by one"
+		},
+		{
+			"name": "M-FACTS-CONVERSION-WRITES",
+			"type": "anyparse.query.FactsView",
+			"method": "conversionSitesIn",
+			"find": "for (r in writes) add(anyValue(), r.at.span, false);",
+			"replace": "",
+			"note": "a value a reflective write sets converts nothing, though the field it lands in converts it on hxcpp"
+		},
+		{
+			"name": "M-FACTS-CONVERSION-FIELD-WRITES",
+			"type": "anyparse.query.FactsView",
+			"method": "conversionSitesIn",
+			"find": "for (f in fields) add(anyValue(), f.at.span, false);",
+			"replace": "",
+			"note": "a value written to a field of a catch-all converts nothing, though the field it lands in converts it on hxcpp"
+		},
+		{
+			"name": "M-REACH-SYNTAX-CONVERSION",
+			"type": "anyparse.query.MemberReach",
+			"method": "sitesOf",
+			"find": "final landings: Bool = facts == null || !facts.truth || facts.unchecked().convertsSomewhere();",
+			"replace": "final landings: Bool = false;",
+			"note": "code read by its syntax converts no value put at a `String` place, which the syntax does not type"
+		},
+		{
+			"name": "M-REACH-HANDED-CONVERTED",
+			"type": "anyparse.query.MemberReach",
+			"method": "externSite",
+			"find": "final converted: Array<Null<String>> = handedConverted(g, handed, arrayOwn);",
+			"replace": "final converted: Array<Null<String>> = [null];",
+			"note": "(precision) the target code of an extern converting what the facts say it is handed converts a value of any type"
+		},
+		{
+			"name": "M-REACH-ARRAY-OWN-HANDS",
+			"type": "anyparse.query.MemberReach",
+			"method": "externSite",
+			"find": "if (handed != null && !arrayOwn) {",
+			"replace": "if (handed != null) {",
+			"note": "(precision) the built-in array's own method reaches every member of what it holds by its name, not only by converting it"
+		},
+		{
+			"name": "M-SITES-LANDING-KEEPING-PLACE",
+			"type": "anyparse.query.ImplicitSites",
+			"method": "mayConvertAt",
+			"find": "if ((_shape.catchAllTypeNames ?? []).contains(place) || (_shape.nonNullableTypeNames ?? []).contains(place)) return false;",
+			"replace": "",
+			"note": "(precision) a value put at a place of a catch-all or of a primitive other than the string type is converted to a string"
+		},
+		{
+			"name": "M-SITES-LANDING-CLASS-PLACE",
+			"type": "anyparse.query.ImplicitSites",
+			"method": "mayConvertAt",
+			"find": "return (_shape.arrayTypeNames ?? []).contains(place) || !_index.resolvesToPlainNominal(place);",
+			"replace": "return true;",
+			"note": "(precision) a value put at a place of a class is converted to a string"
+		},
+		{
+			"name": "M-SITES-LANDING-TYPED-VALUE",
+			"type": "anyparse.query.ImplicitSites",
+			"method": "mayBeForeign",
+			"find": "final type: Null<String> = typeOf(file, tree, source, value);",
+			"replace": "final type: Null<String> = null;",
+			"note": "(precision) a value the syntax types as a string may be an object that left the type system"
 		}
 	]
 }

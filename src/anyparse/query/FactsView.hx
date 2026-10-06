@@ -9,6 +9,7 @@ import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.CompilerFacts.FieldDeclFact;
 import anyparse.query.CompilerFacts.FieldFact;
+import anyparse.query.CompilerFacts.FlowFact;
 import anyparse.query.CompilerFacts.HandFact;
 import anyparse.query.CompilerFacts.IterationFact;
 import anyparse.query.CompilerFacts.NativeFact;
@@ -126,6 +127,12 @@ final class FactsView {
 	 */
 	public static final FIELD_ACCESSES: Array<String> = ['Reflect.field', 'Reflect.setField', 'Reflect.hasField', 'Reflect.deleteField'];
 
+	/**
+	 * The reflective accesses by name that set a field: the object's own field converts the value as its assignment would
+	 * (`conversionSitesIn`).
+	 */
+	private static final FIELD_WRITES: Array<String> = ['Reflect.setField', 'Reflect.setProperty'];
+
 	/** The call accesses whose target is a field a type declares. */
 	private static final DECLARED_ACCESSES: Array<String> = ['FInstance', 'FStatic', 'FClosure', 'super', 'inlined', 'fieldValue'];
 
@@ -183,6 +190,9 @@ final class FactsView {
 
 	/** Where an unchecked conversion may put a value its place's type says nothing of (`unchecked`), built on first need. */
 	private var _unchecked: Null<UncheckedConversions> = null;
+
+	/** A pair of facts types `from\nto` -> the operands of the conversions putting a value of the one at the other makes. */
+	private final _conversionOperands: Map<String, Array<Null<String>>> = [];
 
 	/** Graph type name -> the typed types standing for it, built on first need. */
 	private var _bySimpleName: Null<Map<String, Array<String>>> = null;
@@ -263,7 +273,8 @@ final class FactsView {
 
 	/**
 	 * The implicit-call sites the code in `span` of `file` runs, from its facts: a string conversion of each non-String operand, of
-	 * each non-String value thrown and of each argument a conversion call (`ExecutionShape.stringConversionCalls`) is handed, and the
+	 * each non-String value thrown, of each argument a conversion call (`ExecutionShape.stringConversionCalls`) is handed and of
+	 * each value a build converting what lands at a typed place puts at a `String` one (`conversionSitesIn`), and the
 	 * iteration of each `for` the compiler kept. Every other implicit call — an operator, a conversion, an index, an
 	 * accessor, a literal construction — is a call or a construction the facts name, an edge of the graph. An operand the
 	 * facts show is an object of exactly its own class (`StringFact.exact`) makes its site `exact`. A conversion call's
@@ -280,6 +291,8 @@ final class FactsView {
 		final iterations: Null<Array<IterationFact>> = table.within(file, span, n -> n.iterations, i -> i.at, truth, harmless);
 		final calls: Null<Array<CallFact>> = table.callsIn(file, span, truth, harmless);
 		if (strings == null || iterations == null || calls == null) return null;
+		final converted: Null<Array<ImplicitSite>> = conversionSitesIn(file, span, harmless);
+		if (converted == null) return null;
 		final out: Array<ImplicitSite> = [
 			for (s in strings)
 				{
@@ -303,6 +316,7 @@ final class FactsView {
 				owners: [operand == null ? null : typedOwner(operand)]
 			});
 		}
+		for (c in converted) out.push(c);
 		for (i in iterations) out.push({
 			family: Iteration,
 			span: i.at.span,
@@ -311,6 +325,78 @@ final class FactsView {
 			owners: [typedOwner(i.iterated)]
 		});
 		return out;
+	}
+
+	/**
+	 * The string conversions a build that converts what lands at a typed place (`UncheckedConversions.convertsSomewhere`) makes
+	 * in the code at `span` of `file`, or none where no build does — under the truth no build the list does not name exists,
+	 * and without it one may: each value a flow puts at a `String` place, or at an array of strings an array of another
+	 * element type is copied into (`UncheckedConversions.stringOperands`), an object of exactly its class where the flow says
+	 * so and the value itself is converted; and a value set by its name — a reflective write (`FIELD_WRITES`) or a write to a
+	 * field of a catch-all — which the object's own field converts as its assignment would, of any type a value that left
+	 * the type system may be (a catch-all operand). Null when a fact there has no place (`CompilerFacts.within`).
+	 */
+	private function conversionSitesIn(file: String, span: Span, harmless: (callee:String) -> Bool): Null<Array<ImplicitSite>> {
+		// noqa: complexity
+		if (truth && !unchecked().convertsSomewhere()) return [];
+		final flows: Null<Array<FlowFact>> = table.within(file, span, n -> n.flows, f -> f.at, truth, harmless);
+		final writes: Null<Array<ReflectionFact>> = table.within(
+			file, span, n -> [for (r in n.reflection) if (FIELD_WRITES.contains(r.target)) r], r -> r.at, truth, harmless
+		);
+		final fields: Null<Array<FieldFact>> = table.within(
+			file, span, n -> [for (f in n.fields) if (f.write && f.owner == null && catchAll(f.receiver)) f], f -> f.at, truth, harmless
+		);
+		if (flows == null || writes == null || fields == null) return null;
+		final out: Array<ImplicitSite> = [];
+		// a site per operand: two conversions of values of one type run the same members
+		final seen: Map<String, Bool> = [];
+		function add(operand: Null<String>, at: Span, exact: Bool): Void {
+			final key: String = '${operand ?? ''}|$exact';
+			if (seen.exists(key)) return;
+			seen[key] = true;
+			out.push({
+				family: Text,
+				span: at,
+				types: [operand == null ? null : simpleSource(operand)],
+				exact: exact,
+				owners: [operand == null ? null : typedOwner(operand)]
+			});
+		}
+		for (f in flows) for (o in conversionOperands(f.from, f.to)) add(o, f.at.span, f.exact && o == f.from);
+		for (r in writes) add(anyValue(), r.at.span, false);
+		for (f in fields) add(anyValue(), f.at.span, false);
+		return out;
+	}
+
+	/**
+	 * The operands, as facts type strings, of the string conversions a value of the facts type `from` put at a place of the facts
+	 * type `to` makes (`UncheckedConversions.stringOperands`) — a value no reader reads may be anything (`anyValue`) and a
+	 * place no reader reads may be a string — read once per pair.
+	 */
+	private function conversionOperands(from: String, to: String): Array<Null<String>> {
+		final key: String = '$from\n$to';
+		final held: Null<Array<Null<String>>> = _conversionOperands[key];
+		if (held != null) return held;
+		final value: Null<FactsType> = FactsTypeTree.read(from);
+		final place: Null<FactsType> = FactsTypeTree.read(to);
+		final out: Array<Null<String>> = value == null || place == null
+			? [anyValue()]
+			: [for (o in unchecked().stringOperands(value, place)) FactsTypeTree.text(o)];
+		_conversionOperands[key] = out;
+		return out;
+	}
+
+	/** The language's catch-all type (`RefShape.catchAllTypeNames`): a value of it may be any value, an object of any class. */
+	private function anyValue(): Null<String> {
+		return (_scope.shape.catchAllTypeNames ?? [])[0];
+	}
+
+	/** Whether the facts type string `type` is a catch-all (`RefShape.catchAllTypeNames`), seen through `Null<T>`. */
+	private function catchAll(type: String): Bool {
+		return switch FactsTypeTree.read(unwrapped(type)) {
+			case Named(id, _): (_scope.shape.catchAllTypeNames ?? []).contains(id);
+			case _: false;
+		};
 	}
 
 	/**

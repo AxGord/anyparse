@@ -89,6 +89,12 @@ final class ReachGraph {
 	/** The always-admitted implicitly-called functions (`alwaysIds`), dropped whenever the graph grows or the question enters new code. */
 	private var _implicit: Null<Array<String>> = null;
 
+	/**
+	 * A site's family, operand types and owners -> what it may run (`ownedIdsAt`), dropped with `_implicit`: two sites alike run
+	 * the same members, and a conversion read off the facts may stand at every flow of a body.
+	 */
+	private final _owned: Map<String, Array<OwnedId>> = [];
+
 	/** The implicitly-called members the index declares, computed on first demand. */
 	private var _indexImplicit: Null<Array<ImplicitCandidate>> = null;
 
@@ -128,7 +134,13 @@ final class ReachGraph {
 		_questionFileCount = 0;
 		_entered.clear();
 		_reach = null;
+		dropImplicit();
+	}
+
+	/** Drop what was computed of the implicitly-called members the graph or the code entered may run (`_implicit`, `_owned`). */
+	private function dropImplicit(): Void {
 		_implicit = null;
+		_owned.clear();
 	}
 
 	/**
@@ -466,6 +478,16 @@ final class ReachGraph {
 	 * them that declares the member. One with no owner is reached by its simple name alone.
 	 */
 	public function ownedIdsAt(g: CallGraph, at: ImplicitSite): Array<OwnedId> {
+		final key: String = '${at.family}|${at.types.join(',')}|${at.exact}|${(at.owners ?? []).join(',')}';
+		final held: Null<Array<OwnedId>> = _owned[key];
+		if (held != null) return held;
+		final read: Array<OwnedId> = ownedIdsRead(g, at);
+		_owned[key] = read;
+		return read;
+	}
+
+	/** `ownedIdsAt`, computed. */
+	private function ownedIdsRead(g: CallGraph, at: ImplicitSite): Array<OwnedId> {
 		final owned: Null<Map<String, Null<Array<String>>>> = ownedTypesAt(g, at);
 		final scope: Null<Array<String>> = owned == null ? typesAt(g, at) : [for (t in owned.keys()) t];
 		final view: Null<FactsView> = _scope.facts;
@@ -539,7 +561,7 @@ final class ReachGraph {
 					for (imp in group) eachWord(imp.raw, word);
 		}
 		if (typeName != null) word(typeName);
-		if (widened) _implicit = null;
+		if (widened) dropImplicit();
 		return widened;
 	}
 
@@ -567,7 +589,7 @@ final class ReachGraph {
 		for (fi in infos) built.types.refreshFile(fi);
 		_unresolvedFrom = null;
 		_accessFrom = null;
-		_implicit = null;
+		dropImplicit();
 		// what the index-wide scans read off the old text of those files
 		_mentions = null;
 		_methodValues = null;
@@ -1375,7 +1397,7 @@ final class ReachGraph {
 		g.addFiles([{ file: file, source: source }]);
 		_unresolvedFrom = null;
 		_accessFrom = null;
-		_implicit = null;
+		dropImplicit();
 		return null;
 	}
 

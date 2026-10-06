@@ -1084,7 +1084,13 @@ final class MemberReach {
 				continue;
 			}
 			_syntaxEntered = true;
-			for (at in _g.sites.sitesIn(file, read.tree, read.source, span)) if (_live.live(file, read.source, at.span)) out.push(at);
+			// a conversion where a value lands is made only by a build converting there: under the truth, one the list names
+			final facts: Null<FactsView> = _scope.facts;
+			final landings: Bool = facts == null || !facts.truth || facts.unchecked().convertsSomewhere();
+			for (at in _g.sites.sitesIn(file, read.tree, read.source, span)) {
+				final made: Bool = landings || at.landing != true;
+				if (made && _live.live(file, read.source, at.span)) out.push(at);
+			}
 		}
 		return out;
 	}
@@ -1758,6 +1764,9 @@ final class MemberReach {
 		// runs nowhere as itself (`spliceOnly`), whose calls run spliced into its callers at the types they hand, only once
 		// something else runs it (`waitingExterns`)
 		final callers: Map<String, Array<ReachStep>> = [];
+		// the callers already noted, by node and what tells two of them apart: a set beside the lists — a conversion standing at
+		// every flow of a body admits each `toString` in play once per site, and a scan of the list made that quadratic
+		final callerKeys: Map<String, Bool> = [];
 		final externs: Map<String, { type: String, name: String }> = [];
 		final externRevisits: Array<{ id: String, step: ReachStep }> = [];
 		final waitingExterns: Map<String, Array<{ id: String, step: ReachStep }>> = [];
@@ -1789,9 +1798,9 @@ final class MemberReach {
 			final owner: Null<String> = typed != null && mayShare(g, id) ? typed : null;
 			final key: String = owner == null ? id : '$id@$owner';
 			final known: Array<ReachStep> = callers[id] ?? [];
-			final read: ReachStep -> Bool = s ->
-				s.from == step.from && (truth || (s.file == step.file && s.span?.from == step.span?.from && s.span?.to == step.span?.to));
-			if (step.from != id && !known.exists(read)) {
+			final callerKey: String = truth ? '$id\n${step.from}' : '$id\n${step.from}\n${step.file}\n${step.span?.from}\n${step.span?.to}';
+			if (step.from != id && !callerKeys.exists(callerKey)) {
+				callerKeys[callerKey] = true;
 				known.push(step);
 				callers[id] = known;
 				if (externs.exists(id)) externRevisits.push({ id: id, step: step });
@@ -1903,14 +1912,17 @@ final class MemberReach {
 					: values.admitted(g, admission.value, called, site.calledAt);
 			}
 			final ids: Array<String> = !site.values ? [] : held ?? typed();
-			if (site.all == true)
-				for (id in admission.closure.keys())
-					if (g.node(id)?.isExternal == false && !ids.contains(id)) ids.push(id);
-			for (id in site.ids ?? []) if (admission.closure.exists(id) && !ids.contains(id)) ids.push(id);
-			for (n in site.names)
-				for (target in g.resolveTarget(n))
-					if (admission.closure.exists(target.id) && !ids.contains(target.id)) ids.push(target.id);
-			if (site.constructors) for (c in admission.constructors) if (!ids.contains(c)) ids.push(c);
+			// a set beside the list: a site admitting the whole closure made `ids.contains` quadratic
+			final have: Map<String, Bool> = [for (id in ids) id => true];
+			function admit(id: String): Void {
+				if (have.exists(id)) return;
+				have[id] = true;
+				ids.push(id);
+			}
+			if (site.all == true) for (id in admission.closure.keys()) if (g.node(id)?.isExternal == false) admit(id);
+			for (id in site.ids ?? []) if (admission.closure.exists(id)) admit(id);
+			for (n in site.names) for (target in g.resolveTarget(n)) if (admission.closure.exists(target.id)) admit(target.id);
+			if (site.constructors) for (c in admission.constructors) admit(c);
 			final implicit: Array<String> = site.always ? _g.alwaysIds(g).copy() : [];
 			// a member the facts name the typed owner of is that type's, not every type's of its simple name
 			final owned: Array<OwnedId> = [];
@@ -1928,7 +1940,7 @@ final class MemberReach {
 			}
 			// the methods of an object reflection reaches by name are each the member of the type the facts name
 			for (o in site.owned ?? []) owned.push(o);
-			for (id in implicit) if (admission.closure.exists(id) && !ids.contains(id)) ids.push(id);
+			for (id in implicit) if (admission.closure.exists(id)) admit(id);
 
 			function step(id: String): ReachStep {
 				return {
@@ -2419,7 +2431,8 @@ final class MemberReach {
 	 * program object's members BY NAME — a `toJSON`, a `toString`, a `then` — so every object the call hands it is a
 	 * reflective access with a computed name: the members its static type may carry at run time (`memberIdsOf`),
 	 * or every function the admission closure holds when that is not known. And a member that returns the language's string
-	 * type converts what it is handed, its receiver included, to one: a string conversion of each of them. The built-in array's
+	 * type converts what it is handed, its receiver included, to one: a string conversion of each of them — under the truth
+	 * of each value the facts say it is handed that may be an object (`handedConverted`). The built-in array's
 	 * own methods and constructor reach no member by name and call only a function value the call hands them; converting the
 	 * array converts its elements, of the type it is written with (the compiler's, where the syntax types no receiver).
 	 */
@@ -2485,7 +2498,22 @@ final class MemberReach {
 		final handed: Null<NativeHands> = externHanded(g, caller, type, name, declaring);
 		if (handed?.blind == true && !namesNoMember) site.blind = true;
 		if (handed != null && !arrayOwn) site.values = handed.values;
-		if (handed != null && (!arrayOwn || (returned != null && returned == stringType))) {
+		if (handed != null && returned != null && returned == stringType) {
+			// what its target code converts is what the facts say the calls hand it
+			final converted: Array<Null<String>> = handedConverted(g, handed, arrayOwn);
+			// with no place to name, a conversion of what may be an object runs what it may
+			if (span == null && converted.length > 0) site.all = true;
+			if (span != null && converted.length > 0) {
+				final callSpan: Span = span;
+				site.implicit.push({
+					family: Text,
+					span: callSpan,
+					types: converted,
+					exact: false
+				});
+			}
+		}
+		if (handed != null && !arrayOwn) {
 			final types: Null<Array<String>> = handed.types;
 			if (types == null)
 				site.all = true
@@ -2538,7 +2566,7 @@ final class MemberReach {
 			final element: Null<String> = n == receiver && arrayOwn && t != null ? elementType(t) : null;
 			return containerFree(element ?? t);
 		}
-		if (returned != null && returned == stringType && at != null) {
+		if (handed == null && returned != null && returned == stringType && at != null) {
 			final converted: Array<QueryNode> = receiver == null ? args : [receiver].concat(args);
 			final callSpan: Span = at;
 			site.implicit.push({
@@ -2549,6 +2577,26 @@ final class MemberReach {
 			});
 		}
 		return site;
+	}
+
+	/**
+	 * The operands of the string conversion the target code of an extern member returning a string makes, read off what the
+	 * facts say its calls hand it (`externHanded`): each value that may be an object, of the type its source spells
+	 * (`NativeHands.types`) — of the built-in array's own method (`arrayOwn`), the elements of the array, which it converts in
+	 * turn — and any (null) for one of a type no source spells, or of a type taking type parameters, a container whose
+	 * elements a conversion reaches too. A value that is no object converts none (`NativeSiteReach.take`: where every build
+	 * converts what lands in an array of strings, it holds strings alone).
+	 */
+	private function handedConverted(g: CallGraph, handed: NativeHands, arrayOwn: Bool): Array<Null<String>> {
+		final types: Null<Array<String>> = handed.types;
+		if (types == null) return [null];
+		return [
+			for (t in types) {
+				final converted: String = (arrayOwn ? elementType(t) : null) ?? t;
+				final nominal: String = NominalTypes.outerNominalOf(converted, _scope.plugin.typeSyntax) ?? converted;
+				g.types.generics.typeParamsOf(nominal).length > 0 ? null : converted;
+			}
+		];
 	}
 
 	/**
