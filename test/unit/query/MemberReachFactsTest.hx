@@ -9,6 +9,7 @@ import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CallGraph;
 import anyparse.query.CompilerFacts;
 import anyparse.query.MemberReach;
+import anyparse.query.MemberTouchScan;
 import anyparse.query.ReachLiveness.ReachConfiguration;
 import anyparse.query.StdResolver;
 import anyparse.query.SymbolIndex;
@@ -2941,6 +2942,101 @@ class MemberReachFactsTest extends Test {
 		assertMatch(compiledTruthAsk(files('', 'grow(items);')), r -> r.match(Reached(_)));
 	}
 
+	@:pin('control') @:killer('M-TOUCH-USE-UNKNOWN') @:killer('M-TOUCH-USE-KNOWN-READS')
+	@:access(anyparse.query.MemberTouchScan)
+	public function testAUseTheFactsReaderDoesNotKnowIsAnEscapeUnderTheTruth(): Void {
+		// the uses a read of a value may carry are a closed list (`FieldFact.use`): one this reader does not name — a code a
+		// grown facts producer writes, an empty one, none — may hand the value anywhere, so it touches and escapes, while each
+		// it names keeps its answer. Through the facts: `sum` keeps nothing of the member it is handed, until its every use is
+		// renamed to one no reader knows
+		final own: OwnMethods = { reads: ['iterator'], changes: ['push'] };
+		function verdict(use: Null<String>, method: Null<String>): String {
+			final v: { touch: Bool, escape: Bool } = MemberTouchScan.classifyUse(use, method, own);
+			return (v.touch ? 'touch' : '-') + (v.escape ? ' escape' : ' -');
+		}
+		for (use in ['future', '', null]) Assert.equals('touch escape', verdict(use, null), 'the use `$use`');
+		final known: Array<String> = [
+			'index',
+			'member',
+			'compare',
+			'iter',
+			'update',
+			'call iterator',
+			'call push',
+			'call count',
+			'elemWrite',
+			'memberWrite',
+			'value'
+		];
+		Assert.same([
+			'- -',
+			'- -',
+			'- -',
+			'- -',
+			'- -',
+			'- -',
+			'touch -',
+			'touch escape',
+			'touch -',
+			'touch -',
+			'- escape'
+		], [for (k in known) verdict(k.split(' ')[0], k.split(' ')[1])]);
+		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n'
+			+ '\t\tsum(items);\n\t}\n\n\tstatic function calm():Void {}\n\n'
+			+ '\tstatic function sum(a:Array<Int>):Int {\n\t\tvar n:Int = 0;\n\t\tfor (x in a) n += x;\n\t\treturn n + a.length + a[0];\n\t}\n}\n';
+		function ask(rewrite: (String, String) -> String): ReachResult {
+			return rewrittenTruth(
+				['Main.hx' => main],
+				rewrite,
+				(reach, dir) ->
+					reach.mayReach(Region(Path.join([dir, 'Main.hx']), regionOf(main)), { owner: 'Main', name: 'items' }, Mutate)
+			);
+		}
+		assertMatch(ask((id, text) -> text), r -> r.match(Proven));
+		final renamed: EReg = ~/"u":"[A-Za-z]+"/g;
+		assertMatch(
+			ask((id, text) -> id == 'Main.sum' ? renamed.replace(text, '"u":"future"') : text), r -> r.match(Unknown(Escape(_, _)))
+		);
+	}
+
+	@:pin('control') @:killer('M-FACTS-UNPLACED-UNKNOWN')
+	public function testAMarkerTheFactsReaderDoesNotKnowKeepsItsBodysSyntaxUnderTheTruth(): Void {
+		// a node's markers are a closed list (`FactNode.incomplete`): one this reader does not name may say a fact of the node
+		// lost its place, so the body keeps its syntax — where `sum(items)`, an argument, escapes — instead of its facts
+		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n'
+			+ '\t\tsum(items);\n\t}\n\n\tstatic function calm():Void {}\n\n'
+			+ '\tstatic function sum(a:Array<Int>):Int return a.length;\n}\n';
+		function ask(marker: Null<String>): ReachResult {
+			return rewrittenTruth(
+				['Main.hx' => main],
+				(id, text) -> id != 'Main.main' || marker == null ? text : text.substr(0, text.length - 1) + ',"inc":["$marker"]}',
+				(reach, dir) ->
+					reach.mayReach(Region(Path.join([dir, 'Main.hx']), regionOf(main)), { owner: 'Main', name: 'items' }, Mutate)
+			);
+		}
+		assertMatch(ask(null), r -> r.match(Proven));
+		assertMatch(ask('future-marker'), r -> r.match(Unknown(Escape(_, _))));
+	}
+
+	@:pin('control') @:killer('M-GRAPH-FIELD-ACCESS-UNKNOWN')
+	public function testAFieldAccessTheFactsReaderDoesNotKnowIsUnresolvedUnderTheTruth(): Void {
+		// a field fact's access is a closed list (`FieldFact.access`): through one this reader does not name, any accessor of
+		// the name may run, so the graph records the read as an unresolved access, as one off a dynamic receiver
+		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n'
+			+ '\t}\n\n\tstatic function calm():Void {}\n}\n';
+		function unresolved(access: String): Bool {
+			return rewrittenTruth(
+				['Main.hx' => main],
+				(id, text) -> StringTools.replace(text, '"f":"items","a":"FStatic"', '"f":"items","a":"$access"'), (reach, dir) -> {
+					reach.mayReach(Region(Path.join([dir, 'Main.hx']), regionOf(main)), { owner: 'Main', name: 'items' }, Mutate);
+					reach.graph().unresolvedAccess.exists(a -> a.member == 'items');
+				}
+			);
+		}
+		Assert.isFalse(unresolved('FStatic'), 'a static read was an unresolved access');
+		Assert.isTrue(unresolved('FFuture'), 'a read through an access no reader knows was resolved');
+	}
+
 	@:pin('control') @:killer('M-TOUCH-TYPED-CALLED')
 	public function testAFieldTheCompilerCallsLeavesItsFunctionToTheSyntaxUnderTheTruth(): Void {
 		// `d.items(1)` calls whatever a dynamic receiver's `items` holds: the facts record a call and no field read, so `poke`
@@ -3763,6 +3859,33 @@ class MemberReachFactsTest extends Test {
 	/** `truthAsk` of `files`, which must compile: a build that fails leaves no facts, and the syntax would answer. */
 	private static function compiledTruthAsk(files: Map<String, String>, ?pos: haxe.PosInfos): ReachResult {
 		final result: ReachResult = truthAsk(files);
+		Assert.equals('', lastDropped.join('; '), 'the fixture did not compile: ${files['Main.hx']}', pos);
+		return result;
+	}
+
+	/**
+	 * `question` over the truth of `files`' builds, each node record of their facts first rewritten by `rewrite` (handed the
+	 * node's id and its record): what a facts producer grown past this reader may write.
+	 */
+	@:access(anyparse.query.MemberReach)
+	@:access(anyparse.query.CompilerFacts)
+	private static function rewrittenTruth<T>(
+		files: Map<String, String>, rewrite: (String, String) -> String, question: (MemberReach, String) -> T, ?pos: haxe.PosInfos
+	): T {
+		final result: T = withReach(files, null, true, false, null, null, null, true, (reach, dir) -> {
+			final table: Null<CompilerFacts> = reach._scope.facts?.table;
+			if (table != null) {
+				for (id => lines in table._nodeLines) for (i in 0...lines.length) lines[i] = {
+					dump: lines[i].dump,
+					text: rewrite(id, lines[i].text),
+					home: lines[i].home,
+					builds: lines[i].builds
+				};
+				table._nodeCache.clear();
+				table._builtCache.clear();
+			}
+			question(reach, dir);
+		});
 		Assert.equals('', lastDropped.join('; '), 'the fixture did not compile: ${files['Main.hx']}', pos);
 		return result;
 	}

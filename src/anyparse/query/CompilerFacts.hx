@@ -483,6 +483,12 @@ final class CompilerFacts {
 	/** The marker of a node an inlined function was spliced into (`TypedFactsProbe`). */
 	private static inline final INLINE_SITE_UNKNOWN: String = 'inline-site-unknown';
 
+	/**
+	 * The records a facts file holds (`TypedFactsMacro`): its header, the end of each round, a node, a type, a home
+	 * file's text and a foreign file's index. A POSITIVE list: a file holding any other is none this reader can read.
+	 */
+	private static final RECORD_KINDS: Array<String> = ['facts', 'end', 'node', 'type', 'src', 'file'];
+
 	/** The configurations that contributed nothing, and why — the table then holds less, and absence answers for it. */
 	public final dropped: Array<{ name: String, reason: String }> = [];
 
@@ -795,6 +801,15 @@ final class CompilerFacts {
 		while (lines.length > 0 && lines[lines.length - 1] == '') lines.pop();
 		if (lines.length < 2 || !lines[0].startsWith('{"k":"facts","v":1,') || !lines[lines.length - 1].startsWith('{"k":"end"')) {
 			dropped.push({ name: dump.name, reason: 'its facts file is not complete' });
+			return;
+		}
+		// a record this reader does not know may say what a fact it reads leaves out: the file is of another version
+		final unknown: Null<String> = lines.find(l -> !RECORD_KINDS.contains(recordKind(l)));
+		if (unknown != null) {
+			dropped.push({
+				name: dump.name,
+				reason: 'its facts file holds a record of the kind `${recordKind(unknown)}`, which no reader here knows'
+			});
 			return;
 		}
 		_byOwner = null;
@@ -1366,6 +1381,13 @@ final class CompilerFacts {
 	public static function baseId(type: String): String {
 		final open: Int = type.indexOf('<');
 		return open < 0 ? type : type.substr(0, open);
+	}
+
+	/** The kind of the facts record `line` (`{"k":"<kind>",…}`), or an empty one when it names none. */
+	private static function recordKind(line: String): String {
+		final head: String = '{"k":"';
+		final end: Int = line.indexOf('"', head.length);
+		return line.startsWith(head) && end > 0 ? line.substring(head.length, end) : '';
 	}
 
 }

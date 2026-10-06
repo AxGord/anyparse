@@ -136,9 +136,6 @@ final class FactsView {
 	 */
 	public static final FIELD_ACCESSES: Array<String> = ['Reflect.field', 'Reflect.setField', 'Reflect.hasField', 'Reflect.deleteField'];
 
-	/** The markers that leave some fact of a node without a place: its body keeps the syntactic reading. */
-	private static final UNPLACED: Array<String> = [MACRO_EXPANSION, INLINE_SITE_UNKNOWN, 'stale-foreign'];
-
 	/** The call accesses whose target is a field a type declares. */
 	private static final DECLARED_ACCESSES: Array<String> = ['FInstance', 'FStatic', 'FClosure', 'super', 'inlined', 'fieldValue'];
 
@@ -843,12 +840,15 @@ final class FactsView {
 	}
 
 	/**
-	 * Whether the marker `m` leaves some fact of its node without a place, so its body keeps the syntactic reading. Under
-	 * the truth neither a splice nor an expression macro's expansion leaves one: the expansion is code every build compiled,
-	 * typed among the node's facts, and they are the node's, which a range question takes where they run (`within`).
+	 * Whether the marker `m` leaves some fact of its node without a place, so its body keeps the syntactic reading. A
+	 * POSITIVE list of the markers that do not: a spliced `Reflect`/`Type` body's (`blindIn` answers for what it lost), and
+	 * under the truth neither a splice nor an expression macro's expansion — the expansion is code every build compiled,
+	 * typed among the node's facts, and they are the node's, which a range question takes where they run (`within`). Any
+	 * other — a fact lost with its file (`stale-foreign`), a marker the facts producer has grown since — leaves one.
 	 */
 	private function unplaced(m: String): Bool {
-		return UNPLACED.contains(m) && !(truth && (m == INLINE_SITE_UNKNOWN || m == MACRO_EXPANSION));
+		if (m == REFLECTION_INLINED || m == REFLECTION_UNATTRIBUTED || m.startsWith(REFLECTION_FROM)) return false;
+		return !(truth && (m == INLINE_SITE_UNKNOWN || m == MACRO_EXPANSION));
 	}
 
 	/**

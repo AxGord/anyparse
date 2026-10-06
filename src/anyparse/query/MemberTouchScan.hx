@@ -31,8 +31,8 @@ using Lambda;
 final class MemberTouchScan {
 
 	/**
-	 * The uses a typed read of the member may carry (`FieldFact.use`) — every one `classifyTyped` answers for. A read
-	 * carrying any other keeps its function read by its syntax.
+	 * The uses a typed read of the member may carry (`FieldFact.use`) — every one `classifyUse` names. A read carrying any
+	 * other keeps its function read by its syntax.
 	 */
 	private static final TYPED_USES: Array<String> = [
 		'call',
@@ -614,7 +614,7 @@ final class MemberTouchScan {
 		var touch: Bool = false;
 		var escape: Bool = false;
 		for (u in met) {
-			final one: Verdict = TYPED_USES.contains(u.use) ? classifyUse(u.use, u.method, owns) : { touch: true, escape: true };
+			final one: Verdict = classifyUse(u.use, u.method, owns);
 			touch = touch || one.touch;
 			escape = escape || one.escape;
 		}
@@ -624,7 +624,9 @@ final class MemberTouchScan {
 	/**
 	 * What a read of the member's value used as `use` does for `Mutate` (`FieldFact.use`): a method call is a read only for one
 	 * of the container's own readers (the facts name the method the receiver's type declares, never an extension), a change
-	 * without an escape only for one of its own changers; an element or member write touches; a value handed on escapes.
+	 * without an escape only for one of its own changers; an index, a member read, a comparison, an iteration and the read
+	 * half of a compound write of the field are nothing; an element or member write touches; a value handed on escapes. A
+	 * POSITIVE list: a use it does not name — a code the facts producer has grown since, an empty one — touches and escapes.
 	 */
 	private static function classifyUse(use: Null<String>, method: Null<String>, owns: OwnMethods): Verdict {
 		return switch use {
@@ -633,9 +635,10 @@ final class MemberTouchScan {
 				final reads: Bool = owns.reads.contains(called);
 				final own: Bool = reads || owns.changes.contains(called);
 				{ touch: !reads, escape: !own };
+			case 'index', 'member', 'compare', 'iter', 'update': { touch: false, escape: false };
 			case 'elemWrite', 'memberWrite': { touch: true, escape: false };
 			case 'value': { touch: false, escape: true };
-			case _: { touch: false, escape: false };
+			case _: { touch: true, escape: true };
 		};
 	}
 
