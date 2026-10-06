@@ -15728,6 +15728,21 @@
 			"find": "CompilerOracle.typecheckAll(judging, true)",
 			"replace": "CompilerOracle.typecheckAll(judging)",
 			"note": "the safe-write net compiles the written tree plainly, so the risky phase's coverage probe compiles every configuration of it again with -v"
+		},
+		{
+			"name": "M-POOL-NO-INVALIDATE",
+			"type": "anyparse.check.OracleServerPool",
+			"method": "moved",
+			"force": "[]",
+			"note": "the pool tells a server nothing moved, so a text the run rewrote within the second the server last compiled is answered as it was"
+		},
+		{
+			"name": "M-POOL-TRUSTS-WARM-RED",
+			"type": "anyparse.check.CompilerOracle",
+			"method": "warmFirst",
+			"find": "if (warm[k]?.status != 0) k];",
+			"replace": "if (warm[k] == null) k];",
+			"note": "a warm rejection is the verdict, so a server re-emitting a stale diagnostic reverts a sound fix"
 		}
 	]
 }

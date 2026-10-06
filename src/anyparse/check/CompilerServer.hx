@@ -201,6 +201,18 @@ final class CompilerServer {
 	}
 
 	/**
+	 * The `server/invalidate` display request for `file`: the server drops its cached module of that file, and its reply
+	 * proves a compilation server answered (`isServerReply`). The file is named by its realpath — see `jsonPath`.
+	 */
+	public static function invalidateRequest(file: String): String {
+		#if nodejs
+		return '{"jsonrpc":"2.0","id":1,"method":"server/invalidate","params":{"file":"${jsonPath(file)}"}}';
+		#else
+		return '';
+		#end
+	}
+
+	/**
 	 * Whether `raw` is a display-protocol reply — the marker that a real Haxe compilation
 	 * server, rather than an unrelated listener that merely accepted the connection, is on
 	 * the port. PURE: no process, unit-testable.
@@ -371,8 +383,7 @@ final class CompilerServer {
 	 * check that keeps a stray listener from passing for a warm server.
 	 */
 	private static function invalidate(port: Int, hxml: String, cwd: Null<String>, file: String, defines: Array<String>): Bool {
-		final request: String = '{"jsonrpc":"2.0","id":1,"method":"server/invalidate","params":{"file":"${jsonPath(file)}"}}';
-		final res: Null<ConnectResult> = connect(port, hxml, cwd, ['--display', request], defines);
+		final res: Null<ConnectResult> = connect(port, hxml, cwd, ['--display', invalidateRequest(file)], defines);
 		return res != null && isServerReply(res.output);
 	}
 

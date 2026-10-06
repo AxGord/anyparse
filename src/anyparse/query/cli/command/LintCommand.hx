@@ -462,6 +462,7 @@ final class LintCommand implements CliCommand {
 	 */
 	private static function endCompiles(early: Null<FactsProbe>, ahead: AheadBuilds, oracles: Array<OracleConfig>): Void {
 		if (early != null) TypedFactsProbe.abandon(early);
+		OracleRunMemo.of(oracles)?.servers.stop();
 		dropAhead(ahead);
 		OracleGeneration.release(oracles);
 	}
@@ -494,6 +495,8 @@ final class LintCommand implements CliCommand {
 				// a check waits on the facts here, and a question it asks may escalate to the builds: they compile meanwhile
 				if (!settling) startBuildsWithFacts(early != null, resolution);
 				final built: Null<CompilerFacts> = TypedFactsProbe.finish(early ?? TypedFactsProbe.start(oracles));
+				// the facts compiles are done and their cores free: the run's warm servers start, and compile, now
+				if (early != null) OracleRunMemo.of(oracles)?.servers.start(oracles);
 				facts = built;
 				if (built != null) {
 					for (d in built.dropped) CliIo.stderr('apq lint: compilerOracle ${d.name}: no compiler facts — ${d.reason}\n');

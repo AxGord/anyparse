@@ -1570,6 +1570,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.OracleRunMemoTest#testARejectedBaselineQuotesThePlainCompile :: control :: M-RUNMEMO-QUOTES-THE-VERBOSE-STREAMS',
 			'unit.check.OracleRunMemoTest#testASourceTheFingerprintCannotSeeIsAlwaysCompiled :: control :: M-RUNMEMO-TRUSTS-UNSEEN-SOURCES',
 			'unit.check.OracleRunMemoTest#testAVerdictIsReusedForTheSameContentOnly :: control :: M-RUNMEMO-KEY-IGNORES-CONTENT',
+			'unit.check.OracleRunMemoTest#testAWarmRejectionIsCompiledAgainCold :: control :: M-POOL-TRUSTS-WARM-RED',
+			'unit.check.OracleRunMemoTest#testAWarmServerReadsATreeRewrittenWithinTheSecond :: control :: M-POOL-NO-INVALIDATE',
 			'unit.check.OracleRunMemoTest#testTheCoverageProbeReusesTheBaselineCompile :: control :: M-RUNMEMO-PROBE-RECOMPILES',
 			'unit.check.OracleRunMemoTest#testTheFactsCompileBringsTheBaselineAlong :: control :: M-RUNMEMO-NO-BASELINE-AHEAD',
 			'unit.check.OracleRunMemoTest#testTheSafeWriteNetCompilesTheTreeTheCoverageProbeAsksAbout :: control :: M-SAFE-NET-PLAIN',
@@ -5478,7 +5480,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-MADE-FROM-ALL',
 			'M-FACTS-MADE-FROM-NONE',
 			'M-BUILDS-WITH-FACTS',
-			'M-SAFE-NET-PLAIN'
+			'M-SAFE-NET-PLAIN',
+			'M-POOL-NO-INVALIDATE',
+			'M-POOL-TRUSTS-WARM-RED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

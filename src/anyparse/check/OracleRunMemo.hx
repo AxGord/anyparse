@@ -29,6 +29,9 @@ final class OracleRunMemo {
 	 */
 	public final persisted: Bool;
 
+	/** The run's own warm servers, for its plain typechecks (`OracleServerPool`); none until a `--fix` run starts them. */
+	public final servers: OracleServerPool;
+
 	private final _runs: Map<String, HaxeRun> = [];
 
 	/** The directories each configuration's fingerprint walked (`OracleCache.scanned`), by `OracleDeclaration.oracleKey`. */
@@ -46,6 +49,7 @@ final class OracleRunMemo {
 	public function new(persisted: Bool, written: () -> Array<String>) {
 		this.persisted = persisted;
 		_written = written;
+		servers = new OracleServerPool(written);
 	}
 
 	/**
