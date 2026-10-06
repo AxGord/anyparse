@@ -386,8 +386,12 @@ class CrossScopeSoundnessTest extends Test {
 	 * together. The control's job falls to the LIBS-ONLY arm instead, where the same two throws are
 	 * written — which is what makes the empty narrow arm a refusal rather than a rule that never
 	 * had a candidate.
+	 *
+	 * `scratch-field` reads the scope through its REPORT gate instead: a sibling that mentions, writes
+	 * or reflects the field keeps it from being reported at all, and its fix is a `RiskyFix` that this
+	 * fixture's narrow arm never applies, so no edit of it reaches either writer census.
 	 */
-	private static final SCOPE_GATED_REFUSERS: Array<String> = ['prefer-typed-throw'];
+	private static final SCOPE_GATED_REFUSERS: Array<String> = ['prefer-typed-throw', 'scratch-field'];
 
 	/**
 	 * What a project declaring `resolutionLibs` and NO `resolutionRoots` loses — the one list in
@@ -425,6 +429,9 @@ class CrossScopeSoundnessTest extends Test {
 	 *   arms and says which verdict it reached in the MESSAGE alone.
 	 * - `unused-public-member@string-catch` and its `report:` twin — the sibling's `a.reached()` is
 	 *   the only call the method has, so a libs-only scope reads it as dead and deletes it.
+	 * - `scratch-field@…` (report only) — the sibling that mentions, writes or reflects the field is
+	 *   gone, so the field reads as one method's scratch value; its fix is a `RiskyFix` and stays
+	 *   report-only on this arm, which is why no `edit:` line joins it.
 	 *
 	 * `allow-grant` is absent by right: the `@:allow` sits in the DECLARING file, so the narrow
 	 * report scope sees the grant without help and both arms refuse alike.
@@ -466,6 +473,13 @@ class CrossScopeSoundnessTest extends Test {
 		'report:prefer-inline@reflection-method',
 		'report:prefer-inline@subtype-override',
 		'report:prefer-read-only-field@public-internal-write',
+		'report:scratch-field@access-grant',
+		'report:scratch-field@access-write',
+		'report:scratch-field@reflection',
+		'report:scratch-field@reflection-method',
+		'report:scratch-field@subtype',
+		'report:scratch-field@subtype-backing-field',
+		'report:scratch-field@subtype-map-write',
 		'report:static-constant@subtype-constant',
 		'report:trivial-getter@subtype-backing-field',
 		'report:unused-parameter@access-grant',

@@ -66,6 +66,16 @@ class RedundantNullCoalescingCheckTest extends Test {
 		Assert.isTrue(out.indexOf('??') == -1, 'the coalescing should be gone, got: $out');
 	}
 
+	/** `x ?? null` is `x` whatever `x` is: the result takes the left operand's type, and a null left yields the same null. */
+	@:pin('control') @:killer('M-REDUNDANT-COAL-NULL-RIGHT')
+	public function testNullRightOperandUnwraps(): Void {
+		final src: String = '@:nullSafety class C { function f(?x:Foo) { var a = x ?? null; } }';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals('`?? null` is a no-op — the result is the left operand', vs[0].message);
+		Assert.equals('@:nullSafety class C { function f(?x:Foo) { var a = x; } }', applyFix(src));
+	}
+
 	public function testFlaggedAsInfo(): Void {
 		final vs: Array<Violation> = violations('class C { function f(x:Int) { var a = x ?? 0; } }');
 		Assert.equals(1, vs.length);

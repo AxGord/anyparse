@@ -15865,6 +15865,375 @@
 			"method": "requiredPrefix",
 			"force": "member.params.length",
 			"note": "an argument past an optional parameter is attributed to the parameter at its own index, though Haxe may have skipped a slot by type"
+		},
+		{
+			"name": "M-PASSTHROUGH-TERNARY",
+			"type": "anyparse.check.PreferTernaryAssignment",
+			"method": "passThroughEdit",
+			"force": "null",
+			"note": "a ternary that only passes a nullable value through is written as `x != null ? x : null`, which prefer-null-coalescing then turns into the no-op `x ?? null`"
+		},
+		{
+			"name": "M-NULLPASS-MUTATES",
+			"type": "anyparse.check.PreferNullCoalescing",
+			"method": "guardOf",
+			"find": "if (guarded == null || subtreeMutates(guarded, seams.unsafeKinds)) return null;",
+			"replace": "if (guarded == null) return null;",
+			"note": "a guarded value that calls is collapsed from two evaluations to one"
+		},
+		{
+			"name": "M-NULLCOAL-NULL-FALLBACK",
+			"type": "anyparse.check.PreferNullCoalescing",
+			"method": "fix",
+			"find": "m.fallback.kind == seams.nullKind\n\t\t\t\t\t\t? { span: span, text: guardedSrc, holes: [] }\n\t\t\t\t\t\t: ParenGuard",
+			"replace": "ParenGuard",
+			"note": "a null fallback is rewritten to the no-op `x ?? null` instead of the guarded value"
+		},
+		{
+			"name": "M-REDUNDANT-COAL-NULL-RIGHT",
+			"type": "anyparse.check.RedundantNullCoalescing",
+			"method": "run",
+			"find": "if (nullKind != null && node.children[1].kind == nullKind)",
+			"replace": "if (false)",
+			"note": "`x ?? null` is no longer reported, so the no-op coalescing a rule cascade or a hand writes survives"
+		},
+		{
+			"name": "M-LOOPBOUND-SILENT",
+			"type": "anyparse.check.LoopBoundLengthMismatch",
+			"method": "compare",
+			"find": "if (same) return;",
+			"replace": "return;",
+			"note": "no loop is ever reported, so a proven mismatch between a bound and a length passes unseen"
+		},
+		{
+			"name": "M-LOOPBOUND-FIXED-WRITE",
+			"type": "anyparse.check.LoopBoundLengthMismatch",
+			"method": "admitted",
+			"find": "return src.fixedLength || !isWriteTarget(parent, grand, s);",
+			"replace": "return !isWriteTarget(parent, grand, s);",
+			"note": "an index write refuses a fixed-length construction too, though it never resizes one"
+		},
+		{
+			"name": "M-LOOPBOUND-ARRAY-WRITE",
+			"type": "anyparse.check.LoopBoundLengthMismatch",
+			"method": "admitted",
+			"find": "return src.fixedLength || !isWriteTarget(parent, grand, s);",
+			"replace": "return true;",
+			"note": "an index write past the end of an array is read as keeping its length, though it extends it"
+		},
+		{
+			"name": "M-LOOPBOUND-VECTOR-IMPORT",
+			"type": "anyparse.check.LoopBoundLengthMismatch",
+			"method": "isFixedLengthType",
+			"find": "if (typeName == simpleName(path) && ctx.tree.children.exists(c -> ctx.seams.modulePathKinds.contains(c.kind) && c.name == path))",
+			"replace": "if (typeName == simpleName(path))",
+			"note": "any type spelled `Vector` is read as the fixed-length one, OpenFL's growable `Vector` included"
+		},
+		{
+			"name": "M-LOOPBOUND-FOLD-OFF",
+			"type": "anyparse.check.LoopBoundLengthMismatch",
+			"method": "fold",
+			"force": "null",
+			"note": "no bound folds, so `G.N + 1` and `5` compare as different texts though the constant makes them equal"
+		},
+		{
+			"name": "M-LOOPBOUND-RELATED-OFF",
+			"type": "anyparse.check.LoopBoundLengthMismatch",
+			"method": "compare",
+			"find": "if (related.exists(name -> mentions(bound, name, owner, isField, s))) return;",
+			"replace": "",
+			"note": "a bound naming the array or a parallel one (`xs.length - 1`) is compared as unrelated text"
+		},
+		{
+			"name": "M-LOOPBOUND-REACH-IGNORED",
+			"type": "anyparse.check.LoopBoundLengthMismatch",
+			"method": "readReach",
+			"find": "return k != null && k >= 0 ? k : null;",
+			"replace": "return k != null && k >= 0 ? 0 : null;",
+			"note": "a read of `xs[i + 1]` reaches no further than `xs[i]`, so a pairwise loop one short of the length is reported"
+		},
+		{
+			"name": "M-LOOPBOUND-ADMIT-ALL",
+			"type": "anyparse.check.LoopBoundLengthMismatch",
+			"method": "admitted",
+			"force": "true",
+			"note": "every occurrence keeps the length, so an array handed to a call or appended elsewhere still counts as proven"
+		},
+		{
+			"name": "M-LOOPBOUND-PUBLIC",
+			"type": "anyparse.check.LoopBoundLengthMismatch",
+			"method": "fieldSource",
+			"find": "if (mods.exists(m -> s.visibility.contains(m.kind) && textOf(m, ctx.source) != s.defaultVis)) return null;",
+			"replace": "",
+			"note": "a public field, which another file may resize, gets a proven length"
+		},
+		{
+			"name": "M-LOOPBOUND-CONFINED-OFF",
+			"type": "anyparse.check.LoopBoundLengthMismatch",
+			"method": "scanFields",
+			"find": "MemberWriteScan.referencesConfined(owner, src.name, ctx.source, confined, ctx.plugin)",
+			"replace": "true",
+			"note": "a subtype that appends to the field no longer refuses its proven length"
+		},
+		{
+			"name": "M-LOOPBOUND-EXITS",
+			"type": "anyparse.check.LoopBoundLengthMismatch",
+			"method": "fillLoopOf",
+			"find": "if (containsAnyKind(body, s.exitKinds)) return null;",
+			"replace": "",
+			"note": "a fill loop that may `continue` past its append is read as appending once per iteration"
+		},
+		{
+			"name": "M-LOOPBOUND-WRITE-READ",
+			"type": "anyparse.check.LoopBoundLengthMismatch",
+			"method": "readReach",
+			"find": "&& isRef(node.children[0], name, owner, isField, s) && !isWriteTarget(node, parent, s)",
+			"replace": "&& isRef(node.children[0], name, owner, isField, s)",
+			"note": "a loop that only writes the array is reported as reading it"
+		},
+		{
+			"name": "M-LOOPBOUND-NESTED-FILL",
+			"type": "anyparse.check.LoopBoundLengthMismatch",
+			"method": "checkLoops",
+			"find": "if (span == null || span.from >= fillFrom && span.to <= fillTo) return;",
+			"replace": "if (span == null) return;",
+			"note": "a loop inside the fill loop, reading an array still being filled, is compared with its final length"
+		},
+		{
+			"name": "M-LOOPBOUND-SHADOW",
+			"type": "anyparse.check.LoopBoundLengthMismatch",
+			"method": "keepsLength",
+			"find": "if (node.name == src.name && s.binderKinds.contains(node.kind) && from != src.declFrom) {",
+			"replace": "if (from == -1) {",
+			"note": "a binder taking the array's name no longer refuses it, so the occurrences of the binder count as the array's"
+		},
+		{
+			"name": "M-LOOPBOUND-UNSIZED",
+			"type": "anyparse.check.LoopBoundLengthMismatch",
+			"method": "fixedSource",
+			"find": "init.children.length == 0 || init.children.exists(c -> s.unsizedElementKinds.contains(c.kind)) ? null",
+			"replace": "init.children.length == 0 ? null",
+			"note": "a comprehension literal counts as a one-element literal"
+		},
+		{
+			"name": "M-LOOPBOUND-STATIC-FILL",
+			"type": "anyparse.check.LoopBoundLengthMismatch",
+			"method": "fieldSource",
+			"find": "mods.exists(m -> m.kind == s.staticKind)",
+			"replace": "false",
+			"note": "a static field filled in the constructor, which grows with every instance, gets the fill loop's bound as its length"
+		},
+		{
+			"name": "M-LOOPBOUND-SELF-REF",
+			"type": "anyparse.check.LoopBoundLengthMismatch",
+			"method": "isRef",
+			"find": "receiver.name == owner || s.selfText != null && receiver.name == s.selfText",
+			"replace": "receiver.name == owner",
+			"note": "`this.xs` is no occurrence of the field `xs`, so a read through it is missed"
+		},
+		{
+			"name": "M-LOOPBOUND-TYPE-OFF",
+			"type": "anyparse.check.LoopBoundLengthMismatch",
+			"method": "declaredTypeFits",
+			"force": "true",
+			"note": "a declared type other than the one the source builds no longer refuses the length"
+		},
+		{
+			"name": "M-SCRATCH-SILENT",
+			"type": "anyparse.check.ScratchField",
+			"method": "run",
+			"find": "if (span == null) continue;",
+			"replace": "continue;",
+			"note": "no scratch field is ever reported or fixed"
+		},
+		{
+			"name": "M-SCRATCH-VALUE-TYPES-OFF",
+			"type": "anyparse.check.ScratchField",
+			"method": "wholeProgramDecline",
+			"find": "(outer == null || !c.seams.valueTypes.contains(outer))",
+			"replace": "true",
+			"note": "a method called on a value type declines as if the field kept an object alive"
+		},
+		{
+			"name": "M-SCRATCH-NAME-UNCHECKED",
+			"type": "anyparse.check.ScratchField",
+			"method": "localNameOf",
+			"find": "&& !OccurrenceScan.referencedInRange(source, bare, method.from, method.to, []);",
+			"replace": ";",
+			"note": "the stripped name is taken even where the method already uses it, which rebinds that use to the new local"
+		},
+		{
+			"name": "M-SCRATCH-DOMINANCE-OFF",
+			"type": "anyparse.check.ScratchField",
+			"method": "read",
+			"find": "if (!assigned) dominated = false;",
+			"replace": "",
+			"note": "a read before any write of the call counts as dominated, so a field carrying a value between calls becomes a local"
+		},
+		{
+			"name": "M-SCRATCH-BRANCH-OPTIMISTIC",
+			"type": "anyparse.check.ScratchField",
+			"method": "branch",
+			"find": "return thenState && elseState;",
+			"replace": "return thenState || elseState;",
+			"note": "a write in one arm of an `if` counts as dominating a read after it"
+		},
+		{
+			"name": "M-SCRATCH-CONDITIONAL-KEEPS",
+			"type": "anyparse.check.ScratchField",
+			"method": "conditional",
+			"find": "return head;",
+			"replace": "return sequence(kids, 0, assigned);",
+			"note": "a write in a loop body (or a switch arm, or a short-circuit's right side) survives the construct as if it always ran"
+		},
+		{
+			"name": "M-SCRATCH-TRY-ALWAYS",
+			"type": "anyparse.check.ScratchField",
+			"method": "statement",
+			"find": "else if (s.doWhileKinds.contains(node.kind) || s.tryKinds.contains(node.kind))",
+			"replace": "else if (s.doWhileKinds.contains(node.kind))",
+			"note": "a `try` body is walked as plain code, so a write it may never reach counts as dominating a read after it"
+		},
+		{
+			"name": "M-SCRATCH-SLOT-ANYWHERE",
+			"type": "anyparse.check.ScratchField",
+			"method": "planOf",
+			"find": "if (lastTo > blockSpan.to) return null;",
+			"replace": "",
+			"note": "the local is declared in a block whose end comes before a later use, which then names nothing"
+		},
+		{
+			"name": "M-SCRATCH-UNTYPED",
+			"type": "anyparse.check.ScratchField",
+			"method": "fix",
+			"find": [
+				"final decline: Null<String> = typeSource == null",
+				"wholeProgramDecline(c, plan, typeSource, v.file"
+			],
+			"replace": [
+				"final decline: Null<String> = false",
+				"wholeProgramDecline(c, plan, typeSource ?? '', v.file"
+			],
+			"note": "an untyped field is fixed with an empty annotation, which no longer keeps the field's type"
+		},
+		{
+			"name": "M-SCRATCH-LIFETIME-OFF",
+			"type": "anyparse.check.ScratchField",
+			"method": "wholeProgramDecline",
+			"find": "if (c.retained && (outer == null || !c.seams.valueTypes.contains(outer)))",
+			"replace": "if (false)",
+			"note": "an object with a method called on it becomes a local, though only the field kept it alive past the call"
+		},
+		{
+			"name": "M-SCRATCH-RECURSION-OFF",
+			"type": "anyparse.check.ScratchField",
+			"method": "wholeProgramDecline",
+			"find": "return bodySpan == null || OccurrenceScan.referencedInRange(source, c.methodName, bodySpan.from, bodySpan.to, [], mask)",
+			"replace": "return bodySpan == null",
+			"note": "a recursive method's scratch field becomes a local, so the outer call stops seeing what the inner one wrote"
+		},
+		{
+			"name": "M-SCRATCH-INIT-OFF",
+			"type": "anyparse.check.ScratchField",
+			"method": "wholeProgramDecline",
+			"find": "if (init != null && !MemberKinds.isSideEffectFree(init, shape) && !trivialConstruction(init, file, plugin, traits))",
+			"replace": "if (false)",
+			"note": "an initializer that calls something is dropped with the field"
+		},
+		{
+			"name": "M-SCRATCH-TRIVIAL-CTOR-ANY",
+			"type": "anyparse.check.ScratchField",
+			"method": "ctorOnlyAssigns",
+			"force": "true",
+			"note": "any constructor counts as only assigning its own fields, so a construction that traces is dropped"
+		},
+		{
+			"name": "M-SCRATCH-MACRO-IGNORED",
+			"type": "anyparse.check.ScratchField",
+			"method": "wholeProgramDecline",
+			"find": "if (!oracleRelaxed && traits.traits.transitivelyCarriesBuildMacro(c.owner, file))",
+			"replace": "if (false)",
+			"note": "a field of a macro-built type is deleted with no oracle to typecheck the builder's view of it"
+		},
+		{
+			"name": "M-SCRATCH-ONE-METHOD",
+			"type": "anyparse.check.ScratchField",
+			"method": "occurrencesIn",
+			"find": "refs.exists(r -> r.span == null || r.span.from < inside.from || r.span.to > inside.to)",
+			"replace": "false",
+			"note": "a field used in two methods counts as the scratch value of the last one"
+		},
+		{
+			"name": "M-SCRATCH-CLOSURE",
+			"type": "anyparse.check.ScratchField",
+			"method": "occurrencesOf",
+			"find": "if (hidden || !s.functionKinds.contains(member.kind))",
+			"replace": "if (!s.functionKinds.contains(member.kind))",
+			"note": "an occurrence inside a closure, which may run after the call returns, counts as the method's own"
+		},
+		{
+			"name": "M-SCRATCH-REFLECTION-OFF",
+			"type": "anyparse.check.ScratchField",
+			"method": "run",
+			"find": "if (strings.whole.exists(s -> OccurrenceScan.referencedInRange(s, c.name, 0, s.length, []))) continue;",
+			"replace": "",
+			"note": "a field a string names, a possible `Reflect.field` target, is still reported"
+		},
+		{
+			"name": "M-SCRATCH-MODIFIERS",
+			"type": "anyparse.check.ScratchField",
+			"method": "isPlainPrivateVar",
+			"find": "!mods.exists(m -> !s.visibility.contains(m.kind) || textOf(m, source) != s.defaultVis)",
+			"replace": "true",
+			"note": "a public field, or one carrying metadata, counts as a plain private one"
+		},
+		{
+			"name": "M-SCRATCH-CONFINED-OFF",
+			"type": "anyparse.check.ScratchField",
+			"method": "run",
+			"find": "!MemberWriteScan.referencesConfined(c.owner, c.name, entry.source, index, plugin)",
+			"replace": "false",
+			"note": "a subtype mentioning the field no longer keeps it from being reported"
+		},
+		{
+			"name": "M-SCRATCH-FOREIGN-OFF",
+			"type": "anyparse.check.ScratchField",
+			"method": "useOf",
+			"find": "else if (s.binderKinds.contains(node.kind) || node.kind == s.fieldAccessKind)",
+			"replace": "else if (s.binderKinds.contains(node.kind))",
+			"note": "another object's member of the field's name is unrelated, so the field of another instance is missed"
+		},
+		{
+			"name": "M-SCRATCH-WRITE-ONLY",
+			"type": "anyparse.check.ScratchField",
+			"method": "candidateOf",
+			"find": "if (walk.reads == 0) return null;",
+			"replace": "",
+			"note": "a field the method only writes is reported as a scratch value"
+		},
+		{
+			"name": "M-SCRATCH-RTTI-OFF",
+			"type": "anyparse.check.ScratchField",
+			"method": "run",
+			"find": "if (index.traits.transitivelyCarriesRtti(c.owner)) continue;",
+			"replace": "",
+			"note": "a field of an `@:rtti` type, reachable by name at run time, is reported"
+		},
+		{
+			"name": "M-SCRATCH-CTOR-RECURSES",
+			"type": "anyparse.check.ScratchField",
+			"method": "wholeProgramDecline",
+			"find": "if (c.methodName == shape.constructorName) return null;",
+			"replace": "",
+			"note": "a constructor's own `new` of another object reads as a recursive call, so every scratch field of a constructor that constructs is declined"
+		},
+		{
+			"name": "M-LOOPBOUND-AHEAD",
+			"type": "anyparse.check.LoopBoundLengthMismatch",
+			"method": "keepsLength",
+			"find": "|| !isField && (from ?? -1) < src.declFrom",
+			"replace": "",
+			"note": "a field's occurrence ahead of a same-named local's declaration is read as the local's, so the field's loop is compared with the local's length"
 		}
 	]
 }

@@ -78,6 +78,7 @@ class BuiltinFixClassCensusTest extends Test {
 			'prefer-null-coalescing',
 			'redundant-import',
 			'redundant-isvar',
+			'scratch-field',
 			'shorten-type-ref',
 			'typed-event-constant',
 			'unused-public-member'
@@ -103,6 +104,7 @@ class BuiltinFixClassCensusTest extends Test {
 			'extract-repeated-expression',
 			'identical-operands',
 			'impossible-cast',
+			'loop-bound-length-mismatch',
 			'magic-number',
 			'null-dereference',
 			'nullable-switch-missing-null',

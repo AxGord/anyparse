@@ -17,7 +17,8 @@ using Lambda;
 /**
  * Flags a null-guarding ternary that the null-coalescing operator `??` replaces —
  * `x != null ? x : y` / `null != x ? x : y` / `x == null ? y : x` / `null == x ? y : x`
- * all collapse to `x ?? y`. `Severity.Info` (a modernization cleanup), with a RISKY autofix — applied only under a
+ * all collapse to `x ?? y` — and to `x` alone when `y` is the `null` literal, which `??` could only spell as
+ * the no-op `x ?? null`. `Severity.Info` (a modernization cleanup), with a RISKY autofix — applied only under a
  * configured `compilerOracle`, which typechecks it and reverts what breaks.
  *
  * Risky because `??` is NOT a drop-in for the ternary when the two branches only agree
@@ -70,7 +71,7 @@ final class PreferNullCoalescing implements Check implements RiskyFix implements
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final shape: RefShape = plugin.refShape();
 		final typed: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
-		return RunScan.collectWith(files, plugin, resolveSeams(plugin), (entry, tree, seams, violations) -> {
+		return RunScan.collectWith(files, plugin, seamsOf(shape), (entry, tree, seams, violations) -> {
 			final declaredTypes: Null<Map<Int, String>> = typed?.declaredTypes(entry.source);
 			walk(violations, entry.file, entry.source, tree, tree, shape, declaredTypes, seams);
 		});
@@ -82,7 +83,7 @@ final class PreferNullCoalescing implements Check implements RiskyFix implements
 	): Array<{ span: Span, text: String }> {
 		final shape: RefShape = plugin.refShape();
 		final typed: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
-		return RunScan.editsWith(plugin, source, resolveSeams(plugin), (rootNode, seams) -> {
+		return RunScan.editsWith(plugin, source, seamsOf(shape), (rootNode, seams) -> {
 			final declaredTypes: Null<Map<Int, String>> = typed?.declaredTypes(source);
 			final guarded: Array<GuardedEdit> = [];
 			CheckScan.applyBySpan(plugin, source, violations, [seams.ternaryKind], (node, span) -> {
@@ -93,7 +94,11 @@ final class PreferNullCoalescing implements Check implements RiskyFix implements
 				if (guardedSpan == null || fallbackSpan == null) return null;
 				final guardedSrc: String = source.substring(guardedSpan.from, guardedSpan.to);
 				final fallbackSrc: String = source.substring(fallbackSpan.from, fallbackSpan.to);
-				guarded.push(ParenGuard.binaryEdit(span, guardedSrc, '??', fallbackSrc));
+				guarded.push(
+					m.fallback.kind == seams.nullKind
+						? { span: span, text: guardedSrc, holes: [] }
+						: ParenGuard.binaryEdit(span, guardedSrc, '??', fallbackSrc)
+				);
 				return null;
 			});
 			return ParenGuard.guard(source, guarded, plugin);
@@ -103,6 +108,25 @@ final class PreferNullCoalescing implements Check implements RiskyFix implements
 	/** `??` and `?.` are Haxe 4.3; a project declaring an older `languageVersion` does not get this rewrite. */
 	public function minLanguageVersion(): String {
 		return '4.3';
+	}
+
+	/**
+	 * The guarded value of a null-guard ternary `cond ? thenBranch : elseBranch` whose fallback is the
+	 * `null` literal — `x != null ? x : null` / `x == null ? null : x` and the reversed comparisons — or
+	 * null when it is not one. Such a ternary IS its guarded value: both yield `x` when `x` is non-null
+	 * and `null` when it is null, and `??` would only spell that as the pointless `x ?? null`. A guarded
+	 * value that mutates a binding is refused, as for the `??` rewrite (two evaluations become one).
+	 *
+	 * Shared with `prefer-ternary-assignment`, whose decl arm builds exactly this ternary from
+	 * `var k:T = null; if (x != null) k = x;` and so writes `var k:T = x;` instead.
+	 */
+	public static function nullPassThrough(
+		cond: QueryNode, thenBranch: QueryNode, elseBranch: QueryNode, source: String, shape: RefShape
+	): Null<QueryNode> {
+		final seams: Null<Seams> = seamsOf(shape);
+		if (seams == null) return null;
+		final res: Null<{ guarded: QueryNode, fallback: QueryNode }> = guardOf(cond, thenBranch, elseBranch, source, seams);
+		return res != null && res.fallback.kind == seams.nullKind ? res.guarded : null;
 	}
 
 	/**
@@ -116,13 +140,18 @@ final class PreferNullCoalescing implements Check implements RiskyFix implements
 	): Void {
 		if (node.kind == seams.ternaryKind) {
 			final span: Null<Span> = node.span;
-			if (span != null && match(node, source, root, shape, declaredTypes, seams) != null) {
+			final m: Null<{ guarded: QueryNode, fallback: QueryNode }> = span == null
+				? null
+				: match(node, source, root, shape, declaredTypes, seams);
+			if (span != null && m != null) {
 				out.push({
 					file: file,
 					span: span,
 					rule: 'prefer-null-coalescing',
 					severity: Severity.Info,
-					message: 'this null-guard ternary can be the null-coalescing operator (??)'
+					message: m.fallback.kind == seams.nullKind
+						? 'this null-guard ternary falls back to null, so it is just its guarded value'
+						: 'this null-guard ternary can be the null-coalescing operator (??)'
 				});
 				return;
 			}
@@ -143,28 +172,9 @@ final class PreferNullCoalescing implements Check implements RiskyFix implements
 		ternary: QueryNode, source: String, root: QueryNode, shape: RefShape, declaredTypes: Null<Map<Int, String>>, seams: Seams
 	): Null<{ guarded: QueryNode, fallback: QueryNode }> {
 		if (ternary.children.length != TERNARY_CHILD_COUNT) return null;
-		final cond: QueryNode = ternary.children[0];
-		final thenBranch: QueryNode = ternary.children[1];
-		final elseBranch: QueryNode = ternary.children[2];
-		if (cond.children.length != 2) return null;
-		final left: QueryNode = cond.children[0];
-		final right: QueryNode = cond.children[1];
-		final guarded: Null<QueryNode> = if (left.kind == seams.nullKind && right.kind != seams.nullKind)
-			right;
-		else if (right.kind == seams.nullKind && left.kind != seams.nullKind)
-			left;
-		else
-			null;
-		if (guarded == null) return null;
-		if (subtreeMutates(guarded, seams.unsafeKinds)) return null;
-		final res: Null<{ guarded: QueryNode, fallback: QueryNode }> = if (
-			cond.kind == seams.notEqKind && MemberKinds.sameSource(guarded, thenBranch, source)
-		)
-			{ guarded: guarded, fallback: elseBranch };
-		else if (cond.kind == seams.eqKind && MemberKinds.sameSource(guarded, elseBranch, source))
-			{ guarded: guarded, fallback: thenBranch };
-		else
-			null;
+		final res: Null<{ guarded: QueryNode, fallback: QueryNode }> = guardOf(
+			ternary.children[0], ternary.children[1], ternary.children[2], source, seams
+		);
 		if (res == null) return null;
 		final span: Null<Span> = ternary.span;
 		return declaredTypes != null && span != null
@@ -182,8 +192,7 @@ final class PreferNullCoalescing implements Check implements RiskyFix implements
 	 * Resolve the ternary / equality / null seam kinds plus the mutation-unsafe kinds, or null when any required kind is unset.
 	 *
 	 */
-	private static function resolveSeams(plugin: GrammarPlugin): Null<Seams> {
-		final shape: RefShape = plugin.refShape();
+	private static function seamsOf(shape: RefShape): Null<Seams> {
 		final ternaryKind: Null<String> = shape.ternaryKind;
 		if (ternaryKind == null) return null;
 		final eqKind: Null<String> = shape.eqKind;
@@ -200,6 +209,31 @@ final class PreferNullCoalescing implements Check implements RiskyFix implements
 			nullKind: nullKind,
 			unsafeKinds: unsafeKinds
 		};
+	}
+
+	/**
+	 * The guarded value and the fallback of the null guard `cond ? thenBranch : elseBranch` in any of
+	 * its four spellings, or null when it is not one or its guarded value mutates a binding.
+	 */
+	private static function guardOf(
+		cond: QueryNode, thenBranch: QueryNode, elseBranch: QueryNode, source: String, seams: Seams
+	): Null<{ guarded: QueryNode, fallback: QueryNode }> {
+		if (cond.children.length != 2) return null;
+		final left: QueryNode = cond.children[0];
+		final right: QueryNode = cond.children[1];
+		final guarded: Null<QueryNode> = if (left.kind == seams.nullKind && right.kind != seams.nullKind)
+			right;
+		else if (right.kind == seams.nullKind && left.kind != seams.nullKind)
+			left;
+		else
+			null;
+		if (guarded == null || subtreeMutates(guarded, seams.unsafeKinds)) return null;
+		return if (cond.kind == seams.notEqKind && MemberKinds.sameSource(guarded, thenBranch, source))
+			{ guarded: guarded, fallback: elseBranch };
+		else if (cond.kind == seams.eqKind && MemberKinds.sameSource(guarded, elseBranch, source))
+			{ guarded: guarded, fallback: thenBranch };
+		else
+			null;
 	}
 
 }

@@ -111,6 +111,21 @@ final class MemberWriteScan {
 	}
 
 	/**
+	 * Whether every reference to the private member `name` of `owner` lives in `source`, the file
+	 * declaring it: the two file-wide vetoes (`RefactorSupport.privateMemberScanIsSound` — no skipped
+	 * file spelling the name, no `@:allow` in the file) plus no subtype and no `@:access` grantee that
+	 * MENTIONS it (`subtypeMayReference`, `accessGrantMayReference`). The question a rule that MOVES or
+	 * re-scopes the member asks, where `RefactorSupport.isPrivateMemberConfined` refuses on the mere
+	 * existence of a subtype: an empty `class D extends C {}` keeps none of `C`'s privates from it.
+	 */
+	public static inline function referencesConfined(
+		owner: String, name: String, source: String, index: SymbolIndex, plugin: GrammarPlugin
+	): Bool {
+		return RefactorSupport.privateMemberScanIsSound(source, index, name) && !subtypeMayReference(owner, name, index, plugin)
+			&& !accessGrantMayReference(owner, name, index, plugin);
+	}
+
+	/**
 	 * Whether any file granting itself `@:access(owner)` may write `name`. The grant is
 	 * file-scoped — every member of such a file reaches the type's privates — so the whole
 	 * grantee source is scanned, unlike a subtype's declaration slice.

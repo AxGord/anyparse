@@ -260,6 +260,50 @@ class PreferTernaryAssignmentCheckTest extends Test {
 		Assert.equals(0, violations('class C {\n\tfunction f() {\n\t\tvar k:Int = 0;\n\t\tif (a) /* why */ k = 5;\n\t}\n}').length);
 	}
 
+	/**
+	 * A decl arm whose ternary would only pass a nullable value through writes the value: the shape
+	 * `LanguageManager.t` had, which the ternary-then-`??` cascade turned into `strKey ?? null`.
+	 */
+	@:pin('control') @:killer('M-PASSTHROUGH-TERNARY')
+	public function testDeclNullPassThroughWritesTheValue(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			'class C {\n\tfunction t(?strKey:String, ?intKey:Int) {\n\t\tvar key:String = null;\n\t\tif (strKey != null) key = strKey;\n'
+			+ '\t\tif (intKey != null) key = \'$$intKey\';\n\t}\n}'
+		);
+		Assert.equals(1, es.length);
+		Assert.equals('var key:String = strKey;', es[0].text);
+	}
+
+	/** The ordinary arm too, in both comparison spellings. */
+	@:pin('control') @:killer('M-PASSTHROUGH-TERNARY')
+	public function testNullPassThroughAssignmentWritesTheValue(): Void {
+		final notEq: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f() {\n\t\tif (x != null) y = x;\n\t\telse y = null;\n\t}\n}');
+		Assert.equals(1, notEq.length);
+		Assert.equals('y = x;', notEq[0].text);
+		final eq: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f() {\n\t\tif (null == x) y = null;\n\t\telse y = x;\n\t}\n}');
+		Assert.equals(1, eq.length);
+		Assert.equals('y = x;', eq[0].text);
+	}
+
+	/** A guarded value that calls is evaluated twice by the ternary, so it keeps the ternary. */
+	@:pin('control') @:killer('M-NULLPASS-MUTATES')
+	public function testMutatingPassThroughKeepsTheTernary(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f() {\n\t\tvar k:String = null;\n\t\tif (g() != null) k = g();\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('var k:String = g() != null ? g() : null;', es[0].text);
+	}
+
+	/** A fallback other than `null` is an ordinary ternary. */
+	public function testNonNullFallbackKeepsTheTernary(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f() {\n\t\tvar k:String = \'d\';\n\t\tif (s != null) k = s;\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('var k:String = s != null ? s : \'d\';', es[0].text);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new PreferTernaryAssignment().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

@@ -1384,3 +1384,26 @@ decided the question; it may not become a record of runs.
   `unused-parameter`, `change-sig`, `introduce-parameter-object` and `inline-method` all demand
   full arity and move the parameter and the argument as one slot, `add-param` only appends a
   defaulted parameter and touches no call — `776917c5`
+- `var key:String = strKey ?? null;` was believed to need a simplification rule after the fact →
+  it was MADE by `prefer-ternary-assignment`'s decl arm writing `strKey != null ? strKey : null`,
+  which `prefer-null-coalescing` then turned into `?? null`; both producers now write the guarded
+  value (`PreferNullCoalescing.nullPassThrough`), and a hand-written `x ?? null` is
+  `redundant-null-coalescing`'s, type-free, because `??` types as its left operand (`i ?? null`
+  with `i:Int` is `Int`, compiled) — branch `feat/rules-batch-1006`
+- `scratch-field` was to prove no RE-ENTRY with `MemberReach` (the code between the first write and
+  the last read writes the field) → it answered `Reached` for `ToolSlider.onButtonMove` through
+  `Knob.set_x -> Event.new -> ToolSlider.onButtonMove`: a setter on a display object dispatches to
+  every override by name. The gate is a syntactic one now (the method does not name itself), and
+  indirect re-entry is the documented residual — branch `feat/rules-batch-1006`
+- `scratch-field` was to drop a `new T()` initializer on `MemberReach.freshOnlyReads` → a field
+  initializer is faceted only under its type's `<init>` pseudo-node, and entered there the walk
+  admits every implicit `@:from` the syntax cannot rule out (`XmlFieldType.resolve`, a macro-only
+  type); a constructor that only assigns its own fields is proven from its text instead — branch
+  `feat/rules-batch-1006`
+- `RefactorSupport.isPrivateMemberConfined` was the confinement both new rules started from → it
+  refuses on the mere EXISTENCE of a subtype, and `ToolSliderBlue extends ToolSlider` mentions none
+  of the field; `MemberWriteScan.referencesConfined` asks whether a subtype or grantee MENTIONS it —
+  branch `feat/rules-batch-1006`
+- `loop-bound-length-mismatch` compared `0...Y` with the length alone → TM's
+  `for (row in 0...GridMesh.CELL_ROWS)` reading `FACTORS[row + 1]` of a `CELL_ROWS + 1` literal is
+  correct code; a read of `xs[i + k]` moves the loop's reach by `k` — branch `feat/rules-batch-1006`

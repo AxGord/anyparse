@@ -940,7 +940,11 @@ final class LintCommand implements CliCommand {
 			// hoist-common-import weighs the SHARE of a directory's modules that spell a statement. On
 			// the active SUBSET the denominator is whatever the last pass rewrote, so the same directory
 			// answers a different share each pass and the decision flips under the fixed-point loop.
-			'hoist-common-import'
+			'hoist-common-import',
+			// scratch-field's reference gates are whole-project like unused-private's: a subtype or an
+			// `@:access` grantee MENTIONING the field, and the reflection-name scan over every string literal.
+			// On the active subset an unchanged file that spells the name reads as absent.
+			'scratch-field'
 		];
 		return {
 			risky: [for (c in checks) if (c is RiskyFix && !relaxableNoOracle(c)) c],

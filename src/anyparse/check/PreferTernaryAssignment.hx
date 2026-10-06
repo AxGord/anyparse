@@ -129,7 +129,7 @@ final class PreferTernaryAssignment implements Check {
 		final plain: Array<{ span: Span, text: String }> =
 			CheckScan.applyBySpan(plugin, source, violations, seams.ifKinds, (node, span) -> {
 				final m: Null<Match> = match(node, source, comments, seams);
-				final edit: Null<GuardedEdit> = m == null ? null : buildEdit(m, source, span);
+				final edit: Null<GuardedEdit> = m == null ? null : buildEdit(m, source, span, seams.shape);
 				if (edit != null) guarded.push(edit);
 				return edit;
 			});
@@ -265,8 +265,11 @@ final class PreferTernaryAssignment implements Check {
 		return StringTools.trim((~/\s+/g).replace(s, ' '));
 	}
 
-	/** Build the `lhs op cond ? thenRhs : elseRhs;` edit replacing the whole `if`/`else` span, the condition a `ParenGuard` hole. */
-	private static function buildEdit(m: Match, source: String, span: Span): Null<GuardedEdit> {
+	/**
+	 * Build the `lhs op cond ? thenRhs : elseRhs;` edit replacing the whole `if`/`else` span, the condition a `ParenGuard` hole.
+	 * A ternary that only passes a nullable value through (`x != null ? x : null`) is written as that value.
+	 */
+	private static function buildEdit(m: Match, source: String, span: Span, shape: RefShape): Null<GuardedEdit> {
 		final thenSpan: Null<Span> = m.thenAssign.span;
 		final thenRhsSpan: Null<Span> = m.thenRhs.span;
 		final condSpan: Null<Span> = m.condition.span;
@@ -275,7 +278,8 @@ final class PreferTernaryAssignment implements Check {
 		final prefix: String = source.substring(thenSpan.from, thenRhsSpan.from);
 		final thenRhs: String = source.substring(thenRhsSpan.from, thenRhsSpan.to);
 		final elseRhs: String = source.substring(elseRhsSpan.from, elseRhsSpan.to);
-		return ParenGuard.ternaryEdit(span, prefix, source.substring(condSpan.from, condSpan.to), thenRhs, elseRhs, ';');
+		final passed: Null<GuardedEdit> = passThroughEdit(span, prefix, m.condition, m.thenRhs, m.elseRhs, source, shape);
+		return passed ?? ParenGuard.ternaryEdit(span, prefix, source.substring(condSpan.from, condSpan.to), thenRhs, elseRhs, ';');
 	}
 
 	/**
@@ -301,11 +305,12 @@ final class PreferTernaryAssignment implements Check {
 			if (BoolExprShape.refusesNullNarrowingBoolCollapse(value, m.init, cond, d.shape)) continue;
 			final kept: Array<Span> = [new Span(m.declSpan.from, m.prefix.keptTo), condSpan, valueSpan, initSpan];
 			if (IfExpressionChain.droppedComment(m.region, kept, comments)) continue;
+			final head: String = '${m.prefix.text} = ';
 			out.push({
 				key: m.declSpan,
-				edit: ParenGuard.ternaryEdit(
-					m.region, '${m.prefix.text} = ', source.substring(condSpan.from, condSpan.to),
-					source.substring(valueSpan.from, valueSpan.to), source.substring(initSpan.from, initSpan.to), ';'
+				edit: passThroughEdit(m.region, head, cond, value, m.init, source, d.shape) ?? ParenGuard.ternaryEdit(
+					m.region, head, source.substring(condSpan.from, condSpan.to), source.substring(valueSpan.from, valueSpan.to),
+					source.substring(initSpan.from, initSpan.to), ';'
 				)
 			});
 		}
@@ -346,6 +351,23 @@ final class PreferTernaryAssignment implements Check {
 	private static function isElseIfLink(node: QueryNode, parent: Null<QueryNode>, s: Seams): Bool {
 		return parent != null && s.ifKinds.contains(parent.kind) && parent.children.length == IF_ELSE_CHILD_COUNT
 			&& parent.children[2] == node;
+	}
+
+	/**
+	 * The `<head><value>;` edit for a collapse whose ternary would only pass a nullable value through —
+	 * `x != null ? x : null` and its three other spellings (`PreferNullCoalescing.nullPassThrough`) —
+	 * or null for any other collapse. Writing the ternary there hands `prefer-null-coalescing` a
+	 * `x ?? null` to make of it. The value takes the l-value's (or the declared) type exactly as the
+	 * ternary's branch did, so dropping the guard cannot change what compiles.
+	 */
+	private static function passThroughEdit(
+		span: Span, head: String, cond: QueryNode, thenValue: QueryNode, elseValue: QueryNode, source: String, shape: RefShape
+	): Null<GuardedEdit> {
+		final value: Null<QueryNode> = PreferNullCoalescing.nullPassThrough(cond, thenValue, elseValue, source, shape);
+		final valueSpan: Null<Span> = value?.span;
+		if (valueSpan == null) return null;
+		final text: String = source.substring(valueSpan.from, valueSpan.to);
+		return { span: span, text: '$head$text;', holes: [new Span(head.length, head.length + text.length)] };
 	}
 
 }
