@@ -6524,8 +6524,8 @@
 			"name": "M-REACH-EXTERN-OBJECT",
 			"type": "anyparse.query.MemberReach",
 			"method": "externSite",
-			"find": "if (handed == null && takesObject && !arrayOwn)",
-			"replace": "if (false) for (arg in args)",
+			"find": "if (!arrayOwn) hand(t);",
+			"replace": "",
 			"note": "an object handed to target code admits none of its members, so `JSON.stringify(this)` runs `toJSON` unseen"
 		},
 		{
@@ -6604,14 +6604,8 @@
 			"name": "M-REACH-EXTERN-HANDS",
 			"type": "anyparse.query.MemberReach",
 			"method": "externSite",
-			"find": [
-				"if (handed == null && takesObject && !arrayOwn)",
-				"if (returned != null && returned == stringType && at != null) {"
-			],
-			"replace": [
-				"if (false) for (arg in args)",
-				"if (at != null && false) {"
-			],
+			"find": ["if (!arrayOwn) hand(t);", "if (returned != null && returned == stringType && at != null) {"],
+			"replace": ["", "if (at != null && false) {"],
 			"note": "target code handed an object neither reaches its members by name nor converts it, so `Std.string(this)` runs `toString` unseen"
 		},
 		{
@@ -12416,24 +12410,24 @@
 		},
 		{
 			"name": "M-NATIVE-SITE-INERT",
-			"type": "anyparse.query.NativeSiteReach",
-			"method": "noObject",
+			"type": "anyparse.query.UncheckedConversions",
+			"method": "noneBy",
 			"find": "if (id.indexOf('.') < 0 && _inert.contains(id))",
 			"replace": "if (false)",
 			"note": "(precision) a primitive handed to target code is taken to be an object"
 		},
 		{
 			"name": "M-NATIVE-SITE-CORE-TYPE",
-			"type": "anyparse.query.NativeSiteReach",
-			"method": "noObject",
-			"find": "fact.kind == 'abstract' && fact.meta.contains(CORE_TYPE) && fact.meta.contains(NOT_NULL)",
-			"replace": "false",
+			"type": "anyparse.query.UncheckedConversions",
+			"method": "noneBy",
+			"find": "\t\t\t\telse\n\t\t\t\t\tcoreValue(fact);",
+			"replace": "\t\t\t\telse\n\t\t\t\t\tfalse;",
 			"note": "(precision) a value of a type the compiler represents itself, never null, is taken to be an object"
 		},
 		{
 			"name": "M-NATIVE-SITE-ALIAS",
-			"type": "anyparse.query.NativeSiteReach",
-			"method": "noObject",
+			"type": "anyparse.query.UncheckedConversions",
+			"method": "noneBy",
 			"find": "else if (fact.kind == 'typedef')",
 			"replace": "else if (false)",
 			"note": "(precision) an alias of a type no value of which is an object is not read through"
@@ -12448,9 +12442,9 @@
 		},
 		{
 			"name": "M-NATIVE-SITE-ARRAY-ELEMENTS",
-			"type": "anyparse.query.NativeSiteReach",
-			"method": "noObject",
-			"find": "case Named(id, [element]) if (_arrays.contains(id)): noObject(element, seen);",
+			"type": "anyparse.query.UncheckedConversions",
+			"method": "noneBy",
+			"find": "case Named(id, [element]) if (_arrays.contains(id)): noneBy(element, foreign, seen);",
 			"replace": "",
 			"note": "(precision) a built-in array of values that are no object is taken to be an object"
 		},
@@ -12482,16 +12476,16 @@
 			"name": "M-EXTERN-HANDED-RECEIVER",
 			"type": "anyparse.query.MemberReach",
 			"method": "externHanded",
-			"find": "return handed.foreach(take) && receivers.foreach(take) ? into : { types: null, values: true };",
-			"replace": "return handed.foreach(take) ? into : { types: null, values: true };",
+			"find": "for (r in read.receivers) handed.push(r);",
+			"replace": "",
 			"note": "an extern instance method's target code is taken not to hold its receiver"
 		},
 		{
 			"name": "M-EXTERN-CALLERS",
 			"type": "anyparse.query.MemberReach",
 			"method": "walk",
-			"find": "final steps: Array<ReachStep> = truth ? (callers[id] ?? []).copy() : [];",
-			"replace": "final steps: Array<ReachStep> = truth ? (callers[id] ?? []).slice(0, 1) : [];",
+			"find": "final steps: Array<ReachStep> = (callers[id] ?? []).copy();",
+			"replace": "final steps: Array<ReachStep> = (callers[id] ?? []).slice(0, 1);",
 			"note": "an extern's admission reads only the first caller that queued it, not every other one"
 		},
 		{
@@ -12624,7 +12618,7 @@
 			"name": "M-VALUE-ARG-ESCAPED",
 			"type": "anyparse.query.FunctionValueTypes",
 			"method": "invokedWith",
-			"find": "if (escaped.exists(e -> hierarchy.contains(e)) && !untypedInvocations(name, hierarchy, index, count, out)) return null;",
+			"find": "if (left && !untypedInvocations(name, hierarchy, index, count, out)) return null;",
 			"replace": "",
 			"note": "a method of a class that escaped runs only at the typed calls of it, whatever is called by its name"
 		},
@@ -12632,7 +12626,7 @@
 			"name": "M-VALUE-ARG-SUPERTYPES",
 			"type": "anyparse.query.FunctionValueTypes",
 			"method": "invokedWith",
-			"find": "final callers: Array<String> = [owner].concat(table.supertypesOf(owner));",
+			"find": "final callers: Array<String> = hierarchy.copy();\n\t\tfor (h in hierarchy) for (s in table.supertypesOf(h)) if (!callers.contains(s)) callers.push(s);",
 			"replace": "final callers: Array<String> = [owner];",
 			"note": "a call of the supertype's member a method overrides invokes no override"
 		},
@@ -12672,7 +12666,7 @@
 			"name": "M-VALUE-STORED-UNTYPED",
 			"type": "anyparse.query.FunctionValueTypes",
 			"method": "readStored",
-			"find": "if (escaped.exists(e -> hierarchy.contains(e)) && !untypedStores(name, hierarchy, out)) return null;",
+			"find": "if (left && !untypedStores(name, hierarchy, out)) return null;",
 			"replace": "",
 			"note": "an object that left the type system is taken to have its dynamic field written only where a typed write names it"
 		},
@@ -12736,7 +12730,7 @@
 			"name": "M-VALUE-STORED-WRITES",
 			"type": "anyparse.query.FunctionValueTypes",
 			"method": "readStored",
-			"find": "if (!f.write || f.field != name || !related.contains(CompilerFacts.baseId(declaring))) continue;",
+			"find": "if (!f.write || f.field != name) continue;",
 			"replace": "continue;",
 			"note": "no write is read, so a dynamic method is taken to hold nothing but its declared body"
 		},
@@ -15038,6 +15032,238 @@
 			"find": "return first != null && facts.foreach(r -> r.memberName == first) ? first : null;",
 			"replace": "return first;",
 			"note": "a reflective access the syntax reads a computed name off names the literal one fact of it names, while another computes it"
+		},
+		{
+			"name": "M-UNCHECKED-TARGET",
+			"type": "anyparse.query.UncheckedConversions",
+			"method": "keeps",
+			"find": "_table.targets.exists(target -> target != CONVERTING_TARGET) || ",
+			"replace": "",
+			"note": "every target is read as converting a value into a typed place, as hxcpp does"
+		},
+		{
+			"name": "M-UNCHECKED-ESCAPED",
+			"type": "anyparse.query.UncheckedConversions",
+			"method": "none",
+			"find": "place -> escaped && keeps(place)",
+			"replace": "place -> keeps(place)",
+			"note": "(precision) a place that keeps what lands there is taken to hold a foreign value though nothing left the type system"
+		},
+		{
+			"name": "M-UNCHECKED-BOXED",
+			"type": "anyparse.query.UncheckedConversions",
+			"method": "converts",
+			"find": "!coreValueType(inner, []) && converts(inner, seen);",
+			"replace": "converts(inner, seen);",
+			"note": "a nullable core value is taken to convert as the value does, where hxcpp boxes it as a `Dynamic`"
+		},
+		{
+			"name": "M-UNCHECKED-BOXED-ALIAS",
+			"type": "anyparse.query.UncheckedConversions",
+			"method": "coreValueType",
+			"find": "\t\t\t\telse if (fact.kind == 'typedef')",
+			"replace": "\t\t\t\telse if (false)",
+			"note": "a nullable alias of a core value is taken to convert, where hxcpp boxes it"
+		},
+		{
+			"name": "M-UNCHECKED-STRING",
+			"type": "anyparse.query.UncheckedConversions",
+			"method": "converts",
+			"find": "case Named(STRING, []): true;",
+			"replace": "",
+			"note": "(precision) hxcpp is taken to keep what lands at a `String`, which it converts"
+		},
+		{
+			"name": "M-UNCHECKED-ARRAY",
+			"type": "anyparse.query.UncheckedConversions",
+			"method": "converts",
+			"find": "\t\t\t\telse if (_arrays.contains(id))\n\t\t\t\t\ttrue",
+			"replace": "\t\t\t\telse if (_arrays.contains(id))\n\t\t\t\t\tfalse",
+			"note": "(precision) hxcpp is taken to keep what lands at the built-in array, whose conversion it checks"
+		},
+		{
+			"name": "M-UNCHECKED-POINTER",
+			"type": "anyparse.query.UncheckedConversions",
+			"method": "converts",
+			"find": "case Named(POINTER, [pointed]): converts(unwrap(pointed), seen);",
+			"replace": "",
+			"note": "(precision) a `cpp.Star` is read as the nullable value its declaration says, where hxcpp makes it a C pointer"
+		},
+		{
+			"name": "M-UNCHECKED-ALIAS",
+			"type": "anyparse.query.UncheckedConversions",
+			"method": "converts",
+			"find": "case 'typedef': readThrough(fact.targets, id, fact, args, seen);",
+			"replace": "case 'typedef': false;",
+			"note": "(precision) an alias of a type hxcpp converts into is taken to keep what lands there"
+		},
+		{
+			"name": "M-UNCHECKED-ALIAS-PLACE",
+			"type": "anyparse.query.UncheckedConversions",
+			"method": "noneBy",
+			"find": "seen.concat([id]), false);",
+			"replace": "seen.concat([id]), true);",
+			"note": "(precision) the type an alias stands for is read as a place of its own, a nullable one boxed"
+		},
+		{
+			"name": "M-UNCHECKED-CLASS-EXTERN",
+			"type": "anyparse.query.UncheckedConversions",
+			"method": "converts",
+			"find": "case 'class': !fact.isExtern;",
+			"replace": "case 'class': true;",
+			"note": "an extern class is taken to convert what lands there as a program class does"
+		},
+		{
+			"name": "M-UNCHECKED-ALIKE",
+			"type": "anyparse.query.UncheckedConversions",
+			"method": "converts",
+			"find": "if (fact == null || seen.contains(id) || !fact.alike)",
+			"replace": "if (fact == null || seen.contains(id))",
+			"note": "a type the builds type unalike is read as one of them"
+		},
+		{
+			"name": "M-UNCHECKED-HOLDS",
+			"type": "anyparse.query.UncheckedConversions",
+			"method": "holdsForeign",
+			"find": "return keeps(Named(id, []));",
+			"replace": "return false;",
+			"note": "a place typed by any class is taken to hold only instances of it"
+		},
+		{
+			"name": "M-FACTS-TARGET-RECORD",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "add",
+			"find": "targets[index] = record.n;",
+			"replace": "",
+			"note": "the target a facts file names is not read: no build is known to convert"
+		},
+		{
+			"name": "M-NATIVE-LITERAL-CODE",
+			"type": "anyparse.query.FactsNativeReach",
+			"method": "handed",
+			"find": "final literal: Bool = code != null && !StringTools.startsWith(code, x.name + '.');",
+			"replace": "final literal: Bool = false;",
+			"note": "(precision) the string literal a native site's code is is taken to be a value of a place that may hold any"
+		},
+		{
+			"name": "M-NATIVE-LITERAL-CHAIN",
+			"type": "anyparse.query.FactsNativeReach",
+			"method": "handed",
+			"find": "final literal: Bool = code != null && !StringTools.startsWith(code, x.name + '.');",
+			"replace": "final literal: Bool = code != null;",
+			"note": "the first value a call through a chain of target names hands is skipped as if it were the code"
+		},
+		{
+			"name": "M-EXTERN-BLIND-HANDED",
+			"type": "anyparse.query.MemberReach",
+			"method": "externSite",
+			"find": "if (handed?.blind == true && !namesNoMember) site.blind = true;",
+			"replace": "",
+			"note": "an extern handed an object carrying the member is taken to write no member by its name"
+		},
+		{
+			"name": "M-EXTERN-BLIND-REPORT",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "\t\t\tif (site.blind == true && !TARGET_ADMISSIONS.contains(via ?? ''))\n\t\t\t\tblind = blind ?? NativeCode(site.file, site.span ?? new Span(0, 0));\n",
+			"replace": "",
+			"note": "an extern that may write the member by its name is no blind spot"
+		},
+		{
+			"name": "M-EXTERN-BLIND-NAMES-NO-MEMBER",
+			"type": "anyparse.query.MemberReach",
+			"method": "externSite",
+			"find": "final namesNoMember: Bool = arrayOwn || _g.runsNoUserCode(g, type, name, true) || reflective.exists('$type.$name');",
+			"replace": "final namesNoMember: Bool = reflective.exists('$type.$name');",
+			"note": "(precision) the built-in array's own methods are taken to write a member of what they hold by its name"
+		},
+		{
+			"name": "M-EXTERN-BLIND-DECLARED",
+			"type": "anyparse.query.MemberReach",
+			"method": "externHanded",
+			"find": "\t\t\t} else if (!escaped && !facts.unchecked().byType(read) && declaredCarrier(g, read, declaring))\n\t\t\t\tinto.blind = true;",
+			"replace": "\t\t\t}",
+			"note": "an extern handed an object carrying the member that never left the type system is taken to write none by its name"
+		},
+		{
+			"name": "M-EXTERN-BLIND-SYNTAX",
+			"type": "anyparse.query.MemberReach",
+			"method": "externSite",
+			"find": "if (_carriers.relation(t, declaring) != CannotCarry) site.blind = true;",
+			"replace": "",
+			"note": "read by its syntax, an extern handed an object carrying the member is taken to write none by its name"
+		},
+		{
+			"name": "M-EXTERN-EVERY-CALLER-SYNTAX",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "final steps: Array<ReachStep> = (callers[id] ?? []).copy();",
+			"replace": "final steps: Array<ReachStep> = truth ? (callers[id] ?? []).copy() : [];",
+			"note": "without the truth an extern's admission reads only the first call that queued it"
+		},
+		{
+			"name": "M-EXTERN-EVERY-CALL-SYNTAX",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "s.from == step.from && (truth || (s.file == step.file && s.span?.from == step.span?.from && s.span?.to == step.span?.to));",
+			"replace": "s.from == step.from;",
+			"note": "without the truth an extern's admission reads one call of each caller, which the syntax reads alone"
+		},
+		{
+			"name": "M-REACH-CLOSED-EXTERN-OVERRIDE",
+			"type": "anyparse.query.ReachGraph",
+			"method": "externQuiet",
+			"find": "if (info != null && !info.isStatic && overriddenBelow(type)) return false;",
+			"replace": "",
+			"note": "an extern closed over inert values is taken to run nothing on a receiver a program subclass overriding a method may be"
+		},
+		{
+			"name": "M-VALUE-INVOKED-FOREIGN",
+			"type": "anyparse.query.FunctionValueTypes",
+			"method": "invokedWith",
+			"find": "if (!callers.contains(named) && left && _view.unchecked().holdsForeign(named)) return null;",
+			"replace": "",
+			"note": "a typed call naming another class is taken to run on no instance of the hierarchy a conversion put where it is written"
+		},
+		{
+			"name": "M-VALUE-INVOKED-SUBTYPE-SUPERS",
+			"type": "anyparse.query.FunctionValueTypes",
+			"method": "invokedWith",
+			"find": "for (h in hierarchy) for (s in table.supertypesOf(h)) if (!callers.contains(s)) callers.push(s);",
+			"replace": "for (s in table.supertypesOf(owner)) if (!callers.contains(s)) callers.push(s);",
+			"note": "a typed call naming an interface only a subclass implements is taken to run another method"
+		},
+		{
+			"name": "M-VALUE-STORED-FOREIGN",
+			"type": "anyparse.query.FunctionValueTypes",
+			"method": "readStored",
+			"find": "if (!related.contains(declaring) && left && f.owner != null && _view.unchecked().holdsForeign(declaring)) return null;",
+			"replace": "",
+			"note": "a typed write naming another class is taken to replace no method of an instance of the hierarchy a conversion put where it is written"
+		},
+		{
+			"name": "M-EXTERN-BLIND-REFLECTIVE",
+			"type": "anyparse.query.MemberReach",
+			"method": "externSite",
+			"find": "|| reflective.exists('$type.$name');",
+			"replace": ";",
+			"note": "(precision) a reflective access by a name is read as an extern that may write any member by its name, not by the name it is handed"
+		},
+		{
+			"name": "M-EXTERN-BLIND-TARGET-ADMISSION",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "if (site.blind == true && !TARGET_ADMISSIONS.contains(via ?? ''))",
+			"replace": "if (site.blind == true)",
+			"note": "(precision) an extern target code runs is judged as if program code handed it what it holds, though the target code running it was judged where it was handed that"
+		},
+		{
+			"name": "M-EXTERN-BLIND-SYNTAX-LITERAL",
+			"type": "anyparse.query.MemberReach",
+			"method": "externSite",
+			"find": "if (!literals.contains(arg.kind) && arg.kind != _shape.nullLiteralKind) carried(t);",
+			"replace": "carried(t);",
+			"note": "(precision) read by its syntax, a literal handed to an extern is taken to be a value that may be an object carrying the member"
 		}
 	]
 }

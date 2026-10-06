@@ -172,6 +172,9 @@ final class FactsView {
 
 	private final _scope: ReachProject;
 
+	/** Where an unchecked conversion may put a value its place's type says nothing of (`unchecked`), built on first need. */
+	private var _unchecked: Null<UncheckedConversions> = null;
+
 	/** Graph type name -> the typed types standing for it, built on first need. */
 	private var _bySimpleName: Null<Map<String, Array<String>>> = null;
 
@@ -203,6 +206,18 @@ final class FactsView {
 		_sole.clear();
 		_soleMember.clear();
 		_argumentUses = null;
+	}
+
+	/**
+	 * Where an unchecked conversion of the table's builds may put a value its place's type says nothing of — the one predicate
+	 * the readings taking a static type at its word ask (`UncheckedConversions`); read once.
+	 */
+	public function unchecked(): UncheckedConversions {
+		final made: UncheckedConversions = _unchecked ?? new UncheckedConversions(
+			table, FactsEscapes.inertIds(_scope.shape), _scope.shape.arrayTypeNames ?? []
+		);
+		_unchecked = made;
+		return made;
 	}
 
 	/** What the code a value is handed to as an argument does with it, read off the table once per argument (`ArgumentUses`). */

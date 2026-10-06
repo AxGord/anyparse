@@ -149,9 +149,15 @@ final class FactsNativeReach {
 		return fact != null && CLASS_KINDS.contains(fact.kind) && !fact.isExtern;
 	}
 
-	/** Hand the type of each value a call of the native site `x` hands its target code to `hand`. */
+	/**
+	 * Hand `hand` each value the site `x` hands its target code (`NativeFact.handed`), but the string literal its first argument
+	 * is when the facts record that as the site's code (`NativeFact.code`): a constant, no object whatever the type of a place
+	 * holding a string may say. A chain of target names records the chain as its code, which no argument is.
+	 */
 	private static function handed(x: NativeFact, hand: NativeHand): Bool {
-		return x.handed.foreach(hand.escape);
+		final code: Null<String> = x.code;
+		final literal: Bool = code != null && !StringTools.startsWith(code, x.name + '.');
+		return [for (i in (literal ? 1 : 0) ... x.handed.length) x.handed[i]].foreach(hand.escape);
 	}
 
 	/** Hand the type of every parameter of every type a build gave the method `f` to `hand`. */

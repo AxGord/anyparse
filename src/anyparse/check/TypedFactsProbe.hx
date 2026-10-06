@@ -28,6 +28,8 @@ import haxe.io.Path;
  * - `{"k":"facts","v":1,"inline":B}` first; `{"k":"end","nodes":N,"types":N}` last — a file without it is incomplete;
  *   one closes each round of the hook, which the compiler runs again over the types defined after it ran.
  *   The compile keeps `keep-inline-positions`, so an inlined body stays at its callee's positions.
+ * - `{"k":"target","n":S}` second: the target the compile generates code for (`target.name`: `cpp`, `js`, `eval`, …), which
+ *   decides what a conversion into a typed place does to a value (`UncheckedConversions`).
  * - `{"k":"file","i":N,"path":S}`; `{"k":"src","path":S,"len":N,"md5":S}` — the UTF-8 length and MD5 of every
  *   file a record is homed in, as the compile read it: a table reading another text has no facts for the file.
  * - `{"k":"type","id","f","p","kind","pack", params?, meta?, ext?, …}` — `kind` is `class`, `interface`, `impl` (an
