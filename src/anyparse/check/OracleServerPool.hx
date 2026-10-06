@@ -5,6 +5,7 @@ import anyparse.check.HaxeSpawn.HaxeRun;
 import anyparse.check.HaxeSpawn.SpawnJob;
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.core.EnvFlag;
+import anyparse.core.PhaseTimings;
 
 using Lambda;
 
@@ -72,6 +73,11 @@ final class OracleServerPool {
 	 * started, under `APQ_NO_ORACLE_SERVER`, or when the machine's compile budget cannot hold them all.
 	 */
 	public function start(oracles: Array<OracleConfig>): Void {
+		PhaseTimings.time('oracle servers start', () -> startTimed(oracles));
+	}
+
+	/** `start`, untimed. */
+	private function startTimed(oracles: Array<OracleConfig>): Void {
 		#if nodejs
 		if (_batch != null || EnvFlag.isSet('APQ_NO_ORACLE_SERVER')) return;
 		final usable: Array<OracleConfig> = [];
@@ -101,6 +107,11 @@ final class OracleServerPool {
 	 * moved since the server's last compile is invalidated first. The compiles overlap; none stops another.
 	 */
 	public function compile(oracles: Array<OracleConfig>): Array<Null<HaxeRun>> {
+		return PhaseTimings.measure('oracle warm compile', () -> compileTimed(oracles));
+	}
+
+	/** `compile`, untimed. */
+	private function compileTimed(oracles: Array<OracleConfig>): Array<Null<HaxeRun>> {
 		final out: Array<Null<HaxeRun>> = [for (_ in oracles) null];
 		#if nodejs
 		if (!_servers.keys().hasNext()) return out;
