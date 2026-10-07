@@ -235,10 +235,10 @@
 		{
 			"name": "M-FIRST-LINE-FIT",
 			"type": "anyparse.format.BodyFit",
-			"method": "fitLineLayout",
-			"find": "else if (refuseGlue)",
-			"replace": "else if (false)",
-			"note": "FitLine goes back to placing a body by its FIRST line, so a body that cannot render flat glues to the head line again"
+			"method": "strictFitLineLayout",
+			"find": "\treturn if (WrapList.flatLength(body) != -1)",
+			"replace": "\treturn if (true)",
+			"note": "expression-position FitLine goes back to placing a body by its FIRST line: a body that cannot render flat takes the plain glue, whose width gate measures only that line, so it glues to the head line again"
 		},
 		{
 			"name": "M-STRICT-HEAD-DELIM-OFF",
