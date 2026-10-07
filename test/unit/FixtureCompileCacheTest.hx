@@ -113,6 +113,37 @@ class FixtureCompileCacheTest extends Test {
 		);
 	}
 
+	/**
+	 * A probe macro that ran the switch of the live arm (`APQ_MUTANT`) answered for that arm alone: never recorded, and a
+	 * recorded compile that ran it is compiled again for it — while every other arm still replays it.
+	 */
+	public function testACompileThatRanTheLiveArmsSwitchAnswersForThatArmAlone(): Void {
+		// what a schema build's `__mutOn(7)` does, compiled into a macro, when the compile runs the switched method
+		final switched: String = PROBE.replace(
+			'\t\tSys.println("cwd " + Sys.getCwd());\n',
+			'\t\tfinal log = Sys.getEnv("APQ_MUTANT_MACRO_LOG");\n\t\tif (log != null) sys.io.File.saveContent(log, "7\\n");\n'
+			+ '\t\tSys.println("cwd " + Sys.getCwd());\n'
+		);
+		final cache: String = CliFixture.writeTree('fcc_cache', []);
+		final fixtures: Array<Fixture> = [for (_ in 0...4) fixture(switched, MAIN)];
+		final before: Null<String> = Sys.getEnv('APQ_MUTANT');
+		CliFixture.always(() -> {
+			Sys.putEnv('APQ_MUTANT', before ?? '');
+			for (f in fixtures) for (dir in [f.dir, f.probe]) CliFixture.removeDir(dir);
+			CliFixture.removeDir(cache);
+		}, () -> {
+			Sys.putEnv('APQ_MUTANT', '7');
+			FixtureCompileCache.run('haxe', 'stamp', cache, fixtures[0].dir, args(fixtures[0]));
+			Sys.putEnv('APQ_MUTANT', '3');
+			FixtureCompileCache.run('haxe', 'stamp', cache, fixtures[1].dir, args(fixtures[1]));
+			FixtureCompileCache.run('haxe', 'stamp', cache, fixtures[2].dir, args(fixtures[2]));
+			Sys.putEnv('APQ_MUTANT', '7');
+			final armed: CompileOutcome = FixtureCompileCache.run('haxe', 'stamp', cache, fixtures[3].dir, args(fixtures[3]));
+			Assert.equals(0, armed.status);
+			Assert.equals('pass,miss,hit,armed', tally(cache));
+		});
+	}
+
 	public function testOnlyAWhitelistedProbeCompileInsideItsRootsIsReplayed(): Void {
 		final f: Fixture = fixture(PROBE, MAIN);
 		final outside: String = CliFixture.writeTree('fcc_outside', [{ name: 'Lib.hx', source: 'class Lib {}\n' }]);

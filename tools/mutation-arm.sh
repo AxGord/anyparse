@@ -674,8 +674,11 @@ fi
 #     the cut could have changed the generated code through — per arm;
 #   - a switch whose source the build EMBEDS as text (the facts macro, which a
 #     child compiler re-compiles under the suite's environment) is the arm's
-#     own in that child too, so its track skips the fixture cache, whose key
-#     cannot tell one active arm from another;
+#     own in that child too; the fixture cache records which switches a
+#     compile ran and never replays one that ran the live arm's. And since
+#     the build never types those modules, they are typed in the macro
+#     context after it (schema_check_embedded): a copy that breaks there
+#     would break every arm's child compiles;
 #   - an arm whose copy does not compile is named by the compiler's position
 #     and left out, and the rest built again (at most SCHEMA_ROUNDS times).
 # Tests that read the tree from disk still read the arm's own cut: a schema
@@ -759,13 +762,13 @@ schema_compose_and_build() {
         rm -f "$schema_dir/macro-log"
         if ( cd "$tree" && APQ_MUTANT_MACRO_LOG="$schema_dir/macro-log" haxe test-js-common.hxml -js "$schema_dir/test.js" ) \
                 > "$schema_dir/build-$round.log" 2>&1; then
-            # `<name> <id> <cache|nocache>` for every arm the build stands for.
+            # `<name> <id>` for every arm the build stands for.
             # An arm whose dispatch line, as `apq mutation-schema` spliced it,
             # occurs verbatim in the output is one whose source the build
             # embeds as TEXT — compiled code spells the call `Type.__mutOn(…)`
             # and never carries the `return __mut<id>_<name>(` that follows.
-            # A string literal that merely looks like one costs that arm the
-            # cache, never a wrong answer.
+            # A string literal that merely looks like one costs a check, never
+            # a wrong answer.
             # ONE regex over the output, then an exact compare against the plan:
             # `grep -F -f` with one pattern per arm ran for minutes on BSD grep.
             grep -oE '\(__mutOn\([0-9]+\)\) return __mut[0-9]+_[A-Za-z0-9_]+\(' "$schema_dir/test.js" \
@@ -804,7 +807,7 @@ schema_compose_and_build() {
                 FILENAME == ARGV[1] { name[$1] = $2; next }
                 FILENAME == ARGV[2] { macro[$1] = 1; next }
                 FILENAME == ARGV[3] { embedded[$1] = 1; next }
-                $2 == "ok" && !($1 in macro) { print name[$1], $1, ($1 in embedded) ? "nocache" : "cache" }
+                $2 == "ok" && !($1 in macro) { print name[$1], $1 }
             ' <(tr ' ' '\t' < "$schema_dir/names") "$schema_dir/macro-log" "$schema_dir/embedded" "$schema_dir/placements" \
                 > "$schema_dir/map"
             echo ready > "$schema_dir/state"

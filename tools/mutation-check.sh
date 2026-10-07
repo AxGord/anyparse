@@ -242,17 +242,15 @@ run_in_slot() {
         return 0
     fi
 
-    local started built mutant="" cache=1 kind schema_row
+    local started built mutant="" kind
     started=$(date +%s)
     # A schema track (--schema) runs the composed build with its arm switched
     # on, and builds nothing; one the composed build left out is built here.
-    if schema_row=$(schema_track "$workroot" "$name"); then
+    if mutant=$(schema_track "$workroot" "$name"); then
         # Candidates are dealt last, so a slot that reaches one is done
         # building: its server's gigabytes go back to the machine.
         stop_slot_server "$workroot" "$slot"
         build="$(cat "$workroot/schema")"
-        mutant=${schema_row% *}
-        [ "${schema_row#* }" = "cache" ] || cache=0
         kind=schema
     elif ! build_track "$workroot" "$slot" "$wt" "$build" "$workroot/$name.build.log"; then
         write_verdict "$verdict_file" "BUILD-FAIL" "$(build_detail "$workroot/$name.build.log")"
@@ -276,7 +274,7 @@ run_in_slot() {
     # The fixture cache's `haxe` shim goes first on the PATH when the parent
     # built one (§ "The fixture cache" in the parent section).
     path=$PATH
-    if [ -x "$workroot/fixture-cache/bin/haxe" ] && [ "$cache" -eq 1 ]; then
+    if [ -x "$workroot/fixture-cache/bin/haxe" ]; then
         path="$workroot/fixture-cache/bin:$PATH"
     fi
 
@@ -362,7 +360,7 @@ run_suite() {
     fi
 }
 
-# schema_track <workroot> <name> — `<arm id> <cache|nocache>` when the
+# schema_track <workroot> <name> — `<arm id>` when the
 # composed build (--schema) stands for this track, else a non-zero status.
 # A candidate waits here for the build to answer; one the build left out, or
 # every candidate of a build that failed, is built per arm.
@@ -375,7 +373,7 @@ schema_track() {
         sleep 2
     done
     [ "$(cat "$dir/state")" = "ready" ] || return 1
-    awk -v n="$2" '$1 == n { print $2, $3; found = 1 } END { exit found ? 0 : 1 }' "$dir/map"
+    awk -v n="$2" '$1 == n { print $2; found = 1 } END { exit found ? 0 : 1 }' "$dir/map"
 }
 
 # killer_tokens <expected-csv> -> the APQ_TEST filter running exactly the

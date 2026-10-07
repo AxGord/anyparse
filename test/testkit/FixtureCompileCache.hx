@@ -117,9 +117,10 @@ final class FixtureCompileCache {
 
 	/**
 	 * The version of the key and entry layout, bumped whenever what may be recorded changes, since a kept cache outlives
-	 * the rule it was written under: 2 gzips an entry, 3 records no compile that writes into its cwd.
+	 * the rule it was written under: 2 gzips an entry, 3 records no compile
+	 * that writes into its cwd, 4 records the mutant switches a compile ran.
 	 */
-	private static inline final LAYOUT: Int = 3;
+	private static inline final LAYOUT: Int = 4;
 
 	/** How long a process waits on another's compile of the same key before compiling it itself. */
 	private static inline final AWAIT_MS: Float = 10 * 60 * 1000;
@@ -160,12 +161,21 @@ final class FixtureCompileCache {
 		}
 		final id: String = key(stamp, compile, before);
 		final entry: String = Path.join([dir, '$id.json.gz']);
+		// A schema build's probe macro carries every embedded arm's switch, and the one `APQ_MUTANT` names is live in this
+		// compile. An entry answers for it only when its compile never ran that switch — then the mutated method never ran
+		// there either, and the answer is the unmutated one every arm shares; one that ran it is compiled for real.
+		final active: Int = Std.parseInt(Sys.getEnv('APQ_MUTANT') ?? '') ?? 0;
 		final stored: Null<String> = readEntry(entry);
 		if (stored != null) {
+			final hit: CompileEntry = Json.parse(stored);
+			if (hit.reached.contains(active)) {
+				note(dir, 'armed');
+				return spawn(real, cwd, args);
+			}
 			// a hit renews the entry, so a cache that outlives one run ages out by disuse (`tools/fixture-cache.sh`)
 			try Fs.utimesSync(entry, Date.now(), Date.now()) catch (exception: Exception) {} // noqa: swallowed-exception
 			note(dir, 'hit');
-			return replay(Json.parse(stored), compile.roots);
+			return replay(hit, compile.roots);
 		}
 		// One compile of a key at a time: the suite processes of one run ask for the same fixture TOGETHER — a sweep's
 		// tracks pin the same tests — and each used to compile it, since none had recorded it yet. A process that finds the
@@ -173,17 +183,24 @@ final class FixtureCompileCache {
 		final lock: String = '$entry.lock';
 		if (!claim(lock)) {
 			final shared: Null<String> = awaited(entry, lock);
-			if (shared != null) {
+			final sharedEntry: Null<CompileEntry> = shared == null ? null : Json.parse(shared);
+			if (sharedEntry != null && !sharedEntry.reached.contains(active)) {
 				note(dir, 'shared');
-				return replay(Json.parse(shared), compile.roots);
+				return replay(sharedEntry, compile.roots);
 			}
 			final unshared: CompileOutcome = spawn(real, cwd, args);
 			note(dir, 'pass');
 			return unshared;
 		}
-		final outcome: CompileOutcome = spawn(real, cwd, args);
+		// the switches the compile runs, recorded by the probe macro's own `__mutOn` (`MutationSchema`)
+		final reachedLog: String = '$entry.${Node.process.pid}.reached';
+		final outcome: CompileOutcome = spawn(real, cwd, args, reachedLog);
+		final reached: Array<Int> = readReached(reachedLog);
 		final after: Null<Array<Map<String, String>>> = trees(compile.roots);
-		final recorded: Null<CompileEntry> = after == null || !outcome.exited ? null : record(outcome, compile.roots, before, after);
+		// a compile that ran the live arm's switch answered for that arm alone: not recorded
+		final recorded: Null<CompileEntry> = after == null || !outcome.exited || reached.contains(active)
+			? null
+			: record(outcome, compile.roots, before, after, reached);
 		if (recorded != null) {
 			final temporary: String = '$entry.${Node.process.pid}.tmp';
 			// gzipped: a probe's `-v` names every std module it parsed, ~240 KB of JSON a cache kept across runs pays per entry
@@ -406,7 +423,8 @@ final class FixtureCompileCache {
 	 * deleted. Null when a stream or a written file is not UTF-8, which a placeholder cannot be spliced into.
 	 */
 	private static function record(
-		outcome: CompileOutcome, roots: Array<String>, before: Array<Map<String, String>>, after: Array<Map<String, String>>
+		outcome: CompileOutcome, roots: Array<String>, before: Array<Map<String, String>>, after: Array<Map<String, String>>,
+		reached: Array<Int>
 	): Null<CompileEntry> {
 		final out: Null<String> = text(outcome.out);
 		final err: Null<String> = text(outcome.err);
@@ -428,7 +446,8 @@ final class FixtureCompileCache {
 			status: outcome.status,
 			out: encode(out, roots),
 			err: encode(err, roots),
-			files: files
+			files: files,
+			reached: reached
 		};
 	}
 
@@ -452,9 +471,12 @@ final class FixtureCompileCache {
 		};
 	}
 
-	/** The real compile, its streams captured. A compile killed by a signal, or never launched, did not exit. */
-	private static function spawn(real: String, cwd: String, args: Array<String>): CompileOutcome {
-		final res: ChildProcessSpawnSyncResult = ChildProcess.spawnSync(real, args, { cwd: cwd, maxBuffer: MAX_BUFFER });
+	/** The real compile; with `reachedLog`, the schema switches it runs are recorded there (`APQ_MUTANT_MACRO_LOG`). */
+	private static function spawn(real: String, cwd: String, args: Array<String>, ?reachedLog: String): CompileOutcome {
+		// the inherited environment, copied: the compile reads everything the test process was given
+		final env: haxe.DynamicAccess<String> = js.Syntax.code('Object.assign({}, process.env)');
+		if (reachedLog != null) env['APQ_MUTANT_MACRO_LOG'] = reachedLog;
+		final res: ChildProcessSpawnSyncResult = ChildProcess.spawnSync(real, args, { cwd: cwd, maxBuffer: MAX_BUFFER, env: env });
 		final status: Null<Int> = res.status;
 		final empty: Buffer = Buffer.alloc(0);
 		final stdout: Null<Buffer> = res.stdout;
@@ -465,6 +487,15 @@ final class FixtureCompileCache {
 			err: stderr ?? empty,
 			exited: res.error == null && status != null
 		};
+	}
+
+	/** The ids a compile's switches wrote to `log`, which is then removed; none when it wrote nothing. */
+	private static function readReached(log: String): Array<Int> {
+		final text: Null<String> = try Fs.readFileSync(log).toString('utf8') catch (exception: Exception) null;
+		try Fs.unlinkSync(log) catch (exception: Exception) {} // noqa: swallowed-exception
+		return text == null ? [] : [
+			for (line in text.split('\n')) if (Std.parseInt(line) != null) Std.parseInt(line) ?? 0
+		];
 	}
 
 	/** `bytes` as a string when it is UTF-8 that round-trips, else null. */
@@ -519,4 +550,7 @@ typedef CompileEntry = {
 	var out: String;
 	var err: String;
 	var files: Array<{ root: Int, path: String, text: Null<String> }>;
+
+	/** The mutant switches (`APQ_MUTANT` ids) the compile ran, a schema build's arms; none for any other source. */
+	var reached: Array<Int>;
 }
