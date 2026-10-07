@@ -154,41 +154,30 @@ repo=$(cd -P "$script_dir/.." && pwd)
 # manifest, with the patch path already resolved against the manifest's
 # directory. Bails on a malformed line.
 parse_manifest() {
-    local manifest=$1 manifest_dir line name patch filter expected lineno=0
+    local manifest=$1 manifest_dir
     manifest_dir=$(cd -P "$(dirname "$manifest")" && pwd)
-    while IFS= read -r line || [ -n "$line" ]; do
-        lineno=$((lineno + 1))
-        case "$(printf '%s' "$line" | sed 's/^[[:space:]]*//')" in
-            ''|'#'*) continue ;;
-        esac
-        name=$(printf '%s' "$line" | cut -d'|' -f1 | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
-        patch=$(printf '%s' "$line" | cut -d'|' -f2 | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
-        filter=$(printf '%s' "$line" | cut -d'|' -f3 | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
-        expected=$(printf '%s' "$line" | cut -d'|' -f4- | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
-        if [ "$(printf '%s' "$line" | tr -cd '|' | wc -c | tr -d ' ')" -lt 3 ]; then
-            echo "mutation-check.sh: $manifest:$lineno: expected 4 '|'-separated fields" >&2
-            return 1
-        fi
-        case "$name" in
-            *[!A-Za-z0-9_.-]*|'')
-                echo "mutation-check.sh: $manifest:$lineno: bad track name '$name' (allowed: A-Za-z0-9_.-)" >&2
-                return 1
-                ;;
-        esac
-        if [ -z "$patch" ]; then
-            echo "mutation-check.sh: $manifest:$lineno: track '$name' has no patch file" >&2
-            return 1
-        fi
-        case "$patch" in
-            /*) ;;
-            *) patch="$manifest_dir/$patch" ;;
-        esac
-        if [ -z "$filter" ]; then
-            echo "mutation-check.sh: $manifest:$lineno: track '$name' has an empty APQ_TEST filter (use ALL for the whole suite)" >&2
-            return 1
-        fi
-        printf '%s\t%s\t%s\t%s\n' "$name" "$patch" "$filter" "$expected"
-    done < "$manifest"
+    # One awk pass. The shell loop it replaces forked ~8 processes per line, and
+    # every track re-parsed the whole manifest to find its own row: 43 s per
+    # parse of a 2051-arm manifest, paid once per track.
+    awk -v manifest="$manifest" -v dir="$manifest_dir" '
+        function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s }
+        {
+            line = $0
+            if (trim(line) == "" || substr(trim(line), 1, 1) == "#") next
+            n = split(line, f, "|")
+            if (n < 4) { printf "mutation-check.sh: %s:%d: expected 4 '"'"'|'"'"'-separated fields\n", manifest, NR > "/dev/stderr"; bad = 1; exit 1 }
+            name = trim(f[1]); patch = trim(f[2]); filter = trim(f[3])
+            expected = f[4]
+            for (i = 5; i <= n; i++) expected = expected "|" f[i]
+            expected = trim(expected)
+            if (name == "" || name ~ /[^A-Za-z0-9_.-]/) { printf "mutation-check.sh: %s:%d: bad track name '"'"'%s'"'"' (allowed: A-Za-z0-9_.-)\n", manifest, NR, name > "/dev/stderr"; bad = 1; exit 1 }
+            if (patch == "") { printf "mutation-check.sh: %s:%d: track '"'"'%s'"'"' has no patch file\n", manifest, NR, name > "/dev/stderr"; bad = 1; exit 1 }
+            if (substr(patch, 1, 1) != "/") patch = dir "/" patch
+            if (filter == "") { printf "mutation-check.sh: %s:%d: track '"'"'%s'"'"' has an empty APQ_TEST filter (use ALL for the whole suite)\n", manifest, NR, name > "/dev/stderr"; bad = 1; exit 1 }
+            printf "%s\t%s\t%s\t%s\n", name, patch, filter, expected
+        }
+        END { exit bad }
+    ' "$manifest"
 }
 
 # ---------------------------------------------------------- child mode
@@ -229,10 +218,8 @@ run_in_slot() {
     build="$workroot/build-$name"
     log="$workroot/$name.log"
 
-    # awk must NOT `exit` on the first match: under `pipefail` that closes
-    # the pipe early, parse_manifest dies of SIGPIPE, and the child aborts
-    # without ever writing a verdict.
-    row=$(parse_manifest "$manifest" | awk -F'\t' -v n="$name" '$1 == n && !seen { print; seen = 1 }')
+    # The parent's parse of the manifest (`<workroot>/rows`), read, not redone.
+    row=$(awk -F'\t' -v n="$name" '$1 == n && !seen { print; seen = 1 }' "$workroot/rows")
     if [ -z "$row" ]; then
         write_verdict "$verdict_file" "RUN-FAIL" "track '$name' vanished from $manifest between the parent's parse and this child's"
         return 0
@@ -260,6 +247,9 @@ run_in_slot() {
     # A schema track (--schema) runs the composed build with its arm switched
     # on, and builds nothing; one the composed build left out is built here.
     if schema_row=$(schema_track "$workroot" "$name"); then
+        # Candidates are dealt last, so a slot that reaches one is done
+        # building: its server's gigabytes go back to the machine.
+        stop_slot_server "$workroot" "$slot"
         build="$(cat "$workroot/schema")"
         mutant=${schema_row% *}
         [ "${schema_row#* }" = "cache" ] || cache=0
@@ -867,6 +857,8 @@ fi
 if [ -n "$schema" ]; then
     printf '%s\n' "$schema" > "$workroot/schema"
 fi
+# Every track reads its own row off the parent's parse (run_in_slot).
+printf '%s\n' "$rows" > "$workroot/rows"
 if [ -z "${APQ_MUTATION_NO_SERVER:-}" ]; then
     # The owner every slot server's watchdog follows (slot_server).
     printf '%s\n' "$$" > "$workroot/servers"
@@ -940,8 +932,8 @@ while IFS=$'\t' read -r name patch filter expected; do
     verdict="RUN-FAIL"
     detail="no verdict written"
     if [ -f "$workroot/$name.verdict" ]; then
-        verdict=$(sed -n '1p' "$workroot/$name.verdict")
-        detail=$(sed -n '2p' "$workroot/$name.verdict")
+        # builtin reads: two `sed`s per row were seconds of a 2051-row report
+        { IFS= read -r verdict || true; IFS= read -r detail || true; } < "$workroot/$name.verdict"
     fi
     case "$verdict" in
         KILLED) killed=$((killed + 1)) ;;

@@ -364,26 +364,37 @@ render_cuts() {
         ( cd "$gen" && node "$apq_bin" patch --batch "$shard" ) 2> "$shard.log" &
     done
     wait
-    for name in "$@"; do
-        [ -f "$workroot/$name.row" ] || continue
-        file=$(cut -f1 "$workroot/$name.row")
-        if [ -f "$workroot/$name.new.err" ]; then
-            render_fail "$name" "$name: the cut did not apply — $(tr '\n' ' ' < "$workroot/$name.new.err")"
-            continue
-        fi
-        if [ ! -f "$workroot/$name.new" ]; then
-            render_fail "$name" "$name: the cut did not apply — its batch wrote nothing ($workroot/render-batch.*.log)"
-            continue
-        fi
-        diff -u --label "a/$file" --label "b/$file" "$gen/$file" "$workroot/$name.new" > "$workroot/$name.patch" || true
-        if [ ! -s "$workroot/$name.patch" ]; then
-            render_fail "$name" "$name: the cut changed nothing — the registry describes the code as it already is"
-        fi
-    done
+    printf '%s\n' "$@" | xargs -P "$render_jobs" -I{} "$self" --diff {} "$workroot" "$gen"
+}
+
+# render_diff <name> — the batch's answer for one arm made its patch, or the
+# reason it could not be (run in parallel by render_cuts).
+render_diff() {
+    local name=$1 file
+    [ -f "$workroot/$name.row" ] || return 0
+    file=$(cut -f1 "$workroot/$name.row")
+    if [ -f "$workroot/$name.new.err" ]; then
+        render_fail "$name" "$name: the cut did not apply — $(tr '\n' ' ' < "$workroot/$name.new.err")"
+        return 0
+    fi
+    if [ ! -f "$workroot/$name.new" ]; then
+        render_fail "$name" "$name: the cut did not apply — its batch wrote nothing ($workroot/render-batch.*.log)"
+        return 0
+    fi
+    diff -u --label "a/$file" --label "b/$file" "$gen/$file" "$workroot/$name.new" > "$workroot/$name.patch" || true
+    if [ ! -s "$workroot/$name.patch" ]; then
+        render_fail "$name" "$name: the cut changed nothing — the registry describes the code as it already is"
+    fi
 }
 
 if [ "${1:-}" = "--render" ]; then
     render_arm "$2" "$3" "$4" "$5"
+    exit 0
+fi
+if [ "${1:-}" = "--diff" ]; then
+    workroot=$3
+    gen=$4
+    render_diff "$2"
     exit 0
 fi
 
@@ -676,25 +687,27 @@ SCHEMA_ROUNDS=${APQ_MUTATION_SCHEMA_ROUNDS:-6}
 # `<id>\t<file>\t<selector>\t<mutated-file>`, ids in manifest order, and the
 # id -> name table beside it.
 schema_plan() {
-    local name id=0 file select built
+    local built
     : > "$schema_dir/plan"
     : > "$schema_dir/names"
     built=$( cd "$gen" && "$repo/bin/hxq" meta '@:build' src --flat --limit 100000 2>/dev/null | sed -n 's/^\(src\/[^:]*\.hx\):.*/\1/p' | sort -u )
-    for name in $(cut -d'|' -f1 "$manifest" | tr -d ' '); do
-        [ -f "$workroot/$name.target" ] || continue
-        IFS=$'\t' read -r file select < "$workroot/$name.target"
-        case "$file" in
-            src/*) ;;
-            *) continue ;;
-        esac
-        if printf '%s\n' "$built" | grep -qxF "$file"; then
-            continue
-        fi
-        id=$((id + 1))
-        printf '%s\t%s\t%s\t%s\n' "$id" "$file" "$select" "$workroot/$name.new" >> "$schema_dir/plan"
-        printf '%s %s\n' "$id" "$name" >> "$schema_dir/names"
-        printf '%s\n' "$name" >> "$schema_dir/candidates"
-    done
+    # One awk over the manifest's names and their targets: a shell loop forked
+    # per arm, seconds of serial work in a 2051-arm sweep.
+    cut -d'|' -f1 "$manifest" | tr -d ' ' | awk -F'\t' -v dir="$workroot" -v out="$schema_dir" '
+        FILENAME == ARGV[1] { built[$0] = 1; next }
+        {
+            name = $0
+            target = dir "/" name ".target"
+            if ((getline line < target) <= 0) next
+            close(target)
+            split(line, t, "\t")
+            if (t[1] !~ /^src\// || (t[1] in built)) next
+            id++
+            print id "\t" t[1] "\t" t[2] "\t" dir "/" name ".new" > (out "/plan")
+            print id " " name > (out "/names")
+            print name > (out "/candidates")
+        }
+    ' <(printf '%s\n' "$built") -
 }
 
 # The ids a failed build's errors name: an error inside an arm's copy, or on
