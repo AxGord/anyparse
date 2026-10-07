@@ -49,6 +49,28 @@ private enum SchemaRole {
 	Switch;
 }
 
+/** A method a copy can stand for, as `MutationSchema.method` read it off the tree. */
+private typedef SchemaMethod = {
+	name: String,
+	span: Span,
+	bodyOpen: Int,
+	modifiers: Array<QueryNode>,
+	params: Array<String>,
+
+	/** Where the copy goes: before the type's closing brace, or right after the method inside a `#if`. */
+	copyAt: Int,
+
+	/** The type's closing brace: where its switch fields go. */
+	closing: Int,
+	owner: String
+};
+
+/** A method a copy can stand for, or why not. */
+private enum SchemaShape {
+	Refused(reason: String);
+	Method(method: SchemaMethod);
+}
+
 /**
  * Mutant schemata for `tools/mutation-arm.sh`: every arm of one file compiled into ONE build behind a run-time
  * switch, so a sweep compiles once instead of once per arm.
@@ -205,72 +227,91 @@ final class MutationSchema {
 	}
 
 	/**
-	 * The two inserts of `arm` pushed onto `inserts`, and the offset its type's switch fields go at into `switchAt`, or
-	 * why the arm is left out.
+	 * The two inserts of `arm` pushed onto `inserts`, and its type's switch-field offset and name into `switchAt` /
+	 * `owners`, or why the arm is left out.
 	 */
 	private static function plan(
 		source: String, tree: QueryNode, plugin: GrammarPlugin, arm: SchemaArm, inserts: Array<SchemaInsert>, switchAt: Map<Int, Int>,
 		owners: Map<Int, String>
 	): Null<String> {
-		final member: QueryNode = switch Address.resolve(tree, source, plugin, { select: arm.select }) {
-			case Ok(_, node) if (node != null): node;
-			case Ok(_, _): return 'the address resolved no node';
-			case Err(message): return message;
+		final m: SchemaMethod = switch method(source, tree, plugin, arm.select) {
+			case Refused(reason): return reason;
+			case Method(found): found;
 		};
-		final name: Null<String> = member.name;
-		final span: Null<Span> = member.span;
-		if (member.kind != 'FnMember' || name == null || span == null) return 'a ${member.kind}, not a method';
-		if (name == 'new') return 'a constructor';
-		final body: Null<QueryNode> = member.children.find(child -> child.kind == 'BlockBody');
-		final bodySpan: Null<Span> = body?.span;
-		if (bodySpan == null || source.charAt(bodySpan.from) != '{') return 'its body is not a block';
-		final parent: Null<QueryNode> = parentOf(tree, member);
-		if (parent == null) return 'no enclosing type';
-		final modifiers: Array<QueryNode> = modifiersOf(parent, member);
-		for (modifier in modifiers) if (REFUSED_MODIFIERS.contains(modifier.kind)) return 'a ${modifier.kind.toLowerCase()} method';
-		// the type the switch fields go into: the parent, or the type around the `#if` the method sits in
-		var owner: Null<QueryNode> = parent;
-		while (owner != null && !TYPE_KINDS.contains(owner.kind)) owner = parentOf(tree, owner);
-		final closing: Int = closingBrace(source, owner);
-		if (closing < span.to) return 'no type body to hold the switch';
-
 		// The cut is an `hxq patch` of this member, so outside the member the mutated file is the original.
-		final tail: Int = source.length - span.to;
+		final tail: Int = source.length - m.span.to;
 		if (
-			!arm.mutated.startsWith(source.substring(0, span.from)) || !arm.mutated.endsWith(source.substring(span.to))
-			|| arm.mutated.length < span.from + tail
+			!arm.mutated.startsWith(source.substring(0, m.span.from)) || !arm.mutated.endsWith(source.substring(m.span.to))
+			|| arm.mutated.length < m.span.from + tail
 		)
 			return 'the cut reached outside the method';
-		final mutated: String = arm.mutated.substring(span.from, arm.mutated.length - tail);
+		final mutated: String = arm.mutated.substring(m.span.from, arm.mutated.length - tail);
 		// The switch forwards the arguments as the ORIGINAL signature received them: a default the cut changes would be
 		// applied by the original and never reach the copy, so the copy stands for the arm only below an unchanged head.
-		if (!mutated.startsWith(source.substring(span.from, bodySpan.from + 1)))
+		if (!mutated.startsWith(source.substring(m.span.from, m.bodyOpen + 1)))
 			return 'the cut changes the signature, which the switch forwards the arguments through';
 		final head: EReg = ~/^function(\s+)([A-Za-z_][A-Za-z0-9_]*)/;
-		if (!head.match(mutated) || head.matched(2) != name) return 'the mutated method does not open with `function $name`';
-		final copyName: String = '$COPY_PREFIX${arm.id}_$name';
+		if (!head.match(mutated) || head.matched(2) != m.name) return 'the mutated method does not open with `function ${m.name}`';
+		final copyName: String = '$COPY_PREFIX${arm.id}_${m.name}';
 		final kept: Array<String> = [
-			for (modifier in modifiers) if (keeps(modifier)) source.substring(modifier.span?.from ?? 0, modifier.span?.to ?? 0)
+			for (modifier in m.modifiers) if (keeps(modifier)) source.substring(modifier.span?.from ?? 0, modifier.span?.to ?? 0)
 		];
 		final copy: String = kept.concat(['function${head.matched(1)}$copyName${mutated.substr(head.matchedPos().len)}']).join(' ');
-		final args: Array<String> = [
-			for (child in member.children) if (PARAM_KINDS.contains(child.kind)) (child.kind == 'Rest' ? '...' : '') + (child.name ?? '')
-		];
 		inserts.push({
-			at: bodySpan.from + 1,
-			text: ' if ($SWITCH(${arm.id})) return $copyName(${args.join(', ')});',
+			at: m.bodyOpen + 1,
+			text: ' if ($SWITCH(${arm.id})) return $copyName(${m.params.join(', ')});',
 			id: arm.id,
 			role: Dispatch
 		});
 		inserts.push({
-			at: parent == owner ? closing : span.to,
+			at: m.copyAt,
 			text: '\n\t$copy\n',
 			id: arm.id,
 			role: Copy
 		});
-		switchAt[arm.id] = closing;
-		owners[arm.id] = owner?.name ?? '';
+		switchAt[arm.id] = m.closing;
+		owners[arm.id] = m.owner;
 		return null;
+	}
+
+	/** The method `select` names in `tree`, when a copy can stand for it. */
+	private static function method(source: String, tree: QueryNode, plugin: GrammarPlugin, select: String): SchemaShape {
+		final member: QueryNode = switch Address.resolve(tree, source, plugin, { select: select }) {
+			case Ok(_, node) if (node != null): node;
+			case Ok(_, _): return Refused('the address resolved no node');
+			case Err(message): return Refused(message);
+		};
+		final memberName: Null<String> = member.name;
+		final memberSpan: Null<Span> = member.span;
+		if (member.kind != 'FnMember' || memberName == null || memberSpan == null) return Refused('a ${member.kind}, not a method');
+		final name: String = memberName;
+		final span: Span = memberSpan;
+		if (name == 'new') return Refused('a constructor');
+		final bodySpan: Null<Span> = member.children.find(child -> child.kind == 'BlockBody')?.span;
+		if (bodySpan == null || source.charAt(bodySpan.from) != '{') return Refused('its body is not a block');
+		final parent: Null<QueryNode> = parentOf(tree, member);
+		if (parent == null) return Refused('no enclosing type');
+		final modifiers: Array<QueryNode> = modifiersOf(parent, member);
+		final refused: Null<QueryNode> = modifiers.find(modifier -> REFUSED_MODIFIERS.contains(modifier.kind));
+		if (refused != null) return Refused('a ${refused.kind.toLowerCase()} method');
+		// the type the switch fields go into: the parent, or the type around the `#if` the method sits in
+		var owner: Null<QueryNode> = parent;
+		while (owner != null && !TYPE_KINDS.contains(owner.kind)) owner = parentOf(tree, owner);
+		final closing: Int = closingBrace(source, owner);
+		if (closing < span.to) return Refused('no type body to hold the switch');
+		return Method({
+			name: name,
+			span: span,
+			bodyOpen: bodySpan.from,
+			modifiers: modifiers,
+			params: [
+				for (child in member.children) if (PARAM_KINDS.contains(child.kind))
+					(child.kind == 'Rest' ? '...' : '') + (child.name ?? '')
+			],
+			copyAt: parent == owner ? closing : span.to,
+			closing: closing,
+			owner: owner?.name ?? ''
+		});
 	}
 
 	/** Whether a copy keeps `modifier`. */
