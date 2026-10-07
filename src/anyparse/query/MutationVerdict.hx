@@ -119,6 +119,52 @@ class MutationVerdict {
 		return missing.length > 0 ? { kind: Mismatch, detail: detail, full: full } : { kind: Killed, detail: detail, full: full };
 	}
 
+	/**
+	 * Several transcripts of ONE run read as one — the slices `tools/mutation-check.sh` deals a fallback run into
+	 * (`<class>#<i>/<k>`), whose union is the filtered run. The merged header is green only when every slice's is,
+	 * its counts are the sums, and the failure names are every slice's; a slice with no header leaves the merge with
+	 * none, so a truncated slice reads `RunFail` exactly as a truncated run does. "No tests executed" holds only when
+	 * it holds for EVERY slice: a slice a short class contributed nothing to is not a typo'd filter.
+	 */
+	public static function merge(results: Array<TestSummaryResult>): TestSummaryResult {
+		if (results.length == 0) throw 'merge needs at least one transcript';
+		var header: Null<TestSummaryHeader> = {
+			assertions: 0,
+			successes: 0,
+			errors: 0,
+			failures: 0,
+			warnings: 0,
+			ok: true
+		};
+		final ran: Array<TestSummaryResult> = results.filter(result -> !result.noTests);
+		for (result in ran) {
+			final sum: Null<TestSummaryHeader> = header;
+			final part: Null<TestSummaryHeader> = result.header;
+			header = if (sum == null || part == null)
+				null
+			else
+				{
+					assertions: sum.assertions + part.assertions,
+					successes: sum.successes + part.successes,
+					errors: sum.errors + part.errors,
+					failures: sum.failures + part.failures,
+					warnings: sum.warnings + part.warnings,
+					ok: sum.ok && part.ok
+				};
+		}
+		return {
+			tests: ran.fold((result, n) -> n + result.tests, 0),
+			assertions: ran.fold((result, n) -> n + result.assertions, 0),
+			failures: ran.fold((result, n) -> n + result.failures, 0),
+			errors: ran.fold((result, n) -> n + result.errors, 0),
+			firstFailure: ran.map(result -> result.firstFailure).find(locus -> locus != null),
+			header: ran.length == 0 ? results[0].header : header,
+			noTests: ran.length == 0,
+			failureNames: [for (result in ran) for (name in result.failureNames) name],
+			counted: results.foreach(result -> result.counted)
+		};
+	}
+
 	/** Does any of `names` carry `needle` as a substring? */
 	private static function anyContains(names: Array<String>, needle: String): Bool {
 		return names.exists(name -> name.indexOf(needle) >= 0);

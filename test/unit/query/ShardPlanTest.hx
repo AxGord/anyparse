@@ -471,6 +471,18 @@ class ShardPlanTest extends Test {
 		Assert.equals(0, (ShardFilter.selected('unit.SomeTest', names, [ShardFilter.parse('OtherTest#0/2')]) ?? ['x']).length);
 	}
 
+	/**
+	 * A `test:` token selects the tests whose `<class>.<method>` contains its text — the substring an expectation is matched
+	 * with — so a prefix pin selects its longer sibling too, and a class token beside it still runs the whole class.
+	 */
+	public function testATestTokenSelectsTheTestsItsTextNames(): Void {
+		final names: Array<String> = ['testA', 'testAB', 'testB'];
+		final tokens: Array<ShardToken> = [ShardFilter.parse('test:unit.SomeTest.testA')];
+		Assert.equals('[testA,testAB]', Std.string(ShardFilter.selected('unit.SomeTest', names, tokens)));
+		Assert.equals(0, (ShardFilter.selected('unit.OtherTest', names, tokens) ?? ['x']).length);
+		Assert.isNull(ShardFilter.selected('unit.SomeTest', names, tokens.concat([ShardFilter.parse('SomeTest')])));
+	}
+
 	/** A slice that is not `#<i>/<k>` with `0 <= i < k` is refused loudly, never read as a class substring matching nothing. */
 	@:pin('control') @:killer('M-SHARD-FILTER-PARSE-RANGE')
 	public function testAMalformedSliceTokenIsRefused(): Void {

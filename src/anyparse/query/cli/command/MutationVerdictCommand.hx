@@ -43,8 +43,8 @@ final class MutationVerdictCommand implements CliCommand {
 
 	#if (sys || nodejs)
 	/**
-	 * `apq mutation-verdict <log> [--expect <csv>]` — classify one utest
-	 * transcript for `tools/mutation-check.sh`, printing the verdict on the
+	 * `apq mutation-verdict <log>... [--expect <csv>]` — classify one utest transcript for `tools/mutation-check.sh`
+	 * (several are the slices of one run, read as their union — `MutationVerdict.merge`), printing the verdict on the
 	 * first line and the row detail on the second — plus a THIRD line, the same
 	 * detail with every list uncapped, but only when `cap` (MutationVerdict) actually
 	 * elided something; absent otherwise, so a caller reading two lines with
@@ -64,7 +64,7 @@ final class MutationVerdictCommand implements CliCommand {
 	 * the caller's `if ! out=$(…)` guard meaning what it says.
 	 */
 	private static function runMutationVerdict(args: Array<String>): Int {
-		var logPath: Null<String> = null;
+		final logPaths: Array<String> = [];
 		var expectCsv: String = '';
 		var buildLog: Bool = false;
 		var i: Int = 0;
@@ -89,24 +89,25 @@ final class MutationVerdictCommand implements CliCommand {
 						printMutationVerdictUsage();
 						return EXIT_USAGE;
 					}
-					if (logPath != null) {
-						CliIo.stderr('apq mutation-verdict: only one transcript supported (got "$logPath" and "$a")\n');
-						return EXIT_USAGE;
-					}
-					logPath = a;
+					logPaths.push(a);
 			}
 			i++;
 		}
-		if (logPath == null) {
+		if (logPaths.length == 0) {
 			CliIo.stderr('apq mutation-verdict: no transcript given\n');
 			printMutationVerdictUsage();
 			return EXIT_USAGE;
 		}
-		final source: String = logPath;
-		final raw: String = try CliIo.readFile(source) catch (exception: Exception) {
+		if (buildLog && logPaths.length > 1) {
+			CliIo.stderr('apq mutation-verdict: --build reads one build log (got ${logPaths.length})\n');
+			return EXIT_USAGE;
+		}
+		final raws: Array<String> = [];
+		for (path in logPaths) raws.push(try CliIo.readFile(path) catch (exception: Exception) {
 			CliIo.stderr('apq mutation-verdict: read failed: ${exception.message}\n');
 			return EXIT_RUNTIME;
-		}
+		});
+		final raw: String = raws[0];
 		if (buildLog) {
 			final failure: BuildFailureResult = BuildFailure.classify(raw);
 			CliIo.sysPrint('${BuildFailure.label(failure.cause)}\n');
@@ -116,7 +117,11 @@ final class MutationVerdictCommand implements CliCommand {
 		final expected: Array<String> = [
 			for (part in expectCsv.split(',')) if (part.trim().length > 0) part.trim()
 		];
-		final verdict: MutationVerdictResult = MutationVerdict.classify(TestTranscript.parseTestSummary(raw), expected);
+		// several transcripts are the slices of one run (`tools/mutation-check.sh`'s fallback), read as their union
+		final verdict: MutationVerdictResult = MutationVerdict.classify(
+			raws.length == 1 ? TestTranscript.parseTestSummary(raw) : MutationVerdict.merge(raws.map(TestTranscript.parseTestSummary)),
+			expected
+		);
 		CliIo.sysPrint('${MutationVerdict.label(verdict.kind)}\n');
 		CliIo.sysPrint('${verdict.detail}\n');
 		// Line 3 is OMITTED, not blank, when `cap` elided nothing — a caller
@@ -127,7 +132,7 @@ final class MutationVerdictCommand implements CliCommand {
 	}
 
 	private static function printMutationVerdictUsage(): Void {
-		CliIo.sysPrint('Usage: apq mutation-verdict <transcript> [--expect <csv>]\n');
+		CliIo.sysPrint('Usage: apq mutation-verdict <transcript>... [--expect <csv>]\n');
 		CliIo.sysPrint('       apq mutation-verdict <haxe-build-log> --build\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Classify one utest stdout transcript for tools/mutation-check.sh.\n');
@@ -137,6 +142,8 @@ final class MutationVerdictCommand implements CliCommand {
 		CliIo.sysPrint('  MISMATCH  the run went red, but some expectation matched nothing\n');
 		CliIo.sysPrint('  NO-TESTS  the filter matched no test class\n');
 		CliIo.sysPrint('  RUN-FAIL  no usable transcript, or a red run whose rows did not parse\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Several transcripts are read as the slices of ONE run (their union).\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('The exit code says whether classification was possible, not what the\n');
 		CliIo.sysPrint('verdict was: every verdict exits 0, a usage error or unreadable file 2.\n');

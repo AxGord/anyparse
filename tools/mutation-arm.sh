@@ -26,6 +26,10 @@
 #   --fast   run only the test classes that pin the arm, instead of the whole
 #            suite. Cheap, and it forfeits the collateral census — an arm cuts
 #            shared engine code, so what ELSE went red is part of the reading.
+#            And killer-first (`mutation-check.sh --killer-first`): the pinned
+#            TESTS alone run first, and the pinned classes only when that run
+#            is not a KILLED reading — same verdict, a fraction of the run.
+#            `APQ_MUTATION_NO_KILLER_FIRST=1` runs the pinned classes only.
 #   --jobs N passed to tools/mutation-check.sh (default: its own min(cores-2, memory/5GiB)).
 #   --list   print the registry and exit.
 #   --working-tree
@@ -153,74 +157,89 @@ for (const arm of table.arms || []) console.log(arm.name);
 ' "$arms_json"
 }
 
-# read_arm <name> <fragment-payload-out>
-# Prints `<kind>\t<type>\t<method>\t<force>`; for a FIND arm the payload file is
-# written here, because a multi-line fragment does not survive a shell variable
-# round trip intact.
-read_arm() {
+# read_arms <names-file> — every named arm's record, read in ONE pass over the
+# registry: `<workroot>/<name>.meta` holds `<FIND|FORCE>\t<type>\t<method>\t<kind>\t<force>`,
+# and a FIND arm's payload is written to `<name>.payload` here, because a
+# multi-line fragment does not survive a shell variable round trip intact. An arm
+# the registry does not hold, or whose pairs do not pair up, gets the reason in
+# `<name>.unknown` instead. (One node process per arm used to read the whole
+# registry once per arm: 2051 reads of it in a full sweep.)
+read_arms() {
     node -e '
 const fs = require("fs");
 const table = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
-const arm = (table.arms || []).find(a => a.name === process.argv[2]);
-if (!arm) {
-    process.stderr.write("mutation-arm.sh: no arm named \"" + process.argv[2] + "\" in " + process.argv[1] + "\n");
-    process.exit(1);
-}
-const force = arm.force === undefined || arm.force === null ? "" : String(arm.force);
+const byName = new Map((table.arms || []).map(a => [a.name, a]));
+const dir = process.argv[2];
 // `find` / `replace` are one string or a LIST of them. N pairs go into ONE payload,
 // which alternates old / new sections, and `Patch` locates every pair against the
 // ORIGINAL member text - so a multi-edit cut needs no ordering and no bridge text.
 const list = v => v === undefined || v === null ? null : (Array.isArray(v) ? v.map(String) : [String(v)]);
-if (force === "") {
-    const finds = list(arm.find) || [];
-    const replaces = list(arm.replace) || finds.map(() => "");
-    if (finds.length === 0 || finds.length !== replaces.length) {
-        process.stderr.write("mutation-arm.sh: \"" + arm.name + "\" declares " + finds.length
-            + " find fragment(s) against " + replaces.length + " replace(s) - a multi-pair cut pairs them up\n");
-        process.exit(1);
+for (const name of fs.readFileSync(process.argv[3], "utf8").split("\n").filter(n => n !== "")) {
+    const arm = byName.get(name);
+    if (!arm) {
+        fs.writeFileSync(dir + "/" + name + ".unknown", "mutation-arm.sh: no arm named \"" + name + "\" in " + process.argv[1] + "\n");
+        continue;
     }
-    const sections = [];
-    for (let i = 0; i < finds.length; i++) sections.push(finds[i], replaces[i]);
-    fs.writeFileSync(process.argv[3], sections.join("\n====\n") + "\n");
+    const force = arm.force === undefined || arm.force === null ? "" : String(arm.force);
+    if (force === "") {
+        const finds = list(arm.find) || [];
+        const replaces = list(arm.replace) || finds.map(() => "");
+        if (finds.length === 0 || finds.length !== replaces.length) {
+            fs.writeFileSync(dir + "/" + name + ".unknown", "mutation-arm.sh: \"" + arm.name + "\" declares " + finds.length
+                + " find fragment(s) against " + replaces.length + " replace(s) - a multi-pair cut pairs them up\n");
+            continue;
+        }
+        const sections = [];
+        for (let i = 0; i < finds.length; i++) sections.push(finds[i], replaces[i]);
+        fs.writeFileSync(dir + "/" + name + ".payload", sections.join("\n====\n") + "\n");
+    }
+    const kind = arm.kind === undefined || arm.kind === null || arm.kind === "" ? "FnMember" : String(arm.kind);
+    fs.writeFileSync(dir + "/" + name + ".meta", [force === "" ? "FIND" : "FORCE", arm.type, arm.method, kind, force].join("\t") + "\n");
 }
-const kind = arm.kind === undefined || arm.kind === null || arm.kind === "" ? "FnMember" : String(arm.kind);
-process.stdout.write([force === "" ? "FIND" : "FORCE", arm.type, arm.method, kind, force].join("\t") + "\n");
-' "$arms_json" "$1" "$2"
+' "$arms_json" "$workroot" "$1"
 }
 
 # The pins that name <arm>, as `<fq.Class>.<method>` — the expectation set
 # `apq mutation-verdict` matches against the failure names. Derived from the
 # GENERATED registry, never restated in the arm record: the pin metadata is
 # where the arm/fixture pairing is declared, and one copy of a fact is enough.
-arm_pins() {
+# pin_tables — `<workroot>/pins.test` and `pins.class`, `<arm>\t<csv>` each.
+pin_tables() {
     # No `cd` needed: `--list-pins` is a compile-time-embedded registry dump
     # with no CWD-relative read, measured (`cd /tmp && node <abs>/test.js
     # --list-pins` matches the in-repo count byte-for-byte) — which is what
     # lets this honour a private `$test_bin` living anywhere. Dumped ONCE per
     # run: loading the 27 MB runner costs ~0.3 s, and two lookups per arm
     # made it a minute and a half of a 139-arm sweep's serial render phase.
+    # Answered for every arm in the same one pass (`<workroot>/pins.test` /
+    # `pins.class`, `<arm>\t<csv>`): an awk over the dump per lookup was
+    # still ~40 s of a 2051-arm sweep.
     if [ ! -s "$workroot/pins" ]; then
         node "$test_bin" --list-pins > "$workroot/pins"
+        awk -F' :: ' -v dir="$workroot" '
+            {
+                n = split($3, killers, ",")
+                cls = $1; sub("#.*", "", cls)
+                test = $1; sub("#", ".", test)
+                for (i = 1; i <= n; i++) { print killers[i] "\t" test > (dir "/pins.test.raw"); print killers[i] "\t" cls > (dir "/pins.class.raw") }
+            }' "$workroot/pins"
+        for want in test class; do
+            sort -u "$workroot/pins.$want.raw" | awk -F'\t' '
+                $1 != arm { if (arm != "") print arm "\t" csv; arm = $1; csv = $2; next }
+                { csv = csv "," $2 }
+                END { if (arm != "") print arm "\t" csv }' > "$workroot/pins.$want"
+        done
     fi
-    awk -F' :: ' -v arm="$1" -v want="$2" '
-        {
-            n = split($3, killers, ",")
-            for (i = 1; i <= n; i++) if (killers[i] == arm) {
-                if (want == "class") { sub("#.*", "", $1); print $1 }
-                else { sub("#", ".", $1); print $1 }
-            }
-        }' "$workroot/pins" | sort -u | tr '\n' ',' | sed 's/,$//'
 }
 
-# render_arm <name> <workroot> <gen> <base-ref> — one arm's cut, rendered
-# READ-ONLY against the scratch worktree into `<workroot>/<name>.patch`, or
-# the reason it could not be into `<name>.renderfail` (`<name>.unknown`: no
-# such arm). Read-only is what lets every arm render at once: `hxq patch`
-# without `--write` prints the patched file — byte-identical to what
-# `--write` writes, measured — and `diff -u` against the untouched file is
-# the patch `git apply` takes in each track. The serial loop this replaced
-# wrote, diffed and checked out each file in turn: ~1 s an arm, over two
-# minutes of a 139-arm sweep before its first build.
+# render_arm <name> <workroot> <gen> <base-ref> — one arm's cut, PREPARED
+# read-only against the scratch worktree: the file its type lives in, its
+# payload (a FORCE arm's is built here, off the member's own signature), and
+# the `<name>.row` that `apq patch --batch` applies (render_cuts), or the
+# reason it could not be prepared in `<name>.renderfail`. Read-only is what
+# lets every arm render at once: the batch prints each patched file —
+# byte-identical to what `hxq patch --write` writes, measured — and `diff -u`
+# against the untouched file is the patch `git apply` takes in each track.
 render_fail() {
     printf '%s\n' "$2" > "$workroot/$1.renderfail"
 }
@@ -231,9 +250,8 @@ render_arm() {
     gen=$3
     base_ref=$4
     payload="$workroot/$name.payload"
-    if ! meta=$(read_arm "$name" "$payload" 2> "$workroot/$name.unknown"); then
-        return 0
-    fi
+    [ -f "$workroot/$name.meta" ] || return 0
+    meta=$(cat "$workroot/$name.meta")
     cut_kind=$(printf '%s' "$meta" | cut -f1)
     type=$(printf '%s' "$meta" | cut -f2)
     method=$(printf '%s' "$meta" | cut -f3)
@@ -304,20 +322,79 @@ process.stdout.write(src.slice(0, nl + 1));
         } > "$payload"
     fi
 
-    if ! ( cd "$gen" && "$repo/bin/hxq" patch "$file" --select "$node_kind:$method" - < "$payload" ) \
-        > "$workroot/$name.new" 2> "$workroot/$name.apply.log"; then
-        render_fail "$name" "$name: the cut did not apply — $workroot/$name.apply.log"
+    # The file and the address the cut is made at: the batch row, and what the
+    # schema plan needs of the arm (schema_plan).
+    printf '%s\t%s\n' "$file" "$node_kind:$method" > "$workroot/$name.target"
+    printf '%s\t%s\t%s\t%s\n' "$file" "$node_kind:$method" "$payload" "$workroot/$name.new" > "$workroot/$name.row"
+    return 0
+}
+
+# render_cuts <names...> — every prepared arm's cut applied by `apq patch
+# --batch` (render_arm wrote the rows), then diffed into `<name>.patch`. One
+# process per arm used to start `apq`, re-read and re-canonical-check the file
+# for every arm cut in it: 396 s of a 2051-arm sweep's render under load,
+# against ~60 s batched. The rows are dealt to one batch per core, a file's
+# rows in chunks of at most RENDER_CHUNK so the file most arms cut in (151 in
+# one) does not hold one batch for the rest — each batch canonical-checks a
+# file once.
+RENDER_CHUNK=16
+
+render_cuts() {
+    local name file shard
+    for name in "$@"; do
+        [ -f "$workroot/$name.row" ] && cat "$workroot/$name.row"
+    done | sort -t$'\t' -k1,1 -s | awk -F'\t' -v n="$render_jobs" -v chunk="$RENDER_CHUNK" -v dir="$workroot" '
+        { rows[$1] = rows[$1] $0 "\n"; count[$1]++ }
+        END {
+            # longest file first, each chunk to the batch with the fewest rows
+            k = 0
+            for (f in count) order[++k] = f
+            for (i = 1; i <= k; i++) for (j = i + 1; j <= k; j++) if (count[order[j]] > count[order[i]]) { t = order[i]; order[i] = order[j]; order[j] = t }
+            for (i = 1; i <= k; i++) {
+                m = split(rows[order[i]], lines, "\n")
+                for (start = 1; start < m; start += chunk) {
+                    best = 0
+                    for (b = 1; b < n; b++) if (load[b] < load[best]) best = b
+                    for (r = start; r < start + chunk && r < m; r++) { print lines[r] > (dir "/render-batch." best); load[best]++ }
+                }
+            }
+        }'
+    for shard in "$workroot"/render-batch.*; do
+        [ -f "$shard" ] || continue
+        ( cd "$gen" && node "$apq_bin" patch --batch "$shard" ) 2> "$shard.log" &
+    done
+    wait
+    printf '%s\n' "$@" | xargs -P "$render_jobs" -I{} "$self" --diff {} "$workroot" "$gen"
+}
+
+# render_diff <name> — the batch's answer for one arm made its patch, or the
+# reason it could not be (run in parallel by render_cuts).
+render_diff() {
+    local name=$1 file
+    [ -f "$workroot/$name.row" ] || return 0
+    file=$(cut -f1 "$workroot/$name.row")
+    if [ -f "$workroot/$name.new.err" ]; then
+        render_fail "$name" "$name: the cut did not apply — $(tr '\n' ' ' < "$workroot/$name.new.err")"
+        return 0
+    fi
+    if [ ! -f "$workroot/$name.new" ]; then
+        render_fail "$name" "$name: the cut did not apply — its batch wrote nothing ($workroot/render-batch.*.log)"
         return 0
     fi
     diff -u --label "a/$file" --label "b/$file" "$gen/$file" "$workroot/$name.new" > "$workroot/$name.patch" || true
     if [ ! -s "$workroot/$name.patch" ]; then
         render_fail "$name" "$name: the cut changed nothing — the registry describes the code as it already is"
     fi
-    return 0
 }
 
 if [ "${1:-}" = "--render" ]; then
     render_arm "$2" "$3" "$4" "$5"
+    exit 0
+fi
+if [ "${1:-}" = "--diff" ]; then
+    workroot=$3
+    gen=$4
+    render_diff "$2"
     exit 0
 fi
 
@@ -472,8 +549,21 @@ gen_fail() {
 # had to outlive the handoff because the child reads them. Running the
 # child as a CHILD keeps the trap, and it is also the honest signal
 # behaviour — an INT reaches the whole process group either way.
+# kill_tree <pid> — <pid> and every process below it, children first.
+kill_tree() {
+    local child
+    for child in $(pgrep -P "$1" 2>/dev/null); do
+        kill_tree "$child"
+    done
+    kill "$1" 2>/dev/null || true
+}
+
 cleanup() {
     local status=$?
+    if [ -n "${schema_pid:-}" ]; then
+        kill_tree "$schema_pid"
+    fi
+    git -C "$repo" worktree remove --force "${schema_dir:-$workroot/schema}/tree" >/dev/null 2>&1 || true
     git -C "$repo" worktree remove --force "$gen" >/dev/null 2>&1 || true
     git -C "$repo" worktree prune >/dev/null 2>&1 || true
     # `|| true` is load-bearing: a non-zero LAST command in an EXIT trap
@@ -517,10 +607,14 @@ if [ "$(uname -s)" = "Darwin" ]; then
 else
     render_jobs=$(nproc 2>/dev/null || echo 2)
 fi
-# Every arm renders at once (render_arm); the manifest is then written in
-# the order the arms were named, so a refusal reads exactly as the serial
-# loop's did.
+# Every arm renders at once — the registry read once (read_arms), each cut
+# prepared (render_arm) and the cuts applied in batches (render_cuts); the
+# manifest is then written in the order the arms were named, so a refusal
+# reads exactly as the serial loop's did.
+printf '%s\n' $names > "$workroot/names"
+read_arms "$workroot/names"
 printf '%s\n' $names | xargs -P "$render_jobs" -I{} "$self" --render {} "$workroot" "$gen" "$base_ref" || true
+render_cuts $names
 for name in $names; do
     if [ ! -s "$workroot/$name.patch" ] && [ ! -f "$workroot/$name.renderfail" ] && [ ! -s "$workroot/$name.unknown" ]; then
         render_fail "$name" "$name: rendering the cut died before it said why"
@@ -538,23 +632,245 @@ for name in $names; do
     # `@:killer` that names it is written once the cut is known to compile.
     # The manifest still records ALL and no expectation, so the same file can
     # be re-run without --build-only.
+    printf '%s\n' "$name" >> "$workroot/manifest.names"
+done
+if [ -s "$workroot/manifest.names" ]; then
     if [ "$check_apply" -eq 1 ]; then
-        expected=""
-        apq_filter="ALL"
+        awk -v dir="$workroot" '{ print $0 " | " dir "/" $0 ".patch | ALL | " }' "$workroot/manifest.names" > "$manifest"
     else
-        expected=$(arm_pins "$name" "test")
-        if [ -z "$expected" ]; then
-            echo "mutation-arm.sh: $name: no @:killer in the generated registry names it — rebuild $test_bin" >&2
+        pin_tables
+        awk -F'\t' -v dir="$workroot" -v fast="$([ "$filter_mode" = "pinned-classes" ] && echo 1 || echo 0)" '
+            FILENAME == ARGV[1] { test[$1] = $2; next }
+            FILENAME == ARGV[2] { cls[$1] = $2; next }
+            !($0 in test) { print $0 > "/dev/stderr"; missing = 1; next }
+            { print $0 " | " dir "/" $0 ".patch | " (fast ? cls[$0] : "ALL") " | " test[$0] }
+            END { exit missing }
+        ' "$workroot/pins.test" "$workroot/pins.class" "$workroot/manifest.names" > "$manifest" 2> "$workroot/unpinned" || true
+        if [ -s "$workroot/unpinned" ]; then
+            echo "mutation-arm.sh: $(head -1 "$workroot/unpinned"): no @:killer in the generated registry names it — rebuild $test_bin" >&2
             exit 2
         fi
-        if [ "$filter_mode" = "pinned-classes" ]; then
-            apq_filter=$(arm_pins "$name" "class")
-        else
-            apq_filter="ALL"
-        fi
     fi
-    printf '%s | %s | %s | %s\n' "$name" "$workroot/$name.patch" "$apq_filter" "$expected" >> "$manifest"
-done
+fi
+
+# ------------------------------------------------------------------ schemata
+#
+# Mutant schemata (docs/testing.md § "Mutation runs: schemata"). Every arm a
+# copy can stand for is compiled into ONE build — `apq mutation-schema` copies
+# the arm's mutated method in beside the original and opens the original with
+# a switch on `APQ_MUTANT` — so such an arm costs a suite run and no build.
+# Built in the background while the per-arm tracks (everything else) run;
+# mutation-check.sh holds a candidate's track until the build answers, and a
+# candidate the build left out is built per arm, as before.
+#
+# A composed build means its per-arm build only where nothing tells the two
+# apart, and the build itself is asked where something could:
+#   - a file a `@:build` macro reads is left alone: a copy is a field the
+#     macro would see (`hxq meta '@:build'`); so is anyparse.macro, which is
+#     compile-time code — built per arm from the start, not after waiting for
+#     the composed build to say what the macro log below says of it;
+#   - test/ is left alone: the suite registers what it finds there;
+#   - a switch REACHED at compile time (`APQ_MUTANT_MACRO_LOG`) is a method
+#     the cut could have changed the generated code through — per arm;
+#   - a switch whose source the build EMBEDS as text (the facts macro, which a
+#     child compiler re-compiles under the suite's environment) is the arm's
+#     own in that child too; the fixture cache records which switches a
+#     compile ran and never replays one that ran the live arm's. And since
+#     the build never types those modules, they are typed in the macro
+#     context after it (schema_check_embedded): a copy that breaks there
+#     would break every arm's child compiles;
+#   - an arm whose copy does not compile is named by the compiler's position
+#     and left out, and the rest built again (at most SCHEMA_ROUNDS times).
+# Tests that read the tree from disk still read the arm's own cut: a schema
+# track resets its slot and applies the arm's patch exactly as a per-arm one,
+# and only skips the build.
+schema_dir="$workroot/schema"
+schema_pid=""
+SCHEMA_ROUNDS=${APQ_MUTATION_SCHEMA_ROUNDS:-6}
+# How many times one round re-checks the embedded modules after leaving culprits out.
+SCHEMA_CHECKS=20
+
+# The plan rows of every rendered arm under src/ outside a `@:build` file:
+# `<id>\t<file>\t<selector>\t<mutated-file>`, ids in manifest order, and the
+# id -> name table beside it.
+schema_plan() {
+    local built
+    : > "$schema_dir/plan"
+    : > "$schema_dir/names"
+    built=$( cd "$gen" && "$repo/bin/hxq" meta '@:build' src --flat --limit 100000 2>/dev/null | sed -n 's/^\(src\/[^:]*\.hx\):.*/\1/p' | sort -u )
+    # One awk over the manifest's names and their targets: a shell loop forked
+    # per arm, seconds of serial work in a 2051-arm sweep.
+    cut -d'|' -f1 "$manifest" | tr -d ' ' | awk -F'\t' -v dir="$workroot" -v out="$schema_dir" '
+        FILENAME == ARGV[1] { built[$0] = 1; next }
+        {
+            name = $0
+            target = dir "/" name ".target"
+            if ((getline line < target) <= 0) next
+            close(target)
+            split(line, t, "\t")
+            # anyparse.macro is compile-time code: its arms change what the build
+            # generates (every one of them is reached at compile time, measured),
+            # so they are built per arm from the start rather than after the
+            # composed build has said so — a candidate waits for that answer.
+            if (t[1] !~ /^src\// || t[1] ~ /^src\/anyparse\/macro\// || (t[1] in built)) next
+            id++
+            print id "\t" t[1] "\t" t[2] "\t" dir "/" name ".new" > (out "/plan")
+            print id " " name > (out "/names")
+            print name > (out "/candidates")
+        }
+    ' <(printf '%s\n' "$built") -
+}
+
+# The ids a failed build's errors name: an error inside an arm's copy, or on
+# its dispatch line, names that arm; one anywhere else in a composed file names
+# every arm of that file.
+schema_culprits() {
+    awk -F'\t' '
+        FNR == NR {
+            if ($2 == "ok") { file[$1] = $3; dispatch[$1] = $4; from[$1] = $5; to[$1] = $6; composed[$3] = 1 }
+            next
+        }
+        match($0, /^[^:]+\.hx:[0-9]+:/) {
+            split(substr($0, RSTART, RLENGTH), p, ":")
+            f = p[1]; l = p[2] + 0
+            sub(/^\.\//, "", f)
+            hit = 0
+            for (id in file) if (file[id] == f && ((l >= from[id] && l <= to[id]) || l == dispatch[id])) { print id; hit = 1 }
+            if (!hit && (f in composed)) for (id in file) if (file[id] == f) print id
+        }
+    ' "$schema_dir/placements" "$1" | sort -un
+}
+
+# The build, answered in `$schema_dir/state` (`ready` | `failed`); the
+# worktree it composed in goes as soon as it has.
+schema_build() {
+    schema_compose_and_build
+    git -C "$repo" worktree remove --force "$schema_dir/tree" >/dev/null 2>&1 || true
+}
+
+schema_compose_and_build() {
+    local tree="$schema_dir/tree" round culprits
+    if ! git -C "$repo" worktree add --detach --quiet "$tree" "$base_ref" 2> "$schema_dir/why"; then
+        echo failed > "$schema_dir/state"
+        return 0
+    fi
+    for round in $(seq 1 "$SCHEMA_ROUNDS"); do
+        if ! schema_compose; then
+            echo failed > "$schema_dir/state"
+            return 0
+        fi
+        rm -f "$schema_dir/macro-log"
+        if ( cd "$tree" && APQ_MUTANT_MACRO_LOG="$schema_dir/macro-log" haxe test-js-common.hxml -js "$schema_dir/test.js" ) \
+                > "$schema_dir/build-$round.log" 2>&1; then
+            # `<name> <id>` for every arm the build stands for.
+            # An arm whose dispatch line, as `apq mutation-schema` spliced it,
+            # occurs verbatim in the output is one whose source the build
+            # embeds as TEXT — compiled code spells the call `Type.__mutOn(…)`
+            # and never carries the `return __mut<id>_<name>(` that follows.
+            # A string literal that merely looks like one costs a check, never
+            # a wrong answer.
+            # ONE regex over the output, then an exact compare against the plan:
+            # `grep -F -f` with one pattern per arm ran for minutes on BSD grep.
+            grep -oE '\(__mutOn\([0-9]+\)\) return __mut[0-9]+_[A-Za-z0-9_]+\(' "$schema_dir/test.js" \
+                | awk -F'\t' '
+                    FILENAME == ARGV[1] { m = $3; sub(/^[^:]*:/, "", m); want["(__mutOn(" $1 ")) return __mut" $1 "_" m "("] = $1; next }
+                    $0 in want { print want[$0] }
+                ' "$schema_dir/plan" - | sort -un > "$schema_dir/embedded" || true
+            # An embedded module is compiled again by a child compiler, under
+            # the suite, in the macro context — and nothing in this build typed
+            # its copies there (a `#if macro` module contributes no type to it).
+            # A copy that does not compile there would break every child compile
+            # of every arm, so the embedded modules are typed in that context
+            # here, and a culprit is left out like any copy the build refused.
+            # The check is seconds and the build minutes, so the check is
+            # repeated alone, recomposing after each drop, until it passes;
+            # the build is then redone once over the cleaned plan.
+            if [ -s "$schema_dir/embedded" ] && ! schema_check_embedded "$round"; then
+                local check=0
+                while [ "$check" -lt "$SCHEMA_CHECKS" ]; do
+                    check=$((check + 1))
+                    culprits=$(schema_culprits "$schema_dir/embedded-$round.log")
+                    [ -n "$culprits" ] || culprits=$(cat "$schema_dir/embedded")
+                    schema_drop "$culprits"
+                    printf '%s\n' "$culprits" | awk 'FNR == NR { out[$1] = 1; next } !($1 in out)' - "$schema_dir/embedded" \
+                        > "$schema_dir/embedded.next"
+                    mv "$schema_dir/embedded.next" "$schema_dir/embedded"
+                    schema_compose || break
+                    if [ ! -s "$schema_dir/embedded" ] || schema_check_embedded "$round"; then
+                        break
+                    fi
+                done
+                continue
+            fi
+            touch "$schema_dir/macro-log"
+            awk -F'\t' '
+                FILENAME == ARGV[1] { name[$1] = $2; next }
+                FILENAME == ARGV[2] { macro[$1] = 1; next }
+                FILENAME == ARGV[3] { embedded[$1] = 1; next }
+                $2 == "ok" && !($1 in macro) { print name[$1], $1 }
+            ' <(tr ' ' '\t' < "$schema_dir/names") "$schema_dir/macro-log" "$schema_dir/embedded" "$schema_dir/placements" \
+                > "$schema_dir/map"
+            echo ready > "$schema_dir/state"
+            return 0
+        fi
+        culprits=$(schema_culprits "$schema_dir/build-$round.log")
+        if [ -z "$culprits" ]; then
+            break
+        fi
+        schema_drop "$culprits"
+    done
+    echo failed > "$schema_dir/state"
+}
+
+# schema_compose — the tree reset and the plan composed into it.
+schema_compose() {
+    git -C "$schema_dir/tree" checkout -q -- . 2>> "$schema_dir/why" \
+        && ( cd "$schema_dir/tree" && "$repo/bin/hxq" mutation-schema "$schema_dir/plan" ) > "$schema_dir/placements" 2>> "$schema_dir/why"
+}
+
+# schema_drop <ids> — the arms left out of the next round's plan.
+schema_drop() {
+    printf '%s\n' "$1" | awk -F'\t' 'FNR == NR { out[$1] = 1; next } !($1 in out)' - "$schema_dir/plan" > "$schema_dir/plan.next"
+    mv "$schema_dir/plan.next" "$schema_dir/plan"
+    printf '%s\n' "$1" >> "$schema_dir/culprits"
+}
+
+# schema_check_embedded <round> — type every module holding an embedded arm
+# in the macro context, through `--macro <type>.__mutOn(0)` over the composed
+# tree; the log's paths are rewritten to the tree-relative ones schema_culprits
+# names arms by.
+schema_check_embedded() {
+    local probe="$schema_dir/probe" file owner rel module macros=""
+    rm -rf "$probe"
+    mkdir -p "$probe"
+    printf 'class AnyparseSchemaCheck {\n\tstatic function main() {}\n}\n' > "$probe/AnyparseSchemaCheck.hx"
+    awk -F'\t' 'FILENAME == ARGV[1] { e[$1] = 1; next } $2 == "ok" && ($1 in e) { print $3 "\t" $7 }' \
+        "$schema_dir/embedded" "$schema_dir/placements" | sort -u > "$schema_dir/embedded-owners"
+    while IFS=$'\t' read -r file owner; do
+        rel=${file#src/}
+        module=$(printf '%s' "${rel%.hx}" | tr '/' '.')
+        [ "$(basename "$rel" .hx)" = "$owner" ] || module="$module.$owner"
+        macros="$macros --macro $module.__mutOn(0)"
+    done < "$schema_dir/embedded-owners"
+    if ( cd "$schema_dir/tree" && haxe -cp src -cp "$probe" -main AnyparseSchemaCheck --interp --no-output $macros ) \
+            > "$schema_dir/embedded-$1.log" 2>&1; then
+        return 0
+    fi
+    return 1
+}
+
+schema_args=""
+if [ "$check_apply" -eq 0 ] && [ -z "${APQ_MUTATION_NO_SCHEMA:-}" ]; then
+    mkdir -p "$schema_dir"
+    : > "$schema_dir/candidates"
+    schema_plan
+    if [ -s "$schema_dir/plan" ]; then
+        echo "schema: $(wc -l < "$schema_dir/plan" | tr -d ' ') arm(s) composed into one build"
+        schema_build &
+        schema_pid=$!
+        schema_args="--schema $schema_dir"
+    fi
+fi
 
 # The scratch worktree has done its job — the patches are rendered. Removed
 # here rather than at exit so it is not held for the length of the run; the
@@ -573,6 +889,8 @@ if [ "$keep" -eq 1 ]; then
 fi
 if [ "$check_apply" -eq 1 ]; then
     check_args="$check_args --build-only"
+elif [ "$filter_mode" = "pinned-classes" ] && [ -z "${APQ_MUTATION_NO_KILLER_FIRST:-}" ]; then
+    check_args="$check_args --killer-first"
 fi
 if [ "$base_ref" != "HEAD" ]; then
     # --working-tree (T694): the patches above were rendered against a
@@ -584,7 +902,7 @@ if [ "$base_ref" != "HEAD" ]; then
 fi
 rc=0
 if [ -s "$manifest" ]; then
-    "$repo/tools/mutation-check.sh" "$manifest" $check_args || rc=$?
+    "$repo/tools/mutation-check.sh" "$manifest" $check_args $schema_args || rc=$?
 elif [ "$check_apply" -eq 0 ]; then
     echo "mutation-arm.sh: nothing to run" >&2
     rc=2

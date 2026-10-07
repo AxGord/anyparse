@@ -35,6 +35,9 @@ typedef PatchOpts = {
 	var file: Null<String>;
 	var payload: Null<String>;
 	var fromFile: Null<String>;
+
+	/** `--batch <rows>`: many patches in one process (`runPatchBatch`). */
+	var batch: Null<String>;
 	// Non-null = parsing hit a terminal case; the caller returns it immediately.
 	var errExit: Null<Int>;
 };
@@ -78,6 +81,8 @@ final class PatchCommand implements CliCommand implements PostWriteFix {
 	private static function runPatch(args: Array<String>, fix: Bool): Int {
 		final o: PatchOpts = parsePatchArgs(args);
 		if (o.errExit != null) return o.errExit;
+		final batch: Null<String> = o.batch;
+		if (batch != null) return runPatchBatch(batch, o.lang, o.sep);
 		var payload: Null<String> = o.payload;
 		if (o.fromFile != null || payload == '-') {
 			final resolved: Null<String> = CliArgs.resolveCodeArg('patch', payload, o.fromFile, true);
@@ -122,6 +127,61 @@ final class PatchCommand implements CliCommand implements PostWriteFix {
 	}
 
 	/**
+	 * `apq patch --batch <rows>` — many patches in one process, for `tools/mutation-arm.sh`, whose render of a full sweep
+	 * spent most of its minutes starting `apq` once per arm and re-reading and re-canonical-checking the same file for
+	 * every arm cut in it. Each row is `<file>\t<selector>\t<payload-file>\t<out-file>`: the patched text goes to
+	 * `<out-file>`, byte for byte what `apq patch <file> --select <selector> --from-file <payload-file>` prints, and a
+	 * refusal goes to `<out-file>.err` (its message; an address that did not resolve says so on stderr). Nothing is
+	 * written over a source file.
+	 *
+	 * Same edit, cheaper: each file is canonical-gated ONCE, and every row of a file that passes is then applied as
+	 * `--reformat` applies it — over a canonical input the gate is the only thing `--reformat` changes. A file that fails
+	 * the gate is patched without `--reformat`, so its rows are refused exactly as one `apq patch` refuses them.
+	 */
+	private static function runPatchBatch(rowsPath: String, lang: String, sep: String): Int {
+		final rows: String = try CliIo.readFile(rowsPath) catch (exception: Exception) {
+			CliIo.stderr('apq patch: --batch: ${exception.message}\n');
+			return EXIT_RUNTIME;
+		};
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
+		final canonical: Map<String, Bool> = [];
+		for (line in rows.split('\n')) if (line.trim() != '') {
+			final cells: Array<String> = line.split('\t');
+			if (cells.length != 4) {
+				CliIo.stderr('apq patch: --batch: a row is <file>\\t<selector>\\t<payload-file>\\t<out-file>, got "$line"\n');
+				return EXIT_USAGE;
+			}
+			final refusal: Null<String> =
+				try batchRow(cells[0], cells[1], cells[2], cells[3], sep, plugin, canonical) catch (exception: Exception) exception.message;
+			if (refusal != null) CliIo.writeFile('${cells[3]}.err', '$refusal\n');
+		}
+		return EXIT_OK;
+	}
+
+	/** One `--batch` row: its patched text written to `out`, or why not. */
+	private static function batchRow(
+		file: String, select: String, payloadPath: String, out: String, sep: String, plugin: GrammarPlugin, canonical: Map<String, Bool>
+	): Null<String> {
+		// read as `--from-file` reads it, trailing newline dropped
+		final payload: Null<String> = CliArgs.resolveCodeArg('patch', null, payloadPath, true);
+		if (payload == null) return 'the payload $payloadPath could not be read';
+		final pairs: Null<Array<{ oldText: String, newText: String }>> = splitPatchPayload(payload, sep);
+		if (pairs == null) return 'the payload must alternate old / new fragments separated by "$sep" lines';
+		final source: String = CliIo.readFile(file);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(file);
+		if (!canonical.exists(file))
+			canonical[file] = try plugin.writeRoundTrip(source, optsJson) == source catch (exception: Exception) false;
+		final target: Null<ReplaceTarget> = CliEdit.resolveEditTarget('patch', source, file, plugin, select, null, null, null, null);
+		if (target == null) return 'the address $select did not resolve in $file (the reason is on stderr)';
+		return switch Patch.patchNodeMany(source, target, pairs, canonical[file] == true, plugin, optsJson) {
+			case Ok(text, _):
+				CliIo.writeFile(out, text);
+				null;
+			case Err(message): message;
+		};
+	}
+
+	/**
 	 * Split a patch payload into (old, new) fragment pairs on the lines whose
 	 * trimmed content equals `sep`: two sections = one pair, 2N sections = N
 	 * pairs. Returns null when there is no separator line or the section count
@@ -156,6 +216,7 @@ final class PatchCommand implements CliCommand implements PostWriteFix {
 		var file: Null<String> = null;
 		var payload: Null<String> = null;
 		var fromFile: Null<String> = null;
+		var batch: Null<String> = null;
 
 		var i: Int = 0;
 		while (i < args.length) {
@@ -177,6 +238,8 @@ final class PatchCommand implements CliCommand implements PostWriteFix {
 					sep = CliArgs.expectValue(args, ++i, '--sep');
 				case '--from-file':
 					fromFile = CliArgs.expectValue(args, ++i, '--from-file');
+				case '--batch':
+					batch = CliArgs.expectValue(args, ++i, '--batch');
 				case '--write':
 					write = true;
 				case '--reformat':
@@ -216,6 +279,7 @@ final class PatchCommand implements CliCommand implements PostWriteFix {
 			file: file,
 			payload: payload,
 			fromFile: fromFile,
+			batch: batch,
 			errExit: null
 		};
 	}
@@ -235,6 +299,7 @@ final class PatchCommand implements CliCommand implements PostWriteFix {
 			file: null,
 			payload: null,
 			fromFile: null,
+			batch: null,
 			errExit: code
 		};
 	}

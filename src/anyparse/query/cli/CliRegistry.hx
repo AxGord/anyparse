@@ -36,6 +36,7 @@ import anyparse.query.cli.command.MentionsCommand;
 import anyparse.query.cli.command.MetaCommand;
 import anyparse.query.cli.command.MoveCommand;
 import anyparse.query.cli.command.MoveMemberCommand;
+import anyparse.query.cli.command.MutationSchemaCommand;
 import anyparse.query.cli.command.MutationVerdictCommand;
 import anyparse.query.cli.command.NewCommand;
 import anyparse.query.cli.command.OracleCommand;
@@ -127,6 +128,7 @@ final class CliRegistry {
 			new LintDiffCommand(),
 			new OracleCommand(),
 			new MutationVerdictCommand(),
+			new MutationSchemaCommand(),
 			new ShardPlanCommand(),
 			new InlineCommand(),
 			new InlineMethodCommand(),
@@ -261,7 +263,8 @@ final class CliRegistry {
 		if (pad > 0) return pad + 1;
 		return switch name {
 			case 'encapsulate-field': ENCAPSULATE_FIELD_GAP;
-			case 'comment-rewrite', 'extract-interface', 'extract-superclass', 'introduce-parameter-object', 'mutation-verdict': 2;
+			case 'comment-rewrite', 'extract-interface', 'extract-superclass', 'introduce-parameter-object', 'mutation-verdict',
+				'mutation-schema': 2;
 			case _: 1;
 		}
 	}

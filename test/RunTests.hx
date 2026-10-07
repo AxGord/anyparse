@@ -42,7 +42,9 @@ class RunTests {
 		// so `APQ_TEST=RemoveParam` runs RemoveParamSliceTest and `APQ_TEST=Apq`
 		// runs all `Apq*` tests; comma-separated to run a slice + its siblings.
 		// A token `<class>#<i>/<k>` runs one slice of a class's tests (`ShardFilter`):
-		// `tools/suite-shard.sh` deals a class heavier than a shard as several.
+		// `tools/suite-shard.sh` deals a class heavier than a shard as several. A token
+		// `test:<text>` runs the tests whose `<class>.<method>` contains `<text>`
+		// (`tools/mutation-check.sh --killer-first`).
 		final filterEnv: Null<String> = Sys.getEnv('APQ_TEST');
 		final filters: Array<ShardToken> = filterEnv == null ? [] : [
 			for (f in filterEnv.split(',')) if (StringTools.trim(f) != '') ShardFilter.parse(StringTools.trim(f))

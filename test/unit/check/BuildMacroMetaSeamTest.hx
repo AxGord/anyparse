@@ -92,7 +92,9 @@ class BuildMacroMetaSeamTest extends Test {
 	 * there. Three reasons, and only the third is a queue item:
 	 *
 	 *  - EMISSION. The file writes the tag INTO target source (`MoveMember` adds an access grant,
-	 *    `EncapsulateField` adds a backing-storage annotation, `NewFile` writes a module header). A
+	 *    `EncapsulateField` adds a backing-storage annotation, `NewFile` writes a module header,
+	 *    `MutationSchema` copies a method and keeps off the copy every tag that would give it the
+	 *    original's role: a second operator, cast, accessor or native name). A
 	 *    name seam answers "which tag means X", not "what do I type to get one" — the distinction
 	 *    `RefShape.enumAbstractSyntax` and `parenDelimiters` already draw. Seaming these needs a
 	 *    SPELLING seam, a different design.
@@ -116,6 +118,16 @@ class BuildMacroMetaSeamTest extends Test {
 		'src/anyparse/query/MoveMember.hx' => ['@:access'],
 		'src/anyparse/query/EncapsulateField.hx' => ['@:isVar'],
 		'src/anyparse/query/NewFile.hx' => ['@:nullSafety'],
+		'src/anyparse/query/MutationSchema.hx' => [
+			'@:op',
+			'@:from',
+			'@:to',
+			'@:arrayAccess',
+			'@:resolve',
+			'@:native',
+			'@:expose',
+			'@:overload'
+		],
 		'src/anyparse/query/MemberWriteScan.hx' => ['@:build', '@:autoBuild', '@:genericBuild', '@:coreApi'],
 		'src/anyparse/query/RefactorSupport.hx' => ['@:allow'],
 		'src/anyparse/check/TrivialGetter.hx' => ['@:isVar'],
