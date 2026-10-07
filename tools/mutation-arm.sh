@@ -739,7 +739,16 @@ schema_compose_and_build() {
         if ( cd "$tree" && APQ_MUTANT_MACRO_LOG="$schema_dir/macro-log" haxe test-js-common.hxml -js "$schema_dir/test.js" ) \
                 > "$schema_dir/build-$round.log" 2>&1; then
             # `<name> <id> <cache|nocache>` for every arm the build stands for.
-            grep -oE '[^A-Za-z0-9_$.]__mutOn\([0-9]+\)' "$schema_dir/test.js" | grep -oE '[0-9]+' | sort -un > "$schema_dir/embedded"
+            # An arm whose dispatch line, as `apq mutation-schema` spliced it,
+            # occurs verbatim in the output is one whose source the build
+            # embeds as TEXT — compiled code spells the call `Type.__mutOn(…)`
+            # and never carries the `return __mut<id>_<name>(` that follows.
+            # A string literal that merely looks like one costs that arm the
+            # cache, never a wrong answer.
+            awk -F'\t' '{ m = $3; sub(/^[^:]*:/, "", m); print "(__mutOn(" $1 ")) return __mut" $1 "_" m "(" }' "$schema_dir/plan" \
+                > "$schema_dir/dispatch-lines"
+            grep -oF -f "$schema_dir/dispatch-lines" "$schema_dir/test.js" | sed 's/^(__mutOn(\([0-9]*\)).*/\1/' | sort -un \
+                > "$schema_dir/embedded" || true
             touch "$schema_dir/macro-log"
             awk -F'\t' '
                 FILENAME == ARGV[1] { name[$1] = $2; next }
