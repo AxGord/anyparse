@@ -3,6 +3,7 @@ package unit.check;
 #if (sys || nodejs)
 import sys.io.File;
 #end
+import anyparse.check.CompilerDisplayOracle;
 import anyparse.check.CompilerOracle;
 import anyparse.check.CompilerServer;
 import anyparse.check.FixVerifier;
@@ -10,6 +11,7 @@ import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.OracleCoverage;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
+import anyparse.query.cli.command.LintFixVerify;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -393,12 +395,15 @@ final class OracleConfigListE2ETest extends Test {
 	/**
 	 * The display server is warmed and queried under the defines of the configuration it serves.
 	 *
-	 * The only configuration declares `-D flag`, under which `v` is an `Int`. A server that dropped the
-	 * define names `String`, the annotation then fails the `-D flag` typecheck and is reverted; with the
-	 * define carried, `Int` is written and kept.
+	 * The only configuration declares `-D flag`, under which `v` is an `Int`. The server the phase starts
+	 * (`LintFixVerify.startDisplay`) is asked directly: one that dropped the define names `String`. The
+	 * lint run alone no longer reaches it — the phase types `v` from the compiler facts
+	 * (`FactsTypeOracle`), and the display server is only their fallback for a run without complete
+	 * facts — so the run's `Int` annotation is the facts' half of the same promise, not the server's.
 	 */
 	@:pin('control')
 	@:killer('M-DISPLAY-ORACLE-DROPS-DEFINES')
+	@:access(anyparse.query.cli.command.LintFixVerify)
 	public function testTheDisplayServerAnswersForTheConfigurationItServes(): Void {
 		Assert.same(
 			['-D', 'flag', '--connect', '7000', 'check.hxml', '--display', 'Main.hx@1@type'],
@@ -414,6 +419,12 @@ final class OracleConfigListE2ETest extends Test {
 			'{"compilerOracle":[{"hxml":"check.hxml","defines":["flag"]}],"rules":{"explicit-local-type":{"enabled":true}}}', DISPLAY_MAIN
 		);
 		if (skipWithoutHaxe(dir, 'check.hxml')) return;
+		final display: Null<CompilerDisplayOracle> = LintFixVerify.startDisplay(
+			[oracle(dir, '$dir/check.hxml', ['flag'])], new HaxeQueryPlugin().typeSyntax
+		);
+		final type: Null<String> = display?.typeAt('$dir/Main.hx', DISPLAY_MAIN.indexOf('trace(v)') + 'trace('.length);
+		display?.stop();
+		Assert.equals('Int', type, 'the server the phase starts types `v` under the -D flag build');
 		Cli.run(['lint', '--rule', 'explicit-local-type', '--fix', dir]);
 		final packed: String = File.getContent('$dir/Main.hx').split(' ').join('');
 		Assert.isTrue(packed.indexOf('varv:Int') != -1, 'the type the -D flag build infers is annotated: $packed');
