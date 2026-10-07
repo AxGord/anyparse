@@ -5266,7 +5266,7 @@
 			"type": "anyparse.query.ValueEscapes",
 			"method": "compute",
 			"find": "case ReflectiveName(_), ArrayChange:",
-			"replace": "case ReflectiveName(_), ArrayChange:\n\t\t\t\t\t\treturn { types: null, raw: false };",
+			"replace": "case ReflectiveName(_), ArrayChange:\n\t\t\t\t\t\treturn { types: null, raw: false, ids: null };",
 			"note": "(precision) an array change or a literal reflective name in the project leaves every instance anywhere"
 		},
 		{
