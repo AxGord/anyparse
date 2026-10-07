@@ -153,10 +153,8 @@ final class TypedEventConstant implements Check implements ConfigAware implement
 		final uses: Map<String, Array<Use>> = [];
 		for (p in parsed) collectUses(p, p.tree, spec, candidates, index, seams, uses);
 		final out: Array<Violation> = [];
-		for (key => candidate in candidates) {
-			final found: Null<Array<Use>> = uses[key];
-			if (found != null) report(candidate, found, types, index, seams, out);
-		}
+		// a candidate no use names is never an event type: `report` reads it as one with no event use
+		for (key => candidate in candidates) report(candidate, uses[key] ?? [], types, index, seams, out);
 		out.sort((a, b) -> a.file != b.file ? (a.file < b.file ? -1 : 1) : (a.span?.from ?? 0) - (b.span?.from ?? 0));
 		return out;
 	}

@@ -9540,7 +9540,21 @@
 			"method": "resolve",
 			"find": "if (head == null || hops > MAX_HOPS || typeParams.contains(head)) return Unproven;",
 			"replace": "if (head == null || hops > MAX_HOPS) return Unproven;",
-			"note": "a type parameter resolves to whatever same-named type is in scope, so `m<R>(x:R)` borrows class `R`'s proof"
+			"note": "a type parameter of the declaration a hop reaches resolves to whatever same-named type is in scope, so `typedef Id<T> = T` borrows class `T`'s proof"
+		},
+		{
+			"name": "M-NULLITY-BINDING-PARAMS-DROPPED",
+			"type": "anyparse.query.DeclaredNullity",
+			"method": "ofBinding",
+			"find": [
+				"if (typeName == null || isTypeParamAt(typeName, bindingFrom)) return Unproven;",
+				"resolve(_typeSources[bindingFrom] ?? typeName, _file, params, 0, [])"
+			],
+			"replace": [
+				"if (typeName == null) return Unproven;",
+				"resolve(_typeSources[bindingFrom] ?? typeName, _file, [], 0, [])"
+			],
+			"note": "the type parameters in scope at a binding are not, so `m<R>(x:R)` borrows class `R`'s proof"
 		},
 		{
 			"name": "M-NULLITY-UNRESOLVED-PROVEN",
@@ -14533,7 +14547,7 @@
 			"method": "runsNoUserCode",
 			"find": "final map: Bool = !array && (execution?.mapTypeNames ?? []).contains(type) && !projectSubtype(type);",
 			"replace": "final map: Bool = false;",
-			"note": "a standard map's own methods may run project code, so under the compiler facts the iteration the loop splices in reaches every function an extern map method admits"
+			"note": "a standard map's own methods may run project code, so under the compiler facts a map handed to a method that only calls them may be changed there, and a loop over it keeps its key"
 		},
 		{
 			"name": "M-FACTS-IDENTITY-CAST-VALUE",
@@ -15823,10 +15837,10 @@
 		{
 			"name": "M-EVENT-NO-USE-GATE",
 			"type": "anyparse.check.TypedEventConstant",
-			"method": "run",
-			"find": "if (found != null) report(candidate, found, types, index, seams, out);",
-			"replace": "report(candidate, found ?? [], types, index, seams, out);",
-			"note": "a constant never used as an event type is reported and retyped"
+			"method": "report",
+			"find": "if (eventUses.length == 0) return;",
+			"replace": "",
+			"note": "a constant no use names as an event type — none at all, or only the constructor of a class that is no event — is reported and retyped"
 		},
 		{
 			"name": "M-EVENT-STATIC-VAR",
