@@ -261,8 +261,8 @@ class PreferStaticExtensionFactsTest extends Test {
 	 */
 	@:pin('control') @:killer('M-PSE-CHANNEL-ALIAS')
 	public function testAnImportAliasOfTheModuleNameDropsTheSite(): Void {
-		// with `Other.f` out of `using` the conflict gate sees no rival the inserted `using Util` could bring: only what the
-		// written name binds to drops the site
+		// the conflict gate drops the plain alias too: the inserted `using Util` would bring `Other` and its `f`. With `Other.f`
+		// out of `using` it sees no rival, and only what the written name binds to drops the site
 		for (meta in ['', '@:noUsing ']) {
 			final seen: Null<Map<String, String>> =
 				verdicts([[]], ALIAS_MAIN, ALIAS_MAIN, BUILD, '{"rules": {"prefer-static-extension": {"types": ["Util"]}}}', [
