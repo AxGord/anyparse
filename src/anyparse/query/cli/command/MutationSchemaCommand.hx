@@ -43,7 +43,7 @@ final class MutationSchemaCommand implements CliCommand {
 	/**
 	 * `apq mutation-schema <plan>` — read the plan's rows, `<id>\t<file>\t<selector>\t<mutated-file>`, compose every
 	 * file's arms (`MutationSchema.compose`) and write each composed file over itself, relative to the CWD. One line per
-	 * row on stdout, in plan order: `<id>\tok\t<file>\t<dispatch>\t<copyFrom>\t<copyTo>`, or `<id>\tskip\t<file>\t<reason>`
+	 * row on stdout, in plan order: `<id>\tok\t<file>\t<dispatch>\t<copyFrom>\t<copyTo>\t<owner type>`, or `<id>\tskip\t<file>\t<reason>`
 	 * for an arm left to a per-arm build. A file that does not parse leaves every arm of it out, never the run.
 	 */
 	private static function runMutationSchema(args: Array<String>): Int {
@@ -115,7 +115,7 @@ final class MutationSchemaCommand implements CliCommand {
 			for (at in composed.placements) placed[at.id] = if (at.skip != null)
 				'skip\t$file\t${at.skip}'
 			else
-				'ok\t$file\t${at.dispatch}\t${at.copyFrom}\t${at.copyTo}';
+				'ok\t$file\t${at.dispatch}\t${at.copyFrom}\t${at.copyTo}\t${at.owner}';
 			if (composed.text != source) CliIo.writeFile(file, composed.text);
 		}
 		for (row in rows) CliIo.sysPrint('${row.id}\t${placed[row.id] ?? 'skip\t${row.file}\tnot composed'}\n');
@@ -133,7 +133,7 @@ final class MutationSchemaCommand implements CliCommand {
 		CliIo.sysPrint('rewritten IN PLACE, relative to the working directory: the arm method is\n');
 		CliIo.sysPrint('copied in as __mut<id>_<name>, and the original opens with a switch that\n');
 		CliIo.sysPrint('calls the copy when APQ_MUTANT=<id>. One stdout line per row:\n');
-		CliIo.sysPrint('  <id> TAB ok TAB <file> TAB <dispatch line> TAB <copy from> TAB <copy to>\n');
+		CliIo.sysPrint('  <id> TAB ok TAB <file> TAB <dispatch line> TAB <copy from> TAB <copy to> TAB <owner type>\n');
 		CliIo.sysPrint('  <id> TAB skip TAB <file> TAB <reason>     left to a per-arm build\n');
 	}
 

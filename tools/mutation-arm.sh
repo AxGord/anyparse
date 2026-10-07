@@ -772,6 +772,19 @@ schema_compose_and_build() {
                     FILENAME == ARGV[1] { m = $3; sub(/^[^:]*:/, "", m); want["(__mutOn(" $1 ")) return __mut" $1 "_" m "("] = $1; next }
                     $0 in want { print want[$0] }
                 ' "$schema_dir/plan" - | sort -un > "$schema_dir/embedded" || true
+            # An embedded module is compiled again by a child compiler, under
+            # the suite, in the macro context — and nothing in this build typed
+            # its copies there (a `#if macro` module contributes no type to it).
+            # A copy that does not compile there would break every child compile
+            # of every arm, so the embedded modules are typed in that context
+            # here, alone on their class path the way the child holds them, and
+            # a culprit is left out like any copy the build refused.
+            if [ -s "$schema_dir/embedded" ] && ! schema_check_embedded "$round"; then
+                culprits=$(schema_culprits "$schema_dir/embedded-$round.log")
+                [ -n "$culprits" ] || culprits=$(cat "$schema_dir/embedded")
+                schema_drop "$culprits"
+                continue
+            fi
             touch "$schema_dir/macro-log"
             awk -F'\t' '
                 FILENAME == ARGV[1] { name[$1] = $2; next }
@@ -787,11 +800,42 @@ schema_compose_and_build() {
         if [ -z "$culprits" ]; then
             break
         fi
-        printf '%s\n' "$culprits" | awk -F'\t' 'FNR == NR { out[$1] = 1; next } !($1 in out)' - "$schema_dir/plan" > "$schema_dir/plan.next"
-        mv "$schema_dir/plan.next" "$schema_dir/plan"
-        printf '%s\n' "$culprits" >> "$schema_dir/culprits"
+        schema_drop "$culprits"
     done
     echo failed > "$schema_dir/state"
+}
+
+# schema_drop <ids> — the arms left out of the next round's plan.
+schema_drop() {
+    printf '%s\n' "$1" | awk -F'\t' 'FNR == NR { out[$1] = 1; next } !($1 in out)' - "$schema_dir/plan" > "$schema_dir/plan.next"
+    mv "$schema_dir/plan.next" "$schema_dir/plan"
+    printf '%s\n' "$1" >> "$schema_dir/culprits"
+}
+
+# schema_check_embedded <round> — type every module holding an embedded arm
+# in the macro context, alone on a class path of its own (the probe directory
+# a child compile gets), through `--macro <type>.__mutOn(0)`; the log's paths
+# are rewritten back to the tree's so schema_culprits can name the arms.
+schema_check_embedded() {
+    local probe="$schema_dir/probe" file owner rel module macros=""
+    rm -rf "$probe"
+    mkdir -p "$probe/main"
+    printf 'class AnyparseSchemaCheck {\n\tstatic function main() {}\n}\n' > "$probe/main/AnyparseSchemaCheck.hx"
+    awk -F'\t' 'FILENAME == ARGV[1] { e[$1] = 1; next } $2 == "ok" && ($1 in e) { print $3 "\t" $7 }' \
+        "$schema_dir/embedded" "$schema_dir/placements" | sort -u > "$schema_dir/embedded-owners"
+    while IFS=$'\t' read -r file owner; do
+        rel=${file#src/}
+        mkdir -p "$probe/cp/$(dirname "$rel")"
+        cp "$schema_dir/tree/$file" "$probe/cp/$rel"
+        module=$(printf '%s' "${rel%.hx}" | tr '/' '.')
+        [ "$(basename "$rel" .hx)" = "$owner" ] || module="$module.$owner"
+        macros="$macros --macro $module.__mutOn(0)"
+    done < "$schema_dir/embedded-owners"
+    if ( cd "$probe" && haxe -cp cp -cp main -main AnyparseSchemaCheck --interp --no-output $macros ) > "$schema_dir/embedded-$1.raw" 2>&1; then
+        return 0
+    fi
+    sed "s|^$probe/cp/|src/|; s|^cp/|src/|" "$schema_dir/embedded-$1.raw" > "$schema_dir/embedded-$1.log"
+    return 1
 }
 
 schema_args=""

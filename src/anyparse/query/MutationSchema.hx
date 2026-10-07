@@ -14,7 +14,7 @@ typedef SchemaArm = {
 };
 
 /**
- * Where `compose` put one arm in the composed text, or why it left the arm out (`skip` non-null, the line fields 0).
+ * Where `compose` put one arm in the composed text, or why it left the arm out (`skip` non-null, the line fields 0, `owner` empty).
  * Lines are 1-based: `dispatch` is the line the arm's switch landed on, `copyFrom`..`copyTo` the lines of its copy.
  */
 typedef SchemaPlacement = {
@@ -22,7 +22,10 @@ typedef SchemaPlacement = {
 	skip: Null<String>,
 	dispatch: Int,
 	copyFrom: Int,
-	copyTo: Int
+	copyTo: Int,
+
+	/** The type that holds the copy and the switch; empty when the arm is left out. */
+	owner: String
 };
 
 /** One composed file: its text, and one placement per arm. */
@@ -88,11 +91,13 @@ final class MutationSchema {
 	 * `APQ_MUTANT` once, on first use, so a static initializer that calls a switched method before the type's own
 	 * statics ran still sees the active arm. Compiled into a macro, it records each id it is asked about in
 	 * `APQ_MUTANT_MACRO_LOG`: a switch reached at compile time is a method whose cut could have changed what the build
-	 * generated, which only a per-arm build answers. Fields of the type and not a class of their own: a module whose
+	 * generated, which only a per-arm build answers. The switch is public so a `--macro` call can type
+	 * its type (and every copy in it) in the macro context, which is how `tools/mutation-arm.sh` checks
+	 * a module the build embeds as text. Fields of the type and not a class of their own: a module whose
 	 * types are all behind `#if macro` must still contribute no type to a build that is not one.
 	 */
 	private static final SWITCH_FIELDS: String = '\n\tprivate static var __mutActive: Null<Int>;\n' + '\t#if macro\n'
-		+ '\tprivate static var __mutReached: Null<Array<Int>>;\n' + '\t#end\n\n' + '\tprivate static function $SWITCH(id: Int): Bool {\n'
+		+ '\tprivate static var __mutReached: Null<Array<Int>>;\n' + '\t#end\n\n' + '\tpublic static function $SWITCH(id: Int): Bool {\n'
 		+ '\t\tvar active: Null<Int> = __mutActive;\n' + '\t\tif (active == null) {\n'
 		+ '\t\t\tfinal raw: Null<String> = Sys.getEnv(\'$ACTIVE_VAR\');\n' + '\t\t\tactive = raw == null ? 0 : Std.parseInt(raw) ?? 0;\n'
 		+ '\t\t\t__mutActive = active;\n' + '\t\t}\n' + '\t\t#if macro\n'
@@ -133,9 +138,10 @@ final class MutationSchema {
 		final inserts: Array<SchemaInsert> = [];
 		final skips: Map<Int, String> = [];
 		final switchAt: Map<Int, Int> = [];
+		final owners: Map<Int, String> = [];
 		for (arm in arms) {
 			final reason: Null<String> =
-				try plan(source, tree, plugin, arm, inserts, switchAt) catch (exception: Exception) exception.message;
+				try plan(source, tree, plugin, arm, inserts, switchAt, owners) catch (exception: Exception) exception.message;
 			if (reason != null) skips[arm.id] = reason;
 		}
 		final ordered: Array<SchemaInsert> = inserts.filter(insert -> !skips.exists(insert.id));
@@ -189,7 +195,8 @@ final class MutationSchema {
 						skip: skips[arm.id],
 						dispatch: at.dispatch,
 						copyFrom: at.copyFrom,
-						copyTo: at.copyTo
+						copyTo: at.copyTo,
+						owner: skips.exists(arm.id) ? '' : owners[arm.id] ?? ''
 					};
 				}
 			]
@@ -201,7 +208,8 @@ final class MutationSchema {
 	 * why the arm is left out.
 	 */
 	private static function plan(
-		source: String, tree: QueryNode, plugin: GrammarPlugin, arm: SchemaArm, inserts: Array<SchemaInsert>, switchAt: Map<Int, Int>
+		source: String, tree: QueryNode, plugin: GrammarPlugin, arm: SchemaArm, inserts: Array<SchemaInsert>, switchAt: Map<Int, Int>,
+		owners: Map<Int, String>
 	): Null<String> {
 		final member: QueryNode = switch Address.resolve(tree, source, plugin, { select: arm.select }) {
 			case Ok(_, node) if (node != null): node;
@@ -256,6 +264,7 @@ final class MutationSchema {
 			role: Copy
 		});
 		switchAt[arm.id] = closing;
+		owners[arm.id] = owner?.name ?? '';
 		return null;
 	}
 

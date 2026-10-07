@@ -30,7 +30,7 @@ class MutationSchemaTest extends Test {
 		Assert.isNull(composed.placements[0].skip);
 		Assert.isTrue(composed.text.contains('{ if (__mutOn(1)) return __mut1_f(a, b, ...c);'), composed.text);
 		Assert.isTrue(composed.text.contains('public function __mut1_f(a: Int, ?b: Int, ...c: Int): Int {\n\t\treturn -a;'), composed.text);
-		Assert.isTrue(composed.text.contains('\tprivate static function __mutOn(id: Int): Bool {'));
+		Assert.isTrue(composed.text.contains('\tpublic static function __mutOn(id: Int): Bool {'));
 		Assert.notNull(new HaxeQueryPlugin().parseFile(composed.text));
 	}
 
@@ -44,6 +44,7 @@ class MutationSchemaTest extends Test {
 		Assert.equals(5, at.dispatch);
 		Assert.equals('public function __mut1_f(a: Int, ?b: Int, ...c: Int): Int {', after[at.copyFrom - 1].trim());
 		Assert.equals('}', after[at.copyTo - 1].trim());
+		Assert.equals('C', at.owner);
 	}
 
 	public function testTwoArmsOfOneMethodEachGetASwitchAndACopy(): Void {
@@ -53,7 +54,7 @@ class MutationSchemaTest extends Test {
 		]);
 		Assert.isTrue(composed.text.contains('if (__mutOn(1)) return __mut1_f(a, b, ...c); if (__mutOn(2))'));
 		Assert.isTrue(composed.text.contains('__mut2_f(a: Int, ?b: Int, ...c: Int): Int {\n\t\treturn 0;'));
-		Assert.equals(1, composed.text.split('private static function __mutOn').length - 1);
+		Assert.equals(1, composed.text.split('public static function __mutOn').length - 1);
 	}
 
 	public function testWhatACopyCannotStandForIsLeftOut(): Void {
