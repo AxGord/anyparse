@@ -9548,7 +9548,21 @@
 			"method": "resolve",
 			"find": "if (head == null || hops > MAX_HOPS || typeParams.contains(head)) return Unproven;",
 			"replace": "if (head == null || hops > MAX_HOPS) return Unproven;",
-			"note": "a type parameter resolves to whatever same-named type is in scope, so `m<R>(x:R)` borrows class `R`'s proof"
+			"note": "a type parameter of the declaration a hop reaches resolves to whatever same-named type is in scope, so `typedef Id<T> = T` borrows class `T`'s proof"
+		},
+		{
+			"name": "M-NULLITY-BINDING-PARAMS-DROPPED",
+			"type": "anyparse.query.DeclaredNullity",
+			"method": "ofBinding",
+			"find": [
+				"if (typeName == null || isTypeParamAt(typeName, bindingFrom)) return Unproven;",
+				"resolve(_typeSources[bindingFrom] ?? typeName, _file, params, 0, [])"
+			],
+			"replace": [
+				"if (typeName == null) return Unproven;",
+				"resolve(_typeSources[bindingFrom] ?? typeName, _file, [], 0, [])"
+			],
+			"note": "the type parameters in scope at a binding are not, so `m<R>(x:R)` borrows class `R`'s proof"
 		},
 		{
 			"name": "M-NULLITY-UNRESOLVED-PROVEN",

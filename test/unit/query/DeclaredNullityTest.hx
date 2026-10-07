@@ -50,7 +50,7 @@ class DeclaredNullityTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-NULLITY-TYPE-PARAMS-IGNORED')
+	@:killer('M-NULLITY-BINDING-PARAMS-DROPPED')
 	public function testFunctionTypeParameterIsUnproven(): Void {
 		Assert.isFalse(proven([
 			'@:nullSafety(Strict) class C { static function m<R>(x:R):Void { if (x != null) {} } } class R {}'
@@ -58,11 +58,21 @@ class DeclaredNullityTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-NULLITY-TYPE-PARAMS-IGNORED')
+	@:killer('M-NULLITY-BINDING-PARAMS-DROPPED')
 	public function testClassTypeParameterIsUnproven(): Void {
 		Assert.isFalse(proven([
 			'@:nullSafety(Strict) class C<R> { function m(x:R):Void { if (x != null) {} } } class R {}'
 		]), 'the enclosing class\'s parameter shadows the class of the same name');
+	}
+
+	@:pin('control')
+	@:killer('M-NULLITY-TYPE-PARAMS-IGNORED')
+	public function testHopTargetTypeParameterIsUnproven(): Void {
+		for (decl in ['typedef Id<T> = T;', 'abstract Id<T>(T) {}'])
+			Assert.isFalse(
+				proven([subject('Id<Null<R>>') + ' $decl class T {} class R {}']),
+				'`$decl` hops to its own parameter `T`, which may be `Null<…>`, not the class of the same name'
+			);
 	}
 
 	@:pin('control')
