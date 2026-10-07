@@ -2469,6 +2469,9 @@ class MemberReachFactsTest extends Test {
 			+ '\tstatic function main() {}\n\tfunction f(n:String):Void {\n\t\tfor (i in 0...items.length) { /*<*/ dump(n); /*>*/ }\n\t}\n}\n'
 			+ 'class Base {\n\tpublic function new() {}\n\n\tpublic function dump(n:String):Dynamic return Reflect.getProperty(this, n);\n}\n';
 		assertMatch(reflectAsk(['Main.hx' => base]), r -> r.match(Unknown(DynamicName(_, _))));
+		// the js build's library code holds a rebinding call (`FactsMethodValues.REBINDING_CALLS`), which ends the exemption of
+		// `this` above whatever its type; the interpreter's holds none, so there only the subtypes of `Base` say it may be a `Main`
+		assertMatch(reflectAsk(['Main.hx' => base], true), r -> r.match(Unknown(DynamicName(_, _))));
 	}
 
 	@:pin('control') @:killer('M-GRAPH-REFLECT-UNTYPED')
