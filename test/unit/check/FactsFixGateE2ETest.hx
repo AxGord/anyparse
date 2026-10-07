@@ -500,8 +500,7 @@ class FactsFixGateE2ETest extends Test {
 	 * each would read through the key what the value iterator does not (rewritten, the program prints `3,2,1` / `3,20` /
 	 * `2,1` where it printed `3,20,1` / `3,null` / `2,20`).
 	 */
-	@:pin('control') @:killer('M-GRAPH-MAP-USER-CODE') @:killer('M-FACTS-IDENTITY-CAST-VALUE')
-	@:killer('M-TOUCH-MAP-METHODS-UNKNOWN') @:killer('M-REACH-LOCAL-MAP-ALIAS-ARRAY')
+	@:pin('control') @:killer('M-GRAPH-MAP-USER-CODE') @:killer('M-TOUCH-MAP-METHODS-UNKNOWN') @:killer('M-REACH-LOCAL-MAP-ALIAS-ARRAY')
 	public function testAMapTheLoopLeavesUnchangedLosesItsKeyUnderTheTruth(): Void {
 		#if (sys || nodejs)
 		mapKeysDropped('{"compilerOracle":[{"hxml":"check.hxml"}],"resolutionRoots":["."],"reachConfigurationsComplete":true}');
@@ -527,7 +526,7 @@ class FactsFixGateE2ETest extends Test {
 	 * value iterator would print `3,2,1` where it printed `3,20,1`.
 	 */
 	@:pin('control') @:killer('M-FACTS-ARGUMENT-USE') @:killer('M-FACTS-ARGUMENT-CAST') @:killer('M-FACTS-ABSTRACT-WRAPPED-CAST')
-	@:killer('M-TOUCH-ARGUMENT-USES')
+	@:killer('M-FACTS-IDENTITY-CAST-VALUE') @:killer('M-TOUCH-ARGUMENT-USES')
 	public function testAMapHandedToMethodsThatKeepNothingLosesItsKeyUnderTheTruth(): Void {
 		#if (sys || nodejs)
 		argumentKeysDropped('{"compilerOracle":[{"hxml":"check.hxml"}],"resolutionRoots":["."],"reachConfigurationsComplete":true}', true);

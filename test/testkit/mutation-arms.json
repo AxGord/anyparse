@@ -6922,7 +6922,7 @@
 			"method": "underTruth",
 			"find": "if (named.exists(r.target) && !seen(r.at.span))",
 			"replace": "if (named.exists(r.target))",
-			"note": "(precision) a reflective access the syntax reads a literal name off is also a computed name, so every reflective access is blind under the truth"
+			"note": "(precision) a reflective access the syntax sees is read a second time off the facts: where one build computes its name and another reads a literal, the literal names that member of any class, past the receiver that bounds the computed name"
 		},
 		{
 			"name": "M-REACH-DEAD-FILE-SEEDS",
@@ -6954,14 +6954,6 @@
 			"find": "return _expected.exists(key) || _stale.exists(key);",
 			"replace": "return _expected.exists(key);",
 			"note": "a file the run wrote after the compiles — one a fix created — counts as compiled by no build, so its touches are never reached"
-		},
-		{
-			"name": "M-FACTS-DEAD-FILE-VALUES",
-			"type": "anyparse.query.ValueEscapes",
-			"method": "compute",
-			"find": "for (f in _scope.files) if (!_scope.runsInNoBuild(f.file)) {",
-			"replace": "for (f in _scope.files) {",
-			"note": "(precision) the escapes read a file no build compiles, which the graph holds no tree of, and give up: any value may be anywhere"
 		},
 		{
 			"name": "M-REACH-DEAD-FILE-ENTRY",
@@ -14549,7 +14541,7 @@
 			"method": "visit",
 			"find": "sink == str(inner.t) ||",
 			"replace": "",
-			"note": "a value read through an identity cast is handed on, so every inlined Map method's receiver escapes in the facts"
+			"note": "a value read through a cast to the type it already has is a plain value under it, so a Map handed to a method that only iterates it escapes in the facts and keeps its key"
 		},
 		{
 			"name": "M-TOUCH-NEW-MAP-NOT-FRESH",

@@ -1,8 +1,11 @@
 package unit.check;
 
+import anyparse.check.LintConfig.OracleConfig;
+import anyparse.check.TypedFactsProbe;
 import anyparse.core.TempScratch;
 import anyparse.query.Cli;
 import anyparse.query.cli.command.LintCommand;
+import haxe.Exception;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -98,9 +101,14 @@ final class OracleRunWiringTest extends Test {
 		Assert.isFalse(LintCommand.startsFactsEarly(false, 1, false, false, true), 'no resolution scope');
 	}
 
-	/** The facts compiles a run started and no check asked for are ended with the run, their probe directories deleted. */
+	/**
+	 * The facts compiles a run started and no check asked for are ended with the run, their probe directories deleted. A
+	 * `--fix` run that completes asks for them before its first write (`CachingGrammarPlugin.compilerFactsSettled`), which
+	 * deletes them; one a failure ends first never asks, and `endingCompiles` ends them on that way out too.
+	 */
 	@:pin('control')
 	@:killer('M-FACTS-EARLY-DIRS-LEFT')
+	@:access(anyparse.query.cli.command.LintCommand)
 	public function testUnaskedEarlyFactsLeaveNothingBehind(): Void {
 		#if (sys || nodejs)
 		final dir: Null<String> = project();
@@ -108,6 +116,11 @@ final class OracleRunWiringTest extends Test {
 		final before: Array<String> = factsDirs();
 		Cli.run(['lint', '$dir/Good.hx', '--fix']);
 		Assert.same(before, factsDirs(), 'no probe directory outlives the run');
+		final oracles: Array<OracleConfig> = [{ hxml: 'check.hxml', dir: dir, defines: [] }];
+		final early: FactsProbe = TypedFactsProbe.start(oracles);
+		Assert.equals(before.length + 1, factsDirs().length, 'the early compile was given its probe directory');
+		Assert.raises(() -> LintCommand.endingCompiles(early, { probe: null }, oracles, () -> throw new Exception('a check failed')));
+		Assert.same(before, factsDirs(), 'no probe directory outlives a run a failure ended');
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');

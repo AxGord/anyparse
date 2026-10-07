@@ -1234,9 +1234,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.FactsFixGateE2ETest#testAComputedClassNameTheProjectBoundsLetsTheLoopRewrite :: control :: M-REFLECTIVE-BUILDS,M-REFLECTIVE-REACH,M-REFLECTIVE-WARN,M-ESCAPES-FACTS-UNMATCHED',
 			'unit.check.FactsFixGateE2ETest#testAComputedMemberNameTheProjectBoundsLetsTheLoopRewrite :: control :: M-HOLDERS-BUILDS,M-HOLDERS-REACH,M-HOLDERS-WARN,M-HOLDERS-READ',
 			'unit.check.FactsFixGateE2ETest#testAMapHandedToMethodsThatKeepNothingLosesItsKeyUnderTheTruth :: control :: '
-				+ 'M-FACTS-ARGUMENT-USE,M-FACTS-ARGUMENT-CAST,M-FACTS-ABSTRACT-WRAPPED-CAST,M-TOUCH-ARGUMENT-USES',
+				+ 'M-FACTS-ARGUMENT-USE,M-FACTS-ARGUMENT-CAST,M-FACTS-ABSTRACT-WRAPPED-CAST,M-FACTS-IDENTITY-CAST-VALUE,M-TOUCH-ARGUMENT-USES',
 			'unit.check.FactsFixGateE2ETest#testAMapTheLoopLeavesUnchangedLosesItsKeyFromItsSyntax :: control :: M-TOUCH-MAP-METHODS-UNKNOWN',
-			'unit.check.FactsFixGateE2ETest#testAMapTheLoopLeavesUnchangedLosesItsKeyUnderTheTruth :: control :: M-GRAPH-MAP-USER-CODE,M-FACTS-IDENTITY-CAST-VALUE,M-TOUCH-MAP-METHODS-UNKNOWN,M-REACH-LOCAL-MAP-ALIAS-ARRAY',
+			'unit.check.FactsFixGateE2ETest#testAMapTheLoopLeavesUnchangedLosesItsKeyUnderTheTruth :: control :: M-GRAPH-MAP-USER-CODE,M-TOUCH-MAP-METHODS-UNKNOWN,M-REACH-LOCAL-MAP-ALIAS-ARRAY',
 			'unit.check.FactsFixGateE2ETest#testAPrivateMemberNoSupertypeDeclaresIsDeleted :: control :: M-UNUSED-PRIVATE-CHAIN-FACTS,M-UNUSED-PRIVATE-CHAIN-DECLARED,M-UNUSED-PRIVATE-CHAIN-AUTOBUILD',
 			'unit.check.FactsFixGateE2ETest#testAProofTheTruthContradictsKeepsTheLoop :: control :: M-REACH-PROVEN-TRUTH',
 			'unit.check.FactsFixGateE2ETest#testAReceiverTheFactsTypeAsANonExternClassLosesItsToString :: control :: M-TOSTRING-FACTS-CLASS,M-TOSTRING-FACTS-EXTERN,M-FACTS-ESCAPE-SHIFT',
@@ -3014,7 +3014,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testAPinnedOwnerAsksItsOwnBuildMacroAndNoOtherUnderTheTruth :: control :: '
 				+ 'M-REACH-PINNED-NONE,M-REACH-PINNED-REWRITTEN-SIMPLE,M-REACH-PINNED-REWRITTEN-NONE,M-FACTS-PINNED-OWNER-FILES',
 			'unit.query.MemberReachFactsTest#testAProducerReadAsAValueMakesOnlyADeclaredClassUnderTheTruth :: control :: M-ESCAPES-FACTS-DECLARED-PRODUCED,M-ESCAPES-FACTS-DECLARED-READER',
-			'unit.query.MemberReachFactsTest#testAProjectFileNoBuildCompilesLetsNoValueEscape :: control :: M-FACTS-DEAD-FILE-VALUES',
+			'unit.query.MemberReachFactsTest#testAProjectFileNoBuildCompilesLetsNoValueEscape :: guard :: ',
 			'unit.query.MemberReachFactsTest#testAProjectFileNoBuildCompilesRunsNothing :: control :: '
 				+ 'M-REACH-DEAD-FILE-SEEDS,M-FACTS-DEAD-FILE-NEVER,M-FACTS-DEAD-FILE-UNTRUE',
 			'unit.query.MemberReachFactsTest#testAPropertyOneBuildReadsThroughAGetterIsNotReadStraight :: control :: M-FACTS-FIELD-KINDS',
@@ -4458,7 +4458,6 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-DEAD-FILE-UNTRUE',
 			'M-FACTS-DEAD-FILE-NEVER',
 			'M-FACTS-DEAD-FILE-REWRITTEN',
-			'M-FACTS-DEAD-FILE-VALUES',
 			'M-REACH-DEAD-FILE-ENTRY',
 			'M-REACH-DEAD-FILE-LOCAL-ENTRY',
 			'M-FACTS-TRUTH-CONTEXT',
