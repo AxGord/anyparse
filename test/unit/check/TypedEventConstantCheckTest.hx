@@ -116,7 +116,7 @@ class TypedEventConstantCheckTest extends Test {
 	}
 
 	/** A string handed to the constructor of a class that is no event is not an event type, and no dispatch to judge. */
-	@:pin('control') @:killer('M-EVENT-ANY-NEW-IS-A-USE')
+	@:pin('control') @:killer('M-EVENT-ANY-NEW-IS-A-USE') @:killer('M-EVENT-NO-USE-GATE')
 	public function testAConstructorOfANonEventClassIsNoUse(): Void {
 		Assert.equals(0, violationsOf(project('trace(new NotEvent(PopupEvent.UNUSED));')).length);
 	}

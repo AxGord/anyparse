@@ -2050,7 +2050,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-TRIVGET-MOVABLE-LITERAL-FALSE',
 			'unit.check.TypedEventConstantCheckTest#testAConstantNeverUsedAsAnEventTypeIsNotReported :: control :: M-EVENT-NO-USE-GATE',
 			'unit.check.TypedEventConstantCheckTest#testAConstantOfAClassThatIsNoEventIsNotReported :: control :: M-EVENT-NO-BASE-GATE',
-			'unit.check.TypedEventConstantCheckTest#testAConstructorOfANonEventClassIsNoUse :: control :: M-EVENT-ANY-NEW-IS-A-USE',
+			'unit.check.TypedEventConstantCheckTest#testAConstructorOfANonEventClassIsNoUse :: control :: M-EVENT-ANY-NEW-IS-A-USE,M-EVENT-NO-USE-GATE',
 			'unit.check.TypedEventConstantCheckTest#testAFunctionTypedLocalListenerIsALatentBug :: control :: M-EVENT-NO-MISMATCH',
 			'unit.check.TypedEventConstantCheckTest#testALambdaListenerOfAnotherEventClassIsALatentBug :: control :: M-EVENT-NO-MISMATCH',
 			'unit.check.TypedEventConstantCheckTest#testAMethodListenerOfASubclassIsALatentBug :: control :: M-EVENT-NO-MISMATCH',

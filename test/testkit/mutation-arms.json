@@ -15845,10 +15845,10 @@
 		{
 			"name": "M-EVENT-NO-USE-GATE",
 			"type": "anyparse.check.TypedEventConstant",
-			"method": "run",
-			"find": "if (found != null) report(candidate, found, types, index, seams, out);",
-			"replace": "report(candidate, found ?? [], types, index, seams, out);",
-			"note": "a constant never used as an event type is reported and retyped"
+			"method": "report",
+			"find": "if (eventUses.length == 0) return;",
+			"replace": "",
+			"note": "a constant no use names as an event type — none at all, or only the constructor of a class that is no event — is reported and retyped"
 		},
 		{
 			"name": "M-EVENT-STATIC-VAR",
