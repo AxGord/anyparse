@@ -1943,12 +1943,20 @@ class MemberReachFactsTest extends Test {
 
 	@:pin('control') @:killer('M-ADMIT-SYNTAX-READ-FACETED')
 	public function testAFunctionValueReadByItsSyntaxMayRunAnyOperatorOverloadUnderTheTruth(): Void {
-		// the lambda `f` holds is an expression macro's expansion, whose facts do not replace its syntax
+		// the lambda `f` holds is an expression macro's expansion, read through its facts like any code since `cad40413`.
+		// `Twin.k` folds the declarations of two types sharing a simple name, which no one type's facts read: a function value
+		// read by its syntax, which the call of a value may run
 		final main: String = LOOP_HEAD + '\tstatic var f:AE -> Bool;\n'
 			+ '\tstatic function main() {\n\t\tf = a -> Mac.yes();\n\t\tfor (i in 0...items.length) { /*<*/ f(new AE(1)); /*>*/ }\n\t}\n}\n'
 			+ CLEARING_EQ;
 		final mac: String = 'class Mac {\n\tpublic static macro function yes() return macro Math.random() < 2;\n}\n';
 		assertMatch(truthAsk(['Main.hx' => main, 'Mac.hx' => mac]), r -> !r.match(Proven));
+		final folded: String = LOOP_HEAD + '\tstatic var f:AE -> Bool;\n\tstatic var g:Int -> Bool;\n'
+			+ '\tstatic function main() {\n\t\tf = a -> true;\n\t\tg = Twin.k;\n\t\tother.Twin.k(0);\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ f(new AE(1)); /*>*/ }\n\t}\n}\n'
+			+ 'class Twin {\n\tpublic static function k(i:Int):Bool return i == 0;\n}\n' + CLEARING_EQ;
+		final twin: String = 'package other;\n\nclass Twin {\n\tpublic static function k(i:Int):Bool return i == 1;\n}\n';
+		assertMatch(compiledTruthAsk(['Main.hx' => folded, 'other/Twin.hx' => twin]), r -> !r.match(Proven));
 	}
 
 	@:pin('control') @:killer('M-ADMIT-SYNTAX-READ-UNSEEN') @:killer('M-REACH-UNREAD-RECHECK')
