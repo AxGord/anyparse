@@ -12450,14 +12450,6 @@
 			"note": "(precision) the built-in array's own methods may call any function value handed to target code before"
 		},
 		{
-			"name": "M-REACH-EXTERN-FACTS-TYPE",
-			"type": "anyparse.query.MemberReach",
-			"method": "externSite",
-			"find": "return own ?? (at == null || _scope.facts?.truth != true ? null : _scope.facts?.table.typeOfExpressionAt(file, at));",
-			"replace": "return own;",
-			"note": "(precision) a value handed to target code the syntax cannot type is of any type, though the compiler typed it"
-		},
-		{
 			"name": "M-REACH-SHARED-OWNERS",
 			"type": "anyparse.query.MemberReach",
 			"method": "walk",
@@ -14526,12 +14518,12 @@
 			"note": "a local map the region changes by its own name is proved unchanged, so a body that removes from it loses its key"
 		},
 		{
-			"name": "M-REACH-LOCAL-MAP-ALIAS-ARRAY",
+			"name": "M-REACH-LOCAL-MAP-ALIAS-PROVEN",
 			"type": "anyparse.query.MemberReach",
 			"method": "answerLocal",
 			"find": "if (owns != null) return Unknown(Escape(file, escape));",
-			"replace": "",
-			"note": "a local map shared through another name is judged by the array alias analysis, which does not know a map's set() changes it"
+			"replace": "if (owns != null) return Proven;",
+			"note": "a local map shared through another name is proved unchanged, so a body that changes it through the static it was stored in loses its key"
 		},
 		{
 			"name": "M-TOUCH-MAP-METHODS-UNKNOWN",

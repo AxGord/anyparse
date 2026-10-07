@@ -409,12 +409,12 @@ class FactsFixGateE2ETest extends Test {
 	}
 
 	/**
-	 * The reading a run asks first proves the loop — it does not see that `stuff`, pushed to once by the `go` the build
-	 * compiles, is `Main.items` imported under another name — but the facts do: under the truth they answer a proved
-	 * question too, and the loop, whose element iterator would follow the push, stays.
+	 * `stuff`, pushed to once by the `go` the build compiles, is `Main.items` imported under another name: under the truth
+	 * the loop, whose element iterator would follow the push, stays. The reading a run asks first sees the alias itself now
+	 * (`testAStaticImportedUnderAnotherNameKeepsTheLoopWithoutTheTruth`), so this pins no arm: that a proof is asked again
+	 * under the truth is `MemberReachFactsTest.testAProofTheTruthContradictsIsAskedAgainUnderTheTruth`'s.
 	 */
-	@:pin('control') @:killer('M-REACH-PROVEN-TRUTH')
-	public function testAProofTheTruthContradictsKeepsTheLoop(): Void {
+	public function testAStaticImportedUnderAnotherNameKeepsTheLoopUnderTheTruth(): Void {
 		#if (sys || nodejs)
 		final complete: String = '{"compilerOracle":[{"hxml":"check.hxml"}],"resolutionRoots":["."],"reachConfigurationsComplete":true}';
 		final dir: Null<String> = tree('aliasproof', [
@@ -500,7 +500,7 @@ class FactsFixGateE2ETest extends Test {
 	 * each would read through the key what the value iterator does not (rewritten, the program prints `3,2,1` / `3,20` /
 	 * `2,1` where it printed `3,20,1` / `3,null` / `2,20`).
 	 */
-	@:pin('control') @:killer('M-TOUCH-MAP-METHODS-UNKNOWN') @:killer('M-REACH-LOCAL-MAP-ALIAS-ARRAY')
+	@:pin('control') @:killer('M-TOUCH-MAP-METHODS-UNKNOWN') @:killer('M-REACH-LOCAL-MAP-ALIAS-PROVEN')
 	public function testAMapTheLoopLeavesUnchangedLosesItsKeyUnderTheTruth(): Void {
 		#if (sys || nodejs)
 		mapKeysDropped('{"compilerOracle":[{"hxml":"check.hxml"}],"resolutionRoots":["."],"reachConfigurationsComplete":true}');

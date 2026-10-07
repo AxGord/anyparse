@@ -1110,7 +1110,7 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthLibAsk(isInt, 'throw last;', null, INTERP_BUILD), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-STRING-EXACT') @:killer('M-REACH-EXACT-SITE') @:killer('M-FACTS-VIEW-EXACT')
+	@:pin('control') @:killer('M-FACTS-STRING-EXACT') @:killer('M-FACTS-VIEW-EXACT')
 	@:killer('M-FACTS-VIEW-EXACT-CONVERSION') @:killer('M-FACTS-EXACT-WRITTEN')
 	@:killer('M-FACTS-CALL-OPERAND-EXACT')
 	public function testAFreshObjectConvertedRunsOnlyItsOwnClassToStringUnderTheTruth(): Void {
@@ -1120,6 +1120,22 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthLibAsk('var d:Dynamic = o;', 'throw "" + new Plain();'), r -> r.match(Proven));
 		assertMatch(truthLibAsk('var d:Dynamic = o;', 'var p:Plain = new Plain();\n\t\tp = last;\n\t\tthrow p;'), r -> !r.match(Proven));
 		assertMatch(truthLibAsk('var d:Dynamic = o;', 'throw "" + (failing ? new Plain() : last);'), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-REACH-EXACT-SITE')
+	public function testAFreshObjectConvertedRunsOnlyItsOwnClassToStringUnderFactsThatAreNotTheTruth(): Void {
+		// with no whole list of builds the facts are no truth, so the site they keep reads no typed owner: its operands' types
+		// answer. `Obj` escaped, so a `Plain` read from a place may be one; a `Plain` just built never is
+		function question(thrown: String): ReachResult {
+			final files: Map<String, String> = escapingObj('var d:Dynamic = o;');
+			return withReach(files, null, true, true, null, plainText(thrown), null, false, (reach, dir) -> {
+				reach.mayReach(
+					Region(Path.join([dir, 'Main.hx']), regionOf(files['Main.hx'] ?? '')), { owner: 'Main', name: 'items' }, Mutate
+				);
+			});
+		}
+		assertMatch(question('throw "" + new Plain();'), r -> r.match(Proven));
+		assertMatch(question('var p:Plain = new Plain();\n\t\tp = last;\n\t\tthrow p;'), r -> !r.match(Proven));
 	}
 
 	@:pin('control') @:killer('M-FACTS-THROW-EXCEPTION')
@@ -1813,24 +1829,35 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main]), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-TYPED-IMPLICIT-TEXT')
 	public function testAStoredFunctionValueMayConvertWhatItIsHandedUnderTheTruth(): Void {
 		// the lambda `fmt` holds is read through its facts, and still reaches no toucher by an edge: its concatenation is a
-		// string conversion the facts keep as a site, which the walk never enters
+		// string conversion the facts keep as a site, which the walk never enters. `Obj.toString` runs from the call itself
+		// too — what a value call is handed is admitted at the call — so this pins no arm: the unread admission's own string
+		// conversions are pinned where nothing else admits the member (`testLibraryCodeNotReadYetMayRunAnyOperatorOverloadUnderTheTruth`)
 		final main: String = LOOP_HEAD + '\tstatic var fmt:Dynamic -> String;\n'
 			+ '\tstatic function main() {\n\t\tfmt = v -> "<" + v;\n\t\tvar o:Obj = new Obj();\n\t\tvar s:String = "";\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ s += fmt(o); /*>*/ }\n\t}\n}\n' + CLEARING_OBJ;
-		assertMatch(truthAsk(['Main.hx' => main]), r -> !r.match(Proven));
+		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-REACH-TYPED-IMPLICIT-ITER')
 	public function testAStoredFunctionValueMayIterateWhatItIsHandedUnderTheTruth(): Void {
 		// the lambda `f` holds iterates a structure, which runs the `next` of whatever it holds: a site the facts keep, in code
-		// the walk never enters
+		// the walk never enters. `Walker.next` runs from the call itself too — what a value call is handed is admitted at the
+		// call — so the unread admission's own iteration is pinned where the lambda iterates what it holds (below)
 		final main: String = LOOP_HEAD + '\tstatic var f:Iterator<Int> -> Int;\n'
 			+ '\tstatic function main() {\n\t\tf = it -> {\n\t\t\tvar n:Int = 0;\n\t\t\tfor (x in it) n++;\n\t\t\tn;\n\t\t};\n'
 			+ '\t\tvar w:Walker = new Walker();\n\t\tfor (i in 0...items.length) { /*<*/ f(w); /*>*/ }\n\t}\n}\n' + CLEARING_WALKER;
-		assertMatch(truthAsk(['Main.hx' => main]), r -> !r.match(Proven));
+		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Reached(_)));
+	}
+
+	@:pin('control') @:killer('M-REACH-TYPED-IMPLICIT-ITER')
+	public function testAStoredFunctionValueMayIterateWhatItHoldsUnderTheTruth(): Void {
+		// the lambda `f` holds iterates `held`, a `Walker` the call hands it nothing of: the walk never enters the lambda — it
+		// reaches no toucher by an edge — so only the iterations its facts keep as sites run `Walker.next`
+		final main: String = LOOP_HEAD + '\tstatic var f:Int -> Int;\n\tstatic var held:Walker = new Walker();\n'
+			+ '\tstatic function main() {\n\t\tf = k -> {\n\t\t\tvar n:Int = k;\n\t\t\tfor (x in held) n++;\n\t\t\tn;\n\t\t};\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ f(i); /*>*/ }\n\t}\n}\n' + CLEARING_WALKER;
+		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Reached(_)));
 	}
 
 	public function testAStoredFunctionValueMayRunAnOperatorOverloadOnlyThroughItsFactsUnderTheTruth(): Void {
@@ -1966,6 +1993,7 @@ class MemberReachFactsTest extends Test {
 	}
 
 	@:pin('control') @:killer('M-ADMIT-SYNTAX-READ-UNSEEN') @:killer('M-REACH-UNREAD-RECHECK')
+	@:killer('M-REACH-TYPED-IMPLICIT-TEXT')
 	public function testLibraryCodeNotReadYetMayRunAnyOperatorOverloadUnderTheTruth(): Void {
 		// the string conversions the facts leave implicit may run the library `Thing.toString`, whose file the walk has not
 		// read: once the graph holds it, code the walk cannot see may run any implicitly-called member
@@ -2012,7 +2040,7 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => SHARED_NAME_MAIN], null, true, null, false, null, dead, null, true), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-SOLE-MEMBER-NONE') @:killer('M-REACH-ITERABLE-RETURNS')
+	@:pin('control') @:killer('M-FACTS-SOLE-MEMBER-NONE')
 	public function testALibraryMemberOnlyOneTypeOfItsNameDeclaresIsReadThroughItsFacts(): Void {
 		// `lib.Vec` and `other.Vec` share a simple name, but only `lib.Vec` declares `splice`, whose loop the syntax cannot
 		// type — so it may run any `next`, `Walker`'s among them — and the facts type as `VecIter`'s (openfl's `Vector.splice`
@@ -2021,6 +2049,20 @@ class MemberReachFactsTest extends Test {
 			ask(['Main.hx' => SHARED_NAME_MAIN], null, true, null, false, null, sharedNameLibrary(), null, true), r -> r.match(Proven)
 		);
 		assertMatch(ask(['Main.hx' => SHARED_NAME_MAIN], null, true, null, false, null, sharedNameLibrary()), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-REACH-ITERABLE-RETURNS')
+	public function testWhatAnIteratorReturnsIsNotIteratedInTurnUnderTheTruth(): Void {
+		// the loop iterates a `FeedAlias`, a typedef naming `Feed`: no typed class owns the site, so the types of the iterated
+		// value answer, and `Feed`'s `next` returns a `Walker` — an element, which the loop runs nothing on. Without the truth
+		// what an iterator method returns may be iterated in turn, and `Walker.next` replaces `items`
+		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tvar c:FeedAlias = new Feed();\n'
+			+ '\t\tvar n:Int = 0;\n\t\tfor (i in 0...items.length) { /*<*/ for (w in c) n++; /*>*/ }\n\t}\n}\n'
+			+ 'typedef FeedAlias = Feed;\n\n' + 'class Feed {\n\tpublic function new() {}\n\n'
+			+ '\tpublic function hasNext():Bool return false;\n\n\tpublic function next():Walker return new Walker();\n}\n'
+			+ CLEARING_WALKER;
+		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Proven));
+		assertMatch(ask(['Main.hx' => main]), r -> !r.match(Proven));
 	}
 
 	@:pin('control') @:killer('M-FACTS-TRUTH-WIRED')
@@ -2038,6 +2080,37 @@ class MemberReachFactsTest extends Test {
 		Assert.equals(true, truth([[], ['other']], true), 'the facts of the listed builds are not the truth');
 		Assert.equals(false, truth([[], ['other']], false), 'the facts are the truth with no list of builds');
 		Assert.isNull(truth([[], ['APQ_BROKEN']], true), 'a table missing a configuration made a view');
+	}
+
+	@:pin('control') @:killer('M-REACH-PROVEN-TRUTH')
+	@:access(anyparse.query.MemberReach)
+	public function testAProofTheTruthContradictsIsAskedAgainUnderTheTruth(): Void {
+		// `Mac.loop` replaces `Main.f`, the region's function, by a push onto `Store.items`. The reading a run asks first — the
+		// compiler facts with no whole list of builds — proves the region, whose text runs nothing; under the truth the region's
+		// text is none of what runs. Wired the way a run wires the two (`MemberReach.forRun`), the proof is asked again under
+		// the truth, whose answer is the run's
+		final main: String = 'class Main extends Base {\n\tstatic function main() {\n\t\tnew Main().f();\n\t}\n'
+			+ '\tfunction f():Void {\n\t\tfor (i in 0...Store.items.length) { /*<*/ var k = i; /*>*/ }\n\t}\n}\n';
+		final files: Map<String, String> = [
+			'Main.hx' => main,
+			'Store.hx' => 'class Store {\n\tpublic static var items:Array<Int> = [1];\n}\n',
+			'Base.hx' => '@:autoBuild(Mac.loop())\nclass Base {\n\tpublic function new() {}\n}\n',
+			'Mac.hx' => BUILD_MACROS
+		];
+		final store: MemberRef = { owner: 'Store', name: 'items' };
+		final answers: Array<ReachResult> = withReach(files, null, true, false, null, null, null, true, (truth, dir) -> {
+			final region: ReachEntry = Region(Path.join([dir, 'Main.hx']), regionOf(main));
+			final first: MemberReach = new MemberReach(
+				truth._plugin, truth._project, truth._index, true, MemberReach.MAX_LIBRARY_FILES, MemberReach.MAX_VISITED, null,
+				() -> false, truth._scope.facts?.table
+			);
+			final alone: ReachResult = first.mayReach(region, store, Mutate);
+			first._factsTruthAvailable = true;
+			first._configure = () -> truth;
+			[alone, first.mayReach(region, store, Mutate)];
+		});
+		assertMatch(answers[0], r -> r.match(Proven));
+		assertMatch(answers[1], r -> r.match(Unknown(Reification(_, _))));
 	}
 
 	@:pin('control') @:killer('M-FACTS-TRUTH-UNLISTED') @:killer('M-FACTS-TRUTH-COUNT') @:killer('M-FACTS-TRUTH-NAMES')
@@ -2703,7 +2776,7 @@ class MemberReachFactsTest extends Test {
 		assertMatch(builtAsk(CPP_BUILD, ['Main.hx' => main]), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-EXTERN-FACTS-TYPE') @:killer('M-REACH-ARRAY-VALUES')
+	@:pin('control') @:killer('M-REACH-ARRAY-VALUES')
 	public function testTheArraysOwnMethodReachesItsElementsOnlyByConvertingThemUnderTheTruth(): Void {
 		// `a.join` is the built-in array's own method: it converts each element of `a`, which the compiler types `Array<String>`
 		// though the syntax cannot, and reaches no member by name — so neither `Obj.toString`, which changes `items`, nor any
@@ -3218,7 +3291,7 @@ class MemberReachFactsTest extends Test {
 		assertMatch(question(false, ''), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-UNREAD-READ-FAMILIES')
+	@:pin('control') @:killer('M-REACH-UNREAD-READ-FAMILIES') @:killer('M-REACH-TYPED-IMPLICIT-TEXT')
 	public function testLibraryCodeNotReadYetMayRunTheOperatorOverloadOfATypeTheIndexDeclaresNowhere(): Void {
 		// the walk has not read the library `Thing`, so code it cannot see may run any implicitly-called member: `AE`'s `==`,
 		// which the builds compile and the index declares nowhere, among them
@@ -3661,9 +3734,8 @@ class MemberReachFactsTest extends Test {
 
 	@:pin('control') @:killer('M-REACH-DEAD-NODE-ENTERED') @:killer('M-LIVE-FRAGMENTED')
 	public function testCodeNoBuildCompilesRunsNothingUnderTheTruth(): Void {
-		// `haxe_ver >= 4.2` is no define a build's set decides, so its `#else` stays live, and its call of `Dead.go` is an edge:
-		// but `Dead` is declared only where no build compiles, so the node runs nothing — not even a build macro of its own. A
-		// call no build compiles is none either when a directive nested in it splits its range (openfl's
+		// the builds' define values decide `haxe_ver >= 4.2`, so its `#else` — the call of `Dead.go` — is no edge of any build.
+		// A call no build compiles is none either when a directive nested in it splits its range (openfl's
 		// `untyped #if haxe4 js.Syntax.code #else __js__ #end (…)`)
 		final lib: String = 'class Lib {\n\tpublic static function run():Void {\n\t\t#if (haxe_ver >= 4.2)\n\t\tcalm();\n\t\t#else\n'
 			+ '\t\tDead.go();\n\t\t#end\n\t\t#if never_defined\n\t\tClearing.go(#if haxe4 1 #else 2 #end);\n\t\t#end\n\t}\n\n'
@@ -3673,6 +3745,13 @@ class MemberReachFactsTest extends Test {
 		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Lib.run(); /*>*/ }\n'
 			+ '\t\tClearing.go(0);\n\t}\n}\n';
 		assertMatch(truthAsk(['Main.hx' => main, 'Lib.hx' => lib, 'Clearing.hx' => clearing]), r -> r.match(Proven));
+		// a node is still met where no edge leads: `d.go()` on a catch-all admits every `go` by its name, `Dead.go` among them.
+		// `Dead` is declared only where no build compiles, so the node runs nothing — not even the build macro of its own type
+		final named: String = LOOP_HEAD + '\tstatic var d:Dynamic = null;\n\n\tstatic function main() {\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ d.go(); /*>*/ }\n\t\tClearing.wipe();\n\t}\n}\n'
+			+ 'class Clearing {\n\tpublic static function wipe():Void Main.items.push(1);\n}\n\n'
+			+ '#if never_defined\n@:build(Nope.build())\nclass Dead {\n\tpublic function go():Void Clearing.wipe();\n}\n#end\n';
+		assertMatch(truthAsk(['Main.hx' => named]), r -> r.match(Proven));
 	}
 
 	@:pin('control') @:killer('M-FACTS-SITE-OWNERS-NONE') @:killer('M-FACTS-SITE-CONVERSION-OWNERS-NONE')
