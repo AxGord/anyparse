@@ -182,6 +182,26 @@ class MutationVerdictTest extends Test {
 		return MutationVerdict.label(verdict.kind);
 	}
 
+	/** The slices of one run read as the run: green only when every slice is, the failures of all of them matched. */
+	public function testSlicesOfOneRunAreReadAsTheirUnion(): Void {
+		final green: String = transcript(0, 0, 0, true, []);
+		final red: String = transcript(1, 0, 0, false, ['unit.SampleTest', '  testTwo: FAILURE expected 1 but was 2']);
+		// utest's own shape for a slice no test fell into: one red row
+		final none: String = transcript(1, 0, 0, false, ['  : FAILURE F', '    line: 1, No tests executed.']);
+		inline function merged(raws: Array<String>, expectCsv: String): MutationVerdictResult {
+			return MutationVerdict.classify(MutationVerdict.merge(raws.map(TestTranscript.parseTestSummary)), [
+				for (part in expectCsv.split(',')) if (part.trim().length > 0) part.trim()
+			]);
+		}
+		final survived: MutationVerdictResult = merged([green, none, green], 'unit.SampleTest.testTwo');
+		Assert.equals('SURVIVED', label(survived));
+		Assert.equals('0 tests failed / 24 assertions', survived.detail);
+		Assert.equals('KILLED', label(merged([green, red], 'unit.SampleTest.testTwo')));
+		Assert.equals('MISMATCH', label(merged([red, green], 'unit.SampleTest.testTwo,unit.SampleTest.testThree')));
+		Assert.equals('RUN-FAIL', label(merged([green, 'killed mid-run\n'], '')));
+		Assert.equals('NO-TESTS', label(merged([none, none], '')));
+	}
+
 	private function classify(raw: String, expectCsv: String): MutationVerdictResult {
 		final expected: Array<String> = [
 			for (part in expectCsv.split(',')) if (part.trim().length > 0) part.trim()

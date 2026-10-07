@@ -29,6 +29,7 @@
 #            And killer-first (`mutation-check.sh --killer-first`): the pinned
 #            TESTS alone run first, and the pinned classes only when that run
 #            is not a KILLED reading — same verdict, a fraction of the run.
+#            `APQ_MUTATION_NO_KILLER_FIRST=1` runs the pinned classes only.
 #   --jobs N passed to tools/mutation-check.sh (default: its own min(cores-2, memory/5GiB)).
 #   --list   print the registry and exit.
 #   --working-tree
@@ -801,7 +802,7 @@ if [ "$keep" -eq 1 ]; then
 fi
 if [ "$check_apply" -eq 1 ]; then
     check_args="$check_args --build-only"
-elif [ "$filter_mode" = "pinned-classes" ]; then
+elif [ "$filter_mode" = "pinned-classes" ] && [ -z "${APQ_MUTATION_NO_KILLER_FIRST:-}" ]; then
     check_args="$check_args --killer-first"
 fi
 if [ "$base_ref" != "HEAD" ]; then

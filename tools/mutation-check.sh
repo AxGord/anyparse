@@ -26,7 +26,17 @@
 # `APQ_MUTATION_NO_SERVER=1` / `APQ_MUTATION_NO_FIXTURE_CACHE=1` turn either
 # off — the A/B arms a verdict comparison needs.
 #
-# Usage: tools/mutation-check.sh <manifest> [--jobs N] [--keep] [--build-only] [--killer-first] [--base <ref>]
+# Usage: tools/mutation-check.sh <manifest> [--jobs N] [--keep] [--build-only] [--killer-first] [--schema <dir>] [--base <ref>]
+#
+# --schema <dir>
+#               the composed build `tools/mutation-arm.sh` makes (docs/testing.md
+#               § "Mutation runs: killer-first, batched render, schemata"): a
+#               track named in `<dir>/candidates` waits for `<dir>/state`, and
+#               when that reads `ready` and `<dir>/map` holds the track, runs
+#               `<dir>/test.js` with `APQ_MUTANT=<id>` instead of building —
+#               still in its own slot, its patch applied, so a test that reads
+#               the tree from disk reads the cut. Any other candidate is built
+#               as a track always was. Candidates are dealt last.
 #
 # --killer-first
 #               run a track's EXPECTED tests alone first (`APQ_TEST=test:<e>,…`)
@@ -280,27 +290,49 @@ run_in_slot() {
         path="$workroot/fixture-cache/bin:$PATH"
     fi
 
-    # --killer-first: the tests the expectations name, alone, first. A KILLED
-    # reading there is the verdict the filtered run would give — see
-    # killer_tokens — and anything else is answered by the filtered run itself.
+    # --killer-first: the tests the expectations name, alone, first. Their run
+    # answers the verdict whenever it matched an expectation (killer_tokens
+    # says why); only one that matched NONE needs the filtered run, which is
+    # then dealt into FALLBACK_SLICES slices run at once (fallback_tokens).
     local classified v d full phase=filtered
     if [ -f "$workroot/killer-first" ] && [ -n "$expected" ]; then
         run_suite "$wt" "$build" "$(killer_tokens "$expected")" "$path" "$mutant" > "$log.killers" 2>&1 || true
-        if classified=$(classify "$log.killers" "$expected") && [ "$(printf '%s\n' "$classified" | sed -n '1p')" = "KILLED" ]; then
+        if classified=$(classify "$expected" "$log.killers") && matched_any "$classified" "$expected"; then
             mv "$log.killers" "$log"
             phase=killers
+        else
+            phase=sliced
         fi
     fi
-    if [ "$phase" = "filtered" ]; then
+    local slices="" slice tokens
+    if [ "$phase" = "sliced" ] && slices=$(fallback_tokens "$filter"); then
+        slice=0
+        while IFS= read -r tokens; do
+            run_suite "$wt" "$build" "$tokens" "$path" "$mutant" > "$log.slice$slice" 2>&1 &
+            slice=$((slice + 1))
+        done <<SLICES
+$slices
+SLICES
+        wait
+    elif [ "$phase" != "killers" ]; then
+        phase=filtered
         run_suite "$wt" "$build" "$filter" "$path" "$mutant" > "$log" 2>&1 || true
     fi
-    # `<run s> <phase>`: `killers` when the killer-first run gave the verdict.
+    # `<run s> <phase>`: `killers` when the killer-first run gave the verdict,
+    # `sliced` when the filtered run answered it in slices.
     printf '%s %s\n' "$(($(date +%s) - built))" "$phase" >> "$workroot/$name.timing"
     # Captured, not redirected straight into the file: `> "$verdict_file"`
     # truncates before classify runs, so an abort inside it would leave an
     # empty file and the report would print a blank verdict column.
     # write_verdict stays the single owner of the file format.
-    if [ "$phase" = "filtered" ] && ! classified=$(classify "$log" "$expected"); then
+    if [ "$phase" = "sliced" ]; then
+        if ! classified=$(classify "$expected" "$log".slice*); then
+            write_verdict "$verdict_file" "RUN-FAIL" "classifier aborted on $log.slice*"
+            return 0
+        fi
+        # one transcript to open, the slices in order
+        cat "$log".slice* > "$log"
+    elif [ "$phase" = "filtered" ] && ! classified=$(classify "$expected" "$log"); then
         write_verdict "$verdict_file" "RUN-FAIL" "classifier aborted on $log"
         return 0
     fi
@@ -361,16 +393,54 @@ schema_track() {
 # `<fq.Class>.<method>` contains `<e>`, the very substring rule `apq
 # mutation-verdict` matches an expectation against a failure name with.
 #
-# Why a KILLED reading of that run is the filtered run's verdict: each
-# expectation is matched by a failure of one of the tests carrying it, and
-# this run holds all of those tests and nothing else, so an expectation is
-# matched here exactly when it is matched there — and the filtered run is red
-# whenever one is. Every OTHER reading (SURVIVED, MISMATCH, RUN-FAIL…) depends
-# on tests this run left out, so it is never used: the filtered run answers.
-# The one thing a killer-first KILLED row loses is the `+extra:` census of the
-# filtered set — the collateral `--fast` already narrows to the pinned classes.
+# Why this run can answer for the filtered run: each expectation is matched
+# by a failure of one of the tests carrying it, and this run holds all of
+# those tests and nothing else, so an expectation is matched here exactly when
+# it is matched there — and the filtered run is red whenever one is. So a
+# KILLED reading is KILLED there, and a MISMATCH that matched at least one
+# expectation is the same MISMATCH (matched_any). A reading that matched none
+# (SURVIVED, a MISMATCH red only elsewhere, RUN-FAIL…) depends on tests this
+# run left out, so it is never used: the filtered run answers. What a
+# killer-first row loses is the `+extra:` census of the filtered set — the
+# collateral `--fast` already narrows to the pinned classes.
 killer_tokens() {
     printf '%s\n' "$1" | tr ',' '\n' | sed '/^[[:space:]]*$/d; s/^[[:space:]]*/test:/; s/[[:space:]]*$//' | paste -sd, -
+}
+
+# matched_any <classified> <expected-csv> — whether a killer-first reading
+# answers the verdict: KILLED, or MISMATCH with at least one expectation
+# matched. Every test carrying an expectation ran, so an expectation matched
+# here is matched in the filtered run and one missing here is missing there:
+# the filtered run is red and its verdict is the same MISMATCH. Only a run
+# that matched NOTHING leaves the filtered run's own question open — green
+# (SURVIVED) or red somewhere else (MISMATCH).
+matched_any() {
+    local verdict missing
+    verdict=$(printf '%s\n' "$1" | sed -n '1p')
+    [ "$verdict" = "KILLED" ] && return 0
+    [ "$verdict" = "MISMATCH" ] || return 1
+    # The uncapped third line when the row was capped, else the row itself.
+    missing=$(printf '%s\n' "$1" | sed -n '3p')
+    [ -n "$missing" ] || missing=$(printf '%s\n' "$1" | sed -n '2p')
+    missing=$(printf '%s' "$missing" | sed -n 's/.*(missing: \(.*\))$/\1/p')
+    [ -n "$missing" ] || return 1
+    [ "$(printf '%s' "$missing" | awk -F', ' '{ print NF }')" -lt "$(printf '%s' "$2" | awk -F',' '{ print NF }')" ]
+}
+
+# fallback_tokens <filter> — FALLBACK_SLICES lines, each the APQ_TEST filter
+# of one slice of the filtered run (`<class>#<i>/<k>` for every class of it);
+# non-zero when the filter is not a plain class list. Slices are disjoint and
+# cover each class (ShardFilter), so their union is the filtered run, read as
+# one by `apq mutation-verdict`; a slice is an own process because the one
+# class that falls back is almost always the heaviest of the suite.
+fallback_tokens() {
+    local i
+    case "$1" in
+        ALL|*'#'*|*'test:'*|'') return 1 ;;
+    esac
+    for i in $(seq 0 $((FALLBACK_SLICES - 1))); do
+        printf '%s\n' "$1" | tr ',' '\n' | sed "s|\$|#$i/$FALLBACK_SLICES|" | paste -sd, -
+    done
 }
 
 # build_track <workroot> <slot> <worktree> <build-dir> <log> — the track's
@@ -488,7 +558,8 @@ write_verdict() {
 
 # ------------------------------------------------------------- parsing
 
-# classify <log> <expected-csv> -> two lines: verdict, detail.
+# classify <expected-csv> <log>... -> two lines: verdict, detail. Several logs
+# are the slices of one run, classified as their union.
 #
 # The whole classifier lives in `apq mutation-verdict`. It used to live
 # here, as ~130 lines of awk that re-implemented a utest transcript
@@ -506,8 +577,9 @@ write_verdict() {
 # reached the transcript parser would otherwise grade its own homework.
 # `cd "$repo"` is what makes the hxq shim resolve the unmutated tree.
 classify() {
-    local log=$1 expected=$2
-    ( cd "$repo" && "$repo/bin/hxq" mutation-verdict "$log" --expect "$expected" )
+    local expected=$1
+    shift
+    ( cd "$repo" && "$repo/bin/hxq" mutation-verdict "$@" --expect "$expected" )
 }
 
 # build_detail <build-log> -> one report-row cell naming WHY the build failed.
@@ -533,6 +605,8 @@ EOF
 # (a cold build under full load takes about a minute); it is killed and the
 # build repeated cold.
 BUILD_TIMEOUT=${APQ_MUTATION_BUILD_TIMEOUT:-300}
+# The slices a killer-first track's fallback run is dealt into.
+FALLBACK_SLICES=${APQ_MUTATION_FALLBACK_SLICES:-4}
 # A slot's server is restarted once its resident set passes this (KiB).
 SERVER_MAX_RSS_KB=${APQ_MUTATION_SERVER_MAX_RSS_KB:-6291456}
 # The memory one default job is budgeted (GiB): see the `--jobs` default.
@@ -550,7 +624,7 @@ fi
 # -------------------------------------------------------- parent mode
 
 if [ "$#" -lt 1 ]; then
-    echo "usage: mutation-check.sh <manifest> [--jobs N] [--keep] [--build-only] [--killer-first] [--base <ref>]" >&2
+    echo "usage: mutation-check.sh <manifest> [--jobs N] [--keep] [--build-only] [--killer-first] [--schema <dir>] [--base <ref>]" >&2
     exit 2
 fi
 
@@ -608,7 +682,7 @@ while [ "$#" -gt 0 ]; do
             shift 2
             ;;
         *)
-            echo "mutation-check.sh: unknown argument '$1' (expected --jobs N, --keep, --build-only, --killer-first or --base <ref>)" >&2
+            echo "mutation-check.sh: unknown argument '$1' (expected --jobs N, --keep, --build-only, --killer-first, --schema <dir> or --base <ref>)" >&2
             exit 2
             ;;
     esac
