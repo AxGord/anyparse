@@ -261,14 +261,19 @@ class PreferStaticExtensionFactsTest extends Test {
 	 */
 	@:pin('control') @:killer('M-PSE-CHANNEL-ALIAS')
 	public function testAnImportAliasOfTheModuleNameDropsTheSite(): Void {
-		final seen: Null<Map<String, String>> =
-			verdicts([[]], ALIAS_MAIN, ALIAS_MAIN, BUILD, '{"rules": {"prefer-static-extension": {"types": ["Util"]}}}', [
-				'Base.hx' => 'class Base {\n\tpublic var n:Int = 1;\n\n\tpublic function new() {}\n\n\tpublic static function touch():String\n\t\treturn Util.f(new Base());\n}\n',
-				'Other.hx' => 'class Other {\n\tpublic static inline function f(x:Base):String\n\t\treturn "Other.f " + x.n;\n}\n',
-				'Util.hx' => 'class Util {\n\tpublic static inline function f(x:Base):String\n\t\treturn "Util.f " + x.n;\n}\n'
-			]);
-		if (seen == null) return;
-		for (site in ['facts', 'structural']) Assert.equals('drop', seen[site], '$site: $seen');
+		// with `Other.f` out of `using` the conflict gate sees no rival the inserted `using Util` could bring: only what the
+		// written name binds to drops the site
+		for (meta in ['', '@:noUsing ']) {
+			final seen: Null<Map<String, String>> =
+				verdicts([[]], ALIAS_MAIN, ALIAS_MAIN, BUILD, '{"rules": {"prefer-static-extension": {"types": ["Util"]}}}', [
+					'Base.hx' => 'class Base {\n\tpublic var n:Int = 1;\n\n\tpublic function new() {}\n\n\tpublic static function touch():String\n\t\treturn Util.f(new Base());\n}\n',
+					'Other.hx' => 'class Other {\n\t' + meta
+					+ 'public static inline function f(x:Base):String\n\t\treturn "Other.f " + x.n;\n}\n',
+					'Util.hx' => 'class Util {\n\tpublic static inline function f(x:Base):String\n\t\treturn "Util.f " + x.n;\n}\n'
+				]);
+			if (seen == null) return;
+			for (site in ['facts', 'structural']) Assert.equals('drop', seen[site], '$meta$site: $seen');
+		}
 	}
 
 	/** A `using` in a conditional region binds in the builds that compile it: `Other.f` there, not the configured `Util.f`. */
