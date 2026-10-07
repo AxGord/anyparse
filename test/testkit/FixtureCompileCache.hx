@@ -121,6 +121,12 @@ final class FixtureCompileCache {
 	 */
 	private static inline final LAYOUT: Int = 3;
 
+	/** How long a process waits on another's compile of the same key before compiling it itself. */
+	private static inline final AWAIT_MS: Float = 10 * 60 * 1000;
+
+	/** How often a waiting process looks for the record. */
+	private static inline final AWAIT_POLL_MS: Int = 50;
+
 	/**
 	 * The shim's entry point: `APQ_FIXTURE_CACHE_HAXE` is the real compiler, `APQ_FIXTURE_CACHE_STAMP` its identity,
 	 * `APQ_FIXTURE_CACHE_DIR` the cache. Answers exactly as the compiler would: its streams, then its status.
@@ -154,26 +160,92 @@ final class FixtureCompileCache {
 		}
 		final id: String = key(stamp, compile, before);
 		final entry: String = Path.join([dir, '$id.json.gz']);
-		final stored: Null<String> = try Zlib.gunzipSync(Fs.readFileSync(entry)).toString('utf8') catch (exception: Exception) null;
+		final stored: Null<String> = readEntry(entry);
 		if (stored != null) {
 			// a hit renews the entry, so a cache that outlives one run ages out by disuse (`tools/fixture-cache.sh`)
 			try Fs.utimesSync(entry, Date.now(), Date.now()) catch (exception: Exception) {} // noqa: swallowed-exception
 			note(dir, 'hit');
 			return replay(Json.parse(stored), compile.roots);
 		}
+		// One compile of a key at a time: the suite processes of one run ask for the same fixture TOGETHER — a sweep's
+		// tracks pin the same tests — and each used to compile it, since none had recorded it yet. A process that finds the
+		// key claimed waits for the holder's record and replays it; one whose holder recorded nothing compiles for real.
+		final lock: String = '$entry.lock';
+		if (!claim(lock)) {
+			final shared: Null<String> = awaited(entry, lock);
+			if (shared != null) {
+				note(dir, 'shared');
+				return replay(Json.parse(shared), compile.roots);
+			}
+			final unshared: CompileOutcome = spawn(real, cwd, args);
+			note(dir, 'pass');
+			return unshared;
+		}
 		final outcome: CompileOutcome = spawn(real, cwd, args);
 		final after: Null<Array<Map<String, String>>> = trees(compile.roots);
 		final recorded: Null<CompileEntry> = after == null || !outcome.exited ? null : record(outcome, compile.roots, before, after);
-		if (recorded == null) {
-			note(dir, 'pass');
-			return outcome;
+		if (recorded != null) {
+			final temporary: String = '$entry.${Node.process.pid}.tmp';
+			// gzipped: a probe's `-v` names every std module it parsed, ~240 KB of JSON a cache kept across runs pays per entry
+			Fs.writeFileSync(temporary, Zlib.gzipSync(Json.stringify(recorded)));
+			Fs.renameSync(temporary, entry);
 		}
-		final temporary: String = '$entry.${Node.process.pid}.tmp';
-		// gzipped: a probe's `-v` names every std module it parsed, ~240 KB of JSON a cache kept across runs pays per entry
-		Fs.writeFileSync(temporary, Zlib.gzipSync(Json.stringify(recorded)));
-		Fs.renameSync(temporary, entry);
-		note(dir, 'miss');
+		release(lock);
+		note(dir, recorded == null ? 'pass' : 'miss');
 		return outcome;
+	}
+
+	/** The recorded entry at `entry`, unzipped, or null. */
+	private static function readEntry(entry: String): Null<String> {
+		return try Zlib.gunzipSync(Fs.readFileSync(entry)).toString('utf8') catch (exception: Exception) null;
+	}
+
+	/** Claims the compile of one key for this process (`lock` holds its pid); false when another process holds it. */
+	private static function claim(lock: String): Bool {
+		try {
+			Fs.mkdirSync(lock);
+		} catch (exception: Exception) {
+			return false;
+		}
+		try Fs.writeFileSync(
+			Path.join([lock, 'pid']), Std.string(Node.process.pid)
+		) catch (exception: Exception) {} // noqa: swallowed-exception
+		return true;
+	}
+
+	private static function release(lock: String): Void {
+		try Fs.unlinkSync(Path.join([lock, 'pid'])) catch (exception: Exception) {} // noqa: swallowed-exception
+		try Fs.rmdirSync(lock) catch (exception: Exception) {} // noqa: swallowed-exception
+	}
+
+	/**
+	 * The entry the holder of `lock` records at `entry`, waited for; null once the holder released the key without one
+	 * (a compile this class does not record), died holding it, or held it past `AWAIT_MS`.
+	 */
+	private static function awaited(entry: String, lock: String): Null<String> {
+		final until: Float = Date.now().getTime() + AWAIT_MS;
+		while (Date.now().getTime() < until) {
+			final shared: Null<String> = readEntry(entry);
+			if (shared != null) return shared;
+			if (!Fs.existsSync(lock)) return readEntry(entry);
+			final holder: Null<Int> = try Std.parseInt(Fs.readFileSync(Path.join([lock, 'pid']))
+				.toString('utf8')) catch (exception: Exception) null;
+			if (holder != null && !alive(holder)) {
+				release(lock);
+				return null;
+			}
+			js.Syntax.code('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, {0})', AWAIT_POLL_MS);
+		}
+		return null;
+	}
+
+	/** Whether a process `pid` exists. */
+	private static function alive(pid: Int): Bool {
+		return try {
+			// signal 0 probes without sending; the extern types the signal as a name
+			js.Syntax.code('process.kill({0}, 0)', pid);
+			true;
+		} catch (exception: Exception) false;
 	}
 
 	/**

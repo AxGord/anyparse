@@ -71,6 +71,48 @@ class FixtureCompileCacheTest extends Test {
 		);
 	}
 
+	/**
+	 * A key another live process is compiling is waited for and replayed (`shared`) — a sweep's concurrent tracks ask for
+	 * the same fixture together — and one whose holder died is compiled here, unrecorded, its claim cleared for the next.
+	 */
+	public function testAKeyAnotherProcessHoldsIsWaitedForThenShared(): Void {
+		final cache: String = CliFixture.writeTree('fcc_cache', []);
+		final first: Fixture = fixture(PROBE, MAIN);
+		final second: Fixture = fixture(PROBE, MAIN);
+		final third: Fixture = fixture(PROBE, MAIN);
+		CliFixture.always(
+			() -> for (dir in [cache, first.dir, first.probe, second.dir, second.probe, third.dir, third.probe]) CliFixture.removeDir(dir),
+			() -> {
+				FixtureCompileCache.run('haxe', 'stamp', cache, first.dir, args(first));
+				final entry: String = Path.join([
+					cache,
+					[for (f in FileSystem.readDirectory(cache)) if (f.endsWith('.json.gz')) f][0]
+				]);
+				// a live holder: this process, whose record lands only after the waiter started waiting
+				FileSystem.rename(entry, '$entry.aside');
+				FileSystem.createDirectory('$entry.lock');
+				File.saveContent('$entry.lock/pid', Std.string(js.Node.process.pid));
+				ChildProcess.spawn('sh', [
+					'-c',
+					'sleep 0.5; mv "$$1.aside" "$$1"; rm -f "$$1.lock/pid"; rmdir "$$1.lock"',
+					'sh',
+					entry
+				]);
+				final shared: CompileOutcome = FixtureCompileCache.run('haxe', 'stamp', cache, second.dir, args(second));
+				Assert.equals(0, shared.status);
+				Assert.isTrue(shared.out.toString().indexOf(resolved(second.dir)) >= 0, 'the shared replay names its own cwd');
+				// a dead holder: its claim is cleared, the compile runs here unrecorded, and the next one claims the key again
+				FileSystem.deleteFile(entry);
+				FileSystem.createDirectory('$entry.lock');
+				File.saveContent('$entry.lock/pid', '999999999');
+				FixtureCompileCache.run('haxe', 'stamp', cache, third.dir, args(third));
+				Assert.isFalse(FileSystem.exists('$entry.lock'));
+				FixtureCompileCache.run('haxe', 'stamp', cache, third.dir, args(third));
+				Assert.equals('miss,shared,pass,miss', tally(cache));
+			}
+		);
+	}
+
 	public function testOnlyAWhitelistedProbeCompileInsideItsRootsIsReplayed(): Void {
 		final f: Fixture = fixture(PROBE, MAIN);
 		final outside: String = CliFixture.writeTree('fcc_outside', [{ name: 'Lib.hx', source: 'class Lib {}\n' }]);
