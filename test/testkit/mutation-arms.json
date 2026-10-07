@@ -14555,7 +14555,7 @@
 			"method": "runsNoUserCode",
 			"find": "final map: Bool = !array && (execution?.mapTypeNames ?? []).contains(type) && !projectSubtype(type);",
 			"replace": "final map: Bool = false;",
-			"note": "a standard map's own methods may run project code, so under the compiler facts the iteration the loop splices in reaches every function an extern map method admits"
+			"note": "a standard map's own methods may run project code, so under the compiler facts a map handed to a method that only calls them may be changed there, and a loop over it keeps its key"
 		},
 		{
 			"name": "M-FACTS-IDENTITY-CAST-VALUE",

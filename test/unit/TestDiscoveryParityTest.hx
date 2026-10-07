@@ -1234,9 +1234,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.FactsFixGateE2ETest#testAComputedClassNameTheProjectBoundsLetsTheLoopRewrite :: control :: M-REFLECTIVE-BUILDS,M-REFLECTIVE-REACH,M-REFLECTIVE-WARN,M-ESCAPES-FACTS-UNMATCHED',
 			'unit.check.FactsFixGateE2ETest#testAComputedMemberNameTheProjectBoundsLetsTheLoopRewrite :: control :: M-HOLDERS-BUILDS,M-HOLDERS-REACH,M-HOLDERS-WARN,M-HOLDERS-READ',
 			'unit.check.FactsFixGateE2ETest#testAMapHandedToMethodsThatKeepNothingLosesItsKeyUnderTheTruth :: control :: '
-				+ 'M-FACTS-ARGUMENT-USE,M-FACTS-ARGUMENT-CAST,M-FACTS-ABSTRACT-WRAPPED-CAST,M-TOUCH-ARGUMENT-USES',
+				+ 'M-FACTS-ARGUMENT-USE,M-FACTS-ARGUMENT-CAST,M-FACTS-ABSTRACT-WRAPPED-CAST,M-TOUCH-ARGUMENT-USES,M-GRAPH-MAP-USER-CODE',
 			'unit.check.FactsFixGateE2ETest#testAMapTheLoopLeavesUnchangedLosesItsKeyFromItsSyntax :: control :: M-TOUCH-MAP-METHODS-UNKNOWN',
-			'unit.check.FactsFixGateE2ETest#testAMapTheLoopLeavesUnchangedLosesItsKeyUnderTheTruth :: control :: M-GRAPH-MAP-USER-CODE,M-FACTS-IDENTITY-CAST-VALUE,M-TOUCH-MAP-METHODS-UNKNOWN,M-REACH-LOCAL-MAP-ALIAS-ARRAY',
+			'unit.check.FactsFixGateE2ETest#testAMapTheLoopLeavesUnchangedLosesItsKeyUnderTheTruth :: control :: M-FACTS-IDENTITY-CAST-VALUE,M-TOUCH-MAP-METHODS-UNKNOWN,M-REACH-LOCAL-MAP-ALIAS-ARRAY',
 			'unit.check.FactsFixGateE2ETest#testAPrivateMemberNoSupertypeDeclaresIsDeleted :: control :: M-UNUSED-PRIVATE-CHAIN-FACTS,M-UNUSED-PRIVATE-CHAIN-DECLARED,M-UNUSED-PRIVATE-CHAIN-AUTOBUILD',
 			'unit.check.FactsFixGateE2ETest#testAProofTheTruthContradictsKeepsTheLoop :: control :: M-REACH-PROVEN-TRUTH',
 			'unit.check.FactsFixGateE2ETest#testAReceiverTheFactsTypeAsANonExternClassLosesItsToString :: control :: M-TOSTRING-FACTS-CLASS,M-TOSTRING-FACTS-EXTERN,M-FACTS-ESCAPE-SHIFT',
