@@ -1236,9 +1236,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.FactsFixGateE2ETest#testAMapHandedToMethodsThatKeepNothingLosesItsKeyUnderTheTruth :: control :: '
 				+ 'M-FACTS-ARGUMENT-USE,M-FACTS-ARGUMENT-CAST,M-FACTS-ABSTRACT-WRAPPED-CAST,M-TOUCH-ARGUMENT-USES',
 			'unit.check.FactsFixGateE2ETest#testAMapTheLoopLeavesUnchangedLosesItsKeyFromItsSyntax :: control :: M-TOUCH-MAP-METHODS-UNKNOWN',
-			'unit.check.FactsFixGateE2ETest#testAMapTheLoopLeavesUnchangedLosesItsKeyUnderTheTruth :: control :: M-GRAPH-MAP-USER-CODE,M-FACTS-IDENTITY-CAST-VALUE,M-TOUCH-MAP-METHODS-UNKNOWN,M-REACH-LOCAL-MAP-ALIAS-ARRAY',
+			'unit.check.FactsFixGateE2ETest#testAMapTheLoopLeavesUnchangedLosesItsKeyUnderTheTruth :: control :: M-GRAPH-MAP-USER-CODE,M-FACTS-IDENTITY-CAST-VALUE,M-TOUCH-MAP-METHODS-UNKNOWN,M-REACH-LOCAL-MAP-ALIAS-PROVEN',
 			'unit.check.FactsFixGateE2ETest#testAPrivateMemberNoSupertypeDeclaresIsDeleted :: control :: M-UNUSED-PRIVATE-CHAIN-FACTS,M-UNUSED-PRIVATE-CHAIN-DECLARED,M-UNUSED-PRIVATE-CHAIN-AUTOBUILD',
-			'unit.check.FactsFixGateE2ETest#testAProofTheTruthContradictsKeepsTheLoop :: control :: M-REACH-PROVEN-TRUTH',
+
 			'unit.check.FactsFixGateE2ETest#testAReceiverTheFactsTypeAsANonExternClassLosesItsToString :: control :: M-TOSTRING-FACTS-CLASS,M-TOSTRING-FACTS-EXTERN,M-FACTS-ESCAPE-SHIFT',
 			'unit.check.FactsFixGateE2ETest#testAStaticImportedUnderAnotherNameKeepsTheLoopWithoutTheTruth :: control :: M-REACH-IMPORT-ALIAS,M-REACH-IMPORT-ALIAS-WORDS',
 			'unit.check.FactsFixGateE2ETest#testAValueStoredInALocalOnlyIteratedLetsTheLoopRewrite :: control :: M-FACTS-ASSIGN-HELD,M-TOUCH-TYPED-HELD-REGION',
@@ -2923,8 +2923,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testAFieldTheCompilerPlacesAcrossTwoInlinedGettersIsItsTextUnderTheTruth :: control :: '
 				+ 'M-FACTS-TEXT-JOINED-SPLICES',
 			'unit.query.MemberReachFactsTest#testAFileTheRunWroteMayBeCompiled :: control :: M-FACTS-DEAD-FILE-REWRITTEN',
+			'unit.query.MemberReachFactsTest#testAFreshObjectConvertedRunsOnlyItsOwnClassToStringUnderFactsThatAreNotTheTruth :: control :: '
+				+ 'M-REACH-EXACT-SITE',
 			'unit.query.MemberReachFactsTest#testAFreshObjectConvertedRunsOnlyItsOwnClassToStringUnderTheTruth :: control :: '
-				+ 'M-FACTS-STRING-EXACT,M-REACH-EXACT-SITE,M-FACTS-VIEW-EXACT,M-FACTS-VIEW-EXACT-CONVERSION,M-FACTS-EXACT-WRITTEN,M-FACTS-CALL-OPERAND-EXACT',
+				+ 'M-FACTS-STRING-EXACT,M-FACTS-VIEW-EXACT,M-FACTS-VIEW-EXACT-CONVERSION,M-FACTS-EXACT-WRITTEN,M-FACTS-CALL-OPERAND-EXACT',
 			'unit.query.MemberReachFactsTest#testAFunctionNestedInATypeOfASharedNameIsItsFilesTypesCodeUnderTheTruth :: control :: '
 				+ 'M-FACTS-NESTED-OWNER-NONE,M-FACTS-NESTED-BODIES-NONE,M-REACH-OWN-TYPES-NONE,M-REACH-REWRITTEN-OWN-SIMPLE',
 			'unit.query.MemberReachFactsTest#testAFunctionSplicedFromAnotherFileIsTheNodeItsCalleeDeclares :: control :: '
@@ -2942,7 +2944,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testALibraryMemberAFactCallsIsItsOwnTypesUnderTheTruth :: control :: '
 				+ 'M-REACH-QUALIFIED-NONE,M-FACTS-QUALIFIED-HAZARDS,M-GRAPH-FACTS-TYPED-NONE',
 			'unit.query.MemberReachFactsTest#testALibraryMemberOnlyOneTypeOfItsNameDeclaresIsReadThroughItsFacts :: control :: '
-				+ 'M-FACTS-SOLE-MEMBER-NONE,M-REACH-ITERABLE-RETURNS',
+				+ 'M-FACTS-SOLE-MEMBER-NONE',
 			'unit.query.MemberReachFactsTest#testALocalACalleeRebuiltInPlaceHandsOutIsNoProofUnderTheTruth :: control :: '
 				+ 'M-FACTS-TEXT-CALLS-ANY',
 			'unit.query.MemberReachFactsTest#testALocalHoldingTheMemberThroughAValueConstructIsFollowedUnderTheTruth :: control :: M-FACTS-HELD-THROUGH-IF,M-FACTS-HELD-THROUGH-SWITCH,M-FACTS-HELD-THROUGH-PAREN,M-FACTS-HELD-THROUGH-BLOCK,M-FACTS-HELD-THROUGH-TRY,M-FACTS-ASSIGN-HELD-THROUGH',
@@ -3017,6 +3019,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testAProjectFileNoBuildCompilesLetsNoValueEscape :: control :: M-FACTS-DEAD-FILE-VALUES',
 			'unit.query.MemberReachFactsTest#testAProjectFileNoBuildCompilesRunsNothing :: control :: '
 				+ 'M-REACH-DEAD-FILE-SEEDS,M-FACTS-DEAD-FILE-NEVER,M-FACTS-DEAD-FILE-UNTRUE',
+			'unit.query.MemberReachFactsTest#testAProofTheTruthContradictsIsAskedAgainUnderTheTruth :: control :: M-REACH-PROVEN-TRUTH',
 			'unit.query.MemberReachFactsTest#testAPropertyOneBuildReadsThroughAGetterIsNotReadStraight :: control :: M-FACTS-FIELD-KINDS',
 			'unit.query.MemberReachFactsTest#testAPropertyOnlyAnotherBranchsDeclarationOfATypeGivesRunsItsAccessor :: control :: '
 				+ 'M-INDEX-ALTERNATE-DROPPED,M-INDEX-ALTERNATE-MEMBERS',
@@ -3056,9 +3059,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testARegionOfATypeABuildReadsFromACopyTheIndexDoesNotHoldIsNoProofUnderTheTruth :: control :: '
 				+ 'M-FACTS-COPY-UNHELD',
 			'unit.query.MemberReachFactsTest#testAStoredFunctionValueMayConvertWhatItIsHanded :: control :: M-FACTS-REACH-UNREAD-VALUE',
-			'unit.query.MemberReachFactsTest#testAStoredFunctionValueMayConvertWhatItIsHandedUnderTheTruth :: control :: '
-				+ 'M-REACH-TYPED-IMPLICIT-TEXT',
-			'unit.query.MemberReachFactsTest#testAStoredFunctionValueMayIterateWhatItIsHandedUnderTheTruth :: control :: '
+			'unit.query.MemberReachFactsTest#testAStoredFunctionValueMayIterateWhatItHoldsUnderTheTruth :: control :: '
 				+ 'M-REACH-TYPED-IMPLICIT-ITER',
 			'unit.query.MemberReachFactsTest#testAStoredFunctionValueMayRunAnOperatorOverload :: control :: M-FACTS-REACH-UNREAD-IMPLICIT',
 			'unit.query.MemberReachFactsTest#testAStringBufHandsItsTargetCodeNoObjectUnderTheTruth :: control :: '
@@ -3199,9 +3200,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testJoiningAnArrayRunsItsElementsToStringAloneUnderTheTruth :: control :: '
 				+ 'M-REACH-ARRAY-OWN-HANDS',
 			'unit.query.MemberReachFactsTest#testLibraryCodeNotReadYetMayRunAnyOperatorOverloadUnderTheTruth :: control :: '
-				+ 'M-ADMIT-SYNTAX-READ-UNSEEN,M-REACH-UNREAD-RECHECK',
+				+ 'M-ADMIT-SYNTAX-READ-UNSEEN,M-REACH-UNREAD-RECHECK,M-REACH-TYPED-IMPLICIT-TEXT',
 			'unit.query.MemberReachFactsTest#testLibraryCodeNotReadYetMayRunTheOperatorOverloadOfATypeTheIndexDeclaresNowhere :: control :: '
-				+ 'M-REACH-UNREAD-READ-FAMILIES',
+				+ 'M-REACH-UNREAD-READ-FAMILIES,M-REACH-TYPED-IMPLICIT-TEXT',
 			'unit.query.MemberReachFactsTest#testLibraryTargetCodeIsReadLikeTheProjectsUnderTheTruth :: control :: '
 				+ 'M-ESCAPES-FACTS-NATIVE-LOCALS',
 			'unit.query.MemberReachFactsTest#testNoReadOfATypeTheIndexDoesNotHoldIsOneOfItsNamesakeUnderTheTruth :: control :: '
@@ -3229,7 +3230,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-NATIVE-SITE-VALUES,M-FACTS-NATIVE-HANDED,M-FACTS-NATIVE-CHAIN,M-ESCAPES-FACTS-NATIVE-HANDED,'
 				+ 'M-NATIVE-LITERAL-CODE,M-NATIVE-LITERAL-CHAIN',
 			'unit.query.MemberReachFactsTest#testTheArraysOwnMethodReachesItsElementsOnlyByConvertingThemUnderTheTruth :: control :: '
-				+ 'M-REACH-EXTERN-FACTS-TYPE,M-REACH-ARRAY-VALUES',
+				+ 'M-REACH-ARRAY-VALUES',
 			'unit.query.MemberReachFactsTest#testTheCompilerResolvesACallTheSyntaxCannot :: control :: M-FACTS-REACH-EDGES',
 			'unit.query.MemberReachFactsTest#testTheCompilersHierarchyReachesAnOverride :: control :: M-FACTS-REACH-OVERRIDES',
 			'unit.query.MemberReachFactsTest#testTheFactsAreTheTruthOnlyUnderTheWholeListOfTheirBuilds :: control :: M-FACTS-TRUTH-WIRED',
@@ -3292,6 +3293,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-TRUTH-HAZARDS,M-FACTS-TRUTH-HAZARDS-UNLISTED,M-FACTS-TRUTH-UNTYPED-KEPT',
 			'unit.query.MemberReachFactsTest#testWhatAnEscapedValueHoldsEscapesWithItUnderTheTruth :: control :: '
 				+ 'M-ESCAPES-FACTS-FIELDS,M-ESCAPES-FACTS-ENUM,M-ESCAPES-FACTS-STRUCTURE,M-ESCAPES-FACTS-PLACE-ARGS,M-ESCAPES-FACTS-TYPE-ARGS',
+			'unit.query.MemberReachFactsTest#testWhatAnIteratorReturnsIsNotIteratedInTurnUnderTheTruth :: control :: '
+				+ 'M-REACH-ITERABLE-RETURNS',
 			'unit.query.MemberReachTest#testAClassNamedToTheClassValueProducerMayBeInstantiatedUntyped :: control :: M-ESCAPE-NAMED-CLASS',
 			'unit.query.MemberReachTest#testAClasspathTheIndexDoesNotHoldMayDeclareAnOverrideOrASubtype :: control :: '
 				+ 'M-REACH-CLASSPATH-DISPATCH,M-CARRY-CLASSPATH',
@@ -5153,7 +5156,6 @@ class TestDiscoveryParityTest extends Test {
 			'M-REACH-ARRAY-OWN',
 			'M-REACH-ARRAY-CTOR',
 			'M-REACH-ARRAY-VALUES',
-			'M-REACH-EXTERN-FACTS-TYPE',
 			'M-REACH-SHARED-OWNERS',
 			'M-GRAPH-INIT-RECORD',
 			'M-FACTS-VIEW-INIT-FACETED',
@@ -5414,7 +5416,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-MAPITER-REACH-SKIPPED',
 			'M-MAPITER-SUBTYPE-VETO-OFF',
 			'M-REACH-LOCAL-TOUCH-BLIND',
-			'M-REACH-LOCAL-MAP-ALIAS-ARRAY',
+			'M-REACH-LOCAL-MAP-ALIAS-PROVEN',
 			'M-TOUCH-MAP-METHODS-UNKNOWN',
 			'M-GRAPH-MAP-USER-CODE',
 			'M-FACTS-IDENTITY-CAST-VALUE',
