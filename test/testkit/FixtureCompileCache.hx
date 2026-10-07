@@ -165,6 +165,9 @@ final class FixtureCompileCache {
 		// compile. An entry answers for it only when its compile never ran that switch — then the mutated method never ran
 		// there either, and the answer is the unmutated one every arm shares; one that ran it is compiled for real.
 		final active: Int = Std.parseInt(Sys.getEnv('APQ_MUTANT') ?? '') ?? 0;
+		// where the CALLER collects the switches its compiles run — a cache in front of this one: answered as the compiler
+		// would have, a replay included
+		final callerLog: Null<String> = Sys.getEnv('APQ_MUTANT_MACRO_LOG');
 		final stored: Null<String> = readEntry(entry);
 		if (stored != null) {
 			final hit: CompileEntry = Json.parse(stored);
@@ -175,6 +178,7 @@ final class FixtureCompileCache {
 			// a hit renews the entry, so a cache that outlives one run ages out by disuse (`tools/fixture-cache.sh`)
 			try Fs.utimesSync(entry, Date.now(), Date.now()) catch (exception: Exception) {} // noqa: swallowed-exception
 			note(dir, 'hit');
+			forward(callerLog, hit.reached);
 			return replay(hit, compile.roots);
 		}
 		// One compile of a key at a time: the suite processes of one run ask for the same fixture TOGETHER — a sweep's
@@ -186,6 +190,7 @@ final class FixtureCompileCache {
 			final sharedEntry: Null<CompileEntry> = shared == null ? null : Json.parse(shared);
 			if (sharedEntry != null && !sharedEntry.reached.contains(active)) {
 				note(dir, 'shared');
+				forward(callerLog, sharedEntry.reached);
 				return replay(sharedEntry, compile.roots);
 			}
 			final unshared: CompileOutcome = spawn(real, cwd, args);
@@ -196,6 +201,7 @@ final class FixtureCompileCache {
 		final reachedLog: String = '$entry.${Node.process.pid}.reached';
 		final outcome: CompileOutcome = spawn(real, cwd, args, reachedLog);
 		final reached: Array<Int> = readReached(reachedLog);
+		forward(callerLog, reached);
 		final after: Null<Array<Map<String, String>>> = trees(compile.roots);
 		// a compile that ran the live arm's switch answered for that arm alone: not recorded
 		final recorded: Null<CompileEntry> = after == null || !outcome.exited || reached.contains(active)
@@ -496,6 +502,13 @@ final class FixtureCompileCache {
 		return text == null ? [] : [
 			for (line in text.split('\n')) if (Std.parseInt(line) != null) Std.parseInt(line) ?? 0
 		];
+	}
+
+	/** `reached` appended to the caller's switch log `log`, as the compile would have written them there. */
+	private static function forward(log: Null<String>, reached: Array<Int>): Void {
+		if (
+			log != null && reached.length > 0
+		) try Fs.appendFileSync(log, [for (id in reached) '$id\n'].join('')) catch (exception: Exception) {} // noqa: swallowed-exception
 	}
 
 	/** `bytes` as a string when it is UTF-8 that round-trips, else null. */
