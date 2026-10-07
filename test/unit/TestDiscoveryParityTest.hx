@@ -953,6 +953,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.MoveGuardedImportCarryTest',
 		'unit.query.MoveMemberSliceTest',
 		'unit.query.MoveSymbolSliceTest',
+		'unit.query.MutationSchemaTest',
 		'unit.query.MutationVerdictTest',
 		'unit.query.NameMentionScanTest',
 		'unit.query.NewFileSliceTest',

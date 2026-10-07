@@ -26,7 +26,15 @@
 # `APQ_MUTATION_NO_SERVER=1` / `APQ_MUTATION_NO_FIXTURE_CACHE=1` turn either
 # off — the A/B arms a verdict comparison needs.
 #
-# Usage: tools/mutation-check.sh <manifest> [--jobs N] [--keep] [--build-only] [--base <ref>]
+# Usage: tools/mutation-check.sh <manifest> [--jobs N] [--keep] [--build-only] [--killer-first] [--base <ref>]
+#
+# --killer-first
+#               run a track's EXPECTED tests alone first (`APQ_TEST=test:<e>,…`)
+#               and take a KILLED reading of that run as the verdict; any other
+#               reading is answered by the track's own filter, as without the
+#               flag. The verdict cannot differ (killer_tokens says why); what a
+#               killer-first row loses is its `+extra:` collateral. A track with
+#               no expectations runs its filter only.
 #
 # --jobs N      job slots (default min(cores - 2, memory / 5 GiB), at least 1).
 #
@@ -237,15 +245,24 @@ run_in_slot() {
         return 0
     fi
 
-    local started built
+    local started built mutant="" cache=1 kind schema_row
     started=$(date +%s)
-    if ! build_track "$workroot" "$slot" "$wt" "$build" "$workroot/$name.build.log"; then
+    # A schema track (--schema) runs the composed build with its arm switched
+    # on, and builds nothing; one the composed build left out is built here.
+    if schema_row=$(schema_track "$workroot" "$name"); then
+        build="$(cat "$workroot/schema")"
+        mutant=${schema_row% *}
+        [ "${schema_row#* }" = "cache" ] || cache=0
+        kind=schema
+    elif ! build_track "$workroot" "$slot" "$wt" "$build" "$workroot/$name.build.log"; then
         write_verdict "$verdict_file" "BUILD-FAIL" "$(build_detail "$workroot/$name.build.log")"
         return 0
+    else
+        kind=$(build_kind "$workroot/$name.build.log")
     fi
     built=$(date +%s)
     # `<build kind> <build s> <run s>`, summed by the parent's report.
-    printf '%s %s ' "$(build_kind "$workroot/$name.build.log")" "$((built - started))" > "$workroot/$name.timing"
+    printf '%s %s ' "$kind" "$((built - started))" > "$workroot/$name.timing"
 
     # `--build-only` asks whether the cut COMPILES and stops there. It claims
     # nothing about any fixture, which is why the verdict is not KILLED: an arm
@@ -259,22 +276,31 @@ run_in_slot() {
     # The fixture cache's `haxe` shim goes first on the PATH when the parent
     # built one (§ "The fixture cache" in the parent section).
     path=$PATH
-    if [ -x "$workroot/fixture-cache/bin/haxe" ]; then
+    if [ -x "$workroot/fixture-cache/bin/haxe" ] && [ "$cache" -eq 1 ]; then
         path="$workroot/fixture-cache/bin:$PATH"
     fi
-    if [ "$filter" = "ALL" ]; then
-        ( cd "$wt" && env -u APQ_TEST PATH="$path" node "$build/test.js" ) > "$log" 2>&1 || true
-    else
-        ( cd "$wt" && APQ_TEST="$filter" PATH="$path" node "$build/test.js" ) > "$log" 2>&1 || true
-    fi
-    printf '%s\n' "$(($(date +%s) - built))" >> "$workroot/$name.timing"
 
+    # --killer-first: the tests the expectations name, alone, first. A KILLED
+    # reading there is the verdict the filtered run would give — see
+    # killer_tokens — and anything else is answered by the filtered run itself.
+    local classified v d full phase=filtered
+    if [ -f "$workroot/killer-first" ] && [ -n "$expected" ]; then
+        run_suite "$wt" "$build" "$(killer_tokens "$expected")" "$path" "$mutant" > "$log.killers" 2>&1 || true
+        if classified=$(classify "$log.killers" "$expected") && [ "$(printf '%s\n' "$classified" | sed -n '1p')" = "KILLED" ]; then
+            mv "$log.killers" "$log"
+            phase=killers
+        fi
+    fi
+    if [ "$phase" = "filtered" ]; then
+        run_suite "$wt" "$build" "$filter" "$path" "$mutant" > "$log" 2>&1 || true
+    fi
+    # `<run s> <phase>`: `killers` when the killer-first run gave the verdict.
+    printf '%s %s\n' "$(($(date +%s) - built))" "$phase" >> "$workroot/$name.timing"
     # Captured, not redirected straight into the file: `> "$verdict_file"`
     # truncates before classify runs, so an abort inside it would leave an
     # empty file and the report would print a blank verdict column.
     # write_verdict stays the single owner of the file format.
-    local classified v d full
-    if ! classified=$(classify "$log" "$expected"); then
+    if [ "$phase" = "filtered" ] && ! classified=$(classify "$log" "$expected"); then
         write_verdict "$verdict_file" "RUN-FAIL" "classifier aborted on $log"
         return 0
     fi
@@ -300,6 +326,51 @@ VERDICT
     fi
     write_verdict "$verdict_file" "$v" "$d"
     return 0
+}
+
+# run_suite <worktree> <build-dir> <APQ_TEST filter | ALL> <PATH> [<arm id>] —
+# one suite run of the track's build, its transcript on stdout. The arm id
+# switches a composed build's arm on (`APQ_MUTANT`); a per-arm build has no
+# switch, and no track ever inherits one from the caller.
+run_suite() {
+    if [ "$3" = "ALL" ]; then
+        ( cd "$1" && env -u APQ_TEST -u APQ_MUTANT ${5:+APQ_MUTANT=$5} PATH="$4" node "$2/test.js" )
+    else
+        ( cd "$1" && env -u APQ_MUTANT ${5:+APQ_MUTANT=$5} APQ_TEST="$3" PATH="$4" node "$2/test.js" )
+    fi
+}
+
+# schema_track <workroot> <name> — `<arm id> <cache|nocache>` when the
+# composed build (--schema) stands for this track, else a non-zero status.
+# A candidate waits here for the build to answer; one the build left out, or
+# every candidate of a build that failed, is built per arm.
+schema_track() {
+    local dir
+    [ -f "$1/schema" ] || return 1
+    dir=$(cat "$1/schema")
+    grep -qxF "$2" "$dir/candidates" || return 1
+    while [ ! -f "$dir/state" ]; do
+        sleep 2
+    done
+    [ "$(cat "$dir/state")" = "ready" ] || return 1
+    awk -v n="$2" '$1 == n { print $2, $3; found = 1 } END { exit found ? 0 : 1 }' "$dir/map"
+}
+
+# killer_tokens <expected-csv> -> the APQ_TEST filter running exactly the
+# tests that can answer the expectations: `test:<e>` selects every test whose
+# `<fq.Class>.<method>` contains `<e>`, the very substring rule `apq
+# mutation-verdict` matches an expectation against a failure name with.
+#
+# Why a KILLED reading of that run is the filtered run's verdict: each
+# expectation is matched by a failure of one of the tests carrying it, and
+# this run holds all of those tests and nothing else, so an expectation is
+# matched here exactly when it is matched there — and the filtered run is red
+# whenever one is. Every OTHER reading (SURVIVED, MISMATCH, RUN-FAIL…) depends
+# on tests this run left out, so it is never used: the filtered run answers.
+# The one thing a killer-first KILLED row loses is the `+extra:` census of the
+# filtered set — the collateral `--fast` already narrows to the pinned classes.
+killer_tokens() {
+    printf '%s\n' "$1" | tr ',' '\n' | sed '/^[[:space:]]*$/d; s/^[[:space:]]*/test:/; s/[[:space:]]*$//' | paste -sd, -
 }
 
 # build_track <workroot> <slot> <worktree> <build-dir> <log> — the track's
@@ -479,7 +550,7 @@ fi
 # -------------------------------------------------------- parent mode
 
 if [ "$#" -lt 1 ]; then
-    echo "usage: mutation-check.sh <manifest> [--jobs N] [--keep] [--build-only] [--base <ref>]" >&2
+    echo "usage: mutation-check.sh <manifest> [--jobs N] [--keep] [--build-only] [--killer-first] [--base <ref>]" >&2
     exit 2
 fi
 
@@ -488,6 +559,8 @@ shift
 jobs=""
 keep=0
 build_only=0
+killer_first=0
+schema=""
 # The commit every track worktree is built from. Always HEAD except when
 # `tools/mutation-arm.sh --working-tree` (T694) rendered the manifest's
 # patches against a `git stash create` snapshot instead — a track built
@@ -506,6 +579,18 @@ while [ "$#" -gt 0 ]; do
             build_only=1
             shift
             ;;
+        --killer-first)
+            killer_first=1
+            shift
+            ;;
+        --schema)
+            if [ "$#" -lt 2 ]; then
+                echo "mutation-check.sh: --schema needs a directory" >&2
+                exit 2
+            fi
+            schema=$(cd -P "$2" && pwd)
+            shift 2
+            ;;
         --base)
             if [ "$#" -lt 2 ]; then
                 echo "mutation-check.sh: --base needs a ref" >&2
@@ -523,7 +608,7 @@ while [ "$#" -gt 0 ]; do
             shift 2
             ;;
         *)
-            echo "mutation-check.sh: unknown argument '$1' (expected --jobs N, --keep, --build-only or --base <ref>)" >&2
+            echo "mutation-check.sh: unknown argument '$1' (expected --jobs N, --keep, --build-only, --killer-first or --base <ref>)" >&2
             exit 2
             ;;
     esac
@@ -702,6 +787,12 @@ if [ -z "$slots" ]; then
 $rows
 EOF
 fi
+if [ "$killer_first" -eq 1 ]; then
+    : > "$workroot/killer-first"
+fi
+if [ -n "$schema" ]; then
+    printf '%s\n' "$schema" > "$workroot/schema"
+fi
 if [ -z "${APQ_MUTATION_NO_SERVER:-}" ]; then
     # The owner every slot server's watchdog follows (slot_server).
     printf '%s\n' "$$" > "$workroot/servers"
@@ -733,7 +824,14 @@ fi
 # Children always exit 0, so xargs failing here means xargs itself broke;
 # the report below turns a missing verdict into RUN-FAIL either way.
 if [ -n "$slots" ]; then
-    if ! printf '%s\n' "$rows" | cut -f1 | xargs -P "$(wc -l < "$workroot/slots" | tr -d " ")" -I{} "$self" --track {} "$manifest" "$workroot" "$build_only"; then
+    # The order tracks are dealt to slots in: a schema candidate last, behind
+    # every track that needs a build of its own — it waits on the composed
+    # build, and the per-arm builds are the long pole.
+    order=$(printf '%s\n' "$rows" | cut -f1)
+    if [ -n "$schema" ]; then
+        order=$( { printf '%s\n' "$order" | grep -vxFf "$schema/candidates" || true; printf '%s\n' "$order" | grep -xFf "$schema/candidates" || true; } )
+    fi
+    if ! printf '%s\n' "$order" | xargs -P "$(wc -l < "$workroot/slots" | tr -d " ")" -I{} "$self" --track {} "$manifest" "$workroot" "$build_only"; then
         echo "mutation-check.sh: xargs reported a failure — see the per-track verdicts below" >&2
     fi
 fi
@@ -742,11 +840,13 @@ fi
 # build its fresh successor accepted — see build_track.
 if ls "$workroot"/*.timing > /dev/null 2>&1; then
     cat "$workroot"/*.timing | awk '
-        { n[$1]++; b[$1] += $2; if ($3 != "") { runs++; r += $3 } }
+        { n[$1]++; b[$1] += $2; if ($3 != "") { runs++; r += $3 } if ($4 == "killers") killers++ }
         END {
             printf "timing:"
             for (k in n) printf " %s builds %d (mean %.0fs),", k, n[k], b[k] / n[k]
-            printf " suite runs %d (mean %.0fs)\n", runs, runs ? r / runs : 0
+            printf " suite runs %d (mean %.0fs)", runs, runs ? r / runs : 0
+            if (killers) printf ", %d answered killer-first", killers
+            printf "\n"
         }'
 fi
 if [ -f "$workroot/fixture-cache/tally" ]; then
