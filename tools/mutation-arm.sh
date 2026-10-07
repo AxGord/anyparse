@@ -666,7 +666,9 @@ fi
 # A composed build means its per-arm build only where nothing tells the two
 # apart, and the build itself is asked where something could:
 #   - a file a `@:build` macro reads is left alone: a copy is a field the
-#     macro would see (`hxq meta '@:build'`);
+#     macro would see (`hxq meta '@:build'`); so is anyparse.macro, which is
+#     compile-time code — built per arm from the start, not after waiting for
+#     the composed build to say what the macro log below says of it;
 #   - test/ is left alone: the suite registers what it finds there;
 #   - a switch REACHED at compile time (`APQ_MUTANT_MACRO_LOG`) is a method
 #     the cut could have changed the generated code through — per arm;
@@ -701,7 +703,11 @@ schema_plan() {
             if ((getline line < target) <= 0) next
             close(target)
             split(line, t, "\t")
-            if (t[1] !~ /^src\// || (t[1] in built)) next
+            # anyparse.macro is compile-time code: its arms change what the build
+            # generates (every one of them is reached at compile time, measured),
+            # so they are built per arm from the start rather than after the
+            # composed build has said so — a candidate waits for that answer.
+            if (t[1] !~ /^src\// || t[1] ~ /^src\/anyparse\/macro\// || (t[1] in built)) next
             id++
             print id "\t" t[1] "\t" t[2] "\t" dir "/" name ".new" > (out "/plan")
             print id " " name > (out "/names")
@@ -759,10 +765,13 @@ schema_compose_and_build() {
             # and never carries the `return __mut<id>_<name>(` that follows.
             # A string literal that merely looks like one costs that arm the
             # cache, never a wrong answer.
-            awk -F'\t' '{ m = $3; sub(/^[^:]*:/, "", m); print "(__mutOn(" $1 ")) return __mut" $1 "_" m "(" }' "$schema_dir/plan" \
-                > "$schema_dir/dispatch-lines"
-            grep -oF -f "$schema_dir/dispatch-lines" "$schema_dir/test.js" | sed 's/^(__mutOn(\([0-9]*\)).*/\1/' | sort -un \
-                > "$schema_dir/embedded" || true
+            # ONE regex over the output, then an exact compare against the plan:
+            # `grep -F -f` with one pattern per arm ran for minutes on BSD grep.
+            grep -oE '\(__mutOn\([0-9]+\)\) return __mut[0-9]+_[A-Za-z0-9_]+\(' "$schema_dir/test.js" \
+                | awk -F'\t' '
+                    FILENAME == ARGV[1] { m = $3; sub(/^[^:]*:/, "", m); want["(__mutOn(" $1 ")) return __mut" $1 "_" m "("] = $1; next }
+                    $0 in want { print want[$0] }
+                ' "$schema_dir/plan" - | sort -un > "$schema_dir/embedded" || true
             touch "$schema_dir/macro-log"
             awk -F'\t' '
                 FILENAME == ARGV[1] { name[$1] = $2; next }
