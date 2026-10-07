@@ -684,6 +684,8 @@ fi
 schema_dir="$workroot/schema"
 schema_pid=""
 SCHEMA_ROUNDS=${APQ_MUTATION_SCHEMA_ROUNDS:-6}
+# How many times one round re-checks the embedded modules after leaving culprits out.
+SCHEMA_CHECKS=20
 
 # The plan rows of every rendered arm under src/ outside a `@:build` file:
 # `<id>\t<file>\t<selector>\t<mutated-file>`, ids in manifest order, and the
@@ -750,8 +752,7 @@ schema_compose_and_build() {
         return 0
     fi
     for round in $(seq 1 "$SCHEMA_ROUNDS"); do
-        git -C "$tree" checkout -q -- . 2>> "$schema_dir/why"
-        if ! ( cd "$tree" && "$repo/bin/hxq" mutation-schema "$schema_dir/plan" ) > "$schema_dir/placements" 2>> "$schema_dir/why"; then
+        if ! schema_compose; then
             echo failed > "$schema_dir/state"
             return 0
         fi
@@ -777,12 +778,25 @@ schema_compose_and_build() {
             # its copies there (a `#if macro` module contributes no type to it).
             # A copy that does not compile there would break every child compile
             # of every arm, so the embedded modules are typed in that context
-            # here, alone on their class path the way the child holds them, and
-            # a culprit is left out like any copy the build refused.
+            # here, and a culprit is left out like any copy the build refused.
+            # The check is seconds and the build minutes, so the check is
+            # repeated alone, recomposing after each drop, until it passes;
+            # the build is then redone once over the cleaned plan.
             if [ -s "$schema_dir/embedded" ] && ! schema_check_embedded "$round"; then
-                culprits=$(schema_culprits "$schema_dir/embedded-$round.log")
-                [ -n "$culprits" ] || culprits=$(cat "$schema_dir/embedded")
-                schema_drop "$culprits"
+                local check=0
+                while [ "$check" -lt "$SCHEMA_CHECKS" ]; do
+                    check=$((check + 1))
+                    culprits=$(schema_culprits "$schema_dir/embedded-$round.log")
+                    [ -n "$culprits" ] || culprits=$(cat "$schema_dir/embedded")
+                    schema_drop "$culprits"
+                    printf '%s\n' "$culprits" | awk 'FNR == NR { out[$1] = 1; next } !($1 in out)' - "$schema_dir/embedded" \
+                        > "$schema_dir/embedded.next"
+                    mv "$schema_dir/embedded.next" "$schema_dir/embedded"
+                    schema_compose || break
+                    if [ ! -s "$schema_dir/embedded" ] || schema_check_embedded "$round"; then
+                        break
+                    fi
+                done
                 continue
             fi
             touch "$schema_dir/macro-log"
@@ -805,6 +819,12 @@ schema_compose_and_build() {
     echo failed > "$schema_dir/state"
 }
 
+# schema_compose — the tree reset and the plan composed into it.
+schema_compose() {
+    git -C "$schema_dir/tree" checkout -q -- . 2>> "$schema_dir/why" \
+        && ( cd "$schema_dir/tree" && "$repo/bin/hxq" mutation-schema "$schema_dir/plan" ) > "$schema_dir/placements" 2>> "$schema_dir/why"
+}
+
 # schema_drop <ids> — the arms left out of the next round's plan.
 schema_drop() {
     printf '%s\n' "$1" | awk -F'\t' 'FNR == NR { out[$1] = 1; next } !($1 in out)' - "$schema_dir/plan" > "$schema_dir/plan.next"
@@ -813,28 +833,26 @@ schema_drop() {
 }
 
 # schema_check_embedded <round> — type every module holding an embedded arm
-# in the macro context, alone on a class path of its own (the probe directory
-# a child compile gets), through `--macro <type>.__mutOn(0)`; the log's paths
-# are rewritten back to the tree's so schema_culprits can name the arms.
+# in the macro context, through `--macro <type>.__mutOn(0)` over the composed
+# tree; the log's paths are rewritten to the tree-relative ones schema_culprits
+# names arms by.
 schema_check_embedded() {
     local probe="$schema_dir/probe" file owner rel module macros=""
     rm -rf "$probe"
-    mkdir -p "$probe/main"
-    printf 'class AnyparseSchemaCheck {\n\tstatic function main() {}\n}\n' > "$probe/main/AnyparseSchemaCheck.hx"
+    mkdir -p "$probe"
+    printf 'class AnyparseSchemaCheck {\n\tstatic function main() {}\n}\n' > "$probe/AnyparseSchemaCheck.hx"
     awk -F'\t' 'FILENAME == ARGV[1] { e[$1] = 1; next } $2 == "ok" && ($1 in e) { print $3 "\t" $7 }' \
         "$schema_dir/embedded" "$schema_dir/placements" | sort -u > "$schema_dir/embedded-owners"
     while IFS=$'\t' read -r file owner; do
         rel=${file#src/}
-        mkdir -p "$probe/cp/$(dirname "$rel")"
-        cp "$schema_dir/tree/$file" "$probe/cp/$rel"
         module=$(printf '%s' "${rel%.hx}" | tr '/' '.')
         [ "$(basename "$rel" .hx)" = "$owner" ] || module="$module.$owner"
         macros="$macros --macro $module.__mutOn(0)"
     done < "$schema_dir/embedded-owners"
-    if ( cd "$probe" && haxe -cp cp -cp main -main AnyparseSchemaCheck --interp --no-output $macros ) > "$schema_dir/embedded-$1.raw" 2>&1; then
+    if ( cd "$schema_dir/tree" && haxe -cp src -cp "$probe" -main AnyparseSchemaCheck --interp --no-output $macros ) \
+            > "$schema_dir/embedded-$1.log" 2>&1; then
         return 0
     fi
-    sed "s|^$probe/cp/|src/|; s|^cp/|src/|" "$schema_dir/embedded-$1.raw" > "$schema_dir/embedded-$1.log"
     return 1
 }
 
