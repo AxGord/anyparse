@@ -157,9 +157,12 @@ class FactsTypeOracleTest extends Test {
 
 	@:pin('control') @:killer('M-CODEPOINT-NATIVE')
 	public function testASiteAfterNonAsciiTextIsFound(): Void {
-		final source: String = '// \u{1F600} é\n' + SRC;
-		// the compiler counts the emoji as one position, a Span as two
-		final shift: Int = '// \u{1F600} é\n'.length - 1;
+		// the compiler counts each emoji as one position, a Span as two: read unconverted, the offsets of a site past a dozen of
+		// them land wholly before the declaration that holds it, where one emoji would leave them inside it
+		final wide: Int = 12;
+		final head: String = '// ' + [for (_ in 0...wide) '\u{1F600}'].join('') + ' é\n';
+		final source: String = head + SRC;
+		final shift: Int = head.length - wide;
 		final facts: CompilerFacts = CompilerFacts.build(
 			[{ name: 'one', text: dump('Int', shift), file: path -> path }], file -> file == 'A.hx' ? source : null, file -> file
 		);

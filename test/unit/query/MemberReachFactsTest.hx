@@ -745,7 +745,8 @@ class MemberReachFactsTest extends Test {
 	public function testUnderTheTruthWhatAPureLibraryCallSplicedInIsNoneOfTheRegions(): Void {
 		// `Std.parseFloat` is `inline` on js, its body a `js.Syntax.code`, and so is `StringTools.fastCodeAt`, its body a call
 		// of `charCodeAt` off a structure: each splice is a call of a function that runs no project code, whose edge answers
-		// for all it does — the target code and the unresolved call its body spells are none of the region's
+		// for all it does — the target code and the unresolved call its body spells are none of the region's, even where that
+		// target code spells the member's own name (`parseFloat({0})`, asked of `Main.parseFloat`)
 		final main: String = LOOP_HEAD + '\tstatic function main() {\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ var f = Std.parseFloat("1"); /*>*/ }\n\t}\n}\n';
 		assertMatch(ask(['Main.hx' => main], null, true, null, false, null, null, null, true, STD_STD), r -> r.match(Proven));
@@ -753,6 +754,11 @@ class MemberReachFactsTest extends Test {
 			+ '\tstatic function run(xs:Array<Int>, s:String):Void {\n'
 			+ '\t\tfor (i in 0...xs.length) { /*<*/ var c = StringTools.fastCodeAt(s, xs[i]); /*>*/ }\n\t}\n}\n';
 		assertMatch(askLocal(['Main.hx' => local], 'xs', true, false, null, STD_STD), r -> r.match(Proven));
+		final named: String = 'class Main {\n\tpublic var parseFloat:Array<Int> = [];\n\tpublic function new() {}\n'
+			+ '\tstatic function main() {\n\t\tnew Main().f();\n\t}\n\tfunction f():Void {\n'
+			+ '\t\tfor (i in 0...parseFloat.length) { /*<*/ var v = Std.parseFloat("1"); /*>*/ }\n\t}\n}\n';
+		final member: MemberRef = { owner: 'Main', name: 'parseFloat' };
+		assertMatch(ask(['Main.hx' => named], null, true, member, false, null, null, null, true, STD_STD), r -> r.match(Proven));
 	}
 
 	@:pin('control') @:killer('M-REACH-SPLICED-SITES') @:killer('M-GRAPH-FACTS-SPLICE-TAG') @:killer('M-GRAPH-FACTS-INLINED-SITE')
@@ -2386,13 +2392,21 @@ class MemberReachFactsTest extends Test {
 	@:pin('control') @:killer('M-FACTS-TRUTH-REFLECTION') @:killer('M-FACTS-TRUTH-REFLECTION-TWIN')
 	public function testAReflectiveCallTheSyntaxDoesNotSeeNamesNothingUnderTheTruth(): Void {
 		// `rf` is `Reflect.field` under another name: the facts see the call, and a name computed at run time names nothing; a
-		// call the syntax sees keeps the literal name it reads
+		// call the syntax sees keeps the literal name it reads, and is read once: where one build computes its name and the
+		// other reads the literal `"poke"`, the name stays computed, bounded by what the receiver may be — an `Other`, which has
+		// no `poke`. Read a second time off the facts, the literal would name `Main.poke`, which pushes onto `items`
 		final main: String = 'import Reflect.field as rf;\n' + MEMBER_HEAD + '\tfunction f():Void {\n\t\tvar n = "it" + "ems";\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ rf(this, n); /*>*/ }\n\t}\n}\n';
 		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Unknown(DynamicName(_, _))));
 		final seen: String = MEMBER_HEAD
 			+ '\tfunction f():Void {\n\t\tfor (i in 0...items.length) { /*<*/ Reflect.field(this, "other"); /*>*/ }\n\t}\n}\n';
 		assertMatch(truthAsk(['Main.hx' => seen]), r -> !r.match(Unknown(DynamicName(_, _))));
+		final split: String = MEMBER_HEAD + '\t#if other\n\tstatic var NAME:String = "x" + Std.random(2);\n\t#else\n'
+			+ '\tstatic inline final NAME:String = "poke";\n\t#end\n\n\tpublic function poke():Void\n\t\titems.push(1);\n\n'
+			+ '\tfunction f():Void {\n\t\tfinal o:Other = new Other();\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ Reflect.field(o, NAME); /*>*/ }\n\t}\n}\n'
+			+ 'class Other {\n\tpublic function new() {}\n}\n';
+		assertMatch(reflectAsk(['Main.hx' => split], true, null, true, [[], ['other']]), r -> r.match(Proven));
 	}
 
 	@:pin('control') @:killer('M-FACTS-REFL-MEMBER-NAME') @:killer('M-FACTS-REFL-MEMBER-NAME-ANY')
@@ -2783,11 +2797,13 @@ class MemberReachFactsTest extends Test {
 		assertMatch(result, r -> r.match(Unknown(SkipParse(_))));
 	}
 
-	@:pin('control') @:killer('M-FACTS-DEAD-FILE-VALUES')
+	@:pin('guard')
 	public function testAProjectFileNoBuildCompilesLetsNoValueEscape(): Void {
 		// `o.items` is another type's `items`: it touches `Main.items` only if a `Main` may have escaped into an `Other`, which
 		// the escapes over the project answer — a file no build compiles, which the graph does not hold, is none of it.
-		// `poke` calls a function named `items`, so its facts leave it to the syntax, which asks the escapes
+		// `poke` calls a function named `items`, so its facts leave it to the syntax, which asks the escapes. Under the truth
+		// those are read off the facts alone (`FactsEscapes`), where such a file has none: no arm can kill this, the syntactic
+		// escapes' skip of it (`ValueEscapes.compute`) is unreachable there, see docs/decisions.md
 		final main: String = MEMBER_HEAD + '\tfunction f(o:Other):Void {\n\t\tfor (i in 0...items.length) { /*<*/ Poker.poke(o); /*>*/ }\n'
 			+ '\t}\n}\nclass Other {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n}\n'
 			+ 'class Poker {\n\tstatic function items():Void {}\n'
@@ -3035,7 +3051,8 @@ class MemberReachFactsTest extends Test {
 		// holds neither, only a calm twin of each in `#if never` of `a/Endian.hx`, a file the builds compile. A construction, a
 		// super constructor, a method read as a value, an override a dispatch reaches, a string conversion and a method
 		// reflection reaches by a computed name each run the
-		// root type's code, none of the twin's. Held by the index alone, the root types answer as their text says
+		// root type's code, none of the twin's. Held by the index alone, the root types answer as their text says. A method
+		// value the region only reads is asked of its edge alone: the call of one is also an implicit call of `Endian` code
 		function question(region: String, ?before: String, ?more: String, ?indexed: Bool, ?loud: Bool): ReachResult {
 			final push: String = loud == false ? '' : 'Main.items.push(1); ';
 			final endian: String = 'class Endian {\n\tpublic function new() { ' + push + '}\n\n'
@@ -3069,6 +3086,7 @@ class MemberReachFactsTest extends Test {
 		each('new Endian();');
 		each('new Kid();', null, kid);
 		each('final f:() -> Void = Endian.calm; f();');
+		each('final f:() -> Void = Endian.calm;');
 		each('b.f();', made);
 		each('final s:String = "" + e;', made);
 		each('Reflect.field(e, "c" + i);', made);
