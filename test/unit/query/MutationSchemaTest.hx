@@ -77,6 +77,17 @@ class MutationSchemaTest extends Test {
 		Assert.equals('the cut reached outside the method', composed.placements[0].skip);
 	}
 
+	/** A cut of a default argument would be applied by the original signature and never reach the copy: left out. */
+	public function testACutOfTheSignatureIsLeftOut(): Void {
+		final source: String = 'class D {\n\tfunction f(a: Int, b: Bool = false): Bool {\n\t\treturn b;\n\t}\n}\n';
+		final mutated: String = source.replace('b: Bool = false', 'b: Bool = true');
+		final composed: SchemaFile = MutationSchema.compose(
+			source, tree(source), plugin(), [{ id: 5, select: 'FnMember:f', mutated: mutated }]
+		);
+		Assert.equals('the cut changes the signature, which the switch forwards the arguments through', composed.placements[0].skip);
+		Assert.equals(source, composed.text);
+	}
+
 	public function testACopyDropsOverrideAndOperatorMetadata(): Void {
 		final source: String =
 			'class D extends C {\n\t@:op(A + B) @:keep override public function f(a: Int): Int {\n\t\treturn a;\n\t}\n}\n';

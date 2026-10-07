@@ -66,7 +66,8 @@ private enum SchemaRole {
  * right after itself instead, in the same region, which does move the lines below it.
  *
  * A method is left out, with the reason, where a copy cannot stand for it: a constructor, a `macro` / `extern` /
- * `overload` method, a body that is not a block, and a cut that reached outside the method's own text. Whatever is
+ * `overload` method, a body that is not a block, a cut of the signature (the switch forwards the arguments the
+ * original received, its defaults already applied), and a cut that reached outside the method's own text. Whatever is
  * left out is built per arm, as before. That the composed build still means the per-arm build in every other way —
  * nothing executes a switch at compile time, nothing reads the composed text — is the caller's to check: both are
  * answered by the build itself (`tools/mutation-arm.sh`).
@@ -241,6 +242,10 @@ final class MutationSchema {
 		)
 			return 'the cut reached outside the method';
 		final mutated: String = arm.mutated.substring(span.from, arm.mutated.length - tail);
+		// The switch forwards the arguments as the ORIGINAL signature received them: a default the cut changes would be
+		// applied by the original and never reach the copy, so the copy stands for the arm only below an unchanged head.
+		if (!mutated.startsWith(source.substring(span.from, bodySpan.from + 1)))
+			return 'the cut changes the signature, which the switch forwards the arguments through';
 		final head: EReg = ~/^function(\s+)([A-Za-z_][A-Za-z0-9_]*)/;
 		if (!head.match(mutated) || head.matched(2) != name) return 'the mutated method does not open with `function $name`';
 		final copyName: String = '$COPY_PREFIX${arm.id}_$name';
