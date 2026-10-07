@@ -2106,12 +2106,15 @@ class MemberReachFactsTest extends Test {
 	@:pin('control') @:killer('M-TOUCH-FOLDED-ACCESSES')
 	public function testATouchOnlyTheFactsSeeInASecondDeclarationIsFoundUnderTheTruth(): Void {
 		// `stuff` is `Main.items` imported under another name, pushed to by the declaration of `go` the build compiles — the
-		// second of the two the graph folds: the facts of that declaration are the node's, though its first holds none
+		// second of the two the graph folds: the facts of that declaration are the node's, though its first holds none. The
+		// syntax follows the alias too; a push through a local holding the member it reads as the value stored, an escape
 		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Other.go(); /*>*/ }\n'
 			+ '\t\tOther.go();\n\t}\n}\n';
-		final other: String = 'import Main.items as stuff;\n\nclass Other {\n#if other\n\tpublic static function go():Void {}\n#else\n'
-			+ '\tpublic static function go():Void stuff.push(1);\n#end\n}\n';
-		assertMatch(truthAsk(['Main.hx' => main, 'Other.hx' => other]), r -> r.match(Reached(_)));
+		for (body in ['stuff.push(1);', '{\n\t\tfinal l:Array<Int> = stuff;\n\t\tl.push(1);\n\t}']) {
+			final other: String = 'import Main.items as stuff;\n\nclass Other {\n#if other\n\tpublic static function go():Void {}\n#else\n'
+				+ '\tpublic static function go():Void ' + body + '\n#end\n}\n';
+			assertMatch(compiledTruthAsk(['Main.hx' => main, 'Other.hx' => other]), r -> r.match(Reached(_)));
+		}
 	}
 
 	@:pin('control') @:killer('M-FACTS-FIELD-KINDS')
@@ -3677,15 +3680,19 @@ class MemberReachFactsTest extends Test {
 	@:killer('M-TOUCH-TYPED-OWNER')
 	public function testATouchOnlyTheFactsSeeIsFoundUnderTheTruth(): Void {
 		// `stuff` is `Main.items` imported under another name: no text of `Other.grow` spells `items`, the facts name the
-		// field it pushes to. `Bag.items` is another type's field of the same name
+		// field it pushes to — and the syntax follows the alias too. `Other.hold` pushes through a local holding it, which the
+		// syntax reads as the value stored, an escape. `Bag.items` is another type's field of the same name
 		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Other.REGION(); /*>*/ }\n'
 			+ '\t\tOther.grow();\n\t\tOther.calm();\n\t}\n}\n';
 		final other: String = 'import Main.items as stuff;\n\nclass Other {\n\tpublic static function grow():Void stuff.push(1);\n\n'
-			+ '\tpublic static function calm():Void Bag.items.push(1);\n}\n\nclass Bag {\n\tpublic static var items:Array<Int> = [];\n}\n';
+			+ '\tpublic static function calm():Void Bag.items.push(1);\n\n'
+			+ '\tpublic static function hold():Void {\n\t\tfinal l:Array<Int> = stuff;\n\t\tl.push(1);\n\t}\n}\n\n'
+			+ 'class Bag {\n\tpublic static var items:Array<Int> = [];\n}\n';
 		function files(called: String): Map<String, String> {
 			return ['Main.hx' => StringTools.replace(main, 'REGION', called), 'Other.hx' => other];
 		}
 		assertMatch(truthAsk(files('grow')), r -> r.match(Reached(_)));
+		assertMatch(compiledTruthAsk(files('hold')), r -> r.match(Reached(_)));
 		// the index is the analysis's word for the classpath, which `Array` would otherwise leave open
 		assertMatch(ask(files('calm'), null, true, null, true, null, null, null, true), r -> r.match(Proven));
 	}
