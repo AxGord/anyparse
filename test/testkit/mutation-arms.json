@@ -11298,8 +11298,8 @@
 		},
 		{
 			"name": "M-TS-SITE-PER-TARGET",
-			"type": "anyparse.check.ThreadSafety",
-			"method": "reportMainSinkCalls",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "report",
 			"find": "final key: String = '${edge.file}:${edge.span?.from ?? -1}:${edge.from}';",
 			"replace": "final key: String = '${edge.file}:${edge.span?.from ?? -1}:${edge.from}:${edge.to}';",
 			"note": "every sink a dispatch may reach is its own finding at one call site"
@@ -11354,10 +11354,10 @@
 		},
 		{
 			"name": "M-TS-QUIET-SWALLOWS",
-			"type": "anyparse.check.ThreadSafety",
-			"method": "reportMainSinkCalls",
-			"find": "if (states.edgeContext(edge) & CTX_MAIN == 0) continue;",
-			"replace": "if (states.edgeContext(edge) & CTX_MAIN == 0 || states.edgeContext(edge) & CTX_QUIET != 0) continue;",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "report",
+			"find": "if (states.edgeContext(edge) & ThreadSafety.CTX_MAIN == 0) continue;",
+			"replace": "if (states.edgeContext(edge) & ThreadSafety.CTX_MAIN == 0 || states.edgeContext(edge) & ThreadSafety.CTX_QUIET != 0) continue;",
 			"note": "one path through a quiet root silences a sink every other main-thread path still reaches"
 		},
 		{
@@ -16660,10 +16660,10 @@
 		},
 		{
 			"name": "M-TS-DATA-CHAIN-CAPPED",
-			"type": "anyparse.check.ThreadSafety",
-			"method": "reportMainSinkCalls",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "mainSinkFinding",
 			"find": "chain: path.concat(sorted)",
-			"replace": "chain: ThreadStates.chainText(path, CHAIN_CAP).split(' -> ').concat(sorted)",
+			"replace": "chain: ThreadStates.chainText(path, ThreadSafety.CHAIN_CAP).split(' -> ').concat(sorted)",
 			"note": "a main-thread finding's data carries the chain the text caps, so the hops past the cap are lost to every tool"
 		},
 		{
@@ -17103,6 +17103,30 @@
 			"find": "if (!(brief.contains(c.name) && once)) at.push(c.span.from);",
 			"replace": "if (!brief.contains(c.name)) at.push(c.span.from);",
 			"note": "a brief unresolved call in a loop under the hold counts brief"
+		},
+		{
+			"name": "M-TS-OWNER-OFF",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "reportSite",
+			"find": "if (owners.length > 0 && !own) reportRepeater(graph, owners[0], sinks, states, owned, violations);",
+			"replace": "",
+			"note": "a short call repeated from above warns nowhere: no loop owns it"
+		},
+		{
+			"name": "M-TS-OWNER-FARTHEST",
+			"type": "anyparse.check.CallRepetition",
+			"method": "repeatersOf",
+			"find": "? a.path.length - b.path.length",
+			"replace": "? b.path.length - a.path.length",
+			"note": "the farthest repeating caller owns a short call's warning"
+		},
+		{
+			"name": "M-TS-OWNER-SELF-MOVED",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "reportSite",
+			"find": "final own: Bool = long || owner == ThreadSafety.memberOf(graph, edge.from);",
+			"replace": "final own: Bool = long;",
+			"note": "a call its own member repeats (recursion, iterates callback) is moved onto itself as a second finding"
 		},
 		{
 			"name": "M-LINT-EXPLAIN-NO-ENVELOPE",

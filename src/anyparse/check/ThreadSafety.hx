@@ -75,7 +75,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	/** Joins the ids of a subject naming several (the sinks of one call site, the two locks of an inversion), sorted. */
 	public static inline final SUBJECT_SEPARATOR: String = ' / ';
 
-	private static inline final CHAIN_CAP: Int = 8;
+	/** The hops a finding's text names of a chain; its data keeps them all. */
+	public static inline final CHAIN_CAP: Int = 8;
 
 	/** The name of a program's entry point, which the runtime calls. */
 	private static inline final ENTRY_POINT: String = 'main';
@@ -165,10 +166,9 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 
 		final violations: Array<Violation> = [];
 		// a value stored or handed where it never runs from repeats nothing, wherever it is written
-		final repeatedOnMain: Map<String, Bool> = repetition.repeatedFrom(e ->
-			!(e.kind == Ref && inertRef(e)) && states.edgeContext(e) & CTX_MAIN != 0
-		);
-		reportMainSinkCalls(graph, taints, costs, e -> repetition.repeated(e) || repeatedOnMain.exists(e.from), states, violations);
+		final runsMain: (CallEdge) -> Bool = e -> !(e.kind == Ref && inertRef(e)) && states.edgeContext(e) & CTX_MAIN != 0;
+		final repeatedOnMain: Map<String, Bool> = repetition.repeatedFrom(runsMain);
+		MainSinkReport.report(graph, taints, costs, { repetition: repetition, on: repeatedOnMain, runs: runsMain }, states, violations);
 		reportMalformedPairs(sets, violations);
 		reportLockHeld(graph, acquires, taints, costs, states, violations);
 		reportThrowHeld(graph, acquires.concat(helperHolds), throws, violations);
@@ -562,61 +562,6 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 				long.push(lock);
 				grew = true;
 			}
-		}
-	}
-
-	/**
-	 * Finding (a): a MAIN-context function directly calls a sink — one taking a lock only when that lock is long or
-	 * unknown. One finding per call site, naming every sink a dispatch there may reach.
-	 */
-	private static function reportMainSinkCalls(
-		graph: CallGraph, taints: LockTaint, costs: LockTaint, repeats: (CallEdge) -> Bool, states: ThreadStates,
-		violations: Array<Violation>
-	): Void {
-		final targets: Map<String, Array<String>> = [];
-		final long: Map<String, Bool> = [];
-		final order: Array<{ key: String, edge: CallEdge }> = [];
-		for (edge in graph.edges) if (edge.kind.isInvocation()) {
-			if (!taints.blocks(edge, null)) continue;
-			// a `marshals` function IS the thread boundary — its body dispatches
-			// between contexts in ways the graph cannot see; sinks inside it are
-			// the primitive's own machinery, not application-level main calls
-			if (taints.listsOf(edge.file).marshalIds.contains(edge.from)) continue;
-			if (states.edgeContext(edge) & CTX_MAIN == 0) continue;
-			final key: String = '${edge.file}:${edge.span?.from ?? -1}:${edge.from}';
-			final known: Null<Array<String>> = targets[key];
-			if (known == null) {
-				targets[key] = [edge.to];
-				order.push({ key: key, edge: edge });
-			} else if (!known.contains(edge.to)) {
-				known.push(edge.to);
-			}
-			if (costs.costsLong(edge, null) || repeats(edge)) long[key] = true;
-		}
-		for (site in order) {
-			final edge: CallEdge = site.edge;
-			final ctx: Int = states.edgeContext(edge);
-			final sinks: Array<String> = targets[site.key] ?? [edge.to];
-			final named: String = [for (t in sinks) '"$t"'].join(SUBJECT_SEPARATOR);
-			final also: String = ctx & CTX_BG != 0 ? ' (also reachable from a background thread)' : '';
-			final path: Array<String> = states.mainPath(edge);
-			final sorted: Array<String> = sortedIds(sinks);
-			// a short call the main thread runs once per run of where it starts waits too little to warn about
-			final short: Bool = !long.exists(site.key);
-			violations.push({
-				file: edge.file,
-				span: edge.span,
-				rule: 'thread-safety',
-				severity: short ? Severity.Info : Severity.Warning,
-				message: 'main thread reaches blocking $named$also: ${ThreadStates.chainText(path, CHAIN_CAP)} -> ${sinks.join(SUBJECT_SEPARATOR)}'
-				+ (short ? CostNote.ShortMainCall : ''),
-				data: {
-					family: FindingFamily.MainSink,
-					member: memberOf(graph, edge.from),
-					subject: sorted.join(SUBJECT_SEPARATOR),
-					chain: path.concat(sorted)
-				}
-			});
 		}
 	}
 

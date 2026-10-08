@@ -85,20 +85,23 @@ class ThreadSafetyCostTest extends Test {
 	 * TM's folder icon: `getCloudIcon` asks the database once, but the file list builds an icon per visible item — a
 	 * caller anywhere up the main thread's way repeats the short call.
 	 */
-	@:pin('control') @:killer('M-TS-REPEAT-UPWARD-NONE')
+	@:pin('control') @:killer('M-TS-REPEAT-UPWARD-NONE') @:killer('M-TS-OWNER-OFF')
 	public function testAShortSinkBelowARepeatingCallerWarns(): Void {
 		#if (sys || nodejs)
-		Assert.same(['warning A A.icon | FileSystem.stat'], graded(run([
+		final found: Array<Violation> = run([
 			'class A { public static function main():Void for (i in 0...10) draw(i);'
 			+ ' static function draw(i:Int):Void icon(i); static function icon(i:Int):Void FileSystem.stat("a"); }'
-		])));
+		]);
+		// the loop owns the warning; the short call below it says where it went
+		Assert.same(['info A A.icon | FileSystem.stat', 'warning A A.main | FileSystem.stat'], graded(found));
+		Assert.isTrue(found.exists(v -> v.message.indexOf('repeated by A.main') != -1));
 		#else
 		Assert.pass('non-sys target');
 		#end
 	}
 
 	/** TM's `FSUtil.deleteRecursive`: a function calling itself runs its short call once per level. */
-	@:pin('control') @:killer('M-TS-REPEAT-NO-RECURSION')
+	@:pin('control') @:killer('M-TS-REPEAT-NO-RECURSION') @:killer('M-TS-OWNER-SELF-MOVED')
 	public function testRecursionRepeatsAShortSink(): Void {
 		#if (sys || nodejs)
 		Assert.same(['warning A A.walk | FileSystem.stat'], graded(run([
@@ -226,5 +229,19 @@ class ThreadSafetyCostTest extends Test {
 		return ThreadSafetyCheckTest.violations(CONFIG, [ThreadSafetyCheckTest.MUTEX, RUNNER].concat(sources));
 	}
 	#end
+
+	/** Of several loops above a short call on different ways to it, the nearest owns the warning: one per call site, never one per loop. */
+	@:pin('control') @:killer('M-TS-OWNER-FARTHEST')
+	public function testTheNearestRepeatingCallerOwnsTheWarning(): Void {
+		#if (sys || nodejs)
+		Assert.same(['info A A.icon | FileSystem.stat', 'warning A A.row | FileSystem.stat'], graded(run([
+			'class A { public static function main():Void { row(); page(); }' + ' static function row():Void for (j in 0...10) icon(j);'
+			+ ' static function page():Void for (j in 0...10) cell(j); static function cell(i:Int):Void icon(i);'
+			+ ' static function icon(i:Int):Void FileSystem.stat("a"); }'
+		])));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
 
 }

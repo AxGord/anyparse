@@ -218,4 +218,36 @@ final class CallRepetition {
 			&& (node.name == CallGraph.INIT_NAME || node.name == CallGraph.STATIC_INIT_NAME);
 	}
 
+	/**
+	 * The nearest calls or registrations that repeat on the way down to `id`: walking up from `id` through the edges `runs`
+	 * admits, each one that repeats (`repeated`), with the functions from its target down to `id`; the walk goes on past
+	 * none of them. Nearest first, then in order of their sites.
+	 */
+	public function repeatersOf(id: String, runs: (CallEdge) -> Bool): Array<{ edge: CallEdge, path: Array<String> }> {
+		final out: Array<{ edge: CallEdge, path: Array<String> }> = [];
+		final down: Map<String, Array<String>> = [id => [id]];
+		final queue: Array<String> = [id];
+		var qi: Int = 0;
+		while (qi < queue.length) {
+			final at: String = queue[qi++];
+			final path: Array<String> = down[at] ?? [at];
+			for (e in _graph.inEdges(at)) if (e.kind != Contains && runs(e)) {
+				if (repeated(e))
+					out.push({ edge: e, path: path })
+				else if (!down.exists(e.from)) {
+					down[e.from] = [e.from].concat(path);
+					queue.push(e.from);
+				}
+			}
+		}
+		out.sort((a, b) ->
+			a.path.length != b.path.length
+				? a.path.length - b.path.length
+				: Reflect.compare(
+					'${a.edge.file}:${a.edge.span?.from ?? -1}:${a.edge.to}', '${b.edge.file}:${b.edge.span?.from ?? -1}:${b.edge.to}'
+				)
+		);
+		return out;
+	}
+
 }

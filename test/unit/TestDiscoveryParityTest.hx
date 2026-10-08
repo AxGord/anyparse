@@ -2115,13 +2115,16 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-TS-REPEAT-NO-BOUNDARY,M-TS-UPWARD-INERT',
 			'unit.check.ThreadSafetyCostTest#testAHoldOverAShortSinkOnceIsInfo :: control :: M-TS-LONG-BY-ANY-SPAN',
 			'unit.check.ThreadSafetyCostTest#testALoopAroundTheWholeHoldIsShort :: control :: M-TS-REPEAT-UNDER-OUTER',
-			'unit.check.ThreadSafetyCostTest#testAShortSinkBelowARepeatingCallerWarns :: control :: M-TS-REPEAT-UPWARD-NONE',
+			'unit.check.ThreadSafetyCostTest#testAShortSinkBelowARepeatingCallerWarns :: control :: '
+				+ 'M-TS-REPEAT-UPWARD-NONE,M-TS-OWNER-OFF',
 			'unit.check.ThreadSafetyCostTest#testAShortSinkCalledOnceIsInfo :: control :: M-TS-SHORT-SINKS-IGNORED',
 			'unit.check.ThreadSafetyCostTest#testAShortSinkInALoopWarns :: control :: M-TS-REPEAT-NO-LOOPS',
 			'unit.check.ThreadSafetyCostTest#testAWarningNamesOnlyTheLongCalls :: control :: M-TS-EVIDENCE-PLAIN',
 			'unit.check.ThreadSafetyCostTest#testAnIteratesCallbackRepeats :: control :: M-TS-REPEAT-NO-ITERATES',
-			'unit.check.ThreadSafetyCostTest#testRecursionRepeatsAShortSink :: control :: M-TS-REPEAT-NO-RECURSION',
+			'unit.check.ThreadSafetyCostTest#testRecursionRepeatsAShortSink :: control :: '
+				+ 'M-TS-REPEAT-NO-RECURSION,M-TS-OWNER-SELF-MOVED',
 			'unit.check.ThreadSafetyCostTest#testTheIterableOfAForRunsOnce :: control :: M-TS-REPEAT-ITERABLE',
+			'unit.check.ThreadSafetyCostTest#testTheNearestRepeatingCallerOwnsTheWarning :: control :: M-TS-OWNER-FARTHEST',
 			'unit.check.ThreadSafetyDominanceTest#testABriefUnresolvedCallLeavesDominanceStanding :: control :: '
 				+ 'M-TS-DOM-BRIEF-NAMES-IGNORED,M-TS-DOM-BRIEF-REPEATED',
 			'unit.check.ThreadSafetyDominanceTest#testAConditionalTakeTheValuationDecidesCounts :: control :: '
@@ -5885,6 +5888,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-DOM-UNDER-HOLD-OFF',
 			'M-TS-DOM-BRIEF-NAMES-IGNORED',
 			'M-TS-DOM-BRIEF-REPEATED',
+			'M-TS-OWNER-OFF',
+			'M-TS-OWNER-FARTHEST',
+			'M-TS-OWNER-SELF-MOVED',
 			'M-LINT-EXPLAIN-NO-ENVELOPE',
 			'M-TS-ORDER-ONE-ARRIVAL',
 			'M-TS-ORDER-CLIMB-FIRST',

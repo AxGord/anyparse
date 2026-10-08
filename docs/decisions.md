@@ -1536,3 +1536,6 @@ decided the question; it may not become a record of runs.
 - counting every function that gives a lock back as a releaser → `if (!batch) _batchMutex.release()` where every caller
   passes `true` gives nothing, and a wrapper's or helper's own give is its caller's; releasers come from the crossing
   releases and helper gives that some state runs — branch `feat/ts-precision-2`
+- attributing a short call that a caller repeats to EVERY repeating caller above it → TM grew from 67 to 466 A keys
+  warning, one per UI loop on any way to a helper; the nearest repeating call on any way owns it, one warning per call
+  site — branch `feat/ts-precision-2`
