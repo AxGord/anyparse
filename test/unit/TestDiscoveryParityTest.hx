@@ -2146,7 +2146,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyDominanceTest#testAGiveOnAnExitingPathKeepsTheOuterLockHeld :: control :: M-TS-DOM-EXITS-IGNORED',
 			'unit.check.ThreadSafetyDominanceTest#testAHoldDominatesItsOwnTake :: control :: M-TS-DOM-UNDER-HOLD-OFF',
 			'unit.check.ThreadSafetyDominanceTest#testALongHoldOutsideTheOuterLockBreaksDominance :: control :: M-TS-DOM-ANY-HOLD',
-			'unit.check.ThreadSafetyDominanceTest#testATakeUnderTheOuterLockIsBrief :: control :: M-TS-DOM-OFF',
+			'unit.check.ThreadSafetyDominanceTest#testAMainTakeUnderTheOuterLockIsBrief :: control :: M-TS-DOM-OFF',
 			'unit.check.ThreadSafetyDominanceTest#testAnotherObjectsLockIsNotDominated :: control :: M-TS-DOM-ANY-OBJECT',
 			'unit.check.ThreadSafetyDominanceTest#testExplainLongNamesTheDominatedLock :: control :: M-TS-DOM-EXPLAIN-DROPPED',
 			'unit.check.ThreadSafetyErrorPathTest#testABlockAlsoOutsideTheCatchWarns :: control :: M-TS-ERROR-ANY,M-TS-ERROR-TAKE-ANY',

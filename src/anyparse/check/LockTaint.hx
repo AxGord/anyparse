@@ -303,10 +303,8 @@ final class LockTaint {
 			// the hold being judged, on the object it is taken on, while its window runs
 			final under: Null<String> = cost?.dominance.holdOf(a);
 			if (blocks(edge, held) || retakesElsewhere(edge, held)) {
-				// a take the hold itself dominates waits for no long hold: each one needs the lock held here
-				final dominated: Bool = cost != null && takesLock(edge) && cost.dominance.underHold(a, edge);
-				if (counts(edge, held, repeats, state.valuation) && !dominated && !briefUnder(under, edge))
-					return trailOf([edge.to], edge, held, [edge]);
+				// a take the hold itself dominates, or a re-take of its own lock, waits for no long hold: each needs the lock held here
+				if (counts(edge, held, repeats, state.valuation) && !briefUnder(under, edge)) return trailOf([edge.to], edge, held, [edge]);
 				continue;
 			}
 			if (takesLock(edge)) continue;

@@ -17082,10 +17082,10 @@
 		},
 		{
 			"name": "M-TS-DOM-UNDER-HOLD-OFF",
-			"type": "anyparse.check.LockDominance",
-			"method": "underHold",
-			"find": "final lock: Null<String> = _sites.lockOf(take);",
-			"replace": "if (take != null) return false;\n\t\tfinal lock: Null<String> = _sites.lockOf(take);",
+			"type": "anyparse.check.LockTaint",
+			"method": "blockingTrail",
+			"find": "if (counts(edge, held, repeats, state.valuation) && !briefUnder(under, edge)) return trailOf([edge.to], edge, held, [edge]);",
+			"replace": "if (counts(edge, held, repeats, state.valuation)) return trailOf([edge.to], edge, held, [edge]);",
 			"note": "a hold never dominates the takes of its own window"
 		},
 		{

@@ -85,18 +85,6 @@ final class LockDominance {
 	}
 
 	/**
-	 * Whether the take `take`, in the window of the hold `a` and in its function, takes a lock the hold's lock dominates,
-	 * on the object the hold takes its own on: what waits there is no long hold, each one needing the lock `a` holds.
-	 */
-	public function underHold(a: LockAcquire, take: CallEdge): Bool {
-		final lock: Null<String> = _sites.lockOf(take);
-		final held: String = a.lock ?? '';
-		final object: Null<String> = _must.holdObject(a);
-		return lock != null && held != '' && take.from == a.edge.from && (dominators[lock] ?? []).contains(held) && object != null
-			&& object == _must.takeObject(take);
-	}
-
-	/**
 	 * The hold `a` as `<lock>@<object>`: its lock and the object it is taken on, relative to its function (`MustHeld`);
 	 * null for a lock no member names, or an object no path of stable fields names.
 	 */

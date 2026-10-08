@@ -20,7 +20,6 @@ class ThreadSafetyDominanceTest extends Test {
 		+ '"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"]}}}';
 
 	/** TM's `_mutex` under `_batchMutex`: the long hold of `_inner` holds `_outer`, so `quick` waits for no long hold. */
-	@:pin('control') @:killer('M-TS-DOM-OFF')
 	public function testATakeUnderTheOuterLockIsBrief(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -30,6 +29,27 @@ class ThreadSafetyDominanceTest extends Test {
 				'd.slow();'
 			))
 		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** The main thread's own take of `_inner` while it must-holds `_outer` (every caller holds it) is brief too. */
+	@:pin('control') @:killer('M-TS-DOM-OFF')
+	public function testAMainTakeUnderTheOuterLockIsBrief(): Void {
+		#if (sys || nodejs)
+		final found: Array<Violation> = ThreadSafetyCheckTest.violations(CONFIG, [
+			ThreadSafetyCheckTest.MUTEX,
+			'class Runner { public static function create(fn:()->Void):Void {} }',
+			'class D { final _outer:Mutex = new Mutex(); final _inner:Mutex = new Mutex(); public function new() {}'
+			+ ' public function slow():Void { _outer.acquire(); _inner.acquire(); Sys.sleep(1); _inner.release(); _outer.release(); }'
+			+ ' public function quick():Void { _outer.acquire(); takeInner(); _outer.release(); }'
+			+ ' function takeInner():Void { _inner.acquire(); _inner.release(); }'
+			+ ' public static function main():Void { final d:D = new D(); Runner.create(() -> d.slow()); d.quick(); } }'
+		]);
+		Assert.same(['info'], [
+			for (v in found) if (v.data?.family == 'A' && v.data?.member == 'D.takeInner') v.severity.label()
+		]);
 		#else
 		Assert.pass('non-sys target');
 		#end
