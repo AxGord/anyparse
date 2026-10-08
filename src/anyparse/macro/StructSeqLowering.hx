@@ -409,14 +409,15 @@ final class StructSeqLowering {
 				pos: Context.currentPos()
 			});
 			final parseCall: Expr = byNameFieldParseExpr(sc, child, fieldName);
+			final key: String = MetaInspect.wireKey(child, fieldName);
 			switchCases.push({
-				values: [{ expr: EConst(CString(fieldName)), pos: Context.currentPos() }],
+				values: [{ expr: EConst(CString(key)), pos: Context.currentPos() }],
 				expr: macro $i{localName} = $parseCall
 			});
 			if (isOptional) {
 				structFields.push({ field: fieldName, expr: macro $i{localName} });
 			} else {
-				final errMsg: String = 'missing required field "$fieldName"';
+				final errMsg: String = 'missing required field "$key"';
 				final checkedName: String = '_r_$fieldName';
 				// Two-step unwrap: the `if (... == null) throw` narrows the
 				// local in the subsequent statement, and the `final` re-bind

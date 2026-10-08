@@ -70,27 +70,33 @@ final class ThreadStates {
 	}
 
 	/**
-	 * `root -> ... -> from` — how the main thread reached a state of `edge.from` that runs `edge` there, capped at `cap`
-	 * hops, cycle-safe; `edge.from` alone when no state does.
+	 * `mainPath` as text, its last `cap` hops after `...` when it is longer.
 	 */
 	public function mainChain(edge: CallEdge, cap: Int): String {
+		final path: Array<String> = mainPath(edge);
+		return (path.length > cap + 1 ? ['...'].concat(path.slice(-(cap + 1))) : path).join(' -> ');
+	}
+
+	/**
+	 * `[root, ..., from]` — how the main thread reached a state of `edge.from` that runs `edge` there, every hop, ending
+	 * where a parent repeats; `[edge.from]` when no state does.
+	 */
+	public function mainPath(edge: CallEdge): Array<String> {
 		final start: Null<ThreadState> = (
 			_byNode[edge.from] ?? []
 		).find(s -> _conditions.carried(edge, s.valuation, s.ctx) & ThreadSafety.CTX_MAIN != 0);
 		final parts: Array<String> = [edge.from];
-		if (start == null) return edge.from;
+		if (start == null) return parts;
 		final visited: Array<ThreadState> = [start];
 		var cursor: ThreadState = start;
-		for (_ in 0...cap) {
+		while (true) {
 			final parent: Null<ThreadState> = cursor.parent;
 			if (parent == null || visited.contains(parent)) break;
 			parts.unshift(parent.id);
 			visited.push(parent);
 			cursor = parent;
 		}
-		final next: Null<ThreadState> = cursor.parent;
-		if (next != null && !visited.contains(next)) parts.unshift('...');
-		return parts.join(' -> ');
+		return parts;
 	}
 
 	/** The fixed point: every state each seed reaches through the calls and callbacks that run from it. */

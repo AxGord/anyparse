@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.format.json.LintFindingDataJson;
 import anyparse.query.format.json.LintFindingJson;
 import anyparse.query.format.json.LintReportJson;
 import anyparse.query.format.json.LintReportJsonParser;
@@ -9,7 +10,8 @@ using StringTools;
 
 /**
  * `apq lint-diff` — compare two `apq lint --format json --all` snapshots as MULTISETS of
- * `(file, rule, severity, message)` keys. The blast-radius gate every slice ends with.
+ * `(file, rule, severity, message)` keys — `(file, rule, severity, family, function, subject)` for a record carrying a
+ * rule's structured identity (`identityKeyOf`). The blast-radius gate every slice ends with.
  *
  * Four fields rather than a text diff, because the cheaper answers lie. A byte diff reports
  * half the tree: line and column move under any edit above them, so a one-line insertion
@@ -50,6 +52,9 @@ using StringTools;
  */
 @:nullSafety(Strict)
 final class LintDiff {
+
+	/** Opens the message slot of an identity key (`identityKeyOf`): a character no rule writes into its prose. */
+	private static inline final IDENTITY_MARK: String = '\x01';
 
 	/**
 	 * Print order for the severity breakdown, most severe first. A severity
@@ -100,7 +105,10 @@ final class LintDiff {
 		for (f in findings) {
 			final file: String = normalizePath(f.file, root);
 			final message: String = normalizeMessage(f.rule, f.message, root, identities);
-			final key: String = keyOf(file, f.rule, f.severity, message);
+			final data: Null<LintFindingDataJson> = f.data;
+			final key: String = data == null
+				? keyOf(file, f.rule, f.severity, message)
+				: identityKeyOf(file, f.rule, f.severity, data.family, data.member, data.subject);
 			final seen: Null<Int> = counts[key];
 			if (seen == null) {
 				order.push(key);
@@ -261,6 +269,19 @@ final class LintDiff {
 	 */
 	public static function keyOf(file: String, rule: String, severity: String, message: String): String {
 		return '${file.length}:$file${rule.length}:$rule${severity.length}:$severity$message';
+	}
+
+	/**
+	 * The multiset key of a finding that carries a structured identity (`Check.FindingData`): `keyOf`'s file, rule and
+	 * severity, then the family, member and subject, length-prefixed behind a control-character marker no lint message
+	 * starts with. The message is left out, and with it the chain it quotes: a chain re-rendered through another path is
+	 * the same finding, so it is no delta. A snapshot written before a rule carried the identity keys by message, so the
+	 * first comparison across that change re-keys the rule's findings once.
+	 */
+	public static function identityKeyOf(
+		file: String, rule: String, severity: String, family: String, member: String, subject: String
+	): String {
+		return keyOf(file, rule, severity, '$IDENTITY_MARK${family.length}:$family${member.length}:$member${subject.length}:$subject');
 	}
 
 	/** A total delta written so its DIRECTION is unmistakable: `+57`, `-3`, `+0`. */

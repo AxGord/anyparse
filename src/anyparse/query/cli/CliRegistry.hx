@@ -30,6 +30,7 @@ import anyparse.query.cli.command.InlineMethodCommand;
 import anyparse.query.cli.command.IntroduceParameterObjectCommand;
 import anyparse.query.cli.command.LintCommand;
 import anyparse.query.cli.command.LintDiffCommand;
+import anyparse.query.cli.command.LintScoreCommand;
 import anyparse.query.cli.command.LitCommand;
 import anyparse.query.cli.command.MakeFinalCommand;
 import anyparse.query.cli.command.MentionsCommand;
@@ -126,6 +127,7 @@ final class CliRegistry {
 			new DeclaresCommand(),
 			new LintCommand(),
 			new LintDiffCommand(),
+			new LintScoreCommand(),
 			new OracleCommand(),
 			new MutationVerdictCommand(),
 			new MutationSchemaCommand(),

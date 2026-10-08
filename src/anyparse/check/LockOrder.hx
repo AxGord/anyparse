@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.check.LockSites.LockAcquire;
+import anyparse.check.ThreadSafety.FindingFamily;
 import anyparse.query.CallGraph;
 
 using Lambda;
@@ -26,6 +27,14 @@ private typedef OrderStep = {
 	final ctx: Int;
 	final held: String;
 	final taken: String;
+}
+
+/** One step as a finding tells it: its text, the call it is anchored at, the function holding the first lock, and the path to the take. */
+private typedef StepStory = {
+	final text: String;
+	final anchor: CallEdge;
+	final holder: String;
+	final path: Array<String>;
 }
 
 /**
@@ -198,15 +207,23 @@ final class LockOrder {
 			final pair: Null<{ main: OrderStep, bg: OrderStep }> = crossThread(_steps[key] ?? [], _steps[back] ?? [], main, bg);
 			if (pair == null) continue;
 			done.push(key);
-			final m: { text: String, anchor: CallEdge } = describe(pair.main, chainCap);
-			final b: { text: String, anchor: CallEdge } = describe(pair.bg, chainCap);
+			final m: StepStory = describe(pair.main, chainCap);
+			final b: StepStory = describe(pair.bg, chainCap);
+			final pairOfLocks: Array<String> = locks.copy();
+			pairOfLocks.sort(Reflect.compare);
 			violations.push({
 				file: m.anchor.file,
 				span: m.anchor.span,
 				rule: 'thread-safety',
 				severity: Severity.Warning,
 				message: 'lock-order inversion: ${m.text} on the main thread, while ${b.text} on a background thread — each can wait'
-				+ ' forever for the lock the other holds'
+				+ ' forever for the lock the other holds',
+				data: {
+					family: FindingFamily.OrderInversion,
+					member: ThreadSafety.memberOf(m.holder),
+					subject: pairOfLocks.join(ThreadSafety.SUBJECT_SEPARATOR),
+					chain: m.path
+				}
 			});
 		}
 		return violations;
@@ -214,9 +231,9 @@ final class LockOrder {
 
 	/**
 	 * `"F" holds "A" and then takes "B" (F -> ... -> take)` for `step`, with the call where F's hold of A first calls
-	 * toward the take: F is the function on the step's path that took A itself.
+	 * toward the take, F itself (`holder`) and the whole path: F is the function on the step's path that took A itself.
 	 */
-	private function describe(step: OrderStep, cap: Int): { text: String, anchor: CallEdge } {
+	private function describe(step: OrderStep, cap: Int): StepStory {
 		final path: Array<String> = [step.take.to];
 		var anchor: CallEdge = step.take;
 		var cursor: HeldState = step.state;
@@ -230,7 +247,9 @@ final class LockOrder {
 		}
 		return {
 			text: '"${cursor.id}" holds "${step.held}" and then takes "${step.taken}" (${ThreadSafety.elided(path, cap)})',
-			anchor: anchor
+			anchor: anchor,
+			holder: cursor.id,
+			path: path
 		};
 	}
 

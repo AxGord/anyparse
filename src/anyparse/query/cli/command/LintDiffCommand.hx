@@ -131,6 +131,9 @@ final class LintDiffCommand implements CliCommand {
 		CliIo.sysPrint('a finding of it moved between files, which is the case a comparison of\n');
 		CliIo.sysPrint('totals hides. The headline also states the NET, so the pair\n');
 		CliIo.sysPrint('`N findings (base M)` cannot be read backwards.\n');
+		CliIo.sysPrint('A record carrying `data` (a rule\'s structured identity) keys on\n');
+		CliIo.sysPrint('(file, rule, severity, family, function, subject) instead of its message,\n');
+		CliIo.sysPrint('so a chain the rule re-rendered through another path is no movement.\n');
 		CliIo.sysPrint('Line, column, span end and address are deliberately not part of the\n');
 		CliIo.sysPrint('key — they move under any edit above them, and `apq lint --format json`\n');
 		CliIo.sysPrint('records DO carry them all (file, line, col, endLine, endCol, severity,\n');

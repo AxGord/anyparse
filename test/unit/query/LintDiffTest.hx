@@ -379,6 +379,26 @@ class LintDiffTest extends Test {
 		Assert.raises(LintDiff.parseReport.bind('{"findings": []}'));
 	}
 
+	/**
+	 * A record carrying `data` keys by its family, function and subject: a chain re-rendered through another path is no
+	 * movement, another subject is — and the same pair without `data` is keyed by its message, so it moves.
+	 */
+	@:pin('control') @:killer('M-LINTDIFF-DATA-IGNORED')
+	public function testDataKeyedFindingsIgnoreTheMessage(): Void {
+		inline function keyed(message: String, subject: String): String {
+			return '{"file": "src/A.hx", "severity": "warning", "rule": "thread-safety", "message": "$message",'
+				+ ' "data": {"family": "A", "function": "A.b", "subject": "$subject", "chain": ["A.b"]}}';
+		}
+		final before: String = reportOf([keyed('reaches S.f: A.b -> S.f', 'S.f')]);
+		Assert.equals(0, diff(before, reportOf([keyed('reaches S.f: R.oot -> A.b -> S.f', 'S.f')]), '').addedTotal);
+		Assert.equals(1, diff(before, reportOf([keyed('reaches S.f: A.b -> S.f', 'S.g')]), '').addedTotal);
+		final plain: String = reportOf([record('src/A.hx', 'warning', 'thread-safety', 'reaches S.f: A.b -> S.f')]);
+		final rerendered: String = reportOf([
+			record('src/A.hx', 'warning', 'thread-safety', 'reaches S.f: R.oot -> A.b -> S.f')
+		]);
+		Assert.equals(1, diff(plain, rerendered, '').addedTotal, 'without data the message is the key');
+	}
+
 	public function testOversizedTypeMemberBumpIsMaskedAway(): Void {
 		// The movement the mask absorbs, in the shape that actually reached the campaign's
 		// verdicts: `type 'Cli' has N -> N+1 members`, printed as one added plus one removed

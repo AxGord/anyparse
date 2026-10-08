@@ -56,6 +56,15 @@ final class MetaInspect {
 	}
 
 	/**
+	 * The key a by-name format spells the struct field `fieldName` with: the string of its `@:key('…')` entry, else the
+	 * field's own name. A format key need not be a Haxe identifier — `"function"`, `"$schema"`, `"content-type"` — and the
+	 * parser and the writer must agree on it, so both read it here.
+	 */
+	public static function wireKey(node: ShapeNode, fieldName: String): String {
+		return readMetaString(node, ':key') ?? fieldName;
+	}
+
+	/**
 	 * Reads N string literal arguments of the named metadata entry, in
 	 * source order. Returns null when the entry is absent, has zero
 	 * params, or any param is not a string literal. Multi-arg sibling

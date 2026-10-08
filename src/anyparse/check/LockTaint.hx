@@ -100,6 +100,11 @@ final class LockTaint {
 		_clean.clear();
 	}
 
+	/** A taint over the same graph, lists, sites, conditions and threads as this one, judging locks long by `long`, with nothing kept. */
+	public function withLong(long: Array<String>): LockTaint {
+		return new LockTaint(_graph, _sinkIds, listsOf, _sites, long, _conditions, _threads);
+	}
+
 	/**
 	 * The lock `a` takes when its kind is `reentrantLocks`-listed, a member names it and the take provably works the
 	 * holder's own object (`LockSites.selfTake`); null otherwise.

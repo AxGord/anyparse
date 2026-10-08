@@ -5,6 +5,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.query.LintBaseline;
 import anyparse.query.LintDiff;
+import anyparse.query.format.LintFormat;
 import anyparse.query.format.json.LintFindingJson;
 import anyparse.runtime.Span;
 import utest.Assert;
@@ -94,6 +95,27 @@ class LintBaselineTest extends Test {
 		Assert.equals(0, delta(live, before).length, 'the tally was mutated by the first call');
 	}
 
+	/**
+	 * A finding carrying structured identity keys by it, not by its message: the snapshot is written by the real json
+	 * writer and read back, and a live finding whose chain re-rendered (another message) is not new, while one with
+	 * another subject is.
+	 */
+	@:pin('control') @:killer('M-BASELINE-DATA-IGNORED', 'M-LINTDIFF-DATA-IGNORED', 'M-LINTFORMAT-NO-DATA')
+	public function testAFindingWithDataKeysByItsIdentity(): Void {
+		final recorded: Violation = withData(
+			violation('src/A.hx', Severity.Warning, 'thread-safety', 'main thread reaches "S.f": A.b -> S.f'), 'S.f'
+		);
+		final before: LintDiffTally = snapshot(LintDiff.parseReport(LintFormat.json([recorded], ['src/A.hx' => ''])));
+		final rerendered: Violation = withData(
+			violation('src/A.hx', Severity.Warning, 'thread-safety', 'main thread reaches "S.f": R.oot -> A.b -> S.f'), 'S.f'
+		);
+		Assert.equals(0, delta([rerendered], before).length, 'a re-rendered chain is the same finding');
+		final other: Violation = withData(
+			violation('src/A.hx', Severity.Warning, 'thread-safety', 'main thread reaches "S.f": A.b -> S.f'), 'S.g'
+		);
+		Assert.equals(1, delta([other], before).length, 'another subject is another finding');
+	}
+
 	private static function delta(all: Array<Violation>, before: LintDiffTally): Array<Violation> {
 		return LintBaseline.added(all, before, '', identities());
 	}
@@ -126,6 +148,17 @@ class LintBaselineTest extends Test {
 			rule: rule,
 			message: message
 		};
+	}
+
+	/** `v` with a family-A identity in member `A.b` about `subject`. */
+	private static function withData(v: Violation, subject: String): Violation {
+		v.data = {
+			family: 'A',
+			member: 'A.b',
+			subject: subject,
+			chain: ['A.b', subject]
+		};
+		return v;
 	}
 
 }

@@ -7,6 +7,9 @@ import anyparse.check.Check.Violation;
 import anyparse.check.LockSites.LockAcquire;
 import anyparse.check.LockSites.LockPair;
 import anyparse.check.LockTaint.ChainLists;
+import anyparse.check.LongLockExplain.GrownLock;
+import anyparse.check.LongLockExplain.LongLockReason;
+import anyparse.check.LongLockExplain.LongLockReport;
 import anyparse.query.CallGraph;
 import anyparse.query.CallGraphTypes;
 import anyparse.query.GrammarPlugin;
@@ -69,8 +72,11 @@ using StringTools;
  * matches the call as written); a `mainThreadChecks` read or call answers whether the running thread is the main one;
  * `closedWorld` says every caller of the code is in the run (`sealedFromOutside`).
  *
- * Findings are grouped: one per hold, at its first blocking call or its first escape, one per main-thread sink call
- * site, and one per pair of locks taken in both orders.
+ * Findings are grouped: one per hold, at its first blocking call or its first escape, one per main-thread sink call site,
+ * and one per pair of locks taken in both orders. Each carries its identity as data (`Check.FindingData`): its family
+ * (`FindingFamily`), the member it sits in, its subject (the sinks, the lock, the two locks) and its whole chain, which a
+ * tool keys by in place of the message. Asked to (`explainLongLocks`), a run also keeps why each lock is long
+ * (`LongLockExplain`) in `longLocks`, without moving a finding.
  */
 @:nullSafety(Strict)
 final class ThreadSafety implements Check implements ConfigAware implements NoAutofix implements GraphScoped {
@@ -81,6 +87,9 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	/** The main thread on a path through a `quietRoots` function: reached, but never reported. */
 	public static inline final CTX_QUIET: Int = 4;
 
+	/** Joins the ids of a subject naming several (the sinks of one call site, the two locks of an inversion), sorted. */
+	public static inline final SUBJECT_SEPARATOR: String = ' / ';
+
 	private static inline final CHAIN_CAP: Int = 8;
 
 	/** The name of a program's entry point, which the runtime calls. */
@@ -88,10 +97,21 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 
 	private static inline final EVIDENCE_CAP: Int = 8;
 
+	/** Why each lock of the last run is long, when the run was asked to say (`explainLongLocks`); null otherwise. */
+	public var longLocks(default, null): Null<LongLockReport> = null;
+
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
+	/** Whether a run explains its long locks into `longLocks` (`explainLongLocks`). */
+	private var _explainLong: Bool = false;
+
 	public function new() {}
+
+	/** Makes each later run explain its long locks into `longLocks` (`LongLockExplain`); its findings stay the same. */
+	public inline function explainLongLocks(on: Bool): Void {
+		_explainLong = on;
+	}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
@@ -115,6 +135,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	 * chain still reaches a sink call in another.
 	 */
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		longLocks = null;
 		if (files.length == 0) return [];
 		// `Linter.collect` hands over every file but an `exclude`d one (`scanSkipReason`), and drops the findings in a
 		// file with no `sinks` of its own afterwards (`skipReason`).
@@ -144,7 +165,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final helperHolds: Array<LockAcquire> = [for (a in sites.helperHolds) if (states.edgeContext(a.edge) != 0) a];
 		final long: Array<String> = [];
 		final taints: LockTaint = new LockTaint(graph, sinkIds, listsOf, sites, long, conditions, states);
-		solveLongLocks(sites, acquires, long, taints);
+		final grown: Array<GrownLock> = [];
+		solveLongLocks(sites, acquires, long, taints, grown);
 
 		final violations: Array<Violation> = [];
 		reportMainSinkCalls(graph, taints, states, violations);
@@ -153,6 +175,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		reportThrowHeld(acquires.concat(helperHolds), throws, violations);
 		final order: LockOrder = new LockOrder(graph, conditions, acquires.concat(helperHolds));
 		for (v in order.report(states, inertRef, CTX_MAIN | CTX_QUIET, CTX_BG, CHAIN_CAP)) violations.push(v);
+		// after every finding: the counterfactual solves fill taints of their own, which must not shape a report
+		longLocks = explained(sites, acquires, long, grown, taints, states);
 		return violations;
 	}
 
@@ -440,13 +464,17 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	/**
 	 * The long locks and the taint they imply, solved together: a call blocks when it reaches a sink, and a lock taken
 	 * by a sink call blocks only when it is long, while a lock is long when a hold of it spans a call that blocks. Grows
-	 * from the locks long on their own (`LockAcquire.leaks`, `LockSites.crossing`) until nothing changes.
+	 * from the locks long on their own (`LongLockExplain.leaks`, `LongLockExplain.blind`, `LockSites.crossing`) until nothing changes,
+	 * and records in `grown` the hold and call each lock grew long by. `aside` names a lock whose own reasons are set aside,
+	 * the counterfactual `--explain-long` asks: is it long by a blocking call too?
 	 */
-	private static function solveLongLocks(sites: LockSites, acquires: Array<LockAcquire>, long: Array<String>, taints: LockTaint): Void {
-		for (lock in sites.crossing) if (!long.contains(lock)) long.push(lock);
-		// a hold that outlives its function, or spans a call to nothing the graph knows, may last any time at all
-		// a wrapper's own take leaks by design: whether it lasts is decided at each call of the wrapper, an acquire itself
-		for (a in acquires) if ((a.leaks && !a.delegated || a.blind && !a.uncontended) && a.lock != null && !long.contains(a.lock))
+	private static function solveLongLocks(
+		sites: LockSites, acquires: Array<LockAcquire>, long: Array<String>, taints: LockTaint, grown: Array<GrownLock>, ?aside: String
+	): Void {
+		for (c in sites.crossing) if (c.lock != aside && !long.contains(c.lock)) long.push(c.lock);
+		for (a in acquires) if (
+			(LongLockExplain.leaks(a) || LongLockExplain.blind(a)) && a.lock != null && a.lock != aside && !long.contains(a.lock)
+		)
 			long.push(a.lock);
 		var grew: Bool = true;
 		// the taint is rebuilt from scratch each round: a lock turning long adds sink edges anywhere in the graph, and the
@@ -455,14 +483,43 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			taints.clear();
 			grew = false;
 			for (a in acquires) {
-				final lock: Null<String> = a.lock;
-				if (lock == null || a.uncontended || long.contains(lock)) continue;
+				final named: Null<String> = a.lock;
+				if (named == null || a.uncontended || long.contains(named)) continue;
+				final lock: String = named;
 				final held: Null<String> = taints.reentrantHeld(a);
-				if (!a.window.exists(e -> taints.blockingPath(a, e, held) != null)) continue;
+				var hit: Null<LongLockReason> = null;
+				if (!a.window.exists(e -> {
+					final path: Null<Array<String>> = taints.blockingPath(a, e, held);
+					if (path != null) hit = LongLockExplain.spansBlocking(a, e, path);
+					path != null;
+				})) continue;
 				long.push(lock);
 				grew = true;
+				final found: Null<LongLockReason> = hit;
+				if (found == null) continue;
+				final reason: LongLockReason = found;
+				grown.push({ lock: lock, reason: reason });
 			}
 		}
+	}
+
+	/**
+	 * Why each lock is long (`LongLockExplain.report`) when this check was asked (`explainLongLocks`), null otherwise: the
+	 * holds `acquires` of `sites`, the `long` locks the solve found with what `grown` recorded, the main-thread takes by
+	 * `states`, and the counterfactual of each lock solved on a fresh taint like `taints`.
+	 */
+	private function explained(
+		sites: LockSites, acquires: Array<LockAcquire>, long: Array<String>, grown: Array<GrownLock>, taints: LockTaint,
+		states: ThreadStates
+	): Null<LongLockReport> {
+		if (!_explainLong) return null;
+		final mainTakes: Array<LockAcquire> = [for (a in acquires) if (states.edgeContext(a.edge) & CTX_MAIN != 0) a];
+		return LongLockExplain.report(sites, acquires, long, grown, mainTakes, lock -> {
+			final found: Array<GrownLock> = [];
+			final without: Array<String> = [];
+			solveLongLocks(sites, acquires, without, taints.withLong(without), found, lock);
+			[for (g in found) if (g.lock == lock) g.reason];
+		});
 	}
 
 	/**
@@ -496,12 +553,20 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			final sinks: Array<String> = targets[site.key] ?? [edge.to];
 			final named: String = [for (t in sinks) '"$t"'].join(' / ');
 			final also: String = ctx & CTX_BG != 0 ? ' (also reachable from a background thread)' : '';
+			final sorted: Array<String> = sinks.copy();
+			sorted.sort(Reflect.compare);
 			violations.push({
 				file: edge.file,
 				span: edge.span,
 				rule: 'thread-safety',
 				severity: Severity.Warning,
-				message: 'main thread reaches blocking $named$also: ${states.mainChain(edge, CHAIN_CAP)} -> ${sinks.join(' / ')}'
+				message: 'main thread reaches blocking $named$also: ${states.mainChain(edge, CHAIN_CAP)} -> ${sinks.join(' / ')}',
+				data: {
+					family: FindingFamily.MainSink,
+					member: memberOf(edge.from),
+					subject: sorted.join(SUBJECT_SEPARATOR),
+					chain: states.mainPath(edge).concat([sinks.join(' / ')])
+				}
 			});
 		}
 	}
@@ -547,7 +612,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			if (blocking.length == 0) continue;
 			blocking.sort((x, y) -> (x.edge.span?.from ?? 0) - (y.edge.span?.from ?? 0));
 			final calls: String = blocking.length == 1 ? 'a call' : '${blocking.length} calls';
-			final message: String = '"${a.edge.from}" holds "${lock ?? a.pair.lockId}" across $calls that can block: '
+			final holder: String = a.edge.from;
+			final message: String = '"$holder" holds "${lock ?? a.pair.lockId}" across $calls that can block: '
 				+ evidenceOf(blocking, held, taints);
 			final anchor: CallEdge = blocking[0].edge;
 			final key: String = '${anchor.file}:${anchor.span?.from}:$message';
@@ -558,7 +624,13 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 				span: anchor.span,
 				rule: 'thread-safety',
 				severity: Severity.Warning,
-				message: message
+				message: message,
+				data: {
+					family: FindingFamily.LockHeld,
+					member: memberOf(holder),
+					subject: lock ?? a.pair.lockId,
+					chain: [holder].concat(blocking[0].path)
+				}
 			});
 		}
 	}
@@ -579,18 +651,26 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 				final shown: String = raiser == null ? 'a throw' : elided(throws.chain(raiser), CHAIN_CAP);
 				if (!evidence.contains(shown)) evidence.push(shown);
 			}
-			final message: String = '"${a.edge.from}" leaves "${a.lock ?? a.pair.lockId}" held when it throws, with no catch to'
-				+ ' release it: ${capped(evidence)}';
+			final holder: String = a.edge.from;
+			final message: String =
+				'"$holder" leaves "${a.lock ?? a.pair.lockId}" held when it throws, with no catch to release it: ${capped(evidence)}';
 			final anchor: Span = a.escapes[0].span;
 			final key: String = '${a.edge.file}:${anchor.from}:$message';
 			if (seen.contains(key)) continue;
 			seen.push(key);
+			final raiser: Null<CallEdge> = a.escapes[0].raiser;
 			violations.push({
 				file: a.edge.file,
 				span: anchor,
 				rule: 'thread-safety',
 				severity: Severity.Warning,
-				message: message
+				message: message,
+				data: {
+					family: FindingFamily.ThrowHeld,
+					member: memberOf(holder),
+					subject: a.lock ?? a.pair.lockId,
+					chain: [holder].concat(raiser == null ? [] : throws.chain(raiser))
+				}
 			});
 		}
 	}
@@ -621,6 +701,12 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		return (parts.length <= cap ? parts : parts.slice(0, cap - 2).concat(['...']).concat(parts.slice(-2))).join(' -> ');
 	}
 
+	/** The member a function id belongs to: a lambda's or a local function's id (`Type.member#…`) is its enclosing member's. */
+	public static function memberOf(id: String): String {
+		final hash: Int = id.indexOf('#');
+		return hash < 0 ? id : id.substring(0, hash);
+	}
+
 	/** `evidence` joined, the first `EVIDENCE_CAP` named and the rest counted. */
 	private static function capped(evidence: Array<String>): String {
 		final more: Int = evidence.length - EVIDENCE_CAP;
@@ -643,5 +729,22 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		}
 		return false;
 	}
+
+}
+
+/** The `FindingData.family` of each kind of `thread-safety` finding, as its class doc letters them. */
+enum abstract FindingFamily(String) to String {
+
+	/** (a) a main-thread function calls a blocking sink. */
+	final MainSink = 'A';
+
+	/** (b) a lock held across calls that can block. */
+	final LockHeld = 'B';
+
+	/** (c) a lock left held when an exception leaves its function. */
+	final ThrowHeld = 'C';
+
+	/** (d) two locks taken in opposite orders on two threads. */
+	final OrderInversion = 'D';
 
 }

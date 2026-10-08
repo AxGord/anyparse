@@ -1454,3 +1454,22 @@ decided the question; it may not become a record of runs.
   findings would vanish; only under `closedWorld`, for a member nothing outside the run can invoke (no override, no
   metadata, no constructor or `main`, no unresolved call of its name, no supertype that may declare it) — branch
   `fix/ts-precision`
+- measuring `thread-safety`'s precision by its messages → a message embeds a chain the rule re-renders whenever the
+  graph finds another path, and caps it at 8 hops, so a label keyed on it rots on the first unrelated edit; every
+  finding carries a structured `data` record (`family`, `function`, `subject`, the whole `chain`), and `lint-diff`,
+  `--baseline` and `lint-score` key on `(file, rule, severity, family, function, subject)` wherever it is present —
+  branch `feat/ts-precision`
+- scoring a rule by matching findings to labels by `file:line` or one by one → a line moves under any edit above it,
+  and a rule reporting one stall at three call sites would look three times as right; `lint-score` matches by the
+  `(family, function, subject)` key, several findings of one key are one hit plus duplicates, and precision leaves
+  `unknown` and unlabelled keys out — branch `feat/ts-precision`
+- a finding's `function` as the id the graph gives it → a lambda's id is `Type.member#<n>`, renumbered by every lambda
+  written before it; the key names the enclosing member and only the chain keeps the lambda's id — branch
+  `feat/ts-precision`
+- spelling the json key `member` because `function` is a Haxe keyword → a ByName schema field declares its wire key
+  with `@:key('…')`, read by the generated parser and writer alike, which every format with keyword or hyphenated keys
+  needs anyway — branch `feat/ts-precision`
+- explaining a long lock by its first reason alone → TM's `_batchMutex` is long by leaks, a blind hold and a crossing
+  release at once, and fixing one leaves it long; `--explain-long` lists every reason at every site, plus what the
+  lock is long by once its own leak / blind / crossing reasons are set aside, solved after the report on a fresh taint
+  so it moves no finding — branch `feat/ts-precision`

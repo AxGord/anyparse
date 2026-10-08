@@ -51,6 +51,12 @@ typedef LockEscape = {
 	final raiser: Null<CallEdge>;
 }
 
+/** A release of a lock in a function that never took it (`LockSites.crossing`): the lock, and the call giving it back. */
+typedef CrossingRelease = {
+	final lock: String;
+	final edge: CallEdge;
+}
+
 /** One call that takes or gives back the lock of `pair`: a call of the pair's own member, or of a lock wrapper. */
 private typedef LockCall = {
 	final edge: CallEdge;
@@ -97,8 +103,11 @@ final class LockSites {
 
 	public final acquires: Array<LockAcquire> = [];
 
-	/** The locks some function releases without taking them first: held across a function boundary, for as long as anyone likes. */
-	public final crossing: Array<String> = [];
+	/**
+	 * Every release of a lock in a function that never took it, with the lock: the hold began elsewhere and lasts for as
+	 * long as anyone likes. A lock may cross at several sites.
+	 */
+	public final crossing: Array<CrossingRelease> = [];
 
 
 	/**
@@ -419,17 +428,20 @@ final class LockSites {
 			&& host.children[1].kind == _shape.newExprKind;
 	}
 
-	/** Every lock one of `gives` releases in a function that makes no other call on it: the hold began in another function. */
+	/**
+	 * Every release of `gives` in a function that makes no other call on its lock: the hold began in another function.
+	 */
 	private function collectCrossing(gives: Array<LockCall>): Void {
 		final giveSites: Array<Null<String>> = [for (g in gives) siteKey(g.edge)];
 		for (give in gives) {
-			final lock: Null<String> = lockOf(give.edge);
+			final named: Null<String> = lockOf(give.edge);
 			// a wrapper's own release is its callers' release, each judged where it stands
-			if (lock == null || crossing.contains(lock) || _wrappers.exists(give.edge.from)) continue;
+			if (named == null || _wrappers.exists(give.edge.from)) continue;
+			final lock: String = named;
 			// a function that works the lock by any other call of its own (a take, a `tryAcquire`) releases what it took
 			final worked: Bool = _graph.outEdges(give.edge.from)
 				.exists(e -> e.kind == Call && !giveSites.contains(siteKey(e)) && lockOf(e) == lock);
-			if (!worked) crossing.push(lock);
+			if (!worked) crossing.push({ lock: lock, edge: give.edge });
 		}
 	}
 

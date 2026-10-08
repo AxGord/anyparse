@@ -802,7 +802,7 @@ class WriterLowering {
 				Context.fatalError('WriterLowering: ByName struct field missing base.fieldName for $typePath', Context.currentPos());
 			final isOptional: Bool = child.annotations.get(AnnotationKeys.BASE_OPTIONAL) == true;
 			final fieldAccess: Expr = { expr: EField(macro value, fieldName), pos: Context.currentPos() };
-			final keyPrefix: String = '"$fieldName"$keyValueSep';
+			final keyPrefix: String = '"${child.wireKey(fieldName)}"$keyValueSep';
 			if (isOptional) {
 				// Strict null safety does not narrow field reads — capture into
 				// a non-null local before handing off to the per-kind writer.

@@ -153,6 +153,8 @@ The macro:
 
 Changing the format means changing one annotation and recompiling. `@:schema(Json5Format) class User { ... }` gives a User parser that accepts comments and trailing commas — zero code changes elsewhere.
 
+A by-name (`FieldLookup.ByName`) field is spelled in the document by its Haxe name unless it declares another with `@:key('<key>')` — the `@:field("id")` above is notional; `@:key` is the meta the macro reads (`MetaInspect.wireKey`), and the generated parser and writer both honour it. It is how a schema reads a key that is a Haxe keyword (`@:key('function') var member: String`) or no identifier at all (`@:key('content-type')`).
+
 ## Not shipping everything
 
 Shipped: `JsonFormat` (the reference `TextFormat`), `SExprFormat` (the `apq ast` output format), `HaxeFormat` (the Haxe grammar's, with its write options), and `ArFormat` (`BinaryFormat`, with the `ar` archive grammar under `anyparse.grammar.ar`). The other families are interface-only stubs. Real format implementations for XML, YAML, TOML, MessagePack, CBOR, etc. come later, driven by the phase roadmap and real needs.

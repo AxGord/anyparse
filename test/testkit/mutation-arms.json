@@ -11156,7 +11156,7 @@
 			"name": "M-TS-CROSSING-IGNORED",
 			"type": "anyparse.check.LockSites",
 			"method": "collectCrossing",
-			"find": "if (!worked) crossing.push(lock);",
+			"find": "if (!worked) crossing.push({ lock: lock, edge: give.edge });",
 			"replace": "",
 			"note": "a lock released by a function that never took it reads as short, so its main-thread take goes unreported"
 		},
@@ -11210,8 +11210,8 @@
 		},
 		{
 			"name": "M-TS-WRAPPER-LEAKS",
-			"type": "anyparse.check.ThreadSafety",
-			"method": "solveLongLocks",
+			"type": "anyparse.check.LongLockExplain",
+			"method": "leaks",
 			"find": "a.leaks && !a.delegated",
 			"replace": "a.leaks",
 			"note": "a wrapper's own take leaking out of its body makes its lock long, so every main-thread take of it is reported again"
@@ -16641,6 +16641,132 @@
 			"find": "CanonicalEdit.editKeepingCanonical(source, edits, plugin, optsJson)",
 			"replace": "anyparse.query.CanonicalEdit.EditResult.Ok(CanonicalEdit.applyEdits(source, edits))",
 			"note": "change-sig keeps the old breaks of a filled list whose slots it reordered, so a canonical file comes back drifted"
+		},
+		{
+			"name": "M-JSON-KEY-PARSE",
+			"type": "anyparse.macro.StructSeqLowering",
+			"method": "lowerStructByName",
+			"find": "final key: String = MetaInspect.wireKey(child, fieldName);",
+			"replace": "final key: String = fieldName;",
+			"note": "a ByName parser matches a field by its Haxe name, so a key declared with `@:key` (a keyword, a hyphenated key) is never read"
+		},
+		{
+			"name": "M-JSON-KEY-WRITE",
+			"type": "anyparse.macro.WriterLowering",
+			"method": "lowerStructByName",
+			"find": "final keyPrefix: String = '\"${child.wireKey(fieldName)}\"$keyValueSep';",
+			"replace": "final keyPrefix: String = '\"$fieldName\"$keyValueSep';",
+			"note": "a ByName writer spells a field by its Haxe name, so what it writes its own parser cannot read back"
+		},
+		{
+			"name": "M-TS-DATA-CHAIN-CAPPED",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "reportMainSinkCalls",
+			"find": "chain: states.mainPath(edge).concat(",
+			"replace": "chain: states.mainChain(edge, CHAIN_CAP).split(' -> ').concat(",
+			"note": "a main-thread finding's data carries the chain the text caps, so the hops past the cap are lost to every tool"
+		},
+		{
+			"name": "M-TS-DATA-MEMBER-LAMBDA",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "memberOf",
+			"force": "id",
+			"note": "a finding in a lambda keys by the lambda's own id, which moves with every lambda written before it"
+		},
+		{
+			"name": "M-TS-DATA-SINKS-UNSORTED",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "reportMainSinkCalls",
+			"find": "sorted.sort(Reflect.compare);",
+			"replace": "",
+			"note": "a call site reaching several sinks keys them in the graph's order, so one finding re-keys when the graph finds them another way"
+		},
+		{
+			"name": "M-TS-DATA-ORDER-PAIR-UNSORTED",
+			"type": "anyparse.check.LockOrder",
+			"method": "inversions",
+			"find": "pairOfLocks.sort(Reflect.compare);",
+			"replace": "",
+			"note": "an inversion keys its two locks in the order the walk met them, so one pair has two keys"
+		},
+		{
+			"name": "M-TS-ASIDE-KEEPS-SEEDS",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "solveLongLocks",
+			"find": "a.lock != aside && ",
+			"replace": "",
+			"note": "the counterfactual keeps the lock's own leak and blind reasons, so a lock long by a leak never shows what else holds it long"
+		},
+		{
+			"name": "M-BASELINE-DATA-IGNORED",
+			"type": "anyparse.query.LintBaseline",
+			"method": "keyOf",
+			"find": "final data: Null<FindingData> = v.data;",
+			"replace": "final data: Null<FindingData> = null;",
+			"note": "a live finding keys by its message even when it carries an identity, so a re-rendered chain is reported as new"
+		},
+		{
+			"name": "M-LINTDIFF-DATA-IGNORED",
+			"type": "anyparse.query.LintDiff",
+			"method": "tally",
+			"find": "final data: Null<LintFindingDataJson> = f.data;",
+			"replace": "final data: Null<LintFindingDataJson> = null;",
+			"note": "a recorded finding keys by its message even when it carries an identity, so a re-rendered chain is a delta"
+		},
+		{
+			"name": "M-LINTFORMAT-NO-DATA",
+			"type": "anyparse.query.format.LintFormat",
+			"method": "recordOf",
+			"find": "final data: Null<FindingData> = v.data;",
+			"replace": "final data: Null<FindingData> = null;",
+			"note": "the json record drops the finding's identity, so nothing downstream can key by it"
+		},
+		{
+			"name": "M-SCORE-DUPLICATES-AS-KEYS",
+			"type": "anyparse.query.LintScore",
+			"method": "keysOf",
+			"find": "final at: Null<Int> = keyIndex[key];",
+			"replace": "final at: Null<Int> = null;",
+			"note": "every finding is its own key, so a rule reporting one stall at three sites scores three hits"
+		},
+		{
+			"name": "M-SCORE-PRECISION-COUNTS-UNKNOWN",
+			"type": "anyparse.query.LintScore",
+			"method": "bucket",
+			"find": "for (v in VERDICTS) if (v != UNKNOWN) known +=",
+			"replace": "for (v in VERDICTS) if (true) known +=",
+			"note": "precision counts an `unknown` verdict as wrong, so labelling less lowers it"
+		},
+		{
+			"name": "M-SCORE-RECALL-REAL-LONG-ONLY",
+			"type": "anyparse.query.LintScore",
+			"method": "isRecall",
+			"force": "e.verdict == 'real-long'",
+			"note": "an entry marked `recall: true` can be lost without failing the score"
+		},
+		{
+			"name": "M-SCORE-VERDICT-UNCHECKED",
+			"type": "anyparse.query.LintScore",
+			"method": "validate",
+			"find": "if (!VERDICTS.contains(e.verdict)) errors.push(",
+			"replace": "if (false) errors.push(",
+			"note": "a misspelt verdict is accepted and silently scored as nothing"
+		},
+		{
+			"name": "M-SCORE-LOST-EXIT",
+			"type": "anyparse.query.cli.command.LintScoreCommand",
+			"method": "runLintScore",
+			"find": "return result.lost.length == 0 ? EXIT_OK : EXIT_RUNTIME;",
+			"replace": "return EXIT_OK;",
+			"note": "a lost real stall no longer fails the scoring run"
+		},
+		{
+			"name": "M-LINT-EXPLAIN-UNSET",
+			"type": "anyparse.query.cli.command.LintExplainLong",
+			"method": "explainer",
+			"find": "check.explainLongLocks(true);",
+			"replace": "",
+			"note": "`--explain-long` never asks the check to explain, so the run prints no evidence"
 		}
 	]
 }

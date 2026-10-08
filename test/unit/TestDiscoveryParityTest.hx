@@ -382,6 +382,8 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.TailMergeCheckTest',
 		'unit.check.ThreadSafetyCheckTest',
 		'unit.check.ThreadSafetyConditionsTest',
+		'unit.check.ThreadSafetyFindingDataTest',
+		'unit.check.ThreadSafetyLongLocksTest',
 		'unit.check.TrivialGetterCheckTest',
 		'unit.check.TrivialGetterIsVarTest',
 		'unit.check.TrivialGetterShapeCollapseTest',
@@ -452,6 +454,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.cli.CliUsageFailureCliTest',
 		'unit.cli.ExtractDestinationCollisionCliTest',
 		'unit.cli.LintConfigCliTest',
+		'unit.cli.LintExplainLongCliTest',
 		'unit.cli.LintFailOnCliTest',
 		'unit.cli.LintFixFactsSettleTest',
 		'unit.cli.LintFixFixedPointCliTest',
@@ -940,6 +943,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.LintBaselineTest',
 		'unit.query.LintDiffTest',
 		'unit.query.LintFixSafePassRevertTest',
+		'unit.query.LintScoreTest',
 		'unit.query.LiteralClassificationTest',
 		'unit.query.LiteralVocabularyTest',
 		'unit.query.LocalTypeAnnotationProjectionTest',
@@ -2102,6 +2106,12 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyConditionsTest#testUnderAClosedWorldAnUncalledMethodRunsNowhere :: control :: M-TS-CLOSED-WORLD-UNREAD',
 			'unit.check.ThreadSafetyConditionsTest#testUnderAClosedWorldAnUnindexedInterfacesMemberStaysARoot :: control :: '
 				+ 'M-TS-SEAL-SUPERTYPE',
+			'unit.check.ThreadSafetyFindingDataTest#testLambdaFindingNamesItsEnclosingMember :: control :: M-TS-DATA-MEMBER-LAMBDA',
+			'unit.check.ThreadSafetyFindingDataTest#testLockOrderData :: control :: M-TS-DATA-ORDER-PAIR-UNSORTED',
+			'unit.check.ThreadSafetyFindingDataTest#testMainSinkDataCarriesTheWholeChain :: control :: M-TS-DATA-CHAIN-CAPPED',
+			'unit.check.ThreadSafetyFindingDataTest#testSeveralSinksAreOneSortedSubject :: control :: M-TS-DATA-SINKS-UNSORTED',
+			'unit.check.ThreadSafetyLongLocksTest#testAsideSetsTheLocksOwnReasonsAside :: control :: M-TS-ASIDE-KEEPS-SEEDS',
+			'unit.check.ThreadSafetyLongLocksTest#testSpansBlockingNamesTheCallAndThePath :: control :: M-TS-LONG-NEVER-GROWS',
 			'unit.check.TrivialGetterCheckTest#testBasicBlockBodyFlagged :: control :: M-SUBOVERRIDE-TRUE',
 			'unit.check.TrivialGetterShapeCollapseTest#testForeignHierarchyBackingNameStaysAccountedFor :: control :: '
 				+ 'M-SUPERDECLARES-FALSE',
@@ -2276,6 +2286,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.cli.CliCommandSeamTest#testTheRequireMatchFlagDoesNotSurviveItsRun :: control :: M-CLI-REQUIREMATCH-STATIC',
 			'unit.cli.CliUnknownSubcommandTest#testAPluralMissNamesTheSingularCommands :: control :: M-CLI-UNKNOWN-NO-PLURAL-PROBE',
 			'unit.cli.LintConfigCliTest#testTheScopeGapNoticesReachTheRun :: control :: M-SCOPE-GAP-UNWIRED,M-SCOPE-GAP-ROOT-UNWIRED',
+			'unit.cli.LintExplainLongCliTest#testJsonEnvelopeCarriesFindingsAndLongLocks :: control :: M-LINT-EXPLAIN-UNSET',
 			'unit.cli.LintFixFactsSettleTest#testTheFactsSettleBeforeTheFirstWrite :: control :: M-FIX-FACTS-SETTLED',
 			'unit.cli.LintFixQuietDefaultTest#testTheRuleAccountingWaitsForAnEditOrForVerbose :: control :: M-LINT-FIX-CENSUS-UNGATED',
 			'unit.cli.LintRangeCliTest#testWriteFixLeavesAStandingFindingOutsideTheWindow :: control :: M-LINT-RANGE-INERT',
@@ -2300,6 +2311,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.format.BraceSymmetrySliceTest#testTheStatementAndValueSkipListsAgree :: control :: M-SSB-VALUE-WRAP-OFF',
 			'unit.format.BraceSymmetrySliceTest#testThenBareElseBracedGainsBraces :: control :: M-SSB-SYMMETRY-ONLY-BLIND',
 			'unit.format.BraceSymmetrySliceTest#testThenBracedElseBareGainsBraces :: control :: M-SSB-SYMMETRY-ONLY-BLIND',
+			'unit.grammar.JsonTypedParserTest#testDeclaredKeyIsTheParsedKey :: control :: M-JSON-KEY-PARSE',
+			'unit.grammar.JsonTypedParserTest#testDeclaredKeyIsTheWrittenKey :: control :: M-JSON-KEY-WRITE',
 			'unit.grammar.haxe.ComplexItemKindsSeamTest#testTheGeneratedPredicateAnswersTheClassifier :: control :: M-KINDS',
 			'unit.grammar.haxe.ComplexItemKindsSeamTest#testTheTriviaFamilyCarriesTheSameEntry :: seam :: ',
 			'unit.grammar.haxe.ElseSwitchPlacementSliceTest#testACommentBeforeTheThenSwitchDeclinesBothSeams :: control :: '
@@ -2863,9 +2876,16 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.GreedyDeclSpanEditBoundarySliceTest#testAGreedyModuleDeclSpanIsTrimmedToItsOwnLastToken :: control :: '
 				+ 'M-DECL-EDIT-SPAN-UNTRIMMED',
 			'unit.query.LintBaselineTest#testAFindingThatONLYMOVEDIsNotNew :: control :: M-LINT-BASELINE-NO-SUBTRACTION',
+			'unit.query.LintBaselineTest#testAFindingWithDataKeysByItsIdentity :: control :: M-BASELINE-DATA-IGNORED,M-LINTDIFF-DATA-IGNORED,M-LINTFORMAT-NO-DATA',
 			'unit.query.LintDiffTest#testAddedMinusRemovedIsAlwaysTheTotalDelta :: control :: M-LINTDIFF-SURPLUS-BY-KEY',
+			'unit.query.LintDiffTest#testDataKeyedFindingsIgnoreTheMessage :: control :: M-LINTDIFF-DATA-IGNORED',
 			'unit.query.LintDiffTest#testTheByRuleSummaryNamesEveryRuleThatMoved :: control :: M-LINTDIFF-RULE-SUMMARY-BLANK',
 			'unit.query.LintDiffTest#testTheHeadlineStatesTheNetDirection :: control :: M-LINTDIFF-NET-UNSTATED',
+			'unit.query.LintScoreTest#testExitStatusIsTheLostRecall :: control :: M-SCORE-LOST-EXIT',
+			'unit.query.LintScoreTest#testFindingsMeetEntriesByKey :: control :: M-SCORE-DUPLICATES-AS-KEYS',
+			'unit.query.LintScoreTest#testPrecisionLeavesUnknownAndUnlabelledOut :: control :: M-SCORE-PRECISION-COUNTS-UNKNOWN',
+			'unit.query.LintScoreTest#testRecallCountsMarkedEntries :: control :: M-SCORE-RECALL-REAL-LONG-ONLY',
+			'unit.query.LintScoreTest#testValidationRefusesWhatTheSchemaCannot :: control :: M-SCORE-VERDICT-UNCHECKED',
 			'unit.query.LiteralClassificationTest#testAKindNamedLikeALiteralIsNotClassifiedAsOne :: control :: M-SAFE-KINDS-SUFFIX-STUB',
 			'unit.query.LiteralClassificationTest#testAnAllocatingLiteralIsRefusedByEveryPredicate :: control :: M-PURE-ARG-ROOT-ONLY',
 			'unit.query.LiteralClassificationTest#testEveryDeclaredConstantLiteralIsClassifiedByEveryList :: control :: '
@@ -5750,7 +5770,23 @@ class TestDiscoveryParityTest extends Test {
 			'M-DISPLAY-SERVER-UNTETHERED',
 			'M-REMOVE-PARAM-RAW-SPLICE',
 			'M-ADD-PARAM-RAW-SPLICE',
-			'M-CHANGE-SIG-RAW-SPLICE'
+			'M-CHANGE-SIG-RAW-SPLICE',
+			'M-JSON-KEY-PARSE',
+			'M-JSON-KEY-WRITE',
+			'M-TS-DATA-CHAIN-CAPPED',
+			'M-TS-DATA-MEMBER-LAMBDA',
+			'M-TS-DATA-SINKS-UNSORTED',
+			'M-TS-DATA-ORDER-PAIR-UNSORTED',
+			'M-TS-ASIDE-KEEPS-SEEDS',
+			'M-BASELINE-DATA-IGNORED',
+			'M-LINTDIFF-DATA-IGNORED',
+			'M-LINTFORMAT-NO-DATA',
+			'M-SCORE-DUPLICATES-AS-KEYS',
+			'M-SCORE-PRECISION-COUNTS-UNKNOWN',
+			'M-SCORE-RECALL-REAL-LONG-ONLY',
+			'M-SCORE-VERDICT-UNCHECKED',
+			'M-SCORE-LOST-EXIT',
+			'M-LINT-EXPLAIN-UNSET'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
@@ -5968,6 +6004,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-REFL-MEMBER-NAME-ANY :: anyparse.check.TypedFactsWalk#reflection',
 			'M-FACTS-REFL-MEMBER-NAME-TABLE :: anyparse.check.TypedFactsWalk#reflection',
 			'M-TETHER-IGNORES-EOF :: anyparse.check.HaxeSpawn#FinalMember:TETHER',
+			'M-JSON-KEY-PARSE :: anyparse.macro.StructSeqLowering#lowerStructByName',
+			'M-JSON-KEY-WRITE :: anyparse.macro.WriterLowering#lowerStructByName',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.check.Check.FindingData;
 import anyparse.check.Check.Violation;
 import anyparse.query.LintDiff.LintDiffTally;
 import anyparse.query.LintDiff.LintMessageIdentities;
@@ -25,7 +26,8 @@ import anyparse.query.LintDiff.LintMessageIdentities;
 final class LintBaseline {
 
 	/**
-	 * The `LintDiff` identity key of one live finding.
+	 * The `LintDiff` identity key of one live finding — by its structured
+	 * identity when it carries one, as `LintDiff.tally` keys the recorded side.
 	 *
 	 * `severity.label()` is the same spelling `LintFormat.recordOf` writes into the json
 	 * record, which is what makes a live finding and a recorded one land on one key; reading
@@ -33,10 +35,11 @@ final class LintBaseline {
 	 * silently be "everything is new".
 	 */
 	public static function keyOf(v: Violation, root: String, identities: LintMessageIdentities): String {
-		return LintDiff.keyOf(
-			LintDiff.normalizePath(v.file, root), v.rule, v.severity.label(),
-			LintDiff.normalizeMessage(v.rule, v.message, root, identities)
-		);
+		final file: String = LintDiff.normalizePath(v.file, root);
+		final data: Null<FindingData> = v.data;
+		return data == null
+			? LintDiff.keyOf(file, v.rule, v.severity.label(), LintDiff.normalizeMessage(v.rule, v.message, root, identities))
+			: LintDiff.identityKeyOf(file, v.rule, v.severity.label(), data.family, data.member, data.subject);
 	}
 
 	/**
