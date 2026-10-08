@@ -4,10 +4,15 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.GraphScoped;
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
+import anyparse.check.LockSites.LockAcquire;
 import anyparse.check.LockSites.LockPair;
 import anyparse.check.LockTaint.ChainLists;
 import anyparse.query.CallGraph;
+import anyparse.query.CallGraphTypes;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
+import anyparse.query.QueryNode;
+import anyparse.query.ReachAdmission;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -22,10 +27,11 @@ using StringTools;
  * hangs a thread for good: (c) a lock still held where an exception leaves the function that took it; (d) two locks
  * taken in opposite orders on the main thread and on a background one (`LockOrder`).
  *
- * Context propagation: graph roots start MAIN; a callback passed to a `spawns` target runs BG, one passed to a
- * `marshals` target runs MAIN, any other inherits its registrar's context. A node with no resolved callers is ASSUMED
- * main — the over-approximation a finder wants. Sinks inside a `marshals` function's own body are the primitive's
- * machinery and are not reported.
+ * Context propagation (`ThreadStates`): graph roots start MAIN; a callback passed to a `spawns` target runs BG, one
+ * passed to a `marshals` target runs MAIN, any other inherits its registrar's context. A node nothing reached is
+ * ASSUMED main — the over-approximation a finder wants. A call runs only where the code around it lets it
+ * (`EdgeConditions`); a value stored into a `dynamic` member runs where the member runs (`deriveStoredCalls`). Sinks
+ * inside a `marshals` function's own body are the primitive's machinery and are not reported.
  *
  * Locks are told apart by the OBJECT (`LockSites`: the sealed member holding it). A sink that TAKES a `lockPairs` lock
  * stalls only when the lock is LONG: some function holds it, on some path (`LockWindow`), across a call that blocks;
@@ -43,6 +49,9 @@ using StringTools;
  *         "quietRoots": ["app.App.shutdown"],
  *         "reentrantLocks": ["app.Mutex.lock"],
  *         "throwers":  ["sys.FileSystem.createDirectory", "sys.io.File.saveContent"],
+ *         "neverInvokes": ["removeEventListener"],
+ *         "mainThreadChecks": ["app.Worker.isMainThread"],
+ *         "closedWorld": true,
  *         "exclude":   ["test"]
  *     }
  *
@@ -56,7 +65,9 @@ using StringTools;
  * hold of a NAMED lock of that kind, taking the SAME OBJECT's lock again (`LockTaint`) blocks nothing. Re-entrance is
  * never assumed: a lock kind not listed, a lock no member names, or a take on another object keeps it a blocking call.
  * A `throwers` entry is a call that raises on a real runtime condition (`ThrowReach`): with none listed, only a `throw`
- * in the holding body itself leaves a lock held.
+ * in the holding body itself leaves a lock held. A `neverInvokes` call runs no function value handed to it (a bare name
+ * matches the call as written); a `mainThreadChecks` read or call answers whether the running thread is the main one;
+ * `closedWorld` says every caller of the code is in the run (`sealedFromOutside`).
  *
  * Findings are grouped: one per hold, at its first blocking call or its first escape, one per main-thread sink call
  * site, and one per pair of locks taken in both orders.
@@ -64,13 +75,17 @@ using StringTools;
 @:nullSafety(Strict)
 final class ThreadSafety implements Check implements ConfigAware implements NoAutofix implements GraphScoped {
 
-	private static inline final CTX_MAIN: Int = 1;
-	private static inline final CTX_BG: Int = 2;
+	public static inline final CTX_MAIN: Int = 1;
+	public static inline final CTX_BG: Int = 2;
 
 	/** The main thread on a path through a `quietRoots` function: reached, but never reported. */
-	private static inline final CTX_QUIET: Int = 4;
+	public static inline final CTX_QUIET: Int = 4;
 
 	private static inline final CHAIN_CAP: Int = 8;
+
+	/** The name of a program's entry point, which the runtime calls. */
+	private static inline final ENTRY_POINT: String = 'main';
+
 	private static inline final EVIDENCE_CAP: Int = 8;
 
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
@@ -105,34 +120,39 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		// file with no `sinks` of its own afterwards (`skipReason`).
 		final graph: CallGraph = CallGraph.build(files, plugin);
 		final sets: Array<ChainLists> = [];
-		final byFile: Map<String, ChainLists> = listsByFile(files, graph, sets);
+		final byFile: Map<String, ChainLists> = listsByFile(files, graph, sets, plugin.refShape().accessorMethodPrefixes ?? []);
 		final sinkIds: Array<String> = [];
 		for (lists in sets) for (id in lists.sinkIds) if (!sinkIds.contains(id)) sinkIds.push(id);
 		if (sinkIds.length == 0) return [];
 		final listsOf: (String) -> ChainLists = listsOfFile.bind(byFile);
-
-		final contexts: Map<String, Int> = [];
-		final mainParent: Map<String, CallEdge> = [];
-		// a quiet root is judged by the chain of the file declaring it
-		settleContexts(graph, listsOf, [
-			for (id => node in graph.nodes) if (byFile[node.file]?.quietIds.contains(id) == true) id
-		], contexts, mainParent);
+		final unresolvedNames: Array<String> = [for (u in graph.unresolved) for (n in ReachAdmission.admittedNames(u)) n];
+		final sealedSlots: Array<String> = deriveStoredCalls(graph, unresolvedNames);
 
 		final trees: FunctionTrees = new FunctionTrees(graph, plugin);
+		final conditions: EdgeConditions = new EdgeConditions(graph, trees, plugin, file -> listsOf(file).mainCheckIds);
+		final inertRef: (CallEdge) -> Bool = runsNothing.bind(sealedSlots, listsOf);
+		final seedable: (String) -> Bool = mayRunFromOutside.bind(graph, plugin, unresolvedNames, byFile);
+		// a quiet root is judged by the chain of the file declaring it
+		final states: ThreadStates = settleContexts(graph, listsOf, [
+			for (id => node in graph.nodes) if (byFile[node.file]?.quietIds.contains(id) == true) id
+		], conditions, inertRef, seedable);
+
 		final throws: ThrowReach = new ThrowReach(graph, plugin.refShape(), file -> listsOf(file).throwerIds, trees);
 		final sites: LockSites = new LockSites(graph, [for (f in files) f.file], plugin, file -> listsOf(file).pairs, throws, trees);
+		// a hold whose take no thread runs holds nothing: a function nothing invokes, a take a condition rules out
+		final acquires: Array<LockAcquire> = [for (a in sites.acquires) if (states.edgeContext(a.edge) != 0) a];
+		final helperHolds: Array<LockAcquire> = [for (a in sites.helperHolds) if (states.edgeContext(a.edge) != 0) a];
 		final long: Array<String> = [];
-		final taints: LockTaint = new LockTaint(graph, sinkIds, listsOf, sites, long);
-		solveLongLocks(sites, long, taints);
+		final taints: LockTaint = new LockTaint(graph, sinkIds, listsOf, sites, long, conditions, states);
+		solveLongLocks(sites, acquires, long, taints);
 
 		final violations: Array<Violation> = [];
-		reportMainSinkCalls(graph, taints, contexts, mainParent, violations);
+		reportMainSinkCalls(graph, taints, states, violations);
 		reportMalformedPairs(sets, violations);
-		reportLockHeld(sites, taints, contexts, violations);
-		reportThrowHeld(sites, throws, violations);
-		final order: LockOrder = new LockOrder(graph, sites.acquires.concat(sites.helperHolds));
-		for (v in order.report(contexts, (e, ctx) -> callbackContext(e, listsOf(e.file), ctx), CTX_MAIN | CTX_QUIET, CTX_BG, CHAIN_CAP))
-			violations.push(v);
+		reportLockHeld(acquires, taints, states, violations);
+		reportThrowHeld(acquires.concat(helperHolds), throws, violations);
+		final order: LockOrder = new LockOrder(graph, conditions, acquires.concat(helperHolds));
+		for (v in order.report(states, inertRef, CTX_MAIN | CTX_QUIET, CTX_BG, CHAIN_CAP)) violations.push(v);
 		return violations;
 	}
 
@@ -166,7 +186,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	 * their first file appears, so a single-chain run holds exactly one.
 	 */
 	private function listsByFile(
-		files: Array<{ file: String, source: String }>, graph: CallGraph, sets: Array<ChainLists>
+		files: Array<{ file: String, source: String }>, graph: CallGraph, sets: Array<ChainLists>, accessorPrefixes: Array<String>
 	): Map<String, ChainLists> {
 		final bySignature: Map<String, ChainLists> = [];
 		final byFile: Map<String, ChainLists> = [];
@@ -179,9 +199,22 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			final quietRoots: Array<String> = config.stringListOption('thread-safety', 'quietRoots') ?? [];
 			final reentrant: Array<String> = config.stringListOption('thread-safety', 'reentrantLocks') ?? [];
 			final throwers: Array<String> = config.stringListOption('thread-safety', 'throwers') ?? [];
+			final neverInvokes: Array<String> = config.stringListOption('thread-safety', 'neverInvokes') ?? [];
+			final mainChecks: Array<String> = config.stringListOption('thread-safety', 'mainThreadChecks') ?? [];
+			final closedWorld: Bool = config.boolOption('thread-safety', 'closedWorld') == true;
 			final signature: String = [
-				for (list in [sinks, spawns, marshals, lockPairs, quietRoots, reentrant, throwers]) list.join('\n')
-			].join('\t');
+					for (list in [
+						sinks,
+						spawns,
+						marshals,
+						lockPairs,
+						quietRoots,
+						reentrant,
+						throwers,
+						neverInvokes,
+						mainChecks
+					]) list.join('\n')
+				].join('\t') + (closedWorld ? '\tclosed' : '');
 			final known: Null<ChainLists> = bySignature[signature];
 			final lists: ChainLists = known ?? {
 				reports: sinks.length > 0,
@@ -191,6 +224,10 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 				quietIds: matchAll(graph, quietRoots),
 				reentrantIds: matchAll(graph, reentrant),
 				throwerIds: matchAll(graph, throwers),
+				neverInvokeIds: matchAll(graph, neverInvokes),
+				neverInvokeNames: [for (p in neverInvokes) if (p.indexOf('.') < 0) p],
+				mainCheckIds: matchAll(graph, mainChecks.concat([for (c in mainChecks) getterOf(c, accessorPrefixes)])),
+				closedWorld: closedWorld,
 				lockPairs: lockPairs,
 				pairs: resolvePairs(graph, lockPairs)
 			};
@@ -208,6 +245,15 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final lists: Null<ChainLists> = byFile[file];
 		if (lists == null) throw new Exception('thread-safety: an edge sits in "$file", which no run file resolved a config for');
 		return lists;
+	}
+
+	/**
+	 * The getter a property pattern `T.p` reads through (`T.get_p`, by the grammar's first accessor prefix): a check
+	 * written as the property matches the accessor its reads call.
+	 */
+	private static function getterOf(pattern: String, accessorPrefixes: Array<String>): String {
+		final dot: Int = pattern.lastIndexOf('.');
+		return accessorPrefixes.length == 0 ? pattern : pattern.substring(0, dot + 1) + accessorPrefixes[0] + pattern.substring(dot + 1);
 	}
 
 	/** Union of `graph.matchIds` over `patterns`, deduplicated. */
@@ -232,6 +278,35 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	}
 
 	/**
+	 * Whether the `Ref` edge `edge` runs its value from nowhere: a value stored into a member of `sealedSlots`, which
+	 * runs where that member runs (`deriveStoredCalls`), or one handed to a call that never runs it (`neverInvoked`).
+	 */
+	private static function runsNothing(sealedSlots: Array<String>, listsOf: (String) -> ChainLists, edge: CallEdge): Bool {
+		return sealedSlots.contains(edge.storedInto ?? '') || neverInvoked(edge, listsOf(edge.file));
+	}
+
+	/**
+	 * Whether a function the walk reaches through no edge may still run, ASSUMED on the main thread: any function, unless
+	 * its file's chain declares `closedWorld` and nothing outside the run can invoke it (`sealedFromOutside`).
+	 */
+	private static function mayRunFromOutside(
+		graph: CallGraph, plugin: GrammarPlugin, unresolvedNames: Array<String>, byFile: Map<String, ChainLists>, id: String
+	): Bool {
+		return !(byFile[graph.node(id)?.file ?? '']?.closedWorld == true && sealedFromOutside(graph, plugin, unresolvedNames, id));
+	}
+
+	/**
+	 * Whether the call the value of the `Ref` edge `edge` is handed to never runs it: one its chain's `neverInvokes`
+	 * names — a `Type.member` entry by the graph's target, a bare member name by the name the call is written with,
+	 * resolved or not.
+	 */
+	private static function neverInvoked(edge: CallEdge, lists: ChainLists): Bool {
+		final via: String = edge.via ?? '';
+		final member: String = edge.viaMember ?? '';
+		return lists.neverInvokeIds.contains(via) || lists.neverInvokeNames.contains(member);
+	}
+
+	/**
 	 * The context a callback `edge` registers from `ctx` runs in: a `spawns` target's BG, a `marshals` target's MAIN,
 	 * any other the registrar's own — quiet never among them: a callback runs later, from whatever invokes it.
 	 */
@@ -247,80 +322,118 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	}
 
 	/**
-	 * `propagateContexts` with the `quiet` roots only the main thread never enters loud: a root some invocation reaches
-	 * from loud MAIN code is dropped, and the contexts are solved again until none is. A root's registration as a
+	 * The contexts (`ThreadStates`) with the `quiet` roots only the main thread never enters loud: a root some invocation
+	 * reaches from loud MAIN code is dropped, and the contexts are solved again until none is. A root's registration as a
 	 * callback (a `Ref`, as a handler is) does not make it loud: declaring how such a callback runs is what the list is for.
 	 */
 	private static function settleContexts(
-		graph: CallGraph, listsOf: (String) -> ChainLists, quiet: Array<String>, contexts: Map<String, Int>,
-		mainParent: Map<String, CallEdge>
-	): Void {
+		graph: CallGraph, listsOf: (String) -> ChainLists, quiet: Array<String>, conditions: EdgeConditions, inertRef: (CallEdge) -> Bool,
+		seedable: (String) -> Bool
+	): ThreadStates {
 		var roots: Array<String> = quiet;
 		while (true) {
-			contexts.clear();
-			mainParent.clear();
-			propagateContexts(graph, listsOf, roots, contexts, mainParent);
+			final states: ThreadStates = new ThreadStates(
+				graph, conditions, roots, (e, ctx) -> callbackContext(e, listsOf(e.file), ctx), inertRef, seedable
+			);
 			final loud: Array<String> = [
-				for (q in roots) if (graph.inEdges(q).exists(e -> e.kind.isInvocation() && (contexts[e.from] ?? 0) & CTX_MAIN != 0)) q
+				for (q in roots) if (graph.inEdges(q).exists(e -> e.kind.isInvocation() && states.edgeContext(e) & CTX_MAIN != 0)) q
 			];
-			if (loud.length == 0) return;
+			if (loud.length == 0) return states;
 			roots = roots.filter(q -> !loud.contains(q));
 		}
 	}
 
-	/** The context `ctx` becomes on entering `id`: the main thread goes quiet in a `quiet` root. */
-	private static function enter(quiet: Array<String>, id: String, ctx: Int): Int {
-		return quiet.contains(id) && ctx & CTX_MAIN != 0 ? (ctx & ~CTX_MAIN) | CTX_QUIET : ctx;
+	/**
+	 * A function value assigned to a `dynamic` method (`CallEdge.storedInto`) runs wherever that member runs: each
+	 * invocation of the member, or of an override of it, is a call of the value too, and each read of the member as a
+	 * value a reference to it. Those edges join the graph, at the member's own sites. Returns the members whose every
+	 * run the graph sees — no call or read of their name it could not resolve — where the assignment itself runs nothing.
+	 */
+	private static function deriveStoredCalls(graph: CallGraph, unresolvedNames: Array<String>): Array<String> {
+		final sealed: Array<String> = [];
+		final stores: Array<CallEdge> = [for (e in graph.edges) if (e.kind == Ref && e.storedInto != null) e];
+		for (store in stores) {
+			final slotId: String = store.storedInto ?? '';
+			final slot: Null<FnNode> = graph.node(slotId);
+			final name: Null<String> = slot?.name;
+			final type: Null<String> = slot?.typeName;
+			if (slot == null || name == null || type == null) continue;
+			final runs: Array<String> = [slotId].concat(graph.virtualTargets(type, name));
+			for (id in runs) for (e in graph.inEdges(id).copy()) if (e.kind != Contains) graph.deriveEdge({
+				from: e.from,
+				to: store.to,
+				kind: e.kind,
+				via: e.via,
+				file: e.file,
+				span: e.span,
+				dispatchType: null,
+				receiverField: null
+			});
+			if (!sealed.contains(slotId) && !unresolvedNames.contains(name) && graph.unresolvedAccessesRunning([slot]).length == 0)
+				sealed.push(slotId);
+		}
+		return sealed;
 	}
 
 	/**
-	 * Fixed-point MAIN/BG propagation. Roots and caller-less nodes seed MAIN;
-	 * spawn-received callbacks seed BG; marshal-received callbacks seed MAIN;
-	 * every other edge propagates the source context. The main thread entering a quiet
-	 * root goes quiet (`enter`) and stays so through direct calls; callbacks never inherit it.
-	 * `mainParent` records the edge that first carried MAIN into a node — the chain evidence.
+	 * Whether nothing outside the run's files can invoke `id`, so that under `closedWorld` a function nothing in them
+	 * reaches runs on no thread at all: a member method (no lambda, no local function, no constructor, no field
+	 * initializer, no `main`) no supertype may declare (`inheritsNothingNamed`), carrying no `override` and no metadata,
+	 * whose name no unresolved call or access may mean.
 	 */
-	private static function propagateContexts(
-		graph: CallGraph, listsOf: (String) -> ChainLists, quiet: Array<String>, contexts: Map<String, Int>,
-		mainParent: Map<String, CallEdge>
-	): Void {
-		// noqa: complexity
-		final queue: Array<String> = [];
-		for (id => node in graph.nodes) if (!node.isExternal && graph.inEdges(id).length == 0) {
-			contexts[id] = enter(quiet, id, CTX_MAIN);
-			queue.push(id);
+	private static function sealedFromOutside(graph: CallGraph, plugin: GrammarPlugin, unresolvedNames: Array<String>, id: String): Bool {
+		final node: Null<FnNode> = graph.node(id);
+		final name: Null<String> = node?.name;
+		final type: Null<String> = node?.typeName;
+		if (node == null || name == null || type == null || node.isExternal || node.isBodyless || id.indexOf('#') >= 0) return false;
+		final shape: RefShape = plugin.refShape();
+		if (name == (shape.constructorName ?? 'new') || name == ENTRY_POINT || name.startsWith('<')) return false;
+		if (graph.ownMember(type, name) != id || !inheritsNothingNamed(graph, type, name, [])) return false;
+		if (unresolvedNames.contains(name) || graph.unresolvedAccessesRunning([node]).length > 0) return false;
+		final declarations: Array<FnDeclaration> = graph.declarationsOf(id);
+		return declarations.length > 0 && declarations.foreach(d -> plainMember(graph, plugin, d));
+	}
+
+	/**
+	 * Whether no supertype of `type` may declare `name`: every one the index holds declares none, and every one it does
+	 * not hold is the superclass of a class — whose members the class can only reach by an `override`, which a sealed
+	 * member never carries. An interface the index does not hold may declare anything.
+	 */
+	private static function inheritsNothingNamed(graph: CallGraph, type: String, name: String, seen: Array<String>): Bool {
+		if (seen.contains(type)) return true;
+		seen.push(type);
+		final types: CallGraphTypes = graph.types;
+		final superclass: Null<String> = types.isInterface(type) ? null : types.superclassOf(type);
+		for (s in types.supertypesOf(type)) {
+			if (types.declarationCount(s) == 0) {
+				if (s != superclass) return false;
+				continue;
+			}
+			if (types.declaringTypeOf(s, name) != null || !inheritsNothingNamed(graph, s, name, seen)) return false;
 		}
-		var qi: Int = 0;
+		return true;
+	}
+
+	/** Whether the member declared at `d` carries neither `override` nor any metadata. */
+	private static function plainMember(graph: CallGraph, plugin: GrammarPlugin, d: FnDeclaration): Bool {
+		final tree: Null<QueryNode> = graph.treeOf(d.file);
+		if (tree == null) return false;
+		final host: Null<{ parent: QueryNode, member: QueryNode }> = memberAt(tree, d.span);
+		if (host == null) return false;
+		final shape: RefShape = plugin.refShape();
+		final kinds: Array<String> = (shape.modifierKinds ?? []).concat(plugin.metaShape().metaKinds);
+		final leading: Array<QueryNode> = MemberKinds.precedingModifiers(host.member, host.parent, kinds);
+		return !leading.exists(m -> m.kind == shape.overrideModifierKind || plugin.metaShape().metaKinds.contains(m.kind));
+	}
+
+	/** The node spanning exactly `span` in `tree`, with its parent; null when there is none. */
+	private static function memberAt(tree: QueryNode, span: Span): Null<{ parent: QueryNode, member: QueryNode }> {
+		var node: QueryNode = tree;
 		while (true) {
-			while (qi < queue.length) {
-				final id: String = queue[qi++];
-				final ctx: Int = contexts[id] ?? 0;
-				for (edge in graph.outEdges(id)) {
-					final carried: Int = switch edge.kind {
-						case Contains: 0;
-						case Ref: callbackContext(edge, listsOf(edge.file), ctx);
-						case _: ctx;
-					};
-					if (carried == 0) continue;
-					final propagated: Int = enter(quiet, edge.to, carried);
-					final old: Int = contexts[edge.to] ?? 0;
-					final merged: Int = old | propagated;
-					if (merged == old) continue;
-					contexts[edge.to] = merged;
-					if (old & CTX_MAIN == 0 && merged & CTX_MAIN != 0) mainParent[edge.to] = edge;
-					queue.push(edge.to);
-				}
-			}
-			// a node with no resolved callers and no context yet is ASSUMED main —
-			// seeded INTO the worklist so the assumption reaches its callees (a
-			// plain post-drain fill would silently miss their sink calls)
-			var seeded: Bool = false;
-			for (id => node in graph.nodes) if (!(node.isExternal || contexts.exists(id))) {
-				contexts[id] = enter(quiet, id, CTX_MAIN);
-				queue.push(id);
-				seeded = true;
-			}
-			if (!seeded) break;
+			final child: Null<QueryNode> = node.children.find(c -> c.span != null && c.span.from <= span.from && c.span.to >= span.to);
+			if (child == null) return null;
+			if (child.span?.from == span.from && child.span?.to == span.to) return { parent: node, member: child };
+			node = child;
 		}
 	}
 
@@ -329,11 +442,11 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	 * by a sink call blocks only when it is long, while a lock is long when a hold of it spans a call that blocks. Grows
 	 * from the locks long on their own (`LockAcquire.leaks`, `LockSites.crossing`) until nothing changes.
 	 */
-	private static function solveLongLocks(sites: LockSites, long: Array<String>, taints: LockTaint): Void {
+	private static function solveLongLocks(sites: LockSites, acquires: Array<LockAcquire>, long: Array<String>, taints: LockTaint): Void {
 		for (lock in sites.crossing) if (!long.contains(lock)) long.push(lock);
 		// a hold that outlives its function, or spans a call to nothing the graph knows, may last any time at all
 		// a wrapper's own take leaks by design: whether it lasts is decided at each call of the wrapper, an acquire itself
-		for (a in sites.acquires) if ((a.leaks && !a.delegated || a.blind && !a.uncontended) && a.lock != null && !long.contains(a.lock))
+		for (a in acquires) if ((a.leaks && !a.delegated || a.blind && !a.uncontended) && a.lock != null && !long.contains(a.lock))
 			long.push(a.lock);
 		var grew: Bool = true;
 		// the taint is rebuilt from scratch each round: a lock turning long adds sink edges anywhere in the graph, and the
@@ -341,11 +454,11 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		while (grew) {
 			taints.clear();
 			grew = false;
-			for (a in sites.acquires) {
+			for (a in acquires) {
 				final lock: Null<String> = a.lock;
 				if (lock == null || a.uncontended || long.contains(lock)) continue;
 				final held: Null<String> = taints.reentrantHeld(a);
-				if (!a.window.exists(e -> taints.heldAcrossBlocking(e, held))) continue;
+				if (!a.window.exists(e -> taints.blockingPath(a, e, held) != null)) continue;
 				long.push(lock);
 				grew = true;
 			}
@@ -357,7 +470,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	 * unknown. One finding per call site, naming every sink a dispatch there may reach.
 	 */
 	private static function reportMainSinkCalls(
-		graph: CallGraph, taints: LockTaint, contexts: Map<String, Int>, mainParent: Map<String, CallEdge>, violations: Array<Violation>
+		graph: CallGraph, taints: LockTaint, states: ThreadStates, violations: Array<Violation>
 	): Void {
 		final targets: Map<String, Array<String>> = [];
 		final order: Array<{ key: String, edge: CallEdge }> = [];
@@ -367,8 +480,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			// between contexts in ways the graph cannot see; sinks inside it are
 			// the primitive's own machinery, not application-level main calls
 			if (taints.listsOf(edge.file).marshalIds.contains(edge.from)) continue;
-			final ctx: Int = contexts[edge.from] ?? 0;
-			if (ctx & CTX_MAIN == 0) continue;
+			if (states.edgeContext(edge) & CTX_MAIN == 0) continue;
 			final key: String = '${edge.file}:${edge.span?.from ?? -1}:${edge.from}';
 			final known: Null<Array<String>> = targets[key];
 			if (known == null) {
@@ -380,7 +492,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		}
 		for (site in order) {
 			final edge: CallEdge = site.edge;
-			final ctx: Int = contexts[edge.from] ?? 0;
+			final ctx: Int = states.edgeContext(edge);
 			final sinks: Array<String> = targets[site.key] ?? [edge.to];
 			final named: String = [for (t in sinks) '"$t"'].join(' / ');
 			final also: String = ctx & CTX_BG != 0 ? ' (also reachable from a background thread)' : '';
@@ -389,7 +501,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 				span: edge.span,
 				rule: 'thread-safety',
 				severity: Severity.Warning,
-				message: 'main thread reaches blocking $named$also: ${mainChain(edge.from, mainParent)} -> ${sinks.join(' / ')}'
+				message: 'main thread reaches blocking $named$also: ${states.mainChain(edge, CHAIN_CAP)} -> ${sinks.join(' / ')}'
 			});
 		}
 	}
@@ -417,23 +529,27 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	 * the hold stall main; a hold in the owner's constructor before the object escapes stalls no one.
 	 */
 	private static function reportLockHeld(
-		sites: LockSites, taints: LockTaint, contexts: Map<String, Int>, violations: Array<Violation>
+		acquires: Array<LockAcquire>, taints: LockTaint, states: ThreadStates, violations: Array<Violation>
 	): Void {
 		final seen: Array<String> = [];
 		final mainTaken: Array<String> = [
-			for (a in sites.acquires) if (a.lock != null && (contexts[a.edge.from] ?? 0) & CTX_MAIN != 0) a.lock
+			for (a in acquires) if (a.lock != null && states.edgeContext(a.edge) & CTX_MAIN != 0) a.lock
 		];
-		for (a in sites.acquires) {
+		for (a in acquires) {
 			final lock: Null<String> = a.lock;
 			if (a.uncontended || lock != null && !mainTaken.contains(lock)) continue;
 			final held: Null<String> = taints.reentrantHeld(a);
-			final blocking: Array<CallEdge> = [for (e in a.window) if (e.span != null && taints.heldAcrossBlocking(e, held)) e];
+			final blocking: Array<{ edge: CallEdge, path: Array<String> }> = [];
+			for (e in a.window) if (e.span != null) {
+				final path: Null<Array<String>> = taints.blockingPath(a, e, held);
+				if (path != null) blocking.push({ edge: e, path: path });
+			}
 			if (blocking.length == 0) continue;
-			blocking.sort((x, y) -> (x.span?.from ?? 0) - (y.span?.from ?? 0));
+			blocking.sort((x, y) -> (x.edge.span?.from ?? 0) - (y.edge.span?.from ?? 0));
 			final calls: String = blocking.length == 1 ? 'a call' : '${blocking.length} calls';
 			final message: String = '"${a.edge.from}" holds "${lock ?? a.pair.lockId}" across $calls that can block: '
 				+ evidenceOf(blocking, held, taints);
-			final anchor: CallEdge = blocking[0];
+			final anchor: CallEdge = blocking[0].edge;
 			final key: String = '${anchor.file}:${anchor.span?.from}:$message';
 			if (seen.contains(key)) continue;
 			seen.push(key);
@@ -453,10 +569,10 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	 * gives it back and the next take waits forever. One finding per hold, at its
 	 * first escape, the holds a multi-lock helper opens in its caller included.
 	 */
-	private static function reportThrowHeld(sites: LockSites, throws: ThrowReach, violations: Array<Violation>): Void {
+	private static function reportThrowHeld(holds: Array<LockAcquire>, throws: ThrowReach, violations: Array<Violation>): Void {
 		final seen: Array<String> = [];
 		// an escape leaks the hold, so none is the owner's constructor's (`LockAcquire.uncontended`)
-		for (a in sites.acquires.concat(sites.helperHolds)) if (a.escapes.length > 0) {
+		for (a in holds) if (a.escapes.length > 0) {
 			final evidence: Array<String> = [];
 			for (escape in a.escapes) {
 				final raiser: Null<CallEdge> = escape.raiser;
@@ -479,16 +595,19 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		}
 	}
 
-	/** What each of `blocking` reaches, distinct, capped (`capped`). */
-	private static function evidenceOf(blocking: Array<CallEdge>, held: Null<String>, taints: LockTaint): String {
+	/** What each of `blocking` reaches, by the path `LockTaint.blockingPath` found for it, distinct, capped (`capped`). */
+	private static function evidenceOf(
+		blocking: Array<{ edge: CallEdge, path: Array<String> }>, held: Null<String>, taints: LockTaint
+	): String {
 		final evidence: Array<String> = [];
-		for (e in blocking) {
+		for (b in blocking) {
+			final e: CallEdge = b.edge;
 			final shown: String = if (taints.blocks(e, held))
 				e.to
-			else if (taints.hops(held).exists(e.to))
-				taintChain(e.to, taints.hops(held))
+			else if (b.path.length == 1 && taints.retakesElsewhere(e, held))
+				'${e.to} (the held lock, on another object)'
 			else
-				'${e.to} (the held lock, on another object)';
+				taintChain(b.path);
 			if (!evidence.contains(shown)) evidence.push(shown);
 		}
 		return capped(evidence);
@@ -508,35 +627,9 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		return evidence.slice(0, EVIDENCE_CAP).join('; ') + (more > 0 ? '; +$more more' : '');
 	}
 
-	/** `root -> ... -> id` — how MAIN reached `id`, capped at CHAIN_CAP hops, cycle-safe (marshal ping-pong). */
-	private static function mainChain(id: String, mainParent: Map<String, CallEdge>): String {
-		final parts: Array<String> = [id];
-		final visited: Array<String> = [id];
-		var cursor: String = id;
-		for (hops in 0...CHAIN_CAP) {
-			final edge: Null<CallEdge> = mainParent[cursor];
-			if (edge == null || visited.contains(edge.from)) break;
-			parts.unshift(edge.from);
-			visited.push(edge.from);
-			cursor = edge.from;
-		}
-		final next: Null<CallEdge> = mainParent[cursor];
-		if (next != null && !visited.contains(next.from)) parts.unshift('...');
-		return parts.join(' -> ');
-	}
-
-	/** `id -> ... -> sink` — how `id` reaches a sink, capped at CHAIN_CAP hops. */
-	private static function taintChain(id: String, taintHop: Map<String, CallEdge>): String {
-		final parts: Array<String> = [id];
-		var cursor: String = id;
-		for (hops in 0...CHAIN_CAP) {
-			final edge: Null<CallEdge> = taintHop[cursor];
-			if (edge == null) break;
-			parts.push(edge.to);
-			cursor = edge.to;
-		}
-		if (taintHop[cursor] != null) parts.push('...');
-		return parts.join(' -> ');
+	/** `id -> ... -> sink` — the path a call reaches a sink by, capped at CHAIN_CAP hops past its first function. */
+	private static function taintChain(path: Array<String>): String {
+		return path.length <= CHAIN_CAP + 1 ? path.join(' -> ') : path.slice(0, CHAIN_CAP + 1).concat(['...']).join(' -> ');
 	}
 
 	/** True when `file` contains one of `patterns` as a '/'-bounded path-segment run. */

@@ -5463,7 +5463,7 @@
 			"name": "M-GRAPH-VALUE-USE",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "refEdges(frameId(currentType), ref, null, span);",
+			"find": "refEdges(frameId(currentType), ref, null, span, storedInto());",
 			"replace": "{}",
 			"note": "a method stored, returned or put in a literal leaves no Ref edge, so a later call through that value reaches nothing"
 		},
@@ -5471,7 +5471,7 @@
 			"name": "M-GRAPH-VALUE-USE-LAMBDA",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "\t\t\t\tif (lambdaId != null) addEdge(frameId(currentType), lambdaId, Ref, null, file, span);\n",
+			"find": "\t\t\t\tif (lambdaId != null) addEdge(frameId(currentType), lambdaId, Ref, null, file, span, null, null, null, null, storedInto());\n",
 			"replace": "",
 			"note": "a lambda stored or returned leaves no Ref edge"
 		},
@@ -5918,7 +5918,7 @@
 			"name": "M-GRAPH-NEW-ARGS",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "scanArgs(node.children, 0, target, currentType);",
+			"find": "scanArgs(node.children, 0, target, null, currentType);",
 			"replace": "",
 			"note": "constructor arguments hand on no function value"
 		},
@@ -5926,7 +5926,7 @@
 			"name": "M-GRAPH-REF-OVERRIDES",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "if (dispatch != null && name != null) for (v in virtualTargets(dispatch, name))\n\t\t\t\taddEdge(from, v, Ref, via, file, span, dispatch);",
+			"find": "if (dispatch != null && name != null) for (v in virtualTargets(dispatch, name))\n\t\t\t\taddEdge(from, v, Ref, via, file, span, dispatch, null, null, null, storedInto, viaMember);",
 			"replace": "",
 			"note": "a method value reaches only the static type's method, never an override"
 		},
@@ -10524,9 +10524,9 @@
 		{
 			"name": "M-TS-TAINT-UNION-SINK",
 			"type": "anyparse.check.LockTaint",
-			"method": "hops",
-			"find": "&& !listsOf(edge.file).sinkIds.contains(edge.from)",
-			"replace": "&& !_sinkIds.contains(edge.from)",
+			"method": "reach",
+			"find": "if (listsOf(edge.file).sinkIds.contains(edge.from)) continue;",
+			"replace": "if (_sinkIds.contains(edge.from)) continue;",
 			"note": "a node one chain names a sink never carries taint to its callers in a chain where it is a plain function"
 		},
 		{
@@ -11284,8 +11284,8 @@
 			"name": "M-TS-HOLD-ANCHOR-LAST",
 			"type": "anyparse.check.ThreadSafety",
 			"method": "reportLockHeld",
-			"find": "final anchor: CallEdge = blocking[0];",
-			"replace": "final anchor: CallEdge = blocking[blocking.length - 1];",
+			"find": "final anchor: CallEdge = blocking[0].edge;",
+			"replace": "final anchor: CallEdge = blocking[blocking.length - 1].edge;",
 			"note": "a hold's finding sits at its last blocking call, not where the stall first begins"
 		},
 		{
@@ -11308,8 +11308,8 @@
 			"name": "M-TS-QUIET-LOUD-CALLER",
 			"type": "anyparse.check.ThreadSafety",
 			"method": "settleContexts",
-			"find": "if (loud.length == 0) return;",
-			"replace": "return;",
+			"find": "if (loud.length == 0) return states;",
+			"replace": "return states;",
 			"note": "a quiet root loud UI code also calls stays quiet, so everything it reaches from that handler goes unreported"
 		},
 		{
@@ -11346,7 +11346,7 @@
 		},
 		{
 			"name": "M-TS-QUIET-IGNORED",
-			"type": "anyparse.check.ThreadSafety",
+			"type": "anyparse.check.ThreadStates",
 			"method": "enter",
 			"find": "return quiet.contains(id)",
 			"replace": "return false",
@@ -11356,8 +11356,8 @@
 			"name": "M-TS-QUIET-SWALLOWS",
 			"type": "anyparse.check.ThreadSafety",
 			"method": "reportMainSinkCalls",
-			"find": "if (ctx & CTX_MAIN == 0) continue;",
-			"replace": "if (ctx & CTX_MAIN == 0 || ctx & CTX_QUIET != 0) continue;",
+			"find": "if (states.edgeContext(edge) & CTX_MAIN == 0) continue;",
+			"replace": "if (states.edgeContext(edge) & CTX_MAIN == 0 || states.edgeContext(edge) & CTX_QUIET != 0) continue;",
 			"note": "one path through a quiet root silences a sink every other main-thread path still reaches"
 		},
 		{
@@ -11404,16 +11404,16 @@
 			"name": "M-TS-ORDER-BG-AS-MAIN",
 			"type": "anyparse.check.LockOrder",
 			"method": "crossThread",
-			"find": "if (x.state.ctx & main != 0 && y.state.ctx & bg != 0)",
-			"replace": "if (x.state.ctx & (main | bg) != 0 && y.state.ctx & bg != 0)",
+			"find": "if (x.ctx & main != 0 && y.ctx & bg != 0)",
+			"replace": "if (x.ctx & (main | bg) != 0 && y.ctx & bg != 0)",
 			"note": "two background steps count as two threads, though one worker may run both"
 		},
 		{
 			"name": "M-TS-ORDER-NO-HELPER-HOLDS",
 			"type": "anyparse.check.ThreadSafety",
 			"method": "run",
-			"find": "sites.acquires.concat(sites.helperHolds)",
-			"replace": "sites.acquires",
+			"find": "new LockOrder(graph, conditions, acquires.concat(helperHolds))",
+			"replace": "new LockOrder(graph, conditions, acquires)",
 			"note": "a helper taking two locks leaves neither held in its caller, so a re-take under them reads as a new order"
 		},
 		{
@@ -11436,8 +11436,8 @@
 			"name": "M-TS-ORDER-UNKNOWN-LOCK",
 			"type": "anyparse.check.LockOrder",
 			"method": "admit",
-			"find": "final lock: Null<String> = a.lock;",
-			"replace": "final lock: Null<String> = a.lock ?? a.pair.lockId;",
+			"find": "final named: Null<String> = a.lock;",
+			"replace": "final named: Null<String> = a.lock ?? a.pair.lockId;",
 			"note": "a lock no member names is ordered under its pair's take member, so any two objects' locks of that kind are one"
 		},
 		{
@@ -11452,8 +11452,8 @@
 			"name": "M-TS-ORDER-CTOR-CONTENDED",
 			"type": "anyparse.check.LockOrder",
 			"method": "admit",
-			"find": "if (lock == null || a.uncontended) return;",
-			"replace": "if (lock == null) return;",
+			"find": "if (named == null || a.uncontended) return;",
+			"replace": "if (named == null) return;",
 			"note": "a take in the owner's constructor, on an object no other thread reaches yet, orders the locks it calls into"
 		},
 		{
@@ -11531,10 +11531,218 @@
 		{
 			"name": "M-TS-THROW-HELPER-HOLDS-UNREAD",
 			"type": "anyparse.check.ThreadSafety",
-			"method": "reportThrowHeld",
-			"find": "sites.acquires.concat(sites.helperHolds)",
-			"replace": "sites.acquires",
+			"method": "run",
+			"find": "reportThrowHeld(acquires.concat(helperHolds), throws, violations);",
+			"replace": "reportThrowHeld(acquires, throws, violations);",
 			"note": "the holds a multi-lock helper opens in its caller never escape, so a throw under them is quiet"
+		},
+		{
+			"name": "M-TS-STORE-INERT",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "runsNothing",
+			"find": "sealedSlots.contains(edge.storedInto ?? '') || ",
+			"replace": "",
+			"note": "a method assigned to a dynamic member runs where it is assigned, so a handler a worker invokes reads as run by the constructor that stored it"
+		},
+		{
+			"name": "M-TS-STORE-UNMIRRORED",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "deriveStoredCalls",
+			"find": "for (id in runs) for (e in graph.inEdges(id).copy()) if (e.kind != Contains) graph.deriveEdge({",
+			"replace": "for (id in runs) for (e in graph.inEdges(id).copy()) if (false) graph.deriveEdge({",
+			"note": "a value stored into a dynamic member is never called where the member is, so the chain to it names no invoker and its thread is a guess"
+		},
+		{
+			"name": "M-TS-STORE-SEALED-BLIND",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "deriveStoredCalls",
+			"find": "!sealed.contains(slotId) && !unresolvedNames.contains(name) && ",
+			"replace": "!sealed.contains(slotId) && ",
+			"note": "a call of the member's name the graph cannot resolve is taken to run nothing stored, so the value loses the context it may run in"
+		},
+		{
+			"name": "M-TS-NEVER-INVOKES-BY-TARGET",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "neverInvoked",
+			"find": "lists.neverInvokeIds.contains(via) || ",
+			"replace": "",
+			"note": "a qualified neverInvokes entry is never matched, so removing a handler still reads as running it"
+		},
+		{
+			"name": "M-TS-NEVER-INVOKES-BY-NAME",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "neverInvoked",
+			"find": " || lists.neverInvokeNames.contains(member)",
+			"replace": "",
+			"note": "a bare neverInvokes name matches only a call the graph resolves, so removing a handler inherited from a library type still runs it"
+		},
+		{
+			"name": "M-TS-MAIN-CHECK-IGNORED",
+			"type": "anyparse.check.EdgeConditions",
+			"method": "carried",
+			"find": "mask &= fact.value ? MAIN_BITS : ThreadSafety.CTX_BG;",
+			"replace": "mask &= MAIN_BITS | ThreadSafety.CTX_BG;",
+			"note": "a branch a main-thread check takes only on a worker runs on the main thread too"
+		},
+		{
+			"name": "M-TS-MAIN-CHECK-NO-GETTER",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "listsByFile",
+			"find": "matchAll(graph, mainChecks.concat([for (c in mainChecks) getterOf(c, accessorPrefixes)]))",
+			"replace": "matchAll(graph, mainChecks)",
+			"note": "a main-thread check written as a property is never recognised at its reads, which call the getter"
+		},
+		{
+			"name": "M-TS-NULL-LOCAL-UNREAD",
+			"type": "anyparse.check.EdgeConditions",
+			"method": "nullFacts",
+			"find": ": nullTestFacts(tested, nonNull, fnId, file);",
+			"replace": ": [];",
+			"note": "a null test of a local the check chose (`check ? null : new Lock()`) fixes nothing, so the worker-only wait runs on the main thread"
+		},
+		{
+			"name": "M-TS-EARLY-EXIT-UNREAD",
+			"type": "anyparse.check.EdgeConditions",
+			"method": "guardFacts",
+			"find": "&& alwaysExits(s.children[1])",
+			"replace": "&& false",
+			"note": "code after `if (c) return;` runs where `c` holds too"
+		},
+		{
+			"name": "M-TS-ARG-UNBOUND",
+			"type": "anyparse.check.ArgumentValues",
+			"method": "bind",
+			"find": "valueOf(args[at], edge.file, callerNames, valuation)",
+			"replace": "UNKNOWN",
+			"note": "a literal argument hands its callee nothing known, so a branch the call rules out still runs"
+		},
+		{
+			"name": "M-TS-DEFAULT-UNREAD",
+			"type": "anyparse.check.ArgumentValues",
+			"method": "defaultOf",
+			"find": "literal(value, file)",
+			"replace": "UNKNOWN",
+			"note": "an omitted Bool argument's default is unknown, so a branch the default rules out still runs"
+		},
+		{
+			"name": "M-TS-ARG-PARAM-UNREAD",
+			"type": "anyparse.check.ArgumentValues",
+			"method": "valueOf",
+			"find": "if (at >= 0) return valuation.charAt(at);",
+			"replace": "",
+			"note": "a parameter handed on bare carries nothing its caller knew, so `load = false` is lost one call down"
+		},
+		{
+			"name": "M-TS-NULL-PARAM-UNREAD",
+			"type": "anyparse.check.EdgeConditions",
+			"method": "nullFacts",
+			"find": "return at >= 0 ? [{ param: at, value: !nonNull, nullTest: true }]",
+			"replace": "return false ? [{ param: at, value: !nonNull, nullTest: true }]",
+			"note": "a null test of a parameter fixes nothing, so `if (fs != null)` runs with `fs` left out"
+		},
+		{
+			"name": "M-TS-SKIP-UNCHECKED",
+			"type": "anyparse.check.ArgumentValues",
+			"method": "maySkip",
+			"find": "args.length != params.length",
+			"replace": "false",
+			"note": "arguments bind by position even where Haxe skips an optional parameter by type, so `work(true)` reads as leaving `sleep` at its default"
+		},
+		{
+			"name": "M-TS-PARAM-WRITE-IGNORED",
+			"type": "anyparse.check.ArgumentValues",
+			"method": "stable",
+			"find": " && !writes(fn, name)",
+			"replace": "",
+			"note": "a parameter the body reassigns is read as holding its argument, so a branch the write opens reads as dead"
+		},
+		{
+			"name": "M-TS-STATES-UNCONDITIONED",
+			"type": "anyparse.check.ThreadStates",
+			"method": "solve",
+			"find": "final live: Int = _conditions.carried(edge, state.valuation, state.ctx);",
+			"replace": "final live: Int = state.ctx;",
+			"note": "the context walk enters every call a condition rules out, so the callees of a dead branch run on the main thread"
+		},
+		{
+			"name": "M-TS-STATES-UNBOUND",
+			"type": "anyparse.check.ThreadStates",
+			"method": "solve",
+			"find": "arrive(edge.to, _conditions.bind(edge, state.valuation), live, state);",
+			"replace": "arrive(edge.to, _conditions.unknown(edge.to), live, state);",
+			"note": "a call hands its callee nothing known, so every valuation is lost one call down"
+		},
+		{
+			"name": "M-TS-ORDER-UNCONDITIONED",
+			"type": "anyparse.check.LockOrder",
+			"method": "visit",
+			"find": "final ctx: Int = _conditions.carried(e, state.valuation, state.ctx);",
+			"replace": "final ctx: Int = state.ctx;",
+			"note": "the order walk counts a take a Bool argument rules out, so `add(true)` under one lock reads as taking the other"
+		},
+		{
+			"name": "M-TS-ORDER-HOLD-UNCONDITIONED",
+			"type": "anyparse.check.LockOrder",
+			"method": "visit",
+			"find": " && _conditions.carried(h.take, state.valuation, state.ctx) != 0",
+			"replace": "",
+			"note": "a hold whose take a Bool argument rules out counts as held at the calls after it"
+		},
+		{
+			"name": "M-TS-TAINT-UNCONDITIONED",
+			"type": "anyparse.check.LockTaint",
+			"method": "reach",
+			"find": "final live: Int = _conditions.carried(edge, state.valuation, state.ctx);",
+			"replace": "final live: Int = state.ctx;",
+			"note": "a hold reaches a blocking call on a branch it never takes on its thread, so a main-thread hold across an async-on-main call reads as blocking"
+		},
+		{
+			"name": "M-TS-CLOSED-WORLD-UNREAD",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "mayRunFromOutside",
+			"find": "byFile[graph.node(id)?.file ?? '']?.closedWorld == true && ",
+			"replace": "false && ",
+			"note": "closedWorld is never read, so a method nothing calls is still assumed to run on the main thread"
+		},
+		{
+			"name": "M-TS-SEAL-CTOR",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "sealedFromOutside",
+			"find": "name == (shape.constructorName ?? 'new') || ",
+			"replace": "",
+			"note": "a constructor nothing in the run constructs reads as dead, so the app's entry object runs on no thread"
+		},
+		{
+			"name": "M-TS-SEAL-OVERRIDE",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "plainMember",
+			"find": "m.kind == shape.overrideModifierKind || ",
+			"replace": "",
+			"note": "an override of a library method reads as dead, though the library calls it"
+		},
+		{
+			"name": "M-TS-SEAL-SUPERTYPE",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "sealedFromOutside",
+			"find": " || !inheritsNothingNamed(graph, type, name, [])",
+			"replace": "",
+			"note": "a method an unindexed interface may declare reads as dead, though code outside the run calls it through that interface"
+		},
+		{
+			"name": "M-TS-SEAL-UNRESOLVED",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "sealedFromOutside",
+			"find": "if (unresolvedNames.contains(name) || graph.unresolvedAccessesRunning([node]).length > 0) return false;",
+			"replace": "if (graph.unresolvedAccessesRunning([node]).length > 0) return false;",
+			"note": "a method an unresolved call may name reads as dead"
+		},
+		{
+			"name": "M-TS-DEAD-HOLDS-KEPT",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "run",
+			"find": "final acquires: Array<LockAcquire> = [for (a in sites.acquires) if (states.edgeContext(a.edge) != 0) a];",
+			"replace": "final acquires: Array<LockAcquire> = sites.acquires;",
+			"note": "a hold in a function no thread runs is reported, and makes its lock long"
 		},
 		{
 			"name": "M-GRAPH-CLASS-BOUND",

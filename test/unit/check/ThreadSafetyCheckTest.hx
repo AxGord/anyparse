@@ -21,7 +21,7 @@ using Lambda;
 class ThreadSafetyCheckTest extends Test {
 
 	#if (sys || nodejs)
-	private static final MUTEX: String =
+	public static final MUTEX: String =
 		'class Mutex { public function new() {} public function acquire():Void {} public function release():Void {} }\n';
 	#end
 
@@ -1485,7 +1485,7 @@ class ThreadSafetyCheckTest extends Test {
 	 * Every lock-order finding of a `Mutex.acquire` run over `sources` (plus `Mutex` and `Runner`, whose `create` is a
 	 * spawn), re-entrant `Mutex` included.
 	 */
-	private function orderFindings(sources: Array<String>): Array<Violation> {
+	public static function orderFindings(sources: Array<String>): Array<Violation> {
 		return
 			violations(
 				'{"rules":{"thread-safety":{"sinks":["Mutex.acquire"],"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"],'
@@ -1509,7 +1509,7 @@ class ThreadSafetyCheckTest extends Test {
 	 * `Fs.download` holds `_batch` (through a wrapper) and calls `save`. `body` is `save`'s body, `start` the body of
 	 * `main`, which has made an `Fs` as `fs`.
 	 */
-	private static function storeFixture(body: String, start: String): Array<String> {
+	public static function storeFixture(body: String, start: String): Array<String> {
 		return [
 			'class Db { final _batch:Mutex = new Mutex(); public function new() {}'
 				+ ' public function batchLock():Void { _batch.acquire(); } public function batchUnlock():Void { _batch.release(); }'
@@ -1523,7 +1523,7 @@ class ThreadSafetyCheckTest extends Test {
 		];
 	}
 
-	private function violations(config: String, sources: Array<String>): Array<Violation> {
+	public static function violations(config: String, sources: Array<String>): Array<Violation> {
 		final dir: String = CliFixture.writeDir('threadsafety', [{ name: 'apqlint.json', source: config }]);
 		final files: Array<{ file: String, source: String }> = [
 			for (i in 0...sources.length) { file: '$dir/F$i.hx', source: sources[i] }

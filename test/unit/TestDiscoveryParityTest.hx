@@ -381,6 +381,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.SwallowedExceptionCheckTest',
 		'unit.check.TailMergeCheckTest',
 		'unit.check.ThreadSafetyCheckTest',
+		'unit.check.ThreadSafetyConditionsTest',
 		'unit.check.TrivialGetterCheckTest',
 		'unit.check.TrivialGetterIsVarTest',
 		'unit.check.TrivialGetterShapeCollapseTest',
@@ -2058,6 +2059,45 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyCheckTest#testShadowedTypeParameterKeepsTheFieldsBound :: control :: M-GRAPH-BOUND-DECL-SCOPE',
 			'unit.check.ThreadSafetyCheckTest#testTwoTakesHeldAtOneThrowAreOneFinding :: control :: M-TS-THROW-PER-TAKE',
 			'unit.check.ThreadSafetyCheckTest#testWhatAQuietRootRegistersRunsLoud :: control :: M-TS-QUIET-INTO-CALLBACK',
+			'unit.check.ThreadSafetyConditionsTest#testABareNeverInvokesNameMatchesAnUnresolvedCall :: control :: '
+				+ 'M-TS-NEVER-INVOKES-BY-NAME',
+			'unit.check.ThreadSafetyConditionsTest#testABoolLiteralArgumentDecidesTheCalleesBranch :: control :: '
+				+ 'M-TS-ARG-UNBOUND,M-TS-STATES-UNCONDITIONED',
+			'unit.check.ThreadSafetyConditionsTest#testAHandlerHandedToANeverInvokesTargetRunsNowhereFromThere :: control :: '
+				+ 'M-TS-NEVER-INVOKES-BY-TARGET',
+			'unit.check.ThreadSafetyConditionsTest#testAHoldABoolArgumentRulesOutHoldsNothingInOrder :: control :: '
+				+ 'M-TS-ORDER-HOLD-UNCONDITIONED',
+			'unit.check.ThreadSafetyConditionsTest#testAHoldAcrossACallBlockingOnlyOnAnotherThreadIsQuiet :: control :: '
+				+ 'M-TS-TAINT-UNCONDITIONED',
+			'unit.check.ThreadSafetyConditionsTest#testAMainThreadCheckPropertyIsReadThroughItsGetter :: control :: '
+				+ 'M-TS-MAIN-CHECK-NO-GETTER',
+			'unit.check.ThreadSafetyConditionsTest#testANullTestOfALocalTheCheckChoseIsTheChecksAnswer :: control :: '
+				+ 'M-TS-NULL-LOCAL-UNREAD',
+			'unit.check.ThreadSafetyConditionsTest#testAParameterHandedOnCarriesItsValue :: control :: '
+				+ 'M-TS-ARG-PARAM-UNREAD,M-TS-STATES-UNBOUND',
+			'unit.check.ThreadSafetyConditionsTest#testAStoredValueAnUnresolvedCallMayRunKeepsTheAssignersContext :: control :: '
+				+ 'M-TS-STORE-SEALED-BLIND',
+			'unit.check.ThreadSafetyConditionsTest#testAStoredValueInvokedOnTheMainThreadIsReachedThroughTheInvoker :: control :: '
+				+ 'M-TS-STORE-UNMIRRORED',
+			'unit.check.ThreadSafetyConditionsTest#testATakeABoolArgumentRulesOutOrdersNothing :: control :: M-TS-ORDER-UNCONDITIONED',
+			'unit.check.ThreadSafetyConditionsTest#testAValueStoredInADynamicMemberRunsWhereTheMemberRuns :: control :: M-TS-STORE-INERT',
+			'unit.check.ThreadSafetyConditionsTest#testAWrittenParameterIsNotTracked :: control :: M-TS-PARAM-WRITE-IGNORED',
+			'unit.check.ThreadSafetyConditionsTest#testAnArgumentHaxeMaySkipAnOptionalParameterForBindsNothing :: control :: '
+				+ 'M-TS-SKIP-UNCHECKED',
+			'unit.check.ThreadSafetyConditionsTest#testAnOmittedArgumentTakesItsBoolDefault :: control :: M-TS-DEFAULT-UNREAD',
+			'unit.check.ThreadSafetyConditionsTest#testAnOmittedOptionalParameterIsNull :: control :: M-TS-NULL-PARAM-UNREAD',
+			'unit.check.ThreadSafetyConditionsTest#testCodeAfterAnEarlyExitOnTheCheckRunsOnTheOtherThreads :: control :: '
+				+ 'M-TS-EARLY-EXIT-UNREAD',
+			'unit.check.ThreadSafetyConditionsTest#testTheOffMainBranchOfAMainThreadCheckIsNoMainStall :: control :: '
+				+ 'M-TS-MAIN-CHECK-IGNORED',
+			'unit.check.ThreadSafetyConditionsTest#testUnderAClosedWorldAConstructorStaysARoot :: control :: M-TS-SEAL-CTOR',
+			'unit.check.ThreadSafetyConditionsTest#testUnderAClosedWorldAHoldNoThreadRunsIsQuiet :: control :: M-TS-DEAD-HOLDS-KEPT',
+			'unit.check.ThreadSafetyConditionsTest#testUnderAClosedWorldAMethodAnUnresolvedCallMayNameStaysARoot :: control :: '
+				+ 'M-TS-SEAL-UNRESOLVED',
+			'unit.check.ThreadSafetyConditionsTest#testUnderAClosedWorldAnOverrideStaysARoot :: control :: M-TS-SEAL-OVERRIDE',
+			'unit.check.ThreadSafetyConditionsTest#testUnderAClosedWorldAnUncalledMethodRunsNowhere :: control :: M-TS-CLOSED-WORLD-UNREAD',
+			'unit.check.ThreadSafetyConditionsTest#testUnderAClosedWorldAnUnindexedInterfacesMemberStaysARoot :: control :: '
+				+ 'M-TS-SEAL-SUPERTYPE',
 			'unit.check.TrivialGetterCheckTest#testBasicBlockBodyFlagged :: control :: M-SUBOVERRIDE-TRUE',
 			'unit.check.TrivialGetterShapeCollapseTest#testForeignHierarchyBackingNameStaysAccountedFor :: control :: '
 				+ 'M-SUPERDECLARES-FALSE',
@@ -5060,6 +5100,32 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-THROW-TRY-UNCAUGHT',
 			'M-TS-THROW-PER-TAKE',
 			'M-TS-THROW-HELPER-HOLDS-UNREAD',
+			'M-TS-STORE-INERT',
+			'M-TS-STORE-UNMIRRORED',
+			'M-TS-STORE-SEALED-BLIND',
+			'M-TS-NEVER-INVOKES-BY-TARGET',
+			'M-TS-NEVER-INVOKES-BY-NAME',
+			'M-TS-MAIN-CHECK-IGNORED',
+			'M-TS-MAIN-CHECK-NO-GETTER',
+			'M-TS-NULL-LOCAL-UNREAD',
+			'M-TS-EARLY-EXIT-UNREAD',
+			'M-TS-ARG-UNBOUND',
+			'M-TS-DEFAULT-UNREAD',
+			'M-TS-ARG-PARAM-UNREAD',
+			'M-TS-NULL-PARAM-UNREAD',
+			'M-TS-SKIP-UNCHECKED',
+			'M-TS-PARAM-WRITE-IGNORED',
+			'M-TS-STATES-UNCONDITIONED',
+			'M-TS-STATES-UNBOUND',
+			'M-TS-ORDER-UNCONDITIONED',
+			'M-TS-ORDER-HOLD-UNCONDITIONED',
+			'M-TS-TAINT-UNCONDITIONED',
+			'M-TS-CLOSED-WORLD-UNREAD',
+			'M-TS-SEAL-CTOR',
+			'M-TS-SEAL-OVERRIDE',
+			'M-TS-SEAL-SUPERTYPE',
+			'M-TS-SEAL-UNRESOLVED',
+			'M-TS-DEAD-HOLDS-KEPT',
 			'M-GRAPH-CLASS-BOUND',
 			'M-GRAPH-FINAL-CLASS-BOUND',
 			'M-GRAPH-FN-BOUND',

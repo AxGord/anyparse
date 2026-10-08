@@ -94,6 +94,18 @@ typedef CallEdge = {
 	 * say, at the types this call instantiated it at. Null on every other edge.
 	 */
 	@:optional var inlined: Null<Bool>;
+
+	/**
+	 * For a `Ref` edge whose site is the right-hand side of an assignment to a `dynamic` method (`w.onDone = handler`), that
+	 * member's node: the value runs wherever the member is invoked, never at the assignment. Null on every other edge.
+	 */
+	@:optional var storedInto: Null<String>;
+
+	/**
+	 * For a `Ref` edge whose value is an argument of a call, the member name the call is written with (`removeEventListener`
+	 * in `x.removeEventListener(t, handler)`), set whether or not the graph resolves the call. Null on every other edge.
+	 */
+	@:optional var viaMember: Null<String>;
 }
 
 /**
@@ -966,7 +978,7 @@ final class CallGraph {
 
 	private function addEdge(
 		from: String, to: String, kind: EdgeKind, via: Null<String>, file: String, span: Null<Span>, ?dispatchType: String,
-		?receiverField: String, ?typed: String, ?inlined: Bool
+		?receiverField: String, ?typed: String, ?inlined: Bool, ?storedInto: String, ?viaMember: String
 	): Void {
 		final edge: CallEdge = {
 			from: from,
@@ -980,9 +992,20 @@ final class CallGraph {
 		};
 		if (typed != null) edge.typed = typed;
 		if (inlined == true) edge.inlined = true;
+		if (storedInto != null) edge.storedInto = storedInto;
+		if (viaMember != null) edge.viaMember = viaMember;
 		// a faceted function's syntax still records every edge it names, which the facts only add to — unless they are the
 		// truth: then its edge at a site they type is dropped (`CallGraphFacts.holdsBack`)
 		if (facts?.holdsBack(edge) != true) indexEdge(edge);
+	}
+
+	/**
+	 * Adds an edge a consumer derived from what the graph already holds (`thread-safety`'s calls of a value stored into a
+	 * `dynamic` method, at the member's own call sites): it is indexed as any other, and only the consumer's own graph
+	 * carries it.
+	 */
+	public inline function deriveEdge(edge: CallEdge): Void {
+		indexEdge(edge);
 	}
 
 	/** Record `edge` in the edge list and the per-node indexes. */
@@ -1614,13 +1637,25 @@ final class CallGraph {
 			return methodRef(argRaw, currentType)?.id;
 		}
 
-		/** A `Ref` edge to the method `ref` names, plus one to each override an instance reference may dispatch to. */
-		function refEdges(from: String, ref: MethodRef, via: Null<String>, span: Null<Span>): Void {
-			addEdge(from, ref.id, Ref, via, file, span, ref.dispatch);
+		/**
+		 * A `Ref` edge to the method `ref` names, plus one to each override an instance reference may dispatch to; each
+		 * marked with the `dynamic` member `storedInto` when the value is assigned to one.
+		 */
+		function refEdges(
+			from: String, ref: MethodRef, via: Null<String>, span: Null<Span>, ?storedInto: String, ?viaMember: String
+		): Void {
+			addEdge(from, ref.id, Ref, via, file, span, ref.dispatch, null, null, null, storedInto, viaMember);
 			final dispatch: Null<String> = ref.dispatch;
 			final name: Null<String> = nodes[ref.id]?.name;
 			if (dispatch != null && name != null) for (v in virtualTargets(dispatch, name))
-				addEdge(from, v, Ref, via, file, span, dispatch);
+				addEdge(from, v, Ref, via, file, span, dispatch, null, null, null, storedInto, viaMember);
+		}
+
+		/** The `dynamic` method the assignment target `target` names, when the graph holds its body; null for any other target. */
+		function dynamicSlot(target: QueryNode, currentType: Null<String>): Null<String> {
+			final ref: Null<MethodRef> = methodRef(target, currentType);
+			final slot: Null<FnNode> = ref == null ? null : nodes[ref.id];
+			return slot != null && slot.isDynamic && !slot.isExternal ? slot.id : null;
 		}
 
 		function resolveBareCallee(name: String, span: Null<Span>, currentType: Null<String>): Null<String> {
@@ -1732,9 +1767,11 @@ final class CallGraph {
 
 		/**
 		 * The function values `args` (from `first` on) hand the callee
-		 * `calleeId`: lambdas, method values, `.bind` results, both ternary arms.
+		 * `calleeId`, written `calleeName`: lambdas, method values, `.bind` results, both ternary arms.
 		 */
-		function scanArgs(args: Array<QueryNode>, first: Int, calleeId: Null<String>, currentType: Null<String>): Void {
+		function scanArgs(
+			args: Array<QueryNode>, first: Int, calleeId: Null<String>, calleeName: Null<String>, currentType: Null<String>
+		): Void {
 			final from: String = frameId(currentType);
 			function refArg(argRaw: QueryNode): Void {
 				final arg: QueryNode = unwrap(argRaw);
@@ -1748,7 +1785,7 @@ final class CallGraph {
 				final argSpan: Null<Span> = arg.span;
 				if (argSpan != null && lambdaKinds.contains(arg.kind)) {
 					final lambdaId: Null<String> = entry.fnBySpanFrom[argSpan.from];
-					if (lambdaId != null) addEdge(from, lambdaId, Ref, calleeId, file, argSpan);
+					if (lambdaId != null) addEdge(from, lambdaId, Ref, calleeId, file, argSpan, null, null, null, null, null, calleeName);
 					return;
 				}
 				if (arg.kind == callKind && arg.children.length > 0) {
@@ -1756,7 +1793,7 @@ final class CallGraph {
 					if (isAccessKind(inner.kind) && inner.name == 'bind' && inner.children.length > 0) {
 						final ref: Null<MethodRef> = methodRef(inner.children[0], currentType);
 						if (ref != null && argSpan != null) {
-							refEdges(from, ref, calleeId, argSpan);
+							refEdges(from, ref, calleeId, argSpan, null, calleeName);
 							consumedBindCalls.push(argSpan.from);
 						}
 					}
@@ -1765,7 +1802,7 @@ final class CallGraph {
 				if (arg.kind != identKind && !isAccessKind(arg.kind)) return;
 				final ref: Null<MethodRef> = methodRef(arg, currentType);
 				if (ref != null)
-					refEdges(from, ref, calleeId, argSpan);
+					refEdges(from, ref, calleeId, argSpan, null, calleeName);
 				else
 					untypedMethodRead(arg, currentType);
 			}
@@ -1874,7 +1911,7 @@ final class CallGraph {
 				target: calleeId,
 				receiver: isAccessKind(callee.kind) && callee.children.length > 0 ? callee.children[0] : null
 			};
-			scanArgs(call.children, 1, calleeId, currentType);
+			scanArgs(call.children, 1, calleeId, calleeName, currentType);
 		}
 
 		/** A constructor run on `typeName` at `span`: the `New` edge to the constructor it names, and the wiring to its initializers. */
@@ -1902,7 +1939,7 @@ final class CallGraph {
 			final span: Null<Span> = node.span;
 			if (span != null) sites[span.from] = { target: target, receiver: null };
 			// constructor args can carry callbacks / lambdas too
-			scanArgs(node.children, 0, target, currentType);
+			scanArgs(node.children, 0, target, null, currentType);
 		}
 
 		/** The written type of parameter `index` of the call target `site` resolved to, as its receiver sees it. */
@@ -2104,9 +2141,13 @@ final class CallGraph {
 			}
 			final span: Null<Span> = node.span;
 			if (span == null) return;
+			// a value assigned to a `dynamic` method is stored there, and runs only where the member is invoked
+			inline function storedInto(): Null<String> {
+				return parent != null && parent.kind == assignKind && childIndex == 1 ? dynamicSlot(parent.children[0], currentType) : null;
+			}
 			if (lambdaKinds.contains(node.kind)) {
 				final lambdaId: Null<String> = entry.fnBySpanFrom[span.from];
-				if (lambdaId != null) addEdge(frameId(currentType), lambdaId, Ref, null, file, span);
+				if (lambdaId != null) addEdge(frameId(currentType), lambdaId, Ref, null, file, span, null, null, null, null, storedInto());
 				return;
 			}
 			final rawName: Null<String> = node.name;
@@ -2117,7 +2158,7 @@ final class CallGraph {
 				return;
 			final ref: Null<MethodRef> = methodRef(node, currentType);
 			if (ref != null)
-				refEdges(frameId(currentType), ref, null, span);
+				refEdges(frameId(currentType), ref, null, span, storedInto());
 			else
 				untypedMethodRead(node, currentType);
 		}

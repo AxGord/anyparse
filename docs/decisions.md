@@ -1431,3 +1431,25 @@ decided the question; it may not become a record of runs.
 - `thread-safety` reporting a lock order taken backwards by two background steps → one worker may run both, and the
   config cannot say which threads are distinct; only a main-thread step against a background one is reported —
   branch `fix/lock-order`
+- `thread-safety` carrying the referencing function's context along every `Ref` edge → TM's `watcher.onBadNames =
+  badNamesHandler` rooted the rename chain on the main thread in `StandardFileSystem.new`, and `dispose`'s
+  `removeEventListener(…, handler)` called the handler; a value assigned to a `dynamic` member runs where the member
+  runs (`ThreadSafety.deriveStoredCalls`), the assignment carrying nothing while no unresolved call or access may name
+  the member, and a call a `neverInvokes` entry names runs nothing it is handed — branch `fix/ts-precision`
+- `thread-safety`'s contexts and lock-held taint read per FUNCTION → a branch a main-thread check sends to a worker
+  (`APIEntity2.get`), or a parameter rules out (`if (!batch) _batchMutex.acquire()` reached with `batch = true`, `if
+  (fileSystem != null)` reached with it left out), ran on every thread its function did; contexts, lock order and taint
+  are walked over STATES (function, valuation of its tracked parameters, thread), a call cut where `EdgeConditions` says
+  so — branch `fix/ts-precision`
+- seeding every function the walk did not reach as an assumed-main root → once conditions cut calls, a function whose
+  only callers the walk reached and cut (`blocked()` in `isMain ? async() : blocked()`) came back as a main root with a
+  one-hop chain; only a function no walked function calls or references is seeded — branch `fix/ts-precision`
+- binding arguments to parameters by position whenever a call passes fewer of them → Haxe skips an optional parameter
+  whose type the argument does not unify with (`work(true)` against `(?n:Int, sleep:Bool = false)` binds `sleep`); each
+  optional parameter an argument reaches must be written with the argument's own type — branch `fix/ts-precision`
+- reading a parameter's type off the branch-aware projection's children → the projection holds no type annotation
+  node; the plugin's `declaredTypeSources`, keyed by the declaration's binding offset, does — branch `fix/ts-precision`
+- dropping every caller-less function as a dead root → a library's public API has no caller in its own run, and its
+  findings would vanish; only under `closedWorld`, for a member nothing outside the run can invoke (no override, no
+  metadata, no constructor or `main`, no unresolved call of its name, no supertype that may declare it) — branch
+  `fix/ts-precision`
