@@ -133,6 +133,18 @@ class ThreadSafetyLongLocksTest extends Test {
 		final report: LongLockReport = explain([source]);
 		Assert.same([], longLock(report, 'A._m')?.aside, 'the leak was the only reason');
 		Assert.same(['spans-blocking'], [for (r in longLock(report, 'A._n')?.aside ?? []) r.kind]);
+		// `_n` is long only because its hold takes `_m`: with `_m`'s leak set aside `_n` is short, so `_m`'s hold of `_n` blocks nothing
+		final circular: String = 'class B { final _m:Mutex = new Mutex(); final _n:Mutex = new Mutex(); public function new() {}'
+			+ ' function keep(x:Bool):Void { if (x) _m.acquire(); }'
+			+ ' function a():Void { _n.acquire(); _m.acquire(); _m.release(); _n.release(); }'
+			+ ' function b():Void { _m.acquire(); _n.acquire(); _n.release(); _m.release(); } }';
+		final loop: LongLockReport = explain([circular]);
+		Assert.same(
+			['spans-blocking'],
+			[for (r in longLock(loop, 'B._m')?.reasons ?? []) if (r.via == 'B._n') r.kind],
+			'held across a long lock'
+		);
+		Assert.same([], longLock(loop, 'B._m')?.aside, 'the lock it waits for is long only by this one');
 		#else
 		Assert.pass('non-sys target');
 		#end
