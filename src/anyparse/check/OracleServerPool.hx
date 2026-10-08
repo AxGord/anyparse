@@ -25,7 +25,10 @@ typedef PoolServer = {
  * Started once the facts compiles are in (`LintCommand`), when the cores those took are free again: each server's first
  * compile runs in the background then, so the first typecheck through it is already warm. They live as the jobs of a
  * background process batch (`PendingRuns`), so the batch's driver ends them when the run ends (`stop`) and when `apq`
- * itself is gone. Never kept past the run: `CompilerServer` is the persistent kind, for report mode.
+ * itself is gone — and each is TETHERED to that driver (`SpawnJob.tethered`), so a kill that takes the driver down with
+ * `apq` (a SIGKILL of their whole process group: a timed-out or stopped agent's shell) takes the servers too, where it
+ * used to leave each one holding a whole compiled project with no owner. Never kept past the run: `CompilerServer` is
+ * the persistent kind, for report mode.
  *
  * ## A warm answer is believed only when it is GREEN
  *
@@ -89,7 +92,7 @@ final class OracleServerPool {
 			if (!ports.contains(port)) ports.push(port);
 		}
 		_batch = HaxeSpawn.startAll([
-			for (i in 0...usable.length) { args: ['--wait', '${ports[i]}'], cwd: usable[i].dir }
+			for (i in 0...usable.length) { args: ['--wait', '${ports[i]}'], cwd: usable[i].dir, tethered: true }
 		], BUFFER, usable.length);
 		final snapshot: Map<String, Null<String>> = texts();
 		final warm: Array<SpawnJob> = [];

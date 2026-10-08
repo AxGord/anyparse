@@ -93,6 +93,39 @@ class ExplicitLocalTypeOracleE2ETest extends Test {
 	}
 
 	/**
+	 * The display server dies with the batch driver that started it, however the driver went — a SIGTERM or SIGKILL of
+	 * `apq` used to leave it behind as a direct child no handler was left to reap, holding a whole compiled project.
+	 */
+	@:pin('control')
+	@:killer('M-DISPLAY-SERVER-UNTETHERED')
+	@:access(anyparse.check.CompilerDisplayOracle)
+	@:access(anyparse.check.PendingRuns)
+	public function testTheDisplayServerDiesWithItsDriver(): Void {
+		#if nodejs
+		if (!oracleWorks()) {
+			Assert.pass('haxe unavailable — skipped');
+			return;
+		}
+		final dir: String = CliFixture.writeDir('eltoracle', [{ name: 'Main.hx', source: SRC }, { name: 'check.hxml', source: HXML }]);
+		final display: Null<CompilerDisplayOracle> = CompilerDisplayOracle.start(new HaxeQueryPlugin().typeSyntax, 'check.hxml', dir);
+		if (display == null) {
+			Assert.pass('display server unavailable — skipped');
+			CliFixture.removeDir(dir);
+			return;
+		}
+		final servers: Array<Int> = ProcessProbe.pidsRunning('haxe --wait ${display._port}');
+		final driver: Null<Int> = display._server._pid;
+		Assert.isTrue(servers.length > 0, 'the server runs');
+		Assert.notNull(driver, 'the server has a driver');
+		if (driver != null) Assert.equals(0, ProcessProbe.outlivingKilledDriver(driver, servers).length, 'the server outlived its driver');
+		display.stop();
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('not a node target');
+		#end
+	}
+
+	/**
 	 * The oracle-assisted path leaves a quoted local alone, driven through the real `apq lint --fix`
 	 * with a real oracle and display server.
 	 *

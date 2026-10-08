@@ -18,6 +18,9 @@ final class PendingRunsTest extends Test {
 	/** Megabytes a job may print — far more than an `echo` needs. */
 	private static inline final BUFFER: Int = 1024 * 1024;
 
+	/** Seconds a job is given to start and write its pid. */
+	private static inline final START_S: Float = 10;
+
 	/** The batch ran while the caller slept, so the answer is waiting when asked for, with the job's output. */
 	@:pin('control')
 	@:killer('M-PENDING-RUNS-IN-FOREGROUND')
@@ -82,7 +85,53 @@ final class PendingRunsTest extends Test {
 		#end
 	}
 
+	/**
+	 * A TETHERED job dies with the driver that started it, however the driver went: a SIGKILL of the driver alone is what
+	 * a SIGKILL of the process group `apq` and its driver share does to the driver, and leaves it no handler to run. The
+	 * job's own process group is not the driver's, so nothing but the tether can end it.
+	 */
+	@:pin('control')
+	@:killer('M-TETHER-IGNORES-EOF')
+	@:access(anyparse.check.PendingRuns)
+	public function testATetheredJobDiesWithItsDriver(): Void {
+		#if nodejs
+		final dir: String = CliFixture.writeDir('pendingtether', []);
+		final pending: PendingRuns = HaxeSpawn.startAll([
+			{
+				args: [],
+				cwd: dir,
+				shell: 'echo $$$$ > job.pid && exec sleep 30',
+				tethered: true
+			}
+		], BUFFER, 1);
+		final job: Null<Int> = awaitPid('$dir/job.pid');
+		final driver: Null<Int> = pending._pid;
+		Assert.notNull(job, 'the job started');
+		Assert.notNull(driver, 'the batch has a driver');
+		if (job != null && driver != null) {
+			Assert.isTrue(ProcessProbe.alive(job), 'the job runs while its driver does');
+			Assert.equals(0, ProcessProbe.outlivingKilledDriver(driver, [job]).length, 'the job outlived its driver');
+		}
+		pending.cancel();
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('no asynchronous process API on this target');
+		#end
+	}
+
 	#if nodejs
+	/** The pid written to `path`, waiting for the file to appear and fill; null when it never does. */
+	private static function awaitPid(path: String): Null<Int> {
+		final until: Float = Sys.time() + START_S;
+		while (Sys.time() < until) {
+			final text: String = sys.FileSystem.exists(path) ? StringTools.trim(sys.io.File.getContent(path)) : '';
+			final pid: Null<Int> = Std.parseInt(text);
+			if (pid != null) return pid;
+			Sys.sleep(0.05);
+		}
+		return null;
+	}
+
 	/** The batch directories under the scratch root now. */
 	private static function pendingDirs(): Array<String> {
 		return [

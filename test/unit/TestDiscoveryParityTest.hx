@@ -430,6 +430,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.cli.ApqLitCommentsCliTest',
 		'unit.cli.ApqLitDirectivesCliTest',
 		'unit.cli.ApqMetaCliTest',
+		'unit.cli.ApqOracleServerLifetimeCliTest',
 		'unit.cli.ApqPrefilterCliTest',
 		'unit.cli.ApqProbeCliTest',
 		'unit.cli.ApqProgressTtyCliTest',
@@ -1229,6 +1230,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.EffectiveRulesTest#testTheChainStopsAtTheProjectRoot :: control :: M-CHAIN-UNBOUNDED',
 			'unit.check.EffectiveRulesTest#testTheListingOpensWithTheHeaderToolingDetects :: control :: M-EFFECTIVE-RENDER-HEADER',
 			'unit.check.EffectiveRulesTest#testTheRunSkipsWhatTheListingReportsOff :: control :: M-GATE-COLLECT-BYPASS',
+			'unit.check.ExplicitLocalTypeOracleE2ETest#testTheDisplayServerDiesWithItsDriver :: control :: M-DISPLAY-SERVER-UNTETHERED',
 			'unit.check.ExtractRepeatedExpressionTest#testALiteralInteriorDifferenceSplitsTheGroup :: control :: '
 				+ 'M-EXTRACT-REPEAT-RENDER-SPLIT',
 			'unit.check.FactsFixGateE2ETest#testAComputedClassNameTheProjectBoundsLetsTheLoopRewrite :: control :: M-REFLECTIVE-BUILDS,M-REFLECTIVE-REACH,M-REFLECTIVE-WARN,M-ESCAPES-FACTS-UNMATCHED',
@@ -1607,6 +1609,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.OracleRunMemoTest#testASourceTheFingerprintCannotSeeIsAlwaysCompiled :: control :: M-RUNMEMO-TRUSTS-UNSEEN-SOURCES',
 			'unit.check.OracleRunMemoTest#testAVerdictIsReusedForTheSameContentOnly :: control :: M-RUNMEMO-KEY-IGNORES-CONTENT',
 			'unit.check.OracleRunMemoTest#testAWarmRejectionIsCompiledAgainCold :: control :: M-POOL-TRUSTS-WARM-RED',
+			'unit.check.OracleRunMemoTest#testAWarmServerDiesWithItsDriver :: control :: M-POOL-SERVER-UNTETHERED',
 			'unit.check.OracleRunMemoTest#testAWarmServerReadsATreeRewrittenWithinTheSecond :: control :: M-POOL-NO-INVALIDATE',
 			'unit.check.OracleRunMemoTest#testTheCoverageProbeReusesTheBaselineCompile :: control :: M-RUNMEMO-PROBE-RECOMPILES',
 			'unit.check.OracleRunMemoTest#testTheFactsCompileBringsTheBaselineAlong :: control :: M-RUNMEMO-NO-BASELINE-AHEAD',
@@ -1630,6 +1633,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-ORPHAN-ARMS-SHARE-REASON',
 			'unit.check.PendingRunsTest#testABatchRunsWhileTheCallerWorks :: control :: M-PENDING-RUNS-IN-FOREGROUND',
 			'unit.check.PendingRunsTest#testACancelledBatchEndsItsJobs :: control :: M-PENDING-CANCEL-LEAVES-JOBS',
+			'unit.check.PendingRunsTest#testATetheredJobDiesWithItsDriver :: control :: M-TETHER-IGNORES-EOF',
 			'unit.check.PendingRunsTest#testTheBatchFilesArePrivateAndShortLived :: control :: M-PENDING-JOBS-FILE-KEPT',
 			'unit.check.PossibleNullDereferenceTest#testCallReturnPopFlagged :: control :: M-NULLABLE-NO-CHAIN',
 			'unit.check.PossibleNullDereferenceTest#testExistsGuardedEarlyReturnNotFlagged :: control :: M-EXISTS-GUARD-BLIND',
@@ -5637,6 +5641,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-SCRATCH-RTTI-OFF',
 			'M-SCRATCH-CTOR-RECURSES',
 			'M-LOOPBOUND-AHEAD',
+			'M-TETHER-IGNORES-EOF',
+			'M-POOL-SERVER-UNTETHERED',
+			'M-DISPLAY-SERVER-UNTETHERED',
 			'M-REMOVE-PARAM-RAW-SPLICE',
 			'M-ADD-PARAM-RAW-SPLICE',
 			'M-CHANGE-SIG-RAW-SPLICE'
@@ -5856,6 +5863,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-REFL-MEMBER-NAME :: anyparse.check.TypedFactsWalk#reflection',
 			'M-FACTS-REFL-MEMBER-NAME-ANY :: anyparse.check.TypedFactsWalk#reflection',
 			'M-FACTS-REFL-MEMBER-NAME-TABLE :: anyparse.check.TypedFactsWalk#reflection',
+			'M-TETHER-IGNORES-EOF :: anyparse.check.HaxeSpawn#FinalMember:TETHER',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 
