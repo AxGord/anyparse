@@ -2,7 +2,9 @@ package anyparse.macro;
 
 #if macro
 import anyparse.core.ShapeTree.ShapeNode;
+import haxe.macro.Context;
 import haxe.macro.Expr.Metadata;
+import haxe.macro.Expr.MetadataEntry;
 
 using Lambda;
 
@@ -53,6 +55,51 @@ final class MetaInspect {
 				};
 		}
 		return null;
+	}
+
+	/**
+	 * The key a by-name format spells the struct field `fieldName` with: the string of its `@:key('…')` entry, else the
+	 * field's own name. A format key need not be a Haxe identifier — `"function"`, `"$schema"`, `"content-type"` — and the
+	 * parser and the writer must agree on it, so both read it here.
+	 */
+	public static function wireKey(node: ShapeNode, fieldName: String): String {
+		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
+		final entries: Array<MetadataEntry> = meta == null ? [] : meta.filter(e -> e.name == ':key');
+		if (entries.length == 0) return fieldName;
+		final key: Null<String> = entries.length == 1 && entries[0].params.length == 1
+			? switch entries[0].params[0].expr {
+				case EConst(CString(s, _)): s;
+				case _: null;
+			}
+			: null;
+		if (key == null)
+			return Context.fatalError(
+				'@:key on field "$fieldName" takes exactly one string: the key the format spells the field with', entries[0].pos
+			);
+		final unwritable: EReg = ~/["\\\x00-\x1f]/;
+		if (unwritable.match(key))
+			Context.fatalError(
+				'@:key "$key" on field "$fieldName" holds a quote, a backslash or a control character, which a writer would emit unescaped',
+				entries[0].pos
+			);
+		return key;
+	}
+
+	/** Refuses a by-name struct `node` two of whose fields a format would spell with one key (`wireKey`). */
+	public static function checkWireKeys(node: ShapeNode): Void {
+		final seen: Map<String, String> = [];
+		for (child in node.children) {
+			final fieldName: Null<String> = child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
+			if (fieldName == null) continue;
+			final key: String = wireKey(child, fieldName);
+			final other: Null<String> = seen[key];
+			if (other != null)
+				Context.fatalError(
+					'fields "$other" and "$fieldName" are both spelled "$key" in the document',
+					child.annotations.get(AnnotationKeys.BASE_FIELD_POS) ?? Context.currentPos()
+				);
+			seen[key] = fieldName;
+		}
 	}
 
 	/**

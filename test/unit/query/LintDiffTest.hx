@@ -375,8 +375,77 @@ class LintDiffTest extends Test {
 		Assert.equals("string literal 'a\\nb' repeated 3 times", findings[0].message);
 	}
 
-	public function testParseReportRefusesADocumentThatIsNotAnArray(): Void {
-		Assert.raises(LintDiff.parseReport.bind('{"findings": []}'));
+	/** The `--explain-long` envelope is a report: its `findings` are read and its other keys skipped; any other object is refused. */
+	@:pin('control') @:killer('M-LINTDIFF-ENVELOPE-REFUSED')
+	public function testParseReportReadsTheEnvelopeAndRefusesOtherObjects(): Void {
+		Assert.same([], LintDiff.parseReport('{"findings": []}'));
+		final envelope: String = '{"findings": [${record('src/A.hx', 'warning', 'r', 'm')}], "longLocks": {"long": [], "mainShort": []}}';
+		Assert.same(['m'], [for (f in LintDiff.parseReport(envelope)) f.message]);
+		Assert.raises(LintDiff.parseReport.bind('{"hits": []}'));
+		Assert.raises(LintDiff.parseReport.bind('"text"'));
+	}
+
+	/**
+	 * A record carrying `data` keys by its family, function and subject: a chain re-rendered through another path is no
+	 * movement, another subject is — and the same pair without `data` is keyed by its message, so it moves.
+	 */
+	@:pin('control') @:killer('M-LINTDIFF-DATA-IGNORED')
+	public function testDataKeyedFindingsIgnoreTheMessage(): Void {
+		final before: String = reportOf([keyed('warning', 'A', 'A.b', 'S.f', 'reaches S.f: A.b -> S.f')]);
+		Assert.equals(0, diff(before, reportOf([keyed('warning', 'A', 'A.b', 'S.f', 'reaches S.f: R.oot -> A.b -> S.f')]), '').addedTotal);
+		Assert.equals(1, diff(before, reportOf([keyed('warning', 'A', 'A.b', 'S.g', 'reaches S.f: A.b -> S.f')]), '').addedTotal);
+		final plain: String = reportOf([record('src/A.hx', 'warning', 'thread-safety', 'reaches S.f: A.b -> S.f')]);
+		final rerendered: String = reportOf([
+			record('src/A.hx', 'warning', 'thread-safety', 'reaches S.f: R.oot -> A.b -> S.f')
+		]);
+		Assert.equals(1, diff(plain, rerendered, '').addedTotal, 'without data the message is the key');
+	}
+
+	/** Every part of the identity is part of the key — family, member and subject — and so is the severity. */
+	public function testEachIdentityPartAndTheSeverityKeyTheFinding(): Void {
+		final before: String = reportOf([keyed('warning', 'A', 'A.b', 'S.f', 'm')]);
+		Assert.same([1, 1, 1, 1, 0], [
+			for (after in [
+				keyed('warning', 'B', 'A.b', 'S.f', 'm'),
+				keyed('warning', 'A', 'A.c', 'S.f', 'm'),
+				keyed('warning', 'A', 'A.b', 'S.g', 'm'),
+				keyed('info', 'A', 'A.b', 'S.f', 'm'),
+				keyed('warning', 'A', 'A.b', 'S.f', 'another message')
+			]) diff(before, reportOf([after]), '').addedTotal
+		]);
+	}
+
+	/**
+	 * A snapshot written before a rule carried `data` against one written after: the same finding, keyed by its message on
+	 * one side and by its identity on the other, pairs by message — no movement — while a finding whose message changed too
+	 * still moves.
+	 */
+	@:pin('control') @:killer('M-LINTDIFF-NO-PAIRING')
+	public function testAnOldSnapshotPairsByMessage(): Void {
+		final old: String = reportOf([
+			record('src/A.hx', 'warning', 'thread-safety', 'm1'),
+			record('src/A.hx', 'warning', 'thread-safety', 'm2')
+		]);
+		final result: LintDiffResult = diff(old, reportOf([
+			keyed('warning', 'A', 'A.b', 'S.f', 'm1'),
+			keyed('warning', 'A', 'A.c', 'S.f', 'm3')
+		]), '');
+		Assert.same([1, 1], [result.addedTotal, result.removedTotal]);
+		Assert.same(['m3'], [for (e in result.added) e.message]);
+		Assert.same(['m2'], [for (e in result.removed) e.message]);
+	}
+
+	/**
+	 * One identity key carrying several messages — one function reaching a sink by several chains — pairs every one of
+	 * them with the old snapshot's records, not only the first message seen under the key.
+	 */
+	@:pin('control') @:killer('M-LINTDIFF-FIRST-MESSAGE')
+	public function testAnOldSnapshotPairsEveryMessageOfOneKey(): Void {
+		final old: String = reportOf([for (m in ['m1', 'm2', 'm3']) record('src/A.hx', 'warning', 'thread-safety', m)]);
+		final result: LintDiffResult = diff(old, reportOf([for (m in ['m1', 'm2', 'm3']) keyed('warning', 'A', 'A.b', 'S.f', m)]), '');
+		Assert.same([0, 0], [result.addedTotal, result.removedTotal]);
+		final reversed: LintDiffResult = diff(reportOf([for (m in ['m1', 'm2', 'm3']) keyed('warning', 'A', 'A.b', 'S.f', m)]), old, '');
+		Assert.same([0, 0], [reversed.addedTotal, reversed.removedTotal], 'and the other way round');
 	}
 
 	public function testOversizedTypeMemberBumpIsMaskedAway(): Void {
@@ -558,6 +627,12 @@ class LintDiffTest extends Test {
 	/** The `oversized-type` message, spelled as `OversizedType` writes it. */
 	private static function oversized(name: String, over: String): String {
 		return 'type \'$name\' has $over — a decomposition candidate (see hxq clusters)';
+	}
+
+	/** A `thread-safety` record of `severity` in `src/A.hx` carrying the identity `family`/`member`/`subject`. */
+	private static function keyed(severity: String, family: String, member: String, subject: String, message: String): String {
+		return '{"file": "src/A.hx", "severity": "$severity", "rule": "thread-safety", "message": "$message",'
+			+ ' "data": {"family": "$family", "function": "$member", "subject": "$subject", "chain": []}}';
 	}
 
 }

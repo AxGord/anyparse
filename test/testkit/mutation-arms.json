@@ -302,8 +302,8 @@
 			"name": "M-LINT-BASELINE-NO-SUBTRACTION",
 			"type": "anyparse.query.LintBaseline",
 			"method": "added",
-			"find": "\t\t\tif (left == null || left <= 0) return true;\n\t\t\tremaining[key] = left - 1;\n\t\t\treturn false;\n",
-			"replace": "\t\t\treturn true;\n",
+			"find": "for (i in 0...all.length) LintDiff.spendOwn(pool, keyOf(all[i], root, identities), messages[i])",
+			"replace": "for (i in 0...all.length) false",
 			"note": "the multiset subtraction is gone, so every standing finding comes back as new and `--baseline` degrades to the whole-file dump it exists to replace - silently, since a delta that is too LARGE still reads as a delta"
 		},
 		{
@@ -11156,7 +11156,7 @@
 			"name": "M-TS-CROSSING-IGNORED",
 			"type": "anyparse.check.LockSites",
 			"method": "collectCrossing",
-			"find": "if (!worked) crossing.push(lock);",
+			"find": "if (!worked) crossing.push({ lock: lock, edge: give.edge });",
 			"replace": "",
 			"note": "a lock released by a function that never took it reads as short, so its main-thread take goes unreported"
 		},
@@ -11188,8 +11188,8 @@
 			"name": "M-TS-BLIND-CALL-SHORT",
 			"type": "anyparse.check.LockSites",
 			"method": "hold",
-			"find": "blind: traced == null || traced.held.exists(",
-			"replace": "blind: traced == null || false && traced.held.exists(",
+			"find": "blind: traced == null || unresolved.length > 0,",
+			"replace": "blind: traced == null,",
 			"note": "a hold across a call the graph resolves to nothing reads as short, so a lock held across a stored callback never stalls its main-thread taker"
 		},
 		{
@@ -11210,8 +11210,8 @@
 		},
 		{
 			"name": "M-TS-WRAPPER-LEAKS",
-			"type": "anyparse.check.ThreadSafety",
-			"method": "solveLongLocks",
+			"type": "anyparse.check.LongLockExplain",
+			"method": "leaks",
 			"find": "a.leaks && !a.delegated",
 			"replace": "a.leaks",
 			"note": "a wrapper's own take leaking out of its body makes its lock long, so every main-thread take of it is reported again"
@@ -11387,9 +11387,9 @@
 		{
 			"name": "M-TS-ORDER-ANCHOR-AT-TAKE",
 			"type": "anyparse.check.LockOrder",
-			"method": "describe",
-			"find": "anchor = via;",
-			"replace": "",
+			"method": "climb",
+			"find": "anchor: up.anchor ?? arrival.via",
+			"replace": "anchor: up.anchor",
 			"note": "an inversion is anchored at the take of the second lock, deep in a callee, not where the hold of the first calls out"
 		},
 		{
@@ -11404,8 +11404,8 @@
 			"name": "M-TS-ORDER-BG-AS-MAIN",
 			"type": "anyparse.check.LockOrder",
 			"method": "crossThread",
-			"find": "if (x.ctx & main != 0 && y.ctx & bg != 0)",
-			"replace": "if (x.ctx & (main | bg) != 0 && y.ctx & bg != 0)",
+			"find": "final m: Null<RankedStep> = least(side.mains, main, rank);",
+			"replace": "final m: Null<RankedStep> = least(side.mains, main | bg, rank);",
 			"note": "two background steps count as two threads, though one worker may run both"
 		},
 		{
@@ -11532,8 +11532,8 @@
 			"name": "M-TS-THROW-HELPER-HOLDS-UNREAD",
 			"type": "anyparse.check.ThreadSafety",
 			"method": "run",
-			"find": "reportThrowHeld(acquires.concat(helperHolds), throws, violations);",
-			"replace": "reportThrowHeld(acquires, throws, violations);",
+			"find": "reportThrowHeld(graph, acquires.concat(helperHolds), throws, violations);",
+			"replace": "reportThrowHeld(graph, acquires, throws, violations);",
 			"note": "the holds a multi-lock helper opens in its caller never escape, so a throw under them is quiet"
 		},
 		{
@@ -16641,6 +16641,348 @@
 			"find": "CanonicalEdit.editKeepingCanonical(source, edits, plugin, optsJson)",
 			"replace": "anyparse.query.CanonicalEdit.EditResult.Ok(CanonicalEdit.applyEdits(source, edits))",
 			"note": "change-sig keeps the old breaks of a filled list whose slots it reordered, so a canonical file comes back drifted"
+		},
+		{
+			"name": "M-JSON-KEY-PARSE",
+			"type": "anyparse.macro.StructSeqLowering",
+			"method": "lowerStructByName",
+			"find": "final key: String = MetaInspect.wireKey(child, fieldName);",
+			"replace": "final key: String = fieldName;",
+			"note": "a ByName parser matches a field by its Haxe name, so a key declared with `@:key` (a keyword, a hyphenated key) is never read"
+		},
+		{
+			"name": "M-JSON-KEY-WRITE",
+			"type": "anyparse.macro.WriterLowering",
+			"method": "lowerStructByName",
+			"find": "final keyPrefix: String = '\"${child.wireKey(fieldName)}\"$keyValueSep';",
+			"replace": "final keyPrefix: String = '\"$fieldName\"$keyValueSep';",
+			"note": "a ByName writer spells a field by its Haxe name, so what it writes its own parser cannot read back"
+		},
+		{
+			"name": "M-TS-DATA-CHAIN-CAPPED",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "reportMainSinkCalls",
+			"find": "chain: path.concat(sorted)",
+			"replace": "chain: ThreadStates.chainText(path, CHAIN_CAP).split(' -> ').concat(sorted)",
+			"note": "a main-thread finding's data carries the chain the text caps, so the hops past the cap are lost to every tool"
+		},
+		{
+			"name": "M-TS-DATA-MEMBER-LAMBDA",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "memberOf",
+			"force": "id",
+			"note": "a finding in a lambda keys by the lambda's own id, which moves with every lambda written before it"
+		},
+		{
+			"name": "M-TS-ASIDE-KEEPS-SEEDS",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "solveLongLocks",
+			"find": "a.lock != aside && ",
+			"replace": "",
+			"note": "the counterfactual keeps the lock's own leak and blind reasons, so a lock long by a leak never shows what else holds it long"
+		},
+		{
+			"name": "M-BASELINE-DATA-IGNORED",
+			"type": "anyparse.query.LintBaseline",
+			"method": "keyOf",
+			"find": "final data: Null<FindingData> = v.data;",
+			"replace": "final data: Null<FindingData> = null;",
+			"note": "a live finding keys by its message even when it carries an identity, so a re-rendered chain is reported as new"
+		},
+		{
+			"name": "M-LINTDIFF-DATA-IGNORED",
+			"type": "anyparse.query.LintDiff",
+			"method": "tally",
+			"find": "final data: Null<LintFindingDataJson> = f.data;",
+			"replace": "final data: Null<LintFindingDataJson> = null;",
+			"note": "a recorded finding keys by its message even when it carries an identity, so a re-rendered chain is a delta"
+		},
+		{
+			"name": "M-LINTFORMAT-NO-DATA",
+			"type": "anyparse.query.format.LintFormat",
+			"method": "recordOf",
+			"find": "final data: Null<FindingData> = v.data;",
+			"replace": "final data: Null<FindingData> = null;",
+			"note": "the json record drops the finding's identity, so nothing downstream can key by it"
+		},
+		{
+			"name": "M-SCORE-DUPLICATES-AS-KEYS",
+			"type": "anyparse.query.LintScore",
+			"method": "keysOf",
+			"find": "final at: Null<Int> = keyIndex[key];",
+			"replace": "final at: Null<Int> = null;",
+			"note": "every finding is its own key, so a rule reporting one stall at three sites scores three hits"
+		},
+		{
+			"name": "M-SCORE-PRECISION-COUNTS-UNKNOWN",
+			"type": "anyparse.query.LintScore",
+			"method": "bucket",
+			"find": "for (v in VERDICTS) if (v != UNKNOWN) known +=",
+			"replace": "for (v in VERDICTS) if (true) known +=",
+			"note": "precision counts an `unknown` verdict as wrong, so labelling less lowers it"
+		},
+		{
+			"name": "M-SCORE-RECALL-REAL-LONG-ONLY",
+			"type": "anyparse.query.LintScore",
+			"method": "isRecall",
+			"force": "e.verdict == 'real-long'",
+			"note": "an entry marked `recall: true` can be lost without failing the score"
+		},
+		{
+			"name": "M-SCORE-VERDICT-UNCHECKED",
+			"type": "anyparse.query.LintScore",
+			"method": "entryErrors",
+			"find": "if (!VERDICTS.contains(e.verdict)) errors.push(",
+			"replace": "if (false) errors.push(",
+			"note": "a misspelt verdict is accepted and silently scored as nothing"
+		},
+		{
+			"name": "M-SCORE-LOST-EXIT",
+			"type": "anyparse.query.cli.command.LintScoreCommand",
+			"method": "runLintScore",
+			"find": "return result.lost.length == 0 ? EXIT_OK : EXIT_RUNTIME;",
+			"replace": "return EXIT_OK;",
+			"note": "a lost real stall no longer fails the scoring run"
+		},
+		{
+			"name": "M-LINT-EXPLAIN-UNSET",
+			"type": "anyparse.query.cli.command.LintExplainLong",
+			"method": "explainer",
+			"find": "check.explainLongLocks(true);",
+			"replace": "",
+			"note": "`--explain-long` never asks the check to explain, so the run prints no evidence"
+		},
+		{
+			"name": "M-JSON-KEY-UNCHECKED",
+			"type": "anyparse.macro.MetaInspect",
+			"method": "wireKey",
+			"find": "if (key == null)",
+			"replace": "if (false)",
+			"note": "a `@:key` that is not one string literal is ignored, and the field silently keeps its Haxe name as its key"
+		},
+		{
+			"name": "M-JSON-KEY-UNWRITABLE",
+			"type": "anyparse.macro.MetaInspect",
+			"method": "wireKey",
+			"find": "if (unwritable.match(key))",
+			"replace": "if (false)",
+			"note": "a key holding a quote or a backslash builds, and the writer emits a document no JSON parser reads"
+		},
+		{
+			"name": "M-JSON-KEY-DUPLICATES",
+			"type": "anyparse.macro.MetaInspect",
+			"method": "checkWireKeys",
+			"find": "if (other != null)",
+			"replace": "if (false)",
+			"note": "two fields spelled with one key build, and the parser fills only the first"
+		},
+		{
+			"name": "M-SCORE-SEVERITY-EXACT",
+			"type": "anyparse.query.LintScore",
+			"method": "atOrAbove",
+			"find": "return minimum == null || rank <= LintDiff.SEVERITY_ORDER.indexOf(minimum);",
+			"replace": "return minimum == null || severity == minimum;",
+			"note": "`--severity warning` scores warnings only, so every error the rule reports drops out of the score"
+		},
+		{
+			"name": "M-SCORE-NOTHING-SCORED",
+			"type": "anyparse.query.LintScore",
+			"method": "score",
+			"find": "if (scored.length == 0)",
+			"replace": "if (false)",
+			"note": "a misspelt rule or an empty report scores as every recall entry lost, a regression instead of a broken input"
+		},
+		{
+			"name": "M-SCORE-DUPOF-DANGLING",
+			"type": "anyparse.query.LintScore",
+			"method": "dupOfErrors",
+			"find": "if (e.verdict == DUP_OF && dupOf != '' && named == 0)",
+			"replace": "if (false)",
+			"note": "a dup-of naming no entry of the truth file is accepted, so the duplicate points nowhere"
+		},
+		{
+			"name": "M-SCORE-RECALL-FALSE-REAL-LONG",
+			"type": "anyparse.query.LintScore",
+			"method": "entryErrors",
+			"find": "if (e.verdict == REAL_LONG && e.recall == false)",
+			"replace": "if (false)",
+			"note": "a real-long entry marked recall: false is accepted though it is recalled anyway"
+		},
+		{
+			"name": "M-LINTDIFF-ENVELOPE-REFUSED",
+			"type": "anyparse.query.LintDiff",
+			"method": "parseReport",
+			"find": "final envelope: Bool = trimmed.startsWith('{');",
+			"replace": "final envelope: Bool = false;",
+			"note": "an --explain-long report cannot be diffed or used as a baseline"
+		},
+		{
+			"name": "M-LINTDIFF-NO-PAIRING",
+			"type": "anyparse.query.LintDiff",
+			"method": "compare",
+			"find": "for (key in after.order) spendAcrossSides(old, fresh, key);",
+			"replace": "",
+			"note": "the first diff after a rule starts carrying data reports every one of its findings as removed and added again"
+		},
+		{
+			"name": "M-BASELINE-NO-MESSAGE-FALLBACK",
+			"type": "anyparse.query.LintBaseline",
+			"method": "added",
+			"find": "spent[i] = LintDiff.spendAcross(",
+			"replace": "spent[i] = false && LintDiff.spendAcross(",
+			"note": "the first --baseline run after a rule starts carrying data reports every one of its findings as new"
+		},
+		{
+			"name": "M-TS-DATA-SUBJECT-UNSORTED",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "sortedIds",
+			"find": "sorted.sort(Reflect.compare);",
+			"replace": "",
+			"note": "a subject naming several ids keeps the graph's order, so one finding re-keys when the graph or the walk meets them another way"
+		},
+		{
+			"name": "M-TS-ORDER-MAIN-FIRST-SEEN",
+			"type": "anyparse.check.LockOrder",
+			"method": "least",
+			"find": "if (known == null || precedes(s, known)) out = s;",
+			"replace": "if (known == null) out = s;",
+			"note": "an inversion two main-thread holders make names whichever the walk met first, so swapping two calls re-keys it"
+		},
+		{
+			"name": "M-TS-DATA-RAISER-CHAIN",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "reportThrowHeld",
+			"find": "chain: [holder].concat(raiser == null ? [] : throws.chain(raiser))",
+			"replace": "chain: [holder]",
+			"note": "a throw raised by a callee keys with no chain, so the evidence of which call raises is lost to every tool"
+		},
+		{
+			"name": "M-TS-DATA-INIT-LAMBDA",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "memberOf",
+			"find": "final container: Null<String> = graph.inEdges(cursor).find(e -> e.kind == Contains)?.from;",
+			"replace": "final container: Null<String> = null;",
+			"note": "a field initializer's lambda keys as the bare type, apart from the initializer's own calls"
+		},
+		{
+			"name": "M-TS-SPANS-FIRST-ONLY",
+			"type": "anyparse.check.LongLockExplain",
+			"method": "spansBlocking",
+			"find": "if (trail != null) out.push({",
+			"replace": "if (trail != null && out.length == 0) out.push({",
+			"note": "only the first blocking call a lock's holds span is listed, so fixing it looks like it makes the lock short"
+		},
+		{
+			"name": "M-TS-VIA-DROPPED",
+			"type": "anyparse.check.LockTaint",
+			"method": "trailOf",
+			"find": "_sites.lockOf(end) ?? end.to",
+			"replace": "null",
+			"note": "a hold long because it takes another long lock does not name that lock"
+		},
+		{
+			"name": "M-TS-MAINSHORT-LOUD-ONLY",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "explained",
+			"find": "if (ctx & (CTX_MAIN | CTX_QUIET) != 0)",
+			"replace": "if (ctx & CTX_MAIN != 0)",
+			"note": "a short lock a quiet root takes on the main thread is missing from the main-thread takes"
+		},
+		{
+			"name": "M-LINT-EXPLAIN-NO-ENVELOPE",
+			"type": "anyparse.query.cli.command.LintExplainLong",
+			"method": "outcome",
+			"find": "if (!on) return null;",
+			"replace": "if (!on || explainer == null) return null;",
+			"note": "--explain-long --format json prints the bare array when thread-safety is not in the run, so a consumer cannot tell asked from not asked"
+		},
+		{
+			"name": "M-TS-ORDER-ONE-ARRIVAL",
+			"type": "anyparse.check.LockOrder",
+			"method": "report",
+			"find": "for (arrival in state.arrivals) known.arrivals.push(arrival);",
+			"replace": "",
+			"note": "a state keeps only its first way in, so which holder an inversion names hangs on the walk's order"
+		},
+		{
+			"name": "M-TS-ORDER-CLIMB-FIRST",
+			"type": "anyparse.check.LockOrder",
+			"method": "climb",
+			"find": "if (current == null || climbPrecedes(found, current)) best = found;",
+			"replace": "if (current == null) best = found;",
+			"note": "of several ways into a state the first decides the holder, so renaming a function outside the key moves it"
+		},
+		{
+			"name": "M-TS-REASONS-DEDUP-BY-SITE",
+			"type": "anyparse.check.LongLockExplain",
+			"method": "distinct",
+			"find": " && o.call == r.call",
+			"replace": "",
+			"note": "a virtual call keeps one target's reason, so reasons and aside disagree on the same site"
+		},
+		{
+			"name": "M-TS-CIRCULAR-COUNTED",
+			"type": "anyparse.check.LongLockExplain",
+			"method": "report",
+			"find": "for (reason in spans) if (reason.via != lock) add(lock, reason);",
+			"replace": "for (reason in spans) add(lock, reason);",
+			"note": "a hold waiting for its own lock — long only because it is long — counts as a reason"
+		},
+		{
+			"name": "M-LINTDIFF-FIRST-MESSAGE",
+			"type": "anyparse.query.LintDiff",
+			"method": "spendAcrossSides",
+			"find": "row.identity ? (fresh.messages[key] ?? []).copy()",
+			"replace": "row.identity ? [for (_ in 0...left) row.message]",
+			"note": "an identity key pairs across data by its first message only, so one function reaching a sink by several chains moves"
+		},
+		{
+			"name": "M-BASELINE-ONE-PASS",
+			"type": "anyparse.query.LintBaseline",
+			"method": "added",
+			"find": "for (i in 0...all.length) LintDiff.spendOwn(pool, keyOf(all[i], root, identities), messages[i])",
+			"replace": "for (i in 0...all.length) LintDiff.spendOwn(pool, keyOf(all[i], root, identities), messages[i]) || LintDiff.spendAcross(pool, LintDiff.normalizePath(all[i].file, root), all[i].rule, all[i].severity.label(), messages[i], all[i].data != null)",
+			"note": "a finding spends across data before a later one spends its own key, so the run's order decides what is new"
+		},
+		{
+			"name": "M-SCORE-DUPOF-AMBIGUOUS",
+			"type": "anyparse.query.LintScore",
+			"method": "dupOfErrors",
+			"find": "if (e.verdict == DUP_OF && named > 1)",
+			"replace": "if (false)",
+			"note": "a dupOf spelling two entries is accepted, pointing at either"
+		},
+		{
+			"name": "M-SCORE-UNIQUE-JOINED",
+			"type": "anyparse.query.LintScore",
+			"method": "validate",
+			"find": "final exact: Array<String> = [for (e in truth.entries) keyOf(e.family, e.member, e.subject)];",
+			"replace": "final exact: Array<String> = keys;",
+			"note": "two keys whose |-joined spellings collide are refused as one key labelled twice"
+		},
+		{
+			"name": "M-SCORE-SEVERITY-UNKNOWN",
+			"type": "anyparse.query.LintScore",
+			"method": "atOrAbove",
+			"find": "if (rank < 0) throw",
+			"replace": "if (false) throw",
+			"note": "a finding of a severity outside the order is scored as if at the top"
+		},
+		{
+			"name": "M-SCORE-JSON-EXCLUDED",
+			"type": "anyparse.query.LintScore",
+			"method": "json",
+			"find": "excluded: result.excluded,",
+			"replace": "",
+			"note": "the json score drops how many findings the severity left out"
+		},
+		{
+			"name": "M-JSON-KEY-DUP-AT-FIELD",
+			"type": "anyparse.macro.MetaInspect",
+			"method": "checkWireKeys",
+			"find": "child.annotations.get(AnnotationKeys.BASE_FIELD_POS) ?? Context.currentPos()",
+			"replace": "Context.currentPos()",
+			"note": "two fields sharing a key are reported at the build macro, not at the field"
 		}
 	]
 }

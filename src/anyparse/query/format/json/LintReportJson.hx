@@ -12,7 +12,8 @@ package anyparse.query.format.json;
  *
  * Here the wrap happens on the way IN: `LintDiff.parseReport` checks that the
  * snapshot text really starts with `[`, then brackets it with `{"findings":`
- * and `}` before handing it to the parser. That is also why `findings` is
+ * and `}` before handing it to the parser — unless it is already the envelope
+ * `lint --explain-long --format json` prints, which is parsed as it stands. That is also why `findings` is
  * required rather than `@:optional` — the adapter supplies the key on every
  * call, so an absent one means the wrap itself broke, not that the file was
  * missing data.

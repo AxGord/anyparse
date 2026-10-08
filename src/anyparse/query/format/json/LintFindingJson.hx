@@ -2,7 +2,8 @@ package anyparse.query.format.json;
 
 /**
  * Declarative schema for ONE record of an `apq lint --format json` report —
- * the four keys `anyparse.query.LintDiff` compares snapshots on. Parsed by
+ * the four keys `anyparse.query.LintDiff` compares snapshots on, and the
+ * `data` identity it compares instead when a record carries one. Parsed by
  * the macro-generated `LintReportJsonParser` (ByName struct lowering), which
  * roots on the `LintReportJson` envelope holding an array of these.
  *
@@ -30,4 +31,7 @@ typedef LintFindingJson = {
 	var rule: String;
 
 	var message: String;
+
+	/** The finding's structured identity (`Check.FindingData`), present only on a rule that attaches one. */
+	@:optional var data: Null<LintFindingDataJson>;
 };

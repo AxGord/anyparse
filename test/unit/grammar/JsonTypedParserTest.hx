@@ -1,5 +1,6 @@
 package unit.grammar;
 
+import anyparse.grammar.json.JsonFormat;
 import anyparse.runtime.ParseError;
 import unit.grammar.JsonTypedFixtures.TestConfig;
 import unit.grammar.JsonTypedFixtures.TestConfigParser;
@@ -97,6 +98,30 @@ class JsonTypedParserTest extends Test {
 		final cfg: TestConfig = TestConfigParser.parse(src);
 		Assert.equals(-5, cfg.count);
 		Assert.equals(-0.25, cfg.ratio);
+	}
+
+	/** A field's `@:key` is the key the parser matches, and the error for a missing one names that key. */
+	@:pin('control') @:killer('M-JSON-KEY-PARSE')
+	public function testDeclaredKeyIsTheParsedKey(): Void {
+		final keyed: TestKeyed = TestKeyedParser.parse('{"function":"A.b","content-type":"text/plain"}');
+		Assert.equals('A.b', keyed.member);
+		Assert.equals('text/plain', keyed.contentType);
+		final error: Null<ParseError> = try {
+			TestKeyedParser.parse('{"member":"A.b"}');
+			null;
+		} catch (exception: ParseError) exception;
+		Assert.notNull(error, 'the field\'s own name is not its key');
+		Assert.stringContains('"function"', error?.message ?? '');
+	}
+
+	/** The writer spells a field with its `@:key`, so what it writes the parser reads back. */
+	@:pin('control') @:killer('M-JSON-KEY-WRITE')
+	public function testDeclaredKeyIsTheWrittenKey(): Void {
+		final written: String = TestKeyedWriter.write({ member: 'A.b', contentType: 'x' }, JsonFormat.instance.defaultWriteOptions);
+		Assert.stringContains('"function":', written);
+		Assert.stringContains('"content-type":', written);
+		final read: TestKeyed = TestKeyedParser.parse(written);
+		Assert.same(['A.b', 'x'], [read.member, read.contentType]);
 	}
 
 }

@@ -38,6 +38,7 @@ final class AnnotationKeys {
 	public static final BASE_META: String = 'base.meta';
 	public static final BASE_OPTIONAL: String = 'base.optional';
 	public static final BASE_FIELD_NAME: String = 'base.fieldName';
+	public static final BASE_FIELD_POS: String = 'base.fieldPos';
 	public static final BASE_CTOR: String = 'base.ctor';
 	public static final BASE_REF: String = 'base.ref';
 

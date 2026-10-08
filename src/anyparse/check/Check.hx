@@ -32,10 +32,29 @@ typedef Violation = {
 	 * field exists to end.
 	 *
 	 * Only `apq lint --fix`'s per-rule unfixed ledger reads it. The text report and the json /
-	 * checkstyle records are built field by field from the other five, so a rule that adopts
+	 * checkstyle records are built field by field from the other fields, so a rule that adopts
 	 * this one changes no reported byte.
 	 */
 	@:optional var declineReason: Null<String>;
+
+	/**
+	 * The finding's identity as structured data, or null: what a message spells in prose, in fields a tool can key on
+	 * without parsing it. Only the json record carries it (as `data`); the text report and checkstyle are unchanged.
+	 */
+	@:optional var data: Null<FindingData>;
+}
+
+/**
+ * A finding's identity as data — the key a scorer or a snapshot diff matches findings by, which a re-rendered message
+ * (a chain found by another path, a capped list) must not move. `family` is the rule's own kind of finding, `member`
+ * the declaration the finding sits in (`Type.member`, the json key `function`), `subject` what it is about (a sink, a
+ * lock, a pair of locks), and `chain` the evidence behind it, untruncated, in the rule's own ids.
+ */
+typedef FindingData = {
+	var family: String;
+	var member: String;
+	var subject: String;
+	var chain: Array<String>;
 }
 
 /**

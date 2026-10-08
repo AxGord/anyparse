@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.LockSites.LockAcquire;
 import anyparse.check.LockSites.LockPair;
 import anyparse.query.CallGraph;
+import haxe.Exception;
 
 using Lambda;
 
@@ -45,6 +46,13 @@ typedef ChainLists = {
 private typedef TaintStep = {
 	final edge: CallEdge;
 	final next: Null<String>;
+}
+
+/** How a call held under a lock blocks: the functions it runs to the blocking call, that call, and the lock it waits for. */
+typedef BlockingTrail = {
+	final path: Array<String>;
+	final end: CallEdge;
+	final via: Null<String>;
 }
 
 /**
@@ -100,6 +108,11 @@ final class LockTaint {
 		_clean.clear();
 	}
 
+	/** A taint over the same graph, lists, sites, conditions and threads as this one, judging locks long by `long`, with nothing kept. */
+	public function withLong(long: Array<String>): LockTaint {
+		return new LockTaint(_graph, _sinkIds, listsOf, _sites, long, _conditions, _threads);
+	}
+
 	/**
 	 * The lock `a` takes when its kind is `reentrantLocks`-listed, a member names it and the take provably works the
 	 * holder's own object (`LockSites.selfTake`); null otherwise.
@@ -128,15 +141,24 @@ final class LockTaint {
 	 * that runs both the take and `edge`.
 	 */
 	public function blockingPath(a: LockAcquire, edge: CallEdge, held: Null<String>): Null<Array<String>> {
+		return blockingTrail(a, edge, held)?.path;
+	}
+
+	/**
+	 * `blockingPath`, with the call at its end that blocks (`end`) and, when that call blocks by taking a lock, the lock
+	 * (`via`: the lock object, the pair's take member for a lock no member names, or `held` for a take of it on another
+	 * object). The one walk both answers come from.
+	 */
+	public function blockingTrail(a: LockAcquire, edge: CallEdge, held: Null<String>): Null<BlockingTrail> {
 		for (state in _threads.statesOf(a.edge.from)) for (bit in THREAD_BITS) if (
 			state.ctx & bit != 0 && _conditions.carried(a.edge, state.valuation, bit) != 0
 		) {
 			final live: Int = _conditions.carried(edge, state.valuation, bit);
 			if (live == 0) continue;
-			if (blocks(edge, held) || retakesElsewhere(edge, held)) return [edge.to];
+			if (blocks(edge, held) || retakesElsewhere(edge, held)) return trailOf([edge.to], edge, held);
 			if (takesLock(edge)) continue;
 			final key: Null<String> = reach(edge.to, _conditions.bind(edge, state.valuation), live, held);
-			if (key != null) return pathFrom(edge.to, key);
+			if (key != null) return trailFrom(edge.to, key, held);
 		}
 		return null;
 	}
@@ -230,16 +252,31 @@ final class LockTaint {
 	 * `id` and the functions the kept steps from the state `key` call, up to the blocking call's target: the steps one walk
 	 * keeps form a tree toward the call it found, and a later walk only adds states no earlier one saw.
 	 */
-	private function pathFrom(id: String, key: String): Array<String> {
+	private function trailFrom(id: String, key: String, held: Null<String>): BlockingTrail {
 		final parts: Array<String> = [id];
 		var cursor: Null<String> = key;
+		var end: Null<CallEdge> = null;
 		while (cursor != null) {
 			final step: Null<TaintStep> = _reaching[cursor];
 			if (step == null) break;
 			parts.push(step.edge.to);
+			end = step.edge;
 			cursor = step.next;
 		}
-		return parts;
+		final last: Null<CallEdge> = end;
+		if (last == null) throw new Exception('thread-safety: a reaching state "$key" keeps no step toward its blocking call');
+		return trailOf(parts, last, held);
+	}
+
+	/** The trail `path` ending in the blocking call `end`, under a hold of `held`, with the lock `end` waits for (`blockingTrail`). */
+	private function trailOf(path: Array<String>, end: CallEdge, held: Null<String>): BlockingTrail {
+		final via: Null<String> = if (retakesElsewhere(end, held))
+			held
+		else if (takesLock(end))
+			_sites.lockOf(end) ?? end.to
+		else
+			null;
+		return { path: path, end: end, via: via };
 	}
 
 

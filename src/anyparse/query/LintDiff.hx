@@ -1,15 +1,18 @@
 package anyparse.query;
 
+import anyparse.query.format.json.LintFindingDataJson;
 import anyparse.query.format.json.LintFindingJson;
 import anyparse.query.format.json.LintReportJson;
 import anyparse.query.format.json.LintReportJsonParser;
+import anyparse.runtime.ParseError;
 import haxe.Exception;
 
 using StringTools;
 
 /**
  * `apq lint-diff` — compare two `apq lint --format json --all` snapshots as MULTISETS of
- * `(file, rule, severity, message)` keys. The blast-radius gate every slice ends with.
+ * `(file, rule, severity, message)` keys — `(file, rule, severity, family, function, subject)` for a record carrying a
+ * rule's structured identity (`keyFor`). The blast-radius gate every slice ends with.
  *
  * Four fields rather than a text diff, because the cheaper answers lie. A byte diff reports
  * half the tree: line and column move under any edit above them, so a one-line insertion
@@ -57,10 +60,14 @@ final class LintDiff {
 	 * than being dropped, so a new severity cannot silently vanish from the
 	 * breakdown while still counting in the totals.
 	 */
-	private static final SEVERITY_ORDER: Array<String> = ['error', 'warning', 'info'];
+	public static final SEVERITY_ORDER: Array<String> = ['error', 'warning', 'info'];
+
+	/** Opens the message slot of an identity key (`keyFor`): a character no rule writes into its prose. */
+	private static inline final IDENTITY_MARK: String = '\x01';
 
 	/**
-	 * Read an `apq lint --format json` snapshot into its records.
+	 * Read an `apq lint --format json` snapshot into its records — the bare array, or the `{"findings":
+	 * […], "longLocks": …}` envelope `--explain-long` prints, whose other keys are skipped.
 	 *
 	 * The report is a bare top-level JSON array and the ByName lowering
 	 * cannot root on one, so the text is wrapped into the `LintReportJson`
@@ -77,10 +84,19 @@ final class LintDiff {
 	 */
 	public static function parseReport(raw: String): Array<LintFindingJson> {
 		final trimmed: String = raw.trim();
-		if (!trimmed.startsWith('[')) {
-			throw new Exception('not an `apq lint --format json` report — expected a top-level JSON array');
+		// the envelope a `--explain-long` run prints holds the same records under `findings`, beside keys this skips
+		final envelope: Bool = trimmed.startsWith('{');
+		if (!envelope && !trimmed.startsWith('[')) {
+			throw new Exception('not an `apq lint --format json` report — expected a top-level JSON array or a {"findings": …} envelope');
 		}
-		final report: LintReportJson = LintReportJsonParser.parse('{"findings":$trimmed}');
+		final report: LintReportJson = try LintReportJsonParser.parse(envelope
+			? trimmed
+			: '{"findings":$trimmed}') catch (exception: ParseError) {
+			if (!envelope) throw exception;
+			throw new Exception(
+				'not an `apq lint --format json` report — an object, but no {"findings": […]} envelope: ${exception.message}'
+			);
+		};
 		return report.findings;
 	}
 
@@ -97,10 +113,17 @@ final class LintDiff {
 		final counts: Map<String, Int> = [];
 		final rows: Map<String, LintDiffRow> = [];
 		final order: Array<String> = [];
+		final messages: Map<String, Array<String>> = [];
 		for (f in findings) {
 			final file: String = normalizePath(f.file, root);
 			final message: String = normalizeMessage(f.rule, f.message, root, identities);
-			final key: String = keyOf(file, f.rule, f.severity, message);
+			final data: Null<LintFindingDataJson> = f.data;
+			final key: String = keyFor(file, f.rule, f.severity, message, data);
+			if (data != null) {
+				final known: Array<String> = messages[key] ?? [];
+				known.push(message);
+				messages[key] = known;
+			}
 			final seen: Null<Int> = counts[key];
 			if (seen == null) {
 				order.push(key);
@@ -108,7 +131,8 @@ final class LintDiff {
 					file: file,
 					rule: f.rule,
 					message: message,
-					severity: f.severity
+					severity: f.severity,
+					identity: data != null
 				};
 				counts[key] = 1;
 			} else
@@ -118,7 +142,8 @@ final class LintDiff {
 			total: findings.length,
 			order: order,
 			counts: counts,
-			rows: rows
+			rows: rows,
+			messages: messages
 		};
 	}
 
@@ -142,8 +167,13 @@ final class LintDiff {
 	 * breakdown, so neither question needs a reader's arithmetic.
 	 */
 	public static function compare(before: LintDiffTally, after: LintDiffTally): LintDiffResult {
-		final added: Array<LintDiffEntry> = surplus(after, before);
-		final removed: Array<LintDiffEntry> = surplus(before, after);
+		final old: LintDiffPool = pool(before);
+		final fresh: LintDiffPool = pool(after);
+		for (key in after.order) spendBoth(old, fresh, key);
+		// what is left of a finding keyed by identity on one side may be keyed by its message on the other
+		for (key in after.order) spendAcrossSides(old, fresh, key);
+		final added: Array<LintDiffEntry> = leftovers(fresh);
+		final removed: Array<LintDiffEntry> = leftovers(old);
 		var addedTotal: Int = 0;
 		var removedTotal: Int = 0;
 		for (e in added) addedTotal += e.count;
@@ -261,6 +291,66 @@ final class LintDiff {
 	 */
 	public static function keyOf(file: String, rule: String, severity: String, message: String): String {
 		return '${file.length}:$file${rule.length}:$rule${severity.length}:$severity$message';
+	}
+
+	/**
+	 * The multiset key of one finding, the ONE spelling `tally` and `LintBaseline.keyOf` share: `keyOf` over the
+	 * (normalized) message, or — for a finding carrying a structured identity (`Check.FindingData`) — over its family,
+	 * member and subject, length-prefixed behind a control-character marker no lint message starts with. The message is
+	 * left out there, and with it the chain it quotes: a chain re-rendered through another path is the same finding. A
+	 * snapshot written before its rule carried the identity keys that finding by message; `compare` pairs the two
+	 * spellings (`spendAcross`).
+	 */
+	public static function keyFor(file: String, rule: String, severity: String, message: String, identity: Null<FindingIdentity>): String {
+		return identity == null
+			? keyOf(file, rule, severity, message)
+			: keyOf(
+				file, rule, severity,
+				'$IDENTITY_MARK${identity.family.length}:${identity.family}${identity.member.length}:${identity.member}'
+				+ '${identity.subject.length}:${identity.subject}'
+			);
+	}
+
+	/** A pool over `t`: what `compare` and `LintBaseline.added` spend occurrences from, `t` itself left untouched. */
+	public static function pool(t: LintDiffTally): LintDiffPool {
+		return { tally: t, counts: t.counts.copy(), messages: [for (key => ms in t.messages) key => ms.copy()] };
+	}
+
+	/**
+	 * Spends one occurrence of `key` from `pool`, carrying `message` — for an identity key, an occurrence that carried that
+	 * message when there is one; false when none of `key` is left.
+	 */
+	public static function spendOwn(pool: LintDiffPool, key: String, message: String): Bool {
+		final left: Int = pool.counts[key] ?? 0;
+		if (left <= 0) return false;
+		pool.counts[key] = left - 1;
+		final carried: Null<Array<String>> = pool.messages[key];
+		if (carried != null && !carried.remove(message)) carried.shift();
+		return true;
+	}
+
+	/**
+	 * Spends one occurrence of the finding `(file, rule, severity, message)` keyed the OTHER way in `pool`: a finding
+	 * carrying an identity (`identity`) from a message-keyed occurrence of that message — a snapshot written before its
+	 * rule carried `data` — and one without from an identity-keyed occurrence that carried that message. The one pairing
+	 * both `compare` and `LintBaseline.added` make; false when there is nothing to pair with.
+	 */
+	public static function spendAcross(
+		pool: LintDiffPool, file: String, rule: String, severity: String, message: String, identity: Bool
+	): Bool {
+		if (identity) {
+			final key: String = keyOf(file, rule, severity, message);
+			return pool.tally.rows[key]?.identity == false && spendOwn(pool, key, message);
+		}
+		for (key in pool.tally.order) {
+			final row: LintDiffRow = rowOf(pool.tally, key);
+			if (
+				row.identity && row.file == file && row.rule == rule && row.severity == severity && (pool.counts[key] ?? 0) > 0
+				&& (pool.messages[key] ?? []).contains(message)
+			)
+				return spendOwn(pool, key, message);
+		}
+		return false;
 	}
 
 	/** A total delta written so its DIRECTION is unmistakable: `+57`, `-3`, `+0`. */
@@ -418,20 +508,48 @@ final class LintDiff {
 		return row;
 	}
 
-	/** Keys occurring more often in `a` than in `b`, in `a`'s document order. */
-	private static function surplus(a: LintDiffTally, b: LintDiffTally): Array<LintDiffEntry> {
+	/**
+	 * Spends from both pools every occurrence of `key` they share — for an identity key the occurrences carrying one
+	 * message first, so what is left carries the messages only one side has.
+	 */
+	private static function spendBoth(old: LintDiffPool, fresh: LintDiffPool, key: String): Void {
+		inline function both(): Bool {
+			return (old.counts[key] ?? 0) > 0 && (fresh.counts[key] ?? 0) > 0;
+		}
+		for (m in (fresh.messages[key] ?? []).copy()) if (both() && (old.messages[key] ?? []).contains(m)) {
+			spendOwn(old, key, m);
+			spendOwn(fresh, key, m);
+		}
+		final message: String = rowOf(fresh.tally, key).message;
+		while (both()) {
+			spendOwn(old, key, message);
+			spendOwn(fresh, key, message);
+		}
+	}
+
+	/** Pairs what is left of `key` in `fresh` with an occurrence of it keyed the other way in `old` (`spendAcross`). */
+	private static function spendAcrossSides(old: LintDiffPool, fresh: LintDiffPool, key: String): Void {
+		final row: LintDiffRow = rowOf(fresh.tally, key);
+		final left: Int = fresh.counts[key] ?? 0;
+		final carried: Array<String> = row.identity ? (fresh.messages[key] ?? []).copy() : [for (_ in 0...left) row.message];
+		for (m in carried) if ((fresh.counts[key] ?? 0) > 0 && spendAcross(old, row.file, row.rule, row.severity, m, row.identity))
+			spendOwn(fresh, key, m);
+	}
+
+	/** What `pool` holds unspent, one entry per key in its tally's order, named by a message one of its occurrences carried. */
+	private static function leftovers(pool: LintDiffPool): Array<LintDiffEntry> {
 		final out: Array<LintDiffEntry> = [];
-		for (key in a.order) {
-			final mine: Int = a.counts[key] ?? 0;
-			final theirs: Int = b.counts[key] ?? 0;
-			if (mine <= theirs) continue;
-			final row: LintDiffRow = rowOf(a, key);
+		for (key in pool.tally.order) {
+			final count: Int = pool.counts[key] ?? 0;
+			if (count <= 0) continue;
+			final row: LintDiffRow = rowOf(pool.tally, key);
 			out.push({
 				file: row.file,
 				rule: row.rule,
-				message: row.message,
+				message: (pool.messages[key] ?? [])[0] ?? row.message,
 				severity: row.severity,
-				count: mine - theirs
+				identity: row.identity,
+				count: count
 			});
 		}
 		return out;
@@ -511,6 +629,16 @@ typedef LintDiffRow = {
 	var message: String;
 
 	var severity: String;
+
+	/** Whether the key is the finding's structured identity rather than its message (`keyFor`). */
+	var identity: Bool;
+};
+
+/** The parts of a finding's structured identity a key is made of (`keyFor`): every field but the chain. */
+typedef FindingIdentity = {
+	var family: String;
+	var member: String;
+	var subject: String;
 };
 
 /** One report folded into a multiset of normalized keys. */
@@ -527,6 +655,19 @@ typedef LintDiffTally = {
 
 	/** Key -> the first record seen under it. */
 	var rows: Map<String, LintDiffRow>;
+
+	/** Identity key -> the normalized message of each record under it, one per record: what pairs it across `data`. */
+	var messages: Map<String, Array<String>>;
+};
+
+/**
+ * The occurrences of `tally` not yet spent (`LintDiff.pool`): the counts, and per identity key the messages its unspent
+ * occurrences carried.
+ */
+typedef LintDiffPool = {
+	final tally: LintDiffTally;
+	final counts: Map<String, Int>;
+	final messages: Map<String, Array<String>>;
 };
 
 /** A key that occurs more often on one side, with the surplus count. */
@@ -539,6 +680,9 @@ typedef LintDiffEntry = {
 	var message: String;
 
 	var severity: String;
+
+	/** Whether the key is the finding's structured identity rather than its message (`keyFor`). */
+	var identity: Bool;
 
 	/** How many occurrences the other side is missing. */
 	var count: Int;

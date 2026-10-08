@@ -158,7 +158,11 @@ class ShapeBuilder {
 					final py: Int = Context.getPosInfos(y.pos).min;
 					return px - py;
 				});
-				for (f in sorted) node.children.push(shapeField(f.name, f.type, f.meta.get()));
+				for (f in sorted) {
+					final child: ShapeNode = shapeField(f.name, f.type, f.meta.get());
+					child.annotations[AnnotationKeys.BASE_FIELD_POS] = f.pos;
+					node.children.push(child);
+				}
 				node;
 			case _:
 				Context.fatalError('ShapeBuilder: typedef ${td.name} does not resolve to an anonymous structure', Context.currentPos());

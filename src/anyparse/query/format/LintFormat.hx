@@ -1,6 +1,10 @@
 package anyparse.query.format;
 
+import anyparse.check.Check.FindingData;
 import anyparse.check.Check.Violation;
+import anyparse.check.LongLockExplain.LongLockKind;
+import anyparse.check.LongLockExplain.LongLockReason;
+import anyparse.check.LongLockExplain.LongLockReport;
 import anyparse.check.Severity;
 import anyparse.runtime.LineIndex;
 import anyparse.runtime.Span;
@@ -26,6 +30,9 @@ final class LintFormat {
 
 	/** Files named, one per line, when a summary covers ONE rule — the by-file breakdown a `--rule` run asks for. */
 	public static inline final SUMMARY_FILES_SINGLE_RULE: Int = 10;
+
+	/** The column an `--explain-long` reason's kind is padded to: the longest kind, `spans-blocking`. */
+	private static inline final LONG_REASON_WIDTH: Int = 14;
 
 	/**
 	 * `violations` condensed for a reader who cannot use them one per line: one line per rule —
@@ -74,16 +81,23 @@ final class LintFormat {
 
 	/**
 	 * Render `violations` as a pretty-printed JSON array of
-	 * `{file, line, col, endLine, endCol, severity, rule, message}` records: `line`/`col`
+	 * `{file, line, col, endLine, endCol, severity, rule, message[, data]}` records: `line`/`col`
 	 * is the span's start and `endLine`/`endCol` its EXCLUSIVE end, both 1-based as every
 	 * other `Span` this CLI prints, so a consumer can ask whether two findings' regions
 	 * nest. A violation with no span resolves all four to null. `addressOf` (when given)
 	 * adds an `address` field — the finding's canonical edit-stable selector
 	 * (`Address.describe`), directly usable as a mutation-op `--select` argument.
 	 * Escaping is delegated to `Json.stringify`.
+	 *
+	 * Given `explain` (`lint --explain-long`), the document is the `{"findings": […], "longLocks": {…} | null}` envelope
+	 * instead — null when the rule ran and explained nothing. `longLocks.long` lists each long lock as `{lock, reasons,
+	 * circular, aside}` (`circular`: how many re-takes of the lock itself were left out), a reason as `{kind, file, line,
+	 * col, function}` plus `call`, `chain`, `via` for `spans-blocking` and `unresolved` (`[{name, line, col}]`) for
+	 * `blind`, `aside` null or such reasons; `longLocks.mainShort` lists each
+	 * main-thread take of a lock that is not long as `{lock, file, line, col, function, quiet}`.
 	 */
 	public static function json(
-		violations: Array<Violation>, sourceOf: Map<String, String>, ?addressOf: Violation -> Null<String>
+		violations: Array<Violation>, sourceOf: Map<String, String>, ?addressOf: Violation -> Null<String>, ?explain: ExplainedLocks
 	): String {
 		final indexes: Map<String, LineIndex> = [];
 		final records: Array<Dynamic> = [
@@ -96,7 +110,28 @@ final class LintFormat {
 				record;
 			}
 		];
-		return Json.stringify(records, null, '  ');
+		if (explain == null) return Json.stringify(records, null, '  ');
+		final longLocks: Null<LongLockReport> = explain.report;
+		if (longLocks == null) return Json.stringify({ findings: records, longLocks: null }, null, '  ');
+		final explained: Dynamic = {
+			long: [
+				for (l in longLocks.long)
+					{
+						lock: l.lock,
+						reasons: [for (r in l.reasons) reasonRecord(r, sourceOf, indexes)],
+						circular: l.circular,
+						aside: l.aside == null ? null : [for (r in l.aside) reasonRecord(r, sourceOf, indexes)]
+					}
+			],
+			mainShort: [
+				for (t in longLocks.mainShort) {
+					final record: Dynamic = siteRecord(t.lock, t.file, t.span, t.holder, indexFor(t.file, sourceOf, indexes));
+					Reflect.setField(record, 'quiet', t.quiet);
+					record;
+				}
+			]
+		};
+		return Json.stringify({ findings: records, longLocks: explained }, null, '  ');
 	}
 
 	/**
@@ -141,12 +176,43 @@ final class LintFormat {
 		return buf.toString();
 	}
 
-	/** One JSON record for a violation; a null span yields null coordinates. */
+	/**
+	 * The `--explain-long` section of a text report: a headline, then each long lock with one line per reason —
+	 * `<kind>  <file>:<line>:<col>  <function>`, a `spans-blocking` one followed by the path to the call that blocks — and
+	 * what the lock is long by with its own reasons set aside, then each main-thread take of a lock that is not long.
+	 */
+	public static function longLocksText(report: LongLockReport, sourceOf: Map<String, String>): String {
+		final indexes: Map<String, LineIndex> = [];
+		final buf: StringBuf = new StringBuf();
+		buf.add(
+			'thread-safety --explain-long: ${report.long.length} long lock(s), ${report.mainShort.length} main-thread take(s) of a lock'
+			+ ' that is not long\n'
+		);
+		for (l in report.long) {
+			buf.add('long ${l.lock}\n');
+			for (r in l.reasons) buf.add('  ${reasonText(r, sourceOf, indexes)}\n');
+			if (l.circular > 0) buf.add('  ${l.circular} circular re-take(s) of this lock itself, left out\n');
+			final aside: Null<Array<LongLockReason>> = l.aside;
+			if (aside != null && aside.length == 0) buf.add('  without its own reasons: not long\n');
+			if (aside != null) for (r in aside) buf.add('  without its own reasons: ${reasonText(r, sourceOf, indexes)}\n');
+		}
+		if (report.mainShort.length > 0) buf.add('not long, taken on the main thread\n');
+		for (t in report.mainShort) {
+			final quiet: String = t.quiet ? '  (quiet)' : '';
+			buf.add('  ${t.lock}  ${place(t.file, t.span, indexFor(t.file, sourceOf, indexes))}  ${t.holder}$quiet\n');
+		}
+		return buf.toString();
+	}
+
+	/**
+	 * One JSON record for a violation; a null span yields null coordinates. A violation carrying `data` gets a `data` object
+	 * (`family`, `function` for its `member`, `subject`, `chain`), and one without has no such key.
+	 */
 	private static function recordOf(v: Violation, index: LineIndex): Dynamic {
 		final span: Null<Span> = v.span;
 		final pos: Null<Position> = posOf(v, index);
 		final end: Null<Position> = span == null ? null : index.lineColAt(span.to);
-		return {
+		final record: Dynamic = {
 			file: v.file,
 			line: pos?.line,
 			col: pos?.col,
@@ -156,6 +222,69 @@ final class LintFormat {
 			rule: v.rule,
 			message: v.message
 		};
+		final data: Null<FindingData> = v.data;
+		if (data != null) Reflect.setField(record, 'data', {
+			family: data.family,
+			"function": data.member,
+			subject: data.subject,
+			chain: data.chain
+		});
+		return record;
+	}
+
+	/**
+	 * One `--explain-long` reason as a JSON record: its site (`siteRecord`) and `kind`, plus a `spans-blocking` one's `call`,
+	 * `chain` and `via`, and a `blind` one's `unresolved` calls with their line and column.
+	 */
+	private static function reasonRecord(r: LongLockReason, sourceOf: Map<String, String>, indexes: Map<String, LineIndex>): Dynamic {
+		final index: LineIndex = indexFor(r.file, sourceOf, indexes);
+		final record: Dynamic = siteRecord(null, r.file, r.span, r.holder, index);
+		Reflect.setField(record, 'kind', r.kind);
+		if (r.call != null) {
+			Reflect.setField(record, 'call', r.call);
+			Reflect.setField(record, 'chain', r.chain);
+			Reflect.setField(record, 'via', r.via);
+		}
+		if (r.kind == LongLockKind.Blind) Reflect.setField(record, 'unresolved', [
+			for (c in r.unresolved) {
+				final pos: Position = index.lineColAt(c.span.from);
+				{ name: c.name, line: pos.line, col: pos.col };
+			}
+		]);
+		return record;
+	}
+
+	/** A site as a JSON record — `lock` (when given), `file`, 1-based `line`/`col` (null with no span) and `function`. */
+	private static function siteRecord(lock: Null<String>, file: String, span: Null<Span>, holder: String, index: LineIndex): Dynamic {
+		final pos: Null<Position> = span == null ? null : index.lineColAt(span.from);
+		final record: Dynamic = { file: file, line: pos?.line, col: pos?.col };
+		if (lock != null) Reflect.setField(record, 'lock', lock);
+		Reflect.setField(record, 'function', holder);
+		return record;
+	}
+
+	/** One reason as a text line: `<kind>  <file>:<line>:<col>  <function>`, then a `spans-blocking` reason's path. */
+	private static function reasonText(r: LongLockReason, sourceOf: Map<String, String>, indexes: Map<String, LineIndex>): String {
+		final index: LineIndex = indexFor(r.file, sourceOf, indexes);
+		final head: String = '${r.kind.rpad(' ', LONG_REASON_WIDTH)}  ${place(r.file, r.span, index)}  ${r.holder}';
+		if (r.kind == LongLockKind.Blind)
+			return '$head  unresolved: ${[for (c in r.unresolved) '${c.name} at ${lineCol(c.span, index)}'].join(', ')}';
+		final call: Null<String> = r.call;
+		if (call == null) return head;
+		final via: String = r.via == null ? '' : ' via ${r.via}';
+		return '$head  calls $call$via: ${r.chain.join(' -> ')}';
+	}
+
+	/** `<line>:<col>` of `span`'s start. */
+	private static function lineCol(span: Span, index: LineIndex): String {
+		final pos: Position = index.lineColAt(span.from);
+		return '${pos.line}:${pos.col}';
+	}
+
+	/** `<file>:<line>:<col>`, or the bare file when there is no span. */
+	private static function place(file: String, span: Null<Span>, index: LineIndex): String {
+		final pos: Null<Position> = span == null ? null : index.lineColAt(span.from);
+		return pos == null ? file : '$file:${pos.line}:${pos.col}';
 	}
 
 	/** Resolve a violation's 1-indexed position, or null when it has no span. */
@@ -218,4 +347,9 @@ final class LintFormat {
 	 */
 	public static inline final DEFAULT_REPORT_SUMMARY_THRESHOLD: Int = 200;
 
+}
+
+/** What an `--explain-long` run hands the json renderer: the report, or null when the rule ran and explained nothing. */
+typedef ExplainedLocks = {
+	final report: Null<LongLockReport>;
 }

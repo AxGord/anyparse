@@ -5,6 +5,7 @@ import anyparse.check.ConfigDisagreement;
 import anyparse.check.EffectiveRules;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
+import anyparse.check.LongLockExplain.LongLockReport;
 import anyparse.check.OracleDeclaration;
 import anyparse.check.OracleGeneration;
 import anyparse.check.OracleRunMemo;
@@ -12,6 +13,7 @@ import anyparse.check.ReachDefinesProbe;
 import anyparse.check.ReachDefinesProbe.AheadBuilds;
 import anyparse.check.ReachDefinesProbe.DefinesProbe;
 import anyparse.check.Severity;
+import anyparse.check.ThreadSafety;
 import anyparse.check.TypedFactsProbe;
 import anyparse.core.PhaseTimings;
 import anyparse.query.Address.TreeAddresser;
@@ -104,6 +106,12 @@ typedef LintOpts = {
 	 * and the `--no-oracle` net notice. It adds output, never behaviour.
 	 */
 	var verbose: Bool;
+
+	/**
+	 * `--explain-long` — after the findings, say why `thread-safety` holds each lock long (`LongLockExplain`). It adds
+	 * output, never a finding.
+	 */
+	var explainLong: Bool;
 
 	/**
 	 * How the TEXT report is laid out: `true` = `--summary` (per-rule summary), `false` = `--full`
@@ -287,6 +295,7 @@ final class LintCommand implements CliCommand {
 		// files. ONE wrapper serves both halves of the pass: the address annotation in the report
 		// reads the trees the checks just parsed out of its cache instead of parsing them again.
 		final cached: CachingGrammarPlugin = wrapResolution(plugin, resolution);
+		final explainer: Null<ThreadSafety> = LintExplainLong.explainer(activeChecks, o.explainLong);
 		final found: Array<Violation> = withinRange(
 			Linter.run(files, cached, activeChecks, resolveConfig, applyEnablement), f -> sourceOf[f], o.range
 		);
@@ -297,7 +306,7 @@ final class LintCommand implements CliCommand {
 		final all: Array<Violation> = baselineDelta(found, o.baseline, sourceOf);
 
 		final shown: Array<Violation> = reportedViolations(all, o.includeInfo, o.format);
-		reportFindings(o, paths, all, shown, sourceOf, cached, oracleConfig, LintFixVerify.unparseableFiles(files, cached));
+		reportFindings(o, paths, all, shown, sourceOf, cached, oracleConfig, LintFixVerify.unparseableFiles(files, cached), explainer);
 
 		// `--no-oracle` skips the typecheck entirely rather than faking its verdict:
 		// the note below says the compiler was not asked, so nothing downstream can
@@ -348,6 +357,7 @@ final class LintCommand implements CliCommand {
 			range: null,
 			baseline: null,
 			verbose: false,
+			explainLong: false,
 			summary: null,
 
 			errExit: code
@@ -1019,10 +1029,20 @@ final class LintCommand implements CliCommand {
 		CliIo.sysPrint('  --baseline <p>   Report only the findings the snapshot at <p> does not already\n');
 		CliIo.sysPrint('                   carry, then refresh <p> with EVERY finding of this run. The\n');
 		CliIo.sysPrint('                   comparison is lint-diff\'s multiset over (file, rule, severity,\n');
-		CliIo.sysPrint('                   message), so an edit that shifts line numbers does not\n');
+		CliIo.sysPrint('                   message) — family/function/subject for a finding carrying\n');
+		CliIo.sysPrint('                   data — so an edit that shifts line numbers does not\n');
 		CliIo.sysPrint('                   manufacture a delta. It narrows the report, the summary and\n');
 		CliIo.sysPrint('                   --fail-on alike; a missing or unreadable <p> reports\n');
 		CliIo.sysPrint('                   everything and says so. Refused with --fix\n');
+		CliIo.sysPrint('  --explain-long   After the findings, say why thread-safety holds each lock long:\n');
+		CliIo.sysPrint('                   per lock every reason (crossing, leak, blind, untraced,\n');
+		CliIo.sysPrint('                   unnamed, spans-blocking with the long lock it waits for) at\n');
+		CliIo.sysPrint('                   every site, what it is long by once its own\n');
+		CliIo.sysPrint('                   reasons are set aside, and the main-thread takes of locks that\n');
+		CliIo.sysPrint('                   are not long. With --format json the report becomes the\n');
+		CliIo.sysPrint('                   {"findings": [...], "longLocks": {...} | null} envelope (null,\n');
+		CliIo.sysPrint('                   with a note, when thread-safety explained nothing). Adds\n');
+		CliIo.sysPrint('                   output, never a finding; refused with --fix and checkstyle\n');
 		CliIo.sysPrint('  --verbose        Bring back the accounting a quiet run withholds: the --fix\n');
 		CliIo.sysPrint('                   rule census (silent on a run that wrote nothing) and the\n');
 		CliIo.sysPrint('                   --no-oracle net notice. Adds output, never behaviour\n');
@@ -1043,6 +1063,7 @@ final class LintCommand implements CliCommand {
 		var range: Null<LintRange> = null;
 		var baseline: Null<String> = null;
 		var verbose: Bool = false;
+		var explainLong: Bool = false;
 		var listRules: Bool = false;
 		var summary: Null<Bool> = null;
 
@@ -1064,6 +1085,8 @@ final class LintCommand implements CliCommand {
 					noOracle = true;
 				case '--verbose':
 					verbose = true;
+				case '--explain-long':
+					explainLong = true;
 				case '--full', '--summary':
 					final wanted: Bool = a == '--summary';
 					if (summary == !wanted) {
@@ -1124,11 +1147,16 @@ final class LintCommand implements CliCommand {
 			range: range,
 			baseline: baseline,
 			verbose: verbose,
+			explainLong: explainLong,
 			summary: summary,
 			errExit: null
 		};
 		// A machine format is never summarised, so asking for a summary of one is a mistake the run
 		// could only honour by ignoring it. `--full` is what such a format does anyway and passes.
+		if (explainLong && format == FORMAT_CHECKSTYLE) {
+			CliIo.stderr('apq lint: --explain-long has no checkstyle form — use --format text or json\n');
+			return lintParseExit(EXIT_USAGE);
+		}
 		if (summary == true && format != FORMAT_TEXT) {
 			CliIo.stderr('apq lint: --summary applies to the text report — --format $format always lists every finding\n');
 			return lintParseExit(EXIT_USAGE);
@@ -1181,6 +1209,10 @@ final class LintCommand implements CliCommand {
 		// happens to carry standing while reporting a converged run.
 		if (o.baseline != null && o.fix) {
 			CliIo.stderr('apq lint: --baseline narrows the REPORT and cannot be combined with --fix (--range narrows both)\n');
+			return EXIT_USAGE;
+		}
+		if (o.explainLong && o.fix) {
+			CliIo.stderr('apq lint: --explain-long explains a REPORT and cannot be combined with --fix\n');
 			return EXIT_USAGE;
 		}
 		if (o.range == null || paths.length == 1) return null;
@@ -1276,17 +1308,17 @@ final class LintCommand implements CliCommand {
 	 */
 	private static function reportFindings(
 		o: LintOpts, paths: Array<String>, all: Array<Violation>, shown: Array<Violation>, sourceOf: Map<String, String>,
-		cached: CachingGrammarPlugin, config: Null<LintConfig>, skipped: Array<String>
+		cached: CachingGrammarPlugin, config: Null<LintConfig>, skipped: Array<String>, explainer: Null<ThreadSafety>
 	): Void {
 		final threshold: Int = config?.reportSummaryThreshold() ?? LintFormat.DEFAULT_REPORT_SUMMARY_THRESHOLD;
 		final summarised: Bool = summarises(shown.length, o.format, o.summary, threshold);
-		renderLintReport(paths, shown, sourceOf, o.format, o.flat, cached, summarised);
+		renderLintReport(paths, shown, sourceOf, o.format, o.flat, cached, summarised, LintExplainLong.outcome(o.explainLong, explainer));
 		lintSummary(all, paths, shown.length == all.length, summarised ? summaryHint(shown.length, o.summary, threshold) : null, skipped);
 	}
 
 	private static function renderLintReport(
 		paths: Array<String>, shown: Array<Violation>, sourceOf: Map<String, String>, format: String, flat: Bool,
-		plugin: CachingGrammarPlugin, summarised: Bool
+		plugin: CachingGrammarPlugin, summarised: Bool, explain: Null<ExplainedLocks>
 	): Void {
 		// Group findings per file, each group sorted by source position so the report
 		// reads top-to-bottom. ONE pass rather than a filter per path: that scan was
@@ -1338,7 +1370,7 @@ final class LintCommand implements CliCommand {
 					final tree: Null<QueryNode> =
 						try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
 					return tree == null ? null : addresser.addressAt(tree, source, span.from);
-				}));
+				}, explain));
 			case FORMAT_CHECKSTYLE:
 				CliIo.sysPrint(LintFormat.checkstyle(orderedByPath(), sourceOf));
 			case _ if (summarised):
@@ -1349,6 +1381,9 @@ final class LintCommand implements CliCommand {
 					if (group != null) CliIo.sysPrint(Text.renderViolations(path, sourceOf[path] ?? '', group, flat));
 				}
 		}
+		final longLocks: Null<LongLockReport> = explain?.report;
+		if (format == FORMAT_TEXT && longLocks != null)
+			CliIo.sysPrint((shown.length > 0 ? '\n' : '') + LintFormat.longLocksText(longLocks, sourceOf));
 	}
 
 	/**
@@ -1445,6 +1480,7 @@ final class LintCommand implements CliCommand {
 			{ flag: '--range', set: o.range != null },
 			{ flag: '--baseline', set: o.baseline != null },
 			{ flag: '--verbose', set: o.verbose },
+			{ flag: '--explain-long', set: o.explainLong },
 			{ flag: o.summary == true ? '--summary' : '--full', set: o.summary != null }
 		];
 		return given.find(g -> g.set)?.flag;

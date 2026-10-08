@@ -5,6 +5,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.query.LintBaseline;
 import anyparse.query.LintDiff;
+import anyparse.query.format.LintFormat;
 import anyparse.query.format.json.LintFindingJson;
 import anyparse.runtime.Span;
 import utest.Assert;
@@ -94,6 +95,83 @@ class LintBaselineTest extends Test {
 		Assert.equals(0, delta(live, before).length, 'the tally was mutated by the first call');
 	}
 
+	/**
+	 * A finding carrying structured identity keys by it, not by its message: the snapshot is written by the real json
+	 * writer and read back, and a live finding whose chain re-rendered (another message) is not new, while one with
+	 * another subject is.
+	 */
+	@:pin('control') @:killer('M-BASELINE-DATA-IGNORED', 'M-LINTDIFF-DATA-IGNORED', 'M-LINTFORMAT-NO-DATA')
+	public function testAFindingWithDataKeysByItsIdentity(): Void {
+		final recorded: Violation = withData(
+			violation('src/A.hx', Severity.Warning, 'thread-safety', 'main thread reaches "S.f": A.b -> S.f'), 'S.f'
+		);
+		final before: LintDiffTally = snapshot(LintDiff.parseReport(LintFormat.json([recorded], ['src/A.hx' => ''])));
+		final rerendered: Violation = withData(
+			violation('src/A.hx', Severity.Warning, 'thread-safety', 'main thread reaches "S.f": R.oot -> A.b -> S.f'), 'S.f'
+		);
+		Assert.equals(0, delta([rerendered], before).length, 'a re-rendered chain is the same finding');
+		final other: Violation = withData(
+			violation('src/A.hx', Severity.Warning, 'thread-safety', 'main thread reaches "S.f": A.b -> S.f'), 'S.g'
+		);
+		Assert.equals(1, delta([other], before).length, 'another subject is another finding');
+	}
+
+	/**
+	 * A snapshot written before the rule carried `data` keys the finding by its message; the live finding, carrying an
+	 * identity now, spends that count instead of coming back as new — once per recorded occurrence.
+	 */
+	@:pin('control') @:killer('M-BASELINE-NO-MESSAGE-FALLBACK')
+	public function testAnOldSnapshotIsSpentByMessage(): Void {
+		final message: String = 'main thread reaches "S.f": A.b -> S.f';
+		final before: LintDiffTally = snapshot([record('src/A.hx', 'warning', 'thread-safety', message)]);
+		final live: Violation = withData(violation('src/A.hx', Severity.Warning, 'thread-safety', message), 'S.f');
+		Assert.equals(0, delta([live], before).length);
+		Assert.equals(
+			1, delta([
+				live,
+				withData(violation('src/A.hx', Severity.Warning, 'thread-safety', message), 'S.f')
+			], before).length
+		);
+	}
+
+	/**
+	 * The baseline spends exactly as `lint-diff` does: one identity carrying several messages is spent message by message,
+	 * and every finding spends its own key before any spends across `data`, so the run's order changes nothing.
+	 */
+	@:pin('control') @:killer('M-BASELINE-ONE-PASS')
+	public function testTheBaselineSpendsLikeTheDiffInAnyOrder(): Void {
+		final old: LintDiffTally = snapshot([for (m in ['m1', 'm2', 'm3']) record('src/A.hx', 'warning', 'thread-safety', m)]);
+		Assert.equals(
+			0,
+			delta([
+				for (m in ['m1', 'm2', 'm3']) withData(violation('src/A.hx', Severity.Warning, 'thread-safety', m), 'S.f')
+			], old).length
+		);
+		// the snapshot holds identity S.f (message m) and a record without data (message m); live: identity S.g, then no data
+		final mixed: LintDiffTally = LintDiff.tally([
+			{
+				file: 'src/A.hx',
+				severity: 'warning',
+				rule: 'thread-safety',
+				message: 'm',
+				data: {
+					family: 'A',
+					member: 'A.b',
+					subject: 'S.f',
+					chain: []
+				}
+			},
+			record('src/A.hx', 'warning', 'thread-safety', 'm')
+		], '', identities());
+		final live: Array<Violation> = [
+			withData(violation('src/A.hx', Severity.Warning, 'thread-safety', 'm'), 'S.g'),
+			violation('src/A.hx', Severity.Warning, 'thread-safety', 'm')
+		];
+		Assert.same(['S.g'], [for (v in delta(live, mixed)) v.data?.subject]);
+		live.reverse();
+		Assert.same(['S.g'], [for (v in delta(live, mixed)) v.data?.subject], 'whatever the order');
+	}
+
 	private static function delta(all: Array<Violation>, before: LintDiffTally): Array<Violation> {
 		return LintBaseline.added(all, before, '', identities());
 	}
@@ -126,6 +204,17 @@ class LintBaselineTest extends Test {
 			rule: rule,
 			message: message
 		};
+	}
+
+	/** `v` with a family-A identity in member `A.b` about `subject`. */
+	private static function withData(v: Violation, subject: String): Violation {
+		v.data = {
+			family: 'A',
+			member: 'A.b',
+			subject: subject,
+			chain: ['A.b', subject]
+		};
+		return v;
 	}
 
 }
