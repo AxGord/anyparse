@@ -17367,6 +17367,14 @@
 			"find": "!a.window.exists(e -> sites.crossing.exists(c -> c.lock == lock && c.edge.from == e.to))",
 			"replace": "!a.window.exists(e -> false)",
 			"note": "a hold whose window calls a releaser counts as handed off"
+		},
+		{
+			"name": "M-TS-REGISTER-OWNER",
+			"type": "anyparse.check.CallRepetition",
+			"method": "repeatersOf",
+			"find": "for (e in _graph.inEdges(at)) if (e.kind != Contains && runs(e) && !registered(e)) {",
+			"replace": "for (e in _graph.inEdges(at)) if (e.kind != Contains && runs(e)) {",
+			"note": "the owner of a short call is searched up its registrations too"
 		}
 	]
 }

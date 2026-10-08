@@ -15,6 +15,10 @@ using Lambda;
  * with a call that runs it once per element (`iterates`), or when it stays inside a recursion: its caller and its target
  * call each other, directly or through other functions.
  *
+ * A value handed to a `registers` call (`addEventListener`) runs later as a run of its own, once per event however
+ * often it was registered: the repeating caller that owns a short call below it (`repeatersOf`) is never one up the
+ * registration — neither a loop around it nor anything up the way to it.
+ *
  * A loop is a kind the grammar names: `loopStatementKinds`, `doWhileLoopKinds`, `iterationBindingKinds` and
  * `whileExprKind`. Of a loop binding a name (`for`), only the body repeats — the iterable runs once; of any other, every
  * part does (a `while` condition runs once per turn). A function or lambda around the site starts the count afresh,
@@ -110,6 +114,16 @@ final class CallRepetition {
 	private function iterated(edge: CallEdge): Bool {
 		final lists: ChainLists = _listsOf(edge.file);
 		return edge.kind == Ref && (lists.iterateIds.contains(edge.via ?? '') || lists.iterateNames.contains(edge.viaMember ?? ''));
+	}
+
+	/**
+	 * Whether the `Ref` edge `edge` hands its value to a call that keeps it to run later, once per event however often it
+	 * was registered: one its chain's `registers` names — a `Type.member` entry by the graph's target, a bare member name
+	 * by the name the call is written with. The value then runs as a run of its own, and nothing repeats it there.
+	 */
+	private function registered(edge: CallEdge): Bool {
+		final lists: ChainLists = _listsOf(edge.file);
+		return edge.kind == Ref && (lists.registerIds.contains(edge.via ?? '') || lists.registerNames.contains(edge.viaMember ?? ''));
 	}
 
 	/**
@@ -241,7 +255,8 @@ final class CallRepetition {
 		while (qi < queue.length) {
 			final at: String = queue[qi++];
 			final path: Array<String> = down[at] ?? [at];
-			for (e in _graph.inEdges(at)) if (e.kind != Contains && runs(e)) {
+			// a registered value runs as a run of its own: nothing up its registration repeats it
+			for (e in _graph.inEdges(at)) if (e.kind != Contains && runs(e) && !registered(e)) {
 				if (repeated(e))
 					out.push({ edge: e, path: path })
 				else if (!down.exists(e.from)) {

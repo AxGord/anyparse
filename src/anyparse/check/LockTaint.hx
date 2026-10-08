@@ -30,6 +30,15 @@ typedef ChainLists = {
 
 	/** The member names whose every call runs a function value handed to it once per element, by the name the call is written with. */
 	final iterateNames: Array<String>;
+
+	/**
+	 * The call targets that keep a function value handed to them to run later, once per event however often it was
+	 * registered (`registers`): a loop around the registration repeats nothing.
+	 */
+	final registerIds: Array<String>;
+
+	/** The member names whose every call registers a function value so (`registerIds`), by the name the call is written with. */
+	final registerNames: Array<String>;
 	final spawnIds: Array<String>;
 	final marshalIds: Array<String>;
 	final quietIds: Array<String>;

@@ -389,6 +389,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.ThreadSafetyFoldingTest',
 		'unit.check.ThreadSafetyLongLocksTest',
 		'unit.check.ThreadSafetyOwnReasonsTest',
+		'unit.check.ThreadSafetyRegistersTest',
 		'unit.check.ThreadSafetyWaiterTest',
 		'unit.check.TrivialGetterCheckTest',
 		'unit.check.TrivialGetterIsVarTest',
@@ -2172,6 +2173,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyOwnReasonsTest#testAHoldItsFunctionNeverGivesBackIsLong :: control :: M-TS-HANDOFF-OFF,M-TS-HANDOFF-GIVES',
 			'unit.check.ThreadSafetyOwnReasonsTest#testARepeatedOrUnknownUnresolvedCallKeepsTheLockLong :: control :: M-TS-DOM-BRIEF-REPEATED',
 			'unit.check.ThreadSafetyOwnReasonsTest#testAnUnresolvedCallInACatchIsAnErrorPath :: control :: M-TS-BLIND-CATCH-OFF',
+			'unit.check.ThreadSafetyRegistersTest#testALoopAboveTheRegistrarRepeatsNothing :: control :: M-TS-REGISTER-OWNER',
+			'unit.check.ThreadSafetyRegistersTest#testARegistrationInALoopRepeatsNothing :: control :: M-TS-REGISTER-OWNER',
+			'unit.check.ThreadSafetyRegistersTest#testTheOwnerIsNeverUpARegistration :: control :: M-TS-REGISTER-OWNER',
 			'unit.check.ThreadSafetyWaiterTest#testAHoldOnlyTheMainThreadRunsIsNoStall :: control :: '
 				+ 'M-TS-B-MAIN-ONLY-KEPT,M-TS-OWN-WORK-TAKES',
 			'unit.check.ThreadSafetyWaiterTest#testAHolderOfUnknownThreadKeepsItsFinding :: control :: M-TS-B-ASSUMED-IGNORED',
@@ -5939,7 +5943,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-BLIND-CATCH-OFF',
 			'M-TS-HANDOFF-OFF',
 			'M-TS-HANDOFF-GIVES',
-			'M-TS-HANDOFF-CROSSING'
+			'M-TS-HANDOFF-CROSSING',
+			'M-TS-REGISTER-OWNER'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

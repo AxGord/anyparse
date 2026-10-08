@@ -1556,5 +1556,10 @@ decided the question; it may not become a record of runs.
   `update()`) was found only through `SerFile.remove` taking that long lock; a hold no path of its function gives back
   (`HoldGrade.handsOff`) is long whatever its window spans — the recall now rests on the mechanism, not the accident.
   A function that only takes the lock is left out: its caller's code is the hold — branch `feat/ts-precision-2`
+- a function value registered in a loop repeating once per iteration → TM's `listenContent` registers one rename
+  handler on every list item, and the handler (a `FileSystem.rename`) warned at the loop; a callback handed to a
+  `registers` call (`addEventListener`) runs later as a run of its own, once per event however often it was registered,
+  so no loop around the registration and nothing up the way to it repeats it. A config list, not a guess: whether a call
+  runs what it is handed now or keeps it is the library's contract — branch `feat/ts-precision-2`
 - judging "inside a catch" off the witness chain the finding prints → the chain is one way; a second way outside every
   catch must keep the warning, which only a solve without the catch edges can see — branch `feat/ts-precision-2`
