@@ -5,20 +5,21 @@ import anyparse.query.CallGraph;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
-import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.runtime.Span;
 
 using Lambda;
+using StringTools;
 
 /**
  * The locks a thread certainly holds at a point of a function, under a valuation of its tracked parameters
- * (`EdgeConditions`), each on the object it is held on: `static`, `this`, or the object a `final` field of `this` names.
+ * (`EdgeConditions`), each on the object it is held on: `static`, `this`, or the object a path of stable fields read off
+ * `this` names (`ObjectPaths`).
  *
  * They are the function's own takes that run on every path to the point — the deepest node holding both a statement
  * sequence whose statement holding the take comes first, reached through statement sequences and `if`s the valuation
  * decides — with nothing giving the lock back on the way, plus the locks every call into the function holds on its way
  * in (the meet over its callers, carried onto the callee's `this` when the callee runs on the caller's object or on the
- * object a `final` field of it names), kept while nothing on the way may give them back. A point may give a lock back
+ * object a path of stable fields of it names), kept while nothing on the way may give them back. A point may give a lock back
  * by a give of it that does not leave the function first, a call into a function giving it back without taking it, or —
  * when code an unresolved call may run can do that — an unresolved call. A function a callback registration, an
  * unresolved call or the walk's own assumption enters holds nothing on entry; so does one the meet does not settle.
@@ -71,6 +72,9 @@ final class MustHeld {
 	/** What may give a lock back on the way to a point. */
 	private final _releasers: LockReleasers;
 
+	/** The objects calls are made on, relative to the running object. */
+	private final _paths: ObjectPaths;
+
 	public function new(
 		graph: CallGraph, plugin: GrammarPlugin, trees: FunctionTrees, sites: LockSites, states: ThreadStates, conditions: EdgeConditions,
 		repetition: CallRepetition, holds: Array<LockAcquire>, inertRef: (CallEdge) -> Bool, unresolvedNames: Array<String>
@@ -83,6 +87,7 @@ final class MustHeld {
 		_trees = trees;
 		_shape = plugin.refShape();
 		_values = new ArgumentValues(graph, trees, plugin);
+		_paths = new ObjectPaths(graph, plugin, sites);
 		_holds = holds;
 		final flow: Null<ControlFlowSupport> = plugin.controlFlowSupport();
 		_blockKinds = flow == null ? [] : flow.blockKinds();
@@ -119,7 +124,7 @@ final class MustHeld {
 		return out;
 	}
 
-	/** The object the hold `a` takes its lock on, relative to its function; null when no `final` member names it. */
+	/** The object the hold `a` takes its lock on, relative to its function; null when no path of stable fields names it. */
 	public function holdObject(a: LockAcquire): Null<String> {
 		final inner: Null<CallEdge> = a.inner;
 		return inner == null ? takeObject(a.edge) : carried(takeObject(inner), a.edge);
@@ -127,14 +132,28 @@ final class MustHeld {
 
 	/**
 	 * The object the take `edge` works the lock of, relative to the function it sits in: `static` for a static lock,
-	 * `this` for the running object's (`LockSites.selfTake`), the `final` member of the running object a wrapper call is
-	 * made on, for a wrapper working the lock of its receiver; null when no such member names that object.
+	 * `this` for the running object's (`LockSites.selfTake`), the path of stable fields of the running object a wrapper
+	 * call is made on (`ObjectPaths`), for a wrapper working the lock of its receiver; null when no such path names it.
 	 */
 	public function takeObject(edge: CallEdge): Null<String> {
 		final lock: Null<String> = _sites.lockOf(edge);
 		if (lock == null) return null;
 		if (_sites.selfTake(edge)) return _sites.isStaticLock(lock) ? STATIC_OBJECT : SELF_OBJECT;
-		return _sites.worksReceiverLock(edge) ? finalField(ownFieldReceiver(edge)) : null;
+		return _sites.worksReceiverLock(edge) ? _paths.receiverPath(edge) : null;
+	}
+
+	/** A must-held entry (`at`): `lock` held on `object`. */
+	public static inline function heldOn(lock: String, object: String): String {
+		return lock + ON + object;
+	}
+
+	/**
+	 * Whether running `id` may give `lock` back without having taken it: it or a function it calls does (`LockReleasers`),
+	 * or code an unresolved call of it may run can.
+	 */
+	public function mayRelease(lock: String, id: String): Bool {
+		if (_releasers.releasersOf(lock).exists(id)) return true;
+		return _releasers.hazard(lock) && (_releasers.blindIn(id) ?? [0]).length > 0;
 	}
 
 	/** The lock of a must-held entry (`at`). */
@@ -147,38 +166,20 @@ final class MustHeld {
 		return held.substring(held.lastIndexOf(ON) + 1);
 	}
 
-	/** `field` itself when it names a `final` field: one whose object no write changes under a hold; null otherwise. */
-	private function finalField(field: Null<String>): Null<String> {
-		final dot: Int = field?.lastIndexOf('.') ?? -1;
-		if (field == null || dot <= 0) return null;
-		final info: Null<MemberInfo> = _graph.types.memberOnChain(field.substring(0, dot), field.substring(dot + 1));
-		final kind: String = info?.kind ?? '';
-		return (_shape.fieldDeclKinds ?? []).contains(kind) && !(_shape.mutableFieldDeclKinds ?? []).contains(kind) ? field : null;
-	}
-
 	/** What a lock held on `object` in the caller is held on in the callee of `call`; null when nothing says. */
-	private function carried(object: Null<String>, call: CallEdge): Null<String> {
+	public function carried(object: Null<String>, call: CallEdge): Null<String> {
 		if (object == null || object == STATIC_OBJECT) return object;
 		final self: Bool = _sites.selfCall(call);
 		if (object == SELF_OBJECT) return self ? object : null;
-		return if (ownFieldReceiver(call) == object)
+		final path: Null<String> = _paths.receiverPath(call);
+		return if (path == object)
 			SELF_OBJECT
+		else if (path != null && object.startsWith(path + ObjectPaths.SEPARATOR))
+			object.substring(path.length + ObjectPaths.SEPARATOR.length)
 		else if (self)
 			object
 		else
 			null;
-	}
-
-	/**
-	 * The member of the running object the call `edge` is made on — its receiver a bare field or one read off `this`, as
-	 * `CallEdge.receiverField` names it; null for any other receiver, a field of another object's included.
-	 */
-	private function ownFieldReceiver(edge: CallEdge): Null<String> {
-		final callee: Null<QueryNode> = _sites.calleeOf(edge);
-		final receiver: Null<QueryNode> = callee != null && _sites.isAccess(callee.kind) && callee.children.length > 0
-			? callee.children[0]
-			: null;
-		return receiver != null && _sites.readsOwnMember(receiver) ? edge.receiverField : null;
 	}
 
 	/** The own takes of `id` must-held at `at` under `valuation`: each run on every path there, with no give since. */

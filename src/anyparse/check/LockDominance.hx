@@ -13,7 +13,7 @@ using Lambda;
  * while L is held on M's object is brief, wherever it is made — and the takes a hold of L itself spans in its window.
  *
  * Positive on every count. A lock is dominated by nothing when some hold of it may outlive its function, cannot be
- * traced, is the release of a hold begun elsewhere, or spans a long call on an object no `final` member names.
+ * traced, is the release of a hold begun elsewhere, or spans a long call on an object no path of stable fields names (`ObjectPaths`).
  */
 @:nullSafety(Strict)
 final class LockDominance {
@@ -97,6 +97,38 @@ final class LockDominance {
 	}
 
 	/**
+	 * The hold `a` as `<lock>@<object>`: its lock and the object it is taken on, relative to its function (`MustHeld`);
+	 * null for a lock no member names, or an object no path of stable fields names.
+	 */
+	public function holdOf(a: LockAcquire): Null<String> {
+		final lock: Null<String> = a.lock;
+		final object: Null<String> = _must.holdObject(a);
+		return lock == null || object == null ? null : MustHeld.heldOn(lock, object);
+	}
+
+	/**
+	 * The hold `under` (`holdOf`) as the callee of `call` sees it: its object carried onto the callee (`MustHeld.carried`);
+	 * null when nothing says what that object is there, or when the callee may give the lock back (`MustHeld.mayRelease`).
+	 */
+	public function carry(under: Null<String>, call: CallEdge): Null<String> {
+		if (under == null) return null;
+		final lock: String = MustHeld.lockOf(under);
+		final object: Null<String> = _must.carried(MustHeld.objectOf(under), call);
+		return object == null || _must.mayRelease(lock, call.to) ? null : MustHeld.heldOn(lock, object);
+	}
+
+	/**
+	 * Whether the take `take` waits for no long hold while the hold `under` is held: on that hold's object, a re-take of
+	 * its lock by a take that may repeat it (`reentrant`), or a take of a lock it dominates (`dominators`).
+	 */
+	public function briefUnder(under: String, take: CallEdge, reentrant: Bool): Bool {
+		final lock: Null<String> = _sites.lockOf(take);
+		final held: String = MustHeld.lockOf(under);
+		if (lock == null || _must.takeObject(take) != MustHeld.objectOf(under)) return false;
+		return lock == held ? reentrant : (dominators[lock] ?? []).contains(held);
+	}
+
+	/**
 	 * Solves `dominators` for the long holds `longAt` names: per hold, the offsets of its calls that block long, empty for
 	 * a brief hold, null for a hold that rules dominance out. Returns whether any lock's dominators changed.
 	 */
@@ -129,7 +161,7 @@ final class LockDominance {
 
 	/**
 	 * The other locks the long hold `a` of `lock` holds, on its object, at every offset of `positions` under every
-	 * valuation its take runs under; null when it takes its lock on an object no `final` member names, or `positions`
+	 * valuation its take runs under; null when it takes its lock on an object no path of stable fields names, or `positions`
 	 * itself is null.
 	 */
 	private function heldAtLong(a: LockAcquire, lock: String, positions: Null<Array<Int>>): Null<Array<String>> {

@@ -17375,6 +17375,62 @@
 			"find": "for (e in _graph.inEdges(at)) if (e.kind != Contains && runs(e) && !registered(e)) {",
 			"replace": "for (e in _graph.inEdges(at)) if (e.kind != Contains && runs(e)) {",
 			"note": "the owner of a short call is searched up its registrations too"
+		},
+		{
+			"name": "M-TS-CARRY-OFF",
+			"type": "anyparse.check.LockDominance",
+			"method": "carry",
+			"find": "return object == null || _must.mayRelease(lock, call.to) ? null : MustHeld.heldOn(lock, object);",
+			"replace": "return null;",
+			"note": "a hold is carried into no callee"
+		},
+		{
+			"name": "M-TS-CARRY-RELEASE",
+			"type": "anyparse.check.LockDominance",
+			"method": "carry",
+			"find": "return object == null || _must.mayRelease(lock, call.to) ? null : MustHeld.heldOn(lock, object);",
+			"replace": "return object == null ? null : MustHeld.heldOn(lock, object);",
+			"note": "a hold is carried into a callee that gives the lock back"
+		},
+		{
+			"name": "M-TS-CARRY-RETAKE",
+			"type": "anyparse.check.LockDominance",
+			"method": "briefUnder",
+			"find": "return lock == held ? reentrant : (dominators[lock] ?? []).contains(held);",
+			"replace": "return lock == held ? false : (dominators[lock] ?? []).contains(held);",
+			"note": "a re-take of the carried re-entrant lock waits"
+		},
+		{
+			"name": "M-TS-CARRY-OBJECT",
+			"type": "anyparse.check.LockDominance",
+			"method": "briefUnder",
+			"find": "if (lock == null || _must.takeObject(take) != MustHeld.objectOf(under)) return false;",
+			"replace": "if (lock == null) return false;",
+			"note": "a take on another object counts as under the carried hold"
+		},
+		{
+			"name": "M-TS-PATH-TWO-LINK",
+			"type": "anyparse.check.ObjectPaths",
+			"method": "receiverPath",
+			"find": "return first == null || !stable(first) ? null : nameOf(first) + SEPARATOR + nameOf(field);",
+			"replace": "return null;",
+			"note": "a field of a field names no object"
+		},
+		{
+			"name": "M-TS-PATH-CTOR",
+			"type": "anyparse.check.ObjectPaths",
+			"method": "writesOutside",
+			"find": "if (write && !inside(at, allowed)) return true;",
+			"replace": "if (write) return true;",
+			"note": "a write in the constructor makes a var unstable"
+		},
+		{
+			"name": "M-TS-PATH-STABLE-ANY",
+			"type": "anyparse.check.ObjectPaths",
+			"method": "writtenOnlyInConstructor",
+			"find": "if (writesOutside(held.file, held.tree, field, allowed)) return false;",
+			"replace": "if (false && writesOutside(held.file, held.tree, field, allowed)) return false;",
+			"note": "a var written outside its constructor counts stable"
 		}
 	]
 }

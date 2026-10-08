@@ -380,6 +380,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.SuppressionSliceTest',
 		'unit.check.SwallowedExceptionCheckTest',
 		'unit.check.TailMergeCheckTest',
+		'unit.check.ThreadSafetyCarriedHoldTest',
 		'unit.check.ThreadSafetyCheckTest',
 		'unit.check.ThreadSafetyConditionsTest',
 		'unit.check.ThreadSafetyCostTest',
@@ -2003,6 +2004,12 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.StructuralConformanceProofTest#testUnresolvableSupertypeSuppliesNoMember :: control :: M-STRUCT-DECLARES-LOOSE',
 			'unit.check.TailMergeCheckTest#testStructuralIdentityHalfNeeded :: control :: M-TAILMERGE-NORM-ONLY',
 			'unit.check.TailMergeCheckTest#testSwitchCaseOutOfScope :: control :: M-TAILMERGE-FALL-KEPT',
+			'unit.check.ThreadSafetyCarriedHoldTest#testACalleeGivingTheLockBackCarriesNothing :: control :: M-TS-CARRY-RELEASE',
+			'unit.check.ThreadSafetyCarriedHoldTest#testADominatedTakeInACalleeOnTheHeldObjectIsBrief :: control :: M-TS-CARRY-OFF',
+			'unit.check.ThreadSafetyCarriedHoldTest#testAFieldWrittenOutsideTheConstructorNamesNoObject :: control :: M-TS-PATH-STABLE-ANY',
+			'unit.check.ThreadSafetyCarriedHoldTest#testAPathOfStableFieldsNamesTheHeldObject :: control :: M-TS-PATH-TWO-LINK,M-TS-PATH-CTOR',
+			'unit.check.ThreadSafetyCarriedHoldTest#testARetakeInACalleeIsBrief :: control :: M-TS-CARRY-RETAKE',
+			'unit.check.ThreadSafetyCarriedHoldTest#testATakeOnAnotherObjectIsNotUnderTheHold :: control :: M-TS-CARRY-OBJECT',
 			'unit.check.ThreadSafetyCheckTest#testABriefHoldThroughWrappersKeepsTheLockShort :: control :: M-TS-WRAPPER-LEAKS,M-TS-WRAPPER-CROSSING',
 			'unit.check.ThreadSafetyCheckTest#testACallCycleNothingEntersIsWalked :: control :: M-TS-ORDER-CYCLES-UNWALKED',
 			'unit.check.ThreadSafetyCheckTest#testACallbackRegisteredUnderAHoldTakesNothingInOrder :: control :: M-TS-ORDER-FOLLOWS-REFS',
@@ -5944,7 +5951,14 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-HANDOFF-OFF',
 			'M-TS-HANDOFF-GIVES',
 			'M-TS-HANDOFF-CROSSING',
-			'M-TS-REGISTER-OWNER'
+			'M-TS-REGISTER-OWNER',
+			'M-TS-CARRY-OFF',
+			'M-TS-CARRY-RELEASE',
+			'M-TS-CARRY-RETAKE',
+			'M-TS-CARRY-OBJECT',
+			'M-TS-PATH-TWO-LINK',
+			'M-TS-PATH-CTOR',
+			'M-TS-PATH-STABLE-ANY'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

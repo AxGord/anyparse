@@ -70,13 +70,17 @@ private typedef TaintStep = {
 	final next: Null<String>;
 }
 
-/** One state of the walk toward a blocking call: its key, function, valuation and context, and whether a call on the way repeats. */
+/**
+ * One state of the walk toward a blocking call: its key, function, valuation and context, whether a call on the way
+ * repeats, and the hold being judged as the state's function sees it (`LockDominance.carry`), when it still does.
+ */
 private typedef WalkState = {
 	final key: String;
 	final id: String;
 	final valuation: String;
 	final ctx: Int;
 	final repeated: Bool;
+	final under: Null<String>;
 }
 
 /**
@@ -288,14 +292,18 @@ final class LockTaint {
 			final cost: Null<TaintCost> = _cost;
 			// a call repeating while the lock is held runs every short call it reaches more than once
 			final repeats: Bool = cost != null && cost.repetition.repeatedUnder(edge, a.edge);
+			// the hold being judged, on the object it is taken on, while its window runs
+			final under: Null<String> = cost?.dominance.holdOf(a);
 			if (blocks(edge, held) || retakesElsewhere(edge, held)) {
 				// a take the hold itself dominates waits for no long hold: each one needs the lock held here
 				final dominated: Bool = cost != null && takesLock(edge) && cost.dominance.underHold(a, edge);
-				if (counts(edge, held, repeats, state.valuation) && !dominated) return trailOf([edge.to], edge, held, [edge]);
+				if (counts(edge, held, repeats, state.valuation) && !dominated && !briefUnder(under, edge))
+					return trailOf([edge.to], edge, held, [edge]);
 				continue;
 			}
 			if (takesLock(edge)) continue;
-			final key: Null<String> = reach(edge.to, _conditions.bind(edge, state.valuation), live, held, repeats);
+			final carried: Null<String> = cost?.dominance.carry(under, edge);
+			final key: Null<String> = reach(edge.to, _conditions.bind(edge, state.valuation), live, held, repeats, carried);
 			if (key != null) return trailFrom(edge, key, held);
 		}
 		return null;
@@ -349,8 +357,8 @@ final class LockTaint {
 	 * whether a call on the way to it repeats (`repeated`, from the caller for the first): a short call (`costsLong`)
 	 * counts only on a path that repeats; run once, it ends no path and leads nowhere, like any sink.
 	 */
-	private function reach(id: String, valuation: String, ctx: Int, held: Null<String>, repeated: Bool): Null<String> {
-		final root: String = stateKey(held, id, valuation, ctx, repeated);
+	private function reach(id: String, valuation: String, ctx: Int, held: Null<String>, repeated: Bool, under: Null<String>): Null<String> {
+		final root: String = stateKey(held, id, valuation, ctx, repeated, under);
 		if (_reaching.exists(root)) return root;
 		if (_clean.exists(root)) return null;
 		final queue: Array<WalkState> = [
@@ -359,7 +367,8 @@ final class LockTaint {
 				id: id,
 				valuation: valuation,
 				ctx: ctx,
-				repeated: repeated
+				repeated: repeated,
+				under: under
 			}
 		];
 		final parents: Map<String, { key: String, edge: CallEdge }> = [];
@@ -375,7 +384,7 @@ final class LockTaint {
 				final repeats: Bool = state.repeated || repeatsAt(edge);
 				if (_sinkIds.contains(edge.to) && blocks(edge, held) || retakesElsewhere(edge, held)) {
 					// a short call run once on this path waits too little to count, and a sink leads nowhere
-					if (!counts(edge, held, repeats, state.valuation)) continue;
+					if (!counts(edge, held, repeats, state.valuation) || briefUnder(state.under, edge)) continue;
 					final step: TaintStep = { edge: edge, next: null };
 					_reaching[state.key] = step;
 					markPath(state.key, parents);
@@ -383,7 +392,8 @@ final class LockTaint {
 				}
 				if (takesLock(edge)) continue;
 				final nextValuation: String = _conditions.bind(edge, state.valuation);
-				final next: String = stateKey(held, edge.to, nextValuation, live, repeats);
+				final nextUnder: Null<String> = _cost?.dominance.carry(state.under, edge);
+				final next: String = stateKey(held, edge.to, nextValuation, live, repeats, nextUnder);
 				if (_clean.exists(next) || seen.exists(next)) continue;
 				seen[next] = true;
 				parents[next] = { key: state.key, edge: edge };
@@ -396,7 +406,8 @@ final class LockTaint {
 					id: edge.to,
 					valuation: nextValuation,
 					ctx: live,
-					repeated: repeats
+					repeated: repeats,
+					under: nextUnder
 				});
 			}
 		}
@@ -488,8 +499,19 @@ final class LockTaint {
 		return lists.sinkIds.contains(edge.to) && lists.pairs.exists(p -> p.lockId == edge.to);
 	}
 
-	private static inline function stateKey(held: Null<String>, id: String, valuation: String, ctx: Int, repeated: Bool): String {
-		return '${held ?? ''}|$id|$valuation|$ctx${repeated ? '|repeated' : ''}';
+	private static inline function stateKey(
+		held: Null<String>, id: String, valuation: String, ctx: Int, repeated: Bool, under: Null<String>
+	): String {
+		return '${held ?? ''}|$id|$valuation|$ctx${repeated ? '|repeated' : ''}|${under ?? ''}';
+	}
+
+	/**
+	 * Whether the take `edge` waits for no long hold while the hold `under` (`LockDominance.holdOf`) is held: asking about
+	 * cost, a re-take of that lock on its object by a `reentrantLocks` take, or a take of a lock it dominates there.
+	 */
+	private inline function briefUnder(under: Null<String>, edge: CallEdge): Bool {
+		return under != null && takesLock(edge)
+			&& _cost?.dominance.briefUnder(under, edge, listsOf(edge.file).reentrantIds.contains(edge.to)) == true;
 	}
 
 }

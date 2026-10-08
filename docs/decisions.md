@@ -1561,5 +1561,12 @@ decided the question; it may not become a record of runs.
   `registers` call (`addEventListener`) runs later as a run of its own, once per event however often it was registered,
   so no loop around the registration and nothing up the way to it repeats it. A config list, not a guess: whether a call
   runs what it is handed now or keeps it is the library's contract — branch `feat/ts-precision-2`
+- dominance proven only at takes in the hold's OWN function (`underHold`) and through the entry meet → TM's
+  `removeFileBlocked` holds `_cloudDatabase._batchMutex` and calls `_cloudDatabase.getFileByCloudId`, whose take of
+  `_mutex` the meet over all its callers cannot prove under the batch; the hold being judged is carried down its own
+  walk instead, its object through each call on it (`LockDominance.carry`), lost at any callee that may give it back —
+  8 of the 13 `batch-x` holds of the brief turned info, 4 more once objects are PATHS of stable fields
+  (`fileSystem.cloudDatabase`: a `var` with no write outside its constructor, the scan conservative — a bare or
+  `this.` write counts in a type owning the field, any other receiver's always) — branch `feat/ts-precision-2`
 - judging "inside a catch" off the witness chain the finding prints → the chain is one way; a second way outside every
   catch must keep the warning, which only a solve without the catch edges can see — branch `feat/ts-precision-2`
