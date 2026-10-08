@@ -144,7 +144,7 @@ final class LongLockExplain {
 			else if (a.untraced && (leaks(a) || blind(a)))
 				add(lock, siteReason(Untraced, a.edge, []))
 			else
-				for (reason in ownReasons(a)) add(lock, reason);
+				for (reason in ownReasons(a, taints)) add(lock, reason);
 		}
 		for (lock in long) {
 			final spans: Array<LongLockReason> = spansBlocking(acquires, lock, taints, normal);
@@ -181,9 +181,13 @@ final class LongLockExplain {
 		return out;
 	}
 
-	/** The leak and blind reasons of the traced hold `a`, at its take. */
-	private static function ownReasons(a: LockAcquire): Array<LongLockReason> {
-		return (leaks(a) ? [siteReason(Leak, a.edge, [])] : []).concat(blind(a) ? [siteReason(Blind, a.edge, a.blindCalls)] : []);
+	/**
+	 * The leak and blind reasons of the traced hold `a`, at its take: blind when `taints` finds an unresolved call of it
+	 * long (`LockTaint.blindLong`), naming those calls.
+	 */
+	private static function ownReasons(a: LockAcquire, taints: LockTaint): Array<LongLockReason> {
+		final blindCalls: Array<BlindCall> = [for (c in a.blindCalls) if (!taints.briefBlind(a, c)) c];
+		return (leaks(a) ? [siteReason(Leak, a.edge, [])] : []).concat(taints.blindLong(a) ? [siteReason(Blind, a.edge, blindCalls)] : []);
 	}
 
 	/**

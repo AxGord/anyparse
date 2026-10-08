@@ -388,6 +388,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.ThreadSafetyFindingDataTest',
 		'unit.check.ThreadSafetyFoldingTest',
 		'unit.check.ThreadSafetyLongLocksTest',
+		'unit.check.ThreadSafetyOwnReasonsTest',
 		'unit.check.ThreadSafetyWaiterTest',
 		'unit.check.TrivialGetterCheckTest',
 		'unit.check.TrivialGetterIsVarTest',
@@ -2165,6 +2166,12 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyLongLocksTest#testEverySpansBlockingCallIsListed :: control :: M-TS-SPANS-FIRST-ONLY',
 			'unit.check.ThreadSafetyLongLocksTest#testMainThreadTakesOfAShortLock :: control :: M-TS-MAINSHORT-LOUD-ONLY',
 			'unit.check.ThreadSafetyLongLocksTest#testSpansBlockingNamesTheCallAndThePath :: control :: M-TS-LONG-NEVER-GROWS',
+			'unit.check.ThreadSafetyOwnReasonsTest#testABriefUnresolvedCallOnceLeavesTheLockShort :: control :: '
+				+ 'M-TS-BLIND-BRIEF-OFF,M-TS-DOM-BRIEF-NAMES-IGNORED',
+			'unit.check.ThreadSafetyOwnReasonsTest#testACallOfAReleaserGivesTheLockBack :: control :: M-TS-HANDOFF-CROSSING',
+			'unit.check.ThreadSafetyOwnReasonsTest#testAHoldItsFunctionNeverGivesBackIsLong :: control :: M-TS-HANDOFF-OFF,M-TS-HANDOFF-GIVES',
+			'unit.check.ThreadSafetyOwnReasonsTest#testARepeatedOrUnknownUnresolvedCallKeepsTheLockLong :: control :: M-TS-DOM-BRIEF-REPEATED',
+			'unit.check.ThreadSafetyOwnReasonsTest#testAnUnresolvedCallInACatchIsAnErrorPath :: control :: M-TS-BLIND-CATCH-OFF',
 			'unit.check.ThreadSafetyWaiterTest#testAHoldOnlyTheMainThreadRunsIsNoStall :: control :: '
 				+ 'M-TS-B-MAIN-ONLY-KEPT,M-TS-OWN-WORK-TAKES',
 			'unit.check.ThreadSafetyWaiterTest#testAHolderOfUnknownThreadKeepsItsFinding :: control :: M-TS-B-ASSUMED-IGNORED',
@@ -5927,7 +5934,12 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-ERROR-TAKE-OFF',
 			'M-TS-ERROR-TAKE-ANY',
 			'M-TS-ERROR-CAUGHT-OFF',
-			'M-TS-ERROR-EXPLAIN-OFF'
+			'M-TS-ERROR-EXPLAIN-OFF',
+			'M-TS-BLIND-BRIEF-OFF',
+			'M-TS-BLIND-CATCH-OFF',
+			'M-TS-HANDOFF-OFF',
+			'M-TS-HANDOFF-GIVES',
+			'M-TS-HANDOFF-CROSSING'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

@@ -158,14 +158,7 @@ final class LockDominance {
 		final at: Array<Int> = [
 			for (b in costs.blockingCalls(a, costs.reentrantHeld(a))) b.edge.span?.from ?? -1
 		];
-		final brief: Array<String> = costs.listsOf(a.edge.file).shortNames;
-		final outer: Null<Array<Span>> = _repetition.loopsAt(a.edge.file, a.edge.span?.from ?? -1);
-		for (c in a.blindCalls) {
-			// a call `shortSinks` names bare is brief once: long only where a loop under the hold repeats it
-			final loops: Null<Array<Span>> = _repetition.loopsAt(a.edge.file, c.span.from);
-			final once: Bool = loops != null && outer != null && !loops.exists(l -> !outer.exists(o -> o.from == l.from));
-			if (!(brief.contains(c.name) && once)) at.push(c.span.from);
-		}
+		for (c in a.blindCalls) if (!costs.briefBlind(a, c)) at.push(c.span.from);
 		return at;
 	}
 

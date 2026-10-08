@@ -81,6 +81,16 @@ final class CallRepetition {
 	}
 
 	/**
+	 * Whether the site at the offset `at`, in the function and file of the call `take`, runs at most once per run of
+	 * `take`: placed, with no loop around it that is not around `take` too.
+	 */
+	public function onceUnder(take: CallEdge, at: Int): Bool {
+		final loops: Null<Array<Span>> = loopsAt(take.file, at);
+		final outer: Null<Array<Span>> = loopsAt(take.file, take.span?.from ?? -1);
+		return loops != null && outer != null && !loops.exists(l -> !outer.exists(o -> o.from == l.from));
+	}
+
+	/**
 	 * Whether `edge` may run more than once while the lock the call `take` took stays held, both in one function: in a
 	 * loop around `edge` that is not around `take`, handed to an `iterates` call, or recursive.
 	 */

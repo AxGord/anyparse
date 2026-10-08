@@ -16970,10 +16970,10 @@
 		},
 		{
 			"name": "M-TS-EVIDENCE-PLAIN",
-			"type": "anyparse.check.ThreadSafety",
-			"method": "gradeHold",
-			"find": ["calls: long,", "taint: judge.long,"],
-			"replace": ["calls: taints.blockingCalls(a, held),", "taint: taints,"],
+			"type": "anyparse.check.HoldGrade",
+			"method": "byCost",
+			"find": ["calls: long,", "taint: judges.long,"],
+			"replace": ["calls: judges.plain.blockingCalls(a, held),", "taint: judges.plain,"],
 			"note": "a long hold's message names its short calls too"
 		},
 		{
@@ -17002,8 +17002,8 @@
 		},
 		{
 			"name": "M-TS-OWN-WORK-DROPPED",
-			"type": "anyparse.check.ThreadSafety",
-			"method": "gradeHold",
+			"type": "anyparse.check.HoldGrade",
+			"method": "byCost",
 			"find": "if (long.length > 0) {",
 			"replace": "if (long.length > 0 && !mainOnly) {",
 			"note": "a main-only hold is dropped even when the main thread works long under it"
@@ -17090,18 +17090,18 @@
 		},
 		{
 			"name": "M-TS-DOM-BRIEF-NAMES-IGNORED",
-			"type": "anyparse.check.LockDominance",
-			"method": "longCallsOf",
-			"find": "if (!(brief.contains(c.name) && once)) at.push(c.span.from);",
-			"replace": "at.push(c.span.from);",
+			"type": "anyparse.check.LockTaint",
+			"method": "briefBlind",
+			"find": "final once: Bool = listsOf(a.edge.file).shortNames.contains(c.name) && cost.repetition.onceUnder(a.edge, c.span.from);",
+			"replace": "final once: Bool = false && listsOf(a.edge.file).shortNames.contains(c.name);",
 			"note": "an unresolved call a bare `shortSinks` name names counts long for dominance"
 		},
 		{
 			"name": "M-TS-DOM-BRIEF-REPEATED",
-			"type": "anyparse.check.LockDominance",
-			"method": "longCallsOf",
-			"find": "if (!(brief.contains(c.name) && once)) at.push(c.span.from);",
-			"replace": "if (!brief.contains(c.name)) at.push(c.span.from);",
+			"type": "anyparse.check.LockTaint",
+			"method": "briefBlind",
+			"find": "final once: Bool = listsOf(a.edge.file).shortNames.contains(c.name) && cost.repetition.onceUnder(a.edge, c.span.from);",
+			"replace": "final once: Bool = listsOf(a.edge.file).shortNames.contains(c.name);",
 			"note": "a brief unresolved call in a loop under the hold counts brief"
 		},
 		{
@@ -17282,18 +17282,18 @@
 		},
 		{
 			"name": "M-TS-ERROR-HOLD-OFF",
-			"type": "anyparse.check.ThreadSafety",
-			"method": "gradeHold",
+			"type": "anyparse.check.HoldGrade",
+			"method": "byCost",
 			"find": "info: error != null",
 			"replace": "info: false && error != null",
 			"note": "a hold long only on an error path still warns"
 		},
 		{
 			"name": "M-TS-ERROR-ANY",
-			"type": "anyparse.check.ThreadSafety",
-			"method": "gradeHold",
-			"find": "final error: Null<String> = judge.normal.blockingCalls(a, held).length > 0",
-			"replace": "final error: Null<String> = judge.normal.blockingCalls(a, held).length < 0",
+			"type": "anyparse.check.HoldGrade",
+			"method": "byCost",
+			"find": "final error: Null<String> = judges.normal.blockingCalls(a, held).length > 0",
+			"replace": "final error: Null<String> = judges.normal.blockingCalls(a, held).length < 0",
 			"note": "a hold with a long call outside every catch is demoted too"
 		},
 		{
@@ -17327,6 +17327,46 @@
 			"find": "return normal.taint.blockingTrail(a, e, held) != null ? null : normal.errors.placeOf(trail.edges);",
 			"replace": "return null;",
 			"note": "--explain-long never marks an error-path reason"
+		},
+		{
+			"name": "M-TS-BLIND-BRIEF-OFF",
+			"type": "anyparse.check.LockTaint",
+			"method": "blindLong",
+			"find": "(_cost == null || a.untraced || a.blindCalls.exists(c -> !briefBlind(a, c)))",
+			"replace": "(_cost == null || a.untraced || a.blindCalls.length >= 0)",
+			"note": "every unresolved call under a hold makes its lock long when asking about cost"
+		},
+		{
+			"name": "M-TS-BLIND-CATCH-OFF",
+			"type": "anyparse.check.LockTaint",
+			"method": "briefBlind",
+			"find": "return once || cost.errors?.catchAt(a.edge.file, c.span) != null;",
+			"replace": "return once;",
+			"note": "an unresolved call only a catch runs stays long over the normal paths"
+		},
+		{
+			"name": "M-TS-HANDOFF-OFF",
+			"type": "anyparse.check.HoldGrade",
+			"method": "grade",
+			"find": "!mainOnly && handsOff(sites, a)",
+			"replace": "!mainOnly && false && handsOff(sites, a)",
+			"note": "a hold its function never gives back is graded by its window alone"
+		},
+		{
+			"name": "M-TS-HANDOFF-GIVES",
+			"type": "anyparse.check.HoldGrade",
+			"method": "handsOff",
+			"find": "!sites.gives.exists(g -> g.edge.from == a.edge.from && g.lock == lock)",
+			"replace": "!sites.gives.exists(g -> false)",
+			"note": "a hold given back on some path counts as handed off"
+		},
+		{
+			"name": "M-TS-HANDOFF-CROSSING",
+			"type": "anyparse.check.HoldGrade",
+			"method": "handsOff",
+			"find": "!a.window.exists(e -> sites.crossing.exists(c -> c.lock == lock && c.edge.from == e.to))",
+			"replace": "!a.window.exists(e -> false)",
+			"note": "a hold whose window calls a releaser counts as handed off"
 		}
 	]
 }

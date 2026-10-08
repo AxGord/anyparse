@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.LockSites.BlindCall;
 import anyparse.check.LockSites.LockAcquire;
 import anyparse.check.LockSites.LockPair;
 import anyparse.query.CallGraph;
@@ -206,6 +207,26 @@ final class LockTaint {
 	public function reentrantHeld(a: LockAcquire): Null<String> {
 		final lock: Null<String> = a.lock;
 		return lock != null && listsOf(a.edge.file).reentrantIds.contains(a.pair.lockId) && _sites.selfTake(a.edge) ? lock : null;
+	}
+
+	/**
+	 * Whether the hold `a` spans an unresolved call that makes its lock long on its own (`LongLockExplain.blind`): any one
+	 * for the plain taint; asking about cost, one that is not brief (`briefBlind`). An untraced hold always does.
+	 */
+	public function blindLong(a: LockAcquire): Bool {
+		return LongLockExplain.blind(a) && (_cost == null || a.untraced || a.blindCalls.exists(c -> !briefBlind(a, c)));
+	}
+
+	/**
+	 * Whether the unresolved call `c` the hold `a` spans waits briefly, asking about cost: one a bare `shortSinks` name
+	 * names, run at most once under the hold (`CallRepetition.onceUnder`) — an unresolved `trace` — or, over the normal
+	 * paths, one only a `catch` runs. Never on the plain taint.
+	 */
+	public function briefBlind(a: LockAcquire, c: BlindCall): Bool {
+		final cost: Null<TaintCost> = _cost;
+		if (cost == null) return false;
+		final once: Bool = listsOf(a.edge.file).shortNames.contains(c.name) && cost.repetition.onceUnder(a.edge, c.span.from);
+		return once || cost.errors?.catchAt(a.edge.file, c.span) != null;
 	}
 
 	/**

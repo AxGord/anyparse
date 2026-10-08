@@ -1548,5 +1548,13 @@ decided the question; it may not become a record of runs.
   hold); the costs are solved a second time over the normal paths — a call inside a `catch` body leads nowhere — and a
   finding long only in the first solve is `info`, naming the catch. Demotion, not removal: an error that repeats is a
   real stall, so it stays visible — branch `feat/ts-precision-2`
+- bare `shortSinks` names applied to dominance only (β1) → the costed solve still seeded every hold spanning an
+  unresolved call as long on its own, so TM's `SerFile._mutex` was long by a `trace` in `SerFile.read` and the main
+  thread's take of it warned; a hold's unresolved call is a long reason only where no bare `shortSinks` name makes it
+  brief once under the hold — the same `briefBlind` the dominance reads — branch `feat/ts-precision-2`
+- that narrowing alone → `FolderWatcher.reset` (real-long: it takes the tree lock and leaves it for the next
+  `update()`) was found only through `SerFile.remove` taking that long lock; a hold no path of its function gives back
+  (`HoldGrade.handsOff`) is long whatever its window spans — the recall now rests on the mechanism, not the accident.
+  A function that only takes the lock is left out: its caller's code is the hold — branch `feat/ts-precision-2`
 - judging "inside a catch" off the witness chain the finding prints → the chain is one way; a second way outside every
   catch must keep the warning, which only a solve without the catch edges can see — branch `feat/ts-precision-2`

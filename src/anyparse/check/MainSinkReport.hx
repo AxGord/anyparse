@@ -136,13 +136,19 @@ final class MainSinkReport {
 	}
 
 	/**
-	 * Where the main-thread take `edge` of a lock long only where a `catch` runs meets that catch: on the way a hold of
-	 * the lock blocks long (`file:line`); null when none is found, and the call stays long.
+	 * Where the main-thread take `edge` of a lock long only where a `catch` runs meets that catch: around an unresolved
+	 * call a hold of the lock spans, or on the way one blocks long (`file:line`); null when none is found, and the call
+	 * stays long.
 	 */
 	private static function errorPlace(sites: LockSites, costs: PathCosts, edge: CallEdge): Null<String> {
 		final lock: Null<String> = sites.lockOf(edge);
 		if (lock == null) return null;
 		for (a in sites.acquires.concat(sites.helperHolds)) if (a.lock == lock) {
+			// an unresolved call long only where a `catch` runs it
+			for (c in a.blindCalls) if (!costs.all.briefBlind(a, c)) {
+				final place: Null<String> = costs.errors.placeAt(a.edge.file, c.span);
+				if (place != null) return place;
+			}
 			final held: Null<String> = costs.all.reentrantHeld(a);
 			for (e in a.window) {
 				final trail: Null<BlockingTrail> = costs.all.blockingTrail(a, e, held);

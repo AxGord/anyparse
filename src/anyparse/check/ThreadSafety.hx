@@ -5,6 +5,8 @@ import anyparse.check.Check.GraphScoped;
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.check.ErrorPaths.PathCosts;
+import anyparse.check.HoldGrade.GradedHold;
+import anyparse.check.HoldGrade.HoldJudges;
 import anyparse.check.LockSites.LockAcquire;
 import anyparse.check.LockSites.LockPair;
 import anyparse.check.LockTaint.ChainLists;
@@ -182,7 +184,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			graph, sites, taints, paths, { repetition: repetition, on: repeatedOnMain, runs: runsMain }, states, violations
 		);
 		reportMalformedPairs(sets, violations);
-		reportLockHeld(graph, acquires, taints, paths, states, violations);
+		reportLockHeld(graph, sites, acquires, taints, paths, states, violations);
 		reportThrowHeld(graph, acquires.concat(helperHolds), throws, violations);
 		final order: LockOrder = new LockOrder(graph, conditions, acquires.concat(helperHolds));
 		for (v in order.report(states, inertRef, CTX_MAIN | CTX_QUIET, CTX_BG, CHAIN_CAP)) violations.push(v);
@@ -549,7 +551,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	/**
 	 * The long locks and the taint they imply, solved together: a call blocks when it reaches a sink, and a lock taken
 	 * by a sink call blocks only when it is long, while a lock is long when a hold of it spans a call that blocks. Grows
-	 * from the locks long on their own (`LongLockExplain.leaks`, `LongLockExplain.blind`, `LockSites.crossing`) until
+	 * from the locks long on their own (`LongLockExplain.leaks`, `LockTaint.blindLong`, `LockSites.crossing`) until
 	 * nothing changes. `aside` names a lock whose own such reasons are left out — the counterfactual `--explain-long`
 	 * asks: is it long by a blocking call too?
 	 */
@@ -558,7 +560,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	): Void {
 		for (c in sites.crossing) if (c.lock != aside && !long.contains(c.lock)) long.push(c.lock);
 		for (a in acquires) if (
-			(LongLockExplain.leaks(a) || LongLockExplain.blind(a)) && a.lock != null && a.lock != aside && !long.contains(a.lock)
+			(LongLockExplain.leaks(a) || taints.blindLong(a)) && a.lock != null && a.lock != aside && !long.contains(a.lock)
 		)
 			long.push(a.lock);
 		var grew: Bool = true;
@@ -605,7 +607,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	 * brief is info, a long one names only the calls that block long.
 	 */
 	private static function reportLockHeld(
-		graph: CallGraph, acquires: Array<LockAcquire>, taints: LockTaint, paths: PathCosts, states: ThreadStates,
+		graph: CallGraph, sites: LockSites, acquires: Array<LockAcquire>, taints: LockTaint, paths: PathCosts, states: ThreadStates,
 		violations: Array<Violation>
 	): Void {
 		final seen: Array<String> = [];
@@ -623,10 +625,20 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			// own long work; who else holds a lock no member names is unknown
 			final mainOnly: Bool = lock != null && states.edgeContext(a.edge) & CTX_BG == 0 && !states.assumed.exists(a.edge.from);
 			final held: Null<String> = taints.reentrantHeld(a);
-			final judge: { long: LockTaint, normal: LockTaint } = mainOnly
-				? { long: ownWork, normal: normalOwn }
-				: { long: costs, normal: paths.normal };
-			final graded: Null<GradedHold> = gradeHold(a, held, taints, judge, mainOnly, paths.errors);
+			final judges: HoldJudges = mainOnly
+				? {
+					plain: taints,
+					long: ownWork,
+					normal: normalOwn,
+					errors: paths.errors
+				}
+				: {
+					plain: taints,
+					long: costs,
+					normal: paths.normal,
+					errors: paths.errors
+				};
+			final graded: Null<GradedHold> = HoldGrade.grade(sites, a, held, judges, mainOnly);
 			if (graded == null) continue;
 			final blocking: Array<{ edge: CallEdge, path: Array<String> }> = graded.calls;
 			final short: Bool = graded.info;
@@ -662,41 +674,6 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final own: Null<LockTaint> = costs.ownWork();
 		if (own == null) throw new Exception('thread-safety: the costed taint has no own-work taint');
 		return own;
-	}
-
-	/**
-	 * The calls a finding (b) names for the hold `a` under a hold of `held`, with the taint that found them and what the
-	 * message adds: the calls that block long under `judge.long` (the holder's own long work, `mainOnly`) — info when
-	 * none blocks long under `judge.normal`, over the normal paths, naming the `catch` its first call's way passes
-	 * (`ErrorPaths`) — or else, unless only the main thread runs the hold, every call that blocks at all under `taints`,
-	 * graded short. Null when none.
-	 */
-	private static function gradeHold(
-		a: LockAcquire, held: Null<String>, taints: LockTaint, judge: { long: LockTaint, normal: LockTaint }, mainOnly: Bool,
-		errors: ErrorPaths
-	): Null<GradedHold> {
-		final long: Array<{ edge: CallEdge, path: Array<String> }> = judge.long.blockingCalls(a, held);
-		if (long.length > 0) {
-			// long only where a `catch` runs: no call of the hold blocks long over the normal paths
-			final error: Null<String> = judge.normal.blockingCalls(a, held).length > 0
-				? null
-				: errors.placeOf(judge.long.blockingTrail(a, long[0].edge, held)?.edges ?? []);
-			final note: String = error != null ? ErrorPaths.note(error) : mainOnly ? CostNote.MainOwnWork : '';
-			return {
-				calls: long,
-				taint: judge.long,
-				note: note,
-				info: error != null
-			};
-		}
-		if (mainOnly) return null;
-		final brief: Array<{ edge: CallEdge, path: Array<String> }> = taints.blockingCalls(a, held);
-		return brief.length == 0 ? null : {
-			calls: brief,
-			taint: taints,
-			note: CostNote.ShortHold,
-			info: true
-		};
 	}
 
 	/**
@@ -819,16 +796,6 @@ enum abstract FindingFamily(String) to String {
 
 }
 
-/** The calls a hold finding names, the taint that found them, and what its message adds (`ThreadSafety.gradeHold`). */
-private typedef GradedHold = {
-	final calls: Array<{ edge: CallEdge, path: Array<String> }>;
-	final taint: LockTaint;
-	final note: String;
-
-	/** Whether the finding is info: every call brief, or long only where a `catch` runs. */
-	final info: Bool;
-}
-
 /** What a `thread-safety` finding adds to its message when its cost or its thread is why it is graded as it is. */
 enum abstract CostNote(String) to String {
 
@@ -846,5 +813,9 @@ enum abstract CostNote(String) to String {
 	/** A hold only the main thread runs: no thread it stalls waits for it, but the main thread works long under it. */
 	final MainOwnWork = ' — held on the main thread only, which never waits for its own hold: the stall is the main thread\'s own long'
 		+ ' work under the lock';
+
+	/** A hold no path of its function gives back: held past the function's end, across whatever runs until it is released. */
+	final HandOff = ' — and no path of the function gives it back: held past its end until another function releases it, across'
+		+ ' whatever runs until then';
 
 }

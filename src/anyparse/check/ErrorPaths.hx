@@ -33,12 +33,16 @@ final class ErrorPaths {
 	}
 
 	/** The `catch` clause whose body holds the site of `edge`, the innermost one; null for a site outside every one, or unplaced. */
-	public function catchOf(edge: CallEdge): Null<Span> {
+	public inline function catchOf(edge: CallEdge): Null<Span> {
 		final at: Null<Span> = edge.span;
-		if (at == null) return null;
-		final key: String = '${edge.file}:${at.from}';
+		return at == null ? null : catchAt(edge.file, at);
+	}
+
+	/** The `catch` clause whose body holds the site `at` of `file`, the innermost one; null for none, or an unplaced site. */
+	public function catchAt(file: String, at: Span): Null<Span> {
+		final key: String = '$file:${at.from}';
 		if (_catches.exists(key)) return _catches[key];
-		final tree: Null<QueryNode> = _trees.ofFile(edge.file);
+		final tree: Null<QueryNode> = _trees.ofFile(file);
 		final found: Null<Span> = tree == null || _catchKind == null ? null : catchTo(tree, at);
 		_catches[key] = found;
 		return found;
@@ -57,10 +61,17 @@ final class ErrorPaths {
 	/** The first call of `edges` that runs only on an error path, as `file:line` of its `catch`; null when none does. */
 	public function placeOf(edges: Array<CallEdge>): Null<String> {
 		for (e in edges) {
-			final span: Null<Span> = catchOf(e);
-			if (span != null) return '${e.file}:${lineOf(e.file, span.from)}';
+			final at: Null<Span> = e.span;
+			final place: Null<String> = at == null ? null : placeAt(e.file, at);
+			if (place != null) return place;
 		}
 		return null;
+	}
+
+	/** The `catch` around the site `at` of `file` as `file:line`; null when no catch holds it. */
+	public function placeAt(file: String, at: Span): Null<String> {
+		final span: Null<Span> = catchAt(file, at);
+		return span == null ? null : '$file:${lineOf(file, span.from)}';
 	}
 
 	/** The innermost `catch` clause from the root of `tree` down to the node spanning `at`. */
