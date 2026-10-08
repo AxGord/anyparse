@@ -100,9 +100,6 @@ final class LintScore {
 	/** The kinds of evidence a verdict may rest on. */
 	public static final EVIDENCE_KINDS: Array<String> = ['measured', 'test', 'code'];
 
-	/** The severities, most severe first: a minimum scores its own and every one before it. */
-	public static final SEVERITY_RANKS: Array<String> = ['error', 'warning', 'info'];
-
 	/** The verdict a precision counts as right. */
 	private static inline final REAL_LONG: String = 'real-long';
 
@@ -142,7 +139,9 @@ final class LintScore {
 		];
 		final keys: Array<String> = [for (e in truth.entries) dupKeyOf(e)];
 		for (i => e in truth.entries) for (error in entryErrors(e, keys[i], keys)) errors.push('entry $i (${keys[i]}): $error');
-		for (i => key in keys) if (keys.indexOf(key) != i) errors.push('entry $i ($key): the key is labelled twice');
+		// uniqueness on the length-prefixed key: `|` may sit inside a part, so the joined spelling can collide
+		final exact: Array<String> = [for (e in truth.entries) keyOf(e.family, e.member, e.subject)];
+		for (i => key in exact) if (exact.indexOf(key) != i) errors.push('entry $i (${keys[i]}): the key is labelled twice');
 		return errors;
 	}
 
@@ -229,6 +228,7 @@ final class LintScore {
 			project: result.project,
 			commit: result.commit,
 			severity: result.severity,
+			excluded: result.excluded,
 			overall: bucketRecord(result.overall),
 			families: [for (b in result.families) bucketRecord(b)],
 			lost: [for (e in result.lost) keyRecord(e.family, e.member, e.subject, e.verdict)],
@@ -312,8 +312,10 @@ final class LintScore {
 		if (e.verdict != DUP_OF && dupOf != '') errors.push('"dupOf" belongs to verdict dup-of only');
 		if (e.verdict == DUP_OF && dupOf == '') errors.push('verdict dup-of needs "dupOf", the "family|function|subject" it duplicates');
 		if (e.verdict == DUP_OF && dupOf == key) errors.push('"dupOf" names the entry itself');
-		if (e.verdict == DUP_OF && dupOf != '' && !keys.contains(dupOf))
+		final named: Int = keys.filter(k -> k == dupOf).length;
+		if (e.verdict == DUP_OF && dupOf != '' && named == 0)
 			errors.push('"dupOf" "$dupOf" names no entry of this truth file (expected "family|function|subject")');
+		if (e.verdict == DUP_OF && named > 1) errors.push('"dupOf" "$dupOf" names $named entries — a "|" inside a part makes it ambiguous');
 		return errors;
 	}
 
@@ -355,11 +357,14 @@ final class LintScore {
 		return keys;
 	}
 
-	/** Whether `severity` is `minimum` or more severe (`SEVERITY_RANKS`); every severity is, under a null minimum. */
+	/**
+	 * Whether `severity` is `minimum` or more severe (`LintDiff.SEVERITY_ORDER`), every one under a null minimum; throws on
+	 * a severity outside the order.
+	 */
 	private static function atOrAbove(severity: String, minimum: Null<String>): Bool {
-		if (minimum == null) return true;
-		final rank: Int = SEVERITY_RANKS.indexOf(severity);
-		return rank >= 0 && rank <= SEVERITY_RANKS.indexOf(minimum);
+		final rank: Int = LintDiff.SEVERITY_ORDER.indexOf(severity);
+		if (rank < 0) throw new Exception('a finding of severity "$severity", which is none of ${LintDiff.SEVERITY_ORDER.join('|')}');
+		return minimum == null || rank <= LintDiff.SEVERITY_ORDER.indexOf(minimum);
 	}
 
 	/** One bucket over its report `keys` and truth `entries`. */

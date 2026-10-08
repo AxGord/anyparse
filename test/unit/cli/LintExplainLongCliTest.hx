@@ -72,6 +72,30 @@ class LintExplainLongCliTest extends Test {
 		#end
 	}
 
+	/** A blind hold names its unresolved calls at their line and column; a short lock only a quiet root takes is marked quiet. */
+	public function testUnresolvedCallsAndQuietTakes(): Void {
+		#if nodejs
+		final source: String = 'class A { final _m:Mutex = new Mutex(); final _s:Mutex = new Mutex(); public function new() {}\n'
+			+ ' function work(f:() -> Void):Void { _m.acquire();\n' + ' f(); _m.release(); }\n'
+			+ ' function shutdown():Void { _s.acquire(); tick(); _s.release(); } function tick():Void {} }';
+		final config: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire"],"lockPairs":["Mutex.acquire/release"],'
+			+ '"quietRoots":["A.shutdown"]}}}';
+		final json: Dynamic = Json.parse(lint(source, config, ['--format', 'json', '--explain-long']).out).longLocks;
+		final blind: Dynamic = (json.long: Array<Dynamic>).filter(l -> l.lock == 'A._m')[0].reasons[0];
+		Assert.same(['blind', 'f', 3, 2], [
+			blind.kind,
+			blind.unresolved[0].name,
+			blind.unresolved[0].line,
+			blind.unresolved[0].col
+		]);
+		final text: String = lint(source, config, ['--explain-long']).out;
+		Assert.stringContains('unresolved: f at 3:2', text);
+		Assert.stringContains('A.shutdown  (quiet)', text);
+		#else
+		Assert.pass('node only: stdout capture');
+		#end
+	}
+
 	/**
 	 * Text puts the section after the findings and says when a lock would not be long without its own reasons; without
 	 * the flag there is none.

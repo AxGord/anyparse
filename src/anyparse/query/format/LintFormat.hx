@@ -91,8 +91,9 @@ final class LintFormat {
 	 *
 	 * Given `explain` (`lint --explain-long`), the document is the `{"findings": […], "longLocks": {…} | null}` envelope
 	 * instead — null when the rule ran and explained nothing. `longLocks.long` lists each long lock as `{lock, reasons,
-	 * aside}`, a reason as `{kind, file, line, col, function}` plus `call`, `chain`, `via` for `spans-blocking` and
-	 * `unresolved` (`[{name, line, col}]`) for `blind`, `aside` null or such reasons; `longLocks.mainShort` lists each
+	 * circular, aside}` (`circular`: how many re-takes of the lock itself were left out), a reason as `{kind, file, line,
+	 * col, function}` plus `call`, `chain`, `via` for `spans-blocking` and `unresolved` (`[{name, line, col}]`) for
+	 * `blind`, `aside` null or such reasons; `longLocks.mainShort` lists each
 	 * main-thread take of a lock that is not long as `{lock, file, line, col, function, quiet}`.
 	 */
 	public static function json(
@@ -118,6 +119,7 @@ final class LintFormat {
 					{
 						lock: l.lock,
 						reasons: [for (r in l.reasons) reasonRecord(r, sourceOf, indexes)],
+						circular: l.circular,
 						aside: l.aside == null ? null : [for (r in l.aside) reasonRecord(r, sourceOf, indexes)]
 					}
 			],
@@ -189,6 +191,7 @@ final class LintFormat {
 		for (l in report.long) {
 			buf.add('long ${l.lock}\n');
 			for (r in l.reasons) buf.add('  ${reasonText(r, sourceOf, indexes)}\n');
+			if (l.circular > 0) buf.add('  ${l.circular} circular re-take(s) of this lock itself, left out\n');
 			final aside: Null<Array<LongLockReason>> = l.aside;
 			if (aside != null && aside.length == 0) buf.add('  without its own reasons: not long\n');
 			if (aside != null) for (r in aside) buf.add('  without its own reasons: ${reasonText(r, sourceOf, indexes)}\n');
@@ -229,7 +232,10 @@ final class LintFormat {
 		return record;
 	}
 
-	/** One `--explain-long` reason as a JSON record: its site (`siteRecord`), its `kind`, a `spans-blocking` one's `call` and `chain`. */
+	/**
+	 * One `--explain-long` reason as a JSON record: its site (`siteRecord`) and `kind`, plus a `spans-blocking` one's `call`,
+	 * `chain` and `via`, and a `blind` one's `unresolved` calls with their line and column.
+	 */
 	private static function reasonRecord(r: LongLockReason, sourceOf: Map<String, String>, indexes: Map<String, LineIndex>): Dynamic {
 		final index: LineIndex = indexFor(r.file, sourceOf, indexes);
 		final record: Dynamic = siteRecord(null, r.file, r.span, r.holder, index);
@@ -262,11 +268,17 @@ final class LintFormat {
 		final index: LineIndex = indexFor(r.file, sourceOf, indexes);
 		final head: String = '${r.kind.rpad(' ', LONG_REASON_WIDTH)}  ${place(r.file, r.span, index)}  ${r.holder}';
 		if (r.kind == LongLockKind.Blind)
-			return '$head  unresolved: ${[for (c in r.unresolved) '${c.name} at ${place(r.file, c.span, index)}'].join(', ')}';
+			return '$head  unresolved: ${[for (c in r.unresolved) '${c.name} at ${lineCol(c.span, index)}'].join(', ')}';
 		final call: Null<String> = r.call;
 		if (call == null) return head;
 		final via: String = r.via == null ? '' : ' via ${r.via}';
 		return '$head  calls $call$via: ${r.chain.join(' -> ')}';
+	}
+
+	/** `<line>:<col>` of `span`'s start. */
+	private static function lineCol(span: Span, index: LineIndex): String {
+		final pos: Position = index.lineColAt(span.from);
+		return '${pos.line}:${pos.col}';
 	}
 
 	/** `<file>:<line>:<col>`, or the bare file when there is no span. */

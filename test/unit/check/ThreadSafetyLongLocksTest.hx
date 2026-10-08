@@ -3,6 +3,8 @@ package unit.check;
 import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.LongLockExplain.LongLock;
+import anyparse.check.LongLockExplain.LongLockKind;
+import anyparse.check.LongLockExplain.LongLockReason;
 import anyparse.check.LongLockExplain.LongLockReport;
 import anyparse.check.ThreadSafety;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
@@ -103,6 +105,61 @@ class ThreadSafetyLongLocksTest extends Test {
 			{ kind: 'spans-blocking', holder: 'A.work', at: source.indexOf('nap2();') },
 			{ kind: 'spans-blocking', holder: 'A.more', at: source.indexOf('nap();', source.indexOf('more')) }
 		], reasonsOf(longLock(explain([source]), 'A._l')));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A virtual call dispatching to several targets is a reason per target, in `reasons` and `aside` alike — one
+	 * normaliser, so the two lists compare: here `_w` is long by a leak, and its hold across `upd` blocks through each override.
+	 */
+	@:pin('control') @:killer('M-TS-REASONS-DEDUP-BY-SITE')
+	public function testAVirtualCallIsAReasonPerTarget(): Void {
+		#if (sys || nodejs)
+		final sources: Array<String> = [
+			'class W { final _w:Mutex = new Mutex(); final _s:Mutex = new Mutex(); public function new() {}'
+				+ ' function keep(x:Bool):Void { if (x) _w.acquire(); } function blindS(f:() -> Void):Void { _s.acquire(); f(); _s.release(); }'
+				+ ' public function save(t:Int):Void { _w.acquire(); upd(t); _w.release(); } public function upd(t:Int):Void write();'
+				+ ' function write():Void { _s.acquire(); _s.release(); } }',
+			'class D extends W { override public function upd(t:Int):Void super.upd(t); }',
+			'class E extends W { override public function upd(t:Int):Void super.upd(t); }'
+		];
+		final lock: Null<LongLock> = longLock(explain(sources), 'W._w');
+		Assert.same(['D.upd', 'E.upd', 'W.upd'], sortedCalls(lock?.reasons ?? []));
+		Assert.same(['D.upd', 'E.upd', 'W.upd'], sortedCalls(lock?.aside ?? []));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A hold waiting for the lock ITSELF — a re-take on another object, a call that takes it again — blocks only once the
+	 * lock is long already: such reasons are circular, left out of `reasons` and `aside`, and counted.
+	 */
+	@:pin('control') @:killer('M-TS-CIRCULAR-COUNTED')
+	public function testACircularReTakeIsCountedApart(): Void {
+		#if (sys || nodejs)
+		final source: String = 'class A { final _m:Mutex = new Mutex(); public function new() {}'
+			+ ' function keep(x:Bool):Void { if (x) _m.acquire(); } function other(o:A):Void { _m.acquire(); o.inner(); _m.release(); }'
+			+ ' public function inner():Void { _m.acquire(); _m.release(); } }';
+		final lock: Null<LongLock> = longLock(explain([source]), 'A._m');
+		Assert.same(['leak'], [for (r in lock?.reasons ?? []) r.kind]);
+		Assert.equals(1, lock?.circular);
+		Assert.same([], lock?.aside, 'nothing but the lock itself holds it long once the leak is set aside');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A hold the control-flow walk cannot trace — a take in a field initializer — is its own reason, `untraced`. */
+	public function testAnInitializerTakeIsUntraced(): Void {
+		#if (sys || nodejs)
+		final source: String = 'class A { final n:Mutex = new Mutex(); final w:Int = { n.acquire(); 2; }; public function new() {}'
+			+ ' function boot():Void { n.acquire(); n.release(); } }';
+		Assert.same(
+			[{ kind: 'untraced', holder: 'A.<init>', at: source.indexOf('n.acquire') }], reasonsOf(longLock(explain([source]), 'A.n'))
+		);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -243,6 +300,13 @@ class ThreadSafetyLongLocksTest extends Test {
 		return [
 			for (r in lock?.reasons ?? []) { kind: r.kind, holder: r.holder, at: r.span?.from }
 		];
+	}
+
+	/** The calls the `spans-blocking` reasons of `reasons` name, sorted. */
+	private static function sortedCalls(reasons: Array<LongLockReason>): Array<Null<String>> {
+		final calls: Array<Null<String>> = [for (r in reasons) if (r.kind == LongLockKind.SpansBlocking) r.call];
+		calls.sort(Reflect.compare);
+		return calls;
 	}
 	#end
 

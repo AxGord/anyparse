@@ -72,12 +72,10 @@ final class MetaInspect {
 				case _: null;
 			}
 			: null;
-		if (key == null) {
-			Context.fatalError(
+		if (key == null)
+			return Context.fatalError(
 				'@:key on field "$fieldName" takes exactly one string: the key the format spells the field with', entries[0].pos
 			);
-			throw 'unreachable';
-		}
 		final unwritable: EReg = ~/["\\\x00-\x1f]/;
 		if (unwritable.match(key))
 			Context.fatalError(
@@ -96,7 +94,10 @@ final class MetaInspect {
 			final key: String = wireKey(child, fieldName);
 			final other: Null<String> = seen[key];
 			if (other != null)
-				Context.fatalError('fields "$other" and "$fieldName" are both spelled "$key" in the document', Context.currentPos());
+				Context.fatalError(
+					'fields "$other" and "$fieldName" are both spelled "$key" in the document',
+					child.annotations.get(AnnotationKeys.BASE_FIELD_POS) ?? Context.currentPos()
+				);
 			seen[key] = fieldName;
 		}
 	}

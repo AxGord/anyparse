@@ -9,15 +9,28 @@ using Lambda;
 
 /**
  * One way a thread can be in a function: entered on `ctx` under `valuation` (`EdgeConditions`) holding the locks `held`
- * (sorted), through the call `via` of the `parent` state — none for an entry point.
+ * (sorted), keyed by all four (`key`), through every call that reaches it (`arrivals`) — none for an entry point.
  */
 private typedef HeldState = {
 	final id: String;
 	final ctx: Int;
 	final valuation: String;
 	final held: Array<String>;
-	final parent: Null<HeldState>;
-	final via: Null<CallEdge>;
+	final key: String;
+	final arrivals: Array<Arrival>;
+}
+
+/** One way into a state: the call `via` of the `parent` state. */
+private typedef Arrival = {
+	final parent: HeldState;
+	final via: CallEdge;
+}
+
+/** How a lock held on entering a state came to be held: the function that took it, where it called out, and the path from it. */
+private typedef Climb = {
+	final holder: String;
+	final anchor: Null<CallEdge>;
+	final prefix: Array<String>;
 }
 
 /** One "holds A, then takes B" step: the state that makes it, the call there that takes B, and the context it runs on. */
@@ -70,17 +83,14 @@ final class LockOrder {
 	/** Bound on the states the walk visits: past it the run reports no inversion at all rather than a partial answer. */
 	private static inline final STATE_CAP: Int = 200000;
 
-	/** The context bits a step is kept by: the least step of an order on each of them. */
-	private static final CONTEXT_BITS: Array<Int> = [ThreadSafety.CTX_MAIN, ThreadSafety.CTX_BG, ThreadSafety.CTX_QUIET];
-
 	/** `<file>:<start>` of each call -> the named locks its function holds there, by the holds of its own body, each with its take. */
 	private final _heldAt: Map<String, Array<{ lock: String, take: CallEdge }>> = [];
 
 	/** `<file>:<start>` of each take -> the named locks it takes. */
 	private final _takenAt: Map<String, Array<String>> = [];
 
-	/** Each order, by `<held>\n<taken>`: per context bit, the least step of it (`precedes`), whatever order the walk met them in. */
-	private final _steps: Map<String, Map<Int, RankedStep>> = [];
+	/** Each order, by `<held>\n<taken>`: every step making it, ranked only once its order turns out reported (`rankStep`). */
+	private final _steps: Map<String, Array<OrderStep>> = [];
 
 	/** The keys of `_steps`, in the order the walk first made each. */
 	private final _order: Array<String> = [];
@@ -112,28 +122,22 @@ final class LockOrder {
 		final reached: Map<String, HeldState> = [];
 		final queue: Array<HeldState> = [];
 		function follow(state: HeldState): Void {
-			final key: String = '${state.id}|${state.ctx}|${state.valuation}|${state.held.join('\n')}';
-			if (seen.exists(key)) return;
-			seen[key] = state;
+			final known: Null<HeldState> = seen[state.key];
+			// a state met again keeps the new way in: which function holds a lock must not hang on the walk's order
+			if (known != null) {
+				for (arrival in state.arrivals) known.arrivals.push(arrival);
+				return;
+			}
+			seen[state.key] = state;
 			if (!reached.exists(state.id)) reached[state.id] = state;
 			queue.push(state);
 		}
 		function enter(id: String, ctx: Int): Void {
 			if (ctx == 0) return;
-			follow({
-				id: id,
-				ctx: ctx,
-				valuation: _conditions.unknown(id),
-				held: [],
-				parent: null,
-				via: null
-			});
+			follow(heldState(id, ctx, _conditions.unknown(id), [], null));
 		}
-		// the walk runs in an order of ids and sites, never of the source: the first arrival at a state fixes the holder a
-		// step names, so the order two calls are written in must not decide it
-		final ids: Array<String> = ThreadSafety.sortedIds([for (id in _graph.nodes.keys()) id]);
-		for (id in ids) if (isEntry(id)) enter(id, contexts[id] ?? 0);
-		for (e in inWalkOrder(_graph.edges)) if (runsCallback(e, inertRef)) enter(e.to, threads.edgeContext(e));
+		for (id => node in _graph.nodes) if (isEntry(id, node)) enter(id, contexts[id] ?? 0);
+		for (e in _graph.edges) if (runsCallback(e, inertRef)) enter(e.to, threads.edgeContext(e));
 		var qi: Int = 0;
 		while (true) {
 			while (qi < queue.length) {
@@ -142,15 +146,15 @@ final class LockOrder {
 			}
 			// a cycle of calls nothing outside it calls is entered anywhere, holding nothing, as `contexts` assumed
 			final before: Int = queue.length;
-			for (id in ids) if (!(_graph.node(id)?.isExternal == true || reached.exists(id))) enter(id, contexts[id] ?? 0);
+			for (id => node in _graph.nodes) if (!(node.isExternal || reached.exists(id))) enter(id, contexts[id] ?? 0);
 			if (queue.length == before) break;
 		}
 		return inversions(main, bg, chainCap);
 	}
 
-	/** Whether `id` is an entry point of the walk: a function of the run no invocation reaches. */
-	private function isEntry(id: String): Bool {
-		return _graph.node(id)?.isExternal == false && !_graph.inEdges(id).exists(e -> e.kind.isInvocation());
+	/** Whether `id` (its `node`) is an entry point of the walk: a function of the run no invocation reaches. */
+	private function isEntry(id: String, node: FnNode): Bool {
+		return !node.isExternal && !_graph.inEdges(id).exists(e -> e.kind.isInvocation());
 	}
 
 	/** Whether the `Ref` edge `e` hands a function of the run to code that runs it (`inertRef` says which never do). */
@@ -177,7 +181,7 @@ final class LockOrder {
 	 * make, and enters the functions they call. A hold of the body counts at a call only where its own take runs too.
 	 */
 	private function visit(state: HeldState, enter: (HeldState) -> Void): Void {
-		for (e in inWalkOrder(_graph.outEdges(state.id))) if (e.kind.isInvocation()) {
+		for (e in _graph.outEdges(state.id)) if (e.kind.isInvocation()) {
 			final ctx: Int = _conditions.carried(e, state.valuation, state.ctx);
 			if (ctx == 0) continue;
 			final key: String = siteKey(e);
@@ -193,43 +197,35 @@ final class LockOrder {
 				held: h,
 				taken: taken
 			});
-			if (_graph.node(e.to)?.isExternal == false) enter({
-				id: e.to,
-				ctx: ctx,
-				valuation: _conditions.bind(e, state.valuation),
-				held: held,
+			if (_graph.node(e.to)?.isExternal == false) enter(heldState(e.to, ctx, _conditions.bind(e, state.valuation), held, {
 				parent: state,
 				via: e
-			});
+			}));
 		}
 	}
 
-	/** Keeps `step` as the witness of its order for each context bit it runs on, when it precedes the witness kept so far. */
+	/** Keeps `step` among the witnesses of its order; which one a finding names is decided once the walk is done (`crossThread`). */
 	private function record(step: OrderStep): Void {
 		final key: String = '${step.held}\n${step.taken}';
-		final ranked: RankedStep = rankStep(step);
-		var known: Null<Map<Int, RankedStep>> = _steps[key];
+		final known: Null<Array<OrderStep>> = _steps[key];
 		if (known == null) {
-			known = [];
-			_steps[key] = known;
+			_steps[key] = [step];
 			_order.push(key);
-		}
-		final byBit: Map<Int, RankedStep> = known;
-		for (bit in CONTEXT_BITS) if (step.ctx & bit != 0) {
-			final current: Null<RankedStep> = byBit[bit];
-			if (current == null || precedes(ranked, current)) byBit[bit] = ranked;
-		}
+		} else
+			known.push(step);
 	}
 
 	/** One finding per pair of locks whose two orders some main-thread step and some background step make. */
 	private function inversions(main: Int, bg: Int, chainCap: Int): Array<Violation> {
 		final violations: Array<Violation> = [];
 		final done: Array<String> = [];
+		final memo: Map<String, Climb> = [];
+		final rank: (OrderStep) -> RankedStep = step -> rankStep(step, memo);
 		for (key in _order) {
 			final locks: Array<String> = key.split('\n');
 			final back: String = '${locks[1]}\n${locks[0]}';
 			if (done.contains(back)) continue;
-			final pair: Null<{ main: RankedStep, bg: RankedStep }> = crossThread(_steps[key] ?? [], _steps[back] ?? [], main, bg);
+			final pair: Null<{ main: RankedStep, bg: RankedStep }> = crossThread(_steps[key] ?? [], _steps[back] ?? [], main, bg, rank);
 			if (pair == null) continue;
 			done.push(key);
 			final m: RankedStep = pair.main;
@@ -255,30 +251,60 @@ final class LockOrder {
 	 * `step` ranked: the call where the hold of its first lock A first calls toward the take, the function
 	 * F holding A — the one on the step's path that took A itself — and the whole path from F to the take.
 	 */
-	private function rankStep(step: OrderStep): RankedStep {
-		final path: Array<String> = [step.take.to];
-		var anchor: CallEdge = step.take;
-		var cursor: HeldState = step.state;
-		while (true) {
-			path.unshift(cursor.id);
-			final parent: Null<HeldState> = cursor.parent;
-			final via: Null<CallEdge> = cursor.via;
-			if (parent == null || via == null || !cursor.held.contains(step.held)) break;
-			anchor = via;
-			cursor = parent;
-		}
+	private function rankStep(step: OrderStep, memo: Map<String, Climb>): RankedStep {
+		final up: Climb = climb(step.state, step.held, memo, []);
 		return {
 			step: step,
-			anchor: anchor,
-			holder: cursor.id,
-			member: ThreadSafety.memberOf(_graph, cursor.id),
-			path: path
+			anchor: up.anchor ?? step.take,
+			holder: up.holder,
+			member: ThreadSafety.memberOf(_graph, up.holder),
+			path: up.prefix.concat([step.take.to])
 		};
+	}
+
+	/**
+	 * Who holds `held` on entering `state`: the state itself when it does not hold it on entry (it takes the lock), else —
+	 * over EVERY way into it, a way back into a state on `onPath` aside — the way whose holder precedes (`precedes`), with
+	 * the call where that holder's hold first calls out. `memo` keeps each state's answer for one lock.
+	 */
+	private function climb(state: HeldState, held: String, memo: Map<String, Climb>, onPath: Array<String>): Climb {
+		final key: String = '$held\n${state.key}';
+		final known: Null<Climb> = memo[key];
+		if (known != null) return known;
+		var best: Null<Climb> = null;
+		if (state.held.contains(held)) for (arrival in state.arrivals) if (!onPath.contains(arrival.parent.key)) {
+			final up: Climb = climb(arrival.parent, held, memo, onPath.concat([state.key]));
+			final found: Climb = { holder: up.holder, anchor: up.anchor ?? arrival.via, prefix: up.prefix.concat([state.id]) };
+			final current: Null<Climb> = best;
+			if (current == null || climbPrecedes(found, current)) best = found;
+		}
+		final out: Climb = best ?? { holder: state.id, anchor: null, prefix: [state.id] };
+		memo[key] = out;
+		return out;
+	}
+
+	/** Whether the way `a` into a state precedes the way `b` (`earlier`, by the members of their holders). */
+	private function climbPrecedes(a: Climb, b: Climb): Bool {
+		return earlier(
+			ThreadSafety.memberOf(_graph, a.holder), a.anchor, a.prefix, ThreadSafety.memberOf(_graph, b.holder), b.anchor, b.prefix
+		);
 	}
 
 	/** `<file>:<start>` of `edge`'s site. */
 	private static inline function siteKey(edge: CallEdge): String {
 		return '${edge.file}:${edge.span?.from ?? -1}';
+	}
+
+	/** A state of `id` on `ctx` under `valuation` holding `held`, entered by `arrival` (none for an entry point). */
+	private static function heldState(id: String, ctx: Int, valuation: String, held: Array<String>, arrival: Null<Arrival>): HeldState {
+		return {
+			id: id,
+			ctx: ctx,
+			valuation: valuation,
+			held: held,
+			key: '$id|$ctx|$valuation|${held.join('\n')}',
+			arrivals: arrival == null ? [] : [arrival]
+		};
 	}
 
 	/** `"F" holds "A" and then takes "B" (F -> ... -> take)` for `ranked`, the path capped at `cap` (`ThreadSafety.elided`). */
@@ -304,12 +330,12 @@ final class LockOrder {
 	 * step of the other order: one inversion, one anchor, whatever order the walk met the steps in.
 	 */
 	private static function crossThread(
-		ab: Map<Int, RankedStep>, ba: Map<Int, RankedStep>, main: Int, bg: Int
+		ab: Array<OrderStep>, ba: Array<OrderStep>, main: Int, bg: Int, rank: (OrderStep) -> RankedStep
 	): Null<{ main: RankedStep, bg: RankedStep }> {
 		var best: Null<{ main: RankedStep, bg: RankedStep }> = null;
 		for (side in [{ mains: ab, bgs: ba }, { mains: ba, bgs: ab }]) {
-			final m: Null<RankedStep> = least(side.mains, main);
-			final b: Null<RankedStep> = least(side.bgs, bg);
+			final m: Null<RankedStep> = least(side.mains, main, rank);
+			final b: Null<RankedStep> = least(side.bgs, bg, rank);
 			if (m == null || b == null) continue;
 			final found: { main: RankedStep, bg: RankedStep } = { main: m, bg: b };
 			final current: Null<{ main: RankedStep, bg: RankedStep }> = best;
@@ -319,44 +345,40 @@ final class LockOrder {
 	}
 
 	/** The step of `steps` running on a context of `mask` that precedes every other such step; null with none. */
-	private static function least(steps: Map<Int, RankedStep>, mask: Int): Null<RankedStep> {
+	private static function least(steps: Array<OrderStep>, mask: Int, rank: (OrderStep) -> RankedStep): Null<RankedStep> {
 		var out: Null<RankedStep> = null;
-		for (s in steps) {
+		for (step in steps) if (step.ctx & mask != 0) {
+			final s: RankedStep = rank(step);
 			final known: Null<RankedStep> = out;
-			if (s.step.ctx & mask != 0 && (known == null || precedes(s, known))) out = s;
+			if (known == null || precedes(s, known)) out = s;
 		}
 		return out;
-	}
-
-	/** `edges` by target, then file and offset: the order the walk takes them in, whatever order the source writes them. */
-	private static function inWalkOrder(edges: Array<CallEdge>): Array<CallEdge> {
-		final ordered: Array<CallEdge> = edges.copy();
-		ordered.sort((a, b) ->
-			if (a.to != b.to)
-				a.to < b.to ? -1 : 1
-			else if (a.file != b.file)
-				a.file < b.file ? -1 : 1
-			else
-				(a.span?.from ?? -1) - (b.span?.from ?? -1)
-		);
-		return ordered;
 	}
 
 	/**
 	 * Whether `a` precedes `b`: by the member holding the first lock (`ThreadSafety.memberOf`), then the anchor's file and
 	 * offset, then the path — a total order over what a finding says, so the step a report names does not depend on walk order.
 	 */
-	private static function precedes(a: RankedStep, b: RankedStep): Bool {
-		final atA: Int = a.anchor.span?.from ?? -1;
-		final atB: Int = b.anchor.span?.from ?? -1;
-		return if (a.member != b.member)
-			a.member < b.member
-		else if (a.anchor.file != b.anchor.file)
-			a.anchor.file < b.anchor.file
+	private static inline function precedes(a: RankedStep, b: RankedStep): Bool {
+		return earlier(a.member, a.anchor, a.path, b.member, b.anchor, b.path);
+	}
+
+	/** The order `precedes` and `climbPrecedes` share: by member, then the anchor's file and offset, then the path. */
+	private static function earlier(
+		memberA: String, anchorA: Null<CallEdge>, pathA: Array<String>, memberB: String, anchorB: Null<CallEdge>, pathB: Array<String>
+	): Bool {
+		final fileA: String = anchorA?.file ?? '';
+		final fileB: String = anchorB?.file ?? '';
+		final atA: Int = anchorA?.span?.from ?? -1;
+		final atB: Int = anchorB?.span?.from ?? -1;
+		return if (memberA != memberB)
+			memberA < memberB
+		else if (fileA != fileB)
+			fileA < fileB
 		else if (atA != atB)
 			atA < atB
 		else
-			a.path.join('\n') < b.path.join('\n');
+			pathA.join('\n') < pathB.join('\n');
 	}
 
 	private static function add(into: Map<String, Array<String>>, key: String, lock: String): Void {

@@ -33,9 +33,10 @@ enum abstract LongLockKind(String) to String {
 
 /**
  * One reason `thread-safety` holds a lock long, at one site: its `kind`, the site and the function it sits in
- * (`holder`). A `spans-blocking` reason also names the call the hold spans (`call`), the path from the holder to the call
- * that blocks (`chain`) and, when that call blocks by taking a lock, the lock it waits for (`via`); a `blind` one the
- * calls the graph resolves to nothing (`unresolved`).
+ * (`holder`). A `spans-blocking` reason also names the call the hold spans (`call`, one target of it), the path from the
+ * holder to a call that blocks (`chain`) and, when that call blocks by taking a lock, the lock it waits for (`via`); a
+ * `blind` one the calls the graph resolves to nothing (`unresolved`). `chain` and `via` are ONE witness the walk found,
+ * not the only way the call blocks: compare two reports by site and call, never by `via`.
  */
 typedef LongLockReason = {
 	final kind: LongLockKind;
@@ -52,11 +53,13 @@ typedef LongLockReason = {
  * One long lock and every reason found for it. `aside` answers, for a lock long on reasons of its own (`crossing`,
  * `leak`, `blind`, `untraced`), what it is long by once those are set aside: every `spans-blocking` reason of its holds
  * in a solve without them, none when it would then be short. Null for a lock long only by spanning blocking calls, and
- * for an unnamed one.
+ * for an unnamed one. A hold waiting for the lock ITSELF (`via` the lock) blocks only once the lock is long already, so
+ * such a reason is circular: left out of `reasons` and `aside` alike, and counted in `circular`.
  */
 typedef LongLock = {
 	final lock: String;
 	final reasons: Array<LongLockReason>;
+	final circular: Int;
 	final aside: Null<Array<LongLockReason>>;
 }
 
@@ -116,11 +119,10 @@ final class LongLockExplain {
 		aside: (String) -> LockTaint
 	): LongLockReport {
 		final byLock: Map<String, Array<LongLockReason>> = [];
+		final circular: Map<String, Int> = [];
 		final order: Array<String> = long.copy();
 		function add(lock: String, reason: LongLockReason): Void {
-			final known: Array<LongLockReason> = byLock[lock] ?? [];
-			if (!known.exists(r -> r.kind == reason.kind && r.file == reason.file && r.span?.from == reason.span?.from)) known.push(reason);
-			byLock[lock] = known;
+			byLock[lock] = distinct((byLock[lock] ?? []).concat([reason]));
 			if (!order.contains(lock)) order.push(lock);
 		}
 		for (c in sites.crossing) add(c.lock, siteReason(Crossing, c.edge, []));
@@ -133,15 +135,35 @@ final class LongLockExplain {
 			else
 				for (reason in ownReasons(a)) add(lock, reason);
 		}
-		for (lock in long) for (reason in spansBlocking(acquires, lock, taints)) add(lock, reason);
+		for (lock in long) {
+			final spans: Array<LongLockReason> = spansBlocking(acquires, lock, taints);
+			for (reason in spans) if (reason.via != lock) add(lock, reason);
+			circular[lock] = distinct(spans.filter(r -> r.via == lock)).length;
+		}
 		final out: Array<LongLock> = [
 			for (lock in order) {
 				final reasons: Array<LongLockReason> = byLock[lock] ?? [];
 				final own: Bool = long.contains(lock) && reasons.exists(r -> r.kind != SpansBlocking);
-				{ lock: lock, reasons: reasons, aside: own ? spansBlocking(acquires, lock, aside(lock)) : null };
+				{
+					lock: lock,
+					reasons: reasons,
+					circular: circular[lock] ?? 0,
+					aside: own ? distinct(spansBlocking(acquires, lock, aside(lock)).filter(r -> r.via != lock)) : null
+				};
 			}
 		];
 		return { long: out, mainShort: shortTakes(mainTakes, long) };
+	}
+
+	/**
+	 * `reasons` with each site once: the same kind at the same call site toward the same target (`call`) — a virtual call
+	 * dispatching to several targets keeps one reason per target. The one normaliser `reasons` and `aside` both go through.
+	 */
+	private static function distinct(reasons: Array<LongLockReason>): Array<LongLockReason> {
+		final out: Array<LongLockReason> = [];
+		for (r in reasons) if (!out.exists(o -> o.kind == r.kind && o.file == r.file && o.span?.from == r.span?.from && o.call == r.call))
+			out.push(r);
+		return out;
 	}
 
 	/** The leak and blind reasons of the traced hold `a`, at its take. */

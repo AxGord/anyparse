@@ -29,13 +29,16 @@ final class LintExplainLong {
 
 	/**
 	 * What the report carries for `--explain-long`: null when the flag is off; otherwise the check's report, or null — said
-	 * on stderr — when the check ran and explained nothing (no file of the run configures `sinks`) or was not run at all.
+	 * on stderr — when the check ran and explained nothing (no file configures `sinks`, or `exclude` dropped every one) or
+	 * was not run at all.
 	 */
 	public static function outcome(on: Bool, explainer: Null<ThreadSafety>): Null<ExplainedLocks> {
 		if (!on) return null;
 		final report: Null<LongLockReport> = explainer?.longLocks;
 		if (explainer != null && report == null)
-			CliIo.stderr('apq lint: --explain-long: thread-safety explained nothing — no file of the run configures its `sinks`\n');
+			CliIo.stderr(
+				'apq lint: --explain-long: thread-safety explained nothing — no file was left to analyse: none configures `sinks`, or `exclude` dropped every one\n'
+			);
 		return { report: report };
 	}
 

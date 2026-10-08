@@ -172,6 +172,34 @@ class LintScoreTest extends Test {
 		Assert.equals(12.0, ok.entries[1].evidence?.ms);
 	}
 
+	/**
+	 * A `|` inside a key part is no collision — `{A, "x|y", "z"}` and `{A, "x", "y|z"}` are two keys — but a `dupOf` that
+	 * spells both is ambiguous, and refused.
+	 */
+	@:pin('control') @:killer('M-SCORE-UNIQUE-JOINED', 'M-SCORE-DUPOF-AMBIGUOUS')
+	public function testAPipeInsideAPartIsNoCollision(): Void {
+		final twoKeys: Array<String> = [entry('A', 'x|y', 'z', 'real-long'), entry('A', 'x', 'y|z', 'false')];
+		Assert.equals(2, LintScore.parseTruth(truthOf(twoKeys)).entries.length);
+		Assert.stringContains(
+			'names 2 entries',
+			refusal(() -> LintScore.parseTruth(truthOf(twoKeys.concat([entry('A', 'w', 'v', 'dup-of', ', "dupOf": "A|x|y|z"')]))))
+		);
+	}
+
+	/** A finding of a severity outside the order is refused, never scored as below the minimum. */
+	@:pin('control') @:killer('M-SCORE-SEVERITY-UNKNOWN')
+	public function testAnUnknownSeverityIsRefused(): Void {
+		final truth: LintTruthJson = LintScore.parseTruth(truthOf([entry('A', 'A.b', 'S.f', 'real-long')]));
+		Assert.stringContains(
+			'severity "fatal"',
+			refusal(() ->
+				LintScore.score(
+					truth, LintDiff.parseReport('[${finding('A', 'A.b', 'S.f')}, ${finding('A', 'A.c', 'S.f', 'fatal')}]'), 'warning'
+				)
+			)
+		);
+	}
+
 	/** The `--explain-long` envelope is a report too: its findings are scored, its other keys skipped. */
 	public function testTheExplainEnvelopeIsAReport(): Void {
 		final result: LintScoreResult = LintScore.score(
@@ -182,6 +210,7 @@ class LintScoreTest extends Test {
 	}
 
 	/** The text table and the json document carry the same numbers, ratios to two decimals and `-` for none. */
+	@:pin('control') @:killer('M-SCORE-JSON-EXCLUDED')
 	public function testRenderAndJson(): Void {
 		final result: LintScoreResult = score(
 			[
@@ -207,6 +236,7 @@ class LintScoreTest extends Test {
 		Assert.stringContains('"precision": 0.3333', json);
 		Assert.stringContains('"function": "A.e"', json);
 		Assert.stringContains('"severity": "warning"', json);
+		Assert.stringContains('"excluded": 0', json);
 	}
 
 	/** The command exits 1 when a recall entry is lost, 0 when none is, 2 when the truth is refused or nothing is scored. */

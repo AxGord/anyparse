@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.check.Check.FindingData;
 import anyparse.check.Check.Violation;
+import anyparse.query.LintDiff.LintDiffPool;
 import anyparse.query.LintDiff.LintDiffTally;
 import anyparse.query.LintDiff.LintMessageIdentities;
 
@@ -50,39 +51,26 @@ final class LintBaseline {
 	 * back.
 	 *
 	 * A baseline the run cannot read is the CALLER's problem, not this function's: handed an
-	 * empty tally it returns `all`, which is the fail-open direction a nudge wants (say too
-	 * much rather than nothing).
+	 * empty tally it returns `all`, which is the fail-open direction a nudge wants (say too much rather than nothing).
+	 *
+	 * A finding no occurrence of its own key accounts for is then paired with one keyed the other way across `data`
+	 * (`LintDiff.spendAcross`) — the pairing `lint-diff` makes, from the same pool, after every finding spent its own key.
 	 */
 	public static function added(
 		all: Array<Violation>, baseline: LintDiffTally, root: String, identities: LintMessageIdentities
 	): Array<Violation> {
-		// A copy, because the tally belongs to the caller and a second call over the same
-		// baseline must see the same counts.
-		final remaining: Map<String, Int> = baseline.counts.copy();
-		return all.filter(v -> {
-			final key: String = spendableKey(v, remaining, root, identities);
-			final left: Null<Int> = remaining[key];
-			if (left == null || left <= 0) return true;
-			remaining[key] = left - 1;
-			return false;
-		});
-	}
-
-	/**
-	 * The key `v` spends a count of `remaining` under: its own (`keyOf`) — or, for a finding carrying an identity the
-	 * snapshot does not count, the key of its message, which is how a snapshot written before its rule carried `data`
-	 * recorded it. The same pairing `LintDiff.compare` makes, so the first run across that change reports nothing new.
-	 */
-	private static function spendableKey(
-		v: Violation, remaining: Map<String, Int>, root: String, identities: LintMessageIdentities
-	): String {
-		final own: String = keyOf(v, root, identities);
-		if (v.data == null || (remaining[own] ?? 0) > 0) return own;
-		final message: String = LintDiff.keyFor(
-			LintDiff.normalizePath(v.file, root), v.rule, v.severity.label(),
-			LintDiff.normalizeMessage(v.rule, v.message, root, identities), null
-		);
-		return (remaining[message] ?? 0) > 0 ? message : own;
+		// a pool, because the tally belongs to the caller and a second call over the same baseline must see the same counts
+		final pool: LintDiffPool = LintDiff.pool(baseline);
+		final messages: Array<String> = [for (v in all) LintDiff.normalizeMessage(v.rule, v.message, root, identities)];
+		// every finding spends its own key before any spends across `data`, so the answer does not hang on the run's order
+		final spent: Array<Bool> = [
+			for (i in 0...all.length) LintDiff.spendOwn(pool, keyOf(all[i], root, identities), messages[i])
+		];
+		for (i => v in all) if (!spent[i])
+			spent[i] = LintDiff.spendAcross(
+				pool, LintDiff.normalizePath(v.file, root), v.rule, v.severity.label(), messages[i], v.data != null
+			);
+		return [for (i => v in all) if (!spent[i]) v];
 	}
 
 }

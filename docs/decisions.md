@@ -1484,3 +1484,14 @@ decided the question; it may not become a record of runs.
 - a `lint-score` truth `rule` matching nothing scored as every recall entry lost (exit 1) → a misspelt rule, an
   empty report or a severity filter excluding everything reads as a precision regression; nothing to score is exit 2
   — branch `feat/ts-precision`
+- deduplicating `--explain-long` reasons by site alone → a virtual call dispatching to three targets kept one in
+  `reasons` and three in `aside`, so the two lists disagreed on one site; one normaliser keys on (kind, site, target),
+  and a hold waiting for its own lock — long only because it already is — is counted apart, never a reason
+  — branch `feat/ts-precision`
+- a lock-order witness ranked off each state's first arrival, the walk sorted to make it stable → two holders reaching
+  one downstream state left the second unseen, so renaming a function outside the key moved it; every state keeps
+  every way in, and the holder is the least over all of them, ranked only for reported pairs — branch
+  `feat/ts-precision`
+- pairing old and new snapshots across `data` by the first message seen per identity key → one function reaching a
+  sink by several chains still moved in `lint-diff` while `--baseline` called nothing new; both spend from one pool
+  holding every message per key, every finding its own key first — branch `feat/ts-precision`

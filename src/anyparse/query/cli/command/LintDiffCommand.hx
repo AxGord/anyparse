@@ -42,7 +42,9 @@ final class LintDiffCommand implements CliCommand {
 	 * `tools/battery.sh` runs once per compared tree.
 	 *
 	 * Both arguments are `apq lint --format json` snapshots; the comparison is a
-	 * MULTISET diff over `(file, rule, severity, message)` with the two
+	 * MULTISET diff over `(file, rule, severity, message)` — over the identity
+	 * `(family, function, subject)` in place of the message for a record carrying
+	 * `data`, paired across a snapshot without it — with the two
 	 * normalizations `LintDiff` documents — `--root` makes a relative and an
 	 * absolute snapshot of one tree comparable, and `duplicate-code` messages are
 	 * digit-masked.

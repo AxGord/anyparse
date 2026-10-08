@@ -157,7 +157,7 @@ class ThreadSafetyFindingDataTest extends Test {
 	 * Two main-thread holders make the same inversion: which one the finding names — its member, its anchor — must not
 	 * depend on which the walk met first, so calling them in either order gives one finding.
 	 */
-	@:pin('control') @:killer('M-TS-ORDER-WALK-UNSORTED')
+	@:pin('control') @:killer('M-TS-ORDER-ONE-ARRIVAL')
 	public function testLockOrderKeyIgnoresWalkOrder(): Void {
 		#if (sys || nodejs)
 		final keys: Array<Array<String>> = [
@@ -202,6 +202,31 @@ class ThreadSafetyFindingDataTest extends Test {
 		Assert.same(['Fs.save'], [
 			for (v in ThreadSafetyCheckTest.orderFindings(sources)) if (v.data?.subject == 'Db._batch / Fs._mutation') v.data?.member
 		]);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * Two main-thread holders reach ONE downstream state that takes the second lock: the holder the finding names is the
+	 * least over every way into that state, so renaming a function outside the key (`p0` to `q0`) does not move it.
+	 */
+	@:pin('control') @:killer('M-TS-ORDER-CLIMB-FIRST', 'M-TS-ORDER-ONE-ARRIVAL')
+	public function testLockOrderKeySurvivesARenameOutsideIt(): Void {
+		#if (sys || nodejs)
+		final source: String = 'class Fs { final _a:Mutex = new Mutex(); final _b:Mutex = new Mutex(); public function new() {}'
+			+ ' public static function main():Void { final fs:Fs = new Fs(); Runner.create(fs.bg); fs.p1(); fs.p0(); }'
+			+ ' public function p1():Void alpha(); public function p0():Void zeta();'
+			+ ' public function alpha():Void { _a.acquire(); t(); _a.release(); } public function zeta():Void { _a.acquire(); t(); _a.release(); }'
+			+ ' public function t():Void { _b.acquire(); _b.release(); }'
+			+ ' public function bg():Void { _b.acquire(); _a.acquire(); _a.release(); _b.release(); } }';
+		final keys: Array<Array<String>> = [
+			for (renamed in [source, source.replace('p0', 'q0')]) [
+				for (v in ThreadSafetyCheckTest.orderFindings([renamed])) '${v.data?.member} ${v.data?.subject} @${v.span?.from}'
+			]
+		];
+		Assert.same(['Fs.alpha Fs._a / Fs._b @${source.indexOf('t();')}'], keys[0]);
+		Assert.same(keys[0], keys[1]);
 		#else
 		Assert.pass('non-sys target');
 		#end

@@ -134,6 +134,44 @@ class LintBaselineTest extends Test {
 		);
 	}
 
+	/**
+	 * The baseline spends exactly as `lint-diff` does: one identity carrying several messages is spent message by message,
+	 * and every finding spends its own key before any spends across `data`, so the run's order changes nothing.
+	 */
+	@:pin('control') @:killer('M-BASELINE-ONE-PASS')
+	public function testTheBaselineSpendsLikeTheDiffInAnyOrder(): Void {
+		final old: LintDiffTally = snapshot([for (m in ['m1', 'm2', 'm3']) record('src/A.hx', 'warning', 'thread-safety', m)]);
+		Assert.equals(
+			0,
+			delta([
+				for (m in ['m1', 'm2', 'm3']) withData(violation('src/A.hx', Severity.Warning, 'thread-safety', m), 'S.f')
+			], old).length
+		);
+		// the snapshot holds identity S.f (message m) and a record without data (message m); live: identity S.g, then no data
+		final mixed: LintDiffTally = LintDiff.tally([
+			{
+				file: 'src/A.hx',
+				severity: 'warning',
+				rule: 'thread-safety',
+				message: 'm',
+				data: {
+					family: 'A',
+					member: 'A.b',
+					subject: 'S.f',
+					chain: []
+				}
+			},
+			record('src/A.hx', 'warning', 'thread-safety', 'm')
+		], '', identities());
+		final live: Array<Violation> = [
+			withData(violation('src/A.hx', Severity.Warning, 'thread-safety', 'm'), 'S.g'),
+			violation('src/A.hx', Severity.Warning, 'thread-safety', 'm')
+		];
+		Assert.same(['S.g'], [for (v in delta(live, mixed)) v.data?.subject]);
+		live.reverse();
+		Assert.same(['S.g'], [for (v in delta(live, mixed)) v.data?.subject], 'whatever the order');
+	}
+
 	private static function delta(all: Array<Violation>, before: LintDiffTally): Array<Violation> {
 		return LintBaseline.added(all, before, '', identities());
 	}

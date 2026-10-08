@@ -87,7 +87,7 @@ final class LintScoreCommand implements CliCommand {
 					truthPath = CliArgs.expectValue(args, ++i, '--truth');
 				case '--severity':
 					final level: String = CliArgs.expectValue(args, ++i, '--severity');
-					if (level != LintScore.ALL_SEVERITIES && !LintScore.SEVERITY_RANKS.contains(level))
+					if (level != LintScore.ALL_SEVERITIES && !LintDiff.SEVERITY_ORDER.contains(level))
 						throw new UsageFailure('unknown --severity value "$level" (expected error|warning|info|all)');
 					severity = level == LintScore.ALL_SEVERITIES ? null : level;
 				case '--format':

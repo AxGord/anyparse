@@ -33,11 +33,13 @@ class JsonKeyMetaCompileTest extends Test {
 		#end
 	}
 
-	/** Two fields spelled with one key are refused, the declared key and a field's own name alike. */
-	@:pin('control') @:killer('M-JSON-KEY-DUPLICATES')
+	/** Two fields spelled with one key are refused — the declared key and a field's own name alike — at the second field. */
+	@:pin('control') @:killer('M-JSON-KEY-DUPLICATES', 'M-JSON-KEY-DUP-AT-FIELD')
 	public function testTwoFieldsCannotShareAKey(): Void {
 		#if nodejs
-		Assert.stringContains('fields "a" and "b" are both spelled "a"', compileError("var a: String; @:key('a') var b: String;"));
+		final error: String = compileError("var a: String;\n@:key('a') var b: String;");
+		Assert.stringContains('fields "a" and "b" are both spelled "a"', error);
+		Assert.stringContains('Keyed.hx:2:', error, 'the error points at the second field');
 		#else
 		Assert.pass('node only: spawns the compiler');
 		#end
