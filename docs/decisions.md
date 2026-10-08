@@ -1519,3 +1519,20 @@ decided the question; it may not become a record of runs.
   repeated or not — branch `feat/ts-precision-2`
 - also solving lock LONGNESS from the holds a main waiter can meet (no main-only hold making a lock long) → measured
   on the three TM trees it moved no finding; left out until a case needs it — branch `feat/ts-precision-2`
+- outer-lock dominance with blind holds breaking it outright → every TM `CloudDatabase._mutex` hold is blind through
+  a `trace` (TM routes `trace` to its log writer), and the brief `getFileCount` holds take `_mutex` outside
+  `_batchMutex`, so nothing was ever dominated; an unresolved call is a long point, except one a bare `shortSinks` name
+  names and no loop under the hold repeats — branch `feat/ts-precision-2`
+- carrying a must-held lock into a callee by `CallEdge.receiverField` alone → the graph names `o.f` on a typed `o` as
+  `Owner.f` too, so `fileSystem.cloudDatabase.batchLock()` read as a lock on a field of the running object; only a bare
+  field or `this.f` carries a lock onto the callee's `this`, and only a `final` one — branch `feat/ts-precision-2`
+- must-held by "the take runs on every path INTO the function" (`LockWindow.runsOnEveryPath`) → TM's CloudDatabase
+  holds open after an `if (…) return` and behind `if (!batch)`; a take counts at a point when the deepest node holding
+  both is a sequence that runs the take's statement first, its way to the take through sequences and `if`s the
+  valuation decides — branch `feat/ts-precision-2`
+- a give before the point killing a must-held lock wherever it sits → `if (done) { releaseMutationLocks(); return; }`
+  ahead of every call in TM's `moveItem`; a give in a block that ends in a `return` or `throw` after it, with no `catch`
+  around it that holds the point, reaches no later call — branch `feat/ts-precision-2`
+- counting every function that gives a lock back as a releaser → `if (!batch) _batchMutex.release()` where every caller
+  passes `true` gives nothing, and a wrapper's or helper's own give is its caller's; releasers come from the crossing
+  releases and helper gives that some state runs — branch `feat/ts-precision-2`

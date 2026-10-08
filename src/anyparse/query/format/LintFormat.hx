@@ -94,7 +94,8 @@ final class LintFormat {
 	 * circular, aside}` (`circular`: how many re-takes of the lock itself were left out), a reason as `{kind, file, line,
 	 * col, function}` plus `call`, `chain`, `via` for `spans-blocking` and `unresolved` (`[{name, line, col}]`) for
 	 * `blind`, `aside` null or such reasons; `longLocks.mainShort` lists each
-	 * main-thread take of a lock that is not long as `{lock, file, line, col, function, quiet}`.
+	 * main-thread take of a lock that is not long as `{lock, file, line, col, function,
+	 * quiet}`, and `longLocks.dominated` each lock others dominate as `{lock, by}`.
 	 */
 	public static function json(
 		violations: Array<Violation>, sourceOf: Map<String, String>, ?addressOf: Violation -> Null<String>, ?explain: ExplainedLocks
@@ -129,7 +130,8 @@ final class LintFormat {
 					Reflect.setField(record, 'quiet', t.quiet);
 					record;
 				}
-			]
+			],
+			dominated: [for (d in longLocks.dominated) { lock: d.lock, by: d.by }]
 		};
 		return Json.stringify({ findings: records, longLocks: explained }, null, '  ');
 	}
@@ -179,7 +181,8 @@ final class LintFormat {
 	/**
 	 * The `--explain-long` section of a text report: a headline, then each long lock with one line per reason —
 	 * `<kind>  <file>:<line>:<col>  <function>`, a `spans-blocking` one followed by the path to the call that blocks — and
-	 * what the lock is long by with its own reasons set aside, then each main-thread take of a lock that is not long.
+	 * what the lock is long by with its own reasons set aside, then each
+	 * main-thread take of a lock that is not long, then each lock others dominate.
 	 */
 	public static function longLocksText(report: LongLockReport, sourceOf: Map<String, String>): String {
 		final indexes: Map<String, LineIndex> = [];
@@ -201,6 +204,7 @@ final class LintFormat {
 			final quiet: String = t.quiet ? '  (quiet)' : '';
 			buf.add('  ${t.lock}  ${place(t.file, t.span, indexFor(t.file, sourceOf, indexes))}  ${t.holder}$quiet\n');
 		}
+		for (d in report.dominated) buf.add('dominated ${d.lock} by ${d.by.join(', ')}: a take of it under one of those is brief\n');
 		return buf.toString();
 	}
 

@@ -154,9 +154,14 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		solveLongLocks(sites, acquires, blocking, taints);
 		// the locks whose take blocks LONG: held across a call that blocks long, or a short one that repeats
 		final repetition: CallRepetition = new CallRepetition(graph, trees, plugin.refShape(), listsOf);
-		final long: Array<String> = [];
-		final costs: LockTaint = taints.costed(long, repetition);
-		solveLongLocks(sites, acquires, long, costs);
+		final holds: Array<LockAcquire> = acquires.concat(helperHolds);
+		final must: MustHeld = new MustHeld(graph, plugin, trees, sites, states, conditions, repetition, holds, inertRef, unresolvedNames);
+		final dominance: LockDominance = new LockDominance(sites, states, conditions, repetition, must, holds);
+		final settled: { long: Array<String>, costs: LockTaint } = dominance.settle(
+			taints, (long, costs) -> solveLongLocks(sites, acquires, long, costs)
+		);
+		final long: Array<String> = settled.long;
+		final costs: LockTaint = settled.costs;
 
 		final violations: Array<Violation> = [];
 		// a value stored or handed where it never runs from repeats nothing, wherever it is written
@@ -170,7 +175,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final order: LockOrder = new LockOrder(graph, conditions, acquires.concat(helperHolds));
 		for (v in order.report(states, inertRef, CTX_MAIN | CTX_QUIET, CTX_BG, CHAIN_CAP)) violations.push(v);
 		// after every finding: the counterfactual solves fill taints of their own, which must not shape a report
-		longLocks = explained(sites, acquires, long, costs, states);
+		longLocks = explained(sites, acquires, long, costs, states, dominance.dominators);
 		return violations;
 	}
 
@@ -205,7 +210,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	 * quiet — runs (`states`), and each lock's counterfactual solved without its own reasons on a fresh taint like `taints`.
 	 */
 	private function explained(
-		sites: LockSites, acquires: Array<LockAcquire>, long: Array<String>, taints: LockTaint, states: ThreadStates
+		sites: LockSites, acquires: Array<LockAcquire>, long: Array<String>, taints: LockTaint, states: ThreadStates,
+		dominators: Map<String, Array<String>>
 	): Null<LongLockReport> {
 		if (!_explainLong) return null;
 		final mainTakes: Array<MainTake> = [];
@@ -218,7 +224,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			final fresh: LockTaint = taints.withLong(without);
 			solveLongLocks(sites, acquires, without, fresh, lock);
 			fresh;
-		});
+		}, dominators);
 	}
 
 	/**
@@ -267,6 +273,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 				reports: sinks.length > 0,
 				sinkIds: matchAll(graph, sinks),
 				shortSinkIds: matchAll(graph, shortSinks),
+				shortNames: [for (p in shortSinks) if (p.indexOf('.') < 0) p],
 				iterateIds: matchAll(graph, iterates),
 				iterateNames: [for (p in iterates) if (p.indexOf('.') < 0) p],
 				spawnIds: matchAll(graph, spawns),

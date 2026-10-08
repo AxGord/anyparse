@@ -21,6 +21,9 @@ typedef ChainLists = {
 	/** The sinks whose one call is short (`shortSinks`): long only where it repeats (`CallRepetition`). */
 	final shortSinkIds: Array<String>;
 
+	/** The bare `shortSinks` names: a call the graph resolves to nothing, by the name it is written with, that is brief once. */
+	final shortNames: Array<String>;
+
 	/** The call targets that run a function value handed to them once per element (`iterates`). */
 	final iterateIds: Array<String>;
 
@@ -84,6 +87,12 @@ typedef TaintCost = {
 
 	/** Whether a take of a lock may count at all: never when the question is the holder's own work, a take being a wait on another. */
 	final takes: Bool;
+
+	/**
+	 * Which takes of a long lock wait briefly after all: the lock dominated by one held there (`LockDominance`), must-held
+	 * under the valuation, or taken by the hold being judged.
+	 */
+	final dominance: LockDominance;
 }
 
 /**
@@ -155,11 +164,12 @@ final class LockTaint {
 	 * The taint over the same graph, lists, sites, conditions and threads asking which calls block LONG, judging locks long
 	 * by `long`, a take of a lock this one's `long` names and `long` leaves out a short wait, and repetition by `repetition`.
 	 */
-	public function costed(long: Array<String>, repetition: CallRepetition): LockTaint {
+	public function costed(long: Array<String>, repetition: CallRepetition, dominance: LockDominance): LockTaint {
 		return new LockTaint(_graph, _sinkIds, listsOf, _sites, long, _conditions, _threads, {
 			blocking: _long,
 			repetition: repetition,
-			takes: true
+			takes: true,
+			dominance: dominance
 		});
 	}
 
@@ -175,7 +185,8 @@ final class LockTaint {
 			: new LockTaint(_graph, _sinkIds, listsOf, _sites, [], _conditions, _threads, {
 				blocking: cost.blocking,
 				repetition: cost.repetition,
-				takes: false
+				takes: false,
+				dominance: cost.dominance
 			});
 	}
 
@@ -204,12 +215,12 @@ final class LockTaint {
 	 * of a long lock or of one no member names, any other sink its site's chain does not list under `shortSinks`. The
 	 * plain taint's every blocking call is.
 	 */
-	public function costsLong(edge: CallEdge, held: Null<String>): Bool {
+	public function costsLong(edge: CallEdge, held: Null<String>, ?valuation: String): Bool {
 		if (_cost == null) return true;
 		if (retakesElsewhere(edge, held)) return held != null && _long.contains(held);
 		if (!takesLock(edge)) return !listsOf(edge.file).shortSinkIds.contains(edge.to);
 		final lock: Null<String> = _sites.lockOf(edge);
-		return lock == null || _long.contains(lock);
+		return lock == null || _long.contains(lock) && !(_cost?.dominance.dominated(edge, valuation) == true);
 	}
 
 	/**
@@ -238,7 +249,9 @@ final class LockTaint {
 			// a call repeating while the lock is held runs every short call it reaches more than once
 			final repeats: Bool = cost != null && cost.repetition.repeatedUnder(edge, a.edge);
 			if (blocks(edge, held) || retakesElsewhere(edge, held)) {
-				if (counts(edge, held, repeats)) return trailOf([edge.to], edge, held);
+				// a take the hold itself dominates waits for no long hold: each one needs the lock held here
+				final dominated: Bool = cost != null && takesLock(edge) && cost.dominance.underHold(a, edge);
+				if (counts(edge, held, repeats, state.valuation) && !dominated) return trailOf([edge.to], edge, held);
 				continue;
 			}
 			if (takesLock(edge)) continue;
@@ -271,9 +284,10 @@ final class LockTaint {
 	}
 
 	/** Whether a call that blocks counts toward this taint's question: every one for the plain taint, else a long or `repeats` one. */
-	private inline function counts(edge: CallEdge, held: Null<String>, repeats: Bool): Bool {
+	private inline function counts(edge: CallEdge, held: Null<String>, repeats: Bool, valuation: String): Bool {
 		final cost: Null<TaintCost> = _cost;
-		return cost == null || (cost.takes || !(takesLock(edge) || retakesElsewhere(edge, held))) && (repeats || costsLong(edge, held));
+		return cost == null || (cost.takes || !(takesLock(edge) || retakesElsewhere(edge, held)))
+			&& (repeats || costsLong(edge, held, valuation));
 	}
 
 	/** Whether this taint asks about cost and the call `edge` may run more than once per run of its function (`CallRepetition`). */
@@ -316,7 +330,7 @@ final class LockTaint {
 				final repeats: Bool = state.repeated || repeatsAt(edge);
 				if (_sinkIds.contains(edge.to) && blocks(edge, held) || retakesElsewhere(edge, held)) {
 					// a short call run once on this path waits too little to count, and a sink leads nowhere
-					if (!counts(edge, held, repeats)) continue;
+					if (!counts(edge, held, repeats, state.valuation)) continue;
 					final step: TaintStep = { edge: edge, next: null };
 					_reaching[state.key] = step;
 					markPath(state.key, parents);

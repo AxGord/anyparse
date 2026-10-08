@@ -49,6 +49,9 @@ typedef LockAcquire = {
 
 	/** Where an exception leaves the function with the lock still held (`HeldWindow.escapes`), in source order. */
 	final escapes: Array<LockEscape>;
+
+	/** For a hold a multi-lock helper's call opens, the take inside the helper that `edge` runs; null for any other hold. */
+	final inner: Null<CallEdge>;
 }
 
 /** A call the graph resolves to no target, by the name its callee is written with, at its site. */
@@ -131,6 +134,18 @@ final class LockSites {
 	 */
 	public final helperHolds: Array<LockAcquire> = [];
 
+	/**
+	 * Every call giving a lock back, with the lock it gives (null for an unknown one): a call of a pair's unlock member, of
+	 * a lock wrapper that gives, or of a multi-lock helper that gives — the last one entry per lock.
+	 */
+	public final gives: Array<{ edge: CallEdge, lock: Null<String> }> = [];
+
+	/**
+	 * The multi-lock helpers (`helperHolds`): functions whose own takes or gives are their callers', each judged where
+	 * the helper is called, as a wrapper's are.
+	 */
+	public final helpers: Array<String> = [];
+
 	private final _unsealed: Array<String> = [];
 
 	/** Each aliased lock member (`Owner.member`) -> the member it holds the lock of, which names the lock of both. */
@@ -198,6 +213,7 @@ final class LockSites {
 			acquires.push(hold(take.edge, take.pair, lock, releasesOf(take.edge, take.pair, lock, gives)));
 		}
 		collectCrossing(gives);
+		for (g in gives) this.gives.push({ edge: g.edge, lock: lockOf(g.edge) });
 		collectHelperHolds(takes, gives, pairIds, unresolved);
 	}
 
@@ -236,6 +252,16 @@ final class LockSites {
 		return callee != null && readsOwnMember(callee);
 	}
 
+	/**
+	 * Whether the call `edge` is a lock wrapper's working the lock of the object it is called on — no alias's, which may
+	 * name either member of one object.
+	 */
+	public function worksReceiverLock(edge: CallEdge): Bool {
+		final site: Null<String> = siteKey(edge);
+		final lock: Null<String> = lockOf(edge);
+		return site != null && lock != null && _siteLocks.exists(site) && _siteSelf[site] == true && !_aliasedLocks.contains(lock);
+	}
+
 	/** Whether `lock` (`Owner.member`) is a static member: one object however it is reached. */
 	public function isStaticLock(lock: String): Bool {
 		final dot: Int = lock.lastIndexOf('.');
@@ -251,7 +277,7 @@ final class LockSites {
 	}
 
 	/** The callee expression of the call `edge` sits at, found by its exact span in the branch-aware tree. */
-	private function calleeOf(edge: CallEdge): Null<QueryNode> {
+	public function calleeOf(edge: CallEdge): Null<QueryNode> {
 		final at: Null<Span> = edge.span;
 		var node: Null<QueryNode> = at == null ? null : _trees.ofEdge(edge);
 		while (node != null && at != null) {
@@ -279,7 +305,7 @@ final class LockSites {
 	}
 
 	/** The hold of `lock` (`pair`) the call `edge` opens, closed by the calls starting at `releases` on their own paths. */
-	private function hold(edge: CallEdge, pair: LockPair, lock: Null<String>, releases: Array<Int>): LockAcquire {
+	private function hold(edge: CallEdge, pair: LockPair, lock: Null<String>, releases: Array<Int>, ?inner: CallEdge): LockAcquire {
 		final start: Int = edge.span?.from ?? -1;
 		final fn: Null<QueryNode> = _trees.ofEdge(edge);
 		final traced: Null<HeldWindow> = fn == null || _walker == null || start < 0
@@ -301,7 +327,8 @@ final class LockSites {
 			blindCalls: unresolved,
 			uncontended: !leaks && fn != null && lock != null && ownConstructorHold(edge, lock, fn),
 			delegated: _wrappers[edge.from]?.takes == true,
-			escapes: traced == null ? [] : _throws.escapes(edge, traced.escapes)
+			escapes: traced == null ? [] : _throws.escapes(edge, traced.escapes),
+			inner: inner
 		};
 	}
 
@@ -478,15 +505,17 @@ final class LockSites {
 		if (walker == null) return;
 		final opened: Array<{ call: CallEdge, op: LockCall }> = [];
 		final closed: Array<{ call: CallEdge, op: LockCall }> = [];
-		for (id => list in opsByFunction(takes, gives)) if (list.length > 1 && mayWrap(id, pairIds, unresolved)) {
+		for (id => list in WrapperOps.opsByFunction(takes, gives)) if (list.length > 1 && mayWrap(id, pairIds, unresolved)) {
 			final fn: Null<QueryNode> = _trees.ofEdge(list[0].call.edge);
 			if (fn == null) continue;
 			final opens: Bool = list.foreach(o -> o.takes);
 			if (!list.foreach(o -> o.takes == opens && onEveryPath(walker, fn, o.call, opens))) continue;
+			helpers.push(id);
 			for (call in _graph.inEdges(id))
 				if (call.kind == Call)
 					for (o in list) (opens ? opened : closed).push({ call: call, op: o.call });
 		}
+		for (c in closed) this.gives.push({ edge: c.call, lock: lockOf(c.op.edge) });
 		for (o in opened) {
 			final lock: Null<String> = lockOf(o.op.edge);
 			final releases: Array<Int> = releasesOf(o.call, o.op.pair, lock, gives).concat([
@@ -495,7 +524,7 @@ final class LockSites {
 					if (at != null && c.call.from == o.call.from && c.call.file == o.call.file && lockOf(c.op.edge) == lock) at.from;
 				}
 			]);
-			helperHolds.push(hold(o.call, o.op.pair, lock, releases));
+			helperHolds.push(hold(o.call, o.op.pair, lock, releases, o.op.edge));
 		}
 	}
 
@@ -524,7 +553,7 @@ final class LockSites {
 				_siteLocks[key] = site.wrapper.lock;
 				_siteSelf[key] = site.wrapper.self;
 			}
-			final ops: Map<String, Array<{ call: LockCall, takes: Bool }>> = opsByFunction(
+			final ops: Map<String, Array<{ call: LockCall, takes: Bool }>> = WrapperOps.opsByFunction(
 				takes.concat([for (site in sites) if (site.wrapper.takes) site.call]),
 				gives.concat([for (site in sites) if (!site.wrapper.takes) site.call])
 			);
@@ -534,7 +563,7 @@ final class LockSites {
 				if (found != null) next[id] = found;
 			}
 			dropUncovered(next);
-			if (sameWrappers(next, wrappers)) {
+			if (WrapperOps.sameWrappers(next, wrappers)) {
 				_wrappers = wrappers;
 				return [for (site in sites) site];
 			}
@@ -619,7 +648,7 @@ final class LockSites {
 			final at: Array<CallEdge> = [
 				for (o in _graph.outEdges(e.from)) if (o.kind.isInvocation() && siteKey(o) == key) o
 			];
-			if (at.foreach(o -> sameWrapper(wrappers[o.to], wrapper) || passesThrough(o.to)))
+			if (at.foreach(o -> WrapperOps.sameWrapper(wrappers[o.to], wrapper) || passesThrough(o.to)))
 				sites[key] = { call: { edge: at.find(o -> o.kind == Call) ?? e, pair: wrapper.pair }, wrapper: wrapper };
 			else
 				refused.push(key);
@@ -638,8 +667,19 @@ final class LockSites {
 		return field.substr(field.lastIndexOf('.') + 1);
 	}
 
+	/** `<file>:<start>` of `edge`'s site; null for an edge with no site. */
+	private static function siteKey(edge: CallEdge): Null<String> {
+		final at: Null<Span> = edge.span;
+		return at == null ? null : '${edge.file}:${at.from}';
+	}
+
+}
+
+/** The set operations over lock calls and wrappers that the wrapper inference of `LockSites` rounds on. */
+private class WrapperOps {
+
 	/** The lock calls of `takes` (takes) and `gives` (gives), grouped by the function each sits in. */
-	private static function opsByFunction(
+	public static function opsByFunction(
 		takes: Array<LockCall>, gives: Array<LockCall>
 	): Map<String, Array<{ call: LockCall, takes: Bool }>> {
 		final ops: Map<String, Array<{ call: LockCall, takes: Bool }>> = [];
@@ -651,17 +691,11 @@ final class LockSites {
 		return ops;
 	}
 
-	private static inline function sameWrapper(a: Null<LockWrapper>, b: LockWrapper): Bool {
+	public static inline function sameWrapper(a: Null<LockWrapper>, b: LockWrapper): Bool {
 		return a != null && a.takes == b.takes && a.lock == b.lock && a.pair == b.pair && a.self == b.self;
 	}
 
-	/** `<file>:<start>` of `edge`'s site; null for an edge with no site. */
-	private static function siteKey(edge: CallEdge): Null<String> {
-		final at: Null<Span> = edge.span;
-		return at == null ? null : '${edge.file}:${at.from}';
-	}
-
-	private static function sameWrappers(a: Map<String, LockWrapper>, b: Map<String, LockWrapper>): Bool {
+	public static function sameWrappers(a: Map<String, LockWrapper>, b: Map<String, LockWrapper>): Bool {
 		for (id => w in a) if (!sameWrapper(b[id], w)) return false;
 		for (id in b.keys()) if (!a.exists(id)) return false;
 		return true;

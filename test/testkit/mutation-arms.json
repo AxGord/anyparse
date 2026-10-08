@@ -16900,16 +16900,16 @@
 			"name": "M-TS-REPEAT-NO-LOOPS",
 			"type": "anyparse.check.CallRepetition",
 			"method": "loopsTo",
-			"find": "_loopKinds.contains(node.kind) && at != null",
-			"replace": "false && at != null",
+			"find": "_loopKinds.contains(node.kind) && repeating != null",
+			"replace": "false && repeating != null",
 			"note": "no loop repeats the calls in it"
 		},
 		{
 			"name": "M-TS-REPEAT-ITERABLE",
 			"type": "anyparse.check.CallRepetition",
 			"method": "loopsTo",
-			"find": "(!_bindingKinds.contains(node.kind) || child == node.children[node.children.length - 1])",
-			"replace": "true",
+			"find": "_bindingKinds.contains(node.kind) ? node.children[node.children.length - 1].span : span",
+			"replace": "span",
 			"note": "the iterable of a `for`, read once, counts as repeating with its body"
 		},
 		{
@@ -16956,16 +16956,16 @@
 			"name": "M-TS-REPEAT-UNDER-OUTER",
 			"type": "anyparse.check.CallRepetition",
 			"method": "repeatedUnder",
-			"find": "loops.exists(l -> !outer.contains(l))",
-			"replace": "loops.length > 0",
+			"find": "!outer.exists(o -> o.from == l.from)",
+			"replace": "true",
 			"note": "a loop around the whole hold counts as repeating the calls inside it"
 		},
 		{
 			"name": "M-TS-LONG-BY-ANY-SPAN",
-			"type": "anyparse.check.ThreadSafety",
-			"method": "run",
-			"find": "final costs: LockTaint = taints.costed(long, repetition);",
-			"replace": "final costs: LockTaint = taints.withLong(long);",
+			"type": "anyparse.check.LockTaint",
+			"method": "costed",
+			"find": "return new LockTaint(_graph, _sinkIds, listsOf, _sites, long, _conditions, _threads, {",
+			"replace": "if (long != null) return withLong(long);\n\t\treturn new LockTaint(_graph, _sinkIds, listsOf, _sites, long, _conditions, _threads, {",
 			"note": "a lock held across short calls only is long, and every short call warns"
 		},
 		{
@@ -17015,6 +17015,94 @@
 			"find": "final mainOnly: Bool = lock != null && ",
 			"replace": "final mainOnly: Bool = ",
 			"note": "a hold of a lock no member names is judged by the holder's thread alone, as if no other could hold it"
+		},
+		{
+			"name": "M-TS-DOM-OFF",
+			"type": "anyparse.check.LockDominance",
+			"method": "dominated",
+			"find": "if (at == null || by.length == 0 || object == null) return false;",
+			"replace": "if (at == null || by.length >= 0 || object == null) return false;",
+			"note": "no take is ever dominated"
+		},
+		{
+			"name": "M-TS-DOM-ANY-HOLD",
+			"type": "anyparse.check.LockDominance",
+			"method": "solveDominators",
+			"find": "found[lock] = known == null ? held : known.filter(l -> held.contains(l));",
+			"replace": "if (held.length > 0) found[lock] = known == null ? held : known.filter(l -> held.contains(l));",
+			"note": "a long hold holding no other lock is left out of the meet"
+		},
+		{
+			"name": "M-TS-DOM-RELEASE-IGNORED",
+			"type": "anyparse.check.MustHeld",
+			"method": "givePoints",
+			"find": "if (g.lock == lock && runs(id, valuation, g.edge)",
+			"replace": "if (false && runs(id, valuation, g.edge)",
+			"note": "a give of the lock between the take and the point is ignored"
+		},
+		{
+			"name": "M-TS-DOM-EXITS-IGNORED",
+			"type": "anyparse.check.MustHeld",
+			"method": "leavesFirst",
+			"find": "return exits.contains(last.kind)",
+			"replace": "return false && exits.contains(last.kind)",
+			"note": "a give on a path that returns at once still kills the lock"
+		},
+		{
+			"name": "M-TS-DOM-UNDECIDED",
+			"type": "anyparse.check.MustHeld",
+			"method": "decided",
+			"find": "final kids: Array<QueryNode> = cond.children;",
+			"replace": "if (cond != null) return null;\n\t\tfinal kids: Array<QueryNode> = cond.children;",
+			"note": "no condition is ever decided by a valuation"
+		},
+		{
+			"name": "M-TS-DOM-ENTRY-NONE",
+			"type": "anyparse.check.MustHeld",
+			"method": "meetInto",
+			"find": "var meet: Null<Array<String>> = null;",
+			"replace": "var meet: Null<Array<String>> = [];",
+			"note": "no lock a caller holds carries into the callee"
+		},
+		{
+			"name": "M-TS-DOM-ANY-OBJECT",
+			"type": "anyparse.check.LockDominance",
+			"method": "dominated",
+			"find": "final object: Null<String> = _must.takeObject(take);",
+			"replace": "final object: Null<String> = MustHeld.SELF_OBJECT;",
+			"note": "a take of another object's lock counts as a take of the running object's"
+		},
+		{
+			"name": "M-TS-DOM-EXPLAIN-DROPPED",
+			"type": "anyparse.check.LongLockExplain",
+			"method": "report",
+			"find": "if (by.length > 0) { lock: lock, by: by.copy() }",
+			"replace": "if (false) { lock: lock, by: by.copy() }",
+			"note": "--explain-long names no dominated lock"
+		},
+		{
+			"name": "M-TS-DOM-UNDER-HOLD-OFF",
+			"type": "anyparse.check.LockDominance",
+			"method": "underHold",
+			"find": "final lock: Null<String> = _sites.lockOf(take);",
+			"replace": "if (take != null) return false;\n\t\tfinal lock: Null<String> = _sites.lockOf(take);",
+			"note": "a hold never dominates the takes of its own window"
+		},
+		{
+			"name": "M-TS-DOM-BRIEF-NAMES-IGNORED",
+			"type": "anyparse.check.LockDominance",
+			"method": "longCallsOf",
+			"find": "if (!(brief.contains(c.name) && once)) at.push(c.span.from);",
+			"replace": "at.push(c.span.from);",
+			"note": "an unresolved call a bare `shortSinks` name names counts long for dominance"
+		},
+		{
+			"name": "M-TS-DOM-BRIEF-REPEATED",
+			"type": "anyparse.check.LockDominance",
+			"method": "longCallsOf",
+			"find": "if (!(brief.contains(c.name) && once)) at.push(c.span.from);",
+			"replace": "if (!brief.contains(c.name)) at.push(c.span.from);",
+			"note": "a brief unresolved call in a loop under the hold counts brief"
 		},
 		{
 			"name": "M-LINT-EXPLAIN-NO-ENVELOPE",

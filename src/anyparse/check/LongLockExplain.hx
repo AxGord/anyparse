@@ -78,10 +78,19 @@ typedef LockTakeSite = {
 	final quiet: Bool;
 }
 
-/** What `--explain-long` reports: every long lock with its reasons, and every main-thread take of a lock that is not long. */
+/**
+ * What `--explain-long` reports: every long lock with its reasons, every
+ * main-thread take of a lock that is not long, and the locks other locks dominate.
+ */
 typedef LongLockReport = {
 	final long: Array<LongLock>;
 	final mainShort: Array<LockTakeSite>;
+
+	/**
+	 * Each lock dominated by others (`LockDominance`): every long hold of it holds one of `by` on its object, so a take of
+	 * it while one of them is held there is brief however long the lock itself is.
+	 */
+	final dominated: Array<{ lock: String, by: Array<String> }>;
 }
 
 /**
@@ -116,7 +125,7 @@ final class LongLockExplain {
 	 */
 	public static function report(
 		sites: LockSites, acquires: Array<LockAcquire>, long: Array<String>, taints: LockTaint, mainTakes: Array<MainTake>,
-		aside: (String) -> LockTaint
+		aside: (String) -> LockTaint, dominators: Map<String, Array<String>>
 	): LongLockReport {
 		final byLock: Map<String, Array<LongLockReason>> = [];
 		final circular: Map<String, Int> = [];
@@ -152,7 +161,11 @@ final class LongLockExplain {
 				};
 			}
 		];
-		return { long: out, mainShort: shortTakes(mainTakes, long) };
+		final dominated: Array<{ lock: String, by: Array<String> }> = [
+			for (lock => by in dominators) if (by.length > 0) { lock: lock, by: by.copy() }
+		];
+		dominated.sort((a, b) -> Reflect.compare(a.lock, b.lock));
+		return { long: out, mainShort: shortTakes(mainTakes, long), dominated: dominated };
 	}
 
 	/**
