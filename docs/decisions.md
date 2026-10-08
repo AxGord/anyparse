@@ -1495,3 +1495,18 @@ decided the question; it may not become a record of runs.
 - pairing old and new snapshots across `data` by the first message seen per identity key → one function reaching a
   sink by several chains still moved in `lint-diff` while `--baseline` called nothing new; both spend from one pool
   holding every message per key, every finding its own key first — branch `feat/ts-precision`
+- grading a short sink by its own call site alone (`thread-safety` `shortSinks`) → TM's folder icon runs four COUNT
+  queries once per icon and the folder delete one unlink per child: each call is single, the loop is up the main
+  thread's way (`FileListItemsController` per visible item, the delete per selected item); a main-thread short call is
+  long when ANY main-thread path to it crosses a repeating call — branch `feat/ts-precision-2`
+- reading that repetition off the finding's own chain (`ThreadStates.mainPath`) → the chain is one witness: the icon's
+  ran through the one-icon-per-event handler and graded the four COUNTs short, while the file list's per-item path
+  repeats them; the closure over every main-thread path is what grades — branch `feat/ts-precision-2`
+- recursion as one strongly connected component over every edge kind → registrations close cycles that run nothing
+  (a handler registering itself, a callback handed back), and TM's graph formed one component of 1080 functions, so
+  every call in it repeated; recursion is a cycle of RUNS (call, `new`, override, accessor), and a callback repeats only
+  through an `iterates` call — branch `feat/ts-precision-2`
+- placing a call site under the function node the graph names for its caller → graph ids are simple names, so two
+  same-named types share one node and every site of the other's file went unplaced (and so repeating); the loops
+  around a site are read off its file's own tree from the root, counted afresh at every function or lambda around it
+  — branch `feat/ts-precision-2`

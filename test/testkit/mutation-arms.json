@@ -16889,6 +16889,94 @@
 			"note": "a short lock a quiet root takes on the main thread is missing from the main-thread takes"
 		},
 		{
+			"name": "M-TS-SHORT-SINKS-IGNORED",
+			"type": "anyparse.check.LockTaint",
+			"method": "costsLong",
+			"find": "if (!takesLock(edge)) return !listsOf(edge.file).shortSinkIds.contains(edge.to);",
+			"replace": "if (!takesLock(edge)) return true;",
+			"note": "a `shortSinks` entry costs as long as any other sink"
+		},
+		{
+			"name": "M-TS-REPEAT-NO-LOOPS",
+			"type": "anyparse.check.CallRepetition",
+			"method": "loopsTo",
+			"find": "_loopKinds.contains(node.kind) && at != null",
+			"replace": "false && at != null",
+			"note": "no loop repeats the calls in it"
+		},
+		{
+			"name": "M-TS-REPEAT-ITERABLE",
+			"type": "anyparse.check.CallRepetition",
+			"method": "loopsTo",
+			"find": "(!_bindingKinds.contains(node.kind) || child == node.children[node.children.length - 1])",
+			"replace": "true",
+			"note": "the iterable of a `for`, read once, counts as repeating with its body"
+		},
+		{
+			"name": "M-TS-REPEAT-UPWARD-NONE",
+			"type": "anyparse.check.CallRepetition",
+			"method": "repeatedFrom",
+			"find": "!found.exists(e.to) && runs(e) && repeated(e)",
+			"replace": "!found.exists(e.to) && runs(e) && false",
+			"note": "a caller repeating a function up the main thread's way repeats nothing below it"
+		},
+		{
+			"name": "M-TS-REPEAT-NO-RECURSION",
+			"type": "anyparse.check.CallRepetition",
+			"method": "recursive",
+			"find": "if (edge.from == edge.to) return true;",
+			"replace": "if (edge.from == edge.to) return false;",
+			"note": "a function calling itself repeats nothing"
+		},
+		{
+			"name": "M-TS-REPEAT-NO-ITERATES",
+			"type": "anyparse.check.CallRepetition",
+			"method": "iterated",
+			"find": "return edge.kind == Ref && (",
+			"replace": "return false && (",
+			"note": "a callback handed to an `iterates` call runs once"
+		},
+		{
+			"name": "M-TS-REPEAT-NO-BOUNDARY",
+			"type": "anyparse.check.CallRepetition",
+			"method": "loopsTo",
+			"find": "loops = []",
+			"replace": "loops = loops.copy()",
+			"note": "a loop around a function counts for the calls in the function's body"
+		},
+		{
+			"name": "M-TS-UPWARD-INERT",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "run",
+			"find": "!(e.kind == Ref && inertRef(e)) && states.edgeContext(e)",
+			"replace": "states.edgeContext(e)",
+			"note": "a value stored where it never runs from repeats with the loop that stores it"
+		},
+		{
+			"name": "M-TS-REPEAT-UNDER-OUTER",
+			"type": "anyparse.check.CallRepetition",
+			"method": "repeatedUnder",
+			"find": "loops.exists(l -> !outer.contains(l))",
+			"replace": "loops.length > 0",
+			"note": "a loop around the whole hold counts as repeating the calls inside it"
+		},
+		{
+			"name": "M-TS-LONG-BY-ANY-SPAN",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "run",
+			"find": "final costs: LockTaint = taints.costed(long, repetition);",
+			"replace": "final costs: LockTaint = taints.withLong(long);",
+			"note": "a lock held across short calls only is long, and every short call warns"
+		},
+		{
+			"name": "M-TS-EVIDENCE-PLAIN",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "reportLockHeld",
+			"find": "= short ? taints.blockingCalls(a, held) : long;",
+			"replace": "= taints.blockingCalls(a, held);",
+			"note": "a long hold's message names its short calls too"
+		},
+		{
 			"name": "M-LINT-EXPLAIN-NO-ENVELOPE",
 			"type": "anyparse.query.cli.command.LintExplainLong",
 			"method": "outcome",

@@ -17,6 +17,15 @@ typedef ChainLists = {
 	final reports: Bool;
 
 	final sinkIds: Array<String>;
+
+	/** The sinks whose one call is short (`shortSinks`): long only where it repeats (`CallRepetition`). */
+	final shortSinkIds: Array<String>;
+
+	/** The call targets that run a function value handed to them once per element (`iterates`). */
+	final iterateIds: Array<String>;
+
+	/** The member names whose every call runs a function value handed to it once per element, by the name the call is written with. */
+	final iterateNames: Array<String>;
 	final spawnIds: Array<String>;
 	final marshalIds: Array<String>;
 	final quietIds: Array<String>;
@@ -48,11 +57,29 @@ private typedef TaintStep = {
 	final next: Null<String>;
 }
 
+/** One state of the walk toward a blocking call: its key, function, valuation and context, and whether a call on the way repeats. */
+private typedef WalkState = {
+	final key: String;
+	final id: String;
+	final valuation: String;
+	final ctx: Int;
+	final repeated: Bool;
+}
+
 /** How a call held under a lock blocks: the functions it runs to the blocking call, that call, and the lock it waits for. */
 typedef BlockingTrail = {
 	final path: Array<String>;
 	final end: CallEdge;
 	final via: Null<String>;
+}
+
+/**
+ * What a taint answering the LONG question needs beyond the plain one: the locks whose take blocks at all (the plain
+ * solve's long locks — a take of one this taint's own `long` leaves out is a short wait), and where a call repeats.
+ */
+typedef TaintCost = {
+	final blocking: Array<String>;
+	final repetition: CallRepetition;
 }
 
 /**
@@ -90,10 +117,17 @@ final class LockTaint {
 	private final _conditions: EdgeConditions;
 	private final _threads: ThreadStates;
 
+	/**
+	 * Null for the plain taint, where every blocking call counts; set for the taint asking which calls block LONG, where
+	 * `long` names the long locks and a short call counts only where it repeats (`costsLong`).
+	 */
+	private final _cost: Null<TaintCost>;
+
 	public function new(
 		graph: CallGraph, sinkIds: Array<String>, listsOf: (String) -> ChainLists, sites: LockSites, long: Array<String>,
-		conditions: EdgeConditions, threads: ThreadStates
+		conditions: EdgeConditions, threads: ThreadStates, ?cost: TaintCost
 	) {
+		_cost = cost;
 		_graph = graph;
 		_sinkIds = sinkIds;
 		this.listsOf = listsOf;
@@ -110,7 +144,15 @@ final class LockTaint {
 
 	/** A taint over the same graph, lists, sites, conditions and threads as this one, judging locks long by `long`, with nothing kept. */
 	public function withLong(long: Array<String>): LockTaint {
-		return new LockTaint(_graph, _sinkIds, listsOf, _sites, long, _conditions, _threads);
+		return new LockTaint(_graph, _sinkIds, listsOf, _sites, long, _conditions, _threads, _cost);
+	}
+
+	/**
+	 * The taint over the same graph, lists, sites, conditions and threads asking which calls block LONG, judging locks long
+	 * by `long`, a take of a lock this one's `long` names and `long` leaves out a short wait, and repetition by `repetition`.
+	 */
+	public function costed(long: Array<String>, repetition: CallRepetition): LockTaint {
+		return new LockTaint(_graph, _sinkIds, listsOf, _sites, long, _conditions, _threads, { blocking: _long, repetition: repetition });
 	}
 
 	/**
@@ -130,7 +172,20 @@ final class LockTaint {
 		if (!edge.kind.isInvocation() || !listsOf(edge.file).sinkIds.contains(edge.to)) return false;
 		if (!takesLock(edge)) return true;
 		final lock: Null<String> = _sites.lockOf(edge);
-		return lock == null || !(lock == held && _sites.selfTake(edge)) && _long.contains(lock);
+		return lock == null || !(lock == held && _sites.selfTake(edge)) && blockingLocks().contains(lock);
+	}
+
+	/**
+	 * Whether the blocking call `edge` (`blocks`, `retakesElsewhere`) waits long even once, under a hold of `held`: a take
+	 * of a long lock or of one no member names, any other sink its site's chain does not list under `shortSinks`. The
+	 * plain taint's every blocking call is.
+	 */
+	public function costsLong(edge: CallEdge, held: Null<String>): Bool {
+		if (_cost == null) return true;
+		if (retakesElsewhere(edge, held)) return held != null && _long.contains(held);
+		if (!takesLock(edge)) return !listsOf(edge.file).shortSinkIds.contains(edge.to);
+		final lock: Null<String> = _sites.lockOf(edge);
+		return lock == null || _long.contains(lock);
 	}
 
 	/**
@@ -155,18 +210,50 @@ final class LockTaint {
 		) {
 			final live: Int = _conditions.carried(edge, state.valuation, bit);
 			if (live == 0) continue;
-			if (blocks(edge, held) || retakesElsewhere(edge, held)) return trailOf([edge.to], edge, held);
+			final cost: Null<TaintCost> = _cost;
+			// a call repeating while the lock is held runs every short call it reaches more than once
+			final repeats: Bool = cost != null && cost.repetition.repeatedUnder(edge, a.edge);
+			if (blocks(edge, held) || retakesElsewhere(edge, held)) {
+				if (counts(edge, held, repeats)) return trailOf([edge.to], edge, held);
+				continue;
+			}
 			if (takesLock(edge)) continue;
-			final key: Null<String> = reach(edge.to, _conditions.bind(edge, state.valuation), live, held);
+			final key: Null<String> = reach(edge.to, _conditions.bind(edge, state.valuation), live, held, repeats);
 			if (key != null) return trailFrom(edge.to, key, held);
 		}
 		return null;
 	}
 
+	/** The calls of the hold `a`'s window that block under a hold of `held` (`blockingPath`), each with its path, in source order. */
+	public function blockingCalls(a: LockAcquire, held: Null<String>): Array<{ edge: CallEdge, path: Array<String> }> {
+		final blocking: Array<{ edge: CallEdge, path: Array<String> }> = [];
+		for (e in a.window) if (e.span != null) {
+			final path: Null<Array<String>> = blockingPath(a, e, held);
+			if (path != null) blocking.push({ edge: e, path: path });
+		}
+		blocking.sort((x, y) -> (x.edge.span?.from ?? 0) - (y.edge.span?.from ?? 0));
+		return blocking;
+	}
+
 	/** Whether `edge` calls, on an object other than its caller's, a function taking the long instance lock `held` on its own. */
 	public function retakesElsewhere(edge: CallEdge, held: Null<String>): Bool {
-		return held != null && _long.contains(held) && !_sites.isStaticLock(held) && edge.kind.isInvocation()
+		return held != null && blockingLocks().contains(held) && !_sites.isStaticLock(held) && edge.kind.isInvocation()
 			&& selfTakers(held).contains(edge.to) && !_sites.selfCall(edge);
+	}
+
+	/** The locks whose take blocks at all: the plain taint's `long`, or the plain solve's for a taint asking about cost. */
+	private inline function blockingLocks(): Array<String> {
+		return _cost?.blocking ?? _long;
+	}
+
+	/** Whether a call that blocks counts toward this taint's question: every one for the plain taint, else a long or `repeats` one. */
+	private inline function counts(edge: CallEdge, held: Null<String>, repeats: Bool): Bool {
+		return _cost == null || repeats || costsLong(edge, held);
+	}
+
+	/** Whether this taint asks about cost and the call `edge` may run more than once per run of its function (`CallRepetition`). */
+	private inline function repeatsAt(edge: CallEdge): Bool {
+		return _cost?.repetition.repeated(edge) == true;
 	}
 
 	/**
@@ -174,41 +261,37 @@ final class LockTaint {
 	 * blocks under a hold of `held`; null when none does. A breadth-first walk over the states, each answer kept: a
 	 * found path marks every state on it, a walk that found nothing every state it saw. A call taking a lock blocks by
 	 * what the lock is (`blocks`), never through the lock primitive's own body, and a function its call site's chain
-	 * names a sink is where a path ENDS: the call to it blocks by that name.
+	 * names a sink is where a path ENDS: the call to it blocks by that name. Asking about cost, a state also carries
+	 * whether a call on the way to it repeats (`repeated`, from the caller for the first): a short call (`costsLong`)
+	 * counts only on a path that repeats; run once, it ends no path and leads nowhere, like any sink.
 	 */
-	private function reach(id: String, valuation: String, ctx: Int, held: Null<String>): Null<String> {
-		final root: String = stateKey(held, id, valuation, ctx);
+	private function reach(id: String, valuation: String, ctx: Int, held: Null<String>, repeated: Bool): Null<String> {
+		final root: String = stateKey(held, id, valuation, ctx, repeated);
 		if (_reaching.exists(root)) return root;
 		if (_clean.exists(root)) return null;
-		final queue: Array<{
-			key: String,
-			id: String,
-			valuation: String,
-			ctx: Int
-		}> = [
+		final queue: Array<WalkState> = [
 			{
 				key: root,
 				id: id,
 				valuation: valuation,
-				ctx: ctx
+				ctx: ctx,
+				repeated: repeated
 			}
 		];
 		final parents: Map<String, { key: String, edge: CallEdge }> = [];
 		final seen: Map<String, Bool> = [root => true];
 		var qi: Int = 0;
 		while (qi < queue.length) {
-			final state: {
-				key: String,
-				id: String,
-				valuation: String,
-				ctx: Int
-			} = queue[qi++];
+			final state: WalkState = queue[qi++];
 			for (edge in _graph.outEdges(state.id)) if (edge.kind.isInvocation()) {
 				// the edge leaves `from`'s body, so its file's chain is the one that says whether `from` is a sink
 				if (listsOf(edge.file).sinkIds.contains(edge.from)) continue;
 				final live: Int = _conditions.carried(edge, state.valuation, state.ctx);
 				if (live == 0) continue;
+				final repeats: Bool = state.repeated || repeatsAt(edge);
 				if (_sinkIds.contains(edge.to) && blocks(edge, held) || retakesElsewhere(edge, held)) {
+					// a short call run once on this path waits too little to count, and a sink leads nowhere
+					if (!counts(edge, held, repeats)) continue;
 					final step: TaintStep = { edge: edge, next: null };
 					_reaching[state.key] = step;
 					markPath(state.key, parents);
@@ -216,7 +299,7 @@ final class LockTaint {
 				}
 				if (takesLock(edge)) continue;
 				final nextValuation: String = _conditions.bind(edge, state.valuation);
-				final next: String = stateKey(held, edge.to, nextValuation, live);
+				final next: String = stateKey(held, edge.to, nextValuation, live, repeats);
 				if (_clean.exists(next) || seen.exists(next)) continue;
 				seen[next] = true;
 				parents[next] = { key: state.key, edge: edge };
@@ -228,7 +311,8 @@ final class LockTaint {
 					key: next,
 					id: edge.to,
 					valuation: nextValuation,
-					ctx: live
+					ctx: live,
+					repeated: repeats
 				});
 			}
 		}
@@ -302,14 +386,15 @@ final class LockTaint {
 		return takers;
 	}
 
+
 	/** Whether `edge` is a call to a sink `lockPairs` names a lock of: one whose cost is the wait for that lock. */
 	private function takesLock(edge: CallEdge): Bool {
 		final lists: ChainLists = listsOf(edge.file);
 		return lists.sinkIds.contains(edge.to) && lists.pairs.exists(p -> p.lockId == edge.to);
 	}
 
-	private static inline function stateKey(held: Null<String>, id: String, valuation: String, ctx: Int): String {
-		return '${held ?? ''}|$id|$valuation|$ctx';
+	private static inline function stateKey(held: Null<String>, id: String, valuation: String, ctx: Int, repeated: Bool): String {
+		return '${held ?? ''}|$id|$valuation|$ctx${repeated ? '|repeated' : ''}';
 	}
 
 }

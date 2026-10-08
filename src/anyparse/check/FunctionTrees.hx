@@ -33,15 +33,20 @@ final class FunctionTrees {
 		return fn == null ? null : nodeAt(fn.file, fn.span);
 	}
 
-	/** The node of the tree of `file` spanning exactly `span`; null when there is none. */
-	private function nodeAt(file: String, span: Null<Span>): Null<QueryNode> {
-		if (span == null) return null;
+	/** The branch-aware tree of the whole of `file`; null for a file the graph cannot give. */
+	public function ofFile(file: String): Null<QueryNode> {
 		if (!_trees.exists(file)) {
 			final tree: Null<QueryNode> = _graph.treeOf(file);
 			final source: Null<String> = _graph.sourceOf(file);
 			_trees[file] = tree == null || source == null ? null : _plugin.projectBranchAware(tree, source);
 		}
-		var node: Null<QueryNode> = _trees[file];
+		return _trees[file];
+	}
+
+	/** The node of the tree of `file` spanning exactly `span`; null when there is none. */
+	private function nodeAt(file: String, span: Null<Span>): Null<QueryNode> {
+		if (span == null) return null;
+		var node: Null<QueryNode> = ofFile(file);
 		while (node != null) {
 			final at: Null<Span> = node.span;
 			if (at != null && at.from == span.from && at.to == span.to) return node;
