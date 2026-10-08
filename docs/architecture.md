@@ -163,10 +163,10 @@ Format classes expose a `public static final instance` singleton because their f
 User schemas reference a format:
 
 ```haxe
-@:schema(JsonFormat)
-class User {
-  @:field("id")    public var id:Int;
-  @:field("name")  public var name:String;
+@:peg @:schema(JsonFormat) @:ws
+typedef User = {
+  var id: Int;
+  @:key('full-name') var name: String;
 }
 ```
 

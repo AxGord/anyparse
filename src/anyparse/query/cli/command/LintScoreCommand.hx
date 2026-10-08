@@ -3,6 +3,7 @@ package anyparse.query.cli.command;
 import anyparse.query.ExitCode.*;
 import anyparse.query.LintScore.LintScoreResult;
 import anyparse.query.cli.CliContext;
+import anyparse.query.cli.UsageFailure;
 import anyparse.query.format.json.LintFindingJson;
 import anyparse.query.format.json.LintTruthJson;
 import haxe.Exception;
@@ -18,6 +19,9 @@ using StringTools;
 final class LintScoreCommand implements CliCommand {
 
 	private static inline final UNLABELLED_LIMIT: Int = 20;
+
+	/** The least severity a score counts unless told otherwise: warnings and errors, the output a reader acts on. */
+	private static inline final DEFAULT_SEVERITY: String = 'warning';
 
 	public function new() {}
 
@@ -40,13 +44,39 @@ final class LintScoreCommand implements CliCommand {
 	#if (sys || nodejs)
 	/**
 	 * `apq lint-score --truth <truth.json> <report.json>`: 0 when every recall entry is still found, 1 when one is lost,
-	 * 2 when the score could not be taken (a file missing or malformed, a truth file `LintScore.validate` refuses, a
-	 * flag wrong) — distinct, so a gate that expects movement can never take a broken truth file for a pass.
+	 * 2 when the score could not be taken (a file missing or malformed, a truth file `LintScore.validate` refuses, no finding
+	 * left to score, a flag wrong) — distinct, so a gate that expects movement can never take a broken truth file for a pass.
 	 */
 	private static function runLintScore(args: Array<String>): Int {
+		final o: Null<ScoreOpts> = parseScoreArgs(args);
+		if (o == null) return EXIT_OK;
+		final truthFile: String = o.truth;
+		final reportFile: String = o.report;
+		final severity: Null<String> = o.severity;
+		var result: Null<LintScoreResult> = null;
+		try {
+			final truth: LintTruthJson = LintScore.parseTruth(CliIo.readFile(truthFile));
+			final findings: Array<LintFindingJson> = LintDiff.parseReport(CliIo.readFile(reportFile));
+			result = LintScore.score(truth, findings, severity);
+		} catch (exception: Exception) {
+			CliIo.stderr('apq lint-score: cannot score $reportFile against $truthFile: ${exception.message}\n');
+			return EXIT_USAGE;
+		}
+		if (result == null) throw new Exception('apq lint-score: the score neither produced a result nor threw');
+		if (result.excluded > 0)
+			CliIo.stderr('apq lint-score: ${result.excluded} finding(s) of rule "${result.rule}" below ${severity ?? ''} left unscored\n');
+		if (o.format == 'json')
+			CliIo.sysPrint('${LintScore.json(result)}\n')
+		else
+			for (line in LintScore.render(result, o.limit)) CliIo.sysPrint('$line\n');
+		return result.lost.length == 0 ? EXIT_OK : EXIT_RUNTIME;
+	}
+
+	/** The options `args` spell, or null after printing the help; a usage error throws (`UsageFailure`). */
+	private static function parseScoreArgs(args: Array<String>): Null<ScoreOpts> {
 		var truthPath: Null<String> = null;
 		var reportPath: Null<String> = null;
-		var severity: Null<String> = 'warning';
+		var severity: Null<String> = DEFAULT_SEVERITY;
 		var format: String = 'text';
 		var limit: Int = UNLABELLED_LIMIT;
 		var i: Int = 0;
@@ -57,56 +87,40 @@ final class LintScoreCommand implements CliCommand {
 					truthPath = CliArgs.expectValue(args, ++i, '--truth');
 				case '--severity':
 					final level: String = CliArgs.expectValue(args, ++i, '--severity');
-					if (!['error', 'warning', 'info', 'all'].contains(level)) {
-						CliIo.stderr('apq lint-score: unknown --severity value "$level" (expected error|warning|info|all)\n');
-						return EXIT_USAGE;
-					}
-					severity = level == 'all' ? null : level;
+					if (level != LintScore.ALL_SEVERITIES && !LintScore.SEVERITY_RANKS.contains(level))
+						throw new UsageFailure('unknown --severity value "$level" (expected error|warning|info|all)');
+					severity = level == LintScore.ALL_SEVERITIES ? null : level;
 				case '--format':
 					format = CliArgs.expectValue(args, ++i, '--format');
-					if (format != 'text' && format != 'json') {
-						CliIo.stderr('apq lint-score: unknown --format value "$format" (expected text|json)\n');
-						return EXIT_USAGE;
-					}
+					if (format != 'text' && format != 'json')
+						throw new UsageFailure('unknown --format value "$format" (expected text|json)');
 				case '--limit':
-					limit = Std.parseInt(CliArgs.expectValue(args, ++i, '--limit')) ?? UNLABELLED_LIMIT;
+					final value: String = CliArgs.expectValue(args, ++i, '--limit');
+					final parsed: Null<Int> = Std.parseInt(value);
+					if (parsed == null || '$parsed' != value || parsed < -1)
+						throw new UsageFailure('--limit expects a count, or -1 for every unlabelled key — got "$value"');
+					limit = parsed;
 				case '--lang':
 					// the hxq shim injects --lang haxe; a score reads two JSON files and needs no grammar
 					CliArgs.expectValue(args, ++i, '--lang');
 				case '-h', '--help':
 					printLintScoreUsage();
-					return EXIT_OK;
-				case _ if (!a.startsWith('--') && reportPath == null):
+					return null;
+				case _ if (!a.startsWith('-') && reportPath == null):
 					reportPath = a;
 				case _:
-					CliIo.stderr('apq lint-score: unexpected argument "$a"\n');
-					printLintScoreUsage();
-					return EXIT_USAGE;
+					throw new UsageFailure('lint-score: unexpected argument "$a" — see apq lint-score --help');
 			}
 			i++;
 		}
-		if (truthPath == null || reportPath == null) {
-			CliIo.stderr('apq lint-score: both --truth <truth.json> and <report.json> are required\n');
-			printLintScoreUsage();
-			return EXIT_USAGE;
-		}
-		final truthFile: String = truthPath;
-		final reportFile: String = reportPath;
-		var result: Null<LintScoreResult> = null;
-		try {
-			final truth: LintTruthJson = LintScore.parseTruth(CliIo.readFile(truthFile));
-			final findings: Array<LintFindingJson> = LintScore.parseFindings(CliIo.readFile(reportFile));
-			result = LintScore.score(truth, findings, severity);
-		} catch (exception: Exception) {
-			CliIo.stderr('apq lint-score: cannot score $reportFile against $truthFile: ${exception.message}\n');
-			return EXIT_USAGE;
-		}
-		if (result == null) throw new Exception('apq lint-score: the score neither produced a result nor threw');
-		if (format == 'json')
-			CliIo.sysPrint('${LintScore.json(result)}\n')
-		else
-			for (line in LintScore.render(result, limit)) CliIo.sysPrint('$line\n');
-		return result.lost.length == 0 ? EXIT_OK : EXIT_RUNTIME;
+		if (truthPath == null || reportPath == null) throw new UsageFailure('lint-score needs both --truth <truth.json> and <report.json>');
+		return {
+			truth: truthPath,
+			report: reportPath,
+			severity: severity,
+			format: format,
+			limit: limit
+		};
 	}
 
 	private static function printLintScoreUsage(): Void {
@@ -118,26 +132,38 @@ final class LintScoreCommand implements CliCommand {
 		CliIo.sysPrint('message or line; several findings with one key are one hit plus duplicates.\n');
 		CliIo.sysPrint('Per family and overall: findings, keys, keys per verdict, unlabelled keys,\n');
 		CliIo.sysPrint('precision = real-long keys / keys with a known verdict (unknown and unlabelled\n');
-		CliIo.sysPrint('aside) and recall = recall entries hit / recall entries (real-long, or\n');
-		CliIo.sysPrint('recall: true); then every lost recall entry and the unlabelled keys.\n');
+		CliIo.sysPrint('aside; a dup-of key counts against it — a duplicate warning is output too) and\n');
+		CliIo.sysPrint('recall = recall entries hit / recall entries (every real-long entry, plus any\n');
+		CliIo.sysPrint('other marked recall: true); then every lost recall entry and the unlabelled keys.\n');
 		CliIo.sysPrint('\n');
-		CliIo.sysPrint('Truth file: {"rule", "project", "commit", "entries": [{"family", "function",\n');
-		CliIo.sysPrint('"subject", "verdict": real-long|real-short|rare|false|dup-of|unknown,\n');
-		CliIo.sysPrint('"dupOf" (dup-of only), "recall": bool, "evidence": {"kind": measured|test|code,\n');
-		CliIo.sysPrint('"ref", "ms"}, "note"}]} — an unknown verdict or evidence kind, a dup-of without\n');
-		CliIo.sysPrint('dupOf, or a key labelled twice is refused.\n');
+		CliIo.sysPrint('Truth file: {"rule", "project", "commit" (all non-empty), "entries": [{"family",\n');
+		CliIo.sysPrint('"function", "subject", "verdict": real-long|real-short|rare|false|dup-of|unknown,\n');
+		CliIo.sysPrint('"dupOf": "family|function|subject" of another entry (dup-of only), "recall": bool\n');
+		CliIo.sysPrint('(false is refused on real-long), "evidence": {"kind": measured|test|code, "ref",\n');
+		CliIo.sysPrint('"ms" >= 0}, "note"}]}. A key labelled twice is refused too.\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Exit 0 when every recall entry is found, 1 when one is lost, 2 when the score\n');
-		CliIo.sysPrint('could not be taken (a file missing or malformed, a truth file refused).\n');
+		CliIo.sysPrint('could not be taken: a file missing or malformed, a truth file refused, or no\n');
+		CliIo.sysPrint('finding of the rule left to score (a misspelt rule, an empty report, a severity\n');
+		CliIo.sysPrint('that excludes them all).\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Options:\n');
 		CliIo.sysPrint('  --truth <path>    The ground-truth file (required)\n');
-		CliIo.sysPrint('  --severity <s>    Score only findings of this severity: error|warning|info|all\n');
-		CliIo.sysPrint('                    (default warning)\n');
+		CliIo.sysPrint('  --severity <s>    Score findings at <s> or above: error|warning|info, or all\n');
+		CliIo.sysPrint('                    (default warning: warnings and errors)\n');
 		CliIo.sysPrint('  --format <fmt>    text (default) or json\n');
 		CliIo.sysPrint('  --limit <n>       Unlabelled keys listed in text (default 20; -1 lists all)\n');
 		CliIo.sysPrint('  -h, --help        Show this help\n');
 	}
 	#end
 
+}
+
+/** The options of one `apq lint-score` run. */
+private typedef ScoreOpts = {
+	final truth: String;
+	final report: String;
+	final severity: Null<String>;
+	final format: String;
+	final limit: Int;
 }

@@ -4,6 +4,7 @@ import anyparse.query.format.json.LintFindingDataJson;
 import anyparse.query.format.json.LintFindingJson;
 import anyparse.query.format.json.LintReportJson;
 import anyparse.query.format.json.LintReportJsonParser;
+import anyparse.runtime.ParseError;
 import haxe.Exception;
 
 using StringTools;
@@ -11,7 +12,7 @@ using StringTools;
 /**
  * `apq lint-diff` — compare two `apq lint --format json --all` snapshots as MULTISETS of
  * `(file, rule, severity, message)` keys — `(file, rule, severity, family, function, subject)` for a record carrying a
- * rule's structured identity (`identityKeyOf`). The blast-radius gate every slice ends with.
+ * rule's structured identity (`keyFor`). The blast-radius gate every slice ends with.
  *
  * Four fields rather than a text diff, because the cheaper answers lie. A byte diff reports
  * half the tree: line and column move under any edit above them, so a one-line insertion
@@ -53,7 +54,7 @@ using StringTools;
 @:nullSafety(Strict)
 final class LintDiff {
 
-	/** Opens the message slot of an identity key (`identityKeyOf`): a character no rule writes into its prose. */
+	/** Opens the message slot of an identity key (`keyFor`): a character no rule writes into its prose. */
 	private static inline final IDENTITY_MARK: String = '\x01';
 
 	/**
@@ -65,7 +66,8 @@ final class LintDiff {
 	private static final SEVERITY_ORDER: Array<String> = ['error', 'warning', 'info'];
 
 	/**
-	 * Read an `apq lint --format json` snapshot into its records.
+	 * Read an `apq lint --format json` snapshot into its records — the bare array, or the `{"findings":
+	 * […], "longLocks": …}` envelope `--explain-long` prints, whose other keys are skipped.
 	 *
 	 * The report is a bare top-level JSON array and the ByName lowering
 	 * cannot root on one, so the text is wrapped into the `LintReportJson`
@@ -82,10 +84,19 @@ final class LintDiff {
 	 */
 	public static function parseReport(raw: String): Array<LintFindingJson> {
 		final trimmed: String = raw.trim();
-		if (!trimmed.startsWith('[')) {
-			throw new Exception('not an `apq lint --format json` report — expected a top-level JSON array');
+		// the envelope a `--explain-long` run prints holds the same records under `findings`, beside keys this skips
+		final envelope: Bool = trimmed.startsWith('{');
+		if (!envelope && !trimmed.startsWith('[')) {
+			throw new Exception('not an `apq lint --format json` report — expected a top-level JSON array or a {"findings": …} envelope');
 		}
-		final report: LintReportJson = LintReportJsonParser.parse('{"findings":$trimmed}');
+		final report: LintReportJson = try LintReportJsonParser.parse(envelope
+			? trimmed
+			: '{"findings":$trimmed}') catch (exception: ParseError) {
+			if (!envelope) throw exception;
+			throw new Exception(
+				'not an `apq lint --format json` report — an object, but no {"findings": […]} envelope: ${exception.message}'
+			);
+		};
 		return report.findings;
 	}
 
@@ -106,9 +117,7 @@ final class LintDiff {
 			final file: String = normalizePath(f.file, root);
 			final message: String = normalizeMessage(f.rule, f.message, root, identities);
 			final data: Null<LintFindingDataJson> = f.data;
-			final key: String = data == null
-				? keyOf(file, f.rule, f.severity, message)
-				: identityKeyOf(file, f.rule, f.severity, data.family, data.member, data.subject);
+			final key: String = keyFor(file, f.rule, f.severity, message, data);
 			final seen: Null<Int> = counts[key];
 			if (seen == null) {
 				order.push(key);
@@ -116,7 +125,8 @@ final class LintDiff {
 					file: file,
 					rule: f.rule,
 					message: message,
-					severity: f.severity
+					severity: f.severity,
+					identity: data != null
 				};
 				counts[key] = 1;
 			} else
@@ -150,8 +160,11 @@ final class LintDiff {
 	 * breakdown, so neither question needs a reader's arithmetic.
 	 */
 	public static function compare(before: LintDiffTally, after: LintDiffTally): LintDiffResult {
-		final added: Array<LintDiffEntry> = surplus(after, before);
-		final removed: Array<LintDiffEntry> = surplus(before, after);
+		final surplusAdded: Array<LintDiffEntry> = surplus(after, before);
+		final surplusRemoved: Array<LintDiffEntry> = surplus(before, after);
+		pairAcrossIdentity(surplusAdded, surplusRemoved);
+		final added: Array<LintDiffEntry> = surplusAdded.filter(e -> e.count > 0);
+		final removed: Array<LintDiffEntry> = surplusRemoved.filter(e -> e.count > 0);
 		var addedTotal: Int = 0;
 		var removedTotal: Int = 0;
 		for (e in added) addedTotal += e.count;
@@ -272,16 +285,21 @@ final class LintDiff {
 	}
 
 	/**
-	 * The multiset key of a finding that carries a structured identity (`Check.FindingData`): `keyOf`'s file, rule and
-	 * severity, then the family, member and subject, length-prefixed behind a control-character marker no lint message
-	 * starts with. The message is left out, and with it the chain it quotes: a chain re-rendered through another path is
-	 * the same finding, so it is no delta. A snapshot written before a rule carried the identity keys by message, so the
-	 * first comparison across that change re-keys the rule's findings once.
+	 * The multiset key of one finding, the ONE spelling `tally` and `LintBaseline.keyOf` share: `keyOf` over the
+	 * (normalized) message, or — for a finding carrying a structured identity (`Check.FindingData`) — over its family,
+	 * member and subject, length-prefixed behind a control-character marker no lint message starts with. The message is
+	 * left out there, and with it the chain it quotes: a chain re-rendered through another path is the same finding. A
+	 * snapshot written before its rule carried the identity keys that finding by message; `compare` pairs the two
+	 * spellings (`pairAcrossIdentity`).
 	 */
-	public static function identityKeyOf(
-		file: String, rule: String, severity: String, family: String, member: String, subject: String
-	): String {
-		return keyOf(file, rule, severity, '$IDENTITY_MARK${family.length}:$family${member.length}:$member${subject.length}:$subject');
+	public static function keyFor(file: String, rule: String, severity: String, message: String, identity: Null<FindingIdentity>): String {
+		return identity == null
+			? keyOf(file, rule, severity, message)
+			: keyOf(
+				file, rule, severity,
+				'$IDENTITY_MARK${identity.family.length}:${identity.family}${identity.member.length}:${identity.member}'
+				+ '${identity.subject.length}:${identity.subject}'
+			);
 	}
 
 	/** A total delta written so its DIRECTION is unmistakable: `+57`, `-3`, `+0`. */
@@ -452,10 +470,27 @@ final class LintDiff {
 				rule: row.rule,
 				message: row.message,
 				severity: row.severity,
+				identity: row.identity,
 				count: mine - theirs
 			});
 		}
 		return out;
+	}
+
+	/**
+	 * Cancels, between `added` and `removed`, the occurrences of one finding keyed by identity on one side and by message
+	 * on the other — a snapshot written before its rule carried `data` against one written after — when file, rule,
+	 * severity and message agree: the same finding, not a delta. Counts drop in place; the caller drops the emptied entries.
+	 */
+	private static function pairAcrossIdentity(added: Array<LintDiffEntry>, removed: Array<LintDiffEntry>): Void {
+		for (a in added) for (r in removed) if (
+			a.identity != r.identity && a.count > 0 && r.count > 0 && a.file == r.file && a.rule == r.rule && a.severity == r.severity
+			&& a.message == r.message
+		) {
+			final paired: Int = a.count < r.count ? a.count : r.count;
+			a.count -= paired;
+			r.count -= paired;
+		}
 	}
 
 	/** Per-severity totals over both surplus lists, in `SEVERITY_ORDER`. */
@@ -532,6 +567,16 @@ typedef LintDiffRow = {
 	var message: String;
 
 	var severity: String;
+
+	/** Whether the key is the finding's structured identity rather than its message (`keyFor`). */
+	var identity: Bool;
+};
+
+/** The parts of a finding's structured identity a key is made of (`keyFor`): every field but the chain. */
+typedef FindingIdentity = {
+	var family: String;
+	var member: String;
+	var subject: String;
 };
 
 /** One report folded into a multiset of normalized keys. */
@@ -560,6 +605,9 @@ typedef LintDiffEntry = {
 	var message: String;
 
 	var severity: String;
+
+	/** Whether the key is the finding's structured identity rather than its message (`keyFor`). */
+	var identity: Bool;
 
 	/** How many occurrences the other side is missing. */
 	var count: Int;

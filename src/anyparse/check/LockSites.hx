@@ -35,6 +35,12 @@ typedef LockAcquire = {
 	/** Whether the window runs a call the graph resolves to no target — a function value, a dynamic or untyped receiver. */
 	final blind: Bool;
 
+	/** Whether the window could not be traced at all (no function node, no control-flow support): `leaks` and `blind` by default. */
+	final untraced: Bool;
+
+	/** The calls in the window the graph resolves to no target, which make the hold `blind`; none for an untraced one. */
+	final blindCalls: Array<BlindCall>;
+
 	/** Whether the hold sits in the owner's own constructor, on an instance lock, before the object can reach another thread. */
 	final uncontended: Bool;
 
@@ -43,6 +49,12 @@ typedef LockAcquire = {
 
 	/** Where an exception leaves the function with the lock still held (`HeldWindow.escapes`), in source order. */
 	final escapes: Array<LockEscape>;
+}
+
+/** A call the graph resolves to no target, by the name its callee is written with, at its site. */
+typedef BlindCall = {
+	final name: String;
+	final span: Span;
 }
 
 /** One throw that leaves a function holding a lock: a `throw` (no `raiser`), or a call that may raise (`ThrowReach`). */
@@ -275,13 +287,18 @@ final class LockSites {
 			: _walker.trace(fn, start, releases, _throws.raisingFroms(edge));
 		final held: Array<CallEdge> = heldEdges(edge, start, releases, traced);
 		final leaks: Bool = traced == null || traced.leaks;
+		final unresolved: Array<BlindCall> = traced == null ? [] : [
+			for (n in traced.held) for (call in unresolvedCalls(n, edge, start, releases)) call
+		];
 		return {
 			edge: edge,
 			pair: pair,
 			lock: lock,
 			window: [for (e in held) if (e.kind.isInvocation()) e],
 			leaks: leaks,
-			blind: traced == null || traced.held.exists(n -> runsUnresolved(n, edge, start, releases)),
+			blind: traced == null || unresolved.length > 0,
+			untraced: traced == null,
+			blindCalls: unresolved,
 			uncontended: !leaks && fn != null && lock != null && ownConstructorHold(edge, lock, fn),
 			delegated: _wrappers[edge.from]?.takes == true,
 			escapes: traced == null ? [] : _throws.escapes(edge, traced.escapes)
@@ -330,18 +347,23 @@ final class LockSites {
 	}
 
 	/**
-	 * Whether `node` holds a call of `edge`'s function — neither the acquire at `start` nor one of the `releases`, nor
-	 * inside a nested function — the graph resolved to no target: it may run anything, a blocking call included.
+	 * The calls under `node` of `edge`'s function — neither the acquire at `start` nor one of the `releases`, nor inside a nested
+	 * function — the graph resolved to no target, each by its callee's name: any of them may run anything, a blocking call included.
 	 */
-	private function runsUnresolved(node: QueryNode, edge: CallEdge, start: Int, releases: Array<Int>): Bool {
-		if (_nestedFnKinds.contains(node.kind)) return false;
+	private function unresolvedCalls(node: QueryNode, edge: CallEdge, start: Int, releases: Array<Int>): Array<BlindCall> {
+		if (_nestedFnKinds.contains(node.kind)) return [];
+		final out: Array<BlindCall> = [];
 		final at: Null<Span> = node.span;
 		if (
-			node.kind == _shape.callKind && at != null && at.from != start && !releases.contains(at.from)
+			at != null && node.kind == _shape.callKind && at.from != start && !releases.contains(at.from)
 			&& !_graph.outEdges(edge.from).exists(e -> e.kind.isInvocation() && e.span?.from == at.from)
-		)
-			return true;
-		return node.children.exists(c -> runsUnresolved(c, edge, start, releases));
+		) {
+			final site: Span = at;
+			final callee: Null<String> = node.children.length > 0 ? node.children[0].name : null;
+			out.push({ name: callee ?? '?', span: site });
+		}
+		for (c in node.children) for (call in unresolvedCalls(c, edge, start, releases)) out.push(call);
+		return out;
 	}
 
 	/** Whether `node` hands the object under construction to anything — `this` read other than as a member access's receiver. */

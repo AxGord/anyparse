@@ -789,6 +789,7 @@ class WriterLowering {
 	 * fatal error.
 	 */
 	private function lowerStructByName(node: ShapeNode, typePath: String): Expr {
+		MetaInspect.checkWireKeys(node);
 		final mappingOpen: String = _formatInfo.mappingOpen;
 		final mappingClose: String = _formatInfo.mappingClose;
 		final keyValueSep: String = _formatInfo.keyValueSep;

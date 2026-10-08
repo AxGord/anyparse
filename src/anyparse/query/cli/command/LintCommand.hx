@@ -1035,12 +1035,14 @@ final class LintCommand implements CliCommand {
 		CliIo.sysPrint('                   --fail-on alike; a missing or unreadable <p> reports\n');
 		CliIo.sysPrint('                   everything and says so. Refused with --fix\n');
 		CliIo.sysPrint('  --explain-long   After the findings, say why thread-safety holds each lock long:\n');
-		CliIo.sysPrint('                   per lock every reason (crossing, leak, blind, unnamed,\n');
-		CliIo.sysPrint('                   spans-blocking) at its site, what it is long by once its own\n');
+		CliIo.sysPrint('                   per lock every reason (crossing, leak, blind, untraced,\n');
+		CliIo.sysPrint('                   unnamed, spans-blocking with the long lock it waits for) at\n');
+		CliIo.sysPrint('                   every site, what it is long by once its own\n');
 		CliIo.sysPrint('                   reasons are set aside, and the main-thread takes of locks that\n');
 		CliIo.sysPrint('                   are not long. With --format json the report becomes the\n');
-		CliIo.sysPrint('                   {"findings": [...], "longLocks": {...}} envelope. Adds output,\n');
-		CliIo.sysPrint('                   never a finding; refused with --fix and checkstyle\n');
+		CliIo.sysPrint('                   {"findings": [...], "longLocks": {...} | null} envelope (null,\n');
+		CliIo.sysPrint('                   with a note, when thread-safety explained nothing). Adds\n');
+		CliIo.sysPrint('                   output, never a finding; refused with --fix and checkstyle\n');
 		CliIo.sysPrint('  --verbose        Bring back the accounting a quiet run withholds: the --fix\n');
 		CliIo.sysPrint('                   rule census (silent on a run that wrote nothing) and the\n');
 		CliIo.sysPrint('                   --no-oracle net notice. Adds output, never behaviour\n');
@@ -1310,13 +1312,13 @@ final class LintCommand implements CliCommand {
 	): Void {
 		final threshold: Int = config?.reportSummaryThreshold() ?? LintFormat.DEFAULT_REPORT_SUMMARY_THRESHOLD;
 		final summarised: Bool = summarises(shown.length, o.format, o.summary, threshold);
-		renderLintReport(paths, shown, sourceOf, o.format, o.flat, cached, summarised, explainer?.longLocks);
+		renderLintReport(paths, shown, sourceOf, o.format, o.flat, cached, summarised, LintExplainLong.outcome(o.explainLong, explainer));
 		lintSummary(all, paths, shown.length == all.length, summarised ? summaryHint(shown.length, o.summary, threshold) : null, skipped);
 	}
 
 	private static function renderLintReport(
 		paths: Array<String>, shown: Array<Violation>, sourceOf: Map<String, String>, format: String, flat: Bool,
-		plugin: CachingGrammarPlugin, summarised: Bool, longLocks: Null<LongLockReport>
+		plugin: CachingGrammarPlugin, summarised: Bool, explain: Null<ExplainedLocks>
 	): Void {
 		// Group findings per file, each group sorted by source position so the report
 		// reads top-to-bottom. ONE pass rather than a filter per path: that scan was
@@ -1368,7 +1370,7 @@ final class LintCommand implements CliCommand {
 					final tree: Null<QueryNode> =
 						try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
 					return tree == null ? null : addresser.addressAt(tree, source, span.from);
-				}, longLocks));
+				}, explain));
 			case FORMAT_CHECKSTYLE:
 				CliIo.sysPrint(LintFormat.checkstyle(orderedByPath(), sourceOf));
 			case _ if (summarised):
@@ -1379,6 +1381,7 @@ final class LintCommand implements CliCommand {
 					if (group != null) CliIo.sysPrint(Text.renderViolations(path, sourceOf[path] ?? '', group, flat));
 				}
 		}
+		final longLocks: Null<LongLockReport> = explain?.report;
 		if (format == FORMAT_TEXT && longLocks != null)
 			CliIo.sysPrint((shown.length > 0 ? '\n' : '') + LintFormat.longLocksText(longLocks, sourceOf));
 	}

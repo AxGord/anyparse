@@ -120,7 +120,8 @@ class JsonTypedParserTest extends Test {
 		final written: String = TestKeyedWriter.write({ member: 'A.b', contentType: 'x' }, JsonFormat.instance.defaultWriteOptions);
 		Assert.stringContains('"function":', written);
 		Assert.stringContains('"content-type":', written);
-		Assert.equals('A.b', TestKeyedParser.parse(written).member);
+		final read: TestKeyed = TestKeyedParser.parse(written);
+		Assert.same(['A.b', 'x'], [read.member, read.contentType]);
 	}
 
 }

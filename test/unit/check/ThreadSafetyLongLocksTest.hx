@@ -11,26 +11,30 @@ import utest.Assert;
 import utest.Test;
 
 using Lambda;
+using StringTools;
 
 /**
- * `thread-safety`'s `--explain-long` evidence (`LongLockExplain`): for every long lock, each reason it is long at its
- * site — `crossing`, `leak`, `blind`, `unnamed`, `spans-blocking` — what it is long by once its own reasons are set
- * aside, and the main-thread takes of locks that are not long. Recording evidence moves no finding.
+ * `thread-safety`'s `--explain-long` evidence (`LongLockExplain`): for every long lock, EVERY reason it is long at
+ * EVERY site — `crossing`, `leak`, `blind` (naming the calls), `unnamed`, `spans-blocking` (naming the call, the path
+ * and the long lock a take waits for) — what it is long by once its own reasons are set aside, and the main-thread takes
+ * of locks that are not long. Recording evidence moves no finding.
  */
 class ThreadSafetyLongLocksTest extends Test {
 
-	#if (sys || nodejs)
-	private static final CONFIG: String =
+	/** The config every case runs under: `Mutex.acquire` a lock and a sink, `Sys.sleep` a sink. */
+	public static final CONFIG: String =
 		'{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Sys.sleep"],"lockPairs":["Mutex.acquire/release"]}}}';
-	#end
 
-	/** A release in a function that never took the lock makes it crossing, at that release. */
-	public function testCrossingIsTheRelease(): Void {
+	/** Every release in a function that never took the lock makes it crossing, each at its own release. */
+	public function testCrossingIsEveryRelease(): Void {
 		#if (sys || nodejs)
 		final source: String = 'class A { final _m:Mutex = new Mutex(); public function new() {} function give():Void {'
-			+ ' tick(); _m.release(); } function boot():Void { _m.acquire(); tick(); _m.release(); } function tick():Void {} }';
-		final lock: Null<LongLock> = longLock(explain([source]), 'A._m');
-		Assert.same([{ kind: 'crossing', holder: 'A.give', at: source.indexOf('_m.release') }], reasonsOf(lock));
+			+ ' tick(); _m.release(); } function give2():Void { tick(); _m.release(); } function boot():Void { _m.acquire(); tick();'
+			+ ' _m.release(); } function tick():Void {} }';
+		Assert.same([
+			{ kind: 'crossing', holder: 'A.give', at: source.indexOf('_m.release') },
+			{ kind: 'crossing', holder: 'A.give2', at: source.indexOf('_m.release', source.indexOf('give2')) }
+		], reasonsOf(longLock(explain([source]), 'A._m')));
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -38,34 +42,38 @@ class ThreadSafetyLongLocksTest extends Test {
 
 	/**
 	 * TM's correlated `if (!batch) acquire … if (!batch) release` reads as a hold that may outlive its function: recorded
-	 * as a leak, at the take — evidence of what the rule does today, not a claim it is right.
+	 * as a leak, at the take — evidence of what the rule does today, not a claim it is right. A second leaking take is a
+	 * second reason.
 	 */
 	public function testCorrelatedConditionalTakeReadsAsALeak(): Void {
 		#if (sys || nodejs)
 		final sources: Array<String> = ThreadSafetyCheckTest.storeFixture('db.add(false);', 'fs.save();');
-		final lock: Null<LongLock> = longLock(explain(sources), 'Db._batch');
+		final db: String = sources[0].replace(
+			'function work():Void {}', 'function work():Void {} function other(b:Bool):Void { if (!b) _batch.acquire(); }'
+		);
 		Assert.same([
-			{ kind: 'leak', holder: 'Db.add', at: sources[0].indexOf('_batch.acquire(); work()') }
-		], reasonsOf(lock));
+			{ kind: 'leak', holder: 'Db.add', at: db.indexOf('_batch.acquire(); work()') },
+			{ kind: 'leak', holder: 'Db.other', at: db.indexOf('_batch.acquire(); }', db.indexOf('function other')) }
+		], reasonsOf(longLock(explain([db, sources[1]]), 'Db._batch')).filter(r -> r.kind == 'leak'));
 		#else
 		Assert.pass('non-sys target');
 		#end
 	}
 
-	/** A hold spanning a call the graph resolves to nothing is blind, at its take. */
-	public function testUnresolvedCallUnderTheHoldIsBlind(): Void {
+	/** A hold spanning calls the graph resolves to nothing is blind, at its take, naming each such call. */
+	public function testBlindNamesTheUnresolvedCalls(): Void {
 		#if (sys || nodejs)
 		final source: String = 'class A { final _m:Mutex = new Mutex(); public function new() {}'
-			+ ' function work(f:() -> Void):Void { _m.acquire(); f(); _m.release(); } }';
-		Assert.same(
-			[{ kind: 'blind', holder: 'A.work', at: source.indexOf('_m.acquire') }], reasonsOf(longLock(explain([source]), 'A._m'))
-		);
+			+ ' function work(f:() -> Void, g:() -> Void):Void { _m.acquire(); f(); g(); _m.release(); } }';
+		final lock: Null<LongLock> = longLock(explain([source]), 'A._m');
+		Assert.same([{ kind: 'blind', holder: 'A.work', at: source.indexOf('_m.acquire') }], reasonsOf(lock));
+		Assert.same([['f', 'g']], [for (r in lock?.reasons ?? []) [for (c in r.unresolved) c.name]]);
 		#else
 		Assert.pass('non-sys target');
 		#end
 	}
 
-	/** A hold across a blocking call grows long by it: the reason names the call and the path to the sink. */
+	/** A hold across a blocking call: the reason names the call and the path to the sink, and no lock it waits for. */
 	@:pin('control') @:killer('M-TS-LONG-NEVER-GROWS')
 	public function testSpansBlockingNamesTheCallAndThePath(): Void {
 		#if (sys || nodejs)
@@ -75,7 +83,26 @@ class ThreadSafetyLongLocksTest extends Test {
 		Assert.same([{ kind: 'spans-blocking', holder: 'A.work', at: source.indexOf('nap();') }], reasonsOf(lock));
 		Assert.same(['A.nap'], [for (r in lock?.reasons ?? []) r.call]);
 		Assert.same([['A.work', 'A.nap', 'Sys.sleep']], [for (r in lock?.reasons ?? []) r.chain]);
+		Assert.same([null], [for (r in lock?.reasons ?? []) r.via]);
 		Assert.isNull(lock?.aside, 'a lock that spans a blocking call needs no counterfactual');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** Every blocking call every hold spans is listed — not only the one the solve met first. */
+	@:pin('control') @:killer('M-TS-SPANS-FIRST-ONLY')
+	public function testEverySpansBlockingCallIsListed(): Void {
+		#if (sys || nodejs)
+		final source: String = 'class A { final _l:Mutex = new Mutex(); public function new() {}'
+			+ ' function work():Void { _l.acquire(); nap(); nap2(); _l.release(); }'
+			+ ' function more():Void { _l.acquire(); nap(); _l.release(); }'
+			+ ' function nap():Void Sys.sleep(1); function nap2():Void Sys.sleep(2); }';
+		Assert.same([
+			{ kind: 'spans-blocking', holder: 'A.work', at: source.indexOf('nap();') },
+			{ kind: 'spans-blocking', holder: 'A.work', at: source.indexOf('nap2();') },
+			{ kind: 'spans-blocking', holder: 'A.more', at: source.indexOf('nap();', source.indexOf('more')) }
+		], reasonsOf(longLock(explain([source]), 'A._l')));
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -111,16 +138,47 @@ class ThreadSafetyLongLocksTest extends Test {
 		#end
 	}
 
-	/** A lock the main thread takes and nothing makes long is listed apart, at its take. */
-	public function testMainThreadTakeOfAShortLock(): Void {
+	/**
+	 * The cascade: `_l` is long by a crossing release, and its hold takes `_m`, long by a leak. Set aside, `_l` is still
+	 * long — by spanning the take of `_m`, which the reason names as the lock it waits for.
+	 */
+	@:pin('control') @:killer('M-TS-VIA-DROPPED')
+	public function testAsideNamesTheLongLockAHoldWaitsFor(): Void {
+		#if (sys || nodejs)
+		final source: String = 'class A { final _l:Mutex = new Mutex(); final _m:Mutex = new Mutex(); public function new() {}'
+			+ ' function give():Void { tick(); _l.release(); } function keep(x:Bool):Void { if (x) _m.acquire(); }'
+			+ ' function work():Void { _l.acquire(); _m.acquire(); _m.release(); _l.release(); } function tick():Void {} }';
+		final aside: Array<{ via: Null<String>, at: Null<Int> }> = [
+			for (r in longLock(explain([source]), 'A._l')?.aside ?? []) { via: r.via, at: r.span?.from }
+		];
+		Assert.same([{ via: 'A._m', at: source.indexOf('_m.acquire(); _m.release') }], aside);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A lock the main thread takes and nothing makes long is listed apart, at its take; a quiet root's take is marked quiet. */
+	@:pin('control') @:killer('M-TS-MAINSHORT-LOUD-ONLY')
+	public function testMainThreadTakesOfAShortLock(): Void {
 		#if (sys || nodejs)
 		final source: String = 'class A { final _m:Mutex = new Mutex(); public function new() {}'
-			+ ' function boot():Void { _m.acquire(); tick(); _m.release(); } function tick():Void {} }';
-		final report: LongLockReport = explain([source]);
-		Assert.same([], [for (l in report.long) l.lock]);
-		Assert.same(['A._m @ ${source.indexOf('_m.acquire')} in A.boot'], [
-			for (t in report.mainShort) '${t.lock} @ ${t.span?.from} in ${t.holder}'
-		]);
+			+ ' function boot():Void { _m.acquire(); tick(); _m.release(); }'
+			+ ' function shutdown():Void { _m.acquire(); tick(); _m.release(); } function tick():Void {} }';
+		final report: Null<LongLockReport> = run(
+			[ThreadSafetyCheckTest.MUTEX, source],
+			true,
+			'{"rules":{"thread-safety":{"sinks":["Mutex.acquire"],"lockPairs":["Mutex.acquire/release"],"quietRoots":["A.shutdown"]}}}'
+		).report;
+		Assert.same([], [for (l in report?.long ?? []) l.lock]);
+		Assert.same(
+			[
+				'A._m @ ${source.indexOf('_m.acquire')} in A.boot quiet=false',
+				'A._m @ ${source.indexOf('_m.acquire', source.indexOf('shutdown'))} in A.shutdown quiet=true'
+			],
+			[
+				for (t in report?.mainShort ?? []) '${t.lock} @ ${t.span?.from} in ${t.holder} quiet=${t.quiet}'
+			]
+		);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -134,9 +192,9 @@ class ThreadSafetyLongLocksTest extends Test {
 			'class A { final _m:Mutex = new Mutex(); final _n:Mutex = new Mutex(); public function new() {} function keep(x:Bool):Void {'
 				+ ' if (x) _m.acquire(); } function boot():Void { _n.acquire(); _m.acquire(); _m.release(); _n.release(); } }'
 		];
-		final plain: Array<String> = [for (v in run(sources, false).found) v.message];
+		final plain: Array<String> = [for (v in run(sources, false, CONFIG).found) v.message];
 		Assert.isTrue(plain.length > 0);
-		Assert.same(plain, [for (v in run(sources, true).found) v.message]);
+		Assert.same(plain, [for (v in run(sources, true, CONFIG).found) v.message]);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -145,14 +203,16 @@ class ThreadSafetyLongLocksTest extends Test {
 	#if (sys || nodejs)
 	/** The report of a `CONFIG` run over `sources` (plus `Mutex`). */
 	private static function explain(sources: Array<String>): LongLockReport {
-		final report: Null<LongLockReport> = run([ThreadSafetyCheckTest.MUTEX].concat(sources), true).report;
+		final report: Null<LongLockReport> = run([ThreadSafetyCheckTest.MUTEX].concat(sources), true, CONFIG).report;
 		if (report == null) throw 'thread-safety: an explaining run left no report';
 		return report;
 	}
 
-	/** A `CONFIG` run over `sources`, explaining when `explaining`: its findings and its report. */
-	private static function run(sources: Array<String>, explaining: Bool): { found: Array<Violation>, report: Null<LongLockReport> } {
-		final dir: String = CliFixture.writeDir('threadsafetylong', [{ name: 'apqlint.json', source: CONFIG }]);
+	/** A run of `config` over `sources`, explaining when `explaining`: its findings and its report. */
+	private static function run(
+		sources: Array<String>, explaining: Bool, config: String
+	): { found: Array<Violation>, report: Null<LongLockReport> } {
+		final dir: String = CliFixture.writeDir('threadsafetylong', [{ name: 'apqlint.json', source: config }]);
 		final check: ThreadSafety = new ThreadSafety();
 		check.explainLongLocks(explaining);
 		final found: Array<Violation> = Linter.run(

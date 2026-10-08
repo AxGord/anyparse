@@ -1,11 +1,13 @@
 package anyparse.query.cli.command;
 
 import anyparse.check.Check;
+import anyparse.check.LongLockExplain.LongLockReport;
 import anyparse.check.ThreadSafety;
+import anyparse.query.format.LintFormat.ExplainedLocks;
 
 using Lambda;
 
-/** The `lint --explain-long` half that runs BEFORE the checks: asking `thread-safety` to keep its long-lock evidence. */
+/** The `lint --explain-long` halves around the checks: asking `thread-safety` to keep its long-lock evidence, and reading it back. */
 @:nullSafety(Strict)
 final class LintExplainLong {
 
@@ -23,6 +25,18 @@ final class LintExplainLong {
 		final check: ThreadSafety = cast found;
 		check.explainLongLocks(true);
 		return check;
+	}
+
+	/**
+	 * What the report carries for `--explain-long`: null when the flag is off; otherwise the check's report, or null — said
+	 * on stderr — when the check ran and explained nothing (no file of the run configures `sinks`) or was not run at all.
+	 */
+	public static function outcome(on: Bool, explainer: Null<ThreadSafety>): Null<ExplainedLocks> {
+		if (!on) return null;
+		final report: Null<LongLockReport> = explainer?.longLocks;
+		if (explainer != null && report == null)
+			CliIo.stderr('apq lint: --explain-long: thread-safety explained nothing — no file of the run configures its `sinks`\n');
+		return { report: report };
 	}
 
 }

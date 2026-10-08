@@ -1473,3 +1473,14 @@ decided the question; it may not become a record of runs.
   release at once, and fixing one leaves it long; `--explain-long` lists every reason at every site, plus what the
   lock is long by once its own leak / blind / crossing reasons are set aside, solved after the report on a fresh taint
   so it moves no finding — branch `feat/ts-precision`
+- reading `--explain-long`'s `spans-blocking` reasons off the solve as it grew → a lock is recorded at the first hold
+  and the first blocking call of the round it turned long, the rest skipped once it is long, so a second hold across
+  a second sleep went unlisted and "fix this one call" read as making the lock short; the reasons are read back from
+  the converged taint over every hold, and the counterfactual's from its own — branch `feat/ts-precision`
+- keeping the first lock-order step the walk records as an inversion's witness → swapping two main-thread calls
+  (`fs.save(); fs.store();`) renamed the holder and moved the anchor; the walk runs in an order of ids and sites, and
+  each order keeps, per thread, the step that precedes by (member, file, offset, path) — a holder whose state another
+  holder's path reached first stays unseen, which is the walk's state collapse — branch `feat/ts-precision`
+- a `lint-score` truth `rule` matching nothing scored as every recall entry lost (exit 1) → a misspelt rule, an
+  empty report or a severity filter excluding everything reads as a precision regression; nothing to score is exit 2
+  — branch `feat/ts-precision`

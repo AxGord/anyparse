@@ -1475,7 +1475,7 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** `W.make` holds `_m` across `prepare`, whose body is `body`; `ensure` makes a directory. */
-	private static function watcherFixture(body: String): String {
+	public static function watcherFixture(body: String): String {
 		return 'class W { final _m:Mutex = new Mutex(); public function new() {}'
 			+ ' public function make(p:String):Void { _m.acquire(); prepare(p); _m.release(); }'
 			+ ' function prepare(p:String):Void { $body } function ensure(p:String):Void { FileSystem.createDirectory(p); } }';

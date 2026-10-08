@@ -116,6 +116,24 @@ class LintBaselineTest extends Test {
 		Assert.equals(1, delta([other], before).length, 'another subject is another finding');
 	}
 
+	/**
+	 * A snapshot written before the rule carried `data` keys the finding by its message; the live finding, carrying an
+	 * identity now, spends that count instead of coming back as new — once per recorded occurrence.
+	 */
+	@:pin('control') @:killer('M-BASELINE-NO-MESSAGE-FALLBACK')
+	public function testAnOldSnapshotIsSpentByMessage(): Void {
+		final message: String = 'main thread reaches "S.f": A.b -> S.f';
+		final before: LintDiffTally = snapshot([record('src/A.hx', 'warning', 'thread-safety', message)]);
+		final live: Violation = withData(violation('src/A.hx', Severity.Warning, 'thread-safety', message), 'S.f');
+		Assert.equals(0, delta([live], before).length);
+		Assert.equals(
+			1, delta([
+				live,
+				withData(violation('src/A.hx', Severity.Warning, 'thread-safety', message), 'S.f')
+			], before).length
+		);
+	}
+
 	private static function delta(all: Array<Violation>, before: LintDiffTally): Array<Violation> {
 		return LintBaseline.added(all, before, '', identities());
 	}

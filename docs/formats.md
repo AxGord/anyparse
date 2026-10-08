@@ -9,10 +9,10 @@ This is separate from `strategies.md`. A strategy is *how* we parse (PEG descent
 There is no built-in `@:json` metadata in anyparse. There is no hardcoded list of supported formats in the core. When a user writes:
 
 ```haxe
-@:schema(JsonFormat)
-class User {
-  @:field("id")   public var id:Int;
-  @:field("name") public var name:String;
+@:peg @:schema(JsonFormat) @:ws
+typedef User = {
+  var id: Int;
+  @:key('full-name') var name: String;
 }
 ```
 
@@ -137,10 +137,10 @@ A format is one class that spells its whole vocabulary. There is no inheritance 
 The macro combines format and schema at compile time. Given:
 
 ```haxe
-@:schema(JsonFormat)
-class User {
-  @:field("id")    public var id:Int;
-  @:field("name")  public var name:String;
+@:peg @:schema(JsonFormat) @:ws
+typedef User = {
+  var id: Int;
+  @:key('full-name') var name: String;
 }
 ```
 
@@ -151,9 +151,9 @@ The macro:
 3. Walks `User`'s fields, using `JsonFormat.instance.mappingOpen`, `JsonFormat.instance.keyValueSep`, etc. as literal constants inlined into generated code.
 4. Emits a parser specialized for this exact pair: parses JSON, builds `User`, respects JSON's policies (missing, unknown, escape).
 
-Changing the format means changing one annotation and recompiling. `@:schema(Json5Format) class User { ... }` gives a User parser that accepts comments and trailing commas — zero code changes elsewhere.
+Changing the format means changing one annotation and recompiling. `@:schema(Json5Format)` on the same `User` gives a User parser that accepts comments and trailing commas — zero code changes elsewhere.
 
-A by-name (`FieldLookup.ByName`) field is spelled in the document by its Haxe name unless it declares another with `@:key('<key>')` — the `@:field("id")` above is notional; `@:key` is the meta the macro reads (`MetaInspect.wireKey`), and the generated parser and writer both honour it. It is how a schema reads a key that is a Haxe keyword (`@:key('function') var member: String`) or no identifier at all (`@:key('content-type')`).
+A by-name (`FieldLookup.ByName`) field is spelled in the document by its Haxe name unless it declares another with `@:key('<key>')` (`MetaInspect.wireKey`), which the generated parser and writer both honour — how a schema reads a key that is a Haxe keyword (`@:key('function') var member: String`) or no identifier at all (`@:key('full-name')`). The macro refuses a `@:key` that is not exactly one string, a key holding a quote, a backslash or a control character (the writer emits a key as written), and two fields spelled with one key.
 
 ## Not shipping everything
 

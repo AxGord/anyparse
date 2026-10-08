@@ -51,10 +51,10 @@ typedef Violation = {
  * lock, a pair of locks), and `chain` the evidence behind it, untruncated, in the rule's own ids.
  */
 typedef FindingData = {
-	final family: String;
-	final member: String;
-	final subject: String;
-	final chain: Array<String>;
+	var family: String;
+	var member: String;
+	var subject: String;
+	var chain: Array<String>;
 }
 
 /**

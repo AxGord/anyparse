@@ -384,6 +384,7 @@ final class StructSeqLowering {
 	 * the missing name; optional fields retain their `null` default.
 	 */
 	private static function lowerStructByName(sc: StructSeqCtx, node: ShapeNode): Expr {
+		MetaInspect.checkWireKeys(node);
 		final structFields: Array<ObjectField> = [];
 		final declareLocals: Array<Expr> = [];
 		final switchCases: Array<Case> = [];

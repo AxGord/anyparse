@@ -70,14 +70,6 @@ final class ThreadStates {
 	}
 
 	/**
-	 * `mainPath` as text, its last `cap` hops after `...` when it is longer.
-	 */
-	public function mainChain(edge: CallEdge, cap: Int): String {
-		final path: Array<String> = mainPath(edge);
-		return (path.length > cap + 1 ? ['...'].concat(path.slice(-(cap + 1))) : path).join(' -> ');
-	}
-
-	/**
 	 * `[root, ..., from]` — how the main thread reached a state of `edge.from` that runs `edge` there, every hop, ending
 	 * where a parent repeats; `[edge.from]` when no state does.
 	 */
@@ -158,6 +150,11 @@ final class ThreadStates {
 		known.ctx = merged;
 		contexts[id] = (contexts[id] ?? 0) | merged;
 		_queue.push(known);
+	}
+
+	/** A `mainPath` as text, its last `cap` hops after `...` when it is longer. */
+	public static function chainText(path: Array<String>, cap: Int): String {
+		return (path.length > cap + 1 ? ['...'].concat(path.slice(-(cap + 1))) : path).join(' -> ');
 	}
 
 	/** The context `ctx` becomes on entering `id`: the main thread goes quiet in a `quiet` root. */

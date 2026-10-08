@@ -53,8 +53,8 @@ class ThreadSafetyFindingDataTest extends Test {
 		#end
 	}
 
-	/** A dispatch reaching several sinks names them all, sorted, whatever order the graph found them in. */
-	@:pin('control') @:killer('M-TS-DATA-SINKS-UNSORTED')
+	/** A dispatch reaching several sinks names them all, sorted, in the subject and at the chain's end. */
+	@:pin('control') @:killer('M-TS-DATA-SUBJECT-UNSORTED')
 	public function testSeveralSinksAreOneSortedSubject(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = ThreadSafetyCheckTest.violations('{"rules":{"thread-safety":{"sinks":["Zed.m","Ann.m"]}}}', [
@@ -64,6 +64,7 @@ class ThreadSafetyFindingDataTest extends Test {
 			'class A { final i:I = new Zed(); function boot():Void i.m(); }'
 		]);
 		Assert.same(['Ann.m / Zed.m'], [for (v in found) v.data?.subject]);
+		Assert.same([['A.boot', 'Ann.m', 'Zed.m']], [for (v in found) v.data?.chain], 'the chain ends in each sink, sorted');
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -125,7 +126,7 @@ class ThreadSafetyFindingDataTest extends Test {
 	}
 
 	/** Finding (d) names the main-side holder, the two locks sorted, and the main side's chain. */
-	@:pin('control') @:killer('M-TS-DATA-ORDER-PAIR-UNSORTED')
+	@:pin('control') @:killer('M-TS-DATA-SUBJECT-UNSORTED')
 	public function testLockOrderData(): Void {
 		#if (sys || nodejs)
 		// `Db` renamed past `Fs`: the walk meets the background step's pair (`Zd._batch`, then `Fs._mutation`) first
@@ -147,6 +148,90 @@ class ThreadSafetyFindingDataTest extends Test {
 				for (v in found) v.data
 			]
 		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * Two main-thread holders make the same inversion: which one the finding names — its member, its anchor — must not
+	 * depend on which the walk met first, so calling them in either order gives one finding.
+	 */
+	@:pin('control') @:killer('M-TS-ORDER-WALK-UNSORTED')
+	public function testLockOrderKeyIgnoresWalkOrder(): Void {
+		#if (sys || nodejs)
+		final keys: Array<Array<String>> = [
+			for (start in [
+				'Runner.create(fs.download); fs.save(); fs.store();',
+				'Runner.create(fs.download); fs.store(); fs.save();'
+			]) [
+				for (v in ThreadSafetyCheckTest.orderFindings([
+					for (source in ThreadSafetyCheckTest.storeFixture('acquireMutation(); db.add(false); releaseMutation();', start))
+						source.replace(
+							'public function save():Void',
+							'public function store():Void { acquireMutation(); db.add(false); releaseMutation(); } public function save():Void'
+						)
+				])) '${v.data?.member} ${v.data?.subject} @${v.span?.from}'
+			]
+		];
+		Assert.equals(1, keys[0].length);
+		Assert.same(keys[0], keys[1]);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * Two main-thread holders whose states stay apart (one also holds `_other`): the walk meets `store` first, a hop
+	 * nearer the root, yet the finding names the least holder, `save` — the step kept is the one that precedes, not the
+	 * first one seen.
+	 */
+	@:pin('control') @:killer('M-TS-ORDER-MAIN-FIRST-SEEN')
+	public function testLockOrderNamesTheLeastHolder(): Void {
+		#if (sys || nodejs)
+		final sources: Array<String> = [
+			for (source in ThreadSafetyCheckTest.storeFixture(
+				'acquireMutation(); _other.acquire(); db.add(false); _other.release(); releaseMutation();',
+				'Runner.create(fs.download); fs.store(); fs.wrap();'
+			)) source.replace(
+				'public function save():Void',
+				'final _other:Mutex = new Mutex(); public function store():Void {'
+				+ ' acquireMutation(); db.add(false); releaseMutation(); } public function wrap():Void save(); public function save():Void'
+			)
+		];
+		Assert.same(['Fs.save'], [
+			for (v in ThreadSafetyCheckTest.orderFindings(sources)) if (v.data?.subject == 'Db._batch / Fs._mutation') v.data?.member
+		]);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A throw raised by a callee names the raising call's chain after the holder. */
+	@:pin('control') @:killer('M-TS-DATA-RAISER-CHAIN')
+	public function testThrowHeldDataFollowsTheRaiser(): Void {
+		#if (sys || nodejs)
+		final found: Array<Violation> = ThreadSafetyCheckTest.violations(
+			'{"rules":{"thread-safety":{"sinks":["Mutex.acquire"],"lockPairs":["Mutex.acquire/release"],"throwers":["FileSystem.createDirectory"]}}}',
+			[ThreadSafetyCheckTest.MUTEX, ThreadSafetyCheckTest.watcherFixture('ensure(p);')]
+		)
+			.filter(v -> v.data?.family == 'C');
+		Assert.same([['W.make', 'W.prepare', 'W.ensure', 'FileSystem.createDirectory']], [for (v in found) v.data?.chain]);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A sink a field initializer runs, directly or in a lambda it holds, is the initializer's (`Type.<init>`). */
+	@:pin('control') @:killer('M-TS-DATA-INIT-LAMBDA')
+	public function testInitializerFindingsNameTheInitializer(): Void {
+		#if (sys || nodejs)
+		final found: Array<Violation> = ThreadSafetyCheckTest.violations('{"rules":{"thread-safety":{"sinks":["Sys.sleep"]}}}', [
+			'class A { final direct:Void = Sys.sleep(1); final later:() -> Void = () -> Sys.sleep(2); public function new() {} }'
+		]);
+		final members: Array<Null<String>> = [for (v in found) v.data?.member];
+		members.sort(Reflect.compare);
+		Assert.same(['A.<init>', 'A.<init>'], members);
 		#else
 		Assert.pass('non-sys target');
 		#end
