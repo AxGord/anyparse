@@ -1089,6 +1089,345 @@ class ThreadSafetyCheckTest extends Test {
 	}
 	#end
 
+	/**
+	 * TM's deadlock: the main thread's `save` holds `_mutation` and takes `_batch` inside `Db.add`, while the spawned
+	 * `download` holds `_batch` and calls `save`, which takes `_mutation`. One finding, at the call where the main
+	 * thread's hold reaches the other lock, naming both chains.
+	 */
+	@:pin('control') @:killer('M-TS-ORDER-ANCHOR-AT-TAKE')
+	public function testALockOrderInversionAcrossThreadsIsReported(): Void {
+		#if (sys || nodejs)
+		final sources: Array<String> = storeFixture(
+			'acquireMutation(); db.add(false); releaseMutation();', 'Runner.create(fs.download); fs.save();'
+		);
+		final found: Array<Violation> = orderFindings(sources);
+		Assert.same([
+			'lock-order inversion: "Fs.save" holds "Fs._mutation" and then takes "Db._batch" (Fs.save -> Db.add -> Mutex.acquire)'
+			+ ' on the main thread, while "Fs.download" holds "Db._batch" and then takes "Fs._mutation" (Fs.download -> Fs.save'
+			+ ' -> Fs.acquireMutation) on a background thread — each can wait forever for the lock the other holds'
+		], [for (v in found) v.message]);
+		Assert.same([sources[1].indexOf('db.add(false)')], [for (v in found) v.span?.from]);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** The fixed order — `_batch` before `_mutation` everywhere, `Db.add` re-taking the re-entrant `_batch` — orders nothing backwards. */
+	@:pin('control') @:killer('M-TS-ORDER-RETAKE-STEPS')
+	public function testOneLockOrderOnEveryThreadIsQuiet(): Void {
+		#if (sys || nodejs)
+		Assert.same(
+			[],
+			orderFindings(storeFixture(
+				'db.batchLock(); acquireMutation(); db.add(false); releaseMutation(); db.batchUnlock();',
+				'Runner.create(fs.download); fs.save();'
+			))
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** Both orders taken by the main thread alone: one thread cannot wait on itself across two locks it takes in turn. */
+	public function testAnInversionOnOneThreadIsQuiet(): Void {
+		#if (sys || nodejs)
+		Assert.same([], orderFindings(storeFixture('acquireMutation(); db.add(false); releaseMutation();', 'fs.download(); fs.save();')));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** Both orders taken only on background threads: one worker may run them both, so the pair is not reported. */
+	@:pin('control') @:killer('M-TS-ORDER-BG-AS-MAIN')
+	public function testAnInversionBetweenBackgroundStepsIsQuiet(): Void {
+		#if (sys || nodejs)
+		Assert.same(
+			[],
+			orderFindings(
+				storeFixture('acquireMutation(); db.add(false); releaseMutation();', 'Runner.create(fs.download); Runner.create(fs.save);')
+			)
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A helper taking two locks (`acquireLocks`) leaves both held in its caller: `W.rename`, called under them, re-takes
+	 * them through `createFolder`, which orders nothing — while the background `stamp` takes `_mutation` then `_tree`.
+	 */
+	@:pin('control') @:killer('M-TS-ORDER-NO-HELPER-HOLDS')
+	public function testAHelperTakingTwoLocksHoldsThemInItsCaller(): Void {
+		#if (sys || nodejs)
+		Assert.same([], orderFindings([
+			'class Fs { final _mutation:Mutex = new Mutex(); final _batch:Mutex = new Mutex(); final w:W = new W(); public function new() {}'
+			+ ' function acquireLocks():Void { _batch.acquire(); _mutation.acquire(); }'
+			+ ' function releaseLocks():Void { _mutation.release(); _batch.release(); }'
+			+ ' public function rename():Void { acquireLocks(); w.rename(this); releaseLocks(); }'
+			+ ' public function createFolder():Void { acquireLocks(); releaseLocks(); }'
+			+ ' public function stamp():Void { _mutation.acquire(); w.touch(); _mutation.release(); }'
+			+ ' public static function main():Void { final fs:Fs = new Fs(); Runner.create(fs.stamp); fs.rename(); } }',
+			'class W { final _tree:Mutex = new Mutex(); public function new() {}'
+			+ ' public function rename(fs:Fs):Void { _tree.acquire(); fs.createFolder(); _tree.release(); }'
+			+ ' public function touch():Void { _tree.acquire(); _tree.release(); } }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A callback registered under a hold — here by `register`, which `ui` calls
+	 * holding `_a` — runs later, holding nothing: `takeB` is no step from `_a` to `_b`.
+	 */
+	@:pin('control') @:killer('M-TS-ORDER-FOLLOWS-REFS')
+	public function testACallbackRegisteredUnderAHoldTakesNothingInOrder(): Void {
+		#if (sys || nodejs)
+		Assert.same([], orderFindings([
+			'class A { final _a:Mutex = new Mutex(); final _b:Mutex = new Mutex(); public function new() {}'
+			+ ' public function ui():Void { _a.acquire(); register(); _a.release(); } function register():Void Ui.defer(takeB);'
+			+ ' function takeB():Void { _b.acquire(); _b.release(); }'
+			+ ' public function bg():Void { _b.acquire(); _a.acquire(); _a.release(); _b.release(); }'
+			+ ' public static function main():Void { final a:A = new A(); Runner.create(a.bg); a.ui(); } }',
+			'class Ui { public static function defer(fn:()->Void):Void {} }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A lock no member names (a parameter) is no lock of the order: two unknown locks may be any two objects. */
+	@:pin('control') @:killer('M-TS-ORDER-UNKNOWN-LOCK')
+	public function testAnUnknownLockOrdersNothing(): Void {
+		#if (sys || nodejs)
+		Assert.same([], orderFindings([
+			'class A { final _b:Mutex = new Mutex(); public function new() {}'
+			+ ' public function ui(m:Mutex):Void { m.acquire(); _b.acquire(); _b.release(); m.release(); }'
+			+ ' public function bg(m:Mutex):Void { _b.acquire(); m.acquire(); m.release(); _b.release(); }'
+			+ ' public static function main():Void { final a:A = new A(); final m:Mutex = new Mutex(); Runner.create(() -> a.bg(m)); a.ui(m); } }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** Two functions calling each other, which nothing else calls, are still walked: from either, holding nothing, on the main thread. */
+	@:pin('control') @:killer('M-TS-ORDER-CYCLES-UNWALKED')
+	public function testACallCycleNothingEntersIsWalked(): Void {
+		#if (sys || nodejs)
+		Assert.equals(
+			1,
+			orderFindings([
+				'class A { static final _a:Mutex = new Mutex(); static final _b:Mutex = new Mutex();'
+				+ ' static function p(x:Bool):Void { _a.acquire(); q(x); _a.release(); }'
+				+ ' static function q(x:Bool):Void { if (x) p(x); _b.acquire(); _b.release(); }'
+				+ ' static function bg():Void { _b.acquire(); _a.acquire(); _a.release(); _b.release(); }'
+				+ ' public static function main():Void Runner.create(bg); }'
+			]).length
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A take in the owner's constructor, on the object no other thread can reach yet, orders nothing. */
+	@:pin('control') @:killer('M-TS-ORDER-CTOR-CONTENDED')
+	public function testATakeInTheOwnersConstructorOrdersNothing(): Void {
+		#if (sys || nodejs)
+		Assert.same([], orderFindings([
+			'class A { final _a:Mutex = new Mutex(); static final b:Mutex = new Mutex();'
+			+ ' public function new() { _a.acquire(); B.take(); _a.release(); }'
+			+ ' public function work():Void { _a.acquire(); _a.release(); }'
+			+ ' static function bg():Void { b.acquire(); new A().work(); b.release(); }'
+			+ ' public static function main():Void { Runner.create(bg); new A(); } }',
+			'class B { public static function take():Void { A.b.acquire(); A.b.release(); } }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A helper giving back two locks (`releaseLocks`) ends their holds in its caller: `w.touch()` after it runs holding
+	 * neither, while the background `stamp` takes `_tree` and then `_mutation`.
+	 */
+	@:pin('control') @:killer('M-TS-ORDER-HELPER-NEVER-RELEASES')
+	public function testAHelperGivingBackTwoLocksEndsTheirHolds(): Void {
+		#if (sys || nodejs)
+		Assert.same([], orderFindings([
+			'class Fs { final _mutation:Mutex = new Mutex(); final _batch:Mutex = new Mutex(); final w:W = new W(); public function new() {}'
+			+ ' function acquireLocks():Void { _batch.acquire(); _mutation.acquire(); }'
+			+ ' function releaseLocks():Void { _mutation.release(); _batch.release(); }'
+			+ ' public function ui():Void { acquireLocks(); releaseLocks(); w.touch(); }'
+			+ ' public function stamp():Void { w.lockTree(); _mutation.acquire(); _mutation.release(); w.unlockTree(); }'
+			+ ' public static function main():Void { final fs:Fs = new Fs(); Runner.create(fs.stamp); fs.ui(); } }',
+			'class W { final _tree:Mutex = new Mutex(); public function new() {}'
+			+ ' public function lockTree():Void { _tree.acquire(); } public function unlockTree():Void { _tree.release(); }'
+			+ ' public function touch():Void { _tree.acquire(); _tree.release(); } }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** TM's `addCloudAction2`: a `throw` in a `switch` between the take and the release leaves the lock held. */
+	@:pin('control') @:killer('M-TS-THROW-UNRAISED')
+	public function testAThrowBetweenTakeAndReleaseLeavesTheLockHeld(): Void {
+		#if (sys || nodejs)
+		final source: String = 'class Db { final _m:Mutex = new Mutex(); public function new() {} public function add(kind:Int):Bool {'
+			+ ' _m.acquire(); switch kind { case 0: throw "unsupported"; case _: } _m.release(); return true; } }';
+		final found: Array<Violation> = violations(
+			'{"rules":{"thread-safety":{"sinks":["Mutex.acquire"],"lockPairs":["Mutex.acquire/release"]}}}', [MUTEX, source]
+		).filter(v -> v.message.indexOf('when it throws') != -1);
+		Assert.same([
+			'"Db.add" leaves "Db._m" held when it throws, with no catch to release it: a throw'
+		], [for (v in found) v.message]);
+		Assert.same([source.indexOf('throw')], [for (v in found) v.span?.from]);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** Two takes of one lock held at one `throw` are one finding there. */
+	@:pin('control') @:killer('M-TS-THROW-PER-TAKE')
+	public function testTwoTakesHeldAtOneThrowAreOneFinding(): Void {
+		#if (sys || nodejs)
+		Assert.same(
+			[
+				'"Db.add" leaves "Db._m" held when it throws, with no catch to release it: a throw'
+			],
+			throwFindings('', [
+				'class Db { final _m:Mutex = new Mutex(); public function new() {} public function add(kind:Int):Void {'
+				+ ' if (kind == 0) _m.acquire(); else _m.acquire(); if (kind == 1) throw "unsupported"; _m.release(); } }'
+			])
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** The same `throw` ahead of the take — TM's fix — raises with nothing held. */
+	public function testAThrowBeforeTheTakeIsQuiet(): Void {
+		#if (sys || nodejs)
+		Assert.same([], throwFindings('', [
+			'class Db { final _m:Mutex = new Mutex(); public function new() {} public function add(kind:Int):Bool {'
+			+ ' switch kind { case 0: throw "unsupported"; case _: } _m.acquire(); _m.release(); return true; } }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A `catch` that releases and rethrows gives the lock back on the exceptional path. */
+	@:pin('control') @:killer('M-TS-THROW-CATCH-IGNORED')
+	public function testACatchReleasingAndRethrowingIsQuiet(): Void {
+		#if (sys || nodejs)
+		Assert.same([], throwFindings('', [
+			'class Db { final _m:Mutex = new Mutex(); public function new() {} public function add(kind:Int):Void {'
+			+ ' _m.acquire(); try { if (kind == 0) throw "unsupported"; } catch (e:Dynamic) { _m.release(); throw e; } _m.release(); } }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A take inside the `try`: what the body threw while holding reaches the `catch` held, and its rethrow escapes with it. */
+	@:pin('control') @:killer('M-TS-THROW-CATCH-ENTRY-UNHELD')
+	public function testARethrowOfWhatTheBodyThrewHoldingEscapesHeld(): Void {
+		#if (sys || nodejs)
+		Assert.same(
+			[
+				'"Db.add" leaves "Db._m" held when it throws, with no catch to release it: a throw'
+			],
+			throwFindings('', [
+				'class Db { final _m:Mutex = new Mutex(); public function new() {} public function add(kind:Int):Void {'
+				+ ' try { _m.acquire(); if (kind == 0) throw "unsupported"; _m.release(); } catch (e:Dynamic) { throw e; } } }'
+			])
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** TM's `FolderWatcher.createDirectory`: a hold across a call that reaches a `throwers` entry with no `catch` on the way. */
+	@:pin('control') @:killer('M-TS-THROW-NO-PROPAGATION')
+	public function testAHoldAcrossACallReachingAThrowerEscapes(): Void {
+		#if (sys || nodejs)
+		Assert.same([
+			'"W.make" leaves "W._m" held when it throws, with no catch to release it: W.prepare -> W.ensure -> FileSystem.createDirectory'
+		], throwFindings('"FileSystem.createDirectory"', [watcherFixture('ensure(p);')]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** With no `throwers` configured nothing but a `throw` raises. */
+	public function testWithoutThrowersACallRaisesNothing(): Void {
+		#if (sys || nodejs)
+		Assert.same([], throwFindings('', [watcherFixture('ensure(p);')]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A callee that catches what the thrower raises raises nothing itself. */
+	@:pin('control') @:killer('M-TS-THROW-TRY-UNCAUGHT')
+	public function testACalleeCatchingTheThrowerRaisesNothing(): Void {
+		#if (sys || nodejs)
+		Assert.same([], throwFindings('"FileSystem.createDirectory"', [watcherFixture('try ensure(p) catch (e:Dynamic) {}')]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A `throw` in a callee is not followed: most are guards that never fire, and every caller of one would be reported. */
+	public function testAThrowInACalleeIsNotFollowed(): Void {
+		#if (sys || nodejs)
+		Assert.same([], throwFindings('', [watcherFixture('if (p == null) throw "no path";')]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A `throw` inside a function value made under the hold runs later, not where the lock is held. */
+	@:pin('control') @:killer('M-TS-THROW-NESTED-FN')
+	public function testAThrowInALambdaMadeUnderTheHoldIsQuiet(): Void {
+		#if (sys || nodejs)
+		Assert.same([], throwFindings('', [
+			'class W { final _m:Mutex = new Mutex(); public function new() {}'
+			+ ' public function make(run:(()->Void)->Void):Void { _m.acquire(); run(() -> throw "later"); _m.release(); } }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A raising call in a step that also releases the lock may run after the release: the step raises nothing held. */
+	@:pin('control') @:killer('M-TS-THROW-STEP-RELEASES')
+	public function testARaisingCallInAStepThatReleasesIsQuiet(): Void {
+		#if (sys || nodejs)
+		Assert.same([], throwFindings('"FileSystem.createDirectory"', [
+			'class W { final _m:Mutex = new Mutex(); public function new() {} public function make(p:String):Void { _m.acquire();'
+			+ ' final made:Bool = if (p != null) { _m.release(); FileSystem.createDirectory(p); true; } else { _m.release(); false; }; } }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A raising call in the very step that takes the lock, ahead of the take, raises with nothing held. */
+	@:pin('control') @:killer('M-TS-THROW-BEFORE-TAKE')
+	public function testARaisingCallAheadOfTheTakeInItsStepIsQuiet(): Void {
+		#if (sys || nodejs)
+		Assert.same([], throwFindings('"FileSystem.createDirectory"', [
+			'class W { final _m:Mutex = new Mutex(); public function new() {} public function make(p:String):Void {'
+			+ ' final both:Array<Void> = [FileSystem.createDirectory(p), _m.acquire()]; _m.release(); } }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
 	/** Every finding over `tree` with the run's files listed in `order`, as sorted `<relative path>: <message>` lines. */
 	private function chainFindings(tree: Array<{ name: String, source: String }>, order: Array<String>): Array<String> {
@@ -1114,6 +1453,55 @@ class ThreadSafetyCheckTest extends Test {
 		];
 		found.sort(Reflect.compare);
 		return found;
+	}
+
+	/** `W.make` holds `_m` across `prepare`, whose body is `body`; `ensure` makes a directory. */
+	private static function watcherFixture(body: String): String {
+		return 'class W { final _m:Mutex = new Mutex(); public function new() {}'
+			+ ' public function make(p:String):Void { _m.acquire(); prepare(p); _m.release(); }'
+			+ ' function prepare(p:String):Void { $body } function ensure(p:String):Void { FileSystem.createDirectory(p); } }';
+	}
+
+	/**
+	 * Every lock-order finding of a `Mutex.acquire` run over `sources` (plus `Mutex` and `Runner`, whose `create` is a
+	 * spawn), re-entrant `Mutex` included.
+	 */
+	private function orderFindings(sources: Array<String>): Array<Violation> {
+		return
+			violations(
+				'{"rules":{"thread-safety":{"sinks":["Mutex.acquire"],"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"],'
+				+ '"reentrantLocks":["Mutex.acquire"]}}}',
+				[MUTEX, 'class Runner { public static function create(fn:()->Void):Void {} }'].concat(sources)
+			).filter(v -> v.message.indexOf('lock-order inversion') != -1);
+	}
+
+	/** The messages of every throw-escape finding of a `Mutex.acquire` run over `sources`, `throwers` as given. */
+	private function throwFindings(throwers: String, sources: Array<String>): Array<String> {
+		return [
+			for (v in violations(
+				'{"rules":{"thread-safety":{"sinks":["Mutex.acquire"],"lockPairs":["Mutex.acquire/release"],"throwers":[$throwers]}}}',
+				[MUTEX].concat(sources)
+			)) if (v.message.indexOf('when it throws') != -1) v.message
+		];
+	}
+
+	/**
+	 * TM's shape: `Fs.save` holds `_mutation` (through a wrapper) and calls `Db.add`, which takes `_batch` itself;
+	 * `Fs.download` holds `_batch` (through a wrapper) and calls `save`. `body` is `save`'s body, `start` the body of
+	 * `main`, which has made an `Fs` as `fs`.
+	 */
+	private static function storeFixture(body: String, start: String): Array<String> {
+		return [
+			'class Db { final _batch:Mutex = new Mutex(); public function new() {}'
+				+ ' public function batchLock():Void { _batch.acquire(); } public function batchUnlock():Void { _batch.release(); }'
+				+ ' public function add(batch:Bool):Void { if (!batch) _batch.acquire(); work(); if (!batch) _batch.release(); }'
+				+ ' function work():Void {} }',
+			'class Fs { final _mutation:Mutex = new Mutex(); final db:Db = new Db(); public function new() {}'
+				+ ' function acquireMutation():Void { _mutation.acquire(); } function releaseMutation():Void { _mutation.release(); }'
+				+ ' public function save():Void { $body }'
+				+ ' public function download():Void { db.batchLock(); save(); db.batchUnlock(); }'
+				+ ' public static function main():Void { final fs:Fs = new Fs(); $start } }'
+		];
 	}
 
 	private function violations(config: String, sources: Array<String>): Array<Violation> {

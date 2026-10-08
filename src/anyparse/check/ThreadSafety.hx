@@ -18,7 +18,9 @@ using StringTools;
 /**
  * Config-driven thread-context analysis over the approximate `CallGraph` — finds the two classic main-thread stalls:
  * (a) a MAIN-context function calling a configured blocking sink; (b) a function holding a configured lock across a
- * call that transitively reaches a sink, while the main thread takes that lock somewhere.
+ * call that transitively reaches a sink, while the main thread takes that lock somewhere — and the two ways a lock
+ * hangs a thread for good: (c) a lock still held where an exception leaves the function that took it; (d) two locks
+ * taken in opposite orders on the main thread and on a background one (`LockOrder`).
  *
  * Context propagation: graph roots start MAIN; a callback passed to a `spawns` target runs BG, one passed to a
  * `marshals` target runs MAIN, any other inherits its registrar's context. A node with no resolved callers is ASSUMED
@@ -40,6 +42,7 @@ using StringTools;
  *         "lockPairs": ["app.Mutex.lock/unlock", "RwLock.lock/unlock"],
  *         "quietRoots": ["app.App.shutdown"],
  *         "reentrantLocks": ["app.Mutex.lock"],
+ *         "throwers":  ["sys.FileSystem.createDirectory", "sys.io.File.saveContent"],
  *         "exclude":   ["test"]
  *     }
  *
@@ -52,8 +55,11 @@ using StringTools;
  * run later, loud. A take listed in `reentrantLocks` is one the holding thread may repeat without waiting: inside a
  * hold of a NAMED lock of that kind, taking the SAME OBJECT's lock again (`LockTaint`) blocks nothing. Re-entrance is
  * never assumed: a lock kind not listed, a lock no member names, or a take on another object keeps it a blocking call.
+ * A `throwers` entry is a call that raises on a real runtime condition (`ThrowReach`): with none listed, only a `throw`
+ * in the holding body itself leaves a lock held.
  *
- * Findings are grouped: one per hold, at its first blocking call, and one per main-thread sink call site.
+ * Findings are grouped: one per hold, at its first blocking call or its first escape, one per main-thread sink call
+ * site, and one per pair of locks taken in both orders.
  */
 @:nullSafety(Strict)
 final class ThreadSafety implements Check implements ConfigAware implements NoAutofix implements GraphScoped {
@@ -81,7 +87,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	}
 
 	public function description(): String {
-		return 'main-thread-reachable blocking calls and locks held across blocking calls (config-driven)';
+		return 'main-thread-reachable blocking calls, locks held across blocking calls or left held by a throw, and lock-order'
+			+ ' inversions between threads (config-driven)';
 	}
 
 	/**
@@ -111,7 +118,9 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			for (id => node in graph.nodes) if (byFile[node.file]?.quietIds.contains(id) == true) id
 		], contexts, mainParent);
 
-		final sites: LockSites = new LockSites(graph, [for (f in files) f.file], plugin, file -> listsOf(file).pairs);
+		final trees: FunctionTrees = new FunctionTrees(graph, plugin);
+		final throws: ThrowReach = new ThrowReach(graph, plugin.refShape(), file -> listsOf(file).throwerIds, trees);
+		final sites: LockSites = new LockSites(graph, [for (f in files) f.file], plugin, file -> listsOf(file).pairs, throws, trees);
 		final long: Array<String> = [];
 		final taints: LockTaint = new LockTaint(graph, sinkIds, listsOf, sites, long);
 		solveLongLocks(sites, long, taints);
@@ -120,6 +129,10 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		reportMainSinkCalls(graph, taints, contexts, mainParent, violations);
 		reportMalformedPairs(sets, violations);
 		reportLockHeld(sites, taints, contexts, violations);
+		reportThrowHeld(sites, throws, violations);
+		final order: LockOrder = new LockOrder(graph, sites.acquires.concat(sites.helperHolds));
+		for (v in order.report(contexts, (e, ctx) -> callbackContext(e, listsOf(e.file), ctx), CTX_MAIN | CTX_QUIET, CTX_BG, CHAIN_CAP))
+			violations.push(v);
 		return violations;
 	}
 
@@ -165,8 +178,9 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			final lockPairs: Array<String> = config.stringListOption('thread-safety', 'lockPairs') ?? [];
 			final quietRoots: Array<String> = config.stringListOption('thread-safety', 'quietRoots') ?? [];
 			final reentrant: Array<String> = config.stringListOption('thread-safety', 'reentrantLocks') ?? [];
+			final throwers: Array<String> = config.stringListOption('thread-safety', 'throwers') ?? [];
 			final signature: String = [
-				for (list in [sinks, spawns, marshals, lockPairs, quietRoots, reentrant]) list.join('\n')
+				for (list in [sinks, spawns, marshals, lockPairs, quietRoots, reentrant, throwers]) list.join('\n')
 			].join('\t');
 			final known: Null<ChainLists> = bySignature[signature];
 			final lists: ChainLists = known ?? {
@@ -176,6 +190,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 				marshalIds: matchAll(graph, marshals),
 				quietIds: matchAll(graph, quietRoots),
 				reentrantIds: matchAll(graph, reentrant),
+				throwerIds: matchAll(graph, throwers),
 				lockPairs: lockPairs,
 				pairs: resolvePairs(graph, lockPairs)
 			};
@@ -432,7 +447,39 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		}
 	}
 
-	/** What each of `blocking` reaches, distinct, the first `EVIDENCE_CAP` named and the rest counted. */
+	/**
+	 * Finding (c): on some path of one function body a lock may still be held where an exception leaves the body — a
+	 * `throw`, or a call `ThrowReach` knows may raise, with no `catch` of the body around it — so nothing on that path
+	 * gives it back and the next take waits forever. One finding per hold, at its first escape; a hold in the owner's
+	 * constructor before the object escapes is no one's.
+	 */
+	private static function reportThrowHeld(sites: LockSites, throws: ThrowReach, violations: Array<Violation>): Void {
+		final seen: Array<String> = [];
+		// an escape leaks the hold, so none is the owner's constructor's (`LockAcquire.uncontended`)
+		for (a in sites.acquires) if (a.escapes.length > 0) {
+			final evidence: Array<String> = [];
+			for (escape in a.escapes) {
+				final raiser: Null<CallEdge> = escape.raiser;
+				final shown: String = raiser == null ? 'a throw' : elided(throws.chain(raiser), CHAIN_CAP);
+				if (!evidence.contains(shown)) evidence.push(shown);
+			}
+			final message: String = '"${a.edge.from}" leaves "${a.lock ?? a.pair.lockId}" held when it throws, with no catch to'
+				+ ' release it: ${capped(evidence)}';
+			final anchor: Span = a.escapes[0].span;
+			final key: String = '${a.edge.file}:${anchor.from}:$message';
+			if (seen.contains(key)) continue;
+			seen.push(key);
+			violations.push({
+				file: a.edge.file,
+				span: anchor,
+				rule: 'thread-safety',
+				severity: Severity.Warning,
+				message: message
+			});
+		}
+	}
+
+	/** What each of `blocking` reaches, distinct, capped (`capped`). */
 	private static function evidenceOf(blocking: Array<CallEdge>, held: Null<String>, taints: LockTaint): String {
 		final evidence: Array<String> = [];
 		for (e in blocking) {
@@ -444,6 +491,19 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 				'${e.to} (the held lock, on another object)';
 			if (!evidence.contains(shown)) evidence.push(shown);
 		}
+		return capped(evidence);
+	}
+
+	/**
+	 * `parts` joined as a call chain, at most `cap` of them: the head says where the chain leaves its function, the
+	 * last two what it ends in.
+	 */
+	public static function elided(parts: Array<String>, cap: Int): String {
+		return (parts.length <= cap ? parts : parts.slice(0, cap - 2).concat(['...']).concat(parts.slice(-2))).join(' -> ');
+	}
+
+	/** `evidence` joined, the first `EVIDENCE_CAP` named and the rest counted. */
+	private static function capped(evidence: Array<String>): String {
 		final more: Int = evidence.length - EVIDENCE_CAP;
 		return evidence.slice(0, EVIDENCE_CAP).join('; ') + (more > 0 ? '; +$more more' : '');
 	}

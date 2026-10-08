@@ -5573,7 +5573,7 @@
 		{
 			"name": "M-TS-ACCESSOR-TAINT",
 			"type": "anyparse.check.LockSites",
-			"method": "acquire",
+			"method": "hold",
 			"find": "if (e.kind.isInvocation()) e",
 			"replace": "if (e.kind == Call || e.kind == New || e.kind == Virtual) e",
 			"note": "a property read inside a lock window is not a call, so a getter that blocks while the lock is held goes unreported"
@@ -11163,7 +11163,7 @@
 		{
 			"name": "M-TS-CTOR-CONTENDED",
 			"type": "anyparse.check.LockSites",
-			"method": "acquire",
+			"method": "hold",
 			"find": "uncontended: !leaks && ",
 			"replace": "uncontended: false && !leaks && ",
 			"note": "a hold in the owner's own constructor makes the lock long, so every later take of it reads as a stall"
@@ -11187,7 +11187,7 @@
 		{
 			"name": "M-TS-BLIND-CALL-SHORT",
 			"type": "anyparse.check.LockSites",
-			"method": "acquire",
+			"method": "hold",
 			"find": "blind: traced == null || traced.held.exists(",
 			"replace": "blind: traced == null || false && traced.held.exists(",
 			"note": "a hold across a call the graph resolves to nothing reads as short, so a lock held across a stored callback never stalls its main-thread taker"
@@ -11275,7 +11275,7 @@
 		{
 			"name": "M-TS-EVIDENCE-UNCAPPED",
 			"type": "anyparse.check.ThreadSafety",
-			"method": "evidenceOf",
+			"method": "capped",
 			"find": "final more: Int = evidence.length - EVIDENCE_CAP;",
 			"replace": "final more: Int = 0;",
 			"note": "a hold's blocking calls past the cap vanish from its finding instead of being counted"
@@ -11383,6 +11383,150 @@
 			"find": " && namedCalls.contains('${call.span?.from}:${node.name}');",
 			"replace": ";",
 			"note": "any method call on a member keeps it sealed, so a lock call through a Dynamic, cast or type-parameter receiver never makes the member long"
+		},
+		{
+			"name": "M-TS-ORDER-ANCHOR-AT-TAKE",
+			"type": "anyparse.check.LockOrder",
+			"method": "describe",
+			"find": "anchor = via;",
+			"replace": "",
+			"note": "an inversion is anchored at the take of the second lock, deep in a callee, not where the hold of the first calls out"
+		},
+		{
+			"name": "M-TS-ORDER-RETAKE-STEPS",
+			"type": "anyparse.check.LockOrder",
+			"method": "visit",
+			"find": "if (!held.contains(taken))",
+			"replace": "if (true)",
+			"note": "a re-take of a lock the thread already holds orders it after every lock held, so one consistent order reads as an inversion"
+		},
+		{
+			"name": "M-TS-ORDER-BG-AS-MAIN",
+			"type": "anyparse.check.LockOrder",
+			"method": "crossThread",
+			"find": "if (x.state.ctx & main != 0 && y.state.ctx & bg != 0)",
+			"replace": "if (x.state.ctx & (main | bg) != 0 && y.state.ctx & bg != 0)",
+			"note": "two background steps count as two threads, though one worker may run both"
+		},
+		{
+			"name": "M-TS-ORDER-NO-HELPER-HOLDS",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "run",
+			"find": "sites.acquires.concat(sites.helperHolds)",
+			"replace": "sites.acquires",
+			"note": "a helper taking two locks leaves neither held in its caller, so a re-take under them reads as a new order"
+		},
+		{
+			"name": "M-TS-ORDER-HELPER-NEVER-RELEASES",
+			"type": "anyparse.check.LockSites",
+			"method": "collectHelperHolds",
+			"find": "for (o in list) (opens ? opened : closed).push({ call: call, op: o.call });",
+			"replace": "for (o in list) if (opens) opened.push({ call: call, op: o.call });",
+			"note": "a helper giving two locks back ends no hold, so every call after it runs holding both"
+		},
+		{
+			"name": "M-TS-ORDER-FOLLOWS-REFS",
+			"type": "anyparse.check.LockOrder",
+			"method": "visit",
+			"find": "if (e.kind.isInvocation())",
+			"replace": "if (e.kind.isInvocation() || e.kind == Ref)",
+			"note": "a callback registered under a hold is walked as if it ran there, holding the registrar's locks"
+		},
+		{
+			"name": "M-TS-ORDER-UNKNOWN-LOCK",
+			"type": "anyparse.check.LockOrder",
+			"method": "admit",
+			"find": "final lock: Null<String> = a.lock;",
+			"replace": "final lock: Null<String> = a.lock ?? a.pair.lockId;",
+			"note": "a lock no member names is ordered under its pair's take member, so any two objects' locks of that kind are one"
+		},
+		{
+			"name": "M-TS-ORDER-CYCLES-UNWALKED",
+			"type": "anyparse.check.LockOrder",
+			"method": "report",
+			"find": "if (queue.length == before) break;",
+			"replace": "break;",
+			"note": "a cycle of calls nothing outside it calls is never walked, so the order its holds make goes unseen"
+		},
+		{
+			"name": "M-TS-ORDER-CTOR-CONTENDED",
+			"type": "anyparse.check.LockOrder",
+			"method": "admit",
+			"find": "if (lock == null || a.uncontended) return;",
+			"replace": "if (lock == null) return;",
+			"note": "a take in the owner's constructor, on an object no other thread reaches yet, orders the locks it calls into"
+		},
+		{
+			"name": "M-TS-THROW-UNRAISED",
+			"type": "anyparse.check.LockWindow",
+			"method": "step",
+			"find": "if (_throwKinds.contains(kind)) raise(node);",
+			"replace": "",
+			"note": "a throw reached holding the lock escapes nothing"
+		},
+		{
+			"name": "M-TS-THROW-CATCH-IGNORED",
+			"type": "anyparse.check.LockWindow",
+			"method": "step",
+			"find": "final intercepts: Bool = kids.exists(k -> k.kind == _catchKind);",
+			"replace": "final intercepts: Bool = false;",
+			"note": "a throw inside a try with a catch escapes the function as if nothing caught it"
+		},
+		{
+			"name": "M-TS-THROW-CATCH-ENTRY-UNHELD",
+			"type": "anyparse.check.LockWindow",
+			"method": "step",
+			"find": "final entry: Bool = held || body == true || raised;",
+			"replace": "final entry: Bool = held || body == true;",
+			"note": "a catch reached by a throw from inside the hold starts unheld, so its rethrow escapes nothing"
+		},
+		{
+			"name": "M-TS-THROW-NESTED-FN",
+			"type": "anyparse.check.LockWindow",
+			"method": "raisesInside",
+			"find": "if (_nestedFnKinds.contains(node.kind)) return;",
+			"replace": "",
+			"note": "a throw inside a function value made under the hold raises there, though it runs later"
+		},
+		{
+			"name": "M-TS-THROW-STEP-RELEASES",
+			"type": "anyparse.check.LockWindow",
+			"method": "opaque",
+			"find": "if (!_releaseFroms.exists(r -> contains(node, r))) raisesInside(node, held ? -1 : _acquireFrom);",
+			"replace": "raisesInside(node, held ? -1 : _acquireFrom);",
+			"note": "a raising call in a step that also gives the lock back raises held, though it may run after the release"
+		},
+		{
+			"name": "M-TS-THROW-BEFORE-TAKE",
+			"type": "anyparse.check.LockWindow",
+			"method": "opaque",
+			"find": "raisesInside(node, held ? -1 : _acquireFrom)",
+			"replace": "raisesInside(node, -1)",
+			"note": "a raising call ahead of the take in the step that takes the lock raises held"
+		},
+		{
+			"name": "M-TS-THROW-NO-PROPAGATION",
+			"type": "anyparse.check.ThrowReach",
+			"method": "solve",
+			"find": "while (qi < queue.length) for (edge in _graph.inEdges(queue[qi++])) if (edge.kind.isInvocation()) reach(edge, queue);",
+			"replace": "",
+			"note": "only a direct caller of a thrower raises: one call further up, the exception is lost"
+		},
+		{
+			"name": "M-TS-THROW-TRY-UNCAUGHT",
+			"type": "anyparse.check.ThrowReach",
+			"method": "uncaught",
+			"find": "if (intercepts(node) && inner == kids[0] || _nestedFnKinds.contains(inner.kind)) return false;",
+			"replace": "if (_nestedFnKinds.contains(inner.kind)) return false;",
+			"note": "a call inside a try with a catch still raises out of its function"
+		},
+		{
+			"name": "M-TS-THROW-PER-TAKE",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "reportThrowHeld",
+			"find": "if (seen.contains(key)) continue;",
+			"replace": "",
+			"note": "two takes of one lock held at one throw are two findings"
 		},
 		{
 			"name": "M-GRAPH-CLASS-BOUND",

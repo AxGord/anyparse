@@ -22,6 +22,9 @@ typedef ChainLists = {
 
 	/** The `lockPairs` take members whose lock the thread holding it may take again without waiting. */
 	final reentrantIds: Array<String>;
+
+	/** The calls known to raise an exception with no body to say so (`ThrowReach`). */
+	final throwerIds: Array<String>;
 	final lockPairs: Array<String>;
 	final pairs: Array<LockPair>;
 }
