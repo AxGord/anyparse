@@ -209,7 +209,7 @@ class ThreadSafetyFindingDataTest extends Test {
 
 	/**
 	 * Two main-thread holders reach ONE downstream state that takes the second lock: the holder the finding names is the
-	 * least over every way into that state, so renaming a function outside the key (`p0` to `q0`) does not move it.
+	 * least over every way into that state, so renaming a function outside the key (`p0` to `q0`), or swapping the two calls, does not move it.
 	 */
 	@:pin('control') @:killer('M-TS-ORDER-CLIMB-FIRST', 'M-TS-ORDER-ONE-ARRIVAL')
 	public function testLockOrderKeySurvivesARenameOutsideIt(): Void {
@@ -221,12 +221,17 @@ class ThreadSafetyFindingDataTest extends Test {
 			+ ' public function t():Void { _b.acquire(); _b.release(); }'
 			+ ' public function bg():Void { _b.acquire(); _a.acquire(); _a.release(); _b.release(); } }';
 		final keys: Array<Array<String>> = [
-			for (renamed in [source, source.replace('p0', 'q0')]) [
+			for (renamed in [
+				source,
+				source.replace('p0', 'q0'),
+				source.replace('fs.p1(); fs.p0();', 'fs.p0(); fs.p1();')
+			]) [
 				for (v in ThreadSafetyCheckTest.orderFindings([renamed])) '${v.data?.member} ${v.data?.subject} @${v.span?.from}'
 			]
 		];
 		Assert.same(['Fs.alpha Fs._a / Fs._b @${source.indexOf('t();')}'], keys[0]);
 		Assert.same(keys[0], keys[1]);
+		Assert.same(keys[0], keys[2], 'nor does calling the two holders in the other order');
 		#else
 		Assert.pass('non-sys target');
 		#end
