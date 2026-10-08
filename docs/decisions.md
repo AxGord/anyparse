@@ -1568,5 +1568,17 @@ decided the question; it may not become a record of runs.
   8 of the 13 `batch-x` holds of the brief turned info, 4 more once objects are PATHS of stable fields
   (`fileSystem.cloudDatabase`: a `var` with no write outside its constructor, the scan conservative — a bare or
   `this.` write counts in a type owning the field, any other receiver's always) — branch `feat/ts-precision-2`
+- a take of a lock nothing ever takes exclusively counted as a wait → TM's `APIToken._refreshReadWriteLock` is taken only
+  with `lockShared`, so `std::shared_mutex::lock_shared` never blocks; which pair members share is the library's
+  contract, so a config list (`sharedLocks`), applied only when EVERY take of the sealed lock goes through one —
+  branch `feat/ts-precision-2`
+- γ4 items left open, by cause: `CloudDatabase.new` (already info) is refused as a constructor hold because its
+  constructor calls `super()` (which may publish `this` first) and registers `enterFrameHandler` after the release;
+  `FoldersIncrementalCloudUpdatesRequest.start`'s lock is UNNAMED (`FoldersIncrementalCloudUpdatesCache.lock` cannot be
+  a wrapper while `lock` is a name some unresolved call is written with), so "no main-thread taker" cannot be asked
+  of it; `FileList.reload`'s `case _` needs every `cast` to `FileListViewType` typed to prove the value set; and
+  `StandardFileSystem.listFolder`'s `Lock.wait` is no main-thread-check gap — `put` does take the async `request` on
+  main, whose `urlLoader.load` → `this.go()` dispatches to every override, `BlockingNativeURLLoader.go` included
+  (the loader `doRequest` builds is never one) — branch `feat/ts-precision-2`
 - judging "inside a catch" off the witness chain the finding prints → the chain is one way; a second way outside every
   catch must keep the warning, which only a solve without the catch edges can see — branch `feat/ts-precision-2`

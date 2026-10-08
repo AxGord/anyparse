@@ -53,7 +53,8 @@ using StringTools;
  * thread is the main one; `closedWorld` says every caller is in the run (`sealedFromOutside`); `exclude` drops files by
  * a '/'-bounded path-segment run before the graph is built; `shortSinks` are the sinks one call of which waits briefly,
  * `iterates` the calls running a function value handed to them once per element, and `registers` the calls keeping one to
- * run later, once per event however often it was registered (`CallRepetition`).
+ * run later, once per event however often it was registered (`CallRepetition`); `sharedLocks` are the `lockPairs` take
+ * members taking their lock shared — a lock only ever taken through them never waits (`QuietLocks`).
  *
  * Findings are grouped: one per hold, at its first blocking call or its first escape, one per main-thread sink call
  * site, and one per pair of locks taken in both orders. Each carries its identity as data (`Check.FindingData`): its
@@ -261,6 +262,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			final shortSinks: Array<String> = option('shortSinks');
 			final iterates: Array<String> = option('iterates');
 			final registers: Array<String> = option('registers');
+			final shared: Array<String> = option('sharedLocks');
 			final spawns: Array<String> = option('spawns');
 			final marshals: Array<String> = option('marshals');
 			final lockPairs: Array<String> = option('lockPairs');
@@ -283,7 +285,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 						mainChecks,
 						shortSinks,
 						iterates,
-						registers
+						registers,
+						shared
 					]) list.join('\n')
 				].join('\t') + (closedWorld ? '\tclosed' : '');
 			final known: Null<ChainLists> = bySignature[signature];
@@ -296,6 +299,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 				iterateNames: [for (p in iterates) if (p.indexOf('.') < 0) p],
 				registerIds: matchAll(graph, registers),
 				registerNames: [for (p in registers) if (p.indexOf('.') < 0) p],
+				sharedIds: matchAll(graph, shared),
 				spawnIds: matchAll(graph, spawns),
 				marshalIds: matchAll(graph, marshals),
 				quietIds: matchAll(graph, quietRoots),
@@ -619,8 +623,12 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final costs: LockTaint = paths.all;
 		final ownWork: LockTaint = ownWorkOf(costs);
 		final normalOwn: LockTaint = ownWorkOf(paths.normal);
+		// a lock only ever taken shared stalls no one
 		final mainTaken: Array<String> = [
-			for (a in acquires) if (a.lock != null && states.edgeContext(a.edge) & CTX_MAIN != 0) a.lock
+			for (a in acquires) {
+				final lock: Null<String> = a.lock;
+				if (lock != null && states.edgeContext(a.edge) & CTX_MAIN != 0 && !taints.quiet.sharedOnly(lock)) lock;
+			}
 		];
 		final reported: Array<{ hold: LockAcquire, calls: Array<CallEdge>, finding: Violation }> = [];
 		for (a in acquires) {

@@ -390,6 +390,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.ThreadSafetyFoldingTest',
 		'unit.check.ThreadSafetyLongLocksTest',
 		'unit.check.ThreadSafetyOwnReasonsTest',
+		'unit.check.ThreadSafetyQuietLocksTest',
 		'unit.check.ThreadSafetyRegistersTest',
 		'unit.check.ThreadSafetyWaiterTest',
 		'unit.check.TrivialGetterCheckTest',
@@ -2180,6 +2181,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyOwnReasonsTest#testAHoldItsFunctionNeverGivesBackIsLong :: control :: M-TS-HANDOFF-OFF,M-TS-HANDOFF-GIVES',
 			'unit.check.ThreadSafetyOwnReasonsTest#testARepeatedOrUnknownUnresolvedCallKeepsTheLockLong :: control :: M-TS-DOM-BRIEF-REPEATED',
 			'unit.check.ThreadSafetyOwnReasonsTest#testAnUnresolvedCallInACatchIsAnErrorPath :: control :: M-TS-BLIND-CATCH-OFF',
+			'unit.check.ThreadSafetyQuietLocksTest#testAConstructorsOwnTakeNeverWaits :: control :: M-TS-CTOR-TAKE',
+			'unit.check.ThreadSafetyQuietLocksTest#testALockOnlyTakenSharedNeverWaits :: control :: M-TS-SHARED-OFF,M-TS-SHARED-HOLD',
+			'unit.check.ThreadSafetyQuietLocksTest#testAnExclusiveTakeMakesTheSharedOnesWait :: control :: M-TS-SHARED-ANY',
 			'unit.check.ThreadSafetyRegistersTest#testALoopAboveTheRegistrarRepeatsNothing :: control :: M-TS-REGISTER-OWNER',
 			'unit.check.ThreadSafetyRegistersTest#testARegistrationInALoopRepeatsNothing :: control :: M-TS-REGISTER-OWNER',
 			'unit.check.ThreadSafetyRegistersTest#testTheOwnerIsNeverUpARegistration :: control :: M-TS-REGISTER-OWNER',
@@ -5958,7 +5962,11 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-CARRY-OBJECT',
 			'M-TS-PATH-TWO-LINK',
 			'M-TS-PATH-CTOR',
-			'M-TS-PATH-STABLE-ANY'
+			'M-TS-PATH-STABLE-ANY',
+			'M-TS-SHARED-OFF',
+			'M-TS-SHARED-ANY',
+			'M-TS-SHARED-HOLD',
+			'M-TS-CTOR-TAKE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

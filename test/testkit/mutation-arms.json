@@ -17431,6 +17431,38 @@
 			"find": "if (writesOutside(held.file, held.tree, field, allowed)) return false;",
 			"replace": "if (false && writesOutside(held.file, held.tree, field, allowed)) return false;",
 			"note": "a var written outside its constructor counts stable"
+		},
+		{
+			"name": "M-TS-SHARED-OFF",
+			"type": "anyparse.check.LockTaint",
+			"method": "blocks",
+			"find": "if (quiet.never(edge)) return false;",
+			"replace": "if (false && quiet.never(edge)) return false;",
+			"note": "a take that never waits still blocks"
+		},
+		{
+			"name": "M-TS-SHARED-ANY",
+			"type": "anyparse.check.QuietLocks",
+			"method": "sharedOnly",
+			"find": "takes.length > 0 && takes.foreach(a -> _listsOf(a.edge.file).sharedIds.contains(a.pair.lockId))",
+			"replace": "takes.length > 0",
+			"note": "a lock some exclusive take works counts as shared-only"
+		},
+		{
+			"name": "M-TS-SHARED-HOLD",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "reportLockHeld",
+			"find": "&& !taints.quiet.sharedOnly(lock)",
+			"replace": "&& lock != ''",
+			"note": "a hold of a lock only ever taken shared still stalls the main thread"
+		},
+		{
+			"name": "M-TS-CTOR-TAKE",
+			"type": "anyparse.check.QuietLocks",
+			"method": "never",
+			"find": "return lock != '' && sharedOnly(lock) || uncontended(edge);",
+			"replace": "return lock != '' && sharedOnly(lock);",
+			"note": "a constructor's own take before publication blocks"
 		}
 	]
 }

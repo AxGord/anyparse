@@ -39,6 +39,9 @@ typedef ChainLists = {
 
 	/** The member names whose every call registers a function value so (`registerIds`), by the name the call is written with. */
 	final registerNames: Array<String>;
+
+	/** The `lockPairs` take members that take their lock shared (`sharedLocks`): such takes never wait for each other. */
+	final sharedIds: Array<String>;
 	final spawnIds: Array<String>;
 	final marshalIds: Array<String>;
 	final quietIds: Array<String>;
@@ -135,6 +138,9 @@ final class LockTaint {
 
 	public final listsOf: (String) -> ChainLists;
 
+	/** The takes that never wait (`QuietLocks`). */
+	public final quiet: QuietLocks;
+
 	/** `<held>|<function>|<valuation>|<bit>` -> the step toward a blocking call from that state. */
 	private final _reaching: Map<String, TaintStep> = [];
 
@@ -162,6 +168,7 @@ final class LockTaint {
 		conditions: EdgeConditions, threads: ThreadStates, ?cost: TaintCost
 	) {
 		_cost = cost;
+		quiet = new QuietLocks(sites, listsOf);
 		_graph = graph;
 		_sinkIds = sinkIds;
 		this.listsOf = listsOf;
@@ -250,6 +257,7 @@ final class LockTaint {
 		if (!edge.kind.isInvocation() || !listsOf(edge.file).sinkIds.contains(edge.to)) return false;
 		if (!takesLock(edge)) return true;
 		final lock: Null<String> = _sites.lockOf(edge);
+		if (quiet.never(edge)) return false;
 		return lock == null || !(lock == held && _sites.selfTake(edge)) && blockingLocks().contains(lock);
 	}
 
