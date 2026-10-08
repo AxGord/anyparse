@@ -5,7 +5,7 @@ import anyparse.check.Check.Violation;
 import utest.Assert;
 import utest.Test;
 
-using Lambda;
+using StringTools;
 
 /**
  * The structured identity (`Check.FindingData`) every `thread-safety` finding carries: its family, the member it sits
@@ -128,16 +128,19 @@ class ThreadSafetyFindingDataTest extends Test {
 	@:pin('control') @:killer('M-TS-DATA-ORDER-PAIR-UNSORTED')
 	public function testLockOrderData(): Void {
 		#if (sys || nodejs)
-		final found: Array<Violation> = ThreadSafetyCheckTest.orderFindings(ThreadSafetyCheckTest.storeFixture(
-			'acquireMutation(); db.add(false); releaseMutation();', 'Runner.create(fs.download); fs.save();'
-		));
+		// `Db` renamed past `Fs`: the walk meets the background step's pair (`Zd._batch`, then `Fs._mutation`) first
+		final found: Array<Violation> = ThreadSafetyCheckTest.orderFindings([
+			for (source in ThreadSafetyCheckTest.storeFixture(
+				'acquireMutation(); db.add(false); releaseMutation();', 'Runner.create(fs.download); fs.save();'
+			)) source.replace('Db', 'Zd')
+		]);
 		Assert.same(
 			[
 				{
 					family: 'D',
 					member: 'Fs.save',
-					subject: 'Db._batch / Fs._mutation',
-					chain: ['Fs.save', 'Db.add', 'Mutex.acquire']
+					subject: 'Fs._mutation / Zd._batch',
+					chain: ['Fs.save', 'Zd.add', 'Mutex.acquire']
 				}
 			],
 			[
