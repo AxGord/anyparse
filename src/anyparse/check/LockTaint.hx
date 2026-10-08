@@ -75,11 +75,15 @@ typedef BlockingTrail = {
 
 /**
  * What a taint answering the LONG question needs beyond the plain one: the locks whose take blocks at all (the plain
- * solve's long locks — a take of one this taint's own `long` leaves out is a short wait), and where a call repeats.
+ * solve's long locks — a take of one this taint's own `long` leaves out is
+ * a short wait), where a call repeats, and whether a take counts at all.
  */
 typedef TaintCost = {
 	final blocking: Array<String>;
 	final repetition: CallRepetition;
+
+	/** Whether a take of a lock may count at all: never when the question is the holder's own work, a take being a wait on another. */
+	final takes: Bool;
 }
 
 /**
@@ -152,7 +156,27 @@ final class LockTaint {
 	 * by `long`, a take of a lock this one's `long` names and `long` leaves out a short wait, and repetition by `repetition`.
 	 */
 	public function costed(long: Array<String>, repetition: CallRepetition): LockTaint {
-		return new LockTaint(_graph, _sinkIds, listsOf, _sites, long, _conditions, _threads, { blocking: _long, repetition: repetition });
+		return new LockTaint(_graph, _sinkIds, listsOf, _sites, long, _conditions, _threads, {
+			blocking: _long,
+			repetition: repetition,
+			takes: true
+		});
+	}
+
+	/**
+	 * The taint asking which calls are the holder's OWN long work — what a hold blocks by when no other thread is there
+	 * to make it wait: the long and repeating calls of this costed taint, every take of a lock left out. Null on the
+	 * plain taint, which knows nothing of cost.
+	 */
+	public function ownWork(): Null<LockTaint> {
+		final cost: Null<TaintCost> = _cost;
+		return cost == null
+			? null
+			: new LockTaint(_graph, _sinkIds, listsOf, _sites, [], _conditions, _threads, {
+				blocking: cost.blocking,
+				repetition: cost.repetition,
+				takes: false
+			});
 	}
 
 	/**
@@ -248,7 +272,8 @@ final class LockTaint {
 
 	/** Whether a call that blocks counts toward this taint's question: every one for the plain taint, else a long or `repeats` one. */
 	private inline function counts(edge: CallEdge, held: Null<String>, repeats: Bool): Bool {
-		return _cost == null || repeats || costsLong(edge, held);
+		final cost: Null<TaintCost> = _cost;
+		return cost == null || (cost.takes || !(takesLock(edge) || retakesElsewhere(edge, held))) && (repeats || costsLong(edge, held));
 	}
 
 	/** Whether this taint asks about cost and the call `edge` may run more than once per run of its function (`CallRepetition`). */

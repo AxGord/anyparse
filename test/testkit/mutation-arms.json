@@ -16971,10 +16971,50 @@
 		{
 			"name": "M-TS-EVIDENCE-PLAIN",
 			"type": "anyparse.check.ThreadSafety",
-			"method": "reportLockHeld",
-			"find": "= short ? taints.blockingCalls(a, held) : long;",
-			"replace": "= taints.blockingCalls(a, held);",
+			"method": "gradeHold",
+			"find": "if (long.length > 0) return { calls: long, taint: judge,",
+			"replace": "if (long.length > 0) return { calls: taints.blockingCalls(a, held), taint: taints,",
 			"note": "a long hold's message names its short calls too"
+		},
+		{
+			"name": "M-TS-B-MAIN-ONLY-KEPT",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "reportLockHeld",
+			"find": "final mainOnly: Bool = lock != null && states.edgeContext(a.edge) & CTX_BG == 0",
+			"replace": "final mainOnly: Bool = false",
+			"note": "a hold only the main thread runs is a stall like any other"
+		},
+		{
+			"name": "M-TS-B-ASSUMED-IGNORED",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "reportLockHeld",
+			"find": " && !states.assumed.exists(a.edge.from);",
+			"replace": ";",
+			"note": "a holder whose thread is only assumed main is taken for a main-only one"
+		},
+		{
+			"name": "M-TS-OWN-WORK-TAKES",
+			"type": "anyparse.check.LockTaint",
+			"method": "counts",
+			"find": "(cost.takes || !(takesLock(edge) || retakesElsewhere(edge, held)))",
+			"replace": "true",
+			"note": "a take of another lock counts as the holder's own work"
+		},
+		{
+			"name": "M-TS-OWN-WORK-DROPPED",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "gradeHold",
+			"find": "if (long.length > 0) return",
+			"replace": "if (long.length > 0 && !mainOnly) return",
+			"note": "a main-only hold is dropped even when the main thread works long under it"
+		},
+		{
+			"name": "M-TS-B-UNKNOWN-AS-MAIN-ONLY",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "reportLockHeld",
+			"find": "final mainOnly: Bool = lock != null && ",
+			"replace": "final mainOnly: Bool = ",
+			"note": "a hold of a lock no member names is judged by the holder's thread alone, as if no other could hold it"
 		},
 		{
 			"name": "M-LINT-EXPLAIN-NO-ENVELOPE",

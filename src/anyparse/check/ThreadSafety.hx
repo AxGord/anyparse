@@ -25,9 +25,10 @@ using StringTools;
 /**
  * Config-driven thread-context analysis over the approximate `CallGraph` — finds the two classic main-thread stalls:
  * (a) a MAIN-context function calling a configured blocking sink; (b) a function holding a configured lock across a
- * call that transitively reaches a sink, while the main thread takes that lock somewhere — and the two ways a lock
- * hangs a thread for good: (c) a lock still held where an exception leaves the function that took it; (d) two locks
- * taken in opposite orders on the main thread and on a background one (`LockOrder`).
+ * call that transitively reaches a sink, while the main thread takes that lock somewhere and some other thread runs the
+ * hold (or the main thread works long under it itself) — and the two ways a lock hangs a thread for good: (c) a lock
+ * still held where an exception leaves the function that took it; (d) two locks taken in opposite orders on the main
+ * thread and on a background one (`LockOrder`).
  *
  * Context propagation (`ThreadStates`): graph roots start MAIN; a callback passed to a `spawns` target runs BG, one
  * passed to a `marshals` target runs MAIN, any other inherits its registrar's context. A node nothing reached is
@@ -42,24 +43,25 @@ using StringTools;
  *
  * Configured per project in `apqlint.json` under `"thread-safety"` (inert without `sinks`): `sinks`, `spawns`,
  * `marshals` and `throwers` (`ThrowReach`) are call patterns, matched by their last two dot-segments (`Type.*` covers a
- * type); a `lockPairs` entry is `<lock pattern>/<unlock member name>`, and a lock WRAPPER's call takes or gives its lock
- * with no entry of its own; `quietRoots` are handlers that block on purpose — the main thread is QUIET in them while no
- * loud main-thread code calls them (`settleContexts`); `reentrantLocks` are takes the holder may repeat on the SAME
- * object; `neverInvokes` calls run no function value handed to them; `mainThreadChecks` answer whether the running
+ * type); a `lockPairs` entry is `<lock pattern>/<unlock member name>`, and a lock WRAPPER's call takes or gives its
+ * lock with no entry of its own; `quietRoots` are handlers that block on purpose — the main thread is QUIET in them
+ * while no loud main-thread code calls them (`settleContexts`); `reentrantLocks` are takes the holder may repeat on the
+ * SAME object; `neverInvokes` calls run no function value handed to them; `mainThreadChecks` answer whether the running
  * thread is the main one; `closedWorld` says every caller is in the run (`sealedFromOutside`); `exclude` drops files by
- * a '/'-bounded path-segment run before the graph is built; `shortSinks` are the sinks one call of which waits
- * briefly, and `iterates` the calls running a function value handed to them once per element (`CallRepetition`).
+ * a '/'-bounded path-segment run before the graph is built; `shortSinks` are the sinks one call of which waits briefly,
+ * and `iterates` the calls running a function value handed to them once per element (`CallRepetition`).
  *
- * Findings are grouped: one per hold, at its first blocking call or its first escape, one per main-thread sink call site,
- * and one per pair of locks taken in both orders. Each carries its identity as data (`Check.FindingData`): its family
- * (`FindingFamily`), the member it sits in, its subject (the sinks, the lock, the two locks) and its whole chain, which a
- * tool keys by in place of the message. Asked to (`explainLongLocks`), a run also keeps
- * why each lock is long (`LongLockExplain`) in `longLocks`, without moving a finding.
+ * Findings are grouped: one per hold, at its first blocking call or its first escape, one per main-thread sink call
+ * site, and one per pair of locks taken in both orders. Each carries its identity as data (`Check.FindingData`): its
+ * family (`FindingFamily`), the member it sits in, its subject (the sinks, the lock, the two locks) and its whole
+ * chain, which a tool keys by in place of the message. Asked to (`explainLongLocks`), a run also keeps why each lock is
+ * long (`LongLockExplain`) in `longLocks`, without moving a finding.
  *
- * Each finding is graded by what it costs. Locks are solved twice: once over every blocking call, which decides what is reported at all,
- * and once over the LONG ones — a sink `shortSinks` does not list, a take of a long lock, or a short call that repeats (`CallRepetition`)
- * — which decides what warns. A main-thread call of a short sink, or a take of a lock held only across short calls, that no main-thread
- * path repeats, and a hold spanning only such calls each once, are reported at `info`, the reason in the message: brief, never dropped.
+ * Each finding is graded by what it costs. Locks are solved twice: once over every blocking call, which decides what is
+ * reported at all, and once over the LONG ones — a sink `shortSinks` does not list, a take of a long lock, or a short
+ * call that repeats (`CallRepetition`) — which decides what warns. A main-thread call of a short sink, or a take of a
+ * lock held only across short calls, that no main-thread path repeats, and a hold spanning only such calls each once,
+ * are reported at `info`, the reason in the message: brief, never dropped.
  */
 @:nullSafety(Strict)
 final class ThreadSafety implements Check implements ConfigAware implements NoAutofix implements GraphScoped {
@@ -79,14 +81,6 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	private static inline final ENTRY_POINT: String = 'main';
 
 	private static inline final EVIDENCE_CAP: Int = 8;
-
-	/** What a main-thread sink call's finding adds when the call waits too little to warn about (`shortSinks`). */
-	private static inline final SHORT_MAIN_CALL: String = ' — short: a short sink or a take of a lock held only across short'
-		+ ' calls, once per main-thread run (no loop, `iterates` callback or recursion on the way), so reported as info';
-
-	/** What a hold's finding adds when every blocking call it spans waits too little to warn about (`shortSinks`). */
-	private static inline final SHORT_HOLD: String = ' — short: every call it spans waits only on short sinks or on locks held only'
-		+ ' across short calls, each once per hold (no loop, `iterates` callback or recursion under the lock), so reported as info';
 
 	/** Why each lock of the last run is long, when the run was asked to say (`explainLongLocks`); null otherwise. */
 	public var longLocks(default, null): Null<LongLockReport> = null;
@@ -608,7 +602,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 				rule: 'thread-safety',
 				severity: short ? Severity.Info : Severity.Warning,
 				message: 'main thread reaches blocking $named$also: ${ThreadStates.chainText(path, CHAIN_CAP)} -> ${sinks.join(SUBJECT_SEPARATOR)}'
-				+ (short ? SHORT_MAIN_CALL : ''),
+				+ (short ? CostNote.ShortMainCall : ''),
 				data: {
 					family: FindingFamily.MainSink,
 					member: memberOf(graph, edge.from),
@@ -639,30 +633,37 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	 * Finding (b): on some path of one function body a lock is held across calls that block — one finding per hold,
 	 * anchored at its first blocking call and naming the lock object (the pair's take member for a lock no member
 	 * names). Reported for a lock the main thread takes somewhere (or one no sealed member names), since only then does
-	 * the hold stall main; a hold in the owner's constructor before the object escapes stalls no one.
+	 * the hold stall main; a hold in the owner's constructor before the object escapes stalls no one. The main thread
+	 * never waits for its own hold, so a hold of a named lock that only the main thread runs — on no background thread,
+	 * and not in a function the walk only assumes runs there (`ThreadStates.assumed`) — stays only when the main thread
+	 * itself works long under it (`LockTaint.ownWork`), and says so. Graded by cost: a hold whose blocking calls are all
+	 * brief is info, a long one names only the calls that block long.
 	 */
 	private static function reportLockHeld(
 		graph: CallGraph, acquires: Array<LockAcquire>, taints: LockTaint, costs: LockTaint, states: ThreadStates,
 		violations: Array<Violation>
 	): Void {
 		final seen: Array<String> = [];
+		final ownWork: Null<LockTaint> = costs.ownWork();
+		if (ownWork == null) throw new Exception('thread-safety: the costed taint has no own-work taint');
 		final mainTaken: Array<String> = [
 			for (a in acquires) if (a.lock != null && states.edgeContext(a.edge) & CTX_MAIN != 0) a.lock
 		];
 		for (a in acquires) {
 			final lock: Null<String> = a.lock;
 			if (a.uncontended || lock != null && !mainTaken.contains(lock)) continue;
+			// the main thread never waits for a hold of a lock it alone holds there: such a hold stays only as the main thread's
+			// own long work; who else holds a lock no member names is unknown
+			final mainOnly: Bool = lock != null && states.edgeContext(a.edge) & CTX_BG == 0 && !states.assumed.exists(a.edge.from);
 			final held: Null<String> = taints.reentrantHeld(a);
-			// the calls that block long name a long hold; a hold blocking only briefly names every call that blocks at all
-			final long: Array<{ edge: CallEdge, path: Array<String> }> = costs.blockingCalls(a, held);
-			final short: Bool = long.length == 0;
-			final blocking: Array<{ edge: CallEdge, path: Array<String> }> = short ? taints.blockingCalls(a, held) : long;
-			if (blocking.length == 0) continue;
+			final graded: Null<GradedHold> = gradeHold(a, held, taints, mainOnly ? ownWork : costs, mainOnly);
+			if (graded == null) continue;
+			final blocking: Array<{ edge: CallEdge, path: Array<String> }> = graded.calls;
+			final short: Bool = graded.note == CostNote.ShortHold;
 			final calls: String = blocking.length == 1 ? 'a call' : '${blocking.length} calls';
 			final holder: String = a.edge.from;
-			final message: String = '"$holder" holds "${lock ?? a.pair.lockId}" across $calls that can block: ' + evidenceOf(
-				blocking, held, short ? taints : costs
-			) + (short ? SHORT_HOLD : '');
+			final message: String = '"$holder" holds "${lock ?? a.pair.lockId}" across $calls that can block: '
+				+ evidenceOf(blocking, held, graded.taint) + graded.note;
 			final anchor: CallEdge = blocking[0].edge;
 			final key: String = '${anchor.file}:${anchor.span?.from}:$message';
 			if (seen.contains(key)) continue;
@@ -681,6 +682,21 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 				}
 			});
 		}
+	}
+
+	/**
+	 * The calls a finding (b) names for the hold `a` under a hold of `held`, with the taint that found them and what the
+	 * message adds: the calls that block long under `judge` (the holder's own long work, `mainOnly`), or else — unless
+	 * only the main thread runs the hold — every call that blocks at all under `taints`, graded short. Null when none.
+	 */
+	private static function gradeHold(
+		a: LockAcquire, held: Null<String>, taints: LockTaint, judge: LockTaint, mainOnly: Bool
+	): Null<GradedHold> {
+		final long: Array<{ edge: CallEdge, path: Array<String> }> = judge.blockingCalls(a, held);
+		if (long.length > 0) return { calls: long, taint: judge, note: mainOnly ? CostNote.MainOwnWork : '' };
+		if (mainOnly) return null;
+		final brief: Array<{ edge: CallEdge, path: Array<String> }> = taints.blockingCalls(a, held);
+		return brief.length == 0 ? null : { calls: brief, taint: taints, note: CostNote.ShortHold };
 	}
 
 	/**
@@ -779,5 +795,29 @@ enum abstract FindingFamily(String) to String {
 
 	/** (d) two locks taken in opposite orders on two threads. */
 	final OrderInversion = 'D';
+
+}
+
+/** The calls a hold finding names, the taint that found them, and what its message adds (`ThreadSafety.gradeHold`). */
+private typedef GradedHold = {
+	final calls: Array<{ edge: CallEdge, path: Array<String> }>;
+	final taint: LockTaint;
+	final note: String;
+}
+
+/** What a `thread-safety` finding adds to its message when its cost or its thread is why it is graded as it is. */
+enum abstract CostNote(String) to String {
+
+	/** A main-thread call that waits too little to warn about (`shortSinks`). */
+	final ShortMainCall = ' — short: a short sink or a take of a lock held only across short calls, once per main-thread run (no'
+		+ ' loop, `iterates` callback or recursion on the way), so reported as info';
+
+	/** A hold every blocking call of which waits too little to warn about (`shortSinks`). */
+	final ShortHold = ' — short: every call it spans waits only on short sinks or on locks held only across short calls, each once'
+		+ ' per hold (no loop, `iterates` callback or recursion under the lock), so reported as info';
+
+	/** A hold only the main thread runs: no thread it stalls waits for it, but the main thread works long under it. */
+	final MainOwnWork = ' — held on the main thread only, which never waits for its own hold: the stall is the main thread\'s own long'
+		+ ' work under the lock';
 
 }

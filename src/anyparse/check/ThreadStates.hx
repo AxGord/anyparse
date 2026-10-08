@@ -32,6 +32,12 @@ final class ThreadStates {
 	/** Each function's contexts, the union over its states. */
 	public final contexts: Map<String, Int> = [];
 
+	/**
+	 * The functions seeded MAIN because nothing the walk knows runs them: their thread is an assumption, not a finding,
+	 * and a question that turns on a function running on the main thread ALONE treats theirs as unknown.
+	 */
+	public final assumed: Map<String, Bool> = [];
+
 	private final _states: Map<String, ThreadState> = [];
 	private final _byNode: Map<String, Array<ThreadState>> = [];
 	private final _queue: Array<ThreadState> = [];
@@ -93,8 +99,7 @@ final class ThreadStates {
 
 	/** The fixed point: every state each seed reaches through the calls and callbacks that run from it. */
 	private function solve(inertRef: (CallEdge) -> Bool, seedable: (String) -> Bool): Void {
-		for (id => node in _graph.nodes) if (!node.isExternal && _graph.inEdges(id).length == 0 && seedable(id))
-			arrive(id, _conditions.unknown(id), ThreadSafety.CTX_MAIN, null);
+		for (id => node in _graph.nodes) if (!node.isExternal && _graph.inEdges(id).length == 0 && seedable(id)) seed(id);
 		var qi: Int = 0;
 		while (true) {
 			while (qi < _queue.length) {
@@ -112,11 +117,17 @@ final class ThreadStates {
 			// unless a function the walk reached calls or references it: the walk then knew that call, and found it runs nowhere
 			var seeded: Bool = false;
 			for (id => node in _graph.nodes) if (!(node.isExternal || contexts.exists(id)) && seedable(id) && !walkedCaller(id)) {
-				arrive(id, _conditions.unknown(id), ThreadSafety.CTX_MAIN, null);
+				seed(id);
 				seeded = true;
 			}
 			if (!seeded) break;
 		}
+	}
+
+	/** `id` ASSUMED to run on the main thread under the valuation that knows nothing (`assumed`). */
+	private function seed(id: String): Void {
+		assumed[id] = true;
+		arrive(id, _conditions.unknown(id), ThreadSafety.CTX_MAIN, null);
 	}
 
 	/** Whether a function the walk reached calls or references `id` — lexical containment aside, which runs nothing. */

@@ -992,7 +992,7 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A hold of a lock no member names is reported under the pair's take member. */
-	@:pin('control') @:killer('M-TS-UNKNOWN-LOCK-UNNAMED')
+	@:pin('control') @:killer('M-TS-UNKNOWN-LOCK-UNNAMED') @:killer('M-TS-B-UNKNOWN-AS-MAIN-ONLY')
 	public function testAHoldOfAnUnknownLockNamesThePair(): Void {
 		#if (sys || nodejs)
 		Assert.same(['"B.use" holds "Mutex.acquire" across a call that can block: Sys.sleep'], heldBy('B.use', lockFindings([
@@ -1045,7 +1045,7 @@ class ThreadSafetyCheckTest extends Test {
 					+ ' public function nested():Void { _m.acquire(); inner(); this.lockIt(); this.unlockIt(); _m.release(); }'
 					+ ' function inner():Void { _m.acquire(); _m.release(); }'
 					+ ' public static function main():Void { Runner.create(() -> b.slow()); a.transfer(b); a.transfer2(b); a.cross(b);'
-					+ ' a.nested(); } }',
+					+ ' a.nested(); Runner.create(() -> { a.transfer(b); a.transfer2(b); a.cross(b); a.nested(); }); } }',
 					'class Runner { public static function create(fn:()->Void):Void {} }'
 				]
 			)) v.message

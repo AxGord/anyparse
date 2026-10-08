@@ -1510,3 +1510,12 @@ decided the question; it may not become a record of runs.
   same-named types share one node and every site of the other's file went unplaced (and so repeating); the loops
   around a site are read off its file's own tree from the root, counted afresh at every function or lambda around it
   — branch `feat/ts-precision-2`
+- dropping every hold only the main thread runs, the main thread's own blocking being finding (a)'s → TM's
+  multi-select move holds `_batchMutex` across a per-item loop on main, and that hold IS the labelled stall while (a)
+  names only the calls below it; a main-only hold stays when the main thread itself works long under the lock
+  (`LockTaint.ownWork`) — branch `feat/ts-precision-2`
+- counting a take of another lock as a main-only holder's own work → `getFolderLastCloudActionAction2` holds
+  `_batchMutex` only to take `_mutex`, a wait finding (a) already reports at the take; own work leaves every take out,
+  repeated or not — branch `feat/ts-precision-2`
+- also solving lock LONGNESS from the holds a main waiter can meet (no main-only hold making a lock long) → measured
+  on the three TM trees it moved no finding; left out until a case needs it — branch `feat/ts-precision-2`
