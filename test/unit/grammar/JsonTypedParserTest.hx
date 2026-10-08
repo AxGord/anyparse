@@ -109,7 +109,7 @@ class JsonTypedParserTest extends Test {
 		final error: Null<ParseError> = try {
 			TestKeyedParser.parse('{"member":"A.b"}');
 			null;
-		} catch (e: ParseError) e;
+		} catch (exception: ParseError) exception;
 		Assert.notNull(error, 'the field\'s own name is not its key');
 		Assert.stringContains('"function"', error?.message ?? '');
 	}
