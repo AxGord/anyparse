@@ -10525,8 +10525,8 @@
 			"name": "M-TS-TAINT-UNION-SINK",
 			"type": "anyparse.check.LockTaint",
 			"method": "reach",
-			"find": "if (listsOf(edge.file).sinkIds.contains(edge.from)) continue;",
-			"replace": "if (_sinkIds.contains(edge.from)) continue;",
+			"find": "if (listsOf(edge.file).sinkIds.contains(edge.from) || onErrorPath(edge)) continue;",
+			"replace": "if (_sinkIds.contains(edge.from) || onErrorPath(edge)) continue;",
 			"note": "a node one chain names a sink never carries taint to its callers in a chain where it is a plain function"
 		},
 		{
@@ -16972,8 +16972,8 @@
 			"name": "M-TS-EVIDENCE-PLAIN",
 			"type": "anyparse.check.ThreadSafety",
 			"method": "gradeHold",
-			"find": "if (long.length > 0) return { calls: long, taint: judge,",
-			"replace": "if (long.length > 0) return { calls: taints.blockingCalls(a, held), taint: taints,",
+			"find": ["calls: long,", "taint: judge.long,"],
+			"replace": ["calls: taints.blockingCalls(a, held),", "taint: taints,"],
 			"note": "a long hold's message names its short calls too"
 		},
 		{
@@ -17004,8 +17004,8 @@
 			"name": "M-TS-OWN-WORK-DROPPED",
 			"type": "anyparse.check.ThreadSafety",
 			"method": "gradeHold",
-			"find": "if (long.length > 0) return",
-			"replace": "if (long.length > 0 && !mainOnly) return",
+			"find": "if (long.length > 0) {",
+			"replace": "if (long.length > 0 && !mainOnly) {",
 			"note": "a main-only hold is dropped even when the main thread works long under it"
 		},
 		{
@@ -17263,6 +17263,70 @@
 			"find": "child.annotations.get(AnnotationKeys.BASE_FIELD_POS) ?? Context.currentPos()",
 			"replace": "Context.currentPos()",
 			"note": "two fields sharing a key are reported at the build macro, not at the field"
+		},
+		{
+			"name": "M-TS-ERROR-REACH-OFF",
+			"type": "anyparse.check.LockTaint",
+			"method": "reach",
+			"find": "if (listsOf(edge.file).sinkIds.contains(edge.from) || onErrorPath(edge)) continue;",
+			"replace": "if (listsOf(edge.file).sinkIds.contains(edge.from)) continue;",
+			"note": "a call inside a callee's catch still leads the normal-path walk to its sink"
+		},
+		{
+			"name": "M-TS-ERROR-WINDOW-OFF",
+			"type": "anyparse.check.LockTaint",
+			"method": "blockingTrail",
+			"find": "if (onErrorPath(a.edge) || onErrorPath(edge)) return null;",
+			"replace": "if (onErrorPath(a.edge)) return null;",
+			"note": "a call the hold makes inside its own catch blocks over the normal paths"
+		},
+		{
+			"name": "M-TS-ERROR-HOLD-OFF",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "gradeHold",
+			"find": "info: error != null",
+			"replace": "info: false && error != null",
+			"note": "a hold long only on an error path still warns"
+		},
+		{
+			"name": "M-TS-ERROR-ANY",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "gradeHold",
+			"find": "final error: Null<String> = judge.normal.blockingCalls(a, held).length > 0",
+			"replace": "final error: Null<String> = judge.normal.blockingCalls(a, held).length < 0",
+			"note": "a hold with a long call outside every catch is demoted too"
+		},
+		{
+			"name": "M-TS-ERROR-TAKE-OFF",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "siteCost",
+			"find": "final error: Null<String> = caught ?? (long && !normal ? errorPlace(sites, costs, edge) : null);",
+			"replace": "final error: Null<String> = caught ?? (long && !normal && false ? errorPlace(sites, costs, edge) : null);",
+			"note": "a main take of a lock long only on an error path still warns"
+		},
+		{
+			"name": "M-TS-ERROR-TAKE-ANY",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "report",
+			"find": "if (!costs.errors.inCatch(edge) && (costs.normal.costsLong(edge, null) || repeated)) normal[key] = true;",
+			"replace": "if (false && !costs.errors.inCatch(edge) && (costs.normal.costsLong(edge, null) || repeated)) normal[key] = true;",
+			"note": "every long main take counts as error-path only"
+		},
+		{
+			"name": "M-TS-ERROR-CAUGHT-OFF",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "siteCost",
+			"find": "final caught: Null<String> = costs.errors.placeOf([edge]);",
+			"replace": "final caught: Null<String> = null;",
+			"note": "a main-thread sink call inside a catch warns"
+		},
+		{
+			"name": "M-TS-ERROR-EXPLAIN-OFF",
+			"type": "anyparse.check.LongLockExplain",
+			"method": "errorOf",
+			"find": "return normal.taint.blockingTrail(a, e, held) != null ? null : normal.errors.placeOf(trail.edges);",
+			"replace": "return null;",
+			"note": "--explain-long never marks an error-path reason"
 		}
 	]
 }

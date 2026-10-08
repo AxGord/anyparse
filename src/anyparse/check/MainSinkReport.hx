@@ -1,6 +1,8 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.check.ErrorPaths.PathCosts;
+import anyparse.check.LockTaint.BlockingTrail;
 import anyparse.check.ThreadSafety.CostNote;
 import anyparse.check.ThreadSafety.FindingFamily;
 import anyparse.query.CallGraph;
@@ -23,13 +25,18 @@ typedef MainRepetition = {
 @:nullSafety(Strict)
 final class MainSinkReport {
 
-	/** Each of finding (a) over `graph`, under the plain `taints` and the costed `costs`, into `violations`. */
+	/**
+	 * Each of finding (a) over `graph`, under the plain `taints` and the costed `costs`, into `violations`. A call long
+	 * only where a `catch` runs — itself inside one, or a take of a lock long over the normal paths of no hold — is
+	 * graded as if short, and info, naming that catch, when no repeating caller owns it.
+	 */
 	public static function report(
-		graph: CallGraph, sites: LockSites, taints: LockTaint, costs: LockTaint, repeats: MainRepetition, states: ThreadStates,
+		graph: CallGraph, sites: LockSites, taints: LockTaint, costs: PathCosts, repeats: MainRepetition, states: ThreadStates,
 		violations: Array<Violation>
 	): Void {
 		final targets: Map<String, Array<String>> = [];
 		final long: Map<String, Bool> = [];
+		final normal: Map<String, Bool> = [];
 		final order: Array<{ key: String, edge: CallEdge }> = [];
 		for (edge in graph.edges) if (edge.kind.isInvocation()) {
 			if (!taints.blocks(edge, null)) continue;
@@ -47,7 +54,9 @@ final class MainSinkReport {
 				known.push(edge.to);
 			}
 			// long here: a long sink, or a short one this very call repeats
-			if (costs.costsLong(edge, null) || repeats.repetition.repeated(edge)) long[key] = true;
+			final repeated: Bool = repeats.repetition.repeated(edge);
+			if (costs.all.costsLong(edge, null) || repeated) long[key] = true;
+			if (!costs.errors.inCatch(edge) && (costs.normal.costsLong(edge, null) || repeated)) normal[key] = true;
 		}
 		final inside: Map<String, Bool> = insideSinks(graph, taints, repeats.runs);
 		final owned: Array<String> = [];
@@ -57,7 +66,8 @@ final class MainSinkReport {
 			// a call a sink's own body makes is the sink's machinery: the finding is the call of that sink
 			final inSink: Bool = inside.exists(edge.from) || taints.listsOf(edge.file).sinkIds.contains(edge.from);
 			final finding: Violation = reportSite(
-				graph, edge, targets[site.key] ?? [edge.to], long.exists(site.key), inSink, repeats, states, owned, violations
+				graph, edge, targets[site.key] ?? [edge.to], siteCost(sites, costs, edge, long.exists(site.key), normal.exists(site.key)),
+				inSink, repeats, states, owned, violations
 			);
 			if (finding.severity == Severity.Warning && taints.takesLock(edge)) takes.push({ edge: edge, finding: finding });
 		}
@@ -114,16 +124,49 @@ final class MainSinkReport {
 	}
 
 	/**
-	 * Finding (a) at the main-thread call `edge` of `sinks`, long on its own or not (`long`). Short once and long only as
-	 * some caller up the main thread's way repeats it: the nearest repeating call owns the warning — one per call site,
-	 * moved, never multiplied by every loop above — unless that call is the member's own (a recursion, a callback it
-	 * hands an `iterates` call). `owned` keeps the owners' findings once each.
+	 * The cost of the main-thread call site `edge`: long (`long`), long over the normal paths too (`normal`), and where
+	 * it is long only on an error path — a call inside a `catch` runs only there, repeated or not (`caught`).
+	 */
+	private static function siteCost(
+		sites: LockSites, costs: PathCosts, edge: CallEdge, long: Bool, normal: Bool
+	): { long: Bool, error: Null<String>, caught: Bool } {
+		final caught: Null<String> = costs.errors.placeOf([edge]);
+		final error: Null<String> = caught ?? (long && !normal ? errorPlace(sites, costs, edge) : null);
+		return { long: long && error == null, error: error, caught: caught != null };
+	}
+
+	/**
+	 * Where the main-thread take `edge` of a lock long only where a `catch` runs meets that catch: on the way a hold of
+	 * the lock blocks long (`file:line`); null when none is found, and the call stays long.
+	 */
+	private static function errorPlace(sites: LockSites, costs: PathCosts, edge: CallEdge): Null<String> {
+		final lock: Null<String> = sites.lockOf(edge);
+		if (lock == null) return null;
+		for (a in sites.acquires.concat(sites.helperHolds)) if (a.lock == lock) {
+			final held: Null<String> = costs.all.reentrantHeld(a);
+			for (e in a.window) {
+				final trail: Null<BlockingTrail> = costs.all.blockingTrail(a, e, held);
+				final place: Null<String> = trail == null ? null : costs.errors.placeOf(trail.edges);
+				if (place != null) return place;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Finding (a) at the main-thread call `edge` of `sinks`, long on its own or not (`cost.long`), or long only where the
+	 * `catch` at `cost.error` runs — inside it when `cost.caught`. Short once and long only as some caller up the main
+	 * thread's way repeats it: the nearest repeating call owns the warning — one per call site, moved, never multiplied by
+	 * every loop above — unless that call is the member's own (a recursion, a callback it hands an `iterates` call). A
+	 * call inside a `catch` itself repeats nothing over the normal paths. `owned` keeps the owners' findings once each.
 	 */
 	private static function reportSite(
-		graph: CallGraph, edge: CallEdge, sinks: Array<String>, long: Bool, inSink: Bool, repeats: MainRepetition, states: ThreadStates,
-		owned: Array<String>, violations: Array<Violation>
+		graph: CallGraph, edge: CallEdge, sinks: Array<String>, cost: { long: Bool, error: Null<String>, caught: Bool }, inSink: Bool,
+		repeats: MainRepetition, states: ThreadStates, owned: Array<String>, violations: Array<Violation>
 	): Violation {
-		final owners: Array<{ edge: CallEdge, path: Array<String> }> = long || inSink || !repeats.on.exists(edge.from)
+		final long: Bool = cost.long;
+		final error: Null<String> = cost.error;
+		final owners: Array<{ edge: CallEdge, path: Array<String> }> = long || inSink || cost.caught || !repeats.on.exists(edge.from)
 			? []
 			: repeats.repetition.repeatersOf(edge.from, repeats.runs);
 		final owner: Null<String> = owners.length > 0 ? ThreadSafety.memberOf(graph, owners[0].edge.from) : null;
@@ -134,7 +177,7 @@ final class MainSinkReport {
 		else if (own)
 			''
 		else if (owners.length == 0)
-			CostNote.ShortMainCall
+			error == null ? CostNote.ShortMainCall : ErrorPaths.note(error)
 		else
 			' — short each time, long only as repeated by $owner, reported there'
 				+ (owners.length > 1 ? ' (${owners.length - 1} more repeating caller(s) further away)' : '');

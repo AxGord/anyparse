@@ -384,6 +384,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.ThreadSafetyConditionsTest',
 		'unit.check.ThreadSafetyCostTest',
 		'unit.check.ThreadSafetyDominanceTest',
+		'unit.check.ThreadSafetyErrorPathTest',
 		'unit.check.ThreadSafetyFindingDataTest',
 		'unit.check.ThreadSafetyFoldingTest',
 		'unit.check.ThreadSafetyLongLocksTest',
@@ -2138,6 +2139,12 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyDominanceTest#testATakeUnderTheOuterLockIsBrief :: control :: M-TS-DOM-OFF',
 			'unit.check.ThreadSafetyDominanceTest#testAnotherObjectsLockIsNotDominated :: control :: M-TS-DOM-ANY-OBJECT',
 			'unit.check.ThreadSafetyDominanceTest#testExplainLongNamesTheDominatedLock :: control :: M-TS-DOM-EXPLAIN-DROPPED',
+			'unit.check.ThreadSafetyErrorPathTest#testABlockAlsoOutsideTheCatchWarns :: control :: M-TS-ERROR-ANY,M-TS-ERROR-TAKE-ANY',
+			'unit.check.ThreadSafetyErrorPathTest#testABlockInTheHoldsOwnCatchIsInfo :: control :: M-TS-ERROR-WINDOW-OFF',
+			'unit.check.ThreadSafetyErrorPathTest#testABlockOnlyInACalleesCatchIsInfo :: control :: '
+				+ 'M-TS-ERROR-REACH-OFF,M-TS-ERROR-HOLD-OFF,M-TS-ERROR-TAKE-OFF',
+			'unit.check.ThreadSafetyErrorPathTest#testAMainSinkCallInACatchIsInfo :: control :: M-TS-ERROR-CAUGHT-OFF',
+			'unit.check.ThreadSafetyErrorPathTest#testExplainLongMarksTheErrorPath :: control :: M-TS-ERROR-EXPLAIN-OFF',
 			'unit.check.ThreadSafetyFindingDataTest#testInitializerFindingsNameTheInitializer :: control :: M-TS-DATA-INIT-LAMBDA',
 			'unit.check.ThreadSafetyFindingDataTest#testLambdaFindingNamesItsEnclosingMember :: control :: M-TS-DATA-MEMBER-LAMBDA',
 			'unit.check.ThreadSafetyFindingDataTest#testLockOrderData :: control :: M-TS-DATA-SUBJECT-UNSORTED',
@@ -5912,7 +5919,15 @@ class TestDiscoveryParityTest extends Test {
 			'M-SCORE-UNIQUE-JOINED',
 			'M-SCORE-SEVERITY-UNKNOWN',
 			'M-SCORE-JSON-EXCLUDED',
-			'M-JSON-KEY-DUP-AT-FIELD'
+			'M-JSON-KEY-DUP-AT-FIELD',
+			'M-TS-ERROR-REACH-OFF',
+			'M-TS-ERROR-WINDOW-OFF',
+			'M-TS-ERROR-HOLD-OFF',
+			'M-TS-ERROR-ANY',
+			'M-TS-ERROR-TAKE-OFF',
+			'M-TS-ERROR-TAKE-ANY',
+			'M-TS-ERROR-CAUGHT-OFF',
+			'M-TS-ERROR-EXPLAIN-OFF'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

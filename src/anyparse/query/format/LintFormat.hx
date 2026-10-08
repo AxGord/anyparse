@@ -248,6 +248,7 @@ final class LintFormat {
 			Reflect.setField(record, 'call', r.call);
 			Reflect.setField(record, 'chain', r.chain);
 			Reflect.setField(record, 'via', r.via);
+			if (r.errorPath != null) Reflect.setField(record, 'errorPath', r.errorPath);
 		}
 		if (r.kind == LongLockKind.Blind) Reflect.setField(record, 'unresolved', [
 			for (c in r.unresolved) {
@@ -276,7 +277,8 @@ final class LintFormat {
 		final call: Null<String> = r.call;
 		if (call == null) return head;
 		final via: String = r.via == null ? '' : ' via ${r.via}';
-		return '$head  calls $call$via: ${r.chain.join(' -> ')}';
+		final error: String = r.errorPath == null ? '' : '  only on an error path (catch at ${r.errorPath})';
+		return '$head  calls $call$via: ${r.chain.join(' -> ')}$error';
 	}
 
 	/** `<line>:<col>` of `span`'s start. */

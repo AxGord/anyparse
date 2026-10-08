@@ -46,17 +46,20 @@ final class LockDominance {
 	/**
 	 * The taint asking which calls block LONG (`LockTaint.costed`), solved with `solve` and with `dominators` until they
 	 * settle: fewer long holds can only free more takes, and every round is sound on its own. `solve` fills a fresh list
-	 * of long locks on the taint it is handed.
+	 * of long locks on the taint it is handed. With `errors`, over the normal paths only: a call only an error path runs
+	 * (`ErrorPaths`) leads nowhere.
 	 */
-	public function settle(taints: LockTaint, solve: (Array<String>, LockTaint) -> Void): { long: Array<String>, costs: LockTaint } {
+	public function settle(
+		taints: LockTaint, solve: (Array<String>, LockTaint) -> Void, ?errors: ErrorPaths
+	): { long: Array<String>, costs: LockTaint } {
 		var long: Array<String> = [];
-		var costs: LockTaint = taints.costed(long, _repetition, this);
+		var costs: LockTaint = taints.costed(long, _repetition, this, errors);
 		solve(long, costs);
 		for (_ in 0...ROUNDS) {
 			final judged: LockTaint = costs;
 			if (!solveDominators(a -> longCallsOf(a, judged))) break;
 			long = [];
-			costs = taints.costed(long, _repetition, this);
+			costs = taints.costed(long, _repetition, this, errors);
 			solve(long, costs);
 		}
 		return { long: long, costs: costs };

@@ -4,6 +4,7 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.GraphScoped;
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
+import anyparse.check.ErrorPaths.PathCosts;
 import anyparse.check.LockSites.LockAcquire;
 import anyparse.check.LockSites.LockPair;
 import anyparse.check.LockTaint.ChainLists;
@@ -163,21 +164,30 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		);
 		final long: Array<String> = settled.long;
 		final costs: LockTaint = settled.costs;
+		// the same question over the normal paths: a call only a `catch` runs leads nowhere
+		final errors: ErrorPaths = new ErrorPaths(graph, trees, plugin.refShape());
+		final paths: PathCosts = {
+			all: costs,
+			normal: new LockDominance(
+				sites, states, conditions, repetition, must, holds
+			).settle(taints, (l, c) -> solveLongLocks(sites, acquires, l, c), errors).costs,
+			errors: errors
+		};
 
 		final violations: Array<Violation> = [];
 		// a value stored or handed where it never runs from repeats nothing, wherever it is written
 		final runsMain: (CallEdge) -> Bool = e -> !(e.kind == Ref && inertRef(e)) && states.edgeContext(e) & CTX_MAIN != 0;
 		final repeatedOnMain: Map<String, Bool> = repetition.repeatedFrom(runsMain);
 		MainSinkReport.report(
-			graph, sites, taints, costs, { repetition: repetition, on: repeatedOnMain, runs: runsMain }, states, violations
+			graph, sites, taints, paths, { repetition: repetition, on: repeatedOnMain, runs: runsMain }, states, violations
 		);
 		reportMalformedPairs(sets, violations);
-		reportLockHeld(graph, acquires, taints, costs, states, violations);
+		reportLockHeld(graph, acquires, taints, paths, states, violations);
 		reportThrowHeld(graph, acquires.concat(helperHolds), throws, violations);
 		final order: LockOrder = new LockOrder(graph, conditions, acquires.concat(helperHolds));
 		for (v in order.report(states, inertRef, CTX_MAIN | CTX_QUIET, CTX_BG, CHAIN_CAP)) violations.push(v);
 		// after every finding: the counterfactual solves fill taints of their own, which must not shape a report
-		longLocks = explained(sites, acquires, long, costs, states, dominance.dominators);
+		longLocks = explained(sites, acquires, long, costs, states, dominance.dominators, { taint: paths.normal, errors: errors });
 		return violations;
 	}
 
@@ -209,11 +219,12 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	/**
 	 * Why each lock is long (`LongLockExplain.report`) when this check was asked (`explainLongLocks`), null otherwise: the
 	 * holds `acquires` of `sites` judged against the converged `long` and `taints`, the takes a main-thread state — loud or
-	 * quiet — runs (`states`), and each lock's counterfactual solved without its own reasons on a fresh taint like `taints`.
+	 * quiet — runs (`states`), each lock's counterfactual solved without its own reasons on a fresh taint like `taints`,
+	 * and the `normal` taint marking a reason that blocks only through a `catch`.
 	 */
 	private function explained(
 		sites: LockSites, acquires: Array<LockAcquire>, long: Array<String>, taints: LockTaint, states: ThreadStates,
-		dominators: Map<String, Array<String>>
+		dominators: Map<String, Array<String>>, normal: { taint: LockTaint, errors: ErrorPaths }
 	): Null<LongLockReport> {
 		if (!_explainLong) return null;
 		final mainTakes: Array<MainTake> = [];
@@ -226,7 +237,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			final fresh: LockTaint = taints.withLong(without);
 			solveLongLocks(sites, acquires, without, fresh, lock);
 			fresh;
-		}, dominators);
+		}, dominators, normal);
 	}
 
 	/**
@@ -594,12 +605,13 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	 * brief is info, a long one names only the calls that block long.
 	 */
 	private static function reportLockHeld(
-		graph: CallGraph, acquires: Array<LockAcquire>, taints: LockTaint, costs: LockTaint, states: ThreadStates,
+		graph: CallGraph, acquires: Array<LockAcquire>, taints: LockTaint, paths: PathCosts, states: ThreadStates,
 		violations: Array<Violation>
 	): Void {
 		final seen: Array<String> = [];
-		final ownWork: Null<LockTaint> = costs.ownWork();
-		if (ownWork == null) throw new Exception('thread-safety: the costed taint has no own-work taint');
+		final costs: LockTaint = paths.all;
+		final ownWork: LockTaint = ownWorkOf(costs);
+		final normalOwn: LockTaint = ownWorkOf(paths.normal);
 		final mainTaken: Array<String> = [
 			for (a in acquires) if (a.lock != null && states.edgeContext(a.edge) & CTX_MAIN != 0) a.lock
 		];
@@ -611,10 +623,13 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			// own long work; who else holds a lock no member names is unknown
 			final mainOnly: Bool = lock != null && states.edgeContext(a.edge) & CTX_BG == 0 && !states.assumed.exists(a.edge.from);
 			final held: Null<String> = taints.reentrantHeld(a);
-			final graded: Null<GradedHold> = gradeHold(a, held, taints, mainOnly ? ownWork : costs, mainOnly);
+			final judge: { long: LockTaint, normal: LockTaint } = mainOnly
+				? { long: ownWork, normal: normalOwn }
+				: { long: costs, normal: paths.normal };
+			final graded: Null<GradedHold> = gradeHold(a, held, taints, judge, mainOnly, paths.errors);
 			if (graded == null) continue;
 			final blocking: Array<{ edge: CallEdge, path: Array<String> }> = graded.calls;
-			final short: Bool = graded.note == CostNote.ShortHold;
+			final short: Bool = graded.info;
 			final calls: String = blocking.length == 1 ? 'a call' : '${blocking.length} calls';
 			final holder: String = a.edge.from;
 			final message: String = '"$holder" holds "${lock ?? a.pair.lockId}" across $calls that can block: '
@@ -642,19 +657,46 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		nestHolds(reported);
 	}
 
+	/** The own-work taint of the costed taint `costs` (`LockTaint.ownWork`). */
+	private static function ownWorkOf(costs: LockTaint): LockTaint {
+		final own: Null<LockTaint> = costs.ownWork();
+		if (own == null) throw new Exception('thread-safety: the costed taint has no own-work taint');
+		return own;
+	}
+
 	/**
 	 * The calls a finding (b) names for the hold `a` under a hold of `held`, with the taint that found them and what the
-	 * message adds: the calls that block long under `judge` (the holder's own long work, `mainOnly`), or else — unless
-	 * only the main thread runs the hold — every call that blocks at all under `taints`, graded short. Null when none.
+	 * message adds: the calls that block long under `judge.long` (the holder's own long work, `mainOnly`) — info when
+	 * none blocks long under `judge.normal`, over the normal paths, naming the `catch` its first call's way passes
+	 * (`ErrorPaths`) — or else, unless only the main thread runs the hold, every call that blocks at all under `taints`,
+	 * graded short. Null when none.
 	 */
 	private static function gradeHold(
-		a: LockAcquire, held: Null<String>, taints: LockTaint, judge: LockTaint, mainOnly: Bool
+		a: LockAcquire, held: Null<String>, taints: LockTaint, judge: { long: LockTaint, normal: LockTaint }, mainOnly: Bool,
+		errors: ErrorPaths
 	): Null<GradedHold> {
-		final long: Array<{ edge: CallEdge, path: Array<String> }> = judge.blockingCalls(a, held);
-		if (long.length > 0) return { calls: long, taint: judge, note: mainOnly ? CostNote.MainOwnWork : '' };
+		final long: Array<{ edge: CallEdge, path: Array<String> }> = judge.long.blockingCalls(a, held);
+		if (long.length > 0) {
+			// long only where a `catch` runs: no call of the hold blocks long over the normal paths
+			final error: Null<String> = judge.normal.blockingCalls(a, held).length > 0
+				? null
+				: errors.placeOf(judge.long.blockingTrail(a, long[0].edge, held)?.edges ?? []);
+			final note: String = error != null ? ErrorPaths.note(error) : mainOnly ? CostNote.MainOwnWork : '';
+			return {
+				calls: long,
+				taint: judge.long,
+				note: note,
+				info: error != null
+			};
+		}
 		if (mainOnly) return null;
 		final brief: Array<{ edge: CallEdge, path: Array<String> }> = taints.blockingCalls(a, held);
-		return brief.length == 0 ? null : { calls: brief, taint: taints, note: CostNote.ShortHold };
+		return brief.length == 0 ? null : {
+			calls: brief,
+			taint: taints,
+			note: CostNote.ShortHold,
+			info: true
+		};
 	}
 
 	/**
@@ -782,6 +824,9 @@ private typedef GradedHold = {
 	final calls: Array<{ edge: CallEdge, path: Array<String> }>;
 	final taint: LockTaint;
 	final note: String;
+
+	/** Whether the finding is info: every call brief, or long only where a `catch` runs. */
+	final info: Bool;
 }
 
 /** What a `thread-safety` finding adds to its message when its cost or its thread is why it is graded as it is. */

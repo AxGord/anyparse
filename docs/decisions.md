@@ -1543,3 +1543,10 @@ decided the question; it may not become a record of runs.
   sink, i.e. inside the shared callee, so siblings duplicate only through LOCK TAKES (`Store.put` / `remove` /
   `removeKeys` each taking `Store._mutex`); the rule is one warning per lock object, at its wrapper's take when one
   exists — branch `feat/ts-precision-2`
+- grading a finding long whenever ANY way to its long call exists → 17 of TM's warnings were long only through
+  `catch` → `Error.reportError` → a blocking PUT (`FileSystemNativeExtensions.getMTime`'s catch under every watcher
+  hold); the costs are solved a second time over the normal paths — a call inside a `catch` body leads nowhere — and a
+  finding long only in the first solve is `info`, naming the catch. Demotion, not removal: an error that repeats is a
+  real stall, so it stays visible — branch `feat/ts-precision-2`
+- judging "inside a catch" off the witness chain the finding prints → the chain is one way; a second way outside every
+  catch must keep the warning, which only a solve without the catch edges can see — branch `feat/ts-precision-2`

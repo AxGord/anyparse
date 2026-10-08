@@ -69,11 +69,15 @@ private typedef WalkState = {
 	final repeated: Bool;
 }
 
-/** How a call held under a lock blocks: the functions it runs to the blocking call, that call, and the lock it waits for. */
+/**
+ * How a call held under a lock blocks: the functions it runs to the blocking call, that call, the lock it waits for, and
+ * the calls taken on the way — the held call first, `end` last.
+ */
 typedef BlockingTrail = {
 	final path: Array<String>;
 	final end: CallEdge;
 	final via: Null<String>;
+	final edges: Array<CallEdge>;
 }
 
 /**
@@ -93,6 +97,9 @@ typedef TaintCost = {
 	 * under the valuation, or taken by the hold being judged.
 	 */
 	final dominance: LockDominance;
+
+	/** Set for the taint asking about the NORMAL paths: the calls only an error path runs (`ErrorPaths`) lead nowhere. */
+	final errors: Null<ErrorPaths>;
 }
 
 /**
@@ -164,12 +171,13 @@ final class LockTaint {
 	 * The taint over the same graph, lists, sites, conditions and threads asking which calls block LONG, judging locks long
 	 * by `long`, a take of a lock this one's `long` names and `long` leaves out a short wait, and repetition by `repetition`.
 	 */
-	public function costed(long: Array<String>, repetition: CallRepetition, dominance: LockDominance): LockTaint {
+	public function costed(long: Array<String>, repetition: CallRepetition, dominance: LockDominance, ?errors: ErrorPaths): LockTaint {
 		return new LockTaint(_graph, _sinkIds, listsOf, _sites, long, _conditions, _threads, {
 			blocking: _long,
 			repetition: repetition,
 			takes: true,
-			dominance: dominance
+			dominance: dominance,
+			errors: errors
 		});
 	}
 
@@ -186,7 +194,8 @@ final class LockTaint {
 				blocking: cost.blocking,
 				repetition: cost.repetition,
 				takes: false,
-				dominance: cost.dominance
+				dominance: cost.dominance,
+				errors: cost.errors
 			});
 	}
 
@@ -240,6 +249,7 @@ final class LockTaint {
 	 * object). The one walk both answers come from.
 	 */
 	public function blockingTrail(a: LockAcquire, edge: CallEdge, held: Null<String>): Null<BlockingTrail> {
+		if (onErrorPath(a.edge) || onErrorPath(edge)) return null;
 		for (state in _threads.statesOf(a.edge.from)) for (bit in THREAD_BITS) if (
 			state.ctx & bit != 0 && _conditions.carried(a.edge, state.valuation, bit) != 0
 		) {
@@ -251,12 +261,12 @@ final class LockTaint {
 			if (blocks(edge, held) || retakesElsewhere(edge, held)) {
 				// a take the hold itself dominates waits for no long hold: each one needs the lock held here
 				final dominated: Bool = cost != null && takesLock(edge) && cost.dominance.underHold(a, edge);
-				if (counts(edge, held, repeats, state.valuation) && !dominated) return trailOf([edge.to], edge, held);
+				if (counts(edge, held, repeats, state.valuation) && !dominated) return trailOf([edge.to], edge, held, [edge]);
 				continue;
 			}
 			if (takesLock(edge)) continue;
 			final key: Null<String> = reach(edge.to, _conditions.bind(edge, state.valuation), live, held, repeats);
-			if (key != null) return trailFrom(edge.to, key, held);
+			if (key != null) return trailFrom(edge, key, held);
 		}
 		return null;
 	}
@@ -288,6 +298,11 @@ final class LockTaint {
 		final cost: Null<TaintCost> = _cost;
 		return cost == null || (cost.takes || !(takesLock(edge) || retakesElsewhere(edge, held)))
 			&& (repeats || costsLong(edge, held, valuation));
+	}
+
+	/** Whether this taint asks about the normal paths and only an error path runs the call `edge` (`ErrorPaths`). */
+	private inline function onErrorPath(edge: CallEdge): Bool {
+		return _cost?.errors?.inCatch(edge) == true;
 	}
 
 	/** Whether this taint asks about cost and the call `edge` may run more than once per run of its function (`CallRepetition`). */
@@ -324,7 +339,7 @@ final class LockTaint {
 			final state: WalkState = queue[qi++];
 			for (edge in _graph.outEdges(state.id)) if (edge.kind.isInvocation()) {
 				// the edge leaves `from`'s body, so its file's chain is the one that says whether `from` is a sink
-				if (listsOf(edge.file).sinkIds.contains(edge.from)) continue;
+				if (listsOf(edge.file).sinkIds.contains(edge.from) || onErrorPath(edge)) continue;
 				final live: Int = _conditions.carried(edge, state.valuation, state.ctx);
 				if (live == 0) continue;
 				final repeats: Bool = state.repeated || repeatsAt(edge);
@@ -372,34 +387,45 @@ final class LockTaint {
 	}
 
 	/**
-	 * `id` and the functions the kept steps from the state `key` call, up to the blocking call's target: the steps one walk
-	 * keeps form a tree toward the call it found, and a later walk only adds states no earlier one saw.
+	 * The call `first`'s target and the functions the kept steps from the state `key` it enters call, up to the blocking
+	 * call's target: the steps one walk keeps form a tree toward the call it found, and a later walk only adds states no
+	 * earlier one saw.
 	 */
-	private function trailFrom(id: String, key: String, held: Null<String>): BlockingTrail {
-		final parts: Array<String> = [id];
+	private function trailFrom(first: CallEdge, key: String, held: Null<String>): BlockingTrail {
+		final parts: Array<String> = [first.to];
+		final edges: Array<CallEdge> = [first];
 		var cursor: Null<String> = key;
 		var end: Null<CallEdge> = null;
 		while (cursor != null) {
 			final step: Null<TaintStep> = _reaching[cursor];
 			if (step == null) break;
 			parts.push(step.edge.to);
+			edges.push(step.edge);
 			end = step.edge;
 			cursor = step.next;
 		}
 		final last: Null<CallEdge> = end;
 		if (last == null) throw new Exception('thread-safety: a reaching state "$key" keeps no step toward its blocking call');
-		return trailOf(parts, last, held);
+		return trailOf(parts, last, held, edges);
 	}
 
-	/** The trail `path` ending in the blocking call `end`, under a hold of `held`, with the lock `end` waits for (`blockingTrail`). */
-	private function trailOf(path: Array<String>, end: CallEdge, held: Null<String>): BlockingTrail {
+	/**
+	 * The trail `path` ending in the blocking call `end`, under a hold of `held`, with the lock `end` waits for and the
+	 * calls `edges` taken on the way (`blockingTrail`).
+	 */
+	private function trailOf(path: Array<String>, end: CallEdge, held: Null<String>, edges: Array<CallEdge>): BlockingTrail {
 		final via: Null<String> = if (retakesElsewhere(end, held))
 			held
 		else if (takesLock(end))
 			_sites.lockOf(end) ?? end.to
 		else
 			null;
-		return { path: path, end: end, via: via };
+		return {
+			path: path,
+			end: end,
+			via: via,
+			edges: edges
+		};
 	}
 
 

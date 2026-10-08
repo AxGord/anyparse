@@ -36,7 +36,8 @@ enum abstract LongLockKind(String) to String {
  * (`holder`). A `spans-blocking` reason also names the call the hold spans (`call`, one target of it), the path from the
  * holder to a call that blocks (`chain`) and, when that call blocks by taking a lock, the lock it waits for (`via`); a
  * `blind` one the calls the graph resolves to nothing (`unresolved`). `chain` and `via` are ONE witness the walk found,
- * not the only way the call blocks: compare two reports by site and call, never by `via`.
+ * not the only way the call blocks: compare two reports by site and call, never by `via`. `errorPath` is the `catch`
+ * (`file:line`) every way the call blocks long passes through, when one does (`ErrorPaths`).
  */
 typedef LongLockReason = {
 	final kind: LongLockKind;
@@ -47,6 +48,7 @@ typedef LongLockReason = {
 	final chain: Array<String>;
 	final via: Null<String>;
 	final unresolved: Array<BlindCall>;
+	final errorPath: Null<String>;
 }
 
 /**
@@ -125,7 +127,7 @@ final class LongLockExplain {
 	 */
 	public static function report(
 		sites: LockSites, acquires: Array<LockAcquire>, long: Array<String>, taints: LockTaint, mainTakes: Array<MainTake>,
-		aside: (String) -> LockTaint, dominators: Map<String, Array<String>>
+		aside: (String) -> LockTaint, dominators: Map<String, Array<String>>, ?normal: { taint: LockTaint, errors: ErrorPaths }
 	): LongLockReport {
 		final byLock: Map<String, Array<LongLockReason>> = [];
 		final circular: Map<String, Int> = [];
@@ -145,7 +147,7 @@ final class LongLockExplain {
 				for (reason in ownReasons(a)) add(lock, reason);
 		}
 		for (lock in long) {
-			final spans: Array<LongLockReason> = spansBlocking(acquires, lock, taints);
+			final spans: Array<LongLockReason> = spansBlocking(acquires, lock, taints, normal);
 			for (reason in spans) if (reason.via != lock) add(lock, reason);
 			circular[lock] = distinct(spans.filter(r -> r.via == lock)).length;
 		}
@@ -186,15 +188,18 @@ final class LongLockExplain {
 
 	/**
 	 * Every call a hold of `lock` among `acquires` spans that blocks under `taints` (`LockTaint.blockingTrail`): one reason
-	 * per call, with its path and the lock it waits for. A hold in the owner's constructor (`LockAcquire.uncontended`)
-	 * blocks no one.
+	 * per call, with its path and the lock it waits for, and the `catch` its trail passes when the `normal` taint finds
+	 * no way it blocks. A hold in the owner's constructor (`LockAcquire.uncontended`) blocks no one.
 	 */
-	private static function spansBlocking(acquires: Array<LockAcquire>, lock: String, taints: LockTaint): Array<LongLockReason> {
+	private static function spansBlocking(
+		acquires: Array<LockAcquire>, lock: String, taints: LockTaint, ?normal: { taint: LockTaint, errors: ErrorPaths }
+	): Array<LongLockReason> {
 		final out: Array<LongLockReason> = [];
 		for (a in acquires) if (a.lock == lock && !a.uncontended) {
 			final held: Null<String> = taints.reentrantHeld(a);
 			for (e in a.window) {
 				final trail: Null<BlockingTrail> = taints.blockingTrail(a, e, held);
+				final error: Null<String> = trail == null || normal == null ? null : errorOf(a, e, held, trail, normal);
 				if (trail != null) out.push({
 					kind: SpansBlocking,
 					file: e.file,
@@ -203,11 +208,19 @@ final class LongLockExplain {
 					call: e.to,
 					chain: [a.edge.from].concat(trail.path),
 					via: trail.via,
-					unresolved: []
+					unresolved: [],
+					errorPath: error
 				});
 			}
 		}
 		return out;
+	}
+
+	/** The `catch` (`file:line`) `trail`, of the call `e` of the hold `a`, passes when `normal` finds no way `e` blocks. */
+	private static function errorOf(
+		a: LockAcquire, e: CallEdge, held: Null<String>, trail: BlockingTrail, normal: { taint: LockTaint, errors: ErrorPaths }
+	): Null<String> {
+		return normal.taint.blockingTrail(a, e, held) != null ? null : normal.errors.placeOf(trail.edges);
 	}
 
 	/** Each take of `takes` of a named lock `long` leaves out, once per site. */
@@ -240,7 +253,8 @@ final class LongLockExplain {
 			call: null,
 			chain: [],
 			via: null,
-			unresolved: unresolved
+			unresolved: unresolved,
+			errorPath: null
 		};
 	}
 
