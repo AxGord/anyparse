@@ -70,6 +70,24 @@ final class HaxeSpawn {
 	private static inline final COMPILE_MEMORY: Float = 2.0 * 1024 * 1024 * 1024;
 
 	/**
+	 * The node program a `tethered` job runs under, between the driver and the job: `argv[1]` is `1` when the tether leads
+	 * a process group of its own, `argv[2]` the job as JSON (`cmd`, `args`, `shell`). The job's streams are the tether's,
+	 * its stdin is a pipe the driver alone holds, and its exit status is the job's (127 when the job could not be
+	 * launched). Once that pipe closes — the driver is gone, by whatever means — or a SIGINT, SIGTERM or SIGHUP reaches
+	 * it, the tether kills its whole group (the job and everything the job started), or the job alone when it leads no
+	 * group, and exits. Holds no single quote and no backslash: the driver carries it inside a single-quoted literal.
+	 */
+	private static inline final TETHER: String = 'const cp = require("child_process");'
+		+ 'const lead = process.argv[1] === "1"; const job = JSON.parse(process.argv[2]);'
+		+ 'const c = cp.spawn(job.cmd, job.args, { shell: job.shell === true, stdio: ["ignore", "inherit", "inherit"] });'
+		+ 'let ended = false; function end() { if (ended) return; ended = true;'
+		+ ' try { if (lead) process.kill(-process.pid, "SIGKILL"); else c.kill("SIGKILL"); }'
+		+ ' catch (err) { try { c.kill("SIGKILL"); } catch (ignored) {} } process.exit(1); }'
+		+ 'process.stdin.on("end", end); process.stdin.on("close", end); process.stdin.on("error", end); process.stdin.resume();'
+		+ 'for (const s of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(s, end);'
+		+ 'c.on("error", () => process.exit(127)); c.on("exit", code => process.exit(code === null ? 1 : code));';
+
+	/**
 	 * The node program `runAll` drives its jobs with: reads the jobs as JSON on stdin, keeps at most `argv[1]` of them
 	 * running, kills one that out-writes `argv[2]` bytes or outlives its own `timeout` (ms, when positive), and prints
 	 * every run as JSON in job order once all closed. A job runs `haxe <args>`, or its `shell` command line when it names
@@ -85,8 +103,12 @@ final class HaxeSpawn {
 	 * renamed, so the file exists only once it is complete — and with `argv[5]` naming one the jobs are read from it
 	 * instead of stdin and deleted once read: the two ends a driver running in the BACKGROUND (`PendingRuns`) is talked
 	 * to through. Such a driver ended by a signal, or outliving `apq`, removes the directory holding its answer file.
+	 * A `tethered` job runs under `TETHER`, the driver holding the write end of its stdin: the job dies with the driver
+	 * however the driver went, a SIGKILL of the whole process group `apq` and the driver share included — off Windows a
+	 * job's group is its own, so that kill does not reach it. Off Windows a tethered job is killed like any other; on
+	 * Windows, where a kill reaches the tether alone, its stdin is closed instead and the tether ends the job itself.
 	 */
-	private static inline final PARALLEL_DRIVER: String = "const cp = require('child_process');"
+	private static inline final PARALLEL_DRIVER: String = "const cp = require('child_process');" + "const TETHER = '" + TETHER + "';"
 		+ "const jobs = JSON.parse(require('fs').readFileSync(process.argv[5] ? process.argv[5] : 0, 'utf8'));"
 		+ "if (process.argv[5]) try { require('fs').unlinkSync(process.argv[5]); } catch (err) {}"
 		+ "function drop() { if (process.argv[4]) try { require('fs').rmSync(require('path').dirname(process.argv[4]),"
@@ -96,7 +118,8 @@ final class HaxeSpawn {
 		+ "const limit = parseInt(process.argv[1]); const max = parseInt(process.argv[2]); const stop = process.argv[3] === '1';"
 		+ "const group = process.platform !== 'win32';"
 		+ "const out = new Array(jobs.length); const kids = new Array(jobs.length); let next = 0, running = 0, done = 0;"
-		+ "function kill(c) { try { if (group) process.kill(-c.pid, 'SIGKILL'); else c.kill(); }"
+		+ "function kill(c) { if (c.tethered && !group) { c.stdin.destroy(); return; }"
+		+ " try { if (group) process.kill(-c.pid, 'SIGKILL'); else c.kill(); }"
 		+ " catch (err) { try { c.kill('SIGKILL'); } catch (ignored) {} } }"
 		+ "function killAll() { for (const c of kids) if (c) kill(c); }"
 		+ "for (const s of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(s, () => { killAll(); drop(); process.exit(1); });"
@@ -114,9 +137,12 @@ final class HaxeSpawn {
 		+ " if (done === jobs.length) emit(JSON.stringify(out)); else start(); }"
 		+ "function start() { while (running < limit && next < jobs.length) { const i = next++; if (out[i]) continue; running++;"
 		+ " const j = jobs[i]; const o = [], e = []; let size = 0, over = false; const what = j.shell == null ? 'haxe' : 'the command';"
-		+ " const opts = { cwd: j.cwd == null ? undefined : j.cwd, stdio: ['ignore', 'pipe', 'pipe'], detached: group };"
-		+ " const c = j.shell == null ? cp.spawn('haxe', j.args, opts) : cp.spawn(j.shell, Object.assign({ shell: true }, opts));"
-		+ " kids[i] = c; recordGroup(j, c);"
+		+ " const opts = { cwd: j.cwd == null ? undefined : j.cwd, stdio: [j.tethered ? 'pipe' : 'ignore', 'pipe', 'pipe'],"
+		+ " detached: group };"
+		+ " const c = j.tethered ? cp.spawn(process.execPath, ['-e', TETHER, '--', group ? '1' : '0', JSON.stringify(j.shell == null"
+		+ " ? { cmd: 'haxe', args: j.args } : { cmd: j.shell, args: [], shell: true })], opts)"
+		+ " : j.shell == null ? cp.spawn('haxe', j.args, opts) : cp.spawn(j.shell, Object.assign({ shell: true }, opts));"
+		+ " c.tethered = j.tethered === true; if (c.tethered) c.stdin.on('error', () => {}); kids[i] = c; recordGroup(j, c);"
 		+ " if (j.timeout > 0) c.timer = setTimeout(() => { c.timedOut = true; kill(c); }, j.timeout);"
 		+ " c.stdout.on('data', d => { size += d.length; if (size > max) { over = true; kill(c); } else o.push(d); });"
 		+ " c.stderr.on('data', d => e.push(d));"
@@ -210,8 +236,10 @@ final class HaxeSpawn {
 	): Array<HaxeRun> {
 		final stop: Bool = stopAfterFailure ?? false;
 		#if nodejs
-		// a shell job always goes through the driver: only there does a kill reach its whole process group
-		if ((jobs.length <= 1 || parallel <= 1) && !Lambda.exists(jobs, j -> j.shell != null)) return runInOrder(jobs, maxBuffer, stop);
+		// a shell job always goes through the driver: only there does a kill reach its whole process group; a tethered one,
+		// because only there is it tethered
+		if ((jobs.length <= 1 || parallel <= 1) && !Lambda.exists(jobs, j -> j.shell != null || j.tethered == true))
+			return runInOrder(jobs, maxBuffer, stop);
 		final options: Dynamic = {
 			encoding: 'utf8',
 			input: haxe.Json.stringify(jobs),
@@ -402,6 +430,12 @@ typedef SpawnJob = {
 
 	/** Where the driver writes the job's process group leader (pid, then its start time) once it started. */
 	var ?groupFile: String;
+
+	/**
+	 * The job never outlives the driver that started it, however the driver ends (`HaxeSpawn.TETHER`) — for a job that
+	 * never ends by itself, a compilation server.
+	 */
+	var ?tethered: Bool;
 }
 
 /**

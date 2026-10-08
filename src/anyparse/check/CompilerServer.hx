@@ -293,13 +293,14 @@ final class CompilerServer {
 	}
 
 	/**
-	 * Spawn `haxe --wait <port>` with its streams discarded, `detached` when the server
-	 * must outlive this process. Null when the spawn itself threw.
+	 * Spawn `haxe --wait <port>` DETACHED with its streams discarded — the shared server
+	 * outlives this process by design. Null when the spawn itself threw. A server that must
+	 * NOT outlive its run is a tethered `HaxeSpawn` job instead (`CompilerDisplayOracle`).
 	 */
-	public static function spawnServer(port: Int, detached: Bool): Dynamic {
+	private static function spawnServer(port: Int): Dynamic {
 		#if nodejs
 		try {
-			final opts: Dynamic = { detached: detached, stdio: 'ignore' };
+			final opts: Dynamic = { detached: true, stdio: 'ignore' };
 			return js.node.ChildProcess.spawn('haxe', ['--wait', '$port'], opts);
 		} catch (exception: haxe.Exception) {
 			return null;
@@ -310,7 +311,7 @@ final class CompilerServer {
 	}
 
 	/** Reap a spawned server handle. Idempotent and exception-safe. */
-	public static function killChild(child: Dynamic): Void {
+	private static function killChild(child: Dynamic): Void {
 		#if nodejs
 		// child.kill() does not throw for an already-dead process (it returns false) — no guard needed.
 		child?.kill();
@@ -358,7 +359,7 @@ final class CompilerServer {
 			attempt++;
 			final startedAt: Int = nowSeconds();
 			final port: Int = PORT_BASE + Std.random(PORT_SPAN);
-			final child: Dynamic = spawnServer(port, true);
+			final child: Dynamic = spawnServer(port);
 			if (child == null) continue;
 			final spawnedPid: Null<Int> = child.pid;
 			if (spawnedPid != null && warm(port, hxml, cwd, defines) && invalidate(port, hxml, cwd, hxml, defines)) {

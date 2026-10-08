@@ -16232,6 +16232,55 @@
 			"find": "|| !isField && (from ?? -1) < src.declFrom",
 			"replace": "",
 			"note": "a field's occurrence ahead of a same-named local's declaration is read as the local's, so the field's loop is compared with the local's length"
+		},
+		{
+			"name": "M-TETHER-IGNORES-EOF",
+			"type": "anyparse.check.HaxeSpawn",
+			"method": "TETHER",
+			"kind": "FinalMember",
+			"find": "process.stdin.on(\"end\", end); process.stdin.on(\"close\", end); process.stdin.on(\"error\", end); process.stdin.resume();",
+			"replace": "",
+			"note": "a tether never reads its stdin, so the driver's death goes unnoticed and a tethered server outlives the run"
+		},
+		{
+			"name": "M-POOL-SERVER-UNTETHERED",
+			"type": "anyparse.check.OracleServerPool",
+			"method": "startTimed",
+			"find": "cwd: usable[i].dir, tethered: true }",
+			"replace": "cwd: usable[i].dir, tethered: false }",
+			"note": "the run's warm servers are plain jobs of their own process groups, so a SIGKILL of the group apq and the driver share leaves each one running with no owner"
+		},
+		{
+			"name": "M-DISPLAY-SERVER-UNTETHERED",
+			"type": "anyparse.check.CompilerDisplayOracle",
+			"method": "start",
+			"find": "cwd: null, tethered: true }",
+			"replace": "cwd: null, tethered: false }",
+			"note": "the display server is a plain job of its own process group, so a run killed with its driver leaves it running with no owner"
+		},
+		{
+			"name": "M-REMOVE-PARAM-RAW-SPLICE",
+			"type": "anyparse.query.RemoveParam",
+			"method": "removeParam",
+			"find": "CanonicalEdit.editKeepingCanonical(source, result.edits, plugin, optsJson)",
+			"replace": "anyparse.query.CanonicalEdit.EditResult.Ok(CanonicalEdit.applyEdits(source, result.edits))",
+			"note": "remove-param splices without the writer, so a list the writer wrapped stays wrapped once it fits and the next writer-emit op refuses the file as drifted"
+		},
+		{
+			"name": "M-ADD-PARAM-RAW-SPLICE",
+			"type": "anyparse.query.AddParam",
+			"method": "addParam",
+			"find": "CanonicalEdit.editKeepingCanonical(source, [edit], plugin, optsJson)",
+			"replace": "anyparse.query.CanonicalEdit.EditResult.Ok(CanonicalEdit.applyEdits(source, [edit]))",
+			"note": "add-param splices without the writer, so a signature that no longer fits stays one over-long line the next writer-emit op refuses"
+		},
+		{
+			"name": "M-CHANGE-SIG-RAW-SPLICE",
+			"type": "anyparse.query.ChangeSig",
+			"method": "changeSig",
+			"find": "CanonicalEdit.editKeepingCanonical(source, edits, plugin, optsJson)",
+			"replace": "anyparse.query.CanonicalEdit.EditResult.Ok(CanonicalEdit.applyEdits(source, edits))",
+			"note": "change-sig keeps the old breaks of a filled list whose slots it reordered, so a canonical file comes back drifted"
 		}
 	]
 }

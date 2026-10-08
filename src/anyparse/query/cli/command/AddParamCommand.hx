@@ -111,7 +111,9 @@ final class AddParamCommand implements CliCommand {
 		final op: String = 'add-param';
 		final pos: Null<Position> = CliEdit.resolveAddressPos(op, source, plugin, posSpec, selectExpr, matchExpr, nth, true);
 		if (pos == null) return EXIT_RUNTIME;
-		final result: AddParamResult = AddParam.addParam(source, pos.line, pos.col, paramStr, plugin);
+		final result: AddParamResult = AddParam.addParam(
+			source, pos.line, pos.col, paramStr, plugin, CliArgs.discoverFormatConfig(filePath)
+		);
 		switch result {
 			case Ok(text):
 				if (write) {

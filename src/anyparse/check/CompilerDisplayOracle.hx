@@ -9,7 +9,9 @@ using StringTools;
  * A `TypeOracle` backed by the Haxe DISPLAY protocol against a warm compilation
  * server — the compiler-oracle TAIL for a resolver-unreachable autofix (the
  * generics / inference locals `explicit-local-type`'s structural arm cannot pin).
- * Lifecycle: `start` spawns `haxe --wait <port>` in the background, WARMS it with
+ * Lifecycle: `start` spawns `haxe --wait <port>` in the background, as a TETHERED job of a background batch
+ * (`HaxeSpawn.startAll`, `SpawnJob.tethered`) so the server dies with the run however the run ends — a SIGTERM or
+ * SIGKILL of `apq` included, which used to leave it behind as a direct child no handler was left to reap — WARMS it with
  * one `haxe --connect <port> <hxml> --no-output`, and returns a handle; `typeAt`
  * queries `haxe --connect <port> <hxml> --display <file>@<bytePos>@type` per finding
  * and parses the `<type>...</type>` reply; `stop` kills the server. The server keeps
@@ -57,6 +59,9 @@ final class CompilerDisplayOracle extends PositionTypeOracle {
 
 	private static inline final PORT_SPAN: Int = 40000;
 
+	/** Output the server may write before its batch's driver ends it — far more than a `--wait` server ever prints. */
+	private static inline final SERVER_OUTPUT: Int = 256 * 1024 * 1024;
+
 	private final _hxml: String;
 	private final _cwd: Null<String>;
 
@@ -66,7 +71,8 @@ final class CompilerDisplayOracle extends PositionTypeOracle {
 	private final _port: Int;
 
 	#if nodejs
-	private final _child: Dynamic;
+	/** The batch whose one job IS the server. */
+	private final _server: PendingRuns;
 
 	/**
 	 * Source text per queried file, read once and kept for the rest of this oracle's life
@@ -80,14 +86,14 @@ final class CompilerDisplayOracle extends PositionTypeOracle {
 
 	#if nodejs
 	private function new(
-		typeSyntax: TypeSyntaxReader, hxml: String, cwd: Null<String>, defines: Array<String>, port: Int, child: Dynamic
+		typeSyntax: TypeSyntaxReader, hxml: String, cwd: Null<String>, defines: Array<String>, port: Int, server: PendingRuns
 	) {
 		super(typeSyntax);
 		_hxml = hxml;
 		_cwd = cwd;
 		_defines = defines;
 		_port = port;
-		_child = child;
+		_server = server;
 	}
 	#else
 	private function new(typeSyntax: TypeSyntaxReader, hxml: String, cwd: Null<String>, defines: Array<String>, port: Int) {
@@ -127,7 +133,7 @@ final class CompilerDisplayOracle extends PositionTypeOracle {
 	/** Reap the background server. Idempotent and exception-safe. */
 	public function stop(): Void {
 		#if nodejs
-		CompilerServer.killChild(_child);
+		_server.cancel();
 		#end
 	}
 
@@ -149,11 +155,10 @@ final class CompilerDisplayOracle extends PositionTypeOracle {
 		while (attempt < MAX_PORT_ATTEMPTS) {
 			attempt++;
 			final port: Int = PORT_BASE + Std.random(PORT_SPAN);
-			final child: Dynamic = CompilerServer.spawnServer(port, false);
-			if (child == null) continue;
+			final server: PendingRuns = HaxeSpawn.startAll([{ args: ['--wait', '$port'], cwd: null, tethered: true }], SERVER_OUTPUT, 1);
 			if (CompilerServer.warm(port, hxml, cwd, defines))
-				return new CompilerDisplayOracle(typeSyntax, hxml, cwd, defines ?? [], port, child);
-			CompilerServer.killChild(child);
+				return new CompilerDisplayOracle(typeSyntax, hxml, cwd, defines ?? [], port, server);
+			server.cancel();
 		}
 		return null;
 		#else

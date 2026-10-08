@@ -430,6 +430,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.cli.ApqLitCommentsCliTest',
 		'unit.cli.ApqLitDirectivesCliTest',
 		'unit.cli.ApqMetaCliTest',
+		'unit.cli.ApqOracleServerLifetimeCliTest',
 		'unit.cli.ApqPrefilterCliTest',
 		'unit.cli.ApqProbeCliTest',
 		'unit.cli.ApqProgressTtyCliTest',
@@ -1229,6 +1230,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.EffectiveRulesTest#testTheChainStopsAtTheProjectRoot :: control :: M-CHAIN-UNBOUNDED',
 			'unit.check.EffectiveRulesTest#testTheListingOpensWithTheHeaderToolingDetects :: control :: M-EFFECTIVE-RENDER-HEADER',
 			'unit.check.EffectiveRulesTest#testTheRunSkipsWhatTheListingReportsOff :: control :: M-GATE-COLLECT-BYPASS',
+			'unit.check.ExplicitLocalTypeOracleE2ETest#testTheDisplayServerDiesWithItsDriver :: control :: M-DISPLAY-SERVER-UNTETHERED',
 			'unit.check.ExtractRepeatedExpressionTest#testALiteralInteriorDifferenceSplitsTheGroup :: control :: '
 				+ 'M-EXTRACT-REPEAT-RENDER-SPLIT',
 			'unit.check.FactsFixGateE2ETest#testAComputedClassNameTheProjectBoundsLetsTheLoopRewrite :: control :: M-REFLECTIVE-BUILDS,M-REFLECTIVE-REACH,M-REFLECTIVE-WARN,M-ESCAPES-FACTS-UNMATCHED',
@@ -1607,6 +1609,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.OracleRunMemoTest#testASourceTheFingerprintCannotSeeIsAlwaysCompiled :: control :: M-RUNMEMO-TRUSTS-UNSEEN-SOURCES',
 			'unit.check.OracleRunMemoTest#testAVerdictIsReusedForTheSameContentOnly :: control :: M-RUNMEMO-KEY-IGNORES-CONTENT',
 			'unit.check.OracleRunMemoTest#testAWarmRejectionIsCompiledAgainCold :: control :: M-POOL-TRUSTS-WARM-RED',
+			'unit.check.OracleRunMemoTest#testAWarmServerDiesWithItsDriver :: control :: M-POOL-SERVER-UNTETHERED',
 			'unit.check.OracleRunMemoTest#testAWarmServerReadsATreeRewrittenWithinTheSecond :: control :: M-POOL-NO-INVALIDATE',
 			'unit.check.OracleRunMemoTest#testTheCoverageProbeReusesTheBaselineCompile :: control :: M-RUNMEMO-PROBE-RECOMPILES',
 			'unit.check.OracleRunMemoTest#testTheFactsCompileBringsTheBaselineAlong :: control :: M-RUNMEMO-NO-BASELINE-AHEAD',
@@ -1630,6 +1633,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-ORPHAN-ARMS-SHARE-REASON',
 			'unit.check.PendingRunsTest#testABatchRunsWhileTheCallerWorks :: control :: M-PENDING-RUNS-IN-FOREGROUND',
 			'unit.check.PendingRunsTest#testACancelledBatchEndsItsJobs :: control :: M-PENDING-CANCEL-LEAVES-JOBS',
+			'unit.check.PendingRunsTest#testATetheredJobDiesWithItsDriver :: control :: M-TETHER-IGNORES-EOF',
 			'unit.check.PendingRunsTest#testTheBatchFilesArePrivateAndShortLived :: control :: M-PENDING-JOBS-FILE-KEPT',
 			'unit.check.PossibleNullDereferenceTest#testCallReturnPopFlagged :: control :: M-NULLABLE-NO-CHAIN',
 			'unit.check.PossibleNullDereferenceTest#testExistsGuardedEarlyReturnNotFlagged :: control :: M-EXISTS-GUARD-BLIND',
@@ -2564,6 +2568,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.AddMetaSliceTest#testFinalClassWrapperIsLifted :: control :: M-ADDMETA-NO-WRAPPER-CLIMB',
 			'unit.query.AddMetaSliceTest#testGuardedTypeKeepsTheEntryInsideTheGuard :: control :: M-ADDMETA-LOOSE-WRAPPER-CLIMB',
 			'unit.query.AddMetaSliceTest#testTypeEntryLandsBelowTheDoc :: control :: M-ADDMETA-ZERO-WIDTH-INSERT',
+			'unit.query.AddParamSliceTest#testASignatureThatNoLongerFitsComesBackCanonical :: control :: M-ADD-PARAM-RAW-SPLICE',
 			'unit.query.AddressTest#testAModuleLevelNodeIsAddressedFromTheRootNotByOrdinal :: control :: M-ADDRESS-NO-ROOT-ANCHOR',
 			'unit.query.AddressTest#testAnAmbiguityListingSpellsTheSelectorThatPicksOneCandidate :: control :: '
 				+ 'M-CANDIDATE-LABEL-BARE,M-ADDRESS-NO-ROOT-ANCHOR',
@@ -2678,6 +2683,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CaseCaptureTest#testRenameLeavesTheCaptureAlone :: control :: M-CAPTURE-ARM-BIND',
 			'unit.query.CaseCaptureTest#testRenameMovesEveryAlternative :: control :: M-RENAME-DECL-SELF,M-BINDING-FROM-DECL-SELF',
 			'unit.query.CaseCaptureTest#testRenameRefusesAnUndecidedCapture :: control :: M-RENAME-UNDECIDED',
+			'unit.query.ChangeSigSliceTest#testAReorderThatMovesTheBreakComesBackCanonical :: control :: M-CHANGE-SIG-RAW-SPLICE',
 			'unit.query.CodepointIndexTest#testAWideCodepointCountsTwoNativeUnits :: control :: M-CODEPOINT-NATIVE,M-CODEPOINT-BACK',
 			'unit.query.CommentOwnerGuardSliceTest#testACarryDeclarationThatDoesNotHoldIsNotARefusal :: control :: M-COMMENT-CARRY-REFUSES',
 			'unit.query.CommentOwnerGuardSliceTest#testACommentThatKeepsItsPlaceUnderACarryIsAccepted :: control :: '
@@ -3527,6 +3533,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.RemoveMemberSliceTest#testSiblingRegionsWithOneConditionAreRefusedByCount :: control :: '
 				+ 'M-COND-FRAME-REGION-KEYED,M-COND-FRAME-CONDITION-RAW',
 			'unit.query.RemoveMemberSliceTest#testTwoDeclarationsInOneBranchAreRefusedByCount :: control :: M-REMOVE-MEMBER-BRANCH-BLIND',
+			'unit.query.RemoveParamSliceTest#testAClassMethodAndItsCallThatNowFitComeBackCanonical :: control :: M-REMOVE-PARAM-RAW-SPLICE',
+			'unit.query.RemoveParamSliceTest#testAnInterfaceSignatureThatNowFitsComesBackCanonical :: control :: M-REMOVE-PARAM-RAW-SPLICE',
 			'unit.query.RenameSliceTest#testModelledSpliceConditionOccurrenceRenames :: control :: M-COND-GAP-KEEPS-DIRECTIVES',
 			'unit.query.ResolutionProjectFilesTest#testDerivedIndexesAreMemoised :: control :: M-MEMO-OFF',
 			'unit.query.ResolutionProjectFilesTest#testSetResolutionIndexExpiresDerivedIndexes :: control :: M-NO-INVALIDATE',
@@ -5632,7 +5640,13 @@ class TestDiscoveryParityTest extends Test {
 			'M-SCRATCH-WRITE-ONLY',
 			'M-SCRATCH-RTTI-OFF',
 			'M-SCRATCH-CTOR-RECURSES',
-			'M-LOOPBOUND-AHEAD'
+			'M-LOOPBOUND-AHEAD',
+			'M-TETHER-IGNORES-EOF',
+			'M-POOL-SERVER-UNTETHERED',
+			'M-DISPLAY-SERVER-UNTETHERED',
+			'M-REMOVE-PARAM-RAW-SPLICE',
+			'M-ADD-PARAM-RAW-SPLICE',
+			'M-CHANGE-SIG-RAW-SPLICE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
@@ -5849,6 +5863,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-REFL-MEMBER-NAME :: anyparse.check.TypedFactsWalk#reflection',
 			'M-FACTS-REFL-MEMBER-NAME-ANY :: anyparse.check.TypedFactsWalk#reflection',
 			'M-FACTS-REFL-MEMBER-NAME-TABLE :: anyparse.check.TypedFactsWalk#reflection',
+			'M-TETHER-IGNORES-EOF :: anyparse.check.HaxeSpawn#FinalMember:TETHER',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

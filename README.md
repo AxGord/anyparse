@@ -580,8 +580,10 @@ only a file OUTSIDE the linted set written within that same second.
 A `--fix` run given every rule starts servers of its OWN instead — one `haxe
 --wait` per configuration, once the compiler-facts compiles are in, each
 warming with a first compile in the background, all ended with the run (they
-are jobs of the run's process driver, so they also die with a killed `apq`;
-`OracleServerPool`). Its plain typechecks — the risky fix's covering compile
+are jobs of the run's process driver, so they also die with a killed `apq`,
+and each is TETHERED to that driver, so a SIGKILL of the process group `apq`
+and the driver share takes them too; `OracleServerPool`, `SpawnJob.tethered`).
+The `explicit-local-type` / `explicit-type` display server is such a job as well. Its plain typechecks — the risky fix's covering compile
 and bisect probes, the oracle-assisted batch — go through them, and every path
 the run may write whose TEXT moved since a server's last compile is
 `server/invalidate`d first, so the one-second granularity cannot freeze a file.

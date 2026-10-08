@@ -107,6 +107,37 @@ final class OracleRunMemoTest extends Test {
 	}
 
 	/**
+	 * A run's warm server dies with the batch driver that started it, however the driver went: a SIGKILL of the process
+	 * group `apq` and the driver share leaves the driver no handler to run, and the server's own group is not theirs.
+	 */
+	@:pin('control')
+	@:killer('M-POOL-SERVER-UNTETHERED')
+	@:access(anyparse.check.OracleServerPool)
+	@:access(anyparse.check.PendingRuns)
+	public function testAWarmServerDiesWithItsDriver(): Void {
+		#if nodejs
+		final dir: Null<String> = scratch(GOOD, BUILD);
+		if (dir == null) return;
+		final oracles: Array<OracleConfig> = remembering(dir);
+		final pool: Null<OracleServerPool> = OracleRunMemo.of(oracles)?.servers;
+		pool?.start(oracles);
+		final ports: Array<Int> = pool == null ? [] : [for (server in pool._servers) server.port];
+		Assert.equals(1, ports.length, 'one server started');
+		final servers: Array<Int> = [
+			for (port in ports) for (pid in ProcessProbe.pidsRunning('haxe --wait $port')) pid
+		];
+		final driver: Null<Int> = pool?._batch?._pid;
+		Assert.isTrue(servers.length > 0, 'the server runs');
+		Assert.notNull(driver, 'the servers have a driver');
+		if (driver != null) Assert.equals(0, ProcessProbe.outlivingKilledDriver(driver, servers).length, 'the server outlived its driver');
+		pool?.stop();
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('not a node target');
+		#end
+	}
+
+	/**
 	 * A warm rejection is never the verdict: the configuration is compiled again cold. Staged by keeping from the server
 	 * that the text moved back, so it answers the rejected text it still holds.
 	 */

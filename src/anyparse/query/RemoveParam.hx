@@ -61,7 +61,9 @@ enum RemoveParamResult {
  *  7. SLOT-REMOVAL splice: deletes parameter `index` from the decl and
  *     argument `index` from every call, removing the corresponding
  *     separating comma so the surviving list stays well-formed.
- *  8. Re-parses the result; an unparseable rewrite is rejected.
+ *  8. Hands a canonical source back canonical — the shortened list may now fit
+ *     where the writer had wrapped it — and re-parses the result; an
+ *     unparseable rewrite is rejected.
  *
  * Coordinate convention: `line` / `col` are interpreted exactly as
  * `apq refs` PRINTS them (1-based), identical to the
@@ -79,9 +81,13 @@ final class RemoveParam {
 	 * language-agnostic. Returns `Ok(rewritten, advisory)` or an `Err`
 	 * describing why the removal could not be applied. The source is never
 	 * mutated — the caller decides whether to write the result.
+	 *
+	 * `optsJson` is the `hxformat.json` governing the file: a source canonical under it comes back canonical
+	 * (`CanonicalEdit.editKeepingCanonical`), a drifted one keeps the plain splice. Omitting it measures the
+	 * source under compiled defaults.
 	 */
 	public static function removeParam(
-		source: String, line: Int, col: Int, index: Int, plugin: GrammarPlugin, shape: RefShape
+		source: String, line: Int, col: Int, index: Int, plugin: GrammarPlugin, shape: RefShape, ?optsJson: String
 	): RemoveParamResult {
 		final found: CursorFn = switch CallSites.resolveFnAtCursor(source, line, col, plugin, shape) {
 			case FnAtErr(message): return Err(message);
@@ -106,8 +112,13 @@ final class RemoveParam {
 		final error: Null<String> = result.error;
 		if (error != null) return Err(error);
 
-		final rewritten: String = CanonicalEdit.applyEdits(source, result.edits);
-		if (rewritten == source) return Err('removing parameter $index of "$name" is a no-op');
+		if (CanonicalEdit.applyEdits(source, result.edits) == source) return Err('removing parameter $index of "$name" is a no-op');
+		// A removal shortens the signature and every call, so a list the writer wrapped may now fit on one line: a
+		// canonical file comes back canonical, or the next writer-emit op refuses it as drifted.
+		final rewritten: String = switch CanonicalEdit.editKeepingCanonical(source, result.edits, plugin, optsJson) {
+			case Err(message): return Err(message);
+			case Ok(text, _): text;
+		};
 
 		try
 			plugin.parseFile(rewritten)
