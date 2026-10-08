@@ -149,7 +149,6 @@ final class LockSites {
 		trees: FunctionTrees
 	) {
 		_graph = graph;
-
 		_throws = throws;
 		_trees = trees;
 		_shape = plugin.refShape();
@@ -157,7 +156,6 @@ final class LockSites {
 		_walker = flow == null ? null : new LockWindow(_shape, flow);
 		_ctorName = _shape.constructorName ?? 'new';
 		_nestedFnKinds = MemberKinds.nestedFunctionKinds(_shape);
-
 		final takes: Array<LockCall> = [];
 		final gives: Array<LockCall> = [];
 		final pairIds: Array<String> = [];

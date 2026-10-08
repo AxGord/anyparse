@@ -1306,6 +1306,25 @@ class ThreadSafetyCheckTest extends Test {
 		#end
 	}
 
+	/** A throw under the two locks a helper takes leaves both held: the holds a helper opens in its caller escape too. */
+	@:pin('control') @:killer('M-TS-THROW-HELPER-HOLDS-UNREAD')
+	public function testAThrowUnderAHelpersLocksLeavesBothHeld(): Void {
+		#if (sys || nodejs)
+		final found: Array<String> = throwFindings('', [
+			'class Db { final _a:Mutex = new Mutex(); final _b:Mutex = new Mutex(); public function new() {}'
+			+ ' function takeBoth():Void { _a.acquire(); _b.acquire(); } function giveBoth():Void { _b.release(); _a.release(); }'
+			+ ' public function add(kind:Int):Void { takeBoth(); if (kind == 0) throw "unsupported"; giveBoth(); } }'
+		]);
+		found.sort(Reflect.compare);
+		Assert.same([
+			'"Db.add" leaves "Db._a" held when it throws, with no catch to release it: a throw',
+			'"Db.add" leaves "Db._b" held when it throws, with no catch to release it: a throw'
+		], found);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	/** The same `throw` ahead of the take — TM's fix — raises with nothing held. */
 	public function testAThrowBeforeTheTakeIsQuiet(): Void {
 		#if (sys || nodejs)

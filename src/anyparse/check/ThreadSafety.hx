@@ -450,13 +450,13 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	/**
 	 * Finding (c): on some path of one function body a lock may still be held where an exception leaves the body — a
 	 * `throw`, or a call `ThrowReach` knows may raise, with no `catch` of the body around it — so nothing on that path
-	 * gives it back and the next take waits forever. One finding per hold, at its first escape; a hold in the owner's
-	 * constructor before the object escapes is no one's.
+	 * gives it back and the next take waits forever. One finding per hold, at its
+	 * first escape, the holds a multi-lock helper opens in its caller included.
 	 */
 	private static function reportThrowHeld(sites: LockSites, throws: ThrowReach, violations: Array<Violation>): Void {
 		final seen: Array<String> = [];
 		// an escape leaks the hold, so none is the owner's constructor's (`LockAcquire.uncontended`)
-		for (a in sites.acquires) if (a.escapes.length > 0) {
+		for (a in sites.acquires.concat(sites.helperHolds)) if (a.escapes.length > 0) {
 			final evidence: Array<String> = [];
 			for (escape in a.escapes) {
 				final raiser: Null<CallEdge> = escape.raiser;

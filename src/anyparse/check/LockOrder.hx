@@ -44,7 +44,8 @@ private typedef OrderStep = {
  * The lock of one member is one lock, so two objects' instances of it (`a.m` then `b.m`) order nothing here. What the
  * walk over-approximates: a lock a caller holds is taken to be held throughout the callee, a release there included.
  */
-class LockOrder {
+@:nullSafety(Strict)
+final class LockOrder {
 
 	/** Bound on the states the walk visits: past it the run reports no inversion at all rather than a partial answer. */
 	private static inline final STATE_CAP: Int = 200000;

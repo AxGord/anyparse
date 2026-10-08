@@ -11529,6 +11529,14 @@
 			"note": "two takes of one lock held at one throw are two findings"
 		},
 		{
+			"name": "M-TS-THROW-HELPER-HOLDS-UNREAD",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "reportThrowHeld",
+			"find": "sites.acquires.concat(sites.helperHolds)",
+			"replace": "sites.acquires",
+			"note": "the holds a multi-lock helper opens in its caller never escape, so a throw under them is quiet"
+		},
+		{
 			"name": "M-GRAPH-CLASS-BOUND",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectNodes",
