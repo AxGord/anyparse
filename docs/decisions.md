@@ -1539,3 +1539,7 @@ decided the question; it may not become a record of runs.
 - attributing a short call that a caller repeats to EVERY repeating caller above it → TM grew from 67 to 466 A keys
   warning, one per UI loop on any way to a helper; the nearest repeating call on any way owns it, one warning per call
   site — branch `feat/ts-precision-2`
+- folding sibling entry points by "the nearest shared callee" of every sink → a finding already sits at the call of the
+  sink, i.e. inside the shared callee, so siblings duplicate only through LOCK TAKES (`Store.put` / `remove` /
+  `removeKeys` each taking `Store._mutex`); the rule is one warning per lock object, at its wrapper's take when one
+  exists — branch `feat/ts-precision-2`

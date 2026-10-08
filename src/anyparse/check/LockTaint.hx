@@ -427,7 +427,7 @@ final class LockTaint {
 
 
 	/** Whether `edge` is a call to a sink `lockPairs` names a lock of: one whose cost is the wait for that lock. */
-	private function takesLock(edge: CallEdge): Bool {
+	public function takesLock(edge: CallEdge): Bool {
 		final lists: ChainLists = listsOf(edge.file);
 		return lists.sinkIds.contains(edge.to) && lists.pairs.exists(p -> p.lockId == edge.to);
 	}

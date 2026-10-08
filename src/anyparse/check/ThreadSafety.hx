@@ -168,7 +168,9 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		// a value stored or handed where it never runs from repeats nothing, wherever it is written
 		final runsMain: (CallEdge) -> Bool = e -> !(e.kind == Ref && inertRef(e)) && states.edgeContext(e) & CTX_MAIN != 0;
 		final repeatedOnMain: Map<String, Bool> = repetition.repeatedFrom(runsMain);
-		MainSinkReport.report(graph, taints, costs, { repetition: repetition, on: repeatedOnMain, runs: runsMain }, states, violations);
+		MainSinkReport.report(
+			graph, sites, taints, costs, { repetition: repetition, on: repeatedOnMain, runs: runsMain }, states, violations
+		);
 		reportMalformedPairs(sets, violations);
 		reportLockHeld(graph, acquires, taints, costs, states, violations);
 		reportThrowHeld(graph, acquires.concat(helperHolds), throws, violations);
@@ -601,6 +603,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final mainTaken: Array<String> = [
 			for (a in acquires) if (a.lock != null && states.edgeContext(a.edge) & CTX_MAIN != 0) a.lock
 		];
+		final reported: Array<{ hold: LockAcquire, calls: Array<CallEdge>, finding: Violation }> = [];
 		for (a in acquires) {
 			final lock: Null<String> = a.lock;
 			if (a.uncontended || lock != null && !mainTaken.contains(lock)) continue;
@@ -620,7 +623,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			final key: String = '${anchor.file}:${anchor.span?.from}:$message';
 			if (seen.contains(key)) continue;
 			seen.push(key);
-			violations.push({
+			final finding: Violation = {
 				file: anchor.file,
 				span: anchor.span,
 				rule: 'thread-safety',
@@ -632,8 +635,11 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 					subject: lock ?? a.pair.lockId,
 					chain: [holder].concat(blocking[0].path)
 				}
-			});
+			};
+			violations.push(finding);
+			if (!short) reported.push({ hold: a, calls: [for (b in blocking) b.edge], finding: finding });
 		}
+		nestHolds(reported);
 	}
 
 	/**
@@ -731,6 +737,27 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		return false;
 	}
 
+	/**
+	 * Of two warned holds in one function, the one taken inside the other's window whose every long call that window spans
+	 * too turns info, naming the outer one: the outer hold's finding names the same calls. In take order, so an outer hold
+	 * is never itself turned by a hold it encloses.
+	 */
+	private static function nestHolds(reported: Array<{ hold: LockAcquire, calls: Array<CallEdge>, finding: Violation }>): Void {
+		reported.sort((x, y) -> (x.hold.edge.span?.from ?? 0) - (y.hold.edge.span?.from ?? 0));
+		final turned: Array<LockAcquire> = [];
+		for (inner in reported) {
+			final outer: Null<{ hold: LockAcquire, calls: Array<CallEdge>, finding: Violation }> = reported.find(
+				o ->
+					o.hold != inner.hold && !turned.contains(o.hold) && o.hold.edge.from == inner.hold.edge.from
+					&& o.hold.window.contains(inner.hold.edge) && inner.calls.foreach(c -> o.hold.window.contains(c))
+			);
+			if (outer == null) continue;
+			turned.push(inner.hold);
+			inner.finding.severity = Severity.Info;
+			inner.finding.message += ' — taken inside the hold of ${outer.hold.lock ?? outer.hold.pair.lockId}, whose finding names these calls';
+		}
+	}
+
 }
 
 /** The `FindingData.family` of each kind of `thread-safety` finding, as its class doc letters them. */
@@ -767,6 +794,9 @@ enum abstract CostNote(String) to String {
 	/** A hold every blocking call of which waits too little to warn about (`shortSinks`). */
 	final ShortHold = ' — short: every call it spans waits only on short sinks or on locks held only across short calls, each once'
 		+ ' per hold (no loop, `iterates` callback or recursion under the lock), so reported as info';
+
+	/** A call a sink's own body makes: the call of that sink is the finding. */
+	final InsideSink = ' — inside a sink\'s own body, whose call is the finding, so reported as info';
 
 	/** A hold only the main thread runs: no thread it stalls waits for it, but the main thread works long under it. */
 	final MainOwnWork = ' — held on the main thread only, which never waits for its own hold: the stall is the main thread\'s own long'

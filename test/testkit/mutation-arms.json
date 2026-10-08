@@ -17129,6 +17129,46 @@
 			"note": "a call its own member repeats (recursion, iterates callback) is moved onto itself as a second finding"
 		},
 		{
+			"name": "M-TS-INSIDE-SINK-OFF",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "report",
+			"find": "final inSink: Bool = inside.exists(edge.from) || taints.listsOf(edge.file).sinkIds.contains(edge.from);",
+			"replace": "final inSink: Bool = false;",
+			"note": "a call a sink's own body makes warns as a finding of its own"
+		},
+		{
+			"name": "M-TS-INSIDE-SINK-DIRECT-ONLY",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "insideSinks",
+			"find": "if (ins.length == 0 ||",
+			"replace": "if (true || ins.length == 0 ||",
+			"note": "only a sink's own body is its machinery, not a function only it calls"
+		},
+		{
+			"name": "M-TS-ONE-TAKE-OFF",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "oneTakePerLock",
+			"find": "for (lock => list in byLock) if (list.length > 1) {",
+			"replace": "for (lock => list in byLock) if (list.length > 1000000) {",
+			"note": "every main-thread take of one lock warns"
+		},
+		{
+			"name": "M-TS-ONE-TAKE-NO-WRAPPER",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "oneTakePerLock",
+			"find": "a.delegated) ? '0' : '1')",
+			"replace": "a.delegated) ? '1' : '1')",
+			"note": "a lock wrapper's own take is no preferred site for its lock's warning"
+		},
+		{
+			"name": "M-TS-NEST-OFF",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "nestHolds",
+			"find": "if (outer == null) continue;",
+			"replace": "if (outer == null || true) continue;",
+			"note": "a hold inside another hold of its function warns on its own"
+		},
+		{
 			"name": "M-LINT-EXPLAIN-NO-ENVELOPE",
 			"type": "anyparse.query.cli.command.LintExplainLong",
 			"method": "outcome",
