@@ -40,6 +40,15 @@ typedef LockAcquire = {
 
 	/** Whether the take is a lock wrapper's own: the hold goes on at each call of the wrapper, an acquire of its own. */
 	final delegated: Bool;
+
+	/** Where an exception leaves the function with the lock still held (`HeldWindow.escapes`), in source order. */
+	final escapes: Array<LockEscape>;
+}
+
+/** One throw that leaves a function holding a lock: a `throw` (no `raiser`), or a call that may raise (`ThrowReach`). */
+typedef LockEscape = {
+	final span: Span;
+	final raiser: Null<CallEdge>;
 }
 
 /** One call that takes or gives back the lock of `pair`: a call of the pair's own member, or of a lock wrapper. */
@@ -91,6 +100,16 @@ final class LockSites {
 	/** The locks some function releases without taking them first: held across a function boundary, for as long as anyone likes. */
 	public final crossing: Array<String> = [];
 
+
+	/**
+	 * The holds a call of a multi-lock HELPER opens in its caller, one per lock: a function every call of which the
+	 * graph sees (`mayWrap`) whose whole lock traffic is two or more takes, each on every path in, and no give —
+	 * `acquireBoth() { a.lock(); b.lock(); }` — leaves each lock held from the call on, as a wrapper does one. A helper
+	 * whose traffic is gives, each on every path out, gives each back where it is called. Kept apart from `acquires`:
+	 * only the lock order and the throw escapes read them.
+	 */
+	public final helperHolds: Array<LockAcquire> = [];
+
 	private final _unsealed: Array<String> = [];
 
 	/** Each aliased lock member (`Owner.member`) -> the member it holds the lock of, which names the lock of both. */
@@ -108,11 +127,10 @@ final class LockSites {
 	/** `<file>:<start>` of every call of a wrapper -> whether the wrapper works the lock of the object it runs on. */
 	private final _siteSelf: Map<String, Bool> = [];
 
-	/** Each file's branch-aware tree, projected the first time an acquire in it is traced; null for a file the graph cannot give. */
-	private final _trees: Map<String, Null<QueryNode>> = [];
-
 	private final _graph: CallGraph;
-	private final _plugin: GrammarPlugin;
+	private final _trees: FunctionTrees;
+	private final _throws: ThrowReach;
+
 	private final _shape: RefShape;
 	private final _walker: Null<LockWindow>;
 	private final _ctorName: String;
@@ -121,10 +139,18 @@ final class LockSites {
 	/** The lock wrappers, by function id. */
 	private var _wrappers: Map<String, LockWrapper> = [];
 
-	/** Collects the acquires over the `files` of `graph`; `pairsOf` names the pairs the chain of a file configures. */
-	public function new(graph: CallGraph, files: Array<String>, plugin: GrammarPlugin, pairsOf: (String) -> Array<LockPair>) {
+
+	/**
+	 * Collects the acquires over the `files` of `graph`; `pairsOf` names the pairs the chain of a file configures,
+	 * `throws` the calls that may raise, and `trees` the function nodes the holds are traced through.
+	 */
+	public function new(
+		graph: CallGraph, files: Array<String>, plugin: GrammarPlugin, pairsOf: (String) -> Array<LockPair>, throws: ThrowReach,
+		trees: FunctionTrees
+	) {
 		_graph = graph;
-		_plugin = plugin;
+		_throws = throws;
+		_trees = trees;
 		_shape = plugin.refShape();
 		final flow: Null<ControlFlowSupport> = plugin.controlFlowSupport();
 		_walker = flow == null ? null : new LockWindow(_shape, flow);
@@ -141,12 +167,17 @@ final class LockSites {
 			if (edge.to == pair.lockId) takes.push({ edge: edge, pair: pair });
 			if (edge.to == pair.unlockId) gives.push({ edge: edge, pair: pair });
 		}
-		collectUnsealed(files, [
+		collectUnsealed(files, plugin, [
 			for (t in takes.concat(gives)) if (t.edge.receiverField != null) memberName(t.edge.receiverField)
 		]);
-		for (site in inferWrappers(takes, gives, pairIds)) (site.wrapper.takes ? takes : gives).push(site.call);
-		for (take in takes) acquires.push(acquire(take.edge, take.pair, gives));
+		final unresolved: Array<String> = [for (u in graph.unresolved) for (n in ReachAdmission.admittedNames(u)) n];
+		for (site in inferWrappers(takes, gives, pairIds, unresolved)) (site.wrapper.takes ? takes : gives).push(site.call);
+		for (take in takes) {
+			final lock: Null<String> = lockOf(take.edge);
+			acquires.push(hold(take.edge, take.pair, lock, releasesOf(take.edge, take.pair, lock, gives)));
+		}
 		collectCrossing(gives);
+		collectHelperHolds(takes, gives, pairIds, unresolved);
 	}
 
 	public inline function isAccess(kind: String): Bool {
@@ -201,7 +232,7 @@ final class LockSites {
 	/** The callee expression of the call `edge` sits at, found by its exact span in the branch-aware tree. */
 	private function calleeOf(edge: CallEdge): Null<QueryNode> {
 		final at: Null<Span> = edge.span;
-		var node: Null<QueryNode> = at == null ? null : functionNode(edge);
+		var node: Null<QueryNode> = at == null ? null : _trees.ofEdge(edge);
 		while (node != null && at != null) {
 			final span: Null<Span> = node.span;
 			if (node.kind == _shape.callKind && span != null && span.from == at.from && span.to == at.to)
@@ -211,10 +242,9 @@ final class LockSites {
 		return null;
 	}
 
-	private function acquire(edge: CallEdge, pair: LockPair, gives: Array<LockCall>): LockAcquire {
-		final lock: Null<String> = lockOf(edge);
-		final start: Int = edge.span?.from ?? -1;
-		final releases: Array<Int> = [
+	/** The starts of the `gives` of `pair` in `edge`'s function that may give back `lock` (an unknown one: any of them). */
+	private function releasesOf(edge: CallEdge, pair: LockPair, lock: Null<String>, gives: Array<LockCall>): Array<Int> {
+		return [
 			for (g in gives) {
 				final at: Null<Span> = g.edge.span;
 				final other: Null<String> = lockOf(g.edge);
@@ -225,8 +255,15 @@ final class LockSites {
 					at.from;
 			}
 		];
-		final fn: Null<QueryNode> = functionNode(edge);
-		final traced: Null<HeldWindow> = fn == null || _walker == null || start < 0 ? null : _walker.trace(fn, start, releases);
+	}
+
+	/** The hold of `lock` (`pair`) the call `edge` opens, closed by the calls starting at `releases` on their own paths. */
+	private function hold(edge: CallEdge, pair: LockPair, lock: Null<String>, releases: Array<Int>): LockAcquire {
+		final start: Int = edge.span?.from ?? -1;
+		final fn: Null<QueryNode> = _trees.ofEdge(edge);
+		final traced: Null<HeldWindow> = fn == null || _walker == null || start < 0
+			? null
+			: _walker.trace(fn, start, releases, _throws.raisingFroms(edge));
 		final held: Array<CallEdge> = heldEdges(edge, start, releases, traced);
 		final leaks: Bool = traced == null || traced.leaks;
 		return {
@@ -237,7 +274,8 @@ final class LockSites {
 			leaks: leaks,
 			blind: traced == null || traced.held.exists(n -> runsUnresolved(n, edge, start, releases)),
 			uncontended: !leaks && fn != null && lock != null && ownConstructorHold(edge, lock, fn),
-			delegated: _wrappers[edge.from]?.takes == true
+			delegated: _wrappers[edge.from]?.takes == true,
+			escapes: traced == null ? [] : _throws.escapes(edge, traced.escapes)
 		};
 	}
 
@@ -297,24 +335,6 @@ final class LockSites {
 		return node.children.exists(c -> runsUnresolved(c, edge, start, releases));
 	}
 
-	/** The function node `edge` leaves, found in the branch-aware tree of its file; null when the graph holds no such node. */
-	private function functionNode(edge: CallEdge): Null<QueryNode> {
-		final span: Null<Span> = _graph.node(edge.from)?.span;
-		if (span == null) return null;
-		if (!_trees.exists(edge.file)) {
-			final tree: Null<QueryNode> = _graph.treeOf(edge.file);
-			final source: Null<String> = _graph.sourceOf(edge.file);
-			_trees[edge.file] = tree == null || source == null ? null : _plugin.projectBranchAware(tree, source);
-		}
-		var node: Null<QueryNode> = _trees[edge.file];
-		while (node != null) {
-			final at: Null<Span> = node.span;
-			if (at != null && at.from == span.from && at.to == span.to) return node;
-			node = node.children.find(c -> c.span != null && c.span.from <= span.from && c.span.to >= span.to);
-		}
-		return null;
-	}
-
 	/** Whether `node` hands the object under construction to anything — `this` read other than as a member access's receiver. */
 	private function passesSelf(node: QueryNode, parent: Null<QueryNode>): Bool {
 		return node.kind == _shape.identKind && node.name == _shape.selfReferenceText
@@ -328,7 +348,7 @@ final class LockSites {
 	 * for every invocation whose `receiverField` names one) — unless a proven alias (`settleAliases`) accounts for each
 	 * such occurrence (`LockAliases`): the member then stays sealed, and an alias names the lock of the member it holds.
 	 */
-	private function collectUnsealed(files: Array<String>, names: Array<String>): Void {
+	private function collectUnsealed(files: Array<String>, plugin: GrammarPlugin, names: Array<String>): Void {
 		if (names.length == 0) return;
 		final named: Map<String, Array<String>> = [];
 		for (e in _graph.edges) {
@@ -340,7 +360,7 @@ final class LockSites {
 			named[e.file] = keys;
 		}
 		final breaking: Map<String, Array<Occurrence>> = [];
-		final aliases: LockAliases = new LockAliases(_graph, _shape, this, _ctorName, files, _plugin.typeSyntax);
+		final aliases: LockAliases = new LockAliases(_graph, _shape, this, _ctorName, files, plugin.typeSyntax);
 		final walked: Array<String> = [];
 		var pending: Array<String> = names;
 		// the member an alias holds the lock of is walked too: it must be sealed apart from its hand-offs
@@ -414,15 +434,53 @@ final class LockSites {
 	}
 
 	/**
+	 * Fills `helperHolds`: each call of a multi-lock helper of `takes` opens a hold of each lock the helper takes, which
+	 * the caller's own gives of it, and its calls of a helper giving it back, close.
+	 */
+	private function collectHelperHolds(
+		takes: Array<LockCall>, gives: Array<LockCall>, pairIds: Array<String>, unresolved: Array<String>
+	): Void {
+		final walker: Null<LockWindow> = _walker;
+		if (walker == null) return;
+		final opened: Array<{ call: CallEdge, op: LockCall }> = [];
+		final closed: Array<{ call: CallEdge, op: LockCall }> = [];
+		for (id => list in opsByFunction(takes, gives)) if (list.length > 1 && mayWrap(id, pairIds, unresolved)) {
+			final fn: Null<QueryNode> = _trees.ofEdge(list[0].call.edge);
+			if (fn == null) continue;
+			final opens: Bool = list.foreach(o -> o.takes);
+			if (!list.foreach(o -> o.takes == opens && onEveryPath(walker, fn, o.call, opens))) continue;
+			for (call in _graph.inEdges(id))
+				if (call.kind == Call)
+					for (o in list) (opens ? opened : closed).push({ call: call, op: o.call });
+		}
+		for (o in opened) {
+			final lock: Null<String> = lockOf(o.op.edge);
+			final releases: Array<Int> = releasesOf(o.call, o.op.pair, lock, gives).concat([
+				for (c in closed) {
+					final at: Null<Span> = c.call.span;
+					if (at != null && c.call.from == o.call.from && c.call.file == o.call.file && lockOf(c.op.edge) == lock) at.from;
+				}
+			]);
+			helperHolds.push(hold(o.call, o.op.pair, lock, releases));
+		}
+	}
+
+	/** Whether `call` works a named lock on every path of `fn`: in, for a take; out, for a give. */
+	private function onEveryPath(walker: LockWindow, fn: QueryNode, call: LockCall, takes: Bool): Bool {
+		final at: Null<Span> = call.edge.span;
+		if (at == null || lockOf(call.edge) == null) return false;
+		return takes ? walker.runsOnEveryPath(fn, at.from) : walker.releasesOnEveryPath(fn, [at.from]);
+	}
+
+	/**
 	 * The lock wrappers of the graph (`_wrappers`, `_siteLocks`) and their calls, grown a nesting level a round: a round
 	 * reads the calls of the last round's wrappers as takes and gives, finds the functions whose whole lock traffic is
 	 * one of them (`wrapperOf`), and keeps those every call of which it sees (`dropUncovered`). Empty when the rounds do
 	 * not settle — every wrapper's own take then leaks as it did.
 	 */
 	private function inferWrappers(
-		takes: Array<LockCall>, gives: Array<LockCall>, pairIds: Array<String>
+		takes: Array<LockCall>, gives: Array<LockCall>, pairIds: Array<String>, unresolved: Array<String>
 	): Array<{ call: LockCall, wrapper: LockWrapper }> {
-		final unresolvedNames: Array<String> = [for (u in _graph.unresolved) for (n in ReachAdmission.admittedNames(u)) n];
 		var wrappers: Map<String, LockWrapper> = [];
 		for (_ in 0...WRAPPER_ROUNDS) {
 			final sites: Map<String, { call: LockCall, wrapper: LockWrapper }> = wrapperSites(wrappers);
@@ -432,17 +490,12 @@ final class LockSites {
 				_siteLocks[key] = site.wrapper.lock;
 				_siteSelf[key] = site.wrapper.self;
 			}
-			final ops: Map<String, Array<{ call: LockCall, takes: Bool }>> = [];
-			function add(call: LockCall, takes: Bool): Void {
-				final list: Array<{ call: LockCall, takes: Bool }> = ops[call.edge.from] ?? [];
-				list.push({ call: call, takes: takes });
-				ops[call.edge.from] = list;
-			}
-			for (t in takes) add(t, true);
-			for (g in gives) add(g, false);
-			for (site in sites) add(site.call, site.wrapper.takes);
+			final ops: Map<String, Array<{ call: LockCall, takes: Bool }>> = opsByFunction(
+				takes.concat([for (site in sites) if (site.wrapper.takes) site.call]),
+				gives.concat([for (site in sites) if (!site.wrapper.takes) site.call])
+			);
 			final next: Map<String, LockWrapper> = [];
-			for (id => list in ops) if (list.length == 1 && mayWrap(id, pairIds, unresolvedNames)) {
+			for (id => list in ops) if (list.length == 1 && mayWrap(id, pairIds, unresolved)) {
 				final found: Null<LockWrapper> = wrapperOf(list[0].call, list[0].takes);
 				if (found != null) next[id] = found;
 			}
@@ -465,7 +518,7 @@ final class LockSites {
 	 * on from the call on would read as taken where it may not be.
 	 */
 	private function wrapperOf(call: LockCall, takes: Bool): Null<LockWrapper> {
-		final fn: Null<QueryNode> = functionNode(call.edge);
+		final fn: Null<QueryNode> = _trees.ofEdge(call.edge);
 		final at: Null<Span> = call.edge.span;
 		final walker: Null<LockWindow> = _walker;
 		if (fn == null || at == null || walker == null) return null;
@@ -549,6 +602,19 @@ final class LockSites {
 
 	public static inline function memberName(field: String): String {
 		return field.substr(field.lastIndexOf('.') + 1);
+	}
+
+	/** The lock calls of `takes` (takes) and `gives` (gives), grouped by the function each sits in. */
+	private static function opsByFunction(
+		takes: Array<LockCall>, gives: Array<LockCall>
+	): Map<String, Array<{ call: LockCall, takes: Bool }>> {
+		final ops: Map<String, Array<{ call: LockCall, takes: Bool }>> = [];
+		for (list in [takes, gives]) for (c in list) {
+			final known: Array<{ call: LockCall, takes: Bool }> = ops[c.edge.from] ?? [];
+			known.push({ call: c, takes: list == takes });
+			ops[c.edge.from] = known;
+		}
+		return ops;
 	}
 
 	private static inline function sameWrapper(a: Null<LockWrapper>, b: LockWrapper): Bool {
