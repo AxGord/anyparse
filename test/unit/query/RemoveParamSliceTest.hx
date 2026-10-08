@@ -7,6 +7,8 @@ import haxe.Exception;
 import utest.Assert;
 import utest.Test;
 
+using StringTools;
+
 /**
  * `RemoveParam.removeParam` — scope-correct, format-preserving
  * remove-parameter, the fifth refactoring operation built on the query
@@ -31,6 +33,9 @@ import utest.Test;
  * as `rename` / `inline` / `extract-var` / `change-sig`).
  */
 class RemoveParamSliceTest extends Test {
+
+	/** A writer config narrow enough that a four-parameter signature wraps and a three-parameter one does not. */
+	private static inline final NARROW: String = '{"wrapping": {"maxLineLength": 60}}';
 
 	/**
 	 * Remove the MIDDLE parameter (index 1) of a method with three
@@ -276,6 +281,44 @@ class RemoveParamSliceTest extends Test {
 		}
 	}
 
+	/**
+	 * PIN. Canonical in, canonical out — the contract every writer-emit op states. An interface method the writer
+	 * wrapped across two lines fits on ONE after the removal, and the raw slot removal used to leave the wrap standing:
+	 * the very next writer-emit op on the file (`set-doc`) then refused it as "not in canonical form".
+	 *
+	 * The raw splice (the killing arm) answers the spliced `f(alpha:Int, gamma:Int,\n\t\tdelta:Int):Bool;`, which the writer
+	 * collapses.
+	 */
+	@:pin('control')
+	@:killer('M-REMOVE-PARAM-RAW-SPLICE')
+	public function testAnInterfaceSignatureThatNowFitsComesBackCanonical(): Void {
+		final source: String = canonical('interface I {\n\tpublic function f(alpha:Int, beta:String, gamma:Int, delta:Int):Bool;\n}\n');
+		Assert.isTrue(source.contains('gamma:Int,\n\t\tdelta:Int):Bool;'), 'the fixture starts wrapped:\n$source');
+		final text: String = okText(removeOf(source, 2, 18, 1, NARROW));
+		Assert.isTrue(text.contains('\tpublic function f(alpha:Int, gamma:Int, delta:Int):Bool;\n'), 'collapsed onto one line:\n$text');
+		Assert.equals(canonical(text), text, 'and the file is canonical');
+	}
+
+	/**
+	 * PIN. The same for a class method AND its call site: both lists were wrapped and both fit once the slot is gone.
+	 *
+	 * The raw splice (the killing arm) keeps both wraps.
+	 */
+	@:pin('control')
+	@:killer('M-REMOVE-PARAM-RAW-SPLICE')
+	public function testAClassMethodAndItsCallThatNowFitComeBackCanonical(): Void {
+		final source: String = canonical(
+			'class C {\n\tfunction h(alpha:Int, beta:String, gamma:Int, delta:Int):Bool {\n\t\treturn alpha + gamma + delta > 0;\n\t}\n\n'
+			+ '\tfunction g():Bool {\n\t\treturn h(1000000, "a long string argument", 3000000, 4000000);\n\t}\n}\n'
+		);
+		Assert.isTrue(source.contains('gamma:Int,\n\t\tdelta:Int):Bool {'), 'the signature starts wrapped:\n$source');
+		Assert.isTrue(source.contains('argument",\n\t\t\t3000000'), 'and so does the call:\n$source');
+		final text: String = okText(removeOf(source, 2, 11, 1, NARROW));
+		Assert.isTrue(text.contains('\tfunction h(alpha:Int, gamma:Int, delta:Int):Bool {\n'), 'the signature is one line:\n$text');
+		Assert.isTrue(text.contains('\t\treturn h(1000000, 3000000, 4000000);\n'), 'and so is the call:\n$text');
+		Assert.equals(canonical(text), text, 'and the file is canonical');
+	}
+
 	private function assertReparses(text: String): Void {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		try {
@@ -286,10 +329,25 @@ class RemoveParamSliceTest extends Test {
 		}
 	}
 
-	private static function removeOf(source: String, line: Int, col: Int, index: Int): RemoveParamResult {
+	private static function removeOf(source: String, line: Int, col: Int, index: Int, ?optsJson: String): RemoveParamResult {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final shape: RefShape = plugin.refShape();
-		return RemoveParam.removeParam(source, line, col, index, plugin, shape);
+		return RemoveParam.removeParam(source, line, col, index, plugin, shape, optsJson);
+	}
+
+	/** `source` as the writer lays it out under `NARROW`. */
+	private static function canonical(source: String): String {
+		return new HaxeQueryPlugin().writeRoundTrip(source, NARROW) ?? '';
+	}
+
+	/** The text of an `Ok`, or a failed assertion and an empty text. */
+	private static function okText(result: RemoveParamResult): String {
+		return switch result {
+			case Ok(text, _): text;
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+				'';
+		};
 	}
 
 }

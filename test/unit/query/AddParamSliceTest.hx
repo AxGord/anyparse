@@ -6,6 +6,8 @@ import haxe.Exception;
 import utest.Assert;
 import utest.Test;
 
+using StringTools;
+
 /**
  * `AddParam.addParam` — add a backward-compatible parameter to a
  * function declaration, a deliberately DECL-ONLY refactoring operation.
@@ -28,6 +30,9 @@ import utest.Test;
  * `rename` / `inline` / `extract-var`).
  */
 class AddParamSliceTest extends Test {
+
+	/** A writer config narrow enough that the fixture's signature wraps. */
+	private static inline final NARROW: String = '{"wrapping": {"maxLineLength": 60}}';
 
 	/**
 	 * Add a defaulted trailing parameter to a 2-parameter method:
@@ -154,6 +159,28 @@ class AddParamSliceTest extends Test {
 		}
 	}
 
+	/**
+	 * PIN. Canonical in, canonical out: a signature that fitted no longer does once the parameter is added, and the raw
+	 * insertion used to leave it one over-long line the next writer-emit op refuses as drifted.
+	 *
+	 * The raw splice (the killing arm) answers the one-line `k(alpha:Int, beta:Int, ?gammaDeltaEpsilon:String = null):Bool {`.
+	 */
+	@:pin('control')
+	@:killer('M-ADD-PARAM-RAW-SPLICE')
+	public function testASignatureThatNoLongerFitsComesBackCanonical(): Void {
+		final source: String = canonical('class K {\n\tfunction k(alpha:Int, beta:Int):Bool {\n\t\treturn true;\n\t}\n}\n');
+		Assert.isTrue(source.contains('\tfunction k(alpha:Int, beta:Int):Bool {\n'), 'the fixture starts on one line:\n$source');
+		final text: String = switch addOf(source, 2, 11, '?gammaDeltaEpsilon:String = null', NARROW) {
+			case Ok(t): t;
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+				'';
+		};
+		Assert.isTrue(text.contains('?gammaDeltaEpsilon:String = null'), 'the parameter was added:\n$text');
+		Assert.isFalse(text.contains('\tfunction k(alpha:Int, beta:Int, ?gammaDeltaEpsilon'), 'the signature wrapped:\n$text');
+		Assert.equals(canonical(text), text, 'and the file is canonical');
+	}
+
 	private function assertRefused(source: String, line: Int, col: Int, paramText: String): Void {
 		final result: AddParamResult = addOf(source, line, col, paramText);
 		switch result {
@@ -174,9 +201,14 @@ class AddParamSliceTest extends Test {
 		}
 	}
 
-	private static function addOf(source: String, line: Int, col: Int, paramText: String): AddParamResult {
+	private static function addOf(source: String, line: Int, col: Int, paramText: String, ?optsJson: String): AddParamResult {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		return AddParam.addParam(source, line, col, paramText, plugin);
+		return AddParam.addParam(source, line, col, paramText, plugin, optsJson);
+	}
+
+	/** `source` as the writer lays it out under `NARROW`. */
+	private static function canonical(source: String): String {
+		return new HaxeQueryPlugin().writeRoundTrip(source, NARROW) ?? '';
 	}
 
 }

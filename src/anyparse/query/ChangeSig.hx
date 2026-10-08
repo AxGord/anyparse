@@ -57,7 +57,9 @@ enum ChangeSigResult {
  *     text of the item that moves there (a SLOT SWAP: only the slot
  *     contents move; the commas and whitespace between slots stay put,
  *     so the existing layout is preserved verbatim).
- *  7. Re-parses the result; an unparseable rewrite is rejected.
+ *  7. Hands a canonical source back canonical — the reordered slots may
+ *     break differently — and re-parses the result; an unparseable
+ *     rewrite is rejected.
  *
  * Call-site collection differs by declaration kind (`CallSites` routes
  * method vs. local-function) — see `CallSites` for the two strategies and
@@ -80,10 +82,12 @@ final class ChangeSig {
 	 * (the same pair the `refs` CLI builds), so the resolver stays
 	 * language-agnostic. Returns `Ok(rewritten, advisory)` or an `Err`
 	 * describing why the reorder could not be applied. The source is never
-	 * mutated — the caller decides whether to write the result.
+	 * mutated — the caller decides whether to write the result. `optsJson`
+	 * is the `hxformat.json` governing the file (compiled defaults when
+	 * omitted), the config the source's canonicality is measured under.
 	 */
 	public static function changeSig(
-		source: String, line: Int, col: Int, perm: String, plugin: GrammarPlugin, shape: RefShape
+		source: String, line: Int, col: Int, perm: String, plugin: GrammarPlugin, shape: RefShape, ?optsJson: String
 	): ChangeSigResult {
 		// The cursor resolves through the shared prologue: a cursor already on a function decl IS that
 		// decl; a bare call resolves back to the decl through `Refs` (methods, not local functions).
@@ -141,8 +145,13 @@ final class ChangeSig {
 			appendSlotSwap(edits, source, args, order);
 		}
 
-		final rewritten: String = CanonicalEdit.applyEdits(source, edits);
-		if (rewritten == source) return Err('reorder of "$name" is a no-op');
+		if (CanonicalEdit.applyEdits(source, edits) == source) return Err('reorder of "$name" is a no-op');
+		// Moving a long slot ahead of a short one moves where a filled list breaks, so a canonical file goes back
+		// through the writer rather than keeping the old breaks.
+		final rewritten: String = switch CanonicalEdit.editKeepingCanonical(source, edits, plugin, optsJson) {
+			case Err(message): return Err(message);
+			case Ok(text, _): text;
+		};
 
 		try
 			plugin.parseFile(rewritten)

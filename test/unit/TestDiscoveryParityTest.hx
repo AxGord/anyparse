@@ -2564,6 +2564,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.AddMetaSliceTest#testFinalClassWrapperIsLifted :: control :: M-ADDMETA-NO-WRAPPER-CLIMB',
 			'unit.query.AddMetaSliceTest#testGuardedTypeKeepsTheEntryInsideTheGuard :: control :: M-ADDMETA-LOOSE-WRAPPER-CLIMB',
 			'unit.query.AddMetaSliceTest#testTypeEntryLandsBelowTheDoc :: control :: M-ADDMETA-ZERO-WIDTH-INSERT',
+			'unit.query.AddParamSliceTest#testASignatureThatNoLongerFitsComesBackCanonical :: control :: M-ADD-PARAM-RAW-SPLICE',
 			'unit.query.AddressTest#testAModuleLevelNodeIsAddressedFromTheRootNotByOrdinal :: control :: M-ADDRESS-NO-ROOT-ANCHOR',
 			'unit.query.AddressTest#testAnAmbiguityListingSpellsTheSelectorThatPicksOneCandidate :: control :: '
 				+ 'M-CANDIDATE-LABEL-BARE,M-ADDRESS-NO-ROOT-ANCHOR',
@@ -2678,6 +2679,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CaseCaptureTest#testRenameLeavesTheCaptureAlone :: control :: M-CAPTURE-ARM-BIND',
 			'unit.query.CaseCaptureTest#testRenameMovesEveryAlternative :: control :: M-RENAME-DECL-SELF,M-BINDING-FROM-DECL-SELF',
 			'unit.query.CaseCaptureTest#testRenameRefusesAnUndecidedCapture :: control :: M-RENAME-UNDECIDED',
+			'unit.query.ChangeSigSliceTest#testAReorderThatMovesTheBreakComesBackCanonical :: control :: M-CHANGE-SIG-RAW-SPLICE',
 			'unit.query.CodepointIndexTest#testAWideCodepointCountsTwoNativeUnits :: control :: M-CODEPOINT-NATIVE,M-CODEPOINT-BACK',
 			'unit.query.CommentOwnerGuardSliceTest#testACarryDeclarationThatDoesNotHoldIsNotARefusal :: control :: M-COMMENT-CARRY-REFUSES',
 			'unit.query.CommentOwnerGuardSliceTest#testACommentThatKeepsItsPlaceUnderACarryIsAccepted :: control :: '
@@ -3527,6 +3529,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.RemoveMemberSliceTest#testSiblingRegionsWithOneConditionAreRefusedByCount :: control :: '
 				+ 'M-COND-FRAME-REGION-KEYED,M-COND-FRAME-CONDITION-RAW',
 			'unit.query.RemoveMemberSliceTest#testTwoDeclarationsInOneBranchAreRefusedByCount :: control :: M-REMOVE-MEMBER-BRANCH-BLIND',
+			'unit.query.RemoveParamSliceTest#testAClassMethodAndItsCallThatNowFitComeBackCanonical :: control :: M-REMOVE-PARAM-RAW-SPLICE',
+			'unit.query.RemoveParamSliceTest#testAnInterfaceSignatureThatNowFitsComesBackCanonical :: control :: M-REMOVE-PARAM-RAW-SPLICE',
 			'unit.query.RenameSliceTest#testModelledSpliceConditionOccurrenceRenames :: control :: M-COND-GAP-KEEPS-DIRECTIVES',
 			'unit.query.ResolutionProjectFilesTest#testDerivedIndexesAreMemoised :: control :: M-MEMO-OFF',
 			'unit.query.ResolutionProjectFilesTest#testSetResolutionIndexExpiresDerivedIndexes :: control :: M-NO-INVALIDATE',
@@ -5632,7 +5636,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-SCRATCH-WRITE-ONLY',
 			'M-SCRATCH-RTTI-OFF',
 			'M-SCRATCH-CTOR-RECURSES',
-			'M-LOOPBOUND-AHEAD'
+			'M-LOOPBOUND-AHEAD',
+			'M-REMOVE-PARAM-RAW-SPLICE',
+			'M-ADD-PARAM-RAW-SPLICE',
+			'M-CHANGE-SIG-RAW-SPLICE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

@@ -42,8 +42,9 @@ final class ChangeSigCommand implements CliCommand {
 	 * per `<perm>` (a comma-separated 0-based list of the OLD parameter
 	 * indices in their NEW order, e.g. `2,0,1`), permuting the positional
 	 * arguments at every resolvable in-file call site to match. The reorder
-	 * is a SLOT SWAP — only the parameter / argument contents move, so the
-	 * existing layout is preserved. `<line>:<col>` uses the same column
+	 * is a SLOT SWAP — only the parameter / argument contents move; a file
+	 * that was in canonical form under its `hxformat.json` is re-laid out by
+	 * the writer, any other keeps its layout. `<line>:<col>` uses the same column
 	 * convention `apq refs` prints. Without `--write` the rewritten source
 	 * is emitted to stdout; with `--write` it overwrites the file in place.
 	 * A reorder of a method also emits a cross-file advisory to stderr
@@ -119,7 +120,9 @@ final class ChangeSigCommand implements CliCommand {
 		final pos: Null<Position> = CliEdit.resolveAddressPos(op, source, plugin, posSpec, selectExpr, matchExpr, nth, true);
 		if (pos == null) return EXIT_RUNTIME;
 		final shape: RefShape = plugin.refShape();
-		final result: ChangeSigResult = ChangeSig.changeSig(source, pos.line, pos.col, permStr, plugin, shape);
+		final result: ChangeSigResult = ChangeSig.changeSig(
+			source, pos.line, pos.col, permStr, plugin, shape, CliArgs.discoverFormatConfig(filePath)
+		);
 		switch result {
 			case Ok(text, advisory):
 				if (write) {
@@ -147,7 +150,8 @@ final class ChangeSigCommand implements CliCommand {
 		CliIo.sysPrint('the NEW order of OLD parameter indices (for g(a,b,c), `2,0,1` reorders\n');
 		CliIo.sysPrint('to c,a,b). The positional arguments at every resolvable in-file call\n');
 		CliIo.sysPrint('site are permuted to match. The reorder is a slot swap — only the\n');
-		CliIo.sysPrint('parameter / argument contents move, so the existing layout is preserved.\n');
+		CliIo.sysPrint('parameter / argument contents move; a file in canonical form stays in it,\n');
+		CliIo.sysPrint('any other keeps its layout.\n');
 		CliIo.sysPrint('Methods (called via bare `name(...)` / `this.name(...)`) and named local\n');
 		CliIo.sysPrint('functions are supported; a receiver-qualified `obj.name(...)` call, an\n');
 		CliIo.sysPrint('unresolvable call, or a call with omitted optional arguments is refused\n');

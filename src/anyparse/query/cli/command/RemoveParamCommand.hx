@@ -128,7 +128,9 @@ final class RemoveParamCommand implements CliCommand {
 		final pos: Null<Position> = CliEdit.resolveAddressPos(op, source, plugin, posSpec, selectExpr, matchExpr, nth, true);
 		if (pos == null) return EXIT_RUNTIME;
 		final shape: RefShape = plugin.refShape();
-		final result: RemoveParamResult = RemoveParam.removeParam(source, pos.line, pos.col, paramIndex, plugin, shape);
+		final result: RemoveParamResult = RemoveParam.removeParam(
+			source, pos.line, pos.col, paramIndex, plugin, shape, CliArgs.discoverFormatConfig(filePath)
+		);
 		switch result {
 			case Ok(text, advisory):
 				if (write) {

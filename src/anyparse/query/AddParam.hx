@@ -42,8 +42,10 @@ enum AddParamResult {
  *  5. Inserts the parameter text at the param-list tail (after the last
  *     existing parameter, or just inside the `(` for a zero-param
  *     function) as a single splice.
- *  6. Re-parses the result; an unparseable rewrite is rejected — the
- *     hard gate that catches a malformed parameter text.
+ *  6. Hands a canonical source back canonical — the longer list may no
+ *     longer fit where it stood — and re-parses the result; an
+ *     unparseable rewrite is rejected — the hard gate that catches a
+ *     malformed parameter text.
  *
  * WHY DECL-ONLY IS SAFE — and why no call site is touched: the
  * backward-compat guard is the load-bearing invariant. Because the new
@@ -55,9 +57,11 @@ enum AddParamResult {
  * ANY function (methods, local functions, callbacks) without resolving a
  * single call site: there is nothing at the call sites to update.
  *
- * The operation is purely textual at the insertion point — it preserves
- * the existing parameter-list formatting (single-line, trailing-comma,
- * or multi-line) and only adds the new parameter. The re-parse is the
+ * The splice is purely textual at the insertion point and only adds the
+ * new parameter; a source that was writer-canonical is then re-laid out
+ * by the writer (`CanonicalEdit.editKeepingCanonical`), so the next
+ * writer-emit op does not refuse it as drifted, while a drifted source
+ * keeps its own layout. The re-parse is the
  * backstop for a syntactically invalid parameter text.
  *
  * Coordinate convention: `line` / `col` are interpreted exactly as
@@ -77,8 +81,13 @@ final class AddParam {
 	 * operation stays language-agnostic. Returns `Ok(rewritten)` or an
 	 * `Err` describing why the parameter could not be added. The source is
 	 * never mutated — the caller decides whether to write the result.
+	 * `optsJson` is the `hxformat.json` governing the file (compiled
+	 * defaults when omitted), the config the source's canonicality is
+	 * measured under.
 	 */
-	public static function addParam(source: String, line: Int, col: Int, paramText: String, plugin: GrammarPlugin): AddParamResult {
+	public static function addParam(
+		source: String, line: Int, col: Int, paramText: String, plugin: GrammarPlugin, ?optsJson: String
+	): AddParamResult {
 		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
 		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
@@ -124,8 +133,11 @@ final class AddParam {
 			text: insertText
 		};
 
-		final rewritten: String = CanonicalEdit.applyEdits(source, [edit]);
-		if (rewritten == source) return Err('adding "$newName" is a no-op');
+		if (CanonicalEdit.applyEdits(source, [edit]) == source) return Err('adding "$newName" is a no-op');
+		final rewritten: String = switch CanonicalEdit.editKeepingCanonical(source, [edit], plugin, optsJson) {
+			case Err(message): return Err(message);
+			case Ok(text, _): text;
+		};
 
 		try
 			plugin.parseFile(rewritten)

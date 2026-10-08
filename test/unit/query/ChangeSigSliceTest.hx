@@ -7,6 +7,8 @@ import haxe.Exception;
 import utest.Assert;
 import utest.Test;
 
+using StringTools;
+
 /**
  * `ChangeSig.changeSig` — scope-correct, format-preserving
  * change-signature (parameter reorder), the fourth refactoring operation
@@ -26,6 +28,9 @@ import utest.Test;
  * `rename` / `inline` / `extract-var`).
  */
 class ChangeSigSliceTest extends Test {
+
+	/** A writer config narrow enough that the fixture's signature wraps. */
+	private static inline final NARROW: String = '{"wrapping": {"maxLineLength": 60}}';
 
 	/**
 	 * Reorder a method's three parameters `2,0,1` (new order c, a, b). The
@@ -224,6 +229,30 @@ class ChangeSigSliceTest extends Test {
 		}
 	}
 
+	/**
+	 * PIN. Canonical in, canonical out: moving the long parameter to the front of a FILLED list moves where the writer
+	 * breaks it, and the slot swap used to keep the old break — a line the writer would have filled differently.
+	 *
+	 * The raw splice (the killing arm) answers `s(deltaepsilonzeta:Int, beta:String, gamma:Int,\n\t\ta:Int)`, which the writer
+	 * re-fills.
+	 */
+	@:pin('control')
+	@:killer('M-CHANGE-SIG-RAW-SPLICE')
+	public function testAReorderThatMovesTheBreakComesBackCanonical(): Void {
+		final source: String = canonical(
+			'class S {\n\tfunction s(a:Int, beta:String, gamma:Int, deltaepsilonzeta:Int):Bool {\n\t\treturn true;\n\t}\n}\n'
+		);
+		Assert.isTrue(source.contains('gamma:Int,\n\t\tdeltaepsilonzeta:Int):Bool {'), 'the fixture starts wrapped:\n$source');
+		final text: String = switch changeSigOf(source, 2, 11, '3,1,2,0', NARROW) {
+			case Ok(t, _): t;
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+				'';
+		};
+		Assert.isTrue(text.contains('function s(deltaepsilonzeta:Int, beta:String'), 'the parameters were reordered:\n$text');
+		Assert.equals(canonical(text), text, 'and the file is canonical');
+	}
+
 	private function assertRefused(source: String, line: Int, col: Int, perm: String): Void {
 		final result: ChangeSigResult = changeSigOf(source, line, col, perm);
 		switch result {
@@ -244,10 +273,15 @@ class ChangeSigSliceTest extends Test {
 		}
 	}
 
-	private static function changeSigOf(source: String, line: Int, col: Int, perm: String): ChangeSigResult {
+	private static function changeSigOf(source: String, line: Int, col: Int, perm: String, ?optsJson: String): ChangeSigResult {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final shape: RefShape = plugin.refShape();
-		return ChangeSig.changeSig(source, line, col, perm, plugin, shape);
+		return ChangeSig.changeSig(source, line, col, perm, plugin, shape, optsJson);
+	}
+
+	/** `source` as the writer lays it out under `NARROW`. */
+	private static function canonical(source: String): String {
+		return new HaxeQueryPlugin().writeRoundTrip(source, NARROW) ?? '';
 	}
 
 }

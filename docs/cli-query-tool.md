@@ -83,7 +83,7 @@ Multi-file by construction: every scope argument is a file, a directory (walked 
 
 ### Refactoring ops — span-splice, format-preserving
 
-Scope-correct edits driven by the `refs` / `Scope` binding resolver: everything outside the edit is byte-verbatim (these move EXISTING tokens, so no new code is formatted), and the result is re-parse-validated. Every op is print-only without `--write`. Cursor positions are 1-based `line:col`, and every op that addresses a node accepts the address forms of § "Op addressing" (`--select` / `--match` / `--nth` / position).
+Scope-correct edits driven by the `refs` / `Scope` binding resolver: everything outside the edit is byte-verbatim (these move EXISTING tokens, so no new code is formatted), and the result is re-parse-validated. Every op is print-only without `--write`. Cursor positions are 1-based `line:col`, and every op that addresses a node accepts the address forms of § "Op addressing" (`--select` / `--match` / `--nth` / position). The signature ops `change-sig` / `add-param` / `remove-param` are canonical in, canonical out (`CanonicalEdit.editKeepingCanonical`): a list they lengthen, shorten or reorder may no longer break where the writer broke it, so a file canonical under its `hxformat.json` goes back through the writer — otherwise the next writer-emit op on it (`set-doc`, `add-member`) refused it as drifted — and a drifted file keeps the plain splice.
 
 | command | synopsis |
 |---|---|
