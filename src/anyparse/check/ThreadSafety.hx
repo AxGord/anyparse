@@ -165,15 +165,17 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		], conditions, inertRef, seedable);
 
 		final throws: ThrowReach = new ThrowReach(graph, plugin.refShape(), file -> listsOf(file).throwerIds, trees);
-		final sites: LockSites = new LockSites(graph, [for (f in files) f.file], plugin, file -> listsOf(file).pairs, throws, trees);
+		// every write of the project, seen only when the run covers a closed project (`listsByFile`)
+		final writes: FieldWrites = new FieldWrites(graph, plugin, files.foreach(f -> byFile[f.file]?.closedWorld == true));
+		final sites: LockSites = new LockSites(
+			graph, [for (f in files) f.file], plugin, file -> listsOf(file).pairs, throws, trees, writes
+		);
 		// a hold whose take no thread runs holds nothing: a function nothing invokes, a take a condition rules out
 		final acquires: Array<LockAcquire> = [for (a in sites.acquires) if (states.edgeContext(a.edge) != 0) a];
 		final helperHolds: Array<LockAcquire> = [for (a in sites.helperHolds) if (states.edgeContext(a.edge) != 0) a];
 		final judged: Array<LockAcquire> = HoldGrade.judged(acquires, helperHolds);
 		// the locks whose take blocks at all: held across any blocking call, short ones included
 		final blocking: Array<String> = [];
-		// every write of the project, seen only when the run covers a closed project (`listsByFile`)
-		final writes: FieldWrites = new FieldWrites(graph, plugin, sites, files.foreach(f -> byFile[f.file]?.closedWorld == true));
 		final taints: LockTaint = new LockTaint(
 			graph, sinkIds, listsOf, sites, blocking, conditions, states, null, new AllocationSets(graph, plugin, sites, writes)
 		);

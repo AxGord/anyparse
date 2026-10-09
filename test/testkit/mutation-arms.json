@@ -18044,6 +18044,14 @@
 			"note": "a getter returning the member's own stored field holds values through the judging cycle, its writes never read"
 		},
 		{
+			"name": "M-TS-EXH-PARTIAL",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "dead",
+			"find": "!_writes.complete || ",
+			"replace": "",
+			"note": "a run that may miss a write of the project reads a member as holding values"
+		},
+		{
 			"name": "M-TS-ERROR-LOOP",
 			"type": "anyparse.check.ErrorPaths",
 			"method": "catchTo",

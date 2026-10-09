@@ -31,8 +31,8 @@ typedef FieldWriteSite = {
 
 /**
  * Every write of a field-shaped target the run's files hold, by the name written, walked ONCE per run (`ObjectPaths`
- * asks which fields stay put, `AllocationSets` which classes a field may hold), and whether the run sees every write of
- * the project at all (`complete`).
+ * asks which fields stay put, `AllocationSets` which classes a field may hold, `ExhaustiveSwitches` what a member is
+ * assigned), and whether the run sees every write of the project at all (`complete`).
  *
  * A write is positive evidence only in one direction: a write the index holds may change the field, and a field the
  * index holds no write of is unwritten only when `complete` — the run covers the whole project a `closedWorld`
@@ -54,12 +54,10 @@ final class FieldWrites {
 
 	private final _graph: CallGraph;
 	private final _shape: RefShape;
-	private final _sites: LockSites;
 
-	public function new(graph: CallGraph, plugin: GrammarPlugin, sites: LockSites, complete: Bool) {
+	public function new(graph: CallGraph, plugin: GrammarPlugin, complete: Bool) {
 		_graph = graph;
 		_shape = plugin.refShape();
-		_sites = sites;
 		this.complete = complete;
 		for (held in graph.heldFiles()) collect(held.file, held.tree);
 	}
@@ -79,8 +77,8 @@ final class FieldWrites {
 	private function record(file: String, write: QueryNode, target: QueryNode): Void {
 		final name: Null<String> = target.name;
 		final at: Null<Span> = target.span;
-		final own: Bool = target.kind == _shape.identKind || _sites.readsOwnMember(target);
-		if (name == null || at == null || !(own || _sites.isAccess(target.kind))) return;
+		final own: Bool = target.kind == _shape.identKind || LockSites.ownMemberRead(target, _shape);
+		if (name == null || at == null || !(own || LockSites.accessKind(target.kind, _shape))) return;
 		final fn: Null<String> = _graph.functionAt(file, at.from);
 		final type: Null<String> = fn == null ? null : _graph.node(fn)?.typeName;
 		final list: Array<FieldWriteSite> = _byName[name] ?? [];

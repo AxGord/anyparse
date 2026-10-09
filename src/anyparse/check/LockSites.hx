@@ -188,18 +188,19 @@ final class LockSites {
 
 	/**
 	 * Collects the acquires over the `files` of `graph`; `pairsOf` names the pairs the chain of a file configures,
-	 * `throws` the calls that may raise, and `trees` the function nodes the holds are traced through.
+	 * `throws` the calls that may raise, `trees` the function nodes the holds are traced through, and `writes` the run's
+	 * field writes (what a `switch` subject may be assigned, `ExhaustiveSwitches`).
 	 */
 	public function new(
 		graph: CallGraph, files: Array<String>, plugin: GrammarPlugin, pairsOf: (String) -> Array<LockPair>, throws: ThrowReach,
-		trees: FunctionTrees
+		trees: FunctionTrees, writes: FieldWrites
 	) {
 		_graph = graph;
 		_throws = throws;
 		_trees = trees;
 		_shape = plugin.refShape();
 		final flow: Null<ControlFlowSupport> = plugin.controlFlowSupport();
-		_walker = flow == null ? null : new LockWindow(_shape, flow, new ExhaustiveSwitches(graph, plugin));
+		_walker = flow == null ? null : new LockWindow(_shape, flow, new ExhaustiveSwitches(graph, plugin, writes));
 		_ctorName = _shape.constructorName ?? 'new';
 		_nestedFnKinds = MemberKinds.nestedFunctionKinds(_shape);
 		final takes: Array<LockCall> = [];
@@ -234,7 +235,20 @@ final class LockSites {
 	}
 
 	public inline function isAccess(kind: String): Bool {
-		return kind == _shape.fieldAccessKind || kind == _shape.nullSafeAccessKind || kind == _shape.forceFieldAccessKind;
+		return accessKind(kind, _shape);
+	}
+
+	/** Whether `kind` is a field access of `shape`: plain, null-safe or forced. */
+	public static inline function accessKind(kind: String, shape: RefShape): Bool {
+		return kind == shape.fieldAccessKind || kind == shape.nullSafeAccessKind || kind == shape.forceFieldAccessKind;
+	}
+
+	/** Whether `node` names a member of the running object under `shape`: a bare name, or a member read off `this`. */
+	public static function ownMemberRead(node: QueryNode, shape: RefShape): Bool {
+		return node.kind == shape.identKind
+			? node.name != shape.selfReferenceText
+			: accessKind(node.kind, shape) && node.children.length > 0 && node.children[0].kind == shape.identKind
+				&& node.children[0].name == shape.selfReferenceText;
 	}
 
 	/** The lock `edge` is made on: a wrapper call's lock, else its receiver's member when that member is sealed, else null. */
@@ -285,11 +299,8 @@ final class LockSites {
 	}
 
 	/** Whether `node` names a member of the running object: a bare name, or a member read off `this`. */
-	public function readsOwnMember(node: QueryNode): Bool {
-		return node.kind == _shape.identKind
-			? node.name != _shape.selfReferenceText
-			: isAccess(node.kind) && node.children.length > 0 && node.children[0].kind == _shape.identKind
-				&& node.children[0].name == _shape.selfReferenceText;
+	public inline function readsOwnMember(node: QueryNode): Bool {
+		return ownMemberRead(node, _shape);
 	}
 
 	/** The callee expression of the call `edge` sits at, found by its exact span in the branch-aware tree. */

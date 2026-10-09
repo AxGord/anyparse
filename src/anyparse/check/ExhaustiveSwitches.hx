@@ -12,7 +12,8 @@ using Lambda;
 
 /**
  * The catch-all branch (`case _`, `default`) of a `switch` over an `enum abstract` whose every value an earlier guard-free
- * case names: no value reaches it. A positive whitelist on every count:
+ * case names: no value reaches it. Only for a run that sees every write of the project (`FieldWrites.complete`), and a
+ * positive whitelist on every count:
  * - the subject is a member of the running type read off `this`, or bare where nothing in the function binds its name,
  *   declared as the abstract itself (not `Null<…>`), the abstract the one type of the project of that name;
  * - the abstract is CLOSED: no `from` clause, no build macro, no conditional-compilation region, no constructor; a
@@ -49,14 +50,21 @@ final class ExhaustiveSwitches {
 	private final _metaKinds: Array<String>;
 	private final _typeKinds: Array<String>;
 
-	/** Name -> every assignment in the held files to a bare name or a field so named (`writesTo`), filled on first use. */
-	private var _writes: Null<Map<String, Array<WriteSite>>> = null;
+	/** Name -> every write in the run to a bare name or a field so named, with where it sits (`writesTo`), filled per name on first use. */
+	private final _writesOf: Map<String, Array<WriteSite>> = [];
+
+	/** Every write of the run (`FieldWrites`), and whether it is every write of the project. */
+	private final _writes: FieldWrites;
+
+	/** Each held file -> its tree, filled on first use (`contextOf`). */
+	private var _treeOf: Null<Map<String, QueryNode>> = null;
 
 	/** The files of the graph with their trees, read once. */
 	private var _held: Null<Array<{ file: String, source: String, tree: QueryNode }>> = null;
 
-	public function new(graph: CallGraph, plugin: GrammarPlugin) {
+	public function new(graph: CallGraph, plugin: GrammarPlugin, writes: FieldWrites) {
 		_graph = graph;
+		_writes = writes;
 		_shape = plugin.refShape();
 		_nestedFnKinds = MemberKinds.nestedFunctionKinds(_shape);
 		_metaKinds = plugin.metaShape().metaKinds;
@@ -71,12 +79,13 @@ final class ExhaustiveSwitches {
 	/**
 	 * Whether `branch`, a branch of the `switch` node `switchNode` in the function node `fn` (graph id `fnId`), is a
 	 * catch-all no value reaches: the subject holds only values of a closed enum abstract and the guard-free cases
-	 * before it name every value.
+	 * before it name every value. Never for a run that may miss a write of the project (`FieldWrites.complete`): what a
+	 * member holds is read off every write of its name.
 	 */
 	public function dead(fn: QueryNode, fnId: String, switchNode: QueryNode, branch: QueryNode): Bool {
 		final kids: Array<QueryNode> = switchNode.children;
 		final at: Int = kids.indexOf(branch);
-		if (at < 1 || !catchAll(branch)) return false;
+		if (!_writes.complete || at < 1 || !catchAll(branch)) return false;
 		final closed: Null<ClosedAbstract> = subjectAbstract(fn, fnId, kids[0]);
 		if (closed == null) return false;
 		final named: Array<String> = [];
@@ -471,40 +480,39 @@ final class ExhaustiveSwitches {
 		});
 	}
 
-	/** Every assignment in the held files whose target is the bare name `name` or a field so named (`indexWrites`). */
+	/**
+	 * Every write in the run whose target is the bare name `name` or a field so named (`FieldWrites.of`) — an assignment,
+	 * a compound one, an increment — with the outermost function around it (`contextOf`).
+	 */
 	private function writesTo(name: String): Array<WriteSite> {
-		var all: Null<Map<String, Array<WriteSite>>> = _writes;
-		if (all == null) {
-			final index: Map<String, Array<WriteSite>> = [];
-			for (held in heldFiles()) indexWrites(held.tree, held.file, null, null, index);
-			_writes = index;
-			all = index;
-		}
-		return all[name] ?? [];
+		final known: Null<Array<WriteSite>> = _writesOf[name];
+		if (known != null) return known;
+		final sites: Array<WriteSite> = [for (w in _writes.of(name)) { node: w.write, at: contextOf(w.file, w.write) }];
+		_writesOf[name] = sites;
+		return sites;
 	}
 
 	/**
-	 * Files under `into` every write under `node` of `file` by the name it targets, with the outermost function around
-	 * it (`fn`, of the type `owner`): an assignment, a compound one, an increment.
+	 * Where the write `write` of `file` is evaluated: the outermost function of the file's tree around it, of the type
+	 * declaring that function; no function and no type outside every function.
 	 */
-	private function indexWrites(
-		node: QueryNode, file: String, fn: Null<QueryNode>, owner: Null<String>, into: Map<String, Array<WriteSite>>
-	): Void {
-		final kids: Array<QueryNode> = node.children;
-		if (_shape.writeParentKinds.contains(node.kind) && kids.length > 0) {
-			final target: QueryNode = kids[0];
-			final name: Null<String> = target.kind == _shape.identKind || isAccess(target.kind) ? target.name : null;
-			if (name != null) {
-				final sites: Array<WriteSite> = into[name] ?? [];
-				sites.push({ node: node, at: { file: file, fn: fn, owner: owner } });
-				into[name] = sites;
-			}
+	private function contextOf(file: String, write: QueryNode): ValueContext {
+		var trees: Null<Map<String, QueryNode>> = _treeOf;
+		if (trees == null) {
+			final built: Map<String, QueryNode> = [for (held in heldFiles()) held.file => held.tree];
+			_treeOf = built;
+			trees = built;
 		}
 		final functions: Array<String> = _shape.functionKinds ?? [];
-		for (k in kids) if (fn == null && functions.contains(k.kind))
-			indexWrites(k, file, k, node.name, into)
-		else
-			indexWrites(k, file, fn, owner, into);
+		final span: Null<Span> = write.span;
+		var parent: Null<QueryNode> = null;
+		var node: Null<QueryNode> = trees[file];
+		while (node != null && span != null) {
+			if (parent != null && functions.contains(node.kind)) return { file: file, fn: node, owner: parent.name };
+			parent = node;
+			node = node.children.find(c -> c.span != null && c.span.from <= span.from && c.span.to >= span.to);
+		}
+		return { file: file, fn: null, owner: null };
 	}
 
 	/** The graph's files with their trees, read once. */

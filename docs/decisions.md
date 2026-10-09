@@ -1824,3 +1824,9 @@ decided the question; it may not become a record of runs.
   stored writes (`mode = d`, `d:Dynamic`) were never read. A getter return that reads the member's own field (bare,
   or off `this`) is judged by what the field holds (`ExhaustiveSwitches.storedHolds`): its initializer and every
   write of its name (review round 2 `ex1-isvar-getter`) — branch `feat/ts-precision-3`
+- `ExhaustiveSwitches` reading what a member is assigned off a whole-project write index of its own → that index
+  covered only the files of the run and asked nothing about the rest, so `hxq lint core` read a member as holding
+  values while `plugins/P.hx` assigned it a `Dynamic`. The check reads the run's one `FieldWrites` index and answers
+  "dead" only when it is `complete` (a `closedWorld` declaration over a run covering the project); `FieldWrites` no
+  longer needs `LockSites` (`LockSites.ownMemberRead`), so it is built before the sites that walk the switches
+  (review round 2 `ex3-partial`) — branch `feat/ts-precision-3`

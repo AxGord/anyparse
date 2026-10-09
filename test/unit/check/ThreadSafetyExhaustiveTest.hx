@@ -12,8 +12,10 @@ import utest.Test;
  */
 class ThreadSafetyExhaustiveTest extends Test {
 
+	/** A closed project: every write of a member is in the run, which the reading of a member needs (`FieldWrites.complete`). */
 	private static inline final CONFIG: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire"],"spawns":["Runner.create"],'
-		+ '"lockPairs":["Mutex.acquire/release"]}}}';
+		+ '"lockPairs":["Mutex.acquire/release"],"closedWorld":true}}}';
+
 	private static inline final CLOSED: String = 'enum abstract V(Int) { final A; final B;'
 		+ ' @:from static function of(s:String):V return s == "a" ? A : B; }';
 
@@ -226,6 +228,26 @@ class ThreadSafetyExhaustiveTest extends Test {
 		#end
 	}
 
+	/**
+	 * A run that may miss a write of the project reads no member as holding values: a project file the run leaves out may
+	 * write it, and so may any code where nothing declares `closedWorld` (review round 2 `ex3-partial`).
+	 */
+	@:pin('control') @:killer('M-TS-EXH-PARTIAL')
+	public function testARunThatMayMissAWriteReadsNoMemberAsHoldingValues(): Void {
+		#if (sys || nodejs)
+		final dead: String = 'switch mode { case A: step(); case B: step(); case _: throw "x"; }';
+		final outside: { name: String, source: String } = {
+			name: 'P.hx',
+			source: 'class P { public static function load(s:S, d:Dynamic):Void { s.mode = d; } }'
+		};
+		Assert.same(['S.work'], leaks(run(CLOSED, 'V', dead, '', ' = A', '', null, [outside])), 'a project file outside the run');
+		Assert.same([], leaks(run(CLOSED, 'V', dead)), 'the whole project');
+		Assert.same(['S.work'], leaks(run(CLOSED, 'V', dead, '', ' = A', '', null, null, false)), 'no closedWorld');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
 	/** `run`, with `S.mode` an `@:isVar` property read through a getter `members` declare. */
 	private static function runIsVar(held: String, members: String): Array<Violation> {
@@ -241,13 +263,14 @@ class ThreadSafetyExhaustiveTest extends Test {
 
 	/**
 	 * `S.work(params)` takes `_m`, runs `held`, releases; `S.mode` is of `modeType`, written ` = A` unless `init` says
-	 * otherwise; `members` are added to `S`, `more` are further sources.
+	 * otherwise; `members` are added to `S`, `more` are further sources, `beside` files of the project the run leaves
+	 * out, and `closed` whether the config declares `closedWorld`.
 	 */
 	private static function run(
 		abstractDecl: String, modeType: String, held: String, params: String = '', init: String = ' = A', members: String = '',
-		?more: Array<String>
+		?more: Array<String>, ?beside: Array<{ name: String, source: String }>, closed: Bool = true
 	): Array<Violation> {
-		return ThreadSafetyCheckTest.violations(CONFIG, [
+		return ThreadSafetyCheckTest.violations(closed ? CONFIG : StringTools.replace(CONFIG, ',"closedWorld":true', ''), [
 			ThreadSafetyCheckTest.MUTEX,
 			'class Runner { public static function create(fn:()->Void):Void {} }',
 			abstractDecl,
@@ -255,7 +278,7 @@ class ThreadSafetyExhaustiveTest extends Test {
 			+ ' function use(n:Int):Void {} var flag:Bool = false; function pick():Null<V> return null; $members'
 			+ ' public function work($params):Void { _m.acquire(); $held _m.release(); }'
 			+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> s.work()); s._m.acquire(); s._m.release(); } }'
-		].concat(more ?? []));
+		].concat(more ?? []), beside);
 	}
 
 	/** The members of the findings (c) of `found`. */
