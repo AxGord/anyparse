@@ -1814,3 +1814,8 @@ decided the question; it may not become a record of runs.
   `FindingData.repeatedBy`, which the json record writes as `data.repeatedBy`; the warning a way's sink calls fold
   into carries what repeats each of them. No key is added for it (decision 2026-10-14): the repetition RANKS the
   call's own warning on the work list, it is not a second finding of the same I/O — branch `feat/ts-precision-3`
+- a hold only a `quietRoots` function runs judged as the main thread's own long work → TM's Help-menu cache wipe and
+  the MAS-migration handlers stayed family (b) warnings after their roots went quiet, so quieting a maintenance path
+  silenced its sink calls but not the locks it holds across them. A hold whose take no loud thread runs (its context
+  quiet only) is reported by no finding (b): the root waits on purpose, on the main thread, which never waits for its
+  own hold. It still makes its lock long, as any main-only hold does — branch `feat/ts-precision-3`

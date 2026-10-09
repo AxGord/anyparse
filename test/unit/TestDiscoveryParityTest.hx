@@ -2070,6 +2070,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-TS-UNKNOWN-LOCK-UNNAMED,M-TS-B-UNKNOWN-AS-MAIN-ONLY',
 			'unit.check.ThreadSafetyCheckTest#testAHoldOfAnotherObjectsLockIsNotReentrantForTheOwnLock :: control :: M-TS-REENTRANT-HOLDER-ELSEWHERE',
 			'unit.check.ThreadSafetyCheckTest#testAHoldOnlyABackgroundThreadTakesIsQuiet :: control :: M-TS-HELD-ANY-THREAD',
+			'unit.check.ThreadSafetyCheckTest#testAHoldOnlyAQuietRootRunsIsNotReported :: control :: M-TS-QUIET-HOLD',
 			'unit.check.ThreadSafetyCheckTest#testAHoldTakenThroughAWrapperIsTheCallersHold :: control :: M-TS-WRAPPER-NONE',
 			'unit.check.ThreadSafetyCheckTest#testALockCallThroughAnUntypedReceiverUnsealsTheMember :: control :: '
 				+ 'M-TS-UNNAMED-RECEIVER-SEALED',
@@ -6251,6 +6252,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-REPEATED-BY-OFF',
 			'M-TS-REPEATED-BY-SELF',
 			'M-TS-REPEATED-BY-MERGE',
+			'M-TS-QUIET-HOLD',
 			'M-TS-FOLD-SITE-CYCLE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];

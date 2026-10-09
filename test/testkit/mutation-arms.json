@@ -18593,6 +18593,14 @@
 			"note": "the warning a way's sink calls fold into drops what repeats the folded ones"
 		},
 		{
+			"name": "M-TS-QUIET-HOLD",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "reportLockHeld",
+			"find": " || states.edgeContext(a.edge) & (CTX_MAIN | CTX_BG) == 0)",
+			"replace": ")",
+			"note": "a hold only a quiet root runs reports as the main thread's own long work, though the root waits on purpose"
+		},
+		{
 			"name": "M-TS-FOLD-SITE-CYCLE",
 			"type": "anyparse.check.LockTaint",
 			"method": "mayRepeatAlong",

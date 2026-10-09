@@ -50,8 +50,9 @@ using StringTools;
  * and checked by `ThreadSafetyOptions`, which says every option it drops: `sinks`, `spawns`,
  * `marshals` and `throwers` (`ThrowReach`) are call patterns, matched by their last two dot-segments (`Type.*` covers a
  * type); a `lockPairs` entry is `<lock pattern>/<unlock member name>`, and a lock WRAPPER's call takes or gives its
- * lock with no entry of its own; `quietRoots` are handlers that block on purpose — the main thread is QUIET in them
- * while no loud main-thread code calls them (`settleContexts`); `reentrantLocks` are takes the holder may repeat on the
+ * lock with no entry of its own; `quietRoots` are handlers that block on purpose — the main thread
+ * is QUIET in them while no loud main-thread code calls them (`settleContexts`), and a hold only
+ * they run is reported by no finding (b); `reentrantLocks` are takes the holder may repeat on the
  * SAME object; `neverInvokes` calls run no function value handed to them; `mainThreadChecks` answer whether the running
  * thread is the main one; `closedWorld` says every caller and every write is in the run (`sealedFromOutside`,
  * `FieldWrites`), held only by a run covering the project it closes (`ProjectCoverage`); `exclude` drops files by
@@ -694,7 +695,9 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			final lock: Null<String> = a.lock;
 			final fold: FoldHold = RootCauseFold.unreported(a, paths.normal);
 			folds.push(fold);
-			if (a.uncontended || !mainTaken.contains(HoldGrade.takenKey(a))) continue;
+			// a hold only a quiet root runs waits on purpose, on the main thread, which never waits for its own hold
+			if (a.uncontended || !mainTaken.contains(HoldGrade.takenKey(a)) || states.edgeContext(a.edge) & (CTX_MAIN | CTX_BG) == 0)
+				continue;
 			// the main thread never waits for a hold of a lock it alone holds there: such a hold stays only as the main thread's
 			// own long work; who else holds a lock no member names is unknown
 			final mainOnly: Bool = lock != null && states.edgeContext(a.edge) & CTX_BG == 0 && !states.assumed.exists(a.edge.from);

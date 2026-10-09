@@ -829,6 +829,32 @@ class ThreadSafetyCheckTest extends Test {
 		#end
 	}
 
+	/**
+	 * A hold only a `quietRoots` function runs is quiet too (TM's Help-menu cache wipe under the file-system locks): the
+	 * main thread waits there on purpose, and never for its own hold — while a hold some loud path also runs still reports.
+	 */
+	@:pin('control') @:killer('M-TS-QUIET-HOLD')
+	public function testAHoldOnlyAQuietRootRunsIsNotReported(): Void {
+		#if (sys || nodejs)
+		final fixture: String -> Array<Violation> = also ->
+			violations(
+				'{"rules":{"thread-safety":{"sinks":["Sys.sleep","Mutex.acquire"],"lockPairs":["Mutex.acquire/release"],'
+				+ '"quietRoots":["A.shutdown"]}}}',
+				[
+					MUTEX,
+					'class Ui { public static function on(fn:()->Void):Void {} }',
+					'class A { static final m:Mutex = new Mutex(); static function flush():Void { m.acquire(); Sys.sleep(1); m.release(); }'
+					+ ' static function shutdown():Void flush(); static function peek():Void { m.acquire(); m.release(); $also }'
+					+ ' public static function main():Void { Ui.on(shutdown); Ui.on(peek); } }'
+				]
+			);
+		Assert.same([], [for (v in fixture('')) if (v.data?.family == 'B') v.message]);
+		Assert.same(['A.flush'], [for (v in fixture('flush();')) if (v.data?.family == 'B') v.data?.member], 'a loud path runs it too');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	/** A sink a quiet root reaches is still reported when another main-thread path reaches it too. */
 	@:pin('control') @:killer('M-TS-QUIET-SWALLOWS')
 	public function testAnotherPathToAQuietSinkStillReports(): Void {
