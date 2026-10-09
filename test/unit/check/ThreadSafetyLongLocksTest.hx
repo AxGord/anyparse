@@ -283,6 +283,26 @@ class ThreadSafetyLongLocksTest extends Test {
 		#end
 	}
 
+	/**
+	 * A flag whose name something else in the function declares is no fixed flag: an `if` reading the name past that
+	 * declaration reads the other binding, so the correlated take and give still read as a leak (review r4 `L2`, `L2d`).
+	 */
+	@:pin('control') @:killer('M-TS-FLAGS-SHADOW') @:killer('M-TS-FLAGS-WRITTEN')
+	public function testAShadowedFlagIsNoFixedFlag(): Void {
+		#if (sys || nodejs)
+		for (shadow in ['var b:Bool = c();', 'final b:Bool = b && c();']) {
+			final source: String = 'class A { final _m:Mutex = new Mutex(); public function new() {} function c():Bool return false;'
+				+ ' public function take(b:Bool):Void { if (b) _m.acquire(); $shadow if (b) _m.release(); }'
+				+ ' public static function main():Void { new A().take(true); } }';
+			Assert.same(['A.take'], [
+				for (r in reasonsOf(longLock(explain([source]), 'A._m'))) if (r.kind == 'leak') r.holder
+			], shadow);
+		}
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
 	/** The report of a `CONFIG` run over `sources` (plus `Mutex`). */
 	private static function explain(sources: Array<String>): LongLockReport {

@@ -20,7 +20,6 @@ class ThreadSafetyErrorPathTest extends Test {
 
 	private static inline final CONFIG: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Sys.sleep"],'
 		+ '"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"]}}}';
-
 	private static inline final REPORT: String = 'class Report { public static function send():Void Sys.sleep(1); }';
 
 	/**
@@ -94,6 +93,47 @@ class ThreadSafetyErrorPathTest extends Test {
 		CliFixture.removeDir(dir);
 		final reasons: Array<LongLockReason> = check.longLocks?.long.find(l -> l.lock == 'S._m')?.reasons ?? [];
 		Assert.same(['$dir/F3.hx:1'], [for (r in reasons) if (r.errorPath != null) r.errorPath]);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A `catch` inside a loop runs once per failing turn, on the normal run: both findings keep their warning (review r4 `P1`). */
+	@:pin('control') @:killer('M-TS-ERROR-LOOP')
+	public function testACatchInALoopIsNoErrorPath(): Void {
+		#if (sys || nodejs)
+		Assert.same(
+			['warning A S.ui | Mutex.acquire', 'warning B S.work | S._m'],
+			graded(run('final paths:Array<Int> = [1, 2];', 'for (p in paths) try { step(); } catch (e:Dynamic) { Report.send(); }'))
+		);
+		Assert.same(
+			['info A S.ui | Mutex.acquire', 'info B S.work | S._m'],
+			graded(run('', 'try { step(); } catch (e:Dynamic) { for (i in 0...2) Report.send(); }')),
+			'a loop inside the catch runs only there'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A lambda a `catch` stores runs wherever it is called, not inside the catch (review r4 `P2`); a local function the
+	 * catch calls runs only there.
+	 */
+	@:pin('control') @:killer('M-TS-ERROR-NESTED-REF') @:killer('M-TS-ERROR-CALLED-LOCAL')
+	public function testALambdaACatchStoresRunsAnywhere(): Void {
+		#if (sys || nodejs)
+		final stored: Array<Violation> = ThreadSafetyCheckTest.violations(CONFIG, [
+			'class A { static var onTick:() -> Void = null; static function step():Void {}'
+			+ ' public static function main():Void { try { step(); } catch (e:Dynamic) { onTick = () -> Sys.sleep(1); }'
+			+ ' for (i in 0...3) onTick(); } }'
+		]);
+		Assert.same(['warning A A.main | Sys.sleep'], graded(stored));
+		final called: Array<Violation> = ThreadSafetyCheckTest.violations(CONFIG, [
+			'class A { static function step():Void {}'
+			+ ' public static function main():Void { try { step(); } catch (e:Dynamic) { function log():Void Sys.sleep(1); log(); } } }'
+		]);
+		Assert.same(['info A A.main | Sys.sleep'], graded(called), 'called in the catch');
 		#else
 		Assert.pass('non-sys target');
 		#end

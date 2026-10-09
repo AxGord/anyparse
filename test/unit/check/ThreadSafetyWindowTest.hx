@@ -60,12 +60,32 @@ class ThreadSafetyWindowTest extends Test {
 		#end
 	}
 
+	/**
+	 * A throw only a `catch` that provably catches it stops: a typed one catches a value of its type (or a subtype),
+	 * a catch-all catches everything, and anything else leaves the function holding the lock (review r4 `L1`, `L1e`).
+	 */
+	@:pin('control') @:killer('M-TS-CATCH-ANY-TYPE') @:killer('M-TS-CATCH-SUPERTYPE') @:killer('M-TS-CATCH-EXCEPTION-TYPE')
+	public function testATypedCatchLetsAnotherThrowThrough(): Void {
+		#if (sys || nodejs)
+		Assert.same(['M.main'], takes(run('try { if (f() == 2) throw "x"; } catch (e:haxe.io.Eof) {}')), 'another type');
+		Assert.same(['M.main'], takes(run('try { if (f() == 2) throw new haxe.Exception("x"); } catch (e:String) {}')), 'a string catch');
+		Assert.same(['M.main'], takes(run('try { if (f() == 2) throw f(); } catch (e:String) {}')), 'a value of no known type');
+		Assert.same([], takes(run('try { if (f() == 2) throw "x"; } catch (e:String) {}')), 'its own type');
+		Assert.same([], takes(run('try { if (f() == 2) throw new Oops(); } catch (e:Fault) {}')), 'a supertype');
+		Assert.same([], takes(run('try { if (f() == 2) throw f(); } catch (e:haxe.Exception) {}')), 'the exception type');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
 	/** `W.work` takes `_m`, runs `body`, releases; the worker runs it while the main thread takes `_m`. */
 	private static function run(body: String): Array<Violation> {
 		return ThreadSafetyCheckTest.violations(CONFIG, [
 			ThreadSafetyCheckTest.MUTEX,
 			'class Runner { public static function create(fn:()->Void):Void {} }',
+			'class Fault { public function new() {} }',
+			'class Oops extends Fault { public function new() { super(); } }',
 			'class W { public final _m:Mutex = new Mutex(); public function new() {} function f():Int return 1;'
 			+ ' public function work():Void { _m.acquire(); $body _m.release(); } }',
 			'class M { public static function main():Void { final w:W = new W(); Runner.create(() -> w.work()); w._m.acquire(); w._m.release(); } }'

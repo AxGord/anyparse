@@ -11460,15 +11460,15 @@
 			"name": "M-TS-THROW-UNRAISED",
 			"type": "anyparse.check.LockWindow",
 			"method": "step",
-			"find": "if (before == true && _throwKinds.contains(kind)) raise(node);",
-			"replace": "",
+			"find": "if (before == true && !(_throwKinds.contains(kind) && raise(node))) _leaks = true;",
+			"replace": "if (before == true) _leaks = true;",
 			"note": "a throw reached holding the lock escapes nothing"
 		},
 		{
 			"name": "M-TS-THROW-CATCH-IGNORED",
 			"type": "anyparse.check.LockWindow",
 			"method": "step",
-			"find": "final intercepts: Bool = kids.exists(k -> k.kind == _catchKind);",
+			"find": "final intercepts: Bool = frame.catches.length > 0;",
 			"replace": "final intercepts: Bool = false;",
 			"note": "a throw inside a try with a catch escapes the function as if nothing caught it"
 		},
@@ -11476,7 +11476,7 @@
 			"name": "M-TS-THROW-CATCH-ENTRY-UNHELD",
 			"type": "anyparse.check.LockWindow",
 			"method": "step",
-			"find": "final entry: Bool = held || body == true || raised;",
+			"find": "final entry: Bool = held || body == true || frame.raised;",
 			"replace": "final entry: Bool = held || body == true;",
 			"note": "a catch reached by a throw from inside the hold starts unheld, so its rethrow escapes nothing"
 		},
@@ -11650,9 +11650,9 @@
 		},
 		{
 			"name": "M-TS-PARAM-WRITE-IGNORED",
-			"type": "anyparse.check.ArgumentValues",
+			"type": "anyparse.check.BareNames",
 			"method": "stable",
-			"find": " && !writes(fn, name)",
+			"find": " && !writes(fn, name, shape)",
 			"replace": "",
 			"note": "a parameter the body reassigns is read as holding its argument, so a branch the write opens reads as dead"
 		},
@@ -17515,18 +17515,26 @@
 		{
 			"name": "M-TS-RETHROW-ANY-NAME",
 			"type": "anyparse.check.ThrowReach",
-			"method": "throwsName",
-			"find": "node.children[0].name == name",
-			"replace": "node.children[0].name != null",
-			"note": "a catch throwing any bare name counts as a rethrow"
+			"method": "throwsAny",
+			"find": "return _throwKinds.contains(node.kind) || node.children.exists(throwsAny);",
+			"replace": "return _throwKinds.contains(node.kind) && node.children.length == 1 && node.children[0].kind == _shape.identKind || node.children.exists(throwsAny);",
+			"note": "only a throw of a bare name in a catch counts as letting the exception go on"
 		},
 		{
 			"name": "M-TS-RETHROW-NESTED",
 			"type": "anyparse.check.ThrowReach",
-			"method": "throwsName",
+			"method": "throwsAny",
 			"find": "if (_nestedFnKinds.contains(node.kind)) return false;",
 			"replace": "",
 			"note": "a rethrow inside a lambda the catch builds counts"
+		},
+		{
+			"name": "M-TS-THROW-TYPED-INTERCEPTS",
+			"type": "anyparse.check.ThrowReach",
+			"method": "intercepts",
+			"find": "k.kind == _catchKind && CatchTypes.catches(k, null, _shape, _graph.types)",
+			"replace": "k.kind == _catchKind",
+			"note": "a typed catch keeps what a throwers call raises"
 		},
 		{
 			"name": "M-TS-ALLOC-OFF",
@@ -17625,6 +17633,36 @@
 			"note": "the try body of a dead catch runs nothing either"
 		},
 		{
+			"name": "M-TS-DEADCATCH-INTERP",
+			"type": "anyparse.check.DeadCatches",
+			"method": "throwsNothing",
+			"find": "return node.children.foreach(c -> inertSegment(c.kind));",
+			"replace": "return true;",
+			"note": "an interpolated string runs nothing"
+		},
+		{
+			"name": "M-TS-DEADCATCH-RECEIVER",
+			"type": "anyparse.check.DeadCatches",
+			"method": "nonThrowingCall",
+			"find": "listed && staticCallee(file, callee) &&",
+			"replace": "listed &&",
+			"note": "a nonThrowing method called off any value receiver throws nothing"
+		},
+		{
+			"name": "M-TS-DEADCATCH-PROPERTY",
+			"type": "anyparse.check.DeadCatches",
+			"method": "plainRead",
+			"force": "true",
+			"note": "a bare name read as a property runs no getter"
+		},
+		{
+			"name": "M-TS-DEADCATCH-BINDING",
+			"type": "anyparse.check.DeadCatches",
+			"method": "plainRead",
+			"force": "false",
+			"note": "a bare read of a parameter may throw"
+		},
+		{
 			"name": "M-TS-STATES-IGNORED",
 			"type": "anyparse.check.MainRepeats",
 			"method": "runsFrom",
@@ -17649,11 +17687,19 @@
 			"note": "a final local bound to a condition decides nothing"
 		},
 		{
+			"name": "M-TS-COND-LOCAL-ANY-BLOCK",
+			"type": "anyparse.check.BareNames",
+			"method": "localOf",
+			"find": "final decl: QueryNode = named[0];",
+			"replace": "final decl: QueryNode = named[0]; if (named.length == 1) return decl;",
+			"note": "a final local decides a read of its name outside its block, or outside the lambda declaring it"
+		},
+		{
 			"name": "M-TS-ARG-LITERAL-NONNULL",
 			"type": "anyparse.check.ArgumentValues",
-			"method": "valueOf",
-			"find": "for (k in [_shape.newExprKind, _shape.objectLiteralKind, _shape.arrayLiteralKind]) if (k != null) k",
-			"replace": "for (k in [_shape.newExprKind]) if (k != null) k",
+			"method": "builtKindsOf",
+			"find": "for (k in [shape.newExprKind, shape.objectLiteralKind, shape.arrayLiteralKind]) if (k != null) k",
+			"replace": "for (k in [shape.newExprKind]) if (k != null) k",
 			"note": "an object literal argument is of unknown nullness"
 		},
 		{
@@ -17716,24 +17762,24 @@
 			"name": "M-TS-EXH-ALL-NAMED",
 			"type": "anyparse.check.ExhaustiveSwitches",
 			"method": "dead",
-			"find": "return values.foreach(v -> named.contains(v));",
-			"replace": "return values.exists(v -> named.contains(v));",
+			"find": "return closed.values.foreach(v -> named.contains(v));",
+			"replace": "return closed.values.exists(v -> named.contains(v));",
 			"note": "one named value makes the catch-all dead"
 		},
 		{
 			"name": "M-TS-EXH-FROM",
 			"type": "anyparse.check.ExhaustiveSwitches",
-			"method": "valuesOf",
-			"find": "if (k.kind == from) return null;",
-			"replace": "",
-			"note": "an enum abstract with a from clause counts as closed"
+			"method": "membersOf",
+			"find": "else if (!fields.contains(k.kind))",
+			"replace": "else if (false)",
+			"note": "a member of the abstract of a kind no rule knows — a from clause, a conditional region — keeps it closed"
 		},
 		{
 			"name": "M-TS-EXH-FROMFN",
 			"type": "anyparse.check.ExhaustiveSwitches",
-			"method": "valuesOf",
-			"find": "&& !handsBackValuesOnly(fn, values)",
-			"replace": "&& false",
+			"method": "buildsNoOther",
+			"find": "declared.children.length == 0 && handsBackValuesOnly(fn, values);",
+			"replace": "declared.children.length == 0;",
 			"note": "a function of the abstract building any value keeps it closed"
 		},
 		{
@@ -17748,9 +17794,125 @@
 			"name": "M-TS-EXH-OPAQUE",
 			"type": "anyparse.check.LockWindow",
 			"method": "raisesInside",
-			"find": "&& !(dead != null && dead(node, k))) raisesInside(k, after);",
-			"replace": ") raisesInside(k, after);",
+			"find": "for (i => k in kids) if (!(dead != null && dead(node, k))) {",
+			"replace": "for (i => k in kids) if (true) {",
 			"note": "a dead catch-all inside an opaque step raises"
+		},
+		{
+			"name": "M-TS-EXH-SUBJECT-BOUND",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "subjectAbstract",
+			"find": "read.kind == _shape.identKind && BareNames.bindsNothing(fn, name, _shape)",
+			"replace": "read.kind == _shape.identKind",
+			"note": "a subject the function binds is read as the member of its name"
+		},
+		{
+			"name": "M-TS-EXH-GUARD",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "dead",
+			"find": " && !guarded(k)",
+			"replace": "",
+			"note": "a guarded case names its value"
+		},
+		{
+			"name": "M-TS-EXH-CTOR",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "buildsNoOther",
+			"find": "if (fn.name == (_shape.constructorName ?? 'new')) return false;",
+			"replace": "",
+			"note": "a constructor of the abstract builds no other value"
+		},
+		{
+			"name": "M-TS-EXH-NORET",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "buildsNoOther",
+			"find": "return returns.length == 0;",
+			"replace": "return true;",
+			"note": "a function of the abstract with no written return type builds no value"
+		},
+		{
+			"name": "M-TS-EXH-STATIC-FIELD",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "membersOf",
+			"find": "else if (fields.contains(k.kind) && (k.type == null || mentions(k.type, type)))",
+			"replace": "else if (false)",
+			"note": "a static field of the abstract builds no other value"
+		},
+		{
+			"name": "M-TS-EXH-WRITES",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "storedHolds",
+			"find": "return starts && assigned;",
+			"replace": "return starts;",
+			"note": "what is assigned to the member is never read"
+		},
+		{
+			"name": "M-TS-EXH-UNINIT",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "storedHolds",
+			"find": "init == null ? closed.zeroIsValue :",
+			"replace": "init == null ? true :",
+			"note": "a member nothing initializes holds a value"
+		},
+		{
+			"name": "M-TS-EXH-ZERO",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "countsFromZero",
+			"force": "false",
+			"note": "no counting abstract has 0 among its values"
+		},
+		{
+			"name": "M-TS-EXH-OPTIONAL",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "parameterOf",
+			"find": "if (param.kind == _shape.optionalParamKind) return optional;",
+			"replace": "if (param.kind == _shape.optionalParamKind) return true;",
+			"note": "an optional parameter, null when left out, holds a value"
+		},
+		{
+			"name": "M-TS-EXH-CONVERT-OFF",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "convertedCall",
+			"force": "false",
+			"note": "no call converts into the abstract through a @:from function"
+		},
+		{
+			"name": "M-TS-EXH-CONVERT-ANY",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "convertedCall",
+			"force": "true",
+			"note": "every call converts into a value of the abstract"
+		},
+		{
+			"name": "M-TS-EXH-COLLISION",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "typeDecl",
+			"find": "found.length == 1 && _graph.types.declarationCount(type) == 1 ? found[0] : null",
+			"replace": "found.length > 0 ? found[0] : null",
+			"note": "the first of two declarations of a name is the one read"
+		},
+		{
+			"name": "M-TS-ERROR-LOOP",
+			"type": "anyparse.check.ErrorPaths",
+			"method": "catchTo",
+			"find": "looped = looped || _loopKinds.contains(child.kind);",
+			"replace": "looped = false;",
+			"note": "a catch inside a loop runs only on an error path"
+		},
+		{
+			"name": "M-TS-ERROR-NESTED-REF",
+			"type": "anyparse.check.ErrorPaths",
+			"method": "catchTo",
+			"find": "if (_nestedFnKinds.contains(child.kind) && found != null && !(span != null && runsOnlyIn(file, span, found))) found = null;",
+			"replace": "",
+			"note": "a lambda written in a catch runs only inside it, wherever its value is called"
+		},
+		{
+			"name": "M-TS-ERROR-CALLED-LOCAL",
+			"type": "anyparse.check.ErrorPaths",
+			"method": "runsOnlyIn",
+			"force": "false",
+			"note": "a local function a catch calls runs outside it"
 		},
 		{
 			"name": "M-TS-SITE-PER-SINK",
@@ -17908,17 +18070,47 @@
 			"name": "M-TS-FLAGS-WRITTEN",
 			"type": "anyparse.check.FixedFlags",
 			"method": "of",
-			"find": " && !written.contains(p)",
+			"find": " && BareNames.stable(fn, c, shape)",
 			"replace": "",
-			"note": "a parameter the function writes counts as fixed"
+			"note": "a parameter the function writes or whose name it declares again counts as fixed"
+		},
+		{
+			"name": "M-TS-FLAGS-SHADOW",
+			"type": "anyparse.check.BareNames",
+			"method": "stable",
+			"find": "named.length == 1 && named[0] == param && ",
+			"replace": "",
+			"note": "a parameter whose name the function declares again keeps the value a call hands it"
 		},
 		{
 			"name": "M-TS-WIN-CAUGHT-THROW",
 			"type": "anyparse.check.LockWindow",
 			"method": "step",
-			"find": " && !(_throwKinds.contains(kind) && _catchDepth > 0)",
-			"replace": "",
+			"find": "if (before == true && !(_throwKinds.contains(kind) && raise(node))) _leaks = true;",
+			"replace": "if (before == true && !(_throwKinds.contains(kind) && raise(node) && false)) _leaks = true;",
 			"note": "a throw a catch around it intercepts is a path out of the function"
+		},
+		{
+			"name": "M-TS-CATCH-ANY-TYPE",
+			"type": "anyparse.check.CatchTypes",
+			"method": "catches",
+			"force": "true",
+			"note": "a typed catch catches every thrown value"
+		},
+		{
+			"name": "M-TS-CATCH-SUPERTYPE",
+			"type": "anyparse.check.CatchTypes",
+			"method": "catches",
+			"find": "&& types.firstOnChain(thrown, t -> t == written) != null",
+			"replace": "&& false",
+			"note": "a catch of a supertype misses a thrown subtype"
+		},
+		{
+			"name": "M-TS-CATCH-EXCEPTION-TYPE",
+			"type": "anyparse.check.CatchTypes",
+			"method": "catchesAll",
+			"force": "false",
+			"note": "a catch of the exception type or Dynamic catches nothing for sure"
 		}
 	]
 }
