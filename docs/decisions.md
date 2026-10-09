@@ -1909,3 +1909,8 @@ decided the question; it may not become a record of runs.
   function only when it is the same lock, opened by the same call (a helper taking both), or spans the other's take
   (`RootCauseFold.nests`). The "way passes" clause stays as decided for `renameCloudFolderBlocked` (review round 2
   `r1`, `s1`) — branch `feat/ts-precision-3`
+- a give "takes back what its function took" whenever a take of its lock runs on every path before it → a give in a
+  loop after ONE take (`_outer.acquire(); for (i in 0...2) _outer.release();`) gave back a hold begun elsewhere on
+  every turn after the first, yet `_outer` still dominated. A take covers a give only when the give does not repeat
+  after it (`GiveFacts.repeatsAfter` = `CallRepetition.repeatedUnder`: a loop around the give that is not around the
+  take, a hand-on, a recursion) (review round 2 `k1`) — branch `feat/ts-precision-3`

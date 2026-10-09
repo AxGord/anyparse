@@ -2202,6 +2202,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyDominanceTest#testAGiveOnAnExitingPathKeepsTheOuterLockHeld :: control :: M-TS-DOM-EXITS-IGNORED',
 			'unit.check.ThreadSafetyDominanceTest#testAGiveOnTheWayToTheLongCallBreaksDominance :: control :: '
 				+ 'M-TS-LEAVES-CAUGHT-THROW,M-TS-COVER-RETAKE',
+			'unit.check.ThreadSafetyDominanceTest#testAGiveRepeatedAfterOneTakeBreaksDominance :: control :: M-TS-GIVE-REPEATED',
 			'unit.check.ThreadSafetyDominanceTest#testAHoldDominatesItsOwnTake :: control :: M-TS-DOM-UNDER-HOLD-OFF,M-TS-RUNS-AS-IS',
 			'unit.check.ThreadSafetyDominanceTest#testALongHoldOutsideTheOuterLockBreaksDominance :: control :: M-TS-DOM-ANY-HOLD',
 			'unit.check.ThreadSafetyDominanceTest#testAMainTakeUnderTheOuterLockIsBrief :: control :: M-TS-DOM-OFF',
@@ -6270,6 +6271,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-RELEASE-CALLBACK',
 			'M-TS-GIVE-PATH',
 			'M-TS-GIVE-OBJECT',
+			'M-TS-GIVE-REPEATED',
 			'M-TS-BLIND-START',
 			'M-TS-DOM-OWNERLESS',
 			'M-TS-DOM-SHARED',

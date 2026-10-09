@@ -117,6 +117,7 @@ final class MustHeld {
 		_releasers = new LockReleasers(graph, plugin, trees, sites, states, conditions, holds, inertRef, unresolvedNames, {
 			sameObject: sameObject,
 			takenBefore: runsBefore,
+			repeatsAfter: repetition.repeatedUnder,
 			runs: _body.runsOf
 		});
 		solveEntries(inertRef, unresolvedNames, seedable);

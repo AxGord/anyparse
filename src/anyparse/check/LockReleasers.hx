@@ -18,6 +18,9 @@ using Lambda;
 typedef GiveFacts = {
 	final sameObject: (LockAcquire, LockGive) -> Bool;
 	final takenBefore: (CallEdge, String, Int) -> Bool;
+
+	/** Whether a give may run more than once after one take of its function (`CallRepetition.repeatedUnder`). */
+	final repeatsAfter: (CallEdge, CallEdge) -> Bool;
 	final runs: (String, String) -> Array<String>;
 }
 
@@ -29,7 +32,8 @@ typedef GiveFacts = {
  * A wrapper's or a multi-lock helper's own gives are its callers', each judged where it is called: a wrapper's
  * call and a helper's call give where they are made. A give no thread runs gives nothing back, and one a take
  * of its lock on the same object runs on every path before, in every run of its function, gives back what it
- * took (`givesUntaken`) — any other may give back a hold begun elsewhere: a `tryAcquire` takes nothing for sure.
+ * took (`givesUntaken`) — once: a give a loop, a hand-on or a recursion repeats after that take gives back
+ * more than it took — any other may give back a hold begun elsewhere: a `tryAcquire` takes nothing for sure.
  */
 @:nullSafety(Strict)
 final class LockReleasers {
@@ -166,6 +170,7 @@ final class LockReleasers {
 			_facts.runs(id, s.valuation).exists(v -> _conditions.carried(give, v, s.ctx) != 0 && !takes.exists(a -> {
 				final taken: Int = a.edge.span?.to ?? at;
 				_conditions.carried(a.edge, v, s.ctx) != 0 && _facts.sameObject(a, given) && _facts.takenBefore(a.edge, v, at)
+				&& !_facts.repeatsAfter(give, a.edge)
 				&& !others.exists(o -> (o.span?.from ?? -1) >= taken && (o.span?.to ?? at + 1) <= at && _facts.takenBefore(o, v, at));
 			}))
 		);

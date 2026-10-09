@@ -18609,6 +18609,14 @@
 			"note": "a take on another object counts as taking what the give gives back"
 		},
 		{
+			"name": "M-TS-GIVE-REPEATED",
+			"type": "anyparse.check.LockReleasers",
+			"method": "givesUntaken",
+			"find": "&& !_facts.repeatsAfter(give, a.edge)",
+			"replace": "",
+			"note": "a give a loop repeats after one take gives back only what it took"
+		},
+		{
 			"name": "M-TS-BLIND-START",
 			"type": "anyparse.check.LockReleasers",
 			"method": "blindIn",

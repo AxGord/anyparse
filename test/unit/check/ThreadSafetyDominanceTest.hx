@@ -148,6 +148,27 @@ class ThreadSafetyDominanceTest extends Test {
 	}
 
 	/**
+	 * A give a loop repeats after one take gives back more than it took: every turn after the first releases a hold
+	 * begun elsewhere, and the lock dominates nothing (review round 2 `k1`; `k2` writes the second give out).
+	 */
+	@:pin('control') @:killer('M-TS-GIVE-REPEATED')
+	public function testAGiveRepeatedAfterOneTakeBreaksDominance(): Void {
+		#if (sys || nodejs)
+		final rest: String = '_inner.acquire(); Sys.sleep(1); _inner.release(); _outer.release();';
+		Assert.same([0], [
+			shortQuickTakes(
+				givingBack(rest, 'public function kick():Void { _outer.acquire(); for (i in 0...2) _outer.release(); }', '', '', 'd.kick()')
+			)
+		], 'a loop');
+		Assert.same([1], [
+			shortQuickTakes(givingBack(rest, 'public function kick():Void { _outer.acquire(); _outer.release(); }', '', '', 'd.kick()'))
+		], 'once');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
 	 * A call made on an unresolved call's result is blind too, wherever it starts (review `chain-chained-unresolved`); the
 	 * untaken give `dropAll` makes keeps `_outer` from dominating anything as well, so no single cut breaks it: a guard.
 	 */
