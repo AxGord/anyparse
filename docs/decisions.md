@@ -1598,5 +1598,12 @@ decided the question; it may not become a record of runs.
   field, the running object's) and drops a dispatch none resolves to. Path-sensitive on the hold walk only: the
   main-thread finding is per call site, and main does reach the blocking loader through `goBlocked`, so
   `A|BlockingNativeURLLoader.go` stays (its witness chain is still the `request` one) — branch `feat/ts-precision-2`
+- passing the oracle's compiler facts to this rule's graph by default → measured on the live TM at 1d1ba147 (its `src`
+  identical to the frozen tree, 13 configurations, verdicts reused): keys 86 → 123, precision 0.21 → 0.16, recall
+  15/15 either way. A call the facts describe carries no `CallEdge.receiverField`, so `LockSites.lockOf` names no
+  lock for its takes and every one becomes an unnamed, always-long lock (`SerFile.write` "holds Mutex.acquire",
+  every `CloudDatabase._batchMutex` holder over its own `_mutex` take); and a lambda the facts record as a value made
+  at its site inherited its maker's thread beside the syntax's `spawns` registration (now `ThreadGraph.madeWhereHanded`).
+  Opt-in (`compilerFacts`) until the facts' call edges name their receiver field — branch `feat/ts-precision-2`
 - judging "inside a catch" off the witness chain the finding prints → the chain is one way; a second way outside every
   catch must keep the warning, which only a solve without the catch edges can see — branch `feat/ts-precision-2`

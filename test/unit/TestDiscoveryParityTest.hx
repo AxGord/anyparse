@@ -387,6 +387,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.ThreadSafetyCostTest',
 		'unit.check.ThreadSafetyDominanceTest',
 		'unit.check.ThreadSafetyErrorPathTest',
+		'unit.check.ThreadSafetyFactsTest',
 		'unit.check.ThreadSafetyFindingDataTest',
 		'unit.check.ThreadSafetyFoldingTest',
 		'unit.check.ThreadSafetyHelperHoldsTest',
@@ -2163,6 +2164,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-TS-ERROR-REACH-OFF,M-TS-ERROR-HOLD-OFF,M-TS-ERROR-TAKE-OFF',
 			'unit.check.ThreadSafetyErrorPathTest#testAMainSinkCallInACatchIsInfo :: control :: M-TS-ERROR-CAUGHT-OFF',
 			'unit.check.ThreadSafetyErrorPathTest#testExplainLongMarksTheErrorPath :: control :: M-TS-ERROR-EXPLAIN-OFF',
+			'unit.check.ThreadSafetyFactsTest#testCompilerFactsResolveWhatTheSyntaxCannot :: control :: M-TS-FACTS-IGNORED,M-TS-FACTS-MADE-REF,M-TS-FACTS-GATE',
 			'unit.check.ThreadSafetyFindingDataTest#testInitializerFindingsNameTheInitializer :: control :: M-TS-DATA-INIT-LAMBDA',
 			'unit.check.ThreadSafetyFindingDataTest#testLambdaFindingNamesItsEnclosingMember :: control :: M-TS-DATA-MEMBER-LAMBDA',
 			'unit.check.ThreadSafetyFindingDataTest#testLockOrderData :: control :: M-TS-DATA-SUBJECT-UNSORTED',
@@ -5994,7 +5996,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-ALLOC-ANY-WRITE',
 			'M-TS-ALLOC-DECLARED',
 			'M-TS-ALLOC-NEW',
-			'M-TS-ALLOC-LIBRARY'
+			'M-TS-ALLOC-LIBRARY',
+			'M-TS-FACTS-IGNORED',
+			'M-TS-FACTS-MADE-REF',
+			'M-TS-FACTS-GATE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

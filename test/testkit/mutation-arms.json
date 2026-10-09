@@ -17466,16 +17466,16 @@
 		},
 		{
 			"name": "M-TS-HELPER-B-OFF",
-			"type": "anyparse.check.ThreadSafety",
-			"method": "judgedHolds",
+			"type": "anyparse.check.HoldGrade",
+			"method": "judged",
 			"find": "return [for (a in acquires) if (!sites.helpers.contains(a.edge.from)) a].concat(helperHolds);",
 			"replace": "return [for (a in acquires) if (!sites.helpers.contains(a.edge.from)) a];",
 			"note": "a multi-lock helper's call opens no hold its caller is judged by"
 		},
 		{
 			"name": "M-TS-HELPER-OWN-TAKES",
-			"type": "anyparse.check.ThreadSafety",
-			"method": "judgedHolds",
+			"type": "anyparse.check.HoldGrade",
+			"method": "judged",
 			"find": "return [for (a in acquires) if (!sites.helpers.contains(a.edge.from)) a].concat(helperHolds);",
 			"replace": "return [for (a in acquires) a].concat(helperHolds);",
 			"note": "a multi-lock helper's own takes are judged as holds of their own"
@@ -17567,6 +17567,30 @@
 			"find": "return target.isExternal;",
 			"replace": "return true;",
 			"note": "a library class may run any project override"
+		},
+		{
+			"name": "M-TS-FACTS-IGNORED",
+			"type": "anyparse.check.ThreadGraph",
+			"method": "build",
+			"find": "if (facts == null) return CallGraph.build(files, plugin);",
+			"replace": "if (facts == null || true) return CallGraph.build(files, plugin);",
+			"note": "thread-safety builds its graph from syntax alone with compiler facts at hand"
+		},
+		{
+			"name": "M-TS-FACTS-MADE-REF",
+			"type": "anyparse.check.ThreadGraph",
+			"method": "madeWhereHanded",
+			"find": "return edge.via == null && at != null",
+			"replace": "return false && edge.via == null && at != null",
+			"note": "the facts' record of a nested value made where the syntax hands it to a spawn makes it inherit the registrar's thread"
+		},
+		{
+			"name": "M-TS-FACTS-GATE",
+			"type": "anyparse.check.ThreadGraph",
+			"method": "build",
+			"find": "final host: Null<SymbolIndexHost> = useFacts && plugin is SymbolIndexHost ? cast plugin : null;",
+			"replace": "final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;",
+			"note": "thread-safety reads compiler facts the project never asked for"
 		}
 	]
 }

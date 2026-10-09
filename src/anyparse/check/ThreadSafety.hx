@@ -52,6 +52,7 @@ using StringTools;
  * SAME object; `neverInvokes` calls run no function value handed to them; `mainThreadChecks` answer whether the running
  * thread is the main one; `closedWorld` says every caller is in the run (`sealedFromOutside`); `exclude` drops files by
  * a '/'-bounded path-segment run before the graph is built; `shortSinks` are the sinks one call of which waits briefly,
+ * `compilerFacts: true` builds the graph through the run's compiler facts when it has them (`ThreadGraph.build`);
  * `iterates` the calls running a function value handed to them once per element, and `registers` the calls keeping one to
  * run later, once per event however often it was registered (`CallRepetition`); `sharedLocks` are the `lockPairs` take
  * members taking their lock shared — a lock only ever taken through them never waits (`QuietLocks`).
@@ -130,7 +131,10 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		if (files.length == 0) return [];
 		// `Linter.collect` hands over every file but an `exclude`d one (`scanSkipReason`), and drops the findings in a
 		// file with no `sinks` of its own afterwards (`skipReason`).
-		final graph: CallGraph = CallGraph.build(files, plugin);
+		final useFacts: Bool = files.exists(
+			f -> LintConfig.resolveWith(_resolveConfig, f.file).boolOption('thread-safety', 'compilerFacts') == true
+		);
+		final graph: CallGraph = ThreadGraph.build(files, plugin, useFacts);
 		final sets: Array<ChainLists> = [];
 		final byFile: Map<String, ChainLists> = listsByFile(files, graph, sets, plugin.refShape().accessorMethodPrefixes ?? []);
 		final sinkIds: Array<String> = [];
@@ -142,7 +146,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 
 		final trees: FunctionTrees = new FunctionTrees(graph, plugin);
 		final conditions: EdgeConditions = new EdgeConditions(graph, trees, plugin, file -> listsOf(file).mainCheckIds);
-		final inertRef: (CallEdge) -> Bool = runsNothing.bind(sealedSlots, listsOf);
+		final inertRef: (CallEdge) -> Bool = runsNothing.bind(graph, sealedSlots, listsOf);
 		final seedable: (String) -> Bool = mayRunFromOutside.bind(graph, plugin, unresolvedNames, byFile);
 		// a quiet root is judged by the chain of the file declaring it
 		final states: ThreadStates = settleContexts(graph, listsOf, [
@@ -154,7 +158,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		// a hold whose take no thread runs holds nothing: a function nothing invokes, a take a condition rules out
 		final acquires: Array<LockAcquire> = [for (a in sites.acquires) if (states.edgeContext(a.edge) != 0) a];
 		final helperHolds: Array<LockAcquire> = [for (a in sites.helperHolds) if (states.edgeContext(a.edge) != 0) a];
-		final judged: Array<LockAcquire> = judgedHolds(sites, acquires, helperHolds);
+		final judged: Array<LockAcquire> = HoldGrade.judged(sites, acquires, helperHolds);
 		// the locks whose take blocks at all: held across any blocking call, short ones included
 		final blocking: Array<String> = [];
 		final taints: LockTaint = new LockTaint(
@@ -402,11 +406,17 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 
 	/**
 	 * Whether the `Ref` edge `edge` runs its value from nowhere: a value stored into a member of `sealedSlots`, which
-	 * runs where that member runs (`deriveStoredCalls`), or one handed to a call that never runs it (`neverInvoked`).
+	 * runs where that member runs (`deriveStoredCalls`), one handed to a call that never runs it (`neverInvoked`), or the
+	 * compiler facts' record of a value made at a site the syntax already records handing it to a call — the same value
+	 * at the same span, said once with its `via` (`ThreadGraph.madeWhereHanded`).
 	 */
-	private static function runsNothing(sealedSlots: Array<String>, listsOf: (String) -> ChainLists, edge: CallEdge): Bool {
-		return sealedSlots.contains(edge.storedInto ?? '') || neverInvoked(edge, listsOf(edge.file));
+	private static function runsNothing(
+		graph: CallGraph, sealedSlots: Array<String>, listsOf: (String) -> ChainLists, edge: CallEdge
+	): Bool {
+		return sealedSlots.contains(edge.storedInto ?? '') || neverInvoked(edge, listsOf(edge.file))
+			|| ThreadGraph.madeWhereHanded(graph, edge);
 	}
+
 
 	/**
 	 * Whether a function the walk reaches through no edge may still run, ASSUMED on the main thread: any function, unless
@@ -686,15 +696,6 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		nestHolds(reported);
 	}
 
-	/**
-	 * The holds findings (b) judge: every one of `acquires` but a multi-lock helper's own takes, which are its callers'
-	 * holds (`helperHolds`), judged where the helper is called.
-	 */
-	private static function judgedHolds(
-		sites: LockSites, acquires: Array<LockAcquire>, helperHolds: Array<LockAcquire>
-	): Array<LockAcquire> {
-		return [for (a in acquires) if (!sites.helpers.contains(a.edge.from)) a].concat(helperHolds);
-	}
 
 	/** The own-work taint of the costed taint `costs` (`LockTaint.ownWork`). */
 	private static function ownWorkOf(costs: LockTaint): LockTaint {

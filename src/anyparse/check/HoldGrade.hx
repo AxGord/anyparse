@@ -46,6 +46,14 @@ final class HoldGrade {
 	}
 
 	/**
+	 * The holds findings (b) judge: every one of `acquires` but a multi-lock helper's own takes, which are its callers'
+	 * holds (`helperHolds`), judged where the helper is called.
+	 */
+	public static function judged(sites: LockSites, acquires: Array<LockAcquire>, helperHolds: Array<LockAcquire>): Array<LockAcquire> {
+		return [for (a in acquires) if (!sites.helpers.contains(a.edge.from)) a].concat(helperHolds);
+	}
+
+	/**
 	 * Whether the hold `a` HANDS its lock OFF: it outlives its function on some path, and nothing of the function gives
 	 * the lock back — no give of it there, no call in its window of a function that releases it without taking it — so
 	 * on every path that takes it, it stays held past the end until another function releases it. Never a lock wrapper's
