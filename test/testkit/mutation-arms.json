@@ -16940,8 +16940,8 @@
 			"name": "M-TS-REPEAT-UPWARD-NONE",
 			"type": "anyparse.check.MainRepeats",
 			"method": "climbEdge",
-			"find": "_repetition.repeated(e) ? null :",
-			"replace": "false ? null :",
+			"find": "_repetition.repeated(e) ? null : _repetition.along(e, way)",
+			"replace": "way",
 			"note": "a caller repeating a function up the main thread's way repeats nothing below it"
 		},
 		{
