@@ -636,9 +636,8 @@ final class LockTaint {
 		inline function runsWhereHanded(e: CallEdge): Bool {
 			final lists: ChainLists = listsOf(e.file);
 			final via: String = e.via ?? '';
-			return e.kind == Ref && _threads.runsFrom(e)
-				&& !(lists.spawnIds.contains(via) || lists.marshalIds.contains(via) || lists.registerIds.contains(via)
-					|| lists.registerNames.contains(e.viaMember ?? ''));
+			final kept: Bool = lists.registerIds.contains(via) || lists.registerNames.contains(e.viaMember ?? '');
+			return e.kind == Ref && _threads.runsFrom(e) && !(lists.spawnIds.contains(via) || lists.marshalIds.contains(via) || kept);
 		}
 		final seen: Map<String, Bool> = [id => true];
 		final queue: Array<String> = [id];

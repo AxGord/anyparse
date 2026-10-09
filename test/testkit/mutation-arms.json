@@ -18756,8 +18756,8 @@
 			"name": "M-TS-CYCLE-REGISTERED",
 			"type": "anyparse.check.LockTaint",
 			"method": "onCycle",
-			"find": " || lists.registerIds.contains(via)\n\t\t\t\t|| lists.registerNames.contains(e.viaMember ?? ''))",
-			"replace": ")",
+			"find": "final kept: Bool = lists.registerIds.contains(via) || lists.registerNames.contains(e.viaMember ?? '');",
+			"replace": "final kept: Bool = false;",
 			"note": "a value a `registers` call keeps counts as run right away, closing cycles under the lock"
 		},
 		{
