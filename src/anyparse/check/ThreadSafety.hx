@@ -651,7 +651,6 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		}
 	}
 
-
 	/** One `info` finding naming no file per line of `problems` (`listsByFile`): what the options' read left out. */
 	private static function reportConfigProblems(problems: Array<String>, violations: Array<Violation>): Void {
 		for (p in problems) violations.push({
