@@ -50,7 +50,8 @@ class ThreadSafetyCostTest extends Test {
 	public function testAShortSinkInALoopWarns(): Void {
 		#if (sys || nodejs)
 		Assert.same(['warning A A.scan | FileSystem.stat'], graded(run([
-			'class A { public static function scan(ps:Array<String>):Void for (p in ps) FileSystem.stat(p); }'
+			'class A { public static function scan(ps:Array<String>):Void for (p in ps) FileSystem.stat(p);'
+			+ ' public static function main():Void scan(["a"]); }'
 		])));
 		#else
 		Assert.pass('non-sys target');

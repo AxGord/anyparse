@@ -209,7 +209,10 @@ class ThreadSafetyRepetitionTest extends Test {
 		#end
 	}
 
-	/** Owners of one distance are ordered by file, then offset as a number: an unrelated comment reorders nothing. */
+	/**
+	 * Owners of one distance are ordered by file, then offset as a number: `p` at a two-digit
+	 * offset stays ahead of `q` past a thousand-character comment, which text order would put first.
+	 */
 	@:pin('control') @:killer('M-TS-OWNER-OFFSET-TEXT')
 	public function testOwnersAreOrderedByOffsetAsANumber(): Void {
 		#if (sys || nodejs)
@@ -269,10 +272,10 @@ class ThreadSafetyRepetitionTest extends Test {
 		return ThreadSafetyCheckTest.violations(config, [ThreadSafetyCheckTest.MUTEX, LIB, other, 'class M { $members }']);
 	}
 
-	/** `p` and `q` each loop over a call of `a`, a short call, with `gap` between them. */
+	/** `p` and `q` each loop over a call of `a`, a short call, `p` first in the file and `gap` between them. */
 	private static function owners(gap: String): String {
-		return 'static function a():Void Db.request("a"); static function p(xs:Array<String>):Void for (x in xs) a();\n$gap'
-			+ ' static function q(xs:Array<String>):Void for (x in xs) a();'
+		return 'static function p(xs:Array<String>):Void for (x in xs) a();\n$gap'
+			+ ' static function q(xs:Array<String>):Void for (x in xs) a(); static function a():Void Db.request("a");'
 			+ ' public static function main():Void { p(["x"]); q(["y"]); }';
 	}
 
