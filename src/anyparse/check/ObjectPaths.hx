@@ -4,16 +4,16 @@ import anyparse.query.CallGraph;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex.MemberInfo;
-import anyparse.runtime.Span;
 
 using Lambda;
 
 /**
  * The object a call is made on, named relative to the object the calling function runs on, for the locks a hold
  * carries into its callees (`MustHeld`): a PATH of fields read off it — a bare field or one read off `this`, and at most
- * one field of that (`fileSystem.cloudDatabase`) — each STABLE: `final`, or a `var` that nothing writes outside its
- * type's constructor. A link is named by its member name, joined by `SEPARATOR`: one object holds one field of a name,
- * whichever type declares it. Positive: any other receiver names no object.
+ * one field of that (`fileSystem.cloudDatabase`) — each STABLE: `final`, or an instance `var` that nothing writes outside
+ * its type's constructor. A link is named by its member name, joined by `SEPARATOR`: one object holds one field of a
+ * name, whichever type declares it. Positive: any other receiver names no object, and a `var` is stable only when the
+ * run sees every write of the project (`FieldWrites.complete`).
  */
 @:nullSafety(Strict)
 final class ObjectPaths {
@@ -28,10 +28,14 @@ final class ObjectPaths {
 	private final _sites: LockSites;
 	private final _shape: RefShape;
 
-	public function new(graph: CallGraph, plugin: GrammarPlugin, sites: LockSites) {
+	/** The run's field writes. */
+	private final _writes: FieldWrites;
+
+	public function new(graph: CallGraph, plugin: GrammarPlugin, sites: LockSites, writes: FieldWrites) {
 		_graph = graph;
 		_sites = sites;
 		_shape = plugin.refShape();
+		_writes = writes;
 	}
 
 	/**
@@ -53,26 +57,22 @@ final class ObjectPaths {
 
 	/**
 	 * Whether the field `field` (`Type.member`) names one object for good once its type's constructor ran: a `final`
-	 * one, or a `var` no assignment, compound assignment, increment or decrement of any project file writes outside that
-	 * constructor — any write of the name counts, whatever its receiver.
+	 * one, or an instance `var` the run sees every write of (`FieldWrites.complete`) and none outside that constructor's
+	 * own body — any write of the name counts, whatever its receiver, and one in a lambda or a local function the
+	 * constructor makes runs later. A field read through a getter (`get`, `dynamic`) names whatever the getter returns,
+	 * and a `static var` is written anew by every write of it, the instance constructor's included: neither is stable.
 	 */
 	public function stable(field: String): Bool {
 		final known: Null<Bool> = _stable[field];
 		if (known != null) return known;
 		final dot: Int = field.lastIndexOf('.');
-		final info: Null<MemberInfo> = dot <= 0 ? null : _graph.types.memberOnChain(field.substring(0, dot), field.substring(dot + 1));
-		final kind: String = info?.kind ?? '';
-		final fields: Array<String> = _shape.fieldDeclKinds ?? [];
-		final answer: Bool = fields.contains(kind)
-			&& (!(_shape.mutableFieldDeclKinds ?? []).contains(kind)
-				|| writtenOnlyInConstructor(field.substring(0, dot), field.substring(dot + 1)));
+		final type: String = field.substring(0, dot);
+		final name: String = field.substring(dot + 1);
+		final info: Null<MemberInfo> = dot <= 0 ? null : _graph.types.memberOnChain(type, name);
+		final answer: Bool = info != null && (_shape.fieldDeclKinds ?? []).contains(info.kind) && !info.hasGetter
+			&& (!(_shape.mutableFieldDeclKinds ?? []).contains(info.kind) || writtenOnlyInConstructor(type, name, info.isStatic));
 		_stable[field] = answer;
 		return answer;
-	}
-
-	/** The member name of the field id `field`. */
-	private static inline function nameOf(field: String): String {
-		return field.substring(field.lastIndexOf('.') + 1);
 	}
 
 	/** The id of the field of the type `from` runs in that `node` (a bare name or `this.name`) reads; null when none is. */
@@ -85,43 +85,20 @@ final class ObjectPaths {
 	}
 
 	/**
-	 * Whether no write of the field `name` of `type` in any file the graph holds sits outside the constructor of `type`:
-	 * a write of a bare `name` or `this.name` counts where `name` is that field of the type of the function around it,
-	 * or where no function is; any other receiver's `.name` always — what it is written on, nothing here can tell.
+	 * Whether the run sees every write of the field `name` of `type` and each sits in the body of the constructor of
+	 * `type` itself, on the running object (a bare `name` or `this.name`) — never for a `static` one, which no
+	 * constructor owns. A write in a lambda or a local function sits in that function, which may run any time later.
 	 */
-	private function writtenOnlyInConstructor(type: String, name: String): Bool {
-		final ctor: Null<FnNode> = _graph.node(_graph.ownMember(type, _shape.constructorName ?? 'new') ?? '');
-		final field: { name: String, owner: String } = { name: name, owner: _graph.types.declaringTypeOf(type, name) ?? type };
-		for (held in _graph.heldFiles()) {
-			final allowed: Null<Span> = ctor != null && ctor.file == held.file ? ctor.span : null;
-			if (writesOutside(held.file, held.tree, field, allowed)) return false;
-		}
-		return true;
+	private function writtenOnlyInConstructor(type: String, name: String, isStatic: Bool): Bool {
+		if (!_writes.complete) return false;
+		final ctor: Null<String> = isStatic ? null : _graph.ownMember(type, _shape.constructorName ?? 'new');
+		final owner: String = _graph.types.declaringTypeOf(type, name) ?? type;
+		return _writes.of(name).foreach(w -> !FieldWrites.mayWrite(w, owner) || w.own && ctor != null && w.fn == ctor);
 	}
 
-	/** Whether `node`'s subtree, in `file`, writes the field `field` outside the span `allowed`. */
-	private function writesOutside(file: String, node: QueryNode, field: { name: String, owner: String }, allowed: Null<Span>): Bool {
-		final at: Null<Span> = node.span;
-		final write: Bool = _shape.writeParentKinds.contains(node.kind) && node.children.length > 0 && writes(file, node.children[0], field);
-		if (write && !inside(at, allowed)) return true;
-		return node.children.exists(c -> writesOutside(file, c, field, allowed));
-	}
-
-	/** Whether the span `at` lies within `allowed`; never when either is unknown. */
-	private static inline function inside(at: Null<Span>, allowed: Null<Span>): Bool {
-		return allowed != null && at != null && allowed.from <= at.from && at.to <= allowed.to;
-	}
-
-	/** Whether the write target `target` in `file` may be the field `field`. */
-	private function writes(file: String, target: QueryNode, field: { name: String, owner: String }): Bool {
-		if (target.name != field.name) return false;
-		if (!(target.kind == _shape.identKind || _sites.readsOwnMember(target))) return _sites.isAccess(target.kind);
-		// a bare name or `this.name` writes the field of the running type, when that type has one by the name
-		final at: Null<Span> = target.span;
-		final fn: Null<String> = at == null ? null : _graph.functionAt(file, at.from);
-		final type: Null<String> = fn == null ? null : _graph.node(fn)?.typeName;
-		final declared: Null<String> = type == null ? null : _graph.types.declaringTypeOf(type, field.name);
-		return type == null || declared == null || declared == field.owner;
+	/** The member name of the field id `field`. */
+	private static inline function nameOf(field: String): String {
+		return field.substring(field.lastIndexOf('.') + 1);
 	}
 
 }

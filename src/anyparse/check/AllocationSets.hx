@@ -15,8 +15,10 @@ using Lambda;
  * down a call path), or a field every value of which is a `new` the project writes — a SEALED allocation set. A
  * dispatch no class of the set resolves to the call's target never runs on that path (`BaseNativeURLLoader.load`'s
  * `go()` on a loader `APIRequest2.doRequest` only ever builds as a thread or simple loader is never the blocking one).
- * Positive: any other receiver, any other write or declared value, a class the index does not hold — unknown, every
- * target runs.
+ * A class the run declares nowhere is a library's, which runs no project override, only when the run sees the whole
+ * project (`FieldWrites.complete`) and the file names it by a path or an import of it.
+ * Positive: any other receiver, any other write or declared value, a name an import aliases, a type parameter, a run
+ * that does not see every write of the project — unknown, every target runs.
  */
 @:nullSafety(Strict)
 final class AllocationSets {
@@ -31,10 +33,17 @@ final class AllocationSets {
 	private final _sites: LockSites;
 	private final _shape: RefShape;
 
-	public function new(graph: CallGraph, plugin: GrammarPlugin, sites: LockSites) {
+	/** The run's field writes. */
+	private final _writes: FieldWrites;
+
+	/** Each file -> the type names its imports bind (`importsOf`). */
+	private final _imports: Map<String, FileImports> = [];
+
+	public function new(graph: CallGraph, plugin: GrammarPlugin, sites: LockSites, writes: FieldWrites) {
 		_graph = graph;
 		_sites = sites;
 		_shape = plugin.refShape();
+		_writes = writes;
 	}
 
 	/**
@@ -79,7 +88,7 @@ final class AllocationSets {
 		while (node != null && at != null) {
 			final span: Null<Span> = node.span;
 			if (node.kind == _shape.newExprKind && span != null && span.from == at.from && span.to == at.to)
-				return constructed(node)?.join(SEPARATOR);
+				return constructed(node, edge.file)?.join(SEPARATOR);
 			node = node.children.find(c -> c.span != null && c.span.from <= at.from && c.span.to >= at.to);
 		}
 		return null;
@@ -87,20 +96,28 @@ final class AllocationSets {
 
 	/**
 	 * The classes every value of the field `field` (`Type.member`) is constructed as: its declared value, if any, and every
-	 * write of it a `new` (through `?:` and conditional compilation), each write a plain assignment; null otherwise, or
-	 * when nothing gives it a value.
+	 * write of it a `new` (through `?:` and conditional compilation), each write a plain assignment; null otherwise, when
+	 * nothing gives it a value, or when the run does not see every write of the project (`FieldWrites.complete`).
 	 */
 	public function fieldClasses(field: String): Null<Array<String>> {
 		if (_fields.exists(field)) return _fields[field];
 		final dot: Int = field.lastIndexOf('.');
 		final type: String = field.substring(0, dot);
 		final name: String = field.substring(dot + 1);
-		final info: Null<MemberInfo> = dot <= 0 ? null : _graph.types.memberOnChain(type, name);
+		final info: Null<MemberInfo> = dot <= 0 || !_writes.complete ? null : _graph.types.memberOnChain(type, name);
 		final owner: String = _graph.types.declaringTypeOf(type, name) ?? type;
 		final own: Null<Array<String>> = info == null ? null : declared(owner, info);
 		final found: Array<String> = own ?? [];
 		var sealed: Bool = own != null;
-		for (held in _graph.heldFiles()) if (sealed && !collect(held.file, held.tree, name, owner, found)) sealed = false;
+		for (w in _writes.of(name)) if (sealed && FieldWrites.mayWrite(w, owner)) {
+			final values: Null<Array<String>> = w.write.kind == _shape.assignKind && w.write.children.length == 2
+				? constructed(w.write.children[1], w.file)
+				: null;
+			if (values == null)
+				sealed = false;
+			else
+				for (v in values) if (!found.contains(v)) found.push(v);
+		}
 		final answer: Null<Array<String>> = !sealed || found.length == 0 ? null : found;
 		_fields[field] = answer;
 		return answer;
@@ -108,8 +125,8 @@ final class AllocationSets {
 
 	/**
 	 * Whether the class `c` resolves the method `edge` dispatches to `edge.to`. A class the index holds no declaration of
-	 * is a library's, which cannot inherit a project type: it never runs a project function by dispatch, while what a
-	 * library function it may run is unknown.
+	 * is a library's (`constructedClass` lets no other undeclared name into a set), which cannot inherit a project type:
+	 * it never runs a project function by dispatch, while what a library function it may run is unknown.
 	 */
 	private function resolves(c: String, edge: CallEdge): Bool {
 		final target: Null<FnNode> = _graph.node(edge.to);
@@ -126,10 +143,11 @@ final class AllocationSets {
 	 */
 	private function declared(owner: String, info: MemberInfo): Null<Array<String>> {
 		final file: Null<String> = fileOf(owner);
-		final tree: Null<QueryNode> = file == null ? null : _graph.treeOf(file);
+		if (file == null) return null;
+		final tree: Null<QueryNode> = _graph.treeOf(file);
 		final decl: Null<QueryNode> = tree == null ? null : declarationAt(tree, info.declFrom);
 		if (decl == null || decl.children.length > 1) return null;
-		return decl.children.length == 0 ? [] : constructed(decl.children[0]);
+		return decl.children.length == 0 ? [] : constructed(decl.children[0], file);
 	}
 
 	/** The node of `tree` starting at `from` that declares a member; null when none does. */
@@ -144,31 +162,21 @@ final class AllocationSets {
 		}
 	}
 
-	/**
-	 * Adds to `found` the classes the writes of the field `name` of `owner` in `node`'s subtree, in `file`, construct;
-	 * false when one writes anything else.
-	 */
-	private function collect(file: String, node: QueryNode, name: String, owner: String, found: Array<String>): Bool {
-		if (_shape.writeParentKinds.contains(node.kind) && node.children.length > 0 && writes(file, node.children[0], name, owner)) {
-			final values: Null<Array<String>> = node.kind == _shape.assignKind && node.children.length == 2
-				? constructed(node.children[1])
-				: null;
-			if (values == null) return false;
-			for (v in values) if (!found.contains(v)) found.push(v);
-		}
-		return node.children.foreach(c -> collect(file, c, name, owner, found));
-	}
-
 	/** The file declaring the type `owner`, as the file of one of its functions; null when the graph holds none. */
 	private function fileOf(owner: String): Null<String> {
 		for (node in _graph.nodes) if (node.typeName == owner) return node.file;
 		return null;
 	}
 
-	/** The classes the value `node` constructs: a `new`, either side of a `?:`, every branch of a conditional region; null for anything else. */
-	private function constructed(node: QueryNode): Null<Array<String>> {
-		final name: Null<String> = node.name;
-		if (node.kind == _shape.newExprKind) return name == null ? null : [CallGraphNames.lastSegments(name, 1)];
+	/**
+	 * The classes the value `node`, in `file`, constructs: a `new` (`constructedClass`); either side of a `?:`, every
+	 * branch of a conditional region; null for anything else.
+	 */
+	private function constructed(node: QueryNode, file: String): Null<Array<String>> {
+		if (node.kind == _shape.newExprKind) {
+			final made: Null<String> = constructedClass(node.name, file);
+			return made == null ? null : [made];
+		}
 		final parts: Array<QueryNode> = if (node.kind == _shape.ternaryKind && node.children.length == 3)
 			node.children.slice(1)
 		else if (node.kind == _shape.parenKind || CondRegionScan.isConditionalKind(node.kind, _shape))
@@ -178,22 +186,60 @@ final class AllocationSets {
 		if (parts.length == 0) return null;
 		final out: Array<String> = [];
 		for (p in parts) {
-			final inner: Null<Array<String>> = constructed(p);
+			final inner: Null<Array<String>> = constructed(p, file);
 			if (inner == null) return null;
 			for (c in inner) if (!out.contains(c)) out.push(c);
 		}
 		return out;
 	}
 
-	/** Whether the write target `target` in `file` may be the field `name` of `owner` (as `ObjectPaths` reads a write). */
-	private function writes(file: String, target: QueryNode, name: String, owner: String): Bool {
-		if (target.name != name) return false;
-		if (!(target.kind == _shape.identKind || _sites.readsOwnMember(target))) return _sites.isAccess(target.kind);
-		final at: Null<Span> = target.span;
-		final fn: Null<String> = at == null ? null : _graph.functionAt(file, at.from);
-		final type: Null<String> = fn == null ? null : _graph.node(fn)?.typeName;
-		final declared: Null<String> = type == null ? null : _graph.types.declaringTypeOf(type, name);
-		return type == null || declared == null || declared == owner;
+	/**
+	 * The class a `new` written `name`, in `file`, builds: a class the index declares, by a name no import of `file`
+	 * aliases (an alias names whatever it aliases, a project class by the alias's name included); or a LIBRARY class — one
+	 * the index declares nowhere, written by its path or by a name an import of `file` binds — but only when the run sees
+	 * the whole project (`FieldWrites.complete`), so that a class it declares nowhere is no project class. Null for
+	 * anything else: a type parameter, an undeclared name of an open run.
+	 */
+	private function constructedClass(name: Null<String>, file: String): Null<String> {
+		if (name == null) return null;
+		final simple: String = CallGraphNames.lastSegments(name, 1);
+		final imports: FileImports = importsOf(file);
+		if (imports.aliases.contains(simple)) return null;
+		if (_graph.types.declarationCount(simple) > 0) return simple;
+		return _writes.complete && (name.indexOf('.') >= 0 || imports.named.contains(simple)) ? simple : null;
 	}
 
+	/**
+	 * The type names the imports of `file` bind, at module level or in a conditional region of it: `aliases` by an alias
+	 * (`import a.B as C` binds `C`), `named` by the last segment of a module path (`import a.B` binds `B`).
+	 */
+	private function importsOf(file: String): FileImports {
+		final known: Null<FileImports> = _imports[file];
+		if (known != null) return known;
+		final out: FileImports = { aliases: [], named: [] };
+		final aliasKinds: Array<String> = _shape.importAliasKinds ?? [];
+		final pathKinds: Array<String> = _shape.modulePathKinds ?? [];
+		function walk(node: QueryNode): Void {
+			for (c in node.children) {
+				final name: Null<String> = c.name;
+				if (name != null && aliasKinds.contains(c.kind))
+					out.aliases.push(name);
+				else if (name != null && pathKinds.contains(c.kind))
+					out.named.push(CallGraphNames.lastSegments(name, 1));
+				else if (CondRegionScan.isConditionalKind(c.kind, _shape))
+					walk(c);
+			}
+		}
+		final tree: Null<QueryNode> = _graph.treeOf(file);
+		if (tree != null) walk(tree);
+		_imports[file] = out;
+		return out;
+	}
+
+}
+
+/** The type names one file's imports bind: by an alias, and by a module path's last segment. */
+private typedef FileImports = {
+	final aliases: Array<String>;
+	final named: Array<String>;
 }

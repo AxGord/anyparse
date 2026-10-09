@@ -1312,7 +1312,11 @@ final class LintCommand implements CliCommand {
 	): Void {
 		final threshold: Int = config?.reportSummaryThreshold() ?? LintFormat.DEFAULT_REPORT_SUMMARY_THRESHOLD;
 		final summarised: Bool = summarises(shown.length, o.format, o.summary, threshold);
-		renderLintReport(paths, shown, sourceOf, o.format, o.flat, cached, summarised, LintExplainLong.outcome(o.explainLong, explainer));
+		// a finding naming no file (a rule's own option it could not read) closes the report under the path `''`, in every
+		// format, rather than only counting in the summary line
+		renderLintReport(
+			paths.concat(['']), shown, sourceOf, o.format, o.flat, cached, summarised, LintExplainLong.outcome(o.explainLong, explainer)
+		);
 		lintSummary(all, paths, shown.length == all.length, summarised ? summaryHint(shown.length, o.summary, threshold) : null, skipped);
 	}
 

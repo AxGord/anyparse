@@ -1524,8 +1524,14 @@ class ThreadSafetyCheckTest extends Test {
 		];
 	}
 
-	public static function violations(config: String, sources: Array<String>): Array<Violation> {
-		final dir: String = CliFixture.writeDir('threadsafety', [{ name: 'apqlint.json', source: config }]);
+	/**
+	 * The findings of a run over `sources` (as `F<i>.hx`) under `config`, in a directory that also holds `beside` on disk:
+	 * files of the project the run leaves out (`ProjectCoverage`).
+	 */
+	public static function violations(
+		config: String, sources: Array<String>, ?beside: Array<{ name: String, source: String }>
+	): Array<Violation> {
+		final dir: String = CliFixture.writeDir('threadsafety', [{ name: 'apqlint.json', source: config }].concat(beside ?? []));
 		final files: Array<{ file: String, source: String }> = [
 			for (i in 0...sources.length) { file: '$dir/F$i.hx', source: sources[i] }
 		];

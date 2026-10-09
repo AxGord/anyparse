@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.ThreadSafetyOptions.BoundedRepeatEntry;
 import anyparse.query.CallGraph;
 
 using Lambda;
@@ -24,42 +25,34 @@ typedef BoundedRepeat = {
  * pattern; `call` narrows it to one repeated call), the bound (`max`, pointed at in code or measured) and the measured
  * worst cost of one repetition (`costMs`); the repetition counts as once only when `max × costMs` stays under
  * `repeatBudgetMs`. An unlisted repetition, an entry missing a number, or a rule with no budget stays repeating. The
- * evidence for each number lives in the project's docs, never in code.
+ * evidence for each number belongs beside its entry, as the unread `evidence` key (`ThreadSafetyOptions`), never in
+ * code. The options are read and checked by `ThreadSafetyOptions`; an entry matching no function is said.
  */
 @:nullSafety(Strict)
 final class BoundedRepeats {
 
-	/** The budget `repeatBudgetMs` of `config`'s `thread-safety`, or null when unset or not a positive number. */
-	public static function budget(config: LintConfig): Null<Float> {
-		final value: Null<Float> = config.numberOption('thread-safety', 'repeatBudgetMs');
-		return value != null && value > 0 ? value : null;
-	}
-
-	/** The well-formed `boundedRepeats` entries of `config`, resolved over `graph`; a malformed one is dropped. */
-	public static function entries(config: LintConfig, graph: CallGraph): Array<BoundedRepeat> {
+	/**
+	 * The well-formed entries `records` (`ThreadSafetyOptions.boundedRepeats`) resolved over `graph`; an entry whose `site`
+	 * or `call` matches no function of the run bounds nothing, and is said in `problems`.
+	 */
+	public static function entries(records: Array<BoundedRepeatEntry>, graph: CallGraph, problems: Array<String>): Array<BoundedRepeat> {
 		final out: Array<BoundedRepeat> = [];
-		for (record in config.recordListOption('thread-safety', 'boundedRepeats')) {
-			final site: Null<String> = record.strings['site'];
-			final max: Float = record.numbers['max'] ?? 0;
-			final cost: Float = record.numbers['costMs'] ?? -1;
-			if (site == null || !(max > 0) || !(cost >= 0)) continue;
-			final call: Null<String> = record.strings['call'];
+		for (record in records) {
+			final members: Array<String> = graph.matchIds(record.site);
+			final call: Null<String> = record.call;
+			final calls: Null<Array<String>> = call == null ? null : graph.matchIds(call);
+			if (members.length == 0)
+				problems.push('boundedRepeats site "${record.site}" matches no function of the run — it bounds nothing');
+			if (call != null && calls != null && calls.length == 0)
+				problems.push('boundedRepeats call "$call" (site "${record.site}") matches no function of the run — it bounds nothing');
 			out.push({
-				members: graph.matchIds(site),
-				calls: call == null ? null : graph.matchIds(call),
-				max: max,
-				costMs: cost
+				members: members,
+				calls: calls,
+				max: record.max,
+				costMs: record.costMs
 			});
 		}
 		return out;
-	}
-
-	/** The signature of `config`'s entries and budget, telling two option sets apart. */
-	public static function signature(config: LintConfig): String {
-		return [
-				for (r in config.recordListOption('thread-safety', 'boundedRepeats'))
-					'${r.strings['site']}>${r.strings['call']}:${r.numbers['max']}x${r.numbers['costMs']}'
-			].join(',') + '\t${budget(config)}';
 	}
 
 	/**

@@ -92,7 +92,8 @@ final class LintFormat {
 	 * Given `explain` (`lint --explain-long`), the document is the `{"findings": […], "longLocks": {…} | null}` envelope
 	 * instead — null when the rule ran and explained nothing. `longLocks.long` lists each long lock as `{lock, reasons,
 	 * circular, aside}` (`circular`: how many re-takes of the lock itself were left out), a reason as `{kind, file, line,
-	 * col, function}` plus `call`, `chain`, `via` for `spans-blocking` and `unresolved` (`[{name, line, col}]`) for
+	 * col, function}` plus `call`, `chain`, `via` (and `errorPath`, the `catch` every way it blocks
+	 * passes through, when there is one) for `spans-blocking` and `unresolved` (`[{name, line, col}]`) for
 	 * `blind`, `aside` null or such reasons; `longLocks.mainShort` lists each
 	 * main-thread take of a lock that is not long as `{lock, file, line, col, function,
 	 * quiet}`, and `longLocks.dominated` each lock others dominate as `{lock, by}`.

@@ -77,7 +77,8 @@ final class MustHeld {
 
 	public function new(
 		graph: CallGraph, plugin: GrammarPlugin, trees: FunctionTrees, sites: LockSites, states: ThreadStates, conditions: EdgeConditions,
-		repetition: CallRepetition, holds: Array<LockAcquire>, inertRef: (CallEdge) -> Bool, unresolvedNames: Array<String>
+		repetition: CallRepetition, holds: Array<LockAcquire>, inertRef: (CallEdge) -> Bool, unresolvedNames: Array<String>,
+		writes: FieldWrites
 	) {
 		_graph = graph;
 		_sites = sites;
@@ -87,7 +88,7 @@ final class MustHeld {
 		_trees = trees;
 		_shape = plugin.refShape();
 		_values = new ArgumentValues(graph, trees, plugin);
-		_paths = new ObjectPaths(graph, plugin, sites);
+		_paths = new ObjectPaths(graph, plugin, sites, writes);
 		_holds = holds;
 		final flow: Null<ControlFlowSupport> = plugin.controlFlowSupport();
 		_blockKinds = flow == null ? [] : flow.blockKinds();

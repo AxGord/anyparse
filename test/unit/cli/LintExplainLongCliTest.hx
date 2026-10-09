@@ -96,6 +96,64 @@ class LintExplainLongCliTest extends Test {
 		#end
 	}
 
+	/** Each lock others dominate, in json (`dominated: [{lock, by}]`) and in text. */
+	@:pin('control') @:killer('M-LINT-FORMAT-DOMINATED')
+	public function testDominatedLocksAreNamed(): Void {
+		#if nodejs
+		final source: String = 'class Runner { public static function create(fn:()->Void):Void {} }'
+			+ ' class A { final _outer:Mutex = new Mutex(); final _inner:Mutex = new Mutex(); public function new() {}'
+			+ ' public function slow():Void { _outer.acquire(); _inner.acquire(); Sys.sleep(1); _inner.release(); _outer.release(); }'
+			+ ' public static function main():Void { final d:A = new A(); Runner.create(() -> d.slow()); } }';
+		final json: Dynamic = Json.parse(lint(source, ThreadSafetyLongLocksTest.CONFIG, ['--format', 'json', '--explain-long']).out)
+			.longLocks;
+		Assert.same([['A._inner', ['A._outer']], ['A._outer', ['A._inner']]], [for (d in (json.dominated: Array<Dynamic>)) [d.lock, d.by]]);
+		Assert.stringContains(
+			'dominated A._inner by A._outer: a take of it under one of those is brief',
+			lint(source, ThreadSafetyLongLocksTest.CONFIG, ['--explain-long']).out
+		);
+		#else
+		Assert.pass('node only: stdout capture');
+		#end
+	}
+
+	/** A reason that blocks only through a `catch` names that catch, as `errorPath` in json and in text. */
+	@:pin('control') @:killer('M-LINT-FORMAT-ERRORPATH')
+	public function testAnErrorPathReasonNamesItsCatch(): Void {
+		#if nodejs
+		final source: String = 'class Runner { public static function create(fn:()->Void):Void {} }'
+			+ ' class Report { public static function send():Void Sys.sleep(1); }\n'
+			+ 'class A { final _m:Mutex = new Mutex(); public function new() {} static function step():Void {}\n'
+			+ ' function save():Void { try { step(); } catch (e:Dynamic) { Report.send(); } }\n'
+			+ ' public function work():Void { _m.acquire(); save(); _m.release(); }'
+			+ ' public static function main():Void { final a:A = new A(); Runner.create(() -> a.work()); a._m.acquire(); a._m.release(); } }';
+		final json: Dynamic = Json.parse(lint(source, ThreadSafetyLongLocksTest.CONFIG, ['--format', 'json', '--explain-long']).out)
+			.longLocks;
+		final reasons: Array<Dynamic> = (json.long: Array<Dynamic>).filter(l -> l.lock == 'A._m')[0].reasons;
+		final paths: Array<String> = [
+			for (r in reasons) if (Reflect.hasField(r, 'errorPath')) (r.errorPath: String).split('/').pop()
+		];
+		Assert.same(['A.hx:3'], paths);
+		Assert.stringContains('only on an error path (catch at ', lint(source, ThreadSafetyLongLocksTest.CONFIG, ['--explain-long']).out);
+		#else
+		Assert.pass('node only: stdout capture');
+		#end
+	}
+
+	/** A finding naming no file (an option the rule could not read) closes the report, in text and in json. */
+	@:pin('control') @:killer('M-LINT-NOFILE-DROPPED')
+	public function testAFindingNamingNoFileIsPrinted(): Void {
+		#if nodejs
+		final config: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Sys.sleep"],"lockPairs":["Mutex.acquire/release"],'
+			+ '"shortSink":["Sys.sleep"]}}}';
+		final unknown: String = 'unknown option "shortSink" — ignored (did you mean "shortSinks"?)';
+		final records: Array<Dynamic> = Json.parse(lint(SOURCE, config, ['--format', 'json']).out);
+		Assert.same([['', 'info', unknown]], [for (r in records) if (r.file == '') [r.file, r.severity, r.message]]);
+		Assert.stringContains('(no file):\n  (no-span): [info] $unknown (thread-safety)', lint(SOURCE, config, ['--all']).out);
+		#else
+		Assert.pass('node only: stdout capture');
+		#end
+	}
+
 	/**
 	 * Text puts the section after the findings and says when a lock would not be long without its own reasons; without
 	 * the flag there is none.

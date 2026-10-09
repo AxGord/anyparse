@@ -22,6 +22,7 @@ import anyparse.query.ReachAdmission;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import haxe.Exception;
+import haxe.ds.ObjectMap;
 
 using Lambda;
 using StringTools;
@@ -45,15 +46,18 @@ using StringTools;
  * always long; a hold in the owner's constructor before the object escapes blocks no one. Holding a long lock is itself
  * blocking, so the locks and the taint are solved together (`solveLongLocks`).
  *
- * Configured per project in `apqlint.json` under `"thread-safety"` (inert without `sinks`): `sinks`, `spawns`,
+ * Configured per project in `apqlint.json` under `"thread-safety"` (inert without `sinks`), read
+ * and checked by `ThreadSafetyOptions`, which says every option it drops: `sinks`, `spawns`,
  * `marshals` and `throwers` (`ThrowReach`) are call patterns, matched by their last two dot-segments (`Type.*` covers a
  * type); a `lockPairs` entry is `<lock pattern>/<unlock member name>`, and a lock WRAPPER's call takes or gives its
  * lock with no entry of its own; `quietRoots` are handlers that block on purpose — the main thread is QUIET in them
  * while no loud main-thread code calls them (`settleContexts`); `reentrantLocks` are takes the holder may repeat on the
  * SAME object; `neverInvokes` calls run no function value handed to them; `mainThreadChecks` answer whether the running
- * thread is the main one; `closedWorld` says every caller is in the run (`sealedFromOutside`); `exclude` drops files by
+ * thread is the main one; `closedWorld` says every caller and every write is in the run (`sealedFromOutside`,
+ * `FieldWrites`), held only by a run covering the project it closes (`ProjectCoverage`); `exclude` drops files by
  * a '/'-bounded path-segment run before the graph is built; `shortSinks` are the sinks one call of which waits briefly,
- * `compilerFacts: true` builds the graph through the run's compiler facts when it has them (`ThreadGraph.build`);
+ * `compilerFacts: true` builds the graph through the run's compiler facts when it has them
+ * (`ThreadGraph.build`) — the ONE graph of the run, so for every file once any chain asks;
  * `iterates` the calls running a function value handed to them once per element, and `registers` the calls keeping one to
  * run later, once per event however often it was registered (`CallRepetition`); `sharedLocks` are the `lockPairs` take
  * members taking their lock shared — a lock only ever taken through them never waits (`QuietLocks`); `nonThrowing` are
@@ -138,7 +142,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		);
 		final graph: CallGraph = ThreadGraph.build(files, plugin, useFacts);
 		final sets: Array<ChainLists> = [];
-		final byFile: Map<String, ChainLists> = listsByFile(files, graph, sets, plugin.refShape().accessorMethodPrefixes ?? []);
+		final problems: Array<String> = [];
+		final byFile: Map<String, ChainLists> = listsByFile(files, graph, sets, plugin.refShape().accessorMethodPrefixes ?? [], problems);
 		final sinkIds: Array<String> = [];
 		for (lists in sets) for (id in lists.sinkIds) if (!sinkIds.contains(id)) sinkIds.push(id);
 		if (sinkIds.length == 0) return [];
@@ -165,14 +170,18 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final judged: Array<LockAcquire> = HoldGrade.judged(sites, acquires, helperHolds);
 		// the locks whose take blocks at all: held across any blocking call, short ones included
 		final blocking: Array<String> = [];
+		// every write of the project, seen only when the run covers a closed project (`listsByFile`)
+		final writes: FieldWrites = new FieldWrites(graph, plugin, sites, files.foreach(f -> byFile[f.file]?.closedWorld == true));
 		final taints: LockTaint = new LockTaint(
-			graph, sinkIds, listsOf, sites, blocking, conditions, states, null, new AllocationSets(graph, plugin, sites)
+			graph, sinkIds, listsOf, sites, blocking, conditions, states, null, new AllocationSets(graph, plugin, sites, writes)
 		);
 		solveLongLocks(sites, judged, blocking, taints);
 		// the locks whose take blocks LONG: held across a call that blocks long, or a short one that repeats
 		final repetition: CallRepetition = new CallRepetition(graph, trees, plugin.refShape(), listsOf);
 		final holds: Array<LockAcquire> = acquires.concat(helperHolds);
-		final must: MustHeld = new MustHeld(graph, plugin, trees, sites, states, conditions, repetition, holds, inertRef, unresolvedNames);
+		final must: MustHeld = new MustHeld(
+			graph, plugin, trees, sites, states, conditions, repetition, holds, inertRef, unresolvedNames, writes
+		);
 		final dominance: LockDominance = new LockDominance(sites, states, conditions, repetition, must, holds);
 		final settled: { long: Array<String>, costs: LockTaint } = dominance.settle(
 			taints, (long, costs) -> solveLongLocks(sites, judged, long, costs)
@@ -196,7 +205,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final reported: Map<String, Violation> = MainSinkReport.report(
 			graph, sites, taints, paths, { repetition: repetition, main: repeatsOnMain, runs: runsMain }, states, violations
 		);
-		reportMalformedPairs(sets, violations);
+		reportConfigProblems(problems, violations);
 		reportLockHeld(
 			graph, sites, judged, taints, { costs: paths, reported: reported, enclosed: dominance.enclosed }, states, violations
 		);
@@ -230,7 +239,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	 * contexts of the files that do report.
 	 */
 	public function scanSkipReason(file: String, config: LintConfig): Null<String> {
-		return pathExcluded(file, config.stringListOption('thread-safety', 'exclude') ?? []) ? 'config-excluded' : null;
+		return ProjectCoverage.excluded(file, config.stringListOption('thread-safety', 'exclude') ?? []) ? 'config-excluded' : null;
 	}
 
 	/**
@@ -258,86 +267,100 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	}
 
 	/**
-	 * Each file's `ChainLists`, one record per DISTINCT option set: `sets` receives them in the order
-	 * their first file appears, so a single-chain run holds exactly one.
+	 * Each file's `ChainLists`, one record per DISTINCT option set: `sets` receives them in the order their first file
+	 * appears, so a single-chain run holds exactly one. The options are read and checked once per config
+	 * (`ThreadSafetyOptions`); what a REPORTING chain's read left out lands in `problems`, each line once.
+	 *
+	 * `closedWorld` holds only for a run that covers the project the declaration closes (`ProjectCoverage`): a run over
+	 * part of it sees neither every caller nor every write, and reads the chain as open — said in `problems`.
 	 */
 	private function listsByFile(
-		files: Array<{ file: String, source: String }>, graph: CallGraph, sets: Array<ChainLists>, accessorPrefixes: Array<String>
+		files: Array<{ file: String, source: String }>, graph: CallGraph, sets: Array<ChainLists>, accessorPrefixes: Array<String>,
+		problems: Array<String>
 	): Map<String, ChainLists> {
 		final bySignature: Map<String, ChainLists> = [];
 		final byFile: Map<String, ChainLists> = [];
+		final read: ObjectMap<LintConfig, ThreadSafetyOptions> = new ObjectMap();
+		final coverage: ProjectCoverage = new ProjectCoverage([for (f in files) f.file]);
+		final factsAsked: Array<Bool> = [];
 		for (entry in files) {
 			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
-			inline function option(key: String): Array<String> {
-				return config.stringListOption('thread-safety', key) ?? [];
-			}
-			final sinks: Array<String> = option('sinks');
-			final shortSinks: Array<String> = option('shortSinks');
-			final iterates: Array<String> = option('iterates');
-			final registers: Array<String> = option('registers');
-			final shared: Array<String> = option('sharedLocks');
-			final nonThrowing: Array<String> = option('nonThrowing');
-			final spawns: Array<String> = option('spawns');
-			final marshals: Array<String> = option('marshals');
-			final lockPairs: Array<String> = option('lockPairs');
-			final quietRoots: Array<String> = option('quietRoots');
-			final reentrant: Array<String> = option('reentrantLocks');
-			final throwers: Array<String> = option('throwers');
-			final neverInvokes: Array<String> = option('neverInvokes');
-			final mainChecks: Array<String> = option('mainThreadChecks');
-			final closedWorld: Bool = config.boolOption('thread-safety', 'closedWorld') == true;
-			final signature: String = [
-					for (list in [
-						sinks,
-						spawns,
-						marshals,
-						lockPairs,
-						quietRoots,
-						reentrant,
-						throwers,
-						neverInvokes,
-						mainChecks,
-						shortSinks,
-						iterates,
-						registers,
-						shared,
-						nonThrowing
-					]) list.join('\n')
-				].join('\t') + (closedWorld ? '\tclosed' : '') + '\t' + BoundedRepeats.signature(config);
+			final options: ThreadSafetyOptions = read.get(config) ?? ThreadSafetyOptions.read(config);
+			read.set(config, options);
+			final option: (String) -> Array<String> = options.list;
+			final declaredClosed: Bool = options.flag('closedWorld');
+			final closedWorld: Bool = declaredClosed && coverage.covers(entry.file, option('exclude'));
+			final signature: String = options.signature() + (closedWorld ? '\tcovered' : '');
 			final known: Null<ChainLists> = bySignature[signature];
-			final lists: ChainLists = known ?? {
-				reports: sinks.length > 0,
-				bounded: BoundedRepeats.entries(config, graph),
-				repeatBudgetMs: BoundedRepeats.budget(config),
-				sinkIds: matchAll(graph, sinks),
-				shortSinkIds: matchAll(graph, shortSinks),
-				shortNames: [for (p in shortSinks) if (p.indexOf('.') < 0) p],
-				iterateIds: matchAll(graph, iterates),
-				iterateNames: [for (p in iterates) if (p.indexOf('.') < 0) p],
-				registerIds: matchAll(graph, registers),
-				registerNames: [for (p in registers) if (p.indexOf('.') < 0) p],
-				sharedIds: matchAll(graph, shared),
-				nonThrowingIds: matchAll(graph, nonThrowing),
-				nonThrowingNames: [for (p in nonThrowing) if (p.indexOf('.') < 0) p],
-				spawnIds: matchAll(graph, spawns),
-				marshalIds: matchAll(graph, marshals),
-				quietIds: matchAll(graph, quietRoots),
-				reentrantIds: matchAll(graph, reentrant),
-				throwerIds: matchAll(graph, throwers),
-				neverInvokeIds: matchAll(graph, neverInvokes),
-				neverInvokeNames: [for (p in neverInvokes) if (p.indexOf('.') < 0) p],
-				mainCheckIds: matchAll(graph, mainChecks.concat([for (c in mainChecks) getterOf(c, accessorPrefixes)])),
-				closedWorld: closedWorld,
-				lockPairs: lockPairs,
-				pairs: resolvePairs(graph, lockPairs)
-			};
-			if (known == null) {
-				bySignature[signature] = lists;
-				sets.push(lists);
+			if (known != null) {
+				byFile[entry.file] = known;
+				continue;
 			}
+			final found: Array<String> = options.problems.copy();
+			final lists: ChainLists = chainLists(options, graph, accessorPrefixes, closedWorld, found);
+			bySignature[signature] = lists;
+			sets.push(lists);
 			byFile[entry.file] = lists;
+			if (!lists.reports) continue;
+			if (declaredClosed && !closedWorld)
+				found.push(
+					'option "closedWorld" holds only for a run over the whole project it closes — this run leaves part of it out, so'
+					+ ' it is read as false'
+				);
+			final facts: Bool = options.flag('compilerFacts');
+			if (!factsAsked.contains(facts)) factsAsked.push(facts);
+			for (p in found) if (!problems.contains(p)) problems.push(p);
 		}
+		// one graph serves every chain, so the facts one chain asks for (`run`'s `useFacts`) build it for all of them
+		if (factsAsked.length > 1)
+			problems.push(
+				'option "compilerFacts" is set by some chains of the run only — the graph is one, built with the facts for every' + ' file'
+			);
 		return byFile;
+	}
+
+	/**
+	 * The `ChainLists` of one option set `options`, resolved over `graph`, its `closedWorld` as the run covers it; a
+	 * `boundedRepeats` entry matching no function lands in `found`.
+	 */
+	private static function chainLists(
+		options: ThreadSafetyOptions, graph: CallGraph, accessorPrefixes: Array<String>, closedWorld: Bool, found: Array<String>
+	): ChainLists {
+		final option: (String) -> Array<String> = options.list;
+		final shortSinks: Array<String> = option('shortSinks');
+		final iterates: Array<String> = option('iterates');
+		final registers: Array<String> = option('registers');
+		final nonThrowing: Array<String> = option('nonThrowing');
+		final neverInvokes: Array<String> = option('neverInvokes');
+		final mainChecks: Array<String> = option('mainThreadChecks');
+		final lockPairs: Array<String> = option('lockPairs');
+		final sinks: Array<String> = option('sinks');
+		return {
+			reports: sinks.length > 0,
+			bounded: BoundedRepeats.entries(options.boundedRepeats, graph, found),
+			repeatBudgetMs: options.repeatBudgetMs,
+			sinkIds: matchAll(graph, sinks),
+			shortSinkIds: matchAll(graph, shortSinks),
+			shortNames: [for (p in shortSinks) if (p.indexOf('.') < 0) p],
+			iterateIds: matchAll(graph, iterates),
+			iterateNames: [for (p in iterates) if (p.indexOf('.') < 0) p],
+			registerIds: matchAll(graph, registers),
+			registerNames: [for (p in registers) if (p.indexOf('.') < 0) p],
+			sharedIds: matchAll(graph, option('sharedLocks')),
+			nonThrowingIds: matchAll(graph, nonThrowing),
+			nonThrowingNames: [for (p in nonThrowing) if (p.indexOf('.') < 0) p],
+			spawnIds: matchAll(graph, option('spawns')),
+			marshalIds: matchAll(graph, option('marshals')),
+			quietIds: matchAll(graph, option('quietRoots')),
+			reentrantIds: matchAll(graph, option('reentrantLocks')),
+			throwerIds: matchAll(graph, option('throwers')),
+			neverInvokeIds: matchAll(graph, neverInvokes),
+			neverInvokeNames: [for (p in neverInvokes) if (p.indexOf('.') < 0) p],
+			mainCheckIds: matchAll(graph, mainChecks.concat([for (c in mainChecks) getterOf(c, accessorPrefixes)])),
+			closedWorld: closedWorld,
+			lockPairs: lockPairs,
+			pairs: resolvePairs(graph, lockPairs)
+		};
 	}
 
 	/** A subject naming several ids (the two locks of an inversion), sorted and joined by `SUBJECT_SEPARATOR`. */
@@ -615,20 +638,15 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		}
 	}
 
-	/** Every malformed `lockPairs` entry of a reporting chain, once however many chains share it. */
-	private static function reportMalformedPairs(sets: Array<ChainLists>, violations: Array<Violation>): Void {
-		for (setIndex => lists in sets) for (pair in lists.lockPairs) {
-			// a chain that reports nothing (`needs-config`) says nothing about its options either
-			if (pair.lastIndexOf('/') > 0 || !lists.reports) continue;
-			if (sets.slice(0, setIndex).exists(earlier -> earlier.reports && earlier.lockPairs.contains(pair))) continue;
-			violations.push({
-				file: '',
-				span: null,
-				rule: 'thread-safety',
-				severity: Severity.Info,
-				message: 'malformed lockPairs entry "$pair" — expected "<lock pattern>/<unlock member>"'
-			});
-		}
+	/** One `info` finding naming no file per line of `problems` (`listsByFile`): what the options' read left out. */
+	private static function reportConfigProblems(problems: Array<String>, violations: Array<Violation>): Void {
+		for (p in problems) violations.push({
+			file: '',
+			span: null,
+			rule: 'thread-safety',
+			severity: Severity.Info,
+			message: p
+		});
 	}
 
 	/**
@@ -784,18 +802,6 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	private static function capped(evidence: Array<String>): String {
 		final more: Int = evidence.length - EVIDENCE_CAP;
 		return evidence.slice(0, EVIDENCE_CAP).join('; ') + (more > 0 ? '; +$more more' : '');
-	}
-
-	/** True when `file` contains one of `patterns` as a '/'-bounded path-segment run. */
-	private static function pathExcluded(file: String, patterns: Array<String>): Bool {
-		final wrapped: String = '/' + file.replace('\\', '/') + '/';
-		for (p in patterns) {
-			var trimmed: String = p;
-			while (trimmed.startsWith('/')) trimmed = trimmed.substring(1);
-			while (trimmed.endsWith('/')) trimmed = trimmed.substring(0, trimmed.length - 1);
-			if (trimmed.length > 0 && wrapped.indexOf('/$trimmed/') != -1) return true;
-		}
-		return false;
 	}
 
 	/**
