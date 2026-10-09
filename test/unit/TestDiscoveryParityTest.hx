@@ -2309,7 +2309,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyRootCauseTest#testALockReleasedElsewhereLeavesTheWaiterWarned :: control :: M-TS-FOLD-CROSSING',
 			'unit.check.ThreadSafetyRootCauseTest#testHoldsLongByOneCallMakeOneWarning :: control :: '
 				+ 'M-TS-FOLD-SITE,M-TS-FOLD-DEPTH,M-TS-FOLD-SITE-LOCK',
-			'unit.check.ThreadSafetyRootCauseTest#testHoldsOnTwoThreadsDoNotCoverEachOther :: control :: M-TS-FOLD-SITE-THREAD',
+			'unit.check.ThreadSafetyRootCauseTest#testHoldsOnTwoThreadsDoNotCoverEachOther :: control :: '
+				+ 'M-TS-FOLD-SITE-THREAD,M-TS-FOLD-SITE-ONE-ORIGIN',
 			'unit.check.ThreadSafetyRootCauseTest#testSinkCallsOfOneWayMakeOneWarning :: control :: M-TS-WAY-OFF',
 			'unit.check.ThreadSafetyRootCauseTest#testTheCallsOfOneLoopMakeOneWarning :: control :: M-TS-LOOP-KEY',
 			'unit.check.ThreadSafetyRootCauseTest#testTwoTakesSharingAFindingDoNotCoverEachOther :: control :: M-TS-FOLD-SELF',
@@ -6243,6 +6244,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-HELPER-GIVE-OBJECT',
 			'M-TS-FOLD-SITE-LOCK',
 			'M-TS-FOLD-SITE-THREAD',
+			'M-TS-FOLD-SITE-ONE-ORIGIN',
 			'M-TS-FOLD-SITE-CYCLE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];

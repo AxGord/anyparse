@@ -18561,6 +18561,14 @@
 			"note": "a hold of a lock covers another of it in another function across threads, though each thread stalls the main one by itself"
 		},
 		{
+			"name": "M-TS-FOLD-SITE-ONE-ORIGIN",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "oneThread",
+			"find": "return covered.length > 0 && covered.foreach(t -> covering.contains(t));",
+			"replace": "return covered.length == 1 && covering.length == 1 && covered[0] == covering[0];",
+			"note": "a hold covers another of its lock only when both run on one origin alone, though a hold running wherever the covered one does reports its stall"
+		},
+		{
 			"name": "M-TS-FOLD-SITE-CYCLE",
 			"type": "anyparse.check.LockTaint",
 			"method": "mayRepeatAlong",
