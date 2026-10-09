@@ -57,8 +57,11 @@ class ThreadSafetyCarriedHoldTest extends Test {
 		#end
 	}
 
-	/** A callee that gives the held lock back carries nothing past it. */
-	@:pin('control') @:killer('M-TS-CARRY-RELEASE')
+	/**
+	 * A callee that gives the held lock back carries nothing past it. Its untaken give also keeps `_batch` from
+	 * dominating anything (`LockDominance.excludes`), so no single cut breaks this any more: a guard.
+	 */
+	@:pin('guard')
 	public function testACalleeGivingTheLockBackCarriesNothing(): Void {
 		#if (sys || nodejs)
 		Assert.same(['info B Fs.work | Db.batch (folded)'], work(own('_db.batchLock(); _db.drop();'), DB_DROP));

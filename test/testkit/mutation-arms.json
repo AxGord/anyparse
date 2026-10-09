@@ -17384,15 +17384,7 @@
 			"replace": "return null;",
 			"note": "a hold is carried into no callee"
 		},
-		{
-			"name": "M-TS-CARRY-RELEASE",
-			"type": "anyparse.check.LockDominance",
-			"method": "carry",
-			"find": "if (object != null && !_must.mayRelease(lock, call.to)) kept.push(MustHeld.heldOn(lock, object));",
-			"replace": "if (object != null) kept.push(MustHeld.heldOn(lock, object));",
-			"note": "a hold is carried into a callee that gives the lock back"
-		},
-		{
+				{
 			"name": "M-TS-CARRY-RETAKE",
 			"type": "anyparse.check.LockDominance",
 			"method": "briefUnder",
