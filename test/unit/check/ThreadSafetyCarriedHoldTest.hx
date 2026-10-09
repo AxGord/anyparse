@@ -104,6 +104,54 @@ class ThreadSafetyCarriedHoldTest extends Test {
 	}
 
 	/**
+	 * A field an interface declares is declared again by each implementer: a write there writes the interface's field,
+	 * and a constant-named `Reflect.setField` / `setProperty` writes the field so named — either one names no object
+	 * through the path (review round 2 `o1`, `o3`).
+	 */
+	@:pin('control') @:killer('M-TS-PATH-INTERFACE') @:killer('M-TS-PATH-REFLECT')
+	public function testAnImplementersOrAReflectiveWriteNamesNoObject(): Void {
+		#if (sys || nodejs)
+		final config: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Sys.sleep"],"spawns":["Runner.create"],'
+			+ '"lockPairs":["Mutex.acquire/release"],"closedWorld":true}}}';
+		final db: String = 'class Db { public final batch:Mutex = new Mutex(); public final mutex:Mutex = new Mutex(); public function new() {}'
+			+ ' public function batchLock():Void batch.acquire(); public function batchUnlock():Void batch.release();'
+			+ ' public function lookup():Void { mutex.acquire(); mutex.release(); }'
+			+ ' public function slow():Void { batch.acquire(); mutex.acquire(); Sys.sleep(1); mutex.release(); batch.release(); } }';
+		final main: String = 'class M { public static function main():Void { final a:Db = new Db(); final b:Db = new Db();'
+			+ ' final fs:Fs = new Fs(a, b); final w:W = new W(fs); Runner.create(() -> { a.slow(); b.slow(); });'
+			+ ' Runner.create(() -> w.work()); Runner.create(() -> Swapper.go(fs, b)); a.batchLock(); a.batchUnlock(); } }';
+		inline function graded(fsDecl: String, fsType: String, swap: String): Array<String> {
+			return [
+				for (v in ThreadSafetyCheckTest.violations(config, [
+					ThreadSafetyCheckTest.MUTEX,
+					'class Runner { public static function create(fn:()->Void):Void {} }',
+					db,
+					fsDecl,
+					'class W { final fs:$fsType; public function new(f:$fsType) { fs = f; }'
+					+ ' public function work():Void { fs.db.batchLock(); fs.db.lookup(); fs.db.batchUnlock(); } }',
+					'class Swapper { public static function go(f:Fs, b:Db):Void { $swap } }',
+					main
+				])) if (v.data?.family == 'B' && v.data?.member == 'W.work') v.severity.label()
+			];
+		}
+		final plain: String = 'class Fs { public var db:Db; public function new(a:Db, b:Db) { db = a; } }';
+		Assert.same(['info'], graded(plain, 'Fs', ''), 'written in the constructor only');
+		Assert.same(
+			['warning'],
+			graded(
+				'interface IFs { var db:Db; } class Fs implements IFs { public var db:Db;'
+				+ ' public function new(a:Db, b:Db) { db = a; Runner.create(() -> db = b); } }',
+				'IFs', ''
+			),
+			'an implementer'
+		);
+		Assert.same(['warning'], graded(plain, 'Fs', 'Reflect.setField(f, "db", b);'), 'a reflective write');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
 	 * A `var` written in a lambda or a local function the constructor makes is written whenever that function runs: it
 	 * names no object.
 	 */

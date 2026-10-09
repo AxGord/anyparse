@@ -109,7 +109,7 @@ final class AllocationSets {
 		final own: Null<Array<String>> = info == null ? null : declared(owner, info);
 		final found: Array<String> = own ?? [];
 		var sealed: Bool = own != null;
-		for (w in _writes.of(name)) if (sealed && FieldWrites.mayWrite(w, owner)) {
+		for (w in _writes.of(name)) if (sealed && _writes.mayWrite(w, owner)) {
 			final values: Null<Array<String>> = w.write.kind == _shape.assignKind && w.write.children.length == 2
 				? constructed(w.write.children[1], w.file)
 				: null;

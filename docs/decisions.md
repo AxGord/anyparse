@@ -1914,3 +1914,10 @@ decided the question; it may not become a record of runs.
   every turn after the first, yet `_outer` still dominated. A take covers a give only when the give does not repeat
   after it (`GiveFacts.repeatsAfter` = `CallRepetition.repeatedUnder`: a loop around the give that is not around the
   take, a hand-on, a recursion) (review round 2 `k1`) — branch `feat/ts-precision-3`
+- `FieldWrites.mayWrite` ignoring an own write whose declaring type is not the field's owner → an interface's `var db`
+  is declared again by its implementer, so `Fs.db = b` (in a lambda) never counted as a write of `IFs.db` and
+  `fs.db.batchLock()` named one object for good; and `Reflect.setField(f, "db", b)` was no write at all. When the
+  owner is an interface, every own write of the name may be one of it; a constant-named `Reflect.setField` /
+  `setProperty` is a write of that name on a value nothing here can tell (`FieldWrites.recordReflective`). A
+  COMPUTED name (`Reflect.setField(o, key, v)`) stays unseen — a known gap, as `RedundantIsVar` documents for the
+  same reason (review round 2 `o1`, `o3`) — branch `feat/ts-precision-3`

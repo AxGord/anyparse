@@ -93,7 +93,7 @@ final class ObjectPaths {
 		if (!_writes.complete) return false;
 		final ctor: Null<String> = isStatic ? null : _graph.ownMember(type, _shape.constructorName ?? 'new');
 		final owner: String = _graph.types.declaringTypeOf(type, name) ?? type;
-		return _writes.of(name).foreach(w -> !FieldWrites.mayWrite(w, owner) || w.own && ctor != null && w.fn == ctor);
+		return _writes.of(name).foreach(w -> !_writes.mayWrite(w, owner) || w.own && ctor != null && w.fn == ctor);
 	}
 
 	/** The member name of the field id `field`. */

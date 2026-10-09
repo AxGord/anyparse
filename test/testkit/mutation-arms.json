@@ -18617,6 +18617,22 @@
 			"note": "a give a loop repeats after one take gives back only what it took"
 		},
 		{
+			"name": "M-TS-PATH-INTERFACE",
+			"type": "anyparse.check.FieldWrites",
+			"method": "mayWrite",
+			"find": " || _graph.types.isInterface(owner)",
+			"replace": "",
+			"note": "an implementer's write of an interface's field writes another field"
+		},
+		{
+			"name": "M-TS-PATH-REFLECT",
+			"type": "anyparse.check.FieldWrites",
+			"method": "collect",
+			"find": "if (node.kind == _shape.callKind) recordReflective(file, source, node);",
+			"replace": "",
+			"note": "a constant-named Reflect.setField writes no field"
+		},
+		{
 			"name": "M-TS-BLIND-START",
 			"type": "anyparse.check.LockReleasers",
 			"method": "blindIn",

@@ -3,6 +3,8 @@ package anyparse.check;
 import anyparse.query.CallGraph;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
+import anyparse.query.StringFold.StringFoldSupport;
+import anyparse.query.StringFold.StringLiteral;
 import anyparse.runtime.Span;
 
 /** One write of a field-shaped target in a file of the run. */
@@ -46,6 +48,11 @@ typedef FieldWriteSite = {
 @:nullSafety(Strict)
 final class FieldWrites {
 
+	/** The reflective calls writing a field by name, off `Reflect` (`recordReflective`). */
+	private static final REFLECT_WRITES: Array<String> = ['setField', 'setProperty'];
+
+	private static inline final REFLECT: String = 'Reflect';
+
 	/** Whether the run sees every write of the project: every file's chain declares `closedWorld` and the run covers the project. */
 	public final complete: Bool;
 
@@ -55,11 +62,15 @@ final class FieldWrites {
 	private final _graph: CallGraph;
 	private final _shape: RefShape;
 
+	/** What reads a plain string literal's content (`Reflect.setField(o, "name", v)`); null for a grammar with none. */
+	private final _fold: Null<StringFoldSupport>;
+
 	public function new(graph: CallGraph, plugin: GrammarPlugin, complete: Bool) {
 		_graph = graph;
 		_shape = plugin.refShape();
+		_fold = plugin.stringFoldSupport();
 		this.complete = complete;
-		for (held in graph.heldFiles()) collect(held.file, held.tree);
+		for (held in graph.heldFiles()) collect(held.file, held.source, held.tree);
 	}
 
 	/** Every write of a target named `name`, in the order the files were walked. */
@@ -67,10 +78,36 @@ final class FieldWrites {
 		return _byName[name] ?? [];
 	}
 
-	/** Records every write in `node`'s subtree, in `file`. */
-	private function collect(file: String, node: QueryNode): Void {
+	/** Records every write in `node`'s subtree, in `file` of `source`: an assignment or an increment, a reflective write. */
+	private function collect(file: String, source: String, node: QueryNode): Void {
 		if (_shape.writeParentKinds.contains(node.kind) && node.children.length > 0) record(file, node, node.children[0]);
-		for (c in node.children) collect(file, c);
+		if (node.kind == _shape.callKind) recordReflective(file, source, node);
+		for (c in node.children) collect(file, source, c);
+	}
+
+	/**
+	 * Records the call `call` of `file` (of `source`) when it writes a field by name, `Reflect.setField(o, "name", v)` or
+	 * `Reflect.setProperty`, the name a plain literal: a write of that name on a value nothing here can tell.
+	 */
+	private function recordReflective(file: String, source: String, call: QueryNode): Void {
+		final callee: Null<QueryNode> = call.children[0];
+		final fold: Null<StringFoldSupport> = _fold;
+		if (fold == null || callee == null || call.children.length < 4 || !REFLECT_WRITES.contains(callee.name ?? '')) return;
+		final receiver: Null<QueryNode> = callee.children[0];
+		if (callee.kind != _shape.fieldAccessKind || receiver == null || receiver.kind != _shape.identKind || receiver.name != REFLECT)
+			return;
+		final literal: Null<StringLiteral> = fold.literalOf(call.children[2], source);
+		final at: Null<Span> = call.span;
+		if (literal == null || at == null) return;
+		final fn: Null<String> = _graph.functionAt(file, at.from);
+		push(literal.content, {
+			write: call,
+			file: file,
+			own: false,
+			fn: fn,
+			declaring: null,
+			typed: fn != null && _graph.node(fn)?.typeName != null
+		});
 	}
 
 	/** Records the write `write` of `target` when the target names a field: a bare name, or a field read off any value. */
@@ -81,8 +118,7 @@ final class FieldWrites {
 		if (name == null || at == null || !(own || accessKind(target.kind, _shape))) return;
 		final fn: Null<String> = _graph.functionAt(file, at.from);
 		final type: Null<String> = fn == null ? null : _graph.node(fn)?.typeName;
-		final list: Array<FieldWriteSite> = _byName[name] ?? [];
-		list.push({
+		push(name, {
 			write: write,
 			file: file,
 			own: own,
@@ -90,16 +126,23 @@ final class FieldWrites {
 			declaring: type == null ? null : _graph.types.declaringTypeOf(type, name),
 			typed: type != null
 		});
+	}
+
+	/** Files `site` under the name `name` it writes. */
+	private function push(name: String, site: FieldWriteSite): Void {
+		final list: Array<FieldWriteSite> = _byName[name] ?? [];
+		list.push(site);
 		_byName[name] = list;
 	}
 
 	/**
 	 * Whether `site` may write the field of that name `owner` declares: any receiver's but the running object's always —
 	 * what it is written on, nothing here can tell — and the running object's when its type declares the field as
-	 * `owner`'s, declares none by the name (a local of that name included), or is unknown.
+	 * `owner`'s, declares none by the name (a local of that name included), or is unknown. An interface's field is
+	 * declared again by every implementer, so any own write of the name may be one of it.
 	 */
-	public static inline function mayWrite(site: FieldWriteSite, owner: String): Bool {
-		return !site.own || !site.typed || site.declaring == null || site.declaring == owner;
+	public function mayWrite(site: FieldWriteSite, owner: String): Bool {
+		return !site.own || !site.typed || site.declaring == null || site.declaring == owner || _graph.types.isInterface(owner);
 	}
 
 	/** Whether `kind` is a field access of `shape`: plain, null-safe or forced. */
