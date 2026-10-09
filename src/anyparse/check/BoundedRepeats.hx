@@ -16,7 +16,7 @@ typedef BoundedRepeat = {
 	/** The graph ids of the call it repeats; null: the member's one repetition, whatever it calls. */
 	final calls: Null<Array<String>>;
 
-	/** The header of the loop it bounds (`CallRepetition.loopLabel`, `for (id in update)`); null: whichever one repetition is there. */
+	/** The header of the loop it bounds (`Loops.label`, `for (id in update)`); null: whichever one repetition is there. */
 	final loop: Null<String>;
 
 	final max: Float;
@@ -34,8 +34,10 @@ typedef BoundedRepeat = {
  * and the measured worst cost of one repetition (`costMs`) make it count as once while `max × costMs` stays under
  * `repeatBudgetMs`. Every other repetition of the member — a loop nested in the bound one, a sibling loop, a loop in a
  * lambda the member defines — stays repeating. A call several bound repetitions enclose in one function runs the
- * product of their bounds, judged against the budget once; repetitions in different functions on one main-thread way
- * do NOT add up — each is judged alone. The options are read and checked by `ThreadSafetyOptions` (a field of the wrong
+ * product of their bounds, judged against the budget once, and so do repetitions in different functions on one
+ * way (`CallRepetition.along`: down the main thread's ways and under a hold alike). A `loop` written with no rank
+ * that names several loops of the member binds none — its rank (`#2`, counting only loops that repeat a call
+ * which may block) names one. The options are read and checked by `ThreadSafetyOptions` (a field of the wrong
  * type, a `max` or `costMs` that is not positive, a `site` pattern, an unknown key); here an entry whose `site` names no
  * member or several, or whose `call` names nothing, is dropped whole and said, never widened, and `CallRepetition` says
  * an entry binding no repetition or several. The evidence for each number lives in the project's config (`evidence`),
@@ -66,7 +68,7 @@ final class BoundedRepeats {
 					site: record.site,
 					member: members[0],
 					calls: calls,
-					loop: loop == null ? null : StringTools.trim(~/\s+/g.replace(loop, ' ')),
+					loop: loop == null ? null : Loops.spelled(loop),
 					max: record.max,
 					costMs: record.costMs
 				});

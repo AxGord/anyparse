@@ -4,7 +4,6 @@ import anyparse.check.BoundedRepeats.BoundedRepeat;
 import anyparse.check.LockTaint.ChainLists;
 import anyparse.query.CallGraph;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 
@@ -38,6 +37,12 @@ using Lambda;
 @:nullSafety(Strict)
 final class CallRepetition {
 
+	/** A way no `boundedRepeats` entry binds a repetition of yet (`along`). */
+	public static final UNBOUNDED: BoundedWay = { turns: 1, cost: 0, entries: [] };
+
+	/** A `boundedRepeats` loop label carrying its rank among the loops of its header (`#2`). */
+	private static final RANKED: EReg = ~/ #[0-9]+$/;
+
 	/** The repeating parts of the loops around each placed position, keyed by `<file>:<offset>`; null for one the tree cannot place. */
 	private final _loops: Map<String, Null<Array<Span>>> = [];
 
@@ -56,37 +61,18 @@ final class CallRepetition {
 	/** Why `boundedRepeats` entries bind nothing (`notices`). */
 	private final _notices: Array<String> = [];
 
+	/** The loops of the graph's trees: which stand around a position, and what each is called. */
+	public final loops: Loops;
+
 	private final _graph: CallGraph;
 	private final _trees: FunctionTrees;
 	private final _listsOf: (String) -> ChainLists;
-	private final _loopKinds: Array<String>;
-	private final _bindingKinds: Array<String>;
-	private final _doWhileKinds: Array<String>;
-
-	/** The kinds whose body is a function of its own: a site inside one sits in no loop around it. */
-	private final _functionKinds: Array<String>;
 
 	public function new(graph: CallGraph, trees: FunctionTrees, shape: RefShape, listsOf: (String) -> ChainLists) {
 		_graph = graph;
 		_trees = trees;
 		_listsOf = listsOf;
-		_bindingKinds = shape.iterationBindingKinds ?? [];
-		_doWhileKinds = shape.doWhileLoopKinds ?? [];
-		_loopKinds = loopKindsOf(shape);
-		_functionKinds = (shape.functionKinds ?? []).concat(MemberKinds.nestedFunctionKinds(shape));
-	}
-
-	/**
-	 * The loops of `shape` — `loopStatementKinds`, `doWhileLoopKinds`, `iterationBindingKinds` and `whileExprKind`, each
-	 * once: the one definition of a loop every check of repetition and control flow reads (`ErrorPaths`, `LockWindow`).
-	 */
-	public static function loopKindsOf(shape: RefShape): Array<String> {
-		final kinds: Array<String> = [];
-		final all: Array<String> = (shape.loopStatementKinds ?? []).concat(shape.doWhileLoopKinds ?? [])
-			.concat(shape.iterationBindingKinds ?? [])
-			.concat(shape.whileExprKind == null ? [] : [shape.whileExprKind]);
-		for (k in all) if (!kinds.contains(k)) kinds.push(k);
-		return kinds;
+		loops = new Loops(graph, shape, listsOf);
 	}
 
 	/** Whether `edge` may run more than once per run of its function: in a loop, handing its value to a call that may repeat it, or recursive. */
@@ -119,25 +105,58 @@ final class CallRepetition {
 	}
 
 	/**
+	 * `way` extended by the call `edge` of it, which nothing repeats (`repeated`) or only repetitions `boundedRepeats`
+	 * entries bind: their bounds multiply into the way's turns and the worst cost of a turn grows to theirs, judged
+	 * against the budget of `edge`'s chain once for the whole way — repetitions in different functions on one way run the
+	 * product of their bounds too. Null when that product times the worst turn reaches the budget: the call then repeats.
+	 */
+	public function along(edge: CallEdge, way: BoundedWay): Null<BoundedWay> {
+		final loops: Null<Array<Span>> = loopsAround(edge);
+		return initializerRun(edge) || loops == null ? way : extend(edge, sourcesOf(edge, loops), way);
+	}
+
+	/**
+	 * `along`, for the call `edge` while the lock the call `take` of the same function took stays held: only the
+	 * repetitions of `edge` not around `take` too count (`repeatedUnder`).
+	 */
+	public function alongUnder(edge: CallEdge, take: CallEdge, way: BoundedWay): Null<BoundedWay> {
+		final loops: Null<Array<Span>> = loopsAround(edge);
+		final outer: Null<Array<Span>> = loopsAround(take);
+		if (initializerRun(edge) || loops == null || outer == null) return way;
+		return extend(edge, sourcesOf(edge, loops.filter(l -> !outer.exists(o -> o.from == l.from))), way);
+	}
+
+	/**
+	 * `way` with the repetitions `sources` of `edge` (`sourcesOf`) multiplied in: each one a `boundedRepeats` entry of its
+	 * chain binds (`boundSources`), the product of the way's bounds times its worst turn under `repeatBudgetMs`; null
+	 * otherwise — the call then repeats.
+	 */
+	private function extend(edge: CallEdge, sources: Array<String>, way: BoundedWay): Null<BoundedWay> {
+		if (sources.length == 0) return way;
+		final lists: ChainLists = _listsOf(edge.file);
+		final budget: Null<Float> = lists.repeatBudgetMs;
+		if (budget == null) return null;
+		final bound: Map<String, BoundedRepeat> = boundSources(lists);
+		var turns: Float = way.turns;
+		var cost: Float = way.cost;
+		final entries: Array<BoundedRepeat> = way.entries.copy();
+		for (s in sources) {
+			final entry: Null<BoundedRepeat> = bound[s];
+			if (entry == null) return null;
+			turns *= entry.max;
+			cost = Math.max(cost, entry.costMs);
+			if (!entries.contains(entry)) entries.push(entry);
+		}
+		return turns * cost < budget ? { turns: turns, cost: cost, entries: entries } : null;
+	}
+
+	/**
 	 * Whether the repetitions `sources` of `edge` (`sourcesOf`) run it few enough times, each cheap enough, to run as
 	 * once: none, or each one a `boundedRepeats` entry of its chain binds (`boundSources`), the product of their bounds
 	 * times the worst cost of one turn under `repeatBudgetMs`.
 	 */
 	private function boundedOnce(edge: CallEdge, sources: Array<String>): Bool {
-		if (sources.length == 0) return true;
-		final lists: ChainLists = _listsOf(edge.file);
-		final budget: Null<Float> = lists.repeatBudgetMs;
-		if (budget == null) return false;
-		final bound: Map<String, BoundedRepeat> = boundSources(lists);
-		var turns: Float = 1;
-		var cost: Float = 0;
-		for (s in sources) {
-			final entry: Null<BoundedRepeat> = bound[s];
-			if (entry == null) return false;
-			turns *= entry.max;
-			cost = Math.max(cost, entry.costMs);
-		}
-		return turns * cost < budget;
+		return extend(edge, sources, UNBOUNDED) != null;
 	}
 
 	/**
@@ -215,7 +234,7 @@ final class CallRepetition {
 		final key: String = '$file:$at';
 		if (_loops.exists(key)) return _loops[key];
 		final tree: Null<QueryNode> = _trees.ofFile(file);
-		final found: Null<Array<Span>> = tree == null || _loopKinds.length == 0 ? null : [for (l in loopsTo(tree, at)) l.repeating];
+		final found: Null<Array<Span>> = tree == null || loops.kinds.length == 0 ? null : [for (l in loops.around(tree, at)) l.repeating];
 		_loops[key] = found;
 		return found;
 	}
@@ -223,79 +242,13 @@ final class CallRepetition {
 	/**
 	 * The header of the innermost loop around the offset `at` of `file`, counted from the innermost function around it —
 	 * `for (s in sessions)`, `while (pending())`, `do … while (more)` — its whitespace collapsed, and a rank (`#2`) for a
-	 * second loop of the same header in that function: what names the loop whatever else its body holds, and whatever
-	 * moves around it. Null when no loop is placed there.
+	 * second loop of the same header in that function that repeats a call which may block (`repeatsSink`): what names the
+	 * loop whatever else its body holds, whatever moves around it, and whatever loop that blocks nothing is added
+	 * beside it. Null when no loop is placed there.
 	 */
 	public function loopLabel(file: String, at: Int): Null<String> {
 		final tree: Null<QueryNode> = _trees.ofFile(file);
-		final loop: Null<QueryNode> = tree == null || _loopKinds.length == 0 ? null : loopsTo(tree, at).pop()?.node;
-		return tree == null || loop == null ? null : labelOf(file, tree, loop, at);
-	}
-
-	/** The label (`loopLabel`) of the loop node `loop` around the offset `at` of `file`, whose tree is `tree`. */
-	private function labelOf(file: String, tree: QueryNode, loop: QueryNode, at: Int): Null<String> {
-		final label: Null<String> = header(file, loop);
-		if (label == null) return null;
-		// a second loop of one header in one function is told apart by its rank among them, never by its offset
-		final same: Array<QueryNode> = [for (l in loopsIn(scopeOf(tree, at), true)) if (header(file, l) == label) l];
-		final rank: Int = same.indexOf(loop);
-		return rank > 0 ? '$label #${rank + 1}' : label;
-	}
-
-	/** The innermost function node of `tree` around the offset `at`, counted as `loopsTo` counts; the root when none is. */
-	private function scopeOf(tree: QueryNode, at: Int): QueryNode {
-		var scope: QueryNode = tree;
-		var node: QueryNode = tree;
-		while (true) {
-			final child: Null<QueryNode> = node.children.find(c -> c.span != null && c.span.from <= at && c.span.to > at);
-			if (child == null) return scope;
-			final span: Null<Span> = node.span;
-			if (_functionKinds.contains(node.kind) && span != null && span.from != at) scope = node;
-			node = child;
-		}
-	}
-
-	/** The loop nodes under `node` in source order, a function nested in it aside (`top`: `node` itself is the function). */
-	private function loopsIn(node: QueryNode, top: Bool): Array<QueryNode> {
-		if (!top && _functionKinds.contains(node.kind)) return [];
-		final out: Array<QueryNode> = _loopKinds.contains(node.kind) ? [node] : [];
-		for (c in node.children) for (l in loopsIn(c, false)) out.push(l);
-		return out;
-	}
-
-	/** The header of the loop node `loop` of `file` (`loopLabel`); null when the file has no source or the loop no parts. */
-	private function header(file: String, loop: QueryNode): Null<String> {
-		final source: Null<String> = _graph.sourceOf(file);
-		final span: Null<Span> = loop.span;
-		if (source == null || span == null || loop.children.length == 0) return null;
-		final first: Null<Span> = loop.children[0].span;
-		final last: Null<Span> = loop.children[loop.children.length - 1].span;
-		final text: Null<String> = if (_doWhileKinds.contains(loop.kind))
-			first == null ? null : 'do … ' + source.substring(first.to, span.to)
-		else
-			last == null ? null : source.substring(span.from, last.from);
-		return text == null ? null : StringTools.trim(~/\s+/g.replace(text, ' '));
-	}
-
-	/**
-	 * The loops from the root of `tree` down to the node holding the offset `at`, counted from the innermost function
-	 * around it, outermost first, each with its repeating part that holds `at` — a `for`'s body, any other loop whole.
-	 */
-	private function loopsTo(tree: QueryNode, at: Int): Array<{ node: QueryNode, repeating: Span }> {
-		var loops: Array<{ node: QueryNode, repeating: Span }> = [];
-		var node: QueryNode = tree;
-		while (true) {
-			final child: Null<QueryNode> = node.children.find(c -> c.span != null && c.span.from <= at && c.span.to > at);
-			if (child == null) return loops;
-			final span: Null<Span> = node.span;
-			final repeating: Null<Span> = _bindingKinds.contains(node.kind) ? node.children[node.children.length - 1].span : span;
-			// a function around the site starts it afresh; a lambda that IS the site is a value its own function registers there
-			if (_functionKinds.contains(node.kind) && span != null && span.from != at)
-				loops = []
-			else if (_loopKinds.contains(node.kind) && repeating != null && repeating.from <= at && at < repeating.to)
-				loops.push({ node: node, repeating: repeating });
-			node = child;
-		}
+		return tree == null ? null : loops.label(file, tree, at);
 	}
 
 	/** Numbers the strongly connected components of the graph over its runs: calls, constructions, overrides, accessors (Tarjan). */
@@ -408,6 +361,9 @@ final class CallRepetition {
 	private function bind(entry: BoundedRepeat, sources: Map<String, BoundedRepeat>): Null<String> {
 		final member: String = entry.member;
 		final calls: Null<Array<String>> = entry.calls;
+		final loop: Null<String> = entry.loop;
+		if (loop != null && !RANKED.match(loop) && labelsIn(member).contains('$loop #2'))
+			return 'loop "$loop" names several loops there — add the rank of the one it bounds ("$loop #1", "$loop #2", …)';
 		final found: Array<String> = [];
 		for (id in functionsOf(member)) for (e in _graph.outEdges(id)) if (
 			e.kind != Contains && (calls == null || calls.contains(e.to) || e.kind == Ref && calls.contains(e.via ?? ''))
@@ -444,15 +400,34 @@ final class CallRepetition {
 	}
 
 	/**
-	 * The keys of the loops around the site of `edge` in its own function whose label (`loopLabel`) is `label`.
+	 * The keys of the loops around the site of `edge` in its own function whose label (`loopLabel`) is `label` — `#1`
+	 * spelling the first of its header, whose label carries no rank.
 	 */
 	private function namedLoops(edge: CallEdge, label: String): Array<String> {
 		final tree: Null<QueryNode> = _trees.ofFile(edge.file);
 		final span: Null<Span> = edge.span;
 		if (tree == null || span == null) return [];
+		final wanted: String = StringTools.endsWith(label, ' #1') ? label.substring(0, label.length - 3) : label;
 		return [
-			for (l in loopsTo(tree, span.from)) if (labelOf(edge.file, tree, l.node, span.from) == label) loopKey(edge.file, l.repeating)
+			for (l in loops.around(
+				tree, span.from
+			)) if (loops.labelOf(edge.file, tree, l.node, span.from) == wanted) loopKey(edge.file, l.repeating)
 		];
+	}
+
+	/** The labels (`loopLabel`) of every loop in the code of `member` — the member and the functions it defines. */
+	private function labelsIn(member: String): Array<String> {
+		final labels: Array<String> = [];
+		for (id in functionsOf(member)) {
+			final file: String = _graph.node(id)?.file ?? '';
+			final fn: Null<QueryNode> = _trees.ofId(id);
+			final tree: Null<QueryNode> = _trees.ofFile(file);
+			if (fn != null && tree != null) for (l in loops.within(fn, true)) {
+				final label: Null<String> = loops.labelOf(file, tree, l, l.span?.from ?? -1);
+				if (label != null) labels.push(label);
+			}
+		}
+		return labels;
 	}
 
 	/** `member` and every function defined in its code (`ThreadSafety.memberOf`). */
@@ -465,4 +440,14 @@ final class CallRepetition {
 		if (!_notices.contains(text)) _notices.push(text);
 	}
 
+}
+
+/**
+ * The repetitions `boundedRepeats` entries bind along one way of calls (`CallRepetition.along`): the product of their
+ * bounds (`turns`), the worst cost of one turn (`cost`, ms), and the entries met.
+ */
+typedef BoundedWay = {
+	final turns: Float;
+	final cost: Float;
+	final entries: Array<BoundedRepeat>;
 }

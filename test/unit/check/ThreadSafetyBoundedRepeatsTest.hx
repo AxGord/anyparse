@@ -199,8 +199,98 @@ class ThreadSafetyBoundedRepeatsTest extends Test {
 		#end
 	}
 
+	/**
+	 * A `loop` label with no rank that names several loops of the member binds none, and says so: a loop added later with
+	 * the same header would otherwise take the bound its first was given (review round 2 `br1-a`, `br1-b`). The rank
+	 * names one.
+	 */
+	@:pin('control') @:killer('M-TS-BOUND-LABEL-SEVERAL')
+	public function testALabelNamingSeveralLoopsBindsNone(): Void {
+		#if (sys || nodejs)
+		final found: Array<Violation> = sameHeaders('{"site": "N.run", "loop": "for (i in 0...n)", "max": 3, "costMs": 1}');
+		Assert.same([
+			'info A N.a | Disk.stat',
+			'info A N.b | Disk.stat',
+			'warning A N.run | for (i in 0...n)',
+			'warning A N.run | for (i in 0...n) #2'
+		], mains(found));
+		Assert.isTrue(notice(found, 'loop "for (i in 0...n)" names several loops there'));
+		Assert.same([
+			'info A N.a | Disk.stat',
+			'info A N.b | Disk.stat',
+			'warning A N.run | for (i in 0...n)'
+		], mains(sameHeaders('{"site": "N.run", "loop": "for (i in 0...n) #2", "max": 3, "costMs": 1}')), 'the rank');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A loop's rank counts only the loops of its header that repeat a call which may block: one added beside it that
+	 * blocks nothing leaves its label, and the key of the finding it names, as they were (review round 2 `ks2-a`, `ks2-b`).
+	 */
+	@:pin('control') @:killer('M-TS-LABEL-RANK-SINK')
+	public function testALoopThatBlocksNothingTakesNoRank(): Void {
+		#if (sys || nodejs)
+		final found: Array<Violation> = ThreadSafetyCheckTest.violations(config('{"site": "Z.none", "max": 1, "costMs": 1}', true), [
+			DISK,
+			'class K { static function a():Void Disk.stat("a");'
+			+ ' static function p(xs:Array<String>):Void { var n:Int = 0; for (x in xs) n++; for (x in xs) a(); }'
+			+ ' public static function main():Void p(["x"]); }'
+		]);
+		Assert.same(['info A K.a | Disk.stat', 'warning A K.p | for (x in xs)'], mains(found));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * Bounds in different functions on one way multiply: 40 turns of a loop calling a function that loops 40 times are
+	 * 1600 turns, over the budget though each bound alone is under it — on the main thread and under a lock alike
+	 * (review round 2 `br2-nested-entries`). A short call run as once by bounds alone names them.
+	 */
+	@:pin('control') @:killer('M-TS-BOUND-ACROSS') @:killer('M-TS-BOUND-ACROSS-HOLD') @:killer('M-TS-BOUND-NOTE')
+	public function testBoundsMultiplyAlongTheWay(): Void {
+		#if (sys || nodejs)
+		final entries: String = '{"site": "N.run", "max": 40, "costMs": 1}, {"site": "N.each", "max": 40, "costMs": 1}';
+		final across: Array<Violation> = ThreadSafetyCheckTest.violations(config(entries, true), [
+			DISK,
+			'class N { static function each(ys:Array<String>):Void for (y in ys) Disk.stat(y);'
+			+ ' public static function run(xs:Array<Array<String>>):Void for (x in xs) each(x);'
+			+ ' public static function main():Void run([["x"]]); }'
+		]);
+		Assert.same(['info A N.each | Disk.stat', 'warning A N.run | for (x in xs)'], mains(across), 'main thread');
+		final held: Array<Violation> = ThreadSafetyCheckTest.violations(
+			config('{"site": "H.work", "max": 10, "costMs": 1}, {"site": "H.each", "max": 10, "costMs": 1}', true), [
+				ThreadSafetyCheckTest.MUTEX,
+				DISK,
+				'class Runner { public static function create(fn:()->Void):Void {} }',
+				'class H { public final _m:Mutex = new Mutex(); public function new() {}'
+				+ ' function each():Void for (i in 0...10) Disk.stat("a");'
+				+ ' public function work():Void { _m.acquire(); for (i in 0...10) each(); _m.release(); }'
+				+ ' public static function main():Void { final h:H = new H(); Runner.create(() -> h.work()); h._m.acquire(); h._m.release(); } }'
+			]
+		);
+		Assert.same(['warning B H.work | H._m'], graded(held, 'B'), 'under a lock');
+		final once: Array<Violation> = loop('{"site": "L.main", "max": 3, "costMs": 1}');
+		Assert.isTrue(once.exists(v -> v.message.indexOf('`boundedRepeats` binds on its ways (L.main ≤ 3 × 1 ms)') >= 0), 'named');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
 	private static inline final DISK: String = 'class Disk { public static function stat(p:String):Void {} }';
+
+	/** `N.run` loops `xs.length` times over `a`, then three times over `b`, both loops written `for (i in 0...n)`, bounded by `entry`. */
+	private static function sameHeaders(entry: String): Array<Violation> {
+		return ThreadSafetyCheckTest.violations(config(entry, true), [
+			DISK,
+			'class N { static function a():Void Disk.stat("a"); static function b():Void Disk.stat("b");'
+			+ ' public static function run(xs:Array<String>):Void { var n:Int = xs.length; for (i in 0...n) a(); n = 3; for (i in 0...n) b(); }'
+			+ ' public static function main():Void run(["x"]); }'
+		]);
+	}
 
 	private static function config(entry: String, budget: Bool): String {
 		return '{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Disk.stat"],"shortSinks":["Disk.stat"],'

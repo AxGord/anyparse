@@ -113,7 +113,7 @@ final class LockWindow {
 			.concat(shape.expressionBodyKinds ?? []);
 		_ifKinds = (shape.ifStatementKinds ?? []).concat(shape.ifExpressionKinds ?? [])
 			.concat(shape.ternaryKind == null ? [] : [shape.ternaryKind]);
-		_loopKinds = CallRepetition.loopKindsOf(shape);
+		_loopKinds = Loops.kindsOf(shape);
 		_tryKinds = (shape.tryStatementKinds ?? []).concat(shape.tryExpressionKinds ?? []);
 		_switchKinds = shape.switchKinds ?? [];
 		_declKinds = inPlaceKindsOf(shape);

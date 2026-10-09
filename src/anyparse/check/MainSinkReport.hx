@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.BoundedRepeats.BoundedRepeat;
 import anyparse.check.Check.FindingData;
 import anyparse.check.Check.RepeatSite;
 import anyparse.check.Check.Violation;
@@ -298,7 +299,7 @@ final class MainSinkReport {
 		else if (own)
 			assumed.length > 0 && !long ? unknownNote(assumed) : ''
 		else
-			shortNote(elsewhere, found.length - repeaters.length, cost.error, climb?.registered == true);
+			shortNote(elsewhere, found.length - repeaters.length, cost.error, climb?.registered == true, climb?.bounded ?? []);
 		final finding: Violation = mainSinkFinding(
 			graph, edge, sinks, states.mainPath(edge), states.edgeContext(edge), note, own && !inSink
 		);
@@ -366,14 +367,31 @@ final class MainSinkReport {
 	 * `further` more repeating callers farther up counted; long only where the catch at `error` runs; or once per run —
 	 * per event of a registration when `registered`.
 	 */
-	private static function shortNote(elsewhere: Array<String>, further: Int, error: Null<String>, registered: Bool): String {
+	private static function shortNote(
+		elsewhere: Array<String>, further: Int, error: Null<String>, registered: Bool, bounded: Array<BoundedRepeat>
+	): String {
 		return if (elsewhere.length > 0)
 			' — short each time, long only as repeated by ${elsewhere.join(', ')}, reported there'
 				+ (further > 0 ? ' ($further more repeating caller(s) further away)' : '')
 		else if (error != null)
 			ErrorPaths.note(error)
+		else if (bounded.length > 0)
+			boundedNote(bounded)
 		else
 			registered ? CostNote.ShortRegisteredCall : CostNote.ShortMainCall;
+	}
+
+	/**
+	 * What a short main-thread call run as once only by `boundedRepeats` entries adds to its message: each repetition
+	 * it relied on, by member, loop or call, and bound — never "none in a loop".
+	 */
+	private static function boundedNote(bounded: Array<BoundedRepeat>): String {
+		final named: Array<String> = [
+			for (b in bounded) b.site + (b.loop == null ? '' : ' `${b.loop}`') + ' ≤ ${b.max} × ${b.costMs} ms'
+		];
+		return ' — short: a short sink or a take of a lock held only across short calls, run as once only by the repetitions'
+			+ ' `boundedRepeats` binds on its ways (${named.join(', ')}), their bounds multiplied along each way under'
+			+ ' `repeatBudgetMs`, so reported as info';
 	}
 
 	/** The note of a warning whose repetition is unknown: the functions on its ways `assumed` that no call the graph resolves runs. */

@@ -1858,3 +1858,15 @@ decided the question; it may not become a record of runs.
   fixed: a hold's taint never walks a value handed on (`Lambda.iter(paths, load)` under the lock), base included,
   so `ep1b-iter-in-caller` stays silent under a hold — the taint follows invocations only (review round 2
   `ep1-loop-in-caller`) — branch `feat/ts-precision-3`
+- a `boundedRepeats` `loop` label re-bound by its header alone, and a loop's rank counting every loop of its header →
+  a loop added later with the same header (`for (i in 0...n)`, now running `xs.length` times) silently took the
+  bound written for the first, and an unrelated loop that blocks nothing (`for (x in xs) n++;`) moved the rank, the
+  label and so the KEY of the repeat warning it names. A loop's rank now counts only the loops of its header that
+  repeat a call which may block (`Loops.labelOf`, `repeatsSink`), and a `loop` written with no rank that names
+  several loops binds none, with a notice asking for `#1` / `#2` (`CallRepetition.bind`). Bounds in different
+  functions on one way MULTIPLY (`CallRepetition.along`: 40 × 40 turns are 1600, over a 50 ms budget though each
+  bound alone is under it) — down the main thread's ways (`MainRepeats.climb`) and under a hold (`LockTaint`'s walk,
+  `WalkFlags.way`) alike; a short call run as once by bounds alone names them in its note, and a short hold under a
+  chain that lists `boundedRepeats` says so (`CostNote.ShortBoundedHold`), never "none in a loop". The loop
+  definition, labels and header spelling live in `Loops` (one normalisation, `Loops.spelled`, for labels and
+  entries) (review round 2 `br1-a`, `br1-b`, `br2-nested-entries`, `ks2-a`, `ks2-b`) — branch `feat/ts-precision-3`

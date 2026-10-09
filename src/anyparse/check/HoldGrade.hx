@@ -213,7 +213,7 @@ final class HoldGrade {
 		return brief.length == 0 ? null : {
 			calls: brief,
 			taint: judges.plain,
-			note: CostNote.ShortHold,
+			note: judges.plain.listsOf(a.edge.file).bounded.length > 0 ? CostNote.ShortBoundedHold : CostNote.ShortHold,
 			info: true
 		};
 	}

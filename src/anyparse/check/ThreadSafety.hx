@@ -916,6 +916,14 @@ enum abstract CostNote(String) to String {
 		+ ' whose every long hold needs a lock held here, each once per hold (no loop, `iterates` callback or recursion under the'
 		+ ' lock), so reported as info';
 
+	/**
+	 * `ShortHold`, for a hold whose chain lists `boundedRepeats` entries: a repetition one binds counts as once, never as
+	 * "no loop" — the bounds multiplied along each way under the budget (`CallRepetition.along`).
+	 */
+	final ShortBoundedHold = ' — short: every call it spans waits only on short sinks, on locks held only across short calls, or on a'
+		+ ' lock whose every long hold needs a lock held here, each once per hold but for the repetitions `boundedRepeats` binds'
+		+ ' (their bounds multiplied along each way under `repeatBudgetMs`), so reported as info';
+
 	/** A call a sink's own body makes: the call of that sink is the finding. */
 	final InsideSink = ' — inside a sink\'s own body, whose call is the finding, so reported as info';
 

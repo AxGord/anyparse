@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.CallRepetition.BoundedWay;
 import anyparse.check.LockSites.BlindCall;
 import anyparse.check.LockSites.LockAcquire;
 import anyparse.check.LockSites.LockPair;
@@ -103,10 +104,20 @@ private typedef WalkState = {
 	final valuation: String;
 	final ctx: Int;
 	final repeated: Bool;
+
+	/** The repetitions `boundedRepeats` binds on the way to the state, counted as once while their product stays in budget. */
+	final way: BoundedWay;
 	final under: Null<String>;
 
 	/** The classes the state's function runs on an instance of (`AllocationSets`), when the way to it says. */
 	final self: Null<String>;
+}
+
+/** What a walk state carries down to the next one: the lock held, whether a call on the way repeats, and the bounded way. */
+private typedef WalkFlags = {
+	final held: Null<String>;
+	final repeated: Bool;
+	final way: BoundedWay;
 }
 
 /**
@@ -331,8 +342,12 @@ final class LockTaint {
 			final live: Int = _conditions.carried(edge, state.valuation, bit);
 			if (live == 0) continue;
 			final cost: Null<TaintCost> = _cost;
+			// the repetitions `boundedRepeats` binds around the call while the lock is held, multiplied on along the way
+			final way: Null<BoundedWay> = cost == null
+				? CallRepetition.UNBOUNDED
+				: cost.repetition.alongUnder(edge, a.edge, CallRepetition.UNBOUNDED);
 			// a call repeating while the lock is held runs every short call it reaches more than once
-			final repeats: Bool = cost != null && cost.repetition.repeatedUnder(edge, a.edge);
+			final repeats: Bool = cost != null && (cost.repetition.repeatedUnder(edge, a.edge) || way == null);
 			// the hold being judged, on the object it is taken on, while its window runs
 			final under: Null<String> = cost?.dominance.holdOf(a);
 			if (blocks(edge, held) || retakesElsewhere(edge, held)) {
@@ -346,7 +361,8 @@ final class LockTaint {
 			final carried: Null<String> = cost?.dominance.carry(under, edge);
 			final self: Null<String> = _allocations?.into(edge, classes);
 			final key: Null<String> = reach(
-				edge.to, _conditions.bind(edge, state.valuation), live, { held: held, repeated: repeats }, carried, self
+				edge.to, _conditions.bind(edge, state.valuation), live,
+				{ held: held, repeated: repeats, way: way ?? CallRepetition.UNBOUNDED }, carried, self
 			);
 			if (key != null) return trailFrom(edge, key, held);
 		}
@@ -454,11 +470,11 @@ final class LockTaint {
 	 * counts only on a path that repeats; run once, it ends no path and leads nowhere, like any sink.
 	 */
 	private function reach(
-		id: String, valuation: String, ctx: Int, flags: { held: Null<String>, repeated: Bool }, under: Null<String>, self: Null<String>
+		id: String, valuation: String, ctx: Int, flags: WalkFlags, under: Null<String>, self: Null<String>
 	): Null<String> {
 		final held: Null<String> = flags.held;
 		final repeated: Bool = flags.repeated;
-		final root: String = stateKey(held, id, valuation, ctx, repeated, under) + '|${self ?? ''}';
+		final root: String = stateKey(held, id, valuation, ctx, flags, under) + '|${self ?? ''}';
 		if (_reaching.exists(root)) return root;
 		if (_clean.exists(root)) return null;
 		final queue: Array<WalkState> = [
@@ -468,6 +484,7 @@ final class LockTaint {
 				valuation: valuation,
 				ctx: ctx,
 				repeated: repeated,
+				way: flags.way,
 				under: under,
 				self: self
 			}
@@ -481,7 +498,8 @@ final class LockTaint {
 				if (leadsNowhere(edge, state.repeated)) continue;
 				final live: Int = _conditions.carried(edge, state.valuation, state.ctx);
 				if (live == 0) continue;
-				final repeats: Bool = state.repeated || repeatsAt(edge);
+				final carriedDown: WalkFlags = stepFlags(state, edge, held);
+				final repeats: Bool = carriedDown.repeated;
 				if (blockingHere(edge, held)) {
 					// a short call run once on this path waits too little to count, and a sink leads nowhere
 					if (!counts(edge, held, repeats, state.valuation) || briefUnder(state.under, edge)) continue;
@@ -491,7 +509,7 @@ final class LockTaint {
 					return root;
 				}
 				if (takesLock(edge)) continue;
-				final nextState: Null<WalkState> = following(state, edge, live, { held: held, repeated: repeats });
+				final nextState: Null<WalkState> = following(state, edge, live, carriedDown);
 				if (nextState == null) continue;
 				final next: String = nextState.key;
 				if (_clean.exists(next) || seen.exists(next)) continue;
@@ -513,20 +531,19 @@ final class LockTaint {
 	 * valuation bound, the judged hold carried into it (`LockDominance.carry`), and the classes it runs on
 	 * (`AllocationSets.into`); null for a dispatch no class the receiver may be resolves to, which runs nothing here.
 	 */
-	private function following(
-		state: WalkState, edge: CallEdge, live: Int, flags: { held: Null<String>, repeated: Bool }
-	): Null<WalkState> {
+	private function following(state: WalkState, edge: CallEdge, live: Int, flags: WalkFlags): Null<WalkState> {
 		final classes: Null<String> = _allocations?.receiverClasses(edge, state.self);
 		if (_allocations?.dispatches(edge, classes) == false) return null;
 		final valuation: String = _conditions.bind(edge, state.valuation);
 		final under: Null<String> = _cost?.dominance.carry(state.under, edge);
 		final self: Null<String> = _allocations?.into(edge, classes);
 		return {
-			key: stateKey(flags.held, edge.to, valuation, live, flags.repeated, under) + '|${self ?? ''}',
+			key: stateKey(flags.held, edge.to, valuation, live, flags, under) + '|${self ?? ''}',
 			id: edge.to,
 			valuation: valuation,
 			ctx: live,
 			repeated: flags.repeated,
+			way: flags.way,
 			under: under,
 			self: self
 		};
@@ -634,9 +651,27 @@ final class LockTaint {
 	}
 
 	private static inline function stateKey(
-		held: Null<String>, id: String, valuation: String, ctx: Int, repeated: Bool, under: Null<String>
+		held: Null<String>, id: String, valuation: String, ctx: Int, flags: WalkFlags, under: Null<String>
 	): String {
-		return '${held ?? ''}|$id|$valuation|$ctx${repeated ? '|repeated' : ''}|${under ?? ''}';
+		final way: BoundedWay = flags.way;
+		final bounded: String = way.entries.length > 0 ? '|${way.turns}x${way.cost}' : '';
+		return '${held ?? ''}|$id|$valuation|$ctx${flags.repeated ? '|repeated' : bounded}|${under ?? ''}';
+	}
+
+	/**
+	 * What the call `edge` of `state` carries down under a hold of `held`: whether a call on the way to its target
+	 * repeats — bounded repetitions on one way multiply, and the call that takes them past the budget repeats — and the
+	 * way's bounded repetitions so far.
+	 */
+	private function stepFlags(state: WalkState, edge: CallEdge, held: Null<String>): WalkFlags {
+		final way: Null<BoundedWay> = state.repeated ? state.way : wayAt(edge, state.way);
+		return { held: held, repeated: state.repeated || repeatsAt(edge) || way == null, way: way ?? state.way };
+	}
+
+	/** `way` extended by the call `edge` asking about cost (`CallRepetition.along`); `way` itself for the plain taint. */
+	private inline function wayAt(edge: CallEdge, way: BoundedWay): Null<BoundedWay> {
+		final cost: Null<TaintCost> = _cost;
+		return cost == null ? way : cost.repetition.along(edge, way);
 	}
 
 }

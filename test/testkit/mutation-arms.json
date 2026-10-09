@@ -10524,9 +10524,9 @@
 		{
 			"name": "M-TS-TAINT-UNION-SINK",
 			"type": "anyparse.check.LockTaint",
-			"method": "reach",
-			"find": "if (listsOf(edge.file).sinkIds.contains(edge.from) || onErrorPath(edge)) continue;",
-			"replace": "if (_sinkIds.contains(edge.from) || onErrorPath(edge)) continue;",
+			"method": "leadsNowhere",
+			"find": "listsOf(edge.file).sinkIds.contains(edge.from) ||",
+			"replace": "_sinkIds.contains(edge.from) ||",
 			"note": "a node one chain names a sink never carries taint to its callers in a chain where it is a plain function"
 		},
 		{
@@ -16922,16 +16922,16 @@
 		},
 		{
 			"name": "M-TS-REPEAT-NO-LOOPS",
-			"type": "anyparse.check.CallRepetition",
-			"method": "loopsTo",
-			"find": "_loopKinds.contains(node.kind) && repeating != null",
+			"type": "anyparse.check.Loops",
+			"method": "around",
+			"find": "kinds.contains(node.kind) && repeating != null",
 			"replace": "false && repeating != null",
 			"note": "no loop repeats the calls in it"
 		},
 		{
 			"name": "M-TS-REPEAT-ITERABLE",
-			"type": "anyparse.check.CallRepetition",
-			"method": "loopsTo",
+			"type": "anyparse.check.Loops",
+			"method": "around",
 			"find": "_bindingKinds.contains(node.kind) ? node.children[node.children.length - 1].span : span",
 			"replace": "span",
 			"note": "the iterable of a `for`, read once, counts as repeating with its body"
@@ -16939,9 +16939,9 @@
 		{
 			"name": "M-TS-REPEAT-UPWARD-NONE",
 			"type": "anyparse.check.MainRepeats",
-			"method": "climb",
-			"find": "if (_repetition.repeated(e)) {",
-			"replace": "if (false) {",
+			"method": "climbEdge",
+			"find": "_repetition.repeated(e) ? null :",
+			"replace": "false ? null :",
 			"note": "a caller repeating a function up the main thread's way repeats nothing below it"
 		},
 		{
@@ -16962,8 +16962,8 @@
 		},
 		{
 			"name": "M-TS-REPEAT-NO-BOUNDARY",
-			"type": "anyparse.check.CallRepetition",
-			"method": "loopsTo",
+			"type": "anyparse.check.Loops",
+			"method": "around",
 			"find": "loops = []",
 			"replace": "loops = loops.copy()",
 			"note": "a loop around a function counts for the calls in the function's body"
@@ -17291,9 +17291,9 @@
 		{
 			"name": "M-TS-ERROR-REACH-OFF",
 			"type": "anyparse.check.LockTaint",
-			"method": "reach",
-			"find": "if (listsOf(edge.file).sinkIds.contains(edge.from) || onErrorPath(edge)) continue;",
-			"replace": "if (listsOf(edge.file).sinkIds.contains(edge.from)) continue;",
+			"method": "leadsNowhere",
+			"find": " || !repeated && onErrorPath(edge)",
+			"replace": "",
 			"note": "a call inside a callee's catch still leads the normal-path walk to its sink"
 		},
 		{
@@ -17395,7 +17395,7 @@
 		{
 			"name": "M-TS-REGISTER-OWNER",
 			"type": "anyparse.check.MainRepeats",
-			"method": "climb",
+			"method": "climbEdge",
 			"find": "if (_repetition.registered(e)) {",
 			"replace": "if (false) {",
 			"note": "the owner of a short call is searched up its registrations too"
@@ -17833,7 +17833,7 @@
 		{
 			"name": "M-TS-STATES-OWNER-IGNORED",
 			"type": "anyparse.check.MainRepeats",
-			"method": "climb",
+			"method": "climbEdge",
 			"find": "for (v in mainStates(e.from)) if (runsFrom(e, v) == at.valuation) {",
 			"replace": "for (v in mainStates(e.from)) if (runsFrom(e, v) != null) {",
 			"note": "the owner walk climbs into callers whatever valuation they hand down"
@@ -18212,8 +18212,8 @@
 		},
 		{
 			"name": "M-TS-WIN-FOREXPR",
-			"type": "anyparse.check.CallRepetition",
-			"method": "loopKindsOf",
+			"type": "anyparse.check.Loops",
+			"method": "kindsOf",
 			"find": ".concat(shape.iterationBindingKinds ?? [])",
 			"replace": "",
 			"note": "a for expression is no loop"
@@ -18245,9 +18245,9 @@
 		{
 			"name": "M-TS-BOUND-BUDGET",
 			"type": "anyparse.check.CallRepetition",
-			"method": "boundedOnce",
-			"find": "return turns * cost < budget;",
-			"replace": "return true;",
+			"method": "extend",
+			"find": "return turns * cost < budget ?",
+			"replace": "return true ?",
 			"note": "a bound over the budget runs as once"
 		},
 		{
@@ -18277,8 +18277,8 @@
 		{
 			"name": "M-TS-MARSHAL-OWNER-OFF",
 			"type": "anyparse.check.MainRepeats",
-			"method": "climb",
-			"find": "if (runsFrom(e, at.valuation) == at.valuation) own(owners, e, path);",
+			"method": "climbEdge",
+			"find": "if (runsFrom(e, at.valuation) == at.valuation) own(walk.owners, e, path);",
 			"replace": "",
 			"note": "a value marshalled onto the main thread runs once, however many posts a background loop makes"
 		},
@@ -18325,10 +18325,50 @@
 		{
 			"name": "M-TS-BOUND-PRODUCT",
 			"type": "anyparse.check.CallRepetition",
-			"method": "boundedOnce",
+			"method": "extend",
 			"find": "turns *= entry.max;",
 			"replace": "turns = Math.max(turns, entry.max);",
 			"note": "bounded repetitions nested in one function are judged by the largest bound, not the product"
+		},
+		{
+			"name": "M-TS-BOUND-LABEL-SEVERAL",
+			"type": "anyparse.check.CallRepetition",
+			"method": "bind",
+			"find": "labelsIn(member).contains('$loop #2')",
+			"replace": "false",
+			"note": "a loop label with no rank binds the first of several loops of its header"
+		},
+		{
+			"name": "M-TS-LABEL-RANK-SINK",
+			"type": "anyparse.check.Loops",
+			"method": "labelOf",
+			"find": "(l == loop || repeatsSink(file, l))",
+			"replace": "true",
+			"note": "a loop's rank counts the loops of its header that block nothing"
+		},
+		{
+			"name": "M-TS-BOUND-ACROSS",
+			"type": "anyparse.check.MainRepeats",
+			"method": "climbEdge",
+			"find": "_repetition.repeated(e) ? null : _repetition.along(e, way)",
+			"replace": "_repetition.repeated(e) ? null : way",
+			"note": "bounds in different functions on one main-thread way are judged each alone"
+		},
+		{
+			"name": "M-TS-BOUND-ACROSS-HOLD",
+			"type": "anyparse.check.LockTaint",
+			"method": "wayAt",
+			"find": "cost.repetition.along(edge, way)",
+			"replace": "way",
+			"note": "bounds in different functions under one hold are judged each alone"
+		},
+		{
+			"name": "M-TS-BOUND-NOTE",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "shortNote",
+			"find": "else if (bounded.length > 0)",
+			"replace": "else if (false)",
+			"note": "a short call run as once by bounds alone claims none in a loop"
 		},
 		{
 			"name": "M-TS-BOUND-CALL-SHAPE",
