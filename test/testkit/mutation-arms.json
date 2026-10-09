@@ -18036,6 +18036,14 @@
 			"note": "the first of two declarations of a name is the one read"
 		},
 		{
+			"name": "M-TS-EXH-ISVAR-SELF",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "getterHolds",
+			"find": "readsOwnField(r.children[0], getter, member)",
+			"replace": "false",
+			"note": "a getter returning the member's own stored field holds values through the judging cycle, its writes never read"
+		},
+		{
 			"name": "M-TS-ERROR-LOOP",
 			"type": "anyparse.check.ErrorPaths",
 			"method": "catchTo",

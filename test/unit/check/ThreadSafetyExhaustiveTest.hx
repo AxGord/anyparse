@@ -210,7 +210,35 @@ class ThreadSafetyExhaustiveTest extends Test {
 		#end
 	}
 
+	/**
+	 * A getter returning the member's own stored field (`@:isVar`) holds what that field holds: a `Dynamic` written to it
+	 * reaches the catch-all (review round 2 `ex1-isvar-getter`).
+	 */
+	@:pin('control') @:killer('M-TS-EXH-ISVAR-SELF')
+	public function testAGetterReturningItsOwnFieldHoldsWhatTheFieldHolds(): Void {
+		#if (sys || nodejs)
+		final dead: String = 'switch mode { case A: step(); case B: step(); case _: throw "x"; }';
+		final isVar: String = 'function get_mode():V return mode;';
+		Assert.same(['S.work'], leaks(runIsVar(dead, '$isVar function load(d:Dynamic):Void { mode = d; }')), 'a dynamic write');
+		Assert.same([], leaks(runIsVar(dead, '$isVar function load():Void { mode = B; }')), 'a value written');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
+	/** `run`, with `S.mode` an `@:isVar` property read through a getter `members` declare. */
+	private static function runIsVar(held: String, members: String): Array<Violation> {
+		return ThreadSafetyCheckTest.violations(CONFIG, [
+			ThreadSafetyCheckTest.MUTEX,
+			'class Runner { public static function create(fn:()->Void):Void {} }',
+			CLOSED,
+			'class S { final _m:Mutex = new Mutex(); @:isVar var mode(get, default):V = A; public function new() {} function step():Void {}'
+			+ ' $members public function work():Void { _m.acquire(); $held _m.release(); }'
+			+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> s.work()); s._m.acquire(); s._m.release(); } }'
+		]);
+	}
+
 	/**
 	 * `S.work(params)` takes `_m`, runs `held`, releases; `S.mode` is of `modeType`, written ` = A` unless `init` says
 	 * otherwise; `members` are added to `S`, `more` are further sources.

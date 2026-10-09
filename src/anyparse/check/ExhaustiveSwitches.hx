@@ -326,7 +326,10 @@ final class ExhaustiveSwitches {
 		return holds;
 	}
 
-	/** Whether every `return` of the getter of the member `member` of `owner` (declared in `decl`) hands back a value. */
+	/**
+	 * Whether every `return` of the getter of the member `member` of `owner` (declared in `decl`) hands back a value; a
+	 * return of the member's own stored field (`@:isVar`) is judged by what that field holds (`storedHolds`).
+	 */
 	private function getterHolds(decl: HeldDecl, owner: String, member: String, closed: ClosedAbstract): Bool {
 		final prefix: Null<String> = (_shape.accessorMethodPrefixes ?? [])[0];
 		final getter: Null<QueryNode> = prefix == null
@@ -336,7 +339,13 @@ final class ExhaustiveSwitches {
 		final returns: Array<QueryNode> = [];
 		collectReturns(getter, returns, true);
 		final at: ValueContext = { file: decl.file, fn: getter, owner: owner };
-		return returns.length > 0 && returns.foreach(r -> r.children.length == 1 && valueExpr(r.children[0], at, closed));
+		return returns.length > 0 && returns.foreach(r ->
+			r.children.length == 1 && (
+				readsOwnField(r.children[0], getter, member)
+					? storedHolds(decl, owner, member, closed)
+					: valueExpr(r.children[0], at, closed)
+			)
+		);
 	}
 
 	/** Whether the stored member `member` of `owner` (declared in `decl`) starts with a value and is assigned only values. */
@@ -510,6 +519,12 @@ final class ExhaustiveSwitches {
 	/** Whether the write `w` assigns a value of `closed`: a plain `=` of a value (`valueExpr`), never a compound one or an increment. */
 	private function assignsValue(w: WriteSite, closed: ClosedAbstract): Bool {
 		return w.node.kind == _shape.assignKind && w.node.children.length == 2 && valueExpr(w.node.children[1], w.at, closed);
+	}
+
+	/** Whether `expr`, a return of the accessor `getter`, reads the member `member` itself: bare where the getter binds nothing of its name, or off `this`. */
+	private function readsOwnField(expr: QueryNode, getter: QueryNode, member: String): Bool {
+		final read: QueryNode = expr.kind == _shape.parenKind && expr.children.length == 1 ? expr.children[0] : expr;
+		return read.name == member && (read.kind == _shape.identKind && BareNames.bindsNothing(getter, member, _shape) || isSelf(read));
 	}
 
 }

@@ -1819,3 +1819,8 @@ decided the question; it may not become a record of runs.
   silenced its sink calls but not the locks it holds across them. A hold whose take no loud thread runs (its context
   quiet only) is reported by no finding (b): the root waits on purpose, on the main thread, which never waits for its
   own hold. It still makes its lock long, as any main-only hold does — branch `feat/ts-precision-3`
+- an `@:isVar` getter returning the member's own stored field judged through `holdsValues` → the member being judged
+  counts as holding values while it is, so `get_mode() return mode;` answered "values" through its own cycle and the
+  stored writes (`mode = d`, `d:Dynamic`) were never read. A getter return that reads the member's own field (bare,
+  or off `this`) is judged by what the field holds (`ExhaustiveSwitches.storedHolds`): its initializer and every
+  write of its name (review round 2 `ex1-isvar-getter`) — branch `feat/ts-precision-3`
