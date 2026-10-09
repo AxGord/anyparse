@@ -11148,8 +11148,8 @@
 			"name": "M-TS-HELD-ANY-THREAD",
 			"type": "anyparse.check.ThreadSafety",
 			"method": "reportLockHeld",
-			"find": "if (a.uncontended || !mainTaken.contains(HoldGrade.takenKey(a))) continue;",
-			"replace": "if (a.uncontended) continue;",
+			"find": "if (a.uncontended || !mainTaken.contains(HoldGrade.takenKey(a)) ||",
+			"replace": "if (a.uncontended ||",
 			"note": "a hold of a lock only background threads take is reported as a main-thread stall"
 		},
 		{
@@ -17898,8 +17898,8 @@
 			"name": "M-TS-UNNAMED-PAIR",
 			"type": "anyparse.check.ThreadSafety",
 			"method": "reportLockHeld",
-			"find": "if (a.uncontended || !mainTaken.contains(HoldGrade.takenKey(a))) continue;",
-			"replace": "if (a.uncontended || a.lock != null && !mainTaken.contains(HoldGrade.takenKey(a))) continue;",
+			"find": "if (a.uncontended || !mainTaken.contains(HoldGrade.takenKey(a)) ||",
+			"replace": "if (a.uncontended || a.lock != null && !mainTaken.contains(HoldGrade.takenKey(a)) ||",
 			"note": "a hold of an unnamed lock warns though the main thread never takes its pair"
 		},
 		{
