@@ -16,8 +16,8 @@ using Lambda;
  * call each other, directly or through other functions.
  *
  * A value handed to a `registers` call (`addEventListener`) runs later as a run of its own, once per event however
- * often it was registered: the repeating caller that owns a short call below it (`repeatersOf`) is never one up the
- * registration — neither a loop around it nor anything up the way to it.
+ * often it was registered: the repeating caller that owns a short call below it (`MainRepeats.ownersOf`) is never one up
+ * the registration — neither a loop around it nor anything up the way to it.
  *
  * A loop is a kind the grammar names: `loopStatementKinds`, `doWhileLoopKinds`, `iterationBindingKinds` and
  * `whileExprKind`. Of a loop binding a name (`for`), only the body repeats — the iterable runs once; of any other, every
@@ -65,26 +65,6 @@ final class CallRepetition {
 	}
 
 	/**
-	 * The functions some path of edges `runs` admits may run more than once per run of where it starts — on ANY such path,
-	 * not only one a finding shows: the target of a call or registration that repeats and `runs` admits, and everything
-	 * reached from one through edges it admits.
-	 */
-	public function repeatedFrom(runs: (CallEdge) -> Bool): Map<String, Bool> {
-		final found: Map<String, Bool> = [];
-		final queue: Array<String> = [];
-		for (e in _graph.edges) if (e.kind != Contains && !found.exists(e.to) && runs(e) && repeated(e)) {
-			found[e.to] = true;
-			queue.push(e.to);
-		}
-		var qi: Int = 0;
-		while (qi < queue.length) for (e in _graph.outEdges(queue[qi++])) if (e.kind != Contains && !found.exists(e.to) && runs(e)) {
-			found[e.to] = true;
-			queue.push(e.to);
-		}
-		return found;
-	}
-
-	/**
 	 * Whether the site at the offset `at`, in the function and file of the call `take`, runs at most once per run of
 	 * `take`: placed, with no loop around it that is not around `take` too.
 	 */
@@ -121,7 +101,7 @@ final class CallRepetition {
 	 * was registered: one its chain's `registers` names — a `Type.member` entry by the graph's target, a bare member name
 	 * by the name the call is written with. The value then runs as a run of its own, and nothing repeats it there.
 	 */
-	private function registered(edge: CallEdge): Bool {
+	public function registered(edge: CallEdge): Bool {
 		final lists: ChainLists = _listsOf(edge.file);
 		return edge.kind == Ref && (lists.registerIds.contains(edge.via ?? '') || lists.registerNames.contains(edge.viaMember ?? ''));
 	}
@@ -240,39 +220,6 @@ final class CallRepetition {
 		final node: Null<FnNode> = _graph.node(edge.to);
 		return edge.span == null && node != null && node.span == null
 			&& (node.name == CallGraph.INIT_NAME || node.name == CallGraph.STATIC_INIT_NAME);
-	}
-
-	/**
-	 * The nearest calls or registrations that repeat on the way down to `id`: walking up from `id` through the edges `runs`
-	 * admits, each one that repeats (`repeated`), with the functions from its target down to `id`; the walk goes on past
-	 * none of them. Nearest first, then in order of their sites.
-	 */
-	public function repeatersOf(id: String, runs: (CallEdge) -> Bool): Array<{ edge: CallEdge, path: Array<String> }> {
-		final out: Array<{ edge: CallEdge, path: Array<String> }> = [];
-		final down: Map<String, Array<String>> = [id => [id]];
-		final queue: Array<String> = [id];
-		var qi: Int = 0;
-		while (qi < queue.length) {
-			final at: String = queue[qi++];
-			final path: Array<String> = down[at] ?? [at];
-			// a registered value runs as a run of its own: nothing up its registration repeats it
-			for (e in _graph.inEdges(at)) if (e.kind != Contains && runs(e) && !registered(e)) {
-				if (repeated(e))
-					out.push({ edge: e, path: path })
-				else if (!down.exists(e.from)) {
-					down[e.from] = [e.from].concat(path);
-					queue.push(e.from);
-				}
-			}
-		}
-		out.sort((a, b) ->
-			a.path.length != b.path.length
-				? a.path.length - b.path.length
-				: Reflect.compare(
-					'${a.edge.file}:${a.edge.span?.from ?? -1}:${a.edge.to}', '${b.edge.file}:${b.edge.span?.from ?? -1}:${b.edge.to}'
-				)
-		);
-		return out;
 	}
 
 }

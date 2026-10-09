@@ -9,10 +9,10 @@ import anyparse.query.CallGraph;
 
 using Lambda;
 
-/** How the main thread repeats calls: where (`repetition`), which functions it may run more than once (`on`), and the edges it runs (`runs`). */
+/** How the main thread repeats calls: where (`repetition`), which of its states may run more than once (`main`), and the edges it runs (`runs`). */
 typedef MainRepetition = {
 	final repetition: CallRepetition;
-	final on: Map<String, Bool>;
+	final main: MainRepeats;
 	final runs: (CallEdge) -> Bool;
 }
 
@@ -20,7 +20,7 @@ typedef MainRepetition = {
  * Finding (a) of `thread-safety`: a MAIN-context function directly calls a sink — one taking a lock only when that lock
  * is long or unknown — one finding per call site, naming every sink a dispatch there may reach. Graded by cost: a short
  * call run once is info; one long only because a caller up the main thread's way repeats it is info too, its warning
- * moved to the nearest repeating call (`CallRepetition.repeatersOf`), unless that call is the member's own.
+ * moved to the nearest repeating call (`MainRepeats.ownersOf`), unless that call is the member's own.
  */
 @:nullSafety(Strict)
 final class MainSinkReport {
@@ -172,9 +172,9 @@ final class MainSinkReport {
 	): Violation {
 		final long: Bool = cost.long;
 		final error: Null<String> = cost.error;
-		final owners: Array<{ edge: CallEdge, path: Array<String> }> = long || inSink || cost.caught || !repeats.on.exists(edge.from)
+		final owners: Array<{ edge: CallEdge, path: Array<String> }> = long || inSink || cost.caught || !repeats.main.repeatedAt(edge)
 			? []
-			: repeats.repetition.repeatersOf(edge.from, repeats.runs);
+			: repeats.main.ownersOf(edge);
 		final owner: Null<String> = owners.length > 0 ? ThreadSafety.memberOf(graph, owners[0].edge.from) : null;
 		final own: Bool = long || owner == ThreadSafety.memberOf(graph, edge.from);
 		if (owners.length > 0 && !own) reportRepeater(graph, owners[0], sinks, states, owned, violations);
@@ -215,7 +215,7 @@ final class MainSinkReport {
 	}
 
 	/**
-	 * Finding (a) owned by the repeating call `owner` (`CallRepetition.repeatersOf`) of short `sinks`: the warning a short
+	 * Finding (a) owned by the repeating call `owner` (`MainRepeats.ownersOf`) of short `sinks`: the warning a short
 	 * call below it is spared, at the loop, recursion or `iterates` call that repeats it — once per site and subject.
 	 */
 	private static function reportRepeater(

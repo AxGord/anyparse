@@ -393,6 +393,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.ThreadSafetyFoldingTest',
 		'unit.check.ThreadSafetyHelperHoldsTest',
 		'unit.check.ThreadSafetyLongLocksTest',
+		'unit.check.ThreadSafetyMainStatesTest',
 		'unit.check.ThreadSafetyOwnReasonsTest',
 		'unit.check.ThreadSafetyQuietLocksTest',
 		'unit.check.ThreadSafetyRegistersTest',
@@ -2194,6 +2195,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyLongLocksTest#testEverySpansBlockingCallIsListed :: control :: M-TS-SPANS-FIRST-ONLY',
 			'unit.check.ThreadSafetyLongLocksTest#testMainThreadTakesOfAShortLock :: control :: M-TS-MAINSHORT-LOUD-ONLY',
 			'unit.check.ThreadSafetyLongLocksTest#testSpansBlockingNamesTheCallAndThePath :: control :: M-TS-LONG-NEVER-GROWS',
+			'unit.check.ThreadSafetyMainStatesTest#testAConstantArgumentRulesTheRepeatedCallOut :: control :: M-TS-STATES-IGNORED',
+			'unit.check.ThreadSafetyMainStatesTest#testTheOwnerIsOnAWayThatRunsTheCall :: control :: M-TS-STATES-OWNER-IGNORED',
 			'unit.check.ThreadSafetyOwnReasonsTest#testABriefUnresolvedCallOnceLeavesTheLockShort :: control :: '
 				+ 'M-TS-BLIND-BRIEF-OFF,M-TS-DOM-BRIEF-NAMES-IGNORED',
 			'unit.check.ThreadSafetyOwnReasonsTest#testACallOfAReleaserGivesTheLockBack :: control :: M-TS-HANDOFF-CROSSING',
@@ -6008,7 +6011,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-DEADCATCH-OFF',
 			'M-TS-DEADCATCH-ANY-CALL',
 			'M-TS-DEADCATCH-FIELD',
-			'M-TS-DEADCATCH-BODY'
+			'M-TS-DEADCATCH-BODY',
+			'M-TS-STATES-IGNORED',
+			'M-TS-STATES-OWNER-IGNORED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

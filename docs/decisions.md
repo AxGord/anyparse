@@ -1610,5 +1610,10 @@ decided the question; it may not become a record of runs.
   that leg was the long reason of most `FolderWatcher.*` holds; a config list (`nonThrowing`, the project's word for
   the runtime) and a positive whitelist of what else a `try` body may hold make such a `catch` no path at all
   (`DeadCatches`, checked in `EdgeConditions.carried`) — branch `feat/ts-precision-2`
+- main-thread repetition and its owner read per FUNCTION → the closure crossed calls the caller's valuation rules out:
+  TM's session planner loops `DrillVOModel.loadDrillData`, which calls `loadXML(path, false, …)`, and the
+  `if (checkLimits)` count / animation check under it were "repeated" by that loop (three keys, two false, one rare);
+  `MainRepeats` runs the closure and the owner walk over `ThreadStates`' states with `EdgeConditions.carried` / `bind`,
+  as the hold taint already did — branch `feat/ts-precision-2`
 - judging "inside a catch" off the witness chain the finding prints → the chain is one way; a second way outside every
   catch must keep the warning, which only a solve without the catch edges can see — branch `feat/ts-precision-2`

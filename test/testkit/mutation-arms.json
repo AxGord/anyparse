@@ -16914,10 +16914,10 @@
 		},
 		{
 			"name": "M-TS-REPEAT-UPWARD-NONE",
-			"type": "anyparse.check.CallRepetition",
-			"method": "repeatedFrom",
-			"find": "!found.exists(e.to) && runs(e) && repeated(e)",
-			"replace": "!found.exists(e.to) && runs(e) && false",
+			"type": "anyparse.check.MainRepeats",
+			"method": "solve",
+			"find": "e.kind != Contains && _runs(e) && _repetition.repeated(e) ? runsFrom(e, v) : null",
+			"replace": "e.kind != Contains && _runs(e) && false ? runsFrom(e, v) : null",
 			"note": "a caller repeating a function up the main thread's way repeats nothing below it"
 		},
 		{
@@ -17114,8 +17114,8 @@
 		},
 		{
 			"name": "M-TS-OWNER-FARTHEST",
-			"type": "anyparse.check.CallRepetition",
-			"method": "repeatersOf",
+			"type": "anyparse.check.MainRepeats",
+			"method": "ownersOf",
 			"find": "? a.path.length - b.path.length",
 			"replace": "? b.path.length - a.path.length",
 			"note": "the farthest repeating caller owns a short call's warning"
@@ -17370,10 +17370,10 @@
 		},
 		{
 			"name": "M-TS-REGISTER-OWNER",
-			"type": "anyparse.check.CallRepetition",
-			"method": "repeatersOf",
-			"find": "for (e in _graph.inEdges(at)) if (e.kind != Contains && runs(e) && !registered(e)) {",
-			"replace": "for (e in _graph.inEdges(at)) if (e.kind != Contains && runs(e)) {",
+			"type": "anyparse.check.MainRepeats",
+			"method": "ownersOf",
+			"find": "e.kind != Contains && _runs(e) && !_repetition.registered(e)",
+			"replace": "e.kind != Contains && _runs(e)",
 			"note": "the owner of a short call is searched up its registrations too"
 		},
 		{
@@ -17623,6 +17623,22 @@
 			"find": "inner.kind == _shape.catchClauseKind",
 			"replace": "true",
 			"note": "the try body of a dead catch runs nothing either"
+		},
+		{
+			"name": "M-TS-STATES-IGNORED",
+			"type": "anyparse.check.MainRepeats",
+			"method": "runsFrom",
+			"find": "return _conditions.carried(e, valuation, ThreadSafety.CTX_MAIN) == 0 ? null",
+			"replace": "return false ? null",
+			"note": "a call a condition rules out under the caller's valuation still carries repetition"
+		},
+		{
+			"name": "M-TS-STATES-OWNER-IGNORED",
+			"type": "anyparse.check.MainRepeats",
+			"method": "ownersOf",
+			"find": "if (runsFrom(e, v) != at.valuation) continue;",
+			"replace": "if (runsFrom(e, v) == null) continue;",
+			"note": "the owner walk climbs into callers whatever valuation they hand down"
 		}
 	]
 }

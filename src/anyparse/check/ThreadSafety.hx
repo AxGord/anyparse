@@ -191,9 +191,9 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final violations: Array<Violation> = [];
 		// a value stored or handed where it never runs from repeats nothing, wherever it is written
 		final runsMain: (CallEdge) -> Bool = e -> !(e.kind == Ref && inertRef(e)) && states.edgeContext(e) & CTX_MAIN != 0;
-		final repeatedOnMain: Map<String, Bool> = repetition.repeatedFrom(runsMain);
+		final repeatsOnMain: MainRepeats = new MainRepeats(graph, repetition, states, conditions, runsMain);
 		MainSinkReport.report(
-			graph, sites, taints, paths, { repetition: repetition, on: repeatedOnMain, runs: runsMain }, states, violations
+			graph, sites, taints, paths, { repetition: repetition, main: repeatsOnMain, runs: runsMain }, states, violations
 		);
 		reportMalformedPairs(sets, violations);
 		reportLockHeld(graph, sites, judged, taints, paths, states, violations);
