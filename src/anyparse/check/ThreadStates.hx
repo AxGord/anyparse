@@ -29,6 +29,9 @@ private typedef ThreadState = {
 @:nullSafety(Strict)
 final class ThreadStates {
 
+	/** The origin of the main thread among a function's threads (`origins`); a worker's is the callback starting it. */
+	public static inline final MAIN_ORIGIN: String = '<main>';
+
 	/** Each function's contexts, the union over its states. */
 	public final contexts: Map<String, Int> = [];
 
@@ -161,6 +164,34 @@ final class ThreadStates {
 		known.ctx = merged;
 		contexts[id] = (contexts[id] ?? 0) | merged;
 		_queue.push(known);
+	}
+
+	/**
+	 * The threads each function runs on, by origin: `MAIN_ORIGIN` for the main thread, loud or quiet, and for a worker
+	 * the callback a `spawns` call starts it with (`callbackContext` making it background whatever registers it) — each
+	 * such callback one thread, whatever spawns it. A worker origin flows along every edge carrying a background context
+	 * (`edgeContext`) but a value handed to a `spawns` call, which starts an origin of its own, or one `inertRef` says is
+	 * never run from there; a function no thread runs has none.
+	 */
+	public function origins(inertRef: (CallEdge) -> Bool): (String) -> Array<String> {
+		final found: Map<String, Array<String>> = [];
+		for (id => ctx in contexts) if (ctx & (ThreadSafety.CTX_MAIN | ThreadSafety.CTX_QUIET) != 0) found[id] = [MAIN_ORIGIN];
+		final spawned: (CallEdge) -> Bool = e -> e.kind == Ref && _callbackContext(e, ThreadSafety.CTX_MAIN) == ThreadSafety.CTX_BG;
+		final onWorker: (CallEdge) -> Bool = e ->
+			e.kind != Contains && !(e.kind == Ref && inertRef(e)) && edgeContext(e) & ThreadSafety.CTX_BG != 0;
+		for (start in _graph.edges) if (spawned(start) && onWorker(start)) {
+			final queue: Array<String> = [start.to];
+			var qi: Int = 0;
+			while (qi < queue.length) {
+				final id: String = queue[qi++];
+				final known: Array<String> = found[id] ?? [];
+				if (known.contains(start.to)) continue;
+				known.push(start.to);
+				found[id] = known;
+				for (e in _graph.outEdges(id)) if (!spawned(e) && onWorker(e)) queue.push(e.to);
+			}
+		}
+		return id -> found[id] ?? [];
 	}
 
 	/** A `mainPath` as text, its last `cap` hops after `...` when it is longer. */

@@ -5,6 +5,8 @@ import anyparse.check.Check.Violation;
 import utest.Assert;
 import utest.Test;
 
+using StringTools;
+
 /**
  * One warning per root cause (`RootCauseFold`, `MainSinkReport`): a hold long only by waiting for a lock whose long
  * holds warn themselves, or by work another warned hold does too, is info naming them; sink calls one main-thread way
@@ -62,6 +64,21 @@ class ThreadSafetyRootCauseTest extends Test {
 		Assert.same(['info B A.a | A._x', 'warning B A.z | A._x'], holds(oneCall('_x')));
 		// a hold of another lock across the same work is a stall of its own: narrowing one hold frees nothing of the other
 		Assert.same(['warning B A.a | A._x', 'warning B A.z | A._y'], holds(oneCall('_y')), 'another lock');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * TM's `StandardFileSystem.loadDrillContent` on the I/O worker against `getText` on the sync worker: two holds of one
+	 * lock across the same sink call, each run by a thread of its own, are two stalls — a hold covers another of its lock
+	 * in another function only on the one thread both run on.
+	 */
+	@:pin('control') @:killer('M-TS-FOLD-SITE-THREAD')
+	public function testHoldsOnTwoThreadsDoNotCoverEachOther(): Void {
+		#if (sys || nodejs)
+		Assert.same(['warning B A.a | A._x', 'warning B A.z | A._x'], holds(twoThreads('Pool.create')));
+		Assert.same(['warning B A.a | A._x', 'warning B A.z | A._x'], holds(twoThreads('Runner.create')), 'two callbacks of one spawn');
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -201,6 +218,19 @@ class ThreadSafetyRootCauseTest extends Test {
 			+ ' public function z():Void { $zLock.acquire(); w(); $zLock.release(); }'
 			+ ' public static function main():Void { final s:A = new A(); Runner.create(() -> { s.a(); s.z(); });'
 			+ ' s._x.acquire(); s._x.release(); s._y.acquire(); s._y.release(); } }'
+		]);
+	}
+	/** `oneCall`'s `A.a` and `A.z`, both holding `_x` across `w`, each run by a callback of its own: `A.a`'s by `Runner.create`, `A.z`'s by `zSpawn`. */
+	private static function twoThreads(zSpawn: String): Array<Violation> {
+		return ThreadSafetyCheckTest.violations(CONFIG.replace('"spawns":["Runner.create"]', '"spawns":["Runner.create","Pool.create"]'), [
+			ThreadSafetyCheckTest.MUTEX,
+			RUNNER,
+			'class Pool { public static function create(fn:()->Void):Void {} }',
+			'class A { final _x:Mutex = new Mutex(); public function new() {}'
+			+ ' public function a():Void { _x.acquire(); v(); _x.release(); } function v():Void w(); function w():Void Sys.sleep(1);'
+			+ ' public function z():Void { _x.acquire(); w(); _x.release(); }'
+			+ ' public static function main():Void { final s:A = new A(); Runner.create(() -> s.a()); $zSpawn(() -> s.z());'
+			+ ' s._x.acquire(); s._x.release(); } }'
 		]);
 	}
 	/** `S` with locks `_a` and `_b`, `work` and `more` declared, a worker running `background`, and the main thread taking both. */

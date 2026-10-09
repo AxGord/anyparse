@@ -1797,3 +1797,12 @@ decided the question; it may not become a record of runs.
   naming no member or several, a `call` naming nothing), and its notices, `CallRepetition.notices()` and the unsettled
   meet all close the report as file-less `info`s; C1's private copies of `collectNamed` / `writes` give way to A's
   `BareNames` — merge `feat/ts-precision-3`
+- a `Site` cover by a hold of the same lock in another function, whatever thread runs either → TM's
+  `StandardFileSystem.loadDrillContent` (the I/O worker writing a validated drill back under `_mutationMutex`) folded
+  onto `getText` / `getXmlAndText` on the sync worker, which reach the same `File.saveContent`: each thread stalls the
+  main thread by itself, and narrowing one hold frees nothing of the other. A hold of the same lock covers another in
+  another function only when every thread the covered one runs on runs the covering one too (`RootCauseFold.oneThread`);
+  a thread is an origin (`ThreadStates.origins`): the main thread, or the callback a `spawns` call starts a worker
+  with — two callbacks are two threads, whatever spawns them; a hold no origin reaches shares none. Requiring both
+  holds on ONE origin was measured and rejected: `Store.remove` / `removeKeys` (main and workers) stopped folding onto
+  `Store.put` (every thread) though `put` runs wherever they do — branch `feat/ts-precision-3`

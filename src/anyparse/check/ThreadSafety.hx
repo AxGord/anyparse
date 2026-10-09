@@ -212,9 +212,12 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 				+ ' no take is brief for being made under another lock'
 			);
 		reportConfigProblems(problems, violations);
-		reportLockHeld(
-			graph, sites, judged, taints, { costs: paths, reported: reported, enclosed: dominance.enclosed }, states, violations
-		);
+		reportLockHeld(graph, sites, judged, taints, {
+			costs: paths,
+			reported: reported,
+			enclosed: dominance.enclosed,
+			threads: states.origins(inertRef)
+		}, states, violations);
 		reportThrowHeld(graph, acquires.concat(helperHolds), throws, violations);
 		final order: LockOrder = new LockOrder(graph, conditions, acquires.concat(helperHolds));
 		for (v in order.report(states, inertRef, CTX_MAIN | CTX_QUIET, CTX_BG, CHAIN_CAP)) violations.push(v);
@@ -647,6 +650,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		}
 	}
 
+
 	/** One `info` finding naming no file per line of `problems` (`listsByFile`): what the options' read left out. */
 	private static function reportConfigProblems(problems: Array<String>, violations: Array<Violation>): Void {
 		for (p in problems) violations.push({
@@ -669,9 +673,13 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	 * brief is info, a long one names only the calls that block long.
 	 */
 	private static function reportLockHeld(
-		graph: CallGraph, sites: LockSites, acquires: Array<LockAcquire>, taints: LockTaint,
-		judged: { costs: PathCosts, reported: Map<String, Violation>, enclosed: (LockAcquire) -> Bool }, states: ThreadStates,
-		violations: Array<Violation>
+		graph: CallGraph, sites: LockSites, acquires: Array<LockAcquire>, taints: LockTaint, judged: {
+			costs: PathCosts,
+			reported: Map<String, Violation>,
+			enclosed: (LockAcquire) -> Bool,
+			threads: (String) -> Array<String>
+		},
+		states: ThreadStates, violations: Array<Violation>
 	): Void {
 		final paths: PathCosts = judged.costs;
 		final costs: LockTaint = paths.all;
@@ -729,7 +737,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final covers: Array<{ finding: Violation, by: Array<Violation> }> = [];
 		nestHolds(reported, covers);
 		foldEnclosed(reported, judged.enclosed, covers);
-		new RootCauseFold([for (c in sites.crossing) c.lock], covers).fold(folds);
+		new RootCauseFold([for (c in sites.crossing) c.lock], covers, judged.threads).fold(folds);
 	}
 
 	/**

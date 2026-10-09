@@ -40,7 +40,9 @@ private typedef SiteDoer = {
  * finding names (TM's tree lock, held long by `FolderWatcher.updateInternal`, which `StandardFileSystem.saveXML` waits
  * for under the mutation lock) — or when it ends in a sink call another warned hold is long by too,
  * at least as often — one that repeats under its hold is not covered by a hold reaching it once (TM's
- * `FolderWatcher.updateInternal` walk against `rename`'s one stat) — by a hold of the same lock, in the same function, or one
+ * `FolderWatcher.updateInternal` walk against `rename`'s one stat) — by a hold of the same lock on every
+ * thread the covered one runs on (`ThreadStates.origins` — TM's `StandardFileSystem.loadDrillContent`
+ * on the I/O worker is not covered by `getText` on the sync worker), in the same function, or one
  * whose function the call's way passes (TM's `RemoteFileSystemBase.renameCloudFolderBlocked` over the loop
  * `CloudDatabase.moveCloudFolderSubItemsAction2` runs under its own lock); another lock's hold across the same work elsewhere
  * is a stall of its own. Positive: a lock long by a hand-off, an unresolved call, a release in another function or a
@@ -75,15 +77,21 @@ final class RootCauseFold {
 	 */
 	private final _covers: Array<{ finding: Violation, by: Array<Violation> }>;
 
+	/** The threads each function runs on, by origin (`ThreadStates.origins`). */
+	private final _threads: (String) -> Array<String>;
+
 	/** The holds `fold` judges, in the order it was handed them. */
 	private var _holds: Array<FoldHold> = [];
 
 	/** The warned holds of `fold`, one per finding, in place order. */
 	private var _warned: Array<FoldHold> = [];
 
-	public function new(crossing: Array<String>, covers: Array<{ finding: Violation, by: Array<Violation> }>) {
+	public function new(
+		crossing: Array<String>, covers: Array<{ finding: Violation, by: Array<Violation> }>, threads: (String) -> Array<String>
+	) {
 		_crossing = crossing;
 		_covers = covers;
+		_threads = threads;
 	}
 
 	/**
@@ -277,13 +285,26 @@ for (d in doing[key] ?? []) if (covers(d, i, mayRepeat, way)) memberOf(_warned[d
 	 * Whether the warned hold `d` makes a sink call another one (at `i`) is long by, as often
 	 * — repeating along its trail where the other's may (`repeated`) —: a hold reaching it once
 	 * reports no stall of one repeating it under its own lock (TM's `FolderWatcher.rename`'s one stat against
-	 * `updateInternal`'s walk over the whole tree).
+	 * `updateInternal`'s walk over the whole tree). A hold of the same lock in another function covers only on the one
+	 * thread both run on (`oneThread`): on two threads each hold stalls the main thread by itself (TM's
+	 * `StandardFileSystem.loadDrillContent` on the I/O worker against `getText` on the sync worker).
 	 */
 	private function covers(d: SiteDoer, i: Int, repeated: Bool, way: Array<String>): Bool {
 		final by: FoldHold = _warned[d.at];
 		final own: FoldHold = _warned[i];
 		return d.at != i && (d.repeated || !repeated)
-			&& (by.lock == own.lock || by.hold.edge.from == own.hold.edge.from || way.contains(by.hold.edge.from));
+			&& (by.lock == own.lock && oneThread(by, own) || by.hold.edge.from == own.hold.edge.from || way.contains(by.hold.edge.from));
+	}
+
+	/**
+	 * Whether every thread the covered hold `own` runs on runs the covering hold `by` too: the origins of the function
+	 * taking `own` (`ThreadStates.origins`) are some and all among `by`'s — positive: a hold no known thread runs
+	 * shares none.
+	 */
+	private function oneThread(by: FoldHold, own: FoldHold): Bool {
+		final covering: Array<String> = _threads(by.hold.edge.from);
+		final covered: Array<String> = _threads(own.hold.edge.from);
+		return covered.length > 0 && covered.foreach(t -> covering.contains(t));
 	}
 
 	/**

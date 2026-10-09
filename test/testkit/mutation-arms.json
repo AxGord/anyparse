@@ -18548,9 +18548,17 @@
 			"name": "M-TS-FOLD-SITE-LOCK",
 			"type": "anyparse.check.RootCauseFold",
 			"method": "covers",
-			"find": "&& (by.lock == own.lock || by.hold.edge.from == own.hold.edge.from || way.contains(by.hold.edge.from));",
+			"find": "&& (by.lock == own.lock && oneThread(by, own) || by.hold.edge.from == own.hold.edge.from || way.contains(by.hold.edge.from));",
 			"replace": ";",
 			"note": "a hold of any lock across the same sink call covers another, though narrowing one frees nothing of the other"
+		},
+		{
+			"name": "M-TS-FOLD-SITE-THREAD",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "covers",
+			"find": "by.lock == own.lock && oneThread(by, own)",
+			"replace": "by.lock == own.lock",
+			"note": "a hold of a lock covers another of it in another function across threads, though each thread stalls the main one by itself"
 		},
 		{
 			"name": "M-TS-FOLD-SITE-CYCLE",
