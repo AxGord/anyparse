@@ -74,6 +74,18 @@ typedef HoldJudges = {
 @:nullSafety(Strict)
 final class HoldGrade {
 
+	/** Opens the `takenKey` of a lock no member names, which no `Owner.member` lock object starts with. */
+	private static inline final UNNAMED: String = '?';
+
+	/**
+	 * The holds findings (b) judge: every one of `acquires`, and the holds a multi-lock helper's call opens in its caller
+	 * (`helperHolds`). A helper's own take is judged too, over the helper's own window — its later takes, a thread waiting
+	 * there with the earlier locks held — and leaks nothing of its own (`LockAcquire.delegated`): its callers' holds do.
+	 */
+	public static inline function judged(acquires: Array<LockAcquire>, helperHolds: Array<LockAcquire>): Array<LockAcquire> {
+		return acquires.concat(helperHolds);
+	}
+
 	/**
 	 * The calls a finding (b) names for the hold `a` of `sites` under a hold of `held`, judged by `judges`, with the taint
 	 * that found them and what the message adds; null when none. `mainOnly`: only the main thread runs the hold.
@@ -85,26 +97,59 @@ final class HoldGrade {
 	}
 
 	/**
-	 * The holds findings (b) judge: every one of `acquires` but a multi-lock helper's own takes, which are its callers'
-	 * holds (`helperHolds`), judged where the helper is called.
-	 */
-	public static function judged(sites: LockSites, acquires: Array<LockAcquire>, helperHolds: Array<LockAcquire>): Array<LockAcquire> {
-		return [for (a in acquires) if (!sites.helpers.contains(a.edge.from)) a].concat(helperHolds);
-	}
-
-	/**
 	 * Whether the hold `a` HANDS its lock OFF: it outlives its function on some path, and nothing of the function gives
 	 * the lock back — no give of it there, no call in its window of a function that releases it without taking it — so
 	 * on every path that takes it, it stays held past the end until another function releases it. Never a lock wrapper's
 	 * own take, a multi-lock helper's, an untraced hold or one of a lock no member names — nor a hold whose window spans no
-	 * call: a function that only takes the lock hands it to its caller, whose own code runs under it.
+	 * call: a function that only takes the lock hands it to its caller, whose own code runs under it. A hold a helper's call
+	 * opens is its caller's, judged by the caller's own gives.
 	 */
 	public static function handsOff(sites: LockSites, a: LockAcquire): Bool {
 		final lock: Null<String> = a.lock;
-		if (lock == null || !a.leaks || a.delegated || a.untraced || a.inner != null || a.window.length == 0) return false;
-		if (sites.helpers.contains(a.edge.from)) return false;
+		if (lock == null || !a.leaks || a.delegated || a.untraced || a.window.length == 0) return false;
 		return !sites.gives.exists(g -> g.edge.from == a.edge.from && g.lock == lock)
 			&& !a.window.exists(e -> sites.crossing.exists(c -> c.lock == lock && c.edge.from == e.to));
+	}
+
+	/** Finding (b) at the call `anchor` of `holder`'s hold of `lock` (`chain[0]`), info when `short`. */
+	public static function finding(
+		graph: CallGraph, anchor: CallEdge, short: Bool, message: String, lock: String, chain: Array<String>
+	): Violation {
+		return {
+			file: anchor.file,
+			span: anchor.span,
+			rule: 'thread-safety',
+			severity: short ? Severity.Info : Severity.Warning,
+			message: message,
+			data: {
+				family: FindingFamily.LockHeld,
+				member: ThreadSafety.memberOf(graph, chain[0]),
+				subject: lock,
+				chain: chain
+			}
+		};
+	}
+
+	/**
+	 * The locks the main thread takes somewhere, of `acquires`, by `takenKey`: a lock only ever taken shared stalls no one.
+	 */
+	public static function mainTaken(acquires: Array<LockAcquire>, states: ThreadStates, taints: LockTaint): Array<String> {
+		return [
+			for (a in acquires) {
+				final key: String = takenKey(a);
+				if (states.edgeContext(a.edge) & ThreadSafety.CTX_MAIN != 0 && (a.lock == null || !taints.quiet.sharedOnly(key))) key;
+			}
+		];
+	}
+
+	/**
+	 * What tells the lock of the hold `a` apart from others when asking whether the main thread takes it (`mainTaken`):
+	 * the lock object, or — for a lock no member names, which may be any object of its class — that class, whichever of
+	 * its pairs takes it: an exclusive take on one thread and a shared one on another wait for each other.
+	 */
+	public static function takenKey(a: LockAcquire): String {
+		final lock: Null<String> = a.lock;
+		return lock ?? UNNAMED + a.pair.lockId.substring(0, a.pair.lockId.lastIndexOf('.'));
 	}
 
 	/**
@@ -171,38 +216,6 @@ final class HoldGrade {
 			note: CostNote.ShortHold,
 			info: true
 		};
-	}
-
-	/** Finding (b) at the call `anchor` of `holder`'s hold of `lock` (`chain[0]`), info when `short`. */
-	public static function finding(
-		graph: CallGraph, anchor: CallEdge, short: Bool, message: String, lock: String, chain: Array<String>
-	): Violation {
-		return {
-			file: anchor.file,
-			span: anchor.span,
-			rule: 'thread-safety',
-			severity: short ? Severity.Info : Severity.Warning,
-			message: message,
-			data: {
-				family: FindingFamily.LockHeld,
-				member: ThreadSafety.memberOf(graph, chain[0]),
-				subject: lock,
-				chain: chain
-			}
-		};
-	}
-
-	/**
-	 * The locks the main thread takes somewhere, of `acquires`: a lock only ever taken shared stalls no one; one no member
-	 * names is told apart by its pair's take member alone.
-	 */
-	public static function mainTaken(acquires: Array<LockAcquire>, states: ThreadStates, taints: LockTaint): Array<String> {
-		return [
-			for (a in acquires) {
-				final lock: String = a.lock ?? a.pair.lockId;
-				if (states.edgeContext(a.edge) & ThreadSafety.CTX_MAIN != 0 && !taints.quiet.sharedOnly(lock)) lock;
-			}
-		];
 	}
 
 }

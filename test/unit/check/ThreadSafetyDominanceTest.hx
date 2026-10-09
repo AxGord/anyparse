@@ -19,6 +19,10 @@ class ThreadSafetyDominanceTest extends Test {
 	private static inline final CONFIG: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Sys.sleep"],'
 		+ '"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"]}}}';
 
+	/** `CONFIG` declaring that every caller is in the run: only then does the meet over a function's callers say what it holds. */
+	private static inline final CLOSED: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Sys.sleep"],'
+		+ '"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"],"closedWorld":true}}}';
+
 	/** TM's `_mutex` under `_batchMutex`: the long hold of `_inner` holds `_outer`, so `quick` waits for no long hold. */
 	public function testATakeUnderTheOuterLockIsBrief(): Void {
 		#if (sys || nodejs)
@@ -34,22 +38,148 @@ class ThreadSafetyDominanceTest extends Test {
 		#end
 	}
 
-	/** The main thread's own take of `_inner` while it must-holds `_outer` (every caller holds it) is brief too. */
+	/**
+	 * The main thread's own take of `_inner` while it must-holds `_outer` (every caller holds it) is brief too — under
+	 * `closedWorld`, where every caller is in the run.
+	 */
 	@:pin('control') @:killer('M-TS-DOM-OFF')
 	public function testAMainTakeUnderTheOuterLockIsBrief(): Void {
 		#if (sys || nodejs)
-		final found: Array<Violation> = ThreadSafetyCheckTest.violations(CONFIG, [
-			ThreadSafetyCheckTest.MUTEX,
-			'class Runner { public static function create(fn:()->Void):Void {} }',
-			'class D { final _outer:Mutex = new Mutex(); final _inner:Mutex = new Mutex(); public function new() {}'
-			+ ' public function slow():Void { _outer.acquire(); _inner.acquire(); Sys.sleep(1); _inner.release(); _outer.release(); }'
-			+ ' public function quick():Void { _outer.acquire(); takeInner(); _outer.release(); }'
-			+ ' function takeInner():Void { _inner.acquire(); _inner.release(); }'
-			+ ' public static function main():Void { final d:D = new D(); Runner.create(() -> d.slow()); d.quick(); } }'
+		Assert.same(['info'], mainTakesOfInner(CLOSED));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * Without `closedWorld`, code outside the run may call `takeInner` holding nothing (`hxq lint core` over a project
+	 * whose `plugins/` calls it): its callers in the run say nothing of what it holds on entry, and its take stays long.
+	 */
+	@:pin('control') @:killer('M-TS-MEET-OUTSIDE')
+	public function testAnOpenWorldCalleeHoldsNothingOnEntry(): Void {
+		#if (sys || nodejs)
+		Assert.same(['warning'], mainTakesOfInner(CONFIG));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * Every way `_outer` may be given back while the long hold of `_inner` runs breaks the dominance, so the main
+	 * thread's take of `_inner` under `_outer` stays long — the review's give-detection holes, one probe each, beside the
+	 * control where nothing gives it back early.
+	 */
+	@:pin('control') @:killer('M-TS-LEAVES-CAUGHT-THROW') @:killer('M-TS-COVER-RETAKE')
+	public function testAGiveOnTheWayToTheLongCallBreaksDominance(): Void {
+		#if (sys || nodejs)
+		Assert.same([1], [
+			shortQuickTakes(givingBack('_inner.acquire(); Sys.sleep(1); _inner.release(); _outer.release();', ''))
+		], 'control');
+		// a throw a `catch` in the same function stops goes on to the sleep (review `exit-throw-caught-after`)
+		Assert.same([0], [
+			shortQuickTakes(givingBack(
+				'_inner.acquire(); try { if (flag) { _outer.release(); throw "x"; } } catch (e:haxe.Exception) {} Sys.sleep(1);'
+				+ ' _inner.release(); if (!flag) _outer.release();',
+				'public var flag:Bool = false;'
+			))
+		], 'caught throw');
+		// `_inner` taken again after the give that covered it, before `_outer` goes (review `cover-retake-before-give`)
+		Assert.same([0], [
+			shortQuickTakes(
+				givingBack('_inner.acquire(); _inner.release(); _inner.acquire(); _outer.release(); Sys.sleep(1); _inner.release();', '')
+			)
+		], 'retaken');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A give a value handed on runs (`U.now(() -> _outer.release())`) gives back where it is handed (review `give-release-in-callback-now`). */
+	@:pin('control') @:killer('M-TS-RELEASE-CALLBACK')
+	public function testAGiveACallbackRunsNowBreaksDominance(): Void {
+		#if (sys || nodejs)
+		for (handed in [
+			'U.now(() -> _outer.release());',
+			'U.now(dropOuter);',
+			'U.each([1], _ -> _outer.release());'
+		]) Assert.same([0], [
+			shortQuickTakes(
+				givingBack('_inner.acquire(); $handed Sys.sleep(1); _inner.release();', 'function dropOuter():Void _outer.release();')
+			)
+		], handed);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A function that takes the lock gives back what it took only where the take ran first, on the same object
+	 * (reviews `close-take-in-other-branch`, `handoff-handoff-other-object`).
+	 */
+	@:pin('control') @:killer('M-TS-GIVE-PATH') @:killer('M-TS-GIVE-OBJECT')
+	public function testAGiveOfWhatTheFunctionDidNotTakeBreaksDominance(): Void {
+		#if (sys || nodejs)
+		Assert.same([0], [
+			shortQuickTakes(givingBack(
+				'_inner.acquire(); close(true); Sys.sleep(1); _inner.release();',
+				'function close(force:Bool):Void { if (!force) _outer.acquire(); _outer.release(); }', 'd.close(false);'
+			))
+		], 'other branch');
+		Assert.same([0], [
+			shortQuickTakes(givingBack(
+				'_inner.acquire(); handOff(other); Sys.sleep(1); _inner.release(); other._outer.release();',
+				'function handOff(o:D):Void { o._outer.acquire(); _outer.release(); }', '', 'other:D'
+			))
+		], 'other object');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A call made on an unresolved call's result is blind too, wherever it starts (review `chain-chained-unresolved`). */
+	@:pin('control') @:killer('M-TS-BLIND-START')
+	public function testACallOnAnUnresolvedResultIsBlind(): Void {
+		#if (sys || nodejs)
+		Assert.same([0], [
+			shortQuickTakes(givingBack(
+				'_inner.acquire(); self().dropAll(); Sys.sleep(1); _inner.release();',
+				'public var any:Dynamic; function self():Dynamic return this; public function dropAll():Void _outer.release();',
+				'd.any = d;'
+			))
 		]);
-		Assert.same(['info'], [
-			for (v in found) if (v.data?.family == 'A' && v.data?.member == 'D.takeInner') v.severity.label()
-		]);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A lock some thread gives back without having taken it excludes no one for sure, nor does one only ever taken shared
+	 * or taken through two pairs of one class (reviews `kick-untaken-release-elsewhere`, `dom-sharedonly`, `dom-shared-False`).
+	 */
+	@:pin('control') @:killer('M-TS-DOM-OWNERLESS') @:killer('M-TS-DOM-SHARED')
+	public function testOnlyAnOwnedExclusiveLockDominates(): Void {
+		#if (sys || nodejs)
+		Assert.same([0], [
+			shortQuickTakes(givingBack(
+				'_inner.acquire(); Sys.sleep(1); _inner.release(); _outer.release();', 'public function kick():Void _outer.release();', '',
+				'', 'd.kick();'
+			))
+		], 'given back elsewhere');
+		final rw: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Rw.lock","Rw.lockShared","Sys.sleep"],'
+			+ '"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release","Rw.lock/unlock","Rw.lockShared/unlockShared"]';
+		final shared: String = 'class D { final _rw:Rw = new Rw(); final _inner:Mutex = new Mutex(); public function new() {}'
+			+ ' public function slow():Void { _rw.lockShared(); _inner.acquire(); Sys.sleep(1); _inner.release(); _rw.unlockShared(); }'
+			+ ' public function quick():Void { _rw.lockShared(); _inner.acquire(); _inner.release(); _rw.unlockShared(); }'
+			+ ' public function writer():Void { _rw.lock(); _rw.unlock(); }'
+			+ ' public static function main():Void { final d:D = new D(); Runner.create(() -> { d.slow(); d.writer(); }); d.quick(); } }';
+		for (sharedLocks in [',"sharedLocks":["Rw.lockShared"]}}}', '}}}']) Assert.same([0], [
+			shortQuickTakes(ThreadSafetyCheckTest.violations(rw + sharedLocks, [
+				ThreadSafetyCheckTest.MUTEX,
+				RW,
+				'class Runner { public static function create(fn:()->Void):Void {} }',
+				shared
+			]))
+		], sharedLocks);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -107,7 +237,7 @@ class ThreadSafetyDominanceTest extends Test {
 
 	/**
 	 * TM's `if (!batch) _batchMutex.acquire()`: taken where the caller hands `batch = false`, held by the caller where it
-	 * hands `true` — under every valuation the long hold of `_inner` holds `_outer`.
+	 * hands `true` — under every valuation the long hold of `_inner` holds `_outer` — the caller's part known only under `closedWorld`.
 	 */
 	@:pin('control') @:killer('M-TS-DOM-UNDECIDED') @:killer('M-TS-DOM-ENTRY-NONE')
 	public function testAConditionalTakeTheValuationDecidesCounts(): Void {
@@ -119,7 +249,7 @@ class ThreadSafetyDominanceTest extends Test {
 		], holds(run(
 			'public function slow(batch:Bool):Void { if (!batch) _outer.acquire(); _inner.acquire(); Sys.sleep(1); _inner.release();'
 			+ ' if (!batch) _outer.release(); }' + ' public function outer():Void { _outer.acquire(); slow(true); _outer.release(); }',
-			'd.slow(false); d.outer();'
+			'd.slow(false); d.outer();', true, CLOSED
 		)));
 		#else
 		Assert.pass('non-sys target');
@@ -144,6 +274,49 @@ class ThreadSafetyDominanceTest extends Test {
 	}
 
 	#if (sys || nodejs)
+	/**
+	 * `D` whose worker runs `slow(params)` — `_outer`, `_inner`, then `rest` — beside `members`, and whose main thread runs
+	 * `quick` (`_outer`, then `_inner`), after `main` and with `background` on another worker.
+	 */
+	private static function givingBack(
+		rest: String, members: String, main: String = '', params: String = '', background: String = ''
+	): Array<Violation> {
+		final args: String = params == '' ? '' : 'new D()';
+		return ThreadSafetyCheckTest.violations(CONFIG, [
+			ThreadSafetyCheckTest.MUTEX,
+			'class Runner { public static function create(fn:()->Void):Void {} }',
+			'class U { public static function each(xs:Array<Int>, f:Int->Void):Void { for (x in xs) f(x); }'
+			+ ' public static function now(f:()->Void):Void f(); }',
+			'class D { public final _outer:Mutex = new Mutex(); final _inner:Mutex = new Mutex(); public function new() {} $members'
+			+ ' public function slow($params):Void { _outer.acquire(); $rest }'
+			+ ' public function quick():Void { _outer.acquire(); _inner.acquire(); _inner.release(); _outer.release(); }'
+			+ ' public static function main():Void { final d:D = new D(); Runner.create(() -> d.slow($args));'
+			+ (background == '' ? '' : ' Runner.create(() -> $background);') + ' $main d.quick(); } }'
+		]);
+	}
+
+	/** How many of the main thread's takes in `quick` are graded short. */
+	private static function shortQuickTakes(found: Array<Violation>): Int {
+		return [
+			for (v in found) if (v.data?.family == 'A' && v.data?.member == 'D.quick' && v.message.indexOf(' — short: ') >= 0) v
+		].length;
+	}
+	/** The severities of the findings (a) at `takeInner`'s take of `_inner`, which only `quick` calls, on the main thread. */
+	private static function mainTakesOfInner(config: String): Array<String> {
+		final found: Array<Violation> = ThreadSafetyCheckTest.violations(config, [
+			ThreadSafetyCheckTest.MUTEX,
+			'class Runner { public static function create(fn:()->Void):Void {} }',
+			'class D { final _outer:Mutex = new Mutex(); final _inner:Mutex = new Mutex(); public function new() {}'
+			+ ' public function slow():Void { _outer.acquire(); _inner.acquire(); Sys.sleep(1); _inner.release(); _outer.release(); }'
+			+ ' public function quick():Void { _outer.acquire(); takeInner(); _outer.release(); }'
+			+ ' function takeInner():Void { _inner.acquire(); _inner.release(); }'
+			+ ' public static function main():Void { final d:D = new D(); Runner.create(() -> d.slow()); d.quick(); } }'
+		]);
+		return [
+			for (v in found) if (v.data?.family == 'A' && v.data?.member == 'D.takeInner') v.severity.label()
+		];
+	}
+
 	/**
 	 * `D` declares `members`, `quick` (holding `_outer` across a call taking `_inner`) unless `withQuick` is
 	 * false, and `ui` (the main thread's take of `_outer`); a spawned thread runs `background`, then `quick`.
@@ -203,7 +376,7 @@ class ThreadSafetyDominanceTest extends Test {
 	 * A hold dominates its own take: in the window of a hold of `_outer`, `_outer` is held, whatever a valuation can prove
 	 * of the conditional take that opened it.
 	 */
-	@:pin('control') @:killer('M-TS-DOM-UNDER-HOLD-OFF')
+	@:pin('control') @:killer('M-TS-DOM-UNDER-HOLD-OFF') @:killer('M-TS-RUNS-AS-IS')
 	public function testAHoldDominatesItsOwnTake(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -251,5 +424,9 @@ class ThreadSafetyDominanceTest extends Test {
 		Assert.pass('non-sys target');
 		#end
 	}
+
+	/** A reader-writer lock: `lock` takes it exclusive, `lockShared` shared. */
+	private static inline final RW: String = 'class Rw { public function new() {} public function lock():Void {} public function unlock():Void {}'
+		+ ' public function lockShared():Void {} public function unlockShared():Void {} }';
 
 }

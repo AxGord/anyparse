@@ -103,6 +103,55 @@ class ThreadSafetyRootCauseTest extends Test {
 		#end
 	}
 
+	/**
+	 * Two takes of one lock whose holds name the same calls share one finding (review `c5`, `c5b`): one warned hold,
+	 * which never covers itself — the warning stays.
+	 */
+	@:pin('control') @:killer('M-TS-FOLD-SELF')
+	public function testTwoTakesSharingAFindingDoNotCoverEachOther(): Void {
+		#if (sys || nodejs)
+		final branches: String =
+			'public function work(c:Bool):Void { if (c) _b.acquire(); else _b.acquire(); Sys.sleep(1); _b.release(); }';
+		Assert.same(['warning B S.work | S._b'], holds(twoTakes(branches, '', 's.work(Math.random() > 0.5);')));
+		final directives: String =
+			'public function work():Void {\n#if mac\n_b.acquire();\n#else\n_b.acquire();\n#end\nSys.sleep(1); _b.release(); }';
+		Assert.same(['warning B S.work | S._b'], holds(twoTakes(directives, '', 's.work();')), 'one take per #if branch');
+		// a hold waiting for that lock folds onto the warning, which stays (review `c5c`)
+		Assert.same(
+			['info B S.zother | S._a', 'warning B S.work | S._b'],
+			holds(twoTakes(
+				branches, 'public function zother():Void { _a.acquire(); _b.acquire(); _b.release(); _a.release(); }',
+				's.work(Math.random() > 0.5); s.zother();'
+			)),
+			'chained'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A hold reaching a sink call once covers no hold repeating that call under its lock (TM's `FolderWatcher.rename`'s
+	 * one stat against `updateInternal`'s walk over the tree): the repeating hold keeps the warning, and the one-call
+	 * hold folds onto it.
+	 */
+	@:pin('control') @:killer('M-TS-FOLD-SITE-ONCE')
+	public function testAHoldReachingACallOnceCoversNoRepeatingOne(): Void {
+		#if (sys || nodejs)
+		Assert.same(['info B A.z | A._y', 'warning B A.a | A._x'], holds(ThreadSafetyCheckTest.violations(CONFIG, [
+			ThreadSafetyCheckTest.MUTEX,
+			RUNNER,
+			'class A { final _x:Mutex = new Mutex(); final _y:Mutex = new Mutex(); public function new() {}'
+			+ ' public function a():Void { _x.acquire(); for (i in 0...3) v(); _x.release(); } function v():Void w();'
+			+ ' function w():Void Sys.sleep(1); public function z():Void { _y.acquire(); w(); _y.release(); }'
+			+ ' public static function main():Void { final s:A = new A(); Runner.create(() -> { s.a(); s.z(); });'
+			+ ' s._x.acquire(); s._x.release(); s._y.acquire(); s._y.release(); } }'
+		])));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
 	private static inline final RUNNER: String = 'class Runner { public static function create(fn:()->Void):Void {} }';
 
@@ -122,6 +171,16 @@ class ThreadSafetyRootCauseTest extends Test {
 		]);
 	}
 
+	/** `S` with locks `_a` and `_b`, `work` and `more` declared, a worker running `background`, and the main thread taking both. */
+	private static function twoTakes(work: String, more: String, background: String): Array<Violation> {
+		return ThreadSafetyCheckTest.violations(CONFIG, [
+			ThreadSafetyCheckTest.MUTEX,
+			RUNNER,
+			'class S { final _a:Mutex = new Mutex(); final _b:Mutex = new Mutex(); public function new() {} $work $more'
+			+ ' public function peek():Void { _a.acquire(); _a.release(); _b.acquire(); _b.release(); }'
+			+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> { $background }); s.peek(); } }'
+		]);
+	}
 	private static function holds(found: Array<Violation>, ?only: Array<String>): Array<String> {
 		return graded(found, 'B', only);
 	}

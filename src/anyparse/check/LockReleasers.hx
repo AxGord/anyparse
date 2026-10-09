@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.LockSites.LockAcquire;
+import anyparse.check.LockSites.LockGive;
 import anyparse.query.CallGraph;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
@@ -10,14 +11,25 @@ import anyparse.runtime.Span;
 using Lambda;
 
 /**
+ * What `LockReleasers` asks `MustHeld` of a give: whether a hold and a give work the lock of one
+ * object; whether a take runs on every path to an offset after it under a valuation; and every
+ * run a function's valuation may stand for.
+ */
+typedef GiveFacts = {
+	final sameObject: (LockAcquire, LockGive) -> Bool;
+	final takenBefore: (CallEdge, String, Int) -> Bool;
+	final runs: (String, String) -> Array<String>;
+}
+
+/**
  * What may give a lock back while another function holds it (`MustHeld`): a function that gives it back without
  * having taken it, directly or through calls (`releasersOf`), and — when code an unresolved call may run is among those
  * (`hazard`) — every call the graph resolves to nothing (`blindIn`).
  *
- * A wrapper's or a multi-lock helper's own gives are its callers', each judged where it is called: a crossing release
- * (`LockSites.crossing`) names a wrapper's call where it stands, and a helper's call gives where it is made. A give no
- * thread runs gives nothing back, and one in a function working the lock by any other call of its own (a take, a
- * `tryAcquire`) gives back what it took.
+ * A wrapper's or a multi-lock helper's own gives are its callers', each judged where it is called: a wrapper's
+ * call and a helper's call give where they are made. A give no thread runs gives nothing back, and one a take
+ * of its lock on the same object runs on every path before, in every run of its function, gives back what it
+ * took (`givesUntaken`) — any other may give back a hold begun elsewhere: a `tryAcquire` takes nothing for sure.
  */
 @:nullSafety(Strict)
 final class LockReleasers {
@@ -42,10 +54,14 @@ final class LockReleasers {
 	private final _holds: Array<LockAcquire>;
 	private final _callKind: Null<String>;
 	private final _functionKinds: Array<String>;
+	private final _inertRef: (CallEdge) -> Bool;
+
+	/** What tells a give that takes back what its function took from one that does not (`MustHeld`). */
+	private final _facts: GiveFacts;
 
 	public function new(
 		graph: CallGraph, plugin: GrammarPlugin, trees: FunctionTrees, sites: LockSites, states: ThreadStates, conditions: EdgeConditions,
-		holds: Array<LockAcquire>, inertRef: (CallEdge) -> Bool, unresolvedNames: Array<String>
+		holds: Array<LockAcquire>, inertRef: (CallEdge) -> Bool, unresolvedNames: Array<String>, facts: GiveFacts
 	) {
 		_graph = graph;
 		_sites = sites;
@@ -53,27 +69,42 @@ final class LockReleasers {
 		_conditions = conditions;
 		_trees = trees;
 		_holds = holds;
+		_inertRef = inertRef;
+		_facts = facts;
 		final shape: RefShape = plugin.refShape();
 		_callKind = shape.callKind;
 		_functionKinds = (shape.functionKinds ?? []).concat(MemberKinds.nestedFunctionKinds(shape));
 		collectUnknownRun(inertRef, unresolvedNames);
 	}
 
-	/** The functions that may give `lock` back without having taken it (`givesUntaken`), and every function calling one. */
+	/**
+	 * Whether the edge `e` of a function may run its target from there: a call, or a value handed on to run
+	 * (`U.now(() -> m.release())`) unless nothing runs it from there.
+	 */
+	public inline function runsFrom(e: CallEdge): Bool {
+		return e.kind.isInvocation() || e.kind == Ref && !_inertRef(e);
+	}
+
+	/**
+	 * The functions that may give `lock` back without having taken it (`givesUntaken`), every function calling one, and
+	 * every one handing one on as a value to run (`U.now(() -> m.release())`) unless nothing runs it from there.
+	 */
 	public function releasersOf(lock: String): Map<String, Bool> {
 		final known: Null<Map<String, Bool>> = _releasers[lock];
 		if (known != null) return known;
 		final found: Map<String, Bool> = [];
 		_releasers[lock] = found;
-		final candidates: Array<CallEdge> = [
-			for (c in _sites.crossing) if (c.lock == lock && !_sites.helpers.contains(c.edge.from)) c.edge
-		].concat([
-			for (g in _sites.gives) if (g.lock == lock && _sites.helpers.contains(g.edge.to)) g.edge
-		]);
-		final queue: Array<String> = [for (g in candidates) if (givesUntaken(g, lock)) g.from];
-		for (id in queue) found[id] = true;
+		// a wrapper's or a helper's own give is its callers', each judged where it is called
+		final queue: Array<String> = [];
+		for (g in _sites.gives) {
+			final from: String = g.edge.from;
+			if (g.lock == lock && !found.exists(from) && !g.own && !_sites.helpers.contains(from) && givesUntaken(g, lock)) {
+				found[from] = true;
+				queue.push(from);
+			}
+		}
 		var qi: Int = 0;
-		while (qi < queue.length) for (e in _graph.inEdges(queue[qi++])) if (e.kind.isInvocation() && !found.exists(e.from)) {
+		while (qi < queue.length) for (e in _graph.inEdges(queue[qi++])) if (runsFrom(e) && !found.exists(e.from)) {
 			found[e.from] = true;
 			queue.push(e.from);
 		}
@@ -103,13 +134,14 @@ final class LockReleasers {
 		}
 		final out: Array<Int> = [];
 		_blindIn[id] = out;
-		final resolved: Array<Int> = [
-			for (e in _graph.outEdges(id)) if (e.kind.isInvocation() && e.span != null) e.span.from
+		// by the whole span: a chained call (`self().drop()`) starts where the call it is made on does
+		final resolved: Array<String> = [
+			for (e in _graph.outEdges(id)) if (e.kind.isInvocation() && e.span != null) '${e.span.from}:${e.span.to}'
 		];
 		function walk(node: QueryNode): Void {
 			if (node != fn && _functionKinds.contains(node.kind)) return;
 			final at: Null<Span> = node.span;
-			if (node.kind == _callKind && at != null && !resolved.contains(at.from)) out.push(at.from);
+			if (node.kind == _callKind && at != null && !resolved.contains('${at.from}:${at.to}')) out.push(at.from);
 			for (c in node.children) walk(c);
 		}
 		walk(fn);
@@ -117,15 +149,27 @@ final class LockReleasers {
 	}
 
 	/**
-	 * Whether the give `give` of `lock` runs under some state of its function, and that function works the lock by no
-	 * other call of its own.
+	 * Whether the give `give` of `lock` may give back what its function did not take: under some run of the function,
+	 * no take of `lock` on the object it gives it on runs on every path before it (`_takenBefore`), or one such take is given back
+	 * on every path between it and `give` already. A take on another object, or on one no path names, takes nothing back. A run is a
+	 * state's valuation with each parameter it does not know read as each value it may hold (`MustHeld.runsOf`): a tracked parameter
+	 * is never written, so `if (!batch) m.acquire(); … if (!batch) m.release();` takes what it gives under every one.
 	 */
-	private function givesUntaken(give: CallEdge, lock: String): Bool {
+	private function givesUntaken(given: LockGive, lock: String): Bool {
+		final give: CallEdge = given.edge;
 		final id: String = give.from;
-		final gives: Array<Null<Int>> = [for (o in _sites.gives) if (o.edge.from == id) o.edge.span?.from];
-		final takes: Bool = _holds.exists(a -> a.edge.from == id && a.lock == lock)
-			|| _graph.outEdges(id).exists(e -> e.kind == Call && !gives.contains(e.span?.from) && _sites.lockOf(e) == lock);
-		return !takes && _states.statesOf(id).exists(s -> _conditions.carried(give, s.valuation, s.ctx) != 0);
+		final at: Int = give.span?.from ?? -1;
+		final takes: Array<LockAcquire> = [for (a in _holds) if (a.edge.from == id && a.lock == lock) a];
+		final others: Array<CallEdge> = [
+			for (g in _sites.gives) if (g.edge.from == id && g.lock == lock && g.edge != give) g.edge
+		];
+		return _states.statesOf(id).exists(s ->
+			_facts.runs(id, s.valuation).exists(v -> _conditions.carried(give, v, s.ctx) != 0 && !takes.exists(a -> {
+				final taken: Int = a.edge.span?.to ?? at;
+				_conditions.carried(a.edge, v, s.ctx) != 0 && _facts.sameObject(a, given) && _facts.takenBefore(a.edge, v, at)
+				&& !others.exists(o -> (o.span?.from ?? -1) >= taken && (o.span?.to ?? at + 1) <= at && _facts.takenBefore(o, v, at));
+			}))
+		);
 	}
 
 	/**

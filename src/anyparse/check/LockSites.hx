@@ -44,7 +44,7 @@ typedef LockAcquire = {
 	/** Whether the hold sits in the owner's own constructor, on an instance lock, before the object can reach another thread. */
 	final uncontended: Bool;
 
-	/** Whether the take is a lock wrapper's own: the hold goes on at each call of the wrapper, an acquire of its own. */
+	/** Whether the take is a lock wrapper's or a multi-lock helper's own: the hold goes on at each call of it, an acquire of its own. */
 	final delegated: Bool;
 
 	/** Where an exception leaves the function with the lock still held (`HeldWindow.escapes`), in source order. */
@@ -70,6 +70,19 @@ typedef LockEscape = {
 typedef CrossingRelease = {
 	final lock: String;
 	final edge: CallEdge;
+}
+
+/**
+ * A call giving a lock back (`LockSites.gives`): the call, the lock it gives (null for an unknown one), and — for a call of
+ * a multi-lock helper that gives — the give inside the helper it runs.
+ */
+typedef LockGive = {
+	final edge: CallEdge;
+	final lock: Null<String>;
+	final inner: Null<CallEdge>;
+
+	/** Whether it is a lock wrapper's own give, which gives back at each call of the wrapper instead. */
+	final own: Bool;
 }
 
 /** One call that takes or gives back the lock of `pair`: a call of the pair's own member, or of a lock wrapper. */
@@ -138,7 +151,7 @@ final class LockSites {
 	 * Every call giving a lock back, with the lock it gives (null for an unknown one): a call of a pair's unlock member, of
 	 * a lock wrapper that gives, or of a multi-lock helper that gives — the last one entry per lock.
 	 */
-	public final gives: Array<{ edge: CallEdge, lock: Null<String> }> = [];
+	public final gives: Array<LockGive> = [];
 
 	/**
 	 * The multi-lock helpers (`helperHolds`): functions whose own takes or gives are their callers', each judged where
@@ -213,8 +226,14 @@ final class LockSites {
 			acquires.push(hold(take.edge, take.pair, lock, releasesOf(take.edge, take.pair, lock, gives)));
 		}
 		collectCrossing(gives);
-		for (g in gives) this.gives.push({ edge: g.edge, lock: lockOf(g.edge) });
+		for (g in gives) this.gives.push({
+			edge: g.edge,
+			lock: lockOf(g.edge),
+			inner: null,
+			own: _wrappers.exists(g.edge.from)
+		});
 		collectHelperHolds(takes, gives, pairIds, unresolved);
+		WrapperOps.delegateHelperTakes(acquires, helpers);
 	}
 
 	public inline function isAccess(kind: String): Bool {
@@ -507,15 +526,23 @@ final class LockSites {
 		final closed: Array<{ call: CallEdge, op: LockCall }> = [];
 		for (id => list in WrapperOps.opsByFunction(takes, gives)) if (list.length > 1 && mayWrap(id, pairIds, unresolved)) {
 			final fn: Null<QueryNode> = _trees.ofEdge(list[0].call.edge);
-			if (fn == null) continue;
+			if (
+				fn == null || !WrapperOps.plainCallsOnly(_graph, id)
+				|| !WrapperOps.lockTrafficOnly(_graph, { shape: _shape, nested: _nestedFnKinds }, id, fn, list)
+			)
+				continue;
 			final opens: Bool = list.foreach(o -> o.takes);
 			if (!list.foreach(o -> o.takes == opens && onEveryPath(walker, fn, o.call, opens))) continue;
 			helpers.push(id);
-			for (call in _graph.inEdges(id))
-				if (call.kind == Call)
-					for (o in list) (opens ? opened : closed).push({ call: call, op: o.call });
+			for (call in _graph.inEdges(id).filter(e -> e.kind == Call)) for (o in list)
+				(opens ? opened : closed).push({ call: call, op: o.call });
 		}
-		for (c in closed) this.gives.push({ edge: c.call, lock: lockOf(c.op.edge) });
+		for (c in closed) this.gives.push({
+			edge: c.call,
+			lock: lockOf(c.op.edge),
+			inner: c.op.edge,
+			own: false
+		});
 		for (o in opened) {
 			final lock: Null<String> = lockOf(o.op.edge);
 			final releases: Array<Int> = releasesOf(o.call, o.op.pair, lock, gives).concat([
@@ -699,6 +726,54 @@ private class WrapperOps {
 		for (id => w in a) if (!sameWrapper(b[id], w)) return false;
 		for (id in b.keys()) if (!a.exists(id)) return false;
 		return true;
+	}
+
+	/**
+	 * Whether the function `id` (body `fn`) runs nothing but its lock calls `ops`: every call the graph
+	 * resolves, and every call or construction the tree holds outside a nested function, sits at one of them.
+	 * Work in a helper runs under the locks its callers hold from the call on, which no window of theirs spans.
+	 */
+	public static function lockTrafficOnly(
+		graph: CallGraph, kinds: { shape: RefShape, nested: Array<String> }, id: String, fn: QueryNode,
+		ops: Array<{ call: LockCall, takes: Bool }>
+	): Bool {
+		final sites: Array<Int> = [for (o in ops) o.call.edge.span?.from ?? -1];
+		if (graph.outEdges(id).exists(e -> e.kind.isInvocation() && !sites.contains(e.span?.from ?? -1))) return false;
+		final shape: RefShape = kinds.shape;
+		function runsOther(node: QueryNode): Bool {
+			if (node != fn && kinds.nested.contains(node.kind)) return false;
+			final at: Null<Span> = node.span;
+			if ((node.kind == shape.callKind || node.kind == shape.newExprKind) && (at == null || !sites.contains(at.from))) return true;
+			return node.children.exists(runsOther);
+		}
+		return !runsOther(fn);
+	}
+
+	/**
+	 * Marks each of `acquires` a multi-lock helper of `helpers` makes delegated: its take goes on at each call of the
+	 * helper, as a wrapper's does, so the hold its caller opens leaks or not in its stead.
+	 */
+	public static function delegateHelperTakes(acquires: Array<LockAcquire>, helpers: Array<String>): Void {
+		for (i => a in acquires) if (helpers.contains(a.edge.from)) acquires[i] = {
+			edge: a.edge,
+			pair: a.pair,
+			lock: a.lock,
+			window: a.window,
+			leaks: a.leaks,
+			blind: a.blind,
+			untraced: a.untraced,
+			blindCalls: a.blindCalls,
+			uncontended: a.uncontended,
+			delegated: true,
+			escapes: a.escapes,
+			inner: a.inner
+		};
+	}
+
+	/** Whether every invocation of the function `id` is a plain call, and there is one: a dispatch may run another override, taking nothing. */
+	public static function plainCallsOnly(graph: CallGraph, id: String): Bool {
+		final into: Array<CallEdge> = [for (e in graph.inEdges(id)) if (e.kind.isInvocation()) e];
+		return into.length > 0 && into.foreach(e -> e.kind == Call);
 	}
 
 }

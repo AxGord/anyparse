@@ -6,8 +6,8 @@ import utest.Assert;
 import utest.Test;
 
 /**
- * A lock no sealed member names is told apart by its pair's take member alone: a hold of one stalls the main thread
- * only when the main thread takes that pair somewhere (TM's `FoldersIncrementalCloudUpdatesCache.lock`, a `lockPairs`
+ * A lock no sealed member names may be any object of its class: a hold of one stalls the main thread only when the main thread
+ * takes a lock of that class somewhere, through any of its pairs (TM's `FoldersIncrementalCloudUpdatesCache.lock`, a `lockPairs`
  * entry only the sync workers ever take).
  */
 class ThreadSafetyUnnamedLockTest extends Test {
@@ -27,6 +27,30 @@ class ThreadSafetyUnnamedLockTest extends Test {
 	public function testAMainTakeOfThePairKeepsTheFinding(): Void {
 		#if (sys || nodejs)
 		Assert.same(['warning B W.work | Gate.close'], holds(run('final g:Gate = new Gate(); g.close(); g.open();')));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * An unnamed lock may be any object of its class, whichever pair takes it: a worker's exclusive take and the main
+	 * thread's shared take of the same reader-writer lock wait for each other (review `c8`).
+	 */
+	@:pin('control') @:killer('M-TS-UNNAMED-BY-PAIR')
+	public function testAnotherPairOfTheSameClassStallsTheMainThread(): Void {
+		#if (sys || nodejs)
+		final config: String = '{"rules":{"thread-safety":{"sinks":["Rw.lock","Rw.lockShared","Sys.sleep"],'
+			+ '"spawns":["Runner.create"],"lockPairs":["Rw.lock/unlock","Rw.lockShared/unlockShared"]}}}';
+		Assert.same(['warning B U.slowUnder | Rw.lock'], holds(ThreadSafetyCheckTest.violations(config, [
+			'class Rw { public function new() {} public function lock():Void {} public function unlock():Void {}'
+			+ ' public function lockShared():Void {} public function unlockShared():Void {} }',
+			'class Runner { public static function create(fn:()->Void):Void {} }',
+			'class U { public static function slowUnder(l:Rw):Void { l.lock(); Sys.sleep(1); l.unlock(); }'
+			+ ' public static function read(l:Rw):Void { l.lockShared(); l.unlockShared(); } }',
+			'class A { final m:Rw = new Rw(); public function new() {} public function work():Void U.slowUnder(m);'
+			+ ' public function peek():Void U.read(m);'
+			+ ' public static function main():Void { final a:A = new A(); Runner.create(() -> a.work()); a.peek(); } }'
+		])));
 		#else
 		Assert.pass('non-sys target');
 		#end

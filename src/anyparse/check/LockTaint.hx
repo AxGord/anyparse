@@ -570,4 +570,17 @@ final class LockTaint {
 			&& _cost?.dominance.briefUnder(under, edge, listsOf(edge.file).reentrantIds.contains(edge.to)) == true;
 	}
 
+	/**
+	 * Whether the call at the end of `trail`, which the call of the hold `a`'s window at its head leads to, runs more than
+	 * once under the hold: that call repeats under the take, or a call on the way repeats (`CallRepetition`). Asked of a
+	 * taint asking about cost: the plain one knows no repetition.
+	 */
+	public function repeatsAlong(a: LockAcquire, trail: BlockingTrail): Bool {
+		final cost: Null<TaintCost> = _cost;
+		if (cost == null) throw new Exception('thread-safety: the plain taint knows no repetition');
+		final repetition: CallRepetition = cost.repetition;
+		return trail.edges.length > 0 && repetition.repeatedUnder(trail.edges[0], a.edge)
+			|| trail.edges.slice(1).exists(e -> repetition.repeated(e));
+	}
+
 }

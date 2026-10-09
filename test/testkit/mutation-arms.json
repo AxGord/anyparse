@@ -17473,12 +17473,12 @@
 			"note": "a multi-lock helper's call opens no hold its caller is judged by"
 		},
 		{
-			"name": "M-TS-HELPER-OWN-TAKES",
+			"name": "M-TS-HELPER-OWN-WINDOW",
 			"type": "anyparse.check.HoldGrade",
 			"method": "judged",
-			"find": "return [for (a in acquires) if (!sites.helpers.contains(a.edge.from)) a].concat(helperHolds);",
-			"replace": "return [for (a in acquires) a].concat(helperHolds);",
-			"note": "a multi-lock helper's own takes are judged as holds of their own"
+			"find": "return acquires.concat(helperHolds);",
+			"replace": "return acquires.filter(a -> !a.delegated).concat(helperHolds);",
+			"note": "no delegated take is judged over its own window: a helper's earlier locks are held across its later takes unseen"
 		},
 		{
 			"name": "M-TS-HELPER-CROSSING",
@@ -17919,6 +17919,166 @@
 			"find": " && !(_throwKinds.contains(kind) && _catchDepth > 0)",
 			"replace": "",
 			"note": "a throw a catch around it intercepts is a path out of the function"
+		},
+		{
+			"name": "M-TS-MEET-OUTSIDE",
+			"type": "anyparse.check.MustHeld",
+			"method": "enteredUnknown",
+			"find": " || seedable(id);",
+			"replace": ";",
+			"note": "a function code outside the run may call takes the meet over its callers in the run as what it holds on entry"
+		},
+		{
+			"name": "M-TS-UNNAMED-BY-PAIR",
+			"type": "anyparse.check.HoldGrade",
+			"method": "takenKey",
+			"find": "lock ?? UNNAMED + a.pair.lockId.substring(0, a.pair.lockId.lastIndexOf(.))",
+			"replace": "lock ?? a.pair.lockId",
+			"note": "a lock no member names is told apart by its pair take member: an exclusive take and a shared one of the same class never meet"
+		},
+		{
+			"name": "M-TS-HELPER-BODY-WORK",
+			"type": "anyparse.check.LockSites",
+			"method": "collectHelperHolds",
+			"find": "\n\t\t\t|| !WrapperOps.lockTrafficOnly(_graph, { shape: _shape, nested: _nestedFnKinds }, id, fn, list)\n",
+			"replace": "\n",
+			"note": "a function doing work beside its lock calls still counts as a helper, so the work under its locks is judged nowhere"
+		},
+		{
+			"name": "M-TS-HELPER-DISPATCH",
+			"type": "anyparse.check.LockSites",
+			"method": "collectHelperHolds",
+			"find": "fn == null || !WrapperOps.plainCallsOnly(_graph, id)\n",
+			"replace": "fn == null\n",
+			"note": "a helper reached by a dispatch counts, though the call may run another override taking nothing"
+		},
+		{
+			"name": "M-TS-HELPER-HANDOFF",
+			"type": "anyparse.check.HoldGrade",
+			"method": "handsOff",
+			"find": "a.untraced || a.window.length == 0) return false;",
+			"replace": "a.untraced || a.inner != null || a.window.length == 0) return false;",
+			"note": "a hold a helper call opens never hands its lock off, however its caller leaves it held"
+		},
+		{
+			"name": "M-TS-NEST-HANDOFF",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "nestHolds",
+			"find": "for (inner in reported) if (!inner.handOff) {",
+			"replace": "for (inner in reported) if (true) {",
+			"note": "a handed-off hold counts as an inner hold of the hold around its take, though it outlives that window"
+		},
+		{
+			"name": "M-TS-FOLD-SELF",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "fold",
+			"find": " && !warned.exists(w -> w.finding == finding)) warned.push(h);",
+			"replace": ") warned.push(h);",
+			"note": "two holds sharing one finding are two warned holds, which cover each other and turn the one finding info"
+		},
+		{
+			"name": "M-TS-FOLD-SITE-ONCE",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "covers",
+			"find": "return d.at != i && (d.repeated || !repeated);",
+			"replace": "return d.at != i;",
+			"note": "a hold reaching a sink call once covers a hold repeating it under its lock"
+		},
+		{
+			"name": "M-TS-ENCLOSED-UNREPORTED",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "foldEnclosed",
+			"find": "if (around.length == 0) continue;",
+			"replace": "",
+			"note": "an enclosed hold turns info though no warning of an enclosing hold reaches its function"
+		},
+		{
+			"name": "M-TS-LEAVES-CAUGHT-THROW",
+			"type": "anyparse.check.MustHeld",
+			"method": "leavesFirst",
+			"find": " && !inTryBody(give.file, site)",
+			"replace": "",
+			"note": "a throw inside a try body leaves the function, though a catch of it goes on"
+		},
+		{
+			"name": "M-TS-COVER-RETAKE",
+			"type": "anyparse.check.MustHeld",
+			"method": "coveredAt",
+			"find": "take > given && take < at",
+			"replace": "take > pos && take < at",
+			"note": "a re-take of the cover between its give and the give point counts as no re-take"
+		},
+		{
+			"name": "M-TS-RELEASE-CALLBACK",
+			"type": "anyparse.check.LockReleasers",
+			"method": "runsFrom",
+			"find": "return e.kind.isInvocation() || e.kind == Ref && !_inertRef(e);",
+			"replace": "return e.kind.isInvocation();",
+			"note": "a value handed on to run, which gives the lock back, gives back nothing where it is handed"
+		},
+		{
+			"name": "M-TS-GIVE-PATH",
+			"type": "anyparse.check.LockReleasers",
+			"method": "givesUntaken",
+			"find": " && _facts.takenBefore(a.edge, v, at)\n",
+			"replace": "\n",
+			"note": "a take anywhere in the function counts as taken before its give"
+		},
+		{
+			"name": "M-TS-GIVE-OBJECT",
+			"type": "anyparse.check.LockReleasers",
+			"method": "givesUntaken",
+			"find": " && _facts.sameObject(a, given)",
+			"replace": "",
+			"note": "a take on another object counts as taking what the give gives back"
+		},
+		{
+			"name": "M-TS-BLIND-START",
+			"type": "anyparse.check.LockReleasers",
+			"method": "blindIn",
+			"find": "!resolved.contains('${at.from}:${at.to}')",
+			"replace": "!resolved.exists(r -> r.indexOf('${at.from}:') == 0)",
+			"note": "a call starting where a resolved call starts counts as resolved"
+		},
+		{
+			"name": "M-TS-DOM-OWNERLESS",
+			"type": "anyparse.check.LockDominance",
+			"method": "excludes",
+			"find": "return _quiet.exclusive(lock) && !_must.releasedUntaken(lock);",
+			"replace": "return _quiet.exclusive(lock);",
+			"note": "a lock some function gives back without having taken it still dominates"
+		},
+		{
+			"name": "M-TS-DOM-SHARED",
+			"type": "anyparse.check.LockDominance",
+			"method": "excludes",
+			"find": "return _quiet.exclusive(lock) && !_must.releasedUntaken(lock);",
+			"replace": "return !_must.releasedUntaken(lock);",
+			"note": "a lock taken shared dominates as an exclusive one does"
+		},
+		{
+			"name": "M-TS-RUNS-AS-IS",
+			"type": "anyparse.check.MustHeld",
+			"method": "runsOf",
+			"find": "if (values.length > 1 && ++open > KNOWN_UNKNOWNS) return [valuation];",
+			"replace": "if (values.length > 1) return [valuation];",
+			"note": "a valuation not knowing a parameter stands for itself alone, so a take and a give under one undecided condition never meet"
+		},
+		{
+			"name": "M-TS-SAME-LOCAL-ROOT",
+			"type": "anyparse.check.MustHeld",
+			"method": "localRoot",
+			"find": "return declared.length == 1 && !writes(fn, name) ? member == null ? name : '$name.$member' : null;",
+			"replace": "return null;",
+			"note": "a take and a give on one member of a local or parameter name no one object"
+		},
+		{
+			"name": "M-TS-HELPER-GIVE-OBJECT",
+			"type": "anyparse.check.MustHeld",
+			"method": "sameObject",
+			"find": "inner == null ? takeObject(g.edge) : carried(takeObject(inner), g.edge);",
+			"replace": "takeObject(g.edge);",
+			"note": "a helper call's give is placed by the call alone, which names no lock object"
 		}
 	]
 }

@@ -17,10 +17,20 @@ class ThreadSafetyCarriedHoldTest extends Test {
 		+ '"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"],"reentrantLocks":["Mutex.acquire"]}}}';
 
 	/**
-	 * `_mutex` is dominated by `_batch` (its one long hold holds both); `lookup` takes `_mutex`, `nested` re-takes
-	 * `_batch`, and `drop` gives `_batch` back without taking it.
+	 * `_mutex` is dominated by `_batch` (its one long hold holds both); `lookup` takes `_mutex`, and `nested` re-takes
+	 * `_batch`.
 	 */
 	private static inline final DB: String = 'class Db { public final batch:Mutex = new Mutex(); public final mutex:Mutex = new Mutex();'
+		+ ' public function new() {} public function batchLock():Void batch.acquire(); public function batchUnlock():Void batch.release();'
+		+ ' public function lookup():Void { mutex.acquire(); mutex.release(); }'
+		+ ' public function nested():Void { batchLock(); mutex.acquire(); mutex.release(); batchUnlock(); }'
+		+ ' public function slow():Void { batch.acquire(); mutex.acquire(); Sys.sleep(1); mutex.release(); batch.release(); } }';
+
+	/**
+	 * `DB` with `drop`, which gives `_batch` back without taking it: `_batch` then excludes no one for sure, so it
+	 * dominates nothing (`LockDominance`) — wherever `drop` is called.
+	 */
+	private static inline final DB_DROP: String = 'class Db { public final batch:Mutex = new Mutex(); public final mutex:Mutex = new Mutex();'
 		+ ' public function new() {} public function batchLock():Void batch.acquire(); public function batchUnlock():Void batch.release();'
 		+ ' public function lookup():Void { mutex.acquire(); mutex.release(); }'
 		+ ' public function nested():Void { batchLock(); mutex.acquire(); mutex.release(); batchUnlock(); }'
@@ -51,7 +61,7 @@ class ThreadSafetyCarriedHoldTest extends Test {
 	@:pin('control') @:killer('M-TS-CARRY-RELEASE')
 	public function testACalleeGivingTheLockBackCarriesNothing(): Void {
 		#if (sys || nodejs)
-		Assert.same(['info B Fs.work | Db.batch (folded)'], work(own('_db.batchLock(); _db.drop();')));
+		Assert.same(['info B Fs.work | Db.batch (folded)'], work(own('_db.batchLock(); _db.drop();'), DB_DROP));
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -118,14 +128,15 @@ class ThreadSafetyCarriedHoldTest extends Test {
 	private static inline final FOLDED: String = ' — long only through ';
 
 	/**
-	 * The findings (b) of `Fs.work` over `DB` and `fs`, `(folded)` marking one long only through other warnings, run on a worker while the main thread takes `Db.batch` — and
+	 * The findings (b) of `Fs.work` over `db` (`DB` unless given) and `fs`, `(folded)` marking one
+	 * long only through other warnings, run on a worker while the main thread takes `Db.batch` — and
 	 * calls `lookup` and `nested` itself, so no meet over their callers holds `batch` on entry.
 	 */
-	private static function work(fs: String): Array<String> {
+	private static function work(fs: String, ?db: String): Array<String> {
 		final found: Array<Violation> = ThreadSafetyCheckTest.violations(CONFIG, [
 			ThreadSafetyCheckTest.MUTEX,
 			'class Runner { public static function create(fn:()->Void):Void {} }',
-			DB,
+			db ?? DB,
 			fs,
 			'class M { public static function main():Void { final db:Db = new Db(); final fs:Fs = new Fs(db, new Db());'
 			+ ' Runner.create(() -> db.slow()); Runner.create(() -> fs.work()); db.batchLock(); db.batchUnlock(); db.lookup(); db.nested(); } }'
