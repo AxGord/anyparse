@@ -104,13 +104,15 @@ class ThreadSafetyHelperHoldsTest extends Test {
 	@:pin('control') @:killer('M-TS-HELPER-BODY-WORK')
 	public function testWorkInsideATakingHelperIsJudged(): Void {
 		#if (sys || nodejs)
-		Assert.same(
-			['warning B S.lockBoth | S._a'],
-			holds(pair(
-				'function lockBoth():Void { _a.acquire(); Sys.sleep(1); _b.acquire(); }',
-				'function unlockBoth():Void { _b.release(); _a.release(); }', 'lockBoth(); unlockBoth();', ''
-			))
+		final found: Array<Violation> = pair(
+			'function lockBoth():Void { _a.acquire(); Sys.sleep(1); _b.acquire(); }',
+			'function unlockBoth():Void { _b.release(); _a.release(); }', 'lockBoth(); unlockBoth();', ''
 		);
+		Assert.same(['warning B S.lockBoth | S._a'], holds(found));
+		// no helper, its take hands the lock off on its own: a helper's would be its caller's
+		Assert.same([true], [
+			for (v in found) if (v.data?.family == 'B') v.message.indexOf(' — and no path of the function gives it back') >= 0
+		]);
 		#else
 		Assert.pass('non-sys target');
 		#end

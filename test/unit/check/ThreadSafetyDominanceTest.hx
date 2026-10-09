@@ -94,8 +94,12 @@ class ThreadSafetyDominanceTest extends Test {
 		#end
 	}
 
-	/** A give a value handed on runs (`U.now(() -> _outer.release())`) gives back where it is handed (review `give-release-in-callback-now`). */
-	@:pin('control') @:killer('M-TS-RELEASE-CALLBACK')
+	/**
+	 * A give a value handed on runs (`U.now(() -> _outer.release())`) gives back where it is handed (review
+	 * `give-release-in-callback-now`). Two mechanisms each catch it — the untaken give that keeps `_outer` from dominating
+	 * anything, and the give point where the value is handed — so no single cut does: a guard of the review's probe.
+	 */
+	@:pin('guard')
 	public function testAGiveACallbackRunsNowBreaksDominance(): Void {
 		#if (sys || nodejs)
 		for (handed in [
@@ -131,13 +135,23 @@ class ThreadSafetyDominanceTest extends Test {
 				'function handOff(o:D):Void { o._outer.acquire(); _outer.release(); }', '', 'other:D'
 			))
 		], 'other object');
+		// a take an undecidable condition guards runs on some path to the give only
+		Assert.same([0], [
+			shortQuickTakes(givingBack(
+				'_inner.acquire(); maybeClose(); Sys.sleep(1); _inner.release();',
+				'function maybeClose():Void { if (Math.random() > 0.5) _outer.acquire(); _outer.release(); }'
+			))
+		], 'some path');
 		#else
 		Assert.pass('non-sys target');
 		#end
 	}
 
-	/** A call made on an unresolved call's result is blind too, wherever it starts (review `chain-chained-unresolved`). */
-	@:pin('control') @:killer('M-TS-BLIND-START')
+	/**
+	 * A call made on an unresolved call's result is blind too, wherever it starts (review `chain-chained-unresolved`); the
+	 * untaken give `dropAll` makes keeps `_outer` from dominating anything as well, so no single cut breaks it: a guard.
+	 */
+	@:pin('guard')
 	public function testACallOnAnUnresolvedResultIsBlind(): Void {
 		#if (sys || nodejs)
 		Assert.same([0], [

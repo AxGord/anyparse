@@ -2166,10 +2166,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyDeadCatchTest#testTheTryBodyStillRuns :: control :: M-TS-DEADCATCH-BODY',
 			'unit.check.ThreadSafetyDominanceTest#testABriefUnresolvedCallLeavesDominanceStanding :: control :: '
 				+ 'M-TS-DOM-BRIEF-NAMES-IGNORED,M-TS-DOM-BRIEF-REPEATED',
-			'unit.check.ThreadSafetyDominanceTest#testACallOnAnUnresolvedResultIsBlind :: control :: M-TS-BLIND-START',
+			'unit.check.ThreadSafetyDominanceTest#testACallOnAnUnresolvedResultIsBlind :: guard :: ',
 			'unit.check.ThreadSafetyDominanceTest#testAConditionalTakeTheValuationDecidesCounts :: control :: '
 				+ 'M-TS-DOM-UNDECIDED,M-TS-DOM-ENTRY-NONE',
-			'unit.check.ThreadSafetyDominanceTest#testAGiveACallbackRunsNowBreaksDominance :: control :: M-TS-RELEASE-CALLBACK',
+			'unit.check.ThreadSafetyDominanceTest#testAGiveACallbackRunsNowBreaksDominance :: guard :: ',
 			'unit.check.ThreadSafetyDominanceTest#testAGiveOfTheOuterLockBeforeTheLongCallBreaksDominance :: control :: '
 				+ 'M-TS-DOM-RELEASE-IGNORED',
 			'unit.check.ThreadSafetyDominanceTest#testAGiveOfWhatTheFunctionDidNotTakeBreaksDominance :: control :: '
@@ -2184,9 +2184,11 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyDominanceTest#testAnotherObjectsLockIsNotDominated :: control :: M-TS-DOM-ANY-OBJECT',
 			'unit.check.ThreadSafetyDominanceTest#testExplainLongNamesTheDominatedLock :: control :: M-TS-DOM-EXPLAIN-DROPPED',
 			'unit.check.ThreadSafetyDominanceTest#testOnlyAnOwnedExclusiveLockDominates :: control :: M-TS-DOM-OWNERLESS,M-TS-DOM-SHARED',
+			'unit.check.ThreadSafetyEnclosedHoldTest#testAGiveOnTheCallersWayBreaksTheEnclosure :: control :: '
+				+ 'M-TS-RELEASE-CALLBACK,M-TS-BLIND-START',
 			'unit.check.ThreadSafetyEnclosedHoldTest#testAHoldEveryCallerEnclosesIsTheirs :: control :: M-TS-ENCLOSED-OFF',
 			'unit.check.ThreadSafetyEnclosedHoldTest#testOneCallerOutsideTheLockKeepsItsOwn :: control :: M-TS-ENCLOSED-ANY-STATE',
-			'unit.check.ThreadSafetyEnclosedHoldTest#testTheNoteNamesTheEnclosingWarning :: control :: M-TS-ENCLOSED-UNREPORTED',
+			'unit.check.ThreadSafetyEnclosedHoldTest#testTheNoteNamesTheEnclosingWarning :: control :: M-TS-ENCLOSED-NOTE',
 			'unit.check.ThreadSafetyErrorPathTest#testABlockAlsoOutsideTheCatchWarns :: control :: M-TS-ERROR-ANY,M-TS-ERROR-TAKE-ANY',
 			'unit.check.ThreadSafetyErrorPathTest#testABlockInTheHoldsOwnCatchIsInfo :: control :: M-TS-ERROR-WINDOW-OFF',
 			'unit.check.ThreadSafetyErrorPathTest#testABlockOnlyInACalleesCatchIsInfo :: control :: '
@@ -6115,7 +6117,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-NEST-HANDOFF',
 			'M-TS-FOLD-SELF',
 			'M-TS-FOLD-SITE-ONCE',
-			'M-TS-ENCLOSED-UNREPORTED',
+			'M-TS-ENCLOSED-NOTE',
 			'M-TS-LEAVES-CAUGHT-THROW',
 			'M-TS-COVER-RETAKE',
 			'M-TS-RELEASE-CALLBACK',

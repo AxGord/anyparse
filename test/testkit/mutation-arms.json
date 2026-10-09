@@ -17985,12 +17985,12 @@
 			"note": "a hold reaching a sink call once covers a hold repeating it under its lock"
 		},
 		{
-			"name": "M-TS-ENCLOSED-UNREPORTED",
+			"name": "M-TS-ENCLOSED-NOTE",
 			"type": "anyparse.check.ThreadSafety",
 			"method": "foldEnclosed",
-			"find": "if (around.length == 0) continue;",
-			"replace": "",
-			"note": "an enclosed hold turns info though no warning of an enclosing hold reaches its function"
+			"find": "is long through the call into this one'",
+			"replace": "names these calls'",
+			"note": "the enclosed hold's note claims the enclosing finding names its calls, which it may not"
 		},
 		{
 			"name": "M-TS-LEAVES-CAUGHT-THROW",
