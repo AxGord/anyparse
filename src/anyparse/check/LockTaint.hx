@@ -47,8 +47,8 @@ typedef ChainLists = {
 	final registerNames: Array<String>;
 
 	/**
-	 * The call targets that run a function value handed to them at most once per call, now or later (`runsOnce`): the
-	 * one positive answer that a value handed to a call does not repeat (`CallRepetition`).
+	 * The call targets a `Type.member` entry of `runsOnce` names running a function value handed to them at most once
+	 * per call, now or later: the one positive answer that a value handed to a call does not repeat (`CallRepetition`).
 	 */
 	final runsOnceIds: Array<String>;
 

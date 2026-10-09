@@ -360,7 +360,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			iterateNames: [for (p in iterates) if (p.indexOf('.') < 0) p],
 			registerIds: matchAll(graph, registers),
 			registerNames: [for (p in registers) if (p.indexOf('.') < 0) p],
-			runsOnceIds: matchAll(graph, runsOnce),
+			// a bare name speaks for the runtime's calls only (`CallRepetition.runsOnce`), never a project member of that name
+			runsOnceIds: matchAll(graph, [for (p in runsOnce) if (p.indexOf('.') >= 0) p]),
 			runsOnceNames: [for (p in runsOnce) if (p.indexOf('.') < 0) p],
 			sharedIds: matchAll(graph, option('sharedLocks')),
 			nonThrowingIds: matchAll(graph, nonThrowing),

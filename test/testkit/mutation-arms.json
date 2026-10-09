@@ -11338,9 +11338,9 @@
 		},
 		{
 			"name": "M-TS-SELF-NEVER",
-			"type": "anyparse.check.LockSites",
-			"method": "readsOwnMember",
-			"find": "? node.name != _shape.selfReferenceText",
+			"type": "anyparse.check.FieldWrites",
+			"method": "ownMemberRead",
+			"find": "? node.name != shape.selfReferenceText",
 			"replace": "? false",
 			"note": "a lock member read bare is never the running object's, so re-taking one's own re-entrant lock is reported as a wait"
 		},
@@ -17324,23 +17324,23 @@
 			"name": "M-TS-ERROR-TAKE-OFF",
 			"type": "anyparse.check.MainSinkReport",
 			"method": "siteCost",
-			"find": "final error: Null<String> = caught ?? (long && !normal ? errorPlace(sites, costs, edge) : null);",
-			"replace": "final error: Null<String> = caught ?? (long && !normal && false ? errorPlace(sites, costs, edge) : null);",
+			"find": "final error: Null<String> = caught ?? (at.long && !at.normal ? errorPlace(sites, costs, edge) : null);",
+			"replace": "final error: Null<String> = caught ?? (at.long && !at.normal && false ? errorPlace(sites, costs, edge) : null);",
 			"note": "a main take of a lock long only on an error path still warns"
 		},
 		{
 			"name": "M-TS-ERROR-TAKE-ANY",
 			"type": "anyparse.check.MainSinkReport",
 			"method": "report",
-			"find": "if (!costs.errors.inCatch(edge) && (costs.normal.costsLong(edge, null) || repeated)) normal[key] = true;",
-			"replace": "if (false && !costs.errors.inCatch(edge) && (costs.normal.costsLong(edge, null) || repeated)) normal[key] = true;",
+			"find": "else if (costs.normal.costsLong(edge, null) || repeated) normal[key] = true;",
+			"replace": "else if (false && (costs.normal.costsLong(edge, null) || repeated)) normal[key] = true;",
 			"note": "every long main take counts as error-path only"
 		},
 		{
 			"name": "M-TS-ERROR-CAUGHT-OFF",
 			"type": "anyparse.check.MainSinkReport",
 			"method": "siteCost",
-			"find": "final caught: Null<String> = costs.errors.placeOf([edge]);",
+			"find": "final caught: Null<String> = at.caught ? costs.errors.placeOf([edge]) : null;",
 			"replace": "final caught: Null<String> = null;",
 			"note": "a main-thread sink call inside a catch warns"
 		},
@@ -17914,7 +17914,7 @@
 			"name": "M-TS-EXH-OFF",
 			"type": "anyparse.check.ExhaustiveSwitches",
 			"method": "dead",
-			"find": "if (at < 1 || !catchAll(branch)) return false;",
+			"find": "if (!_writes.complete || at < 1 || !catchAll(branch)) return false;",
 			"replace": "if (true) return false;",
 			"note": "no catch-all branch is ever dead"
 		},
@@ -18017,8 +18017,8 @@
 			"name": "M-TS-EXH-OPTIONAL",
 			"type": "anyparse.check.ExhaustiveSwitches",
 			"method": "parameterOf",
-			"find": "if (param.kind == _shape.optionalParamKind) return optional;",
-			"replace": "if (param.kind == _shape.optionalParamKind) return true;",
+			"find": "if (param.kind == _shape.optionalParamKind)\n\t\t\toptional",
+			"replace": "if (param.kind == _shape.optionalParamKind)\n\t\t\ttrue",
 			"note": "an optional parameter, null when left out, holds a value"
 		},
 		{
@@ -18262,16 +18262,32 @@
 			"name": "M-TS-RUNS-ONCE-OFF",
 			"type": "anyparse.check.CallRepetition",
 			"method": "handedOn",
-			"find": "listed(edge, lists.runsOnceIds, lists.runsOnceNames) ||",
+			"find": "runsOnce(edge, lists) ||",
 			"replace": "",
 			"note": "a value handed to a call `runsOnce` lists still repeats"
 		},
 		{
+			"name": "M-TS-RUNS-ONCE-PROJECT",
+			"type": "anyparse.check.CallRepetition",
+			"method": "runtimeCall",
+			"find": "if (via != null) return via.isExternal || via.isBodyless;",
+			"replace": "if (via != null) return true;",
+			"note": "a bare runsOnce name trusts a project function of that name, whose body may loop"
+		},
+		{
+			"name": "M-TS-RUNS-ONCE-UNRESOLVED",
+			"type": "anyparse.check.CallRepetition",
+			"method": "runtimeCall",
+			"find": "return !names.exists(edge.viaMember ?? '');",
+			"replace": "return true;",
+			"note": "an unresolved call a bare name lists runs its value once though a project function of that name loops over it"
+		},
+		{
 			"name": "M-TS-REGISTER-PROJECT",
 			"type": "anyparse.check.CallRepetition",
-			"method": "registered",
-			"find": "(via == null || via.isExternal || via.isBodyless)",
-			"replace": "true",
+			"method": "runtimeCall",
+			"find": "return via == null || via.isExternal || via.isBodyless;",
+			"replace": "return true;",
 			"note": "a registration into project code, which runs the value from a call the graph cannot follow, counts as once per event"
 		},
 		{

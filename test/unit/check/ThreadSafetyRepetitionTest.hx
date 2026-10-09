@@ -80,6 +80,28 @@ class ThreadSafetyRepetitionTest extends Test {
 	}
 
 	/**
+	 * A bare `runsOnce` name speaks for the runtime's calls only: a project function of that name may run the value once
+	 * per item, and does here (review round 2 `cr1-runsonce-project`). A `Type.member` entry is the project's word on
+	 * that member.
+	 */
+	@:pin('control') @:killer('M-TS-RUNS-ONCE-PROJECT') @:killer('M-TS-RUNS-ONCE-UNRESOLVED')
+	public function testABareRunsOnceNameSaysNothingOfProjectCode(): Void {
+		#if (sys || nodejs)
+		final batch: String = 'class Batch { final items:Array<String>; public function new(items:Array<String>) this.items = items;'
+			+ ' public function success(f:String->Void):Batch { for (i in items) f(i); return this; } }';
+		final typed: String =
+			'public static function main():Void { final b:Batch = new Batch(["a", "b"]); b.success(s -> Db.request(s)); }';
+		final chained: String = 'public static function main():Void new Batch(["a", "b"]).success(s -> Db.request(s));';
+		final repeated: Array<String> = ['warning A M.main | Db.request'];
+		Assert.same(repeated, graded(run(typed, batch, '"runsOnce":["success"],')), 'a bare name, the call resolved');
+		Assert.same(repeated, graded(run(chained, batch, '"runsOnce":["success"],')), 'a bare name, the call unresolved');
+		Assert.same(['info A M.main | Db.request'], graded(run(typed, batch, '"runsOnce":["Batch.success"],')), 'a member');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
 	 * A registration into project code is kept by that code and run from a call the graph cannot follow — here per item
 	 * of a dispatch loop: the registration owns the warning.
 	 */

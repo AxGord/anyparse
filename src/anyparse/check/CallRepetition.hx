@@ -64,6 +64,9 @@ final class CallRepetition {
 	/** The loops of the graph's trees: which stand around a position, and what each is called. */
 	public final loops: Loops;
 
+	/** The names of the functions of the run's files that have a body (`runtimeCall`), filled on first use. */
+	private var _bodiedNames: Null<Map<String, Bool>> = null;
+
 	private final _graph: CallGraph;
 	private final _trees: FunctionTrees;
 	private final _listsOf: (String) -> ChainLists;
@@ -171,8 +174,35 @@ final class CallRepetition {
 		final lists: ChainLists = _listsOf(edge.file);
 		if (listed(edge, lists.iterateIds, lists.iterateNames)) return true;
 		final via: String = edge.via ?? '';
-		return !(listed(edge, lists.runsOnceIds, lists.runsOnceNames) || registered(edge) || lists.spawnIds.contains(via)
-			|| lists.marshalIds.contains(via) || listed(edge, lists.neverInvokeIds, lists.neverInvokeNames));
+		return !(runsOnce(edge, lists) || registered(edge) || lists.spawnIds.contains(via) || lists.marshalIds.contains(via)
+			|| listed(edge, lists.neverInvokeIds, lists.neverInvokeNames));
+	}
+
+	/**
+	 * Whether the `Ref` edge `edge` hands its value to a call its chain lists running it at most once (`runsOnce`): one a
+	 * `Type.member` entry names — the project's word on that member — or one a bare name names that is the runtime's
+	 * (`runtimeCall`): a bare name says nothing of a project function of that name, whose body may loop over its items.
+	 */
+	private function runsOnce(edge: CallEdge, lists: ChainLists): Bool {
+		return listed(edge, lists.runsOnceIds, []) || listed(edge, [], lists.runsOnceNames) && runtimeCall(edge);
+	}
+
+	/**
+	 * Whether the `Ref` edge `edge` is handed to the runtime's call: one the graph resolves to an external or body-less
+	 * function, or to none when no function of the run's files with a body bears the name the call is written with — an
+	 * unresolved `b.success(f)` may be a project `Batch.success` looping over its items.
+	 */
+	private function runtimeCall(edge: CallEdge): Bool {
+		final via: Null<FnNode> = _graph.node(edge.via ?? '');
+		if (via != null) return via.isExternal || via.isBodyless;
+		var names: Null<Map<String, Bool>> = _bodiedNames;
+		if (names == null) {
+			final found: Map<String, Bool> = [];
+			for (n in _graph.nodes) if (!n.isExternal && !n.isBodyless && n.name != null) found[n.name] = true;
+			_bodiedNames = found;
+			names = found;
+		}
+		return !names.exists(edge.viaMember ?? '');
 	}
 
 	/**
@@ -183,8 +213,7 @@ final class CallRepetition {
 	 */
 	public function registered(edge: CallEdge): Bool {
 		final lists: ChainLists = _listsOf(edge.file);
-		final via: Null<FnNode> = _graph.node(edge.via ?? '');
-		return listed(edge, lists.registerIds, lists.registerNames) && (via == null || via.isExternal || via.isBodyless);
+		return listed(edge, lists.registerIds, lists.registerNames) && runtimeCall(edge);
 	}
 
 	/** Whether the `Ref` edge `edge` hands its value to a call its chain's `marshals` names: it runs on the main thread once per post. */

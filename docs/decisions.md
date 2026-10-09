@@ -1870,3 +1870,10 @@ decided the question; it may not become a record of runs.
   chain that lists `boundedRepeats` says so (`CostNote.ShortBoundedHold`), never "none in a loop". The loop
   definition, labels and header spelling live in `Loops` (one normalisation, `Loops.spelled`, for labels and
   entries) (review round 2 `br1-a`, `br1-b`, `br2-nested-entries`, `ks2-a`, `ks2-b`) — branch `feat/ts-precision-3`
+- a bare `runsOnce` name trusted for any call written with it → `"runsOnce": ["success"]` (meant for a library's
+  promise callback) made a project `Batch.success`, which runs its value once per item, count as once, so the
+  per-item request under it went info. A bare name now speaks for the runtime's calls only — the guard
+  `registers` already had (`CallRepetition.runtimeCall`): a call resolved to an external or body-less function, or
+  an unresolved one where no function of the run with a body bears the name. A `Type.member` entry stays the
+  project's word on that member, and only a dotted entry yields ids (`runsOnceIds`). The unresolved half applies to
+  `registers` too (review round 2 `cr1-runsonce-project`) — branch `feat/ts-precision-3`
