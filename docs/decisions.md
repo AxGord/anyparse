@@ -1756,3 +1756,44 @@ decided the question; it may not become a record of runs.
 - a lambda's first parameter read as a reference to the lambda (`x -> f(x)`: the binder starts where the lambda does,
   and `fnBySpanFrom` answered the lambda) → a phantom `Ref` from every such lambda to itself; a name binds a local
   function only when that function carries the name — branch `fix/ts-B`
+- a multi-lock helper taken for any function calling a lock pair, its takes delegated to its callers and its own window
+  judged nowhere → a helper is POSITIVE: its body runs nothing but its lock calls (`WrapperOps.lockTrafficOnly`) and
+  every invocation of it is a plain call (`plainCallsOnly`, no dispatch that may run another override); its own takes
+  are judged over its own window (a thread waiting for its later lock while holding the earlier ones), a hold a helper
+  call opens may hand its lock off (`HoldGrade.handsOff`), and `nestHolds` leaves a handed-off inner hold a warning of
+  its own; a lock no member names is keyed by its class for "the main thread takes it" (`HoldGrade.takenKey`), so an
+  exclusive take and a shared one meet (review r3 `c1` `c1b` `c4` `c8`–`c10`) — branch `fix/ts-C1`
+- a `Site` root cause covering by any hold across the same sink call → it covers only by a hold of the SAME lock, in the
+  same function, or one whose function the call's way passes: another lock's hold across the same work elsewhere is a
+  stall of its own, and narrowing one frees nothing of the other (`RootCauseFold.covers`); a finding never covers
+  itself (one warned hold per finding), and an info turned by a hold around it counts as reported only while a warning
+  it was turned onto is (covers chain); `foldEnclosed` demotes only when a warned enclosing hold's trail reaches the
+  function, and its note says so (review r3 `c5` `c5b` `c5c`) — branch `fix/ts-C1`
+- the covered hold judged "once" along the covering hold's trail → the covered hold MAY repeat: a `Site` reason
+  carries whether the call repeats under the hold, a hold reaching it once covers no repeating one, and the covered
+  hold repeats whenever a function on its way is re-entered through a cycle of calls (`LockTaint.mayRepeatAlong`) —
+  TM's `FolderWatcher.updateInternal` (the recursive `checkNode` walk) warns again — branch `fix/ts-C1`
+- the meet over callers seeding what a function holds on entry for any function → a function code outside the run may
+  call holds nothing on entry (`MustHeld.enteredUnknown` via `seedable`) unless its chain's `closedWorld` holds and
+  nothing outside can invoke it (`sealedFromOutside`); `closedWorld` is the coverage-adjusted one of `ChainLists`
+  (`ProjectCoverage`), so a partial run reads the meet as open exactly where it reads the field writes as open — one
+  predicate for both (merge `feat/ts-precision-3`) — branch `fix/ts-C1`
+- a valuation's unknown parameters left unknown, so a take and a give under one undecided condition never met → each
+  run of a function is split per value of the parameters a condition of its body reads (`BodyFacts.conditionNames`,
+  `runsOf`), up to `KNOWN_UNKNOWNS` open ones, the rest kept as written; a `case`'s statements are a sequence for "runs
+  on every path" — branch `fix/ts-C1`
+- every lock that some take dominated counted as dominating → only a lock whose every take is exclusive through one
+  pair, and that NO function gives back without having taken it (`MustHeld.releasedUntaken`), dominates
+  (`LockDominance.excludes`); every give is a releaser candidate unless a take of its lock on the same object runs on
+  every path before it in every run of its function with no give in between, a value handed on to run that gives the
+  lock back gives it back where it is handed, a throw in a `try` body does not leave the function, and a re-take after
+  the cover's give breaks the cover (review r1) — branch `fix/ts-C1`
+- a 64-pass sweep over every entry state, its unsettled result silent → a worklist in `MustHeld.solveEntries`
+  re-meets only the callees of a changed state, under the same bound per state on average (`PASSES`); an unsettled
+  meet holds nothing for every entry and is reported as a file-less `info` — branch `fix/ts-C1`
+- merging the four groups: `BoundedRepeats` read its own JSON beside `ThreadSafetyOptions` → B's per-entry checks (a
+  pattern `site`, a non-positive `max` / `costMs`, a non-string `call` / `loop`, an unknown key) moved into the one
+  reader (`readBounded`, which now reads `loop`); `BoundedRepeats.entries` keeps only the graph resolution (a `site`
+  naming no member or several, a `call` naming nothing), and its notices, `CallRepetition.notices()` and the unsettled
+  meet all close the report as file-less `info`s; C1's private copies of `collectNamed` / `writes` give way to A's
+  `BareNames` — merge `feat/ts-precision-3`

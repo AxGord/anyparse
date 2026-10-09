@@ -168,7 +168,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		// a hold whose take no thread runs holds nothing: a function nothing invokes, a take a condition rules out
 		final acquires: Array<LockAcquire> = [for (a in sites.acquires) if (states.edgeContext(a.edge) != 0) a];
 		final helperHolds: Array<LockAcquire> = [for (a in sites.helperHolds) if (states.edgeContext(a.edge) != 0) a];
-		final judged: Array<LockAcquire> = HoldGrade.judged(sites, acquires, helperHolds);
+		final judged: Array<LockAcquire> = HoldGrade.judged(acquires, helperHolds);
 		// the locks whose take blocks at all: held across any blocking call, short ones included
 		final blocking: Array<String> = [];
 		// every write of the project, seen only when the run covers a closed project (`listsByFile`)
@@ -181,9 +181,9 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final repetition: CallRepetition = new CallRepetition(graph, trees, plugin.refShape(), listsOf);
 		final holds: Array<LockAcquire> = acquires.concat(helperHolds);
 		final must: MustHeld = new MustHeld(
-			graph, plugin, trees, sites, states, conditions, repetition, holds, inertRef, unresolvedNames, writes
+			graph, plugin, trees, sites, states, conditions, repetition, holds, inertRef, unresolvedNames, seedable, writes
 		);
-		final dominance: LockDominance = new LockDominance(sites, states, conditions, repetition, must, holds);
+		final dominance: LockDominance = new LockDominance(sites, states, conditions, repetition, must, holds, taints.quiet);
 		final settled: { long: Array<String>, costs: LockTaint } = dominance.settle(
 			taints, (long, costs) -> solveLongLocks(sites, judged, long, costs)
 		);
@@ -194,7 +194,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final paths: PathCosts = {
 			all: costs,
 			normal: new LockDominance(
-				sites, states, conditions, repetition, must, holds
+				sites, states, conditions, repetition, must, holds, taints.quiet
 			).settle(taints, (l, c) -> solveLongLocks(sites, judged, l, c), errors).costs,
 			errors: errors
 		};
@@ -206,6 +206,11 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final reported: Map<String, Violation> = MainSinkReport.report(
 			graph, sites, taints, paths, { repetition: repetition, main: repeatsOnMain, runs: runsMain }, states, violations
 		);
+		if (must.unsettled)
+			problems.push(
+				'the locks held on entry did not settle within the bound, so no function is taken to hold any on its way in:'
+				+ ' no take is brief for being made under another lock'
+			);
 		reportConfigProblems(problems, violations);
 		reportLockHeld(
 			graph, sites, judged, taints, { costs: paths, reported: reported, enclosed: dominance.enclosed }, states, violations
@@ -674,14 +679,14 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final own: { long: LockTaint, normal: LockTaint } = { long: ownWorkOf(costs), normal: ownWorkOf(paths.normal) };
 		final any: { long: LockTaint, normal: LockTaint } = { long: costs, normal: paths.normal };
 		final mainTaken: Array<String> = HoldGrade.mainTaken(acquires, states, taints);
-		final reported: Array<{ hold: LockAcquire, calls: Array<CallEdge>, finding: Violation }> = [];
+		final reported: Array<WarnedHold> = [];
 		final folds: Array<FoldHold> = [];
 		final made: Map<String, Violation> = [];
 		for (a in acquires) {
 			final lock: Null<String> = a.lock;
 			final fold: FoldHold = RootCauseFold.unreported(a, paths.normal);
 			folds.push(fold);
-			if (a.uncontended || !mainTaken.contains(lock ?? a.pair.lockId)) continue;
+			if (a.uncontended || !mainTaken.contains(HoldGrade.takenKey(a))) continue;
 			// the main thread never waits for a hold of a lock it alone holds there: such a hold stays only as the main thread's
 			// own long work; who else holds a lock no member names is unknown
 			final mainOnly: Bool = lock != null && states.edgeContext(a.edge) & CTX_BG == 0 && !states.assumed.exists(a.edge.from);
@@ -712,23 +717,46 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			if (known != null) continue;
 			violations.push(finding);
 			made[key] = finding;
-			if (!short) reported.push({ hold: a, calls: [for (b in blocking) b.edge], finding: finding });
+			if (!short) reported.push({
+				hold: a,
+				calls: [for (b in blocking) b.edge],
+				finding: finding,
+				handOff: graded.note == CostNote.HandOff,
+				taint: graded.taint,
+				held: held
+			});
 		}
-		nestHolds(reported);
-		foldEnclosed(reported, judged.enclosed);
-		new RootCauseFold([for (c in sites.crossing) c.lock]).fold(folds);
+		final covers: Array<{ finding: Violation, by: Array<Violation> }> = [];
+		nestHolds(reported, covers);
+		foldEnclosed(reported, judged.enclosed, covers);
+		new RootCauseFold([for (c in sites.crossing) c.lock], covers).fold(folds);
 	}
 
 	/**
-	 * Each warned hold a hold of the same lock its every caller keeps encloses (`LockDominance.enclosed`) turns info: the
-	 * enclosing hold's window spans the call into it, and its finding names what this one's does.
+	 * Each warned hold a hold of the same lock its every caller keeps encloses (`LockDominance.enclosed`) turns info,
+	 * recorded in `covers` — when a warned hold of that lock in another function is long through a call into this hold's
+	 * function: that warning reports the work this hold does. Such a hold says so, naming those holds; one no warning
+	 * of an enclosing hold reaches stays.
 	 */
 	private static function foldEnclosed(
-		reported: Array<{ hold: LockAcquire, calls: Array<CallEdge>, finding: Violation }>, enclosed: (LockAcquire) -> Bool
+		reported: Array<WarnedHold>, enclosed: (LockAcquire) -> Bool, covers: Array<{ finding: Violation, by: Array<Violation> }>
 	): Void {
-		for (r in reported) if (r.finding.severity == Severity.Warning && enclosed(r.hold)) {
+		final warned: Array<WarnedHold> = [for (r in reported) if (r.finding.severity == Severity.Warning) r];
+		for (r in warned) if (enclosed(r.hold)) {
+			final fn: String = r.hold.edge.from;
+			final around: Array<WarnedHold> = warned.filter(
+				w ->
+					w != r && w.hold.lock == r.hold.lock && w.hold.edge.from != fn
+					&& w.calls.exists(c -> w.taint.blockingTrail(w.hold, c, w.held)?.path.contains(fn) == true)
+			);
+			if (around.length == 0) continue;
+			final members: Array<String> = [];
+			for (w in around) if (!members.contains(w.finding.data?.member ?? w.hold.edge.from))
+				members.push(w.finding.data?.member ?? w.hold.edge.from);
 			r.finding.severity = Severity.Info;
-			r.finding.message += ' — taken inside a hold of ${r.hold.lock ?? r.hold.pair.lockId} every caller keeps, whose finding names these calls';
+			r.finding.message += ' — taken inside a hold of ${r.hold.lock ?? r.hold.pair.lockId} every caller keeps, whose warning at '
+				+ '${members.join(', ')} is long through the call into this one';
+			covers.push({ finding: r.finding, by: [for (w in around) w.finding] });
 		}
 	}
 
@@ -811,13 +839,15 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	/**
 	 * Of two warned holds in one function, the one taken inside the other's window whose every long call that window spans
 	 * too turns info, naming the outer one: the outer hold's finding names the same calls. In take order, so an outer hold
-	 * is never itself turned by a hold it encloses.
+	 * is never itself turned by a hold it encloses; each turned one is recorded in
+	 * `covers`. A hold its function hands off (`HoldGrade.handsOff`) outlives the outer
+	 * window, across calls no finding of it names, and stays.
 	 */
-	private static function nestHolds(reported: Array<{ hold: LockAcquire, calls: Array<CallEdge>, finding: Violation }>): Void {
+	private static function nestHolds(reported: Array<WarnedHold>, covers: Array<{ finding: Violation, by: Array<Violation> }>): Void {
 		reported.sort((x, y) -> (x.hold.edge.span?.from ?? 0) - (y.hold.edge.span?.from ?? 0));
 		final turned: Array<LockAcquire> = [];
-		for (inner in reported) {
-			final outer: Null<{ hold: LockAcquire, calls: Array<CallEdge>, finding: Violation }> = reported.find(
+		for (inner in reported) if (!inner.handOff) {
+			final outer: Null<WarnedHold> = reported.find(
 				o ->
 					o.hold != inner.hold && !turned.contains(o.hold) && o.hold.edge.from == inner.hold.edge.from
 					&& o.hold.window.contains(inner.hold.edge) && inner.calls.foreach(c -> o.hold.window.contains(c))
@@ -826,6 +856,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			turned.push(inner.hold);
 			inner.finding.severity = Severity.Info;
 			inner.finding.message += ' — taken inside the hold of ${outer.hold.lock ?? outer.hold.pair.lockId}, whose finding names these calls';
+			covers.push({ finding: inner.finding, by: [outer.finding] });
 		}
 	}
 
@@ -864,9 +895,13 @@ enum abstract CostNote(String) to String {
 		+ ' registration (`registers`) — how often the runtime dispatches it is not known here — with no loop, recursion or value'
 		+ ' handed to a call not listed `runsOnce` on the way down from it, so reported as info';
 
-	/** A hold every blocking call of which waits too little to warn about (`shortSinks`). */
-	final ShortHold = ' — short: every call it spans waits only on short sinks or on locks held only across short calls, each once'
-		+ ' per hold (no loop, `iterates` callback or recursion under the lock), so reported as info';
+	/**
+	 * A hold every blocking call of which waits too little to warn about (`shortSinks`), or takes a lock every long hold
+	 * of which needs one held there (`LockDominance`) — directly in its window or in a callee, alike.
+	 */
+	final ShortHold = ' — short: every call it spans waits only on short sinks, on locks held only across short calls, or on a lock'
+		+ ' whose every long hold needs a lock held here, each once per hold (no loop, `iterates` callback or recursion under the'
+		+ ' lock), so reported as info';
 
 	/** A call a sink's own body makes: the call of that sink is the finding. */
 	final InsideSink = ' — inside a sink\'s own body, whose call is the finding, so reported as info';
@@ -879,4 +914,17 @@ enum abstract CostNote(String) to String {
 	final HandOff = ' — and no path of the function gives it back: held past its end until another function releases it, across'
 		+ ' whatever runs until then';
 
+}
+
+/**
+ * A hold whose finding (b) warns: the calls it names, whether it was graded as
+ * handing its lock off, and the taint and re-held lock those calls were found under.
+ */
+private typedef WarnedHold = {
+	final hold: LockAcquire;
+	final calls: Array<CallEdge>;
+	final finding: Violation;
+	final handOff: Bool;
+	final taint: LockTaint;
+	final held: Null<String>;
 }

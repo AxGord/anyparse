@@ -12,8 +12,9 @@ using Lambda;
  * then never waits long for M: the hold of M it may meet is no long one, since that one needs L. So a take of M made
  * while L is held on M's object is brief, wherever it is made — and the takes a hold of L itself spans in its window.
  *
- * Positive on every count. A lock is dominated by nothing when some hold of it may outlive its function, cannot be
- * traced, is the release of a hold begun elsewhere, or spans a long call on an object no path of stable fields names (`ObjectPaths`).
+ * Positive on every count. A lock is dominated by nothing when some hold of it may outlive its function, cannot be traced, is
+ * the release of a hold begun elsewhere, or spans a long call on an object no path of stable fields names (`ObjectPaths`). A
+ * lock dominates nothing unless its every take is known to be exclusive and nothing gives it back without having taken it.
  */
 @:nullSafety(Strict)
 final class LockDominance {
@@ -33,10 +34,11 @@ final class LockDominance {
 	private final _repetition: CallRepetition;
 	private final _must: MustHeld;
 	private final _holds: Array<LockAcquire>;
+	private final _quiet: QuietLocks;
 
 	public function new(
 		sites: LockSites, states: ThreadStates, conditions: EdgeConditions, repetition: CallRepetition, must: MustHeld,
-		holds: Array<LockAcquire>
+		holds: Array<LockAcquire>, quiet: QuietLocks
 	) {
 		_sites = sites;
 		_states = states;
@@ -44,6 +46,7 @@ final class LockDominance {
 		_repetition = repetition;
 		_must = must;
 		_holds = holds;
+		_quiet = quiet;
 	}
 
 	/**
@@ -154,7 +157,8 @@ final class LockDominance {
 
 	/**
 	 * Solves `dominators` for the long holds `longAt` names: per hold, the offsets of its calls that block long, empty for
-	 * a brief hold, null for a hold that rules dominance out. Returns whether any lock's dominators changed.
+	 * a brief hold, null for a hold that rules dominance out. Returns whether any lock's dominators changed. Only a lock
+	 * that excludes for sure dominates (`excludes`).
 	 */
 	private function solveDominators(longAt: (LockAcquire) -> Null<Array<Int>>): Bool {
 		final found: Map<String, Array<String>> = [];
@@ -172,7 +176,7 @@ final class LockDominance {
 				continue;
 			}
 			final known: Null<Array<String>> = found[lock];
-			found[lock] = known == null ? held : known.filter(l -> held.contains(l));
+			found[lock] = (known == null ? held : known.filter(l -> held.contains(l))).filter(excludes);
 		}
 		var changed: Bool = false;
 		for (lock in [for (l in found.keys()) l].concat(broken)) {
@@ -182,6 +186,16 @@ final class LockDominance {
 			dominators[lock] = next;
 		}
 		return changed;
+	}
+
+	/**
+	 * Whether a hold of `lock` keeps every other thread out for as long as its window runs: every take of it is known to
+	 * be exclusive (`QuietLocks.exclusive`) — a shared hold excludes no other shared one — and no function may give it
+	 * back without having taken it (`MustHeld.releasedUntaken`): an ownerless lock (TM's `LockMutex`) given back by
+	 * another thread is free while its holder's window still runs.
+	 */
+	private function excludes(lock: String): Bool {
+		return _quiet.exclusive(lock) && !_must.releasedUntaken(lock);
 	}
 
 	/**

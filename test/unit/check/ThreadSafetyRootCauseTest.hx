@@ -56,18 +56,12 @@ class ThreadSafetyRootCauseTest extends Test {
 	 * TM's `renameCloudFolderBlocked` over the loop `moveCloudFolderSubItemsAction2` runs under its own lock: two holds
 	 * long by one sink call make one warning, the hold nearest that call's.
 	 */
-	@:pin('control') @:killer('M-TS-FOLD-SITE') @:killer('M-TS-FOLD-DEPTH')
+	@:pin('control') @:killer('M-TS-FOLD-SITE') @:killer('M-TS-FOLD-DEPTH') @:killer('M-TS-FOLD-SITE-LOCK')
 	public function testHoldsLongByOneCallMakeOneWarning(): Void {
 		#if (sys || nodejs)
-		Assert.same(['info B A.a | A._x', 'warning B A.z | A._y'], holds(ThreadSafetyCheckTest.violations(CONFIG, [
-			ThreadSafetyCheckTest.MUTEX,
-			RUNNER,
-			'class A { final _x:Mutex = new Mutex(); final _y:Mutex = new Mutex(); public function new() {}'
-			+ ' public function a():Void { _x.acquire(); v(); _x.release(); } function v():Void w(); function w():Void Sys.sleep(1);'
-			+ ' public function z():Void { _y.acquire(); w(); _y.release(); }'
-			+ ' public static function main():Void { final s:A = new A(); Runner.create(() -> { s.a(); s.z(); });'
-			+ ' s._x.acquire(); s._x.release(); s._y.acquire(); s._y.release(); } }'
-		])));
+		Assert.same(['info B A.a | A._x', 'warning B A.z | A._x'], holds(oneCall('_x')));
+		// a hold of another lock across the same work is a stall of its own: narrowing one hold frees nothing of the other
+		Assert.same(['warning B A.a | A._x', 'warning B A.z | A._y'], holds(oneCall('_y')), 'another lock');
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -107,6 +101,77 @@ class ThreadSafetyRootCauseTest extends Test {
 		#end
 	}
 
+	/**
+	 * Two takes of one lock whose holds name the same calls share one finding (review `c5`, `c5b`): one warned hold,
+	 * which never covers itself — the warning stays.
+	 */
+	@:pin('control') @:killer('M-TS-FOLD-SELF')
+	public function testTwoTakesSharingAFindingDoNotCoverEachOther(): Void {
+		#if (sys || nodejs)
+		final branches: String =
+			'public function work(c:Bool):Void { if (c) _b.acquire(); else _b.acquire(); Sys.sleep(1); _b.release(); }';
+		Assert.same(['warning B S.work | S._b'], holds(twoTakes(branches, '', 's.work(Math.random() > 0.5);')));
+		final directives: String =
+			'public function work():Void {\n#if mac\n_b.acquire();\n#else\n_b.acquire();\n#end\nSys.sleep(1); _b.release(); }';
+		Assert.same(['warning B S.work | S._b'], holds(twoTakes(directives, '', 's.work();')), 'one take per #if branch');
+		// a hold waiting for that lock folds onto the warning, which stays (review `c5c`)
+		Assert.same(
+			['info B S.zother | S._a', 'warning B S.work | S._b'],
+			holds(twoTakes(
+				branches, 'public function zother():Void { _a.acquire(); _b.acquire(); _b.release(); _a.release(); }',
+				's.work(Math.random() > 0.5); s.zother();'
+			)),
+			'chained'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A hold reaching a sink call once covers no hold repeating that call under its lock (TM's `FolderWatcher.rename`'s
+	 * one stat against `updateInternal`'s walk over the tree): the repeating hold keeps the warning, and the one-call
+	 * hold folds onto it.
+	 */
+	@:pin('control') @:killer('M-TS-FOLD-SITE-ONCE')
+	public function testAHoldReachingACallOnceCoversNoRepeatingOne(): Void {
+		#if (sys || nodejs)
+		Assert.same(['info B A.z | A._x', 'warning B A.a | A._x'], holds(ThreadSafetyCheckTest.violations(CONFIG, [
+			ThreadSafetyCheckTest.MUTEX,
+			RUNNER,
+			'class A { final _x:Mutex = new Mutex(); final _y:Mutex = new Mutex(); public function new() {}'
+			+ ' public function a():Void { _x.acquire(); for (i in 0...3) v(); _x.release(); } function v():Void w();'
+			+ ' function w():Void Sys.sleep(1); public function z():Void { _x.acquire(); w(); _x.release(); }'
+			+ ' public static function main():Void { final s:A = new A(); Runner.create(() -> { s.a(); s.z(); });'
+			+ ' s._x.acquire(); s._x.release(); s._y.acquire(); s._y.release(); } }'
+		])));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A call reached through a function a cycle of calls re-enters repeats however the trail found it (TM's
+	 * `FolderWatcher.updateInternal`, whose `checkNode` walks the tree recursively): no hold reaching it once covers it.
+	 */
+	@:pin('control') @:killer('M-TS-FOLD-SITE-CYCLE')
+	public function testACallUnderARecursiveWalkRepeats(): Void {
+		#if (sys || nodejs)
+		Assert.same(['info B A.z | A._x', 'warning B A.a | A._x'], holds(ThreadSafetyCheckTest.violations(CONFIG, [
+			ThreadSafetyCheckTest.MUTEX,
+			RUNNER,
+			'class A { final _x:Mutex = new Mutex(); public function new() {}'
+			+ ' public function a():Void { _x.acquire(); walk(3); _x.release(); }'
+			+ ' function walk(n:Int):Void { step(); if (n > 0) walk(n - 1); } function step():Void Sys.sleep(1);'
+			+ ' public function z():Void { _x.acquire(); step(); _x.release(); }'
+			+ ' public static function main():Void { final s:A = new A(); Runner.create(() -> { s.a(); s.z(); });'
+			+ ' s._x.acquire(); s._x.release(); } }'
+		])));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
 	private static inline final RUNNER: String = 'class Runner { public static function create(fn:()->Void):Void {} }';
 
@@ -126,6 +191,28 @@ class ThreadSafetyRootCauseTest extends Test {
 		]);
 	}
 
+	/** `A.a` holding `_x` across `v`, which calls `w`, and `A.z` holding `zLock` across `w` itself: both long by `w`'s sleep. */
+	private static function oneCall(zLock: String): Array<Violation> {
+		return ThreadSafetyCheckTest.violations(CONFIG, [
+			ThreadSafetyCheckTest.MUTEX,
+			RUNNER,
+			'class A { final _x:Mutex = new Mutex(); final _y:Mutex = new Mutex(); public function new() {}'
+			+ ' public function a():Void { _x.acquire(); v(); _x.release(); } function v():Void w(); function w():Void Sys.sleep(1);'
+			+ ' public function z():Void { $zLock.acquire(); w(); $zLock.release(); }'
+			+ ' public static function main():Void { final s:A = new A(); Runner.create(() -> { s.a(); s.z(); });'
+			+ ' s._x.acquire(); s._x.release(); s._y.acquire(); s._y.release(); } }'
+		]);
+	}
+	/** `S` with locks `_a` and `_b`, `work` and `more` declared, a worker running `background`, and the main thread taking both. */
+	private static function twoTakes(work: String, more: String, background: String): Array<Violation> {
+		return ThreadSafetyCheckTest.violations(CONFIG, [
+			ThreadSafetyCheckTest.MUTEX,
+			RUNNER,
+			'class S { final _a:Mutex = new Mutex(); final _b:Mutex = new Mutex(); public function new() {} $work $more'
+			+ ' public function peek():Void { _a.acquire(); _a.release(); _b.acquire(); _b.release(); }'
+			+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> { $background }); s.peek(); } }'
+		]);
+	}
 	private static function holds(found: Array<Violation>, ?only: Array<String>): Array<String> {
 		return graded(found, 'B', only);
 	}

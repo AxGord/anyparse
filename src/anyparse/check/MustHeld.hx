@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.LockSites.LockAcquire;
+import anyparse.check.LockSites.LockGive;
 import anyparse.query.CallGraph;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
@@ -21,8 +22,9 @@ using StringTools;
  * in (the meet over its callers, carried onto the callee's `this` when the callee runs on the caller's object or on the
  * object a path of stable fields of it names), kept while nothing on the way may give them back. A point may give a lock back
  * by a give of it that does not leave the function first, a call into a function giving it back without taking it, or —
- * when code an unresolved call may run can do that — an unresolved call. A function a callback registration, an
- * unresolved call or the walk's own assumption enters holds nothing on entry; so does one the meet does not settle.
+ * when code an unresolved call may run can do that — an unresolved call. A function a callback registration, an unresolved
+ * call or the walk's own assumption enters holds nothing on entry, and so does one code outside the run may call — any
+ * function, unless its chain declares `closedWorld` and nothing outside can invoke it — or one the meet does not settle.
  *
  * A lock no member names is never a sealed member's object, so its gives give none of these back. Positive on every
  * count: anything unplaced holds nothing.
@@ -39,24 +41,17 @@ final class MustHeld {
 	/** Joins a must-held lock and the object it is held on. */
 	private static inline final ON: String = '@';
 
-	/** Bound on the passes of the meet: past it every entry still moving is taken to hold nothing. */
+	/** Bound on the meets of each state, on average: past it every entry is taken to hold nothing (`unsettled`). */
 	private static inline final PASSES: Int = 64;
 
-	private final _graph: CallGraph;
-	private final _sites: LockSites;
-	private final _states: ThreadStates;
-	private final _conditions: EdgeConditions;
-	private final _repetition: CallRepetition;
-	private final _trees: FunctionTrees;
-	private final _values: ArgumentValues;
-	private final _shape: RefShape;
-	private final _holds: Array<LockAcquire>;
+	/** Whether the meet over the callers did not settle within its bound, so every entry holds nothing. */
+	public var unsettled(default, null): Bool = false;
 
 	/** The holds of named locks each function takes itself, a helper's own takes left to its callers. */
 	private final _holdsIn: Map<String, Array<LockAcquire>> = [];
 
 	/** The gives of each function. */
-	private final _givesIn: Map<String, Array<{ edge: CallEdge, lock: Null<String> }>> = [];
+	private final _givesIn: Map<String, Array<LockGive>> = [];
 
 	/** `<id>|<valuation>` -> the locks held on entry, `<lock>@<object>`. */
 	private final _entry: Map<String, Array<String>> = [];
@@ -64,6 +59,13 @@ final class MustHeld {
 	/** `<id>|<valuation>|<offset>|<cover>` -> the own takes must-held there. */
 	private final _own: Map<String, Array<String>> = [];
 
+	private final _graph: CallGraph;
+	private final _sites: LockSites;
+	private final _states: ThreadStates;
+	private final _conditions: EdgeConditions;
+	private final _repetition: CallRepetition;
+	private final _trees: FunctionTrees;
+	private final _shape: RefShape;
 	private final _sequenceKinds: Array<String>;
 	private final _blockKinds: Array<String>;
 	private final _tryKinds: Array<String>;
@@ -75,10 +77,13 @@ final class MustHeld {
 	/** The objects calls are made on, relative to the running object. */
 	private final _paths: ObjectPaths;
 
+	/** What the bodies of the functions say: conditions, runs of a valuation, locals locks are taken on. */
+	private final _body: BodyFacts;
+
 	public function new(
 		graph: CallGraph, plugin: GrammarPlugin, trees: FunctionTrees, sites: LockSites, states: ThreadStates, conditions: EdgeConditions,
 		repetition: CallRepetition, holds: Array<LockAcquire>, inertRef: (CallEdge) -> Bool, unresolvedNames: Array<String>,
-		writes: FieldWrites
+		seedable: (String) -> Bool, writes: FieldWrites
 	) {
 		_graph = graph;
 		_sites = sites;
@@ -87,29 +92,34 @@ final class MustHeld {
 		_repetition = repetition;
 		_trees = trees;
 		_shape = plugin.refShape();
-		_values = new ArgumentValues(graph, trees, plugin);
 		_paths = new ObjectPaths(graph, plugin, sites, writes);
-		_holds = holds;
+
 		final flow: Null<ControlFlowSupport> = plugin.controlFlowSupport();
 		_blockKinds = flow == null ? [] : flow.blockKinds();
 		_tryKinds = (_shape.tryStatementKinds ?? []).concat(_shape.tryExpressionKinds ?? []);
+
 		_sequenceKinds = _blockKinds.concat(_shape.exprStatementKind == null ? [] : [_shape.exprStatementKind])
 			.concat(_shape.expressionBodyKinds ?? [])
 			.concat(_shape.localDeclKinds ?? [])
 			.concat(_shape.parenKind == null ? [] : [_shape.parenKind]);
 		_ifKinds = (_shape.ifStatementKinds ?? []).concat(_shape.ifExpressionKinds ?? []);
+		_body = new BodyFacts(sites, trees, new ArgumentValues(graph, trees, plugin), _shape, { tryKinds: _tryKinds, ifKinds: _ifKinds });
 		for (a in holds) if (a.lock != null && !sites.helpers.contains(a.edge.from)) {
 			final list: Array<LockAcquire> = _holdsIn[a.edge.from] ?? [];
 			list.push(a);
 			_holdsIn[a.edge.from] = list;
 		}
 		for (g in sites.gives) {
-			final list: Array<{ edge: CallEdge, lock: Null<String> }> = _givesIn[g.edge.from] ?? [];
+			final list: Array<LockGive> = _givesIn[g.edge.from] ?? [];
 			list.push(g);
 			_givesIn[g.edge.from] = list;
 		}
-		_releasers = new LockReleasers(graph, plugin, trees, sites, states, conditions, holds, inertRef, unresolvedNames);
-		solveEntries(inertRef, unresolvedNames);
+		_releasers = new LockReleasers(graph, plugin, trees, sites, states, conditions, holds, inertRef, unresolvedNames, {
+			sameObject: sameObject,
+			takenBefore: runsBefore,
+			runs: _body.runsOf
+		});
+		solveEntries(inertRef, unresolvedNames, seedable);
 	}
 
 	/**
@@ -143,9 +153,20 @@ final class MustHeld {
 		return _sites.worksReceiverLock(edge) ? _paths.receiverPath(edge) : null;
 	}
 
-	/** A must-held entry (`at`): `lock` held on `object`. */
-	public static inline function heldOn(lock: String, object: String): String {
-		return lock + ON + object;
+	/**
+	 * Whether the take of the hold `a` and the give `g` in one function work the lock of one object: the object a path
+	 * names (`holdObject`; a helper's give carried as its take is) when either has one, else both made
+	 * on the same parameter or local, or the same member read off one, which the function declares once
+	 * and writes nowhere (`h.b.acquire(); … h.b.release();`, `db.batchLock(); … db.batchUnlock();`).
+	 */
+	public function sameObject(a: LockAcquire, g: LockGive): Bool {
+		final inner: Null<CallEdge> = g.inner;
+		final held: Null<String> = holdObject(a);
+		final given: Null<String> = inner == null ? takeObject(g.edge) : carried(takeObject(inner), g.edge);
+		if (held != null || given != null) return held != null && held == given;
+		if (a.inner != null || inner != null || a.edge.from != g.edge.from) return false;
+		final root: Null<String> = _body.localRoot(a.edge);
+		return root != null && root == _body.localRoot(g.edge);
 	}
 
 	/**
@@ -155,16 +176,6 @@ final class MustHeld {
 	public function mayRelease(lock: String, id: String): Bool {
 		if (_releasers.releasersOf(lock).exists(id)) return true;
 		return _releasers.hazard(lock) && (_releasers.blindIn(id) ?? [0]).length > 0;
-	}
-
-	/** The lock of a must-held entry (`at`). */
-	public static inline function lockOf(held: String): String {
-		return held.substring(0, held.lastIndexOf(ON));
-	}
-
-	/** The object of a must-held entry (`at`). */
-	public static inline function objectOf(held: String): String {
-		return held.substring(held.lastIndexOf(ON) + 1);
 	}
 
 	/** What a lock held on `object` in the caller is held on in the callee of `call`; null when nothing says. */
@@ -181,6 +192,14 @@ final class MustHeld {
 			object
 		else
 			null;
+	}
+
+	/**
+	 * Whether some function may give `lock` back without having taken it (`LockReleasers`): a thread holding it may then
+	 * lose it to another while its own window still runs, so its holds exclude no one for sure.
+	 */
+	public function releasedUntaken(lock: String): Bool {
+		return _releasers.releasersOf(lock).keys().hasNext();
 	}
 
 	/** The own takes of `id` must-held at `at` under `valuation`: each run on every path there, with no give since. */
@@ -216,14 +235,15 @@ final class MustHeld {
 		return points.exists(
 			pos ->
 				pos > from && (pos < at || loops.exists(l -> l.from > from && l.from <= pos && pos < l.to))
-				&& (covered == '' || !coveredAt(id, valuation, covered, pos, at))
+				&& (covered == '' || !coveredAt(id, valuation, file, covered, pos, at))
 		);
 	}
 
 	/**
 	 * The starts of what in `id`'s body may give `lock` back under `valuation`: its gives of it that run and do not leave
-	 * the function before `at` first, its calls into a function giving it back without taking it, and — when code an
-	 * unresolved call may run can give it back — its unresolved calls; null when that code is anywhere in it.
+	 * the function before `at` first, its calls into a function giving it back without taking it, the values it hands on
+	 * to run that may (`U.now(() -> m.release())`), and — when code an unresolved call may run can give it back — its
+	 * unresolved calls; null when that code is anywhere in it.
 	 */
 	private function givePoints(id: String, valuation: String, lock: String, at: Int): Null<Array<Int>> {
 		final points: Array<Int> = [
@@ -231,7 +251,7 @@ final class MustHeld {
 				g.edge.span?.from ?? -1
 		];
 		final releasers: Map<String, Bool> = _releasers.releasersOf(lock);
-		for (e in _graph.outEdges(id)) if (e.kind.isInvocation() && releasers.exists(e.to) && runs(id, valuation, e))
+		for (e in _graph.outEdges(id)) if (_releasers.runsFrom(e) && releasers.exists(e.to) && runs(id, valuation, e))
 			points.push(e.span?.from ?? -1);
 		if (!_releasers.hazard(lock)) return points;
 		final blind: Null<Array<Int>> = _releasers.blindIn(id);
@@ -245,14 +265,21 @@ final class MustHeld {
 
 	/**
 	 * Whether `id`'s body under `valuation` gives `cover` back on every path to the offset `pos` — a give of it that runs
-	 * on every path there (`runsBefore`) — and takes it by no call between `pos` and `at`.
+	 * on every path there (`runsBefore`) — and takes it by no call after that give and before `at`, nor in a loop around
+	 * `pos`, whose next round may take it again before `at` (none known: not covered).
 	 */
-	private function coveredAt(id: String, valuation: String, cover: String, pos: Int, at: Int): Bool {
-		final given: Bool = (_givesIn[id] ?? []).exists(
-			g -> g.lock == cover && (g.edge.span?.to ?? pos + 1) <= pos && runs(id, valuation, g.edge) && runsBefore(g.edge, valuation, pos)
-		);
-		return given
-			&& !(_holdsIn[id] ?? []).exists(a -> a.lock == cover && (a.edge.span?.from ?? -1) > pos && (a.edge.span?.from ?? -1) < at);
+	private function coveredAt(id: String, valuation: String, file: String, cover: String, pos: Int, at: Int): Bool {
+		final loops: Null<Array<Span>> = _repetition.loopsAt(file, pos);
+		if (loops == null) return false;
+		final around: Array<Span> = loops;
+		return (_givesIn[id] ?? []).exists(g -> {
+			final given: Int = g.edge.span?.to ?? pos + 1;
+			g.lock == cover && given <= pos && runs(id, valuation, g.edge) && runsBefore(g.edge, valuation, pos)
+			&& !(_holdsIn[id] ?? []).exists(a -> {
+				final take: Int = a.edge.span?.from ?? -1;
+				a.lock == cover && (take > given && take < at || around.exists(l -> l.from <= take && take < l.to));
+			});
+		});
 	}
 
 	/**
@@ -268,7 +295,7 @@ final class MustHeld {
 
 	/**
 	 * The child holding `site` of the deepest node of `file`'s tree holding both `site` and the offset `at` after it,
-	 * when that node is a statement sequence; null otherwise.
+	 * when that node is a statement sequence — a `case`'s statements included; null otherwise.
 	 */
 	private function towardTake(file: String, site: Span, at: Int): Null<QueryNode> {
 		var common: Null<QueryNode> = _trees.ofFile(file);
@@ -276,7 +303,11 @@ final class MustHeld {
 			final cT: Null<QueryNode> = common.children.find(c -> c.span != null && c.span.from <= site.from && c.span.to >= site.to);
 			final cA: Null<QueryNode> = common.children.find(c -> c.span != null && c.span.from <= at && at < c.span.to);
 			if (cT == null || cA == null) return null;
-			if (cT != cA) return _sequenceKinds.contains(common.kind) ? cT : null;
+			// a `case`'s statements run in order after its patterns, which make no call
+			if (cT != cA)
+				return _sequenceKinds.contains(common.kind) || common.kind == _shape.caseBranchKind && common.children.indexOf(cT) > 0
+					? cT
+					: null;
 			common = cT;
 		}
 		return null;
@@ -295,14 +326,173 @@ final class MustHeld {
 			if (!_sequenceKinds.contains(cursor.kind)) {
 				final branch: Int = cursor.children.indexOf(child);
 				if (!_ifKinds.contains(cursor.kind) || branch < 1 || branch > 2) return false;
-				if (decided(cursor.children[0], id, valuation) != (branch == 1)) return false;
+				if (_body.decided(cursor.children[0], id, valuation) != (branch == 1)) return false;
 			}
 			cursor = child;
 		}
 	}
 
+	/**
+	 * The locks each state holds on entry: the meet, over every call that runs into it, of what the caller must-holds at
+	 * the call, carried onto the callee's objects — nothing for a state something unknown may enter:
+	 * a callback registration, an unresolved call, the walk's assumption, or code outside the run
+	 * (`seedable`: any function, unless its chain declares `closedWorld` and nothing outside can invoke it).
+	 */
+	private function solveEntries(inertRef: (CallEdge) -> Bool, unresolvedNames: Array<String>, seedable: (String) -> Bool): Void {
+		final keys: Array<{ id: String, valuation: String }> = [];
+		final keysOf: Map<String, Array<Int>> = [];
+		for (id => node in _graph.nodes) {
+			final unknown: Bool = enteredUnknown(id, node, inertRef, unresolvedNames, seedable);
+			for (s in _states.statesOf(id)) if (unknown)
+				_entry['$id|${s.valuation}'] = []
+			else {
+				keysOf[id] = (keysOf[id] ?? []).concat([keys.length]);
+				keys.push({ id: id, valuation: s.valuation });
+			}
+		}
+		// a worklist: a state is met again only when a caller's entry moved
+		final queue: Array<Int> = [for (i in 0...keys.length) i];
+		final queued: Array<Bool> = [for (_ in keys) true];
+		final bound: Int = keys.length * PASSES;
+		var qi: Int = 0;
+		while (qi < queue.length) {
+			if (qi >= bound) {
+				// a state still moving after the bound holds nothing it can prove
+				unsettled = true;
+				for (k in keys) _entry['${k.id}|${k.valuation}'] = [];
+				return;
+			}
+			final i: Int = queue[qi++];
+			queued[i] = false;
+			final k: { id: String, valuation: String } = keys[i];
+			final next: Null<Array<String>> = meetInto(k.id, k.valuation);
+			final key: String = '${k.id}|${k.valuation}';
+			if (next == null || _entry.exists(key) && (_entry[key] ?? []).join('\n') == next.join('\n')) continue;
+			_entry[key] = next;
+			for (e in _graph.outEdges(k.id)) if (e.kind.isInvocation()) for (j in keysOf[e.to] ?? []) if (!queued[j]) {
+				queued[j] = true;
+				queue.push(j);
+			}
+		}
+	}
+
+	/**
+	 * Whether something the meet cannot see may enter `id` (`node`): the walk's assumption, no call into it, a call of its
+	 * name the graph resolved to nothing, its value handed on to run, or code outside the run (`seedable`) — whose callers
+	 * the meet over those in the run does not include.
+	 */
+	private function enteredUnknown(
+		id: String, node: FnNode, inertRef: (CallEdge) -> Bool, unresolvedNames: Array<String>, seedable: (String) -> Bool
+	): Bool {
+		return _states.assumed.exists(id) || !_graph.inEdges(id).exists(e -> e.kind.isInvocation())
+			|| unresolvedNames.contains(node.name ?? '') || _graph.inEdges(id).exists(e -> e.kind == Ref && !inertRef(e)) || seedable(id);
+	}
+
+	/** The meet over the solved callers of the state `id` under `valuation`, sorted; null while none is solved. */
+	private function meetInto(id: String, valuation: String): Null<Array<String>> {
+		var meet: Null<Array<String>> = null;
+		for (call in _graph.inEdges(id)) if (call.kind.isInvocation()) for (s in _states.statesOf(call.from)) {
+			final at: Null<Span> = call.span;
+			if (_conditions.carried(call, s.valuation, s.ctx) == 0 || _conditions.bind(call, s.valuation) != valuation) continue;
+			if (!_entry.exists('${call.from}|${s.valuation}')) continue;
+			final held: Array<String> = [];
+			if (at != null) for (h in this.at(call.from, s.valuation, call.file, at.from)) {
+				final object: Null<String> = carried(objectOf(h), call);
+				if (object != null) held.push(lockOf(h) + ON + object);
+			}
+			final known: Null<Array<String>> = meet;
+			meet = known == null ? held : known.filter(h -> held.contains(h));
+		}
+		meet?.sort(Reflect.compare);
+		return meet;
+	}
+
+	/**
+	 * Whether every path from the give `give` leaves the function before it reaches the offset `at`: the block it sits in
+	 * (`blockOf`) holds no `at` and ends in a `return` or a `throw` after it — `if (done) { m.release(); return; }`. A
+	 * `throw` inside a `try`'s body leaves nothing: a `catch` of it may go on to `at`.
+	 */
+	private function leavesFirst(give: CallEdge, at: Int): Bool {
+		final site: Null<Span> = give.span;
+		final block: Null<QueryNode> = site == null ? null : blockOf(give.file, site, at);
+		if (site == null || block == null) return false;
+		final span: Null<Span> = block.span;
+		if (span == null || span.from <= at && at < span.to || block.children.length == 0) return false;
+		final returns: Array<String> = [for (k in [_shape.returnStatementKind, _shape.voidReturnKind]) if (k != null) k];
+		final last: QueryNode = block.children[block.children.length - 1];
+		if ((last.span?.from ?? -1) <= site.from) return false;
+		return returns.contains(last.kind) || (_shape.throwKinds ?? []).contains(last.kind) && !_body.inTryBody(give.file, site);
+	}
+
+	/**
+	 * The innermost block of `file`'s tree around `site`; null when there is none, or when a `try` around it holds `at`
+	 * in a `catch` — a call between the give and the exit may throw into it.
+	 */
+	private function blockOf(file: String, site: Span, at: Int): Null<QueryNode> {
+		var block: Null<QueryNode> = null;
+		var node: Null<QueryNode> = _trees.ofFile(file);
+		while (node != null) {
+			final child: Null<QueryNode> = node.children.find(c -> c.span != null && c.span.from <= site.from && c.span.to >= site.to);
+			if (child == null) return block;
+			final around: Null<Span> = child.span;
+			final body: Null<Span> = child.children.length > 0 ? child.children[0].span : null;
+			final inBody: Bool = body != null && body.from <= at && at < body.to;
+			if (_tryKinds.contains(child.kind) && around != null && around.from <= at && at < around.to && !inBody) return null;
+			if (_blockKinds.contains(child.kind)) block = child;
+			node = child;
+		}
+		return block;
+	}
+
+	/** A must-held entry (`at`): `lock` held on `object`. */
+	public static inline function heldOn(lock: String, object: String): String {
+		return lock + ON + object;
+	}
+
+	/** The lock of a must-held entry (`at`). */
+	public static inline function lockOf(held: String): String {
+		return held.substring(0, held.lastIndexOf(ON));
+	}
+
+	/** The object of a must-held entry (`at`). */
+	public static inline function objectOf(held: String): String {
+		return held.substring(held.lastIndexOf(ON) + 1);
+	}
+
+}
+
+/**
+ * What `MustHeld` reads off one function's body: what a condition evaluates to under a valuation of its tracked
+ * parameters, every run a valuation may stand for, the local a lock call is made on, and whether a `try` may stop an
+ * exception thrown at a site.
+ */
+@:nullSafety(Strict)
+private final class BodyFacts {
+
+	/** The most parameters a valuation does not know that `runsOf` reads as each value they may hold. */
+	private static inline final KNOWN_UNKNOWNS: Int = 3;
+
+	private final _sites: LockSites;
+	private final _trees: FunctionTrees;
+	private final _values: ArgumentValues;
+	private final _shape: RefShape;
+	private final _tryKinds: Array<String>;
+	private final _ifKinds: Array<String>;
+
+	public function new(
+		sites: LockSites, trees: FunctionTrees, values: ArgumentValues, shape: RefShape,
+		kinds: { tryKinds: Array<String>, ifKinds: Array<String> }
+	) {
+		_sites = sites;
+		_trees = trees;
+		_values = values;
+		_shape = shape;
+		_tryKinds = kinds.tryKinds;
+		_ifKinds = kinds.ifKinds;
+	}
+
 	/** What `cond` evaluates to under `valuation` of `id`'s tracked parameters; null when any part of it is undecided. */
-	private function decided(cond: QueryNode, id: String, valuation: String): Null<Bool> {
+	public function decided(cond: QueryNode, id: String, valuation: String): Null<Bool> {
 		final kids: Array<QueryNode> = cond.children;
 		final kind: String = cond.kind;
 		if (kind == _shape.parenKind && kids.length == 1) return decided(kids[0], id, valuation);
@@ -323,6 +513,69 @@ final class MustHeld {
 				null;
 		}
 		return decidedParam(cond, id, valuation);
+	}
+
+	/**
+	 * Every run of `id` its `valuation` may stand for, each deciding at least as much: a tracked
+	 * parameter some condition reads (`conditionNames`) that it does not know, or knows only to
+	 * be never null, read as true and as false — a bare condition reads a `Bool` — and, when some
+	 * comparison of the body tests it against `null`, as `null` too. A tracked parameter is never written, so a run gives
+	 * it one value throughout. Past `KNOWN_UNKNOWNS` such parameters, `valuation` itself.
+	 */
+	public function runsOf(id: String, valuation: String): Array<String> {
+		final nullTested: Array<String> = nullTestedIn(id);
+		final deciding: Array<String> = conditionNames(id);
+		final tracked: Array<String> = _values.tracked(id);
+		var runs: Array<String> = [''];
+		var open: Int = 0;
+		for (i in 0...valuation.length) {
+			final c: String = valuation.charAt(i);
+			final values: Array<String> = if (i >= tracked.length || !deciding.contains(tracked[i]))
+				[c]
+			else if (c == ArgumentValues.UNKNOWN)
+				[ArgumentValues.TRUE, ArgumentValues.FALSE].concat(
+					i < tracked.length && nullTested.contains(tracked[i]) ? [ArgumentValues.NULL] : []
+				)
+			else if (c == ArgumentValues.NON_NULL)
+				[ArgumentValues.TRUE, ArgumentValues.FALSE]
+			else
+				[c];
+			if (values.length > 1 && ++open > KNOWN_UNKNOWNS) return [valuation];
+			runs = [for (r in runs) for (v in values) r + v];
+		}
+		return runs;
+	}
+
+	/**
+	 * What the lock call `edge` is made on when it is a name its function declares once and never writes (a lock
+	 * wrapper's call, `db.batchLock()`) or a member read off one (`h.b.acquire()`): `<root>` or `<root>.<member>`; null
+	 * for any other receiver.
+	 */
+	public function localRoot(edge: CallEdge): Null<String> {
+		final callee: Null<QueryNode> = _sites.calleeOf(edge);
+		if (callee == null || !_sites.isAccess(callee.kind) || callee.children.length == 0) return null;
+		final receiver: QueryNode = callee.children[0];
+		final member: Null<String> = _sites.isAccess(receiver.kind) ? receiver.name : null;
+		final root: Null<QueryNode> = member == null ? receiver : receiver.children.length > 0 ? receiver.children[0] : null;
+		final name: Null<String> = root?.name;
+		final fn: Null<QueryNode> = _trees.ofId(edge.from);
+		if (root == null || root.kind != _shape.identKind || name == null || name == _shape.selfReferenceText || fn == null) return null;
+		final declared: Array<QueryNode> = [];
+		BareNames.collectNamed(fn, name, _shape, declared);
+		return declared.length == 1 && !BareNames.writes(fn, name, _shape) ? member == null ? name : '$name.$member' : null;
+	}
+
+	/** Whether `site` of `file` sits in the body of a `try`, whose `catch` an exception thrown there may land in. */
+	public function inTryBody(file: String, site: Span): Bool {
+		var node: Null<QueryNode> = _trees.ofFile(file);
+		while (node != null) {
+			final child: Null<QueryNode> = node.children.find(c -> c.span != null && c.span.from <= site.from && c.span.to >= site.to);
+			if (child == null) return false;
+			final body: Null<Span> = child.children.length > 0 ? child.children[0].span : null;
+			if (_tryKinds.contains(child.kind) && body != null && body.from <= site.from && site.to <= body.to) return true;
+			node = child;
+		}
+		return false;
 	}
 
 	/** What a tracked parameter of `id` read bare, or tested against `null`, as `cond` evaluates to under `valuation`. */
@@ -347,90 +600,42 @@ final class MustHeld {
 	}
 
 	/**
-	 * The locks each state holds on entry: the meet, over every call that runs into it, of what the caller must-holds at
-	 * the call, carried onto the callee's objects — nothing for a state something unknown may enter.
+	 * The names read in what decides whether code of `id`'s body runs: an `if`'s condition, the left side of `&&` and
+	 * `||` (`EdgeConditions`). A parameter no such place reads decides nothing, whatever it holds.
 	 */
-	private function solveEntries(inertRef: (CallEdge) -> Bool, unresolvedNames: Array<String>): Void {
-		final keys: Array<{ id: String, valuation: String }> = [];
-		for (id => node in _graph.nodes) for (s in _states.statesOf(id)) {
-			final entered: Bool = _graph.inEdges(id).exists(e -> e.kind.isInvocation());
-			final unknown: Bool = _states.assumed.exists(id) || !entered || unresolvedNames.contains(node.name ?? '')
-				|| _graph.inEdges(id).exists(e -> e.kind == Ref && !inertRef(e));
-			if (unknown)
-				_entry['$id|${s.valuation}'] = []
-			else
-				keys.push({ id: id, valuation: s.valuation });
+	private function conditionNames(id: String): Array<String> {
+		final fn: Null<QueryNode> = _trees.ofId(id);
+		final out: Array<String> = [];
+		if (fn == null) return out;
+		function names(node: QueryNode): Void {
+			final name: Null<String> = node.name;
+			if (node.kind == _shape.identKind && name != null && !out.contains(name)) out.push(name);
+			for (c in node.children) names(c);
 		}
-		var changed: Bool = true;
-		var passes: Int = 0;
-		while (changed && passes++ < PASSES) {
-			changed = false;
-			for (k in keys) {
-				final next: Null<Array<String>> = meetInto(k.id, k.valuation);
-				final key: String = '${k.id}|${k.valuation}';
-				if (next == null || (_entry[key] ?? []).join('\n') == next.join('\n') && _entry.exists(key)) continue;
-				_entry[key] = next;
-				changed = true;
+		function walk(node: QueryNode): Void {
+			final deciding: Bool = _ifKinds.contains(node.kind) || node.kind == _shape.logicalAndKind || node.kind == _shape.logicalOrKind;
+			if (deciding && node.children.length > 0) names(node.children[0]);
+			for (c in node.children) walk(c);
+		}
+		walk(fn);
+		return out;
+	}
+
+	/** The names some comparison of `id`'s body tests against `null` (`ArgumentValues.nullTested`). */
+	private function nullTestedIn(id: String): Array<String> {
+		final fn: Null<QueryNode> = _trees.ofId(id);
+		final out: Array<String> = [];
+		if (fn == null) return out;
+		function walk(node: QueryNode): Void {
+			if (node.kind == _shape.eqKind || node.kind == _shape.notEqKind) {
+				final read: Null<QueryNode> = _values.nullTested(node);
+				final name: Null<String> = read?.kind == _shape.identKind ? read?.name : null;
+				if (name != null && !out.contains(name)) out.push(name);
 			}
+			for (c in node.children) walk(c);
 		}
-		// a state still moving after the bound holds nothing it can prove; one no solved caller reached holds nothing
-		if (changed) for (k in keys) _entry['${k.id}|${k.valuation}'] = [];
-	}
-
-	/** The meet over the solved callers of the state `id` under `valuation`, sorted; null while none is solved. */
-	private function meetInto(id: String, valuation: String): Null<Array<String>> {
-		var meet: Null<Array<String>> = null;
-		for (call in _graph.inEdges(id)) if (call.kind.isInvocation()) for (s in _states.statesOf(call.from)) {
-			final at: Null<Span> = call.span;
-			if (_conditions.carried(call, s.valuation, s.ctx) == 0 || _conditions.bind(call, s.valuation) != valuation) continue;
-			if (!_entry.exists('${call.from}|${s.valuation}')) continue;
-			final held: Array<String> = [];
-			if (at != null) for (h in this.at(call.from, s.valuation, call.file, at.from)) {
-				final object: Null<String> = carried(objectOf(h), call);
-				if (object != null) held.push(lockOf(h) + ON + object);
-			}
-			final known: Null<Array<String>> = meet;
-			meet = known == null ? held : known.filter(h -> held.contains(h));
-		}
-		meet?.sort(Reflect.compare);
-		return meet;
-	}
-
-	/**
-	 * Whether every path from the give `give` leaves the function before it reaches the offset `at`: the block it sits in
-	 * (`blockOf`) holds no `at` and ends in a `return` or a `throw` after it — `if (done) { m.release(); return; }`.
-	 */
-	private function leavesFirst(give: CallEdge, at: Int): Bool {
-		final site: Null<Span> = give.span;
-		final block: Null<QueryNode> = site == null ? null : blockOf(give.file, site, at);
-		if (site == null || block == null) return false;
-		final span: Null<Span> = block.span;
-		if (span == null || span.from <= at && at < span.to || block.children.length == 0) return false;
-		final exits: Array<String> = (_shape.throwKinds ?? []).concat([for (k in [_shape.returnStatementKind, _shape.voidReturnKind]) if (
-			k != null
-		) k]);
-		final last: QueryNode = block.children[block.children.length - 1];
-		return exits.contains(last.kind) && (last.span?.from ?? -1) > site.from;
-	}
-
-	/**
-	 * The innermost block of `file`'s tree around `site`; null when there is none, or when a `try` around it holds `at`
-	 * in a `catch` — a call between the give and the exit may throw into it.
-	 */
-	private function blockOf(file: String, site: Span, at: Int): Null<QueryNode> {
-		var block: Null<QueryNode> = null;
-		var node: Null<QueryNode> = _trees.ofFile(file);
-		while (node != null) {
-			final child: Null<QueryNode> = node.children.find(c -> c.span != null && c.span.from <= site.from && c.span.to >= site.to);
-			if (child == null) return block;
-			final around: Null<Span> = child.span;
-			final body: Null<Span> = child.children.length > 0 ? child.children[0].span : null;
-			final inBody: Bool = body != null && body.from <= at && at < body.to;
-			if (_tryKinds.contains(child.kind) && around != null && around.from <= at && at < around.to && !inBody) return null;
-			if (_blockKinds.contains(child.kind)) block = child;
-			node = child;
-		}
-		return block;
+		walk(fn);
+		return out;
 	}
 
 }

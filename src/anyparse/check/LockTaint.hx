@@ -156,6 +156,9 @@ typedef TaintCost = {
 @:nullSafety(Strict)
 final class LockTaint {
 
+	/** The most functions `onCycle` walks before it answers that calls may lead back. */
+	private static inline final CYCLE_WALK: Int = 4096;
+
 	/** The context bits a state is split into: a call may block on one thread and not on another. */
 	private static final THREAD_BITS: Array<Int> = [ThreadSafety.CTX_MAIN, ThreadSafety.CTX_BG, ThreadSafety.CTX_QUIET];
 
@@ -163,9 +166,6 @@ final class LockTaint {
 
 	/** The takes that never wait (`QuietLocks`). */
 	public final quiet: QuietLocks;
-
-	/** The receivers whose classes the code says (`AllocationSets`): a dispatch none of them resolves to runs nothing. */
-	private final _allocations: Null<AllocationSets>;
 
 	/** `<held>|<function>|<valuation>|<bit>` -> the step toward a blocking call from that state. */
 	private final _reaching: Map<String, TaintStep> = [];
@@ -175,6 +175,12 @@ final class LockTaint {
 
 	/** Per held instance lock: the functions that take it on the object they run on, directly or by calls on that object. */
 	private final _selfTakers: Map<String, Array<String>> = [];
+
+	/** Each function -> whether calls from it may lead back to it (`onCycle`). */
+	private final _cyclic: Map<String, Bool> = [];
+
+	/** The receivers whose classes the code says (`AllocationSets`): a dispatch none of them resolves to runs nothing. */
+	private final _allocations: Null<AllocationSets>;
 
 	private final _graph: CallGraph;
 	private final _sinkIds: Array<String>;
@@ -364,6 +370,34 @@ final class LockTaint {
 			&& selfTakers(held).contains(edge.to) && !_sites.selfCall(edge);
 	}
 
+	/** Whether `edge` is a call to a sink `lockPairs` names a lock of: one whose cost is the wait for that lock. */
+	public function takesLock(edge: CallEdge): Bool {
+		final lists: ChainLists = listsOf(edge.file);
+		return lists.sinkIds.contains(edge.to) && lists.pairs.exists(p -> p.lockId == edge.to);
+	}
+
+	/**
+	 * Whether the call at the end of `trail`, which the call of the hold `a`'s window at its head leads to, runs more than
+	 * once under the hold: that call repeats under the take, or a call on the way repeats (`CallRepetition`). Asked of a
+	 * taint asking about cost: the plain one knows no repetition.
+	 */
+	public function repeatsAlong(a: LockAcquire, trail: BlockingTrail): Bool {
+		final cost: Null<TaintCost> = _cost;
+		if (cost == null) throw new Exception('thread-safety: the plain taint knows no repetition');
+		final repetition: CallRepetition = cost.repetition;
+		return trail.edges.length > 0 && repetition.repeatedUnder(trail.edges[0], a.edge)
+			|| trail.edges.slice(1).exists(e -> repetition.repeated(e));
+	}
+
+	/**
+	 * Whether the call at the end of `trail` may run more than once under the hold `a`: it repeats along the trail
+	 * (`repeatsAlong`), or a function on the way is re-entered through a cycle of calls — every call it makes then repeats,
+	 * whichever of them the trail took (TM's `FolderWatcher.checkNode` walking the tree).
+	 */
+	public function mayRepeatAlong(a: LockAcquire, trail: BlockingTrail): Bool {
+		return repeatsAlong(a, trail) || trail.path.exists(onCycle);
+	}
+
 	/** The locks whose take blocks at all: the plain taint's `long`, or the plain solve's for a taint asking about cost. */
 	private inline function blockingLocks(): Array<String> {
 		return _cost?.blocking ?? _long;
@@ -384,6 +418,20 @@ final class LockTaint {
 	/** Whether this taint asks about cost and the call `edge` may run more than once per run of its function (`CallRepetition`). */
 	private inline function repeatsAt(edge: CallEdge): Bool {
 		return _cost?.repetition.repeated(edge) == true;
+	}
+
+	/** Whether the call `edge` of a walk blocks itself under a hold of `held`: a sink call that blocks, or a re-take elsewhere. */
+	private inline function blockingHere(edge: CallEdge, held: Null<String>): Bool {
+		return _sinkIds.contains(edge.to) && blocks(edge, held) || retakesElsewhere(edge, held);
+	}
+
+	/**
+	 * Whether the take `edge` waits for no long hold while the hold `under` (`LockDominance.holdOf`) is held: asking about
+	 * cost, a re-take of that lock on its object by a `reentrantLocks` take, or a take of a lock it dominates there.
+	 */
+	private inline function briefUnder(under: Null<String>, edge: CallEdge): Bool {
+		return under != null && takesLock(edge)
+			&& _cost?.dominance.briefUnder(under, edge, listsOf(edge.file).reentrantIds.contains(edge.to)) == true;
 	}
 
 	/**
@@ -449,11 +497,6 @@ final class LockTaint {
 		}
 		for (key in seen.keys()) _clean[key] = true;
 		return null;
-	}
-
-	/** Whether the call `edge` of a walk blocks itself under a hold of `held`: a sink call that blocks, or a re-take elsewhere. */
-	private inline function blockingHere(edge: CallEdge, held: Null<String>): Bool {
-		return _sinkIds.contains(edge.to) && blocks(edge, held) || retakesElsewhere(edge, held);
 	}
 
 	/**
@@ -534,7 +577,6 @@ final class LockTaint {
 		};
 	}
 
-
 	/**
 	 * The functions that take the instance lock `held` on the object they run on: a function whose own take of it is
 	 * `LockSites.selfTake`, and every caller reaching one by calls on its own object (`LockSites.selfCall`).
@@ -557,26 +599,35 @@ final class LockTaint {
 		return takers;
 	}
 
-
-	/** Whether `edge` is a call to a sink `lockPairs` names a lock of: one whose cost is the wait for that lock. */
-	public function takesLock(edge: CallEdge): Bool {
-		final lists: ChainLists = listsOf(edge.file);
-		return lists.sinkIds.contains(edge.to) && lists.pairs.exists(p -> p.lockId == edge.to);
+	/** Whether calls from `id` may lead back to it; a walk longer than `CYCLE_WALK` functions says they may. */
+	private function onCycle(id: String): Bool {
+		final known: Null<Bool> = _cyclic[id];
+		if (known != null) return known;
+		final seen: Map<String, Bool> = [id => true];
+		final queue: Array<String> = [id];
+		var qi: Int = 0;
+		var answer: Bool = false;
+		while (qi < queue.length && !answer) {
+			if (qi >= CYCLE_WALK) {
+				answer = true;
+				break;
+			}
+			for (e in _graph.outEdges(queue[qi++])) if (e.kind.isInvocation()) {
+				if (e.to == id) answer = true;
+				if (!seen.exists(e.to)) {
+					seen[e.to] = true;
+					queue.push(e.to);
+				}
+			}
+		}
+		_cyclic[id] = answer;
+		return answer;
 	}
 
 	private static inline function stateKey(
 		held: Null<String>, id: String, valuation: String, ctx: Int, repeated: Bool, under: Null<String>
 	): String {
 		return '${held ?? ''}|$id|$valuation|$ctx${repeated ? '|repeated' : ''}|${under ?? ''}';
-	}
-
-	/**
-	 * Whether the take `edge` waits for no long hold while the hold `under` (`LockDominance.holdOf`) is held: asking about
-	 * cost, a re-take of that lock on its object by a `reentrantLocks` take, or a take of a lock it dominates there.
-	 */
-	private inline function briefUnder(under: Null<String>, edge: CallEdge): Bool {
-		return under != null && takesLock(edge)
-			&& _cost?.dominance.briefUnder(under, edge, listsOf(edge.file).reentrantIds.contains(edge.to)) == true;
 	}
 
 }

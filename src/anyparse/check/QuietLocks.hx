@@ -17,11 +17,14 @@ final class QuietLocks {
 	/** Each lock -> whether every take of it is a shared one. */
 	private final _sharedOnly: Map<String, Bool> = [];
 
-	/** The takes in their owner's constructor, by `<file>:<offset>:<target>`; built on the first question. */
-	private var _uncontended: Null<Map<String, Bool>> = null;
+	/** Each lock -> whether every take of it is known to be exclusive (`exclusive`). */
+	private final _exclusive: Map<String, Bool> = [];
 
 	private final _sites: LockSites;
 	private final _listsOf: (String) -> ChainLists;
+
+	/** The takes in their owner's constructor, by `<file>:<offset>:<target>`; built on the first question. */
+	private var _uncontended: Null<Map<String, Bool>> = null;
 
 	public function new(sites: LockSites, listsOf: (String) -> ChainLists) {
 		_sites = sites;
@@ -44,6 +47,26 @@ final class QuietLocks {
 		final takes: Array<LockAcquire> = [for (a in _sites.acquires.concat(_sites.helperHolds)) if (a.lock == lock) a];
 		final answer: Bool = takes.length > 0 && takes.foreach(a -> _listsOf(a.edge.file).sharedIds.contains(a.pair.lockId));
 		_sharedOnly[lock] = answer;
+		return answer;
+	}
+
+	/**
+	 * Whether every take of the named lock `lock` is known to be exclusive: there is one, each is made through one and the
+	 * same pair, no chain lists that pair's take member under `sharedLocks`, and no chain pairs another take member of its
+	 * class — a class with two take members (`lock` and `lockShared`) may be taken shared through one nobody listed.
+	 */
+	public function exclusive(lock: String): Bool {
+		final known: Null<Bool> = _exclusive[lock];
+		if (known != null) return known;
+		final takes: Array<LockAcquire> = [for (a in _sites.acquires.concat(_sites.helperHolds)) if (a.lock == lock) a];
+		final pair: String = takes.length == 0 ? '' : takes[0].pair.lockId;
+		final type: String = pair.substring(0, pair.lastIndexOf('.') + 1);
+		final answer: Bool = pair != '' && takes.foreach(a -> {
+			final lists: ChainLists = _listsOf(a.edge.file);
+			a.pair.lockId == pair && !lists.sharedIds.contains(pair)
+			&& !lists.pairs.exists(p -> p.lockId != pair && p.lockId.substring(0, p.lockId.lastIndexOf('.') + 1) == type);
+		});
+		_exclusive[lock] = answer;
 		return answer;
 	}
 
