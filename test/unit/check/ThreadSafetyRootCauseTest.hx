@@ -116,6 +116,28 @@ class ThreadSafetyRootCauseTest extends Test {
 		#end
 	}
 
+	/**
+	 * Two locks no member names (each a getter's value) are not one lock for covering, though both are keyed by their
+	 * pair's take member: each hold across the same work stalls on its own (review round 2 `u2p`).
+	 */
+	@:pin('control') @:killer('M-TS-FOLD-UNNAMED-SAME')
+	public function testUnnamedLocksNeverCoverEachOther(): Void {
+		#if (sys || nodejs)
+		final s: String = 'class S { final _a:Mutex = new Mutex(); final _b:Mutex = new Mutex(); public function new() {}'
+			+ ' function io():Void Sys.sleep(1); function getA():Mutex return _a; function getB():Mutex return _b;'
+			+ ' function g():Void { final m:Mutex = getA(); m.acquire(); io(); m.release(); }'
+			+ ' function h():Void { final m:Mutex = getB(); m.acquire(); io(); m.release(); }'
+			+ ' public function peekB():Void { _b.acquire(); _b.release(); }'
+			+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> { s.g(); s.h(); }); s.peekB(); } }';
+		Assert.same(
+			['warning B S.g | Mutex.acquire', 'warning B S.h | Mutex.acquire'],
+			holds(ThreadSafetyCheckTest.violations(CONFIG, [ThreadSafetyCheckTest.MUTEX, RUNNER, s]))
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	/** TM's `FSUtil.deleteRecursive`: the sink calls one main-thread way into a function runs make one warning. */
 	@:pin('control') @:killer('M-TS-WAY-OFF')
 	public function testSinkCallsOfOneWayMakeOneWarning(): Void {

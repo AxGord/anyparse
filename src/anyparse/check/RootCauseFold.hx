@@ -285,7 +285,8 @@ for (d in doing[key] ?? []) if (covers(d, i, mayRepeat, way)) memberOf(_warned[d
 	 * Whether the warned hold `d` makes a sink call another one (at `i`) is long by, as often
 	 * — repeating along its trail where the other's may (`repeated`) —: a hold reaching it once
 	 * reports no stall of one repeating it under its own lock (TM's `FolderWatcher.rename`'s one stat against
-	 * `updateInternal`'s walk over the whole tree). A hold of the same lock in another function covers only on the one
+	 * `updateInternal`'s walk over the whole tree). A hold of the same lock — one
+	 * a member names (`sameLock`) — in another function covers only on the one
 	 * thread both run on (`oneThread`): on two threads each hold stalls the main thread by itself (TM's
 	 * `StandardFileSystem.loadDrillContent` on the I/O worker against `getText` on the sync worker).
 	 */
@@ -293,7 +294,7 @@ for (d in doing[key] ?? []) if (covers(d, i, mayRepeat, way)) memberOf(_warned[d
 		final by: FoldHold = _warned[d.at];
 		final own: FoldHold = _warned[i];
 		return d.at != i && (d.repeated || !repeated)
-			&& (by.lock == own.lock && oneThread(by, own) || by.hold.edge.from == own.hold.edge.from || way.contains(by.hold.edge.from));
+			&& (sameLock(by, own) && oneThread(by, own) || by.hold.edge.from == own.hold.edge.from || way.contains(by.hold.edge.from));
 	}
 
 	/**
@@ -368,6 +369,15 @@ for (d in doing[key] ?? []) if (covers(d, i, mayRepeat, way)) memberOf(_warned[d
 			case [Uncovered, Uncovered]: true;
 			case _: false;
 		};
+	}
+
+	/**
+	 * Whether the holds `by` and `own` hold one lock: a lock object a member names, the same for both. An unnamed lock (a
+	 * local, a getter's value) is keyed by its pair's take member, which every unnamed lock of the pair shares — never
+	 * the same lock for this (`FoldHold.lock`).
+	 */
+	private static inline function sameLock(by: FoldHold, own: FoldHold): Bool {
+		return by.hold.lock != null && own.hold.lock != null && by.lock == own.lock;
 	}
 
 }

@@ -1892,3 +1892,8 @@ decided the question; it may not become a record of runs.
   `f(false)` was taken to run `g` (which only `f(true)` calls, on another worker), so `g`'s hold "ran on both" and
   covered `h`'s on the first worker. Origins now walk the states: the valuation the worker hands down decides each
   call (`ThreadStates.workerStep`, `EdgeConditions.carried`) (review round 2 `s2`) — branch `feat/ts-precision-3`
+- a `Site` cover comparing `FoldHold.lock`, the pair's take member for a lock no member names → every unnamed lock of
+  a pair ("`Mutex.acquire`") was "the same lock", so `g` holding `getA()`'s mutex covered `h` holding `getB()`'s across
+  the same sleep. An unnamed lock is never the same lock for the cover (`RootCauseFold.sameLock`); the `Waits` cover
+  keeps the pair key, where requiring every unnamed hold of the pair to be reported is a superset of the real one
+  (review round 2 `u2p`) — branch `feat/ts-precision-3`

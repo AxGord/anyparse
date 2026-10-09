@@ -18737,6 +18737,14 @@
 			"note": "a worker origin flows along every call whatever valuation the worker hands down"
 		},
 		{
+			"name": "M-TS-FOLD-UNNAMED-SAME",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "sameLock",
+			"find": "by.hold.lock != null && own.hold.lock != null && ",
+			"replace": "",
+			"note": "two unnamed locks keyed by one take member are one lock for covering"
+		},
+		{
 			"name": "M-TS-REPEATED-BY-HEADER",
 			"type": "anyparse.check.MainSinkReport",
 			"method": "repeaters",

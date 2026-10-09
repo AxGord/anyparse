@@ -2331,6 +2331,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyRootCauseTest#testSinkCallsOfOneWayMakeOneWarning :: control :: M-TS-WAY-OFF',
 			'unit.check.ThreadSafetyRootCauseTest#testTheCallsOfOneLoopMakeOneWarning :: control :: M-TS-LOOP-KEY',
 			'unit.check.ThreadSafetyRootCauseTest#testTwoTakesSharingAFindingDoNotCoverEachOther :: control :: M-TS-FOLD-SELF',
+			'unit.check.ThreadSafetyRootCauseTest#testUnnamedLocksNeverCoverEachOther :: control :: M-TS-FOLD-UNNAMED-SAME',
 			'unit.check.ThreadSafetyUnnamedLockTest#testAnUnnamedLockNoMainThreadTakesStallsNoOne :: control :: M-TS-UNNAMED-PAIR',
 			'unit.check.ThreadSafetyUnnamedLockTest#testAnotherPairOfTheSameClassStallsTheMainThread :: control :: M-TS-UNNAMED-BY-PAIR',
 			'unit.check.ThreadSafetyWaiterTest#testAHoldOnlyTheMainThreadRunsIsNoStall :: control :: '
@@ -6283,6 +6284,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-HAND-RANK',
 			'M-TS-HELPER-SPAN-START',
 			'M-TS-ORIGIN-STATES',
+			'M-TS-FOLD-UNNAMED-SAME',
 			'M-TS-REPEATED-BY-HEADER',
 			'M-TS-FOLD-SITE-CYCLE'
 		];
