@@ -144,6 +144,8 @@ class LexicalRegionsSeamTest extends Test {
 	 */
 	public function testNoGrammarAgnosticModuleNamesOneGrammar(): Void {
 		final allowed: Array<String> = [
+			// reads `boundedRepeats` entry by entry, so a field of the wrong type drops the entry instead of widening it
+			'src/anyparse/check/BoundedRepeats.hx',
 			'src/anyparse/check/LintConfig.hx',
 			'src/anyparse/check/OracleDeclaration.hx',
 			'src/anyparse/check/RuleDeclaration.hx',

@@ -18,7 +18,7 @@ class ThreadSafetyCostTest extends Test {
 	/** `FileSystem.stat` and `FileSystem.readDirectory` are short sinks, `Sys.sleep` a long one; `Runner.create` spawns. */
 	private static inline final CONFIG: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Sys.sleep","FileSystem.stat",'
 		+ '"FileSystem.readDirectory"],"shortSinks":["FileSystem.stat","FileSystem.readDirectory"],"spawns":["Runner.create"],'
-		+ '"lockPairs":["Mutex.acquire/release"],"iterates":["Each.all"]}}}';
+		+ '"lockPairs":["Mutex.acquire/release"],"iterates":["Each.all"],"runsOnce":["Once.run"]}}}';
 
 	private static inline final RUNNER: String = 'class Runner { public static function create(fn:()->Void):Void {} }';
 
@@ -74,7 +74,8 @@ class ThreadSafetyCostTest extends Test {
 	public function testTheIterableOfAForRunsOnce(): Void {
 		#if (sys || nodejs)
 		Assert.same(['info A A.list | FileSystem.readDirectory'], graded(run([
-			'class A { public static function list():Void for (p in FileSystem.readDirectory("d")) trace(p); }'
+			'class A { public static function list():Void for (p in FileSystem.readDirectory("d")) trace(p);'
+			+ ' public static function main():Void list(); }'
 		])));
 		#else
 		Assert.pass('non-sys target');
@@ -93,7 +94,7 @@ class ThreadSafetyCostTest extends Test {
 			+ ' static function draw(i:Int):Void icon(i); static function icon(i:Int):Void FileSystem.stat("a"); }'
 		]);
 		// the loop owns the warning; the short call below it says where it went
-		Assert.same(['info A A.icon | FileSystem.stat', 'warning A A.main | A.draw'], graded(found));
+		Assert.same(['info A A.icon | FileSystem.stat', 'warning A A.main | for (i in 0...10)'], graded(found));
 		Assert.isTrue(found.exists(v -> v.message.indexOf('repeated by A.main') != -1));
 		#else
 		Assert.pass('non-sys target');
@@ -121,7 +122,8 @@ class ThreadSafetyCostTest extends Test {
 			'class Each { public static function all(xs:Array<String>, fn:String->Void):Void {} }',
 			'class Once { public static function run(fn:String->Void):Void {} }',
 			'class A { public static function each(ps:Array<String>):Void Each.all(ps, p -> FileSystem.stat(p));'
-			+ ' public static function once():Void Once.run(p -> FileSystem.stat(p)); }'
+			+ ' public static function once():Void Once.run(p -> FileSystem.stat(p));'
+			+ ' public static function main():Void { each(["a"]); once(); } }'
 		])));
 		#else
 		Assert.pass('non-sys target');
@@ -215,7 +217,7 @@ class ThreadSafetyCostTest extends Test {
 		Assert.same([
 			'info A A.icon | FileSystem.stat',
 			'info A A.list | FileSystem.readDirectory',
-			'warning A A.main | A.draw'
+			'warning A A.main | for (i in 0...10)'
 		], graded(found));
 		Assert.isTrue(
 			found.exists(v -> v.severity.label() == 'warning' && v.message.indexOf('"FileSystem.readDirectory" / "FileSystem.stat"') != -1)
@@ -235,8 +237,8 @@ class ThreadSafetyCostTest extends Test {
 		Assert.same([
 			'info A A.icon | FileSystem.stat',
 			'info A A.list | FileSystem.readDirectory',
-			'warning A A.main | A.icon',
-			'warning A A.main | A.list'
+			'warning A A.main | for (i in 0...10)',
+			'warning A A.main | for (i in 0...10) #2'
 		], graded(found));
 		#else
 		Assert.pass('non-sys target');
@@ -278,7 +280,7 @@ class ThreadSafetyCostTest extends Test {
 	@:pin('control') @:killer('M-TS-OWNER-FARTHEST')
 	public function testTheNearestRepeatingCallerOwnsTheWarning(): Void {
 		#if (sys || nodejs)
-		Assert.same(['info A A.icon | FileSystem.stat', 'warning A A.row | A.icon'], graded(run([
+		Assert.same(['info A A.icon | FileSystem.stat', 'warning A A.row | for (j in 0...10)'], graded(run([
 			'class A { public static function main():Void { row(); page(); }' + ' static function row():Void for (j in 0...10) icon(j);'
 			+ ' static function page():Void for (j in 0...10) cell(j); static function cell(i:Int):Void icon(i);'
 			+ ' static function icon(i:Int):Void FileSystem.stat("a"); }'

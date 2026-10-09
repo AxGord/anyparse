@@ -5,6 +5,8 @@ import anyparse.check.Check.Violation;
 import utest.Assert;
 import utest.Test;
 
+using Lambda;
+
 /**
  * `boundedRepeats` / `repeatBudgetMs` (`BoundedRepeats`): a repetition an entry bounds — `max` turns, `costMs` each,
  * `max × costMs` under the budget — runs as once, so the short sinks it repeats stay short; anything else repeats (TM's
@@ -24,7 +26,9 @@ class ThreadSafetyBoundedRepeatsTest extends Test {
 	@:pin('control') @:killer('M-TS-BOUND-BUDGET')
 	public function testABoundOverTheBudgetStillRepeats(): Void {
 		#if (sys || nodejs)
-		Assert.same(['info A L.a | Disk.stat', 'warning A L.main | L.a'], mains(loop('{"site": "L.main", "max": 100, "costMs": 1}')));
+		Assert.same(
+			['info A L.a | Disk.stat', 'warning A L.main | for (i in 0...3)'], mains(loop('{"site": "L.main", "max": 100, "costMs": 1}'))
+		);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -34,7 +38,8 @@ class ThreadSafetyBoundedRepeatsTest extends Test {
 	public function testAnEntryForAnotherCallLeavesTheLoopRepeating(): Void {
 		#if (sys || nodejs)
 		Assert.same(
-			['info A L.a | Disk.stat', 'warning A L.main | L.a'], mains(loop('{"site": "L.main", "call": "L.b", "max": 3, "costMs": 1}'))
+			['info A L.a | Disk.stat', 'warning A L.main | for (i in 0...3)'],
+			mains(loop('{"site": "L.main", "call": "L.b", "max": 3, "costMs": 1}'))
 		);
 		#else
 		Assert.pass('non-sys target');
@@ -43,7 +48,10 @@ class ThreadSafetyBoundedRepeatsTest extends Test {
 
 	public function testNoBudgetBoundsNothing(): Void {
 		#if (sys || nodejs)
-		Assert.same(['info A L.a | Disk.stat', 'warning A L.main | L.a'], mains(loop('{"site": "L.main", "max": 3, "costMs": 1}', false)));
+		Assert.same(
+			['info A L.a | Disk.stat', 'warning A L.main | for (i in 0...3)'],
+			mains(loop('{"site": "L.main", "max": 3, "costMs": 1}', false))
+		);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -61,6 +69,131 @@ class ThreadSafetyBoundedRepeatsTest extends Test {
 			+ ' public static function main():Void { final h:H = new H(); Runner.create(() -> h.work()); h._m.acquire(); h._m.release(); } }'
 		]);
 		Assert.same(['info B H.work | H._m'], graded(found, 'B'));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** An entry binds ONE repetition: over a member with nested loops it binds none, says why, and both loops repeat. */
+	@:pin('control') @:killer('M-TS-BOUND-ONE')
+	public function testAnEntryOverNestedLoopsBindsNone(): Void {
+		#if (sys || nodejs)
+		final found: Array<Violation> = nested('{"site": "N.run", "max": 3, "costMs": 1}');
+		Assert.same(['warning A N.run | Disk.stat'], mains(found));
+		Assert.isTrue(notice(found, 'boundedRepeats entry "N.run" dropped: 2 repetitions there'));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A sibling loop the entry was not written for keeps repeating: the entry binds none of the two. */
+	public function testAnEntryOverSiblingLoopsBindsNone(): Void {
+		#if (sys || nodejs)
+		final found: Array<String> = mains(siblings('{"site": "N.run", "max": 3, "costMs": 1}'));
+		Assert.isTrue(found.contains('warning A N.run | for (i in 0...3)'));
+		Assert.isTrue(found.contains('warning A N.run | while (pending())'));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** `loop` names the loop it binds by its header: that loop runs as once, its sibling keeps repeating. */
+	public function testALoopEntryBindsThatLoopOnly(): Void {
+		#if (sys || nodejs)
+		final found: Array<Violation> = siblings('{"site": "N.run", "loop": "for (i in 0...3)", "max": 3, "costMs": 1}');
+		Assert.same([
+			'info A N.a | Disk.stat',
+			'info A N.b | Disk.stat',
+			'warning A N.run | while (pending())'
+		], mains(found));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A lambda the member defines repeats on its own: its loop is one more repetition, and the entry binds none. */
+	public function testALambdaLoopInTheMemberIsNoPartOfTheBound(): Void {
+		#if (sys || nodejs)
+		final found: Array<Violation> = ThreadSafetyCheckTest.violations(config('{"site": "N.run", "max": 3, "costMs": 1}', true), [
+			DISK,
+			'class N { public static var cb:Array<String>->Void; public static function run():Void { for (i in 0...3) Disk.stat("a");'
+			+ ' cb = rows -> for (r in rows) Disk.stat(r); } public static function main():Void { run(); cb(["x"]); } }'
+		]);
+		Assert.isTrue(mains(found).contains('warning A N.run | Disk.stat'));
+		Assert.isTrue(notice(found, 'boundedRepeats entry "N.run" dropped: 3 repetitions there'));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A `call` that is no string drops the whole entry — never widened to the member. */
+	@:pin('control') @:killer('M-TS-BOUND-CALL-SHAPE')
+	public function testAMalformedCallDropsTheEntry(): Void {
+		#if (sys || nodejs)
+		final found: Array<Violation> = twoLoops('{"site": "N.run", "call": ["N.a"], "max": 3, "costMs": 1}');
+		Assert.same([
+			'info A N.a | Disk.stat',
+			'info A N.b | Disk.stat',
+			'warning A N.run | for (i in 0...3)',
+			'warning A N.run | for (x in xs)'
+		], mains(found));
+		Assert.isTrue(notice(found, 'boundedRepeats entry "N.run" dropped: `call` is not a string'));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** The well-formed `call` binds the loop around it alone. */
+	public function testACallEntryBindsTheLoopAroundIt(): Void {
+		#if (sys || nodejs)
+		Assert.same([
+			'info A N.a | Disk.stat',
+			'info A N.b | Disk.stat',
+			'warning A N.run | for (x in xs)'
+		], mains(twoLoops('{"site": "N.run", "call": "N.a", "max": 3, "costMs": 1}')));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A turn costing nothing would bound any number of turns: `costMs` must be positive, or the entry is dropped. */
+	@:pin('control') @:killer('M-TS-BOUND-COST-ZERO')
+	public function testAZeroCostDropsTheEntry(): Void {
+		#if (sys || nodejs)
+		final found: Array<Violation> = loop('{"site": "L.main", "max": 1000000000000, "costMs": 0}');
+		Assert.same(['info A L.a | Disk.stat', 'warning A L.main | for (i in 0...3)'], mains(found));
+		Assert.isTrue(notice(found, '`costMs` is not a positive number'));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** `site` names one member, never a pattern — even one that happens to match a single member. */
+	@:pin('control') @:killer('M-TS-BOUND-SITE-PATTERN')
+	public function testASitePatternDropsTheEntry(): Void {
+		#if (sys || nodejs)
+		final found: Array<Violation> = ThreadSafetyCheckTest.violations(config('{"site": "R.*", "max": 3, "costMs": 1}', true), [
+			DISK,
+			'class R { public static function run():Void for (i in 0...3) a(); static function a():Void Disk.stat("a"); }',
+			'class Main { public static function main():Void R.run(); }'
+		]);
+		Assert.isTrue(mains(found).contains('warning A R.run | for (i in 0...3)'));
+		Assert.isTrue(notice(found, '`site` is a pattern'));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** Two bound loops, one inside the other, run the PRODUCT of their bounds: 10 × 10 turns of 1 ms are over 50. */
+	@:pin('control') @:killer('M-TS-BOUND-PRODUCT')
+	public function testNestedBoundsMultiply(): Void {
+		#if (sys || nodejs)
+		Assert.isTrue(
+			mains(nested(
+				'{"site": "N.run", "loop": "for (g in groups)", "max": 10, "costMs": 1},'
+				+ ' {"site": "N.run", "loop": "for (x in g)", "max": 10, "costMs": 1}'
+			)).contains('warning A N.run | Disk.stat')
+		);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -86,6 +219,41 @@ class ThreadSafetyBoundedRepeatsTest extends Test {
 
 	private static function mains(found: Array<Violation>): Array<String> {
 		return graded(found, 'A');
+	}
+
+	/** `N.run` calls a short sink inside a loop nested in another, bounded by `entries`. */
+	private static function nested(entries: String): Array<Violation> {
+		return ThreadSafetyCheckTest.violations(config(entries, true), [
+			DISK,
+			'class N { public static function run(groups:Array<Array<String>>):Void { for (g in groups) for (x in g) Disk.stat(x); }'
+			+ ' public static function main():Void run([["a"]]); }'
+		]);
+	}
+
+	/** `N.run` loops over `a` three times, then over `b` while `pending()`, bounded by `entry`. */
+	private static function siblings(entry: String): Array<Violation> {
+		return ThreadSafetyCheckTest.violations(config(entry, true), [
+			DISK,
+			'class N { static function pending():Bool return true; static function a():Void Disk.stat("a");'
+			+ ' static function b():Void Disk.stat("b");'
+			+ ' public static function run():Void { for (i in 0...3) a(); while (pending()) b(); }'
+			+ ' public static function main():Void run(); }'
+		]);
+	}
+
+	/** `N.run` loops over `a` three times and over `b` once per item, bounded by `entry`. */
+	private static function twoLoops(entry: String): Array<Violation> {
+		return ThreadSafetyCheckTest.violations(config(entry, true), [
+			DISK,
+			'class N { static function a():Void Disk.stat("a"); static function b():Void Disk.stat("b");'
+			+ ' public static function run(xs:Array<String>):Void { for (i in 0...3) a(); for (x in xs) b(); }'
+			+ ' public static function main():Void run(["x"]); }'
+		]);
+	}
+
+	/** Whether `found` holds the config notice containing `text`. */
+	private static function notice(found: Array<Violation>, text: String): Bool {
+		return found.exists(v -> v.data == null && v.message.indexOf(text) >= 0);
 	}
 
 	private static function graded(found: Array<Violation>, family: String): Array<String> {

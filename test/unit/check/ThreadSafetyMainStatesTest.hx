@@ -32,7 +32,7 @@ class ThreadSafetyMainStatesTest extends Test {
 	public function testTheOwnerIsOnAWayThatRunsTheCall(): Void {
 		#if (sys || nodejs)
 		Assert.same(
-			['info A L.load | Db.count', 'warning A L.other | L.load'],
+			['info A L.load | Db.count', 'warning A L.other | for (q in qs)'],
 			graded(run(
 				'load(p, false); static function other(qs:Array<String>):Void for (q in qs) load(q, Math.random() > 0.5);', 'other(["c"]);'
 			))
