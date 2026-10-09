@@ -17503,6 +17503,30 @@
 			"find": "if (h == a || h.inner != null && h.edge == a.edge) {",
 			"replace": "if (h == a) {",
 			"note": "a helper hold carries only its own lock, not the others its call takes"
+		},
+		{
+			"name": "M-TS-RETHROW-OFF",
+			"type": "anyparse.check.ThrowReach",
+			"method": "intercepts",
+			"find": "&& !node.children.exists(rethrows)",
+			"replace": "&& true",
+			"note": "a catch that rethrows its own variable keeps the exception"
+		},
+		{
+			"name": "M-TS-RETHROW-ANY-NAME",
+			"type": "anyparse.check.ThrowReach",
+			"method": "throwsName",
+			"find": "node.children[0].name == name",
+			"replace": "node.children[0].name != null",
+			"note": "a catch throwing any bare name counts as a rethrow"
+		},
+		{
+			"name": "M-TS-RETHROW-NESTED",
+			"type": "anyparse.check.ThrowReach",
+			"method": "throwsName",
+			"find": "if (_nestedFnKinds.contains(node.kind)) return false;",
+			"replace": "",
+			"note": "a rethrow inside a lambda the catch builds counts"
 		}
 	]
 }

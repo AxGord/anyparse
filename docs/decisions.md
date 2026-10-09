@@ -1586,5 +1586,11 @@ decided the question; it may not become a record of runs.
   `_batchMutex`, and the twin's gives counted as crossing releases making both locks long on their own. The holds are
   judged at the caller like a wrapper's; the helper's takes and the twin's gives are the caller's — branch
   `feat/ts-precision-2`
+- every `try` with a `catch` intercepting what its body raises → TM's `FolderWatcher.update` became `try updateInternal()
+  catch (e) { _resetMutex.release(); throw e; }` and its callers' holds stopped being seen leaking
+  (`SessionsFolderWatcher.update`); a `catch` throwing its own variable is the `try`'s exception going on. Only that
+  shape: a `throw` of anything else is the function's own throw, which stays unfollowed by design — a project function
+  whose throw callers must expect goes in `throwers` by name (TM's `badNamesHandler`, not configured: on 1d1ba147 the
+  healing runs outside the tree lock) — branch `feat/ts-precision-2`
 - judging "inside a catch" off the witness chain the finding prints → the chain is one way; a second way outside every
   catch must keep the warning, which only a solve without the catch edges can see — branch `feat/ts-precision-2`

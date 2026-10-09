@@ -393,6 +393,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.ThreadSafetyOwnReasonsTest',
 		'unit.check.ThreadSafetyQuietLocksTest',
 		'unit.check.ThreadSafetyRegistersTest',
+		'unit.check.ThreadSafetyRethrowTest',
 		'unit.check.ThreadSafetyWaiterTest',
 		'unit.check.TrivialGetterCheckTest',
 		'unit.check.TrivialGetterIsVarTest',
@@ -2192,6 +2193,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyRegistersTest#testALoopAboveTheRegistrarRepeatsNothing :: control :: M-TS-REGISTER-OWNER',
 			'unit.check.ThreadSafetyRegistersTest#testARegistrationInALoopRepeatsNothing :: control :: M-TS-REGISTER-OWNER',
 			'unit.check.ThreadSafetyRegistersTest#testTheOwnerIsNeverUpARegistration :: control :: M-TS-REGISTER-OWNER',
+			'unit.check.ThreadSafetyRethrowTest#testACatchThatRethrowsRaises :: control :: M-TS-RETHROW-OFF',
+			'unit.check.ThreadSafetyRethrowTest#testACatchThrowingAnotherValueKeepsIt :: control :: M-TS-RETHROW-ANY-NAME',
+			'unit.check.ThreadSafetyRethrowTest#testARethrowInANestedFunctionKeepsIt :: control :: M-TS-RETHROW-NESTED',
 			'unit.check.ThreadSafetyWaiterTest#testAHoldOnlyTheMainThreadRunsIsNoStall :: control :: '
 				+ 'M-TS-B-MAIN-ONLY-KEPT,M-TS-OWN-WORK-TAKES',
 			'unit.check.ThreadSafetyWaiterTest#testAHolderOfUnknownThreadKeepsItsFinding :: control :: M-TS-B-ASSUMED-IGNORED',
@@ -5976,7 +5980,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-HELPER-OWN-TAKES',
 			'M-TS-HELPER-CROSSING',
 			'M-TS-HELPER-DOM-CROSSING',
-			'M-TS-HELPER-SIBLINGS'
+			'M-TS-HELPER-SIBLINGS',
+			'M-TS-RETHROW-OFF',
+			'M-TS-RETHROW-ANY-NAME',
+			'M-TS-RETHROW-NESTED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

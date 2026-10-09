@@ -18,7 +18,9 @@ using Lambda;
  * the lock is the walk's own (`LockWindow`). A function whose callers must expect its exception goes in `throwers` by name.
  *
  * Intercepting is read generously, so as to report less: a `catch` of any type stops everything (a typed one lets the
- * rest through), and a call or a body the graph cannot place in its function's tree raises nothing.
+ * rest through) — but a `catch` that throws its own variable again (`catch (e) { m.release(); throw e; }`) lets it go
+ * on, since what it throws is what the `try` raised — and a call or a body the graph cannot place in its function's tree
+ * raises nothing. A project function whose throw is data-dependent goes in `throwers` like any primitive.
  */
 @:nullSafety(Strict)
 final class ThrowReach {
@@ -33,6 +35,8 @@ final class ThrowReach {
 	private final _tryKinds: Array<String>;
 	private final _catchKind: Null<String>;
 	private final _nestedFnKinds: Array<String>;
+	private final _throwKinds: Array<String>;
+	private final _identKind: Null<String>;
 
 	/**
 	 * Solves the raising functions of `graph`: `throwersOf` names the `throwers` of the chain a file sits under, and
@@ -45,6 +49,8 @@ final class ThrowReach {
 		_tryKinds = (shape.tryStatementKinds ?? []).concat(shape.tryExpressionKinds ?? []);
 		_catchKind = shape.catchClauseKind;
 		_nestedFnKinds = MemberKinds.nestedFunctionKinds(shape);
+		_throwKinds = shape.throwKinds ?? [];
+		_identKind = shape.identKind;
 		solve();
 	}
 
@@ -123,9 +129,32 @@ final class ThrowReach {
 		return false;
 	}
 
-	/** Whether `node` is a `try` with a `catch`: an exception raised in its body (its first child) goes no further. */
+	/**
+	 * Whether `node` is a `try` with a `catch` that keeps what its body raises: an exception raised in its body (its first
+	 * child) goes no further — unless some `catch` of it throws its own variable again (`rethrows`).
+	 */
 	private inline function intercepts(node: QueryNode): Bool {
-		return _tryKinds.contains(node.kind) && node.children.exists(k -> k.kind == _catchKind);
+		return _tryKinds.contains(node.kind) && node.children.exists(k -> k.kind == _catchKind) && !node.children.exists(rethrows);
+	}
+
+	/**
+	 * Whether `clause` is a `catch` whose body throws the exception it caught again: a `throw` of its own variable, outside
+	 * a function nested in it — `catch (e) { m.release(); throw e; }` lets what the `try` raised go on.
+	 */
+	private function rethrows(clause: QueryNode): Bool {
+		final name: Null<String> = clause.name;
+		return clause.kind == _catchKind && name != null && clause.children.exists(c -> throwsName(c, name));
+	}
+
+	/** Whether `node`'s subtree, outside a nested function, holds a `throw` of the bare name `name`. */
+	private function throwsName(node: QueryNode, name: String): Bool {
+		if (_nestedFnKinds.contains(node.kind)) return false;
+		if (
+			_throwKinds.contains(node.kind) && node.children.length == 1 && node.children[0].kind == _identKind
+			&& node.children[0].name == name
+		)
+			return true;
+		return node.children.exists(c -> throwsName(c, name));
 	}
 
 }
