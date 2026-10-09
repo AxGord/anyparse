@@ -94,6 +94,28 @@ class ThreadSafetyRootCauseTest extends Test {
 		#end
 	}
 
+	/**
+	 * A worker runs a function only on the ways its own valuation lets through: `f(false)` on one worker never calls the
+	 * hold `f(true)` reaches on another, so that hold runs on the second worker alone and covers no hold of the first
+	 * (review round 2 `s2`).
+	 */
+	@:pin('control') @:killer('M-TS-ORIGIN-STATES')
+	public function testAWorkerRunsOnlyTheWaysItsValuesOpen(): Void {
+		#if (sys || nodejs)
+		final s: String = 'class S { final _m:Mutex = new Mutex(); public function new() {} function io():Void Sys.sleep(1);'
+			+ ' function g():Void { _m.acquire(); io(); _m.release(); } function h():Void { _m.acquire(); io(); _m.release(); }'
+			+ ' function f(fast:Bool):Void { if (fast) g(); } public function peek():Void { _m.acquire(); _m.release(); }'
+			+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> { s.f(false); s.h(); });'
+			+ ' Runner.create(() -> s.f(true)); s.peek(); } }';
+		Assert.same(
+			['warning B S.g | S._m', 'warning B S.h | S._m'],
+			holds(ThreadSafetyCheckTest.violations(CONFIG, [ThreadSafetyCheckTest.MUTEX, RUNNER, s]))
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	/** TM's `FSUtil.deleteRecursive`: the sink calls one main-thread way into a function runs make one warning. */
 	@:pin('control') @:killer('M-TS-WAY-OFF')
 	public function testSinkCallsOfOneWayMakeOneWarning(): Void {

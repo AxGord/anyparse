@@ -2323,6 +2323,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyRootCauseTest#testAHoldLongOnlyByWaitingForAWarnedHolderIsInfo :: control :: M-TS-FOLD-OFF',
 			'unit.check.ThreadSafetyRootCauseTest#testAHoldReachingACallOnceCoversNoRepeatingOne :: control :: M-TS-FOLD-SITE-ONCE',
 			'unit.check.ThreadSafetyRootCauseTest#testALockReleasedElsewhereLeavesTheWaiterWarned :: control :: M-TS-FOLD-CROSSING',
+			'unit.check.ThreadSafetyRootCauseTest#testAWorkerRunsOnlyTheWaysItsValuesOpen :: control :: M-TS-ORIGIN-STATES',
 			'unit.check.ThreadSafetyRootCauseTest#testHoldsLongByOneCallMakeOneWarning :: control :: '
 				+ 'M-TS-FOLD-SITE,M-TS-FOLD-DEPTH,M-TS-FOLD-SITE-LOCK',
 			'unit.check.ThreadSafetyRootCauseTest#testHoldsOnTwoThreadsDoNotCoverEachOther :: control :: '
@@ -6281,6 +6282,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-QUIET-HOLD',
 			'M-TS-HAND-RANK',
 			'M-TS-HELPER-SPAN-START',
+			'M-TS-ORIGIN-STATES',
 			'M-TS-REPEATED-BY-HEADER',
 			'M-TS-FOLD-SITE-CYCLE'
 		];

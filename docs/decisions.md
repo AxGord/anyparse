@@ -1888,3 +1888,7 @@ decided the question; it may not become a record of runs.
   `me()._b.release()` starts where `me()` does, so the blocking `me()` passed as lock traffic and the helper's caller
   held `_a` across it unreported. Every lock-call key is the whole span (`LockReleasers.callKey`, shared with
   `blindIn`) (review round 2 `h3`) — branch `feat/ts-precision-3`
+- a worker's origin flowing along every edge whose UNION context carries a background bit → a worker running
+  `f(false)` was taken to run `g` (which only `f(true)` calls, on another worker), so `g`'s hold "ran on both" and
+  covered `h`'s on the first worker. Origins now walk the states: the valuation the worker hands down decides each
+  call (`ThreadStates.workerStep`, `EdgeConditions.carried`) (review round 2 `s2`) — branch `feat/ts-precision-3`

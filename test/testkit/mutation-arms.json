@@ -18729,6 +18729,14 @@
 			"note": "a lock-call site is keyed by its start, so a call a give is made on passes as lock traffic"
 		},
 		{
+			"name": "M-TS-ORIGIN-STATES",
+			"type": "anyparse.check.ThreadStates",
+			"method": "workerStep",
+			"find": "_conditions.carried(e, valuation, ThreadSafety.CTX_BG)",
+			"replace": "ThreadSafety.CTX_BG",
+			"note": "a worker origin flows along every call whatever valuation the worker hands down"
+		},
+		{
 			"name": "M-TS-REPEATED-BY-HEADER",
 			"type": "anyparse.check.MainSinkReport",
 			"method": "repeaters",

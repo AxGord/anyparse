@@ -169,8 +169,9 @@ final class ThreadStates {
 	/**
 	 * The threads each function runs on, by origin: `MAIN_ORIGIN` for the main thread, loud or quiet, and for a worker
 	 * the callback a `spawns` call starts it with (`callbackContext` making it background whatever registers it) — each
-	 * such callback one thread, whatever spawns it. A worker origin flows along every edge carrying a background context
-	 * (`edgeContext`) but a value handed to a `spawns` call, which starts an origin of its own, or one `inertRef` says is
+	 * such callback one thread, whatever spawns it. A worker origin flows along every edge carrying a background context, per
+	 * state — under the valuation the worker hands down (`EdgeConditions.carried`), so a call a condition rules out there
+	 * carries none — but a value handed to a `spawns` call, which starts an origin of its own, or one `inertRef` says is
 	 * never run from there; a function no thread runs has none.
 	 */
 	public function origins(inertRef: (CallEdge) -> Bool): (String) -> Array<String> {
@@ -180,18 +181,36 @@ final class ThreadStates {
 		final onWorker: (CallEdge) -> Bool = e ->
 			e.kind != Contains && !(e.kind == Ref && inertRef(e)) && edgeContext(e) & ThreadSafety.CTX_BG != 0;
 		for (start in _graph.edges) if (spawned(start) && onWorker(start)) {
-			final queue: Array<String> = [start.to];
+			// per state: a call a condition rules out under the valuation the worker hands down carries no origin
+			final seen: Map<String, Bool> = [];
+			final queue: Array<{ id: String, valuation: String }> = [{ id: start.to, valuation: _conditions.unknown(start.to) }];
 			var qi: Int = 0;
 			while (qi < queue.length) {
-				final id: String = queue[qi++];
-				final known: Array<String> = found[id] ?? [];
-				if (known.contains(start.to)) continue;
-				known.push(start.to);
-				found[id] = known;
-				for (e in _graph.outEdges(id)) if (!spawned(e) && onWorker(e)) queue.push(e.to);
+				final at: { id: String, valuation: String } = queue[qi++];
+				if (seen.exists('${at.id}|${at.valuation}')) continue;
+				seen['${at.id}|${at.valuation}'] = true;
+				final known: Array<String> = found[at.id] ?? [];
+				if (!known.contains(start.to)) known.push(start.to);
+				found[at.id] = known;
+				for (e in _graph.outEdges(at.id)) if (!spawned(e) && onWorker(e)) {
+					final next: Null<{ id: String, valuation: String }> = workerStep(e, at.valuation);
+					if (next != null) queue.push(next);
+				}
 			}
 		}
 		return id -> found[id] ?? [];
+	}
+
+	/**
+	 * The state a worker running a function under `valuation` enters through its edge `e`: the call's target under the
+	 * values it hands down, a value handed on with nothing known; null when a condition rules `e` out there, or the value
+	 * runs on no worker from there.
+	 */
+	private function workerStep(e: CallEdge, valuation: String): Null<{ id: String, valuation: String }> {
+		final live: Int = _conditions.carried(e, valuation, ThreadSafety.CTX_BG);
+		final ctx: Int = e.kind == Ref ? _callbackContext(e, live) : live;
+		if (live == 0 || ctx & ThreadSafety.CTX_BG == 0) return null;
+		return { id: e.to, valuation: e.kind == Ref ? _conditions.unknown(e.to) : _conditions.bind(e, valuation) };
 	}
 
 	/** A `mainPath` as text, its last `cap` hops after `...` when it is longer. */
