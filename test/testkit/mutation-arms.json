@@ -17332,8 +17332,8 @@
 			"name": "M-TS-ERROR-TAKE-ANY",
 			"type": "anyparse.check.MainSinkReport",
 			"method": "report",
-			"find": "else if (costs.normal.costsLong(edge, null) || repeated) normal[key] = true;",
-			"replace": "else if (false && (costs.normal.costsLong(edge, null) || repeated)) normal[key] = true;",
+			"find": "else if (costs.normal.costsLong(edge, null) || repeated)",
+			"replace": "else if (false)",
 			"note": "every long main take counts as error-path only"
 		},
 		{
