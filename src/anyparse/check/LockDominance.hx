@@ -18,6 +18,9 @@ using Lambda;
 @:nullSafety(Strict)
 final class LockDominance {
 
+	/** Joins the entries of a hold set (`holdOf`). */
+	private static inline final HELD_SEPARATOR: String = '\n';
+
 	/** Bound on the rounds of `settle`: each round's answer is sound, the last one kept. */
 	private static inline final ROUNDS: Int = 8;
 
@@ -85,35 +88,50 @@ final class LockDominance {
 	}
 
 	/**
-	 * The hold `a` as `<lock>@<object>`: its lock and the object it is taken on, relative to its function (`MustHeld`);
-	 * null for a lock no member names, or an object no path of stable fields names.
+	 * What the hold `a` holds while its window runs, as `<lock>@<object>` entries (`MustHeld`) joined by `HELD_SEPARATOR`:
+	 * its lock on the object it is taken on, relative to its function, and — for a hold a multi-lock helper's call opens
+	 * — every other lock that call takes; null when no entry names its object.
 	 */
 	public function holdOf(a: LockAcquire): Null<String> {
-		final lock: Null<String> = a.lock;
-		final object: Null<String> = _must.holdObject(a);
-		return lock == null || object == null ? null : MustHeld.heldOn(lock, object);
+		final entries: Array<String> = [];
+		for (h in _holds) if (h == a || h.inner != null && h.edge == a.edge) {
+			final lock: Null<String> = h.lock;
+			final object: Null<String> = _must.holdObject(h);
+			if (lock != null && object != null && !entries.contains(MustHeld.heldOn(lock, object)))
+				entries.push(MustHeld.heldOn(lock, object));
+		}
+		return entries.length == 0 ? null : entries.join(HELD_SEPARATOR);
 	}
 
 	/**
-	 * The hold `under` (`holdOf`) as the callee of `call` sees it: its object carried onto the callee (`MustHeld.carried`);
-	 * null when nothing says what that object is there, or when the callee may give the lock back (`MustHeld.mayRelease`).
+	 * The holds `under` (`holdOf`) as the callee of `call` sees them: each object carried onto the callee
+	 * (`MustHeld.carried`); an entry drops out when nothing says what its object is there, or when the callee may give its
+	 * lock back (`MustHeld.mayRelease`); null when none is left.
 	 */
 	public function carry(under: Null<String>, call: CallEdge): Null<String> {
 		if (under == null) return null;
-		final lock: String = MustHeld.lockOf(under);
-		final object: Null<String> = _must.carried(MustHeld.objectOf(under), call);
-		return object == null || _must.mayRelease(lock, call.to) ? null : MustHeld.heldOn(lock, object);
+		final kept: Array<String> = [];
+		for (held in under.split(HELD_SEPARATOR)) {
+			final lock: String = MustHeld.lockOf(held);
+			final object: Null<String> = _must.carried(MustHeld.objectOf(held), call);
+			if (object != null && !_must.mayRelease(lock, call.to)) kept.push(MustHeld.heldOn(lock, object));
+		}
+		return kept.length == 0 ? null : kept.join(HELD_SEPARATOR);
 	}
 
 	/**
-	 * Whether the take `take` waits for no long hold while the hold `under` is held: on that hold's object, a re-take of
-	 * its lock by a take that may repeat it (`reentrant`), or a take of a lock it dominates (`dominators`).
+	 * Whether the take `take` waits for no long hold while the holds `under` are held: on one's object, a re-take of its
+	 * lock by a take that may repeat it (`reentrant`), or a take of a lock it dominates (`dominators`).
 	 */
 	public function briefUnder(under: String, take: CallEdge, reentrant: Bool): Bool {
 		final lock: Null<String> = _sites.lockOf(take);
-		final held: String = MustHeld.lockOf(under);
-		if (lock == null || _must.takeObject(take) != MustHeld.objectOf(under)) return false;
-		return lock == held ? reentrant : (dominators[lock] ?? []).contains(held);
+		final object: Null<String> = _must.takeObject(take);
+		if (lock == null || object == null) return false;
+		return under.split(HELD_SEPARATOR).exists(
+			held ->
+				MustHeld.objectOf(held) == object
+				&& (lock == MustHeld.lockOf(held) ? reentrant : (dominators[lock] ?? []).contains(MustHeld.lockOf(held)))
+		);
 	}
 
 	/**
@@ -122,7 +140,8 @@ final class LockDominance {
 	 */
 	private function solveDominators(longAt: (LockAcquire) -> Null<Array<Int>>): Bool {
 		final found: Map<String, Array<String>> = [];
-		final broken: Array<String> = [for (c in _sites.crossing) c.lock];
+		// a multi-lock helper's give is its caller's release, never a release of a hold begun elsewhere
+		final broken: Array<String> = [for (c in _sites.crossing) if (!_sites.helpers.contains(c.edge.from)) c.lock];
 		for (a in _holds) {
 			final lock: String = a.lock ?? '';
 			if (lock == '' || a.uncontended || _sites.helpers.contains(a.edge.from) || broken.contains(lock)) continue;

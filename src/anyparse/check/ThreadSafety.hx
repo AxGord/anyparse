@@ -154,17 +154,18 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		// a hold whose take no thread runs holds nothing: a function nothing invokes, a take a condition rules out
 		final acquires: Array<LockAcquire> = [for (a in sites.acquires) if (states.edgeContext(a.edge) != 0) a];
 		final helperHolds: Array<LockAcquire> = [for (a in sites.helperHolds) if (states.edgeContext(a.edge) != 0) a];
+		final judged: Array<LockAcquire> = judgedHolds(sites, acquires, helperHolds);
 		// the locks whose take blocks at all: held across any blocking call, short ones included
 		final blocking: Array<String> = [];
 		final taints: LockTaint = new LockTaint(graph, sinkIds, listsOf, sites, blocking, conditions, states);
-		solveLongLocks(sites, acquires, blocking, taints);
+		solveLongLocks(sites, judged, blocking, taints);
 		// the locks whose take blocks LONG: held across a call that blocks long, or a short one that repeats
 		final repetition: CallRepetition = new CallRepetition(graph, trees, plugin.refShape(), listsOf);
 		final holds: Array<LockAcquire> = acquires.concat(helperHolds);
 		final must: MustHeld = new MustHeld(graph, plugin, trees, sites, states, conditions, repetition, holds, inertRef, unresolvedNames);
 		final dominance: LockDominance = new LockDominance(sites, states, conditions, repetition, must, holds);
 		final settled: { long: Array<String>, costs: LockTaint } = dominance.settle(
-			taints, (long, costs) -> solveLongLocks(sites, acquires, long, costs)
+			taints, (long, costs) -> solveLongLocks(sites, judged, long, costs)
 		);
 		final long: Array<String> = settled.long;
 		final costs: LockTaint = settled.costs;
@@ -174,7 +175,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			all: costs,
 			normal: new LockDominance(
 				sites, states, conditions, repetition, must, holds
-			).settle(taints, (l, c) -> solveLongLocks(sites, acquires, l, c), errors).costs,
+			).settle(taints, (l, c) -> solveLongLocks(sites, judged, l, c), errors).costs,
 			errors: errors
 		};
 
@@ -186,12 +187,12 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			graph, sites, taints, paths, { repetition: repetition, on: repeatedOnMain, runs: runsMain }, states, violations
 		);
 		reportMalformedPairs(sets, violations);
-		reportLockHeld(graph, sites, acquires, taints, paths, states, violations);
+		reportLockHeld(graph, sites, judged, taints, paths, states, violations);
 		reportThrowHeld(graph, acquires.concat(helperHolds), throws, violations);
 		final order: LockOrder = new LockOrder(graph, conditions, acquires.concat(helperHolds));
 		for (v in order.report(states, inertRef, CTX_MAIN | CTX_QUIET, CTX_BG, CHAIN_CAP)) violations.push(v);
 		// after every finding: the counterfactual solves fill taints of their own, which must not shape a report
-		longLocks = explained(sites, acquires, long, costs, states, dominance.dominators, { taint: paths.normal, errors: errors });
+		longLocks = explained(sites, judged, long, costs, states, dominance.dominators, { taint: paths.normal, errors: errors });
 		return violations;
 	}
 
@@ -567,7 +568,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	private static function solveLongLocks(
 		sites: LockSites, acquires: Array<LockAcquire>, long: Array<String>, taints: LockTaint, ?aside: String
 	): Void {
-		for (c in sites.crossing) if (c.lock != aside && !long.contains(c.lock)) long.push(c.lock);
+		// a multi-lock helper's give is its caller's release, never a release of a hold begun elsewhere
+		for (c in sites.crossing) if (c.lock != aside && !long.contains(c.lock) && !sites.helpers.contains(c.edge.from)) long.push(c.lock);
 		for (a in acquires) if (
 			(LongLockExplain.leaks(a) || taints.blindLong(a)) && a.lock != null && a.lock != aside && !long.contains(a.lock)
 		)
@@ -680,6 +682,16 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			if (!short) reported.push({ hold: a, calls: [for (b in blocking) b.edge], finding: finding });
 		}
 		nestHolds(reported);
+	}
+
+	/**
+	 * The holds findings (b) judge: every one of `acquires` but a multi-lock helper's own takes, which are its callers'
+	 * holds (`helperHolds`), judged where the helper is called.
+	 */
+	private static function judgedHolds(
+		sites: LockSites, acquires: Array<LockAcquire>, helperHolds: Array<LockAcquire>
+	): Array<LockAcquire> {
+		return [for (a in acquires) if (!sites.helpers.contains(a.edge.from)) a].concat(helperHolds);
 	}
 
 	/** The own-work taint of the costed taint `costs` (`LockTaint.ownWork`). */

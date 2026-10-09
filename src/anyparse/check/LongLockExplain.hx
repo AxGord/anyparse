@@ -136,7 +136,7 @@ final class LongLockExplain {
 			byLock[lock] = distinct((byLock[lock] ?? []).concat([reason]));
 			if (!order.contains(lock)) order.push(lock);
 		}
-		for (c in sites.crossing) add(c.lock, siteReason(Crossing, c.edge, []));
+		for (c in crossings(sites)) add(c.lock, siteReason(Crossing, c.edge, []));
 		for (a in acquires) {
 			final lock: Null<String> = a.lock;
 			if (lock == null)
@@ -179,6 +179,13 @@ final class LongLockExplain {
 		for (r in reasons) if (!out.exists(o -> o.kind == r.kind && o.file == r.file && o.span?.from == r.span?.from && o.call == r.call))
 			out.push(r);
 		return out;
+	}
+
+	/** The crossing releases of `sites` but a multi-lock helper's, whose gives are its callers' releases. */
+	private static function crossings(sites: LockSites): Array<{ lock: String, edge: CallEdge }> {
+		return [
+			for (c in sites.crossing) if (!sites.helpers.contains(c.edge.from)) { lock: c.lock, edge: c.edge }
+		];
 	}
 
 	/**

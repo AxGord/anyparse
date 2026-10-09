@@ -388,6 +388,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.ThreadSafetyErrorPathTest',
 		'unit.check.ThreadSafetyFindingDataTest',
 		'unit.check.ThreadSafetyFoldingTest',
+		'unit.check.ThreadSafetyHelperHoldsTest',
 		'unit.check.ThreadSafetyLongLocksTest',
 		'unit.check.ThreadSafetyOwnReasonsTest',
 		'unit.check.ThreadSafetyQuietLocksTest',
@@ -2168,6 +2169,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyFoldingTest#testAHoldInsideAnotherIsItsFinding :: control :: M-TS-NEST-OFF',
 			'unit.check.ThreadSafetyFoldingTest#testAWaitInsideASinksBodyIsTheSinks :: control :: M-TS-INSIDE-SINK-OFF',
 			'unit.check.ThreadSafetyFoldingTest#testMainTakesOfOneLockWarnOnce :: control :: M-TS-ONE-TAKE-OFF,M-TS-ONE-TAKE-NO-WRAPPER',
+			'unit.check.ThreadSafetyHelperHoldsTest#testTheHelpersCallerHoldsBothLocks :: control :: M-TS-HELPER-B-OFF,M-TS-HELPER-OWN-TAKES',
+			'unit.check.ThreadSafetyHelperHoldsTest#testTheHelpersOtherLocksAreHeldToo :: control :: M-TS-HELPER-SIBLINGS',
+			'unit.check.ThreadSafetyHelperHoldsTest#testTheTwinsGiveIsNoCrossingRelease :: control :: M-TS-HELPER-CROSSING',
+			'unit.check.ThreadSafetyHelperHoldsTest#testTheTwinsGiveLeavesDominanceStanding :: control :: M-TS-HELPER-DOM-CROSSING',
 			'unit.check.ThreadSafetyLongLocksTest#testACircularReTakeIsCountedApart :: control :: M-TS-CIRCULAR-COUNTED',
 			'unit.check.ThreadSafetyLongLocksTest#testAVirtualCallIsAReasonPerTarget :: control :: M-TS-REASONS-DEDUP-BY-SITE',
 			'unit.check.ThreadSafetyLongLocksTest#testAsideNamesTheLongLockAHoldWaitsFor :: control :: M-TS-VIA-DROPPED',
@@ -5966,7 +5971,12 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-SHARED-OFF',
 			'M-TS-SHARED-ANY',
 			'M-TS-SHARED-HOLD',
-			'M-TS-CTOR-TAKE'
+			'M-TS-CTOR-TAKE',
+			'M-TS-HELPER-B-OFF',
+			'M-TS-HELPER-OWN-TAKES',
+			'M-TS-HELPER-CROSSING',
+			'M-TS-HELPER-DOM-CROSSING',
+			'M-TS-HELPER-SIBLINGS'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

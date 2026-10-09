@@ -57,14 +57,21 @@ class ThreadSafetyCarriedHoldTest extends Test {
 		#end
 	}
 
-	/** A take on ANOTHER object's lock is no take under the hold. */
+	/** A take on ANOTHER object's lock is no take under the hold — another field's, or the running object's own. */
 	@:pin('control') @:killer('M-TS-CARRY-OBJECT')
 	public function testATakeOnAnotherObjectIsNotUnderTheHold(): Void {
 		#if (sys || nodejs)
 		Assert.same(
-			['warning B Fs.work | Db.batch'],
-			work(own('_db.batchLock(); _other.mutex.acquire(); _other.mutex.release(); _db.batchUnlock();'))
+			['warning B Fs.work | Db.batch'], work(own('_db.batchLock(); _other.batchLock(); _other.batchUnlock(); _db.batchUnlock();'))
 		);
+		// `Fs` a `Db` itself: its own `batch` is not the one it holds on `_db`
+		final self: String = StringTools.replace(
+			StringTools.replace(
+				own('_db.batchLock(); batch.acquire(); batch.release(); _db.batchUnlock();'), 'class Fs {', 'class Fs extends Db {'
+			),
+			'{ _db = db;', '{ super(); _db = db;'
+		);
+		Assert.same(['warning B Fs.work | Db.batch'], work(self), 'its own object');
 		#else
 		Assert.pass('non-sys target');
 		#end

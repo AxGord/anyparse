@@ -17380,7 +17380,7 @@
 			"name": "M-TS-CARRY-OFF",
 			"type": "anyparse.check.LockDominance",
 			"method": "carry",
-			"find": "return object == null || _must.mayRelease(lock, call.to) ? null : MustHeld.heldOn(lock, object);",
+			"find": "return kept.length == 0 ? null : kept.join(HELD_SEPARATOR);",
 			"replace": "return null;",
 			"note": "a hold is carried into no callee"
 		},
@@ -17388,24 +17388,24 @@
 			"name": "M-TS-CARRY-RELEASE",
 			"type": "anyparse.check.LockDominance",
 			"method": "carry",
-			"find": "return object == null || _must.mayRelease(lock, call.to) ? null : MustHeld.heldOn(lock, object);",
-			"replace": "return object == null ? null : MustHeld.heldOn(lock, object);",
+			"find": "if (object != null && !_must.mayRelease(lock, call.to)) kept.push(MustHeld.heldOn(lock, object));",
+			"replace": "if (object != null) kept.push(MustHeld.heldOn(lock, object));",
 			"note": "a hold is carried into a callee that gives the lock back"
 		},
 		{
 			"name": "M-TS-CARRY-RETAKE",
 			"type": "anyparse.check.LockDominance",
 			"method": "briefUnder",
-			"find": "return lock == held ? reentrant : (dominators[lock] ?? []).contains(held);",
-			"replace": "return lock == held ? false : (dominators[lock] ?? []).contains(held);",
+			"find": "(lock == MustHeld.lockOf(held) ? reentrant :",
+			"replace": "(lock == MustHeld.lockOf(held) ? false :",
 			"note": "a re-take of the carried re-entrant lock waits"
 		},
 		{
 			"name": "M-TS-CARRY-OBJECT",
 			"type": "anyparse.check.LockDominance",
 			"method": "briefUnder",
-			"find": "if (lock == null || _must.takeObject(take) != MustHeld.objectOf(under)) return false;",
-			"replace": "if (lock == null) return false;",
+			"find": "MustHeld.objectOf(held) == object",
+			"replace": "true",
 			"note": "a take on another object counts as under the carried hold"
 		},
 		{
@@ -17463,6 +17463,46 @@
 			"find": "return lock != '' && sharedOnly(lock) || uncontended(edge);",
 			"replace": "return lock != '' && sharedOnly(lock);",
 			"note": "a constructor's own take before publication blocks"
+		},
+		{
+			"name": "M-TS-HELPER-B-OFF",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "judgedHolds",
+			"find": "return [for (a in acquires) if (!sites.helpers.contains(a.edge.from)) a].concat(helperHolds);",
+			"replace": "return [for (a in acquires) if (!sites.helpers.contains(a.edge.from)) a];",
+			"note": "a multi-lock helper's call opens no hold its caller is judged by"
+		},
+		{
+			"name": "M-TS-HELPER-OWN-TAKES",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "judgedHolds",
+			"find": "return [for (a in acquires) if (!sites.helpers.contains(a.edge.from)) a].concat(helperHolds);",
+			"replace": "return [for (a in acquires) a].concat(helperHolds);",
+			"note": "a multi-lock helper's own takes are judged as holds of their own"
+		},
+		{
+			"name": "M-TS-HELPER-CROSSING",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "solveLongLocks",
+			"find": "&& !sites.helpers.contains(c.edge.from)) long.push(c.lock);",
+			"replace": ") long.push(c.lock);",
+			"note": "a helper twin's give makes its locks long as a crossing release"
+		},
+		{
+			"name": "M-TS-HELPER-DOM-CROSSING",
+			"type": "anyparse.check.LockDominance",
+			"method": "solveDominators",
+			"find": "[for (c in _sites.crossing) if (!_sites.helpers.contains(c.edge.from)) c.lock]",
+			"replace": "[for (c in _sites.crossing) c.lock]",
+			"note": "a helper twin's give breaks every dominance of its locks"
+		},
+		{
+			"name": "M-TS-HELPER-SIBLINGS",
+			"type": "anyparse.check.LockDominance",
+			"method": "holdOf",
+			"find": "if (h == a || h.inner != null && h.edge == a.edge) {",
+			"replace": "if (h == a) {",
+			"note": "a helper hold carries only its own lock, not the others its call takes"
 		}
 	]
 }

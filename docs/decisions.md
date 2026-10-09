@@ -1580,5 +1580,11 @@ decided the question; it may not become a record of runs.
   `StandardFileSystem.listFolder`'s `Lock.wait` is no main-thread-check gap — `put` does take the async `request` on
   main, whose `urlLoader.load` → `this.go()` dispatches to every override, `BlockingNativeURLLoader.go` included
   (the loader `doRequest` builds is never one) — branch `feat/ts-precision-2`
+- multi-lock helper holds (`helperHolds`) fed to the throw and order findings only → finding (b) never judged
+  them, so every caller of TM's `acquireMutationLocks` (saveXML, moveItem, deleteItem, renameItemInternal, …) held
+  `_batchMutex` and `_mutationMutex` across nothing, while the helper itself warned for taking `_mutationMutex` under
+  `_batchMutex`, and the twin's gives counted as crossing releases making both locks long on their own. The holds are
+  judged at the caller like a wrapper's; the helper's takes and the twin's gives are the caller's — branch
+  `feat/ts-precision-2`
 - judging "inside a catch" off the witness chain the finding prints → the chain is one way; a second way outside every
   catch must keep the warning, which only a solve without the catch edges can see — branch `feat/ts-precision-2`
