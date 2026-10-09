@@ -4,10 +4,14 @@ import anyparse.grammar.json.JValue;
 import anyparse.runtime.EditDistance;
 import haxe.Exception;
 
-/** One well-formed `boundedRepeats` entry, as written: the member, the call it narrows to, the bound and the cost of a turn. */
+/**
+ * One well-formed `boundedRepeats` entry, as written: the member, the
+ * call or loop header it narrows to, the bound and the cost of a turn.
+ */
 typedef BoundedRepeatEntry = {
 	final site: String;
 	final call: Null<String>;
+	final loop: Null<String>;
 	final max: Float;
 	final costMs: Float;
 }
@@ -19,7 +23,8 @@ typedef BoundedRepeatEntry = {
  *
  * Shapes. A LIST (`LIST_KEYS`) is an array of strings, a non-string item dropped with a note; a FLAG (`FLAG_KEYS`) is
  * `true` or `false`; `repeatBudgetMs` a positive number; `boundedRepeats` an array of objects, each with a `site`
- * string, a positive `max`, a `costMs` of at least 0, an optional `call` string and an optional `evidence` string (read
+ * string naming one member (no pattern), a positive `max`, a positive `costMs`,
+ * an optional `call` and `loop` string and an optional `evidence` string (read
  * by people, never by the rule); `lockPairs` items are `<lock pattern>/<unlock member>`. Any other shape is dropped,
  * whole, and said: the option then reads as absent, which is what it read as before, silently.
  *
@@ -95,7 +100,7 @@ final class ThreadSafetyOptions {
 		final parts: Array<String> = [for (key in LIST_KEYS) key + '=' + list(key).join('\n')];
 		for (key in FLAG_KEYS) parts.push('$key=${flag(key)}');
 		parts.push('$BUDGET_KEY=$repeatBudgetMs');
-		for (b in boundedRepeats) parts.push('${b.site}>${b.call}:${b.max}x${b.costMs}');
+		for (b in boundedRepeats) parts.push('${b.site}>${b.call}@${b.loop}:${b.max}x${b.costMs}');
 		return parts.join('\t');
 	}
 
@@ -166,6 +171,7 @@ final class ThreadSafetyOptions {
 			case JObject(fields):
 				var site: Null<String> = null;
 				var call: Null<String> = null;
+				var loop: Null<String> = null;
 				var max: Null<Float> = null;
 				var cost: Null<Float> = null;
 				final wrong: Array<String> = [];
@@ -174,12 +180,14 @@ final class ThreadSafetyOptions {
 						site = v;
 					case ['call', JString(v)]:
 						call = v;
+					case ['loop', JString(v)]:
+						loop = v;
 					case ['max', JNumber(v)]:
 						max = (v: Float);
 					case ['costMs', JNumber(v)]:
 						cost = (v: Float);
 					case ['evidence', JString(_)]:
-					case ['site' | 'call' | 'max' | 'costMs' | 'evidence', _]:
+					case ['site' | 'call' | 'loop' | 'max' | 'costMs' | 'evidence', _]:
 						wrong.push('"${field.key}" is not a ${field.key == 'max' || field.key == 'costMs' ? 'number' : 'string'}');
 					case _:
 						wrong.push('unknown key "${field.key}"');
@@ -187,13 +195,17 @@ final class ThreadSafetyOptions {
 				final siteName: Null<String> = site;
 				final bound: Null<Float> = max;
 				final turn: Null<Float> = cost;
-				final missing: String = '$BOUNDED_KEY[$i] dropped: it needs a "site", a positive "max" and a "costMs" of at least 0';
+				final dropped: String = '$BOUNDED_KEY[$i] dropped: ';
 				if (wrong.length > 0)
 					problems.push('$BOUNDED_KEY[$i] dropped: ${wrong.join(', ')}');
-				else if (siteName == null || bound == null || turn == null)
-					problems.push(missing);
-				else if (!(bound > 0) || !(turn >= 0))
-					problems.push(missing);
+				else if (siteName == null)
+					problems.push(dropped + 'it names no "site"');
+				else if (siteName.indexOf('*') >= 0)
+					problems.push(dropped + '"site" is a pattern, not one member');
+				else if (bound == null || !(bound > 0))
+					problems.push(dropped + '"max" is not a positive number');
+				else if (turn == null || !(turn > 0))
+					problems.push(dropped + '"costMs" is not a positive number');
 				else {
 					// re-bound: strict null-safety does not carry a narrowed local into a structure literal
 					final named: String = siteName;
@@ -202,6 +214,7 @@ final class ThreadSafetyOptions {
 					boundedRepeats.push({
 						site: named,
 						call: call,
+						loop: loop,
 						max: most,
 						costMs: each
 					});

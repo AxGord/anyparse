@@ -13,7 +13,7 @@ import utest.Test;
 class ThreadSafetyOptionsTest extends Test {
 
 	private static inline final SOURCES: String = 'class Mutex { public function new() {} public function acquire():Void {}'
-		+ ' public function release():Void {} } class L { public static function main():Void { Sys.sleep(1); } }';
+		+ ' public function release():Void {} } class L { public static function main():Void { for (i in 0...3) Sys.sleep(1); } }';
 
 	@:pin('control') @:killer('M-TS-OPT-UNKNOWN') @:killer('M-TS-OPT-LIST-SHAPE') @:killer('M-TS-OPT-LIST-ITEM')
 	@:killer('M-TS-OPT-FLAG') @:killer('M-TS-OPT-BUDGET') @:killer('M-TS-OPT-BOUNDED-ENTRY') @:killer('M-TS-OPT-BOUNDED-SITE')

@@ -91,7 +91,11 @@ class ThreadSafetyRootCauseTest extends Test {
 	public function testTheCallsOfOneLoopMakeOneWarning(): Void {
 		#if (sys || nodejs)
 		Assert.same(
-			['info A L.a | Disk.stat', 'info A L.b | Disk.list', 'warning A L.main | L.a'],
+			[
+				'info A L.a | Disk.stat',
+				'info A L.b | Disk.list',
+				'warning A L.main | for (i in 0...3)'
+			],
 			mains(ThreadSafetyCheckTest.violations(CONFIG, [
 				DISK,
 				'class L { static function a():Void Disk.stat("a"); static function b():Void Disk.list("b");'

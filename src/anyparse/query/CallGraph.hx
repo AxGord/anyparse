@@ -1206,8 +1206,10 @@ final class CallGraph {
 			final local: Null<String> = localFn(name);
 			if (local != null) return local;
 			final bound: Null<Int> = bindFor(name)[span.from];
+			// a lambda's first parameter starts where the lambda does: only a local function NAMED so is what the name binds
+			final fn: Null<String> = bound == null ? null : entry.fnBySpanFrom[bound];
 			return if (bound != null && bound >= 0)
-				entry.fnBySpanFrom[bound]
+				fn != null && nodes[fn]?.name == name ? fn : null
 			else if (currentType == null)
 				null
 			else

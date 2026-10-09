@@ -1730,3 +1730,29 @@ decided the question; it may not become a record of runs.
 - the fix brief's "dead" `boundedRepeats` entry `fs.FileSystemManager.deleteFileSystems` → live: without it TM's
   `A deleteFileSystems | FileSystem.deleteFile` (four unlinks under `HelpMain.deleteCache`, real-short) warns on all
   three frozen trees; kept — branch `fix/ts-C2`
+- a call repeats only when the graph PROVES a loop, an `iterates` callback or a recursion (a negative list) → a user
+  `each(xs, f)`, an aliased `Lambda.iter`, `n.forEachKid(walk)`, a `Dynamic` handler loop, a custom iterator's `next`
+  and a background loop posting 1000 `runInMainThread` tasks were all "once" and info, with a note claiming "no loop,
+  `iterates` callback or recursion on the way"; repetition is POSITIVE now: a value handed to any call but a `runsOnce`
+  / `registers` / `spawns` / `marshals` / `neverInvokes` one repeats, a marshalled value owns its repetition, a function
+  no resolved call runs (the entry point and static initializers aside) warns "repetition unknown", and the info note
+  says what it proved. TM: +25 warnings on 1d1ba147 with a proposed `runsOnce` (API entity calls, `LoadView.load`, …)
+  — branch `fix/ts-B`
+- `registers` honoured for any call it names → a registration into project code (`Hub.addEventListener` pushing into an
+  array a dispatch loop runs) counted once per event though the project's own loop runs it per item; only the
+  runtime's registration (no body in the run) is once per event, and its info says "once per event" — a dispatch the
+  RUNTIME makes in a project loop (`for (…) sprite.dispatchEvent(e)`) stays the known hole — branch `fix/ts-B`
+- a `boundedRepeats` entry covering its whole member (nested, sibling and lambda loops became "once" with it) and a
+  malformed `call` widening to the member → an entry binds ONE repetition of the member's code (the only one, its
+  `loop` header, or the one around its `call`), a call inside several bound ones pays the product of their bounds, and
+  an entry binding none or several, or with a field of the wrong type, a non-positive number, a pattern `site`, a
+  `call` naming nothing or an unknown key, is dropped whole with a config `info` — branch `fix/ts-B`
+- only the first of several equally near repeating callers warning, owners ordered by `'file:offset:to'` as TEXT, a
+  loop's warning keyed by its first call by offset and a handed value's by its lambda's per-file number → every owner
+  at the least distance warns, ordered by numeric offset; a repeating site is keyed by its loop's header (`#2` for a
+  second of one header in a function), the call it hands a value to, or its recursion's target — an unrelated edit
+  renames nothing. TM truth keys remapped (9 entries, `for (session in sessions)`, `FileSystemItemData.forEachChild`, …)
+  — branch `fix/ts-B`
+- a lambda's first parameter read as a reference to the lambda (`x -> f(x)`: the binder starts where the lambda does,
+  and `fnBySpanFrom` answered the lambda) → a phantom `Ref` from every such lambda to itself; a name binds a local
+  function only when that function carries the name — branch `fix/ts-B`

@@ -15,8 +15,9 @@ class ThreadSafetyRegistersTest extends Test {
 		+ '"shortSinks":["FileSystem.stat"],"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"],'
 		+ '"registers":["addEventListener"]}}}';
 
-	private static inline final DISPATCHER: String = 'class D { public function new() {}'
-		+ ' public function addEventListener(type:String, fn:String->Void):Void {} }';
+	/** The runtime's dispatcher (an openfl display object in TM): `registers` speaks for a registration it keeps itself. */
+	private static inline final DISPATCHER: String = 'extern class D { public function new();'
+		+ ' public function addEventListener(type:String, fn:String->Void):Void; }';
 
 	/**
 	 * TM's `FileListOperations.listenContent`: one rename handler registered on every list item renames once per event,
@@ -40,7 +41,7 @@ class ThreadSafetyRegistersTest extends Test {
 	public function testWithoutTheEntryTheLoopWarns(): Void {
 		#if (sys || nodejs)
 		Assert.same(
-			['info A A.handler | FileSystem.stat', 'warning A A.main | A.handler'],
+			['info A A.handler | FileSystem.stat', 'warning A A.main | for (d in ds)'],
 			graded(run(
 				'public static function main():Void { final ds:Array<D> = [new D(), new D()]; for (d in ds) d.addEventListener("x", handler); }',
 				StringTools.replace(CONFIG, '"addEventListener"', '"other"')
@@ -72,7 +73,7 @@ class ThreadSafetyRegistersTest extends Test {
 	public function testTheOwnerIsNeverUpARegistration(): Void {
 		#if (sys || nodejs)
 		Assert.same(
-			['info A A.handler | FileSystem.stat', 'warning A A.main | A.a'],
+			['info A A.handler | FileSystem.stat', 'warning A A.main | for (i in 0...3)'],
 			graded(run(
 				'static function wire():Void new D().addEventListener("x", handler); static function setup():Void for (i in 0...3) wire();'
 				+ ' static function b():Void handler("y"); static function a():Void b();'

@@ -16939,9 +16939,9 @@
 		{
 			"name": "M-TS-REPEAT-UPWARD-NONE",
 			"type": "anyparse.check.MainRepeats",
-			"method": "solve",
-			"find": "e.kind != Contains && _runs(e) && _repetition.repeated(e) ? runsFrom(e, v) : null",
-			"replace": "e.kind != Contains && _runs(e) && false ? runsFrom(e, v) : null",
+			"method": "climb",
+			"find": "if (_repetition.repeated(e)) {",
+			"replace": "if (false) {",
 			"note": "a caller repeating a function up the main thread's way repeats nothing below it"
 		},
 		{
@@ -16955,10 +16955,10 @@
 		{
 			"name": "M-TS-REPEAT-NO-ITERATES",
 			"type": "anyparse.check.CallRepetition",
-			"method": "iterated",
-			"find": "return edge.kind == Ref && (",
-			"replace": "return false && (",
-			"note": "a callback handed to an `iterates` call runs once"
+			"method": "handedOn",
+			"find": "if (edge.kind != Ref) return false;",
+			"replace": "if (true) return false;",
+			"note": "a value handed to a call that may run it repeatedly (`iterates`, or any call not listed `runsOnce`) runs once"
 		},
 		{
 			"name": "M-TS-REPEAT-NO-BOUNDARY",
@@ -17132,25 +17132,25 @@
 			"name": "M-TS-OWNER-OFF",
 			"type": "anyparse.check.MainSinkReport",
 			"method": "reportSite",
-			"find": "if (repeaters.length > 0 && !own)",
-			"replace": "if (false)",
+			"find": "for (r in repeaters) {",
+			"replace": "for (r in repeaters.slice(repeaters.length)) {",
 			"note": "a short call repeated from above warns nowhere: no loop owns it"
 		},
 		{
 			"name": "M-TS-OWNER-FARTHEST",
 			"type": "anyparse.check.MainRepeats",
-			"method": "ownersOf",
-			"find": "? a.path.length - b.path.length",
-			"replace": "? b.path.length - a.path.length",
+			"method": "nearestFirst",
+			"find": "a.path.length - b.path.length",
+			"replace": "b.path.length - a.path.length",
 			"note": "the farthest repeating caller owns a short call's warning"
 		},
 		{
 			"name": "M-TS-OWNER-SELF-MOVED",
 			"type": "anyparse.check.MainSinkReport",
 			"method": "reportSite",
-			"find": "final own: Bool = long || owner == ThreadSafety.memberOf(graph, edge.from);",
-			"replace": "final own: Bool = long;",
-			"note": "a call its own member repeats (recursion, iterates callback) is moved onto itself as a second finding"
+			"find": "final own: Bool = long || assumed.length > 0 || repeaters.exists(r -> ThreadSafety.memberOf(graph, r.edge.from) == member);",
+			"replace": "final own: Bool = long || assumed.length > 0;",
+			"note": "a call its own member repeats (recursion, a callback it hands a repeating call) warns nowhere"
 		},
 		{
 			"name": "M-TS-INSIDE-SINK-OFF",
@@ -17395,9 +17395,9 @@
 		{
 			"name": "M-TS-REGISTER-OWNER",
 			"type": "anyparse.check.MainRepeats",
-			"method": "ownersOf",
-			"find": "e.kind != Contains && _runs(e) && !_repetition.registered(e)",
-			"replace": "e.kind != Contains && _runs(e)",
+			"method": "climb",
+			"find": "if (_repetition.registered(e)) {",
+			"replace": "if (false) {",
 			"note": "the owner of a short call is searched up its registrations too"
 		},
 		{
@@ -17833,9 +17833,9 @@
 		{
 			"name": "M-TS-STATES-OWNER-IGNORED",
 			"type": "anyparse.check.MainRepeats",
-			"method": "ownersOf",
-			"find": "if (runsFrom(e, v) != at.valuation) continue;",
-			"replace": "if (runsFrom(e, v) == null) continue;",
+			"method": "climb",
+			"find": "for (v in mainStates(e.from)) if (runsFrom(e, v) == at.valuation) {",
+			"replace": "for (v in mainStates(e.from)) if (runsFrom(e, v) != null) {",
 			"note": "the owner walk climbs into callers whatever valuation they hand down"
 		},
 		{
@@ -17882,8 +17882,8 @@
 			"name": "M-TS-MAINONLY-MOVED",
 			"type": "anyparse.check.MainSinkReport",
 			"method": "reportSite",
-			"find": "owners.moved[siteKey(edge)] = reportRepeater(",
-			"replace": "reportRepeater(",
+			"find": "if (!owners.moved.exists(siteKey(edge))) owners.moved[siteKey(edge)] = finding;",
+			"replace": "",
 			"note": "a sink call whose warning moved to its repeating owner counts as reported nowhere"
 		},
 		{
@@ -18086,7 +18086,7 @@
 			"name": "M-TS-SITE-SUBJECT",
 			"type": "anyparse.check.MainSinkReport",
 			"method": "reportRepeater",
-			"find": "subject: edge.to,",
+			"find": "subject: repeatSubject(edge, repeats.repetition),",
 			"replace": "subject: ThreadSafety.sortedIds(sinks).join(ThreadSafety.SUBJECT_SEPARATOR),",
 			"note": "a repeating site's warning is keyed by its sinks, not the call it repeats"
 		},
@@ -18182,33 +18182,161 @@
 			"name": "M-TS-BOUND-OFF",
 			"type": "anyparse.check.CallRepetition",
 			"method": "repeated",
-			"find": "if (initializerRun(edge) || boundedOnce(edge)) return false;",
-			"replace": "if (initializerRun(edge)) return false;",
+			"find": "return loops == null || recursive(edge) || !boundedOnce(edge, sourcesOf(edge, loops));",
+			"replace": "return loops == null || recursive(edge) || sourcesOf(edge, loops).length > 0;",
 			"note": "a bounded repetition still repeats"
 		},
 		{
 			"name": "M-TS-BOUND-UNDER",
 			"type": "anyparse.check.CallRepetition",
 			"method": "repeatedUnder",
-			"find": "if (initializerRun(edge) || boundedOnce(edge)) return false;",
-			"replace": "if (initializerRun(edge)) return false;",
+			"find": "return !boundedOnce(edge, sourcesOf(edge, loops.filter(l -> !outer.exists(o -> o.from == l.from))));",
+			"replace": "return sourcesOf(edge, loops.filter(l -> !outer.exists(o -> o.from == l.from))).length > 0;",
 			"note": "a bounded repetition under a lock still repeats"
 		},
 		{
 			"name": "M-TS-BOUND-BUDGET",
-			"type": "anyparse.check.BoundedRepeats",
-			"method": "short",
-			"find": " && b.max * b.costMs < limit",
-			"replace": "",
+			"type": "anyparse.check.CallRepetition",
+			"method": "boundedOnce",
+			"find": "return turns * cost < budget;",
+			"replace": "return true;",
 			"note": "a bound over the budget runs as once"
 		},
 		{
 			"name": "M-TS-BOUND-CALL",
-			"type": "anyparse.check.BoundedRepeats",
-			"method": "short",
-			"find": "(b.calls == null || b.calls.contains(callee))",
+			"type": "anyparse.check.CallRepetition",
+			"method": "bind",
+			"find": "e.kind != Contains && (calls == null || calls.contains(e.to) || e.kind == Ref && calls.contains(e.via ?? ''))",
+			"replace": "e.kind != Contains",
+			"note": "an entry naming one call binds the repetitions of every call of the member"
+		},
+		{
+			"name": "M-TS-RUNS-ONCE-OFF",
+			"type": "anyparse.check.CallRepetition",
+			"method": "handedOn",
+			"find": "listed(edge, lists.runsOnceIds, lists.runsOnceNames) ||",
+			"replace": "",
+			"note": "a value handed to a call `runsOnce` lists still repeats"
+		},
+		{
+			"name": "M-TS-REGISTER-PROJECT",
+			"type": "anyparse.check.CallRepetition",
+			"method": "registered",
+			"find": "(via == null || via.isExternal || via.isBodyless)",
 			"replace": "true",
-			"note": "an entry naming one call bounds every repeating call of the member"
+			"note": "a registration into project code, which runs the value from a call the graph cannot follow, counts as once per event"
+		},
+		{
+			"name": "M-TS-MARSHAL-OWNER-OFF",
+			"type": "anyparse.check.MainRepeats",
+			"method": "climb",
+			"find": "if (runsFrom(e, at.valuation) == at.valuation) own(owners, e, path);",
+			"replace": "",
+			"note": "a value marshalled onto the main thread runs once, however many posts a background loop makes"
+		},
+		{
+			"name": "M-TS-ASSUMED-OFF",
+			"type": "anyparse.check.MainRepeats",
+			"method": "climb",
+			"find": "if (_states.assumed.exists(at.id) && !runsOnceAtStart(at.id) && !assumed.contains(at.id)) assumed.push(at.id);",
+			"replace": "",
+			"note": "a function only an assumption runs counts as run once"
+		},
+		{
+			"name": "M-TS-ASSUMED-STATIC",
+			"type": "anyparse.check.MainRepeats",
+			"method": "runsOnceAtStart",
+			"find": "return name == ThreadSafety.ENTRY_POINT || name == CallGraph.STATIC_INIT_NAME;",
+			"replace": "return name == ThreadSafety.ENTRY_POINT;",
+			"note": "a static initializer, run once per program, counts as unknown repetition"
+		},
+		{
+			"name": "M-TS-OWNER-FIRST-ONLY",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "reportSite",
+			"find": "found.filter(o -> o.path.length == found[0].path.length)",
+			"replace": "found.slice(0, 1)",
+			"note": "of equally near repeating callers only the first by offset warns"
+		},
+		{
+			"name": "M-TS-OWNER-OFFSET-TEXT",
+			"type": "anyparse.check.MainRepeats",
+			"method": "nearestFirst",
+			"find": "at - bt",
+			"replace": "Reflect.compare('$at', '$bt')",
+			"note": "owners at one distance ordered by their offsets as text, so an unrelated edit reorders them"
+		},
+		{
+			"name": "M-TS-BOUND-ONE",
+			"type": "anyparse.check.CallRepetition",
+			"method": "bind",
+			"find": "if (found.length != 1)",
+			"replace": "if (found.length == 0)",
+			"note": "an entry over a member holding several repetitions binds the first"
+		},
+		{
+			"name": "M-TS-BOUND-PRODUCT",
+			"type": "anyparse.check.CallRepetition",
+			"method": "boundedOnce",
+			"find": "turns *= entry.max;",
+			"replace": "turns = Math.max(turns, entry.max);",
+			"note": "bounded repetitions nested in one function are judged by the largest bound, not the product"
+		},
+		{
+			"name": "M-TS-BOUND-CALL-SHAPE",
+			"type": "anyparse.check.ThreadSafetyOptions",
+			"method": "readBounded",
+			"find": "wrong.push('\"${field.key}\" is not a ${field.key == 'max' || field.key == 'costMs' ? 'number' : 'string'}');",
+			"replace": "{}",
+			"note": "an entry whose `call` is no string widens to the whole member"
+		},
+		{
+			"name": "M-TS-BOUND-COST-ZERO",
+			"type": "anyparse.check.ThreadSafetyOptions",
+			"method": "readBounded",
+			"find": "else if (turn == null || !(turn > 0))",
+			"replace": "else if (turn == null || !(turn >= 0))",
+			"note": "a zero cost of one turn bounds any number of turns"
+		},
+		{
+			"name": "M-TS-BOUND-SITE-PATTERN",
+			"type": "anyparse.check.ThreadSafetyOptions",
+			"method": "readBounded",
+			"find": "else if (siteName.indexOf('*') >= 0)",
+			"replace": "else if (false)",
+			"note": "a `site` pattern binds whichever single member it happens to match"
+		},
+		{
+			"name": "M-TS-LOOP-SUBJECT",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "repeatSubject",
+			"find": "if (loop != null) return loop;",
+			"replace": "",
+			"note": "a loop's warning is keyed by the call it repeats, which a new call earlier in the loop changes"
+		},
+		{
+			"name": "M-TS-HAND-SUBJECT",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "repeatSubject",
+			"find": "final target: String = edge.kind == Ref ? (edge.via ?? edge.viaMember ?? edge.to) : edge.to;",
+			"replace": "final target: String = edge.to;",
+			"note": "a handed value's warning is keyed by the value, a lambda the file numbers"
+		},
+		{
+			"name": "M-TS-SHORT-REGISTERED-NOTE",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "shortNote",
+			"find": "registered ? CostNote.ShortRegisteredCall : CostNote.ShortMainCall;",
+			"replace": "CostNote.ShortMainCall;",
+			"note": "a short call run once per event of a registration claims every caller up to the entry point"
+		},
+		{
+			"name": "M-GRAPH-LAMBDA-PARAM-SELF",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "fn != null && nodes[fn]?.name == name ? fn : null",
+			"replace": "fn",
+			"note": "a lambda's first parameter, starting where the lambda does, reads as a reference to the lambda"
 		},
 		{
 			"name": "M-TS-FLAGS-OFF",

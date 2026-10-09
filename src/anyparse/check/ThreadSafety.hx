@@ -59,7 +59,8 @@ using StringTools;
  * `compilerFacts: true` builds the graph through the run's compiler facts when it has them
  * (`ThreadGraph.build`) — the ONE graph of the run, so for every file once any chain asks;
  * `iterates` the calls running a function value handed to them once per element, and `registers` the calls keeping one to
- * run later, once per event however often it was registered (`CallRepetition`); `sharedLocks` are the `lockPairs` take
+ * run later, once per event however often it was registered, and `runsOnce` the calls running one at most once per
+ * call — a value handed to any other call may repeat (`CallRepetition`); `sharedLocks` are the `lockPairs` take
  * members taking their lock shared — a lock only ever taken through them never waits (`QuietLocks`); `nonThrowing` are
  * the calls that never throw, so a `catch` around nothing else runs no call (`DeadCatches`).
  *
@@ -91,7 +92,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	public static inline final CHAIN_CAP: Int = 8;
 
 	/** The name of a program's entry point, which the runtime calls. */
-	private static inline final ENTRY_POINT: String = 'main';
+	public static inline final ENTRY_POINT: String = 'main';
 
 	private static inline final EVIDENCE_CAP: Int = 8;
 
@@ -330,6 +331,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final shortSinks: Array<String> = option('shortSinks');
 		final iterates: Array<String> = option('iterates');
 		final registers: Array<String> = option('registers');
+		final runsOnce: Array<String> = option('runsOnce');
 		final nonThrowing: Array<String> = option('nonThrowing');
 		final neverInvokes: Array<String> = option('neverInvokes');
 		final mainChecks: Array<String> = option('mainThreadChecks');
@@ -346,6 +348,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			iterateNames: [for (p in iterates) if (p.indexOf('.') < 0) p],
 			registerIds: matchAll(graph, registers),
 			registerNames: [for (p in registers) if (p.indexOf('.') < 0) p],
+			runsOnceIds: matchAll(graph, runsOnce),
+			runsOnceNames: [for (p in runsOnce) if (p.indexOf('.') < 0) p],
 			sharedIds: matchAll(graph, option('sharedLocks')),
 			nonThrowingIds: matchAll(graph, nonThrowing),
 			nonThrowingNames: [for (p in nonThrowing) if (p.indexOf('.') < 0) p],
@@ -847,9 +851,18 @@ enum abstract FindingFamily(String) to String {
 /** What a `thread-safety` finding adds to its message when its cost or its thread is why it is graded as it is. */
 enum abstract CostNote(String) to String {
 
-	/** A main-thread call that waits too little to warn about (`shortSinks`). */
-	final ShortMainCall = ' — short: a short sink or a take of a lock held only across short calls, once per main-thread run (no'
-		+ ' loop, `iterates` callback or recursion on the way), so reported as info';
+	/**
+	 * A main-thread call that waits too little to warn about (`shortSinks`), run once: every way up to it is a resolved
+	 * call from the entry point that no loop, recursion or value handed to a repeating call repeats (`MainRepeats.climb`).
+	 */
+	final ShortMainCall = ' — short: a short sink or a take of a lock held only across short calls, once per main-thread run (every'
+		+ ' caller up from the entry point resolved, none in a loop, a recursion or a value handed to a call not listed `runsOnce`),'
+		+ ' so reported as info';
+
+	/** A short main-thread call some way up to which is a registration (`registers`): once per event the runtime dispatches. */
+	final ShortRegisteredCall = ' — short: a short sink or a take of a lock held only across short calls, once per event of a'
+		+ ' registration (`registers`) — how often the runtime dispatches it is not known here — with no loop, recursion or value'
+		+ ' handed to a call not listed `runsOnce` on the way down from it, so reported as info';
 
 	/** A hold every blocking call of which waits too little to warn about (`shortSinks`). */
 	final ShortHold = ' — short: every call it spans waits only on short sinks or on locks held only across short calls, each once'
