@@ -10596,9 +10596,9 @@
 		{
 			"name": "M-TS-MALFORMED-UNGATED",
 			"type": "anyparse.check.ThreadSafety",
-			"method": "reportMalformedPairs",
-			"find": " || !lists.reports) continue;",
-			"replace": ") continue;",
+			"method": "listsByFile",
+			"find": "if (!lists.reports) continue;",
+			"replace": "",
 			"note": "a malformed option of a chain that reports nothing is reported"
 		},
 		{
@@ -11587,7 +11587,7 @@
 		{
 			"name": "M-TS-MAIN-CHECK-NO-GETTER",
 			"type": "anyparse.check.ThreadSafety",
-			"method": "listsByFile",
+			"method": "chainLists",
 			"find": "matchAll(graph, mainChecks.concat([for (c in mainChecks) getterOf(c, accessorPrefixes)]))",
 			"replace": "matchAll(graph, mainChecks)",
 			"note": "a main-thread check written as a property is never recognised at its reads, which call the getter"
@@ -16745,6 +16745,30 @@
 			"note": "a lost real stall no longer fails the scoring run"
 		},
 		{
+			"name": "M-LINT-FORMAT-DOMINATED",
+			"type": "anyparse.query.format.LintFormat",
+			"method": "json",
+			"find": "dominated: [for (d in longLocks.dominated) { lock: d.lock, by: d.by }]",
+			"replace": "dominated: []",
+			"note": "the json envelope names no dominated lock"
+		},
+		{
+			"name": "M-LINT-FORMAT-ERRORPATH",
+			"type": "anyparse.query.format.LintFormat",
+			"method": "reasonRecord",
+			"find": "if (r.errorPath != null) Reflect.setField(record, 'errorPath', r.errorPath);",
+			"replace": "",
+			"note": "a reason blocking only through a catch carries no errorPath in json"
+		},
+		{
+			"name": "M-LINT-NOFILE-DROPPED",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "reportFindings",
+			"find": "paths.concat([''])",
+			"replace": "paths",
+			"note": "a finding naming no file only counts in the summary line"
+		},
+		{
 			"name": "M-LINT-EXPLAIN-UNSET",
 			"type": "anyparse.query.cli.command.LintExplainLong",
 			"method": "explainer",
@@ -17419,17 +17443,17 @@
 		{
 			"name": "M-TS-PATH-CTOR",
 			"type": "anyparse.check.ObjectPaths",
-			"method": "writesOutside",
-			"find": "if (write && !inside(at, allowed)) return true;",
-			"replace": "if (write) return true;",
+			"method": "writtenOnlyInConstructor",
+			"find": "w.own && ctor != null && w.fn == ctor",
+			"replace": "false",
 			"note": "a write in the constructor makes a var unstable"
 		},
 		{
 			"name": "M-TS-PATH-STABLE-ANY",
 			"type": "anyparse.check.ObjectPaths",
 			"method": "writtenOnlyInConstructor",
-			"find": "if (writesOutside(held.file, held.tree, field, allowed)) return false;",
-			"replace": "if (false && writesOutside(held.file, held.tree, field, allowed)) return false;",
+			"find": "!FieldWrites.mayWrite(w, owner) || w.own && ctor != null && w.fn == ctor",
+			"replace": "true",
 			"note": "a var written outside its constructor counts stable"
 		},
 		{
@@ -17547,16 +17571,16 @@
 		{
 			"name": "M-TS-ALLOC-ANY-WRITE",
 			"type": "anyparse.check.AllocationSets",
-			"method": "collect",
-			"find": "if (values == null) return false;",
-			"replace": "if (values == null) return true;",
+			"method": "fieldClasses",
+			"find": "sealed = false;",
+			"replace": "sealed = true;",
 			"note": "a write of anything but a `new` leaves a field's classes known"
 		},
 		{
 			"name": "M-TS-ALLOC-DECLARED",
 			"type": "anyparse.check.AllocationSets",
 			"method": "declared",
-			"find": "return decl.children.length == 0 ? [] : constructed(decl.children[0]);",
+			"find": "return decl.children.length == 0 ? [] : constructed(decl.children[0], file);",
 			"replace": "return [];",
 			"note": "a field's declared value adds no class"
 		},
@@ -17575,6 +17599,142 @@
 			"find": "return target.isExternal;",
 			"replace": "return true;",
 			"note": "a library class may run any project override"
+		},
+		{
+			"name": "M-TS-ALLOC-ALIAS",
+			"type": "anyparse.check.AllocationSets",
+			"method": "constructedClass",
+			"find": "if (imports.aliases.contains(simple)) return null;",
+			"replace": "",
+			"note": "a `new` through an import alias names the project class of the alias's name"
+		},
+		{
+			"name": "M-TS-ALLOC-LIBRARY-PATH",
+			"type": "anyparse.check.AllocationSets",
+			"method": "constructedClass",
+			"find": "(name.indexOf('.') >= 0 || imports.named.contains(simple))",
+			"replace": "true",
+			"note": "a name the run declares nowhere is taken for a library class however the file spells it — an alias, a type parameter"
+		},
+		{
+			"name": "M-TS-ALLOC-COMPLETE",
+			"type": "anyparse.check.AllocationSets",
+			"method": "fieldClasses",
+			"find": "dot <= 0 || !_writes.complete ? null",
+			"replace": "dot <= 0 ? null",
+			"note": "a run over part of the project seals a field by the writes it happens to hold"
+		},
+		{
+			"name": "M-TS-PATH-CTOR-LAMBDA",
+			"type": "anyparse.check.ObjectPaths",
+			"method": "writtenOnlyInConstructor",
+			"find": "w.fn == ctor",
+			"replace": "(w.fn ?? '').indexOf(ctor) == 0",
+			"note": "a write in a lambda or a local function the constructor makes counts as the constructor's"
+		},
+		{
+			"name": "M-TS-PATH-COMPLETE",
+			"type": "anyparse.check.ObjectPaths",
+			"method": "writtenOnlyInConstructor",
+			"find": "if (!_writes.complete) return false;",
+			"replace": "",
+			"note": "a run over part of the project takes a var for stable by the writes it happens to hold"
+		},
+		{
+			"name": "M-TS-PATH-STATIC",
+			"type": "anyparse.check.ObjectPaths",
+			"method": "writtenOnlyInConstructor",
+			"find": "isStatic ? null : ",
+			"replace": "",
+			"note": "a static var written in the instance constructor counts stable"
+		},
+		{
+			"name": "M-TS-PATH-OWN",
+			"type": "anyparse.check.ObjectPaths",
+			"method": "writtenOnlyInConstructor",
+			"find": "w.own && ctor != null",
+			"replace": "ctor != null",
+			"note": "a constructor writing the field of another object leaves it stable"
+		},
+		{
+			"name": "M-TS-COVER-WALK",
+			"type": "anyparse.check.ProjectCoverage",
+			"method": "holdsProject",
+			"find": "if (path.endsWith('.hx') && !_run.exists(canonical)) return false;",
+			"replace": "",
+			"note": "a run over part of a closed project counts as covering it"
+		},
+		{
+			"name": "M-TS-COVER-EXCLUDE",
+			"type": "anyparse.check.ProjectCoverage",
+			"method": "holdsProject",
+			"find": "skip(path.startsWith(base) ? path.substring(base.length) : path) || ",
+			"replace": "",
+			"note": "an excluded file the run leaves out breaks the coverage"
+		},
+		{
+			"name": "M-TS-COVER-NOTE",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "listsByFile",
+			"find": "if (declaredClosed && !closedWorld)",
+			"replace": "if (false)",
+			"note": "a closedWorld the run does not cover is read as false without a word"
+		},
+		{
+			"name": "M-TS-OPT-UNKNOWN",
+			"type": "anyparse.check.ThreadSafetyOptions",
+			"method": "readKeys",
+			"find": "problems.push(unknownKey(key));",
+			"replace": "{}",
+			"note": "a misspelt option key is dropped without a word"
+		},
+		{
+			"name": "M-TS-OPT-LIST-SHAPE",
+			"type": "anyparse.check.ThreadSafetyOptions",
+			"method": "readList",
+			"find": "problems.push('option \"$key\" is not an array of strings — ignored');",
+			"replace": "",
+			"note": "a list option written as a string is dropped without a word"
+		},
+		{
+			"name": "M-TS-OPT-LIST-ITEM",
+			"type": "anyparse.check.ThreadSafetyOptions",
+			"method": "readList",
+			"find": "if (skipped > 0) problems.push('option \"$key\" ignored $skipped value(s) that are not strings');",
+			"replace": "",
+			"note": "a non-string list item is dropped without a word"
+		},
+		{
+			"name": "M-TS-OPT-FLAG",
+			"type": "anyparse.check.ThreadSafetyOptions",
+			"method": "readFlag",
+			"find": "problems.push('option \"$key\" is not true or false — ignored');",
+			"replace": "",
+			"note": "a flag written as a string is dropped without a word"
+		},
+		{
+			"name": "M-TS-OPT-BUDGET",
+			"type": "anyparse.check.ThreadSafetyOptions",
+			"method": "readBudget",
+			"find": "problems.push('option \"$BUDGET_KEY\" is not a positive number — ignored');",
+			"replace": "",
+			"note": "a budget written as a string is dropped without a word"
+		},
+		{
+			"name": "M-TS-OPT-BOUNDED-ENTRY",
+			"type": "anyparse.check.ThreadSafetyOptions",
+			"method": "readBounded",
+			"find": "problems.push('$BOUNDED_KEY[$i] dropped: ${wrong.join(', ')}');",
+			"replace": "{}",
+			"note": "a boundedRepeats entry of the wrong shape is dropped without a word"
+		},
+		{
+			"name": "M-TS-OPT-BOUNDED-SITE",
+			"type": "anyparse.check.BoundedRepeats",
+			"method": "entries",
+			"find": "if (members.length == 0)",
+			"replace": "if (false)",
+			"note": "a boundedRepeats site matching no function bounds nothing without a word"
 		},
 		{
 			"name": "M-TS-FACTS-IGNORED",

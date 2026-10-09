@@ -13,7 +13,7 @@ import utest.Test;
 class ThreadSafetyAllocationTest extends Test {
 
 	private static inline final CONFIG: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Sys.sleep"],'
-		+ '"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"]}}}';
+		+ '"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"],"closedWorld":true}}}';
 
 	private static inline final LOADERS: String = 'class Base { public function new(?now:Bool) { if (now == true) load(); }'
 		+ ' public function load():Void go(); function go():Void {} }'
@@ -70,24 +70,87 @@ class ThreadSafetyAllocationTest extends Test {
 	public function testALibraryClassRunsNoProjectOverride(): Void {
 		#if (sys || nodejs)
 		Assert.same([], holds(run('var loader:Base;', 'loader = flag ? new Async() : new lib.Loader();', 'loader.load();')));
+		Assert.same(
+			[], holds(run('var loader:Base;', 'loader = flag ? new Async() : new Loader();', 'loader.load();', 'import lib.Loader;')),
+			'imported'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A name the run declares nowhere is a library class only when the file writes it by a path or imports it: an import
+	 * alias (`as`, `in`) or a type parameter may name a project class, so it runs every override.
+	 */
+	@:pin('control') @:killer('M-TS-ALLOC-LIBRARY-PATH')
+	public function testAnUndeclaredNameNoImportNamesRunsEveryOverride(): Void {
+		#if (sys || nodejs)
+		for (alias in ['import Blocking as Blk;', 'import Blocking in Blk;'])
+			Assert.same(['warning B C.work | C._m'], holds(run('var loader:Base;', 'loader = new Blk();', 'loader.load();', alias)), alias);
+		final generic: Array<Violation> = ThreadSafetyCheckTest.violations(CONFIG, [
+			ThreadSafetyCheckTest.MUTEX,
+			'class Runner { public static function create(fn:()->Void):Void {} }',
+			LOADERS,
+			'@:generic class C<T:Base> { public final _m:Mutex = new Mutex(); var loader:Base;'
+			+ ' public function new() {} public function prepare():Void { loader = new T(); }'
+			+ ' public function work():Void { _m.acquire(); loader.load(); _m.release(); } }',
+			'class M { public static function main():Void { final c:C<Blocking> = new C<Blocking>(); c.prepare();'
+			+ ' Runner.create(() -> c.work()); c._m.acquire(); c._m.release(); } }'
+		]);
+		Assert.same(['warning B C.work | C._m'], holds(generic), 'type parameter');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** An alias spelled as a project class's name names whatever it aliases, not that class. */
+	@:pin('control') @:killer('M-TS-ALLOC-ALIAS')
+	public function testAnAliasNamedAsAProjectClassNamesWhatItAliases(): Void {
+		#if (sys || nodejs)
+		Assert.same(
+			['warning B C.work | C._m'],
+			holds(run('var loader:Base;', 'loader = new Async();', 'loader.load();', 'import Blocking as Async;'))
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A run that leaves out a file of the project writing the field sees not every value of it: its classes are unknown. */
+	@:pin('control') @:killer('M-TS-ALLOC-COMPLETE')
+	public function testARunOverPartOfTheProjectSealsNoField(): Void {
+		#if (sys || nodejs)
+		final plugin: { name: String, source: String } = {
+			name: 'Plugin.hx',
+			source: 'class Plugin { public static function install(c:C):Void c.loader = new Blocking(); }'
+		};
+		Assert.same(
+			['warning B C.work | C._m'], holds(run('public var loader:Base;', 'loader = new Async();', 'loader.load();', '', [plugin]))
+		);
 		#else
 		Assert.pass('non-sys target');
 		#end
 	}
 
 	#if (sys || nodejs)
-	/** `C` declaring `field`, assigning it by `assign` in `prepare`, and on a worker holding `_m` across `held`. */
-	private static function run(field: String, assign: String, held: String): Array<Violation> {
+	/**
+	 * `C` declaring `field`, assigning it by `assign` in `prepare`, and on a worker holding `_m` across `held`, its file
+	 * headed by `imports`; `beside` on disk next to the run.
+	 */
+	private static function run(
+		field: String, assign: String, held: String, imports: String = '', ?beside: Array<{ name: String, source: String }>
+	): Array<Violation> {
 		return ThreadSafetyCheckTest.violations(CONFIG, [
 			ThreadSafetyCheckTest.MUTEX,
 			'class Runner { public static function create(fn:()->Void):Void {} }',
 			LOADERS,
-			'class C { final _m:Mutex = new Mutex(); var flag:Bool = false; $field public function new() {}'
+			'$imports class C { final _m:Mutex = new Mutex(); var flag:Bool = false; $field public function new() {}'
 			+ ' public function prepare():Void { $assign } public function work():Void { _m.acquire(); $held _m.release(); }'
 			+ ' public function blocked():Void { final b:Blocking = new Blocking(); b.load(); }'
 			+ ' public static function main():Void { final c:C = new C(); c.prepare(); Runner.create(() -> { c.work(); c.blocked(); });'
 			+ ' c._m.acquire(); c._m.release(); } }'
-		]);
+		], beside);
 	}
 
 	/** The hold findings (b) of `found` as `<severity> B <member> | <lock>`, sorted. */

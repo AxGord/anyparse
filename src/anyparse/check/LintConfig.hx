@@ -416,43 +416,24 @@ final class LintConfig {
 		return out;
 	}
 
-	/** A rule-specific number option (`thread-safety` `repeatBudgetMs`), or null when unset or not a number. */
-	public function numberOption(id: String, key: String): Null<Float> {
-		return switch propOf(id, key) {
-			case JNumber(v): (v: Float);
-			case null, _: null;
-		};
-	}
-
-	/**
-	 * A rule-specific list-of-objects option (`thread-safety` `boundedRepeats`): each object's string fields and number
-	 * fields by key, empty when unset; an entry that is no object is dropped, a field of any other type left out.
-	 */
-	public function recordListOption(id: String, key: String): Array<{ strings: Map<String, String>, numbers: Map<String, Float> }> {
-		final out: Array<{ strings: Map<String, String>, numbers: Map<String, Float> }> = [];
-		for (item in arrayOption(id, key) ?? []) switch item {
-			case JObject(entries):
-				final strings: Map<String, String> = [];
-				final numbers: Map<String, Float> = [];
-				for (e in entries) switch e.value {
-					case JString(v):
-						strings[e.key] = (v: String);
-					case JNumber(v):
-						numbers[e.key] = (v: Float);
-					case _:
-				}
-				out.push({ strings: strings, numbers: numbers });
-			case _:
-		}
-		return out;
-	}
-
 	/**
 	 * A rule-specific option as the raw JSON the document wrote, or null when unset — for an option whose shape no typed
 	 * accessor reads (`prefer-api-idiom`'s list of objects), so the owning check validates it entry by entry itself.
 	 */
 	public function jsonOption(id: String, key: String): Null<JValue> {
 		return propOf(id, key);
+	}
+
+	/**
+	 * The option keys the document wrote for rule `id`, sorted — `enabled` and `severity` aside, which the framework
+	 * reads — so a check reading its options through one reader can say which key no option of it has.
+	 */
+	public function optionKeys(id: String): Array<String> {
+		final rule: Null<RuleConfig> = _rules[id];
+		if (rule == null) return [];
+		final keys: Array<String> = [for (key in rule.props.keys()) key];
+		keys.sort(Reflect.compare);
+		return keys;
 	}
 
 	/**

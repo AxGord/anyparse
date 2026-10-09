@@ -1702,3 +1702,31 @@ decided the question; it may not become a record of runs.
   runs once per failing turn of the normal run, and a lambda a catch stores runs wherever it is called (review r4 `P1`,
   `P2`, r2 `f11`); a catch counts only with no loop above it in its function, and a nested function inherits it only when
   every way into it is an invocation inside that catch — branch `fix/ts-A`
+- "a `var` written only in its constructor" judged by SPAN containment → a write in a lambda or a local function the
+  constructor makes (`Runner.create(() -> db = b)`) sits inside the constructor's span yet runs any time later, a
+  write of ANOTHER object's field inside the constructor counted as the constructor's own, and a `static var` the
+  instance constructor assigns was taken for stable; the write's own function id must BE the constructor, on the
+  running object, never for a static (`FieldWrites`, `ObjectPaths.writtenOnlyInConstructor`) — branch `fix/ts-C2`
+- "every write" / "every value" of a field read off the run's files alone → a run over part of a project
+  (`hxq lint core` where `plugins/` writes the field) sealed the field and the stall vanished; a `var` is stable and a
+  field's allocation set sealed only when the run sees every write of the project — `closedWorld` declared AND the
+  run holding every `.hx` file under the declaring document's `resolutionRoots` (else its directory), `exclude`d paths
+  aside (`ProjectCoverage`); a `final` needs neither — branch `fix/ts-C2`
+- an undeclared class name in a `new` taken for a library class → an import alias (`import a.Blocking as Blk`, `in
+  Blk`) and a type parameter (`new T()`) spell a project class with a name the index does not declare, and the
+  dispatch "ran no project override"; a name the run does not declare is a library's only when the run covers a closed
+  project and the file writes it by a path or a plain import, and an alias names nothing, even when it reads as a
+  project class's name (`AllocationSets.constructedClass`) — branch `fix/ts-C2`
+- two write walkers re-walking every file per field (`ObjectPaths.writes`, `AllocationSets.writes`) → one write index
+  per run over the graph's held trees, by name (`FieldWrites`); `FieldWriteIndex` was not reused: it re-parses every
+  file, records neither a write's function nor its value, and attributes by DECLARED receiver type, which for this
+  question needs the subtype closure to stay sound — branch `fix/ts-C2`
+- each `thread-safety` option read where it is used, a wrong shape falling back to "absent" → a malformed config
+  (`"shortSinks": "x"`, `"iterates": [1, 2]`, a typo key, `"max": "414"`, a `site` matching nothing) ran byte-identical
+  to no config with nothing said; one reader (`ThreadSafetyOptions`) checks every key and reports each drop as an
+  `info` finding naming no file — and those were never printed at all: the report grouped findings by input path, so
+  a file-less finding (the old malformed-`lockPairs` one included) only counted in the summary line; it now closes the
+  report under `''` — branch `fix/ts-C2`
+- the fix brief's "dead" `boundedRepeats` entry `fs.FileSystemManager.deleteFileSystems` → live: without it TM's
+  `A deleteFileSystems | FileSystem.deleteFile` (four unlinks under `HelpMain.deleteCache`, real-short) warns on all
+  three frozen trees; kept — branch `fix/ts-C2`

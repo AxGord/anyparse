@@ -14,7 +14,7 @@ import utest.Test;
 class ThreadSafetyCarriedHoldTest extends Test {
 
 	private static inline final CONFIG: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Sys.sleep"],'
-		+ '"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"],"reentrantLocks":["Mutex.acquire"]}}}';
+		+ '"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"],"reentrantLocks":["Mutex.acquire"],"closedWorld":true}}}';
 
 	/**
 	 * `_mutex` is dominated by `_batch` (its one long hold holds both); `lookup` takes `_mutex`, `nested` re-takes
@@ -90,6 +90,68 @@ class ThreadSafetyCarriedHoldTest extends Test {
 		#end
 	}
 
+	/**
+	 * A `var` written in a lambda or a local function the constructor makes is written whenever that function runs: it
+	 * names no object.
+	 */
+	@:pin('control') @:killer('M-TS-PATH-CTOR-LAMBDA')
+	public function testAWriteInAFunctionTheConstructorMakesIsNoConstructorWrite(): Void {
+		#if (sys || nodejs)
+		Assert.same(['info B Fs.work | Db.batch (folded)'], work(path('', ' Runner.create(() -> holder = new Holder(other));')));
+		Assert.same(['info B Fs.work | Db.batch (folded)'], work(path('', ' function swap():Void holder = new Holder(other);')), 'local');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A constructor writing the field of ANOTHER object changes that object's after its construction. */
+	@:pin('control') @:killer('M-TS-PATH-OWN')
+	public function testAConstructorWritingAnotherObjectsFieldNamesNoObject(): Void {
+		#if (sys || nodejs)
+		Assert.same(['info B Fs.work | Db.batch (folded)'], work(path('', ' if (peer != null) peer.holder = new Holder(other);')));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A `static var` the instance constructor assigns is assigned again by every construction. */
+	@:pin('control') @:killer('M-TS-PATH-STATIC')
+	public function testAStaticVarWrittenInTheConstructorNamesNoObject(): Void {
+		#if (sys || nodejs)
+		Assert.same(['info B Fs.work | Db.batch (folded)'], work(path('', '', 'static var holder:Holder;')));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A run that leaves out a file of the project sees not every write of it, whatever `closedWorld` declares: the `var`
+	 * names no object, and the run says why it reads the chain as open.
+	 */
+	@:pin('control') @:killer('M-TS-PATH-COMPLETE') @:killer('M-TS-COVER-WALK') @:killer('M-TS-COVER-NOTE')
+	public function testARunOverPartOfTheProjectSeesNotEveryWrite(): Void {
+		#if (sys || nodejs)
+		final found: Array<Violation> = run(path(''), [{ name: 'Plugin.hx', source: PLUGIN }]);
+		Assert.same(['info B Fs.work | Db.batch (folded)'], holds(found));
+		Assert.contains(CLOSED_NOTE, [for (v in found) if (v.file == '') v.message]);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A file `exclude` names is no part of the project: leaving it out of the run leaves the project covered. */
+	@:pin('control') @:killer('M-TS-COVER-EXCLUDE')
+	public function testAnExcludedFileIsNoPartOfTheProject(): Void {
+		#if (sys || nodejs)
+		final config: String = StringTools.replace(CONFIG, '"closedWorld":true', '"closedWorld":true,"exclude":["Plugin.hx"]');
+		final found: Array<Violation> =
+			ThreadSafetyCheckTest.violations(config, sources(path('')), [{ name: 'Plugin.hx', source: PLUGIN }]);
+		Assert.same(['info B Fs.work | Db.batch'], holds(found));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	/** The same `var` written outside the constructor names no object. */
 	@:pin('control') @:killer('M-TS-PATH-STABLE-ANY')
 	public function testAFieldWrittenOutsideTheConstructorNamesNoObject(): Void {
@@ -107,10 +169,13 @@ class ThreadSafetyCarriedHoldTest extends Test {
 			+ ' public function work():Void { $body } }';
 	}
 
-	/** `Fs` reaching its `Db` through `holder.db`, `holder` a `var` assigned in the constructor, beside `members`. */
-	private static function path(members: String): String {
+	/**
+	 * `Fs` reaching its `Db` through `holder.db`, `holder` (declared by `field`) assigned in the constructor and then
+	 * `ctor`, beside `members`.
+	 */
+	private static function path(members: String, ctor: String = '', field: String = 'public var holder:Holder;'): String {
 		return 'class Holder { public final db:Db; public function new(db:Db) { this.db = db; } }'
-			+ ' class Fs { public var holder:Holder; public function new(db:Db, other:Db) { holder = new Holder(db); } $members'
+			+ ' class Fs { $field public function new(db:Db, other:Db, ?peer:Fs) { holder = new Holder(db);$ctor } $members'
 			+ ' public function work():Void { holder.db.batchLock(); holder.db.lookup(); holder.db.batchUnlock(); } }';
 	}
 
@@ -118,18 +183,33 @@ class ThreadSafetyCarriedHoldTest extends Test {
 	private static inline final FOLDED: String = ' — long only through ';
 
 	/**
-	 * The findings (b) of `Fs.work` over `DB` and `fs`, `(folded)` marking one long only through other warnings, run on a worker while the main thread takes `Db.batch` — and
-	 * calls `lookup` and `nested` itself, so no meet over their callers holds `batch` on entry.
+	 * The findings (b) of `Fs.work` over `DB` and `fs`, `(folded)` marking one long only through other warnings, run on a
+	 * worker while the main thread takes `Db.batch` — and calls `lookup` and `nested` itself, so no meet over their
+	 * callers holds `batch` on entry.
 	 */
 	private static function work(fs: String): Array<String> {
-		final found: Array<Violation> = ThreadSafetyCheckTest.violations(CONFIG, [
+		return holds(run(fs, []));
+	}
+
+	/** The run over `sources(fs)`, `beside` on disk next to it. */
+	private static inline function run(fs: String, beside: Array<{ name: String, source: String }>): Array<Violation> {
+		return ThreadSafetyCheckTest.violations(CONFIG, sources(fs), beside);
+	}
+
+	/** The files of a run over `fs`. */
+	private static function sources(fs: String): Array<String> {
+		return [
 			ThreadSafetyCheckTest.MUTEX,
 			'class Runner { public static function create(fn:()->Void):Void {} }',
 			DB,
 			fs,
 			'class M { public static function main():Void { final db:Db = new Db(); final fs:Fs = new Fs(db, new Db());'
-			+ ' Runner.create(() -> db.slow()); Runner.create(() -> fs.work()); db.batchLock(); db.batchUnlock(); db.lookup(); db.nested(); } }'
-		]);
+				+ ' Runner.create(() -> db.slow()); Runner.create(() -> fs.work()); db.batchLock(); db.batchUnlock(); db.lookup(); db.nested(); } }'
+		];
+	}
+
+	/** The findings (b) of `Fs.work` in `found`, as `<severity> B <member> | <subject>`, `(folded)` marking a folded one. */
+	private static function holds(found: Array<Violation>): Array<String> {
 		final out: Array<String> = [
 			for (v in found) {
 				final data: Null<FindingData> = v.data;
@@ -140,6 +220,13 @@ class ThreadSafetyCarriedHoldTest extends Test {
 		out.sort(Reflect.compare);
 		return out;
 	}
+
+	/** A project file the run leaves out, writing `Fs.holder` (`ProjectCoverage`). */
+	private static inline final PLUGIN: String = 'class Plugin { public static function install(fs:Fs, h:Holder):Void fs.holder = h; }';
+
+	/** What a run says of a `closedWorld` it does not cover (`ThreadSafety.listsByFile`). */
+	private static inline final CLOSED_NOTE: String = 'option "closedWorld" holds only for a run over the whole project it closes — this run leaves'
+		+ ' part of it out, so it is read as false';
 	#end
 
 }
