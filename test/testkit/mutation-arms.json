@@ -18269,9 +18269,9 @@
 		{
 			"name": "M-TS-RUNS-ONCE-PROJECT",
 			"type": "anyparse.check.CallRepetition",
-			"method": "runtimeCall",
-			"find": "if (via != null) return via.isExternal || via.isBodyless;",
-			"replace": "if (via != null) return true;",
+			"method": "runsOnce",
+			"find": " && runtimeCall(edge)",
+			"replace": "",
 			"note": "a bare runsOnce name trusts a project function of that name, whose body may loop"
 		},
 		{
@@ -18286,8 +18286,8 @@
 			"name": "M-TS-REGISTER-PROJECT",
 			"type": "anyparse.check.CallRepetition",
 			"method": "runtimeCall",
-			"find": "return via == null || via.isExternal || via.isBodyless;",
-			"replace": "return true;",
+			"find": "if (via != null) return via.isExternal || via.isBodyless;",
+			"replace": "if (via != null) return true;",
 			"note": "a registration into project code, which runs the value from a call the graph cannot follow, counts as once per event"
 		},
 		{
