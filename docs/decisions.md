@@ -1674,3 +1674,31 @@ decided the question; it may not become a record of runs.
   it intercepts no longer marks a leak (`copyFileAndCreateSlave`) — branch `feat/ts-precision-2`
 - judging "inside a catch" off the witness chain the finding prints → the chain is one way; a second way outside every
   catch must keep the warning, which only a solve without the catch edges can see — branch `feat/ts-precision-2`
+- a parameter as a fixed flag when nothing ASSIGNS it (`FixedFlags`) → `var flush = check()`, `final flush = flush &&
+  check()`, a `for` binder, a `catch` variable or a lambda parameter of its name made a later `if (flush)` read another
+  binding, and a take nothing gave back read as no leak (review r4 `L2`, `L2d`, r2 `h01`); a flag is now a parameter no
+  other node of the function declares (`BareNames.stable`) — branch `fix/ts-A`
+- a `final` local deciding a condition when the function declares its name once (`EdgeConditions.finalLocalInit`) → a
+  read outside the local's block, or outside the lambda declaring it, means the member of that name (review r4 `A1`,
+  `A2`); the local must sit in a block on the way to the read, before it (`BareNames.localOf`) — branch `fix/ts-A`
+- a `try` with any `catch` stopping every throw (`LockWindow`, `ThrowReach`) → `catch (e:haxe.io.Eof)` does not catch
+  `throw "x"`, and a `throwers` exception is of no known type (review r4 `L1`, `L1e`, `R5`); a catch stops a throw only
+  when it provably catches it (`CatchTypes`: untyped, a catch-all type, the exception type, the thrown literal's or
+  `new`'s type or a supertype) — branch `fix/ts-A`
+- a `catch` re-raising only when it throws its own variable bare (`ThrowReach.rethrows`) → `throw new X("…", e)`,
+  `throw (e)`, `final x = e; throw x` and any other value thrown there run only where the `try` failed (review r4 `R1`,
+  `R2`, `R4`); a `catch` holding any `throw` lets the failure go on — branch `fix/ts-A`
+- a catch-all of a switch over an enum abstract dead whenever the abstract has no `from` clause and its typed functions
+  hand back values (`ExhaustiveSwitches`) → a guarded case, a value under `#if`, a constructor, an untyped `@:op`, a
+  static field, a parameter or local shadowing the subject, a `Dynamic` write, an uninitialized String member, two
+  abstracts of one name all reached it (review r4 `e1`–`e10`); closedness is now a whitelist of the abstract's members,
+  and the member must HOLD only values — its getter, its initializer or a counting abstract's `0`, every assignment to a
+  field of its name — which TM's `FileListSelect.viewType` (uninitialized, LIST = 0, set through a `?viewType ??
+  defaultViewType` whose getter converts a `Null<String>` by `@:from`) still passes — branch `fix/ts-A`
+- a string literal inert, a bare name inert, a `nonThrowing` call off any receiver (`DeadCatches`) → `'${risky()}'`, a
+  property with a throwing getter, `disk().istat(p)` and `d.istat(p)` on a null `d` throw (review r4 `d1`–`d5`); inert
+  is a literal of text parts only, a read of a binding or a plain field, a call off a static path — branch `fix/ts-A`
+- a call in any `catch` body, or in a lambda written there, only on an error path (`ErrorPaths`) → a catch inside a loop
+  runs once per failing turn of the normal run, and a lambda a catch stores runs wherever it is called (review r4 `P1`,
+  `P2`, r2 `f11`); a catch counts only with no loop above it in its function, and a nested function inherits it only when
+  every way into it is an invocation inside that catch — branch `fix/ts-A`

@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.query.CallGraph;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.runtime.LineIndex;
 import anyparse.runtime.Span;
@@ -9,9 +10,10 @@ import anyparse.runtime.Span;
 using Lambda;
 
 /**
- * Where a call runs only on an error path: its site sits inside the body of a `catch` clause of its file — of its own
- * function, or of the one a lambda or local function it sits in is written in, which exists only once that `catch` ran.
- * Read off the branch-aware tree (`FunctionTrees`), each site placed once.
+ * Where a call runs only on an error path: its site sits inside the body of a `catch` clause of its file that no loop of its
+ * function holds (every turn of a loop may fail: such a `catch` runs on the normal path) — of its own function, or of the one a
+ * lambda or local function it sits in is written in, when that nested function runs only through calls made inside the `catch`
+ * (a reference to it may be stored and called anywhere). Read off the branch-aware tree (`FunctionTrees`), each site placed once.
  */
 @:nullSafety(Strict)
 final class ErrorPaths {
@@ -25,11 +27,17 @@ final class ErrorPaths {
 	private final _graph: CallGraph;
 	private final _trees: FunctionTrees;
 	private final _catchKind: Null<String>;
+	private final _nestedFnKinds: Array<String>;
+
+	/** The loops: a `catch` inside one runs once per failing turn, which nothing bounds. */
+	private final _loopKinds: Array<String>;
 
 	public function new(graph: CallGraph, trees: FunctionTrees, shape: RefShape) {
 		_graph = graph;
 		_trees = trees;
 		_catchKind = shape.catchClauseKind;
+		_nestedFnKinds = MemberKinds.nestedFunctionKinds(shape);
+		_loopKinds = LockWindow.loopKindsOf(shape, ArgumentValues.conditionalKinds(shape));
 	}
 
 	/** The `catch` clause whose body holds the site of `edge`, the innermost one; null for a site outside every one, or unplaced. */
@@ -38,24 +46,19 @@ final class ErrorPaths {
 		return at == null ? null : catchAt(edge.file, at);
 	}
 
+	/** Whether `edge` runs only on an error path (`catchOf`). */
+	public inline function inCatch(edge: CallEdge): Bool {
+		return catchOf(edge) != null;
+	}
+
 	/** The `catch` clause whose body holds the site `at` of `file`, the innermost one; null for none, or an unplaced site. */
 	public function catchAt(file: String, at: Span): Null<Span> {
 		final key: String = '$file:${at.from}';
 		if (_catches.exists(key)) return _catches[key];
 		final tree: Null<QueryNode> = _trees.ofFile(file);
-		final found: Null<Span> = tree == null || _catchKind == null ? null : catchTo(tree, at);
+		final found: Null<Span> = tree == null || _catchKind == null ? null : catchTo(tree, file, at);
 		_catches[key] = found;
 		return found;
-	}
-
-	/** What a finding long only where a `catch` runs adds to its message, `place` the `file:line` of that catch. */
-	public static inline function note(place: String): String {
-		return ' — only on an error path (catch at $place): long through no call outside a catch, so reported as info';
-	}
-
-	/** Whether `edge` runs only on an error path (`catchOf`). */
-	public inline function inCatch(edge: CallEdge): Bool {
-		return catchOf(edge) != null;
 	}
 
 	/** The first call of `edges` that runs only on an error path, as `file:line` of its `catch`; null when none does. */
@@ -74,16 +77,39 @@ final class ErrorPaths {
 		return span == null ? null : '$file:${lineOf(file, span.from)}';
 	}
 
-	/** The innermost `catch` clause from the root of `tree` down to the node spanning `at`. */
-	private function catchTo(tree: QueryNode, at: Span): Null<Span> {
+	/**
+	 * The innermost `catch` clause from the root of `tree` (of `file`) down to the node spanning `at` that runs only on
+	 * an error path: one no loop of the way down holds — a loop's every turn may fail, so its `catch` is a path of the
+	 * normal run — and, for a site inside a nested function, one that function runs only inside (`runsOnlyIn`).
+	 */
+	private function catchTo(tree: QueryNode, file: String, at: Span): Null<Span> {
 		var found: Null<Span> = null;
+		var looped: Bool = false;
 		var node: QueryNode = tree;
 		while (true) {
 			final child: Null<QueryNode> = node.children.find(c -> c.span != null && c.span.from <= at.from && c.span.to >= at.to);
 			if (child == null) return found;
-			if (child.kind == _catchKind) found = child.span;
+			final span: Null<Span> = child.span;
+			looped = looped || _loopKinds.contains(child.kind);
+			if (child.kind == _catchKind && !looped) found = span;
+			// a nested function runs where it is called: under the catch only when every way into it is a call there
+			if (_nestedFnKinds.contains(child.kind) && found != null && !(span != null && runsOnlyIn(file, span, found))) found = null;
 			node = child;
 		}
+	}
+
+	/**
+	 * Whether the nested function spanning `fnSpan` in `file` runs only inside the `catch` clause spanning `clause`: the
+	 * graph holds a way into it besides its enclosing function's containment, and every one is an invocation made there —
+	 * never a reference, whose value may be stored and called anywhere.
+	 */
+	private function runsOnlyIn(file: String, fnSpan: Span, clause: Span): Bool {
+		final id: Null<String> = _graph.functionAt(file, fnSpan.from);
+		final ways: Array<CallEdge> = id == null ? [] : _graph.inEdges(id).filter(e -> e.kind != Contains);
+		return ways.length > 0
+			&& ways.foreach(
+				e -> e.kind.isInvocation() && e.file == file && e.span != null && e.span.from >= clause.from && e.span.to <= clause.to
+			);
 	}
 
 	/** The 1-based line of `offset` in `file`. */
@@ -94,6 +120,11 @@ final class ErrorPaths {
 			_lines[file] = index;
 		}
 		return index.lineColAt(offset).line;
+	}
+
+	/** What a finding long only where a `catch` runs adds to its message, `place` the `file:line` of that catch. */
+	public static inline function note(place: String): String {
+		return ' — only on an error path (catch at $place): long through no call outside a catch, so reported as info';
 	}
 
 }

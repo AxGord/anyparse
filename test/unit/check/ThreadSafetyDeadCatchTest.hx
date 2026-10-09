@@ -63,6 +63,45 @@ class ThreadSafetyDeadCatchTest extends Test {
 		#end
 	}
 
+	/** A string interpolating a call or a field read runs it: the `catch` around it is a path (review r4 `d1`, `d2`). */
+	@:pin('control') @:killer('M-TS-DEADCATCH-INTERP')
+	public function testAnInterpolatedStringRunsWhatItInterpolates(): Void {
+		#if (sys || nodejs)
+		Assert.same(['info B S.work | S._m'], holds(run("Disk.stat('${risky()}').mtime")), 'a call');
+		Assert.same(['info B S.work | S._m'], holds(run("Disk.stat('${last.x.y}').mtime")), 'a field read');
+		Assert.same([], holds(run("Disk.stat('plain').mtime")), 'no interpolation');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A `nonThrowing` method called off a value runs what builds the value, which may throw or be null: the `catch` around
+	 * it is a path (review r4 `d3`, `d5`). Off a type's name it is not.
+	 */
+	@:pin('control') @:killer('M-TS-DEADCATCH-RECEIVER')
+	public function testACallOffAValueMayThrow(): Void {
+		#if (sys || nodejs)
+		final config: String = StringTools.replace(CONFIG, '"nonThrowing":["Disk.stat"]', '"nonThrowing":["Disk.stat","Disk.istat"]');
+		Assert.same(['info B S.work | S._m'], holds(run('disk().istat(p)', config)), 'a call receiver');
+		Assert.same(['info B S.work | S._m'], holds(run('d.istat(p)', config)), 'a field receiver');
+		Assert.same([], holds(run('Disk.stat(p)', config)), 'a type name');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A bare name read as a property runs its getter, which may throw (review r4 `d4`); a parameter does not. */
+	@:pin('control') @:killer('M-TS-DEADCATCH-PROPERTY') @:killer('M-TS-DEADCATCH-BINDING')
+	public function testAPropertyReadRunsItsGetter(): Void {
+		#if (sys || nodejs)
+		Assert.same(['info B S.work | S._m'], holds(run('Disk.stat(p).mtime == limit')), 'a property');
+		Assert.same([], holds(run('Disk.stat(p).mtime == p')), 'a parameter');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
 	/** `S.work` holds `_m` across `mtime()`, whose `try` evaluates `value` and whose `catch` sleeps (or, `quiet`, does not). */
 	private static function run(value: String, ?config: String, quiet: Bool = false): Array<Violation> {
@@ -70,8 +109,11 @@ class ThreadSafetyDeadCatchTest extends Test {
 		return ThreadSafetyCheckTest.violations(config ?? CONFIG, [
 			ThreadSafetyCheckTest.MUTEX,
 			'class Runner { public static function create(fn:()->Void):Void {} }',
-			'class Disk { public static function stat(p:String):Dynamic return null; }',
-			'class S { final _m:Mutex = new Mutex(); var last:Dynamic = null; public function new() {} function other():Void {}'
+			'class Disk { public function new() {} public static function stat(p:String):Dynamic return null;'
+			+ ' public function istat(p:String):Dynamic return null; }',
+			'class S { final _m:Mutex = new Mutex(); var last:Dynamic = null; var d:Disk = null; public function new() {} function other():Void {}'
+			+ ' function risky():String { throw "boom"; } function disk():Disk { throw "boom"; }'
+			+ ' var limit(get, never):Int; function get_limit():Int { throw "boom"; }'
 			+ ' function mtime(p:String):Dynamic { return try { $value; } catch (e:Dynamic) { $reported }; }'
 			+ ' public function work():Void { _m.acquire(); mtime("x"); _m.release(); }'
 			+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> s.work()); s._m.acquire(); s._m.release(); } }'

@@ -379,7 +379,36 @@ class ThreadSafetyConditionsTest extends Test {
 		#end
 	}
 
+	/**
+	 * A `final` local bound to a condition decides a read of its name only where that read means it: in its block, after
+	 * it. A read outside the block or outside the lambda that declares it means the member (review r4 `A1`, `A2`).
+	 */
+	@:pin('control') @:killer('M-TS-COND-LOCAL-ANY-BLOCK')
+	public function testAFinalLocalDecidesOnlyTheReadsItBinds(): Void {
+		#if (sys || nodejs)
+		final reached: Array<String> = [
+			'main thread reaches blocking "Sys.sleep" (also reachable from a background thread): S.main -> S.save -> Sys.sleep'
+		];
+		Assert.same([], sleepFindings('', [savesUnder('final ready:Bool = !batch; if (ready) Sys.sleep(1);')]), 'the local');
+		Assert.same(reached, sleepFindings('', [
+			savesUnder('if (c) { final ready:Bool = !batch; use(ready); } if (ready) Sys.sleep(1);')
+		]), 'an inner block');
+		Assert.same(reached, sleepFindings('', [
+			savesUnder('final f:() -> Void = () -> { final ready:Bool = !batch; use(ready); }; f(); if (ready) Sys.sleep(1);')
+		]), 'a lambda');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
+	/** `S.save(batch)` runs `body`; the main thread saves a batch, a worker a single one. */
+	private static function savesUnder(body: String): String {
+		return 'class S { var ready:Bool = true; var c:Bool = true; public function new() {} function use(b:Bool):Void {}'
+			+ ' function save(batch:Bool):Void { $body }'
+			+ ' public static function main():Void { final s:S = new S(); s.save(true); Runner.create(() -> s.save(false)); } }';
+	}
+
 	/**
 	 * Every message of a `Sys.sleep` run over `sources` (plus `Runner`, whose `create` is a spawn), `extra` added to the
 	 * rule's options (`"key":value,…` or empty), sorted.

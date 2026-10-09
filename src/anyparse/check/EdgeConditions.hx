@@ -57,6 +57,10 @@ final class EdgeConditions {
 	private final _shape: RefShape;
 	private final _checksOf: (String) -> Array<String>;
 	private final _blockKinds: Array<String>;
+
+	/** The kinds whose children run one after another as statements: the blocks, and the branches of a `switch`. */
+	private final _sequenceKinds: Array<String>;
+
 	private final _ifKinds: Array<String>;
 	private final _nestedFnKinds: Array<String>;
 	private final _values: ArgumentValues;
@@ -79,6 +83,7 @@ final class EdgeConditions {
 		_values = new ArgumentValues(graph, trees, plugin);
 		final flow: Null<ControlFlowSupport> = plugin.controlFlowSupport();
 		_blockKinds = flow == null ? [] : flow.blockKinds();
+		_sequenceKinds = _blockKinds.concat([for (k in [_shape.caseBranchKind, _shape.defaultBranchKind]) if (k != null) k]);
 		_ifKinds = ArgumentValues.conditionalKinds(_shape);
 		_nestedFnKinds = MemberKinds.nestedFunctionKinds(_shape);
 	}
@@ -215,15 +220,15 @@ final class EdgeConditions {
 		return factsOf(init.children[0], nonNull == newFirst, fnId, file);
 	}
 
-	/** The value of `local` when it reads a `final` local the body of `fnId` declares once, with one; null otherwise. */
+	/**
+	 * The value of `local` when it reads a `final` local the body of `fnId` declares once, with one, in a block the read
+	 * sits in, before it (`BareNames.localOf`): a read outside that block, a nested function's own local, means some
+	 * other binding. Null otherwise.
+	 */
 	private function finalLocalInit(local: QueryNode, fnId: String): Null<QueryNode> {
-		final name: Null<String> = local.name;
 		final fn: Null<QueryNode> = _trees.ofId(fnId);
-		if (local.kind != _shape.identKind || name == null || fn == null) return null;
-		final decls: Array<QueryNode> = [];
-		_values.collectNamed(fn, name, decls);
-		if (decls.length != 1) return null;
-		final decl: QueryNode = decls[0];
+		final decl: Null<QueryNode> = fn == null ? null : BareNames.localOf(fn, local, _shape, _sequenceKinds);
+		if (decl == null) return null;
 		final declKinds: Array<String> = _shape.localDeclKinds ?? [];
 		if (!declKinds.contains(decl.kind) || (_shape.mutableLocalDeclKinds ?? []).contains(decl.kind) || decl.children.length == 0)
 			return null;
