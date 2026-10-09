@@ -17796,8 +17796,8 @@
 			"name": "M-TS-FOLD-SITE",
 			"type": "anyparse.check.RootCauseFold",
 			"method": "settled",
-			"find": "case Site(key, repeated): (doing[key] ?? []).exists(d -> covers(d, i, repeated) && state[d.at] != Open);",
-			"replace": "case Site(key, repeated): false;",
+			"find": "case Site(key, _, mayRepeat, way): (doing[key] ?? []).exists(d -> covers(d, i, mayRepeat, way) && state[d.at] != Open);",
+			"replace": "case Site(_, _, _, _): false;",
 			"note": "work another warned hold does too never covers a hold"
 		},
 		{
@@ -17980,8 +17980,8 @@
 			"name": "M-TS-FOLD-SITE-ONCE",
 			"type": "anyparse.check.RootCauseFold",
 			"method": "covers",
-			"find": "return d.at != i && (d.repeated || !repeated);",
-			"replace": "return d.at != i;",
+			"find": "return d.at != i && (d.repeated || !repeated)",
+			"replace": "return d.at != i",
 			"note": "a hold reaching a sink call once covers a hold repeating it under its lock"
 		},
 		{
@@ -18084,8 +18084,8 @@
 			"name": "M-TS-FOLD-SITE-LOCK",
 			"type": "anyparse.check.RootCauseFold",
 			"method": "covers",
-			"find": "\n\t\t\t&& (by.lock == own.lock || by.hold.edge.from == own.hold.edge.from || way.contains(by.hold.edge.from))",
-			"replace": "",
+			"find": "&& (by.lock == own.lock || by.hold.edge.from == own.hold.edge.from || way.contains(by.hold.edge.from));",
+			"replace": ";",
 			"note": "a hold of any lock across the same sink call covers another, though narrowing one frees nothing of the other"
 		},
 		{
