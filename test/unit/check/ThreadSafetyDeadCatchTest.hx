@@ -102,9 +102,28 @@ class ThreadSafetyDeadCatchTest extends Test {
 		#end
 	}
 
+	/**
+	 * A name bound somewhere else in the function — a lambda's parameter, a local after the read — does not bind the read:
+	 * it reads the property, whose getter may throw (review round 2 `dc1-prop-shadowed-elsewhere`). A local declared
+	 * before it in its block does.
+	 */
+	@:pin('control') @:killer('M-TS-DEADCATCH-BINDING-SCOPE')
+	public function testABindingElsewhereInTheFunctionDoesNotBindTheRead(): Void {
+		#if (sys || nodejs)
+		final read: String = 'Disk.stat(p).mtime == limit';
+		Assert.same(['info B S.work | S._m'], holds(run(read, null, false, '[1].map(limit -> limit + 1);')), "a lambda's parameter");
+		Assert.same([], holds(run(read, null, false, 'final limit:Int = 1;')), 'a local before the read');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
-	/** `S.work` holds `_m` across `mtime()`, whose `try` evaluates `value` and whose `catch` sleeps (or, `quiet`, does not). */
-	private static function run(value: String, ?config: String, quiet: Bool = false): Array<Violation> {
+	/**
+	 * `S.work` holds `_m` across `mtime()`, which runs `before`, then a `try` evaluating `value` whose `catch` sleeps (or,
+	 * `quiet`, does not).
+	 */
+	private static function run(value: String, ?config: String, quiet: Bool = false, before: String = ''): Array<Violation> {
 		final reported: String = quiet ? 'null;' : 'Sys.sleep(1); null;';
 		return ThreadSafetyCheckTest.violations(config ?? CONFIG, [
 			ThreadSafetyCheckTest.MUTEX,
@@ -114,7 +133,7 @@ class ThreadSafetyDeadCatchTest extends Test {
 			'class S { final _m:Mutex = new Mutex(); var last:Dynamic = null; var d:Disk = null; public function new() {} function other():Void {}'
 			+ ' function risky():String { throw "boom"; } function disk():Disk { throw "boom"; }'
 			+ ' var limit(get, never):Int; function get_limit():Int { throw "boom"; }'
-			+ ' function mtime(p:String):Dynamic { return try { $value; } catch (e:Dynamic) { $reported }; }'
+			+ ' function mtime(p:String):Dynamic { $before return try { $value; } catch (e:Dynamic) { $reported }; }'
 			+ ' public function work():Void { _m.acquire(); mtime("x"); _m.release(); }'
 			+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> s.work()); s._m.acquire(); s._m.release(); } }'
 		]);

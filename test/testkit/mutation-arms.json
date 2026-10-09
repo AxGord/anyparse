@@ -17815,6 +17815,14 @@
 			"note": "a bare read of a parameter may throw"
 		},
 		{
+			"name": "M-TS-DEADCATCH-BINDING-SCOPE",
+			"type": "anyparse.check.DeadCatches",
+			"method": "plainRead",
+			"find": "if (param || BareNames.localOf(scope.fn, read, _shape, _sequenceKinds) != null) return true;",
+			"replace": "if (named.length > 0) return true;",
+			"note": "a name any node of the function binds is taken to bind the read"
+		},
+		{
 			"name": "M-TS-STATES-IGNORED",
 			"type": "anyparse.check.MainRepeats",
 			"method": "runsFrom",

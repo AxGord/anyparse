@@ -31,6 +31,9 @@ final class DeadCatches {
 	private final _tryKinds: Array<String>;
 	private final _blockKinds: Array<String>;
 
+	/** The kinds whose children run in order, a declaration among them binding the rest (`BareNames.localOf`). */
+	private final _sequenceKinds: Array<String>;
+
 	public function new(graph: CallGraph, trees: FunctionTrees, plugin: GrammarPlugin, listsOf: (String) -> ChainLists) {
 		_graph = graph;
 		_trees = trees;
@@ -39,6 +42,7 @@ final class DeadCatches {
 		_tryKinds = (_shape.tryStatementKinds ?? []).concat(_shape.tryExpressionKinds ?? []);
 		final flow: Null<ControlFlowSupport> = plugin.controlFlowSupport();
 		_blockKinds = flow == null ? [] : flow.blockKinds();
+		_sequenceKinds = _blockKinds.concat([for (k in [_shape.caseBranchKind, _shape.defaultBranchKind]) if (k != null) k]);
 	}
 
 	/** Whether the site of `edge` sits in the body of a `catch` whose `try` throws nothing (`throwsNothing`). */
@@ -81,14 +85,20 @@ final class DeadCatches {
 	}
 
 	/**
-	 * Whether the bare name `read` of `file` reads a binding of its function (a local, a parameter) or a plain field of
-	 * the running type — never a property with a getter, which runs code, nor a name this does not place.
+	 * Whether the bare name `read` of `file` reads a binding of its function or a plain field of the running type —
+	 * never a property with a getter, which runs code, nor a name this does not place. The binding is the one
+	 * declaration of the name in the function, a local statement before the read in a block around it
+	 * (`BareNames.localOf`) or a parameter of the function itself; a name bound anywhere else in the function (a
+	 * lambda's parameter, a later local) may still read the member, and is judged as the member.
 	 */
 	private function plainRead(file: String, read: QueryNode): Bool {
 		final name: Null<String> = read.name;
 		final scope: Null<ReadScope> = scopeOf(file, read);
 		if (name == null || scope == null) return false;
-		if (!BareNames.bindsNothing(scope.fn, name, _shape)) return true;
+		final named: Array<QueryNode> = [];
+		BareNames.collectNamed(scope.fn, name, _shape, named);
+		final param: Bool = named.length == 1 && (_shape.paramKinds ?? []).contains(named[0].kind) && scope.fn.children.contains(named[0]);
+		if (param || BareNames.localOf(scope.fn, read, _shape, _sequenceKinds) != null) return true;
 		final type: Null<String> = scope.type;
 		return type != null && _graph.types.memberOnChain(type, name) != null && _graph.types.propertyOnChain(type, name) == null;
 	}

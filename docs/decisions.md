@@ -1841,3 +1841,8 @@ decided the question; it may not become a record of runs.
   `FileList.reload` stays dead (its `?viewType` relays through `FileList.new` into `FileListSelect.new`). The
   default `0` of a counting abstract is a static target's (hxcpp); on JS an `Int` field starts `null` (review round 2
   `ex2-param-dynamic`) — branch `feat/ts-precision-3`
+- a bare name in a `try` body read as a binding whenever ANY node of the function binds the name → a lambda's
+  parameter `limit` elsewhere in the function made `limit` (a property whose getter throws) inert, and the `catch`
+  around it dead. `DeadCatches.plainRead` takes a read as a binding only where the one declaration of the name is a
+  parameter of the function itself or a local before the read in a block around it (`BareNames.localOf`); any other
+  read is judged as the member (review round 2 `dc1-prop-shadowed-elsewhere`) — branch `feat/ts-precision-3`
