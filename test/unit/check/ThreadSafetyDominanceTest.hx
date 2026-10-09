@@ -162,7 +162,7 @@ class ThreadSafetyDominanceTest extends Test {
 		Assert.same([0], [
 			shortQuickTakes(givingBack(
 				'_inner.acquire(); Sys.sleep(1); _inner.release(); _outer.release();', 'public function kick():Void _outer.release();', '',
-				'', 'd.kick();'
+				'', 'd.kick()'
 			))
 		], 'given back elsewhere');
 		final rw: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Rw.lock","Rw.lockShared","Sys.sleep"],'
@@ -295,11 +295,12 @@ class ThreadSafetyDominanceTest extends Test {
 		]);
 	}
 
-	/** How many of the main thread's takes in `quick` are graded short. */
+	/** How many of the main thread's takes in `quick` are graded short; -1 when the fixture reports fewer than both. */
 	private static function shortQuickTakes(found: Array<Violation>): Int {
-		return [
-			for (v in found) if (v.data?.family == 'A' && v.data?.member == 'D.quick' && v.message.indexOf(' — short: ') >= 0) v
-		].length;
+		final takes: Array<Violation> = [for (v in found) if (v.data?.family == 'A' && v.data?.member == 'D.quick') v];
+		// both of `quick`'s takes reach the main thread: fewer means the fixture said nothing (a parse failure)
+		if (takes.length < 2) return -1;
+		return takes.filter(v -> v.message.indexOf(' — short: ') >= 0).length;
 	}
 	/** The severities of the findings (a) at `takeInner`'s take of `_inner`, which only `quick` calls, on the main thread. */
 	private static function mainTakesOfInner(config: String): Array<String> {
