@@ -43,20 +43,34 @@ class ThreadSafetyLongLocksTest extends Test {
 	}
 
 	/**
-	 * TM's correlated `if (!batch) acquire … if (!batch) release` reads as a hold that may outlive its function: recorded
-	 * as a leak, at the take — evidence of what the rule does today, not a claim it is right. A second leaking take is a
-	 * second reason.
+	 * TM's correlated `if (!batch) acquire … if (!batch) release`: the parameter is a fixed flag (`FixedFlags`), so the
+	 * window is traced once per value and no run takes without giving back — no leak. A take nothing gives back is one.
 	 */
-	public function testCorrelatedConditionalTakeReadsAsALeak(): Void {
+	@:pin('control') @:killer('M-TS-FLAGS-OFF')
+	public function testCorrelatedConditionalTakeIsNoLeak(): Void {
 		#if (sys || nodejs)
 		final sources: Array<String> = ThreadSafetyCheckTest.storeFixture('db.add(false);', 'fs.save();');
 		final db: String = sources[0].replace(
 			'function work():Void {}', 'function work():Void {} function other(b:Bool):Void { if (!b) _batch.acquire(); }'
 		);
 		Assert.same([
-			{ kind: 'leak', holder: 'Db.add', at: db.indexOf('_batch.acquire(); work()') },
 			{ kind: 'leak', holder: 'Db.other', at: db.indexOf('_batch.acquire(); }', db.indexOf('function other')) }
 		], reasonsOf(longLock(explain([db, sources[1]]), 'Db._batch')).filter(r -> r.kind == 'leak'));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A flag the function writes is no fixed flag: the correlated take and give still read as a leak. */
+	@:pin('control') @:killer('M-TS-FLAGS-WRITTEN')
+	public function testAWrittenFlagIsNoFixedFlag(): Void {
+		#if (sys || nodejs)
+		final source: String = 'class A { final _m:Mutex = new Mutex(); public function new() {}'
+			+ ' public function take(b:Bool):Void { if (b) _m.acquire(); b = !b; if (b) _m.release(); }'
+			+ ' public static function main():Void { new A().take(true); } }';
+		Assert.same(['A.take'], [
+			for (r in reasonsOf(longLock(explain([source]), 'A._m'))) if (r.kind == 'leak') r.holder
+		]);
 		#else
 		Assert.pass('non-sys target');
 		#end

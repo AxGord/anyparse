@@ -73,6 +73,11 @@ final class LockWindow {
 
 	private var _escapes: Array<QueryNode> = [];
 
+	private final _shape: RefShape;
+
+	/** The value of each fixed flag for the trace under way (`FixedFlags`). */
+	private var _decided: Map<String, Bool> = [];
+
 	/** For each loop the walk is inside, innermost last: what its `break`s and its `continue`s leave held. */
 	private var _loops: Array<{ brk: Null<Bool>, cont: Null<Bool> }> = [];
 
@@ -89,6 +94,7 @@ final class LockWindow {
 	private var _raisedHeld: Bool = false;
 
 	public function new(shape: RefShape, flow: ControlFlowSupport, ?exhaustive: ExhaustiveSwitches) {
+		_shape = shape;
 		_exhaustive = exhaustive;
 		// an expression body is a sequence of the one expression it holds
 		_sequenceKinds = flow.blockKinds()
@@ -138,9 +144,21 @@ final class LockWindow {
 		if (_exitKinds.length == 0) return null;
 		final exhaustive: Null<ExhaustiveSwitches> = _exhaustive;
 		_deadBranch = exhaustive == null || fnId == null ? null : deadIn(exhaustive, fnId);
-		reset(acquireFrom, releaseFroms, raisingFroms);
-		if (sequence(fn.children, false) == true) _leaks = true;
-		return { held: _held, leaks: _leaks, escapes: _escapes };
+		// once per value of each fixed flag (`FixedFlags`): every run fixes them, so the traces' union covers every run
+		final flags: Array<String> = FixedFlags.of(fn, _shape, _ifKinds);
+		final held: Array<QueryNode> = [];
+		final escapes: Array<QueryNode> = [];
+		var leaks: Bool = false;
+		for (bits in 0...1 << flags.length) {
+			_decided = [for (i => f in flags) f => bits & (1 << i) != 0];
+			reset(acquireFrom, releaseFroms, raisingFroms);
+			if (sequence(fn.children, false) == true) _leaks = true;
+			leaks = leaks || _leaks;
+			for (n in _held) if (!held.contains(n)) held.push(n);
+			for (n in _escapes) if (!escapes.contains(n)) escapes.push(n);
+		}
+		_decided = [];
+		return { held: held, leaks: leaks, escapes: escapes };
 	}
 
 	/** The branches `exhaustive` says no value reaches, in the function `fnId`. */
@@ -209,15 +227,16 @@ final class LockWindow {
 					loop.cont = join(loop.cont, before);
 				return null;
 			}
-			if (before == true) {
-				_leaks = true;
-				if (_throwKinds.contains(kind)) raise(node);
-			}
+			// a throw inside the body of a `try` with a `catch` goes to that catch, not out of the function
+			if (before == true && _throwKinds.contains(kind)) raise(node);
+			if (before == true && !(_throwKinds.contains(kind) && _catchDepth > 0)) _leaks = true;
 			return null;
 		}
 		if (_ifKinds.contains(kind) && kids.length >= 2) {
 			final cond: Null<Bool> = step(kids[0], held);
 			if (cond == null) return null;
+			final fixed: Null<Bool> = FixedFlags.decide(kids[0], _decided, _shape);
+			if (fixed != null) return fixed ? step(kids[1], cond) : kids.length > 2 ? step(kids[2], cond) : cond;
 			final otherwise: Null<Bool> = kids.length > 2 ? step(kids[2], cond) : cond;
 			return join(step(kids[1], cond), otherwise);
 		}

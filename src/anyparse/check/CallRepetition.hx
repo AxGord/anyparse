@@ -59,7 +59,7 @@ final class CallRepetition {
 
 	/** Whether `edge` may run more than once per run of its function: in a loop, handed to an `iterates` call, or recursive. */
 	public function repeated(edge: CallEdge): Bool {
-		if (initializerRun(edge)) return false;
+		if (initializerRun(edge) || boundedOnce(edge)) return false;
 		final loops: Null<Array<Span>> = loopsAround(edge);
 		return loops == null || loops.length > 0 || iterated(edge) || recursive(edge);
 	}
@@ -79,12 +79,22 @@ final class CallRepetition {
 	 * loop around `edge` that is not around `take`, handed to an `iterates` call, or recursive.
 	 */
 	public function repeatedUnder(edge: CallEdge, take: CallEdge): Bool {
-		if (initializerRun(edge)) return false;
+		if (initializerRun(edge) || boundedOnce(edge)) return false;
 		final loops: Null<Array<Span>> = loopsAround(edge);
 		final outer: Null<Array<Span>> = loopsAround(take);
 		return loops == null || outer == null || loops.exists(l ->
 			!outer.exists(o -> o.from == l.from)
 		) || iterated(edge) || recursive(edge);
+	}
+
+	/**
+	 * Whether `edge` repeats few enough times, each cheap enough, to run as once: a `boundedRepeats` entry of its chain
+	 * names the member it sits in (and the call, when it narrows) within `repeatBudgetMs` (`BoundedRepeats.short`).
+	 */
+	private function boundedOnce(edge: CallEdge): Bool {
+		final lists: ChainLists = _listsOf(edge.file);
+		return lists.bounded.length > 0
+			&& BoundedRepeats.short(lists.bounded, lists.repeatBudgetMs, ThreadSafety.memberOf(_graph, edge.from), edge.to);
 	}
 
 	/**

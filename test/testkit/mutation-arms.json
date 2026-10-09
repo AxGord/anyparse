@@ -11460,7 +11460,7 @@
 			"name": "M-TS-THROW-UNRAISED",
 			"type": "anyparse.check.LockWindow",
 			"method": "step",
-			"find": "if (_throwKinds.contains(kind)) raise(node);",
+			"find": "if (before == true && _throwKinds.contains(kind)) raise(node);",
 			"replace": "",
 			"note": "a throw reached holding the lock escapes nothing"
 		},
@@ -17821,7 +17821,7 @@
 			"type": "anyparse.check.MainSinkReport",
 			"method": "repeatKey",
 			"find": "return loops == null || loops.length == 0 ? siteKey(edge) :",
-			"replace": "return true ? siteKey(edge) :",
+			"replace": "return loops == null || loops.length == 0 || true ? siteKey(edge) :",
 			"note": "each call a loop repeats owns its own warning"
 		},
 		{
@@ -17863,6 +17863,62 @@
 			"find": "calls: [for (c in normal.blockingCalls(fold.hold, held)) c.edge],",
 			"replace": "calls: [for (c in graded.calls) c.edge],",
 			"note": "a call only a catch runs counts as a reason a folded hold warns"
+		},
+		{
+			"name": "M-TS-BOUND-OFF",
+			"type": "anyparse.check.CallRepetition",
+			"method": "repeated",
+			"find": "if (initializerRun(edge) || boundedOnce(edge)) return false;",
+			"replace": "if (initializerRun(edge)) return false;",
+			"note": "a bounded repetition still repeats"
+		},
+		{
+			"name": "M-TS-BOUND-UNDER",
+			"type": "anyparse.check.CallRepetition",
+			"method": "repeatedUnder",
+			"find": "if (initializerRun(edge) || boundedOnce(edge)) return false;",
+			"replace": "if (initializerRun(edge)) return false;",
+			"note": "a bounded repetition under a lock still repeats"
+		},
+		{
+			"name": "M-TS-BOUND-BUDGET",
+			"type": "anyparse.check.BoundedRepeats",
+			"method": "short",
+			"find": " && b.max * b.costMs < limit",
+			"replace": "",
+			"note": "a bound over the budget runs as once"
+		},
+		{
+			"name": "M-TS-BOUND-CALL",
+			"type": "anyparse.check.BoundedRepeats",
+			"method": "short",
+			"find": "(b.calls == null || b.calls.contains(callee))",
+			"replace": "true",
+			"note": "an entry naming one call bounds every repeating call of the member"
+		},
+		{
+			"name": "M-TS-FLAGS-OFF",
+			"type": "anyparse.check.FixedFlags",
+			"method": "of",
+			"find": "return out.slice(0, MAX_FLAGS);",
+			"replace": "return [];",
+			"note": "no parameter is a fixed flag"
+		},
+		{
+			"name": "M-TS-FLAGS-WRITTEN",
+			"type": "anyparse.check.FixedFlags",
+			"method": "of",
+			"find": " && !written.contains(p)",
+			"replace": "",
+			"note": "a parameter the function writes counts as fixed"
+		},
+		{
+			"name": "M-TS-WIN-CAUGHT-THROW",
+			"type": "anyparse.check.LockWindow",
+			"method": "step",
+			"find": " && !(_throwKinds.contains(kind) && _catchDepth > 0)",
+			"replace": "",
+			"note": "a throw a catch around it intercepts is a path out of the function"
 		}
 	]
 }

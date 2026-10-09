@@ -303,10 +303,12 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 						shared,
 						nonThrowing
 					]) list.join('\n')
-				].join('\t') + (closedWorld ? '\tclosed' : '');
+				].join('\t') + (closedWorld ? '\tclosed' : '') + '\t' + BoundedRepeats.signature(config);
 			final known: Null<ChainLists> = bySignature[signature];
 			final lists: ChainLists = known ?? {
 				reports: sinks.length > 0,
+				bounded: BoundedRepeats.entries(config, graph),
+				repeatBudgetMs: BoundedRepeats.budget(config),
 				sinkIds: matchAll(graph, sinks),
 				shortSinkIds: matchAll(graph, shortSinks),
 				shortNames: [for (p in shortSinks) if (p.indexOf('.') < 0) p],

@@ -381,6 +381,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.SwallowedExceptionCheckTest',
 		'unit.check.TailMergeCheckTest',
 		'unit.check.ThreadSafetyAllocationTest',
+		'unit.check.ThreadSafetyBoundedRepeatsTest',
 		'unit.check.ThreadSafetyCarriedHoldTest',
 		'unit.check.ThreadSafetyCheckTest',
 		'unit.check.ThreadSafetyConditionsTest',
@@ -2022,6 +2023,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyAllocationTest#testASealedFieldRunsOnlyItsClassesOverrides :: control :: M-TS-ALLOC-OFF',
 			'unit.check.ThreadSafetyAllocationTest#testAnyOtherWriteMakesTheFieldUnknown :: control :: M-TS-ALLOC-ANY-WRITE',
 			'unit.check.ThreadSafetyAllocationTest#testTheDeclaredValueCounts :: control :: M-TS-ALLOC-DECLARED',
+			'unit.check.ThreadSafetyBoundedRepeatsTest#testABoundOverTheBudgetStillRepeats :: control :: M-TS-BOUND-BUDGET',
+			'unit.check.ThreadSafetyBoundedRepeatsTest#testABoundedLoopRunsAsOnce :: control :: M-TS-BOUND-OFF',
+			'unit.check.ThreadSafetyBoundedRepeatsTest#testABoundedLoopUnderALockIsBrief :: control :: M-TS-BOUND-UNDER',
+			'unit.check.ThreadSafetyBoundedRepeatsTest#testAnEntryForAnotherCallLeavesTheLoopRepeating :: control :: M-TS-BOUND-CALL',
 			'unit.check.ThreadSafetyCarriedHoldTest#testACalleeGivingTheLockBackCarriesNothing :: control :: M-TS-CARRY-RELEASE',
 			'unit.check.ThreadSafetyCarriedHoldTest#testADominatedTakeInACalleeOnTheHeldObjectIsBrief :: control :: M-TS-CARRY-OFF',
 			'unit.check.ThreadSafetyCarriedHoldTest#testAFieldWrittenOutsideTheConstructorNamesNoObject :: control :: M-TS-PATH-STABLE-ANY',
@@ -2204,8 +2209,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyHelperHoldsTest#testTheTwinsGiveLeavesDominanceStanding :: control :: M-TS-HELPER-DOM-CROSSING',
 			'unit.check.ThreadSafetyLongLocksTest#testACircularReTakeIsCountedApart :: control :: M-TS-CIRCULAR-COUNTED',
 			'unit.check.ThreadSafetyLongLocksTest#testAVirtualCallIsAReasonPerTarget :: control :: M-TS-REASONS-DEDUP-BY-SITE',
+			'unit.check.ThreadSafetyLongLocksTest#testAWrittenFlagIsNoFixedFlag :: control :: M-TS-FLAGS-WRITTEN',
 			'unit.check.ThreadSafetyLongLocksTest#testAsideNamesTheLongLockAHoldWaitsFor :: control :: M-TS-VIA-DROPPED',
 			'unit.check.ThreadSafetyLongLocksTest#testAsideSetsTheLocksOwnReasonsAside :: control :: M-TS-ASIDE-KEEPS-SEEDS',
+			'unit.check.ThreadSafetyLongLocksTest#testCorrelatedConditionalTakeIsNoLeak :: control :: M-TS-FLAGS-OFF',
 			'unit.check.ThreadSafetyLongLocksTest#testEverySpansBlockingCallIsListed :: control :: M-TS-SPANS-FIRST-ONLY',
 			'unit.check.ThreadSafetyLongLocksTest#testMainThreadTakesOfAShortLock :: control :: M-TS-MAINSHORT-LOUD-ONLY',
 			'unit.check.ThreadSafetyLongLocksTest#testSpansBlockingNamesTheCallAndThePath :: control :: M-TS-LONG-NEVER-GROWS',
@@ -2244,6 +2251,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyWaiterTest#testAMainOnlyHoldOverItsOwnLongWorkStays :: control :: M-TS-OWN-WORK-DROPPED',
 			'unit.check.ThreadSafetyWindowTest#testAComprehensionIsWalkedAsALoop :: control :: M-TS-WIN-ARRAY,M-TS-WIN-FOREXPR',
 			'unit.check.ThreadSafetyWindowTest#testAContinueStaysInTheLoop :: control :: M-TS-WIN-JUMP',
+			'unit.check.ThreadSafetyWindowTest#testAThrowACatchInterceptsStaysInTheFunction :: control :: M-TS-WIN-CAUGHT-THROW',
 			'unit.check.ThreadSafetyWindowTest#testATryInADeclarationReleasingBeforeItRethrowsLeavesNothingHeld :: control :: M-TS-WIN-DECL',
 			'unit.check.TrivialGetterCheckTest#testBasicBlockBodyFlagged :: control :: M-SUBOVERRIDE-TRUE',
 			'unit.check.TrivialGetterShapeCollapseTest#testForeignHierarchyBackingNameStaysAccountedFor :: control :: '
@@ -6070,7 +6078,14 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-WIN-JUMP',
 			'M-TS-WIN-ARRAY',
 			'M-TS-WIN-FOREXPR',
-			'M-TS-FOLD-NORMAL'
+			'M-TS-FOLD-NORMAL',
+			'M-TS-BOUND-OFF',
+			'M-TS-BOUND-UNDER',
+			'M-TS-BOUND-BUDGET',
+			'M-TS-BOUND-CALL',
+			'M-TS-FLAGS-OFF',
+			'M-TS-FLAGS-WRITTEN',
+			'M-TS-WIN-CAUGHT-THROW'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

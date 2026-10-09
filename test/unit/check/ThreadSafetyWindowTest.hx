@@ -43,6 +43,15 @@ class ThreadSafetyWindowTest extends Test {
 		#end
 	}
 
+	@:pin('control') @:killer('M-TS-WIN-CAUGHT-THROW')
+	public function testAThrowACatchInterceptsStaysInTheFunction(): Void {
+		#if (sys || nodejs)
+		Assert.same([], takes(run('try { if (f() == 2) throw "x"; } catch (e:Dynamic) { _m.release(); throw e; }')));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	public function testAReturnUnderTheLockStillLeaks(): Void {
 		#if (sys || nodejs)
 		Assert.same(['M.main'], takes(run('for (i in 0...3) { if (i == 1) return; f(); }')));

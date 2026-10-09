@@ -127,6 +127,7 @@ final class RootCauseFold {
 			state[pick] = 1;
 		}
 		for (i => h in warned) if (state[i] == 2) turn(h, reasons[i], i, warned, doing);
+
 	}
 
 	/** By `MainSinkReport.siteKey`, the warned holds (by index into `reasons`) long by each sink call. */

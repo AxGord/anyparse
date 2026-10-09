@@ -14,6 +14,11 @@ using Lambda;
  */
 typedef ChainLists = {
 
+	/** The repetitions bounded few and cheap enough to run as once (`BoundedRepeats`), and the budget they are judged by. */
+	final bounded: Array<anyparse.check.BoundedRepeats.BoundedRepeat>;
+
+	final repeatBudgetMs: Null<Float>;
+
 	/** Whether the chain names any `sinks` — a chain that names none is read for the graph and reports nothing. */
 	final reports: Bool;
 

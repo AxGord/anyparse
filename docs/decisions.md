@@ -1661,5 +1661,16 @@ decided the question; it may not become a record of runs.
   `readDirectory`, `deleteDirectory`, `deleteFile` run on every run of it) and `repairShareAttr`'s session loop twice
   (`getXML`, `setXML`); one warning per way into a function, and per loop for the calls it repeats — branch
   `feat/ts-precision-2`
+- every repetition long for a short sink (ζ2) → TM's `listFolder` per-child SELECTs (414 children × 2 × 0.04 ms = 33 ms),
+  `createPathToItem`'s path segments, `deleteFileSystems`' four unlinks warned as repeated short work under the
+  50 ms real-long line; `boundedRepeats` names the member (and call), the bound and the measured cost of one turn, and
+  the check stays mechanical (`max × costMs < repeatBudgetMs`), the numbers and their evidence in the config. Not
+  listed: the 401 retry cycle (`executeCompletion` ↔ `refreshTokenOrLogoutBlocked` has no retry cap in code) and
+  `listFolderCloudCallback` (a turn that inserts the missing DB row costs 1.2 ms, 84 × 1.25 > 50) — branch
+  `feat/ts-precision-2`
+- `if (flag) lock(); … if (flag) unlock();` read as a leak → TM's `FolderWatcher.rename(…, flush)` made the tree lock
+  long by a leak no finding names, which kept every wait for it from folding; a parameter deciding two or more `if`s
+  that nothing writes is a fixed flag, the window traced once per value (`FixedFlags`) — and a `throw` a `catch` around
+  it intercepts no longer marks a leak (`copyFileAndCreateSlave`) — branch `feat/ts-precision-2`
 - judging "inside a catch" off the witness chain the finding prints → the chain is one way; a second way outside every
   catch must keep the warning, which only a solve without the catch edges can see — branch `feat/ts-precision-2`
