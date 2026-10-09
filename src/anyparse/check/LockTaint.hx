@@ -42,6 +42,12 @@ typedef ChainLists = {
 
 	/** The `lockPairs` take members that take their lock shared (`sharedLocks`): such takes never wait for each other. */
 	final sharedIds: Array<String>;
+
+	/** The calls that never throw (`nonThrowing`): a `catch` around nothing else is no path (`DeadCatches`). */
+	final nonThrowingIds: Array<String>;
+
+	/** The bare `nonThrowing` names, for a call the graph resolves to nothing. */
+	final nonThrowingNames: Array<String>;
 	final spawnIds: Array<String>;
 	final marshalIds: Array<String>;
 	final quietIds: Array<String>;

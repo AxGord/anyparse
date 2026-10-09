@@ -1605,5 +1605,10 @@ decided the question; it may not become a record of runs.
   every `CloudDatabase._batchMutex` holder over its own `_mutex` take); and a lambda the facts record as a value made
   at its site inherited its maker's thread beside the syntax's `spawns` registration (now `ThreadGraph.madeWhereHanded`).
   Opt-in (`compilerFacts`) until the facts' call edges name their receiver field — branch `feat/ts-precision-2`
+- every `catch` body a path → TM's `getMTime` / `setTimestamp` wrap hxcpp's `FileSystem.stat` (a missing path gives a
+  zeroed record, no throw) and a native prim returning a status code in a `catch` that reports by a blocking PUT, and
+  that leg was the long reason of most `FolderWatcher.*` holds; a config list (`nonThrowing`, the project's word for
+  the runtime) and a positive whitelist of what else a `try` body may hold make such a `catch` no path at all
+  (`DeadCatches`, checked in `EdgeConditions.carried`) — branch `feat/ts-precision-2`
 - judging "inside a catch" off the witness chain the finding prints → the chain is one way; a second way outside every
   catch must keep the warning, which only a solve without the catch edges can see — branch `feat/ts-precision-2`

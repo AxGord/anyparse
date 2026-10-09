@@ -55,7 +55,8 @@ using StringTools;
  * `compilerFacts: true` builds the graph through the run's compiler facts when it has them (`ThreadGraph.build`);
  * `iterates` the calls running a function value handed to them once per element, and `registers` the calls keeping one to
  * run later, once per event however often it was registered (`CallRepetition`); `sharedLocks` are the `lockPairs` take
- * members taking their lock shared — a lock only ever taken through them never waits (`QuietLocks`).
+ * members taking their lock shared — a lock only ever taken through them never waits (`QuietLocks`); `nonThrowing` are
+ * the calls that never throw, so a `catch` around nothing else runs no call (`DeadCatches`).
  *
  * Findings are grouped: one per hold, at its first blocking call or its first escape, one per main-thread sink call
  * site, and one per pair of locks taken in both orders. Each carries its identity as data (`Check.FindingData`): its
@@ -145,7 +146,9 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final sealedSlots: Array<String> = deriveStoredCalls(graph, unresolvedNames);
 
 		final trees: FunctionTrees = new FunctionTrees(graph, plugin);
-		final conditions: EdgeConditions = new EdgeConditions(graph, trees, plugin, file -> listsOf(file).mainCheckIds);
+		final conditions: EdgeConditions = new EdgeConditions(
+			graph, trees, plugin, file -> listsOf(file).mainCheckIds, new DeadCatches(graph, trees, plugin, listsOf).holds
+		);
 		final inertRef: (CallEdge) -> Bool = runsNothing.bind(graph, sealedSlots, listsOf);
 		final seedable: (String) -> Bool = mayRunFromOutside.bind(graph, plugin, unresolvedNames, byFile);
 		// a quiet root is judged by the chain of the file declaring it
@@ -270,6 +273,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			final iterates: Array<String> = option('iterates');
 			final registers: Array<String> = option('registers');
 			final shared: Array<String> = option('sharedLocks');
+			final nonThrowing: Array<String> = option('nonThrowing');
 			final spawns: Array<String> = option('spawns');
 			final marshals: Array<String> = option('marshals');
 			final lockPairs: Array<String> = option('lockPairs');
@@ -293,7 +297,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 						shortSinks,
 						iterates,
 						registers,
-						shared
+						shared,
+						nonThrowing
 					]) list.join('\n')
 				].join('\t') + (closedWorld ? '\tclosed' : '');
 			final known: Null<ChainLists> = bySignature[signature];
@@ -307,6 +312,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 				registerIds: matchAll(graph, registers),
 				registerNames: [for (p in registers) if (p.indexOf('.') < 0) p],
 				sharedIds: matchAll(graph, shared),
+				nonThrowingIds: matchAll(graph, nonThrowing),
+				nonThrowingNames: [for (p in nonThrowing) if (p.indexOf('.') < 0) p],
 				spawnIds: matchAll(graph, spawns),
 				marshalIds: matchAll(graph, marshals),
 				quietIds: matchAll(graph, quietRoots),

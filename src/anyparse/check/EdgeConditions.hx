@@ -27,6 +27,8 @@ private typedef SiteFact = {
  * function, the context it runs on, the VALUATION of its tracked parameters — and on which threads, and `bind` what the
  * call hands the callee's tracked parameters.
  *
+ * A call in a `catch` body no exception reaches runs nowhere (`DeadCatches`, handed in as `dead`).
+ *
  * A positive whitelist: a call is cut only where its own body says so in one of these shapes, and any other answers
  * "it runs, on every thread its function does".
  * - The call sits in the `then` / `else` of an `if` or a ternary, in the right operand of `&&` / `||`, or after an
@@ -58,11 +60,17 @@ final class EdgeConditions {
 	private final _nestedFnKinds: Array<String>;
 	private final _values: ArgumentValues;
 
+	/** Whether a call site sits where nothing runs at all: a `catch` no exception reaches (`DeadCatches`). */
+	private final _dead: Null<(CallEdge) -> Bool>;
+
 	/**
 	 * `checksOf` names, per file, the graph ids of the main-thread checks the file's chain configures; `trees` finds the
 	 * function bodies.
 	 */
-	public function new(graph: CallGraph, trees: FunctionTrees, plugin: GrammarPlugin, checksOf: (String) -> Array<String>) {
+	public function new(
+		graph: CallGraph, trees: FunctionTrees, plugin: GrammarPlugin, checksOf: (String) -> Array<String>, ?dead: (CallEdge) -> Bool
+	) {
+		_dead = dead;
 		_graph = graph;
 		_trees = trees;
 		_shape = plugin.refShape();
@@ -90,6 +98,8 @@ final class EdgeConditions {
 	 * otherwise.
 	 */
 	public function carried(edge: CallEdge, valuation: String, ctx: Int): Int {
+		final dead: Null<(CallEdge) -> Bool> = _dead;
+		if (dead != null && dead(edge)) return 0;
 		var mask: Int = MAIN_BITS | ThreadSafety.CTX_BG;
 		for (fact in siteFacts(edge)) {
 			if (fact.param == MAIN_CHECK) {

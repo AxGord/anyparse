@@ -385,6 +385,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.ThreadSafetyCheckTest',
 		'unit.check.ThreadSafetyConditionsTest',
 		'unit.check.ThreadSafetyCostTest',
+		'unit.check.ThreadSafetyDeadCatchTest',
 		'unit.check.ThreadSafetyDominanceTest',
 		'unit.check.ThreadSafetyErrorPathTest',
 		'unit.check.ThreadSafetyFactsTest',
@@ -2146,6 +2147,10 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-TS-REPEAT-NO-RECURSION,M-TS-OWNER-SELF-MOVED',
 			'unit.check.ThreadSafetyCostTest#testTheIterableOfAForRunsOnce :: control :: M-TS-REPEAT-ITERABLE',
 			'unit.check.ThreadSafetyCostTest#testTheNearestRepeatingCallerOwnsTheWarning :: control :: M-TS-OWNER-FARTHEST',
+			'unit.check.ThreadSafetyDeadCatchTest#testACatchAroundANonThrowingCallIsNoPath :: control :: M-TS-DEADCATCH-OFF',
+			'unit.check.ThreadSafetyDeadCatchTest#testAFieldReadOffAValueMakesTheCatchAPath :: control :: M-TS-DEADCATCH-FIELD',
+			'unit.check.ThreadSafetyDeadCatchTest#testAnotherCallMakesTheCatchAPath :: control :: M-TS-DEADCATCH-ANY-CALL',
+			'unit.check.ThreadSafetyDeadCatchTest#testTheTryBodyStillRuns :: control :: M-TS-DEADCATCH-BODY',
 			'unit.check.ThreadSafetyDominanceTest#testABriefUnresolvedCallLeavesDominanceStanding :: control :: '
 				+ 'M-TS-DOM-BRIEF-NAMES-IGNORED,M-TS-DOM-BRIEF-REPEATED',
 			'unit.check.ThreadSafetyDominanceTest#testAConditionalTakeTheValuationDecidesCounts :: control :: '
@@ -5999,7 +6004,11 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-ALLOC-LIBRARY',
 			'M-TS-FACTS-IGNORED',
 			'M-TS-FACTS-MADE-REF',
-			'M-TS-FACTS-GATE'
+			'M-TS-FACTS-GATE',
+			'M-TS-DEADCATCH-OFF',
+			'M-TS-DEADCATCH-ANY-CALL',
+			'M-TS-DEADCATCH-FIELD',
+			'M-TS-DEADCATCH-BODY'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

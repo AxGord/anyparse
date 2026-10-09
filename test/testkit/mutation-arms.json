@@ -17591,6 +17591,38 @@
 			"find": "final host: Null<SymbolIndexHost> = useFacts && plugin is SymbolIndexHost ? cast plugin : null;",
 			"replace": "final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;",
 			"note": "thread-safety reads compiler facts the project never asked for"
+		},
+		{
+			"name": "M-TS-DEADCATCH-OFF",
+			"type": "anyparse.check.EdgeConditions",
+			"method": "carried",
+			"find": "if (dead != null && dead(edge)) return 0;",
+			"replace": "if (dead != null && false) return 0;",
+			"note": "a catch around only nonThrowing calls is still a path"
+		},
+		{
+			"name": "M-TS-DEADCATCH-ANY-CALL",
+			"type": "anyparse.check.DeadCatches",
+			"method": "nonThrowingCall",
+			"find": "? targets.foreach(t -> lists.nonThrowingIds.contains(t))",
+			"replace": "? targets.length > 0",
+			"note": "any resolved call counts as non-throwing"
+		},
+		{
+			"name": "M-TS-DEADCATCH-FIELD",
+			"type": "anyparse.check.DeadCatches",
+			"method": "throwsNothing",
+			"find": "return node.children.length == 1 && node.children[0].kind == _shape.callKind",
+			"replace": "return true || node.children.length == 1 && node.children[0].kind == _shape.callKind",
+			"note": "a field read off any value cannot throw"
+		},
+		{
+			"name": "M-TS-DEADCATCH-BODY",
+			"type": "anyparse.check.DeadCatches",
+			"method": "holds",
+			"find": "inner.kind == _shape.catchClauseKind",
+			"replace": "true",
+			"note": "the try body of a dead catch runs nothing either"
 		}
 	]
 }
