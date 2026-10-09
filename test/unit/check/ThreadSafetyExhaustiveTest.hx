@@ -113,7 +113,7 @@ class ThreadSafetyExhaustiveTest extends Test {
 	 * constructor, a function with no written return type handing back a value, a static field of it (review r4 `e3`,
 	 * `e4`, `e8`, `e9`).
 	 */
-	@:pin('control') @:killer('M-TS-EXH-FROM') @:killer('M-TS-EXH-CTOR') @:killer('M-TS-EXH-NORET') @:killer('M-TS-EXH-STATIC-FIELD')
+	@:pin('control') @:killer('M-TS-EXH-FROM') @:killer('M-TS-EXH-CTOR') @:killer('M-TS-EXH-NORET')
 	public function testMembersBuildingOtherValuesOpenTheAbstract(): Void {
 		#if (sys || nodejs)
 		final dead: String = 'switch mode { case A: step(); case B: step(); case _: throw "x"; }';

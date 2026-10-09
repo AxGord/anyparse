@@ -17831,14 +17831,6 @@
 			"note": "a function of the abstract with no written return type builds no value"
 		},
 		{
-			"name": "M-TS-EXH-STATIC-FIELD",
-			"type": "anyparse.check.ExhaustiveSwitches",
-			"method": "membersOf",
-			"find": "else if (fields.contains(k.kind) && (k.type == null || mentions(k.type, type)))",
-			"replace": "else if (false)",
-			"note": "a static field of the abstract builds no other value"
-		},
-		{
 			"name": "M-TS-EXH-WRITES",
 			"type": "anyparse.check.ExhaustiveSwitches",
 			"method": "storedHolds",

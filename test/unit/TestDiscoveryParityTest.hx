@@ -2199,7 +2199,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyExhaustiveTest#testAValueNoCaseNamesReachesIt :: control :: M-TS-EXH-ALL-NAMED',
 			'unit.check.ThreadSafetyExhaustiveTest#testAnAbstractNameDeclaredTwiceIsNotRead :: control :: M-TS-EXH-COLLISION',
 			'unit.check.ThreadSafetyExhaustiveTest#testMembersBuildingOtherValuesOpenTheAbstract :: control :: '
-				+ 'M-TS-EXH-FROM,M-TS-EXH-CTOR,M-TS-EXH-NORET,M-TS-EXH-STATIC-FIELD',
+				+ 'M-TS-EXH-FROM,M-TS-EXH-CTOR,M-TS-EXH-NORET',
 			'unit.check.ThreadSafetyExhaustiveTest#testTheMemberHoldsOnlyValues :: control :: '
 				+ 'M-TS-EXH-WRITES,M-TS-EXH-UNINIT,M-TS-EXH-ZERO,M-TS-EXH-OPTIONAL',
 			'unit.check.ThreadSafetyExhaustiveTest#testValuesThroughAccessorsAndConversions :: control :: M-TS-EXH-CONVERT-OFF,M-TS-EXH-CONVERT-ANY',
@@ -6094,7 +6094,6 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-EXH-GUARD',
 			'M-TS-EXH-CTOR',
 			'M-TS-EXH-NORET',
-			'M-TS-EXH-STATIC-FIELD',
 			'M-TS-EXH-WRITES',
 			'M-TS-EXH-UNINIT',
 			'M-TS-EXH-ZERO',

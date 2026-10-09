@@ -15,14 +15,13 @@ using Lambda;
  * case names: no value reaches it. A positive whitelist on every count:
  * - the subject is a member of the running type read off `this`, or bare where nothing in the function binds its name,
  *   declared as the abstract itself (not `Null<…>`), the abstract the one type of the project of that name;
- * - the abstract is CLOSED: no `from` clause, no build macro, no conditional-compilation region, no constructor; a static
- *   field of it is typed without naming it; a function of it with a written return type naming it is the abstract alone
- *   and hands back only its values (through `switch` arms, `?:`, parentheses and blocks), one with no written return type
- *   hands back nothing;
+ * - the abstract is CLOSED: no `from` clause, no build macro, no conditional-compilation region, no constructor; a
+ *   function of it with a written return type naming it is the abstract alone and hands back only its values (through
+ *   `switch` arms, `?:`, parentheses and blocks), one with no written return type hands back nothing;
  * - the member HOLDS only values (`holdsValues`): through its getter, or through its initializer — with none, the default
  *   `0` of a counting abstract that has a `0` value — and every assignment to a field of its name in the project; a value
- *   is a value constant, a parameter written as the abstract, a member holding only values, or a call converted by a
- *   `@:from` function.
+ *   is a value constant (never a static field of the abstract), a parameter written as the abstract, a member holding
+ *   only values, or a call converted by a `@:from` function.
  * The holes the source cannot show are a `cast` into the abstract and an untyped value handed to a parameter written as
  * it, taken as absent: the project's word that it builds the abstract's values only through its constants.
  */
@@ -145,7 +144,7 @@ final class ExhaustiveSwitches {
 	private function closedDecl(held: HeldDecl, type: String): Null<ClosedAbstract> {
 		final kids: Array<QueryNode> = held.node.children;
 		final underlying: Null<String> = kids.length > 0 && _typeKinds.contains(kids[0].kind) ? kids[0].name : null;
-		final members: Null<AbstractMembers> = membersOf(kids.slice(underlying == null ? 0 : 1), type);
+		final members: Null<AbstractMembers> = membersOf(kids.slice(underlying == null ? 0 : 1));
 		if (members == null || members.values.length == 0) return null;
 		final names: Array<String> = [for (v in members.values) v.name ?? ''];
 		if (!members.functions.foreach(f -> buildsNoOther(f.fn, type, names))) return null;
@@ -163,11 +162,12 @@ final class ExhaustiveSwitches {
 	}
 
 	/**
-	 * The values (its non-static fields) and the functions of the members `kids` of the enum abstract named `type`, when
-	 * every other one is a modifier, metadata or a static field typed without naming the abstract. Null for any other
+	 * The values (its non-static fields) and the functions of the members `kids` of an enum abstract, when
+	 * every other one is a modifier, metadata or a static field — whose value no read accepts as one of
+	 * the abstract's (`valueExpr` takes a value constant off the abstract's name only). Null for any other
 	 * member: a `from` clause, a conditional-compilation region (a value of another build), anything not listed.
 	 */
-	private function membersOf(kids: Array<QueryNode>, type: String): Null<AbstractMembers> {
+	private function membersOf(kids: Array<QueryNode>): Null<AbstractMembers> {
 		final fields: Array<String> = _shape.fieldDeclKinds ?? [];
 		final members: AbstractMembers = { values: [], functions: [] };
 		var isStatic: Bool = false;
@@ -180,8 +180,6 @@ final class ExhaustiveSwitches {
 			}
 			if (fields.contains(k.kind) && !isStatic && k.name != null)
 				members.values.push(k)
-			else if (fields.contains(k.kind) && (k.type == null || mentions(k.type, type)))
-				return null
 			else if ((_shape.functionKinds ?? []).contains(k.kind))
 				members.functions.push({ fn: k, from: isFrom })
 			else if (!fields.contains(k.kind))
@@ -411,10 +409,14 @@ final class ExhaustiveSwitches {
 		final fn: Null<QueryNode> = at.fn;
 		if (fn != null && !BareNames.bindsNothing(fn, via, _shape)) return false;
 		final owner: Null<String> = at.owner;
-		final written: Null<String> = owner == null || via == _shape.selfReferenceText
-			? owner
-			: _graph.types.memberOnChain(owner, via)?.typeSource;
-		final type: Null<String> = written ?? (_graph.types.declarationCount(via) == 1 ? via : null);
+		// off `this`: the running type; off a member: its written type; off a name no member holds: the type of that name
+		final member: Null<MemberInfo> = owner == null ? null : _graph.types.memberOnChain(owner, via);
+		final type: Null<String> = if (via == _shape.selfReferenceText)
+			owner
+		else if (member != null)
+			member.typeSource
+		else
+			_graph.types.declarationCount(via) == 1 ? via : null;
 		final bare: Null<String> = type == null ? null : type.split('<')[0];
 		final declaring: Null<String> = bare == null ? null : _graph.types.declaringTypeOf(bare, name);
 		return declaring != null && holdsValues(declaring, name, closed);
