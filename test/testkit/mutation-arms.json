@@ -18612,7 +18612,7 @@
 			"name": "M-TS-BLIND-START",
 			"type": "anyparse.check.LockReleasers",
 			"method": "blindIn",
-			"find": "!resolved.contains('${at.from}:${at.to}')",
+			"find": "!resolved.contains(callKey(at))",
 			"replace": "!resolved.exists(r -> r.indexOf('${at.from}:') == 0)",
 			"note": "a call starting where a resolved call starts counts as resolved"
 		},
@@ -18719,6 +18719,14 @@
 			"find": "return rank > 0 ? '$named #${rank + 1}' : named;",
 			"replace": "return named;",
 			"note": "two values one function hands the same iterating call share a subject, and so a key"
+		},
+		{
+			"name": "M-TS-HELPER-SPAN-START",
+			"type": "anyparse.check.LockReleasers",
+			"method": "callKey",
+			"find": "'${span.from}:${span.to}'",
+			"replace": "'${span.from}'",
+			"note": "a lock-call site is keyed by its start, so a call a give is made on passes as lock traffic"
 		},
 		{
 			"name": "M-TS-REPEATED-BY-HEADER",

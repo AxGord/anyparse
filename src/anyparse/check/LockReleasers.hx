@@ -134,14 +134,13 @@ final class LockReleasers {
 		}
 		final out: Array<Int> = [];
 		_blindIn[id] = out;
-		// by the whole span: a chained call (`self().drop()`) starts where the call it is made on does
 		final resolved: Array<String> = [
-			for (e in _graph.outEdges(id)) if (e.kind.isInvocation() && e.span != null) '${e.span.from}:${e.span.to}'
+			for (e in _graph.outEdges(id)) if (e.kind.isInvocation() && e.span != null) callKey(e.span)
 		];
 		function walk(node: QueryNode): Void {
 			if (node != fn && _functionKinds.contains(node.kind)) return;
 			final at: Null<Span> = node.span;
-			if (node.kind == _callKind && at != null && !resolved.contains('${at.from}:${at.to}')) out.push(at.from);
+			if (node.kind == _callKind && at != null && !resolved.contains(callKey(at))) out.push(at.from);
 			for (c in node.children) walk(c);
 		}
 		walk(fn);
@@ -189,6 +188,14 @@ final class LockReleasers {
 			_unknownRun[e.to] = true;
 			queue.push(e.to);
 		}
+	}
+
+	/**
+	 * The key of a call site by its whole span, `<from>:<to>`: a chained call (`self().drop()`) starts where the call it is
+	 * made on does, so its start alone names two calls. `?` for a site with none.
+	 */
+	public static inline function callKey(span: Null<Span>): String {
+		return span == null ? '?' : '${span.from}:${span.to}';
 	}
 
 }

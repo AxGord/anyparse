@@ -732,13 +732,14 @@ private class WrapperOps {
 		graph: CallGraph, kinds: { shape: RefShape, nested: Array<String> }, id: String, fn: QueryNode,
 		ops: Array<{ call: LockCall, takes: Bool }>
 	): Bool {
-		final sites: Array<Int> = [for (o in ops) o.call.edge.span?.from ?? -1];
-		if (graph.outEdges(id).exists(e -> e.kind.isInvocation() && !sites.contains(e.span?.from ?? -1))) return false;
+		// by the whole span: a chained call (`me()._b.release()`) starts where the call it is made on does
+		final sites: Array<String> = [for (o in ops) LockReleasers.callKey(o.call.edge.span)];
+		if (graph.outEdges(id).exists(e -> e.kind.isInvocation() && !sites.contains(LockReleasers.callKey(e.span)))) return false;
 		final shape: RefShape = kinds.shape;
 		function runsOther(node: QueryNode): Bool {
 			if (node != fn && kinds.nested.contains(node.kind)) return false;
 			final at: Null<Span> = node.span;
-			if ((node.kind == shape.callKind || node.kind == shape.newExprKind) && (at == null || !sites.contains(at.from))) return true;
+			if ((node.kind == shape.callKind || node.kind == shape.newExprKind) && !sites.contains(LockReleasers.callKey(at))) return true;
 			return node.children.exists(runsOther);
 		}
 		return !runsOther(fn);

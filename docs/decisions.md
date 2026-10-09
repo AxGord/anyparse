@@ -1884,3 +1884,7 @@ decided the question; it may not become a record of runs.
   that may block (`CallRepetition.handLabel`, `Lambda.iter #2`), as loops are ranked; the message names the
   repeating MEMBERS only (`MainSinkReport.repeaters`), the headers stay in `data.repeatedBy`, and the suffix is
   written last, on warnings only (review round 2 `ks1-two-iters`, `rb1`) — branch `feat/ts-precision-3`
+- a helper's lock-call sites keyed by their start offset (`WrapperOps.lockTrafficOnly`) → a chained receiver
+  `me()._b.release()` starts where `me()` does, so the blocking `me()` passed as lock traffic and the helper's caller
+  held `_a` across it unreported. Every lock-call key is the whole span (`LockReleasers.callKey`, shared with
+  `blindIn`) (review round 2 `h3`) — branch `feat/ts-precision-3`

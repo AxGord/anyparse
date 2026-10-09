@@ -138,6 +138,30 @@ class ThreadSafetyHelperHoldsTest extends Test {
 	}
 
 	/**
+	 * A call a give is made on (`me()._b.release()`) starts where the give does: it is work of the helper, not lock
+	 * traffic, and the helper's caller holds the lock across it (review round 2 `h3`).
+	 */
+	@:pin('control') @:killer('M-TS-HELPER-SPAN-START')
+	public function testACallAGiveIsMadeOnIsWorkOfTheHelper(): Void {
+		#if (sys || nodejs)
+		final lock: String = 'function lockBoth():Void { _a.acquire(); _b.acquire(); }';
+		final me: String = 'function me():S { Sys.sleep(1); return this; }';
+		Assert.same(
+			['warning B S.lockBoth | S._a', 'warning B S.work | S._a'],
+			holds(pair(lock, 'function unlockBoth():Void { me()._b.release(); _a.release(); }', 'lockBoth(); unlockBoth();', me)),
+			'chained'
+		);
+		Assert.same(
+			['warning B S.lockBoth | S._a', 'warning B S.work | S._a'],
+			holds(pair(lock, 'function unlockBoth():Void { me(); _b.release(); _a.release(); }', 'lockBoth(); unlockBoth();', me)),
+			'a statement of its own'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
 	 * A helper reached through a dispatch is no helper (review `c4`): the call may run another override, taking nothing,
 	 * so the override's takes leak on their own.
 	 */

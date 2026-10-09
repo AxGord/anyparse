@@ -2258,6 +2258,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyFoldingTest#testAHoldInsideAnotherIsItsFinding :: control :: M-TS-NEST-OFF',
 			'unit.check.ThreadSafetyFoldingTest#testAWaitInsideASinksBodyIsTheSinks :: control :: M-TS-INSIDE-SINK-OFF',
 			'unit.check.ThreadSafetyFoldingTest#testMainTakesOfOneLockWarnOnce :: control :: M-TS-ONE-TAKE-OFF,M-TS-ONE-TAKE-NO-WRAPPER',
+			'unit.check.ThreadSafetyHelperHoldsTest#testACallAGiveIsMadeOnIsWorkOfTheHelper :: control :: M-TS-HELPER-SPAN-START',
 			'unit.check.ThreadSafetyHelperHoldsTest#testAHandedOffHoldIsNoInnerHold :: control :: M-TS-NEST-HANDOFF',
 			'unit.check.ThreadSafetyHelperHoldsTest#testAHelperReachedByDispatchIsNone :: control :: M-TS-HELPER-DISPATCH',
 			'unit.check.ThreadSafetyHelperHoldsTest#testAHelpersHoldHandedOffByItsCallerIsLong :: control :: M-TS-HELPER-HANDOFF',
@@ -6279,6 +6280,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-REPEATED-BY-MERGE',
 			'M-TS-QUIET-HOLD',
 			'M-TS-HAND-RANK',
+			'M-TS-HELPER-SPAN-START',
 			'M-TS-REPEATED-BY-HEADER',
 			'M-TS-FOLD-SITE-CYCLE'
 		];
