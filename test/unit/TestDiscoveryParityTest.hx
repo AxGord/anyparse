@@ -2142,6 +2142,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-TS-REPEAT-NO-BOUNDARY,M-TS-UPWARD-INERT',
 			'unit.check.ThreadSafetyCostTest#testAHoldOverAShortSinkOnceIsInfo :: control :: M-TS-LONG-BY-ANY-SPAN',
 			'unit.check.ThreadSafetyCostTest#testALoopAroundTheWholeHoldIsShort :: control :: M-TS-REPEAT-UNDER-OUTER',
+			'unit.check.ThreadSafetyCostTest#testARepeatingSiteOwnsOneWarning :: control :: M-TS-SITE-PER-SINK,M-TS-SITE-GROW,M-TS-SITE-SUBJECT',
 			'unit.check.ThreadSafetyCostTest#testAShortSinkBelowARepeatingCallerWarns :: control :: '
 				+ 'M-TS-REPEAT-UPWARD-NONE,M-TS-OWNER-OFF',
 			'unit.check.ThreadSafetyCostTest#testAShortSinkCalledOnceIsInfo :: control :: M-TS-SHORT-SINKS-IGNORED',
@@ -6045,7 +6046,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-EXH-FROM',
 			'M-TS-EXH-FROMFN',
 			'M-TS-EXH-STRUCT',
-			'M-TS-EXH-OPAQUE'
+			'M-TS-EXH-OPAQUE',
+			'M-TS-SITE-PER-SINK',
+			'M-TS-SITE-GROW',
+			'M-TS-SITE-SUBJECT'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

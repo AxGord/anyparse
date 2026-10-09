@@ -1639,5 +1639,9 @@ decided the question; it may not become a record of runs.
   back the abstract hands back only its values (`@:from fromString` maps every string onto LIST / GRID). A `cast`
   into the abstract is the hole the source cannot show — accepted, as the compiler's own exhaustiveness does —
   branch `feat/ts-precision-2`
+- one repeating-owner finding (a) per short sink → TM's `FileListMoveFiles.moveItems` warned four times at one line
+  (`File.getContent`, `FileSystem.rename`, `Connection.request`, `Mutex.acquire`), `repairShareAttr` twice per
+  site; the site owns one warning keyed by the call it repeats, naming every sink — a sink set that grows with the
+  code no longer renames the key — branch `feat/ts-precision-2`
 - judging "inside a catch" off the witness chain the finding prints → the chain is one way; a second way outside every
   catch must keep the warning, which only a solve without the catch edges can see — branch `feat/ts-precision-2`

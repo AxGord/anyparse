@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.Check.FindingData;
 import anyparse.check.Check.Violation;
 import anyparse.check.ErrorPaths.PathCosts;
 import anyparse.check.LockTaint.BlockingTrail;
@@ -8,6 +9,13 @@ import anyparse.check.ThreadSafety.FindingFamily;
 import anyparse.query.CallGraph;
 
 using Lambda;
+
+/** A repeating call's finding (a), with the short sinks below it it names and the main-thread path to it. */
+private typedef OwnedFinding = {
+	final finding: Violation;
+	var sinks: Array<String>;
+	final path: Array<String>;
+}
 
 /** How the main thread repeats calls: where (`repetition`), which of its states may run more than once (`main`), and the edges it runs (`runs`). */
 typedef MainRepetition = {
@@ -62,7 +70,7 @@ final class MainSinkReport {
 			if (!costs.errors.inCatch(edge) && (costs.normal.costsLong(edge, null) || repeated)) normal[key] = true;
 		}
 		final inside: Map<String, Bool> = insideSinks(graph, taints, repeats.runs);
-		final owned: Array<String> = [];
+		final owned: Map<String, OwnedFinding> = [];
 		final takes: Array<{ edge: CallEdge, finding: Violation }> = [];
 		for (site in order) {
 			final edge: CallEdge = site.edge;
@@ -188,7 +196,7 @@ final class MainSinkReport {
 	 */
 	private static function reportSite(
 		graph: CallGraph, edge: CallEdge, sinks: Array<String>, cost: { long: Bool, error: Null<String>, caught: Bool }, inSink: Bool,
-		repeats: MainRepetition, states: ThreadStates, owners: { owned: Array<String>, moved: Map<String, String> },
+		repeats: MainRepetition, states: ThreadStates, owners: { owned: Map<String, OwnedFinding>, moved: Map<String, String> },
 		violations: Array<Violation>
 	): Violation {
 		final long: Bool = cost.long;
@@ -240,32 +248,51 @@ final class MainSinkReport {
 
 	/**
 	 * Finding (a) owned by the repeating call `owner` (`MainRepeats.ownersOf`) of short `sinks`: the warning a short
-	 * call below it is spared, at the loop, recursion or `iterates` call that repeats it — once per site and subject.
+	 * call below it is spared, at the loop, recursion or `iterates` call that repeats it — ONE per call site, keyed by
+	 * the call it repeats (`owner.edge.to`), every short sink below it named in it; `owned` keeps them by site.
 	 */
 	private static function reportRepeater(
-		graph: CallGraph, owner: { edge: CallEdge, path: Array<String> }, sinks: Array<String>, states: ThreadStates, owned: Array<String>,
-		violations: Array<Violation>
+		graph: CallGraph, owner: { edge: CallEdge, path: Array<String> }, sinks: Array<String>, states: ThreadStates,
+		owned: Map<String, OwnedFinding>, violations: Array<Violation>
 	): Void {
 		final edge: CallEdge = owner.edge;
-		final sorted: Array<String> = ThreadSafety.sortedIds(sinks);
-		final key: String = '${edge.file}:${edge.span?.from ?? -1}:${sorted.join(ThreadSafety.SUBJECT_SEPARATOR)}';
-		if (owned.contains(key)) return;
-		owned.push(key);
+		final key: String = siteKey(edge);
+		final known: Null<OwnedFinding> = owned[key];
+		if (known != null) {
+			final grown: Array<String> = known.sinks.concat([for (t in sinks) if (!known.sinks.contains(t)) t]);
+			if (grown.length == known.sinks.length) return;
+			known.sinks = grown;
+			fill(known);
+			return;
+		}
 		final path: Array<String> = states.mainPath(edge).concat(owner.path);
-		violations.push({
+		final finding: Violation = {
 			file: edge.file,
 			span: edge.span,
 			rule: 'thread-safety',
 			severity: Severity.Warning,
-			message: 'main thread repeats short blocking ${[for (t in sinks) '"$t"'].join(ThreadSafety.SUBJECT_SEPARATOR)} at this call: '
-			+ '${ThreadStates.chainText(path, ThreadSafety.CHAIN_CAP)} -> ${sinks.join(ThreadSafety.SUBJECT_SEPARATOR)}',
+			message: '',
 			data: {
 				family: FindingFamily.MainSink,
 				member: ThreadSafety.memberOf(graph, edge.from),
-				subject: sorted.join(ThreadSafety.SUBJECT_SEPARATOR),
-				chain: path.concat(sorted)
+				subject: edge.to,
+				chain: []
 			}
-		});
+		};
+		final made: OwnedFinding = { finding: finding, sinks: ThreadSafety.sortedIds(sinks), path: path };
+		fill(made);
+		owned[key] = made;
+		violations.push(finding);
+	}
+
+	/** Writes the message and chain of the repeating call's finding `owned` from the short sinks it names so far. */
+	private static function fill(owned: OwnedFinding): Void {
+		final sorted: Array<String> = ThreadSafety.sortedIds(owned.sinks);
+		owned.sinks = sorted;
+		owned.finding.message = 'main thread repeats short blocking ${[for (t in sorted) '"$t"'].join(ThreadSafety.SUBJECT_SEPARATOR)}'
+			+ ' at this call: ${ThreadStates.chainText(owned.path, ThreadSafety.CHAIN_CAP)} -> ${sorted.join(ThreadSafety.SUBJECT_SEPARATOR)}';
+		final data: Null<FindingData> = owned.finding.data;
+		if (data != null) data.chain = owned.path.concat(sorted);
 	}
 
 }

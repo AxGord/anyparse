@@ -93,7 +93,7 @@ class ThreadSafetyCostTest extends Test {
 			+ ' static function draw(i:Int):Void icon(i); static function icon(i:Int):Void FileSystem.stat("a"); }'
 		]);
 		// the loop owns the warning; the short call below it says where it went
-		Assert.same(['info A A.icon | FileSystem.stat', 'warning A A.main | FileSystem.stat'], graded(found));
+		Assert.same(['info A A.icon | FileSystem.stat', 'warning A A.main | A.draw'], graded(found));
 		Assert.isTrue(found.exists(v -> v.message.indexOf('repeated by A.main') != -1));
 		#else
 		Assert.pass('non-sys target');
@@ -199,6 +199,50 @@ class ThreadSafetyCostTest extends Test {
 		#end
 	}
 
+
+	/**
+	 * TM's `FileListMoveFiles.moveItems`: one repeated call reaches four short sinks, which made four warnings at one
+	 * line. The site owns ONE warning, keyed by the call it repeats, naming every short sink below it.
+	 */
+	@:pin('control') @:killer('M-TS-SITE-PER-SINK') @:killer('M-TS-SITE-GROW') @:killer('M-TS-SITE-SUBJECT')
+	public function testARepeatingSiteOwnsOneWarning(): Void {
+		#if (sys || nodejs)
+		final found: Array<Violation> = run([
+			'class A { public static function main():Void for (i in 0...10) draw(i);'
+			+ ' static function draw(i:Int):Void { icon(i); list(i); }'
+			+ ' static function icon(i:Int):Void FileSystem.stat("a"); static function list(i:Int):Void FileSystem.readDirectory("a"); }'
+		]);
+		Assert.same([
+			'info A A.icon | FileSystem.stat',
+			'info A A.list | FileSystem.readDirectory',
+			'warning A A.main | A.draw'
+		], graded(found));
+		Assert.isTrue(
+			found.exists(v -> v.severity.label() == 'warning' && v.message.indexOf('"FileSystem.readDirectory" / "FileSystem.stat"') != -1)
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** Two repeating sites in one member own a warning each. */
+	public function testTwoRepeatingSitesWarnApart(): Void {
+		#if (sys || nodejs)
+		final found: Array<Violation> = run([
+			'class A { public static function main():Void { for (i in 0...10) icon(i); for (i in 0...10) list(i); }'
+			+ ' static function icon(i:Int):Void FileSystem.stat("a"); static function list(i:Int):Void FileSystem.readDirectory("a"); }'
+		]);
+		Assert.same([
+			'info A A.icon | FileSystem.stat',
+			'info A A.list | FileSystem.readDirectory',
+			'warning A A.main | A.icon',
+			'warning A A.main | A.list'
+		], graded(found));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
 	/**
 	 * `S.scan` holds `_m` on a spawned thread across `body`, and the main thread takes `_m` in `S.read`, holding it across
@@ -234,7 +278,7 @@ class ThreadSafetyCostTest extends Test {
 	@:pin('control') @:killer('M-TS-OWNER-FARTHEST')
 	public function testTheNearestRepeatingCallerOwnsTheWarning(): Void {
 		#if (sys || nodejs)
-		Assert.same(['info A A.icon | FileSystem.stat', 'warning A A.row | FileSystem.stat'], graded(run([
+		Assert.same(['info A A.icon | FileSystem.stat', 'warning A A.row | A.icon'], graded(run([
 			'class A { public static function main():Void { row(); page(); }' + ' static function row():Void for (j in 0...10) icon(j);'
 			+ ' static function page():Void for (j in 0...10) cell(j); static function cell(i:Int):Void icon(i);'
 			+ ' static function icon(i:Int):Void FileSystem.stat("a"); }'

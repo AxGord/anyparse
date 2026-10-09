@@ -40,7 +40,7 @@ class ThreadSafetyRegistersTest extends Test {
 	public function testWithoutTheEntryTheLoopWarns(): Void {
 		#if (sys || nodejs)
 		Assert.same(
-			['info A A.handler | FileSystem.stat', 'warning A A.main | FileSystem.stat'],
+			['info A A.handler | FileSystem.stat', 'warning A A.main | A.handler'],
 			graded(run(
 				'public static function main():Void { final ds:Array<D> = [new D(), new D()]; for (d in ds) d.addEventListener("x", handler); }',
 				StringTools.replace(CONFIG, '"addEventListener"', '"other"')
@@ -72,7 +72,7 @@ class ThreadSafetyRegistersTest extends Test {
 	public function testTheOwnerIsNeverUpARegistration(): Void {
 		#if (sys || nodejs)
 		Assert.same(
-			['info A A.handler | FileSystem.stat', 'warning A A.main | FileSystem.stat'],
+			['info A A.handler | FileSystem.stat', 'warning A A.main | A.a'],
 			graded(run(
 				'static function wire():Void new D().addEventListener("x", handler); static function setup():Void for (i in 0...3) wire();'
 				+ ' static function b():Void handler("y"); static function a():Void b();'

@@ -17759,6 +17759,30 @@
 			"find": "&& !(dead != null && dead(node, k))) raisesInside(k, after);",
 			"replace": ") raisesInside(k, after);",
 			"note": "a dead catch-all inside an opaque step raises"
+		},
+		{
+			"name": "M-TS-SITE-PER-SINK",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "reportRepeater",
+			"find": "final key: String = siteKey(edge);",
+			"replace": "final key: String = siteKey(edge) + sinks.join(',');",
+			"note": "each short sink below a repeating site owns its own warning"
+		},
+		{
+			"name": "M-TS-SITE-GROW",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "reportRepeater",
+			"find": "known.sinks = grown;",
+			"replace": "",
+			"note": "a repeating site's warning names only the first short sink found below it"
+		},
+		{
+			"name": "M-TS-SITE-SUBJECT",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "reportRepeater",
+			"find": "subject: edge.to,",
+			"replace": "subject: ThreadSafety.sortedIds(sinks).join(ThreadSafety.SUBJECT_SEPARATOR),",
+			"note": "a repeating site's warning is keyed by its sinks, not the call it repeats"
 		}
 	]
 }
