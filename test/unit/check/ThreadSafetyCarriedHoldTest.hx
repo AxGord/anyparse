@@ -51,7 +51,7 @@ class ThreadSafetyCarriedHoldTest extends Test {
 	@:pin('control') @:killer('M-TS-CARRY-RELEASE')
 	public function testACalleeGivingTheLockBackCarriesNothing(): Void {
 		#if (sys || nodejs)
-		Assert.same(['warning B Fs.work | Db.batch'], work(own('_db.batchLock(); _db.drop();')));
+		Assert.same(['info B Fs.work | Db.batch (folded)'], work(own('_db.batchLock(); _db.drop();')));
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -94,7 +94,7 @@ class ThreadSafetyCarriedHoldTest extends Test {
 	@:pin('control') @:killer('M-TS-PATH-STABLE-ANY')
 	public function testAFieldWrittenOutsideTheConstructorNamesNoObject(): Void {
 		#if (sys || nodejs)
-		Assert.same(['warning B Fs.work | Db.batch'], work(path('public function swap(h:Holder):Void holder = h;')));
+		Assert.same(['info B Fs.work | Db.batch (folded)'], work(path('public function swap(h:Holder):Void holder = h;')));
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -114,8 +114,11 @@ class ThreadSafetyCarriedHoldTest extends Test {
 			+ ' public function work():Void { holder.db.batchLock(); holder.db.lookup(); holder.db.batchUnlock(); } }';
 	}
 
+	/** What a finding folded onto the warnings covering it says (`RootCauseFold`): a long wait, not a brief one. */
+	private static inline final FOLDED: String = ' — long only through ';
+
 	/**
-	 * The findings (b) of `Fs.work` over `DB` and `fs`, run on a worker while the main thread takes `Db.batch` — and
+	 * The findings (b) of `Fs.work` over `DB` and `fs`, `(folded)` marking one long only through other warnings, run on a worker while the main thread takes `Db.batch` — and
 	 * calls `lookup` and `nested` itself, so no meet over their callers holds `batch` on entry.
 	 */
 	private static function work(fs: String): Array<String> {
@@ -131,7 +134,7 @@ class ThreadSafetyCarriedHoldTest extends Test {
 			for (v in found) {
 				final data: Null<FindingData> = v.data;
 				if (data != null && data.family == 'B' && data.member == 'Fs.work')
-					'${v.severity.label()} B ${data.member} | ${data.subject}';
+					'${v.severity.label()} B ${data.member} | ${data.subject}' + (v.message.indexOf(FOLDED) >= 0 ? ' (folded)' : '');
 			}
 		];
 		out.sort(Reflect.compare);

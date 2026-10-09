@@ -5,6 +5,8 @@ import anyparse.check.Check.Violation;
 import utest.Assert;
 import utest.Test;
 
+using Lambda;
+
 /**
  * A multi-lock helper (TM's `StandardFileSystem.acquireMutationLocks`: `_batchMutex`, then `_mutationMutex`) takes its
  * locks for its caller: each call of it opens a hold of every lock it takes, judged where it is called, exactly as a
@@ -19,7 +21,8 @@ class ThreadSafetyHelperHoldsTest extends Test {
 	@:pin('control') @:killer('M-TS-HELPER-B-OFF') @:killer('M-TS-HELPER-OWN-TAKES')
 	public function testTheHelpersCallerHoldsBothLocks(): Void {
 		#if (sys || nodejs)
-		Assert.same(['warning B H.viaBoth | H.a', 'warning B H.viaBoth | H.b'], holds(run('takeBoth(); Sys.sleep(1); giveBoth();', '')));
+		// both holds are long by the one `Sys.sleep`: one warning, the other folded onto it (`RootCauseFold`)
+		Assert.same(['info B H.viaBoth | H.a', 'warning B H.viaBoth | H.b'], holds(run('takeBoth(); Sys.sleep(1); giveBoth();', '')));
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -68,6 +71,15 @@ class ThreadSafetyHelperHoldsTest extends Test {
 				+ ' public function slowC():Void { b.acquire(); c.acquire(); Sys.sleep(1); c.release(); b.release(); }',
 				'h.takeC();', 'h.slowC();'
 			)).filter(g -> g.indexOf('viaBoth') >= 0)
+		);
+		// brief, not folded as long through `slowC`'s warning (`RootCauseFold`)
+		Assert.isFalse(
+			run(
+				'takeBoth(); takeC(); giveBoth();',
+				'public function takeC():Void { c.acquire(); c.release(); }'
+				+ ' public function slowC():Void { b.acquire(); c.acquire(); Sys.sleep(1); c.release(); b.release(); }',
+				'h.takeC();', 'h.slowC();'
+			).exists(v -> v.message.indexOf(' — long only through ') >= 0 && v.message.indexOf('viaBoth') >= 0)
 		);
 		#else
 		Assert.pass('non-sys target');

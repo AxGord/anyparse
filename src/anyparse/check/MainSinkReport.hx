@@ -7,6 +7,7 @@ import anyparse.check.LockTaint.BlockingTrail;
 import anyparse.check.ThreadSafety.CostNote;
 import anyparse.check.ThreadSafety.FindingFamily;
 import anyparse.query.CallGraph;
+import anyparse.runtime.Span;
 
 using Lambda;
 
@@ -37,14 +38,15 @@ final class MainSinkReport {
 	 * Each of finding (a) over `graph`, under the plain `taints` and the costed `costs`, into `violations`. A call long
 	 * only where a `catch` runs — itself inside one, or a take of a lock long over the normal paths of no hold — is
 	 * graded as if short, and info, naming that catch, when no repeating caller owns it. Returns, by `siteKey`, the
-	 * member whose warning reports each main-thread sink call: its own, or the repeating call's that owns it.
+	 * warning that reports each main-thread sink call: its own, the repeating call's that owns it, or the one its sibling
+	 * calls fold into (`oneWarningPerWay`).
 	 */
 	public static function report(
 		graph: CallGraph, sites: LockSites, taints: LockTaint, costs: PathCosts, repeats: MainRepetition, states: ThreadStates,
 		violations: Array<Violation>
-	): Map<String, String> {
-		final reportedBy: Map<String, String> = [];
-		final moved: Map<String, String> = [];
+	): Map<String, Violation> {
+		final reportedBy: Map<String, Violation> = [];
+		final moved: Map<String, Violation> = [];
 		final targets: Map<String, Array<String>> = [];
 		final long: Map<String, Bool> = [];
 		final normal: Map<String, Bool> = [];
@@ -72,6 +74,7 @@ final class MainSinkReport {
 		final inside: Map<String, Bool> = insideSinks(graph, taints, repeats.runs);
 		final owned: Map<String, OwnedFinding> = [];
 		final takes: Array<{ edge: CallEdge, finding: Violation }> = [];
+		final direct: Array<{ edge: CallEdge, finding: Violation }> = [];
 		for (site in order) {
 			final edge: CallEdge = site.edge;
 			// a call a sink's own body makes is the sink's machinery: the finding is the call of that sink
@@ -80,19 +83,58 @@ final class MainSinkReport {
 				graph, edge, targets[site.key] ?? [edge.to], siteCost(sites, costs, edge, long.exists(site.key), normal.exists(site.key)),
 				inSink, repeats, states, { owned: owned, moved: moved }, violations
 			);
-			if (finding.severity == Severity.Warning && taints.takesLock(edge)) takes.push({ edge: edge, finding: finding });
+			if (finding.severity == Severity.Warning) (taints.takesLock(edge) ? takes : direct).push({ edge: edge, finding: finding });
 			noteReporter(reportedBy, edge, finding, moved);
 		}
 		oneTakePerLock(graph, sites, takes);
+		oneWarningPerWay(direct, states, reportedBy);
 		return reportedBy;
 	}
 
-	/** Records in `reportedBy` the member whose warning reports the sink call `edge`: its own `finding`'s, or the owner it `moved` to. */
+	/** Records in `reportedBy` the warning that reports the sink call `edge`: its own `finding`, or the owner's it `moved` to. */
 	private static function noteReporter(
-		reportedBy: Map<String, String>, edge: CallEdge, finding: Violation, moved: Map<String, String>
+		reportedBy: Map<String, Violation>, edge: CallEdge, finding: Violation, moved: Map<String, Violation>
 	): Void {
-		final by: Null<String> = finding.severity == Severity.Warning ? finding.data?.member : moved[siteKey(edge)];
+		final by: Null<Violation> = finding.severity == Severity.Warning ? finding : moved[siteKey(edge)];
 		if (by != null) reportedBy[siteKey(edge)] = by;
+	}
+
+	/**
+	 * Of the warnings at sink calls in one function the main thread reaches by one way (`ThreadStates.mainPath`) — TM's
+	 * `FSUtil.deleteRecursive`, whose `readDirectory`, `deleteDirectory` and `deleteFile` run on every run of it — the
+	 * first by offset stays, naming the others, and they turn info naming it: one trigger, one warning. Lock takes are
+	 * left to `oneTakePerLock`. `reportedBy` follows each turned one to the warning that stays.
+	 */
+	private static function oneWarningPerWay(
+		direct: Array<{ edge: CallEdge, finding: Violation }>, states: ThreadStates, reportedBy: Map<String, Violation>
+	): Void {
+		final byWay: Map<String, Array<{ edge: CallEdge, finding: Violation }>> = [];
+		final ways: Array<String> = [];
+		for (d in direct) {
+			final way: String = '${d.edge.file}\n${d.edge.from}\n${states.mainPath(d.edge).join('\n')}';
+			final list: Null<Array<{ edge: CallEdge, finding: Violation }>> = byWay[way];
+			if (list == null) {
+				byWay[way] = [d];
+				ways.push(way);
+			} else {
+				list.push(d);
+			}
+		}
+		for (way in ways) {
+			final list: Array<{ edge: CallEdge, finding: Violation }> = byWay[way] ?? [];
+			if (list.length < 2) continue;
+			list.sort((a, b) -> (a.edge.span?.from ?? 0) - (b.edge.span?.from ?? 0));
+			final kept: Violation = list[0].finding;
+			final named: Array<String> = [];
+			for (d in list.slice(1)) if (d.finding != kept) {
+				d.finding.severity = Severity.Info;
+				d.finding.message += ' — run on the same main-thread way into ${d.edge.from} as "${kept.data?.subject}", reported there';
+				for (k => v in reportedBy) if (v == d.finding) reportedBy[k] = kept;
+				final subject: String = d.finding.data?.subject ?? d.edge.to;
+				if (!named.contains(subject)) named.push(subject);
+			}
+			if (named.length > 0) kept.message += ' — with ${[for (n in named) '"$n"'].join(', ')} on the same way, reported here';
+		}
 	}
 
 	/** `<file>:<offset>` of the site of `edge`. */
@@ -196,7 +238,7 @@ final class MainSinkReport {
 	 */
 	private static function reportSite(
 		graph: CallGraph, edge: CallEdge, sinks: Array<String>, cost: { long: Bool, error: Null<String>, caught: Bool }, inSink: Bool,
-		repeats: MainRepetition, states: ThreadStates, owners: { owned: Map<String, OwnedFinding>, moved: Map<String, String> },
+		repeats: MainRepetition, states: ThreadStates, owners: { owned: Map<String, OwnedFinding>, moved: Map<String, Violation> },
 		violations: Array<Violation>
 	): Violation {
 		final long: Bool = cost.long;
@@ -206,10 +248,8 @@ final class MainSinkReport {
 			: repeats.main.ownersOf(edge);
 		final owner: Null<String> = repeaters.length > 0 ? ThreadSafety.memberOf(graph, repeaters[0].edge.from) : null;
 		final own: Bool = long || owner == ThreadSafety.memberOf(graph, edge.from);
-		if (repeaters.length > 0 && !own) {
-			reportRepeater(graph, repeaters[0], sinks, states, owners.owned, violations);
-			if (owner != null) owners.moved[siteKey(edge)] = owner;
-		}
+		if (repeaters.length > 0 && !own)
+			owners.moved[siteKey(edge)] = reportRepeater(graph, repeaters[0], sinks, repeats, states, owners.owned, violations);
 		final note: String = if (inSink)
 			CostNote.InsideSink
 		else if (own)
@@ -248,22 +288,26 @@ final class MainSinkReport {
 
 	/**
 	 * Finding (a) owned by the repeating call `owner` (`MainRepeats.ownersOf`) of short `sinks`: the warning a short
-	 * call below it is spared, at the loop, recursion or `iterates` call that repeats it — ONE per call site, keyed by
-	 * the call it repeats (`owner.edge.to`), every short sink below it named in it; `owned` keeps them by site.
+	 * call below it is spared, at the loop, recursion or `iterates` call that repeats it — ONE per call site, or per
+	 * loop for the calls one loop repeats (TM's `repairShareAttr`, whose session loop runs `getXML` and `setXML`), keyed
+	 * by the call it repeats (`owner.edge.to`, the first by offset in a loop), every short sink below it named in it;
+	 * `owned` keeps them by site or loop. Returns that finding.
 	 */
 	private static function reportRepeater(
-		graph: CallGraph, owner: { edge: CallEdge, path: Array<String> }, sinks: Array<String>, states: ThreadStates,
-		owned: Map<String, OwnedFinding>, violations: Array<Violation>
-	): Void {
+		graph: CallGraph, owner: { edge: CallEdge, path: Array<String> }, sinks: Array<String>, repeats: MainRepetition,
+		states: ThreadStates, owned: Map<String, OwnedFinding>, violations: Array<Violation>
+	): Violation {
 		final edge: CallEdge = owner.edge;
-		final key: String = siteKey(edge);
+		final key: String = repeatKey(edge, repeats.repetition);
 		final known: Null<OwnedFinding> = owned[key];
 		if (known != null) {
-			final grown: Array<String> = known.sinks.concat([for (t in sinks) if (!known.sinks.contains(t)) t]);
-			if (grown.length == known.sinks.length) return;
-			known.sinks = grown;
+			final first: Bool = (edge.span?.from ?? 0) < (known.finding.span?.from ?? 0);
+			final data: Null<FindingData> = known.finding.data;
+			if (first) known.finding.span = edge.span;
+			if (first && data != null) data.subject = edge.to;
+			known.sinks = known.sinks.concat([for (t in sinks) if (!known.sinks.contains(t)) t]);
 			fill(known);
-			return;
+			return known.finding;
 		}
 		final path: Array<String> = states.mainPath(edge).concat(owner.path);
 		final finding: Violation = {
@@ -283,6 +327,13 @@ final class MainSinkReport {
 		fill(made);
 		owned[key] = made;
 		violations.push(finding);
+		return finding;
+	}
+
+	/** The key a repeating call's finding is kept by: its innermost loop when one repeats it, else its site. */
+	private static function repeatKey(edge: CallEdge, repetition: CallRepetition): String {
+		final loops: Null<Array<Span>> = repetition.loopsAt(edge.file, edge.span?.from ?? -1);
+		return loops == null || loops.length == 0 ? siteKey(edge) : '${edge.file}:loop:${loops[loops.length - 1].from}';
 	}
 
 	/** Writes the message and chain of the repeating call's finding `owned` from the short sinks it names so far. */

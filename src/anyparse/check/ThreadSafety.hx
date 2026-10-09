@@ -5,6 +5,7 @@ import anyparse.check.Check.GraphScoped;
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.check.ErrorPaths.PathCosts;
+import anyparse.check.HoldGrade.FoldHold;
 import anyparse.check.HoldGrade.GradedHold;
 import anyparse.check.HoldGrade.HoldJudges;
 import anyparse.check.LockSites.LockAcquire;
@@ -192,7 +193,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		// a value stored or handed where it never runs from repeats nothing, wherever it is written
 		final runsMain: (CallEdge) -> Bool = e -> !(e.kind == Ref && inertRef(e)) && states.edgeContext(e) & CTX_MAIN != 0;
 		final repeatsOnMain: MainRepeats = new MainRepeats(graph, repetition, states, conditions, runsMain);
-		final reported: Map<String, String> = MainSinkReport.report(
+		final reported: Map<String, Violation> = MainSinkReport.report(
 			graph, sites, taints, paths, { repetition: repetition, main: repeatsOnMain, runs: runsMain }, states, violations
 		);
 		reportMalformedPairs(sets, violations);
@@ -640,25 +641,22 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	 */
 	private static function reportLockHeld(
 		graph: CallGraph, sites: LockSites, acquires: Array<LockAcquire>, taints: LockTaint,
-		judged: { costs: PathCosts, reported: Map<String, String>, enclosed: (LockAcquire) -> Bool }, states: ThreadStates,
+		judged: { costs: PathCosts, reported: Map<String, Violation>, enclosed: (LockAcquire) -> Bool }, states: ThreadStates,
 		violations: Array<Violation>
 	): Void {
 		final paths: PathCosts = judged.costs;
-		final seen: Array<String> = [];
 		final costs: LockTaint = paths.all;
 		// what a hold only the main thread runs is judged by: its own work, every take left out
 		final own: { long: LockTaint, normal: LockTaint } = { long: ownWorkOf(costs), normal: ownWorkOf(paths.normal) };
 		final any: { long: LockTaint, normal: LockTaint } = { long: costs, normal: paths.normal };
-		// a lock only ever taken shared stalls no one; one no member names is told apart by its pair's take member alone
-		final mainTaken: Array<String> = [
-			for (a in acquires) {
-				final lock: String = a.lock ?? a.pair.lockId;
-				if (states.edgeContext(a.edge) & CTX_MAIN != 0 && !taints.quiet.sharedOnly(lock)) lock;
-			}
-		];
+		final mainTaken: Array<String> = HoldGrade.mainTaken(acquires, states, taints);
 		final reported: Array<{ hold: LockAcquire, calls: Array<CallEdge>, finding: Violation }> = [];
+		final folds: Array<FoldHold> = [];
+		final made: Map<String, Violation> = [];
 		for (a in acquires) {
 			final lock: Null<String> = a.lock;
+			final fold: FoldHold = RootCauseFold.unreported(a, paths.normal);
+			folds.push(fold);
 			if (a.uncontended || !mainTaken.contains(lock ?? a.pair.lockId)) continue;
 			// the main thread never waits for a hold of a lock it alone holds there: such a hold stays only as the main thread's
 			// own long work; who else holds a lock no member names is unknown
@@ -670,8 +668,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 				long: pick.long,
 				normal: pick.normal,
 				errors: paths.errors,
-				reported: judged.reported,
-				member: memberOf(graph, a.edge.from)
+				reported: judged.reported
 			};
 			final graded: Null<GradedHold> = HoldGrade.grade(sites, a, held, judges, mainOnly);
 			if (graded == null) continue;
@@ -683,26 +680,19 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 				+ evidenceOf(blocking, held, graded.taint) + graded.note;
 			final anchor: CallEdge = blocking[0].edge;
 			final key: String = '${anchor.file}:${anchor.span?.from}:$message';
-			if (seen.contains(key)) continue;
-			seen.push(key);
-			final finding: Violation = {
-				file: anchor.file,
-				span: anchor.span,
-				rule: 'thread-safety',
-				severity: short ? Severity.Info : Severity.Warning,
-				message: message,
-				data: {
-					family: FindingFamily.LockHeld,
-					member: memberOf(graph, holder),
-					subject: lock ?? a.pair.lockId,
-					chain: [holder].concat(blocking[0].path)
-				}
-			};
+			final known: Null<Violation> = made[key];
+			final finding: Violation = known ?? HoldGrade.finding(graph, anchor, short, message, lock ?? a.pair.lockId, [holder].concat(
+				blocking[0].path
+			));
+			folds[folds.length - 1] = RootCauseFold.judgedAs(fold, finding, graded, held, pick.normal, graded.note == CostNote.HandOff);
+			if (known != null) continue;
 			violations.push(finding);
+			made[key] = finding;
 			if (!short) reported.push({ hold: a, calls: [for (b in blocking) b.edge], finding: finding });
 		}
 		nestHolds(reported);
 		foldEnclosed(reported, judged.enclosed);
+		new RootCauseFold([for (c in sites.crossing) c.lock]).fold(folds);
 	}
 
 	/**

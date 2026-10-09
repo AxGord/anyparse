@@ -5,6 +5,8 @@ import anyparse.check.Check.Violation;
 import utest.Assert;
 import utest.Test;
 
+using Lambda;
+
 /**
  * How `thread-safety` folds findings of one root cause onto one warning, the rest kept at `info` naming it: a sink's
  * own body is the sink's finding; every main-thread take of one lock waits for the same holders; a hold taken inside
@@ -98,14 +100,17 @@ class ThreadSafetyFoldingTest extends Test {
 	@:pin('control') @:killer('M-TS-NEST-OFF')
 	public function testAHoldInsideAnotherIsItsFinding(): Void {
 		#if (sys || nodejs)
-		Assert.same(['info B S.work | S._b', 'warning B S.work | S._a'], holds(run([
+		final found: Array<Violation> = run([
 			ThreadSafetyCheckTest.MUTEX,
 			RUNNER,
 			'class S { final _a:Mutex = new Mutex(); final _b:Mutex = new Mutex(); public function new() {}'
 			+ ' public function work():Void { _a.acquire(); _b.acquire(); Sys.sleep(1); _b.release(); _a.release(); }'
 			+ ' public function ui():Void { _a.acquire(); _a.release(); _b.acquire(); _b.release(); }'
 			+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> s.work()); s.ui(); } }'
-		])));
+		]);
+		Assert.same(['info B S.work | S._b', 'warning B S.work | S._a'], holds(found));
+		// the outer hold's finding, not merely one long by the same call (`RootCauseFold`)
+		Assert.isTrue(found.exists(v -> v.message.indexOf('taken inside the hold of S._a') >= 0));
 		#else
 		Assert.pass('non-sys target');
 		#end

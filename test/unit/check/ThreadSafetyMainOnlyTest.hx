@@ -9,8 +9,8 @@ import utest.Test;
  * A hold only the main thread runs stalls no other thread; what it reports is the main thread's own long work under
  * the lock — finding (a)'s. Where (a) already warns of that work at another member (the sink's own call, or the
  * repeating call that owns it), the hold adds no second warning (TM's `StandardFileSystem.deleteItem` over
- * `deleteItemInternal`'s per-child unlinks); where (a) reports it at the holder itself (TM's `FileListMoveFiles.moveItems`
- * loop), the hold keeps its warning.
+ * `deleteItemInternal`'s per-child unlinks), or at the holder itself (TM's `FileListMoveFiles.moveItems` loop), the hold
+ * adds no second warning.
  */
 class ThreadSafetyMainOnlyTest extends Test {
 
@@ -26,10 +26,10 @@ class ThreadSafetyMainOnlyTest extends Test {
 		#end
 	}
 
-	@:pin('control') @:killer('M-TS-MAINONLY-SAME-MEMBER')
-	public function testWorkReportedAtTheHolderKeepsTheWarning(): Void {
+	@:pin('control') @:killer('M-TS-MAINONLY-ELSEWHERE-OFF')
+	public function testWorkReportedAtTheHolderLeavesTheHoldInfo(): Void {
 		#if (sys || nodejs)
-		Assert.same(['warning B M.ui | M._m'], holds(run('Sys.sleep(1);')));
+		Assert.same(['info B M.ui | M._m'], holds(run('Sys.sleep(1);')));
 		#else
 		Assert.pass('non-sys target');
 		#end

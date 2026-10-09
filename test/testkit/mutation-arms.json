@@ -11372,7 +11372,7 @@
 			"name": "M-TS-LOOP-ONE-PASS",
 			"type": "anyparse.check.LockWindow",
 			"method": "step",
-			"find": "if (next == entry) return entry;",
+			"find": "if (next == entry) return join(entry, frame.brk) == true;",
 			"replace": "return next;",
 			"note": "a loop body is walked once, so a lock taken on one pass is not held across the next pass's calls"
 		},
@@ -17108,8 +17108,8 @@
 			"name": "M-TS-OWNER-OFF",
 			"type": "anyparse.check.MainSinkReport",
 			"method": "reportSite",
-			"find": "reportRepeater(graph, repeaters[0], sinks, states, owners.owned, violations);",
-			"replace": "",
+			"find": "if (repeaters.length > 0 && !own)",
+			"replace": "if (false)",
 			"note": "a short call repeated from above warns nowhere: no loop owns it"
 		},
 		{
@@ -17450,8 +17450,8 @@
 		},
 		{
 			"name": "M-TS-SHARED-HOLD",
-			"type": "anyparse.check.ThreadSafety",
-			"method": "reportLockHeld",
+			"type": "anyparse.check.HoldGrade",
+			"method": "mainTaken",
 			"find": "&& !taints.quiet.sharedOnly(lock)",
 			"replace": "&& lock != ''",
 			"note": "a hold of a lock only ever taken shared still stalls the main thread"
@@ -17673,19 +17673,11 @@
 			"note": "a main-only hold warns beside the finding (a) that names its work elsewhere"
 		},
 		{
-			"name": "M-TS-MAINONLY-SAME-MEMBER",
-			"type": "anyparse.check.HoldGrade",
-			"method": "reportedElsewhere",
-			"find": "if (by == null || by == judges.member) return null;",
-			"replace": "if (by == null) return null;",
-			"note": "a main-only hold is demoted when finding (a) names its work at the holder itself"
-		},
-		{
 			"name": "M-TS-MAINONLY-MOVED",
 			"type": "anyparse.check.MainSinkReport",
 			"method": "reportSite",
-			"find": "if (owner != null) owners.moved[siteKey(edge)] = owner;",
-			"replace": "",
+			"find": "owners.moved[siteKey(edge)] = reportRepeater(",
+			"replace": "reportRepeater(",
 			"note": "a sink call whose warning moved to its repeating owner counts as reported nowhere"
 		},
 		{
@@ -17764,15 +17756,15 @@
 			"name": "M-TS-SITE-PER-SINK",
 			"type": "anyparse.check.MainSinkReport",
 			"method": "reportRepeater",
-			"find": "final key: String = siteKey(edge);",
-			"replace": "final key: String = siteKey(edge) + sinks.join(',');",
+			"find": "final key: String = repeatKey(edge, repeats.repetition);",
+			"replace": "final key: String = repeatKey(edge, repeats.repetition) + sinks.join(',');",
 			"note": "each short sink below a repeating site owns its own warning"
 		},
 		{
 			"name": "M-TS-SITE-GROW",
 			"type": "anyparse.check.MainSinkReport",
 			"method": "reportRepeater",
-			"find": "known.sinks = grown;",
+			"find": "known.sinks = known.sinks.concat([for (t in sinks) if (!known.sinks.contains(t)) t]);",
 			"replace": "",
 			"note": "a repeating site's warning names only the first short sink found below it"
 		},
@@ -17783,6 +17775,94 @@
 			"find": "subject: edge.to,",
 			"replace": "subject: ThreadSafety.sortedIds(sinks).join(ThreadSafety.SUBJECT_SEPARATOR),",
 			"note": "a repeating site's warning is keyed by its sinks, not the call it repeats"
+		},
+		{
+			"name": "M-TS-FOLD-OFF",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "fold",
+			"find": "for (i => h in warned) if (state[i] == 2) turn(h, reasons[i], i, warned, doing);",
+			"replace": "",
+			"note": "no hold finding folds onto the warnings that cover it"
+		},
+		{
+			"name": "M-TS-FOLD-CROSSING",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "reasonOf",
+			"find": "_crossing.contains(via) || ",
+			"replace": "",
+			"note": "a wait for a lock released in another function counts as covered"
+		},
+		{
+			"name": "M-TS-FOLD-SITE",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "settled",
+			"find": "case Site(key): (doing[key] ?? []).exists(j -> j != i && state[j] != 0);",
+			"replace": "case Site(key): false;",
+			"note": "work another warned hold does too never covers a hold"
+		},
+		{
+			"name": "M-TS-FOLD-DEPTH",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "fold",
+			"find": "(pick < 0 || _depth[i] < _depth[pick])",
+			"replace": "pick < 0",
+			"note": "a cycle keeps the first hold by place, not the one nearest its work"
+		},
+		{
+			"name": "M-TS-WAY-OFF",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "report",
+			"find": "oneWarningPerWay(direct, states, reportedBy);",
+			"replace": "",
+			"note": "every sink call of one main-thread way warns"
+		},
+		{
+			"name": "M-TS-LOOP-KEY",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "repeatKey",
+			"find": "return loops == null || loops.length == 0 ? siteKey(edge) :",
+			"replace": "return true ? siteKey(edge) :",
+			"note": "each call a loop repeats owns its own warning"
+		},
+		{
+			"name": "M-TS-WIN-DECL",
+			"type": "anyparse.check.LockWindow",
+			"method": "step",
+			"find": "if (_sequenceKinds.contains(kind) || _declKinds.contains(kind)) return sequence(kids, held);",
+			"replace": "if (_sequenceKinds.contains(kind)) return sequence(kids, held);",
+			"note": "a local declaration is an opaque step"
+		},
+		{
+			"name": "M-TS-WIN-JUMP",
+			"type": "anyparse.check.LockWindow",
+			"method": "step",
+			"find": "= _jumpKinds.contains(kind) ? _loops[_loops.length - 1] : null;",
+			"replace": "= null;",
+			"note": "a break or continue is a path out of the function"
+		},
+		{
+			"name": "M-TS-WIN-ARRAY",
+			"type": "anyparse.check.LockWindow",
+			"method": "inPlaceKindsOf",
+			"find": ".concat(shape.arrayLiteralKind == null ? [] : [shape.arrayLiteralKind])",
+			"replace": "",
+			"note": "an array literal is an opaque step"
+		},
+		{
+			"name": "M-TS-WIN-FOREXPR",
+			"type": "anyparse.check.LockWindow",
+			"method": "loopKindsOf",
+			"find": ".concat([for (k in shape.iterationBindingKinds ?? []) if (k != shape.forStmtKind) k])",
+			"replace": "",
+			"note": "a for expression is no loop"
+		},
+		{
+			"name": "M-TS-FOLD-NORMAL",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "judgedAs",
+			"find": "calls: [for (c in normal.blockingCalls(fold.hold, held)) c.edge],",
+			"replace": "calls: [for (c in graded.calls) c.edge],",
+			"note": "a call only a catch runs counts as a reason a folded hold warns"
 		}
 	]
 }

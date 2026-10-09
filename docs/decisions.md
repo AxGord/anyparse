@@ -1623,8 +1623,8 @@ decided the question; it may not become a record of runs.
 - a main-only hold warning for its own long work beside finding (a) → after δ1 eight of TM's new caller holds were
   main-only (`deleteItem`, `moveItem`, `setXML`, `loadXML`, …), each a second key for work (a) already warns of at
   `deleteItemInternal` / `moveCloudFolderSubItemsAction2`; the hold turns info when (a) warns of every long call it
-  names at another member, and keeps the warning where (a) reports the work at the holder itself, as for
-  `FileListMoveFiles.moveItems`, whose loop owns the per-item calls — branch `feat/ts-precision-2`
+  names at another member (ζ1 dropped the exception that kept it where (a) reports the work at the holder itself,
+  `FileListMoveFiles.moveItems`: the hold is still the main thread's own work) — branch `feat/ts-precision-2`
 - folding nested holds only within one function (β3) → a multi-lock helper judged at a caller that runs inside the
   sync's own batch hold (`cloudLocalRenameAndMoveItem`, `removeCloudLocal` under `moveLocalQueue` /
   `removeLocalQueue`) was a second key for one hold; a hold whose lock every state of its function already must-holds
@@ -1643,5 +1643,23 @@ decided the question; it may not become a record of runs.
   (`File.getContent`, `FileSystem.rename`, `Connection.request`, `Mutex.acquire`), `repairShareAttr` twice per
   site; the site owns one warning keyed by the call it repeats, naming every sink — a sink set that grows with the
   code no longer renames the key — branch `feat/ts-precision-2`
+- a hold of a lock warning both where it waits for another lock and where that lock's holder warns → TM's
+  `StandardFileSystem.saveXML` (mutation lock) waits for the tree lock `FolderWatcher.updateInternal` holds long;
+  one root cause, two warnings. `RootCauseFold`: a hold warning whose every long call is a wait for a lock every
+  long-making hold of which is reported (a warning, or an info naming the warning that covers it), or a sink call
+  another warned hold is long by too, turns info naming them; a cycle keeps the hold nearest its work. Positive: a
+  lock long by a hand-off, an unresolved call, a crossing release or a hold with no finding stays uncovered. A finding
+  (a) at that sink call covers a hold only when the hold runs on the main thread alone (its own work) — a background
+  hold across the same call stalls the main thread through the lock even once the main thread stops calling it.
+  The same-member exception of the main-only fold (ε4) went with it: TM's `moveItems` hold folds onto the loop's (a)
+  warning — branch `feat/ts-precision-2`
+- a local declaration, an array literal, `break` / `continue` as opaque steps of a hold's window → TM's
+  `StandardFileSystem.getXML` (`final xml = try … catch { unlock; throw }`) and `listFolder` (a comprehension with
+  `continue` and a `catch` that releases before it returns) "leaked" their tree lock, which made every wait for it
+  long by a leak no finding names; `LockWindow` walks them in place — branch `feat/ts-precision-2`
+- one warning per call site of a sink a main-thread way runs → TM's `FSUtil.deleteRecursive` warned three times (its
+  `readDirectory`, `deleteDirectory`, `deleteFile` run on every run of it) and `repairShareAttr`'s session loop twice
+  (`getXML`, `setXML`); one warning per way into a function, and per loop for the calls it repeats — branch
+  `feat/ts-precision-2`
 - judging "inside a catch" off the witness chain the finding prints → the chain is one way; a second way outside every
   catch must keep the warning, which only a solve without the catch edges can see — branch `feat/ts-precision-2`

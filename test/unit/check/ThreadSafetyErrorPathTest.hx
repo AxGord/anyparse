@@ -73,10 +73,10 @@ class ThreadSafetyErrorPathTest extends Test {
 	public function testAMainSinkCallInACatchIsInfo(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = ThreadSafetyCheckTest.violations(CONFIG, [
-			'class A { static function step():Void {}'
-			+ ' public static function main():Void { try { step(); } catch (e:Dynamic) { Sys.sleep(1); } Sys.sleep(2); } }'
+			'class A { static function step():Void {}' + ' static function pause():Void Sys.sleep(2);'
+			+ ' public static function main():Void { try { step(); } catch (e:Dynamic) { Sys.sleep(1); } pause(); } }'
 		]);
-		Assert.same(['info A A.main | Sys.sleep', 'warning A A.main | Sys.sleep'], graded(found));
+		Assert.same(['info A A.main | Sys.sleep', 'warning A A.pause | Sys.sleep'], graded(found));
 		#else
 		Assert.pass('non-sys target');
 		#end

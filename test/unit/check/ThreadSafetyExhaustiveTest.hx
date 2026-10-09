@@ -21,7 +21,7 @@ class ThreadSafetyExhaustiveTest extends Test {
 	@:pin('control') @:killer('M-TS-EXH-OFF') @:killer('M-TS-EXH-OPAQUE')
 	public function testACatchAllNoValueReachesIsNoPathInAValue(): Void {
 		#if (sys || nodejs)
-		Assert.same([], leaks(run(CLOSED, 'V', 'final n:Int = switch mode { case A: 1; case B: 2; case _: throw "x"; };')));
+		Assert.same([], leaks(run(CLOSED, 'V', 'use(switch mode { case A: 1; case B: 2; case _: throw "x"; });')));
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -89,7 +89,7 @@ class ThreadSafetyExhaustiveTest extends Test {
 			ThreadSafetyCheckTest.MUTEX,
 			'class Runner { public static function create(fn:()->Void):Void {} }',
 			abstractDecl,
-			'class S { final _m:Mutex = new Mutex(); var mode:$modeType = null; public function new() {} function step():Void {}'
+			'class S { final _m:Mutex = new Mutex(); var mode:$modeType = null; public function new() {} function step():Void {} function use(n:Int):Void {}'
 			+ ' public function work():Void { _m.acquire(); $held _m.release(); }'
 			+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> s.work()); s._m.acquire(); s._m.release(); } }'
 		]);

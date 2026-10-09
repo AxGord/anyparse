@@ -113,8 +113,8 @@ class ThreadSafetyDominanceTest extends Test {
 	public function testAConditionalTakeTheValuationDecidesCounts(): Void {
 		#if (sys || nodejs)
 		Assert.same([
+			'info B D.outer | D._outer',
 			'info B D.quick | D._outer',
-			'warning B D.outer | D._outer',
 			'warning B D.slow | D._outer'
 		], holds(run(
 			'public function slow(batch:Bool):Void { if (!batch) _outer.acquire(); _inner.acquire(); Sys.sleep(1); _inner.release();'

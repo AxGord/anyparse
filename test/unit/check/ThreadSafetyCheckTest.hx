@@ -1427,7 +1427,8 @@ class ThreadSafetyCheckTest extends Test {
 		#if (sys || nodejs)
 		Assert.same([], throwFindings('"FileSystem.createDirectory"', [
 			'class W { final _m:Mutex = new Mutex(); public function new() {} public function make(p:String):Void { _m.acquire();'
-			+ ' final made:Bool = if (p != null) { _m.release(); FileSystem.createDirectory(p); true; } else { _m.release(); false; }; } }'
+			+ ' use(if (p != null) { _m.release(); FileSystem.createDirectory(p); true; } else { _m.release(); false; }); }'
+			+ ' function use(b:Bool):Void {} }'
 		]));
 		#else
 		Assert.pass('non-sys target');
@@ -1440,7 +1441,7 @@ class ThreadSafetyCheckTest extends Test {
 		#if (sys || nodejs)
 		Assert.same([], throwFindings('"FileSystem.createDirectory"', [
 			'class W { final _m:Mutex = new Mutex(); public function new() {} public function make(p:String):Void {'
-			+ ' final both:Array<Void> = [FileSystem.createDirectory(p), _m.acquire()]; _m.release(); } }'
+			+ ' use([FileSystem.createDirectory(p), _m.acquire()]); _m.release(); } function use(a:Array<Void>):Void {} }'
 		]));
 		#else
 		Assert.pass('non-sys target');

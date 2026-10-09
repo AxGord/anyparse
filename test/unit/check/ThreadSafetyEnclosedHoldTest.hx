@@ -26,7 +26,8 @@ class ThreadSafetyEnclosedHoldTest extends Test {
 	@:pin('control') @:killer('M-TS-ENCLOSED-ANY-STATE')
 	public function testOneCallerOutsideTheLockKeepsItsOwn(): Void {
 		#if (sys || nodejs)
-		Assert.same(['warning B S.inner | S._m', 'warning B S.outer | S._m'], holds(run('s.bare(true);')));
+		// not enclosed, the outer hold still folds onto the inner one: both are long by the same `Sys.sleep` (`RootCauseFold`)
+		Assert.same(['info B S.outer | S._m', 'warning B S.inner | S._m'], holds(run('s.bare(true);')));
 		#else
 		Assert.pass('non-sys target');
 		#end

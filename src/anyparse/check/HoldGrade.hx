@@ -1,7 +1,9 @@
 package anyparse.check;
 
+import anyparse.check.Check.Violation;
 import anyparse.check.LockSites.LockAcquire;
 import anyparse.check.ThreadSafety.CostNote;
+import anyparse.check.ThreadSafety.FindingFamily;
 import anyparse.query.CallGraph;
 
 using Lambda;
@@ -14,6 +16,40 @@ typedef GradedHold = {
 
 	/** Whether the finding is info: every call brief, or long only where a `catch` runs. */
 	final info: Bool;
+
+	/** Whether it is info because a finding (a) warning names its every long call: a main-only hold's own work. */
+	final ?elsewhere: Bool;
+}
+
+/** One hold finding (b) judges: its lock, whether it makes that lock long, and, once warned, what it was judged by. */
+typedef FoldHold = {
+	final hold: LockAcquire;
+
+	/** The lock object, or the pair's take member for a lock no member names. */
+	final lock: String;
+
+	/** Whether the hold is a reason its lock is long (`ThreadSafety.solveLongLocks`). */
+	final longMaking: Bool;
+
+	/** Its finding (b), when one was made, whatever its severity. */
+	final finding: Null<Violation>;
+
+	/** The long calls the finding names, the taint that found them, and the lock re-held there; empty for no finding. */
+	final calls: Array<CallEdge>;
+
+	final taint: Null<LockTaint>;
+	final held: Null<String>;
+
+	/** Whether the hold is long by something no call of it names: handed off past its function, or an unresolved call. */
+	final opaque: Bool;
+
+	/**
+	 * Whether its finding, when info, names where its long calls are reported instead: made a warning and turned by a
+	 * hold around it (`ThreadSafety.nestHolds`, `foldEnclosed`), or a main-only hold whose work a finding (a) warns of.
+	 */
+	final madeWarning: Bool;
+
+	final elsewhere: Bool;
 }
 
 /**
@@ -26,11 +62,8 @@ typedef HoldJudges = {
 	final normal: LockTaint;
 	final errors: ErrorPaths;
 
-	/** By `MainSinkReport.siteKey`, the member whose finding (a) warning reports each main-thread sink call. */
-	final reported: Map<String, String>;
-
-	/** The member the hold being judged sits in. */
-	final member: String;
+	/** By `MainSinkReport.siteKey`, the finding (a) warning that reports each main-thread sink call. */
+	final reported: Map<String, Violation>;
 }
 
 /**
@@ -91,9 +124,9 @@ final class HoldGrade {
 
 	/**
 	 * The members whose finding (a) warnings report every long call `long` of the main-only hold `a` — the sink call
-	 * each one ends in (`LockTaint.blockingTrail`), warned at itself or at the repeating call that owns it — when none of
-	 * them is the hold's own member; null otherwise. The main thread's own long work is finding (a)'s: a hold of it adds
-	 * no second warning where (a) already names it elsewhere.
+	 * each one ends in (`LockTaint.blockingTrail`), warned at itself or at the repeating call that owns it, the hold's
+	 * own member included (TM's `FileListMoveFiles.moveItems` loop); null otherwise. The main thread's own long work is
+	 * finding (a)'s: a hold of it adds no second warning where (a) already names it.
 	 */
 	private static function reportedElsewhere(
 		a: LockAcquire, held: Null<String>, long: Array<{ edge: CallEdge, path: Array<String> }>, judges: HoldJudges
@@ -101,8 +134,8 @@ final class HoldGrade {
 		final members: Array<String> = [];
 		for (c in long) {
 			final end: Null<CallEdge> = judges.long.blockingTrail(a, c.edge, held)?.end;
-			final by: Null<String> = end == null ? null : judges.reported[MainSinkReport.siteKey(end)];
-			if (by == null || by == judges.member) return null;
+			final by: Null<String> = end == null ? null : judges.reported[MainSinkReport.siteKey(end)]?.data?.member;
+			if (by == null) return null;
 			if (!members.contains(by)) members.push(by);
 		}
 		return members.length == 0 ? null : members.join(', ');
@@ -126,7 +159,8 @@ final class HoldGrade {
 				calls: long,
 				taint: judges.long,
 				note: elsewhere == null ? note : note + ', which finding (a) reports at $elsewhere, so reported as info',
-				info: error != null || elsewhere != null
+				info: error != null || elsewhere != null,
+				elsewhere: error == null && elsewhere != null
 			};
 		}
 		if (mainOnly) return null;
@@ -137,6 +171,38 @@ final class HoldGrade {
 			note: CostNote.ShortHold,
 			info: true
 		};
+	}
+
+	/** Finding (b) at the call `anchor` of `holder`'s hold of `lock` (`chain[0]`), info when `short`. */
+	public static function finding(
+		graph: CallGraph, anchor: CallEdge, short: Bool, message: String, lock: String, chain: Array<String>
+	): Violation {
+		return {
+			file: anchor.file,
+			span: anchor.span,
+			rule: 'thread-safety',
+			severity: short ? Severity.Info : Severity.Warning,
+			message: message,
+			data: {
+				family: FindingFamily.LockHeld,
+				member: ThreadSafety.memberOf(graph, chain[0]),
+				subject: lock,
+				chain: chain
+			}
+		};
+	}
+
+	/**
+	 * The locks the main thread takes somewhere, of `acquires`: a lock only ever taken shared stalls no one; one no member
+	 * names is told apart by its pair's take member alone.
+	 */
+	public static function mainTaken(acquires: Array<LockAcquire>, states: ThreadStates, taints: LockTaint): Array<String> {
+		return [
+			for (a in acquires) {
+				final lock: String = a.lock ?? a.pair.lockId;
+				if (states.edgeContext(a.edge) & ThreadSafety.CTX_MAIN != 0 && !taints.quiet.sharedOnly(lock)) lock;
+			}
+		];
 	}
 
 }

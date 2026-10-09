@@ -47,6 +47,14 @@ final class LockWindow {
 	private final _loopKinds: Array<String>;
 	private final _tryKinds: Array<String>;
 	private final _switchKinds: Array<String>;
+
+	/** The local declarations (`var`, `final`), walked as their initializer, and array literals, as their elements in order. */
+	private final _declKinds: Array<String>;
+
+	/** The `break` and `continue` statements: a jump to the end or the head of the loop around them, not out of the body. */
+	private final _jumpKinds: Array<String>;
+
+	private final _breakKind: Null<String>;
 	private final _branchKinds: Array<String>;
 	private final _nestedFnKinds: Array<String>;
 	private final _exitKinds: Array<String>;
@@ -64,6 +72,9 @@ final class LockWindow {
 	private var _raisingFroms: Array<Int> = [];
 
 	private var _escapes: Array<QueryNode> = [];
+
+	/** For each loop the walk is inside, innermost last: what its `break`s and its `continue`s leave held. */
+	private var _loops: Array<{ brk: Null<Bool>, cont: Null<Bool> }> = [];
 
 	/** Which catch-all branches no value reaches (`ExhaustiveSwitches`), when the walk is told. */
 	private final _exhaustive: Null<ExhaustiveSwitches>;
@@ -86,12 +97,14 @@ final class LockWindow {
 		_ifKinds = (shape.ifStatementKinds ?? []).concat(shape.ifExpressionKinds ?? [])
 			.concat(shape.ternaryKind == null ? [] : [shape.ternaryKind]);
 		// a `while` shares the condition-first slot with an `if`; what is left after the `if` kinds are the loops
-		_loopKinds = [for (k in shape.conditionFirstChildKinds ?? []) if (!_ifKinds.contains(k)) k].concat(
-			shape.conditionLastChildKinds ?? []
-		)
-			.concat(shape.forStmtKind == null ? [] : [shape.forStmtKind]);
+		_loopKinds = loopKindsOf(shape, _ifKinds);
 		_tryKinds = (shape.tryStatementKinds ?? []).concat(shape.tryExpressionKinds ?? []);
 		_switchKinds = shape.switchKinds ?? [];
+		_declKinds = inPlaceKindsOf(shape);
+		_jumpKinds = [
+			for (k in [shape.breakStatementKind, shape.continueStatementKind]) if (k != null) k
+		];
+		_breakKind = shape.breakStatementKind;
 		_branchKinds = [for (k in [shape.caseBranchKind, shape.defaultBranchKind]) if (k != null) k];
 		_nestedFnKinds = MemberKinds.nestedFunctionKinds(shape);
 		_exitKinds = shape.controlExitKinds ?? [];
@@ -99,6 +112,18 @@ final class LockWindow {
 		_catchKind = shape.catchClauseKind;
 		_regionKind = shape.conditionalMemberKind;
 		_callKind = shape.callKind;
+	}
+
+	/** The loops of `shape`: `while` (what the condition-first kinds hold beyond `ifKinds`), `do`, `for`, a `for` expression. */
+	private static function loopKindsOf(shape: RefShape, ifKinds: Array<String>): Array<String> {
+		return [for (k in shape.conditionFirstChildKinds ?? []) if (!ifKinds.contains(k)) k].concat(shape.conditionLastChildKinds ?? [])
+			.concat(shape.forStmtKind == null ? [] : [shape.forStmtKind])
+			.concat([for (k in shape.iterationBindingKinds ?? []) if (k != shape.forStmtKind) k]);
+	}
+
+	/** The kinds walked as their children in order: local declarations (their initializer) and array literals. */
+	private static function inPlaceKindsOf(shape: RefShape): Array<String> {
+		return (shape.localDeclKinds ?? []).concat(shape.arrayLiteralKind == null ? [] : [shape.arrayLiteralKind]);
 	}
 
 	/**
@@ -172,9 +197,18 @@ final class LockWindow {
 		final kind: String = node.kind;
 		final kids: Array<QueryNode> = node.children;
 		if (_nestedFnKinds.contains(kind)) return opaque(node, held);
-		if (_sequenceKinds.contains(kind)) return sequence(kids, held);
+		// a local declaration runs its initializer, in place: a `try`, `switch` or `if` there is walked like a statement
+		if (_sequenceKinds.contains(kind) || _declKinds.contains(kind)) return sequence(kids, held);
 		if (_exitKinds.contains(kind)) {
 			final before: Null<Bool> = sequence(kids, held);
+			final loop: Null<{ brk: Null<Bool>, cont: Null<Bool> }> = _jumpKinds.contains(kind) ? _loops[_loops.length - 1] : null;
+			if (loop != null) {
+				if (kind == _breakKind)
+					loop.brk = join(loop.brk, before)
+				else
+					loop.cont = join(loop.cont, before);
+				return null;
+			}
 			if (before == true) {
 				_leaks = true;
 				if (_throwKinds.contains(kind)) raise(node);
@@ -188,11 +222,16 @@ final class LockWindow {
 			return join(step(kids[1], cond), otherwise);
 		}
 		if (_loopKinds.contains(kind)) {
-			// iterate to a fixed point: a lock one pass leaves held is held on the next, from its first statement on
+			// iterate to a fixed point: a lock one pass leaves held is held on the next, from its first statement on; a
+			// `continue` goes back to the head, a `break` past the end
 			var entry: Bool = held;
 			while (true) {
-				final next: Bool = join(entry, sequence(kids, entry)) == true;
-				if (next == entry) return entry;
+				final frame: { brk: Null<Bool>, cont: Null<Bool> } = { brk: null, cont: null };
+				_loops.push(frame);
+				final body: Null<Bool> = sequence(kids, entry);
+				_loops.pop();
+				final next: Bool = join(join(entry, body), frame.cont) == true;
+				if (next == entry) return join(entry, frame.brk) == true;
 				entry = next;
 			}
 		}
@@ -283,6 +322,7 @@ final class LockWindow {
 		_held = [];
 		_leaks = false;
 		_escapes = [];
+		_loops = [];
 		_catchDepth = 0;
 		_raisedHeld = false;
 	}

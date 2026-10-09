@@ -401,8 +401,10 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.ThreadSafetyQuietLocksTest',
 		'unit.check.ThreadSafetyRegistersTest',
 		'unit.check.ThreadSafetyRethrowTest',
+		'unit.check.ThreadSafetyRootCauseTest',
 		'unit.check.ThreadSafetyUnnamedLockTest',
 		'unit.check.ThreadSafetyWaiterTest',
+		'unit.check.ThreadSafetyWindowTest',
 		'unit.check.TrivialGetterCheckTest',
 		'unit.check.TrivialGetterIsVarTest',
 		'unit.check.TrivialGetterShapeCollapseTest',
@@ -2209,7 +2211,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyLongLocksTest#testSpansBlockingNamesTheCallAndThePath :: control :: M-TS-LONG-NEVER-GROWS',
 			'unit.check.ThreadSafetyMainOnlyTest#testWorkOwnedByARepeatingCalleeLeavesTheHoldInfo :: control :: M-TS-MAINONLY-MOVED',
 			'unit.check.ThreadSafetyMainOnlyTest#testWorkReportedAtACalleeLeavesTheHoldInfo :: control :: M-TS-MAINONLY-ELSEWHERE-OFF',
-			'unit.check.ThreadSafetyMainOnlyTest#testWorkReportedAtTheHolderKeepsTheWarning :: control :: M-TS-MAINONLY-SAME-MEMBER',
+			'unit.check.ThreadSafetyMainOnlyTest#testWorkReportedAtTheHolderLeavesTheHoldInfo :: control :: M-TS-MAINONLY-ELSEWHERE-OFF',
 			'unit.check.ThreadSafetyMainStatesTest#testAConstantArgumentRulesTheRepeatedCallOut :: control :: M-TS-STATES-IGNORED',
 			'unit.check.ThreadSafetyMainStatesTest#testALiteralArgumentDecidesAFinalLocalCondition :: control :: '
 				+ 'M-TS-COND-FINAL-LOCAL,M-TS-ARG-LITERAL-NONNULL,M-TS-ARG-FINAL-LOCAL-READ',
@@ -2229,11 +2231,20 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyRethrowTest#testACatchThatRethrowsRaises :: control :: M-TS-RETHROW-OFF',
 			'unit.check.ThreadSafetyRethrowTest#testACatchThrowingAnotherValueKeepsIt :: control :: M-TS-RETHROW-ANY-NAME',
 			'unit.check.ThreadSafetyRethrowTest#testARethrowInANestedFunctionKeepsIt :: control :: M-TS-RETHROW-NESTED',
+			'unit.check.ThreadSafetyRootCauseTest#testACallOnlyACatchRunsLeavesTheFoldStanding :: control :: M-TS-FOLD-NORMAL',
+			'unit.check.ThreadSafetyRootCauseTest#testAHoldLongOnlyByWaitingForAWarnedHolderIsInfo :: control :: M-TS-FOLD-OFF',
+			'unit.check.ThreadSafetyRootCauseTest#testALockReleasedElsewhereLeavesTheWaiterWarned :: control :: M-TS-FOLD-CROSSING',
+			'unit.check.ThreadSafetyRootCauseTest#testHoldsLongByOneCallMakeOneWarning :: control :: M-TS-FOLD-SITE,M-TS-FOLD-DEPTH',
+			'unit.check.ThreadSafetyRootCauseTest#testSinkCallsOfOneWayMakeOneWarning :: control :: M-TS-WAY-OFF',
+			'unit.check.ThreadSafetyRootCauseTest#testTheCallsOfOneLoopMakeOneWarning :: control :: M-TS-LOOP-KEY',
 			'unit.check.ThreadSafetyUnnamedLockTest#testAnUnnamedLockNoMainThreadTakesStallsNoOne :: control :: M-TS-UNNAMED-PAIR',
 			'unit.check.ThreadSafetyWaiterTest#testAHoldOnlyTheMainThreadRunsIsNoStall :: control :: '
 				+ 'M-TS-B-MAIN-ONLY-KEPT,M-TS-OWN-WORK-TAKES',
 			'unit.check.ThreadSafetyWaiterTest#testAHolderOfUnknownThreadKeepsItsFinding :: control :: M-TS-B-ASSUMED-IGNORED',
 			'unit.check.ThreadSafetyWaiterTest#testAMainOnlyHoldOverItsOwnLongWorkStays :: control :: M-TS-OWN-WORK-DROPPED',
+			'unit.check.ThreadSafetyWindowTest#testAComprehensionIsWalkedAsALoop :: control :: M-TS-WIN-ARRAY,M-TS-WIN-FOREXPR',
+			'unit.check.ThreadSafetyWindowTest#testAContinueStaysInTheLoop :: control :: M-TS-WIN-JUMP',
+			'unit.check.ThreadSafetyWindowTest#testATryInADeclarationReleasingBeforeItRethrowsLeavesNothingHeld :: control :: M-TS-WIN-DECL',
 			'unit.check.TrivialGetterCheckTest#testBasicBlockBodyFlagged :: control :: M-SUBOVERRIDE-TRUE',
 			'unit.check.TrivialGetterShapeCollapseTest#testForeignHierarchyBackingNameStaysAccountedFor :: control :: '
 				+ 'M-SUPERDECLARES-FALSE',
@@ -6036,7 +6047,6 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-ARG-LITERAL-NONNULL',
 			'M-TS-ARG-FINAL-LOCAL-READ',
 			'M-TS-MAINONLY-ELSEWHERE-OFF',
-			'M-TS-MAINONLY-SAME-MEMBER',
 			'M-TS-MAINONLY-MOVED',
 			'M-TS-ENCLOSED-OFF',
 			'M-TS-ENCLOSED-ANY-STATE',
@@ -6049,7 +6059,18 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-EXH-OPAQUE',
 			'M-TS-SITE-PER-SINK',
 			'M-TS-SITE-GROW',
-			'M-TS-SITE-SUBJECT'
+			'M-TS-SITE-SUBJECT',
+			'M-TS-FOLD-OFF',
+			'M-TS-FOLD-CROSSING',
+			'M-TS-FOLD-SITE',
+			'M-TS-FOLD-DEPTH',
+			'M-TS-WAY-OFF',
+			'M-TS-LOOP-KEY',
+			'M-TS-WIN-DECL',
+			'M-TS-WIN-JUMP',
+			'M-TS-WIN-ARRAY',
+			'M-TS-WIN-FOREXPR',
+			'M-TS-FOLD-NORMAL'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
