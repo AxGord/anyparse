@@ -389,6 +389,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.ThreadSafetyDominanceTest',
 		'unit.check.ThreadSafetyEnclosedHoldTest',
 		'unit.check.ThreadSafetyErrorPathTest',
+		'unit.check.ThreadSafetyExhaustiveTest',
 		'unit.check.ThreadSafetyFactsTest',
 		'unit.check.ThreadSafetyFindingDataTest',
 		'unit.check.ThreadSafetyFoldingTest',
@@ -2175,6 +2176,11 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-TS-ERROR-REACH-OFF,M-TS-ERROR-HOLD-OFF,M-TS-ERROR-TAKE-OFF',
 			'unit.check.ThreadSafetyErrorPathTest#testAMainSinkCallInACatchIsInfo :: control :: M-TS-ERROR-CAUGHT-OFF',
 			'unit.check.ThreadSafetyErrorPathTest#testExplainLongMarksTheErrorPath :: control :: M-TS-ERROR-EXPLAIN-OFF',
+			'unit.check.ThreadSafetyExhaustiveTest#testACatchAllNoValueReachesIsNoPathInAStatement :: control :: M-TS-EXH-STRUCT',
+			'unit.check.ThreadSafetyExhaustiveTest#testACatchAllNoValueReachesIsNoPathInAValue :: control :: M-TS-EXH-OFF,M-TS-EXH-OPAQUE',
+			'unit.check.ThreadSafetyExhaustiveTest#testAFromClauseOpensTheAbstract :: control :: M-TS-EXH-FROM',
+			'unit.check.ThreadSafetyExhaustiveTest#testAFunctionBuildingAnyValueOpensTheAbstract :: control :: M-TS-EXH-FROMFN',
+			'unit.check.ThreadSafetyExhaustiveTest#testAValueNoCaseNamesReachesIt :: control :: M-TS-EXH-ALL-NAMED',
 			'unit.check.ThreadSafetyFactsTest#testCompilerFactsResolveWhatTheSyntaxCannot :: control :: M-TS-FACTS-IGNORED,M-TS-FACTS-MADE-REF,M-TS-FACTS-GATE',
 			'unit.check.ThreadSafetyFindingDataTest#testInitializerFindingsNameTheInitializer :: control :: M-TS-DATA-INIT-LAMBDA',
 			'unit.check.ThreadSafetyFindingDataTest#testLambdaFindingNamesItsEnclosingMember :: control :: M-TS-DATA-MEMBER-LAMBDA',
@@ -6033,7 +6039,13 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-MAINONLY-MOVED',
 			'M-TS-ENCLOSED-OFF',
 			'M-TS-ENCLOSED-ANY-STATE',
-			'M-TS-UNNAMED-PAIR'
+			'M-TS-UNNAMED-PAIR',
+			'M-TS-EXH-OFF',
+			'M-TS-EXH-ALL-NAMED',
+			'M-TS-EXH-FROM',
+			'M-TS-EXH-FROMFN',
+			'M-TS-EXH-STRUCT',
+			'M-TS-EXH-OPAQUE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

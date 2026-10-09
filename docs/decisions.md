@@ -1633,5 +1633,11 @@ decided the question; it may not become a record of runs.
   `_base._cache`, a field read for more than its calls, so no member names it; named in `lockPairs`
   (`fs.cloud.FoldersIncrementalCloudUpdatesCache.lock/unlock`) it is told apart by that pair, and a pair the main
   thread never takes stalls no main thread — branch `feat/ts-precision-2`
+- every `switch` branch a path → TM's `FileList.reload` throws in the `case _` of a switch over `FileListViewType`
+  (LIST, GRID), a `C` finding no value can reach; the catch-all of a switch over a closed enum abstract whose values
+  the cases all name is no path (`ExhaustiveSwitches`). Closed is positive: no `from` clause, every function handing
+  back the abstract hands back only its values (`@:from fromString` maps every string onto LIST / GRID). A `cast`
+  into the abstract is the hole the source cannot show — accepted, as the compiler's own exhaustiveness does —
+  branch `feat/ts-precision-2`
 - judging "inside a catch" off the witness chain the finding prints → the chain is one way; a second way outside every
   catch must keep the warning, which only a solve without the catch edges can see — branch `feat/ts-precision-2`

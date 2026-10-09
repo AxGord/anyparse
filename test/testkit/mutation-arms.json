@@ -17711,6 +17711,54 @@
 			"find": "if (a.uncontended || !mainTaken.contains(lock ?? a.pair.lockId)) continue;",
 			"replace": "if (a.uncontended || lock != null && !mainTaken.contains(lock)) continue;",
 			"note": "a hold of an unnamed lock warns though the main thread never takes its pair"
+		},
+		{
+			"name": "M-TS-EXH-OFF",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "dead",
+			"find": "if (at < 1 || !catchAll(branch)) return false;",
+			"replace": "if (true) return false;",
+			"note": "no catch-all branch is ever dead"
+		},
+		{
+			"name": "M-TS-EXH-ALL-NAMED",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "dead",
+			"find": "return values.foreach(v -> named.contains(v));",
+			"replace": "return values.exists(v -> named.contains(v));",
+			"note": "one named value makes the catch-all dead"
+		},
+		{
+			"name": "M-TS-EXH-FROM",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "valuesOf",
+			"find": "if (k.kind == from) return null;",
+			"replace": "",
+			"note": "an enum abstract with a from clause counts as closed"
+		},
+		{
+			"name": "M-TS-EXH-FROMFN",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "valuesOf",
+			"find": "&& !handsBackValuesOnly(fn, values)",
+			"replace": "&& false",
+			"note": "a function of the abstract building any value keeps it closed"
+		},
+		{
+			"name": "M-TS-EXH-STRUCT",
+			"type": "anyparse.check.LockWindow",
+			"method": "step",
+			"find": "&& !(dead != null && dead(node, k))",
+			"replace": "",
+			"note": "a dead catch-all of a statement switch is walked"
+		},
+		{
+			"name": "M-TS-EXH-OPAQUE",
+			"type": "anyparse.check.LockWindow",
+			"method": "raisesInside",
+			"find": "&& !(dead != null && dead(node, k))) raisesInside(k, after);",
+			"replace": ") raisesInside(k, after);",
+			"note": "a dead catch-all inside an opaque step raises"
 		}
 	]
 }

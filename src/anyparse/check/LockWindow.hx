@@ -65,13 +65,20 @@ final class LockWindow {
 
 	private var _escapes: Array<QueryNode> = [];
 
+	/** Which catch-all branches no value reaches (`ExhaustiveSwitches`), when the walk is told. */
+	private final _exhaustive: Null<ExhaustiveSwitches>;
+
+	/** The branches of a `switch` no value reaches, for the trace under way (`trace`, in the function `fnId`). */
+	private var _deadBranch: Null<(QueryNode, QueryNode) -> Bool> = null;
+
 	/** How many `try` bodies with a `catch` the walk is inside: a throw there is intercepted, never an escape. */
 	private var _catchDepth: Int = 0;
 
 	/** Whether something inside the innermost intercepting `try` body threw while the lock may have been held. */
 	private var _raisedHeld: Bool = false;
 
-	public function new(shape: RefShape, flow: ControlFlowSupport) {
+	public function new(shape: RefShape, flow: ControlFlowSupport, ?exhaustive: ExhaustiveSwitches) {
+		_exhaustive = exhaustive;
 		// an expression body is a sequence of the one expression it holds
 		_sequenceKinds = flow.blockKinds()
 			.concat(shape.exprStatementKind == null ? [] : [shape.exprStatementKind])
@@ -100,11 +107,20 @@ final class LockWindow {
 	 * `raisingFroms`. Null when the grammar names no exit kinds, so no path out of the body can be recognised: the
 	 * caller must then assume the lock is held anywhere.
 	 */
-	public function trace(fn: QueryNode, acquireFrom: Int, releaseFroms: Array<Int>, raisingFroms: Array<Int>): Null<HeldWindow> {
+	public function trace(
+		fn: QueryNode, acquireFrom: Int, releaseFroms: Array<Int>, raisingFroms: Array<Int>, ?fnId: String
+	): Null<HeldWindow> {
 		if (_exitKinds.length == 0) return null;
+		final exhaustive: Null<ExhaustiveSwitches> = _exhaustive;
+		_deadBranch = exhaustive == null || fnId == null ? null : deadIn(exhaustive, fnId);
 		reset(acquireFrom, releaseFroms, raisingFroms);
 		if (sequence(fn.children, false) == true) _leaks = true;
 		return { held: _held, leaks: _leaks, escapes: _escapes };
+	}
+
+	/** The branches `exhaustive` says no value reaches, in the function `fnId`. */
+	private static function deadIn(exhaustive: ExhaustiveSwitches, fnId: String): (QueryNode, QueryNode) -> Bool {
+		return (sw, branch) -> exhaustive.dead(fnId, sw, branch);
 	}
 
 	/**
@@ -205,7 +221,10 @@ final class LockWindow {
 			final subject: Null<Bool> = sequence([for (k in kids) if (!_branchKinds.contains(k.kind)) k], held);
 			if (subject == null) return null;
 			var out: Null<Bool> = subject;
-			for (k in kids) if (_branchKinds.contains(k.kind)) out = join(out, sequence(k.children, subject));
+			final dead: Null<(QueryNode, QueryNode) -> Bool> = _deadBranch;
+			// a catch-all no value reaches is no path (`ExhaustiveSwitches`)
+			for (k in kids) if (_branchKinds.contains(k.kind) && !(dead != null && dead(node, k)))
+				out = join(out, sequence(k.children, subject));
 			return out;
 		}
 		// a conditional-compilation region the branch-aware projection split into branches: exactly one of them runs
@@ -233,7 +252,8 @@ final class LockWindow {
 
 	/**
 	 * Raises every throw and raising call inside the opaque step `node` that starts after `after`, outside a nested
-	 * function and outside the body of a `try` with a `catch` (whose catches still run in the step's own context).
+	 * function, outside the body of a `try` with a `catch` (whose catches still run in the step's own context), and
+	 * outside a `switch` branch no value reaches.
 	 */
 	private function raisesInside(node: QueryNode, after: Int): Void {
 		final from: Int = node.span?.from ?? -1;
@@ -244,7 +264,8 @@ final class LockWindow {
 		}
 		final kids: Array<QueryNode> = node.children;
 		final intercepted: Bool = _tryKinds.contains(node.kind) && kids.exists(k -> k.kind == _catchKind);
-		for (i => k in kids) if (!(intercepted && i == 0)) raisesInside(k, after);
+		final dead: Null<(QueryNode, QueryNode) -> Bool> = _switchKinds.contains(node.kind) ? _deadBranch : null;
+		for (i => k in kids) if (!(intercepted && i == 0) && !(dead != null && dead(node, k))) raisesInside(k, after);
 	}
 
 	/** A throw reached holding the lock: intercepted inside a `try` with a `catch`, else an escape out of the body. */

@@ -189,7 +189,7 @@ final class LockSites {
 		_trees = trees;
 		_shape = plugin.refShape();
 		final flow: Null<ControlFlowSupport> = plugin.controlFlowSupport();
-		_walker = flow == null ? null : new LockWindow(_shape, flow);
+		_walker = flow == null ? null : new LockWindow(_shape, flow, new ExhaustiveSwitches(graph, plugin));
 		_ctorName = _shape.constructorName ?? 'new';
 		_nestedFnKinds = MemberKinds.nestedFunctionKinds(_shape);
 		final takes: Array<LockCall> = [];
@@ -310,7 +310,7 @@ final class LockSites {
 		final fn: Null<QueryNode> = _trees.ofEdge(edge);
 		final traced: Null<HeldWindow> = fn == null || _walker == null || start < 0
 			? null
-			: _walker.trace(fn, start, releases, _throws.raisingFroms(edge));
+			: _walker.trace(fn, start, releases, _throws.raisingFroms(edge), edge.from);
 		final held: Array<CallEdge> = heldEdges(edge, start, releases, traced);
 		final leaks: Bool = traced == null || traced.leaks;
 		final unresolved: Array<BlindCall> = traced == null ? [] : [
