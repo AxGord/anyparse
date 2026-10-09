@@ -18586,9 +18586,9 @@
 		},
 		{
 			"name": "M-TS-RELEASE-CALLBACK",
-			"type": "anyparse.check.LockReleasers",
-			"method": "runsFrom",
-			"find": "return e.kind.isInvocation() || e.kind == Ref && !_inertRef(e);",
+			"type": "anyparse.check.ThreadStates",
+			"method": "runsWith",
+			"find": "return e.kind.isInvocation() || e.kind == Ref && !inertRef(e);",
 			"replace": "return e.kind.isInvocation();",
 			"note": "a value handed on to run, which gives the lock back, gives back nothing where it is handed"
 		},
@@ -18660,7 +18660,7 @@
 			"name": "M-TS-FOLD-SITE-LOCK",
 			"type": "anyparse.check.RootCauseFold",
 			"method": "covers",
-			"find": "&& (by.lock == own.lock && oneThread(by, own) || by.hold.edge.from == own.hold.edge.from || way.contains(by.hold.edge.from));",
+			"find": "&& (sameLock(by, own) && oneThread(by, own) || nests(by, own) || way.contains(by.hold.edge.from));",
 			"replace": ";",
 			"note": "a hold of any lock across the same sink call covers another, though narrowing one frees nothing of the other"
 		},
@@ -18668,8 +18668,8 @@
 			"name": "M-TS-FOLD-SITE-THREAD",
 			"type": "anyparse.check.RootCauseFold",
 			"method": "covers",
-			"find": "by.lock == own.lock && oneThread(by, own)",
-			"replace": "by.lock == own.lock",
+			"find": "sameLock(by, own) && oneThread(by, own)",
+			"replace": "sameLock(by, own)",
 			"note": "a hold of a lock covers another of it in another function across threads, though each thread stalls the main one by itself"
 		},
 		{
@@ -18743,6 +18743,30 @@
 			"find": "by.hold.lock != null && own.hold.lock != null && ",
 			"replace": "",
 			"note": "two unnamed locks keyed by one take member are one lock for covering"
+		},
+		{
+			"name": "M-TS-CYCLE-REF",
+			"type": "anyparse.check.LockTaint",
+			"method": "onCycle",
+			"find": "if (e.kind.isInvocation() || runsWhereHanded(e))",
+			"replace": "if (e.kind.isInvocation())",
+			"note": "a recursion through a callback that runs is no cycle, so a whole-tree walk under a lock counts as once"
+		},
+		{
+			"name": "M-TS-CYCLE-REGISTERED",
+			"type": "anyparse.check.LockTaint",
+			"method": "onCycle",
+			"find": " || lists.registerIds.contains(via)\n\t\t\t\t|| lists.registerNames.contains(e.viaMember ?? ''))",
+			"replace": ")",
+			"note": "a value a `registers` call keeps counts as run right away, closing cycles under the lock"
+		},
+		{
+			"name": "M-TS-FOLD-NEST-LOCK",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "nests",
+			"find": "&& (sameLock(by, own) || by.hold.edge == own.hold.edge || by.hold.window.contains(own.hold.edge))",
+			"replace": "",
+			"note": "a hold of any lock in the same function covers another across the same sink"
 		},
 		{
 			"name": "M-TS-REPEATED-BY-HEADER",

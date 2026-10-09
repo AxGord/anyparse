@@ -1897,3 +1897,15 @@ decided the question; it may not become a record of runs.
   the same sleep. An unnamed lock is never the same lock for the cover (`RootCauseFold.sameLock`); the `Waits` cover
   keeps the pair key, where requiring every unnamed hold of the pair to be reported is a superset of the real one
   (review round 2 `u2p`) — branch `feat/ts-precision-3`
+- `LockTaint.onCycle` following invocations only → a recursion through a callback that runs (`n.each(k -> walk(k))`)
+  was no cycle, so a whole-tree walk under a lock counted as once and a hold reaching the same sleep once covered
+  it. The cycle walk now follows values handed on that run where they are handed (`ThreadStates.runsFrom`, the one
+  predicate `LockReleasers.runsFrom` reads too), never one a `spawns` / `marshals` call runs elsewhere or a
+  `registers` call keeps for later — following registrations too made TM's UI listener graph exceed the walk bound
+  and answer "cycle" for `FolderWatcher.setTimestamp` and two `_batchMutex` holds. `lockTrafficOnly` needs no Ref
+  clause: a value handed on runs only through a call, which its tree walk already counts as other work. The residual
+  `covers` clause "same function" had no lock condition: two holds of DIFFERENT locks one after the other in one
+  function (`f` holding `_a` then `_b` across the same `io()`) folded into one; now a hold covers another of its
+  function only when it is the same lock, opened by the same call (a helper taking both), or spans the other's take
+  (`RootCauseFold.nests`). The "way passes" clause stays as decided for `renameCloudFolderBlocked` (review round 2
+  `r1`, `s1`) — branch `feat/ts-precision-3`

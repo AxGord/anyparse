@@ -138,6 +138,65 @@ class ThreadSafetyRootCauseTest extends Test {
 		#end
 	}
 
+	/**
+	 * A recursion through a value handed on that runs (`n.each(k -> walk(k))`) re-enters the walk under the lock, as a
+	 * direct one does: the walk repeats its sink and is not covered by a hold reaching it once; a value the runtime only
+	 * registers runs per event, closing no cycle under the lock (review round 2 `r1`).
+	 */
+	@:pin('control') @:killer('M-TS-CYCLE-REF') @:killer('M-TS-CYCLE-REGISTERED')
+	public function testARecursionThroughACallbackRepeatsUnderTheLock(): Void {
+		#if (sys || nodejs)
+		final walk: String = 'class S { final _m:Mutex = new Mutex(); public function new() {} function io():Void Sys.sleep(1);'
+			+ ' function walkAll(root:Node):Void { _m.acquire(); walk(root); _m.release(); }'
+			+ ' function touch():Void { _m.acquire(); io(); _m.release(); } public function peek():Void { _m.acquire(); _m.release(); }'
+			+ ' public static function main():Void { final s:S = new S(); final r:Node = new Node();'
+			+ ' Runner.create(() -> { s.walkAll(r); s.touch(); }); s.peek(); }';
+		final node: String = 'class Node { public var kids:Array<Node> = []; public function new() {}'
+			+ ' public function each(f:Node->Void):Void for (k in kids) f(k); }';
+		Assert.same(['info B S.touch | S._m', 'warning B S.walkAll | S._m'], holds(ThreadSafetyCheckTest.violations(CONFIG, [
+			ThreadSafetyCheckTest.MUTEX,
+			RUNNER,
+			node,
+			'$walk function walk(n:Node):Void { io(); n.each(k -> walk(k)); } }'
+		])), 'a callback that runs');
+		final hub: String = 'interface IHub { function addEventListener(f:Node->Void):Void; }'
+			+ ' class Node { public var hub:IHub = null; public function new() {} }';
+		Assert.same(
+			['info B S.walkAll | S._m', 'warning B S.touch | S._m'],
+			holds(ThreadSafetyCheckTest.violations(StringTools.replace(CONFIG, '"spawns"', '"registers":["addEventListener"],"spawns"'), [
+				ThreadSafetyCheckTest.MUTEX,
+				RUNNER,
+				hub,
+				'$walk function walk(n:Node):Void { io(); n.hub.addEventListener(k -> walk(k)); } }'
+			])),
+			'a registration'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * Two holds of different locks one after the other in one function are two stalls: one does not cover the other
+	 * for sharing the work's sink (review round 2 `s1`). One taken inside the other does.
+	 */
+	@:pin('control') @:killer('M-TS-FOLD-NEST-LOCK')
+	public function testHoldsOfTwoLocksOneAfterTheOtherAreTwoStalls(): Void {
+		#if (sys || nodejs)
+		final s: String = 'class S { final _a:Mutex = new Mutex(); final _b:Mutex = new Mutex(); public function new() {}'
+			+ ' function io():Void Sys.sleep(1); public function peekA():Void { _a.acquire(); _a.release(); }'
+			+ ' public function peekB():Void { _b.acquire(); _b.release(); }'
+			+ ' public static function main():Void { final s:S = new S(); Runner.create(s.f); s.peekA(); s.peekB(); }';
+		Assert.same(['warning B S.f | S._a', 'warning B S.f | S._b'], holds(ThreadSafetyCheckTest.violations(CONFIG, [
+			ThreadSafetyCheckTest.MUTEX,
+			RUNNER,
+			'$s function f():Void { _a.acquire(); io(); _a.release(); _b.acquire(); io(); _b.release(); } }'
+		])));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	/** TM's `FSUtil.deleteRecursive`: the sink calls one main-thread way into a function runs make one warning. */
 	@:pin('control') @:killer('M-TS-WAY-OFF')
 	public function testSinkCallsOfOneWayMakeOneWarning(): Void {

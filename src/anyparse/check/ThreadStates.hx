@@ -49,6 +49,9 @@ final class ThreadStates {
 	private final _callbackContext: (CallEdge, Int) -> Int;
 	private final _quiet: Array<String>;
 
+	/** Whether a value handed on is never run from where it is handed (`ThreadSafety.runsNothing`). */
+	private final _inertRef: (CallEdge) -> Bool;
+
 	public function new(
 		graph: CallGraph, conditions: EdgeConditions, quiet: Array<String>, callbackContext: (CallEdge, Int) -> Int,
 		inertRef: (CallEdge) -> Bool, seedable: (String) -> Bool
@@ -57,7 +60,22 @@ final class ThreadStates {
 		_conditions = conditions;
 		_callbackContext = callbackContext;
 		_quiet = quiet;
+		_inertRef = inertRef;
 		solve(inertRef, seedable);
+	}
+
+	/**
+	 * Whether the edge `e` may run its target from its function: a call, or a value handed on to run unless `inertRef`
+	 * says nothing runs it from there — what a walk over the code a function runs follows (`LockReleasers`, `LockTaint`,
+	 * the helper inference of `LockSites`).
+	 */
+	public static inline function runsWith(e: CallEdge, inertRef: (CallEdge) -> Bool): Bool {
+		return e.kind.isInvocation() || e.kind == Ref && !inertRef(e);
+	}
+
+	/** `runsWith` under this solve's `inertRef`. */
+	public inline function runsFrom(e: CallEdge): Bool {
+		return runsWith(e, _inertRef);
 	}
 
 	/** Every state of `id` the walk reached: each valuation of its tracked parameters, with the contexts it runs it on. */

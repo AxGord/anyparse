@@ -82,7 +82,7 @@ final class LockReleasers {
 	 * (`U.now(() -> m.release())`) unless nothing runs it from there.
 	 */
 	public inline function runsFrom(e: CallEdge): Bool {
-		return e.kind.isInvocation() || e.kind == Ref && !_inertRef(e);
+		return ThreadStates.runsWith(e, _inertRef);
 	}
 
 	/**

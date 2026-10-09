@@ -282,19 +282,19 @@ for (d in doing[key] ?? []) if (covers(d, i, mayRepeat, way)) memberOf(_warned[d
 	}
 
 	/**
-	 * Whether the warned hold `d` makes a sink call another one (at `i`) is long by, as often
-	 * — repeating along its trail where the other's may (`repeated`) —: a hold reaching it once
-	 * reports no stall of one repeating it under its own lock (TM's `FolderWatcher.rename`'s one stat against
-	 * `updateInternal`'s walk over the whole tree). A hold of the same lock — one
-	 * a member names (`sameLock`) — in another function covers only on the one
-	 * thread both run on (`oneThread`): on two threads each hold stalls the main thread by itself (TM's
-	 * `StandardFileSystem.loadDrillContent` on the I/O worker against `getText` on the sync worker).
+	 * Whether the warned hold `d` makes a sink call another one (at `i`) is long by, as often — repeating along its trail
+	 * where the other's may (`repeated`) —: a hold reaching it once reports no stall of one repeating it under its own lock
+	 * (TM's `FolderWatcher.rename`'s one stat against `updateInternal`'s walk over the whole tree). And it is a hold of the
+	 * same lock — one a member names (`sameLock`) — on every thread the covered one runs on (`oneThread`: on two threads each
+	 * hold stalls the main thread by itself, TM's `StandardFileSystem.loadDrillContent` on the I/O worker against `getText` on
+	 * the sync worker), a hold around the covered one in its function (`nests`), or one whose function the covered hold's way
+	 * to the call passes. Two holds of different locks one after the other in one function are two stalls.
 	 */
 	private function covers(d: SiteDoer, i: Int, repeated: Bool, way: Array<String>): Bool {
 		final by: FoldHold = _warned[d.at];
 		final own: FoldHold = _warned[i];
 		return d.at != i && (d.repeated || !repeated)
-			&& (sameLock(by, own) && oneThread(by, own) || by.hold.edge.from == own.hold.edge.from || way.contains(by.hold.edge.from));
+			&& (sameLock(by, own) && oneThread(by, own) || nests(by, own) || way.contains(by.hold.edge.from));
 	}
 
 	/**
@@ -378,6 +378,16 @@ for (d in doing[key] ?? []) if (covers(d, i, mayRepeat, way)) memberOf(_warned[d
 	 */
 	private static inline function sameLock(by: FoldHold, own: FoldHold): Bool {
 		return by.hold.lock != null && own.hold.lock != null && by.lock == own.lock;
+	}
+
+	/**
+	 * Whether the hold `own` is taken inside the hold `by` in one function: of the same lock, by the same call (a helper
+	 * taking both), or inside `by`'s window — its work runs under both locks. Two holds of different locks one after the
+	 * other in a function are two stalls, each of its lock.
+	 */
+	private static inline function nests(by: FoldHold, own: FoldHold): Bool {
+		return by.hold.edge.from == own.hold.edge.from
+			&& (sameLock(by, own) || by.hold.edge == own.hold.edge || by.hold.window.contains(own.hold.edge));
 	}
 
 }

@@ -629,6 +629,17 @@ final class LockTaint {
 	private function onCycle(id: String): Bool {
 		final known: Null<Bool> = _cyclic[id];
 		if (known != null) return known;
+		/**
+		 * Whether the value a `Ref` edge `e` hands on may run while the call it is handed to runs (`ThreadStates.runsFrom`):
+		 * never one a `spawns` or `marshals` call runs on another thread, nor one a `registers` call keeps to run per event.
+		 */
+		inline function runsWhereHanded(e: CallEdge): Bool {
+			final lists: ChainLists = listsOf(e.file);
+			final via: String = e.via ?? '';
+			return e.kind == Ref && _threads.runsFrom(e)
+				&& !(lists.spawnIds.contains(via) || lists.marshalIds.contains(via) || lists.registerIds.contains(via)
+					|| lists.registerNames.contains(e.viaMember ?? ''));
+		}
 		final seen: Map<String, Bool> = [id => true];
 		final queue: Array<String> = [id];
 		var qi: Int = 0;
@@ -638,7 +649,8 @@ final class LockTaint {
 				answer = true;
 				break;
 			}
-			for (e in _graph.outEdges(queue[qi++])) if (e.kind.isInvocation()) {
+			// a value handed on that runs there closes a cycle too: `n.each(k -> walk(k))` walks a whole tree
+			for (e in _graph.outEdges(queue[qi++])) if (e.kind.isInvocation() || runsWhereHanded(e)) {
 				if (e.to == id) answer = true;
 				if (!seen.exists(e.to)) {
 					seen[e.to] = true;
