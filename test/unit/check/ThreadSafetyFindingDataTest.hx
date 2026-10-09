@@ -90,7 +90,42 @@ class ThreadSafetyFindingDataTest extends Test {
 			null,
 			[{ member: 'A.main', at: 'for (p in [1, 2])' }]
 		], [for (v in warned) v.data?.repeatedBy]);
-		Assert.isTrue(warned[2].message.endsWith(' — repeated by A.main at for (p in [1, 2])'), warned[2].message);
+		Assert.isTrue(warned[2].message.endsWith(' — repeated by A.main'), warned[2].message);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A key and a message stay put whatever changes elsewhere: two values one function hands the same iterating call are
+	 * two subjects, the second ranked; a warning's message names the members repeating it, never their loop headers,
+	 * which another file may rewrite or rank anew — those stay in `data.repeatedBy` (review round 2 `ks1-two-iters`,
+	 * `rb1`).
+	 */
+	@:pin('control') @:killer('M-TS-HAND-RANK') @:killer('M-TS-REPEATED-BY-HEADER')
+	public function testKeysAndMessagesDoNotDependOnOtherCode(): Void {
+		#if (sys || nodejs)
+		final config: String = '{"rules":{"thread-safety":{"sinks":["Db.request","Disk.stat","Net.get"],'
+			+ '"shortSinks":["Db.request","Disk.stat"],"iterates":["Lambda.*"]}}}';
+		final iters: Array<Violation> = ThreadSafetyCheckTest.violations(config, [
+			'class Db { public static function request(s:String):Void {} } class Disk { public static function stat(s:String):Void {} }',
+			'class K { static function h(s:String):Void Db.request(s); static function g(s:String):Void Disk.stat(s);'
+			+ ' static function p(xs:Array<String>, ys:Array<String>):Void { Lambda.iter(xs, x -> h(x)); Lambda.iter(ys, y -> g(y)); }'
+			+ ' public static function main():Void p(["x"], ["y"]); }'
+		]);
+		final subjects: Array<String> = [for (v in iters) if (v.severity.label() == 'warning') v.data?.subject ?? ''];
+		subjects.sort(Reflect.compare);
+		Assert.same(['Lambda.iter', 'Lambda.iter #2'], subjects, 'two values handed on');
+		final fetched: Array<Violation> = ThreadSafetyCheckTest.violations(config, [
+			'class Net { public static function get(u:String):Void {} }',
+			'class K { static function fetch(u:String):Void Net.get(u); static function viaA(xs:Array<String>):Void for (x in xs) fetch(x);'
+			+ ' public static function main():Void { viaA(["a"]); fetch("c"); } }'
+		]);
+		final warned: Null<Violation> = [
+			for (v in fetched) if (v.severity.label() == 'warning' && v.data?.member == 'K.fetch') v
+		][0];
+		Assert.isTrue(warned?.message.endsWith(' — repeated by K.viaA') == true, warned?.message);
+		Assert.same([{ member: 'K.viaA', at: 'for (x in xs)' }], warned?.data?.repeatedBy);
 		#else
 		Assert.pass('non-sys target');
 		#end

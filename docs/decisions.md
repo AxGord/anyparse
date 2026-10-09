@@ -1877,3 +1877,10 @@ decided the question; it may not become a record of runs.
   an unresolved one where no function of the run with a body bears the name. A `Type.member` entry stays the
   project's word on that member, and only a dotted entry yields ids (`runsOnceIds`). The unresolved half applies to
   `registers` too (review round 2 `cr1-runsonce-project`) — branch `feat/ts-precision-3`
+- a repeat warning's subject for a value handed on named only the call it was handed to, and a sink warning's
+  message spelled where it repeats (`— repeated by M at <loop header>`) → two `Lambda.iter` in one member shared ONE
+  key, and a loop header rewritten or re-ranked in another file changed the message of a finding elsewhere, so
+  `--baseline` / `lint-diff` churned. A value handed on is ranked among the values its function hands the same call
+  that may block (`CallRepetition.handLabel`, `Lambda.iter #2`), as loops are ranked; the message names the
+  repeating MEMBERS only (`MainSinkReport.repeaters`), the headers stay in `data.repeatedBy`, and the suffix is
+  written last, on warnings only (review round 2 `ks1-two-iters`, `rb1`) — branch `feat/ts-precision-3`

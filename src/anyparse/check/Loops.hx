@@ -160,6 +160,11 @@ final class Loops {
 		);
 	}
 
+	/** Whether a call made from the function `id` may block: it calls a sink, or a function from which a call may (`sinkward`). */
+	public inline function mayBlock(id: String): Bool {
+		return sinkward().exists(id);
+	}
+
 	/** The functions from which a call may block (`_sinkward`), filled on first use. */
 	private function sinkward(): Map<String, Bool> {
 		final known: Null<Map<String, Bool>> = _sinkward;

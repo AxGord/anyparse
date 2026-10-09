@@ -2244,6 +2244,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyFindingDataTest#testALongCallALoopRepeatsSaysWhichLoop :: control :: '
 				+ 'M-TS-REPEATED-BY-OFF,M-TS-REPEATED-BY-SELF',
 			'unit.check.ThreadSafetyFindingDataTest#testInitializerFindingsNameTheInitializer :: control :: M-TS-DATA-INIT-LAMBDA',
+			'unit.check.ThreadSafetyFindingDataTest#testKeysAndMessagesDoNotDependOnOtherCode :: control :: M-TS-HAND-RANK,M-TS-REPEATED-BY-HEADER',
 			'unit.check.ThreadSafetyFindingDataTest#testLambdaFindingNamesItsEnclosingMember :: control :: M-TS-DATA-MEMBER-LAMBDA',
 			'unit.check.ThreadSafetyFindingDataTest#testLockOrderData :: control :: M-TS-DATA-SUBJECT-UNSORTED',
 			'unit.check.ThreadSafetyFindingDataTest#testLockOrderKeyIgnoresWalkOrder :: control :: M-TS-ORDER-ONE-ARRIVAL',
@@ -6277,6 +6278,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-REPEATED-BY-SELF',
 			'M-TS-REPEATED-BY-MERGE',
 			'M-TS-QUIET-HOLD',
+			'M-TS-HAND-RANK',
+			'M-TS-REPEATED-BY-HEADER',
 			'M-TS-FOLD-SITE-CYCLE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];

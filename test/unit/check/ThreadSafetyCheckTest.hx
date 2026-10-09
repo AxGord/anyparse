@@ -876,7 +876,7 @@ class ThreadSafetyCheckTest extends Test {
 		Assert.same(
 			[
 				'main thread reaches blocking "Sys.sleep": A.shutdown -> A.shutdown#1 -> Sys.sleep',
-				'main thread reaches blocking "Sys.sleep": A.shutdown#2 -> A.shutdown#2#3 -> Sys.sleep — repeated by A.shutdown at Ui.marshal'
+				'main thread reaches blocking "Sys.sleep": A.shutdown#2 -> A.shutdown#2#3 -> Sys.sleep — repeated by A.shutdown'
 			],
 			[
 				for (v in violations(

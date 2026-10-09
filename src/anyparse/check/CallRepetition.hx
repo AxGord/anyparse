@@ -221,6 +221,24 @@ final class CallRepetition {
 		return edge.kind == Ref && _listsOf(edge.file).marshalIds.contains(edge.via ?? '');
 	}
 
+	/**
+	 * What names the call `edge` with no loop around it, by name, never by position: the call a value is handed to —
+	 * with a rank (`#2`) for a second value its function hands that call which may block (`Loops.mayBlock`), as a loop's
+	 * label ranks a second loop of its header — else its target; a lambda's positional number (`#3`) is spelled `#fn`.
+	 */
+	public function handLabel(edge: CallEdge): String {
+		final target: String = edge.kind == Ref ? (edge.via ?? edge.viaMember ?? edge.to) : edge.to;
+		final named: String = ~/#[0-9]+/g.replace(target, "#fn");
+		if (edge.kind != Ref) return named;
+		final same: Array<CallEdge> = [
+			for (o in _graph.outEdges(edge.from))
+				if (o.kind == Ref && (o.via ?? o.viaMember ?? o.to) == target && (o == edge || loops.mayBlock(o.to))) o
+		];
+		same.sort((a, b) -> (a.span?.from ?? 0) - (b.span?.from ?? 0));
+		final rank: Int = same.indexOf(edge);
+		return rank > 0 ? '$named #${rank + 1}' : named;
+	}
+
 	/** Why each `boundedRepeats` entry of a chain the run's files sit under bounds nothing, one line each, deduplicated. */
 	public function notices(): Array<String> {
 		final seen: Map<String, Bool> = [];

@@ -18713,6 +18713,22 @@
 			"note": "a hold only a quiet root runs reports as the main thread's own long work, though the root waits on purpose"
 		},
 		{
+			"name": "M-TS-HAND-RANK",
+			"type": "anyparse.check.CallRepetition",
+			"method": "handLabel",
+			"find": "return rank > 0 ? '$named #${rank + 1}' : named;",
+			"replace": "return named;",
+			"note": "two values one function hands the same iterating call share a subject, and so a key"
+		},
+		{
+			"name": "M-TS-REPEATED-BY-HEADER",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "repeaters",
+			"find": "for (r in by) if (!members.contains(r.member)) members.push(r.member);",
+			"replace": "for (r in by) members.push(r.member + ' at ' + r.at);",
+			"note": "a warning's message names the loop headers repeating it, which another file may rewrite"
+		},
+		{
 			"name": "M-TS-FOLD-SITE-CYCLE",
 			"type": "anyparse.check.LockTaint",
 			"method": "mayRepeatAlong",

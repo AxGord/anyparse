@@ -357,8 +357,7 @@ final class MainSinkReport {
 	private static function noteRepeats(warned: Array<{ edge: CallEdge, finding: Violation }>): Void {
 		for (w in warned) {
 			final by: Array<RepeatSite> = w.finding.data?.repeatedBy ?? [];
-			if (w.finding.severity == Severity.Warning && by.length > 0)
-				w.finding.message += ' — repeated by ${[for (r in by) '${r.member} at ${r.at}'].join(', ')}';
+			if (w.finding.severity == Severity.Warning && by.length > 0) w.finding.message += ' — repeated by ${repeaters(by).join(', ')}';
 		}
 	}
 
@@ -476,14 +475,11 @@ final class MainSinkReport {
 
 	/**
 	 * What a repeating call's finding is about, by name, never by position: the header of the innermost loop around it
-	 * (`CallRepetition.loopLabel`) — whatever other calls that loop repeats — else the call a value is handed to, else the
-	 * call's target, a lambda's positional number (`#3`) spelled `#fn`.
+	 * (`CallRepetition.loopLabel`) — whatever other calls that loop repeats — else the call a value is handed to, ranked
+	 * among the values its function hands that call (`CallRepetition.handLabel`), else the call's target.
 	 */
 	private static function repeatSubject(edge: CallEdge, repetition: CallRepetition): String {
-		final loop: Null<String> = repetition.loopLabel(edge.file, edge.span?.from ?? -1);
-		if (loop != null) return loop;
-		final target: String = edge.kind == Ref ? (edge.via ?? edge.viaMember ?? edge.to) : edge.to;
-		return ~/#[0-9]+/g.replace(target, "#fn");
+		return repetition.loopLabel(edge.file, edge.span?.from ?? -1) ?? repetition.handLabel(edge);
 	}
 
 	/** Writes the message and chain of the repeating call's finding `owned` from the short sinks it names so far. */
@@ -494,6 +490,16 @@ final class MainSinkReport {
 			+ ' at this call: ${ThreadStates.chainText(owned.path, ThreadSafety.CHAIN_CAP)} -> ${sorted.join(ThreadSafety.SUBJECT_SEPARATOR)}';
 		final data: Null<FindingData> = owned.finding.data;
 		if (data != null) data.chain = owned.path.concat(sorted);
+	}
+
+	/**
+	 * The members of `by`, each once, in order: what a warning's message names of what repeats it. Where in them it
+	 * repeats stays in `data.repeatedBy` — a loop header written in another file must not change this finding's message.
+	 */
+	private static function repeaters(by: Array<RepeatSite>): Array<String> {
+		final members: Array<String> = [];
+		for (r in by) if (!members.contains(r.member)) members.push(r.member);
+		return members;
 	}
 
 }
