@@ -1620,5 +1620,10 @@ decided the question; it may not become a record of runs.
   == null && files == null; … simpleRequest ? fromMemory(id) : null`; an object, array or string literal is never
   null, and a `final` local bound to a condition is that condition, both where a parameter is tracked and where a
   call is decided — branch `feat/ts-precision-2`
+- a main-only hold warning for its own long work beside finding (a) → after δ1 eight of TM's new caller holds were
+  main-only (`deleteItem`, `moveItem`, `setXML`, `loadXML`, …), each a second key for work (a) already warns of at
+  `deleteItemInternal` / `moveCloudFolderSubItemsAction2`; the hold turns info when (a) warns of every long call it
+  names at another member, and keeps the warning where (a) reports the work at the holder itself, as for
+  `FileListMoveFiles.moveItems`, whose loop owns the per-item calls — branch `feat/ts-precision-2`
 - judging "inside a catch" off the witness chain the finding prints → the chain is one way; a second way outside every
   catch must keep the warning, which only a solve without the catch edges can see — branch `feat/ts-precision-2`

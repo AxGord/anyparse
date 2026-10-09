@@ -25,6 +25,12 @@ typedef HoldJudges = {
 	final long: LockTaint;
 	final normal: LockTaint;
 	final errors: ErrorPaths;
+
+	/** By `MainSinkReport.siteKey`, the member whose finding (a) warning reports each main-thread sink call. */
+	final reported: Map<String, String>;
+
+	/** The member the hold being judged sits in. */
+	final member: String;
 }
 
 /**
@@ -84,6 +90,25 @@ final class HoldGrade {
 	}
 
 	/**
+	 * The members whose finding (a) warnings report every long call `long` of the main-only hold `a` — the sink call
+	 * each one ends in (`LockTaint.blockingTrail`), warned at itself or at the repeating call that owns it — when none of
+	 * them is the hold's own member; null otherwise. The main thread's own long work is finding (a)'s: a hold of it adds
+	 * no second warning where (a) already names it elsewhere.
+	 */
+	private static function reportedElsewhere(
+		a: LockAcquire, held: Null<String>, long: Array<{ edge: CallEdge, path: Array<String> }>, judges: HoldJudges
+	): Null<String> {
+		final members: Array<String> = [];
+		for (c in long) {
+			final end: Null<CallEdge> = judges.long.blockingTrail(a, c.edge, held)?.end;
+			final by: Null<String> = end == null ? null : judges.reported[MainSinkReport.siteKey(end)];
+			if (by == null || by == judges.member) return null;
+			if (!members.contains(by)) members.push(by);
+		}
+		return members.length == 0 ? null : members.join(', ');
+	}
+
+	/**
 	 * The calls that block long under `judges.long` (the holder's own long work, `mainOnly`) — info when none blocks long
 	 * under `judges.normal`, over the normal paths, naming the `catch` its first call's way passes (`ErrorPaths`) — or
 	 * else, unless only the main thread runs the hold, every call that blocks at all under `judges.plain`, graded short.
@@ -96,11 +121,12 @@ final class HoldGrade {
 				? null
 				: judges.errors.placeOf(judges.long.blockingTrail(a, long[0].edge, held)?.edges ?? []);
 			final note: String = error != null ? ErrorPaths.note(error) : mainOnly ? CostNote.MainOwnWork : '';
+			final elsewhere: Null<String> = mainOnly && error == null ? reportedElsewhere(a, held, long, judges) : null;
 			return {
 				calls: long,
 				taint: judges.long,
-				note: note,
-				info: error != null
+				note: elsewhere == null ? note : note + ', which finding (a) reports at $elsewhere, so reported as info',
+				info: error != null || elsewhere != null
 			};
 		}
 		if (mainOnly) return null;

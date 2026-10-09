@@ -192,11 +192,11 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		// a value stored or handed where it never runs from repeats nothing, wherever it is written
 		final runsMain: (CallEdge) -> Bool = e -> !(e.kind == Ref && inertRef(e)) && states.edgeContext(e) & CTX_MAIN != 0;
 		final repeatsOnMain: MainRepeats = new MainRepeats(graph, repetition, states, conditions, runsMain);
-		MainSinkReport.report(
+		final reported: Map<String, String> = MainSinkReport.report(
 			graph, sites, taints, paths, { repetition: repetition, main: repeatsOnMain, runs: runsMain }, states, violations
 		);
 		reportMalformedPairs(sets, violations);
-		reportLockHeld(graph, sites, judged, taints, paths, states, violations);
+		reportLockHeld(graph, sites, judged, taints, { costs: paths, reported: reported }, states, violations);
 		reportThrowHeld(graph, acquires.concat(helperHolds), throws, violations);
 		final order: LockOrder = new LockOrder(graph, conditions, acquires.concat(helperHolds));
 		for (v in order.report(states, inertRef, CTX_MAIN | CTX_QUIET, CTX_BG, CHAIN_CAP)) violations.push(v);
@@ -637,13 +637,15 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	 * brief is info, a long one names only the calls that block long.
 	 */
 	private static function reportLockHeld(
-		graph: CallGraph, sites: LockSites, acquires: Array<LockAcquire>, taints: LockTaint, paths: PathCosts, states: ThreadStates,
-		violations: Array<Violation>
+		graph: CallGraph, sites: LockSites, acquires: Array<LockAcquire>, taints: LockTaint,
+		judged: { costs: PathCosts, reported: Map<String, String> }, states: ThreadStates, violations: Array<Violation>
 	): Void {
+		final paths: PathCosts = judged.costs;
 		final seen: Array<String> = [];
 		final costs: LockTaint = paths.all;
-		final ownWork: LockTaint = ownWorkOf(costs);
-		final normalOwn: LockTaint = ownWorkOf(paths.normal);
+		// what a hold only the main thread runs is judged by: its own work, every take left out
+		final own: { long: LockTaint, normal: LockTaint } = { long: ownWorkOf(costs), normal: ownWorkOf(paths.normal) };
+		final any: { long: LockTaint, normal: LockTaint } = { long: costs, normal: paths.normal };
 		// a lock only ever taken shared stalls no one
 		final mainTaken: Array<String> = [
 			for (a in acquires) {
@@ -659,19 +661,15 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			// own long work; who else holds a lock no member names is unknown
 			final mainOnly: Bool = lock != null && states.edgeContext(a.edge) & CTX_BG == 0 && !states.assumed.exists(a.edge.from);
 			final held: Null<String> = taints.reentrantHeld(a);
-			final judges: HoldJudges = mainOnly
-				? {
-					plain: taints,
-					long: ownWork,
-					normal: normalOwn,
-					errors: paths.errors
-				}
-				: {
-					plain: taints,
-					long: costs,
-					normal: paths.normal,
-					errors: paths.errors
-				};
+			final pick: { long: LockTaint, normal: LockTaint } = mainOnly ? own : any;
+			final judges: HoldJudges = {
+				plain: taints,
+				long: pick.long,
+				normal: pick.normal,
+				errors: paths.errors,
+				reported: judged.reported,
+				member: memberOf(graph, a.edge.from)
+			};
 			final graded: Null<GradedHold> = HoldGrade.grade(sites, a, held, judges, mainOnly);
 			if (graded == null) continue;
 			final blocking: Array<{ edge: CallEdge, path: Array<String> }> = graded.calls;

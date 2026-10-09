@@ -393,6 +393,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.ThreadSafetyFoldingTest',
 		'unit.check.ThreadSafetyHelperHoldsTest',
 		'unit.check.ThreadSafetyLongLocksTest',
+		'unit.check.ThreadSafetyMainOnlyTest',
 		'unit.check.ThreadSafetyMainStatesTest',
 		'unit.check.ThreadSafetyOwnReasonsTest',
 		'unit.check.ThreadSafetyQuietLocksTest',
@@ -2195,6 +2196,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyLongLocksTest#testEverySpansBlockingCallIsListed :: control :: M-TS-SPANS-FIRST-ONLY',
 			'unit.check.ThreadSafetyLongLocksTest#testMainThreadTakesOfAShortLock :: control :: M-TS-MAINSHORT-LOUD-ONLY',
 			'unit.check.ThreadSafetyLongLocksTest#testSpansBlockingNamesTheCallAndThePath :: control :: M-TS-LONG-NEVER-GROWS',
+			'unit.check.ThreadSafetyMainOnlyTest#testWorkOwnedByARepeatingCalleeLeavesTheHoldInfo :: control :: M-TS-MAINONLY-MOVED',
+			'unit.check.ThreadSafetyMainOnlyTest#testWorkReportedAtACalleeLeavesTheHoldInfo :: control :: M-TS-MAINONLY-ELSEWHERE-OFF',
+			'unit.check.ThreadSafetyMainOnlyTest#testWorkReportedAtTheHolderKeepsTheWarning :: control :: M-TS-MAINONLY-SAME-MEMBER',
 			'unit.check.ThreadSafetyMainStatesTest#testAConstantArgumentRulesTheRepeatedCallOut :: control :: M-TS-STATES-IGNORED',
 			'unit.check.ThreadSafetyMainStatesTest#testALiteralArgumentDecidesAFinalLocalCondition :: control :: '
 				+ 'M-TS-COND-FINAL-LOCAL,M-TS-ARG-LITERAL-NONNULL,M-TS-ARG-FINAL-LOCAL-READ',
@@ -6018,7 +6022,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-STATES-OWNER-IGNORED',
 			'M-TS-COND-FINAL-LOCAL',
 			'M-TS-ARG-LITERAL-NONNULL',
-			'M-TS-ARG-FINAL-LOCAL-READ'
+			'M-TS-ARG-FINAL-LOCAL-READ',
+			'M-TS-MAINONLY-ELSEWHERE-OFF',
+			'M-TS-MAINONLY-SAME-MEMBER',
+			'M-TS-MAINONLY-MOVED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

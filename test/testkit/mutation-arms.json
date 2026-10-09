@@ -17108,7 +17108,7 @@
 			"name": "M-TS-OWNER-OFF",
 			"type": "anyparse.check.MainSinkReport",
 			"method": "reportSite",
-			"find": "if (owners.length > 0 && !own) reportRepeater(graph, owners[0], sinks, states, owned, violations);",
+			"find": "reportRepeater(graph, repeaters[0], sinks, states, owners.owned, violations);",
 			"replace": "",
 			"note": "a short call repeated from above warns nowhere: no loop owns it"
 		},
@@ -17663,6 +17663,30 @@
 			"find": "if (finalLocal && kids.length > 0) bareName(kids[kids.length - 1], into);",
 			"replace": "if (false && finalLocal) bareName(kids[kids.length - 1], into);",
 			"note": "a parameter read only in a final local's condition is not tracked"
+		},
+		{
+			"name": "M-TS-MAINONLY-ELSEWHERE-OFF",
+			"type": "anyparse.check.HoldGrade",
+			"method": "byCost",
+			"find": "final elsewhere: Null<String> = mainOnly && error == null",
+			"replace": "final elsewhere: Null<String> = false && error == null",
+			"note": "a main-only hold warns beside the finding (a) that names its work elsewhere"
+		},
+		{
+			"name": "M-TS-MAINONLY-SAME-MEMBER",
+			"type": "anyparse.check.HoldGrade",
+			"method": "reportedElsewhere",
+			"find": "if (by == null || by == judges.member) return null;",
+			"replace": "if (by == null) return null;",
+			"note": "a main-only hold is demoted when finding (a) names its work at the holder itself"
+		},
+		{
+			"name": "M-TS-MAINONLY-MOVED",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "reportSite",
+			"find": "if (owner != null) owners.moved[siteKey(edge)] = owner;",
+			"replace": "",
+			"note": "a sink call whose warning moved to its repeating owner counts as reported nowhere"
 		}
 	]
 }
