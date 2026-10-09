@@ -18079,6 +18079,22 @@
 			"find": "inner == null ? takeObject(g.edge) : carried(takeObject(inner), g.edge);",
 			"replace": "takeObject(g.edge);",
 			"note": "a helper call's give is placed by the call alone, which names no lock object"
+		},
+		{
+			"name": "M-TS-FOLD-SITE-LOCK",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "covers",
+			"find": "\n\t\t\t&& (by.lock == own.lock || by.hold.edge.from == own.hold.edge.from || way.contains(by.hold.edge.from))",
+			"replace": "",
+			"note": "a hold of any lock across the same sink call covers another, though narrowing one frees nothing of the other"
+		},
+		{
+			"name": "M-TS-FOLD-SITE-CYCLE",
+			"type": "anyparse.check.LockTaint",
+			"method": "mayRepeatAlong",
+			"find": "return repeatsAlong(a, trail) || trail.path.exists(onCycle);",
+			"replace": "return repeatsAlong(a, trail);",
+			"note": "a call reached through a function a cycle of calls re-enters counts as once when the trail found it once"
 		}
 	]
 }

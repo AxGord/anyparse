@@ -47,14 +47,6 @@ final class MustHeld {
 	/** Whether the meet over the callers did not settle within its bound, so every entry holds nothing. */
 	public var unsettled(default, null): Bool = false;
 
-	private final _graph: CallGraph;
-	private final _sites: LockSites;
-	private final _states: ThreadStates;
-	private final _conditions: EdgeConditions;
-	private final _repetition: CallRepetition;
-	private final _trees: FunctionTrees;
-	private final _shape: RefShape;
-
 	/** The holds of named locks each function takes itself, a helper's own takes left to its callers. */
 	private final _holdsIn: Map<String, Array<LockAcquire>> = [];
 
@@ -67,6 +59,13 @@ final class MustHeld {
 	/** `<id>|<valuation>|<offset>|<cover>` -> the own takes must-held there. */
 	private final _own: Map<String, Array<String>> = [];
 
+	private final _graph: CallGraph;
+	private final _sites: LockSites;
+	private final _states: ThreadStates;
+	private final _conditions: EdgeConditions;
+	private final _repetition: CallRepetition;
+	private final _trees: FunctionTrees;
+	private final _shape: RefShape;
 	private final _sequenceKinds: Array<String>;
 	private final _blockKinds: Array<String>;
 	private final _tryKinds: Array<String>;
@@ -98,12 +97,13 @@ final class MustHeld {
 		final flow: Null<ControlFlowSupport> = plugin.controlFlowSupport();
 		_blockKinds = flow == null ? [] : flow.blockKinds();
 		_tryKinds = (_shape.tryStatementKinds ?? []).concat(_shape.tryExpressionKinds ?? []);
-		_body = new BodyFacts(sites, trees, new ArgumentValues(graph, trees, plugin), _shape, _tryKinds);
+
 		_sequenceKinds = _blockKinds.concat(_shape.exprStatementKind == null ? [] : [_shape.exprStatementKind])
 			.concat(_shape.expressionBodyKinds ?? [])
 			.concat(_shape.localDeclKinds ?? [])
 			.concat(_shape.parenKind == null ? [] : [_shape.parenKind]);
 		_ifKinds = (_shape.ifStatementKinds ?? []).concat(_shape.ifExpressionKinds ?? []);
+		_body = new BodyFacts(sites, trees, new ArgumentValues(graph, trees, plugin), _shape, { tryKinds: _tryKinds, ifKinds: _ifKinds });
 		for (a in holds) if (a.lock != null && !sites.helpers.contains(a.edge.from)) {
 			final list: Array<LockAcquire> = _holdsIn[a.edge.from] ?? [];
 			list.push(a);
@@ -169,11 +169,6 @@ final class MustHeld {
 		return root != null && root == _body.localRoot(g.edge);
 	}
 
-	/** A must-held entry (`at`): `lock` held on `object`. */
-	public static inline function heldOn(lock: String, object: String): String {
-		return lock + ON + object;
-	}
-
 	/**
 	 * Whether running `id` may give `lock` back without having taken it: it or a function it calls does (`LockReleasers`),
 	 * or code an unresolved call of it may run can.
@@ -181,16 +176,6 @@ final class MustHeld {
 	public function mayRelease(lock: String, id: String): Bool {
 		if (_releasers.releasersOf(lock).exists(id)) return true;
 		return _releasers.hazard(lock) && (_releasers.blindIn(id) ?? [0]).length > 0;
-	}
-
-	/** The lock of a must-held entry (`at`). */
-	public static inline function lockOf(held: String): String {
-		return held.substring(0, held.lastIndexOf(ON));
-	}
-
-	/** The object of a must-held entry (`at`). */
-	public static inline function objectOf(held: String): String {
-		return held.substring(held.lastIndexOf(ON) + 1);
 	}
 
 	/** What a lock held on `object` in the caller is held on in the callee of `call`; null when nothing says. */
@@ -207,6 +192,14 @@ final class MustHeld {
 			object
 		else
 			null;
+	}
+
+	/**
+	 * Whether some function may give `lock` back without having taken it (`LockReleasers`): a thread holding it may then
+	 * lose it to another while its own window still runs, so its holds exclude no one for sure.
+	 */
+	public function releasedUntaken(lock: String): Bool {
+		return _releasers.releasersOf(lock).keys().hasNext();
 	}
 
 	/** The own takes of `id` must-held at `at` under `valuation`: each run on every path there, with no give since. */
@@ -302,7 +295,7 @@ final class MustHeld {
 
 	/**
 	 * The child holding `site` of the deepest node of `file`'s tree holding both `site` and the offset `at` after it,
-	 * when that node is a statement sequence; null otherwise.
+	 * when that node is a statement sequence — a `case`'s statements included; null otherwise.
 	 */
 	private function towardTake(file: String, site: Span, at: Int): Null<QueryNode> {
 		var common: Null<QueryNode> = _trees.ofFile(file);
@@ -310,7 +303,11 @@ final class MustHeld {
 			final cT: Null<QueryNode> = common.children.find(c -> c.span != null && c.span.from <= site.from && c.span.to >= site.to);
 			final cA: Null<QueryNode> = common.children.find(c -> c.span != null && c.span.from <= at && at < c.span.to);
 			if (cT == null || cA == null) return null;
-			if (cT != cA) return _sequenceKinds.contains(common.kind) ? cT : null;
+			// a `case`'s statements run in order after its patterns, which make no call
+			if (cT != cA)
+				return _sequenceKinds.contains(common.kind) || common.kind == _shape.caseBranchKind && common.children.indexOf(cT) > 0
+					? cT
+					: null;
 			common = cT;
 		}
 		return null;
@@ -447,12 +444,19 @@ final class MustHeld {
 		return block;
 	}
 
-	/**
-	 * Whether some function may give `lock` back without having taken it (`LockReleasers`): a thread holding it may then
-	 * lose it to another while its own window still runs, so its holds exclude no one for sure.
-	 */
-	public function releasedUntaken(lock: String): Bool {
-		return _releasers.releasersOf(lock).keys().hasNext();
+	/** A must-held entry (`at`): `lock` held on `object`. */
+	public static inline function heldOn(lock: String, object: String): String {
+		return lock + ON + object;
+	}
+
+	/** The lock of a must-held entry (`at`). */
+	public static inline function lockOf(held: String): String {
+		return held.substring(0, held.lastIndexOf(ON));
+	}
+
+	/** The object of a must-held entry (`at`). */
+	public static inline function objectOf(held: String): String {
+		return held.substring(held.lastIndexOf(ON) + 1);
 	}
 
 }
@@ -473,15 +477,18 @@ private final class BodyFacts {
 	private final _values: ArgumentValues;
 	private final _shape: RefShape;
 	private final _tryKinds: Array<String>;
+	private final _ifKinds: Array<String>;
 
 	public function new(
-		sites: LockSites, trees: FunctionTrees, values: ArgumentValues, shape: RefShape, tryKinds: Array<String>
+		sites: LockSites, trees: FunctionTrees, values: ArgumentValues, shape: RefShape,
+		kinds: { tryKinds: Array<String>, ifKinds: Array<String> }
 	) {
 		_sites = sites;
 		_trees = trees;
 		_values = values;
 		_shape = shape;
-		_tryKinds = tryKinds;
+		_tryKinds = kinds.tryKinds;
+		_ifKinds = kinds.ifKinds;
 	}
 
 	/** What `cond` evaluates to under `valuation` of `id`'s tracked parameters; null when any part of it is undecided. */
@@ -509,19 +516,23 @@ private final class BodyFacts {
 	}
 
 	/**
-	 * Every run of `id` its `valuation` may stand for, each deciding at least as much: a tracked parameter it does not
-	 * know, or knows only to be never null, read as true and as false — a bare condition reads a `Bool` — and, when some
+	 * Every run of `id` its `valuation` may stand for, each deciding at least as much: a tracked
+	 * parameter some condition reads (`conditionNames`) that it does not know, or knows only to
+	 * be never null, read as true and as false — a bare condition reads a `Bool` — and, when some
 	 * comparison of the body tests it against `null`, as `null` too. A tracked parameter is never written, so a run gives
 	 * it one value throughout. Past `KNOWN_UNKNOWNS` such parameters, `valuation` itself.
 	 */
 	public function runsOf(id: String, valuation: String): Array<String> {
 		final nullTested: Array<String> = nullTestedIn(id);
+		final deciding: Array<String> = conditionNames(id);
 		final tracked: Array<String> = _values.tracked(id);
 		var runs: Array<String> = [''];
 		var open: Int = 0;
 		for (i in 0...valuation.length) {
 			final c: String = valuation.charAt(i);
-			final values: Array<String> = if (c == ArgumentValues.UNKNOWN)
+			final values: Array<String> = if (i >= tracked.length || !deciding.contains(tracked[i]))
+				[c]
+			else if (c == ArgumentValues.UNKNOWN)
 				[ArgumentValues.TRUE, ArgumentValues.FALSE].concat(
 					i < tracked.length && nullTested.contains(tracked[i]) ? [ArgumentValues.NULL] : []
 				)
@@ -586,6 +597,28 @@ private final class BodyFacts {
 			case _: null;
 		};
 		return isNull == null ? null : isNull == (kind == _shape.eqKind);
+	}
+
+	/**
+	 * The names read in what decides whether code of `id`'s body runs: an `if`'s condition, the left side of `&&` and
+	 * `||` (`EdgeConditions`). A parameter no such place reads decides nothing, whatever it holds.
+	 */
+	private function conditionNames(id: String): Array<String> {
+		final fn: Null<QueryNode> = _trees.ofId(id);
+		final out: Array<String> = [];
+		if (fn == null) return out;
+		function names(node: QueryNode): Void {
+			final name: Null<String> = node.name;
+			if (node.kind == _shape.identKind && name != null && !out.contains(name)) out.push(name);
+			for (c in node.children) names(c);
+		}
+		function walk(node: QueryNode): Void {
+			final deciding: Bool = _ifKinds.contains(node.kind) || node.kind == _shape.logicalAndKind || node.kind == _shape.logicalOrKind;
+			if (deciding && node.children.length > 0) names(node.children[0]);
+			for (c in node.children) walk(c);
+		}
+		walk(fn);
+		return out;
 	}
 
 	/** The names some comparison of `id`'s body tests against `null` (`ArgumentValues.nullTested`). */

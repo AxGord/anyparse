@@ -137,7 +137,6 @@ final class LockSites {
 	 */
 	public final crossing: Array<CrossingRelease> = [];
 
-
 	/**
 	 * The holds a call of a multi-lock HELPER opens in its caller, one per lock: a function every call of which the
 	 * graph sees (`mayWrap`) whose whole lock traffic is two or more takes, each on every path in, and no give —
@@ -179,7 +178,6 @@ final class LockSites {
 	private final _graph: CallGraph;
 	private final _trees: FunctionTrees;
 	private final _throws: ThrowReach;
-
 	private final _shape: RefShape;
 	private final _walker: Null<LockWindow>;
 	private final _ctorName: String;
@@ -187,7 +185,6 @@ final class LockSites {
 
 	/** The lock wrappers, by function id. */
 	private var _wrappers: Map<String, LockWrapper> = [];
-
 
 	/**
 	 * Collects the acquires over the `files` of `graph`; `pairsOf` names the pairs the chain of a file configures,
@@ -705,6 +702,10 @@ final class LockSites {
 /** The set operations over lock calls and wrappers that the wrapper inference of `LockSites` rounds on. */
 private class WrapperOps {
 
+	public static inline function sameWrapper(a: Null<LockWrapper>, b: LockWrapper): Bool {
+		return a != null && a.takes == b.takes && a.lock == b.lock && a.pair == b.pair && a.self == b.self;
+	}
+
 	/** The lock calls of `takes` (takes) and `gives` (gives), grouped by the function each sits in. */
 	public static function opsByFunction(
 		takes: Array<LockCall>, gives: Array<LockCall>
@@ -716,10 +717,6 @@ private class WrapperOps {
 			ops[c.edge.from] = known;
 		}
 		return ops;
-	}
-
-	public static inline function sameWrapper(a: Null<LockWrapper>, b: LockWrapper): Bool {
-		return a != null && a.takes == b.takes && a.lock == b.lock && a.pair == b.pair && a.self == b.self;
 	}
 
 	public static function sameWrappers(a: Map<String, LockWrapper>, b: Map<String, LockWrapper>): Bool {

@@ -20,11 +20,11 @@ final class QuietLocks {
 	/** Each lock -> whether every take of it is known to be exclusive (`exclusive`). */
 	private final _exclusive: Map<String, Bool> = [];
 
-	/** The takes in their owner's constructor, by `<file>:<offset>:<target>`; built on the first question. */
-	private var _uncontended: Null<Map<String, Bool>> = null;
-
 	private final _sites: LockSites;
 	private final _listsOf: (String) -> ChainLists;
+
+	/** The takes in their owner's constructor, by `<file>:<offset>:<target>`; built on the first question. */
+	private var _uncontended: Null<Map<String, Bool>> = null;
 
 	public function new(sites: LockSites, listsOf: (String) -> ChainLists) {
 		_sites = sites;
@@ -50,22 +50,6 @@ final class QuietLocks {
 		return answer;
 	}
 
-	/** Whether the take `edge` is a hold in its owner's constructor on an instance lock before the object escapes. */
-	private function uncontended(edge: CallEdge): Bool {
-		var known: Null<Map<String, Bool>> = _uncontended;
-		if (known == null) {
-			final built: Map<String, Bool> = [];
-			for (a in _sites.acquires) if (a.uncontended) built[keyOf(a.edge)] = true;
-			_uncontended = built;
-			known = built;
-		}
-		return known.exists(keyOf(edge));
-	}
-
-	private static inline function keyOf(edge: CallEdge): String {
-		return '${edge.file}:${edge.span?.from ?? -1}:${edge.to}';
-	}
-
 	/**
 	 * Whether every take of the named lock `lock` is known to be exclusive: there is one, each is made through one and the
 	 * same pair, no chain lists that pair's take member under `sharedLocks`, and no chain pairs another take member of its
@@ -84,6 +68,22 @@ final class QuietLocks {
 		});
 		_exclusive[lock] = answer;
 		return answer;
+	}
+
+	/** Whether the take `edge` is a hold in its owner's constructor on an instance lock before the object escapes. */
+	private function uncontended(edge: CallEdge): Bool {
+		var known: Null<Map<String, Bool>> = _uncontended;
+		if (known == null) {
+			final built: Map<String, Bool> = [];
+			for (a in _sites.acquires) if (a.uncontended) built[keyOf(a.edge)] = true;
+			_uncontended = built;
+			known = built;
+		}
+		return known.exists(keyOf(edge));
+	}
+
+	private static inline function keyOf(edge: CallEdge): String {
+		return '${edge.file}:${edge.span?.from ?? -1}:${edge.to}';
 	}
 
 }

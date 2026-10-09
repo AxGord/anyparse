@@ -2255,10 +2255,12 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyRethrowTest#testACatchThrowingAnotherValueKeepsIt :: control :: M-TS-RETHROW-ANY-NAME',
 			'unit.check.ThreadSafetyRethrowTest#testARethrowInANestedFunctionKeepsIt :: control :: M-TS-RETHROW-NESTED',
 			'unit.check.ThreadSafetyRootCauseTest#testACallOnlyACatchRunsLeavesTheFoldStanding :: control :: M-TS-FOLD-NORMAL',
+			'unit.check.ThreadSafetyRootCauseTest#testACallUnderARecursiveWalkRepeats :: control :: M-TS-FOLD-SITE-CYCLE',
 			'unit.check.ThreadSafetyRootCauseTest#testAHoldLongOnlyByWaitingForAWarnedHolderIsInfo :: control :: M-TS-FOLD-OFF',
 			'unit.check.ThreadSafetyRootCauseTest#testAHoldReachingACallOnceCoversNoRepeatingOne :: control :: M-TS-FOLD-SITE-ONCE',
 			'unit.check.ThreadSafetyRootCauseTest#testALockReleasedElsewhereLeavesTheWaiterWarned :: control :: M-TS-FOLD-CROSSING',
-			'unit.check.ThreadSafetyRootCauseTest#testHoldsLongByOneCallMakeOneWarning :: control :: M-TS-FOLD-SITE,M-TS-FOLD-DEPTH',
+			'unit.check.ThreadSafetyRootCauseTest#testHoldsLongByOneCallMakeOneWarning :: control :: '
+				+ 'M-TS-FOLD-SITE,M-TS-FOLD-DEPTH,M-TS-FOLD-SITE-LOCK',
 			'unit.check.ThreadSafetyRootCauseTest#testSinkCallsOfOneWayMakeOneWarning :: control :: M-TS-WAY-OFF',
 			'unit.check.ThreadSafetyRootCauseTest#testTheCallsOfOneLoopMakeOneWarning :: control :: M-TS-LOOP-KEY',
 			'unit.check.ThreadSafetyRootCauseTest#testTwoTakesSharingAFindingDoNotCoverEachOther :: control :: M-TS-FOLD-SELF',
@@ -6124,7 +6126,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-DOM-SHARED',
 			'M-TS-RUNS-AS-IS',
 			'M-TS-SAME-LOCAL-ROOT',
-			'M-TS-HELPER-GIVE-OBJECT'
+			'M-TS-HELPER-GIVE-OBJECT',
+			'M-TS-FOLD-SITE-LOCK',
+			'M-TS-FOLD-SITE-CYCLE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

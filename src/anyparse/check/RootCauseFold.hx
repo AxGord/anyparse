@@ -12,8 +12,11 @@ using Lambda;
 private enum FoldReason {
 	Waits(lock: String);
 
-	/** Long by the sink call `key` (`MainSinkReport.siteKey`), which runs more than once under the hold (`repeated`) or not. */
-	Site(key: String, repeated: Bool);
+	/**
+	 * Long by the sink call `key` (`MainSinkReport.siteKey`), which runs more than once under the hold along its trail
+	 * (`repeated`) or not, or may (`mayRepeat`, through a cycle of calls on the way), reached through the functions `way`.
+	 */
+	Site(key: String, repeated: Bool, mayRepeat: Bool, way: Array<String>);
 	Uncovered;
 }
 
@@ -36,9 +39,11 @@ private typedef SiteDoer = {
  * every hold making that lock long has its long work reported — its own warning, kept or folded, or the warning its info
  * finding names (TM's tree lock, held long by `FolderWatcher.updateInternal`, which `StandardFileSystem.saveXML` waits
  * for under the mutation lock) — or when it ends in a sink call another warned hold is long by too,
- * at least as often: one that repeats under its hold is not covered by a hold reaching it once (TM's
- * `RemoteFileSystemBase.renameCloudFolderBlocked` over the loop `CloudDatabase.moveCloudFolderSubItemsAction2` runs
- * under its own lock). Positive: a lock long by a hand-off, an unresolved call, a release in another function or a
+ * at least as often — one that repeats under its hold is not covered by a hold reaching it once (TM's
+ * `FolderWatcher.updateInternal` walk against `rename`'s one stat) — by a hold of the same lock, in the same function, or one
+ * whose function the call's way passes (TM's `RemoteFileSystemBase.renameCloudFolderBlocked` over the loop
+ * `CloudDatabase.moveCloudFolderSubItemsAction2` runs under its own lock); another lock's hold across the same work elsewhere
+ * is a stall of its own. Positive: a lock long by a hand-off, an unresolved call, a release in another function or a
  * hold with no finding is not covered, nor is a hold long by what no call of it names. Holds covering each other round a
  * cycle keep the first by place and fold the rest onto it. Two holds sharing one finding are one warned hold, which never
  * covers itself; an info finding a hold around it turned counts as reported only while the warning it was turned onto does.
@@ -165,7 +170,7 @@ final class RootCauseFold {
 		if (trail == null) return Uncovered;
 		final via: Null<String> = trail.via;
 		if (via != null) return via == h.lock || _crossing.contains(via) || !_makers.exists(via) ? Uncovered : Waits(via);
-		return Site(MainSinkReport.siteKey(trail.end), taint.repeatsAlong(h.hold, trail));
+		return Site(MainSinkReport.siteKey(trail.end), taint.repeatsAlong(h.hold, trail), taint.mayRepeatAlong(h.hold, trail), trail.path);
 	}
 
 	/**
@@ -175,7 +180,7 @@ final class RootCauseFold {
 	 */
 	private function settled(reason: FoldReason, i: Int, doing: Map<String, Array<SiteDoer>>, state: Array<FoldState>): Bool {
 		return switch reason {
-			case Site(key, repeated): (doing[key] ?? []).exists(d -> covers(d, i, repeated) && state[d.at] != Open);
+			case Site(key, _, mayRepeat, way): (doing[key] ?? []).exists(d -> covers(d, i, mayRepeat, way) && state[d.at] != Open);
 			case Uncovered: false;
 			case Waits(lock): (_makers[lock] ?? []).foreach(m -> _warnedAt[m] != i && reportedFor(m, state));
 		};
@@ -217,10 +222,10 @@ final class RootCauseFold {
 		for (r in reasons) switch r {
 			case Waits(lock):
 				parts.push('waiting for $lock, held long by ${named([for (m in _makers[lock] ?? []) memberOf(_holds[m])])}');
-			case Site(key, repeated):
-				parts.push(
-					'work ${named([for (d in doing[key] ?? []) if (covers(d, i, repeated)) memberOf(_warned[d.at])])} also holds a lock across'
-				);
+			case Site(key, _, mayRepeat, way):
+				parts.push('work ${named([
+for (d in doing[key] ?? []) if (covers(d, i, mayRepeat, way)) memberOf(_warned[d.at])
+])} also holds a lock across');
 			case Uncovered:
 		}
 		finding.severity = Severity.Info;
@@ -269,12 +274,16 @@ final class RootCauseFold {
 	}
 
 	/**
-	 * Whether the warned hold `d` makes a sink call another one (at `i`) is long by, as often: a hold reaching it once
+	 * Whether the warned hold `d` makes a sink call another one (at `i`) is long by, as often
+	 * — repeating along its trail where the other's may (`repeated`) —: a hold reaching it once
 	 * reports no stall of one repeating it under its own lock (TM's `FolderWatcher.rename`'s one stat against
 	 * `updateInternal`'s walk over the whole tree).
 	 */
-	private static inline function covers(d: SiteDoer, i: Int, repeated: Bool): Bool {
-		return d.at != i && (d.repeated || !repeated);
+	private function covers(d: SiteDoer, i: Int, repeated: Bool, way: Array<String>): Bool {
+		final by: FoldHold = _warned[d.at];
+		final own: FoldHold = _warned[i];
+		return d.at != i && (d.repeated || !repeated)
+			&& (by.lock == own.lock || by.hold.edge.from == own.hold.edge.from || way.contains(by.hold.edge.from));
 	}
 
 	/**
@@ -293,7 +302,7 @@ final class RootCauseFold {
 	private static function doers(reasons: Array<Array<FoldReason>>): Map<String, Array<SiteDoer>> {
 		final doing: Map<String, Array<SiteDoer>> = [];
 		for (i => r in reasons) for (reason in r) switch reason {
-			case Site(key, repeated):
+			case Site(key, repeated, _, _):
 				doing[key] = (doing[key] ?? []).concat([{ at: i, repeated: repeated }]);
 			case _:
 		}
@@ -304,10 +313,10 @@ final class RootCauseFold {
 	 * Whether `reason` of the warned hold at `i` can never be covered: long by what no call names, or by a sink call no
 	 * other warned hold makes at least as often (`covers`).
 	 */
-	private static function uncoverable(reason: FoldReason, i: Int, doing: Map<String, Array<SiteDoer>>): Bool {
+	private function uncoverable(reason: FoldReason, i: Int, doing: Map<String, Array<SiteDoer>>): Bool {
 		return switch reason {
 			case Uncovered: true;
-			case Site(key, repeated): !(doing[key] ?? []).exists(d -> covers(d, i, repeated));
+			case Site(key, _, mayRepeat, way): !(doing[key] ?? []).exists(d -> covers(d, i, mayRepeat, way));
 			case Waits(_): false;
 		};
 	}
@@ -333,8 +342,8 @@ final class RootCauseFold {
 	private static function same(a: FoldReason, b: FoldReason): Bool {
 		return switch [a, b] {
 			case [Waits(x), Waits(y)]: x == y;
-			case [Site(x, r), Site(y, s)]:
-				x == y && r == s;
+			case [Site(x, r, m, _), Site(y, s, n, _)]:
+				x == y && r == s && m == n;
 			case [Uncovered, Uncovered]: true;
 			case _: false;
 		};
