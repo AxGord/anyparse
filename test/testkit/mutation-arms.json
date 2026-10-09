@@ -11148,7 +11148,7 @@
 			"name": "M-TS-HELD-ANY-THREAD",
 			"type": "anyparse.check.ThreadSafety",
 			"method": "reportLockHeld",
-			"find": "if (a.uncontended || lock != null && !mainTaken.contains(lock)) continue;",
+			"find": "if (a.uncontended || !mainTaken.contains(lock ?? a.pair.lockId)) continue;",
 			"replace": "if (a.uncontended) continue;",
 			"note": "a hold of a lock only background threads take is reported as a main-thread stall"
 		},
@@ -17703,6 +17703,14 @@
 			"find": "running.foreach(",
 			"replace": "running.exists(",
 			"note": "one caller keeping the lock encloses the hold for all"
+		},
+		{
+			"name": "M-TS-UNNAMED-PAIR",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "reportLockHeld",
+			"find": "if (a.uncontended || !mainTaken.contains(lock ?? a.pair.lockId)) continue;",
+			"replace": "if (a.uncontended || lock != null && !mainTaken.contains(lock)) continue;",
+			"note": "a hold of an unnamed lock warns though the main thread never takes its pair"
 		}
 	]
 }

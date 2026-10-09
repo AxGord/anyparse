@@ -1629,5 +1629,9 @@ decided the question; it may not become a record of runs.
   sync's own batch hold (`cloudLocalRenameAndMoveItem`, `removeCloudLocal` under `moveLocalQueue` /
   `removeLocalQueue`) was a second key for one hold; a hold whose lock every state of its function already must-holds
   on the same object at the take is the enclosing hold's (`LockDominance.enclosed`) — branch `feat/ts-precision-2`
+- reporting every hold of a lock no sealed member names → TM's `FoldersIncrementalCloudUpdatesCache` is reached through
+  `_base._cache`, a field read for more than its calls, so no member names it; named in `lockPairs`
+  (`fs.cloud.FoldersIncrementalCloudUpdatesCache.lock/unlock`) it is told apart by that pair, and a pair the main
+  thread never takes stalls no main thread — branch `feat/ts-precision-2`
 - judging "inside a catch" off the witness chain the finding prints → the chain is one way; a second way outside every
   catch must keep the warning, which only a solve without the catch edges can see — branch `feat/ts-precision-2`

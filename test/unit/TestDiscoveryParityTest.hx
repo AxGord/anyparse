@@ -400,6 +400,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.ThreadSafetyQuietLocksTest',
 		'unit.check.ThreadSafetyRegistersTest',
 		'unit.check.ThreadSafetyRethrowTest',
+		'unit.check.ThreadSafetyUnnamedLockTest',
 		'unit.check.ThreadSafetyWaiterTest',
 		'unit.check.TrivialGetterCheckTest',
 		'unit.check.TrivialGetterIsVarTest',
@@ -2221,6 +2222,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyRethrowTest#testACatchThatRethrowsRaises :: control :: M-TS-RETHROW-OFF',
 			'unit.check.ThreadSafetyRethrowTest#testACatchThrowingAnotherValueKeepsIt :: control :: M-TS-RETHROW-ANY-NAME',
 			'unit.check.ThreadSafetyRethrowTest#testARethrowInANestedFunctionKeepsIt :: control :: M-TS-RETHROW-NESTED',
+			'unit.check.ThreadSafetyUnnamedLockTest#testAnUnnamedLockNoMainThreadTakesStallsNoOne :: control :: M-TS-UNNAMED-PAIR',
 			'unit.check.ThreadSafetyWaiterTest#testAHoldOnlyTheMainThreadRunsIsNoStall :: control :: '
 				+ 'M-TS-B-MAIN-ONLY-KEPT,M-TS-OWN-WORK-TAKES',
 			'unit.check.ThreadSafetyWaiterTest#testAHolderOfUnknownThreadKeepsItsFinding :: control :: M-TS-B-ASSUMED-IGNORED',
@@ -6030,7 +6032,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-MAINONLY-SAME-MEMBER',
 			'M-TS-MAINONLY-MOVED',
 			'M-TS-ENCLOSED-OFF',
-			'M-TS-ENCLOSED-ANY-STATE'
+			'M-TS-ENCLOSED-ANY-STATE',
+			'M-TS-UNNAMED-PAIR'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

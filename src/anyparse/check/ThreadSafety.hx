@@ -631,8 +631,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	/**
 	 * Finding (b): on some path of one function body a lock is held across calls that block — one finding per hold,
 	 * anchored at its first blocking call and naming the lock object (the pair's take member for a lock no member
-	 * names). Reported for a lock the main thread takes somewhere (or one no sealed member names), since only then does
-	 * the hold stall main; a hold in the owner's constructor before the object escapes stalls no one. The main thread
+	 * names). Reported for a lock the main thread takes somewhere — for one no sealed member names, a take of the pair
+	 * on the main thread at all — since only then does the hold stall main; a hold in the owner's constructor before the object escapes stalls no one. The main thread
 	 * never waits for its own hold, so a hold of a named lock that only the main thread runs — on no background thread,
 	 * and not in a function the walk only assumes runs there (`ThreadStates.assumed`) — stays only when the main thread
 	 * itself works long under it (`LockTaint.ownWork`), and says so. Graded by cost: a hold whose blocking calls are all
@@ -649,17 +649,17 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		// what a hold only the main thread runs is judged by: its own work, every take left out
 		final own: { long: LockTaint, normal: LockTaint } = { long: ownWorkOf(costs), normal: ownWorkOf(paths.normal) };
 		final any: { long: LockTaint, normal: LockTaint } = { long: costs, normal: paths.normal };
-		// a lock only ever taken shared stalls no one
+		// a lock only ever taken shared stalls no one; one no member names is told apart by its pair's take member alone
 		final mainTaken: Array<String> = [
 			for (a in acquires) {
-				final lock: Null<String> = a.lock;
-				if (lock != null && states.edgeContext(a.edge) & CTX_MAIN != 0 && !taints.quiet.sharedOnly(lock)) lock;
+				final lock: String = a.lock ?? a.pair.lockId;
+				if (states.edgeContext(a.edge) & CTX_MAIN != 0 && !taints.quiet.sharedOnly(lock)) lock;
 			}
 		];
 		final reported: Array<{ hold: LockAcquire, calls: Array<CallEdge>, finding: Violation }> = [];
 		for (a in acquires) {
 			final lock: Null<String> = a.lock;
-			if (a.uncontended || lock != null && !mainTaken.contains(lock)) continue;
+			if (a.uncontended || !mainTaken.contains(lock ?? a.pair.lockId)) continue;
 			// the main thread never waits for a hold of a lock it alone holds there: such a hold stays only as the main thread's
 			// own long work; who else holds a lock no member names is unknown
 			final mainOnly: Bool = lock != null && states.edgeContext(a.edge) & CTX_BG == 0 && !states.assumed.exists(a.edge.from);
