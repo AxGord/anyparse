@@ -113,8 +113,7 @@ final class LockWindow {
 			.concat(shape.expressionBodyKinds ?? []);
 		_ifKinds = (shape.ifStatementKinds ?? []).concat(shape.ifExpressionKinds ?? [])
 			.concat(shape.ternaryKind == null ? [] : [shape.ternaryKind]);
-		// a `while` shares the condition-first slot with an `if`; what is left after the `if` kinds are the loops
-		_loopKinds = loopKindsOf(shape, _ifKinds);
+		_loopKinds = CallRepetition.loopKindsOf(shape);
 		_tryKinds = (shape.tryStatementKinds ?? []).concat(shape.tryExpressionKinds ?? []);
 		_switchKinds = shape.switchKinds ?? [];
 		_declKinds = inPlaceKindsOf(shape);
@@ -349,13 +348,6 @@ final class LockWindow {
 	/** Whether `node` holds a path out of the body — an exit statement not inside a nested function. */
 	private function exits(node: QueryNode): Bool {
 		return node.children.exists(k -> !_nestedFnKinds.contains(k.kind) && (_exitKinds.contains(k.kind) || exits(k)));
-	}
-
-	/** The loops of `shape`: `while` (what the condition-first kinds hold beyond `ifKinds`), `do`, `for`, a `for` expression. */
-	public static function loopKindsOf(shape: RefShape, ifKinds: Array<String>): Array<String> {
-		return [for (k in shape.conditionFirstChildKinds ?? []) if (!ifKinds.contains(k)) k].concat(shape.conditionLastChildKinds ?? [])
-			.concat(shape.forStmtKind == null ? [] : [shape.forStmtKind])
-			.concat([for (k in shape.iterationBindingKinds ?? []) if (k != shape.forStmtKind) k]);
 	}
 
 	/** The kinds walked as their children in order: local declarations (their initializer) and array literals. */

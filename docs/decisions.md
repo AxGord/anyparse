@@ -1846,3 +1846,15 @@ decided the question; it may not become a record of runs.
   around it dead. `DeadCatches.plainRead` takes a read as a binding only where the one declaration of the name is a
   parameter of the function itself or a local before the read in a block around it (`BareNames.localOf`); any other
   read is judged as the member (review round 2 `dc1-prop-shadowed-elsewhere`) — branch `feat/ts-precision-3`
+- a `catch` judged an error path by the loops of its own function alone → a per-item loop one call up (`for (p in
+  paths) load(p)` under a hold, `load` catching a failed parse and sleeping) still made the hold and the main
+  thread's take info "only on an error path". Every turn of a repeating caller may fail, so the `catch` is a path of
+  the normal run: the normal-path taint skips a `catch` only where no call on the way from the hold repeats
+  (`LockTaint.leadsNowhere`, the walk's `repeated` flag — loops, values handed on to a call that may repeat them,
+  recursion), and a main-thread sink call in a `catch` is error-only only where no repeating call up the main
+  thread's ways runs it (`MainSinkReport.caughtOnce`, `MainRepeats.climb` owners). An ASSUMED root (no resolved
+  caller) is not counted as repeating there. A loop is ONE definition, `CallRepetition.loopKindsOf`, read by
+  `ErrorPaths`, `LockWindow` and `CallRepetition` (the same five Haxe kinds the three derived separately). Not
+  fixed: a hold's taint never walks a value handed on (`Lambda.iter(paths, load)` under the lock), base included,
+  so `ep1b-iter-in-caller` stays silent under a hold — the taint follows invocations only (review round 2
+  `ep1-loop-in-caller`) — branch `feat/ts-precision-3`

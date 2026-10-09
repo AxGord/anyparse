@@ -72,10 +72,21 @@ final class CallRepetition {
 		_listsOf = listsOf;
 		_bindingKinds = shape.iterationBindingKinds ?? [];
 		_doWhileKinds = shape.doWhileLoopKinds ?? [];
-		_loopKinds = (shape.loopStatementKinds ?? []).concat(_doWhileKinds)
-			.concat(_bindingKinds)
-			.concat(shape.whileExprKind == null ? [] : [shape.whileExprKind]);
+		_loopKinds = loopKindsOf(shape);
 		_functionKinds = (shape.functionKinds ?? []).concat(MemberKinds.nestedFunctionKinds(shape));
+	}
+
+	/**
+	 * The loops of `shape` — `loopStatementKinds`, `doWhileLoopKinds`, `iterationBindingKinds` and `whileExprKind`, each
+	 * once: the one definition of a loop every check of repetition and control flow reads (`ErrorPaths`, `LockWindow`).
+	 */
+	public static function loopKindsOf(shape: RefShape): Array<String> {
+		final kinds: Array<String> = [];
+		final all: Array<String> = (shape.loopStatementKinds ?? []).concat(shape.doWhileLoopKinds ?? [])
+			.concat(shape.iterationBindingKinds ?? [])
+			.concat(shape.whileExprKind == null ? [] : [shape.whileExprKind]);
+		for (k in all) if (!kinds.contains(k)) kinds.push(k);
+		return kinds;
 	}
 
 	/** Whether `edge` may run more than once per run of its function: in a loop, handing its value to a call that may repeat it, or recursive. */

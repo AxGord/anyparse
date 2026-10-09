@@ -37,7 +37,7 @@ final class ErrorPaths {
 		_trees = trees;
 		_catchKind = shape.catchClauseKind;
 		_nestedFnKinds = MemberKinds.nestedFunctionKinds(shape);
-		_loopKinds = LockWindow.loopKindsOf(shape, ArgumentValues.conditionalKinds(shape));
+		_loopKinds = CallRepetition.loopKindsOf(shape);
 	}
 
 	/** The `catch` clause whose body holds the site of `edge`, the innermost one; null for a site outside every one, or unplaced. */

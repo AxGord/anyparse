@@ -18099,6 +18099,22 @@
 			"note": "a local function a catch calls runs outside it"
 		},
 		{
+			"name": "M-TS-ERROR-REPEATED-WAY",
+			"type": "anyparse.check.LockTaint",
+			"method": "leadsNowhere",
+			"find": "!repeated && onErrorPath(edge)",
+			"replace": "onErrorPath(edge)",
+			"note": "a catch a repeating call on the way runs is an error path all the same"
+		},
+		{
+			"name": "M-TS-ERROR-CAUGHT-REPEATED",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "caughtOnce",
+			"find": " && repeats.main.climb(edge).owners.length == 0",
+			"replace": "",
+			"note": "a main-thread call in a catch a loop up the way runs is an error path all the same"
+		},
+		{
 			"name": "M-TS-SITE-PER-SINK",
 			"type": "anyparse.check.MainSinkReport",
 			"method": "reportRepeater",
@@ -18196,9 +18212,9 @@
 		},
 		{
 			"name": "M-TS-WIN-FOREXPR",
-			"type": "anyparse.check.LockWindow",
+			"type": "anyparse.check.CallRepetition",
 			"method": "loopKindsOf",
-			"find": ".concat([for (k in shape.iterationBindingKinds ?? []) if (k != shape.forStmtKind) k])",
+			"find": ".concat(shape.iterationBindingKinds ?? [])",
 			"replace": "",
 			"note": "a for expression is no loop"
 		},

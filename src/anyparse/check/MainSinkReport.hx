@@ -54,6 +54,7 @@ final class MainSinkReport {
 		final targets: Map<String, Array<String>> = [];
 		final long: Map<String, Bool> = [];
 		final normal: Map<String, Bool> = [];
+		final caught: Map<String, Bool> = [];
 		final order: Array<{ key: String, edge: CallEdge }> = [];
 		for (edge in graph.edges) if (edge.kind.isInvocation()) {
 			if (!taints.blocks(edge, null)) continue;
@@ -73,7 +74,10 @@ final class MainSinkReport {
 			// long here: a long sink, or a short one this very call repeats
 			final repeated: Bool = repeats.repetition.repeated(edge);
 			if (costs.all.costsLong(edge, null) || repeated) long[key] = true;
-			if (!costs.errors.inCatch(edge) && (costs.normal.costsLong(edge, null) || repeated)) normal[key] = true;
+			if (caughtOnce(costs, repeats, edge))
+				caught[key] = true;
+			else if (costs.normal.costsLong(edge, null) || repeated)
+				normal[key] = true;
 		}
 		final inside: Map<String, Bool> = insideSinks(graph, taints, repeats.runs);
 		final owned: Map<String, OwnedFinding> = [];
@@ -84,7 +88,11 @@ final class MainSinkReport {
 			// a call a sink's own body makes is the sink's machinery: the finding is the call of that sink
 			final inSink: Bool = inside.exists(edge.from) || taints.listsOf(edge.file).sinkIds.contains(edge.from);
 			final finding: Violation = reportSite(
-				graph, edge, targets[site.key] ?? [edge.to], siteCost(sites, costs, edge, long.exists(site.key), normal.exists(site.key)),
+				graph, edge, targets[site.key] ?? [edge.to],
+				siteCost(
+					sites, costs, edge,
+					{ long: long.exists(site.key), normal: normal.exists(site.key), caught: caught.exists(site.key) }
+				),
 				inSink, repeats, states, { owned: owned, moved: moved }, violations
 			);
 			if (finding.severity == Severity.Warning) (taints.takesLock(edge) ? takes : direct).push({ edge: edge, finding: finding });
@@ -207,15 +215,25 @@ final class MainSinkReport {
 	}
 
 	/**
-	 * The cost of the main-thread call site `edge`: long (`long`), long over the normal paths too (`normal`), and where
-	 * it is long only on an error path — a call inside a `catch` runs only there, repeated or not (`caught`).
+	 * The cost of the main-thread call site `edge`: long (`at.long`), long over the normal paths too (`at.normal`), and
+	 * where it is long only on an error path — a call inside a `catch` no caller up the way repeats runs only there,
+	 * repeated or not (`at.caught`, `caughtOnce`).
 	 */
 	private static function siteCost(
-		sites: LockSites, costs: PathCosts, edge: CallEdge, long: Bool, normal: Bool
+		sites: LockSites, costs: PathCosts, edge: CallEdge, at: { long: Bool, normal: Bool, caught: Bool }
 	): { long: Bool, error: Null<String>, caught: Bool } {
-		final caught: Null<String> = costs.errors.placeOf([edge]);
-		final error: Null<String> = caught ?? (long && !normal ? errorPlace(sites, costs, edge) : null);
-		return { long: long && error == null, error: error, caught: caught != null };
+		final caught: Null<String> = at.caught ? costs.errors.placeOf([edge]) : null;
+		final error: Null<String> = caught ?? (at.long && !at.normal ? errorPlace(sites, costs, edge) : null);
+		return { long: at.long && error == null, error: error, caught: caught != null };
+	}
+
+	/**
+	 * Whether the main-thread call `edge` runs only on an error path: inside a `catch` (`ErrorPaths`), and no repeating
+	 * call — a loop, a value handed to a call that may repeat it, a recursion — up the main thread's ways runs its function
+	 * again (`MainRepeats.climb`): every turn of such a caller may fail, so the `catch` is a path of the normal run.
+	 */
+	private static function caughtOnce(costs: PathCosts, repeats: MainRepetition, edge: CallEdge): Bool {
+		return costs.errors.inCatch(edge) && repeats.main.climb(edge).owners.length == 0;
 	}
 
 	/**

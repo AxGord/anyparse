@@ -410,6 +410,16 @@ final class LockTaint {
 			&& (repeats || costsLong(edge, held, valuation));
 	}
 
+	/**
+	 * Whether the call `edge` of a walk leads nowhere: a call out of a sink's own body — the edge leaves `from`'s body, so
+	 * its file's chain is the one that says whether `from` is a sink — or, asking about the normal paths, one only an
+	 * error path runs (`onErrorPath`), unless a call on the way to it repeats (`repeated`): every turn may fail, and the
+	 * `catch` is then a path of the normal run.
+	 */
+	private inline function leadsNowhere(edge: CallEdge, repeated: Bool): Bool {
+		return listsOf(edge.file).sinkIds.contains(edge.from) || !repeated && onErrorPath(edge);
+	}
+
 	/** Whether this taint asks about the normal paths and only an error path runs the call `edge` (`ErrorPaths`). */
 	private inline function onErrorPath(edge: CallEdge): Bool {
 		return _cost?.errors?.inCatch(edge) == true;
@@ -468,8 +478,7 @@ final class LockTaint {
 		while (qi < queue.length) {
 			final state: WalkState = queue[qi++];
 			for (edge in _graph.outEdges(state.id)) if (edge.kind.isInvocation()) {
-				// the edge leaves `from`'s body, so its file's chain is the one that says whether `from` is a sink
-				if (listsOf(edge.file).sinkIds.contains(edge.from) || onErrorPath(edge)) continue;
+				if (leadsNowhere(edge, state.repeated)) continue;
 				final live: Int = _conditions.carried(edge, state.valuation, state.ctx);
 				if (live == 0) continue;
 				final repeats: Bool = state.repeated || repeatsAt(edge);

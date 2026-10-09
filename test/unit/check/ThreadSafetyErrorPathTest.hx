@@ -117,6 +117,54 @@ class ThreadSafetyErrorPathTest extends Test {
 	}
 
 	/**
+	 * A `catch` whose function a repeating call under the hold runs — a loop up the way, a recursion — runs once per
+	 * failing turn, on the normal run: the hold, and the main thread's take, warn (review round 2 `ep1-loop-in-caller`).
+	 */
+	@:pin('control') @:killer('M-TS-ERROR-REPEATED-WAY')
+	public function testACatchARepeatingCallerRunsIsNoErrorPath(): Void {
+		#if (sys || nodejs)
+		final save: String =
+			'final paths:Array<Int> = [1, 2]; function save():Void { try { step(); } catch (e:Dynamic) { Report.send(); } }';
+		final warned: Array<String> = ['warning A S.ui | Mutex.acquire', 'warning B S.work | S._m'];
+		Assert.same(warned, graded(run(save, 'for (p in paths) save();')), 'a loop in the caller');
+		Assert.same(
+			warned,
+			graded(run(
+				'function walk(n:Int):Void { try { step(); } catch (e:Dynamic) { Report.send(); } if (n > 0) walk(n - 1); }', 'walk(3);'
+			)),
+			'a recursion'
+		);
+		Assert.same(['info A S.ui | Mutex.acquire', 'info B S.work | S._m'], graded(run(save, 'save();')), 'once');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A main-thread sink call in a `catch` whose function a repeating call up the main thread's way runs — a loop, a
+	 * value handed on to a call that may repeat it — warns (review round 2 `ep1b-iter-in-caller`).
+	 */
+	@:pin('control') @:killer('M-TS-ERROR-CAUGHT-REPEATED')
+	public function testAMainSinkCallInACatchARepeatingCallerRunsWarns(): Void {
+		#if (sys || nodejs)
+		final load: String =
+			'class A { static function step():Void {} static function load():Void { try { step(); } catch (e:Dynamic) { Sys.sleep(1); } }';
+		final looped: Array<Violation> = ThreadSafetyCheckTest.violations(
+			CONFIG, ['$load public static function main():Void { for (i in 0...3) load(); } }']
+		);
+		Assert.same(['warning A A.load | Sys.sleep'], graded(looped), 'a loop');
+		final handed: Array<Violation> = ThreadSafetyCheckTest.violations(CONFIG, [
+			'$load public static function main():Void { Lambda.iter([1, 2], i -> load()); } }'
+		]);
+		Assert.same(['warning A A.load | Sys.sleep'], graded(handed), 'a value handed on');
+		final once: Array<Violation> = ThreadSafetyCheckTest.violations(CONFIG, ['$load public static function main():Void load(); }']);
+		Assert.same(['info A A.load | Sys.sleep'], graded(once), 'once');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
 	 * A lambda a `catch` stores runs wherever it is called, not inside the catch (review r4 `P2`); a local function the
 	 * catch calls runs only there.
 	 */
