@@ -17639,6 +17639,30 @@
 			"find": "if (runsFrom(e, v) != at.valuation) continue;",
 			"replace": "if (runsFrom(e, v) == null) continue;",
 			"note": "the owner walk climbs into callers whatever valuation they hand down"
+		},
+		{
+			"name": "M-TS-COND-FINAL-LOCAL",
+			"type": "anyparse.check.EdgeConditions",
+			"method": "factsOf",
+			"find": "if (bound != null) return factsOf(bound, value, fnId, file);",
+			"replace": "if (bound != null && false) return factsOf(bound, value, fnId, file);",
+			"note": "a final local bound to a condition decides nothing"
+		},
+		{
+			"name": "M-TS-ARG-LITERAL-NONNULL",
+			"type": "anyparse.check.ArgumentValues",
+			"method": "valueOf",
+			"find": "for (k in [_shape.newExprKind, _shape.objectLiteralKind, _shape.arrayLiteralKind]) if (k != null) k",
+			"replace": "for (k in [_shape.newExprKind]) if (k != null) k",
+			"note": "an object literal argument is of unknown nullness"
+		},
+		{
+			"name": "M-TS-ARG-FINAL-LOCAL-READ",
+			"type": "anyparse.check.ArgumentValues",
+			"method": "collectBareReads",
+			"find": "if (finalLocal && kids.length > 0) bareName(kids[kids.length - 1], into);",
+			"replace": "if (false && finalLocal) bareName(kids[kids.length - 1], into);",
+			"note": "a parameter read only in a final local's condition is not tracked"
 		}
 	]
 }

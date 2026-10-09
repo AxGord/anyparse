@@ -42,6 +42,23 @@ class ThreadSafetyMainStatesTest extends Test {
 		#end
 	}
 
+	/**
+	 * TM's `Token.blockedPost` → `blockedRequestInternal`: an object literal handed down is never null, and a `final`
+	 * local bound to `data == null` is that test — the cache read under it never runs from the loop.
+	 */
+	@:pin('control') @:killer('M-TS-COND-FINAL-LOCAL') @:killer('M-TS-ARG-LITERAL-NONNULL') @:killer('M-TS-ARG-FINAL-LOCAL-READ')
+	public function testALiteralArgumentDecidesAFinalLocalCondition(): Void {
+		#if (sys || nodejs)
+		final found: Array<String> = graded(run(
+			'req({ a: 1 }); static function req(data:Dynamic):Void { final simple:Bool = data == null; if (simple) Db.count(); }',
+			'req(null);'
+		)).filter(g -> g.indexOf('L.load') < 0);
+		Assert.equals('info A L.req | Db.count', found.join(';'));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
 	/** `L.all` loops calling `body`; `load` counts under `check`; `main` also calls `load` once with an unknown flag. */
 	private static function run(body: String, ?more: String): Array<Violation> {

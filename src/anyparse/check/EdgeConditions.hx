@@ -36,7 +36,8 @@ private typedef SiteFact = {
  *   only where `c` is false).
  * - The condition, read through parentheses, `!`, an `&&` that holds (or an `||` that fails) on that side, is a read
  *   or call of a `mainThreadChecks` entry (the edge the graph records at exactly that expression), a tracked parameter
- *   read bare or compared with `null`, or `v != null` / `v == null` of a `final` local written once as
+ *   read bare or compared with `null`, a `final` local bound once to such a condition, or `v != null` / `v == null` of a
+ *   `final` local written once as
  *   `check ? null : new T()` (or the arms swapped): the `new` arm is never null, so the test is the check's answer.
  */
 @:nullSafety(Strict)
@@ -181,6 +182,9 @@ final class EdgeConditions {
 		if (kind == _shape.identKind) {
 			final at: Int = _values.tracked(fnId).indexOf(cond.name ?? '');
 			if (at >= 0) return [{ param: at, value: value, nullTest: false }];
+			// a `final` local bound once to a condition is that condition
+			final bound: Null<QueryNode> = finalLocalInit(cond, fnId);
+			if (bound != null) return factsOf(bound, value, fnId, file);
 		}
 		return isMainCheck(cond, fnId, file) ? [{ param: MAIN_CHECK, value: value, nullTest: false }] : [];
 	}
@@ -201,24 +205,29 @@ final class EdgeConditions {
 	 * `check ? null : new T()` or `check ? new T() : null`, the check's answer that picked that arm.
 	 */
 	private function nullTestFacts(local: QueryNode, nonNull: Bool, fnId: String, file: String): Array<SiteFact> {
-		final name: Null<String> = local.name;
-		final fn: Null<QueryNode> = _trees.ofId(fnId);
-		if (local.kind != _shape.identKind || name == null || fn == null) return [];
-		final decls: Array<QueryNode> = [];
-		_values.collectNamed(fn, name, decls);
-		if (decls.length != 1) return [];
-		final decl: QueryNode = decls[0];
-		final declKinds: Array<String> = _shape.localDeclKinds ?? [];
-		if (!declKinds.contains(decl.kind) || (_shape.mutableLocalDeclKinds ?? []).contains(decl.kind) || decl.children.length == 0)
-			return [];
-		final init: QueryNode = decl.children[decl.children.length - 1];
-		if (init.kind != _shape.ternaryKind || init.children.length != 3) return [];
+		final init: Null<QueryNode> = finalLocalInit(local, fnId);
+		if (init == null || init.kind != _shape.ternaryKind || init.children.length != 3) return [];
 		final newKind: Null<String> = _shape.newExprKind;
 		final nullFirst: Bool = init.children[1].kind == _shape.nullLiteralKind && init.children[2].kind == newKind;
 		final newFirst: Bool = init.children[1].kind == newKind && init.children[2].kind == _shape.nullLiteralKind;
 		if (!(nullFirst || newFirst)) return [];
 		// the `new` arm is the non-null one: the check took it exactly where the local is non-null
 		return factsOf(init.children[0], nonNull == newFirst, fnId, file);
+	}
+
+	/** The value of `local` when it reads a `final` local the body of `fnId` declares once, with one; null otherwise. */
+	private function finalLocalInit(local: QueryNode, fnId: String): Null<QueryNode> {
+		final name: Null<String> = local.name;
+		final fn: Null<QueryNode> = _trees.ofId(fnId);
+		if (local.kind != _shape.identKind || name == null || fn == null) return null;
+		final decls: Array<QueryNode> = [];
+		_values.collectNamed(fn, name, decls);
+		if (decls.length != 1) return null;
+		final decl: QueryNode = decls[0];
+		final declKinds: Array<String> = _shape.localDeclKinds ?? [];
+		if (!declKinds.contains(decl.kind) || (_shape.mutableLocalDeclKinds ?? []).contains(decl.kind) || decl.children.length == 0)
+			return null;
+		return decl.children[decl.children.length - 1];
 	}
 
 	/** Whether `expr` is a read or call of a `mainThreadChecks` entry: the graph records an invocation of one at exactly its range. */

@@ -2196,6 +2196,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyLongLocksTest#testMainThreadTakesOfAShortLock :: control :: M-TS-MAINSHORT-LOUD-ONLY',
 			'unit.check.ThreadSafetyLongLocksTest#testSpansBlockingNamesTheCallAndThePath :: control :: M-TS-LONG-NEVER-GROWS',
 			'unit.check.ThreadSafetyMainStatesTest#testAConstantArgumentRulesTheRepeatedCallOut :: control :: M-TS-STATES-IGNORED',
+			'unit.check.ThreadSafetyMainStatesTest#testALiteralArgumentDecidesAFinalLocalCondition :: control :: '
+				+ 'M-TS-COND-FINAL-LOCAL,M-TS-ARG-LITERAL-NONNULL,M-TS-ARG-FINAL-LOCAL-READ',
 			'unit.check.ThreadSafetyMainStatesTest#testTheOwnerIsOnAWayThatRunsTheCall :: control :: M-TS-STATES-OWNER-IGNORED',
 			'unit.check.ThreadSafetyOwnReasonsTest#testABriefUnresolvedCallOnceLeavesTheLockShort :: control :: '
 				+ 'M-TS-BLIND-BRIEF-OFF,M-TS-DOM-BRIEF-NAMES-IGNORED',
@@ -6013,7 +6015,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-DEADCATCH-FIELD',
 			'M-TS-DEADCATCH-BODY',
 			'M-TS-STATES-IGNORED',
-			'M-TS-STATES-OWNER-IGNORED'
+			'M-TS-STATES-OWNER-IGNORED',
+			'M-TS-COND-FINAL-LOCAL',
+			'M-TS-ARG-LITERAL-NONNULL',
+			'M-TS-ARG-FINAL-LOCAL-READ'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

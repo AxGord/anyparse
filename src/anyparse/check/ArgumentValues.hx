@@ -17,7 +17,8 @@ using Lambda;
  * - A parameter is TRACKED when nothing in the body writes or shadows its name (no assignment, no increment, no other
  *   declaration of it, nested functions included) and the body reads it bare — as a condition, compared with `null`, or
  *   handed to a call — and the function has exactly one declaration.
- * - What a call hands a tracked parameter is known when its argument is a `Bool` literal, `null`, a `new` expression,
+ * - What a call hands a tracked parameter is known when its argument is a `Bool` literal, `null`, a `new` expression or
+ *   an object, array or string literal (never null),
  *   a tracked parameter of the caller the caller's valuation knows (a `Bool` one negated through `!`), or — the
  *   argument omitted — the callee's own default: a `Bool` literal or `null`, and `null` for a `?p` with none.
  * - Arguments map to parameters by position only where Haxe cannot skip one by type: each optional parameter (`?p`,
@@ -195,7 +196,11 @@ final class ArgumentValues {
 		}
 		if (arg.kind == _shape.boolLitKind) return literal(arg, file);
 		if (arg.kind == _shape.nullLiteralKind) return NULL;
-		if (arg.kind == _shape.newExprKind) return NON_NULL;
+		// a value built where it is written is never null: a construction, an object, array or string literal
+		final built: Array<String> = [
+			for (k in [_shape.newExprKind, _shape.objectLiteralKind, _shape.arrayLiteralKind]) if (k != null) k
+		];
+		if (built.contains(arg.kind) || (_shape.stringLiteralKinds ?? []).contains(arg.kind)) return NON_NULL;
 		if (arg.kind == _shape.identKind) {
 			final at: Int = callerNames.indexOf(arg.name ?? '');
 			if (at >= 0) return valuation.charAt(at);
@@ -304,8 +309,8 @@ final class ArgumentValues {
 	}
 
 	/**
-	 * The names `node`'s subtree reads bare as a condition — of an `if`, a ternary, an operand of `&&` / `||`, through
-	 * parentheses and `!`, or compared with `null` there — or hands bare to a call.
+	 * The names `node`'s subtree reads bare as a condition — of an `if`, a ternary, an operand of `&&` / `||`, the value
+	 * of a `final` local, through parentheses and `!`, or compared with `null` there — or hands bare to a call.
 	 */
 	private function collectBareReads(node: QueryNode, into: Array<String>): Void {
 		final kids: Array<QueryNode> = node.children;
@@ -315,6 +320,10 @@ final class ArgumentValues {
 			bareName(kids[1], into);
 		}
 		if (node.kind == _shape.callKind) for (i in 1...kids.length) bareName(kids[i], into);
+		// a `final` local bound to a condition is read as that condition (`EdgeConditions`)
+		final finalLocal: Bool = (_shape.localDeclKinds ?? []).contains(node.kind)
+			&& !(_shape.mutableLocalDeclKinds ?? []).contains(node.kind);
+		if (finalLocal && kids.length > 0) bareName(kids[kids.length - 1], into);
 		for (k in kids) collectBareReads(k, into);
 	}
 

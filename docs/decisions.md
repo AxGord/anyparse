@@ -1615,5 +1615,10 @@ decided the question; it may not become a record of runs.
   `if (checkLimits)` count / animation check under it were "repeated" by that loop (three keys, two false, one rare);
   `MainRepeats` runs the closure and the owner walk over `ThreadStates`' states with `EdgeConditions.carried` / `bind`,
   as the hold taint already did — branch `feat/ts-precision-2`
+- valuations knowing only `Bool` literals, `null` and `new` arguments, and conditions only on a parameter itself → TM's
+  `Token.blockedPost` hands `blockedRequestInternal` an object literal, which tests it as `final simpleRequest = data
+  == null && files == null; … simpleRequest ? fromMemory(id) : null`; an object, array or string literal is never
+  null, and a `final` local bound to a condition is that condition, both where a parameter is tracked and where a
+  call is decided — branch `feat/ts-precision-2`
 - judging "inside a catch" off the witness chain the finding prints → the chain is one way; a second way outside every
   catch must keep the warning, which only a solve without the catch edges can see — branch `feat/ts-precision-2`
