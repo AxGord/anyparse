@@ -18569,6 +18569,30 @@
 			"note": "a hold covers another of its lock only when both run on one origin alone, though a hold running wherever the covered one does reports its stall"
 		},
 		{
+			"name": "M-TS-REPEATED-BY-OFF",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "attachRepeats",
+			"find": "if (by.length > 0) data.repeatedBy = by;",
+			"replace": "",
+			"note": "a long main-thread call a loop repeats warns as if it ran once: the work list cannot tell a per-item stall"
+		},
+		{
+			"name": "M-TS-REPEATED-BY-SELF",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "repeatersOf",
+			"find": "if (repetition.repeated(edge)) return",
+			"replace": "if (false) return",
+			"note": "a long call in a loop of its own function names no repetition: only callers up the way are asked"
+		},
+		{
+			"name": "M-TS-REPEATED-BY-MERGE",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "oneWarningPerWay",
+			"find": "mergeRepeats(kept, d.finding);",
+			"replace": "",
+			"note": "the warning a way's sink calls fold into drops what repeats the folded ones"
+		},
+		{
 			"name": "M-TS-FOLD-SITE-CYCLE",
 			"type": "anyparse.check.LockTaint",
 			"method": "mayRepeatAlong",

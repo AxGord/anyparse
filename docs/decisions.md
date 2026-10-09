@@ -1806,3 +1806,11 @@ decided the question; it may not become a record of runs.
   with — two callbacks are two threads, whatever spawns them; a hold no origin reaches shares none. Requiring both
   holds on ONE origin was measured and rejected: `Store.remove` / `removeKeys` (main and workers) stopped folding onto
   `Store.put` (every thread) though `put` runs wherever they do — branch `feat/ts-precision-3`
+- with no I/O in `shortSinks`, a long sink a loop up the main thread's way repeats warns at itself as a one-off → TM's
+  `FileListMoveFiles.moveItems`, `repairShareAttr`, `deleteItemInternal`'s `forEachChild`, `listFolder`'s per-child
+  SQL and `listFolderCloudCallback` lost their owner warnings, and nothing said the I/O runs per item. A main-thread
+  sink warning now says what repeats its call — the nearest repeating calls up its ways (`MainRepeats.climb`), or the
+  call itself where it stands in a loop — in its message (`— repeated by <member> at <loop header>`) and as
+  `FindingData.repeatedBy`, which the json record writes as `data.repeatedBy`; the warning a way's sink calls fold
+  into carries what repeats each of them. No key is added for it (decision 2026-10-14): the repetition RANKS the
+  call's own warning on the work list, it is not a second finding of the same I/O — branch `feat/ts-precision-3`

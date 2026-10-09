@@ -2231,6 +2231,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-TS-EXH-WRITES,M-TS-EXH-UNINIT,M-TS-EXH-ZERO,M-TS-EXH-OPTIONAL',
 			'unit.check.ThreadSafetyExhaustiveTest#testValuesThroughAccessorsAndConversions :: control :: M-TS-EXH-CONVERT-OFF,M-TS-EXH-CONVERT-ANY',
 			'unit.check.ThreadSafetyFactsTest#testCompilerFactsResolveWhatTheSyntaxCannot :: control :: M-TS-FACTS-IGNORED,M-TS-FACTS-MADE-REF,M-TS-FACTS-GATE',
+			'unit.check.ThreadSafetyFindingDataTest#testALongCallALoopRepeatsSaysWhichLoop :: control :: '
+				+ 'M-TS-REPEATED-BY-OFF,M-TS-REPEATED-BY-SELF',
 			'unit.check.ThreadSafetyFindingDataTest#testInitializerFindingsNameTheInitializer :: control :: M-TS-DATA-INIT-LAMBDA',
 			'unit.check.ThreadSafetyFindingDataTest#testLambdaFindingNamesItsEnclosingMember :: control :: M-TS-DATA-MEMBER-LAMBDA',
 			'unit.check.ThreadSafetyFindingDataTest#testLockOrderData :: control :: M-TS-DATA-SUBJECT-UNSORTED',
@@ -2239,6 +2241,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyFindingDataTest#testLockOrderNamesTheLeastHolder :: control :: M-TS-ORDER-MAIN-FIRST-SEEN',
 			'unit.check.ThreadSafetyFindingDataTest#testMainSinkDataCarriesTheWholeChain :: control :: M-TS-DATA-CHAIN-CAPPED',
 			'unit.check.ThreadSafetyFindingDataTest#testSeveralSinksAreOneSortedSubject :: control :: M-TS-DATA-SUBJECT-UNSORTED',
+			'unit.check.ThreadSafetyFindingDataTest#testTheWayWarningCarriesWhatRepeatsItsFoldedCalls :: control :: M-TS-REPEATED-BY-MERGE',
 			'unit.check.ThreadSafetyFindingDataTest#testThrowHeldDataFollowsTheRaiser :: control :: M-TS-DATA-RAISER-CHAIN',
 			'unit.check.ThreadSafetyFoldingTest#testAFunctionOnlyASinkCallsIsTheSinks :: control :: M-TS-INSIDE-SINK-DIRECT-ONLY',
 			'unit.check.ThreadSafetyFoldingTest#testAHoldInsideAnotherIsItsFinding :: control :: M-TS-NEST-OFF',
@@ -6245,6 +6248,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-FOLD-SITE-LOCK',
 			'M-TS-FOLD-SITE-THREAD',
 			'M-TS-FOLD-SITE-ONE-ORIGIN',
+			'M-TS-REPEATED-BY-OFF',
+			'M-TS-REPEATED-BY-SELF',
+			'M-TS-REPEATED-BY-MERGE',
 			'M-TS-FOLD-SITE-CYCLE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];

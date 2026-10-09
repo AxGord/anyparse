@@ -1,6 +1,7 @@
 package anyparse.query.format;
 
 import anyparse.check.Check.FindingData;
+import anyparse.check.Check.RepeatSite;
 import anyparse.check.Check.Violation;
 import anyparse.check.LongLockExplain.LongLockKind;
 import anyparse.check.LongLockExplain.LongLockReason;
@@ -228,12 +229,17 @@ final class LintFormat {
 			message: v.message
 		};
 		final data: Null<FindingData> = v.data;
-		if (data != null) Reflect.setField(record, 'data', {
-			family: data.family,
-			"function": data.member,
-			subject: data.subject,
-			chain: data.chain
-		});
+		if (data != null) {
+			final fields: Dynamic = {
+				family: data.family,
+				"function": data.member,
+				subject: data.subject,
+				chain: data.chain
+			};
+			final repeated: Null<Array<RepeatSite>> = data.repeatedBy;
+			if (repeated != null) Reflect.setField(fields, 'repeatedBy', [for (r in repeated) { "function": r.member, at: r.at }]);
+			Reflect.setField(record, 'data', fields);
+		}
 		return record;
 	}
 

@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.FindingData;
+import anyparse.check.Check.RepeatSite;
 import anyparse.check.Check.Violation;
 import anyparse.check.ErrorPaths.PathCosts;
 import anyparse.check.LockTaint.BlockingTrail;
@@ -91,6 +92,7 @@ final class MainSinkReport {
 		}
 		oneTakePerLock(graph, sites, takes);
 		oneWarningPerWay(direct, states, reportedBy);
+		noteRepeats(takes.concat(direct));
 
 		for (notice in repeats.repetition.notices()) violations.push({
 			file: '',
@@ -140,6 +142,7 @@ final class MainSinkReport {
 			for (d in list.slice(1)) if (d.finding != kept) {
 				d.finding.severity = Severity.Info;
 				d.finding.message += ' — run on the same main-thread way into ${d.edge.from} as "${kept.data?.subject}", reported there';
+				mergeRepeats(kept, d.finding);
 				for (k => v in reportedBy) if (v == d.finding) reportedBy[k] = kept;
 				final subject: String = d.finding.data?.subject ?? d.edge.to;
 				if (!named.contains(subject)) named.push(subject);
@@ -281,8 +284,63 @@ final class MainSinkReport {
 		final finding: Violation = mainSinkFinding(
 			graph, edge, sinks, states.mainPath(edge), states.edgeContext(edge), note, own && !inSink
 		);
+		attachRepeats(graph, finding, edge, repeats, climb);
 		violations.push(finding);
 		return finding;
+	}
+
+	/**
+	 * Records in the data of `finding`, at the main-thread call `edge`, what repeats that call (`repeatersOf`) when it
+	 * warns: a long call warns at itself, and this says it runs per item, which ranks it. `climb` is the walk already
+	 * made, if any.
+	 */
+	private static function attachRepeats(
+		graph: CallGraph, finding: Violation, edge: CallEdge, repeats: MainRepetition, climb: Null<MainClimb>
+	): Void {
+		final data: Null<FindingData> = finding.data;
+		if (data == null || finding.severity != Severity.Warning) return;
+		final by: Array<RepeatSite> = repeatersOf(graph, edge, repeats, climb);
+		if (by.length > 0) data.repeatedBy = by;
+	}
+
+	/**
+	 * The nearest repeating calls up the main thread's ways that run the call `edge` more than once — the call itself
+	 * when it repeats where it stands (`CallRepetition.repeated`) — each by its member and what repeats there
+	 * (`repeatSubject`); `climb` is the walk already made, if any.
+	 */
+	private static function repeatersOf(
+		graph: CallGraph, edge: CallEdge, repeats: MainRepetition, climb: Null<MainClimb>
+	): Array<RepeatSite> {
+		final repetition: CallRepetition = repeats.repetition;
+		if (repetition.repeated(edge)) return [
+			{ member: ThreadSafety.memberOf(graph, edge.from), at: repeatSubject(edge, repetition) }
+		];
+		final found: Array<RepeatOwner> = (climb ?? repeats.main.climb(edge)).owners;
+		final by: Array<RepeatSite> = [];
+		for (o in found) if (o.path.length == found[0].path.length) {
+			final site: RepeatSite = { member: ThreadSafety.memberOf(graph, o.edge.from), at: repeatSubject(o.edge, repetition) };
+			if (!by.exists(r -> r.member == site.member && r.at == site.at)) by.push(site);
+		}
+		return by;
+	}
+
+	/** Adds to the warning `kept` the repeating calls of the finding `folded` it now reports. */
+	private static function mergeRepeats(kept: Violation, folded: Violation): Void {
+		final into: Null<FindingData> = kept.data;
+		final from: Array<RepeatSite> = folded.data?.repeatedBy ?? [];
+		if (into == null || from.length == 0) return;
+		final by: Array<RepeatSite> = into.repeatedBy ?? [];
+		for (r in from) if (!by.exists(x -> x.member == r.member && x.at == r.at)) by.push(r);
+		into.repeatedBy = by;
+	}
+
+	/** Says in the message of each warning of `warned` what repeats its call (`FindingData.repeatedBy`), when anything does. */
+	private static function noteRepeats(warned: Array<{ edge: CallEdge, finding: Violation }>): Void {
+		for (w in warned) {
+			final by: Array<RepeatSite> = w.finding.data?.repeatedBy ?? [];
+			if (w.finding.severity == Severity.Warning && by.length > 0)
+				w.finding.message += ' — repeated by ${[for (r in by) '${r.member} at ${r.at}'].join(', ')}';
+		}
 	}
 
 	/**

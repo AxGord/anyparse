@@ -55,6 +55,21 @@ typedef FindingData = {
 	var member: String;
 	var subject: String;
 	var chain: Array<String>;
+
+	/**
+	 * The repeating calls that run the finding's call more than once, when the rule says so (`thread-safety`: a long
+	 * sink a loop up the main thread's way repeats) — what ranks a per-item stall above a one-off one; not identity.
+	 */
+	@:optional var repeatedBy: Null<Array<RepeatSite>>;
+}
+
+/**
+ * A repeating call (`FindingData.repeatedBy`): the member it sits in and what repeats there, by name — a loop's header,
+ * the call a value is handed to, or the call itself.
+ */
+typedef RepeatSite = {
+	var member: String;
+	var at: String;
 }
 
 /**

@@ -59,6 +59,7 @@ class ThreadSafetyConditionsTest extends Test {
 		Assert.same(
 			[
 				'main thread reaches blocking "Sys.sleep" (also reachable from a background thread): A.new -> A.done -> Sys.sleep'
+				+ ' — repeated by A.new at A.done'
 			],
 			sleepFindings('', [
 				STORE_SLOT,
