@@ -75,21 +75,29 @@ final class ProjectCoverage {
 	}
 
 	#if (sys || nodejs)
-	/** Whether every `.hx` file of the project `document` declares, but those `skip` answers for, is a run file. */
+	/**
+	 * Whether every `.hx` file of the project `document` declares is a run file, those `skip` answers for left out — asked
+	 * of each path relative to the document's directory, as `exclude` is written. A directory reached twice (a symlink
+	 * cycle) is walked once; one that cannot be listed leaves the project uncovered.
+	 */
 	private function holdsProject(document: String, skip: (String) -> Bool): Bool {
 		final content: Null<String> = try File.getContent(document) catch (_: Exception) null;
 		if (content == null) return false;
-		final base: String = Path.directory(document);
+		final base: String = Path.addTrailingSlash(Path.directory(document));
 		final roots: Array<String> = LintConfig.parse(content, base).resolutionRoots();
 		final cwd: String = Sys.getCwd();
 		final stack: Array<String> = roots.length > 0 ? [for (r in roots) Path.isAbsolute(r) ? r : Path.join([base, r])] : [base];
+		final walked: Map<String, Bool> = [];
 		while (stack.length > 0) {
 			final path: String = stack.pop() ?? '';
-			if (skip(path) || !FileSystem.exists(path)) continue;
+			if (skip(path.startsWith(base) ? path.substring(base.length) : path) || !FileSystem.exists(path)) continue;
+			final canonical: String = OracleCoverage.canonical(cwd, path);
 			if (!FileSystem.isDirectory(path)) {
-				if (path.endsWith('.hx') && !_run.exists(OracleCoverage.canonical(cwd, path))) return false;
+				if (path.endsWith('.hx') && !_run.exists(canonical)) return false;
 				continue;
 			}
+			if (walked.exists(canonical)) continue;
+			walked[canonical] = true;
 			final names: Null<Array<String>> = try FileSystem.readDirectory(path) catch (_: Exception) null;
 			if (names == null) return false;
 			for (name in names) stack.push(Path.join([path, name]));

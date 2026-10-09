@@ -17652,7 +17652,7 @@
 			"name": "M-TS-COVER-WALK",
 			"type": "anyparse.check.ProjectCoverage",
 			"method": "holdsProject",
-			"find": "if (path.endsWith('.hx') && !_run.exists(OracleCoverage.canonical(cwd, path))) return false;",
+			"find": "if (path.endsWith('.hx') && !_run.exists(canonical)) return false;",
 			"replace": "",
 			"note": "a run over part of a closed project counts as covering it"
 		},
@@ -17660,8 +17660,8 @@
 			"name": "M-TS-COVER-EXCLUDE",
 			"type": "anyparse.check.ProjectCoverage",
 			"method": "holdsProject",
-			"find": "if (skip(path) || !FileSystem.exists(path)) continue;",
-			"replace": "if (!FileSystem.exists(path)) continue;",
+			"find": "skip(path.startsWith(base) ? path.substring(base.length) : path) || ",
+			"replace": "",
 			"note": "an excluded file the run leaves out breaks the coverage"
 		},
 		{
