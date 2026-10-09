@@ -196,7 +196,9 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			graph, sites, taints, paths, { repetition: repetition, main: repeatsOnMain, runs: runsMain }, states, violations
 		);
 		reportMalformedPairs(sets, violations);
-		reportLockHeld(graph, sites, judged, taints, { costs: paths, reported: reported }, states, violations);
+		reportLockHeld(
+			graph, sites, judged, taints, { costs: paths, reported: reported, enclosed: dominance.enclosed }, states, violations
+		);
 		reportThrowHeld(graph, acquires.concat(helperHolds), throws, violations);
 		final order: LockOrder = new LockOrder(graph, conditions, acquires.concat(helperHolds));
 		for (v in order.report(states, inertRef, CTX_MAIN | CTX_QUIET, CTX_BG, CHAIN_CAP)) violations.push(v);
@@ -638,7 +640,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	 */
 	private static function reportLockHeld(
 		graph: CallGraph, sites: LockSites, acquires: Array<LockAcquire>, taints: LockTaint,
-		judged: { costs: PathCosts, reported: Map<String, String> }, states: ThreadStates, violations: Array<Violation>
+		judged: { costs: PathCosts, reported: Map<String, String>, enclosed: (LockAcquire) -> Bool }, states: ThreadStates,
+		violations: Array<Violation>
 	): Void {
 		final paths: PathCosts = judged.costs;
 		final seen: Array<String> = [];
@@ -699,6 +702,20 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			if (!short) reported.push({ hold: a, calls: [for (b in blocking) b.edge], finding: finding });
 		}
 		nestHolds(reported);
+		foldEnclosed(reported, judged.enclosed);
+	}
+
+	/**
+	 * Each warned hold a hold of the same lock its every caller keeps encloses (`LockDominance.enclosed`) turns info: the
+	 * enclosing hold's window spans the call into it, and its finding names what this one's does.
+	 */
+	private static function foldEnclosed(
+		reported: Array<{ hold: LockAcquire, calls: Array<CallEdge>, finding: Violation }>, enclosed: (LockAcquire) -> Bool
+	): Void {
+		for (r in reported) if (r.finding.severity == Severity.Warning && enclosed(r.hold)) {
+			r.finding.severity = Severity.Info;
+			r.finding.message += ' — taken inside a hold of ${r.hold.lock ?? r.hold.pair.lockId} every caller keeps, whose finding names these calls';
+		}
 	}
 
 

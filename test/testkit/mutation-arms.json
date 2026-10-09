@@ -17687,6 +17687,22 @@
 			"find": "if (owner != null) owners.moved[siteKey(edge)] = owner;",
 			"replace": "",
 			"note": "a sink call whose warning moved to its repeating owner counts as reported nowhere"
+		},
+		{
+			"name": "M-TS-ENCLOSED-OFF",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "reportLockHeld",
+			"find": "foldEnclosed(reported, judged.enclosed);",
+			"replace": "",
+			"note": "a hold every caller's hold of its lock encloses warns on its own"
+		},
+		{
+			"name": "M-TS-ENCLOSED-ANY-STATE",
+			"type": "anyparse.check.LockDominance",
+			"method": "enclosed",
+			"find": "running.foreach(",
+			"replace": "running.exists(",
+			"note": "one caller keeping the lock encloses the hold for all"
 		}
 	]
 }

@@ -120,6 +120,24 @@ final class LockDominance {
 	}
 
 	/**
+	 * Whether the hold `a` is a re-take inside a hold its callers keep: every state of its function that runs its take
+	 * already must-holds its lock, on the object it takes it on, right where it takes it (`MustHeld.at`, the meet over
+	 * its callers) — TM's `StandardFileSystem.cloudLocalRenameAndMoveItem`, whose `_batchMutex` take runs inside the
+	 * sync's own batch hold.
+	 */
+	public function enclosed(a: LockAcquire): Bool {
+		final lock: Null<String> = a.lock;
+		final object: Null<String> = _must.holdObject(a);
+		final at: Null<Span> = a.edge.span;
+		if (lock == null || object == null || at == null) return false;
+		final running: Array<String> = [
+			for (s in _states.statesOf(a.edge.from)) if (_conditions.carried(a.edge, s.valuation, s.ctx) != 0) s.valuation
+		];
+		return running.length > 0
+			&& running.foreach(v -> _must.at(a.edge.from, v, a.edge.file, at.from).contains(MustHeld.heldOn(lock, object)));
+	}
+
+	/**
 	 * Whether the take `take` waits for no long hold while the holds `under` are held: on one's object, a re-take of its
 	 * lock by a take that may repeat it (`reentrant`), or a take of a lock it dominates (`dominators`).
 	 */

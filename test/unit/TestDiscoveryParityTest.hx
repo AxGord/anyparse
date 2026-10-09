@@ -387,6 +387,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.ThreadSafetyCostTest',
 		'unit.check.ThreadSafetyDeadCatchTest',
 		'unit.check.ThreadSafetyDominanceTest',
+		'unit.check.ThreadSafetyEnclosedHoldTest',
 		'unit.check.ThreadSafetyErrorPathTest',
 		'unit.check.ThreadSafetyFactsTest',
 		'unit.check.ThreadSafetyFindingDataTest',
@@ -2165,6 +2166,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyDominanceTest#testAMainTakeUnderTheOuterLockIsBrief :: control :: M-TS-DOM-OFF',
 			'unit.check.ThreadSafetyDominanceTest#testAnotherObjectsLockIsNotDominated :: control :: M-TS-DOM-ANY-OBJECT',
 			'unit.check.ThreadSafetyDominanceTest#testExplainLongNamesTheDominatedLock :: control :: M-TS-DOM-EXPLAIN-DROPPED',
+			'unit.check.ThreadSafetyEnclosedHoldTest#testAHoldEveryCallerEnclosesIsTheirs :: control :: M-TS-ENCLOSED-OFF',
+			'unit.check.ThreadSafetyEnclosedHoldTest#testOneCallerOutsideTheLockKeepsItsOwn :: control :: M-TS-ENCLOSED-ANY-STATE',
 			'unit.check.ThreadSafetyErrorPathTest#testABlockAlsoOutsideTheCatchWarns :: control :: M-TS-ERROR-ANY,M-TS-ERROR-TAKE-ANY',
 			'unit.check.ThreadSafetyErrorPathTest#testABlockInTheHoldsOwnCatchIsInfo :: control :: M-TS-ERROR-WINDOW-OFF',
 			'unit.check.ThreadSafetyErrorPathTest#testABlockOnlyInACalleesCatchIsInfo :: control :: '
@@ -6025,7 +6028,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-ARG-FINAL-LOCAL-READ',
 			'M-TS-MAINONLY-ELSEWHERE-OFF',
 			'M-TS-MAINONLY-SAME-MEMBER',
-			'M-TS-MAINONLY-MOVED'
+			'M-TS-MAINONLY-MOVED',
+			'M-TS-ENCLOSED-OFF',
+			'M-TS-ENCLOSED-ANY-STATE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

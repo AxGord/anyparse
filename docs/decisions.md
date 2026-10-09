@@ -1625,5 +1625,9 @@ decided the question; it may not become a record of runs.
   `deleteItemInternal` / `moveCloudFolderSubItemsAction2`; the hold turns info when (a) warns of every long call it
   names at another member, and keeps the warning where (a) reports the work at the holder itself, as for
   `FileListMoveFiles.moveItems`, whose loop owns the per-item calls — branch `feat/ts-precision-2`
+- folding nested holds only within one function (β3) → a multi-lock helper judged at a caller that runs inside the
+  sync's own batch hold (`cloudLocalRenameAndMoveItem`, `removeCloudLocal` under `moveLocalQueue` /
+  `removeLocalQueue`) was a second key for one hold; a hold whose lock every state of its function already must-holds
+  on the same object at the take is the enclosing hold's (`LockDominance.enclosed`) — branch `feat/ts-precision-2`
 - judging "inside a catch" off the witness chain the finding prints → the chain is one way; a second way outside every
   catch must keep the warning, which only a solve without the catch edges can see — branch `feat/ts-precision-2`
