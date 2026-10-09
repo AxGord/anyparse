@@ -84,6 +84,9 @@ private typedef WalkState = {
 	final ctx: Int;
 	final repeated: Bool;
 	final under: Null<String>;
+
+	/** The classes the state's function runs on an instance of (`AllocationSets`), when the way to it says. */
+	final self: Null<String>;
 }
 
 /**
@@ -141,6 +144,9 @@ final class LockTaint {
 	/** The takes that never wait (`QuietLocks`). */
 	public final quiet: QuietLocks;
 
+	/** The receivers whose classes the code says (`AllocationSets`): a dispatch none of them resolves to runs nothing. */
+	private final _allocations: Null<AllocationSets>;
+
 	/** `<held>|<function>|<valuation>|<bit>` -> the step toward a blocking call from that state. */
 	private final _reaching: Map<String, TaintStep> = [];
 
@@ -165,9 +171,10 @@ final class LockTaint {
 
 	public function new(
 		graph: CallGraph, sinkIds: Array<String>, listsOf: (String) -> ChainLists, sites: LockSites, long: Array<String>,
-		conditions: EdgeConditions, threads: ThreadStates, ?cost: TaintCost
+		conditions: EdgeConditions, threads: ThreadStates, ?cost: TaintCost, ?allocations: AllocationSets
 	) {
 		_cost = cost;
+		_allocations = allocations;
 		quiet = new QuietLocks(sites, listsOf);
 		_graph = graph;
 		_sinkIds = sinkIds;
@@ -185,7 +192,7 @@ final class LockTaint {
 
 	/** A taint over the same graph, lists, sites, conditions and threads as this one, judging locks long by `long`, with nothing kept. */
 	public function withLong(long: Array<String>): LockTaint {
-		return new LockTaint(_graph, _sinkIds, listsOf, _sites, long, _conditions, _threads, _cost);
+		return new LockTaint(_graph, _sinkIds, listsOf, _sites, long, _conditions, _threads, _cost, _allocations);
 	}
 
 	/**
@@ -199,7 +206,7 @@ final class LockTaint {
 			takes: true,
 			dominance: dominance,
 			errors: errors
-		});
+		}, _allocations);
 	}
 
 	/**
@@ -217,7 +224,7 @@ final class LockTaint {
 				takes: false,
 				dominance: cost.dominance,
 				errors: cost.errors
-			});
+			}, _allocations);
 	}
 
 	/**
@@ -308,8 +315,13 @@ final class LockTaint {
 				continue;
 			}
 			if (takesLock(edge)) continue;
+			final classes: Null<String> = _allocations?.receiverClasses(edge, null);
+			if (_allocations?.dispatches(edge, classes) == false) continue;
 			final carried: Null<String> = cost?.dominance.carry(under, edge);
-			final key: Null<String> = reach(edge.to, _conditions.bind(edge, state.valuation), live, held, repeats, carried);
+			final self: Null<String> = _allocations?.into(edge, classes);
+			final key: Null<String> = reach(
+				edge.to, _conditions.bind(edge, state.valuation), live, { held: held, repeated: repeats }, carried, self
+			);
 			if (key != null) return trailFrom(edge, key, held);
 		}
 		return null;
@@ -363,8 +375,12 @@ final class LockTaint {
 	 * whether a call on the way to it repeats (`repeated`, from the caller for the first): a short call (`costsLong`)
 	 * counts only on a path that repeats; run once, it ends no path and leads nowhere, like any sink.
 	 */
-	private function reach(id: String, valuation: String, ctx: Int, held: Null<String>, repeated: Bool, under: Null<String>): Null<String> {
-		final root: String = stateKey(held, id, valuation, ctx, repeated, under);
+	private function reach(
+		id: String, valuation: String, ctx: Int, flags: { held: Null<String>, repeated: Bool }, under: Null<String>, self: Null<String>
+	): Null<String> {
+		final held: Null<String> = flags.held;
+		final repeated: Bool = flags.repeated;
+		final root: String = stateKey(held, id, valuation, ctx, repeated, under) + '|${self ?? ''}';
 		if (_reaching.exists(root)) return root;
 		if (_clean.exists(root)) return null;
 		final queue: Array<WalkState> = [
@@ -374,7 +390,8 @@ final class LockTaint {
 				valuation: valuation,
 				ctx: ctx,
 				repeated: repeated,
-				under: under
+				under: under,
+				self: self
 			}
 		];
 		final parents: Map<String, { key: String, edge: CallEdge }> = [];
@@ -388,7 +405,7 @@ final class LockTaint {
 				final live: Int = _conditions.carried(edge, state.valuation, state.ctx);
 				if (live == 0) continue;
 				final repeats: Bool = state.repeated || repeatsAt(edge);
-				if (_sinkIds.contains(edge.to) && blocks(edge, held) || retakesElsewhere(edge, held)) {
+				if (blockingHere(edge, held)) {
 					// a short call run once on this path waits too little to count, and a sink leads nowhere
 					if (!counts(edge, held, repeats, state.valuation) || briefUnder(state.under, edge)) continue;
 					final step: TaintStep = { edge: edge, next: null };
@@ -397,9 +414,9 @@ final class LockTaint {
 					return root;
 				}
 				if (takesLock(edge)) continue;
-				final nextValuation: String = _conditions.bind(edge, state.valuation);
-				final nextUnder: Null<String> = _cost?.dominance.carry(state.under, edge);
-				final next: String = stateKey(held, edge.to, nextValuation, live, repeats, nextUnder);
+				final nextState: Null<WalkState> = following(state, edge, live, { held: held, repeated: repeats });
+				if (nextState == null) continue;
+				final next: String = nextState.key;
 				if (_clean.exists(next) || seen.exists(next)) continue;
 				seen[next] = true;
 				parents[next] = { key: state.key, edge: edge };
@@ -407,18 +424,40 @@ final class LockTaint {
 					markPath(next, parents);
 					return root;
 				}
-				queue.push({
-					key: next,
-					id: edge.to,
-					valuation: nextValuation,
-					ctx: live,
-					repeated: repeats,
-					under: nextUnder
-				});
+				queue.push(nextState);
 			}
 		}
 		for (key in seen.keys()) _clean[key] = true;
 		return null;
+	}
+
+	/** Whether the call `edge` of a walk blocks itself under a hold of `held`: a sink call that blocks, or a re-take elsewhere. */
+	private inline function blockingHere(edge: CallEdge, held: Null<String>): Bool {
+		return _sinkIds.contains(edge.to) && blocks(edge, held) || retakesElsewhere(edge, held);
+	}
+
+	/**
+	 * The state the call `edge` of `state` enters on `live`, under a hold of `flags.held` and repeating or not: its
+	 * valuation bound, the judged hold carried into it (`LockDominance.carry`), and the classes it runs on
+	 * (`AllocationSets.into`); null for a dispatch no class the receiver may be resolves to, which runs nothing here.
+	 */
+	private function following(
+		state: WalkState, edge: CallEdge, live: Int, flags: { held: Null<String>, repeated: Bool }
+	): Null<WalkState> {
+		final classes: Null<String> = _allocations?.receiverClasses(edge, state.self);
+		if (_allocations?.dispatches(edge, classes) == false) return null;
+		final valuation: String = _conditions.bind(edge, state.valuation);
+		final under: Null<String> = _cost?.dominance.carry(state.under, edge);
+		final self: Null<String> = _allocations?.into(edge, classes);
+		return {
+			key: stateKey(flags.held, edge.to, valuation, live, flags.repeated, under) + '|${self ?? ''}',
+			id: edge.to,
+			valuation: valuation,
+			ctx: live,
+			repeated: flags.repeated,
+			under: under,
+			self: self
+		};
 	}
 
 	/** Marks every state on the walk's way to `found` (a state that reaches a blocking call) as reaching one too. */

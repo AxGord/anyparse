@@ -1592,5 +1592,11 @@ decided the question; it may not become a record of runs.
   shape: a `throw` of anything else is the function's own throw, which stays unfollowed by design — a project function
   whose throw callers must expect goes in `throwers` by name (TM's `badNamesHandler`, not configured: on 1d1ba147 the
   healing runs outside the tree lock) — branch `feat/ts-precision-2`
+- every override of a dispatch running wherever its receiver came from → TM's `APIRequest2.doRequest` builds
+  `urlLoader` as a thread or simple loader and `BaseNativeURLLoader.load`'s `go()` reached `BlockingNativeURLLoader.go`
+  anyway; the walk hands down the classes the receiver may be (`AllocationSets`: a `new`, a sealed allocation set of a
+  field, the running object's) and drops a dispatch none resolves to. Path-sensitive on the hold walk only: the
+  main-thread finding is per call site, and main does reach the blocking loader through `goBlocked`, so
+  `A|BlockingNativeURLLoader.go` stays (its witness chain is still the `request` one) — branch `feat/ts-precision-2`
 - judging "inside a catch" off the witness chain the finding prints → the chain is one way; a second way outside every
   catch must keep the warning, which only a solve without the catch edges can see — branch `feat/ts-precision-2`

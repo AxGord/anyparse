@@ -380,6 +380,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.SuppressionSliceTest',
 		'unit.check.SwallowedExceptionCheckTest',
 		'unit.check.TailMergeCheckTest',
+		'unit.check.ThreadSafetyAllocationTest',
 		'unit.check.ThreadSafetyCarriedHoldTest',
 		'unit.check.ThreadSafetyCheckTest',
 		'unit.check.ThreadSafetyConditionsTest',
@@ -2007,6 +2008,11 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.StructuralConformanceProofTest#testUnresolvableSupertypeSuppliesNoMember :: control :: M-STRUCT-DECLARES-LOOSE',
 			'unit.check.TailMergeCheckTest#testStructuralIdentityHalfNeeded :: control :: M-TAILMERGE-NORM-ONLY',
 			'unit.check.TailMergeCheckTest#testSwitchCaseOutOfScope :: control :: M-TAILMERGE-FALL-KEPT',
+			'unit.check.ThreadSafetyAllocationTest#testAConstructionRunsOnItsOwnClass :: control :: M-TS-ALLOC-NEW',
+			'unit.check.ThreadSafetyAllocationTest#testALibraryClassRunsNoProjectOverride :: control :: M-TS-ALLOC-LIBRARY',
+			'unit.check.ThreadSafetyAllocationTest#testASealedFieldRunsOnlyItsClassesOverrides :: control :: M-TS-ALLOC-OFF',
+			'unit.check.ThreadSafetyAllocationTest#testAnyOtherWriteMakesTheFieldUnknown :: control :: M-TS-ALLOC-ANY-WRITE',
+			'unit.check.ThreadSafetyAllocationTest#testTheDeclaredValueCounts :: control :: M-TS-ALLOC-DECLARED',
 			'unit.check.ThreadSafetyCarriedHoldTest#testACalleeGivingTheLockBackCarriesNothing :: control :: M-TS-CARRY-RELEASE',
 			'unit.check.ThreadSafetyCarriedHoldTest#testADominatedTakeInACalleeOnTheHeldObjectIsBrief :: control :: M-TS-CARRY-OFF',
 			'unit.check.ThreadSafetyCarriedHoldTest#testAFieldWrittenOutsideTheConstructorNamesNoObject :: control :: M-TS-PATH-STABLE-ANY',
@@ -5983,7 +5989,12 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-HELPER-SIBLINGS',
 			'M-TS-RETHROW-OFF',
 			'M-TS-RETHROW-ANY-NAME',
-			'M-TS-RETHROW-NESTED'
+			'M-TS-RETHROW-NESTED',
+			'M-TS-ALLOC-OFF',
+			'M-TS-ALLOC-ANY-WRITE',
+			'M-TS-ALLOC-DECLARED',
+			'M-TS-ALLOC-NEW',
+			'M-TS-ALLOC-LIBRARY'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

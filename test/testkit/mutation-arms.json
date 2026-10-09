@@ -17527,6 +17527,46 @@
 			"find": "if (_nestedFnKinds.contains(node.kind)) return false;",
 			"replace": "",
 			"note": "a rethrow inside a lambda the catch builds counts"
+		},
+		{
+			"name": "M-TS-ALLOC-OFF",
+			"type": "anyparse.check.AllocationSets",
+			"method": "dispatches",
+			"find": "if (classes == null || edge.dispatchType == null && edge.kind != New) return true;",
+			"replace": "if (classes == null || edge.kind == New || edge.kind != New) return true;",
+			"note": "every override of a dispatch runs whatever the receiver was built as"
+		},
+		{
+			"name": "M-TS-ALLOC-ANY-WRITE",
+			"type": "anyparse.check.AllocationSets",
+			"method": "collect",
+			"find": "if (values == null) return false;",
+			"replace": "if (values == null) return true;",
+			"note": "a write of anything but a `new` leaves a field's classes known"
+		},
+		{
+			"name": "M-TS-ALLOC-DECLARED",
+			"type": "anyparse.check.AllocationSets",
+			"method": "declared",
+			"find": "return decl.children.length == 0 ? [] : constructed(decl.children[0]);",
+			"replace": "return [];",
+			"note": "a field's declared value adds no class"
+		},
+		{
+			"name": "M-TS-ALLOC-NEW",
+			"type": "anyparse.check.AllocationSets",
+			"method": "receiverClasses",
+			"find": "if (edge.kind == New) return constructedAt(edge);",
+			"replace": "if (edge.kind == New) return null;",
+			"note": "the object a `new` builds is of no known class"
+		},
+		{
+			"name": "M-TS-ALLOC-LIBRARY",
+			"type": "anyparse.check.AllocationSets",
+			"method": "resolves",
+			"find": "return target.isExternal;",
+			"replace": "return true;",
+			"note": "a library class may run any project override"
 		}
 	]
 }

@@ -157,7 +157,9 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final judged: Array<LockAcquire> = judgedHolds(sites, acquires, helperHolds);
 		// the locks whose take blocks at all: held across any blocking call, short ones included
 		final blocking: Array<String> = [];
-		final taints: LockTaint = new LockTaint(graph, sinkIds, listsOf, sites, blocking, conditions, states);
+		final taints: LockTaint = new LockTaint(
+			graph, sinkIds, listsOf, sites, blocking, conditions, states, null, new AllocationSets(graph, plugin, sites)
+		);
 		solveLongLocks(sites, judged, blocking, taints);
 		// the locks whose take blocks LONG: held across a call that blocks long, or a short one that repeats
 		final repetition: CallRepetition = new CallRepetition(graph, trees, plugin.refShape(), listsOf);
