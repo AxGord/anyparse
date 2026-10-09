@@ -11148,7 +11148,7 @@
 			"name": "M-TS-HELD-ANY-THREAD",
 			"type": "anyparse.check.ThreadSafety",
 			"method": "reportLockHeld",
-			"find": "if (a.uncontended || !mainTaken.contains(lock ?? a.pair.lockId)) continue;",
+			"find": "if (a.uncontended || !mainTaken.contains(HoldGrade.takenKey(a))) continue;",
 			"replace": "if (a.uncontended) continue;",
 			"note": "a hold of a lock only background threads take is reported as a main-thread stall"
 		},
@@ -11420,8 +11420,8 @@
 			"name": "M-TS-ORDER-HELPER-NEVER-RELEASES",
 			"type": "anyparse.check.LockSites",
 			"method": "collectHelperHolds",
-			"find": "for (o in list) (opens ? opened : closed).push({ call: call, op: o.call });",
-			"replace": "for (o in list) if (opens) opened.push({ call: call, op: o.call });",
+			"find": "(opens ? opened : closed).push({ call: call, op: o.call });",
+			"replace": "if (opens) opened.push({ call: call, op: o.call });",
 			"note": "a helper giving two locks back ends no hold, so every call after it runs holding both"
 		},
 		{
@@ -17028,8 +17028,8 @@
 			"name": "M-TS-DOM-ANY-HOLD",
 			"type": "anyparse.check.LockDominance",
 			"method": "solveDominators",
-			"find": "found[lock] = known == null ? held : known.filter(l -> held.contains(l));",
-			"replace": "if (held.length > 0) found[lock] = known == null ? held : known.filter(l -> held.contains(l));",
+			"find": "found[lock] = (known == null ? held : known.filter(l -> held.contains(l))).filter(excludes);",
+			"replace": "if (held.length > 0) found[lock] = (known == null ? held : known.filter(l -> held.contains(l))).filter(excludes);",
 			"note": "a long hold holding no other lock is left out of the meet"
 		},
 		{
@@ -17044,8 +17044,8 @@
 			"name": "M-TS-DOM-EXITS-IGNORED",
 			"type": "anyparse.check.MustHeld",
 			"method": "leavesFirst",
-			"find": "return exits.contains(last.kind)",
-			"replace": "return false && exits.contains(last.kind)",
+			"find": "return returns.contains(last.kind) || (_shape.throwKinds ?? []).contains(last.kind) && !_body.inTryBody(give.file, site);",
+			"replace": "return false;",
 			"note": "a give on a path that returns at once still kills the lock"
 		},
 		{
@@ -17452,8 +17452,8 @@
 			"name": "M-TS-SHARED-HOLD",
 			"type": "anyparse.check.HoldGrade",
 			"method": "mainTaken",
-			"find": "&& !taints.quiet.sharedOnly(lock)",
-			"replace": "&& lock != ''",
+			"find": "(a.lock == null || !taints.quiet.sharedOnly(key))",
+			"replace": "(a.lock == null || key != '')",
 			"note": "a hold of a lock only ever taken shared still stalls the main thread"
 		},
 		{
@@ -17468,8 +17468,8 @@
 			"name": "M-TS-HELPER-B-OFF",
 			"type": "anyparse.check.HoldGrade",
 			"method": "judged",
-			"find": "return [for (a in acquires) if (!sites.helpers.contains(a.edge.from)) a].concat(helperHolds);",
-			"replace": "return [for (a in acquires) if (!sites.helpers.contains(a.edge.from)) a];",
+			"find": "return acquires.concat(helperHolds);",
+			"replace": "return acquires;",
 			"note": "a multi-lock helper's call opens no hold its caller is judged by"
 		},
 		{
@@ -17684,7 +17684,7 @@
 			"name": "M-TS-ENCLOSED-OFF",
 			"type": "anyparse.check.ThreadSafety",
 			"method": "reportLockHeld",
-			"find": "foldEnclosed(reported, judged.enclosed);",
+			"find": "foldEnclosed(reported, judged.enclosed, covers);",
 			"replace": "",
 			"note": "a hold every caller's hold of its lock encloses warns on its own"
 		},
@@ -17700,8 +17700,8 @@
 			"name": "M-TS-UNNAMED-PAIR",
 			"type": "anyparse.check.ThreadSafety",
 			"method": "reportLockHeld",
-			"find": "if (a.uncontended || !mainTaken.contains(lock ?? a.pair.lockId)) continue;",
-			"replace": "if (a.uncontended || lock != null && !mainTaken.contains(lock)) continue;",
+			"find": "if (a.uncontended || !mainTaken.contains(HoldGrade.takenKey(a))) continue;",
+			"replace": "if (a.uncontended || a.lock != null && !mainTaken.contains(HoldGrade.takenKey(a))) continue;",
 			"note": "a hold of an unnamed lock warns though the main thread never takes its pair"
 		},
 		{
@@ -17780,7 +17780,7 @@
 			"name": "M-TS-FOLD-OFF",
 			"type": "anyparse.check.RootCauseFold",
 			"method": "fold",
-			"find": "for (i => h in warned) if (state[i] == 2) turn(h, reasons[i], i, warned, doing);",
+			"find": "for (i => h in warned) if (state[i] == Folded) turn(h, reasons[i], i, doing);",
 			"replace": "",
 			"note": "no hold finding folds onto the warnings that cover it"
 		},
@@ -17796,8 +17796,8 @@
 			"name": "M-TS-FOLD-SITE",
 			"type": "anyparse.check.RootCauseFold",
 			"method": "settled",
-			"find": "case Site(key): (doing[key] ?? []).exists(j -> j != i && state[j] != 0);",
-			"replace": "case Site(key): false;",
+			"find": "case Site(key, repeated): (doing[key] ?? []).exists(d -> covers(d, i, repeated) && state[d.at] != Open);",
+			"replace": "case Site(key, repeated): false;",
 			"note": "work another warned hold does too never covers a hold"
 		},
 		{
@@ -17932,7 +17932,7 @@
 			"name": "M-TS-UNNAMED-BY-PAIR",
 			"type": "anyparse.check.HoldGrade",
 			"method": "takenKey",
-			"find": "lock ?? UNNAMED + a.pair.lockId.substring(0, a.pair.lockId.lastIndexOf(.))",
+			"find": "lock ?? UNNAMED + a.pair.lockId.substring(0, a.pair.lockId.lastIndexOf('.'))",
 			"replace": "lock ?? a.pair.lockId",
 			"note": "a lock no member names is told apart by its pair take member: an exclusive take and a shared one of the same class never meet"
 		},
@@ -17940,16 +17940,16 @@
 			"name": "M-TS-HELPER-BODY-WORK",
 			"type": "anyparse.check.LockSites",
 			"method": "collectHelperHolds",
-			"find": "\n\t\t\t|| !WrapperOps.lockTrafficOnly(_graph, { shape: _shape, nested: _nestedFnKinds }, id, fn, list)\n",
-			"replace": "\n",
+			"find": "|| !WrapperOps.lockTrafficOnly(_graph, { shape: _shape, nested: _nestedFnKinds }, id, fn, list)",
+			"replace": "|| false",
 			"note": "a function doing work beside its lock calls still counts as a helper, so the work under its locks is judged nowhere"
 		},
 		{
 			"name": "M-TS-HELPER-DISPATCH",
 			"type": "anyparse.check.LockSites",
 			"method": "collectHelperHolds",
-			"find": "fn == null || !WrapperOps.plainCallsOnly(_graph, id)\n",
-			"replace": "fn == null\n",
+			"find": "|| !WrapperOps.plainCallsOnly(_graph, id)",
+			"replace": "",
 			"note": "a helper reached by a dispatch counts, though the call may run another override taking nothing"
 		},
 		{
@@ -17996,7 +17996,7 @@
 			"name": "M-TS-LEAVES-CAUGHT-THROW",
 			"type": "anyparse.check.MustHeld",
 			"method": "leavesFirst",
-			"find": " && !inTryBody(give.file, site)",
+			"find": " && !_body.inTryBody(give.file, site)",
 			"replace": "",
 			"note": "a throw inside a try body leaves the function, though a catch of it goes on"
 		},
