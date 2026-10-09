@@ -159,7 +159,10 @@ class ThreadSafetyExhaustiveTest extends Test {
 		Assert.same([], leaks(run('enum abstract V(Int) { final A = 1; final B = 0; }', 'V', dead, '', '')), 'a zero value');
 		Assert.same([], leaks(run(CLOSED, 'V', dead, '', '')), 'the implicit zero');
 		Assert.same([], leaks(run(CLOSED, 'V', 'mode = B; $dead')), 'a value written');
-		Assert.same([], leaks(run(CLOSED, 'V', 'mode = m; $dead', 'm:V')), 'a parameter written');
+		Assert.same(
+			[], leaks(run(CLOSED, 'V', dead, '', ' = A', 'function set(m:V):Void mode = m; function init():Void set(B);')),
+			'a parameter written'
+		);
 		Assert.same(['S.work'], leaks(run(CLOSED, 'V', 'mode = m; $dead', '?m:V')), 'an optional parameter written');
 		#else
 		Assert.pass('non-sys target');
@@ -243,6 +246,35 @@ class ThreadSafetyExhaustiveTest extends Test {
 		Assert.same(['S.work'], leaks(run(CLOSED, 'V', dead, '', ' = A', '', null, [outside])), 'a project file outside the run');
 		Assert.same([], leaks(run(CLOSED, 'V', dead)), 'the whole project');
 		Assert.same(['S.work'], leaks(run(CLOSED, 'V', dead, '', ' = A', '', null, null, false)), 'no closedWorld');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A parameter written as the abstract holds a value only where every call of its function hands one: a `Dynamic`
+	 * argument does not, nor does a call the run cannot see, the function handed on as a value (review round 2
+	 * `ex2-param-dynamic`).
+	 */
+	@:pin('control') @:killer('M-TS-EXH-PARAM-CALLERS') @:killer('M-TS-EXH-PARAM-REF')
+	public function testAParameterHoldsValuesOnlyWhereEveryCallHandsOne(): Void {
+		#if (sys || nodejs)
+		final dead: String = 'switch mode { case A: step(); case B: step(); case _: throw "x"; }';
+		final setter: String = 'function setMode(v:V):Void mode = v;';
+		Assert.same([], leaks(run(CLOSED, 'V', dead, '', ' = A', '$setter function load():Void setMode(B);')), 'a value handed');
+		Assert.same(
+			['S.work'], leaks(run(CLOSED, 'V', dead, '', ' = A', '$setter function load(d:Dynamic):Void setMode(d);')), 'a dynamic handed'
+		);
+		Assert.same(
+			['S.work'],
+			leaks(run(CLOSED, 'V', dead, '', ' = A', '$setter function load():Void { final f:(V) -> Void = setMode; f(B); }')),
+			'handed on as a value'
+		);
+		final relay: String = 'function setMode(?v:V):Void mode = v ?? A; function relay(?v:V):Void setMode(v);';
+		Assert.same([], leaks(run(CLOSED, 'V', dead, '', ' = A', '$relay function load():Void relay();')), 'an optional parameter relayed');
+		Assert.same(
+			['S.work'], leaks(run(CLOSED, 'V', dead, '', ' = A', '$relay function load(d:Dynamic):Void relay(d);')), 'a dynamic relayed'
+		);
 		#else
 		Assert.pass('non-sys target');
 		#end

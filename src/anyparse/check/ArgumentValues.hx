@@ -87,7 +87,7 @@ final class ArgumentValues {
 		if (edge.kind != Call && edge.kind != Virtual || edge.spliced != null) return unknownValuation;
 		final call: Null<QueryNode> = callAt(edge);
 		final callee: Null<QueryNode> = _trees.ofId(edge.to);
-		if (call == null || callee == null || !receiverPassesNothing(call, edge.to)) return unknownValuation;
+		if (call == null || callee == null || !receiverPassesNothing(_graph, _shape, call, edge.to)) return unknownValuation;
 		final params: Array<QueryNode> = [for (c in callee.children) if ((_shape.paramKinds ?? []).contains(c.kind)) c];
 		final args: Array<QueryNode> = call.children.slice(1);
 		if (args.length > params.length || params.exists(p -> p.kind == _shape.restParamKind)) return unknownValuation;
@@ -156,15 +156,15 @@ final class ArgumentValues {
 	 * Whether the call `call` of `target` hands it only its written arguments: an instance method, or a static one called
 	 * by its bare name or off its own type's name — never a static extension, which takes the receiver first.
 	 */
-	private function receiverPassesNothing(call: QueryNode, target: String): Bool {
-		final fn: Null<FnNode> = _graph.node(target);
+	public static function receiverPassesNothing(graph: CallGraph, shape: RefShape, call: QueryNode, target: String): Bool {
+		final fn: Null<FnNode> = graph.node(target);
 		final type: Null<String> = fn?.typeName;
 		final name: Null<String> = fn?.name;
 		if (fn == null || type == null || name == null) return false;
-		if (!_graph.types.isStatic(type, name)) return true;
+		if (!graph.types.isStatic(type, name)) return true;
 		final callee: QueryNode = call.children[0];
-		return callee.kind == _shape.identKind || callee.kind == _shape.fieldAccessKind && callee.children.length == 1
-			&& callee.children[0].kind == _shape.identKind && callee.children[0].name == type;
+		return callee.kind == shape.identKind || callee.kind == shape.fieldAccessKind && callee.children.length == 1
+			&& callee.children[0].kind == shape.identKind && callee.children[0].name == type;
 	}
 
 	/**

@@ -18029,7 +18029,7 @@
 		},
 		{
 			"name": "M-TS-EXH-COLLISION",
-			"type": "anyparse.check.ExhaustiveSwitches",
+			"type": "anyparse.check.HeldTrees",
 			"method": "typeDecl",
 			"find": "found.length == 1 && _graph.types.declarationCount(type) == 1 ? found[0] : null",
 			"replace": "found.length > 0 ? found[0] : null",
@@ -18050,6 +18050,22 @@
 			"find": "!_writes.complete || ",
 			"replace": "",
 			"note": "a run that may miss a write of the project reads a member as holding values"
+		},
+		{
+			"name": "M-TS-EXH-PARAM-CALLERS",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "parameterOf",
+			"find": "return shaped && callersPassValues(fn, param, at.file, closed);",
+			"replace": "return shaped;",
+			"note": "a parameter written as the abstract holds values whatever its calls hand it"
+		},
+		{
+			"name": "M-TS-EXH-PARAM-REF",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "callersPassValues",
+			"find": "e.kind == Contains || e.kind.isInvocation() && {",
+			"replace": "e.kind == Contains || !e.kind.isInvocation() || {",
+			"note": "a function handed on as a value counts as handing its parameters nothing"
 		},
 		{
 			"name": "M-TS-ERROR-LOOP",

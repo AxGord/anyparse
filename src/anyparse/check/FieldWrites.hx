@@ -77,8 +77,8 @@ final class FieldWrites {
 	private function record(file: String, write: QueryNode, target: QueryNode): Void {
 		final name: Null<String> = target.name;
 		final at: Null<Span> = target.span;
-		final own: Bool = target.kind == _shape.identKind || LockSites.ownMemberRead(target, _shape);
-		if (name == null || at == null || !(own || LockSites.accessKind(target.kind, _shape))) return;
+		final own: Bool = target.kind == _shape.identKind || ownMemberRead(target, _shape);
+		if (name == null || at == null || !(own || accessKind(target.kind, _shape))) return;
 		final fn: Null<String> = _graph.functionAt(file, at.from);
 		final type: Null<String> = fn == null ? null : _graph.node(fn)?.typeName;
 		final list: Array<FieldWriteSite> = _byName[name] ?? [];
@@ -100,6 +100,19 @@ final class FieldWrites {
 	 */
 	public static inline function mayWrite(site: FieldWriteSite, owner: String): Bool {
 		return !site.own || !site.typed || site.declaring == null || site.declaring == owner;
+	}
+
+	/** Whether `kind` is a field access of `shape`: plain, null-safe or forced. */
+	public static inline function accessKind(kind: String, shape: RefShape): Bool {
+		return kind == shape.fieldAccessKind || kind == shape.nullSafeAccessKind || kind == shape.forceFieldAccessKind;
+	}
+
+	/** Whether `node` names a member of the running object under `shape`: a bare name, or a member read off `this`. */
+	public static function ownMemberRead(node: QueryNode, shape: RefShape): Bool {
+		return node.kind == shape.identKind
+			? node.name != shape.selfReferenceText
+			: accessKind(node.kind, shape) && node.children.length > 0 && node.children[0].kind == shape.identKind
+				&& node.children[0].name == shape.selfReferenceText;
 	}
 
 }

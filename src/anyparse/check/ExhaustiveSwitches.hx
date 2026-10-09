@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.HeldTrees.HeldDecl;
 import anyparse.query.CallGraph;
 import anyparse.query.CallGraphTypes;
 import anyparse.query.GrammarPlugin;
@@ -21,10 +22,13 @@ using Lambda;
  *   `switch` arms, `?:`, parentheses and blocks), one with no written return type hands back nothing;
  * - the member HOLDS only values (`holdsValues`): through its getter, or through its initializer — with none, the default
  *   `0` of a counting abstract that has a `0` value — and every assignment to a field of its name in the project; a value
- *   is a value constant (never a static field of the abstract), a parameter written as the abstract, a member holding
- *   only values, or a call converted by a `@:from` function.
- * The holes the source cannot show are a `cast` into the abstract and an untyped value handed to a parameter written as
- * it, taken as absent: the project's word that it builds the abstract's values only through its constants.
+ *   is a value constant (never a static field of the abstract), a parameter written as the abstract that every call of
+ *   its function hands a value (`callersPassValues`), a member holding only values, or a call converted by a `@:from`
+ *   function.
+ * The holes the source cannot show are a `cast` into the abstract and a constructor the runtime calls (reflection), taken
+ * as absent: the project's word that it builds the abstract's values only through its constants. The default `0` is a
+ * TARGET's: a static target (hxcpp, where TM ships) starts an `Int` field at `0`, a dynamic one (JS) at `null`, so on JS
+ * an uninitialized member may hold no value at all — `zeroIsValue` is read as the static targets have it.
  */
 @:nullSafety(Strict)
 final class ExhaustiveSwitches {
@@ -41,9 +45,6 @@ final class ExhaustiveSwitches {
 	/** The members `holdsValues` is judging: each is assumed to hold only values while it is, so nothing judged then is kept. */
 	private final _judging: Array<String> = [];
 
-	/** A type's name -> its declaration and the file holding it (`typeDecl`); null when not exactly one is held. */
-	private final _decls: Map<String, Null<HeldDecl>> = [];
-
 	private final _graph: CallGraph;
 	private final _shape: RefShape;
 	private final _nestedFnKinds: Array<String>;
@@ -53,18 +54,23 @@ final class ExhaustiveSwitches {
 	/** Name -> every write in the run to a bare name or a field so named, with where it sits (`writesTo`), filled per name on first use. */
 	private final _writesOf: Map<String, Array<WriteSite>> = [];
 
+	/** The graph's held trees, and the lookups made in them. */
+	private final _trees: HeldTrees;
+
 	/** Every write of the run (`FieldWrites`), and whether it is every write of the project. */
 	private final _writes: FieldWrites;
 
-	/** Each held file -> its tree, filled on first use (`contextOf`). */
-	private var _treeOf: Null<Map<String, QueryNode>> = null;
+	/** Whether code outside the run may call a function of the graph, so what its parameters hold is not the run's to tell. */
+	private final _seedable: (String) -> Bool;
 
-	/** The files of the graph with their trees, read once. */
-	private var _held: Null<Array<{ file: String, source: String, tree: QueryNode }>> = null;
+	/** `<function id>#<parameter index>` of the parameters `callersPassValues` is judging: each is taken to pass values meanwhile. */
+	private final _passing: Array<String> = [];
 
-	public function new(graph: CallGraph, plugin: GrammarPlugin, writes: FieldWrites) {
+	public function new(graph: CallGraph, plugin: GrammarPlugin, writes: FieldWrites, seedable: (String) -> Bool) {
 		_graph = graph;
+		_trees = new HeldTrees(graph);
 		_writes = writes;
+		_seedable = seedable;
 		_shape = plugin.refShape();
 		_nestedFnKinds = MemberKinds.nestedFunctionKinds(_shape);
 		_metaKinds = plugin.metaShape().metaKinds;
@@ -140,7 +146,7 @@ final class ExhaustiveSwitches {
 	 */
 	private function closedOf(type: String): Null<ClosedAbstract> {
 		if (_closed.exists(type)) return _closed[type];
-		final held: Null<HeldDecl> = _graph.types.meta.isBuilt(type) ? null : typeDecl(type);
+		final held: Null<HeldDecl> = _graph.types.meta.isBuilt(type) ? null : _trees.typeDecl(type);
 		final found: Null<ClosedAbstract> = held == null || held.node.kind != _shape.enumAbstractDeclKind ? null : closedDecl(held, type);
 		_closed[type] = found;
 		return found;
@@ -297,22 +303,6 @@ final class ExhaustiveSwitches {
 	}
 
 	/**
-	 * The one declaration of the type named `type` the graph's files hold, a top-level one or one a module-level
-	 * wrapper holds (`final class`); null when the project declares the name other than exactly once.
-	 */
-	private function typeDecl(type: String): Null<HeldDecl> {
-		if (_decls.exists(type)) return _decls[type];
-		final found: Array<HeldDecl> = [];
-		for (held in heldFiles())
-			for (top in held.tree.children)
-				for (d in [top].concat(top.children))
-					if (d.name == type && d.children.length > 0) found.push({ node: d, file: held.file, source: held.source });
-		final decl: Null<HeldDecl> = found.length == 1 && _graph.types.declarationCount(type) == 1 ? found[0] : null;
-		_decls[type] = decl;
-		return decl;
-	}
-
-	/**
 	 * Whether the member `member` of the type `owner` holds only values of the closed abstract `closed`: declared as
 	 * the abstract, read through a getter every `return` of which hands back a value, or with no getter, initialized
 	 * with a value — or, with no initializer, defaulting to one (`ClosedAbstract.zeroIsValue`) — and assigned only
@@ -326,12 +316,12 @@ final class ExhaustiveSwitches {
 		if (_judging.contains(key)) return true;
 		_judging.push(key);
 		final info: Null<MemberInfo> = _graph.types.memberOnChain(owner, member);
-		final decl: Null<HeldDecl> = typeDecl(owner);
+		final decl: Null<HeldDecl> = _trees.typeDecl(owner);
 		final holds: Bool = info != null && decl != null && info.typeSource == closed.name
 			&& (info.hasGetter ? getterHolds(decl, owner, member, closed) : storedHolds(decl, owner, member, closed));
 		_judging.pop();
-		// an answer that leaned on a member still being judged is kept only once nothing is
-		if (_judging.length == 0 || !holds) _holds[key] = holds;
+		// an answer that leaned on a member or a parameter still being judged is kept only once nothing is
+		if (_judging.length == 0 && _passing.length == 0 || !holds) _holds[key] = holds;
 		return holds;
 	}
 
@@ -442,7 +432,8 @@ final class ExhaustiveSwitches {
 
 	/**
 	 * Whether `read` at `at` is the one binding in its function of its name, a parameter written as the abstract
-	 * itself — a required one with no default, or an optional one (`?p`, null when left out) where `optional` allows it.
+	 * itself — a required one with no default, or an optional one (`?p`, null when left out) where `optional` allows it —
+	 * that every call hands a value (`callersPassValues`).
 	 */
 	private function parameterOf(read: QueryNode, at: ValueContext, closed: ClosedAbstract, optional: Bool): Bool {
 		final fn: Null<QueryNode> = at.fn;
@@ -454,9 +445,63 @@ final class ExhaustiveSwitches {
 		final declared: Null<QueryNode> = param?.type;
 		if (param == null || declared == null) return false;
 		if (declared.name != closed.name || declared.children.length > 0) return false;
-		if (param.kind == _shape.optionalParamKind) return optional;
-		return (_shape.paramKinds ?? []).contains(param.kind) && param.kind != _shape.restParamKind && param.children.length == 0;
+		final shaped: Bool = if (param.kind == _shape.optionalParamKind)
+			optional
+		else
+			(_shape.paramKinds ?? []).contains(param.kind) && param.kind != _shape.restParamKind && param.children.length == 0;
+		return shaped && callersPassValues(fn, param, at.file, closed);
 	}
+
+	/**
+	 * Whether every call of the function `fn` of `file` hands its parameter `param` a value of `closed`: `fn` is the
+	 * graph's function at exactly its span, which code outside the run cannot call (`_seedable`; a constructor excepted —
+	 * a runtime construction is the hole this takes as absent), never handed on as a value, and each invocation's
+	 * argument for `param` (`argumentsAt`) is a value where it is written, or left out of an optional parameter, which
+	 * then holds null. A function nothing calls hands nothing.
+	 */
+	private function callersPassValues(fn: QueryNode, param: QueryNode, file: String, closed: ClosedAbstract): Bool {
+		final params: Array<QueryNode> = [for (c in fn.children) if ((_shape.paramKinds ?? []).contains(c.kind)) c];
+		final index: Int = params.indexOf(param);
+		final id: Null<String> = _trees.functionOf(file, fn);
+		if (index < 0 || id == null) return false;
+		if (_graph.node(id)?.name != (_shape.constructorName ?? 'new') && _seedable(id)) return false;
+		final key: String = '$id#$index';
+		if (_passing.contains(key)) return true;
+		_passing.push(key);
+		// an optional parameter before this one may be skipped by type, moving a later argument here
+		final skippable: Bool = params.slice(0, index).exists(p -> p.kind == _shape.optionalParamKind || p.children.length > 0);
+		final optional: Bool = param.kind == _shape.optionalParamKind;
+		final passes: Bool = _graph.inEdges(id).foreach(e -> e.kind == Contains || e.kind.isInvocation() && {
+			final args: Null<{ values: Array<QueryNode>, at: ValueContext }> = argumentsAt(e);
+			args != null && (args.values.length == params.length || args.values.length == 0 || !skippable)
+				&& (index >= args.values.length ? optional : handsValue(args.values[index], args.at, closed, optional));
+		});
+		_passing.pop();
+		return passes;
+	}
+
+	/**
+	 * The arguments the invocation `edge` hands its target, in order, and where they are evaluated: a call's (never a
+	 * static extension's, which hands its receiver first), a construction's, or the value a plain `=` assigns through a
+	 * setter. Null for any other site.
+	 */
+	private function argumentsAt(edge: CallEdge): Null<{ values: Array<QueryNode>, at: ValueContext }> {
+		final span: Null<Span> = edge.span;
+		final path: Array<QueryNode> = span == null ? [] : _trees.pathTo(edge.file, span);
+		final site: Null<QueryNode> = path[path.length - 1];
+		if (site == null) return null;
+		final parent: Null<QueryNode> = path[path.length - 2];
+		final values: Null<Array<QueryNode>> = if (site.kind == _shape.callKind && site.children.length > 0)
+			ArgumentValues.receiverPassesNothing(_graph, _shape, site, edge.to) ? site.children.slice(1) : null
+		else if (site.kind == _shape.newExprKind)
+			[for (c in site.children) if (!_typeKinds.contains(c.kind)) c]
+		else if (parent != null && parent.kind == _shape.assignKind && parent.children.length == 2 && parent.children[0] == site)
+			[parent.children[1]]
+		else
+			null;
+		return values == null ? null : { values: values, at: contextOf(edge.file, site) };
+	}
+
 
 	/**
 	 * Whether the call `call` at `at` hands back a value of `closed` through an implicit conversion: the graph resolves
@@ -493,35 +538,15 @@ final class ExhaustiveSwitches {
 	}
 
 	/**
-	 * Where the write `write` of `file` is evaluated: the outermost function of the file's tree around it, of the type
+	 * Where the node `node` of `file` is evaluated: the outermost function of the file's tree around it, of the type
 	 * declaring that function; no function and no type outside every function.
 	 */
-	private function contextOf(file: String, write: QueryNode): ValueContext {
-		var trees: Null<Map<String, QueryNode>> = _treeOf;
-		if (trees == null) {
-			final built: Map<String, QueryNode> = [for (held in heldFiles()) held.file => held.tree];
-			_treeOf = built;
-			trees = built;
-		}
+	private function contextOf(file: String, node: QueryNode): ValueContext {
+		final span: Null<Span> = node.span;
+		final path: Array<QueryNode> = span == null ? [] : _trees.pathTo(file, span);
 		final functions: Array<String> = _shape.functionKinds ?? [];
-		final span: Null<Span> = write.span;
-		var parent: Null<QueryNode> = null;
-		var node: Null<QueryNode> = trees[file];
-		while (node != null && span != null) {
-			if (parent != null && functions.contains(node.kind)) return { file: file, fn: node, owner: parent.name };
-			parent = node;
-			node = node.children.find(c -> c.span != null && c.span.from <= span.from && c.span.to >= span.to);
-		}
+		for (i in 1...path.length) if (functions.contains(path[i].kind)) return { file: file, fn: path[i], owner: path[i - 1].name };
 		return { file: file, fn: null, owner: null };
-	}
-
-	/** The graph's files with their trees, read once. */
-	private function heldFiles(): Array<{ file: String, source: String, tree: QueryNode }> {
-		final known: Null<Array<{ file: String, source: String, tree: QueryNode }>> = _held;
-		if (known != null) return known;
-		final files: Array<{ file: String, source: String, tree: QueryNode }> = _graph.heldFiles();
-		_held = files;
-		return files;
 	}
 
 	/** Whether the write `w` assigns a value of `closed`: a plain `=` of a value (`valueExpr`), never a compound one or an increment. */
@@ -533,6 +558,15 @@ final class ExhaustiveSwitches {
 	private function readsOwnField(expr: QueryNode, getter: QueryNode, member: String): Bool {
 		final read: QueryNode = expr.kind == _shape.parenKind && expr.children.length == 1 ? expr.children[0] : expr;
 		return read.name == member && (read.kind == _shape.identKind && BareNames.bindsNothing(getter, member, _shape) || isSelf(read));
+	}
+
+	/**
+	 * Whether the argument `arg` at `at` hands a parameter a value of `closed`: a value (`valueExpr`), or — to an `optional`
+	 * parameter, which this reads only through `??` — `null`, or an optional parameter of the caller its own calls hand a
+	 * value or `null`.
+	 */
+	private function handsValue(arg: QueryNode, at: ValueContext, closed: ClosedAbstract, optional: Bool): Bool {
+		return valueExpr(arg, at, closed) || optional && (arg.kind == _shape.nullLiteralKind || parameterOf(arg, at, closed, true));
 	}
 
 }
@@ -549,13 +583,6 @@ private typedef ClosedAbstract = {
 private typedef AbstractMembers = {
 	final values: Array<QueryNode>;
 	final functions: Array<{ fn: QueryNode, from: Bool }>;
-}
-
-/** A type's declaration node, the file holding it and that file's source. */
-private typedef HeldDecl = {
-	final node: QueryNode;
-	final file: String;
-	final source: String;
 }
 
 /** Where an expression is evaluated: its file, the outermost function around it (null outside one) and that function's type. */

@@ -1828,5 +1828,16 @@ decided the question; it may not become a record of runs.
   covered only the files of the run and asked nothing about the rest, so `hxq lint core` read a member as holding
   values while `plugins/P.hx` assigned it a `Dynamic`. The check reads the run's one `FieldWrites` index and answers
   "dead" only when it is `complete` (a `closedWorld` declaration over a run covering the project); `FieldWrites` no
-  longer needs `LockSites` (`LockSites.ownMemberRead`), so it is built before the sites that walk the switches
+  longer needs `LockSites` (`FieldWrites.ownMemberRead`), so it is built before the sites that walk the switches
   (review round 2 `ex3-partial`) — branch `feat/ts-precision-3`
+- a parameter written as an enum abstract taken to hold only its values → an untyped value handed to it was the hole
+  `ExhaustiveSwitches` took as absent, so `setMode(v:V) mode = v;` called with a `Dynamic` read the member as closed.
+  A parameter now holds values only where every call of its function hands it one (`callersPassValues`): the function
+  is the graph's at exactly its span, code outside the run cannot call it (`mayRunFromOutside`; a constructor
+  excepted — reflection is the hole left), it is never handed on as a value, and each call's argument — the value a
+  plain `=` assigns through a setter included — is a value, or, to an optional parameter (read only through `??`),
+  `null` or an optional parameter of the caller passing the same. Haxe's skip-by-type is honoured: an optional
+  parameter BEFORE the one read makes a short call unknown. A function nothing calls hands nothing. TM's
+  `FileList.reload` stays dead (its `?viewType` relays through `FileList.new` into `FileListSelect.new`). The
+  default `0` of a counting abstract is a static target's (hxcpp); on JS an `Int` field starts `null` (review round 2
+  `ex2-param-dynamic`) — branch `feat/ts-precision-3`

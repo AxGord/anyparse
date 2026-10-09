@@ -168,7 +168,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		// every write of the project, seen only when the run covers a closed project (`listsByFile`)
 		final writes: FieldWrites = new FieldWrites(graph, plugin, files.foreach(f -> byFile[f.file]?.closedWorld == true));
 		final sites: LockSites = new LockSites(
-			graph, [for (f in files) f.file], plugin, file -> listsOf(file).pairs, throws, trees, writes
+			graph, [for (f in files) f.file],
+			plugin, file -> listsOf(file).pairs, throws, trees, new ExhaustiveSwitches(graph, plugin, writes, seedable)
 		);
 		// a hold whose take no thread runs holds nothing: a function nothing invokes, a take a condition rules out
 		final acquires: Array<LockAcquire> = [for (a in sites.acquires) if (states.edgeContext(a.edge) != 0) a];
