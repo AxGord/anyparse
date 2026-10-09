@@ -18017,6 +18017,14 @@
 			"note": "a short call run once per event of a registration claims every caller up to the entry point"
 		},
 		{
+			"name": "M-GRAPH-LAMBDA-PARAM-SELF",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "fn != null && nodes[fn]?.name == name ? fn : null",
+			"replace": "fn",
+			"note": "a lambda's first parameter, starting where the lambda does, reads as a reference to the lambda"
+		},
+		{
 			"name": "M-TS-FLAGS-OFF",
 			"type": "anyparse.check.FixedFlags",
 			"method": "of",

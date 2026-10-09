@@ -2842,6 +2842,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.BodySlotGuardSliceTest#testAllowsSoleCatchClauseRemoval :: control :: M-BODYSLOT-LEAD-KEPT',
 			'unit.query.BodySlotGuardSliceTest#testAllowsSoleCatchClauseRemovalWithATrailingComment :: control :: M-BODYSLOT-TRIM-WS-ONLY',
 			'unit.query.BodySlotGuardSliceTest#testAllowsWholeElseBranchRemoval :: control :: M-BODYSLOT-LEAD-KEPT',
+			'unit.query.CallGraphTest#testALambdaParameterIsNoReferenceToItsLambda :: control :: M-GRAPH-LAMBDA-PARAM-SELF',
 			'unit.query.CallGraphTest#testAddFilesUpgradesTheExternalPlaceholder :: control :: M-GRAPH-UPGRADE-EXTERNAL',
 			'unit.query.CallGraphTest#testBareCallSomethingElseMaySupplyIsNeverAConstructor :: control :: '
 				+ 'M-GRAPH-IMPORT-UNLISTED,M-GRAPH-UNLISTED-WILDCARD',
@@ -6115,6 +6116,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-LOOP-SUBJECT',
 			'M-TS-HAND-SUBJECT',
 			'M-TS-SHORT-REGISTERED-NOTE',
+			'M-GRAPH-LAMBDA-PARAM-SELF',
 			'M-TS-FLAGS-OFF',
 			'M-TS-FLAGS-WRITTEN',
 			'M-TS-WIN-CAUGHT-THROW'
