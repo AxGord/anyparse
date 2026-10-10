@@ -720,8 +720,6 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 					'sys.io.File.append',
 					'sys.io.File.update',
 					'sys.io.File.copy',
-					'sys.io.FileInput.*',
-					'sys.io.FileOutput.*',
 					'sys.FileSystem.exists',
 					'sys.FileSystem.rename',
 					'sys.FileSystem.stat',
@@ -737,9 +735,6 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 					'sys.io.Process.new',
 					'sys.io.Process.exitCode',
 					'sys.io.Process.close',
-					// a stream of unknown kind — a process's, a socket's, a file's — is read and written as one
-					'haxe.io.Input.*',
-					'haxe.io.Output.*',
 					'sys.net.Socket.connect',
 					'sys.net.Socket.accept',
 					'sys.net.Socket.read',
@@ -771,6 +766,8 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 					'sys.thread.Semaphore.tryAcquire',
 					'sys.thread.Thread.readMessage'
 				],
+				// a stream of unknown kind — a process's, a socket's, a file's — is read and written as one that blocks
+				blockingLibraryTypes: ['sys.io.FileInput', 'sys.io.FileOutput', 'haxe.io.Input', 'haxe.io.Output'],
 				nativeCodeMetaNames: ['@:native', '@:hlNative', '@:functionCode'],
 				nativeLoaderCalls: [
 					'cpp.Lib.load',

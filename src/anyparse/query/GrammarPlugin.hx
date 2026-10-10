@@ -3611,12 +3611,14 @@ typedef ExecutionShape = {
 	/**
 	 * Qualified `pkg.Type.method` calls into the language's RUNTIME LIBRARY that block the calling thread on the world
 	 * outside the process — a file, a process, a socket, a database, a sleep, a wait for another thread (Haxe
-	 * `sys.io.File.getContent`, `sys.thread.Lock.wait`); `pkg.Type.*` names every member of a type all of whose members
-	 * do. A thread-context analysis counts a call of one as blocking wherever it runs, beside what the project's own
-	 * configuration lists. Matched by the last two segments, on a target the run holds no body for. Optional; unset
-	 * lists none.
+	 * `sys.io.File.getContent`, `sys.thread.Lock.wait`). A thread-context analysis counts a call of one as blocking
+	 * wherever it runs, beside what the project's own configuration lists. Matched by the last two segments, on a target
+	 * the run holds no body for. Optional; unset lists none.
 	 */
 	@:optional var blockingLibraryCalls: Array<String>;
+
+	/** Library types EVERY member of which qualifies as a `blockingLibraryCalls` entry (Haxe `sys.io.FileInput`). */
+	@:optional var blockingLibraryTypes: Array<String>;
 
 	/**
 	 * Member annotations under which a function declared in the PROJECT runs target code, not its body (Haxe `@:native`,

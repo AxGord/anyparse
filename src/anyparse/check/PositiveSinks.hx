@@ -27,7 +27,11 @@ final class PositiveSinks {
 	public final natives: Array<String>;
 
 	public function new(graph: CallGraph, plugin: GrammarPlugin, projectNatives: ProjectNatives) {
-		final calls: Array<String> = plugin.refShape().execution?.blockingLibraryCalls ?? [];
+		final execution: Null<ExecutionShape> = plugin.refShape().execution;
+		// a type every member of which blocks is the pattern naming them all
+		final calls: Array<String> = (execution?.blockingLibraryCalls ?? []).concat([
+			for (t in execution?.blockingLibraryTypes ?? []) '$t.*'
+		]);
 		final ids: Array<String> = [];
 		for (p in calls) for (id in graph.matchIds(p)) if (graph.node(id)?.isExternal == true && !ids.contains(id)) ids.push(id);
 		patterns = calls.length;

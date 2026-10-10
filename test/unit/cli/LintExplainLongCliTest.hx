@@ -1,5 +1,6 @@
 package unit.cli;
 
+import anyparse.check.PositiveSinks;
 import anyparse.query.Cli;
 import anyparse.query.LintDiff;
 import anyparse.query.format.json.LintFindingJson;
@@ -40,7 +41,7 @@ class LintExplainLongCliTest extends Test {
 		final out: String = lint(SOURCE, ThreadSafetyLongLocksTest.CONFIG, ['--format', 'json', '--explain-long']).out;
 		Assert.isTrue(out.trim().startsWith('{'), 'an envelope, not the bare array');
 		final findings: Array<LintFindingJson> = LintDiff.parseReport(out);
-		final families: Array<String> = [for (f in findings) f.data?.family ?? '-'];
+		final families: Array<String> = [for (f in findings) if (f.file != '') f.data?.family ?? '-'];
 		families.sort(Reflect.compare);
 		Assert.same(['A', 'A', 'B'], families, 'the two main-thread blocking calls and the hold, each with its data');
 		final reason: Dynamic = Json.parse(out).longLocks.long[0].reasons[0];
@@ -147,7 +148,10 @@ class LintExplainLongCliTest extends Test {
 			+ '"shortSink":["Sys.sleep"]}}}';
 		final unknown: String = 'unknown option "shortSink" — ignored (did you mean "shortSinks"?)';
 		final records: Array<Dynamic> = Json.parse(lint(SOURCE, config, ['--format', 'json']).out);
-		Assert.same([['', 'info', unknown]], [for (r in records) if (r.file == '') [r.file, r.severity, r.message]]);
+		// beside the notice every reporting run gives of the builtin sinks it applied
+		Assert.same([['', 'info', unknown]], [
+			for (r in records) if (r.file == '' && !(r.message: String).startsWith(PositiveSinks.NOTICE)) [r.file, r.severity, r.message]
+		]);
 		Assert.stringContains('(no file):\n  (no-span): [info] $unknown (thread-safety)', lint(SOURCE, config, ['--all']).out);
 		#else
 		Assert.pass('node only: stdout capture');
@@ -173,7 +177,7 @@ class LintExplainLongCliTest extends Test {
 		#end
 	}
 
-	/** Nothing to explain still answers an envelope, with a note: the rule not in the run, or a run with no `sinks`. */
+	/** Nothing to explain still answers an envelope, with a note: the rule not in the run, or a run whose every sink is waived. */
 	@:pin('control') @:killer('M-LINT-EXPLAIN-NO-ENVELOPE')
 	public function testNothingToExplainIsSaid(): Void {
 		#if nodejs
@@ -183,7 +187,10 @@ class LintExplainLongCliTest extends Test {
 		Assert.stringContains('"longLocks": null', notInRules.out);
 		Assert.stringContains('thread-safety is not among the rules this run reports', notInRules.err);
 		final noSinks: LintOutput = lint(
-			SOURCE, '{"rules":{"thread-safety":{"lockPairs":["Mutex.acquire/release"]}}}', ['--format', 'json', '--explain-long']
+			SOURCE,
+			'{"rules":{"thread-safety":{"lockPairs":["Mutex.acquire/release"],'
+			+ '"nonBlocking":["Sys.sleep a fixture sleep","Mutex.acquire a fixture lock"]}}}',
+			['--format', 'json', '--explain-long']
 		);
 		Assert.stringContains('"longLocks": null', noSinks.out);
 		Assert.stringContains('thread-safety explained nothing', noSinks.err);
