@@ -689,6 +689,17 @@ class ThreadSafetyCheckTest extends Test {
 			{ name: 'y/Reg.hx', source: 'class Reg { static function main():Void { W.run(X.work); } }' }
 		];
 		for (order in [['x/X.hx', 'y/Reg.hx'], ['y/Reg.hx', 'x/X.hx']]) Assert.same([], chainFindings(tree, order));
+		// a chain writing no thread-safety option at all is no report of the rule's, and its calls are still the graph's:
+		// under `closedWorld` the only call of `X.helper` is `y`'s
+		final silent: Array<{ name: String, source: String }> = [
+			{ name: 'x/apqlint.json', source: '{"inherit":false,"rules":{"thread-safety":{"sinks":["Sys.sleep"],"closedWorld":true}}}' },
+			{ name: 'y/apqlint.json', source: '{"inherit":false,"rules":{}}' },
+			{ name: 'x/X.hx', source: 'class X { public static function helper():Void Sys.sleep(1); }' },
+			{ name: 'y/Reg.hx', source: 'class Reg { static function main():Void X.helper(); }' }
+		];
+		for (order in [['x/X.hx', 'y/Reg.hx'], ['y/Reg.hx', 'x/X.hx']]) Assert.same([
+			'x/X.hx: main thread reaches blocking "Sys.sleep": Reg.main -> X.helper -> Sys.sleep'
+		], chainFindings(silent, order));
 		#else
 		Assert.pass('non-sys target');
 		#end

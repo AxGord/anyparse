@@ -182,6 +182,15 @@ class ThreadSafetyErrorPathTest extends Test {
 			+ ' public static function main():Void { try { step(); } catch (e:Dynamic) { function log():Void Sys.sleep(1); log(); } } }'
 		]);
 		Assert.same(['info A A.main | Sys.sleep'], graded(called), 'called in the catch');
+		// handed to a call that runs it later, once: no repetition decides it, only where it runs
+		final handed: Array<Violation> = ThreadSafetyCheckTest.violations(
+			StringTools.replace(CONFIG, '"lockPairs"', '"runsOnce":["A.later"],"lockPairs"'),
+			[
+				'class A { static function step():Void {} static function later(f:() -> Void):Void {}'
+				+ ' public static function main():Void { try { step(); } catch (e:Dynamic) { later(() -> Sys.sleep(1)); } } }'
+			]
+		);
+		Assert.same(['warning A A.main | Sys.sleep'], graded(handed), 'handed on once');
 		#else
 		Assert.pass('non-sys target');
 		#end
