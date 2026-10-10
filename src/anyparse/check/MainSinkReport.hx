@@ -57,7 +57,8 @@ final class MainSinkReport {
 		final normal: Map<String, Bool> = [];
 		final caught: Map<String, Bool> = [];
 		final order: Array<{ key: String, edge: CallEdge }> = [];
-		for (edge in graph.edges) if (edge.kind.isInvocation()) {
+		// every edge that runs its target: a sink handed on as a value runs wherever the call it is handed to runs it
+		for (edge in graph.edges) {
 			if (!taints.blocks(edge, null)) continue;
 			// a `marshals` function IS the thread boundary — its body dispatches
 			// between contexts in ways the graph cannot see; sinks inside it are

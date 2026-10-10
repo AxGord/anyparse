@@ -298,11 +298,12 @@ final class LockTaint {
 	}
 
 	/**
-	 * Whether `edge` itself blocks under a hold of `held`: a sink call its site's chain names, one taking a lock only
-	 * when the lock is long or unknown, and never a re-take of `held`.
+	 * Whether `edge` itself blocks under a hold of `held`: a sink call its site's chain names — or a sink handed on as a
+	 * value that runs from there (`ThreadStates.runsFrom`) — one taking a lock only when the lock is long or unknown, and
+	 * never a re-take of `held`.
 	 */
 	public function blocks(edge: CallEdge, held: Null<String>): Bool {
-		if (!edge.kind.isInvocation() || !listsOf(edge.file).sinkIds.contains(edge.to)) return false;
+		if (!_threads.runsFrom(edge) || !listsOf(edge.file).sinkIds.contains(edge.to)) return false;
 		if (!takesLock(edge)) return true;
 		final lock: Null<String> = _sites.lockOf(edge);
 		if (quiet.never(edge)) return false;
@@ -339,7 +340,7 @@ final class LockTaint {
 	 * object). The one walk both answers come from.
 	 */
 	public function blockingTrail(a: LockAcquire, edge: CallEdge, held: Null<String>): Null<BlockingTrail> {
-		if (onErrorPath(a.edge) || onErrorPath(edge)) return null;
+		if (!_threads.runsHere(edge, listsOf(edge.file)) || onErrorPath(a.edge) || onErrorPath(edge)) return null;
 		for (state in _threads.statesOf(a.edge.from)) for (bit in THREAD_BITS) if (
 			state.ctx & bit != 0 && _conditions.carried(a.edge, state.valuation, bit) != 0
 		) {
@@ -365,7 +366,7 @@ final class LockTaint {
 			final carried: Null<String> = cost?.dominance.carry(under, edge);
 			final self: Null<String> = _allocations?.into(edge, classes);
 			final key: Null<String> = reach(
-				edge.to, _conditions.bind(edge, state.valuation), live,
+				edge.to, _conditions.entered(edge, state.valuation), live,
 				{ held: held, repeated: repeats, way: way ?? CallRepetition.UNBOUNDED }, carried, self
 			);
 			if (key != null) return trailFrom(edge, key, held);
@@ -386,7 +387,7 @@ final class LockTaint {
 
 	/** Whether `edge` calls, on an object other than its caller's, a function taking the long instance lock `held` on its own. */
 	public function retakesElsewhere(edge: CallEdge, held: Null<String>): Bool {
-		return held != null && blockingLocks().contains(held) && !_sites.isStaticLock(held) && edge.kind.isInvocation()
+		return held != null && blockingLocks().contains(held) && !_sites.isStaticLock(held) && _threads.runsFrom(edge)
 			&& selfTakers(held).contains(edge.to) && !_sites.selfCall(edge);
 	}
 
@@ -465,8 +466,9 @@ final class LockTaint {
 	}
 
 	/**
-	 * The key of the state `id` under `valuation` on `ctx` when some path of calls that run from it reaches a call that
-	 * blocks under a hold of `held`; null when none does. A breadth-first walk over the states, each answer kept: a
+	 * The key of the state `id` under `valuation` on `ctx` when some path of calls that run from it — a value handed to
+	 * a call that runs it there among them (`ThreadStates.runsHere`), repeating as that call repeats it — reaches a call that blocks
+	 * under a hold of `held`; null when none does. A breadth-first walk over the states, each answer kept: a
 	 * found path marks every state on it, a walk that found nothing every state it saw. A call taking a lock blocks by
 	 * what the lock is (`blocks`), never through the lock primitive's own body, and a function its call site's chain
 	 * names a sink is where a path ENDS: the call to it blocks by that name. Asking about cost, a state also carries
@@ -498,7 +500,7 @@ final class LockTaint {
 		var qi: Int = 0;
 		while (qi < queue.length) {
 			final state: WalkState = queue[qi++];
-			for (edge in _graph.outEdges(state.id)) if (edge.kind.isInvocation()) {
+			for (edge in _graph.outEdges(state.id)) if (_threads.runsHere(edge, listsOf(edge.file))) {
 				if (leadsNowhere(edge, state.repeated)) continue;
 				final live: Int = _conditions.carried(edge, state.valuation, state.ctx);
 				if (live == 0) continue;
@@ -538,7 +540,7 @@ final class LockTaint {
 	private function following(state: WalkState, edge: CallEdge, live: Int, flags: WalkFlags): Null<WalkState> {
 		final classes: Null<String> = _allocations?.receiverClasses(edge, state.self);
 		if (_allocations?.dispatches(edge, classes) == false) return null;
-		final valuation: String = _conditions.bind(edge, state.valuation);
+		final valuation: String = _conditions.entered(edge, state.valuation);
 		final under: Null<String> = _cost?.dominance.carry(state.under, edge);
 		final self: Null<String> = _allocations?.into(edge, classes);
 		return {
@@ -633,16 +635,6 @@ final class LockTaint {
 	private function onCycle(id: String): Bool {
 		final known: Null<Bool> = _cyclic[id];
 		if (known != null) return known;
-		/**
-		 * Whether the value a `Ref` edge `e` hands on may run while the call it is handed to runs (`ThreadStates.runsFrom`):
-		 * never one a `spawns` or `marshals` call runs on another thread, nor one a `registers` call keeps to run per event.
-		 */
-		inline function runsWhereHanded(e: CallEdge): Bool {
-			final lists: ChainLists = listsOf(e.file);
-			final via: String = e.via ?? '';
-			final kept: Bool = lists.registerIds.contains(via) || lists.registerNames.contains(e.viaMember ?? '');
-			return e.kind == Ref && _threads.runsFrom(e) && !(lists.spawnIds.contains(via) || lists.marshalIds.contains(via) || kept);
-		}
 		final seen: Map<String, Bool> = [id => true];
 		final queue: Array<String> = [id];
 		var qi: Int = 0;
@@ -653,7 +645,7 @@ final class LockTaint {
 				break;
 			}
 			// a value handed on that runs there closes a cycle too: `n.each(k -> walk(k))` walks a whole tree
-			for (e in _graph.outEdges(queue[qi++])) if (e.kind.isInvocation() || runsWhereHanded(e)) {
+			for (e in _graph.outEdges(queue[qi++])) if (_threads.runsHere(e, listsOf(e.file))) {
 				if (e.to == id) answer = true;
 				if (!seen.exists(e.to)) {
 					seen[e.to] = true;

@@ -26,7 +26,11 @@ typedef LockAcquire = {
 	/** The lock OBJECT, as the member that holds it (`Owner.field`); null when no sealed member names it. */
 	final lock: Null<String>;
 
-	/** Every call of the function the lock may be held at, the acquire and its own releases excepted. */
+	/**
+	 * Every call of the function the lock may be held at, the acquire and its own releases excepted, and every function
+	 * value handed on there (`Ref`): whether such a value runs under the hold is the call it is handed to's question
+	 * (`LockTaint.blockingTrail`), never the window's.
+	 */
 	final window: Array<CallEdge>;
 
 	/** Whether some path leaves the function still holding the lock — the hold then lasts as long as its caller wants. */
@@ -334,7 +338,7 @@ final class LockSites {
 			edge: edge,
 			pair: pair,
 			lock: lock,
-			window: [for (e in held) if (e.kind.isInvocation()) e],
+			window: [for (e in held) if (e.kind.isInvocation() || e.kind == Ref) e],
 			leaks: leaks,
 			blind: traced == null || unresolved.length > 0,
 			untraced: traced == null,

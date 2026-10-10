@@ -394,6 +394,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.ThreadSafetyFactsTest',
 		'unit.check.ThreadSafetyFindingDataTest',
 		'unit.check.ThreadSafetyFoldingTest',
+		'unit.check.ThreadSafetyHandedValueTest',
 		'unit.check.ThreadSafetyHelperHoldsTest',
 		'unit.check.ThreadSafetyLongLocksTest',
 		'unit.check.ThreadSafetyMainOnlyTest',
@@ -2263,6 +2264,12 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyFoldingTest#testAHoldInsideAnotherIsItsFinding :: control :: M-TS-NEST-OFF',
 			'unit.check.ThreadSafetyFoldingTest#testAWaitInsideASinksBodyIsTheSinks :: control :: M-TS-INSIDE-SINK-OFF',
 			'unit.check.ThreadSafetyFoldingTest#testMainTakesOfOneLockWarnOnce :: control :: M-TS-ONE-TAKE-OFF,M-TS-ONE-TAKE-NO-WRAPPER',
+			'unit.check.ThreadSafetyHandedValueTest#testAHandedValueRepeatsWithTheCallItIsHandedTo :: control :: M-TS-REPEAT-NO-ITERATES,M-TS-RUNS-ONCE-OFF',
+			'unit.check.ThreadSafetyHandedValueTest#testAHoldTaintsAValueHandedToACallThatRunsIt :: control :: '
+				+ 'M-TS-HANDED-RUNS-HERE,M-TS-HANDED-WINDOW-OFF,M-TS-HANDED-REACH-OFF,M-TS-HANDED-SINK-OFF',
+			'unit.check.ThreadSafetyHandedValueTest#testAMainSinkHandedAsAValueIsReported :: control :: M-TS-HANDED-SINK-OFF',
+			'unit.check.ThreadSafetyHandedValueTest#testAMethodValueOfAnotherObjectWaitsForItsLock :: control :: M-TS-HANDED-RETAKE',
+			'unit.check.ThreadSafetyHandedValueTest#testAValueRunElsewhereTaintsNothing :: control :: M-TS-HANDED-ELSEWHERE,M-TS-CYCLE-REGISTERED',
 			'unit.check.ThreadSafetyHelperHoldsTest#testACallAGiveIsMadeOnIsWorkOfTheHelper :: control :: M-TS-HELPER-SPAN-START',
 			'unit.check.ThreadSafetyHelperHoldsTest#testAHandedOffHoldIsNoInnerHold :: control :: M-TS-NEST-HANDOFF',
 			'unit.check.ThreadSafetyHelperHoldsTest#testAHelperReachedByDispatchIsNone :: control :: M-TS-HELPER-DISPATCH',
@@ -6329,7 +6336,13 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-NATIVE-CALLEE-SPAN',
 			'M-TS-NATIVE-CODE-CALLS',
 			'M-TS-NATIVE-LOADED-MEMBER',
-			'M-TS-BUILTIN-NOTICE-OFF'
+			'M-TS-BUILTIN-NOTICE-OFF',
+			'M-TS-HANDED-RUNS-HERE',
+			'M-TS-HANDED-WINDOW-OFF',
+			'M-TS-HANDED-REACH-OFF',
+			'M-TS-HANDED-SINK-OFF',
+			'M-TS-HANDED-ELSEWHERE',
+			'M-TS-HANDED-RETAKE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

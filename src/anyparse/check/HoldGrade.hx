@@ -106,9 +106,11 @@ final class HoldGrade {
 	 */
 	public static function handsOff(sites: LockSites, a: LockAcquire): Bool {
 		final lock: Null<String> = a.lock;
-		if (lock == null || !a.leaks || a.delegated || a.untraced || a.window.length == 0) return false;
+		// the calls alone: a value handed on that may give the lock back proves no give here — the hold stays handed off
+		final calls: Array<CallEdge> = a.window.filter(e -> e.kind.isInvocation());
+		if (lock == null || !a.leaks || a.delegated || a.untraced || calls.length == 0) return false;
 		return !sites.gives.exists(g -> g.edge.from == a.edge.from && g.lock == lock)
-			&& !a.window.exists(e -> sites.crossing.exists(c -> c.lock == lock && c.edge.from == e.to));
+			&& !calls.exists(e -> sites.crossing.exists(c -> c.lock == lock && c.edge.from == e.to));
 	}
 
 	/** Finding (b) at the call `anchor` of `holder`'s hold of `lock` (`chain[0]`), info when `short`. */
