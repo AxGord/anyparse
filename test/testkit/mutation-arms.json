@@ -18633,6 +18633,14 @@
 			"note": "a constant-named Reflect.setField writes no field"
 		},
 		{
+			"name": "M-TS-COVER-PARSED",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "listsByFile",
+			"find": "new ProjectCoverage([for (h in graph.heldFiles()) h.file])",
+			"replace": "new ProjectCoverage([for (f in files) f.file])",
+			"note": "a run file that fails to parse counts as covering its part of the project"
+		},
+		{
 			"name": "M-TS-BLIND-START",
 			"type": "anyparse.check.LockReleasers",
 			"method": "blindIn",

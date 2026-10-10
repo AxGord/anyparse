@@ -2044,6 +2044,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyCarriedHoldTest#testAConstructorWritingAnotherObjectsFieldNamesNoObject :: control :: M-TS-PATH-OWN',
 			'unit.check.ThreadSafetyCarriedHoldTest#testADominatedTakeInACalleeOnTheHeldObjectIsBrief :: control :: M-TS-CARRY-OFF',
 			'unit.check.ThreadSafetyCarriedHoldTest#testAFieldWrittenOutsideTheConstructorNamesNoObject :: control :: M-TS-PATH-STABLE-ANY',
+			'unit.check.ThreadSafetyCarriedHoldTest#testAFileTheRunCannotParseLeavesTheProjectUncovered :: control :: M-TS-COVER-PARSED',
 			'unit.check.ThreadSafetyCarriedHoldTest#testAPathOfStableFieldsNamesTheHeldObject :: control :: M-TS-PATH-TWO-LINK,M-TS-PATH-CTOR',
 			'unit.check.ThreadSafetyCarriedHoldTest#testARetakeInACalleeIsBrief :: control :: M-TS-CARRY-RETAKE',
 			'unit.check.ThreadSafetyCarriedHoldTest#testARunOverPartOfTheProjectSeesNotEveryWrite :: control :: '
@@ -6275,6 +6276,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-GIVE-REPEATED',
 			'M-TS-PATH-INTERFACE',
 			'M-TS-PATH-REFLECT',
+			'M-TS-COVER-PARSED',
 			'M-TS-BLIND-START',
 			'M-TS-DOM-OWNERLESS',
 			'M-TS-DOM-SHARED',

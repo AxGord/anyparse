@@ -1921,3 +1921,8 @@ decided the question; it may not become a record of runs.
   `setProperty` is a write of that name on a value nothing here can tell (`FieldWrites.recordReflective`). A
   COMPUTED name (`Reflect.setField(o, key, v)`) stays unseen — a known gap, as `RedundantIsVar` documents for the
   same reason (review round 2 `o1`, `o3`) — branch `feat/ts-precision-3`
+- `ProjectCoverage` built from the files handed to the run → a project file that fails to parse is in the run but
+  not in the graph, so its writes and calls were invisible while the run still "covered" the project and
+  `closedWorld` held. Coverage is built from the files the graph HOLDS (`CallGraph.heldFiles`): a file the run
+  cannot parse leaves the project uncovered, and the `closedWorld` notice now says either cause (review round 2
+  `o2`) — branch `feat/ts-precision-3`

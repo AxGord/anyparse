@@ -294,7 +294,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final bySignature: Map<String, ChainLists> = [];
 		final byFile: Map<String, ChainLists> = [];
 		final read: ObjectMap<LintConfig, ThreadSafetyOptions> = new ObjectMap();
-		final coverage: ProjectCoverage = new ProjectCoverage([for (f in files) f.file]);
+		// the files the graph HOLDS: one of the run that failed to parse contributes no call and no write, so it covers nothing
+		final coverage: ProjectCoverage = new ProjectCoverage([for (h in graph.heldFiles()) h.file]);
 		final factsAsked: Array<Bool> = [];
 		for (entry in files) {
 			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
@@ -317,8 +318,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			if (!lists.reports) continue;
 			if (declaredClosed && !closedWorld)
 				found.push(
-					'option "closedWorld" holds only for a run over the whole project it closes — this run leaves part of it out, so'
-					+ ' it is read as false'
+					'option "closedWorld" holds only for a run over the whole project it closes — this run leaves part of it out (a'
+					+ ' file it does not hold, or one it could not parse), so it is read as false'
 				);
 			final facts: Bool = options.flag('compilerFacts');
 			if (!factsAsked.contains(facts)) factsAsked.push(facts);

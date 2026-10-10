@@ -200,6 +200,26 @@ class ThreadSafetyCarriedHoldTest extends Test {
 		#end
 	}
 
+	/**
+	 * A file of the run that fails to parse holds no call and no write the graph sees: the run covers the project no more
+	 * than one leaving it out (review round 2 `o2`).
+	 */
+	@:pin('control') @:killer('M-TS-COVER-PARSED')
+	public function testAFileTheRunCannotParseLeavesTheProjectUncovered(): Void {
+		#if (sys || nodejs)
+		final broken: String = 'class Plugin { public static function install(fs:Fs, h:Holder):Void fs.holder = h;'
+			+ ' static function odd():Void { var x = 1 +* 2; } }';
+		// in the run as `F5.hx` and on disk under that name: the project's file the run holds but cannot read
+		final found: Array<Violation> = ThreadSafetyCheckTest.violations(
+			CONFIG, sources(path('')).concat([broken]), [{ name: 'F5.hx', source: broken }]
+		);
+		Assert.same(['info B Fs.work | Db.batch (folded)'], holds(found));
+		Assert.contains(CLOSED_NOTE, [for (v in found) if (v.file == '') v.message]);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	/** A file `exclude` names is no part of the project: leaving it out of the run leaves the project covered. */
 	@:pin('control') @:killer('M-TS-COVER-EXCLUDE')
 	public function testAnExcludedFileIsNoPartOfTheProject(): Void {
@@ -287,7 +307,7 @@ class ThreadSafetyCarriedHoldTest extends Test {
 
 	/** What a run says of a `closedWorld` it does not cover (`ThreadSafety.listsByFile`). */
 	private static inline final CLOSED_NOTE: String = 'option "closedWorld" holds only for a run over the whole project it closes — this run leaves'
-		+ ' part of it out, so it is read as false';
+		+ ' part of it out (a file it does not hold, or one it could not parse), so it is read as false';
 	#end
 
 }
