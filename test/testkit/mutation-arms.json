@@ -5574,8 +5574,8 @@
 			"name": "M-TS-ACCESSOR-TAINT",
 			"type": "anyparse.check.LockSites",
 			"method": "hold",
-			"find": "if (e.kind.isInvocation()) e",
-			"replace": "if (e.kind == Call || e.kind == New || e.kind == Virtual) e",
+			"find": "if (e.kind.isInvocation() || e.kind == Ref) e",
+			"replace": "if (e.kind == Call || e.kind == New || e.kind == Virtual || e.kind == Ref) e",
 			"note": "a property read inside a lock window is not a call, so a getter that blocks while the lock is held goes unreported"
 		},
 		{
@@ -17380,8 +17380,8 @@
 			"name": "M-TS-HANDOFF-CROSSING",
 			"type": "anyparse.check.HoldGrade",
 			"method": "handsOff",
-			"find": "!a.window.exists(e -> sites.crossing.exists(c -> c.lock == lock && c.edge.from == e.to))",
-			"replace": "!a.window.exists(e -> false)",
+			"find": "!calls.exists(e -> sites.crossing.exists(c -> c.lock == lock && c.edge.from == e.to))",
+			"replace": "!calls.exists(e -> false)",
 			"note": "a hold whose window calls a releaser counts as handed off"
 		},
 		{
@@ -18524,8 +18524,8 @@
 			"name": "M-TS-HELPER-HANDOFF",
 			"type": "anyparse.check.HoldGrade",
 			"method": "handsOff",
-			"find": "a.untraced || a.window.length == 0) return false;",
-			"replace": "a.untraced || a.inner != null || a.window.length == 0) return false;",
+			"find": "a.untraced || calls.length == 0) return false;",
+			"replace": "a.untraced || a.inner != null || calls.length == 0) return false;",
 			"note": "a hold a helper call opens never hands its lock off, however its caller leaves it held"
 		},
 		{
