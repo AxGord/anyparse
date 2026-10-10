@@ -1942,3 +1942,27 @@ decided the question; it may not become a record of runs.
   nothing of it. A mistyped `enabled` / `severity` is a value of the wrong shape, not an unknown option. The old
   control "a malformed option of a non-reporting chain is silent" is reversed by this decision (review round 2
   `cfgA`–`cfgE`) — branch `feat/ts-precision-3`
+- `sinks` a config-only list → a blocking call a project forgot to list was invisible, silently (TM lacked
+  `FileSystem.exists`, `isDirectory`, `nativeSetTimestamp`, `Sys.command` until they were added by hand). The sinks
+  are now POSITIVE: the grammar names the runtime's blocking calls (`ExecutionShape.blockingLibraryCalls`, verified
+  against the Haxe 4.3.7 std: `sys.io.File` / `FileInput` / `FileOutput`, `haxe.io.Input` / `Output` — a stream of
+  unknown kind is read as one that blocks — `sys.FileSystem` but `absolutePath` (its cpp body is `Sys.getCwd` and a
+  join), `Sys.sleep` / `command` / `getChar`, `sys.io.Process`, sockets, `Host` construction and `reverse` (not
+  `localhost`: `gethostname`), `sys.db`, `sys.Http`, the `sys.thread` waits) and they apply wherever the rule runs,
+  on a target the run holds no body for — a project function of the same name is read through its body; `sinks`
+  ADDS; a new string-list key `nonBlocking` (named like `nonThrowing`) WAIVES one, each entry `"<pattern>
+  <evidence>"`, an entry with no evidence dropped and said, one waiving nothing said, one naming a `sinks` call
+  said and kept. The `sys.thread` waits are IN the set although the lock analysis grades takes: it grades only a take
+  that is a sink (`LockTaint.blocks`), and `lockPairs` then narrows it to "long only when the lock is long", so a
+  project writing `lockPairs` but no sink would have lost every main-thread take; a wait with no pair (`Lock.wait`,
+  `Deque.pop` — `pop(false)` cannot be told from `pop(true)` by the graph) blocks every time. The project's own
+  NATIVES block too (`ProjectNatives`, positive: an unknown native blocks): a body-less member of a project `extern`
+  type, a `@:native` / `@:hlNative` / `@:functionCode` member whatever its stub body (TM's `nativeSetTimestamp` has one),
+  a member a native loader initialised, `untyped __cpp__` / `__global__.f` and `cpp.Syntax.code`; a site with no
+  node of its own gains an edge into a node standing for the native, its unresolved record kept. A LIBRARY's externs
+  and natives stay calls of library code — measured on TM 1d1ba147: 3108 main-context call sites into non-builtin
+  library externs / native bodies, 2511 of them the std's memory primitives (`Array`, `String`, `Math`, `Std`), so
+  sinking them would bury the list; the decision is the orchestrator's. A chain writing ANY option reports
+  (`reports = declared`), and one `info` per run says the set applied with its size. TM: dropping the 22 `sinks`
+  entries the builtin covers leaves the json report byte-identical on all three frozen trees — branch
+  `feat/ts-precision-4`
