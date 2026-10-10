@@ -17,7 +17,8 @@ using Lambda;
  * - A parameter is TRACKED when nothing in the body writes or shadows its name (no assignment, no increment, no other
  *   declaration of it, nested functions included) and the body reads it bare — as a condition, compared with `null`, or
  *   handed to a call — and the function has exactly one declaration.
- * - What a call hands a tracked parameter is known when its argument is a `Bool` literal, `null`, a `new` expression,
+ * - What a call hands a tracked parameter is known when its argument is a `Bool` literal, `null`, a `new` expression or
+ *   an object, array or string literal (never null),
  *   a tracked parameter of the caller the caller's valuation knows (a `Bool` one negated through `!`), or — the
  *   argument omitted — the callee's own default: a `Bool` literal or `null`, and `null` for a `?p` with none.
  * - Arguments map to parameters by position only where Haxe cannot skip one by type: each optional parameter (`?p`,
@@ -58,6 +59,9 @@ final class ArgumentValues {
 	private final _shape: RefShape;
 	private final _ifKinds: Array<String>;
 
+	/** The kinds of a value built where it is written, never null: a construction, an object or array literal. */
+	private final _builtKinds: Array<String>;
+
 	/** What reads the written types of declarations; null for a plugin that reads none, which then knows no type. */
 	private final _types: Null<TypeInfoProvider>;
 
@@ -67,6 +71,7 @@ final class ArgumentValues {
 		_shape = plugin.refShape();
 		_types = plugin is TypeInfoProvider ? cast plugin : null;
 		_ifKinds = conditionalKinds(_shape);
+		_builtKinds = builtKindsOf(_shape);
 	}
 
 	/** The valuation of `id` that knows nothing: every tracked parameter unknown. */
@@ -82,7 +87,7 @@ final class ArgumentValues {
 		if (edge.kind != Call && edge.kind != Virtual || edge.spliced != null) return unknownValuation;
 		final call: Null<QueryNode> = callAt(edge);
 		final callee: Null<QueryNode> = _trees.ofId(edge.to);
-		if (call == null || callee == null || !receiverPassesNothing(call, edge.to)) return unknownValuation;
+		if (call == null || callee == null || !receiverPassesNothing(_graph, _shape, call, edge.to)) return unknownValuation;
 		final params: Array<QueryNode> = [for (c in callee.children) if ((_shape.paramKinds ?? []).contains(c.kind)) c];
 		final args: Array<QueryNode> = call.children.slice(1);
 		if (args.length > params.length || params.exists(p -> p.kind == _shape.restParamKind)) return unknownValuation;
@@ -117,7 +122,7 @@ final class ArgumentValues {
 		collectBareReads(fn, read);
 		for (p in fn.children) {
 			final name: Null<String> = p.name;
-			if (paramKinds.contains(p.kind) && name != null && read.contains(name) && stable(fn, p, name)) names.push(name);
+			if (paramKinds.contains(p.kind) && name != null && read.contains(name) && BareNames.stable(fn, p, _shape)) names.push(name);
 		}
 		return names;
 	}
@@ -132,23 +137,6 @@ final class ArgumentValues {
 			kids[1]
 		else
 			null;
-	}
-
-	/**
-	 * The nodes of `node`'s subtree carrying `name` that are no plain read of it: every declaration-like node, an access
-	 * of a field so named and an object literal's field so named excepted.
-	 */
-	public function collectNamed(node: QueryNode, name: String, into: Array<QueryNode>): Void {
-		// a bare name in a case pattern captures: it declares a new binding
-		if (node.kind == _shape.caseBranchKind && node.children.length > 0 && readsName(node.children[0], name)) into.push(node);
-		for (k in node.children) {
-			if (k.name == name && k.kind != _shape.identKind && k.kind != _shape.objectFieldKind && !isAccess(k.kind)) into.push(k);
-			collectNamed(k, name, into);
-		}
-	}
-
-	private inline function isAccess(kind: String): Bool {
-		return kind == _shape.fieldAccessKind || kind == _shape.nullSafeAccessKind || kind == _shape.forceFieldAccessKind;
 	}
 
 	/** The call node of `edge`'s site in its function's body; null when there is none at exactly that range. */
@@ -168,15 +156,15 @@ final class ArgumentValues {
 	 * Whether the call `call` of `target` hands it only its written arguments: an instance method, or a static one called
 	 * by its bare name or off its own type's name — never a static extension, which takes the receiver first.
 	 */
-	private function receiverPassesNothing(call: QueryNode, target: String): Bool {
-		final fn: Null<FnNode> = _graph.node(target);
+	public static function receiverPassesNothing(graph: CallGraph, shape: RefShape, call: QueryNode, target: String): Bool {
+		final fn: Null<FnNode> = graph.node(target);
 		final type: Null<String> = fn?.typeName;
 		final name: Null<String> = fn?.name;
 		if (fn == null || type == null || name == null) return false;
-		if (!_graph.types.isStatic(type, name)) return true;
+		if (!graph.types.isStatic(type, name)) return true;
 		final callee: QueryNode = call.children[0];
-		return callee.kind == _shape.identKind || callee.kind == _shape.fieldAccessKind && callee.children.length == 1
-			&& callee.children[0].kind == _shape.identKind && callee.children[0].name == type;
+		return callee.kind == shape.identKind || callee.kind == shape.fieldAccessKind && callee.children.length == 1
+			&& callee.children[0].kind == shape.identKind && callee.children[0].name == type;
 	}
 
 	/**
@@ -195,7 +183,8 @@ final class ArgumentValues {
 		}
 		if (arg.kind == _shape.boolLitKind) return literal(arg, file);
 		if (arg.kind == _shape.nullLiteralKind) return NULL;
-		if (arg.kind == _shape.newExprKind) return NON_NULL;
+		// a value built where it is written is never null: a construction, an object, array or string literal
+		if (_builtKinds.contains(arg.kind) || (_shape.stringLiteralKinds ?? []).contains(arg.kind)) return NON_NULL;
 		if (arg.kind == _shape.identKind) {
 			final at: Int = callerNames.indexOf(arg.name ?? '');
 			if (at >= 0) return valuation.charAt(at);
@@ -256,7 +245,7 @@ final class ArgumentValues {
 		final name: Null<String> = arg.name;
 		if (kind != _shape.identKind || name == null) return null;
 		final decls: Array<QueryNode> = [];
-		collectNamed(caller, name, decls);
+		BareNames.collectNamed(caller, name, _shape, decls);
 		return decls.length == 1 ? annotationOf(decls[0], file) : null;
 	}
 
@@ -304,8 +293,8 @@ final class ArgumentValues {
 	}
 
 	/**
-	 * The names `node`'s subtree reads bare as a condition — of an `if`, a ternary, an operand of `&&` / `||`, through
-	 * parentheses and `!`, or compared with `null` there — or hands bare to a call.
+	 * The names `node`'s subtree reads bare as a condition — of an `if`, a ternary, an operand of `&&` / `||`, the value
+	 * of a `final` local, through parentheses and `!`, or compared with `null` there — or hands bare to a call.
 	 */
 	private function collectBareReads(node: QueryNode, into: Array<String>): Void {
 		final kids: Array<QueryNode> = node.children;
@@ -315,6 +304,10 @@ final class ArgumentValues {
 			bareName(kids[1], into);
 		}
 		if (node.kind == _shape.callKind) for (i in 1...kids.length) bareName(kids[i], into);
+		// a `final` local bound to a condition is read as that condition (`EdgeConditions`)
+		final finalLocal: Bool = (_shape.localDeclKinds ?? []).contains(node.kind)
+			&& !(_shape.mutableLocalDeclKinds ?? []).contains(node.kind);
+		if (finalLocal && kids.length > 0) bareName(kids[kids.length - 1], into);
 		for (k in kids) collectBareReads(k, into);
 	}
 
@@ -333,32 +326,17 @@ final class ArgumentValues {
 		if (expr.kind == _shape.identKind && name != null && !into.contains(name)) into.push(name);
 	}
 
-	/**
-	 * Whether the parameter `param` named `name` keeps the value a call hands it throughout the body of `fn`: no other node
-	 * of the body declares the name (a local, a nested function's parameter, a capture) and no write targets it.
-	 */
-	private function stable(fn: QueryNode, param: QueryNode, name: String): Bool {
-		final named: Array<QueryNode> = [];
-		collectNamed(fn, name, named);
-		return named.length == 1 && named[0] == param && !writes(fn, name);
-	}
-
-	/** Whether `node`'s subtree holds the identifier `name`. */
-	private function readsName(node: QueryNode, name: String): Bool {
-		return node.kind == _shape.identKind && node.name == name || node.children.exists(k -> readsName(k, name));
-	}
-
-	/** Whether something in `node`'s subtree writes the identifier `name`: an assignment to it, an increment. */
-	private function writes(node: QueryNode, name: String): Bool {
-		final kids: Array<QueryNode> = node.children;
-		return _shape.writeParentKinds.contains(node.kind) && kids.length > 0 && kids[0].kind == _shape.identKind && kids[0].name == name
-			|| kids.exists(k -> writes(k, name));
-	}
-
 	/** The kinds of an `if` statement, an `if` expression and a ternary: the constructs whose first child is a condition. */
 	public static function conditionalKinds(shape: RefShape): Array<String> {
 		return (shape.ifStatementKinds ?? []).concat(shape.ifExpressionKinds ?? [])
 			.concat(shape.ternaryKind == null ? [] : [shape.ternaryKind]);
+	}
+
+	/** The kinds of a value built where it is written, never null: a construction, an object or array literal. */
+	private static function builtKindsOf(shape: RefShape): Array<String> {
+		return [
+			for (k in [shape.newExprKind, shape.objectLiteralKind, shape.arrayLiteralKind]) if (k != null) k
+		];
 	}
 
 }

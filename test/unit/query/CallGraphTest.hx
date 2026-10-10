@@ -29,6 +29,20 @@ class CallGraphTest extends Test {
 	}
 
 	/**
+	 * A lambda's first parameter starts where the lambda does: a read of it passed on (`x -> f(x)`) is a value, never a
+	 * reference to the lambda — the binder must NAME a local function to be one.
+	 */
+	@:pin('control') @:killer('M-GRAPH-LAMBDA-PARAM-SELF')
+	public function testALambdaParameterIsNoReferenceToItsLambda(): Void {
+		final g: CallGraph = graphOf([
+			'class A { static function take(f:String->Void):Void {} static function f(s:String):Void {}'
+			+ ' static function main():Void { take(x -> f(x)); function walk(n:Int):Void take(s -> walk(1)); } }'
+		]);
+		Assert.equals(0, edges(g, 'A.main#1', 'A.main#1', Ref).length);
+		Assert.equals(1, edges(g, 'A.main#walk#2', 'A.main#walk', Call).length);
+	}
+
+	/**
 	 * A call's receiver names the lock OBJECT only when it is a member read directly — a bare field, `this.f`, a static
 	 * `T.f`; a parameter of the same name is a value some other binding may alias, and names none.
 	 */

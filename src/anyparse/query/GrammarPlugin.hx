@@ -1232,6 +1232,13 @@ typedef RefShape = {
 	@:optional var enumAbstractDeclKind: String;
 
 	/**
+	 * The clause of an abstract declaration converting a value of another type into it implicitly (Haxe `from T`,
+	 * `FromClause`) — `thread-safety` reads an enum abstract with one as open: such a conversion builds values its
+	 * constants do not name. Optional; unset reads every enum abstract as open.
+	 */
+	@:optional var abstractFromClauseKind: String;
+
+	/**
 	 * The ANNOTATION name that turns an ordinary abstract declaration into an enum
 	 * abstract (Haxe's deprecated `@:enum abstract` spelling, still legal). Such a
 	 * declaration projects as the PLAIN abstract kind with the annotation as a preceding

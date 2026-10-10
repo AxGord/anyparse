@@ -1,6 +1,7 @@
 package anyparse.query.format;
 
 import anyparse.check.Check.FindingData;
+import anyparse.check.Check.RepeatSite;
 import anyparse.check.Check.Violation;
 import anyparse.check.LongLockExplain.LongLockKind;
 import anyparse.check.LongLockExplain.LongLockReason;
@@ -92,9 +93,11 @@ final class LintFormat {
 	 * Given `explain` (`lint --explain-long`), the document is the `{"findings": […], "longLocks": {…} | null}` envelope
 	 * instead — null when the rule ran and explained nothing. `longLocks.long` lists each long lock as `{lock, reasons,
 	 * circular, aside}` (`circular`: how many re-takes of the lock itself were left out), a reason as `{kind, file, line,
-	 * col, function}` plus `call`, `chain`, `via` for `spans-blocking` and `unresolved` (`[{name, line, col}]`) for
+	 * col, function}` plus `call`, `chain`, `via` (and `errorPath`, the `catch` every way it blocks
+	 * passes through, when there is one) for `spans-blocking` and `unresolved` (`[{name, line, col}]`) for
 	 * `blind`, `aside` null or such reasons; `longLocks.mainShort` lists each
-	 * main-thread take of a lock that is not long as `{lock, file, line, col, function, quiet}`.
+	 * main-thread take of a lock that is not long as `{lock, file, line, col, function,
+	 * quiet}`, and `longLocks.dominated` each lock others dominate as `{lock, by}`.
 	 */
 	public static function json(
 		violations: Array<Violation>, sourceOf: Map<String, String>, ?addressOf: Violation -> Null<String>, ?explain: ExplainedLocks
@@ -129,7 +132,8 @@ final class LintFormat {
 					Reflect.setField(record, 'quiet', t.quiet);
 					record;
 				}
-			]
+			],
+			dominated: [for (d in longLocks.dominated) { lock: d.lock, by: d.by }]
 		};
 		return Json.stringify({ findings: records, longLocks: explained }, null, '  ');
 	}
@@ -179,7 +183,8 @@ final class LintFormat {
 	/**
 	 * The `--explain-long` section of a text report: a headline, then each long lock with one line per reason —
 	 * `<kind>  <file>:<line>:<col>  <function>`, a `spans-blocking` one followed by the path to the call that blocks — and
-	 * what the lock is long by with its own reasons set aside, then each main-thread take of a lock that is not long.
+	 * what the lock is long by with its own reasons set aside, then each
+	 * main-thread take of a lock that is not long, then each lock others dominate.
 	 */
 	public static function longLocksText(report: LongLockReport, sourceOf: Map<String, String>): String {
 		final indexes: Map<String, LineIndex> = [];
@@ -201,6 +206,7 @@ final class LintFormat {
 			final quiet: String = t.quiet ? '  (quiet)' : '';
 			buf.add('  ${t.lock}  ${place(t.file, t.span, indexFor(t.file, sourceOf, indexes))}  ${t.holder}$quiet\n');
 		}
+		for (d in report.dominated) buf.add('dominated ${d.lock} by ${d.by.join(', ')}: a take of it under one of those is brief\n');
 		return buf.toString();
 	}
 
@@ -223,12 +229,17 @@ final class LintFormat {
 			message: v.message
 		};
 		final data: Null<FindingData> = v.data;
-		if (data != null) Reflect.setField(record, 'data', {
-			family: data.family,
-			"function": data.member,
-			subject: data.subject,
-			chain: data.chain
-		});
+		if (data != null) {
+			final fields: Dynamic = {
+				family: data.family,
+				"function": data.member,
+				subject: data.subject,
+				chain: data.chain
+			};
+			final repeated: Null<Array<RepeatSite>> = data.repeatedBy;
+			if (repeated != null) Reflect.setField(fields, 'repeatedBy', [for (r in repeated) { "function": r.member, at: r.at }]);
+			Reflect.setField(record, 'data', fields);
+		}
 		return record;
 	}
 
@@ -244,6 +255,7 @@ final class LintFormat {
 			Reflect.setField(record, 'call', r.call);
 			Reflect.setField(record, 'chain', r.chain);
 			Reflect.setField(record, 'via', r.via);
+			if (r.errorPath != null) Reflect.setField(record, 'errorPath', r.errorPath);
 		}
 		if (r.kind == LongLockKind.Blind) Reflect.setField(record, 'unresolved', [
 			for (c in r.unresolved) {
@@ -272,7 +284,8 @@ final class LintFormat {
 		final call: Null<String> = r.call;
 		if (call == null) return head;
 		final via: String = r.via == null ? '' : ' via ${r.via}';
-		return '$head  calls $call$via: ${r.chain.join(' -> ')}';
+		final error: String = r.errorPath == null ? '' : '  only on an error path (catch at ${r.errorPath})';
+		return '$head  calls $call$via: ${r.chain.join(' -> ')}$error';
 	}
 
 	/** `<line>:<col>` of `span`'s start. */

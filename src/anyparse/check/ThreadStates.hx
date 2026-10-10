@@ -29,8 +29,17 @@ private typedef ThreadState = {
 @:nullSafety(Strict)
 final class ThreadStates {
 
+	/** The origin of the main thread among a function's threads (`origins`); a worker's is the callback starting it. */
+	public static inline final MAIN_ORIGIN: String = '<main>';
+
 	/** Each function's contexts, the union over its states. */
 	public final contexts: Map<String, Int> = [];
+
+	/**
+	 * The functions seeded MAIN because nothing the walk knows runs them: their thread is an assumption, not a finding,
+	 * and a question that turns on a function running on the main thread ALONE treats theirs as unknown.
+	 */
+	public final assumed: Map<String, Bool> = [];
 
 	private final _states: Map<String, ThreadState> = [];
 	private final _byNode: Map<String, Array<ThreadState>> = [];
@@ -40,6 +49,9 @@ final class ThreadStates {
 	private final _callbackContext: (CallEdge, Int) -> Int;
 	private final _quiet: Array<String>;
 
+	/** Whether a value handed on is never run from where it is handed (`ThreadSafety.runsNothing`). */
+	private final _inertRef: (CallEdge) -> Bool;
+
 	public function new(
 		graph: CallGraph, conditions: EdgeConditions, quiet: Array<String>, callbackContext: (CallEdge, Int) -> Int,
 		inertRef: (CallEdge) -> Bool, seedable: (String) -> Bool
@@ -48,7 +60,22 @@ final class ThreadStates {
 		_conditions = conditions;
 		_callbackContext = callbackContext;
 		_quiet = quiet;
+		_inertRef = inertRef;
 		solve(inertRef, seedable);
+	}
+
+	/**
+	 * Whether the edge `e` may run its target from its function: a call, or a value handed on to run unless `inertRef`
+	 * says nothing runs it from there — what a walk over the code a function runs follows (`LockReleasers`, `LockTaint`,
+	 * the helper inference of `LockSites`).
+	 */
+	public static inline function runsWith(e: CallEdge, inertRef: (CallEdge) -> Bool): Bool {
+		return e.kind.isInvocation() || e.kind == Ref && !inertRef(e);
+	}
+
+	/** `runsWith` under this solve's `inertRef`. */
+	public inline function runsFrom(e: CallEdge): Bool {
+		return runsWith(e, _inertRef);
 	}
 
 	/** Every state of `id` the walk reached: each valuation of its tracked parameters, with the contexts it runs it on. */
@@ -93,8 +120,7 @@ final class ThreadStates {
 
 	/** The fixed point: every state each seed reaches through the calls and callbacks that run from it. */
 	private function solve(inertRef: (CallEdge) -> Bool, seedable: (String) -> Bool): Void {
-		for (id => node in _graph.nodes) if (!node.isExternal && _graph.inEdges(id).length == 0 && seedable(id))
-			arrive(id, _conditions.unknown(id), ThreadSafety.CTX_MAIN, null);
+		for (id => node in _graph.nodes) if (!node.isExternal && _graph.inEdges(id).length == 0 && seedable(id)) seed(id);
 		var qi: Int = 0;
 		while (true) {
 			while (qi < _queue.length) {
@@ -112,11 +138,17 @@ final class ThreadStates {
 			// unless a function the walk reached calls or references it: the walk then knew that call, and found it runs nowhere
 			var seeded: Bool = false;
 			for (id => node in _graph.nodes) if (!(node.isExternal || contexts.exists(id)) && seedable(id) && !walkedCaller(id)) {
-				arrive(id, _conditions.unknown(id), ThreadSafety.CTX_MAIN, null);
+				seed(id);
 				seeded = true;
 			}
 			if (!seeded) break;
 		}
+	}
+
+	/** `id` ASSUMED to run on the main thread under the valuation that knows nothing (`assumed`). */
+	private function seed(id: String): Void {
+		assumed[id] = true;
+		arrive(id, _conditions.unknown(id), ThreadSafety.CTX_MAIN, null);
 	}
 
 	/** Whether a function the walk reached calls or references `id` — lexical containment aside, which runs nothing. */
@@ -150,6 +182,53 @@ final class ThreadStates {
 		known.ctx = merged;
 		contexts[id] = (contexts[id] ?? 0) | merged;
 		_queue.push(known);
+	}
+
+	/**
+	 * The threads each function runs on, by origin: `MAIN_ORIGIN` for the main thread, loud or quiet, and for a worker
+	 * the callback a `spawns` call starts it with (`callbackContext` making it background whatever registers it) — each
+	 * such callback one thread, whatever spawns it. A worker origin flows along every edge carrying a background context, per
+	 * state — under the valuation the worker hands down (`EdgeConditions.carried`), so a call a condition rules out there
+	 * carries none — but a value handed to a `spawns` call, which starts an origin of its own, or one `inertRef` says is
+	 * never run from there; a function no thread runs has none.
+	 */
+	public function origins(inertRef: (CallEdge) -> Bool): (String) -> Array<String> {
+		final found: Map<String, Array<String>> = [];
+		for (id => ctx in contexts) if (ctx & (ThreadSafety.CTX_MAIN | ThreadSafety.CTX_QUIET) != 0) found[id] = [MAIN_ORIGIN];
+		final spawned: (CallEdge) -> Bool = e -> e.kind == Ref && _callbackContext(e, ThreadSafety.CTX_MAIN) == ThreadSafety.CTX_BG;
+		final onWorker: (CallEdge) -> Bool = e ->
+			e.kind != Contains && !(e.kind == Ref && inertRef(e)) && edgeContext(e) & ThreadSafety.CTX_BG != 0;
+		for (start in _graph.edges) if (spawned(start) && onWorker(start)) {
+			// per state: a call a condition rules out under the valuation the worker hands down carries no origin
+			final seen: Map<String, Bool> = [];
+			final queue: Array<{ id: String, valuation: String }> = [{ id: start.to, valuation: _conditions.unknown(start.to) }];
+			var qi: Int = 0;
+			while (qi < queue.length) {
+				final at: { id: String, valuation: String } = queue[qi++];
+				if (seen.exists('${at.id}|${at.valuation}')) continue;
+				seen['${at.id}|${at.valuation}'] = true;
+				final known: Array<String> = found[at.id] ?? [];
+				if (!known.contains(start.to)) known.push(start.to);
+				found[at.id] = known;
+				for (e in _graph.outEdges(at.id)) if (!spawned(e) && onWorker(e)) {
+					final next: Null<{ id: String, valuation: String }> = workerStep(e, at.valuation);
+					if (next != null) queue.push(next);
+				}
+			}
+		}
+		return id -> found[id] ?? [];
+	}
+
+	/**
+	 * The state a worker running a function under `valuation` enters through its edge `e`: the call's target under the
+	 * values it hands down, a value handed on with nothing known; null when a condition rules `e` out there, or the value
+	 * runs on no worker from there.
+	 */
+	private function workerStep(e: CallEdge, valuation: String): Null<{ id: String, valuation: String }> {
+		final live: Int = _conditions.carried(e, valuation, ThreadSafety.CTX_BG);
+		final ctx: Int = e.kind == Ref ? _callbackContext(e, live) : live;
+		if (live == 0 || ctx & ThreadSafety.CTX_BG == 0) return null;
+		return { id: e.to, valuation: e.kind == Ref ? _conditions.unknown(e.to) : _conditions.bind(e, valuation) };
 	}
 
 	/** A `mainPath` as text, its last `cap` hops after `...` when it is longer. */

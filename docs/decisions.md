@@ -1495,3 +1495,450 @@ decided the question; it may not become a record of runs.
 - pairing old and new snapshots across `data` by the first message seen per identity key → one function reaching a
   sink by several chains still moved in `lint-diff` while `--baseline` called nothing new; both spend from one pool
   holding every message per key, every finding its own key first — branch `feat/ts-precision`
+- grading a short sink by its own call site alone (`thread-safety` `shortSinks`) → TM's folder icon runs four COUNT
+  queries once per icon and the folder delete one unlink per child: each call is single, the loop is up the main
+  thread's way (`FileListItemsController` per visible item, the delete per selected item); a main-thread short call is
+  long when ANY main-thread path to it crosses a repeating call — branch `feat/ts-precision-2`
+- reading that repetition off the finding's own chain (`ThreadStates.mainPath`) → the chain is one witness: the icon's
+  ran through the one-icon-per-event handler and graded the four COUNTs short, while the file list's per-item path
+  repeats them; the closure over every main-thread path is what grades — branch `feat/ts-precision-2`
+- recursion as one strongly connected component over every edge kind → registrations close cycles that run nothing
+  (a handler registering itself, a callback handed back), and TM's graph formed one component of 1080 functions, so
+  every call in it repeated; recursion is a cycle of RUNS (call, `new`, override, accessor), and a callback repeats only
+  through an `iterates` call — branch `feat/ts-precision-2`
+- placing a call site under the function node the graph names for its caller → graph ids are simple names, so two
+  same-named types share one node and every site of the other's file went unplaced (and so repeating); the loops
+  around a site are read off its file's own tree from the root, counted afresh at every function or lambda around it
+  — branch `feat/ts-precision-2`
+- dropping every hold only the main thread runs, the main thread's own blocking being finding (a)'s → TM's
+  multi-select move holds `_batchMutex` across a per-item loop on main, and that hold IS the labelled stall while (a)
+  names only the calls below it; a main-only hold stays when the main thread itself works long under the lock
+  (`LockTaint.ownWork`) — branch `feat/ts-precision-2`
+- counting a take of another lock as a main-only holder's own work → `getFolderLastCloudActionAction2` holds
+  `_batchMutex` only to take `_mutex`, a wait finding (a) already reports at the take; own work leaves every take out,
+  repeated or not — branch `feat/ts-precision-2`
+- also solving lock LONGNESS from the holds a main waiter can meet (no main-only hold making a lock long) → measured
+  on the three TM trees it moved no finding; left out until a case needs it — branch `feat/ts-precision-2`
+- outer-lock dominance with blind holds breaking it outright → every TM `CloudDatabase._mutex` hold is blind through
+  a `trace` (TM routes `trace` to its log writer), and the brief `getFileCount` holds take `_mutex` outside
+  `_batchMutex`, so nothing was ever dominated; an unresolved call is a long point, except one a bare `shortSinks` name
+  names and no loop under the hold repeats — branch `feat/ts-precision-2`
+- carrying a must-held lock into a callee by `CallEdge.receiverField` alone → the graph names `o.f` on a typed `o` as
+  `Owner.f` too, so `fileSystem.cloudDatabase.batchLock()` read as a lock on a field of the running object; only a bare
+  field or `this.f` carries a lock onto the callee's `this`, and only a `final` one — branch `feat/ts-precision-2`
+- must-held by "the take runs on every path INTO the function" (`LockWindow.runsOnEveryPath`) → TM's CloudDatabase
+  holds open after an `if (…) return` and behind `if (!batch)`; a take counts at a point when the deepest node holding
+  both is a sequence that runs the take's statement first, its way to the take through sequences and `if`s the
+  valuation decides — branch `feat/ts-precision-2`
+- a give before the point killing a must-held lock wherever it sits → `if (done) { releaseMutationLocks(); return; }`
+  ahead of every call in TM's `moveItem`; a give in a block that ends in a `return` or `throw` after it, with no `catch`
+  around it that holds the point, reaches no later call — branch `feat/ts-precision-2`
+- counting every function that gives a lock back as a releaser → `if (!batch) _batchMutex.release()` where every caller
+  passes `true` gives nothing, and a wrapper's or helper's own give is its caller's; releasers come from the crossing
+  releases and helper gives that some state runs — branch `feat/ts-precision-2`
+- attributing a short call that a caller repeats to EVERY repeating caller above it → TM grew from 67 to 466 A keys
+  warning, one per UI loop on any way to a helper; the nearest repeating call on any way owns it, one warning per call
+  site — branch `feat/ts-precision-2`
+- folding sibling entry points by "the nearest shared callee" of every sink → a finding already sits at the call of the
+  sink, i.e. inside the shared callee, so siblings duplicate only through LOCK TAKES (`Store.put` / `remove` /
+  `removeKeys` each taking `Store._mutex`); the rule is one warning per lock object, at its wrapper's take when one
+  exists — branch `feat/ts-precision-2`
+- grading a finding long whenever ANY way to its long call exists → 17 of TM's warnings were long only through
+  `catch` → `Error.reportError` → a blocking PUT (`FileSystemNativeExtensions.getMTime`'s catch under every watcher
+  hold); the costs are solved a second time over the normal paths — a call inside a `catch` body leads nowhere — and a
+  finding long only in the first solve is `info`, naming the catch. Demotion, not removal: an error that repeats is a
+  real stall, so it stays visible — branch `feat/ts-precision-2`
+- bare `shortSinks` names applied to dominance only (β1) → the costed solve still seeded every hold spanning an
+  unresolved call as long on its own, so TM's `SerFile._mutex` was long by a `trace` in `SerFile.read` and the main
+  thread's take of it warned; a hold's unresolved call is a long reason only where no bare `shortSinks` name makes it
+  brief once under the hold — the same `briefBlind` the dominance reads — branch `feat/ts-precision-2`
+- that narrowing alone → `FolderWatcher.reset` (real-long: it takes the tree lock and leaves it for the next
+  `update()`) was found only through `SerFile.remove` taking that long lock; a hold no path of its function gives back
+  (`HoldGrade.handsOff`) is long whatever its window spans — the recall now rests on the mechanism, not the accident.
+  A function that only takes the lock is left out: its caller's code is the hold — branch `feat/ts-precision-2`
+- a function value registered in a loop repeating once per iteration → TM's `listenContent` registers one rename
+  handler on every list item, and the handler (a `FileSystem.rename`) warned at the loop; a callback handed to a
+  `registers` call (`addEventListener`) runs later as a run of its own, once per event however often it was registered,
+  so no loop around the registration and nothing up the way to it repeats it. A config list, not a guess: whether a call
+  runs what it is handed now or keeps it is the library's contract — branch `feat/ts-precision-2`
+- dominance proven only at takes in the hold's OWN function (`underHold`) and through the entry meet → TM's
+  `removeFileBlocked` holds `_cloudDatabase._batchMutex` and calls `_cloudDatabase.getFileByCloudId`, whose take of
+  `_mutex` the meet over all its callers cannot prove under the batch; the hold being judged is carried down its own
+  walk instead, its object through each call on it (`LockDominance.carry`), lost at any callee that may give it back —
+  8 of the 13 `batch-x` holds of the brief turned info, 4 more once objects are PATHS of stable fields
+  (`fileSystem.cloudDatabase`: a `var` with no write outside its constructor, the scan conservative — a bare or
+  `this.` write counts in a type owning the field, any other receiver's always) — branch `feat/ts-precision-2`
+- a take of a lock nothing ever takes exclusively counted as a wait → TM's `APIToken._refreshReadWriteLock` is taken only
+  with `lockShared`, so `std::shared_mutex::lock_shared` never blocks; which pair members share is the library's
+  contract, so a config list (`sharedLocks`), applied only when EVERY take of the sealed lock goes through one —
+  branch `feat/ts-precision-2`
+- γ4 items left open, by cause: `CloudDatabase.new` (already info) is refused as a constructor hold because its
+  constructor calls `super()` (which may publish `this` first) and registers `enterFrameHandler` after the release;
+  `FoldersIncrementalCloudUpdatesRequest.start`'s lock is UNNAMED (`FoldersIncrementalCloudUpdatesCache.lock` cannot be
+  a wrapper while `lock` is a name some unresolved call is written with), so "no main-thread taker" cannot be asked
+  of it; `FileList.reload`'s `case _` needs every `cast` to `FileListViewType` typed to prove the value set; and
+  `StandardFileSystem.listFolder`'s `Lock.wait` is no main-thread-check gap — `put` does take the async `request` on
+  main, whose `urlLoader.load` → `this.go()` dispatches to every override, `BlockingNativeURLLoader.go` included
+  (the loader `doRequest` builds is never one) — branch `feat/ts-precision-2`
+- multi-lock helper holds (`helperHolds`) fed to the throw and order findings only → finding (b) never judged
+  them, so every caller of TM's `acquireMutationLocks` (saveXML, moveItem, deleteItem, renameItemInternal, …) held
+  `_batchMutex` and `_mutationMutex` across nothing, while the helper itself warned for taking `_mutationMutex` under
+  `_batchMutex`, and the twin's gives counted as crossing releases making both locks long on their own. The holds are
+  judged at the caller like a wrapper's; the helper's takes and the twin's gives are the caller's — branch
+  `feat/ts-precision-2`
+- every `try` with a `catch` intercepting what its body raises → TM's `FolderWatcher.update` became `try updateInternal()
+  catch (e) { _resetMutex.release(); throw e; }` and its callers' holds stopped being seen leaking
+  (`SessionsFolderWatcher.update`); a `catch` throwing its own variable is the `try`'s exception going on. Only that
+  shape: a `throw` of anything else is the function's own throw, which stays unfollowed by design — a project function
+  whose throw callers must expect goes in `throwers` by name (TM's `badNamesHandler`, not configured: on 1d1ba147 the
+  healing runs outside the tree lock) — branch `feat/ts-precision-2`
+- every override of a dispatch running wherever its receiver came from → TM's `APIRequest2.doRequest` builds
+  `urlLoader` as a thread or simple loader and `BaseNativeURLLoader.load`'s `go()` reached `BlockingNativeURLLoader.go`
+  anyway; the walk hands down the classes the receiver may be (`AllocationSets`: a `new`, a sealed allocation set of a
+  field, the running object's) and drops a dispatch none resolves to. Path-sensitive on the hold walk only: the
+  main-thread finding is per call site, and main does reach the blocking loader through `goBlocked`, so
+  `A|BlockingNativeURLLoader.go` stays (its witness chain is still the `request` one) — branch `feat/ts-precision-2`
+- passing the oracle's compiler facts to this rule's graph by default → measured on the live TM at 1d1ba147 (its `src`
+  identical to the frozen tree, 13 configurations, verdicts reused): keys 86 → 123, precision 0.21 → 0.16, recall
+  15/15 either way. A call the facts describe carries no `CallEdge.receiverField`, so `LockSites.lockOf` names no
+  lock for its takes and every one becomes an unnamed, always-long lock (`SerFile.write` "holds Mutex.acquire",
+  every `CloudDatabase._batchMutex` holder over its own `_mutex` take); and a lambda the facts record as a value made
+  at its site inherited its maker's thread beside the syntax's `spawns` registration (now `ThreadGraph.madeWhereHanded`).
+  Opt-in (`compilerFacts`) until the facts' call edges name their receiver field — branch `feat/ts-precision-2`
+- every `catch` body a path → TM's `getMTime` / `setTimestamp` wrap hxcpp's `FileSystem.stat` (a missing path gives a
+  zeroed record, no throw) and a native prim returning a status code in a `catch` that reports by a blocking PUT, and
+  that leg was the long reason of most `FolderWatcher.*` holds; a config list (`nonThrowing`, the project's word for
+  the runtime) and a positive whitelist of what else a `try` body may hold make such a `catch` no path at all
+  (`DeadCatches`, checked in `EdgeConditions.carried`) — branch `feat/ts-precision-2`
+- main-thread repetition and its owner read per FUNCTION → the closure crossed calls the caller's valuation rules out:
+  TM's session planner loops `DrillVOModel.loadDrillData`, which calls `loadXML(path, false, …)`, and the
+  `if (checkLimits)` count / animation check under it were "repeated" by that loop (three keys, two false, one rare);
+  `MainRepeats` runs the closure and the owner walk over `ThreadStates`' states with `EdgeConditions.carried` / `bind`,
+  as the hold taint already did — branch `feat/ts-precision-2`
+- valuations knowing only `Bool` literals, `null` and `new` arguments, and conditions only on a parameter itself → TM's
+  `Token.blockedPost` hands `blockedRequestInternal` an object literal, which tests it as `final simpleRequest = data
+  == null && files == null; … simpleRequest ? fromMemory(id) : null`; an object, array or string literal is never
+  null, and a `final` local bound to a condition is that condition, both where a parameter is tracked and where a
+  call is decided — branch `feat/ts-precision-2`
+- a main-only hold warning for its own long work beside finding (a) → after δ1 eight of TM's new caller holds were
+  main-only (`deleteItem`, `moveItem`, `setXML`, `loadXML`, …), each a second key for work (a) already warns of at
+  `deleteItemInternal` / `moveCloudFolderSubItemsAction2`; the hold turns info when (a) warns of every long call it
+  names at another member (ζ1 dropped the exception that kept it where (a) reports the work at the holder itself,
+  `FileListMoveFiles.moveItems`: the hold is still the main thread's own work) — branch `feat/ts-precision-2`
+- folding nested holds only within one function (β3) → a multi-lock helper judged at a caller that runs inside the
+  sync's own batch hold (`cloudLocalRenameAndMoveItem`, `removeCloudLocal` under `moveLocalQueue` /
+  `removeLocalQueue`) was a second key for one hold; a hold whose lock every state of its function already must-holds
+  on the same object at the take is the enclosing hold's (`LockDominance.enclosed`) — branch `feat/ts-precision-2`
+- reporting every hold of a lock no sealed member names → TM's `FoldersIncrementalCloudUpdatesCache` is reached through
+  `_base._cache`, a field read for more than its calls, so no member names it; named in `lockPairs`
+  (`fs.cloud.FoldersIncrementalCloudUpdatesCache.lock/unlock`) it is told apart by that pair, and a pair the main
+  thread never takes stalls no main thread — branch `feat/ts-precision-2`
+- every `switch` branch a path → TM's `FileList.reload` throws in the `case _` of a switch over `FileListViewType`
+  (LIST, GRID), a `C` finding no value can reach; the catch-all of a switch over a closed enum abstract whose values
+  the cases all name is no path (`ExhaustiveSwitches`). Closed is positive: no `from` clause, every function handing
+  back the abstract hands back only its values (`@:from fromString` maps every string onto LIST / GRID). A `cast`
+  into the abstract is the hole the source cannot show — accepted, as the compiler's own exhaustiveness does —
+  branch `feat/ts-precision-2`
+- one repeating-owner finding (a) per short sink → TM's `FileListMoveFiles.moveItems` warned four times at one line
+  (`File.getContent`, `FileSystem.rename`, `Connection.request`, `Mutex.acquire`), `repairShareAttr` twice per
+  site; the site owns one warning keyed by the call it repeats, naming every sink — a sink set that grows with the
+  code no longer renames the key — branch `feat/ts-precision-2`
+- a hold of a lock warning both where it waits for another lock and where that lock's holder warns → TM's
+  `StandardFileSystem.saveXML` (mutation lock) waits for the tree lock `FolderWatcher.updateInternal` holds long;
+  one root cause, two warnings. `RootCauseFold`: a hold warning whose every long call is a wait for a lock every
+  long-making hold of which is reported (a warning, or an info naming the warning that covers it), or a sink call
+  another warned hold is long by too, turns info naming them; a cycle keeps the hold nearest its work. Positive: a
+  lock long by a hand-off, an unresolved call, a crossing release or a hold with no finding stays uncovered. A finding
+  (a) at that sink call covers a hold only when the hold runs on the main thread alone (its own work) — a background
+  hold across the same call stalls the main thread through the lock even once the main thread stops calling it.
+  The same-member exception of the main-only fold (ε4) went with it: TM's `moveItems` hold folds onto the loop's (a)
+  warning — branch `feat/ts-precision-2`
+- a local declaration, an array literal, `break` / `continue` as opaque steps of a hold's window → TM's
+  `StandardFileSystem.getXML` (`final xml = try … catch { unlock; throw }`) and `listFolder` (a comprehension with
+  `continue` and a `catch` that releases before it returns) "leaked" their tree lock, which made every wait for it
+  long by a leak no finding names; `LockWindow` walks them in place — branch `feat/ts-precision-2`
+- one warning per call site of a sink a main-thread way runs → TM's `FSUtil.deleteRecursive` warned three times (its
+  `readDirectory`, `deleteDirectory`, `deleteFile` run on every run of it) and `repairShareAttr`'s session loop twice
+  (`getXML`, `setXML`); one warning per way into a function, and per loop for the calls it repeats — branch
+  `feat/ts-precision-2`
+- every repetition long for a short sink (ζ2) → TM's `listFolder` per-child SELECTs (414 children × 2 × 0.04 ms = 33 ms),
+  `createPathToItem`'s path segments, `deleteFileSystems`' four unlinks warned as repeated short work under the
+  50 ms real-long line; `boundedRepeats` names the member (and call), the bound and the measured cost of one turn, and
+  the check stays mechanical (`max × costMs < repeatBudgetMs`), the numbers and their evidence in the config. Not
+  listed: the 401 retry cycle (`executeCompletion` ↔ `refreshTokenOrLogoutBlocked` has no retry cap in code) and
+  `listFolderCloudCallback` (a turn that inserts the missing DB row costs 1.2 ms, 84 × 1.25 > 50) — branch
+  `feat/ts-precision-2`
+- `if (flag) lock(); … if (flag) unlock();` read as a leak → TM's `FolderWatcher.rename(…, flush)` made the tree lock
+  long by a leak no finding names, which kept every wait for it from folding; a parameter deciding two or more `if`s
+  that nothing writes is a fixed flag, the window traced once per value (`FixedFlags`) — and a `throw` a `catch` around
+  it intercepts no longer marks a leak (`copyFileAndCreateSlave`) — branch `feat/ts-precision-2`
+- judging "inside a catch" off the witness chain the finding prints → the chain is one way; a second way outside every
+  catch must keep the warning, which only a solve without the catch edges can see — branch `feat/ts-precision-2`
+- a parameter as a fixed flag when nothing ASSIGNS it (`FixedFlags`) → `var flush = check()`, `final flush = flush &&
+  check()`, a `for` binder, a `catch` variable or a lambda parameter of its name made a later `if (flush)` read another
+  binding, and a take nothing gave back read as no leak (review r4 `L2`, `L2d`, r2 `h01`); a flag is now a parameter no
+  other node of the function declares (`BareNames.stable`) — branch `fix/ts-A`
+- a `final` local deciding a condition when the function declares its name once (`EdgeConditions.finalLocalInit`) → a
+  read outside the local's block, or outside the lambda declaring it, means the member of that name (review r4 `A1`,
+  `A2`); the local must sit in a block on the way to the read, before it (`BareNames.localOf`) — branch `fix/ts-A`
+- a `try` with any `catch` stopping every throw (`LockWindow`, `ThrowReach`) → `catch (e:haxe.io.Eof)` does not catch
+  `throw "x"`, and a `throwers` exception is of no known type (review r4 `L1`, `L1e`, `R5`); a catch stops a throw only
+  when it provably catches it (`CatchTypes`: untyped, a catch-all type, the exception type, the thrown literal's or
+  `new`'s type or a supertype) — branch `fix/ts-A`
+- a `catch` re-raising only when it throws its own variable bare (`ThrowReach.rethrows`) → `throw new X("…", e)`,
+  `throw (e)`, `final x = e; throw x` and any other value thrown there run only where the `try` failed (review r4 `R1`,
+  `R2`, `R4`); a `catch` holding any `throw` lets the failure go on — branch `fix/ts-A`
+- a catch-all of a switch over an enum abstract dead whenever the abstract has no `from` clause and its typed functions
+  hand back values (`ExhaustiveSwitches`) → a guarded case, a value under `#if`, a constructor, an untyped `@:op`, a
+  static field, a parameter or local shadowing the subject, a `Dynamic` write, an uninitialized String member, two
+  abstracts of one name all reached it (review r4 `e1`–`e10`); closedness is now a whitelist of the abstract's members,
+  and the member must HOLD only values — its getter, its initializer or a counting abstract's `0`, every assignment to a
+  field of its name — which TM's `FileListSelect.viewType` (uninitialized, LIST = 0, set through a `?viewType ??
+  defaultViewType` whose getter converts a `Null<String>` by `@:from`) still passes — branch `fix/ts-A`
+- a string literal inert, a bare name inert, a `nonThrowing` call off any receiver (`DeadCatches`) → `'${risky()}'`, a
+  property with a throwing getter, `disk().istat(p)` and `d.istat(p)` on a null `d` throw (review r4 `d1`–`d5`); inert
+  is a literal of text parts only, a read of a binding or a plain field, a call off a static path — branch `fix/ts-A`
+- a call in any `catch` body, or in a lambda written there, only on an error path (`ErrorPaths`) → a catch inside a loop
+  runs once per failing turn of the normal run, and a lambda a catch stores runs wherever it is called (review r4 `P1`,
+  `P2`, r2 `f11`); a catch counts only with no loop above it in its function, and a nested function inherits it only when
+  every way into it is an invocation inside that catch — branch `fix/ts-A`
+- "a `var` written only in its constructor" judged by SPAN containment → a write in a lambda or a local function the
+  constructor makes (`Runner.create(() -> db = b)`) sits inside the constructor's span yet runs any time later, a
+  write of ANOTHER object's field inside the constructor counted as the constructor's own, and a `static var` the
+  instance constructor assigns was taken for stable; the write's own function id must BE the constructor, on the
+  running object, never for a static (`FieldWrites`, `ObjectPaths.writtenOnlyInConstructor`) — branch `fix/ts-C2`
+- "every write" / "every value" of a field read off the run's files alone → a run over part of a project
+  (`hxq lint core` where `plugins/` writes the field) sealed the field and the stall vanished; a `var` is stable and a
+  field's allocation set sealed only when the run sees every write of the project — `closedWorld` declared AND the
+  run holding every `.hx` file under the declaring document's `resolutionRoots` (else its directory), `exclude`d paths
+  aside (`ProjectCoverage`); a `final` needs neither — branch `fix/ts-C2`
+- an undeclared class name in a `new` taken for a library class → an import alias (`import a.Blocking as Blk`, `in
+  Blk`) and a type parameter (`new T()`) spell a project class with a name the index does not declare, and the
+  dispatch "ran no project override"; a name the run does not declare is a library's only when the run covers a closed
+  project and the file writes it by a path or a plain import, and an alias names nothing, even when it reads as a
+  project class's name (`AllocationSets.constructedClass`) — branch `fix/ts-C2`
+- two write walkers re-walking every file per field (`ObjectPaths.writes`, `AllocationSets.writes`) → one write index
+  per run over the graph's held trees, by name (`FieldWrites`); `FieldWriteIndex` was not reused: it re-parses every
+  file, records neither a write's function nor its value, and attributes by DECLARED receiver type, which for this
+  question needs the subtype closure to stay sound — branch `fix/ts-C2`
+- each `thread-safety` option read where it is used, a wrong shape falling back to "absent" → a malformed config
+  (`"shortSinks": "x"`, `"iterates": [1, 2]`, a typo key, `"max": "414"`, a `site` matching nothing) ran byte-identical
+  to no config with nothing said; one reader (`ThreadSafetyOptions`) checks every key and reports each drop as an
+  `info` finding naming no file — and those were never printed at all: the report grouped findings by input path, so
+  a file-less finding (the old malformed-`lockPairs` one included) only counted in the summary line; it now closes the
+  report under `''` — branch `fix/ts-C2`
+- the fix brief's "dead" `boundedRepeats` entry `fs.FileSystemManager.deleteFileSystems` → live: without it TM's
+  `A deleteFileSystems | FileSystem.deleteFile` (four unlinks under `HelpMain.deleteCache`, real-short) warns on all
+  three frozen trees; kept — branch `fix/ts-C2`
+- a call repeats only when the graph PROVES a loop, an `iterates` callback or a recursion (a negative list) → a user
+  `each(xs, f)`, an aliased `Lambda.iter`, `n.forEachKid(walk)`, a `Dynamic` handler loop, a custom iterator's `next`
+  and a background loop posting 1000 `runInMainThread` tasks were all "once" and info, with a note claiming "no loop,
+  `iterates` callback or recursion on the way"; repetition is POSITIVE now: a value handed to any call but a `runsOnce`
+  / `registers` / `spawns` / `marshals` / `neverInvokes` one repeats, a marshalled value owns its repetition, a function
+  no resolved call runs (the entry point and static initializers aside) warns "repetition unknown", and the info note
+  says what it proved. TM: +25 warnings on 1d1ba147 with a proposed `runsOnce` (API entity calls, `LoadView.load`, …)
+  — branch `fix/ts-B`
+- `registers` honoured for any call it names → a registration into project code (`Hub.addEventListener` pushing into an
+  array a dispatch loop runs) counted once per event though the project's own loop runs it per item; only the
+  runtime's registration (no body in the run) is once per event, and its info says "once per event" — a dispatch the
+  RUNTIME makes in a project loop (`for (…) sprite.dispatchEvent(e)`) stays the known hole — branch `fix/ts-B`
+- a `boundedRepeats` entry covering its whole member (nested, sibling and lambda loops became "once" with it) and a
+  malformed `call` widening to the member → an entry binds ONE repetition of the member's code (the only one, its
+  `loop` header, or the one around its `call`), a call inside several bound ones pays the product of their bounds, and
+  an entry binding none or several, or with a field of the wrong type, a non-positive number, a pattern `site`, a
+  `call` naming nothing or an unknown key, is dropped whole with a config `info` — branch `fix/ts-B`
+- only the first of several equally near repeating callers warning, owners ordered by `'file:offset:to'` as TEXT, a
+  loop's warning keyed by its first call by offset and a handed value's by its lambda's per-file number → every owner
+  at the least distance warns, ordered by numeric offset; a repeating site is keyed by its loop's header (`#2` for a
+  second of one header in a function), the call it hands a value to, or its recursion's target — an unrelated edit
+  renames nothing. TM truth keys remapped (9 entries, `for (session in sessions)`, `FileSystemItemData.forEachChild`, …)
+  — branch `fix/ts-B`
+- a lambda's first parameter read as a reference to the lambda (`x -> f(x)`: the binder starts where the lambda does,
+  and `fnBySpanFrom` answered the lambda) → a phantom `Ref` from every such lambda to itself; a name binds a local
+  function only when that function carries the name — branch `fix/ts-B`
+- a multi-lock helper taken for any function calling a lock pair, its takes delegated to its callers and its own window
+  judged nowhere → a helper is POSITIVE: its body runs nothing but its lock calls (`WrapperOps.lockTrafficOnly`) and
+  every invocation of it is a plain call (`plainCallsOnly`, no dispatch that may run another override); its own takes
+  are judged over its own window (a thread waiting for its later lock while holding the earlier ones), a hold a helper
+  call opens may hand its lock off (`HoldGrade.handsOff`), and `nestHolds` leaves a handed-off inner hold a warning of
+  its own; a lock no member names is keyed by its class for "the main thread takes it" (`HoldGrade.takenKey`), so an
+  exclusive take and a shared one meet (review r3 `c1` `c1b` `c4` `c8`–`c10`) — branch `fix/ts-C1`
+- a `Site` root cause covering by any hold across the same sink call → it covers only by a hold of the SAME lock, in the
+  same function, or one whose function the call's way passes: another lock's hold across the same work elsewhere is a
+  stall of its own, and narrowing one frees nothing of the other (`RootCauseFold.covers`); a finding never covers
+  itself (one warned hold per finding), and an info turned by a hold around it counts as reported only while a warning
+  it was turned onto is (covers chain); `foldEnclosed` demotes only when a warned enclosing hold's trail reaches the
+  function, and its note says so (review r3 `c5` `c5b` `c5c`) — branch `fix/ts-C1`
+- the covered hold judged "once" along the covering hold's trail → the covered hold MAY repeat: a `Site` reason
+  carries whether the call repeats under the hold, a hold reaching it once covers no repeating one, and the covered
+  hold repeats whenever a function on its way is re-entered through a cycle of calls (`LockTaint.mayRepeatAlong`) —
+  TM's `FolderWatcher.updateInternal` (the recursive `checkNode` walk) warns again — branch `fix/ts-C1`
+- the meet over callers seeding what a function holds on entry for any function → a function code outside the run may
+  call holds nothing on entry (`MustHeld.enteredUnknown` via `seedable`) unless its chain's `closedWorld` holds and
+  nothing outside can invoke it (`sealedFromOutside`); `closedWorld` is the coverage-adjusted one of `ChainLists`
+  (`ProjectCoverage`), so a partial run reads the meet as open exactly where it reads the field writes as open — one
+  predicate for both (merge `feat/ts-precision-3`) — branch `fix/ts-C1`
+- a valuation's unknown parameters left unknown, so a take and a give under one undecided condition never met → each
+  run of a function is split per value of the parameters a condition of its body reads (`BodyFacts.conditionNames`,
+  `runsOf`), up to `KNOWN_UNKNOWNS` open ones, the rest kept as written; a `case`'s statements are a sequence for "runs
+  on every path" — branch `fix/ts-C1`
+- every lock that some take dominated counted as dominating → only a lock whose every take is exclusive through one
+  pair, and that NO function gives back without having taken it (`MustHeld.releasedUntaken`), dominates
+  (`LockDominance.excludes`); every give is a releaser candidate unless a take of its lock on the same object runs on
+  every path before it in every run of its function with no give in between, a value handed on to run that gives the
+  lock back gives it back where it is handed, a throw in a `try` body does not leave the function, and a re-take after
+  the cover's give breaks the cover (review r1) — branch `fix/ts-C1`
+- a 64-pass sweep over every entry state, its unsettled result silent → a worklist in `MustHeld.solveEntries`
+  re-meets only the callees of a changed state, under the same bound per state on average (`PASSES`); an unsettled
+  meet holds nothing for every entry and is reported as a file-less `info` — branch `fix/ts-C1`
+- merging the four groups: `BoundedRepeats` read its own JSON beside `ThreadSafetyOptions` → B's per-entry checks (a
+  pattern `site`, a non-positive `max` / `costMs`, a non-string `call` / `loop`, an unknown key) moved into the one
+  reader (`readBounded`, which now reads `loop`); `BoundedRepeats.entries` keeps only the graph resolution (a `site`
+  naming no member or several, a `call` naming nothing), and its notices, `CallRepetition.notices()` and the unsettled
+  meet all close the report as file-less `info`s; C1's private copies of `collectNamed` / `writes` give way to A's
+  `BareNames` — merge `feat/ts-precision-3`
+- a `Site` cover by a hold of the same lock in another function, whatever thread runs either → TM's
+  `StandardFileSystem.loadDrillContent` (the I/O worker writing a validated drill back under `_mutationMutex`) folded
+  onto `getText` / `getXmlAndText` on the sync worker, which reach the same `File.saveContent`: each thread stalls the
+  main thread by itself, and narrowing one hold frees nothing of the other. A hold of the same lock covers another in
+  another function only when every thread the covered one runs on runs the covering one too (`RootCauseFold.oneThread`);
+  a thread is an origin (`ThreadStates.origins`): the main thread, or the callback a `spawns` call starts a worker
+  with — two callbacks are two threads, whatever spawns them; a hold no origin reaches shares none. Requiring both
+  holds on ONE origin was measured and rejected: `Store.remove` / `removeKeys` (main and workers) stopped folding onto
+  `Store.put` (every thread) though `put` runs wherever they do — branch `feat/ts-precision-3`
+- with no I/O in `shortSinks`, a long sink a loop up the main thread's way repeats warns at itself as a one-off → TM's
+  `FileListMoveFiles.moveItems`, `repairShareAttr`, `deleteItemInternal`'s `forEachChild`, `listFolder`'s per-child
+  SQL and `listFolderCloudCallback` lost their owner warnings, and nothing said the I/O runs per item. A main-thread
+  sink warning now says what repeats its call — the nearest repeating calls up its ways (`MainRepeats.climb`), or the
+  call itself where it stands in a loop — in its message (`— repeated by <member> at <loop header>`) and as
+  `FindingData.repeatedBy`, which the json record writes as `data.repeatedBy`; the warning a way's sink calls fold
+  into carries what repeats each of them. No key is added for it (decision 2026-10-14): the repetition RANKS the
+  call's own warning on the work list, it is not a second finding of the same I/O — branch `feat/ts-precision-3`
+- a hold only a `quietRoots` function runs judged as the main thread's own long work → TM's Help-menu cache wipe and
+  the MAS-migration handlers stayed family (b) warnings after their roots went quiet, so quieting a maintenance path
+  silenced its sink calls but not the locks it holds across them. A hold whose take no loud thread runs (its context
+  quiet only) is reported by no finding (b): the root waits on purpose, on the main thread, which never waits for its
+  own hold. It still makes its lock long, as any main-only hold does — branch `feat/ts-precision-3`
+- an `@:isVar` getter returning the member's own stored field judged through `holdsValues` → the member being judged
+  counts as holding values while it is, so `get_mode() return mode;` answered "values" through its own cycle and the
+  stored writes (`mode = d`, `d:Dynamic`) were never read. A getter return that reads the member's own field (bare,
+  or off `this`) is judged by what the field holds (`ExhaustiveSwitches.storedHolds`): its initializer and every
+  write of its name (review round 2 `ex1-isvar-getter`) — branch `feat/ts-precision-3`
+- `ExhaustiveSwitches` reading what a member is assigned off a whole-project write index of its own → that index
+  covered only the files of the run and asked nothing about the rest, so `hxq lint core` read a member as holding
+  values while `plugins/P.hx` assigned it a `Dynamic`. The check reads the run's one `FieldWrites` index and answers
+  "dead" only when it is `complete` (a `closedWorld` declaration over a run covering the project); `FieldWrites` no
+  longer needs `LockSites` (`FieldWrites.ownMemberRead`), so it is built before the sites that walk the switches
+  (review round 2 `ex3-partial`) — branch `feat/ts-precision-3`
+- a parameter written as an enum abstract taken to hold only its values → an untyped value handed to it was the hole
+  `ExhaustiveSwitches` took as absent, so `setMode(v:V) mode = v;` called with a `Dynamic` read the member as closed.
+  A parameter now holds values only where every call of its function hands it one (`callersPassValues`): the function
+  is the graph's at exactly its span, code outside the run cannot call it (`mayRunFromOutside`; a constructor
+  excepted — reflection is the hole left), it is never handed on as a value, and each call's argument — the value a
+  plain `=` assigns through a setter included — is a value, or, to an optional parameter (read only through `??`),
+  `null` or an optional parameter of the caller passing the same. Haxe's skip-by-type is honoured: an optional
+  parameter BEFORE the one read makes a short call unknown. A function nothing calls hands nothing. TM's
+  `FileList.reload` stays dead (its `?viewType` relays through `FileList.new` into `FileListSelect.new`). The
+  default `0` of a counting abstract is a static target's (hxcpp); on JS an `Int` field starts `null` (review round 2
+  `ex2-param-dynamic`) — branch `feat/ts-precision-3`
+- a bare name in a `try` body read as a binding whenever ANY node of the function binds the name → a lambda's
+  parameter `limit` elsewhere in the function made `limit` (a property whose getter throws) inert, and the `catch`
+  around it dead. `DeadCatches.plainRead` takes a read as a binding only where the one declaration of the name is a
+  parameter of the function itself or a local before the read in a block around it (`BareNames.localOf`); any other
+  read is judged as the member (review round 2 `dc1-prop-shadowed-elsewhere`) — branch `feat/ts-precision-3`
+- a `catch` judged an error path by the loops of its own function alone → a per-item loop one call up (`for (p in
+  paths) load(p)` under a hold, `load` catching a failed parse and sleeping) still made the hold and the main
+  thread's take info "only on an error path". Every turn of a repeating caller may fail, so the `catch` is a path of
+  the normal run: the normal-path taint skips a `catch` only where no call on the way from the hold repeats
+  (`LockTaint.leadsNowhere`, the walk's `repeated` flag — loops, values handed on to a call that may repeat them,
+  recursion), and a main-thread sink call in a `catch` is error-only only where no repeating call up the main
+  thread's ways runs it (`MainSinkReport.caughtOnce`, `MainRepeats.climb` owners). An ASSUMED root (no resolved
+  caller) is not counted as repeating there. A loop is ONE definition, `CallRepetition.loopKindsOf`, read by
+  `ErrorPaths`, `LockWindow` and `CallRepetition` (the same five Haxe kinds the three derived separately). Not
+  fixed: a hold's taint never walks a value handed on (`Lambda.iter(paths, load)` under the lock), base included,
+  so `ep1b-iter-in-caller` stays silent under a hold — the taint follows invocations only (review round 2
+  `ep1-loop-in-caller`) — branch `feat/ts-precision-3`
+- a `boundedRepeats` `loop` label re-bound by its header alone, and a loop's rank counting every loop of its header →
+  a loop added later with the same header (`for (i in 0...n)`, now running `xs.length` times) silently took the
+  bound written for the first, and an unrelated loop that blocks nothing (`for (x in xs) n++;`) moved the rank, the
+  label and so the KEY of the repeat warning it names. A loop's rank now counts only the loops of its header that
+  repeat a call which may block (`Loops.labelOf`, `repeatsSink`), and a `loop` written with no rank that names
+  several loops binds none, with a notice asking for `#1` / `#2` (`CallRepetition.bind`). Bounds in different
+  functions on one way MULTIPLY (`CallRepetition.along`: 40 × 40 turns are 1600, over a 50 ms budget though each
+  bound alone is under it) — down the main thread's ways (`MainRepeats.climb`) and under a hold (`LockTaint`'s walk,
+  `WalkFlags.way`) alike; a short call run as once by bounds alone names them in its note, and a short hold under a
+  chain that lists `boundedRepeats` says so (`CostNote.ShortBoundedHold`), never "none in a loop". The loop
+  definition, labels and header spelling live in `Loops` (one normalisation, `Loops.spelled`, for labels and
+  entries) (review round 2 `br1-a`, `br1-b`, `br2-nested-entries`, `ks2-a`, `ks2-b`) — branch `feat/ts-precision-3`
+- a bare `runsOnce` name trusted for any call written with it → `"runsOnce": ["success"]` (meant for a library's
+  promise callback) made a project `Batch.success`, which runs its value once per item, count as once, so the
+  per-item request under it went info. A bare name now speaks for the runtime's calls only — the guard
+  `registers` already had (`CallRepetition.runtimeCall`): a call resolved to an external or body-less function, or
+  an unresolved one where no function of the run with a body bears the name. A `Type.member` entry stays the
+  project's word on that member, and only a dotted entry yields ids (`runsOnceIds`). The unresolved half applies to
+  `registers` too (review round 2 `cr1-runsonce-project`) — branch `feat/ts-precision-3`
+- a repeat warning's subject for a value handed on named only the call it was handed to, and a sink warning's
+  message spelled where it repeats (`— repeated by M at <loop header>`) → two `Lambda.iter` in one member shared ONE
+  key, and a loop header rewritten or re-ranked in another file changed the message of a finding elsewhere, so
+  `--baseline` / `lint-diff` churned. A value handed on is ranked among the values its function hands the same call
+  that may block (`CallRepetition.handLabel`, `Lambda.iter #2`), as loops are ranked; the message names the
+  repeating MEMBERS only (`MainSinkReport.repeaters`), the headers stay in `data.repeatedBy`, and the suffix is
+  written last, on warnings only (review round 2 `ks1-two-iters`, `rb1`) — branch `feat/ts-precision-3`
+- a helper's lock-call sites keyed by their start offset (`WrapperOps.lockTrafficOnly`) → a chained receiver
+  `me()._b.release()` starts where `me()` does, so the blocking `me()` passed as lock traffic and the helper's caller
+  held `_a` across it unreported. Every lock-call key is the whole span (`LockReleasers.callKey`, shared with
+  `blindIn`) (review round 2 `h3`) — branch `feat/ts-precision-3`
+- a worker's origin flowing along every edge whose UNION context carries a background bit → a worker running
+  `f(false)` was taken to run `g` (which only `f(true)` calls, on another worker), so `g`'s hold "ran on both" and
+  covered `h`'s on the first worker. Origins now walk the states: the valuation the worker hands down decides each
+  call (`ThreadStates.workerStep`, `EdgeConditions.carried`) (review round 2 `s2`) — branch `feat/ts-precision-3`
+- a `Site` cover comparing `FoldHold.lock`, the pair's take member for a lock no member names → every unnamed lock of
+  a pair ("`Mutex.acquire`") was "the same lock", so `g` holding `getA()`'s mutex covered `h` holding `getB()`'s across
+  the same sleep. An unnamed lock is never the same lock for the cover (`RootCauseFold.sameLock`); the `Waits` cover
+  keeps the pair key, where requiring every unnamed hold of the pair to be reported is a superset of the real one
+  (review round 2 `u2p`) — branch `feat/ts-precision-3`
+- `LockTaint.onCycle` following invocations only → a recursion through a callback that runs (`n.each(k -> walk(k))`)
+  was no cycle, so a whole-tree walk under a lock counted as once and a hold reaching the same sleep once covered
+  it. The cycle walk now follows values handed on that run where they are handed (`ThreadStates.runsFrom`, the one
+  predicate `LockReleasers.runsFrom` reads too), never one a `spawns` / `marshals` call runs elsewhere or a
+  `registers` call keeps for later — following registrations too made TM's UI listener graph exceed the walk bound
+  and answer "cycle" for `FolderWatcher.setTimestamp` and two `_batchMutex` holds. `lockTrafficOnly` needs no Ref
+  clause: a value handed on runs only through a call, which its tree walk already counts as other work. The residual
+  `covers` clause "same function" had no lock condition: two holds of DIFFERENT locks one after the other in one
+  function (`f` holding `_a` then `_b` across the same `io()`) folded into one; now a hold covers another of its
+  function only when it is the same lock, opened by the same call (a helper taking both), or spans the other's take
+  (`RootCauseFold.nests`). The "way passes" clause stays as decided for `renameCloudFolderBlocked` (review round 2
+  `r1`, `s1`) — branch `feat/ts-precision-3`
+- a give "takes back what its function took" whenever a take of its lock runs on every path before it → a give in a
+  loop after ONE take (`_outer.acquire(); for (i in 0...2) _outer.release();`) gave back a hold begun elsewhere on
+  every turn after the first, yet `_outer` still dominated. A take covers a give only when the give does not repeat
+  after it (`GiveFacts.repeatsAfter` = `CallRepetition.repeatedUnder`: a loop around the give that is not around the
+  take, a hand-on, a recursion) (review round 2 `k1`) — branch `feat/ts-precision-3`
+- `FieldWrites.mayWrite` ignoring an own write whose declaring type is not the field's owner → an interface's `var db`
+  is declared again by its implementer, so `Fs.db = b` (in a lambda) never counted as a write of `IFs.db` and
+  `fs.db.batchLock()` named one object for good; and `Reflect.setField(f, "db", b)` was no write at all. When the
+  owner is an interface, every own write of the name may be one of it; a constant-named `Reflect.setField` /
+  `setProperty` is a write of that name on a value nothing here can tell (`FieldWrites.recordReflective`). A
+  COMPUTED name (`Reflect.setField(o, key, v)`) stays unseen — a known gap, as `RedundantIsVar` documents for the
+  same reason (review round 2 `o1`, `o3`) — branch `feat/ts-precision-3`
+- `ProjectCoverage` built from the files handed to the run → a project file that fails to parse is in the run but
+  not in the graph, so its writes and calls were invisible while the run still "covered" the project and
+  `closedWorld` held. Coverage is built from the files the graph HOLDS (`CallGraph.heldFiles`): a file the run
+  cannot parse leaves the project uncovered, and the `closedWorld` notice now says either cause (review round 2
+  `o2`) — branch `feat/ts-precision-3`
+- the project a `closedWorld` declaration closes taken from the NEAREST document declaring it → a nested
+  `core/apqlint.json` restating `closedWorld` became "the project", so `hxq lint core` covered it while
+  `plugins/Plugin.hx` assigned the field a `core` hold reads. The project is the OUTERMOST document of the chain
+  declaring `closedWorld` or `resolutionRoots` (`ProjectCoverage.declaringDocument`), and the `closedWorld` notice
+  names it (`projectOf`). A scratch config nested in another project's tree now closes the outer project too —
+  conservative: such a run is read as open (review round 2 `pc`) — branch `feat/ts-precision-3`
+- config problems said only for a chain that reports (`lists.reports`), and `run` returning before
+  `reportConfigProblems` when no sink matches → a typo or a wrong shape of `sinks` itself (`"sink"`,
+  `"sinks": "Sys.sleep"`, `[{…}]`) or a `sinks` naming no call of the run printed "no issues". A chain writing ANY
+  `thread-safety` option is now scanned (`skipReason` gates only a chain writing none) and every problem of it said;
+  a `sinks` written and lost says "lists no call", one matching nothing says so with its entries, and a run no sink
+  matches still returns its notices; the rule drops its own findings in a file whose chain lists no sinks (`run`),
+  the gate `skipReason` used to be. A chain writing no `sinks` on purpose (one that only shapes the graph) says
+  nothing of it. A mistyped `enabled` / `severity` is a value of the wrong shape, not an unknown option. The old
+  control "a malformed option of a non-reporting chain is silent" is reversed by this decision (review round 2
+  `cfgA`–`cfgE`) — branch `feat/ts-precision-3`

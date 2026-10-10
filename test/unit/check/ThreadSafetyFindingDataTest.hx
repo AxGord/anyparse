@@ -70,6 +70,85 @@ class ThreadSafetyFindingDataTest extends Test {
 		#end
 	}
 
+	/**
+	 * TM's `FileListMoveFiles.moveItems` loop over a long sink (`File.getContent` per moved drill): the call warns at itself,
+	 * no key of its own added, and its message and data say what repeats it — a loop up the main thread's way, or one
+	 * around the call itself — which ranks a per-item stall above a one-off one.
+	 */
+	@:pin('control') @:killer('M-TS-REPEATED-BY-OFF') @:killer('M-TS-REPEATED-BY-SELF')
+	public function testALongCallALoopRepeatsSaysWhichLoop(): Void {
+		#if (sys || nodejs)
+		final found: Array<Violation> = ThreadSafetyCheckTest.violations('{"rules":{"thread-safety":{"sinks":["Sys.sleep"]}}}', [
+			'class A { static function one():Void Sys.sleep(1); static function each(n:Int):Void for (i in 0...n) Sys.sleep(1);'
+			+ ' static function once():Void Sys.sleep(2); public static function main():Void { for (p in [1, 2]) one(); each(3); once(); } }'
+		]);
+		final warned: Array<Violation> = [for (v in found) if (v.severity.label() == 'warning') v];
+		warned.sort((a, b) -> Reflect.compare(a.data?.member, b.data?.member));
+		Assert.same(['A.each', 'A.once', 'A.one'], [for (v in warned) v.data?.member], 'one warning per call, at the call');
+		Assert.same([
+			[{ member: 'A.each', at: 'for (i in 0...n)' }],
+			null,
+			[{ member: 'A.main', at: 'for (p in [1, 2])' }]
+		], [for (v in warned) v.data?.repeatedBy]);
+		Assert.isTrue(warned[2].message.endsWith(' — repeated by A.main'), warned[2].message);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A key and a message stay put whatever changes elsewhere: two values one function hands the same iterating call are
+	 * two subjects, the second ranked; a warning's message names the members repeating it, never their loop headers,
+	 * which another file may rewrite or rank anew — those stay in `data.repeatedBy` (review round 2 `ks1-two-iters`,
+	 * `rb1`).
+	 */
+	@:pin('control') @:killer('M-TS-HAND-RANK') @:killer('M-TS-REPEATED-BY-HEADER')
+	public function testKeysAndMessagesDoNotDependOnOtherCode(): Void {
+		#if (sys || nodejs)
+		final config: String = '{"rules":{"thread-safety":{"sinks":["Db.request","Disk.stat","Net.get"],'
+			+ '"shortSinks":["Db.request","Disk.stat"],"iterates":["Lambda.*"]}}}';
+		final iters: Array<Violation> = ThreadSafetyCheckTest.violations(config, [
+			'class Db { public static function request(s:String):Void {} } class Disk { public static function stat(s:String):Void {} }',
+			'class K { static function h(s:String):Void Db.request(s); static function g(s:String):Void Disk.stat(s);'
+			+ ' static function p(xs:Array<String>, ys:Array<String>):Void { Lambda.iter(xs, x -> h(x)); Lambda.iter(ys, y -> g(y)); }'
+			+ ' public static function main():Void p(["x"], ["y"]); }'
+		]);
+		final subjects: Array<String> = [for (v in iters) if (v.severity.label() == 'warning') v.data?.subject ?? ''];
+		subjects.sort(Reflect.compare);
+		Assert.same(['Lambda.iter', 'Lambda.iter #2'], subjects, 'two values handed on');
+		final fetched: Array<Violation> = ThreadSafetyCheckTest.violations(config, [
+			'class Net { public static function get(u:String):Void {} }',
+			'class K { static function fetch(u:String):Void Net.get(u); static function viaA(xs:Array<String>):Void for (x in xs) fetch(x);'
+			+ ' public static function main():Void { viaA(["a"]); fetch("c"); } }'
+		]);
+		final warned: Null<Violation> = [
+			for (v in fetched) if (v.severity.label() == 'warning' && v.data?.member == 'K.fetch') v
+		][0];
+		Assert.isTrue(warned?.message.endsWith(' — repeated by K.viaA') == true, warned?.message);
+		Assert.same([{ member: 'K.viaA', at: 'for (x in xs)' }], warned?.data?.repeatedBy);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** The warning one main-thread way's sink calls fold into carries what repeats each of them (TM's `closeFileSystems` waits). */
+	@:pin('control') @:killer('M-TS-REPEATED-BY-MERGE')
+	public function testTheWayWarningCarriesWhatRepeatsItsFoldedCalls(): Void {
+		#if (sys || nodejs)
+		final found: Array<Violation> =
+			ThreadSafetyCheckTest.violations('{"rules":{"thread-safety":{"sinks":["Sys.sleep","Disk.read"]}}}', [
+				'class Disk { public static function read():Void {} }',
+				'class A { static function two(n:Int):Void { Sys.sleep(1); for (i in 0...n) Disk.read(); }'
+				+ ' public static function main():Void two(3); }'
+			]);
+		final warned: Array<Violation> = [for (v in found) if (v.severity.label() == 'warning') v];
+		Assert.same(['Sys.sleep'], [for (v in warned) v.data?.subject]);
+		Assert.same([[{ member: 'A.two', at: 'for (i in 0...n)' }]], [for (v in warned) v.data?.repeatedBy]);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	/** Finding (b) names the holder, the lock object, and the path from the holder to the call that blocks. */
 	public function testLockHeldData(): Void {
 		#if (sys || nodejs)

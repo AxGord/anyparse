@@ -154,19 +154,21 @@ final class Text {
 	public static function renderViolations(file: String, source: String, violations: Array<Violation>, flat: Bool = false): String {
 		if (violations.length == 0) return '$file: no violations\n';
 		final buf: StringBuf = new StringBuf();
+		// a finding naming no file (a rule's own option it could not read) is headed by what it is
+		final heading: String = file == '' ? '(no file)' : file;
 		// One line index for the file beats `Span.lineCol` per finding: that counts
 		// newlines from byte zero every time, so a file with many findings re-scanned
 		// its own source once per line reported. `lineColAt` is documented as exactly
 		// equivalent, clamps included. Same shape in every renderer below.
 		final lineIndex: LineIndex = new LineIndex(source);
-		if (!flat) buf.add('$file:\n');
+		if (!flat) buf.add('$heading:\n');
 		for (v in violations) {
 			final span: Null<Span> = v.span;
 			if (span != null) {
 				final pos: Position = lineIndex.lineColAt(span.from);
-				buf.add(flat ? '$file:${pos.line}:${pos.col}: ' : '  ${pos.line}:${pos.col}: ');
+				buf.add(flat ? '$heading:${pos.line}:${pos.col}: ' : '  ${pos.line}:${pos.col}: ');
 			} else if (flat)
-				buf.add('$file: ');
+				buf.add('$heading: ');
 			else
 				buf.add('  (no-span): ');
 			final severity: Severity = v.severity;

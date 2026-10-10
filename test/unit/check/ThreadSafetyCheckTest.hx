@@ -134,7 +134,8 @@ class ThreadSafetyCheckTest extends Test {
 	public function testSkipParseNoCrash(): Void {
 		#if (sys || nodejs)
 		final vs: Array<Violation> = violations('{"rules":{"thread-safety":{"sinks":["Sys.sleep"]}}}', ['class A { function broken( { ']);
-		Assert.equals(0, vs.length);
+		// the one notice says no call of the run is a sink: the file did not parse
+		Assert.equals(0, vs.filter(v -> v.file != '').length);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -612,7 +613,8 @@ class ThreadSafetyCheckTest extends Test {
 		final vs: Array<Violation> = violations(
 			'{"rules":{"thread-safety":{"sinks":["Sys.sleep"]}}}', ['class A { macro public static function gen():Void Sys.sleep(1); }']
 		);
-		Assert.equals(0, vs.length);
+		// the one notice says no call of the run is a sink: a macro's body runs at compile time
+		Assert.equals(0, vs.filter(v -> v.file != '').length);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -687,12 +689,25 @@ class ThreadSafetyCheckTest extends Test {
 			{ name: 'y/Reg.hx', source: 'class Reg { static function main():Void { W.run(X.work); } }' }
 		];
 		for (order in [['x/X.hx', 'y/Reg.hx'], ['y/Reg.hx', 'x/X.hx']]) Assert.same([], chainFindings(tree, order));
+		// a chain writing no thread-safety option at all is no report of the rule's, and its calls are still the graph's:
+		// under `closedWorld` the only call of `X.helper` is `y`'s
+		final silent: Array<{ name: String, source: String }> = [
+			{ name: 'x/apqlint.json', source: '{"inherit":false,"rules":{"thread-safety":{"sinks":["Sys.sleep"],"closedWorld":true}}}' },
+			{ name: 'y/apqlint.json', source: '{"inherit":false,"rules":{}}' },
+			{ name: 'x/X.hx', source: 'class X { public static function helper():Void Sys.sleep(1); }' },
+			{ name: 'y/Reg.hx', source: 'class Reg { static function main():Void X.helper(); }' }
+		];
+		for (order in [['x/X.hx', 'y/Reg.hx'], ['y/Reg.hx', 'x/X.hx']]) Assert.same([
+			'x/X.hx: main thread reaches blocking "Sys.sleep": Reg.main -> X.helper -> Sys.sleep'
+		], chainFindings(silent, order));
 		#else
 		Assert.pass('non-sys target');
 		#end
 	}
 
-	/** A file whose chain names no sinks is scanned for the graph and never reported in — `skipReason` is the report gate. */
+	/**
+	 * A file whose chain names no sinks is scanned for the graph and never reported in: the rule drops its own findings there (`ThreadSafety.run`), and `skipReason` keeps a chain writing no option out.
+	 */
 	@:pin('control') @:killer('M-TS-REPORT-UNGATED')
 	public function testNoFindingInAFileWhoseChainNamesNoSinks(): Void {
 		#if (sys || nodejs)
@@ -713,9 +728,11 @@ class ThreadSafetyCheckTest extends Test {
 		#end
 	}
 
-	/** A malformed `lockPairs` entry of a chain that names no sinks is not reported: that chain reports nothing at all. */
+	/**
+	 * A malformed `lockPairs` entry of a chain that names no sinks is said too: a chain writing any option is a config to report on (review round 2 `cfgA`–`cfgE`).
+	 */
 	@:pin('control') @:killer('M-TS-MALFORMED-UNGATED')
-	public function testAMalformedOptionOfANonReportingChainIsSilent(): Void {
+	public function testAMalformedOptionOfANonReportingChainIsSaid(): Void {
 		#if (sys || nodejs)
 		final tree: Array<{ name: String, source: String }> = [
 			{ name: 'x/apqlint.json', source: '{"inherit":false,"rules":{"thread-safety":{"sinks":["Sys.sleep"],"lockPairs":["bad2"]}}}' },
@@ -723,11 +740,10 @@ class ThreadSafetyCheckTest extends Test {
 			{ name: 'x/X.hx', source: 'class X { public static function work():Void { Sys.sleep(1); } }' },
 			{ name: 'y/Y.hx', source: 'class Y { static function main():Void { X.work(); } }' }
 		];
-		for (order in [['x/X.hx', 'y/Y.hx'], ['y/Y.hx', 'x/X.hx']])
-			Assert.same(
-				[': malformed lockPairs entry "bad2" — expected "<lock pattern>/<unlock member>"'],
-				chainFindings(tree, order).filter(f -> f.indexOf('malformed') != -1)
-			);
+		for (order in [['x/X.hx', 'y/Y.hx'], ['y/Y.hx', 'x/X.hx']]) Assert.same([
+			': malformed lockPairs entry "bad" — expected "<lock pattern>/<unlock member>"',
+			': malformed lockPairs entry "bad2" — expected "<lock pattern>/<unlock member>"'
+		], chainFindings(tree, order).filter(f -> f.indexOf('malformed') != -1));
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -829,6 +845,32 @@ class ThreadSafetyCheckTest extends Test {
 		#end
 	}
 
+	/**
+	 * A hold only a `quietRoots` function runs is quiet too (TM's Help-menu cache wipe under the file-system locks): the
+	 * main thread waits there on purpose, and never for its own hold — while a hold some loud path also runs still reports.
+	 */
+	@:pin('control') @:killer('M-TS-QUIET-HOLD')
+	public function testAHoldOnlyAQuietRootRunsIsNotReported(): Void {
+		#if (sys || nodejs)
+		final fixture: String -> Array<Violation> = also ->
+			violations(
+				'{"rules":{"thread-safety":{"sinks":["Sys.sleep","Mutex.acquire"],"lockPairs":["Mutex.acquire/release"],'
+				+ '"quietRoots":["A.shutdown"]}}}',
+				[
+					MUTEX,
+					'class Ui { public static function on(fn:()->Void):Void {} }',
+					'class A { static final m:Mutex = new Mutex(); static function flush():Void { m.acquire(); Sys.sleep(1); m.release(); }'
+					+ ' static function shutdown():Void flush(); static function peek():Void { m.acquire(); m.release(); $also }'
+					+ ' public static function main():Void { Ui.on(shutdown); Ui.on(peek); } }'
+				]
+			);
+		Assert.same([], [for (v in fixture('')) if (v.data?.family == 'B') v.message]);
+		Assert.same(['A.flush'], [for (v in fixture('flush();')) if (v.data?.family == 'B') v.data?.member], 'a loud path runs it too');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	/** A sink a quiet root reaches is still reported when another main-thread path reaches it too. */
 	@:pin('control') @:killer('M-TS-QUIET-SWALLOWS')
 	public function testAnotherPathToAQuietSinkStillReports(): Void {
@@ -850,7 +892,7 @@ class ThreadSafetyCheckTest extends Test {
 		Assert.same(
 			[
 				'main thread reaches blocking "Sys.sleep": A.shutdown -> A.shutdown#1 -> Sys.sleep',
-				'main thread reaches blocking "Sys.sleep": A.shutdown#2 -> A.shutdown#2#3 -> Sys.sleep'
+				'main thread reaches blocking "Sys.sleep": A.shutdown#2 -> A.shutdown#2#3 -> Sys.sleep — repeated by A.shutdown'
 			],
 			[
 				for (v in violations(
@@ -992,7 +1034,7 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A hold of a lock no member names is reported under the pair's take member. */
-	@:pin('control') @:killer('M-TS-UNKNOWN-LOCK-UNNAMED')
+	@:pin('control') @:killer('M-TS-UNKNOWN-LOCK-UNNAMED') @:killer('M-TS-B-UNKNOWN-AS-MAIN-ONLY')
 	public function testAHoldOfAnUnknownLockNamesThePair(): Void {
 		#if (sys || nodejs)
 		Assert.same(['"B.use" holds "Mutex.acquire" across a call that can block: Sys.sleep'], heldBy('B.use', lockFindings([
@@ -1045,7 +1087,7 @@ class ThreadSafetyCheckTest extends Test {
 					+ ' public function nested():Void { _m.acquire(); inner(); this.lockIt(); this.unlockIt(); _m.release(); }'
 					+ ' function inner():Void { _m.acquire(); _m.release(); }'
 					+ ' public static function main():Void { Runner.create(() -> b.slow()); a.transfer(b); a.transfer2(b); a.cross(b);'
-					+ ' a.nested(); } }',
+					+ ' a.nested(); Runner.create(() -> { a.transfer(b); a.transfer2(b); a.cross(b); a.nested(); }); } }',
 					'class Runner { public static function create(fn:()->Void):Void {} }'
 				]
 			)) v.message
@@ -1427,7 +1469,8 @@ class ThreadSafetyCheckTest extends Test {
 		#if (sys || nodejs)
 		Assert.same([], throwFindings('"FileSystem.createDirectory"', [
 			'class W { final _m:Mutex = new Mutex(); public function new() {} public function make(p:String):Void { _m.acquire();'
-			+ ' final made:Bool = if (p != null) { _m.release(); FileSystem.createDirectory(p); true; } else { _m.release(); false; }; } }'
+			+ ' use(if (p != null) { _m.release(); FileSystem.createDirectory(p); true; } else { _m.release(); false; }); }'
+			+ ' function use(b:Bool):Void {} }'
 		]));
 		#else
 		Assert.pass('non-sys target');
@@ -1440,7 +1483,7 @@ class ThreadSafetyCheckTest extends Test {
 		#if (sys || nodejs)
 		Assert.same([], throwFindings('"FileSystem.createDirectory"', [
 			'class W { final _m:Mutex = new Mutex(); public function new() {} public function make(p:String):Void {'
-			+ ' final both:Array<Void> = [FileSystem.createDirectory(p), _m.acquire()]; _m.release(); } }'
+			+ ' use([FileSystem.createDirectory(p), _m.acquire()]); _m.release(); } function use(a:Array<Void>):Void {} }'
 		]));
 		#else
 		Assert.pass('non-sys target');
@@ -1523,8 +1566,14 @@ class ThreadSafetyCheckTest extends Test {
 		];
 	}
 
-	public static function violations(config: String, sources: Array<String>): Array<Violation> {
-		final dir: String = CliFixture.writeDir('threadsafety', [{ name: 'apqlint.json', source: config }]);
+	/**
+	 * The findings of a run over `sources` (as `F<i>.hx`) under `config`, in a directory that also holds `beside` on disk:
+	 * files of the project the run leaves out (`ProjectCoverage`).
+	 */
+	public static function violations(
+		config: String, sources: Array<String>, ?beside: Array<{ name: String, source: String }>
+	): Array<Violation> {
+		final dir: String = CliFixture.writeDir('threadsafety', [{ name: 'apqlint.json', source: config }].concat(beside ?? []));
 		final files: Array<{ file: String, source: String }> = [
 			for (i in 0...sources.length) { file: '$dir/F$i.hx', source: sources[i] }
 		];

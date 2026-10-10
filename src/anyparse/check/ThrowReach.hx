@@ -10,15 +10,17 @@ import anyparse.runtime.Span;
 using Lambda;
 
 /**
- * Which calls of a call graph may raise an exception, for the `thread-safety` finding of a lock left held by a throw.
- * A POSITIVE list, never a guess at what a call might do: a call its site's chain names in `throwers` (a primitive known to
+ * Which calls of a call graph may raise an exception, for the `thread-safety` finding of a lock left held by a throw. A
+ * POSITIVE list, never a guess at what a call might do: a call its site's chain names in `throwers` (a primitive known to
  * raise on a real runtime condition — I/O, a database — mostly with no body to read), and every function making a call to one
- * of those outside the body of a `try` with a `catch`. Nothing else raises: a `throw` reached through a call is not followed,
+ * of those outside the body of a `try` that keeps it. Nothing else raises: a `throw` reached through a call is not followed,
  * since most are invariant guards that never fire, and every caller of one would be reported; a `throw` in the body holding
  * the lock is the walk's own (`LockWindow`). A function whose callers must expect its exception goes in `throwers` by name.
  *
- * Intercepting is read generously, so as to report less: a `catch` of any type stops everything (a typed one lets the
- * rest through), and a call or a body the graph cannot place in its function's tree raises nothing.
+ * A `try` keeps what its body raises only when a `catch` of it catches every value (`CatchTypes`: what a `throwers` call raises is of
+ * no known type, so a typed `catch` lets it through) and no `catch` of it throws: a `throw` there — the caught variable again, a
+ * wrapper of it, any other value — runs only where the `try` failed, so it is that failure going on. A call or a body the graph cannot
+ * place in its function's tree raises nothing. A project function whose throw is data-dependent goes in `throwers` like any primitive.
  */
 @:nullSafety(Strict)
 final class ThrowReach {
@@ -29,10 +31,11 @@ final class ThrowReach {
 	private final _graph: CallGraph;
 	private final _throwersOf: (String) -> Array<String>;
 	private final _trees: FunctionTrees;
-
 	private final _tryKinds: Array<String>;
 	private final _catchKind: Null<String>;
 	private final _nestedFnKinds: Array<String>;
+	private final _throwKinds: Array<String>;
+	private final _shape: RefShape;
 
 	/**
 	 * Solves the raising functions of `graph`: `throwersOf` names the `throwers` of the chain a file sits under, and
@@ -45,15 +48,9 @@ final class ThrowReach {
 		_tryKinds = (shape.tryStatementKinds ?? []).concat(shape.tryExpressionKinds ?? []);
 		_catchKind = shape.catchClauseKind;
 		_nestedFnKinds = MemberKinds.nestedFunctionKinds(shape);
+		_throwKinds = shape.throwKinds ?? [];
+		_shape = shape;
 		solve();
-	}
-
-	/** Fills `_hops`: from each call of a `throwers` entry, up every invocation no `catch` of its caller intercepts. */
-	private function solve(): Void {
-		final queue: Array<String> = [];
-		for (edge in _graph.edges) if (edge.kind.isInvocation() && _throwersOf(edge.file).contains(edge.to)) reach(edge, queue);
-		var qi: Int = 0;
-		while (qi < queue.length) for (edge in _graph.inEdges(queue[qi++])) if (edge.kind.isInvocation()) reach(edge, queue);
 	}
 
 	/** Whether the call `edge` may raise: its target is a `throwers` entry of its site's chain, or a raising function. */
@@ -100,6 +97,25 @@ final class ThrowReach {
 		return parts;
 	}
 
+	/**
+	 * Whether `node` is a `try` that keeps what its body raises: an exception raised in its body (its first child), of no
+	 * known type, goes no further — some `catch` of it catches every value (`CatchTypes`: a typed one lets the rest
+	 * through), and no `catch` of it throws anything (`rethrows`).
+	 */
+	private inline function intercepts(node: QueryNode): Bool {
+		return _tryKinds.contains(node.kind)
+			&& node.children.exists(k -> k.kind == _catchKind && CatchTypes.catches(k, null, _shape, _graph.types))
+			&& !node.children.exists(rethrows);
+	}
+
+	/** Fills `_hops`: from each call of a `throwers` entry, up every invocation no `catch` of its caller intercepts. */
+	private function solve(): Void {
+		final queue: Array<String> = [];
+		for (edge in _graph.edges) if (edge.kind.isInvocation() && _throwersOf(edge.file).contains(edge.to)) reach(edge, queue);
+		var qi: Int = 0;
+		while (qi < queue.length) for (edge in _graph.inEdges(queue[qi++])) if (edge.kind.isInvocation()) reach(edge, queue);
+	}
+
 	/** Marks the caller of `edge` raising, through it, when the call raises and no `catch` of the caller intercepts it. */
 	private function reach(edge: CallEdge, queue: Array<String>): Void {
 		final from: String = edge.from;
@@ -123,9 +139,19 @@ final class ThrowReach {
 		return false;
 	}
 
-	/** Whether `node` is a `try` with a `catch`: an exception raised in its body (its first child) goes no further. */
-	private inline function intercepts(node: QueryNode): Bool {
-		return _tryKinds.contains(node.kind) && node.children.exists(k -> k.kind == _catchKind);
+	/**
+	 * Whether `clause` is a `catch` whose body throws, outside a function nested in it: it runs only where the `try`
+	 * raised, so what it throws — the caught exception again, `(e)`, a wrapper of it, an alias, any other value — is the
+	 * `try`'s failure going on.
+	 */
+	private function rethrows(clause: QueryNode): Bool {
+		return clause.kind == _catchKind && clause.children.exists(throwsAny);
+	}
+
+	/** Whether `node`'s subtree, outside a nested function, holds a `throw`. */
+	private function throwsAny(node: QueryNode): Bool {
+		if (_nestedFnKinds.contains(node.kind)) return false;
+		return _throwKinds.contains(node.kind) || node.children.exists(throwsAny);
 	}
 
 }

@@ -1,0 +1,379 @@
+package unit.check;
+
+import anyparse.check.Check.FindingData;
+import anyparse.check.Check.Violation;
+import utest.Assert;
+import utest.Test;
+
+using StringTools;
+
+/**
+ * One warning per root cause (`RootCauseFold`, `MainSinkReport`): a hold long only by waiting for a lock whose long
+ * holds warn themselves, or by work another warned hold does too, is info naming them; sink calls one main-thread way
+ * runs together, and the calls one loop repeats, make one warning.
+ */
+class ThreadSafetyRootCauseTest extends Test {
+
+	private static inline final CONFIG: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Sys.sleep","Disk.read",'
+		+ '"Disk.stat","Disk.list"],"shortSinks":["Disk.stat","Disk.list"],"spawns":["Runner.create"],'
+		+ '"lockPairs":["Mutex.acquire/release"]}}}';
+
+	/** TM's `StandardFileSystem.saveXML`: under the mutation lock it waits for the tree lock `updateInternal` holds long. */
+	@:pin('control') @:killer('M-TS-FOLD-OFF')
+	public function testAHoldLongOnlyByWaitingForAWarnedHolderIsInfo(): Void {
+		#if (sys || nodejs)
+		Assert.same(['info B S.save | S._x', 'warning B S.scan | S._t'], holds(waits('')));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** TM's `saveXML`, whose `catch` reports over HTTP: a call only a `catch` runs is no reason the warning warns. */
+	@:pin('control') @:killer('M-TS-FOLD-NORMAL')
+	public function testACallOnlyACatchRunsLeavesTheFoldStanding(): Void {
+		#if (sys || nodejs)
+		Assert.same(
+			['info B S.save | S._x', 'warning B S.scan | S._t'],
+			holds(waits('', '', 'try { step(); } catch (e:Dynamic) { Sys.sleep(1); }'))
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A lock long also by a release in another function is long by what no hold names: the waiter keeps its warning. */
+	@:pin('control') @:killer('M-TS-FOLD-CROSSING')
+	public function testALockReleasedElsewhereLeavesTheWaiterWarned(): Void {
+		#if (sys || nodejs)
+		Assert.same(
+			['warning B S.save | S._x', 'warning B S.scan | S._t'],
+			holds(waits(' public function close():Void _t.release();', 's.close();'), ['S.save', 'S.scan'])
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * TM's `renameCloudFolderBlocked` over the loop `moveCloudFolderSubItemsAction2` runs under its own lock: two holds
+	 * long by one sink call make one warning, the hold nearest that call's.
+	 */
+	@:pin('control') @:killer('M-TS-FOLD-SITE') @:killer('M-TS-FOLD-DEPTH') @:killer('M-TS-FOLD-SITE-LOCK')
+	public function testHoldsLongByOneCallMakeOneWarning(): Void {
+		#if (sys || nodejs)
+		Assert.same(['info B A.a | A._x', 'warning B A.z | A._x'], holds(oneCall('_x')));
+		// a hold of another lock across the same work is a stall of its own: narrowing one hold frees nothing of the other
+		Assert.same(['warning B A.a | A._x', 'warning B A.z | A._y'], holds(oneCall('_y')), 'another lock');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * TM's `StandardFileSystem.loadDrillContent` on the I/O worker against `getText` on the sync worker: two holds of one
+	 * lock across the same sink call, each run by a thread of its own, are two stalls — a hold covers another of its lock
+	 * in another function only on the one thread both run on.
+	 */
+	@:pin('control') @:killer('M-TS-FOLD-SITE-THREAD') @:killer('M-TS-FOLD-SITE-ONE-ORIGIN')
+	public function testHoldsOnTwoThreadsDoNotCoverEachOther(): Void {
+		#if (sys || nodejs)
+		Assert.same(
+			['warning B A.a | A._x', 'warning B A.z | A._x'], holds(twoThreads('Runner.create(() -> s.a()); Pool.create(() -> s.z());'))
+		);
+		Assert.same(
+			['warning B A.a | A._x', 'warning B A.z | A._x'],
+			holds(twoThreads('Runner.create(() -> s.a()); Runner.create(() -> s.z());')), 'two callbacks of one spawn'
+		);
+		// TM's `Store.remove` against `Store.put`: a hold on threads the other runs on too, among more, is covered by it
+		Assert.same(
+			['info B A.a | A._x', 'warning B A.z | A._x'],
+			holds(twoThreads('Runner.create(() -> { s.a(); s.z(); }); s.z();')), 'among more'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A worker runs a function only on the ways its own valuation lets through: `f(false)` on one worker never calls the
+	 * hold `f(true)` reaches on another, so that hold runs on the second worker alone and covers no hold of the first
+	 * (review round 2 `s2`).
+	 */
+	@:pin('control') @:killer('M-TS-ORIGIN-STATES')
+	public function testAWorkerRunsOnlyTheWaysItsValuesOpen(): Void {
+		#if (sys || nodejs)
+		final s: String = 'class S { final _m:Mutex = new Mutex(); public function new() {} function io():Void Sys.sleep(1);'
+			+ ' function g():Void { _m.acquire(); io(); _m.release(); } function h():Void { _m.acquire(); io(); _m.release(); }'
+			+ ' function f(fast:Bool):Void { if (fast) g(); } public function peek():Void { _m.acquire(); _m.release(); }'
+			+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> { s.f(false); s.h(); });'
+			+ ' Runner.create(() -> s.f(true)); s.peek(); } }';
+		Assert.same(
+			['warning B S.g | S._m', 'warning B S.h | S._m'],
+			holds(ThreadSafetyCheckTest.violations(CONFIG, [ThreadSafetyCheckTest.MUTEX, RUNNER, s]))
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * Two locks no member names (each a getter's value) are not one lock for covering, though both are keyed by their
+	 * pair's take member: each hold across the same work stalls on its own (review round 2 `u2p`).
+	 */
+	@:pin('control') @:killer('M-TS-FOLD-UNNAMED-SAME')
+	public function testUnnamedLocksNeverCoverEachOther(): Void {
+		#if (sys || nodejs)
+		final s: String = 'class S { final _a:Mutex = new Mutex(); final _b:Mutex = new Mutex(); public function new() {}'
+			+ ' function io():Void Sys.sleep(1); function getA():Mutex return _a; function getB():Mutex return _b;'
+			+ ' function g():Void { final m:Mutex = getA(); m.acquire(); io(); m.release(); }'
+			+ ' function h():Void { final m:Mutex = getB(); m.acquire(); io(); m.release(); }'
+			+ ' public function peekB():Void { _b.acquire(); _b.release(); }'
+			+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> { s.g(); s.h(); }); s.peekB(); } }';
+		Assert.same(
+			['warning B S.g | Mutex.acquire', 'warning B S.h | Mutex.acquire'],
+			holds(ThreadSafetyCheckTest.violations(CONFIG, [ThreadSafetyCheckTest.MUTEX, RUNNER, s]))
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A recursion through a value handed on that runs (`n.each(k -> walk(k))`) re-enters the walk under the lock, as a
+	 * direct one does: the walk repeats its sink and is not covered by a hold reaching it once; a value the runtime only
+	 * registers runs per event, closing no cycle under the lock (review round 2 `r1`).
+	 */
+	@:pin('control') @:killer('M-TS-CYCLE-REF') @:killer('M-TS-CYCLE-REGISTERED')
+	public function testARecursionThroughACallbackRepeatsUnderTheLock(): Void {
+		#if (sys || nodejs)
+		final walk: String = 'class S { final _m:Mutex = new Mutex(); public function new() {} function io():Void Sys.sleep(1);'
+			+ ' function walkAll(root:Node):Void { _m.acquire(); walk(root); _m.release(); }'
+			+ ' function touch():Void { _m.acquire(); io(); _m.release(); } public function peek():Void { _m.acquire(); _m.release(); }'
+			+ ' public static function main():Void { final s:S = new S(); final r:Node = new Node();'
+			+ ' Runner.create(() -> { s.walkAll(r); s.touch(); }); s.peek(); }';
+		final node: String = 'class Node { public var kids:Array<Node> = []; public function new() {}'
+			+ ' public function each(f:Node->Void):Void for (k in kids) f(k); }';
+		Assert.same(['info B S.touch | S._m', 'warning B S.walkAll | S._m'], holds(ThreadSafetyCheckTest.violations(CONFIG, [
+			ThreadSafetyCheckTest.MUTEX,
+			RUNNER,
+			node,
+			'$walk function walk(n:Node):Void { io(); n.each(k -> walk(k)); } }'
+		])), 'a callback that runs');
+		final hub: String = 'interface IHub { function addEventListener(f:Node->Void):Void; }'
+			+ ' class Node { public var hub:IHub = null; public function new() {} }';
+		Assert.same(
+			['info B S.walkAll | S._m', 'warning B S.touch | S._m'],
+			holds(ThreadSafetyCheckTest.violations(StringTools.replace(CONFIG, '"spawns"', '"registers":["addEventListener"],"spawns"'), [
+				ThreadSafetyCheckTest.MUTEX,
+				RUNNER,
+				hub,
+				'$walk function walk(n:Node):Void { io(); n.hub.addEventListener(k -> walk(k)); } }'
+			])),
+			'a registration'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * Two holds of different locks one after the other in one function are two stalls: one does not cover the other
+	 * for sharing the work's sink (review round 2 `s1`). One taken inside the other does.
+	 */
+	@:pin('control') @:killer('M-TS-FOLD-NEST-LOCK')
+	public function testHoldsOfTwoLocksOneAfterTheOtherAreTwoStalls(): Void {
+		#if (sys || nodejs)
+		final s: String = 'class S { final _a:Mutex = new Mutex(); final _b:Mutex = new Mutex(); public function new() {}'
+			+ ' function io():Void Sys.sleep(1); public function peekA():Void { _a.acquire(); _a.release(); }'
+			+ ' public function peekB():Void { _b.acquire(); _b.release(); }'
+			+ ' public static function main():Void { final s:S = new S(); Runner.create(s.f); s.peekA(); s.peekB(); }';
+		Assert.same(['warning B S.f | S._a', 'warning B S.f | S._b'], holds(ThreadSafetyCheckTest.violations(CONFIG, [
+			ThreadSafetyCheckTest.MUTEX,
+			RUNNER,
+			'$s function f():Void { _a.acquire(); io(); _a.release(); _b.acquire(); io(); _b.release(); } }'
+		])));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** TM's `FSUtil.deleteRecursive`: the sink calls one main-thread way into a function runs make one warning. */
+	@:pin('control') @:killer('M-TS-WAY-OFF')
+	public function testSinkCallsOfOneWayMakeOneWarning(): Void {
+		#if (sys || nodejs)
+		Assert.same(['info A F.f | Sys.sleep', 'warning A F.f | Disk.read'], mains(ThreadSafetyCheckTest.violations(CONFIG, [
+			DISK,
+			'class F { static function f():Void { Disk.read("a"); Sys.sleep(1); } public static function main():Void f(); }'
+		])));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** TM's `repairShareAttr`: the calls one loop repeats make one warning, keyed by the first. */
+	@:pin('control') @:killer('M-TS-LOOP-KEY')
+	public function testTheCallsOfOneLoopMakeOneWarning(): Void {
+		#if (sys || nodejs)
+		Assert.same(
+			[
+				'info A L.a | Disk.stat',
+				'info A L.b | Disk.list',
+				'warning A L.main | for (i in 0...3)'
+			],
+			mains(ThreadSafetyCheckTest.violations(CONFIG, [
+				DISK,
+				'class L { static function a():Void Disk.stat("a"); static function b():Void Disk.list("b");'
+				+ ' public static function main():Void for (i in 0...3) { a(); b(); } }'
+			]))
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * Two takes of one lock whose holds name the same calls share one finding (review `c5`, `c5b`): one warned hold,
+	 * which never covers itself — the warning stays.
+	 */
+	@:pin('control') @:killer('M-TS-FOLD-SELF')
+	public function testTwoTakesSharingAFindingDoNotCoverEachOther(): Void {
+		#if (sys || nodejs)
+		final branches: String =
+			'public function work(c:Bool):Void { if (c) _b.acquire(); else _b.acquire(); Sys.sleep(1); _b.release(); }';
+		Assert.same(['warning B S.work | S._b'], holds(twoTakes(branches, '', 's.work(Math.random() > 0.5);')));
+		final directives: String =
+			'public function work():Void {\n#if mac\n_b.acquire();\n#else\n_b.acquire();\n#end\nSys.sleep(1); _b.release(); }';
+		Assert.same(['warning B S.work | S._b'], holds(twoTakes(directives, '', 's.work();')), 'one take per #if branch');
+		// a hold waiting for that lock folds onto the warning, which stays (review `c5c`)
+		Assert.same(
+			['info B S.zother | S._a', 'warning B S.work | S._b'],
+			holds(twoTakes(
+				branches, 'public function zother():Void { _a.acquire(); _b.acquire(); _b.release(); _a.release(); }',
+				's.work(Math.random() > 0.5); s.zother();'
+			)),
+			'chained'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A hold reaching a sink call once covers no hold repeating that call under its lock (TM's `FolderWatcher.rename`'s
+	 * one stat against `updateInternal`'s walk over the tree): the repeating hold keeps the warning, and the one-call
+	 * hold folds onto it.
+	 */
+	@:pin('control') @:killer('M-TS-FOLD-SITE-ONCE')
+	public function testAHoldReachingACallOnceCoversNoRepeatingOne(): Void {
+		#if (sys || nodejs)
+		Assert.same(['info B A.z | A._x', 'warning B A.a | A._x'], holds(ThreadSafetyCheckTest.violations(CONFIG, [
+			ThreadSafetyCheckTest.MUTEX,
+			RUNNER,
+			'class A { final _x:Mutex = new Mutex(); final _y:Mutex = new Mutex(); public function new() {}'
+			+ ' public function a():Void { _x.acquire(); for (i in 0...3) v(); _x.release(); } function v():Void w();'
+			+ ' function w():Void Sys.sleep(1); public function z():Void { _x.acquire(); w(); _x.release(); }'
+			+ ' public static function main():Void { final s:A = new A(); Runner.create(() -> { s.a(); s.z(); });'
+			+ ' s._x.acquire(); s._x.release(); s._y.acquire(); s._y.release(); } }'
+		])));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A call reached through a function a cycle of calls re-enters repeats however the trail found it (TM's
+	 * `FolderWatcher.updateInternal`, whose `checkNode` walks the tree recursively): no hold reaching it once covers it.
+	 */
+	@:pin('control') @:killer('M-TS-FOLD-SITE-CYCLE')
+	public function testACallUnderARecursiveWalkRepeats(): Void {
+		#if (sys || nodejs)
+		Assert.same(['info B A.z | A._x', 'warning B A.a | A._x'], holds(ThreadSafetyCheckTest.violations(CONFIG, [
+			ThreadSafetyCheckTest.MUTEX,
+			RUNNER,
+			'class A { final _x:Mutex = new Mutex(); public function new() {}'
+			+ ' public function a():Void { _x.acquire(); walk(3); _x.release(); }'
+			+ ' function walk(n:Int):Void { step(); if (n > 0) walk(n - 1); } function step():Void Sys.sleep(1);'
+			+ ' public function z():Void { _x.acquire(); step(); _x.release(); }'
+			+ ' public static function main():Void { final s:A = new A(); Runner.create(() -> { s.a(); s.z(); });'
+			+ ' s._x.acquire(); s._x.release(); } }'
+		])));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	#if (sys || nodejs)
+	private static inline final RUNNER: String = 'class Runner { public static function create(fn:()->Void):Void {} }';
+
+	private static inline final DISK: String = 'class Disk { public static function read(p:String):Void {}'
+		+ ' public static function stat(p:String):Void {} public static function list(p:String):Void {} }';
+
+	/** `S.save` holds `_x` while it takes `_t`, which `S.scan` holds across a sleep, both on a worker; `more` adds members. */
+	private static function waits(more: String, ?worker: String, ?saving: String): Array<Violation> {
+		return ThreadSafetyCheckTest.violations(CONFIG, [
+			ThreadSafetyCheckTest.MUTEX,
+			RUNNER,
+			'class S { final _t:Mutex = new Mutex(); final _x:Mutex = new Mutex(); public function new() {}'
+			+ ' public function scan():Void { _t.acquire(); Sys.sleep(1); _t.release(); }'
+			+ ' function step():Void {} public function save():Void { _x.acquire(); _t.acquire(); _t.release(); ${saving ?? ''} _x.release(); }$more'
+			+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> { s.scan(); s.save(); ${worker ?? ''} });'
+			+ ' s._x.acquire(); s._x.release(); s._t.acquire(); s._t.release(); } }'
+		]);
+	}
+
+	/** `A.a` holding `_x` across `v`, which calls `w`, and `A.z` holding `zLock` across `w` itself: both long by `w`'s sleep. */
+	private static function oneCall(zLock: String): Array<Violation> {
+		return ThreadSafetyCheckTest.violations(CONFIG, [
+			ThreadSafetyCheckTest.MUTEX,
+			RUNNER,
+			'class A { final _x:Mutex = new Mutex(); final _y:Mutex = new Mutex(); public function new() {}'
+			+ ' public function a():Void { _x.acquire(); v(); _x.release(); } function v():Void w(); function w():Void Sys.sleep(1);'
+			+ ' public function z():Void { $zLock.acquire(); w(); $zLock.release(); }'
+			+ ' public static function main():Void { final s:A = new A(); Runner.create(() -> { s.a(); s.z(); });'
+			+ ' s._x.acquire(); s._x.release(); s._y.acquire(); s._y.release(); } }'
+		]);
+	}
+	/** `oneCall`'s `A.a` and `A.z`, both holding `_x` across `w`, run from the main thread by `running`. */
+	private static function twoThreads(running: String): Array<Violation> {
+		return ThreadSafetyCheckTest.violations(CONFIG.replace('"spawns":["Runner.create"]', '"spawns":["Runner.create","Pool.create"]'), [
+			ThreadSafetyCheckTest.MUTEX,
+			RUNNER,
+			'class Pool { public static function create(fn:()->Void):Void {} }',
+			'class A { final _x:Mutex = new Mutex(); public function new() {}'
+			+ ' public function a():Void { _x.acquire(); v(); _x.release(); } function v():Void w(); function w():Void Sys.sleep(1);'
+			+ ' public function z():Void { _x.acquire(); w(); _x.release(); }'
+			+ ' public static function main():Void { final s:A = new A(); $running' + ' s._x.acquire(); s._x.release(); } }'
+		]);
+	}
+	/** `S` with locks `_a` and `_b`, `work` and `more` declared, a worker running `background`, and the main thread taking both. */
+	private static function twoTakes(work: String, more: String, background: String): Array<Violation> {
+		return ThreadSafetyCheckTest.violations(CONFIG, [
+			ThreadSafetyCheckTest.MUTEX,
+			RUNNER,
+			'class S { final _a:Mutex = new Mutex(); final _b:Mutex = new Mutex(); public function new() {} $work $more'
+			+ ' public function peek():Void { _a.acquire(); _a.release(); _b.acquire(); _b.release(); }'
+			+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> { $background }); s.peek(); } }'
+		]);
+	}
+	private static function holds(found: Array<Violation>, ?only: Array<String>): Array<String> {
+		return graded(found, 'B', only);
+	}
+
+	private static function mains(found: Array<Violation>): Array<String> {
+		return graded(found, 'A', null);
+	}
+
+	private static function graded(found: Array<Violation>, family: String, only: Null<Array<String>>): Array<String> {
+		final out: Array<String> = [
+			for (v in found) {
+				final data: Null<FindingData> = v.data;
+				if (data != null && data.family == family && (only == null || only.contains(data.member)))
+					'${v.severity.label()} $family ${data.member} | ${data.subject}';
+			}
+		];
+		out.sort(Reflect.compare);
+		return out;
+	}
+	#end
+
+}

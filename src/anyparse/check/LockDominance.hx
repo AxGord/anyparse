@@ -1,0 +1,236 @@
+package anyparse.check;
+
+import anyparse.check.LockSites.LockAcquire;
+import anyparse.query.CallGraph;
+import anyparse.runtime.Span;
+
+using Lambda;
+
+/**
+ * Outer-lock dominance: lock M is DOMINATED by lock L when every long hold of M — every hold spanning a call that blocks
+ * long, or an unresolved call — holds L too, on the same object, at each such call (`MustHeld`). A thread holding L
+ * then never waits long for M: the hold of M it may meet is no long one, since that one needs L. So a take of M made
+ * while L is held on M's object is brief, wherever it is made — and the takes a hold of L itself spans in its window.
+ *
+ * Positive on every count. A lock is dominated by nothing when some hold of it may outlive its function, cannot be traced, is
+ * the release of a hold begun elsewhere, or spans a long call on an object no path of stable fields names (`ObjectPaths`). A
+ * lock dominates nothing unless its every take is known to be exclusive and nothing gives it back without having taken it.
+ */
+@:nullSafety(Strict)
+final class LockDominance {
+
+	/** Joins the entries of a hold set (`holdOf`). */
+	private static inline final HELD_SEPARATOR: String = '\n';
+
+	/** Bound on the rounds of `settle`: each round's answer is sound, the last one kept. */
+	private static inline final ROUNDS: Int = 8;
+
+	/** Each lock -> the locks that dominate it; filled by `settle`. */
+	public final dominators: Map<String, Array<String>> = [];
+
+	private final _sites: LockSites;
+	private final _states: ThreadStates;
+	private final _conditions: EdgeConditions;
+	private final _repetition: CallRepetition;
+	private final _must: MustHeld;
+	private final _holds: Array<LockAcquire>;
+	private final _quiet: QuietLocks;
+
+	public function new(
+		sites: LockSites, states: ThreadStates, conditions: EdgeConditions, repetition: CallRepetition, must: MustHeld,
+		holds: Array<LockAcquire>, quiet: QuietLocks
+	) {
+		_sites = sites;
+		_states = states;
+		_conditions = conditions;
+		_repetition = repetition;
+		_must = must;
+		_holds = holds;
+		_quiet = quiet;
+	}
+
+	/**
+	 * The taint asking which calls block LONG (`LockTaint.costed`), solved with `solve` and with `dominators` until they
+	 * settle: fewer long holds can only free more takes, and every round is sound on its own. `solve` fills a fresh list
+	 * of long locks on the taint it is handed. With `errors`, over the normal paths only: a call only an error path runs
+	 * (`ErrorPaths`) leads nowhere.
+	 */
+	public function settle(
+		taints: LockTaint, solve: (Array<String>, LockTaint) -> Void, ?errors: ErrorPaths
+	): { long: Array<String>, costs: LockTaint } {
+		var long: Array<String> = [];
+		var costs: LockTaint = taints.costed(long, _repetition, this, errors);
+		solve(long, costs);
+		for (_ in 0...ROUNDS) {
+			final judged: LockTaint = costs;
+			if (!solveDominators(a -> longCallsOf(a, judged))) break;
+			long = [];
+			costs = taints.costed(long, _repetition, this, errors);
+			solve(long, costs);
+		}
+		return { long: long, costs: costs };
+	}
+
+	/**
+	 * The lock `take` takes dominated there (`dominators`): some dominator of it must-held on the object it takes it on,
+	 * under `valuation` — or, null, under every valuation its function runs it on.
+	 */
+	public function dominated(take: CallEdge, valuation: Null<String>): Bool {
+		final lock: Null<String> = _sites.lockOf(take);
+		final at: Null<Span> = take.span;
+		final by: Array<String> = lock == null ? [] : dominators[lock] ?? [];
+		final object: Null<String> = _must.takeObject(take);
+		if (at == null || by.length == 0 || object == null) return false;
+		final under: Array<String> = valuation != null ? [valuation] : [
+			for (s in _states.statesOf(take.from)) if (_conditions.carried(take, s.valuation, s.ctx) != 0) s.valuation
+		];
+		return under.length > 0
+			&& under.foreach(v ->
+				_must.at(take.from, v, take.file, at.from).exists(h -> MustHeld.objectOf(h) == object && by.contains(MustHeld.lockOf(h)))
+			);
+	}
+
+	/**
+	 * What the hold `a` holds while its window runs, as `<lock>@<object>` entries (`MustHeld`) joined by `HELD_SEPARATOR`:
+	 * its lock on the object it is taken on, relative to its function, and — for a hold a multi-lock helper's call opens
+	 * — every other lock that call takes; null when no entry names its object.
+	 */
+	public function holdOf(a: LockAcquire): Null<String> {
+		final entries: Array<String> = [];
+		for (h in _holds) if (h == a || h.inner != null && h.edge == a.edge) {
+			final lock: Null<String> = h.lock;
+			final object: Null<String> = _must.holdObject(h);
+			if (lock != null && object != null && !entries.contains(MustHeld.heldOn(lock, object)))
+				entries.push(MustHeld.heldOn(lock, object));
+		}
+		return entries.length == 0 ? null : entries.join(HELD_SEPARATOR);
+	}
+
+	/**
+	 * The holds `under` (`holdOf`) as the callee of `call` sees them: each object carried onto the callee
+	 * (`MustHeld.carried`); an entry drops out when nothing says what its object is there, or when the callee may give its
+	 * lock back (`MustHeld.mayRelease`); null when none is left.
+	 */
+	public function carry(under: Null<String>, call: CallEdge): Null<String> {
+		if (under == null) return null;
+		final kept: Array<String> = [];
+		for (held in under.split(HELD_SEPARATOR)) {
+			final lock: String = MustHeld.lockOf(held);
+			final object: Null<String> = _must.carried(MustHeld.objectOf(held), call);
+			if (object != null && !_must.mayRelease(lock, call.to)) kept.push(MustHeld.heldOn(lock, object));
+		}
+		return kept.length == 0 ? null : kept.join(HELD_SEPARATOR);
+	}
+
+	/**
+	 * Whether the hold `a` is a re-take inside a hold its callers keep: every state of its function that runs its take
+	 * already must-holds its lock, on the object it takes it on, right where it takes it (`MustHeld.at`, the meet over
+	 * its callers) — TM's `StandardFileSystem.cloudLocalRenameAndMoveItem`, whose `_batchMutex` take runs inside the
+	 * sync's own batch hold.
+	 */
+	public function enclosed(a: LockAcquire): Bool {
+		final lock: Null<String> = a.lock;
+		final object: Null<String> = _must.holdObject(a);
+		final at: Null<Span> = a.edge.span;
+		if (lock == null || object == null || at == null) return false;
+		final running: Array<String> = [
+			for (s in _states.statesOf(a.edge.from)) if (_conditions.carried(a.edge, s.valuation, s.ctx) != 0) s.valuation
+		];
+		return running.length > 0
+			&& running.foreach(v -> _must.at(a.edge.from, v, a.edge.file, at.from).contains(MustHeld.heldOn(lock, object)));
+	}
+
+	/**
+	 * Whether the take `take` waits for no long hold while the holds `under` are held: on one's object, a re-take of its
+	 * lock by a take that may repeat it (`reentrant`), or a take of a lock it dominates (`dominators`).
+	 */
+	public function briefUnder(under: String, take: CallEdge, reentrant: Bool): Bool {
+		final lock: Null<String> = _sites.lockOf(take);
+		final object: Null<String> = _must.takeObject(take);
+		if (lock == null || object == null) return false;
+		return under.split(HELD_SEPARATOR).exists(
+			held ->
+				MustHeld.objectOf(held) == object
+				&& (lock == MustHeld.lockOf(held) ? reentrant : (dominators[lock] ?? []).contains(MustHeld.lockOf(held)))
+		);
+	}
+
+	/**
+	 * Solves `dominators` for the long holds `longAt` names: per hold, the offsets of its calls that block long, empty for
+	 * a brief hold, null for a hold that rules dominance out. Returns whether any lock's dominators changed. Only a lock
+	 * that excludes for sure dominates (`excludes`).
+	 */
+	private function solveDominators(longAt: (LockAcquire) -> Null<Array<Int>>): Bool {
+		final found: Map<String, Array<String>> = [];
+		// a multi-lock helper's give is its caller's release, never a release of a hold begun elsewhere
+		final broken: Array<String> = [for (c in _sites.crossing) if (!_sites.helpers.contains(c.edge.from)) c.lock];
+		for (a in _holds) {
+			final lock: String = a.lock ?? '';
+			if (lock == '' || a.uncontended || _sites.helpers.contains(a.edge.from) || broken.contains(lock)) continue;
+			final positions: Null<Array<Int>> = longAt(a);
+			// a brief hold leaves the lock free to be dominated by anything a long one holds
+			if (positions != null && positions.length == 0) continue;
+			final held: Null<Array<String>> = heldAtLong(a, lock, positions);
+			if (held == null) {
+				broken.push(lock);
+				continue;
+			}
+			final known: Null<Array<String>> = found[lock];
+			found[lock] = (known == null ? held : known.filter(l -> held.contains(l))).filter(excludes);
+		}
+		var changed: Bool = false;
+		for (lock in [for (l in found.keys()) l].concat(broken)) {
+			final next: Array<String> = broken.contains(lock) ? [] : found[lock] ?? [];
+			next.sort(Reflect.compare);
+			if ((dominators[lock] ?? []).join('\n') != next.join('\n')) changed = true;
+			dominators[lock] = next;
+		}
+		return changed;
+	}
+
+	/**
+	 * Whether a hold of `lock` keeps every other thread out for as long as its window runs: every take of it is known to
+	 * be exclusive (`QuietLocks.exclusive`) — a shared hold excludes no other shared one — and no function may give it
+	 * back without having taken it (`MustHeld.releasedUntaken`): an ownerless lock (TM's `LockMutex`) given back by
+	 * another thread is free while its holder's window still runs.
+	 */
+	private function excludes(lock: String): Bool {
+		return _quiet.exclusive(lock) && !_must.releasedUntaken(lock);
+	}
+
+	/**
+	 * The other locks the long hold `a` of `lock` holds, on its object, at every offset of `positions` under every
+	 * valuation its take runs under; null when it takes its lock on an object no path of stable fields names, or `positions`
+	 * itself is null.
+	 */
+	private function heldAtLong(a: LockAcquire, lock: String, positions: Null<Array<Int>>): Null<Array<String>> {
+		final object: Null<String> = _must.holdObject(a);
+		if (positions == null || positions.length > 0 && object == null) return null;
+		var meet: Null<Array<String>> = null;
+		for (state in _states.statesOf(a.edge.from)) if (_conditions.carried(
+			a.edge, state.valuation, state.ctx
+		) != 0) for (at in positions) {
+			final held: Array<String> = [
+				for (h in _must.at(a.edge.from, state.valuation, a.edge.file, at, lock))
+					if (MustHeld.objectOf(h) == object && MustHeld.lockOf(h) != lock) MustHeld.lockOf(h)
+			];
+			final known: Null<Array<String>> = meet;
+			meet = known == null ? held : known.filter(l -> held.contains(l));
+		}
+		return meet ?? [];
+	}
+
+	/**
+	 * Where the hold `a` blocks long under `costs`: the starts of its calls that do, and of its unresolved ones but a bare
+	 * `shortSinks` name run once under the hold; null for a hold that may outlive its function or could not be traced.
+	 */
+	private function longCallsOf(a: LockAcquire, costs: LockTaint): Null<Array<Int>> {
+		if (LongLockExplain.leaks(a) || a.untraced) return null;
+		final at: Array<Int> = [
+			for (b in costs.blockingCalls(a, costs.reentrantHeld(a))) b.edge.span?.from ?? -1
+		];
+		for (c in a.blindCalls) if (!costs.briefBlind(a, c)) at.push(c.span.from);
+		return at;
+	}
+
+}

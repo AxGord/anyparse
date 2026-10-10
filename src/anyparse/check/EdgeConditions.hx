@@ -27,6 +27,8 @@ private typedef SiteFact = {
  * function, the context it runs on, the VALUATION of its tracked parameters — and on which threads, and `bind` what the
  * call hands the callee's tracked parameters.
  *
+ * A call in a `catch` body no exception reaches runs nowhere (`DeadCatches`, handed in as `dead`).
+ *
  * A positive whitelist: a call is cut only where its own body says so in one of these shapes, and any other answers
  * "it runs, on every thread its function does".
  * - The call sits in the `then` / `else` of an `if` or a ternary, in the right operand of `&&` / `||`, or after an
@@ -34,7 +36,8 @@ private typedef SiteFact = {
  *   only where `c` is false).
  * - The condition, read through parentheses, `!`, an `&&` that holds (or an `||` that fails) on that side, is a read
  *   or call of a `mainThreadChecks` entry (the edge the graph records at exactly that expression), a tracked parameter
- *   read bare or compared with `null`, or `v != null` / `v == null` of a `final` local written once as
+ *   read bare or compared with `null`, a `final` local bound once to such a condition, or `v != null` / `v == null` of a
+ *   `final` local written once as
  *   `check ? null : new T()` (or the arms swapped): the `new` arm is never null, so the test is the check's answer.
  */
 @:nullSafety(Strict)
@@ -54,15 +57,25 @@ final class EdgeConditions {
 	private final _shape: RefShape;
 	private final _checksOf: (String) -> Array<String>;
 	private final _blockKinds: Array<String>;
+
+	/** The kinds whose children run one after another as statements: the blocks, and the branches of a `switch`. */
+	private final _sequenceKinds: Array<String>;
+
 	private final _ifKinds: Array<String>;
 	private final _nestedFnKinds: Array<String>;
 	private final _values: ArgumentValues;
+
+	/** Whether a call site sits where nothing runs at all: a `catch` no exception reaches (`DeadCatches`). */
+	private final _dead: Null<(CallEdge) -> Bool>;
 
 	/**
 	 * `checksOf` names, per file, the graph ids of the main-thread checks the file's chain configures; `trees` finds the
 	 * function bodies.
 	 */
-	public function new(graph: CallGraph, trees: FunctionTrees, plugin: GrammarPlugin, checksOf: (String) -> Array<String>) {
+	public function new(
+		graph: CallGraph, trees: FunctionTrees, plugin: GrammarPlugin, checksOf: (String) -> Array<String>, ?dead: (CallEdge) -> Bool
+	) {
+		_dead = dead;
 		_graph = graph;
 		_trees = trees;
 		_shape = plugin.refShape();
@@ -70,6 +83,7 @@ final class EdgeConditions {
 		_values = new ArgumentValues(graph, trees, plugin);
 		final flow: Null<ControlFlowSupport> = plugin.controlFlowSupport();
 		_blockKinds = flow == null ? [] : flow.blockKinds();
+		_sequenceKinds = _blockKinds.concat([for (k in [_shape.caseBranchKind, _shape.defaultBranchKind]) if (k != null) k]);
 		_ifKinds = ArgumentValues.conditionalKinds(_shape);
 		_nestedFnKinds = MemberKinds.nestedFunctionKinds(_shape);
 	}
@@ -90,6 +104,8 @@ final class EdgeConditions {
 	 * otherwise.
 	 */
 	public function carried(edge: CallEdge, valuation: String, ctx: Int): Int {
+		final dead: Null<(CallEdge) -> Bool> = _dead;
+		if (dead != null && dead(edge)) return 0;
 		var mask: Int = MAIN_BITS | ThreadSafety.CTX_BG;
 		for (fact in siteFacts(edge)) {
 			if (fact.param == MAIN_CHECK) {
@@ -171,6 +187,9 @@ final class EdgeConditions {
 		if (kind == _shape.identKind) {
 			final at: Int = _values.tracked(fnId).indexOf(cond.name ?? '');
 			if (at >= 0) return [{ param: at, value: value, nullTest: false }];
+			// a `final` local bound once to a condition is that condition
+			final bound: Null<QueryNode> = finalLocalInit(cond, fnId);
+			if (bound != null) return factsOf(bound, value, fnId, file);
 		}
 		return isMainCheck(cond, fnId, file) ? [{ param: MAIN_CHECK, value: value, nullTest: false }] : [];
 	}
@@ -191,24 +210,29 @@ final class EdgeConditions {
 	 * `check ? null : new T()` or `check ? new T() : null`, the check's answer that picked that arm.
 	 */
 	private function nullTestFacts(local: QueryNode, nonNull: Bool, fnId: String, file: String): Array<SiteFact> {
-		final name: Null<String> = local.name;
-		final fn: Null<QueryNode> = _trees.ofId(fnId);
-		if (local.kind != _shape.identKind || name == null || fn == null) return [];
-		final decls: Array<QueryNode> = [];
-		_values.collectNamed(fn, name, decls);
-		if (decls.length != 1) return [];
-		final decl: QueryNode = decls[0];
-		final declKinds: Array<String> = _shape.localDeclKinds ?? [];
-		if (!declKinds.contains(decl.kind) || (_shape.mutableLocalDeclKinds ?? []).contains(decl.kind) || decl.children.length == 0)
-			return [];
-		final init: QueryNode = decl.children[decl.children.length - 1];
-		if (init.kind != _shape.ternaryKind || init.children.length != 3) return [];
+		final init: Null<QueryNode> = finalLocalInit(local, fnId);
+		if (init == null || init.kind != _shape.ternaryKind || init.children.length != 3) return [];
 		final newKind: Null<String> = _shape.newExprKind;
 		final nullFirst: Bool = init.children[1].kind == _shape.nullLiteralKind && init.children[2].kind == newKind;
 		final newFirst: Bool = init.children[1].kind == newKind && init.children[2].kind == _shape.nullLiteralKind;
 		if (!(nullFirst || newFirst)) return [];
 		// the `new` arm is the non-null one: the check took it exactly where the local is non-null
 		return factsOf(init.children[0], nonNull == newFirst, fnId, file);
+	}
+
+	/**
+	 * The value of `local` when it reads a `final` local the body of `fnId` declares once, with one, in a block the read
+	 * sits in, before it (`BareNames.localOf`): a read outside that block, a nested function's own local, means some
+	 * other binding. Null otherwise.
+	 */
+	private function finalLocalInit(local: QueryNode, fnId: String): Null<QueryNode> {
+		final fn: Null<QueryNode> = _trees.ofId(fnId);
+		final decl: Null<QueryNode> = fn == null ? null : BareNames.localOf(fn, local, _shape, _sequenceKinds);
+		if (decl == null) return null;
+		final declKinds: Array<String> = _shape.localDeclKinds ?? [];
+		if (!declKinds.contains(decl.kind) || (_shape.mutableLocalDeclKinds ?? []).contains(decl.kind) || decl.children.length == 0)
+			return null;
+		return decl.children[decl.children.length - 1];
 	}
 
 	/** Whether `expr` is a read or call of a `mainThreadChecks` entry: the graph records an invocation of one at exactly its range. */

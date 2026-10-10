@@ -43,20 +43,34 @@ class ThreadSafetyLongLocksTest extends Test {
 	}
 
 	/**
-	 * TM's correlated `if (!batch) acquire … if (!batch) release` reads as a hold that may outlive its function: recorded
-	 * as a leak, at the take — evidence of what the rule does today, not a claim it is right. A second leaking take is a
-	 * second reason.
+	 * TM's correlated `if (!batch) acquire … if (!batch) release`: the parameter is a fixed flag (`FixedFlags`), so the
+	 * window is traced once per value and no run takes without giving back — no leak. A take nothing gives back is one.
 	 */
-	public function testCorrelatedConditionalTakeReadsAsALeak(): Void {
+	@:pin('control') @:killer('M-TS-FLAGS-OFF')
+	public function testCorrelatedConditionalTakeIsNoLeak(): Void {
 		#if (sys || nodejs)
 		final sources: Array<String> = ThreadSafetyCheckTest.storeFixture('db.add(false);', 'fs.save();');
 		final db: String = sources[0].replace(
 			'function work():Void {}', 'function work():Void {} function other(b:Bool):Void { if (!b) _batch.acquire(); }'
 		);
 		Assert.same([
-			{ kind: 'leak', holder: 'Db.add', at: db.indexOf('_batch.acquire(); work()') },
 			{ kind: 'leak', holder: 'Db.other', at: db.indexOf('_batch.acquire(); }', db.indexOf('function other')) }
 		], reasonsOf(longLock(explain([db, sources[1]]), 'Db._batch')).filter(r -> r.kind == 'leak'));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A flag the function writes is no fixed flag: the correlated take and give still read as a leak. */
+	@:pin('control') @:killer('M-TS-FLAGS-WRITTEN')
+	public function testAWrittenFlagIsNoFixedFlag(): Void {
+		#if (sys || nodejs)
+		final source: String = 'class A { final _m:Mutex = new Mutex(); public function new() {}'
+			+ ' public function take(b:Bool):Void { if (b) _m.acquire(); b = !b; if (b) _m.release(); }'
+			+ ' public static function main():Void { new A().take(true); } }';
+		Assert.same(['A.take'], [
+			for (r in reasonsOf(longLock(explain([source]), 'A._m'))) if (r.kind == 'leak') r.holder
+		]);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -264,6 +278,26 @@ class ThreadSafetyLongLocksTest extends Test {
 		final plain: Array<String> = [for (v in run(sources, false, CONFIG).found) v.message];
 		Assert.isTrue(plain.length > 0);
 		Assert.same(plain, [for (v in run(sources, true, CONFIG).found) v.message]);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A flag whose name something else in the function declares is no fixed flag: an `if` reading the name past that
+	 * declaration reads the other binding, so the correlated take and give still read as a leak (review r4 `L2`, `L2d`).
+	 */
+	@:pin('control') @:killer('M-TS-FLAGS-SHADOW') @:killer('M-TS-FLAGS-WRITTEN')
+	public function testAShadowedFlagIsNoFixedFlag(): Void {
+		#if (sys || nodejs)
+		for (shadow in ['var b:Bool = c();', 'final b:Bool = b && c();']) {
+			final source: String = 'class A { final _m:Mutex = new Mutex(); public function new() {} function c():Bool return false;'
+				+ ' public function take(b:Bool):Void { if (b) _m.acquire(); $shadow if (b) _m.release(); }'
+				+ ' public static function main():Void { new A().take(true); } }';
+			Assert.same(['A.take'], [
+				for (r in reasonsOf(longLock(explain([source]), 'A._m'))) if (r.kind == 'leak') r.holder
+			], shadow);
+		}
 		#else
 		Assert.pass('non-sys target');
 		#end

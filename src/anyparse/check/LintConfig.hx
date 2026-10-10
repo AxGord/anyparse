@@ -425,6 +425,18 @@ final class LintConfig {
 	}
 
 	/**
+	 * The option keys the document wrote for rule `id`, sorted — `enabled` and `severity` aside, which the framework
+	 * reads — so a check reading its options through one reader can say which key no option of it has.
+	 */
+	public function optionKeys(id: String): Array<String> {
+		final rule: Null<RuleConfig> = _rules[id];
+		if (rule == null) return [];
+		final keys: Array<String> = [for (key in rule.props.keys()) key];
+		keys.sort(Reflect.compare);
+		return keys;
+	}
+
+	/**
 	 * Whether a rule requiring language version `minimum` may run for this config.
 	 *
 	 * True when the project declares no `languageVersion` — an undeclared floor constrains

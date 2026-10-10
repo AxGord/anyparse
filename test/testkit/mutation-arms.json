@@ -10524,9 +10524,9 @@
 		{
 			"name": "M-TS-TAINT-UNION-SINK",
 			"type": "anyparse.check.LockTaint",
-			"method": "reach",
-			"find": "if (listsOf(edge.file).sinkIds.contains(edge.from)) continue;",
-			"replace": "if (_sinkIds.contains(edge.from)) continue;",
+			"method": "leadsNowhere",
+			"find": "listsOf(edge.file).sinkIds.contains(edge.from) ||",
+			"replace": "_sinkIds.contains(edge.from) ||",
 			"note": "a node one chain names a sink never carries taint to its callers in a chain where it is a plain function"
 		},
 		{
@@ -10539,11 +10539,11 @@
 		},
 		{
 			"name": "M-TS-REPORT-UNGATED",
-			"type": "anyparse.check.Linter",
-			"method": "runGated",
-			"find": "if (!(check is GraphScoped)) return found;",
-			"replace": "return found;",
-			"note": "a graph-scoped rule reports in a file whose own config refuses it"
+			"type": "anyparse.check.ThreadSafety",
+			"method": "run",
+			"find": "return violations.filter(v -> v.file == '' || listsOf(v.file).reports);",
+			"replace": "return violations;",
+			"note": "a file whose chain lists no sinks reports findings of its own"
 		},
 		{
 			"name": "M-ANON-FIRST-FILE-CONFIG",
@@ -10596,10 +10596,10 @@
 		{
 			"name": "M-TS-MALFORMED-UNGATED",
 			"type": "anyparse.check.ThreadSafety",
-			"method": "reportMalformedPairs",
-			"find": " || !lists.reports) continue;",
-			"replace": ") continue;",
-			"note": "a malformed option of a chain that reports nothing is reported"
+			"method": "listsByFile",
+			"find": "if (!lists.reports && !options.declared) continue;",
+			"replace": "if (!lists.reports) continue;",
+			"note": "a malformed option of a chain that lists no sinks is not said"
 		},
 		{
 			"name": "M-PARSE-MEMO-REPLAY-OFF",
@@ -11148,8 +11148,8 @@
 			"name": "M-TS-HELD-ANY-THREAD",
 			"type": "anyparse.check.ThreadSafety",
 			"method": "reportLockHeld",
-			"find": "if (a.uncontended || lock != null && !mainTaken.contains(lock)) continue;",
-			"replace": "if (a.uncontended) continue;",
+			"find": "if (a.uncontended || !mainTaken.contains(HoldGrade.takenKey(a)) ||",
+			"replace": "if (a.uncontended ||",
 			"note": "a hold of a lock only background threads take is reported as a main-thread stall"
 		},
 		{
@@ -11298,8 +11298,8 @@
 		},
 		{
 			"name": "M-TS-SITE-PER-TARGET",
-			"type": "anyparse.check.ThreadSafety",
-			"method": "reportMainSinkCalls",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "report",
 			"find": "final key: String = '${edge.file}:${edge.span?.from ?? -1}:${edge.from}';",
 			"replace": "final key: String = '${edge.file}:${edge.span?.from ?? -1}:${edge.from}:${edge.to}';",
 			"note": "every sink a dispatch may reach is its own finding at one call site"
@@ -11338,9 +11338,9 @@
 		},
 		{
 			"name": "M-TS-SELF-NEVER",
-			"type": "anyparse.check.LockSites",
-			"method": "readsOwnMember",
-			"find": "? node.name != _shape.selfReferenceText",
+			"type": "anyparse.check.FieldWrites",
+			"method": "ownMemberRead",
+			"find": "? node.name != shape.selfReferenceText",
 			"replace": "? false",
 			"note": "a lock member read bare is never the running object's, so re-taking one's own re-entrant lock is reported as a wait"
 		},
@@ -11354,10 +11354,10 @@
 		},
 		{
 			"name": "M-TS-QUIET-SWALLOWS",
-			"type": "anyparse.check.ThreadSafety",
-			"method": "reportMainSinkCalls",
-			"find": "if (states.edgeContext(edge) & CTX_MAIN == 0) continue;",
-			"replace": "if (states.edgeContext(edge) & CTX_MAIN == 0 || states.edgeContext(edge) & CTX_QUIET != 0) continue;",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "report",
+			"find": "if (states.edgeContext(edge) & ThreadSafety.CTX_MAIN == 0) continue;",
+			"replace": "if (states.edgeContext(edge) & ThreadSafety.CTX_MAIN == 0 || states.edgeContext(edge) & ThreadSafety.CTX_QUIET != 0) continue;",
 			"note": "one path through a quiet root silences a sink every other main-thread path still reaches"
 		},
 		{
@@ -11372,7 +11372,7 @@
 			"name": "M-TS-LOOP-ONE-PASS",
 			"type": "anyparse.check.LockWindow",
 			"method": "step",
-			"find": "if (next == entry) return entry;",
+			"find": "if (next == entry) return join(entry, frame.brk) == true;",
 			"replace": "return next;",
 			"note": "a loop body is walked once, so a lock taken on one pass is not held across the next pass's calls"
 		},
@@ -11420,8 +11420,8 @@
 			"name": "M-TS-ORDER-HELPER-NEVER-RELEASES",
 			"type": "anyparse.check.LockSites",
 			"method": "collectHelperHolds",
-			"find": "for (o in list) (opens ? opened : closed).push({ call: call, op: o.call });",
-			"replace": "for (o in list) if (opens) opened.push({ call: call, op: o.call });",
+			"find": "(opens ? opened : closed).push({ call: call, op: o.call });",
+			"replace": "if (opens) opened.push({ call: call, op: o.call });",
 			"note": "a helper giving two locks back ends no hold, so every call after it runs holding both"
 		},
 		{
@@ -11460,15 +11460,15 @@
 			"name": "M-TS-THROW-UNRAISED",
 			"type": "anyparse.check.LockWindow",
 			"method": "step",
-			"find": "if (_throwKinds.contains(kind)) raise(node);",
-			"replace": "",
+			"find": "if (before == true && !(_throwKinds.contains(kind) && raise(node))) _leaks = true;",
+			"replace": "if (before == true) _leaks = true;",
 			"note": "a throw reached holding the lock escapes nothing"
 		},
 		{
 			"name": "M-TS-THROW-CATCH-IGNORED",
 			"type": "anyparse.check.LockWindow",
 			"method": "step",
-			"find": "final intercepts: Bool = kids.exists(k -> k.kind == _catchKind);",
+			"find": "final intercepts: Bool = frame.catches.length > 0;",
 			"replace": "final intercepts: Bool = false;",
 			"note": "a throw inside a try with a catch escapes the function as if nothing caught it"
 		},
@@ -11476,7 +11476,7 @@
 			"name": "M-TS-THROW-CATCH-ENTRY-UNHELD",
 			"type": "anyparse.check.LockWindow",
 			"method": "step",
-			"find": "final entry: Bool = held || body == true || raised;",
+			"find": "final entry: Bool = held || body == true || frame.raised;",
 			"replace": "final entry: Bool = held || body == true;",
 			"note": "a catch reached by a throw from inside the hold starts unheld, so its rethrow escapes nothing"
 		},
@@ -11587,7 +11587,7 @@
 		{
 			"name": "M-TS-MAIN-CHECK-NO-GETTER",
 			"type": "anyparse.check.ThreadSafety",
-			"method": "listsByFile",
+			"method": "chainLists",
 			"find": "matchAll(graph, mainChecks.concat([for (c in mainChecks) getterOf(c, accessorPrefixes)]))",
 			"replace": "matchAll(graph, mainChecks)",
 			"note": "a main-thread check written as a property is never recognised at its reads, which call the getter"
@@ -11650,9 +11650,9 @@
 		},
 		{
 			"name": "M-TS-PARAM-WRITE-IGNORED",
-			"type": "anyparse.check.ArgumentValues",
+			"type": "anyparse.check.BareNames",
 			"method": "stable",
-			"find": " && !writes(fn, name)",
+			"find": " && !writes(fn, name, shape)",
 			"replace": "",
 			"note": "a parameter the body reassigns is read as holding its argument, so a branch the write opens reads as dead"
 		},
@@ -16660,10 +16660,10 @@
 		},
 		{
 			"name": "M-TS-DATA-CHAIN-CAPPED",
-			"type": "anyparse.check.ThreadSafety",
-			"method": "reportMainSinkCalls",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "mainSinkFinding",
 			"find": "chain: path.concat(sorted)",
-			"replace": "chain: ThreadStates.chainText(path, CHAIN_CAP).split(' -> ').concat(sorted)",
+			"replace": "chain: ThreadStates.chainText(path, ThreadSafety.CHAIN_CAP).split(' -> ').concat(sorted)",
 			"note": "a main-thread finding's data carries the chain the text caps, so the hops past the cap are lost to every tool"
 		},
 		{
@@ -16743,6 +16743,30 @@
 			"find": "return result.lost.length == 0 ? EXIT_OK : EXIT_RUNTIME;",
 			"replace": "return EXIT_OK;",
 			"note": "a lost real stall no longer fails the scoring run"
+		},
+		{
+			"name": "M-LINT-FORMAT-DOMINATED",
+			"type": "anyparse.query.format.LintFormat",
+			"method": "json",
+			"find": "dominated: [for (d in longLocks.dominated) { lock: d.lock, by: d.by }]",
+			"replace": "dominated: []",
+			"note": "the json envelope names no dominated lock"
+		},
+		{
+			"name": "M-LINT-FORMAT-ERRORPATH",
+			"type": "anyparse.query.format.LintFormat",
+			"method": "reasonRecord",
+			"find": "if (r.errorPath != null) Reflect.setField(record, 'errorPath', r.errorPath);",
+			"replace": "",
+			"note": "a reason blocking only through a catch carries no errorPath in json"
+		},
+		{
+			"name": "M-LINT-NOFILE-DROPPED",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "reportFindings",
+			"find": "paths.concat([''])",
+			"replace": "paths",
+			"note": "a finding naming no file only counts in the summary line"
 		},
 		{
 			"name": "M-LINT-EXPLAIN-UNSET",
@@ -16889,6 +16913,286 @@
 			"note": "a short lock a quiet root takes on the main thread is missing from the main-thread takes"
 		},
 		{
+			"name": "M-TS-SHORT-SINKS-IGNORED",
+			"type": "anyparse.check.LockTaint",
+			"method": "costsLong",
+			"find": "if (!takesLock(edge)) return !listsOf(edge.file).shortSinkIds.contains(edge.to);",
+			"replace": "if (!takesLock(edge)) return true;",
+			"note": "a `shortSinks` entry costs as long as any other sink"
+		},
+		{
+			"name": "M-TS-REPEAT-NO-LOOPS",
+			"type": "anyparse.check.Loops",
+			"method": "around",
+			"find": "kinds.contains(node.kind) && repeating != null",
+			"replace": "false && repeating != null",
+			"note": "no loop repeats the calls in it"
+		},
+		{
+			"name": "M-TS-REPEAT-ITERABLE",
+			"type": "anyparse.check.Loops",
+			"method": "around",
+			"find": "_bindingKinds.contains(node.kind) ? node.children[node.children.length - 1].span : span",
+			"replace": "span",
+			"note": "the iterable of a `for`, read once, counts as repeating with its body"
+		},
+		{
+			"name": "M-TS-REPEAT-UPWARD-NONE",
+			"type": "anyparse.check.MainRepeats",
+			"method": "climbEdge",
+			"find": "_repetition.repeated(e) ? null : _repetition.along(e, way)",
+			"replace": "way",
+			"note": "a caller repeating a function up the main thread's way repeats nothing below it"
+		},
+		{
+			"name": "M-TS-REPEAT-NO-RECURSION",
+			"type": "anyparse.check.CallRepetition",
+			"method": "recursive",
+			"find": "if (edge.from == edge.to) return true;",
+			"replace": "if (edge.from == edge.to) return false;",
+			"note": "a function calling itself repeats nothing"
+		},
+		{
+			"name": "M-TS-REPEAT-NO-ITERATES",
+			"type": "anyparse.check.CallRepetition",
+			"method": "handedOn",
+			"find": "if (edge.kind != Ref) return false;",
+			"replace": "if (true) return false;",
+			"note": "a value handed to a call that may run it repeatedly (`iterates`, or any call not listed `runsOnce`) runs once"
+		},
+		{
+			"name": "M-TS-REPEAT-NO-BOUNDARY",
+			"type": "anyparse.check.Loops",
+			"method": "around",
+			"find": "loops = []",
+			"replace": "loops = loops.copy()",
+			"note": "a loop around a function counts for the calls in the function's body"
+		},
+		{
+			"name": "M-TS-UPWARD-INERT",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "run",
+			"find": "!(e.kind == Ref && inertRef(e)) && states.edgeContext(e)",
+			"replace": "states.edgeContext(e)",
+			"note": "a value stored where it never runs from repeats with the loop that stores it"
+		},
+		{
+			"name": "M-TS-REPEAT-UNDER-OUTER",
+			"type": "anyparse.check.CallRepetition",
+			"method": "repeatedUnder",
+			"find": "!outer.exists(o -> o.from == l.from)",
+			"replace": "true",
+			"note": "a loop around the whole hold counts as repeating the calls inside it"
+		},
+		{
+			"name": "M-TS-LONG-BY-ANY-SPAN",
+			"type": "anyparse.check.LockTaint",
+			"method": "costed",
+			"find": "return new LockTaint(_graph, _sinkIds, listsOf, _sites, long, _conditions, _threads, {",
+			"replace": "if (long != null) return withLong(long);\n\t\treturn new LockTaint(_graph, _sinkIds, listsOf, _sites, long, _conditions, _threads, {",
+			"note": "a lock held across short calls only is long, and every short call warns"
+		},
+		{
+			"name": "M-TS-EVIDENCE-PLAIN",
+			"type": "anyparse.check.HoldGrade",
+			"method": "byCost",
+			"find": ["calls: long,", "taint: judges.long,"],
+			"replace": ["calls: judges.plain.blockingCalls(a, held),", "taint: judges.plain,"],
+			"note": "a long hold's message names its short calls too"
+		},
+		{
+			"name": "M-TS-B-MAIN-ONLY-KEPT",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "reportLockHeld",
+			"find": "final mainOnly: Bool = lock != null && states.edgeContext(a.edge) & CTX_BG == 0",
+			"replace": "final mainOnly: Bool = false",
+			"note": "a hold only the main thread runs is a stall like any other"
+		},
+		{
+			"name": "M-TS-B-ASSUMED-IGNORED",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "reportLockHeld",
+			"find": " && !states.assumed.exists(a.edge.from);",
+			"replace": ";",
+			"note": "a holder whose thread is only assumed main is taken for a main-only one"
+		},
+		{
+			"name": "M-TS-OWN-WORK-TAKES",
+			"type": "anyparse.check.LockTaint",
+			"method": "counts",
+			"find": "(cost.takes || !(takesLock(edge) || retakesElsewhere(edge, held)))",
+			"replace": "true",
+			"note": "a take of another lock counts as the holder's own work"
+		},
+		{
+			"name": "M-TS-OWN-WORK-DROPPED",
+			"type": "anyparse.check.HoldGrade",
+			"method": "byCost",
+			"find": "if (long.length > 0) {",
+			"replace": "if (long.length > 0 && !mainOnly) {",
+			"note": "a main-only hold is dropped even when the main thread works long under it"
+		},
+		{
+			"name": "M-TS-B-UNKNOWN-AS-MAIN-ONLY",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "reportLockHeld",
+			"find": "final mainOnly: Bool = lock != null && ",
+			"replace": "final mainOnly: Bool = ",
+			"note": "a hold of a lock no member names is judged by the holder's thread alone, as if no other could hold it"
+		},
+		{
+			"name": "M-TS-DOM-OFF",
+			"type": "anyparse.check.LockDominance",
+			"method": "dominated",
+			"find": "if (at == null || by.length == 0 || object == null) return false;",
+			"replace": "if (at == null || by.length >= 0 || object == null) return false;",
+			"note": "no take is ever dominated"
+		},
+		{
+			"name": "M-TS-DOM-ANY-HOLD",
+			"type": "anyparse.check.LockDominance",
+			"method": "solveDominators",
+			"find": "found[lock] = (known == null ? held : known.filter(l -> held.contains(l))).filter(excludes);",
+			"replace": "if (held.length > 0) found[lock] = (known == null ? held : known.filter(l -> held.contains(l))).filter(excludes);",
+			"note": "a long hold holding no other lock is left out of the meet"
+		},
+		{
+			"name": "M-TS-DOM-RELEASE-IGNORED",
+			"type": "anyparse.check.MustHeld",
+			"method": "givePoints",
+			"find": "if (g.lock == lock && runs(id, valuation, g.edge)",
+			"replace": "if (false && runs(id, valuation, g.edge)",
+			"note": "a give of the lock between the take and the point is ignored"
+		},
+		{
+			"name": "M-TS-DOM-EXITS-IGNORED",
+			"type": "anyparse.check.MustHeld",
+			"method": "leavesFirst",
+			"find": "return returns.contains(last.kind) || (_shape.throwKinds ?? []).contains(last.kind) && !_body.inTryBody(give.file, site);",
+			"replace": "return false;",
+			"note": "a give on a path that returns at once still kills the lock"
+		},
+		{
+			"name": "M-TS-DOM-UNDECIDED",
+			"type": "anyparse.check.MustHeld",
+			"method": "decided",
+			"find": "final kids: Array<QueryNode> = cond.children;",
+			"replace": "if (cond != null) return null;\n\t\tfinal kids: Array<QueryNode> = cond.children;",
+			"note": "no condition is ever decided by a valuation"
+		},
+		{
+			"name": "M-TS-DOM-ENTRY-NONE",
+			"type": "anyparse.check.MustHeld",
+			"method": "meetInto",
+			"find": "var meet: Null<Array<String>> = null;",
+			"replace": "var meet: Null<Array<String>> = [];",
+			"note": "no lock a caller holds carries into the callee"
+		},
+		{
+			"name": "M-TS-DOM-ANY-OBJECT",
+			"type": "anyparse.check.LockDominance",
+			"method": "dominated",
+			"find": "final object: Null<String> = _must.takeObject(take);",
+			"replace": "final object: Null<String> = MustHeld.SELF_OBJECT;",
+			"note": "a take of another object's lock counts as a take of the running object's"
+		},
+		{
+			"name": "M-TS-DOM-EXPLAIN-DROPPED",
+			"type": "anyparse.check.LongLockExplain",
+			"method": "report",
+			"find": "if (by.length > 0) { lock: lock, by: by.copy() }",
+			"replace": "if (false) { lock: lock, by: by.copy() }",
+			"note": "--explain-long names no dominated lock"
+		},
+		{
+			"name": "M-TS-DOM-UNDER-HOLD-OFF",
+			"type": "anyparse.check.LockTaint",
+			"method": "blockingTrail",
+			"find": "if (counts(edge, held, repeats, state.valuation) && !briefUnder(under, edge)) return trailOf([edge.to], edge, held, [edge]);",
+			"replace": "if (counts(edge, held, repeats, state.valuation)) return trailOf([edge.to], edge, held, [edge]);",
+			"note": "a hold never dominates the takes of its own window"
+		},
+		{
+			"name": "M-TS-DOM-BRIEF-NAMES-IGNORED",
+			"type": "anyparse.check.LockTaint",
+			"method": "briefBlind",
+			"find": "final once: Bool = listsOf(a.edge.file).shortNames.contains(c.name) && cost.repetition.onceUnder(a.edge, c.span.from);",
+			"replace": "final once: Bool = false && listsOf(a.edge.file).shortNames.contains(c.name);",
+			"note": "an unresolved call a bare `shortSinks` name names counts long for dominance"
+		},
+		{
+			"name": "M-TS-DOM-BRIEF-REPEATED",
+			"type": "anyparse.check.LockTaint",
+			"method": "briefBlind",
+			"find": "final once: Bool = listsOf(a.edge.file).shortNames.contains(c.name) && cost.repetition.onceUnder(a.edge, c.span.from);",
+			"replace": "final once: Bool = listsOf(a.edge.file).shortNames.contains(c.name);",
+			"note": "a brief unresolved call in a loop under the hold counts brief"
+		},
+		{
+			"name": "M-TS-OWNER-OFF",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "reportSite",
+			"find": "for (r in repeaters) {",
+			"replace": "for (r in repeaters.slice(repeaters.length)) {",
+			"note": "a short call repeated from above warns nowhere: no loop owns it"
+		},
+		{
+			"name": "M-TS-OWNER-FARTHEST",
+			"type": "anyparse.check.MainRepeats",
+			"method": "nearestFirst",
+			"find": "a.path.length - b.path.length",
+			"replace": "b.path.length - a.path.length",
+			"note": "the farthest repeating caller owns a short call's warning"
+		},
+		{
+			"name": "M-TS-OWNER-SELF-MOVED",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "reportSite",
+			"find": "final own: Bool = long || assumed.length > 0 || repeaters.exists(r -> ThreadSafety.memberOf(graph, r.edge.from) == member);",
+			"replace": "final own: Bool = long || assumed.length > 0;",
+			"note": "a call its own member repeats (recursion, a callback it hands a repeating call) warns nowhere"
+		},
+		{
+			"name": "M-TS-INSIDE-SINK-OFF",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "report",
+			"find": "final inSink: Bool = inside.exists(edge.from) || taints.listsOf(edge.file).sinkIds.contains(edge.from);",
+			"replace": "final inSink: Bool = false;",
+			"note": "a call a sink's own body makes warns as a finding of its own"
+		},
+		{
+			"name": "M-TS-INSIDE-SINK-DIRECT-ONLY",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "insideSinks",
+			"find": "if (ins.length == 0 ||",
+			"replace": "if (true || ins.length == 0 ||",
+			"note": "only a sink's own body is its machinery, not a function only it calls"
+		},
+		{
+			"name": "M-TS-ONE-TAKE-OFF",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "oneTakePerLock",
+			"find": "for (lock => list in byLock) if (list.length > 1) {",
+			"replace": "for (lock => list in byLock) if (list.length > 1000000) {",
+			"note": "every main-thread take of one lock warns"
+		},
+		{
+			"name": "M-TS-ONE-TAKE-NO-WRAPPER",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "oneTakePerLock",
+			"find": "a.delegated) ? '0' : '1')",
+			"replace": "a.delegated) ? '1' : '1')",
+			"note": "a lock wrapper's own take is no preferred site for its lock's warning"
+		},
+		{
+			"name": "M-TS-NEST-OFF",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "nestHolds",
+			"find": "if (outer == null) continue;",
+			"replace": "if (outer == null || true) continue;",
+			"note": "a hold inside another hold of its function warns on its own"
+		},
+		{
 			"name": "M-LINT-EXPLAIN-NO-ENVELOPE",
 			"type": "anyparse.query.cli.command.LintExplainLong",
 			"method": "outcome",
@@ -16983,6 +17287,1574 @@
 			"find": "child.annotations.get(AnnotationKeys.BASE_FIELD_POS) ?? Context.currentPos()",
 			"replace": "Context.currentPos()",
 			"note": "two fields sharing a key are reported at the build macro, not at the field"
+		},
+		{
+			"name": "M-TS-ERROR-REACH-OFF",
+			"type": "anyparse.check.LockTaint",
+			"method": "leadsNowhere",
+			"find": " || !repeated && onErrorPath(edge)",
+			"replace": "",
+			"note": "a call inside a callee's catch still leads the normal-path walk to its sink"
+		},
+		{
+			"name": "M-TS-ERROR-WINDOW-OFF",
+			"type": "anyparse.check.LockTaint",
+			"method": "blockingTrail",
+			"find": "if (onErrorPath(a.edge) || onErrorPath(edge)) return null;",
+			"replace": "if (onErrorPath(a.edge)) return null;",
+			"note": "a call the hold makes inside its own catch blocks over the normal paths"
+		},
+		{
+			"name": "M-TS-ERROR-HOLD-OFF",
+			"type": "anyparse.check.HoldGrade",
+			"method": "byCost",
+			"find": "info: error != null",
+			"replace": "info: false && error != null",
+			"note": "a hold long only on an error path still warns"
+		},
+		{
+			"name": "M-TS-ERROR-ANY",
+			"type": "anyparse.check.HoldGrade",
+			"method": "byCost",
+			"find": "final error: Null<String> = judges.normal.blockingCalls(a, held).length > 0",
+			"replace": "final error: Null<String> = judges.normal.blockingCalls(a, held).length < 0",
+			"note": "a hold with a long call outside every catch is demoted too"
+		},
+		{
+			"name": "M-TS-ERROR-TAKE-OFF",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "siteCost",
+			"find": "final error: Null<String> = caught ?? (at.long && !at.normal ? errorPlace(sites, costs, edge) : null);",
+			"replace": "final error: Null<String> = caught ?? (at.long && !at.normal && false ? errorPlace(sites, costs, edge) : null);",
+			"note": "a main take of a lock long only on an error path still warns"
+		},
+		{
+			"name": "M-TS-ERROR-TAKE-ANY",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "report",
+			"find": "else if (costs.normal.costsLong(edge, null) || repeated)",
+			"replace": "else if (false)",
+			"note": "every long main take counts as error-path only"
+		},
+		{
+			"name": "M-TS-ERROR-CAUGHT-OFF",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "siteCost",
+			"find": "final caught: Null<String> = at.caught ? costs.errors.placeOf([edge]) : null;",
+			"replace": "final caught: Null<String> = null;",
+			"note": "a main-thread sink call inside a catch warns"
+		},
+		{
+			"name": "M-TS-ERROR-EXPLAIN-OFF",
+			"type": "anyparse.check.LongLockExplain",
+			"method": "errorOf",
+			"find": "return normal.taint.blockingTrail(a, e, held) != null ? null : normal.errors.placeOf(trail.edges);",
+			"replace": "return null;",
+			"note": "--explain-long never marks an error-path reason"
+		},
+		{
+			"name": "M-TS-BLIND-BRIEF-OFF",
+			"type": "anyparse.check.LockTaint",
+			"method": "blindLong",
+			"find": "(_cost == null || a.untraced || a.blindCalls.exists(c -> !briefBlind(a, c)))",
+			"replace": "(_cost == null || a.untraced || a.blindCalls.length >= 0)",
+			"note": "every unresolved call under a hold makes its lock long when asking about cost"
+		},
+		{
+			"name": "M-TS-BLIND-CATCH-OFF",
+			"type": "anyparse.check.LockTaint",
+			"method": "briefBlind",
+			"find": "return once || cost.errors?.catchAt(a.edge.file, c.span) != null;",
+			"replace": "return once;",
+			"note": "an unresolved call only a catch runs stays long over the normal paths"
+		},
+		{
+			"name": "M-TS-HANDOFF-OFF",
+			"type": "anyparse.check.HoldGrade",
+			"method": "grade",
+			"find": "!mainOnly && handsOff(sites, a)",
+			"replace": "!mainOnly && false && handsOff(sites, a)",
+			"note": "a hold its function never gives back is graded by its window alone"
+		},
+		{
+			"name": "M-TS-HANDOFF-GIVES",
+			"type": "anyparse.check.HoldGrade",
+			"method": "handsOff",
+			"find": "!sites.gives.exists(g -> g.edge.from == a.edge.from && g.lock == lock)",
+			"replace": "!sites.gives.exists(g -> false)",
+			"note": "a hold given back on some path counts as handed off"
+		},
+		{
+			"name": "M-TS-HANDOFF-CROSSING",
+			"type": "anyparse.check.HoldGrade",
+			"method": "handsOff",
+			"find": "!a.window.exists(e -> sites.crossing.exists(c -> c.lock == lock && c.edge.from == e.to))",
+			"replace": "!a.window.exists(e -> false)",
+			"note": "a hold whose window calls a releaser counts as handed off"
+		},
+		{
+			"name": "M-TS-REGISTER-OWNER",
+			"type": "anyparse.check.MainRepeats",
+			"method": "climbEdge",
+			"find": "if (_repetition.registered(e)) {",
+			"replace": "if (false) {",
+			"note": "the owner of a short call is searched up its registrations too"
+		},
+		{
+			"name": "M-TS-CARRY-OFF",
+			"type": "anyparse.check.LockDominance",
+			"method": "carry",
+			"find": "return kept.length == 0 ? null : kept.join(HELD_SEPARATOR);",
+			"replace": "return null;",
+			"note": "a hold is carried into no callee"
+		},
+				{
+			"name": "M-TS-CARRY-RETAKE",
+			"type": "anyparse.check.LockDominance",
+			"method": "briefUnder",
+			"find": "(lock == MustHeld.lockOf(held) ? reentrant :",
+			"replace": "(lock == MustHeld.lockOf(held) ? false :",
+			"note": "a re-take of the carried re-entrant lock waits"
+		},
+		{
+			"name": "M-TS-CARRY-OBJECT",
+			"type": "anyparse.check.LockDominance",
+			"method": "briefUnder",
+			"find": "MustHeld.objectOf(held) == object",
+			"replace": "true",
+			"note": "a take on another object counts as under the carried hold"
+		},
+		{
+			"name": "M-TS-PATH-TWO-LINK",
+			"type": "anyparse.check.ObjectPaths",
+			"method": "receiverPath",
+			"find": "return first == null || !stable(first) ? null : nameOf(first) + SEPARATOR + nameOf(field);",
+			"replace": "return null;",
+			"note": "a field of a field names no object"
+		},
+		{
+			"name": "M-TS-PATH-CTOR",
+			"type": "anyparse.check.ObjectPaths",
+			"method": "writtenOnlyInConstructor",
+			"find": "w.own && ctor != null && w.fn == ctor",
+			"replace": "false",
+			"note": "a write in the constructor makes a var unstable"
+		},
+		{
+			"name": "M-TS-PATH-STABLE-ANY",
+			"type": "anyparse.check.ObjectPaths",
+			"method": "writtenOnlyInConstructor",
+			"find": "!_writes.mayWrite(w, owner) || w.own && ctor != null && w.fn == ctor",
+			"replace": "true",
+			"note": "a var written outside its constructor counts stable"
+		},
+		{
+			"name": "M-TS-SHARED-OFF",
+			"type": "anyparse.check.LockTaint",
+			"method": "blocks",
+			"find": "if (quiet.never(edge)) return false;",
+			"replace": "if (false && quiet.never(edge)) return false;",
+			"note": "a take that never waits still blocks"
+		},
+		{
+			"name": "M-TS-SHARED-ANY",
+			"type": "anyparse.check.QuietLocks",
+			"method": "sharedOnly",
+			"find": "takes.length > 0 && takes.foreach(a -> _listsOf(a.edge.file).sharedIds.contains(a.pair.lockId))",
+			"replace": "takes.length > 0",
+			"note": "a lock some exclusive take works counts as shared-only"
+		},
+		{
+			"name": "M-TS-SHARED-HOLD",
+			"type": "anyparse.check.HoldGrade",
+			"method": "mainTaken",
+			"find": "(a.lock == null || !taints.quiet.sharedOnly(key))",
+			"replace": "(a.lock == null || key != '')",
+			"note": "a hold of a lock only ever taken shared still stalls the main thread"
+		},
+		{
+			"name": "M-TS-CTOR-TAKE",
+			"type": "anyparse.check.QuietLocks",
+			"method": "never",
+			"find": "return lock != '' && sharedOnly(lock) || uncontended(edge);",
+			"replace": "return lock != '' && sharedOnly(lock);",
+			"note": "a constructor's own take before publication blocks"
+		},
+		{
+			"name": "M-TS-HELPER-B-OFF",
+			"type": "anyparse.check.HoldGrade",
+			"method": "judged",
+			"find": "return acquires.concat(helperHolds);",
+			"replace": "return acquires;",
+			"note": "a multi-lock helper's call opens no hold its caller is judged by"
+		},
+		{
+			"name": "M-TS-HELPER-OWN-WINDOW",
+			"type": "anyparse.check.HoldGrade",
+			"method": "judged",
+			"find": "return acquires.concat(helperHolds);",
+			"replace": "return acquires.filter(a -> !a.delegated).concat(helperHolds);",
+			"note": "no delegated take is judged over its own window: a helper's earlier locks are held across its later takes unseen"
+		},
+		{
+			"name": "M-TS-HELPER-CROSSING",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "solveLongLocks",
+			"find": "&& !sites.helpers.contains(c.edge.from)) long.push(c.lock);",
+			"replace": ") long.push(c.lock);",
+			"note": "a helper twin's give makes its locks long as a crossing release"
+		},
+		{
+			"name": "M-TS-HELPER-DOM-CROSSING",
+			"type": "anyparse.check.LockDominance",
+			"method": "solveDominators",
+			"find": "[for (c in _sites.crossing) if (!_sites.helpers.contains(c.edge.from)) c.lock]",
+			"replace": "[for (c in _sites.crossing) c.lock]",
+			"note": "a helper twin's give breaks every dominance of its locks"
+		},
+		{
+			"name": "M-TS-HELPER-SIBLINGS",
+			"type": "anyparse.check.LockDominance",
+			"method": "holdOf",
+			"find": "if (h == a || h.inner != null && h.edge == a.edge) {",
+			"replace": "if (h == a) {",
+			"note": "a helper hold carries only its own lock, not the others its call takes"
+		},
+		{
+			"name": "M-TS-RETHROW-OFF",
+			"type": "anyparse.check.ThrowReach",
+			"method": "intercepts",
+			"find": "&& !node.children.exists(rethrows)",
+			"replace": "&& true",
+			"note": "a catch that rethrows its own variable keeps the exception"
+		},
+		{
+			"name": "M-TS-RETHROW-ANY-NAME",
+			"type": "anyparse.check.ThrowReach",
+			"method": "throwsAny",
+			"find": "return _throwKinds.contains(node.kind) || node.children.exists(throwsAny);",
+			"replace": "return _throwKinds.contains(node.kind) && node.children.length == 1 && node.children[0].kind == _shape.identKind || node.children.exists(throwsAny);",
+			"note": "only a throw of a bare name in a catch counts as letting the exception go on"
+		},
+		{
+			"name": "M-TS-RETHROW-NESTED",
+			"type": "anyparse.check.ThrowReach",
+			"method": "throwsAny",
+			"find": "if (_nestedFnKinds.contains(node.kind)) return false;",
+			"replace": "",
+			"note": "a rethrow inside a lambda the catch builds counts"
+		},
+		{
+			"name": "M-TS-THROW-TYPED-INTERCEPTS",
+			"type": "anyparse.check.ThrowReach",
+			"method": "intercepts",
+			"find": "k.kind == _catchKind && CatchTypes.catches(k, null, _shape, _graph.types)",
+			"replace": "k.kind == _catchKind",
+			"note": "a typed catch keeps what a throwers call raises"
+		},
+		{
+			"name": "M-TS-ALLOC-OFF",
+			"type": "anyparse.check.AllocationSets",
+			"method": "dispatches",
+			"find": "if (classes == null || edge.dispatchType == null && edge.kind != New) return true;",
+			"replace": "if (classes == null || edge.kind == New || edge.kind != New) return true;",
+			"note": "every override of a dispatch runs whatever the receiver was built as"
+		},
+		{
+			"name": "M-TS-ALLOC-ANY-WRITE",
+			"type": "anyparse.check.AllocationSets",
+			"method": "fieldClasses",
+			"find": "sealed = false;",
+			"replace": "sealed = true;",
+			"note": "a write of anything but a `new` leaves a field's classes known"
+		},
+		{
+			"name": "M-TS-ALLOC-DECLARED",
+			"type": "anyparse.check.AllocationSets",
+			"method": "declared",
+			"find": "return decl.children.length == 0 ? [] : constructed(decl.children[0], file);",
+			"replace": "return [];",
+			"note": "a field's declared value adds no class"
+		},
+		{
+			"name": "M-TS-ALLOC-NEW",
+			"type": "anyparse.check.AllocationSets",
+			"method": "receiverClasses",
+			"find": "if (edge.kind == New) return constructedAt(edge);",
+			"replace": "if (edge.kind == New) return null;",
+			"note": "the object a `new` builds is of no known class"
+		},
+		{
+			"name": "M-TS-ALLOC-LIBRARY",
+			"type": "anyparse.check.AllocationSets",
+			"method": "resolves",
+			"find": "return target.isExternal;",
+			"replace": "return true;",
+			"note": "a library class may run any project override"
+		},
+		{
+			"name": "M-TS-ALLOC-ALIAS",
+			"type": "anyparse.check.AllocationSets",
+			"method": "constructedClass",
+			"find": "if (imports.aliases.contains(simple)) return null;",
+			"replace": "",
+			"note": "a `new` through an import alias names the project class of the alias's name"
+		},
+		{
+			"name": "M-TS-ALLOC-LIBRARY-PATH",
+			"type": "anyparse.check.AllocationSets",
+			"method": "constructedClass",
+			"find": "(name.indexOf('.') >= 0 || imports.named.contains(simple))",
+			"replace": "true",
+			"note": "a name the run declares nowhere is taken for a library class however the file spells it — an alias, a type parameter"
+		},
+		{
+			"name": "M-TS-ALLOC-COMPLETE",
+			"type": "anyparse.check.AllocationSets",
+			"method": "fieldClasses",
+			"find": "dot <= 0 || !_writes.complete ? null",
+			"replace": "dot <= 0 ? null",
+			"note": "a run over part of the project seals a field by the writes it happens to hold"
+		},
+		{
+			"name": "M-TS-PATH-CTOR-LAMBDA",
+			"type": "anyparse.check.ObjectPaths",
+			"method": "writtenOnlyInConstructor",
+			"find": "w.fn == ctor",
+			"replace": "(w.fn ?? '').indexOf(ctor) == 0",
+			"note": "a write in a lambda or a local function the constructor makes counts as the constructor's"
+		},
+		{
+			"name": "M-TS-PATH-COMPLETE",
+			"type": "anyparse.check.ObjectPaths",
+			"method": "writtenOnlyInConstructor",
+			"find": "if (!_writes.complete) return false;",
+			"replace": "",
+			"note": "a run over part of the project takes a var for stable by the writes it happens to hold"
+		},
+		{
+			"name": "M-TS-PATH-STATIC",
+			"type": "anyparse.check.ObjectPaths",
+			"method": "writtenOnlyInConstructor",
+			"find": "isStatic ? null : ",
+			"replace": "",
+			"note": "a static var written in the instance constructor counts stable"
+		},
+		{
+			"name": "M-TS-PATH-OWN",
+			"type": "anyparse.check.ObjectPaths",
+			"method": "writtenOnlyInConstructor",
+			"find": "w.own && ctor != null",
+			"replace": "ctor != null",
+			"note": "a constructor writing the field of another object leaves it stable"
+		},
+		{
+			"name": "M-TS-COVER-WALK",
+			"type": "anyparse.check.ProjectCoverage",
+			"method": "holdsProject",
+			"find": "if (path.endsWith('.hx') && !_run.exists(canonical)) return false;",
+			"replace": "",
+			"note": "a run over part of a closed project counts as covering it"
+		},
+		{
+			"name": "M-TS-COVER-EXCLUDE",
+			"type": "anyparse.check.ProjectCoverage",
+			"method": "holdsProject",
+			"find": "skip(path.startsWith(base) ? path.substring(base.length) : path) || ",
+			"replace": "",
+			"note": "an excluded file the run leaves out breaks the coverage"
+		},
+		{
+			"name": "M-TS-COVER-NOTE",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "listsByFile",
+			"find": "if (declaredClosed && !closedWorld)",
+			"replace": "if (false)",
+			"note": "a closedWorld the run does not cover is read as false without a word"
+		},
+		{
+			"name": "M-TS-OPT-UNKNOWN",
+			"type": "anyparse.check.ThreadSafetyOptions",
+			"method": "readKeys",
+			"find": "problems.push(unknownKey(key));",
+			"replace": "{}",
+			"note": "a misspelt option key is dropped without a word"
+		},
+		{
+			"name": "M-TS-OPT-LIST-SHAPE",
+			"type": "anyparse.check.ThreadSafetyOptions",
+			"method": "readList",
+			"find": "problems.push('option \"$key\" is not an array of strings — ignored');",
+			"replace": "",
+			"note": "a list option written as a string is dropped without a word"
+		},
+		{
+			"name": "M-TS-OPT-LIST-ITEM",
+			"type": "anyparse.check.ThreadSafetyOptions",
+			"method": "readList",
+			"find": "if (skipped > 0) problems.push('option \"$key\" ignored $skipped value(s) that are not strings');",
+			"replace": "",
+			"note": "a non-string list item is dropped without a word"
+		},
+		{
+			"name": "M-TS-OPT-FLAG",
+			"type": "anyparse.check.ThreadSafetyOptions",
+			"method": "readFlag",
+			"find": "problems.push('option \"$key\" is not true or false — ignored');",
+			"replace": "",
+			"note": "a flag written as a string is dropped without a word"
+		},
+		{
+			"name": "M-TS-OPT-BUDGET",
+			"type": "anyparse.check.ThreadSafetyOptions",
+			"method": "readBudget",
+			"find": "problems.push('option \"$BUDGET_KEY\" is not a positive number — ignored');",
+			"replace": "",
+			"note": "a budget written as a string is dropped without a word"
+		},
+		{
+			"name": "M-TS-OPT-BOUNDED-ENTRY",
+			"type": "anyparse.check.ThreadSafetyOptions",
+			"method": "readBounded",
+			"find": "problems.push('$BOUNDED_KEY[$i] dropped: ${wrong.join(', ')}');",
+			"replace": "{}",
+			"note": "a boundedRepeats entry of the wrong shape is dropped without a word"
+		},
+		{
+			"name": "M-TS-OPT-BOUNDED-SITE",
+			"type": "anyparse.check.BoundedRepeats",
+			"method": "entries",
+			"find": "if (members.length == 0)",
+			"replace": "if (false)",
+			"note": "a boundedRepeats site matching no function bounds nothing without a word"
+		},
+		{
+			"name": "M-TS-FACTS-IGNORED",
+			"type": "anyparse.check.ThreadGraph",
+			"method": "build",
+			"find": "if (facts == null) return CallGraph.build(files, plugin);",
+			"replace": "if (facts == null || true) return CallGraph.build(files, plugin);",
+			"note": "thread-safety builds its graph from syntax alone with compiler facts at hand"
+		},
+		{
+			"name": "M-TS-FACTS-MADE-REF",
+			"type": "anyparse.check.ThreadGraph",
+			"method": "madeWhereHanded",
+			"find": "return edge.via == null && at != null",
+			"replace": "return false && edge.via == null && at != null",
+			"note": "the facts' record of a nested value made where the syntax hands it to a spawn makes it inherit the registrar's thread"
+		},
+		{
+			"name": "M-TS-FACTS-GATE",
+			"type": "anyparse.check.ThreadGraph",
+			"method": "build",
+			"find": "final host: Null<SymbolIndexHost> = useFacts && plugin is SymbolIndexHost ? cast plugin : null;",
+			"replace": "final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;",
+			"note": "thread-safety reads compiler facts the project never asked for"
+		},
+		{
+			"name": "M-TS-DEADCATCH-OFF",
+			"type": "anyparse.check.EdgeConditions",
+			"method": "carried",
+			"find": "if (dead != null && dead(edge)) return 0;",
+			"replace": "if (dead != null && false) return 0;",
+			"note": "a catch around only nonThrowing calls is still a path"
+		},
+		{
+			"name": "M-TS-DEADCATCH-ANY-CALL",
+			"type": "anyparse.check.DeadCatches",
+			"method": "nonThrowingCall",
+			"find": "? targets.foreach(t -> lists.nonThrowingIds.contains(t))",
+			"replace": "? targets.length > 0",
+			"note": "any resolved call counts as non-throwing"
+		},
+		{
+			"name": "M-TS-DEADCATCH-FIELD",
+			"type": "anyparse.check.DeadCatches",
+			"method": "throwsNothing",
+			"find": "return node.children.length == 1 && node.children[0].kind == _shape.callKind",
+			"replace": "return true || node.children.length == 1 && node.children[0].kind == _shape.callKind",
+			"note": "a field read off any value cannot throw"
+		},
+		{
+			"name": "M-TS-DEADCATCH-BODY",
+			"type": "anyparse.check.DeadCatches",
+			"method": "holds",
+			"find": "inner.kind == _shape.catchClauseKind",
+			"replace": "true",
+			"note": "the try body of a dead catch runs nothing either"
+		},
+		{
+			"name": "M-TS-DEADCATCH-INTERP",
+			"type": "anyparse.check.DeadCatches",
+			"method": "throwsNothing",
+			"find": "return node.children.foreach(c -> inertSegment(c.kind));",
+			"replace": "return true;",
+			"note": "an interpolated string runs nothing"
+		},
+		{
+			"name": "M-TS-DEADCATCH-RECEIVER",
+			"type": "anyparse.check.DeadCatches",
+			"method": "nonThrowingCall",
+			"find": "listed && staticCallee(file, callee) &&",
+			"replace": "listed &&",
+			"note": "a nonThrowing method called off any value receiver throws nothing"
+		},
+		{
+			"name": "M-TS-DEADCATCH-PROPERTY",
+			"type": "anyparse.check.DeadCatches",
+			"method": "plainRead",
+			"force": "true",
+			"note": "a bare name read as a property runs no getter"
+		},
+		{
+			"name": "M-TS-DEADCATCH-BINDING",
+			"type": "anyparse.check.DeadCatches",
+			"method": "plainRead",
+			"force": "false",
+			"note": "a bare read of a parameter may throw"
+		},
+		{
+			"name": "M-TS-DEADCATCH-BINDING-SCOPE",
+			"type": "anyparse.check.DeadCatches",
+			"method": "plainRead",
+			"find": "if (param || BareNames.localOf(scope.fn, read, _shape, _sequenceKinds) != null) return true;",
+			"replace": "if (named.length > 0) return true;",
+			"note": "a name any node of the function binds is taken to bind the read"
+		},
+		{
+			"name": "M-TS-STATES-IGNORED",
+			"type": "anyparse.check.MainRepeats",
+			"method": "runsFrom",
+			"find": "return _conditions.carried(e, valuation, ThreadSafety.CTX_MAIN) == 0 ? null",
+			"replace": "return false ? null",
+			"note": "a call a condition rules out under the caller's valuation still carries repetition"
+		},
+		{
+			"name": "M-TS-STATES-OWNER-IGNORED",
+			"type": "anyparse.check.MainRepeats",
+			"method": "climbEdge",
+			"find": "for (v in mainStates(e.from)) if (runsFrom(e, v) == at.valuation) {",
+			"replace": "for (v in mainStates(e.from)) if (runsFrom(e, v) != null) {",
+			"note": "the owner walk climbs into callers whatever valuation they hand down"
+		},
+		{
+			"name": "M-TS-COND-FINAL-LOCAL",
+			"type": "anyparse.check.EdgeConditions",
+			"method": "factsOf",
+			"find": "if (bound != null) return factsOf(bound, value, fnId, file);",
+			"replace": "if (bound != null && false) return factsOf(bound, value, fnId, file);",
+			"note": "a final local bound to a condition decides nothing"
+		},
+		{
+			"name": "M-TS-COND-LOCAL-ANY-BLOCK",
+			"type": "anyparse.check.BareNames",
+			"method": "localOf",
+			"find": "final decl: QueryNode = named[0];",
+			"replace": "final decl: QueryNode = named[0]; if (named.length == 1) return decl;",
+			"note": "a final local decides a read of its name outside its block, or outside the lambda declaring it"
+		},
+		{
+			"name": "M-TS-ARG-LITERAL-NONNULL",
+			"type": "anyparse.check.ArgumentValues",
+			"method": "builtKindsOf",
+			"find": "for (k in [shape.newExprKind, shape.objectLiteralKind, shape.arrayLiteralKind]) if (k != null) k",
+			"replace": "for (k in [shape.newExprKind]) if (k != null) k",
+			"note": "an object literal argument is of unknown nullness"
+		},
+		{
+			"name": "M-TS-ARG-FINAL-LOCAL-READ",
+			"type": "anyparse.check.ArgumentValues",
+			"method": "collectBareReads",
+			"find": "if (finalLocal && kids.length > 0) bareName(kids[kids.length - 1], into);",
+			"replace": "if (false && finalLocal) bareName(kids[kids.length - 1], into);",
+			"note": "a parameter read only in a final local's condition is not tracked"
+		},
+		{
+			"name": "M-TS-MAINONLY-ELSEWHERE-OFF",
+			"type": "anyparse.check.HoldGrade",
+			"method": "byCost",
+			"find": "final elsewhere: Null<String> = mainOnly && error == null",
+			"replace": "final elsewhere: Null<String> = false && error == null",
+			"note": "a main-only hold warns beside the finding (a) that names its work elsewhere"
+		},
+		{
+			"name": "M-TS-MAINONLY-MOVED",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "reportSite",
+			"find": "if (!owners.moved.exists(siteKey(edge))) owners.moved[siteKey(edge)] = finding;",
+			"replace": "",
+			"note": "a sink call whose warning moved to its repeating owner counts as reported nowhere"
+		},
+		{
+			"name": "M-TS-ENCLOSED-OFF",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "reportLockHeld",
+			"find": "foldEnclosed(reported, judged.enclosed, covers);",
+			"replace": "",
+			"note": "a hold every caller's hold of its lock encloses warns on its own"
+		},
+		{
+			"name": "M-TS-ENCLOSED-ANY-STATE",
+			"type": "anyparse.check.LockDominance",
+			"method": "enclosed",
+			"find": "running.foreach(",
+			"replace": "running.exists(",
+			"note": "one caller keeping the lock encloses the hold for all"
+		},
+		{
+			"name": "M-TS-UNNAMED-PAIR",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "reportLockHeld",
+			"find": "if (a.uncontended || !mainTaken.contains(HoldGrade.takenKey(a)) ||",
+			"replace": "if (a.uncontended || a.lock != null && !mainTaken.contains(HoldGrade.takenKey(a)) ||",
+			"note": "a hold of an unnamed lock warns though the main thread never takes its pair"
+		},
+		{
+			"name": "M-TS-EXH-OFF",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "dead",
+			"find": "if (!_writes.complete || at < 1 || !catchAll(branch)) return false;",
+			"replace": "if (true) return false;",
+			"note": "no catch-all branch is ever dead"
+		},
+		{
+			"name": "M-TS-EXH-ALL-NAMED",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "dead",
+			"find": "return closed.values.foreach(v -> named.contains(v));",
+			"replace": "return closed.values.exists(v -> named.contains(v));",
+			"note": "one named value makes the catch-all dead"
+		},
+		{
+			"name": "M-TS-EXH-FROM",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "membersOf",
+			"find": "else if (!fields.contains(k.kind))",
+			"replace": "else if (false)",
+			"note": "a member of the abstract of a kind no rule knows — a from clause, a conditional region — keeps it closed"
+		},
+		{
+			"name": "M-TS-EXH-FROMFN",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "buildsNoOther",
+			"find": "declared.children.length == 0 && handsBackValuesOnly(fn, values);",
+			"replace": "declared.children.length == 0;",
+			"note": "a function of the abstract building any value keeps it closed"
+		},
+		{
+			"name": "M-TS-EXH-STRUCT",
+			"type": "anyparse.check.LockWindow",
+			"method": "step",
+			"find": "&& !(dead != null && dead(node, k))",
+			"replace": "",
+			"note": "a dead catch-all of a statement switch is walked"
+		},
+		{
+			"name": "M-TS-EXH-OPAQUE",
+			"type": "anyparse.check.LockWindow",
+			"method": "raisesInside",
+			"find": "for (i => k in kids) if (!(dead != null && dead(node, k))) {",
+			"replace": "for (i => k in kids) if (true) {",
+			"note": "a dead catch-all inside an opaque step raises"
+		},
+		{
+			"name": "M-TS-EXH-SUBJECT-BOUND",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "subjectAbstract",
+			"find": "read.kind == _shape.identKind && BareNames.bindsNothing(fn, name, _shape)",
+			"replace": "read.kind == _shape.identKind",
+			"note": "a subject the function binds is read as the member of its name"
+		},
+		{
+			"name": "M-TS-EXH-GUARD",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "dead",
+			"find": " && !guarded(k)",
+			"replace": "",
+			"note": "a guarded case names its value"
+		},
+		{
+			"name": "M-TS-EXH-CTOR",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "buildsNoOther",
+			"find": "if (fn.name == (_shape.constructorName ?? 'new')) return false;",
+			"replace": "",
+			"note": "a constructor of the abstract builds no other value"
+		},
+		{
+			"name": "M-TS-EXH-NORET",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "buildsNoOther",
+			"find": "return returns.length == 0;",
+			"replace": "return true;",
+			"note": "a function of the abstract with no written return type builds no value"
+		},
+		{
+			"name": "M-TS-EXH-WRITES",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "storedHolds",
+			"find": "return starts && assigned;",
+			"replace": "return starts;",
+			"note": "what is assigned to the member is never read"
+		},
+		{
+			"name": "M-TS-EXH-UNINIT",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "storedHolds",
+			"find": "init == null ? closed.zeroIsValue :",
+			"replace": "init == null ? true :",
+			"note": "a member nothing initializes holds a value"
+		},
+		{
+			"name": "M-TS-EXH-ZERO",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "countsFromZero",
+			"force": "false",
+			"note": "no counting abstract has 0 among its values"
+		},
+		{
+			"name": "M-TS-EXH-OPTIONAL",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "parameterOf",
+			"find": "if (param.kind == _shape.optionalParamKind)\n\t\t\toptional",
+			"replace": "if (param.kind == _shape.optionalParamKind)\n\t\t\ttrue",
+			"note": "an optional parameter, null when left out, holds a value"
+		},
+		{
+			"name": "M-TS-EXH-CONVERT-OFF",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "convertedCall",
+			"force": "false",
+			"note": "no call converts into the abstract through a @:from function"
+		},
+		{
+			"name": "M-TS-EXH-CONVERT-ANY",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "convertedCall",
+			"force": "true",
+			"note": "every call converts into a value of the abstract"
+		},
+		{
+			"name": "M-TS-EXH-COLLISION",
+			"type": "anyparse.check.HeldTrees",
+			"method": "typeDecl",
+			"find": "found.length == 1 && _graph.types.declarationCount(type) == 1 ? found[0] : null",
+			"replace": "found.length > 0 ? found[0] : null",
+			"note": "the first of two declarations of a name is the one read"
+		},
+		{
+			"name": "M-TS-EXH-ISVAR-SELF",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "getterHolds",
+			"find": "readsOwnField(r.children[0], getter, member)",
+			"replace": "false",
+			"note": "a getter returning the member's own stored field holds values through the judging cycle, its writes never read"
+		},
+		{
+			"name": "M-TS-EXH-PARTIAL",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "dead",
+			"find": "!_writes.complete || ",
+			"replace": "",
+			"note": "a run that may miss a write of the project reads a member as holding values"
+		},
+		{
+			"name": "M-TS-EXH-PARAM-CALLERS",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "parameterOf",
+			"find": "return shaped && callersPassValues(fn, param, at.file, closed);",
+			"replace": "return shaped;",
+			"note": "a parameter written as the abstract holds values whatever its calls hand it"
+		},
+		{
+			"name": "M-TS-EXH-PARAM-REF",
+			"type": "anyparse.check.ExhaustiveSwitches",
+			"method": "callersPassValues",
+			"find": "e.kind == Contains || e.kind.isInvocation() && {",
+			"replace": "e.kind == Contains || !e.kind.isInvocation() || {",
+			"note": "a function handed on as a value counts as handing its parameters nothing"
+		},
+		{
+			"name": "M-TS-ERROR-LOOP",
+			"type": "anyparse.check.ErrorPaths",
+			"method": "catchTo",
+			"find": "looped = looped || _loopKinds.contains(child.kind);",
+			"replace": "looped = false;",
+			"note": "a catch inside a loop runs only on an error path"
+		},
+		{
+			"name": "M-TS-ERROR-NESTED-REF",
+			"type": "anyparse.check.ErrorPaths",
+			"method": "catchTo",
+			"find": "if (_nestedFnKinds.contains(child.kind) && found != null && !(span != null && runsOnlyIn(file, span, found))) found = null;",
+			"replace": "",
+			"note": "a lambda written in a catch runs only inside it, wherever its value is called"
+		},
+		{
+			"name": "M-TS-ERROR-CALLED-LOCAL",
+			"type": "anyparse.check.ErrorPaths",
+			"method": "runsOnlyIn",
+			"force": "false",
+			"note": "a local function a catch calls runs outside it"
+		},
+		{
+			"name": "M-TS-ERROR-REPEATED-WAY",
+			"type": "anyparse.check.LockTaint",
+			"method": "leadsNowhere",
+			"find": "!repeated && onErrorPath(edge)",
+			"replace": "onErrorPath(edge)",
+			"note": "a catch a repeating call on the way runs is an error path all the same"
+		},
+		{
+			"name": "M-TS-ERROR-CAUGHT-REPEATED",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "caughtOnce",
+			"find": " && repeats.main.climb(edge).owners.length == 0",
+			"replace": "",
+			"note": "a main-thread call in a catch a loop up the way runs is an error path all the same"
+		},
+		{
+			"name": "M-TS-SITE-PER-SINK",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "reportRepeater",
+			"find": "final key: String = repeatKey(edge, repeats.repetition);",
+			"replace": "final key: String = repeatKey(edge, repeats.repetition) + sinks.join(',');",
+			"note": "each short sink below a repeating site owns its own warning"
+		},
+		{
+			"name": "M-TS-SITE-GROW",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "reportRepeater",
+			"find": "known.sinks = known.sinks.concat([for (t in sinks) if (!known.sinks.contains(t)) t]);",
+			"replace": "",
+			"note": "a repeating site's warning names only the first short sink found below it"
+		},
+		{
+			"name": "M-TS-SITE-SUBJECT",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "reportRepeater",
+			"find": "subject: repeatSubject(edge, repeats.repetition),",
+			"replace": "subject: ThreadSafety.sortedIds(sinks).join(ThreadSafety.SUBJECT_SEPARATOR),",
+			"note": "a repeating site's warning is keyed by its sinks, not the call it repeats"
+		},
+		{
+			"name": "M-TS-FOLD-OFF",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "fold",
+			"find": "for (i => h in warned) if (state[i] == Folded) turn(h, reasons[i], i, doing);",
+			"replace": "",
+			"note": "no hold finding folds onto the warnings that cover it"
+		},
+		{
+			"name": "M-TS-FOLD-CROSSING",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "reasonOf",
+			"find": "_crossing.contains(via) || ",
+			"replace": "",
+			"note": "a wait for a lock released in another function counts as covered"
+		},
+		{
+			"name": "M-TS-FOLD-SITE",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "settled",
+			"find": "case Site(key, _, mayRepeat, way): (doing[key] ?? []).exists(d -> covers(d, i, mayRepeat, way) && state[d.at] != Open);",
+			"replace": "case Site(_, _, _, _): false;",
+			"note": "work another warned hold does too never covers a hold"
+		},
+		{
+			"name": "M-TS-FOLD-DEPTH",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "fold",
+			"find": "(pick < 0 || _depth[i] < _depth[pick])",
+			"replace": "pick < 0",
+			"note": "a cycle keeps the first hold by place, not the one nearest its work"
+		},
+		{
+			"name": "M-TS-WAY-OFF",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "report",
+			"find": "oneWarningPerWay(direct, states, reportedBy);",
+			"replace": "",
+			"note": "every sink call of one main-thread way warns"
+		},
+		{
+			"name": "M-TS-LOOP-KEY",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "repeatKey",
+			"find": "return loops == null || loops.length == 0 ? siteKey(edge) :",
+			"replace": "return loops == null || loops.length == 0 || true ? siteKey(edge) :",
+			"note": "each call a loop repeats owns its own warning"
+		},
+		{
+			"name": "M-TS-WIN-DECL",
+			"type": "anyparse.check.LockWindow",
+			"method": "step",
+			"find": "if (_sequenceKinds.contains(kind) || _declKinds.contains(kind)) return sequence(kids, held);",
+			"replace": "if (_sequenceKinds.contains(kind)) return sequence(kids, held);",
+			"note": "a local declaration is an opaque step"
+		},
+		{
+			"name": "M-TS-WIN-JUMP",
+			"type": "anyparse.check.LockWindow",
+			"method": "step",
+			"find": "= _jumpKinds.contains(kind) ? _loops[_loops.length - 1] : null;",
+			"replace": "= null;",
+			"note": "a break or continue is a path out of the function"
+		},
+		{
+			"name": "M-TS-WIN-ARRAY",
+			"type": "anyparse.check.LockWindow",
+			"method": "inPlaceKindsOf",
+			"find": ".concat(shape.arrayLiteralKind == null ? [] : [shape.arrayLiteralKind])",
+			"replace": "",
+			"note": "an array literal is an opaque step"
+		},
+		{
+			"name": "M-TS-WIN-FOREXPR",
+			"type": "anyparse.check.Loops",
+			"method": "kindsOf",
+			"find": ".concat(shape.iterationBindingKinds ?? [])",
+			"replace": "",
+			"note": "a for expression is no loop"
+		},
+		{
+			"name": "M-TS-FOLD-NORMAL",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "judgedAs",
+			"find": "calls: [for (c in normal.blockingCalls(fold.hold, held)) c.edge],",
+			"replace": "calls: [for (c in graded.calls) c.edge],",
+			"note": "a call only a catch runs counts as a reason a folded hold warns"
+		},
+		{
+			"name": "M-TS-BOUND-OFF",
+			"type": "anyparse.check.CallRepetition",
+			"method": "repeated",
+			"find": "return loops == null || recursive(edge) || !boundedOnce(edge, sourcesOf(edge, loops));",
+			"replace": "return loops == null || recursive(edge) || sourcesOf(edge, loops).length > 0;",
+			"note": "a bounded repetition still repeats"
+		},
+		{
+			"name": "M-TS-BOUND-UNDER",
+			"type": "anyparse.check.CallRepetition",
+			"method": "repeatedUnder",
+			"find": "return !boundedOnce(edge, sourcesOf(edge, loops.filter(l -> !outer.exists(o -> o.from == l.from))));",
+			"replace": "return sourcesOf(edge, loops.filter(l -> !outer.exists(o -> o.from == l.from))).length > 0;",
+			"note": "a bounded repetition under a lock still repeats"
+		},
+		{
+			"name": "M-TS-BOUND-BUDGET",
+			"type": "anyparse.check.CallRepetition",
+			"method": "extend",
+			"find": "return turns * cost < budget ?",
+			"replace": "return true ?",
+			"note": "a bound over the budget runs as once"
+		},
+		{
+			"name": "M-TS-BOUND-CALL",
+			"type": "anyparse.check.CallRepetition",
+			"method": "bind",
+			"find": "e.kind != Contains && (calls == null || calls.contains(e.to) || e.kind == Ref && calls.contains(e.via ?? ''))",
+			"replace": "e.kind != Contains",
+			"note": "an entry naming one call binds the repetitions of every call of the member"
+		},
+		{
+			"name": "M-TS-RUNS-ONCE-OFF",
+			"type": "anyparse.check.CallRepetition",
+			"method": "handedOn",
+			"find": "runsOnce(edge, lists) ||",
+			"replace": "",
+			"note": "a value handed to a call `runsOnce` lists still repeats"
+		},
+		{
+			"name": "M-TS-RUNS-ONCE-PROJECT",
+			"type": "anyparse.check.CallRepetition",
+			"method": "runsOnce",
+			"find": " && runtimeCall(edge)",
+			"replace": "",
+			"note": "a bare runsOnce name trusts a project function of that name, whose body may loop"
+		},
+		{
+			"name": "M-TS-RUNS-ONCE-UNRESOLVED",
+			"type": "anyparse.check.CallRepetition",
+			"method": "runtimeCall",
+			"find": "return !names.exists(edge.viaMember ?? '');",
+			"replace": "return true;",
+			"note": "an unresolved call a bare name lists runs its value once though a project function of that name loops over it"
+		},
+		{
+			"name": "M-TS-REGISTER-PROJECT",
+			"type": "anyparse.check.CallRepetition",
+			"method": "runtimeCall",
+			"find": "if (via != null) return via.isExternal || via.isBodyless;",
+			"replace": "if (via != null) return true;",
+			"note": "a registration into project code, which runs the value from a call the graph cannot follow, counts as once per event"
+		},
+		{
+			"name": "M-TS-MARSHAL-OWNER-OFF",
+			"type": "anyparse.check.MainRepeats",
+			"method": "climbEdge",
+			"find": "if (runsFrom(e, at.valuation) == at.valuation) own(walk.owners, e, path);",
+			"replace": "",
+			"note": "a value marshalled onto the main thread runs once, however many posts a background loop makes"
+		},
+		{
+			"name": "M-TS-ASSUMED-OFF",
+			"type": "anyparse.check.MainRepeats",
+			"method": "climb",
+			"find": "if (_states.assumed.exists(at.id) && !runsOnceAtStart(at.id) && !assumed.contains(at.id)) assumed.push(at.id);",
+			"replace": "",
+			"note": "a function only an assumption runs counts as run once"
+		},
+		{
+			"name": "M-TS-ASSUMED-STATIC",
+			"type": "anyparse.check.MainRepeats",
+			"method": "runsOnceAtStart",
+			"find": "return name == ThreadSafety.ENTRY_POINT || name == CallGraph.STATIC_INIT_NAME;",
+			"replace": "return name == ThreadSafety.ENTRY_POINT;",
+			"note": "a static initializer, run once per program, counts as unknown repetition"
+		},
+		{
+			"name": "M-TS-OWNER-FIRST-ONLY",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "reportSite",
+			"find": "found.filter(o -> o.path.length == found[0].path.length)",
+			"replace": "found.slice(0, 1)",
+			"note": "of equally near repeating callers only the first by offset warns"
+		},
+		{
+			"name": "M-TS-OWNER-OFFSET-TEXT",
+			"type": "anyparse.check.MainRepeats",
+			"method": "nearestFirst",
+			"find": "at - bt",
+			"replace": "Reflect.compare('$at', '$bt')",
+			"note": "owners at one distance ordered by their offsets as text, so an unrelated edit reorders them"
+		},
+		{
+			"name": "M-TS-BOUND-ONE",
+			"type": "anyparse.check.CallRepetition",
+			"method": "bind",
+			"find": "if (found.length != 1)",
+			"replace": "if (found.length == 0)",
+			"note": "an entry over a member holding several repetitions binds the first"
+		},
+		{
+			"name": "M-TS-BOUND-PRODUCT",
+			"type": "anyparse.check.CallRepetition",
+			"method": "extend",
+			"find": "turns *= entry.max;",
+			"replace": "turns = Math.max(turns, entry.max);",
+			"note": "bounded repetitions nested in one function are judged by the largest bound, not the product"
+		},
+		{
+			"name": "M-TS-BOUND-LABEL-SEVERAL",
+			"type": "anyparse.check.CallRepetition",
+			"method": "bind",
+			"find": "labelsIn(member).contains('$loop #2')",
+			"replace": "false",
+			"note": "a loop label with no rank binds the first of several loops of its header"
+		},
+		{
+			"name": "M-TS-LABEL-RANK-SINK",
+			"type": "anyparse.check.Loops",
+			"method": "labelOf",
+			"find": "(l == loop || repeatsSink(file, l))",
+			"replace": "true",
+			"note": "a loop's rank counts the loops of its header that block nothing"
+		},
+		{
+			"name": "M-TS-BOUND-ACROSS",
+			"type": "anyparse.check.MainRepeats",
+			"method": "climbEdge",
+			"find": "_repetition.repeated(e) ? null : _repetition.along(e, way)",
+			"replace": "_repetition.repeated(e) ? null : way",
+			"note": "bounds in different functions on one main-thread way are judged each alone"
+		},
+		{
+			"name": "M-TS-BOUND-ACROSS-HOLD",
+			"type": "anyparse.check.LockTaint",
+			"method": "wayAt",
+			"find": "cost.repetition.along(edge, way)",
+			"replace": "way",
+			"note": "bounds in different functions under one hold are judged each alone"
+		},
+		{
+			"name": "M-TS-BOUND-NOTE",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "shortNote",
+			"find": "else if (bounded.length > 0)",
+			"replace": "else if (false)",
+			"note": "a short call run as once by bounds alone claims none in a loop"
+		},
+		{
+			"name": "M-TS-BOUND-CALL-SHAPE",
+			"type": "anyparse.check.ThreadSafetyOptions",
+			"method": "readBounded",
+			"find": "wrong.push('\"${field.key}\" is not a ${field.key == 'max' || field.key == 'costMs' ? 'number' : 'string'}');",
+			"replace": "{}",
+			"note": "an entry whose `call` is no string widens to the whole member"
+		},
+		{
+			"name": "M-TS-BOUND-COST-ZERO",
+			"type": "anyparse.check.ThreadSafetyOptions",
+			"method": "readBounded",
+			"find": "else if (turn == null || !(turn > 0))",
+			"replace": "else if (turn == null || !(turn >= 0))",
+			"note": "a zero cost of one turn bounds any number of turns"
+		},
+		{
+			"name": "M-TS-BOUND-SITE-PATTERN",
+			"type": "anyparse.check.ThreadSafetyOptions",
+			"method": "readBounded",
+			"find": "else if (siteName.indexOf('*') >= 0)",
+			"replace": "else if (false)",
+			"note": "a `site` pattern binds whichever single member it happens to match"
+		},
+		{
+			"name": "M-TS-LOOP-SUBJECT",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "repeatSubject",
+			"find": "repetition.loopLabel(edge.file, edge.span?.from ?? -1) ?? ",
+			"replace": "",
+			"note": "a loop's warning is keyed by the call it repeats, which a new call earlier in the loop changes"
+		},
+		{
+			"name": "M-TS-HAND-SUBJECT",
+			"type": "anyparse.check.CallRepetition",
+			"method": "handLabel",
+			"find": "final target: String = edge.kind == Ref ? (edge.via ?? edge.viaMember ?? edge.to) : edge.to;",
+			"replace": "final target: String = edge.to;",
+			"note": "a handed value's warning is keyed by the value, a lambda the file numbers"
+		},
+		{
+			"name": "M-TS-SHORT-REGISTERED-NOTE",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "shortNote",
+			"find": "registered ? CostNote.ShortRegisteredCall : CostNote.ShortMainCall;",
+			"replace": "CostNote.ShortMainCall;",
+			"note": "a short call run once per event of a registration claims every caller up to the entry point"
+		},
+		{
+			"name": "M-GRAPH-LAMBDA-PARAM-SELF",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "fn != null && nodes[fn]?.name == name ? fn : null",
+			"replace": "fn",
+			"note": "a lambda's first parameter, starting where the lambda does, reads as a reference to the lambda"
+		},
+		{
+			"name": "M-TS-FLAGS-OFF",
+			"type": "anyparse.check.FixedFlags",
+			"method": "of",
+			"find": "return out.slice(0, MAX_FLAGS);",
+			"replace": "return [];",
+			"note": "no parameter is a fixed flag"
+		},
+		{
+			"name": "M-TS-FLAGS-WRITTEN",
+			"type": "anyparse.check.FixedFlags",
+			"method": "of",
+			"find": " && BareNames.stable(fn, c, shape)",
+			"replace": "",
+			"note": "a parameter the function writes or whose name it declares again counts as fixed"
+		},
+		{
+			"name": "M-TS-FLAGS-SHADOW",
+			"type": "anyparse.check.BareNames",
+			"method": "stable",
+			"find": "named.length == 1 && named[0] == param && ",
+			"replace": "",
+			"note": "a parameter whose name the function declares again keeps the value a call hands it"
+		},
+		{
+			"name": "M-TS-WIN-CAUGHT-THROW",
+			"type": "anyparse.check.LockWindow",
+			"method": "step",
+			"find": "if (before == true && !(_throwKinds.contains(kind) && raise(node))) _leaks = true;",
+			"replace": "if (before == true && !(_throwKinds.contains(kind) && raise(node) && false)) _leaks = true;",
+			"note": "a throw a catch around it intercepts is a path out of the function"
+		},
+		{
+			"name": "M-TS-CATCH-ANY-TYPE",
+			"type": "anyparse.check.CatchTypes",
+			"method": "catches",
+			"force": "true",
+			"note": "a typed catch catches every thrown value"
+		},
+		{
+			"name": "M-TS-CATCH-SUPERTYPE",
+			"type": "anyparse.check.CatchTypes",
+			"method": "catches",
+			"find": "&& types.firstOnChain(thrown, t -> t == written) != null",
+			"replace": "&& false",
+			"note": "a catch of a supertype misses a thrown subtype"
+		},
+		{
+			"name": "M-TS-CATCH-EXCEPTION-TYPE",
+			"type": "anyparse.check.CatchTypes",
+			"method": "catchesAll",
+			"force": "false",
+			"note": "a catch of the exception type or Dynamic catches nothing for sure"
+		},
+		{
+			"name": "M-TS-MEET-OUTSIDE",
+			"type": "anyparse.check.MustHeld",
+			"method": "enteredUnknown",
+			"find": " || seedable(id);",
+			"replace": ";",
+			"note": "a function code outside the run may call takes the meet over its callers in the run as what it holds on entry"
+		},
+		{
+			"name": "M-TS-UNNAMED-BY-PAIR",
+			"type": "anyparse.check.HoldGrade",
+			"method": "takenKey",
+			"find": "lock ?? UNNAMED + a.pair.lockId.substring(0, a.pair.lockId.lastIndexOf('.'))",
+			"replace": "lock ?? a.pair.lockId",
+			"note": "a lock no member names is told apart by its pair take member: an exclusive take and a shared one of the same class never meet"
+		},
+		{
+			"name": "M-TS-HELPER-BODY-WORK",
+			"type": "anyparse.check.LockSites",
+			"method": "collectHelperHolds",
+			"find": "|| !WrapperOps.lockTrafficOnly(_graph, { shape: _shape, nested: _nestedFnKinds }, id, fn, list)",
+			"replace": "|| false",
+			"note": "a function doing work beside its lock calls still counts as a helper, so the work under its locks is judged nowhere"
+		},
+		{
+			"name": "M-TS-HELPER-DISPATCH",
+			"type": "anyparse.check.LockSites",
+			"method": "collectHelperHolds",
+			"find": "|| !WrapperOps.plainCallsOnly(_graph, id)",
+			"replace": "",
+			"note": "a helper reached by a dispatch counts, though the call may run another override taking nothing"
+		},
+		{
+			"name": "M-TS-HELPER-HANDOFF",
+			"type": "anyparse.check.HoldGrade",
+			"method": "handsOff",
+			"find": "a.untraced || a.window.length == 0) return false;",
+			"replace": "a.untraced || a.inner != null || a.window.length == 0) return false;",
+			"note": "a hold a helper call opens never hands its lock off, however its caller leaves it held"
+		},
+		{
+			"name": "M-TS-NEST-HANDOFF",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "nestHolds",
+			"find": "for (inner in reported) if (!inner.handOff) {",
+			"replace": "for (inner in reported) if (true) {",
+			"note": "a handed-off hold counts as an inner hold of the hold around its take, though it outlives that window"
+		},
+		{
+			"name": "M-TS-FOLD-SELF",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "fold",
+			"find": " && !warned.exists(w -> w.finding == finding)) warned.push(h);",
+			"replace": ") warned.push(h);",
+			"note": "two holds sharing one finding are two warned holds, which cover each other and turn the one finding info"
+		},
+		{
+			"name": "M-TS-FOLD-SITE-ONCE",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "covers",
+			"find": "return d.at != i && (d.repeated || !repeated)",
+			"replace": "return d.at != i",
+			"note": "a hold reaching a sink call once covers a hold repeating it under its lock"
+		},
+		{
+			"name": "M-TS-ENCLOSED-NOTE",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "foldEnclosed",
+			"find": "is long through the call into this one'",
+			"replace": "names these calls'",
+			"note": "the enclosed hold's note claims the enclosing finding names its calls, which it may not"
+		},
+		{
+			"name": "M-TS-LEAVES-CAUGHT-THROW",
+			"type": "anyparse.check.MustHeld",
+			"method": "leavesFirst",
+			"find": " && !_body.inTryBody(give.file, site)",
+			"replace": "",
+			"note": "a throw inside a try body leaves the function, though a catch of it goes on"
+		},
+		{
+			"name": "M-TS-COVER-RETAKE",
+			"type": "anyparse.check.MustHeld",
+			"method": "coveredAt",
+			"find": "take > given && take < at",
+			"replace": "take > pos && take < at",
+			"note": "a re-take of the cover between its give and the give point counts as no re-take"
+		},
+		{
+			"name": "M-TS-RELEASE-CALLBACK",
+			"type": "anyparse.check.ThreadStates",
+			"method": "runsWith",
+			"find": "return e.kind.isInvocation() || e.kind == Ref && !inertRef(e);",
+			"replace": "return e.kind.isInvocation();",
+			"note": "a value handed on to run, which gives the lock back, gives back nothing where it is handed"
+		},
+		{
+			"name": "M-TS-GIVE-PATH",
+			"type": "anyparse.check.LockReleasers",
+			"method": "givesUntaken",
+			"find": " && _facts.takenBefore(a.edge, v, at)\n",
+			"replace": "\n",
+			"note": "a take anywhere in the function counts as taken before its give"
+		},
+		{
+			"name": "M-TS-GIVE-OBJECT",
+			"type": "anyparse.check.LockReleasers",
+			"method": "givesUntaken",
+			"find": " && _facts.sameObject(a, given)",
+			"replace": "",
+			"note": "a take on another object counts as taking what the give gives back"
+		},
+		{
+			"name": "M-TS-GIVE-REPEATED",
+			"type": "anyparse.check.LockReleasers",
+			"method": "givesUntaken",
+			"find": "&& !_facts.repeatsAfter(give, a.edge)",
+			"replace": "",
+			"note": "a give a loop repeats after one take gives back only what it took"
+		},
+		{
+			"name": "M-TS-PATH-INTERFACE",
+			"type": "anyparse.check.FieldWrites",
+			"method": "mayWrite",
+			"find": " || _graph.types.isInterface(owner)",
+			"replace": "",
+			"note": "an implementer's write of an interface's field writes another field"
+		},
+		{
+			"name": "M-TS-PATH-REFLECT",
+			"type": "anyparse.check.FieldWrites",
+			"method": "collect",
+			"find": "if (node.kind == _shape.callKind) recordReflective(file, source, node);",
+			"replace": "",
+			"note": "a constant-named Reflect.setField writes no field"
+		},
+		{
+			"name": "M-TS-COVER-PARSED",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "listsByFile",
+			"find": "new ProjectCoverage([for (h in graph.heldFiles()) h.file])",
+			"replace": "new ProjectCoverage([for (f in files) f.file])",
+			"note": "a run file that fails to parse counts as covering its part of the project"
+		},
+		{
+			"name": "M-TS-COVER-OUTERMOST",
+			"type": "anyparse.check.ProjectCoverage",
+			"method": "declaringDocument",
+			"find": "found = path;",
+			"replace": "if (found == \"\") found = path;",
+			"note": "the nearest document declaring closedWorld is the project, so a nested restatement covers its own directory"
+		},
+		{
+			"name": "M-TS-OPT-SINKS-UNMATCHED",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "listsByFile",
+			"find": "else if (lists.reports && lists.sinkIds.length == 0)",
+			"replace": "else if (false)",
+			"note": "a sinks list naming no call of the run reads as a working one"
+		},
+		{
+			"name": "M-TS-OPT-SKIP-DECLARED",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "skipReason",
+			"find": "config.optionKeys('thread-safety').length == 0",
+			"replace": "(config.stringListOption('thread-safety', 'sinks') ?? []).length == 0",
+			"note": "a chain with no usable sinks is not scanned, so what its config lost is never said"
+		},
+		{
+			"name": "M-TS-OPT-NO-SINK-NOTICES",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "run",
+			"find": "if (sinkIds.length == 0) return reportConfigProblems(problems, []);",
+			"replace": "if (sinkIds.length == 0) return [];",
+			"note": "a run no sink matches returns before its config problems are said"
+		},
+		{
+			"name": "M-TS-OPT-LIFTED",
+			"type": "anyparse.check.ThreadSafetyOptions",
+			"method": "readKeys",
+			"find": "else if (LIFTED_KEYS.contains(key))",
+			"replace": "else if (false)",
+			"note": "a mistyped enabled reads as an unknown option"
+		},
+		{
+			"name": "M-TS-BLIND-START",
+			"type": "anyparse.check.LockReleasers",
+			"method": "blindIn",
+			"find": "!resolved.contains(callKey(at))",
+			"replace": "!resolved.exists(r -> r.indexOf('${at.from}:') == 0)",
+			"note": "a call starting where a resolved call starts counts as resolved"
+		},
+		{
+			"name": "M-TS-DOM-OWNERLESS",
+			"type": "anyparse.check.LockDominance",
+			"method": "excludes",
+			"find": "return _quiet.exclusive(lock) && !_must.releasedUntaken(lock);",
+			"replace": "return _quiet.exclusive(lock);",
+			"note": "a lock some function gives back without having taken it still dominates"
+		},
+		{
+			"name": "M-TS-DOM-SHARED",
+			"type": "anyparse.check.LockDominance",
+			"method": "excludes",
+			"find": "return _quiet.exclusive(lock) && !_must.releasedUntaken(lock);",
+			"replace": "return !_must.releasedUntaken(lock);",
+			"note": "a lock taken shared dominates as an exclusive one does"
+		},
+		{
+			"name": "M-TS-RUNS-AS-IS",
+			"type": "anyparse.check.MustHeld",
+			"method": "runsOf",
+			"find": "if (values.length > 1 && ++open > KNOWN_UNKNOWNS) return [valuation];",
+			"replace": "if (values.length > 1) return [valuation];",
+			"note": "a valuation not knowing a parameter stands for itself alone, so a take and a give under one undecided condition never meet"
+		},
+		{
+			"name": "M-TS-SAME-LOCAL-ROOT",
+			"type": "anyparse.check.MustHeld",
+			"method": "localRoot",
+			"find": "return declared.length == 1 && !BareNames.writes(fn, name, _shape) ? member == null ? name : '$name.$member' : null;",
+			"replace": "return null;",
+			"note": "a take and a give on one member of a local or parameter name no one object"
+		},
+		{
+			"name": "M-TS-HELPER-GIVE-OBJECT",
+			"type": "anyparse.check.MustHeld",
+			"method": "sameObject",
+			"find": "inner == null ? takeObject(g.edge) : carried(takeObject(inner), g.edge);",
+			"replace": "takeObject(g.edge);",
+			"note": "a helper call's give is placed by the call alone, which names no lock object"
+		},
+		{
+			"name": "M-TS-FOLD-SITE-LOCK",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "covers",
+			"find": "&& (sameLock(by, own) && oneThread(by, own) || nests(by, own) || way.contains(by.hold.edge.from));",
+			"replace": ";",
+			"note": "a hold of any lock across the same sink call covers another, though narrowing one frees nothing of the other"
+		},
+		{
+			"name": "M-TS-FOLD-SITE-THREAD",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "covers",
+			"find": "sameLock(by, own) && oneThread(by, own)",
+			"replace": "sameLock(by, own)",
+			"note": "a hold of a lock covers another of it in another function across threads, though each thread stalls the main one by itself"
+		},
+		{
+			"name": "M-TS-FOLD-SITE-ONE-ORIGIN",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "oneThread",
+			"find": "return covered.length > 0 && covered.foreach(t -> covering.contains(t));",
+			"replace": "return covered.length == 1 && covering.length == 1 && covered[0] == covering[0];",
+			"note": "a hold covers another of its lock only when both run on one origin alone, though a hold running wherever the covered one does reports its stall"
+		},
+		{
+			"name": "M-TS-REPEATED-BY-OFF",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "attachRepeats",
+			"find": "if (by.length > 0) data.repeatedBy = by;",
+			"replace": "",
+			"note": "a long main-thread call a loop repeats warns as if it ran once: the work list cannot tell a per-item stall"
+		},
+		{
+			"name": "M-TS-REPEATED-BY-SELF",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "repeatersOf",
+			"find": "if (repetition.repeated(edge)) return",
+			"replace": "if (false) return",
+			"note": "a long call in a loop of its own function names no repetition: only callers up the way are asked"
+		},
+		{
+			"name": "M-TS-REPEATED-BY-MERGE",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "oneWarningPerWay",
+			"find": "mergeRepeats(kept, d.finding);",
+			"replace": "",
+			"note": "the warning a way's sink calls fold into drops what repeats the folded ones"
+		},
+		{
+			"name": "M-TS-QUIET-HOLD",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "reportLockHeld",
+			"find": " || states.edgeContext(a.edge) & (CTX_MAIN | CTX_BG) == 0)",
+			"replace": ")",
+			"note": "a hold only a quiet root runs reports as the main thread's own long work, though the root waits on purpose"
+		},
+		{
+			"name": "M-TS-HAND-RANK",
+			"type": "anyparse.check.CallRepetition",
+			"method": "handLabel",
+			"find": "return rank > 0 ? '$named #${rank + 1}' : named;",
+			"replace": "return named;",
+			"note": "two values one function hands the same iterating call share a subject, and so a key"
+		},
+		{
+			"name": "M-TS-HELPER-SPAN-START",
+			"type": "anyparse.check.LockReleasers",
+			"method": "callKey",
+			"find": "'${span.from}:${span.to}'",
+			"replace": "'${span.from}'",
+			"note": "a lock-call site is keyed by its start, so a call a give is made on passes as lock traffic"
+		},
+		{
+			"name": "M-TS-ORIGIN-STATES",
+			"type": "anyparse.check.ThreadStates",
+			"method": "workerStep",
+			"find": "_conditions.carried(e, valuation, ThreadSafety.CTX_BG)",
+			"replace": "ThreadSafety.CTX_BG",
+			"note": "a worker origin flows along every call whatever valuation the worker hands down"
+		},
+		{
+			"name": "M-TS-FOLD-UNNAMED-SAME",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "sameLock",
+			"find": "by.hold.lock != null && own.hold.lock != null && ",
+			"replace": "",
+			"note": "two unnamed locks keyed by one take member are one lock for covering"
+		},
+		{
+			"name": "M-TS-CYCLE-REF",
+			"type": "anyparse.check.LockTaint",
+			"method": "onCycle",
+			"find": "if (e.kind.isInvocation() || runsWhereHanded(e))",
+			"replace": "if (e.kind.isInvocation())",
+			"note": "a recursion through a callback that runs is no cycle, so a whole-tree walk under a lock counts as once"
+		},
+		{
+			"name": "M-TS-CYCLE-REGISTERED",
+			"type": "anyparse.check.LockTaint",
+			"method": "onCycle",
+			"find": "final kept: Bool = lists.registerIds.contains(via) || lists.registerNames.contains(e.viaMember ?? '');",
+			"replace": "final kept: Bool = false;",
+			"note": "a value a `registers` call keeps counts as run right away, closing cycles under the lock"
+		},
+		{
+			"name": "M-TS-FOLD-NEST-LOCK",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "nests",
+			"find": "&& (sameLock(by, own) || by.hold.edge == own.hold.edge || by.hold.window.contains(own.hold.edge))",
+			"replace": "",
+			"note": "a hold of any lock in the same function covers another across the same sink"
+		},
+		{
+			"name": "M-TS-REPEATED-BY-HEADER",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "repeaters",
+			"find": "for (r in by) if (!members.contains(r.member)) members.push(r.member);",
+			"replace": "for (r in by) members.push(r.member + ' at ' + r.at);",
+			"note": "a warning's message names the loop headers repeating it, which another file may rewrite"
+		},
+		{
+			"name": "M-TS-FOLD-SITE-CYCLE",
+			"type": "anyparse.check.LockTaint",
+			"method": "mayRepeatAlong",
+			"find": "return repeatsAlong(a, trail) || trail.path.exists(onCycle);",
+			"replace": "return repeatsAlong(a, trail);",
+			"note": "a call reached through a function a cycle of calls re-enters counts as once when the trail found it once"
 		}
 	]
 }
