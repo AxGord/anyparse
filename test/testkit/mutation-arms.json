@@ -18641,6 +18641,14 @@
 			"note": "a run file that fails to parse counts as covering its part of the project"
 		},
 		{
+			"name": "M-TS-COVER-OUTERMOST",
+			"type": "anyparse.check.ProjectCoverage",
+			"method": "declaringDocument",
+			"find": "found = path;",
+			"replace": "if (found == \"\") found = path;",
+			"note": "the nearest document declaring closedWorld is the project, so a nested restatement covers its own directory"
+		},
+		{
 			"name": "M-TS-BLIND-START",
 			"type": "anyparse.check.LockReleasers",
 			"method": "blindIn",

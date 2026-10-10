@@ -1926,3 +1926,9 @@ decided the question; it may not become a record of runs.
   `closedWorld` held. Coverage is built from the files the graph HOLDS (`CallGraph.heldFiles`): a file the run
   cannot parse leaves the project uncovered, and the `closedWorld` notice now says either cause (review round 2
   `o2`) — branch `feat/ts-precision-3`
+- the project a `closedWorld` declaration closes taken from the NEAREST document declaring it → a nested
+  `core/apqlint.json` restating `closedWorld` became "the project", so `hxq lint core` covered it while
+  `plugins/Plugin.hx` assigned the field a `core` hold reads. The project is the OUTERMOST document of the chain
+  declaring `closedWorld` or `resolutionRoots` (`ProjectCoverage.declaringDocument`), and the `closedWorld` notice
+  names it (`projectOf`). A scratch config nested in another project's tree now closes the outer project too —
+  conservative: such a run is read as open (review round 2 `pc`) — branch `feat/ts-precision-3`

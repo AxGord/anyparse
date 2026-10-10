@@ -2,6 +2,12 @@ package unit.check;
 
 import anyparse.check.Check.FindingData;
 import anyparse.check.Check.Violation;
+import anyparse.check.Linter;
+import anyparse.check.ThreadSafety;
+import anyparse.grammar.haxe.HaxeQueryPlugin;
+import sys.FileSystem;
+import sys.io.File;
+import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -194,7 +200,7 @@ class ThreadSafetyCarriedHoldTest extends Test {
 		#if (sys || nodejs)
 		final found: Array<Violation> = run(path(''), [{ name: 'Plugin.hx', source: PLUGIN }]);
 		Assert.same(['info B Fs.work | Db.batch (folded)'], holds(found));
-		Assert.contains(CLOSED_NOTE, [for (v in found) if (v.file == '') v.message]);
+		Assert.isTrue(closedNote(found) != null, 'the closedWorld notice');
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -214,7 +220,33 @@ class ThreadSafetyCarriedHoldTest extends Test {
 			CONFIG, sources(path('')).concat([broken]), [{ name: 'F5.hx', source: broken }]
 		);
 		Assert.same(['info B Fs.work | Db.batch (folded)'], holds(found));
-		Assert.contains(CLOSED_NOTE, [for (v in found) if (v.file == '') v.message]);
+		Assert.isTrue(closedNote(found) != null, 'the closedWorld notice');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A nested `apqlint.json` restating `closedWorld` closes no project of its own: the project is the outermost
+	 * document's, and a run over the nested directory alone leaves the outer one's `plugins/` out — the notice names
+	 * that project (review round 2 `pc`).
+	 */
+	@:pin('control') @:killer('M-TS-COVER-OUTERMOST')
+	public function testANestedRestatementClosesNoProjectOfItsOwn(): Void {
+		#if (sys || nodejs)
+		final root: String = CliFixture.writeDir('threadsafetynested', [{ name: 'apqlint.json', source: CONFIG }]);
+		FileSystem.createDirectory('$root/core');
+		FileSystem.createDirectory('$root/plugins');
+		File.saveContent('$root/core/apqlint.json', '{"rules":{"thread-safety":{"closedWorld":true}}}');
+		File.saveContent('$root/plugins/Plugin.hx', PLUGIN);
+		final run: Array<String> = sources(path(''));
+		final found: Array<Violation> = Linter.run(
+			[for (i in 0...run.length) { file: '$root/core/F$i.hx', source: run[i] }], new HaxeQueryPlugin(),
+			[new ThreadSafety()]
+		);
+		CliFixture.removeDir(root);
+		Assert.same(['info B Fs.work | Db.batch (folded)'], holds(found));
+		Assert.isTrue(StringTools.endsWith(closedNote(found) ?? '', '$root/apqlint.json'), closedNote(found));
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -305,9 +337,17 @@ class ThreadSafetyCarriedHoldTest extends Test {
 	/** A project file the run leaves out, writing `Fs.holder` (`ProjectCoverage`). */
 	private static inline final PLUGIN: String = 'class Plugin { public static function install(fs:Fs, h:Holder):Void fs.holder = h; }';
 
+	/** The run's notice of a `closedWorld` it does not cover (`CLOSED_NOTE`, then the project's document); null for none. */
+	private static function closedNote(found: Array<Violation>): Null<String> {
+		final notes: Array<String> = [
+			for (v in found) if (v.file == '' && StringTools.startsWith(v.message, CLOSED_NOTE)) v.message
+		];
+		return notes.length == 1 ? notes[0] : null;
+	}
+
 	/** What a run says of a `closedWorld` it does not cover (`ThreadSafety.listsByFile`). */
 	private static inline final CLOSED_NOTE: String = 'option "closedWorld" holds only for a run over the whole project it closes — this run leaves'
-		+ ' part of it out (a file it does not hold, or one it could not parse), so it is read as false';
+		+ ' part of it out (a file it does not hold, or one it could not parse), so it is read as false; the project is the one of ';
 	#end
 
 }

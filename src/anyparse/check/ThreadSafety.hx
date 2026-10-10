@@ -319,7 +319,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			if (declaredClosed && !closedWorld)
 				found.push(
 					'option "closedWorld" holds only for a run over the whole project it closes — this run leaves part of it out (a'
-					+ ' file it does not hold, or one it could not parse), so it is read as false'
+					+ ' file it does not hold, or one it could not parse), so it is read as false; the project is the one of '
+					+ coverage.projectOf(entry.file)
 				);
 			final facts: Bool = options.flag('compilerFacts');
 			if (!factsAsked.contains(facts)) factsAsked.push(facts);

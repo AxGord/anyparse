@@ -17,8 +17,9 @@ import sys.io.File;
  *
  * The project is the declaring document's: the `.hx` files under its `resolutionRoots` when it declares any (relative
  * entries resolved against its directory; a root that does not exist holds nothing), else under its own directory —
- * the document nearest the file that declares `closedWorld` for `thread-safety`, so a scratch config nested in another
- * project's tree closes its own directory, not the outer one's. A path `exclude` names is no part of it. Positive: a
+ * the OUTERMOST document of the file's chain that declares `closedWorld` for `thread-safety` or
+ * `resolutionRoots`, so a nested config restating `closedWorld` closes no project of its own and a
+ * run over its directory alone covers nothing. A path `exclude` names is no part of it. Positive: a
  * file of the project the run does not hold, a document that cannot be read, or a target without a file system, and
  * the run does not cover it.
  */
@@ -44,9 +45,7 @@ final class ProjectCoverage {
 	/** Whether the run covers the project of the `closedWorld` declaration governing `file`, the paths `exclude` names left out. */
 	public function covers(file: String, exclude: Array<String>): Bool {
 		#if (sys || nodejs)
-		final dir: String = Path.directory(file);
-		final document: String = _documentOf[dir] ?? declaringDocument(file);
-		_documentOf[dir] = document;
+		final document: String = projectOf(file);
 		if (document == '') return false;
 		final key: String = '$document\t' + exclude.join('\n');
 		final known: Null<Bool> = _covered[key];
@@ -56,6 +55,18 @@ final class ProjectCoverage {
 		return answer;
 		#else
 		return false;
+		#end
+	}
+
+	/** The document whose project `file`'s `closedWorld` closes (`declaringDocument`); `''` for none, or a target without a file system. */
+	public function projectOf(file: String): String {
+		#if (sys || nodejs)
+		final dir: String = Path.directory(file);
+		final document: String = _documentOf[dir] ?? declaringDocument(file);
+		_documentOf[dir] = document;
+		return document;
+		#else
+		return '';
 		#end
 	}
 
@@ -105,14 +116,20 @@ final class ProjectCoverage {
 		return true;
 	}
 
-	/** The nearest document of `file`'s chain that declares `closedWorld` for `thread-safety`; `''` when none does. */
+	/**
+	 * The OUTERMOST document of `file`'s chain that declares `closedWorld` for `thread-safety`, or `resolutionRoots`; `''`
+	 * when none does, or one cannot be read. A nested document restating `closedWorld` closes no project of its own: the
+	 * run must still cover the outer one, whose files may call and write into the inner directory.
+	 */
 	private static function declaringDocument(file: String): String {
+		var found: String = '';
 		for (path in LintConfig.discoverChain(file).chain) {
 			final content: Null<String> = try File.getContent(path) catch (_: Exception) null;
 			if (content == null) return '';
-			if (LintConfig.parse(content, Path.directory(path)).boolOption('thread-safety', 'closedWorld') != null) return path;
+			final config: LintConfig = LintConfig.parse(content, Path.directory(path));
+			if (config.boolOption('thread-safety', 'closedWorld') != null || config.resolutionRoots().length > 0) found = path;
 		}
-		return '';
+		return found;
 	}
 	#end
 
