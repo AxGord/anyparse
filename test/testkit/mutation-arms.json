@@ -17444,7 +17444,7 @@
 			"name": "M-TS-PATH-STABLE-ANY",
 			"type": "anyparse.check.ObjectPaths",
 			"method": "writtenOnlyInConstructor",
-			"find": "!FieldWrites.mayWrite(w, owner) || w.own && ctor != null && w.fn == ctor",
+			"find": "!_writes.mayWrite(w, owner) || w.own && ctor != null && w.fn == ctor",
 			"replace": "true",
 			"note": "a var written outside its constructor counts stable"
 		},
@@ -18414,14 +18414,14 @@
 			"name": "M-TS-LOOP-SUBJECT",
 			"type": "anyparse.check.MainSinkReport",
 			"method": "repeatSubject",
-			"find": "if (loop != null) return loop;",
+			"find": "repetition.loopLabel(edge.file, edge.span?.from ?? -1) ?? ",
 			"replace": "",
 			"note": "a loop's warning is keyed by the call it repeats, which a new call earlier in the loop changes"
 		},
 		{
 			"name": "M-TS-HAND-SUBJECT",
-			"type": "anyparse.check.MainSinkReport",
-			"method": "repeatSubject",
+			"type": "anyparse.check.CallRepetition",
+			"method": "handLabel",
 			"find": "final target: String = edge.kind == Ref ? (edge.via ?? edge.viaMember ?? edge.to) : edge.to;",
 			"replace": "final target: String = edge.to;",
 			"note": "a handed value's warning is keyed by the value, a lambda the file numbers"
@@ -18652,7 +18652,7 @@
 			"name": "M-TS-OPT-SINKS-UNMATCHED",
 			"type": "anyparse.check.ThreadSafety",
 			"method": "listsByFile",
-			"find": "else if (lists.sinkIds.length == 0)",
+			"find": "else if (lists.reports && lists.sinkIds.length == 0)",
 			"replace": "else if (false)",
 			"note": "a sinks list naming no call of the run reads as a working one"
 		},
