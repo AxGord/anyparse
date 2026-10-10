@@ -1966,3 +1966,24 @@ decided the question; it may not become a record of runs.
   (`reports = declared`), and one `info` per run says the set applied with its size. TM: dropping the 22 `sinks`
   entries the builtin covers leaves the json report byte-identical on all three frozen trees — branch
   `feat/ts-precision-4`
+- a hold's taint following invocations only → a lock held across `Lambda.iter(paths, load)`, `load` blocking, was
+  silent (review round 2 `ep1b-iter-in-caller`, base 338efc41 included), and so was every lambda handed on under a
+  hold; the main thread never reached a sink handed on as a value (`Lambda.iter(paths, File.getContent)`). The hold's
+  window now carries the values handed on there (`Ref` edges), and ONE predicate, `ThreadStates.runsHere` — the one
+  `LockTaint.onCycle` used since FIX2 item 12, moved out of it — says which run under the hold, in the window and at
+  every step of the walk (`LockTaint.reach`): a call, or a value the call it is handed to runs there, library or
+  project, a call the graph resolves to nothing included (unknown = runs), never one a `spawns` / `marshals` call runs
+  on another thread or a `registers` call keeps; a value enters its target knowing nothing of its parameters
+  (`EdgeConditions.entered`), and repeats as the call it is handed to repeats it (`CallRepetition.handedOn`, so
+  `Lambda.iter` repeats and a `runsOnce` call does not). A sink handed on as a value blocks wherever it runs
+  (`LockTaint.blocks` asks `ThreadStates.runsFrom`), which is all finding (a) needed: `MainSinkReport` reads every
+  edge `blocks` admits, and the main-thread climb (`MainRepeats.climb`) already followed values handed on — a short
+  sink reached only through `Lambda.iter(paths, one)` was owned by that call before (probe `main-ref-short`). Another
+  object's method handed on is no re-take of the holder's re-entrant lock (`retakesElsewhere`). Two readers of the
+  window keep the calls alone: `HoldGrade.handsOff`, so a value that may give the lock back proves no give and the
+  hold stays handed off (the long answer); `LockOrder` never looks a value's site up. The walk has no bound to hit: it
+  is a memoised breadth-first walk over finitely many states, and `onCycle`'s `CYCLE_WALK` bound — whose answer when
+  hit is "may lead back", the repeating one — was never reached on any of the three TM trees (counted with a traced
+  engine). TM: every score row identical, no warning key new, lost or moved; one info key per tree (B
+  `FileList.reload|FolderWatcher._mutex`, a main-only hold whose long call finding (a) reports); runtime unchanged
+  (15.7 s → 15.8 s, three trees) — branch `feat/ts-precision-4`
