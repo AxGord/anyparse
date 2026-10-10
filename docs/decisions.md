@@ -1932,3 +1932,13 @@ decided the question; it may not become a record of runs.
   declaring `closedWorld` or `resolutionRoots` (`ProjectCoverage.declaringDocument`), and the `closedWorld` notice
   names it (`projectOf`). A scratch config nested in another project's tree now closes the outer project too —
   conservative: such a run is read as open (review round 2 `pc`) — branch `feat/ts-precision-3`
+- config problems said only for a chain that reports (`lists.reports`), and `run` returning before
+  `reportConfigProblems` when no sink matches → a typo or a wrong shape of `sinks` itself (`"sink"`,
+  `"sinks": "Sys.sleep"`, `[{…}]`) or a `sinks` naming no call of the run printed "no issues". A chain writing ANY
+  `thread-safety` option is now scanned (`skipReason` gates only a chain writing none) and every problem of it said;
+  a `sinks` written and lost says "lists no call", one matching nothing says so with its entries, and a run no sink
+  matches still returns its notices; the rule drops its own findings in a file whose chain lists no sinks (`run`),
+  the gate `skipReason` used to be. A chain writing no `sinks` on purpose (one that only shapes the graph) says
+  nothing of it. A mistyped `enabled` / `severity` is a value of the wrong shape, not an unknown option. The old
+  control "a malformed option of a non-reporting chain is silent" is reversed by this decision (review round 2
+  `cfgA`–`cfgE`) — branch `feat/ts-precision-3`

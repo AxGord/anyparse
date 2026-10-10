@@ -136,9 +136,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	 */
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		longLocks = null;
-		if (files.length == 0) return [];
 		// `Linter.collect` hands over every file but an `exclude`d one (`scanSkipReason`), and drops the findings in a
-		// file with no `sinks` of its own afterwards (`skipReason`).
+		// file whose chain writes no option at all (`skipReason`); no file is no sink, answered below.
 		final useFacts: Bool = files.exists(
 			f -> LintConfig.resolveWith(_resolveConfig, f.file).boolOption('thread-safety', 'compilerFacts') == true
 		);
@@ -148,7 +147,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final byFile: Map<String, ChainLists> = listsByFile(files, graph, sets, plugin.refShape().accessorMethodPrefixes ?? [], problems);
 		final sinkIds: Array<String> = [];
 		for (lists in sets) for (id in lists.sinkIds) if (!sinkIds.contains(id)) sinkIds.push(id);
-		if (sinkIds.length == 0) return [];
+		// nothing to find, and what the config lost says why
+		if (sinkIds.length == 0) return reportConfigProblems(problems, []);
 		final listsOf: (String) -> ChainLists = listsOfFile.bind(byFile);
 		final unresolvedNames: Array<String> = [for (u in graph.unresolved) for (n in ReachAdmission.admittedNames(u)) n];
 		final sealedSlots: Array<String> = deriveStoredCalls(graph, unresolvedNames);
@@ -227,7 +227,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		for (v in order.report(states, inertRef, CTX_MAIN | CTX_QUIET, CTX_BG, CHAIN_CAP)) violations.push(v);
 		// after every finding: the counterfactual solves fill taints of their own, which must not shape a report
 		longLocks = explained(sites, judged, long, costs, states, dominance.dominators, { taint: paths.normal, errors: errors });
-		return violations;
+		// a file whose chain lists no sinks is scanned for its config's sake only (`skipReason`): it reports no finding of its own
+		return violations.filter(v -> v.file == '' || listsOf(v.file).reports);
 	}
 
 	public function fix(
@@ -241,9 +242,13 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			+ ' rewrite expresses';
 	}
 
-	/** `needs-config` without a `sinks` list — there is nothing to find — and `config-excluded` for a path under `exclude`. */
+	/**
+	 * `needs-config` for a chain that writes no `thread-safety` option — nothing to find, nothing to report on — and
+	 * `config-excluded` for a path under `exclude`. A chain that writes options but no usable `sinks` is scanned, so what
+	 * its config lost is said (`listsByFile`); it reports no finding of its own (`run`).
+	 */
 	public function skipReason(file: String, config: LintConfig): Null<String> {
-		return (config.stringListOption('thread-safety', 'sinks') ?? []).length == 0 ? 'needs-config' : scanSkipReason(file, config);
+		return config.optionKeys('thread-safety').length == 0 ? 'needs-config' : scanSkipReason(file, config);
 	}
 
 	/**
@@ -315,7 +320,13 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			bySignature[signature] = lists;
 			sets.push(lists);
 			byFile[entry.file] = lists;
-			if (!lists.reports) continue;
+			// a chain that writes any option for the rule is a config to report on, a `sinks` it lost or never wrote included
+			if (!lists.reports && !options.declared) continue;
+			// a `sinks` written and lost; a chain writing none on purpose only shapes the graph for the others
+			if (!lists.reports && options.wrote('sinks'))
+				found.push('option "sinks" lists no call — thread-safety finds nothing under this config');
+			else if (lists.reports && lists.sinkIds.length == 0)
+				found.push('option "sinks" names no call of the run (${option('sinks').join(', ')}) — thread-safety finds nothing here');
 			if (declaredClosed && !closedWorld)
 				found.push(
 					'option "closedWorld" holds only for a run over the whole project it closes — this run leaves part of it out (a'
@@ -658,7 +669,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	}
 
 	/** One `info` finding naming no file per line of `problems` (`listsByFile`): what the options' read left out. */
-	private static function reportConfigProblems(problems: Array<String>, violations: Array<Violation>): Void {
+	private static function reportConfigProblems(problems: Array<String>, violations: Array<Violation>): Array<Violation> {
 		for (p in problems) violations.push({
 			file: '',
 			span: null,
@@ -666,6 +677,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			severity: Severity.Info,
 			message: p
 		});
+		return violations;
 	}
 
 	/**

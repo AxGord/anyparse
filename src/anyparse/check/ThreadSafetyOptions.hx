@@ -59,6 +59,9 @@ final class ThreadSafetyOptions {
 	/** The keys holding `true` or `false`. */
 	public static final FLAG_KEYS: Array<String> = ['closedWorld', 'compilerFacts'];
 
+	/** The keys every rule takes, which the linter reads itself when well-formed (`LintConfig.parseRule`). */
+	private static final LIFTED_KEYS: Array<String> = ['enabled', 'severity'];
+
 	private static inline final BUDGET_KEY: String = 'repeatBudgetMs';
 	private static inline final BOUNDED_KEY: String = 'boundedRepeats';
 
@@ -71,6 +74,12 @@ final class ThreadSafetyOptions {
 	/** The positive `repeatBudgetMs`, or null when unset or dropped. */
 	public final repeatBudgetMs: Null<Float>;
 
+	/** Whether the chain writes any option for the rule at all, well-formed or not: one that does is a config to report on. */
+	public final declared: Bool;
+
+	/** The option keys the chain writes, well-formed or not. */
+	private final _written: Array<String>;
+
 	/** Each LIST key -> its strings; a key absent or dropped holds none. */
 	private final _lists: Map<String, Array<String>> = [];
 
@@ -78,6 +87,8 @@ final class ThreadSafetyOptions {
 	private final _flags: Map<String, Bool> = [];
 
 	private function new(config: LintConfig) {
+		_written = config.optionKeys(RULE);
+		declared = _written.length > 0;
 		repeatBudgetMs = readKeys(config);
 		for (pair in list('lockPairs')) if (pair.lastIndexOf('/') <= 0)
 			problems.push('malformed lockPairs entry "$pair" — expected "<lock pattern>/<unlock member>"');
@@ -87,6 +98,11 @@ final class ThreadSafetyOptions {
 	public function list(key: String): Array<String> {
 		if (!LIST_KEYS.contains(key)) throw new Exception('thread-safety: "$key" is no list option');
 		return _lists[key] ?? [];
+	}
+
+	/** Whether the chain writes the option `key`, whatever its shape. */
+	public inline function wrote(key: String): Bool {
+		return _written.contains(key);
 	}
 
 	/** The FLAG option `key` (`FLAG_KEYS`); false when it is absent or was dropped. */
@@ -118,6 +134,9 @@ final class ThreadSafetyOptions {
 				budget = readBudget(value);
 			else if (key == BOUNDED_KEY)
 				readBounded(value);
+			else if (LIFTED_KEYS.contains(key))
+				// the linter lifts a well-formed one out before the rule reads its options: what is left is of another shape
+				problems.push('option "$key" is not ${key == 'enabled' ? 'true or false' : 'a severity name'} — ignored');
 			else
 				problems.push(unknownKey(key));
 		}

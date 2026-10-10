@@ -134,7 +134,8 @@ class ThreadSafetyCheckTest extends Test {
 	public function testSkipParseNoCrash(): Void {
 		#if (sys || nodejs)
 		final vs: Array<Violation> = violations('{"rules":{"thread-safety":{"sinks":["Sys.sleep"]}}}', ['class A { function broken( { ']);
-		Assert.equals(0, vs.length);
+		// the one notice says no call of the run is a sink: the file did not parse
+		Assert.equals(0, vs.filter(v -> v.file != '').length);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -612,7 +613,8 @@ class ThreadSafetyCheckTest extends Test {
 		final vs: Array<Violation> = violations(
 			'{"rules":{"thread-safety":{"sinks":["Sys.sleep"]}}}', ['class A { macro public static function gen():Void Sys.sleep(1); }']
 		);
-		Assert.equals(0, vs.length);
+		// the one notice says no call of the run is a sink: a macro's body runs at compile time
+		Assert.equals(0, vs.filter(v -> v.file != '').length);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -692,7 +694,9 @@ class ThreadSafetyCheckTest extends Test {
 		#end
 	}
 
-	/** A file whose chain names no sinks is scanned for the graph and never reported in — `skipReason` is the report gate. */
+	/**
+	 * A file whose chain names no sinks is scanned for the graph and never reported in: the rule drops its own findings there (`ThreadSafety.run`), and `skipReason` keeps a chain writing no option out.
+	 */
 	@:pin('control') @:killer('M-TS-REPORT-UNGATED')
 	public function testNoFindingInAFileWhoseChainNamesNoSinks(): Void {
 		#if (sys || nodejs)
@@ -713,9 +717,11 @@ class ThreadSafetyCheckTest extends Test {
 		#end
 	}
 
-	/** A malformed `lockPairs` entry of a chain that names no sinks is not reported: that chain reports nothing at all. */
+	/**
+	 * A malformed `lockPairs` entry of a chain that names no sinks is said too: a chain writing any option is a config to report on (review round 2 `cfgA`–`cfgE`).
+	 */
 	@:pin('control') @:killer('M-TS-MALFORMED-UNGATED')
-	public function testAMalformedOptionOfANonReportingChainIsSilent(): Void {
+	public function testAMalformedOptionOfANonReportingChainIsSaid(): Void {
 		#if (sys || nodejs)
 		final tree: Array<{ name: String, source: String }> = [
 			{ name: 'x/apqlint.json', source: '{"inherit":false,"rules":{"thread-safety":{"sinks":["Sys.sleep"],"lockPairs":["bad2"]}}}' },
@@ -723,11 +729,10 @@ class ThreadSafetyCheckTest extends Test {
 			{ name: 'x/X.hx', source: 'class X { public static function work():Void { Sys.sleep(1); } }' },
 			{ name: 'y/Y.hx', source: 'class Y { static function main():Void { X.work(); } }' }
 		];
-		for (order in [['x/X.hx', 'y/Y.hx'], ['y/Y.hx', 'x/X.hx']])
-			Assert.same(
-				[': malformed lockPairs entry "bad2" — expected "<lock pattern>/<unlock member>"'],
-				chainFindings(tree, order).filter(f -> f.indexOf('malformed') != -1)
-			);
+		for (order in [['x/X.hx', 'y/Y.hx'], ['y/Y.hx', 'x/X.hx']]) Assert.same([
+			': malformed lockPairs entry "bad" — expected "<lock pattern>/<unlock member>"',
+			': malformed lockPairs entry "bad2" — expected "<lock pattern>/<unlock member>"'
+		], chainFindings(tree, order).filter(f -> f.indexOf('malformed') != -1));
 		#else
 		Assert.pass('non-sys target');
 		#end

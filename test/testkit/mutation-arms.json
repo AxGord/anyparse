@@ -10539,11 +10539,11 @@
 		},
 		{
 			"name": "M-TS-REPORT-UNGATED",
-			"type": "anyparse.check.Linter",
-			"method": "runGated",
-			"find": "if (!(check is GraphScoped)) return found;",
-			"replace": "return found;",
-			"note": "a graph-scoped rule reports in a file whose own config refuses it"
+			"type": "anyparse.check.ThreadSafety",
+			"method": "run",
+			"find": "return violations.filter(v -> v.file == '' || listsOf(v.file).reports);",
+			"replace": "return violations;",
+			"note": "a file whose chain lists no sinks reports findings of its own"
 		},
 		{
 			"name": "M-ANON-FIRST-FILE-CONFIG",
@@ -10597,9 +10597,9 @@
 			"name": "M-TS-MALFORMED-UNGATED",
 			"type": "anyparse.check.ThreadSafety",
 			"method": "listsByFile",
-			"find": "if (!lists.reports) continue;",
-			"replace": "",
-			"note": "a malformed option of a chain that reports nothing is reported"
+			"find": "if (!lists.reports && !options.declared) continue;",
+			"replace": "if (!lists.reports) continue;",
+			"note": "a malformed option of a chain that lists no sinks is not said"
 		},
 		{
 			"name": "M-PARSE-MEMO-REPLAY-OFF",
@@ -18647,6 +18647,38 @@
 			"find": "found = path;",
 			"replace": "if (found == \"\") found = path;",
 			"note": "the nearest document declaring closedWorld is the project, so a nested restatement covers its own directory"
+		},
+		{
+			"name": "M-TS-OPT-SINKS-UNMATCHED",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "listsByFile",
+			"find": "else if (lists.sinkIds.length == 0)",
+			"replace": "else if (false)",
+			"note": "a sinks list naming no call of the run reads as a working one"
+		},
+		{
+			"name": "M-TS-OPT-SKIP-DECLARED",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "skipReason",
+			"find": "config.optionKeys('thread-safety').length == 0",
+			"replace": "(config.stringListOption('thread-safety', 'sinks') ?? []).length == 0",
+			"note": "a chain with no usable sinks is not scanned, so what its config lost is never said"
+		},
+		{
+			"name": "M-TS-OPT-NO-SINK-NOTICES",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "run",
+			"find": "if (sinkIds.length == 0) return reportConfigProblems(problems, []);",
+			"replace": "if (sinkIds.length == 0) return [];",
+			"note": "a run no sink matches returns before its config problems are said"
+		},
+		{
+			"name": "M-TS-OPT-LIFTED",
+			"type": "anyparse.check.ThreadSafetyOptions",
+			"method": "readKeys",
+			"find": "else if (LIFTED_KEYS.contains(key))",
+			"replace": "else if (false)",
+			"note": "a mistyped enabled reads as an unknown option"
 		},
 		{
 			"name": "M-TS-BLIND-START",

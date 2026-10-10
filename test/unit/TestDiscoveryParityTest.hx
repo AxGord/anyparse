@@ -2087,7 +2087,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyCheckTest#testALockOrderInversionAcrossThreadsIsReported :: control :: M-TS-ORDER-ANCHOR-AT-TAKE',
 			'unit.check.ThreadSafetyCheckTest#testALockTakenInALoopIsHeldOnTheNextPass :: control :: M-TS-LOOP-ONE-PASS',
 			'unit.check.ThreadSafetyCheckTest#testAMainThreadCallSiteIsOneFinding :: control :: M-TS-SITE-PER-TARGET',
-			'unit.check.ThreadSafetyCheckTest#testAMalformedOptionOfANonReportingChainIsSilent :: control :: M-TS-MALFORMED-UNGATED',
+			'unit.check.ThreadSafetyCheckTest#testAMalformedOptionOfANonReportingChainIsSaid :: control :: M-TS-MALFORMED-UNGATED',
 			'unit.check.ThreadSafetyCheckTest#testAPathThroughAQuietRootIsNotReported :: control :: M-TS-QUIET-IGNORED',
 			'unit.check.ThreadSafetyCheckTest#testAQuietRootALoudCallerCallsIsLoud :: control :: M-TS-QUIET-LOUD-CALLER',
 			'unit.check.ThreadSafetyCheckTest#testARaisingCallAheadOfTheTakeInItsStepIsQuiet :: control :: M-TS-THROW-BEFORE-TAKE',
@@ -2291,6 +2291,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyMainStatesTest#testALiteralArgumentDecidesAFinalLocalCondition :: control :: '
 				+ 'M-TS-COND-FINAL-LOCAL,M-TS-ARG-LITERAL-NONNULL,M-TS-ARG-FINAL-LOCAL-READ',
 			'unit.check.ThreadSafetyMainStatesTest#testTheOwnerIsOnAWayThatRunsTheCall :: control :: M-TS-STATES-OWNER-IGNORED',
+			'unit.check.ThreadSafetyOptionsTest#testALostSinksListIsSaid :: control :: M-TS-MALFORMED-UNGATED,M-TS-OPT-SINKS-UNMATCHED,M-TS-OPT-SKIP-DECLARED,M-TS-OPT-NO-SINK-NOTICES,M-TS-OPT-LIFTED',
 			'unit.check.ThreadSafetyOptionsTest#testEveryMalformedOptionIsSaid :: control :: '
 				+ 'M-TS-OPT-UNKNOWN,M-TS-OPT-LIST-SHAPE,M-TS-OPT-LIST-ITEM,M-TS-OPT-FLAG,M-TS-OPT-BUDGET,M-TS-OPT-BOUNDED-ENTRY,M-TS-OPT-BOUNDED-SITE',
 			'unit.check.ThreadSafetyOwnReasonsTest#testABriefUnresolvedCallOnceLeavesTheLockShort :: control :: '
@@ -6279,6 +6280,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-PATH-REFLECT',
 			'M-TS-COVER-PARSED',
 			'M-TS-COVER-OUTERMOST',
+			'M-TS-OPT-SINKS-UNMATCHED',
+			'M-TS-OPT-SKIP-DECLARED',
+			'M-TS-OPT-NO-SINK-NOTICES',
+			'M-TS-OPT-LIFTED',
 			'M-TS-BLIND-START',
 			'M-TS-DOM-OWNERLESS',
 			'M-TS-DOM-SHARED',
