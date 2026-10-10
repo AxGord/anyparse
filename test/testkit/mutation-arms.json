@@ -10594,14 +10594,6 @@
 			"note": "a clone whose later copy sits in a disabled file is reported nowhere"
 		},
 		{
-			"name": "M-TS-MALFORMED-UNGATED",
-			"type": "anyparse.check.ThreadSafety",
-			"method": "listsByFile",
-			"find": "if (!lists.reports && !options.declared) continue;",
-			"replace": "if (!lists.reports) continue;",
-			"note": "a malformed option of a chain that lists no sinks is not said"
-		},
-		{
 			"name": "M-PARSE-MEMO-REPLAY-OFF",
 			"type": "anyparse.runtime.Parser",
 			"method": "memoReplay",
@@ -18652,7 +18644,7 @@
 			"name": "M-TS-OPT-SINKS-UNMATCHED",
 			"type": "anyparse.check.ThreadSafety",
 			"method": "listsByFile",
-			"find": "else if (lists.reports && lists.sinkIds.length == 0)",
+			"find": "else if (option('sinks').length > 0 && configured.length == 0)",
 			"replace": "else if (false)",
 			"note": "a sinks list naming no call of the run reads as a working one"
 		},
@@ -18855,6 +18847,134 @@
 			"find": "return repeatsAlong(a, trail) || trail.path.exists(onCycle);",
 			"replace": "return repeatsAlong(a, trail);",
 			"note": "a call reached through a function a cycle of calls re-enters counts as once when the trail found it once"
+		},
+		{
+			"name": "M-TS-BUILTIN-NEEDS-SINKS",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "chainLists",
+			"find": "reports: options.declared,",
+			"replace": "reports: option('sinks').length > 0,",
+			"note": "a chain writing no sinks of its own reports nothing, though the builtin sinks apply wherever the rule runs"
+		},
+		{
+			"name": "M-TS-BUILTIN-OFF",
+			"type": "anyparse.check.PositiveSinks",
+			"method": "new",
+			"find": "for (p in calls) for (id in graph.matchIds(p)) if (graph.node(id)?.isExternal == true && !ids.contains(id)) ids.push(id);",
+			"replace": "",
+			"note": "the runtime library's blocking calls block only where a project lists them"
+		},
+		{
+			"name": "M-TS-BUILTIN-ANY-NODE",
+			"type": "anyparse.check.PositiveSinks",
+			"method": "new",
+			"find": "if (graph.node(id)?.isExternal == true && !ids.contains(id))",
+			"replace": "if (!ids.contains(id))",
+			"note": "a project function named like a blocking library call is a sink, its body unread"
+		},
+		{
+			"name": "M-TS-WAIVE-OFF",
+			"type": "anyparse.check.PositiveSinks",
+			"method": "waived",
+			"find": "for (id in hit) if (!out.contains(id)) out.push(id);",
+			"replace": "",
+			"note": "a nonBlocking entry waives nothing"
+		},
+		{
+			"name": "M-TS-WAIVE-SAYS-NOTHING",
+			"type": "anyparse.check.PositiveSinks",
+			"method": "waived",
+			"find": "if (hit.length == 0) found.push(",
+			"replace": "if (false) found.push(",
+			"note": "a nonBlocking entry waiving nothing reads as one that works"
+		},
+		{
+			"name": "M-TS-WAIVE-SINKS-WIN",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "chainLists",
+			"find": "final sinkIds: Array<String> = configured.copy();",
+			"replace": "final sinkIds: Array<String> = [for (id in configured) if (!waived.contains(id)) id];",
+			"note": "a nonBlocking entry waives a call the project's own sinks list"
+		},
+		{
+			"name": "M-TS-OPT-NONBLOCKING-EVIDENCE",
+			"type": "anyparse.check.ThreadSafetyOptions",
+			"method": "new",
+			"find": "if (cut > 0)",
+			"replace": "if (cut != 0)",
+			"note": "a nonBlocking entry giving no evidence is kept as a waiver of nothing, without a word"
+		},
+		{
+			"name": "M-TS-NATIVE-EXTERN",
+			"type": "anyparse.check.ProjectNatives",
+			"method": "declaredNative",
+			"find": "if (node.isBodyless && _graph.types.meta.isExtern(type)) return true;",
+			"replace": "",
+			"note": "a body-less member of a project extern runs no native code"
+		},
+		{
+			"name": "M-TS-NATIVE-EXTERN-ANY-BODYLESS",
+			"type": "anyparse.check.ProjectNatives",
+			"method": "declaredNative",
+			"find": "if (node.isBodyless && _graph.types.meta.isExtern(type))",
+			"replace": "if (node.isBodyless)",
+			"note": "an interface member, which only dispatches, counts as native"
+		},
+		{
+			"name": "M-TS-NATIVE-META",
+			"type": "anyparse.check.ProjectNatives",
+			"method": "declaredNative",
+			"find": "if (leading != null && leading.exists(m -> metaNames.contains(m.name ?? ''))) return true;",
+			"replace": "",
+			"note": "a @:native member runs its Haxe stub, not the symbol it names"
+		},
+		{
+			"name": "M-TS-NATIVE-LOADER",
+			"type": "anyparse.check.ProjectNatives",
+			"method": "new",
+			"find": "if (loaders.length > 0) for (held in graph.heldFiles()) collectLoaded(held.tree, null, loaders);",
+			"replace": "",
+			"note": "a member a native loader initialised is called as an unknown value"
+		},
+		{
+			"name": "M-TS-NATIVE-AFFIX",
+			"type": "anyparse.check.ProjectNatives",
+			"method": "siteNative",
+			"find": "if (affix != null && head.length > affix.length * 2 && head.startsWith(affix) && head.endsWith(affix))",
+			"replace": "if (false)",
+			"note": "untyped __cpp__ and __global__ calls run nothing"
+		},
+		{
+			"name": "M-TS-NATIVE-CALLEE-SPAN",
+			"type": "anyparse.check.ProjectNatives",
+			"method": "callAt",
+			"find": "else if (parent != null && parent.kind == _shape.callKind && parent.children[0] == node)",
+			"replace": "else if (false)",
+			"note": "an unresolved site recorded at its bare callee's span is no call"
+		},
+		{
+			"name": "M-TS-NATIVE-CODE-CALLS",
+			"type": "anyparse.check.ProjectNatives",
+			"method": "new",
+			"find": "for (p in execution.nativeCodeCalls ?? []) for (id in graph.matchIds(p)) if (graph.node(id)?.isExternal == true) push(id);",
+			"replace": "",
+			"note": "cpp.Syntax.code is a library call, not the project's native code"
+		},
+		{
+			"name": "M-TS-NATIVE-LOADED-MEMBER",
+			"type": "anyparse.check.ProjectNatives",
+			"method": "new",
+			"find": "if (e.kind == Call && graph.node(e.to)?.isExternal == true) siteNative(e.file, e.span, e.from, null, e.spliced);",
+			"replace": "{}",
+			"note": "a loaded native called through its value's member (cpp.Callable.call) runs library code"
+		},
+		{
+			"name": "M-TS-BUILTIN-NOTICE-OFF",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "listsByFile",
+			"find": "if (sets.exists(s -> s.reports))",
+			"replace": "if (false)",
+			"note": "a run never says which builtin sinks it applied"
 		}
 	]
 }

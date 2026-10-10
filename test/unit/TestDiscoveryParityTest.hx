@@ -400,6 +400,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.ThreadSafetyMainStatesTest',
 		'unit.check.ThreadSafetyOptionsTest',
 		'unit.check.ThreadSafetyOwnReasonsTest',
+		'unit.check.ThreadSafetyPositiveSinksTest',
 		'unit.check.ThreadSafetyQuietLocksTest',
 		'unit.check.ThreadSafetyRegistersTest',
 		'unit.check.ThreadSafetyRepetitionTest',
@@ -2087,7 +2088,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyCheckTest#testALockOrderInversionAcrossThreadsIsReported :: control :: M-TS-ORDER-ANCHOR-AT-TAKE',
 			'unit.check.ThreadSafetyCheckTest#testALockTakenInALoopIsHeldOnTheNextPass :: control :: M-TS-LOOP-ONE-PASS',
 			'unit.check.ThreadSafetyCheckTest#testAMainThreadCallSiteIsOneFinding :: control :: M-TS-SITE-PER-TARGET',
-			'unit.check.ThreadSafetyCheckTest#testAMalformedOptionOfANonReportingChainIsSaid :: control :: M-TS-MALFORMED-UNGATED',
+			'unit.check.ThreadSafetyCheckTest#testAMalformedOptionOfANonReportingChainIsSaid :: control :: M-TS-BUILTIN-NEEDS-SINKS',
 			'unit.check.ThreadSafetyCheckTest#testAPathThroughAQuietRootIsNotReported :: control :: M-TS-QUIET-IGNORED',
 			'unit.check.ThreadSafetyCheckTest#testAQuietRootALoudCallerCallsIsLoud :: control :: M-TS-QUIET-LOUD-CALLER',
 			'unit.check.ThreadSafetyCheckTest#testARaisingCallAheadOfTheTakeInItsStepIsQuiet :: control :: M-TS-THROW-BEFORE-TAKE',
@@ -2124,7 +2125,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyCheckTest#testAnotherPathToAQuietSinkStillReports :: control :: M-TS-QUIET-SWALLOWS',
 			'unit.check.ThreadSafetyCheckTest#testEachCallSiteJudgedByItsOwnChain :: control :: M-TS-FIRST-FILE-LISTS',
 			'unit.check.ThreadSafetyCheckTest#testLockHeldAcrossABlockingGetterFlagged :: control :: M-TS-ACCESSOR-TAINT',
-			'unit.check.ThreadSafetyCheckTest#testNoFindingInAFileWhoseChainNamesNoSinks :: control :: M-TS-REPORT-UNGATED',
+			'unit.check.ThreadSafetyCheckTest#testNoFindingInAFileWhoseChainWritesNoOption :: control :: M-TS-REPORT-UNGATED',
 			'unit.check.ThreadSafetyCheckTest#testOneLockOrderOnEveryThreadIsQuiet :: control :: M-TS-ORDER-RETAKE-STEPS',
 			'unit.check.ThreadSafetyCheckTest#testShadowedTypeParameterKeepsTheFieldsBound :: control :: M-GRAPH-BOUND-DECL-SCOPE',
 			'unit.check.ThreadSafetyCheckTest#testTwoTakesHeldAtOneThrowAreOneFinding :: control :: M-TS-THROW-PER-TAKE',
@@ -2291,7 +2292,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyMainStatesTest#testALiteralArgumentDecidesAFinalLocalCondition :: control :: '
 				+ 'M-TS-COND-FINAL-LOCAL,M-TS-ARG-LITERAL-NONNULL,M-TS-ARG-FINAL-LOCAL-READ',
 			'unit.check.ThreadSafetyMainStatesTest#testTheOwnerIsOnAWayThatRunsTheCall :: control :: M-TS-STATES-OWNER-IGNORED',
-			'unit.check.ThreadSafetyOptionsTest#testALostSinksListIsSaid :: control :: M-TS-MALFORMED-UNGATED,M-TS-OPT-SINKS-UNMATCHED,M-TS-OPT-SKIP-DECLARED,M-TS-OPT-NO-SINK-NOTICES,M-TS-OPT-LIFTED',
+			'unit.check.ThreadSafetyOptionsTest#testALostSinksListIsSaid :: control :: M-TS-OPT-SINKS-UNMATCHED,M-TS-OPT-SKIP-DECLARED,M-TS-OPT-NO-SINK-NOTICES,M-TS-OPT-LIFTED',
 			'unit.check.ThreadSafetyOptionsTest#testEveryMalformedOptionIsSaid :: control :: '
 				+ 'M-TS-OPT-UNKNOWN,M-TS-OPT-LIST-SHAPE,M-TS-OPT-LIST-ITEM,M-TS-OPT-FLAG,M-TS-OPT-BUDGET,M-TS-OPT-BOUNDED-ENTRY,M-TS-OPT-BOUNDED-SITE',
 			'unit.check.ThreadSafetyOwnReasonsTest#testABriefUnresolvedCallOnceLeavesTheLockShort :: control :: '
@@ -2300,6 +2301,14 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyOwnReasonsTest#testAHoldItsFunctionNeverGivesBackIsLong :: control :: M-TS-HANDOFF-OFF,M-TS-HANDOFF-GIVES',
 			'unit.check.ThreadSafetyOwnReasonsTest#testARepeatedOrUnknownUnresolvedCallKeepsTheLockLong :: control :: M-TS-DOM-BRIEF-REPEATED',
 			'unit.check.ThreadSafetyOwnReasonsTest#testAnUnresolvedCallInACatchIsAnErrorPath :: control :: M-TS-BLIND-CATCH-OFF',
+			'unit.check.ThreadSafetyPositiveSinksTest#testNonBlockingWaivesOnEvidence :: control :: '
+				+ 'M-TS-WAIVE-OFF,M-TS-WAIVE-SAYS-NOTHING,M-TS-WAIVE-SINKS-WIN,M-TS-OPT-NONBLOCKING-EVIDENCE',
+			'unit.check.ThreadSafetyPositiveSinksTest#testProjectNativesBlock :: control :: '
+				+ 'M-TS-NATIVE-EXTERN,M-TS-NATIVE-EXTERN-ANY-BODYLESS,M-TS-NATIVE-META,M-TS-NATIVE-LOADER,M-TS-NATIVE-AFFIX,'
+				+ 'M-TS-NATIVE-CALLEE-SPAN,M-TS-NATIVE-CODE-CALLS,M-TS-NATIVE-LOADED-MEMBER',
+			'unit.check.ThreadSafetyPositiveSinksTest#testTheBuiltinAppliesWithNoSinks :: control :: '
+				+ 'M-TS-BUILTIN-NEEDS-SINKS,M-TS-BUILTIN-OFF,M-TS-BUILTIN-ANY-NODE',
+			'unit.check.ThreadSafetyPositiveSinksTest#testTheRunSaysWhichBuiltinsApplied :: control :: M-TS-BUILTIN-NOTICE-OFF',
 			'unit.check.ThreadSafetyQuietLocksTest#testAConstructorsOwnTakeNeverWaits :: control :: M-TS-CTOR-TAKE',
 			'unit.check.ThreadSafetyQuietLocksTest#testALockOnlyTakenSharedNeverWaits :: control :: M-TS-SHARED-OFF,M-TS-SHARED-HOLD',
 			'unit.check.ThreadSafetyQuietLocksTest#testAnExclusiveTakeMakesTheSharedOnesWait :: control :: M-TS-SHARED-ANY',
@@ -5266,7 +5275,6 @@ class TestDiscoveryParityTest extends Test {
 			'M-VERSION-LIFTED-BY-RULE',
 			'M-ANON-ANCHOR-UNGATED',
 			'M-DUP-ANCHOR-UNGATED',
-			'M-TS-MALFORMED-UNGATED',
 			'M-PARSE-MEMO-REPLAY-OFF',
 			'M-PARSE-MEMO-STASHED-SKIP',
 			'M-COLLAPSE-REWRITE-MEMO-OFF',
@@ -6305,7 +6313,23 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-CYCLE-REGISTERED',
 			'M-TS-FOLD-NEST-LOCK',
 			'M-TS-REPEATED-BY-HEADER',
-			'M-TS-FOLD-SITE-CYCLE'
+			'M-TS-FOLD-SITE-CYCLE',
+			'M-TS-BUILTIN-NEEDS-SINKS',
+			'M-TS-BUILTIN-OFF',
+			'M-TS-BUILTIN-ANY-NODE',
+			'M-TS-WAIVE-OFF',
+			'M-TS-WAIVE-SAYS-NOTHING',
+			'M-TS-WAIVE-SINKS-WIN',
+			'M-TS-OPT-NONBLOCKING-EVIDENCE',
+			'M-TS-NATIVE-EXTERN',
+			'M-TS-NATIVE-EXTERN-ANY-BODYLESS',
+			'M-TS-NATIVE-META',
+			'M-TS-NATIVE-LOADER',
+			'M-TS-NATIVE-AFFIX',
+			'M-TS-NATIVE-CALLEE-SPAN',
+			'M-TS-NATIVE-CODE-CALLS',
+			'M-TS-NATIVE-LOADED-MEMBER',
+			'M-TS-BUILTIN-NOTICE-OFF'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

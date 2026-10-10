@@ -131,7 +131,9 @@ class ThreadSafetyRepetitionTest extends Test {
 		final found: Array<Violation> = run(
 			'static function onItem(e:String):Void Db.request(e);'
 			+ ' public static function main():Void { final d:Hub = new Hub(); d.addEventListener("item", onItem); }',
-			'extern class Hub { public function new(); public function addEventListener(t:String, l:String->Void):Void; }'
+			'extern class Hub { public function new(); public function addEventListener(t:String, l:String->Void):Void; }',
+			// the extern stands for a library dispatcher, which a project native would not be
+			'"nonBlocking":["Hub.new a stand-in for a library class","Hub.addEventListener keeps the listener and runs nothing"],'
 		);
 		Assert.same(['info A M.onItem | Db.request'], graded(found));
 		Assert.isTrue(found.exists(v -> v.message.indexOf('once per event of a registration (`registers`)') >= 0));

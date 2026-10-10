@@ -20,9 +20,13 @@ typedef ChainLists = {
 
 	final repeatBudgetMs: Null<Float>;
 
-	/** Whether the chain names any `sinks` — a chain that names none is read for the graph and reports nothing. */
+	/**
+	 * Whether the chain writes any option for the rule — the builtin sinks apply wherever
+	 * it runs; a chain that writes none is read for the graph and reports nothing.
+	 */
 	final reports: Bool;
 
+	/** The blocking calls: the `sinks` entries, and the builtin sinks and project natives no `nonBlocking` entry waives. */
 	final sinkIds: Array<String>;
 
 	/** The sinks whose one call is short (`shortSinks`): long only where it repeats (`CallRepetition`). */

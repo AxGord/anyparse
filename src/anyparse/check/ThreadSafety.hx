@@ -46,8 +46,10 @@ using StringTools;
  * always long; a hold in the owner's constructor before the object escapes blocks no one. Holding a long lock is itself
  * blocking, so the locks and the taint are solved together (`solveLongLocks`).
  *
- * Configured per project in `apqlint.json` under `"thread-safety"` (inert without `sinks`), read
- * and checked by `ThreadSafetyOptions`, which says every option it drops: `sinks`, `spawns`,
+ * Configured per project in `apqlint.json` under `"thread-safety"` (inert without any option), read and checked by
+ * `ThreadSafetyOptions`, which says every option it drops. The sinks are POSITIVE: the grammar's blocking library calls
+ * (`ExecutionShape.blockingLibraryCalls`) and the project's natives (`ProjectNatives`) apply wherever the rule runs,
+ * `sinks` adds to them and `nonBlocking` waives one on evidence, a run saying once which applied; `sinks`, `spawns`,
  * `marshals` and `throwers` (`ThrowReach`) are call patterns, matched by their last two dot-segments (`Type.*` covers a
  * type); a `lockPairs` entry is `<lock pattern>/<unlock member name>`, and a lock WRAPPER's call takes or gives its
  * lock with no entry of its own; `quietRoots` are handlers that block on purpose — the main thread
@@ -144,7 +146,11 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final graph: CallGraph = ThreadGraph.build(files, plugin, useFacts);
 		final sets: Array<ChainLists> = [];
 		final problems: Array<String> = [];
-		final byFile: Map<String, ChainLists> = listsByFile(files, graph, sets, plugin.refShape().accessorMethodPrefixes ?? [], problems);
+		// the project's natives first: their call sites gain the edges every list is then resolved over
+		final natives: ProjectNatives = new ProjectNatives(graph, plugin);
+		final byFile: Map<String, ChainLists> = listsByFile(
+			files, graph, sets, new PositiveSinks(graph, plugin, natives), plugin.refShape().accessorMethodPrefixes ?? [], problems
+		);
 		final sinkIds: Array<String> = [];
 		for (lists in sets) for (id in lists.sinkIds) if (!sinkIds.contains(id)) sinkIds.push(id);
 		// nothing to find, and what the config lost says why
@@ -227,7 +233,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		for (v in order.report(states, inertRef, CTX_MAIN | CTX_QUIET, CTX_BG, CHAIN_CAP)) violations.push(v);
 		// after every finding: the counterfactual solves fill taints of their own, which must not shape a report
 		longLocks = explained(sites, judged, long, costs, states, dominance.dominators, { taint: paths.normal, errors: errors });
-		// a file whose chain lists no sinks is scanned for its config's sake only (`skipReason`): it reports no finding of its own
+		// a file whose chain writes no option is scanned for the graph's sake only: it reports no finding of its own
 		return violations.filter(v -> v.file == '' || listsOf(v.file).reports);
 	}
 
@@ -244,8 +250,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 
 	/**
 	 * `needs-config` for a chain that writes no `thread-safety` option — nothing to find, nothing to report on — and
-	 * `config-excluded` for a path under `exclude`. A chain that writes options but no usable `sinks` is scanned, so what
-	 * its config lost is said (`listsByFile`); it reports no finding of its own (`run`).
+	 * `config-excluded` for a path under `exclude`. A chain that writes any option is scanned
+	 * and reports, the builtin sinks applying with no `sinks` of its own (`listsByFile`).
 	 */
 	public function skipReason(file: String, config: LintConfig): Null<String> {
 		return config.optionKeys('thread-safety').length == 0 ? 'needs-config' : scanSkipReason(file, config);
@@ -293,8 +299,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	 * part of it sees neither every caller nor every write, and reads the chain as open — said in `problems`.
 	 */
 	private function listsByFile(
-		files: Array<{ file: String, source: String }>, graph: CallGraph, sets: Array<ChainLists>, accessorPrefixes: Array<String>,
-		problems: Array<String>
+		files: Array<{ file: String, source: String }>, graph: CallGraph, sets: Array<ChainLists>, positive: PositiveSinks,
+		accessorPrefixes: Array<String>, problems: Array<String>
 	): Map<String, ChainLists> {
 		final bySignature: Map<String, ChainLists> = [];
 		final byFile: Map<String, ChainLists> = [];
@@ -316,17 +322,19 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 				continue;
 			}
 			final found: Array<String> = options.problems.copy();
-			final lists: ChainLists = chainLists(options, graph, accessorPrefixes, closedWorld, found);
+			final configured: Array<String> = matchAll(graph, option('sinks'));
+			final lists: ChainLists = chainLists(options, graph, positive, configured, accessorPrefixes, closedWorld, found);
 			bySignature[signature] = lists;
 			sets.push(lists);
 			byFile[entry.file] = lists;
-			// a chain that writes any option for the rule is a config to report on, a `sinks` it lost or never wrote included
-			if (!lists.reports && !options.declared) continue;
-			// a `sinks` written and lost; a chain writing none on purpose only shapes the graph for the others
-			if (!lists.reports && options.wrote('sinks'))
-				found.push('option "sinks" lists no call — thread-safety finds nothing under this config');
-			else if (lists.reports && lists.sinkIds.length == 0)
-				found.push('option "sinks" names no call of the run (${option('sinks').join(', ')}) — thread-safety finds nothing here');
+			// a chain that writes any option for the rule reports — the builtin sinks apply wherever it runs — and is a
+			// config to report on; one writing none only shapes the graph for the others
+			if (!lists.reports) continue;
+			// a `sinks` written and lost, or naming nothing the run calls: the builtin sinks alone are left
+			if (options.wrote('sinks') && option('sinks').length == 0)
+				found.push('option "sinks" lists no call — only the builtin sinks apply under this config');
+			else if (option('sinks').length > 0 && configured.length == 0)
+				found.push('option "sinks" names no call of the run (${option('sinks').join(', ')}) — only the builtin sinks apply here');
 			if (declaredClosed && !closedWorld)
 				found.push(
 					'option "closedWorld" holds only for a run over the whole project it closes — this run leaves part of it out (a'
@@ -337,6 +345,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			if (!factsAsked.contains(facts)) factsAsked.push(facts);
 			for (p in found) if (!problems.contains(p)) problems.push(p);
 		}
+		if (sets.exists(s -> s.reports)) problems.push(positive.notice());
 		// one graph serves every chain, so the facts one chain asks for (`run`'s `useFacts`) build it for all of them
 		if (factsAsked.length > 1)
 			problems.push(
@@ -350,7 +359,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	 * `boundedRepeats` entry matching no function lands in `found`.
 	 */
 	private static function chainLists(
-		options: ThreadSafetyOptions, graph: CallGraph, accessorPrefixes: Array<String>, closedWorld: Bool, found: Array<String>
+		options: ThreadSafetyOptions, graph: CallGraph, positive: PositiveSinks, configured: Array<String>,
+		accessorPrefixes: Array<String>, closedWorld: Bool, found: Array<String>
 	): ChainLists {
 		final option: (String) -> Array<String> = options.list;
 		final shortSinks: Array<String> = option('shortSinks');
@@ -361,12 +371,14 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final neverInvokes: Array<String> = option('neverInvokes');
 		final mainChecks: Array<String> = option('mainThreadChecks');
 		final lockPairs: Array<String> = option('lockPairs');
-		final sinks: Array<String> = option('sinks');
+		final waived: Array<String> = positive.waived(options, graph, configured, found);
+		final sinkIds: Array<String> = configured.copy();
+		for (id in positive.builtin.concat(positive.natives)) if (!waived.contains(id) && !sinkIds.contains(id)) sinkIds.push(id);
 		return {
-			reports: sinks.length > 0,
+			reports: options.declared,
 			bounded: BoundedRepeats.entries(options.boundedRepeats, graph, found),
 			repeatBudgetMs: options.repeatBudgetMs,
-			sinkIds: matchAll(graph, sinks),
+			sinkIds: sinkIds,
 			shortSinkIds: matchAll(graph, shortSinks),
 			shortNames: [for (p in shortSinks) if (p.indexOf('.') < 0) p],
 			iterateIds: matchAll(graph, iterates),
@@ -616,23 +628,11 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	private static function plainMember(graph: CallGraph, plugin: GrammarPlugin, d: FnDeclaration): Bool {
 		final tree: Null<QueryNode> = graph.treeOf(d.file);
 		if (tree == null) return false;
-		final host: Null<{ parent: QueryNode, member: QueryNode }> = memberAt(tree, d.span);
-		if (host == null) return false;
 		final shape: RefShape = plugin.refShape();
 		final kinds: Array<String> = (shape.modifierKinds ?? []).concat(plugin.metaShape().metaKinds);
-		final leading: Array<QueryNode> = MemberKinds.precedingModifiers(host.member, host.parent, kinds);
+		final leading: Null<Array<QueryNode>> = MemberKinds.precedingAt(tree, d.span, kinds);
+		if (leading == null) return false;
 		return !leading.exists(m -> m.kind == shape.overrideModifierKind || plugin.metaShape().metaKinds.contains(m.kind));
-	}
-
-	/** The node spanning exactly `span` in `tree`, with its parent; null when there is none. */
-	private static function memberAt(tree: QueryNode, span: Span): Null<{ parent: QueryNode, member: QueryNode }> {
-		var node: QueryNode = tree;
-		while (true) {
-			final child: Null<QueryNode> = node.children.find(c -> c.span != null && c.span.from <= span.from && c.span.to >= span.to);
-			if (child == null) return null;
-			if (child.span?.from == span.from && child.span?.to == span.to) return { parent: node, member: child };
-			node = child;
-		}
 	}
 
 	/**

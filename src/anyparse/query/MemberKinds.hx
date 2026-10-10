@@ -699,6 +699,20 @@ final class MemberKinds {
 		return out;
 	}
 
+	/**
+	 * The modifier and metadata nodes (`modifierKinds`) directly before the node of `tree` spanning exactly `span` — a
+	 * declaration, found by descending to it — nearest first; null when no node of `tree` spans `span`.
+	 */
+	public static function precedingAt(tree: QueryNode, span: Span, modifierKinds: Array<String>): Null<Array<QueryNode>> {
+		var node: QueryNode = tree;
+		while (true) {
+			final child: Null<QueryNode> = node.children.find(c -> c.span != null && c.span.from <= span.from && c.span.to >= span.to);
+			if (child == null) return null;
+			if (child.span?.from == span.from && child.span?.to == span.to) return precedingModifiers(child, node, modifierKinds);
+			node = child;
+		}
+	}
+
 	/** `callKind` + `newExprKind` — the invocation kinds whose last child is the trailing argument; whichever the grammar names. */
 	public static function invocationKinds(shape: RefShape): Array<String> {
 		final kinds: Array<String> = [];

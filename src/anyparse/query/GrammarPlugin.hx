@@ -3607,6 +3607,41 @@ typedef ExecutionShape = {
 	 * Unset makes every abstract read as carrying no conversion.
 	 */
 	@:optional var implicitConversionMetaName: String;
+
+	/**
+	 * Qualified `pkg.Type.method` calls into the language's RUNTIME LIBRARY that block the calling thread on the world
+	 * outside the process — a file, a process, a socket, a database, a sleep, a wait for another thread (Haxe
+	 * `sys.io.File.getContent`, `sys.thread.Lock.wait`); `pkg.Type.*` names every member of a type all of whose members
+	 * do. A thread-context analysis counts a call of one as blocking wherever it runs, beside what the project's own
+	 * configuration lists. Matched by the last two segments, on a target the run holds no body for. Optional; unset
+	 * lists none.
+	 */
+	@:optional var blockingLibraryCalls: Array<String>;
+
+	/**
+	 * Member annotations under which a function declared in the PROJECT runs target code, not its body (Haxe `@:native`,
+	 * `@:hlNative`, `@:functionCode`): a call of one runs code no analysis can read. Optional; unset marks none.
+	 */
+	@:optional var nativeCodeMetaNames: Array<String>;
+
+	/**
+	 * Qualified `Type.method` calls handing back a function of the target loaded at run time (Haxe `cpp.Lib.load`,
+	 * `cpp.Prime.load`, `lime.system.CFFI.load`): a member whose initializer makes one holds a native function, and a
+	 * call of that member runs target code. Optional; unset makes none.
+	 */
+	@:optional var nativeLoaderCalls: Array<String>;
+
+	/**
+	 * Qualified `Type.method` calls whose argument IS target code the call splices in (Haxe `cpp.Syntax.code`): the
+	 * project's own native code, written as a library call. Optional; unset makes none.
+	 */
+	@:optional var nativeCodeCalls: Array<String>;
+
+	/**
+	 * The affix a bare name starts and ends with when it names the TARGET's own code (Haxe `__cpp__`, `__global__`, read
+	 * under `untyped`): a call of such a name, or of a member read off one, runs target code. Optional; unset makes none.
+	 */
+	@:optional var targetCodeNameAffix: String;
 }
 
 /**
