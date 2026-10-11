@@ -18884,8 +18884,8 @@
 			"name": "M-TS-WAIVE-SAYS-NOTHING",
 			"type": "anyparse.check.PositiveSinks",
 			"method": "waived",
-			"find": "if (hit.length == 0) found.push(",
-			"replace": "if (false) found.push(",
+			"find": "if (hit.length == 0 && walked?.waives(pattern) != true)",
+			"replace": "if (false)",
 			"note": "a nonBlocking entry waiving nothing reads as one that works"
 		},
 		{
