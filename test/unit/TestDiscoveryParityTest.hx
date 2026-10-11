@@ -396,6 +396,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.ThreadSafetyFoldingTest',
 		'unit.check.ThreadSafetyHandedValueTest',
 		'unit.check.ThreadSafetyHelperHoldsTest',
+		'unit.check.ThreadSafetyLibraryBodiesTest',
 		'unit.check.ThreadSafetyLongLocksTest',
 		'unit.check.ThreadSafetyMainOnlyTest',
 		'unit.check.ThreadSafetyMainStatesTest',
@@ -2282,6 +2283,14 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyHelperHoldsTest#testTheTwinsGiveLeavesDominanceStanding :: control :: M-TS-HELPER-DOM-CROSSING',
 			'unit.check.ThreadSafetyHelperHoldsTest#testWorkInsideAGivingHelperIsHeldByItsCaller :: control :: M-TS-HELPER-BODY-WORK',
 			'unit.check.ThreadSafetyHelperHoldsTest#testWorkInsideATakingHelperIsJudged :: control :: M-TS-HELPER-BODY-WORK',
+			'unit.check.ThreadSafetyLibraryBodiesTest#testALibraryCallThatBlocksInsideIsASink :: control :: '
+				+ 'M-TS-LIB-OFF,M-TS-LIB-NOT-SINKS,M-TS-LIB-CHAIN-OFF,M-TS-LIB-NOTICE,M-TS-LIB-KNOWN,M-TS-LIB-AWAY-OFF',
+			'unit.check.ThreadSafetyLibraryBodiesTest#testAProjectTypeRunsNoLibraryOverride :: control :: M-TS-LIB-VIRTUAL-OFF,M-TS-LIB-PROJECT-OVERRIDES,M-TS-LIB-PROJECT-TYPE',
+			'unit.check.ThreadSafetyLibraryBodiesTest#testAnUnknownBuildIsSaid :: control :: M-TS-LIB-UNKNOWN-SAID',
+			'unit.check.ThreadSafetyLibraryBodiesTest#testNonBlockingWaivesALibraryNative :: control :: M-TS-LIB-WAIVE-OFF,M-TS-LIB-WAIVE-SAID',
+			'unit.check.ThreadSafetyLibraryBodiesTest#testTheLibrariesAreReadAsTheBuildCompilesThem :: control :: '
+				+ 'M-TS-LIB-DEFINES-OFF,M-TS-LIB-DASH,M-TS-LIB-ORACLE-DEFINES,M-TS-LIB-TARGET-DEFINES,M-TS-LIB-VERSION-DEFINES,'
+				+ 'M-TS-LIB-OTHER-TARGET-FILE,M-TS-LIB-SHADOWED,M-TS-LIB-TARGET-PACKAGE',
 			'unit.check.ThreadSafetyLongLocksTest#testACircularReTakeIsCountedApart :: control :: M-TS-CIRCULAR-COUNTED',
 			'unit.check.ThreadSafetyLongLocksTest#testAShadowedFlagIsNoFixedFlag :: control :: M-TS-FLAGS-SHADOW,M-TS-FLAGS-WRITTEN',
 			'unit.check.ThreadSafetyLongLocksTest#testAVirtualCallIsAReasonPerTarget :: control :: M-TS-REASONS-DEDUP-BY-SITE',
@@ -6342,7 +6351,27 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-HANDED-REACH-OFF',
 			'M-TS-HANDED-SINK-OFF',
 			'M-TS-HANDED-ELSEWHERE',
-			'M-TS-HANDED-RETAKE'
+			'M-TS-HANDED-RETAKE',
+			'M-TS-LIB-OFF',
+			'M-TS-LIB-NOT-SINKS',
+			'M-TS-LIB-CHAIN-OFF',
+			'M-TS-LIB-NOTICE',
+			'M-TS-LIB-KNOWN',
+			'M-TS-LIB-AWAY-OFF',
+			'M-TS-LIB-DEFINES-OFF',
+			'M-TS-LIB-DASH',
+			'M-TS-LIB-ORACLE-DEFINES',
+			'M-TS-LIB-TARGET-DEFINES',
+			'M-TS-LIB-VERSION-DEFINES',
+			'M-TS-LIB-OTHER-TARGET-FILE',
+			'M-TS-LIB-SHADOWED',
+			'M-TS-LIB-TARGET-PACKAGE',
+			'M-TS-LIB-VIRTUAL-OFF',
+			'M-TS-LIB-PROJECT-OVERRIDES',
+			'M-TS-LIB-PROJECT-TYPE',
+			'M-TS-LIB-WAIVE-OFF',
+			'M-TS-LIB-WAIVE-SAID',
+			'M-TS-LIB-UNKNOWN-SAID'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

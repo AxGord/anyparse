@@ -19023,6 +19023,164 @@
 			"find": "!_sites.isStaticLock(held) && _threads.runsFrom(edge)",
 			"replace": "!_sites.isStaticLock(held) && edge.kind.isInvocation()",
 			"note": "another object's method handed on as a value re-takes the holder's own re-entrant lock for free"
+		},
+		{
+			"name": "M-TS-LIB-OFF",
+			"type": "anyparse.check.LibraryBodies",
+			"method": "forRun",
+			"force": "null",
+			"note": "no chain's libraries are ever walked"
+		},
+		{
+			"name": "M-TS-LIB-NOT-SINKS",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "chainLists",
+			"find": ".concat(positive.libraryFor(options))",
+			"replace": "",
+			"note": "a library call whose body blocks is no sink of the chain that walked it"
+		},
+		{
+			"name": "M-TS-LIB-CHAIN-OFF",
+			"type": "anyparse.check.LibraryBodies",
+			"method": "annotate",
+			"find": "if (tails.length > 0) data.chain = data.chain.concat(tails);",
+			"replace": "",
+			"note": "a finding's chain stops at the library call"
+		},
+		{
+			"name": "M-TS-LIB-NOTICE",
+			"type": "anyparse.check.PositiveSinks",
+			"method": "notice",
+			"find": "${library?.notice() ?? ''}",
+			"replace": "",
+			"note": "the run never says how many library calls block"
+		},
+		{
+			"name": "M-TS-LIB-KNOWN",
+			"type": "anyparse.check.LibraryBodies",
+			"method": "summarise",
+			"find": " && !project.known.contains(id)",
+			"replace": "",
+			"note": "a builtin sink a library also declares gains a library chain"
+		},
+		{
+			"name": "M-TS-LIB-AWAY-OFF",
+			"type": "anyparse.check.LibraryBodies",
+			"method": "runsThere",
+			"find": "!awayIds.exists(via) && !awayNames.contains(e.viaMember ?? '')",
+			"replace": "true",
+			"note": "a value the library hands to a spawns call runs where it is handed"
+		},
+		{
+			"name": "M-TS-LIB-DEFINES-OFF",
+			"type": "anyparse.check.LibraryBodies",
+			"method": "blanked",
+			"force": "source",
+			"note": "every branch of the libraries is walked, whatever the build compiles"
+		},
+		{
+			"name": "M-TS-LIB-DASH",
+			"type": "anyparse.check.LibraryBuild",
+			"method": "addDefine",
+			"find": ".replace('-', '_')",
+			"replace": "",
+			"note": "a -D spelled with a dash never meets the condition that spells it with an underscore"
+		},
+		{
+			"name": "M-TS-LIB-ORACLE-DEFINES",
+			"type": "anyparse.check.LibraryBuild",
+			"method": "read",
+			"find": ".concat(oracle.defines)",
+			"replace": "",
+			"note": "the oracle entry's defines decide nothing"
+		},
+		{
+			"name": "M-TS-LIB-TARGET-DEFINES",
+			"type": "anyparse.check.LibraryBuild",
+			"method": "read",
+			"find": ".concat(implicit)",
+			"replace": "",
+			"note": "the target's own defines (cpp, sys) decide nothing"
+		},
+		{
+			"name": "M-TS-LIB-VERSION-DEFINES",
+			"type": "anyparse.check.LibraryBuild",
+			"method": "read",
+			"find": ".concat(versionDefines(compilerVersion()))",
+			"replace": "",
+			"note": "haxe_ver decides nothing"
+		},
+		{
+			"name": "M-TS-LIB-OTHER-TARGET-FILE",
+			"type": "anyparse.check.LibraryBuild",
+			"method": "compiles",
+			"find": "return parts[1] == own;",
+			"replace": "return true;",
+			"note": "a file named for another target is compiled"
+		},
+		{
+			"name": "M-TS-LIB-SHADOWED",
+			"type": "anyparse.check.LibraryBuild",
+			"method": "compiles",
+			"find": "return own == null || !hasFile(",
+			"replace": "return true || !hasFile(",
+			"note": "a plain file the target's own copy stands in for is compiled too"
+		},
+		{
+			"name": "M-TS-LIB-TARGET-PACKAGE",
+			"type": "anyparse.check.LibraryBuild",
+			"method": "compiles",
+			"find": "if (slash > 0 && TARGET_PACKAGES",
+			"replace": "if (false && slash > 0 && TARGET_PACKAGES",
+			"note": "another target's package is compiled"
+		},
+		{
+			"name": "M-TS-LIB-VIRTUAL-OFF",
+			"type": "anyparse.check.LibraryBodies",
+			"method": "blockingChain",
+			"find": "if (owner == call.type && name != 'new')",
+			"replace": "if (false)",
+			"note": "a call on a library type runs no override the library declares"
+		},
+		{
+			"name": "M-TS-LIB-PROJECT-OVERRIDES",
+			"type": "anyparse.check.LibraryBodies",
+			"method": "blockingChain",
+			"find": "if (owner == call.type && name != 'new')",
+			"replace": "if (name != 'new')",
+			"note": "a call on a project type runs the overrides of its library superclass"
+		},
+		{
+			"name": "M-TS-LIB-PROJECT-TYPE",
+			"type": "anyparse.check.LibraryBodies",
+			"method": "blockingChain",
+			"find": "call.declared(owner) ? null : graph.memberOnChain(owner, name)",
+			"replace": "graph.memberOnChain(owner, name)",
+			"note": "a project type is read as the library type sharing its name"
+		},
+		{
+			"name": "M-TS-LIB-WAIVE-OFF",
+			"type": "anyparse.check.LibraryBodies",
+			"method": "sinksOf",
+			"find": "sinkIds.remove(id);",
+			"replace": "",
+			"note": "nonBlocking waives no native of the libraries"
+		},
+		{
+			"name": "M-TS-LIB-WAIVE-SAID",
+			"type": "anyparse.check.PositiveSinks",
+			"method": "waived",
+			"find": "walked?.waives(pattern) != true",
+			"replace": "true",
+			"note": "a nonBlocking entry waiving a library native is said to waive nothing"
+		},
+		{
+			"name": "M-TS-LIB-UNKNOWN-SAID",
+			"type": "anyparse.check.LibraryBodies",
+			"method": "forRun",
+			"find": "if (oracle == null) {",
+			"replace": "if (oracle == null) { return null;",
+			"note": "a libraryBodies entry naming no oracle hxml walks nothing in silence"
 		}
 	]
 }

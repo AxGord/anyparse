@@ -148,8 +148,15 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final problems: Array<String> = [];
 		// the project's natives first: their call sites gain the edges every list is then resolved over
 		final natives: ProjectNatives = new ProjectNatives(graph, plugin);
+		// opt-in: the library calls whose library bodies block (`libraryBodies`)
+		final library: Null<LibraryBodies> = LibraryBodies.forRun(
+			files, _resolveConfig,
+			{ graph: graph, sinks: new PositiveSinks(graph, plugin, natives, null) },
+			plugin, problems
+		);
 		final byFile: Map<String, ChainLists> = listsByFile(
-			files, graph, sets, new PositiveSinks(graph, plugin, natives), plugin.refShape().accessorMethodPrefixes ?? [], problems
+			files, graph, sets, new PositiveSinks(graph, plugin, natives, library), plugin.refShape().accessorMethodPrefixes ?? [],
+			problems
 		);
 		final sinkIds: Array<String> = [];
 		for (lists in sets) for (id in lists.sinkIds) if (!sinkIds.contains(id)) sinkIds.push(id);
@@ -233,6 +240,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		for (v in order.report(states, inertRef, CTX_MAIN | CTX_QUIET, CTX_BG, CHAIN_CAP)) violations.push(v);
 		// after every finding: the counterfactual solves fill taints of their own, which must not shape a report
 		longLocks = explained(sites, judged, long, costs, states, dominance.dominators, { taint: paths.normal, errors: errors });
+		library?.annotate(violations);
 		// a file whose chain writes no option is scanned for the graph's sake only: it reports no finding of its own
 		return violations.filter(v -> v.file == '' || listsOf(v.file).reports);
 	}
@@ -373,7 +381,10 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final lockPairs: Array<String> = option('lockPairs');
 		final waived: Array<String> = positive.waived(options, graph, configured, found);
 		final sinkIds: Array<String> = configured.copy();
-		for (id in positive.builtin.concat(positive.natives)) if (!waived.contains(id) && !sinkIds.contains(id)) sinkIds.push(id);
+		for (id in positive.builtin.concat(positive.natives).concat(positive.libraryFor(options))) if (
+			!waived.contains(id) && !sinkIds.contains(id)
+		)
+			sinkIds.push(id);
 		return {
 			reports: options.declared,
 			bounded: BoundedRepeats.entries(options.boundedRepeats, graph, found),

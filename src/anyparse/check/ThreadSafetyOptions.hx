@@ -56,7 +56,8 @@ final class ThreadSafetyOptions {
 		'sharedLocks',
 		'nonThrowing',
 		'runsOnce',
-		'nonBlocking'
+		'nonBlocking',
+		'libraryBodies'
 	];
 
 	/** The keys holding `true` or `false`. */

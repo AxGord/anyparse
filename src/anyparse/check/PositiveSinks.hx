@@ -26,7 +26,12 @@ final class PositiveSinks {
 	/** The graph ids of the project's natives. */
 	public final natives: Array<String>;
 
-	public function new(graph: CallGraph, plugin: GrammarPlugin, projectNatives: ProjectNatives) {
+	/** The run's library calls whose library bodies block (`LibraryBodies`), when a chain asked for them; null otherwise. */
+	public final library: Null<LibraryBodies>;
+
+	public function new(
+		graph: CallGraph, plugin: GrammarPlugin, projectNatives: ProjectNatives, library: Null<LibraryBodies>
+	) {
 		final execution: Null<ExecutionShape> = plugin.refShape().execution;
 		// a type every member of which blocks is the pattern naming them all
 		final calls: Array<String> = (execution?.blockingLibraryCalls ?? []).concat([
@@ -37,6 +42,7 @@ final class PositiveSinks {
 		patterns = calls.length;
 		builtin = ids;
 		natives = projectNatives.ids;
+		this.library = library;
 	}
 
 	/**
@@ -45,10 +51,15 @@ final class PositiveSinks {
 	 */
 	public function waived(options: ThreadSafetyOptions, graph: CallGraph, configured: Array<String>, found: Array<String>): Array<String> {
 		final out: Array<String> = [];
+		final walked: Null<LibraryBodies> = walkedFor(options);
+		final blocking: Array<String> = libraryFor(options);
 		for (pattern in options.nonBlocking) {
 			final ids: Array<String> = graph.matchIds(pattern);
-			final hit: Array<String> = [for (id in ids) if (builtin.contains(id) || natives.contains(id)) id];
-			if (hit.length == 0) found.push('nonBlocking entry "$pattern" waives no builtin sink or project native of the run');
+			final hit: Array<String> = [
+				for (id in ids) if (builtin.contains(id) || natives.contains(id) || blocking.contains(id)) id
+			];
+			if (hit.length == 0 && walked?.waives(pattern) != true)
+				found.push('nonBlocking entry "$pattern" waives no builtin sink or project native of the run');
 			if (ids.exists(id -> configured.contains(id)))
 				found.push('nonBlocking entry "$pattern" names a call "sinks" lists too, which keeps it');
 			for (id in hit) if (!out.contains(id)) out.push(id);
@@ -56,11 +67,21 @@ final class PositiveSinks {
 		return out;
 	}
 
+	/** The library calls whose bodies block, for a chain whose `options` walk the libraries (`libraryBodies`); none otherwise. */
+	public inline function libraryFor(options: ThreadSafetyOptions): Array<String> {
+		return walkedFor(options)?.ids ?? [];
+	}
+
 	/** The notice a reporting run gives once: how many blocking library calls there are, how many it makes, and its natives. */
 	public function notice(): String {
 		return
 			'$NOTICE$patterns blocking calls of the runtime library (${builtin.length} of them called in this run) and ${natives.length}'
-				+ ' project native(s) — "sinks" adds to them, "nonBlocking" removes from them';
+				+ ' project native(s)${library?.notice() ?? ''} — "sinks" adds to them, "nonBlocking" removes from them';
+	}
+
+	/** The libraries walked, for a chain whose `options` ask for them (`libraryBodies`); null otherwise. */
+	private inline function walkedFor(options: ThreadSafetyOptions): Null<LibraryBodies> {
+		return options.list(LibraryBodies.OPTION).length > 0 ? library : null;
 	}
 
 }
