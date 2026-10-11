@@ -2039,3 +2039,23 @@ decided the question; it may not become a record of runs.
   value itself (`Lambda.iter(ms, Mutex.acquire)`), never a take for `LockSites` (takes are `Call` edges). TM: bd943dac
   byte-identical; 1d1ba147 and f81c2049 +2 D keys each (`FileList.reload`, the stored thumbnail getter), labelled
   `false` — branch `feat/ts-precision-4`
+- duplicate root causes on TM 1d1ba147 (truth: 20 warned keys `dup-of` another warning) → fold only where the
+  covering warning provably names the same blocking work. Three gaps, each with a positive criterion: (1) the two
+  holds one call of a multi-lock helper opens (`acquireMutationLocks`: `_batchMutex`, then `_mutationMutex`) span the
+  very same calls, yet `nestHolds` only turned a hold taken INSIDE another's window — and a helper pair's take edge is
+  the same call, never inside the window; it now also turns the hold the helper takes later (`takenFirst`, by the
+  helper's take order — the outer lock keeps the warning) when its long calls are the outer window's, naming it;
+  (2) `RootCauseFold` read the helper twin's give (`releaseMutationLocks`) as a crossing release, so any wait for
+  `_mutationMutex` / `_batchMutex` was `Uncovered`, though `solveLongLocks` never counts such a give as making a lock
+  long — the fold now gets the same crossings the solve does; (3) a hold waiting for a lock some hold makes long with no
+  finding reporting its work (TM's `listFolder` on the tree lock) can never fold, yet stayed open into the cycle pick,
+  which then kept `acquireMutationLocks` (fewest calls, first by place) instead of the `_mutationMutex` holders it
+  would have folded onto; such a hold is now kept from the start (`uncoverable`, `neverReported`). TM 1d1ba147: dup-of
+  20 → 15 (5 folded, `renameItemInternal`'s pair swaps which lock warns: both `dup-of`), precision 0.71 → 0.74, recall
+  84/84; f81c2049 and bd943dac: no warning key changes. KEPT, no positive criterion: a callee re-taking the hold's own
+  lock (`if (!batch) _batchMutex.acquire()` — the graph cannot tie the object, and the one trail computed through the
+  call leaves its other work unexamined — that the call re-takes nothing is an argument value, `dbBatch = true`, the
+  graph does not track); a hold on threads the covering one never runs on (`getDrillsWatcher`); a
+  different sink call site (A family: an argument value, a virtual dispatch, the release half of one hand-off); a
+  representative the engine already keeps for the truth's target (`Store.removeKeys` over `Store.put`, threads
+  superset) — branch `feat/ts-precision-4`
