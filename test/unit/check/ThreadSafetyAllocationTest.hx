@@ -133,6 +133,32 @@ class ThreadSafetyAllocationTest extends Test {
 		#end
 	}
 
+	/**
+	 * A reflective write whose name is computed may store anything in any field of its target's class, and in a field of
+	 * any class when its target's type places it on none (`Dynamic`): the field's classes are unknown. One on a value of an
+	 * unrelated class leaves the field sealed.
+	 */
+	@:pin('control') @:killer('M-TS-REFLECT-COMPUTED') @:killer('M-TS-REFLECT-MAYWRITE')
+	public function testAComputedReflectiveWriteMakesTheFieldUnknown(): Void {
+		#if (sys || nodejs)
+		inline function poked(poke: String): Array<String> {
+			return holds(run('var loader:Base; $poke', 'loader = new Async();', 'loader.load();'));
+		}
+		Assert.same(
+			['warning B C.work | C._m'], poked('public function set(k:String, l:Base):Void Reflect.setField(this, k, l);'), 'its own class'
+		);
+		Assert.same(
+			['warning B C.work | C._m'],
+			poked('public static function poke(o:Dynamic, k:String):Void Reflect.setField(o, k, null);'), 'a Dynamic value'
+		);
+		Assert.same(
+			[], poked('public static function poke(o:Blocking, k:String):Void Reflect.setField(o, k, null);'), 'an unrelated class'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
 	/**
 	 * `C` declaring `field`, assigning it by `assign` in `prepare`, and on a worker holding `_m` across `held`, its file

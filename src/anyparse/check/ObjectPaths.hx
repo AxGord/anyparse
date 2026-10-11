@@ -10,8 +10,9 @@ using Lambda;
 /**
  * The object a call is made on, named relative to the object the calling function runs on, for the locks a hold
  * carries into its callees (`MustHeld`): a PATH of fields read off it — a bare field or one read off `this`, and at most
- * one field of that (`fileSystem.cloudDatabase`) — each STABLE: `final`, or an instance `var` that nothing writes outside
- * its type's constructor. A link is named by its member name, joined by `SEPARATOR`: one object holds one field of a
+ * one field of that (`fileSystem.cloudDatabase`) — each STABLE: `final`, or an instance `var` that nothing
+ * writes outside its type's constructor — and no reflective write may reach (`FieldWrites.reflective`), which
+ * no `final` stops. A link is named by its member name, joined by `SEPARATOR`: one object holds one field of a
  * name, whichever type declares it. Positive: any other receiver names no object, and a `var` is stable only when the
  * run sees every write of the project (`FieldWrites.complete`).
  */
@@ -56,8 +57,8 @@ final class ObjectPaths {
 	}
 
 	/**
-	 * Whether the field `field` (`Type.member`) names one object for good once its type's constructor ran: a `final`
-	 * one, or an instance `var` the run sees every write of (`FieldWrites.complete`) and none outside that constructor's
+	 * Whether the field `field` (`Type.member`) names one object for good once its type's constructor ran: a `final` one no reflective
+	 * write may reach, or an instance `var` the run sees every write of (`FieldWrites.complete`) and none outside that constructor's
 	 * own body — any write of the name counts, whatever its receiver, and one in a lambda or a local function the
 	 * constructor makes runs later. A field read through a getter (`get`, `dynamic`) names whatever the getter returns,
 	 * and a `static var` is written anew by every write of it, the instance constructor's included: neither is stable.
@@ -69,8 +70,11 @@ final class ObjectPaths {
 		final type: String = field.substring(0, dot);
 		final name: String = field.substring(dot + 1);
 		final info: Null<MemberInfo> = dot <= 0 ? null : _graph.types.memberOnChain(type, name);
-		final answer: Bool = info != null && (_shape.fieldDeclKinds ?? []).contains(info.kind) && !info.hasGetter
-			&& (!(_shape.mutableFieldDeclKinds ?? []).contains(info.kind) || writtenOnlyInConstructor(type, name, info.isStatic));
+		final answer: Bool = info != null && (_shape.fieldDeclKinds ?? []).contains(info.kind) && !info.hasGetter && (
+			(_shape.mutableFieldDeclKinds ?? []).contains(info.kind)
+				? writtenOnlyInConstructor(type, name, info.isStatic)
+				: !reflectivelyWritten(type, name)
+		);
 		_stable[field] = answer;
 		return answer;
 	}
@@ -94,6 +98,12 @@ final class ObjectPaths {
 		final ctor: Null<String> = isStatic ? null : _graph.ownMember(type, _shape.constructorName ?? 'new');
 		final owner: String = _graph.types.declaringTypeOf(type, name) ?? type;
 		return _writes.of(name).foreach(w -> !_writes.mayWrite(w, owner) || w.own && ctor != null && w.fn == ctor);
+	}
+
+	/** Whether a reflective write the run sees may write the `final` field `name` of `type` (`FieldWrites.mayWrite`). */
+	private function reflectivelyWritten(type: String, name: String): Bool {
+		final owner: String = _graph.types.declaringTypeOf(type, name) ?? type;
+		return _writes.of(name).exists(w -> w.reflective && _writes.mayWrite(w, owner));
 	}
 
 	/** The member name of the field id `field`. */

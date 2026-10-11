@@ -117,28 +117,8 @@ class ThreadSafetyCarriedHoldTest extends Test {
 	@:pin('control') @:killer('M-TS-PATH-INTERFACE') @:killer('M-TS-PATH-REFLECT')
 	public function testAnImplementersOrAReflectiveWriteNamesNoObject(): Void {
 		#if (sys || nodejs)
-		final config: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Sys.sleep"],"spawns":["Runner.create"],'
-			+ '"lockPairs":["Mutex.acquire/release"],"closedWorld":true}}}';
-		final db: String = 'class Db { public final batch:Mutex = new Mutex(); public final mutex:Mutex = new Mutex(); public function new() {}'
-			+ ' public function batchLock():Void batch.acquire(); public function batchUnlock():Void batch.release();'
-			+ ' public function lookup():Void { mutex.acquire(); mutex.release(); }'
-			+ ' public function slow():Void { batch.acquire(); mutex.acquire(); Sys.sleep(1); mutex.release(); batch.release(); } }';
-		final main: String = 'class M { public static function main():Void { final a:Db = new Db(); final b:Db = new Db();'
-			+ ' final fs:Fs = new Fs(a, b); final w:W = new W(fs); Runner.create(() -> { a.slow(); b.slow(); });'
-			+ ' Runner.create(() -> w.work()); Runner.create(() -> Swapper.go(fs, b)); a.batchLock(); a.batchUnlock(); } }';
 		inline function graded(fsDecl: String, fsType: String, swap: String): Array<String> {
-			return [
-				for (v in ThreadSafetyCheckTest.violations(config, [
-					ThreadSafetyCheckTest.MUTEX,
-					'class Runner { public static function create(fn:()->Void):Void {} }',
-					db,
-					fsDecl,
-					'class W { final fs:$fsType; public function new(f:$fsType) { fs = f; }'
-					+ ' public function work():Void { fs.db.batchLock(); fs.db.lookup(); fs.db.batchUnlock(); } }',
-					'class Swapper { public static function go(f:Fs, b:Db):Void { $swap } }',
-					main
-				])) if (v.data?.family == 'B' && v.data?.member == 'W.work') v.severity.label()
-			];
+			return swapGraded(fsDecl, fsType, 'class Swapper { public static function go(f:Fs, b:Db):Void { $swap } }');
 		}
 		final plain: String = 'class Fs { public var db:Db; public function new(a:Db, b:Db) { db = a; } }';
 		Assert.same(['info'], graded(plain, 'Fs', ''), 'written in the constructor only');
@@ -152,6 +132,65 @@ class ThreadSafetyCarriedHoldTest extends Test {
 			'an implementer'
 		);
 		Assert.same(['warning'], graded(plain, 'Fs', 'Reflect.setField(f, "db", b);'), 'a reflective write');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A reflective write whose name is computed may write any field of the object it is made on: every field of its class,
+	 * of the types on that class's chain and of its subclasses — `Reflect.setField(o, key, v)`, `setProperty`, `deleteField`,
+	 * a `using Reflect` extension `o.setField(key, v)` (a literal name too), an index write `o[key] = v` into a `Dynamic`
+	 * value — a `final` field included. On a value whose type places it on no class (`Dynamic`, a structure, a type
+	 * parameter, even one named like a class) it may write any field at all; a value of an unrelated class leaves the path
+	 * named.
+	 */
+	@:pin('control') @:killer('M-TS-REFLECT-COMPUTED') @:killer('M-TS-REFLECT-EXTENSION') @:killer('M-TS-REFLECT-INDEX')
+	@:killer('M-TS-REFLECT-REACH') @:killer('M-TS-REFLECT-SUBTYPES') @:killer('M-TS-REFLECT-SUPERTYPES') @:killer('M-TS-REFLECT-MAYWRITE')
+	@:killer('M-TS-REFLECT-FINAL') @:killer('M-TS-REFLECT-ANY') @:killer('M-TS-REFLECT-TYPEPARAM')
+	public function testAComputedReflectiveWriteNamesNoObject(): Void {
+		#if (sys || nodejs)
+		final plain: String = 'class Fs { public var db:Db; public function new(a:Db, b:Db) { db = a; } }';
+		inline function graded(body: String, head: String = '', fs: String = ''): Array<String> {
+			return swapGraded(
+				fs == '' ? plain : fs, 'Fs',
+				'${head}class Swapper { public static function go(f:Fs, b:Db, ?key:String):Void { $body } }'
+				+ ' class Other { public var db:Db; public function new() {} } typedef Bag = { var db:Db; }'
+			);
+		}
+		Assert.same(['info'], graded(''), 'nothing else writes');
+		Assert.same(['warning'], graded('Reflect.setField(f, key, b);'), 'a computed name');
+		Assert.same(['warning'], graded('Reflect.setProperty(f, key, b);'), 'setProperty');
+		Assert.same(['warning'], graded('Reflect.deleteField(f, key);'), 'deleteField');
+		Assert.same(['warning'], graded('f.setField(key, b);', 'using Reflect; '), 'a using extension');
+		Assert.same(['warning'], graded('f.setField("db", b);', 'using Reflect; '), 'a using extension of a literal name');
+		Assert.same(['warning'], graded('final o:Dynamic = f; Reflect.setField(o, key, b);'), 'a Dynamic value');
+		Assert.same(['warning'], graded('final o:Dynamic = f; o[key] = b;'), 'an index write into a Dynamic value');
+		Assert.same(['warning'], graded('final o:Bag = f; Reflect.setField(o, key, b);'), 'a structure');
+		Assert.same(['info'], graded('final o:Other = new Other(); Reflect.setField(o, key, b);'), 'an unrelated class');
+		Assert.same(
+			['warning'],
+			graded(
+				'final o:Base = f; Reflect.setField(o, key, b);', '',
+				'class Base {} class Fs extends Base { public var db:Db;' + ' public function new(a:Db, b:Db) { db = a; } }'
+			),
+			'a superclass of the field\'s'
+		);
+		Assert.same(
+			['warning'],
+			graded('final o:Sub = null; Reflect.setField(o, key, b);', '', plain + ' class Sub extends Fs {}'),
+			'a subclass of the field\'s'
+		);
+		Assert.same(['warning'], graded('final w:W = null; Reflect.setField(w, key, f);'), 'a final field');
+		Assert.same(
+			['warning'],
+			swapGraded(
+				plain, 'Fs',
+				'class Swapper { public static function go<Other>(f:Fs, b:Db, ?key:String):Void {'
+				+ ' final o:Other = null; Reflect.setField(o, key, b); } } class Other { public function new() {} }'
+			),
+			'a type parameter named like a class'
+		);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -332,6 +371,34 @@ class ThreadSafetyCarriedHoldTest extends Test {
 		];
 		out.sort(Reflect.compare);
 		return out;
+	}
+	/**
+	 * The severities of `W.work`'s hold of `Db.batch` across `fs.db.lookup()` — `fs` declared `fsType`, `Fs` declared
+	 * `fsDecl` — in a run that also holds the module `swapper` (`Swapper.go(fs, b)` runs on a worker): `fs.db` names the held
+	 * object, and the hold is brief, only while nothing may write `db` but `Fs`'s constructor.
+	 */
+	private static function swapGraded(fsDecl: String, fsType: String, swapper: String): Array<String> {
+		final config: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Sys.sleep"],"spawns":["Runner.create"],'
+			+ '"lockPairs":["Mutex.acquire/release"],"closedWorld":true}}}';
+		final db: String = 'class Db { public final batch:Mutex = new Mutex(); public final mutex:Mutex = new Mutex(); public function new() {}'
+			+ ' public function batchLock():Void batch.acquire(); public function batchUnlock():Void batch.release();'
+			+ ' public function lookup():Void { mutex.acquire(); mutex.release(); }'
+			+ ' public function slow():Void { batch.acquire(); mutex.acquire(); Sys.sleep(1); mutex.release(); batch.release(); } }';
+		final main: String = 'class M { public static function main():Void { final a:Db = new Db(); final b:Db = new Db();'
+			+ ' final fs:Fs = new Fs(a, b); final w:W = new W(fs); Runner.create(() -> { a.slow(); b.slow(); });'
+			+ ' Runner.create(() -> w.work()); Runner.create(() -> Swapper.go(fs, b)); a.batchLock(); a.batchUnlock(); } }';
+		return [
+			for (v in ThreadSafetyCheckTest.violations(config, [
+				ThreadSafetyCheckTest.MUTEX,
+				'class Runner { public static function create(fn:()->Void):Void {} }',
+				db,
+				fsDecl,
+				'class W { final fs:$fsType; public function new(f:$fsType) { fs = f; }'
+				+ ' public function work():Void { fs.db.batchLock(); fs.db.lookup(); fs.db.batchUnlock(); } }',
+				swapper,
+				main
+			])) if (v.data?.family == 'B' && v.data?.member == 'W.work') v.severity.label()
+		];
 	}
 
 	/** A project file the run leaves out, writing `Fs.holder` (`ProjectCoverage`). */

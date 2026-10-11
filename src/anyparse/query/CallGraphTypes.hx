@@ -60,7 +60,7 @@ final class CallGraphTypes {
 	private final _files: Map<String, Bool> = [];
 
 	/** What each type's modifiers and metadata say: extern, built by a macro, constructed from a literal, forwarding. */
-	public final meta: TypeMetaFacts = new TypeMetaFacts();
+	public final meta: TypeMetaFacts;
 
 	/** The type parameters each type declares, and the arguments its supertypes are given. */
 	public final generics: TypeParamTable = new TypeParamTable();
@@ -79,6 +79,7 @@ final class CallGraphTypes {
 
 	/** `index` null yields the empty tables of a graph that resolves nothing. */
 	public function new(index: Null<SymbolIndex>, shape: RefShape) {
+		meta = new TypeMetaFacts(shape.classDeclKinds ?? []);
 		_fieldKinds = shape.fieldDeclKinds ?? [];
 		_functionKinds = shape.functionKinds ?? [];
 		_interfaceKinds = shape.interfaceDeclKinds ?? [];

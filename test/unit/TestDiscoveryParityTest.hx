@@ -2023,6 +2023,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.StructuralConformanceProofTest#testUnresolvableSupertypeSuppliesNoMember :: control :: M-STRUCT-DECLARES-LOOSE',
 			'unit.check.TailMergeCheckTest#testStructuralIdentityHalfNeeded :: control :: M-TAILMERGE-NORM-ONLY',
 			'unit.check.TailMergeCheckTest#testSwitchCaseOutOfScope :: control :: M-TAILMERGE-FALL-KEPT',
+			'unit.check.ThreadSafetyAllocationTest#testAComputedReflectiveWriteMakesTheFieldUnknown :: control :: '
+				+ 'M-TS-REFLECT-COMPUTED,M-TS-REFLECT-MAYWRITE',
 			'unit.check.ThreadSafetyAllocationTest#testAConstructionRunsOnItsOwnClass :: control :: M-TS-ALLOC-NEW',
 			'unit.check.ThreadSafetyAllocationTest#testALibraryClassRunsNoProjectOverride :: control :: M-TS-ALLOC-LIBRARY',
 			'unit.check.ThreadSafetyAllocationTest#testARunOverPartOfTheProjectSealsNoField :: control :: M-TS-ALLOC-COMPLETE',
@@ -2044,6 +2046,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyBoundedRepeatsTest#testBoundsMultiplyAlongTheWay :: control :: M-TS-BOUND-ACROSS,M-TS-BOUND-ACROSS-HOLD,M-TS-BOUND-NOTE',
 			'unit.check.ThreadSafetyBoundedRepeatsTest#testNestedBoundsMultiply :: control :: M-TS-BOUND-PRODUCT',
 			'unit.check.ThreadSafetyCarriedHoldTest#testACalleeGivingTheLockBackCarriesNothing :: guard :: ',
+			'unit.check.ThreadSafetyCarriedHoldTest#testAComputedReflectiveWriteNamesNoObject :: control :: '
+				+ 'M-TS-REFLECT-COMPUTED,M-TS-REFLECT-EXTENSION,M-TS-REFLECT-INDEX,M-TS-REFLECT-REACH,M-TS-REFLECT-SUBTYPES,'
+				+ 'M-TS-REFLECT-SUPERTYPES,M-TS-REFLECT-MAYWRITE,M-TS-REFLECT-FINAL,M-TS-REFLECT-ANY,M-TS-REFLECT-TYPEPARAM',
 			'unit.check.ThreadSafetyCarriedHoldTest#testAConstructorWritingAnotherObjectsFieldNamesNoObject :: control :: M-TS-PATH-OWN',
 			'unit.check.ThreadSafetyCarriedHoldTest#testADominatedTakeInACalleeOnTheHeldObjectIsBrief :: control :: M-TS-CARRY-OFF',
 			'unit.check.ThreadSafetyCarriedHoldTest#testAFieldWrittenOutsideTheConstructorNamesNoObject :: control :: M-TS-PATH-STABLE-ANY',
@@ -6387,7 +6392,17 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-PAIR-ORDER',
 			'M-TS-FOLD-HELPER-CROSSING',
 			'M-TS-FOLD-STUCK-WAIT',
-			'M-TS-FOLD-STUCK-MADE'
+			'M-TS-FOLD-STUCK-MADE',
+			'M-TS-REFLECT-COMPUTED',
+			'M-TS-REFLECT-EXTENSION',
+			'M-TS-REFLECT-INDEX',
+			'M-TS-REFLECT-REACH',
+			'M-TS-REFLECT-SUBTYPES',
+			'M-TS-REFLECT-SUPERTYPES',
+			'M-TS-REFLECT-MAYWRITE',
+			'M-TS-REFLECT-FINAL',
+			'M-TS-REFLECT-ANY',
+			'M-TS-REFLECT-TYPEPARAM'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

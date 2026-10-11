@@ -1,6 +1,9 @@
 package anyparse.check;
 
+import anyparse.query.BoolExprShape;
 import anyparse.query.CallGraph;
+import anyparse.query.CallGraphNames;
+import anyparse.query.CallGraphTypes;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.StringFold.StringFoldSupport;
@@ -29,6 +32,18 @@ typedef FieldWriteSite = {
 
 	/** Whether a function is around the write and the graph knows its type. */
 	final typed: Bool;
+
+	/**
+	 * Whether the write names its field at run time (`recordReflective`, an index write into a dynamic value): a `final`
+	 * field is no bar to it.
+	 */
+	final reflective: Bool;
+
+	/**
+	 * For a `reflective` write, the types whose fields it may reach (`reachOf`); null when that is any type's, and for
+	 * every other write.
+	 */
+	final reaches: Null<Array<String>>;
 }
 
 /**
@@ -36,7 +51,13 @@ typedef FieldWriteSite = {
  * asks which fields stay put, `AllocationSets` which classes a field may hold, `ExhaustiveSwitches` what a member is
  * assigned), and whether the run sees every write of the project at all (`complete`).
  *
- * A write is positive evidence only in one direction: a write the index holds may change the field, and a field the
+ * A reflective write — `Reflect.setField` / `setProperty` / `deleteField`, called off `Reflect` or as a `using` extension, or an
+ * index write into a `Dynamic` / `DynamicAccess` value — names its field at run time and is not stopped by a `final`: a literal name
+ * files it under that name, a computed one under every name (`of`), each bounded by the types its target may be a value of
+ * (`reachOf`; any type for a target of a type the run cannot place on a class: `Dynamic`, `Any`, a type parameter, a structure).
+ * There is no narrower sound bound for those: a value of such a type may be an instance of any class, and nothing here tracks which
+ * reach it — the cost is paid only by the fields a consumer asks about (fields read through a lock path, a dispatched receiver, a
+ * switch subject). A write is positive evidence only in one direction: a write the index holds may change the field, and a field the
  * index holds no write of is unwritten only when `complete` — the run covers the whole project a `closedWorld`
  * declaration closes (`ThreadSafety.listsByFile`). Anything else, a consumer reads as unknown.
  *
@@ -48,16 +69,33 @@ typedef FieldWriteSite = {
 @:nullSafety(Strict)
 final class FieldWrites {
 
-	/** The reflective calls writing a field by name, off `Reflect` (`recordReflective`). */
-	private static final REFLECT_WRITES: Array<String> = ['setField', 'setProperty'];
+	/**
+	 * The reflective calls writing a field by name, off `Reflect` (`recordReflective`) -> how many arguments a direct
+	 * call takes: the object, the name, and but for `deleteField` the value.
+	 */
+	private static final REFLECT_WRITES: Map<String, Int> = ['setField' => 3, 'setProperty' => 3, 'deleteField' => 2];
 
 	private static inline final REFLECT: String = 'Reflect';
+
+	/** The types whose index write `o[name] = v` writes the field so named (`record`). */
+	private static final NAME_INDEXED_TYPES: Array<String> = ['Dynamic', 'DynamicAccess'];
 
 	/** Whether the run sees every write of the project: every file's chain declares `closedWorld` and the run covers the project. */
 	public final complete: Bool;
 
 	/** The name written -> every write of it. */
 	private final _byName: Map<String, Array<FieldWriteSite>> = [];
+
+	/** The reflective writes whose name is computed: each may write a field of any name (`of`). */
+	private final _computed: Array<FieldWriteSite> = [];
+
+	/** Each class or interface -> the types whose fields a write on a value of it may reach (`reachOf`). */
+	private final _reach: Map<String, Array<String>> = [];
+
+	/** Each file -> what types an expression of it, as far as the declarations say (`typeOf`); null when nothing can. */
+	private final _typers: Map<String, Null<(QueryNode) -> Null<String>>> = [];
+
+	private final _plugin: GrammarPlugin;
 
 	private final _graph: CallGraph;
 	private final _shape: RefShape;
@@ -67,51 +105,54 @@ final class FieldWrites {
 
 	public function new(graph: CallGraph, plugin: GrammarPlugin, complete: Bool) {
 		_graph = graph;
+		_plugin = plugin;
 		_shape = plugin.refShape();
 		_fold = plugin.stringFoldSupport();
 		this.complete = complete;
 		for (held in graph.heldFiles()) collect(held.file, held.source, held.tree);
 	}
 
-	/** Every write of a target named `name`, in the order the files were walked. */
-	public inline function of(name: String): Array<FieldWriteSite> {
-		return _byName[name] ?? [];
+	/**
+	 * Every write that may write a target named `name`: those naming it, in the order the files were walked, then every
+	 * reflective write of a computed name.
+	 */
+	public function of(name: String): Array<FieldWriteSite> {
+		final named: Array<FieldWriteSite> = _byName[name] ?? [];
+		return _computed.length == 0 ? named : named.concat(_computed);
 	}
 
 	/** Records every write in `node`'s subtree, in `file` of `source`: an assignment or an increment, a reflective write. */
 	private function collect(file: String, source: String, node: QueryNode): Void {
-		if (_shape.writeParentKinds.contains(node.kind) && node.children.length > 0) record(file, node, node.children[0]);
+		if (_shape.writeParentKinds.contains(node.kind) && node.children.length > 0) record(file, source, node, node.children[0]);
 		if (node.kind == _shape.callKind) recordReflective(file, source, node);
 		for (c in node.children) collect(file, source, c);
 	}
 
 	/**
-	 * Records the call `call` of `file` (of `source`) when it writes a field by name, `Reflect.setField(o, "name", v)` or
-	 * `Reflect.setProperty`, the name a plain literal: a write of that name on a value nothing here can tell.
+	 * Records the call `call` of `file` (of `source`) when it writes a field by name: `Reflect.setField(o, name, v)`,
+	 * `setProperty` or `deleteField`, called off `Reflect` or as a `using` extension (`o.setField(name, v)` — any call of
+	 * that shape and arity, the run cannot tell a `using Reflect` from a method so named, and over-counting only makes a
+	 * field unstable).
 	 */
 	private function recordReflective(file: String, source: String, call: QueryNode): Void {
 		final callee: Null<QueryNode> = call.children[0];
-		final fold: Null<StringFoldSupport> = _fold;
-		if (fold == null || callee == null || call.children.length < 4 || !REFLECT_WRITES.contains(callee.name ?? '')) return;
-		final receiver: Null<QueryNode> = callee.children[0];
-		if (callee.kind != _shape.fieldAccessKind || receiver == null || receiver.kind != _shape.identKind || receiver.name != REFLECT)
-			return;
-		final literal: Null<StringLiteral> = fold.literalOf(call.children[2], source);
-		final at: Null<Span> = call.span;
-		if (literal == null || at == null) return;
-		final fn: Null<String> = _graph.functionAt(file, at.from);
-		push(literal.content, {
-			write: call,
-			file: file,
-			own: false,
-			fn: fn,
-			declaring: null,
-			typed: fn != null && _graph.node(fn)?.typeName != null
-		});
+		final arity: Null<Int> = callee == null ? null : REFLECT_WRITES[callee.name ?? ''];
+		if (callee == null || arity == null || !accessKind(callee.kind, _shape) || callee.children.length == 0) return;
+		final receiver: QueryNode = callee.children[0];
+		final direct: Bool = receiver.kind == _shape.identKind && receiver.name == REFLECT;
+		final args: Array<QueryNode> = direct ? call.children.slice(1) : [receiver].concat(call.children.slice(1));
+		if (args.length == arity) reflectiveWrite(file, source, call, args[0], args[1]);
 	}
 
-	/** Records the write `write` of `target` when the target names a field: a bare name, or a field read off any value. */
-	private function record(file: String, write: QueryNode, target: QueryNode): Void {
+	/**
+	 * Records the write `write` of `target`, in `file` of `source`, when the target names a field: a bare name, or a field
+	 * read off any value; an index into a value of a `NAME_INDEXED_TYPES` type writes the field its key names.
+	 */
+	private function record(file: String, source: String, write: QueryNode, target: QueryNode): Void {
+		if (target.kind == _shape.indexAccessKind && target.children.length == 2 && nameIndexed(file, source, target.children[0])) {
+			reflectiveWrite(file, source, write, target.children[0], target.children[1]);
+			return;
+		}
 		final name: Null<String> = target.name;
 		final at: Null<Span> = target.span;
 		final own: Bool = target.kind == _shape.identKind || ownMemberRead(target, _shape);
@@ -124,7 +165,9 @@ final class FieldWrites {
 			own: own,
 			fn: fn,
 			declaring: type == null ? null : _graph.types.declaringTypeOf(type, name),
-			typed: type != null
+			typed: type != null,
+			reflective: false,
+			reaches: null
 		});
 	}
 
@@ -136,12 +179,93 @@ final class FieldWrites {
 	}
 
 	/**
-	 * Whether `site` may write the field of that name `owner` declares: any receiver's but the running object's always —
-	 * what it is written on, nothing here can tell — and the running object's when its type declares the field as
-	 * `owner`'s, declares none by the name (a local of that name included), or is unknown. An interface's field is
-	 * declared again by every implementer, so any own write of the name may be one of it.
+	 * Records `write`, in `file` of `source`, of the field the key `key` names on the object `target` holds: a plain literal
+	 * names one field, anything else any field (`_computed`). Either reaches only fields of the types `target` may be a
+	 * value of (`reachOf`).
+	 */
+	private function reflectiveWrite(file: String, source: String, write: QueryNode, target: QueryNode, key: QueryNode): Void {
+		final at: Null<Span> = write.span;
+		if (at == null) return;
+		final fn: Null<String> = _graph.functionAt(file, at.from);
+		final literal: Null<StringLiteral> = _fold?.literalOf(key, source);
+		final site: FieldWriteSite = {
+			write: write,
+			file: file,
+			own: false,
+			fn: fn,
+			declaring: null,
+			typed: fn != null && _graph.node(fn)?.typeName != null,
+			reflective: true,
+			reaches: reachOf(typeOf(file, source, fn, target), fn)
+		};
+		if (literal == null)
+			_computed.push(site);
+		else
+			push(literal.content, site);
+	}
+
+	/** Whether `container`, in `file` of `source`, is declared of a type whose index names a field (`NAME_INDEXED_TYPES`). */
+	private function nameIndexed(file: String, source: String, container: QueryNode): Bool {
+		final type: Null<String> = typeOf(file, source, null, container);
+		return type != null && NAME_INDEXED_TYPES.contains(CallGraphNames.lastSegments(type, 1));
+	}
+
+	/**
+	 * The type the value `node`, in `file` of `source` and the function `fn`, is declared of, as far as the declarations
+	 * say (`CheckScan.typeNominalResolver`): the running type for the self reference; null when unknown.
+	 */
+	private function typeOf(file: String, source: String, fn: Null<String>, node: QueryNode): Null<String> {
+		final value: QueryNode = BoolExprShape.unwrapParens(node, _shape.parenKind);
+		if (value.kind == _shape.identKind && value.name == _shape.selfReferenceText) return fn == null ? null : _graph.node(fn)?.typeName;
+		if (!_typers.exists(file)) {
+			final tree: Null<QueryNode> = _graph.treeOf(file);
+			_typers[file] = tree == null ? null : CheckScan.typeNominalResolver(source, _plugin, tree, file, null, true);
+		}
+		final typer: Null<(QueryNode) -> Null<String>> = _typers[file];
+		return typer == null ? null : typer(value);
+	}
+
+	/**
+	 * The types whose fields a write on a value declared `type` may reach: for a class or an interface the run declares
+	 * once (through a typedef alias), every subtype of it and every type on the chain of each — the object is one of them,
+	 * its fields declared along its chain. Null, any type's, for any other type: `Dynamic`, `Any`, a type parameter, a
+	 * structure or an abstract (which a value of any class may be), a library type, an unknown one — and a name a type
+	 * parameter of the function `fn` the write runs in, or of its type, takes over.
+	 */
+	private function reachOf(type: Null<String>, fn: Null<String>): Null<Array<String>> {
+		final types: CallGraphTypes = _graph.types;
+		final named: Null<String> = type == null ? null : types.resolveAlias(CallGraphNames.lastSegments(type, 1));
+		if (named == null || types.declarationCount(named) != 1 || !(types.meta.isClass(named) || types.isInterface(named))) return null;
+		if (fn != null && _graph.typeParamBoundsOf(fn, named) != null) return null;
+		final known: Null<Array<String>> = _reach[named];
+		if (known != null) return known;
+		final out: Array<String> = closure([named], types.subtypesOf);
+		final reach: Array<String> = closure(out, types.supertypesOf);
+		_reach[named] = reach;
+		return reach;
+	}
+
+	/** `from` and every type `next` reaches from it, step by step: the closure of `next` over `from`. */
+	private static function closure(from: Array<String>, next: (String) -> Array<String>): Array<String> {
+		final out: Array<String> = from.copy();
+		var at: Int = 0;
+		while (at < out.length) {
+			for (t in next(out[at])) if (!out.contains(t)) out.push(t);
+			at++;
+		}
+		return out;
+	}
+
+	/**
+	 * Whether `site` may write the field of that name `owner` declares: a reflective write when `owner` is among the types
+	 * it may reach (`reachOf`; any, when unknown); any other receiver's write always — what it is written on, nothing here
+	 * can tell — and the running object's when its type declares the field as `owner`'s, declares none by the name (a local
+	 * of that name included), or is unknown. An interface's field is declared again by every implementer, so any own write
+	 * of the name may be one of it.
 	 */
 	public function mayWrite(site: FieldWriteSite, owner: String): Bool {
+		final reaches: Null<Array<String>> = site.reaches;
+		if (site.reflective) return reaches == null || reaches.contains(owner);
 		return !site.own || !site.typed || site.declaring == null || site.declaring == owner || _graph.types.isInterface(owner);
 	}
 

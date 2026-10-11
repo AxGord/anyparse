@@ -19261,6 +19261,86 @@
 			"find": "!_holds[m].madeWarning && ",
 			"replace": "",
 			"note": "a maker turned info around a warning counts as never reported: its waiters stay warnings"
+		},
+		{
+			"name": "M-TS-REFLECT-COMPUTED",
+			"type": "anyparse.check.FieldWrites",
+			"method": "of",
+			"find": "named.concat(_computed)",
+			"replace": "named",
+			"note": "a reflective write of a computed name writes no field"
+		},
+		{
+			"name": "M-TS-REFLECT-EXTENSION",
+			"type": "anyparse.check.FieldWrites",
+			"method": "recordReflective",
+			"find": "[receiver].concat(call.children.slice(1))",
+			"replace": "[]",
+			"note": "a using-Reflect extension call writes no field"
+		},
+		{
+			"name": "M-TS-REFLECT-INDEX",
+			"type": "anyparse.check.FieldWrites",
+			"method": "record",
+			"find": " && nameIndexed(file, source, target.children[0])",
+			"replace": " && false",
+			"note": "an index write into a Dynamic value writes no field"
+		},
+		{
+			"name": "M-TS-REFLECT-REACH",
+			"type": "anyparse.check.FieldWrites",
+			"method": "reflectiveWrite",
+			"find": "reachOf(typeOf(file, source, fn, target), fn)",
+			"replace": "null",
+			"note": "a reflective write reaches every type's fields whatever its target"
+		},
+		{
+			"name": "M-TS-REFLECT-SUBTYPES",
+			"type": "anyparse.check.FieldWrites",
+			"method": "reachOf",
+			"find": "closure([named], types.subtypesOf)",
+			"replace": "[named]",
+			"note": "a write on a value of a class reaches none of its subclasses' fields"
+		},
+		{
+			"name": "M-TS-REFLECT-SUPERTYPES",
+			"type": "anyparse.check.FieldWrites",
+			"method": "reachOf",
+			"find": "closure(out, types.supertypesOf)",
+			"replace": "out",
+			"note": "a write on a value of a class reaches no field its supertypes declare"
+		},
+		{
+			"name": "M-TS-REFLECT-MAYWRITE",
+			"type": "anyparse.check.FieldWrites",
+			"method": "mayWrite",
+			"find": "if (site.reflective) return reaches == null || reaches.contains(owner);",
+			"replace": "",
+			"note": "a reflective write may write any type's field whatever it reaches"
+		},
+		{
+			"name": "M-TS-REFLECT-FINAL",
+			"type": "anyparse.check.ObjectPaths",
+			"method": "stable",
+			"find": ": !reflectivelyWritten(type, name)",
+			"replace": ": true",
+			"note": "a final field is stable whatever a reflective write may reach"
+		},
+		{
+			"name": "M-TS-REFLECT-ANY",
+			"type": "anyparse.check.FieldWrites",
+			"method": "reachOf",
+			"find": " || !(types.meta.isClass(named) || types.isInterface(named))",
+			"replace": "",
+			"note": "a structure or an abstract bounds a reflective write like a class"
+		},
+		{
+			"name": "M-TS-REFLECT-TYPEPARAM",
+			"type": "anyparse.check.FieldWrites",
+			"method": "reachOf",
+			"find": "if (fn != null && _graph.typeParamBoundsOf(fn, named) != null) return null;",
+			"replace": "",
+			"note": "a type parameter named like a class bounds a reflective write like that class"
 		}
 	]
 }
