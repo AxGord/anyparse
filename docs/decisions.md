@@ -2017,3 +2017,25 @@ decided the question; it may not become a record of runs.
   Cost: thread-safety alone 4.65 s → 7.27 s (+56%, 655 → 996 MB), the plain lint 22.0 s → 25.0 s (+13–15%), all of
   it the rule's library work (parse 1.2 s, graph 0.5 s, defines 0.2 s, walk 0.1 s); B costs nothing measurable. The
   choice between A and B is the user's — branch `feat/ts-precision-4`
+- the lock-order walk following invocations only → a lock taken inside a value handed to a call that runs it
+  (`Lambda.iter(paths, p -> b.acquire())`, or a method value taking its own lock) under a hold of another was taken
+  under no hold, so an AB/BA pair one side of which takes its lock that way went unreported. `LockOrder.visit` now
+  follows the edges `ThreadStates.runsHere` says run there — the one predicate the hold window, `LockTaint.reach`,
+  `blockingTrail` and `onCycle` read since dfb52d4a — entering the value under the locks held at the call it is
+  handed to, knowing none of its parameters (`EdgeConditions.entered`); a value a `spawns` / `marshals` call runs on
+  another thread, or one a `registers` call keeps, stays a callback entered holding nothing. Additive: the entry and
+  callback seeding is unchanged, so every state the walk had stays and no step is lost. The same predicate means an
+  UNLISTED call is taken to run the value in place — the old control `Ui.defer(takeB)` now declares `Ui.defer` in
+  `registers`. Since runsHere over-approximates (a value handed to a project constructor that only STORES it is taken
+  to run there), a pair's WITNESS ranks a step — and a way into a state (`climb`) — through calls alone before one
+  through a value handed on (`Climb.handed`, `RankedStep.handed`), so a pair the old walk reported keeps its key: TM
+  bd943dac otherwise moved two real-long D keys onto `FileList.reload`, whose handed `_source.getThumbnail` is stored
+  by `new FileListGrid` and runs only after the hold (`FileListItemGrid.requestThumbnail`). Audit of the other lock
+  analyses, each walking invocations only on purpose: `LockSites` (its window carries `Ref` edges since dfb52d4a; the
+  wrapper / multi-lock-helper inference refuses any function with a `Ref` in-edge, `mayWrap`, so a value's take is a
+  hold of its own), `MustHeld` (a function with a non-inert `Ref` in-edge holds nothing on entry — an under-approximation,
+  sound for a must-analysis), `LockDominance` (reads `MustHeld`), `HoldGrade.handsOff` (a handed value that MAY give
+  the lock back proves no give; keeping it out keeps the hand-off reported). Not followed: a lock primitive handed as a
+  value itself (`Lambda.iter(ms, Mutex.acquire)`), never a take for `LockSites` (takes are `Call` edges). TM: bd943dac
+  byte-identical; 1d1ba147 and f81c2049 +2 D keys each (`FileList.reload`, the stored thumbnail getter), labelled
+  `false` — branch `feat/ts-precision-4`
