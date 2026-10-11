@@ -11420,8 +11420,8 @@
 			"name": "M-TS-ORDER-FOLLOWS-REFS",
 			"type": "anyparse.check.LockOrder",
 			"method": "visit",
-			"find": "if (e.kind.isInvocation())",
-			"replace": "if (e.kind.isInvocation() || e.kind == Ref)",
+			"find": "if (runsHere(e)) {",
+			"replace": "if (runsHere(e) || e.kind == Ref) {",
 			"note": "a callback registered under a hold is walked as if it ran there, holding the registrar's locks"
 		},
 		{
@@ -19181,6 +19181,46 @@
 			"find": "if (oracle == null) {",
 			"replace": "if (oracle == null) { return null;",
 			"note": "a libraryBodies entry naming no oracle hxml walks nothing in silence"
+		},
+		{
+			"name": "M-TS-ORDER-HANDED",
+			"type": "anyparse.check.LockOrder",
+			"method": "visit",
+			"find": "if (runsHere(e)) {",
+			"replace": "if (e.kind.isInvocation()) {",
+			"note": "the order walk follows calls only: a lock a value handed to Lambda.iter takes is taken under no hold"
+		},
+		{
+			"name": "M-TS-ORDER-HANDED-ANYWHERE",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "run",
+			"find": "e -> states.runsHere(e, listsOf(e.file));",
+			"replace": "e -> ThreadStates.runsWith(e, inertRef);",
+			"note": "a value a spawns or registers call runs elsewhere is walked as if it ran under the hold"
+		},
+		{
+			"name": "M-TS-ORDER-HANDED-RANK",
+			"type": "anyparse.check.LockOrder",
+			"method": "precedes",
+			"find": "a.handed != b.handed",
+			"replace": "false",
+			"note": "a step through a value handed on names a pair a step through calls alone also makes, by member order"
+		},
+		{
+			"name": "M-TS-ORDER-HANDED-CLIMB",
+			"type": "anyparse.check.LockOrder",
+			"method": "climbPrecedes",
+			"find": "a.handed != b.handed",
+			"replace": "false",
+			"note": "a way into a state through a value handed on names its holder over a way through calls alone"
+		},
+		{
+			"name": "M-TS-ORDER-HANDED-VIA",
+			"type": "anyparse.check.LockOrder",
+			"method": "climb",
+			"find": "handed: up.handed || arrival.via.kind == Ref",
+			"replace": "handed: up.handed",
+			"note": "no way into a state counts as passing a value handed on"
 		}
 	]
 }

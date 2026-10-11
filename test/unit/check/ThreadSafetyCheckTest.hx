@@ -1232,8 +1232,9 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/**
-	 * A callback registered under a hold — here by `register`, which `ui` calls
-	 * holding `_a` — runs later, holding nothing: `takeB` is no step from `_a` to `_b`.
+	 * A callback registered under a hold — here by `register`, which `ui` calls holding `_a`, through
+	 * `Ui.defer`, which `registers` names — runs later, holding nothing: `takeB` is no step from `_a` to `_b`.
+	 * A value handed to a call no list names runs where it is handed (`ThreadStates.runsHere`), under the hold.
 	 */
 	@:pin('control') @:killer('M-TS-ORDER-FOLLOWS-REFS')
 	public function testACallbackRegisteredUnderAHoldTakesNothingInOrder(): Void {
@@ -1542,15 +1543,14 @@ class ThreadSafetyCheckTest extends Test {
 
 	/**
 	 * Every lock-order finding of a `Mutex.acquire` run over `sources` (plus `Mutex` and `Runner`, whose `create` is a
-	 * spawn), re-entrant `Mutex` included.
+	 * spawn, and `Ui.defer`, which registers a callback), re-entrant `Mutex` included.
 	 */
 	public static function orderFindings(sources: Array<String>): Array<Violation> {
-		return
-			violations(
-				'{"rules":{"thread-safety":{"sinks":["Mutex.acquire"],"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"],'
-				+ '"reentrantLocks":["Mutex.acquire"]}}}',
-				[MUTEX, 'class Runner { public static function create(fn:()->Void):Void {} }'].concat(sources)
-			).filter(v -> v.message.indexOf('lock-order inversion') != -1);
+		return violations(
+			'{"rules":{"thread-safety":{"sinks":["Mutex.acquire"],"spawns":["Runner.create"],"registers":["Ui.defer"],'
+			+ '"lockPairs":["Mutex.acquire/release"],' + '"reentrantLocks":["Mutex.acquire"]}}}',
+			[MUTEX, 'class Runner { public static function create(fn:()->Void):Void {} }'].concat(sources)
+		).filter(v -> v.message.indexOf('lock-order inversion') != -1);
 	}
 
 	/** The messages of every throw-escape finding of a `Mutex.acquire` run over `sources`, `throwers` as given. */

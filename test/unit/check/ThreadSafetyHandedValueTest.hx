@@ -111,6 +111,31 @@ class ThreadSafetyHandedValueTest extends Test {
 		#end
 	}
 
+	/**
+	 * Lock order through a value handed on: the main thread holds `_a` across `Lambda.iter`, whose lambda or method value
+	 * takes `_b` there, while a spawned worker holds `_b` and takes `_a`. Before, the order walk followed calls only, so
+	 * the take of `_b` was made under no hold and the pair went unreported. A value run on another thread, or kept to run
+	 * per event, takes `_b` under no hold of `_a`.
+	 */
+	@:pin('control') @:killer('M-TS-ORDER-HANDED') @:killer('M-TS-ORDER-HANDED-ANYWHERE') @:killer('M-TS-ORDER-FOLLOWS-REFS')
+	@:killer('M-TS-ORDER-HANDED-RANK') @:killer('M-TS-ORDER-HANDED-CLIMB') @:killer('M-TS-ORDER-HANDED-VIA')
+	public function testALockTakenInAHandedValueOrdersUnderTheHold(): Void {
+		#if (sys || nodejs)
+		final pair: Array<String> = ['S.main | S._a / S._b'];
+		Assert.same(pair, orders('Lambda.iter(paths, p -> { _b.acquire(); _b.release(); });'), 'a lambda');
+		Assert.same(pair, orders('Lambda.iter(paths, takeB);'), 'a method value');
+		Assert.same([], orders('Runner.create(() -> takeB("x"));'), 'spawned');
+		Assert.same([], orders('Hub.on(takeB);'), 'registered');
+		Assert.same([], orders('Never.drop(() -> takeB("x"));'), 'never run');
+		// the same pair made through calls alone too: that way names it, whatever member sorts first
+		final direct: Array<String> = ['S.zDirect | S._a / S._b'];
+		Assert.same(direct, orders('Lambda.iter(paths, p -> { _b.acquire(); _b.release(); });', true), 'a lambda and a call');
+		Assert.same(direct, orders('Lambda.iter(paths, takeB);', true), 'a method value and a call');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
 	/**
 	 * `S.work` runs on a spawned thread and holds `_m` across `held`; the main thread takes `_m` too. `load` blocks, `caught` blocks only in its `catch`, `scan` hands `load` to `Lambda.iter`.
@@ -151,6 +176,38 @@ class ThreadSafetyHandedValueTest extends Test {
 			for (v in found) {
 				final data: Null<FindingData> = v.data;
 				if (data != null && data.family == 'A') '${v.severity.label()} A ${data.member} | ${data.subject}';
+			}
+		];
+		out.sort(Reflect.compare);
+		return out;
+	}
+	/**
+	 * The lock-order findings (D) as `<member> | <locks>`, sorted, of a run where `S.main` holds the static `_a` across
+	 * `held` after spawning `work`, which holds `_b` and takes `_a`; `takeB` takes `_b`, `Hub.on` registers a handler. With
+	 * `direct`, `main` then calls `zDirect`, which calls `takeB` holding `_a`.
+	 */
+	private static function orders(held: String, direct: Bool = false): Array<String> {
+		final call: String = direct ? 'zDirect();' : '';
+		final found: Array<Violation> =
+			ThreadSafetyCheckTest.violations(
+				'{"rules":{"thread-safety":{"sinks":["Mutex.acquire"],"spawns":["Runner.create"],"registers":["Hub.on"],'
+				+ '"neverInvokes":["Never.drop"],"lockPairs":["Mutex.acquire/release"]}}}',
+				[
+					ThreadSafetyCheckTest.MUTEX,
+					'class Runner { public static function create(fn:()->Void):Void {} }',
+					'class Never { public static function drop(fn:()->Void):Void {} }',
+					'class Hub { public static function on(fn:String->Void):Void {} }',
+					'class S { static final _a:Mutex = new Mutex(); static final _b:Mutex = new Mutex();'
+					+ ' static final paths:Array<String> = ["x", "y"]; static function takeB(p:String):Void { _b.acquire(); _b.release(); }'
+					+ ' static function work():Void { _b.acquire(); _a.acquire(); _a.release(); _b.release(); }'
+					+ (direct ? ' static function zDirect():Void { _a.acquire(); takeB("x"); _a.release(); }' : '')
+					+ ' public static function main():Void { Runner.create(work); _a.acquire(); $held _a.release(); $call } }'
+				]
+			);
+		final out: Array<String> = [
+			for (v in found) {
+				final data: Null<FindingData> = v.data;
+				if (data != null && data.family == 'D') '${data.member} | ${data.subject}';
 			}
 		];
 		out.sort(Reflect.compare);

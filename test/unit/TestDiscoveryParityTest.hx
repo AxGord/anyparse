@@ -2268,6 +2268,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyHandedValueTest#testAHandedValueRepeatsWithTheCallItIsHandedTo :: control :: M-TS-REPEAT-NO-ITERATES,M-TS-RUNS-ONCE-OFF',
 			'unit.check.ThreadSafetyHandedValueTest#testAHoldTaintsAValueHandedToACallThatRunsIt :: control :: '
 				+ 'M-TS-HANDED-RUNS-HERE,M-TS-HANDED-WINDOW-OFF,M-TS-HANDED-REACH-OFF,M-TS-HANDED-SINK-OFF',
+			'unit.check.ThreadSafetyHandedValueTest#testALockTakenInAHandedValueOrdersUnderTheHold :: control :: '
+				+ 'M-TS-ORDER-HANDED,M-TS-ORDER-HANDED-ANYWHERE,M-TS-ORDER-FOLLOWS-REFS,M-TS-ORDER-HANDED-RANK,M-TS-ORDER-HANDED-CLIMB,'
+				+ 'M-TS-ORDER-HANDED-VIA',
 			'unit.check.ThreadSafetyHandedValueTest#testAMainSinkHandedAsAValueIsReported :: control :: M-TS-HANDED-SINK-OFF',
 			'unit.check.ThreadSafetyHandedValueTest#testAMethodValueOfAnotherObjectWaitsForItsLock :: control :: M-TS-HANDED-RETAKE',
 			'unit.check.ThreadSafetyHandedValueTest#testAValueRunElsewhereTaintsNothing :: control :: M-TS-HANDED-ELSEWHERE,M-TS-CYCLE-REGISTERED',
@@ -6371,7 +6374,12 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-LIB-PROJECT-TYPE',
 			'M-TS-LIB-WAIVE-OFF',
 			'M-TS-LIB-WAIVE-SAID',
-			'M-TS-LIB-UNKNOWN-SAID'
+			'M-TS-LIB-UNKNOWN-SAID',
+			'M-TS-ORDER-HANDED',
+			'M-TS-ORDER-HANDED-ANYWHERE',
+			'M-TS-ORDER-HANDED-RANK',
+			'M-TS-ORDER-HANDED-CLIMB',
+			'M-TS-ORDER-HANDED-VIA'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

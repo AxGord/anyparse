@@ -237,7 +237,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		}, states, violations);
 		reportThrowHeld(graph, acquires.concat(helperHolds), throws, violations);
 		final order: LockOrder = new LockOrder(graph, conditions, acquires.concat(helperHolds));
-		for (v in order.report(states, inertRef, CTX_MAIN | CTX_QUIET, CTX_BG, CHAIN_CAP)) violations.push(v);
+		final runsHere: (CallEdge) -> Bool = e -> states.runsHere(e, listsOf(e.file));
+		for (v in order.report(states, inertRef, runsHere, CTX_MAIN | CTX_QUIET, CTX_BG, CHAIN_CAP)) violations.push(v);
 		// after every finding: the counterfactual solves fill taints of their own, which must not shape a report
 		longLocks = explained(sites, judged, long, costs, states, dominance.dominators, { taint: paths.normal, errors: errors });
 		library?.annotate(violations);
