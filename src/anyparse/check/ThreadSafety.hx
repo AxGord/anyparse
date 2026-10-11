@@ -769,7 +769,9 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final covers: Array<{ finding: Violation, by: Array<Violation> }> = [];
 		nestHolds(reported, covers);
 		foldEnclosed(reported, judged.enclosed, covers);
-		new RootCauseFold([for (c in sites.crossing) c.lock], covers, judged.threads).fold(folds);
+		// a multi-lock helper's give is its caller's release, as `solveLongLocks` reads it: it makes no lock long
+		final crossing: Array<String> = [for (c in sites.crossing) if (!sites.helpers.contains(c.edge.from)) c.lock];
+		new RootCauseFold(crossing, covers, judged.threads).fold(folds);
 	}
 
 	/**
@@ -877,11 +879,11 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	}
 
 	/**
-	 * Of two warned holds in one function, the one taken inside the other's window whose every long call that window spans
-	 * too turns info, naming the outer one: the outer hold's finding names the same calls. In take order, so an outer hold
-	 * is never itself turned by a hold it encloses; each turned one is recorded in
-	 * `covers`. A hold its function hands off (`HoldGrade.handsOff`) outlives the outer
-	 * window, across calls no finding of it names, and stays.
+	 * Of two warned holds in one function, the one taken inside the other's window — or after it by the same call of a
+	 * multi-lock helper (`takenFirst`) — whose every long call that window spans too turns info, naming the outer one: the
+	 * outer hold's finding names the same calls. In take order, so an outer hold is never itself turned by a hold it
+	 * encloses; each turned one is recorded in `covers`. A hold its function hands off (`HoldGrade.handsOff`) outlives the
+	 * outer window, across calls no finding of it names, and stays.
 	 */
 	private static function nestHolds(reported: Array<WarnedHold>, covers: Array<{ finding: Violation, by: Array<Violation> }>): Void {
 		reported.sort((x, y) -> (x.hold.edge.span?.from ?? 0) - (y.hold.edge.span?.from ?? 0));
@@ -890,14 +892,32 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			final outer: Null<WarnedHold> = reported.find(
 				o ->
 					o.hold != inner.hold && !turned.contains(o.hold) && o.hold.edge.from == inner.hold.edge.from
-					&& o.hold.window.contains(inner.hold.edge) && inner.calls.foreach(c -> o.hold.window.contains(c))
+					&& (o.hold.window.contains(inner.hold.edge) || takenFirst(o.hold, inner.hold))
+					&& inner.calls.foreach(c -> o.hold.window.contains(c))
 			);
 			if (outer == null) continue;
 			turned.push(inner.hold);
 			inner.finding.severity = Severity.Info;
-			inner.finding.message += ' — taken inside the hold of ${outer.hold.lock ?? outer.hold.pair.lockId}, whose finding names these calls';
+			final lock: String = outer.hold.lock ?? outer.hold.pair.lockId;
+			final helper: Null<CallEdge> = inner.hold.inner;
+			inner.finding.message += helper != null && takenFirst(outer.hold, inner.hold)
+				? ' — taken after the hold of $lock by the same call of ${helper.from}, whose finding names these calls'
+				: ' — taken inside the hold of $lock, whose finding names these calls';
 			covers.push({ finding: inner.finding, by: [outer.finding] });
 		}
+	}
+
+	/**
+	 * Whether one call of a multi-lock helper opens both holds (`LockAcquire.inner`), the helper's take of `outer`'s lock
+	 * written before its take of `inner`'s: the caller holds both from that call on, and of two holds across the same calls
+	 * the one the helper takes first — the outer lock of its order (TM's `StandardFileSystem.acquireMutationLocks`:
+	 * `_batchMutex`, then `_mutationMutex`) — keeps the warning. Whether the outer window spans the inner hold's long calls
+	 * is `nestHolds`' question.
+	 */
+	private static function takenFirst(outer: LockAcquire, inner: LockAcquire): Bool {
+		final first: Null<Span> = outer.inner?.span;
+		final then: Null<Span> = inner.inner?.span;
+		return first != null && then != null && outer.edge == inner.edge && first.to <= then.from;
 	}
 
 }

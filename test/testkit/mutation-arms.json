@@ -19221,6 +19221,46 @@
 			"find": "handed: up.handed || arrival.via.kind == Ref",
 			"replace": "handed: up.handed",
 			"note": "no way into a state counts as passing a value handed on"
+		},
+		{
+			"name": "M-TS-PAIR-OFF",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "nestHolds",
+			"find": "(o.hold.window.contains(inner.hold.edge) || takenFirst(o.hold, inner.hold))",
+			"replace": "o.hold.window.contains(inner.hold.edge)",
+			"note": "two holds one call of a multi-lock helper opens, across the same calls, warn twice"
+		},
+		{
+			"name": "M-TS-PAIR-ORDER",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "takenFirst",
+			"find": "first.to <= then.from",
+			"replace": "true",
+			"note": "either hold one helper call opens folds onto the other, whichever comes first, not the lock the helper takes first"
+		},
+		{
+			"name": "M-TS-FOLD-HELPER-CROSSING",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "reportLockHeld",
+			"find": "if (!sites.helpers.contains(c.edge.from)) c.lock",
+			"replace": "c.lock",
+			"note": "a multi-lock helper's give counts as a crossing release for the fold: a wait for its lock is never covered"
+		},
+		{
+			"name": "M-TS-FOLD-STUCK-WAIT",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "uncoverable",
+			"find": "(_makers[lock] ?? []).exists(neverReported)",
+			"replace": "false",
+			"note": "a hold waiting for a lock no finding reports stays open, so a cycle may keep a hold that would fold onto it"
+		},
+		{
+			"name": "M-TS-FOLD-STUCK-MADE",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "neverReported",
+			"find": "!_holds[m].madeWarning && ",
+			"replace": "",
+			"note": "a maker turned info around a warning counts as never reported: its waiters stay warnings"
 		}
 	]
 }

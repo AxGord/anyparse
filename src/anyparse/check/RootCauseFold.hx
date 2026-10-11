@@ -45,9 +45,12 @@ private typedef SiteDoer = {
  * on the I/O worker is not covered by `getText` on the sync worker), in the same function, or one
  * whose function the call's way passes (TM's `RemoteFileSystemBase.renameCloudFolderBlocked` over the loop
  * `CloudDatabase.moveCloudFolderSubItemsAction2` runs under its own lock); another lock's hold across the same work elsewhere
- * is a stall of its own. Positive: a lock long by a hand-off, an unresolved call, a release in another function or a
- * hold with no finding is not covered, nor is a hold long by what no call of it names. Holds covering each other round a
- * cycle keep the first by place and fold the rest onto it. Two holds sharing one finding are one warned hold, which never
+ * is a stall of its own. Positive: a lock long by a hand-off, an unresolved call, a release in another
+ * function (a multi-lock helper's give excepted: it is its caller's release) or a hold with no finding
+ * is not covered, nor is a hold long by what no call of it names. A hold waiting for a lock some hold with no finding reporting
+ * its work makes long stays from the start (TM's `StandardFileSystem.getText`, waiting for the tree lock `listFolder` holds),
+ * so a cycle never keeps a hold that could fold onto it; holds covering each other round a cycle keep the first by
+ * place and fold the rest onto it. Two holds sharing one finding are one warned hold, which never
  * covers itself; an info finding a hold around it turned counts as reported only while the warning it was turned onto does.
  */
 @:nullSafety(Strict)
@@ -68,7 +71,10 @@ final class RootCauseFold {
 	/** For each warned hold of `fold`, in place order, the fewest calls from the hold to a call it is long by. */
 	private final _depth: Array<Int> = [];
 
-	/** The locks long by a release in a function other than the take's (`LockSites.crossing`): no hold names why. */
+	/**
+	 * The locks long by a release in a function other than the take's (`LockSites.crossing`): no hold names why. A
+	 * multi-lock helper's give is no such release — it is its caller's, whose hold names the work (`ThreadSafety.solveLongLocks`).
+	 */
 	private final _crossing: Array<String>;
 
 	/**
@@ -332,15 +338,26 @@ for (d in doing[key] ?? []) if (covers(d, i, mayRepeat, way)) memberOf(_warned[d
 	}
 
 	/**
-	 * Whether `reason` of the warned hold at `i` can never be covered: long by what no call names, or by a sink call no
-	 * other warned hold makes at least as often (`covers`).
+	 * Whether `reason` of the warned hold at `i` can never be covered: long by what no call names, by a sink call no
+	 * other warned hold makes at least as often (`covers`), or by waiting for a lock a hold makes long whose work no finding
+	 * reports (`neverReported`) — such a hold stays before any cycle is broken, so the holds waiting for its lock fold onto
+	 * it rather than one of them staying in its place.
 	 */
 	private function uncoverable(reason: FoldReason, i: Int, doing: Map<String, Array<SiteDoer>>): Bool {
 		return switch reason {
 			case Uncovered: true;
 			case Site(key, _, mayRepeat, way): !(doing[key] ?? []).exists(d -> covers(d, i, mayRepeat, way));
-			case Waits(_): false;
+			case Waits(lock): (_makers[lock] ?? []).exists(neverReported);
 		};
+	}
+
+	/**
+	 * Whether the hold at `m` of `_holds` making a lock long can never count as reported (`reportedFor`), whatever `fold`
+	 * decides: it made no warning (`madeWarning` — every warned hold made one, and a hold turned info around it did too),
+	 * and no finding of it names a warning reporting its work instead (`elsewhere`).
+	 */
+	private function neverReported(m: Int): Bool {
+		return !_holds[m].madeWarning && !_holds[m].elsewhere;
 	}
 
 	private static function memberOf(m: FoldHold): String {

@@ -228,6 +228,60 @@ class ThreadSafetyHelperHoldsTest extends Test {
 		#end
 	}
 
+	/**
+	 * TM's `StandardFileSystem.createFolderItem`: one call of `acquireMutationLocks` opens a hold of `_batchMutex` and one
+	 * of `_mutationMutex`, across the same calls — here a wait for a lock given back elsewhere, which nothing folds. One
+	 * warning, on the lock the helper takes first; the other names it, taken after it by the same call.
+	 */
+	@:pin('control') @:killer('M-TS-PAIR-OFF') @:killer('M-TS-PAIR-ORDER')
+	public function testAHelpersLaterTakeFoldsOntoItsFirst(): Void {
+		#if (sys || nodejs)
+		final found: Array<Violation> = crossed('b.acquire(); a.acquire();');
+		Assert.same(['info B H.viaBoth | H.a', 'warning B H.viaBoth | H.b'], holds(found).filter(g -> g.indexOf('viaBoth') >= 0));
+		Assert.same([true], [
+			for (v in found) if (v.data?.member == 'H.viaBoth' && v.data?.subject == 'H.a')
+				v.message.indexOf(' — taken after the hold of H.b by the same call of H.takeBoth, ') >= 0
+		]);
+		Assert.same(
+			['info B H.viaBoth | H.b', 'warning B H.viaBoth | H.a'],
+			holds(crossed('a.acquire(); b.acquire();')).filter(g -> g.indexOf('viaBoth') >= 0), 'the other order'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * TM's `StandardFileSystem.acquireMutationLocks`: the helper holds its first lock across its take of the second, long
+	 * exactly when a hold of the second is — the twin's gives are its callers' releases, no crossing that leaves the lock
+	 * long by nothing a hold names. A hold of the second lock waiting for a lock no finding reports (`slowA`, for `k`)
+	 * stays a warning from the start, so the helper's wait folds onto it rather than staying in its place when the two
+	 * would cover each other round a cycle.
+	 */
+	@:pin('control') @:killer('M-TS-FOLD-HELPER-CROSSING') @:killer('M-TS-FOLD-STUCK-WAIT') @:killer('M-TS-FOLD-STUCK-MADE')
+	public function testTheHelpersWaitForItsSecondLockFoldsOntoItsHolders(): Void {
+		#if (sys || nodejs)
+		final found: Array<Violation> = crossed(
+			'b.acquire(); a.acquire();',
+			'public function slowA():Void { a.acquire(); waitK(); a.release(); } function waitK():Void { k.acquire(); k.release(); }'
+			+ ' public function holdK():Void { k.acquire(); Sys.sleep(1); k.release(); }',
+			'Runner.create(() -> h.slowA()); Runner.create(() -> h.holdK());'
+		);
+		Assert.same([
+			'info B H.takeBoth | H.b',
+			'info B H.viaBoth | H.a',
+			'warning B H.slowA | H.a',
+			'warning B H.viaBoth | H.b'
+		], holds(found));
+		Assert.same([true], [
+			for (v in found) if (v.data?.member == 'H.takeBoth')
+				v.message.indexOf(' — long only through waiting for H.a, held long by H.slowA, H.viaBoth, reported there') >= 0
+		]);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
 	/**
 	 * `H` with the two-lock helper pair, `viaBoth` running `body` on a worker (with `background` after it), `members`,
@@ -263,6 +317,22 @@ class ThreadSafetyHelperHoldsTest extends Test {
 			'class S { final _a:Mutex = new Mutex(); final _b:Mutex = new Mutex(); public function new() {} $lock $unlock'
 			+ ' public function work():Void { $body } public function peek():Void { _a.acquire(); _a.release(); } $members'
 			+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> s.work()); s.peek(); } }'
+		);
+	}
+	/**
+	 * `H` whose helper `takeBoth` runs `take`, `giveBoth` giving both locks back, `viaBoth` holding both on a worker across
+	 * a wait for `c` — which another worker takes in one function and gives back in another — with `members`, `background`
+	 * started after those workers, and the main thread taking `a` and `b`.
+	 */
+	private static function crossed(take: String, members: String = '', background: String = ''): Array<Violation> {
+		return source(
+			'class H { public final a:Mutex = new Mutex(); public final b:Mutex = new Mutex(); public final c:Mutex = new Mutex();'
+			+ ' public final k:Mutex = new Mutex(); public function new() {} function takeBoth():Void { $take }'
+			+ ' function giveBoth():Void { a.release(); b.release(); } public function viaBoth():Void { takeBoth(); waitC(); giveBoth(); }'
+			+ ' function waitC():Void { c.acquire(); c.release(); } public function holdC():Void { c.acquire(); }'
+			+ ' public function freeC():Void { c.release(); } $members public static function main():Void { final h:H = new H();'
+			+ ' Runner.create(() -> h.viaBoth()); Runner.create(() -> { h.holdC(); Sys.sleep(1); h.freeC(); }); $background'
+			+ ' h.a.acquire(); h.a.release(); h.b.acquire(); h.b.release(); } }'
 		);
 	}
 

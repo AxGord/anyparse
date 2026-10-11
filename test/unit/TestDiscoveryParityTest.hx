@@ -2278,10 +2278,13 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyHelperHoldsTest#testAHandedOffHoldIsNoInnerHold :: control :: M-TS-NEST-HANDOFF',
 			'unit.check.ThreadSafetyHelperHoldsTest#testAHelperReachedByDispatchIsNone :: control :: M-TS-HELPER-DISPATCH',
 			'unit.check.ThreadSafetyHelperHoldsTest#testAHelpersHoldHandedOffByItsCallerIsLong :: control :: M-TS-HELPER-HANDOFF',
+			'unit.check.ThreadSafetyHelperHoldsTest#testAHelpersLaterTakeFoldsOntoItsFirst :: control :: M-TS-PAIR-OFF,M-TS-PAIR-ORDER',
 			'unit.check.ThreadSafetyHelperHoldsTest#testTheHelpersCallerHoldsBothLocks :: control :: '
 				+ 'M-TS-HELPER-B-OFF,M-TS-HELPER-OWN-WINDOW',
 			'unit.check.ThreadSafetyHelperHoldsTest#testTheHelpersOtherLocksAreHeldToo :: control :: '
 				+ 'M-TS-HELPER-SIBLINGS,M-TS-SAME-LOCAL-ROOT,M-TS-HELPER-GIVE-OBJECT',
+			'unit.check.ThreadSafetyHelperHoldsTest#testTheHelpersWaitForItsSecondLockFoldsOntoItsHolders :: control :: '
+				+ 'M-TS-FOLD-HELPER-CROSSING,M-TS-FOLD-STUCK-WAIT,M-TS-FOLD-STUCK-MADE',
 			'unit.check.ThreadSafetyHelperHoldsTest#testTheTwinsGiveIsNoCrossingRelease :: control :: M-TS-HELPER-CROSSING',
 			'unit.check.ThreadSafetyHelperHoldsTest#testTheTwinsGiveLeavesDominanceStanding :: control :: M-TS-HELPER-DOM-CROSSING',
 			'unit.check.ThreadSafetyHelperHoldsTest#testWorkInsideAGivingHelperIsHeldByItsCaller :: control :: M-TS-HELPER-BODY-WORK',
@@ -6379,7 +6382,12 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-ORDER-HANDED-ANYWHERE',
 			'M-TS-ORDER-HANDED-RANK',
 			'M-TS-ORDER-HANDED-CLIMB',
-			'M-TS-ORDER-HANDED-VIA'
+			'M-TS-ORDER-HANDED-VIA',
+			'M-TS-PAIR-OFF',
+			'M-TS-PAIR-ORDER',
+			'M-TS-FOLD-HELPER-CROSSING',
+			'M-TS-FOLD-STUCK-WAIT',
+			'M-TS-FOLD-STUCK-MADE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
