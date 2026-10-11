@@ -1987,3 +1987,33 @@ decided the question; it may not become a record of runs.
   engine). TM: every score row identical, no warning key new, lost or moved; one info key per tree (B
   `FileList.reload|FolderWatcher._mutex`, a main-only hold whose long call finding (a) reports); runtime unchanged
   (15.7 s → 15.8 s, three trees) — branch `feat/ts-precision-4`
+- a call into a library with a Haxe body ends the graph, so blocking I/O inside lime/openfl (T1: 4852 main-context
+  sites on TM 1d1ba147) is invisible → EXPERIMENT, opt-in `libraryBodies` (`LibraryBodies`, `LibraryBuild`): the
+  option names ONE `compilerOracle` entry's hxml; its library classpaths (every `-cp` holding no run file, every
+  `-lib`) are read under its defines read off the hxml with no compile (the `-D`s, a dash read as `_`; the entry's
+  `defines`; the target's own; `haxe`/`haxe_ver` from `haxe -version`), every branch they do not compile blanked
+  (`ReachLiveness.skippedOf`, closed world), a file of another target's package / suffix or one its target's copy
+  stands in for left out, and walked as a graph of their own — a SUMMARY, not a merged graph: the run's graph and its
+  contexts are unchanged, each external call whose library member reaches a library sink (natives as `ProjectNatives`
+  reads them, the runtime's blocking calls, `sinks`, less `nonBlocking`) through calls, overrides and values handed to a
+  call that runs them there becomes a sink of the chains writing the option, so a finding stays keyed
+  `A|<project function>|<library call>` and `data.chain` goes on to the library sink; a project type's call runs its
+  nearest library superclass's member and no library override. Off by default (TM: byte-identical reports on the three
+  frozen trees). MEASURED on TM 1d1ba147, mac-release defines, 1119 library files (lime, openfl, swf, actuate, mime,
+  hx4compat, extension-video-export, extension-file-save), 4 unparsed (AS3 leftovers in swf): with every library
+  native and wait as a sink (the positive default) 473 new warning keys, 0 of a 40-key sample real-long (17 reachable but
+  no I/O — openfl's cpp `ObjectPool` mutex, `ImageDataUtil` prims, `System.getTimer` — and 23 false paths); with only
+  the file / network / process / dialog prims as sinks (non-I/O natives, waits and target code waived for the
+  measurement on both sides) 366 new keys, ~12% real-long (TextField layout → `TextEngine.findFont` → `Font.fromFile`
+  opening a font file for an unregistered or default font; openfl `File` stats; `Lib.getURL` → `Sys.command`), 87%
+  false: a constructor branch on a static only stage construction sets (`DisplayObject.__initStage`, 185 keys), an
+  event-type branch (`TextField.__dispatch` opens a URL only on a link click, 71), an argument the call never passes
+  (`Font.enumerateFonts()` reads the font directory only for `true`, 59), dispatch to a library subclass the receiver
+  is not (`DatagramSocket`/`SWF` overrides, `Stage.__dispatchEvent`), a simple-name collision (`swf.runtime.Shape` for
+  openfl's). It MISSES the loaders themselves: lime/openfl locals are un-annotated (`var symbol = new LibrarySymbol(id)`)
+  and `import lime.utils.Assets as LimeAssets` is unresolved, so `Assets.getBitmapData` never reaches
+  `lime_image_load_file`. The loader list as plain `sinks` (B) gives 50 new keys, 20 of a 40-key sample real-long
+  (`getBitmapData`, `getText`) and 20 no I/O (`getMovieClip` on `preload="true"` SWF libraries, embedded `getFont`).
+  Cost: thread-safety alone 4.65 s → 7.27 s (+56%, 655 → 996 MB), the plain lint 22.0 s → 25.0 s (+13–15%), all of
+  it the rule's library work (parse 1.2 s, graph 0.5 s, defines 0.2 s, walk 0.1 s); B costs nothing measurable. The
+  choice between A and B is the user's — branch `feat/ts-precision-4`
