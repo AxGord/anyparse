@@ -2059,3 +2059,22 @@ decided the question; it may not become a record of runs.
   different sink call site (A family: an argument value, a virtual dispatch, the release half of one hand-off); a
   representative the engine already keeps for the truth's target (`Store.removeKeys` over `Store.put`, threads
   superset) — branch `feat/ts-precision-4`
+- a reflective write of a COMPUTED name unseen (`Reflect.setField(o, key, v)`, the gap the constant-name entry above
+  left) → a field another code path rewrites by name stayed stable for `ObjectPaths` and sealed for `AllocationSets`.
+  `FieldWrites` now files a computed-name write under every name (`of`), reads the `using Reflect` extension form
+  (`o.setField(key, v)` — any call of that shape and arity; it cannot tell a `using` from a method so named, and
+  over-counting only unsettles) and `deleteField`, and takes `o[key] = v` into a value declared `Dynamic` /
+  `DynamicAccess` as a reflective write. Each reflective write is bounded by its target's DECLARED type (`reachOf`):
+  a class or interface declared once → it, every subtype, and every type on the chain of each (the object is one of
+  them; its fields are declared along its chain); anything else — `Dynamic`, `Any`, a type parameter (also one named
+  like a class), a structure or an abstract (a value of any class may be one), a library or unknown type — reaches
+  every type. No narrower bound is sound without tracking which objects flow into a dynamic value; the cost falls only
+  on the fields a consumer asks about (lock paths, dispatched receivers, switch subjects). A reflective write is no
+  respecter of `final`: `ObjectPaths.stable` holds a `final` stable only while none may reach it (TM: same reports with
+  and without that half). TM's three any-type writes (`drill.Node.toTarget`: `targetObject:T`; `Node.snapshot` and
+  `Form.get_data`: a `Dynamic` local) unsettle every field: 1d1ba147 +1 C key (`FileList.reload`, the `viewType`
+  switch no longer provably exhaustive), 1 B key info → warning, both already labelled; f81c2049 / bd943dac 1–2 B
+  warnings fold to info. NOT covered: a reflective write a run that does not see the whole project leaves out (a
+  `final` stays trusted there, as before), a reflective writer reached by another name (`final set = Reflect.setField`),
+  an index write into a container whose type the declarations do not say, and the lock-member sealing of `LockSites`
+  (`collectUnsealed` reads only syntactic occurrences of the member's name) — branch `feat/ts-precision-4`
