@@ -292,7 +292,7 @@ final class FieldWrites {
 
 	/**
 	 * The index of the files the graph holds, built on the first demand: what `typeOf` resolves a member type through. Not
-	 * the resolution index (std + libraries): building that one took 5 of TM's 10 s. A member chain
+	 * the resolution index (std + libraries): building that one cost more than the rest of the rule (decisions.md, FX3). A member chain
 	 * through a library type stays unknown, which costs precision only: `reachOf` places only a project
 	 * class, and an index write into a container of an unknown type is a reflective one (`record`).
 	 */
