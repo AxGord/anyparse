@@ -2152,3 +2152,32 @@ decided the question; it may not become a record of runs.
   messages re-rendered with the same-way calls the std receivers add, one uncovered-call count); no other rule moved, and
   anyparse's 2311 findings are identical. Time on TM 1d1ba147 (median of 3): all rules 22.69 s -> 22.63 s, thread-safety
   alone 9.81 s -> 9.85 s — the std modules are read lazily and only a handful are asked for.
+- the T4 cost (FX3): `--rule thread-safety` on TM 1d1ba147 went 4.75 s -> 9.97 s (median of 5) with the computed-name
+  reflective writes. Profiled, not guessed: none of it was the reach consumers (`of`, `mayWrite`, `ObjectPaths.stable`
+  together ~0.02 s) — `FieldWrites.typeOf` asked `CheckScan.typeNominalResolver`, which builds the std + library
+  resolution index on first use (5.0 of 10.8 s). `typeOf` now resolves through an index of the files the graph holds
+  (`heldIndex`, built once on demand; `typeNominalResolver`'s new `resolution: false`). Checked side by side before the
+  switch: every FieldWrites query answered the same under both typers (TM 174/171/167 queries, the fixtures 1776), and
+  the reports are byte-identical on the three trees and all 315 fixture runs; 9.97 s -> 5.82 s (a second session,
+  median of 5 each: 3599e65b 5.01 s, 01ed3fe1 10.17 s, this fix 5.54 s, with the F3 / F11 entries below 5.60 s). What the narrower index
+  loses — a member chain through a LIBRARY type — costs precision only once an index write into an unknown container is
+  itself a reflective write (below). The remaining ~1 s over 3599e65b is FX1's all-ways walk and FX2's std typing.
+- lock-member sealing vs reflective writes (review round 4 `f3`): `Reflect.setField(this, "_l", _m)` makes `_l` the lock
+  `_m` is, yet `_l` stayed sealed, so the main thread's take of it waited for nothing. `LockSites.collectUnsealed` now
+  unseals a lock member a reflective write may store a value in (`FieldWrites.reflectivelyWritten`): one filed under its
+  name (a literal, on any value), or a computed one whose reach holds a type declaring the member on its chain. A
+  computed name on a value of NO known class (`Dynamic`, `Any`, a type parameter: `reachOf` null) is deliberately not
+  counted, and the run says so in one `info` naming the functions (`FieldWrites.notices`). Counting it was built and
+  measured: TM's `Node.toTarget` (`targetObject:T`), `Node.snapshot` / `Form.get_data` (`Dynamic` locals) and
+  `ShareUsersStore`'s enum-binder maps make every lock member of TM hold any lock, so no lock keeps its name — 1d1ba147
+  153 -> 225 findings and 37 of 102 recall keys re-keyed to the lock's class (f81c2049 0/5, bd943dac 1/9). Bounding
+  those writes soundly needs the objects flowing into a `Dynamic` value or a type parameter (`Node`'s `T` is set through
+  `cast` writes and `Type.createInstance(Type.resolveClass(name))`); left open, said in the run.
+- reflective-write escapes (review round 4 `f11`): `DynamicAccess.set` / `remove` on a value declared `DynamicAccess`;
+  `Reflect.setField` / `setProperty` / `deleteField` read as a VALUE rather than called (`final set = Reflect.setField`,
+  `o.setField` under a `using`) — a computed-name write at the read, of any type off `Reflect`, of the receiver's as an
+  extension, since where the value is later called is not tracked; and an index write `o[k] = v` into ANY value not
+  declared an array, a map, a vector or a byte buffer (`ELEMENT_INDEXED_TYPES`, a positive list) — `untyped c[k]`
+  (bounded by `c`'s class), `(cast c : Dynamic)[k]`, an enum binder whose type the declarations do not say. TM: reports
+  byte-identical but for the new notice (its any-type writes already unsettled every field); fixtures: the four review
+  escapes warn, nothing that warned stopped.
