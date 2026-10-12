@@ -2181,3 +2181,23 @@ decided the question; it may not become a record of runs.
   (bounded by `c`'s class), `(cast c : Dynamic)[k]`, an enum binder whose type the declarations do not say. TM: reports
   byte-identical but for the new notice (its any-type writes already unsettled every field); fixtures: the four review
   escapes warn, nothing that warned stopped.
+- names a wildcard or a guarded import binds (review round 5 `N1`): beside a project `utils.Lock`, `import sys.thread.*;`
+  or `#if sys import sys.thread.Lock; #end` left `Lock` keyed as the project type — `CallGraphImports.typeOf` read only
+  unguarded explicit imports — so the runtime's `wait` went silent. A wildcard of a package now binds a name the project
+  or the std core declares there (`StdTypes.declaresModule`), in the order Haxe searches (own module, explicit imports,
+  wildcards last first, then the package — checked against the compiler); a guarded import or wildcard, or a wildcard of
+  a package neither holds (a library's), MAY supply the name, so a call or a `new` on the type the file keys runs every
+  candidate (`alternateTypes`). The candidates are read off the FILE, not the value: carrying a candidate list on every
+  declared type, receiver and type source was the alternative, for a shape TM does not have (all-rules reports
+  identical on the three trees); the price is that a value of that type the file did not write takes the candidates
+  too. Method values and member chains through such a name still use the first candidate only.
+- dotted patterns (review round 5 `N3`): `pkg.Type.method` / `pkg.Type.*` also matched the bare simple name, so
+  `nonBlocking: ["sys.thread.Lock.* …"]` waived the project native `utils.Lock.spin`. A pattern written with a package
+  now names the type declared at that path alone (`CallGraphImports.pathKey`, `memberIds`, `typeKeys`): a project path
+  is the simple key, any other path the path key while the project declares the simple name elsewhere. The old "matches
+  by its last two segments" is gone for a package that is wrong — such an entry now matches nothing, said only for a
+  `nonBlocking` entry (and a `sinks` list matching nothing at all); TM's four configs: all-rules reports identical.
+- a local initialised by a call (review round 5 F4 residue): `final i = Sys.stdin(); i.readLine()` left `i` untyped. A
+  local written with no type whose initializer is a call holds what `typeSourceOf` reads for that call — the reading a
+  call receiver already got (`CallGraphKeys.callInitializers`, `throughInitializer` against a cycle). Any other
+  initializer (a field read, a ternary) stays untyped — branch `feat/ts-precision-5`
