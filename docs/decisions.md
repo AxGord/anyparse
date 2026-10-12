@@ -2116,3 +2116,39 @@ decided the question; it may not become a record of runs.
   "whose finding names these calls" read as a warning); the warning a lock's main-thread takes fold into carries what
   repeats each folded take (TM's `Store.get` names `Main.reboot` again, lost when `Store.remove`'s take turned long) —
   branch `feat/ts-precision-4`
+- a library type keyed apart from a project type of its simple name (review round 4 `f7`): the call graph keyed every
+  type by its simple name, so `l:sys.thread.Lock` beside a project `extern class utils.Lock` called the project's
+  native, and a waiver of that native (`nonBlocking: ["utils.Lock.wait …"]`) silenced the runtime's wait on main.
+  Making `SymbolIndex` and every graph table package-aware was the full fix and touches every consumer; instead a type
+  is keyed by its PATH only where it collides — written dotted, or bound by an import or an alias of the writing file,
+  while a project type of that simple name lives elsewhere (`CallGraphImports.typeOf` / `pathType`) — so every id and
+  config pattern of a project without a collision stays as it was (TM: no import of a library path whose simple name a
+  TM type bears; reports byte-identical in that respect). A pattern finds a keyed node by its path or its simple name
+  (`keyedIds`, `matchIds`). The resolution reads the writing file's imports for that file's own declarations only; a
+  member type written by its simple name in ANOTHER file stays merged — hence the backstop: a `nonBlocking` entry naming
+  a project native whose id is a builtin call's name is kept and said (`PositiveSinks.shadowing`), since a library call
+  the graph cannot tell apart may resolve there.
+- std signatures for receivers (review round 4 `f4`): `Sys.stdin().readLine()`, `socket.input.readLine()` and an
+  unannotated `final h = new sys.Http(…)` left their calls unresolved, and `import sys.io.File as F` made `F.getContent`
+  an unknown node. Reading the lint run's resolution index (std plus every `resolutionLibs` haxelib) was considered and
+  refused: a thread-safety-only run would parse all of TM's twenty libraries, and it would type openfl receivers the
+  question did not ask about. `StdTypes` reads the std core only (the toplevel, `haxe/`, `sys/` — the same core
+  `StdResolver.resolutionSpecs` joins to the resolution scope), one module at a time on demand, by simple name like the
+  graph, answering only where every std type of that name that declares the member says the same thing (type, accessors).
+  The graph asks it for a placeholder's return type, a field's type on a type the project does not declare, and a
+  property's getter — the last on a local or parameter receiver, or on a receiver the graph types, when the name is no
+  project property. Import aliases go through `typeOf`; a `new T(…)` initialiser types an unannotated local (the static
+  type Haxe infers). Limits kept: a local initialised by any other call stays untyped; `"resolutionStd": false` is not
+  seen by the graph (`APQ_NO_STD` is), as for `HaxeQueryPlugin.knownExtensionMethods`. Builtin set +6:
+  `UdpSocket.readFrom` / `sendTo`, `EventLoop.loop` / `wait`, `Thread.runWithEventLoop`, `ResultSet.get_length` (the
+  cpp getter steps every row). TM: 1d1ba147 +2 A warning keys, both rare (`CleanExit.exit|Output.flush` taking the way
+  from `untyped.__cpp__`, `LanguageManager.t|Output.writeString` under `#if reportkeys`), +2 info keys (dup-of); f81c2049
+  +2 / bd943dac +1 warning keys of the same two; recall full on all three.
+- config text (review round 4 `f8`, `f9`): `libraryBodies` names the `-lib` haxelib cannot resolve and the `-cp` that does
+  not exist instead of walking nothing in silence; the builtin notice counts the sinks the run's `nonBlocking` entries
+  removed and the entries that removed one.
+- the shared-graph change measured beyond the rule (FX2): full `hxq lint src --no-oracle` on the three TM trees and on
+  anyparse's own `src`, engine before vs after — every changed finding is a thread-safety one (the keys above, three
+  messages re-rendered with the same-way calls the std receivers add, one uncovered-call count); no other rule moved, and
+  anyparse's 2311 findings are identical. Time on TM 1d1ba147 (median of 3): all rules 22.69 s -> 22.63 s, thread-safety
+  alone 9.81 s -> 9.85 s — the std modules are read lazily and only a handful are asked for.
