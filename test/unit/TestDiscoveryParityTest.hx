@@ -2338,11 +2338,16 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyOwnReasonsTest#testAHoldItsFunctionNeverGivesBackIsLong :: control :: M-TS-HANDOFF-OFF,M-TS-HANDOFF-GIVES',
 			'unit.check.ThreadSafetyOwnReasonsTest#testARepeatedOrUnknownUnresolvedCallKeepsTheLockLong :: control :: M-TS-DOM-BRIEF-REPEATED',
 			'unit.check.ThreadSafetyOwnReasonsTest#testAnUnresolvedCallInACatchIsAnErrorPath :: control :: M-TS-BLIND-CATCH-OFF',
+			'unit.check.ThreadSafetyPositiveSinksTest#testADottedWaiverNamesOnlyTheTypeAtThatPath :: control :: M-TS-DOTTED-WILDCARD',
 			'unit.check.ThreadSafetyPositiveSinksTest#testALibraryTypeIsNotItsProjectNamesake :: control :: '
 				+ 'M-TS-PATH-FOREIGN,M-TS-PATH-IMPORT,M-TS-PATH-RECEIVER-STATIC,M-TS-PATH-NEW,M-TS-PATH-MATCH,M-TS-SHADOWING-KEPT,'
 				+ 'M-TS-PATH-DECLARED-PACKAGE,M-TS-PATH-NOMINAL,M-TS-PATH-RETURN,M-TS-PATH-NULLABLE-KEYED,M-TS-ALIAS-TYPE',
+			'unit.check.ThreadSafetyPositiveSinksTest#testALocalOfACallResultIsTypedByWhatTheCallReturns :: control :: '
+				+ 'M-TS-LOCAL-CALL-INIT,M-TS-LOCAL-CALL-READ',
 			'unit.check.ThreadSafetyPositiveSinksTest#testAStdMemberStandsWhereEveryNamesakeAgrees :: control :: '
 				+ 'M-TS-STD-AGREE,M-TS-STD-SUPER,M-TS-STD-SIBLING',
+			'unit.check.ThreadSafetyPositiveSinksTest#testAWildcardOrGuardedImportOfALibraryTypeIsNotItsProjectNamesake :: control :: '
+				+ 'M-TS-WILD-PACKAGES,M-TS-WILD-OWN-MODULE,M-TS-WILD-EXPLICIT-FIRST,M-TS-WILD-STD,M-TS-GUARDED-IMPORT,M-TS-ALTERNATE-CALL',
 			'unit.check.ThreadSafetyPositiveSinksTest#testNonBlockingWaivesOnEvidence :: control :: '
 				+ 'M-TS-WAIVE-OFF,M-TS-WAIVE-SAYS-NOTHING,M-TS-WAIVE-SINKS-WIN,M-TS-OPT-NONBLOCKING-EVIDENCE',
 			'unit.check.ThreadSafetyPositiveSinksTest#testProjectNativesBlock :: control :: '
@@ -2987,6 +2992,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.BodySlotGuardSliceTest#testAllowsSoleCatchClauseRemovalWithATrailingComment :: control :: M-BODYSLOT-TRIM-WS-ONLY',
 			'unit.query.BodySlotGuardSliceTest#testAllowsWholeElseBranchRemoval :: control :: M-BODYSLOT-LEAD-KEPT',
 			'unit.query.CallGraphTest#testALambdaParameterIsNoReferenceToItsLambda :: control :: M-GRAPH-LAMBDA-PARAM-SELF',
+			'unit.query.CallGraphTest#testAWildcardOrGuardedNameDispatchesToEveryTypeItMayBe :: control :: '
+				+ 'M-TS-WILD-EXPLICIT-NO-MAYBE,M-TS-WILD-MAYBE,M-TS-WILD-GUARDED,M-TS-WILD-PROJECT,M-TS-WILD-ORDER,M-TS-STD-PACKAGES,'
+				+ 'M-TS-ALTERNATE-SAME,M-TS-ALTERNATE-NEW',
 			'unit.query.CallGraphTest#testAddFilesUpgradesTheExternalPlaceholder :: control :: M-GRAPH-UPGRADE-EXTERNAL',
 			'unit.query.CallGraphTest#testBareCallSomethingElseMaySupplyIsNeverAConstructor :: control :: '
 				+ 'M-GRAPH-IMPORT-UNLISTED,M-GRAPH-UNLISTED-WILDCARD',
@@ -3022,6 +3030,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CallGraphTest#testReceiverFieldNamesOnlyAMemberReadDirectly :: control :: ' + 'M-GRAPH-RECEIVER-LOCAL-FIELD',
 			'unit.query.CallGraphTest#testReceiverFieldSkipsAPropertyWithAGetter :: control :: M-GRAPH-RECEIVER-PROPERTY',
 			'unit.query.CallGraphTest#testReceiverTypedThroughDeclaredMemberTypes :: control :: M-GRAPH-FIELD-PATH-RECEIVER',
+			'unit.query.CallGraphTest#testResolveTargetBareAndQualified :: control :: M-TS-DOTTED-TARGET',
 			'unit.query.CallGraphTest#testStaticExtensionResolvesThroughTheUsing :: control :: M-GRAPH-USING-EXTENSION',
 			'unit.query.CallGraphTest#testStaticFieldReadOffItsTypeIsTyped :: control :: M-GRAPH-STATIC-FIELD-TYPE',
 			'unit.query.CallGraphTest#testSuperCallRunsTheGeneratedConstructorsInitializers :: control :: M-GRAPH-SUPER-CTOR-RUN',
@@ -6477,7 +6486,25 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-STD-SIBLING',
 			'M-TS-LIB-LOST-LIB-SAID',
 			'M-TS-LIB-LOST-CP-SAID',
-			'M-TS-BUILTIN-EVENTS'
+			'M-TS-BUILTIN-EVENTS',
+			'M-TS-WILD-PACKAGES',
+			'M-TS-WILD-OWN-MODULE',
+			'M-TS-WILD-EXPLICIT-FIRST',
+			'M-TS-WILD-EXPLICIT-NO-MAYBE',
+			'M-TS-WILD-MAYBE',
+			'M-TS-WILD-GUARDED',
+			'M-TS-WILD-STD',
+			'M-TS-WILD-PROJECT',
+			'M-TS-WILD-ORDER',
+			'M-TS-STD-PACKAGES',
+			'M-TS-GUARDED-IMPORT',
+			'M-TS-ALTERNATE-SAME',
+			'M-TS-ALTERNATE-CALL',
+			'M-TS-ALTERNATE-NEW',
+			'M-TS-DOTTED-TARGET',
+			'M-TS-DOTTED-WILDCARD',
+			'M-TS-LOCAL-CALL-INIT',
+			'M-TS-LOCAL-CALL-READ'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

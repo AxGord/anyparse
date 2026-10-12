@@ -35,6 +35,18 @@ final class CallGraphImports {
 	/** Type simple name -> the paths `pathType` keyed apart from the declarations of that name, as it met them. */
 	private final _foreign: Map<String, Array<String>> = [];
 
+	/** File -> the names of the types its own module declares, which its code means before any import's. */
+	private final _ownTypes: Map<String, Array<String>> = [];
+
+	/**
+	 * File -> the packages its wildcard imports (own and ambient) open, in the order the language searches them — the file's
+	 * own last to first, then each ambient group nearest first — each with whether it is `#if`-guarded.
+	 */
+	private final _wildPackages: Map<String, Array<WildPackage>> = [];
+
+	/** File -> the type names its `#if`-guarded `import p.T;` statements bind, and the path each names: on some builds only. */
+	private final _guardedPaths: Map<String, Array<{ name: String, path: String }>> = [];
+
 	private final _enumConstructorKinds: Array<String>;
 
 	/** Whether a type declares a member static — the tables that answer it live with the types. */
@@ -98,6 +110,35 @@ final class CallGraphImports {
 			for (name => path in bound) if (!paths.exists(name)) paths[name] = path;
 		}
 		_typePaths[key] = paths;
+		recordSearchOrder(fi, key, groups, imports);
+	}
+
+	/**
+	 * What `wildcardPath` and `alternateTypes` read of `fi`, held under `key`, whose import `groups` are the file's own and
+	 * then its ambient ones, nearest first, and whose `imports` are every one of them a `using` is not: the types its module
+	 * declares, the packages its wildcards open in search order, the names its guarded imports bind.
+	 */
+	private function recordSearchOrder(fi: FileInfo, key: String, groups: Array<Array<ImportInfo>>, imports: Array<ImportInfo>): Void {
+		_ownTypes[key] = [for (t in fi.types) t.name];
+		final wild: Array<WildPackage> = [];
+		for (group in groups) {
+			final opened: Array<WildPackage> = [
+				for (imp in group) {
+					final pkg: String = imp.raw.substring(0, imp.raw.length - 2);
+					// `p.T.*` opens the statics of a type, which `importedStatics` reads; `p.*` a package, whose modules it brings in
+					if (imp.kind == ImportKind.Wild && !CallGraphNames.isTypeLike(SourceText.lastSegment(pkg)))
+						{ pkg: pkg, guarded: imp.guarded };
+				}
+			];
+			opened.reverse();
+			for (w in opened) wild.push(w);
+		}
+		_wildPackages[key] = wild;
+		_guardedPaths[key] = [
+			for (imp in imports)
+				if (imp.kind == ImportKind.Import && imp.guarded && CallGraphNames.isTypeLike(SourceText.lastSegment(imp.raw)))
+					{ name: SourceText.lastSegment(imp.raw), path: imp.raw }
+		];
 	}
 
 	/**
@@ -167,15 +208,41 @@ final class CallGraphImports {
 
 	/**
 	 * The name the graph keys the type `written` in `file` by (`CallGraph` keys types by simple name): the simple name,
-	 * unless the type the file means — a dotted path written out, or the path an import or an alias of the file binds
-	 * the name to — is not a declaration of that simple name the tables hold while one of them bears it. Then the path
-	 * itself: `sys.thread.Lock` beside a project `utils.Lock` is another type, and merging the two by name would make a
-	 * call of the library one run the project's. A name no import binds stays as written.
+	 * unless the type the file means — a dotted path written out, the path an import or an alias of the file binds the name
+	 * to, or the module a wildcard import of a package supplies under it (`wildcardPath`) — is not a declaration of that
+	 * simple name the tables hold while one of them bears it. Then the path itself: `sys.thread.Lock` beside a project
+	 * `utils.Lock` is another type, and merging the two by name would make a call of the library one run the project's. A
+	 * name nothing binds stays as written.
 	 */
 	public function typeOf(file: String, written: String): String {
 		if (written.indexOf('.') >= 0) return pathType(written);
-		final path: Null<String> = (_typePaths[CallGraphNames.normalizePath(file)] ?? [])[written];
+		final key: String = CallGraphNames.normalizePath(file);
+		final path: Null<String> = (_typePaths[key] ?? [])[written] ?? wildcardPath(key, written);
 		return path == null ? written : pathType(path);
+	}
+
+	/**
+	 * The other types a value `file` keys as `type` (`typeOf`) may be, which a call on it may run too: a name an `#if`-guarded
+	 * import binds to another type on some builds, and a name a wildcard import of a package may supply where the tables
+	 * cannot tell whether it does (a guarded wildcard, or a package neither the project nor the std core holds), searched
+	 * before the type `typeOf` settled on. Read off the file, not the value: a value of `type` the file did not write
+	 * takes them too.
+	 */
+	public function alternateTypes(file: String, type: String): Array<String> {
+		final key: String = CallGraphNames.normalizePath(file);
+		final guarded: Array<{ name: String, path: String }> = _guardedPaths[key] ?? [];
+		final wild: Array<WildPackage> = _wildPackages[key] ?? [];
+		if (guarded.length == 0 && wild.length == 0) return [];
+		final name: String = SourceText.lastSegment(type);
+		if (typeOf(file, name) != type) return [];
+		final paths: Array<String> = [for (g in guarded) if (g.name == name) g.path];
+		if (!(_typePaths[key] ?? []).exists(name)) wildcardPath(key, name, paths);
+		final out: Array<String> = [];
+		for (path in paths) {
+			final alternate: String = pathType(path);
+			if (alternate != type && !out.contains(alternate)) out.push(alternate);
+		}
+		return out;
 	}
 
 	/**
@@ -183,13 +250,30 @@ final class CallGraphImports {
 	 * whose simple name a declaration they hold bears. A path starting at a type (`Module.Sub`) is read by its last segment.
 	 */
 	public function pathType(path: String): String {
+		final key: String = pathKey(path);
+		if (key == path && path.indexOf('.') >= 0) CallGraphTypes.unionInto(_foreign, SourceText.lastSegment(path), [path]);
+		return key;
+	}
+
+	/**
+	 * The key a written dotted path of a type names, for matching it (`CallGraph.matchIds`): `pathType`'s, without recording
+	 * the path as met.
+	 */
+	public function pathKey(path: String): String {
 		final simple: String = SourceText.lastSegment(path);
 		final dot: Int = path.indexOf('.');
 		if (dot < 0 || CallGraphNames.isTypeLike(path.substring(0, dot))) return simple;
 		final declared: Null<Array<String>> = _declaredPaths[simple];
-		if (declared == null || declared.contains(path)) return simple;
-		CallGraphTypes.unionInto(_foreign, simple, [path]);
-		return path;
+		return declared == null || declared.contains(path) ? simple : path;
+	}
+
+	/**
+	 * The type keys a pattern `T.*` or `pkg.T.*` names, `written` its part before `.*` (`CallGraph.matchIds`): every type
+	 * keyed by the simple name `T`, by it or by a path ending in it; the one declared at `pkg.T` alone (`pathKey`).
+	 */
+	public function typeKeys(written: String): Array<String> {
+		final simple: String = SourceText.lastSegment(written);
+		return written == simple ? foreignPaths(simple).concat([simple]) : [pathKey(written)];
 	}
 
 	/** The paths of types outside the tables that bear the simple name `simple`, each keyed by its path (`pathType`). */
@@ -198,17 +282,33 @@ final class CallGraphImports {
 	}
 
 	/**
-	 * The graph ids a member query `T.m` or `pkg.T.m` names beside the one of its last two segments: the member `m` of each
-	 * type `pathType` keyed by a path ending in `T` — every such type for a query naming `T` alone, the one it names for a
-	 * query naming the path.
+	 * The graph ids a member query names (`CallGraph.resolveTarget`): `T.m` names the member `m` of every type keyed by the
+	 * simple name `T` — the one keyed so, and each `pathType` keyed by a path ending in `T`; `pkg.T.m` names the member of
+	 * the type declared at that path alone (`pathKey`), never a namesake declared elsewhere.
 	 */
-	public function keyedIds(query: String): Array<String> {
+	public function memberIds(query: String): Array<String> {
 		final simple: String = CallGraphNames.lastSegments(query, 2);
 		final dot: Int = simple.indexOf('.');
 		final member: String = simple.substring(dot);
-		return dot < 0 ? [] : [
-			for (path in foreignPaths(simple.substring(0, dot))) if (query == simple || query == path + member) path + member
-		];
+		if (query != simple) return [pathKey(query.substring(0, query.length - simple.length + dot)) + member];
+		return [simple].concat([for (path in foreignPaths(simple.substring(0, dot))) path + member]);
+	}
+
+	/**
+	 * The module path a wildcard import of a package supplies under `name` in the file keyed `key` — the first, in the
+	 * language's search order, that the project or the std core declares — unless its own module declares the name; null
+	 * for none. A wildcard that may supply it where that cannot be told (guarded, or a package neither holds) pushes its
+	 * path into `maybe` on the way.
+	 */
+	private function wildcardPath(key: String, name: String, ?maybe: Array<String>): Null<String> {
+		if ((_ownTypes[key] ?? []).contains(name)) return null;
+		for (w in _wildPackages[key] ?? []) {
+			final path: String = '${w.pkg}.$name';
+			final supplied: Null<Bool> = (_declaredPaths[name] ?? []).contains(path) ? true : StdTypes.declaresModule(w.pkg, name);
+			if (supplied == true && !w.guarded) return path;
+			if (supplied != false) maybe?.push(path);
+		}
+		return null;
 	}
 
 	/**
@@ -258,4 +358,10 @@ typedef FieldAlias = {
 	var alias: String;
 	var owner: Null<String>;
 	var member: Null<String>;
+}
+
+/** A package a wildcard import opens (`import p.*;`), and whether the import is `#if`-guarded — on some builds only. */
+typedef WildPackage = {
+	var pkg: String;
+	var guarded: Bool;
 }

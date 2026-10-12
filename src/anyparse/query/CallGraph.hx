@@ -470,16 +470,14 @@ final class CallGraph {
 	}
 
 	/**
-	 * Resolve a user-facing target query to nodes: `Type.method` (a qualified
-	 * config entry `pkg.Type.method` matches by its last two segments), or a
-	 * bare `method` name (every type's member with that name). More than one
-	 * result means the query is ambiguous — the caller decides how to present
-	 * the candidates.
+	 * Resolve a user-facing target query to nodes: `Type.method` (every type keyed by that simple name), `pkg.Type.method`
+	 * (the type declared at that path only — a project type of the same simple name elsewhere is another type, `pathKey`), or
+	 * a bare `method` name (every type's member with that name). More than one result means the query is ambiguous — the
+	 * caller decides how to present the candidates.
 	 */
 	public function resolveTarget(query: String): Array<FnNode> {
 		final simple: String = CallGraphNames.lastSegments(query, 2);
-		// a library type bearing a project type's simple name is keyed by its path, which finds it too (`CallGraphImports.keyedIds`)
-		final ids: Array<String> = simple.indexOf('.') != -1 ? [simple].concat(types.imports.keyedIds(query)) : _byMember[simple] ?? [];
+		final ids: Array<String> = simple.indexOf('.') == -1 ? _byMember[simple] ?? [] : types.imports.memberIds(query);
 		return [
 			for (id in ids) {
 				final n: Null<FnNode> = nodes[id];
@@ -489,16 +487,13 @@ final class CallGraph {
 	}
 
 	/**
-	 * All node ids matching a config pattern: `pkg.Type.method` (last two
-	 * segments), `Type.*` (every recorded member of `Type`, external nodes
-	 * included), or a bare `method`. Missing types / members yield [].
+	 * All node ids matching a config pattern: `Type.method` or `pkg.Type.method` (`resolveTarget`), `Type.*` (every recorded
+	 * member of every type keyed by that simple name, external nodes included), `pkg.Type.*` (of the type declared at that
+	 * path only), or a bare `method`. Missing types / members yield [].
 	 */
 	public function matchIds(pattern: String): Array<String> {
 		if (!pattern.endsWith('.*')) return [for (n in resolveTarget(pattern)) n.id];
-		final written: String = pattern.substring(0, pattern.length - 2);
-		final typeName: String = CallGraphNames.lastSegments(written, 1);
-		// a type keyed by its path (`CallGraphImports.pathType`) is matched by that path, or by its simple name
-		final named: Array<String> = (written == typeName ? types.imports.foreignPaths(typeName) : [written]).concat([typeName]);
+		final named: Array<String> = types.imports.typeKeys(pattern.substring(0, pattern.length - 2));
 		return [
 			for (id => n in nodes) if (n.name != null && named.contains(n.typeName ?? '')) id
 		];
@@ -1060,7 +1055,7 @@ final class CallGraph {
 		final moduleType: String = CallGraphNames.moduleTypeName(file);
 		// the file's declared types as the graph keys them (`CallGraphKeys`): a library type never merges into a project one
 		final keys: CallGraphKeys = new CallGraphKeys(types.imports, file, _plugin.typeSyntax, provider, source);
-		if (newExprKind != null) keys.typeNewLocals(tree, localDeclKinds, newExprKind);
+		keys.typeLocals(tree, localDeclKinds, newExprKind, callKind);
 		final declaredTypes: Map<Int, String> = keys.declaredTypes;
 		final typeSources: Map<Int, String> = keys.typeSources;
 		final bindCache: Map<String, Map<Int, Int>> = [];
@@ -1445,7 +1440,8 @@ final class CallGraph {
 				final span: Null<Span> = expr.span;
 				if (span == null) return null;
 				final bound: Null<Int> = bindFor(name)[span.from];
-				if (bound != null && bound >= 0) return typeSources[bound];
+				if (bound != null && bound >= 0)
+					return typeSources[bound] ?? keys.throughInitializer(bound, c -> typeSourceOf(c, currentType));
 				return currentType == null || CallGraphNames.isTypeLike(name)
 					? null
 					: memberTypeThrough(null, currentType, name, currentType);
@@ -1896,15 +1892,18 @@ final class CallGraph {
 									addEdge(from, calleeId, Call, null, file, span);
 								}
 							} else {
-								// a placeholder names the type the index says declares it, which is the node its file upgrades
-								calleeId = resolved ?? externalNode(
-									types.declaringTypeOf(recv.typeName, calleeName) ?? recv.typeName, calleeName
-								);
 								final field: Null<String> = receiverField(callee.children[0], currentType);
-								addEdge(from, calleeId, Call, null, file, span, recv.isValue ? recv.typeName : null, field);
-								if (recv.isValue) for (v in virtualTargets(recv.typeName, calleeName))
-									addEdge(from, v, Virtual, null, file, span, recv.typeName, field);
-								if (nodes[calleeId]?.isDynamic == true) unresolvedAt(span, FunctionValue(calleeName), currentType);
+								for (type in [recv.typeName].concat(types.imports.alternateTypes(file, recv.typeName))) {
+									// a placeholder names the type the index says declares it, which is the node its file upgrades
+									final target: String = memberOnChain(type, calleeName) ?? externalNode(
+										types.declaringTypeOf(type, calleeName) ?? type, calleeName
+									);
+									if (type == recv.typeName) calleeId = target;
+									addEdge(from, target, Call, null, file, span, recv.isValue ? type : null, field);
+									if (recv.isValue) for (v in virtualTargets(type, calleeName))
+										addEdge(from, v, Virtual, null, file, span, type, field);
+									if (nodes[target]?.isDynamic == true) unresolvedAt(span, FunctionValue(calleeName), currentType);
+								}
 							}
 						}
 					}
@@ -1945,6 +1944,7 @@ final class CallGraph {
 			if (rawName == null) return;
 			final typeName: String = types.imports.typeOf(file, rawName);
 			final target: Null<String> = constructionRun(typeName, node.span, currentType);
+			for (alternate in types.imports.alternateTypes(file, typeName)) constructionRun(alternate, node.span, currentType);
 			final span: Null<Span> = node.span;
 			if (span != null) sites[span.from] = { target: target, receiver: null };
 			// constructor args can carry callbacks / lambdas too

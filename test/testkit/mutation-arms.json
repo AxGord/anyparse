@@ -19584,9 +19584,9 @@
 		{
 			"name": "M-TS-PATH-MATCH",
 			"type": "anyparse.query.CallGraphImports",
-			"method": "keyedIds",
-			"find": "if (query == simple || query == path + member) path + member",
-			"replace": "if (false) path + member",
+			"method": "memberIds",
+			"find": "[for (path in foreignPaths(simple.substring(0, dot))) path + member]",
+			"replace": "[]",
 			"note": "a pattern never finds a call keyed by its library path, so the builtin sinks miss sys.thread.Lock.wait"
 		},
 		{
@@ -19679,10 +19679,10 @@
 		},
 		{
 			"name": "M-TS-NEW-LOCAL",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "if (newExprKind != null) keys.typeNewLocals(tree, localDeclKinds, newExprKind);",
-			"replace": "",
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "typeLocals",
+			"find": "final made: Null<String> = init.kind == newExprKind ? init.name : null;",
+			"replace": "final made: Null<String> = null;",
 			"note": "an unannotated local a new initialises stays untyped"
 		},
 		{
@@ -19758,6 +19758,150 @@
 				""
 			],
 			"note": "a datagram read, a result set's length and the event loop's waits block only where a project lists them"
+		},
+		{
+			"name": "M-TS-WILD-PACKAGES",
+			"type": "anyparse.query.CallGraphImports",
+			"method": "recordSearchOrder",
+			"find": "_wildPackages[key] = wild;",
+			"replace": "_wildPackages[key] = [];",
+			"note": "a wildcard import of a package supplies no name, so a std type it brings in merges into its project namesake"
+		},
+		{
+			"name": "M-TS-WILD-OWN-MODULE",
+			"type": "anyparse.query.CallGraphImports",
+			"method": "wildcardPath",
+			"find": "if ((_ownTypes[key] ?? []).contains(name)) return null;",
+			"replace": "",
+			"note": "a wildcard import outranks the type the file's own module declares"
+		},
+		{
+			"name": "M-TS-WILD-EXPLICIT-FIRST",
+			"type": "anyparse.query.CallGraphImports",
+			"method": "typeOf",
+			"find": "(_typePaths[key] ?? [])[written] ?? wildcardPath(key, written)",
+			"replace": "wildcardPath(key, written) ?? (_typePaths[key] ?? [])[written]",
+			"note": "a wildcard import outranks an explicit one"
+		},
+		{
+			"name": "M-TS-WILD-EXPLICIT-NO-MAYBE",
+			"type": "anyparse.query.CallGraphImports",
+			"method": "alternateTypes",
+			"find": "if (!(_typePaths[key] ?? []).exists(name)) wildcardPath(key, name, paths);",
+			"replace": "wildcardPath(key, name, paths);",
+			"note": "a name an explicit import binds still dispatches to what a wildcard may supply"
+		},
+		{
+			"name": "M-TS-WILD-MAYBE",
+			"type": "anyparse.query.CallGraphImports",
+			"method": "wildcardPath",
+			"find": "if (supplied != false) maybe?.push(path);",
+			"replace": "",
+			"note": "a wildcard of a package nothing lists supplies no candidate"
+		},
+		{
+			"name": "M-TS-WILD-GUARDED",
+			"type": "anyparse.query.CallGraphImports",
+			"method": "wildcardPath",
+			"find": "if (supplied == true && !w.guarded) return path;",
+			"replace": "if (supplied == true) return path;",
+			"note": "a guarded wildcard binds its type on every build"
+		},
+		{
+			"name": "M-TS-WILD-STD",
+			"type": "anyparse.query.CallGraphImports",
+			"method": "wildcardPath",
+			"find": "StdTypes.declaresModule(w.pkg, name)",
+			"replace": "false",
+			"note": "a wildcard of a std package supplies none of its modules"
+		},
+		{
+			"name": "M-TS-WILD-PROJECT",
+			"type": "anyparse.query.CallGraphImports",
+			"method": "wildcardPath",
+			"find": "(_declaredPaths[name] ?? []).contains(path) ? true : ",
+			"replace": "",
+			"note": "a wildcard of a project package is unsure of the modules the project declares in it"
+		},
+		{
+			"name": "M-TS-WILD-ORDER",
+			"type": "anyparse.query.CallGraphImports",
+			"method": "recordSearchOrder",
+			"find": "opened.reverse();",
+			"replace": "",
+			"note": "wildcards are searched first to last, not last to first"
+		},
+		{
+			"name": "M-TS-STD-PACKAGES",
+			"type": "anyparse.query.StdTypes",
+			"method": "listed",
+			"find": "packages[module.substring(0, Std.int(Math.max(0, module.lastIndexOf('.'))))] = true;",
+			"replace": "",
+			"note": "no package is the std core's, so a std wildcard is never sure of its modules"
+		},
+		{
+			"name": "M-TS-GUARDED-IMPORT",
+			"type": "anyparse.query.CallGraphImports",
+			"method": "alternateTypes",
+			"find": "final paths: Array<String> = [for (g in guarded) if (g.name == name) g.path];",
+			"replace": "final paths: Array<String> = [];",
+			"note": "a guarded import binds nothing, so the name stays the project type alone"
+		},
+		{
+			"name": "M-TS-ALTERNATE-SAME",
+			"type": "anyparse.query.CallGraphImports",
+			"method": "alternateTypes",
+			"find": "if (typeOf(file, name) != type) return [];",
+			"replace": "",
+			"note": "a value of another type than the name binds takes the name's candidates"
+		},
+		{
+			"name": "M-TS-ALTERNATE-CALL",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "for (type in [recv.typeName].concat(types.imports.alternateTypes(file, recv.typeName))) {",
+			"replace": "for (type in [recv.typeName]) {",
+			"note": "a call dispatches to the first candidate type only"
+		},
+		{
+			"name": "M-TS-ALTERNATE-NEW",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "for (alternate in types.imports.alternateTypes(file, typeName)) constructionRun(alternate, node.span, currentType);",
+			"replace": "",
+			"note": "a new constructs the first candidate type only"
+		},
+		{
+			"name": "M-TS-DOTTED-TARGET",
+			"type": "anyparse.query.CallGraphImports",
+			"method": "memberIds",
+			"find": "if (query != simple) return [pathKey(query.substring(0, query.length - simple.length + dot)) + member];",
+			"replace": "",
+			"note": "a pkg.Type.method query matches every type of that simple name"
+		},
+		{
+			"name": "M-TS-DOTTED-WILDCARD",
+			"type": "anyparse.query.CallGraphImports",
+			"method": "typeKeys",
+			"find": ": [pathKey(written)]",
+			"replace": ": [written, simple]",
+			"note": "a pkg.Type.* pattern matches every type of that simple name"
+		},
+		{
+			"name": "M-TS-LOCAL-CALL-INIT",
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "typeLocals",
+			"find": "callInitializers[at.from] = init;",
+			"replace": "",
+			"note": "a local a call initialises is never recorded, so it stays untyped"
+		},
+		{
+			"name": "M-TS-LOCAL-CALL-READ",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "typeSources[bound] ?? keys.throughInitializer(bound, c -> typeSourceOf(c, currentType))",
+			"replace": "typeSources[bound]",
+			"note": "a local a call initialises is never typed by what the call returns"
 		}
 	]
 }
