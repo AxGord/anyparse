@@ -44,11 +44,12 @@ final class MainSinkReport {
 	 * only where a `catch` runs — itself inside one, or a take of a lock long over the normal paths of no hold — is
 	 * graded as if short, and info, naming that catch, when no repeating caller owns it. Returns, by `siteKey`, the
 	 * warning that reports each main-thread sink call: its own, the repeating call's that owns it, or the one its sibling
-	 * calls fold into (`oneWarningPerWay`).
+	 * calls fold into (`oneWarningPerWay`) — never one a directive silences (`suppressed`), which reports nothing, so no
+	 * other finding folds onto it while another can stay instead.
 	 */
 	public static function report(
 		graph: CallGraph, sites: LockSites, taints: LockTaint, costs: PathCosts, repeats: MainRepetition, states: ThreadStates,
-		violations: Array<Violation>
+		violations: Array<Violation>, suppressed: (Violation) -> Bool
 	): Map<String, Violation> {
 		final reportedBy: Map<String, Violation> = [];
 		final moved: Map<String, Violation> = [];
@@ -57,7 +58,8 @@ final class MainSinkReport {
 		final normal: Map<String, Bool> = [];
 		final caught: Map<String, Bool> = [];
 		final order: Array<{ key: String, edge: CallEdge }> = [];
-		for (edge in graph.edges) if (edge.kind.isInvocation()) {
+		// every edge that runs its target: a sink handed on as a value runs wherever the call it is handed to runs it
+		for (edge in graph.edges) {
 			if (!taints.blocks(edge, null)) continue;
 			// a `marshals` function IS the thread boundary — its body dispatches
 			// between contexts in ways the graph cannot see; sinks inside it are
@@ -99,9 +101,10 @@ final class MainSinkReport {
 			if (finding.severity == Severity.Warning) (taints.takesLock(edge) ? takes : direct).push({ edge: edge, finding: finding });
 			noteReporter(reportedBy, edge, finding, moved);
 		}
-		oneTakePerLock(graph, sites, takes);
-		oneWarningPerWay(direct, states, reportedBy);
+		oneTakePerLock(graph, sites, takes, suppressed);
+		oneWarningPerWay(direct, states, reportedBy, suppressed);
 		noteRepeats(takes.concat(direct));
+		dropSilenced(reportedBy, suppressed);
 
 		for (notice in repeats.repetition.notices()) violations.push({
 			file: '',
@@ -111,6 +114,11 @@ final class MainSinkReport {
 			message: notice
 		});
 		return reportedBy;
+	}
+
+	/** Drops from `reportedBy` each warning a directive silences (`suppressed`): it reports no sink call, so a hold long only by one stays. */
+	private static function dropSilenced(reportedBy: Map<String, Violation>, suppressed: (Violation) -> Bool): Void {
+		for (k in [for (k => v in reportedBy) if (suppressed(v)) k]) reportedBy.remove(k);
 	}
 
 	/** Records in `reportedBy` the warning that reports the sink call `edge`: its own `finding`, or the owner's it `moved` to. */
@@ -123,12 +131,15 @@ final class MainSinkReport {
 
 	/**
 	 * Of the warnings at sink calls in one function the main thread reaches by one way (`ThreadStates.mainPath`) — TM's
-	 * `FSUtil.deleteRecursive`, whose `readDirectory`, `deleteDirectory` and `deleteFile` run on every run of it — the
-	 * first by offset stays, naming the others, and they turn info naming it: one trigger, one warning. Lock takes are
-	 * left to `oneTakePerLock`. `reportedBy` follows each turned one to the warning that stays.
+	 * `FSUtil.deleteRecursive`, whose `readDirectory`, `deleteDirectory` and `deleteFile` run on every run of it — one
+	 * stays, naming the others, and they turn info naming it: one trigger, one warning. The one that stays is the first
+	 * by offset of the calls the function makes itself, before a sink it only hands on as a value — which may be stored,
+	 * not run (`new Later(File.getContent)`) — and never one a directive silences (`suppressed`) while another can stay.
+	 * Lock takes are left to `oneTakePerLock`. `reportedBy` follows each turned one to the warning that stays.
 	 */
 	private static function oneWarningPerWay(
-		direct: Array<{ edge: CallEdge, finding: Violation }>, states: ThreadStates, reportedBy: Map<String, Violation>
+		direct: Array<{ edge: CallEdge, finding: Violation }>, states: ThreadStates, reportedBy: Map<String, Violation>,
+		suppressed: (Violation) -> Bool
 	): Void {
 		final byWay: Map<String, Array<{ edge: CallEdge, finding: Violation }>> = [];
 		final ways: Array<String> = [];
@@ -145,7 +156,9 @@ final class MainSinkReport {
 		for (way in ways) {
 			final list: Array<{ edge: CallEdge, finding: Violation }> = byWay[way] ?? [];
 			if (list.length < 2) continue;
-			list.sort((a, b) -> (a.edge.span?.from ?? 0) - (b.edge.span?.from ?? 0));
+			final rank: ({ edge: CallEdge, finding: Violation }) -> Int = d ->
+				(suppressed(d.finding) ? 2 : 0) + (d.edge.kind == Ref ? 1 : 0);
+			list.sort((a, b) -> rank(a) != rank(b) ? rank(a) - rank(b) : (a.edge.span?.from ?? 0) - (b.edge.span?.from ?? 0));
 			final kept: Violation = list[0].finding;
 			final named: Array<String> = [];
 			for (d in list.slice(1)) if (d.finding != kept) {
@@ -187,11 +200,14 @@ final class MainSinkReport {
 	}
 
 	/**
-	 * Every main-thread take of one named lock waits for the same holders: of its warnings, one stays — the take inside a
-	 * lock wrapper of it (`LockAcquire.delegated`) when there is one, else the first by member, file and offset — and the
-	 * others turn info, naming that one.
+	 * Every main-thread take of one named lock waits for the same holders: of its warnings, one stays — of those no
+	 * directive silences (`suppressed`) when there is one, the take inside a lock wrapper of it (`LockAcquire.delegated`)
+	 * when there is one, else the first by member, file and offset — and the others turn info, naming that one, which
+	 * carries what repeats each of them (TM's `Store.get`, named for `Main.reboot`'s loop over `Store.remove`).
 	 */
-	private static function oneTakePerLock(graph: CallGraph, sites: LockSites, takes: Array<{ edge: CallEdge, finding: Violation }>): Void {
+	private static function oneTakePerLock(
+		graph: CallGraph, sites: LockSites, takes: Array<{ edge: CallEdge, finding: Violation }>, suppressed: (Violation) -> Bool
+	): Void {
 		final byLock: Map<String, Array<{ edge: CallEdge, finding: Violation }>> = [];
 		for (t in takes) {
 			final lock: Null<String> = sites.lockOf(t.edge);
@@ -202,7 +218,7 @@ final class MainSinkReport {
 		}
 		for (lock => list in byLock) if (list.length > 1) {
 			final rank: ({ edge: CallEdge, finding: Violation }) -> String = t ->
-				(sites.acquires.exists(a -> a.edge == t.edge && a.delegated) ? '0' : '1')
+				(suppressed(t.finding) ? '1' : '0') + (sites.acquires.exists(a -> a.edge == t.edge && a.delegated) ? '0' : '1')
 					+ '${ThreadSafety.memberOf(graph, t.edge.from)}\n${t.edge.file}';
 			list.sort(
 				(a, b) -> rank(a) == rank(b) ? (a.edge.span?.from ?? 0) - (b.edge.span?.from ?? 0) : Reflect.compare(rank(a), rank(b))
@@ -211,6 +227,7 @@ final class MainSinkReport {
 			for (t in list.slice(1)) {
 				t.finding.severity = Severity.Info;
 				t.finding.message += ' — the same lock $lock as $kept waits for the same holders, reported there';
+				mergeRepeats(list[0].finding, t.finding);
 			}
 		}
 	}

@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.LockTaint.ChainLists;
 import anyparse.query.CallGraph;
 
 using Lambda;
@@ -76,6 +77,20 @@ final class ThreadStates {
 	/** `runsWith` under this solve's `inertRef`. */
 	public inline function runsFrom(e: CallEdge): Bool {
 		return runsWith(e, _inertRef);
+	}
+
+	/**
+	 * Whether the edge `e` runs its target while its function runs, where it runs, under the chain `lists` of its file: a
+	 * call, or a value handed on (`runsFrom`) that the call it is handed to runs there — a library call or a project one,
+	 * one the graph resolves to nothing included, as often as that call repeats it (`CallRepetition`) — never one a
+	 * `spawns` or `marshals` call runs on another thread, nor one a `registers` call keeps to run per event. What a hold's
+	 * window spans and a walk under the hold follows (`LockTaint`).
+	 */
+	public function runsHere(e: CallEdge, lists: ChainLists): Bool {
+		if (e.kind.isInvocation()) return true;
+		final via: String = e.via ?? '';
+		final kept: Bool = lists.registerIds.contains(via) || lists.registerNames.contains(e.viaMember ?? '');
+		return runsFrom(e) && !(lists.spawnIds.contains(via) || lists.marshalIds.contains(via) || kept);
 	}
 
 	/** Every state of `id` the walk reached: each valuation of its tracked parameters, with the contexts it runs it on. */
@@ -228,7 +243,7 @@ final class ThreadStates {
 		final live: Int = _conditions.carried(e, valuation, ThreadSafety.CTX_BG);
 		final ctx: Int = e.kind == Ref ? _callbackContext(e, live) : live;
 		if (live == 0 || ctx & ThreadSafety.CTX_BG == 0) return null;
-		return { id: e.to, valuation: e.kind == Ref ? _conditions.unknown(e.to) : _conditions.bind(e, valuation) };
+		return { id: e.to, valuation: _conditions.entered(e, valuation) };
 	}
 
 	/** A `mainPath` as text, its last `cap` hops after `...` when it is longer. */

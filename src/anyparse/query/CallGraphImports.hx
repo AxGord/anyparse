@@ -26,6 +26,15 @@ final class CallGraphImports {
 	/** File -> the statics its `import p.T.member as alias;` statements (own and ambient) bind under another name. */
 	private final _fieldAliases: Map<String, Array<FieldAlias>> = [];
 
+	/** Type simple name -> the dotted paths that name a declaration of it (`pkg.Module.Name`; a main type's also `pkg.Module`). */
+	private final _declaredPaths: Map<String, Array<String>> = [];
+
+	/** File -> the simple names its imports and aliases (own and ambient) bind to a type, and the dotted path each names. */
+	private final _typePaths: Map<String, Map<String, String>> = [];
+
+	/** Type simple name -> the paths `pathType` keyed apart from the declarations of that name, as it met them. */
+	private final _foreign: Map<String, Array<String>> = [];
+
 	private final _enumConstructorKinds: Array<String>;
 
 	/** Whether a type declares a member static — the tables that answer it live with the types. */
@@ -53,9 +62,14 @@ final class CallGraphImports {
 
 	/** Fold the declarations and the imports of `fi`, held under `key`. */
 	public function recordFile(fi: FileInfo, key: String): Void {
-		for (t in fi.types)
-			for (m in t.members)
-				if (_enumConstructorKinds.contains(m.kind)) CallGraphTypes.unionInto(_enumConstructors, m.name, [t.name]);
+		for (t in fi.types) {
+			for (m in t.members) if (_enumConstructorKinds.contains(m.kind)) CallGraphTypes.unionInto(_enumConstructors, m.name, [t.name]);
+			// a type is named by its module's path and its own name, a main type by its module's path too; and by its package
+			// and its name, whatever its module is called — what an import reads when a file does not name its module
+			final inModule: String = '${fi.module}.${t.name}';
+			final inPackage: String = fi.pkg == '' ? t.name : '${fi.pkg}.${t.name}';
+			CallGraphTypes.unionInto(_declaredPaths, t.name, t.isMain ? [fi.module, inModule, inPackage] : [inModule, inPackage]);
+		}
 		final usings: Array<String> = [];
 		final imports: Array<ImportInfo> = [];
 		final groups: Array<Array<ImportInfo>> = [fi.imports].concat([for (g in fi.ambientImports) g.imports]);
@@ -73,6 +87,17 @@ final class CallGraphImports {
 			if (alias != null) aliases.push(alias);
 		}
 		_fieldAliases[key] = aliases;
+		final paths: Map<String, String> = [];
+		// the file's own imports first, then each ambient group, nearest first; inside one list the last binding wins
+		for (group in groups) {
+			final bound: Map<String, String> = [];
+			for (imp in group) {
+				final named: Null<{ name: String, path: String }> = typeImportOf(imp);
+				if (named != null) bound[named.name] = named.path;
+			}
+			for (name => path in bound) if (!paths.exists(name)) paths[name] = path;
+		}
+		_typePaths[key] = paths;
 	}
 
 	/**
@@ -141,6 +166,52 @@ final class CallGraphImports {
 	}
 
 	/**
+	 * The name the graph keys the type `written` in `file` by (`CallGraph` keys types by simple name): the simple name,
+	 * unless the type the file means — a dotted path written out, or the path an import or an alias of the file binds
+	 * the name to — is not a declaration of that simple name the tables hold while one of them bears it. Then the path
+	 * itself: `sys.thread.Lock` beside a project `utils.Lock` is another type, and merging the two by name would make a
+	 * call of the library one run the project's. A name no import binds stays as written.
+	 */
+	public function typeOf(file: String, written: String): String {
+		if (written.indexOf('.') >= 0) return pathType(written);
+		final path: Null<String> = (_typePaths[CallGraphNames.normalizePath(file)] ?? [])[written];
+		return path == null ? written : pathType(path);
+	}
+
+	/**
+	 * `typeOf` for a dotted path, which needs no file: its last segment unless the path names a type outside the tables
+	 * whose simple name a declaration they hold bears. A path starting at a type (`Module.Sub`) is read by its last segment.
+	 */
+	public function pathType(path: String): String {
+		final simple: String = SourceText.lastSegment(path);
+		final dot: Int = path.indexOf('.');
+		if (dot < 0 || CallGraphNames.isTypeLike(path.substring(0, dot))) return simple;
+		final declared: Null<Array<String>> = _declaredPaths[simple];
+		if (declared == null || declared.contains(path)) return simple;
+		CallGraphTypes.unionInto(_foreign, simple, [path]);
+		return path;
+	}
+
+	/** The paths of types outside the tables that bear the simple name `simple`, each keyed by its path (`pathType`). */
+	public inline function foreignPaths(simple: String): Array<String> {
+		return _foreign[simple] ?? [];
+	}
+
+	/**
+	 * The graph ids a member query `T.m` or `pkg.T.m` names beside the one of its last two segments: the member `m` of each
+	 * type `pathType` keyed by a path ending in `T` — every such type for a query naming `T` alone, the one it names for a
+	 * query naming the path.
+	 */
+	public function keyedIds(query: String): Array<String> {
+		final simple: String = CallGraphNames.lastSegments(query, 2);
+		final dot: Int = simple.indexOf('.');
+		final member: String = simple.substring(dot);
+		return dot < 0 ? [] : [
+			for (path in foreignPaths(simple.substring(0, dot))) if (query == simple || query == path + member) path + member
+		];
+	}
+
+	/**
 	 * The static an alias statement binds — `importedStatics` binds no other: a path whose segment before the last
 	 * names a type (`p.T.member`). Null for an alias of a type or a module; an alias whose path did not decode is one with
 	 * no owner and no member.
@@ -153,6 +224,22 @@ final class CallGraphImports {
 		final segs: Array<String> = path.split('.');
 		if (segs.length < 2 || !CallGraphNames.isTypeLike(segs[segs.length - 2])) return null;
 		return { alias: alias, owner: segs[segs.length - 2], member: segs[segs.length - 1] };
+	}
+
+	/**
+	 * The type name an import statement binds and the path it binds it to: an alias of a path ending in a type, or an
+	 * unguarded `import p.T;` — a guarded one binds the name on some builds only, where the name may mean another type.
+	 */
+	private static function typeImportOf(imp: ImportInfo): Null<{ name: String, path: String }> {
+		final alias: Null<String> = imp.alias;
+		final target: Null<String> = imp.aliasTarget;
+		return switch imp.kind {
+			case Alias if (alias != null && target != null && CallGraphNames.isTypeLike(SourceText.lastSegment(target))):
+				{ name: alias, path: target };
+			case Import if (!imp.guarded && CallGraphNames.isTypeLike(SourceText.lastSegment(imp.raw))):
+				{ name: SourceText.lastSegment(imp.raw), path: imp.raw };
+			case _: null;
+		};
 	}
 
 }

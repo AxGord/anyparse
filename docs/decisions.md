@@ -1942,3 +1942,242 @@ decided the question; it may not become a record of runs.
   nothing of it. A mistyped `enabled` / `severity` is a value of the wrong shape, not an unknown option. The old
   control "a malformed option of a non-reporting chain is silent" is reversed by this decision (review round 2
   `cfgA`–`cfgE`) — branch `feat/ts-precision-3`
+- `sinks` a config-only list → a blocking call a project forgot to list was invisible, silently (TM lacked
+  `FileSystem.exists`, `isDirectory`, `nativeSetTimestamp`, `Sys.command` until they were added by hand). The sinks
+  are now POSITIVE: the grammar names the runtime's blocking calls (`ExecutionShape.blockingLibraryCalls`, verified
+  against the Haxe 4.3.7 std: `sys.io.File` / `FileInput` / `FileOutput`, `haxe.io.Input` / `Output` — a stream of
+  unknown kind is read as one that blocks — `sys.FileSystem` but `absolutePath` (its cpp body is `Sys.getCwd` and a
+  join), `Sys.sleep` / `command` / `getChar`, `sys.io.Process`, sockets, `Host` construction and `reverse` (not
+  `localhost`: `gethostname`), `sys.db`, `sys.Http`, the `sys.thread` waits) and they apply wherever the rule runs,
+  on a target the run holds no body for — a project function of the same name is read through its body; `sinks`
+  ADDS; a new string-list key `nonBlocking` (named like `nonThrowing`) WAIVES one, each entry `"<pattern>
+  <evidence>"`, an entry with no evidence dropped and said, one waiving nothing said, one naming a `sinks` call
+  said and kept. The `sys.thread` waits are IN the set although the lock analysis grades takes: it grades only a take
+  that is a sink (`LockTaint.blocks`), and `lockPairs` then narrows it to "long only when the lock is long", so a
+  project writing `lockPairs` but no sink would have lost every main-thread take; a wait with no pair (`Lock.wait`,
+  `Deque.pop` — `pop(false)` cannot be told from `pop(true)` by the graph) blocks every time. The project's own
+  NATIVES block too (`ProjectNatives`, positive: an unknown native blocks): a body-less member of a project `extern`
+  type, a `@:native` / `@:hlNative` / `@:functionCode` member whatever its stub body (TM's `nativeSetTimestamp` has one),
+  a member a native loader initialised, `untyped __cpp__` / `__global__.f` and `cpp.Syntax.code`; a site with no
+  node of its own gains an edge into a node standing for the native, its unresolved record kept. A LIBRARY's externs
+  and natives stay calls of library code — measured on TM 1d1ba147: 3108 main-context call sites into non-builtin
+  library externs / native bodies, 2511 of them the std's memory primitives (`Array`, `String`, `Math`, `Std`), so
+  sinking them would bury the list; the decision is the orchestrator's. A chain writing ANY option reports
+  (`reports = declared`), and one `info` per run says the set applied with its size. TM: dropping the 22 `sinks`
+  entries the builtin covers leaves the json report byte-identical on all three frozen trees — branch
+  `feat/ts-precision-4`
+- a hold's taint following invocations only → a lock held across `Lambda.iter(paths, load)`, `load` blocking, was
+  silent (review round 2 `ep1b-iter-in-caller`, base 338efc41 included), and so was every lambda handed on under a
+  hold; the main thread never reached a sink handed on as a value (`Lambda.iter(paths, File.getContent)`). The hold's
+  window now carries the values handed on there (`Ref` edges), and ONE predicate, `ThreadStates.runsHere` — the one
+  `LockTaint.onCycle` used since FIX2 item 12, moved out of it — says which run under the hold, in the window and at
+  every step of the walk (`LockTaint.reach`): a call, or a value the call it is handed to runs there, library or
+  project, a call the graph resolves to nothing included (unknown = runs), never one a `spawns` / `marshals` call runs
+  on another thread or a `registers` call keeps; a value enters its target knowing nothing of its parameters
+  (`EdgeConditions.entered`), and repeats as the call it is handed to repeats it (`CallRepetition.handedOn`, so
+  `Lambda.iter` repeats and a `runsOnce` call does not). A sink handed on as a value blocks wherever it runs
+  (`LockTaint.blocks` asks `ThreadStates.runsFrom`), which is all finding (a) needed: `MainSinkReport` reads every
+  edge `blocks` admits, and the main-thread climb (`MainRepeats.climb`) already followed values handed on — a short
+  sink reached only through `Lambda.iter(paths, one)` was owned by that call before (probe `main-ref-short`). Another
+  object's method handed on is no re-take of the holder's re-entrant lock (`retakesElsewhere`). Two readers of the
+  window keep the calls alone: `HoldGrade.handsOff`, so a value that may give the lock back proves no give and the
+  hold stays handed off (the long answer); `LockOrder` never looks a value's site up. The walk has no bound to hit: it
+  is a memoised breadth-first walk over finitely many states, and `onCycle`'s `CYCLE_WALK` bound — whose answer when
+  hit is "may lead back", the repeating one — was never reached on any of the three TM trees (counted with a traced
+  engine). TM: every score row identical, no warning key new, lost or moved; one info key per tree (B
+  `FileList.reload|FolderWatcher._mutex`, a main-only hold whose long call finding (a) reports); runtime unchanged
+  (15.7 s → 15.8 s, three trees) — branch `feat/ts-precision-4`
+- a call into a library with a Haxe body ends the graph, so blocking I/O inside lime/openfl (T1: 4852 main-context
+  sites on TM 1d1ba147) is invisible → EXPERIMENT, opt-in `libraryBodies` (`LibraryBodies`, `LibraryBuild`): the
+  option names ONE `compilerOracle` entry's hxml; its library classpaths (every `-cp` holding no run file, every
+  `-lib`) are read under its defines read off the hxml with no compile (the `-D`s, a dash read as `_`; the entry's
+  `defines`; the target's own; `haxe`/`haxe_ver` from `haxe -version`), every branch they do not compile blanked
+  (`ReachLiveness.skippedOf`, closed world), a file of another target's package / suffix or one its target's copy
+  stands in for left out, and walked as a graph of their own — a SUMMARY, not a merged graph: the run's graph and its
+  contexts are unchanged, each external call whose library member reaches a library sink (natives as `ProjectNatives`
+  reads them, the runtime's blocking calls, `sinks`, less `nonBlocking`) through calls, overrides and values handed to a
+  call that runs them there becomes a sink of the chains writing the option, so a finding stays keyed
+  `A|<project function>|<library call>` and `data.chain` goes on to the library sink; a project type's call runs its
+  nearest library superclass's member and no library override. Off by default (TM: byte-identical reports on the three
+  frozen trees). MEASURED on TM 1d1ba147, mac-release defines, 1119 library files (lime, openfl, swf, actuate, mime,
+  hx4compat, extension-video-export, extension-file-save), 4 unparsed (AS3 leftovers in swf): with every library
+  native and wait as a sink (the positive default) 473 new warning keys, 0 of a 40-key sample real-long (17 reachable but
+  no I/O — openfl's cpp `ObjectPool` mutex, `ImageDataUtil` prims, `System.getTimer` — and 23 false paths); with only
+  the file / network / process / dialog prims as sinks (non-I/O natives, waits and target code waived for the
+  measurement on both sides) 366 new keys, ~12% real-long (TextField layout → `TextEngine.findFont` → `Font.fromFile`
+  opening a font file for an unregistered or default font; openfl `File` stats; `Lib.getURL` → `Sys.command`), 87%
+  false: a constructor branch on a static only stage construction sets (`DisplayObject.__initStage`, 185 keys), an
+  event-type branch (`TextField.__dispatch` opens a URL only on a link click, 71), an argument the call never passes
+  (`Font.enumerateFonts()` reads the font directory only for `true`, 59), dispatch to a library subclass the receiver
+  is not (`DatagramSocket`/`SWF` overrides, `Stage.__dispatchEvent`), a simple-name collision (`swf.runtime.Shape` for
+  openfl's). It MISSES the loaders themselves: lime/openfl locals are un-annotated (`var symbol = new LibrarySymbol(id)`)
+  and `import lime.utils.Assets as LimeAssets` is unresolved, so `Assets.getBitmapData` never reaches
+  `lime_image_load_file`. The loader list as plain `sinks` (B) gives 50 new keys, 20 of a 40-key sample real-long
+  (`getBitmapData`, `getText`) and 20 no I/O (`getMovieClip` on `preload="true"` SWF libraries, embedded `getFont`).
+  Cost: thread-safety alone 4.65 s → 7.27 s (+56%, 655 → 996 MB), the plain lint 22.0 s → 25.0 s (+13–15%), all of
+  it the rule's library work (parse 1.2 s, graph 0.5 s, defines 0.2 s, walk 0.1 s); B costs nothing measurable. The
+  choice between A and B is the user's — branch `feat/ts-precision-4`
+- the lock-order walk following invocations only → a lock taken inside a value handed to a call that runs it
+  (`Lambda.iter(paths, p -> b.acquire())`, or a method value taking its own lock) under a hold of another was taken
+  under no hold, so an AB/BA pair one side of which takes its lock that way went unreported. `LockOrder.visit` now
+  follows the edges `ThreadStates.runsHere` says run there — the one predicate the hold window, `LockTaint.reach`,
+  `blockingTrail` and `onCycle` read since dfb52d4a — entering the value under the locks held at the call it is
+  handed to, knowing none of its parameters (`EdgeConditions.entered`); a value a `spawns` / `marshals` call runs on
+  another thread, or one a `registers` call keeps, stays a callback entered holding nothing. Additive: the entry and
+  callback seeding is unchanged, so every state the walk had stays and no step is lost. The same predicate means an
+  UNLISTED call is taken to run the value in place — the old control `Ui.defer(takeB)` now declares `Ui.defer` in
+  `registers`. Since runsHere over-approximates (a value handed to a project constructor that only STORES it is taken
+  to run there), a pair's WITNESS ranks a step — and a way into a state (`climb`) — through calls alone before one
+  through a value handed on (`Climb.handed`, `RankedStep.handed`), so a pair the old walk reported keeps its key: TM
+  bd943dac otherwise moved two real-long D keys onto `FileList.reload`, whose handed `_source.getThumbnail` is stored
+  by `new FileListGrid` and runs only after the hold (`FileListItemGrid.requestThumbnail`). Audit of the other lock
+  analyses, each walking invocations only on purpose: `LockSites` (its window carries `Ref` edges since dfb52d4a; the
+  wrapper / multi-lock-helper inference refuses any function with a `Ref` in-edge, `mayWrap`, so a value's take is a
+  hold of its own), `MustHeld` (a function with a non-inert `Ref` in-edge holds nothing on entry — an under-approximation,
+  sound for a must-analysis), `LockDominance` (reads `MustHeld`), `HoldGrade.handsOff` (a handed value that MAY give
+  the lock back proves no give; keeping it out keeps the hand-off reported). Not followed: a lock primitive handed as a
+  value itself (`Lambda.iter(ms, Mutex.acquire)`), never a take for `LockSites` (takes are `Call` edges). TM: bd943dac
+  byte-identical; 1d1ba147 and f81c2049 +2 D keys each (`FileList.reload`, the stored thumbnail getter), labelled
+  `false` — branch `feat/ts-precision-4`
+- duplicate root causes on TM 1d1ba147 (truth: 20 warned keys `dup-of` another warning) → fold only where the
+  covering warning provably names the same blocking work. Three gaps, each with a positive criterion: (1) the two
+  holds one call of a multi-lock helper opens (`acquireMutationLocks`: `_batchMutex`, then `_mutationMutex`) span the
+  very same calls, yet `nestHolds` only turned a hold taken INSIDE another's window — and a helper pair's take edge is
+  the same call, never inside the window; it now also turns the hold the helper takes later (`takenFirst`, by the
+  helper's take order — the outer lock keeps the warning) when its long calls are the outer window's, naming it;
+  (2) `RootCauseFold` read the helper twin's give (`releaseMutationLocks`) as a crossing release, so any wait for
+  `_mutationMutex` / `_batchMutex` was `Uncovered`, though `solveLongLocks` never counts such a give as making a lock
+  long — the fold now gets the same crossings the solve does; (3) a hold waiting for a lock some hold makes long with no
+  finding reporting its work (TM's `listFolder` on the tree lock) can never fold, yet stayed open into the cycle pick,
+  which then kept `acquireMutationLocks` (fewest calls, first by place) instead of the `_mutationMutex` holders it
+  would have folded onto; such a hold is now kept from the start (`uncoverable`, `neverReported`). TM 1d1ba147: dup-of
+  20 → 15 (5 folded, `renameItemInternal`'s pair swaps which lock warns: both `dup-of`), precision 0.71 → 0.74, recall
+  84/84; f81c2049 and bd943dac: no warning key changes. KEPT, no positive criterion: a callee re-taking the hold's own
+  lock (`if (!batch) _batchMutex.acquire()` — the graph cannot tie the object, and the one trail computed through the
+  call leaves its other work unexamined — that the call re-takes nothing is an argument value, `dbBatch = true`, the
+  graph does not track); a hold on threads the covering one never runs on (`getDrillsWatcher`); a
+  different sink call site (A family: an argument value, a virtual dispatch, the release half of one hand-off); a
+  representative the engine already keeps for the truth's target (`Store.removeKeys` over `Store.put`, threads
+  superset) — branch `feat/ts-precision-4`
+- a reflective write of a COMPUTED name unseen (`Reflect.setField(o, key, v)`, the gap the constant-name entry above
+  left) → a field another code path rewrites by name stayed stable for `ObjectPaths` and sealed for `AllocationSets`.
+  `FieldWrites` now files a computed-name write under every name (`of`), reads the `using Reflect` extension form
+  (`o.setField(key, v)` — any call of that shape and arity; it cannot tell a `using` from a method so named, and
+  over-counting only unsettles) and `deleteField`, and takes `o[key] = v` into a value declared `Dynamic` /
+  `DynamicAccess` as a reflective write. Each reflective write is bounded by its target's DECLARED type (`reachOf`):
+  a class or interface declared once → it, every subtype, and every type on the chain of each (the object is one of
+  them; its fields are declared along its chain); anything else — `Dynamic`, `Any`, a type parameter (also one named
+  like a class), a structure or an abstract (a value of any class may be one), a library or unknown type — reaches
+  every type. No narrower bound is sound without tracking which objects flow into a dynamic value; the cost falls only
+  on the fields a consumer asks about (lock paths, dispatched receivers, switch subjects). A reflective write is no
+  respecter of `final`: `ObjectPaths.stable` holds a `final` stable only while none may reach it (TM: same reports with
+  and without that half). TM's three any-type writes (`drill.Node.toTarget`: `targetObject:T`; `Node.snapshot` and
+  `Form.get_data`: a `Dynamic` local) unsettle every field: 1d1ba147 +1 C key (`FileList.reload`, the `viewType`
+  switch no longer provably exhaustive), 1 B key info → warning, both already labelled; f81c2049 / bd943dac 1–2 B
+  warnings fold to info. NOT covered: a reflective write a run that does not see the whole project leaves out (a
+  `final` stays trusted there, as before), a reflective writer reached by another name (`final set = Reflect.setField`),
+  an index write into a container whose type the declarations do not say, and the lock-member sealing of `LockSites`
+  (`collectUnsealed` reads only syntactic occurrences of the member's name) — branch `feat/ts-precision-4`
+- a hold folded from ONE blocking trail (review round 4 `f1`): `RootCauseFold` read each long call's reason off
+  `LockTaint.blockingTrail`, the first way its walk finds, so a call reaching a sink another hold covers AND, deeper,
+  one nobody covers folded, and nothing named the deeper sink (TM r5 configs: `FolderWatcher.saveContent|_mutex`).
+  Now every blocking call a long call reaches is a reason (`LockTaint.blockingEnds`: an exhaustive walk over the same
+  states — the root and per-call steps `rootsOf` / `stepOf` are shared with `reach` — keeping no answer across calls;
+  states are finite, so no cap and no unexamined trail): the shortest way, repeated or may-repeat on ANY way, and the
+  functions EVERY way passes (dominators over the walked states), which the "a hold on the way" cover now needs. The
+  covering side stays the work a finding NAMES — the first way of each of its calls — since a warning shows no other
+  way: with every reached sink as covering work instead, 1d1ba147 folded the recall entry
+  `RemoteFileSystemBase.setTimestamp|_mutationMutex` onto `StandardFileSystem.getText`, whose message names a
+  different stat. A kept warning appends the sink calls it stays for that its first ways do not show and no warning
+  covers (`— its calls also reach …, which no warning names`). TM: 1d1ba147 +4 B warning keys (`Store.put` rare,
+  `Store.remove`, `FileSystemBase.removeCloudQueue`, `RemoteFileSystemBase.addCloudActionValidated` dup-of, all
+  labelled), `acquireMutationLocks|_batchMutex` warning → info (dup-of); f81c2049 / bd943dac +2 / +3 B warnings; recall
+  full; ~25 B warnings per tree gain the note.
+- the fold onto a main-only "elsewhere" maker, stated (review round 4, point 1): a wait for lock K counts as covered
+  when every hold making K long has its work reported — a warned maker kept or folded, OR an info maker whose finding
+  names (a) warnings for its work (`FoldHold.elsewhere`: a hold only the main thread runs, its long work reported at
+  finding (a)). The second half is sound for a reason the general rule does not give: the main thread inside such a
+  holder cannot also be waiting for K there, so the waiter's stall under K is the holder's own main-thread work, which
+  (a) reports; an inversion between the two locks is finding (d)'s. TM's `RemoteFileSystemBase.setTimestamp` and
+  `FileSystemBase.moveLocalQueue` fold onto `StandardFileSystem.listFolder` this way.
+- a handed value took a way's warning (review round 4 `f10`): `runsHere` reads a value handed to an unlisted call as
+  run there, and `new Later(File.getContent)` only stores it, yet `MainSinkReport.oneWarningPerWay` kept the first
+  sink by offset — the handed one — and demoted the call the function makes itself. A call the function makes itself
+  now keeps the way's warning before a sink handed on as a value; repeating owners at one distance rank a way through
+  calls alone first (`MainRepeats`), as T2b ranks lock-order witnesses. Merged `repeatedBy` still follows the folded
+  handed value onto the kept warning (it may run the value repeatedly; positive).
+- a silenced finding as a cover (review round 4 `f2`): `// noqa` on the warning another hold folded onto left that
+  stall named only by an info. `Suppression.silencer` (the predicate `apply` now uses) tells the check which of its own
+  findings will be shown: a silenced warning covers no hold's work (`RootCauseFold`), makes a hold waiting for its lock
+  stay, turns no hold inside or enclosed by it info (`nestHolds`, `foldEnclosed`), keeps no way's or lock's main-thread
+  warning while another can stay, and reports no work for a main-only hold. Not covered: a finding a file's config
+  disables or remaps (`Linter.gatedPerFile`), which the check does not see.
+- review round 4 text nits: a hold turned info onto a finding that ended info itself says so (`INFO_COVER_NOTE`; T3's
+  "whose finding names these calls" read as a warning); the warning a lock's main-thread takes fold into carries what
+  repeats each folded take (TM's `Store.get` names `Main.reboot` again, lost when `Store.remove`'s take turned long) —
+  branch `feat/ts-precision-4`
+- a library type keyed apart from a project type of its simple name (review round 4 `f7`): the call graph keyed every
+  type by its simple name, so `l:sys.thread.Lock` beside a project `extern class utils.Lock` called the project's
+  native, and a waiver of that native (`nonBlocking: ["utils.Lock.wait …"]`) silenced the runtime's wait on main.
+  Making `SymbolIndex` and every graph table package-aware was the full fix and touches every consumer; instead a type
+  is keyed by its PATH only where it collides — written dotted, or bound by an import or an alias of the writing file,
+  while a project type of that simple name lives elsewhere (`CallGraphImports.typeOf` / `pathType`) — so every id and
+  config pattern of a project without a collision stays as it was (TM: no import of a library path whose simple name a
+  TM type bears; reports byte-identical in that respect). A pattern finds a keyed node by its path or its simple name
+  (`keyedIds`, `matchIds`). The resolution reads the writing file's imports for that file's own declarations only; a
+  member type written by its simple name in ANOTHER file stays merged — hence the backstop: a `nonBlocking` entry naming
+  a project native whose id is a builtin call's name is kept and said (`PositiveSinks.shadowing`), since a library call
+  the graph cannot tell apart may resolve there.
+- std signatures for receivers (review round 4 `f4`): `Sys.stdin().readLine()`, `socket.input.readLine()` and an
+  unannotated `final h = new sys.Http(…)` left their calls unresolved, and `import sys.io.File as F` made `F.getContent`
+  an unknown node. Reading the lint run's resolution index (std plus every `resolutionLibs` haxelib) was considered and
+  refused: a thread-safety-only run would parse all of TM's twenty libraries, and it would type openfl receivers the
+  question did not ask about. `StdTypes` reads the std core only (the toplevel, `haxe/`, `sys/` — the same core
+  `StdResolver.resolutionSpecs` joins to the resolution scope), one module at a time on demand, by simple name like the
+  graph, answering only where every std type of that name that declares the member says the same thing (type, accessors).
+  The graph asks it for a placeholder's return type, a field's type on a type the project does not declare, and a
+  property's getter — the last on a local or parameter receiver, or on a receiver the graph types, when the name is no
+  project property. Import aliases go through `typeOf`; a `new T(…)` initialiser types an unannotated local (the static
+  type Haxe infers). Limits kept: a local initialised by any other call stays untyped; `"resolutionStd": false` is not
+  seen by the graph (`APQ_NO_STD` is), as for `HaxeQueryPlugin.knownExtensionMethods`. Builtin set +6:
+  `UdpSocket.readFrom` / `sendTo`, `EventLoop.loop` / `wait`, `Thread.runWithEventLoop`, `ResultSet.get_length` (the
+  cpp getter steps every row). TM: 1d1ba147 +2 A warning keys, both rare (`CleanExit.exit|Output.flush` taking the way
+  from `untyped.__cpp__`, `LanguageManager.t|Output.writeString` under `#if reportkeys`), +2 info keys (dup-of); f81c2049
+  +2 / bd943dac +1 warning keys of the same two; recall full on all three.
+- config text (review round 4 `f8`, `f9`): `libraryBodies` names the `-lib` haxelib cannot resolve and the `-cp` that does
+  not exist instead of walking nothing in silence; the builtin notice counts the sinks the run's `nonBlocking` entries
+  removed and the entries that removed one.
+- the shared-graph change measured beyond the rule (FX2): full `hxq lint src --no-oracle` on the three TM trees and on
+  anyparse's own `src`, engine before vs after — every changed finding is a thread-safety one (the keys above, three
+  messages re-rendered with the same-way calls the std receivers add, one uncovered-call count); no other rule moved, and
+  anyparse's 2311 findings are identical. Time on TM 1d1ba147 (median of 3): all rules 22.69 s -> 22.63 s, thread-safety
+  alone 9.81 s -> 9.85 s — the std modules are read lazily and only a handful are asked for.
+- the T4 cost (FX3): `--rule thread-safety` on TM 1d1ba147 went 4.75 s -> 9.97 s (median of 5) with the computed-name
+  reflective writes. Profiled, not guessed: none of it was the reach consumers (`of`, `mayWrite`, `ObjectPaths.stable`
+  together ~0.02 s) — `FieldWrites.typeOf` asked `CheckScan.typeNominalResolver`, which builds the std + library
+  resolution index on first use (5.0 of 10.8 s). `typeOf` now resolves through an index of the files the graph holds
+  (`heldIndex`, built once on demand; `typeNominalResolver`'s new `resolution: false`). Checked side by side before the
+  switch: every FieldWrites query answered the same under both typers (TM 174/171/167 queries, the fixtures 1776), and
+  the reports are byte-identical on the three trees and all 315 fixture runs; 9.97 s -> 5.82 s (a second session,
+  median of 5 each: 3599e65b 5.01 s, 01ed3fe1 10.17 s, this fix 5.54 s, with the F3 / F11 entries below 5.60 s). What the narrower index
+  loses — a member chain through a LIBRARY type — costs precision only once an index write into an unknown container is
+  itself a reflective write (below). The remaining ~1 s over 3599e65b is FX1's all-ways walk and FX2's std typing.
+- lock-member sealing vs reflective writes (review round 4 `f3`): `Reflect.setField(this, "_l", _m)` makes `_l` the lock
+  `_m` is, yet `_l` stayed sealed, so the main thread's take of it waited for nothing. `LockSites.collectUnsealed` now
+  unseals a lock member a reflective write may store a value in (`FieldWrites.reflectivelyWritten`): one filed under its
+  name (a literal, on any value), or a computed one whose reach holds a type declaring the member on its chain. A
+  computed name on a value of NO known class (`Dynamic`, `Any`, a type parameter: `reachOf` null) is deliberately not
+  counted, and the run says so in one `info` naming the functions (`FieldWrites.notices`). Counting it was built and
+  measured: TM's `Node.toTarget` (`targetObject:T`), `Node.snapshot` / `Form.get_data` (`Dynamic` locals) and
+  `ShareUsersStore`'s enum-binder maps make every lock member of TM hold any lock, so no lock keeps its name — 1d1ba147
+  153 -> 225 findings and 37 of 102 recall keys re-keyed to the lock's class (f81c2049 0/5, bd943dac 1/9). Bounding
+  those writes soundly needs the objects flowing into a `Dynamic` value or a type parameter (`Node`'s `T` is set through
+  `cast` writes and `Type.createInstance(Type.resolveClass(name))`); left open, said in the run.
+- reflective-write escapes (review round 4 `f11`): `DynamicAccess.set` / `remove` on a value declared `DynamicAccess`;
+  `Reflect.setField` / `setProperty` / `deleteField` read as a VALUE rather than called (`final set = Reflect.setField`,
+  `o.setField` under a `using`) — a computed-name write at the read, of any type off `Reflect`, of the receiver's as an
+  extension, since where the value is later called is not tracked; and an index write `o[k] = v` into ANY value not
+  declared an array, a map, a vector or a byte buffer (`ELEMENT_INDEXED_TYPES`, a positive list) — `untyped c[k]`
+  (bounded by `c`'s class), `(cast c : Dynamic)[k]`, an enum binder whose type the declarations do not say. TM: reports
+  byte-identical but for the new notice (its any-type writes already unsettled every field); fixtures: the four review
+  escapes warn, nothing that warned stopped.

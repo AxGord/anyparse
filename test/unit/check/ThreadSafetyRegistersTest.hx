@@ -13,7 +13,8 @@ class ThreadSafetyRegistersTest extends Test {
 
 	private static inline final CONFIG: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire","FileSystem.stat"],'
 		+ '"shortSinks":["FileSystem.stat"],"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"],'
-		+ '"registers":["addEventListener"]}}}';
+		+ '"registers":["addEventListener"],"nonBlocking":["D.new the dispatcher stands for a library class, no project native",'
+		+ '"D.addEventListener keeps the handler and runs nothing"]}}}';
 
 	/** The runtime's dispatcher (an openfl display object in TM): `registers` speaks for a registration it keeps itself. */
 	private static inline final DISPATCHER: String = 'extern class D { public function new();'

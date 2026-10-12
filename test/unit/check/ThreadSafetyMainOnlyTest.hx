@@ -44,6 +44,21 @@ class ThreadSafetyMainOnlyTest extends Test {
 		#end
 	}
 
+	/** A finding (a) a directive silences reports nothing: the hold over that work keeps its warning (review round 4 `f2`). */
+	@:pin('control') @:killer('M-TS-REPORTED-SUPPRESSED')
+	public function testWorkReportedOnlyBySilencedFindingsKeepsTheHold(): Void {
+		#if (sys || nodejs)
+		Assert.same(['warning B M.ui | M._m'], holds(ThreadSafetyCheckTest.violations(CONFIG, [
+			ThreadSafetyCheckTest.MUTEX,
+			'class M { final _m:Mutex = new Mutex(); public function new() {}\n function work():Void Sys.sleep(1); // noqa: thread-safety\n'
+			+ ' public function ui():Void { _m.acquire(); work(); _m.release(); }'
+			+ ' public static function main():Void { final m:M = new M(); m.ui(); } }'
+		])));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
 	private static function run(held: String): Array<Violation> {
 		return ThreadSafetyCheckTest.violations(CONFIG, [

@@ -133,6 +133,68 @@ class ThreadSafetyAllocationTest extends Test {
 		#end
 	}
 
+	/**
+	 * A reflective write whose name is computed may store anything in any field of its target's class, and in a field of
+	 * any class when its target's type places it on none (`Dynamic`): the field's classes are unknown. One on a value of an
+	 * unrelated class leaves the field sealed.
+	 */
+	@:pin('control') @:killer('M-TS-REFLECT-COMPUTED') @:killer('M-TS-REFLECT-MAYWRITE') @:killer('M-TS-REFLECT-HANDED-CALLEE')
+	public function testAComputedReflectiveWriteMakesTheFieldUnknown(): Void {
+		#if (sys || nodejs)
+		inline function poked(poke: String): Array<String> {
+			return holds(run('var loader:Base; $poke', 'loader = new Async();', 'loader.load();'));
+		}
+		// on its own class the write may also store another lock in `_m`, which then names no lock (`LockSites`, review F3)
+		Assert.same(
+			['warning B C.work | Mutex.acquire'],
+			poked('public function set(k:String, l:Base):Void Reflect.setField(this, k, l);'), 'its own class'
+		);
+		Assert.same(
+			['warning B C.work | C._m'],
+			poked('public static function poke(o:Dynamic, k:String):Void Reflect.setField(o, k, null);'), 'a Dynamic value'
+		);
+		Assert.same(
+			[], poked('public static function poke(o:Blocking, k:String):Void Reflect.setField(o, k, null);'), 'an unrelated class'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * Every way to write a field by a name chosen at run time is a reflective write (review F11): `DynamicAccess.set`, a
+	 * `Reflect.setField` handed on as a value and called later, an index write into an `untyped` or a cast-to-`Dynamic`
+	 * value — any index write into a value not proven an array, a map or a buffer. An index write into an array is none.
+	 */
+	@:pin('control') @:killer('M-TS-REFLECT-DYNACC') @:killer('M-TS-REFLECT-HANDED') @:killer('M-TS-REFLECT-INDEX-ANY')
+	@:killer('M-TS-REFLECT-INDEX-ELEMENT')
+	public function testEveryReflectiveEscapeMakesTheFieldUnknown(): Void {
+		#if (sys || nodejs)
+		inline function poked(poke: String): Array<String> {
+			return holds(run('var loader:Base; final _bases:Array<Base> = []; $poke', 'loader = new Async();', 'loader.load();'));
+		}
+		final unknown: Array<String> = ['warning B C.work | C._m'];
+		Assert.same(
+			unknown,
+			poked('public static function poke(o:C, k:String):Void { final d:haxe.DynamicAccess<Dynamic> = cast o;' + ' d.set(k, null); }'),
+			'DynamicAccess.set'
+		);
+		Assert.same(
+			unknown, poked('public static function poke(o:C, k:String):Void { final set = Reflect.setField; set(o, k, null); }'),
+			'a handed Reflect.setField'
+		);
+		Assert.same(
+			['warning B C.work | Mutex.acquire'],
+			poked('public static function poke(o:C, k:String):Void untyped o[k] = null;'),
+			'an untyped index on its class, which may also write the lock member'
+		);
+		Assert.same(unknown, poked('public static function poke(o:C, k:String):Void (cast o : Dynamic)[k] = null;'), 'a cast index');
+		Assert.same([], poked('public function poke(i:Int, b:Base):Void _bases[i] = b;'), 'an array element');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
 	/**
 	 * `C` declaring `field`, assigning it by `assign` in `prepare`, and on a worker holding `_m` across `held`, its file

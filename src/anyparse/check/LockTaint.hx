@@ -20,9 +20,13 @@ typedef ChainLists = {
 
 	final repeatBudgetMs: Null<Float>;
 
-	/** Whether the chain names any `sinks` — a chain that names none is read for the graph and reports nothing. */
+	/**
+	 * Whether the chain writes any option for the rule — the builtin sinks apply wherever
+	 * it runs; a chain that writes none is read for the graph and reports nothing.
+	 */
 	final reports: Bool;
 
+	/** The blocking calls: the `sinks` entries, and the builtin sinks and project natives no `nonBlocking` entry waives. */
 	final sinkIds: Array<String>;
 
 	/** The sinks whose one call is short (`shortSinks`): long only where it repeats (`CallRepetition`). */
@@ -120,6 +124,13 @@ private typedef WalkFlags = {
 	final way: BoundedWay;
 }
 
+/** What one call does from a walk state (`LockTaint.stepOf`): nothing there, block — repeating or not — or enter a state. */
+private enum WalkStep {
+	Skip;
+	Blocks(repeated: Bool);
+	Enter(state: WalkState);
+}
+
 /**
  * How a call held under a lock blocks: the functions it runs to the blocking call, that call, the lock it waits for, and
  * the calls taken on the way — the held call first, `end` last.
@@ -129,6 +140,19 @@ typedef BlockingTrail = {
 	final end: CallEdge;
 	final via: Null<String>;
 	final edges: Array<CallEdge>;
+}
+
+/**
+ * One call that blocks which a call held under a lock reaches, over EVERY way to it (`LockTaint.blockingEnds`): the
+ * shortest way, whether it runs more than once under the hold on some way (`repeated`) or may (`mayRepeat`, a function
+ * on some way re-entered through a cycle of calls), and the functions every way to it passes (`passes`: the held call's
+ * target and the blocking call's among them).
+ */
+typedef BlockingEnd = {
+	final trail: BlockingTrail;
+	final repeated: Bool;
+	final mayRepeat: Bool;
+	final passes: Array<String>;
 }
 
 /**
@@ -294,11 +318,12 @@ final class LockTaint {
 	}
 
 	/**
-	 * Whether `edge` itself blocks under a hold of `held`: a sink call its site's chain names, one taking a lock only
-	 * when the lock is long or unknown, and never a re-take of `held`.
+	 * Whether `edge` itself blocks under a hold of `held`: a sink call its site's chain names — or a sink handed on as a
+	 * value that runs from there (`ThreadStates.runsFrom`) — one taking a lock only when the lock is long or unknown, and
+	 * never a re-take of `held`.
 	 */
 	public function blocks(edge: CallEdge, held: Null<String>): Bool {
-		if (!edge.kind.isInvocation() || !listsOf(edge.file).sinkIds.contains(edge.to)) return false;
+		if (!_threads.runsFrom(edge) || !listsOf(edge.file).sinkIds.contains(edge.to)) return false;
 		if (!takesLock(edge)) return true;
 		final lock: Null<String> = _sites.lockOf(edge);
 		if (quiet.never(edge)) return false;
@@ -319,61 +344,61 @@ final class LockTaint {
 	}
 
 	/**
-	 * The call path by which the call `edge` of the hold `a`, under a hold of `held`, blocks on some thread the hold runs
-	 * on — `[edge.to]` for a call that blocks itself, `edge.to` and the functions after it toward the blocking call
-	 * otherwise; null when it blocks on none: `edge` blocks, reaches a sink through no lock, or runs on another object a
-	 * function that takes the held lock on its own (`retakesElsewhere`), each only in a state of the holder's function
-	 * that runs both the take and `edge`.
-	 */
-	public function blockingPath(a: LockAcquire, edge: CallEdge, held: Null<String>): Null<Array<String>> {
-		return blockingTrail(a, edge, held)?.path;
-	}
-
-	/**
-	 * `blockingPath`, with the call at its end that blocks (`end`) and, when that call blocks by taking a lock, the lock
-	 * (`via`: the lock object, the pair's take member for a lock no member names, or `held` for a take of it on another
-	 * object). The one walk both answers come from.
+	 * How the call `edge` of the hold `a`, under a hold of `held`, blocks on some thread the hold runs on, each only in a
+	 * state of the holder's function that runs both the take and `edge`: the first way found (`path`: `[edge.to]` for a
+	 * call that blocks itself, `edge.to` and the functions after it toward the blocking call otherwise), the call at its
+	 * end that blocks (`end`) and, when that call blocks by taking a lock, the lock (`via`: the lock object, the pair's take
+	 * member for a lock no member names, or `held` for a take of it on another object); null when it blocks on none.
+	 * `edge` blocks, reaches a sink through no lock, or runs on another object a function that takes the held lock on its
+	 * own (`retakesElsewhere`). `blockingEnds` answers for every blocking call the call reaches.
 	 */
 	public function blockingTrail(a: LockAcquire, edge: CallEdge, held: Null<String>): Null<BlockingTrail> {
-		if (onErrorPath(a.edge) || onErrorPath(edge)) return null;
-		for (state in _threads.statesOf(a.edge.from)) for (bit in THREAD_BITS) if (
-			state.ctx & bit != 0 && _conditions.carried(a.edge, state.valuation, bit) != 0
-		) {
-			final live: Int = _conditions.carried(edge, state.valuation, bit);
-			if (live == 0) continue;
-			final cost: Null<TaintCost> = _cost;
-			// the repetitions `boundedRepeats` binds around the call while the lock is held, multiplied on along the way
-			final way: Null<BoundedWay> = cost == null
-				? CallRepetition.UNBOUNDED
-				: cost.repetition.alongUnder(edge, a.edge, CallRepetition.UNBOUNDED);
-			// a call repeating while the lock is held runs every short call it reaches more than once
-			final repeats: Bool = cost != null && (cost.repetition.repeatedUnder(edge, a.edge) || way == null);
-			// the hold being judged, on the object it is taken on, while its window runs
-			final under: Null<String> = cost?.dominance.holdOf(a);
-			if (blocks(edge, held) || retakesElsewhere(edge, held)) {
-				// a take the hold itself dominates, or a re-take of its own lock, waits for no long hold: each needs the lock held here
-				if (counts(edge, held, repeats, state.valuation) && !briefUnder(under, edge)) return trailOf([edge.to], edge, held, [edge]);
-				continue;
-			}
-			if (takesLock(edge)) continue;
-			final classes: Null<String> = _allocations?.receiverClasses(edge, null);
-			if (_allocations?.dispatches(edge, classes) == false) continue;
-			final carried: Null<String> = cost?.dominance.carry(under, edge);
-			final self: Null<String> = _allocations?.into(edge, classes);
-			final key: Null<String> = reach(
-				edge.to, _conditions.bind(edge, state.valuation), live,
-				{ held: held, repeated: repeats, way: way ?? CallRepetition.UNBOUNDED }, carried, self
-			);
-			if (key != null) return trailFrom(edge, key, held);
+		for (root in rootsOf(a, edge, held)) switch root {
+			case Blocks(_):
+				return trailOf([edge.to], edge, held, [edge]);
+			case Enter(state):
+				final key: Null<String> = reach(state, held);
+				if (key != null) return trailFrom(edge, key, held);
+			case Skip:
 		}
 		return null;
 	}
 
-	/** The calls of the hold `a`'s window that block under a hold of `held` (`blockingPath`), each with its path, in source order. */
+	/**
+	 * EVERY call that blocks which the call `edge` of the hold `a` reaches under a hold of `held` — `blockingTrail` names
+	 * the first — each once by its site and the lock it waits for (`BlockingEnd`): the shortest way to it, whether some
+	 * way repeats it, and the functions every way passes. Empty when the call blocks on no way. A walk of its own over
+	 * the same states, keeping no answer for another call: each state is entered once, so it ends with the states.
+	 */
+	public function blockingEnds(a: LockAcquire, edge: CallEdge, held: Null<String>): Array<BlockingEnd> {
+		final ways: EndGraph = new EndGraph(edge);
+		for (root in rootsOf(a, edge, held)) switch root {
+			case Blocks(repeated):
+				ways.blocked(-1, edge, repeated);
+			case Enter(state):
+				ways.enter(state, -1, edge);
+			case Skip:
+		}
+		var qi: Int = 0;
+		while (qi < ways.states.length) {
+			final at: Int = qi++;
+			final state: WalkState = ways.states[at];
+			for (e in _graph.outEdges(state.id)) switch stepOf(state, e, held) {
+				case Blocks(repeated):
+					ways.blocked(at, e, repeated);
+				case Enter(next):
+					ways.enter(next, at, e);
+				case Skip:
+			}
+		}
+		return ways.ends(onCycle, (path, end, edges) -> trailOf(path, end, held, edges));
+	}
+
+	/** The calls of the hold `a`'s window that block under a hold of `held` (`blockingTrail`), each with its path, in source order. */
 	public function blockingCalls(a: LockAcquire, held: Null<String>): Array<{ edge: CallEdge, path: Array<String> }> {
 		final blocking: Array<{ edge: CallEdge, path: Array<String> }> = [];
 		for (e in a.window) if (e.span != null) {
-			final path: Null<Array<String>> = blockingPath(a, e, held);
+			final path: Null<Array<String>> = blockingTrail(a, e, held)?.path;
 			if (path != null) blocking.push({ edge: e, path: path });
 		}
 		blocking.sort((x, y) -> (x.edge.span?.from ?? 0) - (y.edge.span?.from ?? 0));
@@ -382,7 +407,7 @@ final class LockTaint {
 
 	/** Whether `edge` calls, on an object other than its caller's, a function taking the long instance lock `held` on its own. */
 	public function retakesElsewhere(edge: CallEdge, held: Null<String>): Bool {
-		return held != null && blockingLocks().contains(held) && !_sites.isStaticLock(held) && edge.kind.isInvocation()
+		return held != null && blockingLocks().contains(held) && !_sites.isStaticLock(held) && _threads.runsFrom(edge)
 			&& selfTakers(held).contains(edge.to) && !_sites.selfCall(edge);
 	}
 
@@ -392,27 +417,6 @@ final class LockTaint {
 		return lists.sinkIds.contains(edge.to) && lists.pairs.exists(p -> p.lockId == edge.to);
 	}
 
-	/**
-	 * Whether the call at the end of `trail`, which the call of the hold `a`'s window at its head leads to, runs more than
-	 * once under the hold: that call repeats under the take, or a call on the way repeats (`CallRepetition`). Asked of a
-	 * taint asking about cost: the plain one knows no repetition.
-	 */
-	public function repeatsAlong(a: LockAcquire, trail: BlockingTrail): Bool {
-		final cost: Null<TaintCost> = _cost;
-		if (cost == null) throw new Exception('thread-safety: the plain taint knows no repetition');
-		final repetition: CallRepetition = cost.repetition;
-		return trail.edges.length > 0 && repetition.repeatedUnder(trail.edges[0], a.edge)
-			|| trail.edges.slice(1).exists(e -> repetition.repeated(e));
-	}
-
-	/**
-	 * Whether the call at the end of `trail` may run more than once under the hold `a`: it repeats along the trail
-	 * (`repeatsAlong`), or a function on the way is re-entered through a cycle of calls — every call it makes then repeats,
-	 * whichever of them the trail took (TM's `FolderWatcher.checkNode` walking the tree).
-	 */
-	public function mayRepeatAlong(a: LockAcquire, trail: BlockingTrail): Bool {
-		return repeatsAlong(a, trail) || trail.path.exists(onCycle);
-	}
 
 	/** The locks whose take blocks at all: the plain taint's `long`, or the plain solve's for a taint asking about cost. */
 	private inline function blockingLocks(): Array<String> {
@@ -461,69 +465,115 @@ final class LockTaint {
 	}
 
 	/**
-	 * The key of the state `id` under `valuation` on `ctx` when some path of calls that run from it reaches a call that
-	 * blocks under a hold of `held`; null when none does. A breadth-first walk over the states, each answer kept: a
+	 * The key of the state `start` when some path of calls that run from it (`stepOf`) — a value handed to a call that
+	 * runs it there among them (`ThreadStates.runsHere`), repeating as that call repeats it — reaches a call that blocks
+	 * under a hold of `held`; null when none does. A breadth-first walk over the states, each answer kept: a
 	 * found path marks every state on it, a walk that found nothing every state it saw. A call taking a lock blocks by
 	 * what the lock is (`blocks`), never through the lock primitive's own body, and a function its call site's chain
 	 * names a sink is where a path ENDS: the call to it blocks by that name. Asking about cost, a state also carries
 	 * whether a call on the way to it repeats (`repeated`, from the caller for the first): a short call (`costsLong`)
 	 * counts only on a path that repeats; run once, it ends no path and leads nowhere, like any sink.
 	 */
-	private function reach(
-		id: String, valuation: String, ctx: Int, flags: WalkFlags, under: Null<String>, self: Null<String>
-	): Null<String> {
-		final held: Null<String> = flags.held;
-		final repeated: Bool = flags.repeated;
-		final root: String = stateKey(held, id, valuation, ctx, flags, under) + '|${self ?? ''}';
+	private function reach(start: WalkState, held: Null<String>): Null<String> {
+		final root: String = start.key;
 		if (_reaching.exists(root)) return root;
 		if (_clean.exists(root)) return null;
-		final queue: Array<WalkState> = [
-			{
-				key: root,
-				id: id,
-				valuation: valuation,
-				ctx: ctx,
-				repeated: repeated,
-				way: flags.way,
-				under: under,
-				self: self
-			}
-		];
+		final queue: Array<WalkState> = [start];
 		final parents: Map<String, { key: String, edge: CallEdge }> = [];
 		final seen: Map<String, Bool> = [root => true];
 		var qi: Int = 0;
 		while (qi < queue.length) {
 			final state: WalkState = queue[qi++];
-			for (edge in _graph.outEdges(state.id)) if (edge.kind.isInvocation()) {
-				if (leadsNowhere(edge, state.repeated)) continue;
-				final live: Int = _conditions.carried(edge, state.valuation, state.ctx);
-				if (live == 0) continue;
-				final carriedDown: WalkFlags = stepFlags(state, edge, held);
-				final repeats: Bool = carriedDown.repeated;
-				if (blockingHere(edge, held)) {
-					// a short call run once on this path waits too little to count, and a sink leads nowhere
-					if (!counts(edge, held, repeats, state.valuation) || briefUnder(state.under, edge)) continue;
+			for (edge in _graph.outEdges(state.id)) switch stepOf(state, edge, held) {
+				case Blocks(_):
 					final step: TaintStep = { edge: edge, next: null };
 					_reaching[state.key] = step;
 					markPath(state.key, parents);
 					return root;
-				}
-				if (takesLock(edge)) continue;
-				final nextState: Null<WalkState> = following(state, edge, live, carriedDown);
-				if (nextState == null) continue;
-				final next: String = nextState.key;
-				if (_clean.exists(next) || seen.exists(next)) continue;
-				seen[next] = true;
-				parents[next] = { key: state.key, edge: edge };
-				if (_reaching.exists(next)) {
-					markPath(next, parents);
-					return root;
-				}
-				queue.push(nextState);
+				case Enter(nextState):
+					final next: String = nextState.key;
+					if (_clean.exists(next) || seen.exists(next)) continue;
+					seen[next] = true;
+					parents[next] = { key: state.key, edge: edge };
+					if (_reaching.exists(next)) {
+						markPath(next, parents);
+						return root;
+					}
+					queue.push(nextState);
+				case Skip:
 			}
 		}
 		for (key in seen.keys()) _clean[key] = true;
 		return null;
+	}
+
+	/**
+	 * What the call `edge` of the hold `a` does under a hold of `held`, in each state of the holder's function and on each
+	 * thread that runs both the take and `edge` (none for a call no thread runs there, or only an error path runs): blocks
+	 * itself, repeating or not, or enters the state its target runs in, carrying the repetitions around it, the judged
+	 * hold and the classes it runs on.
+	 */
+	private function rootsOf(a: LockAcquire, edge: CallEdge, held: Null<String>): Array<WalkStep> {
+		final roots: Array<WalkStep> = [];
+		if (!_threads.runsHere(edge, listsOf(edge.file)) || onErrorPath(a.edge) || onErrorPath(edge)) return roots;
+		for (state in _threads.statesOf(a.edge.from)) for (bit in THREAD_BITS) if (
+			state.ctx & bit != 0 && _conditions.carried(a.edge, state.valuation, bit) != 0
+		) {
+			final live: Int = _conditions.carried(edge, state.valuation, bit);
+			if (live == 0) continue;
+			final cost: Null<TaintCost> = _cost;
+			// the repetitions `boundedRepeats` binds around the call while the lock is held, multiplied on along the way
+			final way: Null<BoundedWay> = cost == null
+				? CallRepetition.UNBOUNDED
+				: cost.repetition.alongUnder(edge, a.edge, CallRepetition.UNBOUNDED);
+			// a call repeating while the lock is held runs every short call it reaches more than once
+			final repeats: Bool = cost != null && (cost.repetition.repeatedUnder(edge, a.edge) || way == null);
+			// the hold being judged, on the object it is taken on, while its window runs
+			final under: Null<String> = cost?.dominance.holdOf(a);
+			if (blocks(edge, held) || retakesElsewhere(edge, held)) {
+				// a take the hold itself dominates, or a re-take of its own lock, waits for no long hold: each needs the lock held here
+				if (counts(edge, held, repeats, state.valuation) && !briefUnder(under, edge)) roots.push(Blocks(repeats));
+				continue;
+			}
+			if (takesLock(edge)) continue;
+			final classes: Null<String> = _allocations?.receiverClasses(edge, null);
+			if (_allocations?.dispatches(edge, classes) == false) continue;
+			final flags: WalkFlags = { held: held, repeated: repeats, way: way ?? CallRepetition.UNBOUNDED };
+			final valuation: String = _conditions.entered(edge, state.valuation);
+			final carried: Null<String> = cost?.dominance.carry(under, edge);
+			final self: Null<String> = _allocations?.into(edge, classes);
+			roots.push(Enter({
+				key: stateKey(held, edge.to, valuation, live, flags, carried) + '|${self ?? ''}',
+				id: edge.to,
+				valuation: valuation,
+				ctx: live,
+				repeated: repeats,
+				way: flags.way,
+				under: carried,
+				self: self
+			}));
+		}
+		return roots;
+	}
+
+	/**
+	 * What the call `edge` of the walk state `state` does under a hold of `held`: nothing — it runs nowhere from here or
+	 * leads nowhere (`leadsNowhere`), a condition rules it out, it blocks too briefly to count (a short call run once, a
+	 * take the judged hold dominates), it takes a lock, or no class its receiver may be runs it — block, repeating or not,
+	 * or enter the state its target runs in.
+	 */
+	private function stepOf(state: WalkState, edge: CallEdge, held: Null<String>): WalkStep {
+		if (!_threads.runsHere(edge, listsOf(edge.file)) || leadsNowhere(edge, state.repeated)) return Skip;
+		final live: Int = _conditions.carried(edge, state.valuation, state.ctx);
+		if (live == 0) return Skip;
+		final carriedDown: WalkFlags = stepFlags(state, edge, held);
+		final repeats: Bool = carriedDown.repeated;
+		// a short call run once on this path waits too little to count, and a sink leads nowhere
+		if (blockingHere(edge, held))
+			return counts(edge, held, repeats, state.valuation) && !briefUnder(state.under, edge) ? Blocks(repeats) : Skip;
+		if (takesLock(edge)) return Skip;
+		final next: Null<WalkState> = following(state, edge, live, carriedDown);
+		return next == null ? Skip : Enter(next);
 	}
 
 	/**
@@ -534,7 +584,7 @@ final class LockTaint {
 	private function following(state: WalkState, edge: CallEdge, live: Int, flags: WalkFlags): Null<WalkState> {
 		final classes: Null<String> = _allocations?.receiverClasses(edge, state.self);
 		if (_allocations?.dispatches(edge, classes) == false) return null;
-		final valuation: String = _conditions.bind(edge, state.valuation);
+		final valuation: String = _conditions.entered(edge, state.valuation);
 		final under: Null<String> = _cost?.dominance.carry(state.under, edge);
 		final self: Null<String> = _allocations?.into(edge, classes);
 		return {
@@ -629,16 +679,6 @@ final class LockTaint {
 	private function onCycle(id: String): Bool {
 		final known: Null<Bool> = _cyclic[id];
 		if (known != null) return known;
-		/**
-		 * Whether the value a `Ref` edge `e` hands on may run while the call it is handed to runs (`ThreadStates.runsFrom`):
-		 * never one a `spawns` or `marshals` call runs on another thread, nor one a `registers` call keeps to run per event.
-		 */
-		inline function runsWhereHanded(e: CallEdge): Bool {
-			final lists: ChainLists = listsOf(e.file);
-			final via: String = e.via ?? '';
-			final kept: Bool = lists.registerIds.contains(via) || lists.registerNames.contains(e.viaMember ?? '');
-			return e.kind == Ref && _threads.runsFrom(e) && !(lists.spawnIds.contains(via) || lists.marshalIds.contains(via) || kept);
-		}
 		final seen: Map<String, Bool> = [id => true];
 		final queue: Array<String> = [id];
 		var qi: Int = 0;
@@ -649,7 +689,7 @@ final class LockTaint {
 				break;
 			}
 			// a value handed on that runs there closes a cycle too: `n.each(k -> walk(k))` walks a whole tree
-			for (e in _graph.outEdges(queue[qi++])) if (e.kind.isInvocation() || runsWhereHanded(e)) {
+			for (e in _graph.outEdges(queue[qi++])) if (_threads.runsHere(e, listsOf(e.file))) {
 				if (e.to == id) answer = true;
 				if (!seen.exists(e.to)) {
 					seen[e.to] = true;
@@ -683,6 +723,154 @@ final class LockTaint {
 	private inline function wayAt(edge: CallEdge, way: BoundedWay): Null<BoundedWay> {
 		final cost: Null<TaintCost> = _cost;
 		return cost == null ? way : cost.repetition.along(edge, way);
+	}
+
+}
+
+/**
+ * The states one `LockTaint.blockingEnds` walk entered, each once with every call into it, and the blocking calls found
+ * from them: what `ends` groups by call site and lock. A state's predecessor -1 is the held call itself.
+ */
+@:nullSafety(Strict)
+private final class EndGraph {
+
+	/** The states entered, breadth first. */
+	public final states: Array<WalkState> = [];
+
+	/** For each state, the states whose calls enter it. */
+	private final _preds: Array<Array<Int>> = [];
+
+	/** For each state, the first state entering it and the call: the shortest way to it. */
+	private final _first: Array<{ from: Int, edge: CallEdge }> = [];
+
+	/** Each state's index, by its key. */
+	private final _at: Map<String, Int> = [];
+
+	/** Each blocking call found, the state whose call it is, and whether it repeats on that way. */
+	private final _found: Array<{ from: Int, edge: CallEdge, repeated: Bool }> = [];
+
+	/** The held call the walk starts at. */
+	private final _call: CallEdge;
+
+	public function new(call: CallEdge) {
+		_call = call;
+	}
+
+	/** The call `edge` of the state at `from` enters `state`: a new state is queued, a known one gains a way in. */
+	public function enter(state: WalkState, from: Int, edge: CallEdge): Void {
+		final known: Null<Int> = _at[state.key];
+		if (known != null) {
+			if (!_preds[known].contains(from)) _preds[known].push(from);
+			return;
+		}
+		_at[state.key] = states.length;
+		states.push(state);
+		_preds.push([from]);
+		_first.push({ from: from, edge: edge });
+	}
+
+	/** The call `edge` of the state at `from` blocks, repeating on that way or not. */
+	public function blocked(from: Int, edge: CallEdge, repeated: Bool): Void {
+		_found.push({ from: from, edge: edge, repeated: repeated });
+	}
+
+	/**
+	 * The blocking calls found, one per call site and lock waited for (`trail` builds each way's trail): the shortest
+	 * way, repeated on any way, may repeat when it does or a function on any way into it is on a cycle (`onCycle`), and
+	 * the functions every way to it passes.
+	 */
+	public function ends(
+		onCycle: (String) -> Bool, trail: (Array<String>, CallEdge, Array<CallEdge>) -> BlockingTrail
+	): Array<BlockingEnd> {
+		final passing: Array<Array<String>> = dominators();
+		final cyclic: Array<Bool> = cyclicWays(onCycle);
+		final keys: Array<String> = [];
+		final out: Array<BlockingEnd> = [];
+		for (f in _found) {
+			final way: BlockingTrail = wayTo(f.from, f.edge, trail);
+			final key: String = '${MainSinkReport.siteKey(f.edge)}|${way.via ?? ''}';
+			final passes: Array<String> = (f.from < 0 ? [] : passing[f.from]).concat([_call.to, f.edge.to]);
+			final mayRepeat: Bool = f.repeated || onCycle(_call.to) || onCycle(f.edge.to) || f.from >= 0 && cyclic[f.from];
+			final at: Int = keys.indexOf(key);
+			if (at < 0) {
+				keys.push(key);
+				out.push({
+					trail: way,
+					repeated: f.repeated,
+					mayRepeat: mayRepeat,
+					passes: passes
+				});
+				continue;
+			}
+			final known: BlockingEnd = out[at];
+			out[at] = {
+				trail: known.trail,
+				repeated: known.repeated || f.repeated,
+				mayRepeat: known.mayRepeat || mayRepeat,
+				passes: known.passes.filter(id -> passes.contains(id))
+			};
+		}
+		return out;
+	}
+
+	/** The trail of the shortest way to the blocking call `end` of the state at `from` (`trail`). */
+	private function wayTo(from: Int, end: CallEdge, trail: (Array<String>, CallEdge, Array<CallEdge>) -> BlockingTrail): BlockingTrail {
+		final ids: Array<String> = [];
+		final edges: Array<CallEdge> = [];
+		var at: Int = from;
+		while (at >= 0) {
+			ids.unshift(states[at].id);
+			edges.unshift(_first[at].edge);
+			at = _first[at].from;
+		}
+		ids.push(end.to);
+		edges.push(end);
+		return trail(ids, end, edges);
+	}
+
+	/**
+	 * For each state, the functions every way from the held call into it passes, its own included: the least fixed
+	 * point of "a state's own function, and what all the states entering it share", breadth first so each sweep but the
+	 * first only shrinks a set.
+	 */
+	private function dominators(): Array<Array<String>> {
+		final known: Array<Null<Array<String>>> = [for (_ in states) null];
+		var moved: Bool = true;
+		while (moved) {
+			moved = false;
+			for (i => s in states) {
+				var shared: Null<Array<String>> = null;
+				for (p in _preds[i]) {
+					final up: Null<Array<String>> = p < 0 ? [] : known[p];
+					if (up == null) continue;
+					final before: Null<Array<String>> = shared;
+					shared = before == null ? up.copy() : before.filter(id -> up.contains(id));
+				}
+				final next: Array<String> = (shared ?? []).filter(id -> id != s.id).concat([s.id]);
+				final old: Null<Array<String>> = known[i];
+				if (old != null && old.length == next.length && old.foreach(id -> next.contains(id))) continue;
+				known[i] = next;
+				moved = true;
+			}
+		}
+		return [for (k in known) k ?? []];
+	}
+
+	/**
+	 * For each state, whether its function or one on some way into it is re-entered through a cycle of calls (`onCycle`):
+	 * every call such a function makes may repeat, whichever way the walk took.
+	 */
+	private function cyclicWays(onCycle: (String) -> Bool): Array<Bool> {
+		final cyclic: Array<Bool> = [for (s in states) onCycle(s.id)];
+		var moved: Bool = true;
+		while (moved) {
+			moved = false;
+			for (i in 0...states.length) if (!cyclic[i] && _preds[i].exists(p -> p >= 0 && cyclic[p])) {
+				cyclic[i] = true;
+				moved = true;
+			}
+		}
+		return cyclic;
 	}
 
 }

@@ -26,7 +26,11 @@ typedef LockAcquire = {
 	/** The lock OBJECT, as the member that holds it (`Owner.field`); null when no sealed member names it. */
 	final lock: Null<String>;
 
-	/** Every call of the function the lock may be held at, the acquire and its own releases excepted. */
+	/**
+	 * Every call of the function the lock may be held at, the acquire and its own releases excepted, and every function
+	 * value handed on there (`Ref`): whether such a value runs under the hold is the call it is handed to's question
+	 * (`LockTaint.blockingTrail`), never the window's.
+	 */
 	final window: Array<CallEdge>;
 
 	/** Whether some path leaves the function still holding the lock — the hold then lasts as long as its caller wants. */
@@ -108,8 +112,9 @@ private typedef LockWrapper = {
  *
  * A lock is named by the member it lives in, and only a SEALED member names one: every value it ever holds comes from a
  * `new` (its initializer, an assignment), and every read of it is the receiver of a method call. Anything else — a
- * member read as a value, assigned from a parameter, initialized from another expression — may alias a lock some other
- * name also reaches, so its calls take an UNKNOWN lock. Sealing is judged by NAME over every file of the graph, which
+ * member read as a value, assigned from a parameter, initialized from another expression — may alias a lock
+ * some other name also reaches, so its calls take an UNKNOWN lock; so may a member a reflective write may store
+ * a value in (`FieldWrites.reflectivelyWritten`). Sealing is judged by NAME over every file of the graph, which
  * can only unseal more.
  *
  * A lock WRAPPER is a function whose whole lock traffic is one call taking a lock on every path in, or one call giving
@@ -189,11 +194,12 @@ final class LockSites {
 	/**
 	 * Collects the acquires over the `files` of `graph`; `pairsOf` names the pairs the chain of a file configures,
 	 * `throws` the calls that may raise, `trees` the function nodes the holds are traced through, and `switches` which
-	 * catch-all of a `switch` no value reaches.
+	 * catch-all of a `switch` no value reaches, `writes` every write of a field — a reflective one may store any lock in a
+	 * member.
 	 */
 	public function new(
 		graph: CallGraph, files: Array<String>, plugin: GrammarPlugin, pairsOf: (String) -> Array<LockPair>, throws: ThrowReach,
-		trees: FunctionTrees, switches: ExhaustiveSwitches
+		trees: FunctionTrees, switches: ExhaustiveSwitches, writes: FieldWrites
 	) {
 		_graph = graph;
 		_throws = throws;
@@ -216,7 +222,7 @@ final class LockSites {
 		}
 		collectUnsealed(files, plugin, [
 			for (t in takes.concat(gives)) if (t.edge.receiverField != null) memberName(t.edge.receiverField)
-		]);
+		], writes);
 		final unresolved: Array<String> = [for (u in graph.unresolved) for (n in ReachAdmission.admittedNames(u)) n];
 		for (site in inferWrappers(takes, gives, pairIds, unresolved)) (site.wrapper.takes ? takes : gives).push(site.call);
 		for (take in takes) {
@@ -334,7 +340,7 @@ final class LockSites {
 			edge: edge,
 			pair: pair,
 			lock: lock,
-			window: [for (e in held) if (e.kind.isInvocation()) e],
+			window: [for (e in held) if (e.kind.isInvocation() || e.kind == Ref) e],
 			leaks: leaks,
 			blind: traced == null || unresolved.length > 0,
 			untraced: traced == null,
@@ -420,7 +426,7 @@ final class LockSites {
 	 * for every invocation whose `receiverField` names one) — unless a proven alias (`settleAliases`) accounts for each
 	 * such occurrence (`LockAliases`): the member then stays sealed, and an alias names the lock of the member it holds.
 	 */
-	private function collectUnsealed(files: Array<String>, plugin: GrammarPlugin, names: Array<String>): Void {
+	private function collectUnsealed(files: Array<String>, plugin: GrammarPlugin, names: Array<String>, writes: FieldWrites): Void {
 		if (names.length == 0) return;
 		final named: Map<String, Array<String>> = [];
 		for (e in _graph.edges) {
@@ -446,6 +452,8 @@ final class LockSites {
 		for (lock in aliases.locks) _aliasedLocks.push(lock);
 		for (lock in aliases.rewritten) _rewrittenLocks.push(lock);
 		for (name => found in breaking) if (found.exists(o -> !aliases.accounts(o))) _unsealed.push(name);
+		// a reflective write names its field at run time: no `new` or hand-off it stores is in sight
+		for (name in walked) if (!_unsealed.contains(name) && writes.reflectivelyWritten(name)) _unsealed.push(name);
 	}
 
 	/** Adds to `into` every occurrence of a member name among `names` that does not keep its member sealed (`sealedAt`). */

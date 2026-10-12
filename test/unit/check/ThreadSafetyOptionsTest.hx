@@ -61,32 +61,36 @@ class ThreadSafetyOptionsTest extends Test {
 
 	/**
 	 * A `sinks` the config loses — a typo of the key, a value of the wrong shape, items that are no strings — or one
-	 * naming no call of the run leaves the rule nothing to find: it is said, not answered "no issues"; and a mistyped
-	 * `enabled` is a value of the wrong shape, not an unknown option (review round 2 `cfgA`–`cfgE`).
+	 * naming no call of the run leaves only the builtin sinks: it is said, not answered "no issues"; and a mistyped
+	 * `enabled` is a value of the wrong shape, not an unknown option (review round 2 `cfgA`–`cfgE`). A run no sink applies
+	 * to at all still says what its config lost.
 	 */
-	@:pin('control') @:killer('M-TS-MALFORMED-UNGATED') @:killer('M-TS-OPT-SINKS-UNMATCHED') @:killer('M-TS-OPT-SKIP-DECLARED')
-	@:killer('M-TS-OPT-NO-SINK-NOTICES') @:killer('M-TS-OPT-LIFTED')
+	@:pin('control') @:killer('M-TS-OPT-SINKS-UNMATCHED') @:killer('M-TS-OPT-SKIP-DECLARED') @:killer('M-TS-OPT-NO-SINK-NOTICES')
+	@:killer('M-TS-OPT-LIFTED')
 	public function testALostSinksListIsSaid(): Void {
 		#if (sys || nodejs)
-		final none: String = 'option "sinks" lists no call — thread-safety finds nothing under this config';
+		final none: String = 'option "sinks" lists no call — only the builtin sinks apply under this config';
 		Assert.same(['unknown option "sink" — ignored (did you mean "sinks"?)'], saidAlone('"sink":["Sys.sleep"]'), 'a typo');
 		Assert.same(['option "sinks" is not an array of strings — ignored', none], saidAlone('"sinks":"Sys.sleep"'), 'a string');
 		Assert.same(
 			['option "sinks" ignored 1 value(s) that are not strings', none], saidAlone('"sinks":[{"call":"Sys.sleep"}]'), 'objects'
 		);
 		Assert.same([
-			'option "sinks" names no call of the run (Sys.slep) — thread-safety finds nothing here'
+			'option "sinks" names no call of the run (Sys.slep) — only the builtin sinks apply here'
 		], saidAlone('"sinks":["Sys.slep"]'), 'matching nothing');
 		Assert.same(['option "enabled" is not true or false — ignored'], saidAlone('"enabled":"true","sinks":["Sys.sleep"]'), 'enabled');
+		Assert.same([
+			'option "sinks" names no call of the run (Sys.slep) — only the builtin sinks apply here'
+		], saidAlone('"sinks":["Sys.slep"]', ['class Q { static function main():Void trace(1); }']), 'no sink at all');
 		#else
 		Assert.pass('non-sys target');
 		#end
 	}
 
 	#if (sys || nodejs)
-	/** The config lines a run under the `thread-safety` options `options` alone says, sorted. */
-	private static function saidAlone(options: String): Array<String> {
-		final found: Array<Violation> = ThreadSafetyCheckTest.violations('{"rules":{"thread-safety":{$options}}}', [SOURCES]);
+	/** The config lines a run of `sources` (`SOURCES` by default) under the `thread-safety` options `options` alone says, sorted. */
+	private static function saidAlone(options: String, ?sources: Array<String>): Array<String> {
+		final found: Array<Violation> = ThreadSafetyCheckTest.violations('{"rules":{"thread-safety":{$options}}}', sources ?? [SOURCES]);
 		final out: Array<String> = [for (v in found) if (v.file == '') v.message];
 		out.sort(Reflect.compare);
 		return out;

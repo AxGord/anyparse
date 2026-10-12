@@ -46,8 +46,10 @@ using StringTools;
  * always long; a hold in the owner's constructor before the object escapes blocks no one. Holding a long lock is itself
  * blocking, so the locks and the taint are solved together (`solveLongLocks`).
  *
- * Configured per project in `apqlint.json` under `"thread-safety"` (inert without `sinks`), read
- * and checked by `ThreadSafetyOptions`, which says every option it drops: `sinks`, `spawns`,
+ * Configured per project in `apqlint.json` under `"thread-safety"` (inert without any option), read and checked by
+ * `ThreadSafetyOptions`, which says every option it drops. The sinks are POSITIVE: the grammar's blocking library calls
+ * (`ExecutionShape.blockingLibraryCalls`) and the project's natives (`ProjectNatives`) apply wherever the rule runs,
+ * `sinks` adds to them and `nonBlocking` waives one on evidence, a run saying once which applied; `sinks`, `spawns`,
  * `marshals` and `throwers` (`ThrowReach`) are call patterns, matched by their last two dot-segments (`Type.*` covers a
  * type); a `lockPairs` entry is `<lock pattern>/<unlock member name>`, and a lock WRAPPER's call takes or gives its
  * lock with no entry of its own; `quietRoots` are handlers that block on purpose — the main thread
@@ -144,7 +146,18 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final graph: CallGraph = ThreadGraph.build(files, plugin, useFacts);
 		final sets: Array<ChainLists> = [];
 		final problems: Array<String> = [];
-		final byFile: Map<String, ChainLists> = listsByFile(files, graph, sets, plugin.refShape().accessorMethodPrefixes ?? [], problems);
+		// the project's natives first: their call sites gain the edges every list is then resolved over
+		final natives: ProjectNatives = new ProjectNatives(graph, plugin);
+		// opt-in: the library calls whose library bodies block (`libraryBodies`)
+		final library: Null<LibraryBodies> = LibraryBodies.forRun(
+			files, _resolveConfig,
+			{ graph: graph, sinks: new PositiveSinks(graph, plugin, natives, null) },
+			plugin, problems
+		);
+		final byFile: Map<String, ChainLists> = listsByFile(
+			files, graph, sets, new PositiveSinks(graph, plugin, natives, library), plugin.refShape().accessorMethodPrefixes ?? [],
+			problems
+		);
 		final sinkIds: Array<String> = [];
 		for (lists in sets) for (id in lists.sinkIds) if (!sinkIds.contains(id)) sinkIds.push(id);
 		// nothing to find, and what the config lost says why
@@ -169,7 +182,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final writes: FieldWrites = new FieldWrites(graph, plugin, files.foreach(f -> byFile[f.file]?.closedWorld == true));
 		final sites: LockSites = new LockSites(
 			graph, [for (f in files) f.file],
-			plugin, file -> listsOf(file).pairs, throws, trees, new ExhaustiveSwitches(graph, plugin, writes, seedable)
+			plugin, file -> listsOf(file).pairs, throws, trees, new ExhaustiveSwitches(graph, plugin, writes, seedable), writes
 		);
 		// a hold whose take no thread runs holds nothing: a function nothing invokes, a take a condition rules out
 		final acquires: Array<LockAcquire> = [for (a in sites.acquires) if (states.edgeContext(a.edge) != 0) a];
@@ -204,30 +217,35 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		};
 
 		final violations: Array<Violation> = [];
+		// a finding a directive silences is shown nowhere: no other finding folds onto it
+		final suppressed: (Violation) -> Bool = Suppression.silencer(files, plugin.lexicalRegions);
 		// a value stored or handed where it never runs from repeats nothing, wherever it is written
 		final runsMain: (CallEdge) -> Bool = e -> !(e.kind == Ref && inertRef(e)) && states.edgeContext(e) & CTX_MAIN != 0;
 		final repeatsOnMain: MainRepeats = new MainRepeats(graph, repetition, states, conditions, runsMain);
 		final reported: Map<String, Violation> = MainSinkReport.report(
-			graph, sites, taints, paths, { repetition: repetition, main: repeatsOnMain, runs: runsMain }, states, violations
+			graph, sites, taints, paths, { repetition: repetition, main: repeatsOnMain, runs: runsMain }, states, violations, suppressed
 		);
 		if (must.unsettled)
 			problems.push(
 				'the locks held on entry did not settle within the bound, so no function is taken to hold any on its way in:'
 				+ ' no take is brief for being made under another lock'
 			);
-		reportConfigProblems(problems, violations);
+		reportConfigProblems(problems.concat(writes.notices()), violations);
 		reportLockHeld(graph, sites, judged, taints, {
 			costs: paths,
 			reported: reported,
 			enclosed: dominance.enclosed,
-			threads: states.origins(inertRef)
+			threads: states.origins(inertRef),
+			suppressed: suppressed
 		}, states, violations);
 		reportThrowHeld(graph, acquires.concat(helperHolds), throws, violations);
 		final order: LockOrder = new LockOrder(graph, conditions, acquires.concat(helperHolds));
-		for (v in order.report(states, inertRef, CTX_MAIN | CTX_QUIET, CTX_BG, CHAIN_CAP)) violations.push(v);
+		final runsHere: (CallEdge) -> Bool = e -> states.runsHere(e, listsOf(e.file));
+		for (v in order.report(states, inertRef, runsHere, CTX_MAIN | CTX_QUIET, CTX_BG, CHAIN_CAP)) violations.push(v);
 		// after every finding: the counterfactual solves fill taints of their own, which must not shape a report
 		longLocks = explained(sites, judged, long, costs, states, dominance.dominators, { taint: paths.normal, errors: errors });
-		// a file whose chain lists no sinks is scanned for its config's sake only (`skipReason`): it reports no finding of its own
+		library?.annotate(violations);
+		// a file whose chain writes no option is scanned for the graph's sake only: it reports no finding of its own
 		return violations.filter(v -> v.file == '' || listsOf(v.file).reports);
 	}
 
@@ -244,8 +262,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 
 	/**
 	 * `needs-config` for a chain that writes no `thread-safety` option — nothing to find, nothing to report on — and
-	 * `config-excluded` for a path under `exclude`. A chain that writes options but no usable `sinks` is scanned, so what
-	 * its config lost is said (`listsByFile`); it reports no finding of its own (`run`).
+	 * `config-excluded` for a path under `exclude`. A chain that writes any option is scanned
+	 * and reports, the builtin sinks applying with no `sinks` of its own (`listsByFile`).
 	 */
 	public function skipReason(file: String, config: LintConfig): Null<String> {
 		return config.optionKeys('thread-safety').length == 0 ? 'needs-config' : scanSkipReason(file, config);
@@ -293,8 +311,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	 * part of it sees neither every caller nor every write, and reads the chain as open — said in `problems`.
 	 */
 	private function listsByFile(
-		files: Array<{ file: String, source: String }>, graph: CallGraph, sets: Array<ChainLists>, accessorPrefixes: Array<String>,
-		problems: Array<String>
+		files: Array<{ file: String, source: String }>, graph: CallGraph, sets: Array<ChainLists>, positive: PositiveSinks,
+		accessorPrefixes: Array<String>, problems: Array<String>
 	): Map<String, ChainLists> {
 		final bySignature: Map<String, ChainLists> = [];
 		final byFile: Map<String, ChainLists> = [];
@@ -316,17 +334,19 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 				continue;
 			}
 			final found: Array<String> = options.problems.copy();
-			final lists: ChainLists = chainLists(options, graph, accessorPrefixes, closedWorld, found);
+			final configured: Array<String> = matchAll(graph, option('sinks'));
+			final lists: ChainLists = chainLists(options, graph, positive, configured, accessorPrefixes, closedWorld, found);
 			bySignature[signature] = lists;
 			sets.push(lists);
 			byFile[entry.file] = lists;
-			// a chain that writes any option for the rule is a config to report on, a `sinks` it lost or never wrote included
-			if (!lists.reports && !options.declared) continue;
-			// a `sinks` written and lost; a chain writing none on purpose only shapes the graph for the others
-			if (!lists.reports && options.wrote('sinks'))
-				found.push('option "sinks" lists no call — thread-safety finds nothing under this config');
-			else if (lists.reports && lists.sinkIds.length == 0)
-				found.push('option "sinks" names no call of the run (${option('sinks').join(', ')}) — thread-safety finds nothing here');
+			// a chain that writes any option for the rule reports — the builtin sinks apply wherever it runs — and is a
+			// config to report on; one writing none only shapes the graph for the others
+			if (!lists.reports) continue;
+			// a `sinks` written and lost, or naming nothing the run calls: the builtin sinks alone are left
+			if (options.wrote('sinks') && option('sinks').length == 0)
+				found.push('option "sinks" lists no call — only the builtin sinks apply under this config');
+			else if (option('sinks').length > 0 && configured.length == 0)
+				found.push('option "sinks" names no call of the run (${option('sinks').join(', ')}) — only the builtin sinks apply here');
 			if (declaredClosed && !closedWorld)
 				found.push(
 					'option "closedWorld" holds only for a run over the whole project it closes — this run leaves part of it out (a'
@@ -337,6 +357,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			if (!factsAsked.contains(facts)) factsAsked.push(facts);
 			for (p in found) if (!problems.contains(p)) problems.push(p);
 		}
+		if (sets.exists(s -> s.reports)) problems.push(positive.notice());
 		// one graph serves every chain, so the facts one chain asks for (`run`'s `useFacts`) build it for all of them
 		if (factsAsked.length > 1)
 			problems.push(
@@ -350,7 +371,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	 * `boundedRepeats` entry matching no function lands in `found`.
 	 */
 	private static function chainLists(
-		options: ThreadSafetyOptions, graph: CallGraph, accessorPrefixes: Array<String>, closedWorld: Bool, found: Array<String>
+		options: ThreadSafetyOptions, graph: CallGraph, positive: PositiveSinks, configured: Array<String>,
+		accessorPrefixes: Array<String>, closedWorld: Bool, found: Array<String>
 	): ChainLists {
 		final option: (String) -> Array<String> = options.list;
 		final shortSinks: Array<String> = option('shortSinks');
@@ -361,12 +383,17 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final neverInvokes: Array<String> = option('neverInvokes');
 		final mainChecks: Array<String> = option('mainThreadChecks');
 		final lockPairs: Array<String> = option('lockPairs');
-		final sinks: Array<String> = option('sinks');
+		final waived: Array<String> = positive.waived(options, graph, configured, found);
+		final sinkIds: Array<String> = configured.copy();
+		for (id in positive.builtin.concat(positive.natives).concat(positive.libraryFor(options))) if (
+			!waived.contains(id) && !sinkIds.contains(id)
+		)
+			sinkIds.push(id);
 		return {
-			reports: sinks.length > 0,
+			reports: options.declared,
 			bounded: BoundedRepeats.entries(options.boundedRepeats, graph, found),
 			repeatBudgetMs: options.repeatBudgetMs,
-			sinkIds: matchAll(graph, sinks),
+			sinkIds: sinkIds,
 			shortSinkIds: matchAll(graph, shortSinks),
 			shortNames: [for (p in shortSinks) if (p.indexOf('.') < 0) p],
 			iterateIds: matchAll(graph, iterates),
@@ -616,23 +643,11 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	private static function plainMember(graph: CallGraph, plugin: GrammarPlugin, d: FnDeclaration): Bool {
 		final tree: Null<QueryNode> = graph.treeOf(d.file);
 		if (tree == null) return false;
-		final host: Null<{ parent: QueryNode, member: QueryNode }> = memberAt(tree, d.span);
-		if (host == null) return false;
 		final shape: RefShape = plugin.refShape();
 		final kinds: Array<String> = (shape.modifierKinds ?? []).concat(plugin.metaShape().metaKinds);
-		final leading: Array<QueryNode> = MemberKinds.precedingModifiers(host.member, host.parent, kinds);
+		final leading: Null<Array<QueryNode>> = MemberKinds.precedingAt(tree, d.span, kinds);
+		if (leading == null) return false;
 		return !leading.exists(m -> m.kind == shape.overrideModifierKind || plugin.metaShape().metaKinds.contains(m.kind));
-	}
-
-	/** The node spanning exactly `span` in `tree`, with its parent; null when there is none. */
-	private static function memberAt(tree: QueryNode, span: Span): Null<{ parent: QueryNode, member: QueryNode }> {
-		var node: QueryNode = tree;
-		while (true) {
-			final child: Null<QueryNode> = node.children.find(c -> c.span != null && c.span.from <= span.from && c.span.to >= span.to);
-			if (child == null) return null;
-			if (child.span?.from == span.from && child.span?.to == span.to) return { parent: node, member: child };
-			node = child;
-		}
 	}
 
 	/**
@@ -661,7 +676,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 				final lock: Null<String> = a.lock;
 				if (lock == null || a.uncontended || long.contains(lock)) continue;
 				final held: Null<String> = taints.reentrantHeld(a);
-				if (!a.window.exists(e -> taints.blockingPath(a, e, held) != null)) continue;
+				if (!a.window.exists(e -> taints.blockingTrail(a, e, held) != null)) continue;
 				long.push(lock);
 				grew = true;
 			}
@@ -695,7 +710,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			costs: PathCosts,
 			reported: Map<String, Violation>,
 			enclosed: (LockAcquire) -> Bool,
-			threads: (String) -> Array<String>
+			threads: (String) -> Array<String>,
+			suppressed: (Violation) -> Bool
 		},
 		states: ThreadStates, violations: Array<Violation>
 	): Void {
@@ -755,26 +771,30 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			});
 		}
 		final covers: Array<{ finding: Violation, by: Array<Violation> }> = [];
-		nestHolds(reported, covers);
-		foldEnclosed(reported, judged.enclosed, covers);
-		new RootCauseFold([for (c in sites.crossing) c.lock], covers, judged.threads).fold(folds);
+		// a warning a directive silences reports nothing: no hold turns info onto it
+		nestHolds(reported, covers, judged.suppressed);
+		foldEnclosed(reported, judged.enclosed, covers, judged.suppressed);
+		// a multi-lock helper's give is its caller's release, as `solveLongLocks` reads it: it makes no lock long
+		final crossing: Array<String> = [for (c in sites.crossing) if (!sites.helpers.contains(c.edge.from)) c.lock];
+		new RootCauseFold(crossing, covers, judged.threads, judged.suppressed).fold(folds);
 	}
 
 	/**
 	 * Each warned hold a hold of the same lock its every caller keeps encloses (`LockDominance.enclosed`) turns info,
 	 * recorded in `covers` — when a warned hold of that lock in another function is long through a call into this hold's
 	 * function: that warning reports the work this hold does. Such a hold says so, naming those holds; one no warning
-	 * of an enclosing hold reaches stays.
+	 * of an enclosing hold reaches stays, and a warning a directive silences (`suppressed`) encloses nothing.
 	 */
 	private static function foldEnclosed(
-		reported: Array<WarnedHold>, enclosed: (LockAcquire) -> Bool, covers: Array<{ finding: Violation, by: Array<Violation> }>
+		reported: Array<WarnedHold>, enclosed: (LockAcquire) -> Bool, covers: Array<{ finding: Violation, by: Array<Violation> }>,
+		suppressed: (Violation) -> Bool
 	): Void {
 		final warned: Array<WarnedHold> = [for (r in reported) if (r.finding.severity == Severity.Warning) r];
 		for (r in warned) if (enclosed(r.hold)) {
 			final fn: String = r.hold.edge.from;
 			final around: Array<WarnedHold> = warned.filter(
 				w ->
-					w != r && w.hold.lock == r.hold.lock && w.hold.edge.from != fn
+					w != r && !suppressed(w.finding) && w.hold.lock == r.hold.lock && w.hold.edge.from != fn
 					&& w.calls.exists(c -> w.taint.blockingTrail(w.hold, c, w.held)?.path.contains(fn) == true)
 			);
 			if (around.length == 0) continue;
@@ -865,27 +885,48 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	}
 
 	/**
-	 * Of two warned holds in one function, the one taken inside the other's window whose every long call that window spans
-	 * too turns info, naming the outer one: the outer hold's finding names the same calls. In take order, so an outer hold
-	 * is never itself turned by a hold it encloses; each turned one is recorded in
-	 * `covers`. A hold its function hands off (`HoldGrade.handsOff`) outlives the outer
-	 * window, across calls no finding of it names, and stays.
+	 * Of two warned holds in one function, the one taken inside the other's window — or after it by the same call of a
+	 * multi-lock helper (`takenFirst`) — whose every long call that window spans too turns info, naming the outer one: the
+	 * outer hold's finding names the same calls. In take order, so an outer hold is never itself turned by a hold it
+	 * encloses; each turned one is recorded in `covers`. A hold its function hands off (`HoldGrade.handsOff`) outlives the
+	 * outer window, across calls no finding of it names, and stays; so does one inside
+	 * a hold whose warning a directive silences (`suppressed`), which reports nothing.
 	 */
-	private static function nestHolds(reported: Array<WarnedHold>, covers: Array<{ finding: Violation, by: Array<Violation> }>): Void {
+	private static function nestHolds(
+		reported: Array<WarnedHold>, covers: Array<{ finding: Violation, by: Array<Violation> }>, suppressed: (Violation) -> Bool
+	): Void {
 		reported.sort((x, y) -> (x.hold.edge.span?.from ?? 0) - (y.hold.edge.span?.from ?? 0));
 		final turned: Array<LockAcquire> = [];
 		for (inner in reported) if (!inner.handOff) {
 			final outer: Null<WarnedHold> = reported.find(
 				o ->
-					o.hold != inner.hold && !turned.contains(o.hold) && o.hold.edge.from == inner.hold.edge.from
-					&& o.hold.window.contains(inner.hold.edge) && inner.calls.foreach(c -> o.hold.window.contains(c))
+					o.hold != inner.hold && !suppressed(o.finding) && !turned.contains(o.hold) && o.hold.edge.from == inner.hold.edge.from
+					&& (o.hold.window.contains(inner.hold.edge) || takenFirst(o.hold, inner.hold))
+					&& inner.calls.foreach(c -> o.hold.window.contains(c))
 			);
 			if (outer == null) continue;
 			turned.push(inner.hold);
 			inner.finding.severity = Severity.Info;
-			inner.finding.message += ' — taken inside the hold of ${outer.hold.lock ?? outer.hold.pair.lockId}, whose finding names these calls';
+			final lock: String = outer.hold.lock ?? outer.hold.pair.lockId;
+			final helper: Null<CallEdge> = inner.hold.inner;
+			inner.finding.message += helper != null && takenFirst(outer.hold, inner.hold)
+				? ' — taken after the hold of $lock by the same call of ${helper.from}, whose finding names these calls'
+				: ' — taken inside the hold of $lock, whose finding names these calls';
 			covers.push({ finding: inner.finding, by: [outer.finding] });
 		}
+	}
+
+	/**
+	 * Whether one call of a multi-lock helper opens both holds (`LockAcquire.inner`), the helper's take of `outer`'s lock
+	 * written before its take of `inner`'s: the caller holds both from that call on, and of two holds across the same calls
+	 * the one the helper takes first — the outer lock of its order (TM's `StandardFileSystem.acquireMutationLocks`:
+	 * `_batchMutex`, then `_mutationMutex`) — keeps the warning. Whether the outer window spans the inner hold's long calls
+	 * is `nestHolds`' question.
+	 */
+	private static function takenFirst(outer: LockAcquire, inner: LockAcquire): Bool {
+		final first: Null<Span> = outer.inner?.span;
+		final then: Null<Span> = inner.inner?.span;
+		return first != null && then != null && outer.edge == inner.edge && first.to <= then.from;
 	}
 
 }

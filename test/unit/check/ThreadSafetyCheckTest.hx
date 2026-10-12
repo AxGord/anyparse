@@ -2,6 +2,7 @@ package unit.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
+import anyparse.check.PositiveSinks;
 import anyparse.check.Severity;
 import anyparse.check.ThreadSafety;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
@@ -542,6 +543,50 @@ class ThreadSafetyCheckTest extends Test {
 		#end
 	}
 
+	/**
+	 * A reflective write names its field at run time (`FieldWrites`): `Reflect.setField(this, k, _m)` may make `_l` the very
+	 * lock a worker holds across a sleep, as `_l = _m` does, so `_l` is no longer sealed and the main thread's take of it
+	 * stays reported (review F3). One on a class declaring no such member leaves it sealed, and so — said once
+	 * per run — does a computed name on a value of no known class, which would unseal every lock member at once.
+	 */
+	@:pin('control') @:killer('M-TS-SEAL-REFLECT') @:killer('M-TS-SEAL-REFLECT-REACH') @:killer('M-TS-SEAL-REFLECT-LITERAL-ANY')
+	@:killer('M-TS-SEAL-REFLECT-UNPLACED') @:killer('M-TS-SEAL-UNPLACED-NOTICE')
+	public function testAReflectiveWriteUnsealsTheMember(): Void {
+		#if (sys || nodejs)
+		inline function found(alias: String): Array<String> {
+			return lockFindings([
+				'class Runner { public static function create(fn:()->Void):Void {} }',
+				'class Other { public function new() {} }',
+				'class D { var _l:Mutex = new Mutex(); final _m:Mutex = new Mutex(); public function new() {}'
+				+ ' public function work():Void { _m.acquire(); Sys.sleep(1); _m.release(); }'
+				+ ' public function alias(k:String, o:Other):Void { final x:Dynamic = o; $alias }'
+				+ ' public function quick():Void { _l.acquire(); _l.release(); }'
+				+ ' public static function main():Void { final d:D = new D(); Runner.create(() -> d.work()); d.alias("_l", new Other());'
+				+ ' d.quick(); } }'
+			]);
+		}
+		inline function quickTakes(alias: String): Int {
+			return found(alias).filter(f -> f.indexOf('D.quick -> Mutex.acquire') != -1).length;
+		}
+		Assert.equals(1, quickTakes('_l = _m;'), 'a plain assignment');
+		Assert.equals(1, quickTakes('Reflect.setField(this, "_l", _m);'), 'a literal name');
+		Assert.equals(1, quickTakes('Reflect.setField(this, k, _m);'), 'a computed name');
+		Assert.equals(1, quickTakes('Reflect.setField(x, "_l", _m);'), 'a literal name on a value of no known class');
+		Assert.equals(0, quickTakes('Reflect.setField(o, k, _m);'), 'a class declaring no such member');
+		// a computed name on a value of no known class would make every lock member hold any lock: not counted, and said
+		Assert.equals(0, quickTakes('Reflect.setField(x, k, _m);'), 'a computed name on a value of no known class');
+		Assert.equals(
+			1,
+			found('Reflect.setField(x, k, _m);')
+				.filter(f -> f.indexOf('may store any lock in any lock member') != -1 && f.indexOf('D.alias') != -1)
+				.length,
+			'the run says what it assumed'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	@:pin('control') @:killer('M-TS-ACCESSOR-TAINT')
 	public function testLockHeldAcrossABlockingGetterFlagged(): Void {
 		// Reading `_p.v` runs `get_v`, and that getter sleeps: the property read is a call like any other.
@@ -629,7 +674,11 @@ class ThreadSafetyCheckTest extends Test {
 		#if (sys || nodejs)
 		final tree: Array<{ name: String, source: String }> = [
 			{ name: 'apqlint.json', source: '{"rules":{"thread-safety":{"sinks":["Sys.sleep"]}}}' },
-			{ name: 'a/apqlint.json', source: '{"inherit":false,"rules":{"thread-safety":{"sinks":["Gate.block"]}}}' },
+			// `a` waives the builtin `Sys.sleep`, which `b`'s call, judged by the root chain, keeps
+			{
+				name: 'a/apqlint.json',
+				source: '{"inherit":false,"rules":{"thread-safety":{"sinks":["Gate.block"],"nonBlocking":["Sys.sleep a/ sleeps on purpose"]}}}'
+			},
 			{ name: 'a/A.hx', source: 'class A { static function main():Void { Sys.sleep(1); Gate.block(); B.f(); } }' },
 			{ name: 'a/Gate.hx', source: 'class Gate { public static function block():Void {} }' },
 			{ name: 'b/B.hx', source: 'class B { public static function f():Void { Sys.sleep(2); Gate.block(); } }' }
@@ -706,32 +755,40 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/**
-	 * A file whose chain names no sinks is scanned for the graph and never reported in: the rule drops its own findings there (`ThreadSafety.run`), and `skipReason` keeps a chain writing no option out.
+	 * A file whose chain writes no `thread-safety` option reports nothing of its own, though the builtin sinks make its
+	 * calls blocking for the graph: called directly, past the linter's own `needs-config` gate, the check drops `Y.f`'s
+	 * `Sys.sleep` and keeps the one `x` reports.
 	 */
 	@:pin('control') @:killer('M-TS-REPORT-UNGATED')
-	public function testNoFindingInAFileWhoseChainNamesNoSinks(): Void {
+	public function testNoFindingInAFileWhoseChainWritesNoOption(): Void {
 		#if (sys || nodejs)
 		final tree: Array<{ name: String, source: String }> = [
-			{ name: 'x/apqlint.json', source: '{"inherit":false,"rules":{"thread-safety":{"sinks":["Sys.sleep"]}}}' },
-			{ name: 'y/apqlint.json', source: '{"inherit":false,"rules":{"thread-safety":{"lockPairs":["Mutex.acquire/release"]}}}' },
+			{ name: 'x/apqlint.json', source: '{"inherit":false,"rules":{"thread-safety":{"spawns":["W.run"]}}}' },
+			{ name: 'y/apqlint.json', source: '{"inherit":false,"rules":{}}' },
 			{ name: 'x/X.hx', source: 'class X { public static function work():Void { Sys.sleep(1); } }' },
-			{
-				name: 'y/Y.hx',
-				source: '${MUTEX}class Y { static var m:Mutex = new Mutex(); public static function f():Void {'
-					+ ' m.acquire(); X.work(); m.release(); } }'
-			}
+			{ name: 'y/Y.hx', source: 'class Y { public static function f():Void { Sys.sleep(2); X.work(); } }' }
 		];
-		for (order in [['x/X.hx', 'y/Y.hx'], ['y/Y.hx', 'x/X.hx']])
-			Assert.same(['x/X.hx: main thread reaches blocking "Sys.sleep": Y.f -> X.work -> Sys.sleep'], chainFindings(tree, order));
+		final root: String = CliFixture.writeTree('threadsafetynooption', tree);
+		final files: Array<{ file: String, source: String }> = [
+			for (t in tree) if (StringTools.endsWith(t.name, '.hx')) { file: '${root}/${t.name}', source: t.source }
+		];
+		final found: Array<String> = [
+			for (v in new ThreadSafety().run(
+				files, new HaxeQueryPlugin()
+			)) if (v.file != '') '${v.file.substring(root.length + 1)}: ${v.message}'
+		];
+		CliFixture.removeDir(root);
+		Assert.same(['x/X.hx: main thread reaches blocking "Sys.sleep": Y.f -> X.work -> Sys.sleep'], found);
 		#else
 		Assert.pass('non-sys target');
 		#end
 	}
 
 	/**
-	 * A malformed `lockPairs` entry of a chain that names no sinks is said too: a chain writing any option is a config to report on (review round 2 `cfgA`–`cfgE`).
+	 * A malformed `lockPairs` entry of a chain that names no sinks is said too: a chain writing any option
+	 * reports, the builtin sinks applying, and is a config to report on (review round 2 `cfgA`–`cfgE`).
 	 */
-	@:pin('control') @:killer('M-TS-MALFORMED-UNGATED')
+	@:pin('control') @:killer('M-TS-BUILTIN-NEEDS-SINKS')
 	public function testAMalformedOptionOfANonReportingChainIsSaid(): Void {
 		#if (sys || nodejs)
 		final tree: Array<{ name: String, source: String }> = [
@@ -1219,8 +1276,9 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/**
-	 * A callback registered under a hold — here by `register`, which `ui` calls
-	 * holding `_a` — runs later, holding nothing: `takeB` is no step from `_a` to `_b`.
+	 * A callback registered under a hold — here by `register`, which `ui` calls holding `_a`, through
+	 * `Ui.defer`, which `registers` names — runs later, holding nothing: `takeB` is no step from `_a` to `_b`.
+	 * A value handed to a call no list names runs where it is handed (`ThreadStates.runsHere`), under the hold.
 	 */
 	@:pin('control') @:killer('M-TS-ORDER-FOLLOWS-REFS')
 	public function testACallbackRegisteredUnderAHoldTakesNothingInOrder(): Void {
@@ -1498,7 +1556,10 @@ class ThreadSafetyCheckTest extends Test {
 			for (name in order) { file: '$root/$name', source: tree.find(t -> t.name == name)?.source ?? '' }
 		];
 		final vs: Array<Violation> = Linter.run(files, new HaxeQueryPlugin(), [new ThreadSafety()]);
-		final found: Array<String> = [for (v in vs) '${v.file.substring(root.length + 1)}: ${v.message}'];
+		final found: Array<String> = [
+			for (v in vs) if (!(v.file == '' && StringTools.startsWith(v.message, PositiveSinks.NOTICE)))
+				'${v.file.substring(root.length + 1)}: ${v.message}'
+		];
 		found.sort(Reflect.compare);
 		CliFixture.removeDir(root);
 		return found;
@@ -1526,15 +1587,14 @@ class ThreadSafetyCheckTest extends Test {
 
 	/**
 	 * Every lock-order finding of a `Mutex.acquire` run over `sources` (plus `Mutex` and `Runner`, whose `create` is a
-	 * spawn), re-entrant `Mutex` included.
+	 * spawn, and `Ui.defer`, which registers a callback), re-entrant `Mutex` included.
 	 */
 	public static function orderFindings(sources: Array<String>): Array<Violation> {
-		return
-			violations(
-				'{"rules":{"thread-safety":{"sinks":["Mutex.acquire"],"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"],'
-				+ '"reentrantLocks":["Mutex.acquire"]}}}',
-				[MUTEX, 'class Runner { public static function create(fn:()->Void):Void {} }'].concat(sources)
-			).filter(v -> v.message.indexOf('lock-order inversion') != -1);
+		return violations(
+			'{"rules":{"thread-safety":{"sinks":["Mutex.acquire"],"spawns":["Runner.create"],"registers":["Ui.defer"],'
+			+ '"lockPairs":["Mutex.acquire/release"],' + '"reentrantLocks":["Mutex.acquire"]}}}',
+			[MUTEX, 'class Runner { public static function create(fn:()->Void):Void {} }'].concat(sources)
+		).filter(v -> v.message.indexOf('lock-order inversion') != -1);
 	}
 
 	/** The messages of every throw-escape finding of a `Mutex.acquire` run over `sources`, `throwers` as given. */
@@ -1571,7 +1631,7 @@ class ThreadSafetyCheckTest extends Test {
 	 * files of the project the run leaves out (`ProjectCoverage`).
 	 */
 	public static function violations(
-		config: String, sources: Array<String>, ?beside: Array<{ name: String, source: String }>
+		config: String, sources: Array<String>, ?beside: Array<{ name: String, source: String }>, withNotice: Bool = false
 	): Array<Violation> {
 		final dir: String = CliFixture.writeDir('threadsafety', [{ name: 'apqlint.json', source: config }].concat(beside ?? []));
 		final files: Array<{ file: String, source: String }> = [
@@ -1580,7 +1640,8 @@ class ThreadSafetyCheckTest extends Test {
 		// Through `Linter.run`, not `run`: the `sinks` / `exclude` gate is `FileGated`, applied where findings enter the tool.
 		final result: Array<Violation> = Linter.run(files, new HaxeQueryPlugin(), [new ThreadSafety()]);
 		CliFixture.removeDir(dir);
-		return result;
+		// every reporting run says once which builtin sinks it applied (`ThreadSafetyPositiveSinksTest` reads it)
+		return withNotice ? result : result.filter(v -> !(v.file == '' && StringTools.startsWith(v.message, PositiveSinks.NOTICE)));
 	}
 	#end
 

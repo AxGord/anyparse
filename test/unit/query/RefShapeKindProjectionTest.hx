@@ -406,6 +406,30 @@ final class RefShapeKindProjectionTest extends Test {
 				after: ' class C {}'
 			},
 			{
+				field: 'nativeCodeMetaNames',
+				slot: '0',
+				kind: 'Meta',
+				names: NAME_IS,
+				before: '',
+				after: ' class C {}'
+			},
+			{
+				field: 'nativeCodeMetaNames',
+				slot: '1',
+				kind: 'Meta',
+				names: NAME_IS,
+				before: '',
+				after: ' class C {}'
+			},
+			{
+				field: 'nativeCodeMetaNames',
+				slot: '2',
+				kind: 'Meta',
+				names: NAME_IS,
+				before: '',
+				after: ' class C {}'
+			},
+			{
 				field: 'extensionExcludingMetaNames',
 				slot: '0',
 				kind: 'Meta',

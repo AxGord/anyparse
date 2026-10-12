@@ -490,7 +490,9 @@ class TestDiscovery {
 
 	/** Does `c` declare a method called `name` — static or instance, private or public. */
 	private static function declaresMethod(c: ClassType, name: String): Bool {
-		return c.fields.get().exists(f -> f.name == name && isMethod(f)) || c.statics.get().exists(f -> f.name == name && isMethod(f));
+		// the constructor is no field: the typer keeps it apart, and an arm cuts it as `FnMember:new` like any method
+		return c.fields.get().exists(f -> f.name == name && isMethod(f)) || c.statics.get().exists(f -> f.name == name && isMethod(f))
+			|| name == 'new' && c.constructor != null;
 	}
 
 	/** Is this field a method rather than a variable or a property. */

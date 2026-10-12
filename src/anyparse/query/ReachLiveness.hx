@@ -129,7 +129,7 @@ final class ReachLiveness {
 	}
 
 	/** The ranges of `file` no configuration compiles and its directives, ordered by their start; computed once. */
-	private function skippedOf(file: String, source: String): Array<Span> {
+	public function skippedOf(file: String, source: String): Array<Span> {
 		final held: Null<Array<Span>> = _skipped[file];
 		if (held != null) return held;
 		// `deadOf` reads the directives: asked first, before they are taken

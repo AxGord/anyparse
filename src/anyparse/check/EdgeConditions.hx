@@ -99,6 +99,14 @@ final class EdgeConditions {
 	}
 
 	/**
+	 * The valuation `edge` enters its target under from `valuation`: what a call hands down (`bind`), nothing
+	 * known for a value handed on (`unknown`).
+	 */
+	public inline function entered(edge: CallEdge, valuation: String): String {
+		return edge.kind == Ref ? unknown(edge.to) : bind(edge, valuation);
+	}
+
+	/**
 	 * The context the call `edge` runs in when its function runs on `ctx` under `valuation`: 0 when a condition around
 	 * it is false there, `ctx` narrowed to the main thread (or to the others) inside a main-thread check, `ctx` itself
 	 * otherwise.

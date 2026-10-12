@@ -28,7 +28,9 @@ typedef BoundedRepeatEntry = {
  * by people, never by the rule); `lockPairs` items are `<lock pattern>/<unlock member>`. Any other shape is dropped,
  * whole, and said: the option then reads as absent, which is what it read as before, silently.
  *
- * `runsOnce` is read as a LIST like the others; what it means is its consumer's.
+ * `runsOnce` is read as a LIST like the others; what it means is its consumer's. A `nonBlocking`
+ * entry is a pattern, a space, then the evidence that the call never blocks: one with no evidence
+ * is dropped and said, so a builtin sink or a project native is never waived on no grounds.
  */
 @:nullSafety(Strict)
 final class ThreadSafetyOptions {
@@ -53,7 +55,9 @@ final class ThreadSafetyOptions {
 		'registers',
 		'sharedLocks',
 		'nonThrowing',
-		'runsOnce'
+		'runsOnce',
+		'nonBlocking',
+		'libraryBodies'
 	];
 
 	/** The keys holding `true` or `false`. */
@@ -70,6 +74,12 @@ final class ThreadSafetyOptions {
 
 	/** The well-formed `boundedRepeats` entries. */
 	public final boundedRepeats: Array<BoundedRepeatEntry> = [];
+
+	/**
+	 * The call patterns of the well-formed `nonBlocking` entries — each written `<pattern> <evidence>`, the evidence
+	 * read by people, never by the rule; an entry giving none is dropped and said.
+	 */
+	public final nonBlocking: Array<String> = [];
 
 	/** The positive `repeatBudgetMs`, or null when unset or dropped. */
 	public final repeatBudgetMs: Null<Float>;
@@ -92,6 +102,14 @@ final class ThreadSafetyOptions {
 		repeatBudgetMs = readKeys(config);
 		for (pair in list('lockPairs')) if (pair.lastIndexOf('/') <= 0)
 			problems.push('malformed lockPairs entry "$pair" — expected "<lock pattern>/<unlock member>"');
+		for (entry in list('nonBlocking')) {
+			final written: String = StringTools.trim(entry);
+			final cut: Int = firstSpace(written);
+			if (cut > 0)
+				nonBlocking.push(written.substring(0, cut))
+			else
+				problems.push('nonBlocking entry "$written" dropped: it gives no evidence — write "<pattern> <why it never blocks>"');
+		}
 	}
 
 	/** The strings of the LIST option `key` (`LIST_KEYS`); none when it is absent or was dropped. */
@@ -254,6 +272,12 @@ final class ThreadSafetyOptions {
 		final near: Array<String> = EditDistance.closest(key, known)
 			.filter(candidate -> candidate.indexOf(key) >= 0 || EditDistance.between(key, candidate, key.length) * 2 < key.length);
 		return near.length == 0 ? 'unknown option "$key" — ignored' : 'unknown option "$key" — ignored (did you mean "${near[0]}"?)';
+	}
+
+	/** The index of the first whitespace character of `text`; -1 when it has none. */
+	private static function firstSpace(text: String): Int {
+		for (i in 0...text.length) if (StringTools.isSpace(text, i)) return i;
+		return -1;
 	}
 
 }

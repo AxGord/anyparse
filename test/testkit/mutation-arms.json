@@ -5574,8 +5574,8 @@
 			"name": "M-TS-ACCESSOR-TAINT",
 			"type": "anyparse.check.LockSites",
 			"method": "hold",
-			"find": "if (e.kind.isInvocation()) e",
-			"replace": "if (e.kind == Call || e.kind == New || e.kind == Virtual) e",
+			"find": "if (e.kind.isInvocation() || e.kind == Ref) e",
+			"replace": "if (e.kind == Call || e.kind == New || e.kind == Virtual || e.kind == Ref) e",
 			"note": "a property read inside a lock window is not a call, so a getter that blocks while the lock is held goes unreported"
 		},
 		{
@@ -6484,8 +6484,8 @@
 			"name": "M-GRAPH-CALL-ELEMENT",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "final returned: Null<String> = call == null ? null : _facts.returnSources[call.target];",
-			"replace": "final returned: Null<String> = null;",
+			"find": ": _facts.returnSources[call.target] ?? StdTypes.returnOf(_plugin, nodes[call.target]);",
+			"replace": ": null;",
 			"note": "an element of a call's result (`b.get()[0]`) has no type, so a call on it is unresolved"
 		},
 		{
@@ -10594,14 +10594,6 @@
 			"note": "a clone whose later copy sits in a disabled file is reported nowhere"
 		},
 		{
-			"name": "M-TS-MALFORMED-UNGATED",
-			"type": "anyparse.check.ThreadSafety",
-			"method": "listsByFile",
-			"find": "if (!lists.reports && !options.declared) continue;",
-			"replace": "if (!lists.reports) continue;",
-			"note": "a malformed option of a chain that lists no sinks is not said"
-		},
-		{
 			"name": "M-PARSE-MEMO-REPLAY-OFF",
 			"type": "anyparse.runtime.Parser",
 			"method": "memoReplay",
@@ -11428,8 +11420,8 @@
 			"name": "M-TS-ORDER-FOLLOWS-REFS",
 			"type": "anyparse.check.LockOrder",
 			"method": "visit",
-			"find": "if (e.kind.isInvocation())",
-			"replace": "if (e.kind.isInvocation() || e.kind == Ref)",
+			"find": "if (runsHere(e)) {",
+			"replace": "if (runsHere(e) || e.kind == Ref) {",
 			"note": "a callback registered under a hold is walked as if it ran there, holding the registrar's locks"
 		},
 		{
@@ -11691,7 +11683,7 @@
 		{
 			"name": "M-TS-TAINT-UNCONDITIONED",
 			"type": "anyparse.check.LockTaint",
-			"method": "reach",
+			"method": "stepOf",
 			"find": "final live: Int = _conditions.carried(edge, state.valuation, state.ctx);",
 			"replace": "final live: Int = state.ctx;",
 			"note": "a hold reaches a blocking call on a branch it never takes on its thread, so a main-thread hold across an async-on-main call reads as blocking"
@@ -17107,9 +17099,9 @@
 		{
 			"name": "M-TS-DOM-UNDER-HOLD-OFF",
 			"type": "anyparse.check.LockTaint",
-			"method": "blockingTrail",
-			"find": "if (counts(edge, held, repeats, state.valuation) && !briefUnder(under, edge)) return trailOf([edge.to], edge, held, [edge]);",
-			"replace": "if (counts(edge, held, repeats, state.valuation)) return trailOf([edge.to], edge, held, [edge]);",
+			"method": "rootsOf",
+			"find": "if (counts(edge, held, repeats, state.valuation) && !briefUnder(under, edge)) roots.push(Blocks(repeats));",
+			"replace": "if (counts(edge, held, repeats, state.valuation)) roots.push(Blocks(repeats));",
 			"note": "a hold never dominates the takes of its own window"
 		},
 		{
@@ -17299,9 +17291,9 @@
 		{
 			"name": "M-TS-ERROR-WINDOW-OFF",
 			"type": "anyparse.check.LockTaint",
-			"method": "blockingTrail",
-			"find": "if (onErrorPath(a.edge) || onErrorPath(edge)) return null;",
-			"replace": "if (onErrorPath(a.edge)) return null;",
+			"method": "rootsOf",
+			"find": "if (!_threads.runsHere(edge, listsOf(edge.file)) || onErrorPath(a.edge) || onErrorPath(edge)) return roots;",
+			"replace": "if (!_threads.runsHere(edge, listsOf(edge.file)) || onErrorPath(a.edge)) return roots;",
 			"note": "a call the hold makes inside its own catch blocks over the normal paths"
 		},
 		{
@@ -17388,8 +17380,8 @@
 			"name": "M-TS-HANDOFF-CROSSING",
 			"type": "anyparse.check.HoldGrade",
 			"method": "handsOff",
-			"find": "!a.window.exists(e -> sites.crossing.exists(c -> c.lock == lock && c.edge.from == e.to))",
-			"replace": "!a.window.exists(e -> false)",
+			"find": "!calls.exists(e -> sites.crossing.exists(c -> c.lock == lock && c.edge.from == e.to))",
+			"replace": "!calls.exists(e -> false)",
 			"note": "a hold whose window calls a releaser counts as handed off"
 		},
 		{
@@ -17890,7 +17882,7 @@
 			"name": "M-TS-ENCLOSED-OFF",
 			"type": "anyparse.check.ThreadSafety",
 			"method": "reportLockHeld",
-			"find": "foldEnclosed(reported, judged.enclosed, covers);",
+			"find": "foldEnclosed(reported, judged.enclosed, covers, judged.suppressed);",
 			"replace": "",
 			"note": "a hold every caller's hold of its lock encloses warns on its own"
 		},
@@ -18142,8 +18134,8 @@
 			"name": "M-TS-FOLD-OFF",
 			"type": "anyparse.check.RootCauseFold",
 			"method": "fold",
-			"find": "for (i => h in warned) if (state[i] == Folded) turn(h, reasons[i], i, doing);",
-			"replace": "",
+			"find": "turn(h, reasons[i], i, doing)",
+			"replace": "{}",
 			"note": "no hold finding folds onto the warnings that cover it"
 		},
 		{
@@ -18158,8 +18150,8 @@
 			"name": "M-TS-FOLD-SITE",
 			"type": "anyparse.check.RootCauseFold",
 			"method": "settled",
-			"find": "case Site(key, _, mayRepeat, way): (doing[key] ?? []).exists(d -> covers(d, i, mayRepeat, way) && state[d.at] != Open);",
-			"replace": "case Site(_, _, _, _): false;",
+			"find": "case Site(key, _, mayRepeat, way, _): (doing[key] ?? []).exists(d -> covers(d, i, mayRepeat, way) && state[d.at] != Open);",
+			"replace": "case Site(_, _, _, _, _): false;",
 			"note": "work another warned hold does too never covers a hold"
 		},
 		{
@@ -18174,7 +18166,7 @@
 			"name": "M-TS-WAY-OFF",
 			"type": "anyparse.check.MainSinkReport",
 			"method": "report",
-			"find": "oneWarningPerWay(direct, states, reportedBy);",
+			"find": "oneWarningPerWay(direct, states, reportedBy, suppressed);",
 			"replace": "",
 			"note": "every sink call of one main-thread way warns"
 		},
@@ -18294,7 +18286,7 @@
 			"name": "M-TS-MARSHAL-OWNER-OFF",
 			"type": "anyparse.check.MainRepeats",
 			"method": "climbEdge",
-			"find": "if (runsFrom(e, at.valuation) == at.valuation) own(walk.owners, e, path);",
+			"find": "if (runsFrom(e, at.valuation) == at.valuation) own(walk.owners, e, path, handed);",
 			"replace": "",
 			"note": "a value marshalled onto the main thread runs once, however many posts a background loop makes"
 		},
@@ -18532,8 +18524,8 @@
 			"name": "M-TS-HELPER-HANDOFF",
 			"type": "anyparse.check.HoldGrade",
 			"method": "handsOff",
-			"find": "a.untraced || a.window.length == 0) return false;",
-			"replace": "a.untraced || a.inner != null || a.window.length == 0) return false;",
+			"find": "a.untraced || calls.length == 0) return false;",
+			"replace": "a.untraced || a.inner != null || calls.length == 0) return false;",
 			"note": "a hold a helper call opens never hands its lock off, however its caller leaves it held"
 		},
 		{
@@ -18628,8 +18620,8 @@
 			"name": "M-TS-PATH-REFLECT",
 			"type": "anyparse.check.FieldWrites",
 			"method": "collect",
-			"find": "if (node.kind == _shape.callKind) recordReflective(file, source, node);",
-			"replace": "",
+			"find": "\t\t\trecordReflective(file, source, node);\n\t\telse if (!callee)",
+			"replace": "\t\t\t{}\n\t\telse if (!callee)",
 			"note": "a constant-named Reflect.setField writes no field"
 		},
 		{
@@ -18652,7 +18644,7 @@
 			"name": "M-TS-OPT-SINKS-UNMATCHED",
 			"type": "anyparse.check.ThreadSafety",
 			"method": "listsByFile",
-			"find": "else if (lists.reports && lists.sinkIds.length == 0)",
+			"find": "else if (option('sinks').length > 0 && configured.length == 0)",
 			"replace": "else if (false)",
 			"note": "a sinks list naming no call of the run reads as a working one"
 		},
@@ -18820,17 +18812,17 @@
 			"name": "M-TS-CYCLE-REF",
 			"type": "anyparse.check.LockTaint",
 			"method": "onCycle",
-			"find": "if (e.kind.isInvocation() || runsWhereHanded(e))",
+			"find": "if (_threads.runsHere(e, listsOf(e.file)))",
 			"replace": "if (e.kind.isInvocation())",
 			"note": "a recursion through a callback that runs is no cycle, so a whole-tree walk under a lock counts as once"
 		},
 		{
 			"name": "M-TS-CYCLE-REGISTERED",
-			"type": "anyparse.check.LockTaint",
-			"method": "onCycle",
+			"type": "anyparse.check.ThreadStates",
+			"method": "runsHere",
 			"find": "final kept: Bool = lists.registerIds.contains(via) || lists.registerNames.contains(e.viaMember ?? '');",
 			"replace": "final kept: Bool = false;",
-			"note": "a value a `registers` call keeps counts as run right away, closing cycles under the lock"
+			"note": "a value a `registers` call keeps counts as run right away: it closes cycles and taints the hold around the registration"
 		},
 		{
 			"name": "M-TS-FOLD-NEST-LOCK",
@@ -18850,11 +18842,922 @@
 		},
 		{
 			"name": "M-TS-FOLD-SITE-CYCLE",
-			"type": "anyparse.check.LockTaint",
-			"method": "mayRepeatAlong",
-			"find": "return repeatsAlong(a, trail) || trail.path.exists(onCycle);",
-			"replace": "return repeatsAlong(a, trail);",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "reasonOf",
+			"find": "end.repeated, end.mayRepeat, end.passes",
+			"replace": "end.repeated, end.repeated, end.passes",
 			"note": "a call reached through a function a cycle of calls re-enters counts as once when the trail found it once"
+		},
+		{
+			"name": "M-TS-BUILTIN-NEEDS-SINKS",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "chainLists",
+			"find": "reports: options.declared,",
+			"replace": "reports: option('sinks').length > 0,",
+			"note": "a chain writing no sinks of its own reports nothing, though the builtin sinks apply wherever the rule runs"
+		},
+		{
+			"name": "M-TS-BUILTIN-OFF",
+			"type": "anyparse.check.PositiveSinks",
+			"method": "new",
+			"find": "for (p in calls) for (id in graph.matchIds(p)) if (graph.node(id)?.isExternal == true && !ids.contains(id)) ids.push(id);",
+			"replace": "",
+			"note": "the runtime library's blocking calls block only where a project lists them"
+		},
+		{
+			"name": "M-TS-BUILTIN-ANY-NODE",
+			"type": "anyparse.check.PositiveSinks",
+			"method": "new",
+			"find": "if (graph.node(id)?.isExternal == true && !ids.contains(id))",
+			"replace": "if (!ids.contains(id))",
+			"note": "a project function named like a blocking library call is a sink, its body unread"
+		},
+		{
+			"name": "M-TS-WAIVE-OFF",
+			"type": "anyparse.check.PositiveSinks",
+			"method": "waived",
+			"find": "for (id in removed) if (!out.contains(id)) out.push(id);",
+			"replace": "",
+			"note": "a nonBlocking entry waives nothing"
+		},
+		{
+			"name": "M-TS-WAIVE-SAYS-NOTHING",
+			"type": "anyparse.check.PositiveSinks",
+			"method": "waived",
+			"find": "if (hit.length == 0 && walked?.waives(pattern) != true)",
+			"replace": "if (false)",
+			"note": "a nonBlocking entry waiving nothing reads as one that works"
+		},
+		{
+			"name": "M-TS-WAIVE-SINKS-WIN",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "chainLists",
+			"find": "final sinkIds: Array<String> = configured.copy();",
+			"replace": "final sinkIds: Array<String> = [for (id in configured) if (!waived.contains(id)) id];",
+			"note": "a nonBlocking entry waives a call the project's own sinks list"
+		},
+		{
+			"name": "M-TS-OPT-NONBLOCKING-EVIDENCE",
+			"type": "anyparse.check.ThreadSafetyOptions",
+			"method": "new",
+			"find": "if (cut > 0)",
+			"replace": "if (cut != 0)",
+			"note": "a nonBlocking entry giving no evidence is kept as a waiver of nothing, without a word"
+		},
+		{
+			"name": "M-TS-NATIVE-EXTERN",
+			"type": "anyparse.check.ProjectNatives",
+			"method": "declaredNative",
+			"find": "if (node.isBodyless && _graph.types.meta.isExtern(type)) return true;",
+			"replace": "",
+			"note": "a body-less member of a project extern runs no native code"
+		},
+		{
+			"name": "M-TS-NATIVE-EXTERN-ANY-BODYLESS",
+			"type": "anyparse.check.ProjectNatives",
+			"method": "declaredNative",
+			"find": "if (node.isBodyless && _graph.types.meta.isExtern(type))",
+			"replace": "if (node.isBodyless)",
+			"note": "an interface member, which only dispatches, counts as native"
+		},
+		{
+			"name": "M-TS-NATIVE-META",
+			"type": "anyparse.check.ProjectNatives",
+			"method": "declaredNative",
+			"find": "if (leading != null && leading.exists(m -> metaNames.contains(m.name ?? ''))) return true;",
+			"replace": "",
+			"note": "a @:native member runs its Haxe stub, not the symbol it names"
+		},
+		{
+			"name": "M-TS-NATIVE-LOADER",
+			"type": "anyparse.check.ProjectNatives",
+			"method": "new",
+			"find": "if (loaders.length > 0) for (held in graph.heldFiles()) collectLoaded(held.tree, null, loaders);",
+			"replace": "",
+			"note": "a member a native loader initialised is called as an unknown value"
+		},
+		{
+			"name": "M-TS-NATIVE-AFFIX",
+			"type": "anyparse.check.ProjectNatives",
+			"method": "siteNative",
+			"find": "if (affix != null && head.length > affix.length * 2 && head.startsWith(affix) && head.endsWith(affix))",
+			"replace": "if (false)",
+			"note": "untyped __cpp__ and __global__ calls run nothing"
+		},
+		{
+			"name": "M-TS-NATIVE-CALLEE-SPAN",
+			"type": "anyparse.check.ProjectNatives",
+			"method": "callAt",
+			"find": "else if (parent != null && parent.kind == _shape.callKind && parent.children[0] == node)",
+			"replace": "else if (false)",
+			"note": "an unresolved site recorded at its bare callee's span is no call"
+		},
+		{
+			"name": "M-TS-NATIVE-CODE-CALLS",
+			"type": "anyparse.check.ProjectNatives",
+			"method": "new",
+			"find": "for (p in execution.nativeCodeCalls ?? []) for (id in graph.matchIds(p)) if (graph.node(id)?.isExternal == true) push(id);",
+			"replace": "",
+			"note": "cpp.Syntax.code is a library call, not the project's native code"
+		},
+		{
+			"name": "M-TS-NATIVE-LOADED-MEMBER",
+			"type": "anyparse.check.ProjectNatives",
+			"method": "new",
+			"find": "if (e.kind == Call && graph.node(e.to)?.isExternal == true) siteNative(e.file, e.span, e.from, null, e.spliced);",
+			"replace": "{}",
+			"note": "a loaded native called through its value's member (cpp.Callable.call) runs library code"
+		},
+		{
+			"name": "M-TS-BUILTIN-NOTICE-OFF",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "listsByFile",
+			"find": "if (sets.exists(s -> s.reports))",
+			"replace": "if (false)",
+			"note": "a run never says which builtin sinks it applied"
+		},
+		{
+			"name": "M-TS-HANDED-RUNS-HERE",
+			"type": "anyparse.check.ThreadStates",
+			"method": "runsHere",
+			"find": "return runsFrom(e) && !(",
+			"replace": "return false && !(",
+			"note": "a value handed to a call that runs it runs nowhere under the hold"
+		},
+		{
+			"name": "M-TS-HANDED-WINDOW-OFF",
+			"type": "anyparse.check.LockSites",
+			"method": "hold",
+			"find": "if (e.kind.isInvocation() || e.kind == Ref) e",
+			"replace": "if (e.kind.isInvocation()) e",
+			"note": "a hold's window spans the calls alone: a value handed on there is never judged"
+		},
+		{
+			"name": "M-TS-HANDED-REACH-OFF",
+			"type": "anyparse.check.LockTaint",
+			"method": "stepOf",
+			"find": "if (!_threads.runsHere(edge, listsOf(edge.file)) || leadsNowhere(edge, state.repeated)) return Skip;",
+			"replace": "if (!edge.kind.isInvocation() || leadsNowhere(edge, state.repeated)) return Skip;",
+			"note": "a walk under the hold follows calls alone, never a value handed on deeper down"
+		},
+		{
+			"name": "M-TS-HANDED-SINK-OFF",
+			"type": "anyparse.check.LockTaint",
+			"method": "blocks",
+			"find": "if (!_threads.runsFrom(edge) || !listsOf(edge.file).sinkIds.contains(edge.to)) return false;",
+			"replace": "if (!edge.kind.isInvocation() || !listsOf(edge.file).sinkIds.contains(edge.to)) return false;",
+			"note": "a sink handed on as a value blocks nowhere it runs"
+		},
+		{
+			"name": "M-TS-HANDED-ELSEWHERE",
+			"type": "anyparse.check.ThreadStates",
+			"method": "runsHere",
+			"find": "!(lists.spawnIds.contains(via) || lists.marshalIds.contains(via) || kept)",
+			"replace": "true",
+			"note": "a value a spawns, marshals or registers call runs elsewhere counts as run under the hold around that call"
+		},
+		{
+			"name": "M-TS-HANDED-RETAKE",
+			"type": "anyparse.check.LockTaint",
+			"method": "retakesElsewhere",
+			"find": "!_sites.isStaticLock(held) && _threads.runsFrom(edge)",
+			"replace": "!_sites.isStaticLock(held) && edge.kind.isInvocation()",
+			"note": "another object's method handed on as a value re-takes the holder's own re-entrant lock for free"
+		},
+		{
+			"name": "M-TS-LIB-OFF",
+			"type": "anyparse.check.LibraryBodies",
+			"method": "forRun",
+			"force": "null",
+			"note": "no chain's libraries are ever walked"
+		},
+		{
+			"name": "M-TS-LIB-NOT-SINKS",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "chainLists",
+			"find": ".concat(positive.libraryFor(options))",
+			"replace": "",
+			"note": "a library call whose body blocks is no sink of the chain that walked it"
+		},
+		{
+			"name": "M-TS-LIB-CHAIN-OFF",
+			"type": "anyparse.check.LibraryBodies",
+			"method": "annotate",
+			"find": "if (tails.length > 0) data.chain = data.chain.concat(tails);",
+			"replace": "",
+			"note": "a finding's chain stops at the library call"
+		},
+		{
+			"name": "M-TS-LIB-NOTICE",
+			"type": "anyparse.check.PositiveSinks",
+			"method": "notice",
+			"find": "${library?.notice() ?? ''}",
+			"replace": "",
+			"note": "the run never says how many library calls block"
+		},
+		{
+			"name": "M-TS-LIB-KNOWN",
+			"type": "anyparse.check.LibraryBodies",
+			"method": "summarise",
+			"find": " && !project.known.contains(id)",
+			"replace": "",
+			"note": "a builtin sink a library also declares gains a library chain"
+		},
+		{
+			"name": "M-TS-LIB-AWAY-OFF",
+			"type": "anyparse.check.LibraryBodies",
+			"method": "runsThere",
+			"find": "!awayIds.exists(via) && !awayNames.contains(e.viaMember ?? '')",
+			"replace": "true",
+			"note": "a value the library hands to a spawns call runs where it is handed"
+		},
+		{
+			"name": "M-TS-LIB-DEFINES-OFF",
+			"type": "anyparse.check.LibraryBodies",
+			"method": "blanked",
+			"force": "source",
+			"note": "every branch of the libraries is walked, whatever the build compiles"
+		},
+		{
+			"name": "M-TS-LIB-DASH",
+			"type": "anyparse.check.LibraryBuild",
+			"method": "addDefine",
+			"find": ".replace('-', '_')",
+			"replace": "",
+			"note": "a -D spelled with a dash never meets the condition that spells it with an underscore"
+		},
+		{
+			"name": "M-TS-LIB-ORACLE-DEFINES",
+			"type": "anyparse.check.LibraryBuild",
+			"method": "read",
+			"find": ".concat(oracle.defines)",
+			"replace": "",
+			"note": "the oracle entry's defines decide nothing"
+		},
+		{
+			"name": "M-TS-LIB-TARGET-DEFINES",
+			"type": "anyparse.check.LibraryBuild",
+			"method": "read",
+			"find": ".concat(implicit)",
+			"replace": "",
+			"note": "the target's own defines (cpp, sys) decide nothing"
+		},
+		{
+			"name": "M-TS-LIB-VERSION-DEFINES",
+			"type": "anyparse.check.LibraryBuild",
+			"method": "read",
+			"find": ".concat(versionDefines(compilerVersion()))",
+			"replace": "",
+			"note": "haxe_ver decides nothing"
+		},
+		{
+			"name": "M-TS-LIB-OTHER-TARGET-FILE",
+			"type": "anyparse.check.LibraryBuild",
+			"method": "compiles",
+			"find": "return parts[1] == own;",
+			"replace": "return true;",
+			"note": "a file named for another target is compiled"
+		},
+		{
+			"name": "M-TS-LIB-SHADOWED",
+			"type": "anyparse.check.LibraryBuild",
+			"method": "compiles",
+			"find": "return own == null || !hasFile(",
+			"replace": "return true || !hasFile(",
+			"note": "a plain file the target's own copy stands in for is compiled too"
+		},
+		{
+			"name": "M-TS-LIB-TARGET-PACKAGE",
+			"type": "anyparse.check.LibraryBuild",
+			"method": "compiles",
+			"find": "if (slash > 0 && TARGET_PACKAGES",
+			"replace": "if (false && slash > 0 && TARGET_PACKAGES",
+			"note": "another target's package is compiled"
+		},
+		{
+			"name": "M-TS-LIB-VIRTUAL-OFF",
+			"type": "anyparse.check.LibraryBodies",
+			"method": "blockingChain",
+			"find": "if (owner == call.type && name != 'new')",
+			"replace": "if (false)",
+			"note": "a call on a library type runs no override the library declares"
+		},
+		{
+			"name": "M-TS-LIB-PROJECT-OVERRIDES",
+			"type": "anyparse.check.LibraryBodies",
+			"method": "blockingChain",
+			"find": "if (owner == call.type && name != 'new')",
+			"replace": "if (name != 'new')",
+			"note": "a call on a project type runs the overrides of its library superclass"
+		},
+		{
+			"name": "M-TS-LIB-PROJECT-TYPE",
+			"type": "anyparse.check.LibraryBodies",
+			"method": "blockingChain",
+			"find": "call.declared(owner) ? null : graph.memberOnChain(owner, name)",
+			"replace": "graph.memberOnChain(owner, name)",
+			"note": "a project type is read as the library type sharing its name"
+		},
+		{
+			"name": "M-TS-LIB-WAIVE-OFF",
+			"type": "anyparse.check.LibraryBodies",
+			"method": "sinksOf",
+			"find": "sinkIds.remove(id);",
+			"replace": "",
+			"note": "nonBlocking waives no native of the libraries"
+		},
+		{
+			"name": "M-TS-LIB-WAIVE-SAID",
+			"type": "anyparse.check.PositiveSinks",
+			"method": "waived",
+			"find": "walked?.waives(pattern) != true",
+			"replace": "true",
+			"note": "a nonBlocking entry waiving a library native is said to waive nothing"
+		},
+		{
+			"name": "M-TS-LIB-UNKNOWN-SAID",
+			"type": "anyparse.check.LibraryBodies",
+			"method": "forRun",
+			"find": "if (oracle == null) {",
+			"replace": "if (oracle == null) { return null;",
+			"note": "a libraryBodies entry naming no oracle hxml walks nothing in silence"
+		},
+		{
+			"name": "M-TS-ORDER-HANDED",
+			"type": "anyparse.check.LockOrder",
+			"method": "visit",
+			"find": "if (runsHere(e)) {",
+			"replace": "if (e.kind.isInvocation()) {",
+			"note": "the order walk follows calls only: a lock a value handed to Lambda.iter takes is taken under no hold"
+		},
+		{
+			"name": "M-TS-ORDER-HANDED-ANYWHERE",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "run",
+			"find": "e -> states.runsHere(e, listsOf(e.file));",
+			"replace": "e -> ThreadStates.runsWith(e, inertRef);",
+			"note": "a value a spawns or registers call runs elsewhere is walked as if it ran under the hold"
+		},
+		{
+			"name": "M-TS-ORDER-HANDED-RANK",
+			"type": "anyparse.check.LockOrder",
+			"method": "precedes",
+			"find": "a.handed != b.handed",
+			"replace": "false",
+			"note": "a step through a value handed on names a pair a step through calls alone also makes, by member order"
+		},
+		{
+			"name": "M-TS-ORDER-HANDED-CLIMB",
+			"type": "anyparse.check.LockOrder",
+			"method": "climbPrecedes",
+			"find": "a.handed != b.handed",
+			"replace": "false",
+			"note": "a way into a state through a value handed on names its holder over a way through calls alone"
+		},
+		{
+			"name": "M-TS-ORDER-HANDED-VIA",
+			"type": "anyparse.check.LockOrder",
+			"method": "climb",
+			"find": "handed: up.handed || arrival.via.kind == Ref",
+			"replace": "handed: up.handed",
+			"note": "no way into a state counts as passing a value handed on"
+		},
+		{
+			"name": "M-TS-PAIR-OFF",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "nestHolds",
+			"find": "(o.hold.window.contains(inner.hold.edge) || takenFirst(o.hold, inner.hold))",
+			"replace": "o.hold.window.contains(inner.hold.edge)",
+			"note": "two holds one call of a multi-lock helper opens, across the same calls, warn twice"
+		},
+		{
+			"name": "M-TS-PAIR-ORDER",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "takenFirst",
+			"find": "first.to <= then.from",
+			"replace": "true",
+			"note": "either hold one helper call opens folds onto the other, whichever comes first, not the lock the helper takes first"
+		},
+		{
+			"name": "M-TS-FOLD-HELPER-CROSSING",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "reportLockHeld",
+			"find": "if (!sites.helpers.contains(c.edge.from)) c.lock",
+			"replace": "c.lock",
+			"note": "a multi-lock helper's give counts as a crossing release for the fold: a wait for its lock is never covered"
+		},
+		{
+			"name": "M-TS-FOLD-STUCK-WAIT",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "uncoverable",
+			"find": "(_makers[lock] ?? []).exists(neverReported)",
+			"replace": "false",
+			"note": "a hold waiting for a lock no finding reports stays open, so a cycle may keep a hold that would fold onto it"
+		},
+		{
+			"name": "M-TS-FOLD-STUCK-MADE",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "neverReported",
+			"find": "!_holds[m].madeWarning && ",
+			"replace": "",
+			"note": "a maker turned info around a warning counts as never reported: its waiters stay warnings"
+		},
+		{
+			"name": "M-TS-REFLECT-COMPUTED",
+			"type": "anyparse.check.FieldWrites",
+			"method": "of",
+			"find": "named.concat(_computed)",
+			"replace": "named",
+			"note": "a reflective write of a computed name writes no field"
+		},
+		{
+			"name": "M-TS-REFLECT-EXTENSION",
+			"type": "anyparse.check.FieldWrites",
+			"method": "recordReflective",
+			"find": "[receiver].concat(call.children.slice(1))",
+			"replace": "[]",
+			"note": "a using-Reflect extension call writes no field"
+		},
+		{
+			"name": "M-TS-REFLECT-INDEX",
+			"type": "anyparse.check.FieldWrites",
+			"method": "record",
+			"find": "if (!declaredAs(file, source, target.children[0], ELEMENT_INDEXED_TYPES))",
+			"replace": "if (false)",
+			"note": "an index write writes no field, whatever it is written into"
+		},
+		{
+			"name": "M-TS-REFLECT-REACH",
+			"type": "anyparse.check.FieldWrites",
+			"method": "reflectiveWrite",
+			"find": "reachOf(typeOf(file, source, fn, target), fn)",
+			"replace": "null",
+			"note": "a reflective write reaches every type's fields whatever its target"
+		},
+		{
+			"name": "M-TS-REFLECT-SUBTYPES",
+			"type": "anyparse.check.FieldWrites",
+			"method": "reachOf",
+			"find": "closure([named], types.subtypesOf)",
+			"replace": "[named]",
+			"note": "a write on a value of a class reaches none of its subclasses' fields"
+		},
+		{
+			"name": "M-TS-REFLECT-SUPERTYPES",
+			"type": "anyparse.check.FieldWrites",
+			"method": "reachOf",
+			"find": "closure(out, types.supertypesOf)",
+			"replace": "out",
+			"note": "a write on a value of a class reaches no field its supertypes declare"
+		},
+		{
+			"name": "M-TS-REFLECT-MAYWRITE",
+			"type": "anyparse.check.FieldWrites",
+			"method": "mayWrite",
+			"find": "if (site.reflective) return reaches == null || reaches.contains(owner);",
+			"replace": "",
+			"note": "a reflective write may write any type's field whatever it reaches"
+		},
+		{
+			"name": "M-TS-REFLECT-FINAL",
+			"type": "anyparse.check.ObjectPaths",
+			"method": "stable",
+			"find": ": !reflectivelyWritten(type, name)",
+			"replace": ": true",
+			"note": "a final field is stable whatever a reflective write may reach"
+		},
+		{
+			"name": "M-TS-REFLECT-ANY",
+			"type": "anyparse.check.FieldWrites",
+			"method": "reachOf",
+			"find": " || !(types.meta.isClass(named) || types.isInterface(named))",
+			"replace": "",
+			"note": "a structure or an abstract bounds a reflective write like a class"
+		},
+		{
+			"name": "M-TS-REFLECT-TYPEPARAM",
+			"type": "anyparse.check.FieldWrites",
+			"method": "reachOf",
+			"find": "if (fn != null && _graph.typeParamBoundsOf(fn, named) != null) return null;",
+			"replace": "",
+			"note": "a type parameter named like a class bounds a reflective write like that class"
+		},
+		{
+			"name": "M-TS-REFLECT-INDEX-ANY",
+			"type": "anyparse.check.FieldWrites",
+			"method": "record",
+			"find": "if (!declaredAs(file, source, target.children[0], ELEMENT_INDEXED_TYPES))",
+			"replace": "if (declaredAs(file, source, target.children[0], ['Dynamic', 'DynamicAccess']))",
+			"note": "only an index write into a value declared Dynamic / DynamicAccess writes a field: an untyped, a cast or an unknown container writes none (review F11)"
+		},
+		{
+			"name": "M-TS-REFLECT-INDEX-ELEMENT",
+			"type": "anyparse.check.FieldWrites",
+			"method": "record",
+			"find": "if (!declaredAs(file, source, target.children[0], ELEMENT_INDEXED_TYPES))",
+			"replace": "if (true)",
+			"note": "(precision) an index write into an array is a reflective write of any field"
+		},
+		{
+			"name": "M-TS-REFLECT-DYNACC",
+			"type": "anyparse.check.FieldWrites",
+			"method": "recordReflective",
+			"find": " || declaredAs(file, source, receiver, [DYNAMIC_ACCESS])",
+			"replace": "",
+			"note": "DynamicAccess.set writes no field (review F11)"
+		},
+		{
+			"name": "M-TS-REFLECT-HANDED",
+			"type": "anyparse.check.FieldWrites",
+			"method": "recordHanded",
+			"find": "if (!accessKind(value.kind, _shape) ||",
+			"replace": "if (true ||",
+			"note": "Reflect.setField handed on as a value and called later writes no field (review F11)"
+		},
+		{
+			"name": "M-TS-REFLECT-HANDED-CALLEE",
+			"type": "anyparse.check.FieldWrites",
+			"method": "collect",
+			"find": "i == 0 && node.kind == _shape.callKind",
+			"replace": "false",
+			"note": "(precision) a reflective call's own callee is also a handed value, a write of any field on any object"
+		},
+		{
+			"name": "M-TS-SEAL-REFLECT",
+			"type": "anyparse.check.LockSites",
+			"method": "collectUnsealed",
+			"find": "if (!_unsealed.contains(name) && writes.reflectivelyWritten(name))",
+			"replace": "if (false)",
+			"note": "a reflective write that may store any lock in a lock member leaves it sealed (review F3)"
+		},
+		{
+			"name": "M-TS-SEAL-REFLECT-REACH",
+			"type": "anyparse.check.FieldWrites",
+			"method": "reachesDeclarer",
+			"find": "return reaches != null && reaches.exists(t -> _graph.types.declaringTypeOf(t, name) != null);",
+			"replace": "return true;",
+			"note": "(precision) a reflective write on a class declaring no such member unseals a lock member of that name"
+		},
+		{
+			"name": "M-TS-SEAL-REFLECT-LITERAL-ANY",
+			"type": "anyparse.check.FieldWrites",
+			"method": "reflectivelyWritten",
+			"find": "site.reflective && (site.reaches == null || reachesDeclarer(site, name))",
+			"replace": "site.reflective && reachesDeclarer(site, name)",
+			"note": "a reflective write naming a lock member by a literal, on a value of no known class, leaves it sealed (review F3)"
+		},
+		{
+			"name": "M-TS-SEAL-REFLECT-UNPLACED",
+			"type": "anyparse.check.FieldWrites",
+			"method": "reflectivelyWritten",
+			"find": "_computed.exists(site -> reachesDeclarer(site, name))",
+			"replace": "_computed.exists(site -> site.reaches == null || reachesDeclarer(site, name))",
+			"note": "(precision) a computed reflective write on a value of no known class unseals every lock member: on TM no lock keeps its name"
+		},
+		{
+			"name": "M-TS-SEAL-UNPLACED-NOTICE",
+			"type": "anyparse.check.FieldWrites",
+			"method": "notices",
+			"force": "[]",
+			"note": "the run no longer says that the lock names assume no computed reflective write on a value of no known class stores a lock"
+		},
+		{
+			"name": "M-TS-FOLD-EVERY-END",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "reasonsOf",
+			"find": "for (end in ends) {",
+			"replace": "for (end in ends.slice(0, 1)) {",
+			"note": "a call is covered when the first blocking call its walk finds is, whatever else it reaches"
+		},
+		{
+			"name": "M-TS-FOLD-ENDS-WALK",
+			"type": "anyparse.check.LockTaint",
+			"method": "blockingEnds",
+			"find": "ways.blocked(at, e, repeated);",
+			"replace": "",
+			"note": "the walk for every blocking call a held call reaches records only a call that blocks itself"
+		},
+		{
+			"name": "M-TS-FOLD-PASSES-PATH",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "reasonOf",
+			"find": "end.repeated, end.mayRepeat, end.passes",
+			"replace": "end.repeated, end.mayRepeat, end.trail.path",
+			"note": "a hold whose function the shortest way passes covers the call, though another way passes no hold of it"
+		},
+		{
+			"name": "M-TS-FOLD-SUPPRESSED",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "doers",
+			"find": "if (!silenced(i)) ",
+			"replace": "",
+			"note": "a hold whose warning a directive silences covers another hold long by the same work"
+		},
+		{
+			"name": "M-TS-COVER-INFO-NOTE",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "noteInfoCovers",
+			"find": "c.finding.message += INFO_COVER_NOTE;",
+			"replace": "{}",
+			"note": "a hold turned onto a finding that ended info says nothing of it"
+		},
+		{
+			"name": "M-TS-WAY-HANDED-RANK",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "oneWarningPerWay",
+			"find": " + (d.edge.kind == Ref ? 1 : 0)",
+			"replace": "",
+			"note": "a sink handed on as a value keeps a way's warning before a call the function makes itself"
+		},
+		{
+			"name": "M-TS-OWNER-HANDED-RANK",
+			"type": "anyparse.check.MainRepeats",
+			"method": "nearestFirst",
+			"find": "a.handed ? 1 : -1",
+			"replace": "0",
+			"note": "an owner through a value handed on ranks with one through calls alone"
+		},
+		{
+			"name": "M-TS-ONE-TAKE-MERGE",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "oneTakePerLock",
+			"find": "mergeRepeats(list[0].finding, t.finding);",
+			"replace": "",
+			"note": "the warning a lock's main-thread takes fold into drops what repeats the folded ones"
+		},
+		{
+			"name": "M-TS-FOLD-NAMED-ONLY",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "doers",
+			"find": "case Site(key, repeated, _, _, null):",
+			"replace": "case Site(key, repeated, _, _, _):",
+			"note": "a hold covers another by work it reaches that its finding does not name"
+		},
+		{
+			"name": "M-TS-FOLD-SUPPRESSED-WAIT",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "neverReported",
+			"find": "return at >= 0 ? silenced(at) :",
+			"replace": "return at >= 0 ? false :",
+			"note": "a hold waiting for a lock whose long hold a directive silences folds onto that silenced warning"
+		},
+		{
+			"name": "M-TS-NEST-SUPPRESSED",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "nestHolds",
+			"find": "!suppressed(o.finding) && ",
+			"replace": "",
+			"note": "a hold taken inside a hold whose warning a directive silences turns info onto it"
+		},
+		{
+			"name": "M-TS-ENCLOSED-SUPPRESSED",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "foldEnclosed",
+			"find": "!suppressed(w.finding) && ",
+			"replace": "",
+			"note": "a hold enclosed by a hold whose warning a directive silences turns info onto it"
+		},
+		{
+			"name": "M-TS-WAY-SUPPRESSED",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "oneWarningPerWay",
+			"find": "(suppressed(d.finding) ? 2 : 0) + ",
+			"replace": "",
+			"note": "a silenced sink call keeps its way's warning and the others turn info onto it"
+		},
+		{
+			"name": "M-TS-ONE-TAKE-SUPPRESSED",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "oneTakePerLock",
+			"find": "(suppressed(t.finding) ? '1' : '0') + ",
+			"replace": "",
+			"note": "a silenced take keeps its lock's warning and the other takes turn info onto it"
+		},
+		{
+			"name": "M-TS-REPORTED-SUPPRESSED",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "dropSilenced",
+			"find": "for (k in [for (k => v in reportedBy) if (suppressed(v)) k]) reportedBy.remove(k);",
+			"replace": "",
+			"note": "a silenced finding (a) still reports the work a main-only hold spans"
+		},
+		{
+			"name": "M-TS-FOLD-UNNAMED-NOTE",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "noteUnnamed",
+			"find": "if (shown.length > 0) finding.message += ' — its calls also reach ${named(shown)}, which no warning names';",
+			"replace": "",
+			"note": "a kept hold warning names only the first way of each call, not the uncovered work it stays for"
+		},
+		{
+			"name": "M-TS-PATH-FOREIGN",
+			"type": "anyparse.query.CallGraphImports",
+			"method": "pathType",
+			"find": "if (declared == null || declared.contains(path)) return simple;",
+			"replace": "return simple;",
+			"note": "a library type bearing a project type's simple name merges into it again, so sys.thread.Lock.wait runs the project's Lock"
+		},
+		{
+			"name": "M-TS-PATH-IMPORT",
+			"type": "anyparse.query.CallGraphImports",
+			"method": "typeOf",
+			"find": "return path == null ? written : pathType(path);",
+			"replace": "return written;",
+			"note": "a name an import or an alias binds is read as written, never as the type it names"
+		},
+		{
+			"name": "M-TS-PATH-RECEIVER-STATIC",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "typeName: types.imports.pathType(CallGraphKeys.packagePathOf(recv, n -> isAccessKind(n.kind), unboundIdent) ?? name),",
+			"replace": "typeName: name,",
+			"note": "a static call written off a package path (sys.io.File.getContent) merges into the project type of its last segment"
+		},
+		{
+			"name": "M-TS-PATH-NEW",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "final typeName: String = types.imports.typeOf(file, rawName);",
+			"replace": "final typeName: String = CallGraphNames.lastSegments(rawName, 1);",
+			"note": "new sys.thread.Lock() runs the constructor of the project's Lock"
+		},
+		{
+			"name": "M-TS-PATH-MATCH",
+			"type": "anyparse.query.CallGraphImports",
+			"method": "keyedIds",
+			"find": "if (query == simple || query == path + member) path + member",
+			"replace": "if (false) path + member",
+			"note": "a pattern never finds a call keyed by its library path, so the builtin sinks miss sys.thread.Lock.wait"
+		},
+		{
+			"name": "M-TS-SHADOWING-KEPT",
+			"type": "anyparse.check.PositiveSinks",
+			"method": "waived",
+			"find": "final removed: Array<String> = [for (id in hit) if (!shadowing.contains(id)) id];",
+			"replace": "final removed: Array<String> = hit;",
+			"note": "a waiver of a project native named like a library call removes it, though a library call may resolve to it"
+		},
+		{
+			"name": "M-TS-PATH-DECLARED-PACKAGE",
+			"type": "anyparse.query.CallGraphImports",
+			"method": "recordFile",
+			"find": "t.isMain ? [fi.module, inModule, inPackage] : [inModule, inPackage]",
+			"replace": "t.isMain ? [fi.module, inModule] : [inModule]",
+			"note": "a project type imported by its package and name, in a module named otherwise, reads as a library type"
+		},
+		{
+			"name": "M-TS-PATH-NOMINAL",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "final outer: Null<String> = path == null ? null : types.imports.pathType(path);",
+			"replace": "final outer: Null<String> = path == null ? null : SourceText.lastSegment(path);",
+			"note": "a member or a return type written with a library package merges into the project type of its simple name"
+		},
+		{
+			"name": "M-TS-PATH-RETURN",
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "returnedPath",
+			"find": "path.indexOf('.') >= 0 && SourceText.lastSegment(path) == simple",
+			"replace": "false",
+			"note": "a call's return type written with a library package is read by its simple name"
+		},
+		{
+			"name": "M-TS-PATH-NULLABLE-KEYED",
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "keyed",
+			"find": "final outer: Null<TypeSyntax> = t?.wrapped(['Null']) ?? t;",
+			"replace": "final outer: Null<TypeSyntax> = t;",
+			"note": "a Null<pkg.T> annotation keeps its dotted path as the graph type, so Null<sys.thread.Mutex> is no Mutex"
+		},
+		{
+			"name": "M-TS-ALIAS-TYPE",
+			"type": "anyparse.query.CallGraphImports",
+			"method": "typeImportOf",
+			"find": "{ name: alias, path: target };",
+			"replace": "null;",
+			"note": "an import alias of a type stays a type of the alias's name, so Disk.getContent is no File.getContent"
+		},
+		{
+			"name": "M-TS-STD-RETURN",
+			"type": "anyparse.query.StdTypes",
+			"method": "returnOf",
+			"find": "return m != null && m.isFunction ? m.type : null;",
+			"replace": "return null;",
+			"note": "what a std function returns never types the next receiver, so Sys.stdin().readLine() is unresolved"
+		},
+		{
+			"name": "M-TS-STD-FIELD",
+			"type": "anyparse.query.StdTypes",
+			"method": "fieldOf",
+			"find": "return m != null && !m.isFunction ? m.type : null;",
+			"replace": "return null;",
+			"note": "a std field's type never types the next receiver, so socket.input.readLine() is unresolved"
+		},
+		{
+			"name": "M-TS-STD-GETTER",
+			"type": "anyparse.query.StdTypes",
+			"method": "accessorsOf",
+			"find": "reads && m.hasGetter",
+			"replace": "false",
+			"note": "a std property read runs no getter, so ResultSet.length steps no rows"
+		},
+		{
+			"name": "M-TS-STD-GETTER-LOCAL",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (isAccessKind(node.kind) && declared != null && types.declarationCount(declared) == 0) stdAccessors(declared);",
+			"replace": "",
+			"note": "a std property no project type names is never read through its getter"
+		},
+		{
+			"name": "M-TS-STD-GETTER-TYPED",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (found == null && types.declarationCount(ownerType) == 0) stdAccessors(ownerType);",
+			"replace": "",
+			"note": "a std property a project property shares its name with is never read through its getter"
+		},
+		{
+			"name": "M-TS-NEW-LOCAL",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (newExprKind != null) keys.typeNewLocals(tree, localDeclKinds, newExprKind);",
+			"replace": "",
+			"note": "an unannotated local a new initialises stays untyped"
+		},
+		{
+			"name": "M-TS-STD-PLACEHOLDER",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "types.declarationCount(innerRecv.typeName) == 0 ? externalNode(innerRecv.typeName, innerName) : null",
+			"replace": "null",
+			"note": "a call of a library type's member names no target, so its std return type is never read"
+		},
+		{
+			"name": "M-TS-NOTICE-WAIVED",
+			"type": "anyparse.check.PositiveSinks",
+			"method": "notice",
+			"find": "final waivers: String = _removers.length == 0",
+			"replace": "final waivers: String = true",
+			"note": "the notice never says what nonBlocking removed"
+		},
+		{
+			"name": "M-TS-STD-AGREE",
+			"type": "anyparse.query.StdTypes",
+			"method": "memberOf",
+			"find": "return agree ? first : null;",
+			"replace": "return first;",
+			"note": "two std types of one name that disagree on a member answer the first's"
+		},
+		{
+			"name": "M-TS-STD-SUPER",
+			"type": "anyparse.query.StdTypes",
+			"method": "lookUp",
+			"find": "if (resolved != null) lookUp(plugin, resolved, member, depth + 1, seen, found);",
+			"replace": "",
+			"note": "a std member a superclass declares is never found"
+		},
+		{
+			"name": "M-TS-STD-SIBLING",
+			"type": "anyparse.query.StdTypes",
+			"method": "resolve",
+			"find": "return modulePaths.exists(sibling) ? sibling : modulePaths.exists(name) ? name : null;",
+			"replace": "return modulePaths.exists(name) ? name : null;",
+			"note": "a simple type name a std module writes never resolves to its own package"
+		},
+		{
+			"name": "M-TS-LIB-LOST-LIB-SAID",
+			"type": "anyparse.check.LibraryBuild",
+			"method": "read",
+			"find": "'libraryBodies: the library \"-lib $lib\" of \"${oracle.hxml}\" does not resolve (haxelib) — its bodies are not walked'",
+			"replace": "''",
+			"note": "a -lib the build names and haxelib cannot resolve is dropped in silence"
+		},
+		{
+			"name": "M-TS-LIB-LOST-CP-SAID",
+			"type": "anyparse.check.LibraryBuild",
+			"method": "read",
+			"find": "problems.push('libraryBodies: the classpath \"$cp\" of \"${oracle.hxml}\" does not exist — nothing under it is walked')",
+			"replace": "{}",
+			"note": "a -cp the build names that does not exist is dropped in silence"
+		},
+		{
+			"name": "M-TS-BUILTIN-EVENTS",
+			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
+			"method": "refShape",
+			"find": [
+				"'sys.net.UdpSocket.readFrom',\n",
+				"'sys.db.ResultSet.get_length',\n",
+				"'sys.thread.EventLoop.loop',\n",
+				"'sys.thread.EventLoop.wait',\n"
+			],
+			"replace": [
+				"",
+				"",
+				"",
+				""
+			],
+			"note": "a datagram read, a result set's length and the event loop's waits block only where a project lists them"
 		}
 	]
 }

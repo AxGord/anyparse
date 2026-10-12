@@ -10,6 +10,12 @@ using Lambda;
 typedef RepeatOwner = {
 	final edge: CallEdge;
 	final path: Array<String>;
+
+	/**
+	 * Whether the way down from the owner to the call passes a value handed on (`Ref`) — the owner's own call included:
+	 * at one distance it ranks after an owner whose way runs calls alone.
+	 */
+	final handed: Bool;
 }
 
 /** What the main thread's ways up from one call say about how often it runs (`MainRepeats.climb`). */
@@ -41,6 +47,9 @@ private typedef ClimbWalk = {
 	final owners: Array<RepeatOwner>;
 	final down: Map<String, Array<String>>;
 	final ways: Map<String, BoundedWay>;
+
+	/** Whether the way down from each state to the call passes a value handed on. */
+	final handed: Map<String, Bool>;
 	final queue: Array<{ id: String, valuation: String }>;
 	var registered: Bool;
 }
@@ -88,6 +97,7 @@ final class MainRepeats {
 			owners: [],
 			down: [],
 			ways: [],
+			handed: [],
 			queue: [],
 			registered: false
 		};
@@ -123,6 +133,7 @@ final class MainRepeats {
 	 */
 	private function climbEdge(walk: ClimbWalk, e: CallEdge, at: { id: String, valuation: String }, way: BoundedWay): Void {
 		final path: Array<String> = walk.down[key(at.id, at.valuation)] ?? [at.id];
+		final handed: Bool = walk.handed[key(at.id, at.valuation)] == true || e.kind == Ref;
 		// a registered value runs as a run of its own: nothing up its registration repeats it
 		if (_repetition.registered(e)) {
 			walk.registered = true;
@@ -130,7 +141,7 @@ final class MainRepeats {
 		}
 		// a marshalled value runs once per post, posted from a thread this walk does not count
 		if (_repetition.marshalled(e)) {
-			if (runsFrom(e, at.valuation) == at.valuation) own(walk.owners, e, path);
+			if (runsFrom(e, at.valuation) == at.valuation) own(walk.owners, e, path, handed);
 			return;
 		}
 		// bounded repetitions on one way multiply: past the budget, the call that crosses it repeats
@@ -138,26 +149,35 @@ final class MainRepeats {
 		for (v in mainStates(e.from)) if (runsFrom(e, v) == at.valuation) {
 			final caller: String = key(e.from, v);
 			if (next == null) {
-				own(walk.owners, e, path);
+				own(walk.owners, e, path, handed);
 			} else if (!walk.down.exists(caller) || worse(next, walk.ways[caller])) {
-				if (!walk.down.exists(caller)) walk.down[caller] = [e.from].concat(path);
+				if (!walk.down.exists(caller)) {
+					walk.down[caller] = [e.from].concat(path);
+					walk.handed[caller] = handed;
+				}
 				walk.ways[caller] = merged(next, walk.ways[caller]);
 				walk.queue.push({ id: e.from, valuation: v });
 			}
 		}
 	}
 
-	/** `e` an owner of the call `path` walks down to, once. */
-	private static function own(owners: Array<RepeatOwner>, e: CallEdge, path: Array<String>): Void {
-		if (!owners.exists(o -> o.edge == e)) owners.push({ edge: e, path: path });
+	/** `e` an owner of the call `path` walks down to, once, by a way through a value handed on or not (`handed`). */
+	private static function own(owners: Array<RepeatOwner>, e: CallEdge, path: Array<String>, handed: Bool): Void {
+		if (!owners.exists(o -> o.edge == e)) owners.push({ edge: e, path: path, handed: handed });
 	}
 
-	/** Nearest first, then by file, by offset as a number — an unrelated edit before both moves neither past the other — and by target. */
+	/**
+	 * Nearest first, then one whose way runs calls alone before one through a value handed on (review round 4 `f10`: a
+	 * value may be stored, not run), then by file, by offset as a number — an unrelated edit before both moves neither
+	 * past the other — and by target.
+	 */
 	private static function nearestFirst(a: RepeatOwner, b: RepeatOwner): Int {
 		final at: Int = a.edge.span?.from ?? -1;
 		final bt: Int = b.edge.span?.from ?? -1;
 		return if (a.path.length != b.path.length)
 			a.path.length - b.path.length
+		else if (a.handed != b.handed)
+			a.handed ? 1 : -1
 		else if (a.edge.file != b.edge.file)
 			Reflect.compare(a.edge.file, b.edge.file)
 		else if (at != bt)

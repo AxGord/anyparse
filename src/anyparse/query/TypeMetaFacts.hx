@@ -5,7 +5,8 @@ import anyparse.query.SymbolIndex.TypeDeclInfo;
 /**
  * What the modifiers and metadata of each indexed type declaration say about how code reaches its members:
  * `extern` (its code belongs to the target), a build macro (it may gain members no declaration shows), a
- * construction from a literal (`@:structInit`), and `@:forward` (members routed to the underlying type).
+ * construction from a literal (`@:structInit`), and `@:forward` (members
+ * routed to the underlying type); and which declarations are classes.
  * Simple names; a later declaration of a name adds to the earlier.
  */
 @:nullSafety(Strict)
@@ -29,11 +30,24 @@ final class TypeMetaFacts {
 	/** `@:forward(a, b)` abstract name -> the only members it forwards. */
 	private final _forwardedOnly: Map<String, Array<String>> = [];
 
-	public function new() {}
+	/** The types some declaration of which is a class. */
+	private final _classes: Map<String, Bool> = [];
+
+	/** The grammar's class declaration kinds (`RefShape.classDeclKinds`). */
+	private final _classKinds: Array<String>;
+
+	public function new(classKinds: Array<String>) {
+		_classKinds = classKinds;
+	}
 
 	/** Whether an indexed declaration of `typeName` is `extern` — a body-less member of it runs target code. */
 	public inline function isExtern(typeName: String): Bool {
 		return _externs.exists(typeName);
+	}
+
+	/** Whether an indexed declaration of `typeName` is a class (`RefShape.classDeclKinds`). */
+	public inline function isClass(typeName: String): Bool {
+		return _classes.exists(typeName);
 	}
 
 	/** Whether an indexed declaration of `typeName` carries a build macro. */
@@ -63,6 +77,7 @@ final class TypeMetaFacts {
 	/** Fold the modifiers and metadata of one declaration. */
 	public function record(t: TypeDeclInfo): Void {
 		if (t.isExtern) _externs[t.name] = true;
+		if (_classKinds.contains(t.kind)) _classes[t.name] = true;
 		if (t.hasBuild || t.hasAutoBuild) _built[t.name] = true;
 		if (t.constructsFromLiteral) _constructedFromLiteral[t.name] = true;
 		if (t.bringsExtensions) _extended[t.name] = true;

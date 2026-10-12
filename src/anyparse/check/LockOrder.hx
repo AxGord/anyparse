@@ -31,6 +31,9 @@ private typedef Climb = {
 	final holder: String;
 	final anchor: Null<CallEdge>;
 	final prefix: Array<String>;
+
+	/** Whether a call on the way from `holder` hands on the value it runs (`Ref`): a witness only when no way runs calls alone. */
+	final handed: Bool;
 }
 
 /** One "holds A, then takes B" step: the state that makes it, the call there that takes B, and the context it runs on. */
@@ -54,6 +57,9 @@ private typedef RankedStep = {
 	/** The member `holder` belongs to (`ThreadSafety.memberOf`): what a finding keys by. */
 	final member: String;
 	final path: Array<String>;
+
+	/** Whether `path` passes a value handed on (`Climb.handed`). */
+	final handed: Bool;
 }
 
 /**
@@ -65,7 +71,8 @@ private typedef RankedStep = {
  * from every entry point: a function no invocation reaches, a callback on the context its registration runs
  * (`ThreadStates.edgeContext`), and a cycle of calls nothing else enters, each holding nothing, on a context
  * `ThreadStates` gives it. A call adds the locks its function holds there (the windows
- * of its own holds, a multi-lock helper's included) and enters its target with them; a callback never inherits them.
+ * of its own holds, a multi-lock helper's included) and enters its target with them, and so does a value handed to a
+ * call that runs it there (`ThreadStates.runsHere`); a callback run elsewhere or kept to run later never inherits them.
  * A take of B with A held is a step from A to B; a take of a lock already held is a re-take on the thread that holds it,
  * and orders nothing, so one consistent order through re-entrant re-takes stays quiet. A state carries the valuation of
  * its function's tracked parameters too: a call runs from it only where `EdgeConditions` lets it, on the threads it
@@ -111,12 +118,15 @@ final class LockOrder {
 	/**
 	 * Walks every state a thread can reach — entered at a graph entry point (no invocation reaches it) on the contexts
 	 * `threads` gives it, or as a callback on the context its registration runs (`ThreadStates.edgeContext`) unless
-	 * `inertRef` says the value never runs from there — collecting each take of a lock some other lock is held at, then
+	 * `inertRef` says the value never runs from there — collecting each take of a lock some other lock is held at, a value
+	 * handed on that `runsHere` says runs where it is handed entered under the locks held there, then
 	 * reports one finding per pair of locks taken in both orders by steps on different threads (`main` / `bg`: the
 	 * context bits of each), anchored at the main-thread step and naming both chains. A function `threads` gives no
 	 * context runs nowhere.
 	 */
-	public function report(threads: ThreadStates, inertRef: (CallEdge) -> Bool, main: Int, bg: Int, chainCap: Int): Array<Violation> {
+	public function report(
+		threads: ThreadStates, inertRef: (CallEdge) -> Bool, runsHere: (CallEdge) -> Bool, main: Int, bg: Int, chainCap: Int
+	): Array<Violation> {
 		final contexts: Map<String, Int> = threads.contexts;
 		final seen: Map<String, HeldState> = [];
 		final reached: Map<String, HeldState> = [];
@@ -142,7 +152,7 @@ final class LockOrder {
 		while (true) {
 			while (qi < queue.length) {
 				if (queue.length > STATE_CAP) return [capReached()];
-				visit(queue[qi++], follow);
+				visit(queue[qi++], runsHere, follow);
 			}
 			// a cycle of calls nothing outside it calls is entered anywhere, holding nothing, as `contexts` assumed
 			final before: Int = queue.length;
@@ -178,10 +188,12 @@ final class LockOrder {
 
 	/**
 	 * Runs the calls of `state`'s function that run from it (`EdgeConditions.carried`): records the steps their takes
-	 * make, and enters the functions they call. A hold of the body counts at a call only where its own take runs too.
+	 * make, and enters the functions they call — and the values handed on that run where they are handed (`runsHere`:
+	 * `Lambda.iter(xs, x -> b.acquire())`), under the locks held at the call they are handed to, knowing none of their
+	 * parameters (`EdgeConditions.entered`). A hold of the body counts at a call only where its own take runs too.
 	 */
-	private function visit(state: HeldState, enter: (HeldState) -> Void): Void {
-		for (e in _graph.outEdges(state.id)) if (e.kind.isInvocation()) {
+	private function visit(state: HeldState, runsHere: (CallEdge) -> Bool, enter: (HeldState) -> Void): Void {
+		for (e in _graph.outEdges(state.id)) if (runsHere(e)) {
 			final ctx: Int = _conditions.carried(e, state.valuation, state.ctx);
 			if (ctx == 0) continue;
 			final key: String = siteKey(e);
@@ -197,7 +209,7 @@ final class LockOrder {
 				held: h,
 				taken: taken
 			});
-			if (_graph.node(e.to)?.isExternal == false) enter(heldState(e.to, ctx, _conditions.bind(e, state.valuation), held, {
+			if (_graph.node(e.to)?.isExternal == false) enter(heldState(e.to, ctx, _conditions.entered(e, state.valuation), held, {
 				parent: state,
 				via: e
 			}));
@@ -258,7 +270,8 @@ final class LockOrder {
 			anchor: up.anchor ?? step.take,
 			holder: up.holder,
 			member: ThreadSafety.memberOf(_graph, up.holder),
-			path: up.prefix.concat([step.take.to])
+			path: up.prefix.concat([step.take.to]),
+			handed: up.handed
 		};
 	}
 
@@ -274,20 +287,35 @@ final class LockOrder {
 		var best: Null<Climb> = null;
 		if (state.held.contains(held)) for (arrival in state.arrivals) if (!onPath.contains(arrival.parent.key)) {
 			final up: Climb = climb(arrival.parent, held, memo, onPath.concat([state.key]));
-			final found: Climb = { holder: up.holder, anchor: up.anchor ?? arrival.via, prefix: up.prefix.concat([state.id]) };
+			final found: Climb = {
+				holder: up.holder,
+				anchor: up.anchor ?? arrival.via,
+				prefix: up.prefix.concat([state.id]),
+				handed: up.handed || arrival.via.kind == Ref
+			};
 			final current: Null<Climb> = best;
 			if (current == null || climbPrecedes(found, current)) best = found;
 		}
-		final out: Climb = best ?? { holder: state.id, anchor: null, prefix: [state.id] };
+		final out: Climb = best ?? {
+			holder: state.id,
+			anchor: null,
+			prefix: [state.id],
+			handed: false
+		};
 		memo[key] = out;
 		return out;
 	}
 
-	/** Whether the way `a` into a state precedes the way `b` (`earlier`, by the members of their holders). */
+	/**
+	 * Whether the way `a` into a state precedes the way `b`: one through calls alone before one through a value handed on,
+	 * then by `earlier`, by the members of their holders.
+	 */
 	private function climbPrecedes(a: Climb, b: Climb): Bool {
-		return earlier(
-			ThreadSafety.memberOf(_graph, a.holder), a.anchor, a.prefix, ThreadSafety.memberOf(_graph, b.holder), b.anchor, b.prefix
-		);
+		return a.handed != b.handed
+			? !a.handed
+			: earlier(
+				ThreadSafety.memberOf(_graph, a.holder), a.anchor, a.prefix, ThreadSafety.memberOf(_graph, b.holder), b.anchor, b.prefix
+			);
 	}
 
 	/** `<file>:<start>` of `edge`'s site. */
@@ -356,11 +384,12 @@ final class LockOrder {
 	}
 
 	/**
-	 * Whether `a` precedes `b`: by the member holding the first lock (`ThreadSafety.memberOf`), then the anchor's file and
-	 * offset, then the path — a total order over what a finding says, so the step a report names does not depend on walk order.
+	 * Whether `a` precedes `b`: a step whose path runs calls alone before one through a value handed on (`handed`), then by
+	 * the member holding the first lock (`ThreadSafety.memberOf`), the anchor's file and offset, and the path — a total order
+	 * over what a finding says, so the step a report names does not depend on walk order.
 	 */
 	private static inline function precedes(a: RankedStep, b: RankedStep): Bool {
-		return earlier(a.member, a.anchor, a.path, b.member, b.anchor, b.path);
+		return a.handed != b.handed ? !a.handed : earlier(a.member, a.anchor, a.path, b.member, b.anchor, b.path);
 	}
 
 	/** The order `precedes` and `climbPrecedes` share: by member, then the anchor's file and offset, then the path. */
