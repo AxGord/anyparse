@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.query.CallGraph;
+import anyparse.query.CallGraphNames;
 import anyparse.query.GrammarPlugin;
 
 using Lambda;
@@ -29,6 +30,19 @@ final class PositiveSinks {
 	/** The run's library calls whose library bodies block (`LibraryBodies`), when a chain asked for them; null otherwise. */
 	public final library: Null<LibraryBodies>;
 
+	/**
+	 * The project natives whose graph id is also the name of a blocking library call (`Lock.wait` beside the runtime's
+	 * `sys.thread.Lock.wait`): a call of the library one the graph cannot tell apart — a receiver typed where it reads no
+	 * package — resolves to it, so no `nonBlocking` entry waives it (`waived`).
+	 */
+	public final shadowing: Array<String>;
+
+	/** The sinks the `nonBlocking` entries of the run's chains removed (`waived`), for the notice. */
+	private final _removed: Array<String> = [];
+
+	/** The `nonBlocking` entries of the run's chains that removed a sink. */
+	private final _removers: Array<String> = [];
+
 	public function new(
 		graph: CallGraph, plugin: GrammarPlugin, projectNatives: ProjectNatives, library: Null<LibraryBodies>
 	) {
@@ -43,11 +57,16 @@ final class PositiveSinks {
 		builtin = ids;
 		natives = projectNatives.ids;
 		this.library = library;
+		final named: Array<String> = [for (p in calls) CallGraphNames.lastSegments(p, 2)];
+		shadowing = [
+			for (id in natives) if (named.contains(id) || named.contains('${graph.node(id)?.typeName}.*')) id
+		];
 	}
 
 	/**
-	 * The builtin sinks and natives the `nonBlocking` entries of `options` waive; each entry that waives none, or names a
-	 * call of `configured` — the chain's own `sinks`, which keep it — said in `found`.
+	 * The builtin sinks and natives the `nonBlocking` entries of `options` waive; each entry that waives none, names a
+	 * call of `configured` — the chain's own `sinks`, which keep it — or names a native that bears a library call's name
+	 * (`shadowing`), which it keeps too, said in `found`.
 	 */
 	public function waived(options: ThreadSafetyOptions, graph: CallGraph, configured: Array<String>, found: Array<String>): Array<String> {
 		final out: Array<String> = [];
@@ -62,7 +81,16 @@ final class PositiveSinks {
 				found.push('nonBlocking entry "$pattern" waives no builtin sink or project native of the run');
 			if (ids.exists(id -> configured.contains(id)))
 				found.push('nonBlocking entry "$pattern" names a call "sinks" lists too, which keeps it');
-			for (id in hit) if (!out.contains(id)) out.push(id);
+			for (id in hit) if (shadowing.contains(id))
+				found.push(
+					'nonBlocking entry "$pattern" names the project native "$id", which bears the name of a blocking library call'
+					+ ' — kept: a call of the library one the graph cannot tell apart from it resolves there'
+				);
+			final removed: Array<String> = [for (id in hit) if (!shadowing.contains(id)) id];
+			for (id in removed) if (!out.contains(id)) out.push(id);
+			// what the run's notice counts
+			if ((removed.length > 0 || walked?.waives(pattern) == true) && !_removers.contains(pattern)) _removers.push(pattern);
+			for (id in removed) if (!_removed.contains(id)) _removed.push(id);
 		}
 		return out;
 	}
@@ -72,11 +100,17 @@ final class PositiveSinks {
 		return walkedFor(options)?.ids ?? [];
 	}
 
-	/** The notice a reporting run gives once: how many blocking library calls there are, how many it makes, and its natives. */
+	/**
+	 * The notice a reporting run gives once: how many blocking library calls there are, how many it makes, its natives, and
+	 * how many of them the run's `nonBlocking` entries removed (`waived`, which a run calls first).
+	 */
 	public function notice(): String {
+		final waivers: String = _removers.length == 0
+			? ''
+			: ' (here ${_removed.length} sink(s) by ${_removers.length} entr${_removers.length == 1 ? 'y' : 'ies'})';
 		return
 			'$NOTICE$patterns blocking calls of the runtime library (${builtin.length} of them called in this run) and ${natives.length}'
-				+ ' project native(s)${library?.notice() ?? ''} — "sinks" adds to them, "nonBlocking" removes from them';
+				+ ' project native(s)${library?.notice() ?? ''} — "sinks" adds to them, "nonBlocking" removes from them$waivers';
 	}
 
 	/** The libraries walked, for a chain whose `options` ask for them (`libraryBodies`); null otherwise. */

@@ -2300,6 +2300,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyHelperHoldsTest#testWorkInsideATakingHelperIsJudged :: control :: M-TS-HELPER-BODY-WORK',
 			'unit.check.ThreadSafetyLibraryBodiesTest#testALibraryCallThatBlocksInsideIsASink :: control :: '
 				+ 'M-TS-LIB-OFF,M-TS-LIB-NOT-SINKS,M-TS-LIB-CHAIN-OFF,M-TS-LIB-NOTICE,M-TS-LIB-KNOWN,M-TS-LIB-AWAY-OFF',
+			'unit.check.ThreadSafetyLibraryBodiesTest#testALibraryTheBuildCannotFindIsSaid :: control :: M-TS-LIB-LOST-LIB-SAID,M-TS-LIB-LOST-CP-SAID',
 			'unit.check.ThreadSafetyLibraryBodiesTest#testAProjectTypeRunsNoLibraryOverride :: control :: M-TS-LIB-VIRTUAL-OFF,M-TS-LIB-PROJECT-OVERRIDES,M-TS-LIB-PROJECT-TYPE',
 			'unit.check.ThreadSafetyLibraryBodiesTest#testAnUnknownBuildIsSaid :: control :: M-TS-LIB-UNKNOWN-SAID',
 			'unit.check.ThreadSafetyLibraryBodiesTest#testNonBlockingWaivesALibraryNative :: control :: M-TS-LIB-WAIVE-OFF,M-TS-LIB-WAIVE-SAID',
@@ -2333,13 +2334,22 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyOwnReasonsTest#testAHoldItsFunctionNeverGivesBackIsLong :: control :: M-TS-HANDOFF-OFF,M-TS-HANDOFF-GIVES',
 			'unit.check.ThreadSafetyOwnReasonsTest#testARepeatedOrUnknownUnresolvedCallKeepsTheLockLong :: control :: M-TS-DOM-BRIEF-REPEATED',
 			'unit.check.ThreadSafetyOwnReasonsTest#testAnUnresolvedCallInACatchIsAnErrorPath :: control :: M-TS-BLIND-CATCH-OFF',
+			'unit.check.ThreadSafetyPositiveSinksTest#testALibraryTypeIsNotItsProjectNamesake :: control :: '
+				+ 'M-TS-PATH-FOREIGN,M-TS-PATH-IMPORT,M-TS-PATH-RECEIVER-STATIC,M-TS-PATH-NEW,M-TS-PATH-MATCH,M-TS-SHADOWING-KEPT,'
+				+ 'M-TS-PATH-DECLARED-PACKAGE,M-TS-PATH-NOMINAL,M-TS-PATH-RETURN,M-TS-PATH-NULLABLE-KEYED,M-TS-ALIAS-TYPE',
+			'unit.check.ThreadSafetyPositiveSinksTest#testAStdMemberStandsWhereEveryNamesakeAgrees :: control :: '
+				+ 'M-TS-STD-AGREE,M-TS-STD-SUPER,M-TS-STD-SIBLING',
 			'unit.check.ThreadSafetyPositiveSinksTest#testNonBlockingWaivesOnEvidence :: control :: '
 				+ 'M-TS-WAIVE-OFF,M-TS-WAIVE-SAYS-NOTHING,M-TS-WAIVE-SINKS-WIN,M-TS-OPT-NONBLOCKING-EVIDENCE',
 			'unit.check.ThreadSafetyPositiveSinksTest#testProjectNativesBlock :: control :: '
 				+ 'M-TS-NATIVE-EXTERN,M-TS-NATIVE-EXTERN-ANY-BODYLESS,M-TS-NATIVE-META,M-TS-NATIVE-LOADER,M-TS-NATIVE-AFFIX,'
 				+ 'M-TS-NATIVE-CALLEE-SPAN,M-TS-NATIVE-CODE-CALLS,M-TS-NATIVE-LOADED-MEMBER',
+			'unit.check.ThreadSafetyPositiveSinksTest#testStdResultsTypeTheirReceivers :: control :: '
+				+ 'M-TS-STD-RETURN,M-TS-STD-FIELD,M-TS-STD-GETTER,M-TS-STD-GETTER-LOCAL,M-TS-STD-GETTER-TYPED,M-TS-NEW-LOCAL,M-TS-ALIAS-TYPE,'
+				+ 'M-TS-STD-PLACEHOLDER,M-TS-BUILTIN-EVENTS',
 			'unit.check.ThreadSafetyPositiveSinksTest#testTheBuiltinAppliesWithNoSinks :: control :: '
 				+ 'M-TS-BUILTIN-NEEDS-SINKS,M-TS-BUILTIN-OFF,M-TS-BUILTIN-ANY-NODE',
+			'unit.check.ThreadSafetyPositiveSinksTest#testTheNoticeCountsWhatNonBlockingRemoved :: control :: M-TS-NOTICE-WAIVED',
 			'unit.check.ThreadSafetyPositiveSinksTest#testTheRunSaysWhichBuiltinsApplied :: control :: M-TS-BUILTIN-NOTICE-OFF',
 			'unit.check.ThreadSafetyQuietLocksTest#testAConstructorsOwnTakeNeverWaits :: control :: M-TS-CTOR-TAKE',
 			'unit.check.ThreadSafetyQuietLocksTest#testALockOnlyTakenSharedNeverWaits :: control :: M-TS-SHARED-OFF,M-TS-SHARED-HOLD',
@@ -6428,7 +6438,32 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-WAY-SUPPRESSED',
 			'M-TS-ONE-TAKE-SUPPRESSED',
 			'M-TS-REPORTED-SUPPRESSED',
-			'M-TS-FOLD-UNNAMED-NOTE'
+			'M-TS-FOLD-UNNAMED-NOTE',
+			'M-TS-PATH-FOREIGN',
+			'M-TS-PATH-IMPORT',
+			'M-TS-PATH-RECEIVER-STATIC',
+			'M-TS-PATH-NEW',
+			'M-TS-PATH-MATCH',
+			'M-TS-SHADOWING-KEPT',
+			'M-TS-PATH-DECLARED-PACKAGE',
+			'M-TS-PATH-NOMINAL',
+			'M-TS-PATH-RETURN',
+			'M-TS-PATH-NULLABLE-KEYED',
+			'M-TS-ALIAS-TYPE',
+			'M-TS-STD-RETURN',
+			'M-TS-STD-FIELD',
+			'M-TS-STD-GETTER',
+			'M-TS-STD-GETTER-LOCAL',
+			'M-TS-STD-GETTER-TYPED',
+			'M-TS-NEW-LOCAL',
+			'M-TS-STD-PLACEHOLDER',
+			'M-TS-NOTICE-WAIVED',
+			'M-TS-STD-AGREE',
+			'M-TS-STD-SUPER',
+			'M-TS-STD-SIBLING',
+			'M-TS-LIB-LOST-LIB-SAID',
+			'M-TS-LIB-LOST-CP-SAID',
+			'M-TS-BUILTIN-EVENTS'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

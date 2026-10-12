@@ -167,6 +167,31 @@ class ThreadSafetyLibraryBodiesTest extends Test {
 		#end
 	}
 
+	/** A library or a classpath the build names that the run cannot find is said by name: nothing under it is walked. */
+	@:pin('control') @:killer('M-TS-LIB-LOST-LIB-SAID') @:killer('M-TS-LIB-LOST-CP-SAID')
+	public function testALibraryTheBuildCannotFindIsSaid(): Void {
+		#if (sys || nodejs)
+		final config: String =
+			'{"compilerOracle":[{"hxml":"lost.hxml"}],"rules":{"thread-safety":{"closedWorld":false,"libraryBodies":["lost.hxml"]}}}';
+		final project: String = 'class A { static function main():Void Sys.sleep(0); }';
+		final dir: String = CliFixture.writeTree('threadsafety_lib_lost', [
+			{ name: 'apqlint.json', source: config },
+			{ name: 'lost.hxml', source: '-cp .\n-cp nowhere\n-lib no_such_haxelib_fx2\n-cpp out\n' },
+			{ name: 'F0.hx', source: project }
+		]);
+		final found: Array<Violation> = Linter.run([{ file: '$dir/F0.hx', source: project }], new HaxeQueryPlugin(), [new ThreadSafety()]);
+		CliFixture.removeDir(dir);
+		final said: Array<String> = [for (v in found) if (v.file == '') v.message];
+		Assert.isTrue(
+			said.exists(m -> m.indexOf('the library "-lib no_such_haxelib_fx2"') >= 0 && m.indexOf('does not resolve') >= 0),
+			said.join('\n')
+		);
+		Assert.isTrue(said.exists(m -> m.indexOf('/nowhere"') >= 0 && m.indexOf('does not exist') >= 0), said.join('\n'));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
 	/** The findings of the fixture project under the `thread-safety` options `options` (JSON members), the notice kept. */
 	private static function run(options: String): Array<Violation> {

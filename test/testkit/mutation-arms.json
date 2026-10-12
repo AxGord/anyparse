@@ -6484,8 +6484,8 @@
 			"name": "M-GRAPH-CALL-ELEMENT",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "final returned: Null<String> = call == null ? null : _facts.returnSources[call.target];",
-			"replace": "final returned: Null<String> = null;",
+			"find": ": _facts.returnSources[call.target] ?? StdTypes.returnOf(_plugin, nodes[call.target]);",
+			"replace": ": null;",
 			"note": "an element of a call's result (`b.get()[0]`) has no type, so a call on it is unresolved"
 		},
 		{
@@ -18876,7 +18876,7 @@
 			"name": "M-TS-WAIVE-OFF",
 			"type": "anyparse.check.PositiveSinks",
 			"method": "waived",
-			"find": "for (id in hit) if (!out.contains(id)) out.push(id);",
+			"find": "for (id in removed) if (!out.contains(id)) out.push(id);",
 			"replace": "",
 			"note": "a nonBlocking entry waives nothing"
 		},
@@ -19469,6 +19469,216 @@
 			"find": "if (shown.length > 0) finding.message += ' — its calls also reach ${named(shown)}, which no warning names';",
 			"replace": "",
 			"note": "a kept hold warning names only the first way of each call, not the uncovered work it stays for"
+		},
+		{
+			"name": "M-TS-PATH-FOREIGN",
+			"type": "anyparse.query.CallGraphImports",
+			"method": "pathType",
+			"find": "if (declared == null || declared.contains(path)) return simple;",
+			"replace": "return simple;",
+			"note": "a library type bearing a project type's simple name merges into it again, so sys.thread.Lock.wait runs the project's Lock"
+		},
+		{
+			"name": "M-TS-PATH-IMPORT",
+			"type": "anyparse.query.CallGraphImports",
+			"method": "typeOf",
+			"find": "return path == null ? written : pathType(path);",
+			"replace": "return written;",
+			"note": "a name an import or an alias binds is read as written, never as the type it names"
+		},
+		{
+			"name": "M-TS-PATH-RECEIVER-STATIC",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "typeName: types.imports.pathType(CallGraphKeys.packagePathOf(recv, n -> isAccessKind(n.kind), unboundIdent) ?? name),",
+			"replace": "typeName: name,",
+			"note": "a static call written off a package path (sys.io.File.getContent) merges into the project type of its last segment"
+		},
+		{
+			"name": "M-TS-PATH-NEW",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "final typeName: String = types.imports.typeOf(file, rawName);",
+			"replace": "final typeName: String = CallGraphNames.lastSegments(rawName, 1);",
+			"note": "new sys.thread.Lock() runs the constructor of the project's Lock"
+		},
+		{
+			"name": "M-TS-PATH-MATCH",
+			"type": "anyparse.query.CallGraphImports",
+			"method": "keyedIds",
+			"find": "if (query == simple || query == path + member) path + member",
+			"replace": "if (false) path + member",
+			"note": "a pattern never finds a call keyed by its library path, so the builtin sinks miss sys.thread.Lock.wait"
+		},
+		{
+			"name": "M-TS-SHADOWING-KEPT",
+			"type": "anyparse.check.PositiveSinks",
+			"method": "waived",
+			"find": "final removed: Array<String> = [for (id in hit) if (!shadowing.contains(id)) id];",
+			"replace": "final removed: Array<String> = hit;",
+			"note": "a waiver of a project native named like a library call removes it, though a library call may resolve to it"
+		},
+		{
+			"name": "M-TS-PATH-DECLARED-PACKAGE",
+			"type": "anyparse.query.CallGraphImports",
+			"method": "recordFile",
+			"find": "t.isMain ? [fi.module, inModule, inPackage] : [inModule, inPackage]",
+			"replace": "t.isMain ? [fi.module, inModule] : [inModule]",
+			"note": "a project type imported by its package and name, in a module named otherwise, reads as a library type"
+		},
+		{
+			"name": "M-TS-PATH-NOMINAL",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "final outer: Null<String> = path == null ? null : types.imports.pathType(path);",
+			"replace": "final outer: Null<String> = path == null ? null : SourceText.lastSegment(path);",
+			"note": "a member or a return type written with a library package merges into the project type of its simple name"
+		},
+		{
+			"name": "M-TS-PATH-RETURN",
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "returnedPath",
+			"find": "path.indexOf('.') >= 0 && SourceText.lastSegment(path) == simple",
+			"replace": "false",
+			"note": "a call's return type written with a library package is read by its simple name"
+		},
+		{
+			"name": "M-TS-PATH-NULLABLE-KEYED",
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "keyed",
+			"find": "final outer: Null<TypeSyntax> = t?.wrapped(['Null']) ?? t;",
+			"replace": "final outer: Null<TypeSyntax> = t;",
+			"note": "a Null<pkg.T> annotation keeps its dotted path as the graph type, so Null<sys.thread.Mutex> is no Mutex"
+		},
+		{
+			"name": "M-TS-ALIAS-TYPE",
+			"type": "anyparse.query.CallGraphImports",
+			"method": "typeImportOf",
+			"find": "{ name: alias, path: target };",
+			"replace": "null;",
+			"note": "an import alias of a type stays a type of the alias's name, so Disk.getContent is no File.getContent"
+		},
+		{
+			"name": "M-TS-STD-RETURN",
+			"type": "anyparse.query.StdTypes",
+			"method": "returnOf",
+			"find": "return m != null && m.isFunction ? m.type : null;",
+			"replace": "return null;",
+			"note": "what a std function returns never types the next receiver, so Sys.stdin().readLine() is unresolved"
+		},
+		{
+			"name": "M-TS-STD-FIELD",
+			"type": "anyparse.query.StdTypes",
+			"method": "fieldOf",
+			"find": "return m != null && !m.isFunction ? m.type : null;",
+			"replace": "return null;",
+			"note": "a std field's type never types the next receiver, so socket.input.readLine() is unresolved"
+		},
+		{
+			"name": "M-TS-STD-GETTER",
+			"type": "anyparse.query.StdTypes",
+			"method": "accessorsOf",
+			"find": "reads && m.hasGetter",
+			"replace": "false",
+			"note": "a std property read runs no getter, so ResultSet.length steps no rows"
+		},
+		{
+			"name": "M-TS-STD-GETTER-LOCAL",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (isAccessKind(node.kind) && declared != null && types.declarationCount(declared) == 0) stdAccessors(declared);",
+			"replace": "",
+			"note": "a std property no project type names is never read through its getter"
+		},
+		{
+			"name": "M-TS-STD-GETTER-TYPED",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (found == null && types.declarationCount(ownerType) == 0) stdAccessors(ownerType);",
+			"replace": "",
+			"note": "a std property a project property shares its name with is never read through its getter"
+		},
+		{
+			"name": "M-TS-NEW-LOCAL",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (newExprKind != null) keys.typeNewLocals(tree, localDeclKinds, newExprKind);",
+			"replace": "",
+			"note": "an unannotated local a new initialises stays untyped"
+		},
+		{
+			"name": "M-TS-STD-PLACEHOLDER",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "types.declarationCount(innerRecv.typeName) == 0 ? externalNode(innerRecv.typeName, innerName) : null",
+			"replace": "null",
+			"note": "a call of a library type's member names no target, so its std return type is never read"
+		},
+		{
+			"name": "M-TS-NOTICE-WAIVED",
+			"type": "anyparse.check.PositiveSinks",
+			"method": "notice",
+			"find": "final waivers: String = _removers.length == 0",
+			"replace": "final waivers: String = true",
+			"note": "the notice never says what nonBlocking removed"
+		},
+		{
+			"name": "M-TS-STD-AGREE",
+			"type": "anyparse.query.StdTypes",
+			"method": "memberOf",
+			"find": "return agree ? first : null;",
+			"replace": "return first;",
+			"note": "two std types of one name that disagree on a member answer the first's"
+		},
+		{
+			"name": "M-TS-STD-SUPER",
+			"type": "anyparse.query.StdTypes",
+			"method": "lookUp",
+			"find": "if (resolved != null) lookUp(plugin, resolved, member, depth + 1, seen, found);",
+			"replace": "",
+			"note": "a std member a superclass declares is never found"
+		},
+		{
+			"name": "M-TS-STD-SIBLING",
+			"type": "anyparse.query.StdTypes",
+			"method": "resolve",
+			"find": "return modulePaths.exists(sibling) ? sibling : modulePaths.exists(name) ? name : null;",
+			"replace": "return modulePaths.exists(name) ? name : null;",
+			"note": "a simple type name a std module writes never resolves to its own package"
+		},
+		{
+			"name": "M-TS-LIB-LOST-LIB-SAID",
+			"type": "anyparse.check.LibraryBuild",
+			"method": "read",
+			"find": "'libraryBodies: the library \"-lib $lib\" of \"${oracle.hxml}\" does not resolve (haxelib) — its bodies are not walked'",
+			"replace": "''",
+			"note": "a -lib the build names and haxelib cannot resolve is dropped in silence"
+		},
+		{
+			"name": "M-TS-LIB-LOST-CP-SAID",
+			"type": "anyparse.check.LibraryBuild",
+			"method": "read",
+			"find": "problems.push('libraryBodies: the classpath \"$cp\" of \"${oracle.hxml}\" does not exist — nothing under it is walked')",
+			"replace": "{}",
+			"note": "a -cp the build names that does not exist is dropped in silence"
+		},
+		{
+			"name": "M-TS-BUILTIN-EVENTS",
+			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
+			"method": "refShape",
+			"find": [
+				"'sys.net.UdpSocket.readFrom',\n",
+				"'sys.db.ResultSet.get_length',\n",
+				"'sys.thread.EventLoop.loop',\n",
+				"'sys.thread.EventLoop.wait',\n"
+			],
+			"replace": [
+				"",
+				"",
+				"",
+				""
+			],
+			"note": "a datagram read, a result set's length and the event loop's waits block only where a project lists them"
 		}
 	]
 }

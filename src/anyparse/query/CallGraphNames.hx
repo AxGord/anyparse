@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
@@ -94,6 +95,29 @@ final class CallGraphNames {
 		}
 		find(tree);
 		return decl;
+	}
+
+	/**
+	 * The written types of the parameters the function declared at `from` in `tree` (the text `source`) writes, as `provider`
+	 * reads them, and whether its last one is a rest parameter; null when unreadable.
+	 */
+	public static function declaredParams(
+		tree: QueryNode, source: String, from: Int, shape: RefShape, provider: Null<TypeInfoProvider>
+	): Null<{ params: Array<Null<String>>, rest: Bool }> {
+		final paramKinds: Array<String> = shape.paramKinds ?? [];
+		final found: Null<QueryNode> = functionNodeAt(tree, from, shape.functionKinds ?? []);
+		if (found == null) return null;
+		final sources: Map<Int, String> = provider?.declaredTypeSources(source) ?? [];
+		final params: Array<QueryNode> = [for (c in found.children) if (paramKinds.contains(c.kind)) c];
+		return {
+			params: [
+				for (c in params) {
+					final at: Null<Span> = c.span;
+					at == null ? null : sources[at.from];
+				}
+			],
+			rest: params.length > 0 && params[params.length - 1].kind == shape.restParamKind
+		};
 	}
 
 	/** Simple name of the type declaration `node` introduces, or null. */

@@ -741,6 +741,8 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 					'sys.net.Socket.write',
 					'sys.net.Socket.waitForRead',
 					'sys.net.Socket.select',
+					'sys.net.UdpSocket.readFrom',
+					'sys.net.UdpSocket.sendTo',
 					'sys.ssl.Socket.handshake',
 					'sys.net.Host.new',
 					'sys.net.Host.reverse',
@@ -755,6 +757,8 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 					'sys.db.ResultSet.hasNext',
 					'sys.db.ResultSet.next',
 					'sys.db.ResultSet.results',
+					// reading `length` runs its getter, which on cpp steps every row into a cache (`result_next`)
+					'sys.db.ResultSet.get_length',
 					'sys.Http.request',
 					'sys.Http.customRequest',
 					'sys.Http.requestUrl',
@@ -764,7 +768,11 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 					'sys.thread.Condition.wait',
 					'sys.thread.Semaphore.acquire',
 					'sys.thread.Semaphore.tryAcquire',
-					'sys.thread.Thread.readMessage'
+					'sys.thread.Thread.readMessage',
+					// a loop runs the thread's events until none is left; `wait` sleeps until one is due
+					'sys.thread.EventLoop.loop',
+					'sys.thread.EventLoop.wait',
+					'sys.thread.Thread.runWithEventLoop'
 				],
 				// a stream of unknown kind — a process's, a socket's, a file's — is read and written as one that blocks
 				blockingLibraryTypes: ['sys.io.FileInput', 'sys.io.FileOutput', 'haxe.io.Input', 'haxe.io.Output'],

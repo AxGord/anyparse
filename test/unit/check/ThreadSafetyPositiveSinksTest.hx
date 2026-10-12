@@ -3,6 +3,10 @@ package unit.check;
 import anyparse.check.Check.FindingData;
 import anyparse.check.Check.Violation;
 import anyparse.check.PositiveSinks;
+import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.StdResolver;
+import anyparse.query.StdTypes;
+import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -138,13 +142,170 @@ class ThreadSafetyPositiveSinksTest extends Test {
 		], null, true);
 		Assert.same(
 			[
-				'builtin sinks applied: 57 blocking calls of the runtime library (2 of them called in this run) and 1 project native(s)'
+				'builtin sinks applied: 63 blocking calls of the runtime library (2 of them called in this run) and 1 project native(s)'
 				+ ' — "sinks" adds to them, "nonBlocking" removes from them'
 			],
 			[
 				for (v in found) if (v.file == '' && StringTools.startsWith(v.message, PositiveSinks.NOTICE)) v.message
 			]
 		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A library type written with its package, imported, or reached through a member or a return type written with one,
+	 * is not the project's type of its simple name: a call of `sys.thread.Lock.wait` is the runtime's wait whatever project
+	 * native shares the name `Lock` (keyed by its path), and a waiver of that native keeps it — the library call may still
+	 * reach it where nothing says which `Lock` a value holds.
+	 */
+	@:pin('control') @:killer('M-TS-PATH-FOREIGN') @:killer('M-TS-PATH-IMPORT') @:killer('M-TS-PATH-RECEIVER-STATIC')
+	@:killer('M-TS-PATH-NEW') @:killer('M-TS-PATH-MATCH') @:killer('M-TS-SHADOWING-KEPT') @:killer('M-TS-PATH-DECLARED-PACKAGE')
+	@:killer('M-TS-PATH-NOMINAL') @:killer('M-TS-PATH-RETURN') @:killer('M-TS-PATH-NULLABLE-KEYED') @:killer('M-TS-ALIAS-TYPE')
+	public function testALibraryTypeIsNotItsProjectNamesake(): Void {
+		#if (sys || nodejs)
+		final native: String = 'package utils; extern class Lock { public function new():Void; public function wait():Bool; }'
+			+ ' class File { public static function getContent(p:String):String return p; }';
+		final app: String = 'package app; import sys.thread.Mutex as M;'
+			+ ' class Holder { public static var lock:sys.thread.Lock; static function make():sys.thread.Lock return null; }'
+			+ ' class A { static function written(l:sys.thread.Lock):Void l.wait(); static function made():Void { final l = new'
+			+ ' sys.thread.Lock(); l.wait(); } static function own(l:utils.Lock):Void l.wait(); static function aliased(m:M):Void'
+			+ ' m.acquire(); static function staticPath():Void sys.io.File.getContent("x"); static function field():Void'
+			+ ' Holder.lock.wait(); static function returned():Void @:privateAccess Holder.make().wait(); static function'
+			+ ' nullable(m:Null<sys.thread.Mutex>):Void m.acquire(); static function main():Void { written(null); made(); own(null);'
+			+ ' aliased(null); staticPath(); field(); returned(); nullable(null); } }';
+		final config: String = '{"rules":{"thread-safety":{"closedWorld":false}}}';
+		Assert.same([
+			'warning A A.aliased | Mutex.acquire',
+			'warning A A.field | sys.thread.Lock.wait',
+			'warning A A.made | sys.thread.Lock.wait',
+			'warning A A.nullable | Mutex.acquire',
+			'warning A A.own | Lock.wait',
+			'warning A A.returned | sys.thread.Lock.wait',
+			'warning A A.staticPath | sys.io.File.getContent',
+			'warning A A.written | sys.thread.Lock.wait'
+		], graded(ThreadSafetyCheckTest.violations(config, [native, app])));
+		final imported: String =
+			'package app; import sys.thread.Lock; class B { static function main():Void { final l:Lock = null; l.wait(); } }';
+		Assert.same(['warning A B.main | sys.thread.Lock.wait'], graded(ThreadSafetyCheckTest.violations(config, [native, imported])));
+		// a project type at the path the import names stays the project's
+		final declared: String =
+			'package app; import utils.Lock; class B { static function main():Void { final l:Lock = null; l.wait(); } }';
+		Assert.same(['warning A B.main | Lock.wait'], graded(ThreadSafetyCheckTest.violations(config, [native, declared])));
+		final waiving: String =
+			'{"rules":{"thread-safety":{"closedWorld":false,"nonBlocking":["utils.Lock.wait our try-lock never waits"]}}}';
+		final found: Array<Violation> = ThreadSafetyCheckTest.violations(waiving, [native, app]);
+		Assert.isTrue(graded(found).contains('warning A A.own | Lock.wait'), 'the native named like a library call is kept');
+		Assert.isTrue(graded(found).contains('warning A A.written | sys.thread.Lock.wait'), 'the library call is never waived with it');
+		Assert.same([
+			'nonBlocking entry "utils.Lock.wait" names the project native "Lock.wait", which bears the name of a blocking library call'
+			+ ' — kept: a call of the library one the graph cannot tell apart from it resolves there'
+		], said(found));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * What a std call returns or a std field holds types the receiver of the next call (`StdTypes`), an import alias is the
+	 * type it names, an unannotated local is the type its `new` makes, and a std property read runs its getter — whether or
+	 * not a project type declares a property of that name: each reaches a blocking library call, among them the event loop,
+	 * a datagram read and a result set's `length`.
+	 */
+	@:pin('control') @:killer('M-TS-STD-RETURN') @:killer('M-TS-STD-FIELD') @:killer('M-TS-STD-GETTER') @:killer('M-TS-STD-GETTER-LOCAL')
+	@:killer('M-TS-STD-GETTER-TYPED') @:killer('M-TS-NEW-LOCAL') @:killer('M-TS-ALIAS-TYPE') @:killer('M-TS-STD-PLACEHOLDER')
+	@:killer('M-TS-BUILTIN-EVENTS')
+	public function testStdResultsTypeTheirReceivers(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final source: String = 'import sys.io.File as Disk; import sys.db.ResultSet;'
+			+ ' class C { static function alias():Void Disk.getContent("x"); static function stdin():Void Sys.stdin().readLine();'
+			+ ' static function socket():Void { final s = new sys.net.Socket(); s.input.readLine(); }'
+			+ ' static function ssl(s:sys.ssl.Socket):Void s.input.readLine();'
+			+ ' static function loop():Void sys.thread.Thread.current().events.loop();'
+			+ ' static function idle(e:sys.thread.EventLoop):Void e.wait(1); static function job():Void sys.thread.Thread.runWithEventLoop(() -> {});'
+			+ ' static function datagram(u:sys.net.UdpSocket):Void u.readFrom(null, 0, 4, null);'
+			+ ' static function rows(r:ResultSet):Int return r.length;'
+			+ ' static function main():Void { alias(); stdin(); socket(); ssl(null); loop(); idle(null); job(); datagram(null); rows(null); } }';
+		final config: String = '{"rules":{"thread-safety":{"closedWorld":false}}}';
+		Assert.same([
+			'warning A C.alias | File.getContent',
+			'warning A C.datagram | UdpSocket.readFrom',
+			'warning A C.idle | EventLoop.wait',
+			'warning A C.job | Thread.runWithEventLoop',
+			'warning A C.loop | EventLoop.loop',
+			'warning A C.rows | ResultSet.get_length',
+			'warning A C.socket | Input.readLine',
+			'warning A C.ssl | Input.readLine',
+			'warning A C.stdin | Input.readLine'
+		], graded(ThreadSafetyCheckTest.violations(config, [source])));
+		// a project property of the same name: the std one is still read off a value of the std type
+		final namesake: String = 'class P { public var length(get, never):Int; function get_length():Int return 0; }';
+		Assert.isTrue(
+			graded(ThreadSafetyCheckTest.violations(config, [source, namesake])).contains('warning A C.rows | ResultSet.get_length'),
+			'beside a project property named length'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A std member stands only where every std type of its name that declares it agrees, through supertypes, its type
+	 * resolved in the module that writes it (`StdTypes`); one with a getter says so even when its type does not resolve.
+	 */
+	@:pin('control') @:killer('M-TS-STD-AGREE') @:killer('M-TS-STD-SUPER') @:killer('M-TS-STD-SIBLING')
+	public function testAStdMemberStandsWhereEveryNamesakeAgrees(): Void {
+		#if (sys || nodejs)
+		final dir: String = CliFixture.writeTree('stdtypes', [
+			{ name: 'Std.hx', source: 'class Std {}' },
+			{ name: 'haxe/a/Pipe.hx', source: 'package haxe.a; class Pipe { public function read():haxe.io.Bytes return null; }' },
+			{ name: 'sys/b/Pipe.hx', source: 'package sys.b; class Pipe { public function read():String return null; }' },
+			{ name: 'sys/c/Out.hx', source: 'package sys.c; class Out {}' },
+			{
+				name: 'sys/c/Base.hx',
+				source: 'package sys.c; class Base { public var input(default, null):Out; public var size(get, never):Int;'
+				+ ' function get_size():Int return 0; }'
+			},
+			{ name: 'sys/c/Derived.hx', source: 'package sys.c; class Derived extends Base {}' }
+		]);
+		final saved: Null<String> = Sys.getEnv('HAXE_STD_PATH');
+		Sys.putEnv('HAXE_STD_PATH', dir);
+		StdResolver.resetCache();
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final disagree: Null<StdMember> = StdTypes.memberOf(plugin, 'Pipe', 'read');
+		final one: Null<StdMember> = StdTypes.memberOf(plugin, 'haxe.a.Pipe', 'read');
+		final inherited: Null<StdMember> = StdTypes.memberOf(plugin, 'Derived', 'input');
+		final getter: Null<StdMember> = StdTypes.memberOf(plugin, 'Derived', 'size');
+		// removed when it was unset: an empty value is a std path a spawned compiler reads as none
+		Sys.putEnv('HAXE_STD_PATH', saved);
+		StdResolver.resetCache();
+		CliFixture.removeDir(dir);
+		Assert.isNull(disagree, 'two std types of one name disagree');
+		Assert.equals('haxe.io.Bytes', one?.type, 'a path names one type');
+		Assert.equals('sys.c.Out', inherited?.type, 'through the superclass, resolved in its package');
+		Assert.isTrue(getter?.hasGetter == true && getter?.type == null, 'a getter whose type does not resolve');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** The notice counts what the run's `nonBlocking` entries removed: the sinks, and the entries that removed one. */
+	@:pin('control') @:killer('M-TS-NOTICE-WAIVED')
+	public function testTheNoticeCountsWhatNonBlockingRemoved(): Void {
+		#if (sys || nodejs)
+		final source: String = 'import sys.thread.Mutex; class A { static function main():Void { Sys.sleep(1); final m:Mutex = null;'
+			+ ' m.acquire(); m.tryAcquire(); Sys.command("ls"); } }';
+		final found: Array<Violation> = ThreadSafetyCheckTest.violations(
+			'{"rules":{"thread-safety":{"nonBlocking":["Mutex.* the fixture mutex is never held","Sys.sleep it sleeps zero"]}}}', [source],
+			null, true
+		);
+		final notice: Null<String> = found.find(v -> v.file == '' && StringTools.startsWith(v.message, PositiveSinks.NOTICE))?.message;
+		Assert.isTrue(StringTools.endsWith(notice ?? '', '"nonBlocking" removes from them (here 2 sink(s) by 2 entries)'), notice);
 		#else
 		Assert.pass('non-sys target');
 		#end

@@ -212,14 +212,24 @@ final class LibraryBuild {
 		for (d in chain.defines.concat(oracle.defines).concat(implicit).concat(versionDefines(compilerVersion())))
 			addDefine(d, defined, values);
 		final classPaths: Array<String> = [for (cp in chain.classPaths) absolute(root, cp)];
+		// a library or a classpath the build names and the run cannot find is one whose bodies go unread: said, by name
 		for (lib in chain.libs) {
 			final dir: Null<String> = HaxelibResolver.libSourceDir(lib);
-			if (dir != null) classPaths.push(dir);
+			if (dir != null)
+				classPaths.push(dir)
+			else
+				problems.push(
+					'libraryBodies: the library "-lib $lib" of "${oracle.hxml}" does not resolve (haxelib) — its bodies are not walked'
+				);
 		}
 		final run: Array<String> = [for (f in runFiles) absolute(Sys.getCwd(), f)];
 		final libraries: Array<String> = [];
-		for (cp in classPaths) if (!libraries.contains(cp) && sys.FileSystem.exists(cp) && !run.exists(f -> f.startsWith('$cp/')))
-			libraries.push(cp);
+		for (cp in classPaths) if (!libraries.contains(cp)) {
+			if (!sys.FileSystem.exists(cp))
+				problems.push('libraryBodies: the classpath "$cp" of "${oracle.hxml}" does not exist — nothing under it is walked')
+			else if (!run.exists(f -> f.startsWith('$cp/')))
+				libraries.push(cp);
+		}
 		return new LibraryBuild(libraries, defined, values, target);
 	}
 
