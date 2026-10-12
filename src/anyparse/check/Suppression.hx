@@ -49,25 +49,35 @@ final class Suppression {
 		violations: Array<Violation>, files: Array<{ file: String, source: String }>, lexicalRegions: (String) -> Array<LexRegion>
 	): Array<Violation> {
 		if (violations.length == 0) return violations;
+		final silenced: (Violation) -> Bool = silencer(files, lexicalRegions);
+		return violations.filter(v -> !silenced(v));
+	}
 
+	/**
+	 * Whether an inline directive in its file silences a finding — `apply`'s question one finding at a time, for a check
+	 * that must know which of its own findings will be shown (`thread-safety` folds no finding onto a silenced one). A
+	 * finding whose file is absent from `files`, or whose span is null, is not silenced.
+	 */
+	public static function silencer(
+		files: Array<{ file: String, source: String }>, lexicalRegions: (String) -> Array<LexRegion>
+	): (Violation) -> Bool {
 		final sourceByFile: Map<String, String> = [for (f in files) f.file => f.source];
 		// Scanned LAZILY, per file that actually carries a finding. `Linter.collect` applies
 		// this gate once PER CHECK, and the fix paths hand it the whole tree — scanning every
 		// source's comments up front there costs one full-tree comment pass per risky rule.
 		final scanned: Map<String, FileDirectives> = [];
-
-		return violations.filter(v -> {
+		return v -> {
 			final span: Null<Span> = v.span;
-			if (span == null) return true;
+			if (span == null) return false;
 			final cached: Null<FileDirectives> = scanned[v.file];
 			final directives: FileDirectives = cached ?? directivesOf(sourceByFile[v.file], lexicalRegions(sourceByFile[v.file] ?? ''));
 			if (cached == null) scanned[v.file] = directives;
-			if (directives.entries.length == 0) return true;
+			if (directives.entries.length == 0) return false;
 			final index: LineIndex = directives.index;
 			final fromLine: Int = index.lineColAt(span.from).line;
 			final toLine: Int = index.lineColAt(span.to).line;
-			return !suppressedInRange(directives.entries, fromLine, toLine, v.rule);
-		});
+			return suppressedInRange(directives.entries, fromLine, toLine, v.rule);
+		};
 	}
 
 	/**

@@ -86,6 +86,23 @@ class ThreadSafetyEnclosedHoldTest extends Test {
 		#end
 	}
 
+	/** A hold whose warning a directive silences encloses nothing: the hold inside it keeps its own warning (review round 4 `f2`). */
+	@:pin('control') @:killer('M-TS-ENCLOSED-SUPPRESSED')
+	public function testASilencedHoldEnclosesNothing(): Void {
+		#if (sys || nodejs)
+		Assert.same(['warning B S.inner | S._m'], holds(ThreadSafetyCheckTest.violations(CONFIG, [
+			ThreadSafetyCheckTest.MUTEX,
+			'class Runner { public static function create(fn:()->Void):Void {} }',
+			'class S { final _m:Mutex = new Mutex(); public function new() {}\n'
+			+ ' function inner(flag:Bool):Void { _m.acquire(); if (flag) Sys.sleep(2); Sys.sleep(1); _m.release(); }\n'
+			+ ' public function outer():Void { _m.acquire(); inner(false); _m.release(); } // noqa: thread-safety\n'
+			+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> s.outer()); s._m.acquire(); s._m.release(); } }'
+		])));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
 	private static function run(more: String): Array<Violation> {
 		return ThreadSafetyCheckTest.violations(CONFIG, [

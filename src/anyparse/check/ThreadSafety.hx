@@ -217,11 +217,13 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		};
 
 		final violations: Array<Violation> = [];
+		// a finding a directive silences is shown nowhere: no other finding folds onto it
+		final suppressed: (Violation) -> Bool = Suppression.silencer(files, plugin.lexicalRegions);
 		// a value stored or handed where it never runs from repeats nothing, wherever it is written
 		final runsMain: (CallEdge) -> Bool = e -> !(e.kind == Ref && inertRef(e)) && states.edgeContext(e) & CTX_MAIN != 0;
 		final repeatsOnMain: MainRepeats = new MainRepeats(graph, repetition, states, conditions, runsMain);
 		final reported: Map<String, Violation> = MainSinkReport.report(
-			graph, sites, taints, paths, { repetition: repetition, main: repeatsOnMain, runs: runsMain }, states, violations
+			graph, sites, taints, paths, { repetition: repetition, main: repeatsOnMain, runs: runsMain }, states, violations, suppressed
 		);
 		if (must.unsettled)
 			problems.push(
@@ -233,7 +235,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			costs: paths,
 			reported: reported,
 			enclosed: dominance.enclosed,
-			threads: states.origins(inertRef)
+			threads: states.origins(inertRef),
+			suppressed: suppressed
 		}, states, violations);
 		reportThrowHeld(graph, acquires.concat(helperHolds), throws, violations);
 		final order: LockOrder = new LockOrder(graph, conditions, acquires.concat(helperHolds));
@@ -673,7 +676,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 				final lock: Null<String> = a.lock;
 				if (lock == null || a.uncontended || long.contains(lock)) continue;
 				final held: Null<String> = taints.reentrantHeld(a);
-				if (!a.window.exists(e -> taints.blockingPath(a, e, held) != null)) continue;
+				if (!a.window.exists(e -> taints.blockingTrail(a, e, held) != null)) continue;
 				long.push(lock);
 				grew = true;
 			}
@@ -707,7 +710,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			costs: PathCosts,
 			reported: Map<String, Violation>,
 			enclosed: (LockAcquire) -> Bool,
-			threads: (String) -> Array<String>
+			threads: (String) -> Array<String>,
+			suppressed: (Violation) -> Bool
 		},
 		states: ThreadStates, violations: Array<Violation>
 	): Void {
@@ -767,28 +771,30 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			});
 		}
 		final covers: Array<{ finding: Violation, by: Array<Violation> }> = [];
-		nestHolds(reported, covers);
-		foldEnclosed(reported, judged.enclosed, covers);
+		// a warning a directive silences reports nothing: no hold turns info onto it
+		nestHolds(reported, covers, judged.suppressed);
+		foldEnclosed(reported, judged.enclosed, covers, judged.suppressed);
 		// a multi-lock helper's give is its caller's release, as `solveLongLocks` reads it: it makes no lock long
 		final crossing: Array<String> = [for (c in sites.crossing) if (!sites.helpers.contains(c.edge.from)) c.lock];
-		new RootCauseFold(crossing, covers, judged.threads).fold(folds);
+		new RootCauseFold(crossing, covers, judged.threads, judged.suppressed).fold(folds);
 	}
 
 	/**
 	 * Each warned hold a hold of the same lock its every caller keeps encloses (`LockDominance.enclosed`) turns info,
 	 * recorded in `covers` — when a warned hold of that lock in another function is long through a call into this hold's
 	 * function: that warning reports the work this hold does. Such a hold says so, naming those holds; one no warning
-	 * of an enclosing hold reaches stays.
+	 * of an enclosing hold reaches stays, and a warning a directive silences (`suppressed`) encloses nothing.
 	 */
 	private static function foldEnclosed(
-		reported: Array<WarnedHold>, enclosed: (LockAcquire) -> Bool, covers: Array<{ finding: Violation, by: Array<Violation> }>
+		reported: Array<WarnedHold>, enclosed: (LockAcquire) -> Bool, covers: Array<{ finding: Violation, by: Array<Violation> }>,
+		suppressed: (Violation) -> Bool
 	): Void {
 		final warned: Array<WarnedHold> = [for (r in reported) if (r.finding.severity == Severity.Warning) r];
 		for (r in warned) if (enclosed(r.hold)) {
 			final fn: String = r.hold.edge.from;
 			final around: Array<WarnedHold> = warned.filter(
 				w ->
-					w != r && w.hold.lock == r.hold.lock && w.hold.edge.from != fn
+					w != r && !suppressed(w.finding) && w.hold.lock == r.hold.lock && w.hold.edge.from != fn
 					&& w.calls.exists(c -> w.taint.blockingTrail(w.hold, c, w.held)?.path.contains(fn) == true)
 			);
 			if (around.length == 0) continue;
@@ -883,15 +889,18 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	 * multi-lock helper (`takenFirst`) — whose every long call that window spans too turns info, naming the outer one: the
 	 * outer hold's finding names the same calls. In take order, so an outer hold is never itself turned by a hold it
 	 * encloses; each turned one is recorded in `covers`. A hold its function hands off (`HoldGrade.handsOff`) outlives the
-	 * outer window, across calls no finding of it names, and stays.
+	 * outer window, across calls no finding of it names, and stays; so does one inside
+	 * a hold whose warning a directive silences (`suppressed`), which reports nothing.
 	 */
-	private static function nestHolds(reported: Array<WarnedHold>, covers: Array<{ finding: Violation, by: Array<Violation> }>): Void {
+	private static function nestHolds(
+		reported: Array<WarnedHold>, covers: Array<{ finding: Violation, by: Array<Violation> }>, suppressed: (Violation) -> Bool
+	): Void {
 		reported.sort((x, y) -> (x.hold.edge.span?.from ?? 0) - (y.hold.edge.span?.from ?? 0));
 		final turned: Array<LockAcquire> = [];
 		for (inner in reported) if (!inner.handOff) {
 			final outer: Null<WarnedHold> = reported.find(
 				o ->
-					o.hold != inner.hold && !turned.contains(o.hold) && o.hold.edge.from == inner.hold.edge.from
+					o.hold != inner.hold && !suppressed(o.finding) && !turned.contains(o.hold) && o.hold.edge.from == inner.hold.edge.from
 					&& (o.hold.window.contains(inner.hold.edge) || takenFirst(o.hold, inner.hold))
 					&& inner.calls.foreach(c -> o.hold.window.contains(c))
 			);

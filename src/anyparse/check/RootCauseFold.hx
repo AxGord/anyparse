@@ -4,6 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.HoldGrade.FoldHold;
 import anyparse.check.HoldGrade.GradedHold;
 import anyparse.check.LockSites.LockAcquire;
+import anyparse.check.LockTaint.BlockingEnd;
 import anyparse.check.LockTaint.BlockingTrail;
 
 using Lambda;
@@ -13,10 +14,12 @@ private enum FoldReason {
 	Waits(lock: String);
 
 	/**
-	 * Long by the sink call `key` (`MainSinkReport.siteKey`), which runs more than once under the hold along its trail
-	 * (`repeated`) or not, or may (`mayRepeat`, through a cycle of calls on the way), reached through the functions `way`.
+	 * Long by the sink call `key` (`MainSinkReport.siteKey`), which runs more than once under the hold on some way to it
+	 * (`repeated`) or not, or may (`mayRepeat`, through a cycle of calls on a way), every way to it passing the functions
+	 * `way`; `unnamed`: null for the call the hold's finding names for its call (`LockTaint.blockingTrail`'s first way)
+	 * — the only work it covers another hold by, since its warning shows no other — else the shortest way to it.
 	 */
-	Site(key: String, repeated: Bool, mayRepeat: Bool, way: Array<String>);
+	Site(key: String, repeated: Bool, mayRepeat: Bool, way: Array<String>, unnamed: Null<Array<String>>);
 	Uncovered;
 }
 
@@ -43,18 +46,26 @@ private typedef SiteDoer = {
  * `FolderWatcher.updateInternal` walk against `rename`'s one stat) — by a hold of the same lock on every
  * thread the covered one runs on (`ThreadStates.origins` — TM's `StandardFileSystem.loadDrillContent`
  * on the I/O worker is not covered by `getText` on the sync worker), in the same function, or one
- * whose function the call's way passes (TM's `RemoteFileSystemBase.renameCloudFolderBlocked` over the loop
+ * whose function every way to the call passes (TM's `RemoteFileSystemBase.renameCloudFolderBlocked` over the loop
  * `CloudDatabase.moveCloudFolderSubItemsAction2` runs under its own lock); another lock's hold across the same work elsewhere
  * is a stall of its own. Positive: a lock long by a hand-off, an unresolved call, a release in another
  * function (a multi-lock helper's give excepted: it is its caller's release) or a hold with no finding
  * is not covered, nor is a hold long by what no call of it names. A hold waiting for a lock some hold with no finding reporting
  * its work makes long stays from the start (TM's `StandardFileSystem.getText`, waiting for the tree lock `listFolder` holds),
  * so a cycle never keeps a hold that could fold onto it; holds covering each other round a cycle keep the first by
- * place and fold the rest onto it. Two holds sharing one finding are one warned hold, which never
+ * place and fold the rest onto it. A call is covered only when EVERY blocking call it reaches on any way is
+ * (`LockTaint.blockingEnds`), and a hold covers another only by the work its finding names — the first way of each of its calls —
+ * never by a warning a directive silences (`Suppression.silencer`). Two holds sharing one finding are one warned hold, which never
  * covers itself; an info finding a hold around it turned counts as reported only while the warning it was turned onto does.
  */
 @:nullSafety(Strict)
 final class RootCauseFold {
+
+	/**
+	 * What a finding a hold around it turned info (`ThreadSafety.nestHolds`, `foldEnclosed`) adds when every finding it
+	 * was turned onto ended info too: it names no warning.
+	 */
+	public static inline final INFO_COVER_NOTE: String = ' — that finding is itself info and says where its work is reported';
 
 	/** How many holds a folded finding names before it counts the rest. */
 	private static inline final NAMED_CAP: Int = 3;
@@ -86,6 +97,9 @@ final class RootCauseFold {
 	/** The threads each function runs on, by origin (`ThreadStates.origins`). */
 	private final _threads: (String) -> Array<String>;
 
+	/** Whether a directive in its file silences a finding (`Suppression.silencer`): a silenced warning reports nothing. */
+	private final _suppressed: (Violation) -> Bool;
+
 	/** The holds `fold` judges, in the order it was handed them. */
 	private var _holds: Array<FoldHold> = [];
 
@@ -93,11 +107,13 @@ final class RootCauseFold {
 	private var _warned: Array<FoldHold> = [];
 
 	public function new(
-		crossing: Array<String>, covers: Array<{ finding: Violation, by: Array<Violation> }>, threads: (String) -> Array<String>
+		crossing: Array<String>, covers: Array<{ finding: Violation, by: Array<Violation> }>, threads: (String) -> Array<String>,
+		suppressed: (Violation) -> Bool
 	) {
 		_crossing = crossing;
 		_covers = covers;
 		_threads = threads;
+		_suppressed = suppressed;
 	}
 
 	/**
@@ -136,7 +152,40 @@ final class RootCauseFold {
 			for (i in 0...warned.length) if (state[i] == Open && (pick < 0 || _depth[i] < _depth[pick])) pick = i;
 			state[pick] = Kept;
 		}
-		for (i => h in warned) if (state[i] == Folded) turn(h, reasons[i], i, doing);
+		for (i => h in warned) if (state[i] == Folded)
+			turn(h, reasons[i], i, doing)
+		else
+			noteUnnamed(h, reasons[i], i, doing);
+		noteInfoCovers();
+	}
+
+	/**
+	 * Names, on the kept warning of `h` (at `i` of `_warned`), the sink calls its calls reach that its message does not
+	 * show — not the first way of any call — and that no other warned hold covers: the work its warning stays for (review
+	 * round 4 `f1`: `D.b`'s warning named the read its first way finds, and stayed for the command deeper down).
+	 */
+	private function noteUnnamed(h: FoldHold, reasons: Array<FoldReason>, i: Int, doing: Map<String, Array<SiteDoer>>): Void {
+		final finding: Null<Violation> = h.finding;
+		if (finding == null) return;
+		final shown: Array<String> = [];
+		for (r in reasons) switch r {
+			case Site(_, _, _, _, unnamed) if (unnamed != null && uncoverable(r, i, doing)):
+				final path: String = unnamed.length <= ThreadSafety.CHAIN_CAP + 1
+					? unnamed.join(' -> ')
+					: unnamed.slice(0, ThreadSafety.CHAIN_CAP + 1).concat(['...']).join(' -> ');
+				if (!shown.contains(path)) shown.push(path);
+			case _:
+		}
+		if (shown.length > 0) finding.message += ' — its calls also reach ${named(shown)}, which no warning names';
+	}
+
+	/**
+	 * Says, on each finding a hold around it turned info (`_covers`), when every finding it was turned onto ended info too
+	 * (`INFO_COVER_NOTE`): its message named a finding as reporting its calls, and that finding warns nowhere.
+	 */
+	private function noteInfoCovers(): Void {
+		for (c in _covers) if (c.finding.severity == Severity.Info && !c.by.exists(b -> b.severity == Severity.Warning))
+			c.finding.message += INFO_COVER_NOTE;
 	}
 
 	/** The index into `_warned` of the warned hold whose finding is `finding`; -1 for none. */
@@ -159,32 +208,42 @@ final class RootCauseFold {
 	}
 
 	/**
-	 * Why each long call of the warned hold `h` is long, plus `Uncovered` for a hold long by what no call of it names —
-	 * whose calls still count as work it does (`Site`).
+	 * Why each long call of the warned hold `h` is long — one reason per blocking call the call reaches on ANY way
+	 * (`LockTaint.blockingEnds`): a call one of whose blocking calls nothing covers is not covered, whatever covers the
+	 * one its first way found — plus `Uncovered` for a hold long by what no call of it names, whose calls still count as
+	 * work it does (`Site`), and for a call no way of which blocks here.
 	 */
 	private function reasonsOf(h: FoldHold): Array<FoldReason> {
 		final taint: Null<LockTaint> = h.taint;
 		if (taint == null) return [Uncovered];
 		final out: Array<FoldReason> = h.opaque ? [Uncovered] : [];
 		for (c in h.calls) {
-			final trail: Null<BlockingTrail> = taint.blockingTrail(h.hold, c, h.held);
+			final ends: Array<BlockingEnd> = taint.blockingEnds(h.hold, c, h.held);
+			final first: Null<BlockingTrail> = taint.blockingTrail(h.hold, c, h.held);
 			final at: Int = _depth.length - 1;
-			if (trail != null && trail.path.length < _depth[at]) _depth[at] = trail.path.length;
-			final reason: FoldReason = reasonOf(h, taint, trail);
-			if (!out.exists(r -> same(r, reason))) out.push(reason);
+			final reasons: Array<FoldReason> = ends.length == 0 ? [Uncovered] : [];
+			for (end in ends) {
+				if (end.trail.path.length < _depth[at]) _depth[at] = end.trail.path.length;
+				reasons.push(reasonOf(h, end, first));
+			}
+			for (reason in reasons) if (!out.exists(r -> same(r, reason))) out.push(reason);
 		}
 		return out;
 	}
 
 	/**
-	 * The reason the call ending in `trail` of the hold `h` is long under `taint`: a wait for another lock whose long-making
-	 * holds are known, or the sink call at its end — work another hold may do too, repeated under the hold or not.
+	 * The reason the blocking call `end` a call of the hold `h` reaches makes it long: a wait for another lock whose
+	 * long-making holds are known, or that sink call — work another hold may do too, repeated under the hold or not,
+	 * through the functions every way to it passes, and named by the hold's finding when the call's first way (`first`)
+	 * ends there.
 	 */
-	private function reasonOf(h: FoldHold, taint: LockTaint, trail: Null<BlockingTrail>): FoldReason {
-		if (trail == null) return Uncovered;
+	private function reasonOf(h: FoldHold, end: BlockingEnd, first: Null<BlockingTrail>): FoldReason {
+		final trail: BlockingTrail = end.trail;
 		final via: Null<String> = trail.via;
 		if (via != null) return via == h.lock || _crossing.contains(via) || !_makers.exists(via) ? Uncovered : Waits(via);
-		return Site(MainSinkReport.siteKey(trail.end), taint.repeatsAlong(h.hold, trail), taint.mayRepeatAlong(h.hold, trail), trail.path);
+		final key: String = MainSinkReport.siteKey(trail.end);
+		final named: Bool = first != null && first.via == null && MainSinkReport.siteKey(first.end) == key;
+		return Site(key, end.repeated, end.mayRepeat, end.passes, named ? null : trail.path);
 	}
 
 	/**
@@ -194,7 +253,7 @@ final class RootCauseFold {
 	 */
 	private function settled(reason: FoldReason, i: Int, doing: Map<String, Array<SiteDoer>>, state: Array<FoldState>): Bool {
 		return switch reason {
-			case Site(key, _, mayRepeat, way): (doing[key] ?? []).exists(d -> covers(d, i, mayRepeat, way) && state[d.at] != Open);
+			case Site(key, _, mayRepeat, way, _): (doing[key] ?? []).exists(d -> covers(d, i, mayRepeat, way) && state[d.at] != Open);
 			case Uncovered: false;
 			case Waits(lock): (_makers[lock] ?? []).foreach(m -> _warnedAt[m] != i && reportedFor(m, state));
 		};
@@ -236,7 +295,7 @@ final class RootCauseFold {
 		for (r in reasons) switch r {
 			case Waits(lock):
 				parts.push('waiting for $lock, held long by ${named([for (m in _makers[lock] ?? []) memberOf(_holds[m])])}');
-			case Site(key, _, mayRepeat, way):
+			case Site(key, _, mayRepeat, way, _):
 				parts.push('work ${named([
 for (d in doing[key] ?? []) if (covers(d, i, mayRepeat, way)) memberOf(_warned[d.at])
 ])} also holds a lock across');
@@ -293,8 +352,8 @@ for (d in doing[key] ?? []) if (covers(d, i, mayRepeat, way)) memberOf(_warned[d
 	 * (TM's `FolderWatcher.rename`'s one stat against `updateInternal`'s walk over the whole tree). And it is a hold of the
 	 * same lock — one a member names (`sameLock`) — on every thread the covered one runs on (`oneThread`: on two threads each
 	 * hold stalls the main thread by itself, TM's `StandardFileSystem.loadDrillContent` on the I/O worker against `getText` on
-	 * the sync worker), a hold around the covered one in its function (`nests`), or one whose function the covered hold's way
-	 * to the call passes. Two holds of different locks one after the other in one function are two stalls.
+	 * the sync worker), a hold around the covered one in its function (`nests`), or one whose function every way of the
+	 * covered hold to the call passes. Two holds of different locks one after the other in one function are two stalls.
 	 */
 	private function covers(d: SiteDoer, i: Int, repeated: Bool, way: Array<String>): Bool {
 		final by: FoldHold = _warned[d.at];
@@ -323,14 +382,17 @@ for (d in doing[key] ?? []) if (covers(d, i, mayRepeat, way)) memberOf(_warned[d
 		if (a.lock == null) return false;
 		if (LongLockExplain.leaks(a) || costs.blindLong(a)) return true;
 		final held: Null<String> = costs.reentrantHeld(a);
-		return !a.uncontended && a.window.exists(e -> costs.blockingPath(a, e, held) != null);
+		return !a.uncontended && a.window.exists(e -> costs.blockingTrail(a, e, held) != null);
 	}
 
-	/** By `MainSinkReport.siteKey`, the warned holds (by index into `reasons`) long by each sink call, repeated or not. */
-	private static function doers(reasons: Array<Array<FoldReason>>): Map<String, Array<SiteDoer>> {
+	/**
+	 * By `MainSinkReport.siteKey`, the warned holds (by index into `reasons`) long by each sink call, repeated or not: a
+	 * hold whose warning a directive silences reports no work, and does none for another hold.
+	 */
+	private function doers(reasons: Array<Array<FoldReason>>): Map<String, Array<SiteDoer>> {
 		final doing: Map<String, Array<SiteDoer>> = [];
-		for (i => r in reasons) for (reason in r) switch reason {
-			case Site(key, repeated, _, _):
+		for (i => r in reasons) if (!silenced(i)) for (reason in r) switch reason {
+			case Site(key, repeated, _, _, null):
 				doing[key] = (doing[key] ?? []).concat([{ at: i, repeated: repeated }]);
 			case _:
 		}
@@ -346,18 +408,25 @@ for (d in doing[key] ?? []) if (covers(d, i, mayRepeat, way)) memberOf(_warned[d
 	private function uncoverable(reason: FoldReason, i: Int, doing: Map<String, Array<SiteDoer>>): Bool {
 		return switch reason {
 			case Uncovered: true;
-			case Site(key, _, mayRepeat, way): !(doing[key] ?? []).exists(d -> covers(d, i, mayRepeat, way));
+			case Site(key, _, mayRepeat, way, _): !(doing[key] ?? []).exists(d -> covers(d, i, mayRepeat, way));
 			case Waits(lock): (_makers[lock] ?? []).exists(neverReported);
 		};
 	}
 
 	/**
 	 * Whether the hold at `m` of `_holds` making a lock long can never count as reported (`reportedFor`), whatever `fold`
-	 * decides: it made no warning (`madeWarning` — every warned hold made one, and a hold turned info around it did too),
-	 * and no finding of it names a warning reporting its work instead (`elsewhere`).
+	 * decides: its warning is silenced (`silenced`), or it made no warning (`madeWarning` — every warned hold made one, and
+	 * a hold turned info around it did too) and no finding of it names a warning reporting its work instead (`elsewhere`).
 	 */
 	private function neverReported(m: Int): Bool {
-		return !_holds[m].madeWarning && !_holds[m].elsewhere;
+		final at: Int = _warnedAt[m];
+		return at >= 0 ? silenced(at) : !_holds[m].madeWarning && !_holds[m].elsewhere;
+	}
+
+	/** Whether a directive silences the finding of the warned hold at `at` of `_warned`: it then reports nothing. */
+	private function silenced(at: Int): Bool {
+		final finding: Null<Violation> = _warned[at].finding;
+		return finding != null && _suppressed(finding);
 	}
 
 	private static function memberOf(m: FoldHold): String {
@@ -381,8 +450,8 @@ for (d in doing[key] ?? []) if (covers(d, i, mayRepeat, way)) memberOf(_warned[d
 	private static function same(a: FoldReason, b: FoldReason): Bool {
 		return switch [a, b] {
 			case [Waits(x), Waits(y)]: x == y;
-			case [Site(x, r, m, _), Site(y, s, n, _)]:
-				x == y && r == s && m == n;
+			case [Site(x, r, m, _, a), Site(y, s, n, _, b)]:
+				x == y && r == s && m == n && (a == null) == (b == null);
 			case [Uncovered, Uncovered]: true;
 			case _: false;
 		};

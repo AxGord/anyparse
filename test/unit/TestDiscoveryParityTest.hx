@@ -2224,6 +2224,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyEnclosedHoldTest#testAGiveOnTheCallersWayBreaksTheEnclosure :: control :: '
 				+ 'M-TS-RELEASE-CALLBACK,M-TS-BLIND-START',
 			'unit.check.ThreadSafetyEnclosedHoldTest#testAHoldEveryCallerEnclosesIsTheirs :: control :: M-TS-ENCLOSED-OFF',
+			'unit.check.ThreadSafetyEnclosedHoldTest#testASilencedHoldEnclosesNothing :: control :: M-TS-ENCLOSED-SUPPRESSED',
 			'unit.check.ThreadSafetyEnclosedHoldTest#testOneCallerOutsideTheLockKeepsItsOwn :: control :: M-TS-ENCLOSED-ANY-STATE',
 			'unit.check.ThreadSafetyEnclosedHoldTest#testTheNoteNamesTheEnclosingWarning :: control :: M-TS-ENCLOSED-NOTE',
 			'unit.check.ThreadSafetyErrorPathTest#testABlockAlsoOutsideTheCatchWarns :: control :: M-TS-ERROR-ANY,M-TS-ERROR-TAKE-ANY',
@@ -2264,12 +2265,15 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyFindingDataTest#testLockOrderNamesTheLeastHolder :: control :: M-TS-ORDER-MAIN-FIRST-SEEN',
 			'unit.check.ThreadSafetyFindingDataTest#testMainSinkDataCarriesTheWholeChain :: control :: M-TS-DATA-CHAIN-CAPPED',
 			'unit.check.ThreadSafetyFindingDataTest#testSeveralSinksAreOneSortedSubject :: control :: M-TS-DATA-SUBJECT-UNSORTED',
+			'unit.check.ThreadSafetyFindingDataTest#testTheLockWarningCarriesWhatRepeatsItsFoldedTakes :: control :: M-TS-ONE-TAKE-MERGE',
 			'unit.check.ThreadSafetyFindingDataTest#testTheWayWarningCarriesWhatRepeatsItsFoldedCalls :: control :: M-TS-REPEATED-BY-MERGE',
 			'unit.check.ThreadSafetyFindingDataTest#testThrowHeldDataFollowsTheRaiser :: control :: M-TS-DATA-RAISER-CHAIN',
 			'unit.check.ThreadSafetyFoldingTest#testAFunctionOnlyASinkCallsIsTheSinks :: control :: M-TS-INSIDE-SINK-DIRECT-ONLY',
 			'unit.check.ThreadSafetyFoldingTest#testAHoldInsideAnotherIsItsFinding :: control :: M-TS-NEST-OFF',
 			'unit.check.ThreadSafetyFoldingTest#testAWaitInsideASinksBodyIsTheSinks :: control :: M-TS-INSIDE-SINK-OFF',
 			'unit.check.ThreadSafetyFoldingTest#testMainTakesOfOneLockWarnOnce :: control :: M-TS-ONE-TAKE-OFF,M-TS-ONE-TAKE-NO-WRAPPER',
+			'unit.check.ThreadSafetyHandedValueTest#testADirectCallOutranksAHandedValue :: control :: '
+				+ 'M-TS-WAY-HANDED-RANK,M-TS-OWNER-HANDED-RANK',
 			'unit.check.ThreadSafetyHandedValueTest#testAHandedValueRepeatsWithTheCallItIsHandedTo :: control :: M-TS-REPEAT-NO-ITERATES,M-TS-RUNS-ONCE-OFF',
 			'unit.check.ThreadSafetyHandedValueTest#testAHoldTaintsAValueHandedToACallThatRunsIt :: control :: '
 				+ 'M-TS-HANDED-RUNS-HERE,M-TS-HANDED-WINDOW-OFF,M-TS-HANDED-REACH-OFF,M-TS-HANDED-SINK-OFF',
@@ -2315,6 +2319,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyMainOnlyTest#testWorkOwnedByARepeatingCalleeLeavesTheHoldInfo :: control :: M-TS-MAINONLY-MOVED',
 			'unit.check.ThreadSafetyMainOnlyTest#testWorkReportedAtACalleeLeavesTheHoldInfo :: control :: M-TS-MAINONLY-ELSEWHERE-OFF',
 			'unit.check.ThreadSafetyMainOnlyTest#testWorkReportedAtTheHolderLeavesTheHoldInfo :: control :: M-TS-MAINONLY-ELSEWHERE-OFF',
+			'unit.check.ThreadSafetyMainOnlyTest#testWorkReportedOnlyBySilencedFindingsKeepsTheHold :: control :: M-TS-REPORTED-SUPPRESSED',
 			'unit.check.ThreadSafetyMainStatesTest#testAConstantArgumentRulesTheRepeatedCallOut :: control :: M-TS-STATES-IGNORED',
 			'unit.check.ThreadSafetyMainStatesTest#testALiteralArgumentDecidesAFinalLocalCondition :: control :: '
 				+ 'M-TS-COND-FINAL-LOCAL,M-TS-ARG-LITERAL-NONNULL,M-TS-ARG-FINAL-LOCAL-READ',
@@ -2359,12 +2364,17 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyRethrowTest#testARethrowInANestedFunctionKeepsIt :: control :: M-TS-RETHROW-NESTED',
 			'unit.check.ThreadSafetyRethrowTest#testATypedCatchLetsAThrowersExceptionThrough :: control :: '
 				+ 'M-TS-THROW-TYPED-INTERCEPTS,M-TS-CATCH-ANY-TYPE',
+			'unit.check.ThreadSafetyRootCauseTest#testACallIsCoveredOnlyWhenEveryBlockingCallItReachesIs :: control :: '
+				+ 'M-TS-FOLD-EVERY-END,M-TS-FOLD-ENDS-WALK,M-TS-FOLD-PASSES-PATH,M-TS-FOLD-NAMED-ONLY,M-TS-FOLD-UNNAMED-NOTE',
 			'unit.check.ThreadSafetyRootCauseTest#testACallOnlyACatchRunsLeavesTheFoldStanding :: control :: M-TS-FOLD-NORMAL',
-			'unit.check.ThreadSafetyRootCauseTest#testACallUnderARecursiveWalkRepeats :: control :: M-TS-FOLD-SITE-CYCLE',
+			'unit.check.ThreadSafetyRootCauseTest#testACallUnderARecursiveWalkRepeats :: control :: M-TS-FOLD-SITE-CYCLE,M-TS-CYCLE-REF',
 			'unit.check.ThreadSafetyRootCauseTest#testAHoldLongOnlyByWaitingForAWarnedHolderIsInfo :: control :: M-TS-FOLD-OFF',
 			'unit.check.ThreadSafetyRootCauseTest#testAHoldReachingACallOnceCoversNoRepeatingOne :: control :: M-TS-FOLD-SITE-ONCE',
+			'unit.check.ThreadSafetyRootCauseTest#testAHoldTurnedOntoAnInfoFindingSaysSo :: control :: M-TS-COVER-INFO-NOTE',
 			'unit.check.ThreadSafetyRootCauseTest#testALockReleasedElsewhereLeavesTheWaiterWarned :: control :: M-TS-FOLD-CROSSING',
-			'unit.check.ThreadSafetyRootCauseTest#testARecursionThroughACallbackRepeatsUnderTheLock :: control :: M-TS-CYCLE-REF,M-TS-CYCLE-REGISTERED',
+			'unit.check.ThreadSafetyRootCauseTest#testARecursionThroughACallbackRepeatsUnderTheLock :: control :: M-TS-CYCLE-REGISTERED',
+			'unit.check.ThreadSafetyRootCauseTest#testASuppressedWarningCoversNothing :: control :: '
+				+ 'M-TS-FOLD-SUPPRESSED,M-TS-FOLD-SUPPRESSED-WAIT,M-TS-NEST-SUPPRESSED,M-TS-WAY-SUPPRESSED,M-TS-ONE-TAKE-SUPPRESSED',
 			'unit.check.ThreadSafetyRootCauseTest#testAWorkerRunsOnlyTheWaysItsValuesOpen :: control :: M-TS-ORIGIN-STATES',
 			'unit.check.ThreadSafetyRootCauseTest#testHoldsLongByOneCallMakeOneWarning :: control :: '
 				+ 'M-TS-FOLD-SITE,M-TS-FOLD-DEPTH,M-TS-FOLD-SITE-LOCK',
@@ -6402,7 +6412,23 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-REFLECT-MAYWRITE',
 			'M-TS-REFLECT-FINAL',
 			'M-TS-REFLECT-ANY',
-			'M-TS-REFLECT-TYPEPARAM'
+			'M-TS-REFLECT-TYPEPARAM',
+			'M-TS-FOLD-EVERY-END',
+			'M-TS-FOLD-ENDS-WALK',
+			'M-TS-FOLD-PASSES-PATH',
+			'M-TS-FOLD-SUPPRESSED',
+			'M-TS-COVER-INFO-NOTE',
+			'M-TS-WAY-HANDED-RANK',
+			'M-TS-OWNER-HANDED-RANK',
+			'M-TS-ONE-TAKE-MERGE',
+			'M-TS-FOLD-NAMED-ONLY',
+			'M-TS-FOLD-SUPPRESSED-WAIT',
+			'M-TS-NEST-SUPPRESSED',
+			'M-TS-ENCLOSED-SUPPRESSED',
+			'M-TS-WAY-SUPPRESSED',
+			'M-TS-ONE-TAKE-SUPPRESSED',
+			'M-TS-REPORTED-SUPPRESSED',
+			'M-TS-FOLD-UNNAMED-NOTE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

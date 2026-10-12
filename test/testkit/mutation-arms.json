@@ -11683,7 +11683,7 @@
 		{
 			"name": "M-TS-TAINT-UNCONDITIONED",
 			"type": "anyparse.check.LockTaint",
-			"method": "reach",
+			"method": "stepOf",
 			"find": "final live: Int = _conditions.carried(edge, state.valuation, state.ctx);",
 			"replace": "final live: Int = state.ctx;",
 			"note": "a hold reaches a blocking call on a branch it never takes on its thread, so a main-thread hold across an async-on-main call reads as blocking"
@@ -17099,9 +17099,9 @@
 		{
 			"name": "M-TS-DOM-UNDER-HOLD-OFF",
 			"type": "anyparse.check.LockTaint",
-			"method": "blockingTrail",
-			"find": "if (counts(edge, held, repeats, state.valuation) && !briefUnder(under, edge)) return trailOf([edge.to], edge, held, [edge]);",
-			"replace": "if (counts(edge, held, repeats, state.valuation)) return trailOf([edge.to], edge, held, [edge]);",
+			"method": "rootsOf",
+			"find": "if (counts(edge, held, repeats, state.valuation) && !briefUnder(under, edge)) roots.push(Blocks(repeats));",
+			"replace": "if (counts(edge, held, repeats, state.valuation)) roots.push(Blocks(repeats));",
 			"note": "a hold never dominates the takes of its own window"
 		},
 		{
@@ -17291,9 +17291,9 @@
 		{
 			"name": "M-TS-ERROR-WINDOW-OFF",
 			"type": "anyparse.check.LockTaint",
-			"method": "blockingTrail",
-			"find": "if (!_threads.runsHere(edge, listsOf(edge.file)) || onErrorPath(a.edge) || onErrorPath(edge)) return null;",
-			"replace": "if (!_threads.runsHere(edge, listsOf(edge.file)) || onErrorPath(a.edge)) return null;",
+			"method": "rootsOf",
+			"find": "if (!_threads.runsHere(edge, listsOf(edge.file)) || onErrorPath(a.edge) || onErrorPath(edge)) return roots;",
+			"replace": "if (!_threads.runsHere(edge, listsOf(edge.file)) || onErrorPath(a.edge)) return roots;",
 			"note": "a call the hold makes inside its own catch blocks over the normal paths"
 		},
 		{
@@ -17882,7 +17882,7 @@
 			"name": "M-TS-ENCLOSED-OFF",
 			"type": "anyparse.check.ThreadSafety",
 			"method": "reportLockHeld",
-			"find": "foldEnclosed(reported, judged.enclosed, covers);",
+			"find": "foldEnclosed(reported, judged.enclosed, covers, judged.suppressed);",
 			"replace": "",
 			"note": "a hold every caller's hold of its lock encloses warns on its own"
 		},
@@ -18134,8 +18134,8 @@
 			"name": "M-TS-FOLD-OFF",
 			"type": "anyparse.check.RootCauseFold",
 			"method": "fold",
-			"find": "for (i => h in warned) if (state[i] == Folded) turn(h, reasons[i], i, doing);",
-			"replace": "",
+			"find": "turn(h, reasons[i], i, doing)",
+			"replace": "{}",
 			"note": "no hold finding folds onto the warnings that cover it"
 		},
 		{
@@ -18150,8 +18150,8 @@
 			"name": "M-TS-FOLD-SITE",
 			"type": "anyparse.check.RootCauseFold",
 			"method": "settled",
-			"find": "case Site(key, _, mayRepeat, way): (doing[key] ?? []).exists(d -> covers(d, i, mayRepeat, way) && state[d.at] != Open);",
-			"replace": "case Site(_, _, _, _): false;",
+			"find": "case Site(key, _, mayRepeat, way, _): (doing[key] ?? []).exists(d -> covers(d, i, mayRepeat, way) && state[d.at] != Open);",
+			"replace": "case Site(_, _, _, _, _): false;",
 			"note": "work another warned hold does too never covers a hold"
 		},
 		{
@@ -18166,7 +18166,7 @@
 			"name": "M-TS-WAY-OFF",
 			"type": "anyparse.check.MainSinkReport",
 			"method": "report",
-			"find": "oneWarningPerWay(direct, states, reportedBy);",
+			"find": "oneWarningPerWay(direct, states, reportedBy, suppressed);",
 			"replace": "",
 			"note": "every sink call of one main-thread way warns"
 		},
@@ -18286,7 +18286,7 @@
 			"name": "M-TS-MARSHAL-OWNER-OFF",
 			"type": "anyparse.check.MainRepeats",
 			"method": "climbEdge",
-			"find": "if (runsFrom(e, at.valuation) == at.valuation) own(walk.owners, e, path);",
+			"find": "if (runsFrom(e, at.valuation) == at.valuation) own(walk.owners, e, path, handed);",
 			"replace": "",
 			"note": "a value marshalled onto the main thread runs once, however many posts a background loop makes"
 		},
@@ -18842,10 +18842,10 @@
 		},
 		{
 			"name": "M-TS-FOLD-SITE-CYCLE",
-			"type": "anyparse.check.LockTaint",
-			"method": "mayRepeatAlong",
-			"find": "return repeatsAlong(a, trail) || trail.path.exists(onCycle);",
-			"replace": "return repeatsAlong(a, trail);",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "reasonOf",
+			"find": "end.repeated, end.mayRepeat, end.passes",
+			"replace": "end.repeated, end.repeated, end.passes",
 			"note": "a call reached through a function a cycle of calls re-enters counts as once when the trail found it once"
 		},
 		{
@@ -18995,9 +18995,9 @@
 		{
 			"name": "M-TS-HANDED-REACH-OFF",
 			"type": "anyparse.check.LockTaint",
-			"method": "reach",
-			"find": "for (edge in _graph.outEdges(state.id)) if (_threads.runsHere(edge, listsOf(edge.file))) {",
-			"replace": "for (edge in _graph.outEdges(state.id)) if (edge.kind.isInvocation()) {",
+			"method": "stepOf",
+			"find": "if (!_threads.runsHere(edge, listsOf(edge.file)) || leadsNowhere(edge, state.repeated)) return Skip;",
+			"replace": "if (!edge.kind.isInvocation() || leadsNowhere(edge, state.repeated)) return Skip;",
 			"note": "a walk under the hold follows calls alone, never a value handed on deeper down"
 		},
 		{
@@ -19341,6 +19341,134 @@
 			"find": "if (fn != null && _graph.typeParamBoundsOf(fn, named) != null) return null;",
 			"replace": "",
 			"note": "a type parameter named like a class bounds a reflective write like that class"
+		},
+		{
+			"name": "M-TS-FOLD-EVERY-END",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "reasonsOf",
+			"find": "for (end in ends) {",
+			"replace": "for (end in ends.slice(0, 1)) {",
+			"note": "a call is covered when the first blocking call its walk finds is, whatever else it reaches"
+		},
+		{
+			"name": "M-TS-FOLD-ENDS-WALK",
+			"type": "anyparse.check.LockTaint",
+			"method": "blockingEnds",
+			"find": "ways.blocked(at, e, repeated);",
+			"replace": "",
+			"note": "the walk for every blocking call a held call reaches records only a call that blocks itself"
+		},
+		{
+			"name": "M-TS-FOLD-PASSES-PATH",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "reasonOf",
+			"find": "end.repeated, end.mayRepeat, end.passes",
+			"replace": "end.repeated, end.mayRepeat, end.trail.path",
+			"note": "a hold whose function the shortest way passes covers the call, though another way passes no hold of it"
+		},
+		{
+			"name": "M-TS-FOLD-SUPPRESSED",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "doers",
+			"find": "if (!silenced(i)) ",
+			"replace": "",
+			"note": "a hold whose warning a directive silences covers another hold long by the same work"
+		},
+		{
+			"name": "M-TS-COVER-INFO-NOTE",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "noteInfoCovers",
+			"find": "c.finding.message += INFO_COVER_NOTE;",
+			"replace": "{}",
+			"note": "a hold turned onto a finding that ended info says nothing of it"
+		},
+		{
+			"name": "M-TS-WAY-HANDED-RANK",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "oneWarningPerWay",
+			"find": " + (d.edge.kind == Ref ? 1 : 0)",
+			"replace": "",
+			"note": "a sink handed on as a value keeps a way's warning before a call the function makes itself"
+		},
+		{
+			"name": "M-TS-OWNER-HANDED-RANK",
+			"type": "anyparse.check.MainRepeats",
+			"method": "nearestFirst",
+			"find": "a.handed ? 1 : -1",
+			"replace": "0",
+			"note": "an owner through a value handed on ranks with one through calls alone"
+		},
+		{
+			"name": "M-TS-ONE-TAKE-MERGE",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "oneTakePerLock",
+			"find": "mergeRepeats(list[0].finding, t.finding);",
+			"replace": "",
+			"note": "the warning a lock's main-thread takes fold into drops what repeats the folded ones"
+		},
+		{
+			"name": "M-TS-FOLD-NAMED-ONLY",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "doers",
+			"find": "case Site(key, repeated, _, _, null):",
+			"replace": "case Site(key, repeated, _, _, _):",
+			"note": "a hold covers another by work it reaches that its finding does not name"
+		},
+		{
+			"name": "M-TS-FOLD-SUPPRESSED-WAIT",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "neverReported",
+			"find": "return at >= 0 ? silenced(at) :",
+			"replace": "return at >= 0 ? false :",
+			"note": "a hold waiting for a lock whose long hold a directive silences folds onto that silenced warning"
+		},
+		{
+			"name": "M-TS-NEST-SUPPRESSED",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "nestHolds",
+			"find": "!suppressed(o.finding) && ",
+			"replace": "",
+			"note": "a hold taken inside a hold whose warning a directive silences turns info onto it"
+		},
+		{
+			"name": "M-TS-ENCLOSED-SUPPRESSED",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "foldEnclosed",
+			"find": "!suppressed(w.finding) && ",
+			"replace": "",
+			"note": "a hold enclosed by a hold whose warning a directive silences turns info onto it"
+		},
+		{
+			"name": "M-TS-WAY-SUPPRESSED",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "oneWarningPerWay",
+			"find": "(suppressed(d.finding) ? 2 : 0) + ",
+			"replace": "",
+			"note": "a silenced sink call keeps its way's warning and the others turn info onto it"
+		},
+		{
+			"name": "M-TS-ONE-TAKE-SUPPRESSED",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "oneTakePerLock",
+			"find": "(suppressed(t.finding) ? '1' : '0') + ",
+			"replace": "",
+			"note": "a silenced take keeps its lock's warning and the other takes turn info onto it"
+		},
+		{
+			"name": "M-TS-REPORTED-SUPPRESSED",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "dropSilenced",
+			"find": "for (k in [for (k => v in reportedBy) if (suppressed(v)) k]) reportedBy.remove(k);",
+			"replace": "",
+			"note": "a silenced finding (a) still reports the work a main-only hold spans"
+		},
+		{
+			"name": "M-TS-FOLD-UNNAMED-NOTE",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "noteUnnamed",
+			"find": "if (shown.length > 0) finding.message += ' — its calls also reach ${named(shown)}, which no warning names';",
+			"replace": "",
+			"note": "a kept hold warning names only the first way of each call, not the uncovered work it stays for"
 		}
 	]
 }

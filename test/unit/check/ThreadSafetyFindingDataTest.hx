@@ -149,6 +149,35 @@ class ThreadSafetyFindingDataTest extends Test {
 		#end
 	}
 
+	/**
+	 * The warning every main-thread take of one lock folds into carries what repeats each folded take (review round 4: TM's
+	 * `Store.get` stopped naming `Main.reboot`, which repeats `Store.remove`'s take of the same lock).
+	 */
+	@:pin('control') @:killer('M-TS-ONE-TAKE-MERGE')
+	public function testTheLockWarningCarriesWhatRepeatsItsFoldedTakes(): Void {
+		#if (sys || nodejs)
+		final found: Array<Violation> =
+			ThreadSafetyCheckTest.violations(
+				'{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Sys.sleep"],"spawns":["Runner.create"],'
+				+ '"lockPairs":["Mutex.acquire/release"]}}}',
+				[
+					ThreadSafetyCheckTest.MUTEX,
+					'class Runner { public static function create(fn:()->Void):Void {} }',
+					'class S { static final _m:Mutex = new Mutex(); static function work():Void { _m.acquire(); Sys.sleep(1); _m.release(); }'
+					+ ' static function get():Void { _m.acquire(); _m.release(); } static function put():Void { _m.acquire(); _m.release(); }'
+					+ ' static function reboot():Void for (i in 0...3) put();'
+					+ ' public static function main():Void { Runner.create(work); get(); reboot(); } }'
+				]
+			);
+		final warned: Array<Violation> = [for (v in found) if (v.severity.label() == 'warning' && v.data?.family == 'A') v];
+		Assert.same(['S.get'], [for (v in warned) v.data?.member]);
+		Assert.same([[{ member: 'S.reboot', at: 'for (i in 0...3)' }]], [for (v in warned) v.data?.repeatedBy]);
+		Assert.isTrue(warned[0]?.message.endsWith(' — repeated by S.reboot') == true, warned[0]?.message);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	/** Finding (b) names the holder, the lock object, and the path from the holder to the call that blocks. */
 	public function testLockHeldData(): Void {
 		#if (sys || nodejs)

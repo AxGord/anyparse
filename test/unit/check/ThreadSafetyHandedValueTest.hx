@@ -5,6 +5,8 @@ import anyparse.check.Check.Violation;
 import utest.Assert;
 import utest.Test;
 
+using StringTools;
+
 /**
  * A function value handed to a call that runs it runs where it is handed: under the hold around that call, and as often
  * as that call repeats it (`Lambda.iter` runs it per element). Before, a hold's taint followed only invocations, so a
@@ -131,6 +133,39 @@ class ThreadSafetyHandedValueTest extends Test {
 		final direct: Array<String> = ['S.zDirect | S._a / S._b'];
 		Assert.same(direct, orders('Lambda.iter(paths, p -> { _b.acquire(); _b.release(); });', true), 'a lambda and a call');
 		Assert.same(direct, orders('Lambda.iter(paths, takeB);', true), 'a method value and a call');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * Of the sink calls one main-thread way runs, a direct call keeps the way's warning before a sink handed on as a value
+	 * (review round 4 `f10`): `new Later(Disk.stat)` only stores the stat for a worker, so the warning stays at the sleep
+	 * `C.f` calls itself, though the stat is written first. Of the nearest repeating calls up a short call's ways, a loop
+	 * around a direct call comes before a value handed to an iterating call at the same distance.
+	 */
+	@:pin('control') @:killer('M-TS-WAY-HANDED-RANK') @:killer('M-TS-OWNER-HANDED-RANK')
+	public function testADirectCallOutranksAHandedValue(): Void {
+		#if (sys || nodejs)
+		final config: String = '{"rules":{"thread-safety":{"sinks":["Disk.stat","Disk.peek","Sys.sleep"],"shortSinks":["Disk.peek"],'
+			+ '"spawns":["Runner.create"],"iterates":["Lambda.*"]}}}';
+		final disk: String = 'class Disk { public static function stat(p:String):Void {} public static function peek(p:String):Void {} }';
+		Assert.same(['info A C.f | Disk.stat', 'warning A C.f | Sys.sleep'], mains(ThreadSafetyCheckTest.violations(config, [
+			disk,
+			'class Runner { public static function create(fn:()->Void):Void {} }',
+			'class Later { var _job:Null<String->Void> = null; public function new(job:String->Void) { _job = job; }'
+			+ ' public function run():Void { final j:Null<String->Void> = _job; if (j != null) j("x"); } }',
+			'class C { static var later:Null<Later> = null; static function f():Void { later = new Later(Disk.stat); Sys.sleep(1); }'
+			+ ' public static function main():Void { f(); Runner.create(() -> { final l:Null<Later> = later; if (l != null) l.run(); }); } }'
+		])));
+		final owned: Array<Violation> = ThreadSafetyCheckTest.violations(config, [
+			disk,
+			'class K { static function g(s:String):Void Disk.peek(s); static function viaIter(xs:Array<String>):Void Lambda.iter(xs, g);'
+			+ ' static function viaLoop(xs:Array<String>):Void for (x in xs) g(x);'
+			+ ' public static function main():Void { viaIter(["a"]); viaLoop(["b"]); } }'
+		]);
+		final short: Null<Violation> = owned.filter(v -> v.data?.member == 'K.g')[0];
+		Assert.isTrue(short?.message.contains('repeated by K.viaLoop, K.viaIter, reported there') == true, short?.message);
 		#else
 		Assert.pass('non-sys target');
 		#end
