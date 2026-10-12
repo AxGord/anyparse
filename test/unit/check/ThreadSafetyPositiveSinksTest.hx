@@ -54,6 +54,11 @@ class ThreadSafetyPositiveSinksTest extends Test {
 			'class File { public static function getContent(p:String):String return p; }'
 			+ ' class B { static function main():Void File.getContent("x"); }'
 		])), 'a project namesake');
+		// a project type declared AT the library path (a classpath override) is the project's: its body is read
+		Assert.same([], graded(ThreadSafetyCheckTest.violations('{"rules":{"thread-safety":{"closedWorld":false}}}', [
+			'package sys.io; class File { public static function getContent(p:String):String return p; }',
+			'class B { static function main():Void sys.io.File.getContent("x"); }'
+		])), 'a project override of the library path');
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -198,6 +203,11 @@ class ThreadSafetyPositiveSinksTest extends Test {
 		final found: Array<Violation> = ThreadSafetyCheckTest.violations(waiving, [native, app]);
 		Assert.isTrue(graded(found).contains('warning A A.own | Lock.wait'), 'the native named like a library call is kept');
 		Assert.isTrue(graded(found).contains('warning A A.written | sys.thread.Lock.wait'), 'the library call is never waived with it');
+		// a pattern naming the type by its simple name names the library type keyed by its path too
+		final bySimpleName: Array<String> = graded(ThreadSafetyCheckTest.violations(
+			'{"rules":{"thread-safety":{"closedWorld":false,"nonBlocking":["Lock.wait the fixture never waits"]}}}', [native, app]
+		));
+		Assert.isFalse(bySimpleName.contains('warning A A.written | sys.thread.Lock.wait'), 'waived by its simple name');
 		Assert.same([
 			'nonBlocking entry "utils.Lock.wait" names the project native "Lock.wait", which bears the name of a blocking library call'
 			+ ' — kept: a call of the library one the graph cannot tell apart from it resolves there'
