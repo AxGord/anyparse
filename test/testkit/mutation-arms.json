@@ -19552,8 +19552,8 @@
 		{
 			"name": "M-TS-PATH-FOREIGN",
 			"type": "anyparse.query.CallGraphImports",
-			"method": "pathType",
-			"find": "if (declared == null || declared.contains(path)) return simple;",
+			"method": "pathKey",
+			"find": "return declared == null || declared.contains(path) ? simple : path;",
 			"replace": "return simple;",
 			"note": "a library type bearing a project type's simple name merges into it again, so sys.thread.Lock.wait runs the project's Lock"
 		},
