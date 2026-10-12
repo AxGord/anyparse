@@ -347,9 +347,13 @@ final class CheckScan {
 	 * member a name resolves to on that receiver — which is what a rule splicing `<recv>.<member>(…)`
 	 * has to know, and why the measured `baseData:Null<Map<Int, ObjectFrameData>>` site needs it
 	 * while the `Iterable`-shape proof next to it must keep asking the value question.
+	 *
+	 * `resolution` false resolves through `index` alone and builds no resolution index: for a caller whose question the
+	 * files it holds answer (`FieldWrites`), where building the std + library index cost more than the whole rest of its run.
 	 */
 	public static function typeNominalResolver(
-		source: String, plugin: GrammarPlugin, tree: QueryNode, file: String, ?index: SymbolIndex, asReceiver: Bool = false
+		source: String, plugin: GrammarPlugin, tree: QueryNode, file: String, ?index: SymbolIndex, asReceiver: Bool = false,
+		resolution: Bool = true
 	): Null<(QueryNode) -> Null<String>> {
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		if (provider == null) return null;
@@ -357,7 +361,7 @@ final class CheckScan {
 		final shape: RefShape = plugin.refShape();
 		// The resolution index sees the std + configured libraries, so a member type such as
 		// `Array.length` resolves; the report index alone would stop at the project boundary.
-		final resolved: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
+		final resolved: Null<SymbolIndex> = resolution ? RefactorSupport.resolutionIndexOf(plugin) ?? index : index;
 		final chain: ChainTypeContext = {
 			declaredTypeSources: provider.declaredTypeSources(source),
 			source: source,

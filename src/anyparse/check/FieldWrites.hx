@@ -8,6 +8,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
+import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
 /** One write of a field-shaped target in a file of the run. */
@@ -94,6 +95,9 @@ final class FieldWrites {
 
 	/** Each file -> what types an expression of it, as far as the declarations say (`typeOf`); null when nothing can. */
 	private final _typers: Map<String, Null<(QueryNode) -> Null<String>>> = [];
+
+	/** The index `typeOf` resolves through (`heldIndex`); null until first demanded. */
+	private var _index: Null<SymbolIndex> = null;
 
 	private final _plugin: GrammarPlugin;
 
@@ -219,10 +223,23 @@ final class FieldWrites {
 		if (value.kind == _shape.identKind && value.name == _shape.selfReferenceText) return fn == null ? null : _graph.node(fn)?.typeName;
 		if (!_typers.exists(file)) {
 			final tree: Null<QueryNode> = _graph.treeOf(file);
-			_typers[file] = tree == null ? null : CheckScan.typeNominalResolver(source, _plugin, tree, file, null, true);
+			_typers[file] = tree == null ? null : CheckScan.typeNominalResolver(source, _plugin, tree, file, heldIndex(), true, false);
 		}
 		final typer: Null<(QueryNode) -> Null<String>> = _typers[file];
 		return typer == null ? null : typer(value);
+	}
+
+	/**
+	 * The index of the files the graph holds, built on the first demand: what `typeOf` resolves a member type through. Not
+	 * the resolution index (std + libraries): building that one took 5 of TM's 10 s, and a member chain through a library
+	 * type stays unknown either way — `reachOf` places only a project class.
+	 */
+	private function heldIndex(): SymbolIndex {
+		final built: Null<SymbolIndex> = _index;
+		if (built != null) return built;
+		final index: SymbolIndex = SymbolIndex.build([for (held in _graph.heldFiles()) { file: held.file, source: held.source }], _plugin);
+		_index = index;
+		return index;
 	}
 
 	/**
