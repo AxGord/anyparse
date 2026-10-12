@@ -6022,8 +6022,8 @@
 			"name": "M-GRAPH-DISPATCH-TYPE",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "addEdge(from, calleeId, Call, null, file, span, recv.isValue ? recv.typeName : null, field);",
-			"replace": "addEdge(from, calleeId, Call, null, file, span, null, field);",
+			"find": "addEdge(from, target, Call, null, file, span, recv.isValue ? type : null, field);",
+			"replace": "addEdge(from, target, Call, null, file, span, null, field);",
 			"note": "an instance call records no dispatch type, so overrides loaded later are never reached"
 		},
 		{
@@ -6364,8 +6364,8 @@
 			"name": "M-GRAPH-PLACEHOLDER-DECLARING",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "types.declaringTypeOf(recv.typeName, calleeName) ?? recv.typeName, calleeName",
-			"replace": "recv.typeName, calleeName",
+			"find": "types.declaringTypeOf(type, calleeName) ?? type, calleeName",
+			"replace": "type, calleeName",
 			"note": "a call through `this` to an unloaded supertype's member names a placeholder no file ever upgrades"
 		},
 		{
