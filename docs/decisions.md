@@ -2078,3 +2078,41 @@ decided the question; it may not become a record of runs.
   `final` stays trusted there, as before), a reflective writer reached by another name (`final set = Reflect.setField`),
   an index write into a container whose type the declarations do not say, and the lock-member sealing of `LockSites`
   (`collectUnsealed` reads only syntactic occurrences of the member's name) — branch `feat/ts-precision-4`
+- a hold folded from ONE blocking trail (review round 4 `f1`): `RootCauseFold` read each long call's reason off
+  `LockTaint.blockingTrail`, the first way its walk finds, so a call reaching a sink another hold covers AND, deeper,
+  one nobody covers folded, and nothing named the deeper sink (TM r5 configs: `FolderWatcher.saveContent|_mutex`).
+  Now every blocking call a long call reaches is a reason (`LockTaint.blockingEnds`: an exhaustive walk over the same
+  states — the root and per-call steps `rootsOf` / `stepOf` are shared with `reach` — keeping no answer across calls;
+  states are finite, so no cap and no unexamined trail): the shortest way, repeated or may-repeat on ANY way, and the
+  functions EVERY way passes (dominators over the walked states), which the "a hold on the way" cover now needs. The
+  covering side stays the work a finding NAMES — the first way of each of its calls — since a warning shows no other
+  way: with every reached sink as covering work instead, 1d1ba147 folded the recall entry
+  `RemoteFileSystemBase.setTimestamp|_mutationMutex` onto `StandardFileSystem.getText`, whose message names a
+  different stat. A kept warning appends the sink calls it stays for that its first ways do not show and no warning
+  covers (`— its calls also reach …, which no warning names`). TM: 1d1ba147 +4 B warning keys (`Store.put` rare,
+  `Store.remove`, `FileSystemBase.removeCloudQueue`, `RemoteFileSystemBase.addCloudActionValidated` dup-of, all
+  labelled), `acquireMutationLocks|_batchMutex` warning → info (dup-of); f81c2049 / bd943dac +2 / +3 B warnings; recall
+  full; ~25 B warnings per tree gain the note.
+- the fold onto a main-only "elsewhere" maker, stated (review round 4, point 1): a wait for lock K counts as covered
+  when every hold making K long has its work reported — a warned maker kept or folded, OR an info maker whose finding
+  names (a) warnings for its work (`FoldHold.elsewhere`: a hold only the main thread runs, its long work reported at
+  finding (a)). The second half is sound for a reason the general rule does not give: the main thread inside such a
+  holder cannot also be waiting for K there, so the waiter's stall under K is the holder's own main-thread work, which
+  (a) reports; an inversion between the two locks is finding (d)'s. TM's `RemoteFileSystemBase.setTimestamp` and
+  `FileSystemBase.moveLocalQueue` fold onto `StandardFileSystem.listFolder` this way.
+- a handed value took a way's warning (review round 4 `f10`): `runsHere` reads a value handed to an unlisted call as
+  run there, and `new Later(File.getContent)` only stores it, yet `MainSinkReport.oneWarningPerWay` kept the first
+  sink by offset — the handed one — and demoted the call the function makes itself. A call the function makes itself
+  now keeps the way's warning before a sink handed on as a value; repeating owners at one distance rank a way through
+  calls alone first (`MainRepeats`), as T2b ranks lock-order witnesses. Merged `repeatedBy` still follows the folded
+  handed value onto the kept warning (it may run the value repeatedly; positive).
+- a silenced finding as a cover (review round 4 `f2`): `// noqa` on the warning another hold folded onto left that
+  stall named only by an info. `Suppression.silencer` (the predicate `apply` now uses) tells the check which of its own
+  findings will be shown: a silenced warning covers no hold's work (`RootCauseFold`), makes a hold waiting for its lock
+  stay, turns no hold inside or enclosed by it info (`nestHolds`, `foldEnclosed`), keeps no way's or lock's main-thread
+  warning while another can stay, and reports no work for a main-only hold. Not covered: a finding a file's config
+  disables or remaps (`Linter.gatedPerFile`), which the check does not see.
+- review round 4 text nits: a hold turned info onto a finding that ended info itself says so (`INFO_COVER_NOTE`; T3's
+  "whose finding names these calls" read as a warning); the warning a lock's main-thread takes fold into carries what
+  repeats each folded take (TM's `Store.get` names `Main.reboot` again, lost when `Store.remove`'s take turned long) —
+  branch `feat/ts-precision-4`
