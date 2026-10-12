@@ -18620,8 +18620,8 @@
 			"name": "M-TS-PATH-REFLECT",
 			"type": "anyparse.check.FieldWrites",
 			"method": "collect",
-			"find": "if (node.kind == _shape.callKind) recordReflective(file, source, node);",
-			"replace": "",
+			"find": "\t\t\trecordReflective(file, source, node);\n\t\telse if (!callee)",
+			"replace": "\t\t\t{}\n\t\telse if (!callee)",
 			"note": "a constant-named Reflect.setField writes no field"
 		},
 		{
@@ -19282,9 +19282,9 @@
 			"name": "M-TS-REFLECT-INDEX",
 			"type": "anyparse.check.FieldWrites",
 			"method": "record",
-			"find": " && nameIndexed(file, source, target.children[0])",
-			"replace": " && false",
-			"note": "an index write into a Dynamic value writes no field"
+			"find": "if (!declaredAs(file, source, target.children[0], ELEMENT_INDEXED_TYPES))",
+			"replace": "if (false)",
+			"note": "an index write writes no field, whatever it is written into"
 		},
 		{
 			"name": "M-TS-REFLECT-REACH",
@@ -19341,6 +19341,85 @@
 			"find": "if (fn != null && _graph.typeParamBoundsOf(fn, named) != null) return null;",
 			"replace": "",
 			"note": "a type parameter named like a class bounds a reflective write like that class"
+		},
+		{
+			"name": "M-TS-REFLECT-INDEX-ANY",
+			"type": "anyparse.check.FieldWrites",
+			"method": "record",
+			"find": "if (!declaredAs(file, source, target.children[0], ELEMENT_INDEXED_TYPES))",
+			"replace": "if (declaredAs(file, source, target.children[0], ['Dynamic', 'DynamicAccess']))",
+			"note": "only an index write into a value declared Dynamic / DynamicAccess writes a field: an untyped, a cast or an unknown container writes none (review F11)"
+		},
+		{
+			"name": "M-TS-REFLECT-INDEX-ELEMENT",
+			"type": "anyparse.check.FieldWrites",
+			"method": "record",
+			"find": "if (!declaredAs(file, source, target.children[0], ELEMENT_INDEXED_TYPES))",
+			"replace": "if (true)",
+			"note": "(precision) an index write into an array is a reflective write of any field"
+		},
+		{
+			"name": "M-TS-REFLECT-DYNACC",
+			"type": "anyparse.check.FieldWrites",
+			"method": "recordReflective",
+			"find": " || declaredAs(file, source, receiver, [DYNAMIC_ACCESS])",
+			"replace": "",
+			"note": "DynamicAccess.set writes no field (review F11)"
+		},
+		{
+			"name": "M-TS-REFLECT-HANDED",
+			"type": "anyparse.check.FieldWrites",
+			"method": "recordHanded",
+			"find": "if (!accessKind(value.kind, _shape) ||",
+			"replace": "if (true ||",
+			"note": "Reflect.setField handed on as a value and called later writes no field (review F11)"
+		},
+		{
+			"name": "M-TS-REFLECT-HANDED-CALLEE",
+			"type": "anyparse.check.FieldWrites",
+			"method": "collect",
+			"find": "i == 0 && node.kind == _shape.callKind",
+			"replace": "false",
+			"note": "(precision) a reflective call's own callee is also a handed value, a write of any field on any object"
+		},
+		{
+			"name": "M-TS-SEAL-REFLECT",
+			"type": "anyparse.check.LockSites",
+			"method": "collectUnsealed",
+			"find": "if (!_unsealed.contains(name) && writes.reflectivelyWritten(name))",
+			"replace": "if (false)",
+			"note": "a reflective write that may store any lock in a lock member leaves it sealed (review F3)"
+		},
+		{
+			"name": "M-TS-SEAL-REFLECT-REACH",
+			"type": "anyparse.check.FieldWrites",
+			"method": "reachesDeclarer",
+			"find": "return reaches != null && reaches.exists(t -> _graph.types.declaringTypeOf(t, name) != null);",
+			"replace": "return true;",
+			"note": "(precision) a reflective write on a class declaring no such member unseals a lock member of that name"
+		},
+		{
+			"name": "M-TS-SEAL-REFLECT-LITERAL-ANY",
+			"type": "anyparse.check.FieldWrites",
+			"method": "reflectivelyWritten",
+			"find": "site.reflective && (site.reaches == null || reachesDeclarer(site, name))",
+			"replace": "site.reflective && reachesDeclarer(site, name)",
+			"note": "a reflective write naming a lock member by a literal, on a value of no known class, leaves it sealed (review F3)"
+		},
+		{
+			"name": "M-TS-SEAL-REFLECT-UNPLACED",
+			"type": "anyparse.check.FieldWrites",
+			"method": "reflectivelyWritten",
+			"find": "_computed.exists(site -> reachesDeclarer(site, name))",
+			"replace": "_computed.exists(site -> site.reaches == null || reachesDeclarer(site, name))",
+			"note": "(precision) a computed reflective write on a value of no known class unseals every lock member: on TM no lock keeps its name"
+		},
+		{
+			"name": "M-TS-SEAL-UNPLACED-NOTICE",
+			"type": "anyparse.check.FieldWrites",
+			"method": "notices",
+			"force": "[]",
+			"note": "the run no longer says that the lock names assume no computed reflective write on a value of no known class stores a lock"
 		},
 		{
 			"name": "M-TS-FOLD-EVERY-END",

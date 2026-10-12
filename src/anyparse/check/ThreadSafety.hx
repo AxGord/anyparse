@@ -182,7 +182,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final writes: FieldWrites = new FieldWrites(graph, plugin, files.foreach(f -> byFile[f.file]?.closedWorld == true));
 		final sites: LockSites = new LockSites(
 			graph, [for (f in files) f.file],
-			plugin, file -> listsOf(file).pairs, throws, trees, new ExhaustiveSwitches(graph, plugin, writes, seedable)
+			plugin, file -> listsOf(file).pairs, throws, trees, new ExhaustiveSwitches(graph, plugin, writes, seedable), writes
 		);
 		// a hold whose take no thread runs holds nothing: a function nothing invokes, a take a condition rules out
 		final acquires: Array<LockAcquire> = [for (a in sites.acquires) if (states.edgeContext(a.edge) != 0) a];
@@ -230,7 +230,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 				'the locks held on entry did not settle within the bound, so no function is taken to hold any on its way in:'
 				+ ' no take is brief for being made under another lock'
 			);
-		reportConfigProblems(problems, violations);
+		reportConfigProblems(problems.concat(writes.notices()), violations);
 		reportLockHeld(graph, sites, judged, taints, {
 			costs: paths,
 			reported: reported,

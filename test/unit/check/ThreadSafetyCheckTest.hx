@@ -543,6 +543,50 @@ class ThreadSafetyCheckTest extends Test {
 		#end
 	}
 
+	/**
+	 * A reflective write names its field at run time (`FieldWrites`): `Reflect.setField(this, k, _m)` may make `_l` the very
+	 * lock a worker holds across a sleep, as `_l = _m` does, so `_l` is no longer sealed and the main thread's take of it
+	 * stays reported (review F3). One on a class declaring no such member leaves it sealed, and so — said once
+	 * per run — does a computed name on a value of no known class, which would unseal every lock member at once.
+	 */
+	@:pin('control') @:killer('M-TS-SEAL-REFLECT') @:killer('M-TS-SEAL-REFLECT-REACH') @:killer('M-TS-SEAL-REFLECT-LITERAL-ANY')
+	@:killer('M-TS-SEAL-REFLECT-UNPLACED') @:killer('M-TS-SEAL-UNPLACED-NOTICE')
+	public function testAReflectiveWriteUnsealsTheMember(): Void {
+		#if (sys || nodejs)
+		inline function found(alias: String): Array<String> {
+			return lockFindings([
+				'class Runner { public static function create(fn:()->Void):Void {} }',
+				'class Other { public function new() {} }',
+				'class D { var _l:Mutex = new Mutex(); final _m:Mutex = new Mutex(); public function new() {}'
+				+ ' public function work():Void { _m.acquire(); Sys.sleep(1); _m.release(); }'
+				+ ' public function alias(k:String, o:Other):Void { final x:Dynamic = o; $alias }'
+				+ ' public function quick():Void { _l.acquire(); _l.release(); }'
+				+ ' public static function main():Void { final d:D = new D(); Runner.create(() -> d.work()); d.alias("_l", new Other());'
+				+ ' d.quick(); } }'
+			]);
+		}
+		inline function quickTakes(alias: String): Int {
+			return found(alias).filter(f -> f.indexOf('D.quick -> Mutex.acquire') != -1).length;
+		}
+		Assert.equals(1, quickTakes('_l = _m;'), 'a plain assignment');
+		Assert.equals(1, quickTakes('Reflect.setField(this, "_l", _m);'), 'a literal name');
+		Assert.equals(1, quickTakes('Reflect.setField(this, k, _m);'), 'a computed name');
+		Assert.equals(1, quickTakes('Reflect.setField(x, "_l", _m);'), 'a literal name on a value of no known class');
+		Assert.equals(0, quickTakes('Reflect.setField(o, k, _m);'), 'a class declaring no such member');
+		// a computed name on a value of no known class would make every lock member hold any lock: not counted, and said
+		Assert.equals(0, quickTakes('Reflect.setField(x, k, _m);'), 'a computed name on a value of no known class');
+		Assert.equals(
+			1,
+			found('Reflect.setField(x, k, _m);')
+				.filter(f -> f.indexOf('may store any lock in any lock member') != -1 && f.indexOf('D.alias') != -1)
+				.length,
+			'the run says what it assumed'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	@:pin('control') @:killer('M-TS-ACCESSOR-TAINT')
 	public function testLockHeldAcrossABlockingGetterFlagged(): Void {
 		// Reading `_p.v` runs `get_v`, and that getter sleeps: the property read is a call like any other.

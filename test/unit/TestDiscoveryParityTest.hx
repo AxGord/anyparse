@@ -2024,7 +2024,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.TailMergeCheckTest#testStructuralIdentityHalfNeeded :: control :: M-TAILMERGE-NORM-ONLY',
 			'unit.check.TailMergeCheckTest#testSwitchCaseOutOfScope :: control :: M-TAILMERGE-FALL-KEPT',
 			'unit.check.ThreadSafetyAllocationTest#testAComputedReflectiveWriteMakesTheFieldUnknown :: control :: '
-				+ 'M-TS-REFLECT-COMPUTED,M-TS-REFLECT-MAYWRITE',
+				+ 'M-TS-REFLECT-COMPUTED,M-TS-REFLECT-MAYWRITE,M-TS-REFLECT-HANDED-CALLEE',
 			'unit.check.ThreadSafetyAllocationTest#testAConstructionRunsOnItsOwnClass :: control :: M-TS-ALLOC-NEW',
 			'unit.check.ThreadSafetyAllocationTest#testALibraryClassRunsNoProjectOverride :: control :: M-TS-ALLOC-LIBRARY',
 			'unit.check.ThreadSafetyAllocationTest#testARunOverPartOfTheProjectSealsNoField :: control :: M-TS-ALLOC-COMPLETE',
@@ -2032,6 +2032,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyAllocationTest#testAnAliasNamedAsAProjectClassNamesWhatItAliases :: control :: M-TS-ALLOC-ALIAS',
 			'unit.check.ThreadSafetyAllocationTest#testAnUndeclaredNameNoImportNamesRunsEveryOverride :: control :: M-TS-ALLOC-LIBRARY-PATH',
 			'unit.check.ThreadSafetyAllocationTest#testAnyOtherWriteMakesTheFieldUnknown :: control :: M-TS-ALLOC-ANY-WRITE',
+			'unit.check.ThreadSafetyAllocationTest#testEveryReflectiveEscapeMakesTheFieldUnknown :: control :: '
+				+ 'M-TS-REFLECT-DYNACC,M-TS-REFLECT-HANDED,M-TS-REFLECT-INDEX-ANY,M-TS-REFLECT-INDEX-ELEMENT',
 			'unit.check.ThreadSafetyAllocationTest#testTheDeclaredValueCounts :: control :: M-TS-ALLOC-DECLARED',
 			'unit.check.ThreadSafetyBoundedRepeatsTest#testABoundOverTheBudgetStillRepeats :: control :: M-TS-BOUND-BUDGET',
 			'unit.check.ThreadSafetyBoundedRepeatsTest#testABoundedLoopRunsAsOnce :: control :: M-TS-BOUND-OFF',
@@ -2108,6 +2110,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyCheckTest#testAReflectiveConstructionOfTheFamilyAliasesNothing :: control :: M-TS-ALIAS-REFLECTED-FAMILY',
 			'unit.check.ThreadSafetyCheckTest#testAReflectiveConstructionTooShortToReachTheParameterKeepsTheAlias :: control :: '
 				+ 'M-TS-ALIAS-REFLECTED-SHORT-REFUSED',
+			'unit.check.ThreadSafetyCheckTest#testAReflectiveWriteUnsealsTheMember :: control :: '
+				+ 'M-TS-SEAL-REFLECT,M-TS-SEAL-REFLECT-REACH,M-TS-SEAL-REFLECT-LITERAL-ANY,M-TS-SEAL-REFLECT-UNPLACED,M-TS-SEAL-UNPLACED-NOTICE',
 			'unit.check.ThreadSafetyCheckTest#testAReleaseOnAnEarlyReturnKeepsTheRestOfTheWindow :: control :: M-TS-WINDOW-IF-RELEASES',
 			'unit.check.ThreadSafetyCheckTest#testAReleaseWithoutATakeMakesTheLockLong :: control :: M-TS-CROSSING-IGNORED',
 			'unit.check.ThreadSafetyCheckTest#testARetakeOfAHeldReentrantLockIsNoBlockingCall :: control :: M-TS-REENTRANT-IGNORED',
@@ -6423,6 +6427,16 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-REFLECT-FINAL',
 			'M-TS-REFLECT-ANY',
 			'M-TS-REFLECT-TYPEPARAM',
+			'M-TS-REFLECT-INDEX-ANY',
+			'M-TS-REFLECT-INDEX-ELEMENT',
+			'M-TS-REFLECT-DYNACC',
+			'M-TS-REFLECT-HANDED',
+			'M-TS-REFLECT-HANDED-CALLEE',
+			'M-TS-SEAL-REFLECT',
+			'M-TS-SEAL-REFLECT-REACH',
+			'M-TS-SEAL-REFLECT-LITERAL-ANY',
+			'M-TS-SEAL-REFLECT-UNPLACED',
+			'M-TS-SEAL-UNPLACED-NOTICE',
 			'M-TS-FOLD-EVERY-END',
 			'M-TS-FOLD-ENDS-WALK',
 			'M-TS-FOLD-PASSES-PATH',
