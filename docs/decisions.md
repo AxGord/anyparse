@@ -2201,3 +2201,27 @@ decided the question; it may not become a record of runs.
   local written with no type whose initializer is a call holds what `typeSourceOf` reads for that call — the reading a
   call receiver already got (`CallGraphKeys.callInitializers`, `throughInitializer` against a cycle). Any other
   initializer (a field read, a ternary) stays untyped — branch `feat/ts-precision-5`
+- a computed reflective write on a value the run places on no class (review round 5 F3 middle ground + N2): it was NOT
+  counted against the lock names ("names no lock at all" on TM), so a value of a known class the typer missed —
+  `owners.first()` off a `List<D>`, `arr[0]`, an un-annotated local of a library call, an enum binder `case Holder(d)` —
+  left `_l` sealed and the stall silent. Now the SOUND default: such a write unseals every lock member
+  (`FieldWrites.reflectivelyWritten`), named in an `info`; the exclusions are POSITIVE (`ReflectiveReach.placeOf`), each
+  named with its reason: a `final` local bound to `{}` (reaches no class: whatever it escapes to, the write lands in that
+  structure — escape does not matter, the binding cannot change) or to `new C()` (`C`'s chain); a `case` capture typed by
+  the parameter of the one indexed enum constructor of its name (`binderType`; two enums declaring it type none); a type
+  parameter bounded by its constraint, or a class's own under a covered `closedWorld` by its instantiations — each
+  subtype's `extends` binding (written type / `Void` none / own param by constraint / free), the class and every free
+  subtype never made (no `new`, name read as no value except as a static receiver, `reflectiveClasses` declared alike by
+  every file and not naming it; the project's declaration, S15, covers library producers too). Trust level unchanged: a
+  declared `T` is the instantiation's as a declared `D` is a `D` — a cast or a `Dynamic` view (`Node<Any>`) is the same hole
+  every declared type has. MEASURED on TM 1d1ba147 (score): full sound default 65/102 (f81c 0/5, bd94 1/9); fresh `{}`
+  clears `Form.get_data` and `Node.snapshot`, binder typing `ShareUsersStore.getAllSharedUsers` (its `MIXED(folders, …)`
+  captures are `Map`s: element writes), the type-parameter bound `Node.toTarget` — any one left unplaced costs the whole
+  37 (one unplaced writer unseals every lock). With all four: rows == start (102/102, 5/5, 9/9). Two pre-existing holes
+  the bound needed closed: a `final class`'s written supertypes were lost (`SymbolIndexBuilder.collectSupertypesWritten`
+  read only the `FinalDecl` wrapper's children: `MatchNode`/`TrainingNode extends Node<Void>` had no argument), and a class
+  extending a typedef alias was no subtype of the aliased type (`CallGraphTypes.merge` now files it there too).
+  `CallGraph.typeParamBoundsOf` sees an enclosing function's parameter from a lambda, answers a type name, and takes
+  `functionsOnly`. Precision side effect: the narrower reach sharpens `AllocationSets` (TM's `APIRequest2.urlLoader` no
+  longer unknown), so 1d1ba147 loses the `false` info `StandardFileSystem.listFolder|FolderWatcher._mutex` and f81c/bd94
+  turn `RemoteFileSystemBase.setTimestamp|_mutationMutex` from a folded info into a warning — branch `feat/ts-precision-5`
