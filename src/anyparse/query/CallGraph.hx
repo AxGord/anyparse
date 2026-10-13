@@ -373,19 +373,21 @@ final class CallGraph {
 	}
 
 	/**
-	 * The written bounds of the type parameter `name` as function `id` sees it — its own, else its type's; empty for an
-	 * unbounded one, null when `name` is no type parameter there.
+	 * The written bounds of type parameter `name` as `id` sees it: a function, its own or an enclosing one's (a lambda's) or —
+	 * unless `functionsOnly` — its type's; a type, its own (empty if declarations differ). Empty if unbounded, null for none.
 	 */
-	public function typeParamBoundsOf(id: String, name: String): Null<Array<String>> {
-		final own: Null<Map<String, Array<String>>> = _facts.typeParamBounds[id];
-		if ((_facts.typeParams[id] ?? []).contains(name)) return own == null ? [] : own[name] ?? [];
+	public function typeParamBoundsOf(id: String, name: String, functionsOnly: Bool = false): Null<Array<String>> {
+		var at: String = id;
+		while (!(_facts.typeParams[at] ?? []).contains(name) && at.indexOf('#') >= 0) at = at.substring(0, at.lastIndexOf('#'));
+		if ((_facts.typeParams[at] ?? []).contains(name)) return _facts.typeParamBounds[at]?.get(name) ?? [];
 		final fn: Null<FnNode> = nodes[id];
-		final type: Null<String> = fn?.typeName;
-		if (fn == null || type == null) return null;
-		final owner: String = type;
-		if (!types.generics.declaresTypeParam(owner, name)) return null;
-		final bounds: Null<Map<String, Array<String>>> = _facts.typeBounds[boundsKey(fn.file, owner)];
-		return bounds == null ? [] : bounds[name] ?? [];
+		final type: String = fn?.typeName ?? (fn == null ? id : '');
+		if (functionsOnly || !types.generics.declaresTypeParam(type, name)) return null;
+		final file: Null<String> = fn == null ? null : boundsKey(fn.file, type);
+		final written: Array<Array<String>> = [
+			for (k => b in _facts.typeBounds) if (file == null ? k.endsWith('#$type') : k == file) b[name] ?? []
+		];
+		return written.length == 0 || written.exists(w -> w.join('&') != written[0].join('&')) ? [] : written[0];
 	}
 
 	public function outEdges(id: String): Array<CallEdge> {
@@ -1106,14 +1108,12 @@ final class CallGraph {
 		/** Whether `name` is a type parameter in scope — of a function on the frame stack or of `currentType` — naming no indexed type. */
 		function isTypeParam(name: String, currentType: Null<String>): Bool {
 			if (currentType != null && types.generics.declaresTypeParam(currentType, name)) return true;
-			for (f in frames) if ((_facts.typeParams[f.id] ?? []).contains(name)) return true;
-			return false;
+			return frames.exists(f -> (_facts.typeParams[f.id] ?? []).contains(name));
 		}
 
 		/** Whether a binding at `from` lies inside a function on the frame stack — a local or a parameter, not a member. */
 		function bindsLocally(from: Int): Bool {
-			for (f in frames) if (from >= f.span.from && from < f.span.to) return true;
-			return false;
+			return frames.exists(f -> from >= f.span.from && from < f.span.to);
 		}
 
 		function unwrap(node: QueryNode): QueryNode {

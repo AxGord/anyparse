@@ -72,6 +72,16 @@ final class CallGraphImports {
 		return _enumConstructors.exists(name);
 	}
 
+	/** The indexed enums declaring a constructor named `name`, by simple name. */
+	public inline function enumsDeclaring(name: String): Array<String> {
+		return _enumConstructors[name] ?? [];
+	}
+
+	/** The qualified paths the type of simple name `name` is declared under (`recordFile`): by its module, by its package. */
+	public inline function declaredPathsOf(name: String): Array<String> {
+		return _declaredPaths[name] ?? [];
+	}
+
 	/** Fold the declarations and the imports of `fi`, held under `key`. */
 	public function recordFile(fi: FileInfo, key: String): Void {
 		for (t in fi.types) {

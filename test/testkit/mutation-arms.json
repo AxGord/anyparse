@@ -19290,13 +19290,13 @@
 			"name": "M-TS-REFLECT-REACH",
 			"type": "anyparse.check.FieldWrites",
 			"method": "reflectiveWrite",
-			"find": "reachOf(typeOf(file, source, fn, target), fn)",
-			"replace": "null",
+			"find": ": _targets.placeOf(file, fn, target, typeOf(file, source, fn, target));",
+			"replace": ": { reaches: null, by: null };",
 			"note": "a reflective write reaches every type's fields whatever its target"
 		},
 		{
 			"name": "M-TS-REFLECT-SUBTYPES",
-			"type": "anyparse.check.FieldWrites",
+			"type": "anyparse.check.ReflectiveReach",
 			"method": "reachOf",
 			"find": "closure([named], types.subtypesOf)",
 			"replace": "[named]",
@@ -19304,7 +19304,7 @@
 		},
 		{
 			"name": "M-TS-REFLECT-SUPERTYPES",
-			"type": "anyparse.check.FieldWrites",
+			"type": "anyparse.check.ReflectiveReach",
 			"method": "reachOf",
 			"find": "closure(out, types.supertypesOf)",
 			"replace": "out",
@@ -19328,7 +19328,7 @@
 		},
 		{
 			"name": "M-TS-REFLECT-ANY",
-			"type": "anyparse.check.FieldWrites",
+			"type": "anyparse.check.ReflectiveReach",
 			"method": "reachOf",
 			"find": " || !(types.meta.isClass(named) || types.isInterface(named))",
 			"replace": "",
@@ -19336,7 +19336,7 @@
 		},
 		{
 			"name": "M-TS-REFLECT-TYPEPARAM",
-			"type": "anyparse.check.FieldWrites",
+			"type": "anyparse.check.ReflectiveReach",
 			"method": "reachOf",
 			"find": "if (fn != null && _graph.typeParamBoundsOf(fn, named) != null) return null;",
 			"replace": "",
@@ -19410,16 +19410,16 @@
 			"name": "M-TS-SEAL-REFLECT-UNPLACED",
 			"type": "anyparse.check.FieldWrites",
 			"method": "reflectivelyWritten",
-			"find": "_computed.exists(site -> reachesDeclarer(site, name))",
-			"replace": "_computed.exists(site -> site.reaches == null || reachesDeclarer(site, name))",
-			"note": "(precision) a computed reflective write on a value of no known class unseals every lock member: on TM no lock keeps its name"
+			"find": "_computed.exists(site -> site.reaches == null || reachesDeclarer(site, name))",
+			"replace": "_computed.exists(site -> reachesDeclarer(site, name))",
+			"note": "a computed reflective write on a value the run places on no class leaves every lock member sealed (review N2)"
 		},
 		{
 			"name": "M-TS-SEAL-UNPLACED-NOTICE",
 			"type": "anyparse.check.FieldWrites",
 			"method": "notices",
 			"force": "[]",
-			"note": "the run no longer says that the lock names assume no computed reflective write on a value of no known class stores a lock"
+			"note": "the run no longer names the computed reflective writes on a value it places on no class, nor the exclusions that bound the others"
 		},
 		{
 			"name": "M-TS-FOLD-EVERY-END",
@@ -19902,6 +19902,174 @@
 			"find": "typeSources[bound] ?? keys.throughInitializer(bound, c -> typeSourceOf(c, currentType))",
 			"replace": "typeSources[bound]",
 			"note": "a local a call initialises is never typed by what the call returns"
+		},
+		{
+			"name": "M-TS-PLACE-FRESH-STRUCT",
+			"type": "anyparse.check.ReflectiveReach",
+			"method": "freshPlacement",
+			"find": "if (init.kind == _shape.objectLiteralKind) return { reaches: [], by: 'a fresh structure' };",
+			"replace": "if (init.kind == _shape.objectLiteralKind) return null;",
+			"note": "(precision) a final local bound to a fresh structure is a value of no placed class"
+		},
+		{
+			"name": "M-TS-PLACE-FRESH-NEW",
+			"type": "anyparse.check.ReflectiveReach",
+			"method": "freshPlacement",
+			"find": "return { reaches: closure([made], types.supertypesOf), by: 'a fresh $made' };",
+			"replace": "return { reaches: [], by: 'a fresh $made' };",
+			"note": "a final local bound to a new object of a class declaring a lock member writes no lock member"
+		},
+		{
+			"name": "M-TS-PLACE-FRESH-MUTABLE",
+			"type": "anyparse.check.ReflectiveReach",
+			"method": "finalInitializer",
+			"find": "final finals: Array<String> = [for (k in _shape.localDeclKinds ?? []) if (!mutable.contains(k)) k];",
+			"replace": "final finals: Array<String> = _shape.localDeclKinds ?? [];",
+			"note": "a var bound to a fresh structure is taken to hold it for good"
+		},
+		{
+			"name": "M-TS-PLACE-PARAM-CONSTRAINT",
+			"type": "anyparse.check.ReflectiveReach",
+			"method": "typeParamPlacement",
+			"find": "final bounded: Null<Array<String>> = reachOfSources(bounds);",
+			"replace": "final bounded: Null<Array<String>> = null;",
+			"note": "(precision) a type parameter's constraint bounds nothing"
+		},
+		{
+			"name": "M-TS-PLACE-PARAM-OWNER",
+			"type": "anyparse.check.ReflectiveReach",
+			"method": "typeParamPlacement",
+			"find": "final own: Null<Array<String>> = _graph.typeParamBoundsOf(fn, name, true);",
+			"replace": "final own: Null<Array<String>> = null;",
+			"note": "a method's own type parameter shadowing its class's is bounded by the class's instantiations"
+		},
+		{
+			"name": "M-TS-PLACE-INSTANTIATIONS",
+			"type": "anyparse.check.ReflectiveReach",
+			"method": "instantiated",
+			"find": "final answer: Null<Array<String>> = _complete ? bindingsOf(type, name) : null;",
+			"replace": "final answer: Null<Array<String>> = null;",
+			"note": "(precision) a class type parameter is bounded by no instantiation"
+		},
+		{
+			"name": "M-TS-PLACE-COMPLETE",
+			"type": "anyparse.check.ReflectiveReach",
+			"method": "instantiated",
+			"find": "final answer: Null<Array<String>> = _complete ? bindingsOf(type, name) : null;",
+			"replace": "final answer: Null<Array<String>> = bindingsOf(type, name);",
+			"note": "a run that sees not every type of the project bounds a type parameter by the subtypes it sees"
+		},
+		{
+			"name": "M-TS-PLACE-RAW-LINK",
+			"type": "anyparse.check.ReflectiveReach",
+			"method": "bindingsOf",
+			"find": "if (arg == null) return null;",
+			"replace": "if (arg == null) continue;",
+			"note": "a subtype whose chain writes no argument for the parameter binds it to nothing"
+		},
+		{
+			"name": "M-TS-PLACE-FREE-SUB",
+			"type": "anyparse.check.ReflectiveReach",
+			"method": "bindingsOf",
+			"find": "free.push(sub);",
+			"replace": "free.remove(sub);",
+			"note": "a subtype leaving the parameter free is never asked whether it is made"
+		},
+		{
+			"name": "M-TS-PLACE-NEVER-MADE",
+			"type": "anyparse.check.ReflectiveReach",
+			"method": "bindingsOf",
+			"find": "return free.foreach(neverMade) ? out : null;",
+			"replace": "return out;",
+			"note": "a class leaving the parameter free is bounded whoever makes it"
+		},
+		{
+			"name": "M-TS-PLACE-UNDECLARED",
+			"type": "anyparse.check.ReflectiveReach",
+			"method": "neverMade",
+			"find": "if (globs == null || paths.length == 0 || paths.exists(p -> globs.exists(g -> Glob.qualifiedNames(g).match(p)))) return false;",
+			"replace": "if (paths.length == 0 || globs != null && paths.exists(p -> globs.exists(g -> Glob.qualifiedNames(g).match(p)))) return false;",
+			"note": "a project declaring no reflectiveClasses makes no class from a computed name"
+		},
+		{
+			"name": "M-TS-PLACE-GLOB-MATCH",
+			"type": "anyparse.check.ReflectiveReach",
+			"method": "neverMade",
+			"find": "if (globs == null || paths.length == 0 || paths.exists(p -> globs.exists(g -> Glob.qualifiedNames(g).match(p)))) return false;",
+			"replace": "if (globs == null || paths.length == 0) return false;",
+			"note": "a class reflectiveClasses names is never made from a computed name"
+		},
+		{
+			"name": "M-TS-PLACE-MAKES-NEW",
+			"type": "anyparse.check.ReflectiveReach",
+			"method": "makes",
+			"find": "? CallGraphNames.lastSegments(node.name ?? '', 1) == type",
+			"replace": "? false",
+			"note": "a new of a class leaving the parameter free makes none"
+		},
+		{
+			"name": "M-TS-PLACE-MAKES-VALUE",
+			"type": "anyparse.check.ReflectiveReach",
+			"method": "makes",
+			"find": "&& !(parent != null && FieldWrites.accessKind(parent.kind, _shape) && parent.children[0] == node)",
+			"replace": "&& false",
+			"note": "a class read as a value (Type.createInstance(C, ...)) makes none"
+		},
+		{
+			"name": "M-TS-PLACE-MAKES-RECEIVER",
+			"type": "anyparse.check.ReflectiveReach",
+			"method": "makes",
+			"find": "&& !(parent != null && FieldWrites.accessKind(parent.kind, _shape) && parent.children[0] == node)",
+			"replace": "",
+			"note": "(precision) a static call on a class makes one"
+		},
+		{
+			"name": "M-TS-PLACE-VOID",
+			"type": "anyparse.check.ReflectiveReach",
+			"method": "reachOfSources",
+			"find": "if (outer != null && outer == _shape.voidTypeName) continue;",
+			"replace": "",
+			"note": "(precision) a parameter bound to Void may hold any object"
+		},
+		{
+			"name": "M-TS-PLACE-FORWARDED-BOUND",
+			"type": "anyparse.check.ReflectiveReach",
+			"method": "bindingsOf",
+			"find": "final forwarded: Null<Array<String>> = _graph.typeParamBoundsOf(sub, arg);",
+			"replace": "final forwarded: Null<Array<String>> = null;",
+			"note": "(precision) a subtype forwarding the parameter to one of its own is not bounded by that one's constraint"
+		},
+		{
+			"name": "M-TS-BINDER-TYPE",
+			"type": "anyparse.check.FieldWrites",
+			"method": "typeOf",
+			"find": "return (typer == null ? null : typer(value)) ?? _targets.binderType(file, value);",
+			"replace": "return typer == null ? null : typer(value);",
+			"note": "(precision) a case capture is typed by nothing, so an index write into a Map capture is reflective"
+		},
+		{
+			"name": "M-TS-BINDER-UNIQUE",
+			"type": "anyparse.check.ReflectiveReach",
+			"method": "binderType",
+			"find": "enums.length == 1 ?",
+			"replace": "enums.length > 0 ?",
+			"note": "a constructor name two enums declare types a capture by the first one's parameter"
+		},
+		{
+			"name": "M-TS-FINAL-SUPERS-WRITTEN",
+			"type": "anyparse.query.SymbolIndexBuilder",
+			"method": "collectSupertypesWritten",
+			"find": "collectInto(node, clause -> {",
+			"replace": "collectInto(node, clause -> if (node.children.contains(clause)) {",
+			"note": "a final class's written supertypes (their type arguments) are lost"
+		},
+		{
+			"name": "M-TS-REACH-ALIAS-SUBTYPES",
+			"type": "anyparse.query.CallGraphTypes",
+			"method": "merge",
+			"find": "if (resolveAlias(alias) != alias) unionInto(_subs, resolveAlias(alias), subtypesOf(alias));",
+			"replace": "",
+			"note": "a class extending a typedef that aliases a type is no subtype of it"
 		}
 	]
 }

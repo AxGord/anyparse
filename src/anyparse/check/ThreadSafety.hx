@@ -179,7 +179,9 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 
 		final throws: ThrowReach = new ThrowReach(graph, plugin.refShape(), file -> listsOf(file).throwerIds, trees);
 		// every write of the project, seen only when the run covers a closed project (`listsByFile`)
-		final writes: FieldWrites = new FieldWrites(graph, plugin, files.foreach(f -> byFile[f.file]?.closedWorld == true));
+		final writes: FieldWrites = new FieldWrites(
+			graph, plugin, files.foreach(f -> byFile[f.file]?.closedWorld == true), ReflectiveReach.declaredClasses(files, _resolveConfig)
+		);
 		final sites: LockSites = new LockSites(
 			graph, [for (f in files) f.file],
 			plugin, file -> listsOf(file).pairs, throws, trees, new ExhaustiveSwitches(graph, plugin, writes, seedable), writes
@@ -277,6 +279,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	public function scanSkipReason(file: String, config: LintConfig): Null<String> {
 		return ProjectCoverage.excluded(file, config.stringListOption('thread-safety', 'exclude') ?? []) ? 'config-excluded' : null;
 	}
+
 
 	/**
 	 * Why each lock is long (`LongLockExplain.report`) when this check was asked (`explainLongLocks`), null otherwise: the

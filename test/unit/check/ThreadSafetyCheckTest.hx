@@ -546,8 +546,8 @@ class ThreadSafetyCheckTest extends Test {
 	/**
 	 * A reflective write names its field at run time (`FieldWrites`): `Reflect.setField(this, k, _m)` may make `_l` the very
 	 * lock a worker holds across a sleep, as `_l = _m` does, so `_l` is no longer sealed and the main thread's take of it
-	 * stays reported (review F3). One on a class declaring no such member leaves it sealed, and so — said once
-	 * per run — does a computed name on a value of no known class, which would unseal every lock member at once.
+	 * stays reported (review F3). One on a class declaring no such member leaves it sealed; a computed name on a value of
+	 * no known class unseals every lock member at once, the sound default (review N2), and the run names the writer.
 	 */
 	@:pin('control') @:killer('M-TS-SEAL-REFLECT') @:killer('M-TS-SEAL-REFLECT-REACH') @:killer('M-TS-SEAL-REFLECT-LITERAL-ANY')
 	@:killer('M-TS-SEAL-REFLECT-UNPLACED') @:killer('M-TS-SEAL-UNPLACED-NOTICE')
@@ -573,14 +573,14 @@ class ThreadSafetyCheckTest extends Test {
 		Assert.equals(1, quickTakes('Reflect.setField(this, k, _m);'), 'a computed name');
 		Assert.equals(1, quickTakes('Reflect.setField(x, "_l", _m);'), 'a literal name on a value of no known class');
 		Assert.equals(0, quickTakes('Reflect.setField(o, k, _m);'), 'a class declaring no such member');
-		// a computed name on a value of no known class would make every lock member hold any lock: not counted, and said
-		Assert.equals(0, quickTakes('Reflect.setField(x, k, _m);'), 'a computed name on a value of no known class');
+		// a computed name on a value of no known class may make every lock member hold any lock: every one is unsealed, and said
+		Assert.equals(1, quickTakes('Reflect.setField(x, k, _m);'), 'a computed name on a value of no known class');
 		Assert.equals(
 			1,
 			found('Reflect.setField(x, k, _m);')
-				.filter(f -> f.indexOf('may store any lock in any lock member') != -1 && f.indexOf('D.alias') != -1)
+				.filter(f -> f.indexOf('may store any lock in any lock member, so no lock is named by its member: D.alias') != -1)
 				.length,
-			'the run says what it assumed'
+			'the run names the writer'
 		);
 		#else
 		Assert.pass('non-sys target');

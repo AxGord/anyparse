@@ -404,6 +404,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.ThreadSafetyOwnReasonsTest',
 		'unit.check.ThreadSafetyPositiveSinksTest',
 		'unit.check.ThreadSafetyQuietLocksTest',
+		'unit.check.ThreadSafetyReflectiveSealTest',
 		'unit.check.ThreadSafetyRegistersTest',
 		'unit.check.ThreadSafetyRepetitionTest',
 		'unit.check.ThreadSafetyRethrowTest',
@@ -2363,6 +2364,15 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyQuietLocksTest#testAConstructorsOwnTakeNeverWaits :: control :: M-TS-CTOR-TAKE',
 			'unit.check.ThreadSafetyQuietLocksTest#testALockOnlyTakenSharedNeverWaits :: control :: M-TS-SHARED-OFF,M-TS-SHARED-HOLD',
 			'unit.check.ThreadSafetyQuietLocksTest#testAnExclusiveTakeMakesTheSharedOnesWait :: control :: M-TS-SHARED-ANY',
+			'unit.check.ThreadSafetyReflectiveSealTest#testAFreshObjectReceiverKeepsTheLockNames :: control :: '
+				+ 'M-TS-PLACE-FRESH-STRUCT,M-TS-PLACE-FRESH-NEW,M-TS-PLACE-FRESH-MUTABLE',
+			'unit.check.ThreadSafetyReflectiveSealTest#testATypeParameterReceiverIsBoundedByItsInstantiations :: control :: '
+				+ 'M-TS-PLACE-INSTANTIATIONS,M-TS-PLACE-COMPLETE,M-TS-PLACE-RAW-LINK,M-TS-PLACE-FREE-SUB,M-TS-PLACE-NEVER-MADE,'
+				+ 'M-TS-PLACE-UNDECLARED,M-TS-PLACE-GLOB-MATCH,M-TS-PLACE-MAKES-NEW,M-TS-PLACE-MAKES-VALUE,M-TS-PLACE-MAKES-RECEIVER,'
+				+ 'M-TS-PLACE-VOID,M-TS-PLACE-FORWARDED-BOUND,M-TS-PLACE-PARAM-CONSTRAINT,M-TS-PLACE-PARAM-OWNER,M-TS-FINAL-SUPERS-WRITTEN,'
+				+ 'M-TS-REACH-ALIAS-SUBTYPES',
+			'unit.check.ThreadSafetyReflectiveSealTest#testAValueTheRunCannotPlaceUnsealsEveryLock :: control :: '
+				+ 'M-TS-SEAL-REFLECT-UNPLACED,M-TS-SEAL-UNPLACED-NOTICE,M-TS-BINDER-TYPE,M-TS-BINDER-UNIQUE',
 			'unit.check.ThreadSafetyRegistersTest#testALoopAboveTheRegistrarRepeatsNothing :: control :: M-TS-REGISTER-OWNER',
 			'unit.check.ThreadSafetyRegistersTest#testARegistrationInALoopRepeatsNothing :: control :: M-TS-REGISTER-OWNER',
 			'unit.check.ThreadSafetyRegistersTest#testTheOwnerIsNeverUpARegistration :: control :: M-TS-REGISTER-OWNER',
@@ -6504,7 +6514,28 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-DOTTED-TARGET',
 			'M-TS-DOTTED-WILDCARD',
 			'M-TS-LOCAL-CALL-INIT',
-			'M-TS-LOCAL-CALL-READ'
+			'M-TS-LOCAL-CALL-READ',
+			'M-TS-PLACE-FRESH-STRUCT',
+			'M-TS-PLACE-FRESH-NEW',
+			'M-TS-PLACE-FRESH-MUTABLE',
+			'M-TS-PLACE-PARAM-CONSTRAINT',
+			'M-TS-PLACE-PARAM-OWNER',
+			'M-TS-PLACE-INSTANTIATIONS',
+			'M-TS-PLACE-COMPLETE',
+			'M-TS-PLACE-RAW-LINK',
+			'M-TS-PLACE-FREE-SUB',
+			'M-TS-PLACE-NEVER-MADE',
+			'M-TS-PLACE-UNDECLARED',
+			'M-TS-PLACE-GLOB-MATCH',
+			'M-TS-PLACE-MAKES-NEW',
+			'M-TS-PLACE-MAKES-VALUE',
+			'M-TS-PLACE-MAKES-RECEIVER',
+			'M-TS-PLACE-VOID',
+			'M-TS-PLACE-FORWARDED-BOUND',
+			'M-TS-BINDER-TYPE',
+			'M-TS-BINDER-UNIQUE',
+			'M-TS-FINAL-SUPERS-WRITTEN',
+			'M-TS-REACH-ALIAS-SUBTYPES'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
