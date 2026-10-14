@@ -359,6 +359,31 @@ class ThreadSafetyRootCauseTest extends Test {
 	}
 
 	/**
+	 * A hold covers a sink call of another only when EVERY way the other's calls take to it passes the hold's function
+	 * (review round 5, G3): `S.x` reaches the sleep through `p`, which holds `_y` across it, AND by calling `io` itself,
+	 * outside any hold of `_y`. Two calls reaching one sink are two ways; folding them to the first call's used to cover
+	 * the second by the first's, in whichever order they were written. With the take of a lock no sink, `p`'s first way
+	 * ends at the sleep too, as TM's `Mutex.acquire` (a `lockPairs` take, not a sink) does.
+	 */
+	@:pin('control') @:killer('M-TS-FOLD-SAME-WAY') @:killer('M-TS-FOLD-PARTS-ONCE')
+	public function testTwoCallsReachingOneSinkAreTwoWays(): Void {
+		#if (sys || nodejs)
+		Assert.same(['warning B S.p | S._y', 'warning B S.x | S._x'], holds(acrossCalls('p(); io();')), 'the covered way first');
+		Assert.same(['warning B S.p | S._y', 'warning B S.x | S._x'], holds(acrossCalls('io(); p();')), 'the uncovered way first');
+		Assert.same(['info B S.x | S._x', 'warning B S.p | S._y'], holds(acrossCalls('p(); p();')), 'every way past the hold');
+		// `q` reaches the sleep through `p` too, by a way of its own: two reasons, one covering hold, said once
+		final twice: Array<Violation> = acrossCalls('q(); p();');
+		Assert.same(['info B S.x | S._x', 'warning B S.p | S._y'], holds(twice), 'two ways past the hold');
+		final folded: Null<Violation> = twice.filter(v -> v.data?.member == 'S.x')[0];
+		Assert.isTrue(
+			folded?.message.endsWith(' — long only through work S.p also holds a lock across, reported there') == true, folded?.message
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
 	 * A suppressed warning reports nothing, so it covers nothing (review round 4 `f2`): `A.b` holds `_x` across the sleep
 	 * `A.a` holds it across too, and `A.a`'s warning carries `noqa`. `A.b` used to fold onto it, leaving the stall named only
 	 * by an info finding.
@@ -503,6 +528,21 @@ class ThreadSafetyRootCauseTest extends Test {
 			+ ' function io():Void Sys.sleep(1); function p():Void { _y.acquire(); io(); _y.release(); }'
 			+ ' function pad():Void io(); function slow():Void pad(); function both():Void { $body }'
 			+ ' public function x():Void { _x.acquire(); both(); _x.release(); }'
+			+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> { s.x(); s.p(); });'
+			+ ' s._x.acquire(); s._x.release(); s._y.acquire(); s._y.release(); } }'
+		]);
+	}
+	/**
+	 * `S.x` holding `_x` across `body` itself; `p` holds `_y` across `io()`, which sleeps. A lock's take is no sink here, so
+	 * a call into `p` names the sleep as its first way.
+	 */
+	private static function acrossCalls(body: String): Array<Violation> {
+		return ThreadSafetyCheckTest.violations(CONFIG.replace('"Mutex.acquire",', ''), [
+			ThreadSafetyCheckTest.MUTEX,
+			RUNNER,
+			'class S { final _x:Mutex = new Mutex(); final _y:Mutex = new Mutex(); public function new() {}'
+			+ ' function io():Void Sys.sleep(1); function p():Void { _y.acquire(); io(); _y.release(); } function q():Void p();'
+			+ ' public function x():Void { _x.acquire(); $body _x.release(); }'
 			+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> { s.x(); s.p(); });'
 			+ ' s._x.acquire(); s._x.release(); s._y.acquire(); s._y.release(); } }'
 		]);

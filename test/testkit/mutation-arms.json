@@ -19422,6 +19422,22 @@
 			"note": "a call is covered when the first blocking call its walk finds is, whatever else it reaches"
 		},
 		{
+			"name": "M-TS-FOLD-SAME-WAY",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "subsumes",
+			"find": " && v.foreach(id -> w.contains(id))",
+			"replace": "",
+			"note": "two calls of a hold reaching one sink by different ways are one reason, keeping the first call's way: a hold on that way covers the other call too"
+		},
+		{
+			"name": "M-TS-FOLD-PARTS-ONCE",
+			"type": "anyparse.check.RootCauseFold",
+			"method": "turn",
+			"find": "[for (k => p in parts) if (parts.indexOf(p) == k) p].join('; ')",
+			"replace": "parts.join('; ')",
+			"note": "a folded finding names the same covering holds once per reason: two ways to one sink say it twice"
+		},
+		{
 			"name": "M-TS-FOLD-ENDS-WALK",
 			"type": "anyparse.check.LockTaint",
 			"method": "blockingEnds",
