@@ -446,10 +446,13 @@ final class SymbolIndexBuilder {
 	 */
 	private static function collectSupertypesWritten(node: QueryNode, source: String): Array<String> {
 		final out: Array<String> = [];
-		for (clause in node.children) if (clause.kind == 'ExtendsClause' || clause.kind == 'ImplementsClause') for (c in clause.children) {
-			final span: Null<Span> = c.span;
-			if (span != null) out.push(source.substring(span.from, span.to));
-		}
+		// the clauses of a `final` type sit on the form the wrapper holds, as for `collectSupertypesRaw`
+		collectInto(node, clause -> {
+			if (clause.kind == 'ExtendsClause' || clause.kind == 'ImplementsClause') for (c in clause.children) {
+				final span: Null<Span> = c.span;
+				if (span != null) out.push(source.substring(span.from, span.to));
+			}
+		});
 		return out;
 	}
 

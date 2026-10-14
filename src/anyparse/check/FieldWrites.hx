@@ -1,9 +1,10 @@
 package anyparse.check;
 
+import anyparse.check.ReflectiveReach.Capture;
+import anyparse.check.ReflectiveReach.Placement;
 import anyparse.query.BoolExprShape;
 import anyparse.query.CallGraph;
 import anyparse.query.CallGraphNames;
-import anyparse.query.CallGraphTypes;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.StringFold.StringFoldSupport;
@@ -43,10 +44,17 @@ typedef FieldWriteSite = {
 	final reflective: Bool;
 
 	/**
-	 * For a `reflective` write, the types whose fields it may reach (`reachOf`); null when that is any type's, and for
+	 * For a `reflective` write, the types whose fields it may reach (`ReflectiveReach.placeOf`); null when that is any type's, and for
 	 * every other write.
 	 */
 	final reaches: Null<Array<String>>;
+
+	/**
+	 * For a `reflective` write on a value its declared type places on no class, the positive exclusion that bounds
+	 * `reaches` all the same (`ReflectiveReach.placeOf`): a fresh structure or object, a type parameter its constraint or its
+	 * instantiations bound; null for every other write.
+	 */
+	final placedBy: Null<String>;
 }
 
 /**
@@ -57,11 +65,13 @@ typedef FieldWriteSite = {
  * A reflective write — `Reflect.setField` / `setProperty` / `deleteField`, called off `Reflect` or as a `using` extension
  * or handed on as a function value, `DynamicAccess.set` / `remove`, or an index write into a value not proven an array, a
  * map or a buffer (`ELEMENT_INDEXED_TYPES`) — names its field at run time and is not stopped by a `final`: a literal name
- * files it under that name, a computed one under every name (`of`), each bounded by the types its target may be a value of
- * (`reachOf`; any type for a target of a type the run cannot place on a class: `Dynamic`, `Any`, a type parameter, a structure).
- * There is no narrower sound bound for those: a value of such a type may be an instance of any class, and nothing here tracks which
- * reach it — the cost is paid only by the fields a consumer asks about (fields read through a lock path, a dispatched receiver, a
- * switch subject). A write is positive evidence only in one direction: a write the index holds may change the field, and a field the
+ * files it under that name, a computed one under every name (`of`), each bounded by the types its target may be an object of
+ * (`ReflectiveReach.placeOf`: its declared class and the chains of its subtypes, else what a positive exclusion proves — a `final` local bound
+ * to a fresh structure or object, a type parameter its constraint or every instantiation of its type bounds, a `case` capture
+ * typed by its enum constructor; any type for anything else: `Dynamic`, `Any`, an unbounded type parameter, a structure). A
+ * value of such a type may be an instance of any class, and nothing here tracks which reach it — the cost is paid only by the
+ * fields a consumer asks about (fields read through a lock path, a dispatched receiver, a switch subject, every lock member).
+ * A write is positive evidence only in one direction: a write the index holds may change the field, and a field the
  * index holds no write of is unwritten only when `complete` — the run covers the whole project a `closedWorld`
  * declaration closes (`ThreadSafety.listsByFile`). Anything else, a consumer reads as unknown.
  *
@@ -130,9 +140,6 @@ final class FieldWrites {
 	/** The reflective writes whose name is computed: each may write a field of any name (`of`). */
 	private final _computed: Array<FieldWriteSite> = [];
 
-	/** Each class or interface -> the types whose fields a write on a value of it may reach (`reachOf`). */
-	private final _reach: Map<String, Array<String>> = [];
-
 	/** Each file -> what types an expression of it, as far as the declarations say (`typeOf`); null when nothing can. */
 	private final _typers: Map<String, Null<(QueryNode) -> Null<String>>> = [];
 
@@ -141,17 +148,21 @@ final class FieldWrites {
 
 	private final _plugin: GrammarPlugin;
 
+	/** What the target of a reflective write may be an object of. */
+	private final _targets: ReflectiveReach;
+
 	private final _graph: CallGraph;
 	private final _shape: RefShape;
 
 	/** What reads a plain string literal's content (`Reflect.setField(o, "name", v)`); null for a grammar with none. */
 	private final _fold: Null<StringFoldSupport>;
 
-	public function new(graph: CallGraph, plugin: GrammarPlugin, complete: Bool) {
+	public function new(graph: CallGraph, plugin: GrammarPlugin, complete: Bool, ?reflectiveClasses: Array<String>) {
 		_graph = graph;
 		_plugin = plugin;
 		_shape = plugin.refShape();
 		_fold = plugin.stringFoldSupport();
+		_targets = new ReflectiveReach(graph, plugin, complete, reflectiveClasses);
 		this.complete = complete;
 		for (held in graph.heldFiles()) collect(held.file, held.source, held.tree, false);
 	}
@@ -232,7 +243,8 @@ final class FieldWrites {
 			declaring: type == null ? null : _graph.types.declaringTypeOf(type, name),
 			typed: type != null,
 			reflective: false,
-			reaches: null
+			reaches: null,
+			placedBy: null
 		});
 	}
 
@@ -246,13 +258,18 @@ final class FieldWrites {
 	/**
 	 * Records `write`, in `file` of `source`, of the field the key `key` names on the object `target` holds: a plain literal
 	 * names one field, anything else — no key at all included — any field (`_computed`). Either reaches only fields of the
-	 * types `target` may be a value of (`reachOf`), any type's for no target.
+	 * types `target` may be an object of (`ReflectiveReach.placeOf`), any type's for no target.
 	 */
 	private function reflectiveWrite(file: String, source: String, write: QueryNode, target: Null<QueryNode>, key: Null<QueryNode>): Void {
 		final at: Null<Span> = write.span;
 		if (at == null) return;
 		final fn: Null<String> = _graph.functionAt(file, at.from);
 		final literal: Null<StringLiteral> = key == null ? null : _fold?.literalOf(key, source);
+		final declared: Null<String> = target == null ? null : declaredType(file, source, fn, target);
+		final capture: Null<Capture> = target == null || declared != null ? null : captureOf(file, source, fn, target);
+		final place: Placement = target == null
+			? { reaches: null, by: null }
+			: _targets.placeOf(file, fn, target, declared ?? capture?.type, capture?.by);
 		final site: FieldWriteSite = {
 			write: write,
 			file: file,
@@ -261,7 +278,8 @@ final class FieldWrites {
 			declaring: null,
 			typed: fn != null && _graph.node(fn)?.typeName != null,
 			reflective: true,
-			reaches: target == null ? null : reachOf(typeOf(file, source, fn, target), fn)
+			reaches: place.reaches,
+			placedBy: place.by
 		};
 		if (literal == null)
 			_computed.push(site);
@@ -277,9 +295,15 @@ final class FieldWrites {
 
 	/**
 	 * The type the value `node`, in `file` of `source` and the function `fn`, is declared of, as far as the declarations
-	 * say (`CheckScan.typeNominalResolver`): the running type for the self reference; null when unknown.
+	 * say (`CheckScan.typeNominalResolver`), a `case` capture by the enum constructor it is a parameter of (`ReflectiveReach.binderType`):
+	 * the running type for the self reference; null when unknown.
 	 */
 	private function typeOf(file: String, source: String, fn: Null<String>, node: QueryNode): Null<String> {
+		return declaredType(file, source, fn, node) ?? captureOf(file, source, fn, node)?.type;
+	}
+
+	/** The type the value `node`, in `file` of `source` and the function `fn`, is declared of (`typeOf`), captures aside. */
+	private function declaredType(file: String, source: String, fn: Null<String>, node: QueryNode): Null<String> {
 		final value: QueryNode = BoolExprShape.unwrapParens(node, _shape.parenKind);
 		if (value.kind == _shape.identKind && value.name == _shape.selfReferenceText) return fn == null ? null : _graph.node(fn)?.typeName;
 		if (!_typers.exists(file)) {
@@ -291,9 +315,17 @@ final class FieldWrites {
 	}
 
 	/**
+	 * What types the `case` capture `node`, in `file` of `source` and the function `fn`, by the enum constructor it is a
+	 * parameter of (`ReflectiveReach.binderType`), its switch subject typed as any value is (`typeOf`); null for any other value.
+	 */
+	private function captureOf(file: String, source: String, fn: Null<String>, node: QueryNode): Null<Capture> {
+		return _targets.binderType(file, BoolExprShape.unwrapParens(node, _shape.parenKind), typeOf.bind(file, source, fn));
+	}
+
+	/**
 	 * The index of the files the graph holds, built on the first demand: what `typeOf` resolves a member type through. Not
 	 * the resolution index (std + libraries): building that one cost more than the rest of the rule (decisions.md, FX3). A member chain
-	 * through a library type stays unknown, which costs precision only: `reachOf` places only a project
+	 * through a library type stays unknown, which costs precision only: `ReflectiveReach` places only a project
 	 * class, and an index write into a container of an unknown type is a reflective one (`record`).
 	 */
 	private function heldIndex(): SymbolIndex {
@@ -305,39 +337,8 @@ final class FieldWrites {
 	}
 
 	/**
-	 * The types whose fields a write on a value declared `type` may reach: for a class or an interface the run declares
-	 * once (through a typedef alias), every subtype of it and every type on the chain of each — the object is one of them,
-	 * its fields declared along its chain. Null, any type's, for any other type: `Dynamic`, `Any`, a type parameter, a
-	 * structure or an abstract (which a value of any class may be), a library type, an unknown one — and a name a type
-	 * parameter of the function `fn` the write runs in, or of its type, takes over.
-	 */
-	private function reachOf(type: Null<String>, fn: Null<String>): Null<Array<String>> {
-		final types: CallGraphTypes = _graph.types;
-		final named: Null<String> = type == null ? null : types.resolveAlias(CallGraphNames.lastSegments(type, 1));
-		if (named == null || types.declarationCount(named) != 1 || !(types.meta.isClass(named) || types.isInterface(named))) return null;
-		if (fn != null && _graph.typeParamBoundsOf(fn, named) != null) return null;
-		final known: Null<Array<String>> = _reach[named];
-		if (known != null) return known;
-		final out: Array<String> = closure([named], types.subtypesOf);
-		final reach: Array<String> = closure(out, types.supertypesOf);
-		_reach[named] = reach;
-		return reach;
-	}
-
-	/** `from` and every type `next` reaches from it, step by step: the closure of `next` over `from`. */
-	private static function closure(from: Array<String>, next: (String) -> Array<String>): Array<String> {
-		final out: Array<String> = from.copy();
-		var at: Int = 0;
-		while (at < out.length) {
-			for (t in next(out[at])) if (!out.contains(t)) out.push(t);
-			at++;
-		}
-		return out;
-	}
-
-	/**
 	 * Whether `site` may write the field of that name `owner` declares: a reflective write when `owner` is among the types
-	 * it may reach (`reachOf`; any, when unknown); any other receiver's write always — what it is written on, nothing here
+	 * it may reach (`ReflectiveReach.placeOf`; any, when unknown); any other receiver's write always — what it is written on, nothing here
 	 * can tell — and the running object's when its type declares the field as `owner`'s, declares none by the name (a local
 	 * of that name included), or is unknown. An interface's field is declared again by every implementer, so any own write
 	 * of the name may be one of it.
@@ -349,14 +350,41 @@ final class FieldWrites {
 	}
 
 	/**
-	 * Whether a reflective write may store a value in a field named `name`: one filed under the name, or a
-	 * computed one whose reach holds a type declaring a member so named on its chain. A computed one on a value
-	 * of no known class (`unplaced`) is not counted: on TM such writes (a `Node<T>`'s `targetObject:T`, `Dynamic`
-	 * locals) would make every lock member hold any lock, which names no lock at all — the run says so instead.
+	 * Whether a reflective write may store a value in a field named `name`: one filed under the name, or a computed one
+	 * whose reach holds a type declaring a member so named on its chain — or that reaches any type's (`unplaced`), which
+	 * may store anything in any field, a lock in any lock member included. That is the sound default; what keeps a write
+	 * on a value of no declared class off it is a POSITIVE exclusion (`ReflectiveReach.placeOf`), never the absence of a known class.
 	 */
-	public function reflectivelyWritten(name: String): Bool {
-		return (_byName[name] ?? []).exists(site -> site.reflective && (site.reaches == null || reachesDeclarer(site, name)))
-			|| _computed.exists(site -> reachesDeclarer(site, name));
+	public inline function reflectivelyWritten(name: String): Bool {
+		return reflectiveWritersOf(name).length > 0;
+	}
+
+	/**
+	 * The functions making the reflective writes that may store a value in a field named `name` (`reflectivelyWritten`), each
+	 * once — a write outside every function by its file.
+	 */
+	public function reflectiveWritersOf(name: String): Array<String> {
+		final out: Array<String> = [];
+		for (site in (_byName[name] ?? []).concat(_computed)) if (
+			site.reflective && (site.reaches == null || reachesDeclarer(site, name))
+		) {
+			final at: String = site.fn ?? site.file;
+			if (!out.contains(at)) out.push(at);
+		}
+		return out;
+	}
+
+	/**
+	 * Why a lock call made on the member `field` (`CallEdge.receiverField`) names no lock — `lock` null — when reflective
+	 * writes may store any lock in that member (`reflectiveWritersOf`): the member and the functions making them, said
+	 * after a finding's message; null for a named lock, no member, or a member no reflective write reaches.
+	 */
+	public function unsealedNote(field: Null<String>, lock: Null<String>): Null<String> {
+		final member: Null<String> = field == null || lock != null ? null : LockSites.memberName(field);
+		final writers: Array<String> = member == null ? [] : reflectiveWritersOf(member);
+		return writers.length == 0
+			? null
+			: ' — its lock member $member names no lock: a reflective write may store any lock in it (${firstNames(writers)})';
 	}
 
 	/** Whether the reflective write `site` reaches a known type declaring a member named `name` on its chain. */
@@ -366,27 +394,60 @@ final class FieldWrites {
 	}
 
 	/**
-	 * The reflective writes of a computed name on a value of no class the run can place (`reachOf` null: `Dynamic`, `Any`, a
-	 * type parameter, an unknown container): each may store anything in any field, and `reflectivelyWritten` does not count
-	 * them.
+	 * The reflective writes of a computed name on a value the run places on no class and no exclusion bounds (`ReflectiveReach.placeOf`:
+	 * `Dynamic`, `Any`, a type parameter nothing bounds, a value the declarations do not type): each may store anything in
+	 * any field, and `reflectivelyWritten` counts each for every name.
 	 */
 	public function unplaced(): Array<FieldWriteSite> {
 		return _computed.filter(site -> site.reaches == null);
 	}
 
 	/**
-	 * What the lock names assume (`reflectivelyWritten`): that no `unplaced` write stores a lock in a lock member — one line
-	 * naming the functions making such writes, the first `NOTICE_NAMES` of them; none when there is no such write.
+	 * What the reflective writes cost the lock names (`reflectivelyWritten`): one line naming the functions making an
+	 * `unplaced` write, which unseals every lock member, one naming each function whose write a positive exclusion bounds,
+	 * with the exclusion — the first `NOTICE_NAMES` of each — and, when `unnamed` lock holds lost the name of their member to
+	 * such a write, one counting them, with the preconditions of the instantiation bound the run fails
+	 * (`ReflectiveReach.lacking`) when a write is unplaced; none when there is no such write.
 	 */
-	public function notices(): Array<String> {
+	public function notices(unnamed: Int): Array<String> {
 		final where: Array<String> = [];
 		for (w in unplaced()) if (!where.contains(w.fn ?? w.file)) where.push(w.fn ?? w.file);
-		if (where.length == 0) return [];
-		final more: String = where.length > NOTICE_NAMES ? ' (+${where.length - NOTICE_NAMES} more)' : '';
-		return [
-			'a reflective write of a computed name on a value of no known class may store any lock in any lock member — the lock'
-				+ ' names assume none does: ${where.slice(0, NOTICE_NAMES).join(', ')}$more'
-		];
+		final placed: Array<String> = [];
+		for (list in [_computed].concat([for (sites in _byName) sites])) for (w in list) {
+			final by: Null<String> = w.placedBy;
+			final entry: String = '${w.fn ?? w.file} ($by)';
+			if (by != null && !placed.contains(entry)) placed.push(entry);
+		}
+		final out: Array<String> = [];
+		if (where.length > 0)
+			out.push(
+				'a reflective write of a computed name on a value the run places on no class (Dynamic, Any, a type parameter'
+				+ ' nothing bounds, or one the declarations do not type) may store any lock in any lock member, so no lock is'
+				+ ' named by its member: ${firstNames(where)}'
+			);
+		if (placed.length > 0)
+			out.push(
+				'reflective writes on a value whose declared type places it on no class, each bounded by what the value provably is:'
+				+ ' ${firstNames(placed)}'
+			);
+		// what would have bounded an unplaced write on a type parameter: a run over a whole closed project declaring its reflection
+		final missing: Array<String> = _targets.lacking();
+		final lacking: String = where.length == 0 || missing.length == 0
+			? ''
+			: '; a type parameter is bounded by its instantiations only in a run over a whole closedWorld project declaring'
+				+ ' reflectiveClasses — here: ${missing.join(', ')}';
+		if (unnamed > 0)
+			out.push(
+				'$unnamed lock hold(s) lost the name of their lock member to a reflective write — each is keyed by its pair\'s take'
+				+ ' and its finding names the writers$lacking'
+			);
+		return out;
+	}
+
+	/** The first `NOTICE_NAMES` of `names`, and how many more there are. */
+	public static function firstNames(names: Array<String>): String {
+		final more: String = names.length > NOTICE_NAMES ? ' (+${names.length - NOTICE_NAMES} more)' : '';
+		return names.slice(0, NOTICE_NAMES).join(', ') + more;
 	}
 
 	/** Whether `kind` is a field access of `shape`: plain, null-safe or forced. */

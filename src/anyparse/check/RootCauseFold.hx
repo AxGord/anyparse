@@ -226,7 +226,7 @@ final class RootCauseFold {
 				if (end.trail.path.length < _depth[at]) _depth[at] = end.trail.path.length;
 				reasons.push(reasonOf(h, end, first));
 			}
-			for (reason in reasons) if (!out.exists(r -> same(r, reason))) out.push(reason);
+			for (reason in reasons) if (!out.exists(r -> subsumes(r, reason))) out.push(reason);
 		}
 		return out;
 	}
@@ -302,7 +302,8 @@ for (d in doing[key] ?? []) if (covers(d, i, mayRepeat, way)) memberOf(_warned[d
 			case Uncovered:
 		}
 		finding.severity = Severity.Info;
-		finding.message += ' — long only through ${parts.join('; ')}, reported there';
+		// two reasons (two ways to one sink, two sinks) may name the same holds: each part is said once
+		finding.message += ' — long only through ${[for (k => p in parts) if (parts.indexOf(p) == k) p].join('; ')}, reported there';
 	}
 
 	/**
@@ -447,11 +448,17 @@ for (d in doing[key] ?? []) if (covers(d, i, mayRepeat, way)) memberOf(_warned[d
 		return members.slice(0, NAMED_CAP).join(', ') + (more > 0 ? ' (+$more more)' : '');
 	}
 
-	private static function same(a: FoldReason, b: FoldReason): Bool {
-		return switch [a, b] {
+	/**
+	 * Whether `reason` adds nothing to `kept`, a reason of the same hold already kept: one wait, or one sink call as often
+	 * and as named whose way passes every function `kept`'s does — covered whenever `kept` is, `covers` reading a way only
+	 * for the functions it passes. Two calls reaching one sink by different ways are two reasons (review round 5, G3): one
+	 * through a hold of another lock does not cover the other, which reaches the sink outside it.
+	 */
+	private static function subsumes(kept: FoldReason, reason: FoldReason): Bool {
+		return switch [kept, reason] {
 			case [Waits(x), Waits(y)]: x == y;
-			case [Site(x, r, m, _, a), Site(y, s, n, _, b)]:
-				x == y && r == s && m == n && (a == null) == (b == null);
+			case [Site(x, r, m, v, a), Site(y, s, n, w, b)]:
+				x == y && r == s && m == n && (a == null) == (b == null) && v.foreach(id -> w.contains(id));
 			case [Uncovered, Uncovered]: true;
 			case _: false;
 		};

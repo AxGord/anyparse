@@ -49,7 +49,7 @@ final class MainSinkReport {
 	 */
 	public static function report(
 		graph: CallGraph, sites: LockSites, taints: LockTaint, costs: PathCosts, repeats: MainRepetition, states: ThreadStates,
-		violations: Array<Violation>, suppressed: (Violation) -> Bool
+		violations: Array<Violation>, suppressed: (Violation) -> Bool, writes: FieldWrites
 	): Map<String, Violation> {
 		final reportedBy: Map<String, Violation> = [];
 		final moved: Map<String, Violation> = [];
@@ -101,7 +101,7 @@ final class MainSinkReport {
 			if (finding.severity == Severity.Warning) (taints.takesLock(edge) ? takes : direct).push({ edge: edge, finding: finding });
 			noteReporter(reportedBy, edge, finding, moved);
 		}
-		oneTakePerLock(graph, sites, takes, suppressed);
+		oneTakePerLock(graph, sites, takes, suppressed, writes);
 		oneWarningPerWay(direct, states, reportedBy, suppressed);
 		noteRepeats(takes.concat(direct));
 		dropSilenced(reportedBy, suppressed);
@@ -200,18 +200,24 @@ final class MainSinkReport {
 	}
 
 	/**
-	 * Every main-thread take of one named lock waits for the same holders: of its warnings, one stays — of those no
+	 * Every main-thread take of one named lock waits for the same holders (a take of a member a reflective write unsealed names
+	 * no lock, and says who unsealed it: `FieldWrites.unsealedNote` of `writes`): of its warnings, one stays — of those no
 	 * directive silences (`suppressed`) when there is one, the take inside a lock wrapper of it (`LockAcquire.delegated`)
 	 * when there is one, else the first by member, file and offset — and the others turn info, naming that one, which
 	 * carries what repeats each of them (TM's `Store.get`, named for `Main.reboot`'s loop over `Store.remove`).
 	 */
 	private static function oneTakePerLock(
-		graph: CallGraph, sites: LockSites, takes: Array<{ edge: CallEdge, finding: Violation }>, suppressed: (Violation) -> Bool
+		graph: CallGraph, sites: LockSites, takes: Array<{ edge: CallEdge, finding: Violation }>, suppressed: (Violation) -> Bool,
+		writes: FieldWrites
 	): Void {
 		final byLock: Map<String, Array<{ edge: CallEdge, finding: Violation }>> = [];
 		for (t in takes) {
 			final lock: Null<String> = sites.lockOf(t.edge);
-			if (lock == null) continue;
+			// a take of a member a reflective write unsealed waits for any holder: it says who unsealed it
+			if (lock == null) {
+				t.finding.message += writes.unsealedNote(t.edge.receiverField, null) ?? '';
+				continue;
+			}
 			final list: Array<{ edge: CallEdge, finding: Violation }> = byLock[lock] ?? [];
 			list.push(t);
 			byLock[lock] = list;

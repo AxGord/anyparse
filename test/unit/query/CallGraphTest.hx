@@ -259,14 +259,60 @@ class CallGraphTest extends Test {
 		Assert.equals(0, g.outEdges('A.a').length);
 	}
 
+	@:pin('control') @:killer('M-TS-DOTTED-TARGET')
 	public function testResolveTargetBareAndQualified(): Void {
 		final g: CallGraph = graphOf([
-			'class A { function run():Void {} }',
+			'package pkg.sub; class A { function run():Void {} }',
 			'class B { function run():Void {} }'
 		]);
 		Assert.equals(2, g.resolveTarget('run').length);
 		Assert.equals(1, g.resolveTarget('A.run').length);
 		Assert.equals(1, g.resolveTarget('pkg.sub.A.run').length);
+		// a path no declaration of `A` sits at names another type, never the project's `A`
+		Assert.equals(0, g.resolveTarget('other.A.run').length);
+	}
+
+	/**
+	 * A type name a wildcard import of a package may supply: one the project or the std core declares there is that type,
+	 * searched last import first and after the file's own explicit imports; a package neither holds, or a guarded import or
+	 * wildcard, may supply it, so a call or a `new` on it dispatches to every candidate.
+	 */
+	@:pin('control') @:killer('M-TS-WILD-EXPLICIT-NO-MAYBE') @:killer('M-TS-WILD-MAYBE') @:killer('M-TS-WILD-GUARDED')
+	@:killer('M-TS-WILD-PROJECT') @:killer('M-TS-WILD-ORDER') @:killer('M-TS-STD-PACKAGES') @:killer('M-TS-ALTERNATE-SAME')
+	@:killer('M-TS-ALTERNATE-NEW')
+	public function testAWildcardOrGuardedNameDispatchesToEveryTypeItMayBe(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final g: CallGraph = graphOf([
+			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
+			'package app; import sys.thread.*; class Std { static function f(l:Lock):Void l.wait(); }',
+			'package app; import sys.thread.*; import utils.*; class Project { static function f(l:Lock):Void l.wait(); }',
+			'package app; import utils.Lock; import lib.*; class Explicit { static function f(l:Lock):Void l.wait(); }',
+			'package app; import lib.*; class Unknown { static function f(l:Lock):Void l.wait(); }',
+			'package app; import sys.thread.*; import lib.*; class Typed { static function f(l:utils.Lock):Void l.wait();'
+			+ ' static function s(l:Lock):Void l.wait(); }',
+			'package app; #if sys import sys.thread.*; #end class Guarded { static function f(l:Lock):Void l.wait();'
+			+ ' static function g():Void new Lock(); }'
+		]);
+		function targets(from: String): Array<String> {
+			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call || e.kind == New) e.to];
+			out.sort(Reflect.compare);
+			return out;
+		}
+		Assert.same(['sys.thread.Lock.wait'], targets('Std.f'), 'a std module');
+		Assert.same(['Lock.wait'], targets('Project.f'), 'the last wildcard first');
+		Assert.same(['Lock.wait'], targets('Explicit.f'), 'an explicit import first');
+		Assert.same(['Lock.wait', 'lib.Lock.wait'], targets('Unknown.f'), 'a package neither holds');
+		Assert.same(['lib.Lock.wait', 'sys.thread.Lock.wait'], targets('Typed.s'), 'a package neither holds, searched first');
+		Assert.same(['Lock.wait'], targets('Typed.f'), 'a value of another type than the name binds');
+		Assert.same(['Lock.wait', 'sys.thread.Lock.wait'], targets('Guarded.f'), 'a guarded wildcard');
+		Assert.same(['Lock.new', 'sys.thread.Lock.new'], targets('Guarded.g'), 'a guarded wildcard constructs either');
+		#else
+		Assert.pass('non-sys target');
+		#end
 	}
 
 	public function testMatchIdsWildcard(): Void {

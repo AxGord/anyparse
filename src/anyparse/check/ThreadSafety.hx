@@ -97,6 +97,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	/** The name of a program's entry point, which the runtime calls. */
 	public static inline final ENTRY_POINT: String = 'main';
 
+
 	private static inline final EVIDENCE_CAP: Int = 8;
 
 	/** Why each lock of the last run is long, when the run was asked to say (`explainLongLocks`); null otherwise. */
@@ -179,7 +180,9 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 
 		final throws: ThrowReach = new ThrowReach(graph, plugin.refShape(), file -> listsOf(file).throwerIds, trees);
 		// every write of the project, seen only when the run covers a closed project (`listsByFile`)
-		final writes: FieldWrites = new FieldWrites(graph, plugin, files.foreach(f -> byFile[f.file]?.closedWorld == true));
+		final writes: FieldWrites = new FieldWrites(
+			graph, plugin, files.foreach(f -> byFile[f.file]?.closedWorld == true), ReflectiveReach.declaredClasses(files, _resolveConfig)
+		);
 		final sites: LockSites = new LockSites(
 			graph, [for (f in files) f.file],
 			plugin, file -> listsOf(file).pairs, throws, trees, new ExhaustiveSwitches(graph, plugin, writes, seedable), writes
@@ -223,22 +226,25 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final runsMain: (CallEdge) -> Bool = e -> !(e.kind == Ref && inertRef(e)) && states.edgeContext(e) & CTX_MAIN != 0;
 		final repeatsOnMain: MainRepeats = new MainRepeats(graph, repetition, states, conditions, runsMain);
 		final reported: Map<String, Violation> = MainSinkReport.report(
-			graph, sites, taints, paths, { repetition: repetition, main: repeatsOnMain, runs: runsMain }, states, violations, suppressed
+			graph, sites, taints, paths, { repetition: repetition, main: repeatsOnMain, runs: runsMain },
+			states, violations, suppressed, writes
 		);
 		if (must.unsettled)
 			problems.push(
 				'the locks held on entry did not settle within the bound, so no function is taken to hold any on its way in:'
 				+ ' no take is brief for being made under another lock'
 			);
-		reportConfigProblems(problems.concat(writes.notices()), violations);
+		final unnamed: Int = holds.filter(a -> writes.unsealedNote(a.edge.receiverField, a.lock) != null).length;
+		reportConfigProblems(problems.concat(writes.notices(unnamed)), violations);
 		reportLockHeld(graph, sites, judged, taints, {
 			costs: paths,
 			reported: reported,
 			enclosed: dominance.enclosed,
+			writes: writes,
 			threads: states.origins(inertRef),
 			suppressed: suppressed
 		}, states, violations);
-		reportThrowHeld(graph, acquires.concat(helperHolds), throws, violations);
+		reportThrowHeld(graph, writes, acquires.concat(helperHolds), throws, violations);
 		final order: LockOrder = new LockOrder(graph, conditions, acquires.concat(helperHolds));
 		final runsHere: (CallEdge) -> Bool = e -> states.runsHere(e, listsOf(e.file));
 		for (v in order.report(states, inertRef, runsHere, CTX_MAIN | CTX_QUIET, CTX_BG, CHAIN_CAP)) violations.push(v);
@@ -277,6 +283,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	public function scanSkipReason(file: String, config: LintConfig): Null<String> {
 		return ProjectCoverage.excluded(file, config.stringListOption('thread-safety', 'exclude') ?? []) ? 'config-excluded' : null;
 	}
+
 
 	/**
 	 * Why each lock is long (`LongLockExplain.report`) when this check was asked (`explainLongLocks`), null otherwise: the
@@ -347,6 +354,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 				found.push('option "sinks" lists no call — only the builtin sinks apply under this config');
 			else if (option('sinks').length > 0 && configured.length == 0)
 				found.push('option "sinks" names no call of the run (${option('sinks').join(', ')}) — only the builtin sinks apply here');
+			else
+				PositiveSinks.unmatched(option('sinks'), graph, found);
 			if (declaredClosed && !closedWorld)
 				found.push(
 					'option "closedWorld" holds only for a run over the whole project it closes — this run leaves part of it out (a'
@@ -710,6 +719,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			costs: PathCosts,
 			reported: Map<String, Violation>,
 			enclosed: (LockAcquire) -> Bool,
+			writes: FieldWrites,
 			threads: (String) -> Array<String>,
 			suppressed: (Violation) -> Bool
 		},
@@ -749,8 +759,9 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			final short: Bool = graded.info;
 			final calls: String = blocking.length == 1 ? 'a call' : '${blocking.length} calls';
 			final holder: String = a.edge.from;
+			final unsealed: String = judged.writes.unsealedNote(a.edge.receiverField, lock) ?? '';
 			final message: String = '"$holder" holds "${lock ?? a.pair.lockId}" across $calls that can block: '
-				+ evidenceOf(blocking, held, graded.taint) + graded.note;
+				+ evidenceOf(blocking, held, graded.taint) + graded.note + unsealed;
 			final anchor: CallEdge = blocking[0].edge;
 			final key: String = '${anchor.file}:${anchor.span?.from}:$message';
 			final known: Null<Violation> = made[key];
@@ -823,7 +834,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	 * first escape, the holds a multi-lock helper opens in its caller included.
 	 */
 	private static function reportThrowHeld(
-		graph: CallGraph, holds: Array<LockAcquire>, throws: ThrowReach, violations: Array<Violation>
+		graph: CallGraph, writes: FieldWrites, holds: Array<LockAcquire>, throws: ThrowReach, violations: Array<Violation>
 	): Void {
 		final seen: Array<String> = [];
 		// an escape leaks the hold, so none is the owner's constructor's (`LockAcquire.uncontended`)
@@ -835,8 +846,9 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 				if (!evidence.contains(shown)) evidence.push(shown);
 			}
 			final holder: String = a.edge.from;
+			final escapes: String = capped(evidence) + (writes.unsealedNote(a.edge.receiverField, a.lock) ?? '');
 			final message: String =
-				'"$holder" leaves "${a.lock ?? a.pair.lockId}" held when it throws, with no catch to release it: ${capped(evidence)}';
+				'"$holder" leaves "${a.lock ?? a.pair.lockId}" held when it throws, with no catch to release it: $escapes';
 			final anchor: Span = a.escapes[0].span;
 			final key: String = '${a.edge.file}:${anchor.from}:$message';
 			if (seen.contains(key)) continue;

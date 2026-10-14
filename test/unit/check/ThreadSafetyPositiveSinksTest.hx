@@ -54,6 +54,11 @@ class ThreadSafetyPositiveSinksTest extends Test {
 			'class File { public static function getContent(p:String):String return p; }'
 			+ ' class B { static function main():Void File.getContent("x"); }'
 		])), 'a project namesake');
+		// a project type declared AT the library path (a classpath override) is the project's: its body is read
+		Assert.same([], graded(ThreadSafetyCheckTest.violations('{"rules":{"thread-safety":{"closedWorld":false}}}', [
+			'package sys.io; class File { public static function getContent(p:String):String return p; }',
+			'class B { static function main():Void sys.io.File.getContent("x"); }'
+		])), 'a project override of the library path');
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -198,10 +203,100 @@ class ThreadSafetyPositiveSinksTest extends Test {
 		final found: Array<Violation> = ThreadSafetyCheckTest.violations(waiving, [native, app]);
 		Assert.isTrue(graded(found).contains('warning A A.own | Lock.wait'), 'the native named like a library call is kept');
 		Assert.isTrue(graded(found).contains('warning A A.written | sys.thread.Lock.wait'), 'the library call is never waived with it');
+		// a pattern naming the type by its simple name names the library type keyed by its path too
+		final bySimpleName: Array<String> = graded(ThreadSafetyCheckTest.violations(
+			'{"rules":{"thread-safety":{"closedWorld":false,"nonBlocking":["Lock.wait the fixture never waits"]}}}', [native, app]
+		));
+		Assert.isFalse(bySimpleName.contains('warning A A.written | sys.thread.Lock.wait'), 'waived by its simple name');
 		Assert.same([
 			'nonBlocking entry "utils.Lock.wait" names the project native "Lock.wait", which bears the name of a blocking library call'
 			+ ' — kept: a call of the library one the graph cannot tell apart from it resolves there'
 		], said(found));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A name a wildcard import of a std package supplies is that std type — the language looks in the wildcards before the
+	 * file's package — unless the file's own module or an explicit import binds it; a name an `#if`-guarded import binds
+	 * may be either type, so a call of it runs both members. Before, both resolved to the project's `Lock`, whose `wait`
+	 * never blocks: the runtime's wait went silent.
+	 */
+	@:pin('control') @:killer('M-TS-WILD-PACKAGES') @:killer('M-TS-WILD-OWN-MODULE') @:killer('M-TS-WILD-EXPLICIT-FIRST')
+	@:killer('M-TS-WILD-STD') @:killer('M-TS-GUARDED-IMPORT') @:killer('M-TS-ALTERNATE-CALL')
+	public function testAWildcardOrGuardedImportOfALibraryTypeIsNotItsProjectNamesake(): Void {
+		#if (sys || nodejs)
+		if (StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final own: String = 'package utils; class Lock { public function new() {} public function wait():Bool return true; }';
+		final config: String = '{"rules":{"thread-safety":{"closedWorld":false}}}';
+		final wild: String =
+			'package utils; import sys.thread.*; class W { static function main():Void { final l:Lock = null; l.wait(); } }';
+		Assert.same(['warning A W.main | sys.thread.Lock.wait'], graded(ThreadSafetyCheckTest.violations(config, [own, wild])), 'wildcard');
+		final guarded: String = 'package app; #if sys import sys.thread.Lock; #end'
+			+ ' class G { static function main():Void { final l:Lock = null; l.wait(); } }';
+		Assert.same(
+			['warning A G.main | sys.thread.Lock.wait'], graded(ThreadSafetyCheckTest.violations(config, [own, guarded])), 'guarded'
+		);
+		// an explicit import, or the file's own module, binds the name before any wildcard: the project's type, which never waits
+		final explicit: String = 'package app; import utils.Lock; import sys.thread.*;'
+			+ ' class E { static function main():Void { final l:Lock = null; l.wait(); } }';
+		Assert.same([], graded(ThreadSafetyCheckTest.violations(config, [own, explicit])), 'explicit import');
+		final local: String = 'package app; import sys.thread.*; class Lock { public function new() {} public function wait():Bool'
+			+ ' return true; } class M { static function main():Void { final l:Lock = null; l.wait(); } }';
+		Assert.same([], graded(ThreadSafetyCheckTest.violations(config, [local])), 'own module');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A `nonBlocking` pattern written with a package names the type declared at that path only: `sys.thread.Lock.*` waives
+	 * nothing of a project native `utils.Lock`, and says so. Before, a dotted pattern matched every type of its simple name.
+	 */
+	@:pin('control') @:killer('M-TS-DOTTED-WILDCARD')
+	public function testADottedWaiverNamesOnlyTheTypeAtThatPath(): Void {
+		#if (sys || nodejs)
+		final native: String = 'package utils; extern class Lock { public function new():Void; public function spin():Void; }';
+		final app: String = 'package app; class C { static function main():Void { final l:utils.Lock = null; l.spin(); } }';
+		final found: Array<Violation> = ThreadSafetyCheckTest.violations(
+			'{"rules":{"thread-safety":{"closedWorld":false,"nonBlocking":["sys.thread.Lock.* the std lock is only ever tried here"]}}}',
+			[native, app]
+		);
+		Assert.same(['warning A C.main | Lock.spin'], graded(found));
+		Assert.same([
+			'nonBlocking entry "sys.thread.Lock.*" waives no builtin sink or project native of the run'
+		], said(found));
+		final waived: Array<Violation> = ThreadSafetyCheckTest.violations(
+			'{"rules":{"thread-safety":{"closedWorld":false,"nonBlocking":["utils.Lock.spin our spin returns at once"]}}}', [native, app]
+		);
+		Assert.same([], graded(waived), 'the path the native is declared at waives it');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A local written with no type and initialised by a call holds what the call returns, as a call's receiver does: a std
+	 * function's return type (`Sys.stdin()`), a project function's declared one. Before, such a local was untyped.
+	 */
+	@:pin('control') @:killer('M-TS-LOCAL-CALL-INIT') @:killer('M-TS-LOCAL-CALL-READ')
+	public function testALocalOfACallResultIsTypedByWhatTheCallReturns(): Void {
+		#if (sys || nodejs)
+		if (StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final source: String = 'class C { static function makeLock():sys.thread.Lock return null;'
+			+ ' static function stdin():Void { final i = Sys.stdin(); i.readLine(); }'
+			+ ' static function made():Void { var l = makeLock(); l.wait(); }' + ' static function main():Void { stdin(); made(); } }';
+		Assert.same(
+			['warning A C.made | Lock.wait', 'warning A C.stdin | Input.readLine'],
+			graded(ThreadSafetyCheckTest.violations('{"rules":{"thread-safety":{"closedWorld":false}}}', [source]))
+		);
 		#else
 		Assert.pass('non-sys target');
 		#end

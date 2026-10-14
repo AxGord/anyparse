@@ -147,7 +147,7 @@ class ThreadSafetyCarriedHoldTest extends Test {
 	 */
 	@:pin('control') @:killer('M-TS-REFLECT-COMPUTED') @:killer('M-TS-REFLECT-EXTENSION') @:killer('M-TS-REFLECT-INDEX')
 	@:killer('M-TS-REFLECT-REACH') @:killer('M-TS-REFLECT-SUBTYPES') @:killer('M-TS-REFLECT-SUPERTYPES') @:killer('M-TS-REFLECT-MAYWRITE')
-	@:killer('M-TS-REFLECT-FINAL') @:killer('M-TS-REFLECT-ANY') @:killer('M-TS-REFLECT-TYPEPARAM')
+	@:killer('M-TS-REFLECT-FINAL') @:killer('M-TS-REFLECT-ANY')
 	public function testAComputedReflectiveWriteNamesNoObject(): Void {
 		#if (sys || nodejs)
 		final plain: String = 'class Fs { public var db:Db; public function new(a:Db, b:Db) { db = a; } }';

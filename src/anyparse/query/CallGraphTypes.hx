@@ -103,6 +103,7 @@ final class CallGraphTypes {
 		return _subs[typeName] ?? [];
 	}
 
+
 	/** Whether an indexed declaration of `typeName` is an interface. */
 	public inline function isInterface(typeName: String): Bool {
 		return (_kinds[typeName] ?? []).exists(k -> _interfaceKinds.contains(k));
@@ -174,6 +175,8 @@ final class CallGraphTypes {
 			for (t in fi.types) record(t);
 			imports.recordFile(fi, key);
 		}
+		// `class R extends N` with `typedef N = T` names `N` alone: `R` is a subtype of `T` too
+		for (alias in _aliases.keys()) if (resolveAlias(alias) != alias) unionInto(_subs, resolveAlias(alias), subtypesOf(alias));
 	}
 
 	/**

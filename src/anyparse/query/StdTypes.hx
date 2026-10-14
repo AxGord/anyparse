@@ -35,6 +35,9 @@ final class StdTypes {
 	/** Module path -> its declarations, null for one that cannot be read or parsed. */
 	private static final moduleInfos: Map<String, Null<FileInfo>> = [];
 
+	/** Every package a std core module sits in (the toplevel as ''), telling a package the core holds from a library's. */
+	private static final packages: Map<String, Bool> = [];
+
 	/**
 	 * What `member` of the std type `typeName` (a simple name, or a module path) is: the module path of the type it
 	 * returns (a function) or holds (a field) — null when the type written is none the module resolves (a type
@@ -72,6 +75,16 @@ final class StdTypes {
 	}
 
 	/**
+	 * Whether the std core declares the module `pkg.name` (`name` for the toplevel
+	 * `pkg` "") — what a wildcard `import pkg.*;` brings in under `name`. Null when
+	 * that cannot be told: no std discovered, or `pkg` a package the core does not hold (a library's, a target's).
+	 */
+	public static function declaresModule(pkg: String, name: String): Null<Bool> {
+		listed();
+		return packages.exists(pkg) ? modulePaths.exists(pkg == '' ? name : '$pkg.$name') : null;
+	}
+
+	/**
 	 * The accessors a use of the std property `member` of `typeName` runs — the getter (`prefixes[0]` + name) when it
 	 * `reads`, the setter (`prefixes[1]` + name) when it `writes` — by their member names; none for a plain field.
 	 */
@@ -89,6 +102,7 @@ final class StdTypes {
 	public static function resetCache(): Void {
 		_modules = null;
 		modulePaths.clear();
+		packages.clear();
 		moduleInfos.clear();
 	}
 
@@ -189,6 +203,7 @@ final class StdTypes {
 			for (spec in StdResolver.resolutionSpecs(root)) for (file in Glob.expand(spec, '.hx')) if (file.startsWith('$root/')) {
 				final module: String = file.substring(root.length + 1, file.length - 3).split('/').join('.');
 				modulePaths[module] = true;
+				packages[module.substring(0, Std.int(Math.max(0, module.lastIndexOf('.'))))] = true;
 				final simple: String = SourceText.lastSegment(module);
 				final named: Array<String> = modules[simple] ?? [];
 				named.push(module);

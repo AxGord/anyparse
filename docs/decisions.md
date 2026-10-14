@@ -2181,3 +2181,103 @@ decided the question; it may not become a record of runs.
   (bounded by `c`'s class), `(cast c : Dynamic)[k]`, an enum binder whose type the declarations do not say. TM: reports
   byte-identical but for the new notice (its any-type writes already unsettled every field); fixtures: the four review
   escapes warn, nothing that warned stopped.
+- names a wildcard or a guarded import binds (review round 5 `N1`): beside a project `utils.Lock`, `import sys.thread.*;`
+  or `#if sys import sys.thread.Lock; #end` left `Lock` keyed as the project type — `CallGraphImports.typeOf` read only
+  unguarded explicit imports — so the runtime's `wait` went silent. A wildcard of a package now binds a name the project
+  or the std core declares there (`StdTypes.declaresModule`), in the order Haxe searches (own module, explicit imports,
+  wildcards last first, then the package — checked against the compiler); a guarded import or wildcard, or a wildcard of
+  a package neither holds (a library's), MAY supply the name, so a call or a `new` on the type the file keys runs every
+  candidate (`alternateTypes`). The candidates are read off the FILE, not the value: carrying a candidate list on every
+  declared type, receiver and type source was the alternative, for a shape TM does not have (all-rules reports
+  identical on the three trees); the price is that a value of that type the file did not write takes the candidates
+  too. Method values and member chains through such a name still use the first candidate only.
+- dotted patterns (review round 5 `N3`): `pkg.Type.method` / `pkg.Type.*` also matched the bare simple name, so
+  `nonBlocking: ["sys.thread.Lock.* …"]` waived the project native `utils.Lock.spin`. A pattern written with a package
+  now names the type declared at that path alone (`CallGraphImports.pathKey`, `memberIds`, `typeKeys`): a project path
+  is the simple key, any other path the path key while the project declares the simple name elsewhere. The old "matches
+  by its last two segments" is gone for a package that is wrong — such an entry now matches nothing, said only for a
+  `nonBlocking` entry (and a `sinks` list matching nothing at all); TM's four configs: all-rules reports identical.
+- a local initialised by a call (review round 5 F4 residue): `final i = Sys.stdin(); i.readLine()` left `i` untyped. A
+  local written with no type whose initializer is a call holds what `typeSourceOf` reads for that call — the reading a
+  call receiver already got (`CallGraphKeys.callInitializers`, `throughInitializer` against a cycle). Any other
+  initializer (a field read, a ternary) stays untyped — branch `feat/ts-precision-5`
+- a computed reflective write on a value the run places on no class (review round 5 F3 middle ground + N2): it was NOT
+  counted against the lock names ("names no lock at all" on TM), so a value of a known class the typer missed —
+  `owners.first()` off a `List<D>`, `arr[0]`, an un-annotated local of a library call, an enum binder `case Holder(d)` —
+  left `_l` sealed and the stall silent. Now the SOUND default: such a write unseals every lock member
+  (`FieldWrites.reflectivelyWritten`), named in an `info`; the exclusions are POSITIVE (`ReflectiveReach.placeOf`), each
+  named with its reason: a `final` local bound to `{}` (reaches no class: whatever it escapes to, the write lands in that
+  structure — escape does not matter, the binding cannot change) or to `new C()` (`C`'s chain); a `case` capture typed by
+  the parameter of the one indexed enum constructor of its name (`binderType`; two enums declaring it type none); a type
+  parameter bounded by its constraint, or a class's own under a covered `closedWorld` by its instantiations — each
+  subtype's `extends` binding (written type / `Void` none / own param by constraint / free), the class and every free
+  subtype never made (no `new`, name read as no value except as a static receiver, `reflectiveClasses` declared alike by
+  every file and not naming it; the project's declaration, S15, covers library producers too). Trust level unchanged: a
+  declared `T` is the instantiation's as a declared `D` is a `D` — a cast or a `Dynamic` view (`Node<Any>`) is the same hole
+  every declared type has. MEASURED on TM 1d1ba147 (score): full sound default 65/102 (f81c 0/5, bd94 1/9); fresh `{}`
+  clears `Form.get_data` and `Node.snapshot`, binder typing `ShareUsersStore.getAllSharedUsers` (its `MIXED(folders, …)`
+  captures are `Map`s: element writes), the type-parameter bound `Node.toTarget` — any one left unplaced costs the whole
+  37 (one unplaced writer unseals every lock). With all four: rows == start (102/102, 5/5, 9/9). Two pre-existing holes
+  the bound needed closed: a `final class`'s written supertypes were lost (`SymbolIndexBuilder.collectSupertypesWritten`
+  read only the `FinalDecl` wrapper's children: `MatchNode`/`TrainingNode extends Node<Void>` had no argument), and a class
+  extending a typedef alias was no subtype of the aliased type (`CallGraphTypes.merge` now files it there too).
+  `CallGraph.typeParamBoundsOf` sees an enclosing function's parameter from a lambda, answers a type name, and takes
+  `functionsOnly`. Precision side effect: the narrower reach sharpens `AllocationSets` (TM's `APIRequest2.urlLoader` no
+  longer unknown), so 1d1ba147 loses the `false` info `StandardFileSystem.listFolder|FolderWatcher._mutex` and f81c/bd94
+  turn `RemoteFileSystemBase.setTimestamp|_mutationMutex` from a folded info into a warning — branch `feat/ts-precision-5`
+- two calls of one hold reaching ONE sink by different ways (review round 5 R2 candidate, G3 — reproduced, pre-existing at
+  aeeca953): `RootCauseFold.reasonsOf` de-duplicated the hold's `Site` reasons by key, repeat and named-ness only, keeping
+  the FIRST call's way, and `covers` reads that way (`way.contains(by.hold.edge.from)`). So `outer { _a: f(); g(); }` with
+  `f` holding `_b` around `g`'s read folded `outer` onto `f` ("long only through work D.f also holds a lock across") although
+  its direct `g()` holds `_a` across the read outside `_b`; written `g(); f();` it warned. R2 could not reproduce it because
+  with the lock's take itself a sink, `f`'s first way ends at the take, so its read is an UNNAMED reason and the two never
+  compared equal; with the take only a `lockPairs` entry — TM's `Mutex.acquire` — both are named. Now `subsumes`: a reason
+  is dropped only when the kept one's way is a SUBSET of its own (then it is covered whenever the kept one is: `covers`
+  reads a way only by `contains`); otherwise both stay and each needs its own cover. A folded finding then says each
+  covering part once (`turn`): two ways to one sink name the same holds — TM's `CloudDatabase.addCloudAction3` info
+  already repeated "work CloudDatabase.addCloudAction2 also holds a lock across" four times before this. MEASURED: score
+  rows == start on all three trees, no severity or key change on TM (messages only: more "its calls also reach (+N
+  more)" ways, de-duplicated fold parts); fixtures lost 0, gained the target — branch `feat/ts-precision-5`
+- R3 review of round 5 (H1, `round6/g2-bound`): `ReflectiveReach.neverMade` compared RAW names, so `typedef NA = Node<D>;
+  new NA()`, `Type.createInstance(NA, [])`, `import pkg.Node as NN; new NN<D>()` and `Type.resolveClass("Node")` kept the
+  instantiation bound of `Node.T` — `_l` sealed, the stall silent, the notice claiming the bound. Now every name a held
+  file makes or reads as a value is resolved as its file means it (`namedTypes`: as written, the key an import / alias /
+  wildcard binds it to, every key an `#if`-guarded import or a wildcard MAY supply, each through `resolveAlias`), a literal
+  handed to any `resolveClass` call names its class, and a `new` of a name that resolves to NO type (`unresolvedMade`: a
+  typedef alias of a name declared nowhere — its target may be an alias its own file binds — or a name nothing binds that
+  the run declares nowhere and the std core at none of its toplevel modules: a type parameter, a type the run does not
+  hold) may be an alias of any class, so it voids every such bound. What counts as BOUND is positive: a path written out,
+  an import / alias, a `using` (it brings the type into scope, which `CallGraphImports` recorded only as an extension
+  source: TM's `using haxe.io.Path; new Path(p)` was the first "unresolved" name), a guarded import or a wildcard that may
+  supply it (a library type: a project alias would be declared, and supplied for sure). One walk per run, memoised
+  (`madeTypes`). MEASURED on TM: before `using`/guarded imports counted as bound, 12 openfl/sys names were "unresolved"
+  and the bound fell (65/102); after, none, rows == start. Also fixed on the way: `StdTypes.declaresModule('', name)`
+  looked up `.name` and so answered false for every toplevel std module — branch `feat/ts-precision-5`
+- R3 H2 (`round6/g2-binder`): a `case` capture was typed by the ONE indexed enum declaring a constructor of its name, so
+  a project `enum Mine { Some(o:Other); }` typed the capture of a library `Option<D>`'s `Some(v)` as `Other` — sealed,
+  silent, and no notice named it. Now `ReflectiveReach.subjectEnum`: only when the switch subject is declared of that
+  enum (typed as any value is, resolved through the file's imports and aliases to ONE type on every build) and the pattern is a top-level one of its arm (an or-alternative counts; a nested pattern's subject is
+  the outer constructor's parameter, which nothing here types). A parameter written with the enum's own type parameters
+  types nothing (`enum Gen<Other> { Hold(x:Other); }` read `x` as the class `Other` before — pre-existing). The binder is
+  an exclusion like the others: `placedBy` = "a capture of `E.Ctor`, typed by its parameter", so the notice names it —
+  branch `feat/ts-precision-5`. The old "two enums declaring the constructor type none" gate (arm `M-TS-BINDER-UNIQUE`)
+  is gone with the name match: two enums of the SUBJECT's name merge their constructors in `memberOnChain`, whose
+  `agreed` leaves a parameter they write differently untyped, so a `declarationCount == 1` guard there survived its
+  arm (redundant) and was dropped
+- R3 M3 (`round6/g1-dotted/wrongpkg2`): since G1 a `sinks` entry written with a package names the type declared at that
+  path alone, so a wrong package matched nothing, silently, while another entry matched (the notice fired only for a
+  whole list naming nothing). The loose last-two-segments match is NOT restored; instead each entry written with its
+  package (dotted, lowercase first segment) that matches no graph id is said (`PositiveSinks.unmatched`). Plain
+  `Type.member` entries are left out on purpose: a shared config's list names calls a tree does not make (27 existing
+  tests run such lists), and a simple name was never narrowed by G1. On TM this adds 9 infos: the option-B loader
+  entries (`openfl.utils.Assets.getSound`, …) TM never calls — true, and worth seeing — branch `feat/ts-precision-5`
+- R3 M4 cheap part (`round6/frag`): one unplaced reflective writer unseals every lock member, and on the TM copy with
+  an 8-line `ReflectHelper.assign` recall fell 37 while the only pointer was a file-less info. Now each finding of a hold
+  (B), a hold left on a throw (C) or a main-thread take (A) whose lock lost its member name says after its message
+  which member and which writers (`FieldWrites.unsealedNote`, from `reflectiveWritersOf`), and the reflective notice
+  counts the holds that lost their name and, beside an unplaced write, names the failed preconditions of the
+  instantiation bound (`ReflectiveReach.lacking`: `no closedWorld over the whole project`, `no reflectiveClasses`; a
+  partial run has its own notice). The note lives in `FieldWrites`, not `LockSites` (at its 50-member cap), and is
+  computed from the writes, so a member unsealed by a hand-off AND written reflectively names the writers too — true
+  either way. README: `reflectiveClasses` was documented as read only under `reachConfigurationsComplete`; G2 reads it
+  under `thread-safety`'s covered `closedWorld` — the doc now says both — branch `feat/ts-precision-5`

@@ -18,6 +18,12 @@ final class CallGraphKeys {
 	/** Binding offset -> the declaration's written type, the type it names (`Null<…>` peeled) spelled as the graph keys it. */
 	public final typeSources: Map<Int, String> = [];
 
+	/** Binding offset -> the call a local written with no type is initialised by: the local holds what that call returns. */
+	public final callInitializers: Map<Int, QueryNode> = [];
+
+	/** The binding offsets of the locals whose initializing call `throughInitializer` is reading, against a cycle. */
+	private final _reading: Array<Int> = [];
+
 	private final _imports: CallGraphImports;
 	private final _file: String;
 	private final _typeSyntax: TypeSyntaxReader;
@@ -41,18 +47,36 @@ final class CallGraphKeys {
 	}
 
 	/**
-	 * Type every local of `tree` (a node of `localDeclKinds`) written with no annotation whose initializer is a
-	 * `newExprKind` node by the type it makes: the type the language gives it.
+	 * Type every local of `tree` (a node of `localDeclKinds`) written with no annotation by its initializer, the type the
+	 * language gives it: one a `newExprKind` node initialises is the type it makes; one a `callKind` node initialises holds
+	 * what the call returns, which the graph reads where the call resolves (`callInitializers`).
 	 */
-	public function typeNewLocals(tree: QueryNode, localDeclKinds: Array<String>, newExprKind: String): Void {
+	public function typeLocals(tree: QueryNode, localDeclKinds: Array<String>, newExprKind: Null<String>, callKind: String): Void {
 		final at: Null<Span> = tree.span;
 		final init: Null<QueryNode> = tree.children.length == 0 ? null : tree.children[tree.children.length - 1];
-		final made: Null<String> = init == null || init.kind != newExprKind ? null : init.name;
-		if (at != null && made != null && localDeclKinds.contains(tree.kind) && !typeSources.exists(at.from)) {
-			typeSources[at.from] = keyed(made);
-			declaredTypes[at.from] = _imports.typeOf(_file, made);
+		if (at != null && init != null && localDeclKinds.contains(tree.kind) && !typeSources.exists(at.from)) {
+			final made: Null<String> = init.kind == newExprKind ? init.name : null;
+			if (made != null) {
+				typeSources[at.from] = keyed(made);
+				declaredTypes[at.from] = _imports.typeOf(_file, made);
+			} else if (init.kind == callKind) {
+				callInitializers[at.from] = init;
+			}
 		}
-		for (c in tree.children) typeNewLocals(c, localDeclKinds, newExprKind);
+		for (c in tree.children) typeLocals(c, localDeclKinds, newExprKind, callKind);
+	}
+
+	/**
+	 * What `read` makes of the call that initialises the local bound at `bound`, a local written with no type
+	 * (`callInitializers`) — the type it holds; null for any other local, and for one whose initializer is being read already.
+	 */
+	public function throughInitializer(bound: Int, read: QueryNode -> Null<String>): Null<String> {
+		final init: Null<QueryNode> = _reading.contains(bound) ? null : callInitializers[bound];
+		if (init == null) return null;
+		_reading.push(bound);
+		final held: Null<String> = read(init);
+		_reading.pop();
+		return held;
 	}
 
 	/** The dotted or simple path of the type `typeSource` names, `Null<…>` peeled unless `peelNull` is false; null for any other type. */

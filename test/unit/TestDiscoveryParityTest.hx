@@ -404,6 +404,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.ThreadSafetyOwnReasonsTest',
 		'unit.check.ThreadSafetyPositiveSinksTest',
 		'unit.check.ThreadSafetyQuietLocksTest',
+		'unit.check.ThreadSafetyReflectiveSealTest',
 		'unit.check.ThreadSafetyRegistersTest',
 		'unit.check.ThreadSafetyRepetitionTest',
 		'unit.check.ThreadSafetyRethrowTest',
@@ -2050,7 +2051,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyCarriedHoldTest#testACalleeGivingTheLockBackCarriesNothing :: guard :: ',
 			'unit.check.ThreadSafetyCarriedHoldTest#testAComputedReflectiveWriteNamesNoObject :: control :: '
 				+ 'M-TS-REFLECT-COMPUTED,M-TS-REFLECT-EXTENSION,M-TS-REFLECT-INDEX,M-TS-REFLECT-REACH,M-TS-REFLECT-SUBTYPES,'
-				+ 'M-TS-REFLECT-SUPERTYPES,M-TS-REFLECT-MAYWRITE,M-TS-REFLECT-FINAL,M-TS-REFLECT-ANY,M-TS-REFLECT-TYPEPARAM',
+				+ 'M-TS-REFLECT-SUPERTYPES,M-TS-REFLECT-MAYWRITE,M-TS-REFLECT-FINAL,M-TS-REFLECT-ANY',
 			'unit.check.ThreadSafetyCarriedHoldTest#testAConstructorWritingAnotherObjectsFieldNamesNoObject :: control :: M-TS-PATH-OWN',
 			'unit.check.ThreadSafetyCarriedHoldTest#testADominatedTakeInACalleeOnTheHeldObjectIsBrief :: control :: M-TS-CARRY-OFF',
 			'unit.check.ThreadSafetyCarriedHoldTest#testAFieldWrittenOutsideTheConstructorNamesNoObject :: control :: M-TS-PATH-STABLE-ANY',
@@ -2329,7 +2330,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyMainStatesTest#testALiteralArgumentDecidesAFinalLocalCondition :: control :: '
 				+ 'M-TS-COND-FINAL-LOCAL,M-TS-ARG-LITERAL-NONNULL,M-TS-ARG-FINAL-LOCAL-READ',
 			'unit.check.ThreadSafetyMainStatesTest#testTheOwnerIsOnAWayThatRunsTheCall :: control :: M-TS-STATES-OWNER-IGNORED',
-			'unit.check.ThreadSafetyOptionsTest#testALostSinksListIsSaid :: control :: M-TS-OPT-SINKS-UNMATCHED,M-TS-OPT-SKIP-DECLARED,M-TS-OPT-NO-SINK-NOTICES,M-TS-OPT-LIFTED',
+			'unit.check.ThreadSafetyOptionsTest#testALostSinksListIsSaid :: control :: '
+				+ 'M-TS-OPT-SINKS-UNMATCHED,M-TS-OPT-SKIP-DECLARED,M-TS-OPT-NO-SINK-NOTICES,M-TS-OPT-LIFTED,M-TS-OPT-SINKS-ENTRY-UNMATCHED',
 			'unit.check.ThreadSafetyOptionsTest#testEveryMalformedOptionIsSaid :: control :: '
 				+ 'M-TS-OPT-UNKNOWN,M-TS-OPT-LIST-SHAPE,M-TS-OPT-LIST-ITEM,M-TS-OPT-FLAG,M-TS-OPT-BUDGET,M-TS-OPT-BOUNDED-ENTRY,M-TS-OPT-BOUNDED-SITE',
 			'unit.check.ThreadSafetyOwnReasonsTest#testABriefUnresolvedCallOnceLeavesTheLockShort :: control :: '
@@ -2338,11 +2340,16 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyOwnReasonsTest#testAHoldItsFunctionNeverGivesBackIsLong :: control :: M-TS-HANDOFF-OFF,M-TS-HANDOFF-GIVES',
 			'unit.check.ThreadSafetyOwnReasonsTest#testARepeatedOrUnknownUnresolvedCallKeepsTheLockLong :: control :: M-TS-DOM-BRIEF-REPEATED',
 			'unit.check.ThreadSafetyOwnReasonsTest#testAnUnresolvedCallInACatchIsAnErrorPath :: control :: M-TS-BLIND-CATCH-OFF',
+			'unit.check.ThreadSafetyPositiveSinksTest#testADottedWaiverNamesOnlyTheTypeAtThatPath :: control :: M-TS-DOTTED-WILDCARD',
 			'unit.check.ThreadSafetyPositiveSinksTest#testALibraryTypeIsNotItsProjectNamesake :: control :: '
 				+ 'M-TS-PATH-FOREIGN,M-TS-PATH-IMPORT,M-TS-PATH-RECEIVER-STATIC,M-TS-PATH-NEW,M-TS-PATH-MATCH,M-TS-SHADOWING-KEPT,'
 				+ 'M-TS-PATH-DECLARED-PACKAGE,M-TS-PATH-NOMINAL,M-TS-PATH-RETURN,M-TS-PATH-NULLABLE-KEYED,M-TS-ALIAS-TYPE',
+			'unit.check.ThreadSafetyPositiveSinksTest#testALocalOfACallResultIsTypedByWhatTheCallReturns :: control :: '
+				+ 'M-TS-LOCAL-CALL-INIT,M-TS-LOCAL-CALL-READ',
 			'unit.check.ThreadSafetyPositiveSinksTest#testAStdMemberStandsWhereEveryNamesakeAgrees :: control :: '
 				+ 'M-TS-STD-AGREE,M-TS-STD-SUPER,M-TS-STD-SIBLING',
+			'unit.check.ThreadSafetyPositiveSinksTest#testAWildcardOrGuardedImportOfALibraryTypeIsNotItsProjectNamesake :: control :: '
+				+ 'M-TS-WILD-PACKAGES,M-TS-WILD-OWN-MODULE,M-TS-WILD-EXPLICIT-FIRST,M-TS-WILD-STD,M-TS-GUARDED-IMPORT,M-TS-ALTERNATE-CALL',
 			'unit.check.ThreadSafetyPositiveSinksTest#testNonBlockingWaivesOnEvidence :: control :: '
 				+ 'M-TS-WAIVE-OFF,M-TS-WAIVE-SAYS-NOTHING,M-TS-WAIVE-SINKS-WIN,M-TS-OPT-NONBLOCKING-EVIDENCE',
 			'unit.check.ThreadSafetyPositiveSinksTest#testProjectNativesBlock :: control :: '
@@ -2358,6 +2365,22 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyQuietLocksTest#testAConstructorsOwnTakeNeverWaits :: control :: M-TS-CTOR-TAKE',
 			'unit.check.ThreadSafetyQuietLocksTest#testALockOnlyTakenSharedNeverWaits :: control :: M-TS-SHARED-OFF,M-TS-SHARED-HOLD',
 			'unit.check.ThreadSafetyQuietLocksTest#testAnExclusiveTakeMakesTheSharedOnesWait :: control :: M-TS-SHARED-ANY',
+			'unit.check.ThreadSafetyReflectiveSealTest#testACaptureIsTypedThroughItsSubject :: control :: '
+				+ 'M-TS-BINDER-SUBJECT,M-TS-BINDER-PLACED-BY,M-TS-BINDER-TOP,M-TS-BINDER-OWN-PARAMS',
+			'unit.check.ThreadSafetyReflectiveSealTest#testAFreshObjectReceiverKeepsTheLockNames :: control :: '
+				+ 'M-TS-PLACE-FRESH-STRUCT,M-TS-PLACE-FRESH-NEW,M-TS-PLACE-FRESH-MUTABLE',
+			'unit.check.ThreadSafetyReflectiveSealTest#testALockAReflectiveWriteUnsealsSaysWhoUnsealedIt :: control :: '
+				+ 'M-TS-UNSEALED-NOTE,M-TS-UNSEALED-HOLDS,M-TS-UNSEALED-PRECONDITIONS,M-TS-UNSEALED-TAKE,M-TS-UNSEALED-THROW',
+			'unit.check.ThreadSafetyReflectiveSealTest#testATypeParameterReceiverIsBoundedByItsInstantiations :: control :: '
+				+ 'M-TS-PLACE-INSTANTIATIONS,M-TS-PLACE-COMPLETE,M-TS-PLACE-RAW-LINK,M-TS-PLACE-FREE-SUB,M-TS-PLACE-NEVER-MADE,'
+				+ 'M-TS-PLACE-UNDECLARED,M-TS-PLACE-GLOB-MATCH,M-TS-PLACE-MAKES-NEW,M-TS-PLACE-MAKES-VALUE,M-TS-PLACE-MAKES-RECEIVER,'
+				+ 'M-TS-PLACE-VOID,M-TS-PLACE-FORWARDED-BOUND,M-TS-PLACE-PARAM-CONSTRAINT,M-TS-PLACE-PARAM-OWNER,M-TS-FINAL-SUPERS-WRITTEN,'
+				+ 'M-TS-REACH-ALIAS-SUBTYPES',
+			'unit.check.ThreadSafetyReflectiveSealTest#testAValueTheRunCannotPlaceUnsealsEveryLock :: control :: '
+				+ 'M-TS-SEAL-REFLECT-UNPLACED,M-TS-SEAL-UNPLACED-NOTICE,M-TS-BINDER-TYPE',
+			'unit.check.ThreadSafetyReflectiveSealTest#testEveryNameThatMakesTheClassMakesIt :: control :: '
+				+ 'M-TS-MAKES-RESOLVED,M-TS-MAKES-LITERAL,M-TS-MAKES-UNKNOWN,M-TS-MAKES-STD,M-TS-MAKES-ALIAS-NOTHING,M-TS-MAKES-ALIAS-STD,'
+				+ 'M-TS-MAKES-WILD,M-TS-MAKES-BOUND,M-TS-MAKES-USING',
 			'unit.check.ThreadSafetyRegistersTest#testALoopAboveTheRegistrarRepeatsNothing :: control :: M-TS-REGISTER-OWNER',
 			'unit.check.ThreadSafetyRegistersTest#testARegistrationInALoopRepeatsNothing :: control :: M-TS-REGISTER-OWNER',
 			'unit.check.ThreadSafetyRegistersTest#testTheOwnerIsNeverUpARegistration :: control :: M-TS-REGISTER-OWNER',
@@ -2397,6 +2420,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-TS-FOLD-SITE-THREAD,M-TS-FOLD-SITE-ONE-ORIGIN',
 			'unit.check.ThreadSafetyRootCauseTest#testSinkCallsOfOneWayMakeOneWarning :: control :: M-TS-WAY-OFF',
 			'unit.check.ThreadSafetyRootCauseTest#testTheCallsOfOneLoopMakeOneWarning :: control :: M-TS-LOOP-KEY',
+			'unit.check.ThreadSafetyRootCauseTest#testTwoCallsReachingOneSinkAreTwoWays :: control :: M-TS-FOLD-SAME-WAY,M-TS-FOLD-PARTS-ONCE',
 			'unit.check.ThreadSafetyRootCauseTest#testTwoTakesSharingAFindingDoNotCoverEachOther :: control :: M-TS-FOLD-SELF',
 			'unit.check.ThreadSafetyRootCauseTest#testUnnamedLocksNeverCoverEachOther :: control :: M-TS-FOLD-UNNAMED-SAME',
 			'unit.check.ThreadSafetyUnnamedLockTest#testAnUnnamedLockNoMainThreadTakesStallsNoOne :: control :: M-TS-UNNAMED-PAIR',
@@ -2987,6 +3011,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.BodySlotGuardSliceTest#testAllowsSoleCatchClauseRemovalWithATrailingComment :: control :: M-BODYSLOT-TRIM-WS-ONLY',
 			'unit.query.BodySlotGuardSliceTest#testAllowsWholeElseBranchRemoval :: control :: M-BODYSLOT-LEAD-KEPT',
 			'unit.query.CallGraphTest#testALambdaParameterIsNoReferenceToItsLambda :: control :: M-GRAPH-LAMBDA-PARAM-SELF',
+			'unit.query.CallGraphTest#testAWildcardOrGuardedNameDispatchesToEveryTypeItMayBe :: control :: '
+				+ 'M-TS-WILD-EXPLICIT-NO-MAYBE,M-TS-WILD-MAYBE,M-TS-WILD-GUARDED,M-TS-WILD-PROJECT,M-TS-WILD-ORDER,M-TS-STD-PACKAGES,'
+				+ 'M-TS-ALTERNATE-SAME,M-TS-ALTERNATE-NEW',
 			'unit.query.CallGraphTest#testAddFilesUpgradesTheExternalPlaceholder :: control :: M-GRAPH-UPGRADE-EXTERNAL',
 			'unit.query.CallGraphTest#testBareCallSomethingElseMaySupplyIsNeverAConstructor :: control :: '
 				+ 'M-GRAPH-IMPORT-UNLISTED,M-GRAPH-UNLISTED-WILDCARD',
@@ -3022,6 +3049,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CallGraphTest#testReceiverFieldNamesOnlyAMemberReadDirectly :: control :: ' + 'M-GRAPH-RECEIVER-LOCAL-FIELD',
 			'unit.query.CallGraphTest#testReceiverFieldSkipsAPropertyWithAGetter :: control :: M-GRAPH-RECEIVER-PROPERTY',
 			'unit.query.CallGraphTest#testReceiverTypedThroughDeclaredMemberTypes :: control :: M-GRAPH-FIELD-PATH-RECEIVER',
+			'unit.query.CallGraphTest#testResolveTargetBareAndQualified :: control :: M-TS-DOTTED-TARGET',
 			'unit.query.CallGraphTest#testStaticExtensionResolvesThroughTheUsing :: control :: M-GRAPH-USING-EXTENSION',
 			'unit.query.CallGraphTest#testStaticFieldReadOffItsTypeIsTyped :: control :: M-GRAPH-STATIC-FIELD-TYPE',
 			'unit.query.CallGraphTest#testSuperCallRunsTheGeneratedConstructorsInitializers :: control :: M-GRAPH-SUPER-CTOR-RUN',
@@ -6426,7 +6454,6 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-REFLECT-MAYWRITE',
 			'M-TS-REFLECT-FINAL',
 			'M-TS-REFLECT-ANY',
-			'M-TS-REFLECT-TYPEPARAM',
 			'M-TS-REFLECT-INDEX-ANY',
 			'M-TS-REFLECT-INDEX-ELEMENT',
 			'M-TS-REFLECT-DYNACC',
@@ -6438,6 +6465,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-SEAL-REFLECT-UNPLACED',
 			'M-TS-SEAL-UNPLACED-NOTICE',
 			'M-TS-FOLD-EVERY-END',
+			'M-TS-FOLD-SAME-WAY',
+			'M-TS-FOLD-PARTS-ONCE',
 			'M-TS-FOLD-ENDS-WALK',
 			'M-TS-FOLD-PASSES-PATH',
 			'M-TS-FOLD-SUPPRESSED',
@@ -6477,7 +6506,64 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-STD-SIBLING',
 			'M-TS-LIB-LOST-LIB-SAID',
 			'M-TS-LIB-LOST-CP-SAID',
-			'M-TS-BUILTIN-EVENTS'
+			'M-TS-BUILTIN-EVENTS',
+			'M-TS-WILD-PACKAGES',
+			'M-TS-WILD-OWN-MODULE',
+			'M-TS-WILD-EXPLICIT-FIRST',
+			'M-TS-WILD-EXPLICIT-NO-MAYBE',
+			'M-TS-WILD-MAYBE',
+			'M-TS-WILD-GUARDED',
+			'M-TS-WILD-STD',
+			'M-TS-WILD-PROJECT',
+			'M-TS-WILD-ORDER',
+			'M-TS-STD-PACKAGES',
+			'M-TS-GUARDED-IMPORT',
+			'M-TS-ALTERNATE-SAME',
+			'M-TS-ALTERNATE-CALL',
+			'M-TS-ALTERNATE-NEW',
+			'M-TS-DOTTED-TARGET',
+			'M-TS-DOTTED-WILDCARD',
+			'M-TS-LOCAL-CALL-INIT',
+			'M-TS-LOCAL-CALL-READ',
+			'M-TS-PLACE-FRESH-STRUCT',
+			'M-TS-PLACE-FRESH-NEW',
+			'M-TS-PLACE-FRESH-MUTABLE',
+			'M-TS-PLACE-PARAM-CONSTRAINT',
+			'M-TS-PLACE-PARAM-OWNER',
+			'M-TS-PLACE-INSTANTIATIONS',
+			'M-TS-PLACE-COMPLETE',
+			'M-TS-PLACE-RAW-LINK',
+			'M-TS-PLACE-FREE-SUB',
+			'M-TS-PLACE-NEVER-MADE',
+			'M-TS-PLACE-UNDECLARED',
+			'M-TS-PLACE-GLOB-MATCH',
+			'M-TS-PLACE-MAKES-NEW',
+			'M-TS-PLACE-MAKES-VALUE',
+			'M-TS-PLACE-MAKES-RECEIVER',
+			'M-TS-PLACE-VOID',
+			'M-TS-PLACE-FORWARDED-BOUND',
+			'M-TS-BINDER-TYPE',
+			'M-TS-MAKES-RESOLVED',
+			'M-TS-MAKES-LITERAL',
+			'M-TS-MAKES-UNKNOWN',
+			'M-TS-MAKES-STD',
+			'M-TS-MAKES-WILD',
+			'M-TS-MAKES-BOUND',
+			'M-TS-MAKES-USING',
+			'M-TS-MAKES-ALIAS-NOTHING',
+			'M-TS-MAKES-ALIAS-STD',
+			'M-TS-BINDER-SUBJECT',
+			'M-TS-BINDER-TOP',
+			'M-TS-BINDER-OWN-PARAMS',
+			'M-TS-BINDER-PLACED-BY',
+			'M-TS-UNSEALED-NOTE',
+			'M-TS-UNSEALED-TAKE',
+			'M-TS-UNSEALED-THROW',
+			'M-TS-UNSEALED-HOLDS',
+			'M-TS-UNSEALED-PRECONDITIONS',
+			'M-TS-OPT-SINKS-ENTRY-UNMATCHED',
+			'M-TS-FINAL-SUPERS-WRITTEN',
+			'M-TS-REACH-ALIAS-SUBTYPES'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

@@ -149,8 +149,9 @@ class ThreadSafetyAllocationTest extends Test {
 			['warning B C.work | Mutex.acquire'],
 			poked('public function set(k:String, l:Base):Void Reflect.setField(this, k, l);'), 'its own class'
 		);
+		// placed on no class, the write may also store a lock in any lock member: `_m` names no lock (review N2)
 		Assert.same(
-			['warning B C.work | C._m'],
+			['warning B C.work | Mutex.acquire'],
 			poked('public static function poke(o:Dynamic, k:String):Void Reflect.setField(o, k, null);'), 'a Dynamic value'
 		);
 		Assert.same(
@@ -173,7 +174,8 @@ class ThreadSafetyAllocationTest extends Test {
 		inline function poked(poke: String): Array<String> {
 			return holds(run('var loader:Base; final _bases:Array<Base> = []; $poke', 'loader = new Async();', 'loader.load();'));
 		}
-		final unknown: Array<String> = ['warning B C.work | C._m'];
+		// each is placed on no class, so it may also store a lock in any lock member: `_m` names no lock (review N2)
+		final unknown: Array<String> = ['warning B C.work | Mutex.acquire'];
 		Assert.same(
 			unknown,
 			poked('public static function poke(o:C, k:String):Void { final d:haxe.DynamicAccess<Dynamic> = cast o;' + ' d.set(k, null); }'),
