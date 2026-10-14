@@ -32,6 +32,7 @@ class ThreadSafetyReflectiveSealTest extends Test {
 	 * name two enums declare types the capture by the enum its subject is declared of.
 	 */
 	@:pin('control') @:killer('M-TS-SEAL-REFLECT-UNPLACED') @:killer('M-TS-SEAL-UNPLACED-NOTICE') @:killer('M-TS-BINDER-TYPE')
+	@:killer('M-TS-STORED-COMPLETE')
 	public function testAValueTheRunCannotPlaceUnsealsEveryLock(): Void {
 		#if (sys || nodejs)
 		Assert.equals(1, quickTakes('Reflect.setField(owners.first(), k, _m);'), 'a library container element');
@@ -42,6 +43,8 @@ class ThreadSafetyReflectiveSealTest extends Test {
 		Assert.equals(1, quickTakes('switch box { case Holder(v): Reflect.setField(v, k, _m); case _: }'), 'a capture of class D');
 		Assert.equals(1, quickTakes('switch box { case Pack(v): Reflect.setField(v, k, _m); case _: }'), 'an ambiguous capture');
 		Assert.equals(0, quickTakes('switch box { case Bag(m): m[k] = new Mutex(); case _: }'), 'a capture of a Map');
+		// what it stores bounds it only in a run that sees every class: here an `Other` may be some lock's subclass's
+		Assert.equals(1, quickTakes('Reflect.setField(arr[0], k, new Other());'), 'an Other, in a run that may not see every class');
 		Assert.equals(
 			1, found('Reflect.setField(arr[0], k, _m);').filter(f -> f.indexOf('so no lock is named by its member: D.alias') != -1).length,
 			'the run names the writer'
@@ -329,20 +332,13 @@ class ThreadSafetyReflectiveSealTest extends Test {
 	 * name the graph does not resolve, or spelled by a literal a reflective read may obtain it by. An optional parameter
 	 * before it lets an argument move along.
 	 */
-	@:pin('control') @:killer('M-TS-STORED-CALLERS') @:killer('M-TS-STORED-COMPLETE') @:killer('M-TS-STORED-HOLDERS')
+	@:pin('control') @:killer('M-TS-STORED-CALLERS') @:killer('M-TS-STORED-HOLDERS')
 	@:killer('M-TS-STORED-SPELLED') @:killer('M-TS-STORED-GLOB') @:killer('M-TS-STORED-SKIPPED') @:killer('M-TS-STORED-REF')
 	public function testAParameterIsFollowedOnlyWhereEveryCallIsSeen(): Void {
 		#if (sys || nodejs)
 		Assert.equals(1, helperTakes(CLOSED, '', ''), 'no reflectiveMethodHolders');
 		Assert.equals(1, helperTakes('{"reflectiveMethodHolders":["nothing.*"],"rules":{$RULE}}}', '', ''), 'no closed project');
-		Assert.equals(
-			1,
-			helperTakes(
-				'{"reflectiveMethodHolders":["nothing.*"],"rules":{$RULE}}}', '',
-				'final k:String = "x"; Reflect.setField(bag, k, new Other());'
-			),
-			'a class in a run that may not see every class'
-		);
+
 		Assert.equals(1, helperTakes(SEALED, '', 'final f = Help.assign; f(d, "x", "text");'), 'a function value');
 		Assert.equals(1, helperTakes(SEALED, '', 'final o:Dynamic = d; o.assign(d, "x", "text");'), 'an unresolved call of its name');
 		Assert.equals(1, helperTakes(SEALED, '', 'Help.assign(d, "x", "text"); Reflect.field(Help, "assign");'), 'a literal names it');
