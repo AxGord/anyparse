@@ -16,6 +16,13 @@ private typedef ThreadState = {
 	var parent: Null<ThreadState>;
 }
 
+/** A function a worker runs, under the valuation it hands down (`ThreadStates.origins`), and the two as one key. */
+private typedef WorkerAt = {
+	final id: String;
+	final valuation: String;
+	final key: String;
+}
+
 /**
  * The contexts a thread may run each function in, solved over STATES — a function and the valuation of its tracked
  * parameters (`EdgeConditions`) — so a call a condition rules out on a path carries nothing along it: a call under
@@ -213,25 +220,46 @@ final class ThreadStates {
 		final spawned: (CallEdge) -> Bool = e -> e.kind == Ref && _callbackContext(e, ThreadSafety.CTX_MAIN) == ThreadSafety.CTX_BG;
 		final onWorker: (CallEdge) -> Bool = e ->
 			e.kind != Contains && !(e.kind == Ref && inertRef(e)) && edgeContext(e) & ThreadSafety.CTX_BG != 0;
-		for (start in _graph.edges) if (spawned(start) && onWorker(start)) {
-			// per state: a call a condition rules out under the valuation the worker hands down carries no origin
-			final seen: Map<String, Bool> = [];
-			final queue: Array<{ id: String, valuation: String }> = [{ id: start.to, valuation: _conditions.unknown(start.to) }];
-			var qi: Int = 0;
-			while (qi < queue.length) {
-				final at: { id: String, valuation: String } = queue[qi++];
-				if (seen.exists('${at.id}|${at.valuation}')) continue;
-				seen['${at.id}|${at.valuation}'] = true;
-				final known: Array<String> = found[at.id] ?? [];
-				if (!known.contains(start.to)) known.push(start.to);
-				found[at.id] = known;
-				for (e in _graph.outEdges(at.id)) if (!spawned(e) && onWorker(e)) {
-					final next: Null<{ id: String, valuation: String }> = workerStep(e, at.valuation);
-					if (next != null) queue.push(next);
-				}
+		// what a worker running a state steps into is the same whatever started the worker: read once per function / state
+		final edgesOf: Map<String, Array<CallEdge>> = [];
+		final steps: Map<String, Array<WorkerAt>> = [];
+		function stepsOf(at: WorkerAt): Array<WorkerAt> {
+			final known: Null<Array<WorkerAt>> = steps[at.key];
+			if (known != null) return known;
+			final edges: Array<CallEdge> = edgesOf[at.id] ?? [for (e in _graph.outEdges(at.id)) if (!spawned(e) && onWorker(e)) e];
+			edgesOf[at.id] = edges;
+			final next: Array<WorkerAt> = [];
+			for (e in edges) {
+				final step: Null<WorkerAt> = workerStep(e, at.valuation);
+				if (step != null) next.push(step);
 			}
+			steps[at.key] = next;
+			return next;
 		}
+		for (start in _graph.edges) if (spawned(start) && onWorker(start))
+			spread(start.to, workerAt(start.to, _conditions.unknown(start.to)), found, stepsOf);
 		return id -> found[id] ?? [];
+	}
+
+	/**
+	 * Every state the worker `origin` reaches from `from`, each through `stepsOf`, recorded in `found` — per state: a call a
+	 * condition rules out under the valuation the worker hands down carries no origin.
+	 */
+	private static function spread(
+		origin: String, from: WorkerAt, found: Map<String, Array<String>>, stepsOf: (WorkerAt) -> Array<WorkerAt>
+	): Void {
+		final seen: Map<String, Bool> = [];
+		final queue: Array<WorkerAt> = [from];
+		var qi: Int = 0;
+		while (qi < queue.length) {
+			final at: WorkerAt = queue[qi++];
+			if (seen.exists(at.key)) continue;
+			seen[at.key] = true;
+			final known: Array<String> = found[at.id] ?? [];
+			if (!known.contains(origin)) known.push(origin);
+			found[at.id] = known;
+			for (next in stepsOf(at)) queue.push(next);
+		}
 	}
 
 	/**
@@ -239,16 +267,21 @@ final class ThreadStates {
 	 * values it hands down, a value handed on with nothing known; null when a condition rules `e` out there, or the value
 	 * runs on no worker from there.
 	 */
-	private function workerStep(e: CallEdge, valuation: String): Null<{ id: String, valuation: String }> {
+	private function workerStep(e: CallEdge, valuation: String): Null<WorkerAt> {
 		final live: Int = _conditions.carried(e, valuation, ThreadSafety.CTX_BG);
 		final ctx: Int = e.kind == Ref ? _callbackContext(e, live) : live;
 		if (live == 0 || ctx & ThreadSafety.CTX_BG == 0) return null;
-		return { id: e.to, valuation: _conditions.entered(e, valuation) };
+		return workerAt(e.to, _conditions.entered(e, valuation));
 	}
 
 	/** A `mainPath` as text, its last `cap` hops after `...` when it is longer. */
 	public static function chainText(path: Array<String>, cap: Int): String {
 		return (path.length > cap + 1 ? ['...'].concat(path.slice(-(cap + 1))) : path).join(' -> ');
+	}
+
+	/** The state a worker runs `id` in under `valuation`, keyed as `origins` dedupes it. */
+	private static inline function workerAt(id: String, valuation: String): WorkerAt {
+		return { id: id, valuation: valuation, key: '$id|$valuation' };
 	}
 
 	/** The context `ctx` becomes on entering `id`: the main thread goes quiet in a `quiet` root. */
