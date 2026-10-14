@@ -469,7 +469,7 @@ final class ReflectiveReach {
 	}
 
 	/** `from` and every type `next` reaches from it, step by step: the closure of `next` over `from`. */
-	private static function closure(from: Array<String>, next: (String) -> Array<String>): Array<String> {
+	public static function closure(from: Array<String>, next: (String) -> Array<String>): Array<String> {
 		final out: Array<String> = from.copy();
 		var at: Int = 0;
 		while (at < out.length) {
@@ -486,7 +486,7 @@ final class ReflectiveReach {
 	}
 
 	/** The innermost node `test` accepts whose span holds the offset `from`, in `node`'s subtree; null when none does. */
-	private static function holderOf(node: QueryNode, from: Int, test: (QueryNode) -> Bool): Null<QueryNode> {
+	public static function holderOf(node: QueryNode, from: Int, test: (QueryNode) -> Bool): Null<QueryNode> {
 		final at: Null<Span> = node.span;
 		if (at != null && (from < at.from || from >= at.to)) return null;
 		for (c in node.children) {

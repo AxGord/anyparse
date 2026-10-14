@@ -1,5 +1,7 @@
 package anyparse.check;
 
+import anyparse.check.ReflectiveReach.closure;
+import anyparse.check.ReflectiveReach.holderOf;
 import anyparse.query.BoolExprShape;
 import anyparse.query.CallGraph;
 import anyparse.query.CallGraphImports;
@@ -323,28 +325,6 @@ final class ReflectiveValues {
 			walk(held.tree);
 		}
 		return out;
-	}
-
-	/** `from` and every type `next` reaches from it, step by step. */
-	private static function closure(from: Array<String>, next: (String) -> Array<String>): Array<String> {
-		final out: Array<String> = from.copy();
-		var at: Int = 0;
-		while (at < out.length) {
-			for (t in next(out[at])) if (!out.contains(t)) out.push(t);
-			at++;
-		}
-		return out;
-	}
-
-	/** The innermost node `test` accepts whose span holds the offset `from`, in `node`'s subtree; null when none does. */
-	private static function holderOf(node: QueryNode, from: Int, test: (QueryNode) -> Bool): Null<QueryNode> {
-		final at: Null<Span> = node.span;
-		if (at != null && (from < at.from || from >= at.to)) return null;
-		for (c in node.children) {
-			final hit: Null<QueryNode> = holderOf(c, from, test);
-			if (hit != null) return hit;
-		}
-		return test(node) ? node : null;
 	}
 
 }
