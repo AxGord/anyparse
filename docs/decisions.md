@@ -2281,3 +2281,24 @@ decided the question; it may not become a record of runs.
   computed from the writes, so a member unsealed by a hand-off AND written reflectively names the writers too — true
   either way. README: `reflectiveClasses` was documented as read only under `reachConfigurationsComplete`; G2 reads it
   under `thread-safety`'s covered `closedWorld` — the doc now says both — branch `feat/ts-precision-5`
+- R3 M1 (`round6/g1-alt/cross-*`): a member's declared type was keyed in the READING file — `A.hx` importing
+  `sys.thread.Lock` (plain, wildcard or guarded) declares `static var lock:Lock`, `C.hx` calls `A.lock.wait()`, and the
+  call resolved to a project `utils.Lock.wait` that never waits (silent, pre-existing, wider than G1: it held for a
+  field read in its own file too, `this.own.wait()`). Now every type a declaration writes is read through the imports
+  of the file that wrote it, at READ time (the declared paths a key depends on are global and grow with the graph):
+  member types (`CallGraphImports.memberFilesOf`), returns and parameters (the node's declaration files,
+  `CallGraphKeys.paramTypesOf`), a supertype's type arguments (`TypeParamTable.argumentsFor(…, keyIn)`), and, in the
+  reading file where they are written, a type parameter's bound and an abstract's underlying type. `keyedIn` keys every
+  nominal of a type, not only the outer one, so `Array<Lock>` and `(Lock) -> Void` keep the declaring file's meaning.
+  Two declarations of one type whose files key a member's type apart type it as NEITHER (`keyedInFiles` null), like
+  `CallGraphTypes.joined` for two spellings; before they took the simple name. Guarded/maybe names of the declaring
+  file: the files read while typing a receiver are collected (`readFrom`) and each one's `alternateTypes` join the
+  call's — a sound over-approximation (an inner link's file contributes too), chosen over threading a file through every
+  type source. Measured: 0 changes all rules on 3 TM trees + anyparse src; the 6 cross-* fixtures now warn — branch
+  `feat/ts-precision-6`
+- R3 M2 (`round6/g1-alt/guard-nowait`, `guard-waitfield`): the alternates of a guarded name were dispatched only in the
+  last branch of `handleCall`, after the project namesake resolved the call to a member, so a namesake lacking the
+  member (extension branch) or declaring it as a field never reached `sys.thread.Lock.wait`. Now each candidate type runs
+  the whole resolution (`dispatchOn`: forward, field, static extension, member + overrides); the call's own target is
+  the first one any candidate names. The namesake's own `UnresolvedReceiver`/`FunctionValue` record stays — on the
+  build where the name is the project type the call is that — branch `feat/ts-precision-6`
