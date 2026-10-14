@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ImportInfo;
 import anyparse.query.SymbolIndex.ImportKind;
+import anyparse.query.SymbolIndex.TypeDeclInfo;
 
 using Lambda;
 
@@ -28,6 +29,9 @@ final class CallGraphImports {
 
 	/** Type simple name -> member name -> the files whose declarations of the type declare the member. */
 	private final _memberFiles: Map<String, Map<String, Array<String>>> = [];
+
+	/** Type simple name -> member name -> each declaration of the member: its file and the type it writes (null for none). */
+	private final _memberTypes: Map<String, Map<String, Array<WrittenIn>>> = [];
 
 	/** Type simple name -> the dotted paths that name a declaration of it (`pkg.Module.Name`; a main type's also `pkg.Module`). */
 	private final _declaredPaths: Map<String, Array<String>> = [];
@@ -96,6 +100,14 @@ final class CallGraphImports {
 		return _memberFiles[typeName]?.get(member) ?? [];
 	}
 
+	/**
+	 * Each declaration of `member` the declarations of the type of simple name `typeName` hold — one per branch of a
+	 * conditional region, one per declaration of the type — with its file and the type it writes, each once.
+	 */
+	public inline function memberTypesOf(typeName: String, member: String): Array<WrittenIn> {
+		return _memberTypes[typeName]?.get(member) ?? [];
+	}
+
 	/** The qualified paths the type of simple name `name` is declared under (`recordFile`): by its module, by its package. */
 	public inline function declaredPathsOf(name: String): Array<String> {
 		return _declaredPaths[name] ?? [];
@@ -104,12 +116,7 @@ final class CallGraphImports {
 	/** Fold the declarations and the imports of `fi`, held under `key`. */
 	public function recordFile(fi: FileInfo, key: String): Void {
 		for (t in fi.types) {
-			final files: Map<String, Array<String>> = _memberFiles[t.name] ?? [];
-			for (m in t.members) {
-				if (_enumConstructorKinds.contains(m.kind)) CallGraphTypes.unionInto(_enumConstructors, m.name, [t.name]);
-				CallGraphTypes.unionInto(files, m.name, [key]);
-			}
-			_memberFiles[t.name] = files;
+			recordMembers(t, key);
 			// a type is named by its module's path and its own name, a main type by its module's path too; and by its package
 			// and its name, whatever its module is called — what an import reads when a file does not name its module
 			final inModule: String = '${fi.module}.${t.name}';
@@ -145,6 +152,21 @@ final class CallGraphImports {
 		}
 		_typePaths[key] = paths;
 		recordSearchOrder(fi, key, groups, imports);
+	}
+
+	/** Fold the members of `t`, a declaration of the file keyed `key`: its enum constructors, and where each member is declared. */
+	private function recordMembers(t: TypeDeclInfo, key: String): Void {
+		final files: Map<String, Array<String>> = _memberFiles[t.name] ?? [];
+		final written: Map<String, Array<WrittenIn>> = _memberTypes[t.name] ?? [];
+		for (m in t.members) {
+			if (_enumConstructorKinds.contains(m.kind)) CallGraphTypes.unionInto(_enumConstructors, m.name, [t.name]);
+			CallGraphTypes.unionInto(files, m.name, [key]);
+			final each: Array<WrittenIn> = written[m.name] ?? [];
+			if (!each.exists(w -> w.file == key && w.written == m.typeSource)) each.push({ file: key, written: m.typeSource });
+			written[m.name] = each;
+		}
+		_memberFiles[t.name] = files;
+		_memberTypes[t.name] = written;
 	}
 
 	/**
@@ -432,6 +454,12 @@ typedef FieldAlias = {
 	var alias: String;
 	var owner: Null<String>;
 	var member: Null<String>;
+}
+
+/** A type one declaration writes (null for none), and the file writing it, where its names are read (`CallGraphKeys.keyedIn`). */
+typedef WrittenIn = {
+	var file: String;
+	var written: Null<String>;
 }
 
 /** A package a wildcard import opens (`import p.*;`), and whether the import is `#if`-guarded — on some builds only. */

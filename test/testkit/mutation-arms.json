@@ -20531,8 +20531,8 @@
 			"name": "M-TS-DECL-RETURN-FILE",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "return readIn([for (d in declarationsOf(target)) d.file], _facts.returnSources[target], nodes[target]?.typeName, target);",
-			"replace": "return _facts.returnSources[target];",
+			"find": "return readIn(files, settled, nodes[target]?.typeName, target, each);",
+			"replace": "return settled;",
 			"note": "a function's written return type is read through the imports of the file calling it (review R3 M1)"
 		},
 		{
@@ -20587,16 +20587,16 @@
 			"name": "M-TS-KEY-MEMBER-PARAMS",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "types.memberOnChain(owner, member)?.typeSource, owner)",
-			"replace": "types.memberOnChain(owner, member)?.typeSource, null)",
+			"find": "types.memberOnChain(owner, member)?.typeSource, owner, null,",
+			"replace": "types.memberOnChain(owner, member)?.typeSource, null, null,",
 			"note": "a member's type is keyed without its owner's type parameters (R4 F5)"
 		},
 		{
 			"name": "M-TS-KEY-RETURN-PARAMS",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "_facts.returnSources[target], nodes[target]?.typeName, target);",
-			"replace": "_facts.returnSources[target], null);",
+			"find": "return readIn(files, settled, nodes[target]?.typeName, target, each);",
+			"replace": "return readIn(files, settled, null, null, each);",
 			"note": "a return type is keyed without its owner's and function's type parameters (R4 F5)"
 		},
 		{
@@ -20610,7 +20610,7 @@
 		{
 			"name": "M-TS-KEY-APART-FIRST",
 			"type": "anyparse.query.CallGraphKeys",
-			"method": "firstKeying",
+			"method": "firstOf",
 			"find": "if (keyed.length == 0) return null;",
 			"replace": "if (keyed.length != 1) return null;",
 			"note": "a type two declarations key apart is typed as neither (R4 F6)"
@@ -20749,6 +20749,46 @@
 			"find": "(params[at] ?? '').trim() == p",
 			"replace": "CallGraphNames.mentionsTypeName(params[at] ?? '', [p], _plugin.typeSyntax)",
 			"note": "an argument passed to a parameter nesting a function's type parameter binds it to the argument's whole type"
+		},
+		{
+			"name": "M-TS-DECL-EACH-MEMBER",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "types.imports.memberTypesOf(owner, member)",
+			"replace": "null",
+			"note": "a member its declarations write differently is typed as neither (review R4 F7)"
+		},
+		{
+			"name": "M-TS-DECL-EACH-RETURN",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "? CallGraphKeys.returnsWritten(this, target) : null;",
+			"replace": "? null : null;",
+			"note": "a return type its declarations write differently is typed as neither (review R4 F6 remainder)"
+		},
+		{
+			"name": "M-TS-DECL-EACH-SIMPLE",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "_facts.returns[target] ?? (outer == null ? null : SourceText.lastSegment(outer));",
+			"replace": "_facts.returns[target];",
+			"note": "a return its declarations write as types of different names names none"
+		},
+		{
+			"name": "M-TS-DECL-EACH-UNTYPED",
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "firstKeyingEach",
+			"find": "if (written == null) return null;",
+			"replace": "if (written == null) continue;",
+			"note": "a declaration writing no type is left out of the types the others write"
+		},
+		{
+			"name": "M-TS-KEY-LINED",
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "firstOf",
+			"find": "if (lined == null) return null;",
+			"replace": "if (lined == null) continue;",
+			"note": "a keying that does not line up with the first is dropped and the first one alone types the value"
 		}
 	]
 }

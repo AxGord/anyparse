@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.CallGraphImports.ImportedName;
+import anyparse.query.CallGraphImports.WrittenIn;
 import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.GrammarPlugin.RefShape;
@@ -1182,11 +1183,19 @@ final class CallGraph {
 				memberOnChain(currentType, name) ?? (imported ? importedFunction(name, span, currentType) : null);
 		}
 
-		/** `written`, a type `owner` (`fn`) declares in `files`, keyed there (`CallGraphKeys.firstKeying`); the files join `readFrom`. */
-		function readIn(files: Array<String>, written: Null<String>, owner: Null<String>, ?fn: String): Null<String> {
+		/**
+		 * `written`, a type `owner` (`fn`) declares in `files`, keyed there (`CallGraphKeys.firstKeying`) — or, when its
+		 * declarations write it differently (`each`, one per declaration), each keyed where written, all of them dispatched on
+		 * (`firstKeyingEach`); the files join `readFrom`.
+		 */
+		function readIn(
+			files: Array<String>, written: Null<String>, owner: Null<String>, ?fn: String, ?each: Array<WrittenIn>
+		): Null<String> {
 			for (f in files) if (!readFrom.contains(f)) readFrom.push(f);
 			final unkeyed: Array<String> = types.generics.typeParamsOf(owner ?? '').concat(fn == null ? [] : _facts.typeParams[fn] ?? []);
-			return CallGraphKeys.firstKeying(types.imports, _plugin.typeSyntax, files, written, unkeyed, keyedApart);
+			return written == null && each != null && each.length > 1
+				? CallGraphKeys.firstKeyingEach(types.imports, _plugin.typeSyntax, each, unkeyed, keyedApart)
+				: CallGraphKeys.firstKeying(types.imports, _plugin.typeSyntax, files, written, unkeyed, keyedApart);
 		}
 
 		/** The written `:Type` of `member` on `typeName`'s chain, from the index, read where declared (`readIn`); else the std's. */
@@ -1195,12 +1204,18 @@ final class CallGraph {
 			final owner: Null<String> = types.declaringTypeOf(typeName, member);
 			return owner == null
 				? null
-				: readIn(types.imports.memberFilesOf(owner, member), types.memberOnChain(owner, member)?.typeSource, owner);
+				: readIn(
+					types.imports.memberFilesOf(owner, member), types.memberOnChain(owner, member)?.typeSource, owner, null,
+					types.imports.memberTypesOf(owner, member)
+				);
 		}
 
-		/** The written return type of the node `target`, read where declared (`readIn`); null for none. */
+		/** The written return type of the node `target`, read where declared (`readIn`) — each one where they differ; null for none. */
 		function returnSourceOf(target: String): Null<String> {
-			return readIn([for (d in declarationsOf(target)) d.file], _facts.returnSources[target], nodes[target]?.typeName, target);
+			final files: Array<String> = [for (d in declarationsOf(target)) d.file];
+			final settled: Null<String> = _facts.returnSources[target];
+			final each: Null<Array<WrittenIn>> = settled == null && files.length > 1 ? CallGraphKeys.returnsWritten(this, target) : null;
+			return readIn(files, settled, nodes[target]?.typeName, target, each);
 		}
 
 		/**
@@ -1373,7 +1388,10 @@ final class CallGraph {
 		): Null<String> {
 			// a return type written as a dotted path is read as that path; a std function's from the std (`StdTypes.returnOf`)
 			final written: Null<String> = returnSourceOf(target);
-			final returned: Null<String> = keys.returnedPath(_facts.returns[target], written) ?? StdTypes.returnOf(_plugin, nodes[target]);
+			// declarations writing it differently each named a type of their own: the one read names it (`returnSourceOf`)
+			final outer: Null<String> = _facts.returnSources.exists(target) || written == null ? null : keys.outerPathOf(written, false);
+			final simple: Null<String> = _facts.returns[target] ?? (outer == null ? null : SourceText.lastSegment(outer));
+			final returned: Null<String> = keys.returnedPath(simple, written) ?? StdTypes.returnOf(_plugin, nodes[target]);
 			final seen: Null<String> = returned == null || nullableWrappers.contains(returned)
 				? null
 				: returnThrough(call, target, returned, receiverSource, receiverType, currentType, argType);

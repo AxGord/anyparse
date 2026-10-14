@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.CallGraph.FnDeclaration;
 import anyparse.query.CallGraph.FnNode;
+import anyparse.query.CallGraphImports.WrittenIn;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
@@ -234,12 +235,26 @@ final class CallGraphKeys {
 		imports: CallGraphImports, typeSyntax: TypeSyntaxReader, files: Array<String>, written: Null<String>, unkeyed: Array<String>,
 		apart: Array<{ from: String, to: String }>
 	): Null<String> {
-		final keyed: Array<String> = keyingsIn(imports, typeSyntax, files, written, unkeyed);
-		if (keyed.length == 0) return null;
-		for (other in keyed.slice(1))
-			for (pair in keyedApart(typeSyntax, keyed[0], other))
-				if (!apart.exists(p -> p.from == pair.from && p.to == pair.to)) apart.push(pair);
-		return keyed[0];
+		return firstOf(typeSyntax, keyingsIn(imports, typeSyntax, files, written, unkeyed), apart);
+	}
+
+	/**
+	 * `firstKeying` for declarations that write a type differently — one per branch of a conditional region — each read
+	 * where it is written (`keyedIn`), `unkeyed` as written: the first, the others dispatched on as well (`apartFrom`). Null
+	 * when one of them writes no type, or two do not line up (`keyedApart`): the type is then unknown, never one of them alone.
+	 */
+	public static function firstKeyingEach(
+		imports: CallGraphImports, typeSyntax: TypeSyntaxReader, declared: Array<WrittenIn>, unkeyed: Array<String>,
+		apart: Array<{ from: String, to: String }>
+	): Null<String> {
+		final keyed: Array<String> = [];
+		for (d in declared) {
+			final written: Null<String> = d.written;
+			if (written == null) return null;
+			final key: String = keyedIn(imports, d.file, typeSyntax, written, unkeyed);
+			if (!keyed.contains(key)) keyed.push(key);
+		}
+		return firstOf(typeSyntax, keyed, apart);
 	}
 
 	/** The types `apart` (`firstKeying`) names in place of the type keyed `typeName`, as the graph keys them. */
@@ -252,18 +267,24 @@ final class CallGraphKeys {
 	}
 
 	/**
-	 * The types `other` names where `chosen` names another, two keyings of one written type (`keyingsIn`), each as a pair
-	 * of the keys at the same position; none when the two do not line up.
+	 * The types `other` names where `chosen` names another, two keyings of one type (`keyingsIn`, `firstKeyingEach`), each as
+	 * a pair of the keys at the same position; null when the two do not line up — a different shape somewhere, or another
+	 * number of type arguments.
 	 */
-	public static function keyedApart(typeSyntax: TypeSyntaxReader, chosen: String, other: String): Array<{ from: String, to: String }> {
+	public static function keyedApart(
+		typeSyntax: TypeSyntaxReader, chosen: String, other: String
+	): Null<Array<{ from: String, to: String }>> {
 		final a: Array<TypeSyntax> = typeSyntax(chosen)?.descendants() ?? [];
 		final b: Array<TypeSyntax> = typeSyntax(other)?.descendants() ?? [];
+		if (a.length != b.length) return null;
 		final out: Array<{ from: String, to: String }> = [];
-		if (a.length != b.length) return out;
 		for (i in 0...a.length) switch [a[i].shape, b[i].shape] {
-			case [Nominal(from, _), Nominal(to, _)] if (from != to):
-				out.push({ from: from, to: to });
+			case [Nominal(from, x), Nominal(to, y)] if (x.length == y.length):
+				if (from != to) out.push({ from: from, to: to });
+			case [Function(_, _, _), Function(_, _, _)], [Structure(_), Structure(_)], [Intersection(_), Intersection(_)],
+				[Conditional(_), Conditional(_)], [Other, Other]:
 			case _:
+				return null;
 		}
 		return out;
 	}
@@ -314,6 +335,25 @@ final class CallGraphKeys {
 	}
 
 	/**
+	 * The return type each declaration the function `id` of `g` folds writes (null for none), with its file — what a call of
+	 * it may return when the declarations write it differently (`firstKeyingEach`); null for a declaration the graph cannot
+	 * read too.
+	 */
+	public static function returnsWritten(g: CallGraph, id: String): Array<WrittenIn> {
+		final kinds: Array<String> = (g._shape.functionKinds ?? []).concat(g._shape.inlineFunctionKinds ?? []);
+		return [
+			for (d in g.declarationsOf(id)) {
+				final entry: Null<{ tree: QueryNode, source: String }> = g._entries[CallGraphNames.normalizePath(d.file)];
+				final fn: Null<QueryNode> = entry == null ? null : CallGraphNames.functionNodeAt(entry.tree, d.span.from, kinds);
+				final read: Null<String> = entry == null || fn == null
+					? null
+					: CallGraphNames.returnSourceOf(fn, entry.source, g._shape.typeAnnotationKinds ?? []);
+				{ file: d.file, written: read };
+			}
+		];
+	}
+
+	/**
 	 * `paramTypesOf` for the node `n` of `g` no declaration of the run folds (an external target): its first parameter's
 	 * written type off the index, read where its member is declared, the owner's and the member's type parameters as written;
 	 * null for a node without a type or a name.
@@ -330,6 +370,24 @@ final class CallGraphKeys {
 				g.types.imports, g._plugin.typeSyntax, g.types.imports.memberFilesOf(owner, name), member?.firstParamTypeSource, unkeyed
 			)
 		];
+	}
+
+	/**
+	 * The first of `keyed` — the keyings of one type — the types each other one names in its place joining `apart` once each;
+	 * null for none, and when one of them does not line up with the first (`keyedApart`).
+	 */
+	private static function firstOf(
+		typeSyntax: TypeSyntaxReader, keyed: Array<String>, apart: Array<{ from: String, to: String }>
+	): Null<String> {
+		if (keyed.length == 0) return null;
+		final pairs: Array<{ from: String, to: String }> = [];
+		for (other in keyed.slice(1)) {
+			final lined: Null<Array<{ from: String, to: String }>> = keyedApart(typeSyntax, keyed[0], other);
+			if (lined == null) return null;
+			for (pair in lined) pairs.push(pair);
+		}
+		for (pair in pairs) if (!apart.exists(p -> p.from == pair.from && p.to == pair.to)) apart.push(pair);
+		return keyed[0];
 	}
 
 }

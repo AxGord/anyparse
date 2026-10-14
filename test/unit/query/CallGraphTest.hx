@@ -1368,6 +1368,50 @@ class CallGraphTest extends Test {
 		#end
 	}
 
+	/**
+	 * Declarations that WRITE a member's type or a function's return type differently — one per branch of a conditional
+	 * region — dispatch a call on the value on every type they write, as two files keying one written type apart do, never
+	 * on none: the field, the result of a call, a return whose types differ in name. One branch writing no type, or types
+	 * that do not line up (`Lock` and `Array<Lock>`), leave the value unknown (review R4 F7, the F6 remainder).
+	 */
+	@:pin('control')
+	@:killer('M-TS-DECL-EACH-MEMBER') @:killer('M-TS-DECL-EACH-RETURN') @:killer('M-TS-DECL-EACH-SIMPLE')
+	@:killer('M-TS-DECL-EACH-UNTYPED') @:killer('M-TS-KEY-LINED')
+	public function testDeclarationsWritingATypeDifferentlyDispatchOnEach(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final g: CallGraph = graphOf([
+			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
+			'package utils; class Gate { public function new() {} public function wait():Bool return true; }',
+			'package app; class A {\n#if sys\npublic static var lock:sys.thread.Lock = null;\npublic static function make():sys.thread.Lock return null;\n'
+			+ 'public static function gate():sys.thread.Lock return null;\n#else\npublic static var lock:utils.Lock = null;\n'
+			+ 'public static function make():utils.Lock return null;\npublic static function gate():utils.Gate return null;\n#end\n}',
+			'package app; class B {\n#if sys\npublic static var lock:sys.thread.Lock = null;\n#else\npublic static var lock:Array<utils.Lock> = null;\n#end\n}',
+			'package app; class D {\n#if sys\npublic static var lock:sys.thread.Lock = null;\n#else\npublic static var lock = null;\n#end\n}',
+			'package app; class C { static function field():Void A.lock.wait(); static function call():Void A.make().wait();'
+			+ ' static function named():Void A.gate().wait(); static function apart():Void B.lock.wait();'
+			+ ' static function untyped():Void D.lock.wait(); }'
+		]);
+		function waits(from: String): Array<String> {
+			final out: Array<String> = [
+				for (e in g.outEdges(from)) if (e.kind == Call && e.to.indexOf('wait') >= 0) e.to
+			];
+			out.sort(Reflect.compare);
+			return out;
+		}
+		Assert.same(['Lock.wait', 'sys.thread.Lock.wait'], waits('C.field'), 'a field');
+		Assert.same(['Lock.wait', 'sys.thread.Lock.wait'], waits('C.call'), 'a return');
+		Assert.same(['Gate.wait', 'sys.thread.Lock.wait'], waits('C.named'), 'a return whose types differ in name');
+		Assert.same([], waits('C.apart'), 'types that do not line up');
+		Assert.same([], waits('C.untyped'), 'a branch writing no type');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	private inline function graphOf(sources: Array<String>): CallGraph {
 		return QueryTestHelpers.graphOf(sources);
 	}

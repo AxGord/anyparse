@@ -3055,6 +3055,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-GRAPH-INIT-WIRING,M-GRAPH-CTOR-OWN-INIT,M-GRAPH-STATIC-INIT',
 			'unit.query.CallGraphTest#testConstructorArgumentsHandOnEveryFunctionValue :: control :: M-GRAPH-NEW-ARGS',
 			'unit.query.CallGraphTest#testConstructorNotLoadedYetIsTheOneTheChainDeclares :: control :: M-GRAPH-CTOR-PLACEHOLDER',
+			'unit.query.CallGraphTest#testDeclarationsWritingATypeDifferentlyDispatchOnEach :: control :: '
+				+ 'M-TS-DECL-EACH-MEMBER,M-TS-DECL-EACH-RETURN,M-TS-DECL-EACH-SIMPLE,M-TS-DECL-EACH-UNTYPED,M-TS-KEY-LINED',
 			'unit.query.CallGraphTest#testDynamicMethodCallIsAlsoAFunctionValueCall :: control :: M-GRAPH-DYNAMIC-METHOD',
 			'unit.query.CallGraphTest#testEnumConstructorSharingAStaticFunctionNameIsUnresolved :: control :: M-GRAPH-ENUM-VS-STATIC',
 			'unit.query.CallGraphTest#testEveryUsingThatDeclaresTheExtensionIsATarget :: control :: M-GRAPH-USING-ALL',
@@ -6660,7 +6662,12 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-INFER-AGREE',
 			'M-TS-INFER-REST',
 			'M-TS-INFER-SHADOW',
-			'M-TS-INFER-BARE'
+			'M-TS-INFER-BARE',
+			'M-TS-DECL-EACH-MEMBER',
+			'M-TS-DECL-EACH-RETURN',
+			'M-TS-DECL-EACH-SIMPLE',
+			'M-TS-DECL-EACH-UNTYPED',
+			'M-TS-KEY-LINED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
