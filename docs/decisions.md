@@ -2225,3 +2225,16 @@ decided the question; it may not become a record of runs.
   `functionsOnly`. Precision side effect: the narrower reach sharpens `AllocationSets` (TM's `APIRequest2.urlLoader` no
   longer unknown), so 1d1ba147 loses the `false` info `StandardFileSystem.listFolder|FolderWatcher._mutex` and f81c/bd94
   turn `RemoteFileSystemBase.setTimestamp|_mutationMutex` from a folded info into a warning — branch `feat/ts-precision-5`
+- two calls of one hold reaching ONE sink by different ways (review round 5 R2 candidate, G3 — reproduced, pre-existing at
+  aeeca953): `RootCauseFold.reasonsOf` de-duplicated the hold's `Site` reasons by key, repeat and named-ness only, keeping
+  the FIRST call's way, and `covers` reads that way (`way.contains(by.hold.edge.from)`). So `outer { _a: f(); g(); }` with
+  `f` holding `_b` around `g`'s read folded `outer` onto `f` ("long only through work D.f also holds a lock across") although
+  its direct `g()` holds `_a` across the read outside `_b`; written `g(); f();` it warned. R2 could not reproduce it because
+  with the lock's take itself a sink, `f`'s first way ends at the take, so its read is an UNNAMED reason and the two never
+  compared equal; with the take only a `lockPairs` entry — TM's `Mutex.acquire` — both are named. Now `subsumes`: a reason
+  is dropped only when the kept one's way is a SUBSET of its own (then it is covered whenever the kept one is: `covers`
+  reads a way only by `contains`); otherwise both stay and each needs its own cover. A folded finding then says each
+  covering part once (`turn`): two ways to one sink name the same holds — TM's `CloudDatabase.addCloudAction3` info
+  already repeated "work CloudDatabase.addCloudAction2 also holds a lock across" four times before this. MEASURED: score
+  rows == start on all three trees, no severity or key change on TM (messages only: more "its calls also reach (+N
+  more)" ways, de-duplicated fold parts); fixtures lost 0, gained the target — branch `feat/ts-precision-5`
