@@ -19512,25 +19512,25 @@
 		{
 			"name": "M-TS-STORED-HOLDERS",
 			"type": "anyparse.check.ReflectiveValues",
-			"method": "obtainable",
-			"find": "if (named == null || declared == null) return true;",
-			"replace": "if (named == null || declared == null) return false;",
+			"method": "obtainableMember",
+			"find": "if (holders == null) return true;",
+			"replace": "if (holders == null) return false;",
 			"note": "(soundness) a run declaring no reflectiveMethodHolders follows a parameter though a computed name may obtain its function (R3 M4)"
 		},
 		{
 			"name": "M-TS-STORED-SPELLED",
 			"type": "anyparse.check.ReflectiveValues",
-			"method": "obtainable",
-			"find": "if (spelled().contains(named.name)) return true;",
+			"method": "obtainableMember",
+			"find": "if (literals().contains(name)) return true;",
 			"replace": "",
 			"note": "(soundness) a literal spelling a function's name no longer stops following its parameter (R3 M4)"
 		},
 		{
 			"name": "M-TS-STORED-GLOB",
 			"type": "anyparse.check.ReflectiveValues",
-			"method": "obtainable",
-			"find": "return closure([named.type], _graph.types.subtypesOf).exists(t -> {",
-			"replace": "return false && closure([named.type], _graph.types.subtypesOf).exists(t -> {",
+			"method": "obtainableMember",
+			"find": "return closure([type], graph.types.subtypesOf).exists(t -> {",
+			"replace": "return false && closure([type], graph.types.subtypesOf).exists(t -> {",
 			"note": "(soundness) a reflectiveMethodHolders glob naming a function's class no longer stops following its parameter (R3 M4)"
 		},
 		{
@@ -20789,6 +20789,78 @@
 			"find": "if (lined == null) return null;",
 			"replace": "if (lined == null) continue;",
 			"note": "a keying that does not line up with the first is dropped and the first one alone types the value"
+		},
+		{
+			"name": "M-TS-CTOR-STORE-INERT",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "runsNothing",
+			"find": "|| stored.stored(edge) ||",
+			"replace": "||",
+			"note": "a value a constructor only stores runs where it is handed, under the hold around the `new` (R7 L1b, TM FileList.reload)"
+		},
+		{
+			"name": "M-TS-CTOR-STORE-DERIVE",
+			"type": "anyparse.check.StoredValues",
+			"method": "derive",
+			"find": "for (c in calls) _graph.deriveEdge({",
+			"replace": "for (c in calls.slice(calls.length)) _graph.deriveEdge({",
+			"note": "a stored value runs nowhere: no call of the field it is stored into runs it"
+		},
+		{
+			"name": "M-TS-CTOR-STORE-FINAL",
+			"type": "anyparse.check.StoredValues",
+			"method": "parameterStores",
+			"find": "if (field == null || !finals.contains(field)) {",
+			"replace": "if (field == null) {",
+			"note": "a value stored into a `var` field (written again anywhere) counts as stored"
+		},
+		{
+			"name": "M-TS-CTOR-STORE-READS",
+			"type": "anyparse.check.StoredValues",
+			"method": "occurrenceCalls",
+			"find": "return next == null ? null : callsOf(next, seen);",
+			"replace": "return next == null ? [] : callsOf(next, seen);",
+			"note": "a stored field read any other way (returned, aliased) runs the value nowhere"
+		},
+		{
+			"name": "M-TS-CTOR-STORE-FORWARD",
+			"type": "anyparse.check.StoredValues",
+			"method": "occurrenceCalls",
+			"find": "parent.kind == _shape.newExprKind ? newTarget(parent, o.file) : null",
+			"replace": "null",
+			"note": "a stored field handed to another constructor that only stores it is not followed"
+		},
+		{
+			"name": "M-TS-CTOR-STORE-CLOSED",
+			"type": "anyparse.check.StoredValues",
+			"method": "callsOf",
+			"find": "if (!_closed(field.file) || obtainable(field)) return null;",
+			"replace": "if (obtainable(field)) return null;",
+			"note": "a stored field of a project not closed counts as read only where the run sees it"
+		},
+		{
+			"name": "M-TS-CTOR-STORE-SPELLED",
+			"type": "anyparse.check.StoredValues",
+			"method": "callsOf",
+			"find": "if (!_closed(field.file) || obtainable(field)) return null;",
+			"replace": "if (!_closed(field.file)) return null;",
+			"note": "a stored field a string literal spells, or of a project declaring no reflectiveMethodHolders, counts as never read by name"
+		},
+		{
+			"name": "M-TS-CTOR-STORE-STATEMENT",
+			"type": "anyparse.check.StoredValues",
+			"method": "storedField",
+			"find": "if (parent.kind != _shape.assignKind || grand.kind != _shape.exprStatementKind) return null;",
+			"replace": "if (parent.kind != _shape.assignKind) return null;",
+			"note": "a store whose value another assignment reads (`_a = _b = p`) counts as one store into `_b`"
+		},
+		{
+			"name": "M-TS-CTOR-STORE-USE",
+			"type": "anyparse.check.StoredValues",
+			"method": "parameterStores",
+			"find": "if (field == null || !finals.contains(field)) {",
+			"replace": "if (field == null) return; if (!finals.contains(field)) {",
+			"note": "a parameter the constructor also calls, or reads in a nested function, counts as only stored"
 		}
 	]
 }

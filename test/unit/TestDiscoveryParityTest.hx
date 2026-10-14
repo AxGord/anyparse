@@ -2287,6 +2287,9 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-TS-ORDER-HANDED-VIA',
 			'unit.check.ThreadSafetyHandedValueTest#testAMainSinkHandedAsAValueIsReported :: control :: M-TS-HANDED-SINK-OFF',
 			'unit.check.ThreadSafetyHandedValueTest#testAMethodValueOfAnotherObjectWaitsForItsLock :: control :: M-TS-HANDED-RETAKE',
+			'unit.check.ThreadSafetyHandedValueTest#testAValueAConstructorOnlyStoresRunsWhereTheFieldIsCalled :: control :: '
+				+ 'M-TS-CTOR-STORE-INERT,M-TS-CTOR-STORE-DERIVE,M-TS-CTOR-STORE-FINAL,M-TS-CTOR-STORE-READS,M-TS-CTOR-STORE-FORWARD,'
+				+ 'M-TS-CTOR-STORE-CLOSED,M-TS-CTOR-STORE-SPELLED,M-TS-CTOR-STORE-STATEMENT,M-TS-CTOR-STORE-USE',
 			'unit.check.ThreadSafetyHandedValueTest#testAValueRunElsewhereTaintsNothing :: control :: M-TS-HANDED-ELSEWHERE,M-TS-CYCLE-REGISTERED',
 			'unit.check.ThreadSafetyHelperHoldsTest#testACallAGiveIsMadeOnIsWorkOfTheHelper :: control :: M-TS-HELPER-SPAN-START',
 			'unit.check.ThreadSafetyHelperHoldsTest#testAHandedOffHoldIsNoInnerHold :: control :: M-TS-NEST-HANDOFF',
@@ -6667,7 +6670,16 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-DECL-EACH-RETURN',
 			'M-TS-DECL-EACH-SIMPLE',
 			'M-TS-DECL-EACH-UNTYPED',
-			'M-TS-KEY-LINED'
+			'M-TS-KEY-LINED',
+			'M-TS-CTOR-STORE-INERT',
+			'M-TS-CTOR-STORE-DERIVE',
+			'M-TS-CTOR-STORE-FINAL',
+			'M-TS-CTOR-STORE-READS',
+			'M-TS-CTOR-STORE-FORWARD',
+			'M-TS-CTOR-STORE-CLOSED',
+			'M-TS-CTOR-STORE-SPELLED',
+			'M-TS-CTOR-STORE-STATEMENT',
+			'M-TS-CTOR-STORE-USE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

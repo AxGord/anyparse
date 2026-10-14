@@ -492,15 +492,7 @@ final class ReflectiveValues {
 	 */
 	private function obtainable(id: String): Bool {
 		final named: Null<{ type: String, name: String }> = memberOf(id);
-		final declared: Null<Array<String>> = _methodHolders;
-		if (named == null || declared == null) return true;
-		final globs: Array<String> = declared;
-		if (spelled().contains(named.name)) return true;
-		final imports: CallGraphImports = _graph.types.imports;
-		return closure([named.type], _graph.types.subtypesOf).exists(t -> {
-			final paths: Array<String> = imports.declaredPathsOf(t);
-			paths.length == 0 || paths.exists(p -> globs.exists(g -> Glob.qualifiedNames(g).match(p)));
-		});
+		return named == null || obtainableMember(_graph, _methodHolders, spelled, named.type, named.name);
 	}
 
 	/** The type and the name of the member function `id`; null for a node without either. */
@@ -515,13 +507,37 @@ final class ReflectiveValues {
 	private function spelled(): Array<String> {
 		final known: Null<Array<String>> = _literals;
 		if (known != null) return known;
-		final out: Array<String> = [];
-		final kinds: Array<String> = _shape.stringLiteralKinds ?? [];
-		final support: Null<StringFoldSupport> = _plugin.stringFoldSupport();
+		final out: Array<String> = literalsOf(_graph, _plugin);
 		_literals = out;
+		return out;
+	}
+
+	/**
+	 * Whether a read of a name may obtain the member `name` of `type` as a value: `holders` (the declared
+	 * `reflectiveMethodHolders`) is null, a string literal of the held files (`literals`) spells the name, or a read of a
+	 * computed name may obtain a member of `type` or a subtype — one `holders` names, or one no declared path names.
+	 */
+	public static function obtainableMember(
+		graph: CallGraph, holders: Null<Array<String>>, literals: () -> Array<String>, type: String, name: String
+	): Bool {
+		if (holders == null) return true;
+		final globs: Array<String> = holders;
+		if (literals().contains(name)) return true;
+		final imports: CallGraphImports = graph.types.imports;
+		return closure([type], graph.types.subtypesOf).exists(t -> {
+			final paths: Array<String> = imports.declaredPathsOf(t);
+			paths.length == 0 || paths.exists(p -> globs.exists(g -> Glob.qualifiedNames(g).match(p)));
+		});
+	}
+
+	/** Every string literal the held files of `graph` spell, read through `plugin`'s string folding (none without one). */
+	public static function literalsOf(graph: CallGraph, plugin: GrammarPlugin): Array<String> {
+		final out: Array<String> = [];
+		final kinds: Array<String> = plugin.refShape().stringLiteralKinds ?? [];
+		final support: Null<StringFoldSupport> = plugin.stringFoldSupport();
 		if (support == null) return out;
 		final fold: StringFoldSupport = support;
-		for (held in _graph.heldFiles()) {
+		for (held in graph.heldFiles()) {
 			final source: String = held.source;
 			function walk(node: QueryNode): Void {
 				final content: Null<String> = kinds.contains(node.kind) ? fold.literalOf(node, source)?.content : null;
