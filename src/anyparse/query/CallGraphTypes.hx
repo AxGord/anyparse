@@ -47,8 +47,11 @@ final class CallGraphTypes {
 	/** The typedefs that name an anonymous structure type. */
 	private final _anonStructs: Map<String, Bool> = [];
 
-	/** Typedef name -> the simple nominal it aliases. */
-	private final _aliases: Map<String, String> = [];
+	/**
+	 * Typedef name -> the simple nominal it aliases, and the path each declaration of it aliases (`aliasTargetRaw`) with the
+	 * file writing it.
+	 */
+	private final _aliases: Map<String, { simple: String, written: Array<{ path: String, file: String }> }> = [];
 
 	/** Every member name an indexed type declares as a STATIC function. */
 	private final _staticFunctionNames: Map<String, Bool> = [];
@@ -211,9 +214,18 @@ final class CallGraphTypes {
 	public function resolveAlias(typeName: String): String {
 		var t: String = typeName;
 		final seen: Array<String> = [];
-		while (_aliases.exists(t) && !seen.contains(t)) {
+		while (!seen.contains(t)) {
+			final alias: Null<{ simple: String, written: Array<{ path: String, file: String }> }> = _aliases[t];
+			if (alias == null) break;
 			seen.push(t);
-			t = _aliases[t] ?? t;
+			// the target its own file binds the name to (`CallGraphImports.typeOf`), a library type a project type's simple name
+			// bears keyed apart — the simple target when two declarations key it apart
+			final keyed: Array<String> = [];
+			for (w in alias.written) {
+				final key: String = imports.typeOf(w.file, w.path);
+				if (!keyed.contains(key)) keyed.push(key);
+			}
+			t = keyed.length == 1 ? keyed[0] : alias.simple;
 		}
 		return t;
 	}
@@ -275,7 +287,12 @@ final class CallGraphTypes {
 		generics.record(t, file);
 		unionInto(_interfaces, t.name, t.interfaces);
 		final target: Null<String> = t.aliasTargetNominal;
-		if (target != null && target != t.name) _aliases[t.name] = target;
+		final path: Null<String> = t.aliasTargetRaw;
+		if (target != null && target != t.name) {
+			final written: Array<{ path: String, file: String }> = _aliases[t.name]?.written ?? [];
+			if (path != null && !written.exists(w -> w.path == path && w.file == file)) written.push({ path: path, file: file });
+			_aliases[t.name] = { simple: target, written: written };
+		}
 		for (s in t.supertypes) unionInto(_subs, s, [t.name]);
 		recordMembers(t);
 	}

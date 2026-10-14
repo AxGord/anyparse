@@ -20677,6 +20677,22 @@
 			"find": "(!types.chainFullyIndexed(currentType) || ",
 			"replace": "(",
 			"note": "an imported static outranks a member a supertype the index does not hold may declare"
+		},
+		{
+			"name": "M-TS-ALIAS-KEYED",
+			"type": "anyparse.query.CallGraphTypes",
+			"method": "resolveAlias",
+			"find": "t = keyed.length == 1 ? keyed[0] : alias.simple;",
+			"replace": "t = alias.simple;",
+			"note": "a typedef aliases the simple name of its target, whatever its own file imports (review R4 F7)"
+		},
+		{
+			"name": "M-TS-ALIAS-AGREE",
+			"type": "anyparse.query.CallGraphTypes",
+			"method": "resolveAlias",
+			"find": "t = keyed.length == 1 ?",
+			"replace": "t = keyed.length > 0 ?",
+			"note": "two declarations keying an alias apart alias the first one's target"
 		}
 	]
 }

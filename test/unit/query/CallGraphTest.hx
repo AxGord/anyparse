@@ -1228,6 +1228,56 @@ class CallGraphTest extends Test {
 		#end
 	}
 
+	/**
+	 * A typedef aliases the type its OWN file binds the target name to, wherever the alias is used: an alias another module
+	 * declares importing the std `Lock` — imported by its module or by name — and one beside its use wait on the std lock,
+	 * whatever the reader imports; an alias of the project type stays it; two declarations keying the alias apart keep the
+	 * simple target, as before (review R4 F7).
+	 */
+	@:pin('control')
+	@:killer('M-TS-ALIAS-KEYED') @:killer('M-TS-ALIAS-AGREE')
+	public function testATypedefAliasesWhatItsOwnFileBindsTheTargetTo(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final g: CallGraph = CallGraph.build([
+			{
+				file: 'utils/Lock.hx',
+				source: 'package utils; class Lock { public function new() {} public function wait():Bool return true; }'
+			},
+			{ file: 'pkg/Alias.hx', source: 'package pkg; import sys.thread.Lock; typedef MyLock = Lock;' },
+			{ file: 'pkg/Sub.hx', source: 'package pkg; import sys.thread.Lock; typedef SubLock = Lock; class Sub {}' },
+			{ file: 'pkg/Own.hx', source: 'package pkg; import utils.Lock; typedef OwnLock = Lock;' },
+			{ file: 'one/Two.hx', source: 'package one; import sys.thread.Lock; typedef TwoLock = Lock;' },
+			{ file: 'two/Two.hx', source: 'package two; import utils.Lock; typedef TwoLock = Lock;' },
+			{
+				file: 'app/A.hx',
+				source: 'package app; import pkg.Alias; import pkg.Sub.SubLock; import pkg.Own; import utils.Lock; class A {'
+				+ ' static function module(l:MyLock):Void l.wait(); static function sub(l:SubLock):Void l.wait();'
+				+ ' static function own(l:OwnLock):Void l.wait(); static function two(l:TwoLock):Void l.wait(); }'
+			},
+			{
+				file: 'app/Here.hx',
+				source: 'package app; import sys.thread.Lock; typedef HereLock = Lock; class Here { static function here(l:HereLock):Void l.wait(); }'
+			}
+		], new HaxeQueryPlugin());
+		function targets(from: String): Array<String> {
+			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+			out.sort(Reflect.compare);
+			return out;
+		}
+		Assert.same(['sys.thread.Lock.wait'], targets('A.module'), 'an alias of another module, imported by its module');
+		Assert.same(['sys.thread.Lock.wait'], targets('A.sub'), 'an alias of another module, imported by name');
+		Assert.same(['sys.thread.Lock.wait'], targets('Here.here'), 'an alias beside its use');
+		Assert.same(['Lock.wait'], targets('A.own'), 'an alias of the project type');
+		Assert.same(['Lock.wait'], targets('A.two'), 'two declarations keying the alias apart: the simple target');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	private inline function graphOf(sources: Array<String>): CallGraph {
 		return QueryTestHelpers.graphOf(sources);
 	}

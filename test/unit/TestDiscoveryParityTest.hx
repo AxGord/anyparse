@@ -3033,6 +3033,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-TS-DECL-SUPER-ARGS,M-TS-DECL-PARAM-FILE,M-TS-DECL-UNDERLYING',
 			'unit.query.CallGraphTest#testATypeParameterIsNeverKeyedThroughAnImport :: control :: '
 				+ 'M-TS-KEY-TYPE-PARAM,M-TS-KEY-MEMBER-PARAMS,M-TS-KEY-SCOPE-PARAMS,M-TS-KEY-RETURN-PARAMS',
+			'unit.query.CallGraphTest#testATypedefAliasesWhatItsOwnFileBindsTheTargetTo :: control :: M-TS-ALIAS-KEYED,M-TS-ALIAS-AGREE',
 			'unit.query.CallGraphTest#testAWildcardOrGuardedNameDispatchesToEveryTypeItMayBe :: control :: '
 				+ 'M-TS-WILD-EXPLICIT-NO-MAYBE,M-TS-WILD-MAYBE,M-TS-WILD-GUARDED,M-TS-WILD-PROJECT,M-TS-WILD-ORDER,M-TS-STD-PACKAGES,'
 				+ 'M-TS-ALTERNATE-SAME,M-TS-ALTERNATE-NEW',
@@ -6646,7 +6647,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-IMPORT-STATIC-CALL',
 			'M-TS-IMPORT-STATIC-OWN',
 			'M-TS-IMPORT-STATIC-ONE',
-			'M-TS-IMPORT-STATIC-INDEXED'
+			'M-TS-IMPORT-STATIC-INDEXED',
+			'M-TS-ALIAS-KEYED',
+			'M-TS-ALIAS-AGREE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
