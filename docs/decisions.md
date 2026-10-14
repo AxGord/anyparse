@@ -2238,3 +2238,44 @@ decided the question; it may not become a record of runs.
   already repeated "work CloudDatabase.addCloudAction2 also holds a lock across" four times before this. MEASURED: score
   rows == start on all three trees, no severity or key change on TM (messages only: more "its calls also reach (+N
   more)" ways, de-duplicated fold parts); fixtures lost 0, gained the target — branch `feat/ts-precision-5`
+- R3 review of round 5 (H1, `round6/g2-bound`): `ReflectiveReach.neverMade` compared RAW names, so `typedef NA = Node<D>;
+  new NA()`, `Type.createInstance(NA, [])`, `import pkg.Node as NN; new NN<D>()` and `Type.resolveClass("Node")` kept the
+  instantiation bound of `Node.T` — `_l` sealed, the stall silent, the notice claiming the bound. Now every name a held
+  file makes or reads as a value is resolved as its file means it (`namedTypes`: as written, the key an import / alias /
+  wildcard binds it to, every key an `#if`-guarded import or a wildcard MAY supply, each through `resolveAlias`), a literal
+  handed to any `resolveClass` call names its class, and a `new` of a name that resolves to NO type (`unresolvedMade`: a
+  typedef alias of a name declared nowhere — its target may be an alias its own file binds — or a name nothing binds that
+  the run declares nowhere and the std core at none of its toplevel modules: a type parameter, a type the run does not
+  hold) may be an alias of any class, so it voids every such bound. What counts as BOUND is positive: a path written out,
+  an import / alias, a `using` (it brings the type into scope, which `CallGraphImports` recorded only as an extension
+  source: TM's `using haxe.io.Path; new Path(p)` was the first "unresolved" name), a guarded import or a wildcard that may
+  supply it (a library type: a project alias would be declared, and supplied for sure). One walk per run, memoised
+  (`madeTypes`). MEASURED on TM: before `using`/guarded imports counted as bound, 12 openfl/sys names were "unresolved"
+  and the bound fell (65/102); after, none, rows == start. Also fixed on the way: `StdTypes.declaresModule('', name)`
+  looked up `.name` and so answered false for every toplevel std module — branch `feat/ts-precision-5`
+- R3 H2 (`round6/g2-binder`): a `case` capture was typed by the ONE indexed enum declaring a constructor of its name, so
+  a project `enum Mine { Some(o:Other); }` typed the capture of a library `Option<D>`'s `Some(v)` as `Other` — sealed,
+  silent, and no notice named it. Now `ReflectiveReach.subjectEnum`: only when the switch subject is declared of that
+  enum (typed as any value is, resolved through the file's imports and aliases to ONE type on every build), the enum is
+  declared once, and the pattern is a top-level one of its arm (an or-alternative counts; a nested pattern's subject is
+  the outer constructor's parameter, which nothing here types). A parameter written with the enum's own type parameters
+  types nothing (`enum Gen<Other> { Hold(x:Other); }` read `x` as the class `Other` before — pre-existing). The binder is
+  an exclusion like the others: `placedBy` = "a capture of `E.Ctor`, typed by its parameter", so the notice names it —
+  branch `feat/ts-precision-5`
+- R3 M3 (`round6/g1-dotted/wrongpkg2`): since G1 a `sinks` entry written with a package names the type declared at that
+  path alone, so a wrong package matched nothing, silently, while another entry matched (the notice fired only for a
+  whole list naming nothing). The loose last-two-segments match is NOT restored; instead each entry written with its
+  package (dotted, lowercase first segment) that matches no graph id is said (`PositiveSinks.unmatched`). Plain
+  `Type.member` entries are left out on purpose: a shared config's list names calls a tree does not make (27 existing
+  tests run such lists), and a simple name was never narrowed by G1. On TM this adds 9 infos: the option-B loader
+  entries (`openfl.utils.Assets.getSound`, …) TM never calls — true, and worth seeing — branch `feat/ts-precision-5`
+- R3 M4 cheap part (`round6/frag`): one unplaced reflective writer unseals every lock member, and on the TM copy with
+  an 8-line `ReflectHelper.assign` recall fell 37 while the only pointer was a file-less info. Now each finding of a hold
+  (B), a hold left on a throw (C) or a main-thread take (A) whose lock lost its member name says after its message
+  which member and which writers (`FieldWrites.unsealedNote`, from `reflectiveWritersOf`), and the reflective notice
+  counts the holds that lost their name and, beside an unplaced write, names the failed preconditions of the
+  instantiation bound (`ReflectiveReach.lacking`: `no closedWorld over the whole project`, `no reflectiveClasses`; a
+  partial run has its own notice). The note lives in `FieldWrites`, not `LockSites` (at its 50-member cap), and is
+  computed from the writes, so a member unsealed by a hand-off AND written reflectively names the writers too — true
+  either way. README: `reflectiveClasses` was documented as read only under `reachConfigurationsComplete`; G2 reads it
+  under `thread-safety`'s covered `closedWorld` — the doc now says both — branch `feat/ts-precision-5`
