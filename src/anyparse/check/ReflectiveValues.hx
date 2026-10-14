@@ -50,6 +50,15 @@ typedef Writes = {
 }
 
 /**
+ * The locals and parameters (`<file>:<binding>`) and the field NAMES some initializer or write hands a value its declared
+ * type was never checked against (`ReflectiveValues.claims`).
+ */
+typedef Claims = {
+	final bindings: Array<String>;
+	final fields: Array<String>;
+}
+
+/**
  * What a reflective write on a value the run places on no class STORES, and whether that may be a lock of the type a lock
  * member is declared of (`FieldWrites.reflectiveWritersOf`). Such a write may store its value in any member of any object;
  * what keeps a member's lock its own is that the value provably holds no lock of the member's type, read off what the value
@@ -94,7 +103,7 @@ final class ReflectiveValues {
 	 * Each local or parameter (`<file>:<binding>`) and each field NAME a write or an initializer may hand a value its declared
 	 * type was never checked against (`unchecked`); null until first asked.
 	 */
-	private var _claims: Null<{ bindings: Map<String, Bool>, fields: Map<String, Bool> }> = null;
+	private var _claims: Null<Claims> = null;
 
 	public function new(
 		graph: CallGraph, plugin: GrammarPlugin, reach: ReflectiveReach, complete: Bool, ?entries: Entries, ?methodHolders: Array<String>
@@ -171,12 +180,12 @@ final class ReflectiveValues {
 	}
 
 	/**
-	 * Whether `type` is an enum the run declares once (`CallGraphTypes.isEnum`), asked of its declaration's KIND: a typedef of a
+	 * Whether `type` is an enum the run declares once (`TypeMetaFacts.isEnum`), asked of its declaration's KIND: a typedef of a
 	 * structure holds any object with its fields, an abstract whatever it wraps.
 	 */
 	private function enumType(type: String): Bool {
 		final types: CallGraphTypes = _graph.types;
-		return types.declarationCount(type) == 1 && types.isEnum(type);
+		return types.declarationCount(type) == 1 && types.meta.isEnum(type);
 	}
 
 	/**
@@ -223,57 +232,73 @@ final class ReflectiveValues {
 		final at: Null<Span> = value.span;
 		final tree: Null<QueryNode> = _graph.treeOf(file);
 		if (name == null || at == null || tree == null) return false;
-		final known: { bindings: Map<String, Bool>, fields: Map<String, Bool> } = claims(typer);
-		if (FieldWrites.accessKind(value.kind, _shape)) return known.fields.exists(name);
+		final known: Claims = claims(typer);
+		if (FieldWrites.accessKind(value.kind, _shape)) return known.fields.contains(name);
 		if (value.kind != _shape.identKind) return false;
 		final bound: Null<Int> = TypeResolver.resolveBindingFrom(name, at, tree, _shape);
-		return bound == null || bound < 0 ? known.fields.exists(name) : known.bindings.exists('$file:$bound');
+		return bound == null || bound < 0 ? known.fields.contains(name) : known.bindings.contains('$file:$bound');
 	}
 
 	/**
 	 * The locals, parameters and field names of the held files an initializer or a write hands a value its declared type was
 	 * never checked against, walked once (`unchecked`): a local by its binding, a field by its name, whoever declares it.
 	 */
-	private function claims(typer: (
-		String, Null<String>, QueryNode
-	) -> Null<String>): { bindings: Map<String, Bool>, fields: Map<String, Bool> } {
-		final known: Null<{ bindings: Map<String, Bool>, fields: Map<String, Bool> }> = _claims;
+	private function claims(typer: (String, Null<String>, QueryNode) -> Null<String>): Claims {
+		final known: Null<Claims> = _claims;
 		if (known != null) return known;
-		final out: { bindings: Map<String, Bool>, fields: Map<String, Bool> } = { bindings: [], fields: [] };
+		final out: Claims = { bindings: [], fields: [] };
 		_claims = out;
-		final locals: Array<String> = (_shape.localDeclKinds ?? []).concat(_shape.localDeclExprKinds ?? [])
-			.concat(_shape.staticLocalDeclKinds ?? []);
-		final fields: Array<String> = _shape.fieldDeclKinds ?? [];
 		for (held in _graph.heldFiles()) {
 			final file: String = held.file;
 			final tree: QueryNode = held.tree;
 			function walk(node: QueryNode): Void {
 				for (c in node.children) walk(c);
-				final name: Null<String> = node.name;
-				final at: Null<Span> = node.span;
-				final declares: Bool = locals.contains(node.kind) || fields.contains(node.kind);
-				if (name != null && at != null && declares && node.children.exists(c -> unchecked(file, c, typer))) {
-					if (fields.contains(node.kind))
-						out.fields[name] = true
-					else
-						out.bindings['$file:${at.from}'] = true;
-				}
-				if (!_shape.writeParentKinds.contains(node.kind) || !node.children.slice(1).exists(c -> unchecked(file, c, typer))) return;
-				final target: QueryNode = BoolExprShape.unwrapParens(node.children[0], _shape.parenKind);
-				final written: Null<String> = target.name;
-				final span: Null<Span> = target.span;
-				if (written == null || span == null) return;
-				final bound: Null<Int> = target.kind == _shape.identKind
-					? TypeResolver.resolveBindingFrom(written, span, tree, _shape)
-					: null;
-				if (bound != null && bound >= 0)
-					out.bindings['$file:$bound'] = true
-				else if (target.kind == _shape.identKind || FieldWrites.accessKind(target.kind, _shape))
-					out.fields[written] = true;
+				claimDeclared(file, node, out, typer);
+				if (_shape.writeParentKinds.contains(node.kind) && node.children.slice(1).exists(c -> unchecked(file, c, typer)))
+					claimWritten(file, tree, node.children[0], out);
 			}
 			walk(tree);
 		}
 		return out;
+	}
+
+	/**
+	 * Records `node`, of `file`, in `out` when it declares a local (by its binding: its own start) or a field (by its name)
+	 * whose initializer may hand a value its declared type was never checked against (`unchecked`).
+	 */
+	private function claimDeclared(
+		file: String, node: QueryNode, out: Claims, typer: (String, Null<String>, QueryNode) -> Null<String>
+	): Void {
+		final name: Null<String> = node.name;
+		final at: Null<Span> = node.span;
+		final local: Bool = (_shape.localDeclKinds ?? []).concat(_shape.localDeclExprKinds ?? [])
+			.concat(_shape.staticLocalDeclKinds ?? [])
+			.contains(node.kind);
+		final field: Bool = (_shape.fieldDeclKinds ?? []).contains(node.kind);
+		if (name == null || at == null || !(local || field) || !node.children.exists(c -> unchecked(file, c, typer))) return;
+		noteClaim(field ? out.fields : out.bindings, field ? name : '$file:${at.from}');
+	}
+
+	/**
+	 * Records the write target `node` of `tree`, the file `file`, in `out`: a local or a parameter by its binding, a bare
+	 * member or a field read off a value by its name.
+	 */
+	private function claimWritten(file: String, tree: QueryNode, node: QueryNode, out: Claims): Void {
+		final target: QueryNode = BoolExprShape.unwrapParens(node, _shape.parenKind);
+		final written: Null<String> = target.name;
+		final span: Null<Span> = target.span;
+		if (written == null || span == null) return;
+		final ident: Bool = target.kind == _shape.identKind;
+		final bound: Null<Int> = ident ? TypeResolver.resolveBindingFrom(written, span, tree, _shape) : null;
+		if (bound != null && bound >= 0)
+			noteClaim(out.bindings, '$file:$bound')
+		else if (ident || FieldWrites.accessKind(target.kind, _shape))
+			noteClaim(out.fields, written);
+	}
+
+	/** Adds `key` to `claims` once. */
+	private static inline function noteClaim(claims: Array<String>, key: String): Void {
+		if (!claims.contains(key)) claims.push(key);
 	}
 
 	/**
@@ -289,6 +314,20 @@ final class ReflectiveValues {
 		if ((_shape.typeAnnotationKinds ?? []).contains(node.kind)) return false;
 		final typed: Null<String> = typer(file, null, node);
 		return holds(node) || typed != null && catchAll(typed);
+	}
+
+	/**
+	 * The types of the value a write of the kind `kind` to `target`, in `file` and the function `id`, stores when it is a
+	 * write by an operator (`operatorWriteKinds`): a value of the target's declared type, none for a catch-all one (an
+	 * operator on `Dynamic` makes a number, a string or a boolean). Null — anything — for a write of any other kind, or a
+	 * declared type out of sight or a type parameter.
+	 */
+	private function operatorStores(
+		file: String, id: String, kind: String, target: QueryNode, typer: (String, Null<String>, QueryNode) -> Null<String>
+	): Null<Array<String>> {
+		final typed: Null<String> = (_shape.operatorWriteKinds ?? []).contains(kind) ? typer(file, id, target) : null;
+		final written: Null<String> = typed == null || typeParameter(file, target, typed) ? null : typed;
+		return written == null ? null : catchAll(written) ? [] : typedAs(file, written);
 	}
 
 	/** Whether `written` names a catch-all type (`Dynamic`, `Any`), which any value is of. */
@@ -351,7 +390,6 @@ final class ReflectiveValues {
 	): Null<Writes> {
 		final out: Writes = { values: [], types: [] };
 		final writeKinds: Array<String> = _shape.writeParentKinds;
-		final operators: Array<String> = _shape.operatorWriteKinds ?? [];
 		var unknown: Bool = false;
 		function walk(node: QueryNode): Void {
 			for (c in node.children) walk(c);
@@ -364,9 +402,7 @@ final class ReflectiveValues {
 				out.values.push(node.children[1]);
 				return;
 			}
-			final typed: Null<String> = operators.contains(node.kind) ? typer(file, id, target) : null;
-			final written: Null<String> = typed == null || typeParameter(file, target, typed) ? null : typed;
-			final types: Null<Array<String>> = written == null ? null : catchAll(written) ? [] : typedAs(file, written);
+			final types: Null<Array<String>> = operatorStores(file, id, node.kind, target, typer);
 			if (types == null)
 				unknown = true
 			else

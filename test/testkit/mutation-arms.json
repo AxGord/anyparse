@@ -19551,10 +19551,10 @@
 		},
 		{
 			"name": "M-TS-ENUM-KIND",
-			"type": "anyparse.query.CallGraphTypes",
-			"method": "isEnum",
-			"find": "return kinds.length > 0 && kinds.foreach(k -> _enumKinds.contains(k));",
-			"replace": "return kinds.length > 0 && holdsNoFunction(typeName) && !isInterface(typeName) && !meta.isClass(typeName);",
+			"type": "anyparse.query.TypeMetaFacts",
+			"method": "record",
+			"find": "if (_enumKinds.contains(t.kind))",
+			"replace": "if (_enumKinds.contains(t.kind) || t.isAnonStruct)",
 			"note": "a typedef of a structure is taken for an enum, which no lock is (R4 F2)"
 		},
 		{
@@ -19576,9 +19576,9 @@
 		{
 			"name": "M-TS-STORED-WRITE-OPERATOR",
 			"type": "anyparse.check.ReflectiveValues",
-			"method": "writesOf",
-			"find": "final types: Null<Array<String>> = written == null ? null : catchAll(written) ? [] : typedAs(file, written);",
-			"replace": "final types: Null<Array<String>> = null;",
+			"method": "operatorStores",
+			"find": "return written == null ? null : catchAll(written) ? [] : typedAs(file, written);",
+			"replace": "return null;",
 			"note": "a write by an operator to a parameter may store anything (R4 F1)"
 		},
 		{
@@ -19609,7 +19609,7 @@
 			"name": "M-TS-STORED-CAST-FIELD",
 			"type": "anyparse.check.ReflectiveValues",
 			"method": "claimed",
-			"find": "if (FieldWrites.accessKind(value.kind, _shape)) return known.fields.exists(name);",
+			"find": "if (FieldWrites.accessKind(value.kind, _shape)) return known.fields.contains(name);",
 			"replace": "if (FieldWrites.accessKind(value.kind, _shape)) return false;",
 			"note": "a field read off a value is trusted whatever its writes hand it (R4 F4)"
 		},
@@ -19632,9 +19632,9 @@
 		{
 			"name": "M-TS-STORED-CAST-WRITES",
 			"type": "anyparse.check.ReflectiveValues",
-			"method": "claims",
-			"find": "out.bindings['$file:$bound'] = true",
-			"replace": "out.fields[''] = true",
+			"method": "claimWritten",
+			"find": "noteClaim(out.bindings, '$file:$bound')",
+			"replace": "noteClaim(out.fields, '')",
 			"note": "a local a cast writes after its declaration is trusted (R4 F4)"
 		},
 		{
@@ -20531,7 +20531,7 @@
 			"name": "M-TS-DECL-RETURN-FILE",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "return readIn([for (d in declarationsOf(target)) d.file], _facts.returnSources[target], unkeyed);",
+			"find": "return readIn([for (d in declarationsOf(target)) d.file], _facts.returnSources[target], nodes[target]?.typeName, target);",
 			"replace": "return _facts.returnSources[target];",
 			"note": "a function's written return type is read through the imports of the file calling it (review R3 M1)"
 		},
@@ -20571,7 +20571,7 @@
 			"name": "M-TS-DECL-SUPER-ARGS",
 			"type": "anyparse.query.TypeParamTable",
 			"method": "argumentsVia",
-			"find": "keyIn == null ? a : keyIn(link.file, a, own)",
+			"find": "keyIn == null ? a : keyIn(link.file, a, typeName)",
 			"replace": "a",
 			"note": "a type argument a subclass passes is read through the imports of the file reading the value"
 		},
@@ -20587,30 +20587,30 @@
 			"name": "M-TS-KEY-MEMBER-PARAMS",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "types.imports.memberFilesOf(owner, member), types.memberOnChain(owner, member)?.typeSource,\ntypes.generics.typeParamsOf(owner)",
-			"replace": "types.imports.memberFilesOf(owner, member), types.memberOnChain(owner, member)?.typeSource,\n[]",
+			"find": "types.memberOnChain(owner, member)?.typeSource, owner)",
+			"replace": "types.memberOnChain(owner, member)?.typeSource, null)",
 			"note": "a member's type is keyed without its owner's type parameters (R4 F5)"
 		},
 		{
 			"name": "M-TS-KEY-RETURN-PARAMS",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "final unkeyed: Array<String> = types.generics.typeParamsOf(nodes[target]?.typeName ?? '')\n.concat(_facts.typeParams[target] ?? []);",
-			"replace": "final unkeyed: Array<String> = [];",
+			"find": "_facts.returnSources[target], nodes[target]?.typeName, target);",
+			"replace": "_facts.returnSources[target], null);",
 			"note": "a return type is keyed without its owner's and function's type parameters (R4 F5)"
 		},
 		{
 			"name": "M-TS-KEY-APART",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "if (types.imports.pathKey(pair.from) == written.typeName && !alternates.contains(other))",
-			"replace": "if (false && !alternates.contains(other))",
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "apartFrom",
+			"find": "if (imports.pathKey(pair.from) == typeName)",
+			"replace": "if (false)",
 			"note": "a type two declarations key apart dispatches on the first one only (R4 F6)"
 		},
 		{
 			"name": "M-TS-KEY-APART-FIRST",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "firstKeying",
 			"find": "if (keyed.length == 0) return null;",
 			"replace": "if (keyed.length != 1) return null;",
 			"note": "a type two declarations key apart is typed as neither (R4 F6)"

@@ -1013,15 +1013,11 @@ final class CallGraph {
 		final source: String = entry.source;
 		final moduleType: String = CallGraphNames.moduleTypeName(file);
 		// the file's declared types as the graph keys them (`CallGraphKeys`): a library type never merges into a project one
-		final keys: CallGraphKeys = new CallGraphKeys(
-			types.imports, file, _plugin.typeSyntax, provider, source, tree,
-			(shape.functionKinds ?? []).concat(shape.inlineFunctionKinds ?? [])
-		);
+		final keys: CallGraphKeys = new CallGraphKeys(types.imports, file, _plugin.typeSyntax, provider, source, tree, fnKinds);
 		keys.typeLocals(tree, localDeclKinds, newExprKind, callKind);
 		// the files whose declarations wrote the types read while typing a receiver (`readIn`), for the types a name there may be
 		final readFrom: Array<String> = [];
-		// each type a declaration read while typing a receiver names where another declaration of it names the one read
-		// (`readIn`): a call on that receiver runs on both
+		// each type a declaration typing a receiver names where another one of it names the type read (`readIn`): runs too
 		final keyedApart: Array<{ from: String, to: String }> = [];
 		final declaredTypes: Map<Int, String> = keys.declaredTypes;
 		final typeSources: Map<Int, String> = keys.typeSources;
@@ -1165,19 +1161,11 @@ final class CallGraph {
 				memberOnChain(currentType, name) ?? (imported ? importedFunction(name, span, currentType) : null);
 		}
 
-		/**
-		 * `written`, a type the declarations in `files` write, keyed there (`CallGraphKeys.keyingsIn`), the type parameters
-		 * `unkeyed` of the declaring type and member as written: the first file's keying, each type another file's names in
-		 * its place joining `keyedApart`; the files join `readFrom`.
-		 */
-		function readIn(files: Array<String>, written: Null<String>, unkeyed: Array<String>): Null<String> {
+		/** `written`, a type `owner` (`fn`) declares in `files`, keyed there (`CallGraphKeys.firstKeying`); the files join `readFrom`. */
+		function readIn(files: Array<String>, written: Null<String>, owner: Null<String>, ?fn: String): Null<String> {
 			for (f in files) if (!readFrom.contains(f)) readFrom.push(f);
-			final keyed: Array<String> = CallGraphKeys.keyingsIn(types.imports, _plugin.typeSyntax, files, written, unkeyed);
-			if (keyed.length == 0) return null;
-			for (other in keyed.slice(1))
-				for (pair in CallGraphKeys.keyedApart(_plugin.typeSyntax, keyed[0], other))
-					if (!keyedApart.exists(p -> p.from == pair.from && p.to == pair.to)) keyedApart.push(pair);
-			return keyed[0];
+			final unkeyed: Array<String> = types.generics.typeParamsOf(owner ?? '').concat(fn == null ? [] : _facts.typeParams[fn] ?? []);
+			return CallGraphKeys.firstKeying(types.imports, _plugin.typeSyntax, files, written, unkeyed, keyedApart);
 		}
 
 		/** The written `:Type` of `member` on `typeName`'s chain, from the index, read where declared (`readIn`); else the std's. */
@@ -1186,17 +1174,12 @@ final class CallGraph {
 			final owner: Null<String> = types.declaringTypeOf(typeName, member);
 			return owner == null
 				? null
-				: readIn(
-					types.imports.memberFilesOf(owner, member), types.memberOnChain(owner, member)?.typeSource,
-					types.generics.typeParamsOf(owner)
-				);
+				: readIn(types.imports.memberFilesOf(owner, member), types.memberOnChain(owner, member)?.typeSource, owner);
 		}
 
-		/** The written return type of the node `target`, read where declared (`readIn`); null for one two declarations key apart. */
+		/** The written return type of the node `target`, read where declared (`readIn`); null for none. */
 		function returnSourceOf(target: String): Null<String> {
-			final unkeyed: Array<String> = types.generics.typeParamsOf(nodes[target]?.typeName ?? '')
-				.concat(_facts.typeParams[target] ?? []);
-			return readIn([for (d in declarationsOf(target)) d.file], _facts.returnSources[target], unkeyed);
+			return readIn([for (d in declarationsOf(target)) d.file], _facts.returnSources[target], nodes[target]?.typeName, target);
 		}
 
 		/**
@@ -1302,7 +1285,7 @@ final class CallGraph {
 				null
 			else
 				viewedArgs(
-					types.generics.argumentsFor(owner, viewType, _plugin.typeSyntax, (f, a, shadowing) -> readIn([f], a, shadowing) ?? a),
+					types.generics.argumentsFor(owner, viewType, _plugin.typeSyntax, (f, a, linking) -> readIn([f], a, linking) ?? a),
 					viewType, viewType == receiverType ? ownArgs : null, currentType
 				);
 			return if (args != null && args.length >= params.length)
@@ -1913,11 +1896,8 @@ final class CallGraph {
 							// each type the receiver may be — a name this file or one whose declaration typed it wrote (`readFrom`) may be
 							// another type there — resolves the call on its own, whatever the others declare
 							final alternates: Array<String> = types.imports.alternateTypesIn([file].concat(readFrom), written.typeName);
-							for (pair in keyedApart) {
-								final other: String = types.imports.pathKey(pair.to);
-								if (types.imports.pathKey(pair.from) == written.typeName && !alternates.contains(other))
-									alternates.push(other);
-							}
+							for (t in CallGraphKeys.apartFrom(types.imports, keyedApart, written.typeName)) if (!alternates.contains(t))
+								alternates.push(t);
 							for (type in [written.typeName].concat(alternates)) {
 								final target: Null<String> = dispatchOn(
 									{ typeName: type, isValue: written.isValue, isDynamic: false }, calleeName, span, field, currentType

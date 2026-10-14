@@ -36,13 +36,32 @@ final class TypeMetaFacts {
 	/** The grammar's class declaration kinds (`RefShape.classDeclKinds`). */
 	private final _classKinds: Array<String>;
 
-	public function new(classKinds: Array<String>) {
+	/** The types some declaration of which is an enum (`RefShape.runtimeTaggedTypeKinds`). */
+	private final _enums: Map<String, Bool> = [];
+
+	/** The types some declaration of which is of any other kind. */
+	private final _nonEnums: Map<String, Bool> = [];
+
+	/** The grammar's enum declaration kinds (`RefShape.runtimeTaggedTypeKinds`). */
+	private final _enumKinds: Array<String>;
+
+	public function new(classKinds: Array<String>, ?enumKinds: Array<String>) {
 		_classKinds = classKinds;
+		_enumKinds = enumKinds ?? [];
 	}
 
 	/** Whether an indexed declaration of `typeName` is `extern` — a body-less member of it runs target code. */
 	public inline function isExtern(typeName: String): Bool {
 		return _externs.exists(typeName);
+	}
+
+	/**
+	 * Whether every indexed declaration of `typeName` is an enum (`RefShape.runtimeTaggedTypeKinds`): a value of it is an
+	 * instance of one of its constructors, never an object of a class. A typedef of a structure is not one — any object with
+	 * the fields is a value of it — and neither is an abstract.
+	 */
+	public inline function isEnum(typeName: String): Bool {
+		return _enums.exists(typeName) && !_nonEnums.exists(typeName);
 	}
 
 	/** Whether an indexed declaration of `typeName` is a class (`RefShape.classDeclKinds`). */
@@ -78,6 +97,10 @@ final class TypeMetaFacts {
 	public function record(t: TypeDeclInfo): Void {
 		if (t.isExtern) _externs[t.name] = true;
 		if (_classKinds.contains(t.kind)) _classes[t.name] = true;
+		if (_enumKinds.contains(t.kind))
+			_enums[t.name] = true
+		else
+			_nonEnums[t.name] = true;
 		if (t.hasBuild || t.hasAutoBuild) _built[t.name] = true;
 		if (t.constructsFromLiteral) _constructedFromLiteral[t.name] = true;
 		if (t.bringsExtensions) _extended[t.name] = true;

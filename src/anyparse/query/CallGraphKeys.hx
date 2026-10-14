@@ -6,6 +6,8 @@ import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
+using Lambda;
+
 /**
  * The types one file writes, spelled as a `CallGraph` keys them (`CallGraphImports.typeOf`): a name an import or an
  * alias of the file binds, or a dotted path, is the type it names — a library type never merges into a project type
@@ -29,6 +31,9 @@ final class CallGraphKeys {
 	/** The binding offsets of the locals whose initializing call `throughInitializer` is reading, against a cycle. */
 	private final _reading: Array<Int> = [];
 
+	/** Every type-parameter name a declaration of the file declares. */
+	private final _paramNames: Array<String> = [];
+
 	private final _imports: CallGraphImports;
 	private final _file: String;
 	private final _typeSyntax: TypeSyntaxReader;
@@ -41,9 +46,6 @@ final class CallGraphKeys {
 
 	/** Each declaration of the file declaring type parameters (by its key, `TypeInfoProvider.typeParamNames`) -> their names. */
 	private final _typeParams: Map<Int, Array<String>>;
-
-	/** Every type-parameter name a declaration of the file declares. */
-	private final _paramNames: Array<String> = [];
 
 	/**
 	 * The keys of the declarations `provider` reads in `source`, the text of `file` (none without a provider), `tree` its
@@ -79,16 +81,6 @@ final class CallGraphKeys {
 	 */
 	public function keyed(typeSource: String, at: Int): String {
 		return keyedIn(_imports, _file, _typeSyntax, typeSource, unkeyedAt(at, typeSource));
-	}
-
-	/**
-	 * The type parameters in scope at the offset `at` of the file (`TypeParamTable.inScopeAt`), asked only when `written`
-	 * mentions a name some declaration of the file declares as one.
-	 */
-	private function unkeyedAt(at: Int, written: String): Array<String> {
-		final tree: Null<QueryNode> = _tree;
-		if (tree == null || !CallGraphNames.mentionsTypeName(written, _paramNames, _typeSyntax)) return [];
-		return TypeParamTable.inScopeAt(tree, at, _typeParams, _functionKinds);
 	}
 
 	/**
@@ -140,6 +132,17 @@ final class CallGraphKeys {
 	public function returnedPath(simple: Null<String>, written: Null<String>): Null<String> {
 		final path: Null<String> = outerPathOf(written);
 		return simple != null && path != null && path.indexOf('.') >= 0 && SourceText.lastSegment(path) == simple ? path : simple;
+	}
+
+	/**
+	 * The type parameters in scope at the offset `at` of the file (`TypeParamTable.inScopeAt`), asked only when `written`
+	 * mentions a name some declaration of the file declares as one.
+	 */
+	private function unkeyedAt(at: Int, written: String): Array<String> {
+		final tree: Null<QueryNode> = _tree;
+		return tree == null || !CallGraphNames.mentionsTypeName(written, _paramNames, _typeSyntax)
+			? []
+			: TypeParamTable.inScopeAt(tree, at, _typeParams, _functionKinds);
 	}
 
 	/**
@@ -224,6 +227,31 @@ final class CallGraphKeys {
 	}
 
 	/**
+	 * The first of `keyingsIn` — null for none — the types each other keying names in its place joining `apart` once each
+	 * (`keyedApart`): a reader typing a receiver by it dispatches on those as well (`apartFrom`).
+	 */
+	public static function firstKeying(
+		imports: CallGraphImports, typeSyntax: TypeSyntaxReader, files: Array<String>, written: Null<String>, unkeyed: Array<String>,
+		apart: Array<{ from: String, to: String }>
+	): Null<String> {
+		final keyed: Array<String> = keyingsIn(imports, typeSyntax, files, written, unkeyed);
+		if (keyed.length == 0) return null;
+		for (other in keyed.slice(1))
+			for (pair in keyedApart(typeSyntax, keyed[0], other))
+				if (!apart.exists(p -> p.from == pair.from && p.to == pair.to)) apart.push(pair);
+		return keyed[0];
+	}
+
+	/** The types `apart` (`firstKeying`) names in place of the type keyed `typeName`, as the graph keys them. */
+	public static function apartFrom(
+		imports: CallGraphImports, apart: Array<{ from: String, to: String }>, typeName: String
+	): Array<String> {
+		return [
+			for (pair in apart) if (imports.pathKey(pair.from) == typeName) imports.pathKey(pair.to)
+		];
+	}
+
+	/**
 	 * The types `other` names where `chosen` names another, two keyings of one written type (`keyingsIn`), each as a pair
 	 * of the keys at the same position; none when the two do not line up.
 	 */
@@ -255,16 +283,7 @@ final class CallGraphKeys {
 		final imports: CallGraphImports = g.types.imports;
 		final typeSyntax: TypeSyntaxReader = g._plugin.typeSyntax;
 		final declared: Array<FnDeclaration> = g.declarationsOf(id);
-		if (declared.length == 0) {
-			final type: Null<String> = n.typeName;
-			final name: Null<String> = n.name;
-			if (type == null || name == null) return null;
-			final owner: String = g.types.declaringTypeOf(type, name) ?? type;
-			final files: Array<String> = imports.memberFilesOf(owner, name);
-			final member: Null<MemberInfo> = g.types.memberOnChain(type, name);
-			final unkeyed: Array<String> = g.types.generics.typeParamsOf(owner).concat(member?.typeParamNames ?? []);
-			return [keyedInFiles(imports, typeSyntax, files, member?.firstParamTypeSource, unkeyed)];
-		}
+		if (declared.length == 0) return externalParamTypes(g, n);
 		var out: Null<Array<Null<String>>> = null;
 		var rest: Bool = false;
 		final unkeyed: Array<String> = g.types.generics.typeParamsOf(n.typeName ?? '').concat(g._facts.typeParams[id] ?? []);
@@ -292,6 +311,25 @@ final class CallGraphKeys {
 		if (rest) g._facts.restParams[id] = true;
 		g._facts.paramTypes[id] = params;
 		return params;
+	}
+
+	/**
+	 * `paramTypesOf` for the node `n` of `g` no declaration of the run folds (an external target): its first parameter's
+	 * written type off the index, read where its member is declared, the owner's and the member's type parameters as written;
+	 * null for a node without a type or a name.
+	 */
+	private static function externalParamTypes(g: CallGraph, n: FnNode): Null<Array<Null<String>>> {
+		final type: Null<String> = n.typeName;
+		final name: Null<String> = n.name;
+		if (type == null || name == null) return null;
+		final owner: String = g.types.declaringTypeOf(type, name) ?? type;
+		final member: Null<MemberInfo> = g.types.memberOnChain(type, name);
+		final unkeyed: Array<String> = g.types.generics.typeParamsOf(owner).concat(member?.typeParamNames ?? []);
+		return [
+			keyedInFiles(
+				g.types.imports, g._plugin.typeSyntax, g.types.imports.memberFilesOf(owner, name), member?.firstParamTypeSource, unkeyed
+			)
+		];
 	}
 
 }
