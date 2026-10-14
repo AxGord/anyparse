@@ -19550,6 +19550,14 @@
 			"note": "an enum value counts as a possible lock (R3 M4)"
 		},
 		{
+			"name": "M-TS-ENUM-KIND",
+			"type": "anyparse.query.CallGraphTypes",
+			"method": "isEnum",
+			"find": "return kinds.length > 0 && kinds.foreach(k -> _enumKinds.contains(k));",
+			"replace": "return kinds.length > 0 && holdsNoFunction(typeName) && !isInterface(typeName) && !meta.isClass(typeName);",
+			"note": "a typedef of a structure is taken for an enum, which no lock is (R4 F2)"
+		},
+		{
 			"name": "M-TS-STORED-UNRELATED",
 			"type": "anyparse.check.ReflectiveValues",
 			"method": "mayHold",

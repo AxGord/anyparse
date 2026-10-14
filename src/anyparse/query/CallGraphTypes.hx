@@ -77,6 +77,9 @@ final class CallGraphTypes {
 	/** Declaration kinds that may alias another type, a function type included. */
 	private final _aliasingKinds: Array<String>;
 
+	/** Declaration kinds whose values are instances of its own constructors, never an object of a class (`isEnum`). */
+	private final _enumKinds: Array<String>;
+
 	/** `index` null yields the empty tables of a graph that resolves nothing. */
 	public function new(index: Null<SymbolIndex>, shape: RefShape) {
 		meta = new TypeMetaFacts(shape.classDeclKinds ?? []);
@@ -86,6 +89,7 @@ final class CallGraphTypes {
 		_valueTypeNames = [for (t in (shape.literalTypeNames ?? []).iterator()) t].concat(shape.nonNullableTypeNames ?? [])
 			.concat(shape.arrayTypeNames ?? []);
 		_aliasingKinds = shape.aliasingDeclKinds ?? [];
+		_enumKinds = shape.runtimeTaggedTypeKinds ?? [];
 		imports = new CallGraphImports(
 			shape.execution?.enumConstructorKinds ?? [], isStatic,
 			type -> declarationCount(type) == 0 || meta.isExtern(type) || firstOnChain(type, t -> meta.isBuilt(t)) != null
@@ -103,6 +107,16 @@ final class CallGraphTypes {
 		return _subs[typeName] ?? [];
 	}
 
+
+	/**
+	 * Whether every indexed declaration of `typeName` is an enum (`RefShape.runtimeTaggedTypeKinds`): a value of it is an
+	 * instance of one of its constructors, never an object of a class. A typedef of a structure is not one — any object with
+	 * the fields is a value of it — and neither is an abstract.
+	 */
+	public function isEnum(typeName: String): Bool {
+		final kinds: Array<String> = _kinds[typeName] ?? [];
+		return kinds.length > 0 && kinds.foreach(k -> _enumKinds.contains(k));
+	}
 
 	/** Whether an indexed declaration of `typeName` is an interface. */
 	public inline function isInterface(typeName: String): Bool {

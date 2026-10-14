@@ -152,10 +152,13 @@ final class ReflectiveValues {
 		return types.declarationCount(type) == 1 && (types.meta.isClass(type) || types.isInterface(type));
 	}
 
-	/** Whether `type` is an enum the run declares once: neither a class nor an interface, and no alias of a function type. */
+	/**
+	 * Whether `type` is an enum the run declares once (`CallGraphTypes.isEnum`), asked of its declaration's KIND: a typedef of a
+	 * structure holds any object with its fields, an abstract whatever it wraps.
+	 */
 	private function enumType(type: String): Bool {
 		final types: CallGraphTypes = _graph.types;
-		return types.declarationCount(type) == 1 && !types.meta.isClass(type) && !types.isInterface(type) && types.holdsNoFunction(type);
+		return types.declarationCount(type) == 1 && types.isEnum(type);
 	}
 
 	/**

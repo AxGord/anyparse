@@ -375,6 +375,33 @@ class ThreadSafetyReflectiveSealTest extends Test {
 		#end
 	}
 
+	/**
+	 * A typedef of a structure is no enum: any object with its fields is a value of it, a lock included — with fields, with
+	 * none, extending another — so a value typed by one may be the lock, stored directly, handed to a parameter, or held by a
+	 * parameter declared of it (review R4 F2).
+	 */
+	@:pin('control') @:killer('M-TS-ENUM-KIND')
+	public function testAStructureTypedefMayHoldALock(): Void {
+		#if (sys || nodejs)
+		Assert.equals(1, helperTakes(SEALED, '', 'final x:Lockable = new Mutex(); Help.assign(d, "x", x);'), 'a structure typedef');
+		Assert.equals(1, helperTakes(SEALED, '', 'final x:Obj = new Mutex(); Help.assign(d, "x", x);'), 'an empty structure typedef');
+		Assert.equals(1, helperTakes(SEALED, '', 'final x:Ext = new Mutex(); Help.assign(d, "x", x);'), 'an extending structure typedef');
+		Assert.equals(
+			1, helperTakes(SEALED, '', 'final x:Lockable = new Mutex(); Reflect.setField(bag, Sys.args()[0], x);'), 'stored directly'
+		);
+		Assert.equals(
+			1,
+			helperTakes(
+				SEALED, 'public static function hold(o:Dynamic, k:String, v:Lockable):Void Reflect.setField(o, k, v);',
+				'Help.hold(d, "x", new Mutex());'
+			),
+			'a parameter declared of it'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
 	/** `Help.put`, handing an optional parameter on to `Help.assign`. */
 	private static inline final PUT: String = 'public static function put(o:Dynamic, k:String, ?v:Dynamic):Void assign(o, k, v);';
@@ -386,29 +413,33 @@ class ThreadSafetyReflectiveSealTest extends Test {
 	private static inline final SKIP: String = 'public static function skip(?n:Int, v:Dynamic):Void assign(D.bag, "x", v);';
 
 	/** How many findings of `helperFindings` report the main thread's take of `_l` in `D.quick`. */
-	private static function helperTakes(config: String, helpers: String, use: String): Int {
-		return helperFindings(config, helpers, use).filter(f -> f.indexOf('D.quick -> Mutex.acquire') != -1).length;
+	private static function helperTakes(config: String, helpers: String, use: String, ?modules: Array<String>): Int {
+		return helperFindings(config, helpers, use, modules).filter(f -> f.indexOf('D.quick -> Mutex.acquire') != -1).length;
 	}
 
 	/**
 	 * The findings of a run under `config` in which `Help.assign` writes a computed name on a `Dynamic` value, `Help`
 	 * declares `helpers` beside it, and `D.main` runs `use` on the main thread while a worker holds `_m` across a sleep and
-	 * the main thread takes `_l`.
+	 * the main thread takes `_l`; `modules` are more modules of the run.
 	 */
-	private static function helperFindings(config: String, helpers: String, use: String): Array<String> {
+	private static function helperFindings(config: String, helpers: String, use: String, ?modules: Array<String>): Array<String> {
 		return [
-			for (v in ThreadSafetyCheckTest.violations(config, [
+			for (v in ThreadSafetyCheckTest.violations(config, (modules ?? []).concat([
 				ThreadSafetyCheckTest.MUTEX,
 				'class Runner { public static function create(fn:()->Void):Void {} }',
 				'class Other { public function new() {} }',
 				'class Sub extends Mutex { public function new() { super(); } }',
 				'enum Color { Red; }',
+				'typedef Lockable = { function acquire():Void; function release():Void; }',
+				'typedef Obj = {}',
+				'typedef Base0 = { function acquire():Void; }',
+				'typedef Ext = { > Base0, function release():Void; }',
 				'class Help { public static function assign(o:Dynamic, k:String, v:Dynamic):Void Reflect.setField(o, k, v); $helpers }',
 				'class D { var _l:Mutex = new Mutex(); final _m:Mutex = new Mutex(); public static var bag:Dynamic = null;'
 				+ ' public function new() {} public function work():Void { _m.acquire(); Sys.sleep(1); _m.release(); }'
 				+ ' public function quick():Void { _l.acquire(); _l.release(); }'
 				+ ' public static function main():Void { final d:D = new D(); Runner.create(() -> d.work()); $use d.quick(); } }'
-			])) v.message
+			]))) v.message
 		];
 	}
 
