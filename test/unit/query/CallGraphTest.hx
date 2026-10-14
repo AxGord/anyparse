@@ -1278,6 +1278,47 @@ class CallGraphTest extends Test {
 		#end
 	}
 
+	/**
+	 * A name no import binds is looked up in the file's own package, then in each package enclosing it, as the language does:
+	 * a project file in the std's `sys.thread` (or a package under it) means the std `Lock` beside a project namesake, unless
+	 * a wildcard import supplies the name first or the project declares it in a package searched first (review R4 F7).
+	 */
+	@:pin('control')
+	@:killer('M-TS-PACKAGE-LOOKUP') @:killer('M-TS-PACKAGE-ENCLOSING') @:killer('M-TS-PACKAGE-PROJECT-FIRST')
+	public function testANameNoImportBindsIsLookedUpInTheFilesPackages(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final g: CallGraph = graphOf([
+			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
+			'package sys.thread; class A { public static var lock:Lock = null; public static function make():Lock return null; }',
+			'package sys.thread.deep; class B { public static var lock:Lock = null; }',
+			'package sys.thread; import utils.*; class W { public static var lock:Lock = null; }',
+			'package utils.inner; class U { public static var lock:Lock = null; }',
+			'package sys.thread.mine; class Lock { public function new() {} public function wait():Bool return true; }',
+			'package sys.thread.mine; class M { public static var lock:Lock = null; }',
+			'package app; class C { static function own():Void A.lock.wait(); static function ret():Void A.make().wait();'
+			+ ' static function deep():Void B.lock.wait(); static function wild():Void W.lock.wait();'
+			+ ' static function proj():Void U.lock.wait(); static function mine():Void M.lock.wait(); }'
+		]);
+		function targets(from: String): Array<String> {
+			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+			out.sort(Reflect.compare);
+			return out;
+		}
+		Assert.same(['sys.thread.Lock.wait'], targets('C.own'), 'a std type of the file\'s own package');
+		Assert.same(['A.make', 'sys.thread.Lock.wait'], targets('C.ret'), 'a return type');
+		Assert.same(['sys.thread.Lock.wait'], targets('C.deep'), 'a std type of an enclosing package');
+		Assert.same(['Lock.wait'], targets('C.wild'), 'a wildcard import comes first');
+		Assert.same(['Lock.wait'], targets('C.proj'), 'a project type of an enclosing package');
+		Assert.same(['Lock.wait'], targets('C.mine'), 'a project type of the own package before a std one of an enclosing package');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	private inline function graphOf(sources: Array<String>): CallGraph {
 		return QueryTestHelpers.graphOf(sources);
 	}

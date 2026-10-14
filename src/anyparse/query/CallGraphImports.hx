@@ -41,6 +41,9 @@ final class CallGraphImports {
 	/** File -> the names of the types its own module declares, which its code means before any import's. */
 	private final _ownTypes: Map<String, Array<String>> = [];
 
+	/** File -> its package ('' for the toplevel), whose modules and its enclosing packages' its code sees after its imports. */
+	private final _packages: Map<String, String> = [];
+
 	/**
 	 * File -> the packages its wildcard imports (own and ambient) open, in the order the language searches them — the file's
 	 * own last to first, then each ambient group nearest first — each with whether it is `#if`-guarded.
@@ -151,6 +154,7 @@ final class CallGraphImports {
 	 */
 	private function recordSearchOrder(fi: FileInfo, key: String, groups: Array<Array<ImportInfo>>, imports: Array<ImportInfo>): Void {
 		_ownTypes[key] = [for (t in fi.types) t.name];
+		_packages[key] = fi.pkg;
 		final wild: Array<WildPackage> = [];
 		for (group in groups) {
 			final opened: Array<WildPackage> = [
@@ -260,7 +264,7 @@ final class CallGraphImports {
 	public function boundPath(file: String, written: String, ?maybe: Array<String>): Null<String> {
 		final key: String = CallGraphNames.normalizePath(file);
 		if (maybe != null) for (g in _guardedPaths[key] ?? []) if (g.name == written) maybe.push(g.path);
-		return (_typePaths[key] ?? [])[written] ?? wildcardPath(key, written, maybe);
+		return (_typePaths[key] ?? [])[written] ?? wildcardPath(key, written, maybe) ?? packagePath(key, written);
 	}
 
 	/**
@@ -359,6 +363,24 @@ final class CallGraphImports {
 			final supplied: Null<Bool> = (_declaredPaths[name] ?? []).contains(path) ? true : StdTypes.declaresModule(w.pkg, name);
 			if (supplied == true && !w.guarded) return path;
 			if (supplied != false) maybe?.push(path);
+		}
+		return null;
+	}
+
+	/**
+	 * The module path the package of the file keyed `key` — or a package enclosing it, nearest first — supplies under `name`,
+	 * which the language searches after the file's imports: the first one the project declares there, or the std core
+	 * declares in a package the core holds (a project file in `sys.thread` sees the std `Lock`); null for none, and in a
+	 * package neither holds — a library's, which the tables cannot list. A type its own module declares is one the project
+	 * declares there.
+	 */
+	private function packagePath(key: String, name: String): Null<String> {
+		var pkg: String = _packages[key] ?? '';
+		while (pkg != '') {
+			final path: String = '$pkg.$name';
+			if ((_declaredPaths[name] ?? []).contains(path) || StdTypes.declaresModule(pkg, name) == true) return path;
+			final dot: Int = pkg.lastIndexOf('.');
+			pkg = dot < 0 ? '' : pkg.substring(0, dot);
 		}
 		return null;
 	}

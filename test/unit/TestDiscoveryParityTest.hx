@@ -3029,6 +3029,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CallGraphTest#testADeclaredTypeIsReadInTheFileThatWroteIt :: control :: '
 				+ 'M-TS-DECL-MEMBER-FILE,M-TS-DECL-RETURN-FILE,M-TS-DECL-READ-FROM,M-TS-DECL-BOUND,M-TS-PATH-NULLABLE-KEYED',
 			'unit.query.CallGraphTest#testALambdaParameterIsNoReferenceToItsLambda :: control :: M-GRAPH-LAMBDA-PARAM-SELF',
+			'unit.query.CallGraphTest#testANameNoImportBindsIsLookedUpInTheFilesPackages :: control :: '
+				+ 'M-TS-PACKAGE-LOOKUP,M-TS-PACKAGE-ENCLOSING,M-TS-PACKAGE-PROJECT-FIRST',
 			'unit.query.CallGraphTest#testATypeAnAliasASupertypeOrAnAbstractWritesIsReadWhereItIsWritten :: control :: '
 				+ 'M-TS-DECL-SUPER-ARGS,M-TS-DECL-PARAM-FILE,M-TS-DECL-UNDERLYING',
 			'unit.query.CallGraphTest#testATypeParameterIsNeverKeyedThroughAnImport :: control :: '
@@ -6649,7 +6651,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-IMPORT-STATIC-ONE',
 			'M-TS-IMPORT-STATIC-INDEXED',
 			'M-TS-ALIAS-KEYED',
-			'M-TS-ALIAS-AGREE'
+			'M-TS-ALIAS-AGREE',
+			'M-TS-PACKAGE-LOOKUP',
+			'M-TS-PACKAGE-ENCLOSING',
+			'M-TS-PACKAGE-PROJECT-FIRST'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

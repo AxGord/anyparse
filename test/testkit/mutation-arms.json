@@ -20083,8 +20083,8 @@
 			"name": "M-TS-WILD-EXPLICIT-FIRST",
 			"type": "anyparse.query.CallGraphImports",
 			"method": "boundPath",
-			"find": "return (_typePaths[key] ?? [])[written] ?? wildcardPath(key, written, maybe);",
-			"replace": "return wildcardPath(key, written, maybe) ?? (_typePaths[key] ?? [])[written];",
+			"find": "return (_typePaths[key] ?? [])[written] ?? wildcardPath(key, written, maybe) ?? packagePath(key, written);",
+			"replace": "return wildcardPath(key, written, maybe) ?? (_typePaths[key] ?? [])[written] ?? packagePath(key, written);",
 			"note": "a wildcard import outranks an explicit one"
 		},
 		{
@@ -20693,6 +20693,30 @@
 			"find": "t = keyed.length == 1 ?",
 			"replace": "t = keyed.length > 0 ?",
 			"note": "two declarations keying an alias apart alias the first one's target"
+		},
+		{
+			"name": "M-TS-PACKAGE-LOOKUP",
+			"type": "anyparse.query.CallGraphImports",
+			"method": "boundPath",
+			"find": " ?? packagePath(key, written);",
+			"replace": ";",
+			"note": "a name no import binds is the project namesake, whatever the file's own package declares (review R4 F7)"
+		},
+		{
+			"name": "M-TS-PACKAGE-ENCLOSING",
+			"type": "anyparse.query.CallGraphImports",
+			"method": "packagePath",
+			"find": "pkg = dot < 0 ? '' : pkg.substring(0, dot);",
+			"replace": "pkg = '';",
+			"note": "the packages enclosing the file's own are not searched"
+		},
+		{
+			"name": "M-TS-PACKAGE-PROJECT-FIRST",
+			"type": "anyparse.query.CallGraphImports",
+			"method": "packagePath",
+			"find": "if ((_declaredPaths[name] ?? []).contains(path) || StdTypes",
+			"replace": "if (StdTypes",
+			"note": "a project type of a package searched first loses to a std type of an enclosing package"
 		}
 	]
 }
