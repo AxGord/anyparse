@@ -5882,7 +5882,7 @@
 			"method": "collectEdges",
 			"find": [
 				"if (currentType == null || !_facts.abstracts.exists(currentType)) return currentType;",
-				"final underlying: Null<String> = _facts.abstracts[currentType];\n\t\t\treturn underlying == null ? null : types.resolveAlias(underlying);"
+				"final underlying: Null<String> = _facts.abstracts[currentType];\n\t\t\treturn underlying == null || types.generics.declaresTypeParam(currentType, underlying)\n\t\t\t\t? underlying\n\t\t\t\t: types.resolveAlias(types.imports.typeOf(file, underlying));"
 			],
 			"replace": [
 				"return currentType;",
@@ -6022,7 +6022,7 @@
 			"name": "M-GRAPH-DISPATCH-TYPE",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "addEdge(from, target, Call, null, file, span, recv.isValue ? type : null, field);",
+			"find": "addEdge(from, target, Call, null, file, span, recv.isValue ? recv.typeName : null, field);",
 			"replace": "addEdge(from, target, Call, null, file, span, null, field);",
 			"note": "an instance call records no dispatch type, so overrides loaded later are never reached"
 		},
@@ -6364,8 +6364,8 @@
 			"name": "M-GRAPH-PLACEHOLDER-DECLARING",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "types.declaringTypeOf(type, calleeName) ?? type, calleeName",
-			"replace": "type, calleeName",
+			"find": "externalNode(types.declaringTypeOf(recv.typeName, calleeName) ?? recv.typeName, calleeName)",
+			"replace": "externalNode(recv.typeName, calleeName)",
 			"note": "a call through `this` to an unloaded supertype's member names a placeholder no file ever upgrades"
 		},
 		{
@@ -6484,7 +6484,7 @@
 			"name": "M-GRAPH-CALL-ELEMENT",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": ": _facts.returnSources[call.target] ?? StdTypes.returnOf(_plugin, nodes[call.target]);",
+			"find": ": returnSourceOf(call.target) ?? StdTypes.returnOf(_plugin, nodes[call.target]);",
 			"replace": ": null;",
 			"note": "an element of a call's result (`b.get()[0]`) has no type, so a call on it is unresolved"
 		},
@@ -6500,8 +6500,8 @@
 			"name": "M-GRAPH-ABSTRACT-THIS-ALIAS",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "return underlying == null ? null : types.resolveAlias(underlying);",
-			"replace": "return underlying;",
+			"find": ": types.resolveAlias(types.imports.typeOf(file, underlying));",
+			"replace": ": types.imports.typeOf(file, underlying);",
 			"note": "`this` inside an abstract over a typedef alias stays the alias, so `this.copy()` on the std `Rest` is an unresolved call"
 		},
 		{
@@ -19632,9 +19632,9 @@
 		{
 			"name": "M-TS-PATH-NULLABLE-KEYED",
 			"type": "anyparse.query.CallGraphKeys",
-			"method": "keyed",
-			"find": "final outer: Null<TypeSyntax> = t?.wrapped(['Null']) ?? t;",
-			"replace": "final outer: Null<TypeSyntax> = t;",
+			"method": "keyedIn",
+			"find": "for (d in t.descendants()) {",
+			"replace": "for (d in [t]) {",
 			"note": "a Null<pkg.T> annotation keeps its dotted path as the graph type, so Null<sys.thread.Mutex> is no Mutex"
 		},
 		{
@@ -19867,8 +19867,8 @@
 			"name": "M-TS-ALTERNATE-CALL",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "for (type in [recv.typeName].concat(types.imports.alternateTypes(file, recv.typeName))) {",
-			"replace": "for (type in [recv.typeName]) {",
+			"find": "for (type in [written.typeName].concat(alternates)) {",
+			"replace": "for (type in [written.typeName]) {",
 			"note": "a call dispatches to the first candidate type only"
 		},
 		{
@@ -20222,6 +20222,86 @@
 			"find": "if (resolveAlias(alias) != alias) unionInto",
 			"replace": "if (false) unionInto",
 			"note": "a class extending a typedef that aliases a type is no subtype of it"
+		},
+		{
+			"name": "M-TS-DECL-MEMBER-FILE",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "readIn(types.imports.memberFilesOf(owner, member), types.memberOnChain(owner, member)?.typeSource)",
+			"replace": "types.memberOnChain(owner, member)?.typeSource",
+			"note": "a member's written type is read through the imports of the file reading it, not the one declaring it (review R3 M1)"
+		},
+		{
+			"name": "M-TS-DECL-RETURN-FILE",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "return readIn([for (d in declarationsOf(target)) d.file], _facts.returnSources[target]);",
+			"replace": "return _facts.returnSources[target];",
+			"note": "a function's written return type is read through the imports of the file calling it (review R3 M1)"
+		},
+		{
+			"name": "M-TS-DECL-RETURN-AGREE",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (written == null && _facts.returnSources.exists(target)) return null;",
+			"replace": "",
+			"note": "a return type two declarations key apart falls back to its simple name"
+		},
+		{
+			"name": "M-TS-DECL-READ-FROM",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "types.imports.alternateTypesIn([file].concat(readFrom), written.typeName);",
+			"replace": "types.imports.alternateTypes(file, written.typeName);",
+			"note": "a guarded or maybe-wildcard name of the file declaring the receiver's type supplies no other type the call may run on"
+		},
+		{
+			"name": "M-TS-DECL-BOUND",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "nominals.push(types.resolveAlias(types.imports.typeOf(file, outer)))",
+			"replace": "nominals.push(types.resolveAlias(outer))",
+			"note": "a type parameter's bound is read by its simple name, whatever the file imports"
+		},
+		{
+			"name": "M-TS-DECL-UNDERLYING",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "types.resolveAlias(types.imports.typeOf(file, underlying))",
+			"replace": "types.resolveAlias(underlying)",
+			"note": "an abstract's underlying type is read by its simple name, whatever the file imports"
+		},
+		{
+			"name": "M-TS-ALTERNATE-WHOLE-CALL",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (calleeId == null) calleeId = target;",
+			"replace": "if (calleeId == null) calleeId = target;\nif (target == null) break;",
+			"note": "an alternate type is dispatched only when the project namesake resolves the call to a member (review R3 M2)"
+		},
+		{
+			"name": "M-TS-DECL-SUPER-ARGS",
+			"type": "anyparse.query.TypeParamTable",
+			"method": "argumentsVia",
+			"find": "keyIn == null ? a : keyIn(link.file, a)",
+			"replace": "a",
+			"note": "a type argument a subclass passes is read through the imports of the file reading the value"
+		},
+		{
+			"name": "M-TS-DECL-PARAM-FILE",
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "paramTypesOf",
+			"find": "p == null ? null : keyedIn(imports, d.file, typeSyntax, p)",
+			"replace": "p",
+			"note": "a parameter's written type is read through the imports of the file passing the argument"
+		},
+		{
+			"name": "M-TS-DECL-FILES-AGREE",
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "keyedInFiles",
+			"find": "case 1: keyed[0];\n\t\t\tcase _: null;",
+			"replace": "case _: keyed[0];",
+			"note": "a type two declarations key apart is the one the first file meant"
 		}
 	]
 }

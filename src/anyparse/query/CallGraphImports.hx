@@ -26,6 +26,9 @@ final class CallGraphImports {
 	/** File -> the statics its `import p.T.member as alias;` statements (own and ambient) bind under another name. */
 	private final _fieldAliases: Map<String, Array<FieldAlias>> = [];
 
+	/** Type simple name -> member name -> the files whose declarations of the type declare the member. */
+	private final _memberFiles: Map<String, Map<String, Array<String>>> = [];
+
 	/** Type simple name -> the dotted paths that name a declaration of it (`pkg.Module.Name`; a main type's also `pkg.Module`). */
 	private final _declaredPaths: Map<String, Array<String>> = [];
 
@@ -82,6 +85,14 @@ final class CallGraphImports {
 		return (_usings[CallGraphNames.normalizePath(file)] ?? []).contains(name);
 	}
 
+	/**
+	 * The files (`normalizePath`d) whose declarations of the type of simple name `typeName` declare `member` itself, not a
+	 * supertype's — where the types its record writes are to be read (`CallGraphKeys.keyedIn`).
+	 */
+	public inline function memberFilesOf(typeName: String, member: String): Array<String> {
+		return _memberFiles[typeName]?.get(member) ?? [];
+	}
+
 	/** The qualified paths the type of simple name `name` is declared under (`recordFile`): by its module, by its package. */
 	public inline function declaredPathsOf(name: String): Array<String> {
 		return _declaredPaths[name] ?? [];
@@ -90,7 +101,12 @@ final class CallGraphImports {
 	/** Fold the declarations and the imports of `fi`, held under `key`. */
 	public function recordFile(fi: FileInfo, key: String): Void {
 		for (t in fi.types) {
-			for (m in t.members) if (_enumConstructorKinds.contains(m.kind)) CallGraphTypes.unionInto(_enumConstructors, m.name, [t.name]);
+			final files: Map<String, Array<String>> = _memberFiles[t.name] ?? [];
+			for (m in t.members) {
+				if (_enumConstructorKinds.contains(m.kind)) CallGraphTypes.unionInto(_enumConstructors, m.name, [t.name]);
+				CallGraphTypes.unionInto(files, m.name, [key]);
+			}
+			_memberFiles[t.name] = files;
 			// a type is named by its module's path and its own name, a main type by its module's path too; and by its package
 			// and its name, whatever its module is called — what an import reads when a file does not name its module
 			final inModule: String = '${fi.module}.${t.name}';
@@ -268,6 +284,16 @@ final class CallGraphImports {
 			final alternate: String = pathType(path);
 			if (alternate != type && !out.contains(alternate)) out.push(alternate);
 		}
+		return out;
+	}
+
+	/**
+	 * The `alternateTypes` of `type` as each file of `files` reads it, each once: a value of `type` read off a declaration of
+	 * another file is the name that file wrote, which may be another type there.
+	 */
+	public function alternateTypesIn(files: Array<String>, type: String): Array<String> {
+		final out: Array<String> = [];
+		for (f in files) for (alternate in alternateTypes(f, type)) if (!out.contains(alternate)) out.push(alternate);
 		return out;
 	}
 

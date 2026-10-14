@@ -2346,6 +2346,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-TS-PATH-DECLARED-PACKAGE,M-TS-PATH-NOMINAL,M-TS-PATH-RETURN,M-TS-PATH-NULLABLE-KEYED,M-TS-ALIAS-TYPE',
 			'unit.check.ThreadSafetyPositiveSinksTest#testALocalOfACallResultIsTypedByWhatTheCallReturns :: control :: '
 				+ 'M-TS-LOCAL-CALL-INIT,M-TS-LOCAL-CALL-READ',
+			'unit.check.ThreadSafetyPositiveSinksTest#testAStdLockWrittenInADeclarationWaitsWhereverItIsRead :: control :: '
+				+ 'M-TS-DECL-MEMBER-FILE,M-TS-ALTERNATE-WHOLE-CALL',
 			'unit.check.ThreadSafetyPositiveSinksTest#testAStdMemberStandsWhereEveryNamesakeAgrees :: control :: '
 				+ 'M-TS-STD-AGREE,M-TS-STD-SUPER,M-TS-STD-SIBLING',
 			'unit.check.ThreadSafetyPositiveSinksTest#testAWildcardOrGuardedImportOfALibraryTypeIsNotItsProjectNamesake :: control :: '
@@ -3010,11 +3012,17 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.BodySlotGuardSliceTest#testAllowsSoleCatchClauseRemoval :: control :: M-BODYSLOT-LEAD-KEPT',
 			'unit.query.BodySlotGuardSliceTest#testAllowsSoleCatchClauseRemovalWithATrailingComment :: control :: M-BODYSLOT-TRIM-WS-ONLY',
 			'unit.query.BodySlotGuardSliceTest#testAllowsWholeElseBranchRemoval :: control :: M-BODYSLOT-LEAD-KEPT',
+			'unit.query.CallGraphTest#testADeclaredTypeIsReadInTheFileThatWroteIt :: control :: '
+				+ 'M-TS-DECL-MEMBER-FILE,M-TS-DECL-RETURN-FILE,M-TS-DECL-READ-FROM,M-TS-DECL-BOUND,M-TS-PATH-NULLABLE-KEYED',
 			'unit.query.CallGraphTest#testALambdaParameterIsNoReferenceToItsLambda :: control :: M-GRAPH-LAMBDA-PARAM-SELF',
+			'unit.query.CallGraphTest#testATypeAnAliasASupertypeOrAnAbstractWritesIsReadWhereItIsWritten :: control :: '
+				+ 'M-TS-DECL-SUPER-ARGS,M-TS-DECL-PARAM-FILE,M-TS-DECL-UNDERLYING',
 			'unit.query.CallGraphTest#testAWildcardOrGuardedNameDispatchesToEveryTypeItMayBe :: control :: '
 				+ 'M-TS-WILD-EXPLICIT-NO-MAYBE,M-TS-WILD-MAYBE,M-TS-WILD-GUARDED,M-TS-WILD-PROJECT,M-TS-WILD-ORDER,M-TS-STD-PACKAGES,'
 				+ 'M-TS-ALTERNATE-SAME,M-TS-ALTERNATE-NEW',
 			'unit.query.CallGraphTest#testAddFilesUpgradesTheExternalPlaceholder :: control :: M-GRAPH-UPGRADE-EXTERNAL',
+			'unit.query.CallGraphTest#testAnAlternateTypeResolvesTheCallWhateverTheNamesakeDeclares :: control :: '
+				+ 'M-TS-ALTERNATE-WHOLE-CALL',
 			'unit.query.CallGraphTest#testBareCallSomethingElseMaySupplyIsNeverAConstructor :: control :: '
 				+ 'M-GRAPH-IMPORT-UNLISTED,M-GRAPH-UNLISTED-WILDCARD',
 			'unit.query.CallGraphTest#testBareStaticCallGetsNoVirtualEdge :: control :: M-GRAPH-STATIC-NO-VIRTUAL',
@@ -3060,6 +3068,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-GRAPH-ABSTRACT-UNDER-SLOT,M-GRAPH-ABSTRACT-PARAM-BOUND',
 			'unit.query.CallGraphTest#testThisInsideAnAbstractIsTheUnderlyingValue :: control :: M-GRAPH-ABSTRACT-THIS',
 			'unit.query.CallGraphTest#testThisInsideAnAbstractOverAnAliasIsTheAliasedType :: control :: M-GRAPH-ABSTRACT-THIS-ALIAS',
+			'unit.query.CallGraphTest#testTwoDeclarationsThatKeyAMemberTypeApartTypeItAsNeither :: control :: '
+				+ 'M-TS-DECL-FILES-AGREE,M-TS-DECL-RETURN-AGREE',
 			'unit.query.CallGraphTest#testTypeParameterBoundsOfSameNamedTypesStayApart :: control :: M-GRAPH-BOUNDS-BY-FILE',
 			'unit.query.CallGraphTest#testTypeParameterIsLookedUpWhereTheReceiverTypeWasWritten :: control :: '
 				+ 'M-GRAPH-BOUND-DECL-SCOPE,M-GRAPH-BOUND-LOCAL-SCOPE',
@@ -6563,7 +6573,17 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-UNSEALED-PRECONDITIONS',
 			'M-TS-OPT-SINKS-ENTRY-UNMATCHED',
 			'M-TS-FINAL-SUPERS-WRITTEN',
-			'M-TS-REACH-ALIAS-SUBTYPES'
+			'M-TS-REACH-ALIAS-SUBTYPES',
+			'M-TS-DECL-MEMBER-FILE',
+			'M-TS-DECL-RETURN-FILE',
+			'M-TS-DECL-RETURN-AGREE',
+			'M-TS-DECL-READ-FROM',
+			'M-TS-DECL-BOUND',
+			'M-TS-DECL-UNDERLYING',
+			'M-TS-ALTERNATE-WHOLE-CALL',
+			'M-TS-DECL-SUPER-ARGS',
+			'M-TS-DECL-PARAM-FILE',
+			'M-TS-DECL-FILES-AGREE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

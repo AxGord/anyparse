@@ -989,6 +989,154 @@ class CallGraphTest extends Test {
 		Assert.equals(1, edges(g, 'Main.c', 'Util.Other', Call).length);
 	}
 
+	/**
+	 * A type a declaration writes is the type the DECLARING file's imports bind its name to, wherever the value is read: a
+	 * field, a call's result, an element, an inherited field, a bound — read off a file that imports nothing, or another
+	 * namesake. A guarded or maybe-wildcard name of the declaring file dispatches to every type it may be there.
+	 */
+	@:pin('control')
+	@:killer('M-TS-DECL-MEMBER-FILE') @:killer('M-TS-DECL-RETURN-FILE') @:killer('M-TS-DECL-READ-FROM') @:killer('M-TS-DECL-BOUND')
+	@:killer('M-TS-PATH-NULLABLE-KEYED')
+	public function testADeclaredTypeIsReadInTheFileThatWroteIt(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final g: CallGraph = graphOf([
+			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
+			'package app; import sys.thread.Lock; class A { public static var lock:Lock = null; public var own:Lock = null;'
+			+ ' public static function make():Lock return null; public static function list():Array<Lock> return null;'
+			+ ' function self():Void this.own.wait(); static function bounded<L:Lock>(l:L):Void l.wait(); }',
+			'package app; class C { static function field():Void A.lock.wait();'
+			+ ' static function local():Void { final l = A.make(); l.wait(); } static function call():Void A.make().wait();'
+			+ ' static function inst(a:A):Void a.own.wait(); static function elem():Void A.list()[0].wait(); }',
+			'package app; class S extends A { function bare():Void own.wait(); }',
+			'package g; #if sys import sys.thread.Lock; #end class B { public static var lock:Lock = null;'
+			+ ' public static function make():Lock return null; }',
+			'package g; class D { static function field():Void B.lock.wait(); static function call():Void B.make().wait(); }',
+			'package w; import sys.thread.*; class W { public static var lock:Lock = null; }',
+			'package w; class X { static function field():Void W.lock.wait(); }',
+			'package u; import utils.Lock; class U { public static var lock:Lock = null; }',
+			'package u; import sys.thread.Lock; class R { static function field():Void U.lock.wait(); }'
+		]);
+		function targets(from: String): Array<String> {
+			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+			out.sort(Reflect.compare);
+			return out;
+		}
+		final std: Array<String> = ['sys.thread.Lock.wait'];
+		Assert.same(std, targets('C.field'), 'a static field');
+		Assert.same(['A.make', 'sys.thread.Lock.wait'], targets('C.local'), 'a local of a call result');
+		Assert.same(['A.make', 'sys.thread.Lock.wait'], targets('C.call'), 'a call result');
+		Assert.same(std, targets('C.inst'), 'an instance field');
+		Assert.same(['A.list', 'sys.thread.Lock.wait'], targets('C.elem'), 'an element of a call result');
+		Assert.same(std, targets('S.bare'), 'an inherited field read bare');
+		Assert.same(std, targets('A.self'), 'a field read in its own file');
+		Assert.same(std, targets('A.bounded'), 'a type parameter bound');
+		Assert.same(['Lock.wait', 'sys.thread.Lock.wait'], targets('D.field'), 'a guarded import of the declaring file');
+		Assert.same(['B.make', 'Lock.wait', 'sys.thread.Lock.wait'], targets('D.call'), 'a guarded return type');
+		Assert.same(std, targets('X.field'), 'a wildcard import of the declaring file');
+		Assert.same(['Lock.wait'], targets('R.field'), 'the declaring file binds the project type, whatever the reader imports');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * Each type a guarded name may be resolves the call on its own: the std type's method is dispatched even when the project
+	 * namesake declares no such member, or declares it as a field.
+	 */
+	@:pin('control')
+	@:killer('M-TS-ALTERNATE-WHOLE-CALL')
+	public function testAnAlternateTypeResolvesTheCallWhateverTheNamesakeDeclares(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final guarded: String = 'package app; #if sys import sys.thread.Lock; #end class G { static function f(l:Lock):Void l.wait(); }';
+		function targets(g: CallGraph): Array<String> {
+			final out: Array<String> = [for (e in g.outEdges('G.f')) if (e.kind == Call) e.to];
+			out.sort(Reflect.compare);
+			return out;
+		}
+		final none: CallGraph = graphOf([
+			'package utils; class Lock { public function new() {} public function signal():Void {} }',
+			guarded
+		]);
+		Assert.same(['sys.thread.Lock.wait'], targets(none), 'the namesake declares no such member');
+		final field: CallGraph = graphOf([
+			'package utils; class Lock { public function new() {} public var wait:Int = 0; }',
+			guarded
+		]);
+		Assert.same(['sys.thread.Lock.wait'], targets(field), 'the namesake declares it as a field');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A name an alias, a supertype's type argument or an abstract's underlying type binds is read through the imports of the
+	 * file that wrote it: a parameter typed by an alias of a `@:structInit` class constructs it from a literal argument
+	 * passed anywhere, and a field typed `T` on a subclass that passes the std `Lock` to `T`, or an abstract over it, waits.
+	 */
+	@:pin('control')
+	@:killer('M-TS-DECL-SUPER-ARGS') @:killer('M-TS-DECL-PARAM-FILE') @:killer('M-TS-DECL-UNDERLYING')
+	public function testATypeAnAliasASupertypeOrAnAbstractWritesIsReadWhereItIsWritten(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final g: CallGraph = graphOf([
+			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
+			'package lib; @:structInit class Point { public var x:Int; public function new(x:Int) this.x = x; }',
+			'package app; import lib.Point as P; class A { public static function take(p:P):Void {} }',
+			'package app; class C { static function arg():Void A.take({x: 1}); }',
+			'package box; class Box<T> { public var item:T; public function new() {} }',
+			'package app; import box.Box; import sys.thread.Lock; class Sub extends Box<Lock> {}',
+			'package app; class E { static function f(s:Sub):Void s.item.wait(); }',
+			'package app; import sys.thread.Lock; abstract W(Lock) { public function f():Void this.wait(); }'
+		]);
+		Assert.equals(1, edges(g, 'C.arg', 'Point.new', New).length, 'an alias the declaring file imports');
+		Assert.equals(1, edges(g, 'E.f', 'sys.thread.Lock.wait', Call).length, 'a type argument the subclass passes');
+		Assert.equals(1, edges(g, 'W.f', 'sys.thread.Lock.wait', Call).length, 'an abstract underlying type');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * Two declarations of one type whose files bind a member's type name to different types type it as neither: a call on
+	 * the field or on the result resolves to no `wait` at all rather than to the one the first file meant.
+	 */
+	@:pin('control')
+	@:killer('M-TS-DECL-FILES-AGREE') @:killer('M-TS-DECL-RETURN-AGREE')
+	public function testTwoDeclarationsThatKeyAMemberTypeApartTypeItAsNeither(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final g: CallGraph = graphOf([
+			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
+			'package app; import sys.thread.Lock; class Hold { public static var lock:Lock = null; public static function make():Lock return null; }',
+			'package app; import utils.Lock; class Hold { public static var lock:Lock = null; public static function make():Lock return null; }',
+			'package app; class C { static function field():Void Hold.lock.wait(); static function call():Void Hold.make().wait(); }'
+		]);
+		function waits(from: String): Array<String> {
+			return [
+				for (e in g.outEdges(from)) if (e.kind == Call && e.to.indexOf('wait') >= 0) e.to
+			];
+		}
+		Assert.same([], waits('C.field'), 'a field');
+		Assert.same([], waits('C.call'), 'a return');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	private inline function graphOf(sources: Array<String>): CallGraph {
 		return QueryTestHelpers.graphOf(sources);
 	}
