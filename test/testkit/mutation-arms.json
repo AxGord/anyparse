@@ -20067,8 +20067,8 @@
 			"name": "M-TS-REACH-ALIAS-SUBTYPES",
 			"type": "anyparse.query.CallGraphTypes",
 			"method": "merge",
-			"find": "if (resolveAlias(alias) != alias) unionInto(_subs, resolveAlias(alias), subtypesOf(alias));",
-			"replace": "",
+			"find": "if (resolveAlias(alias) != alias) unionInto",
+			"replace": "if (false) unionInto",
 			"note": "a class extending a typedef that aliases a type is no subtype of it"
 		}
 	]
