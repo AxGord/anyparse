@@ -270,7 +270,7 @@ class ThreadSafetyReflectiveSealTest extends Test {
 		Assert.equals(0, helperTakes(SEALED, '', 'final s:String = "a"; Help.assign(d, "x", s);'), 'a typed String');
 		Assert.equals(0, helperTakes(SEALED, '', 'Help.assign(d, "x", new Other());'), 'an object of a class no lock is');
 		Assert.equals(0, helperTakes(SEALED, '', 'final c:Color = Color.Red; Help.assign(d, "x", c);'), 'an enum value');
-		Assert.equals(0, helperTakes(SEALED, '', 'Reflect.deleteField(bag, "x");'), 'a delete');
+		Assert.equals(0, helperTakes(SEALED, '', 'final k:String = "x"; Reflect.deleteField(bag, k);'), 'a delete');
 		Assert.equals(
 			0, helperTakes(SEALED, PUT, 'Help.put(d, "x", 1); Help.put(d, "y");'), 'a parameter handed numbers, or nothing at all'
 		);
@@ -295,6 +295,7 @@ class ThreadSafetyReflectiveSealTest extends Test {
 	public function testAWriteThatMayStoreALockUnsealsAsBefore(): Void {
 		#if (sys || nodejs)
 		Assert.equals(1, helperTakes(SEALED, '', 'final m:Mutex = new Mutex(); Help.assign(d, "x", m);'), 'a lock');
+		Assert.equals(1, helperTakes(SEALED, '', 'Help.assign(d, "x", new Sub());'), 'a subclass of the lock');
 		Assert.equals(1, helperTakes(SEALED, '', 'bag = new Mutex(); Help.assign(d, "x", bag);'), 'a Dynamic field');
 		Assert.equals(
 			1, helperTakes(SEALED, '', 'final a:Array<Dynamic> = [new Mutex()]; Help.assign(d, "x", a[0]);'), 'an Array<Dynamic>'
@@ -335,7 +336,11 @@ class ThreadSafetyReflectiveSealTest extends Test {
 		Assert.equals(1, helperTakes(CLOSED, '', ''), 'no reflectiveMethodHolders');
 		Assert.equals(1, helperTakes('{"reflectiveMethodHolders":["nothing.*"],"rules":{$RULE}}}', '', ''), 'no closed project');
 		Assert.equals(
-			1, helperTakes('{"reflectiveMethodHolders":["nothing.*"],"rules":{$RULE}}}', '', 'Help.assign(d, "x", new Other());'),
+			1,
+			helperTakes(
+				'{"reflectiveMethodHolders":["nothing.*"],"rules":{$RULE}}}', '',
+				'final k:String = "x"; Reflect.setField(bag, k, new Other());'
+			),
 			'a class in a run that may not see every class'
 		);
 		Assert.equals(1, helperTakes(SEALED, '', 'final f = Help.assign; f(d, "x", "text");'), 'a function value');
@@ -400,6 +405,7 @@ class ThreadSafetyReflectiveSealTest extends Test {
 				ThreadSafetyCheckTest.MUTEX,
 				'class Runner { public static function create(fn:()->Void):Void {} }',
 				'class Other { public function new() {} }',
+				'class Sub extends Mutex { public function new() { super(); } }',
 				'enum Color { Red; }',
 				'class Help { public static function assign(o:Dynamic, k:String, v:Dynamic):Void Reflect.setField(o, k, v); $helpers }',
 				'class D { var _l:Mutex = new Mutex(); final _m:Mutex = new Mutex(); public static var bag:Dynamic = null;'
