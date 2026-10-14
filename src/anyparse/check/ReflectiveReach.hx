@@ -88,7 +88,7 @@ final class ReflectiveReach {
 	public function placeOf(file: String, fn: Null<String>, target: QueryNode, type: Null<String>): Placement {
 		final param: Null<Placement> = type == null || fn == null ? null : typeParamPlacement(fn, CallGraphNames.lastSegments(type, 1));
 		if (param != null) return param;
-		final reaches: Null<Array<String>> = reachOf(type, fn);
+		final reaches: Null<Array<String>> = reachOf(type);
 		if (reaches != null) return { reaches: reaches, by: null };
 		return freshPlacement(file, fn, target) ?? { reaches: null, by: null };
 	}
@@ -116,14 +116,13 @@ final class ReflectiveReach {
 	 * The types whose fields a write on a value declared `type` may reach: for a class or an interface the run declares
 	 * once (through a typedef alias), every subtype of it and every type on the chain of each — the object is one of them,
 	 * its fields declared along its chain. Null, any type's, for any other type: `Dynamic`, `Any`, a type parameter, a
-	 * structure or an abstract (which a value of any class may be), a library type, an unknown one — and a name a type
-	 * parameter of the function `fn` the write runs in, or of its type, takes over.
+	 * structure or an abstract (which a value of any class may be), a library type, an unknown
+	 * one. A type parameter never arrives here: `placeOf` answers it first (`typeParamPlacement`).
 	 */
-	private function reachOf(type: Null<String>, fn: Null<String>): Null<Array<String>> {
+	private function reachOf(type: Null<String>): Null<Array<String>> {
 		final types: CallGraphTypes = _graph.types;
 		final named: Null<String> = type == null ? null : types.resolveAlias(CallGraphNames.lastSegments(type, 1));
 		if (named == null || types.declarationCount(named) != 1 || !(types.meta.isClass(named) || types.isInterface(named))) return null;
-		if (fn != null && _graph.typeParamBoundsOf(fn, named) != null) return null;
 		final known: Null<Array<String>> = _reach[named];
 		if (known != null) return known;
 		final out: Array<String> = closure([named], types.subtypesOf);
@@ -141,7 +140,7 @@ final class ReflectiveReach {
 		for (written in sources) {
 			final outer: Null<String> = NominalTypes.outerNominalOf(written, _plugin.typeSyntax);
 			if (outer != null && outer == _shape.voidTypeName) continue;
-			final reach: Null<Array<String>> = reachOf(outer, null);
+			final reach: Null<Array<String>> = reachOf(outer);
 			if (reach == null) return null;
 			for (t in reach) if (!out.contains(t)) out.push(t);
 		}

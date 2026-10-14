@@ -19335,14 +19335,6 @@
 			"note": "a structure or an abstract bounds a reflective write like a class"
 		},
 		{
-			"name": "M-TS-REFLECT-TYPEPARAM",
-			"type": "anyparse.check.ReflectiveReach",
-			"method": "reachOf",
-			"find": "if (fn != null && _graph.typeParamBoundsOf(fn, named) != null) return null;",
-			"replace": "",
-			"note": "a type parameter named like a class bounds a reflective write like that class"
-		},
-		{
 			"name": "M-TS-REFLECT-INDEX-ANY",
 			"type": "anyparse.check.FieldWrites",
 			"method": "record",

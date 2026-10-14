@@ -2051,7 +2051,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyCarriedHoldTest#testACalleeGivingTheLockBackCarriesNothing :: guard :: ',
 			'unit.check.ThreadSafetyCarriedHoldTest#testAComputedReflectiveWriteNamesNoObject :: control :: '
 				+ 'M-TS-REFLECT-COMPUTED,M-TS-REFLECT-EXTENSION,M-TS-REFLECT-INDEX,M-TS-REFLECT-REACH,M-TS-REFLECT-SUBTYPES,'
-				+ 'M-TS-REFLECT-SUPERTYPES,M-TS-REFLECT-MAYWRITE,M-TS-REFLECT-FINAL,M-TS-REFLECT-ANY,M-TS-REFLECT-TYPEPARAM',
+				+ 'M-TS-REFLECT-SUPERTYPES,M-TS-REFLECT-MAYWRITE,M-TS-REFLECT-FINAL,M-TS-REFLECT-ANY',
 			'unit.check.ThreadSafetyCarriedHoldTest#testAConstructorWritingAnotherObjectsFieldNamesNoObject :: control :: M-TS-PATH-OWN',
 			'unit.check.ThreadSafetyCarriedHoldTest#testADominatedTakeInACalleeOnTheHeldObjectIsBrief :: control :: M-TS-CARRY-OFF',
 			'unit.check.ThreadSafetyCarriedHoldTest#testAFieldWrittenOutsideTheConstructorNamesNoObject :: control :: M-TS-PATH-STABLE-ANY',
@@ -6445,7 +6445,6 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-REFLECT-MAYWRITE',
 			'M-TS-REFLECT-FINAL',
 			'M-TS-REFLECT-ANY',
-			'M-TS-REFLECT-TYPEPARAM',
 			'M-TS-REFLECT-INDEX-ANY',
 			'M-TS-REFLECT-INDEX-ELEMENT',
 			'M-TS-REFLECT-DYNACC',
