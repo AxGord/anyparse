@@ -2,6 +2,8 @@ package anyparse.check;
 
 import anyparse.check.ReflectiveReach.Capture;
 import anyparse.check.ReflectiveReach.Placement;
+import anyparse.check.ReflectiveValues.Entries;
+import anyparse.check.ReflectiveValues.StoredValue;
 import anyparse.query.BoolExprShape;
 import anyparse.query.CallGraph;
 import anyparse.query.CallGraphNames;
@@ -55,6 +57,9 @@ typedef FieldWriteSite = {
 	 * instantiations bound; null for every other write.
 	 */
 	final placedBy: Null<String>;
+
+	/** For a reflective write, what it stores in the field (`ReflectiveValues.typesOf`); `Unknown` for every other write. */
+	final stored: StoredValue;
 }
 
 /**
@@ -151,18 +156,36 @@ final class FieldWrites {
 	/** What the target of a reflective write may be an object of. */
 	private final _targets: ReflectiveReach;
 
+	/** What a reflective write on a value the run places on no class stores (`storesLock`). */
+	private final _values: ReflectiveValues;
+
+	/** Each lock member name -> the members of that name a lock call reads (`Owner.member`, `markLockMembers`). */
+	private final _lockFields: Map<String, Array<String>> = [];
+
+	/** Each write `unplaced` holds, a literal name's included, with the types of what it stores (`storedTypes`); null until first asked. */
+	private var _stores: Null<Array<{ site: FieldWriteSite, types: Null<Array<String>> }>> = null;
+
 	private final _graph: CallGraph;
 	private final _shape: RefShape;
 
 	/** What reads a plain string literal's content (`Reflect.setField(o, "name", v)`); null for a grammar with none. */
 	private final _fold: Null<StringFoldSupport>;
 
-	public function new(graph: CallGraph, plugin: GrammarPlugin, complete: Bool, ?reflectiveClasses: Array<String>) {
+	/**
+	 * The writes of the files `graph` holds; `complete` when the run sees every write of the project, `reflectiveClasses`
+	 * and `methodHolders` as the project declares them, `entries` what may invoke a function from outside the graph's
+	 * calls (`ReflectiveValues`).
+	 */
+	public function new(
+		graph: CallGraph, plugin: GrammarPlugin, complete: Bool, ?reflectiveClasses: Array<String>, ?entries: Entries,
+		?methodHolders: Array<String>
+	) {
 		_graph = graph;
 		_plugin = plugin;
 		_shape = plugin.refShape();
 		_fold = plugin.stringFoldSupport();
 		_targets = new ReflectiveReach(graph, plugin, complete, reflectiveClasses);
+		_values = new ReflectiveValues(graph, plugin, _targets, complete, entries, methodHolders);
 		this.complete = complete;
 		for (held in graph.heldFiles()) collect(held.file, held.source, held.tree, false);
 	}
@@ -205,7 +228,7 @@ final class FieldWrites {
 		final args: Array<QueryNode> = direct ? call.children.slice(1) : [receiver].concat(call.children.slice(1));
 		if (arity == null || args.length != arity) return;
 		if (REFLECT_WRITES.exists(name) || declaredAs(file, source, receiver, [DYNAMIC_ACCESS]))
-			reflectiveWrite(file, source, call, args[0], args[1]);
+			reflectiveWrite(file, source, call, args[0], args[1], arity > 2 ? Value(args[2]) : Nothing);
 	}
 
 	/**
@@ -216,7 +239,9 @@ final class FieldWrites {
 	private function recordHanded(file: String, source: String, value: QueryNode): Void {
 		if (!accessKind(value.kind, _shape) || !REFLECT_WRITES.exists(value.name ?? '') || value.children.length == 0) return;
 		final receiver: QueryNode = value.children[0];
-		reflectiveWrite(file, source, value, receiver.kind == _shape.identKind && receiver.name == REFLECT ? null : receiver, null);
+		reflectiveWrite(
+			file, source, value, receiver.kind == _shape.identKind && receiver.name == REFLECT ? null : receiver, null, Unknown
+		);
 	}
 
 	/**
@@ -225,8 +250,9 @@ final class FieldWrites {
 	 */
 	private function record(file: String, source: String, write: QueryNode, target: QueryNode): Void {
 		if (target.kind == _shape.indexAccessKind && target.children.length == 2) {
+			final plain: Bool = (write.kind == _shape.assignKind || write.kind == _shape.nullCoalAssignKind) && write.children.length > 1;
 			if (!declaredAs(file, source, target.children[0], ELEMENT_INDEXED_TYPES))
-				reflectiveWrite(file, source, write, target.children[0], target.children[1]);
+				reflectiveWrite(file, source, write, target.children[0], target.children[1], plain ? Value(write.children[1]) : Unknown);
 			return;
 		}
 		final name: Null<String> = target.name;
@@ -244,7 +270,8 @@ final class FieldWrites {
 			typed: type != null,
 			reflective: false,
 			reaches: null,
-			placedBy: null
+			placedBy: null,
+			stored: Unknown
 		});
 	}
 
@@ -256,11 +283,14 @@ final class FieldWrites {
 	}
 
 	/**
-	 * Records `write`, in `file` of `source`, of the field the key `key` names on the object `target` holds: a plain literal
-	 * names one field, anything else — no key at all included — any field (`_computed`). Either reaches only fields of the
-	 * types `target` may be an object of (`ReflectiveReach.placeOf`), any type's for no target.
+	 * Records `write`, in `file` of `source`, of the field the key `key` names on the object `target` holds, storing
+	 * `stored` there: a plain literal names one field, anything else — no key at all included — any field (`_computed`).
+	 * Either reaches only fields of the types `target` may be an object of (`ReflectiveReach.placeOf`), any type's for no
+	 * target.
 	 */
-	private function reflectiveWrite(file: String, source: String, write: QueryNode, target: Null<QueryNode>, key: Null<QueryNode>): Void {
+	private function reflectiveWrite(
+		file: String, source: String, write: QueryNode, target: Null<QueryNode>, key: Null<QueryNode>, stored: StoredValue
+	): Void {
 		final at: Null<Span> = write.span;
 		if (at == null) return;
 		final fn: Null<String> = _graph.functionAt(file, at.from);
@@ -279,7 +309,8 @@ final class FieldWrites {
 			typed: fn != null && _graph.node(fn)?.typeName != null,
 			reflective: true,
 			reaches: place.reaches,
-			placedBy: place.by
+			placedBy: place.by,
+			stored: stored
 		};
 		if (literal == null)
 			_computed.push(site);
@@ -352,11 +383,26 @@ final class FieldWrites {
 	/**
 	 * Whether a reflective write may store a value in a field named `name`: one filed under the name, or a computed one
 	 * whose reach holds a type declaring a member so named on its chain — or that reaches any type's (`unplaced`), which
-	 * may store anything in any field, a lock in any lock member included. That is the sound default; what keeps a write
-	 * on a value of no declared class off it is a POSITIVE exclusion (`ReflectiveReach.placeOf`), never the absence of a known class.
+	 * may store anything in any field, a lock in any lock member included, unless what it stores holds no lock of the type
+	 * of a lock member so named (`storesLock`). That is the sound default; what keeps a write on a value of no declared
+	 * class off it is a POSITIVE exclusion (`ReflectiveReach.placeOf`, `ReflectiveValues.typesOf`), never the absence of a
+	 * known class.
 	 */
 	public inline function reflectivelyWritten(name: String): Bool {
 		return reflectiveWritersOf(name).length > 0;
+	}
+
+	/**
+	 * Records `fields` (`Owner.member`) as the lock members of their names, the members a lock call reads: what an
+	 * `unplaced` write stores counts against a name only when it may be a lock of the type one of them is declared of.
+	 */
+	public function markLockMembers(fields: Array<String>): Void {
+		for (f in fields) {
+			final name: String = LockSites.memberName(f);
+			final known: Array<String> = _lockFields[name] ?? [];
+			if (!known.contains(f)) known.push(f);
+			_lockFields[name] = known;
+		}
 	}
 
 	/**
@@ -366,7 +412,7 @@ final class FieldWrites {
 	public function reflectiveWritersOf(name: String): Array<String> {
 		final out: Array<String> = [];
 		for (site in (_byName[name] ?? []).concat(_computed)) if (
-			site.reflective && (site.reaches == null || reachesDeclarer(site, name))
+			site.reflective && (site.reaches == null ? storesLock(site, _lockFields[name]) : reachesDeclarer(site, name))
 		) {
 			final at: String = site.fn ?? site.file;
 			if (!out.contains(at)) out.push(at);
@@ -385,6 +431,37 @@ final class FieldWrites {
 		return writers.length == 0
 			? null
 			: ' — its lock member $member names no lock: a reflective write may store any lock in it (${firstNames(writers)})';
+	}
+
+	/**
+	 * Whether the `unplaced` write `site` may store a lock in one of the lock members `fields` (any member, when null or
+	 * none is known): what it stores may be any object (`storedTypes` null), or of a type that may be a lock of the type
+	 * one of them is declared of (`ReflectiveValues.mayHold`).
+	 */
+	private function storesLock(site: FieldWriteSite, fields: Null<Array<String>>): Bool {
+		final types: Null<Array<String>> = storedTypes(site);
+		if (types == null) return true;
+		final members: Array<Null<String>> = fields == null || fields.length == 0 ? [null] : [for (f in fields) _values.memberTypeOf(f)];
+		return types.exists(t -> members.exists(m -> _values.mayHold(t, m)));
+	}
+
+	/**
+	 * The types of the objects what the `unplaced` write `site` stores may be (`ReflectiveValues.typesOf`); null for any
+	 * object. Each such write is typed once, on the first demand.
+	 */
+	private function storedTypes(site: FieldWriteSite): Null<Array<String>> {
+		var stores: Null<Array<{ site: FieldWriteSite, types: Null<Array<String>> }>> = _stores;
+		if (stores == null) {
+			final typer: (
+				String, Null<String>, QueryNode
+			) -> Null<String> = (file, fn, node) -> typeOf(file, _graph.sourceOf(file) ?? '', fn, node);
+			final all: Array<FieldWriteSite> = [for (sites in _byName) for (s in sites) if (s.reflective && s.reaches == null) s];
+			stores = [
+				for (s in all.concat(unplaced())) { site: s, types: _values.typesOf(s.file, s.fn, s.stored, typer) }
+			];
+			_stores = stores;
+		}
+		return stores.find(s -> s.site == site)?.types;
 	}
 
 	/** Whether the reflective write `site` reaches a known type declaring a member named `name` on its chain. */
@@ -411,7 +488,9 @@ final class FieldWrites {
 	 */
 	public function notices(unnamed: Int): Array<String> {
 		final where: Array<String> = [];
-		for (w in unplaced()) if (!where.contains(w.fn ?? w.file)) where.push(w.fn ?? w.file);
+		final typed: Array<String> = [];
+		final kept: Array<String> = [];
+		sortUnplaced(where, typed, kept);
 		final placed: Array<String> = [];
 		for (list in [_computed].concat([for (sites in _byName) sites])) for (w in list) {
 			final by: Null<String> = w.placedBy;
@@ -425,6 +504,16 @@ final class FieldWrites {
 				+ ' nothing bounds, or one the declarations do not type) may store any lock in any lock member, so no lock is'
 				+ ' named by its member: ${firstNames(where)}'
 			);
+		if (typed.length > 0)
+			out.push(
+				'a reflective write of a computed name on a value the run places on no class may store a lock of the type it stores'
+				+ ' in any lock member of that type, so no such member names its lock: ${firstNames(typed)}'
+			);
+		if (kept.length > 0)
+			out.push(
+				'reflective writes on a value the run places on no class kept off every lock member, since what each stores is no'
+				+ ' lock of a lock member\'s type: ${firstNames(kept)}'
+			);
 		if (placed.length > 0)
 			out.push(
 				'reflective writes on a value whose declared type places it on no class, each bounded by what the value provably is:'
@@ -432,7 +521,7 @@ final class FieldWrites {
 			);
 		// what would have bounded an unplaced write on a type parameter: a run over a whole closed project declaring its reflection
 		final missing: Array<String> = _targets.lacking();
-		final lacking: String = where.length == 0 || missing.length == 0
+		final lacking: String = where.length == 0 && typed.length == 0 || missing.length == 0
 			? ''
 			: '; a type parameter is bounded by its instantiations only in a run over a whole closedWorld project declaring'
 				+ ' reflectiveClasses — here: ${missing.join(', ')}';
@@ -442,6 +531,34 @@ final class FieldWrites {
 				+ ' and its finding names the writers$lacking'
 			);
 		return out;
+	}
+
+	/**
+	 * Files each function making an `unplaced` write (`notices`) by what it stores: under `where` one that may store any
+	 * object, under `typed` one storing a lock of some lock member's type, under `kept` one storing no lock of any — a
+	 * write naming its field by a literal only there: it costs one member, and only keeping off it is news.
+	 */
+	private function sortUnplaced(where: Array<String>, typed: Array<String>, kept: Array<String>): Void {
+		final locks: Array<String> = [for (fields in _lockFields) for (f in fields) f];
+		final named: Array<FieldWriteSite> = [for (sites in _byName) for (w in sites) if (w.reflective && w.reaches == null) w];
+		for (w in unplaced().concat(named)) {
+			final types: Null<Array<String>> = storedTypes(w);
+			final into: Null<Array<String>> = if (types != null && !storesLock(w, locks))
+				kept
+			else if (named.contains(w))
+				null
+			else if (types == null)
+				where
+			else
+				typed;
+			final entry: String = types == null ? w.fn ?? w.file : storing(w.fn ?? w.file, types);
+			if (into != null && !into.contains(entry)) into.push(entry);
+		}
+	}
+
+	/** `at`, the function making a reflective write, with the types `types` of what it stores. */
+	private static function storing(at: String, types: Array<String>): String {
+		return '$at (${types.length == 0 ? 'it stores no object' : 'it stores ${types.join(', ')}'})';
 	}
 
 	/** The first `NOTICE_NAMES` of `names`, and how many more there are. */

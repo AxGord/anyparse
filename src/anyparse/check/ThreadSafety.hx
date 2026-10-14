@@ -181,7 +181,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final throws: ThrowReach = new ThrowReach(graph, plugin.refShape(), file -> listsOf(file).throwerIds, trees);
 		// every write of the project, seen only when the run covers a closed project (`listsByFile`)
 		final writes: FieldWrites = new FieldWrites(
-			graph, plugin, files.foreach(f -> byFile[f.file]?.closedWorld == true), ReflectiveReach.declaredClasses(files, _resolveConfig)
+			graph, plugin, files.foreach(f -> byFile[f.file]?.closedWorld == true), ReflectiveReach.declaredClasses(files, _resolveConfig),
+			{ seedable: seedable, inertRef: inertRef }, ReflectiveReach.declaredMethodHolders(files, _resolveConfig)
 		);
 		final sites: LockSites = new LockSites(
 			graph, [for (f in files) f.file],

@@ -19394,15 +19394,15 @@
 			"name": "M-TS-SEAL-REFLECT-LITERAL-ANY",
 			"type": "anyparse.check.FieldWrites",
 			"method": "reflectiveWritersOf",
-			"find": "site.reflective && (site.reaches == null || reachesDeclarer(site, name))",
-			"replace": "site.reflective && reachesDeclarer(site, name)",
+			"find": "site.reflective && (site.reaches == null ? storesLock(site, _lockFields[name]) : reachesDeclarer(site, name))",
+			"replace": "site.reflective && (site.reaches == null ? false : reachesDeclarer(site, name))",
 			"note": "a reflective write naming a lock member by a literal, on a value of no known class, leaves it sealed (review F3)"
 		},
 		{
 			"name": "M-TS-SEAL-REFLECT-UNPLACED",
 			"type": "anyparse.check.FieldWrites",
 			"method": "reflectiveWritersOf",
-			"find": "(site.reaches == null || reachesDeclarer(site, name))",
+			"find": "(site.reaches == null ? storesLock(site, _lockFields[name]) : reachesDeclarer(site, name))",
 			"replace": "reachesDeclarer(site, name)",
 			"note": "a computed reflective write on a value the run places on no class leaves every lock member sealed (review N2)"
 		},
@@ -19412,6 +19412,198 @@
 			"method": "notices",
 			"force": "[]",
 			"note": "the run no longer names the computed reflective writes on a value it places on no class, nor the exclusions that bound the others"
+		},
+		{
+			"name": "M-TS-STORED-COUNTS",
+			"type": "anyparse.check.FieldWrites",
+			"method": "reflectiveWritersOf",
+			"find": "(site.reaches == null ? storesLock(site, _lockFields[name]) : reachesDeclarer(site, name))",
+			"replace": "(site.reaches == null || reachesDeclarer(site, name))",
+			"note": "a reflective write on a value the run places on no class unseals every lock member whatever it stores (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-NOTHING",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "typesOf",
+			"find": "case Nothing: [];",
+			"replace": "case Nothing: null;",
+			"note": "a reflective delete counts as storing any object in a lock member (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-ANY",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "typesOf",
+			"find": "case Unknown: null;",
+			"replace": "case Unknown: [];",
+			"note": "(soundness) a write whose stored value is out of sight (a reflective write handed on) counts as storing nothing (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-NULL",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "valueTypes",
+			"find": "if (value.kind == _shape.nullLiteralKind) return [];",
+			"replace": "if (value.kind == _shape.nullLiteralKind) return null;",
+			"note": "a stored `null` counts as any object (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-LITERAL",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "valueTypes",
+			"find": "if (literal != null) return [literal];",
+			"replace": "if (literal != null) return null;",
+			"note": "a stored literal counts as any object (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-CATCH-ALL",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "valueTypes",
+			"find": "if (written != null && !(_shape.catchAllTypeNames ?? []).contains(CallGraphNames.lastSegments(written, 1))) {",
+			"replace": "if (written != null) {",
+			"note": "a value declared `Dynamic` or `Any` is taken at its word, so a parameter so declared is never followed into its calls (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-TYPED",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "valueTypes",
+			"find": "return _complete || named.foreach(t -> _basic.contains(t)) ? named : null;",
+			"replace": "return null;",
+			"note": "a stored value of a declared type counts as any object (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-COMPLETE",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "valueTypes",
+			"find": "return _complete || named.foreach(t -> _basic.contains(t)) ? named : null;",
+			"replace": "return named;",
+			"note": "(soundness) a declared class bounds what a value is in a run that may not see every subtype of it (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-PARAMETER",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "valueTypes",
+			"find": "return value.kind == _shape.identKind ? parameterTypes(file, value, typer, visiting) : null;",
+			"replace": "return null;",
+			"note": "a parameter is never followed into the calls handing it a value (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-CALLERS",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "parameterTypes",
+			"find": "if (id.indexOf('#') >= 0 || !callersSeen(id) || obtainable(id)) return null;",
+			"replace": "if (id.indexOf('#') >= 0 || obtainable(id)) return null;",
+			"note": "(soundness) a parameter is followed into the calls the graph holds though another may invoke its function (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-ARGUMENTS",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "argumentTypes",
+			"find": "for (a in handed) sources.push({ file: e.file, fn: e.from, node: a });",
+			"replace": "",
+			"note": "(soundness) what the calls hand a parameter is not read (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-SKIPPED",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "argumentTypes",
+			"find": "final handed: Array<QueryNode> = fixed ? args.slice(index, index + 1) : args.slice(0, index + 1);",
+			"replace": "final handed: Array<QueryNode> = args.slice(index, index + 1);",
+			"note": "(soundness) an argument moved along past a skipped optional parameter is not read (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-HOLDERS",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "obtainable",
+			"find": "if (named == null || declared == null) return true;",
+			"replace": "if (named == null || declared == null) return false;",
+			"note": "(soundness) a run declaring no reflectiveMethodHolders follows a parameter though a computed name may obtain its function (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-SPELLED",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "obtainable",
+			"find": "if (spelled().contains(named.name)) return true;",
+			"replace": "",
+			"note": "(soundness) a literal spelling a function's name no longer stops following its parameter (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-GLOB",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "obtainable",
+			"find": "return closure([named.type], _graph.types.subtypesOf).exists(t -> {",
+			"replace": "return false && closure([named.type], _graph.types.subtypesOf).exists(t -> {",
+			"note": "(soundness) a reflectiveMethodHolders glob naming a function's class no longer stops following its parameter (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-BASIC",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "mayHold",
+			"find": "if (_basic.contains(type) || enumType(type)) return false;",
+			"replace": "if (enumType(type)) return false;",
+			"note": "a value of a literal type counts as a possible lock (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-ENUM",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "mayHold",
+			"find": "if (_basic.contains(type) || enumType(type)) return false;",
+			"replace": "if (_basic.contains(type)) return false;",
+			"note": "an enum value counts as a possible lock (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-UNRELATED",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "mayHold",
+			"find": "return closure([type], types.subtypesOf).exists(t -> under.contains(t));",
+			"replace": "return true;",
+			"note": "an object of a class sharing no subtype with a lock member's type counts as a possible lock of it (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-RELATED",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "mayHold",
+			"find": "return closure([type], types.subtypesOf).exists(t -> under.contains(t));",
+			"replace": "return false;",
+			"note": "(soundness) an object of a lock member's own class counts as no lock of it (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-MEMBER-TYPE",
+			"type": "anyparse.check.FieldWrites",
+			"method": "storesLock",
+			"find": "fields == null || fields.length == 0 ? [null] : [for (f in fields) _values.memberTypeOf(f)]",
+			"replace": "[null]",
+			"note": "what a write stores costs every lock member, whatever its type (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-MARKED",
+			"type": "anyparse.check.LockSites",
+			"method": "collectUnsealed",
+			"find": "writes.markLockMembers(fields.concat([for (target => source in aliases.targets) for (f in [target, source]) f]));",
+			"replace": "",
+			"note": "the lock members are not marked, so what a write stores costs every one, whatever its type (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-KEPT-NOTICE",
+			"type": "anyparse.check.FieldWrites",
+			"method": "notices",
+			"find": "if (kept.length > 0)",
+			"replace": "if (false)",
+			"note": "the run no longer names the writes kept off every lock member, nor what they store (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-TYPED-NOTICE",
+			"type": "anyparse.check.FieldWrites",
+			"method": "notices",
+			"find": "if (typed.length > 0)",
+			"replace": "if (false)",
+			"note": "the run no longer names the writes storing a lock of a lock member's type (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-REF",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "callersSeen",
+			"find": " && !_graph.inEdges(id).exists(e -> e.kind == Ref && !entries.inertRef(e))",
+			"replace": "",
+			"note": "(soundness) a function handed on as a value counts as one every call of which the graph holds (R3 M4)"
 		},
 		{
 			"name": "M-TS-FOLD-EVERY-END",
@@ -20195,7 +20387,7 @@
 			"name": "M-TS-UNSEALED-PRECONDITIONS",
 			"type": "anyparse.check.FieldWrites",
 			"method": "notices",
-			"find": "final lacking: String = where.length == 0 || missing.length == 0",
+			"find": "final lacking: String = where.length == 0 && typed.length == 0 || missing.length == 0",
 			"replace": "final lacking: String = true",
 			"note": "the run no longer names the preconditions of the instantiation bound it fails"
 		},

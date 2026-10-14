@@ -2373,6 +2373,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-TS-PLACE-FRESH-STRUCT,M-TS-PLACE-FRESH-NEW,M-TS-PLACE-FRESH-MUTABLE',
 			'unit.check.ThreadSafetyReflectiveSealTest#testALockAReflectiveWriteUnsealsSaysWhoUnsealedIt :: control :: '
 				+ 'M-TS-UNSEALED-NOTE,M-TS-UNSEALED-HOLDS,M-TS-UNSEALED-PRECONDITIONS,M-TS-UNSEALED-TAKE,M-TS-UNSEALED-THROW',
+			'unit.check.ThreadSafetyReflectiveSealTest#testAParameterIsFollowedOnlyWhereEveryCallIsSeen :: control :: '
+				+ 'M-TS-STORED-CALLERS,M-TS-STORED-COMPLETE,M-TS-STORED-HOLDERS,M-TS-STORED-SPELLED,M-TS-STORED-GLOB,M-TS-STORED-SKIPPED,M-TS-STORED-REF',
 			'unit.check.ThreadSafetyReflectiveSealTest#testATypeParameterReceiverIsBoundedByItsInstantiations :: control :: '
 				+ 'M-TS-PLACE-INSTANTIATIONS,M-TS-PLACE-COMPLETE,M-TS-PLACE-RAW-LINK,M-TS-PLACE-FREE-SUB,M-TS-PLACE-NEVER-MADE,'
 				+ 'M-TS-PLACE-UNDECLARED,M-TS-PLACE-GLOB-MATCH,M-TS-PLACE-MAKES-NEW,M-TS-PLACE-MAKES-VALUE,M-TS-PLACE-MAKES-RECEIVER,'
@@ -2380,9 +2382,14 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-TS-REACH-ALIAS-SUBTYPES',
 			'unit.check.ThreadSafetyReflectiveSealTest#testAValueTheRunCannotPlaceUnsealsEveryLock :: control :: '
 				+ 'M-TS-SEAL-REFLECT-UNPLACED,M-TS-SEAL-UNPLACED-NOTICE,M-TS-BINDER-TYPE',
+			'unit.check.ThreadSafetyReflectiveSealTest#testAWriteThatMayStoreALockUnsealsAsBefore :: control :: M-TS-STORED-ANY,M-TS-STORED-RELATED,M-TS-STORED-ARGUMENTS',
+			'unit.check.ThreadSafetyReflectiveSealTest#testAWriteThatStoresNoLockKeepsTheLockNames :: control :: '
+				+ 'M-TS-STORED-NOTHING,M-TS-STORED-LITERAL,M-TS-STORED-NULL,M-TS-STORED-TYPED,M-TS-STORED-UNRELATED,M-TS-STORED-PARAMETER,'
+				+ 'M-TS-STORED-KEPT-NOTICE,M-TS-STORED-COUNTS,M-TS-STORED-ENUM,M-TS-STORED-BASIC,M-TS-STORED-CATCH-ALL',
 			'unit.check.ThreadSafetyReflectiveSealTest#testEveryNameThatMakesTheClassMakesIt :: control :: '
 				+ 'M-TS-MAKES-RESOLVED,M-TS-MAKES-LITERAL,M-TS-MAKES-UNKNOWN,M-TS-MAKES-STD,M-TS-MAKES-ALIAS-NOTHING,M-TS-MAKES-ALIAS-STD,'
 				+ 'M-TS-MAKES-WILD,M-TS-MAKES-BOUND,M-TS-MAKES-USING',
+			'unit.check.ThreadSafetyReflectiveSealTest#testWhatAWriteStoresUnsealsOnlyTheLocksOfItsType :: control :: M-TS-STORED-MEMBER-TYPE,M-TS-STORED-MARKED,M-TS-STORED-TYPED-NOTICE',
 			'unit.check.ThreadSafetyRegistersTest#testALoopAboveTheRegistrarRepeatsNothing :: control :: M-TS-REGISTER-OWNER',
 			'unit.check.ThreadSafetyRegistersTest#testARegistrationInALoopRepeatsNothing :: control :: M-TS-REGISTER-OWNER',
 			'unit.check.ThreadSafetyRegistersTest#testTheOwnerIsNeverUpARegistration :: control :: M-TS-REGISTER-OWNER',
@@ -6474,6 +6481,30 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-SEAL-REFLECT-LITERAL-ANY',
 			'M-TS-SEAL-REFLECT-UNPLACED',
 			'M-TS-SEAL-UNPLACED-NOTICE',
+			'M-TS-STORED-COUNTS',
+			'M-TS-STORED-NOTHING',
+			'M-TS-STORED-ANY',
+			'M-TS-STORED-NULL',
+			'M-TS-STORED-LITERAL',
+			'M-TS-STORED-CATCH-ALL',
+			'M-TS-STORED-TYPED',
+			'M-TS-STORED-COMPLETE',
+			'M-TS-STORED-PARAMETER',
+			'M-TS-STORED-CALLERS',
+			'M-TS-STORED-ARGUMENTS',
+			'M-TS-STORED-SKIPPED',
+			'M-TS-STORED-HOLDERS',
+			'M-TS-STORED-SPELLED',
+			'M-TS-STORED-GLOB',
+			'M-TS-STORED-BASIC',
+			'M-TS-STORED-ENUM',
+			'M-TS-STORED-UNRELATED',
+			'M-TS-STORED-RELATED',
+			'M-TS-STORED-MEMBER-TYPE',
+			'M-TS-STORED-MARKED',
+			'M-TS-STORED-KEPT-NOTICE',
+			'M-TS-STORED-TYPED-NOTICE',
+			'M-TS-STORED-REF',
 			'M-TS-FOLD-EVERY-END',
 			'M-TS-FOLD-SAME-WAY',
 			'M-TS-FOLD-PARTS-ONCE',

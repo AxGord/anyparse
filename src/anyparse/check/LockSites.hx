@@ -221,7 +221,7 @@ final class LockSites {
 			if (edge.to == pair.unlockId) gives.push({ edge: edge, pair: pair });
 		}
 		collectUnsealed(files, plugin, [
-			for (t in takes.concat(gives)) if (t.edge.receiverField != null) memberName(t.edge.receiverField)
+			for (t in takes.concat(gives)) if (t.edge.receiverField != null) t.edge.receiverField
 		], writes);
 		final unresolved: Array<String> = [for (u in graph.unresolved) for (n in ReachAdmission.admittedNames(u)) n];
 		for (site in inferWrappers(takes, gives, pairIds, unresolved)) (site.wrapper.takes ? takes : gives).push(site.call);
@@ -421,12 +421,14 @@ final class LockSites {
 	}
 
 	/**
-	 * Every member name among `names` some file of `files` reads as a value, fills from anything but a `new`, or calls a
-	 * method on through a receiver the graph did not name that member for (`named`: per file, `<call start>:<member>`
-	 * for every invocation whose `receiverField` names one) — unless a proven alias (`settleAliases`) accounts for each
-	 * such occurrence (`LockAliases`): the member then stays sealed, and an alias names the lock of the member it holds.
+	 * Every name of the lock members `fields` (`Owner.member`) some file of `files` reads as a value, fills from anything but
+	 * a `new`, or calls a method on through a receiver the graph did not name that member for (`named`: per file,
+	 * `<call start>:<member>` for every invocation whose `receiverField` names one) — unless a proven alias
+	 * (`settleAliases`) accounts for each such occurrence (`LockAliases`): the member then stays sealed, and an alias names
+	 * the lock of the member it holds — or a reflective write may store a lock of its type in (`FieldWrites.markLockMembers`).
 	 */
-	private function collectUnsealed(files: Array<String>, plugin: GrammarPlugin, names: Array<String>, writes: FieldWrites): Void {
+	private function collectUnsealed(files: Array<String>, plugin: GrammarPlugin, fields: Array<String>, writes: FieldWrites): Void {
+		final names: Array<String> = [for (f in fields) memberName(f)];
 		if (names.length == 0) return;
 		final named: Map<String, Array<String>> = [];
 		for (e in _graph.edges) {
@@ -453,6 +455,7 @@ final class LockSites {
 		for (lock in aliases.rewritten) _rewrittenLocks.push(lock);
 		for (name => found in breaking) if (found.exists(o -> !aliases.accounts(o))) _unsealed.push(name);
 		// a reflective write names its field at run time: no `new` or hand-off it stores is in sight
+		writes.markLockMembers(fields.concat([for (target => source in aliases.targets) for (f in [target, source]) f]));
 		for (name in walked) if (!_unsealed.contains(name) && writes.reflectivelyWritten(name)) _unsealed.push(name);
 	}
 

@@ -18,6 +18,10 @@ class ThreadSafetyReflectiveSealTest extends Test {
 
 	/** The rule over a closed project that declares no class made from a computed name (`reflectiveClasses`). */
 	private static inline final CLOSED: String = '{"reflectiveClasses":["nothing.*"],"rules":{$RULE,"closedWorld":true}}}';
+
+	/** `CLOSED`, declaring too that a read of a computed name obtains no method (`reflectiveMethodHolders`). */
+	private static inline final SEALED: String = '{"reflectiveClasses":["nothing.*"],"reflectiveMethodHolders":["nothing.*"],'
+		+ '"rules":{$RULE,"closedWorld":true}}}';
 	#end
 
 	/**
@@ -247,7 +251,191 @@ class ThreadSafetyReflectiveSealTest extends Test {
 		#end
 	}
 
+	/**
+	 * A computed name on a value the run places on no class, storing what holds no lock: no value, a literal, a value of
+	 * an unrelated class, a parameter every call of which hands one such (an optional parameter's absent argument
+	 * included) — `_l` keeps its name, so the main thread's take of it waits for no worker, and the run names the writer
+	 * with what it stores.
+	 */
+	@:pin('control') @:killer('M-TS-STORED-NOTHING') @:killer('M-TS-STORED-LITERAL') @:killer('M-TS-STORED-NULL')
+	@:killer('M-TS-STORED-TYPED') @:killer('M-TS-STORED-UNRELATED') @:killer('M-TS-STORED-PARAMETER')
+	@:killer('M-TS-STORED-KEPT-NOTICE') @:killer('M-TS-STORED-COUNTS') @:killer('M-TS-STORED-ENUM') @:killer('M-TS-STORED-BASIC')
+	@:killer('M-TS-STORED-CATCH-ALL')
+	public function testAWriteThatStoresNoLockKeepsTheLockNames(): Void {
+		#if (sys || nodejs)
+		Assert.equals(0, helperTakes(SEALED, '', ''), 'no call hands it anything');
+		Assert.equals(0, helperTakes(SEALED, '', 'Help.assign(d, "x", "text");'), 'a string');
+		Assert.equals(0, helperTakes(SEALED, '', 'Help.assign(d, "x", 5);'), 'a number');
+		Assert.equals(0, helperTakes(SEALED, '', 'Help.assign(d, "x", null);'), 'null');
+		Assert.equals(0, helperTakes(SEALED, '', 'final s:String = "a"; Help.assign(d, "x", s);'), 'a typed String');
+		Assert.equals(0, helperTakes(SEALED, '', 'Help.assign(d, "x", new Other());'), 'an object of a class no lock is');
+		Assert.equals(0, helperTakes(SEALED, '', 'final c:Color = Color.Red; Help.assign(d, "x", c);'), 'an enum value');
+		Assert.equals(0, helperTakes(SEALED, '', 'Reflect.deleteField(bag, "x");'), 'a delete');
+		Assert.equals(
+			0, helperTakes(SEALED, PUT, 'Help.put(d, "x", 1); Help.put(d, "y");'), 'a parameter handed numbers, or nothing at all'
+		);
+		Assert.equals(
+			1,
+			helperFindings(SEALED, '', 'Help.assign(d, "x", "text");')
+				.filter(f -> f.indexOf('kept off every lock member') != -1 && f.indexOf('Help.assign (it stores String)') != -1)
+				.length,
+			'the run names the writer and what it stores'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * What a write stores may be a lock whenever a lock may have reached a value of no lock type: stored in a `Dynamic`
+	 * field, an `Array<Dynamic>`, a structure, a `Map<String, Dynamic>`, handed to a `Dynamic` parameter, cast, returned as
+	 * `Any` — or be one, declared so: each unseals `_l` as before, named in the run's notice.
+	 */
+	@:pin('control') @:killer('M-TS-STORED-ANY') @:killer('M-TS-STORED-RELATED') @:killer('M-TS-STORED-ARGUMENTS')
+	public function testAWriteThatMayStoreALockUnsealsAsBefore(): Void {
+		#if (sys || nodejs)
+		Assert.equals(1, helperTakes(SEALED, '', 'final m:Mutex = new Mutex(); Help.assign(d, "x", m);'), 'a lock');
+		Assert.equals(1, helperTakes(SEALED, '', 'bag = new Mutex(); Help.assign(d, "x", bag);'), 'a Dynamic field');
+		Assert.equals(
+			1, helperTakes(SEALED, '', 'final a:Array<Dynamic> = [new Mutex()]; Help.assign(d, "x", a[0]);'), 'an Array<Dynamic>'
+		);
+		Assert.equals(1, helperTakes(SEALED, '', 'final s:{ m:Dynamic } = { m: new Mutex() }; Help.assign(d, "x", s.m);'), 'a structure');
+		Assert.equals(
+			1, helperTakes(SEALED, '', 'final s:Map<String, Dynamic> = ["m" => new Mutex()]; Help.assign(d, "x", s["m"]);'),
+			'a Map<String, Dynamic>'
+		);
+		Assert.equals(1, helperTakes(SEALED, PASS, 'Help.pass(new Mutex());'), 'handed to a Dynamic parameter');
+		Assert.equals(1, helperTakes(SEALED, '', 'Help.assign(d, "x", cast new Mutex());'), 'a cast');
+		Assert.equals(1, helperTakes(SEALED, '', 'final set = Reflect.setField; set(bag, "x", 1);'), 'a reflective write handed on');
+		Assert.equals(
+			1, helperTakes(SEALED, 'public static function any():Any return new Mutex();', 'Help.assign(d, "x", Help.any());'), 'Any'
+		);
+		Assert.equals(
+			1,
+			helperFindings(SEALED, '', 'bag = new Mutex(); Help.assign(d, "x", bag);')
+				.filter(f -> f.indexOf('so no lock is named by its member: Help.assign') != -1)
+				.length,
+			'the run names the writer'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A parameter is followed into its calls only when the run sees every one of them: in a run over a closed project
+	 * declaring which classes' methods a computed name may obtain, never for a function handed on as a value, called by a
+	 * name the graph does not resolve, or spelled by a literal a reflective read may obtain it by. An optional parameter
+	 * before it lets an argument move along.
+	 */
+	@:pin('control') @:killer('M-TS-STORED-CALLERS') @:killer('M-TS-STORED-COMPLETE') @:killer('M-TS-STORED-HOLDERS')
+	@:killer('M-TS-STORED-SPELLED') @:killer('M-TS-STORED-GLOB') @:killer('M-TS-STORED-SKIPPED') @:killer('M-TS-STORED-REF')
+	public function testAParameterIsFollowedOnlyWhereEveryCallIsSeen(): Void {
+		#if (sys || nodejs)
+		Assert.equals(1, helperTakes(CLOSED, '', ''), 'no reflectiveMethodHolders');
+		Assert.equals(1, helperTakes('{"reflectiveMethodHolders":["nothing.*"],"rules":{$RULE}}}', '', ''), 'no closed project');
+		Assert.equals(
+			1, helperTakes('{"reflectiveMethodHolders":["nothing.*"],"rules":{$RULE}}}', '', 'Help.assign(d, "x", new Other());'),
+			'a class in a run that may not see every class'
+		);
+		Assert.equals(1, helperTakes(SEALED, '', 'final f = Help.assign; f(d, "x", "text");'), 'a function value');
+		Assert.equals(1, helperTakes(SEALED, '', 'final o:Dynamic = d; o.assign(d, "x", "text");'), 'an unresolved call of its name');
+		Assert.equals(1, helperTakes(SEALED, '', 'Help.assign(d, "x", "text"); Reflect.field(Help, "assign");'), 'a literal names it');
+		Assert.equals(
+			1, helperTakes('{"reflectiveMethodHolders":["Help"],"rules":{$RULE,"closedWorld":true}}}', '', ''),
+			'its class may lend its methods'
+		);
+		Assert.equals(1, helperTakes(SEALED, SKIP, 'Help.skip(new Mutex());'), 'a skipped optional parameter');
+		Assert.equals(0, helperTakes(SEALED, SKIP, 'Help.skip(1, "text");'), 'nothing skipped');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * What a write stores costs only the lock members of a type it may be a lock of: a `Gate` stored unseals `_g`, never
+	 * the `Mutex` member `_l`; a `Mutex` stored, never `_g`.
+	 */
+	@:pin('control') @:killer('M-TS-STORED-MEMBER-TYPE') @:killer('M-TS-STORED-MARKED') @:killer('M-TS-STORED-TYPED-NOTICE')
+	public function testWhatAWriteStoresUnsealsOnlyTheLocksOfItsType(): Void {
+		#if (sys || nodejs)
+		final gate: Array<String> = gateFindings('Help.assign(d, "x", new Gate());');
+		Assert.equals(0, gate.filter(f -> f.indexOf('D.quick -> Mutex.acquire') != -1).length, 'the Mutex member keeps its name');
+		Assert.equals(1, gate.filter(f -> f.indexOf('D.gate -> Gate.lock') != -1).length, 'the Gate member loses it');
+		Assert.equals(
+			1, gate.filter(f -> f.indexOf('no such member names its lock: Help.assign (it stores Gate)') != -1).length,
+			'the run names the writer'
+		);
+		final mutex: Array<String> = gateFindings('Help.assign(d, "x", new Mutex());');
+		Assert.equals(1, mutex.filter(f -> f.indexOf('D.quick -> Mutex.acquire') != -1).length, 'the Mutex member loses its name');
+		Assert.equals(0, mutex.filter(f -> f.indexOf('D.gate -> Gate.lock') != -1).length, 'the Gate member keeps it');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
+	/** `Help.put`, handing an optional parameter on to `Help.assign`. */
+	private static inline final PUT: String = 'public static function put(o:Dynamic, k:String, ?v:Dynamic):Void assign(o, k, v);';
+
+	/** `Help.pass`, handing a `Dynamic` parameter on to `Help.assign`. */
+	private static inline final PASS: String = 'public static function pass(x:Dynamic):Void assign(D.bag, "x", x);';
+
+	/** `Help.skip`, whose stored parameter comes after an optional one. */
+	private static inline final SKIP: String = 'public static function skip(?n:Int, v:Dynamic):Void assign(D.bag, "x", v);';
+
+	/** How many findings of `helperFindings` report the main thread's take of `_l` in `D.quick`. */
+	private static function helperTakes(config: String, helpers: String, use: String): Int {
+		return helperFindings(config, helpers, use).filter(f -> f.indexOf('D.quick -> Mutex.acquire') != -1).length;
+	}
+
+	/**
+	 * The findings of a run under `config` in which `Help.assign` writes a computed name on a `Dynamic` value, `Help`
+	 * declares `helpers` beside it, and `D.main` runs `use` on the main thread while a worker holds `_m` across a sleep and
+	 * the main thread takes `_l`.
+	 */
+	private static function helperFindings(config: String, helpers: String, use: String): Array<String> {
+		return [
+			for (v in ThreadSafetyCheckTest.violations(config, [
+				ThreadSafetyCheckTest.MUTEX,
+				'class Runner { public static function create(fn:()->Void):Void {} }',
+				'class Other { public function new() {} }',
+				'enum Color { Red; }',
+				'class Help { public static function assign(o:Dynamic, k:String, v:Dynamic):Void Reflect.setField(o, k, v); $helpers }',
+				'class D { var _l:Mutex = new Mutex(); final _m:Mutex = new Mutex(); public static var bag:Dynamic = null;'
+				+ ' public function new() {} public function work():Void { _m.acquire(); Sys.sleep(1); _m.release(); }'
+				+ ' public function quick():Void { _l.acquire(); _l.release(); }'
+				+ ' public static function main():Void { final d:D = new D(); Runner.create(() -> d.work()); $use d.quick(); } }'
+			])) v.message
+		];
+	}
+
+	/**
+	 * The findings of a closed run in which `Help.assign` writes a computed name on a `Dynamic` value, a worker holds the
+	 * `Mutex` `_m` and the `Gate` `_h` across a sleep, the main thread runs `use` and takes `_l` and `_g`.
+	 */
+	private static function gateFindings(use: String): Array<String> {
+		return [
+			for (v in ThreadSafetyCheckTest.violations(
+				'{"reflectiveClasses":["nothing.*"],"reflectiveMethodHolders":["nothing.*"],"rules":{"thread-safety":{'
+				+ '"sinks":["Mutex.acquire","Gate.lock","Sys.sleep"],"spawns":["Runner.create"],'
+				+ '"lockPairs":["Mutex.acquire/release","Gate.lock/unlock"],"closedWorld":true}}}',
+				[
+					ThreadSafetyCheckTest.MUTEX,
+					'class Gate { public function new() {} public function lock():Void {} public function unlock():Void {} }',
+					'class Runner { public static function create(fn:()->Void):Void {} }',
+					'class Help { public static function assign(o:Dynamic, k:String, v:Dynamic):Void Reflect.setField(o, k, v); }',
+					'class D { var _l:Mutex = new Mutex(); final _m:Mutex = new Mutex(); var _g:Gate = new Gate(); final _h:Gate = new Gate();'
+					+ ' public function new() {}'
+					+ ' public function work():Void { _m.acquire(); _h.lock(); Sys.sleep(1); _h.unlock(); _m.release(); }'
+					+ ' public function quick():Void { _l.acquire(); _l.release(); }'
+					+ ' public function gate():Void { _g.lock(); _g.unlock(); }'
+					+ ' public static function main():Void { final d:D = new D(); Runner.create(() -> d.work()); $use d.quick(); d.gate(); } }'
+				]
+			)) v.message
+		];
+	}
+
 	/**
 	 * How many findings report the main thread's take of `_l` in `D.quick` when `Node` sits in the package `pkg` beside
 	 * `beside`, `V` imports it, and `D`'s file, under `imports`, runs `use`.
