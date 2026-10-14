@@ -2302,3 +2302,31 @@ decided the question; it may not become a record of runs.
   the whole resolution (`dispatchOn`: forward, field, static extension, member + overrides); the call's own target is
   the first one any candidate names. The namesake's own `UnresolvedReceiver`/`FunctionValue` record stays — on the
   build where the name is the project type the call is that — branch `feat/ts-precision-6`
+- R3 M4 expensive part (`round6/frag`): one computed reflective write on a value the run places on no class unsealed
+  EVERY lock member — an 8-line `ReflectHelper.assign(o:Dynamic, k, v)` on a TM copy re-keyed 37 of 102 recall keys to
+  `Mutex.acquire` / `LockMutex.lock`. R3's sketch ("a lock type never reaching an untyped value keeps its members
+  sealed") was checked and REJECTED as unsound as stated: it misses the reflective-READ copy channel — `Reflect.field(dyn,
+  k)` of a holder object yields its lock untyped, the unplaced write stores it in another member, and sealing never sees a
+  read. Refined so ("no project reflective read may yield a lock either") it fails for every lock type on TM: TM has four
+  unplaced computed reads (`API.getErrorMessages`, `BaseNativeURLLoader`, `Form`, `Node.restore`) and holders reach
+  `Dynamic` through library supertypes (`CloudDatabase extends EventDispatcher`: `event.target`), so neither the reads nor
+  the holders can be bounded. Asked of the WRITE instead (`ReflectiveValues`): what an unplaced write stores, as the types
+  of the objects its value may be — a POSITIVE list: nothing for a delete or `null`, a literal's type, an expression's
+  declared type (only under a covered `closedWorld`, so every subtype is seen), and for a parameter — `Dynamic` / `Any`
+  ones included — what every call of its function hands it, when every invocation is a call the graph holds
+  (`ThreadSafety.callersSeen`: `seedable` false, no non-inert `Ref`), `reflectiveMethodHolders` is declared alike and names
+  neither its class nor a subtype (a computed read cannot obtain it for `Reflect.callMethod`), and no string literal of the
+  run spells its name; the argument at its index, any up to it after an optional parameter (type-based skipping moves
+  the rest along), a static extension call's receiver first, an import-alias receiver refused. Anything else may be any
+  lock. Per lock member (`FieldWrites.markLockMembers`: the `receiverField`s of the lock calls and the alias hand-offs) the
+  write counts only when a stored type may be a lock of the member's declared type (`mayHold`: never a literal's type or an
+  enum; a project class/interface only through a common subtype; a library member type only through a project subtype
+  unless the value's chain leaves the run; anything else — library type, structure, abstract — may). Applied to unplaced
+  writes only (literal-named ones too); placed writes keep G2's exclusions as they were. Notices: the unchanged line for
+  writes that may store any object, one for a typed value storing a lock of some member type, one naming each write kept
+  off every lock member with what it stores. MEASURED: TM 1d1ba147 / f81c2049 / bd943dac rows == start (no unplaced write
+  there); frag 65/102 -> 102/102 with `ReflectHelper.assign (it stores no object)` named; called with a literal 102/102
+  (`it stores String`), through a second helper fed `1` / a `String` / nothing 102/102, called with `Reflect.field(from, k)`
+  65/102 (today's default, named as before). Fixtures: lost 0, five round4/f11b holds re-keyed `Mutex.acquire` -> `C._m`
+  (each stores `new Blocking()`). Rule time +1.2% (TM 5.76 -> 5.83 s). The boundary is the one every reflective write
+  already has: a write inside library code is not seen at all — branch `feat/ts-precision-6`
