@@ -1,5 +1,7 @@
 package anyparse.query;
 
+using Lambda;
+
 /**
  * What a `CallGraph` reads off the declarations of the functions and abstracts it holds, keyed by function
  * node id or type name: the facts a receiver, an argument or a literal is typed with.
@@ -22,7 +24,7 @@ final class DeclarationFacts {
 	/** Function node id -> type parameter -> the written sources of its bounds (`<U:A & B>` -> `U` -> `['A', 'B']`). */
 	public final typeParamBounds: Map<String, Map<String, Array<String>>> = [];
 
-	/** File + type name (`CallGraph.boundsKey`) -> type parameter -> the written sources of its bounds, as that declaration writes them. */
+	/** File + type name (`boundsKey`) -> type parameter -> the written sources of its bounds, as that declaration writes them. */
 	public final typeBounds: Map<String, Map<String, Array<String>>> = [];
 
 	/** Function node id -> its parameters' written types, `null` where one carries none. */
@@ -41,6 +43,31 @@ final class DeclarationFacts {
 		typeParamBounds.remove(id);
 		paramTypes.remove(id);
 		restParams.remove(id);
+	}
+
+	/** The key of `typeName`'s parameter bounds as the declaration in `file` writes them — two types may share a simple name. */
+	public static inline function boundsKey(file: String, typeName: String): String {
+		return '${CallGraphNames.normalizePath(file)}#$typeName';
+	}
+
+	/**
+	 * Keep `value` as the fact `facts` holds for the node `id` when `first` — its first declaration — and, for a further
+	 * declaration, only while that spells the same: a fact two declarations of one node disagree on is none.
+	 */
+	public static function settle(facts: Map<String, String>, id: String, value: Null<String>, first: Bool): Void {
+		if (first) {
+			if (value != null) facts[id] = value;
+		} else if (facts[id] != value) {
+			facts.remove(id);
+		}
+	}
+
+	/** Whether two declarations bound their type parameters alike: the same parameters, each with the same written bounds. */
+	public static function sameBounds(a: Null<Map<String, Array<String>>>, b: Null<Map<String, Array<String>>>): Bool {
+		if (a == null || b == null) return a == b;
+		for (name => written in a) if (!b.exists(name) || (b[name] ?? []).join('\n') != written.join('\n')) return false;
+		for (name in b.keys()) if (!a.exists(name)) return false;
+		return true;
 	}
 
 }

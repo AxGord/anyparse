@@ -2,12 +2,14 @@ package anyparse.query;
 
 import anyparse.query.CallGraph.FnDeclaration;
 import anyparse.query.CallGraph.FnNode;
+import anyparse.query.CallGraphImports.ImportedName;
 import anyparse.query.CallGraphImports.WrittenIn;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
 using Lambda;
+using StringTools;
 
 /**
  * The types one file writes, spelled as a `CallGraph` keys them (`CallGraphImports.typeOf`): a name an import or an
@@ -332,6 +334,59 @@ final class CallGraphKeys {
 		if (rest) g._facts.restParams[id] = true;
 		g._facts.paramTypes[id] = params;
 		return params;
+	}
+
+	/**
+	 * The node of `g` of the static `member` of `owner` an import binds: its declaration, or a placeholder for one the graph
+	 * has not loaded or one a type whose chain the index does not hold may declare; null for a static that is no function.
+	 */
+	public static function staticTarget(g: CallGraph, owner: String, member: String): Null<String> {
+		final types: CallGraphTypes = g.types;
+		return g.memberOnChain(owner, member) ?? (
+			types.functionOnChain(owner, member) || !types.chainFullyIndexed(owner)
+				? g.externalNode(types.declaringTypeOf(owner, member) ?? owner, member)
+				: null
+		);
+	}
+
+	/**
+	 * The one static the imports of `file` bind the unbound `name` to, read where nothing nearer binds it: neither the
+	 * functions of its module `moduleType` nor `currentType`'s chain — which the index must hold whole — declares it. Null
+	 * when the imports bind none, more than one, or may bind one a wildcard type whose statics the index cannot list supplies.
+	 */
+	public static function importedStatic(
+		g: CallGraph, file: String, moduleType: String, name: String, currentType: Null<String>
+	): Null<{ owner: String, member: String }> {
+		final types: CallGraphTypes = g.types;
+		if (g.memberOnChain(moduleType, name) != null) return null;
+		if (currentType != null && (!types.chainFullyIndexed(currentType) || types.declaringTypeOf(currentType, name) != null)) return null;
+		final imported: ImportedName = types.imports.importedStatics(file, name);
+		return imported.unknown || imported.statics.length != 1 ? null : imported.statics[0];
+	}
+
+	/**
+	 * What the arguments of `call` bind each type parameter the function `target` of `g` declares itself to, in order, as the
+	 * language infers it: the type `argType` gives every argument passed to a parameter written as that bare type parameter
+	 * — a rest parameter taking every argument from its position on — when they all agree; `CallGraph.UNKNOWN_TYPE` for one
+	 * no argument binds, or arguments of different types bind.
+	 */
+	public static function argumentBindings(
+		g: CallGraph, target: String, call: QueryNode, argType: QueryNode -> Null<String>
+	): Array<String> {
+		final params: Array<Null<String>> = paramTypesOf(g, target) ?? [];
+		final last: Int = params.length - 1;
+		final rest: Bool = g._facts.restParams.exists(target);
+		return [
+			for (p in g._facts.typeParams[target] ?? []) {
+				final passed: Array<Null<String>> = [
+					for (j in 1...call.children.length) {
+						final at: Int = rest && j - 1 > last ? last : j - 1;
+						if (at <= last && (params[at] ?? '').trim() == p) argType(call.children[j]);
+					}
+				];
+				passed.length > 0 && !passed.exists(a -> a != passed[0]) ? passed[0] ?? CallGraph.UNKNOWN_TYPE : CallGraph.UNKNOWN_TYPE;
+			}
+		];
 	}
 
 	/**

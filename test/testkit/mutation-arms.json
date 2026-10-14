@@ -11740,8 +11740,8 @@
 			"name": "M-GRAPH-CLASS-BOUND",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectNodes",
-			"find": "_facts.typeBounds[boundsKey(entry.file, declared)] = own",
-			"replace": "_facts.typeBounds.remove(boundsKey(entry.file, declared))",
+			"find": "_facts.typeBounds[DeclarationFacts.boundsKey(entry.file, declared)] = own",
+			"replace": "_facts.typeBounds.remove(DeclarationFacts.boundsKey(entry.file, declared))",
 			"note": "a type's own parameter bounds are not recorded, so a receiver typed by a class parameter stays unresolved"
 		},
 		{
@@ -11794,7 +11794,7 @@
 		},
 		{
 			"name": "M-GRAPH-BOUNDS-BY-FILE",
-			"type": "anyparse.query.CallGraph",
+			"type": "anyparse.query.DeclarationFacts",
 			"method": "boundsKey",
 			"find": "return '${CallGraphNames.normalizePath(file)}#$typeName';",
 			"replace": "return typeName;",
@@ -20650,30 +20650,30 @@
 			"name": "M-TS-IMPORT-STATIC-CALL",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "? importedStatic(innerName, currentType)",
+			"find": "? CallGraphKeys.importedStatic(this, file, moduleType, innerName, currentType)",
 			"replace": "? null",
 			"note": "the result of a static function an import binds, called bare, is not typed (review R4 F7)"
 		},
 		{
 			"name": "M-TS-IMPORT-STATIC-OWN",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "importedStatic",
 			"find": " || types.declaringTypeOf(currentType, name) != null))",
 			"replace": "))",
 			"note": "an imported static outranks a member of the reading type of the same name"
 		},
 		{
 			"name": "M-TS-IMPORT-STATIC-ONE",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "importedStatic",
 			"find": "imported.unknown || imported.statics.length != 1 ? null : imported.statics[0];",
 			"replace": "imported.statics.length == 0 ? null : imported.statics[0];",
 			"note": "two imports binding the name type it as the first one's"
 		},
 		{
 			"name": "M-TS-IMPORT-STATIC-INDEXED",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "importedStatic",
 			"find": "(!types.chainFullyIndexed(currentType) || ",
 			"replace": "(",
 			"note": "an imported static outranks a member a supertype the index does not hold may declare"
@@ -20720,16 +20720,16 @@
 		},
 		{
 			"name": "M-TS-INFER-AGREE",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "argumentBindings",
 			"find": "passed.length > 0 && !passed.exists(a -> a != passed[0])",
 			"replace": "passed.length > 0",
 			"note": "arguments binding a function's type parameter to different types bind it to the first one's"
 		},
 		{
 			"name": "M-TS-INFER-REST",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "argumentBindings",
 			"find": "final at: Int = rest && j - 1 > last ? last : j - 1;",
 			"replace": "final at: Int = j - 1;",
 			"note": "a rest parameter binds a function's type parameter from its first argument alone"
@@ -20744,10 +20744,10 @@
 		},
 		{
 			"name": "M-TS-INFER-BARE",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "argumentBindings",
 			"find": "(params[at] ?? '').trim() == p",
-			"replace": "CallGraphNames.mentionsTypeName(params[at] ?? '', [p], _plugin.typeSyntax)",
+			"replace": "CallGraphNames.mentionsTypeName(params[at] ?? '', [p], g._plugin.typeSyntax)",
 			"note": "an argument passed to a parameter nesting a function's type parameter binds it to the argument's whole type"
 		},
 		{

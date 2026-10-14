@@ -163,7 +163,7 @@ final class CallGraphFacts {
 	/**
 	 * Under the truth (`FactsView.truth`), take into the graph every method a build macro made for a type `file` declares:
 	 * one whose compiled body the macro placed outside that file (`FactNode.generated`), or that no declaration of the text
-	 * holds (`CallGraph.adoptNode`). Neither has a range of the file to be found by: its body is read by its id (`adopted`)
+	 * holds (`adoptNode`). Neither has a range of the file to be found by: its body is read by its id (`adopted`)
 	 * and recorded from its facts once every file's nodes exist (`recordAdopted`), so what it runs and what it touches are
 	 * seen. Such a type's text is not its code (`FactsProvenance.typeIsItsText`), so the walk answers Unknown wherever it
 	 * enters code of it; what the facts show it doing is still found. A type named twice, and one no build macro ran over,
@@ -736,10 +736,37 @@ final class CallGraphFacts {
 			final graphId: String = '$type.$name';
 			final declared: Bool = g.nodes[graphId]?.isExternal == false;
 			if (declared && !n.generated) continue;
-			if (!declared) g.adoptNode(graphId, file, type, name, kinds.contains(DYNAMIC_FIELD));
+			if (!declared) adoptNode(g, graphId, file, type, name, kinds.contains(DYNAMIC_FIELD));
 			adopted[graphId] = n;
 			out.push(graphId);
 		}
+	}
+
+	/**
+	 * Take in the method `name` of `typeName` a build macro made (`adopt`) into `g`: a node of `file` with no range — the
+	 * compiler facts alone describe its body — that replaces the placeholder a call of it left, and a member of its type.
+	 */
+	private static function adoptNode(g: CallGraph, id: String, file: String, typeName: String, name: String, isDynamic: Bool): Void {
+		final created: FnNode = {
+			id: id,
+			file: file,
+			typeName: typeName,
+			name: name,
+			span: null,
+			isExternal: false,
+			isDynamic: isDynamic,
+			isBodyless: false
+		};
+		g.nodes[id] = created;
+		final key: String = CallGraphNames.normalizePath(file);
+		final inFile: Array<FnNode> = g._fileNodes[key] ?? [];
+		inFile.push(created);
+		g._fileNodes[key] = inFile;
+		if (!g._grownTypes.contains(typeName)) g._grownTypes.push(typeName);
+		g.registerMember(typeName, name, id);
+		final ids: Array<String> = g._byMember[name] ?? [];
+		if (!ids.contains(id)) ids.push(id);
+		g._byMember[name] = ids;
 	}
 
 }

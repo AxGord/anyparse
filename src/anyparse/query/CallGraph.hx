@@ -384,7 +384,7 @@ final class CallGraph {
 		final fn: Null<FnNode> = nodes[id];
 		final type: String = fn?.typeName ?? (fn == null ? id : '');
 		if (functionsOnly || !types.generics.declaresTypeParam(type, name)) return null;
-		final file: Null<String> = fn == null ? null : boundsKey(fn.file, type);
+		final file: Null<String> = fn == null ? null : DeclarationFacts.boundsKey(fn.file, type);
 		final written: Array<Array<String>> = [
 			for (k => b in _facts.typeBounds) if (file == null ? k.endsWith('#$type') : k == file) b[name] ?? []
 		];
@@ -726,9 +726,9 @@ final class CallGraph {
 			if (declared != null && declaredAt != null) {
 				final own: Null<Map<String, Array<String>>> = bounds[declaredAt.from];
 				if (own != null)
-					_facts.typeBounds[boundsKey(entry.file, declared)] = own
+					_facts.typeBounds[DeclarationFacts.boundsKey(entry.file, declared)] = own
 				else
-					_facts.typeBounds.remove(boundsKey(entry.file, declared));
+					_facts.typeBounds.remove(DeclarationFacts.boundsKey(entry.file, declared));
 			}
 
 			var fnId: Null<String> = parentFn;
@@ -751,15 +751,19 @@ final class CallGraph {
 				final bounded: Null<Map<String, Array<String>>> = bounds[span.from];
 				if (first && bounded != null)
 					_facts.typeParamBounds[id] = bounded
-				else if (!first && !sameBounds(_facts.typeParamBounds[id], bounded))
+				else if (!first && !DeclarationFacts.sameBounds(_facts.typeParamBounds[id], bounded))
 					_facts.typeParamBounds.remove(id);
-				settle(_facts.returns, id, returnTypes[span.from], first);
-				settle(_facts.returnSources, id, CallGraphNames.returnSourceOf(node, entry.source, annotationKinds), first);
+				DeclarationFacts.settle(_facts.returns, id, returnTypes[span.from], first);
+				DeclarationFacts.settle(
+					_facts.returnSources, id, CallGraphNames.returnSourceOf(node, entry.source, annotationKinds), first
+				);
 			} else if (span != null && lambdaKinds.contains(node.kind)) {
 				lambdaCounter++;
 				fnId = '${parentFn ?? (typeName ?? moduleType)}#$lambdaCounter';
 				final id: String = fnId;
-				settle(_facts.returns, id, returnTypes[span.from], registerNode(id, entry, typeName, null, span, false, false));
+				DeclarationFacts.settle(
+					_facts.returns, id, returnTypes[span.from], registerNode(id, entry, typeName, null, span, false, false)
+				);
 			}
 			final kids: Array<QueryNode> = node.children;
 			for (i in 0...kids.length) {
@@ -827,53 +831,6 @@ final class CallGraph {
 			_byMember[name] = ids;
 		}
 		return first;
-	}
-
-	/**
-	 * Keep `value` as the fact `facts` holds for the node `id` when `first` — its first declaration — and, for a further
-	 * declaration, only while that spells the same: a fact two declarations of one node disagree on is none.
-	 */
-	private static function settle(facts: Map<String, String>, id: String, value: Null<String>, first: Bool): Void {
-		if (first) {
-			if (value != null) facts[id] = value;
-		} else if (facts[id] != value) {
-			facts.remove(id);
-		}
-	}
-
-	/** Whether two declarations bound their type parameters alike: the same parameters, each with the same written bounds. */
-	private static function sameBounds(a: Null<Map<String, Array<String>>>, b: Null<Map<String, Array<String>>>): Bool {
-		if (a == null || b == null) return a == b;
-		for (name => written in a) if (!b.exists(name) || (b[name] ?? []).join('\n') != written.join('\n')) return false;
-		for (name in b.keys()) if (!a.exists(name)) return false;
-		return true;
-	}
-
-	/**
-	 * Take in the method `name` of `typeName` a build macro made (`CallGraphFacts.adopt`): a node of `file` with no range —
-	 * the compiler facts alone describe its body — that replaces the placeholder a call of it left, and a member of its type.
-	 */
-	private function adoptNode(id: String, file: String, typeName: String, name: String, isDynamic: Bool): Void {
-		final created: FnNode = {
-			id: id,
-			file: file,
-			typeName: typeName,
-			name: name,
-			span: null,
-			isExternal: false,
-			isDynamic: isDynamic,
-			isBodyless: false
-		};
-		nodes[id] = created;
-		final key: String = CallGraphNames.normalizePath(file);
-		final inFile: Array<FnNode> = _fileNodes[key] ?? [];
-		inFile.push(created);
-		_fileNodes[key] = inFile;
-		if (!_grownTypes.contains(typeName)) _grownTypes.push(typeName);
-		registerMember(typeName, name, id);
-		final ids: Array<String> = _byMember[name] ?? [];
-		if (!ids.contains(id)) ids.push(id);
-		_byMember[name] = ids;
 	}
 
 	private function registerMember(typeName: String, member: String, id: String): Void {
@@ -958,11 +915,6 @@ final class CallGraph {
 		final into: Array<CallEdge> = _in[edge.to] ?? [];
 		into.push(edge);
 		_in[edge.to] = into;
-	}
-
-	/** The key of `typeName`'s parameter bounds as the declaration in `file` writes them — two types may share a simple name. */
-	private static inline function boundsKey(file: String, typeName: String): String {
-		return '${CallGraphNames.normalizePath(file)}#$typeName';
 	}
 
 	private function collectEdges(entry: ParsedEntry): Void {
@@ -1125,31 +1077,6 @@ final class CallGraph {
 
 
 		/**
-		 * The node of the static `member` of `owner` an import binds: its declaration, or a placeholder for one the graph has not
-		 * loaded or one a type whose chain the index does not hold may declare; null for a static that is no function.
-		 */
-		function staticTarget(owner: String, member: String): Null<String> {
-			return memberOnChain(owner, member) ?? (
-				types.functionOnChain(owner, member) || !types.chainFullyIndexed(owner)
-					? externalNode(types.declaringTypeOf(owner, member) ?? owner, member)
-					: null
-			);
-		}
-
-		/**
-		 * The one static the imports of the file bind the unbound `name` to, read where nothing nearer binds it: neither the
-		 * module's own functions nor `currentType`'s chain — which the index must hold whole — declares it. Null when the imports
-		 * bind none, more than one, or may bind one a wildcard type whose statics the index cannot list supplies.
-		 */
-		function importedStatic(name: String, currentType: Null<String>): Null<{ owner: String, member: String }> {
-			if (memberOnChain(moduleType, name) != null) return null;
-			if (currentType != null && (!types.chainFullyIndexed(currentType) || types.declaringTypeOf(currentType, name) != null))
-				return null;
-			final imported: ImportedName = types.imports.importedStatics(file, name);
-			return imported.unknown || imported.statics.length != 1 ? null : imported.statics[0];
-		}
-
-		/**
 		 * The static function an import of the file binds `name` to (`import p.T.f;`, `import p.T.f as name;`, `import p.T.*;`),
 		 * read as a value at `span`: the first, each further one a `Ref` edge of its own — a placeholder for one the graph has
 		 * not loaded, or one a type whose chain the index does not hold may declare. A static that is no function is none.
@@ -1157,7 +1084,7 @@ final class CallGraph {
 		function importedFunction(name: String, span: Span, currentType: Null<String>): Null<String> {
 			final targets: Array<String> = [];
 			for (s in types.imports.importedStatics(file, name).statics) {
-				final id: Null<String> = staticTarget(s.owner, s.member);
+				final id: Null<String> = CallGraphKeys.staticTarget(this, s.owner, s.member);
 				if (id != null && !targets.contains(id)) targets.push(id);
 			}
 			for (i in 1...targets.length) addEdge(frameId(currentType), targets[i], Ref, null, file, span);
@@ -1242,7 +1169,7 @@ final class CallGraph {
 				i--;
 			}
 			if (written == null && currentType != null && types.generics.declaresTypeParam(currentType, name))
-				written = _facts.typeBounds[boundsKey(file, currentType)]?.get(name) ?? [];
+				written = _facts.typeBounds[DeclarationFacts.boundsKey(file, currentType)]?.get(name) ?? [];
 			if (written == null) return null;
 			final bounds: Array<String> = written;
 			final nominals: Array<String> = [];
@@ -1359,21 +1286,7 @@ final class CallGraph {
 			if (named && own.exists(p -> types.generics.declaresTypeParam(owner ?? '', p))) return null;
 			final viewed: String = throughParams(written, owner, receiverSource, receiverType, currentType);
 			if (!named) return viewed;
-			final params: Array<Null<String>> = CallGraphKeys.paramTypesOf(this, target) ?? [];
-			final last: Int = params.length - 1;
-			// a rest parameter takes every argument from its position on
-			final rest: Bool = _facts.restParams.exists(target);
-			final bound: Array<String> = [
-				for (p in own) {
-					final passed: Array<Null<String>> = [
-						for (j in 1...call.children.length) {
-							final at: Int = rest && j - 1 > last ? last : j - 1;
-							if (at <= last && (params[at] ?? '').trim() == p) argType(call.children[j]);
-						}
-					];
-					passed.length > 0 && !passed.exists(a -> a != passed[0]) ? passed[0] ?? UNKNOWN_TYPE : UNKNOWN_TYPE;
-				}
-			];
+			final bound: Array<String> = CallGraphKeys.argumentBindings(this, target, call, argType);
 			return CallGraphNames.substituteTypeParams(viewed, own, bound, _plugin.typeSyntax);
 		}
 
@@ -1493,7 +1406,9 @@ final class CallGraph {
 					return typeSources[bound] ?? keys.throughInitializer(bound, c -> typeSourceOf(c, currentType));
 				if (CallGraphNames.isTypeLike(name)) return null;
 				// a static an import binds by its own name (`import p.T.*;`): its type, read where it is declared
-				final imported: Null<{ owner: String, member: String }> = importedStatic(name, currentType);
+				final imported: Null<{ owner: String, member: String }> = CallGraphKeys.importedStatic(
+					this, file, moduleType, name, currentType
+				);
 				if (imported != null) return memberTypeSource(imported.owner, imported.member);
 				return currentType == null ? null : memberTypeThrough(null, currentType, name, currentType);
 			}
@@ -1651,9 +1566,9 @@ final class CallGraph {
 				if (target != null) return { target: target, receiverSource: null, onType: currentType };
 				// a static function an import binds by its own name, called bare
 				final imported: Null<{ owner: String, member: String }> = unboundIdent(inner)
-					? importedStatic(innerName, currentType)
+					? CallGraphKeys.importedStatic(this, file, moduleType, innerName, currentType)
 					: null;
-				final made: Null<String> = imported == null ? null : staticTarget(imported.owner, imported.member);
+				final made: Null<String> = imported == null ? null : CallGraphKeys.staticTarget(this, imported.owner, imported.member);
 				return imported == null || made == null ? null : { target: made, receiverSource: null, onType: imported.owner };
 			}
 			if (!isAccessKind(inner.kind) || inner.children.length == 0) return null;
