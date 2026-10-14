@@ -3039,6 +3039,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CallGraphTest#testAddFilesUpgradesTheExternalPlaceholder :: control :: M-GRAPH-UPGRADE-EXTERNAL',
 			'unit.query.CallGraphTest#testAnAlternateTypeResolvesTheCallWhateverTheNamesakeDeclares :: control :: '
 				+ 'M-TS-ALTERNATE-WHOLE-CALL',
+			'unit.query.CallGraphTest#testAnImportedStaticIsTypedWhereItIsDeclared :: control :: '
+				+ 'M-TS-IMPORT-STATIC-FIELD,M-TS-IMPORT-STATIC-CALL,M-TS-IMPORT-STATIC-OWN,M-TS-IMPORT-STATIC-ONE,M-TS-IMPORT-STATIC-INDEXED',
 			'unit.query.CallGraphTest#testBareCallSomethingElseMaySupplyIsNeverAConstructor :: control :: '
 				+ 'M-GRAPH-IMPORT-UNLISTED,M-GRAPH-UNLISTED-WILDCARD',
 			'unit.query.CallGraphTest#testBareStaticCallGetsNoVirtualEdge :: control :: M-GRAPH-STATIC-NO-VIRTUAL',
@@ -6639,7 +6641,12 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-KEY-APART-FIRST',
 			'M-TS-KEY-SCOPE-PARAMS',
 			'M-TS-DECL-PARAM-FILE',
-			'M-TS-DECL-FILES-AGREE'
+			'M-TS-DECL-FILES-AGREE',
+			'M-TS-IMPORT-STATIC-FIELD',
+			'M-TS-IMPORT-STATIC-CALL',
+			'M-TS-IMPORT-STATIC-OWN',
+			'M-TS-IMPORT-STATIC-ONE',
+			'M-TS-IMPORT-STATIC-INDEXED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

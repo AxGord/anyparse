@@ -1185,6 +1185,49 @@ class CallGraphTest extends Test {
 		#end
 	}
 
+	/**
+	 * A static an import binds by its own name (`import p.T.*;`, `import p.T.member;`) types a bare read of it and a bare call
+	 * of it by the type it is declared with, read where it is declared; a member the reading type inherits of that name is
+	 * what the name means there, not the import (review R4 F7).
+	 */
+	@:pin('control')
+	@:killer('M-TS-IMPORT-STATIC-FIELD') @:killer('M-TS-IMPORT-STATIC-CALL') @:killer('M-TS-IMPORT-STATIC-OWN')
+	@:killer('M-TS-IMPORT-STATIC-ONE') @:killer('M-TS-IMPORT-STATIC-INDEXED')
+	public function testAnImportedStaticIsTypedWhereItIsDeclared(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final g: CallGraph = graphOf([
+			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
+			'package app; import sys.thread.Lock; class A { public static var lock:Lock = null; public static function make():Lock return null; }',
+			'package app; import app.A.*; class W { static function field():Void lock.wait(); static function call():Void make().wait(); }',
+			'package app; import app.A.lock; import app.A.make; class F { static function field():Void lock.wait();'
+			+ ' static function call():Void make().wait(); }',
+			'package app; class P { public var lock:utils.Lock = null; }',
+			'package app; import app.A.*; class O extends P { function own():Void lock.wait(); }',
+			'package app; class B { public static var lock:utils.Lock = null; }',
+			'package app; import app.A.*; import app.B.*; class T { static function both():Void lock.wait(); }',
+			'package app; import app.A.*; class X extends lib.Unseen { static function field():Void lock.wait(); }'
+		]);
+		function targets(from: String): Array<String> {
+			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+			out.sort(Reflect.compare);
+			return out;
+		}
+		Assert.same(['sys.thread.Lock.wait'], targets('W.field'), 'a static field a wildcard brings in');
+		Assert.same(['A.make', 'sys.thread.Lock.wait'], targets('W.call'), 'a static function a wildcard brings in');
+		Assert.same(['sys.thread.Lock.wait'], targets('F.field'), 'a static field imported by name');
+		Assert.same(['A.make', 'sys.thread.Lock.wait'], targets('F.call'), 'a static function imported by name');
+		Assert.same(['Lock.wait'], targets('O.own'), 'a member the reading type inherits comes first');
+		Assert.same([], targets('T.both'), 'two imports binding the name: unresolved');
+		Assert.same([], targets('X.field'), 'a supertype the index does not hold may declare it: unresolved');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	private inline function graphOf(sources: Array<String>): CallGraph {
 		return QueryTestHelpers.graphOf(sources);
 	}

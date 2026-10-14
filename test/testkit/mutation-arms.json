@@ -20637,6 +20637,46 @@
 			"find": "return keyed.length == 1 ? keyed[0] : null;",
 			"replace": "return keyed.length == 0 ? null : keyed[0];",
 			"note": "a type two declarations key apart is the one the first file meant"
+		},
+		{
+			"name": "M-TS-IMPORT-STATIC-FIELD",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (imported != null) return memberTypeSource(imported.owner, imported.member);",
+			"replace": "",
+			"note": "a static an import binds by its own name, read bare, is not typed (review R4 F7)"
+		},
+		{
+			"name": "M-TS-IMPORT-STATIC-CALL",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "? importedStatic(innerName, currentType)",
+			"replace": "? null",
+			"note": "the result of a static function an import binds, called bare, is not typed (review R4 F7)"
+		},
+		{
+			"name": "M-TS-IMPORT-STATIC-OWN",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": " || types.declaringTypeOf(currentType, name) != null))",
+			"replace": "))",
+			"note": "an imported static outranks a member of the reading type of the same name"
+		},
+		{
+			"name": "M-TS-IMPORT-STATIC-ONE",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "imported.unknown || imported.statics.length != 1 ? null : imported.statics[0];",
+			"replace": "imported.statics.length == 0 ? null : imported.statics[0];",
+			"note": "two imports binding the name type it as the first one's"
+		},
+		{
+			"name": "M-TS-IMPORT-STATIC-INDEXED",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "(!types.chainFullyIndexed(currentType) || ",
+			"replace": "(",
+			"note": "an imported static outranks a member a supertype the index does not hold may declare"
 		}
 	]
 }

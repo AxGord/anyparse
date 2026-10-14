@@ -1124,6 +1124,31 @@ final class CallGraph {
 
 
 		/**
+		 * The node of the static `member` of `owner` an import binds: its declaration, or a placeholder for one the graph has not
+		 * loaded or one a type whose chain the index does not hold may declare; null for a static that is no function.
+		 */
+		function staticTarget(owner: String, member: String): Null<String> {
+			return memberOnChain(owner, member) ?? (
+				types.functionOnChain(owner, member) || !types.chainFullyIndexed(owner)
+					? externalNode(types.declaringTypeOf(owner, member) ?? owner, member)
+					: null
+			);
+		}
+
+		/**
+		 * The one static the imports of the file bind the unbound `name` to, read where nothing nearer binds it: neither the
+		 * module's own functions nor `currentType`'s chain — which the index must hold whole — declares it. Null when the imports
+		 * bind none, more than one, or may bind one a wildcard type whose statics the index cannot list supplies.
+		 */
+		function importedStatic(name: String, currentType: Null<String>): Null<{ owner: String, member: String }> {
+			if (memberOnChain(moduleType, name) != null) return null;
+			if (currentType != null && (!types.chainFullyIndexed(currentType) || types.declaringTypeOf(currentType, name) != null))
+				return null;
+			final imported: ImportedName = types.imports.importedStatics(file, name);
+			return imported.unknown || imported.statics.length != 1 ? null : imported.statics[0];
+		}
+
+		/**
 		 * The static function an import of the file binds `name` to (`import p.T.f;`, `import p.T.f as name;`, `import p.T.*;`),
 		 * read as a value at `span`: the first, each further one a `Ref` edge of its own — a placeholder for one the graph has
 		 * not loaded, or one a type whose chain the index does not hold may declare. A static that is no function is none.
@@ -1131,11 +1156,7 @@ final class CallGraph {
 		function importedFunction(name: String, span: Span, currentType: Null<String>): Null<String> {
 			final targets: Array<String> = [];
 			for (s in types.imports.importedStatics(file, name).statics) {
-				final id: Null<String> = memberOnChain(s.owner, s.member) ?? (
-					types.functionOnChain(s.owner, s.member) || !types.chainFullyIndexed(s.owner)
-						? externalNode(types.declaringTypeOf(s.owner, s.member) ?? s.owner, s.member)
-						: null
-				);
+				final id: Null<String> = staticTarget(s.owner, s.member);
 				if (id != null && !targets.contains(id)) targets.push(id);
 			}
 			for (i in 1...targets.length) addEdge(frameId(currentType), targets[i], Ref, null, file, span);
@@ -1419,9 +1440,11 @@ final class CallGraph {
 				final bound: Null<Int> = bindFor(name)[span.from];
 				if (bound != null && bound >= 0)
 					return typeSources[bound] ?? keys.throughInitializer(bound, c -> typeSourceOf(c, currentType));
-				return currentType == null || CallGraphNames.isTypeLike(name)
-					? null
-					: memberTypeThrough(null, currentType, name, currentType);
+				if (CallGraphNames.isTypeLike(name)) return null;
+				// a static an import binds by its own name (`import p.T.*;`): its type, read where it is declared
+				final imported: Null<{ owner: String, member: String }> = importedStatic(name, currentType);
+				if (imported != null) return memberTypeSource(imported.owner, imported.member);
+				return currentType == null ? null : memberTypeThrough(null, currentType, name, currentType);
 			}
 			if (isAccessKind(expr.kind) && name != null && expr.children.length > 0) {
 				// `Type.field`: a static member, read off a type name no local shadows
@@ -1571,7 +1594,13 @@ final class CallGraph {
 			if (innerName == null) return null;
 			if (inner.kind == identKind) {
 				final target: Null<String> = identTarget(innerName, inner.span, currentType);
-				return target == null ? null : { target: target, receiverSource: null, onType: currentType };
+				if (target != null) return { target: target, receiverSource: null, onType: currentType };
+				// a static function an import binds by its own name, called bare
+				final imported: Null<{ owner: String, member: String }> = unboundIdent(inner)
+					? importedStatic(innerName, currentType)
+					: null;
+				final made: Null<String> = imported == null ? null : staticTarget(imported.owner, imported.member);
+				return imported == null || made == null ? null : { target: made, receiverSource: null, onType: imported.owner };
 			}
 			if (!isAccessKind(inner.kind) || inner.children.length == 0) return null;
 			final innerRecv: Null<Receiver> = receiverType(inner.children[0], currentType, innerName);
