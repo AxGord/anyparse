@@ -2330,3 +2330,59 @@ decided the question; it may not become a record of runs.
   65/102 (today's default, named as before). Fixtures: lost 0, five round4/f11b holds re-keyed `Mutex.acquire` -> `C._m`
   (each stores `new Blocking()`). Rule time +1.2% (TM 5.76 -> 5.83 s). The boundary is the one every reflective write
   already has: a write inside library code is not seen at all — branch `feat/ts-precision-6`
+- R4 F1 (`round7/k2/reassign*`, `call-default`, `k2b/reassign-caller`): K2 followed a parameter to what its callers hand
+  it and never looked at the function's own writes, so `assign(o, k, v:Dynamic) { if (v == null) v = lock; ... }` called
+  with `null` was kept off every lock member. `ReflectiveValues.writesOf` walks the declaring function (closures and
+  local functions included) for every write whose target BINDS to the parameter (`resolveBindingFrom`, so a shadowing
+  closure parameter is not it): `=` / `??=` add their right side as one more source, an operator write
+  (`RefShape.operatorWriteKinds`: compound assignments but `??=`, increments, decrements) stores a value of the target's
+  own declared type, none for a catch-all one (an operator on `Dynamic` makes a number, a string or a boolean — so the
+  reviewer's `v++` control stays kept), and any other write shape (a `#if` region as the value) makes the parameter
+  Unknown. Chosen over "any write -> Unknown" (the reviewer's first option) because it keeps the literal-reassigned and
+  increment controls precise at no soundness cost — branch `feat/ts-precision-6`
+- R4 F2 (`round7/k2/struct-*typedef`, `k2b/*struct*`): `enumType` asked `CallGraphTypes.holdsNoFunction`, which is true
+  for every typedef of an anonymous structure, so a value typed by `typedef Lockable = { function acquire():Void; }`,
+  `{}` or `{ > Base, … }` "held no lock" — but structural typing admits any object with the fields. The question is the
+  declaration KIND: `TypeMetaFacts.isEnum` (every declaration of the type is a `runtimeTaggedTypeKinds` one); a
+  structure typedef or an abstract falls through to "may hold" — branch `feat/ts-precision-6`
+- R4 F3 (`round7/k2/typeparam-shadow`): the typer's declared name was taken at face value, so `v:Other` inside
+  `class Box<Other>` was typed as the project class `Other`. A written type whose outer name is a type parameter in
+  scope at the value — the enclosing types' and functions' (`TypeParamTable.inScopeAt`, off
+  `TypeInfoProvider.typeParamNames`; a type's keyed by its name node, a function's by its own start) — is Unknown, for a
+  stored value and an operator write alike. A member read off another type's value (`b.v` with `b:Box<Mutex>`) was
+  checked and is already right: the typer answers the substituted type or nothing — branch `feat/ts-precision-6`
+- R4 F4 (`round7/k2/cast-local`), decided by the positive-whitelist policy: a declared type an unchecked value reached
+  is a claim the compiler never checked, so it is no exclusion. `ReflectiveValues.claims` walks the held files once on
+  first demand: a local or parameter (by binding) and a field (by NAME, whoever declares it) whose initializer or any
+  write holds an unchecked `cast` or an `untyped` anywhere, or is itself declared `Dynamic` / `Any` (which the compiler
+  lets into a variable of any type — the same lie without a cast), makes a read of it Unknown. A checked `cast(e, T)` is
+  trusted. NOT covered, same class, left as reported: a typed PARAMETER whose callers pass an unchecked or `Dynamic`
+  value, and a function whose declared return type is fed one — following those means the arguments and returns of
+  every typed value, i.e. a typer, not a list. TM: no row moves (no unplaced reflective write on the 3 trees) — branch
+  `feat/ts-precision-6`
+- R4 F5 (`round7/k1/tparam-shadow-*`): K1's `keyedIn` keyed a TYPE PARAMETER through its file's imports (`import
+  sys.thread.Lock; class Box<Lock> { var v:Lock; }` -> `sys.thread.Lock`), so the receiver's type argument
+  (`Box<utils.Lock>`) was never substituted and the call went to the std `wait` — a false A warning where the base had
+  the right edge. Haxe: a type parameter shadows every import. `keyedIn` / `keyedInFiles` / `keyingsIn` take the names
+  to leave as written: the owner's parameters for a member type, the owner's and the function's for a return or a
+  parameter type (`CallGraph.readIn(files, written, owner, fn)`, `paramTypesOf`), the linking type's for a supertype's
+  arguments, every type parameter in scope at a declaration of the file (`CallGraphKeys.unkeyedAt`), and
+  `ReflectiveValues.memberTypeOf` leaves a member declared of one untyped (may hold). The argument is keyed where it is
+  written, as K1 already did — branch `feat/ts-precision-6`
+- R4 F6 (`round7/k1/two-decls-type`): K1 typed a member two declarations key apart (`mac/A.hx` `import
+  sys.thread.Lock`, `web/A.hx` `import utils.Lock`, one per build) as NEITHER — silently, the unsound direction.
+  `CallGraphKeys.keyingsIn` returns every keying; `readIn` types the receiver by the first and records what each other
+  keying names in its place (`firstKeying` -> `keyedApart`), and the dispatch runs those types too (`apartFrom`), as it
+  runs alternate types. Readers that need ONE type (`ReflectiveValues.memberTypeOf`, `paramTypesOf`) keep "none" via
+  `keyedInFiles`. The return-type guard that turned a keyed-apart return into "no type" (and its arm
+  `M-TS-DECL-RETURN-AGREE`) is gone; `testTwoDeclarationsThatKeyAMemberTypeApartTypeItAsNeither` became
+  `testTwoDeclarationsKeyingAMemberApartDispatchOnBoth`. Left as is: two declarations whose RETURN texts differ are
+  settled to no fact (`CallGraph.settle`), still "neither" — branch `feat/ts-precision-6`
+- R4 F7 (K1 coverage holes, both engines silent: static imports, cross-module typedef chains, a project file in a library
+  package, `@:forward` abstracts, iteration, function-typed fields, function type parameters, lambda parameters typed by
+  the callee, a member declared twice under `#if`): backlog, not taken in K3.
+- R4 K3 MEASURED (engine of the K3 tip vs a3c2b416): TM 1d1ba147 / f81c2049 / bd943dac reports byte-identical (rows
+  `153 146 102 … 0.70 102/102`, 5/5, 9/9), `round6/frag` 102/102; all rules byte-identical on the 3 TM trees and
+  anyparse src; fixtures r1..r5, round2, round4..round7 (499 runs): lost 2 = the F5 false positives, gained 27 = the 14
+  F1..F6 targets, 5 info-only changes; rule time 5.56 -> 5.63 s (+1.3%), full lint 23.90 -> 23.17 s (noise) — branch
+  `feat/ts-precision-6`
