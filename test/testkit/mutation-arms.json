@@ -19457,14 +19457,14 @@
 			"name": "M-TS-STORED-CATCH-ALL",
 			"type": "anyparse.check.ReflectiveValues",
 			"method": "valueTypes",
-			"find": "if (written != null && !(_shape.catchAllTypeNames ?? []).contains(CallGraphNames.lastSegments(written, 1))) {",
-			"replace": "if (written != null) {",
+			"find": "if (written != null && !catchAll(written)) return typedAs(file, written);",
+			"replace": "if (written != null) return typedAs(file, written);",
 			"note": "a value declared `Dynamic` or `Any` is taken at its word, so a parameter so declared is never followed into its calls (R3 M4)"
 		},
 		{
 			"name": "M-TS-STORED-TYPED",
 			"type": "anyparse.check.ReflectiveValues",
-			"method": "valueTypes",
+			"method": "typedAs",
 			"find": "return _complete || named.foreach(t -> _basic.contains(t)) ? named : null;",
 			"replace": "return null;",
 			"note": "a stored value of a declared type counts as any object (R3 M4)"
@@ -19472,7 +19472,7 @@
 		{
 			"name": "M-TS-STORED-COMPLETE",
 			"type": "anyparse.check.ReflectiveValues",
-			"method": "valueTypes",
+			"method": "typedAs",
 			"find": "return _complete || named.foreach(t -> _basic.contains(t)) ? named : null;",
 			"replace": "return named;",
 			"note": "(soundness) a declared class bounds what a value is in a run that may not see every subtype of it (R3 M4)"
@@ -19556,6 +19556,38 @@
 			"find": "return kinds.length > 0 && kinds.foreach(k -> _enumKinds.contains(k));",
 			"replace": "return kinds.length > 0 && holdsNoFunction(typeName) && !isInterface(typeName) && !meta.isClass(typeName);",
 			"note": "a typedef of a structure is taken for an enum, which no lock is (R4 F2)"
+		},
+		{
+			"name": "M-TS-STORED-WRITTEN",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "parameterTypes",
+			"find": "final writes: Null<Writes> = writesOf(file, id, tree, decl, name, from, typer);",
+			"replace": "final writes: Null<Writes> = { values: [], types: [] };",
+			"note": "a parameter is followed into its calls whatever its function writes to it (R4 F1)"
+		},
+		{
+			"name": "M-TS-STORED-WRITE-VALUE",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "writesOf",
+			"find": "out.values.push(node.children[1]);",
+			"replace": "",
+			"note": "what an `=` or a `??=` to a parameter stores is not followed (R4 F1)"
+		},
+		{
+			"name": "M-TS-STORED-WRITE-OPERATOR",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "writesOf",
+			"find": "final types: Null<Array<String>> = written == null ? null : catchAll(written) ? [] : typedAs(file, written);",
+			"replace": "final types: Null<Array<String>> = null;",
+			"note": "a write by an operator to a parameter may store anything (R4 F1)"
+		},
+		{
+			"name": "M-TS-STORED-WRITE-OTHER",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "writesOf",
+			"find": "unknown = true",
+			"replace": "unknown = false",
+			"note": "a write of another shape to a parameter stores nothing (R4 F1)"
 		},
 		{
 			"name": "M-TS-STORED-UNRELATED",

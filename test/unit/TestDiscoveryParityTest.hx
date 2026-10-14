@@ -2375,6 +2375,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-TS-UNSEALED-NOTE,M-TS-UNSEALED-HOLDS,M-TS-UNSEALED-PRECONDITIONS,M-TS-UNSEALED-TAKE,M-TS-UNSEALED-THROW',
 			'unit.check.ThreadSafetyReflectiveSealTest#testAParameterIsFollowedOnlyWhereEveryCallIsSeen :: control :: '
 				+ 'M-TS-STORED-CALLERS,M-TS-STORED-HOLDERS,M-TS-STORED-SPELLED,M-TS-STORED-GLOB,M-TS-STORED-SKIPPED,M-TS-STORED-REF',
+			'unit.check.ThreadSafetyReflectiveSealTest#testAParameterItsFunctionWritesHoldsWhatEveryWriteStores :: control :: '
+				+ 'M-TS-STORED-WRITTEN,M-TS-STORED-WRITE-VALUE,M-TS-STORED-WRITE-OPERATOR,M-TS-STORED-WRITE-OTHER',
 			'unit.check.ThreadSafetyReflectiveSealTest#testAStructureTypedefMayHoldALock :: control :: M-TS-ENUM-KIND',
 			'unit.check.ThreadSafetyReflectiveSealTest#testATypeParameterReceiverIsBoundedByItsInstantiations :: control :: '
 				+ 'M-TS-PLACE-INSTANTIATIONS,M-TS-PLACE-COMPLETE,M-TS-PLACE-RAW-LINK,M-TS-PLACE-FREE-SUB,M-TS-PLACE-NEVER-MADE,'
@@ -6498,6 +6500,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-STORED-BASIC',
 			'M-TS-STORED-ENUM',
 			'M-TS-ENUM-KIND',
+			'M-TS-STORED-WRITTEN',
+			'M-TS-STORED-WRITE-VALUE',
+			'M-TS-STORED-WRITE-OPERATOR',
+			'M-TS-STORED-WRITE-OTHER',
 			'M-TS-STORED-UNRELATED',
 			'M-TS-STORED-RELATED',
 			'M-TS-STORED-MEMBER-TYPE',

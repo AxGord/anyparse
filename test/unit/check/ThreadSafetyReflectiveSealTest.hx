@@ -402,6 +402,42 @@ class ThreadSafetyReflectiveSealTest extends Test {
 		#end
 	}
 
+	/**
+	 * A parameter its function writes holds what each write stores as well as what the calls hand it: an `=` or a `??=`
+	 * adds its right side — in a closure too, and filling an optional parameter left out — while a write by an operator
+	 * stores a value of the parameter's own type, a number for a `Dynamic` one (review R4 F1).
+	 */
+	@:pin('control') @:killer('M-TS-STORED-WRITTEN') @:killer('M-TS-STORED-WRITE-VALUE') @:killer('M-TS-STORED-WRITE-OPERATOR')
+	@:killer('M-TS-STORED-WRITE-OTHER')
+	public function testAParameterItsFunctionWritesHoldsWhatEveryWriteStores(): Void {
+		#if (sys || nodejs)
+		function takes(body: String, use: String): Int {
+			return helperTakes(
+				SEALED, 'public static function re(o:Dynamic, k:String, ?v:Dynamic):Void { $body Reflect.setField(o, k, v); }', use
+			);
+		}
+		Assert.equals(1, takes('if (v == null) v = new Mutex();', 'Help.re(d, "x", null);'), 'an assignment');
+		Assert.equals(1, takes('v ??= new Mutex();', 'Help.re(d, "x", null);'), 'a null-coalescing assignment');
+		Assert.equals(1, takes('final f = () -> v = new Mutex(); f();', 'Help.re(d, "x", null);'), 'a closure assigns it');
+		Assert.equals(1, takes('if (v == null) v = new Mutex();', 'Help.re(d, "x");'), 'an optional parameter filled in the body');
+		Assert.equals(1, takes('v = #if sys new Mutex(); #else null; #end', 'Help.re(d, "x", 1);'), 'a write of another shape');
+		Assert.equals(
+			1,
+			helperTakes(
+				SEALED, 'public static function relay(o:Dynamic, k:String, v:Dynamic):Void { v = new Mutex(); assign(o, k, v); }',
+				'Help.relay(d, "x", null);'
+			),
+			'a relay assigns its own parameter'
+		);
+		Assert.equals(0, takes('v = "text";', 'Help.re(d, "x", null);'), 'what the write stores is followed');
+		Assert.equals(0, takes('v++;', 'Help.re(d, "x", 1);'), 'an increment of a Dynamic');
+		Assert.equals(0, takes('v += 1;', 'Help.re(d, "x", 1);'), 'a compound assignment of a Dynamic');
+		Assert.equals(0, takes('final f = (v:Dynamic) -> v = new Mutex();', 'Help.re(d, "x", 1);'), 'a closure parameter shadowing it');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
 	/** `Help.put`, handing an optional parameter on to `Help.assign`. */
 	private static inline final PUT: String = 'public static function put(o:Dynamic, k:String, ?v:Dynamic):Void assign(o, k, v);';

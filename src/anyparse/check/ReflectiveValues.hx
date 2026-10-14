@@ -40,6 +40,15 @@ typedef Entries = {
 }
 
 /**
+ * What a function writes to one of its parameters (`ReflectiveValues.writesOf`): the values its `=` and `??=` writes store,
+ * and the types the values its operator writes store may be.
+ */
+typedef Writes = {
+	final values: Array<QueryNode>;
+	final types: Array<String>;
+}
+
+/**
  * What a reflective write on a value the run places on no class STORES, and whether that may be a lock of the type a lock
  * member is declared of (`FieldWrites.reflectiveWritersOf`). Such a write may store its value in any member of any object;
  * what keeps a member's lock its own is that the value provably holds no lock of the member's type, read off what the value
@@ -174,11 +183,22 @@ final class ReflectiveValues {
 		final literal: Null<String> = (_shape.literalTypeNames ?? [])[value.kind];
 		if (literal != null) return [literal];
 		final written: Null<String> = value.kind == _shape.newExprKind ? value.name : typer(file, fn, value);
-		if (written != null && !(_shape.catchAllTypeNames ?? []).contains(CallGraphNames.lastSegments(written, 1))) {
-			final named: Array<String> = _reach.namedTypes(file, written);
-			return _complete || named.foreach(t -> _basic.contains(t)) ? named : null;
-		}
+		if (written != null && !catchAll(written)) return typedAs(file, written);
 		return value.kind == _shape.identKind ? parameterTypes(file, value, typer, visiting) : null;
+	}
+
+	/** Whether `written` names a catch-all type (`Dynamic`, `Any`), which any value is of. */
+	private function catchAll(written: String): Bool {
+		return (_shape.catchAllTypeNames ?? []).contains(CallGraphNames.lastSegments(written, 1));
+	}
+
+	/**
+	 * The types a value declared `written` in `file` may be (`ReflectiveReach.namedTypes`), in a run that sees every type of
+	 * the project — a literal's type in any run: no subtype of one is a lock. Null for any other.
+	 */
+	private function typedAs(file: String, written: String): Null<Array<String>> {
+		final named: Array<String> = _reach.namedTypes(file, written);
+		return _complete || named.foreach(t -> _basic.contains(t)) ? named : null;
 	}
 
 	/**
@@ -198,7 +218,7 @@ final class ReflectiveValues {
 		final from: Null<Int> = TypeResolver.resolveBindingFrom(name, at, tree, _shape);
 		final param: Null<QueryNode> = from == null ? null : holderOf(tree, from, n -> paramKinds.contains(n.kind));
 		final start: Null<Int> = param?.span?.from;
-		if (param == null || start == null) return null;
+		if (param == null || start == null || from == null) return null;
 		final key: String = '$file:$start';
 		if (_parameters.exists(key)) return _parameters[key];
 		if (visiting.contains(key) || visiting.length >= MAX_DEPTH) return null;
@@ -208,19 +228,59 @@ final class ReflectiveValues {
 		if (decl == null || found == null) return null;
 		final id: String = found;
 		if (id.indexOf('#') >= 0 || !callersSeen(id) || obtainable(id)) return null;
-		final answer: Null<Array<String>> = argumentTypes(id, decl, param, typer, visiting.concat([key]));
+		final writes: Null<Writes> = writesOf(file, id, tree, decl, name, from, typer);
+		final answer: Null<Array<String>> = writes == null ? null : argumentTypes(id, decl, param, writes, typer, visiting.concat([key]));
 		_parameters[key] = answer;
 		return answer;
+	}
+
+	/**
+	 * What the function `id`, declared by `decl` in `file`, writes to its parameter `name` bound at `from` in `tree` —
+	 * closures and local functions included, each write target resolved to its binding (`TypeResolver.resolveBindingFrom`):
+	 * the right side of every `=` and `??=` as a value, and for a write by an operator (`operatorWriteKinds`) the types of
+	 * the target's declared type, none for a catch-all one (an operator on `Dynamic` makes a number, a string or a boolean).
+	 * Null when a write of any other shape binds it, or an operator writes it with a type out of sight: it may store anything.
+	 */
+	private function writesOf(
+		file: String, id: String, tree: QueryNode, decl: QueryNode, name: String, from: Int,
+		typer: (String, Null<String>, QueryNode) -> Null<String>
+	): Null<Writes> {
+		final out: Writes = { values: [], types: [] };
+		final writeKinds: Array<String> = _shape.writeParentKinds;
+		final operators: Array<String> = _shape.operatorWriteKinds ?? [];
+		var unknown: Bool = false;
+		function walk(node: QueryNode): Void {
+			for (c in node.children) walk(c);
+			if (unknown || !writeKinds.contains(node.kind) || node.children.length == 0) return;
+			final target: QueryNode = BoolExprShape.unwrapParens(node.children[0], _shape.parenKind);
+			final at: Null<Span> = target.span;
+			if (target.kind != _shape.identKind || target.name != name || at == null) return;
+			if (TypeResolver.resolveBindingFrom(name, at, tree, _shape) != from) return;
+			if ((node.kind == _shape.assignKind || node.kind == _shape.nullCoalAssignKind) && node.children.length == 2) {
+				out.values.push(node.children[1]);
+				return;
+			}
+			final written: Null<String> = operators.contains(node.kind) ? typer(file, id, target) : null;
+			final types: Null<Array<String>> = written == null ? null : catchAll(written) ? [] : typedAs(file, written);
+			if (types == null)
+				unknown = true
+			else
+				for (t in types) if (!out.types.contains(t)) out.types.push(t);
+		}
+		walk(decl);
+		return unknown ? null : out;
 	}
 
 	/**
 	 * The types of what each call of the function `id`, declared by `decl`, hands its parameter `param`, and of the
 	 * parameter's default: the argument at its index — or, when an optional parameter comes before it, any argument up to
 	 * it, a skipped one moving the rest along — of every call the graph holds (`argumentsAt`). Null when a call of it is one
-	 * the tree holds no call at (an accessor), or a rest parameter comes up to it.
+	 * the tree holds no call at (an accessor), or a rest parameter comes up to it. What the function itself writes to the
+	 * parameter (`writes`, `writesOf`) counts as well.
 	 */
 	private function argumentTypes(
-		id: String, decl: QueryNode, param: QueryNode, typer: (String, Null<String>, QueryNode) -> Null<String>, visiting: Array<String>
+		id: String, decl: QueryNode, param: QueryNode, writes: Writes, typer: (String, Null<String>, QueryNode) -> Null<String>,
+		visiting: Array<String>
 	): Null<Array<String>> {
 		final params: Array<QueryNode> = [for (c in decl.children) if ((_shape.paramKinds ?? []).contains(c.kind)) c];
 		final index: Int = params.indexOf(param);
@@ -229,16 +289,18 @@ final class ReflectiveValues {
 		final fixed: Bool = params.slice(0, index)
 			.foreach(p -> p.kind != _shape.optionalParamKind && !p.children.exists(c -> !annotations.contains(c.kind)));
 		final fallback: Null<QueryNode> = param.children.find(c -> !annotations.contains(c.kind));
+		final own: String = _graph.node(id)?.file ?? '';
 		final sources: Array<{ file: String, fn: Null<String>, node: QueryNode }> = fallback == null
 			? []
-			: [{ file: _graph.node(id)?.file ?? '', fn: id, node: fallback }];
+			: [{ file: own, fn: id, node: fallback }];
+		for (v in writes.values) sources.push({ file: own, fn: id, node: v });
 		for (e in _graph.inEdges(id)) if (e.kind.isInvocation()) {
 			final args: Null<Array<QueryNode>> = argumentsAt(e, id);
 			if (args == null) return null;
 			final handed: Array<QueryNode> = fixed ? args.slice(index, index + 1) : args.slice(0, index + 1);
 			for (a in handed) sources.push({ file: e.file, fn: e.from, node: a });
 		}
-		final out: Array<String> = [];
+		final out: Array<String> = writes.types.copy();
 		for (s in sources) {
 			final types: Null<Array<String>> = valueTypes(s.file, s.fn, s.node, typer, visiting);
 			if (types == null) return null;
