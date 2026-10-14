@@ -61,11 +61,11 @@ final class TypeParamTable {
 	 * The type arguments `viewType`'s `extends` / `implements` chain passes to `owner`'s parameters, written in
 	 * `viewType`'s own terms (`class D extends B<W>` passes `W`, `class M<X> extends B<X>` passes `X`), or null
 	 * when `owner` is not on the chain or a link writes no arguments. With `keyIn` handed, each argument a link writes is
-	 * first read through it with the file that wrote it (`CallGraphKeys.keyedIn`): a name means what that file's imports
-	 * bind it to.
+	 * first read through it with the file that wrote it and the type parameters of the type writing the link
+	 * (`CallGraphKeys.keyedIn`): a name means what that file's imports bind it to, unless one of those parameters shadows it.
 	 */
 	public function argumentsFor(
-		owner: String, viewType: String, typeSyntax: TypeSyntaxReader, ?keyIn: (String, String) -> String
+		owner: String, viewType: String, typeSyntax: TypeSyntaxReader, ?keyIn: (String, String, Array<String>) -> String
 	): Null<Array<String>> {
 		return argumentsVia(owner, viewType, [], typeSyntax, keyIn);
 	}
@@ -82,15 +82,17 @@ final class TypeParamTable {
 	}
 
 	private function argumentsVia(
-		owner: String, typeName: String, seen: Array<String>, typeSyntax: TypeSyntaxReader, keyIn: Null<(String, String) -> String>
+		owner: String, typeName: String, seen: Array<String>, typeSyntax: TypeSyntaxReader,
+		keyIn: Null<(String, String, Array<String>) -> String>
 	): Null<Array<String>> {
 		if (seen.contains(typeName)) return null;
 		seen.push(typeName);
+		final own: Array<String> = typeParamsOf(typeName);
 		for (link in _supersWritten[typeName] ?? []) {
 			final written: String = link.written;
 			final outer: Null<String> = NominalTypes.outerNominalOf(written, typeSyntax);
 			final args: Array<String> = [
-				for (a in NominalTypes.typeArgumentSourcesOf(written, typeSyntax) ?? []) keyIn == null ? a : keyIn(link.file, a)
+				for (a in NominalTypes.typeArgumentSourcesOf(written, typeSyntax) ?? []) keyIn == null ? a : keyIn(link.file, a, own)
 			];
 			if (outer == owner) return args;
 			final up: Null<Array<String>> = outer == null ? null : argumentsVia(owner, outer, seen, typeSyntax, keyIn);

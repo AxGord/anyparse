@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.CallGraph.FnDeclaration;
 import anyparse.query.CallGraph.FnNode;
+import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
@@ -32,27 +33,62 @@ final class CallGraphKeys {
 	private final _file: String;
 	private final _typeSyntax: TypeSyntaxReader;
 
-	/** The keys of the declarations `provider` reads in `source`, the text of `file` (none without a provider). */
+	/** The file's tree, for the type parameters in scope at a declaration (`unkeyedAt`); null when not handed. */
+	private final _tree: Null<QueryNode>;
+
+	/** The grammar's function kinds, whose type parameters are in scope inside them. */
+	private final _functionKinds: Array<String>;
+
+	/** Each declaration of the file declaring type parameters (by its key, `TypeInfoProvider.typeParamNames`) -> their names. */
+	private final _typeParams: Map<Int, Array<String>>;
+
+	/** Every type-parameter name a declaration of the file declares. */
+	private final _paramNames: Array<String> = [];
+
+	/**
+	 * The keys of the declarations `provider` reads in `source`, the text of `file` (none without a provider), `tree` its
+	 * tree: a name a type parameter in scope at the declaration (`TypeParamTable.inScopeAt`, the functions among
+	 * `functionKinds`) shadows every import and stays as written.
+	 */
 	public function new(
-		imports: CallGraphImports, file: String, typeSyntax: TypeSyntaxReader, provider: Null<TypeInfoProvider>, source: String
+		imports: CallGraphImports, file: String, typeSyntax: TypeSyntaxReader, provider: Null<TypeInfoProvider>, source: String,
+		?tree: QueryNode, ?functionKinds: Array<String>
 	) {
 		_imports = imports;
 		_file = file;
 		_typeSyntax = typeSyntax;
+		_tree = tree;
+		_functionKinds = functionKinds ?? [];
+		_typeParams = provider == null ? [] : provider.typeParamNames(source);
+		for (names in _typeParams) for (n in names) if (!_paramNames.contains(n)) _paramNames.push(n);
 		final simpleTypes: Map<Int, String> = provider == null ? [] : provider.declaredTypes(source);
 		final writtenSources: Map<Int, String> = provider == null ? [] : provider.declaredTypeSources(source);
 		for (at => simple in simpleTypes) {
 			final written: Null<String> = outerPathOf(writtenSources[at]);
 			declaredTypes[at] = written == null || simple == 'Null' || SourceText.lastSegment(written) != simple
+				|| unkeyedAt(at, written).contains(written)
 				? simple
 				: imports.typeOf(file, written);
 		}
-		for (at => written in writtenSources) typeSources[at] = keyed(written);
+		for (at => written in writtenSources) typeSources[at] = keyed(written, at);
 	}
 
-	/** `typeSource`, written in the file, with every type it names spelled as the graph keys it (`keyedIn`). */
-	public inline function keyed(typeSource: String): String {
-		return keyedIn(_imports, _file, _typeSyntax, typeSource);
+	/**
+	 * `typeSource`, written in the file at the offset `at`, with every type it names spelled as the graph keys it (`keyedIn`),
+	 * a type parameter in scope there (`unkeyedAt`) left as written.
+	 */
+	public function keyed(typeSource: String, at: Int): String {
+		return keyedIn(_imports, _file, _typeSyntax, typeSource, unkeyedAt(at, typeSource));
+	}
+
+	/**
+	 * The type parameters in scope at the offset `at` of the file (`TypeParamTable.inScopeAt`), asked only when `written`
+	 * mentions a name some declaration of the file declares as one.
+	 */
+	private function unkeyedAt(at: Int, written: String): Array<String> {
+		final tree: Null<QueryNode> = _tree;
+		if (tree == null || !CallGraphNames.mentionsTypeName(written, _paramNames, _typeSyntax)) return [];
+		return TypeParamTable.inScopeAt(tree, at, _typeParams, _functionKinds);
 	}
 
 	/**
@@ -66,7 +102,7 @@ final class CallGraphKeys {
 		if (at != null && init != null && localDeclKinds.contains(tree.kind) && !typeSources.exists(at.from)) {
 			final made: Null<String> = init.kind == newExprKind ? init.name : null;
 			if (made != null) {
-				typeSources[at.from] = keyed(made);
+				typeSources[at.from] = keyed(made, at.from);
 				declaredTypes[at.from] = _imports.typeOf(_file, made);
 			} else if (init.kind == callKind) {
 				callInitializers[at.from] = init;
@@ -109,9 +145,13 @@ final class CallGraphKeys {
 	/**
 	 * `typeSource`, written in `file`, with every type it names — the outer one, each argument, parameter, result and
 	 * field type — spelled as the graph keys it there (`CallGraphImports.typeOf`): a name is read through the imports of
-	 * the file that WROTE it, so the type a declaration names stays that type wherever its value is read.
+	 * the file that WROTE it, so the type a declaration names stays that type wherever its value is read. A name among
+	 * `unkeyed` — a type parameter in scope where it is written, which shadows every import — stays as written: it is
+	 * substituted by the type argument given where the value is read, keyed there.
 	 */
-	public static function keyedIn(imports: CallGraphImports, file: String, typeSyntax: TypeSyntaxReader, typeSource: String): String {
+	public static function keyedIn(
+		imports: CallGraphImports, file: String, typeSyntax: TypeSyntaxReader, typeSource: String, ?unkeyed: Array<String>
+	): String {
 		final t: Null<TypeSyntax> = typeSyntax(typeSource);
 		if (t == null) return typeSource;
 		final out: StringBuf = new StringBuf();
@@ -119,7 +159,7 @@ final class CallGraphKeys {
 		for (d in t.descendants()) {
 			final from: Int = d.span.from;
 			switch d.shape {
-				case Nominal(path, _) if (from >= at && typeSource.substr(from, path.length) == path):
+				case Nominal(path, _) if (from >= at && typeSource.substr(from, path.length) == path && !(unkeyed ?? []).contains(path)):
 					final key: String = imports.typeOf(file, path);
 					if (key != path) {
 						out.add(typeSource.substring(at, from));
@@ -153,18 +193,18 @@ final class CallGraphKeys {
 	}
 
 	/**
-	 * `written`, a type the declarations in `files` write, read through the imports of the file that wrote it (`keyedIn`):
-	 * null when two of them key it apart — a type two declarations name differently is neither — and `written` as it stands
-	 * when no file is known.
+	 * `written`, a type the declarations in `files` write, read through the imports of the file that wrote it (`keyedIn`),
+	 * the names among `unkeyed` (the declaring type's or member's type parameters) as written: null when two of them key
+	 * it apart — a type two declarations name differently is neither — and `written` as it stands when no file is known.
 	 */
 	public static function keyedInFiles(
-		imports: CallGraphImports, typeSyntax: TypeSyntaxReader, files: Array<String>, written: Null<String>
+		imports: CallGraphImports, typeSyntax: TypeSyntaxReader, files: Array<String>, written: Null<String>, ?unkeyed: Array<String>
 	): Null<String> {
 		if (written == null) return null;
 		final source: String = written;
 		final keyed: Array<String> = [];
 		for (f in files) {
-			final key: String = keyedIn(imports, f, typeSyntax, source);
+			final key: String = keyedIn(imports, f, typeSyntax, source, unkeyed);
 			if (!keyed.contains(key)) keyed.push(key);
 		}
 		return switch keyed.length {
@@ -193,13 +233,15 @@ final class CallGraphKeys {
 			final type: Null<String> = n.typeName;
 			final name: Null<String> = n.name;
 			if (type == null || name == null) return null;
-			final files: Array<String> = imports.memberFilesOf(g.types.declaringTypeOf(type, name) ?? type, name);
-			return [
-				keyedInFiles(imports, typeSyntax, files, g.types.memberOnChain(type, name)?.firstParamTypeSource)
-			];
+			final owner: String = g.types.declaringTypeOf(type, name) ?? type;
+			final files: Array<String> = imports.memberFilesOf(owner, name);
+			final member: Null<MemberInfo> = g.types.memberOnChain(type, name);
+			final unkeyed: Array<String> = g.types.generics.typeParamsOf(owner).concat(member?.typeParamNames ?? []);
+			return [keyedInFiles(imports, typeSyntax, files, member?.firstParamTypeSource, unkeyed)];
 		}
 		var out: Null<Array<Null<String>>> = null;
 		var rest: Bool = false;
+		final unkeyed: Array<String> = g.types.generics.typeParamsOf(n.typeName ?? '').concat(g._facts.typeParams[id] ?? []);
 		for (d in declared) {
 			final entry: Null<{ tree: QueryNode, source: String }> = g._entries[CallGraphNames.normalizePath(d.file)];
 			final read: Null<{ params: Array<Null<String>>, rest: Bool }> = entry == null
@@ -207,7 +249,7 @@ final class CallGraphKeys {
 				: CallGraphNames.declaredParams(entry.tree, entry.source, d.span.from, g._shape, g._provider);
 			if (read == null) return null;
 			final written: Array<Null<String>> = [
-				for (p in read.params) p == null ? null : keyedIn(imports, d.file, typeSyntax, p)
+				for (p in read.params) p == null ? null : keyedIn(imports, d.file, typeSyntax, p, unkeyed)
 			];
 			final held: Null<Array<Null<String>>> = out;
 			if (held == null) {

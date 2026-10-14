@@ -20523,15 +20523,15 @@
 			"name": "M-TS-DECL-MEMBER-FILE",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "readIn(types.imports.memberFilesOf(owner, member), types.memberOnChain(owner, member)?.typeSource)",
-			"replace": "types.memberOnChain(owner, member)?.typeSource",
+			"find": "types.imports.memberFilesOf(owner, member), types.memberOnChain(owner, member)?.typeSource,",
+			"replace": "[], types.memberOnChain(owner, member)?.typeSource,",
 			"note": "a member's written type is read through the imports of the file reading it, not the one declaring it (review R3 M1)"
 		},
 		{
 			"name": "M-TS-DECL-RETURN-FILE",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "return readIn([for (d in declarationsOf(target)) d.file], _facts.returnSources[target]);",
+			"find": "return readIn([for (d in declarationsOf(target)) d.file], _facts.returnSources[target], unkeyed);",
 			"replace": "return _facts.returnSources[target];",
 			"note": "a function's written return type is read through the imports of the file calling it (review R3 M1)"
 		},
@@ -20579,15 +20579,46 @@
 			"name": "M-TS-DECL-SUPER-ARGS",
 			"type": "anyparse.query.TypeParamTable",
 			"method": "argumentsVia",
-			"find": "keyIn == null ? a : keyIn(link.file, a)",
+			"find": "keyIn == null ? a : keyIn(link.file, a, own)",
 			"replace": "a",
 			"note": "a type argument a subclass passes is read through the imports of the file reading the value"
+		},
+		{
+			"name": "M-TS-KEY-TYPE-PARAM",
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "keyedIn",
+			"find": " && !(unkeyed ?? []).contains(path)",
+			"replace": "",
+			"note": "a type parameter is keyed through an import of its file, which it shadows (R4 F5)"
+		},
+		{
+			"name": "M-TS-KEY-MEMBER-PARAMS",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "types.imports.memberFilesOf(owner, member), types.memberOnChain(owner, member)?.typeSource,\ntypes.generics.typeParamsOf(owner)",
+			"replace": "types.imports.memberFilesOf(owner, member), types.memberOnChain(owner, member)?.typeSource,\n[]",
+			"note": "a member's type is keyed without its owner's type parameters (R4 F5)"
+		},
+		{
+			"name": "M-TS-KEY-RETURN-PARAMS",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "final unkeyed: Array<String> = types.generics.typeParamsOf(nodes[target]?.typeName ?? '')\n.concat(_facts.typeParams[target] ?? []);",
+			"replace": "final unkeyed: Array<String> = [];",
+			"note": "a return type is keyed without its owner's and function's type parameters (R4 F5)"
+		},
+		{
+			"name": "M-TS-KEY-SCOPE-PARAMS",
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "unkeyedAt",
+			"force": "[]",
+			"note": "a declaration of a file is keyed without the type parameters in scope at it (R4 F5)"
 		},
 		{
 			"name": "M-TS-DECL-PARAM-FILE",
 			"type": "anyparse.query.CallGraphKeys",
 			"method": "paramTypesOf",
-			"find": "p == null ? null : keyedIn(imports, d.file, typeSyntax, p)",
+			"find": "p == null ? null : keyedIn(imports, d.file, typeSyntax, p, unkeyed)",
 			"replace": "p",
 			"note": "a parameter's written type is read through the imports of the file passing the argument"
 		},

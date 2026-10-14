@@ -1044,6 +1044,46 @@ class CallGraphTest extends Test {
 	}
 
 	/**
+	 * A type parameter shadows every import of its file: a member declared of the parameter `Lock` of a type whose file
+	 * imports the std `Lock` is whatever the reader instantiates it with — the project `Lock` written as a path or imported,
+	 * the project `Mutex` — through a field or a return type, and a parameter of the type's own method is
+	 * no import either (review R4 F5).
+	 */
+	@:pin('control') @:killer('M-TS-KEY-TYPE-PARAM') @:killer('M-TS-KEY-MEMBER-PARAMS') @:killer('M-TS-KEY-SCOPE-PARAMS')
+	@:killer('M-TS-KEY-RETURN-PARAMS')
+	public function testATypeParameterIsNeverKeyedThroughAnImport(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final g: CallGraph = graphOf([
+			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
+			'package utils; class Mutex { public function new() {} public function release():Void {} }',
+			'package app; import sys.thread.Lock; class Box<Lock> { public var v:Lock = null; public function new() {}'
+			+ ' public function get():Lock return v; function own(l:Lock):Void l.wait(); }',
+			'package app; import sys.thread.Mutex; class MBox<Mutex> { public var v:Mutex = null; public function new() {} }',
+			'package app; class C { static function path(b:Box<utils.Lock>):Void b.v.wait();'
+			+ ' static function ret(b:Box<utils.Lock>):Void b.get().wait(); }',
+			'package app; import utils.Lock; class I { static function simple(b:Box<Lock>):Void b.v.wait(); }',
+			'package app; import utils.Mutex; class M { static function lib(b:MBox<Mutex>):Void b.v.release(); }'
+		]);
+		function targets(from: String): Array<String> {
+			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+			out.sort(Reflect.compare);
+			return out;
+		}
+		Assert.same(['Lock.wait'], targets('C.path'), 'instantiated with a path');
+		Assert.same(['Box.get', 'Lock.wait'], targets('C.ret'), 'a return type');
+		Assert.same(['Lock.wait'], targets('I.simple'), 'instantiated with an imported name');
+		Assert.same(['Mutex.release'], targets('M.lib'), 'a library name');
+		Assert.equals(0, targets('Box.own').filter(t -> t == 'sys.thread.Lock.wait').length, 'a parameter of the type method');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
 	 * Each type a guarded name may be resolves the call on its own: the std type's method is dispatched even when the project
 	 * namesake declares no such member, or declares it as a field.
 	 */

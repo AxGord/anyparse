@@ -1013,7 +1013,10 @@ final class CallGraph {
 		final source: String = entry.source;
 		final moduleType: String = CallGraphNames.moduleTypeName(file);
 		// the file's declared types as the graph keys them (`CallGraphKeys`): a library type never merges into a project one
-		final keys: CallGraphKeys = new CallGraphKeys(types.imports, file, _plugin.typeSyntax, provider, source);
+		final keys: CallGraphKeys = new CallGraphKeys(
+			types.imports, file, _plugin.typeSyntax, provider, source, tree,
+			(shape.functionKinds ?? []).concat(shape.inlineFunctionKinds ?? [])
+		);
 		keys.typeLocals(tree, localDeclKinds, newExprKind, callKind);
 		// the files whose declarations wrote the types read while typing a receiver (`readIn`), for the types a name there may be
 		final readFrom: Array<String> = [];
@@ -1159,10 +1162,13 @@ final class CallGraph {
 				memberOnChain(currentType, name) ?? (imported ? importedFunction(name, span, currentType) : null);
 		}
 
-		/** `written`, a type the declarations in `files` write, keyed there (`CallGraphKeys.keyedInFiles`); the files join `readFrom`. */
-		function readIn(files: Array<String>, written: Null<String>): Null<String> {
+		/**
+		 * `written`, a type the declarations in `files` write, keyed there (`CallGraphKeys.keyedInFiles`), the type parameters
+		 * `unkeyed` of the declaring type and member as written; the files join `readFrom`.
+		 */
+		function readIn(files: Array<String>, written: Null<String>, unkeyed: Array<String>): Null<String> {
 			for (f in files) if (!readFrom.contains(f)) readFrom.push(f);
-			return CallGraphKeys.keyedInFiles(types.imports, _plugin.typeSyntax, files, written);
+			return CallGraphKeys.keyedInFiles(types.imports, _plugin.typeSyntax, files, written, unkeyed);
 		}
 
 		/** The written `:Type` of `member` on `typeName`'s chain, from the index, read where declared (`readIn`); else the std's. */
@@ -1171,12 +1177,17 @@ final class CallGraph {
 			final owner: Null<String> = types.declaringTypeOf(typeName, member);
 			return owner == null
 				? null
-				: readIn(types.imports.memberFilesOf(owner, member), types.memberOnChain(owner, member)?.typeSource);
+				: readIn(
+					types.imports.memberFilesOf(owner, member), types.memberOnChain(owner, member)?.typeSource,
+					types.generics.typeParamsOf(owner)
+				);
 		}
 
 		/** The written return type of the node `target`, read where declared (`readIn`); null for one two declarations key apart. */
 		function returnSourceOf(target: String): Null<String> {
-			return readIn([for (d in declarationsOf(target)) d.file], _facts.returnSources[target]);
+			final unkeyed: Array<String> = types.generics.typeParamsOf(nodes[target]?.typeName ?? '')
+				.concat(_facts.typeParams[target] ?? []);
+			return readIn([for (d in declarationsOf(target)) d.file], _facts.returnSources[target], unkeyed);
 		}
 
 		/**
@@ -1282,8 +1293,8 @@ final class CallGraph {
 				null
 			else
 				viewedArgs(
-					types.generics.argumentsFor(owner, viewType, _plugin.typeSyntax, (f, a) -> readIn([f], a) ?? a), viewType,
-					viewType == receiverType ? ownArgs : null, currentType
+					types.generics.argumentsFor(owner, viewType, _plugin.typeSyntax, (f, a, shadowing) -> readIn([f], a, shadowing) ?? a),
+					viewType, viewType == receiverType ? ownArgs : null, currentType
 				);
 			return if (args != null && args.length >= params.length)
 				CallGraphNames.substituteTypeParams(written, params, args, _plugin.typeSyntax)

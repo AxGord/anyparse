@@ -144,7 +144,7 @@ final class ReflectiveValues {
 
 	/**
 	 * The type the member `field` (`Owner.member`) is declared of, read where it is declared and `Null<…>` peeled, through
-	 * its typedef aliases; null when it declares none, or two declarations write it apart.
+	 * its typedef aliases; null when it declares none, a type parameter of its owner, or two declarations write it apart.
 	 */
 	public function memberTypeOf(field: String): Null<String> {
 		final dot: Int = field.lastIndexOf('.');
@@ -153,13 +153,15 @@ final class ReflectiveValues {
 		final member: String = field.substring(dot + 1);
 		final owner: Null<String> = types.declaringTypeOf(field.substring(0, dot), member);
 		if (owner == null) return null;
+		final params: Array<String> = types.generics.typeParamsOf(owner);
 		final written: Null<String> = CallGraphKeys.keyedInFiles(
-			types.imports, _plugin.typeSyntax, types.imports.memberFilesOf(owner, member), types.memberOnChain(owner, member)?.typeSource
+			types.imports, _plugin.typeSyntax, types.imports.memberFilesOf(owner, member), types.memberOnChain(owner, member)?.typeSource,
+			params
 		);
 		if (written == null) return null;
 		final peeled: String = NominalTypes.unwrapNullable(written, _shape.nullableWrapperTypeNames ?? [], _plugin.typeSyntax);
 		final outer: Null<String> = NominalTypes.outerNominalOf(peeled, _plugin.typeSyntax);
-		return outer == null ? null : types.resolveAlias(outer);
+		return outer == null || params.contains(outer) ? null : types.resolveAlias(outer);
 	}
 
 	/** Whether `type` is a class or an interface the run declares once. */

@@ -3031,6 +3031,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CallGraphTest#testALambdaParameterIsNoReferenceToItsLambda :: control :: M-GRAPH-LAMBDA-PARAM-SELF',
 			'unit.query.CallGraphTest#testATypeAnAliasASupertypeOrAnAbstractWritesIsReadWhereItIsWritten :: control :: '
 				+ 'M-TS-DECL-SUPER-ARGS,M-TS-DECL-PARAM-FILE,M-TS-DECL-UNDERLYING',
+			'unit.query.CallGraphTest#testATypeParameterIsNeverKeyedThroughAnImport :: control :: '
+				+ 'M-TS-KEY-TYPE-PARAM,M-TS-KEY-MEMBER-PARAMS,M-TS-KEY-SCOPE-PARAMS,M-TS-KEY-RETURN-PARAMS',
 			'unit.query.CallGraphTest#testAWildcardOrGuardedNameDispatchesToEveryTypeItMayBe :: control :: '
 				+ 'M-TS-WILD-EXPLICIT-NO-MAYBE,M-TS-WILD-MAYBE,M-TS-WILD-GUARDED,M-TS-WILD-PROJECT,M-TS-WILD-ORDER,M-TS-STD-PACKAGES,'
 				+ 'M-TS-ALTERNATE-SAME,M-TS-ALTERNATE-NEW',
@@ -6631,6 +6633,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-DECL-UNDERLYING',
 			'M-TS-ALTERNATE-WHOLE-CALL',
 			'M-TS-DECL-SUPER-ARGS',
+			'M-TS-KEY-TYPE-PARAM',
+			'M-TS-KEY-MEMBER-PARAMS',
+			'M-TS-KEY-RETURN-PARAMS',
+			'M-TS-KEY-SCOPE-PARAMS',
 			'M-TS-DECL-PARAM-FILE',
 			'M-TS-DECL-FILES-AGREE'
 		];
