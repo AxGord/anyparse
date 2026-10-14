@@ -24,11 +24,10 @@ class ThreadSafetyReflectiveSealTest extends Test {
 	 * A computed name on a value the typer cannot place — a library container's element, an array element, an
 	 * un-annotated local of a library call, `Dynamic` — unseals `_l`, so the main thread's take of it stays reported, and
 	 * the run names the writer; a `case` capture is typed by its enum constructor's parameter (`D`, which declares `_l`),
-	 * a capture of a `Map` parameter is an element write, not a reflective one, and a constructor name two enums declare
-	 * types no capture.
+	 * a capture of a `Map` parameter is an element write, not a reflective one, and a constructor
+	 * name two enums declare types the capture by the enum its subject is declared of.
 	 */
 	@:pin('control') @:killer('M-TS-SEAL-REFLECT-UNPLACED') @:killer('M-TS-SEAL-UNPLACED-NOTICE') @:killer('M-TS-BINDER-TYPE')
-	@:killer('M-TS-BINDER-UNIQUE')
 	public function testAValueTheRunCannotPlaceUnsealsEveryLock(): Void {
 		#if (sys || nodejs)
 		Assert.equals(1, quickTakes('Reflect.setField(owners.first(), k, _m);'), 'a library container element');
@@ -119,7 +118,171 @@ class ThreadSafetyReflectiveSealTest extends Test {
 		#end
 	}
 
+	/**
+	 * A lock member a reflective write unseals names no lock, so its holds are keyed by the pair's take: each finding of
+	 * such a hold or take says which member lost its name and which writers unsealed it, and the run says how many holds
+	 * lost their lock name and which precondition of the instantiation bound the run fails.
+	 */
+	@:pin('control') @:killer('M-TS-UNSEALED-NOTE') @:killer('M-TS-UNSEALED-HOLDS') @:killer('M-TS-UNSEALED-PRECONDITIONS')
+	@:killer('M-TS-UNSEALED-TAKE') @:killer('M-TS-UNSEALED-THROW')
+	public function testALockAReflectiveWriteUnsealsSaysWhoUnsealedIt(): Void {
+		#if (sys || nodejs)
+		final note: String = 'its lock member _l names no lock: a reflective write may store any lock in it (D.alias)';
+		final all: Array<String> = unsealedFindings('Reflect.setField(arr[0], k, m);');
+		Assert.equals(1, all.filter(f -> f.indexOf('D.quick -> Mutex.acquire') != -1 && f.indexOf(note) != -1).length, 'the take');
+		Assert.equals(1, all.filter(f -> f.indexOf('"D.work" holds') != -1 && f.indexOf(note) != -1).length, 'the hold');
+		Assert.equals(1, all.filter(f -> f.indexOf('"D.risky" leaves') != -1 && f.indexOf(note) != -1).length, 'the hold left on a throw');
+		Assert.equals(
+			1,
+			all.filter(
+				f ->
+					f.indexOf('3 lock hold(s) lost the name of their lock member') != -1
+					&& f.indexOf('here: no closedWorld over the whole project, no reflectiveClasses') != -1
+			)
+				.length,
+			'the run counts them and says what is missing'
+		);
+		Assert.equals(
+			0, unsealedFindings('final y:Dynamic = {}; Reflect.setField(y, k, m);').filter(f -> f.indexOf('names no lock') != -1).length,
+			'sealed'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A `case` capture is typed by its enum constructor only when the switch subject is declared of that enum: a capture
+	 * of a library `Option` or `Either` whose constructor's name a project enum declares too stays untyped, and the run
+	 * says which capture an enum constructor typed.
+	 */
+	@:pin('control') @:killer('M-TS-BINDER-SUBJECT') @:killer('M-TS-BINDER-PLACED-BY') @:killer('M-TS-BINDER-TOP')
+	@:killer('M-TS-BINDER-OWN-PARAMS') @:killer('M-TS-BINDER-UNIQUE')
+	public function testACaptureIsTypedThroughItsSubject(): Void {
+		#if (sys || nodejs)
+		Assert.equals(
+			1,
+			quickTakes(
+				'final opt:haxe.ds.Option<D> = haxe.ds.Option.Some(this); switch opt { case Some(v): Reflect.setField(v, k, _m); case None: }'
+			),
+			'a library Option capture'
+		);
+		Assert.equals(
+			1,
+			quickTakes(
+				'final e:haxe.ds.Either<D, Int> = haxe.ds.Either.Left(this); switch e { case Left(v): Reflect.setField(v, k, _m); case Right(_): }'
+			),
+			'a library Either capture'
+		);
+		Assert.equals(1, quickTakes('switch crate { case Wrap(Pack(v)): Reflect.setField(v, k, _m); case _: }'), 'a nested pattern');
+		Assert.equals(
+			1, quickTakes('switch gen { case Hold(v): Reflect.setField(v, k, _m); }'), "a parameter of the enum's own type parameter"
+		);
+		Assert.equals(
+			1, quickTakes('switch twin { case Twice(v): Reflect.setField(v, k, _m); }'), 'a subject two enums of its name may be'
+		);
+		final crate: String = 'switch crate { case Pack(o): Reflect.setField(o, k, _m); case _: }';
+		Assert.equals(0, quickTakes(crate), 'a capture its subject types');
+		Assert.equals(
+			1, found(crate).filter(f -> f.indexOf('D.alias (a capture of Crate.Pack, typed by its parameter)') != -1).length, 'named'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * Every name a run writes that makes an object of `Node`, or reads it as a class value, counts as making one: a
+	 * typedef alias of it made or read as a value, an import alias of it made, a literal naming it handed to
+	 * `Type.resolveClass`. A made name that resolves to no type may be an alias of it too; a std type, a class the run
+	 * declares, a literal naming another class do not make one.
+	 */
+	@:pin('control') @:killer('M-TS-MAKES-RESOLVED') @:killer('M-TS-MAKES-LITERAL') @:killer('M-TS-MAKES-UNKNOWN')
+	@:killer('M-TS-MAKES-STD') @:killer('M-TS-MAKES-ALIAS-NOTHING') @:killer('M-TS-MAKES-ALIAS-STD')
+	@:killer('M-TS-MAKES-WILD') @:killer('M-TS-MAKES-BOUND') @:killer('M-TS-MAKES-USING')
+	public function testEveryNameThatMakesTheClassMakesIt(): Void {
+		#if (sys || nodejs)
+		final use: String = 'n.targetObject = d; n.toTarget("_l", d._m);';
+		final alias: String = 'typedef NA = Node<D>;';
+		Assert.equals(1, nodeTakes(CLOSED, alias, 'final n:NA = new NA(); $use'), 'a typedef alias made');
+		Assert.equals(1, nodeTakes(CLOSED, alias, 'final n:Node<D> = Type.createInstance(NA, []); $use'), 'a typedef alias as a value');
+		Assert.equals(
+			1, nodeTakes(CLOSED, '', 'final n:Node<D> = Type.createInstance(Type.resolveClass("Node"), []); $use'), 'a literal naming it'
+		);
+		Assert.equals(
+			1, nodeTakes(CLOSED, 'typedef NB = Unseen<D>;', 'final x = new NB(); new V().toTarget("_l", d._m);'), 'an alias of nothing'
+		);
+		Assert.equals(1, nodeTakes(CLOSED, '', 'final x = new Mystery(); new V().toTarget("_l", d._m);'), 'a name nothing declares');
+		Assert.equals(1, importAsTakes('import pkg.Node as NN;', 'final n:NN<D> = new NN<D>(); $use'), 'an import alias made');
+		Assert.equals(0, importAsTakes('import pkg.Node as NN;', 'new V().toTarget("_l", d._m);'), 'an import alias not made');
+		Assert.equals(
+			1, importAsTakes('import pkg.NB;', 'final x = new NB(); new V().toTarget("_l", d._m);', 'typedef NB = Unseen<D>;'),
+			'an imported alias of nothing'
+		);
+		Assert.equals(
+			0, nodeTakes(CLOSED, 'typedef NM = Map<String, Int>;', 'final x = new NM(); new V().toTarget("_l", d._m);'),
+			'an alias of a std type'
+		);
+		Assert.equals(0, importAsTakes('import somelib.*;', 'final x = new Widget(); new V().toTarget("_l", d._m);'), 'a library wildcard');
+		Assert.equals(
+			0, importAsTakes('#if sys import somelib.Gadget; #end', 'final x = new Gadget(); new V().toTarget("_l", d._m);'),
+			'a guarded import'
+		);
+		Assert.equals(0, importAsTakes('using haxe.io.Path;', 'final x = new Path("p"); new V().toTarget("_l", d._m);'), 'a using');
+		Assert.equals(
+			0, nodeTakes(CLOSED, '', 'final c = Type.resolveClass("Other"); new V().toTarget("_l", d._m);'), 'a literal naming another'
+		);
+		Assert.equals(
+			0,
+			nodeTakes(CLOSED, '', 'final m = new Map<String, Int>(); final s = new haxe.ds.StringMap<Int>(); new V().toTarget("_l", d._m);'),
+			'std types made'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
+	/**
+	 * How many findings report the main thread's take of `_l` in `D.quick` when `Node` sits in the package `pkg` beside
+	 * `beside`, `V` imports it, and `D`'s file, under `imports`, runs `use`.
+	 */
+	private static function importAsTakes(imports: String, use: String, beside: String = ''): Int {
+		return [
+			for (v in ThreadSafetyCheckTest.violations(CLOSED, [
+				ThreadSafetyCheckTest.MUTEX,
+				'class Runner { public static function create(fn:()->Void):Void {} }',
+				'package pkg; class Node<T> { public var targetObject:T = null; public function new() {}'
+				+ ' public function toTarget(k:String, m:Mutex):Void Reflect.setField(targetObject, k, m); } $beside',
+				'import pkg.Node; final class V extends Node<Void> {}',
+				'$imports import pkg.Node; class D { var _l:Mutex = new Mutex(); final _m:Mutex = new Mutex(); public function new() {}'
+				+ ' public function work():Void { _m.acquire(); Sys.sleep(1); _m.release(); }'
+				+ ' public function quick():Void { _l.acquire(); _l.release(); }'
+				+ ' public static function main():Void { final d:D = new D(); Runner.create(() -> d.work()); $use d.quick(); } }'
+			])) if (v.message.indexOf('D.quick -> Mutex.acquire') != -1) v.message
+		].length;
+	}
+
+	/**
+	 * The findings of a run in which a worker holds `_l` across a sleep, the main thread takes it, holds it into a throw,
+	 * and runs `write` in `D.alias(k, m)` first.
+	 */
+	private static function unsealedFindings(write: String): Array<String> {
+		return [
+			for (v in ThreadSafetyCheckTest.violations('{"rules":{$RULE}}}', [
+				ThreadSafetyCheckTest.MUTEX,
+				'class Runner { public static function create(fn:()->Void):Void {} }',
+				'class D { var _l:Mutex = new Mutex(); public static final arr:Array<D> = []; public function new() {}'
+				+ ' public function work():Void { _l.acquire(); Sys.sleep(1); _l.release(); }'
+				+ ' public function alias(k:String, m:Mutex):Void { $write }'
+				+ ' public function quick():Void { _l.acquire(); _l.release(); }'
+				+ ' public function risky():Void { _l.acquire(); throw "x"; }'
+				+ ' public static function main():Void { final d:D = new D(); arr.push(d); Runner.create(() -> d.work());'
+				+ ' d.alias("_l", new Mutex()); d.quick(); d.risky(); } }'
+			])) v.message
+		];
+	}
+
 	/** How many findings of `found(alias)` report the main thread's take of `_l` in `D.quick`. */
 	private static function quickTakes(alias: String): Int {
 		return found(alias).filter(f -> f.indexOf('D.quick -> Mutex.acquire') != -1).length;
@@ -135,11 +298,14 @@ class ThreadSafetyReflectiveSealTest extends Test {
 				ThreadSafetyCheckTest.MUTEX,
 				'class Runner { public static function create(fn:()->Void):Void {} }',
 				'class Other { public function new() {} }',
-				'enum Crate { Pack(o:Other); }',
+				'enum Crate { Pack(o:Other); Wrap(s:Shelf); } enum Shelf { Pack(d:D); } enum Mine { Some(o:Other); Left(o:Other); }',
+				'enum Gen<Other> { Hold(x:Other); } enum Twin { Twice(o:Other); }',
+				'enum Twin { Twice(d:D); }',
 				'enum Box { Holder(d:D); Bag(m:Map<String, Mutex>); Pack(d:D); }',
 				'class D { var _l:Mutex = new Mutex(); final _m:Mutex = new Mutex();'
 				+ ' public static final owners:haxe.ds.List<D> = new haxe.ds.List<D>(); public static final arr:Array<D> = [];'
-				+ ' public static var box:Box = null; public function new() {}'
+				+ ' public static var box:Box = null; public static var crate:Crate = null;'
+				+ ' public static var gen:Gen<D> = null; public static var twin:Twin = null; public function new() {}'
 				+ ' public function work():Void { _m.acquire(); Sys.sleep(1); _m.release(); }'
 				+ ' public function alias(k:String):Void { $alias }' + ' public function quick():Void { _l.acquire(); _l.release(); }'
 				+ ' public static function main():Void { final d:D = new D(); owners.add(d); arr.push(d);'

@@ -77,6 +77,11 @@ final class CallGraphImports {
 		return _enumConstructors[name] ?? [];
 	}
 
+	/** Whether a `using` of `file` (own or ambient) names a type of simple name `name` — which it brings into scope, as an import does. */
+	public inline function usesType(file: String, name: String): Bool {
+		return (_usings[CallGraphNames.normalizePath(file)] ?? []).contains(name);
+	}
+
 	/** The qualified paths the type of simple name `name` is declared under (`recordFile`): by its module, by its package. */
 	public inline function declaredPathsOf(name: String): Array<String> {
 		return _declaredPaths[name] ?? [];
@@ -226,9 +231,20 @@ final class CallGraphImports {
 	 */
 	public function typeOf(file: String, written: String): String {
 		if (written.indexOf('.') >= 0) return pathType(written);
-		final key: String = CallGraphNames.normalizePath(file);
-		final path: Null<String> = (_typePaths[key] ?? [])[written] ?? wildcardPath(key, written);
+		final path: Null<String> = boundPath(file, written);
 		return path == null ? written : pathType(path);
+	}
+
+	/**
+	 * The dotted path the simple name `written` means in `file`, when an import, an alias or a wildcard import of a package
+	 * binds it there (`typeOf`); null when none does. With `maybe` handed, the paths it may mean on some builds or where
+	 * that cannot be told land in it: those an `#if`-guarded import binds it to, and the ones a wildcard may supply it from
+	 * (`wildcardPath`). Records nothing: a reader asking after the graph is built keys a path with `pathKey`.
+	 */
+	public function boundPath(file: String, written: String, ?maybe: Array<String>): Null<String> {
+		final key: String = CallGraphNames.normalizePath(file);
+		if (maybe != null) for (g in _guardedPaths[key] ?? []) if (g.name == written) maybe.push(g.path);
+		return (_typePaths[key] ?? [])[written] ?? wildcardPath(key, written, maybe);
 	}
 
 	/**

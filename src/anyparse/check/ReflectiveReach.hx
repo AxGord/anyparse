@@ -3,12 +3,15 @@ package anyparse.check;
 import anyparse.query.BinderScan;
 import anyparse.query.BoolExprShape;
 import anyparse.query.CallGraph;
+import anyparse.query.CallGraphImports;
 import anyparse.query.CallGraphNames;
 import anyparse.query.CallGraphTypes;
+import anyparse.query.CasePatterns;
 import anyparse.query.Glob;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
+import anyparse.query.StdTypes;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
@@ -25,6 +28,17 @@ typedef Placement = {
 }
 
 /**
+ * A `case` capture typed by the parameter of its enum constructor (`ReflectiveReach.binderType`).
+ */
+typedef Capture = {
+	/** The written type of the constructor parameter the capture binds. */
+	final type: String;
+
+	/** The exclusion that typed it, for the run notice (`Placement.by`). */
+	final by: String;
+}
+
+/**
  * What the target of a reflective write may be an object of (`FieldWrites`): the classes its declared type places it on,
  * with their subtypes and chains; else what a POSITIVE exclusion proves of a value whose declared type places it on no
  * class — each a whitelist entry with its reason (`Placement.by`), anything else any type's. The exclusions: a `final`
@@ -33,6 +47,9 @@ typedef Placement = {
  */
 @:nullSafety(Strict)
 final class ReflectiveReach {
+
+	/** The `Type` member making a class value of a name (`resolvedLiteral`). */
+	private static inline final RESOLVE_CLASS: String = 'resolveClass';
 
 	/**
 	 * The globs naming every class a class value made from a computed name may be of (`reflectiveClasses`, the one list
@@ -48,6 +65,12 @@ final class ReflectiveReach {
 
 	/** Each file -> the names a `case` pattern of it captures (`binderType`). */
 	private final _captures: Map<String, Array<String>> = [];
+
+	/** The types the held files make objects of or read as class values (`madeTypes`); null until first asked. */
+	private var _made: Null<Array<String>> = null;
+
+	/** The names a `new` of the held files makes that resolve to no type (`unresolvedMade`), which may be an alias of any. */
+	private final _unresolvedMade: Array<String> = [];
 
 	private final _graph: CallGraph;
 
@@ -80,16 +103,30 @@ final class ReflectiveReach {
 	}
 
 	/**
-	 * What the target `target` of a reflective write, in `file` and the function `fn`, declared `type`, may be an object
-	 * of: what that type places it on (`reachOf`), else what a POSITIVE exclusion proves — a type parameter its
-	 * constraint or every instantiation of its type bounds (`typeParamPlacement`), a `final` local bound to a fresh
-	 * structure or object (`freshPlacement`); any type's for anything else.
+	 * The preconditions of the instantiation bound of a type parameter (`instantiated`, `neverMade`) the run fails: a run
+	 * over the whole of a project declaring `closedWorld`, and one `reflectiveClasses` list every file declares.
 	 */
-	public function placeOf(file: String, fn: Null<String>, target: QueryNode, type: Null<String>): Placement {
-		final param: Null<Placement> = type == null || fn == null ? null : typeParamPlacement(fn, CallGraphNames.lastSegments(type, 1));
+	public function lacking(): Array<String> {
+		final out: Array<String> = [];
+		if (!_complete) out.push('no closedWorld over the whole project');
+		if (_reflectiveClasses == null) out.push('no reflectiveClasses');
+		return out;
+	}
+
+	/**
+	 * What the target `target` of a reflective write, in `file` and the function `fn`, declared `type`, may be an object
+	 * of: what that type places it on (`reachOf`) — for a `case` capture a constructor typed, the exclusion `capture` that
+	 * typed it (`binderType`) — else what a POSITIVE exclusion proves: a type parameter its constraint or every
+	 * instantiation of its type bounds (`typeParamPlacement`), a `final` local bound to a fresh structure or object
+	 * (`freshPlacement`); any type's for anything else.
+	 */
+	public function placeOf(file: String, fn: Null<String>, target: QueryNode, type: Null<String>, ?capture: String): Placement {
+		final param: Null<Placement> = type == null || fn == null || capture != null
+			? null
+			: typeParamPlacement(fn, CallGraphNames.lastSegments(type, 1));
 		if (param != null) return param;
 		final reaches: Null<Array<String>> = reachOf(type);
-		if (reaches != null) return { reaches: reaches, by: null };
+		if (reaches != null) return { reaches: reaches, by: capture };
 		return freshPlacement(file, fn, target) ?? { reaches: null, by: null };
 	}
 
@@ -190,28 +227,119 @@ final class ReflectiveReach {
 	}
 
 	/**
-	 * Whether no object of the type `type` is ever made, so none takes a type argument nothing here reads: no `new` of
-	 * it, its name read as no value (a class value handed on may reach `Type.createInstance`), and the project declares
-	 * the classes a class value made from a computed name may be of (`reflectiveClasses`) without naming it — a library
-	 * making one from such a name (an unserializer) is covered by that declaration too.
+	 * Whether no object of the type `type` is ever made, so none takes a type argument nothing here reads: no held file
+	 * makes one or reads its name as a value under any name it means it by (`madeTypes` — a class value handed on may reach
+	 * `Type.createInstance`), none makes an object of a name that resolves to no type (`unresolvedMade`, which may be an
+	 * alias of it), and the project declares the classes a class value made from a computed name may be of
+	 * (`reflectiveClasses`) without naming it — a library making one from such a name (an unserializer) is covered by that
+	 * declaration too.
 	 */
 	private function neverMade(type: String): Bool {
 		final globs: Null<Array<String>> = _reflectiveClasses;
 		final paths: Array<String> = _graph.types.imports.declaredPathsOf(type);
 		if (globs == null || paths.length == 0 || paths.exists(p -> globs.exists(g -> Glob.qualifiedNames(g).match(p)))) return false;
-		return !_graph.heldFiles().exists(held -> makes(held.tree, null, type));
+		final made: Array<String> = madeTypes();
+		return _unresolvedMade.length == 0 && !made.contains(type);
 	}
 
 	/**
-	 * Whether `node`'s subtree, `parent` holding it, makes an object of `type` by `new` or reads its name as a value — as
-	 * anything but the receiver of a member access, the static ones.
+	 * The types the held files make an object of, walked once (`collectMade`): by `new`, by a name of the type read as a
+	 * value (a class value handed on may reach `Type.createInstance`), by a literal handed to `Type.resolveClass` — each
+	 * name as its file means it, through its imports and typedef aliases (`namedTypes`). A `new` of a name that resolves
+	 * to no type lands in `_unresolvedMade`.
 	 */
-	private function makes(node: QueryNode, parent: Null<QueryNode>, type: String): Bool {
-		final made: Bool = node.kind == _shape.newExprKind
-			? CallGraphNames.lastSegments(node.name ?? '', 1) == type
-			: (node.kind == _shape.identKind || FieldWrites.accessKind(node.kind, _shape)) && node.name == type
-				&& !(parent != null && FieldWrites.accessKind(parent.kind, _shape) && parent.children[0] == node);
-		return made || node.children.exists(c -> makes(c, node, type));
+	private function madeTypes(): Array<String> {
+		final known: Null<Array<String>> = _made;
+		if (known != null) return known;
+		final out: Array<String> = [];
+		for (held in _graph.heldFiles()) collectMade(held.file, held.source, held.tree, null, out);
+		_made = out;
+		return out;
+	}
+
+	/**
+	 * Adds to `out` every type `node`'s subtree, in `file` of `source` and `parent` holding it, makes an object of or reads
+	 * as a class value — a type name read as anything but the receiver of a member access, the static ones — and to
+	 * `_unresolvedMade` every name a `new` there makes that resolves to no type (`unresolvedMade`).
+	 */
+	private function collectMade(file: String, source: String, node: QueryNode, parent: Null<QueryNode>, out: Array<String>): Void {
+		final name: Null<String> = node.name;
+		final written: Null<String> = if (node.kind == _shape.newExprKind)
+			name
+		else if (node.kind == _shape.callKind)
+			resolvedLiteral(source, node)
+		else if (
+			(node.kind == _shape.identKind || FieldWrites.accessKind(node.kind, _shape)) && name != null && CallGraphNames.isTypeLike(name)
+			&& !(parent != null && FieldWrites.accessKind(parent.kind, _shape) && parent.children[0] == node)
+		)
+			name
+		else
+			null;
+		if (written != null) for (t in namedTypes(file, written)) if (!out.contains(t)) out.push(t);
+		if (name != null && node.kind == _shape.newExprKind && unresolvedMade(file, name) && !_unresolvedMade.contains(name))
+			_unresolvedMade.push(name);
+		for (c in node.children) collectMade(file, source, c, node, out);
+	}
+
+	/**
+	 * The class name a literal handed to `Type.resolveClass` names, in the call `call` of `source` — called off any
+	 * receiver or bare, a literal names its one class whatever `reflectiveClasses` says; null for any other call.
+	 */
+	private function resolvedLiteral(source: String, call: QueryNode): Null<String> {
+		final callee: Null<QueryNode> = call.children[0];
+		final resolving: Bool = callee != null && callee.name == RESOLVE_CLASS && call.children.length > 1
+			&& (callee.kind == _shape.identKind || FieldWrites.accessKind(callee.kind, _shape));
+		return resolving ? _plugin.stringFoldSupport()?.literalOf(call.children[1], source)?.content : null;
+	}
+
+	/**
+	 * Every type the name `written` may mean in `file`: as written, as the file's imports, aliases and wildcards bind it or
+	 * may bind it (`keysOf`), and the type each typedef alias of those stands for — a superset, so no spelling of a type
+	 * escapes it.
+	 */
+	private function namedTypes(file: String, written: String): Array<String> {
+		final types: CallGraphTypes = _graph.types;
+		final simple: String = CallGraphNames.lastSegments(written, 1);
+		final out: Array<String> = [simple];
+		for (key in keysOf(file, written, [])) for (t in [key, types.resolveAlias(key)]) if (!out.contains(t)) out.push(t);
+		return out;
+	}
+
+	/**
+	 * The keys the name `written` may mean in `file` (`CallGraphImports.typeOf`), recording nothing: the one an import,
+	 * an alias or a wildcard binds it to — itself when none does — then each one an `#if`-guarded import or a wildcard may
+	 * supply it as, whose paths land in `maybe`.
+	 */
+	private function keysOf(file: String, written: String, maybe: Array<String>): Array<String> {
+		final imports: CallGraphImports = _graph.types.imports;
+		final path: Null<String> = written.indexOf('.') >= 0 ? written : imports.boundPath(file, written, maybe);
+		final out: Array<String> = [path == null ? written : imports.pathKey(path)];
+		for (p in maybe) {
+			final key: String = imports.pathKey(p);
+			if (!out.contains(key)) out.push(key);
+		}
+		return out;
+	}
+
+	/**
+	 * Whether the name `written` a `new` in `file` makes resolves to no type, so it may be an alias of any: a typedef alias
+	 * it may mean standing for a name the run declares nowhere and the std core at none of its top-level modules (its target
+	 * may be an alias its own file binds), or a name nothing in the file binds — no import, alias, `using`, guarded import or
+	 * wildcard that may supply it — that the run declares nowhere and the std core at none of its top-level modules (a type
+	 * parameter, a type the run does not hold). A path written out, and a name an import binds to a type outside the run,
+	 * mean a library type, never an alias of a project one.
+	 */
+	private function unresolvedMade(file: String, written: String): Bool {
+		final types: CallGraphTypes = _graph.types;
+		final maybe: Array<String> = [];
+		for (key in keysOf(file, written, maybe)) {
+			final named: String = types.resolveAlias(key);
+			if (named != key && types.declarationCount(named) == 0 && StdTypes.declaresModule('', named) != true) return true;
+		}
+		final imports: CallGraphImports = types.imports;
+		final bound: Bool = written.indexOf('.') >= 0 || maybe.length > 0 || imports.boundPath(file, written) != null
+			|| imports.usesType(file, written);
+		return !bound && types.declarationCount(written) == 0 && StdTypes.declaresModule('', written) != true;
 	}
 
 	/**
@@ -248,11 +376,12 @@ final class ReflectiveReach {
 	}
 
 	/**
-	 * The written type of the enum-constructor parameter a `case` capture `value`, in `file`, binds (`Ctor(a, b)`): when
-	 * one indexed enum declares a constructor of that name, with as many parameters as the pattern; null for any other
-	 * value.
+	 * The written type of the enum-constructor parameter a `case` capture `value`, in `file`, binds (`Ctor(a, b)`), with
+	 * the exclusion that typed it: when the switch subject is declared of an indexed enum declaring a constructor of that
+	 * name (`subjectEnum`, `subjectType` typing the subject), with as many parameters as the pattern, and the parameter
+	 * names none of the enum's own type parameters; null for any other value.
 	 */
-	public function binderType(file: String, value: QueryNode): Null<String> {
+	public function binderType(file: String, value: QueryNode, subjectType: (QueryNode) -> Null<String>): Null<Capture> {
 		final name: Null<String> = value.name;
 		final at: Null<Span> = value.span;
 		final tree: Null<QueryNode> = _graph.treeOf(file);
@@ -266,12 +395,48 @@ final class ReflectiveReach {
 			);
 		if (pattern == null) return null;
 		final ctor: String = pattern.children[0].name ?? '';
-		final enums: Array<String> = _graph.types.imports.enumsDeclaring(ctor);
-		final info: Null<MemberInfo> = enums.length == 1 ? _graph.types.memberOnChain(enums[0], ctor) : null;
-		final arity: Int = pattern.children.length - 1;
-		if (info == null || info.paramTypeSources.length != arity) return null;
+		final owner: Null<String> = subjectEnum(file, tree, pattern, ctor, subjectType);
+		if (owner == null) return null;
+		final info: Null<MemberInfo> = _graph.types.memberOnChain(owner, ctor);
+		if (info == null || info.paramTypeSources.length != pattern.children.length - 1) return null;
 		final written: Null<String> = info.paramTypeSources[pattern.children.findIndex(c -> c.span?.from == from) - 1];
-		return written == null ? null : NominalTypes.outerNominalOf(written, _plugin.typeSyntax);
+		// a parameter of the enum's own type parameters is what the subject's arguments bind, which nothing here reads
+		if (written == null || CallGraphNames.mentionsTypeName(written, _graph.types.generics.typeParamsOf(owner), _plugin.typeSyntax))
+			return null;
+		final outer: Null<String> = NominalTypes.outerNominalOf(written, _plugin.typeSyntax);
+		return outer == null ? null : { type: outer, by: 'a capture of $owner.$ctor, typed by its parameter' };
+	}
+
+	/**
+	 * The enum a `case` pattern `pattern` of `file`, whose tree is `tree`, builds with the constructor `ctor`: the one the
+	 * switch subject is declared of (`subjectType`, through the file's imports and typedef aliases), when it declares
+	 * `ctor` and the pattern is a top-level one of its arm — an alternative of it included. Null otherwise: a constructor
+	 * matched by name alone may be another enum's (a library `Option`'s `Some` beside a project enum's).
+	 */
+	private function subjectEnum(
+		file: String, tree: QueryNode, pattern: QueryNode, ctor: String, subjectType: (QueryNode) -> Null<String>
+	): Null<String> {
+		final span: Null<Span> = pattern.span;
+		if (span == null) return null;
+		final at: Span = span;
+		final switchKinds: Array<String> = _shape.switchKinds ?? [];
+		final held: Null<QueryNode> = holderOf(tree, at.from, n -> switchKinds.contains(n.kind));
+		if (held == null || held.children.length == 0) return null;
+		final arm: Null<QueryNode> = held.children.find(c -> c.kind == _shape.caseBranchKind && holds(c, at));
+		if (arm == null || !CasePatterns.patternRun(arm, _shape).exists(r -> r.children.exists(c -> topPattern(c, pattern)))) return null;
+		final written: Null<String> = subjectType(BoolExprShape.unwrapParens(held.children[0], _shape.parenKind));
+		final outer: Null<String> = written == null ? null : NominalTypes.outerNominalOf(written, _plugin.typeSyntax);
+		// a subject type the file may mean another type by on some builds types no capture
+		final keys: Array<String> = outer == null ? [] : keysOf(file, outer, []);
+		final named: Null<String> = keys.length == 1 ? _graph.types.resolveAlias(keys[0]) : null;
+		return named != null && _graph.types.declarationCount(named) == 1 && _graph.types.imports.enumsDeclaring(ctor).contains(named)
+			? named
+			: null;
+	}
+
+	/** Whether `node` is the pattern `pattern` or an alternative (`A(x) | B(x)`) holding it as one of its own. */
+	private function topPattern(node: QueryNode, pattern: QueryNode): Bool {
+		return node == pattern || node.kind == _shape.orPatternKind && node.children.exists(c -> topPattern(c, pattern));
 	}
 
 	/** The names a `case` pattern of `file`, whose tree is `tree`, captures. */
@@ -292,6 +457,12 @@ final class ReflectiveReach {
 			at++;
 		}
 		return out;
+	}
+
+	/** Whether the span of `node` holds the span `at`. */
+	private static function holds(node: QueryNode, at: Span): Bool {
+		final own: Null<Span> = node.span;
+		return own != null && own.from <= at.from && at.to <= own.to;
 	}
 
 	/** The innermost node `test` accepts whose span holds the offset `from`, in `node`'s subtree; null when none does. */

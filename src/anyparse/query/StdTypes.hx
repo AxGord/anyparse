@@ -75,12 +75,13 @@ final class StdTypes {
 	}
 
 	/**
-	 * Whether the std core declares the module `pkg.name` — what a wildcard `import pkg.*;` brings in under `name`. Null when
+	 * Whether the std core declares the module `pkg.name` (`name` for the toplevel
+	 * `pkg` "") — what a wildcard `import pkg.*;` brings in under `name`. Null when
 	 * that cannot be told: no std discovered, or `pkg` a package the core does not hold (a library's, a target's).
 	 */
 	public static function declaresModule(pkg: String, name: String): Null<Bool> {
 		listed();
-		return packages.exists(pkg) ? modulePaths.exists('$pkg.$name') : null;
+		return packages.exists(pkg) ? modulePaths.exists(pkg == '' ? name : '$pkg.$name') : null;
 	}
 
 	/**

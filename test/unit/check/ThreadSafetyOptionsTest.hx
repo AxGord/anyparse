@@ -60,13 +60,14 @@ class ThreadSafetyOptionsTest extends Test {
 	}
 
 	/**
-	 * A `sinks` the config loses — a typo of the key, a value of the wrong shape, items that are no strings — or one
-	 * naming no call of the run leaves only the builtin sinks: it is said, not answered "no issues"; and a mistyped
+	 * A `sinks` the config loses — a typo of the key, a value of the wrong shape, items that are no strings — or
+	 * one naming no call of the run leaves only the builtin sinks: it is said, not answered "no issues" — and so
+	 * is an entry written with its package that names no call beside entries that do (review R3 M3); and a mistyped
 	 * `enabled` is a value of the wrong shape, not an unknown option (review round 2 `cfgA`–`cfgE`). A run no sink applies
 	 * to at all still says what its config lost.
 	 */
 	@:pin('control') @:killer('M-TS-OPT-SINKS-UNMATCHED') @:killer('M-TS-OPT-SKIP-DECLARED') @:killer('M-TS-OPT-NO-SINK-NOTICES')
-	@:killer('M-TS-OPT-LIFTED')
+	@:killer('M-TS-OPT-LIFTED') @:killer('M-TS-OPT-SINKS-ENTRY-UNMATCHED')
 	public function testALostSinksListIsSaid(): Void {
 		#if (sys || nodejs)
 		final none: String = 'option "sinks" lists no call — only the builtin sinks apply under this config';
@@ -82,6 +83,16 @@ class ThreadSafetyOptionsTest extends Test {
 		Assert.same([
 			'option "sinks" names no call of the run (Sys.slep) — only the builtin sinks apply here'
 		], saidAlone('"sinks":["Sys.slep"]', ['class Q { static function main():Void trace(1); }']), 'no sink at all');
+		Assert.same(
+			[
+				'option "sinks" entry "wrong.Db.query" names no call of the run — it adds no sink'
+			],
+			saidAlone('"sinks":["wrong.Db.query","Sys.sleep"]', [
+				'package db; class Db { public function new() {} public function query():Void {} }',
+				'import db.Db; class C { static function main():Void { new Db().query(); Sys.sleep(1); } }'
+			]),
+			'one entry matching nothing'
+		);
 		#else
 		Assert.pass('non-sys target');
 		#end

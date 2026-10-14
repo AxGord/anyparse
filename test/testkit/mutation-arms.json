@@ -11524,8 +11524,8 @@
 			"name": "M-TS-THROW-HELPER-HOLDS-UNREAD",
 			"type": "anyparse.check.ThreadSafety",
 			"method": "run",
-			"find": "reportThrowHeld(graph, acquires.concat(helperHolds), throws, violations);",
-			"replace": "reportThrowHeld(graph, acquires, throws, violations);",
+			"find": "reportThrowHeld(graph, writes, acquires.concat(helperHolds), throws, violations);",
+			"replace": "reportThrowHeld(graph, writes, acquires, throws, violations);",
 			"note": "the holds a multi-lock helper opens in its caller never escape, so a throw under them is quiet"
 		},
 		{
@@ -19290,7 +19290,7 @@
 			"name": "M-TS-REFLECT-REACH",
 			"type": "anyparse.check.FieldWrites",
 			"method": "reflectiveWrite",
-			"find": ": _targets.placeOf(file, fn, target, typeOf(file, source, fn, target));",
+			"find": ": _targets.placeOf(file, fn, target, declared ?? capture?.type, capture?.by);",
 			"replace": ": { reaches: null, by: null };",
 			"note": "a reflective write reaches every type's fields whatever its target"
 		},
@@ -19393,7 +19393,7 @@
 		{
 			"name": "M-TS-SEAL-REFLECT-LITERAL-ANY",
 			"type": "anyparse.check.FieldWrites",
-			"method": "reflectivelyWritten",
+			"method": "reflectiveWritersOf",
 			"find": "site.reflective && (site.reaches == null || reachesDeclarer(site, name))",
 			"replace": "site.reflective && reachesDeclarer(site, name)",
 			"note": "a reflective write naming a lock member by a literal, on a value of no known class, leaves it sealed (review F3)"
@@ -19401,9 +19401,9 @@
 		{
 			"name": "M-TS-SEAL-REFLECT-UNPLACED",
 			"type": "anyparse.check.FieldWrites",
-			"method": "reflectivelyWritten",
-			"find": "_computed.exists(site -> site.reaches == null || reachesDeclarer(site, name))",
-			"replace": "_computed.exists(site -> reachesDeclarer(site, name))",
+			"method": "reflectiveWritersOf",
+			"find": "(site.reaches == null || reachesDeclarer(site, name))",
+			"replace": "reachesDeclarer(site, name)",
 			"note": "a computed reflective write on a value the run places on no class leaves every lock member sealed (review N2)"
 		},
 		{
@@ -19786,9 +19786,9 @@
 		{
 			"name": "M-TS-WILD-EXPLICIT-FIRST",
 			"type": "anyparse.query.CallGraphImports",
-			"method": "typeOf",
-			"find": "(_typePaths[key] ?? [])[written] ?? wildcardPath(key, written)",
-			"replace": "wildcardPath(key, written) ?? (_typePaths[key] ?? [])[written]",
+			"method": "boundPath",
+			"find": "return (_typePaths[key] ?? [])[written] ?? wildcardPath(key, written, maybe);",
+			"replace": "return wildcardPath(key, written, maybe) ?? (_typePaths[key] ?? [])[written];",
 			"note": "a wildcard import outranks an explicit one"
 		},
 		{
@@ -20010,23 +20010,23 @@
 		{
 			"name": "M-TS-PLACE-MAKES-NEW",
 			"type": "anyparse.check.ReflectiveReach",
-			"method": "makes",
-			"find": "? CallGraphNames.lastSegments(node.name ?? '', 1) == type",
-			"replace": "? false",
+			"method": "collectMade",
+			"find": "final written: Null<String> = if (node.kind == _shape.newExprKind)",
+			"replace": "final written: Null<String> = if (false)",
 			"note": "a new of a class leaving the parameter free makes none"
 		},
 		{
 			"name": "M-TS-PLACE-MAKES-VALUE",
 			"type": "anyparse.check.ReflectiveReach",
-			"method": "makes",
-			"find": "&& !(parent != null && FieldWrites.accessKind(parent.kind, _shape) && parent.children[0] == node)",
-			"replace": "&& false",
+			"method": "collectMade",
+			"find": "(node.kind == _shape.identKind || FieldWrites.accessKind(node.kind, _shape)) && name != null && CallGraphNames.isTypeLike(name)",
+			"replace": "false && name != null",
 			"note": "a class read as a value (Type.createInstance(C, ...)) makes none"
 		},
 		{
 			"name": "M-TS-PLACE-MAKES-RECEIVER",
 			"type": "anyparse.check.ReflectiveReach",
-			"method": "makes",
+			"method": "collectMade",
 			"find": "&& !(parent != null && FieldWrites.accessKind(parent.kind, _shape) && parent.children[0] == node)",
 			"replace": "",
 			"note": "(precision) a static call on a class makes one"
@@ -20051,17 +20051,169 @@
 			"name": "M-TS-BINDER-TYPE",
 			"type": "anyparse.check.FieldWrites",
 			"method": "typeOf",
-			"find": "return (typer == null ? null : typer(value)) ?? _targets.binderType(file, value);",
-			"replace": "return typer == null ? null : typer(value);",
+			"find": "return declaredType(file, source, fn, node) ?? captureOf(file, source, fn, node)?.type;",
+			"replace": "return declaredType(file, source, fn, node);",
 			"note": "(precision) a case capture is typed by nothing, so an index write into a Map capture is reflective"
 		},
 		{
 			"name": "M-TS-BINDER-UNIQUE",
 			"type": "anyparse.check.ReflectiveReach",
+			"method": "subjectEnum",
+			"find": "_graph.types.declarationCount(named) == 1 && ",
+			"replace": "",
+			"note": "a subject type two enums of one name declare types a capture by their merged constructors"
+		},
+		{
+			"name": "M-TS-MAKES-RESOLVED",
+			"type": "anyparse.check.ReflectiveReach",
+			"method": "namedTypes",
+			"find": "for (key in keysOf(file, written, [])) for (t in [key, types.resolveAlias(key)]) if (!out.contains(t)) out.push(t);",
+			"replace": "",
+			"note": "a name made under an import alias or a typedef alias of the class makes none of it (review R3 H1)"
+		},
+		{
+			"name": "M-TS-MAKES-LITERAL",
+			"type": "anyparse.check.ReflectiveReach",
+			"method": "collectMade",
+			"find": "resolvedLiteral(source, node)",
+			"replace": "null",
+			"note": "a literal naming the class handed to Type.resolveClass makes none of it"
+		},
+		{
+			"name": "M-TS-MAKES-UNKNOWN",
+			"type": "anyparse.check.ReflectiveReach",
+			"method": "neverMade",
+			"find": "return _unresolvedMade.length == 0 && !made.contains(type);",
+			"replace": "return !made.contains(type);",
+			"note": "a new of a name that resolves to no type is no alias of the class"
+		},
+		{
+			"name": "M-TS-MAKES-STD",
+			"type": "anyparse.check.ReflectiveReach",
+			"method": "unresolvedMade",
+			"find": "return !bound && types.declarationCount(written) == 0 && StdTypes.declaresModule('', written) != true;",
+			"replace": "return !bound && types.declarationCount(written) == 0;",
+			"note": "(precision) a new of a toplevel std type may make any class"
+		},
+		{
+			"name": "M-TS-MAKES-WILD",
+			"type": "anyparse.check.ReflectiveReach",
+			"method": "unresolvedMade",
+			"find": "final bound: Bool = written.indexOf('.') >= 0 || maybe.length > 0 || imports.boundPath(file, written) != null",
+			"replace": "final bound: Bool = written.indexOf('.') >= 0 || imports.boundPath(file, written) != null",
+			"note": "(precision) a new of a name a library wildcard or a guarded import may supply may make any class"
+		},
+		{
+			"name": "M-TS-MAKES-BOUND",
+			"type": "anyparse.check.ReflectiveReach",
+			"method": "unresolvedMade",
+			"find": "final bound: Bool = written.indexOf('.') >= 0 || maybe.length > 0 || imports.boundPath(file, written) != null",
+			"replace": "final bound: Bool = maybe.length > 0",
+			"note": "(precision) a new of a library type written out or imported may make any class"
+		},
+		{
+			"name": "M-TS-MAKES-USING",
+			"type": "anyparse.check.ReflectiveReach",
+			"method": "unresolvedMade",
+			"find": "|| imports.usesType(file, written);",
+			"replace": ";",
+			"note": "(precision) a new of a type a using brings into scope may make any class"
+		},
+		{
+			"name": "M-TS-MAKES-ALIAS-NOTHING",
+			"type": "anyparse.check.ReflectiveReach",
+			"method": "unresolvedMade",
+			"find": "if (named != key && types.declarationCount(named) == 0 && StdTypes.declaresModule('', named) != true) return true;",
+			"replace": "",
+			"note": "an imported typedef alias of a name the run declares nowhere is a library type"
+		},
+		{
+			"name": "M-TS-MAKES-ALIAS-STD",
+			"type": "anyparse.check.ReflectiveReach",
+			"method": "unresolvedMade",
+			"find": "if (named != key && types.declarationCount(named) == 0 && StdTypes.declaresModule('', named) != true) return true;",
+			"replace": "if (named != key && types.declarationCount(named) == 0) return true;",
+			"note": "(precision) a new of a typedef alias of a toplevel std type may make any class"
+		},
+		{
+			"name": "M-TS-BINDER-SUBJECT",
+			"type": "anyparse.check.ReflectiveReach",
+			"method": "subjectEnum",
+			"find": "final written: Null<String> = subjectType(BoolExprShape.unwrapParens(held.children[0], _shape.parenKind));",
+			"replace": "final only: Array<String> = _graph.types.imports.enumsDeclaring(ctor); if (only.length == 1) return only[0]; final written: Null<String> = null;",
+			"note": "a capture is typed by the one indexed enum declaring its constructor's name, whatever the subject is (review R3 H2)"
+		},
+		{
+			"name": "M-TS-BINDER-TOP",
+			"type": "anyparse.check.ReflectiveReach",
+			"method": "subjectEnum",
+			"find": "if (arm == null || !CasePatterns.patternRun(arm, _shape).exists(r -> r.children.exists(c -> topPattern(c, pattern)))) return null;",
+			"replace": "if (arm == null) return null;",
+			"note": "a nested pattern is typed by the subject's enum"
+		},
+		{
+			"name": "M-TS-BINDER-OWN-PARAMS",
+			"type": "anyparse.check.ReflectiveReach",
 			"method": "binderType",
-			"find": "enums.length == 1 ?",
-			"replace": "enums.length > 0 ?",
-			"note": "a constructor name two enums declare types a capture by the first one's parameter"
+			"find": "if (written == null || CallGraphNames.mentionsTypeName(written, _graph.types.generics.typeParamsOf(owner), _plugin.typeSyntax))",
+			"replace": "if (written == null)",
+			"note": "a constructor parameter of the enum's own type parameter is read as the type of that name"
+		},
+		{
+			"name": "M-TS-BINDER-PLACED-BY",
+			"type": "anyparse.check.ReflectiveReach",
+			"method": "placeOf",
+			"find": "if (reaches != null) return { reaches: reaches, by: capture };",
+			"replace": "if (reaches != null) return { reaches: reaches, by: null };",
+			"note": "the run no longer names a capture an enum constructor typed"
+		},
+		{
+			"name": "M-TS-UNSEALED-NOTE",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "reportLockHeld",
+			"find": "+ evidenceOf(blocking, held, graded.taint) + graded.note + unsealed;",
+			"replace": "+ evidenceOf(blocking, held, graded.taint) + graded.note;",
+			"note": "a hold whose lock member a reflective write unsealed no longer says which member and which writers (review R3 M4)"
+		},
+		{
+			"name": "M-TS-UNSEALED-TAKE",
+			"type": "anyparse.check.MainSinkReport",
+			"method": "oneTakePerLock",
+			"find": "t.finding.message += writes.unsealedNote(t.edge.receiverField, null) ?? '';",
+			"replace": "",
+			"note": "a main-thread take of a member a reflective write unsealed no longer says who unsealed it"
+		},
+		{
+			"name": "M-TS-UNSEALED-THROW",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "reportThrowHeld",
+			"find": "final escapes: String = capped(evidence) + (writes.unsealedNote(a.edge.receiverField, a.lock) ?? '');",
+			"replace": "final escapes: String = capped(evidence);",
+			"note": "a hold left on a throw whose lock member a reflective write unsealed no longer says who unsealed it"
+		},
+		{
+			"name": "M-TS-UNSEALED-HOLDS",
+			"type": "anyparse.check.FieldWrites",
+			"method": "notices",
+			"find": "if (unnamed > 0)",
+			"replace": "if (false)",
+			"note": "the run no longer counts the holds that lost their lock name"
+		},
+		{
+			"name": "M-TS-UNSEALED-PRECONDITIONS",
+			"type": "anyparse.check.FieldWrites",
+			"method": "notices",
+			"find": "final lacking: String = where.length == 0 || missing.length == 0",
+			"replace": "final lacking: String = true",
+			"note": "the run no longer names the preconditions of the instantiation bound it fails"
+		},
+		{
+			"name": "M-TS-OPT-SINKS-ENTRY-UNMATCHED",
+			"type": "anyparse.check.PositiveSinks",
+			"method": "unmatched",
+			"find": "for (p in sinks) if (p.indexOf('.') >= 0 && !CallGraphNames.isTypeLike(p) && graph.matchIds(p).length == 0)",
+			"replace": "for (p in sinks) if (false)",
+			"note": "a sinks entry written with a package that names no call of the run, beside one that does, reads as a working one (review R3 M3)"
 		},
 		{
 			"name": "M-TS-FINAL-SUPERS-WRITTEN",

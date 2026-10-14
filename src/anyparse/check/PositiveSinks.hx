@@ -95,6 +95,15 @@ final class PositiveSinks {
 		return out;
 	}
 
+	/**
+	 * Says in `found` each `sinks` entry written with its package (`pkg.Type.member`) that names no call of `graph`: such an
+	 * entry names the type declared at that path alone, so a wrong package adds no sink while the others still match.
+	 */
+	public static function unmatched(sinks: Array<String>, graph: CallGraph, found: Array<String>): Void {
+		for (p in sinks) if (p.indexOf('.') >= 0 && !CallGraphNames.isTypeLike(p) && graph.matchIds(p).length == 0)
+			found.push('option "sinks" entry "$p" names no call of the run — it adds no sink');
+	}
+
 	/** The library calls whose bodies block, for a chain whose `options` walk the libraries (`libraryBodies`); none otherwise. */
 	public inline function libraryFor(options: ThreadSafetyOptions): Array<String> {
 		return walkedFor(options)?.ids ?? [];

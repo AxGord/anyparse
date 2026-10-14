@@ -2330,7 +2330,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyMainStatesTest#testALiteralArgumentDecidesAFinalLocalCondition :: control :: '
 				+ 'M-TS-COND-FINAL-LOCAL,M-TS-ARG-LITERAL-NONNULL,M-TS-ARG-FINAL-LOCAL-READ',
 			'unit.check.ThreadSafetyMainStatesTest#testTheOwnerIsOnAWayThatRunsTheCall :: control :: M-TS-STATES-OWNER-IGNORED',
-			'unit.check.ThreadSafetyOptionsTest#testALostSinksListIsSaid :: control :: M-TS-OPT-SINKS-UNMATCHED,M-TS-OPT-SKIP-DECLARED,M-TS-OPT-NO-SINK-NOTICES,M-TS-OPT-LIFTED',
+			'unit.check.ThreadSafetyOptionsTest#testALostSinksListIsSaid :: control :: '
+				+ 'M-TS-OPT-SINKS-UNMATCHED,M-TS-OPT-SKIP-DECLARED,M-TS-OPT-NO-SINK-NOTICES,M-TS-OPT-LIFTED,M-TS-OPT-SINKS-ENTRY-UNMATCHED',
 			'unit.check.ThreadSafetyOptionsTest#testEveryMalformedOptionIsSaid :: control :: '
 				+ 'M-TS-OPT-UNKNOWN,M-TS-OPT-LIST-SHAPE,M-TS-OPT-LIST-ITEM,M-TS-OPT-FLAG,M-TS-OPT-BUDGET,M-TS-OPT-BOUNDED-ENTRY,M-TS-OPT-BOUNDED-SITE',
 			'unit.check.ThreadSafetyOwnReasonsTest#testABriefUnresolvedCallOnceLeavesTheLockShort :: control :: '
@@ -2364,15 +2365,22 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyQuietLocksTest#testAConstructorsOwnTakeNeverWaits :: control :: M-TS-CTOR-TAKE',
 			'unit.check.ThreadSafetyQuietLocksTest#testALockOnlyTakenSharedNeverWaits :: control :: M-TS-SHARED-OFF,M-TS-SHARED-HOLD',
 			'unit.check.ThreadSafetyQuietLocksTest#testAnExclusiveTakeMakesTheSharedOnesWait :: control :: M-TS-SHARED-ANY',
+			'unit.check.ThreadSafetyReflectiveSealTest#testACaptureIsTypedThroughItsSubject :: control :: '
+				+ 'M-TS-BINDER-SUBJECT,M-TS-BINDER-PLACED-BY,M-TS-BINDER-TOP,M-TS-BINDER-OWN-PARAMS,M-TS-BINDER-UNIQUE',
 			'unit.check.ThreadSafetyReflectiveSealTest#testAFreshObjectReceiverKeepsTheLockNames :: control :: '
 				+ 'M-TS-PLACE-FRESH-STRUCT,M-TS-PLACE-FRESH-NEW,M-TS-PLACE-FRESH-MUTABLE',
+			'unit.check.ThreadSafetyReflectiveSealTest#testALockAReflectiveWriteUnsealsSaysWhoUnsealedIt :: control :: '
+				+ 'M-TS-UNSEALED-NOTE,M-TS-UNSEALED-HOLDS,M-TS-UNSEALED-PRECONDITIONS,M-TS-UNSEALED-TAKE,M-TS-UNSEALED-THROW',
 			'unit.check.ThreadSafetyReflectiveSealTest#testATypeParameterReceiverIsBoundedByItsInstantiations :: control :: '
 				+ 'M-TS-PLACE-INSTANTIATIONS,M-TS-PLACE-COMPLETE,M-TS-PLACE-RAW-LINK,M-TS-PLACE-FREE-SUB,M-TS-PLACE-NEVER-MADE,'
 				+ 'M-TS-PLACE-UNDECLARED,M-TS-PLACE-GLOB-MATCH,M-TS-PLACE-MAKES-NEW,M-TS-PLACE-MAKES-VALUE,M-TS-PLACE-MAKES-RECEIVER,'
 				+ 'M-TS-PLACE-VOID,M-TS-PLACE-FORWARDED-BOUND,M-TS-PLACE-PARAM-CONSTRAINT,M-TS-PLACE-PARAM-OWNER,M-TS-FINAL-SUPERS-WRITTEN,'
 				+ 'M-TS-REACH-ALIAS-SUBTYPES',
 			'unit.check.ThreadSafetyReflectiveSealTest#testAValueTheRunCannotPlaceUnsealsEveryLock :: control :: '
-				+ 'M-TS-SEAL-REFLECT-UNPLACED,M-TS-SEAL-UNPLACED-NOTICE,M-TS-BINDER-TYPE,M-TS-BINDER-UNIQUE',
+				+ 'M-TS-SEAL-REFLECT-UNPLACED,M-TS-SEAL-UNPLACED-NOTICE,M-TS-BINDER-TYPE',
+			'unit.check.ThreadSafetyReflectiveSealTest#testEveryNameThatMakesTheClassMakesIt :: control :: '
+				+ 'M-TS-MAKES-RESOLVED,M-TS-MAKES-LITERAL,M-TS-MAKES-UNKNOWN,M-TS-MAKES-STD,M-TS-MAKES-ALIAS-NOTHING,M-TS-MAKES-ALIAS-STD,'
+				+ 'M-TS-MAKES-WILD,M-TS-MAKES-BOUND,M-TS-MAKES-USING',
 			'unit.check.ThreadSafetyRegistersTest#testALoopAboveTheRegistrarRepeatsNothing :: control :: M-TS-REGISTER-OWNER',
 			'unit.check.ThreadSafetyRegistersTest#testARegistrationInALoopRepeatsNothing :: control :: M-TS-REGISTER-OWNER',
 			'unit.check.ThreadSafetyRegistersTest#testTheOwnerIsNeverUpARegistration :: control :: M-TS-REGISTER-OWNER',
@@ -6536,6 +6544,25 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-PLACE-FORWARDED-BOUND',
 			'M-TS-BINDER-TYPE',
 			'M-TS-BINDER-UNIQUE',
+			'M-TS-MAKES-RESOLVED',
+			'M-TS-MAKES-LITERAL',
+			'M-TS-MAKES-UNKNOWN',
+			'M-TS-MAKES-STD',
+			'M-TS-MAKES-WILD',
+			'M-TS-MAKES-BOUND',
+			'M-TS-MAKES-USING',
+			'M-TS-MAKES-ALIAS-NOTHING',
+			'M-TS-MAKES-ALIAS-STD',
+			'M-TS-BINDER-SUBJECT',
+			'M-TS-BINDER-TOP',
+			'M-TS-BINDER-OWN-PARAMS',
+			'M-TS-BINDER-PLACED-BY',
+			'M-TS-UNSEALED-NOTE',
+			'M-TS-UNSEALED-TAKE',
+			'M-TS-UNSEALED-THROW',
+			'M-TS-UNSEALED-HOLDS',
+			'M-TS-UNSEALED-PRECONDITIONS',
+			'M-TS-OPT-SINKS-ENTRY-UNMATCHED',
 			'M-TS-FINAL-SUPERS-WRITTEN',
 			'M-TS-REACH-ALIAS-SUBTYPES'
 		];
