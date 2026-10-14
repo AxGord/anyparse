@@ -718,7 +718,7 @@ final class CallGraph {
 			if (declared != null && underlyingKinds.contains(node.kind)) {
 				// the declared-type slot, never a child: a bounded `<T:B>` projects its bound among the children
 				final under: Null<String> = node.type?.name;
-				_facts.abstracts[declared] = under == null ? null : CallGraphNames.lastSegments(under, 1);
+				_facts.abstracts[declared] = under;
 			}
 			// a `final class` declares its parameters on the inner form the wrapper holds, which is where they are keyed
 			final declaredAt: Null<Span> = declared == null ? null : (RefactorSupport.typeDeclOf(node)?.nameNode ?? node).span;
@@ -894,49 +894,6 @@ final class CallGraph {
 		return externalNode(owner ?? typeName, ctorName);
 	}
 
-	/**
-	 * The written types of the parameters of function `id`, in order (`null` for one written without a
-	 * type), read off its declarations — the ones every declaration the node folds (`declarationsOf`) writes alike;
-	 * for an external target only the first, from the index. Null when a declaration cannot be read, or two of them
-	 * write the parameters differently: a call of the node may then run either.
-	 */
-	private function paramTypesOf(id: String): Null<Array<Null<String>>> {
-		final cached: Null<Array<Null<String>>> = _facts.paramTypes[id];
-		if (cached != null) return cached;
-		final n: Null<FnNode> = nodes[id];
-		if (n == null) return null;
-		final declared: Array<FnDeclaration> = declarationsOf(id);
-		if (declared.length == 0) {
-			final type: Null<String> = n.typeName;
-			final name: Null<String> = n.name;
-			return type == null || name == null ? null : [types.memberOnChain(type, name)?.firstParamTypeSource];
-		}
-		var out: Null<Array<Null<String>>> = null;
-		var rest: Bool = false;
-		for (d in declared) {
-			final entry: Null<ParsedEntry> = _entries[CallGraphNames.normalizePath(d.file)];
-			final read: Null<{ params: Array<Null<String>>, rest: Bool }> = entry == null
-				? null
-				: CallGraphNames.declaredParams(entry.tree, entry.source, d.span.from, _shape, _provider);
-			if (read == null) return null;
-			final held: Null<Array<Null<String>>> = out;
-			if (held == null) {
-				out = read.params;
-				rest = read.rest;
-			} else if (
-				read.rest != rest || read.params.length != held.length
-				|| [for (i in 0...held.length) held[i] == read.params[i]].contains(false)
-			) {
-				return null;
-			}
-		}
-		final params: Null<Array<Null<String>>> = out;
-		if (params == null) return null;
-		if (rest) _facts.restParams[id] = true;
-		_facts.paramTypes[id] = params;
-		return params;
-	}
-
 	/** Pseudo-node holding calls made from the instance (or, `isStatic`, the static) field initializers of `typeName`. */
 	private function initNode(typeName: String, file: String, isStatic: Bool = false): String {
 		final name: String = isStatic ? STATIC_INIT_NAME : INIT_NAME;
@@ -1056,8 +1013,12 @@ final class CallGraph {
 		final source: String = entry.source;
 		final moduleType: String = CallGraphNames.moduleTypeName(file);
 		// the file's declared types as the graph keys them (`CallGraphKeys`): a library type never merges into a project one
-		final keys: CallGraphKeys = new CallGraphKeys(types.imports, file, _plugin.typeSyntax, provider, source);
+		final keys: CallGraphKeys = new CallGraphKeys(types.imports, file, _plugin.typeSyntax, provider, source, tree, fnKinds);
 		keys.typeLocals(tree, localDeclKinds, newExprKind, callKind);
+		// the files whose declarations wrote the types read while typing a receiver (`readIn`), for the types a name there may be
+		final readFrom: Array<String> = [];
+		// each type a declaration typing a receiver names where another one of it names the type read (`readIn`): runs too
+		final keyedApart: Array<{ from: String, to: String }> = [];
 		final declaredTypes: Map<Int, String> = keys.declaredTypes;
 		final typeSources: Map<Int, String> = keys.typeSources;
 		final bindCache: Map<String, Map<Int, Int>> = [];
@@ -1200,11 +1161,25 @@ final class CallGraph {
 				memberOnChain(currentType, name) ?? (imported ? importedFunction(name, span, currentType) : null);
 		}
 
-		/** The written `:Type` of `member` on `typeName`'s chain, from the index; on a type it holds none of, the std's (`StdTypes`). */
+		/** `written`, a type `owner` (`fn`) declares in `files`, keyed there (`CallGraphKeys.firstKeying`); the files join `readFrom`. */
+		function readIn(files: Array<String>, written: Null<String>, owner: Null<String>, ?fn: String): Null<String> {
+			for (f in files) if (!readFrom.contains(f)) readFrom.push(f);
+			final unkeyed: Array<String> = types.generics.typeParamsOf(owner ?? '').concat(fn == null ? [] : _facts.typeParams[fn] ?? []);
+			return CallGraphKeys.firstKeying(types.imports, _plugin.typeSyntax, files, written, unkeyed, keyedApart);
+		}
+
+		/** The written `:Type` of `member` on `typeName`'s chain, from the index, read where declared (`readIn`); else the std's. */
 		function memberTypeSource(typeName: String, member: String): Null<String> {
-			return types.declarationCount(typeName) > 0
-				? types.memberOnChain(typeName, member)?.typeSource
-				: StdTypes.fieldOf(_plugin, typeName, member);
+			if (types.declarationCount(typeName) == 0) return StdTypes.fieldOf(_plugin, typeName, member);
+			final owner: Null<String> = types.declaringTypeOf(typeName, member);
+			return owner == null
+				? null
+				: readIn(types.imports.memberFilesOf(owner, member), types.memberOnChain(owner, member)?.typeSource, owner);
+		}
+
+		/** The written return type of the node `target`, read where declared (`readIn`); null for none. */
+		function returnSourceOf(target: String): Null<String> {
+			return readIn([for (d in declarationsOf(target)) d.file], _facts.returnSources[target], nodes[target]?.typeName, target);
 		}
 
 		/**
@@ -1237,7 +1212,8 @@ final class CallGraph {
 			final nominals: Array<String> = [];
 			for (w in bounds) {
 				final outer: Null<String> = NominalTypes.outerNominalOf(w.trim(), _plugin.typeSyntax);
-				if (outer != null && !isTypeParam(outer, currentType)) nominals.push(types.resolveAlias(outer));
+				// a bound is written in this file, by the function or the type enclosing the value's type
+				if (outer != null && !isTypeParam(outer, currentType)) nominals.push(types.resolveAlias(types.imports.typeOf(file, outer)));
 			}
 			final declaring: Null<String> = nominals.find(n -> types.declaringTypeOf(n, member) != null);
 			return declaring ?? (bounds.length == 1 && nominals.length == 1 ? nominals[0] : null);
@@ -1309,8 +1285,8 @@ final class CallGraph {
 				null
 			else
 				viewedArgs(
-					types.generics.argumentsFor(owner, viewType, _plugin.typeSyntax), viewType, viewType == receiverType ? ownArgs : null,
-					currentType
+					types.generics.argumentsFor(owner, viewType, _plugin.typeSyntax, (f, a, linking) -> readIn([f], a, linking) ?? a),
+					viewType, viewType == receiverType ? ownArgs : null, currentType
 				);
 			return if (args != null && args.length >= params.length)
 				CallGraphNames.substituteTypeParams(written, params, args, _plugin.typeSyntax)
@@ -1340,9 +1316,8 @@ final class CallGraph {
 			?scope: Int
 		): Null<String> {
 			// a return type written as a dotted path is read as that path; a std function's from the std (`StdTypes.returnOf`)
-			final returned: Null<String> = keys.returnedPath(_facts.returns[target], _facts.returnSources[target]) ?? StdTypes.returnOf(
-				_plugin, nodes[target]
-			);
+			final written: Null<String> = returnSourceOf(target);
+			final returned: Null<String> = keys.returnedPath(_facts.returns[target], written) ?? StdTypes.returnOf(_plugin, nodes[target]);
 			if (returned == null || nullableWrappers.contains(returned) || (_facts.typeParams[target] ?? []).contains(returned))
 				return null;
 			final owner: Null<String> = nodes[target]?.typeName;
@@ -1365,13 +1340,15 @@ final class CallGraph {
 
 		/**
 		 * What `this` denotes inside `currentType`: the type itself, or — inside an abstract — its UNDERLYING type,
-		 * seen through a typedef alias, whose members a `this.m()` there reaches. Null for an abstract whose underlying
-		 * type is unreadable.
+		 * seen through a typedef alias, whose members a `this.m()` there reaches — read through this file's imports, where the
+		 * abstract writes it. Null for an abstract whose underlying type is unreadable.
 		 */
 		function selfTypeOf(currentType: Null<String>): Null<String> {
 			if (currentType == null || !_facts.abstracts.exists(currentType)) return currentType;
 			final underlying: Null<String> = _facts.abstracts[currentType];
-			return underlying == null ? null : types.resolveAlias(underlying);
+			return underlying == null || types.generics.declaresTypeParam(currentType, underlying)
+				? underlying
+				: types.resolveAlias(types.imports.typeOf(file, underlying));
 		}
 
 		/** The type `recvRaw` names when it is a bare type-like identifier that binds to nothing (as the graph keys it), else null. */
@@ -1465,7 +1442,7 @@ final class CallGraph {
 				final call: Null<CallTarget> = callTargetOf(expr, currentType);
 				final returned: Null<String> = call == null
 					? null
-					: _facts.returnSources[call.target] ?? StdTypes.returnOf(_plugin, nodes[call.target]);
+					: returnSourceOf(call.target) ?? StdTypes.returnOf(_plugin, nodes[call.target]);
 				if (call == null || returned == null) return null;
 				final written: String = returned;
 				if (CallGraphNames.mentionsTypeName(written, _facts.typeParams[call.target] ?? [], _plugin.typeSyntax)) return null;
@@ -1828,6 +1805,56 @@ final class CallGraph {
 			return types.isStatic(owner, member) ? [] : virtualTargets(typeName, member);
 		}
 
+		/**
+		 * The edges of a call of `calleeName` at `span` on a receiver of the type `written` (`field` the member the receiver
+		 * reads, if any): the member the chain declares, or the one a `@:forward` abstract routes it to, with every override a
+		 * value dispatches to; a static extension a `using` brings in when no indexed type on the chain declares it; nothing
+		 * for a field, whose function value the call runs. The node the call names, or null.
+		 */
+		function dispatchOn(
+			written: Receiver, calleeName: String, span: Null<Span>, field: Null<String>, currentType: Null<String>
+		): Null<String> {
+			final from: String = frameId(currentType);
+			// a `@:forward` abstract routes a member it does not declare to its underlying value
+			final forwarded: Null<String> = memberOnChain(written.typeName, calleeName) == null
+				&& types.memberOnChain(written.typeName, calleeName) == null
+				? types.meta.forwardedTo(written.typeName, calleeName)
+				: null;
+			final recv: Receiver = forwarded == null ? written : { typeName: forwarded, isValue: true, isDynamic: false };
+			final resolved: Null<String> = memberOnChain(recv.typeName, calleeName);
+			if (resolved == null && types.fieldOnChain(recv.typeName, calleeName)) {
+				unresolvedAt(span, FunctionValue(calleeName), currentType);
+				return null;
+			}
+			if (
+				resolved == null && recv.isValue && types.chainFullyIndexed(recv.typeName)
+				&& types.memberOnChain(recv.typeName, calleeName) == null
+			) {
+				// no indexed type on the chain declares it: a static extension a `using` brings in, else unresolved
+				final extensions: Array<String> = types.imports.staticExtensionsOf(file, calleeName);
+				// a type on the chain that brings extensions in itself (`@:using`) may supply one no import names
+				final bringing: Null<String> = types.firstOnChain(recv.typeName, t -> types.meta.bringsExtensions(t));
+				if (bringing != null)
+					unresolvedAt(span, Unseen('the static extension `$calleeName` the extensions of `$bringing` may supply'), currentType)
+				else if (extensions.length == 0)
+					unresolvedAt(span, UnresolvedReceiver(calleeName), currentType);
+				var extended: Null<String> = null;
+				for (extension in extensions) {
+					final target: String = memberOnChain(extension, calleeName) ?? externalNode(extension, calleeName);
+					addEdge(from, target, Call, null, file, span);
+					extended = target;
+				}
+				return extended;
+			}
+			// a placeholder names the type the index says declares it, which is the node its file upgrades
+			final target: String = resolved ?? externalNode(types.declaringTypeOf(recv.typeName, calleeName) ?? recv.typeName, calleeName);
+			addEdge(from, target, Call, null, file, span, recv.isValue ? recv.typeName : null, field);
+			if (recv.isValue) for (v in virtualTargets(recv.typeName, calleeName))
+				addEdge(from, v, Virtual, null, file, span, recv.typeName, field);
+			if (nodes[target]?.isDynamic == true) unresolvedAt(span, FunctionValue(calleeName), currentType);
+			return target;
+		}
+
 		function handleCall(call: QueryNode, currentType: Null<String>): Void {
 			final from: String = frameId(currentType);
 			final span: Null<Span> = call.span;
@@ -1857,53 +1884,25 @@ final class CallGraph {
 							if (ref != null) refEdges(from, ref, null, span);
 						}
 					} else {
+						readFrom.resize(0);
+						keyedApart.resize(0);
 						final written: Null<Receiver> = receiverType(callee.children[0], currentType, calleeName);
 						if (written == null) {
 							unresolvedAt(span, UnresolvedReceiver(calleeName), currentType);
 						} else if (written.isDynamic) {
 							unresolvedAt(span, DynamicReceiver(calleeName), currentType);
 						} else {
-							// a `@:forward` abstract routes a member it does not declare to its underlying value
-							final forwarded: Null<String> = memberOnChain(written.typeName, calleeName) == null
-								&& types.memberOnChain(written.typeName, calleeName) == null
-								? types.meta.forwardedTo(written.typeName, calleeName)
-								: null;
-							final recv: Receiver = forwarded == null ? written : { typeName: forwarded, isValue: true, isDynamic: false };
-							final resolved: Null<String> = memberOnChain(recv.typeName, calleeName);
-							if (resolved == null && types.fieldOnChain(recv.typeName, calleeName)) {
-								unresolvedAt(span, FunctionValue(calleeName), currentType);
-							} else if (
-								resolved == null && recv.isValue && types.chainFullyIndexed(recv.typeName)
-								&& types.memberOnChain(recv.typeName, calleeName) == null
-							) {
-								// no indexed type on the chain declares it: a static extension a `using` brings in, else unresolved
-								final extensions: Array<String> = types.imports.staticExtensionsOf(file, calleeName);
-								// a type on the chain that brings extensions in itself (`@:using`) may supply one no import names
-								final bringing: Null<String> = types.firstOnChain(recv.typeName, t -> types.meta.bringsExtensions(t));
-								if (bringing != null)
-									unresolvedAt(
-										span, Unseen('the static extension `$calleeName` the extensions of `$bringing` may supply'),
-										currentType
-									)
-								else if (extensions.length == 0)
-									unresolvedAt(span, UnresolvedReceiver(calleeName), currentType);
-								for (extension in extensions) {
-									calleeId = memberOnChain(extension, calleeName) ?? externalNode(extension, calleeName);
-									addEdge(from, calleeId, Call, null, file, span);
-								}
-							} else {
-								final field: Null<String> = receiverField(callee.children[0], currentType);
-								for (type in [recv.typeName].concat(types.imports.alternateTypes(file, recv.typeName))) {
-									// a placeholder names the type the index says declares it, which is the node its file upgrades
-									final target: String = memberOnChain(type, calleeName) ?? externalNode(
-										types.declaringTypeOf(type, calleeName) ?? type, calleeName
-									);
-									if (type == recv.typeName) calleeId = target;
-									addEdge(from, target, Call, null, file, span, recv.isValue ? type : null, field);
-									if (recv.isValue) for (v in virtualTargets(type, calleeName))
-										addEdge(from, v, Virtual, null, file, span, type, field);
-									if (nodes[target]?.isDynamic == true) unresolvedAt(span, FunctionValue(calleeName), currentType);
-								}
+							final field: Null<String> = receiverField(callee.children[0], currentType);
+							// each type the receiver may be — a name this file or one whose declaration typed it wrote (`readFrom`) may be
+							// another type there — resolves the call on its own, whatever the others declare
+							final alternates: Array<String> = types.imports.alternateTypesIn([file].concat(readFrom), written.typeName);
+							for (t in CallGraphKeys.apartFrom(types.imports, keyedApart, written.typeName)) if (!alternates.contains(t))
+								alternates.push(t);
+							for (type in [written.typeName].concat(alternates)) {
+								final target: Null<String> = dispatchOn(
+									{ typeName: type, isValue: written.isValue, isDynamic: false }, calleeName, span, field, currentType
+								);
+								if (calleeId == null) calleeId = target;
 							}
 						}
 					}
@@ -1954,7 +1953,7 @@ final class CallGraph {
 		/** The written type of parameter `index` of the call target `site` resolved to, as its receiver sees it. */
 		function argumentTypeSource(site: CallSite, index: Int, currentType: Null<String>): Null<String> {
 			final target: Null<String> = site.target;
-			final params: Null<Array<Null<String>>> = target == null ? null : paramTypesOf(target);
+			final params: Null<Array<Null<String>>> = target == null ? null : CallGraphKeys.paramTypesOf(this, target);
 			// a rest parameter takes every argument from its position on
 			final at: Int = params != null && target != null && _facts.restParams.exists(target)
 				? Std.int(Math.min(index, params.length - 1))

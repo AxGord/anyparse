@@ -2346,6 +2346,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-TS-PATH-DECLARED-PACKAGE,M-TS-PATH-NOMINAL,M-TS-PATH-RETURN,M-TS-PATH-NULLABLE-KEYED,M-TS-ALIAS-TYPE',
 			'unit.check.ThreadSafetyPositiveSinksTest#testALocalOfACallResultIsTypedByWhatTheCallReturns :: control :: '
 				+ 'M-TS-LOCAL-CALL-INIT,M-TS-LOCAL-CALL-READ',
+			'unit.check.ThreadSafetyPositiveSinksTest#testAStdLockWrittenInADeclarationWaitsWhereverItIsRead :: control :: '
+				+ 'M-TS-DECL-MEMBER-FILE,M-TS-ALTERNATE-WHOLE-CALL',
 			'unit.check.ThreadSafetyPositiveSinksTest#testAStdMemberStandsWhereEveryNamesakeAgrees :: control :: '
 				+ 'M-TS-STD-AGREE,M-TS-STD-SUPER,M-TS-STD-SIBLING',
 			'unit.check.ThreadSafetyPositiveSinksTest#testAWildcardOrGuardedImportOfALibraryTypeIsNotItsProjectNamesake :: control :: '
@@ -2371,16 +2373,30 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-TS-PLACE-FRESH-STRUCT,M-TS-PLACE-FRESH-NEW,M-TS-PLACE-FRESH-MUTABLE',
 			'unit.check.ThreadSafetyReflectiveSealTest#testALockAReflectiveWriteUnsealsSaysWhoUnsealedIt :: control :: '
 				+ 'M-TS-UNSEALED-NOTE,M-TS-UNSEALED-HOLDS,M-TS-UNSEALED-PRECONDITIONS,M-TS-UNSEALED-TAKE,M-TS-UNSEALED-THROW',
+			'unit.check.ThreadSafetyReflectiveSealTest#testAParameterIsFollowedOnlyWhereEveryCallIsSeen :: control :: '
+				+ 'M-TS-STORED-CALLERS,M-TS-STORED-HOLDERS,M-TS-STORED-SPELLED,M-TS-STORED-GLOB,M-TS-STORED-SKIPPED,M-TS-STORED-REF',
+			'unit.check.ThreadSafetyReflectiveSealTest#testAParameterItsFunctionWritesHoldsWhatEveryWriteStores :: control :: '
+				+ 'M-TS-STORED-WRITTEN,M-TS-STORED-WRITE-VALUE,M-TS-STORED-WRITE-OPERATOR,M-TS-STORED-WRITE-OTHER',
+			'unit.check.ThreadSafetyReflectiveSealTest#testAStructureTypedefMayHoldALock :: control :: M-TS-ENUM-KIND',
+			'unit.check.ThreadSafetyReflectiveSealTest#testATypeParameterNamedLikeAClassIsNoneOfIt :: control :: '
+				+ 'M-TS-STORED-TYPE-PARAM,M-TS-SCOPE-TYPE-PARAMS,M-TS-SCOPE-FUNCTION-PARAMS',
 			'unit.check.ThreadSafetyReflectiveSealTest#testATypeParameterReceiverIsBoundedByItsInstantiations :: control :: '
 				+ 'M-TS-PLACE-INSTANTIATIONS,M-TS-PLACE-COMPLETE,M-TS-PLACE-RAW-LINK,M-TS-PLACE-FREE-SUB,M-TS-PLACE-NEVER-MADE,'
 				+ 'M-TS-PLACE-UNDECLARED,M-TS-PLACE-GLOB-MATCH,M-TS-PLACE-MAKES-NEW,M-TS-PLACE-MAKES-VALUE,M-TS-PLACE-MAKES-RECEIVER,'
 				+ 'M-TS-PLACE-VOID,M-TS-PLACE-FORWARDED-BOUND,M-TS-PLACE-PARAM-CONSTRAINT,M-TS-PLACE-PARAM-OWNER,M-TS-FINAL-SUPERS-WRITTEN,'
 				+ 'M-TS-REACH-ALIAS-SUBTYPES',
 			'unit.check.ThreadSafetyReflectiveSealTest#testAValueTheRunCannotPlaceUnsealsEveryLock :: control :: '
-				+ 'M-TS-SEAL-REFLECT-UNPLACED,M-TS-SEAL-UNPLACED-NOTICE,M-TS-BINDER-TYPE',
+				+ 'M-TS-SEAL-REFLECT-UNPLACED,M-TS-SEAL-UNPLACED-NOTICE,M-TS-BINDER-TYPE,M-TS-STORED-COMPLETE',
+			'unit.check.ThreadSafetyReflectiveSealTest#testAWriteThatMayStoreALockUnsealsAsBefore :: control :: M-TS-STORED-ANY,M-TS-STORED-RELATED,M-TS-STORED-ARGUMENTS',
+			'unit.check.ThreadSafetyReflectiveSealTest#testAWriteThatStoresNoLockKeepsTheLockNames :: control :: '
+				+ 'M-TS-STORED-NOTHING,M-TS-STORED-LITERAL,M-TS-STORED-NULL,M-TS-STORED-TYPED,M-TS-STORED-UNRELATED,M-TS-STORED-PARAMETER,'
+				+ 'M-TS-STORED-KEPT-NOTICE,M-TS-STORED-COUNTS,M-TS-STORED-ENUM,M-TS-STORED-BASIC,M-TS-STORED-CATCH-ALL',
+			'unit.check.ThreadSafetyReflectiveSealTest#testAnUncheckedCastIsNoDeclaredType :: control :: '
+				+ 'M-TS-STORED-CAST-LOCAL,M-TS-STORED-CAST-FIELD,M-TS-STORED-CAST-KINDS,M-TS-STORED-CAST-DYNAMIC,M-TS-STORED-CAST-WRITES',
 			'unit.check.ThreadSafetyReflectiveSealTest#testEveryNameThatMakesTheClassMakesIt :: control :: '
 				+ 'M-TS-MAKES-RESOLVED,M-TS-MAKES-LITERAL,M-TS-MAKES-UNKNOWN,M-TS-MAKES-STD,M-TS-MAKES-ALIAS-NOTHING,M-TS-MAKES-ALIAS-STD,'
 				+ 'M-TS-MAKES-WILD,M-TS-MAKES-BOUND,M-TS-MAKES-USING',
+			'unit.check.ThreadSafetyReflectiveSealTest#testWhatAWriteStoresUnsealsOnlyTheLocksOfItsType :: control :: M-TS-STORED-MEMBER-TYPE,M-TS-STORED-MARKED,M-TS-STORED-TYPED-NOTICE',
 			'unit.check.ThreadSafetyRegistersTest#testALoopAboveTheRegistrarRepeatsNothing :: control :: M-TS-REGISTER-OWNER',
 			'unit.check.ThreadSafetyRegistersTest#testARegistrationInALoopRepeatsNothing :: control :: M-TS-REGISTER-OWNER',
 			'unit.check.ThreadSafetyRegistersTest#testTheOwnerIsNeverUpARegistration :: control :: M-TS-REGISTER-OWNER',
@@ -3010,11 +3026,19 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.BodySlotGuardSliceTest#testAllowsSoleCatchClauseRemoval :: control :: M-BODYSLOT-LEAD-KEPT',
 			'unit.query.BodySlotGuardSliceTest#testAllowsSoleCatchClauseRemovalWithATrailingComment :: control :: M-BODYSLOT-TRIM-WS-ONLY',
 			'unit.query.BodySlotGuardSliceTest#testAllowsWholeElseBranchRemoval :: control :: M-BODYSLOT-LEAD-KEPT',
+			'unit.query.CallGraphTest#testADeclaredTypeIsReadInTheFileThatWroteIt :: control :: '
+				+ 'M-TS-DECL-MEMBER-FILE,M-TS-DECL-RETURN-FILE,M-TS-DECL-READ-FROM,M-TS-DECL-BOUND,M-TS-PATH-NULLABLE-KEYED',
 			'unit.query.CallGraphTest#testALambdaParameterIsNoReferenceToItsLambda :: control :: M-GRAPH-LAMBDA-PARAM-SELF',
+			'unit.query.CallGraphTest#testATypeAnAliasASupertypeOrAnAbstractWritesIsReadWhereItIsWritten :: control :: '
+				+ 'M-TS-DECL-SUPER-ARGS,M-TS-DECL-PARAM-FILE,M-TS-DECL-UNDERLYING',
+			'unit.query.CallGraphTest#testATypeParameterIsNeverKeyedThroughAnImport :: control :: '
+				+ 'M-TS-KEY-TYPE-PARAM,M-TS-KEY-MEMBER-PARAMS,M-TS-KEY-SCOPE-PARAMS,M-TS-KEY-RETURN-PARAMS',
 			'unit.query.CallGraphTest#testAWildcardOrGuardedNameDispatchesToEveryTypeItMayBe :: control :: '
 				+ 'M-TS-WILD-EXPLICIT-NO-MAYBE,M-TS-WILD-MAYBE,M-TS-WILD-GUARDED,M-TS-WILD-PROJECT,M-TS-WILD-ORDER,M-TS-STD-PACKAGES,'
 				+ 'M-TS-ALTERNATE-SAME,M-TS-ALTERNATE-NEW',
 			'unit.query.CallGraphTest#testAddFilesUpgradesTheExternalPlaceholder :: control :: M-GRAPH-UPGRADE-EXTERNAL',
+			'unit.query.CallGraphTest#testAnAlternateTypeResolvesTheCallWhateverTheNamesakeDeclares :: control :: '
+				+ 'M-TS-ALTERNATE-WHOLE-CALL',
 			'unit.query.CallGraphTest#testBareCallSomethingElseMaySupplyIsNeverAConstructor :: control :: '
 				+ 'M-GRAPH-IMPORT-UNLISTED,M-GRAPH-UNLISTED-WILDCARD',
 			'unit.query.CallGraphTest#testBareStaticCallGetsNoVirtualEdge :: control :: M-GRAPH-STATIC-NO-VIRTUAL',
@@ -3060,6 +3084,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-GRAPH-ABSTRACT-UNDER-SLOT,M-GRAPH-ABSTRACT-PARAM-BOUND',
 			'unit.query.CallGraphTest#testThisInsideAnAbstractIsTheUnderlyingValue :: control :: M-GRAPH-ABSTRACT-THIS',
 			'unit.query.CallGraphTest#testThisInsideAnAbstractOverAnAliasIsTheAliasedType :: control :: M-GRAPH-ABSTRACT-THIS-ALIAS',
+			'unit.query.CallGraphTest#testTwoDeclarationsKeyingAMemberApartDispatchOnBoth :: control :: '
+				+ 'M-TS-KEY-APART,M-TS-KEY-APART-FIRST,M-TS-DECL-FILES-AGREE',
 			'unit.query.CallGraphTest#testTypeParameterBoundsOfSameNamedTypesStayApart :: control :: M-GRAPH-BOUNDS-BY-FILE',
 			'unit.query.CallGraphTest#testTypeParameterIsLookedUpWhereTheReceiverTypeWasWritten :: control :: '
 				+ 'M-GRAPH-BOUND-DECL-SCOPE,M-GRAPH-BOUND-LOCAL-SCOPE',
@@ -5149,7 +5175,6 @@ class TestDiscoveryParityTest extends Test {
 			'M-ESCAPES-FACTS-CLOSURE',
 			'M-ESCAPES-FACTS-DYNAMIC-RECEIVER',
 			'M-ESCAPES-FACTS-PRODUCED',
-
 			'M-ESCAPES-FACTS-INSTANCES',
 			'M-ESCAPES-FACTS-PARAMETER',
 			'M-ESCAPES-FACTS-GENERIC-METHOD',
@@ -5176,7 +5201,6 @@ class TestDiscoveryParityTest extends Test {
 			'M-REACH-COMPOUND-WRITE-ALIAS',
 			'M-REACH-ASSIGNMENT-VALUE-ALIAS',
 			'M-REACH-LAST-STATEMENT-VALUE',
-
 			'M-REACH-DISCARDED-BODY',
 			'M-REACH-DISCARDED-STATEMENT-BRANCH',
 			'M-ORACLE-PARALLEL-HALF-THE-CORES',
@@ -6464,6 +6488,43 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-SEAL-REFLECT-LITERAL-ANY',
 			'M-TS-SEAL-REFLECT-UNPLACED',
 			'M-TS-SEAL-UNPLACED-NOTICE',
+			'M-TS-STORED-COUNTS',
+			'M-TS-STORED-NOTHING',
+			'M-TS-STORED-ANY',
+			'M-TS-STORED-NULL',
+			'M-TS-STORED-LITERAL',
+			'M-TS-STORED-CATCH-ALL',
+			'M-TS-STORED-TYPED',
+			'M-TS-STORED-COMPLETE',
+			'M-TS-STORED-PARAMETER',
+			'M-TS-STORED-CALLERS',
+			'M-TS-STORED-ARGUMENTS',
+			'M-TS-STORED-SKIPPED',
+			'M-TS-STORED-HOLDERS',
+			'M-TS-STORED-SPELLED',
+			'M-TS-STORED-GLOB',
+			'M-TS-STORED-BASIC',
+			'M-TS-STORED-ENUM',
+			'M-TS-ENUM-KIND',
+			'M-TS-STORED-WRITTEN',
+			'M-TS-STORED-WRITE-VALUE',
+			'M-TS-STORED-WRITE-OPERATOR',
+			'M-TS-STORED-WRITE-OTHER',
+			'M-TS-STORED-TYPE-PARAM',
+			'M-TS-STORED-CAST-LOCAL',
+			'M-TS-STORED-CAST-FIELD',
+			'M-TS-STORED-CAST-KINDS',
+			'M-TS-STORED-CAST-DYNAMIC',
+			'M-TS-STORED-CAST-WRITES',
+			'M-TS-SCOPE-TYPE-PARAMS',
+			'M-TS-SCOPE-FUNCTION-PARAMS',
+			'M-TS-STORED-UNRELATED',
+			'M-TS-STORED-RELATED',
+			'M-TS-STORED-MEMBER-TYPE',
+			'M-TS-STORED-MARKED',
+			'M-TS-STORED-KEPT-NOTICE',
+			'M-TS-STORED-TYPED-NOTICE',
+			'M-TS-STORED-REF',
 			'M-TS-FOLD-EVERY-END',
 			'M-TS-FOLD-SAME-WAY',
 			'M-TS-FOLD-PARTS-ONCE',
@@ -6563,7 +6624,22 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-UNSEALED-PRECONDITIONS',
 			'M-TS-OPT-SINKS-ENTRY-UNMATCHED',
 			'M-TS-FINAL-SUPERS-WRITTEN',
-			'M-TS-REACH-ALIAS-SUBTYPES'
+			'M-TS-REACH-ALIAS-SUBTYPES',
+			'M-TS-DECL-MEMBER-FILE',
+			'M-TS-DECL-RETURN-FILE',
+			'M-TS-DECL-READ-FROM',
+			'M-TS-DECL-BOUND',
+			'M-TS-DECL-UNDERLYING',
+			'M-TS-ALTERNATE-WHOLE-CALL',
+			'M-TS-DECL-SUPER-ARGS',
+			'M-TS-KEY-TYPE-PARAM',
+			'M-TS-KEY-MEMBER-PARAMS',
+			'M-TS-KEY-RETURN-PARAMS',
+			'M-TS-KEY-APART',
+			'M-TS-KEY-APART-FIRST',
+			'M-TS-KEY-SCOPE-PARAMS',
+			'M-TS-DECL-PARAM-FILE',
+			'M-TS-DECL-FILES-AGREE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

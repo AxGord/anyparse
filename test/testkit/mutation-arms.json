@@ -5882,7 +5882,7 @@
 			"method": "collectEdges",
 			"find": [
 				"if (currentType == null || !_facts.abstracts.exists(currentType)) return currentType;",
-				"final underlying: Null<String> = _facts.abstracts[currentType];\n\t\t\treturn underlying == null ? null : types.resolveAlias(underlying);"
+				"final underlying: Null<String> = _facts.abstracts[currentType];\n\t\t\treturn underlying == null || types.generics.declaresTypeParam(currentType, underlying)\n\t\t\t\t? underlying\n\t\t\t\t: types.resolveAlias(types.imports.typeOf(file, underlying));"
 			],
 			"replace": [
 				"return currentType;",
@@ -6022,7 +6022,7 @@
 			"name": "M-GRAPH-DISPATCH-TYPE",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "addEdge(from, target, Call, null, file, span, recv.isValue ? type : null, field);",
+			"find": "addEdge(from, target, Call, null, file, span, recv.isValue ? recv.typeName : null, field);",
 			"replace": "addEdge(from, target, Call, null, file, span, null, field);",
 			"note": "an instance call records no dispatch type, so overrides loaded later are never reached"
 		},
@@ -6364,8 +6364,8 @@
 			"name": "M-GRAPH-PLACEHOLDER-DECLARING",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "types.declaringTypeOf(type, calleeName) ?? type, calleeName",
-			"replace": "type, calleeName",
+			"find": "externalNode(types.declaringTypeOf(recv.typeName, calleeName) ?? recv.typeName, calleeName)",
+			"replace": "externalNode(recv.typeName, calleeName)",
 			"note": "a call through `this` to an unloaded supertype's member names a placeholder no file ever upgrades"
 		},
 		{
@@ -6484,7 +6484,7 @@
 			"name": "M-GRAPH-CALL-ELEMENT",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": ": _facts.returnSources[call.target] ?? StdTypes.returnOf(_plugin, nodes[call.target]);",
+			"find": ": returnSourceOf(call.target) ?? StdTypes.returnOf(_plugin, nodes[call.target]);",
 			"replace": ": null;",
 			"note": "an element of a call's result (`b.get()[0]`) has no type, so a call on it is unresolved"
 		},
@@ -6500,8 +6500,8 @@
 			"name": "M-GRAPH-ABSTRACT-THIS-ALIAS",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "return underlying == null ? null : types.resolveAlias(underlying);",
-			"replace": "return underlying;",
+			"find": ": types.resolveAlias(types.imports.typeOf(file, underlying));",
+			"replace": ": types.imports.typeOf(file, underlying);",
 			"note": "`this` inside an abstract over a typedef alias stays the alias, so `this.copy()` on the std `Rest` is an unresolved call"
 		},
 		{
@@ -19394,15 +19394,15 @@
 			"name": "M-TS-SEAL-REFLECT-LITERAL-ANY",
 			"type": "anyparse.check.FieldWrites",
 			"method": "reflectiveWritersOf",
-			"find": "site.reflective && (site.reaches == null || reachesDeclarer(site, name))",
-			"replace": "site.reflective && reachesDeclarer(site, name)",
+			"find": "site.reflective && (site.reaches == null ? storesLock(site, _lockFields[name]) : reachesDeclarer(site, name))",
+			"replace": "site.reflective && (site.reaches == null ? false : reachesDeclarer(site, name))",
 			"note": "a reflective write naming a lock member by a literal, on a value of no known class, leaves it sealed (review F3)"
 		},
 		{
 			"name": "M-TS-SEAL-REFLECT-UNPLACED",
 			"type": "anyparse.check.FieldWrites",
 			"method": "reflectiveWritersOf",
-			"find": "(site.reaches == null || reachesDeclarer(site, name))",
+			"find": "(site.reaches == null ? storesLock(site, _lockFields[name]) : reachesDeclarer(site, name))",
 			"replace": "reachesDeclarer(site, name)",
 			"note": "a computed reflective write on a value the run places on no class leaves every lock member sealed (review N2)"
 		},
@@ -19412,6 +19412,302 @@
 			"method": "notices",
 			"force": "[]",
 			"note": "the run no longer names the computed reflective writes on a value it places on no class, nor the exclusions that bound the others"
+		},
+		{
+			"name": "M-TS-STORED-COUNTS",
+			"type": "anyparse.check.FieldWrites",
+			"method": "reflectiveWritersOf",
+			"find": "(site.reaches == null ? storesLock(site, _lockFields[name]) : reachesDeclarer(site, name))",
+			"replace": "(site.reaches == null || reachesDeclarer(site, name))",
+			"note": "a reflective write on a value the run places on no class unseals every lock member whatever it stores (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-NOTHING",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "typesOf",
+			"find": "case Nothing: [];",
+			"replace": "case Nothing: null;",
+			"note": "a reflective delete counts as storing any object in a lock member (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-ANY",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "typesOf",
+			"find": "case Unknown: null;",
+			"replace": "case Unknown: [];",
+			"note": "(soundness) a write whose stored value is out of sight (a reflective write handed on) counts as storing nothing (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-NULL",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "valueTypes",
+			"find": "if (value.kind == _shape.nullLiteralKind) return [];",
+			"replace": "if (value.kind == _shape.nullLiteralKind) return null;",
+			"note": "a stored `null` counts as any object (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-LITERAL",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "valueTypes",
+			"find": "if (literal != null) return [literal];",
+			"replace": "if (literal != null) return null;",
+			"note": "a stored literal counts as any object (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-CATCH-ALL",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "valueTypes",
+			"find": "if (written != null && !catchAll(written)) return typedAs(file, written);",
+			"replace": "if (written != null) return typedAs(file, written);",
+			"note": "a value declared `Dynamic` or `Any` is taken at its word, so a parameter so declared is never followed into its calls (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-TYPED",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "typedAs",
+			"find": "return _complete || named.foreach(t -> _basic.contains(t)) ? named : null;",
+			"replace": "return null;",
+			"note": "a stored value of a declared type counts as any object (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-COMPLETE",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "typedAs",
+			"find": "return _complete || named.foreach(t -> _basic.contains(t)) ? named : null;",
+			"replace": "return named;",
+			"note": "(soundness) a declared class bounds what a value is in a run that may not see every subtype of it (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-PARAMETER",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "valueTypes",
+			"find": "return value.kind == _shape.identKind ? parameterTypes(file, value, typer, visiting) : null;",
+			"replace": "return null;",
+			"note": "a parameter is never followed into the calls handing it a value (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-CALLERS",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "parameterTypes",
+			"find": "if (id.indexOf('#') >= 0 || !callersSeen(id) || obtainable(id)) return null;",
+			"replace": "if (id.indexOf('#') >= 0 || obtainable(id)) return null;",
+			"note": "(soundness) a parameter is followed into the calls the graph holds though another may invoke its function (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-ARGUMENTS",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "argumentTypes",
+			"find": "for (a in handed) sources.push({ file: e.file, fn: e.from, node: a });",
+			"replace": "",
+			"note": "(soundness) what the calls hand a parameter is not read (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-SKIPPED",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "argumentTypes",
+			"find": "final handed: Array<QueryNode> = fixed ? args.slice(index, index + 1) : args.slice(0, index + 1);",
+			"replace": "final handed: Array<QueryNode> = args.slice(index, index + 1);",
+			"note": "(soundness) an argument moved along past a skipped optional parameter is not read (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-HOLDERS",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "obtainable",
+			"find": "if (named == null || declared == null) return true;",
+			"replace": "if (named == null || declared == null) return false;",
+			"note": "(soundness) a run declaring no reflectiveMethodHolders follows a parameter though a computed name may obtain its function (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-SPELLED",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "obtainable",
+			"find": "if (spelled().contains(named.name)) return true;",
+			"replace": "",
+			"note": "(soundness) a literal spelling a function's name no longer stops following its parameter (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-GLOB",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "obtainable",
+			"find": "return closure([named.type], _graph.types.subtypesOf).exists(t -> {",
+			"replace": "return false && closure([named.type], _graph.types.subtypesOf).exists(t -> {",
+			"note": "(soundness) a reflectiveMethodHolders glob naming a function's class no longer stops following its parameter (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-BASIC",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "mayHold",
+			"find": "if (_basic.contains(type) || enumType(type)) return false;",
+			"replace": "if (enumType(type)) return false;",
+			"note": "a value of a literal type counts as a possible lock (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-ENUM",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "mayHold",
+			"find": "if (_basic.contains(type) || enumType(type)) return false;",
+			"replace": "if (_basic.contains(type)) return false;",
+			"note": "an enum value counts as a possible lock (R3 M4)"
+		},
+		{
+			"name": "M-TS-ENUM-KIND",
+			"type": "anyparse.query.TypeMetaFacts",
+			"method": "record",
+			"find": "if (_enumKinds.contains(t.kind))",
+			"replace": "if (_enumKinds.contains(t.kind) || t.isAnonStruct)",
+			"note": "a typedef of a structure is taken for an enum, which no lock is (R4 F2)"
+		},
+		{
+			"name": "M-TS-STORED-WRITTEN",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "parameterTypes",
+			"find": "final writes: Null<Writes> = writesOf(file, id, tree, decl, name, from, typer);",
+			"replace": "final writes: Null<Writes> = { values: [], types: [] };",
+			"note": "a parameter is followed into its calls whatever its function writes to it (R4 F1)"
+		},
+		{
+			"name": "M-TS-STORED-WRITE-VALUE",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "writesOf",
+			"find": "out.values.push(node.children[1]);",
+			"replace": "",
+			"note": "what an `=` or a `??=` to a parameter stores is not followed (R4 F1)"
+		},
+		{
+			"name": "M-TS-STORED-WRITE-OPERATOR",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "operatorStores",
+			"find": "return written == null ? null : catchAll(written) ? [] : typedAs(file, written);",
+			"replace": "return null;",
+			"note": "a write by an operator to a parameter may store anything (R4 F1)"
+		},
+		{
+			"name": "M-TS-STORED-WRITE-OTHER",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "writesOf",
+			"find": "unknown = true",
+			"replace": "unknown = false",
+			"note": "a write of another shape to a parameter stores nothing (R4 F1)"
+		},
+		{
+			"name": "M-TS-STORED-TYPE-PARAM",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "valueTypes",
+			"find": "if (written != null && typeParameter(file, value, written)) return null;",
+			"replace": "",
+			"note": "a value declared of a type parameter named like a class is taken for that class (R4 F3)"
+		},
+		{
+			"name": "M-TS-STORED-CAST-LOCAL",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "valueTypes",
+			"find": "if (written != null && value.kind != _shape.newExprKind && claimed(file, value, typer)) return null;",
+			"replace": "",
+			"note": "a declared type an unchecked cast or a Dynamic value reached is trusted (R4 F4)"
+		},
+		{
+			"name": "M-TS-STORED-CAST-FIELD",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "claimed",
+			"find": "if (FieldWrites.accessKind(value.kind, _shape)) return known.fields.contains(name);",
+			"replace": "if (FieldWrites.accessKind(value.kind, _shape)) return false;",
+			"note": "a field read off a value is trusted whatever its writes hand it (R4 F4)"
+		},
+		{
+			"name": "M-TS-STORED-CAST-KINDS",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "unchecked",
+			"find": "return holds(node) || typed != null && catchAll(typed);",
+			"replace": "return typed != null && catchAll(typed);",
+			"note": "an unchecked cast or an untyped hands on a checked value (R4 F4)"
+		},
+		{
+			"name": "M-TS-STORED-CAST-DYNAMIC",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "unchecked",
+			"find": "return holds(node) || typed != null && catchAll(typed);",
+			"replace": "return holds(node);",
+			"note": "a Dynamic value hands on a checked value (R4 F4)"
+		},
+		{
+			"name": "M-TS-STORED-CAST-WRITES",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "claimWritten",
+			"find": "noteClaim(out.bindings, '$file:$bound')",
+			"replace": "noteClaim(out.fields, '')",
+			"note": "a local a cast writes after its declaration is trusted (R4 F4)"
+		},
+		{
+			"name": "M-TS-SCOPE-TYPE-PARAMS",
+			"type": "anyparse.query.TypeParamTable",
+			"method": "inScopeAt",
+			"find": "if (decl != null) add((decl.nameNode.span ?? decl.fullSpan).from);",
+			"replace": "",
+			"note": "the type parameters of the enclosing type are not in scope (R4 F3, F5)"
+		},
+		{
+			"name": "M-TS-SCOPE-FUNCTION-PARAMS",
+			"type": "anyparse.query.TypeParamTable",
+			"method": "inScopeAt",
+			"find": "if (span != null && functionKinds.contains(node.kind)) add(span.from);",
+			"replace": "",
+			"note": "the type parameters of an enclosing function are not in scope (R4 F3, F5)"
+		},
+		{
+			"name": "M-TS-STORED-UNRELATED",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "mayHold",
+			"find": "return closure([type], types.subtypesOf).exists(t -> under.contains(t));",
+			"replace": "return true;",
+			"note": "an object of a class sharing no subtype with a lock member's type counts as a possible lock of it (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-RELATED",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "mayHold",
+			"find": "return closure([type], types.subtypesOf).exists(t -> under.contains(t));",
+			"replace": "return false;",
+			"note": "(soundness) an object of a lock member's own class counts as no lock of it (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-MEMBER-TYPE",
+			"type": "anyparse.check.FieldWrites",
+			"method": "storesLock",
+			"find": "fields == null || fields.length == 0 ? [null] : [for (f in fields) _values.memberTypeOf(f)]",
+			"replace": "[null]",
+			"note": "what a write stores costs every lock member, whatever its type (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-MARKED",
+			"type": "anyparse.check.LockSites",
+			"method": "collectUnsealed",
+			"find": "writes.markLockMembers(fields.concat([for (target => source in aliases.targets) for (f in [target, source]) f]));",
+			"replace": "",
+			"note": "the lock members are not marked, so what a write stores costs every one, whatever its type (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-KEPT-NOTICE",
+			"type": "anyparse.check.FieldWrites",
+			"method": "notices",
+			"find": "if (kept.length > 0)",
+			"replace": "if (false)",
+			"note": "the run no longer names the writes kept off every lock member, nor what they store (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-TYPED-NOTICE",
+			"type": "anyparse.check.FieldWrites",
+			"method": "notices",
+			"find": "if (typed.length > 0)",
+			"replace": "if (false)",
+			"note": "the run no longer names the writes storing a lock of a lock member's type (R3 M4)"
+		},
+		{
+			"name": "M-TS-STORED-REF",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "callersSeen",
+			"find": " && !_graph.inEdges(id).exists(e -> e.kind == Ref && !entries.inertRef(e))",
+			"replace": "",
+			"note": "(soundness) a function handed on as a value counts as one every call of which the graph holds (R3 M4)"
 		},
 		{
 			"name": "M-TS-FOLD-EVERY-END",
@@ -19632,9 +19928,9 @@
 		{
 			"name": "M-TS-PATH-NULLABLE-KEYED",
 			"type": "anyparse.query.CallGraphKeys",
-			"method": "keyed",
-			"find": "final outer: Null<TypeSyntax> = t?.wrapped(['Null']) ?? t;",
-			"replace": "final outer: Null<TypeSyntax> = t;",
+			"method": "keyedIn",
+			"find": "for (d in t.descendants()) {",
+			"replace": "for (d in [t]) {",
 			"note": "a Null<pkg.T> annotation keeps its dotted path as the graph type, so Null<sys.thread.Mutex> is no Mutex"
 		},
 		{
@@ -19867,8 +20163,8 @@
 			"name": "M-TS-ALTERNATE-CALL",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "for (type in [recv.typeName].concat(types.imports.alternateTypes(file, recv.typeName))) {",
-			"replace": "for (type in [recv.typeName]) {",
+			"find": "for (type in [written.typeName].concat(alternates)) {",
+			"replace": "for (type in [written.typeName]) {",
 			"note": "a call dispatches to the first candidate type only"
 		},
 		{
@@ -20195,7 +20491,7 @@
 			"name": "M-TS-UNSEALED-PRECONDITIONS",
 			"type": "anyparse.check.FieldWrites",
 			"method": "notices",
-			"find": "final lacking: String = where.length == 0 || missing.length == 0",
+			"find": "final lacking: String = where.length == 0 && typed.length == 0 || missing.length == 0",
 			"replace": "final lacking: String = true",
 			"note": "the run no longer names the preconditions of the instantiation bound it fails"
 		},
@@ -20222,6 +20518,125 @@
 			"find": "if (resolveAlias(alias) != alias) unionInto",
 			"replace": "if (false) unionInto",
 			"note": "a class extending a typedef that aliases a type is no subtype of it"
+		},
+		{
+			"name": "M-TS-DECL-MEMBER-FILE",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "types.imports.memberFilesOf(owner, member), types.memberOnChain(owner, member)?.typeSource,",
+			"replace": "[], types.memberOnChain(owner, member)?.typeSource,",
+			"note": "a member's written type is read through the imports of the file reading it, not the one declaring it (review R3 M1)"
+		},
+		{
+			"name": "M-TS-DECL-RETURN-FILE",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "return readIn([for (d in declarationsOf(target)) d.file], _facts.returnSources[target], nodes[target]?.typeName, target);",
+			"replace": "return _facts.returnSources[target];",
+			"note": "a function's written return type is read through the imports of the file calling it (review R3 M1)"
+		},
+		{
+			"name": "M-TS-DECL-READ-FROM",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "types.imports.alternateTypesIn([file].concat(readFrom), written.typeName);",
+			"replace": "types.imports.alternateTypes(file, written.typeName);",
+			"note": "a guarded or maybe-wildcard name of the file declaring the receiver's type supplies no other type the call may run on"
+		},
+		{
+			"name": "M-TS-DECL-BOUND",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "nominals.push(types.resolveAlias(types.imports.typeOf(file, outer)))",
+			"replace": "nominals.push(types.resolveAlias(outer))",
+			"note": "a type parameter's bound is read by its simple name, whatever the file imports"
+		},
+		{
+			"name": "M-TS-DECL-UNDERLYING",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "types.resolveAlias(types.imports.typeOf(file, underlying))",
+			"replace": "types.resolveAlias(underlying)",
+			"note": "an abstract's underlying type is read by its simple name, whatever the file imports"
+		},
+		{
+			"name": "M-TS-ALTERNATE-WHOLE-CALL",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (calleeId == null) calleeId = target;",
+			"replace": "if (calleeId == null) calleeId = target;\nif (target == null) break;",
+			"note": "an alternate type is dispatched only when the project namesake resolves the call to a member (review R3 M2)"
+		},
+		{
+			"name": "M-TS-DECL-SUPER-ARGS",
+			"type": "anyparse.query.TypeParamTable",
+			"method": "argumentsVia",
+			"find": "keyIn == null ? a : keyIn(link.file, a, typeName)",
+			"replace": "a",
+			"note": "a type argument a subclass passes is read through the imports of the file reading the value"
+		},
+		{
+			"name": "M-TS-KEY-TYPE-PARAM",
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "keyedIn",
+			"find": " && !(unkeyed ?? []).contains(path)",
+			"replace": "",
+			"note": "a type parameter is keyed through an import of its file, which it shadows (R4 F5)"
+		},
+		{
+			"name": "M-TS-KEY-MEMBER-PARAMS",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "types.memberOnChain(owner, member)?.typeSource, owner)",
+			"replace": "types.memberOnChain(owner, member)?.typeSource, null)",
+			"note": "a member's type is keyed without its owner's type parameters (R4 F5)"
+		},
+		{
+			"name": "M-TS-KEY-RETURN-PARAMS",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "_facts.returnSources[target], nodes[target]?.typeName, target);",
+			"replace": "_facts.returnSources[target], null);",
+			"note": "a return type is keyed without its owner's and function's type parameters (R4 F5)"
+		},
+		{
+			"name": "M-TS-KEY-APART",
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "apartFrom",
+			"find": "if (imports.pathKey(pair.from) == typeName)",
+			"replace": "if (false)",
+			"note": "a type two declarations key apart dispatches on the first one only (R4 F6)"
+		},
+		{
+			"name": "M-TS-KEY-APART-FIRST",
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "firstKeying",
+			"find": "if (keyed.length == 0) return null;",
+			"replace": "if (keyed.length != 1) return null;",
+			"note": "a type two declarations key apart is typed as neither (R4 F6)"
+		},
+		{
+			"name": "M-TS-KEY-SCOPE-PARAMS",
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "unkeyedAt",
+			"force": "[]",
+			"note": "a declaration of a file is keyed without the type parameters in scope at it (R4 F5)"
+		},
+		{
+			"name": "M-TS-DECL-PARAM-FILE",
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "paramTypesOf",
+			"find": "p == null ? null : keyedIn(imports, d.file, typeSyntax, p, unkeyed)",
+			"replace": "p",
+			"note": "a parameter's written type is read through the imports of the file passing the argument"
+		},
+		{
+			"name": "M-TS-DECL-FILES-AGREE",
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "keyedInFiles",
+			"find": "return keyed.length == 1 ? keyed[0] : null;",
+			"replace": "return keyed.length == 0 ? null : keyed[0];",
+			"note": "a type two declarations key apart is the one the first file meant"
 		}
 	]
 }

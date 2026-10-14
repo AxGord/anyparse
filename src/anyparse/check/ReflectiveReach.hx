@@ -94,12 +94,21 @@ final class ReflectiveReach {
 	 * its responsibility): the one list the config of every file of `files` declares, each resolved by `resolve`; null when
 	 * a file declares none or another list, and such a value may then be of any class.
 	 */
-	public static function declaredClasses(
+	public static inline function declaredClasses(
 		files: Array<{ file: String, source: String }>, resolve: Null<(String) -> LintConfig>
 	): Null<Array<String>> {
-		final lists: Array<Null<Array<String>>> = [for (f in files) LintConfig.resolveWith(resolve, f.file).reflectiveClasses()];
-		final first: Null<Array<String>> = lists.length == 0 ? null : lists[0];
-		return first != null && lists.foreach(l -> l != null && l.join('\n') == first.join('\n')) ? first : null;
+		return declaredGlobs(files, resolve, c -> c.reflectiveClasses());
+	}
+
+	/**
+	 * The classes whose methods a read of a computed name may obtain, as the project declares them
+	 * (`reflectiveMethodHolders`): the one list the config of every file of `files` declares, each resolved by `resolve`;
+	 * null when a file declares none or another list, and such a read may then obtain any method.
+	 */
+	public static inline function declaredMethodHolders(
+		files: Array<{ file: String, source: String }>, resolve: Null<(String) -> LintConfig>
+	): Null<Array<String>> {
+		return declaredGlobs(files, resolve, c -> c.reflectiveMethodHolders());
 	}
 
 	/**
@@ -297,7 +306,7 @@ final class ReflectiveReach {
 	 * may bind it (`keysOf`), and the type each typedef alias of those stands for — a superset, so no spelling of a type
 	 * escapes it.
 	 */
-	private function namedTypes(file: String, written: String): Array<String> {
+	public function namedTypes(file: String, written: String): Array<String> {
 		final types: CallGraphTypes = _graph.types;
 		final simple: String = CallGraphNames.lastSegments(written, 1);
 		final out: Array<String> = [simple];
@@ -447,8 +456,20 @@ final class ReflectiveReach {
 		return names;
 	}
 
+	/**
+	 * The one list of globs `read` takes off the config of every file of `files`, each resolved by `resolve`; null when a
+	 * file declares none or another list.
+	 */
+	private static function declaredGlobs(
+		files: Array<{ file: String, source: String }>, resolve: Null<(String) -> LintConfig>, read: (LintConfig) -> Null<Array<String>>
+	): Null<Array<String>> {
+		final lists: Array<Null<Array<String>>> = [for (f in files) read(LintConfig.resolveWith(resolve, f.file))];
+		final first: Null<Array<String>> = lists.length == 0 ? null : lists[0];
+		return first != null && lists.foreach(l -> l != null && l.join('\n') == first.join('\n')) ? first : null;
+	}
+
 	/** `from` and every type `next` reaches from it, step by step: the closure of `next` over `from`. */
-	private static function closure(from: Array<String>, next: (String) -> Array<String>): Array<String> {
+	public static function closure(from: Array<String>, next: (String) -> Array<String>): Array<String> {
 		final out: Array<String> = from.copy();
 		var at: Int = 0;
 		while (at < out.length) {
@@ -465,7 +486,7 @@ final class ReflectiveReach {
 	}
 
 	/** The innermost node `test` accepts whose span holds the offset `from`, in `node`'s subtree; null when none does. */
-	private static function holderOf(node: QueryNode, from: Int, test: (QueryNode) -> Bool): Null<QueryNode> {
+	public static function holderOf(node: QueryNode, from: Int, test: (QueryNode) -> Bool): Null<QueryNode> {
 		final at: Null<Span> = node.span;
 		if (at != null && (from < at.from || from >= at.to)) return null;
 		for (c in node.children) {

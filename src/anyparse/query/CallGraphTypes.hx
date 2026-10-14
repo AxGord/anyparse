@@ -79,7 +79,7 @@ final class CallGraphTypes {
 
 	/** `index` null yields the empty tables of a graph that resolves nothing. */
 	public function new(index: Null<SymbolIndex>, shape: RefShape) {
-		meta = new TypeMetaFacts(shape.classDeclKinds ?? []);
+		meta = new TypeMetaFacts(shape.classDeclKinds ?? [], shape.runtimeTaggedTypeKinds ?? []);
 		_fieldKinds = shape.fieldDeclKinds ?? [];
 		_functionKinds = shape.functionKinds ?? [];
 		_interfaceKinds = shape.interfaceDeclKinds ?? [];
@@ -172,7 +172,7 @@ final class CallGraphTypes {
 			final key: String = CallGraphNames.normalizePath(fi.file);
 			if (_files.exists(key)) continue;
 			_files[key] = true;
-			for (t in fi.types) record(t);
+			for (t in fi.types) record(t, key);
 			imports.recordFile(fi, key);
 		}
 		// `class R extends N` with `typedef N = T` names `N` alone: `R` is a subtype of `T` too
@@ -233,6 +233,7 @@ final class CallGraphTypes {
 		return null;
 	}
 
+
 	/** The record of `member` on `typeName` or the nearest supertype declaring it, or null when no indexed type does. */
 	public function memberOnChain(typeName: String, member: String): Null<MemberInfo> {
 		final owner: Null<String> = declaringTypeOf(typeName, member);
@@ -263,15 +264,15 @@ final class CallGraphTypes {
 		return info != null && _functionKinds.contains(info.kind);
 	}
 
-	/** Fold one declaration into the tables — a later declaration of the same simple name UNIONS with the earlier. */
-	private function record(t: TypeDeclInfo): Void {
+	/** Fold one declaration of the file keyed `file` into the tables — a later one of the same simple name UNIONS with the earlier. */
+	private function record(t: TypeDeclInfo, file: String): Void {
 		// a typedef re-exporting a type of its own name is not a second declaration of it
 		if (!CallGraphNames.selfAlias(t)) _declarations[t.name] = (_declarations[t.name] ?? 0) + 1;
 		meta.record(t);
 		if (t.isAnonStruct) _anonStructs[t.name] = true;
 		unionInto(_kinds, t.name, [t.kind]);
 		unionInto(_supers, t.name, t.supertypes);
-		generics.record(t);
+		generics.record(t, file);
 		unionInto(_interfaces, t.name, t.interfaces);
 		final target: Null<String> = t.aliasTargetNominal;
 		if (target != null && target != t.name) _aliases[t.name] = target;

@@ -2138,6 +2138,15 @@ typedef RefShape = {
 	@:optional var nullCoalAssignKind: String;
 
 	/**
+	 * The write kinds (a subset of `writeParentKinds`) that store what an OPERATOR makes of the target's own value — every
+	 * compound assignment but `??=`, an increment, a decrement (Haxe `AddAssign` … `PostDecr`): a value of the target's
+	 * declared type, and for a target of a catch-all type (`Dynamic`) a number, a string or a boolean, never an object the
+	 * write hands in. `thread-safety` reads it for what a write to a parameter stores (`ReflectiveValues`). Optional; unset
+	 * makes every such write one that may store anything.
+	 */
+	@:optional var operatorWriteKinds: Array<String>;
+
+	/**
 	 * The `macro`-modifier node kind. A function declared with it runs at
 	 * COMPILE time — its body is not runtime code, so the call graph skips the
 	 * declaration entirely (a runtime call site expands in place instead of

@@ -2281,3 +2281,108 @@ decided the question; it may not become a record of runs.
   computed from the writes, so a member unsealed by a hand-off AND written reflectively names the writers too — true
   either way. README: `reflectiveClasses` was documented as read only under `reachConfigurationsComplete`; G2 reads it
   under `thread-safety`'s covered `closedWorld` — the doc now says both — branch `feat/ts-precision-5`
+- R3 M1 (`round6/g1-alt/cross-*`): a member's declared type was keyed in the READING file — `A.hx` importing
+  `sys.thread.Lock` (plain, wildcard or guarded) declares `static var lock:Lock`, `C.hx` calls `A.lock.wait()`, and the
+  call resolved to a project `utils.Lock.wait` that never waits (silent, pre-existing, wider than G1: it held for a
+  field read in its own file too, `this.own.wait()`). Now every type a declaration writes is read through the imports
+  of the file that wrote it, at READ time (the declared paths a key depends on are global and grow with the graph):
+  member types (`CallGraphImports.memberFilesOf`), returns and parameters (the node's declaration files,
+  `CallGraphKeys.paramTypesOf`), a supertype's type arguments (`TypeParamTable.argumentsFor(…, keyIn)`), and, in the
+  reading file where they are written, a type parameter's bound and an abstract's underlying type. `keyedIn` keys every
+  nominal of a type, not only the outer one, so `Array<Lock>` and `(Lock) -> Void` keep the declaring file's meaning.
+  Two declarations of one type whose files key a member's type apart type it as NEITHER (`keyedInFiles` null), like
+  `CallGraphTypes.joined` for two spellings; before they took the simple name. Guarded/maybe names of the declaring
+  file: the files read while typing a receiver are collected (`readFrom`) and each one's `alternateTypes` join the
+  call's — a sound over-approximation (an inner link's file contributes too), chosen over threading a file through every
+  type source. Measured: 0 changes all rules on 3 TM trees + anyparse src; the 6 cross-* fixtures now warn — branch
+  `feat/ts-precision-6`
+- R3 M2 (`round6/g1-alt/guard-nowait`, `guard-waitfield`): the alternates of a guarded name were dispatched only in the
+  last branch of `handleCall`, after the project namesake resolved the call to a member, so a namesake lacking the
+  member (extension branch) or declaring it as a field never reached `sys.thread.Lock.wait`. Now each candidate type runs
+  the whole resolution (`dispatchOn`: forward, field, static extension, member + overrides); the call's own target is
+  the first one any candidate names. The namesake's own `UnresolvedReceiver`/`FunctionValue` record stays — on the
+  build where the name is the project type the call is that — branch `feat/ts-precision-6`
+- R3 M4 expensive part (`round6/frag`): one computed reflective write on a value the run places on no class unsealed
+  EVERY lock member — an 8-line `ReflectHelper.assign(o:Dynamic, k, v)` on a TM copy re-keyed 37 of 102 recall keys to
+  `Mutex.acquire` / `LockMutex.lock`. R3's sketch ("a lock type never reaching an untyped value keeps its members
+  sealed") was checked and REJECTED as unsound as stated: it misses the reflective-READ copy channel — `Reflect.field(dyn,
+  k)` of a holder object yields its lock untyped, the unplaced write stores it in another member, and sealing never sees a
+  read. Refined so ("no project reflective read may yield a lock either") it fails for every lock type on TM: TM has four
+  unplaced computed reads (`API.getErrorMessages`, `BaseNativeURLLoader`, `Form`, `Node.restore`) and holders reach
+  `Dynamic` through library supertypes (`CloudDatabase extends EventDispatcher`: `event.target`), so neither the reads nor
+  the holders can be bounded. Asked of the WRITE instead (`ReflectiveValues`): what an unplaced write stores, as the types
+  of the objects its value may be — a POSITIVE list: nothing for a delete or `null`, a literal's type, an expression's
+  declared type (only under a covered `closedWorld`, so every subtype is seen), and for a parameter — `Dynamic` / `Any`
+  ones included — what every call of its function hands it, when every invocation is a call the graph holds
+  (`ThreadSafety.callersSeen`: `seedable` false, no non-inert `Ref`), `reflectiveMethodHolders` is declared alike and names
+  neither its class nor a subtype (a computed read cannot obtain it for `Reflect.callMethod`), and no string literal of the
+  run spells its name; the argument at its index, any up to it after an optional parameter (type-based skipping moves
+  the rest along), a static extension call's receiver first, an import-alias receiver refused. Anything else may be any
+  lock. Per lock member (`FieldWrites.markLockMembers`: the `receiverField`s of the lock calls and the alias hand-offs) the
+  write counts only when a stored type may be a lock of the member's declared type (`mayHold`: never a literal's type or an
+  enum; a project class/interface only through a common subtype; a library member type only through a project subtype
+  unless the value's chain leaves the run; anything else — library type, structure, abstract — may). Applied to unplaced
+  writes only (literal-named ones too); placed writes keep G2's exclusions as they were. Notices: the unchanged line for
+  writes that may store any object, one for a typed value storing a lock of some member type, one naming each write kept
+  off every lock member with what it stores. MEASURED: TM 1d1ba147 / f81c2049 / bd943dac rows == start (no unplaced write
+  there); frag 65/102 -> 102/102 with `ReflectHelper.assign (it stores no object)` named; called with a literal 102/102
+  (`it stores String`), through a second helper fed `1` / a `String` / nothing 102/102, called with `Reflect.field(from, k)`
+  65/102 (today's default, named as before). Fixtures: lost 0, five round4/f11b holds re-keyed `Mutex.acquire` -> `C._m`
+  (each stores `new Blocking()`). Rule time +1.2% (TM 5.76 -> 5.83 s). The boundary is the one every reflective write
+  already has: a write inside library code is not seen at all — branch `feat/ts-precision-6`
+- R4 F1 (`round7/k2/reassign*`, `call-default`, `k2b/reassign-caller`): K2 followed a parameter to what its callers hand
+  it and never looked at the function's own writes, so `assign(o, k, v:Dynamic) { if (v == null) v = lock; ... }` called
+  with `null` was kept off every lock member. `ReflectiveValues.writesOf` walks the declaring function (closures and
+  local functions included) for every write whose target BINDS to the parameter (`resolveBindingFrom`, so a shadowing
+  closure parameter is not it): `=` / `??=` add their right side as one more source, an operator write
+  (`RefShape.operatorWriteKinds`: compound assignments but `??=`, increments, decrements) stores a value of the target's
+  own declared type, none for a catch-all one (an operator on `Dynamic` makes a number, a string or a boolean — so the
+  reviewer's `v++` control stays kept), and any other write shape (a `#if` region as the value) makes the parameter
+  Unknown. Chosen over "any write -> Unknown" (the reviewer's first option) because it keeps the literal-reassigned and
+  increment controls precise at no soundness cost — branch `feat/ts-precision-6`
+- R4 F2 (`round7/k2/struct-*typedef`, `k2b/*struct*`): `enumType` asked `CallGraphTypes.holdsNoFunction`, which is true
+  for every typedef of an anonymous structure, so a value typed by `typedef Lockable = { function acquire():Void; }`,
+  `{}` or `{ > Base, … }` "held no lock" — but structural typing admits any object with the fields. The question is the
+  declaration KIND: `TypeMetaFacts.isEnum` (every declaration of the type is a `runtimeTaggedTypeKinds` one); a
+  structure typedef or an abstract falls through to "may hold" — branch `feat/ts-precision-6`
+- R4 F3 (`round7/k2/typeparam-shadow`): the typer's declared name was taken at face value, so `v:Other` inside
+  `class Box<Other>` was typed as the project class `Other`. A written type whose outer name is a type parameter in
+  scope at the value — the enclosing types' and functions' (`TypeParamTable.inScopeAt`, off
+  `TypeInfoProvider.typeParamNames`; a type's keyed by its name node, a function's by its own start) — is Unknown, for a
+  stored value and an operator write alike. A member read off another type's value (`b.v` with `b:Box<Mutex>`) was
+  checked and is already right: the typer answers the substituted type or nothing — branch `feat/ts-precision-6`
+- R4 F4 (`round7/k2/cast-local`), decided by the positive-whitelist policy: a declared type an unchecked value reached
+  is a claim the compiler never checked, so it is no exclusion. `ReflectiveValues.claims` walks the held files once on
+  first demand: a local or parameter (by binding) and a field (by NAME, whoever declares it) whose initializer or any
+  write holds an unchecked `cast` or an `untyped` anywhere, or is itself declared `Dynamic` / `Any` (which the compiler
+  lets into a variable of any type — the same lie without a cast), makes a read of it Unknown. A checked `cast(e, T)` is
+  trusted. NOT covered, same class, left as reported: a typed PARAMETER whose callers pass an unchecked or `Dynamic`
+  value, and a function whose declared return type is fed one — following those means the arguments and returns of
+  every typed value, i.e. a typer, not a list. TM: no row moves (no unplaced reflective write on the 3 trees) — branch
+  `feat/ts-precision-6`
+- R4 F5 (`round7/k1/tparam-shadow-*`): K1's `keyedIn` keyed a TYPE PARAMETER through its file's imports (`import
+  sys.thread.Lock; class Box<Lock> { var v:Lock; }` -> `sys.thread.Lock`), so the receiver's type argument
+  (`Box<utils.Lock>`) was never substituted and the call went to the std `wait` — a false A warning where the base had
+  the right edge. Haxe: a type parameter shadows every import. `keyedIn` / `keyedInFiles` / `keyingsIn` take the names
+  to leave as written: the owner's parameters for a member type, the owner's and the function's for a return or a
+  parameter type (`CallGraph.readIn(files, written, owner, fn)`, `paramTypesOf`), the linking type's for a supertype's
+  arguments, every type parameter in scope at a declaration of the file (`CallGraphKeys.unkeyedAt`), and
+  `ReflectiveValues.memberTypeOf` leaves a member declared of one untyped (may hold). The argument is keyed where it is
+  written, as K1 already did — branch `feat/ts-precision-6`
+- R4 F6 (`round7/k1/two-decls-type`): K1 typed a member two declarations key apart (`mac/A.hx` `import
+  sys.thread.Lock`, `web/A.hx` `import utils.Lock`, one per build) as NEITHER — silently, the unsound direction.
+  `CallGraphKeys.keyingsIn` returns every keying; `readIn` types the receiver by the first and records what each other
+  keying names in its place (`firstKeying` -> `keyedApart`), and the dispatch runs those types too (`apartFrom`), as it
+  runs alternate types. Readers that need ONE type (`ReflectiveValues.memberTypeOf`, `paramTypesOf`) keep "none" via
+  `keyedInFiles`. The return-type guard that turned a keyed-apart return into "no type" (and its arm
+  `M-TS-DECL-RETURN-AGREE`) is gone; `testTwoDeclarationsThatKeyAMemberTypeApartTypeItAsNeither` became
+  `testTwoDeclarationsKeyingAMemberApartDispatchOnBoth`. Left as is: two declarations whose RETURN texts differ are
+  settled to no fact (`CallGraph.settle`), still "neither" — branch `feat/ts-precision-6`
+- R4 F7 (K1 coverage holes, both engines silent: static imports, cross-module typedef chains, a project file in a library
+  package, `@:forward` abstracts, iteration, function-typed fields, function type parameters, lambda parameters typed by
+  the callee, a member declared twice under `#if`): backlog, not taken in K3.
+- R4 K3 MEASURED (engine of the K3 tip vs a3c2b416): TM 1d1ba147 / f81c2049 / bd943dac reports byte-identical (rows
+  `153 146 102 … 0.70 102/102`, 5/5, 9/9), `round6/frag` 102/102; all rules byte-identical on the 3 TM trees and
+  anyparse src; fixtures r1..r5, round2, round4..round7 (499 runs): lost 2 = the F5 false positives, gained 27 = the 14
+  F1..F6 targets, 5 info-only changes; rule time 5.56 -> 5.63 s (+1.3%), full lint 23.90 -> 23.17 s (noise) — branch
+  `feat/ts-precision-6`

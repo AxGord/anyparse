@@ -149,10 +149,15 @@ class ThreadSafetyAllocationTest extends Test {
 			['warning B C.work | Mutex.acquire'],
 			poked('public function set(k:String, l:Base):Void Reflect.setField(this, k, l);'), 'its own class'
 		);
-		// placed on no class, the write may also store a lock in any lock member: `_m` names no lock (review N2)
+		// placed on no class, the write may store what it stores in any lock member — `null`, no lock: `_m` keeps its name (R3 M4)
+		Assert.same(
+			['warning B C.work | C._m'],
+			poked('public static function poke(o:Dynamic, k:String):Void Reflect.setField(o, k, null);'), 'a Dynamic value'
+		);
+		// one that may store a lock: `_m` names no lock (review N2)
 		Assert.same(
 			['warning B C.work | Mutex.acquire'],
-			poked('public static function poke(o:Dynamic, k:String):Void Reflect.setField(o, k, null);'), 'a Dynamic value'
+			poked('public static function poke(o:Dynamic, k:String, v:Dynamic):Void Reflect.setField(o, k, v);'), 'a Dynamic value stored'
 		);
 		Assert.same(
 			[], poked('public static function poke(o:Blocking, k:String):Void Reflect.setField(o, k, null);'), 'an unrelated class'
@@ -174,12 +179,20 @@ class ThreadSafetyAllocationTest extends Test {
 		inline function poked(poke: String): Array<String> {
 			return holds(run('var loader:Base; final _bases:Array<Base> = []; $poke', 'loader = new Async();', 'loader.load();'));
 		}
-		// each is placed on no class, so it may also store a lock in any lock member: `_m` names no lock (review N2)
+		// each is placed on no class, so it may store what it stores in any lock member: `_m` names no lock (review N2) —
+		// but for `null`, which is no lock (R3 M4)
 		final unknown: Array<String> = ['warning B C.work | Mutex.acquire'];
 		Assert.same(
-			unknown,
+			['warning B C.work | C._m'],
 			poked('public static function poke(o:C, k:String):Void { final d:haxe.DynamicAccess<Dynamic> = cast o;' + ' d.set(k, null); }'),
 			'DynamicAccess.set'
+		);
+		Assert.same(
+			unknown,
+			poked(
+				'public static function poke(o:C, k:String, v:Dynamic):Void { final d:haxe.DynamicAccess<Dynamic> = cast o; d.set(k, v); }'
+			),
+			'DynamicAccess.set storing a Dynamic'
 		);
 		Assert.same(
 			unknown, poked('public static function poke(o:C, k:String):Void { final set = Reflect.setField; set(o, k, null); }'),
@@ -190,7 +203,9 @@ class ThreadSafetyAllocationTest extends Test {
 			poked('public static function poke(o:C, k:String):Void untyped o[k] = null;'),
 			'an untyped index on its class, which may also write the lock member'
 		);
-		Assert.same(unknown, poked('public static function poke(o:C, k:String):Void (cast o : Dynamic)[k] = null;'), 'a cast index');
+		Assert.same(
+			unknown, poked('public static function poke(o:C, k:String, v:Dynamic):Void (cast o : Dynamic)[k] = v;'), 'a cast index'
+		);
 		Assert.same([], poked('public function poke(i:Int, b:Base):Void _bases[i] = b;'), 'an array element');
 		#else
 		Assert.pass('non-sys target');

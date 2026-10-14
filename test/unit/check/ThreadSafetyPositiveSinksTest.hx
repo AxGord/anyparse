@@ -406,6 +406,49 @@ class ThreadSafetyPositiveSinksTest extends Test {
 		#end
 	}
 
+	/**
+	 * The std `Lock` a declaration's file imports stays the std one where the value is read, and a guarded name runs the std
+	 * method whatever its project namesake declares: each of these waits on `sys.thread.Lock`. Before, a field read off another
+	 * file took the reader's meaning of `Lock` (the project's, which never waits), and an alternate type was dispatched only when
+	 * the namesake declared the member as a method.
+	 */
+	@:pin('control')
+	@:killer('M-TS-DECL-MEMBER-FILE') @:killer('M-TS-ALTERNATE-WHOLE-CALL')
+	public function testAStdLockWrittenInADeclarationWaitsWhereverItIsRead(): Void {
+		#if (sys || nodejs)
+		if (StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final own: String = 'package utils; class Lock { public function new() {} public function wait():Bool return true; }';
+		final config: String = '{"rules":{"thread-safety":{"closedWorld":false}}}';
+		final reader: String = 'package app; class C { static function main():Void A.lock.wait(); }';
+		for (imp in [
+			'import sys.thread.Lock;',
+			'import sys.thread.*;',
+			'#if sys import sys.thread.Lock; #end'
+		]) {
+			final declaring: String = 'package app; $imp class A { public static var lock:Lock = null; }';
+			Assert.same(
+				['warning A C.main | sys.thread.Lock.wait'],
+				graded(ThreadSafetyCheckTest.violations(config, [own, declaring, reader])), imp
+			);
+		}
+		final guarded: String =
+			'package app; #if sys import sys.thread.Lock; #end class G { static function main():Void l.wait(); static var l:Lock; }';
+		final nowait: String = 'package utils; class Lock { public function new() {} public function signal():Void {} }';
+		Assert.same(
+			['warning A G.main | sys.thread.Lock.wait'], graded(ThreadSafetyCheckTest.violations(config, [nowait, guarded])), 'no wait'
+		);
+		final field: String = 'package utils; class Lock { public function new() {} public var wait:Int = 0; }';
+		Assert.same(
+			['warning A G.main | sys.thread.Lock.wait'], graded(ThreadSafetyCheckTest.violations(config, [field, guarded])), 'a field'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
 	/** The findings of `found` with data as `<severity> <family> <member> | <subject>`, sorted. */
 	private static function graded(found: Array<Violation>): Array<String> {
