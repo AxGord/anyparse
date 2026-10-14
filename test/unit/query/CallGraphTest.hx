@@ -1148,12 +1148,13 @@ class CallGraphTest extends Test {
 	}
 
 	/**
-	 * Two declarations of one type whose files bind a member's type name to different types type it as neither: a call on
-	 * the field or on the result resolves to no `wait` at all rather than to the one the first file meant.
+	 * Two declarations of one type whose files bind a member's type name to different types — one per build — dispatch a call
+	 * on the field or on the result to both types, as an alternate type does, never to neither (review R4 F6); a reader that
+	 * needs ONE type (`keyedInFiles`) still has none.
 	 */
 	@:pin('control')
-	@:killer('M-TS-DECL-FILES-AGREE') @:killer('M-TS-DECL-RETURN-AGREE')
-	public function testTwoDeclarationsThatKeyAMemberTypeApartTypeItAsNeither(): Void {
+	@:killer('M-TS-KEY-APART') @:killer('M-TS-KEY-APART-FIRST') @:killer('M-TS-DECL-FILES-AGREE')
+	public function testTwoDeclarationsKeyingAMemberApartDispatchOnBoth(): Void {
 		#if (sys || nodejs)
 		if (anyparse.query.StdResolver.stdDir() == null) {
 			Assert.pass('no std on this machine');
@@ -1166,12 +1167,19 @@ class CallGraphTest extends Test {
 			'package app; class C { static function field():Void Hold.lock.wait(); static function call():Void Hold.make().wait(); }'
 		]);
 		function waits(from: String): Array<String> {
-			return [
+			final out: Array<String> = [
 				for (e in g.outEdges(from)) if (e.kind == Call && e.to.indexOf('wait') >= 0) e.to
 			];
+			out.sort(Reflect.compare);
+			return out;
 		}
-		Assert.same([], waits('C.field'), 'a field');
-		Assert.same([], waits('C.call'), 'a return');
+		Assert.same(['Lock.wait', 'sys.thread.Lock.wait'], waits('C.field'), 'a field');
+		Assert.same(['Lock.wait', 'sys.thread.Lock.wait'], waits('C.call'), 'a return');
+		final typeSyntax: anyparse.query.TypeSyntax.TypeSyntaxReader = new anyparse.grammar.haxe.HaxeQueryPlugin().typeSyntax;
+		Assert.isNull(
+			anyparse.query.CallGraphKeys.keyedInFiles(g.types.imports, typeSyntax, ['F1.hx', 'F2.hx'], 'Lock'),
+			'a reader needing one type has none'
+		);
 		#else
 		Assert.pass('non-sys target');
 		#end

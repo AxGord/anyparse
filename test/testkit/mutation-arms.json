@@ -20536,14 +20536,6 @@
 			"note": "a function's written return type is read through the imports of the file calling it (review R3 M1)"
 		},
 		{
-			"name": "M-TS-DECL-RETURN-AGREE",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "if (written == null && _facts.returnSources.exists(target)) return null;",
-			"replace": "",
-			"note": "a return type two declarations key apart falls back to its simple name"
-		},
-		{
 			"name": "M-TS-DECL-READ-FROM",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
@@ -20608,6 +20600,22 @@
 			"note": "a return type is keyed without its owner's and function's type parameters (R4 F5)"
 		},
 		{
+			"name": "M-TS-KEY-APART",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (types.imports.pathKey(pair.from) == written.typeName && !alternates.contains(other))",
+			"replace": "if (false && !alternates.contains(other))",
+			"note": "a type two declarations key apart dispatches on the first one only (R4 F6)"
+		},
+		{
+			"name": "M-TS-KEY-APART-FIRST",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (keyed.length == 0) return null;",
+			"replace": "if (keyed.length != 1) return null;",
+			"note": "a type two declarations key apart is typed as neither (R4 F6)"
+		},
+		{
 			"name": "M-TS-KEY-SCOPE-PARAMS",
 			"type": "anyparse.query.CallGraphKeys",
 			"method": "unkeyedAt",
@@ -20626,8 +20634,8 @@
 			"name": "M-TS-DECL-FILES-AGREE",
 			"type": "anyparse.query.CallGraphKeys",
 			"method": "keyedInFiles",
-			"find": "case 1: keyed[0];\n\t\t\tcase _: null;",
-			"replace": "case _: keyed[0];",
+			"find": "return keyed.length == 1 ? keyed[0] : null;",
+			"replace": "return keyed.length == 0 ? null : keyed[0];",
 			"note": "a type two declarations key apart is the one the first file meant"
 		}
 	]

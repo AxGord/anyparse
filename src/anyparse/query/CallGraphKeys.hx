@@ -193,25 +193,51 @@ final class CallGraphKeys {
 	}
 
 	/**
-	 * `written`, a type the declarations in `files` write, read through the imports of the file that wrote it (`keyedIn`),
-	 * the names among `unkeyed` (the declaring type's or member's type parameters) as written: null when two of them key
-	 * it apart — a type two declarations name differently is neither — and `written` as it stands when no file is known.
+	 * `written`, a type the declarations in `files` write, read through the imports of the file that wrote it (`keyingsIn`):
+	 * null when two of them key it apart, a reader that needs ONE type then has none — and `written` as it stands when no
+	 * file is known.
 	 */
 	public static function keyedInFiles(
 		imports: CallGraphImports, typeSyntax: TypeSyntaxReader, files: Array<String>, written: Null<String>, ?unkeyed: Array<String>
 	): Null<String> {
-		if (written == null) return null;
+		final keyed: Array<String> = keyingsIn(imports, typeSyntax, files, written, unkeyed);
+		return keyed.length == 1 ? keyed[0] : null;
+	}
+
+	/**
+	 * Every type `written`, a type the declarations in `files` write, may be, each once: read through the imports of each
+	 * file that wrote it (`keyedIn`), the names among `unkeyed` (the declaring type's or member's type parameters) as
+	 * written — two declarations keying it apart (one per build) give both; `written` as it stands when no file is known,
+	 * none when it is null.
+	 */
+	public static function keyingsIn(
+		imports: CallGraphImports, typeSyntax: TypeSyntaxReader, files: Array<String>, written: Null<String>, ?unkeyed: Array<String>
+	): Array<String> {
+		if (written == null) return [];
 		final source: String = written;
 		final keyed: Array<String> = [];
 		for (f in files) {
 			final key: String = keyedIn(imports, f, typeSyntax, source, unkeyed);
 			if (!keyed.contains(key)) keyed.push(key);
 		}
-		return switch keyed.length {
-			case 0: source;
-			case 1: keyed[0];
-			case _: null;
-		};
+		return keyed.length == 0 ? [source] : keyed;
+	}
+
+	/**
+	 * The types `other` names where `chosen` names another, two keyings of one written type (`keyingsIn`), each as a pair
+	 * of the keys at the same position; none when the two do not line up.
+	 */
+	public static function keyedApart(typeSyntax: TypeSyntaxReader, chosen: String, other: String): Array<{ from: String, to: String }> {
+		final a: Array<TypeSyntax> = typeSyntax(chosen)?.descendants() ?? [];
+		final b: Array<TypeSyntax> = typeSyntax(other)?.descendants() ?? [];
+		final out: Array<{ from: String, to: String }> = [];
+		if (a.length != b.length) return out;
+		for (i in 0...a.length) switch [a[i].shape, b[i].shape] {
+			case [Nominal(from, _), Nominal(to, _)] if (from != to):
+				out.push({ from: from, to: to });
+			case _:
+		}
+		return out;
 	}
 
 	/**

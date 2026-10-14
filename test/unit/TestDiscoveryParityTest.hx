@@ -3084,8 +3084,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-GRAPH-ABSTRACT-UNDER-SLOT,M-GRAPH-ABSTRACT-PARAM-BOUND',
 			'unit.query.CallGraphTest#testThisInsideAnAbstractIsTheUnderlyingValue :: control :: M-GRAPH-ABSTRACT-THIS',
 			'unit.query.CallGraphTest#testThisInsideAnAbstractOverAnAliasIsTheAliasedType :: control :: M-GRAPH-ABSTRACT-THIS-ALIAS',
-			'unit.query.CallGraphTest#testTwoDeclarationsThatKeyAMemberTypeApartTypeItAsNeither :: control :: '
-				+ 'M-TS-DECL-FILES-AGREE,M-TS-DECL-RETURN-AGREE',
+			'unit.query.CallGraphTest#testTwoDeclarationsKeyingAMemberApartDispatchOnBoth :: control :: '
+				+ 'M-TS-KEY-APART,M-TS-KEY-APART-FIRST,M-TS-DECL-FILES-AGREE',
 			'unit.query.CallGraphTest#testTypeParameterBoundsOfSameNamedTypesStayApart :: control :: M-GRAPH-BOUNDS-BY-FILE',
 			'unit.query.CallGraphTest#testTypeParameterIsLookedUpWhereTheReceiverTypeWasWritten :: control :: '
 				+ 'M-GRAPH-BOUND-DECL-SCOPE,M-GRAPH-BOUND-LOCAL-SCOPE',
@@ -6627,7 +6627,6 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-REACH-ALIAS-SUBTYPES',
 			'M-TS-DECL-MEMBER-FILE',
 			'M-TS-DECL-RETURN-FILE',
-			'M-TS-DECL-RETURN-AGREE',
 			'M-TS-DECL-READ-FROM',
 			'M-TS-DECL-BOUND',
 			'M-TS-DECL-UNDERLYING',
@@ -6636,6 +6635,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-KEY-TYPE-PARAM',
 			'M-TS-KEY-MEMBER-PARAMS',
 			'M-TS-KEY-RETURN-PARAMS',
+			'M-TS-KEY-APART',
+			'M-TS-KEY-APART-FIRST',
 			'M-TS-KEY-SCOPE-PARAMS',
 			'M-TS-DECL-PARAM-FILE',
 			'M-TS-DECL-FILES-AGREE'
