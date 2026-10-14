@@ -2386,3 +2386,62 @@ decided the question; it may not become a record of runs.
   anyparse src; fixtures r1..r5, round2, round4..round7 (499 runs): lost 2 = the F5 false positives, gained 27 = the 14
   F1..F6 targets, 5 info-only changes; rule time 5.56 -> 5.63 s (+1.3%), full lint 23.90 -> 23.17 s (noise) — branch
   `feat/ts-precision-6`
+- R7 L1 (a) (`round7/k1/statics-wild`, `-field`, `-wild-ret`): a bare value name no binding, member or module function
+  answers was never read through the imports that may bind it, so `import A.*;` + `lock.wait()` / `make().wait()` stayed
+  unresolved and silent. `CallGraphKeys.importedStatic`: the ONE static `CallGraphImports.importedStatics` binds the name
+  to, typed where its owner declares it (`memberTypeSource`), a bare call of one resolved the same way (`staticTarget`,
+  shared with `importedFunction`). Refused (unresolved, as before): a member the reading type's chain declares, a chain
+  the index does not hold whole (a library supertype may declare it), a module function, two imports binding the name
+  (the compiler takes the last; kept unknown rather than ordered), an unlisted wildcard type — branch `feat/ts-precision-7`
+- R7 L1 (b) (`typedef-chain`, `-sub`): `CallGraphTypes.resolveAlias` followed the alias's SIMPLE target, so
+  `pkg/Alias.hx: import sys.thread.Lock; typedef MyLock = Lock;` beside a project `utils.Lock` dispatched to the project
+  `wait` (a same-file alias too). Each declaration's `aliasTargetRaw` is kept with its file and keyed there
+  (`CallGraphImports.typeOf`) at every hop. Two declarations keying one alias apart keep the simple target, as before —
+  `resolveAlias` answers one type; not covered (no case in the fixtures or TM) — branch `feat/ts-precision-7`
+- R7 L1 (c) (`libpkg-samepkg`, `-noimp`): a name no import binds stayed as written, i.e. the project namesake. Checked
+  with haxe 4.3 first: after the module, the imports and the wildcard imports (a wildcard import beats the own package),
+  the compiler searches the file's own package and then each enclosing one. `CallGraphImports.packagePath` does the same
+  after `wildcardPath`: the first `pkg.Name` the project declares (keys to the project type, unchanged) or the std core
+  declares in a package it holds (`sys.thread.Lock`). A package neither holds (a library's: TM's `src/openfl/net`) answers
+  nothing and the name stays as written, as before — such a package cannot be listed without the library's sources; TM's
+  thread-safety reports are byte-identical with (a)..(c) (measured, below) — branch `feat/ts-precision-7`
+- R7 L1 (d) (`fn-tparam-shadow`): a return type that is a type parameter the function declares itself was "no type"
+  (K3's rule kept it unkeyed, correctly, but nothing bound it), so `A.id(s).wait()` with `id<Lock>(x:Lock):Lock` and the
+  std lock was unresolved. `returnThrough` (receiver view first, then the function's own parameters) binds each of them
+  from the declared types of the arguments passed to parameters written as that BARE parameter, rest arguments
+  included, when they all agree (`CallGraphKeys.argumentBindings`) — the compiler's inference for the simple shape;
+  disagreeing arguments, a parameter only nesting it (`Array<T>`: no structural unification), an argument with no
+  declared type, and a function parameter shadowing its type's leave the result unknown (`UNKNOWN_TYPE`). Never keyed
+  through the import the name shadows — branch `feat/ts-precision-7`
+- R7 L1 (e) (`ifdef-decl-member`) + the R4 F6 remainder: a member declared twice under `#if` with different types was
+  joined to "no type" (`CallGraphTypes.joined`), and two declarations whose return texts differ were settled to none
+  (`CallGraph.settle`): "neither", silently. The index keeps each member declaration's written type with its file
+  (`CallGraphImports.memberTypesOf`); a function's per-declaration return types are read on demand
+  (`CallGraphKeys.returnsWritten`, only when the settled one is missing and there are several declarations). When the
+  joined record / the settled fact has none, `readIn` keys each where written (`firstKeyingEach`) and the dispatch runs
+  every type they name (`apartFrom`), exactly as K3 did for one text keyed apart; a return whose types differ in name
+  takes the simple name of the one read. Unknown, as before: a branch writing no type, a declaration the graph cannot
+  read, types that do not line up — `keyedApart` now answers null for a different shape or argument count instead of
+  "no pairs" (which would have typed the value by the first alone). Readers needing ONE type (`paramTypesOf`,
+  `ReflectiveValues.memberTypeOf`) still have none; a parameter list two declarations write differently stays unknown
+  (`paramTypesOf`), not taken here — branch `feat/ts-precision-7`
+- R7 L1 F7 remainder NOT taken (L2): `@:forward abstract H(Lock)` (`abstract-underlying`), iteration over `Array<Lock>`
+  (`array-iter`), a function-typed field (`fn-type`), a lambda parameter typed by the callee's signature in another file
+  (`param-decl-file`).
+- R7 L1 MEASURED (engine of the L1 tip vs dc09aa52): fixtures r1..r5, round2, round4..round7 (499 runs): 480
+  byte-identical; the 9 F7 targets now warn `A C.realWait|sys.thread.Lock.wait`; every other round7 fixture (k1, k2,
+  k2b, controls, "not findings") byte-identical; the r5 trees (TM 1d1ba147 src under the r5 configs) re-key from (e):
+  `D RemoteFileSystemBase.listFolderCloudCallback|…` (tm-bad) disappear because `getFolderContentAPI()` (two `#if`
+  declarations, FolderContentNewAPI / FolderContent) now types `loadContent`, whose callback runs through
+  `APIRequest2.success` (spawns), not as if under the caller's hold; `B RemoteFileSystemBase.setTimestamp|…` is demoted
+  to info by the existing "long only through work … reported there" fold; `D FileList.reload|…` (truth `false`) becomes
+  `B FileList.reload|FolderWatcher._mutex`. TM: 1d1ba147 `153 146 102 8 12 5 18 1 0 0.70 102/102` -> `164 157 102 8 12 8
+  26 1 0 0.65 102/102` (13 keys gained, 10 already labelled dup-of / false, 3 labelled `false` R7-L1; 2 D false keys
+  lost), f81c2049 198 -> 209 (5/5), bd943dac 199 -> 210 (9/9), round6/frag 102/102 — all from (e): the std/lib/TM members
+  and returns written per `#if` branch (std `Process.stdout`, openfl `DisplayObject.stage`, TM `getFolderContentAPI`)
+  are typed now; (a)..(d) leave the 3 reports byte-identical. All rules: only thread-safety moves on the 3 TM trees,
+  anyparse src identical. Rule time on tm-1d1ba147 (interleaved, median of 3) 5.94 -> 7.40 s (+24.6%), full lint 25.44
+  -> 26.95 s (+5.9%): (a)..(d) cost +2.5%; the rest is not the resolution (graph build +0.1 s) but the analysis over
+  the larger reachable graph — `ThreadStates.origins` (one BFS per worker start) +1.0 s, `siteFacts` / `holds` /
+  `carried` the remainder (cpu profile); accepted as the price of the edges, a faster `origins` is separate work —
+  branch `feat/ts-precision-7`
