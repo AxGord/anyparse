@@ -438,6 +438,30 @@ class ThreadSafetyReflectiveSealTest extends Test {
 		#end
 	}
 
+	/**
+	 * A type parameter named like a class is none of it: a value declared of the type's or the function's parameter `Other`
+	 * may be whatever the type is instantiated with, a lock included (review R4 F3).
+	 */
+	@:pin('control') @:killer('M-TS-STORED-TYPE-PARAM') @:killer('M-TS-SCOPE-TYPE-PARAMS') @:killer('M-TS-SCOPE-FUNCTION-PARAMS')
+	public function testATypeParameterNamedLikeAClassIsNoneOfIt(): Void {
+		#if (sys || nodejs)
+		Assert.equals(1, helperTakes(SEALED, '', 'new Box<Mutex>(new Mutex()).put(d, "x");', [
+			'class Box<Other> { final v:Other; public function new(v:Other) this.v = v;'
+			+ ' public function put(o:Dynamic, k:String):Void Reflect.setField(o, k, v); }'
+		]), 'a type parameter of the type');
+		Assert.equals(
+			1,
+			helperTakes(
+				SEALED, 'public static function gen<Other>(o:Dynamic, k:String, v:Other):Void Reflect.setField(o, k, v);',
+				'Help.gen(d, "x", new Mutex());'
+			),
+			'a type parameter of the function'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
 	/** `Help.put`, handing an optional parameter on to `Help.assign`. */
 	private static inline final PUT: String = 'public static function put(o:Dynamic, k:String, ?v:Dynamic):Void assign(o, k, v);';

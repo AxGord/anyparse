@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
+import anyparse.runtime.Span;
 
 using Lambda;
 
@@ -20,6 +21,31 @@ final class TypeParamTable {
 	private final _supersWritten: Map<String, Array<{ written: String, file: String }>> = [];
 
 	public function new() {}
+
+	/**
+	 * The type parameters in scope at the offset `at` of `tree`, read off `declared` (`TypeInfoProvider.typeParamNames`): those
+	 * of every type declaration around it (keyed by its name node, `RefactorSupport.typeDeclOf`) and of every function around
+	 * it (a node of `functionKinds`, keyed by its own start). A name among them means the parameter there, never a type an
+	 * import or the package binds it to.
+	 */
+	public static function inScopeAt(
+		tree: QueryNode, at: Int, declared: Map<Int, Array<String>>, functionKinds: Array<String>
+	): Array<String> {
+		final out: Array<String> = [];
+		function add(key: Int): Void {
+			for (name in declared[key] ?? []) if (!out.contains(name)) out.push(name);
+		}
+		function visit(node: QueryNode): Void {
+			final span: Null<Span> = node.span;
+			if (span != null && (at < span.from || at >= span.to)) return;
+			final decl: Null<RefactorSupport.TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
+			if (decl != null) add((decl.nameNode.span ?? decl.fullSpan).from);
+			if (span != null && functionKinds.contains(node.kind)) add(span.from);
+			for (c in node.children) visit(c);
+		}
+		visit(tree);
+		return out;
+	}
 
 	/** Whether `typeName` declares the type parameter `name`. */
 	public inline function declaresTypeParam(typeName: String, name: String): Bool {

@@ -13,6 +13,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.StringFold.StringFoldSupport;
+import anyparse.query.TypeParamTable;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
@@ -183,8 +184,24 @@ final class ReflectiveValues {
 		final literal: Null<String> = (_shape.literalTypeNames ?? [])[value.kind];
 		if (literal != null) return [literal];
 		final written: Null<String> = value.kind == _shape.newExprKind ? value.name : typer(file, fn, value);
+		if (written != null && typeParameter(file, value, written)) return null;
 		if (written != null && !catchAll(written)) return typedAs(file, written);
 		return value.kind == _shape.identKind ? parameterTypes(file, value, typer, visiting) : null;
+	}
+
+	/**
+	 * Whether `written`, the type the value `node` of `file` is declared of, names a type parameter in scope at it — the
+	 * enclosing type's or function's (`TypeParamTable.inScopeAt`): whatever it is instantiated with, a lock included, never
+	 * the project type the name may also name.
+	 */
+	private function typeParameter(file: String, node: QueryNode, written: String): Bool {
+		final outer: Null<String> = NominalTypes.outerNominalOf(written, _plugin.typeSyntax);
+		final tree: Null<QueryNode> = _graph.treeOf(file);
+		final source: Null<String> = _graph.sourceOf(file);
+		final at: Null<Int> = node.span?.from;
+		if (outer == null || outer.indexOf('.') >= 0 || tree == null || source == null || at == null) return false;
+		final kinds: Array<String> = (_shape.functionKinds ?? []).concat(_shape.inlineFunctionKinds ?? []);
+		return TypeParamTable.inScopeAt(tree, at, RunScan.typeParamNamesOf(_plugin, source), kinds).contains(outer);
 	}
 
 	/** Whether `written` names a catch-all type (`Dynamic`, `Any`), which any value is of. */
@@ -260,7 +277,8 @@ final class ReflectiveValues {
 				out.values.push(node.children[1]);
 				return;
 			}
-			final written: Null<String> = operators.contains(node.kind) ? typer(file, id, target) : null;
+			final typed: Null<String> = operators.contains(node.kind) ? typer(file, id, target) : null;
+			final written: Null<String> = typed == null || typeParameter(file, target, typed) ? null : typed;
 			final types: Null<Array<String>> = written == null ? null : catchAll(written) ? [] : typedAs(file, written);
 			if (types == null)
 				unknown = true

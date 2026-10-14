@@ -19590,6 +19590,30 @@
 			"note": "a write of another shape to a parameter stores nothing (R4 F1)"
 		},
 		{
+			"name": "M-TS-STORED-TYPE-PARAM",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "valueTypes",
+			"find": "if (written != null && typeParameter(file, value, written)) return null;",
+			"replace": "",
+			"note": "a value declared of a type parameter named like a class is taken for that class (R4 F3)"
+		},
+		{
+			"name": "M-TS-SCOPE-TYPE-PARAMS",
+			"type": "anyparse.query.TypeParamTable",
+			"method": "inScopeAt",
+			"find": "if (decl != null) add((decl.nameNode.span ?? decl.fullSpan).from);",
+			"replace": "",
+			"note": "the type parameters of the enclosing type are not in scope (R4 F3, F5)"
+		},
+		{
+			"name": "M-TS-SCOPE-FUNCTION-PARAMS",
+			"type": "anyparse.query.TypeParamTable",
+			"method": "inScopeAt",
+			"find": "if (span != null && functionKinds.contains(node.kind)) add(span.from);",
+			"replace": "",
+			"note": "the type parameters of an enclosing function are not in scope (R4 F3, F5)"
+		},
+		{
 			"name": "M-TS-STORED-UNRELATED",
 			"type": "anyparse.check.ReflectiveValues",
 			"method": "mayHold",

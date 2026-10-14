@@ -2378,6 +2378,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyReflectiveSealTest#testAParameterItsFunctionWritesHoldsWhatEveryWriteStores :: control :: '
 				+ 'M-TS-STORED-WRITTEN,M-TS-STORED-WRITE-VALUE,M-TS-STORED-WRITE-OPERATOR,M-TS-STORED-WRITE-OTHER',
 			'unit.check.ThreadSafetyReflectiveSealTest#testAStructureTypedefMayHoldALock :: control :: M-TS-ENUM-KIND',
+			'unit.check.ThreadSafetyReflectiveSealTest#testATypeParameterNamedLikeAClassIsNoneOfIt :: control :: '
+				+ 'M-TS-STORED-TYPE-PARAM,M-TS-SCOPE-TYPE-PARAMS,M-TS-SCOPE-FUNCTION-PARAMS',
 			'unit.check.ThreadSafetyReflectiveSealTest#testATypeParameterReceiverIsBoundedByItsInstantiations :: control :: '
 				+ 'M-TS-PLACE-INSTANTIATIONS,M-TS-PLACE-COMPLETE,M-TS-PLACE-RAW-LINK,M-TS-PLACE-FREE-SUB,M-TS-PLACE-NEVER-MADE,'
 				+ 'M-TS-PLACE-UNDECLARED,M-TS-PLACE-GLOB-MATCH,M-TS-PLACE-MAKES-NEW,M-TS-PLACE-MAKES-VALUE,M-TS-PLACE-MAKES-RECEIVER,'
@@ -6504,6 +6506,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-STORED-WRITE-VALUE',
 			'M-TS-STORED-WRITE-OPERATOR',
 			'M-TS-STORED-WRITE-OTHER',
+			'M-TS-STORED-TYPE-PARAM',
+			'M-TS-SCOPE-TYPE-PARAMS',
+			'M-TS-SCOPE-FUNCTION-PARAMS',
 			'M-TS-STORED-UNRELATED',
 			'M-TS-STORED-RELATED',
 			'M-TS-STORED-MEMBER-TYPE',
