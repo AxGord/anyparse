@@ -6204,16 +6204,16 @@
 			"name": "M-GRAPH-RETURN-PARAM",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "throughParams(returned, owner, receiverSource, receiverType, currentType), currentType, member",
-			"replace": "returned, currentType, member",
+			"find": "final viewed: String = throughParams(written, owner, receiverSource, receiverType, currentType);",
+			"replace": "final viewed: String = written;",
 			"note": "a return type that is the owner's parameter never takes the receiver's argument"
 		},
 		{
 			"name": "M-GRAPH-FN-RETURN-PARAM",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "|| (_facts.typeParams[target] ?? []).contains(returned))",
-			"replace": ")",
+			"find": "if (!named) return viewed;",
+			"replace": "if (!named || true) return viewed;",
 			"note": "a return type that is the function's own parameter resolves to a class of that name"
 		},
 		{
@@ -20717,6 +20717,38 @@
 			"find": "if ((_declaredPaths[name] ?? []).contains(path) || StdTypes",
 			"replace": "if (StdTypes",
 			"note": "a project type of a package searched first loses to a std type of an enclosing package"
+		},
+		{
+			"name": "M-TS-INFER-AGREE",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "passed.length > 0 && !passed.exists(a -> a != passed[0])",
+			"replace": "passed.length > 0",
+			"note": "arguments binding a function's type parameter to different types bind it to the first one's"
+		},
+		{
+			"name": "M-TS-INFER-REST",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "final at: Int = rest && j - 1 > last ? last : j - 1;",
+			"replace": "final at: Int = j - 1;",
+			"note": "a rest parameter binds a function's type parameter from its first argument alone"
+		},
+		{
+			"name": "M-TS-INFER-SHADOW",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (named && own.exists(p -> types.generics.declaresTypeParam(owner ?? '', p))) return null;",
+			"replace": "",
+			"note": "a function's type parameter shadowing its type's takes the receiver's type argument"
+		},
+		{
+			"name": "M-TS-INFER-BARE",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "(params[at] ?? '').trim() == p",
+			"replace": "CallGraphNames.mentionsTypeName(params[at] ?? '', [p], _plugin.typeSyntax)",
+			"note": "an argument passed to a parameter nesting a function's type parameter binds it to the argument's whole type"
 		}
 	]
 }

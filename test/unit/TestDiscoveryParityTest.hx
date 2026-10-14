@@ -3028,6 +3028,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.BodySlotGuardSliceTest#testAllowsWholeElseBranchRemoval :: control :: M-BODYSLOT-LEAD-KEPT',
 			'unit.query.CallGraphTest#testADeclaredTypeIsReadInTheFileThatWroteIt :: control :: '
 				+ 'M-TS-DECL-MEMBER-FILE,M-TS-DECL-RETURN-FILE,M-TS-DECL-READ-FROM,M-TS-DECL-BOUND,M-TS-PATH-NULLABLE-KEYED',
+			'unit.query.CallGraphTest#testAFunctionsOwnTypeParameterIsWhatItsArgumentsBind :: control :: '
+				+ 'M-GRAPH-FN-RETURN-PARAM,M-TS-INFER-AGREE,M-TS-INFER-REST,M-TS-INFER-SHADOW,M-TS-INFER-BARE',
 			'unit.query.CallGraphTest#testALambdaParameterIsNoReferenceToItsLambda :: control :: M-GRAPH-LAMBDA-PARAM-SELF',
 			'unit.query.CallGraphTest#testANameNoImportBindsIsLookedUpInTheFilesPackages :: control :: '
 				+ 'M-TS-PACKAGE-LOOKUP,M-TS-PACKAGE-ENCLOSING,M-TS-PACKAGE-PROJECT-FIRST',
@@ -6654,7 +6656,11 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-ALIAS-AGREE',
 			'M-TS-PACKAGE-LOOKUP',
 			'M-TS-PACKAGE-ENCLOSING',
-			'M-TS-PACKAGE-PROJECT-FIRST'
+			'M-TS-PACKAGE-PROJECT-FIRST',
+			'M-TS-INFER-AGREE',
+			'M-TS-INFER-REST',
+			'M-TS-INFER-SHADOW',
+			'M-TS-INFER-BARE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

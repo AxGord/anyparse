@@ -1319,6 +1319,55 @@ class CallGraphTest extends Test {
 		#end
 	}
 
+	/**
+	 * A type parameter a function declares itself is what the arguments bind it to, as the language infers it — never the type
+	 * an import of its name names: `id<Lock>(x:Lock):Lock` in a file importing the project `Lock`, called with the std lock,
+	 * returns the std lock, read off the call or through a local; arguments that disagree, a parameter that only nests the type
+	 * parameter, and one shadowing a type parameter of the function's type leave the result unknown (review R4 F7).
+	 */
+	@:pin('control')
+	@:killer('M-GRAPH-FN-RETURN-PARAM') @:killer('M-TS-INFER-AGREE') @:killer('M-TS-INFER-REST') @:killer('M-TS-INFER-SHADOW')
+	@:killer('M-TS-INFER-BARE')
+	public function testAFunctionsOwnTypeParameterIsWhatItsArgumentsBind(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final g: CallGraph = graphOf([
+			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
+			'package app; import utils.Lock; class A { public static function id<Lock>(x:Lock):Lock return x;'
+			+ ' public static function two<Lock>(a:Lock, b:Lock):Lock return a; public static function pick<Lock>(...xs:Lock):Lock return xs[0];'
+			+ ' public static function head<Lock>(xs:Array<Lock>):Lock return xs[0]; }',
+			'package app; class Box<T> { public function new() {} public function get<T>(x:T):T return x; }',
+			'package app; class C { static function id(s:sys.thread.Lock):Void A.id(s).wait();'
+			+ ' static function local(s:sys.thread.Lock):Void { final l = A.id(s); l.wait(); }'
+			+ ' static function same(s:sys.thread.Lock, t:sys.thread.Lock):Void A.two(s, t).wait();'
+			+ ' static function apart(s:sys.thread.Lock, u:utils.Lock):Void A.two(s, u).wait();'
+			+ ' static function rest(s:sys.thread.Lock, u:utils.Lock):Void A.pick(s, u).wait();'
+			+ ' static function nested(xs:Array<sys.thread.Lock>):Void A.head(xs).wait();'
+			+ ' static function shadow(b:Box<utils.Lock>, s:sys.thread.Lock):Void b.get(s).wait(); }'
+		]);
+		function waits(from: String): Array<String> {
+			final out: Array<String> = [
+				for (e in g.outEdges(from)) if (e.kind == Call && e.to.indexOf('wait') >= 0) e.to
+			];
+			out.sort(Reflect.compare);
+			return out;
+		}
+		final std: Array<String> = ['sys.thread.Lock.wait'];
+		Assert.same(std, waits('C.id'), 'the argument binds the parameter');
+		Assert.same(std, waits('C.local'), 'through a local');
+		Assert.same(std, waits('C.same'), 'arguments that agree');
+		Assert.same([], waits('C.apart'), 'arguments that disagree');
+		Assert.same([], waits('C.rest'), 'rest arguments that disagree');
+		Assert.same([], waits('C.nested'), 'a parameter nesting the type parameter');
+		Assert.same([], waits('C.shadow'), 'a function type parameter shadowing its type\'s');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	private inline function graphOf(sources: Array<String>): CallGraph {
 		return QueryTestHelpers.graphOf(sources);
 	}

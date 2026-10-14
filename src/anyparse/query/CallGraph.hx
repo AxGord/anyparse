@@ -1327,24 +1327,57 @@ final class CallGraph {
 		}
 
 		/**
-		 * The nominal the DECLARED return type of `target` denotes for a call made on a value of `receiverType`
-		 * written `receiverSource`: a type parameter the function declares itself is unknown, one of its owner
-		 * is the receiver's argument for it (`throughParams`), and a nullable or dynamic wrapper names no
-		 * dispatchable type. `member`, when the result is a receiver, is the member looked up on it (`nominalOf`).
+		 * `written`, the declared return type of `target` the call `call` resolved to, as the value the call makes sees it: a
+		 * type parameter of the function's type as the receiver binds it (`throughParams`), one the function declares itself
+		 * (`function id<T>(x:T):T`) as the arguments bind it, the way the language infers it — the type `argType` gives every
+		 * argument passed to a parameter written as that bare type parameter, when they all agree. One no argument binds, or
+		 * arguments of different types bind, is `UNKNOWN_TYPE`: never the type an import of its name names (review R4 F7).
+		 * Null when such a parameter shadows a type parameter of the function's type.
+		 */
+		function returnThrough(
+			call: QueryNode, target: String, written: String, receiverSource: Null<String>, receiverType: Null<String>,
+			currentType: Null<String>, argType: QueryNode -> Null<String>
+		): Null<String> {
+			final own: Array<String> = _facts.typeParams[target] ?? [];
+			final owner: Null<String> = nodes[target]?.typeName;
+			final named: Bool = CallGraphNames.mentionsTypeName(written, own, _plugin.typeSyntax);
+			if (named && own.exists(p -> types.generics.declaresTypeParam(owner ?? '', p))) return null;
+			final viewed: String = throughParams(written, owner, receiverSource, receiverType, currentType);
+			if (!named) return viewed;
+			final params: Array<Null<String>> = CallGraphKeys.paramTypesOf(this, target) ?? [];
+			final last: Int = params.length - 1;
+			// a rest parameter takes every argument from its position on
+			final rest: Bool = _facts.restParams.exists(target);
+			final bound: Array<String> = [
+				for (p in own) {
+					final passed: Array<Null<String>> = [
+						for (j in 1...call.children.length) {
+							final at: Int = rest && j - 1 > last ? last : j - 1;
+							if (at <= last && (params[at] ?? '').trim() == p) argType(call.children[j]);
+						}
+					];
+					passed.length > 0 && !passed.exists(a -> a != passed[0]) ? passed[0] ?? UNKNOWN_TYPE : UNKNOWN_TYPE;
+				}
+			];
+			return CallGraphNames.substituteTypeParams(viewed, own, bound, _plugin.typeSyntax);
+		}
+
+		/**
+		 * The nominal the DECLARED return type of `target` denotes for the call `call` made on a value of `receiverType` written
+		 * `receiverSource`, `argType` typing its arguments (`returnThrough`): a nullable or dynamic wrapper names no dispatchable
+		 * type. `member`, when the result is a receiver, is the member looked up on it (`nominalOf`).
 		 */
 		function returnedNominal(
-			target: String, receiverSource: Null<String>, receiverType: Null<String>, currentType: Null<String>, ?member: String,
-			?scope: Int
+			call: QueryNode, target: String, receiverSource: Null<String>, receiverType: Null<String>, currentType: Null<String>,
+			argType: QueryNode -> Null<String>, ?member: String, ?scope: Int
 		): Null<String> {
 			// a return type written as a dotted path is read as that path; a std function's from the std (`StdTypes.returnOf`)
 			final written: Null<String> = returnSourceOf(target);
 			final returned: Null<String> = keys.returnedPath(_facts.returns[target], written) ?? StdTypes.returnOf(_plugin, nodes[target]);
-			if (returned == null || nullableWrappers.contains(returned) || (_facts.typeParams[target] ?? []).contains(returned))
-				return null;
-			final owner: Null<String> = nodes[target]?.typeName;
-			final nominal: Null<String> = nominalOf(
-				throughParams(returned, owner, receiverSource, receiverType, currentType), currentType, member, scope
-			);
+			final seen: Null<String> = returned == null || nullableWrappers.contains(returned)
+				? null
+				: returnThrough(call, target, returned, receiverSource, receiverType, currentType, argType);
+			final nominal: Null<String> = seen == null ? null : nominalOf(seen, currentType, member, scope);
 			return nominal == null || nullableWrappers.contains(nominal) ? null : nominal;
 		}
 
@@ -1467,9 +1500,9 @@ final class CallGraph {
 					? null
 					: returnSourceOf(call.target) ?? StdTypes.returnOf(_plugin, nodes[call.target]);
 				if (call == null || returned == null) return null;
-				final written: String = returned;
-				if (CallGraphNames.mentionsTypeName(written, _facts.typeParams[call.target] ?? [], _plugin.typeSyntax)) return null;
-				return throughParams(written, nodes[call.target]?.typeName, call.receiverSource, call.onType, currentType);
+				return returnThrough(
+					expr, call.target, returned, call.receiverSource, call.onType, currentType, a -> typeSourceOf(a, currentType)
+				);
 			}
 			return null;
 		}
@@ -1491,7 +1524,10 @@ final class CallGraph {
 				final call: Null<CallTarget> = callTargetOf(recv, currentType);
 				final returned: Null<String> = call == null
 					? null
-					: returnedNominal(call.target, call.receiverSource, call.onType, currentType, member, typeScopeOf(recv, currentType));
+					: returnedNominal(
+						recv, call.target, call.receiverSource, call.onType, currentType, a -> typeSourceOf(a, currentType), member,
+						typeScopeOf(recv, currentType)
+					);
 				return returned == null ? null : {
 					typeName: returned,
 					isValue: true,
