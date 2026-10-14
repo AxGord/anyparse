@@ -2366,7 +2366,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyQuietLocksTest#testALockOnlyTakenSharedNeverWaits :: control :: M-TS-SHARED-OFF,M-TS-SHARED-HOLD',
 			'unit.check.ThreadSafetyQuietLocksTest#testAnExclusiveTakeMakesTheSharedOnesWait :: control :: M-TS-SHARED-ANY',
 			'unit.check.ThreadSafetyReflectiveSealTest#testACaptureIsTypedThroughItsSubject :: control :: '
-				+ 'M-TS-BINDER-SUBJECT,M-TS-BINDER-PLACED-BY,M-TS-BINDER-TOP,M-TS-BINDER-OWN-PARAMS,M-TS-BINDER-UNIQUE',
+				+ 'M-TS-BINDER-SUBJECT,M-TS-BINDER-PLACED-BY,M-TS-BINDER-TOP,M-TS-BINDER-OWN-PARAMS',
 			'unit.check.ThreadSafetyReflectiveSealTest#testAFreshObjectReceiverKeepsTheLockNames :: control :: '
 				+ 'M-TS-PLACE-FRESH-STRUCT,M-TS-PLACE-FRESH-NEW,M-TS-PLACE-FRESH-MUTABLE',
 			'unit.check.ThreadSafetyReflectiveSealTest#testALockAReflectiveWriteUnsealsSaysWhoUnsealedIt :: control :: '
@@ -6543,7 +6543,6 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-PLACE-VOID',
 			'M-TS-PLACE-FORWARDED-BOUND',
 			'M-TS-BINDER-TYPE',
-			'M-TS-BINDER-UNIQUE',
 			'M-TS-MAKES-RESOLVED',
 			'M-TS-MAKES-LITERAL',
 			'M-TS-MAKES-UNKNOWN',

@@ -2256,12 +2256,14 @@ decided the question; it may not become a record of runs.
 - R3 H2 (`round6/g2-binder`): a `case` capture was typed by the ONE indexed enum declaring a constructor of its name, so
   a project `enum Mine { Some(o:Other); }` typed the capture of a library `Option<D>`'s `Some(v)` as `Other` — sealed,
   silent, and no notice named it. Now `ReflectiveReach.subjectEnum`: only when the switch subject is declared of that
-  enum (typed as any value is, resolved through the file's imports and aliases to ONE type on every build), the enum is
-  declared once, and the pattern is a top-level one of its arm (an or-alternative counts; a nested pattern's subject is
+  enum (typed as any value is, resolved through the file's imports and aliases to ONE type on every build) and the pattern is a top-level one of its arm (an or-alternative counts; a nested pattern's subject is
   the outer constructor's parameter, which nothing here types). A parameter written with the enum's own type parameters
   types nothing (`enum Gen<Other> { Hold(x:Other); }` read `x` as the class `Other` before — pre-existing). The binder is
   an exclusion like the others: `placedBy` = "a capture of `E.Ctor`, typed by its parameter", so the notice names it —
-  branch `feat/ts-precision-5`
+  branch `feat/ts-precision-5`. The old "two enums declaring the constructor type none" gate (arm `M-TS-BINDER-UNIQUE`)
+  is gone with the name match: two enums of the SUBJECT's name merge their constructors in `memberOnChain`, whose
+  `agreed` leaves a parameter they write differently untyped, so a `declarationCount == 1` guard there survived its
+  arm (redundant) and was dropped
 - R3 M3 (`round6/g1-dotted/wrongpkg2`): since G1 a `sinks` entry written with a package names the type declared at that
   path alone, so a wrong package matched nothing, silently, while another entry matched (the notice fired only for a
   whole list naming nothing). The loose last-two-segments match is NOT restored; instead each entry written with its

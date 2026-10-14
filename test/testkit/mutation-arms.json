@@ -20056,14 +20056,6 @@
 			"note": "(precision) a case capture is typed by nothing, so an index write into a Map capture is reflective"
 		},
 		{
-			"name": "M-TS-BINDER-UNIQUE",
-			"type": "anyparse.check.ReflectiveReach",
-			"method": "subjectEnum",
-			"find": "_graph.types.declarationCount(named) == 1 && ",
-			"replace": "",
-			"note": "a subject type two enums of one name declare types a capture by their merged constructors"
-		},
-		{
 			"name": "M-TS-MAKES-RESOLVED",
 			"type": "anyparse.check.ReflectiveReach",
 			"method": "namedTypes",

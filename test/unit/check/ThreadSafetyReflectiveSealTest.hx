@@ -157,7 +157,7 @@ class ThreadSafetyReflectiveSealTest extends Test {
 	 * says which capture an enum constructor typed.
 	 */
 	@:pin('control') @:killer('M-TS-BINDER-SUBJECT') @:killer('M-TS-BINDER-PLACED-BY') @:killer('M-TS-BINDER-TOP')
-	@:killer('M-TS-BINDER-OWN-PARAMS') @:killer('M-TS-BINDER-UNIQUE')
+	@:killer('M-TS-BINDER-OWN-PARAMS')
 	public function testACaptureIsTypedThroughItsSubject(): Void {
 		#if (sys || nodejs)
 		Assert.equals(
@@ -227,6 +227,11 @@ class ThreadSafetyReflectiveSealTest extends Test {
 		Assert.equals(
 			0, importAsTakes('#if sys import somelib.Gadget; #end', 'final x = new Gadget(); new V().toTarget("_l", d._m);'),
 			'a guarded import'
+		);
+		Assert.equals(
+			0,
+			importAsTakes('import somelib.Gadget;', 'final x = new Gadget(); final y = new otherlib.Thing(); new V().toTarget("_l", d._m);'),
+			'a library type imported or written out'
 		);
 		Assert.equals(0, importAsTakes('using haxe.io.Path;', 'final x = new Path("p"); new V().toTarget("_l", d._m);'), 'a using');
 		Assert.equals(

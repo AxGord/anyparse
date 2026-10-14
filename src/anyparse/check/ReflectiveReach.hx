@@ -429,9 +429,8 @@ final class ReflectiveReach {
 		// a subject type the file may mean another type by on some builds types no capture
 		final keys: Array<String> = outer == null ? [] : keysOf(file, outer, []);
 		final named: Null<String> = keys.length == 1 ? _graph.types.resolveAlias(keys[0]) : null;
-		return named != null && _graph.types.declarationCount(named) == 1 && _graph.types.imports.enumsDeclaring(ctor).contains(named)
-			? named
-			: null;
+		// two enums of one name merge their constructors (`memberOnChain`): a parameter they write differently types nothing
+		return named != null && _graph.types.imports.enumsDeclaring(ctor).contains(named) ? named : null;
 	}
 
 	/** Whether `node` is the pattern `pattern` or an alternative (`A(x) | B(x)`) holding it as one of its own. */
