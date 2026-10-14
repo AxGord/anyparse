@@ -90,6 +90,12 @@ final class ReflectiveValues {
 	/** Every string literal the held files spell (`spelled`); null until first asked. */
 	private var _literals: Null<Array<String>> = null;
 
+	/**
+	 * Each local or parameter (`<file>:<binding>`) and each field NAME a write or an initializer may hand a value its declared
+	 * type was never checked against (`unchecked`); null until first asked.
+	 */
+	private var _claims: Null<{ bindings: Map<String, Bool>, fields: Map<String, Bool> }> = null;
+
 	public function new(
 		graph: CallGraph, plugin: GrammarPlugin, reach: ReflectiveReach, complete: Bool, ?entries: Entries, ?methodHolders: Array<String>
 	) {
@@ -185,6 +191,7 @@ final class ReflectiveValues {
 		if (literal != null) return [literal];
 		final written: Null<String> = value.kind == _shape.newExprKind ? value.name : typer(file, fn, value);
 		if (written != null && typeParameter(file, value, written)) return null;
+		if (written != null && value.kind != _shape.newExprKind && claimed(file, value, typer)) return null;
 		if (written != null && !catchAll(written)) return typedAs(file, written);
 		return value.kind == _shape.identKind ? parameterTypes(file, value, typer, visiting) : null;
 	}
@@ -202,6 +209,84 @@ final class ReflectiveValues {
 		if (outer == null || outer.indexOf('.') >= 0 || tree == null || source == null || at == null) return false;
 		final kinds: Array<String> = (_shape.functionKinds ?? []).concat(_shape.inlineFunctionKinds ?? []);
 		return TypeParamTable.inScopeAt(tree, at, RunScan.typeParamNamesOf(_plugin, source), kinds).contains(outer);
+	}
+
+	/**
+	 * Whether `node`, read in `file`, is a local, a parameter or a field some initializer or write hands a value its declared
+	 * type was never checked against (`claims`): its declared type is then a claim, not a fact.
+	 */
+	private function claimed(file: String, node: QueryNode, typer: (String, Null<String>, QueryNode) -> Null<String>): Bool {
+		final value: QueryNode = BoolExprShape.unwrapParens(node, _shape.parenKind);
+		final name: Null<String> = value.name;
+		final at: Null<Span> = value.span;
+		final tree: Null<QueryNode> = _graph.treeOf(file);
+		if (name == null || at == null || tree == null) return false;
+		final known: { bindings: Map<String, Bool>, fields: Map<String, Bool> } = claims(typer);
+		if (FieldWrites.accessKind(value.kind, _shape)) return known.fields.exists(name);
+		if (value.kind != _shape.identKind) return false;
+		final bound: Null<Int> = TypeResolver.resolveBindingFrom(name, at, tree, _shape);
+		return bound == null || bound < 0 ? known.fields.exists(name) : known.bindings.exists('$file:$bound');
+	}
+
+	/**
+	 * The locals, parameters and field names of the held files an initializer or a write hands a value its declared type was
+	 * never checked against, walked once (`unchecked`): a local by its binding, a field by its name, whoever declares it.
+	 */
+	private function claims(typer: (
+		String, Null<String>, QueryNode
+	) -> Null<String>): { bindings: Map<String, Bool>, fields: Map<String, Bool> } {
+		final known: Null<{ bindings: Map<String, Bool>, fields: Map<String, Bool> }> = _claims;
+		if (known != null) return known;
+		final out: { bindings: Map<String, Bool>, fields: Map<String, Bool> } = { bindings: [], fields: [] };
+		_claims = out;
+		final locals: Array<String> = (_shape.localDeclKinds ?? []).concat(_shape.localDeclExprKinds ?? [])
+			.concat(_shape.staticLocalDeclKinds ?? []);
+		final fields: Array<String> = _shape.fieldDeclKinds ?? [];
+		for (held in _graph.heldFiles()) {
+			final file: String = held.file;
+			final tree: QueryNode = held.tree;
+			function walk(node: QueryNode): Void {
+				for (c in node.children) walk(c);
+				final name: Null<String> = node.name;
+				final at: Null<Span> = node.span;
+				final declares: Bool = locals.contains(node.kind) || fields.contains(node.kind);
+				if (name != null && at != null && declares && node.children.exists(c -> unchecked(file, c, typer))) {
+					if (fields.contains(node.kind))
+						out.fields[name] = true
+					else
+						out.bindings['$file:${at.from}'] = true;
+				}
+				if (!_shape.writeParentKinds.contains(node.kind) || !node.children.slice(1).exists(c -> unchecked(file, c, typer))) return;
+				final target: QueryNode = BoolExprShape.unwrapParens(node.children[0], _shape.parenKind);
+				final written: Null<String> = target.name;
+				final span: Null<Span> = target.span;
+				if (written == null || span == null) return;
+				final bound: Null<Int> = target.kind == _shape.identKind
+					? TypeResolver.resolveBindingFrom(written, span, tree, _shape)
+					: null;
+				if (bound != null && bound >= 0)
+					out.bindings['$file:$bound'] = true
+				else if (target.kind == _shape.identKind || FieldWrites.accessKind(target.kind, _shape))
+					out.fields[written] = true;
+			}
+			walk(tree);
+		}
+		return out;
+	}
+
+	/**
+	 * Whether the expression `node` of `file` may hand on a value its declared type was never checked against: it holds an
+	 * unchecked `cast` (`uncheckedCastKind`) or an `untyped` (`untypedKinds`) anywhere, or is itself declared of a catch-all
+	 * type (`Dynamic`, `Any`), which the compiler lets into a variable of any type.
+	 */
+	private function unchecked(file: String, node: QueryNode, typer: (String, Null<String>, QueryNode) -> Null<String>): Bool {
+		final untypedKinds: Array<String> = _shape.untypedKinds ?? [];
+		function holds(n: QueryNode): Bool {
+			return n.kind == _shape.uncheckedCastKind || untypedKinds.contains(n.kind) || n.children.exists(holds);
+		}
+		if ((_shape.typeAnnotationKinds ?? []).contains(node.kind)) return false;
+		final typed: Null<String> = typer(file, null, node);
+		return holds(node) || typed != null && catchAll(typed);
 	}
 
 	/** Whether `written` names a catch-all type (`Dynamic`, `Any`), which any value is of. */

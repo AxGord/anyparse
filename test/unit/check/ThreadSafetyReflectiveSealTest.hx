@@ -462,6 +462,40 @@ class ThreadSafetyReflectiveSealTest extends Test {
 		#end
 	}
 
+	/**
+	 * An unchecked `cast`, an `untyped` or a `Dynamic` value makes a declared type a claim the compiler never checked: a
+	 * local or a field it initialises or writes may hold any object, a lock included; a checked `cast(e, T)` is trusted
+	 * (review R4 F4).
+	 */
+	@:pin('control') @:killer('M-TS-STORED-CAST-LOCAL') @:killer('M-TS-STORED-CAST-FIELD') @:killer('M-TS-STORED-CAST-KINDS')
+	@:killer('M-TS-STORED-CAST-DYNAMIC') @:killer('M-TS-STORED-CAST-WRITES')
+	public function testAnUncheckedCastIsNoDeclaredType(): Void {
+		#if (sys || nodejs)
+		Assert.equals(1, helperTakes(SEALED, '', 'final x:Other = cast new Mutex(); Help.assign(d, "x", x);'), 'a cast initialiser');
+		Assert.equals(1, helperTakes(SEALED, '', 'var x:Other = null; x = cast new Mutex(); Help.assign(d, "x", x);'), 'a cast write');
+		Assert.equals(1, helperTakes(SEALED, '', 'final x:Other = untyped new Mutex(); Help.assign(d, "x", x);'), 'an untyped initialiser');
+		Assert.equals(
+			1, helperTakes(SEALED, '', 'Help.assign(d, "x", Keep.o);', ['class Keep { public static var o:Other = cast new Mutex(); }']),
+			'a field a cast initialises'
+		);
+		Assert.equals(
+			1,
+			helperTakes(
+				SEALED, '', 'Keep.o = cast new Mutex(); Help.assign(d, "x", Keep.o);', ['class Keep { public static var o:Other = null; }']
+			),
+			'a field a cast writes'
+		);
+		Assert.equals(1, helperTakes(SEALED, '', 'final x:Other = bag; Help.assign(d, "x", x);'), 'a Dynamic initialiser');
+		Assert.equals(0, helperTakes(SEALED, '', 'final x:Other = cast(new Other(), Other); Help.assign(d, "x", x);'), 'a checked cast');
+		Assert.equals(
+			0, helperTakes(SEALED, '', 'Help.assign(d, "x", Keep.o);', ['class Keep { public static var o:Other = new Other(); }']),
+			'a field of the type it is declared'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
 	/** `Help.put`, handing an optional parameter on to `Help.assign`. */
 	private static inline final PUT: String = 'public static function put(o:Dynamic, k:String, ?v:Dynamic):Void assign(o, k, v);';

@@ -19598,6 +19598,46 @@
 			"note": "a value declared of a type parameter named like a class is taken for that class (R4 F3)"
 		},
 		{
+			"name": "M-TS-STORED-CAST-LOCAL",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "valueTypes",
+			"find": "if (written != null && value.kind != _shape.newExprKind && claimed(file, value, typer)) return null;",
+			"replace": "",
+			"note": "a declared type an unchecked cast or a Dynamic value reached is trusted (R4 F4)"
+		},
+		{
+			"name": "M-TS-STORED-CAST-FIELD",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "claimed",
+			"find": "if (FieldWrites.accessKind(value.kind, _shape)) return known.fields.exists(name);",
+			"replace": "if (FieldWrites.accessKind(value.kind, _shape)) return false;",
+			"note": "a field read off a value is trusted whatever its writes hand it (R4 F4)"
+		},
+		{
+			"name": "M-TS-STORED-CAST-KINDS",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "unchecked",
+			"find": "return holds(node) || typed != null && catchAll(typed);",
+			"replace": "return typed != null && catchAll(typed);",
+			"note": "an unchecked cast or an untyped hands on a checked value (R4 F4)"
+		},
+		{
+			"name": "M-TS-STORED-CAST-DYNAMIC",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "unchecked",
+			"find": "return holds(node) || typed != null && catchAll(typed);",
+			"replace": "return holds(node);",
+			"note": "a Dynamic value hands on a checked value (R4 F4)"
+		},
+		{
+			"name": "M-TS-STORED-CAST-WRITES",
+			"type": "anyparse.check.ReflectiveValues",
+			"method": "claims",
+			"find": "out.bindings['$file:$bound'] = true",
+			"replace": "out.fields[''] = true",
+			"note": "a local a cast writes after its declaration is trusted (R4 F4)"
+		},
+		{
 			"name": "M-TS-SCOPE-TYPE-PARAMS",
 			"type": "anyparse.query.TypeParamTable",
 			"method": "inScopeAt",
