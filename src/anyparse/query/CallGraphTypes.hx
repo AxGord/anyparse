@@ -59,8 +59,8 @@ final class CallGraphTypes {
 	/** Every member name an indexed type declares as a FUNCTION. */
 	private final _functionNames: Map<String, Bool> = [];
 
-	/** The files whose declarations the tables hold. */
-	private final _files: Map<String, Bool> = [];
+	/** The files whose declarations the tables hold, each with the index entry it was read from. */
+	private final _files: Map<String, HeldFile> = [];
 
 	/** What each type's modifiers and metadata say: extern, built by a macro, constructed from a literal, forwarding. */
 	public final meta: TypeMetaFacts;
@@ -89,10 +89,7 @@ final class CallGraphTypes {
 		_valueTypeNames = [for (t in (shape.literalTypeNames ?? []).iterator()) t].concat(shape.nonNullableTypeNames ?? [])
 			.concat(shape.arrayTypeNames ?? []);
 		_aliasingKinds = shape.aliasingDeclKinds ?? [];
-		imports = new CallGraphImports(
-			shape.execution?.enumConstructorKinds ?? [], isStatic,
-			type -> declarationCount(type) == 0 || meta.isExtern(type) || firstOnChain(type, t -> meta.isBuilt(t)) != null
-		);
+		imports = new CallGraphImports(shape.execution?.enumConstructorKinds ?? [], isStatic);
 		if (index != null) merge(index);
 	}
 
@@ -116,10 +113,11 @@ final class CallGraphTypes {
 		return _declarations[typeName] ?? 0;
 	}
 
-	/** Whether the tables hold the declarations of `file`. */
-	public inline function holdsFile(file: String): Bool {
-		return _files.exists(CallGraphNames.normalizePath(file));
+	/** The index entry the tables took `file`'s declarations from, null for a file they do not hold. */
+	public inline function heldFile(file: String): Null<HeldFile> {
+		return _files[CallGraphNames.normalizePath(file)];
 	}
+
 
 	/** Whether any indexed type declares a STATIC function named `name`. */
 	public inline function hasStaticFunctionNamed(name: String): Bool {
@@ -173,7 +171,8 @@ final class CallGraphTypes {
 		for (fi in index.allFiles()) {
 			final key: String = CallGraphNames.normalizePath(fi.file);
 			if (_files.exists(key)) continue;
-			_files[key] = true;
+			final held: HeldFile = { index: index, info: fi };
+			_files[key] = held;
 			for (t in fi.types) record(t, key);
 			imports.recordFile(fi, key);
 		}
@@ -374,4 +373,10 @@ final class CallGraphTypes {
 		map[key] = list;
 	}
 
+}
+
+/** A file a `CallGraphTypes` holds: the index entry its declarations were read from, and the index answering its names. */
+typedef HeldFile = {
+	final index: SymbolIndex;
+	final info: FileInfo;
 }

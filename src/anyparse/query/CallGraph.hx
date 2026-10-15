@@ -1,13 +1,13 @@
 package anyparse.query;
 
-import anyparse.query.CallGraphImports.ImportedName;
 import anyparse.query.CallGraphImports.WrittenIn;
+import anyparse.query.CallGraphTypes.HeldFile;
 import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.query.Refs.RefHit;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.TypeSyntax;
+import anyparse.query.ValueNameBinding.ImportedStatics;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -529,7 +529,7 @@ final class CallGraph {
 			parsed.push(p);
 		}
 		final unindexed: Array<{ file: String, source: String }> = [
-			for (p in parsed) if (!types.holdsFile(p.file)) { file: p.file, source: p.source }
+			for (p in parsed) if (types.heldFile(p.file) == null) { file: p.file, source: p.source }
 		];
 		if (unindexed.length > 0) types.merge(IndexScope.over(unindexed, _plugin));
 		_grownTypes.resize(0);
@@ -828,14 +828,15 @@ final class CallGraph {
 		// the file's declared types as the graph keys them (`CallGraphKeys`): a library type never merges into a project one
 		final keys: CallGraphKeys = new CallGraphKeys(types.imports, file, _plugin.typeSyntax, provider, source, tree, fnKinds);
 		keys.typeLocals(tree, localDeclKinds, newExprKind, callKind);
-		types.imports.recordModuleNames(file, CallGraphNames.moduleLevelNames(tree, shape.importAliasKinds ?? []));
+		// the index entry the file was read from, whose `values` layer says what a bare name the module and its imports bind
+		final held: Null<HeldFile> = types.heldFile(file);
+
 		// the files whose declarations wrote the types read while typing a receiver (`readIn`), for the types a name there may be
 		final readFrom: Array<String> = [];
 		// each type a declaration typing a receiver names where another one of it names the type read (`readIn`): runs too
 		final keyedApart: Array<{ from: String, to: String }> = [];
 		final declaredTypes: Map<Int, String> = keys.declaredTypes;
 		final typeSources: Map<Int, String> = keys.typeSources;
-		final bindCache: Map<String, Map<Int, Int>> = [];
 		final consumedBindCalls: Array<Int> = [];
 		final frames: Array<Frame> = [];
 		final staticKind: Null<String> = shape.staticModifierKind;
@@ -843,27 +844,10 @@ final class CallGraph {
 		// true while the walk is inside a STATIC member's initializer, whose calls land on `<static>`
 		var inStaticInit: Bool = false;
 
-		// one Refs pass for EVERY identifier name in the file — per-name find()
-		// walks made the graph build quadratic on large files
-		final identNames: Array<String> = [];
-		function scanIdents(node: QueryNode): Void {
-			final name: Null<String> = node.name;
-			if (node.kind == identKind && name != null) identNames.push(name);
-			for (c in node.children) scanIdents(c);
-		}
-		scanIdents(tree);
-		final multiHits: Map<String, Array<RefHit>> = Refs.findMulti(identNames, tree, shape);
-
-		function bindFor(name: String): Map<Int, Int> {
-			final hit: Null<Map<Int, Int>> = bindCache[name];
-			if (hit != null) return hit;
-			final map: Map<Int, Int> = [];
-			for (h in multiHits[name] ?? []) {
-				final b: Null<Span> = h.bindingSpan;
-				map[h.span.from] = b == null ? -1 : b.from;
-			}
-			bindCache[name] = map;
-			return map;
+		/** What the module and the imports of the file supply under the bare name `name` (`ValueNameBinding.importedStatics`). */
+		function importedOf(name: String): ImportedStatics {
+			final holder: Null<HeldFile> = held;
+			return holder == null ? { statics: [], unknown: false } : holder.index.values.importedStatics(holder.info, name);
 		}
 
 		function frameId(currentType: Null<String>): String {
@@ -923,7 +907,7 @@ final class CallGraph {
 
 		/** Declared simple type of a value identifier, `Null<T>` unwrapped to `T`. */
 		function identDeclaredType(name: String, span: Span): Null<String> {
-			final bindingFrom: Null<Int> = bindFor(name)[span.from];
+			final bindingFrom: Null<Int> = Refs.bindingAt(name, span.from, tree, shape);
 			if (bindingFrom == null || bindingFrom < 0) return null;
 			final typeName: Null<String> = declaredTypes[bindingFrom];
 			return if (typeName == null)
@@ -950,7 +934,7 @@ final class CallGraph {
 		 */
 		function importedFunction(name: String, span: Span, currentType: Null<String>): Null<String> {
 			final targets: Array<String> = [];
-			for (s in types.imports.importedStatics(file, name).statics) {
+			for (s in importedOf(name).statics) {
 				final id: Null<String> = CallGraphKeys.staticTarget(this, s.owner, s.member);
 				if (id != null && !targets.contains(id)) targets.push(id);
 			}
@@ -966,13 +950,14 @@ final class CallGraph {
 			if (span == null) return null;
 			final local: Null<String> = localFn(name);
 			if (local != null) return local;
-			final bound: Null<Int> = bindFor(name)[span.from];
+			final bound: Null<Int> = Refs.bindingAt(name, span.from, tree, shape);
 			// a lambda's first parameter starts where the lambda does: only a local function NAMED so is what the name binds
 			final fn: Null<String> = bound == null ? null : entry.fnBySpanFrom[bound];
 			return if (bound != null && bound >= 0)
 				fn != null && nodes[fn]?.name == name ? fn : null
 			else if (currentType == null)
-				null
+				// module-level code sees no class's members, the main class's included: the module's own names and its imports'
+				imported ? importedFunction(name, span, currentType) : null
 			else
 				(CallGraphKeys.staticOfSupertype(this, currentType, name) ? null : memberOnChain(currentType, name)) ?? (
 					imported ? importedFunction(name, span, currentType) : null
@@ -1262,13 +1247,13 @@ final class CallGraph {
 			if (recv.kind != identKind || raw == null || span == null) return null;
 			final name: String = raw;
 			if (!CallGraphNames.isTypeLike(name)) return null;
-			final bound: Null<Int> = bindFor(name)[span.from];
+			final bound: Null<Int> = Refs.bindingAt(name, span.from, tree, shape);
 			return bound == null || bound < 0 ? types.imports.typeOf(file, name) : null;
 		}
 
 		// an identifier other than `this` that binds to nothing: the root of a package path, say
 		final unboundIdent: QueryNode -> Bool = n ->
-			n.kind == identKind && n.name != selfText && (bindFor(n.name ?? '')[n.span?.from ?? -1] ?? -1) < 0;
+			n.kind == identKind && n.name != selfText && (Refs.bindingAt(n.name ?? '', n.span?.from ?? -1, tree, shape) ?? -1) < 0;
 
 		// bound once `receiverType` exists (below): the target of a call and the receiver it was made on
 		var callTargetOf: (QueryNode, Null<String>) -> Null<CallTarget> = (call, currentType) -> null;
@@ -1287,7 +1272,7 @@ final class CallGraph {
 			if (expr.kind == identKind && name != null) {
 				if (name == selfText) return MEMBER_SCOPE;
 				if (span == null) return null;
-				final bound: Null<Int> = bindFor(name)[span.from];
+				final bound: Null<Int> = Refs.bindingAt(name, span.from, tree, shape);
 				if (bound != null && bound >= 0) return bindsLocally(bound) ? bound : MEMBER_SCOPE;
 				return CallGraphNames.isTypeLike(name) ? null : MEMBER_SCOPE;
 			}
@@ -1319,13 +1304,13 @@ final class CallGraph {
 				if (name == selfText) return selfTypeOf(currentType);
 				final span: Null<Span> = expr.span;
 				if (span == null) return null;
-				final bound: Null<Int> = bindFor(name)[span.from];
+				final bound: Null<Int> = Refs.bindingAt(name, span.from, tree, shape);
 				if (bound != null && bound >= 0)
 					return typeSources[bound] ?? keys.throughInitializer(bound, c -> typeSourceOf(c, currentType));
 				if (CallGraphNames.isTypeLike(name)) return null;
 				// a static an import binds by its own name (`import p.T.*;`): its type, read where it is declared
 				final imported: Null<{ owner: String, member: String }> = CallGraphKeys.importedStatic(
-					this, file, moduleType, name, currentType
+					this, importedOf(name), name, currentType
 				);
 				if (imported != null) return memberTypeSource(imported.owner, imported.member);
 				// a supertype's static is not in scope bare
@@ -1429,7 +1414,7 @@ final class CallGraph {
 						isValue: true,
 						isDynamic: false
 					};
-					final bound: Null<Int> = bindFor(name)[span.from];
+					final bound: Null<Int> = Refs.bindingAt(name, span.from, tree, shape);
 					if ((bound == null || bound < 0) && CallGraphNames.isTypeLike(name)) return {
 						typeName: types.imports.typeOf(file, name),
 						isValue: false,
@@ -1466,7 +1451,7 @@ final class CallGraph {
 			if (receiver.kind == identKind) {
 				final span: Null<Span> = receiver.span;
 				if (span == null || name == selfText) return null;
-				final bound: Null<Int> = bindFor(name)[span.from];
+				final bound: Null<Int> = Refs.bindingAt(name, span.from, tree, shape);
 				// a local or a parameter is a value some other binding may alias: no member names it
 				if (bound != null && bound >= 0 && bindsLocally(bound)) return null;
 				owner = currentType;
@@ -1502,7 +1487,7 @@ final class CallGraph {
 				if (target != null) return { target: target, receiverSource: null, onType: currentType };
 				// a static function an import binds by its own name, called bare
 				final imported: Null<{ owner: String, member: String }> = unboundIdent(inner)
-					? CallGraphKeys.importedStatic(this, file, moduleType, innerName, currentType)
+					? CallGraphKeys.importedStatic(this, importedOf(innerName), innerName, currentType)
 					: null;
 				final made: Null<String> = imported == null ? null : CallGraphKeys.staticTarget(this, imported.owner, imported.member);
 				return imported == null || made == null ? null : { target: made, receiverSource: null, onType: imported.owner };
@@ -1599,7 +1584,7 @@ final class CallGraph {
 			final local: Null<String> = localFn(name);
 			if (local != null) return local;
 			if (span != null) {
-				final bound: Null<Int> = bindFor(name)[span.from];
+				final bound: Null<Int> = Refs.bindingAt(name, span.from, tree, shape);
 				if (bound != null && bound >= 0) {
 					final fn: Null<String> = entry.fnBySpanFrom[bound];
 					if (fn != null) return fn;
@@ -1607,9 +1592,10 @@ final class CallGraph {
 					return null;
 				}
 			}
-			// a supertype's static is not in scope bare: the name is the module's or an import's
+			// a supertype's static is not in scope bare: the name is the module's or an import's; and module-level code sees no
+			// class's members at all — the module's main class shares the module's name, never its scope (review L3 G5)
 			final hidden: Bool = currentType != null && CallGraphKeys.staticOfSupertype(this, currentType, name);
-			final inherited: Null<String> = hidden ? null : memberOnChain(currentType ?? moduleType, name);
+			final inherited: Null<String> = currentType == null || hidden ? null : memberOnChain(currentType, name);
 			if (inherited != null) return inherited;
 			// a module-level function is registered under the module pseudo-type,
 			// which the enclosing-type chain does not reach from inside a class
@@ -1630,7 +1616,7 @@ final class CallGraph {
 			}
 			// an imported static: `import p.T.f;` or `import p.T.*;` — every type that may be meant, a placeholder for one the
 			// index does not list
-			final imported: ImportedName = types.imports.importedStatics(file, name);
+			final imported: ImportedStatics = importedOf(name);
 			final targets: Array<String> = [
 				for (s in imported.statics) memberOnChain(s.owner, s.member) ?? externalNode(s.owner, s.member)
 			];
@@ -2062,7 +2048,7 @@ final class CallGraph {
 			// the stored field is what the name can mean inside its own accessor — on `this`, never on another object
 			var ownStorage: Bool = false;
 			if (node.kind == identKind) {
-				final bound: Null<Int> = bindFor(name)[span.from];
+				final bound: Null<Int> = Refs.bindingAt(name, span.from, tree, shape);
 				if (bound != null && bound >= 0 && bindsLocally(bound)) return;
 				owner = currentType;
 				ownStorage = true;
@@ -2115,12 +2101,12 @@ final class CallGraph {
 		}
 
 		/**
-		 * Whether an import of the file binds `name` to a static that may be a function (`import p.T.f as name;`): one
-		 * whose name some indexed type gives a function, or one whose path did not decode.
+		 * Whether an import of the file may bind `name` to a static function (`ValueNameBinding.importedStatics`): one whose
+		 * name some indexed type gives a function, or one the index cannot list.
 		 */
-		function aliasesFunction(name: String): Bool {
-			return types.imports.fieldAliases(file)
-				.exists(a -> a.alias == name && (a.member == null || types.hasFunctionNamed(a.member ?? '')));
+		function importsFunction(name: String): Bool {
+			final imported: ImportedStatics = importedOf(name);
+			return imported.unknown || imported.statics.exists(s -> types.hasFunctionNamed(s.member));
 		}
 
 		/**
@@ -2149,7 +2135,7 @@ final class CallGraph {
 			final rawName: Null<String> = node.name;
 			if (
 				rawName == null
-				|| !(_byMember.exists(rawName) || localFn(rawName) != null || types.hasFunctionNamed(rawName) || aliasesFunction(rawName))
+				|| !(_byMember.exists(rawName) || localFn(rawName) != null || types.hasFunctionNamed(rawName) || importsFunction(rawName))
 			)
 				return;
 			final ref: Null<MethodRef> = methodRef(node, currentType);

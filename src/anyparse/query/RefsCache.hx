@@ -32,6 +32,9 @@ final class RefsCache {
 
 	private final _byTree: Map<QueryNode, Map<String, Array<RefHit>>> = [];
 
+	/** Tree -> name -> reference offset -> its binding's offset (`bindingAt`), built per name on its first question. */
+	private final _bindings: Map<QueryNode, Map<String, Map<Int, Int>>> = [];
+
 	public function new() {}
 
 	/**
@@ -57,6 +60,28 @@ final class RefsCache {
 		final idx: Map<String, Array<RefHit>> = Refs.findMulti(names, tree, shape);
 		_byTree[tree] = idx;
 		return idx;
+	}
+
+	/**
+	 * The binding of the reference or declaration of `name` starting at `from` in `tree`: the offset its binding starts at,
+	 * -1 for one that binds nothing, null when no hit of `name` starts there. Read off the memoized index (`indexFor`),
+	 * one offset table per name, built on its first question.
+	 */
+	public function bindingAt(name: String, from: Int, tree: QueryNode, shape: RefShape): Null<Int> {
+		final byName: Map<String, Map<Int, Int>> = _bindings[tree] ?? [];
+		_bindings[tree] = byName;
+		final known: Null<Map<Int, Int>> = byName[name];
+		if (known != null) return known[from];
+		final built: Map<Int, Int> = offsetTable(indexFor(tree, shape)[name] ?? []);
+		byName[name] = built;
+		return built[from];
+	}
+
+	/** Each hit's start -> its binding's start, -1 for a hit that binds nothing (`bindingAt`). */
+	public static function offsetTable(hits: Array<RefHit>): Map<Int, Int> {
+		final out: Map<Int, Int> = [];
+		for (h in hits) out[h.span.from] = h.bindingSpan?.from ?? -1;
+		return out;
 	}
 
 	/**

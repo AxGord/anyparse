@@ -2,10 +2,10 @@ package anyparse.query;
 
 import anyparse.query.CallGraph.FnDeclaration;
 import anyparse.query.CallGraph.FnNode;
-import anyparse.query.CallGraphImports.ImportedName;
 import anyparse.query.CallGraphImports.WrittenIn;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
+import anyparse.query.ValueNameBinding.ImportedStatics;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -370,15 +370,16 @@ final class CallGraphKeys {
 	}
 
 	/**
-	 * The one static the imports of `file` bind the unbound `name` to, read where nothing nearer binds it: neither the
-	 * functions of its module `moduleType` nor `currentType`'s chain — which the index must hold whole — declares it. Null
-	 * when the imports bind none, more than one, or may bind one a wildcard type whose statics the index cannot list supplies.
+	 * The one static of `imported` — what the module and the imports of the file supply
+	 * under the unbound `name` (`ValueNameBinding.importedStatics`) —, read where nothing
+	 * nearer binds it: `currentType`'s chain — which the index must hold whole — declares it nowhere but as a supertype's
+	 * static, which a bare name does not see. Null when the module itself declares the name, or the imports bind none, more
+	 * than one, or may bind one the index cannot list.
 	 */
 	public static function importedStatic(
-		g: CallGraph, file: String, moduleType: String, name: String, currentType: Null<String>
+		g: CallGraph, imported: ImportedStatics, name: String, currentType: Null<String>
 	): Null<{ owner: String, member: String }> {
 		final types: CallGraphTypes = g.types;
-		if (declaredOn(g, moduleType, name) != null) return null;
 		if (
 			currentType != null && (
 				!types.chainFullyIndexed(currentType) || types.declaringTypeOf(currentType, name) != null
@@ -386,8 +387,8 @@ final class CallGraphKeys {
 			)
 		)
 			return null;
-		final imported: ImportedName = types.imports.importedStatics(file, name);
-		return imported.unknown || imported.statics.length != 1 ? null : imported.statics[0];
+		if (imported.unknown || imported.statics.length != 1) return null;
+		return { owner: imported.statics[0].owner, member: imported.statics[0].member };
 	}
 
 	/**

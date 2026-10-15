@@ -93,6 +93,17 @@ final class Refs {
 	}
 
 	/**
+	 * The binding of the reference or declaration of `name` starting at `from` in `tree`: the offset its binding starts
+	 * at, -1 for one that binds nothing — a member, an import, a type — and null when no hit of `name` starts there.
+	 * Memoized per tree and name in the run's `RefsCache` when the shape carries one, so a walk asking it of every
+	 * identifier pays one resolution of the file.
+	 */
+	public static function bindingAt(name: String, from: Int, tree: QueryNode, shape: RefShape): Null<Int> {
+		final cache: Null<RefsCache> = shape.refsCache;
+		return cache != null ? cache.bindingAt(name, from, tree, shape) : RefsCache.offsetTable(find(name, tree, shape))[from];
+	}
+
+	/**
 	 * Multi-name variant of `find` — ONE tree walk resolving every name in
 	 * `names` simultaneously (duplicates tolerated). The call-graph layer needs
 	 * bindings for dozens of names per file; per-name `find` walks made that

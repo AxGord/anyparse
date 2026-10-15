@@ -191,6 +191,25 @@ final class SymbolIndexBuilder {
 		return RefactorSupport.typeDeclOf(node) ?? condSharedBodyDeclOf(node);
 	}
 
+	/**
+	 * The names of the module-level value declarations of `tree` (`RefShape.moduleValueDeclKinds`: a function, a `var`, the
+	 * form a `final` wraps), each once — inside a conditional region or any other nameless wrapper too, never inside a named
+	 * declaration.
+	 */
+	private static function moduleFieldsOf(tree: QueryNode, shape: RefShape): Array<String> {
+		final kinds: Array<String> = shape.moduleValueDeclKinds ?? [];
+		final out: Array<String> = [];
+		function walk(node: QueryNode): Void {
+			final name: Null<String> = node.name;
+			if (name == null)
+				for (c in node.children) walk(c)
+			else if (kinds.contains(node.kind) && !out.contains(name))
+				out.push(name);
+		}
+		for (c in tree.children) walk(c);
+		return out;
+	}
+
 	/** Whether `pendingMeta` holds the grammar's (optional) tag `name` — false when the grammar names none. */
 	private static inline function carriesMeta(pendingMeta: Array<String>, name: Null<String>): Bool {
 		return name != null && pendingMeta.contains(name);
@@ -410,7 +429,8 @@ final class SymbolIndexBuilder {
 			// usually an indexed file, and its extracted list is not there while this pass runs.
 			ambientImports: [],
 			ambientImportsBounded: true,
-			accessGrants: collectAccessGrants(tree, shape)
+			accessGrants: collectAccessGrants(tree, shape),
+			moduleFields: moduleFieldsOf(tree, shape)
 		};
 	}
 

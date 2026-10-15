@@ -6340,19 +6340,19 @@
 		},
 		{
 			"name": "M-GRAPH-IMPORT-UNLISTED",
-			"type": "anyparse.query.CallGraphImports",
-			"method": "importedNamed",
-			"find": "case Import if (last == name && before != '' && CallGraphNames.isTypeLike(before)):\n\t\t\t\t\tbind(before, last);",
-			"replace": "case Import if (last == name && before != '' && CallGraphNames.isTypeLike(before)):\n\t\t\t\t\tif (_isStatic(before, last)) bind(before, last);",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "staticOf",
+			"find": "\t\treturn { owner: owner, decls: decls, member: member };",
+			"replace": "\t\treturn decls.exists(d -> d.type.members.exists(m -> m.name == member && m.isStatic)) ? { owner: owner, decls: decls, member: member } : null;",
 			"note": "an explicit static import the index does not list binds nothing, so the call is taken for an enum constructor"
 		},
 		{
 			"name": "M-GRAPH-UNLISTED-WILDCARD",
-			"type": "anyparse.query.CallGraphImports",
-			"method": "importedNamed",
-			"find": "\t\t\t\t\t\tbind(last, name)\n\t\t\t\t\telse if (_unlisted(last))\n\t\t\t\t\t\tout.unknown = true;\n",
-			"replace": "\t\t\t\t\t\tbind(last, name);\n",
-			"note": "a wildcard import of a type under a build macro supplies nothing unseen"
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "wildcard",
+			"find": "\t\telse if (unlisted(decls))\n\t\t\tout.unknown = true;\n",
+			"replace": ";\n",
+			"note": "a wildcard import of a type whose statics the index cannot list supplies nothing unseen"
 		},
 		{
 			"name": "M-GRAPH-PLACEHOLDER-DISPATCH",
@@ -14132,7 +14132,7 @@
 			"name": "M-REACH-IMPORT-ALIAS-OTHER-TYPE",
 			"type": "anyparse.query.MemberTouchScan",
 			"method": "aliasesIn",
-			"find": "owner != null && owner != declaring && g.types.declarationCount(owner) == 1 && g.types.declaringTypeOf(owner, name) == owner",
+			"find": "target.owner != declaring && target.decls.length == 1\n\t\t\t\t\t&& target.decls[0].type.members.exists(m -> m.name == name)",
 			"replace": "false",
 			"note": "an alias of another type's own static of the same name is read as the member"
 		},
@@ -14156,7 +14156,7 @@
 			"name": "M-CALLGRAPH-ALIAS-VALUE",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": " || aliasesFunction(rawName)",
+			"find": " || importsFunction(rawName)",
 			"replace": "",
 			"note": "a static function imported under another name and read as a value gets no `Ref` edge, so a call of a value never admits it"
 		},
@@ -14164,8 +14164,8 @@
 			"name": "M-CALLGRAPH-IMPORTED-VALUE",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "imported ? importedFunction(name, span, currentType) : null",
-			"replace": "null",
+			"find": "?? (\n\t\t\t\t\timported ? importedFunction(name, span, currentType) : null",
+			"replace": "?? (\n\t\t\t\t\tnull",
 			"note": "a static function an import binds (`import p.T.f;`, an alias, a wildcard) read as a value in another type gets no `Ref` edge, so a call of a value never admits it"
 		},
 		{
@@ -20776,7 +20776,7 @@
 			"name": "M-TS-IMPORT-STATIC-CALL",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "? CallGraphKeys.importedStatic(this, file, moduleType, innerName, currentType)",
+			"find": "? CallGraphKeys.importedStatic(this, importedOf(innerName), innerName, currentType)",
 			"replace": "? null",
 			"note": "the result of a static function an import binds, called bare, is not typed (review R4 F7)"
 		},
@@ -20792,8 +20792,8 @@
 			"name": "M-TS-IMPORT-STATIC-ONE",
 			"type": "anyparse.query.CallGraphKeys",
 			"method": "importedStatic",
-			"find": "imported.unknown || imported.statics.length != 1 ? null : imported.statics[0];",
-			"replace": "imported.statics.length == 0 ? null : imported.statics[0];",
+			"find": "if (imported.unknown || imported.statics.length != 1) return null;",
+			"replace": "if (imported.statics.length == 0) return null;",
 			"note": "two imports binding the name type it as the first one's"
 		},
 		{
@@ -21206,27 +21206,91 @@
 		},
 		{
 			"name": "M-TS-MODULE-NAME",
-			"type": "anyparse.query.CallGraphImports",
+			"type": "anyparse.query.ValueNameBinding",
 			"method": "importedStatics",
-			"find": "return own ? { statics: [], unknown: false } : importedNamed(file, name);",
-			"replace": "return importedNamed(file, name);",
+			"find": "\t\tif (fi.moduleFields.contains(name)) return out;\n",
+			"replace": "",
 			"note": "a static an import brings in wins over a module-level field of the same name"
 		},
 		{
 			"name": "M-TS-MODULE-NAME-NESTED",
-			"type": "anyparse.query.CallGraphNames",
-			"method": "moduleLevelNames",
+			"type": "anyparse.query.SymbolIndexBuilder",
+			"method": "moduleFieldsOf",
 			"find": "for (c in node.children) walk(c)",
 			"replace": "{}",
 			"note": "a module-level field under a wrapper (`final`, a conditional region) is not seen"
 		},
 		{
 			"name": "M-TS-MODULE-NAME-ALIAS",
-			"type": "anyparse.query.CallGraphNames",
-			"method": "moduleLevelNames",
-			"find": "if (aliasKinds.contains(node.kind)) return;",
+			"type": "anyparse.query.SymbolIndexBuilder",
+			"method": "moduleFieldsOf",
+			"find": "else if (kinds.contains(node.kind) && !out.contains(name))",
+			"replace": "else if (!out.contains(name))",
+			"note": "any named module-level node — an import alias, a type — counts as a value the module declares, hiding the static an import binds"
+		},
+		{
+			"name": "M-VALUES-SUBTYPE-IMPORT",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "staticOf",
+			"find": "\t\tif (split.rest.length == 1 && files.exists(f -> f.types.exists(t -> t.name == member))) return null;\n",
 			"replace": "",
-			"note": "an import alias's name counts as one the module declares, hiding the static it binds"
+			"note": "a path naming a sub-type of an indexed module is read as a static of its main type"
+		},
+		{
+			"name": "M-VALUES-ENUM-CTOR",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "staticOf",
+			"find": "\t\tif (decls.exists(d -> d.type.members.exists(m -> m.name == member && _enumConstructorKinds.contains(m.kind)))) return null;\n",
+			"replace": "",
+			"note": "an import of an enum constructor binds a static"
+		},
+		{
+			"name": "M-VALUES-OWNER-BY-NAME",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "wildcard",
+			"find": "typesOf(_refs.names.filesOfModule(split.module), owner)",
+			"replace": "_refs.resolvedDeclsNamed(owner)",
+			"note": "a wildcard reads the statics of every type of the simple name, a namesake in another package lending its own"
+		},
+		{
+			"name": "M-VALUES-EXTERN",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "unlisted",
+			"find": "d.type.isExtern || ",
+			"replace": "",
+			"note": "an extern type's statics are taken as all listed"
+		},
+		{
+			"name": "M-VALUES-BUILT-ABOVE",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "builtAtOrAbove",
+			"find": "\t\t\tif (up != null && builtAtOrAbove(up, seen)) return true;\n",
+			"replace": "",
+			"note": "an @:autoBuild on a supertype is not seen, so a type it builds lists all its statics"
+		},
+		{
+			"name": "M-VALUES-ALIAS-UNDECODED",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "aliasOf",
+			"find": "if (target == null || TypeNameBinding.splitPath(target) == null) return { alias: alias, target: null };",
+			"replace": "if (target == null || TypeNameBinding.splitPath(target) == null) return null;",
+			"note": "an alias whose path does not decode is taken to bind nothing"
+		},
+		{
+			"name": "M-TS-MODULE-FN-CLASS-CHAIN",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "final inherited: Null<String> = currentType == null || hidden ? null : memberOnChain(currentType, name);",
+			"replace": "final inherited: Null<String> = hidden ? null : memberOnChain(currentType ?? moduleType, name);",
+			"note": "a module-level function reaches the main class's chain, its supertype's static before the import (review L3 G5)"
+		},
+		{
+			"name": "M-TS-MODULE-FN-IMPORTED-REF",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "included: the module's own names and its imports'\n\t\t\t\timported ? importedFunction(name, span, currentType) : null",
+			"replace": "included: the module's own names and its imports'\n\t\t\t\tnull",
+			"note": "a static an import binds, read as a value in module-level code, names nothing"
 		},
 		{
 			"name": "M-TS-OVERLOAD-RETURN",

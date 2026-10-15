@@ -1177,7 +1177,7 @@ class CallGraphTest extends Test {
 		Assert.same(['Lock.wait', 'sys.thread.Lock.wait'], waits('C.call'), 'a return');
 		final typeSyntax: anyparse.query.TypeSyntax.TypeSyntaxReader = new anyparse.grammar.haxe.HaxeQueryPlugin().typeSyntax;
 		Assert.isNull(
-			anyparse.query.CallGraphKeys.keyedInFiles(g.types.imports, typeSyntax, ['F1.hx', 'F2.hx'], 'Lock'),
+			anyparse.query.CallGraphKeys.keyedInFiles(g.types.imports, typeSyntax, ['app/Hold.hx', 'cp2/app/Hold.hx'], 'Lock'),
 			'a reader needing one type has none'
 		);
 		#else
@@ -1319,6 +1319,30 @@ class CallGraphTest extends Test {
 		#else
 		Assert.pass('non-sys target');
 		#end
+	}
+
+	/**
+	 * Review L3 G5 (`f7x/modfn-super`): a module-level function sees no class's members — not those of the main class whose
+	 * name it shares with the module, nor that class's supertype statics — so its bare names are its module's and its
+	 * imports' (Haxe 4.3.7: the main class's own static called bare there is `Unknown identifier`). A static an import binds,
+	 * read there as a value, is the import's too.
+	 */
+	@:pin('control') @:killer('M-TS-MODULE-FN-CLASS-CHAIN') @:killer('M-TS-MODULE-FN-IMPORTED-REF')
+	public function testAModuleLevelFunctionSeesItsModuleAndImportsNoClassChain(): Void {
+		final g: CallGraph = graphOf([
+			'package app; class A { public static function go():Void {} public static function only():Void {} }',
+			'package app; class P { public static function go():Void {} public static function only():Void {} public function new() {} }',
+			'package app; import app.A.*; class C extends P { static function inner():Void { go(); only(); } }'
+			+ ' function helper():Void { go(); only(); } function take(f:()->Void):Void {} function hands():Void take(go);'
+		]);
+		function targets(from: String, kind: EdgeKind): Array<String> {
+			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == kind) e.to];
+			out.sort(Reflect.compare);
+			return out;
+		}
+		Assert.same(['A.go', 'A.only'], targets('C.helper', Call), 'a module function: the imports, never the main class chain');
+		Assert.same(['A.go', 'A.only'], targets('C.inner', Call), 'inside the class: the supertype statics stay hidden');
+		Assert.same(['A.go'], targets('C.hands', Ref), 'a static an import binds, handed on as a value');
 	}
 
 	/**

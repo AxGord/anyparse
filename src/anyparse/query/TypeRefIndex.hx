@@ -14,7 +14,8 @@ using Lambda;
  * declaration a written type reference denotes when it is read from a given file's scope.
  * A SIMPLE name is bound by `names` (`TypeNameBinding`), the compiler's resolution order and the one implementation of it:
  * `resolveTypeRefAll` answers a simple reference through it, and `ImportBindings` lists an import line's names from its tables.
- * What still reads import statements its own way is the call graph's `CallGraphImports`, owned by the graph (`apqlint.json`
+ * What still reads import statements its own way for TYPE names is the call graph's
+ * `CallGraphImports`; a bare VALUE name is `ValueNameBinding`'s, owned by the graph (`apqlint.json`
  * `ownedTypes`); a consumer adding another reading re-opens the package-blind match this layer exists to remove.
  *
  * Split out of `SymbolIndex`, which keeps the indexed DATA and hands a `TypeRefIndex` to each of

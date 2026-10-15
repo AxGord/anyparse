@@ -18,14 +18,8 @@ final class CallGraphImports {
 	/** Enum constructor name -> the enums declaring one of that name. */
 	private final _enumConstructors: Map<String, Array<String>> = [];
 
-	/** File -> the `import` statements (own and ambient) that bring names into it, `using` aside. */
-	private final _imports: Map<String, Array<ImportInfo>> = [];
-
 	/** File -> the simple names of the types its `using` statements (own and ambient) bring in, nearest first. */
 	private final _usings: Map<String, Array<String>> = [];
-
-	/** File -> the statics its `import p.T.member as alias;` statements (own and ambient) bind under another name. */
-	private final _fieldAliases: Map<String, Array<FieldAlias>> = [];
 
 	/** Type simple name -> member name -> the files whose declarations of the type declare the member. */
 	private final _memberFiles: Map<String, Map<String, Array<String>>> = [];
@@ -45,12 +39,6 @@ final class CallGraphImports {
 	/** File -> the names of the types its own module declares, which its code means before any import's. */
 	private final _ownTypes: Map<String, Array<String>> = [];
 
-	/**
-	 * File -> the names its module declares at module level (`recordModuleNames`): a module-level field or function, which its
-	 * code means before any static an import brings in under the name.
-	 */
-	private final _moduleNames: Map<String, Array<String>> = [];
-
 	/** File -> its package ('' for the toplevel), whose modules and its enclosing packages' its code sees after its imports. */
 	private final _packages: Map<String, String> = [];
 
@@ -68,16 +56,9 @@ final class CallGraphImports {
 	/** Whether a type declares a member static — the tables that answer it live with the types. */
 	private final _isStatic: (String, String) -> Bool;
 
-	/**
-	 * Whether the index cannot list a type's statics: not indexed, extern, or under a build macro on its own
-	 * chain (`@:build` / `@:autoBuild`), which may add members no declaration shows.
-	 */
-	private final _unlisted: String -> Bool;
-
-	public function new(enumConstructorKinds: Array<String>, isStatic: (String, String) -> Bool, unlisted: String -> Bool) {
+	public function new(enumConstructorKinds: Array<String>, isStatic: (String, String) -> Bool) {
 		_enumConstructorKinds = enumConstructorKinds;
 		_isStatic = isStatic;
-		_unlisted = unlisted;
 	}
 
 	/**
@@ -139,13 +120,6 @@ final class CallGraphImports {
 			imports.push(imp);
 		}
 		_usings[key] = usings;
-		_imports[key] = imports;
-		final aliases: Array<FieldAlias> = [];
-		for (imp in imports) {
-			final alias: Null<FieldAlias> = imp.kind == ImportKind.Alias ? fieldAliasOf(imp) : null;
-			if (alias != null) aliases.push(alias);
-		}
-		_fieldAliases[key] = aliases;
 		final paths: Map<String, String> = [];
 		// the file's own imports first, then each ambient group, nearest first; inside one list the last binding wins
 		for (group in groups) {
@@ -204,20 +178,6 @@ final class CallGraphImports {
 		];
 	}
 
-	/** Record `names`, the names the module of `file` declares at module level (`CallGraphNames.moduleLevelNames`). */
-	public inline function recordModuleNames(file: String, names: Array<String>): Void {
-		_moduleNames[CallGraphNames.normalizePath(file)] = names;
-	}
-
-	/**
-	 * The statics the imports of `file` bind under a name of their own (`import p.T.member as alias;`) — each with the
-	 * type the path names as the member's owner — and every alias whose path does not decode, with no owner and no member:
-	 * that one may stand for any static. A plain `import p.T.member;` or a wildcard binds a static under its own name.
-	 */
-	public inline function fieldAliases(file: String): Array<FieldAlias> {
-		return _fieldAliases[CallGraphNames.normalizePath(file)] ?? [];
-	}
-
 	/**
 	 * Every type a `using` in `file` brings in that declares a STATIC `member` — the static extensions a
 	 * `value.member(…)` there may call when the value's own type declares no such member. All of them: which
@@ -228,57 +188,6 @@ final class CallGraphImports {
 		return [
 			for (u in _usings[CallGraphNames.normalizePath(file)] ?? []) if (_isStatic(u, member)) u
 		];
-	}
-
-	/**
-	 * What the imports of `file` may supply under the simple name `name`: the statics an explicit
-	 * `import p.T.name;` or `import p.T.f as name;` binds (whether or not the index lists them), those a
-	 * wildcard `import p.T.*;` brings in, and `unknown` when a wildcard type's statics are not all listed
-	 * (`_unlisted`) — the name may be one of them. A constructor an import names on an indexed enum is none
-	 * of these: it builds a value.
-	 */
-	public function importedStatics(file: String, name: String): ImportedName {
-		// a module-level field or function of the file's own module is what the name means there (review R5 F4)
-		final own: Bool = (_moduleNames[CallGraphNames.normalizePath(file)] ?? []).contains(name);
-		return own ? { statics: [], unknown: false } : importedNamed(file, name);
-	}
-
-	/** `importedStatics` for a name the file's own module does not declare: what its imports bind it to. */
-	private function importedNamed(file: String, name: String): ImportedName {
-		final out: ImportedName = { statics: [], unknown: false };
-		function bind(owner: String, member: String): Void {
-			if ((_enumConstructors[member] ?? []).contains(owner)) return;
-			if (!out.statics.exists(o -> o.owner == owner && o.member == member)) out.statics.push({ owner: owner, member: member });
-		}
-		for (imp in _imports[CallGraphNames.normalizePath(file)] ?? []) {
-			final path: Null<String> = switch imp.kind {
-				case Import: imp.raw;
-				case Wild: imp.raw.substring(0, imp.raw.length - 2);
-				case _: null;
-			};
-			if (path == null) continue;
-			final segs: Array<String> = path.split('.');
-			final last: String = segs[segs.length - 1];
-			final before: String = segs.length < 2 ? '' : segs[segs.length - 2];
-			switch imp.kind {
-				case Wild:
-					// `import p.T.*` — `p.*` names a package, whose types bring no statics in
-					if (!CallGraphNames.isTypeLike(last)) continue;
-					if (_isStatic(last, name))
-						bind(last, name)
-					else if (_unlisted(last))
-						out.unknown = true;
-				case Import if (last == name && before != '' && CallGraphNames.isTypeLike(before)):
-					bind(before, last);
-				case _:
-			}
-		}
-		for (a in fieldAliases(file)) {
-			final owner: Null<String> = a.owner;
-			final member: Null<String> = a.member;
-			if (a.alias == name && owner != null && member != null) bind(owner, member);
-		}
-		return out;
 	}
 
 	/**
@@ -460,21 +369,6 @@ final class CallGraphImports {
 	}
 
 	/**
-	 * The static an alias statement binds — `importedStatics` binds no other: a path whose segment before the last
-	 * names a type (`p.T.member`). Null for an alias of a type or a module; an alias whose path did not decode is one with
-	 * no owner and no member.
-	 */
-	private static function fieldAliasOf(imp: ImportInfo): Null<FieldAlias> {
-		final alias: Null<String> = imp.alias;
-		if (alias == null) return null;
-		final path: Null<String> = imp.aliasTarget;
-		if (path == null) return { alias: alias, owner: null, member: null };
-		final segs: Array<String> = path.split('.');
-		if (segs.length < 2 || !CallGraphNames.isTypeLike(segs[segs.length - 2])) return null;
-		return { alias: alias, owner: segs[segs.length - 2], member: segs[segs.length - 1] };
-	}
-
-	/**
 	 * The type name an import statement binds and the path it binds it to: an alias of a path ending in a type, or an
 	 * unguarded `import p.T;` — a guarded one binds the name on some builds only, where the name may mean another type.
 	 */
@@ -490,22 +384,6 @@ final class CallGraphImports {
 		};
 	}
 
-}
-
-/** What a file's imports may supply under one simple name: the statics they bind, and whether an unlisted wildcard may supply it too. */
-typedef ImportedName = {
-	var statics: Array<{ owner: String, member: String }>;
-	var unknown: Bool;
-}
-
-/**
- * A static an import binds under a name of its own (`import p.T.member as alias;`): `owner` is the type the path names,
- * both null when the path did not decode.
- */
-typedef FieldAlias = {
-	var alias: String;
-	var owner: Null<String>;
-	var member: Null<String>;
 }
 
 /** A type one declaration writes (null for none), and the file writing it, where its names are read (`CallGraphKeys.keyedIn`). */

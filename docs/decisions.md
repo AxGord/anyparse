@@ -2719,3 +2719,23 @@ decided the question; it may not become a record of runs.
   type of it); a ROOT module's path is its bare file name, which any directory holds, so its candidates are parsed and
   their package compared — taking `openfl/events/EventDispatcher.hx` for a toplevel `EventDispatcher` lost 6 findings
   on bd943dac before that check — branch `feat/infra-B2`
+- the call graph kept its own `bindFor` memo over a second `Refs.findMulti` walk of every file → the binding of a
+  reference is `TypeResolver.bindingAt`, memoized per tree and name in the run's `RefsCache` (the walk every other
+  `Refs.find` caller already shares); results are per-name independent, so nothing changes — branch `feat/infra-B3`
+- the call graph read imported statics and the module's own module-level names its own way (`CallGraphImports.
+  importedStatics` / `fieldAliases`, `CallGraphNames.moduleLevelNames` over any named module node) → the index records
+  each module's module-level VALUE declarations (`FileInfo.moduleFields`: functions, `var`s, `final`s, a conditional
+  region's too — no types, imports or aliases), and `ValueNameBinding` (the index's `values` layer) answers a bare
+  value name by declaration: the module field first, then the statics each import binds, owners looked up in the
+  binding's module table so a namesake in another package lends nothing. Probed on 4.3.7 (`b3-scratch/hx/{g5c,mf}`):
+  a module function beats an `import A.*` static of the name; `import p.Mod.f;` binds a module-level field of module
+  `p.Mod`, while `import p.Mod.*;` brings in only the TYPE `Mod`'s statics (`Unknown identifier : helper`); an alias
+  whose path does not decode is now `unknown` (it may name any static) — branch `feat/infra-B3`
+- a module-level function resolved a bare name through the module's MAIN CLASS's chain (the module pseudo-type shares
+  its name), so `function helper() go();` in `C.hx` with `class C extends P` ran `P.go` (review L3 G5) → module-level
+  code sees no class's members: 4.3.7 answers the main class's own static called bare there with `Unknown identifier`,
+  and a static an import binds is what the name means, as a call and as a value — branch `feat/infra-B3`
+- the graph's node ids stay `Simple.member`, namesakes folded into one node: 28 simple names are declared twice in TM
+  (`fs.FolderWatcher` / `logs.FolderWatcher`, `Main`, `Logs`…) and 37 thread-safety truth keys sit on them, so keying
+  namesakes apart by path would rename those keys; B3 moves RESOLUTION onto the shared layers, not node identity —
+  branch `feat/infra-B3`

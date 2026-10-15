@@ -1040,6 +1040,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.TypeResolverSliceTest',
 		'unit.query.TypeSyntaxTest',
 		'unit.query.UncheckedConversionsTest',
+		'unit.query.ValueNameBindingTest',
 		'unit.runtime.CommonPrefixTest',
 		'unit.runtime.InputTest',
 		'unit.runtime.ParseErrorTest',
@@ -3071,6 +3072,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-TS-LOOP-OWN-PARAMS,M-TS-LOOP-THROUGH',
 			'unit.query.CallGraphTest#testAModuleLevelFieldComesBeforeAnImportedStatic :: control :: '
 				+ 'M-TS-MODULE-NAME,M-TS-MODULE-NAME-NESTED,M-TS-MODULE-NAME-ALIAS',
+			'unit.query.CallGraphTest#testAModuleLevelFunctionSeesItsModuleAndImportsNoClassChain :: control :: '
+				+ 'M-TS-MODULE-FN-CLASS-CHAIN,M-TS-MODULE-FN-IMPORTED-REF',
 			'unit.query.CallGraphTest#testANameNoImportBindsIsLookedUpInTheFilesPackages :: control :: '
 				+ 'M-TS-PACKAGE-LOOKUP,M-TS-PACKAGE-ENCLOSING,M-TS-PACKAGE-PROJECT-FIRST',
 			'unit.query.CallGraphTest#testAReceiverANewMakesIsOfTheTypeItNames :: control :: M-TS-NEW-RECEIVER',
@@ -4105,7 +4108,14 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-UNCHECKED-POINTER,M-UNCHECKED-ALIAS,M-UNCHECKED-ALIAS-PLACE,M-UNCHECKED-BOXED-ALIAS,'
 				+ 'M-NATIVE-SITE-INERT,M-NATIVE-SITE-CORE-TYPE,M-NATIVE-SITE-ALIAS,M-NATIVE-SITE-ARRAY-ELEMENTS',
 			'unit.query.UncheckedConversionsTest#testAnInstanceOfAnotherClassSitsOnlyWhereSomeBuildKeepsIt :: control :: '
-				+ 'M-UNCHECKED-CLASS-EXTERN,M-UNCHECKED-ALIKE'
+				+ 'M-UNCHECKED-CLASS-EXTERN,M-UNCHECKED-ALIKE',
+			'unit.query.ValueNameBindingTest#testAModuleFieldComesBeforeAnyImport :: control :: '
+				+ 'M-TS-MODULE-NAME,M-TS-MODULE-NAME-NESTED,M-TS-MODULE-NAME-ALIAS',
+			'unit.query.ValueNameBindingTest#testAWildcardBringsTheTypesStaticsOnly :: control :: '
+				+ 'M-GRAPH-UNLISTED-WILDCARD,M-VALUES-OWNER-BY-NAME,M-VALUES-EXTERN,M-VALUES-BUILT-ABOVE',
+			'unit.query.ValueNameBindingTest#testAnAliasWhosePathDoesNotDecodeMayBeAnyStatic :: control :: M-VALUES-ALIAS-UNDECODED',
+			'unit.query.ValueNameBindingTest#testAnExplicitImportBindsTheStaticItsPathNames :: control :: '
+				+ 'M-VALUES-SUBTYPE-IMPORT,M-VALUES-ENUM-CTOR,M-GRAPH-IMPORT-UNLISTED'
 		];
 		final actualPins: Array<String> = TestRegistry.pins();
 		Assert.same(
@@ -6800,6 +6810,14 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-MODULE-NAME',
 			'M-TS-MODULE-NAME-NESTED',
 			'M-TS-MODULE-NAME-ALIAS',
+			'M-VALUES-SUBTYPE-IMPORT',
+			'M-VALUES-ENUM-CTOR',
+			'M-VALUES-OWNER-BY-NAME',
+			'M-VALUES-EXTERN',
+			'M-VALUES-BUILT-ABOVE',
+			'M-VALUES-ALIAS-UNDECODED',
+			'M-TS-MODULE-FN-CLASS-CHAIN',
+			'M-TS-MODULE-FN-IMPORTED-REF',
 			'M-TS-OVERLOAD-RETURN',
 			'M-TS-OVERLOAD-RETURN-EACH',
 			'M-TS-OVERLOAD-PARAMS',
