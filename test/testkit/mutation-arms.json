@@ -9687,8 +9687,8 @@
 			"name": "M-BINDING-UNINDEXED-IMPORT-FREE",
 			"type": "anyparse.query.TypeNameBinding",
 			"method": "statementAnswer",
-			"find": "final outside: Null<Array<TypeDeclInfo>> = outsideTypes(split.module);",
-			"replace": "final outside: Null<Array<TypeDeclInfo>> = outsideTypes(split.module) ?? [];",
+			"find": "if (outside == null) return Unreadable;",
+			"replace": "if (outside == null) return Pass;",
 			"note": "an import or alias of a module nothing can read is taken to declare nothing, so it falls through to the package tier"
 		},
 		{

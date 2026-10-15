@@ -219,12 +219,8 @@ final class TypeNameBinding {
 			return decls.length > 0 ? Decls(decls) : missing;
 		}
 		final outside: Null<Array<TypeDeclInfo>> = outsideTypes(split.module);
-		return if (outside == null)
-			Unreadable
-		else if (outside.exists(t -> t.name == wanted && !t.isPrivate))
-			Outside
-		else
-			missing;
+		if (outside == null) return Unreadable;
+		return outside.exists(t -> t.name == wanted && !t.isPrivate) ? Outside : missing;
 	}
 
 	/**

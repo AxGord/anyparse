@@ -10,9 +10,11 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ImportOrder;
+import anyparse.query.StdResolver;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeRefPrinter;
 import anyparse.runtime.Span;
+import haxe.io.Path;
 import sys.io.File;
 import unit.QueryTestHelpers;
 import unit.cli.CliFixture;
@@ -100,7 +102,8 @@ class ImportBlockOrderCheckTest extends Test {
 	 * MODULE-LEVEL `modfn`, `v.Reds` a module-level `Red` and `w.Other` a module-level `other`; `p.Col` /
 	 * `p.Col2` share the constructor `Red`, which `p.M`'s SECONDARY enum and `p.Pm`'s PRIVATE one declare
 	 * too; `p.Ab3` holds the value `Blue` and a STATIC field `Red`; `p.TAlias` / `p.TNull` alias `p.Col2` (the
-	 * second through `Null<T>`, stubbed at the root as the std declares it); `p.Built` carries a build macro.
+	 * second through `Null<T>`, stubbed where the std declares it: `StdTypes.hx` under the std root, which the
+	 * compiler imports into every module ahead of the toplevel); `p.Built` carries a build macro.
 	 */
 	private static final BIND_LIBS: Array<{ file: String, source: String }> = [
 		{ file: 'a/Alpha.hx', source: 'package a;\n\nclass Alpha {}\n' },
@@ -119,7 +122,7 @@ class ImportBlockOrderCheckTest extends Test {
 		},
 		{ file: 'p/TAlias.hx', source: 'package p;\n\ntypedef TAlias = Col2;\n' },
 		{ file: 'p/TNull.hx', source: 'package p;\n\ntypedef TNull = Null<Col2>;\n' },
-		{ file: 'Null.hx', source: '@:coreType abstract Null<T> {}\n' },
+		{ file: Path.join([StdResolver.stdDir() ?? '', 'StdTypes.hx']), source: '@:coreType abstract Null<T> {}\n' },
 		{ file: 'p/Built.hx', source: 'package p;\n\n@:build(p.Macro.build())\nenum Built {\n\tTeal;\n}\n' }
 	];
 
