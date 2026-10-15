@@ -2445,3 +2445,52 @@ decided the question; it may not become a record of runs.
   the larger reachable graph — `ThreadStates.origins` (one BFS per worker start) +1.0 s, `siteFacts` / `holds` /
   `carried` the remainder (cpu profile); accepted as the price of the edges, a faster `origins` is separate work —
   branch `feat/ts-precision-7`
+- R7 L1b timing (`fb7b1342`): L1's +24% rule time (tm-1d1ba147) was `ThreadStates.origins` re-evaluating, in every
+  per-start BFS, `onWorker` (an `edgeContext` over all states of the edge's function) and `workerStep` (`carried` +
+  `entered`) for every out-edge of every state — neither depends on the start. Each function's worker edges and each
+  state's steps are now read once (`stepsOf`), the per-start BFS (`spread`) walks that memo; origins 1394 -> 119 ms
+  (cpu profile), reports byte-identical on the 3 TM trees. Not taken: one shared multi-source reachability (origins are
+  a set per function; the memo already makes each BFS a walk over cached steps) — branch `feat/ts-precision-7`
+- R7 L1b diagnosis of L1's 1d1ba147 delta (+13 / -2 warning keys): every key comes from ONE edge (e) added —
+  `LanguageSelection.saveButtonHandler -> Main.languageReboot`: `Main.instance` is declared in root `Main` and in
+  `logs.Main`, joined to no type before, keyed where each is written now. Measured: a copy of the tree with only that
+  call made `Dynamic` reports exactly what dc09aa52 reports. The edge is right; it puts the editor UI on the worker
+  origin `IAPStore.onPurchaseSuccess#5` (TM config: `api.APIRequest2.success` is a `spawns` entry; `Timer.delay` and a
+  handler registered with `addEventListener` keep the registrar's context), so holds the main-only rule turned info
+  ("reported at (a)") are taken on a worker too and warn. No sound engine narrowing exists for that reach (it follows
+  the config and the registrar rule); the 8 `dup-of` and 2 earlier-`false` keys stay, none meeting a RootCauseFold
+  cover (their holds reach blocking calls no covering finding names, or the cover repeats where they do not). Three
+  `false` keys rode a second, older imprecision — next entry. `getFolderContentAPI` (named by L1) is the r5 `tm-bad`
+  change only — branch `feat/ts-precision-7`
+- R7 L1b stored values (`7014cabd`, `StoredValues`): a function value handed to a project constructor that only stores
+  it into a `final` field runs where the field is called, not at the `new` (TM `FileList.reload` -> `new
+  FileListGrid(..., _source.getThumbnail)` under the tree lock; FileListGrid / FileListItemGrid store it, only
+  `FileListItemGrid.requestThumbnail` calls it). Each call of the field gets a derived `Call` edge to the value and the
+  handing `Ref` runs nothing (`ThreadSafety.runsNothing`), like a value stored into a `dynamic` member
+  (`deriveStoredCalls`). Positive whitelist: a whole argument of a `new` resolving to a constructor of one declaration,
+  as many arguments as parameters (no rest); the parameter read only bare as the right-hand side of assignment
+  STATEMENTS to `final` fields its class declares (any other node of its name refuses); every node of the held
+  files carrying the field's name a field declaration, an assignment target, a call of it in a held function, or a
+  whole argument of another such constructor's store (followed); no string literal spelling it, the class not a
+  declared `reflectiveMethodHolders` (`ReflectiveValues.obtainableMember`, extracted from `obtainable`), its file under
+  `closedWorld`. Anything else keeps the value running where handed. TM 1d1ba147: the three `false` keys go
+  (B FileList.reload|FolderWatcher._mutex, D FileListMoveFiles.moveItems|…, D StandardFileSystem.createFolderItem|…);
+  16 handed values are stores in TM (thumbnails, dialog callbacks, animation-frame commands, share rows) — branch
+  `feat/ts-precision-7`
+- R7 L1b `B RemoteFileSystemBase.setTimestamp` (truth real-long): on f81c2049 / bd943dac and 8 r5 configs L1 turned it
+  info. Of its two long calls the stat (`getTimestamp -> getMTime -> FileSystem.stat`) was covered by warnings of the
+  same lock over the same stat site on its thread (createFolderItem / moveItem / renameItemInternal, `_mutationMutex`,
+  origin `FileSystemBase.runCloud` among theirs — measured) — RootCauseFold's same-lock / same-site / same-thread rule,
+  a different hold of the same root; the wait for `FolderWatcher._mutex` was covered only because FileList.reload's and
+  listFolder's `_mutex` holds had turned warnings in L1 — both truth `false`. So the demotion rested on false covers:
+  not the same stall. With stored values FileList.reload's hold reports nothing, a `_mutex` maker has no finding again,
+  and setTimestamp warns on f81c2049 / bd943dac / the r5 configs (where `B acquireMutationLocks|_batchMutex`, truth
+  `dup-of`, now folds onto the `_mutationMutex` makers including it) — branch `feat/ts-precision-7`
+- R7 L1b MEASURED (engine of the L1b tip vs dc09aa52 and the L1 tip): rule time on tm-1d1ba147 (interleaved, median of
+  3) dc09aa52 5.70 / L1 tip 7.03 / L1b tip 5.62 s (-1.4% vs dc09aa52); full lint 24.41 -> 25.10 s (+2.8%); cpu profile
+  origins 415 / 1394 / 131 ms, carried 491 / 1029 / 326, edgeContext 208 / 625 / 80, StoredValues 53. TM rows:
+  1d1ba147 `161 154 102 8 12 5 26 1 0 0.67 102/102` (L1 164 … 0.65), f81c2049 207 (5/5), bd943dac 210 (9/9),
+  round6/frag 102/102. Fixtures r1..r5, round2, round4..round7 (499 runs) vs the L1 tip: 490 byte-identical; only the r5
+  TM-derived trees move (the 3 false keys go, B setTimestamp warns, B acquireMutationLocks|_batchMutex — truth `dup-of`
+  — folds onto the _mutationMutex makers); round7: the same 9 F7 targets as L1. All rules: only thread-safety moves on
+  the 3 TM trees, anyparse src identical — branch `feat/ts-precision-7`
