@@ -943,6 +943,9 @@ final class CallGraph {
 		final nullableWrappers: Array<String> = shape.nullableWrapperTypeNames ?? [];
 		final transparentWrappers: Array<String> = shape.memberTransparentWrapperTypeNames ?? [];
 		final elementParams: Map<String, Int> = shape.indexedElementTypeParams ?? [];
+		final iterationParams: Map<String, Int> = shape.iterationElementTypeParams ?? [];
+		final iterationKinds: Array<String> = shape.iterationBindingKinds ?? [];
+		final valueBinderKinds: Array<String> = shape.iterationValueBinderKinds ?? [];
 		final accessorPrefixes: Array<String> = shape.accessorMethodPrefixes ?? [];
 		final ctorName: String = shape.constructorName ?? 'new';
 		final objectLiteralKind: Null<String> = shape.objectLiteralKind;
@@ -1318,16 +1321,47 @@ final class CallGraph {
 			return nominal == null || nullableWrappers.contains(nominal) ? null : nominal;
 		}
 
-		/** The element type an index access into a value of `container`'s written type yields, per `indexedElementTypeParams`. */
-		function elementTypeSource(container: String): Null<String> {
+		/**
+		 * The element type an index access into a value of `container`'s written type yields, per `indexedElementTypeParams` —
+		 * or, with `params` handed, the one a loop over it binds per `iterationElementTypeParams`.
+		 */
+		function elementTypeSource(container: String, ?params: Map<String, Int>): Null<String> {
 			final peeled: String = NominalTypes.unwrapNullable(container.trim(), transparentWrappers, _plugin.typeSyntax);
 			final outer: Null<String> = NominalTypes.outerNominalOf(peeled, _plugin.typeSyntax);
-			final at: Null<Int> = outer == null ? null : elementParams[outer];
+			final at: Null<Int> = outer == null ? null : (params ?? elementParams)[outer];
 			final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(peeled, _plugin.typeSyntax);
 			if (at == null || args == null) return null;
 			final list: Array<String> = args;
 			return at >= list.length ? null : list[at];
 		}
+
+		/**
+		 * The written return type of the function `member` a value written `source` declares on its type's chain, as that value
+		 * sees it (`throughParams`); null for a member that is no function the graph holds, or one declaring type parameters.
+		 */
+		function memberReturn(source: String, member: String, currentType: Null<String>): Null<String> {
+			final type: Null<String> = nominalOf(source, currentType);
+			final target: Null<String> = type == null ? null : memberOnChain(type, member);
+			final written: Null<String> = target == null || (_facts.typeParams[target] ?? []).length > 0 ? null : returnSourceOf(target);
+			return target == null || written == null ? null : throughParams(written, nodes[target]?.typeName, source, type, currentType);
+		}
+
+		/**
+		 * The type a loop over a value written `container` binds its element to: the argument a standard container names
+		 * (`iterationElementTypeParams`), and for a key-value loop's value binder nothing else; otherwise what the `next()` of
+		 * the iterator its `iterator()` returns yields, or its own `next()` — null when neither is declared, or both disagree.
+		 */
+		function iterationElement(container: String, keyValue: Bool, currentType: Null<String>): Null<String> {
+			final listed: Null<String> = elementTypeSource(container, iterationParams);
+			if (listed != null || keyValue) return listed;
+			final iterator: Null<String> = memberReturn(container, 'iterator', currentType);
+			final viaIterator: Null<String> = iterator == null
+				? null
+				: elementTypeSource(iterator, iterationParams) ?? memberReturn(iterator, 'next', currentType);
+			final own: Null<String> = memberReturn(container, 'next', currentType);
+			return viaIterator == null || own == null || viaIterator == own ? viaIterator ?? own : null;
+		}
+
 
 		/**
 		 * What `this` denotes inside `currentType`: the type itself, or — inside an abstract — its UNDERLYING type,
@@ -1562,6 +1596,20 @@ final class CallGraph {
 			// a property with an accessor hands back whatever its getter returns, not one stored object
 			if (owner == null || !types.fieldOnChain(owner, name) || types.propertyOnChain(owner, name) != null) return null;
 			return '${types.declaringTypeOf(owner, name) ?? owner}.$name';
+		}
+
+		/**
+		 * Type the binder of the loop `loop` by what its iterable yields (`iterationElement`): the element binder of a plain
+		 * loop, the VALUE binder of a key-value one — never its key binder, which binds the container's key or an index.
+		 */
+		function typeLoopBinder(loop: QueryNode, currentType: Null<String>): Void {
+			final valueBinder: Null<QueryNode> = NominalTypes.iterationValueBinder(loop, valueBinderKinds);
+			final binder: Null<Span> = valueBinder == null ? loop.span : valueBinder.span;
+			final iterable: Null<QueryNode> = NominalTypes.iterationIterable(loop, valueBinderKinds);
+			if (binder == null || iterable == null || typeSources.exists(binder.from)) return;
+			final container: Null<String> = typeSourceOf(iterable, currentType);
+			final element: Null<String> = container == null ? null : iterationElement(container, valueBinder != null, currentType);
+			if (element != null) typeSources[binder.from] = element;
 		}
 
 		callTargetOf = (call, currentType) -> {
@@ -2232,6 +2280,8 @@ final class CallGraph {
 				}
 			}
 
+			// a loop's binder is typed before the body that reads it is walked
+			if (iterationKinds.contains(node.kind)) typeLoopBinder(node, typeName);
 			if (node.kind == callKind && node.children.length > 0)
 				handleCall(node, typeName);
 			else if (newExprKind != null && node.kind == newExprKind)

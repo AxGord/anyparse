@@ -20909,6 +20909,70 @@
 			"find": "return CallGraphNames.functionReturnSource(written?.wrapped(['Null']) ?? written);",
 			"replace": "return CallGraphNames.functionReturnSource(written);",
 			"note": "a nullable function type returns nothing the graph types"
+		},
+		{
+			"name": "M-TS-LOOP-ELEMENT",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (iterationKinds.contains(node.kind)) typeLoopBinder(node, typeName);",
+			"replace": "",
+			"note": "a loop's binder is not typed by what its iterable yields (review R4 F7)"
+		},
+		{
+			"name": "M-TS-LOOP-KEY-BINDER",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "final binder: Null<Span> = valueBinder == null ? loop.span : valueBinder.span;",
+			"replace": "final binder: Null<Span> = loop.span;",
+			"note": "a key-value loop's KEY binder is typed as the element"
+		},
+		{
+			"name": "M-TS-LOOP-KV-LISTED",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (listed != null || keyValue) return listed;",
+			"replace": "if (listed != null) return listed;",
+			"note": "a key-value loop's value binder over a non-standard container is typed by its iterator()"
+		},
+		{
+			"name": "M-TS-LOOP-ITERATOR",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "final iterator: Null<String> = memberReturn(container, 'iterator', currentType);",
+			"replace": "final iterator: Null<String> = null;",
+			"note": "a loop over a value with iterator() binds nothing"
+		},
+		{
+			"name": "M-TS-LOOP-NEXT",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "final own: Null<String> = memberReturn(container, 'next', currentType);",
+			"replace": "final own: Null<String> = null;",
+			"note": "a loop over an iterator binds nothing"
+		},
+		{
+			"name": "M-TS-LOOP-AGREE",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "return viaIterator == null || own == null || viaIterator == own ? viaIterator ?? own : null;",
+			"replace": "return viaIterator ?? own;",
+			"note": "a value whose iterator() and next() disagree binds what iterator() yields"
+		},
+		{
+			"name": "M-TS-LOOP-OWN-PARAMS",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "target == null || (_facts.typeParams[target] ?? []).length > 0 ? null : returnSourceOf(target);",
+			"replace": "target == null ? null : returnSourceOf(target);",
+			"note": "a member declaring its own type parameters binds a type named like one"
+		},
+		{
+			"name": "M-TS-LOOP-THROUGH",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": ": throughParams(written, nodes[target]?.typeName, source, type, currentType);",
+			"replace": ": written;",
+			"note": "a container's type parameter in what its iterator yields is not bound by the value's argument"
 		}
 	]
 }

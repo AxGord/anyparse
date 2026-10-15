@@ -1288,6 +1288,52 @@ class CallGraphTest extends Test {
 		#end
 	}
 
+	@:pin('control')
+	@:killer('M-TS-LOOP-ELEMENT') @:killer('M-TS-LOOP-KEY-BINDER') @:killer('M-TS-LOOP-KV-LISTED') @:killer('M-TS-LOOP-ITERATOR')
+	@:killer('M-TS-LOOP-NEXT') @:killer('M-TS-LOOP-AGREE') @:killer('M-TS-LOOP-OWN-PARAMS') @:killer('M-TS-LOOP-THROUGH')
+	public function testALoopBindsWhatItsIterableYields(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final g: CallGraph = graphOf([
+			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
+			'package app; class X { public function new() {} public function wait():Bool return true; }',
+			'package app; import sys.thread.Lock; class A { public static var locks:Array<Lock> = [];'
+			+ ' public static var byName:Map<String, Lock> = null; public static var bag:Bag = null; public static var walker:Walker = null;'
+			+ ' public static var both:Both = null; public static var gen:Gen = null; public static var box:Box<Lock> = null; }',
+			'package app; import sys.thread.Lock; class Bag { public function new() {} public function iterator():Iterator<Lock> return null; }',
+			'package app; import sys.thread.Lock; class Walker { public function new() {} public function hasNext():Bool return false;'
+			+ ' public function next():Lock return null; }',
+			'package app; class Both { public function new() {} public function iterator():Iterator<utils.Lock> return null;'
+			+ ' public function hasNext():Bool return false; public function next():sys.thread.Lock return null; }',
+			'package app; class Gen { public function new() {} public function iterator<X>():Iterator<X> return null; }',
+			'package app; class Box<T> { public function new() {} public function iterator():Iterator<T> return null; }',
+			'package app; class C { static function arr():Void for (l in A.locks) l.wait(); static function values():Void for (l in A.byName) l.wait();'
+			+ ' static function kv():Void for (k => l in A.byName) l.wait(); static function key():Void for (k => l in A.byName) k.wait();'
+			+ ' static function kvOther():Void for (k => l in A.bag) l.wait(); static function iterable():Void for (l in A.bag) l.wait();'
+			+ ' static function iterator():Void for (l in A.walker) l.wait(); static function both():Void for (l in A.both) l.wait();'
+			+ ' static function gen():Void for (l in A.gen) l.wait(); static function box():Void for (l in A.box) l.wait(); }'
+		]);
+		function targets(from: String): Array<String> {
+			return [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+		}
+		Assert.same(['sys.thread.Lock.wait'], targets('C.arr'), 'an array element, its type read where the array was declared');
+		Assert.same(['sys.thread.Lock.wait'], targets('C.values'), 'a map yields its values');
+		Assert.same(['sys.thread.Lock.wait'], targets('C.kv'), 'the value binder of a key-value loop');
+		Assert.same([], targets('C.key'), 'the key binder of a key-value loop is never the element');
+		Assert.same([], targets('C.kvOther'), 'a key-value loop over another type binds nothing known');
+		Assert.same(['sys.thread.Lock.wait'], targets('C.iterable'), 'what the iterator `iterator()` returns yields');
+		Assert.same(['sys.thread.Lock.wait'], targets('C.iterator'), 'what an iterator\'s own `next()` returns');
+		Assert.same([], targets('C.both'), '`iterator()` and `next()` disagreeing bind neither');
+		Assert.same([], targets('C.gen'), 'an `iterator()` declaring its own type parameters binds nothing');
+		Assert.same(['sys.thread.Lock.wait'], targets('C.box'), 'a type parameter of the container, as the value binds it');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	/**
 	 * A typedef aliases the type its OWN file binds the target name to, wherever the alias is used: an alias another module
 	 * declares importing the std `Lock` — imported by its module or by name — and one beside its use wait on the std lock,
