@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.check.CheckScan;
 import anyparse.query.CallGraph.FnDeclaration;
 import anyparse.query.CallGraph.FnNode;
 import anyparse.query.GrammarPlugin.RefShape;
@@ -39,8 +40,11 @@ final class CallGraphNodes {
 
 		final underlyingKinds: Array<String> = shape.underlyingThisTypeKinds ?? [];
 		final annotationKinds: Array<String> = shape.typeAnnotationKinds ?? [];
+		final runKinds: Array<String> = CheckScan.modifierKinds(shape).concat(g._plugin.metaShape().metaKinds);
 
-		function walk(node: QueryNode, currentType: Null<String>, parentFn: Null<String>, isDynamic: Bool): Void {
+		function walk(
+			node: QueryNode, currentType: Null<String>, parentFn: Null<String>, isDynamic: Bool, ?overloads: Array<QueryNode>
+		): Void {
 			// a macro-reification subtree is generated-code emission, not runtime
 			// calls — walking it would fabricate nodes and edges (mirrors Refs)
 			if (opaqueKinds.contains(node.kind)) return;
@@ -87,6 +91,7 @@ final class CallGraphNodes {
 				DeclarationFacts.settle(
 					g._facts.returnSources, id, CallGraphNames.returnSourceOf(node, entry.source, annotationKinds), first
 				);
+				if (overloads != null) overloaded(g, id, node, overloads, entry.source);
 			} else if (span != null && lambdaKinds.contains(node.kind)) {
 				lambdaCounter++;
 				fnId = '${parentFn ?? (typeName ?? moduleType)}#$lambdaCounter';
@@ -104,10 +109,55 @@ final class CallGraphNodes {
 					continue;
 				}
 				final dyn: Bool = fnKinds.contains(c.kind) && MemberKinds.macroModifierPrecedes(kids, i, dynamicKind, modifierBoundary);
-				walk(c, typeName, fnId, dyn);
+				walk(
+					c, typeName, fnId, dyn,
+					fnKinds.contains(c.kind) ? signaturesOffered(MemberKinds.precedingModifiers(c, node, runKinds), shape) : null
+				);
 			}
 		}
 		walk(entry.tree, null, null, false);
+	}
+
+	/**
+	 * The other signatures the modifier run `run` of a function declaration offers: the function each `@:overload`
+	 * (`signatureOverloadMetaName`) holds; null for none.
+	 */
+	private static function signaturesOffered(run: Array<QueryNode>, shape: RefShape): Null<Array<QueryNode>> {
+		final meta: Null<String> = shape.signatureOverloadMetaName;
+		final out: Array<QueryNode> = [
+			for (m in run) if (meta != null && m.name == meta) for (c in m.children) if ((shape.lambdaKinds ?? []).contains(c.kind)) c
+		];
+		return out.length == 0 && !run.exists(m -> meta != null && m.name == meta) ? null : out;
+	}
+
+	/**
+	 * Mark the node `id`, declared by `fn` (in `source`) offering the signatures `others`, as one whose return type or
+	 * parameters a call cannot read off its declaration: some other signature writes them differently. An offered
+	 * signature that does not read as a function differs in both.
+	 */
+	private static function overloaded(g: CallGraph, id: String, fn: QueryNode, others: Array<QueryNode>, source: String): Void {
+		final shape: RefShape = g._shape;
+		final annotationKinds: Array<String> = shape.typeAnnotationKinds ?? [];
+		final paramKinds: Array<String> = shape.paramKinds ?? [];
+		function params(f: QueryNode): String {
+			return [
+				for (p in f.children)
+					if (paramKinds.contains(p.kind)) {
+						final at: Null<Span> = p.type?.span;
+						'${p.kind}:${at == null ? '' : source.substring(at.from, at.to)}';
+					}
+			].join(',');
+		}
+		final returned: Null<String> = CallGraphNames.returnSourceOf(fn, source, annotationKinds);
+		final written: String = params(fn);
+		// an `@:overload` holding no function expression offers a signature nothing reads
+		final unread: Bool = others.length == 0;
+		if (unread || others.exists(o -> CallGraphNames.returnSourceOf(o, source, annotationKinds) != returned)) {
+			g._facts.overloadedReturns[id] = true;
+			g._facts.returns.remove(id);
+			g._facts.returnSources.remove(id);
+		}
+		if (unread || others.exists(o -> params(o) != written)) g._facts.overloadedParams[id] = true;
 	}
 
 	/**

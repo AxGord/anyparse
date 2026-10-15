@@ -1191,6 +1191,68 @@ class CallGraphTest extends Test {
 	 * what the name means there, not the import (review R4 F7).
 	 */
 	/**
+	 * Review R5 F6 (`h/ovl-return(-rev)`, `ifdef-ovl`): a function offering other signatures (`@:overload`) is typed by none
+	 * of them where they disagree — a call may select any — its return where the returns differ, its parameters where the
+	 * parameter lists do; one declaration of several offering them is enough. A library function the graph holds no file
+	 * for, marked so in the index, types no parameter either.
+	 */
+	@:pin('control') @:killer('M-TS-OVERLOAD-RETURN') @:killer('M-TS-OVERLOAD-RETURN-EACH') @:killer('M-TS-OVERLOAD-PARAMS') @:killer('M-TS-OVERLOAD-AGREE')
+	@:killer('M-TS-OVERLOAD-EXTERNAL')
+	public function testAFunctionOfferingOtherSignaturesIsTypedWhereTheyAgree(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final project: Array<{ file: String, source: String }> = [
+			{
+				file: 'utils/Lock.hx',
+				source: 'package utils; class Lock { public function new() {} public function wait():Bool return true; }'
+			},
+			{
+				file: 'app/A.hx',
+				source: 'package app; class A { @:overload(function(x:Int):sys.thread.Lock {}) public static function get(x:String):utils.Lock'
+					+ ' return null; @:overload(function(x:Int):utils.Lock {}) public static function same(x:String):utils.Lock return null;'
+					+ ' @:overload(function(f:(sys.thread.Lock) -> Void):Void {}) public static function run(f:(utils.Lock) -> Void):Void {}'
+					+ ' #if never @:overload(function(x:Int):sys.thread.Lock {}) public static function each(x:String):utils.Lock return null;'
+					+ ' #else public static function each(x:String):utils.Lock return null; #end }'
+			},
+			{
+				file: 'app/C.hx',
+				source: 'package app; import lib.L; class C { static function get():Void A.get(1).wait(); static function same():Void A.same(1).wait();'
+					+ ' static function run():Void A.run(l -> l.wait()); static function each():Void A.each("x").wait();'
+					+ ' static function lib():Void L.run(l -> l.wait()); }'
+			}
+		];
+		final library: Array<{ file: String, source: String }> = [
+			{
+				file: 'lib/L.hx',
+				source: 'package lib; extern class L { @:overload(function(f:(sys.thread.Lock) -> Void):Void {})'
+					+ ' public static function run(f:(utils.Lock) -> Void):Void; }'
+			}
+		];
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final g: CallGraph = CallGraph.build(project, plugin, SymbolIndex.build(project.concat(library), plugin));
+		function targets(from: String): Array<String> {
+			final out: Array<String> = [];
+			for (id in g.nodes.keys())
+				if (id == from || StringTools.startsWith(id, '$from#'))
+					for (e in g.outEdges(id))
+						if (e.kind == Call) out.push(e.to);
+			out.sort(Reflect.compare);
+			return out;
+		}
+		Assert.same(['A.get'], targets('C.get'), 'another signature returns another type');
+		Assert.same(['A.same', 'Lock.wait'], targets('C.same'), 'every signature returns the same type');
+		Assert.same(['A.run'], targets('C.run'), 'another signature takes other parameters');
+		Assert.same(['A.each'], targets('C.each'), 'one declaration of several offers another signature');
+		Assert.same(['L.run'], targets('C.lib'), 'a library function the index marks');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
 	 * Review R5 F4 (`h/stat-modvar(-rev)`): a field the reading file's own module declares at module level — plain, `final`,
 	 * inside a conditional region — is what a bare name means there, before any static an import brings in under it.
 	 */

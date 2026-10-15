@@ -20625,7 +20625,7 @@
 		{
 			"name": "M-TS-DECL-PARAM-FILE",
 			"type": "anyparse.query.CallGraphKeys",
-			"method": "paramTypesOf",
+			"method": "declaredParamTypes",
 			"find": "p == null ? null : keyedIn(imports, d.file, typeSyntax, p, unkeyed)",
 			"replace": "p",
 			"note": "a parameter's written type is read through the imports of the file passing the argument"
@@ -21101,6 +21101,46 @@
 			"find": "if (aliasKinds.contains(node.kind)) return;",
 			"replace": "",
 			"note": "an import alias's name counts as one the module declares, hiding the static it binds"
+		},
+		{
+			"name": "M-TS-OVERLOAD-RETURN",
+			"type": "anyparse.query.CallGraphNodes",
+			"method": "overloaded",
+			"find": "\t\t\tg._facts.overloadedReturns[id] = true;\n\t\t\tg._facts.returns.remove(id);\n\t\t\tg._facts.returnSources.remove(id);\n",
+			"replace": "",
+			"note": "a function another signature of which returns another type is typed by its declared return"
+		},
+		{
+			"name": "M-TS-OVERLOAD-RETURN-EACH",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (_facts.overloadedReturns.exists(target)) return null;",
+			"replace": "",
+			"note": "a node folding declarations one of which offers other signatures reads each declaration's return"
+		},
+		{
+			"name": "M-TS-OVERLOAD-PARAMS",
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "paramTypesOf",
+			"find": "return g._facts.overloadedParams.exists(id) ? null : declaredParamTypes(g, id);",
+			"replace": "return declaredParamTypes(g, id);",
+			"note": "a function another signature of which takes other parameters types a lambda argument by its declared ones"
+		},
+		{
+			"name": "M-TS-OVERLOAD-AGREE",
+			"type": "anyparse.query.CallGraphNodes",
+			"method": "overloaded",
+			"find": "|| others.exists(o -> CallGraphNames.returnSourceOf(o, source, annotationKinds) != returned)",
+			"replace": "|| others.length > 0",
+			"note": "signatures that all return the same type still leave the call untyped"
+		},
+		{
+			"name": "M-TS-OVERLOAD-EXTERNAL",
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "externalParamTypes",
+			"find": "if (member?.hasOverloadMeta == true) return null;",
+			"replace": "",
+			"note": "a library function the index marks as offering other signatures types its first parameter"
 		}
 	]
 }

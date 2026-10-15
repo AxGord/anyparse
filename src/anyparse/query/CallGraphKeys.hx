@@ -299,6 +299,12 @@ final class CallGraphKeys {
 	 * either.
 	 */
 	public static function paramTypesOf(g: CallGraph, id: String): Null<Array<Null<String>>> {
+		// another signature a call may select takes other parameters (`@:overload`)
+		return g._facts.overloadedParams.exists(id) ? null : declaredParamTypes(g, id);
+	}
+
+	/** `paramTypesOf` for a function offering no other signature: what its declarations write. */
+	private static function declaredParamTypes(g: CallGraph, id: String): Null<Array<Null<String>>> {
 		final cached: Null<Array<Null<String>>> = g._facts.paramTypes[id];
 		if (cached != null) return cached;
 		final n: Null<FnNode> = g.nodes[id];
@@ -433,6 +439,7 @@ final class CallGraphKeys {
 		if (type == null || name == null) return null;
 		final owner: String = g.types.declaringTypeOf(type, name) ?? type;
 		final member: Null<MemberInfo> = g.types.memberOnChain(type, name);
+		if (member?.hasOverloadMeta == true) return null;
 		final unkeyed: Array<String> = g.types.generics.typeParamsOf(owner).concat(member?.typeParamNames ?? []);
 		// which of its parameters a call may skip the index does not say: any of them
 		final declared: Int = member?.paramTypeSources.length ?? 0;

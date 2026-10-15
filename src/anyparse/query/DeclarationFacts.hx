@@ -40,6 +40,14 @@ final class DeclarationFacts {
 	 */
 	public final skippable: Map<String, { from: Int, count: Int }> = [];
 
+	/**
+	 * The function node ids a declaration of which offers other signatures (`@:overload`) whose RETURN type differs from its
+	 * own, and those whose PARAMETERS differ: a call may select any of them, so the declared one types neither (review R5 F6).
+	 */
+	public final overloadedReturns: Map<String, Bool> = [];
+
+	public final overloadedParams: Map<String, Bool> = [];
+
 	public function new() {}
 
 	/** Drop every fact about the function node `id`, whose declaration left the graph. */
@@ -51,6 +59,8 @@ final class DeclarationFacts {
 		paramTypes.remove(id);
 		restParams.remove(id);
 		skippable.remove(id);
+		overloadedReturns.remove(id);
+		overloadedParams.remove(id);
 	}
 
 	/** The key of `typeName`'s parameter bounds as the declaration in `file` writes them — two types may share a simple name. */

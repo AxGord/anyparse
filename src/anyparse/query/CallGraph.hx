@@ -1006,6 +1006,8 @@ final class CallGraph {
 
 		/** The written return type of the node `target`, read where declared (`readIn`) — each one where they differ; null for none. */
 		function returnSourceOf(target: String): Null<String> {
+			// another signature a call may select returns another type (`@:overload`)
+			if (_facts.overloadedReturns.exists(target)) return null;
 			final files: Array<String> = [for (d in declarationsOf(target)) d.file];
 			final settled: Null<String> = _facts.returnSources[target];
 			final each: Null<Array<WrittenIn>> = settled == null && files.length > 1 ? CallGraphKeys.returnsWritten(this, target) : null;
