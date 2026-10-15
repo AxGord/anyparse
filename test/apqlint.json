@@ -10,6 +10,7 @@
             ]
         },
         "duplicate-code": { "enabled": false },
-        "prefer-typed-throw": { "enabled": false }
+        "prefer-typed-throw": { "enabled": false },
+        "owned-types": { "enabled": false }
     }
 }
