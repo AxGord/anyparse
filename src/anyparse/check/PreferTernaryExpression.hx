@@ -3,9 +3,9 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.ParenGuard;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -125,7 +125,7 @@ final class PreferTernaryExpression implements Check {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null) return [];
-		final resolveIndex: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
+		final resolveIndex: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		return [
 			for (entry in files) for (m in collect(plugin, entry.source, seams, resolveIndex))
 				{
@@ -143,7 +143,7 @@ final class PreferTernaryExpression implements Check {
 	): Array<{ span: Span, text: String }> {
 		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null) return [];
-		final resolveIndex: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex([{ file: '', source: source }], plugin, index);
+		final resolveIndex: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex([{ file: '', source: source }], plugin, index);
 		final byKey: Map<String, Match> = [];
 		for (m in collect(plugin, source, seams, resolveIndex)) byKey['${m.span.from}:${m.span.to}'] = m;
 		final guarded: Array<GuardedEdit> = [];

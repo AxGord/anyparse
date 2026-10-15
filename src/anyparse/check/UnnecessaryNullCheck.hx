@@ -3,8 +3,8 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.query.DeclaredNullity;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
@@ -62,7 +62,7 @@ final class UnnecessaryNullCheck implements Check {
 		final nullLit: String = nullLitKind;
 		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
-		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
+		final index: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		return RunScan.collect(files, plugin, (entry, tree, violations) -> {
 			final root: QueryNode = tree;
 			final types: DeclaredNullity = DeclaredNullity.of(entry.file, root, entry.source, shape, provider, plugin.typeSyntax, index);

@@ -2,9 +2,9 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
@@ -116,7 +116,7 @@ final class PreferArrowCallback implements Check {
 		final fnKind: Null<String> = shape.fnExprKind;
 		final callKind: Null<String> = shape.callKind;
 		if (fnKind == null || callKind == null) return [];
-		final getIndex: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
+		final getIndex: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		final declTrees: Map<String, Null<QueryNode>> = [];
 		return RunScan.collect(files, plugin, (entry, tree, violations) -> {
 			final ctx: Ctx = makeCtx(entry.file, entry.source, tree, plugin, shape, fnKind, callKind, getIndex, declTrees);
@@ -145,7 +145,7 @@ final class PreferArrowCallback implements Check {
 		return fnKind == null || callKind == null
 			? []
 			: RunScan.edits(plugin, source, tree -> {
-				final getIndex: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex([], plugin, index);
+				final getIndex: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex([], plugin, index);
 				final wanted: Map<String, Bool> = [];
 				for (v in violations) {
 					final s: Null<Span> = v.span;

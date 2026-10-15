@@ -5,6 +5,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.Check.VolatileMessage;
 import anyparse.check.PurityScan.PurityCtx;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
@@ -125,7 +126,7 @@ final class ExtractRepeatedExpression implements Check implements VolatileMessag
 		final candidateKinds: Array<String> = indexKind == null ? [faKind, callKind] : [faKind, callKind, indexKind];
 		final functionUnitKinds: Array<String> = (shape.functionKinds ?? []).concat(shape.lambdaKinds ?? []);
 		final exclusiveConditionalKinds: Array<String> = (shape.branchConditionKinds ?? []).concat(shape.switchKinds ?? []);
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final index: SymbolIndex = IndexScope.report(files, plugin);
 		return RunScan.collect(files, plugin, (entry, root, violations) -> {
 			final purity: Null<PurityCtx> = PurityScan.contextOf(plugin, entry.source, root, index);
 			if (purity == null) return;

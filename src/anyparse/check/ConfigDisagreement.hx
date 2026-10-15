@@ -64,7 +64,7 @@ final class ConfigDisagreement {
 	 * halves — `ResolutionSources.projectRoots` directly, and the library half through
 	 * `LintCommand.resolutionThunk`'s concat. Leave it out and both starve at once:
 	 * `RefactorSupport.resolutionProjectSourcesOf` answers null on the empty `projectRoots`, and the index
-	 * `RefactorSupport.widestScopeIndex` hands back is the report files plus an installed library, while
+	 * `IndexScope.widestScopeIndex` hands back is the report files plus an installed library, while
 	 * `hasDeclaredResolutionScope` keeps saying yes. So five checks decide a rewrite without a single file
 	 * of the project they are rewriting, and none of them can tell.
 	 * `test/unit/check/CrossScopeSoundnessTest.LIBS_ONLY_REGRESSIONS` pins

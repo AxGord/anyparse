@@ -10,6 +10,7 @@ import anyparse.query.BinderScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.CtorFieldFold;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.NodeShape;
 import anyparse.query.NominalTypes;
@@ -141,7 +142,7 @@ final class LambdaLoopScan {
 		final out: Array<Violation> = [];
 		// Lazy: the resolution scope reads the std and the configured libraries, and only a CALL
 		// iterable demands it — the one shape whose type has to be proved.
-		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
+		final index: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		for (entry in files) {
 			final tree: Null<QueryNode> =
 				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
@@ -174,7 +175,7 @@ final class LambdaLoopScan {
 		if (s == null) return [];
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
-		final symbols: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
+		final symbols: Null<SymbolIndex> = IndexScope.resolutionIndexOf(plugin) ?? index;
 		final header: UsingHeader = UsingScan.headerOf(tree, source, plugin);
 		final conflicted: Bool = UsingScan.conflictingUsing(
 			UsingScan.usingModules(header), LAMBDA_MODULE, method(kind), plugin, () -> symbols, []
@@ -183,7 +184,7 @@ final class LambdaLoopScan {
 		// where the loop is written — the report pass proved it against exactly that context.
 		final file: String = violations.length == 0 ? '' : violations[0].file;
 		final probe: Probes = lazyProbes(
-			source, plugin, tree, file, RefactorSupport.lazySymbolIndex([{ file: file, source: source }], plugin, index), kind, s.loopSeams
+			source, plugin, tree, file, IndexScope.lazySymbolIndex([{ file: file, source: source }], plugin, index), kind, s.loopSeams
 		);
 		final byKey: Map<String, Cand> = [];
 		scan(tree, null, source, s, kind, probe, cand -> {

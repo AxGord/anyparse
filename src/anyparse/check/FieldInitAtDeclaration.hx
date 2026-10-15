@@ -6,6 +6,7 @@ import anyparse.query.CtorFieldWrite;
 import anyparse.query.ElementSpan;
 import anyparse.query.FieldWriteIndex;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.MemberReach;
 import anyparse.query.QueryNode;
@@ -321,8 +322,8 @@ final class FieldInitAtDeclaration implements Check {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final shape: RefShape = plugin.refShape();
-		final writeIndex: FieldWriteIndex = FieldWriteIndex.build(files, plugin);
-		final lazyIndex: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
+		final writeIndex: FieldWriteIndex = IndexScope.reportWrites(files, plugin);
+		final lazyIndex: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		final classLike: Array<String> = MemberKinds.classLikeContainerKinds(shape);
 		final violations: Array<Violation> = [];
 		for (entry in files) {

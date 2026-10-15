@@ -5,7 +5,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.NullFlowScan.IdentOperand;
 import anyparse.query.DeclaredNullity;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.IndexScope;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
@@ -54,7 +54,7 @@ final class DeadNullGuard implements Check implements RiskyFix {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final shape: RefShape = plugin.refShape();
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
-		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
+		final index: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		return RunScan.collectWith(files, plugin, NullFlowScan.seamsOf(shape), (entry, root, s, violations) -> {
 			final types: DeclaredNullity = DeclaredNullity.of(entry.file, root, entry.source, shape, provider, plugin.typeSyntax, index);
 			NullFlow.analyze(root, shape, entry.source, (node, facts) -> {

@@ -12,9 +12,9 @@ import anyparse.check.Check.Violation;
 import anyparse.check.DynamicShape.DynCtx;
 import anyparse.check.ParamAscription.ParamVerdict;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.NodeShape;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
@@ -231,11 +231,11 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 		final typeParams: Map<Int, Array<String>> = provider != null ? provider.typeParamNames(source) : [];
 		// The inferred type must resolve to a provably plain nominal — resolved against the
 		// caller's cross-file index (FixVerifier), or this file alone when invoked directly.
-		final symbols: SymbolIndex = index ?? SymbolIndex.build([{ file: '', source: source }], plugin);
+		final symbols: SymbolIndex = index ?? IndexScope.over([{ file: '', source: source }], plugin);
 		// The parameter arm asks its type gate of the WIDEST index available: an ascription naming a
 		// std abstract (`haxe.DynamicAccess`) is the motivating shape, and only the resolution scope
 		// holds the std. The local arm keeps the narrower index it has always answered against.
-		final scope: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? symbols;
+		final scope: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? symbols;
 		final edits: Array<GroupedEdit> = [];
 		var group: Int = 0;
 		for (v in violations) if (v.rule == RULE_ID) {

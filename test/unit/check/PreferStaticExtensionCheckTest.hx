@@ -8,7 +8,7 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
-import anyparse.query.RefactorSupport;
+import anyparse.query.IndexScope;
 import anyparse.query.StdResolver;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -487,7 +487,7 @@ class PreferStaticExtensionCheckTest extends Test {
 		// The `?? index` arm: a bare plugin hosts no resolution scope, so the index the caller
 		// passes is the only one — and must still drive the gates to a real edit.
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		Assert.isNull(RefactorSupport.resolutionIndexOf(plugin));
+		Assert.isNull(IndexScope.resolutionIndexOf(plugin));
 		Assert.equals(2, editsOf(fileSet(user('using Ext;\n\n', 'Ext.deco(w, 1);'))).length);
 	}
 

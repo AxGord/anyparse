@@ -3,10 +3,10 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.ImportBindings;
+import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.LexicalRegions.LexRegionKind;
 import anyparse.query.OccurrenceScan;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
@@ -176,13 +176,13 @@ final class UnusedImport implements Check {
 		// The report-scoped index drives the per-file violation loop and the
 		// report-scoped member set (kept report-scoped so a wildcard / `using`
 		// verdict never widens).
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final index: SymbolIndex = IndexScope.report(files, plugin);
 		// The resolution index — report files UNION configured library roots (openfl /
 		// lime) — when the plugin carries a resolution scope, else the report index.
 		// Named-import liveness and existence resolve against it, so an unused library
 		// import becomes a verifiable deletable Warning, while a library import kept
 		// live by a secondary type / bare enum constructor stays live.
-		final resolveIndex: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? index;
+		final resolveIndex: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? index;
 		// Top-level type names per resolution-scoped module — a plain module import
 		// binds ALL of them, so the used-check must consult every name.
 		final moduleTypes: Map<String, Array<String>> = [];

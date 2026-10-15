@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.query.BoolExprShape;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
@@ -159,7 +160,7 @@ final class MapValueScan {
 		if (decl.exported || index == null) return false;
 		final report: SymbolIndex = index;
 		if (!RefactorSupport.privateMemberScanIsSound(source, report, name)) return false;
-		final scope: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? report;
+		final scope: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? report;
 		return !scope.text.hasAccessGrant(owner) && !scope.subtypes.subtypeDeclMatches(owner, name, (subtype, src, span, redeclares) -> {
 			if (redeclares || MemberWriteScan.carriesBuildMacro(src)) return true;
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, src);

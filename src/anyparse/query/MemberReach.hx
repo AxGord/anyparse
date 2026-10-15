@@ -2749,7 +2749,7 @@ final class MemberReach {
 		final infos: Array<FileInfo> = [];
 		for (f in changed) {
 			final before: Null<FileInfo> = _index.fileInfo(f.file);
-			final after: Null<FileInfo> = SymbolIndex.build([f], _plugin).fileInfo(f.file);
+			final after: Null<FileInfo> = IndexScope.over([f], _plugin).fileInfo(f.file);
 			if (before == null || after == null) return false;
 			final rebuilt: FileInfo = after;
 			if (signatureOf(before) != signatureOf(rebuilt)) return false;
@@ -2839,7 +2839,7 @@ final class MemberReach {
 		final memo: Null<MemberReach> = host?.memberReach();
 		final changed: Null<Array<{ file: String, source: String }>> = memo?.changedFiles(project);
 		if (memo != null && changed != null && (changed.length == 0 || memo.refresh(changed))) return memo;
-		final index: SymbolIndex = host?.resolutionIndex() ?? SymbolIndex.build(project, plugin);
+		final index: SymbolIndex = host?.resolutionIndex() ?? IndexScope.over(project, plugin);
 		// an analysis reading compiler facts escalates on its first question (`escalation`), which probes the builds: their
 		// compiles start now, beside the facts this waits on below, instead of after them
 		host?.reachBuildsAhead();
@@ -3063,7 +3063,7 @@ final class MemberReach {
 		final cwd: String = Sys.getCwd();
 		final projectPaths: Map<String, Bool> = [for (f in project) OracleCoverage.canonical(cwd, f.file) => true];
 		final library: Array<{ file: String, source: String }> = [for (f in builds.library) if (!projectPaths.exists(f.file)) f];
-		return SymbolIndex.build(project.concat(library), plugin, [for (f in library) f.file]);
+		return IndexScope.over(project.concat(library), plugin, [for (f in library) f.file]);
 	}
 
 	// -- locals -----------------------------------------------------------------------------------

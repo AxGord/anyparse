@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -42,7 +43,7 @@ final class DuplicateImport implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final index: SymbolIndex = IndexScope.report(files, plugin);
 		final violations: Array<Violation> = [];
 		for (info in index.allFiles()) {
 			final seen: Array<String> = [];

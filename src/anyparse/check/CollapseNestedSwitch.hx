@@ -5,6 +5,7 @@ import anyparse.check.Check.Violation;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.CasePatterns;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.PatternNameScope;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
@@ -175,7 +176,7 @@ final class CollapseNestedSwitch implements Check implements DefaultOff {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final index: SymbolIndex = IndexScope.report(files, plugin);
 		return RunScan.collectWith(files, plugin, resolveSeams(plugin), (entry, tree, resolved, violations) -> {
 			final scope: Null<PatternNameScope> = PatternNameScope.of(entry.file, tree, plugin, index);
 			for (candidate in collect({
@@ -208,7 +209,7 @@ final class CollapseNestedSwitch implements Check implements DefaultOff {
 		final resolved: Seams = seams;
 		final file: String = RunScan.oneFile(violations, RULE_ID);
 		return RunScan.edits(plugin, source, tree -> {
-			final resolvedIndex: SymbolIndex = index ?? SymbolIndex.build([{ file: file, source: source }], plugin);
+			final resolvedIndex: SymbolIndex = index ?? IndexScope.over([{ file: file, source: source }], plugin);
 			final scope: Null<PatternNameScope> = PatternNameScope.of(file, tree, plugin, resolvedIndex);
 			final byKey: Map<String, Candidate> = [];
 			for (candidate in collect({

@@ -51,7 +51,7 @@ final class SymbolQuery {
 		final sourceOf: Map<String, String> = [];
 		for (entry in files) sourceOf[entry.file] = entry.source;
 
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final index: SymbolIndex = IndexScope.over(files, plugin);
 		final rows: Array<SymbolRow> = [];
 		for (info in index.allFiles()) {
 			final maybeSrc: Null<String> = sourceOf[info.file];
@@ -82,7 +82,7 @@ final class SymbolQuery {
 	public static function importers(
 		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, modulePath: String
 	): Array<String> {
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final index: SymbolIndex = IndexScope.over(files, plugin);
 		return [for (info in index.filesImportingModule(modulePath)) info.file];
 	}
 

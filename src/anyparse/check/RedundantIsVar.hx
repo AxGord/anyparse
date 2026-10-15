@@ -9,12 +9,12 @@ import anyparse.check.ReflectionScan.ReflectionSurface;
 import anyparse.query.CondRegionScan;
 import anyparse.query.CtorFieldFold;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberKinds;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RawSourceScan;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
@@ -104,8 +104,8 @@ final class RedundantIsVar implements Check implements DefaultOff implements Ris
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
-		final wide: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? index;
+		final index: SymbolIndex = IndexScope.report(files, plugin);
+		final wide: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? index;
 		final ctx: Ctx = {
 			plugin: plugin,
 			shape: plugin.refShape(),

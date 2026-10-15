@@ -11,6 +11,7 @@ import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.OracleCoverage;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -357,7 +358,7 @@ final class FixVerifier {
 		// only leaves the snapshot conservative — and re-probing per file would cost one
 		// compile each, which is the whole expense this gate exists to avoid.
 		final coverageMemo: OracleCoverageMemo = { probes: (coverage ?? []).copy(), usable: null };
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final index: SymbolIndex = IndexScope.report(files, plugin);
 		// One WHOLE-SET run per check, findings then grouped per file: a risky check's
 		// soundness gates can be whole-project (prefer-inline's subtype-override /
 		// value-reference scans), and a per-file run starves them — the safe loop routes

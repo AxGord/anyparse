@@ -5,13 +5,13 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FileGated;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.NamingPolicy.NamedDecl;
 import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.NamingPolicy.NamingPolicy;
 import anyparse.query.NamingPolicy.NamingRule;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.Rename;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
@@ -209,7 +209,7 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 				// The inherited-member proof walks the FULL supertype closure, so it resolves through the
 				// plugin's resolution scope (report files UNION the configured libraries) when present,
 				// exactly as the `naming` field rename does; the report-scoped index is the fallback.
-				final resolutionIndex: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
+				final resolutionIndex: Null<SymbolIndex> = IndexScope.resolutionIndexOf(plugin) ?? index;
 				final flaggedFroms: Array<Int> = RunScan.spanStarts(violations);
 				// Every flagged binding's derived target, resolved BEFORE any rename is emitted: two
 				// bindings differing only in underscore count (`_a` / `__a`) strip to the same name, and

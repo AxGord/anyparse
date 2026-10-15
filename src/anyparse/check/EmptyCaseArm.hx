@@ -4,6 +4,7 @@ import anyparse.check.CasePatternScan.CaseSeams;
 import anyparse.check.CasePatternScan.PatternBinder;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
@@ -122,7 +123,7 @@ final class EmptyCaseArm implements Check {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final scan: Null<Scan> = scanOf(plugin);
 		if (scan == null) return [];
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final index: SymbolIndex = IndexScope.report(files, plugin);
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final ctx: Null<Ctx> = contextOf(scan, plugin, entry.file, entry.source, index);
@@ -152,7 +153,7 @@ final class EmptyCaseArm implements Check {
 		final file: String = RunScan.oneFile(violations, RULE_ID);
 		final scan: Null<Scan> = scanOf(plugin);
 		if (scan == null) return [];
-		final ctx: Null<Ctx> = contextOf(scan, plugin, file, source, index ?? SymbolIndex.build([{ file: file, source: source }], plugin));
+		final ctx: Null<Ctx> = contextOf(scan, plugin, file, source, index ?? IndexScope.over([{ file: file, source: source }], plugin));
 		if (ctx == null) return [];
 		final deletable: Array<String> = [for (span in collect(ctx, source)) '${span.from}:${span.to}'];
 		final edits: Array<{ span: Span, text: String }> = [];

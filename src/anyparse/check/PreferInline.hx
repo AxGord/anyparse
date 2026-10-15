@@ -6,6 +6,7 @@ import anyparse.check.Check.OracleRelaxable;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.Lit;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberKinds;
@@ -14,7 +15,6 @@ import anyparse.query.NamingPolicy.FrameworkContract;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.QueryNode;
 import anyparse.query.RawSourceScan;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -215,7 +215,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		function widest(): SymbolIndex {
 			final ready: Null<SymbolIndex> = wide;
 			if (ready != null) return ready;
-			final built: SymbolIndex = RefactorSupport.widestScopeIndex(plugin) ?? SymbolIndex.build(files, plugin);
+			final built: SymbolIndex = IndexScope.widest(files, plugin);
 			wide = built;
 			return built;
 		}
@@ -601,8 +601,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 			// `nominated` an EMPTY modifier list, so this rule and `unused-public-member` exempted every
 			// such method while `unused-private` — which passes the projected declaration — did not.
 			if (CheckScan.frameworkReachableMethod(
-				naming, name, owner, candidate.span, () -> RefactorSupport.resolutionIndexOf(plugin) ?? index, contracts,
-				candidate.isStatic
+				naming, name, owner, candidate.span, () -> IndexScope.resolutionIndexOf(plugin) ?? index, contracts, candidate.isStatic
 			))
 				continue;
 			// LAST, because it is the one gate that walks the whole scope a second time (`run`'s Pass B2).

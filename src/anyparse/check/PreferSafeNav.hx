@@ -6,6 +6,7 @@ import anyparse.query.BoolExprShape;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
@@ -148,7 +149,7 @@ using Lambda;
  * the field receiver (any missing → fields refuse), `parenKind` to unwrap a parenthesized
  * condition or ternary branch, and `opaqueKinds` to skip reification subtrees. The one-step
  * path arm additionally needs the `TypeInfoProvider` declared-type sources and a
- * `SymbolIndex` (`RefactorSupport.lazySymbolIndex`); without either, only plain-identifier
+ * `SymbolIndex` (`IndexScope.lazySymbolIndex`); without either, only plain-identifier
  * subjects are flagged.
  */
 @:nullSafety(Strict)
@@ -180,7 +181,7 @@ final class PreferSafeNav implements Check implements VersionGated {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final getIndex: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
+		final getIndex: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		final shape: RefShape = plugin.refShape();
 		return RunScan.collectWith(files, plugin, readSeams(plugin), (entry, tree, seams, violations) -> {
 			final bindings: Array<{ name: String, scope: Span, declEnd: Int }> = [];

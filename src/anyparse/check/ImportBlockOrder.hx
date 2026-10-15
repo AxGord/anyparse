@@ -6,8 +6,8 @@ import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.ImportBindings;
 import anyparse.query.ImportOrder;
+import anyparse.query.IndexScope;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.WildcardImportGate;
@@ -65,7 +65,7 @@ private typedef UsingWedge = {
  * a value outranks a type of the same name; between field wildcards, explicit field imports and
  * the module-level fields a module import brings in, the LAST wins) and the names the resolution
  * index lists for it. What the index cannot enumerate keeps the wildcard a boundary, the pre-gate
- * reading. Both `run` and `fix` read the same index (`RefactorSupport.lazySymbolIndex`), so a fix
+ * reading. Both `run` and `fix` read the same index (`IndexScope.lazySymbolIndex`), so a fix
  * never sorts a block no finding described. A wildcard member written BELOW a wedged `using` stays
  * below the group when the wedge merges, and one between two wedged groups refuses the merge.
  *
@@ -139,7 +139,7 @@ private typedef UsingWedge = {
  * whether the reorder is available or refused. The `prefer-typed-throw` treatment (a second,
  * report-only message once its whole-scope gate closes) is the shape to copy, and the
  * LENS mismatch that kept it from being copied is gone: `run` and `fix` both build their
- * `ImportBindings` over `RefactorSupport.lazySymbolIndex`, the resolution index whenever the host
+ * `ImportBindings` over `IndexScope.lazySymbolIndex`, the resolution index whenever the host
  * carries one, so the report could now spell the refusal the fixer would meet.
  *
  * ## Options
@@ -185,7 +185,7 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		// One gate for the whole run, over the index `fix` reads too: the report and the fix must split a
 		// file into the SAME runs, or a fix would sort a block no finding described.
-		final gate: WildcardImportGate = new WildcardImportGate(new ImportBindings(RefactorSupport.lazySymbolIndex(files, plugin), plugin));
+		final gate: WildcardImportGate = new WildcardImportGate(new ImportBindings(IndexScope.lazySymbolIndex(files, plugin), plugin));
 		return RunScan.collect(files, plugin, (entry, tree, violations) -> {
 			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
 			final requested: Int = requestedOrder(config);
@@ -230,7 +230,7 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 				// ONE reader for the wildcard gate and both refusals, over the RESOLUTION index when the host
 				// carries one — the lens that sees a library module's secondary types, constructors and
 				// module-level fields, and every extra file it reads can only make a refusal fire MORE.
-				final bindings: ImportBindings = new ImportBindings(RefactorSupport.lazySymbolIndex([], plugin, index), plugin);
+				final bindings: ImportBindings = new ImportBindings(IndexScope.lazySymbolIndex([], plugin, index), plugin);
 				final gate: WildcardImportGate = new WildcardImportGate(bindings);
 				final edits: Array<{ span: Span, text: String }> = [];
 				// A merged wedge REWRITES the region its runs live in, so a run it takes over must not also

@@ -4,6 +4,7 @@ import anyparse.query.CallGraph;
 import anyparse.query.CompilerFacts;
 import anyparse.query.FactsView;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.ReachProject;
 import anyparse.query.SymbolIndex;
 import anyparse.query.SymbolIndexHost;
@@ -25,7 +26,7 @@ final class ThreadGraph {
 		final host: Null<SymbolIndexHost> = useFacts && plugin is SymbolIndexHost ? cast plugin : null;
 		final facts: Null<CompilerFacts> = host?.compilerFacts();
 		if (facts == null) return CallGraph.build(files, plugin);
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final index: SymbolIndex = IndexScope.report(files, plugin);
 		return CallGraph.build(files, plugin, index, FactsView.of(facts, new ReachProject(plugin, index, files), false));
 	}
 

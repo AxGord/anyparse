@@ -4,6 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.query.BinderScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
@@ -101,7 +102,7 @@ final class PreferIndexAccess implements Check {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		// A path receiver's member types resolve cross-file; the index is built at most once, on
 		// first demand, because most runs never reach a path receiver that cleared every other gate.
-		final resolveSymbols: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
+		final resolveSymbols: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		return RunScan.collectWith(files, plugin, config(plugin), (entry, root, c, violations) -> {
 			final declaredTypes: Map<Int, String> = c.typed.declaredTypes(entry.source);
 			final declaredTypeSources: Map<Int, String> = c.typed.declaredTypeSources(entry.source);

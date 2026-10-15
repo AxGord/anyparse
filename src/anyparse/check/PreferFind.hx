@@ -5,10 +5,10 @@ import anyparse.check.UsingScan.UsingHeader;
 import anyparse.query.BinderScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.NominalTypes;
 import anyparse.query.ParenGuard;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -119,7 +119,7 @@ final class PreferFind implements Check {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		// Lazy: the resolution scope reads the std and the configured libraries, and only a recovered
 		// loop demands it — a file holding none never forces the index.
-		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
+		final index: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		return RunScan.collectWith(
 			files, plugin, readSeams(plugin),
 			(entry, tree, s, violations) ->
@@ -153,7 +153,7 @@ final class PreferFind implements Check {
 		// rather than emit a silently retargeted one. The gates run on the plugin's resolution
 		// index when it has one, the caller's otherwise.
 		return RunScan.editsWith(plugin, source, readSeams(plugin), (tree, s) -> {
-			final symbols: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
+			final symbols: Null<SymbolIndex> = IndexScope.resolutionIndexOf(plugin) ?? index;
 			final header: UsingHeader = UsingScan.headerOf(tree, source, plugin);
 			final conflicted: Bool = UsingScan.conflictingUsing(
 				UsingScan.usingModules(header), LAMBDA_MODULE, FIND_METHOD, plugin, () -> symbols, []
@@ -168,7 +168,7 @@ final class PreferFind implements Check {
 			// the extension form for a finding the report wrote as qualified.
 			collectFixCandidates(
 				tree, source, s,
-				memberProbe(source, plugin, tree, file, RefactorSupport.lazySymbolIndex([{ file: file, source: source }], plugin, symbols)),
+				memberProbe(source, plugin, tree, file, IndexScope.lazySymbolIndex([{ file: file, source: source }], plugin, symbols)),
 				byKey
 			);
 			final edits: Array<{ span: Span, text: String }> = [];

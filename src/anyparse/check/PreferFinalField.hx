@@ -6,6 +6,7 @@ import anyparse.check.Check.Violation;
 import anyparse.query.CtorFieldFold;
 import anyparse.query.CtorFieldWrite;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
@@ -141,8 +142,8 @@ final class PreferFinalField implements Check implements RiskyFix implements Ora
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
-		final lazyIndex: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin, index);
+		final index: SymbolIndex = IndexScope.report(files, plugin);
+		final lazyIndex: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin, index);
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		final abstractKinds: Array<String> = plugin.refShape().underlyingThisTypeKinds ?? [];
 		final declaredTypesByFile: Map<String, Map<Int, String>> = [];
@@ -234,7 +235,7 @@ final class PreferFinalField implements Check implements RiskyFix implements Ora
 		// A macro-built type's fields are not what the declaration says (see the class doc): the
 		// finding is kept, and whether its edit is admitted is `macroFinalDecline`'s to say. The grant
 		// is inherited through `implements`, so the class itself may carry no metadata.
-		final builders: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? index;
+		final builders: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? index;
 		final decline: Null<String> = CtorFieldFold.macroFinalDecline(index, builders, owner, file, folded, oracleRelaxed);
 		if (folded) {
 			if (!writesConfined(owner, name, source, index, plugin)) return;

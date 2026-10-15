@@ -6,12 +6,12 @@ import anyparse.check.Check.Violation;
 import anyparse.check.ReflectionScan.ReflectionSurface;
 import anyparse.query.CtorFieldWrite;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.NominalTypes;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
@@ -101,7 +101,7 @@ final class ScratchField implements Check implements RiskyFix implements OracleR
 		final resolved: Null<Seams> = seamsOf(plugin.refShape());
 		if (resolved == null) return [];
 		final seams: Seams = resolved;
-		final lazyIndex: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
+		final lazyIndex: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		var surface: Null<ReflectionSurface> = null;
 		final out: Array<Violation> = [];
 		for (entry in files) {
@@ -183,7 +183,7 @@ final class ScratchField implements Check implements RiskyFix implements OracleR
 	): Null<String> {
 		final shape: RefShape = plugin.refShape();
 		// a fix asked without an index (a direct caller) reads the types of its own file
-		final traits: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? index ?? SymbolIndex.build(
+		final traits: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? index ?? IndexScope.over(
 			[{ file: file, source: source }], plugin
 		);
 		if (!oracleRelaxed && traits.traits.transitivelyCarriesBuildMacro(c.owner, file))

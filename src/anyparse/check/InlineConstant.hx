@@ -4,6 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.ConstantFieldScan.ConstantFieldSeams;
 import anyparse.check.ReflectionScan.ReflectionSurface;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.QueryNode;
@@ -204,7 +205,7 @@ final class InlineConstant implements Check {
 		// Built for ONE question — `transitivelyCarriesBuildMacro` in `scanContainer`. This rule
 		// asked no index before; the four field rules, `member-order` and `prefer-inline` all did,
 		// and the gap was measured rather than argued (see the class doc).
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final index: SymbolIndex = IndexScope.report(files, plugin);
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);

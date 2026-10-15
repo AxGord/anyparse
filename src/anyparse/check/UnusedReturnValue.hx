@@ -4,6 +4,7 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -46,7 +47,7 @@ import anyparse.runtime.Span;
  * both trees are in one run. Neither answer is wrong; the narrow one is blind, and every miss is a miss, never a false
  * positive.
  *
- * The obvious repair — resolve through `RefactorSupport.resolutionIndexOf`, the way
+ * The obvious repair — resolve through `IndexScope.resolutionIndexOf`, the way
  * `prefer-static-extension` and the guard family do, so the project's declared
  * `resolutionRoots` are honoured at any scope — is REFUSED. That index is report UNION resolutionRoots UNION resolutionLibs UNION the Haxe
  * std, undivided, and wiring it in floods a test tree with `utest.Assert.*` calls whose `Bool`
@@ -122,7 +123,7 @@ final class UnusedReturnValue implements Check implements ConfigAware implements
 		final stmtK: String = exprStmtKind;
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		if (provider == null) return [];
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final index: SymbolIndex = IndexScope.report(files, plugin);
 		final ctx: Ctx = {
 			shape: shape,
 			identKind: identKind,

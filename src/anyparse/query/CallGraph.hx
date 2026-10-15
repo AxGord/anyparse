@@ -531,7 +531,7 @@ final class CallGraph {
 		final unindexed: Array<{ file: String, source: String }> = [
 			for (p in parsed) if (!types.holdsFile(p.file)) { file: p.file, source: p.source }
 		];
-		if (unindexed.length > 0) types.merge(SymbolIndex.build(unindexed, _plugin));
+		if (unindexed.length > 0) types.merge(IndexScope.over(unindexed, _plugin));
 		_grownTypes.resize(0);
 		for (p in parsed) CallGraphNodes.collect(this, p);
 		final reading: Null<CallGraphFacts> = facts;
@@ -2256,7 +2256,7 @@ final class CallGraph {
 		final provider: Null<TypeInfoProvider> = cached is TypeInfoProvider ? cast cached : null;
 		if (shape.callKind == null || shape.fieldAccessKind == null)
 			return new CallGraph(cached, shape, provider, new CallGraphTypes(null, shape), null);
-		final types: CallGraphTypes = new CallGraphTypes(index ?? SymbolIndex.build(files, cached), shape);
+		final types: CallGraphTypes = new CallGraphTypes(index ?? IndexScope.report(files, cached), shape);
 		final graph: CallGraph = new CallGraph(cached, shape, provider, types, facts == null ? null : new CallGraphFacts(facts));
 		graph.addFiles(files);
 		return graph;

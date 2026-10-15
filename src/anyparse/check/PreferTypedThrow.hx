@@ -4,8 +4,8 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.query.BoolExprShape;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
 import anyparse.query.StdResolver;
 import anyparse.query.SymbolIndex;
@@ -47,7 +47,7 @@ using StringTools;
  * the wrapper object instead of the raw string, so a body reading the raw value's API changes
  * behaviour. None is decidable per-file — the handler can live anywhere the thrower's call
  * reaches. So the gate scans the report files UNION the configured library roots (via
- * `RefactorSupport.resolutionIndexOf`): if ANY `catch` clause there is typed one of those
+ * `IndexScope.resolutionIndexOf`): if ANY `catch` clause there is typed one of those
  * names, the rule DEGRADES WHOLESALE to report-only — every finding keeps its diagnostic, no
  * finding gets an edit. A source the index could not PARSE is scanned like any
  * other — the gate is textual and the index retains its bytes — so a skipped project file
@@ -190,7 +190,7 @@ final class PreferTypedThrow implements Check implements DefaultOff {
 			final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 			final importMap: Map<String, String> = provider != null ? provider.importMap(source, violations[0].file) : [];
 			final printer: TypeRefPrinter = TypeRefPrinter.forFile(
-				source, tree, importMap, plugin, index ?? RefactorSupport.resolutionIndexOf(plugin)
+				source, tree, importMap, plugin, index ?? IndexScope.resolutionIndexOf(plugin)
 			);
 			final edits: Array<{ span: Span, text: String }> = [];
 			walkThrows(tree, seams, false, (literal, insideConditional) -> {
@@ -234,7 +234,7 @@ final class PreferTypedThrow implements Check implements DefaultOff {
 	 */
 	private static function catchAllInScope(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, seams: Seams): Bool {
 		for (entry in files) if (sourceHasBlockingCatch(entry.source, seams.blockingCatchTypes)) return true;
-		final index: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin);
+		final index: Null<SymbolIndex> = IndexScope.resolutionIndexOf(plugin);
 		if (index == null) return false;
 		final scanned: Map<String, Bool> = [for (entry in files) entry.file => true];
 		// A source the index could not PARSE never enters `allFiles` — but this gate never wanted a

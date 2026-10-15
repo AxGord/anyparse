@@ -12,6 +12,7 @@ import anyparse.query.CanonicalEdit;
 import anyparse.query.Cli.RuleEdits;
 import anyparse.query.Cli.RuleFixOutcome;
 import anyparse.query.EditJournal;
+import anyparse.query.IndexScope;
 import anyparse.query.LintFixSafePass;
 import anyparse.query.cli.command.LintCommand.CheckPartition;
 import anyparse.query.cli.command.LintCommand.LintRange;
@@ -302,15 +303,11 @@ final class LintFixDriver {
 		// resolution-scoped index (report UNION library) rides the HOST instead, so a check's
 		// resolution gate (naming's inherited-member proof) resolves a library supertype through
 		// `SymbolIndexHost.resolutionIndex()`. Both rebuild per pass over this pass's sources.
-		final index: SymbolIndex = PhaseTimings.measure('pass report index', () -> SymbolIndex.build(files, cached));
+		final index: SymbolIndex = PhaseTimings.measure('pass report index', () -> IndexScope.report(files, cached));
 		final resolutionFiles: Null<Array<{ file: String, source: String }>> = PhaseTimings.measure(
 			'pass resolution files', () -> cached.resolutionFiles()
 		);
-		if (resolutionFiles != null)
-			PhaseTimings.time(
-				'pass resolution index',
-				() -> cached.setResolutionIndex(SymbolIndex.build(resolutionFiles, cached, cached.thirdPartyFiles()))
-			);
+		if (resolutionFiles != null) PhaseTimings.time('pass resolution index', () -> cached.rebuildResolutionIndex(resolutionFiles));
 		// The `--range` window is applied HERE, on the pass's own sources, and nowhere else in
 		// the fix path: one filter point is what keeps the flag from meaning different things to
 		// the report and to the fixer. Re-measured every pass, because a pass rewrites the file

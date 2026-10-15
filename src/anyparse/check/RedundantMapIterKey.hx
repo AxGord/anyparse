@@ -3,10 +3,10 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.check.ValueIterationProof.ValueIteration;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.MemberReach;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
@@ -71,7 +71,7 @@ final class RedundantMapIterKey implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
+		final index: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		return RunScan.collectWith(
 			files, plugin, readSeams(plugin.refShape()),
 			(entry, tree, s, violations) ->
@@ -97,9 +97,7 @@ final class RedundantMapIterKey implements Check {
 			indexFor(tree, s.forStmtKind, nodeByKey);
 			final kindOf: (loop:QueryNode, valueBinderKinds:Array<String>) -> ValueIteration = proofOf(
 				tree, source, file, plugin,
-				RefactorSupport.lazySymbolIndex(
-					[{ file: file, source: source }], plugin, RefactorSupport.resolutionIndexOf(plugin) ?? index
-				)
+				IndexScope.lazySymbolIndex([{ file: file, source: source }], plugin, IndexScope.resolutionIndexOf(plugin) ?? index)
 			);
 			var reach: Null<MemberReach> = null;
 			final reachOf: () -> MemberReach = () -> {

@@ -165,7 +165,7 @@ final class MoveSymbol {
 		plugin: GrammarPlugin, typeRefShape: TypeRefShape
 	): MoveResult {
 		// 1-3. Build the index, resolve the type at the cursor, and run the guards.
-		final index: SymbolIndex = SymbolIndex.build(scopeFiles, plugin);
+		final index: SymbolIndex = IndexScope.over(scopeFiles, plugin);
 		final prep: MovePrep = resolveMoveTarget(index, scopeFiles, cursorFile, destFile, line, col, plugin);
 		final target: MoveTarget = switch prep {
 			case PErr(message): return Err(message);

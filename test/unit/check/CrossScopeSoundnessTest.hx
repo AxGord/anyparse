@@ -288,7 +288,7 @@ class CrossScopeSoundnessTest extends Test {
 	 * The `<kind>:<rule>@<cell>` pairs a reflective string answers differently depending on WHICH half
 	 * of one declared resolution scope it sits in. EMPTY by the same contract as the two above, and
 	 * that emptiness IS the verdict on the fork: the two seams the check layer forked over — the wide
-	 * `RefactorSupport.widestScopeIndex` and the narrow `resolutionProjectSourcesOf` — are now one
+	 * `IndexScope.widestScopeIndex` and the narrow `resolutionProjectSourcesOf` — are now one
 	 * (`ReflectionScan.scopeFiles`), so a library source and a `resolutionRoots` source carry the same
 	 * weight for a name-keyed question.
 	 */
@@ -323,7 +323,7 @@ class CrossScopeSoundnessTest extends Test {
 	 * analysed scope, `field-init-at-declaration` loses its sole-assignment CLAIM rather than the
 	 * behaviour its move preserves). `map-keys-lookup` does NOT hold — `receiverTypeAllows` answers TRUE
 	 * for an unresolvable receiver, so a narrower set makes it FLAG a loop the wider one SKIPS — but
-	 * `RefactorSupport.lazySymbolIndex` prefers the RESOLUTION index whenever a scope exists, so the
+	 * `IndexScope.lazySymbolIndex` prefers the RESOLUTION index whenever a scope exists, so the
 	 * cell it wants is a `LIBS_ONLY`-side one: a filed defect, not a line here. On `string-catch` the
 	 * two-candidate control does NOT transfer (the gate degrades the RULE, both arms write nothing) and
 	 * the rule reaches the roster through `SCOPE_GATED_REFUSERS`. Every autofix OUTSIDE the license
@@ -598,7 +598,7 @@ class CrossScopeSoundnessTest extends Test {
 	 * string must not decide the answer.
 	 *
 	 * The fork this pins was two seams answering one question. `check/Naming`'s reflection scan asked
-	 * `RefactorSupport.widestScopeIndex` — report UNION the library, so an installed haxelib and the std
+	 * `IndexScope.widestScopeIndex` — report UNION the library, so an installed haxelib and the std
 	 * counted — while `check/UnusedPrivate`'s asked `resolutionProjectSourcesOf`, report UNION the
 	 * declared `resolutionRoots` and nothing third-party. Both err toward refusal, so neither was a
 	 * correctness bug on its own; what they were is two incompatible precedents for the next site.
@@ -663,7 +663,7 @@ class CrossScopeSoundnessTest extends Test {
 	 * declaring file and only the declared SHAPE of the resolution scope moves
 	 * (`ROOTS_AND_LIBRARY` -> `LIBS_ONLY`), so a rule whose answer differs read the scope, whatever
 	 * seam it read it through. That matters because the seams are not one: `unused-private` and
-	 * `unused-parameter` ask `RefactorSupport.widestScopeIndex`, `unused-public-member`
+	 * `unused-parameter` ask `IndexScope.widestScopeIndex`, `unused-public-member`
 	 * `resolutionSourcesOf`, `prefer-final-field` reaches it through `MemberWriteScan`, and a grep
 	 * for any fixed list of them undercounts — which is how `prefer-final-field` sat in the old
 	 * floor's count of five while nobody had classified it.

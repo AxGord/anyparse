@@ -6,11 +6,11 @@ import anyparse.check.Check.GroupedFix;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.ModuleScan;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
@@ -256,7 +256,7 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final index: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin);
+		final index: Null<SymbolIndex> = IndexScope.resolutionIndexOf(plugin);
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final plan: Null<FilePlan> = planFor(entry.source, plugin, index, null, entry.file);
@@ -336,7 +336,7 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 		// is defensive only: through `run` a null resolution index makes EVERY finding unproven, so
 		// the empty `wanted` has already returned above — it exists for a caller that hands in
 		// violations it built itself.
-		final scope: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
+		final scope: Null<SymbolIndex> = IndexScope.resolutionIndexOf(plugin) ?? index;
 		final plan: Null<FilePlan> = planFor(source, plugin, scope, wanted, violations[0].file);
 		if (plan == null) return [];
 		// One bucket can serve SEVERAL paths (the printer merges imports landing on one anchor), so

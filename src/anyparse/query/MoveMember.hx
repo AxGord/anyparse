@@ -480,7 +480,7 @@ final class MoveMember {
 		srcFile: String, srcTypeName: String, memberNames: Array<String>, destTypeName: String, closure: Bool,
 		scopeFiles: Array<{ file: String, source: String }>, plugin: GrammarPlugin
 	): PrepResult {
-		final index: SymbolIndex = SymbolIndex.build(scopeFiles, plugin);
+		final index: SymbolIndex = IndexScope.over(scopeFiles, plugin);
 		// Whole-scope on purpose, and NOT the per-name question the check layer asks. What makes it
 		// right here is the loop below: it re-parses EVERY scope file and returns `PErr` on the same
 		// thrown exception the index skipped on, so a skipped file refuses a few lines later whether

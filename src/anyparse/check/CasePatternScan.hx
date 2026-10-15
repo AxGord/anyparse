@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.query.CasePatterns;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.PatternNameScope;
 import anyparse.query.QueryNode;
@@ -352,7 +353,7 @@ final class CasePatternScan {
 		return {
 			parsed: parsed,
 			constants: declaredConstantNames(seams, [for (entry in parsed) entry.tree]),
-			index: SymbolIndex.build(files, plugin)
+			index: IndexScope.report(files, plugin)
 		};
 	}
 

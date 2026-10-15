@@ -238,7 +238,7 @@ final class MemberWriteScan {
 	 * all bail before the subtype question never pays for it.
 	 */
 	private static inline function scopeOf(index: SymbolIndex, plugin: GrammarPlugin): SymbolIndex {
-		return RefactorSupport.resolutionIndexOf(plugin) ?? index;
+		return IndexScope.resolutionIndexOf(plugin) ?? index;
 	}
 
 	/**
