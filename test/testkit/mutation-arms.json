@@ -20554,7 +20554,7 @@
 			"type": "anyparse.check.ReflectiveReach",
 			"method": "subjectEnum",
 			"find": "final written: Null<String> = subjectType(BoolExprShape.unwrapParens(held.children[0], _shape.parenKind));",
-			"replace": "final only: Array<String> = _graph.types.imports.enumsDeclaring(ctor); if (only.length == 1) return only[0]; final written: Null<String> = null;",
+			"replace": "final only: Array<String> = @:privateAccess _graph.types.imports._enumConstructors[ctor] ?? []; if (only.length == 1) return only[0]; final written: Null<String> = null;",
 			"note": "a capture is typed by the one indexed enum declaring its constructor's name, whatever the subject is (review R3 H2)"
 		},
 		{
