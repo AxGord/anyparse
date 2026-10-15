@@ -341,6 +341,8 @@ final class Linter {
 			// final field, a type no other rule rewrites — `shorten-type-ref` only touches a QUALIFIED reference, which is
 			// what this rule writes when the abstract is not yet imported, so the two compose across passes.
 			new TypedEventConstant(),
+			// Inert without an `ownedTypes` declaration, and report-only: registry order carries no meaning.
+			new OwnedTypes(),
 			new StringLiteralDup(),
 			// The TYPE-level twin of `string-literal-dup`, and the two can never claim the same
 			// node: that rule groups string LITERALS, this one anonymous structure TYPES. Both are

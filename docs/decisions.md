@@ -2612,3 +2612,17 @@ decided the question; it may not become a record of runs.
   round6/frag byte-identical (rows unchanged, recall full); all rules (`--no-oracle --all`) on the 3 TM trees and
   anyparse src: JSON byte-identical. Rule time on tm-1d1ba147 (interleaved, median of 3) dc09aa52 6.12 / 23d4b78b 6.05 /
   L3 6.01 s; full lint 25.59 / 24.96 / 24.80 s — branch `feat/ts-precision-7`
+- `owned-types` was to match an INSTANCE member by name wherever its receiver is untyped → that reports every
+  same-named method of every type; only a static, which Haxe reaches through a type receiver alone, is matched by name
+  when the receiver's meaning is `Unknown` — branch `feat/infra-A`
+- `owned-types` was to look a static member up through the receiver type's supertypes, as an instance member is →
+  Haxe 4.3.7 rejects `B.make()` for a static of `B`'s superclass (`Class<B> has no field make`), so the type itself must
+  declare it; instance members keep the supertype walk (`ConfiguredTypes.memberOf`) — branch `feat/infra-A`
+- `owned-types` was to read a simple name with its own import / package lookup → it asks `TypeNameBinding.tierOf`, and
+  a qualified one `TypeRefIndex.resolveTypeRefAll`: `Free` (no tier binds the name) is skipped as provably not the
+  owned type, `Unknown` is REPORTED (positive whitelist — an unproved reach is a reach); the qualified path of the
+  enclosing type comes from `TypeRefIndex.importPathFor`, made public rather than spelled a second time — branch
+  `feat/infra-A`
+- the module declaring an owned type was to be listed among its `owners` by hand → it always owns it: its own
+  declaration and body are no reach past the boundary, and every declaration would otherwise repeat its own module —
+  branch `feat/infra-A`

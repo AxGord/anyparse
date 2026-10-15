@@ -44,6 +44,10 @@ import anyparse.grammar.json.JValue;
  *
  * `reportSummaryThreshold` is how many findings a TEXT report may list before
  * it prints a per-rule summary instead (`LintConfig.reportSummaryThreshold`).
+ *
+ * `ownedTypes` declares which layer of the project owns a type or a member — each entry `{types, members,
+ * owners, why}`, read by `OwnedTypesDeclaration` into `TypeOwnership` for the `owned-types` rule. Raw `JValue`
+ * entries for the reason `frameworks` has them: a typo in one entry degrades that entry, not the document.
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef ApqLintConfig = {
@@ -73,4 +77,6 @@ typedef ApqLintConfig = {
 	@:optional var frameworks: Array<JValue>;
 
 	@:optional var reportSummaryThreshold: Int;
+
+	@:optional var ownedTypes: Array<JValue>;
 };
