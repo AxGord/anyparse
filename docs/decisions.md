@@ -2626,3 +2626,20 @@ decided the question; it may not become a record of runs.
 - the module declaring an owned type was to be listed among its `owners` by hand → it always owns it: its own
   declaration and body are no reach past the boundary, and every declaration would otherwise repeat its own module —
   branch `feat/infra-A`
+- every rule was to build the index its question needs (`SymbolIndex.build` in 63 places, `FieldWriteIndex.build` in 4,
+  each choosing report vs resolution scope on its own) → `IndexScope` names the choice — `report` (exactly the files
+  handed in), `resolution` (the host's report UNION library UNION std scope, else `report`), `widest` (the resolution
+  scope only when DECLARED, else `report`), `over` (an explicit other set: an op's `--scope`, a per-file rebuild, a
+  graph's held files) and `reportWrites` / `resolutionWrites` — and the run host builds: `CachingGrammarPlugin.indexOver`
+  / `writeIndexOver` memoise one index per file set, keyed by the third-party tag and the length-prefixed ordered paths
+  and validated by the sources, so a `--fix` pass that rewrote a file rebuilds it. `resolutionIndexOf`,
+  `widestScopeIndex`, `lazySymbolIndex`, `fieldWriteIndexOf` moved there from `RefactorSupport`. Every site keeps its
+  file set and its scope (a narrow site stays narrow: `redundant-map-exists`, `field-init-at-declaration` and the
+  `fix` fallbacks are report / one-file builds on purpose), so answers are unchanged and only the build count drops —
+  branch `feat/infra-B1`
+- the index memo was to live as long as the run → it dies with the ambient-import memos (`invalidateAmbientChain`, the
+  head of every `--fix` pass): `SymbolIndexBuilder` reads the ambient `import.hx` chain through the host, and a pass may
+  have rewritten one without touching the report sources the memo validates — branch `feat/infra-B1`
+- the `--fix` loop was to keep building the per-pass resolution index itself → the host rebuilds it
+  (`rebuildResolutionIndex`) outside the memo, since every pass replaces it and a kept entry would pin a whole
+  library-wide index per pass — branch `feat/infra-B1`
