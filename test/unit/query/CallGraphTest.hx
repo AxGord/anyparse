@@ -1502,7 +1502,7 @@ class CallGraphTest extends Test {
 	 * element its own `iterator()` says, and a project `Vector<T>` indexed is no std vector; the std types stay typed.
 	 */
 	@:pin('control') @:killer('M-TS-STD-CONTAINER') @:killer('M-TS-STD-CONTAINER-DECLARED') @:killer('M-TS-STD-CONTAINER-WHERE')
-	@:killer('M-TS-STD-CONTAINER-GUARDED')
+	@:killer('M-TS-STD-CONTAINER-GUARDED') @:killer('M-TS-STD-CONTAINER-STD-OWN')
 	public function testAContainerIsTheStandardOneOnlyWhereItsNameMeansIt(): Void {
 		#if (sys || nodejs)
 		if (anyparse.query.StdResolver.stdDir() == null) {
@@ -1532,6 +1532,19 @@ class CallGraphTest extends Test {
 			'package app; class List<T> { public function new() {} public function iterator():Iterator<utils.Lock> return null; }'
 			+ ' class D { static function own():Void { final l:List<sys.thread.Lock> = null; for (x in l) x.wait(); } }'
 		]);
+		// the std itself indexed as a library: its `Array` sits at the standard path
+		final project: Array<{ file: String, source: String }> = [
+			{ file: 'utils/Lock.hx', source: lock },
+			{
+				file: 'app/X.hx',
+				source: 'package app; class X { static function arr():Void { final a:Array<sys.thread.Lock> = []; a[0].wait(); } }'
+			}
+		];
+		final std: Array<{ file: String, source: String }> = [
+			{ file: 'std/Array.hx', source: 'extern class Array<T> { public function new(); public function push(x:T):Int; }' }
+		];
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final indexed: CallGraph = CallGraph.build(project, plugin, SymbolIndex.build(project.concat(std), plugin));
 		function targets(graph: CallGraph, from: String): Array<String> {
 			return [for (e in graph.outEdges(from)) if (e.kind == Call) e.to];
 		}
@@ -1547,6 +1560,7 @@ class CallGraphTest extends Test {
 			targets(g, 'W.arr'), 'a wildcard of a package the tables cannot list, no declaration bearing the name'
 		);
 		Assert.same(['Lock.wait'], targets(own, 'D.own'), 'a List the module declares');
+		Assert.same(['sys.thread.Lock.wait'], targets(indexed, 'X.arr'), 'the std\'s own Array, indexed as a library');
 		#else
 		Assert.pass('non-sys target');
 		#end

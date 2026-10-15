@@ -21197,6 +21197,14 @@
 			"find": "if (guarded.exists(g -> g.name == path && !standard.contains(g.path))) return false;",
 			"replace": "",
 			"note": "a name an #if-guarded import binds to another type on some build still reads as the std container"
+		},
+		{
+			"name": "M-TS-STD-CONTAINER-STD-OWN",
+			"type": "anyparse.query.CallGraphImports",
+			"method": "namesStandard",
+			"find": "if (!standard.contains(d) && !standard.contains(SourceText.parentPath(d))) d",
+			"replace": "d",
+			"note": "the std's own declaration, indexed as a library, counts as a namesake and refuses the std container"
 		}
 	]
 }
