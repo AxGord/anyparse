@@ -659,7 +659,7 @@ The order, each tier compiled on Haxe 4.3.7 in type position (`docs/decisions.md
 The answer is `Bound` (declarations of the index), `Free` (a declaration outside the index — a built-in, a std or
 library type — or nothing at all) or `Unknown`. `Unknown` is the positive whitelist: a tier that could bind the name to
 something nothing here can read answers it, and no lower tier is asked — an import of a module neither the index, nor
-the run's resolution scope (`SymbolIndexHost.moduleTypesInScope`, the files of that module's name alone), nor the std
+the run's resolution scope (`SymbolIndexHost.moduleTypesInScope`: the file the compiler would load, `<root>/a/b/C.hx`, parsed only when its text spells the name; a ROOT module's candidates parsed and their package compared), nor the std
 (`StdTypes.moduleTypes`, any std module file) can read; a wildcard over a package the index does not hold, unless the
 std listing proves the module absent; an unbounded ambient chain; a skipped file that could be the module; a `#if`-guarded
 statement whose other builds bind something else (§ "Ambient imports" above). Reading a module outside the index is what

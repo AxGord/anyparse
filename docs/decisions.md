@@ -2701,3 +2701,12 @@ decided the question; it may not become a record of runs.
   repeated module on a second class path (`cpN/`) — the shape two declarations of one module really have; 20
   `CrossRenameMemberSliceTest` fixtures renamed; `OrphanAccessorCheckTest`'s parent-package case is now RESOLVED (a
   proven orphan, `Warning`) and its speculative-fallback tests moved to an unrelated package — branch `feat/infra-B2`
+- the binding was to read a module outside the index by parsing every scope file of its name, and the scope was to be
+  read with one `haxelib libpath` per declared library → measured on TM (`--rule thread-safety`, 5.8 → 7.8 s): 0.72 s
+  was twenty serial `haxelib libpath` spawns, 0.45 s parsing imported library modules. `haxelib libpath a b …` takes
+  several names and prints one root per line (`HaxelibResolver.libSourceDirs`; a failed or short answer — one name not
+  installed fails the call whole — falls back to a call per name). The module is the file the compiler loads,
+  `<root>/a/b/C.hx`, and it is parsed only when its text spells the asked name (a file that never spells it declares no
+  type of it); a ROOT module's path is its bare file name, which any directory holds, so its candidates are parsed and
+  their package compared — taking `openfl/events/EventDispatcher.hx` for a toplevel `EventDispatcher` lost 6 findings
+  on bd943dac before that check — branch `feat/infra-B2`
