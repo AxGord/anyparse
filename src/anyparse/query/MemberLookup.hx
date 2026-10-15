@@ -306,11 +306,11 @@ final class MemberLookup {
 	 * needing the shadow answer on an aliased nominal must read a false here as "unprovable"
 	 * rather than as "declared".
 	 */
-	public function typeProvablyLacksMember(typeName: String, member: String, ?fromFile: String): Bool {
+	public function typeProvablyLacksMember(typeName: String, member: String, ?fromFile: String, ?at: Int): Bool {
 		// A caller may pass `Dynamic` itself — it reaches an `interfaces` list from an
 		// `implements Dynamic<T>` clause — and it declares no named member (see `dynamicSupertypeRef`).
 		if (dynamicSupertypeRef(typeName)) return true;
-		final start: Null<ResolvedType> = _refs.resolveStartType(typeName, fromFile);
+		final start: Null<ResolvedType> = _refs.resolveStartType(typeName, fromFile, at);
 		return start != null && lacksMemberClosure(start, member, []);
 	}
 
@@ -364,8 +364,8 @@ final class MemberLookup {
 	 * declares to before any `using` of the file. False — not proven — when any link of that closure does not resolve to
 	 * one declaration, a `@:forward` abstract exposes an underlying type, or a supertype is `Dynamic`.
 	 */
-	public function closureFreeOfExtensionTypes(typeName: String, ?fromFile: String): Bool {
-		final start: Null<ResolvedType> = _refs.resolveStartType(typeName, fromFile);
+	public function closureFreeOfExtensionTypes(typeName: String, ?fromFile: String, ?at: Int): Bool {
+		final start: Null<ResolvedType> = _refs.resolveStartType(typeName, fromFile, at);
 		return start != null && freeOfExtensionTypes(start, []);
 	}
 
@@ -429,7 +429,7 @@ final class MemberLookup {
 			// hop lands on the alias, hits the cycle test below and proves nothing.
 			final target: Null<String> = t.aliasTargetRaw;
 			if (target == null) return false;
-			final next: Null<ResolvedType> = _refs.resolveTypeRef(target, cur.file);
+			final next: Null<ResolvedType> = _refs.resolveTypeRef(target, cur.file, cur.type.span.from);
 			// An alias CYCLE proves nothing — unlike a supertype cycle, whose closure is still
 			// fully enumerated, a chain that re-enters itself never reaches a member host at all.
 			return next == null || seen.contains(_refs.seenKey(next)) ? false : lacksMemberClosure(next, member, seen);
@@ -440,7 +440,7 @@ final class MemberLookup {
 		// packages picks the one actually in scope instead of failing the whole proof. A
 		// reference resolving to zero OR to several decls is refused identically: unresolved.
 		for (raw in t.supertypesRaw) if (!dynamicSupertypeRef(raw)) {
-			final anc: Null<ResolvedType> = _refs.resolveTypeRef(raw, cur.file);
+			final anc: Null<ResolvedType> = _refs.resolveTypeRef(raw, cur.file, cur.type.span.from);
 			if (anc == null || !lacksMemberClosure(anc, member, seen)) return false;
 		}
 		return true;
@@ -453,11 +453,11 @@ final class MemberLookup {
 		if (t.bringsExtensions || t.abstractForwardUnderlying != null) return false;
 		if (t.kind == SymbolIndex.TYPEDEF_DECL_KIND && !t.isAnonStruct) {
 			final target: Null<String> = t.aliasTargetRaw;
-			final next: Null<ResolvedType> = target == null ? null : _refs.resolveTypeRef(target, cur.file);
+			final next: Null<ResolvedType> = target == null ? null : _refs.resolveTypeRef(target, cur.file, cur.type.span.from);
 			return next != null && !seen.contains(_refs.seenKey(next)) && freeOfExtensionTypes(next, seen);
 		}
 		for (raw in t.supertypesRaw) {
-			final anc: Null<ResolvedType> = dynamicSupertypeRef(raw) ? null : _refs.resolveTypeRef(raw, cur.file);
+			final anc: Null<ResolvedType> = dynamicSupertypeRef(raw) ? null : _refs.resolveTypeRef(raw, cur.file, cur.type.span.from);
 			if (anc == null || !freeOfExtensionTypes(anc, seen)) return false;
 		}
 		return true;
@@ -501,12 +501,12 @@ final class MemberLookup {
 		if (t.kind == SymbolIndex.TYPEDEF_DECL_KIND && !t.isAnonStruct) {
 			final target: Null<String> = t.aliasTargetRaw;
 			if (target == null) return null;
-			final next: Null<ResolvedType> = _refs.resolveTypeRef(target, cur.file);
+			final next: Null<ResolvedType> = _refs.resolveTypeRef(target, cur.file, cur.type.span.from);
 			return next == null || seen.contains(_refs.seenKey(next)) ? null : declaredMemberClosure(next, member, seen);
 		}
 		if (t.abstractForwardUnderlying != null) return null;
 		for (raw in t.supertypesRaw) if (!dynamicSupertypeRef(raw)) {
-			final anc: Null<ResolvedType> = _refs.resolveTypeRef(raw, cur.file);
+			final anc: Null<ResolvedType> = _refs.resolveTypeRef(raw, cur.file, cur.type.span.from);
 			if (anc == null) continue;
 			final up: Null<{ member: MemberInfo, host: ResolvedType }> = declaredMemberClosure(anc, member, seen);
 			if (up != null) return up;
@@ -528,7 +528,7 @@ final class MemberLookup {
 	private function ancestorsProof(cur: ResolvedType, field: String, seen: Array<String>): SupertypeProof {
 		var unreachable: Bool = false;
 		for (raw in cur.type.supertypesRaw) if (!dynamicSupertypeRef(raw)) {
-			final anc: Null<ResolvedType> = _refs.resolveTypeRef(raw, cur.file);
+			final anc: Null<ResolvedType> = _refs.resolveTypeRef(raw, cur.file, cur.type.span.from);
 			switch anc == null ? SupertypeProof.Unreachable : hostProof(anc, field, seen) {
 				case SupertypeProof.Declares:
 					return SupertypeProof.Declares;
@@ -555,7 +555,7 @@ final class MemberLookup {
 		if (t.abstractForwardUnderlying != null) return SupertypeProof.Unreachable;
 		if (t.kind != SymbolIndex.TYPEDEF_DECL_KIND) return ancestorsProof(cur, field, seen);
 		final target: Null<String> = t.isAnonStruct ? null : t.aliasTargetRaw;
-		final next: Null<ResolvedType> = target == null ? null : _refs.resolveTypeRef(target, cur.file);
+		final next: Null<ResolvedType> = target == null ? null : _refs.resolveTypeRef(target, cur.file, cur.type.span.from);
 		return next == null ? SupertypeProof.Unreachable : hostProof(next, field, seen);
 	}
 
@@ -578,7 +578,7 @@ final class MemberLookup {
 	private function inheritsInstanceMemberWalk(cur: ResolvedType, member: String, seen: Array<String>): Null<Bool> {
 		if (!_refs.markSeen(cur, seen)) return null;
 		for (raw in cur.type.supertypesRaw) {
-			final anc: Null<ResolvedType> = _refs.resolveTypeRef(raw, cur.file);
+			final anc: Null<ResolvedType> = _refs.resolveTypeRef(raw, cur.file, cur.type.span.from);
 			if (anc == null) continue;
 			final ancestor: ResolvedType = anc;
 			final declared: Null<Bool> = declaredInstanceMember(ancestor.type, member);
@@ -600,7 +600,7 @@ final class MemberLookup {
 		final direct: Null<MemberInfo> = cur.type.members.find(m -> m.name == member);
 		if (direct != null) return direct.typeSource;
 		for (raw in cur.type.supertypesRaw) {
-			final anc: Null<ResolvedType> = _refs.resolveTypeRef(raw, cur.file);
+			final anc: Null<ResolvedType> = _refs.resolveTypeRef(raw, cur.file, cur.type.span.from);
 			if (anc == null) continue;
 			final src: Null<String> = memberTypeSourceWalk(anc, member, seen);
 			if (src != null) return src;
@@ -630,7 +630,7 @@ final class MemberLookup {
 		if (declared) return inherited && (cur.type.hasBuild || autoBuildAtOrAbove(cur, [])) ? null : false;
 		var found: Null<Bool> = null;
 		for (raw in cur.type.supertypesRaw) {
-			final anc: Null<ResolvedType> = _refs.resolveTypeRef(raw, cur.file);
+			final anc: Null<ResolvedType> = _refs.resolveTypeRef(raw, cur.file, cur.type.span.from);
 			if (anc == null) continue;
 			final up: Null<Bool> = memberGetterWalk(anc, field, true, seen);
 			if (up == true) return true;
@@ -652,7 +652,7 @@ final class MemberLookup {
 		if (!_refs.markSeen(cur, seen)) return false;
 		if (cur.type.hasAutoBuild) return true;
 		for (raw in cur.type.supertypesRaw) {
-			final anc: Null<ResolvedType> = _refs.resolveTypeRef(raw, cur.file) ?? uniqueDeclarationOf(raw);
+			final anc: Null<ResolvedType> = _refs.resolveTypeRef(raw, cur.file, cur.type.span.from) ?? uniqueDeclarationOf(raw);
 			if (anc == null) continue;
 			if (autoBuildAtOrAbove(anc, seen)) return true;
 		}

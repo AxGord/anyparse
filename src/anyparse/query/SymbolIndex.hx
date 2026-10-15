@@ -664,7 +664,7 @@ final class SymbolIndex {
 		_abstractKinds = plugin.refShape().underlyingThisTypeKinds ?? [];
 		_thirdParty = thirdParty;
 		_typeSyntax = plugin.typeSyntax;
-		refs = new TypeRefIndex(files, skipped, plugin);
+		refs = new TypeRefIndex(files, skipped, sources, plugin);
 		subtypes = new SubtypeGraph(files, sources, refs);
 		members = new MemberLookup(refs);
 		structural = new StructuralTypes(files, refs, subtypes, members, plugin.typeSyntax);
@@ -944,9 +944,9 @@ final class SymbolIndex {
 	 * std — when every candidate yields the same verdict). Empty when `fromFile` is
 	 * not indexed or nothing matches.
 	 */
-	public function resolveTypeRefsFrom(raw: String, fromFile: String): Array<{ file: FileInfo, type: TypeDeclInfo }> {
+	public function resolveTypeRefsFrom(raw: String, fromFile: String, ?at: Int): Array<{ file: FileInfo, type: TypeDeclInfo }> {
 		final fi: Null<FileInfo> = fileInfo(fromFile);
-		return fi == null ? [] : refs.resolveTypeRefAll(raw, fi);
+		return fi == null ? [] : refs.resolveTypeRefAll(raw, fi, at);
 	}
 
 	/**

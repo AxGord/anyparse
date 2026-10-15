@@ -5,6 +5,8 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
 
+using Lambda;
+
 /**
  * Which conditional-compilation BRANCH a source position sits in, for checks that compare
  * sibling constructs.
@@ -115,6 +117,19 @@ final class CondBranchPath {
 		if (a.length != b.length) return false;
 		for (i in 0...a.length) if (a[i].branch != b[i].branch || a[i].condition != b[i].condition) return false;
 		return true;
+	}
+
+	/**
+	 * Whether every build that compiles a position at `inner` also compiles one at `outer`: each region `outer` sits in
+	 * holds `inner` in the SAME branch — the same region and branch, or a branch of the same spelled condition chain (two
+	 * sibling regions `#if a … #end #if a … #end` guard one set of builds). An empty `outer` is always true. A chain that
+	 * implies `outer`'s only logically (`#if (a && b)` against `#if a`) is not read and answers false — the direction that
+	 * keeps a caller from trusting a guard it cannot prove.
+	 */
+	public static function within(inner: Array<CondFrame>, outer: Array<CondFrame>): Bool {
+		return outer.foreach(
+			o -> inner.exists(i -> i.branch == o.branch && (i.region == o.region || (o.condition != '' && i.condition == o.condition)))
+		);
 	}
 
 	/**

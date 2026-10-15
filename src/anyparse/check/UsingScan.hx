@@ -492,7 +492,7 @@ final class UsingScan {
 		final seen: Array<TypeDeclInfo> = [];
 		while (cur.type.kind == SymbolIndex.TYPEDEF_DECL_KIND && !cur.type.isAnonStruct) {
 			final target: Null<String> = cur.type.aliasTargetRaw;
-			final next: Null<ResolvedType> = target == null ? null : index.refs.resolveTypeRef(target, cur.file);
+			final next: Null<ResolvedType> = target == null ? null : index.refs.resolveTypeRef(target, cur.file, cur.type.span.from);
 			if (next == null || seen.contains(next.type)) return null;
 			seen.push(cur.type);
 			cur = next;

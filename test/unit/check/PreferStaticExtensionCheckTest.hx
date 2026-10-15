@@ -950,15 +950,17 @@ class PreferStaticExtensionCheckTest extends Test {
 	}
 
 	/**
-	 * The `#if` region guards the IMPORT RUN only — the class, and the call the rewrite touches, sit
-	 * OUTSIDE it. `conditionalFiles`'s region guards the whole body instead, which is the shape that
-	 * already worked; this one is its counterexample.
+	 * The `#if` region guards the `using` only — the class, and the call the rewrite touches, sit OUTSIDE it.
+	 * `conditionalFiles`'s region guards the whole body instead, which is the shape that already worked; this one is its
+	 * counterexample. The receiver's `import sub.Widget;` stays outside the region, and the module sits in the root package:
+	 * the build without `FLAG` then binds `Ext` to the root `Ext.hx` the index holds (a packaged module would ask the
+	 * unread `top.Ext` first), so the refusal is the `using`'s.
 	 */
 	private function guardedImportRunFiles(): Array<{ file: String, source: String }> {
 		return [
 			{
 				file: 'C.hx',
-				source: 'package top;\n\n#if FLAG\nimport sub.Widget;\n\nusing Ext;\n#end\n\nclass C {\n'
+				source: 'import sub.Widget;\n\n#if FLAG\nusing Ext;\n#end\n\nclass C {\n'
 					+ '\tfunction f(w:Widget):Void {\n\t\tExt.deco(w, 1);\n\t}\n}\n'
 			},
 			{ file: 'Ext.hx', source: EXT_SOURCE },

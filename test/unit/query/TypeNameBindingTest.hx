@@ -213,12 +213,52 @@ class TypeNameBindingTest extends Test {
 
 	@:pin('control')
 	@:killer('M-BINDING-GUARDED-OTHER-BUILD')
-	public function testAGuardedImportBindsWhereNoOtherBuildBindsTheName(): Void {
+	public function testAGuardedImportBindsWhereTheOtherBuildProvablyBindsNothing(): Void {
+		// The scope READS the toplevel module `T` and finds no type `T` in it, so a build without the import binds nothing.
+		final project: Array<{ file: String, source: String }> = [
+			{ file: 'Main.hx', source: '#if useA\nimport a.T;\n#end\n\nclass Main {\n\tvar t:T;\n}\n' }
+		];
+		final library: Array<{ file: String, source: String }> = [
+			{ file: 'a/T.hx', source: 'package a;\n\nclass T {}\n' },
+			{ file: 'T.hx', source: 'class Unrelated {}\n' }
+		];
+		final index: SymbolIndex = IndexScope.resolution(project, QueryTestHelpers.projectPlugin(project, library));
+		Assert.equals('a/T.hx#T', tierAt(index, 'T', 'Main.hx', 'var t:T'), 'the other build binds no `T`, so it compiles no use of it');
+	}
+
+	@:pin('control')
+	@:killer('M-BINDING-COGUARD-IGNORED')
+	public function testAUseInsideTheGuardedImportsBranchBindsIt(): Void {
+		// Compiled on 4.3.7 (b2-scratch/hx/g2): the build without the import has no `class M extends T` at all.
 		final index: SymbolIndex = indexOf([
 			'a/T.hx' => 'package a;\n\nclass T {}\n',
-			'Main.hx' => '#if macro\nimport a.T;\n#end\n\nclass Main {}\n'
+			'b/Other.hx' => 'package b;\n\nclass Other {}\n',
+			'M.hx' => '#if !useB\nimport a.T;\n\nclass M extends T {}\n#else\ntypedef M = b.Other;\n#end\n'
 		]);
-		Assert.equals('a/T.hx#T', tierText(index, 'T', 'Main.hx'), 'a build without the import binds no `T`, so it compiles no use of it');
+		Assert.equals('a/T.hx#T', tierAt(index, 'T', 'M.hx', 'extends T'), 'the use sits in the import\'s own branch');
+		Assert.equals('Unknown', tierText(index, 'T', 'M.hx'), 'with no use site, the other build\'s toplevel `T` is unread');
+	}
+
+	@:pin('control')
+	@:killer('M-BINDING-STRICT-UNREAD-PASS')
+	public function testAUseOutsideTheGuardedRegionIsUnknown(): Void {
+		// A build without `useA` compiles `var t:T` too, and what `T` names there is a toplevel module nothing here reads.
+		final index: SymbolIndex = indexOf([
+			'a/T.hx' => 'package a;\n\nclass T {}\n',
+			'Main.hx' => '#if useA\nimport a.T;\n#end\n\nclass Main {\n\tvar t:T;\n}\n'
+		]);
+		Assert.equals('Unknown', tierAt(index, 'T', 'Main.hx', 'var t:T'), 'the other build\'s binding is unread, not absent');
+	}
+
+	@:pin('control')
+	@:killer('M-COND-WITHIN-BRANCH-IGNORED')
+	public function testAUseInTheOtherBranchOfTheImportsRegionIsNotCoGuarded(): Void {
+		// The `#else` arm is exactly the build WITHOUT the import.
+		final index: SymbolIndex = indexOf([
+			'a/T.hx' => 'package a;\n\nclass T {}\n',
+			'Main.hx' => '#if useA\nimport a.T;\n#else\nclass Main {\n\tvar t:T;\n}\n#end\n'
+		]);
+		Assert.equals('Unknown', tierAt(index, 'T', 'Main.hx', 'var t:T'), 'the use is compiled only by builds without the import');
 	}
 
 	@:pin('control')
@@ -298,6 +338,18 @@ class TypeNameBindingTest extends Test {
 	private static function pinned(index: SymbolIndex, name: String, from: String): String {
 		final resolved: Null<ResolvedType> = index.refs.resolveStartType(name, from);
 		return resolved == null ? 'unresolved' : resolved.file.file;
+	}
+
+	/** `tierText` for `name` written at the first occurrence of `marker` in `from` — the use site's `#if` branch decides. */
+	private static function tierAt(index: SymbolIndex, name: String, from: String, marker: String): String {
+		final fi: Null<FileInfo> = index.fileInfo(from);
+		final source: Null<String> = index.sourceOf(from);
+		if (fi == null || source == null) throw new Exception('the fixture must index $from');
+		return switch index.refs.names.tierOf(name, fi, source.indexOf(marker)) {
+			case Bound(decls): [for (d in decls) '${d.file.file}#${d.type.name}'].join(' | ');
+			case Unknown: 'Unknown';
+			case Free: 'Free';
+		};
 	}
 
 }

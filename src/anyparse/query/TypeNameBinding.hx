@@ -1,5 +1,7 @@
 package anyparse.query;
 
+import anyparse.query.CondBranchPath.CondBranchIndex;
+import anyparse.query.CondBranchPath.CondFrame;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ImportInfo;
 import anyparse.query.SymbolIndex.ImportKind;
@@ -79,6 +81,9 @@ final class TypeNameBinding {
 		'ArrayAccess'
 	];
 
+	/** File path -> its `#if` directive marks (`CondBranchPath.scan`), read on the first question about the file. */
+	private final _branches: Map<String, CondBranchIndex> = [];
+
 	/** Every indexed file, handed over by the owning `TypeRefIndex`. */
 	private final _files: Array<FileInfo>;
 
@@ -88,30 +93,41 @@ final class TypeNameBinding {
 	/** The grammar a module outside the index is read with (`StdTypes.moduleTypes`), and the run host when it is one. */
 	private final _plugin: GrammarPlugin;
 
+	/** The indexed files' texts, by path — where a use site's `#if` branch is read (`branchPathAt`). */
+	private final _sources: Map<String, String>;
+
 	/** The tables `tables` builds on the first question. */
 	private var _tables: Null<Tables> = null;
 
-	/** Built by the owning `TypeRefIndex` over the same files. */
-	public function new(files: Array<FileInfo>, skipped: Array<String>, plugin: GrammarPlugin) {
+	/**
+	 * Built by the owning `TypeRefIndex` over the same files; `sources` are their texts, read for a use site's `#if` branch.
+	 */
+	public function new(files: Array<FileInfo>, skipped: Array<String>, sources: Map<String, String>, plugin: GrammarPlugin) {
 		_files = files;
 		_skipped = skipped;
+		_sources = sources;
 		_plugin = plugin;
 	}
 
-	/** Null when no tier provably answers; otherwise the declarations of the first tier that binds `name`. */
-	public function bind(name: String, fi: FileInfo): Null<Array<ResolvedType>> {
-		return switch tierOf(name, fi) {
+	/**
+	 * Null when no tier provably answers; otherwise the declarations of the first tier that binds `name` — written at offset
+	 * `at` of `fi` when the caller knows where (see `tierOf`).
+	 */
+	public function bind(name: String, fi: FileInfo, ?at: Int): Null<Array<ResolvedType>> {
+		return switch tierOf(name, fi, at) {
 			case Bound(decls): decls;
 			case Unknown, Free: null;
 		};
 	}
 
 	/**
-	 * The whole resolution order's answer for `name` written in `fi`: `Bound` by the first tier that binds it to
-	 * declarations of the index, `Unknown` when a tier could bind it to something the index cannot read, `Free`
-	 * when it binds a declaration outside the index (a built-in, a std or library type) or nothing at all.
+	 * The whole resolution order's answer for `name` written in `fi` — at offset `at` when the caller knows where: `Bound` by
+	 * the first tier that binds it to declarations of the index, `Unknown` when a tier could bind it to something the index
+	 * cannot read, `Free` when it binds a declaration outside the index (a built-in, a std or library type) or nothing at all.
+	 * The offset decides a `#if`-guarded statement: a use inside the statement's own branch is compiled only by the builds
+	 * that hold the statement (`coGuarded`); without one, the other builds are asked too (`bothBuilds`).
 	 */
-	public function tierOf(name: String, fi: FileInfo): Tier {
+	public function tierOf(name: String, fi: FileInfo, ?at: Int): Tier {
 		final own: Array<TypeDeclInfo> = fi.types.filter(t -> t.name == name);
 		if (own.length > 0) return Bound([for (t in own) { file: fi, type: t }]);
 		final explicit: Array<ImportInfo> = [];
@@ -121,7 +137,8 @@ final class TypeNameBinding {
 			lastFirst.reverse();
 			for (imp in lastFirst) (imp.kind == ImportKind.Wild ? wildcards : explicit).push(imp);
 		}
-		return switch explicitFrom(name, fi, { explicit: explicit, wildcards: wildcards }, 0, false) {
+		final order: StatementOrder = { explicit: explicit, wildcards: wildcards, use: at == null ? null : branchPathAt(fi, at) };
+		return switch explicitFrom(name, fi, order, 0, false) {
 			case Decls(decls): Bound(decls);
 			case Unreadable: Unknown;
 			case Outside, Pass: Free;
@@ -156,6 +173,20 @@ final class TypeNameBinding {
 		return files.length == 0 ? null : typesIn(files, null, true);
 	}
 
+	/** The `#if` regions and branches open at offset `at` of `fi` (`CondBranchPath`), its directives read once per file. */
+	public function branchPathAt(fi: FileInfo, at: Int): Array<CondFrame> {
+		var index: Null<CondBranchIndex> = _branches[fi.file];
+		if (index == null) {
+			final source: Null<String> = _sources[fi.file];
+			final read: CondBranchIndex = source == null
+				? []
+				: CondBranchPath.scan(source, _plugin.refShape(), _plugin.lexicalRegions(source));
+			_branches[fi.file] = read;
+			index = read;
+		}
+		return CondBranchPath.pathAt(index, at);
+	}
+
 	/**
 	 * The answer of the order from explicit statement `at` on: each explicit statement, the LAST of a list first
 	 * and the file's own list before the ambient chain's (nearest source first); then the chain's bound, the
@@ -164,7 +195,7 @@ final class TypeNameBinding {
 	private function explicitFrom(name: String, fi: FileInfo, order: StatementOrder, at: Int, strict: Bool): Answer {
 		for (i in at ... order.explicit.length) {
 			final imp: ImportInfo = order.explicit[i];
-			final guarded: Bool = imp.guarded;
+			final guarded: Bool = imp.guarded && !coGuarded(imp, fi, order.use);
 			switch statementAnswer(name, imp) {
 				case Pass:
 				case Decls(decls) if (guarded):
@@ -187,12 +218,13 @@ final class TypeNameBinding {
 	private function wildcardFrom(name: String, fi: FileInfo, order: StatementOrder, at: Int, strict: Bool): Answer {
 		for (i in at ... order.wildcards.length) {
 			final w: ImportInfo = order.wildcards[i];
+			final guarded: Bool = w.guarded && !coGuarded(w, fi, order.use);
 			switch wildcardAnswer(name, SourceText.parentPath(w.raw)) {
 				case Pass:
-				case Decls(decls) if (w.guarded):
+				case Decls(decls) if (guarded):
 					return bothBuilds(decls, wildcardFrom(name, fi, order, i + 1, true));
 				case answer:
-					return w.guarded ? Unreadable : answer;
+					return guarded ? Unreadable : answer;
 			}
 		}
 		return packageAnswer(name, fi.pkg, strict);
@@ -276,8 +308,13 @@ final class TypeNameBinding {
 		for (scope in chain) {
 			final mains: Array<ResolvedType> = typesIn(packages[scope] ?? [], name, true);
 			if (mains.length > 0) return Decls(mains);
-			final outside: Null<Answer> = strict ? declaresMain(outsideTypes(scope == '' ? name : '$scope.$name', name), name) : null;
-			if (outside != null && outside.match(Outside)) return Outside;
+			// In a guarded statement's other build a module nothing here can read is unknown, never taken as absent; one the
+			// index holds was read above.
+			final module: String = scope == '' ? name : '$scope.$name';
+			final outside: Null<Answer> = strict && !tables().modules.exists(module)
+				? declaresMain(outsideTypes(module, name), name) ?? Unreadable
+				: null;
+			if (outside != null && !outside.match(Pass)) return outside;
 		}
 		return Pass;
 	}
@@ -314,6 +351,16 @@ final class TypeNameBinding {
 		}
 		_tables = built;
 		return built;
+	}
+
+	/**
+	 * Whether the use at the `#if` branch `use` is compiled ONLY by builds that hold the file's own guarded statement `imp`:
+	 * the use sits in the statement's branch, or in one of the same spelled condition chain (`CondBranchPath.within`). The
+	 * other builds then compile no use of the name, so what it would bind there does not matter. An ambient source's
+	 * statement is in another file and guards nothing here.
+	 */
+	private function coGuarded(imp: ImportInfo, fi: FileInfo, use: Null<Array<CondFrame>>): Bool {
+		return use != null && fi.imports.indexOf(imp) >= 0 && CondBranchPath.within(use, branchPathAt(fi, imp.span.from));
 	}
 
 	/**
@@ -393,6 +440,9 @@ typedef ImportPath = {
 private typedef StatementOrder = {
 	final explicit: Array<ImportInfo>;
 	final wildcards: Array<ImportInfo>;
+
+	/** The `#if` branch the name is used in, null when the caller gave no offset. */
+	final use: Null<Array<CondFrame>>;
 }
 
 /** The index's files by module and by package, and the std's own `StdTypes` files among them (`StdResolver.isStdFile`). */

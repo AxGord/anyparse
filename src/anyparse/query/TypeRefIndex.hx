@@ -40,11 +40,11 @@ final class TypeRefIndex {
 
 	/**
 	 * Built once by the owning `SymbolIndex`, before any layer that resolves through it; `skipped` are the files it could
-	 * not parse, `plugin` the grammar a std module outside the index is read with.
+	 * not parse, `sources` the texts of those it did, `plugin` the grammar a std module outside the index is read with.
 	 */
-	public function new(files: Array<FileInfo>, skipped: Array<String>, plugin: GrammarPlugin) {
+	public function new(files: Array<FileInfo>, skipped: Array<String>, sources: Map<String, String>, plugin: GrammarPlugin) {
 		_files = files;
-		names = new TypeNameBinding(files, skipped, plugin);
+		names = new TypeNameBinding(files, skipped, sources, plugin);
 	}
 
 	/**
@@ -100,20 +100,21 @@ final class TypeRefIndex {
 	 * declaration it names, or null when nothing in the index provably is that declaration (an external
 	 * type, a tier the index cannot bound) or the answer is AMBIGUOUS (two class paths holding one
 	 * module). A simple `raw` is bound by `names`, the compiler's resolution order; a qualified one
-	 * matches on import path.
+	 * matches on import path. `at`, the offset `raw` is written at in `fromFile`, lets a
+	 * `#if`-guarded import decide a use inside its own branch (`TypeNameBinding.tierOf`).
 	 */
-	public function resolveTypeRef(raw: String, fromFile: FileInfo): Null<ResolvedType> {
-		final matches: Array<ResolvedType> = resolveTypeRefAll(raw, fromFile);
+	public function resolveTypeRef(raw: String, fromFile: FileInfo, ?at: Int): Null<ResolvedType> {
+		final matches: Array<ResolvedType> = resolveTypeRefAll(raw, fromFile, at);
 		return matches.length == 1 ? matches[0] : null;
 	}
 
 	/**
-	 * Every declaration `raw` resolves to from `fromFile` (see `resolveTypeRef`). A simple name is bound by
-	 * `names` — the compiler's resolution order, empty wherever no tier provably answers; a dotted one
-	 * matches on import path, the module-relative `Mod.Sub` as the fallback.
+	 * Every declaration `raw` resolves to from `fromFile` (see `resolveTypeRef`), written at offset `at` of it when the caller
+	 * knows where. A simple name is bound by `names` — the compiler's resolution order, empty wherever no tier provably
+	 * answers; a dotted one matches on import path, the module-relative `Mod.Sub` as the fallback.
 	 */
-	public function resolveTypeRefAll(raw: String, fromFile: FileInfo): Array<ResolvedType> {
-		if (raw.indexOf('.') < 0) return names.bind(raw, fromFile) ?? [];
+	public function resolveTypeRefAll(raw: String, fromFile: FileInfo, ?at: Int): Array<ResolvedType> {
+		if (raw.indexOf('.') < 0) return names.bind(raw, fromFile, at) ?? [];
 		final qualified: Array<ResolvedType> = resolveQualifiedRefAll(raw);
 		return qualified.length > 0 ? qualified : moduleRelativeRefAll(raw, fromFile);
 	}
@@ -152,10 +153,10 @@ final class TypeRefIndex {
 	 *  - neither: the name must be globally unique among indexed decls — the original rule, kept
 	 *    as the fallback so an out-of-index `fromFile` degrades to it instead of refusing.
 	 */
-	public function resolveStartType(typeName: String, fromFile: Null<String>): Null<ResolvedType> {
+	public function resolveStartType(typeName: String, fromFile: Null<String>, ?at: Int): Null<ResolvedType> {
 		if (fromFile != null) {
 			final host: Null<FileInfo> = _files.find(f -> f.file == fromFile);
-			if (host != null) return resolveTypeRef(typeName, host);
+			if (host != null) return resolveTypeRef(typeName, host, at);
 		}
 		if (typeName.indexOf('.') >= 0) {
 			final qualified: Array<ResolvedType> = resolveQualifiedRefAll(typeName);

@@ -237,7 +237,7 @@ final class ImportBindings {
 			if (type.isAnonStruct) return [];
 			final target: Null<String> = type.aliasTargetRaw;
 			if (target == null || (shape.nullableWrapperTypeNames ?? []).contains(SourceText.lastSegment(target))) return null;
-			final next: Null<ResolvedType> = _index()?.refs.resolveTypeRef(target, file);
+			final next: Null<ResolvedType> = _index()?.refs.resolveTypeRef(target, file, type.span.from);
 			return next == null || seen.contains(next.type) ? null : typeValuesOf(next.type, next.file, seen.concat([type]));
 		}
 		if (!abstracts.contains(type.kind) && !enums.contains(type.kind)) return [];

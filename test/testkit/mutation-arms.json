@@ -3302,7 +3302,7 @@
 			"name": "M-AMBIENT-GUARDED-UNION",
 			"type": "anyparse.query.TypeNameBinding",
 			"method": "explicitFrom",
-			"find": "final guarded: Bool = imp.guarded;",
+			"find": "final guarded: Bool = imp.guarded && !coGuarded(imp, fi, order.use);",
 			"replace": "final guarded: Bool = false;",
 			"note": "no explicit statement is ever seen as `#if`-guarded, so the engine pins the declaration ONE build resolves where the builds disagree"
 		},
@@ -9550,11 +9550,11 @@
 			"method": "ofBinding",
 			"find": [
 				"if (typeName == null || isTypeParamAt(typeName, bindingFrom)) return Unproven;",
-				"resolve(_typeSources[bindingFrom] ?? typeName, _file, params, 0, [])"
+				"resolve(_typeSources[bindingFrom] ?? typeName, _file, bindingFrom, params, 0, [])"
 			],
 			"replace": [
 				"if (typeName == null) return Unproven;",
-				"resolve(_typeSources[bindingFrom] ?? typeName, _file, [], 0, [])"
+				"resolve(_typeSources[bindingFrom] ?? typeName, _file, bindingFrom, [], 0, [])"
 			],
 			"note": "the type parameters in scope at a binding are not, so `m<R>(x:R)` borrows class `R`'s proof"
 		},
@@ -9803,9 +9803,32 @@
 			"name": "M-BINDING-STRICT-OUTSIDE",
 			"type": "anyparse.query.TypeNameBinding",
 			"method": "packageAnswer",
-			"find": "if (outside != null && outside.match(Outside)) return Outside;",
+			"find": "if (outside != null && !outside.match(Pass)) return outside;",
 			"replace": "",
 			"note": "in a guarded statement's other build a package or toplevel module outside the index binds nothing, so the guarded binding is pinned against a std type the other build picks"
+		},
+		{
+			"name": "M-BINDING-COGUARD-IGNORED",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "coGuarded",
+			"force": "false",
+			"note": "a use inside a guarded import's own branch is weighed against the build without the import, which never compiles it — openfl's `#if !flash` DisplayObject loses its supertype"
+		},
+		{
+			"name": "M-BINDING-STRICT-UNREAD-PASS",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "packageAnswer",
+			"find": "declaresMain(outsideTypes(module, name), name) ?? Unreadable",
+			"replace": "declaresMain(outsideTypes(module, name), name) ?? Pass",
+			"note": "in a guarded statement's other build a module nothing reads is taken as absent — the guess the binding exists to refuse"
+		},
+		{
+			"name": "M-COND-WITHIN-BRANCH-IGNORED",
+			"type": "anyparse.query.CondBranchPath",
+			"method": "within",
+			"find": "i.branch == o.branch && ",
+			"replace": "",
+			"note": "a position in the `#else` of a region reads as inside its `#if` branch, so a use the build WITHOUT the import compiles is pinned to the import"
 		},
 		{
 			"name": "M-SCOPE-MODULE-TYPES-NONE",
@@ -10393,7 +10416,7 @@
 			"name": "M-PSE-CLOSURE-USING",
 			"type": "anyparse.check.PreferStaticExtension",
 			"method": "verdictFor",
-			"find": "\n\t\t\t&& index.members.closureFreeOfExtensionTypes(receiverType, file)",
+			"find": "\n\t\t\t&& index.members.closureFreeOfExtensionTypes(receiverType, file, at)",
 			"replace": "",
 			"note": "the structural path ignores @:using on the receiver's type closure"
 		},
@@ -10449,8 +10472,8 @@
 			"name": "M-OPERAND-SIMPLE-NAME",
 			"type": "anyparse.query.DeclaredNullity",
 			"method": "headTierIn",
-			"find": "return switch index.refs.names.tierOf(head, fi) {",
-			"replace": "return switch (index.refs.resolvedDeclsNamed(head).length > 0 ? Bound(index.refs.resolvedDeclsNamed(head)) : index.refs.names.tierOf(head, fi)) {",
+			"find": "return switch index.refs.names.tierOf(head, fi, at) {",
+			"replace": "return switch (index.refs.resolvedDeclsNamed(head).length > 0 ? Bound(index.refs.resolvedDeclsNamed(head)) : index.refs.names.tierOf(head, fi, at)) {",
 			"note": "a written type name is judged by any indexed declaration of that simple name, so an import of an unindexed type answers as its namesake"
 		},
 		{
@@ -10465,8 +10488,8 @@
 			"name": "M-OPERAND-MEMBER-SCOPE-LOST",
 			"type": "anyparse.check.OperandBinder",
 			"method": "memberTier",
-			"find": "DeclaredNullity.headTierIn(written, owner.file, _index,",
-			"replace": "DeclaredNullity.headTierIn(written, _index.fileInfo(_file) ?? owner.file, _index,",
+			"find": "DeclaredNullity.headTierIn(written, owner.file, m.declFrom, _index,",
+			"replace": "DeclaredNullity.headTierIn(written, _index.fileInfo(_file) ?? owner.file, m.declFrom, _index,",
 			"note": "a member's written type is bound in the READING file instead of the declaring one"
 		},
 		{
@@ -10488,7 +10511,7 @@
 			"name": "M-OPERAND-STATIC-RECEIVER-CUT",
 			"type": "anyparse.check.OperandBinder",
 			"method": "receiverDecls",
-			"find": "return switch _index.refs.names.tierOf(name, fi) {",
+			"find": "return switch _index.refs.names.tierOf(name, fi, receiver.span?.from) {",
 			"replace": "return switch Unknown {",
 			"note": "a type name never serves as a receiver, so no static access types an operand"
 		},

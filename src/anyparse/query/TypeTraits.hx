@@ -211,7 +211,9 @@ final class TypeTraits {
 		final raws: Array<String> = cur.type.supertypesRaw;
 		final simples: Array<String> = cur.type.supertypes;
 		for (i in 0...simples.length) {
-			final resolved: Array<ResolvedType> = _refs.resolveTypeRefAll(i < raws.length ? raws[i] : simples[i], cur.file);
+			final resolved: Array<ResolvedType> = _refs.resolveTypeRefAll(
+				i < raws.length ? raws[i] : simples[i], cur.file, cur.type.span.from
+			);
 			final hops: Array<ResolvedType> = resolved.length > 0 ? resolved : _refs.resolvedDeclsNamed(simples[i]);
 			for (r in hops) out.push(r);
 		}

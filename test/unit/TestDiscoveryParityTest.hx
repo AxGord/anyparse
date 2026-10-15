@@ -3290,8 +3290,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FN-SCOPE-KINDS-FROZEN',
 			'unit.query.GreedyDeclSpanEditBoundarySliceTest#testAGreedyModuleDeclSpanIsTrimmedToItsOwnLastToken :: control :: '
 				+ 'M-DECL-EDIT-SPAN-UNTRIMMED',
-			'unit.query.HaxelibResolverTest#testAMultiLibraryAnswerSplitsOneRootPerLibrary :: control :: '
-				+ 'M-HAXELIB-BATCH-COUNT-IGNORED',
+			'unit.query.HaxelibResolverTest#testAMultiLibraryAnswerSplitsOneRootPerLibrary :: control :: M-HAXELIB-BATCH-COUNT-IGNORED',
 			'unit.query.IndexScopeTest#testAChangedSourceIsRebuilt :: control :: M-INDEX-MEMO-UNVALIDATED',
 			'unit.query.IndexScopeTest#testTheKeyTellsEveryFileSetApart :: control :: M-INDEX-KEY-UNPREFIXED,M-INDEX-MEMO-TAG-IGNORED',
 			'unit.query.IndexScopeTest#testTheMemoDiesWithTheAmbientChain :: control :: M-INDEX-MEMO-OUTLIVES-AMBIENT',
@@ -4077,7 +4076,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-MODULE-PLATFORM,M-MODULE-SCAN-PLATFORM',
 			'unit.query.TypeNameBindingTest#testAGuardedImportAgainstAStdTypeIsUnknown :: control :: M-BINDING-STRICT-OUTSIDE',
 			'unit.query.TypeNameBindingTest#testAGuardedImportAgainstAnotherBindingIsUnknown :: control :: M-AMBIENT-GUARDED-UNION',
-			'unit.query.TypeNameBindingTest#testAGuardedImportBindsWhereNoOtherBuildBindsTheName :: control :: '
+			'unit.query.TypeNameBindingTest#testAGuardedImportBindsWhereTheOtherBuildProvablyBindsNothing :: control :: '
 				+ 'M-BINDING-GUARDED-OTHER-BUILD',
 			'unit.query.TypeNameBindingTest#testALibraryModuleIsReadFromTheResolutionScope :: control :: M-SCOPE-MODULE-TYPES-NONE',
 			'unit.query.TypeNameBindingTest#testAParentPackageMainTypeBinds :: control :: M-BINDING-PACKAGE-TIER-CUT',
@@ -4088,6 +4087,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.TypeNameBindingTest#testAStdModuleIsReadByTheStdListing :: control :: M-BINDING-OUTSIDE-UNREAD',
 			'unit.query.TypeNameBindingTest#testAStdWildcardWithoutTheModuleBindsNothing :: control :: M-BINDING-STD-WILDCARD-BLIND',
 			'unit.query.TypeNameBindingTest#testASubTypeIsInvisibleOutsideItsModule :: control :: M-BINDING-ROOT-SUBTYPES',
+			'unit.query.TypeNameBindingTest#testAUseInTheOtherBranchOfTheImportsRegionIsNotCoGuarded :: control :: '
+				+ 'M-COND-WITHIN-BRANCH-IGNORED',
+			'unit.query.TypeNameBindingTest#testAUseInsideTheGuardedImportsBranchBindsIt :: control :: M-BINDING-COGUARD-IGNORED',
+			'unit.query.TypeNameBindingTest#testAUseOutsideTheGuardedRegionIsUnknown :: control :: M-BINDING-STRICT-UNREAD-PASS',
 			'unit.query.TypeNameBindingTest#testAWildcardBindsMainTypesOnly :: control :: M-BINDING-SUBTYPES-VISIBLE',
 			'unit.query.TypeNameBindingTest#testAnImportLineListsTheNonPrivateTypesItBinds :: control :: M-BINDING-PRIVATE-VISIBLE',
 			'unit.query.TypeNameBindingTest#testAnUnreadableModuleImportIsUnknown :: control :: M-BINDING-UNINDEXED-MODULE-FREE',
@@ -5361,6 +5364,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-BINDING-STD-WILDCARD-BLIND',
 			'M-BINDING-GUARDED-OTHER-BUILD',
 			'M-BINDING-STRICT-OUTSIDE',
+			'M-BINDING-COGUARD-IGNORED',
+			'M-BINDING-STRICT-UNREAD-PASS',
+			'M-COND-WITHIN-BRANCH-IGNORED',
 			'M-SCOPE-MODULE-TYPES-NONE',
 			'M-SCOPE-ROOT-MODULE-ANYWHERE',
 			'M-HAXELIB-BATCH-COUNT-IGNORED',

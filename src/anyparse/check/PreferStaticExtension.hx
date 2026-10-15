@@ -437,7 +437,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		if (callSpan == null || recv.span == null) return null;
 		// Every channel through which the compiler could bind `recv.method` to another function: what the written name denotes,
 		// whether the function takes part in `using` at all, and every `using` that could reach the site.
-		final channels: Channels = channelsOf(typeName, module, method, file, root, symbols);
+		final channels: Channels = channelsOf(typeName, module, method, file, callSpan.from, root, symbols);
 		final key: String = '$module:$method';
 		final conflict: UsingConflict = conflicts[key] ?? UsingScan.usingConflict(channels.usings, module, method, plugin, symbols, file);
 		conflicts[key] = conflict;
@@ -445,7 +445,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		final nominal: Null<String> = receiverNominal(recv, root, s, declaredTypes, chain, symbols, file);
 		// A `Dynamic` receiver dispatches no extension at RUNTIME while the rewrite still compiles.
 		if (nominal != null && nominal == s.dynamicTypeName) return null;
-		final structural: Null<Verdict> = verdictFor(nominal, method, symbols, file);
+		final structural: Null<Verdict> = verdictFor(nominal, method, symbols, file, callSpan.from);
 		final judged: Null<Verdict> = structural == Verdict.UnresolvedReceiver && nominal == null
 			? factsVerdict(call, recv, root, s, chain, source, file, module, method, plugin, channels.usings)
 			: structural;
@@ -479,7 +479,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 	 * channel this cannot read keeps the site report-only.
 	 */
 	private static function channelsOf(
-		name: String, module: String, method: String, file: String, root: QueryNode, symbols: () -> Null<SymbolIndex>
+		name: String, module: String, method: String, file: String, at: Int, root: QueryNode, symbols: () -> Null<SymbolIndex>
 	): Channels {
 		final usings: Array<String> = [];
 		collectUsings(root, usings);
@@ -487,7 +487,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		final info: Null<FileInfo> = index?.fileInfo(file);
 		if (index == null || info == null) return { elsewhere: false, proven: false, usings: usings };
 		for (path in TypeRefIndex.ambientUsings(info)) usings.push(path);
-		final decls: Array<ResolvedType> = index.refs.names.bind(name, info) ?? [];
+		final decls: Array<ResolvedType> = index.refs.names.bind(name, info, at) ?? [];
 		final paths: Array<String> = [];
 		for (d in decls) {
 			final path: String = qualifiedPath(d);
@@ -524,7 +524,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 	 * because it reports a hedged finding where they simply keep quiet.
 	 */
 	private static function verdictFor(
-		nominal: Null<String>, method: String, symbols: () -> Null<SymbolIndex>, file: String
+		nominal: Null<String>, method: String, symbols: () -> Null<SymbolIndex>, file: String, at: Int
 	): Null<Verdict> {
 		final resolved: Null<SymbolIndex> = symbols();
 		if (nominal == null || resolved == null) return Verdict.UnresolvedReceiver;
@@ -533,8 +533,8 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		return if (index.members.memberShadowsExtension(receiverType, method))
 			null
 		else if (
-			index.members.typeProvablyLacksMember(receiverType, method, file)
-			&& index.members.closureFreeOfExtensionTypes(receiverType, file)
+			index.members.typeProvablyLacksMember(receiverType, method, file, at)
+			&& index.members.closureFreeOfExtensionTypes(receiverType, file, at)
 		)
 			Verdict.Fixable
 		else
