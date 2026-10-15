@@ -79,7 +79,7 @@ final class ConfiguredTypes {
 		final direct: Null<MemberInfo> = cur.type.members.find(m -> m.name == member);
 		if (direct != null) return { owner: cur, member: direct };
 		for (raw in cur.type.supertypesRaw) {
-			final ancestor: Null<ResolvedType> = index.refs.resolveTypeRef(raw, cur.file);
+			final ancestor: Null<ResolvedType> = index.refs.resolveTypeRef(raw, cur.file, cur.type.span.from);
 			if (ancestor == null) continue;
 			final found: Null<OwnedMember> = memberWalk(index, ancestor, member, seen);
 			if (found != null) return found;
@@ -93,7 +93,7 @@ final class ConfiguredTypes {
 		if (!index.refs.markSeen(cur, seen)) return false;
 		var complete: Bool = true;
 		for (raw in cur.type.supertypesRaw) {
-			final ancestor: Null<ResolvedType> = index.refs.resolveTypeRef(raw, cur.file);
+			final ancestor: Null<ResolvedType> = index.refs.resolveTypeRef(raw, cur.file, cur.type.span.from);
 			if (ancestor == null) {
 				complete = false;
 				continue;

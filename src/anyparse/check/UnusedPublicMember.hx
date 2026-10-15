@@ -465,7 +465,7 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 		if (seen.contains(visited)) return;
 		seen.push(visited);
 		for (raw in type.supertypesRaw) {
-			final supers: Array<{ file: FileInfo, type: TypeDeclInfo }> = scope.resolveTypeRefsFrom(raw, host.file);
+			final supers: Array<{ file: FileInfo, type: TypeDeclInfo }> = scope.resolveTypeRefsFrom(raw, host.file, type.span.from);
 			if (supers.length == 0) {
 				chain.unresolved = true;
 				continue;

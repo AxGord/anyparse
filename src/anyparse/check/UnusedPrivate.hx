@@ -18,6 +18,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeRefIndex;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -808,12 +809,9 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			final names: Array<String> = [className];
 			final fi: Null<FileInfo> = index.fileInfo(entry.file);
-			final imports: Array<ImportInfo> = fi == null ? [] : fi.imports.concat([for (g in fi.ambientImports) for (i in g.imports) i]);
-			for (imp in imports) {
-				final target: String = imp.aliasTarget ?? '';
-				final alias: Null<String> = imp.alias;
-				if (alias != null && (target == className || target.endsWith('.$className'))) names.push(alias);
-			}
+			if (fi != null)
+				for (alias => targets in TypeRefIndex.importAliasEdges(fi, true))
+					if (targets.contains(className)) names.push(alias);
 			tree != null && valueUse(tree, null, names);
 		});
 	}

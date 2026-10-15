@@ -2,7 +2,6 @@ package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.SymbolIndex.FileInfo;
-import anyparse.query.SymbolIndex.ImportKind;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
@@ -364,40 +363,21 @@ final class FieldWriteIndex {
 	}
 
 	/**
-	 * Whether the type reference `path`, READ FROM `file`, denotes exactly one indexed
-	 * declaration and that declaration is a plain class (`RefShape.classDeclKinds`) — the
-	 * no-implicit-conversion proof `hasUnresolvedWriteTargeting` stands on. An abstract's
-	 * `@:from`, an interface, a typedef, an enum, a name the file's package and imports do not
-	 * reach, and a name several in-scope declarations answer to, all fail.
+	 * Whether the type reference `path`, READ FROM `file`, denotes exactly one indexed declaration and that declaration is
+	 * a plain class (`RefShape.classDeclKinds`) — the no-implicit-conversion proof `hasUnresolvedWriteTargeting` stands
+	 * on. An abstract's `@:from`, an interface, a typedef, an enum, a name the file's package and imports do not reach,
+	 * and a name several in-scope declarations answer to, all fail.
 	 *
-	 * The resolution is the index's own (`TypeRefIndex.resolveTypeRef` -> `simpleRefInScope`), so
-	 * package, `import`, `using` and wildcard visibility decide it — not a global simple-name
-	 * count, which answers about a declaration the file may have no way to name. That difference
-	 * is what makes the proof independent of how WIDE the index is: a name is either in this
-	 * file's scope or it is not, whether or not some library elsewhere declares one too.
-	 *
-	 * The import-SHADOW test the resolver does not do is done here. `simpleRefInScope` admits a
-	 * ROOT-package declaration from every file unconditionally, which is right for visibility and
-	 * wrong for denotation: `import ext.pack.ShadowM;` beside a root-package `ShadowM` makes the
-	 * written name mean the imported one, and nothing indexed here can say what THAT declares. So
-	 * an explicit `import` / `using` / alias binding the reference's simple name to any module
-	 * other than the one it resolved to fails the proof. A dotted reference is exempt: an import
-	 * cannot shadow a path.
+	 * The resolution is the index's own (`TypeRefIndex.resolveTypeRef` -> `TypeNameBinding`), the compiler's resolution
+	 * order: an explicit `import` / `using` / alias binding the simple name to a module the index does not hold answers
+	 * nothing rather than a namesake lower in the order (a root-package `ShadowM` beside `import ext.pack.ShadowM;`), so the
+	 * proof is independent of how WIDE the index is.
 	 */
 	private function plainClassInScope(path: String, file: String): Bool {
 		final fi: Null<FileInfo> = _index.fileInfo(file);
 		if (fi == null) return false;
 		final resolved: Null<ResolvedType> = _index.refs.resolveTypeRef(path, fi);
-		if (resolved == null || !_classKinds.contains(resolved.type.kind)) return false;
-		if (path.indexOf('.') >= 0) return true;
-		final declaredPath: String = resolved.type.isMain ? resolved.file.module : '${resolved.file.module}.${resolved.type.name}';
-		for (imp in fi.imports) if (imp.kind != ImportKind.Wild) {
-			if (imp.kind == ImportKind.Alias) {
-				if (imp.raw == path) return false;
-			} else if (SourceText.lastSegment(imp.raw) == path && imp.raw != declaredPath)
-				return false;
-		}
-		return true;
+		return resolved != null && _classKinds.contains(resolved.type.kind);
 	}
 
 	/**

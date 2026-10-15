@@ -12,7 +12,6 @@ import anyparse.query.NominalTypes;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
-import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
@@ -226,8 +225,9 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 
 	/**
 	 * The SIMPLE nominal of the written container type `typeSource`, or null unless it PROVABLY names a
-	 * std declaration from `file` (`SymbolIndex.resolvesToStdType`: one declaration, under the std root, with every import in scope
-	 * resolved), over an index `projectComplete` says spans the whole project. The lists match a simple name, and a project `List`
+	 * std declaration from `file` (`SymbolIndex.stdDeclarationOf`: one declaration, under the std root, as the compiler
+	 * binds the name — the DECLARATION's name is answered, so an alias spelling `List` for another type is that type),
+	 * over an index `projectComplete` says spans the whole project. The lists match a simple name, and a project `List`
 	 * whose `length` is not its element count compiles under either rewrite, so neither the name nor its
 	 * spelling is proof. Shared with `prefer-count`'s `length` spelling.
 	 */
@@ -238,7 +238,8 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 			case Nominal(path, _): path;
 			case _: null;
 		};
-		return projectComplete && path != null && index?.resolvesToStdType(path, file) == true ? SourceText.lastSegment(path) : null;
+		final declared: Null<ResolvedType> = projectComplete && path != null ? index?.stdDeclarationOf(path, file) : null;
+		return declared?.type.name;
 	}
 
 	/** Whether `stmt` is exactly `<counter>++;` — an expression statement wrapping a post-increment of the counter. */

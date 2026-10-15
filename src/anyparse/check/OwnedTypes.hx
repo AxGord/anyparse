@@ -432,7 +432,7 @@ final class OwnedTypes implements Check implements ConfigAware implements FileGa
 	 */
 	private static function typesNamed(scan: FileScan, spelled: String): Null<Array<ResolvedType>> {
 		if (spelled.indexOf('.') >= 0) return scan.index.refs.resolveTypeRefAll(spelled, scan.info);
-		final tier: Tier = scan.tiers[spelled] ?? TypeNameBinding.tierOf(spelled, scan.info, scan.index);
+		final tier: Tier = scan.tiers[spelled] ?? scan.index.refs.names.tierOf(spelled, scan.info);
 		scan.tiers[spelled] = tier;
 		return switch tier {
 			case Bound(decls): decls;

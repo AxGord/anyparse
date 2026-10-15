@@ -16,6 +16,8 @@ import anyparse.query.Pattern.KindEquivalence;
 import anyparse.query.ReachLiveness.ReachBuilds;
 import anyparse.query.SpanTypeInfoProvider;
 import anyparse.query.StringFold.StringFoldSupport;
+import anyparse.query.SymbolIndex.FileInfo;
+import anyparse.query.SymbolIndex.TypeDeclInfo;
 import haxe.io.Path;
 
 /**
@@ -754,6 +756,68 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		for (i => source in sources) if (source != files[i].source) return false;
 		return true;
 	}
+
+	/**
+	 * The types named `name` the module `module` declares in the resolution scope, or null when the scope holds no file of
+	 * that module or one that does not parse. The module is the file the compiler would load, `<root>/a/b/C.hx` under any
+	 * root, and only a file whose text spells `name` is parsed — the scope is never indexed whole, and an import of a module
+	 * whose source never names the type costs a substring search.
+	 */
+	public function moduleTypesInScope(module: String, name: String): Null<Array<TypeDeclInfo>> {
+		final asked: String = '$module#$name';
+		if (_scopeModules.exists(asked)) return _scopeModules[asked];
+		var named: Null<Map<String, Array<{ file: String, source: String }>>> = _scopeByFileName;
+		if (named == null) {
+			final built: Map<String, Array<{ file: String, source: String }>> = [];
+			// The sources, not `resolutionFiles`: that one promotes the whole library into the parse tier, which parses every
+			// file of it, and only the files named after the module are read here.
+			final sources: Null<ResolutionSources> = scopeSources();
+			final scope: Array<{ file: String, source: String }> = sources == null ? [] : sources.report.concat(sources.library.entries());
+			for (entry in scope) {
+				final key: String = Path.withoutDirectory(entry.file);
+				final same: Array<{ file: String, source: String }> = built[key] ?? [];
+				same.push(entry);
+				built[key] = same;
+			}
+			_scopeByFileName = built;
+			named = built;
+		}
+		// The compiler finds module `a.b.C` as `<class path>/a/b/C.hx`, so that is the file looked for, under any root.
+		final tail: String = '${module.split('.').join('/')}.hx';
+		final files: Array<{ file: String, source: String }> = [
+			for (entry in named[Path.withoutDirectory(tail)] ?? []) if (entry.file == tail || StringTools.endsWith(entry.file, '/$tail'))
+				entry
+		];
+		// A file at `a/b/C.hx` is that module's own, and one that never spells `name` declares no type of it, so it is not
+		// parsed. A ROOT module's path is its bare file name, which any directory may hold, so its candidates are parsed and
+		// their package read.
+		final rooted: Bool = module.indexOf('.') < 0;
+		var found: Bool = false;
+		final declared: Array<TypeDeclInfo> = [];
+		for (entry in files) {
+			if (!rooted && entry.source.indexOf(name) < 0) {
+				found = true;
+				continue;
+			}
+			final info: Null<FileInfo> = IndexScope.over([entry], this).fileInfo(entry.file);
+			if (info == null) {
+				_scopeModules[asked] = null;
+				return null;
+			}
+			if (info.module != module) continue;
+			found = true;
+			for (t in info.types) if (t.name == name) declared.push(t);
+		}
+		final types: Null<Array<TypeDeclInfo>> = found ? declared : null;
+		_scopeModules[asked] = types;
+		return types;
+	}
+
+	/** `module#name` -> the types of that name the module declares in the resolution scope, null when unknown (`moduleTypesInScope`). */
+	private final _scopeModules: Map<String, Null<Array<TypeDeclInfo>>> = [];
+
+	/** File name (`Mod.hx`) -> the resolution scope's sources of that name, built on the first `moduleTypesInScope`. */
+	private var _scopeByFileName: Null<Map<String, Array<{ file: String, source: String }>>> = null;
 
 }
 

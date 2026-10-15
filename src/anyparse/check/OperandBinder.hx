@@ -63,10 +63,13 @@ final class OperandBinder {
 		_fnKinds = (shape.functionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
 	}
 
-	/** What a type NAME written in this file binds to at the file's top level, tier by tier; `Unknown` when the file is not indexed. */
-	public function typeNameTier(name: String): Tier {
+	/**
+	 * What a type NAME written in this file — at offset `at` when known — binds to
+	 * at the file's top level, tier by tier; `Unknown` when the file is not indexed.
+	 */
+	public function typeNameTier(name: String, ?at: Int): Tier {
 		final fi: Null<FileInfo> = _index.fileInfo(_file);
-		return fi == null ? Unknown : TypeNameBinding.tierOf(name, fi, _index);
+		return fi == null ? Unknown : _index.refs.names.tierOf(name, fi, at);
 	}
 
 	/** What the type `written` at offset `at` of this file binds to, with the type parameters in scope there. */
@@ -160,7 +163,7 @@ final class OperandBinder {
 				final written: Null<String> = call ? m.returnSource : m.typeSource;
 				if (written == null || (call && !typedByItsReturn(m))) return Unknown;
 				final params: Array<String> = call ? ownParams.concat(m.typeParamNames) : ownParams;
-				switch DeclaredNullity.headTierIn(written, owner.file, _index, params, _wrappers, _builtins) {
+				switch DeclaredNullity.headTierIn(written, owner.file, m.declFrom, _index, params, _wrappers, _builtins) {
 					case Bound(decls):
 						for (d in decls) found.push(d);
 					case Free:
@@ -200,7 +203,7 @@ final class OperandBinder {
 		final fi: Null<FileInfo> = _index.fileInfo(_file);
 		if (name == null || fi == null || !_identKinds.contains(receiver.kind) || !SourceText.isUpperInitial(name)) return null;
 		if (hit != null && (hit.bindingSpan != null || hit.bindingNode != null)) return null;
-		return switch TypeNameBinding.tierOf(name, fi, _index) {
+		return switch _index.refs.names.tierOf(name, fi, receiver.span?.from) {
 			case Bound(decls): decls;
 			case _: null;
 		};

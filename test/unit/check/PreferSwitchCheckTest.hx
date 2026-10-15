@@ -9,6 +9,7 @@ import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CachingGrammarPlugin.LibrarySources;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import unit.QueryTestHelpers;
 import utest.Assert;
 import utest.Test;
 
@@ -542,9 +543,9 @@ class PreferSwitchCheckTest extends Test {
 
 	/** The fixture file set: the chain-bearing module, plus a constants module when one is given. */
 	private function entries(src: String, ?constants: String): Array<{ file: String, source: String }> {
-		final all: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
-		if (constants != null) all.push({ file: 'NodeMeta.hx', source: constants });
-		return all;
+		// Each constants type its own module's main type: a sub-type is invisible by its bare name.
+		final types: Array<String> = constants == null ? [] : ~/\n\n(?=(enum|class|abstract|typedef|interface)\b)/g.split(constants);
+		return [{ file: 'C.hx', source: src }].concat(QueryTestHelpers.rootModules(types));
 	}
 
 

@@ -127,7 +127,7 @@ final class DeclaredNullity {
 		if (typeName == null || isTypeParamAt(typeName, bindingFrom)) return Unproven;
 		if ((_shape.nonNullableTypeNames ?? []).contains(typeName)) return ValueType;
 		final params: Null<Array<String>> = typeParamsAt(bindingFrom);
-		return params == null ? Unproven : resolve(_typeSources[bindingFrom] ?? typeName, _file, params, 0, []);
+		return params == null ? Unproven : resolve(_typeSources[bindingFrom] ?? typeName, _file, bindingFrom, params, 0, []);
 	}
 
 	/**
@@ -152,7 +152,7 @@ final class DeclaredNullity {
 		final fi: Null<SymbolIndex.FileInfo> = index?.fileInfo(_file);
 		return written == null || params == null || index == null || fi == null
 			? Unknown
-			: headTierIn(written, fi, index, params, wrappers, builtins);
+			: headTierIn(written, fi, at, index, params, wrappers, builtins);
 	}
 
 	/**
@@ -160,16 +160,16 @@ final class DeclaredNullity {
 	 * declared — with `params` the type parameters in scope there.
 	 */
 	public static function headTierIn(
-		written: String, fi: SymbolIndex.FileInfo, index: SymbolIndex, params: Array<String>, wrappers: Array<String>,
+		written: String, fi: SymbolIndex.FileInfo, at: Int, index: SymbolIndex, params: Array<String>, wrappers: Array<String>,
 		builtins: Array<String>
 	): Tier {
 		final head: Null<String> = headPathOf(NominalTypes.unwrapNullable(written.trim(), wrappers, index.typeSyntax), index.typeSyntax);
 		if (head == null || wrappers.contains(head) || params.contains(head)) return Unknown;
 		if (head.indexOf('.') >= 0) {
-			final decls: Array<ResolvedType> = index.resolveTypeRefsFrom(head, fi.file);
+			final decls: Array<ResolvedType> = index.resolveTypeRefsFrom(head, fi.file, at);
 			return decls.length == 0 ? Unknown : Bound(decls);
 		}
-		return switch TypeNameBinding.tierOf(head, fi, index) {
+		return switch index.refs.names.tierOf(head, fi, at) {
 			case Free if (!builtins.contains(head)): Unknown;
 			case tier: tier;
 		};
@@ -192,7 +192,7 @@ final class DeclaredNullity {
 			final source: Null<String> = index.sourceOf(r.file.file);
 			if (returned == null || source == null || m.hasOverloadMeta || m.isMacro) return Unproven;
 			final params: Array<String> = r.type.typeParamNames.concat(m.typeParamNames);
-			if (resolve(returned, r.file.file, params, 1, []) != NonNull) return Unproven;
+			if (resolve(returned, r.file.file, m.declFrom, params, 1, []) != NonNull) return Unproven;
 			verdict = NonNull;
 		}
 		return verdict;
@@ -203,7 +203,9 @@ final class DeclaredNullity {
 	 * `hops` counts the alias / abstract steps taken to reach it, which decides whether a basic value
 	 * type is still `ValueType` (its own spelling at the binding) or only `NonNull`.
 	 */
-	private function resolve(typeSource: String, fromFile: String, typeParams: Array<String>, hops: Int, seen: Array<String>): Nullity {
+	private function resolve(
+		typeSource: String, fromFile: String, at: Int, typeParams: Array<String>, hops: Int, seen: Array<String>
+	): Nullity {
 		final head: Null<String> = headPathOf(typeSource, _typeSyntax);
 		if (head == null || hops > MAX_HOPS || typeParams.contains(head)) return Unproven;
 		final simple: String = head.substr(head.lastIndexOf('.') + 1);
@@ -211,7 +213,7 @@ final class DeclaredNullity {
 		if ((_shape.nonNullableTypeNames ?? []).contains(head)) return hops == 0 ? ValueType : NonNull;
 		final index: Null<SymbolIndex> = _index();
 		if (index == null) return Unproven;
-		final candidates: Null<Array<ResolvedType>> = bindingOf(head, fromFile, index);
+		final candidates: Null<Array<ResolvedType>> = bindingOf(head, fromFile, at, index);
 		return candidates != null && candidates.length > 0 && candidates.foreach(c -> ofDecl(c, hops, seen) == NonNull)
 			? NonNull
 			: Unproven;
@@ -224,7 +226,7 @@ final class DeclaredNullity {
 		if (t.guarded || seen.contains(key)) return Unproven;
 		if (_nominalKinds.contains(t.kind) || t.isAnonStruct) return NonNull;
 		final next: Null<String> = _aliasKinds.contains(t.kind) ? t.aliasTargetRaw : t.underlyingRaw;
-		return next == null ? Unproven : resolve(next, r.file.file, t.typeParamNames, hops + 1, seen.concat([key]));
+		return next == null ? Unproven : resolve(next, r.file.file, t.span.from, t.typeParamNames, hops + 1, seen.concat([key]));
 	}
 
 	/**
@@ -295,13 +297,13 @@ final class DeclaredNullity {
 	}
 
 	/**
-	 * What `head`, written in `fromFile`, names: a dotted path resolves as a path, a simple name tier by
+	 * What `head`, written in `fromFile` at offset `at`, names: a dotted path resolves as a path, a simple name tier by
 	 * tier in the compiler's own order (`TypeNameBinding`). Null when no tier provably answers.
 	 */
-	private static function bindingOf(head: String, fromFile: String, index: SymbolIndex): Null<Array<ResolvedType>> {
-		if (head.indexOf('.') >= 0) return index.resolveTypeRefsFrom(head, fromFile);
+	private static function bindingOf(head: String, fromFile: String, at: Int, index: SymbolIndex): Null<Array<ResolvedType>> {
+		if (head.indexOf('.') >= 0) return index.resolveTypeRefsFrom(head, fromFile, at);
 		final fi: Null<SymbolIndex.FileInfo> = index.fileInfo(fromFile);
-		return fi == null ? null : TypeNameBinding.bind(head, fi, index);
+		return fi == null ? null : index.refs.names.bind(head, fi, at);
 	}
 
 	/**

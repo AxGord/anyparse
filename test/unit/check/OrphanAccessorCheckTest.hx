@@ -413,16 +413,16 @@ import utest.Test;
 	}
 
 	public function testSpeculativeWalkDoesNotMaskALaterResolvedDeclaration(): Void {
-		// `Common` resolves only speculatively (parent package, no import) and withholds its
+		// `Common` resolves only speculatively (another package, no import) and withholds its
 		// `declared` evidence; `IPar` resolves normally and declares `v` with no set slot. The
 		// arm-1 proof must survive regardless of which clause the walk reaches first.
-		final common: String = 'package a;\ninterface Common {\n\tpublic var v(get, never):Int;\n}';
+		final common: String = 'package c;\ninterface Common {\n\tpublic var v(get, never):Int;\n}';
 		final par: String = 'package a.b;\ninterface IPar {\n\tpublic var v(default, null):Int;\n}';
 		final first: String = 'package a.b;\nclass Sub implements Common implements IPar {\n\tfunction set_v(x:Int):Int return x;\n}';
 		final second: String = 'package a.b;\nclass Sub implements IPar implements Common {\n\tfunction set_v(x:Int):Int return x;\n}';
 		for (sub in [first, second]) {
 			final vs: Array<Violation> = violationsOf([
-				{ file: 'a/Common.hx', source: common },
+				{ file: 'c/Common.hx', source: common },
 				{ file: 'a/b/IPar.hx', source: par },
 				{ file: 'a/b/Sub.hx', source: sub }
 			]);
@@ -466,35 +466,45 @@ import utest.Test;
 	}
 
 	public function testParentPackageSupertypeSlotSilencesTheFinding(): Void {
-		// `a.b.Sub` names `a.Base` with no import — legal Haxe (a parent package needs none) but
-		// invisible to the index's import-visibility resolution. The unique-simple-name fallback
-		// finds the property and its `get` slot, so nothing is reported.
+		// `a.b.Sub` names `a.Base` with no import — legal Haxe (a parent package needs none), and the name binding
+		// resolves it the compiler's way: the property and its `get` slot are found, so nothing is reported.
 		final base: String = 'package a;\nclass Base {\n\tpublic var v(get, never):Int;\n\tfunction get_v():Int return 1;\n}';
 		final sub: String = 'package a.b;\nclass Sub extends Base {\n\toverride function get_v():Int return 2;\n}';
 		Assert.equals(0, violationsOf([{ file: 'a/Base.hx', source: base }, { file: 'a/b/Sub.hx', source: sub }]).length);
 	}
 
-	public function testParentPackageSupertypeWithoutSlotStaysInfoOnly(): Void {
-		// The same fallback resolution, but the parent declares `v` with NO get slot. A
-		// speculatively-resolved type may not be the real supertype, so its member list never
+	public function testUnimportedSupertypeWithoutSlotStaysInfoOnly(): Void {
+		// `d.Sub` names a `Base` its scope does not reach; the unique-simple-name fallback finds `a.Base`, which declares
+		// `v` with NO get slot. A speculatively-resolved type may not be the real supertype, so its member list never
 		// promotes the finding to `Warning` — it stays the unproven `Info` arm, and unfixed.
 		final base: String = 'package a;\nclass Base {\n\tpublic var v(default, null):Int = 0;\n}';
-		final sub: String = 'package a.b;\nclass Sub extends Base {\n\toverride function get_v():Int return 2;\n}';
-		final vs: Array<Violation> = violationsOf([{ file: 'a/Base.hx', source: base }, { file: 'a/b/Sub.hx', source: sub }]);
+		final sub: String = 'package d;\nclass Sub extends Base {\n\toverride function get_v():Int return 2;\n}';
+		final vs: Array<Violation> = violationsOf([{ file: 'a/Base.hx', source: base }, { file: 'd/Sub.hx', source: sub }]);
 		Assert.equals(1, vs.length);
 		if (vs.length != 1) return;
 		Assert.equals(Severity.Info, vs[0].severity);
 	}
 
+	public function testParentPackageSupertypeWithoutSlotIsAProvenOrphan(): Void {
+		// `a.b.Sub` names `a.Base` with no import: the compiler resolves a parent package's main type (4.3.7), and so does
+		// the name binding, so the supertype is RESOLVED, not speculative — `v` declared with no get slot proves the orphan.
+		final base: String = 'package a;\nclass Base {\n\tpublic var v(default, null):Int = 0;\n}';
+		final sub: String = 'package a.b;\nclass Sub extends Base {\n\toverride function get_v():Int return 2;\n}';
+		final vs: Array<Violation> = violationsOf([{ file: 'a/Base.hx', source: base }, { file: 'a/b/Sub.hx', source: sub }]);
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		Assert.equals(Severity.Warning, vs[0].severity);
+	}
+
 	public function testAmbiguousSimpleNameIsNotSpeculativelyResolved(): Void {
-		// Two `Base` declarations — the fallback refuses to guess, so the chain stays unresolved.
+		// Two `Base` declarations, neither in `d.Sub`'s scope — the fallback refuses to guess, so the chain stays unresolved.
 		final one: String = 'package a;\nclass Base {\n\tpublic var v(get, never):Int;\n\tfunction get_v():Int return 1;\n}';
 		final two: String = 'package c;\nclass Base {\n\tpublic var v(get, never):Int;\n\tfunction get_v():Int return 1;\n}';
-		final sub: String = 'package a.b;\nclass Sub extends Base {\n\toverride function get_v():Int return 2;\n}';
+		final sub: String = 'package d;\nclass Sub extends Base {\n\toverride function get_v():Int return 2;\n}';
 		final vs: Array<Violation> = violationsOf([
 			{ file: 'a/Base.hx', source: one },
 			{ file: 'c/Base.hx', source: two },
-			{ file: 'a/b/Sub.hx', source: sub }
+			{ file: 'd/Sub.hx', source: sub }
 		]);
 		Assert.equals(1, vs.length);
 		if (vs.length != 1) return;

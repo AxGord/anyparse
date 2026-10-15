@@ -9,7 +9,7 @@ import haxe.io.Path;
 /**
  * A plugin whose resolution scope holds `report` plus STUBS of the std containers, filed under the
  * machine's discovered std root — what a rule needs to PROVE a written `Array` / `List` / `Map` is
- * the std one (`SymbolIndex.resolvesToStdType`), since a plain test index holds no std at all.
+ * the std one (`SymbolIndex.stdDeclarationOf`), since a plain test index holds no std at all.
  * The stubs declare only what the proof reads: the type, in its std module.
  */
 @:nullSafety(Strict)

@@ -148,10 +148,11 @@ class AmbientImportResolutionTest extends Test {
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
 			final index: SymbolIndex = indexOfTree(root, ['src/a/T.hx', 'src/b/T.hx', 'src/lib/T.hx', 'src/lib/Main.hx']);
 			// Checked against the compiler: it answers `b.T` under the define and `a.T` without it, the
-			// same-package `lib.T` in neither. A tier resting on a guarded statement decides one build.
+			// same-package `lib.T` in neither. A guarded statement binding a name another build binds
+			// otherwise decides one build only, so no declaration is the name's for certain.
 			Assert.equals(
-				'$root/src/b/T.hx | $root/src/a/T.hx', candidates(index, 'T', '$root/src/lib/Main.hx'),
-				'a guarded own import and the ambient chain answer different builds, so both stay in scope'
+				'', candidates(index, 'T', '$root/src/lib/Main.hx'),
+				'a guarded own import and the ambient chain answer different builds, so neither is in scope for certain'
 			);
 			Assert.equals(
 				'unresolved', declaringFile(index, 'T', '$root/src/lib/Main.hx'),
@@ -178,8 +179,8 @@ class AmbientImportResolutionTest extends Test {
 			// The guard sits on the AMBIENT statement: the compiler answers `a.T` under the define and the
 			// same-package `lib.T` without it, so the chain cannot outrank the namesake on its own.
 			Assert.equals(
-				'$root/src/a/T.hx | $root/src/lib/T.hx', candidates(index, 'T', '$root/src/lib/Main.hx'),
-				'a guarded ambient import is present in one build only, so the same-package namesake stays in scope'
+				'', candidates(index, 'T', '$root/src/lib/Main.hx'),
+				'a guarded ambient import is present in one build only and the other binds the same-package namesake'
 			);
 			Assert.equals(
 				'unresolved', declaringFile(index, 'T', '$root/src/lib/Main.hx'),

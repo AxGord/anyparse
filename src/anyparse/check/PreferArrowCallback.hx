@@ -552,7 +552,7 @@ final class PreferArrowCallback implements Check {
 		}
 		for (raw in rt.type.supertypesRaw) {
 			final v: Null<Bool> = chainLookup(
-				ctx, idx, idx.resolveTypeRefsFrom(raw, rt.file.file), member, argIndex, argCount, visited, depth + 1
+				ctx, idx, idx.resolveTypeRefsFrom(raw, rt.file.file, rt.type.span.from), member, argIndex, argCount, visited, depth + 1
 			);
 			if (v != null) return v;
 		}

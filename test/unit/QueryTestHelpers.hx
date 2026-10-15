@@ -71,4 +71,26 @@ final class QueryTestHelpers {
 		return plugin;
 	}
 
+	/**
+	 * Each source as the module named after the first type it declares, under its package's directory (`Box.hx` for `class Box
+	 * {…}`, `q/Quiet.hx` for `package q; class Quiet …`), a repeated one on another class path (`cp<i>/Box.hx`), `F<i>.hx`
+	 * for one declaring none: the compiler binds a bare name to a module's MAIN type only, so a fixture whose files are named
+	 * `F0.hx`, `F1.hx` hides every type it declares from the others.
+	 */
+	public static function rootModules(sources: Array<String>): Array<{ file: String, source: String }> {
+		final declaration: EReg = ~/(class|interface|typedef|enum|abstract)\s+([A-Z][A-Za-z0-9_]*)/;
+		final packageDecl: EReg = ~/^\s*package\s+([a-z0-9_.]+)\s*;/;
+		final taken: Array<String> = [];
+		return [
+			for (i in 0...sources.length) {
+				final dir: String = packageDecl.match(sources[i]) ? packageDecl.matched(1).split('.').join('/') + '/' : '';
+				final named: String = declaration.match(sources[i]) ? '$dir${declaration.matched(2)}.hx' : '';
+				// A second source of one module is that module on another class path, as the compiler would see two.
+				final file: String = named == '' ? 'F$i.hx' : taken.contains(named) ? 'cp$i/$named' : named;
+				taken.push(file);
+				{ file: file, source: sources[i] };
+			}
+		];
+	}
+
 }

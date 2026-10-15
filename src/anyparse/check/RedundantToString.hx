@@ -440,7 +440,7 @@ final class RedundantToString implements Check implements DefaultOff {
 		final owner: QueryNode = callee.children[0];
 		final ownerName: Null<String> = owner.name;
 		final unboundType: Bool = ownerName != null && TypeResolver.receiverRootIsUnboundType(owner, ctx.root, seams.shape);
-		if (ownerName != null && unboundType && binder.typeNameTier(ownerName).match(Free)) {
+		if (ownerName != null && unboundType && binder.typeNameTier(ownerName, owner.span?.from).match(Free)) {
 			final declared: Null<String> = nonWrapperNominal(seams.staticMethodReturns['$ownerName.$method'], seams);
 			return declared == null ? unresolved : { decls: ctx.index.refs.resolveQualifiedRefAll(declared), nonNull: true };
 		}

@@ -61,7 +61,7 @@ class StructuralConformanceProofTest extends Test {
 	private static final C_OUTSIDE: SourceFile = { file: 'C.hx', source: 'class C extends Outside { public var x:Int = 0; }' };
 
 	/** A plain alias of the owner's declared type, in its own module. */
-	private static final ALIAS: SourceFile = { file: 'A.hx', source: 'typedef MyInt = Int;' };
+	private static final ALIAS: SourceFile = { file: 'MyInt.hx', source: 'typedef MyInt = Int;' };
 
 	/** The alias-typed structure. */
 	private static final S_ALIAS: SourceFile = { file: 'S.hx', source: 'typedef S = { x:MyInt }' };

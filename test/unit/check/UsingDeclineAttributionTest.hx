@@ -61,19 +61,19 @@ class UsingDeclineAttributionTest extends Test {
 		+ "\tfunction f() {\n\t\tfor (i in 0...100) g(if (i < 10) '00$i' else '0$i');\n\t}\n}\n";
 
 	/** The same ladder in a file whose header declares an UNRELATED `using` — the conflicting-module gate. */
-	private static inline final CONFLICTING_LPAD: String = 'package p;\n\nusing Other;\n\nclass C {\n'
+	private static inline final CONFLICTING_LPAD: String = 'package p;\n\nusing p.Other;\n\nclass C {\n'
 		+ "\tfunction f() {\n\t\tfor (i in 0...100) g(if (i < 10) '00$i' else '0$i');\n\t}\n}\n";
 
 	/** A `find`-shaped loop in a file whose header declares an unrelated `using`. */
-	private static inline final CONFLICTING_FIND: String = 'package p;\n\nusing Other;\n\nclass C {\n'
+	private static inline final CONFLICTING_FIND: String = 'package p;\n\nusing p.Other;\n\nclass C {\n'
 		+ '\tfunction f(xs:Array<Int>):Null<Int> {\n\t\tfor (x in xs) if (x > 2) return x;\n\t\treturn null;\n\t}\n}\n';
 
 	/** An `exists`-shaped loop in a file whose header declares an unrelated `using`. */
-	private static inline final CONFLICTING_EXISTS: String = 'package p;\n\nusing Other;\n\nclass C {\n'
+	private static inline final CONFLICTING_EXISTS: String = 'package p;\n\nusing p.Other;\n\nclass C {\n'
 		+ '\tfunction f(xs:Array<Int>):Bool {\n\t\tfor (x in xs) if (x > 2) return true;\n\t\treturn false;\n\t}\n}\n';
 
 	/** A `Map` counter loop needing `count()` beside an `Array` one that needs nothing, under an unrelated `using`. */
-	private static inline final CONFLICTING_COUNT: String = 'package p;\n\nusing Other;\n\nclass C {\n'
+	private static inline final CONFLICTING_COUNT: String = 'package p;\n\nusing p.Other;\n\nclass C {\n'
 		+ '\tfunction f(table:Map<Int, Int>, items:Array<Int>):Void {\n'
 		+ '\t\tvar i = 0;\n\t\tfor (x in table) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}\n'
 		+ '\t\tvar j = 0;\n\t\tfor (y in items) {\n\t\t\twork(j);\n\t\t\tj++;\n\t\t}\n\t}\n}\n';

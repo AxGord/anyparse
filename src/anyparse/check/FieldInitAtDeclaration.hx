@@ -12,6 +12,7 @@ import anyparse.query.MemberReach;
 import anyparse.query.QueryNode;
 import anyparse.query.RawSourceScan;
 import anyparse.query.RefactorSupport;
+import anyparse.query.StdResolver;
 import anyparse.query.SymbolIndex;
 import anyparse.query.SymbolIndexHost;
 import anyparse.query.TypeResolver;
@@ -981,7 +982,7 @@ final class FieldInitAtDeclaration implements Check {
 		final declared: Null<TypeSyntax> = annotation == null ? null : plugin.typeSyntax(source.substring(annotation.from, annotation.to));
 		// An annotation the grammar cannot read proves nothing about the value it holds.
 		if (annotation != null && declared == null) return false;
-		return inertCollection(rhs, plugin, shape) && faultingFieldType(declared, shape) && !coreNameShadowed(host, file, declared, scope)
+		return inertCollection(rhs, plugin, shape) && faultingFieldType(declared, shape) && !coreNameShadowed(host, file, declared)
 			&& !MemberKinds.fieldExposed(tree, member, container, plugin, shape)
 			&& !ReflectionScan.runtimeName(ReflectionScan.reflectionSurface(files, plugin), name)
 			&& !readObservableInScope(files, plugin, scope, file, name, span.from);
@@ -1194,33 +1195,26 @@ final class FieldInitAtDeclaration implements Check {
 	}
 
 	/**
-	 * Whether the core name a WRITTEN annotation relies on (`faultingFieldType`) may name a user type in
-	 * `file` instead, decided by the resolution index rather than by text. Shadowed when the file, or an
-	 * ambient `import.hx` above it, imports a path whose last segment or alias is that name; when any
-	 * wildcard import is in reach (which package it opens is not decided here, so it refuses); when the
-	 * name resolves from `file` to a project declaration (the file's own, a same-package sibling's) or to
-	 * any declaration outside the root package; or when a project file declares it in the root package,
-	 * which every file sees unqualified. Refuses too when the index or the file's entry is missing or the
-	 * ambient chain could not be bounded.
+	 * Whether the core name a WRITTEN annotation relies on (`faultingFieldType`) may name something else in `file` than the
+	 * standard library's own type, decided by the name binding (`TypeNameBinding`, the compiler's resolution order) over
+	 * the resolution index: not shadowed when it binds a built-in the index does not hold or declarations the std itself
+	 * contributed (`StdResolver.isStdFile`); shadowed when it binds any other declaration (the file's own, an imported, a
+	 * sibling's, a root-package project type) or when no tier provably answers (an unreadable import or wildcard, an
+	 * unbounded ambient chain). Refuses too when the index or the file's entry is missing.
 	 */
-	private static function coreNameShadowed(
-		host: SymbolIndexHost, file: String, declared: Null<TypeSyntax>, scope: Array<{ file: String, source: String }>
-	): Bool {
+	private static function coreNameShadowed(host: SymbolIndexHost, file: String, declared: Null<TypeSyntax>): Bool {
 		final head: String = switch declared?.shape {
 			case Nominal(path, _): path;
 			case _: return false;
 		};
 		final index: Null<SymbolIndex> = host.resolutionIndex();
-		if (index == null) return true;
-		final found: Null<FileInfo> = index.fileInfo(file);
-		if (found == null) return true;
-		final info: FileInfo = found;
-		if (!info.ambientImportsBounded) return true;
-		final imports: Array<ImportInfo> = info.imports.concat([for (group in info.ambientImports) for (i in group.imports) i]);
-		if (imports.exists(i -> i.kind == ImportKind.Wild || (i.alias ?? i.raw.substr(i.raw.lastIndexOf('.') + 1)) == head)) return true;
-		final project: Array<String> = [for (entry in scope) entry.file];
-		return index.resolveTypeRefsFrom(head, file).exists(d -> d.file.pkg != '' || project.contains(d.file.file))
-			|| index.refs.resolvedDeclsNamed(head).exists(d -> d.file.pkg == '' && project.contains(d.file.file));
+		final info: Null<FileInfo> = index?.fileInfo(file);
+		if (index == null || info == null) return true;
+		return switch index.refs.names.tierOf(head, info) {
+			case Free: false;
+			case Bound(decls): !decls.foreach(d -> StdResolver.isStdFile(d.file.file));
+			case Unknown: true;
+		};
 	}
 
 }

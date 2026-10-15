@@ -10,7 +10,6 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
-import anyparse.query.TypeNameBinding;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -476,7 +475,7 @@ final class UsingScan {
 					if (t.name == path.substr(dot + 1) && !t.isMain) out.push({ path: path, type: t, file: fi });
 		}
 		final info: Null<FileInfo> = file == null ? null : index.fileInfo(file);
-		if (dot < 0 && info != null) for (d in TypeNameBinding.bind(path, info, index) ?? []) if (d.type.isMain)
+		if (dot < 0 && info != null) for (d in index.refs.names.bind(path, info) ?? []) if (d.type.isMain)
 			wholeModule(d.file)
 		else
 			out.push({ path: '${d.file.module}.${d.type.name}', type: d.type, file: d.file });
@@ -493,7 +492,7 @@ final class UsingScan {
 		final seen: Array<TypeDeclInfo> = [];
 		while (cur.type.kind == SymbolIndex.TYPEDEF_DECL_KIND && !cur.type.isAnonStruct) {
 			final target: Null<String> = cur.type.aliasTargetRaw;
-			final next: Null<ResolvedType> = target == null ? null : index.refs.resolveTypeRef(target, cur.file);
+			final next: Null<ResolvedType> = target == null ? null : index.refs.resolveTypeRef(target, cur.file, cur.type.span.from);
 			if (next == null || seen.contains(next.type)) return null;
 			seen.push(cur.type);
 			cur = next;

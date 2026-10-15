@@ -44,7 +44,7 @@ final class HaxelibResolver {
 	 */
 	public static function libSourceDir(name: String): Null<String> {
 		invocations++;
-		final libpathOutput: Null<String> = runLibpath(name);
+		final libpathOutput: Null<String> = runLibpath([name]);
 		return libpathOutput == null ? null : sourceDirFrom(libpathOutput, readHaxelibJson(rootFrom(libpathOutput)));
 	}
 
@@ -90,12 +90,35 @@ final class HaxelibResolver {
 	}
 
 	/**
-	 * Spawn `haxelib libpath <name>` and return its stdout on a zero exit, or
-	 * null on any failure (mirrors `CompilerOracle`'s target-conditional spawn).
+	 * The source directory of each of `names`, in order, null for one that cannot be resolved — `libSourceDir` for every
+	 * name, asked of ONE `haxelib libpath` spawn (it takes several names and prints one root per line): twenty libraries cost
+	 * one spawn instead of twenty. When that call fails (a name not installed fails it whole) or answers a different number of
+	 * lines, each name is asked alone, as before.
 	 */
-	private static function runLibpath(name: String): Null<String> {
+	public static function libSourceDirs(names: Array<String>): Array<Null<String>> {
+		if (names.length > 1) {
+			invocations++;
+			final roots: Null<Array<String>> = rootsFrom(runLibpath(names), names.length);
+			if (roots != null) return [for (root in roots) sourceDirFrom(root, readHaxelibJson(rootFrom(root)))];
+		}
+		return names.map(libSourceDir);
+	}
+
+	/** PURE: the roots a multi-name `haxelib libpath` printed, one per line, or null when there is no answer or not `count` of them. */
+	public static function rootsFrom(libpathOutput: Null<String>, count: Int): Null<Array<String>> {
+		if (libpathOutput == null) return null;
+		final lines: Array<String> = [for (line in libpathOutput.split('\n')) if (line.trim() != '') line.trim()];
+		if (lines.length != count) return null;
+		return lines;
+	}
+
+	/**
+	 * Spawn `haxelib libpath <names…>` and return its stdout on a zero exit, or null on any failure — one name that does
+	 * not resolve fails the whole call (mirrors `CompilerOracle`'s target-conditional spawn).
+	 */
+	private static function runLibpath(names: Array<String>): Null<String> {
 		#if nodejs
-		final res: ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync('haxelib', ['libpath', name], { encoding: 'utf8' });
+		final res: ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync('haxelib', ['libpath'].concat(names), { encoding: 'utf8' });
 		final launchError: Null<Dynamic> = (res.error: Dynamic);
 		if (launchError != null) return null;
 		final status: Null<Int> = (res.status: Null<Int>);
@@ -104,7 +127,7 @@ final class HaxelibResolver {
 		return out == null ? null : '$out';
 		#elseif sys
 		try {
-			final process: sys.io.Process = new sys.io.Process('haxelib', ['libpath', name]);
+			final process: sys.io.Process = new sys.io.Process('haxelib', ['libpath'].concat(names));
 			final out: String = process.stdout.readAll().toString();
 			// `exitCode()` is `Null<Int>`: null only in the non-blocking form, which this
 			// call is not; a null still means "no status", so it falls through to null like

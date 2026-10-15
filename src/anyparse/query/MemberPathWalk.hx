@@ -129,7 +129,7 @@ final class MemberPathWalk {
 				case Nominal(path, _): path;
 				case _: null;
 			};
-			current = nominal == null ? null : _refs.resolveTypeRef(nominal, cur.file);
+			current = nominal == null ? null : _refs.resolveTypeRef(nominal, cur.file, cur.type.span.from);
 		}
 		if (current == null) return null;
 		final last: ResolvedType = current;

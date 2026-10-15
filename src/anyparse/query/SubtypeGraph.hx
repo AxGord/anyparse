@@ -672,7 +672,9 @@ final class SubtypeGraph {
 					// chain alike, since `importAliases` unions both.
 					final written: String = i < t.supertypesRaw.length ? t.supertypesRaw[i] : '';
 					final aliased: Bool = written.indexOf('.') < 0 && importAliases.exists(written);
-					final direct: Null<ResolvedType> = pinnable && !aliased && written != '' ? _refs.resolveTypeRef(written, fi) : null;
+					final direct: Null<ResolvedType> = pinnable && !aliased && written != ''
+						? _refs.resolveTypeRef(written, fi, t.span.from)
+						: null;
 					if (direct != null)
 						fileSubtypeOnce(adjacency.qualified, _refs.seenKey(direct), qualifiedKeys, fi, t);
 					else
@@ -762,7 +764,7 @@ final class SubtypeGraph {
 		// of a class — so the closure over it IS complete and the refusal does not apply.
 		if (ALIASING_DECL_KINDS.contains(cur.type.kind) && !cur.type.isAnonStruct) return false;
 		for (raw in cur.type.supertypesRaw) {
-			final anc: Null<ResolvedType> = _refs.resolveTypeRef(raw, cur.file);
+			final anc: Null<ResolvedType> = _refs.resolveTypeRef(raw, cur.file, cur.type.span.from);
 			if (anc == null) return false;
 			final ancestor: ResolvedType = anc;
 			if (ancestor.type.name == target) return false;
@@ -831,7 +833,7 @@ final class SubtypeGraph {
 			for (cur in level) if (_refs.markSeen(cur, seen)) {
 				for (i in 0...cur.type.supertypesRaw.length) {
 					if (i < cur.type.supertypes.length && cur.type.interfaces.contains(cur.type.supertypes[i])) continue;
-					final anc: Null<ResolvedType> = _refs.resolveTypeRef(cur.type.supertypesRaw[i], cur.file);
+					final anc: Null<ResolvedType> = _refs.resolveTypeRef(cur.type.supertypesRaw[i], cur.file, cur.type.span.from);
 					if (anc != null) next.push(anc);
 				}
 			}

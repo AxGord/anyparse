@@ -297,7 +297,7 @@ final class StructuralTypes {
 		final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(paramSource, _typeSyntax);
 		if (args == null || args.length != 1) return false;
 		final element: String = args[0];
-		return SourceText.isIdentifier(element) && _refs.resolveTypeRef(element, host.file) == null
+		return SourceText.isIdentifier(element) && _refs.resolveTypeRef(element, host.file, host.type.span.from) == null
 			&& (accepts == ITERABLE_TYPE_NAME ? satisfiesIterable(receiver, fromFile) : satisfiesIterator(receiver, fromFile));
 	}
 
@@ -470,7 +470,7 @@ final class StructuralTypes {
 			final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(typeSource, _typeSyntax);
 			return args == null || args.length != 1 ? null : comparableNominalOf(args[0], host, seen);
 		}
-		final decl: Null<ResolvedType> = _refs.resolveTypeRef(nominal, host.file);
+		final decl: Null<ResolvedType> = _refs.resolveTypeRef(nominal, host.file, host.type.span.from);
 		if (decl == null) return nominal;
 		if (decl.type.kind != SymbolIndex.TYPEDEF_DECL_KIND) return nominal;
 		if (decl.type.isAnonStruct) return null;

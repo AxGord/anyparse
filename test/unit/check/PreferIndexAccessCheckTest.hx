@@ -5,6 +5,7 @@ import anyparse.check.Linter;
 import anyparse.check.PreferIndexAccess;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.QueryTestHelpers;
 import utest.Assert;
 import utest.Test;
 
@@ -493,7 +494,7 @@ class PreferIndexAccessCheckTest extends Test {
 
 	/** Run over several sources at once, so the type gate can resolve a member declared in another file. */
 	private function violationsAcross(sources: Array<String>): Array<Violation> {
-		return new PreferIndexAccess().run([for (i in 0...sources.length) { file: 'F$i.hx', source: sources[i] }], new HaxeQueryPlugin());
+		return new PreferIndexAccess().run(QueryTestHelpers.rootModules(sources), new HaxeQueryPlugin());
 	}
 
 	/** Run over explicit file paths, so package + import scope (isMain module names) resolves. */

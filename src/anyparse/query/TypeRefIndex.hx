@@ -1,6 +1,5 @@
 package anyparse.query;
 
-import anyparse.query.SymbolIndex.AmbientImportGroup;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ImportInfo;
 import anyparse.query.SymbolIndex.ImportKind;
@@ -13,10 +12,10 @@ using Lambda;
 /**
  * The name -> DECLARATION layer of the index: which files declare a simple name, and which
  * declaration a written type reference denotes when it is read from a given file's scope.
- * Import, `using`, alias and same-package visibility resolve here, and nothing above this layer should
- * re-derive them — a package-blind simple-name match is exactly the flaw it exists to remove. That is a goal,
- * not yet a fact: `TypeNameBinding`, `ImportBindings` and `CallGraphImports` each answer part of the same
- * question their own way, and a consumer that adds a fifth reading re-opens the flaw.
+ * A SIMPLE name is bound by `names` (`TypeNameBinding`), the compiler's resolution order and the one implementation of it:
+ * `resolveTypeRefAll` answers a simple reference through it, and `ImportBindings` lists an import line's names from its tables.
+ * What still reads import statements its own way is the call graph's `CallGraphImports`, owned by the graph (`apqlint.json`
+ * `ownedTypes`); a consumer adding another reading re-opens the package-blind match this layer exists to remove.
  *
  * Split out of `SymbolIndex`, which keeps the indexed DATA and hands a `TypeRefIndex` to each of
  * its query layers at construction. Those layers depend on reference RESOLUTION, not on the
@@ -30,9 +29,6 @@ using Lambda;
 @:allow(anyparse.query.MemberLookup)
 final class TypeRefIndex {
 
-	/** The strongest precedence tier: a module's own declarations and its own explicit imports — see `tierOf`. */
-	private static inline final OWN_EXPLICIT_TIER: Int = 0;
-
 	/** Every indexed file's `FileInfo`, handed over by the owning index. */
 	private final _files: Array<FileInfo>;
 
@@ -42,9 +38,13 @@ final class TypeRefIndex {
 	/** Simple name -> each file entry declaring it once, in index order (`declaringFiles`): built with `_byName`. */
 	private final _filesByName: Map<String, Array<FileInfo>> = [];
 
-	/** Built once by the owning `SymbolIndex`, before any layer that resolves through it. */
-	public function new(files: Array<FileInfo>) {
+	/**
+	 * Built once by the owning `SymbolIndex`, before any layer that resolves through it; `skipped` are the files it could
+	 * not parse, `sources` the texts of those it did, `plugin` the grammar a std module outside the index is read with.
+	 */
+	public function new(files: Array<FileInfo>, skipped: Array<String>, sources: Map<String, String>, plugin: GrammarPlugin) {
 		_files = files;
+		names = new TypeNameBinding(files, skipped, sources, plugin);
 	}
 
 	/**
@@ -96,34 +96,27 @@ final class TypeRefIndex {
 	}
 
 	/**
-	 * Resolve a written supertype reference `raw` (as it appears in `fromFile`) to the
-	 * SINGLE in-set type it names, or null when it is external (no in-set match) or
-	 * AMBIGUOUS (more than one distinct in-set match). A qualified `raw` matches an
-	 * in-set type whose import path equals it; a simple `raw` matches a type in scope of
-	 * `fromFile` — named by an explicit `import` / `using`, reached through a `pkg.*`
-	 * wildcard, or declared in `fromFile`'s own package.
+	 * Resolve a written type reference `raw` (as it appears in `fromFile`) to the SINGLE in-set
+	 * declaration it names, or null when nothing in the index provably is that declaration (an external
+	 * type, a tier the index cannot bound) or the answer is AMBIGUOUS (two class paths holding one
+	 * module). A simple `raw` is bound by `names`, the compiler's resolution order; a qualified one
+	 * matches on import path. `at`, the offset `raw` is written at in `fromFile`, lets a
+	 * `#if`-guarded import decide a use inside its own branch (`TypeNameBinding.tierOf`).
 	 */
-	public function resolveTypeRef(raw: String, fromFile: FileInfo): Null<ResolvedType> {
-		final matches: Array<ResolvedType> = resolveTypeRefAll(raw, fromFile);
+	public function resolveTypeRef(raw: String, fromFile: FileInfo, ?at: Int): Null<ResolvedType> {
+		final matches: Array<ResolvedType> = resolveTypeRefAll(raw, fromFile, at);
 		return matches.length == 1 ? matches[0] : null;
 	}
 
-	/** Every in-scope declaration `raw` resolves to from `fromFile` (see `resolveTypeRef`), deduped by declaring file. */
-	public function resolveTypeRefAll(raw: String, fromFile: FileInfo): Array<ResolvedType> {
-		final dot: Int = raw.lastIndexOf('.');
-		if (dot >= 0) {
-			final qualified: Array<ResolvedType> = resolveQualifiedRefAll(raw);
-			return qualified.length > 0 ? qualified : moduleRelativeRefAll(raw, fromFile);
-		}
-		final withGuarded: Array<ResolvedType> = inScopeAll(raw, fromFile, true);
-		// A `#if`-guarded import statement is in one build and absent from another, so a tier resting
-		// only on guarded statements cannot decide ONE declaration: the answer is the UNION of the two
-		// configurations, which is the ambiguity every pinning consumer already refuses on. With no
-		// ambient group that union is provably the set above — every tier a guarded statement can fill
-		// is one the answer already concatenates — so the second view is asked for only with a chain.
-		return fromFile.ambientImports.length == 0 || !hasGuardedImport(fromFile)
-			? withGuarded
-			: deduped(withGuarded.concat(inScopeAll(raw, fromFile, false)));
+	/**
+	 * Every declaration `raw` resolves to from `fromFile` (see `resolveTypeRef`), written at offset `at` of it when the caller
+	 * knows where. A simple name is bound by `names` — the compiler's resolution order, empty wherever no tier provably
+	 * answers; a dotted one matches on import path, the module-relative `Mod.Sub` as the fallback.
+	 */
+	public function resolveTypeRefAll(raw: String, fromFile: FileInfo, ?at: Int): Array<ResolvedType> {
+		if (raw.indexOf('.') < 0) return names.bind(raw, fromFile, at) ?? [];
+		final qualified: Array<ResolvedType> = resolveQualifiedRefAll(raw);
+		return qualified.length > 0 ? qualified : moduleRelativeRefAll(raw, fromFile);
 	}
 
 	/**
@@ -160,10 +153,10 @@ final class TypeRefIndex {
 	 *  - neither: the name must be globally unique among indexed decls — the original rule, kept
 	 *    as the fallback so an out-of-index `fromFile` degrades to it instead of refusing.
 	 */
-	public function resolveStartType(typeName: String, fromFile: Null<String>): Null<ResolvedType> {
+	public function resolveStartType(typeName: String, fromFile: Null<String>, ?at: Int): Null<ResolvedType> {
 		if (fromFile != null) {
 			final host: Null<FileInfo> = _files.find(f -> f.file == fromFile);
-			if (host != null) return resolveTypeRef(typeName, host);
+			if (host != null) return resolveTypeRef(typeName, host, at);
 		}
 		if (typeName.indexOf('.') >= 0) {
 			final qualified: Array<ResolvedType> = resolveQualifiedRefAll(typeName);
@@ -171,29 +164,6 @@ final class TypeRefIndex {
 		}
 		final ds: Array<ResolvedType> = resolvedDeclsNamed(typeName);
 		return ds.length == 1 ? ds[0] : null;
-	}
-
-	/**
-	 * Every declaration a simple `raw` is in scope of from `fromFile`, at the PRECEDENCE `tierOf`
-	 * lays out: the STRONGEST non-empty tier is the whole answer. `guardedVisible` false reads the
-	 * configuration in which every `#if`-guarded import statement is absent — see `resolveTypeRefAll`.
-	 */
-	private function inScopeAll(raw: String, fromFile: FileInfo, guardedVisible: Bool): Array<ResolvedType> {
-		final chain: Int = fromFile.ambientImports.length;
-		final tiers: Array<Array<ResolvedType>> = [for (_ in 0...tierCount(chain)) []];
-		// Whether a tier only the CHAIN can fill has a member. Nothing else may collapse the tiers: a
-		// file with no ambient binding must get the set this layer always answered, ambiguity included.
-		var chainFilled: Bool = false;
-		for (r in named(raw)) {
-			final tier: Int = tierOf(fromFile, r.file, r.type, guardedVisible);
-			if (tier >= 0) {
-				tiers[tier].push({ file: r.file, type: r.type });
-				if (chainTier(tier, chain)) chainFilled = true;
-			}
-		}
-		if (!chainFilled) return deduped(tiers[OWN_EXPLICIT_TIER].concat(tiers[ownWildTier(chain)]).concat(tiers[localTier(chain)]));
-		for (tier in tiers) if (tier.length > 0) return deduped(tier);
-		return [];
 	}
 
 	/**
@@ -270,21 +240,6 @@ final class TypeRefIndex {
 		return edges;
 	}
 
-	/** The tier a `fromFile`-own wildcard import reaches, for an ambient chain of `chain` groups. */
-	private static inline function ownWildTier(chain: Int): Int {
-		return OWN_EXPLICIT_TIER + 1 + chain;
-	}
-
-	/** The weakest tier — a same-package or root-package type — for an ambient chain of `chain` groups. */
-	private static inline function localTier(chain: Int): Int {
-		return ownWildTier(chain) + 1 + chain;
-	}
-
-	/** How many tiers an ambient chain of `chain` groups lays out. */
-	private static inline function tierCount(chain: Int): Int {
-		return localTier(chain) + 1;
-	}
-
 	/** The import path naming type `t` in file `fi`: its module when `t` is the module main type, else `module.name`. */
 	public static inline function importPathFor(fi: FileInfo, t: TypeDeclInfo): String {
 		return t.isMain ? fi.module : '${fi.module}.${t.name}';
@@ -299,7 +254,7 @@ final class TypeRefIndex {
 	/**
 	 * Whether the MODULE of `fi` can be named by its own simple name from `fromFile` — the
 	 * visibility a module-relative `Mod.Sub` reference needs, which is NOT the one a bare TYPE
-	 * name needs, so `simpleRefInScope` cannot stand in for it. Compiled on 4.3.7: same package
+	 * name needs, so the simple-name binding (`names`) cannot stand in for it. Compiled on 4.3.7: same package
 	 * resolves and `import pkg.*;` resolves, while BOTH `import pkg.Mod;` and `using pkg.Mod;`
 	 * fail with `Type not found : Mod` — a module import puts the module's TYPES in simple-name
 	 * scope, but the qualifier of `Mod.Sub` is read as a module PATH, which only the package
@@ -318,84 +273,6 @@ final class TypeRefIndex {
 		// this is a membership question with no precedence in it — a module either can be named by
 		// its simple name here or cannot — so the two lists answer as a union.
 		return supplies(fromFile.imports) || fromFile.ambientImports.exists(g -> supplies(g.imports));
-	}
-
-	/** `matches` with one entry per `(declaring file, name)` — the identity `resolveTypeRefAll` answers in. */
-	private static function deduped(matches: Array<ResolvedType>): Array<ResolvedType> {
-		final out: Array<ResolvedType> = [];
-		final seen: Array<String> = [];
-		for (m in matches) {
-			final key: String = '${m.file.file}#${m.type.name}';
-			if (seen.contains(key)) continue;
-			seen.push(key);
-			out.push(m);
-		}
-		return out;
-	}
-
-	/**
-	 * Whether `imports` names type `t` of file `fi` EXPLICITLY — a statement spelling `t`'s own import
-	 * path, or spelling `t`'s module (which carries every type the module declares into simple-name
-	 * scope, so `import pkg.Mod;` makes a sub-module `pkg.Mod.Sub` referable as `Sub`).
-	 *
-	 * Takes the statement LIST rather than the referring file so one predicate answers both for a
-	 * file's own imports and for an ambient source's: precedence between the two is the caller's, the
-	 * shape of a binding is not. A ROOT-package type is included — `import T;` on a package-less
-	 * module is an explicit import like any other, and the compiler ranks it as one.
-	 *
-	 * An ALIAS statement answers false: the alias binds a name this predicate is not given, so
-	 * resolving one is a separate question no consumer of this layer asks yet.
-	 */
-	private static function namedByExplicitImport(imports: Array<ImportInfo>, fi: FileInfo, t: TypeDeclInfo, guardedVisible: Bool): Bool {
-		final path: String = importPathFor(fi, t);
-		for (imp in imports) if (guardedVisible || !imp.guarded) switch imp.kind {
-			case ImportKind.Import, ImportKind.Using:
-				if (imp.raw == path || (!t.isMain && imp.raw == fi.module)) return true;
-			case ImportKind.Wild, ImportKind.Alias:
-		}
-		return false;
-	}
-
-	/**
-	 * Whether `imports` carries a `pkg.*` wildcard over `fi`'s package. A wildcard binds a whole
-	 * package rather than a named type, and the compiler ranks every wildcard BELOW every explicit
-	 * import — the file's own wildcard included — so it is a separate predicate rather than an arm of
-	 * the one above. A root-package type has no package to wildcard over.
-	 */
-	private static function namedByWildcardImport(imports: Array<ImportInfo>, fi: FileInfo, guardedVisible: Bool): Bool {
-		if (fi.pkg == '') return false;
-		final wild: String = '${fi.pkg}.*';
-		return imports.exists(imp -> imp.kind == ImportKind.Wild && imp.raw == wild && (guardedVisible || !imp.guarded));
-	}
-
-	/** Whether any import statement `fromFile` resolves through — its own or an ambient group's — is `#if`-guarded. */
-	private static function hasGuardedImport(fromFile: FileInfo): Bool {
-		return fromFile.imports.exists(imp -> imp.guarded) || fromFile.ambientImports.exists(g -> g.imports.exists(imp -> imp.guarded));
-	}
-
-	/**
-	 * The PRECEDENCE tier a bare `t` of `fi` is reached at from `fromFile`, LOWER is stronger, -1 when
-	 * it is out of scope. The layout, and with it the whole precedence order:
-	 *
-	 *  - 0 — `fromFile`'s own declarations and its own EXPLICIT imports.
-	 *  - 1 + k — the explicit imports of ambient group `k`, nearest group first.
-	 *  - 1 + n — `fromFile`'s own WILDCARD imports.
-	 *  - 2 + n + k — the wildcard imports of ambient group `k`.
-	 *  - 2 + 2n — a same-package or root-package type, named by nothing.
-	 */
-	private static function tierOf(fromFile: FileInfo, fi: FileInfo, t: TypeDeclInfo, guardedVisible: Bool): Int {
-		final groups: Array<AmbientImportGroup> = fromFile.ambientImports;
-		final chain: Int = groups.length;
-		if (fi.file == fromFile.file || namedByExplicitImport(fromFile.imports, fi, t, guardedVisible)) return OWN_EXPLICIT_TIER;
-		for (i in 0...chain) if (namedByExplicitImport(groups[i].imports, fi, t, guardedVisible)) return OWN_EXPLICIT_TIER + 1 + i;
-		if (namedByWildcardImport(fromFile.imports, fi, guardedVisible)) return ownWildTier(chain);
-		for (i in 0...chain) if (namedByWildcardImport(groups[i].imports, fi, guardedVisible)) return ownWildTier(chain) + 1 + i;
-		return fi.pkg == fromFile.pkg || fi.pkg == '' ? localTier(chain) : -1;
-	}
-
-	/** Whether `tier` is one only the ambient chain of `chain` groups can fill — see `tierOf`. */
-	private static function chainTier(tier: Int, chain: Int): Bool {
-		return tier != OWN_EXPLICIT_TIER && tier != ownWildTier(chain) && tier != localTier(chain);
 	}
 
 	/**
@@ -426,6 +303,20 @@ final class TypeRefIndex {
 			table = built;
 		}
 		return table[name] ?? [];
+	}
+
+	/** What a simple type name written in a file binds to, tier by tier in the compiler's order — the one reading of a bare name. */
+	public final names: TypeNameBinding;
+
+	/**
+	 * The paths of the `using` statements `fi` receives from its AMBIENT chain (`import.hx`), nearest source first —
+	 * the extensions in scope that the file itself does not spell. A guarded one included: the build that compiles it
+	 * binds through it.
+	 */
+	public static function ambientUsings(fi: FileInfo): Array<String> {
+		return [
+			for (group in fi.ambientImports) for (imp in group.imports) if (imp.kind == ImportKind.Using) imp.raw
+		];
 	}
 
 }

@@ -9,6 +9,7 @@ import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import unit.QueryTestHelpers;
 import utest.Assert;
 import utest.Test;
 
@@ -495,13 +496,16 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 	 */
 	private function fixedWith(source: String, model: String): String {
 		final report: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: source }];
+		// One module per model class, each its module's main type: a sub-type is invisible by its bare name.
+		final library: Array<{ file: String, source: String }> =
+			QueryTestHelpers.rootModules([for (i => piece in model.split('\nclass ')) i == 0 ? piece : 'class $piece']);
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		scoped.setResolutionScope({
 			declared: true,
-			sources: () -> {report: report, projectRoots: [], library: new LibrarySources([{ file: 'Res.hx', source: model }]) }
+			sources: () -> {report: report, projectRoots: [], library: new LibrarySources(library) }
 		});
 		final check: SimplifyNegatedCompound = new SimplifyNegatedCompound();
-		final files: Array<{ file: String, source: String }> = report.concat([{ file: 'Res.hx', source: model }]);
+		final files: Array<{ file: String, source: String }> = report.concat(library);
 		final vs: Array<Violation> = check.run(report, scoped);
 		final es: Array<{ span: Span, text: String }> = check.fix(source, vs, scoped, SymbolIndex.build(files, scoped));
 		return es.length == 0 ? source : canonicalized(source, es, scoped);

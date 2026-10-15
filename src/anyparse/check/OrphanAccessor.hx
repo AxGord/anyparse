@@ -396,7 +396,7 @@ final class OrphanAccessor implements Check implements DefaultOff {
 			if (!speculative) found.declared = true;
 		}
 		for (raw in type.supertypesRaw) {
-			final resolved: Array<{ file: FileInfo, type: TypeDeclInfo }> = scope.resolveTypeRefsFrom(raw, host.file);
+			final resolved: Array<{ file: FileInfo, type: TypeDeclInfo }> = scope.resolveTypeRefsFrom(raw, host.file, type.span.from);
 			// Import-visibility resolution misses a supertype the file reaches by simple name
 			// through a PARENT package (Haxe needs no import for that, and the index models only
 			// same-package / root / explicit-import / wildcard visibility). Fall back to a

@@ -269,7 +269,7 @@ class MemberReachTest extends Test {
 		final base: String = 'class Base { public function new() {} public function go():Void {} }';
 		final sub: String = 'class LibSub extends Base {\n#if js\noverride function go():Void {\n#else\noverride function go():Void {\n#end\n'
 			+ 'C.items.push(9); } }';
-		assertMatch(ask([src], [base, sub]), r -> r.match(Unknown(SkipParse('L1.hx'))));
+		assertMatch(ask([src], [base, sub]), r -> r.match(Unknown(SkipParse('LibSub.hx'))));
 		assertMatch(ask([src], [base]), r -> r.match(Proven));
 	}
 
@@ -283,7 +283,8 @@ class MemberReachTest extends Test {
 		function ask2(receiver: String): ReachResult {
 			final src: String = 'class C { public var items:Array<Int> = []; public static var inst:C; var b:Base; '
 				+ 'function f():Void { /*<*/ b.go(); /*>*/ } }';
-			final sub: String = 'class LibSub extends Base { override public function go():Void { '
+			// `C` is a sub-type of the project's module `F0`, which a library file names through its module.
+			final sub: String = 'import F0.C;\n\nclass LibSub extends Base { override public function go():Void { '
 				+ 'var a:Array<Int> = Reflect.field($receiver, "items"); a.push(9); } }';
 			final reflect: String = 'extern class Reflect { public static function field(o:Dynamic, name:String):Dynamic; }';
 			return ask([src], [base, other, sub, reflect]);
@@ -1950,9 +1951,7 @@ class MemberReachTest extends Test {
 	private function reachOf(project: Array<String>, library: Null<Array<String>>, scopeKnown: Bool): MemberReach {
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		final files: Array<{ file: String, source: String }> = [for (i in 0...project.length) { file: 'F$i.hx', source: project[i] }];
-		final libs: Array<{ file: String, source: String }> = [
-			for (i in 0...(library ?? []).length) { file: 'L$i.hx', source: (library ?? [])[i] }
-		];
+		final libs: Array<{ file: String, source: String }> = QueryTestHelpers.rootModules(library ?? []);
 		libs.push({ file: 'std/Array.hx', source: STD_ARRAY });
 		return new MemberReach(
 			plugin, files, SymbolIndex.build(files.concat(libs), plugin), scopeKnown, MemberReach.MAX_LIBRARY_FILES,

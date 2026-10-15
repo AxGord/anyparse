@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.check.ReflectionMemo;
 import anyparse.query.ReachLiveness.ReachBuilds;
+import anyparse.query.SymbolIndex.TypeDeclInfo;
 
 /**
  * A run-scoped host that can supply a resolution-scoped `SymbolIndex` — the
@@ -50,6 +51,14 @@ interface SymbolIndexHost {
 	 * files UNION the library roots), or null when no scope is configured.
 	 */
 	function resolutionIndex(): Null<SymbolIndex>;
+
+	/**
+	 * The types named `name` the module `module` declares in the resolution scope — read from that module's own file
+	 * alone, never by building the resolution index — or null when the scope does not hold it or no scope reached the
+	 * run. What a name binding over a NARROWER index asks before it lets a lower tier answer past an import of a module it
+	 * does not hold.
+	 */
+	function moduleTypesInScope(module: String, name: String): Null<Array<TypeDeclInfo>>;
 
 	/**
 	 * The resolution scope's RAW sources — report files UNION the library roots — or null when no

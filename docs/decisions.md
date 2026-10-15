@@ -2643,3 +2643,79 @@ decided the question; it may not become a record of runs.
 - the `--fix` loop was to keep building the per-pass resolution index itself → the host rebuilds it
   (`rebuildResolutionIndex`) outside the memo, since every pass replaces it and a kept entry would pin a whole
   library-wide index per pass — branch `feat/infra-B1`
+- a simple type name was read four ways (`TypeRefIndex.resolveTypeRefAll` concatenating tiers and refusing on two,
+  `TypeNameBinding` in the compiler's order, `ImportBindings` re-deriving an import line's types, `CallGraphImports`) →
+  ONE: `TypeNameBinding`, owned by `TypeRefIndex` (`refs.names`), which `resolveTypeRefAll` answers a simple reference
+  through; the tier helpers of `TypeRefIndex` (`inScopeAll`, `tierOf`, `chainTier`, `hasGuardedImport`, the two
+  `namedBy*Import` predicates, the tier arithmetic) are deleted. The order, each tier compiled on 4.3.7 in TYPE position
+  (`final v:X`, probes kept in `../b2-scratch/hx/typepos`): the module's own types, a private one included, beat every
+  import (`p1`, `p1b`); explicit `import` / `using` / alias, the LAST binding statement winning (`p2*`, `p3b/c`), a
+  module import binding its non-private types only (`p9`); `import.hx` explicit, nearest first, below the file's own and
+  above its wildcards (`p4*`); `StdTypes` (`Iterable` beats a same-package, wildcard and toplevel `Iterable`, loses to
+  an explicit import, `t1..t5`); wildcards asked LAST FIRST (`p5c/d`, `p4f/g`), binding package MAIN types only (`p5a`,
+  `r1`, `r2`: a module without a main type, or with a private one, is skipped), a field wildcard binding no type
+  (`q1`), a static or constructor import binding no type (`q3`, `q4`); the package then each PARENT package (`p6*`),
+  then the toplevel, main types only (`p6c`, `p7b`, `p7c`, `p8`) — branch `feat/infra-B2`
+- an import path was to be split by asking the index which prefix is a module → by the compiler's case rule (lower-case
+  segments are the package, the first other one the module): a lower-case module cannot be imported at all
+  (`Module name must start with an uppercase letter`, 4.3.7), so the rule is exact and needs no index — branch
+  `feat/infra-B2`
+- fail-closed on an import of a module the index does not hold, as `TypeNameBinding` did → measured: TM's report
+  index holds neither openfl nor the std, so every file importing either answered `Unknown` for every name and
+  thread-safety lost 37 of 102 recall keys (lock members typed through report-index `MemberLookup`). The module is READ
+  instead, never guessed: `SymbolIndexHost.moduleTypesInScope` parses only the resolution-scope files named after it
+  (no resolution index is built), then `StdTypes.moduleTypes` reads the std file of that module (any std module, `js/`,
+  `flash/` included: openfl wraps its imports in `#if (js && html5)`). A module that declares the name binds OUTSIDE
+  the index (`Free`); one that does not lets the next tier answer; one nothing reads stays `Unknown` — branch
+  `feat/infra-B2`
+- a `#if`-guarded statement binding the name was to answer `Unknown` (old `TypeNameBinding`) or the union of an
+  all-guards-present and an all-guards-absent reading (old `TypeRefIndex`) → the USE SITE decides (`tierOf(name, fi,
+  at)`): a use inside the statement's own branch, or a branch of the same spelled condition chain
+  (`CondBranchPath.within`, the shared `#if` layer), is compiled only by the builds holding the statement, so its answer
+  stands (`coGuarded`; 4.3.7 probe `g2`: `#if !useB import a.T; class M extends T {} #else typedef M = b.Other; #end`
+  compiles both builds, and the one without the import never names `T`); any other use is weighed against the order
+  WITHOUT the statement (`bothBuilds`), where a package or toplevel module that nothing — index, scope, std — can read
+  is `Unknown`, never taken as absent (a use outside the region, probe `g1`, is compiled by the other build too). A
+  caller with no offset gets that strict reading. The callers that walk a declaration pass its start
+  (`MemberLookup`, `SubtypeGraph`, `StructuralTypes`, `MemberPathWalk`, `TypeTraits`, `ConfiguredTypes`, `UsingScan`,
+  `ImportBindings`, `OrphanAccessor`, `UnusedPublicMember`, `PreferArrowCallback`), `DeclaredNullity` / `OperandBinder`
+  the written type's or the member's offset, `prefer-static-extension` the call's. An intermediate version took the
+  other build's unread module as binding nothing — a guess; measured against it the strict rule alone lost 6
+  `prefer-api-idiom` findings on bd943dac and 4 fold findings on anyparse, all inside a whole-file `#if`, which the use
+  site keeps — branch `feat/infra-B2`
+- `StdTypes` was not a tier → it is, between the explicit imports and the wildcards; read from the index when the std's
+  own `StdTypes.hx` is in it (`StdResolver.isStdFile`), else from the std listing, else from `STD_TYPE_NAMES` (pinned
+  against the std by `TypeNameBindingTest`), a name it declares binding a built-in (`Free`) — branch `feat/infra-B2`
+- `ImportBindings` was to list an import line's types off its own module / package tables → it reads the binding's
+  (`importedTypes`: a module's NON-PRIVATE types; `wildcardTypes`: a package's non-private MAIN types, where it listed
+  module names), so the import ranks and the binding read one table; `PreferStaticExtension.moduleIfGuardedSelf`
+  (subsumed by `bothBuilds`), `FieldWriteIndex.plainClassInScope`'s import-shadow loop (the binding answers it),
+  `FieldInitAtDeclaration.coreNameShadowed`'s own import / wildcard scan (now `tierOf` + `isStdFile`),
+  `SymbolIndex.importResolves` (subsumed by fail-closed binding) and `UnusedPrivate`'s alias scan
+  (`TypeRefIndex.importAliasEdges`) are deleted — branch `feat/infra-B2`
+- `CallGraphImports` keeps its own import reading for task B3; what it needs is now in the shared layer:
+  `TypeNameBinding.splitPath` (module / type / field of an import path), `importedTypes`, `wildcardTypes`,
+  `filesOfModule`, the compiler's statement order (`tierOf`'s own-then-chain, last-first lists) and
+  `TypeRefIndex.ambientUsings` — branch `feat/infra-B2`
+- `SymbolIndex.resolvesToStdType` answered a yes for the WRITTEN name → `stdDeclarationOf` answers the declaration, and
+  `dead-binder-counter-loop` / `prefer-count` take the container's name from it: `import haxe.ds.StringMap as List;`
+  binds `List` to the std `StringMap` (4.3.7: an alias binds its alias name to the aliased type, `p3`), which is not a
+  `List`. The old proof refused any alias spelling the name; the binding now answers it, so the name must be the
+  declaration's — branch `feat/infra-B2`
+- test fixtures that put a type in a module of another name (`a.hx` declaring `Foo`, `F0.hx`, `L1.hx`, one `Res.hx`
+  holding several model classes) or wrote `using Other;` for a same-package `p.Other` resolved only through the old
+  lax reading: 4.3.7 sees no sub-type outside its module by its bare name (`p7c`) and reads every import path
+  absolutely (`import Other;` in package `p` is `Type not found`, `u1`..`u4`). Fixed as fixtures, not as engine
+  leniency: `QueryTestHelpers.rootModules` names each source after its first type under its package directory, a
+  repeated module on a second class path (`cpN/`) — the shape two declarations of one module really have; 20
+  `CrossRenameMemberSliceTest` fixtures renamed; `OrphanAccessorCheckTest`'s parent-package case is now RESOLVED (a
+  proven orphan, `Warning`) and its speculative-fallback tests moved to an unrelated package — branch `feat/infra-B2`
+- the binding was to read a module outside the index by parsing every scope file of its name, and the scope was to be
+  read with one `haxelib libpath` per declared library → measured on TM (`--rule thread-safety`, 5.8 → 7.8 s): 0.72 s
+  was twenty serial `haxelib libpath` spawns, 0.45 s parsing imported library modules. `haxelib libpath a b …` takes
+  several names and prints one root per line (`HaxelibResolver.libSourceDirs`; a failed or short answer — one name not
+  installed fails the call whole — falls back to a call per name). The module is the file the compiler loads,
+  `<root>/a/b/C.hx`, and it is parsed only when its text spells the asked name (a file that never spells it declares no
+  type of it); a ROOT module's path is its bare file name, which any directory holds, so its candidates are parsed and
+  their package compared — taking `openfl/events/EventDispatcher.hx` for a toplevel `EventDispatcher` lost 6 findings
+  on bd943dac before that check — branch `feat/infra-B2`

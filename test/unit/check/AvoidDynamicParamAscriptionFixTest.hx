@@ -205,8 +205,8 @@ class AvoidDynamicParamAscriptionFixTest extends Test {
 		// The member walk is transitive, so the resolvability proof has to be: a reachable base
 		// whose OWN interface left the index leaves the closure unproven just the same.
 		final base: String = 'class C extends Base {\n\tfunction f(p:Dynamic):Void {\n\t\ttrace((p : Foo));\n\t}\n}$FOO';
-		Assert.equals(0, crossFileEdits(base, 'class Base implements IGone {}\n').length, 'the closure is not reachable');
-		Assert.isTrue(crossFileEdits(base, 'class Base {}\n').length > 0, 'the same owner fires over a reachable closure');
+		Assert.equals(0, crossFileEdits(base, 'class Base implements IGone {}\n', 'Base.hx').length, 'the closure is not reachable');
+		Assert.isTrue(crossFileEdits(base, 'class Base {}\n', 'Base.hx').length > 0, 'the same owner fires over a reachable closure');
 	}
 
 	public function testAQualifiedAscriptionNeedsThatPathIndexed(): Void {
