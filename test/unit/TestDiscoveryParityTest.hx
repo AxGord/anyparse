@@ -1450,7 +1450,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.JoinSingleUseLocalCheckTest#testTrailingStatementWithoutInterpolationStillFlagged :: control :: '
 				+ 'M-JSUL-UNINDEXED-NAME-ALWAYS',
 			'unit.check.JoinSingleUseLocalCheckTest#testUnconditionalFieldChainStillFlagged :: control :: M-JSUL-PATH-ALWAYS-CONDITIONAL',
-			'unit.check.LintConfigInheritanceTest#testAnUnnamedKeyFallsThroughToTheAncestor :: control :: M-REFLECTIVE-MERGE,M-HOLDERS-MERGE',
+			'unit.check.LintConfigInheritanceTest#testAnUnnamedKeyFallsThroughToTheAncestor :: control :: '
+				+ 'M-REFLECTIVE-MERGE,M-HOLDERS-MERGE,M-OWNED-MERGE',
 			'unit.check.LintConfigTest#testReachSkipsBranchesOnlyUnderADeclaredCompleteOracleList :: control :: M-REACH-CONFIGS-COMPLETE',
 			'unit.check.LintConfigTest#testReachTakesTheBuildsAsCompleteOnlyWhenEveryPathAgrees :: control :: M-REACH-CONFIGS-AGREE',
 			'unit.check.LintConfigTest#testTheReflectiveClassesAreTheRunsOnlyWhenEveryPathDeclaresThemAlike :: control :: M-REFLECTIVE-AGREE,M-HOLDERS-PARSE',
@@ -1680,7 +1681,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.OwnedTypesCheckTest#testNoDeclarationIsInert :: control :: M-OWNED-SKIP-REASON-NULL',
 			'unit.check.OwnedTypesCheckTest#testOwnersArePackageGlobs :: control :: M-OWNED-OWNERS-IGNORED',
 			'unit.check.OwnedTypesCheckTest#testTheDeclaringModuleOwnsItsType :: control :: M-OWNED-DECLARING-MODULE',
-			'unit.check.OwnedTypesCheckTest#testTheReaderNamesEveryDrop :: control :: M-OWNED-READER-NO-OWNERS',
+			'unit.check.OwnedTypesCheckTest#testTheReaderNamesEveryDrop :: control :: M-OWNED-READER-NO-OWNERS,M-OWNED-PARSE',
 			'unit.check.PendingRunsTest#testABatchRunsWhileTheCallerWorks :: control :: M-PENDING-RUNS-IN-FOREGROUND',
 			'unit.check.PendingRunsTest#testACancelledBatchEndsItsJobs :: control :: M-PENDING-CANCEL-LEAVES-JOBS',
 			'unit.check.PendingRunsTest#testATetheredJobDiesWithItsDriver :: control :: M-TETHER-IGNORES-EOF',
@@ -6777,7 +6778,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-OWNED-NO-SUPERTYPE-WALK',
 			'M-OWNED-STATIC-THROUGH-SUBTYPE',
 			'M-OWNED-READER-NO-OWNERS',
-			'M-OWNED-SKIP-REASON-NULL'
+			'M-OWNED-SKIP-REASON-NULL',
+			'M-OWNED-MERGE',
+			'M-OWNED-PARSE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

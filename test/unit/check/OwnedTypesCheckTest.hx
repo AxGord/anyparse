@@ -159,7 +159,7 @@ class OwnedTypesCheckTest extends Test {
 	}
 
 	/** Every entry the reader cannot keep, and every value it ignores, says so. */
-	@:pin('control') @:killer('M-OWNED-READER-NO-OWNERS')
+	@:pin('control') @:killer('M-OWNED-READER-NO-OWNERS') @:killer('M-OWNED-PARSE')
 	public function testTheReaderNamesEveryDrop(): Void {
 		final config: LintConfig = LintConfig.parse(
 			'{"ownedTypes":[1,{"types":["a.T"],"why":"w"},{"owners":["o"],"why":"w"},{"types":["a.T"],"owners":["o"]},'

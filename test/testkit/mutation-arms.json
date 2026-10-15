@@ -21339,6 +21339,22 @@
 			"method": "skipReason",
 			"force": "null",
 			"note": "the rule claims every file of a config that declares no ownedTypes"
+		},
+		{
+			"name": "M-OWNED-MERGE",
+			"type": "anyparse.check.LintConfig",
+			"method": "mergeDocuments",
+			"find": "ownedTypes: near.ownedTypes ?? far.ownedTypes,",
+			"replace": "ownedTypes: near.ownedTypes,",
+			"note": "a nested document that leaves `ownedTypes` unsaid drops the ancestor's declarations"
+		},
+		{
+			"name": "M-OWNED-PARSE",
+			"type": "anyparse.check.LintConfig",
+			"method": "parseDocument",
+			"find": "ownedTypes: ownedTypes,",
+			"replace": "",
+			"note": "`ownedTypes` is never read out of `apqlint.json`"
 		}
 	]
 }
