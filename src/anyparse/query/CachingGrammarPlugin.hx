@@ -788,12 +788,27 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 			for (entry in named[Path.withoutDirectory(tail)] ?? []) if (entry.file == tail || StringTools.endsWith(entry.file, '/$tail'))
 				entry
 		];
-		var types: Null<Array<TypeDeclInfo>> = files.length == 0 ? null : [];
-		// A file that never spells `name` declares no type of it, so only one that does is parsed.
-		for (entry in files) if (types != null && entry.source.indexOf(name) >= 0) {
+		// A file at `a/b/C.hx` is that module's own, and one that never spells `name` declares no type of it, so it is not
+		// parsed. A ROOT module's path is its bare file name, which any directory may hold, so its candidates are parsed and
+		// their package read.
+		final rooted: Bool = module.indexOf('.') < 0;
+		var found: Bool = false;
+		final declared: Array<TypeDeclInfo> = [];
+		for (entry in files) {
+			if (!rooted && entry.source.indexOf(name) < 0) {
+				found = true;
+				continue;
+			}
 			final info: Null<FileInfo> = IndexScope.over([entry], this).fileInfo(entry.file);
-			types = info == null ? null : types.concat(info.types.filter(t -> t.name == name));
+			if (info == null) {
+				_scopeModules[asked] = null;
+				return null;
+			}
+			if (info.module != module) continue;
+			found = true;
+			for (t in info.types) if (t.name == name) declared.push(t);
 		}
+		final types: Null<Array<TypeDeclInfo>> = found ? declared : null;
 		_scopeModules[asked] = types;
 		return types;
 	}

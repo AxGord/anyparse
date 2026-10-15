@@ -4082,6 +4082,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.TypeNameBindingTest#testALibraryModuleIsReadFromTheResolutionScope :: control :: M-SCOPE-MODULE-TYPES-NONE',
 			'unit.query.TypeNameBindingTest#testAParentPackageMainTypeBinds :: control :: M-BINDING-PACKAGE-TIER-CUT',
 			'unit.query.TypeNameBindingTest#testAPrivateTypeIsNeverImportedOrSeenFromItsPackage :: control :: M-BINDING-PRIVATE-VISIBLE',
+			'unit.query.TypeNameBindingTest#testARootModuleIsNotAFileOfItsNameInAnotherPackage :: control :: '
+				+ 'M-SCOPE-ROOT-MODULE-ANYWHERE',
 			'unit.query.TypeNameBindingTest#testAStaticFieldImportBindsNoType :: control :: M-BINDING-FIELD-IMPORT-UNKNOWN',
 			'unit.query.TypeNameBindingTest#testAStdModuleIsReadByTheStdListing :: control :: M-BINDING-OUTSIDE-UNREAD',
 			'unit.query.TypeNameBindingTest#testAStdWildcardWithoutTheModuleBindsNothing :: control :: M-BINDING-STD-WILDCARD-BLIND',
@@ -5360,6 +5362,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-BINDING-GUARDED-OTHER-BUILD',
 			'M-BINDING-STRICT-OUTSIDE',
 			'M-SCOPE-MODULE-TYPES-NONE',
+			'M-SCOPE-ROOT-MODULE-ANYWHERE',
 			'M-HAXELIB-BATCH-COUNT-IGNORED',
 			'M-CTOR-IMPORT-ALIAS-BLIND',
 			'M-CTOR-QUALIFIED-BLIND',

@@ -196,6 +196,22 @@ class TypeNameBindingTest extends Test {
 	}
 
 	@:pin('control')
+	@:killer('M-SCOPE-ROOT-MODULE-ANYWHERE')
+	public function testARootModuleIsNotAFileOfItsNameInAnotherPackage(): Void {
+		// `import Thing;` names the ROOT module `Thing`; the scope holds only `lib/Thing.hx`, the module `lib.Thing`, which
+		// does declare an `X` — but it is not the module imported, so what `Thing` brings in is unknown.
+		final project: Array<{ file: String, source: String }> = [
+			{ file: 'p/X.hx', source: 'package p;\n\nclass X {}\n' },
+			{ file: 'p/Main.hx', source: 'package p;\n\nimport Thing;\n\nclass Main {}\n' }
+		];
+		final library: Array<{ file: String, source: String }> = [
+			{ file: 'lib/Thing.hx', source: 'package lib;\n\nclass Thing {}\n\nclass X {}\n' }
+		];
+		final index: SymbolIndex = IndexScope.report(project, QueryTestHelpers.projectPlugin(project, library));
+		Assert.equals('Unknown', tierText(index, 'X', 'p/Main.hx'), 'no root module `Thing` is in the scope');
+	}
+
+	@:pin('control')
 	@:killer('M-BINDING-GUARDED-OTHER-BUILD')
 	public function testAGuardedImportBindsWhereNoOtherBuildBindsTheName(): Void {
 		final index: SymbolIndex = indexOf([

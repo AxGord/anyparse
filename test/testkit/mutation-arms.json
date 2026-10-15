@@ -9815,6 +9815,14 @@
 			"note": "the resolution scope never answers which types a module outside the index declares, so a library import makes every name it does not bind unknown"
 		},
 		{
+			"name": "M-SCOPE-ROOT-MODULE-ANYWHERE",
+			"type": "anyparse.query.CachingGrammarPlugin",
+			"method": "moduleTypesInScope",
+			"find": "if (info.module != module) continue;",
+			"replace": "",
+			"note": "a file named after a module is taken for it whatever package it declares, so a ROOT module is found in any directory"
+		},
+		{
 			"name": "M-HAXELIB-BATCH-COUNT-IGNORED",
 			"type": "anyparse.query.HaxelibResolver",
 			"method": "rootsFrom",
