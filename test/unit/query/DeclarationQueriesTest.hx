@@ -60,8 +60,8 @@ class DeclarationQueriesTest extends Test {
 			'p/Iface.hx' => 'package p;\n\nclass Iface implements lib.Unknown {\n\tfunction run():Void {}\n}\n',
 			'p/Base.hx' => 'package p;\n\nclass Base {\n\tfunction run():Void {}\n}\n',
 			'p/Kid.hx' => 'package p;\n\nclass Kid extends Base {\n\toverride function run():Void {}\n}\n',
-			'p/Shared.hx' => 'package p;\n\nclass Shared {}\n',
-			'cp1/p/Shared.hx' => 'package p;\n\nclass Shared {\n\tfunction run():Void {}\n}\n',
+			'p/Shared.hx' => 'package p;\n\nclass Shared {\n\tfunction run():Void {}\n}\n',
+			'cp1/p/Shared.hx' => 'package p;\n\nclass Shared {}\n',
 			'p/Over.hx' => 'package p;\n\nclass Over extends Shared {\n\tfunction run():Void {}\n}\n'
 		]);
 		Assert.isTrue(index.members.supertypesDeclareNone('Plain', 'run'), 'an unread superclass: reached only by an override');

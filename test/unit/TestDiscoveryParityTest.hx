@@ -2411,8 +2411,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyReflectiveSealTest#testATypeParameterReceiverIsBoundedByItsInstantiations :: control :: '
 				+ 'M-TS-PLACE-INSTANTIATIONS,M-TS-PLACE-COMPLETE,M-TS-PLACE-RAW-LINK,M-TS-PLACE-FREE-SUB,M-TS-PLACE-NEVER-MADE,'
 				+ 'M-TS-PLACE-UNDECLARED,M-TS-PLACE-GLOB-MATCH,M-TS-PLACE-MAKES-NEW,M-TS-PLACE-MAKES-VALUE,M-TS-PLACE-MAKES-RECEIVER,'
-				+ 'M-TS-PLACE-VOID,M-TS-PLACE-FORWARDED-BOUND,M-TS-PLACE-PARAM-CONSTRAINT,M-TS-PLACE-PARAM-OWNER,M-TS-FINAL-SUPERS-WRITTEN,'
-				+ 'M-TS-REACH-ALIAS-SUBTYPES',
+				+ 'M-TS-PLACE-VOID,M-TS-PLACE-FORWARDED-BOUND,M-TS-PLACE-PARAM-CONSTRAINT,M-TS-PLACE-PARAM-OWNER,M-TS-FINAL-SUPERS-WRITTEN',
 			'unit.check.ThreadSafetyReflectiveSealTest#testAValueTheRunCannotPlaceUnsealsEveryLock :: control :: '
 				+ 'M-TS-SEAL-REFLECT-UNPLACED,M-TS-SEAL-UNPLACED-NOTICE,M-TS-BINDER-TYPE,M-TS-STORED-COMPLETE',
 			'unit.check.ThreadSafetyReflectiveSealTest#testAWriteThatMayStoreALockUnsealsAsBefore :: control :: M-TS-STORED-ANY,M-TS-STORED-RELATED,M-TS-STORED-ARGUMENTS',
@@ -3054,6 +3053,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.BodySlotGuardSliceTest#testAllowsSoleCatchClauseRemoval :: control :: M-BODYSLOT-LEAD-KEPT',
 			'unit.query.BodySlotGuardSliceTest#testAllowsSoleCatchClauseRemovalWithATrailingComment :: control :: M-BODYSLOT-TRIM-WS-ONLY',
 			'unit.query.BodySlotGuardSliceTest#testAllowsWholeElseBranchRemoval :: control :: M-BODYSLOT-LEAD-KEPT',
+			'unit.query.CallGraphBindingTest#testAClassExtendingAnAliasIsASubtypeOfItsTarget :: control :: M-TS-REACH-ALIAS-SUBTYPES',
 			'unit.query.CallGraphBindingTest#testAContainerIsTheStdOneOnlyWhereItsWritingFileBindsIt :: control :: '
 				+ 'M-TS-STD-CONTAINER-DECLARED,M-TS-STD-CONTAINER-WHERE,M-TS-NULLABLE-PATH-KEY',
 			'unit.query.CallGraphBindingTest#testAModuleLevelFunctionSeesItsModuleAndImportsNoClassChain :: control :: '

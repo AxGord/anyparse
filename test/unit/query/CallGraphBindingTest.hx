@@ -100,6 +100,19 @@ class CallGraphBindingTest extends Test {
 		Assert.same(['A.go'], targets('C.hands', Ref), 'a static an import binds, handed on as a value');
 	}
 
+	/** A class extending a typedef alias of a type is a subtype of that type: a call on the type dispatches to its override. */
+	@:pin('control') @:killer('M-TS-REACH-ALIAS-SUBTYPES')
+	public function testAClassExtendingAnAliasIsASubtypeOfItsTarget(): Void {
+		final g: CallGraph = graphOf([
+			'package app; class T { public function new() {} public function m():Void {} }',
+			'package app; typedef N = T;',
+			'package app; class R extends N { override public function m():Void {} }',
+			'package app; class U { static function run(t:T):Void t.m(); }'
+		]);
+		final out: Array<String> = [for (e in g.outEdges('U.run')) if (e.kind == Virtual) e.to];
+		Assert.same(['R.m'], out, 'the override of a class extending the alias');
+	}
+
 	private inline function graphOf(sources: Array<String>): CallGraph {
 		return QueryTestHelpers.graphOf(sources);
 	}
