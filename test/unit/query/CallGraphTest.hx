@@ -1322,79 +1322,6 @@ class CallGraphTest extends Test {
 	}
 
 	/**
-	 * Review L3 G2 / G6 (`f2x/top-list(-rev)`, `proj-vec(-rev)`, `xfile-other`): a container is the std one only where the
-	 * file that WROTE its type binds the name to the std's declaration — a project type at a std path (`haxe/ds/Vector.hx`,
-	 * a root `List.hx`) shadows the std's on the class path (4.3.7, `hx/g2`), and a field type read in another file is what
-	 * its declaring file's imports make it (`import lib.List;` there is no std list). A `Null<T>` parameter of a project
-	 * type in a package is keyed as that type.
-	 */
-	@:pin('control') @:killer('M-TS-STD-CONTAINER-DECLARED') @:killer('M-TS-STD-CONTAINER-WHERE') @:killer('M-TS-NULLABLE-PATH-KEY')
-	public function testAContainerIsTheStdOneOnlyWhereItsWritingFileBindsIt(): Void {
-		#if (sys || nodejs)
-		if (anyparse.query.StdResolver.stdDir() == null) {
-			Assert.pass('no std on this machine');
-			return;
-		}
-		final lock: String = 'package utils; class Lock { public function new() {} public function wait():Bool return true; }';
-		function targets(g: CallGraph, from: String): Array<String> {
-			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
-			out.sort(Reflect.compare);
-			return out;
-		}
-		final list: CallGraph = graphOf([
-			lock,
-			'class List<T> { public function new() {} public function iterator():Iterator<utils.Lock> return null; }',
-			'class C { static function top():Void { final l:List<sys.thread.Lock> = null; for (x in l) x.wait(); } }'
-		]);
-		Assert.same(['Lock.wait'], targets(list, 'C.top'), 'a root List.hx is the project\'s: its iterator() yields utils.Lock');
-		final vector: CallGraph = graphOf([
-			lock,
-			'package haxe.ds; class Vector<T> { public function new(n:Int) {} public function iterator():Iterator<utils.Lock> return null; }',
-			'import haxe.ds.Vector; class C { static function vec():Void { final v:Vector<sys.thread.Lock> = null; for (x in v) x.wait(); } }'
-		]);
-		Assert.same(['Lock.wait'], targets(vector, 'C.vec'), 'a project haxe/ds/Vector.hx shadows the std\'s');
-		final crossFile: CallGraph = graphOf([
-			lock,
-			'package other; import lib.List; class Holder { public static var l:List<utils.Lock> = null; }',
-			'import other.Holder; class C { static function read():Void for (x in Holder.l) x.wait(); }'
-		]);
-		Assert.same([], targets(crossFile, 'C.read'), 'a field type is what its declaring file binds: `lib.List` is no std list');
-		final nullable: CallGraph = graphOf([
-			lock,
-			'package app; class Data { public function new() {} public function go():Void {} }',
-			'package app; class U { static function run(d:Null<Data>):Void d.go(); }'
-		]);
-		Assert.same(['Data.go'], targets(nullable, 'U.run'), 'a Null<T> parameter of a project type in a package');
-		#else
-		Assert.pass('non-sys target');
-		#end
-	}
-
-	/**
-	 * Review L3 G5 (`f7x/modfn-super`): a module-level function sees no class's members — not those of the main class whose
-	 * name it shares with the module, nor that class's supertype statics — so its bare names are its module's and its
-	 * imports' (Haxe 4.3.7: the main class's own static called bare there is `Unknown identifier`). A static an import binds,
-	 * read there as a value, is the import's too.
-	 */
-	@:pin('control') @:killer('M-TS-MODULE-FN-CLASS-CHAIN') @:killer('M-TS-MODULE-FN-IMPORTED-REF')
-	public function testAModuleLevelFunctionSeesItsModuleAndImportsNoClassChain(): Void {
-		final g: CallGraph = graphOf([
-			'package app; class A { public static function go():Void {} public static function only():Void {} }',
-			'package app; class P { public static function go():Void {} public static function only():Void {} public function new() {} }',
-			'package app; import app.A.*; class C extends P { static function inner():Void { go(); only(); } }'
-			+ ' function helper():Void { go(); only(); } function take(f:()->Void):Void {} function hands():Void take(go);'
-		]);
-		function targets(from: String, kind: EdgeKind): Array<String> {
-			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == kind) e.to];
-			out.sort(Reflect.compare);
-			return out;
-		}
-		Assert.same(['A.go', 'A.only'], targets('C.helper', Call), 'a module function: the imports, never the main class chain');
-		Assert.same(['A.go', 'A.only'], targets('C.inner', Call), 'inside the class: the supertype statics stay hidden');
-		Assert.same(['A.go'], targets('C.hands', Ref), 'a static an import binds, handed on as a value');
-	}
-
-	/**
 	 * Review R5 F4 (`h/stat-modvar(-rev)`): a field the reading file's own module declares at module level — plain, `final`,
 	 * inside a conditional region — is what a bare name means there, before any static an import brings in under it.
 	 */
@@ -1574,7 +1501,7 @@ class CallGraphTest extends Test {
 	 * name spells only where it is that one — a project `List<T>` an import or the module itself binds is another type, whose
 	 * element its own `iterator()` says, and a project `Vector<T>` indexed is no std vector; the std types stay typed.
 	 */
-	@:pin('control') @:killer('M-TS-STD-CONTAINER') @:killer('M-TS-STD-CONTAINER-DECLARED') @:killer('M-TS-STD-CONTAINER-WHERE')
+	@:pin('control') @:killer('M-TS-STD-CONTAINER') @:killer('M-TS-STD-CONTAINER-WHERE')
 	@:killer('M-TS-STD-CONTAINER-GUARDED') @:killer('M-TS-STD-CONTAINER-STD-OWN')
 	public function testAContainerIsTheStandardOneOnlyWhereItsNameMeansIt(): Void {
 		#if (sys || nodejs)

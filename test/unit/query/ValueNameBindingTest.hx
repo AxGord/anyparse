@@ -93,11 +93,13 @@ class ValueNameBindingTest extends Test {
 	public function testAUsingBringsEveryTypeOfItsModule(): Void {
 		final index: SymbolIndex = indexOf([
 			'p/Mod.hx' => 'package p;\n\nclass Mod {}\n\nclass Sub {}\n\nprivate class Hidden {}\n',
-			'Main.hx' => 'using p.Mod;\nusing p.Mod.Sub;\nusing lib.Ext;\n\nclass Main {}\n'
+			'Main.hx' => 'using p.Mod;\nusing lib.Ext;\n\nclass Main {}\n',
+			'One.hx' => 'using p.Mod.Sub;\n\nclass One {}\n'
 		]);
 		Assert.equals(
-			'Mod,Sub,Ext', index.values.usingTypes(fileOf(index, 'Main.hx')).join(','), 'a module\'s types, a type, a module outside'
+			'Mod,Sub,Ext', index.values.usingTypes(fileOf(index, 'Main.hx')).join(','), 'a module\'s every type, a module outside'
 		);
+		Assert.equals('Sub', index.values.usingTypes(fileOf(index, 'One.hx')).join(','), 'the one type a path names');
 	}
 
 	private static function indexOf(files: Map<String, String>): SymbolIndex {

@@ -272,9 +272,10 @@ enum abstract EdgeKind(Int) {
  * were resolved to, so a consumer that grows the graph re-resolves an external target
  * through `memberOnChain` / `virtualTargets`.
  *
- * Simple type names only (`SymbolIndex` models no packages): two types with
- * the same simple name merge into one graph node — acceptable for a finder,
- * listed as a known limit. Where the compiler facts are the truth, an edge they
+ * Node ids are simple type names: two types with the same simple name merge into one graph node —
+ * acceptable for a finder, a known limit kept so finding keys stay stable (`docs/decisions.md`). What a
+ * written type name means is the shared binding's (`TypeNameBinding.bindingsOf`), a library type a project
+ * type's simple name bears keyed apart by its path. Where the compiler facts are the truth, an edge they
  * record names the typed owner of its target (`CallEdge.typed`), and a node of
  * such a name may be read as that one type's member (`CallGraphFacts.qualify`).
  *
@@ -308,6 +309,12 @@ final class CallGraph {
 
 	/** The type facts edges resolve against, seeded from the index `build` was given. */
 	public final types: CallGraphTypes;
+
+	/**
+	 * The index the graph was built over (`build`: the one handed, else the report index of its files), whose layers answer a
+	 * consumer's type question by declaration; null for a grammar without call seams.
+	 */
+	public final index: Null<SymbolIndex>;
 
 	/**
 	 * How the graph reads compiler facts (`CallGraphFacts`): which functions they replace the syntax of, and the view
@@ -349,13 +356,15 @@ final class CallGraph {
 	private final _provider: Null<TypeInfoProvider>;
 
 	private function new(
-		plugin: GrammarPlugin, shape: RefShape, provider: Null<TypeInfoProvider>, types: CallGraphTypes, facts: Null<CallGraphFacts>
+		plugin: GrammarPlugin, shape: RefShape, provider: Null<TypeInfoProvider>, types: CallGraphTypes, facts: Null<CallGraphFacts>,
+		index: Null<SymbolIndex>
 	) {
 		_plugin = plugin;
 		_shape = shape;
 		_provider = provider;
 		this.types = types;
 		this.facts = facts;
+		this.index = index;
 		_wiring = new ConstructorWiring(this, shape.constructorName ?? 'new');
 	}
 
@@ -2254,9 +2263,10 @@ final class CallGraph {
 		final shape: RefShape = cached.refShape();
 		final provider: Null<TypeInfoProvider> = cached is TypeInfoProvider ? cast cached : null;
 		if (shape.callKind == null || shape.fieldAccessKind == null)
-			return new CallGraph(cached, shape, provider, new CallGraphTypes(null, shape), null);
-		final types: CallGraphTypes = new CallGraphTypes(index ?? IndexScope.report(files, cached), shape);
-		final graph: CallGraph = new CallGraph(cached, shape, provider, types, facts == null ? null : new CallGraphFacts(facts));
+			return new CallGraph(cached, shape, provider, new CallGraphTypes(null, shape), null, null);
+		final seed: SymbolIndex = index ?? IndexScope.report(files, cached);
+		final types: CallGraphTypes = new CallGraphTypes(seed, shape);
+		final graph: CallGraph = new CallGraph(cached, shape, provider, types, facts == null ? null : new CallGraphFacts(facts), seed);
 		graph.addFiles(files);
 		return graph;
 	}

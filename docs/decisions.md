@@ -2763,3 +2763,16 @@ decided the question; it may not become a record of runs.
 - a `using` of a module brought the static extensions of its last segment's type only → every non-private type of the
   module (`ValueNameBinding.usingTypes`; 4.3.7, `hx/us`: `using p.Mod;` brings `Sub`'s extensions too) — branch
   `feat/infra-B3`
+- the graph's supertype tables unioned the SIMPLE names every declaration of a name wrote (`t.supertypes`), so `class
+  Mine extends sys.thread.Lock` beside a project `utils.Lock` inherited the project's `wait` → each supertype is keyed
+  where its declaration writes it (`CallGraphImports.typeOf` over the shared binding), the declarations of one name
+  still folding into one node; TM thread-safety findings unchanged — branch `feat/infra-B3`
+- the graph's type tables had outside readers (`CatchTypes`, `ExhaustiveSwitches`, `LockWindow`, `ThrowReach`,
+  `ThreadSafety.inheritsNothingNamed`, `AbstractReach`, `ReflectiveReach`, `ReflectiveValues`) → they read the index the
+  graph was built over (`CallGraph.index`) through its layers: `SubtypeGraph.isSubtype` / `subtypeNamesClosure` /
+  `supertypeNamesClosure`, `MemberLookup.supertypesDeclareNone` (new: a supertype link naming two declarations proves
+  nothing, an unread interface may declare anything, an unread superclass only by an override), `MemberLookup.
+  declaringHost` (new: the member's declaration and the type hosting it), `TypeRefIndex.aliasedName` (new: typedef hops
+  each ONE declaration, resolved where written). The graph's generics table moved into the graph family
+  (`TypeParamTable` → `CallGraphGenerics`); `ReflectiveReach` still asks it for the arguments a subtype's chain passes
+  (`argumentsFor`), the one question no shared layer answers yet — branch `feat/infra-B3`

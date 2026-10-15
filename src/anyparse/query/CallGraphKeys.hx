@@ -53,7 +53,7 @@ final class CallGraphKeys {
 
 	/**
 	 * The keys of the declarations `provider` reads in `source`, the text of `file` (none without a provider), `tree` its
-	 * tree: a name a type parameter in scope at the declaration (`TypeParamTable.inScopeAt`, the functions among
+	 * tree: a name a type parameter in scope at the declaration (`CallGraphGenerics.inScopeAt`, the functions among
 	 * `functionKinds`) shadows every import and stays as written.
 	 */
 	public function new(
@@ -139,14 +139,14 @@ final class CallGraphKeys {
 	}
 
 	/**
-	 * The type parameters in scope at the offset `at` of the file (`TypeParamTable.inScopeAt`), asked only when `written`
+	 * The type parameters in scope at the offset `at` of the file (`CallGraphGenerics.inScopeAt`), asked only when `written`
 	 * mentions a name some declaration of the file declares as one.
 	 */
 	private function unkeyedAt(at: Int, written: String): Array<String> {
 		final tree: Null<QueryNode> = _tree;
 		return tree == null || !CallGraphNames.mentionsTypeName(written, _paramNames, _typeSyntax)
 			? []
-			: TypeParamTable.inScopeAt(tree, at, _typeParams, _functionKinds);
+			: CallGraphGenerics.inScopeAt(tree, at, _typeParams, _functionKinds);
 	}
 
 	/**

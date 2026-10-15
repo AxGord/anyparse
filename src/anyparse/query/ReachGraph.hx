@@ -1286,7 +1286,7 @@ final class ReachGraph {
 		if (held != null) return held;
 		var everything: Null<Array<String>> = null;
 		final made: AbstractReach = new AbstractReach(
-			signatureWords(), graph().types, [for (t in (_scope.shape.execution?.literalAbstractTypes ?? []).iterator()) t],
+			signatureWords(), _scope.index, [for (t in (_scope.shape.execution?.literalAbstractTypes ?? []).iterator()) t],
 			() -> {
 				final all: Array<String> = everything ?? [for (fi in _scope.index.allFiles()) for (t in fi.types) t.name];
 				everything = all;

@@ -5992,8 +5992,8 @@
 			"name": "M-GRAPH-SUPERS-UNION",
 			"type": "anyparse.query.CallGraphTypes",
 			"method": "record",
-			"find": "unionInto(_supers, t.name, t.supertypes);",
-			"replace": "_supers[t.name] = t.supertypes.copy();",
+			"find": "unionInto(_supers, t.name, supers);",
+			"replace": "_supers[t.name] = supers.copy();",
 			"note": "a later declaration of a simple name replaces the earlier one's supertypes"
 		},
 		{
@@ -6276,7 +6276,7 @@
 		},
 		{
 			"name": "M-GRAPH-INHERITED-ARGS",
-			"type": "anyparse.query.TypeParamTable",
+			"type": "anyparse.query.CallGraphGenerics",
 			"method": "argumentsVia",
 			"find": "if (outer == owner) return args;",
 			"replace": "if (outer == owner) return null;",
@@ -9788,7 +9788,7 @@
 			"type": "anyparse.query.TypeNameBinding",
 			"method": "wildcardAnswer",
 			"find": "case false: Pass;",
-			"replace": "case false: Unreadable;",
+			"replace": "case false: Unreadable(null);",
 			"note": "a wildcard over a std package that has no module of the name is read as possibly binding it"
 		},
 		{
@@ -9796,7 +9796,7 @@
 			"type": "anyparse.query.TypeNameBinding",
 			"method": "bothBuilds",
 			"find": "case Pass: Decls(decls);",
-			"replace": "case Pass: Unreadable;",
+			"replace": "case Pass: Unreadable(null);",
 			"note": "a guarded statement is unknown even where no other build binds the name"
 		},
 		{
@@ -11842,7 +11842,7 @@
 			"name": "M-TS-SEAL-SUPERTYPE",
 			"type": "anyparse.check.ThreadSafety",
 			"method": "sealedFromOutside",
-			"find": " || !inheritsNothingNamed(graph, type, name, [])",
+			"find": " || !inheritsNothingNamed(graph, type, name)",
 			"replace": "",
 			"note": "a method an unindexed interface may declare reads as dead, though code outside the run calls it through that interface"
 		},
@@ -17666,7 +17666,7 @@
 			"name": "M-TS-THROW-TYPED-INTERCEPTS",
 			"type": "anyparse.check.ThrowReach",
 			"method": "intercepts",
-			"find": "k.kind == _catchKind && CatchTypes.catches(k, null, _shape, _graph.types)",
+			"find": "k.kind == _catchKind && CatchTypes.catches(k, null, _shape, _graph.index)",
 			"replace": "k.kind == _catchKind",
 			"note": "a typed catch keeps what a throwers call raises"
 		},
@@ -18603,7 +18603,7 @@
 			"name": "M-TS-CATCH-SUPERTYPE",
 			"type": "anyparse.check.CatchTypes",
 			"method": "catches",
-			"find": "&& types.firstOnChain(thrown, t -> t == written) != null",
+			"find": "&& index.subtypes.isSubtype(thrown, written)",
 			"replace": "&& false",
 			"note": "a catch of a supertype misses a thrown subtype"
 		},
@@ -19424,7 +19424,7 @@
 			"name": "M-TS-REFLECT-SUBTYPES",
 			"type": "anyparse.check.ReflectiveReach",
 			"method": "reachOf",
-			"find": "closure([named], types.subtypesOf)",
+			"find": "index.subtypes.subtypeNamesClosure(named)",
 			"replace": "[named]",
 			"note": "a write on a value of a class reaches none of its subclasses' fields"
 		},
@@ -19432,7 +19432,7 @@
 			"name": "M-TS-REFLECT-SUPERTYPES",
 			"type": "anyparse.check.ReflectiveReach",
 			"method": "reachOf",
-			"find": "closure(out, types.supertypesOf)",
+			"find": "closure(out, t -> index.subtypes.supertypeNamesClosure(t))",
 			"replace": "out",
 			"note": "a write on a value of a class reaches no field its supertypes declare"
 		},
@@ -19456,8 +19456,8 @@
 			"name": "M-TS-REFLECT-ANY",
 			"type": "anyparse.check.ReflectiveReach",
 			"method": "reachOf",
-			"find": " || !(types.meta.isClass(named) || types.isInterface(named))",
-			"replace": "",
+			"find": "if (!classLike(index, _shape, named)) return null;",
+			"replace": "if (index.refs.declsNamed(named).length != 1) return null;",
 			"note": "a structure or an abstract bounds a reflective write like a class"
 		},
 		{
@@ -19655,8 +19655,8 @@
 			"name": "M-TS-STORED-GLOB",
 			"type": "anyparse.check.ReflectiveValues",
 			"method": "obtainableMember",
-			"find": "return closure([type], graph.types.subtypesOf).exists(t -> {",
-			"replace": "return false && closure([type], graph.types.subtypesOf).exists(t -> {",
+			"find": "return subtypes.exists(t -> {",
+			"replace": "return false && subtypes.exists(t -> {",
 			"note": "(soundness) a reflectiveMethodHolders glob naming a function's class no longer stops following its parameter (R3 M4)"
 		},
 		{
@@ -19765,7 +19765,7 @@
 		},
 		{
 			"name": "M-TS-SCOPE-TYPE-PARAMS",
-			"type": "anyparse.query.TypeParamTable",
+			"type": "anyparse.query.CallGraphGenerics",
 			"method": "inScopeAt",
 			"find": "if (decl != null) add((decl.nameNode.span ?? decl.fullSpan).from);",
 			"replace": "",
@@ -19773,7 +19773,7 @@
 		},
 		{
 			"name": "M-TS-SCOPE-FUNCTION-PARAMS",
-			"type": "anyparse.query.TypeParamTable",
+			"type": "anyparse.query.CallGraphGenerics",
 			"method": "inScopeAt",
 			"find": "if (span != null && functionKinds.contains(node.kind)) add(span.from);",
 			"replace": "",
@@ -19783,7 +19783,7 @@
 			"name": "M-TS-STORED-UNRELATED",
 			"type": "anyparse.check.ReflectiveValues",
 			"method": "mayHold",
-			"find": "return closure([type], types.subtypesOf).exists(t -> under.contains(t));",
+			"find": "return index.subtypes.subtypeNamesClosure(type).exists(t -> under.contains(t));",
 			"replace": "return true;",
 			"note": "an object of a class sharing no subtype with a lock member's type counts as a possible lock of it (R3 M4)"
 		},
@@ -19791,7 +19791,7 @@
 			"name": "M-TS-STORED-RELATED",
 			"type": "anyparse.check.ReflectiveValues",
 			"method": "mayHold",
-			"find": "return closure([type], types.subtypesOf).exists(t -> under.contains(t));",
+			"find": "return index.subtypes.subtypeNamesClosure(type).exists(t -> under.contains(t));",
 			"replace": "return false;",
 			"note": "(soundness) an object of a lock member's own class counts as no lock of it (R3 M4)"
 		},
@@ -20345,7 +20345,7 @@
 			"name": "M-TS-PLACE-FRESH-NEW",
 			"type": "anyparse.check.ReflectiveReach",
 			"method": "freshPlacement",
-			"find": "return { reaches: closure([made], types.supertypesOf), by: 'a fresh $made' };",
+			"find": "return { reaches: index.subtypes.supertypeNamesClosure(made), by: 'a fresh $made' };",
 			"replace": "return { reaches: [], by: 'a fresh $made' };",
 			"note": "a final local bound to a new object of a class declaring a lock member writes no lock member"
 		},
@@ -20481,7 +20481,7 @@
 			"name": "M-TS-MAKES-RESOLVED",
 			"type": "anyparse.check.ReflectiveReach",
 			"method": "namedTypes",
-			"find": "for (key in keysOf(file, written)) for (t in [key, types.resolveAlias(key)]) if (!out.contains(t)) out.push(t);",
+			"find": "for (key in keysOf(file, written)) for (t in [key, aliased(key)]) if (!out.contains(t)) out.push(t);",
 			"replace": "",
 			"note": "a name made under an import alias or a typedef alias of the class makes none of it (review R3 H1)"
 		},
@@ -20505,8 +20505,8 @@
 			"name": "M-TS-MAKES-STD",
 			"type": "anyparse.check.ReflectiveReach",
 			"method": "unresolvedMade",
-			"find": "return !bound && types.declarationCount(written) == 0 && StdTypes.declaresModule('', written) != true;",
-			"replace": "return !bound && types.declarationCount(written) == 0;",
+			"find": "return !bound && !declared(written) && StdTypes.declaresModule('', written) != true;",
+			"replace": "return !bound && !declared(written);",
 			"note": "(precision) a new of a toplevel std type may make any class"
 		},
 		{
@@ -20537,7 +20537,7 @@
 			"name": "M-TS-MAKES-ALIAS-NOTHING",
 			"type": "anyparse.check.ReflectiveReach",
 			"method": "unresolvedMade",
-			"find": "if (named != key && types.declarationCount(named) == 0 && StdTypes.declaresModule('', named) != true) return true;",
+			"find": "if (named != key && !declared(named) && StdTypes.declaresModule('', named) != true) return true;",
 			"replace": "",
 			"note": "an imported typedef alias of a name the run declares nowhere is a library type"
 		},
@@ -20545,8 +20545,8 @@
 			"name": "M-TS-MAKES-ALIAS-STD",
 			"type": "anyparse.check.ReflectiveReach",
 			"method": "unresolvedMade",
-			"find": "if (named != key && types.declarationCount(named) == 0 && StdTypes.declaresModule('', named) != true) return true;",
-			"replace": "if (named != key && types.declarationCount(named) == 0) return true;",
+			"find": "if (named != key && !declared(named) && StdTypes.declaresModule('', named) != true) return true;",
+			"replace": "if (named != key && !declared(named)) return true;",
 			"note": "(precision) a new of a typedef alias of a toplevel std type may make any class"
 		},
 		{
@@ -20569,7 +20569,7 @@
 			"name": "M-TS-BINDER-OWN-PARAMS",
 			"type": "anyparse.check.ReflectiveReach",
 			"method": "binderType",
-			"find": "if (written == null || CallGraphNames.mentionsTypeName(written, _graph.types.generics.typeParamsOf(owner), _plugin.typeSyntax))",
+			"find": "if (written == null || CallGraphNames.mentionsTypeName(written, enumDecl.type.typeParamNames, _plugin.typeSyntax))",
 			"replace": "if (written == null)",
 			"note": "a constructor parameter of the enum's own type parameter is read as the type of that name"
 		},
@@ -20695,7 +20695,7 @@
 		},
 		{
 			"name": "M-TS-DECL-SUPER-ARGS",
-			"type": "anyparse.query.TypeParamTable",
+			"type": "anyparse.query.CallGraphGenerics",
 			"method": "argumentsVia",
 			"find": "keyIn == null ? a : keyIn(link.file, a, typeName)",
 			"replace": "a",
@@ -21331,6 +21331,54 @@
 			"find": "? types.imports.pathType(name) : null",
 			"replace": "? name : null",
 			"note": "the type a Null<T> local wraps is keyed by the path its text spells, so a call on it runs a placeholder of the path"
+		},
+		{
+			"name": "M-SUPERS-BY-DECLARATION",
+			"type": "anyparse.query.CallGraphTypes",
+			"method": "record",
+			"find": "final supers: Array<String> = [for (raw in t.supertypesRaw) imports.typeOf(file, raw)];",
+			"replace": "final supers: Array<String> = [for (raw in t.supertypesRaw) SourceText.lastSegment(raw)];",
+			"note": "a supertype is keyed by its simple name, so a library type extended beside a project namesake lends the namesake's members"
+		},
+		{
+			"name": "M-SEAL-AMBIGUOUS",
+			"type": "anyparse.query.MemberLookup",
+			"method": "supertypesDeclareNoneWalk",
+			"find": "if (ups.length > 1) return false;",
+			"replace": "",
+			"note": "a link naming two declarations is read through its first, so a namesake declaring the member is missed"
+		},
+		{
+			"name": "M-SEAL-UNRESOLVED-IFACE",
+			"type": "anyparse.query.MemberLookup",
+			"method": "supertypesDeclareNoneWalk",
+			"find": "if (isInterface || cur.type.interfaces.contains(SourceText.lastSegment(raw))) return false;",
+			"replace": "",
+			"note": "an interface the index cannot resolve is taken to declare nothing"
+		},
+		{
+			"name": "M-SEAL-DECLARING-SUPER",
+			"type": "anyparse.query.MemberLookup",
+			"method": "supertypesDeclareNoneWalk",
+			"find": "ups[0].type.members.exists(m -> m.name == member) || ",
+			"replace": "",
+			"note": "a supertype declaring the member itself is not seen"
+		},
+		{
+			"name": "M-ALIAS-SINGLE-DECL",
+			"type": "anyparse.query.TypeRefIndex",
+			"method": "aliasedName",
+			"find": "if (decls.length != 1) return at;",
+			"replace": "if (decls.length == 0) return at;",
+			"note": "a name declared twice is followed through its first declaration's alias"
+		},
+		{
+			"name": "M-HOST-UNIQUE",
+			"type": "anyparse.query.MemberLookup",
+			"method": "declaringHost",
+			"find": "return starts.length == 1 ? declaredMemberClosure(starts[0], member, []) : null;",
+			"replace": "return starts.length > 0 ? declaredMemberClosure(starts[0], member, []) : null;",
+			"note": "a name declared twice hosts its member in its first declaration"
 		},
 		{
 			"name": "M-TS-OVERLOAD-RETURN",

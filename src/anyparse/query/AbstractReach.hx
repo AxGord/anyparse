@@ -27,7 +27,13 @@ final class AbstractReach {
 	private final _reads: Map<String, Bool> = [];
 
 	private final _sig: SignatureWords;
-	private final _graphTypes: CallGraphTypes;
+
+	/** Every indexed type name -> every supertype name its declarations write (`SubtypeGraph.supertypeNameUnion`). */
+	private final _supertypes: Map<String, Array<String>>;
+
+	/** The index the reach reads, whose declarations a found name is looked up in. */
+	private final _index: SymbolIndex;
+
 	private final _literals: Array<String>;
 	private final _everything: () -> Array<String>;
 	private final _built: String -> Bool;
@@ -43,11 +49,12 @@ final class AbstractReach {
 	private var _undeclared: Bool = false;
 
 	public function new(
-		sig: SignatureWords, graphTypes: CallGraphTypes, literals: Array<String>, everything: () -> Array<String>, built: String -> Bool,
+		sig: SignatureWords, index: SymbolIndex, literals: Array<String>, everything: () -> Array<String>, built: String -> Bool,
 		inferred: InferredRef -> Null<{ words: Array<String>, reads: Array<MemberRead> }>
 	) {
 		_sig = sig;
-		_graphTypes = graphTypes;
+		_index = index;
+		_supertypes = index.subtypes.supertypeNameUnion();
 		_literals = literals;
 		_everything = everything;
 		_built = built;
@@ -62,7 +69,7 @@ final class AbstractReach {
 		_grown = true;
 		final queue: Array<String> = [word];
 		var qi: Int = 0;
-		while (qi < queue.length) for (s in _graphTypes.supertypesOf(queue[qi++])) if (!_supers.exists(s)) {
+		while (qi < queue.length) for (s in _supertypes[queue[qi++]] ?? []) if (!_supers.exists(s)) {
 			_supers[s] = true;
 			queue.push(s);
 		}
@@ -96,7 +103,7 @@ final class AbstractReach {
 		while (true) {
 			if (_ti >= _types.length && _mi >= _memberQueue.length) {
 				// a member a build macro generated on a type in reach is described by nothing indexed: every abstract
-				if (_undeclared && !_grown && [for (t in found.keys()) t].exists(t -> _graphTypes.declarationCount(t) > 0 && _built(t))) {
+				if (_undeclared && !_grown && [for (t in found.keys()) t].exists(t -> _index.refs.declsNamed(t).length > 0 && _built(t))) {
 					_undeclared = false;
 					for (t in _everything()) add(t);
 				}

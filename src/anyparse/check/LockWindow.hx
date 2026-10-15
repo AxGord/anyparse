@@ -328,7 +328,7 @@ final class LockWindow {
 		while (at-- > 0) {
 			final frame: TryFrame = _tries[at];
 			frame.raised = true;
-			if (CatchTypes.anyCatches(frame.catches, thrown, _shape, _exhaustive?.types())) return true;
+			if (CatchTypes.anyCatches(frame.catches, thrown, _shape, _exhaustive?.index())) return true;
 		}
 		if (!_escapes.contains(node)) _escapes.push(node);
 		return false;

@@ -4,14 +4,13 @@ import anyparse.query.BinderScan;
 import anyparse.query.BoolExprShape;
 import anyparse.query.CallGraph;
 import anyparse.query.CallGraphNames;
-import anyparse.query.CallGraphTypes;
 import anyparse.query.CasePatterns;
 import anyparse.query.Glob;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.StdTypes;
-import anyparse.query.SymbolIndex.MemberInfo;
+import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
@@ -165,13 +164,14 @@ final class ReflectiveReach {
 	 * one. A type parameter never arrives here: `placeOf` answers it first (`typeParamPlacement`).
 	 */
 	private function reachOf(type: Null<String>): Null<Array<String>> {
-		final types: CallGraphTypes = _graph.types;
-		final named: Null<String> = type == null ? null : types.resolveAlias(CallGraphNames.lastSegments(type, 1));
-		if (named == null || types.declarationCount(named) != 1 || !(types.meta.isClass(named) || types.isInterface(named))) return null;
+		final index: Null<SymbolIndex> = _graph.index;
+		final named: Null<String> = type == null || index == null ? null : index.refs.aliasedName(CallGraphNames.lastSegments(type, 1));
+		if (index == null || named == null) return null;
+		if (!classLike(index, _shape, named)) return null;
 		final known: Null<Array<String>> = _reach[named];
 		if (known != null) return known;
-		final out: Array<String> = closure([named], types.subtypesOf);
-		final reach: Array<String> = closure(out, types.supertypesOf);
+		final out: Array<String> = index.subtypes.subtypeNamesClosure(named);
+		final reach: Array<String> = closure(out, t -> index.subtypes.supertypeNamesClosure(t));
 		_reach[named] = reach;
 		return reach;
 	}
@@ -213,13 +213,15 @@ final class ReflectiveReach {
 	 * (`neverMade`); null when it is any type's, a chain that writes no argument for it included.
 	 */
 	private function bindingsOf(type: String, name: String): Null<Array<String>> {
-		final types: CallGraphTypes = _graph.types;
-		final at: Int = types.generics.typeParamsOf(type).indexOf(name);
-		if (at < 0 || types.declarationCount(type) != 1 || !(types.meta.isClass(type) || types.isInterface(type))) return null;
+		final index: Null<SymbolIndex> = _graph.index;
+		final decl: Null<ResolvedType> = index == null ? null : onlyDeclaration(index, type);
+		final at: Int = decl == null ? -1 : decl.type.typeParamNames.indexOf(name);
+		if (index == null || at < 0 || !classLike(index, _shape, type)) return null;
 		final out: Array<String> = [];
 		final free: Array<String> = [type];
-		for (sub in closure([type], types.subtypesOf)) if (sub != type) {
-			final args: Null<Array<String>> = types.generics.argumentsFor(type, sub, _plugin.typeSyntax);
+		for (sub in index.subtypes.subtypeNamesClosure(type)) if (sub != type) {
+			// the arguments a subtype's chain passes is the graph's reading of the written supertypes (`CallGraphGenerics`)
+			final args: Null<Array<String>> = _graph.types.generics.argumentsFor(type, sub, _plugin.typeSyntax);
 			final arg: Null<String> = args == null || at >= args.length ? null : args[at];
 			if (arg == null) return null;
 			final forwarded: Null<Array<String>> = _graph.typeParamBoundsOf(sub, arg);
@@ -306,10 +308,9 @@ final class ReflectiveReach {
 	 * escapes it.
 	 */
 	public function namedTypes(file: String, written: String): Array<String> {
-		final types: CallGraphTypes = _graph.types;
 		final simple: String = CallGraphNames.lastSegments(written, 1);
 		final out: Array<String> = [simple];
-		for (key in keysOf(file, written)) for (t in [key, types.resolveAlias(key)]) if (!out.contains(t)) out.push(t);
+		for (key in keysOf(file, written)) for (t in [key, aliased(key)]) if (!out.contains(t)) out.push(t);
 		return out;
 	}
 
@@ -331,13 +332,12 @@ final class ReflectiveReach {
 	 * mean a library type, never an alias of a project one.
 	 */
 	private function unresolvedMade(file: String, written: String): Bool {
-		final types: CallGraphTypes = _graph.types;
 		for (key in keysOf(file, written)) {
-			final named: String = types.resolveAlias(key);
-			if (named != key && types.declarationCount(named) == 0 && StdTypes.declaresModule('', named) != true) return true;
+			final named: String = aliased(key);
+			if (named != key && !declared(named) && StdTypes.declaresModule('', named) != true) return true;
 		}
 		final bound: Bool = written.indexOf('.') >= 0 || _graph.typeKeysOf(file, written).length > 0;
-		return !bound && types.declarationCount(written) == 0 && StdTypes.declaresModule('', written) != true;
+		return !bound && !declared(written) && StdTypes.declaresModule('', written) != true;
 	}
 
 	/**
@@ -351,11 +351,15 @@ final class ReflectiveReach {
 		if (init == null) return null;
 		if (init.kind == _shape.objectLiteralKind) return { reaches: [], by: 'a fresh structure' };
 		if (init.kind != _shape.newExprKind) return null;
-		final types: CallGraphTypes = _graph.types;
-		final made: String = types.resolveAlias(CallGraphNames.lastSegments(init.name ?? '', 1));
-		if (types.declarationCount(made) != 1 || !types.meta.isClass(made) || fn != null && _graph.typeParamBoundsOf(fn, made) != null)
+		final index: Null<SymbolIndex> = _graph.index;
+		final made: String = aliased(CallGraphNames.lastSegments(init.name ?? '', 1));
+		final decl: Null<ResolvedType> = index == null ? null : onlyDeclaration(index, made);
+		if (
+			index == null || decl == null || !(_shape.classDeclKinds ?? []).contains(decl.type.kind) || fn != null
+			&& _graph.typeParamBoundsOf(fn, made) != null
+		)
 			return null;
-		return { reaches: closure([made], types.supertypesOf), by: 'a fresh $made' };
+		return { reaches: index.subtypes.supertypeNamesClosure(made), by: 'a fresh $made' };
 	}
 
 	/** The initializer of the `final` local the identifier `node`, in `file`, names; null for any other value. */
@@ -395,12 +399,14 @@ final class ReflectiveReach {
 		final ctor: String = pattern.children[0].name ?? '';
 		final owner: Null<String> = subjectEnum(file, tree, pattern, ctor, subjectType);
 		if (owner == null) return null;
-		final info: Null<MemberInfo> = _graph.types.memberOnChain(owner, ctor);
-		if (info == null || info.paramTypeSources.length != pattern.children.length - 1) return null;
+		final index: Null<SymbolIndex> = _graph.index;
+		final enumDecl: Null<ResolvedType> = index == null ? null : onlyDeclaration(index, owner);
+		final info: Null<MemberInfo> = enumDecl?.type.members.find(m -> m.name == ctor);
+		if (enumDecl == null || info == null) return null;
+		if (info.paramTypeSources.length != pattern.children.length - 1) return null;
 		final written: Null<String> = info.paramTypeSources[pattern.children.findIndex(c -> c.span?.from == from) - 1];
 		// a parameter of the enum's own type parameters is what the subject's arguments bind, which nothing here reads
-		if (written == null || CallGraphNames.mentionsTypeName(written, _graph.types.generics.typeParamsOf(owner), _plugin.typeSyntax))
-			return null;
+		if (written == null || CallGraphNames.mentionsTypeName(written, enumDecl.type.typeParamNames, _plugin.typeSyntax)) return null;
 		final outer: Null<String> = NominalTypes.outerNominalOf(written, _plugin.typeSyntax);
 		return outer == null ? null : { type: outer, by: 'a capture of $owner.$ctor, typed by its parameter' };
 	}
@@ -426,9 +432,12 @@ final class ReflectiveReach {
 		final outer: Null<String> = written == null ? null : NominalTypes.outerNominalOf(written, _plugin.typeSyntax);
 		// a subject type the file may mean another type by on some builds types no capture
 		final keys: Array<String> = outer == null ? [] : keysOf(file, outer);
-		final named: Null<String> = keys.length == 1 ? _graph.types.resolveAlias(keys[0]) : null;
-		// two enums of one name merge their constructors (`memberOnChain`): a parameter they write differently types nothing
-		return named != null && _graph.types.imports.enumsDeclaring(ctor).contains(named) ? named : null;
+		final named: Null<String> = keys.length == 1 ? aliased(keys[0]) : null;
+		final index: Null<SymbolIndex> = _graph.index;
+		// the ONE enum declaration of the name declares the constructor: two enums of one name type no capture
+		final decl: Null<ResolvedType> = index == null || named == null ? null : onlyDeclaration(index, named);
+		final ctorKinds: Array<String> = _shape.execution?.enumConstructorKinds ?? [];
+		return decl != null && decl.type.members.exists(m -> m.name == ctor && ctorKinds.contains(m.kind)) ? named : null;
 	}
 
 	/** Whether `node` is the pattern `pattern` or an alternative (`A(x) | B(x)`) holding it as one of its own. */
@@ -455,6 +464,32 @@ final class ReflectiveReach {
 		final lists: Array<Null<Array<String>>> = [for (f in files) read(LintConfig.resolveWith(resolve, f.file))];
 		final first: Null<Array<String>> = lists.length == 0 ? null : lists[0];
 		return first != null && lists.foreach(l -> l != null && l.join('\n') == first.join('\n')) ? first : null;
+	}
+
+	/** The simple name `name` stands for through its typedef aliases (`TypeRefIndex.aliasedName`); itself with no index. */
+	private function aliased(name: String): String {
+		return _graph.index?.refs.aliasedName(name) ?? name;
+	}
+
+	/** Whether the graph's index declares a type of the name `name`. */
+	private function declared(name: String): Bool {
+		return (_graph.index?.refs.declsNamed(name) ?? []).length > 0;
+	}
+
+	/**
+	 * Whether `name` is a class or an interface `index` declares once (`RefShape.classDeclKinds` / `interfaceDeclKinds`) —
+	 * a type whose subtypes and chain the index lists, unlike an abstract, a structure or a library type.
+	 */
+	public static function classLike(index: SymbolIndex, shape: RefShape, name: String): Bool {
+		final decl: Null<ResolvedType> = onlyDeclaration(index, name);
+		return decl != null
+			&& ((shape.classDeclKinds ?? []).contains(decl.type.kind) || (shape.interfaceDeclKinds ?? []).contains(decl.type.kind));
+	}
+
+	/** The ONE declaration `index` holds of the name `name`, null for none or several. */
+	public static function onlyDeclaration(index: SymbolIndex, name: String): Null<ResolvedType> {
+		final decls: Array<ResolvedType> = index.refs.resolvedDeclsNamed(name);
+		return decls.length == 1 ? decls[0] : null;
 	}
 
 	/** `from` and every type `next` reaches from it, step by step: the closure of `next` over `from`. */

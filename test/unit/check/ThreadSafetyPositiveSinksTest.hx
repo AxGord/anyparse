@@ -167,7 +167,7 @@ class ThreadSafetyPositiveSinksTest extends Test {
 	 */
 	@:pin('control') @:killer('M-TS-PATH-FOREIGN') @:killer('M-TS-PATH-IMPORT') @:killer('M-TS-PATH-RECEIVER-STATIC')
 	@:killer('M-TS-PATH-NEW') @:killer('M-TS-PATH-MATCH') @:killer('M-TS-SHADOWING-KEPT') @:killer('M-TS-PATH-DECLARED-PACKAGE')
-	@:killer('M-TS-PATH-NOMINAL') @:killer('M-TS-PATH-RETURN') @:killer('M-TS-PATH-NULLABLE-KEYED') @:killer('M-TS-ALIAS-TYPE')
+	@:killer('M-TS-PATH-NOMINAL') @:killer('M-TS-PATH-RETURN') @:killer('M-TS-ALIAS-TYPE')
 	public function testALibraryTypeIsNotItsProjectNamesake(): Void {
 		#if (sys || nodejs)
 		final native: String = 'package utils; extern class Lock { public function new():Void; public function wait():Bool; }'

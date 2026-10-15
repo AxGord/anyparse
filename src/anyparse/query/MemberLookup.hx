@@ -23,6 +23,9 @@ using Lambda;
 @:allow(anyparse.query.MemberPathWalk)
 final class MemberLookup {
 
+	/** The grammar kind an `interface` declaration projects as: its supertypes are interfaces all. */
+	private static final INTERFACE_DECL_KIND: String = 'InterfaceDecl';
+
 	/**
 	 * The name -> declaration layer this one resolves every written member and supertype reference through, and the
 	 * table every lookup by simple name reads (`TypeRefIndex.named`) — each of them a scan of every type of every file
@@ -383,6 +386,28 @@ final class MemberLookup {
 	}
 
 	/**
+	 * The declaration of `member` on the ONE declaration of `typeName` or the nearest supertype of it that declares it, with
+	 * the declaration hosting it (`declaredMemberClosure`, each link resolved by declaration): where the member's written
+	 * type is to be read. Null when the name is not declared once, or nothing the closure resolves declares the member.
+	 */
+	public function declaringHost(typeName: String, member: String): Null<{ member: MemberInfo, host: ResolvedType }> {
+		final starts: Array<ResolvedType> = _refs.resolvedDeclsNamed(typeName);
+		return starts.length == 1 ? declaredMemberClosure(starts[0], member, []) : null;
+	}
+
+	/**
+	 * Whether no supertype of any declaration of `typeName` may declare `member`, each supertype resolved by declaration
+	 * from the declaring file (`resolveTypeRef`): every one the index resolves declares none, itself or above, and every one
+	 * it cannot resolve is a class's superclass — whose members a subclass reaches only by an `override`. An interface the
+	 * index cannot resolve may declare anything, so it answers false. Every declaration of the name is asked: a caller
+	 * folding namesakes into one node needs the answer of each.
+	 */
+	public function supertypesDeclareNone(typeName: String, member: String): Bool {
+		final seen: Array<String> = [];
+		return _refs.named(typeName).foreach(decl -> supertypesDeclareNoneWalk({ file: decl.file, type: decl.type }, member, seen));
+	}
+
+	/**
 	 * Whether `typeName` IMPLEMENTS an interface that declares a member named `field` —
 	 * or implements an interface that cannot be resolved in the current scope. Such a
 	 * field is pinned to the interface's declared property access, so a `var → final`
@@ -512,6 +537,23 @@ final class MemberLookup {
 			if (up != null) return up;
 		}
 		return null;
+	}
+
+	/** `supertypesDeclareNone` from the declaration `cur`, cycle-guarded by `seen`. */
+	private function supertypesDeclareNoneWalk(cur: ResolvedType, member: String, seen: Array<String>): Bool {
+		if (!_refs.markSeen(cur, seen)) return true;
+		final isInterface: Bool = cur.type.kind == INTERFACE_DECL_KIND;
+		for (raw in cur.type.supertypesRaw) {
+			final ups: Array<ResolvedType> = _refs.resolveTypeRefAll(raw, cur.file, cur.type.span.from);
+			// two declarations the link may name: which one is not known, so neither is cleared
+			if (ups.length > 1) return false;
+			if (ups.length == 0) {
+				if (isInterface || cur.type.interfaces.contains(SourceText.lastSegment(raw))) return false;
+			} else if (ups[0].type.members.exists(m -> m.name == member) || !supertypesDeclareNoneWalk(ups[0], member, seen)) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	/** Recursive supertype walk for `supertypeDeclaresMember`, cycle-guarded by `seen`. */

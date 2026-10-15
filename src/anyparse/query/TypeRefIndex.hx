@@ -87,6 +87,28 @@ final class TypeRefIndex {
 		return [for (r in named(typeName)) { file: r.file, type: r.type }];
 	}
 
+	/**
+	 * The simple name of the type `name` stands for through its typedef alias hops (`typedef A = B`): each hop the ONE
+	 * declaration of its name, its target resolved where that declaration writes it (`resolveTypeRef`). `name` itself when
+	 * it aliases nothing (a typedef of a structure, one re-exporting a type of its own name); the target's written simple name
+	 * when a hop leaves the index; the name reached when a hop is no single declaration, or loops.
+	 */
+	public function aliasedName(name: String): String {
+		var at: String = name;
+		final seen: Array<String> = [];
+		while (!seen.contains(at)) {
+			seen.push(at);
+			final decls: Array<ResolvedType> = named(at);
+			if (decls.length != 1) return at;
+			final t: TypeDeclInfo = decls[0].type;
+			final raw: Null<String> = t.aliasTargetRaw;
+			if (raw == null || t.isAnonStruct || t.aliasTargetNominal == t.name) return at;
+			final next: Null<ResolvedType> = resolveTypeRef(raw, decls[0].file, t.span.from);
+			at = next == null ? SourceText.lastSegment(raw) : next.type.name;
+		}
+		return at;
+	}
+
 	/** The `{file, type}` for the type named `typeName` declared in `file`, or null. */
 	public function findDeclaredType(file: String, typeName: String): Null<ResolvedType> {
 		final fi: Null<FileInfo> = _files.find(f -> f.file == file);
