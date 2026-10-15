@@ -5493,8 +5493,8 @@
 		},
 		{
 			"name": "M-GRAPH-UPGRADE-EXTERNAL",
-			"type": "anyparse.query.CallGraph",
-			"method": "registerNode",
+			"type": "anyparse.query.CallGraphNodes",
+			"method": "register",
 			"find": "if (held == null || held.isExternal) {",
 			"replace": "if (held == null) {",
 			"note": "a file added later leaves the external placeholder of its declaration in place, so the body it brings is never linked"
@@ -5752,8 +5752,8 @@
 		},
 		{
 			"name": "M-GRAPH-FOLDED-DECLARATIONS",
-			"type": "anyparse.query.CallGraph",
-			"method": "registerNode",
+			"type": "anyparse.query.CallGraphNodes",
+			"method": "register",
 			"find": "inFile.push(declaration);",
 			"replace": "if (first) inFile.push(declaration);",
 			"note": "a further declaration of a node is no function of its file, so a touch inside it belongs to its type's initializers"
@@ -5792,8 +5792,8 @@
 		},
 		{
 			"name": "M-GRAPH-FOLDED-DYNAMIC",
-			"type": "anyparse.query.CallGraph",
-			"method": "registerNode",
+			"type": "anyparse.query.CallGraphNodes",
+			"method": "register",
 			"find": "if (isDynamic) held.isDynamic = true;",
 			"replace": "",
 			"note": "a node is `dynamic` only when its first declaration is, so a call of a method another branch declares replaceable runs its body alone"
@@ -5964,9 +5964,9 @@
 		},
 		{
 			"name": "M-GRAPH-FN-TYPE-PARAM",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectNodes",
-			"find": "if (declaredParams.length > 0) _facts.typeParams[id] = declaredParams;",
+			"type": "anyparse.query.CallGraphNodes",
+			"method": "collect",
+			"find": "if (declaredParams.length > 0) g._facts.typeParams[id] = declaredParams;",
 			"replace": "",
 			"note": "a function's own type parameters are not recorded, so a receiver typed by one becomes a phantom type"
 		},
@@ -6266,8 +6266,8 @@
 		},
 		{
 			"name": "M-GRAPH-BODYLESS-FLAG",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectNodes",
+			"type": "anyparse.query.CallGraphNodes",
+			"method": "collect",
 			"find": "noBodyKind != null && node.children.exists(c -> c.kind == noBodyKind)",
 			"replace": "false",
 			"note": "a declaration with no body is taken for an empty body"
@@ -8550,8 +8550,8 @@
 		},
 		{
 			"name": "M-GRAPH-LOCAL-INLINE",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectNodes",
+			"type": "anyparse.query.CallGraphNodes",
+			"method": "collect",
 			"find": "final fnKinds: Array<String> = (shape.functionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);",
 			"replace": "final fnKinds: Array<String> = shape.functionKinds ?? [];",
 			"note": "a local inline function is no node of the graph, so a call of it resolves to nothing and what it runs is never walked"
@@ -11738,25 +11738,25 @@
 		},
 		{
 			"name": "M-GRAPH-CLASS-BOUND",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectNodes",
-			"find": "_facts.typeBounds[DeclarationFacts.boundsKey(entry.file, declared)] = own",
-			"replace": "_facts.typeBounds.remove(DeclarationFacts.boundsKey(entry.file, declared))",
+			"type": "anyparse.query.CallGraphNodes",
+			"method": "collect",
+			"find": "g._facts.typeBounds[DeclarationFacts.boundsKey(entry.file, declared)] = own",
+			"replace": "g._facts.typeBounds.remove(DeclarationFacts.boundsKey(entry.file, declared))",
 			"note": "a type's own parameter bounds are not recorded, so a receiver typed by a class parameter stays unresolved"
 		},
 		{
 			"name": "M-GRAPH-FINAL-CLASS-BOUND",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectNodes",
+			"type": "anyparse.query.CallGraphNodes",
+			"method": "collect",
 			"find": "(RefactorSupport.typeDeclOf(node)?.nameNode ?? node).span",
 			"replace": "node.span",
 			"note": "a `final class`'s bounds are looked up on the wrapper, not on the inner form they are keyed by"
 		},
 		{
 			"name": "M-GRAPH-FN-BOUND",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectNodes",
-			"find": "if (first && bounded != null)\n\t\t\t\t\t_facts.typeParamBounds[id] = bounded\n",
+			"type": "anyparse.query.CallGraphNodes",
+			"method": "collect",
+			"find": "if (first && bounded != null)\n\t\t\t\t\tg._facts.typeParamBounds[id] = bounded\n",
 			"replace": "if (first && bounded != null)\n\t\t\t\t\t{}\n",
 			"note": "a function's own parameter bounds are not recorded, so a receiver typed by one stays unresolved"
 		},
@@ -11802,8 +11802,8 @@
 		},
 		{
 			"name": "M-GRAPH-ABSTRACT-UNDER-SLOT",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectNodes",
+			"type": "anyparse.query.CallGraphNodes",
+			"method": "collect",
 			"find": "final under: Null<String> = node.type?.name;",
 			"replace": "final under: Null<String> = node.children.find(c -> annotationKinds.contains(c.kind))?.name;",
 			"note": "an abstract's underlying type is read as its first annotation child, which is a type parameter's bound when one is declared"
