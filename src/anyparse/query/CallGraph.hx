@@ -946,6 +946,7 @@ final class CallGraph {
 		final iterationParams: Map<String, Int> = shape.iterationElementTypeParams ?? [];
 		final iterationKinds: Array<String> = shape.iterationBindingKinds ?? [];
 		final valueBinderKinds: Array<String> = shape.iterationValueBinderKinds ?? [];
+		final paramKinds: Array<String> = shape.paramKinds ?? [];
 		final accessorPrefixes: Array<String> = shape.accessorMethodPrefixes ?? [];
 		final ctorName: String = shape.constructorName ?? 'new';
 		final objectLiteralKind: Null<String> = shape.objectLiteralKind;
@@ -2096,6 +2097,29 @@ final class CallGraph {
 		}
 
 		/**
+		 * Type the parameters the lambda `lambda`, walked at the top of `lineage`, writes with no type by the function type it is
+		 * expected to be (`expectedAt`): a call's parameter as the callee's own file writes it, a declaration's or an assignment's
+		 * type — one of the same arity.
+		 */
+		function typeLambdaParams(lambda: QueryNode, currentType: Null<String>): Void {
+			final params: Array<QueryNode> = [for (c in lambda.children) if (paramKinds.contains(c.kind)) c];
+			final bare: Array<QueryNode> = [
+				for (p in params) if (p.span != null && !typeSources.exists(p.span?.from ?? -1)) p
+			];
+			if (bare.length == 0) return;
+			final read: Null<TypeSyntax> = _plugin.typeSyntax(expectedAt(lineage.length - 1, currentType) ?? '');
+			final written: Array<TypeSyntax> = switch (read?.wrapped(['Null']) ?? read)?.shape {
+				case Function(ps, _, _): [for (p in ps) p.type];
+				case _: return;
+			};
+			if (written.length != params.length) return;
+			for (i in 0...params.length) {
+				final at: Null<Span> = params[i].span;
+				if (at != null && bare.contains(params[i])) typeSources[at.from] = written[i].text;
+			}
+		}
+
+		/**
 		 * An object literal whose expected type (`expectedAt`) is a class the language CONSTRUCTS from a literal
 		 * (`ExecutionShape.implicitConstructionTypeMetaNames`): the `New` edge and constructor run a `new` would carry.
 		 */
@@ -2259,6 +2283,8 @@ final class CallGraph {
 				handleValueUse(node, parent, childIndex, typeName);
 
 			final span: Null<Span> = node.span;
+			// a lambda's untyped parameters take the function type it is expected to be, before its body reads them
+			if (lambdaKinds.contains(node.kind)) typeLambdaParams(node, typeName);
 			var pushed: Bool = false;
 			if (span != null && (fnKinds.contains(node.kind) || lambdaKinds.contains(node.kind))) {
 				final id: Null<String> = entry.fnBySpanFrom[span.from];

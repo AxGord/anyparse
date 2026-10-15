@@ -3038,6 +3038,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CallGraphTest#testAFunctionsOwnTypeParameterIsWhatItsArgumentsBind :: control :: '
 				+ 'M-GRAPH-FN-RETURN-PARAM,M-TS-INFER-AGREE,M-TS-INFER-REST,M-TS-INFER-SHADOW,M-TS-INFER-BARE',
 			'unit.query.CallGraphTest#testALambdaParameterIsNoReferenceToItsLambda :: control :: M-GRAPH-LAMBDA-PARAM-SELF',
+			'unit.query.CallGraphTest#testALambdaParameterIsTypedByTheFunctionTypeItIsExpectedToBe :: control :: '
+				+ 'M-TS-LAMBDA-PARAMS,M-TS-LAMBDA-ARITY,M-TS-LAMBDA-ANNOTATED,M-TS-LAMBDA-NULL',
 			'unit.query.CallGraphTest#testALoopBindsWhatItsIterableYields :: control :: '
 				+ 'M-TS-LOOP-ELEMENT,M-TS-LOOP-KEY-BINDER,M-TS-LOOP-KV-LISTED,M-TS-LOOP-ITERATOR,M-TS-LOOP-NEXT,M-TS-LOOP-AGREE,'
 				+ 'M-TS-LOOP-OWN-PARAMS,M-TS-LOOP-THROUGH',
@@ -6700,7 +6702,11 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-LOOP-NEXT',
 			'M-TS-LOOP-AGREE',
 			'M-TS-LOOP-OWN-PARAMS',
-			'M-TS-LOOP-THROUGH'
+			'M-TS-LOOP-THROUGH',
+			'M-TS-LAMBDA-PARAMS',
+			'M-TS-LAMBDA-ARITY',
+			'M-TS-LAMBDA-ANNOTATED',
+			'M-TS-LAMBDA-NULL'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

@@ -1334,6 +1334,46 @@ class CallGraphTest extends Test {
 		#end
 	}
 
+	@:pin('control')
+	@:killer('M-TS-LAMBDA-PARAMS') @:killer('M-TS-LAMBDA-ARITY') @:killer('M-TS-LAMBDA-ANNOTATED') @:killer('M-TS-LAMBDA-NULL')
+	public function testALambdaParameterIsTypedByTheFunctionTypeItIsExpectedToBe(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final g: CallGraph = graphOf([
+			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
+			'package app; import sys.thread.Lock; class A { public static function run(f:(Lock) -> Void):Void {}'
+			+ ' public static function pair(f:(Int, Lock) -> Void):Void {} public static function first(f:(Lock, Int) -> Void):Void {}'
+			+ ' public static function curried(f:Lock -> Void):Void {} public static function gen<T>(f:T -> Void, v:T):Void {}'
+			+ ' public static function maybe(f:Null<(Lock) -> Void>):Void {} }',
+			'package app; class Box<T> { public function new() {} public function each(f:T -> Void):Void {} }',
+			'package app; class C { static function call():Void A.run(l -> l.wait()); static function second():Void A.pair((n, l) -> l.wait());'
+			+ ' static function fnExpr():Void A.curried(function(l) l.wait()); static function arity():Void A.first(l -> l.wait());'
+			+ ' static function own():Void A.gen(l -> l.wait(), null); static function box(b:Box<utils.Lock>):Void b.each(l -> l.wait());'
+			+ ' static function declared():Void { final f:(utils.Lock) -> Void = l -> l.wait(); }'
+			+ ' static function annotated():Void A.run((l:Null<utils.Lock>) -> l.wait()); static function nullable():Void A.maybe(l -> l.wait()); }'
+		]);
+		function inLambdas(fn: String): Array<String> {
+			final out: Array<String> = [];
+			for (id in g.nodes.keys()) if (StringTools.startsWith(id, '$fn#')) for (e in g.outEdges(id)) if (e.kind == Call) out.push(e.to);
+			return out;
+		}
+		Assert.same(['sys.thread.Lock.wait'], inLambdas('C.call'), 'a call\'s parameter, read in the file declaring the callee');
+		Assert.same(['sys.thread.Lock.wait'], inLambdas('C.second'), 'each parameter by its position');
+		Assert.same(['sys.thread.Lock.wait'], inLambdas('C.fnExpr'), 'a function expression, a curried function type');
+		Assert.same([], inLambdas('C.arity'), 'a function type of another arity types nothing');
+		Assert.same([], inLambdas('C.own'), 'a type parameter of the callee itself types nothing');
+		Assert.same(['Lock.wait'], inLambdas('C.box'), 'a type parameter of the receiver, as the receiver binds it');
+		Assert.same(['Lock.wait'], inLambdas('C.declared'), 'a declaration\'s type');
+		Assert.same(['Lock.wait'], inLambdas('C.annotated'), 'a parameter written with a type keeps it');
+		Assert.same(['sys.thread.Lock.wait'], inLambdas('C.nullable'), 'a nullable function type');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	/**
 	 * A typedef aliases the type its OWN file binds the target name to, wherever the alias is used: an alias another module
 	 * declares importing the std `Lock` — imported by its module or by name — and one beside its use wait on the std lock,

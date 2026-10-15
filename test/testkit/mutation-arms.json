@@ -20973,6 +20973,38 @@
 			"find": ": throughParams(written, nodes[target]?.typeName, source, type, currentType);",
 			"replace": ": written;",
 			"note": "a container's type parameter in what its iterator yields is not bound by the value's argument"
+		},
+		{
+			"name": "M-TS-LAMBDA-PARAMS",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (lambdaKinds.contains(node.kind)) typeLambdaParams(node, typeName);",
+			"replace": "",
+			"note": "a lambda parameter written with no type is not typed by the function type the lambda is expected to be (review R4 F7)"
+		},
+		{
+			"name": "M-TS-LAMBDA-ARITY",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (written.length != params.length) return;",
+			"replace": "if (written.length < params.length) return;",
+			"note": "a lambda is typed by a function type of more parameters than it declares"
+		},
+		{
+			"name": "M-TS-LAMBDA-ANNOTATED",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "for (p in params) if (p.span != null && !typeSources.exists(p.span?.from ?? -1)) p",
+			"replace": "for (p in params) if (p.span != null) p",
+			"note": "a lambda parameter written with a type is retyped by the expected function type"
+		},
+		{
+			"name": "M-TS-LAMBDA-NULL",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "final written: Array<TypeSyntax> = switch (read?.wrapped(['Null']) ?? read)?.shape {",
+			"replace": "final written: Array<TypeSyntax> = switch read?.shape {",
+			"note": "a nullable function type types no lambda parameter"
 		}
 	]
 }
