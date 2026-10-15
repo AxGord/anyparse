@@ -169,7 +169,7 @@ final class DeclaredNullity {
 			final decls: Array<ResolvedType> = index.resolveTypeRefsFrom(head, fi.file);
 			return decls.length == 0 ? Unknown : Bound(decls);
 		}
-		return switch TypeNameBinding.tierOf(head, fi, index) {
+		return switch index.refs.names.tierOf(head, fi) {
 			case Free if (!builtins.contains(head)): Unknown;
 			case tier: tier;
 		};
@@ -301,7 +301,7 @@ final class DeclaredNullity {
 	private static function bindingOf(head: String, fromFile: String, index: SymbolIndex): Null<Array<ResolvedType>> {
 		if (head.indexOf('.') >= 0) return index.resolveTypeRefsFrom(head, fromFile);
 		final fi: Null<SymbolIndex.FileInfo> = index.fileInfo(fromFile);
-		return fi == null ? null : TypeNameBinding.bind(head, fi, index);
+		return fi == null ? null : index.refs.names.bind(head, fi);
 	}
 
 	/**

@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.query.CallGraph.FnNode;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.MemberInfo;
+import anyparse.query.SymbolIndex.TypeDeclInfo;
 import haxe.Exception;
 
 using Lambda;
@@ -104,6 +105,7 @@ final class StdTypes {
 		modulePaths.clear();
 		packages.clear();
 		moduleInfos.clear();
+		outsideInfos.clear();
 	}
 
 	/** Push into `found` what `member` of the type at `path` is, or, when it declares none, what its supertypes and typedef targets do. */
@@ -179,14 +181,10 @@ final class StdTypes {
 	/** The declarations of the std module at `module`, read once; null when it is none or does not parse. */
 	private static function infoOf(plugin: GrammarPlugin, module: String): Null<FileInfo> {
 		if (moduleInfos.exists(module)) return moduleInfos[module];
-		var info: Null<FileInfo> = null;
 		final root: Null<String> = StdResolver.stdDir();
-		if (root != null && modulePaths.exists(module)) {
-			final file: String = '$root/${module.split('.').join('/')}.hx';
-			final source: Null<String> = read(file);
-			if (source != null)
-				info = try IndexScope.over([{ file: file, source: source }], plugin).fileInfo(file) catch (exception: Exception) null;
-		}
+		final info: Null<FileInfo> = root != null && modulePaths.exists(module)
+			? parsed(plugin, '$root/${module.split('.').join('/')}.hx')
+			: null;
 		moduleInfos[module] = info;
 		return info;
 	}
@@ -220,6 +218,33 @@ final class StdTypes {
 		return null;
 		#end
 	}
+
+	/**
+	 * The types the std module `module` declares (`haxe.Timer`, the toplevel `StdTypes`, a target module such as
+	 * `js.html.Element` outside the core the other answers here read), read once — what a name binding over an index that
+	 * does not hold the std asks before it lets a lower tier answer. Null when that cannot be told: no std discovered, no
+	 * std file of that module, or one that does not parse.
+	 */
+	public static function moduleTypes(plugin: GrammarPlugin, module: String): Null<Array<TypeDeclInfo>> {
+		listed();
+		if (modulePaths.exists(module)) return infoOf(plugin, module)?.types;
+		if (outsideInfos.exists(module)) return outsideInfos[module]?.types;
+		final root: Null<String> = StdResolver.stdDir();
+		final info: Null<FileInfo> = root == null ? null : parsed(plugin, '$root/${module.split('.').join('/')}.hx');
+		outsideInfos[module] = info;
+		return info?.types;
+	}
+
+	/** The declarations of the std file `file`, null when it cannot be read or does not parse. */
+	private static function parsed(plugin: GrammarPlugin, file: String): Null<FileInfo> {
+		final source: Null<String> = read(file);
+		return source == null
+			? null
+			: try IndexScope.over([{ file: file, source: source }], plugin).fileInfo(file) catch (exception: Exception) null;
+	}
+
+	/** Module path -> the declarations of a std module outside the core (`moduleTypes`), null for one that cannot be read. */
+	private static final outsideInfos: Map<String, Null<FileInfo>> = [];
 
 }
 

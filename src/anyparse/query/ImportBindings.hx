@@ -85,12 +85,6 @@ final class ImportBindings {
 
 	private final _plugin: GrammarPlugin;
 
-	/** Module path -> its indexed files; built on the first question that needs the index. */
-	private var _modules: Null<Map<String, Array<FileInfo>>> = null;
-
-	/** Package -> its module names; built from `_modules` on the first package wildcard. */
-	private var _packages: Null<Map<String, Array<String>>> = null;
-
 	public function new(index: () -> Null<SymbolIndex>, plugin: GrammarPlugin) {
 		_index = index;
 		_plugin = plugin;
@@ -133,7 +127,7 @@ final class ImportBindings {
 
 	/** Whether the index holds a module at `path` that declares at least one type. */
 	public function indexesModule(path: String): Bool {
-		return (modules()[path] ?? []).exists(file -> file.types.length > 0);
+		return filesOf(path).exists(file -> file.types.length > 0);
 	}
 
 	/**
@@ -142,18 +136,17 @@ final class ImportBindings {
 	 * field value; anything else is a module the index never saw (the residual reading).
 	 */
 	private function readExplicit(path: String): ImportBinding {
-		final files: Null<Array<FileInfo>> = modules()[path];
-		if (files != null) {
-			final types: Array<String> = [];
+		final files: Array<FileInfo> = filesOf(path);
+		final imported: Array<ResolvedType> = _index()?.refs.names.importedTypes(path) ?? [];
+		if (files.length > 0) {
 			var typeValues: Null<Array<String>> = [];
 			var fieldValues: Null<Array<String>> = [];
 			for (file in files) {
-				for (t in file.types) {
-					if (!types.contains(t.name)) types.push(t.name);
-					if (!t.isPrivate) typeValues = union(typeValues, typeValuesOf(t, file, []));
-				}
+				for (t in file.types) if (!t.isPrivate) typeValues = union(typeValues, typeValuesOf(t, file, []));
 				fieldValues = union(fieldValues, moduleFieldsOf(file));
 			}
+			final types: Array<String> = [];
+			for (r in imported) if (!types.contains(r.type.name)) types.push(r.type.name);
 			return {
 				types: types,
 				wildcardTypes: [],
@@ -163,14 +156,14 @@ final class ImportBindings {
 		}
 		final leaf: String = SourceText.lastSegment(path);
 		final owner: String = SourceText.parentPath(path);
-		for (file in modules()[owner] ?? []) for (t in file.types) if (t.name == leaf) return {
+		for (r in imported) return {
 			types: [leaf],
 			wildcardTypes: [],
-			typeValues: typeValuesOf(t, file, []),
+			typeValues: typeValuesOf(r.type, r.file, []),
 			fieldValues: []
 		};
 		final ownerFields: Array<String> = [
-			for (file in modules()[owner] ?? []) for (name in moduleFieldsOf(file) ?? []) name
+			for (file in filesOf(owner)) for (name in moduleFieldsOf(file) ?? []) name
 		];
 		final owners: Array<TypeDeclInfo> = typesNamed(owner);
 		final member: Bool = ownerFields.contains(leaf) || owners.length > 0 && owners.foreach(t -> t.members.exists(m -> m.name == leaf));
@@ -197,9 +190,14 @@ final class ImportBindings {
 	 * would add statics this index never sees).
 	 */
 	private function readWildcard(target: String): Null<ImportBinding> {
-		if (!SourceText.isUpperInitial(SourceText.lastSegment(target))) {
-			final names: Null<Array<String>> = packages()[target];
-			return names == null ? null : {
+		final binding: Null<TypeNameBinding> = _index()?.refs.names;
+		if (binding == null) return null;
+		if (TypeNameBinding.splitPath(target) == null) {
+			final mains: Null<Array<ResolvedType>> = binding.wildcardTypes(target);
+			if (mains == null) return null;
+			final names: Array<String> = [];
+			for (m in mains) if (!names.contains(m.type.name)) names.push(m.type.name);
+			return {
 				types: [],
 				wildcardTypes: names,
 				typeValues: [],
@@ -291,41 +289,17 @@ final class ImportBindings {
 		final leaf: String = SourceText.lastSegment(target);
 		final out: Array<TypeDeclInfo> = [];
 		for (module in [target, SourceText.parentPath(target)])
-			for (file in modules()[module] ?? [])
+			for (file in filesOf(module))
 				for (t in file.types)
 					if (t.name == leaf && !out.contains(t)) out.push(t);
 		return out;
 	}
 
-	/** Module path -> its indexed files, read once from the index; empty without one. */
-	private function modules(): Map<String, Array<FileInfo>> {
-		final known: Null<Map<String, Array<FileInfo>>> = _modules;
-		if (known != null) return known;
-		final built: Map<String, Array<FileInfo>> = [];
-		final index: Null<SymbolIndex> = _index();
-		if (index != null) for (file in index.allFiles()) {
-			final files: Array<FileInfo> = built[file.module] ?? [];
-			files.push(file);
-			built[file.module] = files;
-		}
-		_modules = built;
-		return built;
-	}
-
-	/** Package -> its module names, read with `modules`; empty without an index. */
-	private function packages(): Map<String, Array<String>> {
-		final known: Null<Map<String, Array<String>>> = _packages;
-		if (known != null) return known;
-		final built: Map<String, Array<String>> = [];
-		for (module => _ in modules()) {
-			final dot: Int = module.lastIndexOf('.');
-			final pkg: String = dot < 0 ? '' : module.substring(0, dot);
-			final names: Array<String> = built[pkg] ?? [];
-			names.push(SourceText.lastSegment(module));
-			built[pkg] = names;
-		}
-		_packages = built;
-		return built;
+	/**
+	 * The indexed files of `module`, from the binding layer's module table (`TypeNameBinding`); none without an index.
+	 */
+	private function filesOf(module: String): Array<FileInfo> {
+		return _index()?.refs.names.filesOfModule(module) ?? [];
 	}
 
 	/** Whether `path` is a wildcard import's path. */

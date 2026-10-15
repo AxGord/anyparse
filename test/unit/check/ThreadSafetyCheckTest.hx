@@ -6,6 +6,7 @@ import anyparse.check.PositiveSinks;
 import anyparse.check.Severity;
 import anyparse.check.ThreadSafety;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.QueryTestHelpers;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -633,7 +634,7 @@ class ThreadSafetyCheckTest extends Test {
 	public function testExcludedPathNotScanned(): Void {
 		#if (sys || nodejs)
 		final vs: Array<Violation> = violations(
-			'{"rules":{"thread-safety":{"sinks":["Sys.sleep"],"exclude":["F0.hx"]}}}', ['class A { function boot():Void Sys.sleep(1); }']
+			'{"rules":{"thread-safety":{"sinks":["Sys.sleep"],"exclude":["A.hx"]}}}', ['class A { function boot():Void Sys.sleep(1); }']
 		);
 		Assert.equals(0, vs.length);
 		#else
@@ -1634,8 +1635,9 @@ class ThreadSafetyCheckTest extends Test {
 		config: String, sources: Array<String>, ?beside: Array<{ name: String, source: String }>, withNotice: Bool = false
 	): Array<Violation> {
 		final dir: String = CliFixture.writeDir('threadsafety', [{ name: 'apqlint.json', source: config }].concat(beside ?? []));
+		// Each source a root module named after its first type: the compiler binds a bare name to a module's MAIN type only.
 		final files: Array<{ file: String, source: String }> = [
-			for (i in 0...sources.length) { file: '$dir/F$i.hx', source: sources[i] }
+			for (entry in QueryTestHelpers.rootModules(sources)) { file: '$dir/${entry.file}', source: entry.source }
 		];
 		// Through `Linter.run`, not `run`: the `sinks` / `exclude` gate is `FileGated`, applied where findings enter the tool.
 		final result: Array<Violation> = Linter.run(files, new HaxeQueryPlugin(), [new ThreadSafety()]);

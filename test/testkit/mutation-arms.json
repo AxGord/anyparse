@@ -3292,17 +3292,19 @@
 		},
 		{
 			"name": "M-AMBIENT-IMPORT-BAND",
-			"type": "anyparse.query.TypeRefIndex",
-			"method": "tierOf",
-			"force": "localTier(fromFile.ambientImports.length)",
-			"note": "every candidate is reached at the WEAKEST tier, so the precedence collapses flat: an explicit import no longer outranks a wildcard one, the module's own statements no longer outrank the chain, a nearer ambient source no longer outranks a farther one, and an ambient binding no longer outranks a same-package namesake"
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "explicitFrom",
+			"find": "case Decls(decls) if (guarded):",
+			"replace": "case Decls(decls) if (true):",
+			"note": "every explicit binding is weighed against the tiers below it as if it held in one build only, so the precedence collapses: an explicit import no longer outranks a wildcard one, the module's own statements no longer outrank the chain, a nearer ambient source no longer outranks a farther one, and an ambient binding no longer outranks a same-package namesake"
 		},
 		{
 			"name": "M-AMBIENT-GUARDED-UNION",
-			"type": "anyparse.query.TypeRefIndex",
-			"method": "hasGuardedImport",
-			"force": "false",
-			"note": "no import statement is ever seen as `#if`-guarded, so the two build configurations collapse into one and the engine pins the declaration ONE of them resolves where the builds disagree"
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "explicitFrom",
+			"find": "final guarded: Bool = imp.guarded;",
+			"replace": "final guarded: Bool = false;",
+			"note": "no explicit statement is ever seen as `#if`-guarded, so the engine pins the declaration ONE build resolves where the builds disagree"
 		},
 		{
 			"name": "M-AMBIENT-GOVERNANCE-BLIND",
@@ -9676,34 +9678,34 @@
 		{
 			"name": "M-BINDING-ALIAS-BLIND",
 			"type": "anyparse.query.TypeNameBinding",
-			"method": "importTier",
-			"find": "if (imp.alias != name)",
-			"replace": "if (true)",
+			"method": "statementAnswer",
+			"find": "if (aliased && imp.alias != name) return Pass;",
+			"replace": "if (aliased) return Pass;",
 			"note": "an import alias never binds its alias name, so a same-package class answers for `import other.Opt as MaybeR`"
 		},
 		{
 			"name": "M-BINDING-UNINDEXED-IMPORT-FREE",
 			"type": "anyparse.query.TypeNameBinding",
-			"method": "boundOrUnknown",
-			"find": "return decls.length == 0 ? Unknown : Bound(decls);",
-			"replace": "return decls.length == 0 ? Free : Bound(decls);",
-			"note": "an import or alias naming a type outside the index falls through to the package tier"
+			"method": "statementAnswer",
+			"find": "final outside: Null<Array<TypeDeclInfo>> = outsideTypes(split.module);",
+			"replace": "final outside: Null<Array<TypeDeclInfo>> = outsideTypes(split.module) ?? [];",
+			"note": "an import or alias of a module nothing can read is taken to declare nothing, so it falls through to the package tier"
 		},
 		{
 			"name": "M-BINDING-UNINDEXED-MODULE-FREE",
 			"type": "anyparse.query.TypeNameBinding",
-			"method": "importTier",
-			"find": "? Free : Unknown;",
-			"replace": "? Free : Free;",
+			"method": "statementAnswer",
+			"find": "if (split.rest.length > 1 || (!aliased && split.rest.length == 1 && split.rest[0] != name)) return Pass;",
+			"replace": "if (split.rest.length > 1 || (!aliased && split.rest.length == 1 && split.rest[0] != name) || (!aliased && split.rest.length == 0 && SourceText.lastSegment(split.module) != name && !modules().exists(split.module))) return Pass;",
 			"note": "an unindexed module import is taken to declare no sub-type of the name"
 		},
 		{
 			"name": "M-BINDING-UNINDEXED-WILDCARD-FREE",
 			"type": "anyparse.query.TypeNameBinding",
-			"method": "wildcardTier",
-			"find": "if (files.length == 0 && !index.allFiles().exists(f -> f.module == pkg)) return Unknown;",
-			"replace": "",
-			"note": "a wildcard over an unindexed package is taken to bind nothing"
+			"method": "wildcardAnswer",
+			"find": "case null: Unreadable;",
+			"replace": "case null: Pass;",
+			"note": "a wildcard over a package nothing can read is taken to bind nothing"
 		},
 		{
 			"name": "M-BINDING-OWN-TIER-CUT",
@@ -9716,16 +9718,101 @@
 		{
 			"name": "M-BINDING-WILDCARD-CUT",
 			"type": "anyparse.query.TypeNameBinding",
-			"method": "wildcardTier",
-			"force": "Free",
+			"method": "wildcardAnswer",
+			"force": "Pass",
 			"note": "no wildcard import binds anything"
 		},
 		{
 			"name": "M-BINDING-PACKAGE-TIER-CUT",
 			"type": "anyparse.query.TypeNameBinding",
-			"method": "packageTier",
-			"force": "Free",
+			"method": "packageAnswer",
+			"force": "Pass",
 			"note": "no package or toplevel type binds anything"
+		},
+		{
+			"name": "M-BINDING-FIRST-STATEMENT-WINS",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "tierOf",
+			"find": "lastFirst.reverse();",
+			"replace": "",
+			"note": "the FIRST statement binding a name wins, explicit and wildcard alike, though the compiler asks the last one first"
+		},
+		{
+			"name": "M-BINDING-PRIVATE-VISIBLE",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "typesIn",
+			"find": " && !t.isPrivate",
+			"replace": "",
+			"note": "a private type is read as imported by its module's import and visible to its package"
+		},
+		{
+			"name": "M-BINDING-SUBTYPES-VISIBLE",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "wildcardTypes",
+			"find": "typesIn(files, null, true)",
+			"replace": "typesIn(files, null, false)",
+			"note": "a package wildcard is read as binding every type of the package's modules, sub-types included"
+		},
+		{
+			"name": "M-BINDING-ROOT-SUBTYPES",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "packageAnswer",
+			"find": "typesIn(packages[scope] ?? [], name, true)",
+			"replace": "typesIn(packages[scope] ?? [], name, false)",
+			"note": "a sub-type of a package or root module is read as visible by its bare name from the package"
+		},
+		{
+			"name": "M-BINDING-STDTYPES-CUT",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "stdTypesAnswer",
+			"force": "Pass",
+			"note": "the types the compiler imports from `StdTypes` bind nothing, so a same-package namesake answers for `Iterable`"
+		},
+		{
+			"name": "M-BINDING-FIELD-IMPORT-UNKNOWN",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "statementAnswer",
+			"find": "if (split.rest.length > 1 || (!aliased && split.rest.length == 1 && split.rest[0] != name)) return Pass;",
+			"replace": "",
+			"note": "a static-field import, and a sub-type import of another name, are read as possibly binding the name"
+		},
+		{
+			"name": "M-BINDING-OUTSIDE-UNREAD",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "outsideTypes",
+			"force": "null",
+			"note": "no module outside the index is read, so a std import makes every name it does not bind unknown"
+		},
+		{
+			"name": "M-BINDING-STD-WILDCARD-BLIND",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "wildcardAnswer",
+			"find": "case false: Pass;",
+			"replace": "case false: Unreadable;",
+			"note": "a wildcard over a std package that has no module of the name is read as possibly binding it"
+		},
+		{
+			"name": "M-BINDING-GUARDED-OTHER-BUILD",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "bothBuilds",
+			"find": "case Pass: Decls(decls);",
+			"replace": "case Pass: Unreadable;",
+			"note": "a guarded statement is unknown even where no other build binds the name"
+		},
+		{
+			"name": "M-BINDING-STRICT-OUTSIDE",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "packageAnswer",
+			"find": "if (outside != null && outside.match(Outside)) return Outside;",
+			"replace": "",
+			"note": "in a guarded statement's other build a package or toplevel module outside the index binds nothing, so the guarded binding is pinned against a std type the other build picks"
+		},
+		{
+			"name": "M-SCOPE-MODULE-TYPES-NONE",
+			"type": "anyparse.query.CachingGrammarPlugin",
+			"method": "moduleTypesInScope",
+			"force": "null",
+			"note": "the resolution scope never answers which types a module outside the index declares, so a library import makes every name it does not bind unknown"
 		},
 		{
 			"name": "M-CTOR-IMPORT-ALIAS-BLIND",
@@ -10346,8 +10433,8 @@
 			"name": "M-OPERAND-SIMPLE-NAME",
 			"type": "anyparse.query.DeclaredNullity",
 			"method": "headTierIn",
-			"find": "return switch TypeNameBinding.tierOf(head, fi, index) {",
-			"replace": "return switch (index.refs.resolvedDeclsNamed(head).length > 0 ? Bound(index.refs.resolvedDeclsNamed(head)) : TypeNameBinding.tierOf(head, fi, index)) {",
+			"find": "return switch index.refs.names.tierOf(head, fi) {",
+			"replace": "return switch (index.refs.resolvedDeclsNamed(head).length > 0 ? Bound(index.refs.resolvedDeclsNamed(head)) : index.refs.names.tierOf(head, fi)) {",
 			"note": "a written type name is judged by any indexed declaration of that simple name, so an import of an unindexed type answers as its namesake"
 		},
 		{
@@ -10385,7 +10472,7 @@
 			"name": "M-OPERAND-STATIC-RECEIVER-CUT",
 			"type": "anyparse.check.OperandBinder",
 			"method": "receiverDecls",
-			"find": "return switch TypeNameBinding.tierOf(name, fi, _index) {",
+			"find": "return switch _index.refs.names.tierOf(name, fi) {",
 			"replace": "return switch Unknown {",
 			"note": "a type name never serves as a receiver, so no static access types an operand"
 		},

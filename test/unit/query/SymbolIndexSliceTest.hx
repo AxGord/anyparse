@@ -1340,14 +1340,14 @@ class SymbolIndexSliceTest extends Test {
 	}
 
 	/**
-	 * Two same-simple-named `Base` declarations are both in `Sub`'s package, so the
-	 * link is AMBIGUOUS and resolves to neither — a namesake's member can never be
+	 * Two class paths each hold the module `pkg.Base`, so the link from `Sub`'s package is AMBIGUOUS and resolves to neither (a
+	 * SUB-type `Base` of another module would not be: the package tier binds main types only) — a namesake's member can never be
 	 * folded in. The ROOT entry stays simple-name unioned, as it always was.
 	 */
 	public function testMemberGetterAmbiguousSupertypeLink(): Void {
 		final index: SymbolIndex = SymbolIndex.build([
 			{ file: 'src/pkg/Base.hx', source: 'package pkg;\nclass Base { public var f:Int; }' },
-			{ file: 'src/pkg/Other.hx', source: 'package pkg;\nclass Other {}\nclass Base { public var f:Int; }' },
+			{ file: 'lib/pkg/Base.hx', source: 'package pkg;\nclass Base { public var f:Int; }' },
 			{ file: 'src/pkg/Sub.hx', source: 'package pkg;\nclass Sub extends Base {}' }
 		], plugin());
 		Assert.isNull(index.members.memberGetter('Sub', 'f'), 'an ambiguous supertype link resolves to nothing');

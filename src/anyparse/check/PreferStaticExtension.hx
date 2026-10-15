@@ -17,12 +17,10 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.SymbolIndex.FileInfo;
-import anyparse.query.SymbolIndex.ImportInfo;
-import anyparse.query.SymbolIndex.ImportKind;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndexHost;
 import anyparse.query.TypeInfoProvider;
-import anyparse.query.TypeNameBinding;
+import anyparse.query.TypeRefIndex;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
@@ -488,8 +486,8 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		final index: Null<SymbolIndex> = symbols();
 		final info: Null<FileInfo> = index?.fileInfo(file);
 		if (index == null || info == null) return { elsewhere: false, proven: false, usings: usings };
-		for (group in info.ambientImports) for (i in group.imports) if (i.kind == ImportKind.Using) usings.push(i.raw);
-		final decls: Array<ResolvedType> = TypeNameBinding.bind(name, info, index) ?? moduleIfGuardedSelf(name, module, info, index);
+		for (path in TypeRefIndex.ambientUsings(info)) usings.push(path);
+		final decls: Array<ResolvedType> = index.refs.names.bind(name, info) ?? [];
 		final paths: Array<String> = [];
 		for (d in decls) {
 			final path: String = qualifiedPath(d);
@@ -503,28 +501,6 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 			proven: bound && info.ambientImportsBounded,
 			usings: usings
 		};
-	}
-
-	/**
-	 * The name's binding when the only thing `TypeNameBinding` could not answer is a `#if`-guarded `import` / `using` of
-	 * `module` itself: the builds that compile it bind `module`, so the name is `module` everywhere when the file's other
-	 * statements alone bind it to `module` too. Empty otherwise.
-	 */
-	private static function moduleIfGuardedSelf(name: String, module: String, info: FileInfo, index: SymbolIndex): Array<ResolvedType> {
-		final self: (ImportInfo) -> Bool = i -> i.guarded && i.raw == module && (i.kind == ImportKind.Import || i.kind == ImportKind.Using);
-		if (!info.imports.exists(self)) return [];
-		final rest: FileInfo = {
-			file: info.file,
-			pkg: info.pkg,
-			module: info.module,
-			imports: info.imports.filter(i -> !self(i)),
-			types: info.types,
-			ambientImports: info.ambientImports,
-			ambientImportsBounded: info.ambientImportsBounded,
-			accessGrants: info.accessGrants
-		};
-		final decls: Array<ResolvedType> = TypeNameBinding.bind(name, rest, index) ?? [];
-		return decls.exists(d -> qualifiedPath(d) != module) ? [] : decls;
 	}
 
 	/** The path a module-level type is imported by: its module's for the main type, the module's plus its name otherwise. */

@@ -16,6 +16,8 @@ import anyparse.query.Pattern.KindEquivalence;
 import anyparse.query.ReachLiveness.ReachBuilds;
 import anyparse.query.SpanTypeInfoProvider;
 import anyparse.query.StringFold.StringFoldSupport;
+import anyparse.query.SymbolIndex.FileInfo;
+import anyparse.query.SymbolIndex.TypeDeclInfo;
 import haxe.io.Path;
 
 /**
@@ -754,6 +756,35 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		for (i => source in sources) if (source != files[i].source) return false;
 		return true;
 	}
+
+	public function moduleTypesInScope(module: String): Null<Array<TypeDeclInfo>> {
+		if (_scopeModules.exists(module)) return _scopeModules[module];
+		var named: Null<Map<String, Array<{ file: String, source: String }>>> = _scopeByFileName;
+		if (named == null) {
+			final built: Map<String, Array<{ file: String, source: String }>> = [];
+			for (entry in resolutionFiles() ?? []) {
+				final key: String = Path.withoutDirectory(entry.file);
+				final same: Array<{ file: String, source: String }> = built[key] ?? [];
+				same.push(entry);
+				built[key] = same;
+			}
+			_scopeByFileName = built;
+			named = built;
+		}
+		var types: Null<Array<TypeDeclInfo>> = null;
+		for (entry in named['${SourceText.lastSegment(module)}.hx'] ?? []) {
+			final info: Null<FileInfo> = IndexScope.over([entry], this).fileInfo(entry.file);
+			if (info != null && info.module == module) types = (types ?? []).concat(info.types);
+		}
+		_scopeModules[module] = types;
+		return types;
+	}
+
+	/** Module path -> the types it declares in the resolution scope, null when the scope does not hold it (`moduleTypesInScope`). */
+	private final _scopeModules: Map<String, Null<Array<TypeDeclInfo>>> = [];
+
+	/** File name (`Mod.hx`) -> the resolution scope's sources of that name, built on the first `moduleTypesInScope`. */
+	private var _scopeByFileName: Null<Map<String, Array<{ file: String, source: String }>>> = null;
 
 }
 

@@ -66,7 +66,7 @@ final class OperandBinder {
 	/** What a type NAME written in this file binds to at the file's top level, tier by tier; `Unknown` when the file is not indexed. */
 	public function typeNameTier(name: String): Tier {
 		final fi: Null<FileInfo> = _index.fileInfo(_file);
-		return fi == null ? Unknown : TypeNameBinding.tierOf(name, fi, _index);
+		return fi == null ? Unknown : _index.refs.names.tierOf(name, fi);
 	}
 
 	/** What the type `written` at offset `at` of this file binds to, with the type parameters in scope there. */
@@ -200,7 +200,7 @@ final class OperandBinder {
 		final fi: Null<FileInfo> = _index.fileInfo(_file);
 		if (name == null || fi == null || !_identKinds.contains(receiver.kind) || !SourceText.isUpperInitial(name)) return null;
 		if (hit != null && (hit.bindingSpan != null || hit.bindingNode != null)) return null;
-		return switch TypeNameBinding.tierOf(name, fi, _index) {
+		return switch _index.refs.names.tierOf(name, fi) {
 			case Bound(decls): decls;
 			case _: null;
 		};

@@ -9,7 +9,7 @@ import utest.Assert;
 import utest.Test;
 
 /**
- * `SymbolIndex.resolvesToStdType` answers false for what it cannot see — the clauses a rule-level
+ * `SymbolIndex.stdDeclarationOf` answers null for what it cannot see — the clauses a rule-level
  * fixture does not reach: a file the index does not hold, and an ambient `import.hx` chain that
  * could not be bounded (one of its members does not parse, so it may import anything).
  */
@@ -18,8 +18,8 @@ class SymbolIndexStdTypeTest extends Test {
 	public function testAFileTheIndexDoesNotHoldIsNoProof(): Void {
 		final index: Null<SymbolIndex> = stdIndex([{ file: 'C.hx', source: 'class C {}' }]);
 		if (index == null) return;
-		Assert.isTrue(index.resolvesToStdType('List', 'C.hx'), 'control: the indexed file resolves the std List');
-		Assert.isFalse(index.resolvesToStdType('List', 'Missing.hx'));
+		Assert.isTrue(index.stdDeclarationOf('List', 'C.hx') != null, 'control: the indexed file resolves the std List');
+		Assert.isFalse(index.stdDeclarationOf('List', 'Missing.hx') != null);
 	}
 
 	public function testAnUnboundedAmbientChainIsNoProof(): Void {
@@ -35,7 +35,7 @@ class SymbolIndexStdTypeTest extends Test {
 		#end
 	}
 
-	/** `resolvesToStdType('List', …)` for `src/lib/C.hx` in an on-disk tree whose `src/lib/import.hx` reads `ambient`. */
+	/** Whether `stdDeclarationOf('List', …)` answers for `src/lib/C.hx` in an on-disk tree whose `src/lib/import.hx` reads `ambient`. */
 	private function resolvesInTree(ambient: String): Bool {
 		var answer: Bool = true;
 		#if (sys || nodejs)
@@ -48,7 +48,7 @@ class SymbolIndexStdTypeTest extends Test {
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
 			final files: Array<{ file: String, source: String }> = names.map(name -> readEntry(root, name));
 			final index: Null<SymbolIndex> = stdIndex(files);
-			if (index != null) answer = index.resolvesToStdType('List', '$root/src/lib/C.hx');
+			if (index != null) answer = index.stdDeclarationOf('List', '$root/src/lib/C.hx') != null;
 		});
 		#end
 		return answer;
