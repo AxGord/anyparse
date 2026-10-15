@@ -2548,3 +2548,67 @@ decided the question; it may not become a record of runs.
   thread-safety moves on the 3 TM trees, anyparse src identical. Rule time on tm-1d1ba147 (interleaved, median of 3)
   dc09aa52 5.96 / L1b tip 5.74 / L2 tip 5.92 s (+3.1% over L1b, -0.7% over dc09aa52); full lint 24.98 -> 25.83 s (+3.4%)
   — branch `feat/ts-precision-7`
+- R7 L3 F1 (review R5, MUST; `sv/implicit-iterator`, `-iterator-local`, `-kv`, `-tostring`): StoredValues followed a
+  value a constructor only stores to the occurrences of its field's NAME, but the compiler calls some fields by name with
+  no node of it at the call — a `for` runs `iterator()` / `keyValueIterator()` (checked on --interp, a private field too:
+  `for (x in this)`), a string conversion runs `toString()` on dynamic targets, `haxe.Serializer` reaches `hxSerialize`
+  through `Reflect` — and std code reads a field structurally (`Lambda` iterating an `Iterable`). A stored field now
+  counts only when its name is in neither `execution.implicitCallNames` nor the new `execution.reflectivelyCalledNames`
+  (`hxSerialize`, `hxUnserialize`, `resolve`) and it is not public (`MemberKinds.fieldExposed`, moved from
+  FieldInitAtDeclaration: explicit `public`, a `@:publicFields` / extern container). Cost: `sv/implicit-iterator-only-stored`
+  (public, never iterated) warns again as on dc09aa52 — branch `feat/ts-precision-7`
+- R7 L3 F2 (`h/loop-proj-list(-rev)`, `loop-proj-iterator-type`, `loop-modsub-list`, `loop-proj-vector`,
+  `idx-proj-vector`): the element maps were looked up by the container's SIMPLE name, so a project `List<T>` was read as
+  the std one (the index arm since K1). The listed parameter is now taken only when the name provably is the std type
+  (`standardContainerPaths`, a new shape key; `CallGraphImports.namesStandard`): a dotted std path no declaration bears,
+  or a simple name no indexed declaration bears — one that does makes the simple key mean that type — which the file
+  binds to a std path or which is a toplevel std name. Otherwise the container's own `iterator()` / `next()`, an
+  `iterator()` return read in the file declaring it (`memberReturn` hands it). An `#if`-guarded import binding the name
+  elsewhere refuses; a wildcard of a package the tables cannot list does not (follow-up: refusing it lost every
+  `Array<T>` loop in TM's Editor.hx, which imports library packages by wildcard — `typeOf` reads such a wildcard the same
+  way). A declaration at a standard path or its module-qualified twin (`Array`, `Array.Array`, `haxe.ds.List.List`,
+  `StdTypes.Iterator`) is the std itself, indexed as a library, and no namesake (follow-up 2: MemberReachTest indexes a
+  `std/Array.hx` stub). Limit: a project module at exactly a std path is indistinguishable from the std by path — branch
+  `feat/ts-precision-7`
+- R7 L3 F3 (`h/lam-skip-shift(-rev)`): L2 d typed a lambda argument by the parameter at its POSITION, but Haxe skips an
+  optional parameter an argument does not fit. `paramTypesOf` records the first skippable parameter (`?p` or a default
+  value; every parameter of an external target, whose index entry does not say) and the declared count
+  (`DeclarationFacts.skippable`); `argumentTypeSource` answers null when one sits at or before the argument and the call
+  passes fewer arguments than declared, or a rest parameter takes the rest (`CallGraphKeys.mayShift`). The same place now
+  counts a `new`'s own arguments only (`new Box<Int>(f)` read the type argument as argument 0) — branch
+  `feat/ts-precision-7`
+- R7 L3 F4 (`h/stat-modvar(-rev)`): a module-level `var` / `final` (the index lists none) lost to a static `import A.*`
+  brings in. Each file's module-level names are recorded as its edges are collected (`CallGraphNames.moduleLevelNames`:
+  named root children and, through nameless wrappers — a conditional region, a `final`'s VarForm — the named nodes they
+  hold; an import alias names none) and `CallGraphImports.importedStatics` brings in nothing under them, for every
+  consumer. The module field itself stays untyped (unknown, not the import's type) — branch `feat/ts-precision-7`
+- R7 L3 F6 (pre-existing; `h/ovl-return(-rev)`, `ifdef-ovl`): `@:overload` signatures were ignored. CallGraphNodes
+  compares each offered function's return and parameter list (kind + written type) with the declaration's: differing
+  returns drop the node's return facts and mark `overloadedReturns` (`returnSourceOf` null, the `#if` twins of L1 e
+  included), differing parameters mark `overloadedParams` (`paramTypesOf` null); a metadata holding no function differs
+  in both; agreeing signatures type as before. A library function the graph holds no file for types no parameter when
+  its index entry carries `hasOverloadMeta`. Not taken: dispatching on every signature (a call's selection is not
+  modelled); StdTypes (the core std's one `@:overload`, Reflect.makeVarArgs, returns Dynamic either way) — branch
+  `feat/ts-precision-7`
+- R7 L3 F7 (pre-existing; `h/stat-super-static`): measured on 4.3.7 --interp — a supertype's static is not in a
+  subtype's unqualified scope (`Unknown identifier`), an `import A.*` static of the name is read there, the type's own
+  static and a module-level function of the module beat the import. `CallGraphKeys.staticOfSupertype` (the nearest
+  declaration — a function the graph keys, else the index's field — is another type's static) keeps such a static out of
+  the import gate, the bare-read typing and the bare-call targets. The module pseudo-type bears the main class's name and
+  `memberOnChain` on it walked that class's supertypes, so module lookups take only what it declares itself
+  (`CallGraphKeys.declaredOn`). `owner != typeName` carries no arm: a type's own member binds lexically before these
+  lookups (the cut survives) — branch `feat/ts-precision-7`
+- R7 L3 F5 (documented, not fixed): types are keyed by SIMPLE name where no path tells them apart, so a module-local
+  `Maker` beside an imported `pkg.Maker` (`h/new-modsub-shadow*`) dispatches on both declarations' members since L1 e /
+  L2 e — an over-approximation (both `make`s reachable), the mechanism that resolves TM's `Main.instance` correctly.
+  Fixed only by qualified node ids (the open "graph by simple names" item) — branch `feat/ts-precision-7`
+- R7 L3 MEASURED (engine of the L3 tip vs 23d4b78b): round8 runner — every F1..F4/F6/F7 fixture moves the right way
+  (N fixtures `loop-proj-list-rev`, `loop-proj-iterator-type`, `loop-modsub-list`, `loop-proj-vector`, `idx-proj-vector`,
+  `lam-skip-shift`, `stat-modvar-rev`, `ovl-return-rev` stop warning; W `loop-proj-list`, `stat-super-static` and the 4
+  `sv/implicit-*` warn; `lam-skip-shift-rev`, `stat-modvar`, `ovl-return`, `ifdef-ovl` lose their wrong edge and stay
+  silent), the hv twins follow (false B gone, `hv/stat-modvar` gains `A C.main|Mutex.acquire` as every unresolved hv
+  row), `sv/implicit-iterator-only-stored` warns again (public field), every control and "not finding" keeps its keys.
+  Fixtures r1..r5, round2, round4..round7 (499 runs): byte-identical. TM 1d1ba147 / f81c2049 / bd943dac reports and
+  round6/frag byte-identical (rows unchanged, recall full); all rules (`--no-oracle --all`) on the 3 TM trees and
+  anyparse src: JSON byte-identical. Rule time on tm-1d1ba147 (interleaved, median of 3) dc09aa52 6.12 / 23d4b78b 6.05 /
+  L3 6.01 s; full lint 25.59 / 24.96 / 24.80 s — branch `feat/ts-precision-7`
