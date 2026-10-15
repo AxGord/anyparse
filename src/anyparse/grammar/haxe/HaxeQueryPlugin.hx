@@ -1454,6 +1454,16 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				'Iterator' => 0,
 				'Map' => 1
 			],
+			// the std types the two element maps describe, as an import or a toplevel name spells each (`Iterable` and
+			// `Iterator` live in the `StdTypes` module, `List` and `Map` have a toplevel typedef beside their `haxe.ds` type)
+			standardContainerPaths: [
+				'Array' => ['Array'],
+				'Vector' => ['haxe.ds.Vector'],
+				'List' => ['List', 'haxe.ds.List'],
+				'Iterable' => ['Iterable', 'StdTypes.Iterable'],
+				'Iterator' => ['Iterator', 'StdTypes.Iterator'],
+				'Map' => ['Map', 'haxe.ds.Map']
+			],
 			// `Array` and `haxe.ds.List` walk one index / node chain in both iterators; a map's
 			// key-value iterator re-reads by key, so it diverges once the body removes an entry.
 			valueIterationTypes: ['Array' => 'Array', 'List' => 'haxe.ds.List'],

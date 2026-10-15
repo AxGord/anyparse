@@ -3033,6 +3033,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.BodySlotGuardSliceTest#testAllowsWholeElseBranchRemoval :: control :: M-BODYSLOT-LEAD-KEPT',
 			'unit.query.CallGraphTest#testACalledFunctionValueReturnsWhatItsFunctionTypeSays :: control :: '
 				+ 'M-TS-CALLED-VALUE,M-TS-CALLED-RECEIVER,M-TS-CALLED-NULL',
+			'unit.query.CallGraphTest#testAContainerIsTheStandardOneOnlyWhereItsNameMeansIt :: control :: '
+				+ 'M-TS-STD-CONTAINER,M-TS-STD-CONTAINER-DECLARED,M-TS-STD-CONTAINER-WHERE',
 			'unit.query.CallGraphTest#testADeclaredTypeIsReadInTheFileThatWroteIt :: control :: '
 				+ 'M-TS-DECL-MEMBER-FILE,M-TS-DECL-RETURN-FILE,M-TS-DECL-READ-FROM,M-TS-DECL-BOUND,M-TS-PATH-NULLABLE-KEYED',
 			'unit.query.CallGraphTest#testAForwardedCallRunsTheUnderlyingTheAbstractsFileNames :: control :: '
@@ -6712,7 +6714,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-LAMBDA-NULL',
 			'M-TS-NEW-RECEIVER',
 			'M-TS-STORED-IMPLICIT-NAME',
-			'M-TS-STORED-PUBLIC'
+			'M-TS-STORED-PUBLIC',
+			'M-TS-STD-CONTAINER',
+			'M-TS-STD-CONTAINER-DECLARED',
+			'M-TS-STD-CONTAINER-WHERE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

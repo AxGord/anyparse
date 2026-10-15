@@ -21029,6 +21029,30 @@
 			"find": "return name != null && !_calledByName.contains(name) && !MemberKinds.fieldExposed(tree, field, body, _plugin, _shape);",
 			"replace": "return name != null && !_calledByName.contains(name);",
 			"note": "a public stored field std code may read as a structure's counts as only stored"
+		},
+		{
+			"name": "M-TS-STD-CONTAINER",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (!types.imports.namesStandard(writtenIn ?? file, path, standardContainers[outer] ?? [])) return null;",
+			"replace": "",
+			"note": "a container is read as the std one its simple name spells wherever written (a project List<T> yields T)"
+		},
+		{
+			"name": "M-TS-STD-CONTAINER-DECLARED",
+			"type": "anyparse.query.CallGraphImports",
+			"method": "namesStandard",
+			"find": "if (declared.length > 0) return false;",
+			"replace": "",
+			"note": "a simple name a project declaration bears still reads as the std type"
+		},
+		{
+			"name": "M-TS-STD-CONTAINER-WHERE",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": ": (returnedIn == null ? null : elementTypeSource(iterator.written, iterationParams, returnedIn))",
+			"replace": ": elementTypeSource(iterator.written, iterationParams)",
+			"note": "an iterator() return is read in the file walked, not where it is declared"
 		}
 	]
 }

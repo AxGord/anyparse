@@ -292,6 +292,22 @@ final class CallGraphImports {
 	}
 
 	/**
+	 * Whether the type path `path` — as `file` writes it, or as the graph keys it (`typeOf`) — can only name one of `standard`,
+	 * the paths a standard type is spelled by: a dotted one among them no declaration the tables hold bears; a simple name no
+	 * declaration bears — one that does makes the simple key mean that type — which `file` binds to one of them through an
+	 * import, an alias, a wildcard or its packages, or leaves unbound while it is one of them itself (a toplevel name). A name
+	 * an `#if`-guarded import or an undecidable wildcard may bind elsewhere is none.
+	 */
+	public function namesStandard(file: String, path: String, standard: Array<String>): Bool {
+		final declared: Array<String> = declaredPathsOf(SourceText.lastSegment(path));
+		if (path.indexOf('.') >= 0) return standard.contains(path) && !declared.contains(path);
+		if (declared.length > 0) return false;
+		final maybe: Array<String> = [];
+		final bound: Null<String> = boundPath(file, path, maybe);
+		return standard.contains(bound ?? path) && !maybe.exists(m -> !standard.contains(m));
+	}
+
+	/**
 	 * The dotted path the simple name `written` means in `file`, when an import, an alias or a wildcard import of a package
 	 * binds it there (`typeOf`); null when none does. With `maybe` handed, the paths it may mean on some builds or where
 	 * that cannot be told land in it: those an `#if`-guarded import binds it to, and the ones a wildcard may supply it from

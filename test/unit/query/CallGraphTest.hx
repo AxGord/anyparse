@@ -1334,6 +1334,54 @@ class CallGraphTest extends Test {
 		#end
 	}
 
+	/**
+	 * Review R5 F2 (`h/loop-proj-list(-rev)`, `loop-modsub-list`, `idx-proj-vector`): a container is read as the standard one its
+	 * name spells only where it is that one — a project `List<T>` an import or the module itself binds is another type, whose
+	 * element its own `iterator()` says, and a project `Vector<T>` indexed is no std vector; the std types stay typed.
+	 */
+	@:pin('control') @:killer('M-TS-STD-CONTAINER') @:killer('M-TS-STD-CONTAINER-DECLARED') @:killer('M-TS-STD-CONTAINER-WHERE')
+	public function testAContainerIsTheStandardOneOnlyWhereItsNameMeansIt(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final lock: String = 'package utils; class Lock { public function new() {} public function wait():Bool return true; }';
+		final g: CallGraph = graphOf([
+			lock,
+			'package pkg; class List<T> { public function new() {} public function iterator():Iterator<sys.thread.Lock> return null; }',
+			'package pkg; abstract Vector<T>(Array<utils.Lock>) { public inline function new() this = [];'
+			+ ' @:arrayAccess inline function get(i:Int):utils.Lock return this[i]; }',
+			'package app; import pkg.List; import pkg.Vector; class C {'
+			+ ' static function list():Void { final l:List<utils.Lock> = null; for (x in l) x.wait(); }'
+			+ ' static function index():Void { final v:Vector<sys.thread.Lock> = null; v[0].wait(); }'
+			+ ' static function std():Void { final v:haxe.ds.Vector<sys.thread.Lock> = null; for (x in v) x.wait(); }'
+			+ ' static function arr():Void { final a:Array<sys.thread.Lock> = []; a[0].wait(); } }',
+			'package other; import pkg.List; class Holder { public static var l:List<utils.Lock> = null; }',
+			'package app; import other.Holder; class E { static function read():Void for (x in Holder.l) x.wait(); }',
+			'package app; import pkg.List; import nowhere.Iterator; class F {'
+			+ ' static function list():Void { final l:List<utils.Lock> = null; for (x in l) x.wait(); } }'
+		]);
+		final own: CallGraph = graphOf([
+			lock,
+			'package app; class List<T> { public function new() {} public function iterator():Iterator<utils.Lock> return null; }'
+			+ ' class D { static function own():Void { final l:List<sys.thread.Lock> = null; for (x in l) x.wait(); } }'
+		]);
+		function targets(graph: CallGraph, from: String): Array<String> {
+			return [for (e in graph.outEdges(from)) if (e.kind == Call) e.to];
+		}
+		Assert.same(['sys.thread.Lock.wait'], targets(g, 'C.list'), 'an imported project List yields what its iterator() says');
+		Assert.same([], targets(g, 'C.index'), 'an imported project Vector indexed is no std vector');
+		Assert.same(['sys.thread.Lock.wait'], targets(g, 'C.std'), 'the std Vector written out');
+		Assert.same(['sys.thread.Lock.wait'], targets(g, 'C.arr'), 'an Array');
+		Assert.same(['sys.thread.Lock.wait'], targets(g, 'E.read'), 'a project List read where no import binds the name');
+		Assert.same(['sys.thread.Lock.wait'], targets(g, 'F.list'), 'an iterator() return read where it is declared');
+		Assert.same(['Lock.wait'], targets(own, 'D.own'), 'a List the module declares');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	@:pin('control')
 	@:killer('M-TS-LAMBDA-PARAMS') @:killer('M-TS-LAMBDA-ARITY') @:killer('M-TS-LAMBDA-ANNOTATED') @:killer('M-TS-LAMBDA-NULL')
 	public function testALambdaParameterIsTypedByTheFunctionTypeItIsExpectedToBe(): Void {

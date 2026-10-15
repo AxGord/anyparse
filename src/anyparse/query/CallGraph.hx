@@ -798,6 +798,7 @@ final class CallGraph {
 		final transparentWrappers: Array<String> = shape.memberTransparentWrapperTypeNames ?? [];
 		final elementParams: Map<String, Int> = shape.indexedElementTypeParams ?? [];
 		final iterationParams: Map<String, Int> = shape.iterationElementTypeParams ?? [];
+		final standardContainers: Map<String, Array<String>> = shape.standardContainerPaths ?? [];
 		final iterationKinds: Array<String> = shape.iterationBindingKinds ?? [];
 		final valueBinderKinds: Array<String> = shape.iterationValueBinderKinds ?? [];
 		final paramKinds: Array<String> = shape.paramKinds ?? [];
@@ -1178,42 +1179,58 @@ final class CallGraph {
 
 		/**
 		 * The element type an index access into a value of `container`'s written type yields, per `indexedElementTypeParams` —
-		 * or, with `params` handed, the one a loop over it binds per `iterationElementTypeParams`.
+		 * or, with `params` handed, the one a loop over it binds per `iterationElementTypeParams` — when the container is the
+		 * standard type those maps describe (`standardContainerPaths`), read where it is written: `writtenIn`, this file by
+		 * default. A project type bearing the name yields what its own members say (review R5 F2).
 		 */
-		function elementTypeSource(container: String, ?params: Map<String, Int>): Null<String> {
+		function elementTypeSource(container: String, ?params: Map<String, Int>, ?writtenIn: String): Null<String> {
 			final peeled: String = NominalTypes.unwrapNullable(container.trim(), transparentWrappers, _plugin.typeSyntax);
-			final outer: Null<String> = NominalTypes.outerNominalOf(peeled, _plugin.typeSyntax);
+			final path: Null<String> = keys.outerPathOf(peeled, false);
+			final outer: Null<String> = path == null ? null : SourceText.lastSegment(path);
 			final at: Null<Int> = outer == null ? null : (params ?? elementParams)[outer];
 			final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(peeled, _plugin.typeSyntax);
-			if (at == null || args == null) return null;
+			if (path == null || outer == null || at == null || args == null) return null;
+			if (!types.imports.namesStandard(writtenIn ?? file, path, standardContainers[outer] ?? [])) return null;
 			final list: Array<String> = args;
 			return at >= list.length ? null : list[at];
 		}
 
 		/**
 		 * The written return type of the function `member` a value written `source` declares on its type's chain, as that value
-		 * sees it (`throughParams`); null for a member that is no function the graph holds, or one declaring type parameters.
+		 * sees it (`throughParams`), with the one file declaring it (null when several do); null for a member that is no
+		 * function the graph holds, or one declaring type parameters.
 		 */
-		function memberReturn(source: String, member: String, currentType: Null<String>): Null<String> {
+		function memberReturn(source: String, member: String, currentType: Null<String>): Null<{ written: String, file: Null<String> }> {
 			final type: Null<String> = nominalOf(source, currentType);
 			final target: Null<String> = type == null ? null : memberOnChain(type, member);
 			final written: Null<String> = target == null || (_facts.typeParams[target] ?? []).length > 0 ? null : returnSourceOf(target);
-			return target == null || written == null ? null : throughParams(written, nodes[target]?.typeName, source, type, currentType);
+			if (target == null || written == null) return null;
+			final files: Array<String> = [];
+			for (d in declarationsOf(target)) if (!files.contains(d.file)) files.push(d.file);
+			return {
+				written: throughParams(written, nodes[target]?.typeName, source, type, currentType),
+				file: files.length == 1 ? files[0] : null
+			};
 		}
 
 		/**
 		 * The type a loop over a value written `container` binds its element to: the argument a standard container names
 		 * (`iterationElementTypeParams`), and for a key-value loop's value binder nothing else; otherwise what the `next()` of
-		 * the iterator its `iterator()` returns yields, or its own `next()` — null when neither is declared, or both disagree.
+		 * the iterator its `iterator()` returns yields — a standard iterator read where that `iterator()` is declared — or its
+		 * own `next()`: null when neither is declared, or both disagree.
 		 */
 		function iterationElement(container: String, keyValue: Bool, currentType: Null<String>): Null<String> {
 			final listed: Null<String> = elementTypeSource(container, iterationParams);
 			if (listed != null || keyValue) return listed;
-			final iterator: Null<String> = memberReturn(container, 'iterator', currentType);
+			final iterator: Null<{ written: String, file: Null<String> }> = memberReturn(container, 'iterator', currentType);
+			// a return several files declare is read in none of them: its standard type is not provable
+			final returnedIn: Null<String> = iterator?.file;
 			final viaIterator: Null<String> = iterator == null
 				? null
-				: elementTypeSource(iterator, iterationParams) ?? memberReturn(iterator, 'next', currentType);
-			final own: Null<String> = memberReturn(container, 'next', currentType);
+				: (returnedIn == null ? null : elementTypeSource(iterator.written, iterationParams, returnedIn)) ?? memberReturn(
+					iterator.written, 'next', currentType
+				)?.written;
+			final own: Null<String> = memberReturn(container, 'next', currentType)?.written;
 			return viaIterator == null || own == null || viaIterator == own ? viaIterator ?? own : null;
 		}
 
