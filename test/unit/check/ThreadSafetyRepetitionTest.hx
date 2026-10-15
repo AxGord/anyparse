@@ -91,7 +91,8 @@ class ThreadSafetyRepetitionTest extends Test {
 			+ ' public function success(f:String->Void):Batch { for (i in items) f(i); return this; } }';
 		final typed: String =
 			'public static function main():Void { final b:Batch = new Batch(["a", "b"]); b.success(s -> Db.request(s)); }';
-		final chained: String = 'public static function main():Void new Batch(["a", "b"]).success(s -> Db.request(s));';
+		// a value a `cast` makes is of no type the graph names: the call on it stays unresolved
+		final chained: String = 'public static function main():Void (cast new Batch(["a", "b"])).success(s -> Db.request(s));';
 		final repeated: Array<String> = ['warning A M.main | Db.request'];
 		Assert.same(repeated, graded(run(typed, batch, '"runsOnce":["success"],')), 'a bare name, the call resolved');
 		Assert.same(repeated, graded(run(chained, batch, '"runsOnce":["success"],')), 'a bare name, the call unresolved');

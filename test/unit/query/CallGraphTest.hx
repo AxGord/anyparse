@@ -1185,6 +1185,677 @@ class CallGraphTest extends Test {
 		#end
 	}
 
+	/**
+	 * A static an import binds by its own name (`import p.T.*;`, `import p.T.member;`) types a bare read of it and a bare call
+	 * of it by the type it is declared with, read where it is declared; a member the reading type inherits of that name is
+	 * what the name means there, not the import (review R4 F7).
+	 */
+	/**
+	 * Review R5 F6 (`h/ovl-return(-rev)`, `ifdef-ovl`): a function offering other signatures (`@:overload`) is typed by none
+	 * of them where they disagree — a call may select any — its return where the returns differ, its parameters where the
+	 * parameter lists do; one declaration of several offering them is enough. A library function the graph holds no file
+	 * for, marked so in the index, types no parameter either.
+	 */
+	@:pin('control') @:killer('M-TS-OVERLOAD-RETURN') @:killer('M-TS-OVERLOAD-RETURN-EACH') @:killer('M-TS-OVERLOAD-PARAMS') @:killer('M-TS-OVERLOAD-AGREE')
+	@:killer('M-TS-OVERLOAD-EXTERNAL')
+	public function testAFunctionOfferingOtherSignaturesIsTypedWhereTheyAgree(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final project: Array<{ file: String, source: String }> = [
+			{
+				file: 'utils/Lock.hx',
+				source: 'package utils; class Lock { public function new() {} public function wait():Bool return true; }'
+			},
+			{
+				file: 'app/A.hx',
+				source: 'package app; class A { @:overload(function(x:Int):sys.thread.Lock {}) public static function get(x:String):utils.Lock'
+					+ ' return null; @:overload(function(x:Int):utils.Lock {}) public static function same(x:String):utils.Lock return null;'
+					+ ' @:overload(function(f:(sys.thread.Lock) -> Void):Void {}) public static function run(f:(utils.Lock) -> Void):Void {}'
+					+ ' #if never @:overload(function(x:Int):sys.thread.Lock {}) public static function each(x:String):utils.Lock return null;'
+					+ ' #else public static function each(x:String):utils.Lock return null; #end }'
+			},
+			{
+				file: 'app/C.hx',
+				source: 'package app; import lib.L; class C { static function get():Void A.get(1).wait(); static function same():Void A.same(1).wait();'
+					+ ' static function run():Void A.run(l -> l.wait()); static function each():Void A.each("x").wait();'
+					+ ' static function lib():Void L.run(l -> l.wait()); }'
+			}
+		];
+		final library: Array<{ file: String, source: String }> = [
+			{
+				file: 'lib/L.hx',
+				source: 'package lib; extern class L { @:overload(function(f:(sys.thread.Lock) -> Void):Void {})'
+					+ ' public static function run(f:(utils.Lock) -> Void):Void; }'
+			}
+		];
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final g: CallGraph = CallGraph.build(project, plugin, SymbolIndex.build(project.concat(library), plugin));
+		function targets(from: String): Array<String> {
+			final out: Array<String> = [];
+			for (id in g.nodes.keys())
+				if (id == from || StringTools.startsWith(id, '$from#'))
+					for (e in g.outEdges(id))
+						if (e.kind == Call) out.push(e.to);
+			out.sort(Reflect.compare);
+			return out;
+		}
+		Assert.same(['A.get'], targets('C.get'), 'another signature returns another type');
+		Assert.same(['A.same', 'Lock.wait'], targets('C.same'), 'every signature returns the same type');
+		Assert.same(['A.run'], targets('C.run'), 'another signature takes other parameters');
+		Assert.same(['A.each'], targets('C.each'), 'one declaration of several offers another signature');
+		Assert.same(['L.run'], targets('C.lib'), 'a library function the index marks');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * Review R5 F7 (`h/stat-super-static`): a supertype's static is not in a subtype's unqualified scope (Haxe 4.3.7:
+	 * `Unknown identifier`), so a bare name there is the static an import brings in — read or called; the type's own static
+	 * still comes first.
+	 */
+	@:pin('control') @:killer('M-TS-SUPER-STATIC-IMPORT') @:killer('M-TS-SUPER-STATIC-READ') @:killer('M-TS-SUPER-STATIC-CALL')
+	@:killer('M-TS-SUPER-STATIC-HIDDEN') @:killer('M-TS-SUPER-STATIC-MODULE') @:killer('M-TS-SUPER-STATIC-MODULE-IMPORT')
+	public function testASupertypeStaticIsNotInScopeBare(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		// each class in a module of its own name: the module pseudo-type a module function is keyed under is the class's name
+		final g: CallGraph = CallGraph.build([
+			{
+				file: 'utils/Lock.hx',
+				source: 'package utils; class Lock { public function new() {} public function wait():Bool return true; }'
+			},
+			{
+				file: 'app/A.hx',
+				source: 'package app; import sys.thread.Lock; class A { public static var lock:Lock = null; public static function go():Lock return null; }'
+			},
+			{
+				file: 'app/P.hx',
+				source: 'package app; class P { public static var lock:utils.Lock = null; public static function go():utils.Lock return null;'
+				+ ' public function new() {} }'
+			},
+			{
+				file: 'app/C.hx',
+				source: 'package app; import app.A.*; class C extends P { function field():Void lock.wait(); function call():Void go().wait(); }'
+			},
+			{
+				file: 'app/R.hx',
+				source: 'package app; import app.A.*; class R { static var lock:utils.Lock = null; static function go():utils.Lock return null;'
+				+ ' function own():Void lock.wait(); function call():Void go().wait(); }'
+			},
+			{
+				file: 'app/M.hx',
+				source: 'package app; import app.A.*; function go():utils.Lock return null;'
+				+ ' class M extends P { function call():Void go().wait(); }'
+			},
+			{
+				file: 'app/B.hx',
+				source: 'package app; class B { public static var lock:sys.thread.Lock = null; public static function go():sys.thread.Lock return null; }'
+			},
+			{
+				file: 'app/T.hx',
+				source: 'package app; import app.A.*; import app.B.*; class T extends P { function field():Void lock.wait();'
+				+ ' function call():Void go().wait(); }'
+			}
+		], new HaxeQueryPlugin());
+		function targets(from: String): Array<String> {
+			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+			out.sort(Reflect.compare);
+			return out;
+		}
+		Assert.same(['sys.thread.Lock.wait'], targets('C.field'), 'a supertype static field read bare: the imported one');
+		Assert.same(['A.go', 'sys.thread.Lock.wait'], targets('C.call'), 'a supertype static function called bare: the imported one');
+		Assert.same(['Lock.wait'], targets('R.own'), 'the type\'s own static comes first');
+		Assert.same(['Lock.wait', 'R.go'], targets('R.call'), 'the type\'s own static function comes first');
+		Assert.same(['Lock.wait', 'M.go'], targets('M.call'), 'a module function before the import, the supertype\'s static hidden');
+		Assert.same([], targets('T.field'), 'two imports bind the name: the supertype static is still none of them');
+		Assert.same(['A.go', 'B.go'], targets('T.call'), 'two imports: a call runs either, never the supertype\'s');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * Review R5 F4 (`h/stat-modvar(-rev)`): a field the reading file's own module declares at module level — plain, `final`,
+	 * inside a conditional region — is what a bare name means there, before any static an import brings in under it.
+	 */
+	@:pin('control') @:killer('M-TS-MODULE-NAME') @:killer('M-TS-MODULE-NAME-NESTED') @:killer('M-TS-MODULE-NAME-ALIAS')
+	public function testAModuleLevelFieldComesBeforeAnImportedStatic(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final g: CallGraph = graphOf([
+			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
+			'package app; import sys.thread.Lock; class A { public static var lock:Lock = null; }',
+			'package app; import app.A.*; final lock:utils.Lock = null; class M { static function field():Void lock.wait(); }',
+			'package app; import app.A.*; #if !never var lock:utils.Lock = null; #end class N { static function field():Void lock.wait(); }',
+			'package app; import app.A.*; class W { static function field():Void lock.wait(); }',
+			'package app; import app.A.lock as held; class Q { static function field():Void held.wait(); }'
+		]);
+		function targets(from: String): Array<String> {
+			return [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+		}
+		Assert.same([], targets('M.field'), 'a module-level final of the name');
+		Assert.same([], targets('N.field'), 'a module-level var inside a conditional region');
+		Assert.same(['sys.thread.Lock.wait'], targets('W.field'), 'no module-level field: the imported static');
+		Assert.same(['sys.thread.Lock.wait'], targets('Q.field'), 'an import alias declares no module-level name');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-TS-IMPORT-STATIC-FIELD') @:killer('M-TS-IMPORT-STATIC-CALL') @:killer('M-TS-IMPORT-STATIC-OWN')
+	@:killer('M-TS-IMPORT-STATIC-ONE') @:killer('M-TS-IMPORT-STATIC-INDEXED')
+	public function testAnImportedStaticIsTypedWhereItIsDeclared(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final g: CallGraph = graphOf([
+			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
+			'package app; import sys.thread.Lock; class A { public static var lock:Lock = null; public static function make():Lock return null; }',
+			'package app; import app.A.*; class W { static function field():Void lock.wait(); static function call():Void make().wait(); }',
+			'package app; import app.A.lock; import app.A.make; class F { static function field():Void lock.wait();'
+			+ ' static function call():Void make().wait(); }',
+			'package app; class P { public var lock:utils.Lock = null; }',
+			'package app; import app.A.*; class O extends P { function own():Void lock.wait(); }',
+			'package app; class B { public static var lock:utils.Lock = null; }',
+			'package app; import app.A.*; import app.B.*; class T { static function both():Void lock.wait(); }',
+			'package app; import app.A.*; class X extends lib.Unseen { static function field():Void lock.wait(); }'
+		]);
+		function targets(from: String): Array<String> {
+			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+			out.sort(Reflect.compare);
+			return out;
+		}
+		Assert.same(['sys.thread.Lock.wait'], targets('W.field'), 'a static field a wildcard brings in');
+		Assert.same(['A.make', 'sys.thread.Lock.wait'], targets('W.call'), 'a static function a wildcard brings in');
+		Assert.same(['sys.thread.Lock.wait'], targets('F.field'), 'a static field imported by name');
+		Assert.same(['A.make', 'sys.thread.Lock.wait'], targets('F.call'), 'a static function imported by name');
+		Assert.same(['Lock.wait'], targets('O.own'), 'a member the reading type inherits comes first');
+		Assert.same([], targets('T.both'), 'two imports binding the name: unresolved');
+		Assert.same([], targets('X.field'), 'a supertype the index does not hold may declare it: unresolved');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-TS-FORWARD-KEYED') @:killer('M-TS-FORWARD-PARAM') @:killer('M-TS-FORWARD-ALIAS')
+	public function testAForwardedCallRunsTheUnderlyingTheAbstractsFileNames(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final g: CallGraph = graphOf([
+			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
+			'package app; class T { public function new() {} public function wait():Bool return true; }',
+			'package app; import sys.thread.Lock; @:forward abstract H(Lock) { public inline function new(l:Lock) this = l; }',
+			'package app; import sys.thread.Lock; typedef Held = Lock; @:forward abstract HA(Held) { public inline function new(l:Held) this = l; }',
+			'package app; @:forward abstract W<T>(T) { public inline function new(v:T) this = v; }',
+			'package app; class C { static function h(x:H):Void x.wait(); static function ha(x:HA):Void x.wait();'
+			+ ' static function w(x:W<utils.Lock>):Void x.wait(); }'
+		]);
+		function targets(from: String): Array<String> {
+			return [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+		}
+		Assert.same(['sys.thread.Lock.wait'], targets('C.h'), 'the underlying type the abstract\'s own file imports');
+		Assert.same(['sys.thread.Lock.wait'], targets('C.ha'), 'an alias the abstract\'s file declares, seen through');
+		Assert.same([], targets('C.w'), 'an underlying type parameter is no type the abstract names');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-TS-CALLED-VALUE') @:killer('M-TS-CALLED-RECEIVER') @:killer('M-TS-CALLED-NULL')
+	public function testACalledFunctionValueReturnsWhatItsFunctionTypeSays(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final g: CallGraph = graphOf([
+			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
+			'package app; import sys.thread.Lock; class A { public static var get:() -> Lock = null;'
+			+ ' public static var maybe:Null<Void -> Lock> = null; public static function maker():() -> Lock return null; }',
+			'package app; class C { static function field():Void A.get().wait(); static function result():Void A.maker()().wait();'
+			+ ' static function param(f:() -> utils.Lock):Void f().wait(); static function nullable():Void A.maybe().wait();'
+			+ ' static function local():Void { final l = A.get(); l.wait(); } static function dyn(d:Dynamic):Void d().wait(); }'
+		]);
+		function targets(from: String): Array<String> {
+			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+			out.sort(Reflect.compare);
+			return out;
+		}
+		Assert.same(['sys.thread.Lock.wait'], targets('C.field'), 'a field of a function type its own file names');
+		Assert.same(['A.maker', 'sys.thread.Lock.wait'], targets('C.result'), 'a function a call returns');
+		Assert.same(['Lock.wait'], targets('C.param'), 'a parameter of a function type');
+		Assert.same(['sys.thread.Lock.wait'], targets('C.nullable'), 'a nullable function type');
+		Assert.same(['sys.thread.Lock.wait'], targets('C.local'), 'a local the call initialises');
+		Assert.same([], targets('C.dyn'), 'a dynamic value types nothing');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-TS-LOOP-ELEMENT') @:killer('M-TS-LOOP-KEY-BINDER') @:killer('M-TS-LOOP-KV-LISTED') @:killer('M-TS-LOOP-ITERATOR')
+	@:killer('M-TS-LOOP-NEXT') @:killer('M-TS-LOOP-AGREE') @:killer('M-TS-LOOP-OWN-PARAMS') @:killer('M-TS-LOOP-THROUGH')
+	public function testALoopBindsWhatItsIterableYields(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final g: CallGraph = graphOf([
+			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
+			'package app; class X { public function new() {} public function wait():Bool return true; }',
+			'package app; import sys.thread.Lock; class A { public static var locks:Array<Lock> = [];'
+			+ ' public static var byName:Map<String, Lock> = null; public static var bag:Bag = null; public static var walker:Walker = null;'
+			+ ' public static var both:Both = null; public static var gen:Gen = null; public static var box:Box<Lock> = null; }',
+			'package app; import sys.thread.Lock; class Bag { public function new() {} public function iterator():Iterator<Lock> return null; }',
+			'package app; import sys.thread.Lock; class Walker { public function new() {} public function hasNext():Bool return false;'
+			+ ' public function next():Lock return null; }',
+			'package app; class Both { public function new() {} public function iterator():Iterator<utils.Lock> return null;'
+			+ ' public function hasNext():Bool return false; public function next():sys.thread.Lock return null; }',
+			'package app; class Gen { public function new() {} public function iterator<X>():Iterator<X> return null; }',
+			'package app; class Box<T> { public function new() {} public function iterator():Iterator<T> return null; }',
+			'package app; class C { static function arr():Void for (l in A.locks) l.wait(); static function values():Void for (l in A.byName) l.wait();'
+			+ ' static function kv():Void for (k => l in A.byName) l.wait(); static function key():Void for (k => l in A.byName) k.wait();'
+			+ ' static function kvOther():Void for (k => l in A.bag) l.wait(); static function iterable():Void for (l in A.bag) l.wait();'
+			+ ' static function iterator():Void for (l in A.walker) l.wait(); static function both():Void for (l in A.both) l.wait();'
+			+ ' static function gen():Void for (l in A.gen) l.wait(); static function box():Void for (l in A.box) l.wait(); }'
+		]);
+		function targets(from: String): Array<String> {
+			return [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+		}
+		Assert.same(['sys.thread.Lock.wait'], targets('C.arr'), 'an array element, its type read where the array was declared');
+		Assert.same(['sys.thread.Lock.wait'], targets('C.values'), 'a map yields its values');
+		Assert.same(['sys.thread.Lock.wait'], targets('C.kv'), 'the value binder of a key-value loop');
+		Assert.same([], targets('C.key'), 'the key binder of a key-value loop is never the element');
+		Assert.same([], targets('C.kvOther'), 'a key-value loop over another type binds nothing known');
+		Assert.same(['sys.thread.Lock.wait'], targets('C.iterable'), 'what the iterator `iterator()` returns yields');
+		Assert.same(['sys.thread.Lock.wait'], targets('C.iterator'), 'what an iterator\'s own `next()` returns');
+		Assert.same([], targets('C.both'), '`iterator()` and `next()` disagreeing bind neither');
+		Assert.same([], targets('C.gen'), 'an `iterator()` declaring its own type parameters binds nothing');
+		Assert.same(['sys.thread.Lock.wait'], targets('C.box'), 'a type parameter of the container, as the value binds it');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * Review R5 F2 (`h/loop-proj-list(-rev)`, `loop-modsub-list`, `idx-proj-vector`): a container is read as the standard one its
+	 * name spells only where it is that one — a project `List<T>` an import or the module itself binds is another type, whose
+	 * element its own `iterator()` says, and a project `Vector<T>` indexed is no std vector; the std types stay typed.
+	 */
+	@:pin('control') @:killer('M-TS-STD-CONTAINER') @:killer('M-TS-STD-CONTAINER-DECLARED') @:killer('M-TS-STD-CONTAINER-WHERE')
+	@:killer('M-TS-STD-CONTAINER-GUARDED') @:killer('M-TS-STD-CONTAINER-STD-OWN')
+	public function testAContainerIsTheStandardOneOnlyWhereItsNameMeansIt(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final lock: String = 'package utils; class Lock { public function new() {} public function wait():Bool return true; }';
+		final g: CallGraph = graphOf([
+			lock,
+			'package pkg; class List<T> { public function new() {} public function iterator():Iterator<sys.thread.Lock> return null; }',
+			'package pkg; abstract Vector<T>(Array<utils.Lock>) { public inline function new() this = [];'
+			+ ' @:arrayAccess inline function get(i:Int):utils.Lock return this[i]; }',
+			'package app; import pkg.List; import pkg.Vector; class C {'
+			+ ' static function list():Void { final l:List<utils.Lock> = null; for (x in l) x.wait(); }'
+			+ ' static function index():Void { final v:Vector<sys.thread.Lock> = null; v[0].wait(); }'
+			+ ' static function std():Void { final v:haxe.ds.Vector<sys.thread.Lock> = null; for (x in v) x.wait(); }'
+			+ ' static function arr():Void { final a:Array<sys.thread.Lock> = []; a[0].wait(); } }',
+			'package other; import pkg.List; class Holder { public static var l:List<utils.Lock> = null; }',
+			'package app; import other.Holder; class E { static function read():Void for (x in Holder.l) x.wait(); }',
+			'package app; import pkg.List; import nowhere.Iterator; class F {'
+			+ ' static function list():Void { final l:List<utils.Lock> = null; for (x in l) x.wait(); } }',
+			'package app; #if never import nowhere.Array; #end class H { static function arr():Void { final a:Array<sys.thread.Lock> = []; a[0].wait(); } }',
+			'package app; import somelib.*; class W { static function arr():Void { final a:Array<sys.thread.Lock> = []; a[0].wait(); } }'
+		]);
+		final own: CallGraph = graphOf([
+			lock,
+			'package app; class List<T> { public function new() {} public function iterator():Iterator<utils.Lock> return null; }'
+			+ ' class D { static function own():Void { final l:List<sys.thread.Lock> = null; for (x in l) x.wait(); } }'
+		]);
+		// the std itself indexed as a library: its `Array` sits at the standard path
+		final project: Array<{ file: String, source: String }> = [
+			{ file: 'utils/Lock.hx', source: lock },
+			{
+				file: 'app/X.hx',
+				source: 'package app; class X { static function arr():Void { final a:Array<sys.thread.Lock> = []; a[0].wait(); } }'
+			}
+		];
+		final std: Array<{ file: String, source: String }> = [
+			{ file: 'std/Array.hx', source: 'extern class Array<T> { public function new(); public function push(x:T):Int; }' }
+		];
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final indexed: CallGraph = CallGraph.build(project, plugin, SymbolIndex.build(project.concat(std), plugin));
+		function targets(graph: CallGraph, from: String): Array<String> {
+			return [for (e in graph.outEdges(from)) if (e.kind == Call) e.to];
+		}
+		Assert.same(['sys.thread.Lock.wait'], targets(g, 'C.list'), 'an imported project List yields what its iterator() says');
+		Assert.same([], targets(g, 'C.index'), 'an imported project Vector indexed is no std vector');
+		Assert.same(['sys.thread.Lock.wait'], targets(g, 'C.std'), 'the std Vector written out');
+		Assert.same(['sys.thread.Lock.wait'], targets(g, 'C.arr'), 'an Array');
+		Assert.same(['sys.thread.Lock.wait'], targets(g, 'E.read'), 'a project List read where no import binds the name');
+		Assert.same(['sys.thread.Lock.wait'], targets(g, 'F.list'), 'an iterator() return read where it is declared');
+		Assert.same([], targets(g, 'H.arr'), 'a guarded import binds the name elsewhere on some build');
+		Assert.same(
+			['sys.thread.Lock.wait'],
+			targets(g, 'W.arr'), 'a wildcard of a package the tables cannot list, no declaration bearing the name'
+		);
+		Assert.same(['Lock.wait'], targets(own, 'D.own'), 'a List the module declares');
+		Assert.same(['sys.thread.Lock.wait'], targets(indexed, 'X.arr'), 'the std\'s own Array, indexed as a library');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-TS-LAMBDA-PARAMS') @:killer('M-TS-LAMBDA-ARITY') @:killer('M-TS-LAMBDA-ANNOTATED') @:killer('M-TS-LAMBDA-NULL')
+	public function testALambdaParameterIsTypedByTheFunctionTypeItIsExpectedToBe(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final g: CallGraph = graphOf([
+			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
+			'package app; import sys.thread.Lock; class A { public static function run(f:(Lock) -> Void):Void {}'
+			+ ' public static function pair(f:(Int, Lock) -> Void):Void {} public static function first(f:(Lock, Int) -> Void):Void {}'
+			+ ' public static function curried(f:Lock -> Void):Void {} public static function gen<T>(f:T -> Void, v:T):Void {}'
+			+ ' public static function maybe(f:Null<(Lock) -> Void>):Void {} }',
+			'package app; class Box<T> { public function new() {} public function each(f:T -> Void):Void {} }',
+			'package app; class C { static function call():Void A.run(l -> l.wait()); static function second():Void A.pair((n, l) -> l.wait());'
+			+ ' static function fnExpr():Void A.curried(function(l) l.wait()); static function arity():Void A.first(l -> l.wait());'
+			+ ' static function own():Void A.gen(l -> l.wait(), null); static function box(b:Box<utils.Lock>):Void b.each(l -> l.wait());'
+			+ ' static function declared():Void { final f:(utils.Lock) -> Void = l -> l.wait(); }'
+			+ ' static function annotated():Void A.run((l:Null<utils.Lock>) -> l.wait()); static function nullable():Void A.maybe(l -> l.wait()); }'
+		]);
+		function inLambdas(fn: String): Array<String> {
+			final out: Array<String> = [];
+			for (id in g.nodes.keys()) if (StringTools.startsWith(id, '$fn#')) for (e in g.outEdges(id)) if (e.kind == Call) out.push(e.to);
+			return out;
+		}
+		Assert.same(['sys.thread.Lock.wait'], inLambdas('C.call'), 'a call\'s parameter, read in the file declaring the callee');
+		Assert.same(['sys.thread.Lock.wait'], inLambdas('C.second'), 'each parameter by its position');
+		Assert.same(['sys.thread.Lock.wait'], inLambdas('C.fnExpr'), 'a function expression, a curried function type');
+		Assert.same([], inLambdas('C.arity'), 'a function type of another arity types nothing');
+		Assert.same([], inLambdas('C.own'), 'a type parameter of the callee itself types nothing');
+		Assert.same(['Lock.wait'], inLambdas('C.box'), 'a type parameter of the receiver, as the receiver binds it');
+		Assert.same(['Lock.wait'], inLambdas('C.declared'), 'a declaration\'s type');
+		Assert.same(['Lock.wait'], inLambdas('C.annotated'), 'a parameter written with a type keeps it');
+		Assert.same(['sys.thread.Lock.wait'], inLambdas('C.nullable'), 'a nullable function type');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * Review R5 F3 (`h/lam-skip-shift(-rev)`): a call passing fewer arguments than its callee declares may skip an optional
+	 * parameter — `?a` or one with a default value — so an argument at or after one binds the parameter its position names
+	 * only when the call passes them all; and a `new` naming its type's arguments (`new Box<Int>(…)`) counts only its own.
+	 */
+	@:pin('control') @:killer('M-TS-SKIP-SHIFT') @:killer('M-TS-SKIP-DEFAULT') @:killer('M-TS-SKIP-NEW-ARGS')
+	public function testAnArgumentAfterASkippableParameterBindsNoKnownParameter(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final g: CallGraph = graphOf([
+			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
+			'package app; class A { public static function run(?a:Int, f:(sys.thread.Lock) -> Void, ?g:(utils.Lock) -> Void):Void {}'
+			+ ' public static function full(?a:Int, f:(sys.thread.Lock) -> Void):Void {}'
+			+ ' public static function dflt(a:Int = 1, f:(sys.thread.Lock) -> Void, ?g:(utils.Lock) -> Void):Void {}'
+			+ ' public static function late(f:(sys.thread.Lock) -> Void, ?g:Int):Void {} }',
+			'package app; class Box<T> { public function new(f:(sys.thread.Lock) -> Void, ?v:T) {} }',
+			'package app; class C { static function shift():Void A.run(l -> {}, l2 -> l2.wait());'
+			+ ' static function full():Void A.full(1, l -> l.wait()); static function dflt():Void A.dflt(l -> {}, l2 -> l2.wait());'
+			+ ' static function late():Void A.late(l -> l.wait()); static function made():Void new Box<Int>(l -> l.wait()); }'
+		]);
+		function inLambdas(fn: String): Array<String> {
+			final out: Array<String> = [];
+			for (id in g.nodes.keys()) if (StringTools.startsWith(id, '$fn#')) for (e in g.outEdges(id)) if (e.kind == Call) out.push(e.to);
+			return out;
+		}
+		Assert.same([], inLambdas('C.shift'), 'an optional parameter before it, fewer arguments than declared');
+		Assert.same(['sys.thread.Lock.wait'], inLambdas('C.full'), 'every argument passed');
+		Assert.same([], inLambdas('C.dflt'), 'a parameter with a default value is skippable too');
+		Assert.same(['sys.thread.Lock.wait'], inLambdas('C.late'), 'the skippable parameter after it');
+		Assert.same(['sys.thread.Lock.wait'], inLambdas('C.made'), 'the type arguments of a new are no arguments');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-TS-NEW-RECEIVER')
+	public function testAReceiverANewMakesIsOfTheTypeItNames(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final g: CallGraph = graphOf([
+			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
+			'package app; import sys.thread.Lock; class Maker { public function new() {} public function make():Lock return null; }',
+			'package app; class Box<T> { public function new(v:T) {} public function get():T return null; }',
+			'package app; class C { static function made():Void new Maker().make().wait(); static function direct():Void new utils.Lock().wait();'
+			+ ' static function generic():Void new Box(new utils.Lock()).get().wait(); }'
+		]);
+		function targets(from: String): Array<String> {
+			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+			out.sort(Reflect.compare);
+			return out;
+		}
+		Assert.same(['Maker.make', 'sys.thread.Lock.wait'], targets('C.made'), 'a call on a value a `new` makes');
+		Assert.same(['Lock.wait'], targets('C.direct'), 'the type a `new` names by its path');
+		Assert.same(['Box.get'], targets('C.generic'), 'a type argument the language infers is no type the graph names');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A typedef aliases the type its OWN file binds the target name to, wherever the alias is used: an alias another module
+	 * declares importing the std `Lock` — imported by its module or by name — and one beside its use wait on the std lock,
+	 * whatever the reader imports; an alias of the project type stays it; two declarations keying the alias apart keep the
+	 * simple target, as before (review R4 F7).
+	 */
+	@:pin('control')
+	@:killer('M-TS-ALIAS-KEYED') @:killer('M-TS-ALIAS-AGREE')
+	public function testATypedefAliasesWhatItsOwnFileBindsTheTargetTo(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final g: CallGraph = CallGraph.build([
+			{
+				file: 'utils/Lock.hx',
+				source: 'package utils; class Lock { public function new() {} public function wait():Bool return true; }'
+			},
+			{ file: 'pkg/Alias.hx', source: 'package pkg; import sys.thread.Lock; typedef MyLock = Lock;' },
+			{ file: 'pkg/Sub.hx', source: 'package pkg; import sys.thread.Lock; typedef SubLock = Lock; class Sub {}' },
+			{ file: 'pkg/Own.hx', source: 'package pkg; import utils.Lock; typedef OwnLock = Lock;' },
+			{ file: 'one/Two.hx', source: 'package one; import sys.thread.Lock; typedef TwoLock = Lock;' },
+			{ file: 'two/Two.hx', source: 'package two; import utils.Lock; typedef TwoLock = Lock;' },
+			{
+				file: 'app/A.hx',
+				source: 'package app; import pkg.Alias; import pkg.Sub.SubLock; import pkg.Own; import utils.Lock; class A {'
+				+ ' static function module(l:MyLock):Void l.wait(); static function sub(l:SubLock):Void l.wait();'
+				+ ' static function own(l:OwnLock):Void l.wait(); static function two(l:TwoLock):Void l.wait(); }'
+			},
+			{
+				file: 'app/Here.hx',
+				source: 'package app; import sys.thread.Lock; typedef HereLock = Lock; class Here { static function here(l:HereLock):Void l.wait(); }'
+			}
+		], new HaxeQueryPlugin());
+		function targets(from: String): Array<String> {
+			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+			out.sort(Reflect.compare);
+			return out;
+		}
+		Assert.same(['sys.thread.Lock.wait'], targets('A.module'), 'an alias of another module, imported by its module');
+		Assert.same(['sys.thread.Lock.wait'], targets('A.sub'), 'an alias of another module, imported by name');
+		Assert.same(['sys.thread.Lock.wait'], targets('Here.here'), 'an alias beside its use');
+		Assert.same(['Lock.wait'], targets('A.own'), 'an alias of the project type');
+		Assert.same(['Lock.wait'], targets('A.two'), 'two declarations keying the alias apart: the simple target');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A name no import binds is looked up in the file's own package, then in each package enclosing it, as the language does:
+	 * a project file in the std's `sys.thread` (or a package under it) means the std `Lock` beside a project namesake, unless
+	 * a wildcard import supplies the name first or the project declares it in a package searched first (review R4 F7).
+	 */
+	@:pin('control')
+	@:killer('M-TS-PACKAGE-LOOKUP') @:killer('M-TS-PACKAGE-ENCLOSING') @:killer('M-TS-PACKAGE-PROJECT-FIRST')
+	public function testANameNoImportBindsIsLookedUpInTheFilesPackages(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final g: CallGraph = graphOf([
+			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
+			'package sys.thread; class A { public static var lock:Lock = null; public static function make():Lock return null; }',
+			'package sys.thread.deep; class B { public static var lock:Lock = null; }',
+			'package sys.thread; import utils.*; class W { public static var lock:Lock = null; }',
+			'package utils.inner; class U { public static var lock:Lock = null; }',
+			'package sys.thread.mine; class Lock { public function new() {} public function wait():Bool return true; }',
+			'package sys.thread.mine; class M { public static var lock:Lock = null; }',
+			'package app; class C { static function own():Void A.lock.wait(); static function ret():Void A.make().wait();'
+			+ ' static function deep():Void B.lock.wait(); static function wild():Void W.lock.wait();'
+			+ ' static function proj():Void U.lock.wait(); static function mine():Void M.lock.wait(); }'
+		]);
+		function targets(from: String): Array<String> {
+			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+			out.sort(Reflect.compare);
+			return out;
+		}
+		Assert.same(['sys.thread.Lock.wait'], targets('C.own'), 'a std type of the file\'s own package');
+		Assert.same(['A.make', 'sys.thread.Lock.wait'], targets('C.ret'), 'a return type');
+		Assert.same(['sys.thread.Lock.wait'], targets('C.deep'), 'a std type of an enclosing package');
+		Assert.same(['Lock.wait'], targets('C.wild'), 'a wildcard import comes first');
+		Assert.same(['Lock.wait'], targets('C.proj'), 'a project type of an enclosing package');
+		Assert.same(['Lock.wait'], targets('C.mine'), 'a project type of the own package before a std one of an enclosing package');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A type parameter a function declares itself is what the arguments bind it to, as the language infers it — never the type
+	 * an import of its name names: `id<Lock>(x:Lock):Lock` in a file importing the project `Lock`, called with the std lock,
+	 * returns the std lock, read off the call or through a local; arguments that disagree, a parameter that only nests the type
+	 * parameter, and one shadowing a type parameter of the function's type leave the result unknown (review R4 F7).
+	 */
+	@:pin('control')
+	@:killer('M-GRAPH-FN-RETURN-PARAM') @:killer('M-TS-INFER-AGREE') @:killer('M-TS-INFER-REST') @:killer('M-TS-INFER-SHADOW')
+	@:killer('M-TS-INFER-BARE')
+	public function testAFunctionsOwnTypeParameterIsWhatItsArgumentsBind(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final g: CallGraph = graphOf([
+			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
+			'package app; import utils.Lock; class A { public static function id<Lock>(x:Lock):Lock return x;'
+			+ ' public static function two<Lock>(a:Lock, b:Lock):Lock return a; public static function pick<Lock>(...xs:Lock):Lock return xs[0];'
+			+ ' public static function head<Lock>(xs:Array<Lock>):Lock return xs[0]; }',
+			'package app; class Box<T> { public function new() {} public function get<T>(x:T):T return x; }',
+			'package app; class C { static function id(s:sys.thread.Lock):Void A.id(s).wait();'
+			+ ' static function local(s:sys.thread.Lock):Void { final l = A.id(s); l.wait(); }'
+			+ ' static function same(s:sys.thread.Lock, t:sys.thread.Lock):Void A.two(s, t).wait();'
+			+ ' static function apart(s:sys.thread.Lock, u:utils.Lock):Void A.two(s, u).wait();'
+			+ ' static function rest(s:sys.thread.Lock, u:utils.Lock):Void A.pick(s, u).wait();'
+			+ ' static function nested(xs:Array<sys.thread.Lock>):Void A.head(xs).wait();'
+			+ ' static function shadow(b:Box<utils.Lock>, s:sys.thread.Lock):Void b.get(s).wait(); }'
+		]);
+		function waits(from: String): Array<String> {
+			final out: Array<String> = [
+				for (e in g.outEdges(from)) if (e.kind == Call && e.to.indexOf('wait') >= 0) e.to
+			];
+			out.sort(Reflect.compare);
+			return out;
+		}
+		final std: Array<String> = ['sys.thread.Lock.wait'];
+		Assert.same(std, waits('C.id'), 'the argument binds the parameter');
+		Assert.same(std, waits('C.local'), 'through a local');
+		Assert.same(std, waits('C.same'), 'arguments that agree');
+		Assert.same([], waits('C.apart'), 'arguments that disagree');
+		Assert.same([], waits('C.rest'), 'rest arguments that disagree');
+		Assert.same([], waits('C.nested'), 'a parameter nesting the type parameter');
+		Assert.same([], waits('C.shadow'), 'a function type parameter shadowing its type\'s');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * Declarations that WRITE a member's type or a function's return type differently — one per branch of a conditional
+	 * region — dispatch a call on the value on every type they write, as two files keying one written type apart do, never
+	 * on none: the field, the result of a call, a return whose types differ in name. One branch writing no type, or types
+	 * that do not line up (`Lock` and `Array<Lock>`), leave the value unknown (review R4 F7, the F6 remainder).
+	 */
+	@:pin('control')
+	@:killer('M-TS-DECL-EACH-MEMBER') @:killer('M-TS-DECL-EACH-RETURN') @:killer('M-TS-DECL-EACH-SIMPLE')
+	@:killer('M-TS-DECL-EACH-UNTYPED') @:killer('M-TS-KEY-LINED')
+	public function testDeclarationsWritingATypeDifferentlyDispatchOnEach(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final g: CallGraph = graphOf([
+			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
+			'package utils; class Gate { public function new() {} public function wait():Bool return true; }',
+			'package app; class A {\n#if sys\npublic static var lock:sys.thread.Lock = null;\npublic static function make():sys.thread.Lock return null;\n'
+			+ 'public static function gate():sys.thread.Lock return null;\n#else\npublic static var lock:utils.Lock = null;\n'
+			+ 'public static function make():utils.Lock return null;\npublic static function gate():utils.Gate return null;\n#end\n}',
+			'package app; class B {\n#if sys\npublic static var lock:sys.thread.Lock = null;\n#else\npublic static var lock:Array<utils.Lock> = null;\n#end\n}',
+			'package app; class D {\n#if sys\npublic static var lock:sys.thread.Lock = null;\n#else\npublic static var lock = null;\n#end\n}',
+			'package app; class C { static function field():Void A.lock.wait(); static function call():Void A.make().wait();'
+			+ ' static function named():Void A.gate().wait(); static function apart():Void B.lock.wait();'
+			+ ' static function untyped():Void D.lock.wait(); }'
+		]);
+		function waits(from: String): Array<String> {
+			final out: Array<String> = [
+				for (e in g.outEdges(from)) if (e.kind == Call && e.to.indexOf('wait') >= 0) e.to
+			];
+			out.sort(Reflect.compare);
+			return out;
+		}
+		Assert.same(['Lock.wait', 'sys.thread.Lock.wait'], waits('C.field'), 'a field');
+		Assert.same(['Lock.wait', 'sys.thread.Lock.wait'], waits('C.call'), 'a return');
+		Assert.same(['Gate.wait', 'sys.thread.Lock.wait'], waits('C.named'), 'a return whose types differ in name');
+		Assert.same([], waits('C.apart'), 'types that do not line up');
+		Assert.same([], waits('C.untyped'), 'a branch writing no type');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	private inline function graphOf(sources: Array<String>): CallGraph {
 		return QueryTestHelpers.graphOf(sources);
 	}

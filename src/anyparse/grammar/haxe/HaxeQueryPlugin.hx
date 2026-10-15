@@ -854,6 +854,8 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				mutatingMapMethods: ['arrayWrite', 'clear', 'remove', 'set'],
 				implicitCallMetaNames: ['@:op', '@:arrayAccess', '@:from', '@:to', '@:resolve'],
 				implicitCallNames: ['toString', 'iterator', 'hasNext', 'next', 'keyValueIterator'],
+				// `haxe.Serializer` / `Unserializer` call these through `Reflect`, a class implementing `Dynamic` falls back to `resolve`
+				reflectivelyCalledNames: ['hxSerialize', 'hxUnserialize', 'resolve'],
 				iterableMethodNames: ['iterator', 'keyValueIterator'],
 				implicitConstructionTypeMetaNames: ['@:structInit'],
 				extensionTypeMetaNames: ['@:using'],
@@ -1451,6 +1453,16 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				'Iterable' => 0,
 				'Iterator' => 0,
 				'Map' => 1
+			],
+			// the std types the two element maps describe, as an import or a toplevel name spells each (`Iterable` and
+			// `Iterator` live in the `StdTypes` module, `List` and `Map` have a toplevel typedef beside their `haxe.ds` type)
+			standardContainerPaths: [
+				'Array' => ['Array'],
+				'Vector' => ['haxe.ds.Vector'],
+				'List' => ['List', 'haxe.ds.List'],
+				'Iterable' => ['Iterable', 'StdTypes.Iterable'],
+				'Iterator' => ['Iterator', 'StdTypes.Iterator'],
+				'Map' => ['Map', 'haxe.ds.Map']
 			],
 			// `Array` and `haxe.ds.List` walk one index / node chain in both iterators; a map's
 			// key-value iterator re-reads by key, so it diverges once the body removes an entry.

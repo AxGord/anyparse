@@ -171,7 +171,11 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final conditions: EdgeConditions = new EdgeConditions(
 			graph, trees, plugin, file -> listsOf(file).mainCheckIds, new DeadCatches(graph, trees, plugin, listsOf).holds
 		);
-		final inertRef: (CallEdge) -> Bool = runsNothing.bind(graph, sealedSlots, listsOf);
+		// a value a constructor only stores runs where the field is called: those calls derived, its `Ref` running nothing
+		final stored: StoredValues = new StoredValues(
+			graph, trees, plugin, ReflectiveReach.declaredMethodHolders(files, _resolveConfig), file -> byFile[file]?.closedWorld == true
+		);
+		final inertRef: (CallEdge) -> Bool = runsNothing.bind(graph, sealedSlots, stored, listsOf);
 		final seedable: (String) -> Bool = mayRunFromOutside.bind(graph, plugin, unresolvedNames, byFile);
 		// a quiet root is judged by the chain of the file declaring it
 		final states: ThreadStates = settleContexts(graph, listsOf, [
@@ -508,14 +512,15 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 
 	/**
 	 * Whether the `Ref` edge `edge` runs its value from nowhere: a value stored into a member of `sealedSlots`, which
-	 * runs where that member runs (`deriveStoredCalls`), one handed to a call that never runs it (`neverInvoked`), or the
-	 * compiler facts' record of a value made at a site the syntax already records handing it to a call — the same value
-	 * at the same span, said once with its `via` (`ThreadGraph.madeWhereHanded`).
+	 * runs where that member runs (`deriveStoredCalls`), one a constructor only stores into a field, which runs where the
+	 * field is called (`StoredValues`), one handed to a call that never runs it (`neverInvoked`), or the compiler facts'
+	 * record of a value made at a site the syntax already records handing it to a call — the same value at the same span,
+	 * said once with its `via` (`ThreadGraph.madeWhereHanded`).
 	 */
 	private static function runsNothing(
-		graph: CallGraph, sealedSlots: Array<String>, listsOf: (String) -> ChainLists, edge: CallEdge
+		graph: CallGraph, sealedSlots: Array<String>, stored: StoredValues, listsOf: (String) -> ChainLists, edge: CallEdge
 	): Bool {
-		return sealedSlots.contains(edge.storedInto ?? '') || neverInvoked(edge, listsOf(edge.file))
+		return sealedSlots.contains(edge.storedInto ?? '') || stored.stored(edge) || neverInvoked(edge, listsOf(edge.file))
 			|| ThreadGraph.madeWhereHanded(graph, edge);
 	}
 

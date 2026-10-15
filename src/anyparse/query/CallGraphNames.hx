@@ -99,17 +99,28 @@ final class CallGraphNames {
 
 	/**
 	 * The written types of the parameters the function declared at `from` in `tree` (the text `source`) writes, as `provider`
-	 * reads them, and whether its last one is a rest parameter; null when unreadable.
+	 * reads them, whether its last one is a rest parameter, and the position of the first one a call may skip — optional or
+	 * carrying a default value; their count for none, 0 for a grammar naming no optional kind; null when unreadable.
 	 */
 	public static function declaredParams(
 		tree: QueryNode, source: String, from: Int, shape: RefShape, provider: Null<TypeInfoProvider>
-	): Null<{ params: Array<Null<String>>, rest: Bool }> {
+	): Null<{ params: Array<Null<String>>, rest: Bool, skippableFrom: Int }> {
 		final paramKinds: Array<String> = shape.paramKinds ?? [];
 		final found: Null<QueryNode> = functionNodeAt(tree, from, shape.functionKinds ?? []);
 		if (found == null) return null;
 		final sources: Map<Int, String> = provider?.declaredTypeSources(source) ?? [];
 		final params: Array<QueryNode> = [for (c in found.children) if (paramKinds.contains(c.kind)) c];
+		final annotationKinds: Array<String> = shape.typeAnnotationKinds ?? [];
+		final optionalKind: Null<String> = shape.optionalParamKind;
+		// `?p` and `p = v` alike are skippable; a grammar naming no optional kind may skip any
+		var skippable: Int = 0;
+		while (
+			optionalKind != null && skippable < params.length && params[skippable].kind != optionalKind
+			&& !params[skippable].children.exists(c -> !annotationKinds.contains(c.kind))
+		)
+			skippable++;
 		return {
+			skippableFrom: skippable,
 			params: [
 				for (c in params) {
 					final at: Null<Span> = c.span;
@@ -118,6 +129,26 @@ final class CallGraphNames {
 			],
 			rest: params.length > 0 && params[params.length - 1].kind == shape.restParamKind
 		};
+	}
+
+	/**
+	 * Every name the module whose tree is `root` declares at module level: each named child of the root, and through a
+	 * nameless one — a conditional region, a `final` declaration's wrapper — each named node it holds, not descending
+	 * further; an import alias (`aliasKinds`) binds a name of an import's, none the module declares. Type, import and
+	 * package names come along; none of them is a static's name.
+	 */
+	public static function moduleLevelNames(root: QueryNode, aliasKinds: Array<String>): Array<String> {
+		final out: Array<String> = [];
+		function walk(node: QueryNode): Void {
+			final name: Null<String> = node.name;
+			if (aliasKinds.contains(node.kind)) return;
+			if (name == null)
+				for (c in node.children) walk(c)
+			else if (!out.contains(name))
+				out.push(name);
+		}
+		for (c in root.children) walk(c);
+		return out;
 	}
 
 	/** Simple name of the type declaration `node` introduces, or null. */

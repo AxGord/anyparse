@@ -2279,6 +2279,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyFoldingTest#testMainTakesOfOneLockWarnOnce :: control :: M-TS-ONE-TAKE-OFF,M-TS-ONE-TAKE-NO-WRAPPER',
 			'unit.check.ThreadSafetyHandedValueTest#testADirectCallOutranksAHandedValue :: control :: '
 				+ 'M-TS-WAY-HANDED-RANK,M-TS-OWNER-HANDED-RANK',
+			'unit.check.ThreadSafetyHandedValueTest#testAFieldTheLanguageCallsByNameIsNotOnlyStored :: control :: '
+				+ 'M-TS-STORED-IMPLICIT-NAME,M-TS-STORED-PUBLIC',
 			'unit.check.ThreadSafetyHandedValueTest#testAHandedValueRepeatsWithTheCallItIsHandedTo :: control :: M-TS-REPEAT-NO-ITERATES,M-TS-RUNS-ONCE-OFF',
 			'unit.check.ThreadSafetyHandedValueTest#testAHoldTaintsAValueHandedToACallThatRunsIt :: control :: '
 				+ 'M-TS-HANDED-RUNS-HERE,M-TS-HANDED-WINDOW-OFF,M-TS-HANDED-REACH-OFF,M-TS-HANDED-SINK-OFF',
@@ -2287,6 +2289,9 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-TS-ORDER-HANDED-VIA',
 			'unit.check.ThreadSafetyHandedValueTest#testAMainSinkHandedAsAValueIsReported :: control :: M-TS-HANDED-SINK-OFF',
 			'unit.check.ThreadSafetyHandedValueTest#testAMethodValueOfAnotherObjectWaitsForItsLock :: control :: M-TS-HANDED-RETAKE',
+			'unit.check.ThreadSafetyHandedValueTest#testAValueAConstructorOnlyStoresRunsWhereTheFieldIsCalled :: control :: '
+				+ 'M-TS-CTOR-STORE-INERT,M-TS-CTOR-STORE-DERIVE,M-TS-CTOR-STORE-FINAL,M-TS-CTOR-STORE-READS,M-TS-CTOR-STORE-FORWARD,'
+				+ 'M-TS-CTOR-STORE-CLOSED,M-TS-CTOR-STORE-SPELLED,M-TS-CTOR-STORE-STATEMENT,M-TS-CTOR-STORE-USE',
 			'unit.check.ThreadSafetyHandedValueTest#testAValueRunElsewhereTaintsNothing :: control :: M-TS-HANDED-ELSEWHERE,M-TS-CYCLE-REGISTERED',
 			'unit.check.ThreadSafetyHelperHoldsTest#testACallAGiveIsMadeOnIsWorkOfTheHelper :: control :: M-TS-HELPER-SPAN-START',
 			'unit.check.ThreadSafetyHelperHoldsTest#testAHandedOffHoldIsNoInnerHold :: control :: M-TS-NEST-HANDOFF',
@@ -3026,19 +3031,46 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.BodySlotGuardSliceTest#testAllowsSoleCatchClauseRemoval :: control :: M-BODYSLOT-LEAD-KEPT',
 			'unit.query.BodySlotGuardSliceTest#testAllowsSoleCatchClauseRemovalWithATrailingComment :: control :: M-BODYSLOT-TRIM-WS-ONLY',
 			'unit.query.BodySlotGuardSliceTest#testAllowsWholeElseBranchRemoval :: control :: M-BODYSLOT-LEAD-KEPT',
+			'unit.query.CallGraphTest#testACalledFunctionValueReturnsWhatItsFunctionTypeSays :: control :: '
+				+ 'M-TS-CALLED-VALUE,M-TS-CALLED-RECEIVER,M-TS-CALLED-NULL',
+			'unit.query.CallGraphTest#testAContainerIsTheStandardOneOnlyWhereItsNameMeansIt :: control :: '
+				+ 'M-TS-STD-CONTAINER,M-TS-STD-CONTAINER-DECLARED,M-TS-STD-CONTAINER-WHERE,M-TS-STD-CONTAINER-GUARDED,M-TS-STD-CONTAINER-STD-OWN',
 			'unit.query.CallGraphTest#testADeclaredTypeIsReadInTheFileThatWroteIt :: control :: '
 				+ 'M-TS-DECL-MEMBER-FILE,M-TS-DECL-RETURN-FILE,M-TS-DECL-READ-FROM,M-TS-DECL-BOUND,M-TS-PATH-NULLABLE-KEYED',
+			'unit.query.CallGraphTest#testAForwardedCallRunsTheUnderlyingTheAbstractsFileNames :: control :: '
+				+ 'M-TS-FORWARD-KEYED,M-TS-FORWARD-PARAM,M-TS-FORWARD-ALIAS',
+			'unit.query.CallGraphTest#testAFunctionOfferingOtherSignaturesIsTypedWhereTheyAgree :: control :: '
+				+ 'M-TS-OVERLOAD-RETURN,M-TS-OVERLOAD-RETURN-EACH,M-TS-OVERLOAD-PARAMS,M-TS-OVERLOAD-AGREE,M-TS-OVERLOAD-EXTERNAL',
+			'unit.query.CallGraphTest#testAFunctionsOwnTypeParameterIsWhatItsArgumentsBind :: control :: '
+				+ 'M-GRAPH-FN-RETURN-PARAM,M-TS-INFER-AGREE,M-TS-INFER-REST,M-TS-INFER-SHADOW,M-TS-INFER-BARE',
 			'unit.query.CallGraphTest#testALambdaParameterIsNoReferenceToItsLambda :: control :: M-GRAPH-LAMBDA-PARAM-SELF',
+			'unit.query.CallGraphTest#testALambdaParameterIsTypedByTheFunctionTypeItIsExpectedToBe :: control :: '
+				+ 'M-TS-LAMBDA-PARAMS,M-TS-LAMBDA-ARITY,M-TS-LAMBDA-ANNOTATED,M-TS-LAMBDA-NULL',
+			'unit.query.CallGraphTest#testALoopBindsWhatItsIterableYields :: control :: '
+				+ 'M-TS-LOOP-ELEMENT,M-TS-LOOP-KEY-BINDER,M-TS-LOOP-KV-LISTED,M-TS-LOOP-ITERATOR,M-TS-LOOP-NEXT,M-TS-LOOP-AGREE,'
+				+ 'M-TS-LOOP-OWN-PARAMS,M-TS-LOOP-THROUGH',
+			'unit.query.CallGraphTest#testAModuleLevelFieldComesBeforeAnImportedStatic :: control :: '
+				+ 'M-TS-MODULE-NAME,M-TS-MODULE-NAME-NESTED,M-TS-MODULE-NAME-ALIAS',
+			'unit.query.CallGraphTest#testANameNoImportBindsIsLookedUpInTheFilesPackages :: control :: '
+				+ 'M-TS-PACKAGE-LOOKUP,M-TS-PACKAGE-ENCLOSING,M-TS-PACKAGE-PROJECT-FIRST',
+			'unit.query.CallGraphTest#testAReceiverANewMakesIsOfTheTypeItNames :: control :: M-TS-NEW-RECEIVER',
+			'unit.query.CallGraphTest#testASupertypeStaticIsNotInScopeBare :: control :: '
+				+ 'M-TS-SUPER-STATIC-IMPORT,M-TS-SUPER-STATIC-READ,M-TS-SUPER-STATIC-CALL,M-TS-SUPER-STATIC-HIDDEN,M-TS-SUPER-STATIC-MODULE,M-TS-SUPER-STATIC-MODULE-IMPORT',
 			'unit.query.CallGraphTest#testATypeAnAliasASupertypeOrAnAbstractWritesIsReadWhereItIsWritten :: control :: '
 				+ 'M-TS-DECL-SUPER-ARGS,M-TS-DECL-PARAM-FILE,M-TS-DECL-UNDERLYING',
 			'unit.query.CallGraphTest#testATypeParameterIsNeverKeyedThroughAnImport :: control :: '
 				+ 'M-TS-KEY-TYPE-PARAM,M-TS-KEY-MEMBER-PARAMS,M-TS-KEY-SCOPE-PARAMS,M-TS-KEY-RETURN-PARAMS',
+			'unit.query.CallGraphTest#testATypedefAliasesWhatItsOwnFileBindsTheTargetTo :: control :: M-TS-ALIAS-KEYED,M-TS-ALIAS-AGREE',
 			'unit.query.CallGraphTest#testAWildcardOrGuardedNameDispatchesToEveryTypeItMayBe :: control :: '
 				+ 'M-TS-WILD-EXPLICIT-NO-MAYBE,M-TS-WILD-MAYBE,M-TS-WILD-GUARDED,M-TS-WILD-PROJECT,M-TS-WILD-ORDER,M-TS-STD-PACKAGES,'
 				+ 'M-TS-ALTERNATE-SAME,M-TS-ALTERNATE-NEW',
 			'unit.query.CallGraphTest#testAddFilesUpgradesTheExternalPlaceholder :: control :: M-GRAPH-UPGRADE-EXTERNAL',
 			'unit.query.CallGraphTest#testAnAlternateTypeResolvesTheCallWhateverTheNamesakeDeclares :: control :: '
 				+ 'M-TS-ALTERNATE-WHOLE-CALL',
+			'unit.query.CallGraphTest#testAnArgumentAfterASkippableParameterBindsNoKnownParameter :: control :: '
+				+ 'M-TS-SKIP-SHIFT,M-TS-SKIP-DEFAULT,M-TS-SKIP-NEW-ARGS',
+			'unit.query.CallGraphTest#testAnImportedStaticIsTypedWhereItIsDeclared :: control :: '
+				+ 'M-TS-IMPORT-STATIC-FIELD,M-TS-IMPORT-STATIC-CALL,M-TS-IMPORT-STATIC-OWN,M-TS-IMPORT-STATIC-ONE,M-TS-IMPORT-STATIC-INDEXED',
 			'unit.query.CallGraphTest#testBareCallSomethingElseMaySupplyIsNeverAConstructor :: control :: '
 				+ 'M-GRAPH-IMPORT-UNLISTED,M-GRAPH-UNLISTED-WILDCARD',
 			'unit.query.CallGraphTest#testBareStaticCallGetsNoVirtualEdge :: control :: M-GRAPH-STATIC-NO-VIRTUAL',
@@ -3048,6 +3080,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-GRAPH-INIT-WIRING,M-GRAPH-CTOR-OWN-INIT,M-GRAPH-STATIC-INIT',
 			'unit.query.CallGraphTest#testConstructorArgumentsHandOnEveryFunctionValue :: control :: M-GRAPH-NEW-ARGS',
 			'unit.query.CallGraphTest#testConstructorNotLoadedYetIsTheOneTheChainDeclares :: control :: M-GRAPH-CTOR-PLACEHOLDER',
+			'unit.query.CallGraphTest#testDeclarationsWritingATypeDifferentlyDispatchOnEach :: control :: '
+				+ 'M-TS-DECL-EACH-MEMBER,M-TS-DECL-EACH-RETURN,M-TS-DECL-EACH-SIMPLE,M-TS-DECL-EACH-UNTYPED,M-TS-KEY-LINED',
 			'unit.query.CallGraphTest#testDynamicMethodCallIsAlsoAFunctionValueCall :: control :: M-GRAPH-DYNAMIC-METHOD',
 			'unit.query.CallGraphTest#testEnumConstructorSharingAStaticFunctionNameIsUnresolved :: control :: M-GRAPH-ENUM-VS-STATIC',
 			'unit.query.CallGraphTest#testEveryUsingThatDeclaresTheExtensionIsATarget :: control :: M-GRAPH-USING-ALL',
@@ -6639,7 +6673,78 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-KEY-APART-FIRST',
 			'M-TS-KEY-SCOPE-PARAMS',
 			'M-TS-DECL-PARAM-FILE',
-			'M-TS-DECL-FILES-AGREE'
+			'M-TS-DECL-FILES-AGREE',
+			'M-TS-IMPORT-STATIC-FIELD',
+			'M-TS-IMPORT-STATIC-CALL',
+			'M-TS-IMPORT-STATIC-OWN',
+			'M-TS-IMPORT-STATIC-ONE',
+			'M-TS-IMPORT-STATIC-INDEXED',
+			'M-TS-ALIAS-KEYED',
+			'M-TS-ALIAS-AGREE',
+			'M-TS-PACKAGE-LOOKUP',
+			'M-TS-PACKAGE-ENCLOSING',
+			'M-TS-PACKAGE-PROJECT-FIRST',
+			'M-TS-INFER-AGREE',
+			'M-TS-INFER-REST',
+			'M-TS-INFER-SHADOW',
+			'M-TS-INFER-BARE',
+			'M-TS-DECL-EACH-MEMBER',
+			'M-TS-DECL-EACH-RETURN',
+			'M-TS-DECL-EACH-SIMPLE',
+			'M-TS-DECL-EACH-UNTYPED',
+			'M-TS-KEY-LINED',
+			'M-TS-CTOR-STORE-INERT',
+			'M-TS-CTOR-STORE-DERIVE',
+			'M-TS-CTOR-STORE-FINAL',
+			'M-TS-CTOR-STORE-READS',
+			'M-TS-CTOR-STORE-FORWARD',
+			'M-TS-CTOR-STORE-CLOSED',
+			'M-TS-CTOR-STORE-SPELLED',
+			'M-TS-CTOR-STORE-STATEMENT',
+			'M-TS-CTOR-STORE-USE',
+			'M-TS-FORWARD-KEYED',
+			'M-TS-FORWARD-PARAM',
+			'M-TS-FORWARD-ALIAS',
+			'M-TS-CALLED-VALUE',
+			'M-TS-CALLED-RECEIVER',
+			'M-TS-CALLED-NULL',
+			'M-TS-LOOP-ELEMENT',
+			'M-TS-LOOP-KEY-BINDER',
+			'M-TS-LOOP-KV-LISTED',
+			'M-TS-LOOP-ITERATOR',
+			'M-TS-LOOP-NEXT',
+			'M-TS-LOOP-AGREE',
+			'M-TS-LOOP-OWN-PARAMS',
+			'M-TS-LOOP-THROUGH',
+			'M-TS-LAMBDA-PARAMS',
+			'M-TS-LAMBDA-ARITY',
+			'M-TS-LAMBDA-ANNOTATED',
+			'M-TS-LAMBDA-NULL',
+			'M-TS-NEW-RECEIVER',
+			'M-TS-STORED-IMPLICIT-NAME',
+			'M-TS-STORED-PUBLIC',
+			'M-TS-STD-CONTAINER',
+			'M-TS-STD-CONTAINER-DECLARED',
+			'M-TS-STD-CONTAINER-WHERE',
+			'M-TS-SKIP-SHIFT',
+			'M-TS-SKIP-DEFAULT',
+			'M-TS-SKIP-NEW-ARGS',
+			'M-TS-MODULE-NAME',
+			'M-TS-MODULE-NAME-NESTED',
+			'M-TS-MODULE-NAME-ALIAS',
+			'M-TS-OVERLOAD-RETURN',
+			'M-TS-OVERLOAD-RETURN-EACH',
+			'M-TS-OVERLOAD-PARAMS',
+			'M-TS-OVERLOAD-AGREE',
+			'M-TS-OVERLOAD-EXTERNAL',
+			'M-TS-SUPER-STATIC-IMPORT',
+			'M-TS-SUPER-STATIC-READ',
+			'M-TS-SUPER-STATIC-CALL',
+			'M-TS-SUPER-STATIC-HIDDEN',
+			'M-TS-SUPER-STATIC-MODULE',
+			'M-TS-SUPER-STATIC-MODULE-IMPORT',
+			'M-TS-STD-CONTAINER-GUARDED',
+			'M-TS-STD-CONTAINER-STD-OWN'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

@@ -462,7 +462,7 @@ final class ExplicitType implements Check implements OracleAssisted {
 	 * The `: Void` return-type pass of `fix()`: annotate every flagged function whose
 	 * block body holds no value-return or throw in its own scope. The invariants are
 	 * captured by the local `walk` / `editVoid` closures — mirroring the recursive-walker
-	 * shape used elsewhere (`CallGraph.collectNodes`) — instead of being threaded through
+	 * shape used elsewhere (`CallGraphNodes.collect`) — instead of being threaded through
 	 * every recursive call. A `macro`-modified function returns `Expr` implicitly and is
 	 * left report-only, detected via `RefactorSupport.macroModifierPrecedes` whose run
 	 * ends at the previous member declaration.

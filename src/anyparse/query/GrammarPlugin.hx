@@ -2910,6 +2910,15 @@ typedef RefShape = {
 	@:optional var iterationElementTypeParams: Map<String, Int>;
 
 	/**
+	 * The paths a container name of `indexedElementTypeParams` / `iterationElementTypeParams` denotes as the STANDARD type
+	 * those maps describe, keyed by that simple name (Haxe `List` -> `List`, `haxe.ds.List`): a project or library type
+	 * bearing the name is another type, whose element only its own `iterator()` / `next()` say. A reader whose name is not
+	 * provably one of these paths (`CallGraphImports.namesStandard`) leaves the listed parameter alone. Optional; unset
+	 * makes the call graph read no container's listed parameter.
+	 */
+	@:optional var standardContainerPaths: Map<String, Array<String>>;
+
+	/**
 	 * The containers whose single-binder iteration yields EXACTLY the values its key-value
 	 * iteration does — in order, and under mutation of the container — keyed by SIMPLE name, each
 	 * mapped to the fully-qualified path an `import` of the standard type would spell. A key-value
@@ -3541,6 +3550,15 @@ typedef ExecutionShape = {
 	 * reachability analysis admits every such function from any code. Optional; unset admits none.
 	 */
 	@:optional var implicitCallNames: Array<String>;
+
+	/**
+	 * Method NAMES library code calls on a value it reaches through reflection, whatever the member's visibility (Haxe
+	 * `hxSerialize` / `hxUnserialize`, which `haxe.Serializer` / `Unserializer` run, and `resolve`, the field-access
+	 * fallback of a class implementing `Dynamic`). Like `implicitCallNames`, no node of the name sits where such a call
+	 * runs, so an analysis that follows a stored value to the occurrences of its field's name cannot see it. Optional;
+	 * unset names none.
+	 */
+	@:optional var reflectivelyCalledNames: Array<String>;
 
 	/**
 	 * The iteration names among `implicitCallNames` a loop calls on the value it iterates for the iterator it then calls the

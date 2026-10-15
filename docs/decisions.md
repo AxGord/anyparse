@@ -2386,3 +2386,229 @@ decided the question; it may not become a record of runs.
   anyparse src; fixtures r1..r5, round2, round4..round7 (499 runs): lost 2 = the F5 false positives, gained 27 = the 14
   F1..F6 targets, 5 info-only changes; rule time 5.56 -> 5.63 s (+1.3%), full lint 23.90 -> 23.17 s (noise) — branch
   `feat/ts-precision-6`
+- R7 L1 (a) (`round7/k1/statics-wild`, `-field`, `-wild-ret`): a bare value name no binding, member or module function
+  answers was never read through the imports that may bind it, so `import A.*;` + `lock.wait()` / `make().wait()` stayed
+  unresolved and silent. `CallGraphKeys.importedStatic`: the ONE static `CallGraphImports.importedStatics` binds the name
+  to, typed where its owner declares it (`memberTypeSource`), a bare call of one resolved the same way (`staticTarget`,
+  shared with `importedFunction`). Refused (unresolved, as before): a member the reading type's chain declares, a chain
+  the index does not hold whole (a library supertype may declare it), a module function, two imports binding the name
+  (the compiler takes the last; kept unknown rather than ordered), an unlisted wildcard type — branch `feat/ts-precision-7`
+- R7 L1 (b) (`typedef-chain`, `-sub`): `CallGraphTypes.resolveAlias` followed the alias's SIMPLE target, so
+  `pkg/Alias.hx: import sys.thread.Lock; typedef MyLock = Lock;` beside a project `utils.Lock` dispatched to the project
+  `wait` (a same-file alias too). Each declaration's `aliasTargetRaw` is kept with its file and keyed there
+  (`CallGraphImports.typeOf`) at every hop. Two declarations keying one alias apart keep the simple target, as before —
+  `resolveAlias` answers one type; not covered (no case in the fixtures or TM) — branch `feat/ts-precision-7`
+- R7 L1 (c) (`libpkg-samepkg`, `-noimp`): a name no import binds stayed as written, i.e. the project namesake. Checked
+  with haxe 4.3 first: after the module, the imports and the wildcard imports (a wildcard import beats the own package),
+  the compiler searches the file's own package and then each enclosing one. `CallGraphImports.packagePath` does the same
+  after `wildcardPath`: the first `pkg.Name` the project declares (keys to the project type, unchanged) or the std core
+  declares in a package it holds (`sys.thread.Lock`). A package neither holds (a library's: TM's `src/openfl/net`) answers
+  nothing and the name stays as written, as before — such a package cannot be listed without the library's sources; TM's
+  thread-safety reports are byte-identical with (a)..(c) (measured, below) — branch `feat/ts-precision-7`
+- R7 L1 (d) (`fn-tparam-shadow`): a return type that is a type parameter the function declares itself was "no type"
+  (K3's rule kept it unkeyed, correctly, but nothing bound it), so `A.id(s).wait()` with `id<Lock>(x:Lock):Lock` and the
+  std lock was unresolved. `returnThrough` (receiver view first, then the function's own parameters) binds each of them
+  from the declared types of the arguments passed to parameters written as that BARE parameter, rest arguments
+  included, when they all agree (`CallGraphKeys.argumentBindings`) — the compiler's inference for the simple shape;
+  disagreeing arguments, a parameter only nesting it (`Array<T>`: no structural unification), an argument with no
+  declared type, and a function parameter shadowing its type's leave the result unknown (`UNKNOWN_TYPE`). Never keyed
+  through the import the name shadows — branch `feat/ts-precision-7`
+- R7 L1 (e) (`ifdef-decl-member`) + the R4 F6 remainder: a member declared twice under `#if` with different types was
+  joined to "no type" (`CallGraphTypes.joined`), and two declarations whose return texts differ were settled to none
+  (`CallGraph.settle`): "neither", silently. The index keeps each member declaration's written type with its file
+  (`CallGraphImports.memberTypesOf`); a function's per-declaration return types are read on demand
+  (`CallGraphKeys.returnsWritten`, only when the settled one is missing and there are several declarations). When the
+  joined record / the settled fact has none, `readIn` keys each where written (`firstKeyingEach`) and the dispatch runs
+  every type they name (`apartFrom`), exactly as K3 did for one text keyed apart; a return whose types differ in name
+  takes the simple name of the one read. Unknown, as before: a branch writing no type, a declaration the graph cannot
+  read, types that do not line up — `keyedApart` now answers null for a different shape or argument count instead of
+  "no pairs" (which would have typed the value by the first alone). Readers needing ONE type (`paramTypesOf`,
+  `ReflectiveValues.memberTypeOf`) still have none; a parameter list two declarations write differently stays unknown
+  (`paramTypesOf`), not taken here — branch `feat/ts-precision-7`
+- R7 L1 F7 remainder NOT taken (L2): `@:forward abstract H(Lock)` (`abstract-underlying`), iteration over `Array<Lock>`
+  (`array-iter`), a function-typed field (`fn-type`), a lambda parameter typed by the callee's signature in another file
+  (`param-decl-file`).
+- R7 L1 MEASURED (engine of the L1 tip vs dc09aa52): fixtures r1..r5, round2, round4..round7 (499 runs): 480
+  byte-identical; the 9 F7 targets now warn `A C.realWait|sys.thread.Lock.wait`; every other round7 fixture (k1, k2,
+  k2b, controls, "not findings") byte-identical; the r5 trees (TM 1d1ba147 src under the r5 configs) re-key from (e):
+  `D RemoteFileSystemBase.listFolderCloudCallback|…` (tm-bad) disappear because `getFolderContentAPI()` (two `#if`
+  declarations, FolderContentNewAPI / FolderContent) now types `loadContent`, whose callback runs through
+  `APIRequest2.success` (spawns), not as if under the caller's hold; `B RemoteFileSystemBase.setTimestamp|…` is demoted
+  to info by the existing "long only through work … reported there" fold; `D FileList.reload|…` (truth `false`) becomes
+  `B FileList.reload|FolderWatcher._mutex`. TM: 1d1ba147 `153 146 102 8 12 5 18 1 0 0.70 102/102` -> `164 157 102 8 12 8
+  26 1 0 0.65 102/102` (13 keys gained, 10 already labelled dup-of / false, 3 labelled `false` R7-L1; 2 D false keys
+  lost), f81c2049 198 -> 209 (5/5), bd943dac 199 -> 210 (9/9), round6/frag 102/102 — all from (e): the std/lib/TM members
+  and returns written per `#if` branch (std `Process.stdout`, openfl `DisplayObject.stage`, TM `getFolderContentAPI`)
+  are typed now; (a)..(d) leave the 3 reports byte-identical. All rules: only thread-safety moves on the 3 TM trees,
+  anyparse src identical. Rule time on tm-1d1ba147 (interleaved, median of 3) 5.94 -> 7.40 s (+24.6%), full lint 25.44
+  -> 26.95 s (+5.9%): (a)..(d) cost +2.5%; the rest is not the resolution (graph build +0.1 s) but the analysis over
+  the larger reachable graph — `ThreadStates.origins` (one BFS per worker start) +1.0 s, `siteFacts` / `holds` /
+  `carried` the remainder (cpu profile); accepted as the price of the edges, a faster `origins` is separate work —
+  branch `feat/ts-precision-7`
+- R7 L1b timing (`fb7b1342`): L1's +24% rule time (tm-1d1ba147) was `ThreadStates.origins` re-evaluating, in every
+  per-start BFS, `onWorker` (an `edgeContext` over all states of the edge's function) and `workerStep` (`carried` +
+  `entered`) for every out-edge of every state — neither depends on the start. Each function's worker edges and each
+  state's steps are now read once (`stepsOf`), the per-start BFS (`spread`) walks that memo; origins 1394 -> 119 ms
+  (cpu profile), reports byte-identical on the 3 TM trees. Not taken: one shared multi-source reachability (origins are
+  a set per function; the memo already makes each BFS a walk over cached steps) — branch `feat/ts-precision-7`
+- R7 L1b diagnosis of L1's 1d1ba147 delta (+13 / -2 warning keys): every key comes from ONE edge (e) added —
+  `LanguageSelection.saveButtonHandler -> Main.languageReboot`: `Main.instance` is declared in root `Main` and in
+  `logs.Main`, joined to no type before, keyed where each is written now. Measured: a copy of the tree with only that
+  call made `Dynamic` reports exactly what dc09aa52 reports. The edge is right; it puts the editor UI on the worker
+  origin `IAPStore.onPurchaseSuccess#5` (TM config: `api.APIRequest2.success` is a `spawns` entry; `Timer.delay` and a
+  handler registered with `addEventListener` keep the registrar's context), so holds the main-only rule turned info
+  ("reported at (a)") are taken on a worker too and warn. No sound engine narrowing exists for that reach (it follows
+  the config and the registrar rule); the 8 `dup-of` and 2 earlier-`false` keys stay, none meeting a RootCauseFold
+  cover (their holds reach blocking calls no covering finding names, or the cover repeats where they do not). Three
+  `false` keys rode a second, older imprecision — next entry. `getFolderContentAPI` (named by L1) is the r5 `tm-bad`
+  change only — branch `feat/ts-precision-7`
+- R7 L1b stored values (`7014cabd`, `StoredValues`): a function value handed to a project constructor that only stores
+  it into a `final` field runs where the field is called, not at the `new` (TM `FileList.reload` -> `new
+  FileListGrid(..., _source.getThumbnail)` under the tree lock; FileListGrid / FileListItemGrid store it, only
+  `FileListItemGrid.requestThumbnail` calls it). Each call of the field gets a derived `Call` edge to the value and the
+  handing `Ref` runs nothing (`ThreadSafety.runsNothing`), like a value stored into a `dynamic` member
+  (`deriveStoredCalls`). Positive whitelist: a whole argument of a `new` resolving to a constructor of one declaration,
+  as many arguments as parameters (no rest); the parameter read only bare as the right-hand side of assignment
+  STATEMENTS to `final` fields its class declares (any other node of its name refuses); every node of the held
+  files carrying the field's name a field declaration, an assignment target, a call of it in a held function, or a
+  whole argument of another such constructor's store (followed); no string literal spelling it, the class not a
+  declared `reflectiveMethodHolders` (`ReflectiveValues.obtainableMember`, extracted from `obtainable`), its file under
+  `closedWorld`. Anything else keeps the value running where handed. TM 1d1ba147: the three `false` keys go
+  (B FileList.reload|FolderWatcher._mutex, D FileListMoveFiles.moveItems|…, D StandardFileSystem.createFolderItem|…);
+  16 handed values are stores in TM (thumbnails, dialog callbacks, animation-frame commands, share rows) — branch
+  `feat/ts-precision-7`
+- R7 L1b `B RemoteFileSystemBase.setTimestamp` (truth real-long): on f81c2049 / bd943dac and 8 r5 configs L1 turned it
+  info. Of its two long calls the stat (`getTimestamp -> getMTime -> FileSystem.stat`) was covered by warnings of the
+  same lock over the same stat site on its thread (createFolderItem / moveItem / renameItemInternal, `_mutationMutex`,
+  origin `FileSystemBase.runCloud` among theirs — measured) — RootCauseFold's same-lock / same-site / same-thread rule,
+  a different hold of the same root; the wait for `FolderWatcher._mutex` was covered only because FileList.reload's and
+  listFolder's `_mutex` holds had turned warnings in L1 — both truth `false`. So the demotion rested on false covers:
+  not the same stall. With stored values FileList.reload's hold reports nothing, a `_mutex` maker has no finding again,
+  and setTimestamp warns on f81c2049 / bd943dac / the r5 configs (where `B acquireMutationLocks|_batchMutex`, truth
+  `dup-of`, now folds onto the `_mutationMutex` makers including it) — branch `feat/ts-precision-7`
+- R7 L1b MEASURED (engine of the L1b tip vs dc09aa52 and the L1 tip): rule time on tm-1d1ba147 (interleaved, median of
+  3) dc09aa52 5.70 / L1 tip 7.03 / L1b tip 5.62 s (-1.4% vs dc09aa52); full lint 24.41 -> 25.10 s (+2.8%); cpu profile
+  origins 415 / 1394 / 131 ms, carried 491 / 1029 / 326, edgeContext 208 / 625 / 80, StoredValues 53. TM rows:
+  1d1ba147 `161 154 102 8 12 5 26 1 0 0.67 102/102` (L1 164 … 0.65), f81c2049 207 (5/5), bd943dac 210 (9/9),
+  round6/frag 102/102. Fixtures r1..r5, round2, round4..round7 (499 runs) vs the L1 tip: 490 byte-identical; only the r5
+  TM-derived trees move (the 3 false keys go, B setTimestamp warns, B acquireMutationLocks|_batchMutex — truth `dup-of`
+  — folds onto the _mutationMutex makers); round7: the same 9 F7 targets as L1. All rules: only thread-safety moves on
+  the 3 TM trees, anyparse src identical — branch `feat/ts-precision-7`
+- R7 L2 (a) (`round7/k1/abstract-underlying`): not a missing forward — `dispatchOn` already routed a member a `@:forward`
+  abstract does not declare to its underlying type, but by the underlying's SIMPLE name (`TypeMetaFacts.forwardedTo`), so
+  `H.hx: import sys.thread.Lock; @:forward abstract H(Lock)` beside a project `utils.Lock` sent `h.wait()` to the project
+  `wait` — a wrong edge, not a missing one. Each declaration's written underlying head path is kept with its file
+  (`TypeMetaFacts.forwardsWritten`) and keyed there (`CallGraphImports.keyedWhereWritten`, which `resolveAlias` now shares),
+  then seen through an alias. An underlying that is a type parameter of the abstract (`@:forward abstract W<T>(T)`) names
+  no type: it used to dispatch on a type of that name (an external `T.m` placeholder, or a project `T`); now unresolved.
+  Not taken: forwarding through a second forwarding abstract (one hop, as before); the type argument of `W<X>` — branch
+  `feat/ts-precision-7`
+- R7 L2 (c) (`fn-type`): a call is typed by the declared return of the function it resolves to, and a function-typed
+  field, parameter, local or call result names no function, so `A.get().wait()` with `get:() -> Lock` stayed unresolved.
+  When the call resolves to no function, `typeSourceOf` takes the result of the callee's own written type when that is a
+  function type (`Null<…>` peeled; `calledResult`), read where it was declared like any member type; `receiverType` falls
+  through to that typing instead of stopping. A `Dynamic` callee stays untyped. The call itself still records
+  `FunctionValue` (which function runs is unknown) — branch `feat/ts-precision-7`
+- R7 L2 (b) (`array-iter`): nothing typed a loop binder. The edge walk now types it before the loop body is walked
+  (`typeLoopBinder`, stored like a declared type at the binder's offset): the type argument a standard container names
+  (`iterationElementTypeParams`: Array, Vector, List, Iterable, Iterator, a Map's values — the plugin's obligation that
+  each of them yields the same element from `iterator()` and `keyValueIterator()` covers a key-value loop's VALUE binder,
+  which takes nothing else); otherwise the return of the `next()` of the type `iterator()` returns (or the standard
+  element of it), or the type's own `next()`, through the container's type arguments (`memberReturn` -> `throughParams`).
+  Unknown: a key binder (a key or an index), both `iterator()` and `next()` declared and disagreeing (which one the
+  compiler takes is not modelled), a member declaring type parameters of its own, a member the graph holds no body of
+  (std / library) — branch `feat/ts-precision-7`
+- R7 L2 (d) (`param-decl-file`): nothing typed a lambda parameter written without a type. The walk types such
+  parameters before the lambda's body (`typeLambdaParams`) by the function type the lambda is expected to be — the
+  existing `expectedAt` (which already typed construction literals): a call's parameter as `paramTypesOf` reads it, keyed
+  in the callee's OWN file, through the receiver's type arguments, refused when it names a type parameter of the callee
+  itself (`argumentTypeSource`); a `new`'s; a declaration's, an assignment's, a return's — through parentheses, ternary
+  and `if`/`switch` arms. Only a function type (`Null<…>` peeled) of exactly the lambda's arity; a parameter written
+  with a type keeps it. Not taken: optional-argument skipping (the arity check refuses a mismatch rather than skip), an
+  `@:overload`ed callee beyond what `paramTypesOf` already refuses — branch `feat/ts-precision-7`
+- R7 L2 (e) (R7 L1b remainder): `typeSourceOf` had no arm for a `new`, so `new Maker().make().wait()` was unresolved. A
+  `new` types its value by the type it names, keyed where written; type arguments it does not spell are unknown
+  (`throughParams` substitutes `UNKNOWN_TYPE`). `ThreadSafetyRepetitionTest`'s "call unresolved" case was
+  `new Batch(…).success(…)`, which now resolves (its arm M-TS-RUNS-ONCE-UNRESOLVED survived); it reads a `cast` receiver
+  instead — branch `feat/ts-precision-7`
+- R7 L2 cleanup: `collectNodes` / `registerNode` move unchanged to `CallGraphNodes.collect` / `register`
+  (`CallGraph` was 2083 lines over the 2000 cap); ten arms re-pointed — branch `feat/ts-precision-7`
+- R7 L2 MEASURED (engine of the L2 tip vs the L1b tip 431f0c39): the 4 F7 targets (`abstract-underlying`, `array-iter`,
+  `fn-type`, `param-decl-file`) now warn `A C.realWait|sys.thread.Lock.wait`; every other round7 fixture (k1, k2, k2b,
+  controls, "not findings") keeps its keys — `tparam-shadow-lib-bg` / `-ctl` add "(also reachable from a background
+  thread)" to `Mutex.release`, right: the spawned lambda's `new Mutex().release()` is typed by (e). Fixtures r1..r5,
+  round2, round4..round7 (499 runs): 482 byte-identical, no warning lost; the r5 TM-derived trees gain the Goals3D keys
+  below. TM 1d1ba147 `161 154 102 8 12 5 26 1 0 0.67 102/102` -> `164 157 102 8 15 5 26 1 0 0.65 102/102`: three keys,
+  all from (e) — `new Goals3D().cropImagesAndSave()` in `AssetTools.run` (`#elseif ASSET_TOOLS`, Main.hx:99) gains its
+  edge, so `A Goals3D.cropImagesAndSave|File.saveContent`, `A Goals3D.saveCroppedImageToFileSystem|File.saveBytes`,
+  `A Goals3D.setCropAngle|Assets.getBitmapData` warn; labelled `rare` (debug-define path, R7-L2); f81c2049 207 -> 210
+  (the same three; 5/5), bd943dac 210 (9/9, keys unchanged), round6/frag 102/102. (a), (c), (d) leave the 1d1ba147 report
+  byte-identical; (b) re-renders chains only (loops over typed command / node arrays: `MultiplexCommand.commit` now
+  dispatches to every `Command.commit`, `Editor.setDrillData` to the node `toObjectData` / `toTarget`). All rules: only
+  thread-safety moves on the 3 TM trees, anyparse src identical. Rule time on tm-1d1ba147 (interleaved, median of 3)
+  dc09aa52 5.96 / L1b tip 5.74 / L2 tip 5.92 s (+3.1% over L1b, -0.7% over dc09aa52); full lint 24.98 -> 25.83 s (+3.4%)
+  — branch `feat/ts-precision-7`
+- R7 L3 F1 (review R5, MUST; `sv/implicit-iterator`, `-iterator-local`, `-kv`, `-tostring`): StoredValues followed a
+  value a constructor only stores to the occurrences of its field's NAME, but the compiler calls some fields by name with
+  no node of it at the call — a `for` runs `iterator()` / `keyValueIterator()` (checked on --interp, a private field too:
+  `for (x in this)`), a string conversion runs `toString()` on dynamic targets, `haxe.Serializer` reaches `hxSerialize`
+  through `Reflect` — and std code reads a field structurally (`Lambda` iterating an `Iterable`). A stored field now
+  counts only when its name is in neither `execution.implicitCallNames` nor the new `execution.reflectivelyCalledNames`
+  (`hxSerialize`, `hxUnserialize`, `resolve`) and it is not public (`MemberKinds.fieldExposed`, moved from
+  FieldInitAtDeclaration: explicit `public`, a `@:publicFields` / extern container). Cost: `sv/implicit-iterator-only-stored`
+  (public, never iterated) warns again as on dc09aa52 — branch `feat/ts-precision-7`
+- R7 L3 F2 (`h/loop-proj-list(-rev)`, `loop-proj-iterator-type`, `loop-modsub-list`, `loop-proj-vector`,
+  `idx-proj-vector`): the element maps were looked up by the container's SIMPLE name, so a project `List<T>` was read as
+  the std one (the index arm since K1). The listed parameter is now taken only when the name provably is the std type
+  (`standardContainerPaths`, a new shape key; `CallGraphImports.namesStandard`): a dotted std path no declaration bears,
+  or a simple name no indexed declaration bears — one that does makes the simple key mean that type — which the file
+  binds to a std path or which is a toplevel std name. Otherwise the container's own `iterator()` / `next()`, an
+  `iterator()` return read in the file declaring it (`memberReturn` hands it). An `#if`-guarded import binding the name
+  elsewhere refuses; a wildcard of a package the tables cannot list does not (follow-up: refusing it lost every
+  `Array<T>` loop in TM's Editor.hx, which imports library packages by wildcard — `typeOf` reads such a wildcard the same
+  way). A declaration at a standard path or its module-qualified twin (`Array`, `Array.Array`, `haxe.ds.List.List`,
+  `StdTypes.Iterator`) is the std itself, indexed as a library, and no namesake (follow-up 2: MemberReachTest indexes a
+  `std/Array.hx` stub). Limit: a project module at exactly a std path is indistinguishable from the std by path — branch
+  `feat/ts-precision-7`
+- R7 L3 F3 (`h/lam-skip-shift(-rev)`): L2 d typed a lambda argument by the parameter at its POSITION, but Haxe skips an
+  optional parameter an argument does not fit. `paramTypesOf` records the first skippable parameter (`?p` or a default
+  value; every parameter of an external target, whose index entry does not say) and the declared count
+  (`DeclarationFacts.skippable`); `argumentTypeSource` answers null when one sits at or before the argument and the call
+  passes fewer arguments than declared, or a rest parameter takes the rest (`CallGraphKeys.mayShift`). The same place now
+  counts a `new`'s own arguments only (`new Box<Int>(f)` read the type argument as argument 0) — branch
+  `feat/ts-precision-7`
+- R7 L3 F4 (`h/stat-modvar(-rev)`): a module-level `var` / `final` (the index lists none) lost to a static `import A.*`
+  brings in. Each file's module-level names are recorded as its edges are collected (`CallGraphNames.moduleLevelNames`:
+  named root children and, through nameless wrappers — a conditional region, a `final`'s VarForm — the named nodes they
+  hold; an import alias names none) and `CallGraphImports.importedStatics` brings in nothing under them, for every
+  consumer. The module field itself stays untyped (unknown, not the import's type) — branch `feat/ts-precision-7`
+- R7 L3 F6 (pre-existing; `h/ovl-return(-rev)`, `ifdef-ovl`): `@:overload` signatures were ignored. CallGraphNodes
+  compares each offered function's return and parameter list (kind + written type) with the declaration's: differing
+  returns drop the node's return facts and mark `overloadedReturns` (`returnSourceOf` null, the `#if` twins of L1 e
+  included), differing parameters mark `overloadedParams` (`paramTypesOf` null); a metadata holding no function differs
+  in both; agreeing signatures type as before. A library function the graph holds no file for types no parameter when
+  its index entry carries `hasOverloadMeta`. Not taken: dispatching on every signature (a call's selection is not
+  modelled); StdTypes (the core std's one `@:overload`, Reflect.makeVarArgs, returns Dynamic either way) — branch
+  `feat/ts-precision-7`
+- R7 L3 F7 (pre-existing; `h/stat-super-static`): measured on 4.3.7 --interp — a supertype's static is not in a
+  subtype's unqualified scope (`Unknown identifier`), an `import A.*` static of the name is read there, the type's own
+  static and a module-level function of the module beat the import. `CallGraphKeys.staticOfSupertype` (the nearest
+  declaration — a function the graph keys, else the index's field — is another type's static) keeps such a static out of
+  the import gate, the bare-read typing and the bare-call targets. The module pseudo-type bears the main class's name and
+  `memberOnChain` on it walked that class's supertypes, so module lookups take only what it declares itself
+  (`CallGraphKeys.declaredOn`). `owner != typeName` carries no arm: a type's own member binds lexically before these
+  lookups (the cut survives) — branch `feat/ts-precision-7`
+- R7 L3 F5 (documented, not fixed): types are keyed by SIMPLE name where no path tells them apart, so a module-local
+  `Maker` beside an imported `pkg.Maker` (`h/new-modsub-shadow*`) dispatches on both declarations' members since L1 e /
+  L2 e — an over-approximation (both `make`s reachable), the mechanism that resolves TM's `Main.instance` correctly.
+  Fixed only by qualified node ids (the open "graph by simple names" item) — branch `feat/ts-precision-7`
+- R7 L3 MEASURED (engine of the L3 tip vs 23d4b78b): round8 runner — every F1..F4/F6/F7 fixture moves the right way
+  (N fixtures `loop-proj-list-rev`, `loop-proj-iterator-type`, `loop-modsub-list`, `loop-proj-vector`, `idx-proj-vector`,
+  `lam-skip-shift`, `stat-modvar-rev`, `ovl-return-rev` stop warning; W `loop-proj-list`, `stat-super-static` and the 4
+  `sv/implicit-*` warn; `lam-skip-shift-rev`, `stat-modvar`, `ovl-return`, `ifdef-ovl` lose their wrong edge and stay
+  silent), the hv twins follow (false B gone, `hv/stat-modvar` gains `A C.main|Mutex.acquire` as every unresolved hv
+  row), `sv/implicit-iterator-only-stored` warns again (public field), every control and "not finding" keeps its keys.
+  Fixtures r1..r5, round2, round4..round7 (499 runs): byte-identical. TM 1d1ba147 / f81c2049 / bd943dac reports and
+  round6/frag byte-identical (rows unchanged, recall full); all rules (`--no-oracle --all`) on the 3 TM trees and
+  anyparse src: JSON byte-identical. Rule time on tm-1d1ba147 (interleaved, median of 3) dc09aa52 6.12 / 23d4b78b 6.05 /
+  L3 6.01 s; full lint 25.59 / 24.96 / 24.80 s — branch `feat/ts-precision-7`

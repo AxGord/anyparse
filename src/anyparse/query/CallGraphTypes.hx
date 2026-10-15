@@ -47,8 +47,11 @@ final class CallGraphTypes {
 	/** The typedefs that name an anonymous structure type. */
 	private final _anonStructs: Map<String, Bool> = [];
 
-	/** Typedef name -> the simple nominal it aliases. */
-	private final _aliases: Map<String, String> = [];
+	/**
+	 * Typedef name -> the simple nominal it aliases, and the path each declaration of it aliases (`aliasTargetRaw`) with the
+	 * file writing it.
+	 */
+	private final _aliases: Map<String, { simple: String, written: Array<{ path: String, file: String }> }> = [];
 
 	/** Every member name an indexed type declares as a STATIC function. */
 	private final _staticFunctionNames: Map<String, Bool> = [];
@@ -102,7 +105,6 @@ final class CallGraphTypes {
 	public inline function subtypesOf(typeName: String): Array<String> {
 		return _subs[typeName] ?? [];
 	}
-
 
 	/** Whether an indexed declaration of `typeName` is an interface. */
 	public inline function isInterface(typeName: String): Bool {
@@ -211,9 +213,12 @@ final class CallGraphTypes {
 	public function resolveAlias(typeName: String): String {
 		var t: String = typeName;
 		final seen: Array<String> = [];
-		while (_aliases.exists(t) && !seen.contains(t)) {
+		while (!seen.contains(t)) {
+			final alias: Null<{ simple: String, written: Array<{ path: String, file: String }> }> = _aliases[t];
+			if (alias == null) break;
 			seen.push(t);
-			t = _aliases[t] ?? t;
+			// the target its own file binds the name to, a library type a project type's simple name bears keyed apart
+			t = imports.keyedWhereWritten(alias.written, alias.simple);
 		}
 		return t;
 	}
@@ -232,7 +237,6 @@ final class CallGraphTypes {
 		}
 		return null;
 	}
-
 
 	/** The record of `member` on `typeName` or the nearest supertype declaring it, or null when no indexed type does. */
 	public function memberOnChain(typeName: String, member: String): Null<MemberInfo> {
@@ -268,14 +272,19 @@ final class CallGraphTypes {
 	private function record(t: TypeDeclInfo, file: String): Void {
 		// a typedef re-exporting a type of its own name is not a second declaration of it
 		if (!CallGraphNames.selfAlias(t)) _declarations[t.name] = (_declarations[t.name] ?? 0) + 1;
-		meta.record(t);
+		meta.record(t, file);
 		if (t.isAnonStruct) _anonStructs[t.name] = true;
 		unionInto(_kinds, t.name, [t.kind]);
 		unionInto(_supers, t.name, t.supertypes);
 		generics.record(t, file);
 		unionInto(_interfaces, t.name, t.interfaces);
 		final target: Null<String> = t.aliasTargetNominal;
-		if (target != null && target != t.name) _aliases[t.name] = target;
+		final path: Null<String> = t.aliasTargetRaw;
+		if (target != null && target != t.name) {
+			final written: Array<{ path: String, file: String }> = _aliases[t.name]?.written ?? [];
+			if (path != null && !written.exists(w -> w.path == path && w.file == file)) written.push({ path: path, file: file });
+			_aliases[t.name] = { simple: target, written: written };
+		}
 		for (s in t.supertypes) unionInto(_subs, s, [t.name]);
 		recordMembers(t);
 	}
