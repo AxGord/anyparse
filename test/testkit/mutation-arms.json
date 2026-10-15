@@ -6339,7 +6339,7 @@
 		{
 			"name": "M-GRAPH-IMPORT-UNLISTED",
 			"type": "anyparse.query.CallGraphImports",
-			"method": "importedStatics",
+			"method": "importedNamed",
 			"find": "case Import if (last == name && before != '' && CallGraphNames.isTypeLike(before)):\n\t\t\t\t\tbind(before, last);",
 			"replace": "case Import if (last == name && before != '' && CallGraphNames.isTypeLike(before)):\n\t\t\t\t\tif (_isStatic(before, last)) bind(before, last);",
 			"note": "an explicit static import the index does not list binds nothing, so the call is taken for an enum constructor"
@@ -6347,7 +6347,7 @@
 		{
 			"name": "M-GRAPH-UNLISTED-WILDCARD",
 			"type": "anyparse.query.CallGraphImports",
-			"method": "importedStatics",
+			"method": "importedNamed",
 			"find": "\t\t\t\t\t\tbind(last, name)\n\t\t\t\t\telse if (_unlisted(last))\n\t\t\t\t\t\tout.unknown = true;\n",
 			"replace": "\t\t\t\t\t\tbind(last, name);\n",
 			"note": "a wildcard import of a type under a build macro supplies nothing unseen"
@@ -21077,6 +21077,30 @@
 			"find": ": [for (c in holder.children) if (!annotationKinds.contains(c.kind)) c];",
 			"replace": ": holder.children;",
 			"note": "a `new` counts the type arguments it names among its arguments"
+		},
+		{
+			"name": "M-TS-MODULE-NAME",
+			"type": "anyparse.query.CallGraphImports",
+			"method": "importedStatics",
+			"find": "return own ? { statics: [], unknown: false } : importedNamed(file, name);",
+			"replace": "return importedNamed(file, name);",
+			"note": "a static an import brings in wins over a module-level field of the same name"
+		},
+		{
+			"name": "M-TS-MODULE-NAME-NESTED",
+			"type": "anyparse.query.CallGraphNames",
+			"method": "moduleLevelNames",
+			"find": "for (c in node.children) walk(c)",
+			"replace": "{}",
+			"note": "a module-level field under a wrapper (`final`, a conditional region) is not seen"
+		},
+		{
+			"name": "M-TS-MODULE-NAME-ALIAS",
+			"type": "anyparse.query.CallGraphNames",
+			"method": "moduleLevelNames",
+			"find": "if (aliasKinds.contains(node.kind)) return;",
+			"replace": "",
+			"note": "an import alias's name counts as one the module declares, hiding the static it binds"
 		}
 	]
 }

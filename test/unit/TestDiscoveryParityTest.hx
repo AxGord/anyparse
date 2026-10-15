@@ -3047,6 +3047,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CallGraphTest#testALoopBindsWhatItsIterableYields :: control :: '
 				+ 'M-TS-LOOP-ELEMENT,M-TS-LOOP-KEY-BINDER,M-TS-LOOP-KV-LISTED,M-TS-LOOP-ITERATOR,M-TS-LOOP-NEXT,M-TS-LOOP-AGREE,'
 				+ 'M-TS-LOOP-OWN-PARAMS,M-TS-LOOP-THROUGH',
+			'unit.query.CallGraphTest#testAModuleLevelFieldComesBeforeAnImportedStatic :: control :: '
+				+ 'M-TS-MODULE-NAME,M-TS-MODULE-NAME-NESTED,M-TS-MODULE-NAME-ALIAS',
 			'unit.query.CallGraphTest#testANameNoImportBindsIsLookedUpInTheFilesPackages :: control :: '
 				+ 'M-TS-PACKAGE-LOOKUP,M-TS-PACKAGE-ENCLOSING,M-TS-PACKAGE-PROJECT-FIRST',
 			'unit.query.CallGraphTest#testAReceiverANewMakesIsOfTheTypeItNames :: control :: M-TS-NEW-RECEIVER',
@@ -6722,7 +6724,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-STD-CONTAINER-WHERE',
 			'M-TS-SKIP-SHIFT',
 			'M-TS-SKIP-DEFAULT',
-			'M-TS-SKIP-NEW-ARGS'
+			'M-TS-SKIP-NEW-ARGS',
+			'M-TS-MODULE-NAME',
+			'M-TS-MODULE-NAME-NESTED',
+			'M-TS-MODULE-NAME-ALIAS'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

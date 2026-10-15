@@ -45,6 +45,12 @@ final class CallGraphImports {
 	/** File -> the names of the types its own module declares, which its code means before any import's. */
 	private final _ownTypes: Map<String, Array<String>> = [];
 
+	/**
+	 * File -> the names its module declares at module level (`recordModuleNames`): a module-level field or function, which its
+	 * code means before any static an import brings in under the name.
+	 */
+	private final _moduleNames: Map<String, Array<String>> = [];
+
 	/** File -> its package ('' for the toplevel), whose modules and its enclosing packages' its code sees after its imports. */
 	private final _packages: Map<String, String> = [];
 
@@ -198,6 +204,11 @@ final class CallGraphImports {
 		];
 	}
 
+	/** Record `names`, the names the module of `file` declares at module level (`CallGraphNames.moduleLevelNames`). */
+	public inline function recordModuleNames(file: String, names: Array<String>): Void {
+		_moduleNames[CallGraphNames.normalizePath(file)] = names;
+	}
+
 	/**
 	 * The statics the imports of `file` bind under a name of their own (`import p.T.member as alias;`) — each with the
 	 * type the path names as the member's owner — and every alias whose path does not decode, with no owner and no member:
@@ -227,6 +238,13 @@ final class CallGraphImports {
 	 * of these: it builds a value.
 	 */
 	public function importedStatics(file: String, name: String): ImportedName {
+		// a module-level field or function of the file's own module is what the name means there (review R5 F4)
+		final own: Bool = (_moduleNames[CallGraphNames.normalizePath(file)] ?? []).contains(name);
+		return own ? { statics: [], unknown: false } : importedNamed(file, name);
+	}
+
+	/** `importedStatics` for a name the file's own module does not declare: what its imports bind it to. */
+	private function importedNamed(file: String, name: String): ImportedName {
 		final out: ImportedName = { statics: [], unknown: false };
 		function bind(owner: String, member: String): Void {
 			if ((_enumConstructors[member] ?? []).contains(owner)) return;

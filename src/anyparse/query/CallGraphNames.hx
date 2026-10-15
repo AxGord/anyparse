@@ -131,6 +131,26 @@ final class CallGraphNames {
 		};
 	}
 
+	/**
+	 * Every name the module whose tree is `root` declares at module level: each named child of the root, and through a
+	 * nameless one — a conditional region, a `final` declaration's wrapper — each named node it holds, not descending
+	 * further; an import alias (`aliasKinds`) binds a name of an import's, none the module declares. Type, import and
+	 * package names come along; none of them is a static's name.
+	 */
+	public static function moduleLevelNames(root: QueryNode, aliasKinds: Array<String>): Array<String> {
+		final out: Array<String> = [];
+		function walk(node: QueryNode): Void {
+			final name: Null<String> = node.name;
+			if (aliasKinds.contains(node.kind)) return;
+			if (name == null)
+				for (c in node.children) walk(c)
+			else if (!out.contains(name))
+				out.push(name);
+		}
+		for (c in root.children) walk(c);
+		return out;
+	}
+
 	/** Simple name of the type declaration `node` introduces, or null. */
 	public static function typeNameOf(node: QueryNode): Null<String> {
 		final td: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);

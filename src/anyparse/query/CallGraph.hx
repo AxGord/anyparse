@@ -828,6 +828,7 @@ final class CallGraph {
 		// the file's declared types as the graph keys them (`CallGraphKeys`): a library type never merges into a project one
 		final keys: CallGraphKeys = new CallGraphKeys(types.imports, file, _plugin.typeSyntax, provider, source, tree, fnKinds);
 		keys.typeLocals(tree, localDeclKinds, newExprKind, callKind);
+		types.imports.recordModuleNames(file, CallGraphNames.moduleLevelNames(tree, shape.importAliasKinds ?? []));
 		// the files whose declarations wrote the types read while typing a receiver (`readIn`), for the types a name there may be
 		final readFrom: Array<String> = [];
 		// each type a declaration typing a receiver names where another one of it names the type read (`readIn`): runs too

@@ -1190,6 +1190,37 @@ class CallGraphTest extends Test {
 	 * of it by the type it is declared with, read where it is declared; a member the reading type inherits of that name is
 	 * what the name means there, not the import (review R4 F7).
 	 */
+	/**
+	 * Review R5 F4 (`h/stat-modvar(-rev)`): a field the reading file's own module declares at module level — plain, `final`,
+	 * inside a conditional region — is what a bare name means there, before any static an import brings in under it.
+	 */
+	@:pin('control') @:killer('M-TS-MODULE-NAME') @:killer('M-TS-MODULE-NAME-NESTED') @:killer('M-TS-MODULE-NAME-ALIAS')
+	public function testAModuleLevelFieldComesBeforeAnImportedStatic(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final g: CallGraph = graphOf([
+			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
+			'package app; import sys.thread.Lock; class A { public static var lock:Lock = null; }',
+			'package app; import app.A.*; final lock:utils.Lock = null; class M { static function field():Void lock.wait(); }',
+			'package app; import app.A.*; #if !never var lock:utils.Lock = null; #end class N { static function field():Void lock.wait(); }',
+			'package app; import app.A.*; class W { static function field():Void lock.wait(); }',
+			'package app; import app.A.lock as held; class Q { static function field():Void held.wait(); }'
+		]);
+		function targets(from: String): Array<String> {
+			return [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+		}
+		Assert.same([], targets('M.field'), 'a module-level final of the name');
+		Assert.same([], targets('N.field'), 'a module-level var inside a conditional region');
+		Assert.same(['sys.thread.Lock.wait'], targets('W.field'), 'no module-level field: the imported static');
+		Assert.same(['sys.thread.Lock.wait'], targets('Q.field'), 'an import alias declares no module-level name');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	@:pin('control')
 	@:killer('M-TS-IMPORT-STATIC-FIELD') @:killer('M-TS-IMPORT-STATIC-CALL') @:killer('M-TS-IMPORT-STATIC-OWN')
 	@:killer('M-TS-IMPORT-STATIC-ONE') @:killer('M-TS-IMPORT-STATIC-INDEXED')
