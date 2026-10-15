@@ -118,6 +118,17 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	// out so `Refs.find` resolves against ONE memoized index per tree instead of
 	// re-walking per query.
 	private final _refsCache: RefsCache = new RefsCache();
+
+	/**
+	 * `indexOver`'s memo: one entry per distinct file set (`fileSetKey`), holding the sources it was
+	 * built from, so a set whose text changed since is rebuilt instead of answered stale. Dropped with
+	 * the ambient-import memos (`invalidateAmbientChain`): the build reads the ambient chain.
+	 */
+	private final _indexMemo: Map<String, { sources: Array<String>, index: SymbolIndex }> = [];
+
+	/** `writeIndexOver`'s memo, keyed and validated like `_indexMemo`. */
+	private final _writeIndexMemo: Map<String, { sources: Array<String>, index: FieldWriteIndex }> = [];
+
 	private final _inner: GrammarPlugin;
 
 	// The wrapped grammar's OPTIONAL root-sharing capability, resolved once — the same
@@ -264,6 +275,16 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	}
 
 	/**
+	 * Rebuild the resolution index over `files` — this `--fix` pass's resolution sources
+	 * (`resolutionFiles()`), the library half tagged third-party — and adopt it (`setResolutionIndex`).
+	 * The host builds it rather than the loop, so the per-pass index and the self-built one are the
+	 * same construction; it bypasses `indexOver`'s memo on purpose, since every pass replaces it.
+	 */
+	public function rebuildResolutionIndex(files: Array<{ file: String, source: String }>): Void {
+		setResolutionIndex(SymbolIndex.build(files, this, thirdPartyFiles()));
+	}
+
+	/**
 	 * `SymbolIndexHost`: the memoised PROJECT-scoped index — report files UNION the declared
 	 * `resolutionRoots` — or null when the project declared no roots, where the caller's own
 	 * report scope is the answer. The project twin of `resolutionIndex`, memoised for the same
@@ -295,6 +316,30 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		_fieldWriteIndexBuilt = true;
 		_fieldWriteIndex = FieldWriteIndex.build(files, this, resolutionIndex(), thirdPartyFiles());
 		return _fieldWriteIndex;
+	}
+
+	/**
+	 * `SymbolIndexHost`: the memoised index over exactly `files` — answered from `_indexMemo` when the
+	 * same paths (and the same third-party tag) were indexed from the same sources earlier in the run,
+	 * built through `this` otherwise.
+	 */
+	public function indexOver(files: Array<{ file: String, source: String }>, ?thirdPartyFiles: Array<String>): SymbolIndex {
+		final key: String = fileSetKey(files, thirdPartyFiles ?? []);
+		final memo: Null<{ sources: Array<String>, index: SymbolIndex }> = _indexMemo[key];
+		if (memo != null && sameSources(memo.sources, files)) return memo.index;
+		final index: SymbolIndex = SymbolIndex.build(files, this, thirdPartyFiles);
+		_indexMemo[key] = { sources: [for (entry in files) entry.source], index: index };
+		return index;
+	}
+
+	/** `SymbolIndexHost`: the memoised write index over exactly `files`, resolving through `indexOver(files)`. */
+	public function writeIndexOver(files: Array<{ file: String, source: String }>): FieldWriteIndex {
+		final key: String = fileSetKey(files, []);
+		final memo: Null<{ sources: Array<String>, index: FieldWriteIndex }> = _writeIndexMemo[key];
+		if (memo != null && sameSources(memo.sources, files)) return memo.index;
+		final index: FieldWriteIndex = FieldWriteIndex.build(files, this, indexOver(files));
+		_writeIndexMemo[key] = { sources: [for (entry in files) entry.source], index: index };
+		return index;
 	}
 
 	/** `SymbolIndexHost`: the pass's memoised `MemberReach`, or null. */
@@ -574,6 +619,8 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	public function invalidateAmbientChain(): Void {
 		_ambientImportCache.clear();
 		_importMapCache.clear();
+		_indexMemo.clear();
+		_writeIndexMemo.clear();
 	}
 
 	/**
@@ -686,6 +733,26 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 			typeParamNames: inner != null ? inner.typeParamNames(source) : [],
 			typeParamConstraints: []
 		};
+	}
+
+	/**
+	 * The memo key of one file set: the third-party tag and the ordered paths, each length-prefixed so no
+	 * two sets spell one key (the `importMap` key's rule). Order is part of it, because the index keeps
+	 * its files in input order and two orders are therefore two answers.
+	 */
+	private static function fileSetKey(files: Array<{ file: String, source: String }>, thirdPartyFiles: Array<String>): String {
+		final key: StringBuf = new StringBuf();
+		key.add('${thirdPartyFiles.length}|');
+		for (file in thirdPartyFiles) key.add('${file.length}:$file');
+		for (entry in files) key.add('${entry.file.length}:${entry.file}');
+		return key.toString();
+	}
+
+	/** Whether `files` still carries, path for path, the `sources` a memo entry was built from. */
+	private static function sameSources(sources: Array<String>, files: Array<{ file: String, source: String }>): Bool {
+		if (sources.length != files.length) return false;
+		for (i => source in sources) if (source != files[i].source) return false;
+		return true;
 	}
 
 }

@@ -166,10 +166,9 @@ final class RawSourceScan {
 	 * walking members paid one whole-source `indexOf` per member of every file it looked at, which on a
 	 * large source is a substantial share of a whole `lint --all`.
 	 *
-	 * ONE slot, and the index instance owns it: `SymbolIndex.build` allocates a fresh instance per
-	 * check run, and the only index anything holds on to is the resolution one a
-	 * `CachingGrammarPlugin` memoises on ITSELF and re-sets per `--fix` pass — so a memo here dies
-	 * with the run that made it, which is what the first invariant asks, and the process-scoped
+	 * ONE slot, and the index instance owns it: an index lives no longer than the run host that memoises it (`IndexScope`,
+	 * `CachingGrammarPlugin.indexOver` and its resolution twin, all re-set per `--fix` pass), and a bare plugin builds a fresh
+	 * one per call — so a memo here dies with the run that made it, which is what the first invariant asks, and the process-scoped
 	 * cache it forbids is what none of this is.
 	 *
 	 * One slot is enough because a member walk asks about one file's source until it moves to the

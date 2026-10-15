@@ -4,9 +4,9 @@ import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.ImportBindings;
 import anyparse.query.ImportOrder;
+import anyparse.query.IndexScope;
 import anyparse.query.ModuleScan;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -120,7 +120,7 @@ final class ImportOutsideGuard implements Check {
 	): Array<{ span: Span, text: String }> {
 		return violations.length == 0
 			? []
-			: relocationEdits(source, plugin, new ImportBindings(RefactorSupport.lazySymbolIndex([], plugin, index), plugin));
+			: relocationEdits(source, plugin, new ImportBindings(IndexScope.lazySymbolIndex([], plugin, index), plugin));
 	}
 
 	/**

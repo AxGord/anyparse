@@ -562,7 +562,7 @@ final class LintCommand implements CliCommand {
 	 * and the report half of that scope is what a `--range`-narrowed `--fix` behind a write op runs on. The
 	 * gate its two neighbours use is a marker interface (`c is FrameworkAware`), which works because a
 	 * framework-aware rule cannot read the roster without declaring itself; nothing similar guards the wide
-	 * index — a check reaches it by calling `RefactorSupport.widestScopeIndex`, so any marker here would be
+	 * index — a check reaches it by calling `IndexScope.widestScopeIndex`, so any marker here would be
 	 * a hand-kept roster of the five that do, failing open the day a sixth joins them.
 	 */
 	private static function warnScopeNotices(
@@ -868,7 +868,7 @@ final class LintCommand implements CliCommand {
 			// `MapValueScan` documents the replacement. What a narrow set costs it is therefore the
 			// three cross-file doors, not an occurrence count. Two of them — an `@:access` grant
 			// and a subtype that could store a null through the map — are asked of
-			// `RefactorSupport.resolutionIndexOf(plugin) ?? report`; the third,
+			// `IndexScope.resolutionIndexOf(plugin) ?? report`; the third,
 			// `privateMemberScanIsSound`, is asked of the REPORT index alone and so narrows with
 			// it. On the active SUBSET of a
 			// project that declares no resolution scope a subtype in an untouched file reads as

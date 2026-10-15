@@ -5,6 +5,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.ConstantFieldScan.ConstantFieldSeams;
 import anyparse.check.ReflectionScan.ReflectionSurface;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.QueryNode;
@@ -150,7 +151,7 @@ final class StaticConstant implements Check implements DefaultOff {
 		final resolved: Null<ConstantFieldSeams> = ConstantFieldScan.seams(plugin);
 		if (resolved == null) return [];
 		final seams: ConstantFieldSeams = resolved;
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final index: SymbolIndex = IndexScope.report(files, plugin);
 		final reflected: ReflectionSurface = ReflectionScan.reflectionSurface(files, plugin);
 		final violations: Array<Violation> = [];
 		for (entry in files) {

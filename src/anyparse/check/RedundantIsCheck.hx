@@ -3,8 +3,8 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.query.DeclaredNullity;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
@@ -53,7 +53,7 @@ final class RedundantIsCheck implements Check {
 		if (isExprKind == null) return [];
 		final kind: String = isExprKind;
 		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
-		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
+		final index: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		return RunScan.collectWith(files, plugin, RunScan.typeInfoOf(plugin), (entry, tree, typed, violations) -> {
 			final root: QueryNode = tree;
 			final types: DeclaredNullity = DeclaredNullity.of(entry.file, root, entry.source, shape, typed, plugin.typeSyntax, index);

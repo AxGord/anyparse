@@ -962,6 +962,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.GreedyDeclSpanEditBoundarySliceTest',
 		'unit.query.HaxelibResolverTest',
 		'unit.query.ImplicitStdScopeTest',
+		'unit.query.IndexScopeTest',
 		'unit.query.InheritanceMoveSliceTest',
 		'unit.query.InlineMethodSliceTest',
 		'unit.query.InlineSliceTest',
@@ -3288,6 +3289,12 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FN-SCOPE-KINDS-FROZEN',
 			'unit.query.GreedyDeclSpanEditBoundarySliceTest#testAGreedyModuleDeclSpanIsTrimmedToItsOwnLastToken :: control :: '
 				+ 'M-DECL-EDIT-SPAN-UNTRIMMED',
+			'unit.query.IndexScopeTest#testAChangedSourceIsRebuilt :: control :: M-INDEX-MEMO-UNVALIDATED',
+			'unit.query.IndexScopeTest#testTheKeyTellsEveryFileSetApart :: control :: M-INDEX-KEY-UNPREFIXED,M-INDEX-MEMO-TAG-IGNORED',
+			'unit.query.IndexScopeTest#testTheMemoDiesWithTheAmbientChain :: control :: M-INDEX-MEMO-OUTLIVES-AMBIENT',
+			'unit.query.IndexScopeTest#testTheReportIndexIsBuiltOncePerFileSet :: control :: M-INDEX-MEMO-OFF,M-INDEXSCOPE-HOST-IGNORED',
+			'unit.query.IndexScopeTest#testTheReportWriteIndexIsBuiltOncePerFileSet :: control :: M-WRITE-INDEX-MEMO-OFF',
+			'unit.query.IndexScopeTest#testWithoutAScopeEveryQuestionSharesTheReportBuild :: control :: M-INDEXSCOPE-RESOLUTION-OWN-BUILD',
 			'unit.query.LintBaselineTest#testAFindingThatONLYMOVEDIsNotNew :: control :: M-LINT-BASELINE-NO-SUBTRACTION',
 			'unit.query.LintBaselineTest#testAFindingWithDataKeysByItsIdentity :: control :: M-BASELINE-DATA-IGNORED,M-LINTDIFF-DATA-IGNORED,M-LINTFORMAT-NO-DATA',
 			'unit.query.LintBaselineTest#testAnOldSnapshotIsSpentByMessage :: control :: M-BASELINE-NO-MESSAGE-FALLBACK',
@@ -6781,7 +6788,15 @@ class TestDiscoveryParityTest extends Test {
 			'M-OWNED-READER-NO-OWNERS',
 			'M-OWNED-SKIP-REASON-NULL',
 			'M-OWNED-MERGE',
-			'M-OWNED-PARSE'
+			'M-OWNED-PARSE',
+			'M-INDEX-MEMO-OFF',
+			'M-INDEX-MEMO-UNVALIDATED',
+			'M-INDEX-KEY-UNPREFIXED',
+			'M-INDEX-MEMO-TAG-IGNORED',
+			'M-INDEX-MEMO-OUTLIVES-AMBIENT',
+			'M-WRITE-INDEX-MEMO-OFF',
+			'M-INDEXSCOPE-HOST-IGNORED',
+			'M-INDEXSCOPE-RESOLUTION-OWN-BUILD'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

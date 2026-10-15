@@ -5,8 +5,8 @@ import anyparse.check.Check.Violation;
 import anyparse.query.CompilerFacts.TypeFact;
 import anyparse.query.DeclaredNullity;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
@@ -116,7 +116,7 @@ final class RedundantToString implements Check implements DefaultOff {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = resolveSeams(plugin);
 		if (seams == null) return [];
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final index: SymbolIndex = IndexScope.report(files, plugin);
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final context: Null<Ctx> = contextFor(plugin, entry.file, entry.source, seams, index, null);
@@ -151,7 +151,7 @@ final class RedundantToString implements Check implements DefaultOff {
 	): Array<{ span: Span, text: String }> {
 		final seams: Null<Seams> = resolveSeams(plugin);
 		if (seams == null) return [];
-		final scope: SymbolIndex = index ?? SymbolIndex.build([{ file: '', source: source }], plugin);
+		final scope: SymbolIndex = index ?? IndexScope.over([{ file: '', source: source }], plugin);
 		final file: String = violations.length == 0 ? '' : violations[0].file;
 		final context: Null<Ctx> = contextFor(plugin, file, source, seams, scope, FactsTypeOracle.forFix(plugin, file, source));
 		if (context == null) return [];
@@ -199,7 +199,7 @@ final class RedundantToString implements Check implements DefaultOff {
 			seams: seams,
 			declaredTypes: provider == null ? [] : provider.declaredTypes(source),
 			nullity: DeclaredNullity.of(
-				file, tree, source, seams.shape, provider, plugin.typeSyntax, RefactorSupport.lazySymbolIndex([], plugin, index)
+				file, tree, source, seams.shape, provider, plugin.typeSyntax, IndexScope.lazySymbolIndex([], plugin, index)
 			),
 			index: index,
 			file: file,

@@ -6,6 +6,7 @@ import anyparse.check.CasePatternScan.PatternBinder;
 import anyparse.check.Check.Violation;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.PatternNameScope;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
@@ -156,7 +157,7 @@ final class UnusedCaseBinder implements Check {
 		final file: String = RunScan.oneFile(violations, RULE_ID);
 		return RunScan.edits(plugin, source, tree -> {
 			final constants: Array<String> = CasePatternScan.declaredConstantNames(resolved, [tree]);
-			final resolvedIndex: SymbolIndex = index ?? SymbolIndex.build([{ file: file, source: source }], plugin);
+			final resolvedIndex: SymbolIndex = index ?? IndexScope.over([{ file: file, source: source }], plugin);
 			final byKey: Map<String, Candidate> = [];
 			for (candidate in collect(resolved, plugin, file, tree, source, constants, resolvedIndex))
 				byKey['${candidate.span.from}:${candidate.span.to}'] = candidate;

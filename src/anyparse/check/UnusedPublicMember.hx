@@ -7,6 +7,7 @@ import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberKinds;
@@ -249,10 +250,10 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 	 */
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		_deletable = [];
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final index: SymbolIndex = IndexScope.report(files, plugin);
 		// Names resolve over report UNION resolution scope: a call from a configured library is a
 		// real reference, and reading it as absent would report every method a library reaches.
-		final wide: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? index;
+		final wide: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? index;
 		final contracts: Array<FrameworkContract> = LintConfig.frameworksFor(_resolveConfig, files);
 		final ctx: Ctx = {
 			tokens: tokenCounts(files, wide, plugin),
@@ -346,7 +347,7 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 	 * rules cannot disagree about one member's framework status.
 	 *
 	 * They do not all reach the same INDEX, and the difference is the GATE, not the scope: this rule
-	 * and `prefer-inline` take `RefactorSupport.resolutionIndexOf`, which answers on
+	 * and `prefer-inline` take `IndexScope.resolutionIndexOf`, which answers on
 	 * `hasAnyResolutionScope()` (a std-only scope counts), while `unused-private` takes
 	 * `widestScopeIndex`, which demands `hasDeclaredResolutionScope()`. On a project that declares
 	 * roots or libs — this one does — all three resolve through the same wide index; on one that

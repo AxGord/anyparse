@@ -73,9 +73,9 @@
 			],
 			"owners": [
 				"anyparse.query.CachingGrammarPlugin",
-				"anyparse.query.RefactorSupport"
+				"anyparse.query.IndexScope"
 			],
-			"why": "the index host (CachingGrammarPlugin as SymbolIndexHost, reached through RefactorSupport.lazySymbolIndex / fieldWriteIndexOf) builds and memoises the indexes once per run; a consumer building its own picks its own scope and pays a rebuild"
+			"why": "the index host (CachingGrammarPlugin as SymbolIndexHost) builds and memoises every index once per run, and IndexScope is the one door onto it: a rule names the scope its question needs (report / resolution / widest / over an explicit file set) and asks there; a consumer building its own picks its own scope and pays a rebuild"
 		}
 	],
 	"rules": {

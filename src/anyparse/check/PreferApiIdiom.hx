@@ -9,9 +9,9 @@ import anyparse.check.PurityScan.PurityCtx;
 import anyparse.check.RuleDeclaration.IdiomSpec;
 import anyparse.query.BinderScan;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
@@ -120,7 +120,7 @@ final class PreferApiIdiom implements Check implements ConfigAware implements Fi
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null) return [];
-		final symbols: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
+		final symbols: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		final validated: Map<String, Array<Idiom>> = [];
 		final out: Array<Violation> = [];
 		for (entry in files) {
@@ -152,7 +152,7 @@ final class PreferApiIdiom implements Check implements ConfigAware implements Fi
 		final file: String = RunScan.oneFile(violations, RULE_ID);
 		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null) return [];
-		final resolved: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? index ?? SymbolIndex.build(
+		final resolved: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? index ?? IndexScope.over(
 			[{ file: file, source: source }], plugin
 		);
 		final idioms: Array<Idiom> = validatedFor(specsFor(file), resolved, seams, []);

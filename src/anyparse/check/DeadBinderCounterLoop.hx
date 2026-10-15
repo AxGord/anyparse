@@ -7,6 +7,7 @@ import anyparse.check.UsingScan.UsingHeader;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.NominalTypes;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
@@ -145,7 +146,7 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 		final typed: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		// Lazy: only the `count()` arm asks the index, so a project holding no map-counted loop
 		// never builds the resolution scope.
-		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
+		final index: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		return RunScan.collectWith(files, plugin, readSeams(plugin), (entry, tree, s, violations) -> {
 			final types: Null<Map<Int, String>> = typed?.declaredTypeSources(entry.source);
 			walk(tree, tree, entry.file, entry.source, types, s, index, violations);
@@ -170,8 +171,8 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 			// caller supplied none, and under the file the findings name — the two passes must reach
 			// the same verdict, and the std-container proof resolves that file's scope.
 			final file: String = violations.length == 0 ? '' : violations[0].file;
-			final symbols: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(
-				[{ file: file, source: source }], plugin, RefactorSupport.resolutionIndexOf(plugin) ?? index
+			final symbols: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(
+				[{ file: file, source: source }], plugin, IndexScope.resolutionIndexOf(plugin) ?? index
 			);
 			final header: UsingHeader = UsingScan.headerOf(tree, source, plugin);
 			final lambdaBlocked: Bool = UsingScan.conflictingUsing(

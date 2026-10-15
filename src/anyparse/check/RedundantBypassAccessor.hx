@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
@@ -64,7 +65,7 @@ final class RedundantBypassAccessor implements Check {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final ctx: Null<Ctx> = context(plugin);
 		if (ctx == null) return [];
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final index: SymbolIndex = IndexScope.report(files, plugin);
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);

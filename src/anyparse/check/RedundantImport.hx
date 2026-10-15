@@ -4,7 +4,7 @@ import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.ImportBindings;
-import anyparse.query.RefactorSupport;
+import anyparse.query.IndexScope;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -80,11 +80,11 @@ final class RedundantImport implements Check implements RiskyFix {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final index: SymbolIndex = IndexScope.report(files, plugin);
 		// The resolution index — report files UNION the configured library roots — proves what a
 		// module declares. Widening it only ever adds evidence: it can turn an unprovable statement
 		// into a finding, and it can reveal a SECOND binder of the name, which vetoes one.
-		final resolveIndex: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? index;
+		final resolveIndex: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? index;
 		// What a statement naming a MODULE brings into scope, built once: the ambient arm asks it per
 		// statement per file, and a module import's SIBLINGS are the names the leaf reading lost.
 		final publicTypes: Map<String, Array<String>> = SymbolIndex.publicTypesByModule(resolveIndex);

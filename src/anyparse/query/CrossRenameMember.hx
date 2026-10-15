@@ -241,7 +241,7 @@ final class CrossRenameMember {
 		// in-memory sources, so the op stays pure - no disk, and the index sees exactly what the caller
 		// passed. `null` means one same-named declaration's relation to the owner is unprovable: half a
 		// family leaves a declaration overriding nothing, so the whole rename is refused.
-		final index: SymbolIndex = SymbolIndex.build(scopeFiles, plugin);
+		final index: SymbolIndex = IndexScope.over(scopeFiles, plugin);
 		// The `isOverride` refusal above reads the OVERRIDE modifier, which an implementation of an
 		// `abstract` method or an interface method never carries - and `overrideFamilyOf` models the
 		// family from the BASE down, so neither sees a cursor sitting on such an implementation. Ask

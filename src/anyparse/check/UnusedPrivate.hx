@@ -6,6 +6,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.ReflectionScan.ReflectionSurface;
 import anyparse.query.CompilerFacts;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberKinds;
 import anyparse.query.NamingPolicy.FrameworkContract;
@@ -182,8 +183,8 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final support: Null<NamingSupport> = plugin.namingSupport();
 		if (support == null) return [];
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
-		final scopeIndex: SymbolIndex = RefactorSupport.widestScopeIndex(plugin, index) ?? index;
+		final index: SymbolIndex = IndexScope.report(files, plugin);
+		final scopeIndex: SymbolIndex = IndexScope.widestScopeIndex(plugin, index) ?? index;
 		final contracts: Array<FrameworkContract> = LintConfig.frameworksFor(_resolveConfig, files);
 		final surface: ReflectionSurface = ReflectionScan.reflectionSurface(files, plugin);
 		final reflected: Array<String> = surface.whole;
@@ -286,7 +287,7 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return edits;
 		final hasConditional: Bool = fileHasConditional(source);
-		final scopeIndex: Null<SymbolIndex> = RefactorSupport.widestScopeIndex(plugin, index);
+		final scopeIndex: Null<SymbolIndex> = IndexScope.widestScopeIndex(plugin, index);
 		// Hoisted once per file — see `run`'s twin.
 		final matchMask: Array<Span> = OccurrenceScan.inertMask(source, plugin);
 

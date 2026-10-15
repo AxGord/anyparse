@@ -107,7 +107,7 @@ final class MakeFinal {
 		// write scan can see that: the unification is a READ position. The answer is only as
 		// strong as `scopeFiles` — without a `--scope` the index holds this file alone, so a
 		// structure declared elsewhere is invisible and only what THIS file states is decided.
-		final index: SymbolIndex = SymbolIndex.build(scopeFiles, plugin);
+		final index: SymbolIndex = IndexScope.over(scopeFiles, plugin);
 		if (index.structural.structuralConformanceForbidsFinal(typeName, fieldName))
 			return Err('"$fieldName" is a member a structural type may require to stay mutable — cannot make it final');
 		final rewritten: String = '${src.source.substring(0, fieldSpanNN.from)}final${src.source.substring(fieldSpanNN.from + VAR.length)}';

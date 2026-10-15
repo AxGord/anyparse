@@ -4,8 +4,8 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.check.UsingScan.UsingHeader;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -192,7 +192,7 @@ final class PreferLpad implements Check implements DefaultOff {
 			}
 			if (edits.length == 0) return edits;
 			final header: UsingHeader = UsingScan.headerOf(tree, source, plugin);
-			final symbols: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
+			final symbols: Null<SymbolIndex> = IndexScope.resolutionIndexOf(plugin) ?? index;
 			// Two ways the file refuses the rewrite outright, both answering "the calls would not resolve
 			// the way this file's own declarations say they should". A second `using` supplying `lpad`
 			// outranks the inserted one, so the rewritten calls would resolve there instead; and

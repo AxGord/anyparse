@@ -7,12 +7,12 @@ import anyparse.check.ValueIterationProof.ValueIteration;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.CondRegionScan;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MemberReach;
 import anyparse.query.NominalTypes;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
@@ -83,7 +83,7 @@ final class UnusedLoopBinder implements Check implements DefaultOff {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
+		final index: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		return RunScan.collectWith(files, plugin, seamsOf(plugin), (entry, tree, s, violations) -> {
 			for (c in collect(fileCtxOf(tree, entry.source, entry.file, s, plugin, index))) violations.push({
 				file: entry.file,
@@ -104,8 +104,8 @@ final class UnusedLoopBinder implements Check implements DefaultOff {
 		if (violations.length == 0) return [];
 		final file: String = RunScan.oneFile(violations, RULE_ID);
 		return RunScan.editsWith(plugin, source, seamsOf(plugin), (tree, s) -> {
-			final symbols: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(
-				[{ file: file, source: source }], plugin, RefactorSupport.resolutionIndexOf(plugin) ?? index
+			final symbols: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(
+				[{ file: file, source: source }], plugin, IndexScope.resolutionIndexOf(plugin) ?? index
 			);
 			final byKey: Map<String, Candidate> = [];
 			for (c in collect(fileCtxOf(tree, source, file, s, plugin, symbols))) byKey['${c.span.from}:${c.span.to}'] = c;

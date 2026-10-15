@@ -5,8 +5,8 @@ import anyparse.check.IfExpressionChain.IfChain;
 import anyparse.check.PurityScan.PurityCtx;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -158,7 +158,7 @@ final class JoinBranchCall implements Check {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null) return [];
-		final symbols: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
+		final symbols: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final ctx: Null<Ctx> = contextOf(plugin, entry.source, seams, symbols);
@@ -174,7 +174,7 @@ final class JoinBranchCall implements Check {
 		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null || violations.length == 0) return [];
 		final files: Array<{ file: String, source: String }> = [{ file: violations[0].file, source: source }];
-		final ctx: Null<Ctx> = contextOf(plugin, source, seams, RefactorSupport.lazySymbolIndex(files, plugin, index));
+		final ctx: Null<Ctx> = contextOf(plugin, source, seams, IndexScope.lazySymbolIndex(files, plugin, index));
 		if (ctx == null) return [];
 		final edits: Array<{ span: Span, text: String }> =
 			CheckScan.applyBySpan(plugin, source, violations, [for (kind in seams.byKind.keys()) kind], (node, span) -> {

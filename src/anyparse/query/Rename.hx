@@ -131,7 +131,7 @@ final class Rename {
 		if (qualifyShadowed) {
 			final reachable: Bool = selfReachableBindingAt(source, tree, cursor, shape);
 			final qualified: Null<Qualification> = qualifyCaptured(
-				rewritten, newTree, mismatch, newName, shape, reachable, RefactorSupport.resolutionIndexOf(plugin), file
+				rewritten, newTree, mismatch, newName, shape, reachable, IndexScope.resolutionIndexOf(plugin), file
 			);
 			if (qualified != null) return verifyQualified(qualified, occurrences, occurrences, newName, cursor, plugin, shape);
 		}

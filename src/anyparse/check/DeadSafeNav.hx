@@ -5,7 +5,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.NullFlowScan.IdentOperand;
 import anyparse.query.DeclaredNullity;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.IndexScope;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
@@ -123,7 +123,7 @@ final class DeadSafeNav implements Check implements ConfigAware {
 		final ident: String = identKind;
 		final hxmlText: Map<String, Null<String>> = [];
 		final buildMay: Map<String, Bool> = [];
-		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
+		final index: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		return RunScan.collectWith(files, plugin, RunScan.typeInfoOf(plugin), (entry, root, typed, violations) -> {
 			final types: DeclaredNullity = DeclaredNullity.of(entry.file, root, entry.source, shape, typed, plugin.typeSyntax, index);
 			final configDir: String = Path.directory(entry.file);

@@ -10,6 +10,7 @@ import anyparse.check.PurityScan.PurityCtx;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
 import anyparse.query.SourceComments;
@@ -120,7 +121,7 @@ final class JoinOverrideChain implements Check implements DefaultOff {
 		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null) return [];
 		final resolved: Seams = seams;
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final index: SymbolIndex = IndexScope.report(files, plugin);
 		return [
 			for (entry in files) for (m in matches(entry.source, plugin, resolved, index))
 				{
@@ -144,7 +145,7 @@ final class JoinOverrideChain implements Check implements DefaultOff {
 		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null || violations.length == 0) return [];
 		final files: Array<{ file: String, source: String }> = [{ file: violations[0].file, source: source }];
-		final resolvedIndex: SymbolIndex = index ?? SymbolIndex.build(files, plugin);
+		final resolvedIndex: SymbolIndex = index ?? IndexScope.over(files, plugin);
 		final byKey: Map<String, Match> = [];
 		for (m in matches(source, plugin, seams, resolvedIndex)) byKey['${m.declSpan.from}:${m.declSpan.to}'] = m;
 		return CanonicalEdit.dropContainedEdits(

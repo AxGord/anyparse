@@ -5,6 +5,7 @@ import anyparse.query.CtorFieldFold;
 import anyparse.query.CtorFieldWrite;
 import anyparse.query.FieldWriteIndex;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
@@ -110,8 +111,8 @@ final class PreferReadOnlyField implements Check {
 		// carrying the candidate's file so the tag narrows it back out. The STRUCTURAL gate was the
 		// last question held back to a project-scoped index and no longer is.
 		final scope: Array<{ file: String, source: String }> = RefactorSupport.resolutionProjectSourcesOf(plugin) ?? files;
-		final index: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? SymbolIndex.build(scope, plugin);
-		final writeIndex: FieldWriteIndex = RefactorSupport.fieldWriteIndexOf(plugin) ?? FieldWriteIndex.build(scope, plugin, index);
+		final index: SymbolIndex = IndexScope.resolution(scope, plugin);
+		final writeIndex: FieldWriteIndex = IndexScope.resolutionWrites(scope, plugin);
 		final violations: Array<Violation> = [];
 		CtorFieldWrite.eachFieldMember(files, plugin, (owner, field, source, file, exported) -> {
 			if (exported) considerField(violations, file, source, field, owner, index, writeIndex, plugin);

@@ -11,7 +11,7 @@ import anyparse.query.AddImport;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.ImportBindings;
-import anyparse.query.RefactorSupport;
+import anyparse.query.IndexScope;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.cli.CliArgs;
@@ -211,8 +211,8 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 	private function planFor(
 		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, index: Null<SymbolIndex>
 	): Array<HoistPlan> {
-		final report: SymbolIndex = index ?? SymbolIndex.build(files, plugin);
-		final resolve: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? report;
+		final report: SymbolIndex = index ?? IndexScope.report(files, plugin);
+		final resolve: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? report;
 		final ctx: HoistContext = contextOf(report, plugin);
 		final plans: Array<HoistPlan> = [];
 		for (site in ctx.sites) planSite(site, ctx, resolve, plans);
@@ -422,7 +422,7 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 		// chain, which is the shape that would read as a redundant import of its own parent. The sort
 		// is stable, so ties keep discovery order and the plan is deterministic.
 		ArraySort.sort(sites, (a, b) -> (governedAt[b] ?? []).length - (governedAt[a] ?? []).length);
-		final widest: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? report;
+		final widest: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? report;
 		return {
 			sites: sites,
 			governedAt: governedAt,

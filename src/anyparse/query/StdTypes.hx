@@ -185,7 +185,7 @@ final class StdTypes {
 			final file: String = '$root/${module.split('.').join('/')}.hx';
 			final source: Null<String> = read(file);
 			if (source != null)
-				info = try SymbolIndex.build([{ file: file, source: source }], plugin).fileInfo(file) catch (exception: Exception) null;
+				info = try IndexScope.over([{ file: file, source: source }], plugin).fileInfo(file) catch (exception: Exception) null;
 		}
 		moduleInfos[module] = info;
 		return info;

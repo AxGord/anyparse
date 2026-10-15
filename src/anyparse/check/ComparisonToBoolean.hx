@@ -4,11 +4,11 @@ import anyparse.check.Check.Violation;
 import anyparse.query.BoolExprShape;
 import anyparse.query.DeclaredNullity;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.NodeShape;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoMemo;
 import anyparse.query.TypeInfoProvider;
@@ -135,7 +135,7 @@ final class ComparisonToBoolean implements Check {
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		// Lazy: the resolution scope reads the configured libraries, and only the two RESOLVED
 		// proofs demand it — after every cheaper arm on every candidate has failed.
-		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
+		final index: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		return RunScan.collectWith(files, plugin, resolveSeams(plugin), (entry, tree, seams, violations) -> {
 			walk(violations, tree, seams, proofOf(entry.file, entry.source, tree, seams.shape, provider, plugin.typeSyntax, index));
 		});
@@ -176,7 +176,7 @@ final class ComparisonToBoolean implements Check {
 		final file: String = RunScan.oneFile(violations, RULE_ID);
 		// `lazySymbolIndex` prefers the run's resolution scope, then the caller's report index, and
 		// only then builds over `source` alone — enough for a same-file receiver type.
-		final resolver: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex([{ file: file, source: source }], plugin, index);
+		final resolver: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex([{ file: file, source: source }], plugin, index);
 		final proof: TypeProof = proofOf(file, source, root, seams.shape, provider, plugin.typeSyntax, resolver);
 		return CheckScan.applyBySpan(
 			plugin, source, violations, seams.equalityKinds, (node, span) -> comparisonEdit(node, span, source, seams, proof, eqKind)

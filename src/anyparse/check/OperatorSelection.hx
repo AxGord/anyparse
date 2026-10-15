@@ -2,8 +2,8 @@ package anyparse.check;
 
 import anyparse.query.BoolExprShape;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeNameBinding.Tier;
@@ -356,10 +356,10 @@ final class OperatorSelection {
 	private function indexes(): Array<SymbolIndex> {
 		final built: Null<Array<SymbolIndex>> = _indexes;
 		if (built != null) return built;
-		final resolution: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(_plugin);
+		final resolution: Null<SymbolIndex> = IndexScope.resolutionIndexOf(_plugin);
 		final resolved: Array<SymbolIndex> = resolution == null
-			? [SymbolIndex.build(_files, _plugin)]
-			: [resolution, SymbolIndex.build(_files, _plugin)];
+			? [IndexScope.report(_files, _plugin)]
+			: [resolution, IndexScope.report(_files, _plugin)];
 		_indexes = resolved;
 		return resolved;
 	}

@@ -7,6 +7,7 @@ import anyparse.query.CanonicalEdit;
 import anyparse.query.CtorFieldFold;
 import anyparse.query.CtorFieldWrite;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.NamingPolicy.HoistedConstant;
 import anyparse.query.NamingPolicy.NamingRule;
@@ -172,7 +173,7 @@ final class FieldInitInConstructor implements Check implements DefaultOff {
 		// The inherited-member proof walks the FULL supertype closure, so it resolves against the
 		// plugin's resolution scope (report files UNION the configured libraries) when there is one —
 		// the same index `naming` asks the same question of.
-		final resolution: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
+		final resolution: Null<SymbolIndex> = IndexScope.resolutionIndexOf(plugin) ?? index;
 		for (v in violations) {
 			final span: Null<Span> = v.span;
 			if (span == null) continue;

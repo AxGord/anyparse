@@ -4,8 +4,8 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.VersionGated;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefPrinter;
@@ -140,9 +140,7 @@ final class CatchDynamic implements Check implements ConfigAware implements Vers
 			// The shared printer owns the short-name / add-import / fully-qualified decision (imports,
 			// aliases, module-local and same-package bindings, sorted insert) — this rule used to
 			// hand-roll a weaker version of it.
-			final printer: TypeRefPrinter = TypeRefPrinter.forFile(
-				source, root, importMap, plugin, RefactorSupport.resolutionIndexOf(plugin)
-			);
+			final printer: TypeRefPrinter = TypeRefPrinter.forFile(source, root, importMap, plugin, IndexScope.resolutionIndexOf(plugin));
 			final exceptionPath: String = seams.exceptionPath;
 			final edits: Array<{ span: Span, text: String }> = [];
 			var rewroteNonConditional: Bool = false;

@@ -9,11 +9,11 @@ import anyparse.check.Check.Violation;
 import anyparse.check.LintConfig;
 import anyparse.query.BoolExprShape;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.NodeShape;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoMemo;
@@ -305,7 +305,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		final anonCap: Int = maxAnonLen(violations);
 		// The one question the REPORT index cannot answer: a constructor a configured library or the
 		// std declares is undeclared here, and "undeclared" is not "non-generic" — see `bareNewType`.
-		final resolution: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin);
+		final resolution: Null<SymbolIndex> = IndexScope.resolutionIndexOf(plugin);
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;

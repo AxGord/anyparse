@@ -5,6 +5,7 @@ import anyparse.check.Check.Violation;
 import anyparse.query.CallSites;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
@@ -161,7 +162,7 @@ final class UnusedParameter implements Check implements ConfigAware {
 		// ADD a subtype / grant, so it
 		// can only turn `eligible` OFF — a `Warning` becomes an `Info`, never the reverse, and no
 		// removal is ever invented.
-		final index: SymbolIndex = RefactorSupport.widestScopeIndex(plugin) ?? SymbolIndex.build(files, plugin);
+		final index: SymbolIndex = IndexScope.widest(files, plugin);
 		return RunScan.collect(files, plugin, (entry, tree, violations) -> {
 			final candidates: Array<{ fn: QueryNode, parent: QueryNode }> = [];
 			walk(candidates, tree, null, functionKinds, opaqueKinds, supertypeClauseKinds, noBodyKind);

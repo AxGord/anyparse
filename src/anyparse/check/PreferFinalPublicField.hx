@@ -7,6 +7,7 @@ import anyparse.query.CtorFieldFold;
 import anyparse.query.CtorFieldWrite;
 import anyparse.query.FieldWriteIndex;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
@@ -169,8 +170,8 @@ final class PreferFinalPublicField implements Check implements RiskyFix implemen
 		// structures then vetoed far past what they can unify with. It now proves the conformance
 		// instead (`StructuralTypes.memberCouldUnify`), so the split has nothing left to protect.
 		final scope: Array<{ file: String, source: String }> = RefactorSupport.resolutionProjectSourcesOf(plugin) ?? files;
-		final index: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? SymbolIndex.build(scope, plugin);
-		final writeIndex: FieldWriteIndex = RefactorSupport.fieldWriteIndexOf(plugin) ?? FieldWriteIndex.build(scope, plugin, index);
+		final index: SymbolIndex = IndexScope.resolution(scope, plugin);
+		final writeIndex: FieldWriteIndex = IndexScope.resolutionWrites(scope, plugin);
 		final violations: Array<Violation> = [];
 		CtorFieldWrite.eachFieldMember(files, plugin, (owner, field, source, file, exported) -> {
 			if (exported) considerField(violations, file, source, field, owner, index, writeIndex, plugin, _oracleRelaxed);

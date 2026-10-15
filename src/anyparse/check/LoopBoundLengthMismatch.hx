@@ -6,11 +6,11 @@ import anyparse.check.Check.VolatileMessage;
 import anyparse.check.LoopScan.LoopSeams;
 import anyparse.query.CtorFieldWrite;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
@@ -106,7 +106,7 @@ final class LoopBoundLengthMismatch implements Check implements NoAutofix implem
 			if (tree != null) parsed.push({ file: entry.file, source: entry.source, tree: tree });
 		}
 		final constants: Map<String, Constant> = collectConstants(parsed, seams);
-		final lazyIndex: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
+		final lazyIndex: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		final typed: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		final out: Array<Violation> = [];
 		for (p in parsed) walk(p.tree, null, null, {

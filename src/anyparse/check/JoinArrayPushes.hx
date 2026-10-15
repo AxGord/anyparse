@@ -8,11 +8,11 @@ import anyparse.query.CtorFieldFold;
 import anyparse.query.CtorFieldWrite;
 import anyparse.query.FieldWriteIndex;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.NominalTypes;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
@@ -235,7 +235,7 @@ final class JoinArrayPushes implements Check {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null) return [];
-		final symbols: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
+		final symbols: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		final writes: () -> FieldWriteIndex = lazyWriteIndex(files, plugin);
 		return [
 			for (entry in files) for (m in collectMatches(plugin, entry.source, seams, symbols, writes))
@@ -263,7 +263,7 @@ final class JoinArrayPushes implements Check {
 		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null || violations.length == 0) return [];
 		final files: Array<{ file: String, source: String }> = [{ file: violations[0].file, source: source }];
-		final symbols: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin, index);
+		final symbols: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin, index);
 		final writes: () -> FieldWriteIndex = lazyWriteIndex(files, plugin);
 		final byKey: Map<String, Match> = [];
 		for (m in collectMatches(plugin, source, seams, symbols, writes)) byKey['${m.span.from}:${m.span.to}'] = m;
@@ -767,7 +767,7 @@ final class JoinArrayPushes implements Check {
 		return () -> {
 			final ready: Null<FieldWriteIndex> = index;
 			if (ready != null) return ready;
-			final built: FieldWriteIndex = FieldWriteIndex.build(files, plugin);
+			final built: FieldWriteIndex = IndexScope.reportWrites(files, plugin);
 			index = built;
 			return built;
 		};

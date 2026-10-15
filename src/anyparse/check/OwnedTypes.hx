@@ -8,9 +8,9 @@ import anyparse.check.ConfiguredTypes.OwnedMember;
 import anyparse.check.OwnedTypesDeclaration.TypeOwnership;
 import anyparse.query.Glob;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeNameBinding;
@@ -148,7 +148,7 @@ final class OwnedTypes implements Check implements ConfigAware implements FileGa
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		if (files.length == 0) return [];
-		final index: Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin)();
+		final index: Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin)();
 		if (index == null) return [];
 		final out: Array<Violation> = [];
 		var declared: Null<Array<TypeOwnership>> = null;

@@ -10,12 +10,12 @@ import anyparse.query.ElementSpan;
 import anyparse.query.FieldRefScan;
 import anyparse.query.FieldRename;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberKinds;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -204,11 +204,11 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final index: SymbolIndex = IndexScope.report(files, plugin);
 		// The subtype-override gate resolves over report + resolution scope (a subtype declared
 		// in a configured resolution library reaches the index too), falling back to the report
 		// index when no resolution scope is configured.
-		final subtypeIndex: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? index;
+		final subtypeIndex: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? index;
 		final sourceByFile: Map<String, String> = [for (f in files) f.file => f.source];
 		final out: Array<Violation> = [];
 		for (entry in files) {
@@ -297,7 +297,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	): Array<Array<CrossFileEdits>> {
 		if (violations.length == 0 || index == null) return [];
 		final idx: SymbolIndex = index;
-		final subtypeIndex: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? idx;
+		final subtypeIndex: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? idx;
 		final sourceByFile: Map<String, String> = [for (f in files) f.file => f.source];
 		final out: Array<Array<CrossFileEdits>> = [];
 		for (v in violations) {

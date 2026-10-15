@@ -1,9 +1,9 @@
 package anyparse.check;
 
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
@@ -201,7 +201,7 @@ final class ExpectedType {
 		function resolve(): SymbolIndex {
 			final cached: Null<SymbolIndex> = index;
 			if (cached != null) return cached;
-			final built: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? SymbolIndex.build(files, plugin);
+			final built: SymbolIndex = IndexScope.resolution(files, plugin);
 			index = built;
 			return built;
 		}

@@ -6,6 +6,7 @@ import anyparse.check.PurityScan.PurityCtx;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -121,7 +122,7 @@ final class UnnecessarySwitch implements Check {
 		final seams: Null<Seams> = resolveSeams(plugin);
 		if (seams == null) return [];
 		final resolved: Seams = seams;
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final index: SymbolIndex = IndexScope.report(files, plugin);
 		return [
 			for (entry in files) for (candidate in candidates(resolved, plugin, entry.source, index))
 				{
@@ -146,7 +147,7 @@ final class UnnecessarySwitch implements Check {
 		if (seams == null || violations.length == 0) return [];
 		final resolved: Seams = seams;
 		final files: Array<{ file: String, source: String }> = [{ file: violations[0].file, source: source }];
-		final resolvedIndex: SymbolIndex = index ?? SymbolIndex.build(files, plugin);
+		final resolvedIndex: SymbolIndex = index ?? IndexScope.over(files, plugin);
 		final byKey: Map<String, Candidate> = [];
 		for (candidate in candidates(resolved, plugin, source, resolvedIndex))
 			byKey['${candidate.span.from}:${candidate.span.to}'] = candidate;

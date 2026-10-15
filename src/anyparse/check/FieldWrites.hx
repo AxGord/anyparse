@@ -8,6 +8,7 @@ import anyparse.query.BoolExprShape;
 import anyparse.query.CallGraph;
 import anyparse.query.CallGraphNames;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.QueryNode;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
@@ -362,7 +363,7 @@ final class FieldWrites {
 	private function heldIndex(): SymbolIndex {
 		final built: Null<SymbolIndex> = _index;
 		if (built != null) return built;
-		final index: SymbolIndex = SymbolIndex.build([for (held in _graph.heldFiles()) { file: held.file, source: held.source }], _plugin);
+		final index: SymbolIndex = IndexScope.over([for (held in _graph.heldFiles()) { file: held.file, source: held.source }], _plugin);
 		_index = index;
 		return index;
 	}

@@ -2,8 +2,8 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
@@ -317,12 +317,12 @@ final class PreferBind implements Check {
 		var own: Null<SymbolIndex> = given;
 		function covering(file: String): Null<SymbolIndex> {
 			if (!widened) {
-				wide = RefactorSupport.resolutionIndexOf(plugin);
+				wide = IndexScope.resolutionIndexOf(plugin);
 				widened = true;
 			}
 			final scope: Null<SymbolIndex> = wide;
 			if (scope != null && scope.fileInfo(file) != null) return scope;
-			final built: SymbolIndex = own ?? SymbolIndex.build(files, plugin);
+			final built: SymbolIndex = own ?? IndexScope.report(files, plugin);
 			own = built;
 			return built;
 		}

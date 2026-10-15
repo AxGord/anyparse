@@ -160,7 +160,7 @@ final class RemoveParam {
 	 * update. On the lint side the proof and the WRITE are split across two of them, which is the part
 	 * worth knowing: `UnusedParameter.checkFunction` calls this to decide SEVERITY, and only raises
 	 * `Warning` when the function is also LOCAL (no cross-file caller is expressible) or a private method
-	 * proved CONFINED against `RefactorSupport.widestScopeIndex` — the REPORT index is not enough: an
+	 * proved CONFINED against `IndexScope.widestScopeIndex` — the REPORT index is not enough: an
 	 * `@:access` grantee outside the lint scope goes on passing the argument the fix has just deleted.
 	 * `UnusedParameter.collectFixEdits` then calls this again and is the site that actually emits the
 	 * edits; it re-checks NOTHING, resting entirely on `fix` having routed `Warning` findings alone into

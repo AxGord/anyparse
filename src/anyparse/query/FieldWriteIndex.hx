@@ -414,7 +414,7 @@ final class FieldWriteIndex {
 		final thirdParty: Map<String, Bool> = pathSet(thirdPartyFiles);
 		final shape: RefShape = plugin.refShape();
 		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
-		final symbols: SymbolIndex = index ?? SymbolIndex.build(files, plugin);
+		final symbols: SymbolIndex = index ?? IndexScope.report(files, plugin);
 		final literalTypes: Map<String, String> = shape.literalTypeNames ?? [];
 		final builtinNames: Array<String> = [];
 		for (v in literalTypes) if (!builtinNames.contains(v)) builtinNames.push(v);

@@ -5,9 +5,9 @@ import anyparse.check.Check.Violation;
 import anyparse.query.BoolExprShape;
 import anyparse.query.CondRegionScan;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SourceComments;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
@@ -371,7 +371,7 @@ final class SwitchChain {
 		function resolve(): Null<SymbolIndex> {
 			final have: Null<SymbolIndex> = cached;
 			if (have != null) return have;
-			final built: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? given ?? SymbolIndex.build(files, plugin);
+			final built: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? given ?? IndexScope.report(files, plugin);
 			cached = built;
 			return built;
 		}

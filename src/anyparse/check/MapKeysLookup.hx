@@ -4,11 +4,11 @@ import anyparse.check.Check.Violation;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.NominalTypes;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
@@ -127,7 +127,7 @@ final class MapKeysLookup implements Check {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		// Cross-file member types are needed only by a loop that already cleared every structural
 		// gate, which most runs never have — so the index is built at most once, on first demand.
-		final resolveSymbols: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
+		final resolveSymbols: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		return RunScan.collectWith(files, plugin, readCfg(plugin), (entry, tree, c, violations) -> {
 			final declaredTypes: Null<Map<Int, String>> = c.typed?.declaredTypes(entry.source);
 			walk(tree, tree, entry.file, declaredTypes, c, resolveSymbols, violations);

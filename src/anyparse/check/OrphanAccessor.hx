@@ -4,10 +4,10 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.check.ReflectionScan.ReflectionSurface;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -154,14 +154,14 @@ final class OrphanAccessor implements Check implements DefaultOff {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		_deletable = [];
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final index: SymbolIndex = IndexScope.report(files, plugin);
 		// Supertypes resolve over report UNION resolution scope: a base class in a configured
 		// library (openfl's DisplayObject) declares the property slot a report-only index cannot
 		// see, and reading it as absent would flag every inherited accessor. It is ALSO the
 		// skipped-file set the two unreadable probes read (`Ctx.scopeIndex`) — the last thing here
 		// that answered from the report scope alone, and the one that let a one-file `--fix` delete
 		// an accessor an unparseable sibling calls.
-		final wide: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? index;
+		final wide: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? index;
 		final reflection: ReflectionSurface = ReflectionScan.reflectionSurface(files, plugin);
 		final ctx: Ctx = {
 			// The call scan takes the SAME file set as the reflection scan above it

@@ -5,6 +5,7 @@ import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MemberKinds;
 import anyparse.query.NamingPolicy.FrameworkContract;
@@ -13,7 +14,6 @@ import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
@@ -361,7 +361,7 @@ final class CheckScan {
 		final shape: RefShape = plugin.refShape();
 		// The resolution index sees the std + configured libraries, so a member type such as
 		// `Array.length` resolves; the report index alone would stop at the project boundary.
-		final resolved: Null<SymbolIndex> = resolution ? RefactorSupport.resolutionIndexOf(plugin) ?? index : index;
+		final resolved: Null<SymbolIndex> = resolution ? IndexScope.resolutionIndexOf(plugin) ?? index : index;
 		final chain: ChainTypeContext = {
 			declaredTypeSources: provider.declaredTypeSources(source),
 			source: source,

@@ -7,8 +7,8 @@ import anyparse.check.MacroGate.CallRef;
 import anyparse.check.MacroGate.MacroIndex;
 import anyparse.query.DeclaredNullity;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
 import anyparse.query.StringFold.ConcatSegment;
 import anyparse.query.StringFold.StringFoldSupport;
@@ -144,7 +144,7 @@ final class PreferInterpolation implements Check implements RiskyFix implements 
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final violations: Array<Violation> = [];
-		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
+		final index: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		final macros: MacroIndex = new MacroIndex(plugin, files);
 		final support: Null<StringFoldSupport> = plugin.stringFoldSupport();
 		for (entry in files) {

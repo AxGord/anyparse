@@ -4,6 +4,7 @@ import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.Violation;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
@@ -72,7 +73,7 @@ final class RunScan {
 	): Array<Violation> {
 		final typed: Null<TypeInfoProvider> = typeInfoOf(plugin);
 		if (typed == null) return [];
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final index: SymbolIndex = IndexScope.report(files, plugin);
 		final out: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);

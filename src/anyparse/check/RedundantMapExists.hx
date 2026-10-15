@@ -5,6 +5,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.MapValueScan.ValueSeams;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.ParenGuard;
 import anyparse.query.QueryNode;
@@ -115,7 +116,7 @@ final class RedundantMapExists implements Check implements DefaultOff {
 		// subtype and access-grant lookups inside the census resolve their own wider scope.
 		var reportIndex: Null<SymbolIndex> = null;
 		final resolveSymbols: () -> SymbolIndex = () -> {
-			final built: SymbolIndex = reportIndex ?? SymbolIndex.build(files, plugin);
+			final built: SymbolIndex = reportIndex ?? IndexScope.report(files, plugin);
 			reportIndex = built;
 			return built;
 		};

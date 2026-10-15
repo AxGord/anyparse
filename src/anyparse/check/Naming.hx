@@ -10,6 +10,7 @@ import anyparse.check.ReflectionScan.ScopeFile;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.CondRegionScan;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.NamingPolicy.FrameworkContract;
 import anyparse.query.NamingPolicy.ImplicitReach;
@@ -102,7 +103,7 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final contracts: Array<FrameworkContract> = LintConfig.frameworksFor(_resolveConfig, files);
-		final indexOf: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
+		final indexOf: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		return RunScan.collectWith(files, plugin, plugin.namingSupport(), (entry, tree, support, violations) -> {
 			// The values of an enum abstract written `@:enum` (or through the `#if` version guard)
 			// project as fields of a plain abstract, where the FIELD naming rule governs them — and an
@@ -181,10 +182,10 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		// DIFFERENT index from this one, and neither takes the report index once the project declares
 		// a resolution scope. With no declared scope both fall back to `index`, which is the state
 		// every unit test holding a bare plugin exercises.
-		final resolutionIndex: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
+		final resolutionIndex: Null<SymbolIndex> = IndexScope.resolutionIndexOf(plugin) ?? index;
 		// Those two cross-file proofs — is this private member confined, and does another file name
 		// it in a reflection call — share ONE index, and it is the WIDEST rather than the report one.
-		// `RefactorSupport.widestScopeIndex` refuses a scope that exists ONLY because a Haxe std was
+		// `IndexScope.widestScopeIndex` refuses a scope that exists ONLY because a Haxe std was
 		// discovered, so a project declaring nothing keeps the report index; a project that DID declare
 		// `resolutionRoots` / `resolutionLibs` gets the std inside this index too, and since both
 		// proofs are keyed on a NAME, a std or haxelib coincidence can decide them. The direction is
@@ -208,7 +209,7 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		// grant, so `confined` can only go true -> false; it only ever ADDS reflection names, so
 		// `REFLECTION_NAME` only fires more often. So this path can only LOSE a rename to a refusal,
 		// never gain one.
-		final wideIndex: Null<SymbolIndex> = RefactorSupport.widestScopeIndex(plugin, index);
+		final wideIndex: Null<SymbolIndex> = IndexScope.widestScopeIndex(plugin, index);
 		// The REPORT index goes to the reflection scan, not `wideIndex`: the SCOPE is
 		// `ReflectionScan.scopeFiles`, and an index is only the fallback for a run that declared none —
 		// where the report set IS the whole world. Handing the wide one would have made the two
@@ -277,7 +278,7 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		if (support == null) return [];
 		final idx: SymbolIndex = index;
 		final shape: RefShape = plugin.refShape();
-		final resolutionIndex: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? idx;
+		final resolutionIndex: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? idx;
 		final sourceByFile: Map<String, String> = [for (f in files) f.file => f.source];
 		final out: Array<Array<CrossFileEdits>> = [];
 		for (v in violations) {

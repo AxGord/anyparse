@@ -1,8 +1,8 @@
 package anyparse.check;
 
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
 import haxe.Exception;
@@ -104,7 +104,7 @@ final class MacroIndex {
 	/** Resolve the index on first demand and project both maps out of it. */
 	private function build(): Void {
 		if (_macros != null) return;
-		final index: SymbolIndex = RefactorSupport.resolutionIndexOf(_plugin) ?? SymbolIndex.build(_files, _plugin);
+		final index: SymbolIndex = IndexScope.resolution(_files, _plugin);
 		_index = index;
 		final macros: Map<String, Array<String>> = [];
 		for (info in index.allFiles()) for (type in info.types) for (member in type.members) if (member.isMacro) {

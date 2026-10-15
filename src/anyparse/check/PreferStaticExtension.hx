@@ -10,6 +10,7 @@ import anyparse.query.BoolExprShape;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.CompilerFacts;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
@@ -125,7 +126,7 @@ using Lambda;
  * conservative direction is the opposite one, so its own answer cannot be the guarantee.
  *
  * `fix` re-derives every gate against the PLUGIN's resolution index
- * (`RefactorSupport.resolutionIndexOf`) in preference to the report-scoped index it is handed,
+ * (`IndexScope.resolutionIndexOf`) in preference to the report-scoped index it is handed,
  * because that is the scope `run` proved the verdicts on: the narrower one would silently
  * degrade every std-typed site to report-only, and could just as easily "prove" — from a name
  * the report scope happens to see only once — something the wider scope refused.
@@ -224,7 +225,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		final violations: Array<Violation> = [];
 		// The receiver / conflict gates resolve cross-file; the index is built at most once, on
 		// first demand, because most files hold no call on a configured module at all.
-		final symbols: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
+		final symbols: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		for (entry in files) {
 			final options: Options = readOptions(LintConfig.resolveWith(_resolveConfig, entry.file));
 			if (options.modules.length == 0) continue;
@@ -267,7 +268,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 				// scope `run` proved them on — the plugin's resolution index (report files UNION the
 				// libraries and the std). Without this a std-typed receiver reads as unresolvable here,
 				// every finding degrades to report-only, and the autofix silently never fires.
-				final resolution: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
+				final resolution: Null<SymbolIndex> = IndexScope.resolutionIndexOf(plugin) ?? index;
 				final byKey: Map<String, Candidate> = [];
 				for (candidate in candidates(root, source, file, s, options, plugin, () -> resolution))
 					byKey['${candidate.callSpan.from}:${candidate.callSpan.to}'] = candidate;

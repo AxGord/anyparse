@@ -2,8 +2,8 @@ package anyparse.check;
 
 import anyparse.query.BoolExprShape;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefPrinter;
@@ -210,7 +210,7 @@ final class LiteralInfer {
 	public static function printerFor(source: String, tree: QueryNode, plugin: GrammarPlugin, ?path: String): TypeRefPrinter {
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		final importMap: Map<String, String> = provider != null ? provider.importMap(source, path) : [];
-		return TypeRefPrinter.forFile(source, tree, importMap, plugin, RefactorSupport.resolutionIndexOf(plugin));
+		return TypeRefPrinter.forFile(source, tree, importMap, plugin, IndexScope.resolutionIndexOf(plugin));
 	}
 
 	/**

@@ -3,8 +3,8 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.query.BinderScan;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -62,7 +62,7 @@ final class RedundantThis implements Check {
 		// member scan (an inherited base member or a `using` extension) — rare — so it is built
 		// at most once per run, on first demand, via the shared lazy builder. When the plugin
 		// carries a resolution scope, that builder resolves supertypes against library roots too.
-		final resolveSymbols: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
+		final resolveSymbols: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		return RunScan.collectWith(
 			files, plugin, context(plugin),
 			(entry, tree, ctx, violations) -> walkMembers(violations, entry.file, tree, entry.source, ctx, null, [], resolveSymbols)

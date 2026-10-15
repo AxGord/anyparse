@@ -9,7 +9,7 @@ import anyparse.query.ReachLiveness.ReachBuilds;
  * discovered Haxe std — for the cross-file type / inheritance resolution the
  * `redundant-this`, `prefer-index-access` and `map-keys-lookup` checks perform.
  * Implemented by `CachingGrammarPlugin`, the per-run plugin wrapper every check
- * receives, and consulted through `RefactorSupport.lazySymbolIndex`.
+ * receives, and consulted through `IndexScope.lazySymbolIndex`.
  *
  * Both `has*` predicates answer WITHOUT forcing the (potentially library-reading)
  * index build, so a check keeps its report-scope-only fallback and never touches
@@ -139,5 +139,22 @@ interface SymbolIndexHost {
 	 * earlier run must never answer this one's gates.
 	 */
 	function reflectionMemo(): ReflectionMemo;
+
+	/**
+	 * The run's memoised `SymbolIndex` over EXACTLY `files` (with `thirdPartyFiles` tagged third-party),
+	 * built on the first demand for that file set and answered from the memo for every later one whose
+	 * paths and sources are the same — so the many rules asking a report-scope question over the files
+	 * they were handed share one build. A set whose sources changed (a `--fix` pass) is rebuilt; the
+	 * memo also dies with every ambient-import memo (`invalidateAmbientChain`), since the build reads the
+	 * ambient chain. Reached through `IndexScope`, never asked directly by a rule.
+	 */
+	function indexOver(files: Array<{ file: String, source: String }>, ?thirdPartyFiles: Array<String>): SymbolIndex;
+
+	/**
+	 * The run's memoised `FieldWriteIndex` over EXACTLY `files`, resolving receivers through
+	 * `indexOver(files)` — the report-scope twin of `fieldWriteIndex`, memoised the same way and for the
+	 * same reason as `indexOver`. Reached through `IndexScope.reportWrites`.
+	 */
+	function writeIndexOver(files: Array<{ file: String, source: String }>): FieldWriteIndex;
 
 }

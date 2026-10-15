@@ -414,7 +414,7 @@
 			"name": "M-WRITEINDEX-PROJECT-FINAL",
 			"type": "anyparse.check.PreferFinalPublicField",
 			"method": "run",
-			"find": "RefactorSupport.fieldWriteIndexOf(plugin) ?? FieldWriteIndex.build(scope, plugin, index)",
+			"find": "IndexScope.resolutionWrites(scope, plugin)",
 			"replace": "FieldWriteIndex.build(scope, plugin, index)",
 			"note": "prefer-final-public-field goes back to a project-scoped write index, so a write through a third-party subtype is invisible again"
 		},
@@ -422,7 +422,7 @@
 			"name": "M-WRITEINDEX-PROJECT-READONLY",
 			"type": "anyparse.check.PreferReadOnlyField",
 			"method": "run",
-			"find": "RefactorSupport.fieldWriteIndexOf(plugin) ?? FieldWriteIndex.build(scope, plugin, index)",
+			"find": "IndexScope.resolutionWrites(scope, plugin)",
 			"replace": "FieldWriteIndex.build(scope, plugin, index)",
 			"note": "prefer-read-only-field goes back to a project-scoped write index, so a write through a third-party subtype is invisible again"
 		},
@@ -556,16 +556,16 @@
 			"name": "M-CHECKINDEX-PROJECT-FINAL",
 			"type": "anyparse.check.PreferFinalPublicField",
 			"method": "run",
-			"find": "final index: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? SymbolIndex.build(scope, plugin);",
-			"replace": "final index: SymbolIndex = SymbolIndex.build(scope, plugin);",
+			"find": "final index: SymbolIndex = IndexScope.resolution(scope, plugin);",
+			"replace": "final index: SymbolIndex = IndexScope.report(scope, plugin);",
 			"note": "prefer-final-public-field goes back to a project-scoped name/type index, so a library supertype, interface or build macro is unresolvable again"
 		},
 		{
 			"name": "M-CHECKINDEX-PROJECT-READONLY",
 			"type": "anyparse.check.PreferReadOnlyField",
 			"method": "run",
-			"find": "final index: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? SymbolIndex.build(scope, plugin);",
-			"replace": "final index: SymbolIndex = SymbolIndex.build(scope, plugin);",
+			"find": "final index: SymbolIndex = IndexScope.resolution(scope, plugin);",
+			"replace": "final index: SymbolIndex = IndexScope.report(scope, plugin);",
 			"note": "prefer-read-only-field goes back to a project-scoped name/type index, so a library supertype, interface or build macro is unresolvable again"
 		},
 		{
@@ -859,8 +859,8 @@
 			"name": "M-NULLABLE-FLOW-REPORT-INDEX",
 			"type": "anyparse.check.UnguardedNullableDeref",
 			"method": "run",
-			"find": "final index: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? SymbolIndex.build(files, plugin);",
-			"replace": "final index: SymbolIndex = SymbolIndex.build(files, plugin);",
+			"find": "final index: SymbolIndex = IndexScope.resolution(files, plugin);",
+			"replace": "final index: SymbolIndex = IndexScope.report(files, plugin);",
 			"note": "the flow seed asks the REPORT index again, so a nullable-returning member declared outside the reported files stops seeding anything"
 		},
 		{
@@ -875,8 +875,8 @@
 			"name": "M-NULLABLE-REPORT-INDEX",
 			"type": "anyparse.check.PossibleNullDereference",
 			"method": "run",
-			"find": "final index: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? SymbolIndex.build(files, plugin);",
-			"replace": "final index: SymbolIndex = SymbolIndex.build(files, plugin);",
+			"find": "final index: SymbolIndex = IndexScope.resolution(files, plugin);",
+			"replace": "final index: SymbolIndex = IndexScope.report(files, plugin);",
 			"note": "the cross-file return arc asks the REPORT index again, so every member declared outside the reported files is unknown and the arc is dead where it matters"
 		},
 		{
@@ -2798,8 +2798,8 @@
 			"name": "M-CONFINEMENT-REPORT-INDEX-PARAM",
 			"type": "anyparse.check.UnusedParameter",
 			"method": "run",
-			"find": "final index: SymbolIndex = RefactorSupport.widestScopeIndex(plugin) ?? SymbolIndex.build(files, plugin);",
-			"replace": "final index: SymbolIndex = SymbolIndex.build(files, plugin);",
+			"find": "final index: SymbolIndex = IndexScope.widest(files, plugin);",
+			"replace": "final index: SymbolIndex = IndexScope.report(files, plugin);",
 			"note": "the removability proof asks the REPORT index again, so an `@:access` grantee outside the lint scope is invisible, the private method reads as confined and the finding goes back to `Warning` — the severity that REMOVES the parameter its cross-file callers still pass"
 		},
 		{
@@ -2838,7 +2838,7 @@
 			"name": "M-CONFINEMENT-REPORT-INDEX-DEAD",
 			"type": "anyparse.check.UnusedPrivate",
 			"method": "run",
-			"find": "final scopeIndex: SymbolIndex = RefactorSupport.widestScopeIndex(plugin, index) ?? index;",
+			"find": "final scopeIndex: SymbolIndex = IndexScope.widestScopeIndex(plugin, index) ?? index;",
 			"replace": "final scopeIndex: SymbolIndex = index;",
 			"note": "the S177 site, declared as an arm only in S180: the zero-occurrence proof asks the REPORT index again, so an `@:access` grantee outside the lint scope is invisible and a live private member is reported dead — and then deleted"
 		},
@@ -2918,8 +2918,8 @@
 			"name": "M-INLINE-SUBTYPE-REPORT-INDEX",
 			"type": "anyparse.check.PreferInline",
 			"method": "run",
-			"find": "\t\tfinal built: SymbolIndex = RefactorSupport.widestScopeIndex(plugin) ?? SymbolIndex.build(files, plugin);",
-			"replace": "\t\tfinal built: SymbolIndex = SymbolIndex.build(files, plugin);",
+			"find": "\t\tfinal built: SymbolIndex = IndexScope.widest(files, plugin);",
+			"replace": "\t\tfinal built: SymbolIndex = IndexScope.report(files, plugin);",
 			"note": "the subtype / build-macro / interface ABSENCE questions go back to the report index, so `hxq lint <one file> --fix` inserts `inline` on a method a subtype in an unlinted file overrides — the S177 shape in the prefer-inline rule; re-encoded in S190 when the index became a per-candidate thunk"
 		},
 		{
@@ -3150,7 +3150,7 @@
 			"name": "M-MAPVALUE-SUBTYPE-REPORT-INDEX",
 			"type": "anyparse.check.MapValueScan",
 			"method": "proven",
-			"find": "\t\tfinal scope: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? report;",
+			"find": "\t\tfinal scope: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? report;",
 			"replace": "\t\tfinal scope: SymbolIndex = report;",
 			"note": "the no-null-value census asks the REPORT index for the access-grant and subtype doors, so `hxq lint <one file> --fix` with `resolutionRoots` declared collapses `m.exists(k) ? m[k] : d` into `m[k] ?? d` for a map an unlinted subtype stores a null into — the S177 shape in the redundant-map-exists rule, found by T918's `subtype-map-write` cell"
 		},
@@ -3158,7 +3158,7 @@
 			"name": "M-TYPEDTHROW-CATCH-REPORT-ONLY",
 			"type": "anyparse.check.PreferTypedThrow",
 			"method": "catchAllInScope",
-			"find": "\t\tfinal index: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin);",
+			"find": "\t\tfinal index: Null<SymbolIndex> = IndexScope.resolutionIndexOf(plugin);",
 			"replace": "\t\tfinal index: Null<SymbolIndex> = null;",
 			"note": "the catch-clause gate narrows to the report files, so a one-file `--fix` boxes a raw-string throw that a `catch (e: String)` in an unlinted sibling still catches — the wholesale-degrade twin of the S177 shape, found by T919's `string-catch` cell"
 		},
@@ -13926,8 +13926,8 @@
 			"name": "M-SWITCH-FIX-REPORT-INDEX-FIRST",
 			"type": "anyparse.check.SwitchChain",
 			"method": "lazyIndexOf",
-			"find": "RefactorSupport.resolutionIndexOf(plugin) ?? given ?? SymbolIndex.build(files, plugin)",
-			"replace": "given ?? RefactorSupport.resolutionIndexOf(plugin) ?? SymbolIndex.build(files, plugin)",
+			"find": "IndexScope.resolutionIndexOf(plugin) ?? given ?? IndexScope.report(files, plugin)",
+			"replace": "given ?? IndexScope.resolutionIndexOf(plugin) ?? IndexScope.report(files, plugin)",
 			"note": "the report-scoped index a --fix hands the check wins over the resolution index, so a constant declared outside the report scope is unprovable in fix though run proved it"
 		},
 		{
@@ -14715,7 +14715,7 @@
 			"name": "M-RUN-GATE-NO-INDEX",
 			"type": "anyparse.check.ImportBlockOrder",
 			"method": "run",
-			"find": "new ImportBindings(RefactorSupport.lazySymbolIndex(files, plugin), plugin)",
+			"find": "new ImportBindings(IndexScope.lazySymbolIndex(files, plugin), plugin)",
 			"replace": "new ImportBindings(() -> null, plugin)",
 			"note": "the report reads no index, so it never admits a wildcard the fix would sort"
 		},
@@ -14723,7 +14723,7 @@
 			"name": "M-FIX-GATE-NO-INDEX",
 			"type": "anyparse.check.ImportBlockOrder",
 			"method": "fix",
-			"find": "new ImportBindings(RefactorSupport.lazySymbolIndex([], plugin, index), plugin)",
+			"find": "new ImportBindings(IndexScope.lazySymbolIndex([], plugin, index), plugin)",
 			"replace": "new ImportBindings(() -> null, plugin)",
 			"note": "the fix reads no index, so it splits a reported block at the wildcard and sorts each piece instead of the block"
 		},
@@ -21355,6 +21355,70 @@
 			"find": "ownedTypes: ownedTypes,",
 			"replace": "",
 			"note": "`ownedTypes` is never read out of `apqlint.json`"
+		},
+		{
+			"name": "M-INDEX-MEMO-OFF",
+			"type": "anyparse.query.CachingGrammarPlugin",
+			"method": "indexOver",
+			"find": "if (memo != null && sameSources(memo.sources, files)) return memo.index;",
+			"replace": "",
+			"note": "every ask over a file set builds again: the report index is rebuilt once per rule, the pre-B1 cost"
+		},
+		{
+			"name": "M-INDEX-MEMO-UNVALIDATED",
+			"type": "anyparse.query.CachingGrammarPlugin",
+			"method": "indexOver",
+			"find": "memo != null && sameSources(memo.sources, files)",
+			"replace": "memo != null",
+			"note": "an entry is answered for any set under the same paths, so a --fix pass reads the index of the text it has just rewritten"
+		},
+		{
+			"name": "M-INDEX-KEY-UNPREFIXED",
+			"type": "anyparse.query.CachingGrammarPlugin",
+			"method": "fileSetKey",
+			"find": "for (entry in files) key.add('${entry.file.length}:${entry.file}');",
+			"replace": "for (entry in files) key.add(entry.file);",
+			"note": "two different file sets spell one key and evict each other"
+		},
+		{
+			"name": "M-INDEX-MEMO-TAG-IGNORED",
+			"type": "anyparse.query.CachingGrammarPlugin",
+			"method": "fileSetKey",
+			"find": ["key.add('${thirdPartyFiles.length}|');", "for (file in thirdPartyFiles) key.add('${file.length}:$file');"],
+			"replace": ["", ""],
+			"note": "an index with a third-party tag answers the untagged ask over the same files, and the reverse"
+		},
+		{
+			"name": "M-INDEX-MEMO-OUTLIVES-AMBIENT",
+			"type": "anyparse.query.CachingGrammarPlugin",
+			"method": "invalidateAmbientChain",
+			"find": "_indexMemo.clear();",
+			"replace": "",
+			"note": "a --fix pass answers the index a previous pass built over an ambient chain it may have rewritten"
+		},
+		{
+			"name": "M-WRITE-INDEX-MEMO-OFF",
+			"type": "anyparse.query.CachingGrammarPlugin",
+			"method": "writeIndexOver",
+			"find": "if (memo != null && sameSources(memo.sources, files)) return memo.index;",
+			"replace": "",
+			"note": "every report-scope write-index ask builds again"
+		},
+		{
+			"name": "M-INDEXSCOPE-HOST-IGNORED",
+			"type": "anyparse.query.IndexScope",
+			"method": "hostOf",
+			"find": "return plugin is SymbolIndexHost ? cast plugin : null;",
+			"replace": "return null;",
+			"note": "no ask reaches the run host: every rule builds its own index again"
+		},
+		{
+			"name": "M-INDEXSCOPE-RESOLUTION-OWN-BUILD",
+			"type": "anyparse.query.IndexScope",
+			"method": "resolution",
+			"find": "return resolutionIndexOf(plugin) ?? report(files, plugin);",
+			"replace": "return resolutionIndexOf(plugin) ?? SymbolIndex.build(files, plugin);",
+			"note": "the resolution question without a scope builds a second report index instead of sharing the memoised one"
 		}
 	]
 }
