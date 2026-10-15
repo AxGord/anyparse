@@ -1472,15 +1472,15 @@ final class CallGraph {
 				final call: Null<CallTarget> = callTargetOf(expr, currentType);
 				// a value no function declaration names — a field, a parameter, a call's result — returns what its function type says
 				if (call == null) return calledResult(typeSourceOf(expr.children[0], currentType));
-				final returned: Null<String> = call == null
-					? null
-					: returnSourceOf(call.target) ?? StdTypes.returnOf(_plugin, nodes[call.target]);
-				if (call == null || returned == null) return null;
+				final returned: Null<String> = returnSourceOf(call.target) ?? StdTypes.returnOf(_plugin, nodes[call.target]);
+				if (returned == null) return null;
 				return returnThrough(
 					expr, call.target, returned, call.receiverSource, call.onType, currentType, a -> typeSourceOf(a, currentType)
 				);
 			}
-			return null;
+			// a value a `new` makes is of the type it names, read where written — its type arguments left to what the language infers
+			final made: Null<Span> = newExprKind != null && expr.kind == newExprKind && name != null ? expr.span : null;
+			return made == null || name == null ? null : keys.keyed(name, made.from);
 		}
 
 		/**

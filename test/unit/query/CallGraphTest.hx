@@ -1374,6 +1374,34 @@ class CallGraphTest extends Test {
 		#end
 	}
 
+	@:pin('control')
+	@:killer('M-TS-NEW-RECEIVER')
+	public function testAReceiverANewMakesIsOfTheTypeItNames(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final g: CallGraph = graphOf([
+			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
+			'package app; import sys.thread.Lock; class Maker { public function new() {} public function make():Lock return null; }',
+			'package app; class Box<T> { public function new(v:T) {} public function get():T return null; }',
+			'package app; class C { static function made():Void new Maker().make().wait(); static function direct():Void new utils.Lock().wait();'
+			+ ' static function generic():Void new Box(new utils.Lock()).get().wait(); }'
+		]);
+		function targets(from: String): Array<String> {
+			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+			out.sort(Reflect.compare);
+			return out;
+		}
+		Assert.same(['Maker.make', 'sys.thread.Lock.wait'], targets('C.made'), 'a call on a value a `new` makes');
+		Assert.same(['Lock.wait'], targets('C.direct'), 'the type a `new` names by its path');
+		Assert.same(['Box.get'], targets('C.generic'), 'a type argument the language infers is no type the graph names');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	/**
 	 * A typedef aliases the type its OWN file binds the target name to, wherever the alias is used: an alias another module
 	 * declares importing the std `Lock` — imported by its module or by name — and one beside its use wait on the std lock,

@@ -6484,8 +6484,8 @@
 			"name": "M-GRAPH-CALL-ELEMENT",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": ": returnSourceOf(call.target) ?? StdTypes.returnOf(_plugin, nodes[call.target]);",
-			"replace": ": null;",
+			"find": "final returned: Null<String> = returnSourceOf(call.target) ?? StdTypes.returnOf(_plugin, nodes[call.target]);",
+			"replace": "final returned: Null<String> = null;",
 			"note": "an element of a call's result (`b.get()[0]`) has no type, so a call on it is unresolved"
 		},
 		{
@@ -21005,6 +21005,14 @@
 			"find": "final written: Array<TypeSyntax> = switch (read?.wrapped(['Null']) ?? read)?.shape {",
 			"replace": "final written: Array<TypeSyntax> = switch read?.shape {",
 			"note": "a nullable function type types no lambda parameter"
+		},
+		{
+			"name": "M-TS-NEW-RECEIVER",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "return made == null || name == null ? null : keys.keyed(name, made.from);",
+			"replace": "return null;",
+			"note": "a receiver a `new` makes is untyped (R7 L1b)"
 		}
 	]
 }

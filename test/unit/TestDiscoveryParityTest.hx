@@ -3045,6 +3045,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-TS-LOOP-OWN-PARAMS,M-TS-LOOP-THROUGH',
 			'unit.query.CallGraphTest#testANameNoImportBindsIsLookedUpInTheFilesPackages :: control :: '
 				+ 'M-TS-PACKAGE-LOOKUP,M-TS-PACKAGE-ENCLOSING,M-TS-PACKAGE-PROJECT-FIRST',
+			'unit.query.CallGraphTest#testAReceiverANewMakesIsOfTheTypeItNames :: control :: M-TS-NEW-RECEIVER',
 			'unit.query.CallGraphTest#testATypeAnAliasASupertypeOrAnAbstractWritesIsReadWhereItIsWritten :: control :: '
 				+ 'M-TS-DECL-SUPER-ARGS,M-TS-DECL-PARAM-FILE,M-TS-DECL-UNDERLYING',
 			'unit.query.CallGraphTest#testATypeParameterIsNeverKeyedThroughAnImport :: control :: '
@@ -6706,7 +6707,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-LAMBDA-PARAMS',
 			'M-TS-LAMBDA-ARITY',
 			'M-TS-LAMBDA-ANNOTATED',
-			'M-TS-LAMBDA-NULL'
+			'M-TS-LAMBDA-NULL',
+			'M-TS-NEW-RECEIVER'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
