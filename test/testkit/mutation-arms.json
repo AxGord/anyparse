@@ -21141,6 +21141,54 @@
 			"find": "if (member?.hasOverloadMeta == true) return null;",
 			"replace": "",
 			"note": "a library function the index marks as offering other signatures types its first parameter"
+		},
+		{
+			"name": "M-TS-SUPER-STATIC-IMPORT",
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "importedStatic",
+			"find": "\t\t\t\t&& !staticOfSupertype(g, currentType, name)\n",
+			"replace": "",
+			"note": "a supertype's static keeps an imported static of the name out of a bare read"
+		},
+		{
+			"name": "M-TS-SUPER-STATIC-READ",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "return currentType == null || CallGraphKeys.staticOfSupertype(this, currentType, name)",
+			"replace": "return currentType == null",
+			"note": "a bare read no import settles is typed by a supertype's static"
+		},
+		{
+			"name": "M-TS-SUPER-STATIC-CALL",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "(CallGraphKeys.staticOfSupertype(this, currentType, name) ? null : memberOnChain(currentType, name))",
+			"replace": "memberOnChain(currentType, name)",
+			"note": "a bare call's target is a supertype's static function before the imported one"
+		},
+		{
+			"name": "M-TS-SUPER-STATIC-HIDDEN",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "final hidden: Bool = currentType != null && CallGraphKeys.staticOfSupertype(this, currentType, name);",
+			"replace": "final hidden: Bool = false;",
+			"note": "a bare call no import settles runs a supertype's static function"
+		},
+		{
+			"name": "M-TS-SUPER-STATIC-MODULE",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "final moduleFn: Null<String> = CallGraphKeys.declaredOn(this, moduleType, name);",
+			"replace": "final moduleFn: Null<String> = memberOnChain(moduleType, name);",
+			"note": "a supertype's static function is taken for a module function of the class's own module"
+		},
+		{
+			"name": "M-TS-SUPER-STATIC-MODULE-IMPORT",
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "declaredOn",
+			"find": "return found == null || g.nodes[found]?.typeName != typeName ? null : found;",
+			"replace": "return found;",
+			"note": "a member the module's main class inherits counts as one the module declares: an inherited static keeps the imported one out"
 		}
 	]
 }

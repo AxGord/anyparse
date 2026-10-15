@@ -1253,6 +1253,75 @@ class CallGraphTest extends Test {
 	}
 
 	/**
+	 * Review R5 F7 (`h/stat-super-static`): a supertype's static is not in a subtype's unqualified scope (Haxe 4.3.7:
+	 * `Unknown identifier`), so a bare name there is the static an import brings in — read or called; the type's own static
+	 * still comes first.
+	 */
+	@:pin('control') @:killer('M-TS-SUPER-STATIC-IMPORT') @:killer('M-TS-SUPER-STATIC-READ') @:killer('M-TS-SUPER-STATIC-CALL')
+	@:killer('M-TS-SUPER-STATIC-HIDDEN') @:killer('M-TS-SUPER-STATIC-MODULE') @:killer('M-TS-SUPER-STATIC-MODULE-IMPORT')
+	public function testASupertypeStaticIsNotInScopeBare(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		// each class in a module of its own name: the module pseudo-type a module function is keyed under is the class's name
+		final g: CallGraph = CallGraph.build([
+			{
+				file: 'utils/Lock.hx',
+				source: 'package utils; class Lock { public function new() {} public function wait():Bool return true; }'
+			},
+			{
+				file: 'app/A.hx',
+				source: 'package app; import sys.thread.Lock; class A { public static var lock:Lock = null; public static function go():Lock return null; }'
+			},
+			{
+				file: 'app/P.hx',
+				source: 'package app; class P { public static var lock:utils.Lock = null; public static function go():utils.Lock return null;'
+				+ ' public function new() {} }'
+			},
+			{
+				file: 'app/C.hx',
+				source: 'package app; import app.A.*; class C extends P { function field():Void lock.wait(); function call():Void go().wait(); }'
+			},
+			{
+				file: 'app/R.hx',
+				source: 'package app; import app.A.*; class R { static var lock:utils.Lock = null; static function go():utils.Lock return null;'
+				+ ' function own():Void lock.wait(); function call():Void go().wait(); }'
+			},
+			{
+				file: 'app/M.hx',
+				source: 'package app; import app.A.*; function go():utils.Lock return null;'
+				+ ' class M extends P { function call():Void go().wait(); }'
+			},
+			{
+				file: 'app/B.hx',
+				source: 'package app; class B { public static var lock:sys.thread.Lock = null; public static function go():sys.thread.Lock return null; }'
+			},
+			{
+				file: 'app/T.hx',
+				source: 'package app; import app.A.*; import app.B.*; class T extends P { function field():Void lock.wait();'
+				+ ' function call():Void go().wait(); }'
+			}
+		], new HaxeQueryPlugin());
+		function targets(from: String): Array<String> {
+			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+			out.sort(Reflect.compare);
+			return out;
+		}
+		Assert.same(['sys.thread.Lock.wait'], targets('C.field'), 'a supertype static field read bare: the imported one');
+		Assert.same(['A.go', 'sys.thread.Lock.wait'], targets('C.call'), 'a supertype static function called bare: the imported one');
+		Assert.same(['Lock.wait'], targets('R.own'), 'the type\'s own static comes first');
+		Assert.same(['Lock.wait', 'R.go'], targets('R.call'), 'the type\'s own static function comes first');
+		Assert.same(['Lock.wait', 'M.go'], targets('M.call'), 'a module function before the import, the supertype\'s static hidden');
+		Assert.same([], targets('T.field'), 'two imports bind the name: the supertype static is still none of them');
+		Assert.same(['A.go', 'B.go'], targets('T.call'), 'two imports: a call runs either, never the supertype\'s');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
 	 * Review R5 F4 (`h/stat-modvar(-rev)`): a field the reading file's own module declares at module level — plain, `final`,
 	 * inside a conditional region — is what a bare name means there, before any static an import brings in under it.
 	 */

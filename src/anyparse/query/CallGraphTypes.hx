@@ -106,7 +106,6 @@ final class CallGraphTypes {
 		return _subs[typeName] ?? [];
 	}
 
-
 	/** Whether an indexed declaration of `typeName` is an interface. */
 	public inline function isInterface(typeName: String): Bool {
 		return (_kinds[typeName] ?? []).exists(k -> _interfaceKinds.contains(k));
@@ -238,7 +237,6 @@ final class CallGraphTypes {
 		}
 		return null;
 	}
-
 
 	/** The record of `member` on `typeName` or the nearest supertype declaring it, or null when no indexed type does. */
 	public function memberOnChain(typeName: String, member: String): Null<MemberInfo> {

@@ -3054,6 +3054,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CallGraphTest#testANameNoImportBindsIsLookedUpInTheFilesPackages :: control :: '
 				+ 'M-TS-PACKAGE-LOOKUP,M-TS-PACKAGE-ENCLOSING,M-TS-PACKAGE-PROJECT-FIRST',
 			'unit.query.CallGraphTest#testAReceiverANewMakesIsOfTheTypeItNames :: control :: M-TS-NEW-RECEIVER',
+			'unit.query.CallGraphTest#testASupertypeStaticIsNotInScopeBare :: control :: '
+				+ 'M-TS-SUPER-STATIC-IMPORT,M-TS-SUPER-STATIC-READ,M-TS-SUPER-STATIC-CALL,M-TS-SUPER-STATIC-HIDDEN,M-TS-SUPER-STATIC-MODULE,M-TS-SUPER-STATIC-MODULE-IMPORT',
 			'unit.query.CallGraphTest#testATypeAnAliasASupertypeOrAnAbstractWritesIsReadWhereItIsWritten :: control :: '
 				+ 'M-TS-DECL-SUPER-ARGS,M-TS-DECL-PARAM-FILE,M-TS-DECL-UNDERLYING',
 			'unit.query.CallGraphTest#testATypeParameterIsNeverKeyedThroughAnImport :: control :: '
@@ -6734,7 +6736,13 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-OVERLOAD-RETURN-EACH',
 			'M-TS-OVERLOAD-PARAMS',
 			'M-TS-OVERLOAD-AGREE',
-			'M-TS-OVERLOAD-EXTERNAL'
+			'M-TS-OVERLOAD-EXTERNAL',
+			'M-TS-SUPER-STATIC-IMPORT',
+			'M-TS-SUPER-STATIC-READ',
+			'M-TS-SUPER-STATIC-CALL',
+			'M-TS-SUPER-STATIC-HIDDEN',
+			'M-TS-SUPER-STATIC-MODULE',
+			'M-TS-SUPER-STATIC-MODULE-IMPORT'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

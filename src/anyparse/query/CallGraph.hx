@@ -974,7 +974,9 @@ final class CallGraph {
 			else if (currentType == null)
 				null
 			else
-				memberOnChain(currentType, name) ?? (imported ? importedFunction(name, span, currentType) : null);
+				(CallGraphKeys.staticOfSupertype(this, currentType, name) ? null : memberOnChain(currentType, name)) ?? (
+					imported ? importedFunction(name, span, currentType) : null
+				);
 		}
 
 		/**
@@ -1326,7 +1328,10 @@ final class CallGraph {
 					this, file, moduleType, name, currentType
 				);
 				if (imported != null) return memberTypeSource(imported.owner, imported.member);
-				return currentType == null ? null : memberTypeThrough(null, currentType, name, currentType);
+				// a supertype's static is not in scope bare
+				return currentType == null || CallGraphKeys.staticOfSupertype(this, currentType, name)
+					? null
+					: memberTypeThrough(null, currentType, name, currentType);
 			}
 			if (isAccessKind(expr.kind) && name != null && expr.children.length > 0) {
 				// `Type.field`: a static member, read off a type name no local shadows
@@ -1602,20 +1607,25 @@ final class CallGraph {
 					return null;
 				}
 			}
-			final inherited: Null<String> = memberOnChain(currentType ?? moduleType, name);
+			// a supertype's static is not in scope bare: the name is the module's or an import's
+			final hidden: Bool = currentType != null && CallGraphKeys.staticOfSupertype(this, currentType, name);
+			final inherited: Null<String> = hidden ? null : memberOnChain(currentType ?? moduleType, name);
 			if (inherited != null) return inherited;
 			// a module-level function is registered under the module pseudo-type,
 			// which the enclosing-type chain does not reach from inside a class
 			if (currentType != null) {
-				final moduleFn: Null<String> = memberOnChain(moduleType, name);
+				// the module's pseudo-type shares its main class's name: only what it declares itself, never its supertypes' members
+				final moduleFn: Null<String> = CallGraphKeys.declaredOn(this, moduleType, name);
 				if (moduleFn != null) return moduleFn;
 				// an inherited FIELD called as a function: its value is a function the program stored
-				if (types.fieldOnChain(currentType, name)) {
+				if (!hidden && types.fieldOnChain(currentType, name)) {
 					unresolvedAt(span, FunctionValue(name), currentType);
 					return null;
 				}
 				// a method a supertype the graph has not loaded declares: a placeholder, upgraded when that file arrives
-				final declaring: Null<String> = types.functionOnChain(currentType, name) ? types.declaringTypeOf(currentType, name) : null;
+				final declaring: Null<String> = !hidden && types.functionOnChain(currentType, name)
+					? types.declaringTypeOf(currentType, name)
+					: null;
 				if (declaring != null) return externalNode(declaring, name);
 			}
 			// an imported static: `import p.T.f;` or `import p.T.*;` — every type that may be meant, a placeholder for one the

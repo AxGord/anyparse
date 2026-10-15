@@ -378,10 +378,37 @@ final class CallGraphKeys {
 		g: CallGraph, file: String, moduleType: String, name: String, currentType: Null<String>
 	): Null<{ owner: String, member: String }> {
 		final types: CallGraphTypes = g.types;
-		if (g.memberOnChain(moduleType, name) != null) return null;
-		if (currentType != null && (!types.chainFullyIndexed(currentType) || types.declaringTypeOf(currentType, name) != null)) return null;
+		if (declaredOn(g, moduleType, name) != null) return null;
+		if (
+			currentType != null && (
+				!types.chainFullyIndexed(currentType) || types.declaringTypeOf(currentType, name) != null
+				&& !staticOfSupertype(g, currentType, name)
+			)
+		)
+			return null;
 		final imported: ImportedName = types.imports.importedStatics(file, name);
 		return imported.unknown || imported.statics.length != 1 ? null : imported.statics[0];
+	}
+
+	/**
+	 * Whether the nearest declaration of `member` on `typeName`'s chain in `g` is a STATIC of a supertype, which a bare name inside
+	 * `typeName` does not see: the language puts no inherited static in unqualified scope (checked on 4.3.7: `Unknown
+	 * identifier`; an `import A.*` static of the name wins there). Review R5 F7.
+	 */
+	public static function staticOfSupertype(g: CallGraph, typeName: String, member: String): Bool {
+		// a function the graph holds is the nearest it keys (a module function under the module pseudo-type), a field the index's
+		final found: Null<String> = g.memberOnChain(typeName, member);
+		final owner: Null<String> = found == null ? g.types.declaringTypeOf(typeName, member) : g.nodes[found]?.typeName;
+		return owner != null && owner != typeName && g.types.isStatic(owner, member);
+	}
+
+	/**
+	 * The node of `g` the type `typeName` itself declares `member` as, null for none: a module function keyed under the module
+	 * pseudo-type, whose name the module's main class shares — a member that class inherits is none (review R5 F7).
+	 */
+	public static function declaredOn(g: CallGraph, typeName: String, member: String): Null<String> {
+		final found: Null<String> = g.memberOnChain(typeName, member);
+		return found == null || g.nodes[found]?.typeName != typeName ? null : found;
 	}
 
 	/**
