@@ -344,6 +344,51 @@ The pattern is parsed by the active grammar plugin **with a metavariable extensi
 
 The matcher walks the input AST and tries to unify each subtree with the pattern AST node-for-node, treating metavariables as holes. `apq search '$x = $x + 1' file.hx` matches every self-increment-by-1 and binds `$x` to the actual variable expression at each site.
 
+### `owned-types`: which layer may name a type
+
+`owned-types` reports every reach past a boundary the project declares in `apqlint.json`'s top-level `ownedTypes`
+key — a list of `{ "types": […], "members": […], "owners": […], "why": "…" }` entries (README § `ownedTypes`). It is a
+`Warning`, report-only, and INERT without the key (`--list-rules <files>` says `needs-config`), so every project that
+declares nothing lints byte-identically. The message is `<path> belongs to <owners> — <why>`, at the mention.
+
+**What is a mention of an owned type.** An `import` / `using` of its path, an alias's included (`import p.T as U;`),
+and a field import or field wildcard under it (`import p.T.f;`, `import p.T.*;`) — a package wildcard mentions no type.
+Every type position the type-reference projection surfaces, through `Uses.find` (the walker behind `apq uses`): a
+field's, parameter's, return's or local's annotation, a type argument, a heritage clause, `new T`, `cast(x, T)`,
+`x is T` — spelled simply, through an alias, or qualified. And every expression naming it: the receiver of a static
+access `T.x`, a class value `T`, a qualified `pkg.T`. An identifier the scope binds to a VALUE is no type.
+
+**What a written name means** is asked of the shared resolvers, never re-derived — the rule exists to keep consumers on
+those layers, so it may not grow a resolver of its own. A simple name goes through `TypeNameBinding.tierOf`, the
+compiler's resolution order: `Bound` to the owned declaration is reported, `Bound` to another one (a same-named type
+of another package) is not, `Free` (no tier binds the name; only a built-in can) is not, and `Unknown` (a tier could
+bind it to something the index does not hold — an import of an unindexed module, a `#if`-guarded import) IS
+reported: a reach nobody proved absent is a reach. A qualified spelling goes through `TypeRefIndex.resolveTypeRefAll`
+(root-relative and module-relative); one that resolves to nothing is reported when its last segment is the owned name.
+
+**Members.** A `members` path is `<type path>.<member>`. A STATIC member is reached only through a type receiver
+resolved as above — that type itself: Haxe resolves no static through a subtype (`Class<B> has no field make`, 4.3.7)
+nor through a value. A receiver whose meaning is `Unknown` is reported; that is the ONE case a name match alone
+reports. An INSTANCE member is reached through a receiver the shared typer types (`CheckScan.typeNominalResolver` over
+`NominalTypes.expressionTypeNominal`, member-lookup position), its member looked up through the receiver type's
+supertypes (`ConfiguredTypes.memberOf`), so a subtype's receiver counts. `T.new` is construction: `new T(…)` of that
+type exactly.
+
+**Owners** are globs over qualified names in the syntax of `reflectiveClasses` (`Glob.qualifiedNames`: `*` within a
+segment, `**` across segments). A mention is owned when one matches the MODULE it is written in or the qualified path
+of the type declaration enclosing it — naming a module's main type therefore owns the whole module, its sub-types
+included, while naming a sub-type owns only that type's body. The module declaring an owned type always owns it.
+
+**Limits, named.** Not seen: an unqualified call of an inherited member from inside a subtype; a constructor run
+through `super(…)` or through a subtype's `new`; an instance member reached through a receiver the typer leaves
+untyped (`Dynamic`, or any value the shared typer cannot follow) — matching instance members by name alone would report
+every same-named method of every type. A value of an owned type that flows WITHOUT the type being spelled (an
+inferred local, a field read off another type) is not a mention: the rule reports what the source writes.
+
+**A baseline is how a project adopts it.** Declaring a boundary the code already crosses reports every crossing at
+once; `apq lint <scope> --rule owned-types --baseline <path>` records today's set and reports only what a later change
+adds, while the recorded crossings stay listed in the snapshot as the work left.
+
 ### The `...` ellipsis
 
 Without it a pattern cannot say "any arity", because the matcher's child loop gates on an exact length; `new $T(...)` is every construction in one pattern.

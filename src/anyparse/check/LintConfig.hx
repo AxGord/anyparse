@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.OwnedTypesDeclaration.TypeOwnership;
 import anyparse.check.config.ApqLintConfig;
 import anyparse.check.config.ApqLintConfigParser;
 import anyparse.grammar.json.JValue;
@@ -102,6 +103,7 @@ typedef LintDocument = {
 	var ?languageVersion: String;
 	var ?frameworks: Array<FrameworkContract>;
 	var ?reportSummaryThreshold: Int;
+	var ?ownedTypes: Array<TypeOwnership>;
 
 	/** Read off the document as PARSED, never off a merged one — a fold has already decided where the chain ends. */
 	var ?inherit: Bool;
@@ -198,12 +200,16 @@ final class LintConfig {
 	/** How many findings a text report lists before it summarises them (`reportSummaryThreshold`); see the accessor. */
 	private final _reportSummaryThreshold: Int;
 
+	/** The declared type ownerships (`ownedTypes`), already mapped off raw JSON; an empty array when the key is absent. */
+	private final _ownedTypes: Array<TypeOwnership>;
+
 	public function new(
 		rules: Map<String, RuleConfig>, ?compilerOracles: Array<OracleConfig>, ?resolutionRoots: Array<String>,
 		?resolutionLibs: Array<String>, ?resolutionStd: Bool, ?compilerOracleServer: Bool, ?languageVersion: String,
 		?frameworks: Array<FrameworkContract>, ?drops: Array<String>, ?reachConfigurationsComplete: Bool, ?reportSummaryThreshold: Int,
-		?reflectiveClasses: Array<String>, ?reflectiveMethodHolders: Array<String>
+		?reflectiveClasses: Array<String>, ?reflectiveMethodHolders: Array<String>, ?ownedTypes: Array<TypeOwnership>
 	) {
+		_ownedTypes = ownedTypes ?? [];
 		_reportSummaryThreshold = reportSummaryThreshold ?? LintFormat.DEFAULT_REPORT_SUMMARY_THRESHOLD;
 		_reachConfigurationsComplete = reachConfigurationsComplete ?? false;
 		_reflectiveClasses = reflectiveClasses;
@@ -465,6 +471,15 @@ final class LintConfig {
 	}
 
 	/**
+	 * The type ownerships the project declares (`ownedTypes`) — see `TypeOwnership`: which types and members a layer
+	 * owns, the code that owns them and why, for the `owned-types` rule. An empty array when the key is absent, which
+	 * leaves the rule inert. Like every array of the chain, a nearer document's list replaces an ancestor's wholesale.
+	 */
+	public function ownedTypes(): Array<TypeOwnership> {
+		return _ownedTypes;
+	}
+
+	/**
 	 * Ready diagnostic lines for what a document in this config's chain declared under `frameworks` and
 	 * this reader DROPPED or partly IGNORED: an entry that is not an object, names no `root`, nominates
 	 * nothing, spells one of the three keys with the wrong type, or names a key this reader does not know.
@@ -686,6 +701,7 @@ final class LintConfig {
 			languageVersion: near.languageVersion ?? far.languageVersion,
 			frameworks: near.frameworks ?? far.frameworks,
 			reportSummaryThreshold: near.reportSummaryThreshold ?? far.reportSummaryThreshold,
+			ownedTypes: near.ownedTypes ?? far.ownedTypes,
 			drops: near.drops.concat(far.drops)
 		};
 	}
@@ -709,7 +725,7 @@ final class LintConfig {
 		return new LintConfig(
 			doc.rules, doc.compilerOracles, doc.resolutionRoots, doc.resolutionLibs, doc.resolutionStd, doc.compilerOracleServer,
 			doc.languageVersion, doc.frameworks, doc.drops, doc.reachConfigurationsComplete, doc.reportSummaryThreshold,
-			doc.reflectiveClasses, doc.reflectiveMethodHolders
+			doc.reflectiveClasses, doc.reflectiveMethodHolders, doc.ownedTypes
 		);
 	}
 
@@ -742,6 +758,10 @@ final class LintConfig {
 		final roots: Null<Array<String>> = declaredRoots?.map(resolveAgainstConfigDir.bind(baseDir));
 		final declaredFrameworks: Null<Array<JValue>> = config.frameworks;
 		final frameworks: Null<Array<FrameworkContract>> = declaredFrameworks == null ? null : parseFrameworks(declaredFrameworks, drops);
+		final declaredOwnership: Null<Array<JValue>> = config.ownedTypes;
+		final ownedTypes: Null<Array<TypeOwnership>> = declaredOwnership == null
+			? null
+			: OwnedTypesDeclaration.read(declaredOwnership, drops);
 		return {
 			rules: rules,
 			compilerOracles: oracles,
@@ -755,6 +775,7 @@ final class LintConfig {
 			languageVersion: config.languageVersion,
 			frameworks: frameworks,
 			reportSummaryThreshold: config.reportSummaryThreshold,
+			ownedTypes: ownedTypes,
 			inherit: config.inherit,
 			drops: drops
 		};

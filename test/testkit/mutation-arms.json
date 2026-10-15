@@ -21205,6 +21205,156 @@
 			"find": "if (!standard.contains(d) && !standard.contains(SourceText.parentPath(d))) d",
 			"replace": "d",
 			"note": "the std's own declaration, indexed as a library, counts as a namesake and refuses the std container"
+		},
+		{
+			"name": "M-OWNED-OWNERS-IGNORED",
+			"type": "anyparse.check.OwnedTypes",
+			"method": "ownedAt",
+			"force": "false",
+			"note": "no owner glob owns anything, so every mention inside a declared owner is reported"
+		},
+		{
+			"name": "M-OWNED-DECLARING-MODULE",
+			"type": "anyparse.check.OwnedTypes",
+			"method": "ownedAt",
+			"find": "if (subject.modules.contains(info.module)) return true;",
+			"replace": "",
+			"note": "the module declaring an owned type is no owner of it, so its own declaration and body are reported"
+		},
+		{
+			"name": "M-OWNED-ENCLOSING-TYPE",
+			"type": "anyparse.check.OwnedTypes",
+			"method": "ownedAt",
+			"find": "if (enclosing != null) names.push(TypeRefIndex.importPathFor(info, enclosing));",
+			"replace": "",
+			"note": "an owner naming a sub-type owns nothing, since only the module path is matched"
+		},
+		{
+			"name": "M-OWNED-FREE-REPORTED",
+			"type": "anyparse.check.OwnedTypes",
+			"method": "typesNamed",
+			"find": "case Free: null;",
+			"replace": "case Free: [];",
+			"note": "a name no resolution tier binds, which only a built-in can be, is reported as an unknown mention"
+		},
+		{
+			"name": "M-OWNED-UNKNOWN-SILENT",
+			"type": "anyparse.check.OwnedTypes",
+			"method": "typesNamed",
+			"find": "case Unknown: [];",
+			"replace": "case Unknown: null;",
+			"note": "a name a tier could bind to something the index does not hold reads as provably another type, and the reach goes unreported"
+		},
+		{
+			"name": "M-OWNED-BOUND-BY-NAME",
+			"type": "anyparse.check.OwnedTypes",
+			"method": "typeSubjectsDenoted",
+			"find": "return candidates.filter(s -> s.keys.exists(k -> keys.contains(k)));",
+			"replace": "return candidates;",
+			"note": "a name bound to a same-named type of another package is reported as the owned type"
+		},
+		{
+			"name": "M-OWNED-VALUE-IS-TYPE",
+			"type": "anyparse.check.OwnedTypes",
+			"method": "valueBound",
+			"find": "return TypeResolver.resolveBindingFrom(name, span, tree, scan.shape) != null;",
+			"replace": "return false;",
+			"note": "an identifier the scope binds to a value is read as the type it is named like"
+		},
+		{
+			"name": "M-OWNED-IMPORTS-IGNORED",
+			"type": "anyparse.check.OwnedTypes",
+			"method": "scanImports",
+			"find": "for (s in scan.subjects) if (s.member != null ? path == s.label : importNames(path, s, scan.index)) report(scan, s, imp.span);",
+			"replace": "",
+			"note": "an import or an alias of an owned type is not a mention"
+		},
+		{
+			"name": "M-OWNED-ALIAS-IGNORED",
+			"type": "anyparse.check.OwnedTypes",
+			"method": "spellingsOf",
+			"find": "if (aliased.length > 0) out[alias] = (out[alias] ?? []).concat(aliased);",
+			"replace": "",
+			"note": "a type position spelling an owned type through an import alias is not seen"
+		},
+		{
+			"name": "M-OWNED-QUALIFIED-EXPR-IGNORED",
+			"type": "anyparse.check.OwnedTypes",
+			"method": "visitTypeName",
+			"find": "pathOf(scan, node)?.join('.')",
+			"replace": "null",
+			"note": "a qualified owned type in an expression (`pkg.T.make()`) is not a mention"
+		},
+		{
+			"name": "M-OWNED-CTOR-ANY-TYPE",
+			"type": "anyparse.check.OwnedTypes",
+			"method": "visitNew",
+			"find": "(made.length == 0 || made.exists(t -> s.keys.contains(scan.index.refs.seenKey(t))))",
+			"replace": "true",
+			"note": "constructing a same-named type of another package is reported as constructing the owned one"
+		},
+		{
+			"name": "M-OWNED-INSTANCE-BY-NAME",
+			"type": "anyparse.check.OwnedTypes",
+			"method": "typedReceiver",
+			"find": "if (nominal == null) return null;",
+			"replace": "if (nominal == null) return [];",
+			"note": "an instance member is matched by name on a receiver the typer cannot type"
+		},
+		{
+			"name": "M-OWNED-STATIC-UNKNOWN-SILENT",
+			"type": "anyparse.check.OwnedTypes",
+			"method": "reaches",
+			"find": "if (types.length == 0) return true;",
+			"replace": "if (types.length == 0) return false;",
+			"note": "a static reached through a receiver whose meaning is unknown goes unreported"
+		},
+		{
+			"name": "M-OWNED-NO-SUPERTYPE-WALK",
+			"type": "anyparse.check.OwnedTypes",
+			"method": "reaches",
+			"find": "found != null && subject.keys.contains(scan.index.refs.seenKey(found.owner));",
+			"replace": "subject.keys.contains(scan.index.refs.seenKey(t));",
+			"note": "an owned instance member reached through a receiver of a subtype is not seen"
+		},
+		{
+			"name": "M-OWNED-STATIC-THROUGH-SUBTYPE",
+			"type": "anyparse.check.OwnedTypes",
+			"method": "reaches",
+			"find": "if (subject.isStatic) return types.exists(t -> subject.keys.contains(scan.index.refs.seenKey(t)));",
+			"replace": "",
+			"note": "a static reached through a subtype of its type is reported, a reach Haxe itself rejects (`Class<B> has no field`)"
+		},
+		{
+			"name": "M-OWNED-READER-NO-OWNERS",
+			"type": "anyparse.check.OwnedTypesDeclaration",
+			"method": "readEntry",
+			"find": "final problem: Null<String> = if (owners.length == 0)",
+			"replace": "final problem: Null<String> = if (false)",
+			"note": "a declaration naming no owner is kept, and owns its types for nobody"
+		},
+		{
+			"name": "M-OWNED-SKIP-REASON-NULL",
+			"type": "anyparse.check.OwnedTypes",
+			"method": "skipReason",
+			"force": "null",
+			"note": "the rule claims every file of a config that declares no ownedTypes"
+		},
+		{
+			"name": "M-OWNED-MERGE",
+			"type": "anyparse.check.LintConfig",
+			"method": "mergeDocuments",
+			"find": "ownedTypes: near.ownedTypes ?? far.ownedTypes,",
+			"replace": "ownedTypes: near.ownedTypes,",
+			"note": "a nested document that leaves `ownedTypes` unsaid drops the ancestor's declarations"
+		},
+		{
+			"name": "M-OWNED-PARSE",
+			"type": "anyparse.check.LintConfig",
+			"method": "parseDocument",
+			"find": "ownedTypes: ownedTypes,",
+			"replace": "",
+			"note": "`ownedTypes` is never read out of `apqlint.json`"
 		}
 	]
 }
