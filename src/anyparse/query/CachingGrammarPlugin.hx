@@ -762,7 +762,11 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		var named: Null<Map<String, Array<{ file: String, source: String }>>> = _scopeByFileName;
 		if (named == null) {
 			final built: Map<String, Array<{ file: String, source: String }>> = [];
-			for (entry in resolutionFiles() ?? []) {
+			// The sources, not `resolutionFiles`: that one promotes the whole library into the parse tier, which parses every
+			// file of it, and only the files named after the module are read here.
+			final sources: Null<ResolutionSources> = scopeSources();
+			final scope: Array<{ file: String, source: String }> = sources == null ? [] : sources.report.concat(sources.library.entries());
+			for (entry in scope) {
 				final key: String = Path.withoutDirectory(entry.file);
 				final same: Array<{ file: String, source: String }> = built[key] ?? [];
 				same.push(entry);
