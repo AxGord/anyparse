@@ -21053,6 +21053,30 @@
 			"find": ": (returnedIn == null ? null : elementTypeSource(iterator.written, iterationParams, returnedIn))",
 			"replace": ": elementTypeSource(iterator.written, iterationParams)",
 			"note": "an iterator() return is read in the file walked, not where it is declared"
+		},
+		{
+			"name": "M-TS-SKIP-SHIFT",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (target != null && CallGraphKeys.mayShift(this, target, index, count)) return null;",
+			"replace": "",
+			"note": "an argument after a skippable parameter binds the parameter at its position (`run(?a, f, ?g)` called `run(x, y)` types `y` by `f`)"
+		},
+		{
+			"name": "M-TS-SKIP-DEFAULT",
+			"type": "anyparse.query.CallGraphNames",
+			"method": "declaredParams",
+			"find": "&& !params[skippable].children.exists(c -> !annotationKinds.contains(c.kind))",
+			"replace": "",
+			"note": "a parameter with a default value is not skippable"
+		},
+		{
+			"name": "M-TS-SKIP-NEW-ARGS",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": ": [for (c in holder.children) if (!annotationKinds.contains(c.kind)) c];",
+			"replace": ": holder.children;",
+			"note": "a `new` counts the type arguments it names among its arguments"
 		}
 	]
 }

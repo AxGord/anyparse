@@ -1422,6 +1422,44 @@ class CallGraphTest extends Test {
 		#end
 	}
 
+	/**
+	 * Review R5 F3 (`h/lam-skip-shift(-rev)`): a call passing fewer arguments than its callee declares may skip an optional
+	 * parameter — `?a` or one with a default value — so an argument at or after one binds the parameter its position names
+	 * only when the call passes them all; and a `new` naming its type's arguments (`new Box<Int>(…)`) counts only its own.
+	 */
+	@:pin('control') @:killer('M-TS-SKIP-SHIFT') @:killer('M-TS-SKIP-DEFAULT') @:killer('M-TS-SKIP-NEW-ARGS')
+	public function testAnArgumentAfterASkippableParameterBindsNoKnownParameter(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final g: CallGraph = graphOf([
+			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
+			'package app; class A { public static function run(?a:Int, f:(sys.thread.Lock) -> Void, ?g:(utils.Lock) -> Void):Void {}'
+			+ ' public static function full(?a:Int, f:(sys.thread.Lock) -> Void):Void {}'
+			+ ' public static function dflt(a:Int = 1, f:(sys.thread.Lock) -> Void, ?g:(utils.Lock) -> Void):Void {}'
+			+ ' public static function late(f:(sys.thread.Lock) -> Void, ?g:Int):Void {} }',
+			'package app; class Box<T> { public function new(f:(sys.thread.Lock) -> Void, ?v:T) {} }',
+			'package app; class C { static function shift():Void A.run(l -> {}, l2 -> l2.wait());'
+			+ ' static function full():Void A.full(1, l -> l.wait()); static function dflt():Void A.dflt(l -> {}, l2 -> l2.wait());'
+			+ ' static function late():Void A.late(l -> l.wait()); static function made():Void new Box<Int>(l -> l.wait()); }'
+		]);
+		function inLambdas(fn: String): Array<String> {
+			final out: Array<String> = [];
+			for (id in g.nodes.keys()) if (StringTools.startsWith(id, '$fn#')) for (e in g.outEdges(id)) if (e.kind == Call) out.push(e.to);
+			return out;
+		}
+		Assert.same([], inLambdas('C.shift'), 'an optional parameter before it, fewer arguments than declared');
+		Assert.same(['sys.thread.Lock.wait'], inLambdas('C.full'), 'every argument passed');
+		Assert.same([], inLambdas('C.dflt'), 'a parameter with a default value is skippable too');
+		Assert.same(['sys.thread.Lock.wait'], inLambdas('C.late'), 'the skippable parameter after it');
+		Assert.same(['sys.thread.Lock.wait'], inLambdas('C.made'), 'the type arguments of a new are no arguments');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	@:pin('control')
 	@:killer('M-TS-NEW-RECEIVER')
 	public function testAReceiverANewMakesIsOfTheTypeItNames(): Void {

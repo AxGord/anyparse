@@ -3061,6 +3061,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CallGraphTest#testAddFilesUpgradesTheExternalPlaceholder :: control :: M-GRAPH-UPGRADE-EXTERNAL',
 			'unit.query.CallGraphTest#testAnAlternateTypeResolvesTheCallWhateverTheNamesakeDeclares :: control :: '
 				+ 'M-TS-ALTERNATE-WHOLE-CALL',
+			'unit.query.CallGraphTest#testAnArgumentAfterASkippableParameterBindsNoKnownParameter :: control :: '
+				+ 'M-TS-SKIP-SHIFT,M-TS-SKIP-DEFAULT,M-TS-SKIP-NEW-ARGS',
 			'unit.query.CallGraphTest#testAnImportedStaticIsTypedWhereItIsDeclared :: control :: '
 				+ 'M-TS-IMPORT-STATIC-FIELD,M-TS-IMPORT-STATIC-CALL,M-TS-IMPORT-STATIC-OWN,M-TS-IMPORT-STATIC-ONE,M-TS-IMPORT-STATIC-INDEXED',
 			'unit.query.CallGraphTest#testBareCallSomethingElseMaySupplyIsNeverAConstructor :: control :: '
@@ -6717,7 +6719,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-STORED-PUBLIC',
 			'M-TS-STD-CONTAINER',
 			'M-TS-STD-CONTAINER-DECLARED',
-			'M-TS-STD-CONTAINER-WHERE'
+			'M-TS-STD-CONTAINER-WHERE',
+			'M-TS-SKIP-SHIFT',
+			'M-TS-SKIP-DEFAULT',
+			'M-TS-SKIP-NEW-ARGS'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

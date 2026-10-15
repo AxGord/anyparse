@@ -309,10 +309,11 @@ final class CallGraphKeys {
 		if (declared.length == 0) return externalParamTypes(g, n);
 		var out: Null<Array<Null<String>>> = null;
 		var rest: Bool = false;
+		var skippableFrom: Int = -1;
 		final unkeyed: Array<String> = g.types.generics.typeParamsOf(n.typeName ?? '').concat(g._facts.typeParams[id] ?? []);
 		for (d in declared) {
 			final entry: Null<{ tree: QueryNode, source: String }> = g._entries[CallGraphNames.normalizePath(d.file)];
-			final read: Null<{ params: Array<Null<String>>, rest: Bool }> = entry == null
+			final read: Null<{ params: Array<Null<String>>, rest: Bool, skippableFrom: Int }> = entry == null
 				? null
 				: CallGraphNames.declaredParams(entry.tree, entry.source, d.span.from, g._shape, g._provider);
 			if (read == null) return null;
@@ -320,6 +321,7 @@ final class CallGraphKeys {
 				for (p in read.params) p == null ? null : keyedIn(imports, d.file, typeSyntax, p, unkeyed)
 			];
 			final held: Null<Array<Null<String>>> = out;
+			skippableFrom = skippableFrom < 0 ? read.skippableFrom : Std.int(Math.min(skippableFrom, read.skippableFrom));
 			if (held == null) {
 				out = written;
 				rest = read.rest;
@@ -332,8 +334,20 @@ final class CallGraphKeys {
 		final params: Null<Array<Null<String>>> = out;
 		if (params == null) return null;
 		if (rest) g._facts.restParams[id] = true;
+		if (skippableFrom < params.length) g._facts.skippable[id] = { from: skippableFrom, count: params.length };
 		g._facts.paramTypes[id] = params;
 		return params;
+	}
+
+	/**
+	 * Whether the argument at `index` of a call passing `count` arguments to `id` of `g` (`paramTypesOf` read) may bind a later
+	 * parameter than the one at its position: a parameter the language may skip sits at or before it while the call passes
+	 * fewer arguments than `id` declares, or a rest parameter takes what is left. Review R5 F3: `run(?a:Int, f, ?g)` called
+	 * `run(l -> {}, l2 -> …)` binds `f` and `g`.
+	 */
+	public static function mayShift(g: CallGraph, id: String, index: Int, count: Int): Bool {
+		final skippable: Null<{ from: Int, count: Int }> = g._facts.skippable[id];
+		return skippable != null && skippable.from <= index && (count < skippable.count || g._facts.restParams.exists(id));
 	}
 
 	/**
@@ -420,6 +434,9 @@ final class CallGraphKeys {
 		final owner: String = g.types.declaringTypeOf(type, name) ?? type;
 		final member: Null<MemberInfo> = g.types.memberOnChain(type, name);
 		final unkeyed: Array<String> = g.types.generics.typeParamsOf(owner).concat(member?.typeParamNames ?? []);
+		// which of its parameters a call may skip the index does not say: any of them
+		final declared: Int = member?.paramTypeSources.length ?? 0;
+		if (declared > 0) g._facts.skippable[n.id] = { from: 0, count: declared };
 		return [
 			keyedInFiles(
 				g.types.imports, g._plugin.typeSyntax, g.types.imports.memberFilesOf(owner, name), member?.firstParamTypeSource, unkeyed

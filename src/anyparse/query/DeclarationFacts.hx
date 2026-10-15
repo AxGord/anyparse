@@ -33,6 +33,13 @@ final class DeclarationFacts {
 	/** The function node ids whose last parameter is a rest parameter, which takes every argument from its position on. */
 	public final restParams: Map<String, Bool> = [];
 
+	/**
+	 * Function node id -> the position of its first parameter a call may skip (an optional one, or one with a default value) —
+	 * every parameter of an external one, whose declaration does not say — and how many parameters it declares; absent when
+	 * it declares none a call may skip (`CallGraphKeys.mayShift`).
+	 */
+	public final skippable: Map<String, { from: Int, count: Int }> = [];
+
 	public function new() {}
 
 	/** Drop every fact about the function node `id`, whose declaration left the graph. */
@@ -43,6 +50,7 @@ final class DeclarationFacts {
 		typeParamBounds.remove(id);
 		paramTypes.remove(id);
 		restParams.remove(id);
+		skippable.remove(id);
 	}
 
 	/** The key of `typeName`'s parameter bounds as the declaration in `file` writes them — two types may share a simple name. */

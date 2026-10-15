@@ -815,6 +815,7 @@ final class CallGraph {
 		final blockKinds: Array<String> = [for (k in [shape.blockStmtKind, shape.exprStatementKind]) if (k != null) k];
 		final mapEntryKind: Null<String> = shape.mapLiteralEntryKind;
 		final objectFieldKind: Null<String> = shape.objectFieldKind;
+		final annotationKinds: Array<String> = shape.typeAnnotationKinds ?? [];
 		// call / `new` site `span.from` -> the target it resolved to and the receiver it was made on, for typing its arguments
 		final sites: Map<Int, CallSite> = [];
 		// the ancestors of the node being walked, outermost first, and the child index leading down from each
@@ -1879,10 +1880,14 @@ final class CallGraph {
 			scanArgs(node.children, 0, target, null, currentType);
 		}
 
-		/** The written type of parameter `index` of the call target `site` resolved to, as its receiver sees it. */
-		function argumentTypeSource(site: CallSite, index: Int, currentType: Null<String>): Null<String> {
+		/**
+		 * The written type of the parameter the argument `index` of a call passing `count` arguments binds, of the target `site`
+		 * resolved to, as its receiver sees it; null where an argument before it may have been skipped (`mayShift`).
+		 */
+		function argumentTypeSource(site: CallSite, index: Int, count: Int, currentType: Null<String>): Null<String> {
 			final target: Null<String> = site.target;
 			final params: Null<Array<Null<String>>> = target == null ? null : CallGraphKeys.paramTypesOf(this, target);
+			if (target != null && CallGraphKeys.mayShift(this, target, index, count)) return null;
 			// a rest parameter takes every argument from its position on
 			final at: Int = params != null && target != null && _facts.restParams.exists(target)
 				? Std.int(Math.min(index, params.length - 1))
@@ -1962,7 +1967,12 @@ final class CallGraph {
 				outer == null || field == null ? null : fieldTypeSource(outer, field, currentType);
 			} else if ((kind == callKind && index >= 1) || kind == newExprKind) {
 				final site: Null<CallSite> = span == null ? null : sites[span.from];
-				site == null ? null : argumentTypeSource(site, kind == callKind ? index - 1 : index, currentType);
+				// a `new` names its type's arguments among its children (`new Box<Int>(x)`): they are no arguments
+				final args: Array<QueryNode> = kind == callKind
+					? holder.children.slice(1)
+					: [for (c in holder.children) if (!annotationKinds.contains(c.kind)) c];
+				final at: Int = args.indexOf(holder.children[index]);
+				site == null || at < 0 ? null : argumentTypeSource(site, at, args.length, currentType);
 			} else
 				null;
 		}
