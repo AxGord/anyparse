@@ -2494,3 +2494,57 @@ decided the question; it may not become a record of runs.
   TM-derived trees move (the 3 false keys go, B setTimestamp warns, B acquireMutationLocks|_batchMutex — truth `dup-of`
   — folds onto the _mutationMutex makers); round7: the same 9 F7 targets as L1. All rules: only thread-safety moves on
   the 3 TM trees, anyparse src identical — branch `feat/ts-precision-7`
+- R7 L2 (a) (`round7/k1/abstract-underlying`): not a missing forward — `dispatchOn` already routed a member a `@:forward`
+  abstract does not declare to its underlying type, but by the underlying's SIMPLE name (`TypeMetaFacts.forwardedTo`), so
+  `H.hx: import sys.thread.Lock; @:forward abstract H(Lock)` beside a project `utils.Lock` sent `h.wait()` to the project
+  `wait` — a wrong edge, not a missing one. Each declaration's written underlying head path is kept with its file
+  (`TypeMetaFacts.forwardsWritten`) and keyed there (`CallGraphImports.keyedWhereWritten`, which `resolveAlias` now shares),
+  then seen through an alias. An underlying that is a type parameter of the abstract (`@:forward abstract W<T>(T)`) names
+  no type: it used to dispatch on a type of that name (an external `T.m` placeholder, or a project `T`); now unresolved.
+  Not taken: forwarding through a second forwarding abstract (one hop, as before); the type argument of `W<X>` — branch
+  `feat/ts-precision-7`
+- R7 L2 (c) (`fn-type`): a call is typed by the declared return of the function it resolves to, and a function-typed
+  field, parameter, local or call result names no function, so `A.get().wait()` with `get:() -> Lock` stayed unresolved.
+  When the call resolves to no function, `typeSourceOf` takes the result of the callee's own written type when that is a
+  function type (`Null<…>` peeled; `calledResult`), read where it was declared like any member type; `receiverType` falls
+  through to that typing instead of stopping. A `Dynamic` callee stays untyped. The call itself still records
+  `FunctionValue` (which function runs is unknown) — branch `feat/ts-precision-7`
+- R7 L2 (b) (`array-iter`): nothing typed a loop binder. The edge walk now types it before the loop body is walked
+  (`typeLoopBinder`, stored like a declared type at the binder's offset): the type argument a standard container names
+  (`iterationElementTypeParams`: Array, Vector, List, Iterable, Iterator, a Map's values — the plugin's obligation that
+  each of them yields the same element from `iterator()` and `keyValueIterator()` covers a key-value loop's VALUE binder,
+  which takes nothing else); otherwise the return of the `next()` of the type `iterator()` returns (or the standard
+  element of it), or the type's own `next()`, through the container's type arguments (`memberReturn` -> `throughParams`).
+  Unknown: a key binder (a key or an index), both `iterator()` and `next()` declared and disagreeing (which one the
+  compiler takes is not modelled), a member declaring type parameters of its own, a member the graph holds no body of
+  (std / library) — branch `feat/ts-precision-7`
+- R7 L2 (d) (`param-decl-file`): nothing typed a lambda parameter written without a type. The walk types such
+  parameters before the lambda's body (`typeLambdaParams`) by the function type the lambda is expected to be — the
+  existing `expectedAt` (which already typed construction literals): a call's parameter as `paramTypesOf` reads it, keyed
+  in the callee's OWN file, through the receiver's type arguments, refused when it names a type parameter of the callee
+  itself (`argumentTypeSource`); a `new`'s; a declaration's, an assignment's, a return's — through parentheses, ternary
+  and `if`/`switch` arms. Only a function type (`Null<…>` peeled) of exactly the lambda's arity; a parameter written
+  with a type keeps it. Not taken: optional-argument skipping (the arity check refuses a mismatch rather than skip), an
+  `@:overload`ed callee beyond what `paramTypesOf` already refuses — branch `feat/ts-precision-7`
+- R7 L2 (e) (R7 L1b remainder): `typeSourceOf` had no arm for a `new`, so `new Maker().make().wait()` was unresolved. A
+  `new` types its value by the type it names, keyed where written; type arguments it does not spell are unknown
+  (`throughParams` substitutes `UNKNOWN_TYPE`). `ThreadSafetyRepetitionTest`'s "call unresolved" case was
+  `new Batch(…).success(…)`, which now resolves (its arm M-TS-RUNS-ONCE-UNRESOLVED survived); it reads a `cast` receiver
+  instead — branch `feat/ts-precision-7`
+- R7 L2 cleanup: `collectNodes` / `registerNode` move unchanged to `CallGraphNodes.collect` / `register`
+  (`CallGraph` was 2083 lines over the 2000 cap); ten arms re-pointed — branch `feat/ts-precision-7`
+- R7 L2 MEASURED (engine of the L2 tip vs the L1b tip 431f0c39): the 4 F7 targets (`abstract-underlying`, `array-iter`,
+  `fn-type`, `param-decl-file`) now warn `A C.realWait|sys.thread.Lock.wait`; every other round7 fixture (k1, k2, k2b,
+  controls, "not findings") keeps its keys — `tparam-shadow-lib-bg` / `-ctl` add "(also reachable from a background
+  thread)" to `Mutex.release`, right: the spawned lambda's `new Mutex().release()` is typed by (e). Fixtures r1..r5,
+  round2, round4..round7 (499 runs): 482 byte-identical, no warning lost; the r5 TM-derived trees gain the Goals3D keys
+  below. TM 1d1ba147 `161 154 102 8 12 5 26 1 0 0.67 102/102` -> `164 157 102 8 15 5 26 1 0 0.65 102/102`: three keys,
+  all from (e) — `new Goals3D().cropImagesAndSave()` in `AssetTools.run` (`#elseif ASSET_TOOLS`, Main.hx:99) gains its
+  edge, so `A Goals3D.cropImagesAndSave|File.saveContent`, `A Goals3D.saveCroppedImageToFileSystem|File.saveBytes`,
+  `A Goals3D.setCropAngle|Assets.getBitmapData` warn; labelled `rare` (debug-define path, R7-L2); f81c2049 207 -> 210
+  (the same three; 5/5), bd943dac 210 (9/9, keys unchanged), round6/frag 102/102. (a), (c), (d) leave the 1d1ba147 report
+  byte-identical; (b) re-renders chains only (loops over typed command / node arrays: `MultiplexCommand.commit` now
+  dispatches to every `Command.commit`, `Editor.setDrillData` to the node `toObjectData` / `toTarget`). All rules: only
+  thread-safety moves on the 3 TM trees, anyparse src identical. Rule time on tm-1d1ba147 (interleaved, median of 3)
+  dc09aa52 5.96 / L1b tip 5.74 / L2 tip 5.92 s (+3.1% over L1b, -0.7% over dc09aa52); full lint 24.98 -> 25.83 s (+3.4%)
+  — branch `feat/ts-precision-7`
