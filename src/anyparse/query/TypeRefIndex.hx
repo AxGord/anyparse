@@ -13,9 +13,10 @@ using Lambda;
 /**
  * The name -> DECLARATION layer of the index: which files declare a simple name, and which
  * declaration a written type reference denotes when it is read from a given file's scope.
- * Import, `using`, alias and same-package visibility all resolve here, and nothing above this
- * layer re-derives them — a package-blind simple-name match is exactly the flaw it exists to
- * remove.
+ * Import, `using`, alias and same-package visibility resolve here, and nothing above this layer should
+ * re-derive them — a package-blind simple-name match is exactly the flaw it exists to remove. That is a goal,
+ * not yet a fact: `TypeNameBinding`, `ImportBindings` and `CallGraphImports` each answer part of the same
+ * question their own way, and a consumer that adds a fifth reading re-opens the flaw.
  *
  * Split out of `SymbolIndex`, which keeps the indexed DATA and hands a `TypeRefIndex` to each of
  * its query layers at construction. Those layers depend on reference RESOLUTION, not on the
@@ -285,7 +286,7 @@ final class TypeRefIndex {
 	}
 
 	/** The import path naming type `t` in file `fi`: its module when `t` is the module main type, else `module.name`. */
-	private static inline function importPathFor(fi: FileInfo, t: TypeDeclInfo): String {
+	public static inline function importPathFor(fi: FileInfo, t: TypeDeclInfo): String {
 		return t.isMain ? fi.module : '${fi.module}.${t.name}';
 	}
 
