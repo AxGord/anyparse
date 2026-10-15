@@ -14038,7 +14038,7 @@
 			"name": "M-CALLGRAPH-IMPORTED-VALUE",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "(imported ? importedFunction(name, span, currentType) : null)",
+			"find": "imported ? importedFunction(name, span, currentType) : null",
 			"replace": "null",
 			"note": "a static function an import binds (`import p.T.f;`, an alias, a wildcard) read as a value in another type gets no `Ref` edge, so a call of a value never admits it"
 		},
@@ -20658,8 +20658,8 @@
 			"name": "M-TS-IMPORT-STATIC-OWN",
 			"type": "anyparse.query.CallGraphKeys",
 			"method": "importedStatic",
-			"find": " || types.declaringTypeOf(currentType, name) != null))",
-			"replace": "))",
+			"find": " || types.declaringTypeOf(currentType, name) != null\n\t\t\t\t&& !staticOfSupertype(g, currentType, name)",
+			"replace": "",
 			"note": "an imported static outranks a member of the reading type of the same name"
 		},
 		{
@@ -20674,8 +20674,8 @@
 			"name": "M-TS-IMPORT-STATIC-INDEXED",
 			"type": "anyparse.query.CallGraphKeys",
 			"method": "importedStatic",
-			"find": "(!types.chainFullyIndexed(currentType) || ",
-			"replace": "(",
+			"find": "!types.chainFullyIndexed(currentType) || ",
+			"replace": "",
 			"note": "an imported static outranks a member a supertype the index does not hold may declare"
 		},
 		{
@@ -20938,15 +20938,15 @@
 			"name": "M-TS-LOOP-ITERATOR",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "final iterator: Null<String> = memberReturn(container, 'iterator', currentType);",
-			"replace": "final iterator: Null<String> = null;",
+			"find": "final iterator: Null<{ written: String, file: Null<String> }> = memberReturn(container, 'iterator', currentType);",
+			"replace": "final iterator: Null<{ written: String, file: Null<String> }> = null;",
 			"note": "a loop over a value with iterator() binds nothing"
 		},
 		{
 			"name": "M-TS-LOOP-NEXT",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "final own: Null<String> = memberReturn(container, 'next', currentType);",
+			"find": "final own: Null<String> = memberReturn(container, 'next', currentType)?.written;",
 			"replace": "final own: Null<String> = null;",
 			"note": "a loop over an iterator binds nothing"
 		},
@@ -20970,8 +20970,8 @@
 			"name": "M-TS-LOOP-THROUGH",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": ": throughParams(written, nodes[target]?.typeName, source, type, currentType);",
-			"replace": ": written;",
+			"find": "written: throughParams(written, nodes[target]?.typeName, source, type, currentType),",
+			"replace": "written: written,",
 			"note": "a container's type parameter in what its iterator yields is not bound by the value's argument"
 		},
 		{
