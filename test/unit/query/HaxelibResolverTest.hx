@@ -101,4 +101,28 @@ class HaxelibResolverTest extends Test {
 		#end
 	}
 
+	/** A multi-name `haxelib libpath` answer splits into one root per line, and a short or missing answer is no answer. */
+	@:pin('control')
+	@:killer('M-HAXELIB-BATCH-COUNT-IGNORED')
+	public function testAMultiLibraryAnswerSplitsOneRootPerLibrary(): Void {
+		Assert.equals('/a/lime/|/b/openfl/', HaxelibResolver.rootsFrom('/a/lime/\n/b/openfl/\n', 2)?.join('|'));
+		Assert.isNull(HaxelibResolver.rootsFrom('/a/lime/\n', 2), 'a line missing for a library is not a positional answer');
+		Assert.isNull(HaxelibResolver.rootsFrom(null, 2));
+	}
+
+	/**
+	 * ONE `haxelib libpath` for several libraries answers what one call per library answers — and a name that is not
+	 * installed, which fails the batched call whole, still leaves every other library resolved.
+	 */
+	public function testOneSpawnForSeveralLibrariesAnswersAsOnePerLibrary(): Void {
+		final names: Array<String> = ['utest', 'hxnodejs'];
+		final alone: Array<Null<String>> = names.map(HaxelibResolver.libSourceDir);
+		if (alone[0] == null) {
+			Assert.pass('haxelib not on PATH — real-lib resolution skipped');
+			return;
+		}
+		Assert.same(alone, HaxelibResolver.libSourceDirs(names));
+		Assert.same([alone[0], null], HaxelibResolver.libSourceDirs(['utest', 'no-such-lib-installed-here']));
+	}
+
 }

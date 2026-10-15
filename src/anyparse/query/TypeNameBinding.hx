@@ -218,7 +218,7 @@ final class TypeNameBinding {
 			final decls: Array<ResolvedType> = typesIn(files, wanted, false);
 			return decls.length > 0 ? Decls(decls) : missing;
 		}
-		final outside: Null<Array<TypeDeclInfo>> = outsideTypes(split.module);
+		final outside: Null<Array<TypeDeclInfo>> = outsideTypes(split.module, wanted);
 		if (outside == null) return Unreadable;
 		return outside.exists(t -> t.name == wanted && !t.isPrivate) ? Outside : missing;
 	}
@@ -252,7 +252,7 @@ final class TypeNameBinding {
 		}
 		return switch StdTypes.declaresModule(pkg, name) {
 			case false: Pass;
-			case true: declaresMain(outsideTypes('$pkg.$name'), name) ?? Unreadable;
+			case true: declaresMain(outsideTypes('$pkg.$name', name), name) ?? Unreadable;
 			case null: Unreadable;
 		};
 	}
@@ -276,20 +276,24 @@ final class TypeNameBinding {
 		for (scope in chain) {
 			final mains: Array<ResolvedType> = typesIn(packages[scope] ?? [], name, true);
 			if (mains.length > 0) return Decls(mains);
-			final outside: Null<Answer> = strict ? declaresMain(outsideTypes(scope == '' ? name : '$scope.$name'), name) : null;
+			final outside: Null<Answer> = strict ? declaresMain(outsideTypes(scope == '' ? name : '$scope.$name', name), name) : null;
 			if (outside != null && outside.match(Outside)) return Outside;
 		}
 		return Pass;
 	}
 
 	/**
-	 * The types the module `module`, which the index does not hold, declares — as the run's resolution scope reads
-	 * it (`SymbolIndexHost.moduleTypesInScope`), else the std listing (`StdTypes.moduleTypes`); null when neither does.
+	 * The types named `name` the module `module`, which the index does not hold, declares — as the run's resolution scope
+	 * reads it (`SymbolIndexHost.moduleTypesInScope`), else the std listing (`StdTypes.moduleTypes`); null when neither does.
 	 */
-	private function outsideTypes(module: String): Null<Array<TypeDeclInfo>> {
+	private function outsideTypes(module: String, name: String): Null<Array<TypeDeclInfo>> {
 		final host: Null<SymbolIndexHost> = _plugin is SymbolIndexHost ? cast _plugin : null;
-		final scoped: Null<Array<TypeDeclInfo>> = host != null && host.hasAnyResolutionScope() ? host.moduleTypesInScope(module) : null;
-		return scoped ?? StdTypes.moduleTypes(_plugin, module);
+		final scoped: Null<Array<TypeDeclInfo>> = host != null && host.hasAnyResolutionScope()
+			? host.moduleTypesInScope(module, name)
+			: null;
+		if (scoped != null) return scoped;
+		final std: Null<Array<TypeDeclInfo>> = StdTypes.moduleTypes(_plugin, module);
+		return std == null ? null : std.filter(t -> t.name == name);
 	}
 
 	/**

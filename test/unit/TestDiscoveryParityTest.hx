@@ -3290,6 +3290,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FN-SCOPE-KINDS-FROZEN',
 			'unit.query.GreedyDeclSpanEditBoundarySliceTest#testAGreedyModuleDeclSpanIsTrimmedToItsOwnLastToken :: control :: '
 				+ 'M-DECL-EDIT-SPAN-UNTRIMMED',
+			'unit.query.HaxelibResolverTest#testAMultiLibraryAnswerSplitsOneRootPerLibrary :: control :: '
+				+ 'M-HAXELIB-BATCH-COUNT-IGNORED',
 			'unit.query.IndexScopeTest#testAChangedSourceIsRebuilt :: control :: M-INDEX-MEMO-UNVALIDATED',
 			'unit.query.IndexScopeTest#testTheKeyTellsEveryFileSetApart :: control :: M-INDEX-KEY-UNPREFIXED,M-INDEX-MEMO-TAG-IGNORED',
 			'unit.query.IndexScopeTest#testTheMemoDiesWithTheAmbientChain :: control :: M-INDEX-MEMO-OUTLIVES-AMBIENT',
@@ -5358,6 +5360,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-BINDING-GUARDED-OTHER-BUILD',
 			'M-BINDING-STRICT-OUTSIDE',
 			'M-SCOPE-MODULE-TYPES-NONE',
+			'M-HAXELIB-BATCH-COUNT-IGNORED',
 			'M-CTOR-IMPORT-ALIAS-BLIND',
 			'M-CTOR-QUALIFIED-BLIND',
 			'M-EFFECTIVE-IGNORES-CONFIG',

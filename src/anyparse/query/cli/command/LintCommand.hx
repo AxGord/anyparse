@@ -771,8 +771,9 @@ final class LintCommand implements CliCommand {
 		// prefer-single-quotes`) pays no haxelib cost. A name that does not resolve (typo /
 		// uninstalled) is dropped with a stderr note so the run proceeds as if the lib were absent.
 		final scanRoots: Array<String> = [];
-		for (name in libNames) {
-			final dir: Null<String> = HaxelibResolver.libSourceDir(name);
+		final dirs: Array<Null<String>> = HaxelibResolver.libSourceDirs(libNames);
+		for (i => name in libNames) {
+			final dir: Null<String> = dirs[i];
 			if (dir == null)
 				CliIo.stderr('apq lint: resolutionLibs: could not resolve haxelib "$name" (not installed?); skipping\n');
 			else if (!scanRoots.contains(dir))

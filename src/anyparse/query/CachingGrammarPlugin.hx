@@ -757,8 +757,15 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		return true;
 	}
 
-	public function moduleTypesInScope(module: String): Null<Array<TypeDeclInfo>> {
-		if (_scopeModules.exists(module)) return _scopeModules[module];
+	/**
+	 * The types named `name` the module `module` declares in the resolution scope, or null when the scope holds no file of
+	 * that module or one that does not parse. The module is the file the compiler would load, `<root>/a/b/C.hx` under any
+	 * root, and only a file whose text spells `name` is parsed — the scope is never indexed whole, and an import of a module
+	 * whose source never names the type costs a substring search.
+	 */
+	public function moduleTypesInScope(module: String, name: String): Null<Array<TypeDeclInfo>> {
+		final asked: String = '$module#$name';
+		if (_scopeModules.exists(asked)) return _scopeModules[asked];
 		var named: Null<Map<String, Array<{ file: String, source: String }>>> = _scopeByFileName;
 		if (named == null) {
 			final built: Map<String, Array<{ file: String, source: String }>> = [];
@@ -775,16 +782,23 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 			_scopeByFileName = built;
 			named = built;
 		}
-		var types: Null<Array<TypeDeclInfo>> = null;
-		for (entry in named['${SourceText.lastSegment(module)}.hx'] ?? []) {
+		// The compiler finds module `a.b.C` as `<class path>/a/b/C.hx`, so that is the file looked for, under any root.
+		final tail: String = '${module.split('.').join('/')}.hx';
+		final files: Array<{ file: String, source: String }> = [
+			for (entry in named[Path.withoutDirectory(tail)] ?? []) if (entry.file == tail || StringTools.endsWith(entry.file, '/$tail'))
+				entry
+		];
+		var types: Null<Array<TypeDeclInfo>> = files.length == 0 ? null : [];
+		// A file that never spells `name` declares no type of it, so only one that does is parsed.
+		for (entry in files) if (types != null && entry.source.indexOf(name) >= 0) {
 			final info: Null<FileInfo> = IndexScope.over([entry], this).fileInfo(entry.file);
-			if (info != null && info.module == module) types = (types ?? []).concat(info.types);
+			types = info == null ? null : types.concat(info.types.filter(t -> t.name == name));
 		}
-		_scopeModules[module] = types;
+		_scopeModules[asked] = types;
 		return types;
 	}
 
-	/** Module path -> the types it declares in the resolution scope, null when the scope does not hold it (`moduleTypesInScope`). */
+	/** `module#name` -> the types of that name the module declares in the resolution scope, null when unknown (`moduleTypesInScope`). */
 	private final _scopeModules: Map<String, Null<Array<TypeDeclInfo>>> = [];
 
 	/** File name (`Mod.hx`) -> the resolution scope's sources of that name, built on the first `moduleTypesInScope`. */
