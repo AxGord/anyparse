@@ -2669,11 +2669,20 @@ decided the question; it may not become a record of runs.
   the index (`Free`); one that does not lets the next tier answer; one nothing reads stays `Unknown` — branch
   `feat/infra-B2`
 - a `#if`-guarded statement binding the name was to answer `Unknown` (old `TypeNameBinding`) or the union of an
-  all-guards-present and an all-guards-absent reading (old `TypeRefIndex`) → it is weighed against what the order
-  answers WITHOUT that statement (`bothBuilds`): the same declarations or nothing at all keep the guarded answer (a
-  build in which the name binds nothing compiles no use of it — openfl's whole `DisplayObject.hx` is `#if !flash`),
-  anything else is `Unknown`; inside that other build package and toplevel modules outside the index are read too, so
-  `#if x import a.Lambda; #end` against the std `Lambda` is `Unknown` — branch `feat/infra-B2`
+  all-guards-present and an all-guards-absent reading (old `TypeRefIndex`) → the USE SITE decides (`tierOf(name, fi,
+  at)`): a use inside the statement's own branch, or a branch of the same spelled condition chain
+  (`CondBranchPath.within`, the shared `#if` layer), is compiled only by the builds holding the statement, so its answer
+  stands (`coGuarded`; 4.3.7 probe `g2`: `#if !useB import a.T; class M extends T {} #else typedef M = b.Other; #end`
+  compiles both builds, and the one without the import never names `T`); any other use is weighed against the order
+  WITHOUT the statement (`bothBuilds`), where a package or toplevel module that nothing — index, scope, std — can read
+  is `Unknown`, never taken as absent (a use outside the region, probe `g1`, is compiled by the other build too). A
+  caller with no offset gets that strict reading. The callers that walk a declaration pass its start
+  (`MemberLookup`, `SubtypeGraph`, `StructuralTypes`, `MemberPathWalk`, `TypeTraits`, `ConfiguredTypes`, `UsingScan`,
+  `ImportBindings`, `OrphanAccessor`, `UnusedPublicMember`, `PreferArrowCallback`), `DeclaredNullity` / `OperandBinder`
+  the written type's or the member's offset, `prefer-static-extension` the call's. An intermediate version took the
+  other build's unread module as binding nothing — a guess; measured against it the strict rule alone lost 6
+  `prefer-api-idiom` findings on bd943dac and 4 fold findings on anyparse, all inside a whole-file `#if`, which the use
+  site keeps — branch `feat/infra-B2`
 - `StdTypes` was not a tier → it is, between the explicit imports and the wildcards; read from the index when the std's
   own `StdTypes.hx` is in it (`StdResolver.isStdFile`), else from the std listing, else from `STD_TYPE_NAMES` (pinned
   against the std by `TypeNameBindingTest`), a name it declares binding a built-in (`Free`) — branch `feat/infra-B2`
