@@ -3,6 +3,7 @@ package anyparse.query;
 using StringTools;
 using Lambda;
 
+import anyparse.check.CheckScan;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
 
@@ -776,6 +777,28 @@ final class MemberKinds {
 		final paren: Null<String> = shape.parenKind;
 		if (paren != null && !out.contains(paren)) out.push(paren);
 		return out;
+	}
+
+	/**
+	 * Whether code outside the project may name `member` of `container`: the member carries the public
+	 * modifier, or its container is declared under a public-by-default annotation or modifier
+	 * (`publicDefaultMetaNames`, `extern`). Fails closed — a grammar with no public modifier kind, or a
+	 * member or container whose parent cannot be found in `tree`, reads as exposed.
+	 */
+	public static function fieldExposed(
+		tree: QueryNode, member: QueryNode, container: QueryNode, plugin: GrammarPlugin, shape: RefShape
+	): Bool {
+		final publicKind: Null<String> = shape.publicModifierKind;
+		final host: Null<QueryNode> = TreePath.parentOf(tree, member);
+		final outer: Null<QueryNode> = TreePath.parentOf(tree, container);
+		if (publicKind == null || host == null || outer == null) return true;
+		final runKinds: Array<String> = CheckScan.modifierKinds(shape).concat(plugin.metaShape().metaKinds);
+		if (precedingModifiers(member, host, runKinds).exists(m -> m.kind == publicKind)) return true;
+		final publicMetaNames: Array<String> = shape.publicDefaultMetaNames ?? [];
+		final externKind: Null<String> = shape.externModifierKind;
+		return precedingModifiers(
+			container, outer, runKinds
+		).exists(m -> m.kind == externKind || m.name != null && publicMetaNames.contains(m.name));
 	}
 
 }

@@ -13,7 +13,6 @@ import anyparse.query.RawSourceScan;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.SymbolIndexHost;
-import anyparse.query.TreePath;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax;
 import anyparse.runtime.Span;
@@ -982,7 +981,7 @@ final class FieldInitAtDeclaration implements Check {
 		// An annotation the grammar cannot read proves nothing about the value it holds.
 		if (annotation != null && declared == null) return false;
 		return inertCollection(rhs, plugin, shape) && faultingFieldType(declared, shape) && !coreNameShadowed(host, file, declared, scope)
-			&& !fieldExposed(tree, member, container, plugin, shape)
+			&& !MemberKinds.fieldExposed(tree, member, container, plugin, shape)
 			&& !ReflectionScan.runtimeName(ReflectionScan.reflectionSurface(files, plugin), name)
 			&& !readObservableInScope(files, plugin, scope, file, name, span.from);
 	}
@@ -1010,7 +1009,7 @@ final class FieldInitAtDeclaration implements Check {
 		final from: Null<Int> = first?.span?.from;
 		if (name == null || owner == null || value == null || from == null) return false;
 		// no list of builds declared complete: the facts are never the truth, and nothing is asked of them
-		if (host == null || host.reachBuilds() == null || fieldExposed(tree, member, container, plugin, shape)) return false;
+		if (host == null || host.reachBuilds() == null || MemberKinds.fieldExposed(tree, member, container, plugin, shape)) return false;
 		final ownerName: String = owner;
 		final fieldName: String = name;
 		final field: MemberRef = { owner: ownerName, name: fieldName };
@@ -1141,27 +1140,6 @@ final class FieldInitAtDeclaration implements Check {
 					|| (shape.mapAbstractTypeNames ?? []).contains(head);
 			case _: false;
 		};
-	}
-
-	/**
-	 * Whether code outside the project may name `member` of `container`: the member carries the public
-	 * modifier, or its container is declared under a public-by-default annotation or modifier
-	 * (`publicDefaultMetaNames`, `extern`). Fails closed — a grammar with no public modifier kind, or a
-	 * member or container whose parent cannot be found in `tree`, reads as exposed.
-	 */
-	private static function fieldExposed(
-		tree: QueryNode, member: QueryNode, container: QueryNode, plugin: GrammarPlugin, shape: RefShape
-	): Bool {
-		final publicKind: Null<String> = shape.publicModifierKind;
-		final host: Null<QueryNode> = TreePath.parentOf(tree, member);
-		final outer: Null<QueryNode> = TreePath.parentOf(tree, container);
-		if (publicKind == null || host == null || outer == null) return true;
-		final runKinds: Array<String> = CheckScan.modifierKinds(shape).concat(plugin.metaShape().metaKinds);
-		if (MemberKinds.precedingModifiers(member, host, runKinds).exists(m -> m.kind == publicKind)) return true;
-		final publicMetaNames: Array<String> = shape.publicDefaultMetaNames ?? [];
-		final externKind: Null<String> = shape.externModifierKind;
-		return MemberKinds.precedingModifiers(container, outer, runKinds)
-			.exists(m -> m.kind == externKind || m.name != null && publicMetaNames.contains(m.name));
 	}
 
 	/**

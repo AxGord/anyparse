@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.query.CallGraph;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 
@@ -44,6 +45,11 @@ private typedef Placed = {
  * - in the constructor body the parameter is read only bare, as the right-hand side of an assignment statement to
  *   `F` or `this.F`, `F` a `final` field the constructor's class declares; any other node of the parameter's name — a
  *   call of it, a read in a nested function, the name declared again — refuses;
+ * - `F` is no field the language or library code calls by its NAME with no node of it at the call — a loop's
+ *   `iterator()` / `keyValueIterator()`, a string conversion's `toString()`, the serializer's `hxSerialize()`
+ *   (`implicitCallNames`, `reflectivelyCalledNames`) — and no field code outside the project may name: std code reads a
+ *   public field as a field of a structure it is handed (`Lambda` iterating an `Iterable`), which no occurrence shows
+ *   either (review R5 F1, `CheckScan.fieldExposed`);
  * - every node of the held files carrying the field's name is a declaration of a field of that name, the target of an
  *   assignment, a call of it (`F(...)`, `x.F(...)`) made in a function the graph holds — the value runs there — or a
  *   whole argument of a `new` of another constructor storing it the same way, whose own field is then followed alike;
@@ -77,6 +83,9 @@ final class StoredValues {
 	private final _holders: Null<Array<String>>;
 	private final _closed: (String) -> Bool;
 
+	/** The field names the language or library code calls with no node of the name at the call (`runsOnlyWhereSpelled`). */
+	private final _calledByName: Array<String>;
+
 	/** Every string literal of the held files, walked the first time a field is judged (`ReflectiveValues.literalsOf`). */
 	private var _literals: Null<Array<String>> = null;
 
@@ -91,7 +100,7 @@ final class StoredValues {
 		_trees = trees;
 		_plugin = plugin;
 		_shape = plugin.refShape();
-
+		_calledByName = (_shape.execution?.implicitCallNames ?? []).concat(_shape.execution?.reflectivelyCalledNames ?? []);
 		_holders = holders;
 		_closed = closed;
 		derive();
@@ -280,14 +289,28 @@ final class StoredValues {
 			&& _graph.declarationsOf(id).length == 1;
 	}
 
-	/** The names of the `final` fields declared beside the member `fn` in its type's body, in the tree of `file`. */
+	/**
+	 * The names of the `final` fields declared beside the member `fn` in its type's body, in the tree of `file`, that run only
+	 * where their name is spelled (`runsOnlyWhereSpelled`).
+	 */
 	private function finalFieldsBeside(file: String, fn: QueryNode): Array<String> {
-		final body: Null<QueryNode> = holderOf(_trees.ofFile(file), fn);
+		final tree: Null<QueryNode> = _trees.ofFile(file);
+		final body: Null<QueryNode> = holderOf(tree, fn);
 		final kinds: Array<String> = _shape.fieldDeclKinds ?? [];
 		final mutable: Array<String> = _shape.mutableFieldDeclKinds ?? [];
-		return body == null ? [] : [
-			for (c in body.children) if (kinds.contains(c.kind) && !mutable.contains(c.kind) && c.name != null) c.name
+		return tree == null || body == null ? [] : [
+			for (c in body.children)
+				if (kinds.contains(c.kind) && !mutable.contains(c.kind) && c.name != null && runsOnlyWhereSpelled(tree, body, c)) c.name
 		];
+	}
+
+	/**
+	 * Whether every call of the field `field` the type `body` of `tree` declares is a node of its name: not one the language or
+	 * library code calls by name (`_calledByName`), and not one code outside the project may name (`CheckScan.fieldExposed`).
+	 */
+	private function runsOnlyWhereSpelled(tree: QueryNode, body: QueryNode, field: QueryNode): Bool {
+		final name: Null<String> = field.name;
+		return name != null && !_calledByName.contains(name) && !MemberKinds.fieldExposed(tree, field, body, _plugin, _shape);
 	}
 
 	/** Every node of the held files carrying one of `names` not yet indexed, with its holder, filed by name in `_occurrences`. */

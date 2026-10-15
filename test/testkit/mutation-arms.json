@@ -4123,7 +4123,7 @@
 		},
 		{
 			"name": "M-FIAD-PUBLIC-ADMITTED",
-			"type": "anyparse.check.FieldInitAtDeclaration",
+			"type": "anyparse.query.MemberKinds",
 			"method": "fieldExposed",
 			"force": "false",
 			"note": "a public field (or one of a `@:publicFields` type) crosses `super(...)`, although code outside the project scope may read it early"
@@ -4185,7 +4185,7 @@
 			"name": "M-FIAD-PROVEN-EXPOSED",
 			"type": "anyparse.check.FieldInitAtDeclaration",
 			"method": "crossingProven",
-			"find": "host.reachBuilds() == null || fieldExposed(tree, member, container, plugin, shape)",
+			"find": "host.reachBuilds() == null || MemberKinds.fieldExposed(tree, member, container, plugin, shape)",
 			"replace": "host.reachBuilds() == null",
 			"note": "a public field crosses too, though code outside the project may read it before the base constructor returns"
 		},
@@ -21013,6 +21013,22 @@
 			"find": "return made == null || name == null ? null : keys.keyed(name, made.from);",
 			"replace": "return null;",
 			"note": "a receiver a `new` makes is untyped (R7 L1b)"
+		},
+		{
+			"name": "M-TS-STORED-IMPLICIT-NAME",
+			"type": "anyparse.check.StoredValues",
+			"method": "runsOnlyWhereSpelled",
+			"find": "return name != null && !_calledByName.contains(name) && !MemberKinds.fieldExposed(",
+			"replace": "return name != null && !MemberKinds.fieldExposed(",
+			"note": "a stored field the language calls by name (`iterator` run by a `for`) counts as only stored"
+		},
+		{
+			"name": "M-TS-STORED-PUBLIC",
+			"type": "anyparse.check.StoredValues",
+			"method": "runsOnlyWhereSpelled",
+			"find": "return name != null && !_calledByName.contains(name) && !MemberKinds.fieldExposed(tree, field, body, _plugin, _shape);",
+			"replace": "return name != null && !_calledByName.contains(name);",
+			"note": "a public stored field std code may read as a structure's counts as only stored"
 		}
 	]
 }

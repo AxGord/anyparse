@@ -2279,6 +2279,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyFoldingTest#testMainTakesOfOneLockWarnOnce :: control :: M-TS-ONE-TAKE-OFF,M-TS-ONE-TAKE-NO-WRAPPER',
 			'unit.check.ThreadSafetyHandedValueTest#testADirectCallOutranksAHandedValue :: control :: '
 				+ 'M-TS-WAY-HANDED-RANK,M-TS-OWNER-HANDED-RANK',
+			'unit.check.ThreadSafetyHandedValueTest#testAFieldTheLanguageCallsByNameIsNotOnlyStored :: control :: '
+				+ 'M-TS-STORED-IMPLICIT-NAME,M-TS-STORED-PUBLIC',
 			'unit.check.ThreadSafetyHandedValueTest#testAHandedValueRepeatsWithTheCallItIsHandedTo :: control :: M-TS-REPEAT-NO-ITERATES,M-TS-RUNS-ONCE-OFF',
 			'unit.check.ThreadSafetyHandedValueTest#testAHoldTaintsAValueHandedToACallThatRunsIt :: control :: '
 				+ 'M-TS-HANDED-RUNS-HERE,M-TS-HANDED-WINDOW-OFF,M-TS-HANDED-REACH-OFF,M-TS-HANDED-SINK-OFF',
@@ -6708,7 +6710,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-LAMBDA-ARITY',
 			'M-TS-LAMBDA-ANNOTATED',
 			'M-TS-LAMBDA-NULL',
-			'M-TS-NEW-RECEIVER'
+			'M-TS-NEW-RECEIVER',
+			'M-TS-STORED-IMPLICIT-NAME',
+			'M-TS-STORED-PUBLIC'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

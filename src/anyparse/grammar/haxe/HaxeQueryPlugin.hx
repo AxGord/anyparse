@@ -854,6 +854,8 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				mutatingMapMethods: ['arrayWrite', 'clear', 'remove', 'set'],
 				implicitCallMetaNames: ['@:op', '@:arrayAccess', '@:from', '@:to', '@:resolve'],
 				implicitCallNames: ['toString', 'iterator', 'hasNext', 'next', 'keyValueIterator'],
+				// `haxe.Serializer` / `Unserializer` call these through `Reflect`, a class implementing `Dynamic` falls back to `resolve`
+				reflectivelyCalledNames: ['hxSerialize', 'hxUnserialize', 'resolve'],
 				iterableMethodNames: ['iterator', 'keyValueIterator'],
 				implicitConstructionTypeMetaNames: ['@:structInit'],
 				extensionTypeMetaNames: ['@:using'],

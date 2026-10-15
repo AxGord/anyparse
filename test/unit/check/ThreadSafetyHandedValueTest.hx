@@ -205,6 +205,28 @@ class ThreadSafetyHandedValueTest extends Test {
 		#end
 	}
 
+	/**
+	 * Review R5 F1 (`sv/implicit-*`): the language calls some fields by NAME, with no node of that name at the call — a `for`
+	 * runs `iterator()` / `keyValueIterator()`, a string conversion runs `toString()` on dynamic targets — and std code reads a
+	 * field of a structure it is handed. Such a stored value runs where no occurrence shows it, so a field named so, or a
+	 * public one, keeps the value running where it is handed.
+	 */
+	@:pin('control') @:killer('M-TS-STORED-IMPLICIT-NAME') @:killer('M-TS-STORED-PUBLIC')
+	public function testAFieldTheLanguageCallsByNameIsNotOnlyStored(): Void {
+		#if (sys || nodejs)
+		final warns: Array<String> = ['S.work | S._m'];
+		Assert.same(warns, holds(implicit('for (x in new Ib(it)) {}')), 'a stored iterator a loop runs');
+		Assert.same(warns, holds(implicit('final ib:Ib = new Ib(it); for (x in ib) {}')), 'through a local');
+		Assert.same(warns, holds(implicit('for (k => v in new Kv(kv)) {}')), 'a stored keyValueIterator');
+		Assert.same(warns, holds(implicit('trace("" + new Ts(ts));')), 'a stored toString');
+		Assert.same(warns, holds(implicit('final p:PIb = new PIb(it); p.each();')), 'a private iterator its own loop runs');
+		Assert.same(warns, holds(implicit('new Pub(load);')), 'a public field std code may read');
+		Assert.same([], holds(implicit('new Priv(load);')), 'a private field only stored');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
 	/**
 	 * `S.work` runs on a spawned thread and holds `_m` across `held`; the main thread takes `_m` too. `load` blocks, `caught` blocks only in its `catch`, `scan` hands `load` to `Lambda.iter`.
@@ -260,6 +282,37 @@ class ThreadSafetyHandedValueTest extends Test {
 			+ ' public function work():Void { _m.acquire(); $held _m.release(); }'
 			+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> s.work()); s._m.acquire(); s._m.release(); } }'
 		]);
+	}
+
+	/**
+	 * `stored` with classes keeping the value in a field the language calls by name (`Ib`, `Kv`, `Ts`, `PIb` iterating
+	 * itself), in a public field (`Pub`) and in a private one (`Priv`); `it`, `kv`, `ts` and `load` block.
+	 */
+	private static function implicit(held: String): Array<Violation> {
+		return ThreadSafetyCheckTest.violations(
+			'{"reflectiveClasses":["nothing.*"],"reflectiveMethodHolders":["nothing.*"],'
+			+ '"rules":{"thread-safety":{"sinks":["Mutex.acquire","Disk.stat"],"spawns":["Runner.create"],'
+			+ '"lockPairs":["Mutex.acquire/release"],"closedWorld":true}}}',
+			[
+				ThreadSafetyCheckTest.MUTEX,
+				'class Runner { public static function create(fn:()->Void):Void {} }',
+				'class Disk { public static function stat(p:String):Void {} }',
+				'class Ib { public final iterator:() -> Iterator<String>; public function new(i:() -> Iterator<String>) { iterator = i; } }',
+				'class Kv { public final keyValueIterator:() -> KeyValueIterator<Int, String>;'
+				+ ' public function new(k:() -> KeyValueIterator<Int, String>) { keyValueIterator = k; } }',
+				'class Ts { public final toString:() -> String; public function new(t:() -> String) { toString = t; } }',
+				'class PIb { final iterator:() -> Iterator<String>; public function new(i:() -> Iterator<String>) { iterator = i; }'
+				+ ' public function each():Void for (x in this) {} }',
+				'class Pub { public final job:String->Void; public function new(j:String->Void) { job = j; } }',
+				'class Priv { final _job:String->Void; public function new(j:String->Void) { _job = j; } }',
+				'class S { final _m:Mutex = new Mutex(); public function new() {} function load(p:String):Void Disk.stat(p);'
+				+ ' function it():Iterator<String> { Disk.stat("p"); return null; }'
+				+ ' function kv():KeyValueIterator<Int, String> { Disk.stat("p"); return null; }'
+				+ ' function ts():String { Disk.stat("p"); return ""; }'
+				+ ' public function work():Void { _m.acquire(); $held _m.release(); }'
+				+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> s.work()); s._m.acquire(); s._m.release(); } }'
+			]
+		);
 	}
 
 	/** The hold warnings (b) of `found` as `<member> | <lock>`, sorted: a hold across short calls run once is info. */
