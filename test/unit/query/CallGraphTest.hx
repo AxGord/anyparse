@@ -1256,6 +1256,38 @@ class CallGraphTest extends Test {
 		#end
 	}
 
+	@:pin('control')
+	@:killer('M-TS-CALLED-VALUE') @:killer('M-TS-CALLED-RECEIVER') @:killer('M-TS-CALLED-NULL')
+	public function testACalledFunctionValueReturnsWhatItsFunctionTypeSays(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final g: CallGraph = graphOf([
+			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
+			'package app; import sys.thread.Lock; class A { public static var get:() -> Lock = null;'
+			+ ' public static var maybe:Null<Void -> Lock> = null; public static function maker():() -> Lock return null; }',
+			'package app; class C { static function field():Void A.get().wait(); static function result():Void A.maker()().wait();'
+			+ ' static function param(f:() -> utils.Lock):Void f().wait(); static function nullable():Void A.maybe().wait();'
+			+ ' static function local():Void { final l = A.get(); l.wait(); } static function dyn(d:Dynamic):Void d().wait(); }'
+		]);
+		function targets(from: String): Array<String> {
+			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+			out.sort(Reflect.compare);
+			return out;
+		}
+		Assert.same(['sys.thread.Lock.wait'], targets('C.field'), 'a field of a function type its own file names');
+		Assert.same(['A.maker', 'sys.thread.Lock.wait'], targets('C.result'), 'a function a call returns');
+		Assert.same(['Lock.wait'], targets('C.param'), 'a parameter of a function type');
+		Assert.same(['sys.thread.Lock.wait'], targets('C.nullable'), 'a nullable function type');
+		Assert.same(['sys.thread.Lock.wait'], targets('C.local'), 'a local the call initialises');
+		Assert.same([], targets('C.dyn'), 'a dynamic value types nothing');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	/**
 	 * A typedef aliases the type its OWN file binds the target name to, wherever the alias is used: an alias another module
 	 * declares importing the std `Lock` — imported by its module or by name — and one beside its use wait on the std lock,

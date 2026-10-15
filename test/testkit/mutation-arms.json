@@ -20885,6 +20885,30 @@
 			"find": ": types.resolveAlias(types.imports.keyedWhereWritten(",
 			"replace": ": (types.imports.keyedWhereWritten(",
 			"note": "an underlying type written as a typedef alias is not seen through"
+		},
+		{
+			"name": "M-TS-CALLED-VALUE",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (call == null) return calledResult(typeSourceOf(expr.children[0], currentType));",
+			"replace": "if (call == null) return null;",
+			"note": "a call of a value no function declaration names — a function-typed field, parameter or call result — is not typed (review R4 F7)"
+		},
+		{
+			"name": "M-TS-CALLED-RECEIVER",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "\tif (call != null) {\n\t\tfinal returned: Null<String> = returnedNominal(",
+			"replace": "\tif (recv.kind == callKind && call == null) return null;\n\tif (call != null) {\n\t\tfinal returned: Null<String> = returnedNominal(",
+			"note": "a receiver that is a call of a function-typed value stays unresolved"
+		},
+		{
+			"name": "M-TS-CALLED-NULL",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "return CallGraphNames.functionReturnSource(written?.wrapped(['Null']) ?? written);",
+			"replace": "return CallGraphNames.functionReturnSource(written);",
+			"note": "a nullable function type returns nothing the graph types"
 		}
 	]
 }

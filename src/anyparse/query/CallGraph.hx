@@ -1054,6 +1054,12 @@ final class CallGraph {
 			return name != null && CallGraphNames.isTypeLike(SourceText.lastSegment(name)) ? name : null;
 		}
 
+		/** The result type a value of the function type `typeSource` (`Null<…>` peeled) returns when called; null for any other type. */
+		function calledResult(typeSource: Null<String>): Null<String> {
+			final written: Null<TypeSyntax> = typeSource == null ? null : _plugin.typeSyntax(typeSource);
+			return CallGraphNames.functionReturnSource(written?.wrapped(['Null']) ?? written);
+		}
+
 		/** Declared simple type of a value identifier, `Null<T>` unwrapped to `T`. */
 		function identDeclaredType(name: String, span: Span): Null<String> {
 			final bindingFrom: Null<Int> = bindFor(name)[span.from];
@@ -1429,6 +1435,8 @@ final class CallGraph {
 			if (expr.kind == callKind && expr.children.length > 0) {
 				// a call's written return type, as the receiver it was made on sees it
 				final call: Null<CallTarget> = callTargetOf(expr, currentType);
+				// a value no function declaration names — a field, a parameter, a call's result — returns what its function type says
+				if (call == null) return calledResult(typeSourceOf(expr.children[0], currentType));
 				final returned: Null<String> = call == null
 					? null
 					: returnSourceOf(call.target) ?? StdTypes.returnOf(_plugin, nodes[call.target]);
@@ -1453,14 +1461,13 @@ final class CallGraph {
 			// a receiver that is itself a CALL takes the callee's DECLARED return type —
 			// an annotation the source carries, never an inferred one; a nullable /
 			// dynamic wrapper names no dispatchable type and stays unresolved
-			if (recv.kind == callKind && recv.children.length > 0) {
-				final call: Null<CallTarget> = callTargetOf(recv, currentType);
-				final returned: Null<String> = call == null
-					? null
-					: returnedNominal(
-						recv, call.target, call.receiverSource, call.onType, currentType, a -> typeSourceOf(a, currentType), member,
-						typeScopeOf(recv, currentType)
-					);
+			// a call of a value no function declaration names is typed by the value's function type, below
+			final call: Null<CallTarget> = recv.kind == callKind && recv.children.length > 0 ? callTargetOf(recv, currentType) : null;
+			if (call != null) {
+				final returned: Null<String> = returnedNominal(
+					recv, call.target, call.receiverSource, call.onType, currentType, a -> typeSourceOf(a, currentType), member,
+					typeScopeOf(recv, currentType)
+				);
 				return returned == null ? null : {
 					typeName: returned,
 					isValue: true,
