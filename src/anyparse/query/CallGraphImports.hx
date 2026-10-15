@@ -64,11 +64,6 @@ final class CallGraphImports {
 		return _enumConstructors.exists(name);
 	}
 
-	/** The indexed enums declaring a constructor named `name`, by simple name. */
-	public inline function enumsDeclaring(name: String): Array<String> {
-		return _enumConstructors[name] ?? [];
-	}
-
 
 	/**
 	 * The files (`normalizePath`d) whose declarations of the type of simple name `typeName` declare `member` itself, not a
