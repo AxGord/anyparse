@@ -9696,7 +9696,7 @@
 			"type": "anyparse.query.TypeNameBinding",
 			"method": "statementAnswer",
 			"find": "if (split.rest.length > 1 || (!aliased && split.rest.length == 1 && split.rest[0] != name)) return Pass;",
-			"replace": "if (split.rest.length > 1 || (!aliased && split.rest.length == 1 && split.rest[0] != name) || (!aliased && split.rest.length == 0 && SourceText.lastSegment(split.module) != name && !modules().exists(split.module))) return Pass;",
+			"replace": "if (split.rest.length > 1 || (!aliased && split.rest.length == 1 && split.rest[0] != name) || (!aliased && split.rest.length == 0 && SourceText.lastSegment(split.module) != name && !tables().modules.exists(split.module))) return Pass;",
 			"note": "an unindexed module import is taken to declare no sub-type of the name"
 		},
 		{
