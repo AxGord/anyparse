@@ -1228,6 +1228,34 @@ class CallGraphTest extends Test {
 		#end
 	}
 
+	@:pin('control')
+	@:killer('M-TS-FORWARD-KEYED') @:killer('M-TS-FORWARD-PARAM') @:killer('M-TS-FORWARD-ALIAS')
+	public function testAForwardedCallRunsTheUnderlyingTheAbstractsFileNames(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final g: CallGraph = graphOf([
+			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
+			'package app; class T { public function new() {} public function wait():Bool return true; }',
+			'package app; import sys.thread.Lock; @:forward abstract H(Lock) { public inline function new(l:Lock) this = l; }',
+			'package app; import sys.thread.Lock; typedef Held = Lock; @:forward abstract HA(Held) { public inline function new(l:Held) this = l; }',
+			'package app; @:forward abstract W<T>(T) { public inline function new(v:T) this = v; }',
+			'package app; class C { static function h(x:H):Void x.wait(); static function ha(x:HA):Void x.wait();'
+			+ ' static function w(x:W<utils.Lock>):Void x.wait(); }'
+		]);
+		function targets(from: String): Array<String> {
+			return [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+		}
+		Assert.same(['sys.thread.Lock.wait'], targets('C.h'), 'the underlying type the abstract\'s own file imports');
+		Assert.same(['sys.thread.Lock.wait'], targets('C.ha'), 'an alias the abstract\'s file declares, seen through');
+		Assert.same([], targets('C.w'), 'an underlying type parameter is no type the abstract names');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	/**
 	 * A typedef aliases the type its OWN file binds the target name to, wherever the alias is used: an alias another module
 	 * declares importing the std `Lock` — imported by its module or by name — and one beside its use wait on the std lock,

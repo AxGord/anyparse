@@ -20682,16 +20682,16 @@
 			"name": "M-TS-ALIAS-KEYED",
 			"type": "anyparse.query.CallGraphTypes",
 			"method": "resolveAlias",
-			"find": "t = keyed.length == 1 ? keyed[0] : alias.simple;",
+			"find": "t = imports.keyedWhereWritten(alias.written, alias.simple);",
 			"replace": "t = alias.simple;",
 			"note": "a typedef aliases the simple name of its target, whatever its own file imports (review R4 F7)"
 		},
 		{
 			"name": "M-TS-ALIAS-AGREE",
-			"type": "anyparse.query.CallGraphTypes",
-			"method": "resolveAlias",
-			"find": "t = keyed.length == 1 ?",
-			"replace": "t = keyed.length > 0 ?",
+			"type": "anyparse.query.CallGraphImports",
+			"method": "keyedWhereWritten",
+			"find": "return keyed.length == 1 ?",
+			"replace": "return keyed.length > 0 ?",
 			"note": "two declarations keying an alias apart alias the first one's target"
 		},
 		{
@@ -20861,6 +20861,30 @@
 			"find": "if (field == null || !finals.contains(field)) {",
 			"replace": "if (field == null) return; if (!finals.contains(field)) {",
 			"note": "a parameter the constructor also calls, or reads in a nested function, counts as only stored"
+		},
+		{
+			"name": "M-TS-FORWARD-KEYED",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": ": types.resolveAlias(types.imports.keyedWhereWritten(types.meta.forwardsWritten(written.typeName), simple));",
+			"replace": ": types.resolveAlias(simple);",
+			"note": "a `@:forward` abstract routes to the simple name of its underlying type, whatever its own file imports (review R4 F7)"
+		},
+		{
+			"name": "M-TS-FORWARD-PARAM",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "final forwarded: Null<String> = simple == null || types.generics.declaresTypeParam(written.typeName, simple)",
+			"replace": "final forwarded: Null<String> = simple == null",
+			"note": "an abstract forwarding to its own type parameter routes to a type of that name"
+		},
+		{
+			"name": "M-TS-FORWARD-ALIAS",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": ": types.resolveAlias(types.imports.keyedWhereWritten(",
+			"replace": ": (types.imports.keyedWhereWritten(",
+			"note": "an underlying type written as a typedef alias is not seen through"
 		}
 	]
 }

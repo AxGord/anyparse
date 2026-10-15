@@ -3031,6 +3031,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.BodySlotGuardSliceTest#testAllowsWholeElseBranchRemoval :: control :: M-BODYSLOT-LEAD-KEPT',
 			'unit.query.CallGraphTest#testADeclaredTypeIsReadInTheFileThatWroteIt :: control :: '
 				+ 'M-TS-DECL-MEMBER-FILE,M-TS-DECL-RETURN-FILE,M-TS-DECL-READ-FROM,M-TS-DECL-BOUND,M-TS-PATH-NULLABLE-KEYED',
+			'unit.query.CallGraphTest#testAForwardedCallRunsTheUnderlyingTheAbstractsFileNames :: control :: '
+				+ 'M-TS-FORWARD-KEYED,M-TS-FORWARD-PARAM,M-TS-FORWARD-ALIAS',
 			'unit.query.CallGraphTest#testAFunctionsOwnTypeParameterIsWhatItsArgumentsBind :: control :: '
 				+ 'M-GRAPH-FN-RETURN-PARAM,M-TS-INFER-AGREE,M-TS-INFER-REST,M-TS-INFER-SHADOW,M-TS-INFER-BARE',
 			'unit.query.CallGraphTest#testALambdaParameterIsNoReferenceToItsLambda :: control :: M-GRAPH-LAMBDA-PARAM-SELF',
@@ -6679,7 +6681,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-CTOR-STORE-CLOSED',
 			'M-TS-CTOR-STORE-SPELLED',
 			'M-TS-CTOR-STORE-STATEMENT',
-			'M-TS-CTOR-STORE-USE'
+			'M-TS-CTOR-STORE-USE',
+			'M-TS-FORWARD-KEYED',
+			'M-TS-FORWARD-PARAM',
+			'M-TS-FORWARD-ALIAS'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

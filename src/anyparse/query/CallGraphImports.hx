@@ -278,6 +278,20 @@ final class CallGraphImports {
 	}
 
 	/**
+	 * The type `written` — the path each declaration writes, with the file writing it — names, read where written
+	 * (`typeOf`): a library type a project type's simple name bears is keyed apart. `simple` when none is written, or two
+	 * declarations key it apart.
+	 */
+	public function keyedWhereWritten(written: Array<{ path: String, file: String }>, simple: String): String {
+		final keyed: Array<String> = [];
+		for (w in written) {
+			final key: String = typeOf(w.file, w.path);
+			if (!keyed.contains(key)) keyed.push(key);
+		}
+		return keyed.length == 1 ? keyed[0] : simple;
+	}
+
+	/**
 	 * The dotted path the simple name `written` means in `file`, when an import, an alias or a wildcard import of a package
 	 * binds it there (`typeOf`); null when none does. With `maybe` handed, the paths it may mean on some builds or where
 	 * that cannot be told land in it: those an `#if`-guarded import binds it to, and the ones a wildcard may supply it from

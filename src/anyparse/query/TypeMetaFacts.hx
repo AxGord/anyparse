@@ -2,6 +2,8 @@ package anyparse.query;
 
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 
+using Lambda;
+
 /**
  * What the modifiers and metadata of each indexed type declaration say about how code reaches its members:
  * `extern` (its code belongs to the target), a build macro (it may gain members no declaration shows), a
@@ -26,6 +28,9 @@ final class TypeMetaFacts {
 
 	/** `@:forward` abstract name -> the simple name of the underlying type its calls are routed to. */
 	private final _forwards: Map<String, String> = [];
+
+	/** `@:forward` abstract name -> the head path each declaration of it writes as its underlying type, with the file writing it. */
+	private final _forwardsWritten: Map<String, Array<{ path: String, file: String }>> = [];
 
 	/** `@:forward(a, b)` abstract name -> the only members it forwards. */
 	private final _forwardedOnly: Map<String, Array<String>> = [];
@@ -93,8 +98,16 @@ final class TypeMetaFacts {
 		return only != null && !only.contains(member) ? null : _forwards[typeName];
 	}
 
-	/** Fold the modifiers and metadata of one declaration. */
-	public function record(t: TypeDeclInfo): Void {
+	/**
+	 * The head path of the underlying type each declaration of the `@:forward` abstract `typeName` writes, with the file
+	 * writing it — where the name is read (`CallGraphImports.keyedWhereWritten`); none for a `#if`-guarded declaration.
+	 */
+	public inline function forwardsWritten(typeName: String): Array<{ path: String, file: String }> {
+		return _forwardsWritten[typeName] ?? [];
+	}
+
+	/** Fold the modifiers and metadata of one declaration, of the file keyed `file`. */
+	public function record(t: TypeDeclInfo, file: String): Void {
 		if (t.isExtern) _externs[t.name] = true;
 		if (_classKinds.contains(t.kind)) _classes[t.name] = true;
 		if (_enumKinds.contains(t.kind))
@@ -106,6 +119,13 @@ final class TypeMetaFacts {
 		if (t.bringsExtensions) _extended[t.name] = true;
 		final forward: Null<String> = t.abstractForwardUnderlying;
 		if (forward != null && forward != t.name) _forwards[t.name] = forward;
+		final underlying: Null<String> = forward == null ? null : t.underlyingRaw;
+		if (underlying != null) {
+			final under: String = underlying;
+			final written: Array<{ path: String, file: String }> = _forwardsWritten[t.name] ?? [];
+			if (!written.exists(w -> w.path == under && w.file == file)) written.push({ path: under, file: file });
+			_forwardsWritten[t.name] = written;
+		}
 		final only: Null<Array<String>> = t.forwardedMembers;
 		if (only != null) _forwardedOnly[t.name] = only;
 	}

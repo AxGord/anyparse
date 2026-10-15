@@ -218,14 +218,8 @@ final class CallGraphTypes {
 			final alias: Null<{ simple: String, written: Array<{ path: String, file: String }> }> = _aliases[t];
 			if (alias == null) break;
 			seen.push(t);
-			// the target its own file binds the name to (`CallGraphImports.typeOf`), a library type a project type's simple name
-			// bears keyed apart — the simple target when two declarations key it apart
-			final keyed: Array<String> = [];
-			for (w in alias.written) {
-				final key: String = imports.typeOf(w.file, w.path);
-				if (!keyed.contains(key)) keyed.push(key);
-			}
-			t = keyed.length == 1 ? keyed[0] : alias.simple;
+			// the target its own file binds the name to, a library type a project type's simple name bears keyed apart
+			t = imports.keyedWhereWritten(alias.written, alias.simple);
 		}
 		return t;
 	}
@@ -280,7 +274,7 @@ final class CallGraphTypes {
 	private function record(t: TypeDeclInfo, file: String): Void {
 		// a typedef re-exporting a type of its own name is not a second declaration of it
 		if (!CallGraphNames.selfAlias(t)) _declarations[t.name] = (_declarations[t.name] ?? 0) + 1;
-		meta.record(t);
+		meta.record(t, file);
 		if (t.isAnonStruct) _anonStructs[t.name] = true;
 		unionInto(_kinds, t.name, [t.kind]);
 		unionInto(_supers, t.name, t.supertypes);

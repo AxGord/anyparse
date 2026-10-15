@@ -1813,11 +1813,15 @@ final class CallGraph {
 			written: Receiver, calleeName: String, span: Null<Span>, field: Null<String>, currentType: Null<String>
 		): Null<String> {
 			final from: String = frameId(currentType);
-			// a `@:forward` abstract routes a member it does not declare to its underlying value
-			final forwarded: Null<String> = memberOnChain(written.typeName, calleeName) == null
+			// a `@:forward` abstract routes a member it does not declare to its underlying value: the type the abstract's own file
+			// names, seen through an alias — none for a type parameter of the abstract, whose members are the type argument's
+			final simple: Null<String> = memberOnChain(written.typeName, calleeName) == null
 				&& types.memberOnChain(written.typeName, calleeName) == null
 				? types.meta.forwardedTo(written.typeName, calleeName)
 				: null;
+			final forwarded: Null<String> = simple == null || types.generics.declaresTypeParam(written.typeName, simple)
+				? null
+				: types.resolveAlias(types.imports.keyedWhereWritten(types.meta.forwardsWritten(written.typeName), simple));
 			final recv: Receiver = forwarded == null ? written : { typeName: forwarded, isValue: true, isDynamic: false };
 			final resolved: Null<String> = memberOnChain(recv.typeName, calleeName);
 			if (resolved == null && types.fieldOnChain(recv.typeName, calleeName)) {
