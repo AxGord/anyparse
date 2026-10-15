@@ -1673,9 +1673,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.OwnedTypesCheckTest#testAStaticMemberIsReachedThroughItsType :: control :: M-OWNED-STATIC-THROUGH-SUBTYPE',
 			'unit.check.OwnedTypesCheckTest#testAValueNamedLikeTheTypeIsNotReported :: control :: M-OWNED-VALUE-IS-TYPE',
 			'unit.check.OwnedTypesCheckTest#testAnImportAndAnAliasAreMentions :: control :: M-OWNED-IMPORTS-IGNORED,M-OWNED-ALIAS-IGNORED',
-			'unit.check.OwnedTypesCheckTest#testAnInstanceMemberIsReachedThroughATypedReceiver :: control :: M-OWNED-INSTANCE-BY-NAME,M-OWNED-NO-SUPERTYPE-WALK',
+			'unit.check.OwnedTypesCheckTest#testAnInstanceMemberIsReachedThroughATypedReceiver :: control :: M-OWNED-NO-SUPERTYPE-WALK',
 			'unit.check.OwnedTypesCheckTest#testAnOwnerTypeOwnsItsOwnBody :: control :: M-OWNED-ENCLOSING-TYPE',
-			'unit.check.OwnedTypesCheckTest#testAnUnknownReceiverIsReportedForAStaticOnly :: control :: M-OWNED-STATIC-UNKNOWN-SILENT,M-OWNED-UNKNOWN-SILENT',
+			'unit.check.OwnedTypesCheckTest#testAnUnknownReceiverIsReportedForAStaticOnly :: control :: '
+				+ 'M-OWNED-STATIC-UNKNOWN-SILENT,M-OWNED-UNKNOWN-SILENT,M-OWNED-INSTANCE-BY-NAME',
 			'unit.check.OwnedTypesCheckTest#testAnUnresolvableMentionIsReported :: control :: M-OWNED-UNKNOWN-SILENT',
 			'unit.check.OwnedTypesCheckTest#testConstructionIsTheNewMember :: control :: M-OWNED-CTOR-ANY-TYPE',
 			'unit.check.OwnedTypesCheckTest#testNoDeclarationIsInert :: control :: M-OWNED-SKIP-REASON-NULL',

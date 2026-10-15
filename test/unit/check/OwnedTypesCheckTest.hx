@@ -129,7 +129,7 @@ class OwnedTypesCheckTest extends Test {
 	}
 
 	/** An instance member is reached through a receiver the shared typer types — a subtype included — and only there. */
-	@:pin('control') @:killer('M-OWNED-INSTANCE-BY-NAME') @:killer('M-OWNED-NO-SUPERTYPE-WALK')
+	@:pin('control') @:killer('M-OWNED-NO-SUPERTYPE-WALK')
 	public function testAnInstanceMemberIsReachedThroughATypedReceiver(): Void {
 		final user: String = 'package b;\n\nimport a.Owned;\nimport a.Sub;\n\nclass User {\n'
 			+ '\tfunction m(o: Owned, s: Sub, d: Dynamic): Void {\n\t\to.run();\n\t\ts.run();\n\t\td.run();\n\t}\n}\n';
@@ -137,7 +137,7 @@ class OwnedTypesCheckTest extends Test {
 	}
 
 	/** A receiver whose meaning is unknown reaches a static by name; an instance member is never matched by name alone. */
-	@:pin('control') @:killer('M-OWNED-STATIC-UNKNOWN-SILENT') @:killer('M-OWNED-UNKNOWN-SILENT')
+	@:pin('control') @:killer('M-OWNED-STATIC-UNKNOWN-SILENT') @:killer('M-OWNED-UNKNOWN-SILENT') @:killer('M-OWNED-INSTANCE-BY-NAME')
 	public function testAnUnknownReceiverIsReportedForAStaticOnly(): Void {
 		final user: String =
 			'package b;\n\nimport gone.Thing;\n\nclass User {\n\tfunction m(): Void {\n\t\tThing.make();\n\t\tThing.run();\n\t}\n}\n';
