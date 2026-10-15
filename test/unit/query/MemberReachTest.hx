@@ -535,7 +535,7 @@ class MemberReachTest extends Test {
 			{ file: 'F0.hx', source: src },
 			{ file: 'F1.hx', source: 'class Other { public var items:Array<Int> = []; public function new() {} }' },
 			{ file: 'F2.hx', source: 'class Poker { public static function poke(o:Other):Void { o.items.push(9); } }' },
-			{ file: 'std/Array.hx', source: STD_ARRAY }
+			{ file: QueryTestHelpers.stdPath('Array.hx'), source: STD_ARRAY }
 		];
 		final member: MemberRef = { owner: 'C', name: 'items' };
 		function run(plugin: CachingGrammarPlugin): ReachResult {
@@ -602,7 +602,7 @@ class MemberReachTest extends Test {
 			final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 			final files: Array<{ file: String, source: String }> = [for (i in 0...project.length) { file: 'F$i.hx', source: project[i] }];
 			final libs: Array<{ file: String, source: String }> = [for (i in 0...library.length) { file: 'L$i.hx', source: library[i] }];
-			libs.push({ file: 'std/Array.hx', source: STD_ARRAY });
+			libs.push({ file: QueryTestHelpers.stdPath('Array.hx'), source: STD_ARRAY });
 			return new MemberReach(
 				plugin, files, SymbolIndex.build(files.concat(libs), plugin), true, MemberReach.MAX_LIBRARY_FILES, MemberReach.MAX_VISITED,
 				null, () -> complete
@@ -1908,7 +1908,7 @@ class MemberReachTest extends Test {
 		final libs: Array<{ file: String, source: String }> = [
 			for (i in 0...(library ?? []).length) { file: 'L$i.hx', source: (library ?? [])[i] }
 		];
-		libs.push({ file: 'std/Array.hx', source: STD_ARRAY });
+		libs.push({ file: QueryTestHelpers.stdPath('Array.hx'), source: STD_ARRAY });
 		final reach: MemberReach = new MemberReach(
 			plugin, files, SymbolIndex.build(files.concat(libs), plugin), true, MemberReach.MAX_LIBRARY_FILES, MemberReach.MAX_VISITED,
 			configurations, () -> true
@@ -1952,7 +1952,7 @@ class MemberReachTest extends Test {
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		final files: Array<{ file: String, source: String }> = [for (i in 0...project.length) { file: 'F$i.hx', source: project[i] }];
 		final libs: Array<{ file: String, source: String }> = QueryTestHelpers.rootModules(library ?? []);
-		libs.push({ file: 'std/Array.hx', source: STD_ARRAY });
+		libs.push({ file: QueryTestHelpers.stdPath('Array.hx'), source: STD_ARRAY });
 		return new MemberReach(
 			plugin, files, SymbolIndex.build(files.concat(libs), plugin), scopeKnown, MemberReach.MAX_LIBRARY_FILES,
 			MemberReach.MAX_VISITED, null, () -> true

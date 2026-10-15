@@ -1322,6 +1322,55 @@ class CallGraphTest extends Test {
 	}
 
 	/**
+	 * Review L3 G2 / G6 (`f2x/top-list(-rev)`, `proj-vec(-rev)`, `xfile-other`): a container is the std one only where the
+	 * file that WROTE its type binds the name to the std's declaration — a project type at a std path (`haxe/ds/Vector.hx`,
+	 * a root `List.hx`) shadows the std's on the class path (4.3.7, `hx/g2`), and a field type read in another file is what
+	 * its declaring file's imports make it (`import lib.List;` there is no std list). A `Null<T>` parameter of a project
+	 * type in a package is keyed as that type.
+	 */
+	@:pin('control') @:killer('M-TS-STD-CONTAINER-DECLARED') @:killer('M-TS-STD-CONTAINER-WHERE') @:killer('M-TS-NULLABLE-PATH-KEY')
+	public function testAContainerIsTheStdOneOnlyWhereItsWritingFileBindsIt(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final lock: String = 'package utils; class Lock { public function new() {} public function wait():Bool return true; }';
+		function targets(g: CallGraph, from: String): Array<String> {
+			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+			out.sort(Reflect.compare);
+			return out;
+		}
+		final list: CallGraph = graphOf([
+			lock,
+			'class List<T> { public function new() {} public function iterator():Iterator<utils.Lock> return null; }',
+			'class C { static function top():Void { final l:List<sys.thread.Lock> = null; for (x in l) x.wait(); } }'
+		]);
+		Assert.same(['Lock.wait'], targets(list, 'C.top'), 'a root List.hx is the project\'s: its iterator() yields utils.Lock');
+		final vector: CallGraph = graphOf([
+			lock,
+			'package haxe.ds; class Vector<T> { public function new(n:Int) {} public function iterator():Iterator<utils.Lock> return null; }',
+			'import haxe.ds.Vector; class C { static function vec():Void { final v:Vector<sys.thread.Lock> = null; for (x in v) x.wait(); } }'
+		]);
+		Assert.same(['Lock.wait'], targets(vector, 'C.vec'), 'a project haxe/ds/Vector.hx shadows the std\'s');
+		final crossFile: CallGraph = graphOf([
+			lock,
+			'package other; import lib.List; class Holder { public static var l:List<utils.Lock> = null; }',
+			'import other.Holder; class C { static function read():Void for (x in Holder.l) x.wait(); }'
+		]);
+		Assert.same([], targets(crossFile, 'C.read'), 'a field type is what its declaring file binds: `lib.List` is no std list');
+		final nullable: CallGraph = graphOf([
+			lock,
+			'package app; class Data { public function new() {} public function go():Void {} }',
+			'package app; class U { static function run(d:Null<Data>):Void d.go(); }'
+		]);
+		Assert.same(['Data.go'], targets(nullable, 'U.run'), 'a Null<T> parameter of a project type in a package');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
 	 * Review L3 G5 (`f7x/modfn-super`): a module-level function sees no class's members — not those of the main class whose
 	 * name it shares with the module, nor that class's supertype statics — so its bare names are its module's and its
 	 * imports' (Haxe 4.3.7: the main class's own static called bare there is `Unknown identifier`). A static an import binds,
@@ -1565,7 +1614,10 @@ class CallGraphTest extends Test {
 			}
 		];
 		final std: Array<{ file: String, source: String }> = [
-			{ file: 'std/Array.hx', source: 'extern class Array<T> { public function new(); public function push(x:T):Int; }' }
+			{
+				file: QueryTestHelpers.stdPath('Array.hx'),
+				source: 'extern class Array<T> { public function new(); public function push(x:T):Int; }'
+			}
 		];
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final indexed: CallGraph = CallGraph.build(project, plugin, SymbolIndex.build(project.concat(std), plugin));

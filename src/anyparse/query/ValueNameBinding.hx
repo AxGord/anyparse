@@ -80,6 +80,21 @@ final class ValueNameBinding {
 	}
 
 	/**
+	 * The types the `using` statements of `fi` (its own, then its ambient chain's) bring static extensions from, by simple
+	 * name, each once: every non-private type of the module `using p.Mod;` names — its sub-types' statics too (4.3.7) — the
+	 * one type `using p.Mod.Sub;` names, and the last segment of a module the index does not hold.
+	 */
+	public function usingTypes(fi: FileInfo): Array<String> {
+		final out: Array<String> = [];
+		for (imp in importsOf(fi)) if (imp.kind == ImportKind.Using) {
+			final types: Null<Array<ResolvedType>> = _refs.names.importedTypes(imp.raw);
+			final names: Array<String> = types == null ? [SourceText.lastSegment(imp.raw)] : [for (t in types) t.type.name];
+			for (n in names) if (!out.contains(n)) out.push(n);
+		}
+		return out;
+	}
+
+	/**
 	 * The static the alias statement `imp` binds (`staticOf`) under its alias name; one with no target when its path does
 	 * not decode, null when it names a type or a module.
 	 */

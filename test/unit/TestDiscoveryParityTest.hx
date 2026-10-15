@@ -3056,6 +3056,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-TS-CALLED-VALUE,M-TS-CALLED-RECEIVER,M-TS-CALLED-NULL',
 			'unit.query.CallGraphTest#testAContainerIsTheStandardOneOnlyWhereItsNameMeansIt :: control :: '
 				+ 'M-TS-STD-CONTAINER,M-TS-STD-CONTAINER-DECLARED,M-TS-STD-CONTAINER-WHERE,M-TS-STD-CONTAINER-GUARDED,M-TS-STD-CONTAINER-STD-OWN',
+			'unit.query.CallGraphTest#testAContainerIsTheStdOneOnlyWhereItsWritingFileBindsIt :: control :: '
+				+ 'M-TS-STD-CONTAINER-DECLARED,M-TS-STD-CONTAINER-WHERE,M-TS-NULLABLE-PATH-KEY',
 			'unit.query.CallGraphTest#testADeclaredTypeIsReadInTheFileThatWroteIt :: control :: '
 				+ 'M-TS-DECL-MEMBER-FILE,M-TS-DECL-RETURN-FILE,M-TS-DECL-READ-FROM,M-TS-DECL-BOUND,M-TS-PATH-NULLABLE-KEYED',
 			'unit.query.CallGraphTest#testAForwardedCallRunsTheUnderlyingTheAbstractsFileNames :: control :: '
@@ -4077,6 +4079,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-INDEX-GUARDED-PRIVATE-SPLIT,M-INDEX-GUARDED-PRIVATE-PAST-MODIFIERS',
 			'unit.query.SymbolIndexSliceTest#testPlatformFileDeclaresTheModuleBeforeItsDot :: control :: '
 				+ 'M-MODULE-PLATFORM,M-MODULE-SCAN-PLATFORM',
+			'unit.query.TypeNameBindingTest#testADeclarationIsAtItsCanonicalPath :: control :: M-BINDINGS-DECLS-AT-SUBTYPE,M-CANONICAL-SUBTYPE',
 			'unit.query.TypeNameBindingTest#testAGuardedImportAgainstAStdTypeIsUnknown :: control :: M-BINDING-STRICT-OUTSIDE',
 			'unit.query.TypeNameBindingTest#testAGuardedImportAgainstAnotherBindingIsUnknown :: control :: M-AMBIENT-GUARDED-UNION',
 			'unit.query.TypeNameBindingTest#testAGuardedImportBindsWhereTheOtherBuildProvablyBindsNothing :: control :: '
@@ -4097,9 +4100,12 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.TypeNameBindingTest#testAWildcardBindsMainTypesOnly :: control :: M-BINDING-SUBTYPES-VISIBLE',
 			'unit.query.TypeNameBindingTest#testAnImportLineListsTheNonPrivateTypesItBinds :: control :: M-BINDING-PRIVATE-VISIBLE',
 			'unit.query.TypeNameBindingTest#testAnUnreadableModuleImportIsUnknown :: control :: M-BINDING-UNINDEXED-MODULE-FREE',
+			'unit.query.TypeNameBindingTest#testBindingsListEveryBuildsType :: control :: '
+				+ 'M-TS-GUARDED-IMPORT,M-TS-WILD-MAYBE,M-BINDINGS-UNREADABLE-SUBTYPE,M-TS-WILD-GUARDED',
 			'unit.query.TypeNameBindingTest#testStdTypesOutrankThePackage :: control :: M-BINDING-STDTYPES-CUT',
 			'unit.query.TypeNameBindingTest#testTheLastExplicitImportWins :: control :: M-BINDING-FIRST-STATEMENT-WINS',
 			'unit.query.TypeNameBindingTest#testTheModulesOwnTypeOutranksAnImport :: control :: M-BINDING-OWN-TIER-CUT',
+			'unit.query.TypeNameBindingTest#testThePackageTierReadsTheStdCoresModulesPackageByPackage :: control :: M-TS-PACKAGE-PROJECT-FIRST',
 			'unit.query.TypeNameBindingTest#testTheStdTypesNamesAreTheStdsOwn :: guard :: ',
 			'unit.query.TypeNameBindingTest#testWildcardsAreAskedLastFirst :: control :: M-BINDING-FIRST-STATEMENT-WINS',
 			'unit.query.UncheckedConversionsTest#testAFactsFileSaysTheTargetItsBuildGeneratesCodeFor :: control :: M-FACTS-TARGET-RECORD',
@@ -4111,6 +4117,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-UNCHECKED-CLASS-EXTERN,M-UNCHECKED-ALIKE',
 			'unit.query.ValueNameBindingTest#testAModuleFieldComesBeforeAnyImport :: control :: '
 				+ 'M-TS-MODULE-NAME,M-TS-MODULE-NAME-NESTED,M-TS-MODULE-NAME-ALIAS',
+			'unit.query.ValueNameBindingTest#testAUsingBringsEveryTypeOfItsModule :: control :: M-USING-MODULE-TYPES',
 			'unit.query.ValueNameBindingTest#testAWildcardBringsTheTypesStaticsOnly :: control :: '
 				+ 'M-GRAPH-UNLISTED-WILDCARD,M-VALUES-OWNER-BY-NAME,M-VALUES-EXTERN,M-VALUES-BUILT-ABOVE',
 			'unit.query.ValueNameBindingTest#testAnAliasWhosePathDoesNotDecodeMayBeAnyStatic :: control :: M-VALUES-ALIAS-UNDECODED',
@@ -6818,6 +6825,11 @@ class TestDiscoveryParityTest extends Test {
 			'M-VALUES-ALIAS-UNDECODED',
 			'M-TS-MODULE-FN-CLASS-CHAIN',
 			'M-TS-MODULE-FN-IMPORTED-REF',
+			'M-BINDINGS-UNREADABLE-SUBTYPE',
+			'M-BINDINGS-DECLS-AT-SUBTYPE',
+			'M-CANONICAL-SUBTYPE',
+			'M-USING-MODULE-TYPES',
+			'M-TS-NULLABLE-PATH-KEY',
 			'M-TS-OVERLOAD-RETURN',
 			'M-TS-OVERLOAD-RETURN-EACH',
 			'M-TS-OVERLOAD-PARAMS',

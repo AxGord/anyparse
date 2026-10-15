@@ -12,7 +12,8 @@ using Lambda;
 using StringTools;
 
 /**
- * The types one file writes, spelled as a `CallGraph` keys them (`CallGraphImports.typeOf`): a name an import or an
+ * The types one file writes, spelled as a `CallGraph` keys them (`CallGraphImports.typeOf`),
+ * each written by the path of the type it binds to (`writtenAs`): a name an import or an
  * alias of the file binds, or a dotted path, is the type it names — a library type never merges into a project type
  * of its simple name — and an unannotated local initialised by a `new` holds the type it makes. The declared types a
  * `TypeInfoProvider` reads by simple name, re-keyed. A type another file declares is keyed through THAT file's imports (`keyedIn`,
@@ -166,10 +167,10 @@ final class CallGraphKeys {
 			final from: Int = d.span.from;
 			switch d.shape {
 				case Nominal(path, _) if (from >= at && typeSource.substr(from, path.length) == path && !(unkeyed ?? []).contains(path)):
-					final key: String = imports.typeOf(file, path);
-					if (key != path) {
+					final spelled: String = imports.writtenAs(file, path);
+					if (spelled != path) {
 						out.add(typeSource.substring(at, from));
-						out.add(key);
+						out.add(spelled);
 						at = from + path.length;
 					}
 				case _:

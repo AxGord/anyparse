@@ -2913,7 +2913,7 @@ typedef RefShape = {
 	 * The paths a container name of `indexedElementTypeParams` / `iterationElementTypeParams` denotes as the STANDARD type
 	 * those maps describe, keyed by that simple name (Haxe `List` -> `List`, `haxe.ds.List`): a project or library type
 	 * bearing the name is another type, whose element only its own `iterator()` / `next()` say. A reader whose name is not
-	 * provably one of these paths (`CallGraphImports.namesStandard`) leaves the listed parameter alone. Optional; unset
+	 * provably one of these paths (`CallGraphImports.isStandard`) leaves the listed parameter alone. Optional; unset
 	 * makes the call graph read no container's listed parameter.
 	 */
 	@:optional var standardContainerPaths: Map<String, Array<String>>;

@@ -3,7 +3,6 @@ package anyparse.check;
 import anyparse.query.BinderScan;
 import anyparse.query.BoolExprShape;
 import anyparse.query.CallGraph;
-import anyparse.query.CallGraphImports;
 import anyparse.query.CallGraphNames;
 import anyparse.query.CallGraphTypes;
 import anyparse.query.CasePatterns;
@@ -245,7 +244,7 @@ final class ReflectiveReach {
 	 */
 	private function neverMade(type: String): Bool {
 		final globs: Null<Array<String>> = _reflectiveClasses;
-		final paths: Array<String> = _graph.types.imports.declaredPathsOf(type);
+		final paths: Array<String> = _graph.declaredPathsOf(type);
 		if (globs == null || paths.length == 0 || paths.exists(p -> globs.exists(g -> Glob.qualifiedNames(g).match(p)))) return false;
 		final made: Array<String> = madeTypes();
 		return _unresolvedMade.length == 0 && !made.contains(type);
@@ -310,24 +309,17 @@ final class ReflectiveReach {
 		final types: CallGraphTypes = _graph.types;
 		final simple: String = CallGraphNames.lastSegments(written, 1);
 		final out: Array<String> = [simple];
-		for (key in keysOf(file, written, [])) for (t in [key, types.resolveAlias(key)]) if (!out.contains(t)) out.push(t);
+		for (key in keysOf(file, written)) for (t in [key, types.resolveAlias(key)]) if (!out.contains(t)) out.push(t);
 		return out;
 	}
 
 	/**
-	 * The keys the name `written` may mean in `file` (`CallGraphImports.typeOf`), recording nothing: the one an import,
-	 * an alias or a wildcard binds it to — itself when none does — then each one an `#if`-guarded import or a wildcard may
-	 * supply it as, whose paths land in `maybe`.
+	 * The keys the name `written` may mean in `file` (`CallGraph.typeKeysOf`): the one the file binds it to, then each
+	 * one an `#if`-guarded statement or a wildcard may bind it to instead — itself when nothing binds it.
 	 */
-	private function keysOf(file: String, written: String, maybe: Array<String>): Array<String> {
-		final imports: CallGraphImports = _graph.types.imports;
-		final path: Null<String> = written.indexOf('.') >= 0 ? written : imports.boundPath(file, written, maybe);
-		final out: Array<String> = [path == null ? written : imports.pathKey(path)];
-		for (p in maybe) {
-			final key: String = imports.pathKey(p);
-			if (!out.contains(key)) out.push(key);
-		}
-		return out;
+	private function keysOf(file: String, written: String): Array<String> {
+		final keys: Array<String> = _graph.typeKeysOf(file, written);
+		return keys.length == 0 ? [written] : keys;
 	}
 
 	/**
@@ -340,14 +332,11 @@ final class ReflectiveReach {
 	 */
 	private function unresolvedMade(file: String, written: String): Bool {
 		final types: CallGraphTypes = _graph.types;
-		final maybe: Array<String> = [];
-		for (key in keysOf(file, written, maybe)) {
+		for (key in keysOf(file, written)) {
 			final named: String = types.resolveAlias(key);
 			if (named != key && types.declarationCount(named) == 0 && StdTypes.declaresModule('', named) != true) return true;
 		}
-		final imports: CallGraphImports = types.imports;
-		final bound: Bool = written.indexOf('.') >= 0 || maybe.length > 0 || imports.boundPath(file, written) != null
-			|| imports.usesType(file, written);
+		final bound: Bool = written.indexOf('.') >= 0 || _graph.typeKeysOf(file, written).length > 0;
 		return !bound && types.declarationCount(written) == 0 && StdTypes.declaresModule('', written) != true;
 	}
 
@@ -436,7 +425,7 @@ final class ReflectiveReach {
 		final written: Null<String> = subjectType(BoolExprShape.unwrapParens(held.children[0], _shape.parenKind));
 		final outer: Null<String> = written == null ? null : NominalTypes.outerNominalOf(written, _plugin.typeSyntax);
 		// a subject type the file may mean another type by on some builds types no capture
-		final keys: Array<String> = outer == null ? [] : keysOf(file, outer, []);
+		final keys: Array<String> = outer == null ? [] : keysOf(file, outer);
 		final named: Null<String> = keys.length == 1 ? _graph.types.resolveAlias(keys[0]) : null;
 		// two enums of one name merge their constructors (`memberOnChain`): a parameter they write differently types nothing
 		return named != null && _graph.types.imports.enumsDeclaring(ctor).contains(named) ? named : null;

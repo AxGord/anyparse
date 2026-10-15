@@ -503,6 +503,19 @@ final class CallGraph {
 	}
 
 	/**
+	 * Every key the type name `written` may mean in `file` (`CallGraphImports.keysOf`): the type the file binds it to, then
+	 * each one a `#if`-guarded statement or a package wildcard may bind it to instead; none when nothing binds it.
+	 */
+	public inline function typeKeysOf(file: String, written: String): Array<String> {
+		return types.imports.keysOf(file, written);
+	}
+
+	/** The paths the type keyed `type` is declared under: its module's, the module's and its own, the package's and its own. */
+	public inline function declaredPathsOf(type: String): Array<String> {
+		return types.imports.declaredPathsOf(type);
+	}
+
+	/**
 	 * Parse and add `files` the graph does not hold yet: their nodes first, then their
 	 * edges, then the constructor wiring over every file. A file already held (or already
 	 * skipped) is ignored, so a caller may pass a closure that overlaps what it added before.
@@ -889,14 +902,14 @@ final class CallGraph {
 			});
 		}
 
-		/** The type a `Null<T>` annotation source, spelled as the graph keys types (`CallGraphKeys.keyed`), wraps, or null. */
+		/** The key of the type a `Null<T>` annotation source, written as `CallGraphKeys.keyed` spells it, wraps, or null. */
 		function nullableInner(typeSource: Null<String>): Null<String> {
 			final inner: Null<TypeSyntax> = typeSource == null ? null : _plugin.typeSyntax(typeSource)?.wrapped(['Null']);
 			final name: Null<String> = switch inner?.shape {
 				case Nominal(path, _): path;
 				case _: null;
 			};
-			return name != null && CallGraphNames.isTypeLike(SourceText.lastSegment(name)) ? name : null;
+			return name != null && CallGraphNames.isTypeLike(SourceText.lastSegment(name)) ? types.imports.pathType(name) : null;
 		}
 
 		/** The result type a value of the function type `typeSource` (`Null<…>` peeled) returns when called; null for any other type. */
@@ -1171,17 +1184,18 @@ final class CallGraph {
 		/**
 		 * The element type an index access into a value of `container`'s written type yields, per `indexedElementTypeParams` —
 		 * or, with `params` handed, the one a loop over it binds per `iterationElementTypeParams` — when the container is the
-		 * standard type those maps describe (`standardContainerPaths`), read where it is written: `writtenIn`, this file by
-		 * default. A project type bearing the name yields what its own members say (review R5 F2).
+		 * standard type those maps describe (`standardContainerPaths`) — the type text spells it as the file that wrote it binds it
+		 * (`CallGraphImports.writtenAs`), so a project type bearing the name, or one at a std path, yields what its own members
+		 * say wherever the text is read (review R5 F2, L3 G2 and G6).
 		 */
-		function elementTypeSource(container: String, ?params: Map<String, Int>, ?writtenIn: String): Null<String> {
+		function elementTypeSource(container: String, ?params: Map<String, Int>): Null<String> {
 			final peeled: String = NominalTypes.unwrapNullable(container.trim(), transparentWrappers, _plugin.typeSyntax);
 			final path: Null<String> = keys.outerPathOf(peeled, false);
 			final outer: Null<String> = path == null ? null : SourceText.lastSegment(path);
 			final at: Null<Int> = outer == null ? null : (params ?? elementParams)[outer];
 			final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(peeled, _plugin.typeSyntax);
 			if (path == null || outer == null || at == null || args == null) return null;
-			if (!types.imports.namesStandard(writtenIn ?? file, path, standardContainers[outer] ?? [])) return null;
+			if (!types.imports.isStandard(file, path, standardContainers[outer] ?? [])) return null;
 			final list: Array<String> = args;
 			return at >= list.length ? null : list[at];
 		}
@@ -1214,11 +1228,10 @@ final class CallGraph {
 			final listed: Null<String> = elementTypeSource(container, iterationParams);
 			if (listed != null || keyValue) return listed;
 			final iterator: Null<{ written: String, file: Null<String> }> = memberReturn(container, 'iterator', currentType);
-			// a return several files declare is read in none of them: its standard type is not provable
-			final returnedIn: Null<String> = iterator?.file;
+			// a return several files declare may be a standard type in one of them only: not provable
 			final viaIterator: Null<String> = iterator == null
 				? null
-				: (returnedIn == null ? null : elementTypeSource(iterator.written, iterationParams, returnedIn)) ?? memberReturn(
+				: (iterator.file == null ? null : elementTypeSource(iterator.written, iterationParams)) ?? memberReturn(
 					iterator.written, 'next', currentType
 				)?.written;
 			final own: Null<String> = memberReturn(container, 'next', currentType)?.written;

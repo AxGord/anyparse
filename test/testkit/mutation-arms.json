@@ -6222,8 +6222,8 @@
 			"name": "M-GRAPH-USING-ALL",
 			"type": "anyparse.query.CallGraphImports",
 			"method": "staticExtensionsOf",
-			"find": "if (_isStatic(u, member)) u\n\t\t];",
-			"replace": "if (_isStatic(u, member)) u\n\t\t].slice(0, 1);",
+			"find": "return [for (u in usings) if (_isStatic(u, member)) u];",
+			"replace": "return [for (u in usings) if (_isStatic(u, member)) u].slice(0, 1);",
 			"note": "only the first `using` declaring the extension is a target, though the last one wins"
 		},
 		{
@@ -9687,7 +9687,7 @@
 			"name": "M-BINDING-UNINDEXED-IMPORT-FREE",
 			"type": "anyparse.query.TypeNameBinding",
 			"method": "statementAnswer",
-			"find": "if (outside == null) return Unreadable;",
+			"find": "if (outside == null) return Unreadable(bound);",
 			"replace": "if (outside == null) return Pass;",
 			"note": "an import or alias of a module nothing can read is taken to declare nothing, so it falls through to the package tier"
 		},
@@ -9703,7 +9703,7 @@
 			"name": "M-BINDING-UNINDEXED-WILDCARD-FREE",
 			"type": "anyparse.query.TypeNameBinding",
 			"method": "wildcardAnswer",
-			"find": "case null: Unreadable;",
+			"find": "case null: Unreadable('$pkg.$name');",
 			"replace": "case null: Pass;",
 			"note": "a wildcard over a package nothing can read is taken to bind nothing"
 		},
@@ -9732,7 +9732,7 @@
 		{
 			"name": "M-BINDING-FIRST-STATEMENT-WINS",
 			"type": "anyparse.query.TypeNameBinding",
-			"method": "tierOf",
+			"method": "orderOf",
 			"find": "lastFirst.reverse();",
 			"replace": "",
 			"note": "the FIRST statement binding a name wins, explicit and wildcard alike, though the compiler asks the last one first"
@@ -9818,8 +9818,8 @@
 			"name": "M-BINDING-STRICT-UNREAD-PASS",
 			"type": "anyparse.query.TypeNameBinding",
 			"method": "packageAnswer",
-			"find": "declaresMain(outsideTypes(module, name), name) ?? Unreadable",
-			"replace": "declaresMain(outsideTypes(module, name), name) ?? Pass",
+			"find": "declaresMain(outsideTypes(module, name), name, module) ?? Unreadable(module)",
+			"replace": "declaresMain(outsideTypes(module, name), name, module) ?? Pass",
 			"note": "in a guarded statement's other build a module nothing reads is taken as absent — the guess the binding exists to refuse"
 		},
 		{
@@ -19991,7 +19991,7 @@
 			"name": "M-TS-PATH-IMPORT",
 			"type": "anyparse.query.CallGraphImports",
 			"method": "typeOf",
-			"find": "return path == null ? written : pathType(path);",
+			"find": "return bound == null ? written : keyOf(bound, true);",
 			"replace": "return written;",
 			"note": "a name an import or an alias binds is read as written, never as the type it names"
 		},
@@ -20061,10 +20061,10 @@
 		},
 		{
 			"name": "M-TS-ALIAS-TYPE",
-			"type": "anyparse.query.CallGraphImports",
-			"method": "typeImportOf",
-			"find": "{ name: alias, path: target };",
-			"replace": "null;",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "statementAnswer",
+			"find": "if (aliased && imp.alias != name) return Pass;",
+			"replace": "if (aliased) return Pass;",
 			"note": "an import alias of a type stays a type of the alias's name, so Disk.getContent is no File.getContent"
 		},
 		{
@@ -20191,74 +20191,74 @@
 		},
 		{
 			"name": "M-TS-WILD-PACKAGES",
-			"type": "anyparse.query.CallGraphImports",
-			"method": "recordSearchOrder",
-			"find": "_wildPackages[key] = wild;",
-			"replace": "_wildPackages[key] = [];",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "bindingsOf",
+			"find": "for (w in order.wildcards) {",
+			"replace": "for (w in order.wildcards.slice(0, 0)) {",
 			"note": "a wildcard import of a package supplies no name, so a std type it brings in merges into its project namesake"
 		},
 		{
 			"name": "M-TS-WILD-OWN-MODULE",
-			"type": "anyparse.query.CallGraphImports",
-			"method": "wildcardPath",
-			"find": "if ((_ownTypes[key] ?? []).contains(name)) return null;",
-			"replace": "",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "bindingsOf",
+			"find": "if (own.length > 0) {",
+			"replace": "if (false && own.length > 0) {",
 			"note": "a wildcard import outranks the type the file's own module declares"
 		},
 		{
 			"name": "M-TS-WILD-EXPLICIT-FIRST",
-			"type": "anyparse.query.CallGraphImports",
-			"method": "boundPath",
-			"find": "return (_typePaths[key] ?? [])[written] ?? wildcardPath(key, written, maybe) ?? packagePath(key, written);",
-			"replace": "return wildcardPath(key, written, maybe) ?? (_typePaths[key] ?? [])[written] ?? packagePath(key, written);",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "bindingsOf",
+			"find": "for (imp in order.explicit) {",
+			"replace": "for (imp in order.explicit.slice(0, 0)) {",
 			"note": "a wildcard import outranks an explicit one"
 		},
 		{
 			"name": "M-TS-WILD-EXPLICIT-NO-MAYBE",
-			"type": "anyparse.query.CallGraphImports",
-			"method": "alternateTypes",
-			"find": "if (!(_typePaths[key] ?? []).exists(name)) wildcardPath(key, name, paths);",
-			"replace": "wildcardPath(key, name, paths);",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "bindingsOf",
+			"find": "\t\t\t\tout.bound = binding;\n\t\t\t\treturn out;\n\t\t\t}\n\t\t\tif (binding != null) out.guarded.push(binding);",
+			"replace": "\t\t\t\tout.bound = binding;\n\t\t\t\tfor (w in order.wildcards) {\n\t\t\t\t\tfinal b: Null<NameTarget> = bindingOf(wildcardAnswer(name, SourceText.parentPath(w.raw)));\n\t\t\t\t\tif (b != null) out.unlisted.push(b);\n\t\t\t\t}\n\t\t\t\treturn out;\n\t\t\t}\n\t\t\tif (binding != null) out.guarded.push(binding);",
 			"note": "a name an explicit import binds still dispatches to what a wildcard may supply"
 		},
 		{
 			"name": "M-TS-WILD-MAYBE",
-			"type": "anyparse.query.CallGraphImports",
-			"method": "wildcardPath",
-			"find": "if (supplied != false) maybe?.push(path);",
-			"replace": "",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "bindingsOf",
+			"find": "if (answer.match(Unreadable(_)))\n\t\t\t\tout.unlisted.push(binding)",
+			"replace": "if (answer.match(Unreadable(_)))\n\t\t\t\t{}",
 			"note": "a wildcard of a package nothing lists supplies no candidate"
 		},
 		{
 			"name": "M-TS-WILD-GUARDED",
-			"type": "anyparse.query.CallGraphImports",
-			"method": "wildcardPath",
-			"find": "if (supplied == true && !w.guarded) return path;",
-			"replace": "if (supplied == true) return path;",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "bindingsOf",
+			"find": "else if (w.guarded && !coGuarded(w, fi, order.use))",
+			"replace": "else if (false)",
 			"note": "a guarded wildcard binds its type on every build"
 		},
 		{
 			"name": "M-TS-WILD-STD",
-			"type": "anyparse.query.CallGraphImports",
-			"method": "wildcardPath",
-			"find": "StdTypes.declaresModule(w.pkg, name)",
-			"replace": "false",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "wildcardAnswer",
+			"find": "return switch StdTypes.declaresModule(pkg, name) {",
+			"replace": "return switch (false: Null<Bool>) {",
 			"note": "a wildcard of a std package supplies none of its modules"
 		},
 		{
 			"name": "M-TS-WILD-PROJECT",
-			"type": "anyparse.query.CallGraphImports",
-			"method": "wildcardPath",
-			"find": "(_declaredPaths[name] ?? []).contains(path) ? true : ",
-			"replace": "",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "wildcardAnswer",
+			"find": "if (mains != null) {",
+			"replace": "if (mains != null && false) {",
 			"note": "a wildcard of a project package is unsure of the modules the project declares in it"
 		},
 		{
 			"name": "M-TS-WILD-ORDER",
-			"type": "anyparse.query.CallGraphImports",
-			"method": "recordSearchOrder",
-			"find": "opened.reverse();",
-			"replace": "",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "bindingsOf",
+			"find": "for (w in order.wildcards) {",
+			"replace": "for (w in [for (i in 0...order.wildcards.length) order.wildcards[order.wildcards.length - 1 - i]]) {",
 			"note": "wildcards are searched first to last, not last to first"
 		},
 		{
@@ -20271,18 +20271,18 @@
 		},
 		{
 			"name": "M-TS-GUARDED-IMPORT",
-			"type": "anyparse.query.CallGraphImports",
-			"method": "alternateTypes",
-			"find": "final paths: Array<String> = [for (g in guarded) if (g.name == name) g.path];",
-			"replace": "final paths: Array<String> = [];",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "bindingsOf",
+			"find": "if (binding != null) out.guarded.push(binding);",
+			"replace": "",
 			"note": "a guarded import binds nothing, so the name stays the project type alone"
 		},
 		{
 			"name": "M-TS-ALTERNATE-SAME",
 			"type": "anyparse.query.CallGraphImports",
 			"method": "alternateTypes",
-			"find": "if (typeOf(file, name) != type) return [];",
-			"replace": "",
+			"find": "if (maybe.length == 0 || typeOf(file, name) != type) return [];",
+			"replace": "if (maybe.length == 0) return [];",
 			"note": "a value of another type than the name binds takes the name's candidates"
 		},
 		{
@@ -20481,7 +20481,7 @@
 			"name": "M-TS-MAKES-RESOLVED",
 			"type": "anyparse.check.ReflectiveReach",
 			"method": "namedTypes",
-			"find": "for (key in keysOf(file, written, [])) for (t in [key, types.resolveAlias(key)]) if (!out.contains(t)) out.push(t);",
+			"find": "for (key in keysOf(file, written)) for (t in [key, types.resolveAlias(key)]) if (!out.contains(t)) out.push(t);",
 			"replace": "",
 			"note": "a name made under an import alias or a typedef alias of the class makes none of it (review R3 H1)"
 		},
@@ -20511,26 +20511,26 @@
 		},
 		{
 			"name": "M-TS-MAKES-WILD",
-			"type": "anyparse.check.ReflectiveReach",
-			"method": "unresolvedMade",
-			"find": "final bound: Bool = written.indexOf('.') >= 0 || maybe.length > 0 || imports.boundPath(file, written) != null",
-			"replace": "final bound: Bool = written.indexOf('.') >= 0 || imports.boundPath(file, written) != null",
+			"type": "anyparse.query.CallGraphImports",
+			"method": "keysOf",
+			"find": "for (t in maybeOf(targets)) {",
+			"replace": "for (t in maybeOf(null)) {",
 			"note": "(precision) a new of a name a library wildcard or a guarded import may supply may make any class"
 		},
 		{
 			"name": "M-TS-MAKES-BOUND",
 			"type": "anyparse.check.ReflectiveReach",
 			"method": "unresolvedMade",
-			"find": "final bound: Bool = written.indexOf('.') >= 0 || maybe.length > 0 || imports.boundPath(file, written) != null",
-			"replace": "final bound: Bool = maybe.length > 0",
+			"find": "final bound: Bool = written.indexOf('.') >= 0 || _graph.typeKeysOf(file, written).length > 0;",
+			"replace": "final bound: Bool = false;",
 			"note": "(precision) a new of a library type written out or imported may make any class"
 		},
 		{
 			"name": "M-TS-MAKES-USING",
-			"type": "anyparse.check.ReflectiveReach",
-			"method": "unresolvedMade",
-			"find": "|| imports.usesType(file, written);",
-			"replace": ";",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "statementAnswer",
+			"find": "final aliased: Bool = imp.kind == ImportKind.Alias;",
+			"replace": "if (imp.kind == ImportKind.Using) return Pass;\n\t\tfinal aliased: Bool = imp.kind == ImportKind.Alias;",
 			"note": "(precision) a new of a type a using brings into scope may make any class"
 		},
 		{
@@ -20822,26 +20822,26 @@
 		},
 		{
 			"name": "M-TS-PACKAGE-LOOKUP",
-			"type": "anyparse.query.CallGraphImports",
-			"method": "boundPath",
-			"find": " ?? packagePath(key, written);",
-			"replace": ";",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "bindingsOf",
+			"find": "out.bound = bindingOf(packageAnswer(name, fi.pkg, false, true));",
+			"replace": "out.bound = null;",
 			"note": "a name no import binds is the project namesake, whatever the file's own package declares (review R4 F7)"
 		},
 		{
 			"name": "M-TS-PACKAGE-ENCLOSING",
-			"type": "anyparse.query.CallGraphImports",
-			"method": "packagePath",
-			"find": "pkg = dot < 0 ? '' : pkg.substring(0, dot);",
-			"replace": "pkg = '';",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "packageAnswer",
+			"find": "p = SourceText.parentPath(p);",
+			"replace": "p = '';",
 			"note": "the packages enclosing the file's own are not searched"
 		},
 		{
 			"name": "M-TS-PACKAGE-PROJECT-FIRST",
-			"type": "anyparse.query.CallGraphImports",
-			"method": "packagePath",
-			"find": "if ((_declaredPaths[name] ?? []).contains(path) || StdTypes",
-			"replace": "if (StdTypes",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "packageAnswer",
+			"find": "if (mains.length > 0) return Decls(mains);",
+			"replace": "if (mains.length > 0 && !listed) return Decls(mains);",
 			"note": "a project type of a package searched first loses to a std type of an enclosing package"
 		},
 		{
@@ -21160,25 +21160,25 @@
 			"name": "M-TS-STD-CONTAINER",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "if (!types.imports.namesStandard(writtenIn ?? file, path, standardContainers[outer] ?? [])) return null;",
+			"find": "if (!types.imports.isStandard(file, path, standardContainers[outer] ?? [])) return null;",
 			"replace": "",
 			"note": "a container is read as the std one its simple name spells wherever written (a project List<T> yields T)"
 		},
 		{
 			"name": "M-TS-STD-CONTAINER-DECLARED",
 			"type": "anyparse.query.CallGraphImports",
-			"method": "namesStandard",
-			"find": "if (declared.length > 0) return false;",
-			"replace": "",
+			"method": "isStandard",
+			"find": "return decls.length > 0 ? decls.foreach(d -> StdResolver.isStdFile(d.file.file)) : standard.contains(path);",
+			"replace": "return standard.contains(path);",
 			"note": "a simple name a project declaration bears still reads as the std type"
 		},
 		{
 			"name": "M-TS-STD-CONTAINER-WHERE",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": ": (returnedIn == null ? null : elementTypeSource(iterator.written, iterationParams, returnedIn))",
-			"replace": ": elementTypeSource(iterator.written, iterationParams)",
-			"note": "an iterator() return is read in the file walked, not where it is declared"
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "keyedIn",
+			"find": "final spelled: String = imports.writtenAs(file, path);",
+			"replace": "final spelled: String = path;",
+			"note": "a type written in a file is spelled by its simple name, so a reader in another file decides what it is (review L3 G6: an iterator() return read in the file walked)"
 		},
 		{
 			"name": "M-TS-SKIP-SHIFT",
@@ -21293,6 +21293,46 @@
 			"note": "a static an import binds, read as a value in module-level code, names nothing"
 		},
 		{
+			"name": "M-BINDINGS-UNREADABLE-SUBTYPE",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "bindingsOf",
+			"find": " || answer.match(Unreadable(_)) && !namesItsType(imp, answer)",
+			"replace": "",
+			"note": "a module the order cannot read binds every name to a sub-type of it, so an unindexed module import keys every type written beside it"
+		},
+		{
+			"name": "M-BINDINGS-DECLS-AT-SUBTYPE",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "declsAt",
+			"find": "if (mains.length > 0 || path.indexOf('.') < 0) return mains;",
+			"replace": "return mains;",
+			"note": "a sub-type is at no path, so a project sub-type at a std container's spelling reads as the std one"
+		},
+		{
+			"name": "M-CANONICAL-SUBTYPE",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "canonicalPath",
+			"find": "return decl.type.isMain ? decl.file.module : '${decl.file.module}.${decl.type.name}';",
+			"replace": "return decl.file.module;",
+			"note": "a sub-type is spelled by its module's path, the main type's, so the text names another type"
+		},
+		{
+			"name": "M-USING-MODULE-TYPES",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "usingTypes",
+			"find": "types == null ? [SourceText.lastSegment(imp.raw)] : [for (t in types) t.type.name]",
+			"replace": "[SourceText.lastSegment(imp.raw)]",
+			"note": "a using of a module brings its main type's extensions only, not its sub-types' (4.3.7 brings both)"
+		},
+		{
+			"name": "M-TS-NULLABLE-PATH-KEY",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "? types.imports.pathType(name) : null",
+			"replace": "? name : null",
+			"note": "the type a Null<T> local wraps is keyed by the path its text spells, so a call on it runs a placeholder of the path"
+		},
+		{
 			"name": "M-TS-OVERLOAD-RETURN",
 			"type": "anyparse.query.CallGraphNodes",
 			"method": "overloaded",
@@ -21383,17 +21423,17 @@
 		{
 			"name": "M-TS-STD-CONTAINER-GUARDED",
 			"type": "anyparse.query.CallGraphImports",
-			"method": "namesStandard",
-			"find": "if (guarded.exists(g -> g.name == path && !standard.contains(g.path))) return false;",
+			"method": "writtenAs",
+			"find": "if (other != spelled && keyOf(g, false) == key) return other;",
 			"replace": "",
 			"note": "a name an #if-guarded import binds to another type on some build still reads as the std container"
 		},
 		{
 			"name": "M-TS-STD-CONTAINER-STD-OWN",
 			"type": "anyparse.query.CallGraphImports",
-			"method": "namesStandard",
-			"find": "if (!standard.contains(d) && !standard.contains(SourceText.parentPath(d))) d",
-			"replace": "d",
+			"method": "isStandard",
+			"find": "decls.foreach(d -> StdResolver.isStdFile(d.file.file))",
+			"replace": "decls.foreach(d -> false)",
 			"note": "the std's own declaration, indexed as a library, counts as a namesake and refuses the std container"
 		},
 		{

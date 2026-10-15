@@ -2739,3 +2739,27 @@ decided the question; it may not become a record of runs.
   (`fs.FolderWatcher` / `logs.FolderWatcher`, `Main`, `Logs`…) and 37 thread-safety truth keys sit on them, so keying
   namesakes apart by path would rename those keys; B3 moves RESOLUTION onto the shared layers, not node identity —
   branch `feat/infra-B3`
+- the call graph read import statements for TYPE names its own way (`CallGraphImports` `_typePaths` / `_wildPackages` /
+  `_guardedPaths` / `_ownTypes` / `_packages`, `boundPath`, `wildcardPath`, `packagePath`, `typeImportOf`,
+  `namesStandard`) → every type a name may be on some build is `TypeNameBinding.bindingsOf` — `bound` (what the order
+  binds it to where it can read it), `guarded` (an `#if`-guarded statement's type on its builds), `unlisted` (a package
+  wildcard the order cannot list) — in the compiler's order; the graph keys a declaration by its simple name and a type
+  outside the indexes by its path when a declaration bears its simple name, as before. A module nothing reads binds
+  only the type its import names (the old reading too), never every name written beside it; the package tier reads the
+  std core's modules package by package, interleaved with the project's (4.3.7 finds both on its class paths) — branch
+  `feat/infra-B3`
+- a type written in a file is now SPELLED by the path of the type that file binds it to (`CallGraphImports.writtenAs`:
+  a declaration's canonical path, `TypeNameBinding.canonicalPath` — a main type by its module, a sub-type by its module
+  and name; 4.3.7: `p.Sub` for a sub-type is `Type not found`), every spelling keying as the bare name did. The text
+  carries its file, so a container read in another file than its declaration's is decided as written there (review L3
+  G6), and the std container is the std's only when the declaration at that path sits in a std file
+  (`StdResolver.isStdFile`) — a project `haxe/ds/Vector.hx` or root `List.hx` shadows the std's (review L3 G2, probe
+  `hx/g2`). Fixtures that stubbed the std at `std/Array.hx` stub it at the real std's path
+  (`QueryTestHelpers.stdPath`) — branch `feat/infra-B3`
+- the graph's wildcard candidates came from "a package the tables do not hold a declaration of the name in", which
+  over a project package with an `import pkg.*;` invented `pkg.T` for every name: on TM 980 of 37 k edges went to such
+  placeholders (`components.editor.equipments.RightPanel.x`) → an indexed package lists its modules, so no candidate;
+  thread-safety findings on TM unchanged — branch `feat/infra-B3`
+- a `using` of a module brought the static extensions of its last segment's type only → every non-private type of the
+  module (`ValueNameBinding.usingTypes`; 4.3.7, `hx/us`: `using p.Mod;` brings `Sub`'s extensions too) — branch
+  `feat/infra-B3`

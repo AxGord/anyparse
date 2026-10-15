@@ -23,6 +23,16 @@ final class QueryTestHelpers {
 	}
 
 	/**
+	 * The path of the std's own module file `relative` (`Array.hx`) under the std the run resolves (`StdResolver.stdDir`):
+	 * where a std stub must sit for the index to take it for the std's own declaration (`StdResolver.isStdFile`) — a stub
+	 * anywhere else is a project or library type at a std path, which shadows the std's. Under `std/` with no std found.
+	 */
+	public static function stdPath(relative: String): String {
+		final dir: Null<String> = anyparse.query.StdResolver.stdDir();
+		return dir == null ? 'std/$relative' : haxe.io.Path.join([dir, relative]);
+	}
+
+	/**
 	 * A plugin whose run declared project roots that matched: `project` is the report and the whole
 	 * project, `library` the read-only rest of the resolution scope. What a `lint` run over a project
 	 * with `resolutionRoots` hands its checks; `allRootsMatched` false stands for a run where some

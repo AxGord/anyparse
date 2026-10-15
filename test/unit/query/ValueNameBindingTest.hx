@@ -88,6 +88,18 @@ class ValueNameBindingTest extends Test {
 		Assert.equals('x=?', aliases(index, 'Main.hx'), 'listed as an alias of no known static');
 	}
 
+	/** A `using` of a module brings the extensions of every type it declares, its sub-types' too (Haxe 4.3.7, `hx/us`). */
+	@:pin('control') @:killer('M-USING-MODULE-TYPES')
+	public function testAUsingBringsEveryTypeOfItsModule(): Void {
+		final index: SymbolIndex = indexOf([
+			'p/Mod.hx' => 'package p;\n\nclass Mod {}\n\nclass Sub {}\n\nprivate class Hidden {}\n',
+			'Main.hx' => 'using p.Mod;\nusing p.Mod.Sub;\nusing lib.Ext;\n\nclass Main {}\n'
+		]);
+		Assert.equals(
+			'Mod,Sub,Ext', index.values.usingTypes(fileOf(index, 'Main.hx')).join(','), 'a module\'s types, a type, a module outside'
+		);
+	}
+
 	private static function indexOf(files: Map<String, String>): SymbolIndex {
 		final entries: Array<{ file: String, source: String }> = [for (file => source in files) { file: file, source: source }];
 		entries.sort((a, b) -> Reflect.compare(a.file, b.file));

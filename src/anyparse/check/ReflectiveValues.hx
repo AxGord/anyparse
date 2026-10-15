@@ -4,7 +4,6 @@ import anyparse.check.ReflectiveReach.closure;
 import anyparse.check.ReflectiveReach.holderOf;
 import anyparse.query.BoolExprShape;
 import anyparse.query.CallGraph;
-import anyparse.query.CallGraphImports;
 import anyparse.query.CallGraphKeys;
 import anyparse.query.CallGraphNames;
 import anyparse.query.CallGraphTypes;
@@ -523,9 +522,8 @@ final class ReflectiveValues {
 		if (holders == null) return true;
 		final globs: Array<String> = holders;
 		if (literals().contains(name)) return true;
-		final imports: CallGraphImports = graph.types.imports;
 		return closure([type], graph.types.subtypesOf).exists(t -> {
-			final paths: Array<String> = imports.declaredPathsOf(t);
+			final paths: Array<String> = graph.declaredPathsOf(t);
 			paths.length == 0 || paths.exists(p -> globs.exists(g -> Glob.qualifiedNames(g).match(p)));
 		});
 	}

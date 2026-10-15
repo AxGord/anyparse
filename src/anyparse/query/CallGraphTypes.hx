@@ -89,7 +89,7 @@ final class CallGraphTypes {
 		_valueTypeNames = [for (t in (shape.literalTypeNames ?? []).iterator()) t].concat(shape.nonNullableTypeNames ?? [])
 			.concat(shape.arrayTypeNames ?? []);
 		_aliasingKinds = shape.aliasingDeclKinds ?? [];
-		imports = new CallGraphImports(shape.execution?.enumConstructorKinds ?? [], isStatic);
+		imports = new CallGraphImports(shape.execution?.enumConstructorKinds ?? [], isStatic, heldFile);
 		if (index != null) merge(index);
 	}
 
