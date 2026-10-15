@@ -21189,6 +21189,14 @@
 			"find": "return found == null || g.nodes[found]?.typeName != typeName ? null : found;",
 			"replace": "return found;",
 			"note": "a member the module's main class inherits counts as one the module declares: an inherited static keeps the imported one out"
+		},
+		{
+			"name": "M-TS-STD-CONTAINER-GUARDED",
+			"type": "anyparse.query.CallGraphImports",
+			"method": "namesStandard",
+			"find": "if (guarded.exists(g -> g.name == path && !standard.contains(g.path))) return false;",
+			"replace": "",
+			"note": "a name an #if-guarded import binds to another type on some build still reads as the std container"
 		}
 	]
 }

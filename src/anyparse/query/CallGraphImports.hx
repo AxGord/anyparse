@@ -314,15 +314,16 @@ final class CallGraphImports {
 	 * the paths a standard type is spelled by: a dotted one among them no declaration the tables hold bears; a simple name no
 	 * declaration bears — one that does makes the simple key mean that type — which `file` binds to one of them through an
 	 * import, an alias, a wildcard or its packages, or leaves unbound while it is one of them itself (a toplevel name). A name
-	 * an `#if`-guarded import or an undecidable wildcard may bind elsewhere is none.
+	 * an `#if`-guarded import binds elsewhere on some build is none. A wildcard of a package the tables cannot list is read
+	 * as `typeOf` reads it: with no declaration bearing the name, the tables know none it could supply.
 	 */
 	public function namesStandard(file: String, path: String, standard: Array<String>): Bool {
 		final declared: Array<String> = declaredPathsOf(SourceText.lastSegment(path));
 		if (path.indexOf('.') >= 0) return standard.contains(path) && !declared.contains(path);
 		if (declared.length > 0) return false;
-		final maybe: Array<String> = [];
-		final bound: Null<String> = boundPath(file, path, maybe);
-		return standard.contains(bound ?? path) && !maybe.exists(m -> !standard.contains(m));
+		final guarded: Array<{ name: String, path: String }> = _guardedPaths[CallGraphNames.normalizePath(file)] ?? [];
+		if (guarded.exists(g -> g.name == path && !standard.contains(g.path))) return false;
+		return standard.contains(boundPath(file, path) ?? path);
 	}
 
 	/**

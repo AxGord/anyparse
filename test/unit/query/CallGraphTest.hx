@@ -1502,6 +1502,7 @@ class CallGraphTest extends Test {
 	 * element its own `iterator()` says, and a project `Vector<T>` indexed is no std vector; the std types stay typed.
 	 */
 	@:pin('control') @:killer('M-TS-STD-CONTAINER') @:killer('M-TS-STD-CONTAINER-DECLARED') @:killer('M-TS-STD-CONTAINER-WHERE')
+	@:killer('M-TS-STD-CONTAINER-GUARDED')
 	public function testAContainerIsTheStandardOneOnlyWhereItsNameMeansIt(): Void {
 		#if (sys || nodejs)
 		if (anyparse.query.StdResolver.stdDir() == null) {
@@ -1522,7 +1523,9 @@ class CallGraphTest extends Test {
 			'package other; import pkg.List; class Holder { public static var l:List<utils.Lock> = null; }',
 			'package app; import other.Holder; class E { static function read():Void for (x in Holder.l) x.wait(); }',
 			'package app; import pkg.List; import nowhere.Iterator; class F {'
-			+ ' static function list():Void { final l:List<utils.Lock> = null; for (x in l) x.wait(); } }'
+			+ ' static function list():Void { final l:List<utils.Lock> = null; for (x in l) x.wait(); } }',
+			'package app; #if never import nowhere.Array; #end class H { static function arr():Void { final a:Array<sys.thread.Lock> = []; a[0].wait(); } }',
+			'package app; import somelib.*; class W { static function arr():Void { final a:Array<sys.thread.Lock> = []; a[0].wait(); } }'
 		]);
 		final own: CallGraph = graphOf([
 			lock,
@@ -1538,6 +1541,11 @@ class CallGraphTest extends Test {
 		Assert.same(['sys.thread.Lock.wait'], targets(g, 'C.arr'), 'an Array');
 		Assert.same(['sys.thread.Lock.wait'], targets(g, 'E.read'), 'a project List read where no import binds the name');
 		Assert.same(['sys.thread.Lock.wait'], targets(g, 'F.list'), 'an iterator() return read where it is declared');
+		Assert.same([], targets(g, 'H.arr'), 'a guarded import binds the name elsewhere on some build');
+		Assert.same(
+			['sys.thread.Lock.wait'],
+			targets(g, 'W.arr'), 'a wildcard of a package the tables cannot list, no declaration bearing the name'
+		);
 		Assert.same(['Lock.wait'], targets(own, 'D.own'), 'a List the module declares');
 		#else
 		Assert.pass('non-sys target');
