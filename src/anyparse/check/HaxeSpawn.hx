@@ -5,7 +5,9 @@ import anyparse.core.PhaseTimings;
 using StringTools;
 
 #if nodejs
+import anyparse.core.TempScratch;
 import haxe.DynamicAccess;
+import haxe.io.Path;
 import js.node.ChildProcess.ChildProcessSpawnSyncResult;
 #end
 
@@ -98,6 +100,18 @@ final class HaxeSpawn {
 	 */
 	private static inline final GC_MEMORY: Float = 0.5 * 1024 * 1024 * 1024;
 
+	/**
+	 * What one job that names no `timeout` of its own is granted in `driverBound`: ten minutes, some twenty times what a
+	 * large project's compile takes on a loaded machine.
+	 */
+	private static inline final JOB_BOUND: Float = 10 * 60 * 1000;
+
+	/** What `driverBound` adds for the process driver itself: its start, the job launches, the answer. */
+	private static inline final DRIVER_SLACK: Float = 60 * 1000;
+
+	/** The largest `driverBound`: a millisecond count that still fits an `Int`. */
+	private static inline final MAX_BOUND: Float = 2147483647;
+
 
 	/**
 	 * The node program a `tethered` job runs under, between the driver and the job: `argv[1]` is `1` when the tether leads
@@ -118,28 +132,29 @@ final class HaxeSpawn {
 		+ 'c.on("error", () => process.exit(127)); c.on("exit", code => process.exit(code === null ? 1 : code));';
 
 	/**
-	 * The node program `runAll` drives its jobs with: reads the jobs as JSON on stdin, keeps at most `argv[1]` of them
-	 * running, kills one that out-writes `argv[2]` bytes or outlives its own `timeout` (ms, when positive), and prints
-	 * every run as JSON in job order once all closed. A job runs `haxe <args>`, or its `shell` command line when it names
-	 * one. With `argv[3]` = `1` a job that fails (any status but 0) kills every LATER job still running and starts none
-	 * after it, so the first failure in job order is always one that ran to its end. Off Windows every job leads a
-	 * process group of its own and a kill reaches the whole group — a shell's children (a build tool it started) die
-	 * with it instead of writing on after their job was answered. A SIGINT, SIGTERM or SIGHUP to the driver kills every
-	 * live job group before it exits: the groups are detached, so a Ctrl-C at the terminal no longer reaches them
-	 * by itself. The driver also watches its parent: once `apq` is gone (its ppid changes — a SIGKILL leaves no
+	 * The node program `runAll` drives its jobs with: reads the jobs as JSON from the file `argv[5]` names and deletes
+	 * it, keeps at most `argv[1]` of them running, kills one that out-writes `argv[2]` bytes or outlives its own `timeout`
+	 * (ms, when positive), and prints every run as JSON in job order once all closed. A job runs `haxe <args>`, or its
+	 * `shell` command line when it names one. With `argv[3]` = `1` a job that fails (any status but 0) kills every LATER
+	 * job still running and starts none after it, so the first failure in job order is always one that ran to its end.
+	 * Off Windows every job leads a process group of its own and a kill reaches the whole group — a shell's children (a
+	 * build tool it started) die with it instead of writing on after their job was answered. A SIGINT, SIGTERM or SIGHUP
+	 * to the driver kills every live job group before it exits: the groups are detached, so a Ctrl-C at the terminal no
+	 * longer reaches them by itself. The driver also watches its parent: once `apq` is gone (its ppid changes — a SIGKILL leaves no
 	 * handler to run) it does the same. A job naming a `groupFile` gets its process group leader written there
 	 * (pid, then start time), so a run that takes over an abandoned generation can end the job the dead run left.
-	 * With `argv[4]` naming a file the runs go there instead of stdout — written whole under a temporary name, then
-	 * renamed, so the file exists only once it is complete — and with `argv[5]` naming one the jobs are read from it
-	 * instead of stdin and deleted once read: the two ends a driver running in the BACKGROUND (`PendingRuns`) is talked
-	 * to through. Such a driver ended by a signal, or outliving `apq`, removes the directory holding its answer file.
+	 * With `argv[4]` naming a file (it is empty for `runAll`) the runs go there instead of stdout — written whole under a
+	 * temporary name, then renamed, so the file exists only once it is complete: the end a driver running in the
+	 * BACKGROUND (`PendingRuns`) answers through. Such a driver ended by a signal, or outliving `apq`, removes the
+	 * directory holding its answer file. The driver never reads its stdin: a pipe handed to `spawnSync` as `input` can
+	 * stall for good on macOS (`runAll`).
 	 * A `tethered` job runs under `TETHER`, the driver holding the write end of its stdin: the job dies with the driver
 	 * however the driver went, a SIGKILL of the whole process group `apq` and the driver share included — off Windows a
 	 * job's group is its own, so that kill does not reach it. Off Windows a tethered job is killed like any other; on
 	 * Windows, where a kill reaches the tether alone, its stdin is closed instead and the tether ends the job itself.
 	 */
 	private static inline final PARALLEL_DRIVER: String = "const cp = require('child_process');" + "const TETHER = '" + TETHER + "';"
-		+ "const jobs = JSON.parse(require('fs').readFileSync(process.argv[5] ? process.argv[5] : 0, 'utf8'));"
+		+ "const jobs = JSON.parse(require('fs').readFileSync(process.argv[5], 'utf8'));"
 		+ "if (process.argv[5]) try { require('fs').unlinkSync(process.argv[5]); } catch (err) {}"
 		+ "function drop() { if (process.argv[4]) try { require('fs').rmSync(require('path').dirname(process.argv[4]),"
 		+ " { recursive: true, force: true }); } catch (err) {} }"
@@ -255,14 +270,22 @@ final class HaxeSpawn {
 	 * unstarted one never starts — and those answer `cancelled`. Jobs start in order, so every job before a failure has
 	 * started and runs to its end: the first failure in job order is the same run a sequential loop that stopped there
 	 * would have seen, which is what lets a caller keep first-failure semantics while overlapping the compiles.
+	 *
+	 * The jobs reach the driver through a file (`writeJobs`), never through its stdin: an `input` piped to `spawnSync`
+	 * can stall for good on macOS, about once in seven hundred calls at 200 KB (`docs/decisions.md`, "F1"), and the
+	 * driver then waits on a read that never ends. A driver still running `bound` ms in (`driverBound` unless given) is wedged and is killed,
+	 * and every job answers that it produced no verdict; nothing is retried, since a killed driver may have run any of
+	 * its jobs.
 	 */
-	public static function runAll(jobs: Array<SpawnJob>, maxBuffer: Int, parallel: Int, ?stopAfterFailure: Bool): Array<HaxeRun> {
-		return PhaseTimings.measure('haxe runAll', () -> runAllTimed(jobs, maxBuffer, parallel, stopAfterFailure));
+	public static function runAll(
+		jobs: Array<SpawnJob>, maxBuffer: Int, parallel: Int, ?stopAfterFailure: Bool, ?bound: Int
+	): Array<HaxeRun> {
+		return PhaseTimings.measure('haxe runAll', () -> runAllTimed(jobs, maxBuffer, parallel, stopAfterFailure, bound));
 	}
 
 	/** `runAll`, untimed. */
 	private static function runAllTimed(
-		jobs: Array<SpawnJob>, maxBuffer: Int, parallel: Int, stopAfterFailure: Null<Bool>
+		jobs: Array<SpawnJob>, maxBuffer: Int, parallel: Int, stopAfterFailure: Null<Bool>, bound: Null<Int>
 	): Array<HaxeRun> {
 		final stop: Bool = stopAfterFailure ?? false;
 		#if nodejs
@@ -270,16 +293,27 @@ final class HaxeSpawn {
 		// because only there is it tethered
 		if ((jobs.length <= 1 || parallel <= 1) && !Lambda.exists(jobs, j -> j.shell != null || j.tethered == true))
 			return runInOrder(jobs, maxBuffer, stop);
+		// the jobs go in through a FILE and the driver's stdin is the null device: an `input` piped to `spawnSync` can
+		// stall for good on macOS, the stdin socket drained while this process sleeps in `kevent` with bytes still to
+		// write, and the driver then blocks on a read that never ends (`docs/decisions.md`, "F1")
+		final batch: Null<DriverBatch> = writeJobs(jobs, 'apq-runall-');
+		if (batch == null) return unanswered(jobs.length, 'the jobs could not be written for the parallel process driver', '');
+		final limit: Int = bound ?? driverBound(jobs, parallel);
 		final options: Dynamic = {
 			encoding: 'utf8',
-			input: haxe.Json.stringify(jobs),
+			stdio: ['ignore', 'pipe', 'pipe'],
 			// the driver hands its own environment to every job it starts
 			env: childEnv(),
-			maxBuffer: (maxBuffer + OVERHEAD) * jobs.length
+			maxBuffer: (maxBuffer + OVERHEAD) * jobs.length,
+			// a driver that outlives every job's share of the bound is wedged: SIGKILL is the one signal a node process
+			// blocked in a synchronous call, or a stopped one, cannot leave unanswered
+			timeout: limit,
+			killSignal: 'SIGKILL'
 		};
 		final res: ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync(
-			js.Node.process.execPath, driverArgs(parallel, maxBuffer, stop), options
+			js.Node.process.execPath, driverArgs(parallel, maxBuffer, stop, { result: '', jobs: batch.jobs }), options
 		);
+		dropBatch(batch.dir);
 		final launchError: Null<Dynamic> = (res.error: Dynamic);
 		final status: Null<Int> = (res.status: Null<Int>);
 		final answer: Null<Array<HaxeRun>> = launchError != null || status != 0
@@ -287,17 +321,11 @@ final class HaxeSpawn {
 			: try haxe.Json.parse(streamText(res.stdout)) catch (exception: haxe.Exception) null;
 		if (answer != null && answer.length == jobs.length) return answer;
 		// the driver itself failed: every job is answered as a run that produced no verdict
-		final why: String = 'the parallel process driver failed (${launchError == null ? 'status $status' : Reflect.field(launchError, 'message')})';
-		return [
-			for (_ in jobs)
-				{
-					status: null,
-					out: '',
-					err: streamText(res.stderr),
-					failure: why,
-					overflowed: false
-				}
-		];
+		final code: Null<Dynamic> = launchError == null ? null : Reflect.field(launchError, 'code');
+		final why: String = code != null && '$code' == 'ETIMEDOUT'
+			? 'the parallel process driver did not answer within $limit ms and was killed'
+			: 'the parallel process driver failed (${launchError == null ? 'status $status' : Reflect.field(launchError, 'message')})';
+		return unanswered(jobs.length, why, streamText(res.stderr));
 		#else
 		return runInOrder(jobs, maxBuffer, stop);
 		#end
@@ -307,8 +335,8 @@ final class HaxeSpawn {
 	 * `runAll` over `jobs` started in the BACKGROUND: they run while the caller goes on, and `PendingRuns.await` answers
 	 * what `runAll` would have. On a target without an asynchronous process API nothing starts before `await`.
 	 */
-	public static function startAll(jobs: Array<SpawnJob>, maxBuffer: Int, parallel: Int): PendingRuns {
-		return new PendingRuns(jobs, maxBuffer, parallel);
+	public static function startAll(jobs: Array<SpawnJob>, maxBuffer: Int, parallel: Int, ?bound: Int): PendingRuns {
+		return new PendingRuns(jobs, maxBuffer, parallel, bound);
 	}
 
 	/**
@@ -417,6 +445,32 @@ final class HaxeSpawn {
 
 	#if nodejs
 	/**
+	 * A directory of its own (`mkdtemp`: private to this user, and no other process can have named it first) holding
+	 * `jobs` as JSON in the file the process driver reads its jobs from (`driverArgs`) and deletes once read; null when
+	 * either could not be written. `dropBatch` removes it with whatever is left in it.
+	 */
+	public static function writeJobs(jobs: Array<SpawnJob>, prefix: String): Null<DriverBatch> {
+		final dir: Null<String> =
+			try js.node.Fs.mkdtempSync(Path.join([TempScratch.root(), prefix])) catch (exception: haxe.Exception) null;
+		if (dir == null) return null;
+		final file: String = Path.join([dir, 'jobs.json']);
+		try sys.io.File.saveContent(file, haxe.Json.stringify(jobs)) catch (exception: haxe.Exception) {
+			dropBatch(dir);
+			return null;
+		}
+		return { dir: dir, jobs: file };
+	}
+
+	/** Remove the batch directory `dir` (`writeJobs`) and everything left in it. */
+	public static function dropBatch(dir: String): Void {
+		try js.Syntax.code(
+			"require('fs').rmSync({0}, { recursive: true, force: true })", dir
+		) catch (exception: haxe.Exception) { // noqa: swallowed-exception
+			// a leftover directory costs nothing but disk: no answer depends on it
+		}
+	}
+
+	/**
 	 * The environment every `haxe` the oracle starts runs in — this process's own, with `OCAMLRUNPARAM` set to
 	 * `gcSetting` when that names any parameter. The process driver of `runAll` runs under it and hands it to every job,
 	 * so a generate command's shell gets it too: the collector's settings change no output, only when memory is reclaimed.
@@ -482,18 +536,51 @@ final class HaxeSpawn {
 
 	/**
 	 * The node argument vector that runs the process driver over at most `parallel` jobs at once under `maxBuffer`, with
-	 * `stop` as `stopAfterFailure`. The jobs go to its stdin as JSON and its runs come back on stdout, in job order.
+	 * `stop` as `stopAfterFailure`. The jobs are read from the JSON file `files.jobs` names, and the runs come back in
+	 * job order in the file `files.result` names, or on stdout when that is empty.
 	 */
-	public static function driverArgs(parallel: Int, maxBuffer: Int, stop: Bool, ?files: { result: String, jobs: String }): Array<String> {
-		final args: Array<String> = [
+	public static function driverArgs(parallel: Int, maxBuffer: Int, stop: Bool, files: { result: String, jobs: String }): Array<String> {
+		return [
 			'-e',
 			PARALLEL_DRIVER,
 			'--',
 			'${Std.int(Math.max(1, parallel))}',
 			'$maxBuffer',
-			stop ? '1' : '0'
+			stop ? '1' : '0',
+			files.result,
+			files.jobs
 		];
-		return files == null ? args : args.concat([files.result, files.jobs]);
+	}
+
+	/**
+	 * The milliseconds a process driver running `jobs` at most `parallel` at a time may take before it counts as wedged:
+	 * every round of `parallel` jobs the longest job's own `timeout` (`JOB_BOUND` for a job naming none), plus
+	 * `DRIVER_SLACK`. Far above any honest run, so it can only end a driver that stopped doing its work — the bound exists
+	 * so that nothing waits on one forever. Pure.
+	 */
+	public static function driverBound(jobs: Array<SpawnJob>, parallel: Int): Int {
+		var longest: Float = 0;
+		for (job in jobs) longest = Math.max(longest, job.timeout != null && job.timeout > 0 ? job.timeout : JOB_BOUND);
+		final rounds: Float = Math.ceil(jobs.length / Math.max(1, parallel));
+		return Std.int(Math.min(MAX_BOUND, rounds * longest + DRIVER_SLACK));
+	}
+
+	/**
+	 * Every job of a batch of `count` answered as a run that produced no verdict, for `failure`, with `err` as its stderr
+	 * and `cancelled` when the batch was ended on purpose.
+	 */
+	public static function unanswered(count: Int, failure: String, err: String, ?cancelled: Bool): Array<HaxeRun> {
+		return [
+			for (_ in 0...count)
+				{
+					status: null,
+					out: '',
+					err: err,
+					failure: failure,
+					overflowed: false,
+					cancelled: cancelled
+				}
+		];
 	}
 
 }
@@ -516,6 +603,12 @@ typedef SpawnJob = {
 	 * never ends by itself, a compilation server.
 	 */
 	var ?tethered: Bool;
+}
+
+/** A batch directory `HaxeSpawn.writeJobs` made, and the jobs file in it the process driver reads. */
+typedef DriverBatch = {
+	var dir: String;
+	var jobs: String;
 }
 
 /**
