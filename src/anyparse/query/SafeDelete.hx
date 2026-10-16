@@ -6,7 +6,6 @@ import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefKind;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using Lambda;
 
@@ -64,10 +63,11 @@ final class SafeDelete {
 	): EditResult {
 		final parsed: Array<Parsed> = [];
 		for (entry in scopeFiles) {
-			final tree: Null<QueryNode> = try plugin.parseFile(entry.source) catch (exception: Exception) null;
-			if (tree == null) return Err('cannot check references: ${entry.file} does not parse');
-			final treeNN: QueryNode = tree;
-			parsed.push({ file: entry.file, source: entry.source, tree: treeNN });
+			final tree: QueryNode = switch ParseGate.parse(plugin, entry.source, entry.file) {
+				case Unparsed(_): return Err('cannot check references: ${entry.file} does not parse');
+				case Parsed(read): read;
+			};
+			parsed.push({ file: entry.file, source: entry.source, tree: tree });
 		}
 
 		final srcEntry: Null<Parsed> = parsed.find(p -> p.file == srcFile);

@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.query.ElementSpan;
+import anyparse.query.SourceText;
 import anyparse.runtime.Span;
 
 using StringTools;
@@ -77,16 +78,6 @@ final class AccessorClauseText {
 		return afterName < 0 || paren == null ? null : new Span(afterName, paren.to);
 	}
 
-	/** Whether `c` is an identifier character. */
-	private static inline function isIdentChar(c: Int): Bool {
-		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code;
-	}
-
-	/** Whether `c` is whitespace. */
-	private static inline function isSpace(c: Int): Bool {
-		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
-	}
-
 	/** Whether `c` is a space or a tab (a line-internal separator, newline excluded). */
 	private static inline function isHorizontalSpace(c: Int): Bool {
 		return c == ' '.code || c == '\t'.code;
@@ -96,14 +87,14 @@ final class AccessorClauseText {
 	private static function identAt(source: String, i: Int, n: Int): Null<{ id: String, next: Int }> {
 		final start: Int = i;
 		var j: Int = i;
-		while (j < n && isIdentChar(source.fastCodeAt(j))) j++;
+		while (j < n && SourceText.isIdentChar(source.fastCodeAt(j))) j++;
 		return j > start ? { id: source.substring(start, j), next: j } : null;
 	}
 
 	/** Advance past a whitespace run starting at `i`. */
 	private static function skipSpace(source: String, i: Int, n: Int): Int {
 		var j: Int = i;
-		while (j < n && isSpace(source.fastCodeAt(j))) j++;
+		while (j < n && SourceText.isSpace(source.fastCodeAt(j))) j++;
 		return j;
 	}
 
@@ -117,7 +108,7 @@ final class AccessorClauseText {
 		if (span.from + kw.length > n || source.substring(span.from, span.from + kw.length) != kw) return -1;
 		var i: Int = skipSpace(source, span.from + kw.length, n);
 		final nameStart: Int = i;
-		while (i < n && isIdentChar(source.fastCodeAt(i))) i++;
+		while (i < n && SourceText.isIdentChar(source.fastCodeAt(i))) i++;
 		return i == nameStart ? -1 : i;
 	}
 

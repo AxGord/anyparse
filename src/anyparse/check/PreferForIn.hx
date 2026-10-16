@@ -7,6 +7,7 @@ import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -356,7 +357,7 @@ final class PreferForIn implements Check implements DefaultOff {
 		if (annotation == null || !ELEMENT_TYPE_HEADS.contains(annotation.name) || annotation.children.length == 0) return null;
 		final qualified: Null<String> = annotation.children[0].name;
 		if (qualified == null) return null;
-		final simple: String = qualified.substring(qualified.lastIndexOf('.') + 1);
+		final simple: String = SourceText.lastSegment(qualified);
 		return simple.length == 0 || UNINFORMATIVE_TYPES.contains(simple)
 			? null
 			: simple.substring(0, 1).toLowerCase() + simple.substring(1);

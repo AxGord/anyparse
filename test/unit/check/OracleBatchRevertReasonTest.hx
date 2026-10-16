@@ -6,6 +6,7 @@ import sys.io.File;
 import anyparse.check.CompilerOracle.OracleOutcome;
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.query.cli.command.LintFixVerify;
+import anyparse.query.cli.command.LintFixVerify.OracleBatchResult;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -58,6 +59,34 @@ class OracleBatchRevertReasonTest extends Test {
 		Assert.equals(2, result.reverted.length);
 		Assert.equals(0, result.applied.length);
 		Assert.equals('before 0\n', File.getContent('$dir/f0.hx'));
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * The batch blames a file the way the safe pass does (`LintFixSafePass.blames`): a same-named file in another
+	 * directory is a different file, a warning is not why the build failed, and a pretty-reported error is read through
+	 * its ANSI badge. The batch's own reader matched by basename, read no badge and counted warnings, so it reverted the
+	 * two files the compiler did not blame and kept the one it did.
+	 */
+	@:pin('control')
+	@:killer('M-BLAMES-BASENAME')
+	public function testTheBatchBlamesTheFileTheCompilerNames(): Void {
+		#if (sys || nodejs)
+		final dir: String = makeDir(3);
+		final esc: String = String.fromCharCode(27);
+		final errors: String = 'other/f0.hx:1: characters 1-2 : boom\n$dir/f1.hx:2: characters 1-2 : Warning : deprecated\n'
+			+ '$esc[30;41m ERROR $esc[0m $dir/f2.hx:1: characters 1-2 : boom';
+		final result: OracleBatchResult = LintFixVerify.verifyOracleBatch(
+			batch(dir, 3), oracles(dir), canned([Rejected(errors), Confirmed])
+		);
+		Assert.same(['$dir/f2.hx'], result.reverted);
+		Assert.equals(2, result.applied.length);
+		Assert.equals('before 2\n', File.getContent('$dir/f2.hx'));
+		Assert.equals('after 0\n', File.getContent('$dir/f0.hx'));
+		Assert.equals('after 1\n', File.getContent('$dir/f1.hx'));
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');

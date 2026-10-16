@@ -712,14 +712,13 @@ final class TypeResolver {
 		final buf: StringBuf = new StringBuf();
 		for (i in 0...src.length) {
 			final c: Int = src.fastCodeAt(i);
-			if (c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code) continue;
+			if (SourceText.isSpace(c)) continue;
 			if (!isNominalChar(c)) return null;
 			buf.addChar(c);
 		}
 		final s: String = buf.toString();
 		if (s == '') return null;
-		final dot: Int = s.lastIndexOf('.');
-		return dot == -1 ? s : s.substring(dot + 1);
+		return SourceText.lastSegment(s);
 	}
 
 	/**

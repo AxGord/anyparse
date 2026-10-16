@@ -4,9 +4,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using Lambda;
 
@@ -102,8 +100,10 @@ final class Rename {
 	): RenameResult {
 		if (!SourceText.isIdentifier(newName)) return Err('new name "$newName" is not a valid identifier');
 
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
-		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
+		final tree: QueryNode = switch ParseGate.parse(plugin, source, 'source') {
+			case Unparsed(message): return Err(message);
+			case Parsed(parsed): parsed;
+		};
 
 		// line:col is 1-based, as apq refs / ast --at / source print.
 		final cursor: Int = Span.offsetOf(source, line, col);
@@ -120,10 +120,10 @@ final class Rename {
 		final rewritten: String = spliceRename(source, occurrences, newName);
 		if (rewritten == source) return Err('rename to "$newName" is a no-op');
 
-		final newTree: QueryNode = try plugin.parseFile(rewritten) catch (exception: ParseError) return Err(
-			'rewritten source does not parse: $exception'
-		)
-		catch (exception: Exception) return Err('rewritten source does not parse: ${exception.message}');
+		final newTree: QueryNode = switch ParseGate.parse(plugin, rewritten, 'rewritten source') {
+			case Unparsed(message): return Err(message);
+			case Parsed(parsed): parsed;
+		};
 
 		final mismatch: Array<Capture> = captureMismatch(rewritten, newTree, occurrences, occurrences, newName, cursor, shape);
 		if (mismatch.length == 0) return Ok(rewritten);
@@ -678,10 +678,10 @@ final class Rename {
 		shape: RefShape
 	): RenameResult {
 		final qualified: String = qualification.source;
-		final tree: QueryNode = try plugin.parseFile(qualified) catch (exception: ParseError) return Err(
-			'qualified rewrite does not parse: $exception'
-		)
-		catch (exception: Exception) return Err('qualified rewrite does not parse: ${exception.message}');
+		final tree: QueryNode = switch ParseGate.parse(plugin, qualified, 'qualified rewrite') {
+			case Unparsed(message): return Err(message);
+			case Parsed(parsed): parsed;
+		};
 
 		// Where each rewritten occurrence landed: the rename's own length delta accumulated
 		// over the edits that PRECEDE it (not `delta * i`, which is only right when every edit

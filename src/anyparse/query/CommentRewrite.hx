@@ -5,7 +5,6 @@ import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.LayoutMetrics;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.SourceComments.CommentTok;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
@@ -77,12 +76,8 @@ final class CommentRewrite {
 	): EditResult {
 		if (find.length == 0) return Err('find pattern is empty');
 
-		try
-			plugin.parseFile(source)
-		catch (exception: ParseError)
-			return Err('source does not parse: $exception')
-		catch (exception: Exception)
-			return Err('source does not parse: ${exception.message}');
+		final unparsed: Null<String> = ParseGate.refusal(plugin, source, 'source');
+		if (unparsed != null) return Err(unparsed);
 
 		var ereg: Null<EReg> = null;
 		if (regex) {
@@ -304,7 +299,7 @@ final class CommentRewrite {
 		final seen: Array<Int> = [];
 		final lines: Array<WideLine> = [];
 		for (tok in SourceComments.collectCommentTokens(regions)) {
-			var from: Int = text.lastIndexOf('\n', tok.from) + 1;
+			var from: Int = SourceText.lineStartOf(text, tok.from);
 			while (from < tok.to) {
 				var to: Int = text.indexOf('\n', from);
 				if (to < 0) to = text.length;

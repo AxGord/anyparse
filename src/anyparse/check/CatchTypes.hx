@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 
 using Lambda;
@@ -71,7 +72,7 @@ final class CatchTypes {
 		final exception: Null<String> = shape.exceptionTypePath;
 		if (exception == null) return false;
 		if (written == exception) return true;
-		final simple: String = exception.substring(exception.lastIndexOf('.') + 1);
+		final simple: String = SourceText.lastSegment(exception);
 		return written == simple && (index == null || index.refs.declsNamed(simple).length == 0);
 	}
 

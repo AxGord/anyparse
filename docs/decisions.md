@@ -3006,3 +3006,52 @@ decided the question; it may not become a record of runs.
   null-safety), so `prefer-final-public-field` now folds the swapped spelling too
   (`testCtorConditionalDefaultSwappedGuardFixed`, red on the start commit); `null == null` names no operand, which
   every former first-null-wins caller already discarded downstream — branch `feat/infra-B6a`
+- the private `isIdentChar` / `isSpace` / `lineStartOf` / `lastSegment` / `nodeAt` copies were read as one question
+  each → most were (byte-equal bodies, deleted for `SourceText` / `TreePath` / `MacroNames`), but not all, and the ones
+  that differ stay: `CommentProse.isIdentChar` admits `$` (a macro splice in a comment's prose), `LintFixSafePass.isSpace`
+  and `AccessorClauseText.isHorizontalSpace` are space-and-tab only, `BlockCommentNormalizer.isSpace` lives in the
+  format layer, which reads nothing of `anyparse.query`. Two line-start answers are both right and are kept apart by
+  name: `SourceText.lineStartOf` gives the line AFTER a newline offset, `lineStartAt` the line that newline ends
+  (`FoldStringLiterals`, `PreferLineComment` and `PreferCaseGuard` scanned the second; no caller hands either a newline
+  offset, so routing each to its own twin changed no answer). The macro layer and the macro-time facts probe
+  (`TypedFactsMacro`, `TypedFactsWalk`) read nothing of `anyparse.query` either, so their dotted-path splits go to
+  `MacroNames` or stay; the nodeAt copies' walk is `TreePath.firstAround` (pre-order, containment-pruned), which also
+  finds a match past a first containing child the greedy descent of `FunctionTrees` / `LockAliases` gave up on — branch
+  `feat/infra-B6b`
+- hand-rolled `<` scans of type text were read as seven parsers → three were not type text at all (`MemberWriteScan`
+  operator characters, `Pattern.isStarSlot` punctuation, `LintFormat` XML escaping) and `CompilerFacts.baseId` is the
+  facts primitive; the real ones read through the reader of their grammar: SOURCE text through `TypeSyntax`
+  (`PreferMapType` by the new `TypeSyntax.argumentsOpen`, `ExhaustiveSwitches` by the `Nominal` path — the path as
+  written, as the split gave it), COMPILER text through the facts readers (`MemberReach.outerTypeName` by
+  `FactsTypeTree`, `FactsView.unwrapped` by the new `FactsTypeText.unwrap`, which peels a wrapper only when its `<`
+  closes at the end) — branch `feat/infra-B6b`
+- the two compiler-diagnostic readers were read as one being merely terser → `LintFixVerify.errorMentionsFile` blamed
+  the wrong file: a basename match (`other/A.hx` blamed `src/A.hx`), a warning counted as a cause, a pretty-reported
+  error unread behind its ANSI badge. The oracle batch now asks `LintFixSafePass.blames` (the safe pass's
+  `errorFiles` + segment-aligned `samePath`) and the copy is gone — branch `feat/infra-B6b`
+- the token-based hxml reader (`OracleCache.hxmlRefs`: several flags per line, tab as a separator) was taken as the
+  stronger of the two → Haxe 4.3.7 reads an hxml as an argv the other way round: a line is trimmed and unquoted, a `#`
+  only leads a comment, and a line starting with `-` is split ONCE at its first space (`-cp a -cp b` is the one
+  classpath `a -cp b`, `-cp<TAB>src` an unknown option, a flag's value may stand on the next line; probed with
+  `--interp` builds). `OracleCache.hxmlArgs` reads that argv, `hxmlRefs` walks it, and
+  `OracleDeclaration.relativeClasspaths` (line prefixes, quotes kept) asks `hxmlRefs`. A fingerprint over an hxml
+  spelled the old way changes once. The compile-dir probe still does not follow an include: it resolves against the
+  directory being decided — branch `feat/infra-B6b`
+- the ops left outside `ParseGate` by B7 were read as needing their own catch → none did: 30 parse sites in 23 ops
+  (the input gate and the rewritten-source gate) now ask `ParseGate.parse` / `refusal` under the label they printed,
+  so the text is the gate's. Measured on 29 op entry points x 93 TM files x a parsing and a broken source (11590
+  answers, 5435 of them refusals): byte-identical. Two wordings change, both on paths the corpus never reached:
+  `MakeFinal`'s rewritten-source refusal and `MoveMember`'s per-file scope parse (behind `ScopeFiles`' own refusal)
+  quoted a grammar `ParseError` by its bare message and now quote it as every other gate does, with its `line:col`.
+  The scope loops that word their refusal without a reason (`InheritanceMove`, `MakeFinal`, `SafeDelete`) keep their
+  words and parse through the gate; `CanonicalEdit` and `NewFile` are writer round trips, not parses — branch
+  `feat/infra-B6b`
+- `ExplicitType` and `MoveMember` decoded `ImportKind` themselves → the name-resolution layer answers:
+  `TypeRefIndex.plainImportPathOf` / `bindsUnderGuard` (moved from `ExplicitType`), `usings` / `plainImports` (what
+  `MoveMember`'s scope guard reads). `MoveMember` now checks a file's `using` lines before its static imports, so a
+  file carrying BOTH refusals names the `using` one whatever their order — branch `feat/infra-B6b`
+- the enclosing-type copies B4b left beside `TypeResolver.enclosingTypeDeclAt` were read as other questions →
+  `UnusedReturnValue.enclosingTypeName` was the same walk unpruned, `ParamAscription.enclosingTypeOf` the same answer
+  read off an ancestor chain, `ExplicitType.enclosingType` the same answer over the index's type spans (Haxe nests no
+  type, and the index and `typeDeclOf` read one kind list, `MemberKinds.TYPE_DECL_KINDS`); all three ask the walk now.
+  `HaxeNamingSupport`'s `enclosingType` is a walk parameter, not a lookup — branch `feat/infra-B6b`

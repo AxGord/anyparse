@@ -1,6 +1,7 @@
 package anyparse.macro;
 
 #if macro
+import anyparse.macro.MacroNames.*;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 
@@ -44,9 +45,8 @@ class TransformCodegen {
 	 * setting one rewrites every node of that type across the tree.
 	 */
 	private static function defineVisitTypedef(visitTypePath: String, hooks: Array<TransformLowering.TransformHook>): Void {
-		final idx: Int = visitTypePath.lastIndexOf('.');
-		final pack: Array<String> = idx == -1 ? [] : visitTypePath.substring(0, idx).split('.');
-		final name: String = idx == -1 ? visitTypePath : visitTypePath.substring(idx + 1);
+		final pack: Array<String> = packOf(visitTypePath);
+		final name: String = simpleName(visitTypePath);
 
 		final structFields: Array<Field> = [
 			for (hook in hooks)
@@ -126,9 +126,8 @@ class TransformCodegen {
 	}
 
 	private static function pathToComplexType(typePath: String): ComplexType {
-		final idx: Int = typePath.lastIndexOf('.');
-		final pack: Array<String> = idx == -1 ? [] : typePath.substring(0, idx).split('.');
-		final name: String = idx == -1 ? typePath : typePath.substring(idx + 1);
+		final pack: Array<String> = packOf(typePath);
+		final name: String = simpleName(typePath);
 		return TPath({ pack: pack, name: name, params: [] });
 	}
 

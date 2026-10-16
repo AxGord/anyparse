@@ -181,8 +181,12 @@ final class Clusters {
 			out.add('\ncomponent $index — ${comp.length} member(s):\n');
 			for (n in comp) out.add('  ${CallChains.nodeLabel(graph, n.id, sourceOf)}\n');
 			final uses: Array<HubUse> = report.hubUses.filter(u -> u.component == index);
-			final toHub: Array<String> = [for (u in uses) if (u.toHub > 0) '${shortName(u.hubId)} ×${u.toHub}'];
-			final fromHub: Array<String> = [for (u in uses) if (u.fromHub > 0) '${shortName(u.hubId)} ×${u.fromHub}'];
+			final toHub: Array<String> = [
+				for (u in uses) if (u.toHub > 0) '${SourceText.lastSegment(u.hubId)} ×${u.toHub}'
+			];
+			final fromHub: Array<String> = [
+				for (u in uses) if (u.fromHub > 0) '${SourceText.lastSegment(u.hubId)} ×${u.fromHub}'
+			];
 			if (toHub.length > 0) out.add('  -> hubs: ${toHub.join(', ')}\n');
 			if (fromHub.length > 0) out.add('  <- hubs: ${fromHub.join(', ')}\n');
 		}
@@ -196,11 +200,6 @@ final class Clusters {
 	private static function memberRoot(id: String): String {
 		final hash: Int = id.indexOf('#');
 		return hash == -1 ? id : id.substring(0, hash);
-	}
-
-	private static function shortName(id: String): String {
-		final dot: Int = id.lastIndexOf('.');
-		return dot == -1 ? id : id.substring(dot + 1);
 	}
 
 	private static function nodeOf(graph: CallGraph, id: String): FnNode {

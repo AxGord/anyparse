@@ -4,9 +4,7 @@ import anyparse.query.CallSites.CollectResult;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Refs.RefKind;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using StringTools;
 using Lambda;
@@ -86,8 +84,10 @@ final class IntroduceParameterObject {
 		if (!SourceText.isIdentifier(typeName)) return Err('type name "$typeName" is not a valid identifier');
 		if (paramNames.length == 0) return Err('no parameters named — nothing to fold');
 
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
-		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
+		final tree: QueryNode = switch ParseGate.parse(plugin, source, 'source') {
+			case Unparsed(message): return Err(message);
+			case Parsed(parsed): parsed;
+		};
 
 		final prep: Prep = switch resolvePrep(source, tree, line, col, paramNames, typeName, objName, plugin, shape) {
 			case Refused(message): return Err(message);
@@ -114,12 +114,8 @@ final class IntroduceParameterObject {
 			case Err(message): return Err(message);
 			case Ok(text, _): text;
 		};
-		try
-			plugin.parseFile(rewritten)
-		catch (exception: ParseError)
-			return Err('rewritten source does not parse: $exception')
-		catch (exception: Exception)
-			return Err('rewritten source does not parse: ${exception.message}');
+		final unparsed: Null<String> = ParseGate.refusal(plugin, rewritten, 'rewritten source');
+		if (unparsed != null) return Err(unparsed);
 		return Ok(rewritten);
 	}
 

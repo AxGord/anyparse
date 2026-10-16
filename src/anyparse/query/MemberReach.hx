@@ -3170,11 +3170,15 @@ final class MemberReach {
 		);
 	}
 
-	/** The outer type a facts type string names, by its simple name: `Array` for `Array<Int>`, `Map` for `haxe.ds.Map<K,V>`. */
+	/**
+	 * The outer type a facts type string names, by its simple name: `Array` for `Array<Int>`, `Map` for `haxe.ds.Map<K,V>`;
+	 * empty for a type that names none (a function, a structure, a parameter) or text the facts grammar does not read.
+	 */
 	private static function outerTypeName(type: String): String {
-		final open: Int = type.indexOf('<');
-		final path: String = open < 0 ? type : type.substr(0, open);
-		return path.substr(path.lastIndexOf('.') + 1);
+		return switch FactsTypeTree.read(type) {
+			case Named(path, _): SourceText.lastSegment(path);
+			case _: '';
+		};
 	}
 
 	/**

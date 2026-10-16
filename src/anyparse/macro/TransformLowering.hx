@@ -315,9 +315,8 @@ class TransformLowering {
 	}
 
 	private static function pathToComplexType(typePath: String): ComplexType {
-		final idx: Int = typePath.lastIndexOf('.');
-		final pack: Array<String> = idx == -1 ? [] : typePath.substring(0, idx).split('.');
-		final name: String = idx == -1 ? typePath : typePath.substring(idx + 1);
+		final pack: Array<String> = packOf(typePath);
+		final name: String = simpleName(typePath);
 		return TPath({ pack: pack, name: name, params: [] });
 	}
 

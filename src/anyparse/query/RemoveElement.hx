@@ -1,7 +1,6 @@
 package anyparse.query;
 
 import anyparse.query.CanonicalEdit.EditResult;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
@@ -47,8 +46,10 @@ final class RemoveElement {
 	public static function removeElement(
 		source: String, line: Int, col: Int, reformat: Bool, plugin: GrammarPlugin, withDoc: Bool = true, ?optsJson: String
 	): EditResult {
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
-		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
+		final tree: QueryNode = switch ParseGate.parse(plugin, source, 'source') {
+			case Unparsed(message): return Err(message);
+			case Parsed(parsed): parsed;
+		};
 
 		// line:col is 1-based, as apq refs / ast --at / source print.
 		final cursor: Int = Span.offsetOf(source, line, col);

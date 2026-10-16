@@ -101,7 +101,7 @@ final class FactsProvenance {
 			for (n in _view._table.nodesIn(node.file)) if (FactsView.FUNCTION_KINDS.contains(n.kind) && body.holds(n.at)) n
 		];
 		// the function's own body must be among them: a body a macro replaced is typed elsewhere, and only what it kept is here
-		final own: Bool = bodies.exists(n -> OWN_BODY_KINDS.contains(n.kind) && simpleName(n.id) == name);
+		final own: Bool = bodies.exists(n -> OWN_BODY_KINDS.contains(n.kind) && SourceText.lastSegment(n.id) == name);
 		return own && bodies.foreach(n -> factsMatch(n, body));
 	}
 
@@ -275,7 +275,7 @@ final class FactsProvenance {
 			final known: Null<Bool> = verdicts[method.id];
 			if (known != null) return known;
 			final field: String = fieldOf(method.id);
-			final owner: String = method.id.substr(0, method.id.lastIndexOf('.'));
+			final owner: String = SourceText.parentPath(method.id);
 			final property: Null<String> = _view.accessorProperty(field);
 			// an abstract's constructor, which the text calls by constructing the abstract
 			final constructed: Bool = _view.graphMember(owner, field) == constructorName()
@@ -392,7 +392,7 @@ final class FactsProvenance {
 	private function expansionWritten(n: FactNode, x: ExpansionFact, body: BodyText, outer: Null<(FactPos) -> Bool>): Bool {
 		final expander: Null<String> = x.expander;
 		if (expander == null) return false;
-		final macroName: String = simpleName(expander);
+		final macroName: String = SourceText.lastSegment(expander);
 		if (body.holds(x.anchor)) return FactText.spellsCall(body.textAt(x.anchor), macroName);
 		if (outer != null && outer(x.anchor)) return body.spellsCall(macroName);
 		final splice: Null<SpliceFact> = CompilerFacts.spliceOf(n, x.anchor);
@@ -558,7 +558,7 @@ final class FactsProvenance {
 	/** Whether every fact of the typed body `n` sits on `body`'s text as its own (see `bodyIsSource`). */
 	private function factsMatch(n: FactNode, body: BodyText): Bool {
 		return !n.generated && n.incomplete.length <= 0 && n.natives.length <= 0 && !n.reflection.exists(r -> r.isValue)
-			&& callsMatch(n, body) && n.news.foreach(x -> body.spells(x.at, simpleName(CompilerFacts.baseId(x.type))))
+			&& callsMatch(n, body) && n.news.foreach(x -> body.spells(x.at, SourceText.lastSegment(CompilerFacts.baseId(x.type))))
 			&& n.fields.foreach(f -> body.holds(f.at) && (body.mentions(f.at, f.field) || (!f.write && body.lowered(f.at))))
 			&& n.vars.foreach(v -> body.spells(v.at, v.name))
 			&& n.reads.foreach(r -> body.holds(r.at) && (body.bare(r.at) || body.lowered(r.at))) && n.flows.foreach(f -> body.holds(f.at))
@@ -575,7 +575,7 @@ final class FactsProvenance {
 			final target: Null<String> = c.target;
 			if (!body.holds(c.at)) return false;
 			if (target == null || target.indexOf(FactsView.NESTED_MARK) >= 0) continue;
-			final member: String = simpleName(target);
+			final member: String = SourceText.lastSegment(target);
 			// a property read or write runs its accessor: the text spells the property
 			final spelled: String = _view.accessorProperty(member) ?? member;
 			if (!body.mentions(c.at, spelled) && !(body.lowered(c.at) && iterationCalls.contains(member))) return false;
@@ -583,14 +583,9 @@ final class FactsProvenance {
 		return true;
 	}
 
-	/** The last dot-separated segment of `path`. */
-	private static inline function simpleName(path: String): String {
-		return path.substr(path.lastIndexOf('.') + 1);
-	}
-
 	/** The field a node id names (`pack.Type.field`, `pack.Type.field~n` for a further overload). */
 	private static function fieldOf(id: String): String {
-		final field: String = simpleName(id);
+		final field: String = SourceText.lastSegment(id);
 		final mark: Int = field.indexOf('~');
 		return mark < 0 ? field : field.substr(0, mark);
 	}

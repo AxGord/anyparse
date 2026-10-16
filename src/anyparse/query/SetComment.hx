@@ -1,9 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.CanonicalEdit.EditResult;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using StringTools;
 
@@ -36,12 +34,8 @@ final class SetComment {
 	public static function setComment(
 		source: String, line: Int, col: Int, commentText: String, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
 	): EditResult {
-		try
-			plugin.parseFile(source)
-		catch (exception: ParseError)
-			return Err('source does not parse: $exception')
-		catch (exception: Exception)
-			return Err('source does not parse: ${exception.message}');
+		final unparsed: Null<String> = ParseGate.refusal(plugin, source, 'source');
+		if (unparsed != null) return Err(unparsed);
 
 		final trimmed: String = commentText.trim();
 		if (trimmed.length == 0) return Err('set-comment requires a non-empty comment text');

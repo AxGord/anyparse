@@ -3034,10 +3034,10 @@
 		},
 		{
 			"name": "M-PURE-ARG-ROOT-ONLY",
-			"type": "anyparse.query.InlineMethod",
-			"method": "isPure",
-			"find": "for (c in node.children) walk(c);",
-			"replace": "if (node.children.length < 0) for (c in node.children) walk(c);",
+			"type": "anyparse.query.MemberKinds",
+			"method": "isSideEffectFree",
+			"find": "for (c in n.children) walk(c);",
+			"replace": "if (n.children.length < 0) for (c in n.children) walk(c);",
 			"note": "the argument walk stops at the ROOT, so `1 + f()` is pure because `Add` is - the call under it is never seen - and an argument that allocates or calls gets DUPLICATED once per use of the parameter it substitutes; the kind vocabulary this arm used to widen is already cut on the MemberKinds side by M-SAFE-KINDS-SUFFIX-STUB"
 		},
 		{
@@ -8387,7 +8387,7 @@
 			"type": "anyparse.query.FactsProvenance",
 			"method": "factsOnText",
 			"find": "final built: String = _view.graphType(x.type);",
-			"replace": "final built: String = simpleName(CompilerFacts.baseId(x.type));",
+			"replace": "final built: String = SourceText.lastSegment(CompilerFacts.baseId(x.type));",
 			"note": "a construction of an abstract spells its implementation class, which no text names"
 		},
 		{
@@ -8866,8 +8866,8 @@
 			"name": "M-FACTS-ABSTRACT-CTOR-NAME",
 			"type": "anyparse.query.CallGraphFacts",
 			"method": "declaredCall",
-			"find": "view.graphMember(owner, target.substr(target.lastIndexOf('.') + 1))",
-			"replace": "target.substr(target.lastIndexOf('.') + 1)",
+			"find": "view.graphMember(owner, SourceText.lastSegment(target))",
+			"replace": "SourceText.lastSegment(target)",
 			"note": "a call of an abstract's constructor names `_new`, which no type the graph holds declares, so every `new` of an abstract is an unresolved dispatch"
 		},
 		{
@@ -16442,8 +16442,8 @@
 			"name": "M-LOOPBOUND-VECTOR-IMPORT",
 			"type": "anyparse.check.LoopBoundLengthMismatch",
 			"method": "isFixedLengthType",
-			"find": "if (typeName == simpleName(path) && ctx.tree.children.exists(c -> ctx.seams.modulePathKinds.contains(c.kind) && c.name == path))",
-			"replace": "if (typeName == simpleName(path))",
+			"find": "if (typeName == SourceText.lastSegment(path) && ctx.tree.children.exists(c ->",
+			"replace": "if (typeName == SourceText.lastSegment(path) || false && ctx.tree.children.exists(c ->",
 			"note": "any type spelled `Vector` is read as the fixed-length one, OpenFL's growable `Vector` included"
 		},
 		{
@@ -18651,7 +18651,7 @@
 			"name": "M-TS-UNNAMED-BY-PAIR",
 			"type": "anyparse.check.HoldGrade",
 			"method": "takenKey",
-			"find": "lock ?? UNNAMED + a.pair.lockId.substring(0, a.pair.lockId.lastIndexOf('.'))",
+			"find": "lock ?? UNNAMED + SourceText.parentPath(a.pair.lockId)",
 			"replace": "lock ?? a.pair.lockId",
 			"note": "a lock no member names is told apart by its pair take member: an exclusive take and a shared one of the same class never meet"
 		},
@@ -21966,6 +21966,36 @@
 			"find": " && NegationScan.negationIsClean(g.cond, source, logic, types)",
 			"replace": "",
 			"note": "a condition that can only invert into a `!( … )` wrap is reported, so the guard form reads worse than the nesting it removes"
+		},
+		{
+			"name": "M-HXML-SPLIT-LAST-SPACE",
+			"type": "anyparse.check.OracleCache",
+			"method": "hxmlArgs",
+			"find": "line.indexOf(' ')",
+			"replace": "line.lastIndexOf(' ')",
+			"note": "a flag line splits at its LAST space, so `-cp lib -lib heaps` reads as the flag `-cp lib -lib` and the compiler's one classpath is lost"
+		},
+		{
+			"name": "M-HXML-QUOTES-KEPT",
+			"type": "anyparse.check.OracleCache",
+			"method": "unquote",
+			"force": "s",
+			"note": "an hxml argument keeps the quotes the compiler drops, so `-cp \"src\"` names a directory called `\"src\"`"
+		},
+		{
+			"name": "M-BLAMES-BASENAME",
+			"type": "anyparse.query.LintFixSafePass",
+			"method": "blames",
+			"find": "errorFiles(errors).exists(path -> samePath(path, file))",
+			"replace": "errors.indexOf(haxe.io.Path.withoutDirectory(file)) >= 0",
+			"note": "the compiler's errors blame any file whose basename they mention: a same-named file elsewhere, a warning, a badge-prefixed line all revert what they name by name only"
+		},
+		{
+			"name": "M-COMPILEDIR-PROBE-BLIND",
+			"type": "anyparse.check.OracleDeclaration",
+			"method": "relativeClasspaths",
+			"force": "[]",
+			"note": "the compile-dir probe reads no classpath, so every nested hxml compiles from its own directory even where its classpaths resolve from the config's"
 		}
 	]
 }

@@ -6,7 +6,6 @@ import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
@@ -259,22 +258,9 @@ final class UnusedReturnValue implements Check implements ConfigAware implements
 		return { nominal: n, desc: desc };
 	}
 
-	/** The simple name of the innermost type declaration whose span contains `span`, or null. */
+	/** The name of the innermost type declaration of `tree` holding `span` (`TypeResolver.enclosingTypeDeclAt`), or null. */
 	private static function enclosingTypeName(tree: QueryNode, span: Null<Span>): Null<String> {
-		if (span == null) return null;
-		final at: Span = span;
-		var best: Null<TypeDeclMatch> = null;
-		function visit(n: QueryNode): Void {
-			final td: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(n);
-			if (td != null && td.fullSpan.from <= at.from && at.to <= td.fullSpan.to) {
-				final b: Null<TypeDeclMatch> = best;
-				if (b == null || (td.fullSpan.to - td.fullSpan.from) < (b.fullSpan.to - b.fullSpan.from)) best = td;
-			}
-			for (c in n.children) visit(c);
-		}
-		visit(tree);
-		final b: Null<TypeDeclMatch> = best;
-		return b?.name;
+		return span == null ? null : TypeResolver.enclosingTypeDeclAt(tree, span.from, span.to)?.name;
 	}
 
 }

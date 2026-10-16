@@ -1475,6 +1475,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-REFLECTIVE-MERGE,M-HOLDERS-MERGE,M-OWNED-MERGE',
 			'unit.check.LintConfigTest#testReachSkipsBranchesOnlyUnderADeclaredCompleteOracleList :: control :: M-REACH-CONFIGS-COMPLETE',
 			'unit.check.LintConfigTest#testReachTakesTheBuildsAsCompleteOnlyWhenEveryPathAgrees :: control :: M-REACH-CONFIGS-AGREE',
+			'unit.check.LintConfigTest#testTheCompileDirProbeReadsTheHxmlAsTheCompilerDoes :: control :: M-HXML-QUOTES-KEPT,M-COMPILEDIR-PROBE-BLIND',
 			'unit.check.LintConfigTest#testTheReflectiveClassesAreTheRunsOnlyWhenEveryPathDeclaresThemAlike :: control :: M-REFLECTIVE-AGREE,M-HOLDERS-PARSE',
 			'unit.check.LintFixDeclineWiringSliceTest#testACrossFileRuleIsNotReportedAsSayingNothing :: control :: '
 				+ 'M-LEDGER-CROSS-FILE-MUTE',
@@ -1565,10 +1566,13 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-ASSISTED-SPLIT-NONE,M-ASSISTED-SALVAGE-NONE,M-ASSISTED-SALVAGED-COUNT-ALL',
 			'unit.check.OracleAssistedRefusalTest#testAnAssistedRefusalIsReported :: control :: '
 				+ 'M-ASSISTED-REFUSAL-SILENT,M-ASSISTED-REFUSAL-LEDGER-NONE',
+			'unit.check.OracleBatchRevertReasonTest#testTheBatchBlamesTheFileTheCompilerNames :: control :: M-BLAMES-BASENAME',
 			'unit.check.OracleCacheTest#testAFingerprintReadsItsSourcesThroughTheMemo :: control :: ' + 'M-ORACLE-CACHE-MEMO-UNREAD',
 			'unit.check.OracleCacheTest#testAVerdictIsNotFiledUnderAFingerprintTheTreeLeft :: control :: '
 				+ 'M-ORACLE-CACHE-STORES-A-MOVED-FINGERPRINT',
 			'unit.check.OracleCacheTest#testFingerprintsSharingOneWalkEqualTheirOwn :: control :: M-ORACLE-CACHE-WALK-FIRST-ONLY',
+			'unit.check.OracleCacheTest#testHxmlArgsReadTheLinesAsTheCompilerDoes :: control :: M-HXML-SPLIT-LAST-SPACE,M-HXML-QUOTES-KEPT',
+			'unit.check.OracleCacheTest#testHxmlRefsReadsCpLibAndIncludes :: control :: M-HXML-SPLIT-LAST-SPACE',
 			'unit.check.OracleConfigListE2ETest#testAConfigurationWithAnUnknownCompiledSetStillVetoesAnEdit :: control :: '
 				+ 'M-ORACLE-UNKNOWN-COVERAGE-NO-VETO',
 			'unit.check.OracleConfigListE2ETest#testARedBaselineExcludesItsConfigurationRatherThanThePhase :: control :: '
@@ -6972,7 +6976,11 @@ class TestDiscoveryParityTest extends Test {
 			'M-GUARD-UNBRACED-THEN',
 			'M-GUARD-MIN-THEN-IGNORED',
 			'M-GUARD-GLUE-COMMENT-BLIND',
-			'M-GUARD-UNCLEAN-INVERSION-REPORTED'
+			'M-GUARD-UNCLEAN-INVERSION-REPORTED',
+			'M-HXML-SPLIT-LAST-SPACE',
+			'M-HXML-QUOTES-KEPT',
+			'M-BLAMES-BASENAME',
+			'M-COMPILEDIR-PROBE-BLIND'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

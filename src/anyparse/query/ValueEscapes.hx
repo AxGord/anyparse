@@ -376,7 +376,9 @@ final class ValueEscapes {
 			}
 			if (_hazards.isAccess(target.kind) && target.children.length > 0 && name != null) {
 				final receiver: QueryNode = target.children[0];
-				final owner: Null<String> = isTypeName(receiver) ? lastSegment(RefactorSupport.flattenPath(receiver)) : typeOf(receiver);
+				final owner: Null<String> = isTypeName(receiver)
+					? SourceText.lastSegment(RefactorSupport.flattenPath(receiver))
+					: typeOf(receiver);
 				return owner == null ? null : g.types.memberOnChain(owner, name)?.typeSource;
 			}
 			return null;
@@ -504,7 +506,7 @@ final class ValueEscapes {
 			if (_hazards.isAccess(target.kind) && target.children.length > 0 && name != null) {
 				final receiver: QueryNode = target.children[0];
 				final owner: Null<String> = isTypeName(receiver) ? RefactorSupport.flattenPath(receiver) : typeOf(receiver);
-				if (owner == null || libraryMember(lastSegment(owner), name)) return false;
+				if (owner == null || libraryMember(SourceText.lastSegment(owner), name)) return false;
 			} else if (
 				target.kind == shape.identKind && name != null && at != null && TypeResolver.bindingNodeFrom(name, at, tree, shape) == null
 				&& libraryMember(TypeResolver.enclosingTypeDeclAt(tree, at.from)?.name, name)
@@ -601,7 +603,7 @@ final class ValueEscapes {
 						ok = false;
 						return;
 					}
-					final type: String = lastSegment(literal);
+					final type: String = SourceText.lastSegment(literal);
 					if (declarationOf(type) != null && !escape(type)) ok = false;
 				}
 				for (i in 0...node.children.length) walk(node.children[i], node, i);
@@ -668,10 +670,6 @@ final class ValueEscapes {
 	private function declarationOf(type: String): Null<TypeDeclInfo> {
 		final site: Null<{ file: String, span: Span }> = _scope.siteOf(type);
 		return site == null ? null : _scope.index.fileInfo(site.file)?.types.find(d -> d.name == type);
-	}
-
-	private static function lastSegment(path: String): String {
-		return path.substr(path.lastIndexOf('.') + 1);
 	}
 
 }

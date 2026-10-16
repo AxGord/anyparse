@@ -5,6 +5,7 @@ import anyparse.check.FactsTypeOracle.FactsDecline;
 import anyparse.check.FactsTypeTree.FactsArgument;
 import anyparse.check.FactsTypeTree.FactsField;
 import anyparse.check.FactsTypeTree.FactsType;
+import anyparse.query.SourceText;
 
 /** The type parameters a spelled type may name: those of the type `owner` (an id) and of the method `method`. */
 typedef TypeScope = {
@@ -43,8 +44,7 @@ final class FactsTypeSpelling {
 
 	/** Whether the type parameter `path` (`<owner>.<name>`) is one `scope` holds: its owner is the scope's type or method. */
 	public static function inScope(path: String, scope: TypeScope): Bool {
-		final dot: Int = path.lastIndexOf('.');
-		final owner: String = dot < 0 ? '' : path.substr(0, dot);
+		final owner: String = SourceText.parentPath(path);
 		return owner != '' && (owner == scope.owner || owner == scope.method);
 	}
 

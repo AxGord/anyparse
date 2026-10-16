@@ -7,6 +7,7 @@ import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.QueryNode;
+import anyparse.query.SourceText;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;
@@ -472,7 +473,7 @@ final class PreferCaseGuard implements Check implements RiskyFix {
 
 	/** The display column `at` sits at on its own line, tabs counted as the writer's indent width. */
 	private static function columnOf(scan: Scan, at: Int): Int {
-		final start: Int = at == 0 ? 0 : scan.source.lastIndexOf('\n', at - 1) + 1;
+		final start: Int = SourceText.lineStartAt(scan.source, at);
 		return CheckScan.displayColumn(scan.source, start, at, scan.metrics.indentWidth);
 	}
 

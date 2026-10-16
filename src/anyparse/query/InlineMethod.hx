@@ -2,9 +2,7 @@ package anyparse.query;
 
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using StringTools;
 using Lambda;
@@ -70,8 +68,10 @@ final class InlineMethod {
 	 * result.
 	 */
 	public static function inlineMethod(source: String, line: Int, col: Int, plugin: GrammarPlugin, shape: RefShape): EditResult {
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
-		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
+		final tree: QueryNode = switch ParseGate.parse(plugin, source, 'source') {
+			case Unparsed(message): return Err(message);
+			case Parsed(parsed): parsed;
+		};
 
 		// line:col is 1-based, as apq refs / ast --at / source print.
 		final cursor: Int = Span.offsetOf(source, line, col);
@@ -306,34 +306,6 @@ final class InlineMethod {
 	}
 
 	/**
-	 * Is every node kind in `arg`'s subtree pure — safe to DROP (a 0-use parameter) or DUPLICATE
-	 * (a 2+-use parameter) without changing evaluation?
-	 *
-	 * The vocabulary used to be a 36-name array here, copied from a second one in `MemberKinds`
-	 * "per the adapt-not-import rule", and both were widened by a NAME-CONVENTION stub
-	 * (`|| kind.endsWith('Lit') || kind.endsWith('StringExpr')`) that readmitted the object and
-	 * regex literals the list's own doc said were absent. An argument this call reports pure is
-	 * DUPLICATED once per use of its parameter, so an allocating literal admitted here turns one
-	 * value into several. Adapting a copy is what let the two spellings drift; the grammar
-	 * declaring it once is what ends that.
-	 */
-	private static function isPure(arg: QueryNode, shape: RefShape): Bool {
-		// Derived once and threaded through the walk, not re-derived per node.
-		final kinds: Array<String> = MemberKinds.sideEffectFreeExprKinds(shape);
-		var pure: Bool = true;
-		function walk(node: QueryNode): Void {
-			if (!pure) return;
-			if (!kinds.contains(node.kind)) {
-				pure = false;
-				return;
-			}
-			for (c in node.children) walk(c);
-		}
-		walk(arg);
-		return pure;
-	}
-
-	/**
 	 * Resolve and validate the inline-method target at `cursor`: the binding must
 	 * be a function decl whose body is a single return expression `E`, not
 	 * recursive, with no parameter shadowed or simple-interpolated inside `E`, and
@@ -439,7 +411,7 @@ final class InlineMethod {
 			}
 			// A dropped (0-use) or duplicated (2+-use) argument must be pure.
 			for (i in 0...params.length) {
-				if (occ[i] != 1 && !isPure(args[i], shape)) {
+				if (occ[i] != 1 && !MemberKinds.isSideEffectFree(args[i], shape)) {
 					final at: String = CallSites.posOf(source, call.span);
 					final reason: String = occ[i] == 0
 						? 'dropped (parameter "${paramNames[i]}" is unused)'
@@ -462,12 +434,8 @@ final class InlineMethod {
 		final rewritten: String = CanonicalEdit.applyEdits(source, edits);
 		if (rewritten == source) return Err('inline of "$name" is a no-op');
 
-		try
-			plugin.parseFile(rewritten)
-		catch (exception: ParseError)
-			return Err('rewritten source does not parse: $exception')
-		catch (exception: Exception)
-			return Err('rewritten source does not parse: ${exception.message}');
+		final unparsed: Null<String> = ParseGate.refusal(plugin, rewritten, 'rewritten source');
+		if (unparsed != null) return Err(unparsed);
 
 		return Ok(rewritten);
 	}

@@ -231,7 +231,7 @@ final class MemberTouchScan {
 		final value: QueryNode = BoolExprShape.unwrapParens(raw, _scope.shape.parenKind);
 		if (value.kind == _scope.shape.arrayLiteralKind || value.kind == _scope.shape.nullLiteralKind) return true;
 		if (value.kind == _scope.shape.newExprKind) {
-			final built: String = lastSegment(value.name ?? '');
+			final built: String = SourceText.lastSegment(value.name ?? '');
 			return (_scope.shape.arrayTypeNames ?? []).contains(built) || (_scope.shape.execution?.mapTypeNames ?? []).contains(built);
 		}
 		if (ctx == null) return false;
@@ -264,7 +264,7 @@ final class MemberTouchScan {
 			// a receiver naming a TYPE (`Store.items`) reaches that type's static member, not an instance one
 			if (TypeResolver.receiverRootIsUnboundType(receiver, tree, shape)) {
 				final path: String = RefactorSupport.flattenPath(receiver);
-				final typeName: String = path.substring(path.lastIndexOf('.') + 1);
+				final typeName: String = SourceText.lastSegment(path);
 				if (g.types.declarationCount(typeName) > 0) return g.types.declaringTypeOf(typeName, name) == declaring;
 			}
 			// the compiler's type of the receiver, where its facts replace the syntax of the code holding it
@@ -866,7 +866,7 @@ final class MemberTouchScan {
 
 	/** The field a call fact's `target` names (`pack.Type.field`, a bare field name), or null for a call of no field. */
 	private static function calledField(target: Null<String>): Null<String> {
-		return target == null ? null : target.substr(target.lastIndexOf('.') + 1);
+		return target == null ? null : SourceText.lastSegment(target);
 	}
 
 	/** The declaration of the node `id` (`CallGraph.declarationsOf`) whose text holds the fact position `at`, or null. */
@@ -896,11 +896,6 @@ final class MemberTouchScan {
 
 	private static function typesOf(provider: Null<TypeInfoProvider>, source: String): Map<Int, String> {
 		return provider == null ? [] : provider.declaredTypes(source);
-	}
-
-	private static function lastSegment(path: String): String {
-		final dot: Int = path.lastIndexOf('.');
-		return dot < 0 ? path : path.substring(dot + 1);
 	}
 
 }

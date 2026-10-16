@@ -139,10 +139,11 @@ final class InheritanceMove {
 	): { error: Null<String>, parsed: Array<ParsedFile> } {
 		final parsed: Array<ParsedFile> = [];
 		for (entry in scopeFiles) {
-			final tree: Null<QueryNode> = try plugin.parseFile(entry.source) catch (exception: Exception) null;
-			if (tree == null) return { error: 'cannot move across scope: ${entry.file} does not parse', parsed: [] };
-			final treeNN: QueryNode = tree;
-			parsed.push({ file: entry.file, source: entry.source, tree: treeNN });
+			final tree: QueryNode = switch ParseGate.parse(plugin, entry.source, entry.file) {
+				case Unparsed(_): return { error: 'cannot move across scope: ${entry.file} does not parse', parsed: [] };
+				case Parsed(read): read;
+			};
+			parsed.push({ file: entry.file, source: entry.source, tree: tree });
 		}
 		return { error: null, parsed: parsed };
 	}

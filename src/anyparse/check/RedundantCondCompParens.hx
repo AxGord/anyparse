@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.query.CondDirectives;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -141,9 +142,9 @@ final class RedundantCondCompParens implements Check {
 		if (source.fastCodeAt(condition.from) != '('.code || source.fastCodeAt(close) != ')'.code) return null;
 		var from: Int = condition.from + 1;
 		while (from < close && isSpaceAt(source, from)) from++;
-		if (from >= close || !CondDirectives.isIdentStart(source.fastCodeAt(from))) return null;
+		if (from >= close || !SourceText.isIdentStartChar(source.fastCodeAt(from))) return null;
 		var to: Int = from;
-		while (to < close && CondDirectives.isIdentChar(source.fastCodeAt(to))) to++;
+		while (to < close && SourceText.isIdentChar(source.fastCodeAt(to))) to++;
 		final flag: String = source.substring(from, to);
 		while (to < close && isSpaceAt(source, to)) to++;
 		return to == close ? flag : null;

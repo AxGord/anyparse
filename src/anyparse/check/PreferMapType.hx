@@ -438,7 +438,7 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 			out.push({ span: site.span, message: MSG_MAP_SHADOWED, edits: [] });
 			return;
 		}
-		final open: Int = typeParameterOpen(site.text, site.name.length);
+		final open: Int = typeParameterOpen(site.text, seams);
 		if (open == -1) {
 			out.push({ span: site.span, message: MSG_NO_TYPE_PARAMS, edits: [] });
 			return;
@@ -466,14 +466,14 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 			out.push({ span: site.span, message: MSG_MAP_SHADOWED, edits: [] });
 			return;
 		}
-		final open: Int = typeParameterOpen(site.text, nameAt + site.name.length);
+		final written: String = site.text.substring(nameAt, site.text.rtrim().length - EMPTY_ARGUMENT_LIST.length);
+		final open: Int = typeParameterOpen(written, seams);
 		if (open != -1) {
-			final written: String = site.text.substring(nameAt, site.text.rtrim().length - EMPTY_ARGUMENT_LIST.length);
 			if (writesItsOwnKey(site.concrete) && !keyResolvesBack(written, seams)) {
 				out.push({ span: site.span, message: MSG_KEY_UNPROVEN, edits: [] });
 				return;
 			}
-			out.push({ span: site.span, message: MSG_FIXABLE, edits: rewriteEdits(site, nameAt, open) });
+			out.push({ span: site.span, message: MSG_FIXABLE, edits: rewriteEdits(site, nameAt, nameAt + open) });
 			return;
 		}
 		// A bare construction carries no type arguments of its own, so everything `new Map()` needs to
@@ -659,11 +659,11 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 		return edits;
 	}
 
-	/** The offset of the type-parameter list's `<` at or after `from` in `text`, or -1 when the reference carries none. */
-	private static function typeParameterOpen(text: String, from: Int): Int {
-		var i: Int = from;
-		while (i < text.length && text.isSpace(i)) i++;
-		return i < text.length && text.fastCodeAt(i) == '<'.code ? i : -1;
+	/** The offset in `text`, a written map type, of its type-parameter list's `<` (`TypeSyntax.argumentsOpen`), or -1 when it carries none. */
+	private static function typeParameterOpen(text: String, seams: Seams): Int {
+		final type: Null<TypeSyntax> = seams.typeSyntax(text);
+		final open: Int = type == null ? -1 : type.argumentsOpen();
+		return type == null || open < 0 ? -1 : type.span.from + open;
 	}
 
 	/**

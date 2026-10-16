@@ -1014,20 +1014,7 @@ final class LambdaLoopScan {
 
 	/** The text with whitespace runs collapsed and truncated past the excerpt cap, so a multi-line expression fits one message line. */
 	private static function excerpt(text: String): String {
-		final buf: StringBuf = new StringBuf();
-		var prevSpace: Bool = false;
-		for (i in 0...text.length) {
-			final c: Int = text.fastCodeAt(i);
-			final isSpace: Bool = c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
-			if (isSpace) {
-				if (!prevSpace) buf.addChar(' '.code);
-				prevSpace = true;
-			} else {
-				buf.addChar(c);
-				prevSpace = false;
-			}
-		}
-		final flat: String = buf.toString().trim();
+		final flat: String = SourceText.collapseSpaces(text);
 		return flat.length > EXCERPT_MAX ? '${flat.substring(0, EXCERPT_MAX)}…' : flat;
 	}
 

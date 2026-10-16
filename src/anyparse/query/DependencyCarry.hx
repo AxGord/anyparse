@@ -409,8 +409,7 @@ final class DependencyCarry {
 		final out: Array<String> = [pkg];
 		var at: String = pkg;
 		while (at != '') {
-			final dot: Int = at.lastIndexOf('.');
-			at = dot < 0 ? '' : at.substring(0, dot);
+			at = SourceText.parentPath(at);
 			out.push(at);
 		}
 		return out;

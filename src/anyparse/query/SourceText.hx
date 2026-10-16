@@ -80,6 +80,26 @@ final class SourceText {
 	}
 
 	/**
+	 * `text` with every run of `isSpace` characters collapsed to one space and both ends trimmed —
+	 * how a multi-line expression is quoted on one message line.
+	 */
+	public static function collapseSpaces(text: String): String {
+		final buf: StringBuf = new StringBuf();
+		var prevSpace: Bool = false;
+		for (i in 0...text.length) {
+			final c: Int = text.fastCodeAt(i);
+			if (isSpace(c)) {
+				if (!prevSpace) buf.addChar(' '.code);
+				prevSpace = true;
+			} else {
+				buf.addChar(c);
+				prevSpace = false;
+			}
+		}
+		return buf.toString().trim();
+	}
+
+	/**
 	 * Offset of the first word-boundary occurrence of `name` within
 	 * `[span.from, span.to)`, or -1 when not found. A word boundary
 	 * requires the characters immediately before and after the match to
@@ -149,7 +169,7 @@ final class SourceText {
 	 * re-indents the whole file afterwards regardless.
 	 */
 	public static function lineIndentAt(source: String, from: Int): String {
-		final prefix: String = source.substring(source.lastIndexOf('\n', from) + 1, from);
+		final prefix: String = source.substring(lineStartOf(source, from), from);
 		return prefix.trim() == '' ? prefix : '';
 	}
 

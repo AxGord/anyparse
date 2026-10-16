@@ -9,6 +9,7 @@ import anyparse.query.IndexScope;
 import anyparse.query.NominalTypes;
 import anyparse.query.ParenGuard;
 import anyparse.query.QueryNode;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -381,7 +382,7 @@ final class PreferFind implements Check {
 		final iterSpan: Null<Span> = iterable.span;
 		final condSpan: Null<Span> = cond.span;
 		if (forSpan == null || iterSpan == null || condSpan == null) return null;
-		final iterSrc: String = normalize(source.substring(iterSpan.from, iterSpan.to));
+		final iterSrc: String = SourceText.collapseSpaces(source.substring(iterSpan.from, iterSpan.to));
 		final condSrc: String = excerpt(source.substring(condSpan.from, condSpan.to));
 		final suggestion: String = '${findCall(iterSrc, loopVar, condSrc, qualified)}$tail';
 		return {
@@ -497,27 +498,9 @@ final class PreferFind implements Check {
 		return span == null ? '' : ' ?? ${excerpt(source.substring(span.from, span.to))}';
 	}
 
-	/** Collapse whitespace runs to single spaces and trim, so a multi-line expression fits one message line. */
-	private static function normalize(text: String): String {
-		final buf: StringBuf = new StringBuf();
-		var prevSpace: Bool = false;
-		for (i in 0...text.length) {
-			final c: Int = text.fastCodeAt(i);
-			final isSpace: Bool = c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
-			if (isSpace) {
-				if (!prevSpace) buf.addChar(' '.code);
-				prevSpace = true;
-			} else {
-				buf.addChar(c);
-				prevSpace = false;
-			}
-		}
-		return buf.toString().trim();
-	}
-
 	/** The normalized source, truncated with an ellipsis beyond the excerpt cap. */
 	private static function excerpt(text: String): String {
-		final flat: String = normalize(text);
+		final flat: String = SourceText.collapseSpaces(text);
 		return flat.length > EXCERPT_MAX ? '${flat.substring(0, EXCERPT_MAX)}…' : flat;
 	}
 

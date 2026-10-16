@@ -5,9 +5,7 @@ import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.QueryNode;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using StringTools;
 
@@ -117,8 +115,10 @@ final class AddElement {
 		final trimmed: String = code.trim();
 		if (trimmed.length == 0) return Err('add-element requires a non-empty element text');
 
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
-		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
+		final tree: QueryNode = switch ParseGate.parse(plugin, source, 'source') {
+			case Unparsed(message): return Err(message);
+			case Parsed(parsed): parsed;
+		};
 
 		// line:col is 1-based, as apq refs / ast --at / source print.
 		final cursor: Int = Span.offsetOf(source, line, col);
@@ -235,8 +235,10 @@ final class AddElement {
 		final trimmed: String = code.trim();
 		if (trimmed.length == 0) return Err('add-element requires a non-empty element text');
 
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
-		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
+		final tree: QueryNode = switch ParseGate.parse(plugin, source, 'source') {
+			case Unparsed(message): return Err(message);
+			case Parsed(parsed): parsed;
+		};
 
 		// line:col is 1-based, as apq refs / ast --at / source print.
 		final cursor: Int = Span.offsetOf(source, line, col);
@@ -303,10 +305,6 @@ final class AddElement {
 
 	private static inline function isContainer(node: QueryNode): Bool {
 		return EXPR_CONTAINER_KINDS.contains(node.kind) || RefactorSupport.typeDeclOf(node) != null;
-	}
-
-	private static inline function isSpace(c: Int): Bool {
-		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
 	}
 
 	/**
@@ -383,7 +381,7 @@ final class AddElement {
 		var at: Int = hi - 1;
 		var afterComments: Int = -1;
 		while (at >= lo) {
-			if (isSpace(source.fastCodeAt(at))) {
+			if (SourceText.isSpace(source.fastCodeAt(at))) {
 				at--;
 				continue;
 			}
@@ -418,7 +416,7 @@ final class AddElement {
 	): EditResult {
 		var close: Int = containerSpan.to - 1;
 		if (close >= source.length) close = source.length - 1;
-		while (close >= containerSpan.from && isSpace(source.fastCodeAt(close))) close--;
+		while (close >= containerSpan.from && SourceText.isSpace(source.fastCodeAt(close))) close--;
 		if (close < containerSpan.from) return Err('the container at $line:$col has no closing delimiter');
 		final closeCode: Int = source.fastCodeAt(close);
 		if (closeCode != '}'.code && closeCode != ']'.code && closeCode != ')'.code)

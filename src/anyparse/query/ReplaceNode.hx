@@ -3,7 +3,6 @@ package anyparse.query;
 import anyparse.check.CheckScan;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
@@ -97,8 +96,10 @@ final class ReplaceNode {
 				+ 'silently dropping the declaration body. Flip modifiers with `apq set-modifier`, '
 				+ 'or pass the complete corrected declaration as newSource.'
 			);
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
-		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
+		final tree: QueryNode = switch ParseGate.parse(plugin, source, 'source') {
+			case Unparsed(message): return Err(message);
+			case Parsed(parsed): parsed;
+		};
 
 		final node: QueryNode = switch resolveTarget(source, tree, target, plugin) {
 			case Resolved(n): n;

@@ -424,14 +424,14 @@ final class PatternStar {
 	 */
 	public static function isStarSlot(source: String, at: Int): Bool {
 		var before: Int = at - 1;
-		while (before >= 0 && isSpace(source.fastCodeAt(before))) before--;
+		while (before >= 0 && SourceText.isSpace(source.fastCodeAt(before))) before--;
 		if (before >= 0) {
 			final c: Int = source.fastCodeAt(before);
 			if (c != '('.code && c != '['.code && c != '{'.code && c != ','.code && c != '<'.code) return false;
 		}
 		var after: Int = at + TOKEN_LENGTH;
 		final len: Int = source.length;
-		while (after < len && isSpace(source.fastCodeAt(after))) after++;
+		while (after < len && SourceText.isSpace(source.fastCodeAt(after))) after++;
 		if (after < len) {
 			final c: Int = source.fastCodeAt(after);
 			if (c != ')'.code && c != ']'.code && c != '}'.code && c != ','.code && c != '>'.code) return false;
@@ -495,10 +495,6 @@ final class PatternStar {
 	/** True when `root` contains at least one star — the gate every text-producing op consults. */
 	public static function contains(root: QueryNode): Bool {
 		return root.kind == KIND || root.children.exists(c -> contains(c));
-	}
-
-	private static inline function isSpace(c: Int): Bool {
-		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
 	}
 
 	private static function checkNode(node: QueryNode): Null<String> {

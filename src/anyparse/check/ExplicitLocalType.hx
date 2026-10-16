@@ -621,7 +621,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		final made: Null<WrittenConstruction> = NominalTypes.writtenConstruction(init, shape, source);
 		final written: Null<String> = made == null || made.args.length > 0 ? null : made.path;
 		if (written == null) return null;
-		final simple: String = written.substring(written.lastIndexOf('.') + 1);
+		final simple: String = SourceText.lastSegment(written);
 		// Declared in an index: provably non-generic ONLY when every declaration THERE agrees on zero
 		// type parameters. A unanimous non-zero arity, or an ambiguous one (declarations disagree, so
 		// typeParamArityOf returns null), both fail `== 0` and stay report-only — ambiguity must never

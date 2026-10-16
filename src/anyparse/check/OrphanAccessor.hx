@@ -8,6 +8,7 @@ import anyparse.query.IndexScope;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -418,8 +419,7 @@ final class OrphanAccessor implements Check implements DefaultOff {
 
 	/** The single project-wide declaration of `raw`'s simple name, or nothing when it is absent or ambiguous. */
 	private static function uniqueDeclaration(scope: SymbolIndex, raw: String): Array<{ file: FileInfo, type: TypeDeclInfo }> {
-		final dot: Int = raw.lastIndexOf('.');
-		final simple: String = dot < 0 ? raw : raw.substr(dot + 1);
+		final simple: String = SourceText.lastSegment(raw);
 		final declarers: Array<FileInfo> = scope.refs.declaringFiles(simple);
 		if (declarers.length != 1) return [];
 		final owner: FileInfo = declarers[0];

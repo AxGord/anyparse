@@ -9,6 +9,7 @@ import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
+import anyparse.query.SourceText;
 import anyparse.query.StringFold.ConcatSegment;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
@@ -627,7 +628,8 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 	private static function unwrapped(ctx: PlanContext, decomposition: Decomposition, filled: Array<Int>, budget: Int): Null<Plan> {
 		final span: Span = decomposition.editSpan;
 		if (!sameBoundaries(filled, decomposition.current) || !overLong(ctx, span)) return { groups: filled, budget: budget };
-		final own: Int = ctx.metrics.lineWidth - columnWidth(ctx, lineStartOf(ctx.source, span.from), span.from) - GROUP_JOIN.length + 1;
+		final own: Int = ctx.metrics.lineWidth - columnWidth(ctx, SourceText.lineStartAt(ctx.source, span.from), span.from)
+			- GROUP_JOIN.length + 1;
 		if (own >= budget) return { groups: filled, budget: budget };
 		final refilled: Null<Array<Int>> = fill(ctx, decomposition, own);
 		return refilled == null ? null : { groups: refilled, budget: own };
@@ -1123,7 +1125,7 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 	 * over-pessimism would not be, since the back-off only ever narrows.
 	 */
 	private static function budgetBase(ctx: PlanContext, span: Span): Int {
-		final lineStart: Int = lineStartOf(ctx.source, span.from);
+		final lineStart: Int = SourceText.lineStartAt(ctx.source, span.from);
 		var indent: Int = lineStart;
 		while (indent < ctx.source.length && isBlank(ctx.source.fastCodeAt(indent))) indent++;
 		final continuation: Int = columnWidth(ctx, lineStart, indent) + ctx.metrics.indentWidth;
@@ -1149,7 +1151,7 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 	 */
 	private static function sourceMaxWidth(ctx: PlanContext, span: Span): Int {
 		final source: String = ctx.source;
-		var lineStart: Int = lineStartOf(source, span.from);
+		var lineStart: Int = SourceText.lineStartAt(source, span.from);
 		var widest: Int = 0;
 		while (lineStart <= source.length) {
 			final lineEnd: Int = lineEndOf(source, lineStart);
@@ -1159,11 +1161,6 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 			lineStart = lineEnd + 1;
 		}
 		return widest;
-	}
-
-	/** The offset just after the line break preceding `pos` (0 when `pos` is on the first line). */
-	private static function lineStartOf(source: String, pos: Int): Int {
-		return pos == 0 ? 0 : source.lastIndexOf('\n', pos - 1) + 1;
 	}
 
 	/** The offset of the line break that ends `pos`'s line, or the source length when none follows. */
@@ -1681,7 +1678,7 @@ private class PlanContext {
 
 	/** The first non-blank offset on `pos`'s line when that line opens exactly one indent deep, else -1. */
 	private function memberLineStart(pos: Int): Int {
-		final lineStart: Int = FoldStringLiterals.lineStartOf(source, pos);
+		final lineStart: Int = SourceText.lineStartAt(source, pos);
 		var indent: Int = lineStart;
 		while (indent < source.length && FoldStringLiterals.isBlank(source.fastCodeAt(indent))) indent++;
 		return FoldStringLiterals.columnWidth(this, lineStart, indent) == metrics.indentWidth ? indent : -1;

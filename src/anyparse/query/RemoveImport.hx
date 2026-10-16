@@ -1,8 +1,6 @@
 package anyparse.query;
 
 import anyparse.query.CanonicalEdit.EditResult;
-import anyparse.runtime.ParseError;
-import haxe.Exception;
 
 using Lambda;
 
@@ -44,8 +42,10 @@ final class RemoveImport {
 	public static function removeImport(
 		source: String, modulePath: String, reformat: Bool, plugin: GrammarPlugin, withDoc: Bool = true, ?optsJson: String
 	): EditResult {
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
-		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
+		final tree: QueryNode = switch ParseGate.parse(plugin, source, 'source') {
+			case Unparsed(message): return Err(message);
+			case Parsed(parsed): parsed;
+		};
 
 		final matches: Array<QueryNode> = tree.children.filter(n -> IMPORT_KINDS.contains(n.kind) && n.name == modulePath);
 		return if (matches.length == 0)

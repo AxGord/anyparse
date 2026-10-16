@@ -55,23 +55,13 @@ final class CondDirectives {
 		return source.substring(directive.span.from, directive.span.to);
 	}
 
-	/** Whether `c` can open an identifier. */
-	public static inline function isIdentStart(c: Int): Bool {
-		return c == '_'.code || c >= 'a'.code && c <= 'z'.code || c >= 'A'.code && c <= 'Z'.code;
-	}
-
-	/** Whether `c` can continue an identifier. */
-	public static inline function isIdentChar(c: Int): Bool {
-		return isIdentStart(c) || isDigit(c);
-	}
-
 	/**
 	 * Whether `source` holds an identifier character at `at` — the positional form of
 	 * `isIdentChar`, for a caller asking whether a neighbour would lex into one token with an
 	 * identifier spliced next to it. Out of range answers false: nothing there to weld with.
 	 */
 	public static inline function isIdentCharAt(source: String, at: Int): Bool {
-		return at >= 0 && at < source.length && isIdentChar(source.fastCodeAt(at));
+		return at >= 0 && at < source.length && SourceText.isIdentChar(source.fastCodeAt(at));
 	}
 
 	/**
@@ -269,7 +259,7 @@ final class CondDirectives {
 		for (keyword in keywords) {
 			final end: Int = at + keyword.length;
 			if (end > source.length || source.substring(at, end) != keyword) continue;
-			if (end == source.length || !isIdentChar(source.fastCodeAt(end))) return keyword;
+			if (end == source.length || !SourceText.isIdentChar(source.fastCodeAt(end))) return keyword;
 		}
 		return null;
 	}
@@ -342,7 +332,7 @@ final class CondDirectives {
 		final c: Int = source.fastCodeAt(at);
 		if (c == '('.code) return scanParens(source, at);
 		if (isQuote(c)) return scanQuoted(source, at);
-		if (isIdentStart(c)) return scanFlagName(source, at + 1);
+		if (SourceText.isIdentStartChar(c)) return scanFlagName(source, at + 1);
 		if (!isDigit(c)) return at;
 		var i: Int = at + 1;
 		while (i < source.length) {
@@ -423,9 +413,9 @@ final class CondDirectives {
 	private static function scanFlagName(source: String, from: Int): Int {
 		var i: Int = from;
 		while (true) {
-			while (i < source.length && isIdentChar(source.fastCodeAt(i))) i++;
+			while (i < source.length && SourceText.isIdentChar(source.fastCodeAt(i))) i++;
 			if (i + 1 >= source.length || source.fastCodeAt(i) != '.'.code) return i;
-			if (!isIdentStart(source.fastCodeAt(i + 1))) return i;
+			if (!SourceText.isIdentStartChar(source.fastCodeAt(i + 1))) return i;
 			i += 2;
 		}
 	}

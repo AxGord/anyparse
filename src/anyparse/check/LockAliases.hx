@@ -6,6 +6,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceText;
+import anyparse.query.TreePath;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
@@ -510,13 +511,8 @@ final class LockAliases {
 
 	/** The outermost node of `file`'s tree spanning exactly `span` — of `kind` when one is given; null when there is none. */
 	private function nodeAt(file: String, span: Span, kind: Null<String>): Null<QueryNode> {
-		var node: Null<QueryNode> = _graph.treeOf(file);
-		while (node != null) {
-			final at: Null<Span> = node.span;
-			if (at != null && at.from == span.from && at.to == span.to && (kind == null || node.kind == kind)) return node;
-			node = node.children.find(c -> c.span != null && c.span.from <= span.from && c.span.to >= span.to);
-		}
-		return null;
+		final tree: Null<QueryNode> = _graph.treeOf(file);
+		return tree == null ? null : TreePath.withSpan(tree, span, kind);
 	}
 
 	/** `<file>:<start>:<name>` of the occurrence `node`. */

@@ -49,11 +49,24 @@ final class TypeSyntax {
 	 * stops at the type; this is what re-spells the list with nothing the author wrote dropped.
 	 */
 	public function argumentsSource(): Null<String> {
+		final open: Int = argumentsOpen();
+		if (open < 0) return null;
+		final list: String = text.substring(open).trim();
+		return list.substring(1, list.length - 1).trim();
+	}
+
+	/**
+	 * The offset in `text` of the `<` that opens a named type's argument list — the first non-blank character after the
+	 * path — or -1 when this is not a named type written with arguments. What an edit that respells the list in place
+	 * (a key inserted after the `<`) is positioned by.
+	 */
+	public function argumentsOpen(): Int {
 		return switch shape {
 			case Nominal(path, args) if (args.length > 0 && text.startsWith(path)):
-				final list: String = text.substring(path.length).trim();
-				list.substring(1, list.length - 1).trim();
-			case _: null;
+				var at: Int = path.length;
+				while (at < text.length && text.isSpace(at)) at++;
+				at;
+			case _: -1;
 		};
 	}
 

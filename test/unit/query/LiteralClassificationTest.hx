@@ -5,7 +5,6 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.haxe.HaxeQueryWalker;
 import anyparse.grammar.haxe.HaxeStringFoldSupport;
 import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.query.InlineMethod;
 import anyparse.query.Lit;
 import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
@@ -46,7 +45,6 @@ using StringTools;
  * spells, so the grammar growing a spelling moves both.
  */
 @:nullSafety(Strict)
-@:access(anyparse.query.InlineMethod)
 @:access(anyparse.query.MemberKinds)
 @:access(anyparse.grammar.haxe.HaxeStringFoldSupport)
 class LiteralClassificationTest extends Test {
@@ -160,11 +158,10 @@ class LiteralClassificationTest extends Test {
 	 * the two measured breaks, asked of real parsed nodes rather than of kind names.
 	 *
 	 * `isSideEffectFree` is the predicate `Inline` gates on, so this is the fixture that stands
-	 * between a regex or object initializer and being duplicated once per read; `InlineMethod.isPure`
-	 * is the same question asked of a call ARGUMENT, and the one this class asserts end-to-end now
-	 * that the kind-by-kind twin of `isSafeKind` is gone from that class.
+	 * between a regex or object initializer and being duplicated once per read; `InlineMethod`
+	 * asks the same predicate of a call ARGUMENT (its private `isPure` copy is gone).
 	 *
-	 * The last block asks the half of `isPure` that no vocabulary answers: the WALK. Every row above
+	 * The last block asks the half of `isSideEffectFree` that no vocabulary answers: the WALK. Every row above
 	 * is decided by its root kind, so an arm cutting the recursion survives them all; `1 + f()` has a
 	 * root the vocabulary calls pure and a call under it, and only the descent sees that.
 	 *
@@ -184,10 +181,7 @@ class LiteralClassificationTest extends Test {
 				specimen.plain, MemberKinds.isSideEffectFree(node, SHAPE),
 				'${specimen.expr} (${node.kind}) must${specimen.plain ? '' : ' not'} be side-effect-free'
 			);
-			Assert.equals(
-				specimen.plain, InlineMethod.isPure(node, SHAPE),
-				'${specimen.expr} (${node.kind}) must${specimen.plain ? '' : ' not'} be a pure argument'
-			);
+
 		}
 		// The refusal side, asked of the SHAPE rather than of a name convention: the allocating
 		// literals carry their own fields, and no spelling suffix would catch a renamed one.
@@ -196,7 +190,9 @@ class LiteralClassificationTest extends Test {
 		// A pure ROOT over an impure subtree — the one question the kind vocabulary cannot answer,
 		// and the only assertion here a walk that never descends would fail.
 		final compound: QueryNode = initializerOf('1 + f()');
-		Assert.isFalse(InlineMethod.isPure(compound, SHAPE), 'an argument calling a function is not pure, whatever its root kind is');
+		Assert.isFalse(
+			MemberKinds.isSideEffectFree(compound, SHAPE), 'an argument calling a function is not pure, whatever its root kind is'
+		);
 		Assert.isTrue(MemberKinds.isSafeKind(compound.kind, SHAPE), 'the fixture needs a root kind the vocabulary calls pure');
 	}
 

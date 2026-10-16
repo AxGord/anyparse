@@ -249,7 +249,7 @@ final class FactsNativeReach {
 	 * js's `pack_Main`).
 	 */
 	private static function classNamed(id: String, names: Array<String>): Bool {
-		final simple: String = id.substr(id.lastIndexOf('.') + 1);
+		final simple: String = SourceText.lastSegment(id);
 		return names.exists(x -> x.indexOf(simple) >= 0);
 	}
 

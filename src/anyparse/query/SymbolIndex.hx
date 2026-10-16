@@ -869,8 +869,7 @@ final class SymbolIndex {
 		function binds(imports: Array<ImportInfo>): Bool {
 			for (imp in imports) switch imp.kind {
 				case ImportKind.Import:
-					final dot: Int = imp.raw.lastIndexOf('.');
-					if ((dot < 0 ? imp.raw : imp.raw.substr(dot + 1)) == name) return true;
+					if (SourceText.lastSegment(imp.raw) == name) return true;
 				case ImportKind.Alias:
 					if (imp.alias == name) return true;
 				case ImportKind.Wild, ImportKind.Using:

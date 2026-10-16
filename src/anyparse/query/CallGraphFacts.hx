@@ -458,7 +458,7 @@ final class CallGraphFacts {
 			return;
 		}
 		// an abstract's constructor is `_new` in its implementation class
-		final name: String = view.graphMember(owner, target.substr(target.lastIndexOf('.') + 1));
+		final name: String = view.graphMember(owner, SourceText.lastSegment(target));
 		final type: String = view.graphType(owner);
 		// an interface's member runs nothing of its own, declared or implied by a property (`get_x` of `x(get, …)`)
 		final dispatched: Bool = dispatchesOnly(g, owner, type, view);
@@ -727,7 +727,7 @@ final class CallGraphFacts {
 		if (typed == null || typed.builds.length == 0 || table.typePosition(id)?.file != key) return;
 		for (nodeId in table.nodeIdsOf(id)) {
 			final n: Null<FactNode> = table.node(nodeId);
-			final field: String = nodeId.substr(nodeId.lastIndexOf('.') + 1);
+			final field: String = SourceText.lastSegment(nodeId);
 			final kinds: Array<String> = typed.fields.find(f -> f.name == field)?.kinds ?? [];
 			// a macro function in every build runs in no program; one a build may replace is a value there
 			if (n == null || n.kind != METHOD_KIND || n.overloadIndex > 0 || (kinds.length > 0 && kinds.foreach(k -> k == MACRO_FIELD)))

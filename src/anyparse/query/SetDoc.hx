@@ -2,9 +2,7 @@ package anyparse.query;
 
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Add or replace the doc-comment of the declaration at a cursor — the
@@ -40,8 +38,10 @@ final class SetDoc {
 	public static function setDoc(
 		source: String, line: Int, col: Int, docText: String, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
 	): EditResult {
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
-		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
+		final tree: QueryNode = switch ParseGate.parse(plugin, source, 'source') {
+			case Unparsed(message): return Err(message);
+			case Parsed(parsed): parsed;
+		};
 
 		final cursor: Int = Span.offsetOf(source, line, col);
 		final resolved: Null<QueryNode> = Engine.at(tree, cursor);

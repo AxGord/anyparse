@@ -150,7 +150,7 @@ final class TypeRefIndex {
 	 * that DOES depend on the referring file; `moduleRelativeRefAll` owns it.
 	 */
 	public function resolveQualifiedRefAll(raw: String): Array<ResolvedType> {
-		final simple: String = raw.substr(raw.lastIndexOf('.') + 1);
+		final simple: String = SourceText.lastSegment(raw);
 		final matches: Array<ResolvedType> = [];
 		final seen: Array<String> = [];
 		for (r in named(simple)) if (importPathFor(r.file, r.type) == raw) {
@@ -206,7 +206,9 @@ final class TypeRefIndex {
 		final prefix: String = raw.substring(0, dot);
 		final matches: Array<ResolvedType> = [];
 		final seen: Array<String> = [];
-		for (r in named(simple)) if (!r.type.isMain && moduleSimpleName(r.file.module) == prefix && moduleRefInScope(fromFile, r.file)) {
+		for (r in named(simple)) if (
+			!r.type.isMain && SourceText.lastSegment(r.file.module) == prefix && moduleRefInScope(fromFile, r.file)
+		) {
 			final key: String = '${r.file.file}#${r.type.name}';
 			if (!seen.contains(key)) {
 				seen.push(key);
@@ -266,12 +268,6 @@ final class TypeRefIndex {
 	/** The import path naming type `t` in file `fi`: its module when `t` is the module main type, else `module.name`. */
 	public static inline function importPathFor(fi: FileInfo, t: TypeDeclInfo): String {
 		return t.isMain ? fi.module : '${fi.module}.${t.name}';
-	}
-
-	/** The last segment of a dotted module path — `pkg.Mod` -> `Mod`, a root-package `Mod` unchanged. */
-	private static inline function moduleSimpleName(module: String): String {
-		final dot: Int = module.lastIndexOf('.');
-		return dot < 0 ? module : module.substr(dot + 1);
 	}
 
 	/**
@@ -340,6 +336,50 @@ final class TypeRefIndex {
 		return [
 			for (group in fi.ambientImports) for (imp in group.imports) if (imp.kind == ImportKind.Using) imp.raw
 		];
+	}
+
+	/** The paths of the `using` statements `fi` itself writes, a guarded one included — the extensions it brings in by name. */
+	public static function usings(fi: FileInfo): Array<String> {
+		return [for (imp in fi.imports) if (imp.kind == ImportKind.Using) imp.raw];
+	}
+
+	/**
+	 * The paths of the plain `import` statements `fi` itself writes (no alias, no wildcard), a guarded one included — a
+	 * static field import among them (`import pkg.Type.member;`).
+	 */
+	public static function plainImports(fi: FileInfo): Array<String> {
+		return [for (imp in fi.imports) if (imp.kind == ImportKind.Import) imp.raw];
+	}
+
+	/**
+	 * The one path an UNGUARDED plain `import` of `fi` binds the simple name `simple` through (its last segment), or
+	 * null when none does or two disagree.
+	 */
+	public static function plainImportPathOf(fi: FileInfo, simple: String): Null<String> {
+		var found: Null<String> = null;
+		for (imp in fi.imports) if (!imp.guarded && imp.kind == ImportKind.Import) {
+			if (SourceText.lastSegment(imp.raw) != simple) continue;
+			if (found != null && found != imp.raw) return null;
+			found = imp.raw;
+		}
+		return found;
+	}
+
+	/**
+	 * Whether `fi` brings `simple` into scope only under a conditional-compilation guard — an `ImportInfo.guarded` import
+	 * or `using` whose last segment it is, an alias binding the name, or any guarded wildcard. The reference index is
+	 * branch-blind, so such an import reads as unconditional.
+	 */
+	public static function bindsUnderGuard(fi: FileInfo, simple: String): Bool {
+		for (imp in fi.imports) if (imp.guarded) switch imp.kind {
+			case ImportKind.Import, ImportKind.Using:
+				if (SourceText.lastSegment(imp.raw) == simple) return true;
+			case ImportKind.Alias:
+				if (imp.alias == simple) return true;
+			case ImportKind.Wild:
+				return true;
+		}
+		return false;
 	}
 
 }

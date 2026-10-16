@@ -7,6 +7,7 @@ import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
+import anyparse.query.SourceText;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -317,8 +318,7 @@ final class MemberSlots {
 	private static function absorbLeadDoc(
 		out: Array<OrderedMember>, firstIdx: Int, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, ifPos: Int
 	): Void {
-		final nl: Int = source.lastIndexOf('\n', ifPos);
-		final ifLineStart: Int = nl < 0 ? 0 : nl + 1;
+		final ifLineStart: Int = SourceText.lineStartOf(source, ifPos);
 		final leadFrom: Int = SourceComments.leadingCommentBlockStart(source, comments, ifPos);
 		if (leadFrom >= ifLineStart) return;
 		out[firstIdx].leadTrivia = source.substring(leadFrom, ifLineStart);

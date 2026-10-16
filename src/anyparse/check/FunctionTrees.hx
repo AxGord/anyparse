@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.query.CallGraph;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
+import anyparse.query.TreePath;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -45,14 +46,8 @@ final class FunctionTrees {
 
 	/** The node of the tree of `file` spanning exactly `span`; null when there is none. */
 	private function nodeAt(file: String, span: Null<Span>): Null<QueryNode> {
-		if (span == null) return null;
-		var node: Null<QueryNode> = ofFile(file);
-		while (node != null) {
-			final at: Null<Span> = node.span;
-			if (at != null && at.from == span.from && at.to == span.to) return node;
-			node = node.children.find(c -> c.span != null && c.span.from <= span.from && c.span.to >= span.to);
-		}
-		return null;
+		final tree: Null<QueryNode> = ofFile(file);
+		return span == null || tree == null ? null : TreePath.withSpan(tree, span);
 	}
 
 }

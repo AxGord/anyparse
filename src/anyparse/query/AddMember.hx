@@ -2,7 +2,6 @@ package anyparse.query;
 
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
@@ -46,8 +45,10 @@ final class AddMember {
 	public static function addMember(
 		source: String, typeName: String, memberText: String, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
 	): EditResult {
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
-		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
+		final tree: QueryNode = switch ParseGate.parse(plugin, source, 'source') {
+			case Unparsed(message): return Err(message);
+			case Parsed(parsed): parsed;
+		};
 
 		final trimmed: String = memberText.trim();
 		if (trimmed.length == 0) return Err('add-member requires a non-empty member text');

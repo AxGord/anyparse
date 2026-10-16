@@ -732,8 +732,7 @@ final class TypeRefPrinter {
 			if (c.kind == ModuleScan.WILDCARD_IMPORT_KIND) {
 				// An unindexed wildcard is unanswerable — nothing can enumerate what it brings in.
 				if (index == null) return true;
-				final dot: Int = path.lastIndexOf('.');
-				final prefix: String = dot < 0 ? '' : path.substring(0, dot);
+				final prefix: String = SourceText.parentPath(path);
 				if (declarers.exists(
 					f -> f.pkg == prefix && ModuleScan.isMainTypeIn(f, simple) && ModuleScan.pathOfTypeIn(f, simple) != canonical
 				))

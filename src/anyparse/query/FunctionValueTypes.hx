@@ -735,7 +735,7 @@ final class FunctionValueTypes {
 		for (h in hierarchy) for (s in table.supertypesOf(h)) if (!callers.contains(s)) callers.push(s);
 		for (call in invocationsOf(name)) {
 			final target: String = call.target ?? '';
-			final named: String = CompilerFacts.baseId(target.substr(0, target.lastIndexOf('.')));
+			final named: String = CompilerFacts.baseId(SourceText.parentPath(target));
 			// a call naming another class runs on an instance of it, unless an unchecked conversion put one of the hierarchy that
 			// left the type system where that class is written (`UncheckedConversions.holdsForeign`)
 			if (!callers.contains(named) && left && _view.unchecked().holdsForeign(named)) return null;
@@ -766,7 +766,7 @@ final class FunctionValueTypes {
 			if (made == null) return false;
 			for (c in made.calls) {
 				final target: String = c.target ?? '';
-				if (target.substr(target.lastIndexOf('.') + 1) != name) continue;
+				if (SourceText.lastSegment(target) != name) continue;
 				if (!CALL_ACCESSES.contains(c.access)) return false;
 				if (!UNTYPED_ACCESSES.contains(c.access)) continue;
 				final value: Null<FactPos> = handed(c.at, index, count);
@@ -822,7 +822,7 @@ final class FunctionValueTypes {
 			for (id in table.nodeIds()) for (c in table.node(id)?.calls ?? []) {
 				final target: Null<String> = c.target;
 				if (target == null || !INVOKING.contains(c.access)) continue;
-				final field: String = target.substr(target.lastIndexOf('.') + 1);
+				final field: String = SourceText.lastSegment(target);
 				final list: Array<CallFact> = built[field] ?? [];
 				list.push(c);
 				built[field] = list;
@@ -858,22 +858,12 @@ final class FunctionValueTypes {
 
 	/**
 	 * The node of `tree` of the kind `kind` spanning exactly `span` — or, `byTarget`, whose first child does: an assignment
-	 * of what the facts place at its written side — or null.
+	 * of what the facts place at its written side — or null, and null for a kind the grammar does not name.
 	 */
 	private function nodeAt(tree: QueryNode, span: Span, kind: Null<String>, byTarget: Bool): Null<QueryNode> {
-		var found: Null<QueryNode> = null;
-		function walk(node: QueryNode): Void {
-			final s: Null<Span> = node.span;
-			if (found != null || kind == null || (s != null && (span.from < s.from || span.to > s.to))) return;
-			final at: Null<Span> = !byTarget ? s : node.children.length > 0 ? node.children[0].span : null;
-			if (at != null && at.from == span.from && at.to == span.to && node.kind == kind) {
-				found = node;
-				return;
-			}
-			for (c in node.children) walk(c);
-		}
-		walk(tree);
-		return found;
+		if (kind == null) return null;
+		if (!byTarget) return TreePath.withSpan(tree, span, kind);
+		return TreePath.firstAround(tree, span, n -> n.kind == kind && n.children.length > 0 && TreePath.spansExactly(n.children[0], span));
 	}
 
 	/** The text the facts of the file keyed `key` were read off and its tree, parsed once; null when it does not read. */

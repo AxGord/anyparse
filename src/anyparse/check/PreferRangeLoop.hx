@@ -267,27 +267,9 @@ final class PreferRangeLoop implements Check {
 			&& (s.localDeclKinds.contains(node.kind) && node.name == name || node.children.exists(c -> declaresName(c, name, s)));
 	}
 
-	/** Collapse whitespace runs to single spaces and trim, so a multi-line bound fits one message line. */
-	private static function normalize(text: String): String {
-		final buf: StringBuf = new StringBuf();
-		var prevSpace: Bool = false;
-		for (i in 0...text.length) {
-			final c: Int = text.fastCodeAt(i);
-			final isSpace: Bool = c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
-			if (isSpace) {
-				if (!prevSpace) buf.addChar(' '.code);
-				prevSpace = true;
-			} else {
-				buf.addChar(c);
-				prevSpace = false;
-			}
-		}
-		return buf.toString().trim();
-	}
-
 	/** The normalized source, truncated with an ellipsis beyond the excerpt cap. */
 	private static function excerpt(text: String): String {
-		final flat: String = normalize(text);
+		final flat: String = SourceText.collapseSpaces(text);
 		return flat.length > EXCERPT_MAX ? '${flat.substring(0, EXCERPT_MAX)}…' : flat;
 	}
 

@@ -8,6 +8,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.ReachAdmission;
 import anyparse.query.ShapeVocab;
+import anyparse.query.SourceText;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -381,7 +382,7 @@ final class LockSites {
 	 */
 	private function ownConstructorHold(edge: CallEdge, lock: String, body: QueryNode): Bool {
 		final fn: Null<FnNode> = _graph.node(edge.from);
-		final owner: String = lock.substring(0, lock.lastIndexOf('.'));
+		final owner: String = SourceText.parentPath(lock);
 		if (
 			fn == null || fn.name != _ctorName || fn.typeName != owner || _graph.types.isStatic(owner, memberName(lock))
 			|| _aliasedLocks.contains(lock)
@@ -697,7 +698,7 @@ final class LockSites {
 	}
 
 	public static inline function memberName(field: String): String {
-		return field.substr(field.lastIndexOf('.') + 1);
+		return SourceText.lastSegment(field);
 	}
 
 	/** `<file>:<start>` of `edge`'s site; null for an edge with no site. */

@@ -297,6 +297,28 @@ class LintConfigTest extends Test {
 	}
 
 	/**
+	 * The compile-dir probe reads the hxml as the compiler does (`OracleCache.hxmlRefs`): a quoted classpath names the
+	 * directory inside the quotes, so `-cp "src"` written in `sub/build.hxml` resolves under the config dir and that is
+	 * where the compile runs. The probe's own line reader kept the quotes, found the classpath under neither directory
+	 * and fell back to the hxml's own one, where `src` does not exist.
+	 */
+	@:pin('control')
+	@:killer('M-HXML-QUOTES-KEPT')
+	@:killer('M-COMPILEDIR-PROBE-BLIND')
+	public function testTheCompileDirProbeReadsTheHxmlAsTheCompilerDoes(): Void {
+		#if (sys || nodejs)
+		final root: String = CliFixture.writeTree('oracledir', [
+			{ name: 'src/Main.hx', source: 'class Main {}\n' },
+			{ name: 'sub/build.hxml', source: '-cp "src"\n-main Main\n--interp\n' }
+		]);
+		Assert.equals(root, only('{"compilerOracle":"sub/build.hxml"}', root).dir);
+		CliFixture.removeDir(root);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
 	 * A malformed array ELEMENT is DROPPED with a diagnostic and the configurations beside it
 	 * still apply — per-entry leniency, exactly as `rules` and `frameworks` have.
 	 *

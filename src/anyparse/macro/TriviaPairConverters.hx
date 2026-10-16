@@ -145,8 +145,8 @@ final class TriviaPairConverters {
 	 */
 
 	private static function buildPairedToRawFn(origName: String, origNode: ShapeNode, synthPack: Array<String>): Field {
-		final pairedSimple: String = TriviaTypeSynth.leafOf(origName) + TriviaTypeSynth.PAIRED_SUFFIX;
-		final rawSimple: String = TriviaTypeSynth.leafOf(origName);
+		final pairedSimple: String = simpleName(origName) + TriviaTypeSynth.PAIRED_SUFFIX;
+		final rawSimple: String = simpleName(origName);
 		final rawCT: ComplexType = TPath({ pack: packOf(origName), name: rawSimple, params: [] });
 		final pairedCT: ComplexType = TPath({ pack: synthPack, name: pairedSimple, params: [] });
 		final pos: Position = Context.currentPos();
@@ -177,7 +177,7 @@ final class TriviaPairConverters {
 	}
 
 	private static function buildPairedToRawAltBody(origName: String, origNode: ShapeNode, pos: Position): Expr {
-		final rawSimple: String = TriviaTypeSynth.leafOf(origName);
+		final rawSimple: String = simpleName(origName);
 		final rawPack: Array<String> = packOf(origName);
 		final cases: Array<Case> = [];
 		for (branch in origNode.children) {
@@ -229,7 +229,7 @@ final class TriviaPairConverters {
 				final refName: String = node.annotations[AnnotationKeys.BASE_REF];
 				final optional: Bool = node.annotations[AnnotationKeys.BASE_OPTIONAL] == true;
 				if (!TriviaTypeSynth.refIsBearing(refName)) return access; // raw type already
-				final fnName: String = 'pairedToRaw_${TriviaTypeSynth.leafOf(refName)}';
+				final fnName: String = 'pairedToRaw_${simpleName(refName)}';
 				final call: Expr = { expr: ECall({ expr: EConst(CIdent(fnName)), pos: pos }, [access]), pos: pos };
 				return optional ? macro ($access == null ? null : $call) : call;
 			case Star:
@@ -272,8 +272,8 @@ final class TriviaPairConverters {
 	 */
 
 	private static function buildRawToPairedFn(origName: String, origNode: ShapeNode, synthPack: Array<String>): Field {
-		final pairedSimple: String = TriviaTypeSynth.leafOf(origName) + TriviaTypeSynth.PAIRED_SUFFIX;
-		final rawSimple: String = TriviaTypeSynth.leafOf(origName);
+		final pairedSimple: String = simpleName(origName) + TriviaTypeSynth.PAIRED_SUFFIX;
+		final rawSimple: String = simpleName(origName);
 		final rawCT: ComplexType = TPath({ pack: packOf(origName), name: rawSimple, params: [] });
 		final pairedCT: ComplexType = TPath({ pack: synthPack, name: pairedSimple, params: [] });
 		final pos: Position = Context.currentPos();
@@ -387,7 +387,7 @@ final class TriviaPairConverters {
 	}
 
 	private static function buildRawToPairedAltBody(origName: String, origNode: ShapeNode, synthPack: Array<String>, pos: Position): Expr {
-		final pairedSimple: String = TriviaTypeSynth.leafOf(origName) + TriviaTypeSynth.PAIRED_SUFFIX;
+		final pairedSimple: String = simpleName(origName) + TriviaTypeSynth.PAIRED_SUFFIX;
 		final pairedPath: Array<String> = synthPack.concat([TriviaTypeSynth.SYNTH_MODULE_LEAF, pairedSimple]);
 		final cases: Array<Case> = [];
 		for (branch in origNode.children) {
@@ -506,7 +506,7 @@ final class TriviaPairConverters {
 				final refName: String = node.annotations[AnnotationKeys.BASE_REF];
 				final optional: Bool = node.annotations[AnnotationKeys.BASE_OPTIONAL] == true;
 				if (!TriviaTypeSynth.refIsBearing(refName)) return access;
-				final fnName: String = 'rawToPaired_${TriviaTypeSynth.leafOf(refName)}';
+				final fnName: String = 'rawToPaired_${simpleName(refName)}';
 				final call: Expr = { expr: ECall({ expr: EConst(CIdent(fnName)), pos: pos }, [access]), pos: pos };
 				return optional ? macro ($access == null ? null : $call) : call;
 			case Star:

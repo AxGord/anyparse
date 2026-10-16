@@ -4,9 +4,7 @@ import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using StringTools;
 using Lambda;
@@ -131,8 +129,10 @@ final class ExtractMethod {
 	): EditResult {
 		if (!SourceText.isIdentifier(name)) return Err('new name "$name" is not a valid identifier');
 
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
-		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
+		final tree: QueryNode = switch ParseGate.parse(plugin, source, 'source') {
+			case Unparsed(message): return Err(message);
+			case Parsed(parsed): parsed;
+		};
 
 		// line:col is 1-based, as apq refs / ast --at / source print.
 		final startOffset: Int = Span.offsetOf(source, startLine, startCol);

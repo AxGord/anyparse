@@ -20,9 +20,9 @@ import anyparse.query.Cli.RuleFixOutcome;
 import anyparse.query.CompilerFacts;
 import anyparse.query.EditJournal;
 import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.LintFixSafePass;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
-import haxe.io.Path;
 import anyparse.query.ExitCode.*;
 
 using StringTools;
@@ -966,21 +966,9 @@ final class LintFixVerify {
 		errors: String, candidates: Array<{ file: String, before: String, after: String }>, reverted: Array<String>
 	): Array<String> {
 		final out: Array<String> = [];
-		for (c in candidates) if (!reverted.contains(c.file) && !out.contains(c.file) && errorMentionsFile(errors, c.file))
+		for (c in candidates) if (!reverted.contains(c.file) && !out.contains(c.file) && LintFixSafePass.blames(errors, c.file))
 			out.push(c.file);
 		return out;
-	}
-
-	/** Whether any error line's leading `path:` token equals `full`, IS its basename, or ends with `/<basename>`. */
-	private static function errorMentionsFile(errors: String, full: String): Bool {
-		final base: String = Path.withoutDirectory(full);
-		for (line in errors.split('\n')) {
-			final colon: Int = line.indexOf(':');
-			if (colon <= 0) continue;
-			final path: String = StringTools.trim(line.substring(0, colon));
-			if (path == full || path == base || path.endsWith('/$base')) return true;
-		}
-		return false;
 	}
 
 	/** Restore every not-yet-reverted candidate to its pre-annotation bytes and mark it reverted. */
