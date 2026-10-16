@@ -69,7 +69,7 @@ final class FactsProvenance {
 	 * see; a type no build typed has no typed subtype.
 	 */
 	public function subtypesIndexed(type: String): Bool {
-		final table: CompilerFacts = _view.table;
+		final table: CompilerFacts = _view._table;
 		for (id in _view.provenanceTypes(type)) for (sub in table.subtypesOf(CompilerFacts.baseId(id))) {
 			final at: Null<FactPos> = table.typePosition(sub);
 			final declaring: Null<FileInfo> = at == null ? null : _view.indexedFile(at.file);
@@ -96,9 +96,9 @@ final class FactsProvenance {
 		final tree: Null<QueryNode> = g.treeOf(node.file);
 		final name: Null<String> = node.name;
 		if (span == null || source == null || tree == null || name == null || g.declarationsOf(node.id).length != 1) return false;
-		final body: BodyText = BodyText.of(_view.table.keyOf(node.file), span, source, tree, _scope.shape);
+		final body: BodyText = BodyText.of(_view._table.keyOf(node.file), span, source, tree, _scope.shape);
 		final bodies: Array<FactNode> = [
-			for (n in _view.table.nodesIn(node.file)) if (FactsView.FUNCTION_KINDS.contains(n.kind) && body.holds(n.at)) n
+			for (n in _view._table.nodesIn(node.file)) if (FactsView.FUNCTION_KINDS.contains(n.kind) && body.holds(n.at)) n
 		];
 		// the function's own body must be among them: a body a macro replaced is typed elsewhere, and only what it kept is here
 		final own: Bool = bodies.exists(n -> OWN_BODY_KINDS.contains(n.kind) && simpleName(n.id) == name);
@@ -147,7 +147,7 @@ final class FactsProvenance {
 	 * name, would read as the type's.
 	 */
 	private function textual(g: CallGraph, type: String, files: Array<String>, ids: Array<String>): Bool {
-		final table: CompilerFacts = _view.table;
+		final table: CompilerFacts = _view._table;
 		final keys: Array<String> = [for (f in files) table.keyOf(f)];
 		final vouched: Array<String> = [];
 		var coded: Bool = false;
@@ -179,7 +179,7 @@ final class FactsProvenance {
 		if (decl == null || source == null || tree == null) return false;
 		final declared: TypeDeclInfo = decl;
 		if (!typed.fields.foreach(f -> declaredAlike(typed, f, declared))) return false;
-		final table: CompilerFacts = _view.table;
+		final table: CompilerFacts = _view._table;
 		final key: String = table.keyOf(file);
 		for (nodeId in table.nodeIdsOf(typed.id)) {
 			if (!table.buildsTyping(nodeId).exists(b -> builds.contains(b))) continue;
@@ -199,7 +199,7 @@ final class FactsProvenance {
 	 * declares no field and the builds typed no code of it.
 	 */
 	private function aliasOnly(typed: TypeFact): Bool {
-		return typed.kind == TYPEDEF_KIND && typed.fields.length == 0 && _view.table.nodeIdsOf(typed.id).length == 0;
+		return typed.kind == TYPEDEF_KIND && typed.fields.length == 0 && _view._table.nodeIdsOf(typed.id).length == 0;
 	}
 
 	/**
@@ -266,7 +266,7 @@ final class FactsProvenance {
 		final verdicts: Map<String, Bool> = [];
 		function written(p: FactPos): Bool {
 			var callee: Null<FactNode> = null;
-			for (m in _view.table.nodesIn(p.file)) if (m != n && FactsView.FUNCTION_KINDS.contains(m.kind) && holds(m.at, p)) {
+			for (m in _view._table.nodesIn(p.file)) if (m != n && FactsView.FUNCTION_KINDS.contains(m.kind) && holds(m.at, p)) {
 				final best: Null<FactNode> = callee;
 				if (best == null || m.at.span.to - m.at.span.from < best.at.span.to - best.at.span.from) callee = m;
 			}
@@ -365,7 +365,7 @@ final class FactsProvenance {
 		if (!placed.foreach(p -> own(p, body.holds(p) || readJoined(n, p, body)))) return false;
 		for (child in n.fns) {
 			// as the same builds typed it: another build's copy places its code in its own file
-			final nested: Null<FactNode> = _view.table.nodeAsBuiltBy(child, builds);
+			final nested: Null<FactNode> = _view._table.nodeAsBuiltBy(child, builds);
 			if (nested == null || (nested.inlinedFrom == null && !factsOnText(nested, body, outer, builds))) return false;
 		}
 		return true;
@@ -398,7 +398,7 @@ final class FactsProvenance {
 		final splice: Null<SpliceFact> = CompilerFacts.spliceOf(n, x.anchor);
 		if (splice == null) return false;
 		function spells(at: FactPos): Bool {
-			final text: Null<String> = _view.table.sourceOf(at.file)?.substring(at.span.from, at.span.to);
+			final text: Null<String> = _view._table.sourceOf(at.file)?.substring(at.span.from, at.span.to);
 			return switch text {
 				case null: false;
 				case written: FactText.spellsCall(written, macroName);
@@ -444,7 +444,7 @@ final class FactsProvenance {
 	 */
 	private function accessEnds(n: FactNode, end: Int, name: String): Bool {
 		return n.splices.exists(s -> {
-			final text: Null<String> = s.body.span.from < end && end <= s.body.span.to ? _view.table.sourceOf(s.body.file) : null;
+			final text: Null<String> = s.body.span.from < end && end <= s.body.span.to ? _view._table.sourceOf(s.body.file) : null;
 			text != null && FactText.endsAccess(text, end, name);
 		});
 	}
@@ -543,7 +543,7 @@ final class FactsProvenance {
 	 */
 	private function implicitlyCalled(target: String): Bool {
 		final dot: Int = target.lastIndexOf('.');
-		final owner: Null<TypeFact> = dot <= 0 ? null : _view.table.type(target.substr(0, dot));
+		final owner: Null<TypeFact> = dot <= 0 ? null : _view._table.type(target.substr(0, dot));
 		final field: Null<FieldDeclFact> = owner == null || owner.kind != IMPL_KIND
 			? null
 			: owner.fields.find(f -> f.name == target.substr(dot + 1));

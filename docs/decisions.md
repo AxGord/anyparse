@@ -2839,6 +2839,76 @@ decided the question; it may not become a record of runs.
   level, plus a method call whose declarations write one return naming no type parameter. `DefaultRepeatedArgument`
   reads a receiver's declared type through `TypeResolver.identTypeName` instead of its own `Refs.find` memo. All-rules
   on the four trees unchanged — branch `feat/infra-B4`
+- ONE structural walk, TWO resolution models (B4b design, recorded before the move). The call graph typed an expression
+  with its own walk (`typeSourceOf`: identifier, field, element, call, construction, with `keys.throughInitializer`
+  for an unannotated local) while `NominalTypes`' deep SOURCE mode walked the same shapes over the `SymbolIndex`. The two
+  differ in what a type VALUE is, not in which shape answers what: the graph's is a type source spelled as it keys
+  types (`CallGraphKeys.keyedIn`: every name in the canonical spelling of what the WRITING file binds it to, so the text
+  resolves on its own and its node ids stay `Simple.member` — 28 TM names are declared twice, 37 truth keys sit on
+  them), the index's a written source whose names resolve in the file that wrote them (`MemberPathWalk` resolves each
+  link where its member is declared). Neither can stand in for the other: re-keying the index's answers would hand
+  its consumers spellings they copy into the user's file (`explicit-local-type`), and reading the graph's keyed text
+  by declaration would resolve a canonical path twice. So the SEAM is `NominalTypes.typeWalk<T, C>` over a
+  `TypingHost<T, C>`: the walk owns the shape dispatch (parentheses, literal, the self reference, a binding with its
+  annotation, an unannotated binding's initializer and a loop binder's element under ONE cycle guard, an unbound name,
+  a field access, an element, a call, a construction) and the host owns resolution in its own currency `T` — what a
+  binding's annotation, a member, a call, an element ARE. `C` is what a walk threads (the graph's enclosing type). The
+  host answers a field access and a call itself, given the walk to type a receiver with, because the index resolves a
+  whole path from its root in one walk (`pathReceiverMemberTypeSource`: import-aware, then package-blind) where the graph
+  goes link by link. An arc a host does not know answers null, never a guess; an arc one host learns is added to the
+  other only as its own measured change. Moved first as a pure move (each host answering exactly what its walk did),
+  all-rules byte-identical on the four trees — branch `feat/infra-B4b`
+- the innermost type declaration holding a position had three walks: `TypeResolver.innermostTypeDecl` (by span),
+  `MemberTouchScan.typeAt` (by offset, 19 callers across eight files) and `Rename.enclosingTypeDecl` (by offset), the
+  second reading `CallGraphNames.typeNameOf`, whose `EXTRA_TYPE_DECL_KINDS` arm was dead (`MemberKinds.TYPE_DECL_KINDS`
+  already lists `AbstractClassDecl` and `EnumAbstractDecl`) → ONE walk, `TypeResolver.enclosingTypeDeclAt(tree, at, ?to)`,
+  entering only the nodes that hold the range (what `typeAt` did; the span walk visited the whole tree);
+  `enclosingTypeDecl` / `enclosingTypeName` are its span spellings, `typeNameOf` callers ask `RefactorSupport.typeDeclOf`,
+  and `ImplicitSites.typeOf` drops its own self-reference arm, which the walk answers the same way. All-rules
+  byte-identical on the four trees — branch `feat/infra-B4b`
+- which children of a construction are its TYPE arguments was decided three ways: `LiteralInfer` scanned the text after
+  `new` for a balanced `<…>` (a `>` after `-` read as an arrow), while `ValueEscapes` and the graph's argument
+  expectation (`expectedAt`) took the children of a `typeAnnotationKinds` kind — a list without `Parens` or
+  `ConstStringType`, so `new Box<(Int)>(f)` handed `f` the constructor's SECOND parameter → `NominalTypes.
+  writtenConstruction` reads the grammar's children and lets the separators between them say which list each belongs
+  to (the first gap holding `(` starts the constructor's); a shape they do not spell consistently answers null. The
+  three consumers read its `path` / `args` / `text` (the arguments verbatim). All-rules byte-identical on the four
+  trees; `CallGraphTest` `C.paren` red on the start commit — branch `feat/infra-B4b`
+- "the type of a local written with no type is its initializer's" had three copies: the graph recorded only a CALL
+  initializer (`CallGraphKeys.callInitializers`, read by `throughInitializer`), `ValueEscapes` read any initializer
+  ending before the use, `NominalTypes`' deep walk none → ONE arc: `NominalTypes.localInitializer` (a local declaration,
+  no annotation, an initializer that ends before the use) behind the walk's `TypingHost.initializer`, under the walk's
+  one cycle guard, for both hosts; `ValueEscapes` asks it too. 4.3.7 types `var l = lock;` as `lock`'s type, so a field
+  read, another such local and a literal now type the local the way a call did; a `new` keeps its eager entry in
+  `typeLocals` (the graph's `declaredTypes` reads it). All-rules byte-identical and the thread-safety score unchanged on
+  the four trees (their locals are annotated); `ThreadSafetyPositiveSinksTest` `C.field` / `C.alias` red on the start
+  commit. `M-TS-LOCAL-CALL-INIT` retired with the table it cut — branch `feat/infra-B4b`
+- the graph typed an identifier receiver twice: `identDeclaredType` read the provider's simple-name table re-keyed
+  (`CallGraphKeys.declaredTypes`, `Null<T>` peeled by `nullableInner`) ahead of the walk, which reads the keyed written
+  annotation; and it typed a local a `new` initialises eagerly (`CallGraphKeys.typeLocals`) as well as through the
+  walk → the walk alone: `receiverType`'s identifier arm keeps only the bare type-name receiver and lets the walk and
+  `nominalOf` (type parameter bound, alias, keyed path) answer a value, the std-property read asks the same two, and
+  `declaredTypes`, `nullableInner`, `typeLocals` are gone. All-rules and the thread-safety score unchanged on the four
+  trees — branch `feat/infra-B4b`
+- the graph typed a CALL two ways: the walk's call arm read the written return through `returnThrough`, while a call in
+  RECEIVER position went through `returnedNominal`, which re-derived the return's simple name from the declaration
+  facts (`returns`) and `keys.returnedPath` before the same `returnThrough` → one reading, `targetReturnSource`, behind
+  both; the receiver keeps its policy that a call returning a nullable or dynamic wrapper names no dispatchable type.
+  What stays the graph host's own, by design, is what the index model has no counterpart for: `nominalOf` (a keyed source
+  to the type a member lookup dispatches on, a type parameter to its bound), `memberReturn` (a member's return on a keyed
+  type, for `iterator()`/`next()`), `argumentTypeSource` (a call argument's expected type) and `receiverType`'s
+  classification (value / type / dynamic receiver). All-rules and the thread-safety score unchanged on the four trees —
+  branch `feat/infra-B4b`
+- `MemberTouchScan.builtinTypeOf` typed a string literal and a binding's annotation itself, and `FieldWrites.typeOf`
+  answered the self reference with the graph node's type ahead of the deep walk → both ask the walk: `builtinTypeOf`
+  keeps only the array literal and the fresh-returning call (the freshness question's own arcs) and reads the rest off
+  `NominalTypes.expressionTypeSource` with no index — the arcs that need no file: a literal, an annotation, an
+  initializer, a loop binder — so `var s = text; s.split(",")` is a fresh array now (red on the start commit,
+  `MemberReachTest`); `FieldWrites` drops its self arm, the walk answering the enclosing class the same way and, inside
+  an abstract, its underlying type (4.3.7) — two reflective-write probes inside an abstract placed nothing either way.
+  `RedundantToString.resolveReceiver` stays: its answer is a DECLARATION tier with a non-null proof (`OperandBinder`,
+  `DeclaredNullity`), a currency the walk does not carry; its overlap with the walk is the node-kind dispatch alone.
+  All-rules and the thread-safety score unchanged on the four trees — branch `feat/infra-B4b`
 - rule tests ran a check the way production never does: 481 direct `check.run(files, new HaxeQueryPlugin())` sites
   skipped `Linter.collect` (reification gate, suppression, the per-file gates) on a bare plugin with no run host, 174
   classes re-implemented `violations`, a dozen `applyFix` helpers re-implemented the splice, `CheckFixture.applyEdits`
@@ -2876,6 +2946,11 @@ decided the question; it may not become a record of runs.
   the file does now (a module-level function's, which the oracle does not place yet), declines instead of being read
   raw, and a value only a flow types is typed. No finding of the oracle-assisted run on TM changed — branch
   `feat/infra-B5`
+- B5's leftover in a B4b-owned file: `MemberTouchScan` still read the facts table itself (`view.table.node` /
+  `.keyOf`) and three `CompilerFacts` statics (`spliceOf`, `expansionOf`, `expansionSites`) → the view's facade
+  answers all five (`FactsView.spliceOf` / `expansionOf` / `expansionSites` added beside `node` / `keyOf`), its
+  `@:allow(MemberTouchScan)` grant is gone and the field is `_table`, read only by the facts layer's own parts.
+  owned-types 12 -> 9 (CompilerFacts 3 -> 0) — branch `feat/infra-B4b`
 - a fix asked with no index was pinned as a rule's behaviour (148 inline `check.fix(src, vs, plugin)` sites, the
   multi-file ones among them) → no production path passes none: `LintFixDriver` and `FixVerifier` both hand the
   report index (`fixGrouped` / `fixCarrying` too), so every site now goes through `CheckFixture` (`fixOf` / `fixIn`
@@ -2898,6 +2973,13 @@ decided the question; it may not become a record of runs.
   graph resolves), and re-aimed fixtures kill all five; the sixth, M-ESCAPE-RECEIVER-CALL, cuts a `ValueEscapes.call`
   precision branch no probed shape reaches (28, syntax and facts) — left to the `ValueEscapes` owner — branch
   `feat/infra-B8b`
+- `ValueEscapes`' call with no graph target had a fallback typing the receiver itself (`typeOf`) and handing on only the
+  arguments of a project method's untyped parameters; B8b probed 28 shapes (21 syntax, 7 facts) and none reached it,
+  and since the graph types a receiver through the same walk (`NominalTypes.typeWalk`) — annotation, initializer,
+  member, call, construction — no receiver it leaves untyped is typed by `typeOf`'s syntax tier → the branch is gone and
+  such a call hands everything on, the sound direction; `M-ESCAPE-RECEIVER-CALL` retired with it, its control re-pinned
+  to `M-TS-NEW-RECEIVER`. The `new` argument split there reads `NominalTypes.writtenConstruction` like the graph's.
+  All-rules unchanged on the four trees — branch `feat/infra-B4b`
 - the grammar's derived vocabulary was respelled per rule — `functionKinds ∪ nestedFunctionKinds` three times,
   `localFunctionKinds ∪ inlineFunctionKinds` five, `functionKinds ∪ lambdaKinds` fifteen, the `try` / `if` / case-arm
   unions five to eight times each, the return kinds in three shapes, the loop kinds read raw beside `Loops.kindsOf`, and

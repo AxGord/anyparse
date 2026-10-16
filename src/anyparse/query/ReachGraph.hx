@@ -1158,7 +1158,7 @@ final class ReachGraph {
 					push(name, t == null ? null : readOwners(g, t, name));
 				} else if (node.kind == shape.identKind || node.kind == shape.stringInterpIdentKind) {
 					final decl: Null<QueryNode> = TypeResolver.bindingNodeFrom(name, span, tree, shape);
-					final enclosing: Null<String> = MemberTouchScan.typeAt(tree, span.from);
+					final enclosing: Null<String> = TypeResolver.enclosingTypeDeclAt(tree, span.from)?.name;
 					if (decl == null)
 						push(name, null);
 					else if (fields.contains(decl.kind))
@@ -1205,7 +1205,7 @@ final class ReachGraph {
 		var member: Null<QueryNode> = null;
 		function find(node: QueryNode, inType: Bool): Void {
 			if (member != null) return;
-			final declared: Null<String> = CallGraphNames.typeNameOf(node);
+			final declared: Null<String> = RefactorSupport.typeDeclOf(node)?.name;
 			final within: Bool = declared == null ? inType : declared == r.type;
 			if (within && kinds.contains(node.kind) && node.name == r.member) {
 				member = node;

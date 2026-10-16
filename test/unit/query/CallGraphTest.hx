@@ -1637,7 +1637,8 @@ class CallGraphTest extends Test {
 			'package app; class Box<T> { public function new(f:(sys.thread.Lock) -> Void, ?v:T) {} }',
 			'package app; class C { static function shift():Void A.run(l -> {}, l2 -> l2.wait());'
 			+ ' static function full():Void A.full(1, l -> l.wait()); static function dflt():Void A.dflt(l -> {}, l2 -> l2.wait());'
-			+ ' static function late():Void A.late(l -> l.wait()); static function made():Void new Box<Int>(l -> l.wait()); }'
+			+ ' static function late():Void A.late(l -> l.wait()); static function made():Void new Box<Int>(l -> l.wait());'
+			+ ' static function paren():Void new Box<(Int)>(l -> l.wait()); }'
 		]);
 		function inLambdas(fn: String): Array<String> {
 			final out: Array<String> = [];
@@ -1649,6 +1650,7 @@ class CallGraphTest extends Test {
 		Assert.same([], inLambdas('C.dflt'), 'a parameter with a default value is skippable too');
 		Assert.same(['sys.thread.Lock.wait'], inLambdas('C.late'), 'the skippable parameter after it');
 		Assert.same(['sys.thread.Lock.wait'], inLambdas('C.made'), 'the type arguments of a new are no arguments');
+		Assert.same(['sys.thread.Lock.wait'], inLambdas('C.paren'), 'nor is a parenthesised one, whatever kind its node is');
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -1835,7 +1837,7 @@ class CallGraphTest extends Test {
 	 * that do not line up (`Lock` and `Array<Lock>`), leave the value unknown (review R4 F7, the F6 remainder).
 	 */
 	@:pin('control')
-	@:killer('M-TS-DECL-EACH-MEMBER') @:killer('M-TS-DECL-EACH-RETURN') @:killer('M-TS-DECL-EACH-SIMPLE')
+	@:killer('M-TS-DECL-EACH-MEMBER') @:killer('M-TS-DECL-EACH-RETURN')
 	@:killer('M-TS-DECL-EACH-UNTYPED') @:killer('M-TS-KEY-LINED')
 	public function testDeclarationsWritingATypeDifferentlyDispatchOnEach(): Void {
 		#if (sys || nodejs)
@@ -1867,6 +1869,37 @@ class CallGraphTest extends Test {
 		Assert.same(['Gate.wait', 'sys.thread.Lock.wait'], waits('C.named'), 'a return whose types differ in name');
 		Assert.same([], waits('C.apart'), 'types that do not line up');
 		Assert.same([], waits('C.untyped'), 'a branch writing no type');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A call receiver whose callee DECLARES a nullable or dynamic return names no dispatchable type, but one returning a type
+	 * parameter the call binds to `Null<X>` is an `X` for a member lookup: the refusal reads the declared return, before its
+	 * parameters are bound (`round8/h/tp-null`).
+	 */
+	@:pin('control')
+	@:killer('M-TS-RETURN-WRAPPER-BOUND')
+	public function testACallReceiverBoundToANullableTypeDispatchesOnIt(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final g: CallGraph = graphOf([
+			'package app; class A { public static function id<T>(x:T):T return x;'
+			+ ' public static function maybe():Null<sys.thread.Lock> return null; }',
+			'package app; class C { static function bound():Void { final s:Null<sys.thread.Lock> = null; A.id(s).wait(); }'
+			+ ' static function declared():Void A.maybe().wait(); }'
+		]);
+		function targets(from: String): Array<String> {
+			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+			out.sort(Reflect.compare);
+			return out;
+		}
+		Assert.same(['A.id', 'Lock.wait'], targets('C.bound'), 'a type parameter bound to a nullable type');
+		Assert.same(['A.maybe'], targets('C.declared'), 'a nullable return the declaration writes');
 		#else
 		Assert.pass('non-sys target');
 		#end

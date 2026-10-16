@@ -507,7 +507,7 @@ final class Rename {
 		if (capturedBy == null) return false;
 		final renamed: Int = capturedBy;
 		if (shadowingBindingAt(tree, offset, name, renamed, shape)) return false;
-		final host: Null<TypeDeclMatch> = enclosingTypeDecl(tree, offset);
+		final host: Null<TypeDeclMatch> = TypeResolver.enclosingTypeDeclAt(tree, offset);
 		if (host == null) return false;
 		final own: Null<Bool> = ownInstanceMember(tree, host.nameNode, name, renamed, shape);
 		return own ?? (index != null && file != null && index.members.inheritsInstanceMember(file, host.name, name));
@@ -569,22 +569,6 @@ final class Rename {
 		}
 		walk(tree);
 		return found;
-	}
-
-	/**
-	 * The innermost type declaration whose span contains `offset`, normalised across the plain and
-	 * `final`-wrapped shapes by `RefactorSupport.typeDeclOf` (a `final class` names itself on an
-	 * inner node the outer wrapper does not carry), or null when `offset` sits outside every type.
-	 */
-	private static function enclosingTypeDecl(tree: QueryNode, offset: Int): Null<TypeDeclMatch> {
-		var best: Null<TypeDeclMatch> = null;
-		function walk(node: QueryNode): Void {
-			final match: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
-			if (match != null && offset >= match.fullSpan.from && offset < match.fullSpan.to) best = match;
-			for (child in node.children) walk(child);
-		}
-		walk(tree);
-		return best;
 	}
 
 	/**

@@ -224,7 +224,7 @@ final class NullGuardedCode {
 			final name: Null<String> = node.name;
 			final span: Null<Span> = node.span;
 			if (isFunction && !nested && name != null && span != null && (_shape.functionKinds ?? []).contains(node.kind)) {
-				final type: Null<String> = MemberTouchScan.typeAt(tree, span.from);
+				final type: Null<String> = TypeResolver.enclosingTypeDeclAt(tree, span.from)?.name;
 				final own: Array<QueryNode> = [for (c in node.children) if (kinds.contains(c.kind)) c];
 				final method: String = name;
 				if (type != null) {

@@ -174,7 +174,7 @@ final class FactsMethodValues {
 	 */
 	public function new(view: FactsView, escaped: () -> Null<Array<String>>, ?holders: Array<String>) {
 		_view = view;
-		_table = view.table;
+		_table = view._table;
 		_escaped = escaped;
 		_holders = holders?.map(Glob.qualifiedNames);
 	}
