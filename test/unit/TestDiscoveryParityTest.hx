@@ -1299,6 +1299,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.FactsTypeOracleTest#testASignatureTheConfigurationsTypeApartDeclines :: control :: M-FACTS-SIGNATURE-VARIANTS',
 			'unit.check.FactsTypeOracleTest#testASiteAfterNonAsciiTextIsFound :: control :: M-CODEPOINT-NATIVE',
 			'unit.check.FactsTypeOracleTest#testATypeParameterOutOfScopeDeclines :: control :: M-FACTS-SPELL-SCOPE',
+			'unit.check.FactsTypeOracleTest#testAValueIsTypedByTheFlowsAtItsRange :: control :: M-FACTS-VALUE-FLOWS,M-FACTS-ORACLE-RAW-AGREE',
 			'unit.check.FactsTypeOracleTest#testAnEditAnywhereInTheMemberDeclines :: control :: M-ORACLE-WHOLE-MEMBER',
 			'unit.check.FactsTypeOracleTest#testAnUnknownDeclines :: control :: M-FACTS-SPELL-UNKNOWN,M-FACTS-TREE-OPTIONAL',
 			'unit.check.FactsTypeOracleTest#testCodeNoConfigurationCompiledDeclines :: control :: M-FACTS-ABSENT',
@@ -3778,7 +3779,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-REACH-ARRAY-VALUES',
 			'unit.query.MemberReachFactsTest#testTheCompilerResolvesACallTheSyntaxCannot :: control :: M-FACTS-REACH-EDGES',
 			'unit.query.MemberReachFactsTest#testTheCompilersHierarchyReachesAnOverride :: control :: M-FACTS-REACH-OVERRIDES',
-			'unit.query.MemberReachFactsTest#testTheFactsAreTheTruthOnlyUnderTheWholeListOfTheirBuilds :: control :: M-FACTS-TRUTH-WIRED',
+			'unit.query.MemberReachFactsTest#testTheFactsAreTheTruthOnlyUnderTheWholeListOfTheirBuilds :: control :: M-FACTS-TRUTH-WIRED,M-FACTS-SOURCE-UNLISTED',
 			'unit.query.MemberReachFactsTest#testTheFactsNameTheNativeCallsUnderTheTruth :: control :: '
 				+ 'M-FACTS-TRUTH-NATIVES,M-FACTS-TRUTH-NATIVE-CALLS-KEPT,M-FACTS-TRUTH-NATIVE-METAS-DROPPED',
 			'unit.query.MemberReachFactsTest#testTheFunctionAPartialApplicationMakesIsItsTextUnderTheTruth :: control :: '
@@ -5046,6 +5047,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-TRUTH-COUNT',
 			'M-FACTS-TRUTH-NAMES',
 			'M-FACTS-TRUTH-ORDER',
+			'M-FACTS-SOURCE-UNLISTED',
 			'M-FACTS-TRUTH-HAZARDS',
 			'M-FACTS-TRUTH-HAZARDS-UNLISTED',
 			'M-FACTS-TRUTH-UNTYPED-KEPT',
@@ -5442,6 +5444,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-EFFECTIVE-IGNORES-FILEGATE',
 			'M-EFFECTIVE-RENDER-HEADER',
 			'M-FACTS-ORACLE-AGREE',
+			'M-FACTS-VALUE-FLOWS',
+			'M-FACTS-ORACLE-RAW-AGREE',
 			'M-FACTS-SPELL-UNKNOWN',
 			'M-FACTS-SPELL-SCOPE',
 			'M-FACTS-SPELL-IMPL',

@@ -22,6 +22,7 @@ import anyparse.query.CondDirectives.CondDirective;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.ImplicitSites.ImplicitSite;
 import anyparse.query.MemberReach.ReachUnknown;
+import anyparse.query.ReachLiveness.ReachConfiguration;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
@@ -148,6 +149,9 @@ final class FactsView {
 	/** The field kinds that are methods (`TypedFactsProbe`): a read of one is a function value. */
 	private static final METHOD_KINDS: Array<String> = ['method', 'inline', 'dynamic'];
 
+	/** The method kinds no code can reassign (`immutableMethod`): a `dynamic` one is a variable. */
+	private static final IMMUTABLE_METHOD_KINDS: Array<String> = ['method', 'inline'];
+
 	/** The typed kinds (`TypeFact.kind`) a value of which is an object of a class: its members are what that class declares. */
 	private static final OBJECT_KINDS: Array<String> = ['class', 'interface'];
 
@@ -157,8 +161,18 @@ final class FactsView {
 	/** An abstract implementation class's name, in a type string. */
 	private static final IMPL_NAME: EReg = ~/([A-Za-z0-9_]+)_Impl_/g;
 
-	/** The table read. */
-	public final table: CompilerFacts;
+	/**
+	 * The table read — by the view and by the parts of the facts layer working over it; every other reader asks the view.
+	 * `MemberTouchScan` still reads it here; once it asks the view, its grant goes and the field takes the `_` of a private
+	 * one, which the grant's spelling keeps for now.
+	 */
+	@:allow(anyparse.query.CallGraphFacts)
+	@:allow(anyparse.query.FactsEscapes)
+	@:allow(anyparse.query.FactsMethodValues)
+	@:allow(anyparse.query.FactsProvenance)
+	@:allow(anyparse.query.FunctionValueTypes)
+	@:allow(anyparse.query.MemberTouchScan)
+	private final table: CompilerFacts; // noqa: naming
 
 	/**
 	 * Whether the table holds every build the project ships: the analysis runs under a list of builds declared complete
@@ -233,6 +247,9 @@ final class FactsView {
 	/** What the code an argument is handed to does with it (`argumentUses`), made on first need. */
 	private var _argumentUses: Null<ArgumentUses> = null;
 
+	/** What target code may do (`nativeReach`), made on first need. */
+	private var _nativeReach: Null<FactsNativeReach> = null;
+
 	private function new(table: CompilerFacts, scope: ReachProject, truth: Bool) {
 		this.table = table;
 		_scope = scope;
@@ -269,6 +286,101 @@ final class FactsView {
 		final made: ArgumentUses = _argumentUses ?? new ArgumentUses(table);
 		_argumentUses = made;
 		return made;
+	}
+
+	/** What target code the table holds may do (`FactsNativeReach`), read once. */
+	public function nativeReach(): FactsNativeReach {
+		final made: FactsNativeReach = _nativeReach ?? new FactsNativeReach(table);
+		_nativeReach = made;
+		return made;
+	}
+
+	/** The table key of `file`: what a fact's `FactPos.file` spells it as (`CompilerFacts.keyOf`). */
+	public inline function keyOf(file: String): String {
+		return table.keyOf(file);
+	}
+
+	/** Whether any build typed code of `file` (`CompilerFacts.compiled`). */
+	public inline function compiled(file: String): Bool {
+		return table.compiled(file);
+	}
+
+	/** Whether a build may compile `file` as it is now (`CompilerFacts.mayCompileNow`). */
+	public inline function mayCompileNow(file: String): Bool {
+		return table.mayCompileNow(file);
+	}
+
+	/** The text of the file keyed `key` the facts describe, or null (`CompilerFacts.sourceOf`). */
+	public inline function sourceOf(key: String): Null<String> {
+		return table.sourceOf(key);
+	}
+
+	/** The node `id`, its facts unioned over every build that typed it; null when none did (`CompilerFacts.node`). */
+	public inline function node(id: String): Null<FactNode> {
+		return table.node(id);
+	}
+
+	/** The id of every node some build typed (`CompilerFacts.nodeIds`). */
+	public inline function nodeIds(): Iterator<String> {
+		return table.nodeIds();
+	}
+
+	/** The type `id` (`pack.Name`) as the builds typed it; null when none did (`CompilerFacts.type`). */
+	public inline function type(id: String): Null<TypeFact> {
+		return table.type(id);
+	}
+
+	/** The id of every type some build typed (`CompilerFacts.typeIds`). */
+	public inline function typeIds(): Iterator<String> {
+		return table.typeIds();
+	}
+
+	/** Where the type `id` is declared, as the first build that typed it read it (`CompilerFacts.typePosition`). */
+	public inline function typePosition(id: String): Null<FactPos> {
+		return table.typePosition(id);
+	}
+
+	/** Every type `id` extends or implements, directly or not (`CompilerFacts.supertypesOf`). */
+	public inline function supertypesOf(id: String): Array<String> {
+		return table.supertypesOf(id);
+	}
+
+	/** Every typed type extending or implementing `id`, directly or not (`CompilerFacts.subtypesOf`). */
+	public inline function subtypesOf(id: String): Array<String> {
+		return table.subtypesOf(id);
+	}
+
+	/**
+	 * The type the builds gave the expression at exactly `span` of `file`, when they agree (`CompilerFacts.typeOfExpressionAt`);
+	 * null otherwise.
+	 */
+	public inline function typeOfExpressionAt(file: String, span: Span): Null<String> {
+		return table.typeOfExpressionAt(file, span);
+	}
+
+	/**
+	 * Every typed field access within `span` of `file`, a body an inlined method spliced in read at the sites of its call
+	 * (`CompilerFacts.within`) and one of a method that runs no project code left out (`harmlessSplice`); null — Unknown —
+	 * when a fact there has no place.
+	 */
+	public function fieldsIn(g: CallGraph, file: String, span: Span): Null<Array<FieldFact>> {
+		return table.within(file, span, n -> n.fields, f -> f.at, true, harmlessSplice.bind(g));
+	}
+
+	/**
+	 * Whether every build declares `name` of the typed type `owner` a method no code can reassign — `method` or `inline`,
+	 * never `dynamic` or a variable.
+	 */
+	public function immutableMethod(owner: String, name: String): Bool {
+		final declared: Null<FieldDeclFact> = table.type(CompilerFacts.baseId(owner))?.fields.find(d -> d.name == name);
+		return declared != null && declared.kinds.foreach(k -> IMMUTABLE_METHOD_KINDS.contains(k));
+	}
+
+	/**
+	 * Whether the reflective member `target` hands the program no member's value read off an object, in the builds the table holds (`FactsMethodValues.memberless`).
+	 */
+	public inline function memberless(target: String): Bool {
+		return FactsMethodValues.memberless(table, target);
 	}
 
 	/**
@@ -1545,12 +1657,41 @@ final class FactsView {
 	}
 
 	/**
-	 * The view of `table` for `scope`, the table holding every build when `truth`; null when there is none, or a
-	 * configuration left no facts: the table then holds less.
+	 * The view of `table` for `scope`; null when there is none, or it is not complete (`CompilerFacts.complete`): the table
+	 * then holds less. The table holds every build (`truth`) when `configurations` are the analysis's list of builds — a
+	 * run's is every build it ships (`MemberReach.configuredFor`) — and the table names exactly them, as both probes name a
+	 * configuration (`OracleDeclaration.describeOracle`).
 	 */
-	public static function of(table: Null<CompilerFacts>, scope: ReachProject, truth: Bool): Null<FactsView> {
-		if (table == null || table.dropped.length > 0 || table.configurations.length == 0) return null;
-		return new FactsView(table, scope, truth);
+	public static function of(
+		table: Null<CompilerFacts>, scope: ReachProject, ?configurations: Array<ReachConfiguration>
+	): Null<FactsView> {
+		if (table == null || !table.complete()) return null;
+		return new FactsView(table, scope, namesExactly(table, configurations));
+	}
+
+	/** `of` over the compiler facts of the run `plugin` serves (`SymbolIndexHost.compilerFacts`): none when it serves no run. */
+	public static function ofRun(plugin: GrammarPlugin, scope: ReachProject, ?configurations: Array<ReachConfiguration>): Null<FactsView> {
+		return of(plugin is SymbolIndexHost ? (cast plugin: SymbolIndexHost).compilerFacts() : null, scope, configurations);
+	}
+
+	/**
+	 * `of` over `table`, asked once the reach analysis handed it has built its scope (`MemberReach`): the analysis carries
+	 * the table on without reading it.
+	 */
+	public static function over(table: Null<CompilerFacts>): FactsSource {
+		return (scope, configurations) -> of(table, scope, configurations);
+	}
+
+	/** Whether `table` names exactly the builds `configurations` lists, none missing and none besides: then it holds every build. */
+	private static function namesExactly(table: CompilerFacts, configurations: Null<Array<ReachConfiguration>>): Bool {
+		if (configurations == null) return false;
+		final typed: Array<String> = table.configurations.copy();
+		final listed: Array<String> = [for (c in configurations) c.name];
+		typed.sort(Reflect.compare);
+		listed.sort(Reflect.compare);
+		if (typed.length != listed.length) return false;
+		for (i in 0...typed.length) if (typed[i] != listed[i]) return false;
+		return true;
 	}
 
 	/**
@@ -1560,6 +1701,11 @@ final class FactsView {
 	public static function simpleSource(type: String): Null<String> {
 		if (type.indexOf('?') >= 0 || type.indexOf('$') >= 0) return null;
 		return IMPL_NAME.replace(PACKAGE_PREFIX.replace(type, ''), '$1');
+	}
+
+	/** Whether the fact at `at` lies in the range of its node `n`, not spliced in from elsewhere (`CompilerFacts.placed`). */
+	public static inline function placed(n: FactNode, at: FactPos): Bool {
+		return CompilerFacts.placed(n, at);
 	}
 
 	/** Whether `inner` lies within `outer`. */
@@ -1677,6 +1823,12 @@ final class FactsView {
 	}
 
 }
+
+/**
+ * How a reach analysis reads the run's compiler facts once it has built its scope: the view over that scope under that list
+ * of builds (`FactsView.over`).
+ */
+typedef FactsSource = (scope:ReachProject, configurations:Null<Array<ReachConfiguration>>) -> Null<FactsView>;
 
 /** The sites the syntax cannot be trusted to see in code whose facts are the truth (`FactsView.truthSites`). */
 typedef TruthSites = {

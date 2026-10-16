@@ -3,8 +3,8 @@ package anyparse.check;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.FrameworkAware;
 import anyparse.check.Check.Violation;
+import anyparse.check.FactsTypeOracle.InheritedMember;
 import anyparse.check.ReflectionScan.ReflectionSurface;
-import anyparse.query.CompilerFacts;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberBranchScan;
@@ -132,9 +132,6 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	/** The decline of a member of an `extends` class the compiler's facts cannot clear (`supertypeDecline`). */
 	private static inline final DECLINE_ABSTRACT_IMPL: String = 'the member may implement an ABSTRACT method of the `extends` '
 		+ 'class — a Haxe impl carries no `override`, so the call in the base is invisible from here';
-
-	/** The metadata a supertype hands its build macro down to every subclass with, as the facts record it. */
-	private static inline final AUTO_BUILD_META: String = ':autoBuild';
 
 	/**
 	 * RESOLUTION-scope string-literal contents gathered by the last `run` — `ReflectionScan.reflectionSurface`,
@@ -337,7 +334,7 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 				continue;
 			}
 			final decline: Null<String> = memberDeclineReason(
-				node, owner, hit.inExtends, supertypeDecline.bind(plugin, v.file, owner, node.name), index, classMeta, reflected,
+				node, owner, hit.inExtends, supertypeDecline.bind(plugin, v.file, source, owner, node.name), index, classMeta, reflected,
 				plugin.refShape(), stringsUnreachable.bind(node, hit.parent, owner, v.file, plugin, scopeIndex ?? index)
 			);
 			if (decline == null)
@@ -430,21 +427,18 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	 * configuration typed, an owner the facts do not place in `file`, and a run with no complete facts keep the
 	 * abstract-method decline: the base's call is invisible from here.
 	 */
-	private static function supertypeDecline(plugin: GrammarPlugin, file: String, owner: Null<String>, name: Null<String>): Null<String> {
-		final facts: Null<CompilerFacts> = FactsTypeOracle.runFacts(plugin);
-		final key: Null<String> = facts?.keyOf(file);
-		final ids: Array<String> = facts == null || owner == null ? [] : [
-			for (id in facts.typeIds()) if (id.substr(id.lastIndexOf('.') + 1) == owner && facts.typePosition(id)?.file == key) id
-		];
-		if (facts == null || name == null || ids.length == 0) return DECLINE_ABSTRACT_IMPL;
-		for (id in ids) for (sup in facts.supertypesOf(id)) {
-			final declared: Null<TypeFact> = facts.type(sup);
-			if (declared == null || declared.fields.exists(f -> f.name == name)) return DECLINE_ABSTRACT_IMPL;
-			if (declared.meta.contains(AUTO_BUILD_META))
-				return 'the supertype `$sup` is `@:autoBuild`, whose macro builds this type as its own `@:build` and reads the '
+	private static function supertypeDecline(
+		plugin: GrammarPlugin, file: String, source: String, owner: Null<String>, name: Null<String>
+	): Null<String> {
+		final oracle: Null<FactsTypeOracle> = FactsTypeOracle.forFix(plugin, file, source);
+		if (oracle == null || owner == null || name == null) return DECLINE_ABSTRACT_IMPL;
+		return switch oracle.inheritedMember(file, owner, name) {
+			case Undeclared: null;
+			case AutoBuilt(sup):
+				'the supertype `$sup` is `@:autoBuild`, whose macro builds this type as its own `@:build` and reads the '
 					+ 'field list this deletion would change';
-		}
-		return null;
+			case Untyped, Declared(_): DECLINE_ABSTRACT_IMPL;
+		};
 	}
 
 	/**

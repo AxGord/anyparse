@@ -5,6 +5,7 @@ import sys.io.File;
 #end
 import anyparse.check.Check.Violation;
 import anyparse.check.CompilerOracle;
+import anyparse.check.FactsTypeOracle;
 import anyparse.check.HaxeSpawn;
 import anyparse.check.LintConfig;
 import anyparse.check.PreferStaticExtension;
@@ -15,6 +16,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.Cli;
 import anyparse.query.CompilerFacts;
+import anyparse.query.EditJournal;
 import anyparse.query.StdResolver;
 import anyparse.runtime.Span;
 import haxe.io.Path;
@@ -241,7 +243,13 @@ class PreferStaticExtensionFactsTest extends Test {
 
 	@:pin('control') @:killer('M-PSE-FACTS-TEXT')
 	public function testFactsOfAnotherTextProveNothing(): Void {
-		final seen: Null<Map<String, String>> = verdicts([[]], '$MAIN// edited since the compile\n');
+		// the run's journal places the receiver in the edited text, but the table is asked by range: only the text it read
+		final edited: String = '$MAIN// edited since the compile\n';
+		final journal: EditJournal = new EditJournal();
+		journal.record(MAIN, [
+			{ span: new Span(MAIN.length, MAIN.length), text: '// edited since the compile\n' }
+		], edited);
+		final seen: Null<Map<String, String>> = verdicts([[]], edited, null, BUILD, CONFIG, null, journal);
 		if (seen == null) return;
 		Assert.equals('report', seen['proven'], '$seen');
 	}
@@ -342,8 +350,8 @@ class PreferStaticExtensionFactsTest extends Test {
 		final call: Int = main.indexOf('Util.f(b)');
 		final recv: Int = call + 'Util.f('.length;
 		final judged: ExtensionFactsVerdict = StaticExtensionFacts.judge(
-			facts, Path.join([dir, 'Main.hx']), main, new Span(call, call + 'Util.f(b)'.length), new Span(recv, recv + 1), 'Util', 'f',
-			['Zeta']
+			new FactsTypeOracle(facts, file -> main, null, new HaxeQueryPlugin()), Path.join([dir, 'Main.hx']),
+			new Span(call, call + 'Util.f(b)'.length), new Span(recv, recv + 1), 'Util', 'f', ['Zeta']
 		);
 		CliFixture.removeDir(dir);
 		Assert.equals(Shadowed, judged);
@@ -384,8 +392,8 @@ class PreferStaticExtensionFactsTest extends Test {
 		final call: Int = SUBTYPE_MAIN.indexOf('Util.f(b)');
 		final recv: Int = call + 'Util.f('.length;
 		final judged: ExtensionFactsVerdict = StaticExtensionFacts.judge(
-			facts, Path.join([dir, 'Main.hx']), SUBTYPE_MAIN, new Span(call, call + 'Util.f(b)'.length), new Span(recv, recv + 1), 'Util',
-			'f', []
+			new FactsTypeOracle(facts, file -> SUBTYPE_MAIN, null, new HaxeQueryPlugin()), Path.join([dir, 'Main.hx']),
+			new Span(call, call + 'Util.f(b)'.length), new Span(recv, recv + 1), 'Util', 'f', []
 		);
 		CliFixture.removeDir(dir);
 		Assert.equals(Shadowed, judged);
@@ -486,11 +494,11 @@ class PreferStaticExtensionFactsTest extends Test {
 	/**
 	 * The verdict per marked site of `source` (default `MAIN`), compiled from `compiled` (default `MAIN`) by `build` under
 	 * each define set of `configurations`, with `config` as the project's options: `fix`, `report`, or `drop` for a site
-	 * with no finding. Null when haxe is unavailable.
+	 * with no finding, asked with `journal` as the run's record of its rewrites. Null when haxe is unavailable.
 	 */
 	private static function verdicts(
 		configurations: Array<Array<String>>, ?source: String, ?compiled: String, build: String = BUILD, config: String = CONFIG,
-		?extra: Map<String, String>
+		?extra: Map<String, String>, ?journal: EditJournal
 	): Null<Map<String, String>> {
 		#if (sys || nodejs)
 		final written: Array<{ name: String, source: String }> = [
@@ -527,6 +535,7 @@ class PreferStaticExtensionFactsTest extends Test {
 			},
 			facts: () -> facts
 		});
+		plugin.editJournal = journal;
 		final check: PreferStaticExtension = new PreferStaticExtension();
 		final json: String = config;
 		check.setConfigResolver(_ -> LintConfig.parse(json));

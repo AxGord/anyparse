@@ -475,7 +475,7 @@ final class ReachGraph {
 		else
 			for (o in at.owners ?? []) if (o != null) {
 				ids.push(o);
-				for (sub in facts.table.subtypesOf(o)) ids.push(sub);
+				for (sub in facts.subtypesOf(o)) ids.push(sub);
 			}
 		return ids.find(id -> facts.implicitUnheld(id, members));
 	}
@@ -540,8 +540,8 @@ final class ReachGraph {
 	 * simple name or a subtype's is spelled in the code the index reads.
 	 */
 	private function textlessInPlay(facts: FactsView, id: String): Bool {
-		return facts.table.type(id)?.isExtern == true || reflectiveProducers().exists(p -> mentioned(p.name, p.file))
-			|| mentioned(facts.graphType(id), null) || facts.table.subtypesOf(id).exists(sub -> mentioned(facts.graphType(sub), null));
+		return facts.type(id)?.isExtern == true || reflectiveProducers().exists(p -> mentioned(p.name, p.file))
+			|| mentioned(facts.graphType(id), null) || facts.subtypesOf(id).exists(sub -> mentioned(facts.graphType(sub), null));
 	}
 
 	/**
@@ -604,7 +604,7 @@ final class ReachGraph {
 			}
 			final facts: FactsView = view;
 			// a type of the name that declares no such member runs none of the others'
-			for (o in owners) if (facts.table.type(o)?.fields.exists(f -> facts.graphMember(o, f.name) == c.member) == true) add(id, o);
+			for (o in owners) if (facts.type(o)?.fields.exists(f -> facts.graphMember(o, f.name) == c.member) == true) add(id, o);
 		}
 		return out;
 	}
@@ -1015,7 +1015,7 @@ final class ReachGraph {
 		}
 		function noteTyped(ids: Array<String>): Void {
 			final typed: Array<String> = ids.copy();
-			for (v in ids) for (s in facts.table.supertypesOf(v)) if (!typed.contains(s)) typed.push(s);
+			for (v in ids) for (s in facts.supertypesOf(v)) if (!typed.contains(s)) typed.push(s);
 			for (id in typed) note(facts.graphType(id), id);
 		}
 		var escapes: Bool = false;
@@ -1024,9 +1024,9 @@ final class ReachGraph {
 			if (t == null) return null;
 			if (at.family == Text && inertType(t)) continue;
 			final owner: Null<String> = i < owners.length ? owners[i] : null;
-			final kind: Null<String> = owner == null ? null : view.table.type(owner)?.kind;
+			final kind: Null<String> = owner == null ? null : view.type(owner)?.kind;
 			if (owner == null || !NOMINAL_KINDS.contains(kind ?? '')) return null;
-			noteTyped(at.exact ? [owner] : [owner].concat(view.table.subtypesOf(owner)));
+			noteTyped(at.exact ? [owner] : [owner].concat(view.subtypesOf(owner)));
 			if (!at.exact) escapes = true;
 		}
 		if (escapes) {
@@ -1416,7 +1416,7 @@ final class ReachGraph {
 		for (p in reflectiveProducers()) wanted[p.name] = true;
 		// under the truth, a typed type whose text the index does not hold is in play by its name as well (`textlessInPlay`)
 		final view: Null<FactsView> = _scope.facts;
-		if (view != null && view.truth) for (id in view.table.typeIds()) wanted[view.graphType(id)] = true;
+		if (view != null && view.truth) for (id in view.typeIds()) wanted[view.graphType(id)] = true;
 		final out: Map<String, Map<String, Int>> = [];
 		for (fi in _scope.index.allFiles()) {
 			final source: Null<String> = _scope.sources[fi.file] ?? _scope.index.sourceOf(fi.file);
@@ -1580,7 +1580,7 @@ final class ReachGraph {
 			}
 			note(id);
 			if (r.receiverExact) continue;
-			for (sub in facts.table.subtypesOf(id)) note(sub);
+			for (sub in facts.subtypesOf(id)) note(sub);
 			// `this` is its method's class's only while no code obtains the method as a value, which a call may rebind
 			if (!r.receiverSelf || !methodValues(facts).selfBound(r.holder)) escapes = true;
 		}
@@ -1590,12 +1590,12 @@ final class ReachGraph {
 			for (id in escaped) note(id);
 		}
 		final objects: Array<String> = typed.copy();
-		for (id in objects) for (sup in facts.table.supertypesOf(id)) note(sup);
+		for (id in objects) for (sup in facts.supertypesOf(id)) note(sup);
 		// a method other than an accessor is obtained off an object of a class the project declares (`reflectiveMethodHolders`),
 		// each by its own name, and is one of that class or of a class it extends; an accessor runs off an object of any class
 		final held: Array<String> = methodValues(facts).declaredHolders(objects);
 		final owners: Array<String> = held.copy();
-		for (id in held) for (sup in facts.table.supertypesOf(id)) if (!owners.contains(sup)) owners.push(sup);
+		for (id in held) for (sup in facts.supertypesOf(id)) if (!owners.contains(sup)) owners.push(sup);
 		final accessors: Array<String> = _scope.shape.accessorMethodPrefixes ?? [];
 		final types: Array<String> = [];
 		final ids: Array<OwnedId> = [];

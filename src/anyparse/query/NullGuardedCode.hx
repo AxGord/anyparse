@@ -275,10 +275,9 @@ final class NullGuardedCode {
 	 * parameters the literal `null`, which nothing replaces (see the type doc).
 	 */
 	private function staticInvocations(owner: String, name: String, index: Int, count: Int): Bool {
-		final table: CompilerFacts = _view.table;
 		final id: String = '$owner.$name';
-		final node: Null<FactNode> = table.node(id);
-		final fact: Null<TypeFact> = table.type(owner);
+		final node: Null<FactNode> = _view.node(id);
+		final fact: Null<TypeFact> = _view.type(owner);
 		final field: Null<FieldDeclFact> = fact?.fields.find(f -> f.name == name);
 		if (node == null || fact == null || field == null || !field.isStatic || !node.keptParams.contains(index)) return false;
 		if (!callable(fact, field) || node.params.length != count || node.variants.exists(v -> v.params.length != count)) return false;
@@ -287,7 +286,7 @@ final class NullGuardedCode {
 		final types: Array<String> = [node.params[index].type].concat([for (v in node.variants) v.params[index].type]);
 		if (!types.foreach(t -> FactsTypeText.unwrapNull(t) == UNBOUND || builtinEquality(FactsTypeTree.read(t), 0))) return false;
 		if (namedByTargetCode(name) || namesInNode(node, param)) return false;
-		final hierarchy: Array<String> = [owner].concat(table.subtypesOf(owner));
+		final hierarchy: Array<String> = [owner].concat(_view.subtypesOf(owner));
 		if (_methods().obtainedUntyped(name, hierarchy, _escapedTypes(), _bindings, true)) return false;
 		final facts: FactsIndex = gathered();
 		for (call in facts.calls[id] ?? []) if (call.access != STATIC_ACCESS || !handsNull(call.at, index, count)) return false;
@@ -335,16 +334,15 @@ final class NullGuardedCode {
 		final dot: Int = target.lastIndexOf('.');
 		final owner: String = target.substr(0, dot);
 		final name: String = target.substr(dot + 1);
-		final table: CompilerFacts = _view.table;
-		final declaring: Null<TypeFact> = table.type(owner);
+		final declaring: Null<TypeFact> = _view.type(owner);
 		final field: Null<FieldDeclFact> = declaring?.fields.find(f -> f.name == name);
 		if (declaring == null || field == null) return false;
 		if (!callable(declaring, field)) return false;
 		final count: Int = argument.call.children.length - 1;
 		// a dispatch on an instance may run each override of the method
 		final runs: Array<String> = [owner];
-		if (call.access != STATIC_ACCESS) for (sub in table.subtypesOf(owner)) {
-			final declared: Null<TypeFact> = table.type(sub);
+		if (call.access != STATIC_ACCESS) for (sub in _view.subtypesOf(owner)) {
+			final declared: Null<TypeFact> = _view.type(sub);
 			final own: Null<FieldDeclFact> = declared?.fields.find(f -> f.name == name && !f.isStatic);
 			if (declared == null || own == null) continue;
 			if (!callable(declared, own)) return false;
@@ -359,7 +357,7 @@ final class NullGuardedCode {
 	 * for the whole run, and no read of it calls it (see the type doc).
 	 */
 	private function parameterNeverCalls(id: String, index: Int, count: Int, depth: Int): Bool {
-		final node: Null<FactNode> = _view.table.node(id);
+		final node: Null<FactNode> = _view.node(id);
 		if (node == null || node.kind != METHOD_KIND || node.params.length != count || !node.keptParams.contains(index)) return false;
 		if (node.variants.exists(v -> v.params.length != count) || FactMarkers.carries(node, m -> !m.match(InlineSite))) return false;
 		final name: String = node.params[index].name;
@@ -438,7 +436,7 @@ final class NullGuardedCode {
 	 */
 	private function containerSealed(owner: String, field: String): Bool {
 		if (!plainStatic(owner, field)) return false;
-		final declared: Null<FieldDeclFact> = _view.table.type(owner)?.fields.find(f -> f.name == field);
+		final declared: Null<FieldDeclFact> = _view.type(owner)?.fields.find(f -> f.name == field);
 		if (declared == null || !declared.types.foreach(t -> container(t))) return false;
 		for (a in gathered().fields['$owner.$field'] ?? []) {
 			if (a.fact.write ? !a.fact.fresh : a.fact.use != COMPARE && !elementStoreReceiver(a.fact.at)) return false;
@@ -451,14 +449,14 @@ final class NullGuardedCode {
 	 * read by no name off a value of no type or by reflection, and named by no target code.
 	 */
 	private function plainStatic(owner: String, field: String): Bool {
-		final type: Null<TypeFact> = _view.table.type(owner);
+		final type: Null<TypeFact> = _view.type(owner);
 		final declared: Null<FieldDeclFact> = type?.fields.find(f -> f.name == field);
 		if (type == null || declared == null) return false;
 		if (type.kind != CLASS_KIND || !type.alike || type.isExtern || !declared.isStatic) return false;
 		if (!declared.kinds.foreach(k -> PLAIN_VARIABLE.match(k)) || namedByTargetCode(field)) return false;
 		// a call of the value it holds reads it too
 		if (gathered().calls.exists('$owner.$field')) return false;
-		final hierarchy: Array<String> = [owner].concat(_view.table.subtypesOf(owner));
+		final hierarchy: Array<String> = [owner].concat(_view.subtypesOf(owner));
 		return !reachedByName(field, hierarchy);
 	}
 
@@ -474,12 +472,11 @@ final class NullGuardedCode {
 		if (methods.unknownReason() != null) return true;
 		final escaped: Null<Array<String>> = _escapedTypes();
 		final facts: FactsIndex = gathered();
-		final table: CompilerFacts = _view.table;
 		for (a in facts.byName[field] ?? []) {
 			if (!assumedDead(a.at) && holdsClassValue(a.receiver, hierarchy, escaped)) return true;
 		}
 		for (r in facts.reflection) {
-			if (FactsMethodValues.memberless(table, r.target) && !WRITERS.contains(r.target)) continue;
+			if (_view.memberless(r.target) && !WRITERS.contains(r.target)) continue;
 			// the member the literal at the call's NAME argument names; null — a computed name, or a call naming no member — is any
 			final named: Null<String> = r.memberName;
 			if ((named != null && named != field) || assumedDead(r.at)) continue;
@@ -500,10 +497,9 @@ final class NullGuardedCode {
 		if (escaped == null || escaped.exists(e -> hierarchy.contains(e))) return true;
 		final read: Null<FactsType> = type == null ? null : FactsTypeTree.read(type);
 		if (read == null) return true;
-		final table: CompilerFacts = _view.table;
 		return switch unwrapNullable(read) {
 			case Named(CLASS_VALUE | ABSTRACT_VALUE, [Named(id, _)]):
-				hierarchy.contains(id) || table.type(id)?.kind != CLASS_KIND || table.subtypesOf(id).exists(s -> hierarchy.contains(s));
+				hierarchy.contains(id) || _view.type(id)?.kind != CLASS_KIND || _view.subtypesOf(id).exists(s -> hierarchy.contains(s));
 			case Named(CLASS_VALUE | ABSTRACT_VALUE, _): true;
 			case _: false;
 		};
@@ -547,7 +543,7 @@ final class NullGuardedCode {
 			case Named(NULLABLE, [inner]): builtinEquality(inner, depth + 1);
 			case Named(CATCH_ALL, []) | Structure(_) | Function(_, _): true;
 			case Named(id, _):
-				final fact: Null<TypeFact> = _view.table.type(id);
+				final fact: Null<TypeFact> = _view.type(id);
 				fact != null && fact.alike
 					&& (NOMINAL_KINDS.contains(fact.kind) || fact.kind == TYPEDEF_KIND && fact.targets.length > 0
 						&& fact.targets.foreach(target -> builtinEquality(FactsTypeTree.read(target), depth + 1)));
@@ -562,7 +558,7 @@ final class NullGuardedCode {
 			case Named(id, _) if (CONTAINERS.contains(id)):
 				return true;
 			case Named(id, _):
-				final fact: Null<TypeFact> = _view.table.type(id);
+				final fact: Null<TypeFact> = _view.type(id);
 				if (fact == null || fact.kind != TYPEDEF_KIND || fact.targets.length != 1) return false;
 				current = FactsTypeTree.read(fact.targets[0]);
 			case _:
@@ -607,7 +603,7 @@ final class NullGuardedCode {
 	private function namesInNode(node: FactNode, name: String): Bool {
 		final pending: Array<String> = [node.id];
 		while (pending.length > 0) {
-			final next: Null<FactNode> = _view.table.node(pending.pop() ?? '');
+			final next: Null<FactNode> = _view.node(pending.pop() ?? '');
 			if (next == null) return true;
 			for (x in next.natives) if (x.computed || wordsOf(x.code ?? '').contains(name)) return true;
 			for (f in next.fns) pending.push(f);
@@ -648,7 +644,6 @@ final class NullGuardedCode {
 			computedTargetCode: false
 		};
 		_index = out;
-		final table: CompilerFacts = _view.table;
 		function words(code: Null<String>): Void {
 			if (code == null) {
 				out.computedTargetCode = true;
@@ -656,8 +651,8 @@ final class NullGuardedCode {
 			}
 			for (w in wordsOf(code)) out.targetWords[w] = true;
 		}
-		for (id in table.nodeIds()) {
-			final n: Null<FactNode> = table.node(id);
+		for (id in _view.nodeIds()) {
+			final n: Null<FactNode> = _view.node(id);
 			if (n == null) {
 				out.computedTargetCode = true;
 				continue;
@@ -691,8 +686,8 @@ final class NullGuardedCode {
 					words(x.code ?? x.name);
 			}
 		}
-		for (id in table.typeIds()) {
-			final t: Null<TypeFact> = table.type(id);
+		for (id in _view.typeIds()) {
+			final t: Null<TypeFact> = _view.type(id);
 			if (t == null) continue;
 			for (c in t.code) words(c);
 			for (f in t.fields) for (c in f.code) words(c);
@@ -751,7 +746,7 @@ final class NullGuardedCode {
 	/** The text the facts of the file keyed `key` were read off and its tree, parsed once; null when it does not read. */
 	private function parsed(key: String): Null<ParsedText> {
 		if (_parsed.exists(key)) return _parsed[key];
-		final source: Null<String> = _view.table.sourceOf(key);
+		final source: Null<String> = _view.sourceOf(key);
 		final tree: Null<QueryNode> = source == null ? null : try _scope.plugin.parseFile(source) catch (exception: Exception) null;
 		final read: Null<ParsedText> = source == null || tree == null ? null : { source: source, tree: tree };
 		_parsed[key] = read;
