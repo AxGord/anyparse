@@ -270,19 +270,10 @@ final class CompilerOracle {
 		memo: OracleRunMemo, oracles: Array<OracleConfig>, stopAfterFailure: Bool, verbose: Bool
 	): Array<Null<OracleOutcome>> {
 		final before: Array<Null<String>> = memo.fingerprints(oracles);
-		final out: Array<Null<OracleOutcome>> = [
-			for (i in 0...oracles.length) {
-				final unavailable: Null<String> = oracles[i].unavailable;
-				unavailable != null ? Unavailable(unavailable) : heldVerdict(memo, oracles[i], before[i]);
-			}
-		];
+		final out: Array<Null<OracleOutcome>> = heldOutcomes(memo, oracles, before);
 		final decided: Int = stopAfterFailure ? firstHeldFailure(oracles, out) : oracles.length;
 		final compiled: Array<Int> = [for (i in 0...oracles.length) if (out[i] == null && i < decided) i];
-		final runs: Array<HaxeRun> = verbose
-			? HaxeSpawn.runAll([
-				for (i in compiled) { args: argsOf(oracles[i], verbose), cwd: oracles[i].dir }
-			], ORACLE_BUFFER, HaxeSpawn.parallelism(), stopAfterFailure)
-			: warmFirst(memo, [for (i in compiled) oracles[i]], stopAfterFailure);
+		final runs: Array<HaxeRun> = compileAsked(memo, [for (i in compiled) oracles[i]], stopAfterFailure, verbose);
 		for (run in runs) if (run.unstarted != true) invocations++;
 		// a failing `-v` compile is asked again plainly: its streams are what a rejection quotes
 		final retried: Array<Int> = verbose ? [for (k in 0...compiled.length) if (answered(runs[k]) && runs[k].status != 0) k] : [];
@@ -295,10 +286,42 @@ final class CompilerOracle {
 			final i: Int = compiled[k];
 			memo.file(oracles[i], verbose, before[i], after[k], runs[k]);
 			final again: Int = retried.indexOf(k);
-			if (again >= 0) memo.file(oracles[i], false, before[i], after[k], plain[again]);
-			out[i] = again >= 0 ? retriedOutcome(plain[again]) : runs[k].cancelled == true ? null : outcomeOf(runs[k]);
+			if (again >= 0) {
+				memo.file(oracles[i], false, before[i], after[k], plain[again]);
+				out[i] = retriedOutcome(plain[again]);
+			} else
+				out[i] = runs[k].cancelled == true ? null : outcomeOf(runs[k]);
 		}
 		return out;
+	}
+
+	/**
+	 * What `rememberedTimed` answers before compiling anything: each configuration's own unavailability, or the verdict the
+	 * memo holds for its input fingerprinted `before`; null for a configuration still to compile.
+	 */
+	private static function heldOutcomes(
+		memo: OracleRunMemo, oracles: Array<OracleConfig>, before: Array<Null<String>>
+	): Array<Null<OracleOutcome>> {
+		return [
+			for (i in 0...oracles.length) {
+				final unavailable: Null<String> = oracles[i].unavailable;
+				unavailable != null ? Unavailable(unavailable) : heldVerdict(memo, oracles[i], before[i]);
+			}
+		];
+	}
+
+	/**
+	 * The compiles of `asked` (`rememberedTimed`): cold with `-v` when `verbose`, through the warm servers first
+	 * otherwise (`warmFirst`).
+	 */
+	private static function compileAsked(
+		memo: OracleRunMemo, asked: Array<OracleConfig>, stopAfterFailure: Bool, verbose: Bool
+	): Array<HaxeRun> {
+		return verbose
+			? HaxeSpawn.runAll([
+				for (o in asked) { args: argsOf(o, verbose), cwd: o.dir }
+			], ORACLE_BUFFER, HaxeSpawn.parallelism(), stopAfterFailure)
+			: warmFirst(memo, asked, stopAfterFailure);
 	}
 
 	/**
@@ -329,20 +352,23 @@ final class CompilerOracle {
 				[for (k in rest) { args: argsOf(asked[k], false), cwd: asked[k].dir }],
 				ORACLE_BUFFER, HaxeSpawn.parallelism(), stopAfterFailure
 			);
-		return [
-			for (k in 0...asked.length) {
-				final held: Null<HaxeRun> = warm[k];
-				final r: Int = rest.indexOf(k);
-				if (r >= 0)
-					restRuns[r]
-				else if (k == 0 && first != null)
-					first
-				else if (held != null)
-					held
-				else
-					throw new haxe.Exception('configuration $k has neither a warm nor a cold run');
-			}
-		];
+		return [for (k in 0...asked.length) runOf(k, warm[k], rest, restRuns, first)];
+	}
+
+	/**
+	 * The run that answers the `k`-th configuration of `warmFirst`: its cold run when it was compiled cold among `rest`
+	 * (`restRuns`), the speculated cold compile `first` for the first one, its warm run `held` otherwise.
+	 */
+	private static function runOf(k: Int, held: Null<HaxeRun>, rest: Array<Int>, restRuns: Array<HaxeRun>, first: Null<HaxeRun>): HaxeRun {
+		final r: Int = rest.indexOf(k);
+		return if (r >= 0)
+			restRuns[r]
+		else if (k == 0 && first != null)
+			first
+		else if (held != null)
+			held
+		else
+			throw new haxe.Exception('configuration $k has neither a warm nor a cold run');
 	}
 
 	/** The run of a job a failure before it left unstarted, as `HaxeSpawn.runAll` answers one under `stopAfterFailure`. */

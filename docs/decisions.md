@@ -3098,5 +3098,5 @@ decided the question; it may not become a record of runs.
   which spliced reflection is harmless → `FactMarkers.lossReason(id, n, harmlessSplice)`; and the four import-record
   literals of `SymbolIndexBuilder.extractFileInfo` → `importOf`. Kept whole: `Renderer.flatTokenWidthOfRestStack`'s
   frame loop (one stack machine threading five running values on the formatter's hot path; only its pure final
-  combination moved out) and `CompilerOracle.rememberedTimed` / `warmFirst` (the oracle spawn path another task is
-  changing). Macro-time splits keep the generated parsers and writers byte-identical — branch `feat/infra-C1`
+  combination moved out). Macro-time splits keep the generated parsers and writers byte-identical — branch
+  `feat/infra-C1`
