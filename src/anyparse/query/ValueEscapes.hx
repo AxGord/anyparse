@@ -139,7 +139,7 @@ final class ValueEscapes {
 			for (k in _shape.functionKinds ?? []) if (!(_shape.localFunctionKinds ?? []).contains(k)) k
 		];
 		if (!kinds.contains(node.kind) || name == null || at == null) return false;
-		final type: Null<String> = MemberTouchScan.typeAt(tree, at.from);
+		final type: Null<String> = TypeResolver.enclosingTypeDeclAt(tree, at.from)?.name;
 		final declared: Null<TypeDeclInfo> = type == null ? null : _scope.index.fileInfo(file)?.types.find(t -> t.name == type);
 		// this declaration's own record: a twin in another branch of a conditional region may be a runtime one
 		return declared != null && declared.members.exists(m -> m.name == name && m.isMacro && m.declFrom == at.from);
@@ -329,26 +329,13 @@ final class ValueEscapes {
 			if (node.kind != shape.newExprKind || constructed == null) {
 				// what the declarations say, and for an unannotated local its initializer's type: the one Haxe infers for it
 				final said: Null<String> = _g.sites.typeOf(file, tree, source, node);
-				final name: Null<String> = node.name;
-				final at: Null<Span> = node.span;
-				if (said != null || node.kind != shape.identKind || name == null || at == null) return said;
-				final decl: Null<QueryNode> = TypeResolver.bindingNodeFrom(name, at, tree, shape);
-				if (decl == null || !(shape.localDeclKinds ?? []).contains(decl.kind)) return null;
-				final declAt: Null<Span> = decl.span;
-				if (declAt == null || annotations.exists(declAt.from)) return null;
-				final init: Null<QueryNode> = CtorFieldFold.declInitializer(decl, shape);
-				if (init == null) return null;
-				// an initializer ending before the use: a self-reference would not terminate
-				final initAt: Null<Span> = init.span;
-				return initAt == null || initAt.to > at.from ? null : typeOf(init);
+				if (said != null || node.kind != shape.identKind) return said;
+				// an initializer ending before the use, so a self-reference terminates (`NominalTypes.localInitializer`)
+				final init: Null<QueryNode> = NominalTypes.localInitializer(node, tree, shape, annotations);
+				return init == null ? null : typeOf(init);
 			}
 			// a construction is of the type it names, with the arguments it writes
-			final typeKinds: Array<String> = shape.typeAnnotationKinds ?? [];
-			final args: Array<String> = [
-				for (c in node.children) if (typeKinds.contains(c.kind) && c.span != null)
-					source.substring(c.span?.from ?? 0, c.span?.to ?? 0)
-			];
-			return args.length == 0 ? constructed : '$constructed<${args.join(', ')}>';
+			return NominalTypes.writtenConstruction(node, shape, source)?.text;
 		}
 		// an operator whose operands no abstract overloads it for yields a primitive or one of its operands
 		function plainOperation(node: QueryNode): Bool {
@@ -384,7 +371,7 @@ final class ValueEscapes {
 				final decl: Null<QueryNode> = TypeResolver.bindingNodeFrom(name, at, tree, shape);
 				final declAt: Null<Span> = decl?.span;
 				if (decl != null && declAt != null && !(shape.fieldDeclKinds ?? []).contains(decl.kind)) return annotations[declAt.from];
-				final enclosing: Null<String> = MemberTouchScan.typeAt(tree, at.from);
+				final enclosing: Null<String> = TypeResolver.enclosingTypeDeclAt(tree, at.from)?.name;
 				return enclosing == null ? null : g.types.memberOnChain(enclosing, name)?.typeSource;
 			}
 			if (_hazards.isAccess(target.kind) && target.children.length > 0 && name != null) {
@@ -438,7 +425,7 @@ final class ValueEscapes {
 					}
 				}
 			} else if (kind == shape.identKind && name != null && at != null && name != shape.selfReferenceText && bindsNoLocal(name, at)) {
-				final enclosing: Null<String> = MemberTouchScan.typeAt(tree, at.from);
+				final enclosing: Null<String> = TypeResolver.enclosingTypeDeclAt(tree, at.from)?.name;
 				if (enclosing != null && g.types.functionOnChain(enclosing, name)) {
 					if (g.types.memberOnChain(enclosing, name)?.isStatic != true && !escape(enclosing)) ok = false;
 					return;
@@ -465,8 +452,10 @@ final class ValueEscapes {
 		}
 		function call(node: QueryNode): Void {
 			final isNew: Bool = node.kind == shape.newExprKind;
-			final typeKinds: Array<String> = shape.typeAnnotationKinds ?? [];
-			final args: Array<QueryNode> = isNew ? [for (c in node.children) if (!typeKinds.contains(c.kind)) c] : node.children.slice(1);
+			// a `new` names its type's arguments among its children (`NominalTypes.writtenConstruction`): they are no arguments
+			final args: Array<QueryNode> = isNew
+				? node.children.slice(NominalTypes.writtenConstruction(node, shape, source)?.args.length ?? node.children.length)
+				: node.children.slice(1);
 			final callee: Null<QueryNode> = isNew || node.children.length == 0 ? null : node.children[0];
 			final head: Null<QueryNode> = callee != null && _hazards.isAccess(callee.kind) && callee.children.length > 0
 				? callee.children[0]
@@ -479,17 +468,8 @@ final class ValueEscapes {
 				final held: Null<QueryNode> = receiver;
 				if (held != null) value(held);
 			}
-			// a call the graph did not resolve still resolves through its receiver's static type, when that is known
-			final calleeName: Null<String> = callee?.name;
-			final owner: Null<String> = receiver == null || calleeName == null ? null : typeOf(receiver);
-			final declared: Null<MemberInfo> = owner == null || calleeName == null ? null : g.types.memberOnChain(owner, calleeName);
-			if (
-				targets.length == 0 && owner != null && calleeName != null && declared != null && !declared.isStatic
-				&& g.types.functionOnChain(owner, calleeName) && !libraryMember(owner, calleeName)
-			) {
-				for (i in 0...args.length) if (!paramsTyped(declared.paramTypeSources, i)) value(args[i]);
-				return;
-			}
+			// a call the graph did not resolve hands everything to code nothing here can read: the graph types a receiver through
+			// the same walk this file's own typing reads (`NominalTypes.typeWalk`), so no receiver it leaves untyped is typed here
 			if (targets.length == 0) {
 				handAll();
 				return;
@@ -527,7 +507,7 @@ final class ValueEscapes {
 				if (owner == null || libraryMember(lastSegment(owner), name)) return false;
 			} else if (
 				target.kind == shape.identKind && name != null && at != null && TypeResolver.bindingNodeFrom(name, at, tree, shape) == null
-				&& libraryMember(MemberTouchScan.typeAt(tree, at.from), name)
+				&& libraryMember(TypeResolver.enclosingTypeDeclAt(tree, at.from)?.name, name)
 			)
 				return false;
 			final declared: Null<String> = declaredSourceOf(target);
@@ -537,7 +517,7 @@ final class ValueEscapes {
 			if (fn == null || !memberFunctions.contains(fn.kind)) return false;
 			final at: Null<Span> = fn.span;
 			final name: Null<String> = fn.name;
-			final type: Null<String> = at == null ? null : MemberTouchScan.typeAt(tree, at.from);
+			final type: Null<String> = at == null ? null : TypeResolver.enclosingTypeDeclAt(tree, at.from)?.name;
 			if (type == null || name == null) return false;
 			// the written return type: the function's own type annotation child, its parameters' being inside them
 			final written: Null<QueryNode> = fn.children.find(c -> (shape.typeAnnotationKinds ?? []).contains(c.kind));

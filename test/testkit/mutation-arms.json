@@ -5283,7 +5283,7 @@
 			"name": "M-ESCAPE-LOCAL-INIT",
 			"type": "anyparse.query.ValueEscapes",
 			"method": "scanFile",
-			"find": "return initAt == null || initAt.to > at.from ? null : typeOf(init);",
+			"find": "return init == null ? null : typeOf(init);",
 			"replace": "return null;",
 			"note": "(precision) an unannotated local has no type, though Haxe gives it its initializer's"
 		},
@@ -5381,14 +5381,6 @@
 			"find": "if (node.kind != shape.newExprKind || constructed == null) {",
 			"replace": "if (true) {",
 			"note": "(precision) a construction has no type, so a lambda returning new Other() or a local holding one reads as an escape (new C().loop() is resolved by the graph and never asks)"
-		},
-		{
-			"name": "M-ESCAPE-RECEIVER-CALL",
-			"type": "anyparse.query.ValueEscapes",
-			"method": "scanFile",
-			"find": "targets.length == 0 && owner != null && calleeName",
-			"replace": "false && owner != null && calleeName",
-			"note": "(precision) a call the graph did not resolve hands its receiver to untyped code, though its static type declares the method"
 		},
 		{
 			"name": "M-REACH-CLASSPATH-DISPATCH",
@@ -5489,8 +5481,8 @@
 			"name": "M-GRAPH-ELEMENT-RECEIVER",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "\t\t\tif (indexKind != null && expr.kind == indexKind && expr.children.length > 0) {\n",
-			"replace": "\t\t\tif (false) {\n",
+			"find": "element: (container, _) -> elementTypeSource(container),",
+			"replace": "element: (container, _) -> null,",
 			"note": "an element receiver a[i] stays untyped, so a[i].x = v runs no setter"
 		},
 		{
@@ -5960,8 +5952,8 @@
 			"name": "M-GRAPH-TYPE-PARAM",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "if (declared != null && isTypeParam(declared, currentType)) {",
-			"replace": "if (declared != null && false) {",
+			"find": "else if (!isTypeParam(outer, currentType))",
+			"replace": "else if (true)",
 			"note": "a receiver typed as a type parameter is taken for a type of that name"
 		},
 		{
@@ -5976,8 +5968,8 @@
 			"name": "M-GRAPH-TYPEDEF-ALIAS",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "typeName: types.resolveAlias(declared),",
-			"replace": "typeName: declared,",
+			"find": "else if (!isTypeParam(outer, currentType))\n\ttypes.resolveAlias(outer)",
+			"replace": "else if (!isTypeParam(outer, currentType))\n\touter",
 			"note": "a receiver typed by a typedef alias is not seen through"
 		},
 		{
@@ -8138,7 +8130,7 @@
 			"name": "M-GRAPH-FACTS-SPLICED-SITE",
 			"type": "anyparse.query.CallGraphFacts",
 			"method": "siteOf",
-			"find": "at.file == view.table.keyOf(node.file) && CompilerFacts.placed(n, at) ? at.span : null",
+			"find": "at.file == view._table.keyOf(node.file) && CompilerFacts.placed(n, at) ? at.span : null",
 			"replace": "at.span",
 			"note": "a spliced fact files its edge under its caller's file at the callee's range, which a region or a dead branch there then claims"
 		},
@@ -8146,7 +8138,7 @@
 			"name": "M-GRAPH-FACTS-SPLICED-FILE",
 			"type": "anyparse.query.CallGraphFacts",
 			"method": "graphFile",
-			"find": "for (file in g._entries.keys()) if (view.table.keyOf(file) == key) return file;",
+			"find": "for (file in g._entries.keys()) if (view._table.keyOf(file) == key) return file;",
 			"replace": "",
 			"note": "a function spliced in from another file is looked up in its caller's file, where no graph node starts at its range"
 		},
@@ -13431,7 +13423,7 @@
 			"name": "M-TOUCH-EXPANSION-RUNS",
 			"type": "anyparse.query.MemberTouchScan",
 			"method": "expansionRuns",
-			"find": "(expansion == null ? null : CompilerFacts.expansionSites(n, expansion)) ?? [n.at.span]",
+			"find": "(expansion == null ? null : view.expansionSites(n, expansion)) ?? [n.at.span]",
 			"replace": "[n.at.span]",
 			"note": "a touch an expansion makes is read over its whole function, not where the call of the macro was"
 		},
@@ -14125,7 +14117,7 @@
 			"name": "M-FACTS-SPLICED-REFLECTION-MEMBERLESS",
 			"type": "anyparse.query.FactsView",
 			"method": "splicedReachesNoMember",
-			"find": " && FactsMethodValues.memberless(table, m)",
+			"find": " && FactsMethodValues.memberless(_table, m)",
 			"replace": "",
 			"note": "a spliced reflective body whose result may hold a member's value (`Reflect.copy`, spliced by its call site) leaves its function's regions readable"
 		},
@@ -14245,8 +14237,8 @@
 			"name": "M-FACTS-COPY-NESTED-UNION",
 			"type": "anyparse.query.FactsProvenance",
 			"method": "factsOnText",
-			"find": "final nested: Null<FactNode> = _view.table.nodeAsBuiltBy(child, builds);",
-			"replace": "final nested: Null<FactNode> = _view.table.node(child);",
+			"find": "final nested: Null<FactNode> = _view._table.nodeAsBuiltBy(child, builds);",
+			"replace": "final nested: Null<FactNode> = _view._table.node(child);",
 			"note": "a function nested in a copy's body is judged by every build's facts of it, the other copies' among them"
 		},
 		{
@@ -20085,14 +20077,6 @@
 			"note": "a member or a return type written with a library package merges into the project type of its simple name"
 		},
 		{
-			"name": "M-TS-PATH-RETURN",
-			"type": "anyparse.query.CallGraphKeys",
-			"method": "returnedPath",
-			"find": "path.indexOf('.') >= 0 && SourceText.lastSegment(path) == simple",
-			"replace": "false",
-			"note": "a call's return type written with a library package is read by its simple name"
-		},
-		{
 			"name": "M-TS-PATH-NULLABLE-KEYED",
 			"type": "anyparse.query.CallGraphKeys",
 			"method": "keyedIn",
@@ -20136,8 +20120,8 @@
 			"name": "M-TS-STD-GETTER-LOCAL",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "if (isAccessKind(node.kind) && declared != null && types.declarationCount(declared) == 0) stdAccessors(declared);",
-			"replace": "",
+			"find": "&& types.declarationCount(declared) == 0",
+			"replace": "&& false",
 			"note": "a std property no project type names is never read through its getter"
 		},
 		{
@@ -20147,14 +20131,6 @@
 			"find": "if (found == null && types.declarationCount(ownerType) == 0) stdAccessors(ownerType);",
 			"replace": "",
 			"note": "a std property a project property shares its name with is never read through its getter"
-		},
-		{
-			"name": "M-TS-NEW-LOCAL",
-			"type": "anyparse.query.CallGraphKeys",
-			"method": "typeLocals",
-			"find": "final made: Null<String> = init.kind == newExprKind ? init.name : null;",
-			"replace": "final made: Null<String> = null;",
-			"note": "an unannotated local a new initialises stays untyped"
 		},
 		{
 			"name": "M-TS-STD-PLACEHOLDER",
@@ -20359,19 +20335,11 @@
 			"note": "a pkg.Type.* pattern matches every type of that simple name"
 		},
 		{
-			"name": "M-TS-LOCAL-CALL-INIT",
-			"type": "anyparse.query.CallGraphKeys",
-			"method": "typeLocals",
-			"find": "callInitializers[at.from] = init;",
-			"replace": "",
-			"note": "a local a call initialises is never recorded, so it stays untyped"
-		},
-		{
 			"name": "M-TS-LOCAL-CALL-READ",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "typeSources[bound] ?? keys.throughInitializer(bound, c -> typeSourceOf(c, currentType))",
-			"replace": "typeSources[bound]",
+			"find": "initializer: (_, use, _) -> NominalTypes.localInitializer(use, tree, shape, typeSources),",
+			"replace": "initializer: (_, use, _) -> null,",
 			"note": "a local a call initialises is never typed by what the call returns"
 		},
 		{
@@ -20514,8 +20482,8 @@
 			"name": "M-TS-BINDER-TYPE",
 			"type": "anyparse.check.FieldWrites",
 			"method": "typeOf",
-			"find": "return declaredType(file, source, fn, node) ?? captureOf(file, source, fn, node)?.type;",
-			"replace": "return declaredType(file, source, fn, node);",
+			"find": "return declaredType(file, source, node) ?? captureOf(file, source, fn, node)?.type;",
+			"replace": "return declaredType(file, source, node);",
 			"note": "(precision) a case capture is typed by nothing, so an index write into a Map capture is reflective"
 		},
 		{
@@ -20934,14 +20902,6 @@
 			"note": "a return type its declarations write differently is typed as neither (review R4 F6 remainder)"
 		},
 		{
-			"name": "M-TS-DECL-EACH-SIMPLE",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "_facts.returns[target] ?? (outer == null ? null : SourceText.lastSegment(outer));",
-			"replace": "_facts.returns[target];",
-			"note": "a return its declarations write as types of different names names none"
-		},
-		{
 			"name": "M-TS-DECL-EACH-UNTYPED",
 			"type": "anyparse.query.CallGraphKeys",
 			"method": "firstKeyingEach",
@@ -21057,16 +21017,16 @@
 			"name": "M-TS-CALLED-VALUE",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "if (call == null) return calledResult(typeSourceOf(expr.children[0], currentType));",
-			"replace": "if (call == null) return null;",
+			"find": "return call == null ? calledResult(typeSourceOf(expr.children[0], currentType)) : targetReturnSource(expr, call, currentType);",
+			"replace": "return call == null ? null : targetReturnSource(expr, call, currentType);",
 			"note": "a call of a value no function declaration names — a function-typed field, parameter or call result — is not typed (review R4 F7)"
 		},
 		{
 			"name": "M-TS-CALLED-RECEIVER",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "\tif (call != null) {\n\t\tfinal returned: Null<String> = returnedNominal(",
-			"replace": "\tif (recv.kind == callKind && call == null) return null;\n\tif (call != null) {\n\t\tfinal returned: Null<String> = returnedNominal(",
+			"find": "\tif (call != null) {\n\t\t// a nullable / dynamic wrapper the declaration returns names no dispatchable type\n\t\tfinal written: Null<String> = targetReturnSource(recv, call, currentType, nullableWrappers);",
+			"replace": "\tif (recv.kind == callKind && call == null) return null;\n\tif (call != null) {\n\t\t// a nullable / dynamic wrapper the declaration returns names no dispatchable type\n\t\tfinal written: Null<String> = targetReturnSource(recv, call, currentType, nullableWrappers);",
 			"note": "a receiver that is a call of a function-typed value stays unresolved"
 		},
 		{
@@ -21177,8 +21137,8 @@
 			"name": "M-TS-NEW-RECEIVER",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "return made == null || name == null ? null : keys.keyed(name, made.from);",
-			"replace": "return null;",
+			"find": "at == null || name == null ? null : keys.keyed(name, at.from);",
+			"replace": "null;",
 			"note": "a receiver a `new` makes is untyped (R7 L1b)"
 		},
 		{
@@ -21241,7 +21201,7 @@
 			"name": "M-TS-SKIP-NEW-ARGS",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": ": [for (c in holder.children) if (!annotationKinds.contains(c.kind)) c];",
+			"find": ": holder.children.slice(NominalTypes.writtenConstruction(holder, shape, source)?.args.length ?? holder.children.length);",
 			"replace": ": holder.children;",
 			"note": "a `new` counts the type arguments it names among its arguments"
 		},
@@ -21369,8 +21329,8 @@
 			"name": "M-TS-NULLABLE-PATH-KEY",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "? types.imports.pathType(name) : null",
-			"replace": "? name : null",
+			"find": "final outer: Null<String> = path == null ? null : types.imports.pathType(path);",
+			"replace": "final outer: Null<String> = path;",
 			"note": "the type a Null<T> local wraps is keyed by the path its text spells, so a call on it runs a placeholder of the path"
 		},
 		{
@@ -21868,9 +21828,9 @@
 		{
 			"name": "M-NOMINAL-LITERAL",
 			"type": "anyparse.query.NominalTypes",
-			"method": "valueTypeSourceDeep",
-			"find": "if (literal != null) return literal;",
-			"replace": "",
+			"method": "typeWalk",
+			"find": "if (literalType != null) return literal == null ? null : literal(literalType, ctx);",
+			"replace": "if (literalType != null) return null;",
 			"note": "a literal types as nothing, so `'x'.ext()` has an unresolved receiver"
 		},
 		{
@@ -21884,8 +21844,9 @@
 		{
 			"name": "M-NOMINAL-ABSTRACT-THIS",
 			"type": "anyparse.query.NominalTypes",
-			"method": "selfTypeSourceDeep",
-			"force": "selfTypeName",
+			"method": "indexSelf",
+			"find": "if (!(c.shape.underlyingThisTypeKinds ?? []).contains(decl.kind)) return decl.name;",
+			"replace": "return decl.name;",
 			"note": "`this` inside an abstract is the abstract, not its underlying value (4.3.7 types it as the underlying)"
 		},
 		{
@@ -21927,6 +21888,29 @@
 			"find": "typeSyntax(memberLookupReceiverSource(typeSource, wrappers, typeSyntax))?.shape",
 			"replace": "typeSyntax(typeSource)?.shape",
 			"note": "a path under a nullable wrapper is the wrapper's"
+		},
+		{
+			"name": "M-CONSTRUCTION-CTOR-GAP",
+			"type": "anyparse.query.NominalTypes",
+			"method": "writtenConstruction",
+			"find": "if (gap.indexOf('(') >= 0) {",
+			"replace": "if (false) {",
+			"note": "the constructor's arguments are read as the type's"
+		},
+		{
+			"name": "M-NOMINAL-LOCAL-INIT",
+			"type": "anyparse.query.NominalTypes",
+			"method": "localInitializer",
+			"force": "null",
+			"note": "a local written with no type has none, though Haxe gives it its initializer's"
+		},
+		{
+			"name": "M-TS-RETURN-WRAPPER-BOUND",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "final written: Null<String> = targetReturnSource(recv, call, currentType, nullableWrappers);",
+			"replace": "final written: Null<String> = [for (w in [targetReturnSource(recv, call, currentType)]) if (w != null && !nullableWrappers.contains(NominalTypes.outerNominalOf(w.trim(), _plugin.typeSyntax) ?? '')) w][0];",
+			"note": "the wrapper refusal reads the return after its type parameters are bound, so a T bound to Null<X> names nothing"
 		},
 		{
 			"name": "M-HXML-SPLIT-LAST-SPACE",

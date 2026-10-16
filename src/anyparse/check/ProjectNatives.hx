@@ -6,6 +6,7 @@ import anyparse.query.MemberKinds;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.ReachHazards;
+import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -87,7 +88,7 @@ final class ProjectNatives {
 
 	/** Records, under `node` of a type `type`, every member whose initializer makes one of the `loaders` calls. */
 	private function collectLoaded(node: QueryNode, type: Null<String>, loaders: Array<String>): Void {
-		final declared: Null<String> = anyparse.query.CallGraphNames.typeNameOf(node);
+		final declared: Null<String> = RefactorSupport.typeDeclOf(node)?.name;
 		final owner: Null<String> = declared ?? type;
 		final name: Null<String> = node.name;
 		if (owner != null && name != null && (_shape.fieldDeclKinds ?? []).contains(node.kind) && makesLoaderCall(node, loaders)) {

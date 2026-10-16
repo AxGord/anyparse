@@ -132,7 +132,7 @@ final class ReachHazards {
 	public function initializerSpans(tree: QueryNode, source: String, typeName: String, isStatic: Bool): Null<Array<Span>> {
 		final decls: Array<QueryNode> = [];
 		function find(node: QueryNode): Void {
-			if (CallGraphNames.typeNameOf(node) == typeName) decls.push(node);
+			if (RefactorSupport.typeDeclOf(node)?.name == typeName) decls.push(node);
 			for (c in node.children) find(c);
 		}
 		find(tree);

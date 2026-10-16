@@ -13,6 +13,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.MemberReach.ReachAccess;
 import anyparse.query.MemberReach.ReachStep;
 import anyparse.query.MemberReach.ReachUnknown;
+import anyparse.query.NominalTypes.ChainTypeContext;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.MemberInfo;
@@ -309,7 +310,7 @@ final class MemberTouchScan {
 			node: QueryNode, parent: Null<QueryNode>, grand: Null<QueryNode>, index: Int, parentIndex: Int, type: Null<String>
 		): Void {
 			if (opaqueKinds.contains(node.kind)) return;
-			final current: Null<String> = CallGraphNames.typeNameOf(node) ?? type;
+			final current: Null<String> = RefactorSupport.typeDeclOf(node)?.name ?? type;
 			final span: Null<Span> = node.span;
 			final spelled: Null<String> = node.name;
 			if (spelled == name && span != null) {
@@ -439,14 +440,14 @@ final class MemberTouchScan {
 					if (!expanded) return unreadable;
 					unread = true;
 				} else if (expanded)
-					for (run in expansionRuns(n, f)) out.push(run)
+					for (run in expansionRuns(n, f, view)) out.push(run)
 				else if (made || declarationHolding(g, node.id, f.at, view) != null)
 					out.push(f)
 				else
 					return BySyntax;
 			}
 			for (child in n.fns) {
-				final nested: Null<FactNode> = view.table.node(child);
+				final nested: Null<FactNode> = view.node(child);
 				if (nested == null) return unreadable;
 				// a function an expansion placed outside its type's file runs whenever its value is called: what it does to a
 				// name of the member no reading places
@@ -467,16 +468,16 @@ final class MemberTouchScan {
 	 */
 	private static function expansionCode(g: CallGraph, node: FnNode, n: FactNode, at: FactPos, view: FactsView): Bool {
 		return view.truth && FactMarkers.carries(n, m -> m.match(MacroExpansion)) && declarationHolding(g, node.id, at, view) == null
-			&& CompilerFacts.spliceOf(n, at) == null;
+			&& view.spliceOf(n, at) == null;
 	}
 
 	/**
 	 * The typed access `f` of code an expression macro's expansion built into `n`, read where it runs: at each site the
 	 * expansion holding it runs at (`CompilerFacts.expansionSites`), or over the whole of `n` when none is known.
 	 */
-	private static function expansionRuns(n: FactNode, f: FieldFact): Array<FieldFact> {
-		final expansion: Null<ExpansionFact> = CompilerFacts.expansionOf(n, f.at);
-		final sites: Array<Span> = (expansion == null ? null : CompilerFacts.expansionSites(n, expansion)) ?? [n.at.span];
+	private static function expansionRuns(n: FactNode, f: FieldFact, view: FactsView): Array<FieldFact> {
+		final expansion: Null<ExpansionFact> = view.expansionOf(n, f.at);
+		final sites: Array<Span> = (expansion == null ? null : view.expansionSites(n, expansion)) ?? [n.at.span];
 		return [
 			for (s in sites)
 				{
@@ -672,7 +673,7 @@ final class MemberTouchScan {
 		final fn: Null<String> = g.functionAt(file, offset);
 		if (fn != null) return [fn];
 		final tree: Null<QueryNode> = g.treeOf(file);
-		final type: Null<String> = tree == null ? null : typeAt(tree, offset);
+		final type: Null<String> = tree == null ? null : TypeResolver.enclosingTypeDeclAt(tree, offset)?.name;
 		return type == null ? [] : ['$type.${CallGraph.INIT_NAME}', '$type.${CallGraph.STATIC_INIT_NAME}'];
 	}
 
@@ -809,18 +810,27 @@ final class MemberTouchScan {
 	}
 
 	/**
-	 * The built-in array or string type `node` is known to hold — a literal, an identifier declared of the
-	 * type, or a fresh-returning call (whose result is an array) — or null.
+	 * The built-in array or string type `node` is known to hold — an array literal, a fresh-returning call (whose
+	 * result is an array), or what the shared walk types it as (`NominalTypes.expressionTypeSource`: a string literal, a
+	 * binding's annotation or initializer) — or null.
 	 */
 	private function builtinTypeOf(node: QueryNode, ctx: FreshContext): Null<String> {
 		final arrays: Array<String> = _scope.shape.arrayTypeNames ?? [];
 		final strings: Array<String> = stringTypeNames();
 		if (node.kind == _scope.shape.arrayLiteralKind) return arrays[0];
-		if ((_scope.shape.stringLiteralKinds ?? []).contains(node.kind)) return strings[0];
 		if (freshResult(node, ctx)) return arrays[0];
 		final provider: Null<TypeInfoProvider> = _scope.plugin is TypeInfoProvider ? cast _scope.plugin : null;
-		final bound: Null<Int> = TypeResolver.identBindingFrom(node, ctx.tree, _scope.shape);
-		final written: Null<String> = bound == null || provider == null ? null : provider.declaredTypeSources(ctx.source)[bound];
+		if (provider == null) return null;
+		final chain: ChainTypeContext = {
+			declaredTypeSources: provider.declaredTypeSources(ctx.source),
+			source: ctx.source,
+			usings: [],
+			typeSyntax: _scope.plugin.typeSyntax
+		};
+		// no index: only the walk's arcs that need no file — a literal, a binding's annotation or initializer, a loop binder
+		final written: Null<String> = NominalTypes.expressionTypeSource(
+			node, ctx.tree, _scope.shape, provider.declaredTypes(ctx.source), null, '', chain
+		);
 		final outer: Null<String> = written == null ? null : NominalTypes.outerNominalOf(written, _scope.plugin.typeSyntax);
 		return outer != null && (arrays.contains(outer) || strings.contains(outer)) ? outer : null;
 	}
@@ -854,20 +864,6 @@ final class MemberTouchScan {
 		return null;
 	}
 
-	/** The innermost type declaration of `tree` enclosing `offset`. */
-	public static function typeAt(tree: QueryNode, offset: Int): Null<String> {
-		var found: Null<String> = null;
-		function walk(node: QueryNode): Void {
-			final span: Null<Span> = node.span;
-			if (span != null && (offset < span.from || offset >= span.to)) return;
-			final name: Null<String> = CallGraphNames.typeNameOf(node);
-			if (name != null) found = name;
-			for (c in node.children) walk(c);
-		}
-		walk(tree);
-		return found;
-	}
-
 	/** The field a call fact's `target` names (`pack.Type.field`, a bare field name), or null for a call of no field. */
 	private static function calledField(target: Null<String>): Null<String> {
 		return target == null ? null : target.substr(target.lastIndexOf('.') + 1);
@@ -875,8 +871,7 @@ final class MemberTouchScan {
 
 	/** The declaration of the node `id` (`CallGraph.declarationsOf`) whose text holds the fact position `at`, or null. */
 	private static function declarationHolding(g: CallGraph, id: String, at: FactPos, view: FactsView): Null<FnDeclaration> {
-		return g.declarationsOf(id)
-			.find(d -> at.file == view.table.keyOf(d.file) && d.span.from <= at.span.from && at.span.to <= d.span.to);
+		return g.declarationsOf(id).find(d -> at.file == view.keyOf(d.file) && d.span.from <= at.span.from && at.span.to <= d.span.to);
 	}
 
 	/** Whether `span` shares a position with `region`; false when either is missing. */

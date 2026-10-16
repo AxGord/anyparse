@@ -1,7 +1,6 @@
 package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
@@ -12,14 +11,6 @@ using StringTools;
 /** The name arithmetic `CallGraph` resolves with: type declarations, module names, dotted paths, written type heads. */
 @:nullSafety(Strict)
 final class CallGraphNames {
-
-	/**
-	 * Type-decl kinds `RefactorSupport.typeDeclOf` does not cover: `abstract
-	 * class` and `enum abstract` project as their own kinds with the name
-	 * directly on the node. Without these the walks lose the enclosing type
-	 * inside such bodies (members mis-registered under the module pseudo-type).
-	 */
-	private static final EXTRA_TYPE_DECL_KINDS: Array<String> = ['AbstractClassDecl', 'EnumAbstractDecl'];
 
 	/**
 	 * The written return type of the function `fn`: its last type annotation (one of `annotationKinds`)
@@ -129,14 +120,6 @@ final class CallGraphNames {
 			],
 			rest: params.length > 0 && params[params.length - 1].kind == shape.restParamKind
 		};
-	}
-
-	/** Simple name of the type declaration `node` introduces, or null. */
-	public static function typeNameOf(node: QueryNode): Null<String> {
-		final td: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
-		if (td != null) return td.name;
-		final name: Null<String> = node.name;
-		return name != null && EXTRA_TYPE_DECL_KINDS.contains(node.kind) ? name : null;
 	}
 
 	/** `a.b.C.m` → last `count` dot-segments joined (`C.m` for count 2). */

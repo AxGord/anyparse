@@ -167,7 +167,7 @@ class ThreadSafetyPositiveSinksTest extends Test {
 	 */
 	@:pin('control') @:killer('M-TS-PATH-FOREIGN') @:killer('M-TS-PATH-IMPORT') @:killer('M-TS-PATH-RECEIVER-STATIC')
 	@:killer('M-TS-PATH-NEW') @:killer('M-TS-PATH-MATCH') @:killer('M-TS-SHADOWING-KEPT') @:killer('M-TS-PATH-DECLARED-PACKAGE')
-	@:killer('M-TS-PATH-NOMINAL') @:killer('M-TS-PATH-RETURN') @:killer('M-TS-ALIAS-TYPE')
+	@:killer('M-TS-PATH-NOMINAL') @:killer('M-TS-ALIAS-TYPE')
 	public function testALibraryTypeIsNotItsProjectNamesake(): Void {
 		#if (sys || nodejs)
 		final native: String = 'package utils; extern class Lock { public function new():Void; public function wait():Bool; }'
@@ -280,10 +280,11 @@ class ThreadSafetyPositiveSinksTest extends Test {
 	}
 
 	/**
-	 * A local written with no type and initialised by a call holds what the call returns, as a call's receiver does: a std
-	 * function's return type (`Sys.stdin()`), a project function's declared one. Before, such a local was untyped.
+	 * A local written with no type holds its initializer's type, as a receiver written that way does: a
+	 * std function's return type (`Sys.stdin()`), a project function's declared one, a field's, another
+	 * such local's (`NominalTypes.localInitializer`). Before, only a call's was read, and before that none.
 	 */
-	@:pin('control') @:killer('M-TS-LOCAL-CALL-INIT') @:killer('M-TS-LOCAL-CALL-READ')
+	@:pin('control') @:killer('M-NOMINAL-LOCAL-INIT') @:killer('M-TS-LOCAL-CALL-READ')
 	public function testALocalOfACallResultIsTypedByWhatTheCallReturns(): Void {
 		#if (sys || nodejs)
 		if (StdResolver.stdDir() == null) {
@@ -292,11 +293,16 @@ class ThreadSafetyPositiveSinksTest extends Test {
 		}
 		final source: String = 'class C { static function makeLock():sys.thread.Lock return null;'
 			+ ' static function stdin():Void { final i = Sys.stdin(); i.readLine(); }'
-			+ ' static function made():Void { var l = makeLock(); l.wait(); }' + ' static function main():Void { stdin(); made(); } }';
-		Assert.same(
-			['warning A C.made | Lock.wait', 'warning A C.stdin | Input.readLine'],
-			graded(ThreadSafetyCheckTest.violations('{"rules":{"thread-safety":{"closedWorld":false}}}', [source]))
-		);
+			+ ' static function made():Void { var l = makeLock(); l.wait(); }' + ' static var lock: sys.thread.Lock;'
+			+ ' static function field():Void { var f = lock; f.wait(); }'
+			+ ' static function alias():Void { var a = makeLock(); var b = a; b.wait(); }'
+			+ ' static function main():Void { stdin(); made(); field(); alias(); } }';
+		Assert.same([
+			'warning A C.alias | Lock.wait',
+			'warning A C.field | Lock.wait',
+			'warning A C.made | Lock.wait',
+			'warning A C.stdin | Input.readLine'
+		], graded(ThreadSafetyCheckTest.violations('{"rules":{"thread-safety":{"closedWorld":false}}}', [source])));
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -309,7 +315,7 @@ class ThreadSafetyPositiveSinksTest extends Test {
 	 * a datagram read and a result set's `length`.
 	 */
 	@:pin('control') @:killer('M-TS-STD-RETURN') @:killer('M-TS-STD-FIELD') @:killer('M-TS-STD-GETTER') @:killer('M-TS-STD-GETTER-LOCAL')
-	@:killer('M-TS-STD-GETTER-TYPED') @:killer('M-TS-NEW-LOCAL') @:killer('M-TS-ALIAS-TYPE') @:killer('M-TS-STD-PLACEHOLDER')
+	@:killer('M-TS-STD-GETTER-TYPED') @:killer('M-TS-NEW-RECEIVER') @:killer('M-TS-ALIAS-TYPE') @:killer('M-TS-STD-PLACEHOLDER')
 	@:killer('M-TS-BUILTIN-EVENTS')
 	public function testStdResultsTypeTheirReceivers(): Void {
 		#if (sys || nodejs)

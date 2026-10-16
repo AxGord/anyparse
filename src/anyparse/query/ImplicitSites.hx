@@ -52,10 +52,7 @@ final class ImplicitSites {
 	public function typeOf(file: String, tree: QueryNode, source: String, node: QueryNode): Null<String> {
 		final literal: Null<String> = (_shape.literalTypeNames ?? [])[node.kind];
 		if (literal != null) return literal;
-		if (node.kind == _shape.identKind && node.name == _shape.selfReferenceText) {
-			final at: Null<Span> = node.span;
-			return at == null ? null : MemberTouchScan.typeAt(tree, at.from);
-		}
+		// the self reference, a binding, a path and a call chain: the shared walk
 		return try NominalTypes.expressionTypeNominal(
 			node, tree, _shape, declaredOf(file, source), _index, file, null, true
 		) catch (exception: haxe.Exception) null;

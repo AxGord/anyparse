@@ -2386,9 +2386,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyPositiveSinksTest#testADottedWaiverNamesOnlyTheTypeAtThatPath :: control :: M-TS-DOTTED-WILDCARD',
 			'unit.check.ThreadSafetyPositiveSinksTest#testALibraryTypeIsNotItsProjectNamesake :: control :: '
 				+ 'M-TS-PATH-FOREIGN,M-TS-PATH-IMPORT,M-TS-PATH-RECEIVER-STATIC,M-TS-PATH-NEW,M-TS-PATH-MATCH,M-TS-SHADOWING-KEPT,'
-				+ 'M-TS-PATH-DECLARED-PACKAGE,M-TS-PATH-NOMINAL,M-TS-PATH-RETURN,M-TS-ALIAS-TYPE',
+				+ 'M-TS-PATH-DECLARED-PACKAGE,M-TS-PATH-NOMINAL,M-TS-ALIAS-TYPE',
 			'unit.check.ThreadSafetyPositiveSinksTest#testALocalOfACallResultIsTypedByWhatTheCallReturns :: control :: '
-				+ 'M-TS-LOCAL-CALL-INIT,M-TS-LOCAL-CALL-READ',
+				+ 'M-NOMINAL-LOCAL-INIT,M-TS-LOCAL-CALL-READ',
 			'unit.check.ThreadSafetyPositiveSinksTest#testAStdLockWrittenInADeclarationWaitsWhereverItIsRead :: control :: '
 				+ 'M-TS-DECL-MEMBER-FILE,M-TS-ALTERNATE-WHOLE-CALL',
 			'unit.check.ThreadSafetyPositiveSinksTest#testAStdMemberStandsWhereEveryNamesakeAgrees :: control :: '
@@ -2401,7 +2401,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-TS-NATIVE-EXTERN,M-TS-NATIVE-EXTERN-ANY-BODYLESS,M-TS-NATIVE-META,M-TS-NATIVE-LOADER,M-TS-NATIVE-AFFIX,'
 				+ 'M-TS-NATIVE-CALLEE-SPAN,M-TS-NATIVE-CODE-CALLS,M-TS-NATIVE-LOADED-MEMBER',
 			'unit.check.ThreadSafetyPositiveSinksTest#testStdResultsTypeTheirReceivers :: control :: '
-				+ 'M-TS-STD-RETURN,M-TS-STD-FIELD,M-TS-STD-GETTER,M-TS-STD-GETTER-LOCAL,M-TS-STD-GETTER-TYPED,M-TS-NEW-LOCAL,M-TS-ALIAS-TYPE,'
+				+ 'M-TS-STD-RETURN,M-TS-STD-FIELD,M-TS-STD-GETTER,M-TS-STD-GETTER-LOCAL,M-TS-STD-GETTER-TYPED,M-TS-NEW-RECEIVER,M-TS-ALIAS-TYPE,'
 				+ 'M-TS-STD-PLACEHOLDER,M-TS-BUILTIN-EVENTS',
 			'unit.check.ThreadSafetyPositiveSinksTest#testTheBuiltinAppliesWithNoSinks :: control :: '
 				+ 'M-TS-REPORT-NEEDS-SINKS,M-TS-BUILTIN-OFF,M-TS-BUILTIN-ANY-NODE',
@@ -3076,6 +3076,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CallGraphBindingTest#testAModuleLevelFunctionSeesItsModuleAndImportsNoClassChain :: control :: '
 				+ 'M-TS-MODULE-FN-CLASS-CHAIN,M-TS-MODULE-FN-IMPORTED-REF',
 			'unit.query.CallGraphBindingTest#testASupertypeIsTheTypeItsDeclaringFileBinds :: control :: M-SUPERS-BY-DECLARATION',
+			'unit.query.CallGraphTest#testACallReceiverBoundToANullableTypeDispatchesOnIt :: control :: M-TS-RETURN-WRAPPER-BOUND',
 			'unit.query.CallGraphTest#testACalledFunctionValueReturnsWhatItsFunctionTypeSays :: control :: '
 				+ 'M-TS-CALLED-VALUE,M-TS-CALLED-RECEIVER,M-TS-CALLED-NULL',
 			'unit.query.CallGraphTest#testAContainerIsTheStandardOneOnlyWhereItsNameMeansIt :: control :: '
@@ -3127,7 +3128,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CallGraphTest#testConstructorArgumentsHandOnEveryFunctionValue :: control :: M-GRAPH-NEW-ARGS',
 			'unit.query.CallGraphTest#testConstructorNotLoadedYetIsTheOneTheChainDeclares :: control :: M-GRAPH-CTOR-PLACEHOLDER',
 			'unit.query.CallGraphTest#testDeclarationsWritingATypeDifferentlyDispatchOnEach :: control :: '
-				+ 'M-TS-DECL-EACH-MEMBER,M-TS-DECL-EACH-RETURN,M-TS-DECL-EACH-SIMPLE,M-TS-DECL-EACH-UNTYPED,M-TS-KEY-LINED',
+				+ 'M-TS-DECL-EACH-MEMBER,M-TS-DECL-EACH-RETURN,M-TS-DECL-EACH-UNTYPED,M-TS-KEY-LINED',
 			'unit.query.CallGraphTest#testDynamicMethodCallIsAlsoAFunctionValueCall :: control :: M-GRAPH-DYNAMIC-METHOD',
 			'unit.query.CallGraphTest#testEnumConstructorSharingAStaticFunctionNameIsUnresolved :: control :: M-GRAPH-ENUM-VS-STATIC',
 			'unit.query.CallGraphTest#testEveryUsingThatDeclaresTheExtensionIsATarget :: control :: M-GRAPH-USING-ALL',
@@ -3854,7 +3855,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachTest#testAClassNamedToTheClassValueProducerMayBeInstantiatedUntyped :: control :: M-ESCAPE-NAMED-CLASS',
 			'unit.query.MemberReachTest#testAClasspathTheIndexDoesNotHoldMayDeclareAnOverrideOrASubtype :: control :: '
 				+ 'M-REACH-CLASSPATH-DISPATCH,M-CARRY-CLASSPATH',
-			'unit.query.MemberReachTest#testAConstructedReceiverIsItsOwnType :: control :: M-ESCAPE-RECEIVER-CALL',
+			'unit.query.MemberReachTest#testAConstructedReceiverIsItsOwnType :: control :: M-TS-NEW-RECEIVER',
 			'unit.query.MemberReachTest#testAConversionOfATypedOperandRunsOnlyItsTypesMethod :: control :: M-REACH-TYPED-SITE',
 			'unit.query.MemberReachTest#testAFieldInitializerRunsWhatItHoldsThoughItCallsNothing :: control :: '
 				+ 'M-GRAPH-EAGER-INIT,M-REACH-INIT-BRANCHES',
@@ -3989,7 +3990,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachTest#testSharedInitializerIsAnEscape :: control :: M-REACH-SHARED-INITIALIZER',
 			'unit.query.MemberReachTest#testSharedParameterWithoutTheWholeProjectIsUnknown :: control :: M-REACH-LOCAL-SCOPE',
 			'unit.query.MemberReachTest#testSlotWriteIsATouch :: control :: M-REACH-SLOT-WRITE',
-			'unit.query.MemberReachTest#testSplitOfAStringAndAChainedResultAreFresh :: control :: M-REACH-SPLIT-FRESH,M-REACH-FRESH-CHAIN',
+			'unit.query.MemberReachTest#testSplitOfAStringAndAChainedResultAreFresh :: control :: '
+				+ 'M-REACH-SPLIT-FRESH,M-REACH-FRESH-CHAIN,M-NOMINAL-LOCAL-INIT',
 			'unit.query.MemberReachTest#testStoringASharedValueIsAnEscape :: control :: M-REACH-FRESH-ASSIGN',
 			'unit.query.MemberReachTest#testTargetCodeCanNameAFreshLocal :: control :: M-REACH-LOCAL-HAZARDS',
 			'unit.query.MemberReachTest#testTwoHopMutatorIsReached :: control :: M-REACH-TOUCHER-FOUND',
@@ -4040,7 +4042,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.NewFileSliceTest#testImportsSectionRefusesAnUnusableLine :: control :: M-NEWFILE-IMPORT-ANY-LINE',
 			'unit.query.NewFileSliceTest#testImportsSectionTakesStatements :: control :: M-NEWFILE-IMPORT-DOUBLED',
 			'unit.query.NominalTypesTest#testAConstructionIsTheTypeItWrites :: control :: M-NOMINAL-CONSTRUCTED',
+			'unit.query.NominalTypesTest#testAConstructionReadsTheTypeArgumentsItWrites :: control :: M-CONSTRUCTION-CTOR-GAP',
 			'unit.query.NominalTypesTest#testALiteralIsItsType :: control :: M-NOMINAL-LITERAL',
+			'unit.query.NominalTypesTest#testALocalWrittenWithNoTypeHoldsItsInitializersType :: control :: M-NOMINAL-LOCAL-INIT',
 			'unit.query.NominalTypesTest#testDeclarationsWritingAReturnDifferentlyHaveNoSource :: control :: M-NOMINAL-RETURN-AGREE',
 			'unit.query.NominalTypesTest#testTheSourceModeKeepsTypeArguments :: control :: M-NOMINAL-SOURCE-CALL,M-NOMINAL-RETURN-TYPEPARAM',
 			'unit.query.NominalTypesTest#testTheWrittenTypeReadersPeelTheirWrappers :: control :: M-ELEMENT-PEEL,M-OUTER-PATH-PEEL',
@@ -4871,7 +4875,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-ESCAPE-DECLARED-SOURCE',
 			'M-ESCAPE-UNWRITTEN-ARGS',
 			'M-ESCAPE-NEW-TYPE',
-			'M-ESCAPE-RECEIVER-CALL',
+
 			'M-REACH-CLASSPATH-DISPATCH',
 			'M-REACH-LIB-ACCESS',
 			'M-REACH-BUILD-MACRO',
@@ -6720,7 +6724,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-SHADOWING-KEPT',
 			'M-TS-PATH-DECLARED-PACKAGE',
 			'M-TS-PATH-NOMINAL',
-			'M-TS-PATH-RETURN',
+
 			'M-TS-PATH-NULLABLE-KEYED',
 			'M-TS-ALIAS-TYPE',
 			'M-TS-STD-RETURN',
@@ -6728,7 +6732,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-STD-GETTER',
 			'M-TS-STD-GETTER-LOCAL',
 			'M-TS-STD-GETTER-TYPED',
-			'M-TS-NEW-LOCAL',
+
 			'M-TS-STD-PLACEHOLDER',
 			'M-TS-NOTICE-WAIVED',
 			'M-TS-STD-AGREE',
@@ -6753,7 +6757,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-ALTERNATE-NEW',
 			'M-TS-DOTTED-TARGET',
 			'M-TS-DOTTED-WILDCARD',
-			'M-TS-LOCAL-CALL-INIT',
+
 			'M-TS-LOCAL-CALL-READ',
 			'M-TS-PLACE-FRESH-STRUCT',
 			'M-TS-PLACE-FRESH-NEW',
@@ -6825,7 +6829,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-INFER-BARE',
 			'M-TS-DECL-EACH-MEMBER',
 			'M-TS-DECL-EACH-RETURN',
-			'M-TS-DECL-EACH-SIMPLE',
+
 			'M-TS-DECL-EACH-UNTYPED',
 			'M-TS-KEY-LINED',
 			'M-TS-CTOR-STORE-INERT',
@@ -6950,6 +6954,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-NOMINAL-RETURN-AGREE',
 			'M-ELEMENT-PEEL',
 			'M-OUTER-PATH-PEEL',
+			'M-CONSTRUCTION-CTOR-GAP',
+			'M-NOMINAL-LOCAL-INIT',
+			'M-TS-RETURN-WRAPPER-BOUND',
 			'M-HXML-SPLIT-LAST-SPACE',
 			'M-HXML-QUOTES-KEPT',
 			'M-BLAMES-BASENAME',
