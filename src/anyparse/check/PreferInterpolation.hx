@@ -8,6 +8,7 @@ import anyparse.check.MacroGate.MacroIndex;
 import anyparse.query.DeclaredNullity;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceText;
 import anyparse.query.StringFold.ConcatSegment;
@@ -202,7 +203,7 @@ final class PreferInterpolation implements Check implements RiskyFix implements 
 		final resolved: Null<Seams> = resolveSeams(plugin);
 		if (resolved == null) return null;
 		final seams: Seams = resolved;
-		final parsed: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final parsed: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (parsed == null) return null;
 		final tree: QueryNode = parsed;
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);

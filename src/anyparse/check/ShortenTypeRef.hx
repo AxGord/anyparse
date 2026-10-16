@@ -10,6 +10,7 @@ import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.ModuleScan;
 import anyparse.query.OccurrenceScan;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
@@ -408,7 +409,7 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 	private static function planFor(
 		source: String, plugin: GrammarPlugin, index: Null<SymbolIndex>, wanted: Null<Array<String>>, ?path: String
 	): Null<FilePlan> {
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		// The type-refs projection is the same tree PLUS one `TypeRef` node per nominal in a
 		// declaration's `:Type` annotation — the positions the default projection drops. It is what
 		// makes field / parameter / return annotations reachable with an exact span instead of the

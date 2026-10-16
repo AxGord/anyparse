@@ -1,13 +1,13 @@
 package unit.check;
 
 import anyparse.check.Check.Violation;
-import anyparse.check.CheckScan;
 import anyparse.check.DeadStore;
 import anyparse.check.Linter;
 import anyparse.check.NullFlow;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.ShapeVocab;
 import anyparse.runtime.Span;
@@ -304,7 +304,7 @@ class DeadStoreTest extends Test {
 			{ code: 'inline function nm(v) return t(v);', kind: 'LocalInlineFnStmt' }
 		];
 		for (s in spellings) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, 'class C { static function r(a:Array<Int>):Void { ${s.code} } }');
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, 'class C { static function r(a:Array<Int>):Void { ${s.code} } }');
 			Assert.notNull(tree, 'the spelling ${s.code} no longer parses');
 			if (tree != null) Assert.isTrue(subtreeHasKind(tree, s.kind), 'the grammar no longer projects ${s.code} as ${s.kind}');
 			Assert.isTrue(authority.contains(s.kind), 'the nested-function authority is missing ${s.kind} (${s.code})');
@@ -545,7 +545,7 @@ class DeadStoreTest extends Test {
 			+ ' var p = (v, w = 1) => v + w; var e = function(v:Int) { return v; }; var n = function nn(v:Int) { return v; };'
 			+ ' function lf(v:Int) { return v; } inline function li(v:Int) { return v; } } }';
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, src);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, src);
 		Assert.notNull(tree);
 		final bodies: Array<String> = [];
 		if (tree != null) NullFlow.forEachFunctionUnit(tree, plugin.refShape(), (body, params) -> bodies.push(body.kind));

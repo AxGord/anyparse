@@ -8,6 +8,7 @@ import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
@@ -410,7 +411,7 @@ final class PreferLambdaExpressionBody implements Check {
 	 * found something — a file with no candidate costs no round trip at all.
 	 */
 	private static function collect(plugin: GrammarPlugin, source: String, s: Seams, optsJson: Null<String>): Array<Match> {
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final found: Array<Match> = [];
 		// The module root is shielded: nothing follows a top-level declaration but another

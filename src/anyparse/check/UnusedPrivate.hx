@@ -14,6 +14,7 @@ import anyparse.query.NamingPolicy.NamedDecl;
 import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.OccurrenceScan;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
@@ -190,7 +191,7 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 		final ctorCandidates: Array<{ file: String, className: String, span: Span }> = [];
 
 		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			final externTypes: Array<String> = [];
 			collectExternTypes(tree, externTypes);
@@ -282,7 +283,7 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final edits: Array<{ span: Span, text: String }> = [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return edits;
 		final hasConditional: Bool = fileHasConditional(source);
 		final scopeIndex: Null<SymbolIndex> = IndexScope.widestScopeIndex(plugin, index);
@@ -800,7 +801,7 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 			return named && !isReceiver || node.children.exists(c -> valueUse(c, node, names));
 		}
 		return files.exists(entry -> {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			final names: Array<String> = [className];
 			final fi: Null<FileInfo> = index.fileInfo(entry.file);
 			if (fi != null)

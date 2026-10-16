@@ -14,6 +14,7 @@ import anyparse.check.ParamAscription.ParamVerdict;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.NodeShape;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
@@ -182,7 +183,7 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final cfg: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			final excludeMeta: Array<String> = cfg.stringListOption(RULE_ID, 'excludeMeta') ?? [];
 			final boundaryCalls: Array<String> = cfg.stringListOption(RULE_ID, 'boundaryCalls') ?? DEFAULT_BOUNDARY_CALLS;
@@ -223,7 +224,7 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 	): Array<GroupedEdit> {
 		final shape: RefShape = plugin.refShape();
 		final dynName: Null<String> = shape.rawDynamicTypeName;
-		final tree: Null<QueryNode> = dynName == null ? null : CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = dynName == null ? null : ParseGate.parseOrNull(plugin, source);
 		if (dynName == null || tree == null) return [];
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		final declaredTypes: Map<Int, String> = provider != null ? provider.declaredTypes(source) : [];

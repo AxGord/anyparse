@@ -6,7 +6,6 @@ import anyparse.query.ElementSpan;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.ReplaceNode;
 import anyparse.query.cli.command.LintCommand;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 import anyparse.query.ExitCode.*;
@@ -136,7 +135,7 @@ final class CliEdit {
 		// here LIFTS the resolved node to its innermost enclosing node of that
 		// kind — a pattern matches the expression (`addCase(x)` = the Call),
 		// while a statement edit wants the ExprStmt.
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree != null) return switch Address.resolve(tree, source, plugin, { select: selectExpr, match: matchExpr, nth: nth }) {
 			case Ok(_, node):
 				if (node == null) {
@@ -263,7 +262,7 @@ final class CliEdit {
 		source: String, plugin: GrammarPlugin, select: Null<String>, matchPat: Null<String>, nth: Null<Int>
 	): Null<String> {
 		if (select == null && matchPat == null) return null;
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: Exception) null;
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return null;
 		return switch Address.resolve(tree, source, plugin, {
 			select: select,

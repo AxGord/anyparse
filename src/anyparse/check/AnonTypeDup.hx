@@ -7,6 +7,7 @@ import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.check.Check.VolatileMessage;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -141,7 +142,7 @@ final class AnonTypeDup implements Check implements NoAutofix implements ConfigA
 			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
 			minOccOf[entry.file] = positiveOr(config.intOption(RULE_ID, 'minOccurrences'), DEFAULT_MIN_OCCURRENCES);
 			final minFields: Int = positiveOr(config.intOption(RULE_ID, 'minFields'), DEFAULT_MIN_FIELDS);
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			collect(tree, null, entry.file, entry.source, ctx, minFields, groups, order);
 		}

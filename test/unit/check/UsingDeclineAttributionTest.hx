@@ -1,7 +1,6 @@
 package unit.check;
 
 import anyparse.check.Check.Violation;
-import anyparse.check.CheckScan;
 import anyparse.check.DeadBinderCounterLoop;
 import anyparse.check.PreferExists;
 import anyparse.check.PreferFind;
@@ -10,6 +9,7 @@ import anyparse.check.Severity;
 import anyparse.check.UsingScan;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
@@ -258,7 +258,7 @@ class UsingDeclineAttributionTest extends Test {
 	/** The `using` header of `source`, built the way every rule sharing the seam builds it. */
 	private function headerOf(source: String): UsingHeader {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) throw 'the fixture must parse';
 		return UsingScan.headerOf(tree, source, plugin);
 	}

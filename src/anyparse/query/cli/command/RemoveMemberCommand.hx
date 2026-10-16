@@ -188,7 +188,7 @@ final class RemoveMemberCommand implements CliCommand implements PostWriteFix {
 	private static function resolveMemberAddress(
 		op: String, source: String, plugin: GrammarPlugin, select: Null<String>, matchPat: Null<String>, nth: Null<Int>
 	): Null<NamedMember> {
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: Exception) null;
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) {
 			CliIo.stderr('apq $op: source does not parse\n');
 			return null;

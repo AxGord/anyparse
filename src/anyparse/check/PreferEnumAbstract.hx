@@ -6,6 +6,7 @@ import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.check.ReflectionScan.ReflectionSurface;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -188,7 +189,7 @@ final class PreferEnumAbstract implements Check implements RiskyFix implements G
 		final violations: Array<Violation> = [];
 		final candidates: Array<ConversionPlan> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			if (tree != null) flagFile(violations, candidates, entry.file, entry.source, tree, containerKinds, cfg);
 		}
 		_plans = [];

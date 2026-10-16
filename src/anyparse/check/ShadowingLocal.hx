@@ -4,6 +4,7 @@ import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
 import anyparse.query.ShapeVocab;
@@ -141,7 +142,7 @@ final class ShadowingLocal implements Check implements NoAutofix {
 		if (seams == null) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			if (tree != null) scan(tree, tree, [], false, seams, entry.file, violations);
 		}
 		return violations;

@@ -8,6 +8,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberWriteScan;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
@@ -155,7 +156,7 @@ final class StaticConstant implements Check implements DefaultOff {
 		final reflected: ReflectionSurface = ReflectionScan.reflectionSurface(files, plugin);
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			// The core-API bail sits beside the build-macro one: promoting an instance field to
 			// `static` moves it out of the instance member set, and for a member a core type declares
 			// that is "Missing field <name> required by core type".

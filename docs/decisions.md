@@ -3065,3 +3065,8 @@ decided the question; it may not become a record of runs.
   `RefactorSupport` → call-site lists dropped (they rot), the pointer qualified. `ScopeFiles.parseScope` caught a
   parse failure itself beside `ParseGate.parse` → asks the gate. Dead `SourceText.last/firstStandaloneIdentIndex` and
   `FactsView.typedElsewhere`'s unused graph parameter removed — branch `feat/infra-B9`
+- a tolerant parse ("the tree, or null") had two homes and ~20 inline copies: `CheckScan.parseOrNull` for the check
+  layer (118 callers), a `try plugin.parseFile(s) catch … null` written out at each graph, reach, op and CLI site that
+  could not reach `check/` → ONE `ParseGate.parseOrNull` beside `parse` / `refusal` (moved there, every caller
+  repointed by `move-member`, the inline copies replaced). Catching `Exception` alone is the old two-catch form: a
+  `ParseError` IS an `Exception`. All-rules and both ops harnesses byte-identical — branch `feat/infra-B9`

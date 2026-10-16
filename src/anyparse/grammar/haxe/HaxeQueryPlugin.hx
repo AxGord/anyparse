@@ -12,6 +12,7 @@ import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.NamingPolicy.NamingSupport;
+import anyparse.query.ParseGate;
 import anyparse.query.ParsedRootProvider;
 import anyparse.query.Pattern;
 import anyparse.query.QueryNode;
@@ -2120,7 +2121,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		if (dir == null) return null;
 		final src: Null<String> = readStdModule(dir, modulePath);
 		if (src == null) return null;
-		final tree: Null<QueryNode> = try parseFile(src) catch (exception: Exception) null;
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(this, src);
 		if (tree == null) return null;
 		final names: Array<String> = [];
 		collectStaticMethodsWithParam(tree, names);

@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.query.GrammarPlugin;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.RawSourceScan;
 import anyparse.query.RefactorSupport;
@@ -98,7 +99,7 @@ final class ReflectionScan {
 		final memoised: Null<ReflectionSurface> = memo?.surfaceFor(scope);
 		if (memoised != null) return memoised;
 		for (entry in scope) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			if (tree != null)
 				collect(tree, entry.source, stringFold, out)
 			else

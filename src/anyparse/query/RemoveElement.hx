@@ -2,7 +2,6 @@ package anyparse.query;
 
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Remove the sibling element a cursor points at — the GENERALIZED
@@ -84,7 +83,7 @@ final class RemoveElement {
 	 * own CACHING plugin: the parse here is then the parse the edit makes.
 	 */
 	public static function describeRemoval(source: String, line: Int, col: Int, plugin: GrammarPlugin, withDoc: Bool = true): Null<String> {
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: Exception) null;
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return null;
 		final hit: Null<{ node: QueryNode, parent: Null<QueryNode> }> = elementAt(tree, source, Span.offsetOf(source, line, col));
 		if (hit == null) return null;

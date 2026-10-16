@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
@@ -105,7 +106,7 @@ final class RedundantAscription implements Check implements DefaultOff {
 	private static function scanFile(
 		entry: { file: String, source: String }, plugin: GrammarPlugin, seams: Seams, typed: TypeInfoProvider, violations: Array<Violation>
 	): Void {
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 		if (tree == null) return;
 		final source: String = entry.source;
 		final castTargets: Map<Int, String> = typed.castTargetSources(source);

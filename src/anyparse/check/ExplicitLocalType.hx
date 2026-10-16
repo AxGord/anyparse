@@ -13,6 +13,7 @@ import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.NodeShape;
 import anyparse.query.NominalTypes;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
@@ -287,7 +288,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	): Array<{ span: Span, text: String }> {
 		final shape: RefShape = plugin.refShape();
 		final locals: Array<String> = shape.localDeclKinds ?? [];
-		final tree: Null<QueryNode> = locals.length == 0 ? null : CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = locals.length == 0 ? null : ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return decline(violations, DECLINE_NO_TREE);
 		final byKey: Map<String, QueryNode> = [];
 		MemberKinds.indexNodesByKind(tree, locals, byKey);
@@ -362,7 +363,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	): Array<{ span: Span, text: String }> {
 		final shape: RefShape = plugin.refShape();
 		final locals: Array<String> = shape.localDeclKinds ?? [];
-		final tree: Null<QueryNode> = locals.length == 0 ? null : CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = locals.length == 0 ? null : ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final byKey: Map<String, QueryNode> = [];
 		MemberKinds.indexNodesByKind(tree, locals, byKey);

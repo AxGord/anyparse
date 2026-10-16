@@ -8,6 +8,7 @@ import anyparse.query.IndexScope;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.NominalTypes;
 import anyparse.query.OccurrenceScan;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
@@ -152,7 +153,7 @@ final class MapKeysLookup implements Check {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final cfg: Null<Cfg> = readCfg(plugin);
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (cfg == null || tree == null || MemberWriteScan.carriesBuildMacro(source)) return [];
 		final c: Cfg = cfg;
 		final wanted: Array<String> = RunScan.spanKeys(violations);

@@ -645,7 +645,7 @@ final class FmtCommand implements CliCommand {
 		final kinds: Null<Array<String>> = shape.opaqueCondRegionKinds;
 		if (kinds == null || kinds.length == 0) return [];
 		if (source.indexOf(shape.conditionalIfKeyword ?? '#if') == -1) return [];
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: Exception) null;
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final regions: Array<OpaqueCondRegion> = CondRegionScan.opaqueCondRegions(tree, source, shape);
 		if (regions.length == 0) return [];

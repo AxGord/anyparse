@@ -6,6 +6,7 @@ import anyparse.query.CompilerFacts.TypeFact;
 import anyparse.query.DeclaredNullity;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
@@ -187,7 +188,7 @@ final class RedundantToString implements Check implements DefaultOff {
 	private static function contextFor(
 		plugin: GrammarPlugin, file: String, source: String, seams: Seams, index: SymbolIndex, facts: Null<FactsTypeOracle>
 	): Null<Ctx> {
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return null;
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		return {

@@ -4,6 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -68,7 +69,7 @@ final class RedundantBypassAccessor implements Check {
 		final index: SymbolIndex = IndexScope.report(files, plugin);
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			final info: Null<FileInfo> = index.fileInfo(entry.file);
 			if (tree != null && info != null) collect(tree, entry.file, ctx, info, violations);
 		}

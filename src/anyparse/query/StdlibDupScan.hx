@@ -2,7 +2,6 @@ package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using Lambda;
 
@@ -142,7 +141,7 @@ final class StdlibDupScan {
 			selfContained: 0
 		};
 		final candidates: Array<StdlibCandidate> = [];
-		final root: Null<QueryNode> = try plugin.parseFile(source) catch (exception: Exception) null;
+		final root: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (root == null) return { candidates: candidates, stages: stages };
 		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		final declaredTypes: Map<Int, String> = provider != null ? provider.declaredTypes(source) : [];

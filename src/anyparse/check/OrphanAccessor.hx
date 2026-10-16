@@ -7,6 +7,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberKinds;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
@@ -447,7 +448,7 @@ final class OrphanAccessor implements Check implements DefaultOff {
 		if (interpolated != null) kinds.push(interpolated);
 		final out: Array<String> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			if (tree != null) collectReferences(tree, kinds, out);
 		}
 		return out;

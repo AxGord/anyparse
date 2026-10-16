@@ -11,6 +11,7 @@ import anyparse.query.BinderScan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.NominalTypes;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
@@ -299,7 +300,7 @@ final class PreferApiIdiom implements Check implements ConfigAware implements Fi
 	): Array<Match> {
 		if (idioms.length == 0) return [];
 		final info: Null<FileInfo> = index.fileInfo(file);
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (info == null || tree == null) return [];
 		final root: QueryNode = tree;
 		final fileInfo: FileInfo = info;

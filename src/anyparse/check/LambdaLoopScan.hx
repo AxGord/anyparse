@@ -15,15 +15,14 @@ import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.NodeShape;
 import anyparse.query.NominalTypes;
 import anyparse.query.OccurrenceScan;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using Lambda;
 using StringTools;
@@ -144,8 +143,7 @@ final class LambdaLoopScan {
 		// iterable demands it — the one shape whose type has to be proved.
 		final index: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			final source: String = entry.source;
 			final file: String = entry.file;
@@ -173,7 +171,7 @@ final class LambdaLoopScan {
 	): Array<GroupedEdit> {
 		final s: Null<Seams> = readSeams(plugin);
 		if (s == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final symbols: Null<SymbolIndex> = IndexScope.resolutionIndexOf(plugin) ?? index;
 		final header: UsingHeader = UsingScan.headerOf(tree, source, plugin);

@@ -9,6 +9,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.MemberReach;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.RawSourceScan;
 import anyparse.query.RefactorSupport;
@@ -1171,7 +1172,7 @@ final class FieldInitAtDeclaration implements Check {
 		final classLike: Array<String> = MemberKinds.classLikeContainerKinds(shape);
 		final tryKinds: Array<String> = ShapeVocab.tryKinds(shape);
 		for (entry in scope) if (RawSourceScan.mentionsWord(entry.source, name)) {
-			final parsed: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			final parsed: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			if (parsed == null) return true;
 			final root: QueryNode = parsed;
 			// An unparsed `#if` region projects no nodes, so the walk below cannot see a read inside one.

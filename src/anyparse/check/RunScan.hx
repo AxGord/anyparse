@@ -5,6 +5,7 @@ import anyparse.check.Check.Violation;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
@@ -30,7 +31,7 @@ final class RunScan {
 		body: (entry:{ file: String, source: String }, tree:QueryNode, out:Array<Violation>) -> Void,
 		?parse: (plugin:GrammarPlugin, source:String) -> Null<QueryNode>
 	): Array<Violation> {
-		final parseOrNull: (plugin:GrammarPlugin, source:String) -> Null<QueryNode> = parse ?? CheckScan.parseOrNull;
+		final parseOrNull: (plugin:GrammarPlugin, source:String) -> Null<QueryNode> = parse ?? ParseGate.parseOrNull;
 		final out: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = parseOrNull(plugin, entry.source);
@@ -51,7 +52,7 @@ final class RunScan {
 		?parse: (plugin:GrammarPlugin, source:String) -> Null<QueryNode>
 	): Array<Violation> {
 		if (seams == null) return [];
-		final parseOrNull: (plugin:GrammarPlugin, source:String) -> Null<QueryNode> = parse ?? CheckScan.parseOrNull;
+		final parseOrNull: (plugin:GrammarPlugin, source:String) -> Null<QueryNode> = parse ?? ParseGate.parseOrNull;
 		final out: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = parseOrNull(plugin, entry.source);
@@ -76,7 +77,7 @@ final class RunScan {
 		final index: SymbolIndex = IndexScope.report(files, plugin);
 		final out: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			if (tree != null) body(entry, tree, typed, index, out);
 		}
 		return out;
@@ -90,7 +91,7 @@ final class RunScan {
 		plugin: GrammarPlugin, source: String, body: (tree:QueryNode) -> Array<FixEdit>,
 		?parse: (plugin:GrammarPlugin, source:String) -> Null<QueryNode>
 	): Array<FixEdit> {
-		final parseOrNull: (plugin:GrammarPlugin, source:String) -> Null<QueryNode> = parse ?? CheckScan.parseOrNull;
+		final parseOrNull: (plugin:GrammarPlugin, source:String) -> Null<QueryNode> = parse ?? ParseGate.parseOrNull;
 		final tree: Null<QueryNode> = parseOrNull(plugin, source);
 		return tree == null ? [] : body(tree);
 	}
@@ -105,7 +106,7 @@ final class RunScan {
 		?parse: (plugin:GrammarPlugin, source:String) -> Null<QueryNode>
 	): Array<FixEdit> {
 		if (seams == null) return [];
-		final parseOrNull: (plugin:GrammarPlugin, source:String) -> Null<QueryNode> = parse ?? CheckScan.parseOrNull;
+		final parseOrNull: (plugin:GrammarPlugin, source:String) -> Null<QueryNode> = parse ?? ParseGate.parseOrNull;
 		final tree: Null<QueryNode> = parseOrNull(plugin, source);
 		return tree == null ? [] : body(tree, seams);
 	}

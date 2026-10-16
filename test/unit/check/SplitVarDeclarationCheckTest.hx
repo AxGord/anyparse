@@ -203,7 +203,7 @@ class SplitVarDeclarationCheckTest extends Test {
 	/**
 	 * TRAP-3 PIN for the CondBranch convention: a statement inside a `#if` region is only a
 	 * direct child of a `blockKinds()` node in the BRANCH-AWARE projection. This test fails
-	 * if the check reads `CheckScan.parseOrNull` instead of `parseBranchAwareOrNull`.
+	 * if the check reads `ParseGate.parseOrNull` instead of `parseBranchAwareOrNull`.
 	 */
 	public function testInsideConditionalBlockFlagged(): Void {
 		Assert.equals(1, violations(wrap('#if js\n\t\tvar a = 1, b = 2;\n\t\t#end')).length);

@@ -9,6 +9,7 @@ import anyparse.query.BinderScan;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
@@ -238,7 +239,7 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 		final violations: Array<Violation> = [];
 		final perFile: Array<DupFile> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			final blocks: Array<Array<DupStmt>> = [];
 			final ctx: DupCtx = {

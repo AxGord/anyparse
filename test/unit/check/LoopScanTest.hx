@@ -1,8 +1,8 @@
 package unit.check;
 
-import anyparse.check.CheckScan;
 import anyparse.check.LoopScan;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import utest.Assert;
 import utest.Test;
@@ -159,7 +159,7 @@ class LoopScanTest extends Test {
 	}
 
 	private function parse(source: String): QueryNode {
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(new HaxeQueryPlugin(), source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(new HaxeQueryPlugin(), source);
 		if (tree == null) throw 'the fixture must parse';
 		return tree;
 	}

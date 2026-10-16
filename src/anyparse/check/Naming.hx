@@ -20,6 +20,7 @@ import anyparse.query.NamingPolicy.NamingPolicy;
 import anyparse.query.NamingPolicy.NamingRule;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.OccurrenceScan;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
@@ -146,7 +147,7 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		if (violations.length == 0) return [];
 		final support: Null<NamingSupport> = plugin.namingSupport();
 		if (support == null) return RenameRefusal.all(violations, RenameRefusal.NO_SUPPORT);
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return RenameRefusal.all(violations, RenameRefusal.NO_TREE);
 
 		final policy: NamingPolicy = support.policyFor(violations[0].file);
@@ -608,7 +609,7 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		final resolved: Array<Span> = Rename.renameOccurrences(source, tree, declFrom, shape);
 		if (resolved.length == 0) return null;
 		final rewritten: String = CanonicalEdit.applyEdits(source, edits);
-		final newTree: Null<QueryNode> = CheckScan.parseOrNull(plugin, rewritten);
+		final newTree: Null<QueryNode> = ParseGate.parseOrNull(plugin, rewritten);
 		if (newTree == null) return null;
 		final mismatch: Array<Capture> = Rename.captureMismatch(rewritten, newTree, renameSpans, resolved, newName, declFrom, shape);
 		if (mismatch.length == 0) return null;
@@ -679,7 +680,7 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		final declSource: Null<String> = sourceByFile[declFile];
 		if (declSource == null) return null;
 		final source: String = declSource;
-		final declTree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final declTree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (declTree == null) return null;
 		final tree: QueryNode = declTree;
 		final decl: Null<NamedDecl> = support.project(tree).find(d -> d.span != null && d.span.from == vspan.from);
@@ -848,7 +849,7 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 			final fileSource: Null<String> = sourceByFile[file];
 			if (fileSource == null) return RenameRefusal.crossRename(v, RenameRefusal.CROSS_FILE_UNREADABLE);
 			final fsrc: String = fileSource;
-			final fileTree: Null<QueryNode> = file == c.declFile ? c.tree : CheckScan.parseOrNull(plugin, fsrc);
+			final fileTree: Null<QueryNode> = file == c.declFile ? c.tree : ParseGate.parseOrNull(plugin, fsrc);
 			if (fileTree == null) return RenameRefusal.crossRename(v, RenameRefusal.CROSS_FILE_UNREADABLE);
 			final familySpans: Array<Span> = familyOccurrences(c.family, file, fsrc, fileTree, shape);
 			final spans: Null<Array<Span>> = file == c.declFile
@@ -1087,7 +1088,7 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		source: String, name: String, plugin: GrammarPlugin, distinctive: Bool, ownerName: String, shape: RefShape,
 		resolutionIndex: SymbolIndex, file: String, ?familySpans: Array<Span>
 	): Null<Array<Span>> {
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return null;
 		// This file declares an override of the member: its declaration and the reads its own type makes
 		// of it are rename targets. Without them the declaration is an occurrence no receiver attributes,
@@ -1319,7 +1320,7 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		for (entry in ReflectionScan.scopeFiles(index == null ? [] : indexSources(index), plugin)) if (entry.file != currentFile) {
 			final source: String = entry.source;
 			if (!quoted.exists(forms -> spelled(source, forms))) continue;
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 			// A file the parser could not read still SPELLS the name in quotes, and nothing downstream
 			// can tell a `Reflect.field(x, 'name')` there from a menu key; skipping it (as a walk over
 			// `SymbolIndex.allFiles()` would, since that drops a skip-parsed file entirely) is the
