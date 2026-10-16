@@ -2852,4 +2852,6 @@ decided the question; it may not become a record of runs.
   (`ReificationGateTest`, `ReificationGateFixPathTest`) and the builder's own `SymbolIndex*Test`. A test that went red
   under the production path is a finding, not a fixture to bend: `RedundantParensCheckTest` (four splice-in-macro fixes
   production drops, the rule is not `QuotationAware`) and `PreferArrayLiteralCheckTest.testThisFieldAssignmentNeedsIndex`
-  (the index-less refusal `lint --fix` never reaches) stay on the old call, commented — branch `feat/infra-B8`
+  (the index-less refusal `lint --fix` never reaches) stay on the old call, commented; so does
+  `ThreadSafetyCheckTest.testNoFindingInAFileWhoseChainWritesNoOption`, whose arm M-TS-REPORT-UNGATED survived through
+  the fixture — `Linter.runGated` re-applies the rule's own `GraphScoped` report gate — branch `feat/infra-B8`
