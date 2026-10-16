@@ -83,7 +83,7 @@ final class ReachProject {
 	 */
 	public function mayCompile(file: String): Bool {
 		final view: Null<FactsView> = facts;
-		return view == null || view.table.compiled(file) || typeHomes(view).exists(view.table.keyOf(file));
+		return view == null || view.compiled(file) || typeHomes(view).exists(view.keyOf(file));
 	}
 
 	/**
@@ -93,7 +93,7 @@ final class ReachProject {
 	 */
 	public function runsInNoBuild(file: String): Bool {
 		final view: Null<FactsView> = facts;
-		return view != null && view.truth && !view.table.mayCompileNow(file);
+		return view != null && view.truth && !view.mayCompileNow(file);
 	}
 
 	/** What the compiler facts say the builds made of the index and the text; null without facts. */
@@ -149,8 +149,8 @@ final class ReachProject {
 		final held: Null<Map<String, Bool>> = _typeHomes;
 		if (held != null) return held;
 		final out: Map<String, Bool> = [];
-		for (id in view.table.typeIds()) {
-			final at: Null<FactPos> = view.table.typePosition(id);
+		for (id in view.typeIds()) {
+			final at: Null<FactPos> = view.typePosition(id);
 			if (at != null) out[at.file] = true;
 		}
 		_typeHomes = out;

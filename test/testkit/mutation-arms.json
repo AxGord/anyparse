@@ -6805,37 +6805,37 @@
 			"name": "M-FACTS-TRUTH-WIRED",
 			"type": "anyparse.query.FactsView",
 			"method": "of",
-			"find": "return new FactsView(table, scope, truth);",
+			"find": "return new FactsView(table, scope, namesExactly(table, configurations));",
 			"replace": "return new FactsView(table, scope, false);",
 			"note": "(precision) the facts are never the truth, even under the whole list of their builds"
 		},
 		{
 			"name": "M-FACTS-TRUTH-UNLISTED",
-			"type": "anyparse.query.MemberReach",
-			"method": "factsAreTruth",
-			"force": "facts != null",
+			"type": "anyparse.query.FactsView",
+			"method": "namesExactly",
+			"force": "true",
 			"note": "facts are the truth whatever builds the analysis runs under, a list not declared whole or none included"
 		},
 		{
 			"name": "M-FACTS-TRUTH-COUNT",
-			"type": "anyparse.query.MemberReach",
-			"method": "factsAreTruth",
+			"type": "anyparse.query.FactsView",
+			"method": "namesExactly",
 			"find": "if (typed.length != listed.length) return false;",
 			"replace": "",
 			"note": "facts are the truth when their builds merely start the listed ones, so a listed build they never typed is vouched for"
 		},
 		{
 			"name": "M-FACTS-TRUTH-NAMES",
-			"type": "anyparse.query.MemberReach",
-			"method": "factsAreTruth",
+			"type": "anyparse.query.FactsView",
+			"method": "namesExactly",
 			"find": "for (i in 0...typed.length) if (typed[i] != listed[i]) return false;",
 			"replace": "",
 			"note": "facts are the truth when they count as many builds as the list, whichever builds those are"
 		},
 		{
 			"name": "M-FACTS-TRUTH-ORDER",
-			"type": "anyparse.query.MemberReach",
-			"method": "factsAreTruth",
+			"type": "anyparse.query.FactsView",
+			"method": "namesExactly",
 			"find": [
 				"typed.sort(Reflect.compare);",
 				"listed.sort(Reflect.compare);"
@@ -6845,6 +6845,14 @@
 				""
 			],
 			"note": "(precision) the facts must name the builds in the order the list does, so facts compiled in another order are never the truth"
+		},
+		{
+			"name": "M-FACTS-SOURCE-UNLISTED",
+			"type": "anyparse.query.FactsView",
+			"method": "over",
+			"find": "(scope, configurations) -> of(table, scope, configurations)",
+			"replace": "(scope, configurations) -> of(table, scope)",
+			"note": "(precision) the facts a reach analysis is handed are never the truth, whatever list of builds it runs under"
 		},
 		{
 			"name": "M-FACTS-TRUTH-HAZARDS",
@@ -6938,8 +6946,8 @@
 			"name": "M-FACTS-DEAD-FILE-UNTRUE",
 			"type": "anyparse.query.ReachProject",
 			"method": "runsInNoBuild",
-			"find": "return view != null && view.truth && !view.table.mayCompileNow(file);",
-			"replace": "return view != null && !view.table.mayCompileNow(file);",
+			"find": "return view != null && view.truth && !view.mayCompileNow(file);",
+			"replace": "return view != null && !view.mayCompileNow(file);",
 			"note": "a file the listed builds do not compile runs in no build though the list is not every build, so a touch there is never reached"
 		},
 		{
@@ -7449,15 +7457,15 @@
 			"name": "M-REACH-TEXTLESS-IN-PLAY",
 			"type": "anyparse.query.ReachGraph",
 			"method": "textlessInPlay",
-			"find": "return facts.table.type(id)?.isExtern == true || reflectiveProducers().exists(p -> mentioned(p.name, p.file))",
-			"replace": "return true || facts.table.type(id)?.isExtern == true || reflectiveProducers().exists(p -> mentioned(p.name, p.file))",
+			"find": "return facts.type(id)?.isExtern == true || reflectiveProducers().exists(p -> mentioned(p.name, p.file))",
+			"replace": "return true || facts.type(id)?.isExtern == true || reflectiveProducers().exists(p -> mentioned(p.name, p.file))",
 			"note": "(precision) a type no code the index reads names is taken to be any value of a type not known"
 		},
 		{
 			"name": "M-REACH-MENTIONS-TYPED",
 			"type": "anyparse.query.ReachGraph",
 			"method": "mentions",
-			"find": "if (view != null && view.truth) for (id in view.table.typeIds()) wanted[view.graphType(id)] = true;",
+			"find": "if (view != null && view.truth) for (id in view.typeIds()) wanted[view.graphType(id)] = true;",
 			"replace": "",
 			"note": "a type the index declares nowhere is never in play by its name: what a value of a type not known may be leaves it out"
 		},
@@ -8504,9 +8512,9 @@
 		},
 		{
 			"name": "M-FACTS-REACH-DROPPED",
-			"type": "anyparse.query.FactsView",
-			"method": "of",
-			"find": "table.dropped.length > 0 || ",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "complete",
+			"find": "dropped.length == 0 && ",
 			"replace": "",
 			"note": "a table missing a configuration is read as if it held every build"
 		},
@@ -9995,10 +10003,26 @@
 			"note": "the first of two types the configurations disagree on is answered, so an annotation is right in one build and wrong in the other"
 		},
 		{
+			"name": "M-FACTS-VALUE-FLOWS",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "valueTypesAt",
+			"find": "types.push(f.from);",
+			"replace": "{}",
+			"note": "a value is typed by its own site alone, so a flow out of it at another type no longer disagrees"
+		},
+		{
+			"name": "M-FACTS-ORACLE-RAW-AGREE",
+			"type": "anyparse.check.FactsTypeOracle",
+			"method": "factsTypeAt",
+			"find": "return types.length == 1 ? Typed(types[0]) : Declined(FactsDecline.NoFact);",
+			"replace": "return types.length > 0 ? Typed(types[0]) : Declined(FactsDecline.NoFact);",
+			"note": "the first of the types the facts give a value at its range is its type, though the configurations disagree"
+		},
+		{
 			"name": "M-FACTS-SPELL-UNKNOWN",
 			"type": "anyparse.check.FactsTypeSpelling",
 			"method": "type",
-			"find": "case Unknown: fail(FactsTypeOracle.DECLINE_UNKNOWN);",
+			"find": "case Unknown: fail(FactsDecline.Unbound);",
 			"replace": "case Unknown: 'Dynamic';",
 			"note": "an unbound monomorph is spelled Dynamic, so a type the compiler never pinned is written as one"
 		},
@@ -10013,7 +10037,7 @@
 			"name": "M-FACTS-SPELL-IMPL",
 			"type": "anyparse.check.FactsTypeSpelling",
 			"method": "nominal",
-			"find": "if (name == 'Abstract' || name.indexOf('_Impl_') >= 0) return fail(FactsTypeOracle.DECLINE_UNSPELLABLE);",
+			"find": "if (name == 'Abstract' || name.indexOf('_Impl_') >= 0) return fail(FactsDecline.Unspellable);",
 			"replace": "",
 			"note": "an abstract's statics and implementation class are spelled like any path, which no source can write"
 		},
@@ -10090,7 +10114,7 @@
 			"name": "M-FACTS-DYNAMIC-SOURCE",
 			"type": "anyparse.check.FactsTypeOracle",
 			"method": "localType",
-			"find": "return Declined(DECLINE_DYNAMIC_SOURCE);",
+			"find": "return Declined(FactsDecline.DynamicSource);",
 			"replace": "{}",
 			"note": "a local a Dynamic value initializes is annotated with the structure its uses bound, which the value need not have"
 		},
@@ -10233,18 +10257,18 @@
 		},
 		{
 			"name": "M-UNUSED-PRIVATE-CHAIN-DECLARED",
-			"type": "anyparse.check.UnusedPrivate",
-			"method": "supertypeDecline",
-			"find": "if (declared == null || declared.fields.exists(f -> f.name == name)) return DECLINE_ABSTRACT_IMPL;",
-			"replace": "if (declared == null) return DECLINE_ABSTRACT_IMPL;",
+			"type": "anyparse.check.FactsTypeOracle",
+			"method": "inheritedMember",
+			"find": "if (declared.fields.exists(f -> f.name == name)) return Declared(sup);",
+			"replace": "",
 			"note": "a member a supertype declares, an abstract one's implementation among them, is deleted"
 		},
 		{
 			"name": "M-UNUSED-PRIVATE-CHAIN-AUTOBUILD",
-			"type": "anyparse.check.UnusedPrivate",
-			"method": "supertypeDecline",
-			"find": "if (declared.meta.contains(AUTO_BUILD_META))",
-			"replace": "if (false)",
+			"type": "anyparse.check.FactsTypeOracle",
+			"method": "inheritedMember",
+			"find": "if (declared.meta.contains(AUTO_BUILD_META)) return AutoBuilt(sup);",
+			"replace": "",
 			"note": "a member of a class a supertype's `@:autoBuild` builds is deleted"
 		},
 		{
@@ -10376,17 +10400,17 @@
 			"name": "M-PSE-FACTS-TEXT",
 			"type": "anyparse.check.StaticExtensionFacts",
 			"method": "judge",
-			"find": " || facts.sourceOf(facts.keyOf(file)) != source)",
-			"replace": ")",
+			"find": "if (!oracle.readsAsCompiled(file)) return Unproven;",
+			"replace": "",
 			"note": "facts of the text the compile read answer for a file edited since"
 		},
 		{
 			"name": "M-PSE-FIRST-PARAM",
 			"type": "anyparse.check.StaticExtensionFacts",
 			"method": "firstParamOf",
-			"find": "c == '>'.code && signature.fastCodeAt(i - 1) != '-'.code",
-			"replace": "c == '>'.code",
-			"note": "the arrow of a function-typed parameter closes a bracket"
+			"find": "case Function(args, _) if (args.length > 0 && !args[0].optional): FactsTypeTree.text(args[0].type);",
+			"replace": "case Function(args, _) if (args.length > 0 && !args[0].optional): FactsTypeTree.text(args[args.length - 1].type);",
+			"note": "the last parameter of a facts signature is read as its first"
 		},
 		{
 			"name": "M-PSE-CHANNEL-ALIAS",
@@ -12836,7 +12860,7 @@
 			"name": "M-GRAPH-REFLECT-SUBTYPES",
 			"type": "anyparse.query.ReachGraph",
 			"method": "reflectedMembers",
-			"find": "for (sub in facts.table.subtypesOf(id)) note(sub);",
+			"find": "for (sub in facts.subtypesOf(id)) note(sub);",
 			"replace": "",
 			"note": "an object reflection acts on is never an instance of a subtype of its type"
 		},
@@ -12844,7 +12868,7 @@
 			"name": "M-GRAPH-REFLECT-SUPERTYPES",
 			"type": "anyparse.query.ReachGraph",
 			"method": "reflectedMembers",
-			"find": "for (id in objects) for (sup in facts.table.supertypesOf(id)) note(sup);",
+			"find": "for (id in objects) for (sup in facts.supertypesOf(id)) note(sup);",
 			"replace": "",
 			"note": "an object reflection acts on carries no member its type inherits"
 		},
@@ -13153,8 +13177,8 @@
 			"name": "M-REFLECTIVE-REACH",
 			"type": "anyparse.query.MemberReach",
 			"method": "configuredFor",
-			"find": "host.compilerFacts(), compiled.reflectiveClasses",
-			"replace": "host.compilerFacts(), null",
+			"find": "FactsView.over(host.compilerFacts()), compiled.reflectiveClasses",
+			"replace": "FactsView.over(host.compilerFacts()), null",
 			"note": "the analysis under the builds drops the declared `reflectiveClasses`"
 		},
 		{
@@ -13855,7 +13879,7 @@
 			"name": "M-REFLECTED-HOLDERS-INHERITED",
 			"type": "anyparse.query.ReachGraph",
 			"method": "reflectedMembers",
-			"find": "for (id in held) for (sup in facts.table.supertypesOf(id)) if (!owners.contains(sup)) owners.push(sup);",
+			"find": "for (id in held) for (sup in facts.supertypesOf(id)) if (!owners.contains(sup)) owners.push(sup);",
 			"replace": "",
 			"note": "an object of a declared class runs only the methods its own class declares, none it inherits"
 		},
@@ -14676,8 +14700,8 @@
 			"name": "M-GUARDED-OVERRIDES",
 			"type": "anyparse.query.NullGuardedCode",
 			"method": "neverCalled",
-			"find": "if (call.access != STATIC_ACCESS) for (sub in table.subtypesOf(owner)) {",
-			"replace": "if (false) for (sub in table.subtypesOf(owner)) {",
+			"find": "if (call.access != STATIC_ACCESS) for (sub in _view.subtypesOf(owner)) {",
+			"replace": "if (false) for (sub in _view.subtypesOf(owner)) {",
 			"note": "(soundness) a function value handed to an instance method runs only its declared body, not an override"
 		},
 		{
@@ -17859,8 +17883,8 @@
 			"name": "M-TS-FACTS-IGNORED",
 			"type": "anyparse.check.ThreadGraph",
 			"method": "build",
-			"find": "if (facts == null) return CallGraph.build(files, plugin);",
-			"replace": "if (facts == null || true) return CallGraph.build(files, plugin);",
+			"find": "FactsView.ofRun(plugin, new ReachProject(plugin, index, files))",
+			"replace": "null",
 			"note": "thread-safety builds its graph from syntax alone with compiler facts at hand"
 		},
 		{
@@ -17875,8 +17899,8 @@
 			"name": "M-TS-FACTS-GATE",
 			"type": "anyparse.check.ThreadGraph",
 			"method": "build",
-			"find": "final host: Null<SymbolIndexHost> = useFacts && plugin is SymbolIndexHost ? cast plugin : null;",
-			"replace": "final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;",
+			"find": "if (!useFacts) return CallGraph.build(files, plugin);",
+			"replace": "",
 			"note": "thread-safety reads compiler facts the project never asked for"
 		},
 		{

@@ -2855,6 +2855,27 @@ decided the question; it may not become a record of runs.
   (the index-less refusal `lint --fix` never reaches) stay on the old call, commented; so does
   `ThreadSafetyCheckTest.testNoFindingInAFileWhoseChainWritesNoOption`, whose arm M-TS-REPORT-UNGATED survived through
   the fixture — `Linter.runGated` re-applies the rule's own `GraphScoped` report gate — branch `feat/infra-B8`
+- the compiler's facts were said to be read by three parallel readers, `FactsView`, `FactsTypeOracle` and
+  `TypedFactsWalk` → `TypedFactsWalk` is the macro-time WRITER of the dump and never sees the table; `TypedFactsProbe`
+  builds the table. The layer has two reading doors over one table, by the question asked: `FactsView` reads the facts
+  against the project (a `ReachProject`: the reach analyses, thread-safety's graph), `FactsTypeOracle` reads them placed
+  in a file's text now (the journal, the member holding a range) and is the `TypeOracle` a structural rule asks
+  (`forFix`). Every other class naming `CompilerFacts` is a part of the layer answering from the facts alone
+  (`ArgumentUses`, `UncheckedConversions`, `StaticExtensionFacts`, …) or the producer and host; a rule or an analysis
+  asks a door (`ownedTypes`). `FactsView.table` is private, granted to the layer's parts by `@:allow` — branch
+  `feat/infra-B5`
+- the rule-level readers kept copies of the doors' readings: the "every configuration contributed" gate three times
+  (`FactsView.of`, `FactsTypeOracle.runFacts`, `StaticExtensionFacts.judge`), "the facts hold every build" in
+  `MemberReach.factsAreTruth`, the agreed type of an expression at a range twice (`FactsTypeOracle.typedAt`,
+  `StaticExtensionFacts.receiverType`), a facts signature's parts by a hand-rolled bracket scan twice
+  (`FactsTypeOracle.resultOf`, `StaticExtensionFacts.firstParamOf`), a supertype chain's member by a scan of every typed
+  id (`UnusedPrivate.supertypeDecline`) → one each: `CompilerFacts.complete`, `FactsView.of(table, scope,
+  configurations)` (the truth is the view's to decide), `CompilerFacts.valueTypesAt`, `FactsTypeTree`,
+  `FactsTypeOracle.inheritedMember`. The static-extension proof now places its receiver as the oracle places any
+  expression (`factsTypeAt`): a range after an escape in a string, or one the facts hold in another member or type than
+  the file does now (a module-level function's, which the oracle does not place yet), declines instead of being read
+  raw, and a value only a flow types is typed. No finding of the oracle-assisted run on TM changed — branch
+  `feat/infra-B5`
 - a fix asked with no index was pinned as a rule's behaviour (148 inline `check.fix(src, vs, plugin)` sites, the
   multi-file ones among them) → no production path passes none: `LintFixDriver` and `FixVerifier` both hand the
   report index (`fixGrouped` / `fixCarrying` too), so every site now goes through `CheckFixture` (`fixOf` / `fixIn`

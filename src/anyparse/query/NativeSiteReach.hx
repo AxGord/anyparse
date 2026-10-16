@@ -37,7 +37,7 @@ final class NativeSiteReach {
 	private final _view: FactsView;
 
 	public function new(view: FactsView) {
-		_native = new FactsNativeReach(view.table);
+		_native = view.nativeReach();
 		_view = view;
 	}
 
