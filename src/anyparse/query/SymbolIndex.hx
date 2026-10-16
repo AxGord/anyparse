@@ -538,6 +538,13 @@ typedef FileInfo = {
 	 * `hasAccessGrant`, the second gate of a cross-file-safe private-member rename.
 	 */
 	var accessGrants: Array<String>;
+
+	/**
+	 * The names of the module's module-level value declarations (`RefShape.moduleValueDeclKinds`: a function, a `var`, a
+	 * `final`), a conditional region's included — what a bare name in the module means before any static an import brings
+	 * in under it (`ValueNameBinding.importedStatics`).
+	 */
+	var moduleFields: Array<String>;
 }
 
 /**
@@ -629,6 +636,9 @@ final class SymbolIndex {
 	/** The type-TRAIT layer: `@:rtti`, build-macro and abstract-`this`-rebinding closures. */
 	public final traits: TypeTraits;
 
+	/** The VALUE-NAME layer: what a bare value name means at module level — a module field, or the statics imports bind. */
+	public final values: ValueNameBinding;
+
 	private final _files: Array<FileInfo>;
 	private final _skipped: Array<String>;
 
@@ -671,6 +681,7 @@ final class SymbolIndex {
 		paths = new MemberPathWalk(files, refs, members, plugin.typeSyntax);
 		text = new RawSourceScan(files, skipped, sources, plugin, thirdParty);
 		traits = new TypeTraits(files, sources, refs);
+		values = new ValueNameBinding(refs, plugin.refShape().execution?.enumConstructorKinds ?? []);
 	}
 
 	/**

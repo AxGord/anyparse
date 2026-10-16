@@ -12,8 +12,10 @@ using Lambda;
  * files the graph holds (a resolution index covering libraries): the supertype and subtype tables, the
  * superclass apart from the interfaces, each type's static members and member records, the type
  * parameters and typedef targets a receiver must see through, and which member names are properties with
- * an accessor somewhere. Simple type names, like the graph itself: every table UNIONS the declarations of a
- * name, and `declarationCount` tells a consumer when a name is ambiguous. A member name declared more than once —
+ * an accessor somewhere. Keyed like the graph itself (`CallGraphImports.typeOf`): a declaration by its simple name — the
+ * declarations of a name UNION into its tables, as namesakes fold into one graph node, and `declarationCount` tells a
+ * consumer when a name is ambiguous — while each supertype a declaration writes is the type its own file binds the name to,
+ * so a library type a project type's simple name bears is a supertype of its own. A member name declared more than once —
  * once per branch of a conditional region, an overload, by two types of one name — has ONE record joining them
  * (`joined`): what either declaration says runs code, runs; a type they spell differently is none.
  */
@@ -59,14 +61,14 @@ final class CallGraphTypes {
 	/** Every member name an indexed type declares as a FUNCTION. */
 	private final _functionNames: Map<String, Bool> = [];
 
-	/** The files whose declarations the tables hold. */
-	private final _files: Map<String, Bool> = [];
+	/** The files whose declarations the tables hold, each with the index entry it was read from. */
+	private final _files: Map<String, HeldFile> = [];
 
 	/** What each type's modifiers and metadata say: extern, built by a macro, constructed from a literal, forwarding. */
 	public final meta: TypeMetaFacts;
 
 	/** The type parameters each type declares, and the arguments its supertypes are given. */
-	public final generics: TypeParamTable = new TypeParamTable();
+	public final generics: CallGraphGenerics = new CallGraphGenerics();
 
 	/** The grammar's FIELD declaration kinds — a member of one of those, called, invokes the function value it holds. */
 	private final _fieldKinds: Array<String>;
@@ -89,10 +91,7 @@ final class CallGraphTypes {
 		_valueTypeNames = [for (t in (shape.literalTypeNames ?? []).iterator()) t].concat(shape.nonNullableTypeNames ?? [])
 			.concat(shape.arrayTypeNames ?? []);
 		_aliasingKinds = shape.aliasingDeclKinds ?? [];
-		imports = new CallGraphImports(
-			shape.execution?.enumConstructorKinds ?? [], isStatic,
-			type -> declarationCount(type) == 0 || meta.isExtern(type) || firstOnChain(type, t -> meta.isBuilt(t)) != null
-		);
+		imports = new CallGraphImports(shape.execution?.enumConstructorKinds ?? [], isStatic, heldFile);
 		if (index != null) merge(index);
 	}
 
@@ -116,10 +115,11 @@ final class CallGraphTypes {
 		return _declarations[typeName] ?? 0;
 	}
 
-	/** Whether the tables hold the declarations of `file`. */
-	public inline function holdsFile(file: String): Bool {
-		return _files.exists(CallGraphNames.normalizePath(file));
+	/** The index entry the tables took `file`'s declarations from, null for a file they do not hold. */
+	public inline function heldFile(file: String): Null<HeldFile> {
+		return _files[CallGraphNames.normalizePath(file)];
 	}
+
 
 	/** Whether any indexed type declares a STATIC function named `name`. */
 	public inline function hasStaticFunctionNamed(name: String): Bool {
@@ -170,13 +170,17 @@ final class CallGraphTypes {
 	 * the index it was built with still learns the types of the files it adds.
 	 */
 	public function merge(index: SymbolIndex): Void {
+		final added: Array<{ info: FileInfo, key: String }> = [];
 		for (fi in index.allFiles()) {
 			final key: String = CallGraphNames.normalizePath(fi.file);
 			if (_files.exists(key)) continue;
-			_files[key] = true;
-			for (t in fi.types) record(t, key);
+			final held: HeldFile = { index: index, info: fi };
+			_files[key] = held;
 			imports.recordFile(fi, key);
+			added.push({ info: fi, key: key });
 		}
+		// a supertype is keyed where its declaration writes it, which reads the paths every file of the index declares
+		for (a in added) for (t in a.info.types) record(t, a.key);
 		// `class R extends N` with `typedef N = T` names `N` alone: `R` is a subtype of `T` too
 		for (alias in _aliases.keys()) if (resolveAlias(alias) != alias) unionInto(_subs, resolveAlias(alias), subtypesOf(alias));
 	}
@@ -275,9 +279,14 @@ final class CallGraphTypes {
 		meta.record(t, file);
 		if (t.isAnonStruct) _anonStructs[t.name] = true;
 		unionInto(_kinds, t.name, [t.kind]);
-		unionInto(_supers, t.name, t.supertypes);
+		// each supertype as the declaration's own file binds the name it writes (`CallGraphImports.typeOf`): a library type a
+		// project type's simple name bears is another type, never the project's
+		final supers: Array<String> = [for (raw in t.supertypesRaw) imports.typeOf(file, raw)];
+		unionInto(_supers, t.name, supers);
 		generics.record(t, file);
-		unionInto(_interfaces, t.name, t.interfaces);
+		unionInto(_interfaces, t.name, [
+			for (i => raw in t.supertypesRaw) if (t.interfaces.contains(SourceText.lastSegment(raw))) supers[i]
+		]);
 		final target: Null<String> = t.aliasTargetNominal;
 		final path: Null<String> = t.aliasTargetRaw;
 		if (target != null && target != t.name) {
@@ -285,7 +294,7 @@ final class CallGraphTypes {
 			if (path != null && !written.exists(w -> w.path == path && w.file == file)) written.push({ path: path, file: file });
 			_aliases[t.name] = { simple: target, written: written };
 		}
-		for (s in t.supertypes) unionInto(_subs, s, [t.name]);
+		for (s in supers) unionInto(_subs, s, [t.name]);
 		recordMembers(t);
 	}
 
@@ -374,4 +383,10 @@ final class CallGraphTypes {
 		map[key] = list;
 	}
 
+}
+
+/** A file a `CallGraphTypes` holds: the index entry its declarations were read from, and the index answering its names. */
+typedef HeldFile = {
+	final index: SymbolIndex;
+	final info: FileInfo;
 }

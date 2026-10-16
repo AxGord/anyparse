@@ -104,7 +104,7 @@ final class ThrowReach {
 	 */
 	private inline function intercepts(node: QueryNode): Bool {
 		return _tryKinds.contains(node.kind)
-			&& node.children.exists(k -> k.kind == _catchKind && CatchTypes.catches(k, null, _shape, _graph.types))
+			&& node.children.exists(k -> k.kind == _catchKind && CatchTypes.catches(k, null, _shape, _graph.index))
 			&& !node.children.exists(rethrows);
 	}
 

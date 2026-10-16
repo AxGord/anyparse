@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.CallGraph.FnDeclaration;
 import anyparse.query.CallGraph.FnNode;
+import anyparse.query.CallGraphTypes.HeldFile;
 import anyparse.query.CompilerFacts.ArgumentFact;
 import anyparse.query.CompilerFacts.ExpansionFact;
 import anyparse.query.CompilerFacts.FactNode;
@@ -17,6 +18,8 @@ import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.ValueCarriers.CarryRelation;
+import anyparse.query.ValueNameBinding.FieldAlias;
+import anyparse.query.ValueNameBinding.ImportedStatic;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -344,18 +347,20 @@ final class MemberTouchScan {
 	}
 
 	/**
-	 * The names the imports of `file` give the static `name` of `declaring` besides its own (`CallGraphImports.fieldAliases`):
+	 * The names the imports of `file` give the static `name` of `declaring` besides its own (`ValueNameBinding.fieldAliases`):
 	 * every alias but one whose path names a type proven not to be `declaring` — one declared once, declaring `name` itself.
 	 * An alias whose path did not decode may name any static.
 	 */
 	private static function aliasesIn(g: CallGraph, file: String, name: String, declaring: String): Array<String> {
+		final held: Null<HeldFile> = g.types.heldFile(file);
+		final aliases: Array<FieldAlias> = held == null ? [] : held.index.values.fieldAliases(held.info);
 		final out: Array<String> = [];
-		for (a in g.types.imports.fieldAliases(file)) {
-			final owner: Null<String> = a.owner;
-			final member: Null<String> = a.member;
-			final other: Bool = (member != null && member != name) || (
-				owner != null && owner != declaring && g.types.declarationCount(owner) == 1 && g.types.declaringTypeOf(owner, name) == owner
-			);
+		for (a in aliases) {
+			final target: Null<ImportedStatic> = a.target;
+			// a static of a type declared once, which declares `name` itself, is provably not `declaring`'s
+			final other: Bool = target != null
+				&& (target.member != name || target.owner != declaring && target.decls.length == 1
+					&& target.decls[0].type.members.exists(m -> m.name == name));
 			if (!other && a.alias != name && !out.contains(a.alias)) out.push(a.alias);
 		}
 		return out;

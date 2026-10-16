@@ -2,17 +2,18 @@ package anyparse.query;
 
 import anyparse.query.CallGraph.FnDeclaration;
 import anyparse.query.CallGraph.FnNode;
-import anyparse.query.CallGraphImports.ImportedName;
 import anyparse.query.CallGraphImports.WrittenIn;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
+import anyparse.query.ValueNameBinding.ImportedStatics;
 import anyparse.runtime.Span;
 
 using Lambda;
 using StringTools;
 
 /**
- * The types one file writes, spelled as a `CallGraph` keys them (`CallGraphImports.typeOf`): a name an import or an
+ * The types one file writes, spelled as a `CallGraph` keys them (`CallGraphImports.typeOf`),
+ * each written by the path of the type it binds to (`writtenAs`): a name an import or an
  * alias of the file binds, or a dotted path, is the type it names — a library type never merges into a project type
  * of its simple name — and an unannotated local initialised by a `new` holds the type it makes. The declared types a
  * `TypeInfoProvider` reads by simple name, re-keyed. A type another file declares is keyed through THAT file's imports (`keyedIn`,
@@ -52,7 +53,7 @@ final class CallGraphKeys {
 
 	/**
 	 * The keys of the declarations `provider` reads in `source`, the text of `file` (none without a provider), `tree` its
-	 * tree: a name a type parameter in scope at the declaration (`TypeParamTable.inScopeAt`, the functions among
+	 * tree: a name a type parameter in scope at the declaration (`CallGraphGenerics.inScopeAt`, the functions among
 	 * `functionKinds`) shadows every import and stays as written.
 	 */
 	public function new(
@@ -138,14 +139,14 @@ final class CallGraphKeys {
 	}
 
 	/**
-	 * The type parameters in scope at the offset `at` of the file (`TypeParamTable.inScopeAt`), asked only when `written`
+	 * The type parameters in scope at the offset `at` of the file (`CallGraphGenerics.inScopeAt`), asked only when `written`
 	 * mentions a name some declaration of the file declares as one.
 	 */
 	private function unkeyedAt(at: Int, written: String): Array<String> {
 		final tree: Null<QueryNode> = _tree;
 		return tree == null || !CallGraphNames.mentionsTypeName(written, _paramNames, _typeSyntax)
 			? []
-			: TypeParamTable.inScopeAt(tree, at, _typeParams, _functionKinds);
+			: CallGraphGenerics.inScopeAt(tree, at, _typeParams, _functionKinds);
 	}
 
 	/**
@@ -166,10 +167,10 @@ final class CallGraphKeys {
 			final from: Int = d.span.from;
 			switch d.shape {
 				case Nominal(path, _) if (from >= at && typeSource.substr(from, path.length) == path && !(unkeyed ?? []).contains(path)):
-					final key: String = imports.typeOf(file, path);
-					if (key != path) {
+					final spelled: String = imports.writtenAs(file, path);
+					if (spelled != path) {
 						out.add(typeSource.substring(at, from));
-						out.add(key);
+						out.add(spelled);
 						at = from + path.length;
 					}
 				case _:
@@ -370,15 +371,16 @@ final class CallGraphKeys {
 	}
 
 	/**
-	 * The one static the imports of `file` bind the unbound `name` to, read where nothing nearer binds it: neither the
-	 * functions of its module `moduleType` nor `currentType`'s chain — which the index must hold whole — declares it. Null
-	 * when the imports bind none, more than one, or may bind one a wildcard type whose statics the index cannot list supplies.
+	 * The one static of `imported` — what the module and the imports of the file supply
+	 * under the unbound `name` (`ValueNameBinding.importedStatics`) —, read where nothing
+	 * nearer binds it: `currentType`'s chain — which the index must hold whole — declares it nowhere but as a supertype's
+	 * static, which a bare name does not see. Null when the module itself declares the name, or the imports bind none, more
+	 * than one, or may bind one the index cannot list.
 	 */
 	public static function importedStatic(
-		g: CallGraph, file: String, moduleType: String, name: String, currentType: Null<String>
+		g: CallGraph, imported: ImportedStatics, name: String, currentType: Null<String>
 	): Null<{ owner: String, member: String }> {
 		final types: CallGraphTypes = g.types;
-		if (declaredOn(g, moduleType, name) != null) return null;
 		if (
 			currentType != null && (
 				!types.chainFullyIndexed(currentType) || types.declaringTypeOf(currentType, name) != null
@@ -386,8 +388,8 @@ final class CallGraphKeys {
 			)
 		)
 			return null;
-		final imported: ImportedName = types.imports.importedStatics(file, name);
-		return imported.unknown || imported.statics.length != 1 ? null : imported.statics[0];
+		if (imported.unknown || imported.statics.length != 1) return null;
+		return { owner: imported.statics[0].owner, member: imported.statics[0].member };
 	}
 
 	/**

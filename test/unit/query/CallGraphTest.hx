@@ -1177,7 +1177,7 @@ class CallGraphTest extends Test {
 		Assert.same(['Lock.wait', 'sys.thread.Lock.wait'], waits('C.call'), 'a return');
 		final typeSyntax: anyparse.query.TypeSyntax.TypeSyntaxReader = new anyparse.grammar.haxe.HaxeQueryPlugin().typeSyntax;
 		Assert.isNull(
-			anyparse.query.CallGraphKeys.keyedInFiles(g.types.imports, typeSyntax, ['F1.hx', 'F2.hx'], 'Lock'),
+			anyparse.query.CallGraphKeys.keyedInFiles(g.types.imports, typeSyntax, ['app/Hold.hx', 'cp2/app/Hold.hx'], 'Lock'),
 			'a reader needing one type has none'
 		);
 		#else
@@ -1501,7 +1501,7 @@ class CallGraphTest extends Test {
 	 * name spells only where it is that one — a project `List<T>` an import or the module itself binds is another type, whose
 	 * element its own `iterator()` says, and a project `Vector<T>` indexed is no std vector; the std types stay typed.
 	 */
-	@:pin('control') @:killer('M-TS-STD-CONTAINER') @:killer('M-TS-STD-CONTAINER-DECLARED') @:killer('M-TS-STD-CONTAINER-WHERE')
+	@:pin('control') @:killer('M-TS-STD-CONTAINER') @:killer('M-TS-STD-CONTAINER-WHERE')
 	@:killer('M-TS-STD-CONTAINER-GUARDED') @:killer('M-TS-STD-CONTAINER-STD-OWN')
 	public function testAContainerIsTheStandardOneOnlyWhereItsNameMeansIt(): Void {
 		#if (sys || nodejs)
@@ -1541,7 +1541,10 @@ class CallGraphTest extends Test {
 			}
 		];
 		final std: Array<{ file: String, source: String }> = [
-			{ file: 'std/Array.hx', source: 'extern class Array<T> { public function new(); public function push(x:T):Int; }' }
+			{
+				file: QueryTestHelpers.stdPath('Array.hx'),
+				source: 'extern class Array<T> { public function new(); public function push(x:T):Int; }'
+			}
 		];
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final indexed: CallGraph = CallGraph.build(project, plugin, SymbolIndex.build(project.concat(std), plugin));

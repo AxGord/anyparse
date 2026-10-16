@@ -2,11 +2,10 @@ package anyparse.check;
 
 import anyparse.check.HeldTrees.HeldDecl;
 import anyparse.query.CallGraph;
-import anyparse.query.CallGraphTypes;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
-import anyparse.query.SymbolIndex.MemberInfo;
+import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -77,9 +76,9 @@ final class ExhaustiveSwitches {
 		_typeKinds = _shape.typeAnnotationKinds ?? [];
 	}
 
-	/** The type tables of the graph this reads: what a `catch` clause's written type is checked against (`CatchTypes`). */
-	public inline function types(): CallGraphTypes {
-		return _graph.types;
+	/** The index the graph this reads was built over: what a `catch` clause's written type is checked against (`CatchTypes`). */
+	public inline function index(): Null<SymbolIndex> {
+		return _graph.index;
 	}
 
 	/**

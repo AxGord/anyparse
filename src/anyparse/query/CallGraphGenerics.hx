@@ -12,7 +12,7 @@ using Lambda;
  * parameter as the type a particular value holds.
  */
 @:nullSafety(Strict)
-final class TypeParamTable {
+final class CallGraphGenerics {
 
 	/** Type name -> the type parameters its declarations declare. */
 	private final _typeParams: Map<String, Array<String>> = [];

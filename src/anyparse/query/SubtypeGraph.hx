@@ -387,6 +387,28 @@ final class SubtypeGraph {
 	}
 
 	/**
+	 * `typeName` and every name its declarations' supertypes name, transitively, each once in breadth-first order — the
+	 * upward closure over `supertypeNameUnion`, name-keyed like it: read as "may be a supertype".
+	 */
+	public function supertypeNamesClosure(typeName: String): Array<String> {
+		final union: Map<String, Array<String>> = supertypeNameUnion();
+		final out: Array<String> = [typeName];
+		var i: Int = 0;
+		while (i < out.length) for (s in union[out[i++]] ?? []) if (!out.contains(s)) out.push(s);
+		return out;
+	}
+
+	/**
+	 * `owner` and every type in its transitive SUBTYPE closure (`subtypeNames`), each once, `owner` first — read as "may be
+	 * a subtype or the type itself".
+	 */
+	public function subtypeNamesClosure(owner: String): Array<String> {
+		final out: Array<String> = [owner];
+		for (s in subtypeNames(owner)) if (!out.contains(s)) out.push(s);
+		return out;
+	}
+
+	/**
 	 * Whether EVERY supertype reference of `typeName`, transitively, names a declaration this
 	 * index holds. `supertypeDeclaresMember` answers `false` both when no ancestor declares the
 	 * member and when an ancestor is not indexed at all, and only the FIRST reading is a proof —

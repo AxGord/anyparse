@@ -334,6 +334,89 @@ class TypeNameBindingTest extends Test {
 		};
 	}
 
+	/**
+	 * What a caller dispatching on every build's type asks (`bindingsOf`): the binding the order reads, then the types a
+	 * `#if`-guarded statement binds on its builds and a wildcard the order cannot list may supply. A module nothing reads
+	 * binds only the type its import names, never every name written beside it.
+	 */
+	@:pin('control')
+	@:killer('M-TS-GUARDED-IMPORT') @:killer('M-TS-WILD-MAYBE') @:killer('M-BINDINGS-UNREADABLE-SUBTYPE') @:killer('M-TS-WILD-GUARDED')
+	public function testBindingsListEveryBuildsType(): Void {
+		final index: SymbolIndex = indexOf([
+			'a/X.hx' => 'package a;\n\nclass X {}\n',
+			'b/X.hx' => 'package b;\n\nclass X {}\n',
+			'Guarded.hx' => '#if foo\nimport b.X;\n#end\nimport a.*;\n\nclass Guarded {}\n',
+			'GuardedWild.hx' => 'import a.*;\n#if foo\nimport b.*;\n#end\n\nclass GuardedWild {}\n',
+			'Wild.hx' => 'import lib.*;\n\nclass Wild {}\n',
+			'Unread.hx' => 'import lib.Mod;\n\nclass Unread {}\n'
+		]);
+		Assert.equals('a/X.hx#X|b/X.hx#X|', targetsText(index, 'X', 'Guarded.hx'), 'the wildcard binds, the guarded import on its builds');
+		Assert.equals(
+			'a/X.hx#X|b/X.hx#X|', targetsText(index, 'X', 'GuardedWild.hx'), 'a guarded wildcard asked first binds on its builds'
+		);
+		Assert.equals('-||lib.Y', targetsText(index, 'Y', 'Wild.hx'), 'a wildcard nothing lists may supply the name');
+		Assert.equals('lib.Mod||', targetsText(index, 'Mod', 'Unread.hx'), 'an unread module binds the type its import names');
+		Assert.equals('-||', targetsText(index, 'Other', 'Unread.hx'), 'and no other name written beside it');
+	}
+
+	/**
+	 * The package tier of `bindingsOf` reads the std core's modules beside the index's, package by package, nearest first
+	 * (4.3.7: a project file in `sys.thread` sees the std `Lock`, before a project `Lock` of an enclosing package).
+	 */
+	@:pin('control') @:killer('M-TS-PACKAGE-PROJECT-FIRST')
+	public function testThePackageTierReadsTheStdCoresModulesPackageByPackage(): Void {
+		if (StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final index: SymbolIndex = indexOf([
+			'sys/thread/W.hx' => 'package sys.thread;\n\nclass W {}\n',
+			'sys/Lock.hx' => 'package sys;\n\nclass Lock {}\n',
+			'sys/thread/deep/V.hx' => 'package sys.thread.deep;\n\nclass V {}\n',
+			'sys/thread/deep/Lock.hx' => 'package sys.thread.deep;\n\nclass Lock {}\n'
+		]);
+		Assert.equals(
+			'sys.thread.Lock||', targetsText(index, 'Lock', 'sys/thread/W.hx'),
+			'the std module of the file\'s own package, before a project one of an enclosing package'
+		);
+		Assert.equals(
+			'sys/thread/deep/Lock.hx#Lock||', targetsText(index, 'Lock', 'sys/thread/deep/V.hx'),
+			'a project module of a nearer package first'
+		);
+	}
+
+	@:pin('control') @:killer('M-BINDINGS-DECLS-AT-SUBTYPE') @:killer('M-CANONICAL-SUBTYPE')
+	public function testADeclarationIsAtItsCanonicalPath(): Void {
+		final index: SymbolIndex = indexOf(['p/Mod.hx' => 'package p;\n\nclass Mod {}\n\nclass Sub {}\n']);
+		function at(path: String): String {
+			return [
+				for (d in index.refs.names.declsAt(path)) '${d.type.name}@${TypeNameBinding.canonicalPath(d)}'
+			].join(' ');
+		}
+		Assert.equals('Mod@p.Mod', at('p.Mod'), 'a main type at its module\'s path');
+		Assert.equals('Sub@p.Mod.Sub', at('p.Mod.Sub'), 'a sub-type at its module\'s path and its own name');
+		Assert.equals('', at('p.Sub'), 'a sub-type is at no package path (4.3.7: `Type not found : p.Sub`)');
+	}
+
+	/** `bindingsOf`'s answer as `bound|guarded|unlisted`, each target a declaration `file#Name` or an outside path. */
+	private static function targetsText(index: SymbolIndex, name: String, from: String): String {
+		final fi: Null<FileInfo> = index.fileInfo(from);
+		if (fi == null) throw new Exception('the fixture must index $from');
+		final found: NameTargets = index.refs.names.bindingsOf(name, fi);
+		function text(t: NameTarget): String {
+			return switch t {
+				case InIndex(decls): [for (d in decls) '${d.file.file}#${d.type.name}'].join(' | ');
+				case OutOfIndex(path): path;
+			};
+		}
+		final bound: Null<NameTarget> = found.bound;
+		return [
+			bound == null ? '-' : text(bound),
+			found.guarded.map(text).join(' '),
+			found.unlisted.map(text).join(' ')
+		].join('|');
+	}
+
 	/** The file declaring the ONE declaration `TypeRefIndex` pins `name` to from `from`, or `unresolved`. */
 	private static function pinned(index: SymbolIndex, name: String, from: String): String {
 		final resolved: Null<ResolvedType> = index.refs.resolveStartType(name, from);

@@ -19,10 +19,17 @@ final class QueryTestHelpers {
 	 * Build a CallGraph over inline sources, one synthetic file per entry.
 	 */
 	public static function graphOf(sources: Array<String>): CallGraph {
-		final files: Array<{ file: String, source: String }> = [
-			for (i in 0...sources.length) { file: 'F$i.hx', source: sources[i] }
-		];
-		return CallGraph.build(files, new HaxeQueryPlugin());
+		return CallGraph.build(rootModules(sources), new HaxeQueryPlugin());
+	}
+
+	/**
+	 * The path of the std's own module file `relative` (`Array.hx`) under the std the run resolves (`StdResolver.stdDir`):
+	 * where a std stub must sit for the index to take it for the std's own declaration (`StdResolver.isStdFile`) — a stub
+	 * anywhere else is a project or library type at a std path, which shadows the std's. Under `std/` with no std found.
+	 */
+	public static function stdPath(relative: String): String {
+		final dir: Null<String> = anyparse.query.StdResolver.stdDir();
+		return dir == null ? 'std/$relative' : haxe.io.Path.join([dir, relative]);
 	}
 
 	/**

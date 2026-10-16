@@ -14,7 +14,6 @@ import anyparse.check.LockTaint.ChainLists;
 import anyparse.check.LongLockExplain.LongLockReport;
 import anyparse.check.LongLockExplain.MainTake;
 import anyparse.query.CallGraph;
-import anyparse.query.CallGraphTypes;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
@@ -628,30 +627,20 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		if (node == null || name == null || type == null || node.isExternal || node.isBodyless || id.indexOf('#') >= 0) return false;
 		final shape: RefShape = plugin.refShape();
 		if (name == (shape.constructorName ?? 'new') || name == ENTRY_POINT || name.startsWith('<')) return false;
-		if (graph.ownMember(type, name) != id || !inheritsNothingNamed(graph, type, name, [])) return false;
+		if (graph.ownMember(type, name) != id || !inheritsNothingNamed(graph, type, name)) return false;
 		if (unresolvedNames.contains(name) || graph.unresolvedAccessesRunning([node]).length > 0) return false;
 		final declarations: Array<FnDeclaration> = graph.declarationsOf(id);
 		return declarations.length > 0 && declarations.foreach(d -> plainMember(graph, plugin, d));
 	}
 
 	/**
-	 * Whether no supertype of `type` may declare `name`: every one the index holds declares none, and every one it does
-	 * not hold is the superclass of a class — whose members the class can only reach by an `override`, which a sealed
-	 * member never carries. An interface the index does not hold may declare anything.
+	 * Whether no supertype of `type` may declare `name` (`MemberLookup.supertypesDeclareNone`, by declaration): every one
+	 * the index resolves declares none, and every one it does not is the superclass of a class — whose members the class can
+	 * only reach by an `override`, which a sealed member never carries. An interface the index does not hold may declare
+	 * anything; a graph with no index proves nothing.
 	 */
-	private static function inheritsNothingNamed(graph: CallGraph, type: String, name: String, seen: Array<String>): Bool {
-		if (seen.contains(type)) return true;
-		seen.push(type);
-		final types: CallGraphTypes = graph.types;
-		final superclass: Null<String> = types.isInterface(type) ? null : types.superclassOf(type);
-		for (s in types.supertypesOf(type)) {
-			if (types.declarationCount(s) == 0) {
-				if (s != superclass) return false;
-				continue;
-			}
-			if (types.declaringTypeOf(s, name) != null || !inheritsNothingNamed(graph, s, name, seen)) return false;
-		}
-		return true;
+	private static inline function inheritsNothingNamed(graph: CallGraph, type: String, name: String): Bool {
+		return graph.index?.members.supertypesDeclareNone(type, name) == true;
 	}
 
 	/** Whether the member declared at `d` carries neither `override` nor any metadata. */

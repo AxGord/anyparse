@@ -4,16 +4,15 @@ import anyparse.check.ReflectiveReach.closure;
 import anyparse.check.ReflectiveReach.holderOf;
 import anyparse.query.BoolExprShape;
 import anyparse.query.CallGraph;
-import anyparse.query.CallGraphImports;
-import anyparse.query.CallGraphKeys;
+import anyparse.query.CallGraphGenerics;
 import anyparse.query.CallGraphNames;
-import anyparse.query.CallGraphTypes;
 import anyparse.query.Glob;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
+import anyparse.query.SourceText;
 import anyparse.query.StringFold.StringFoldSupport;
-import anyparse.query.TypeParamTable;
+import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
@@ -144,11 +143,12 @@ final class ReflectiveValues {
 	public function mayHold(type: String, member: Null<String>): Bool {
 		if (type == member) return true;
 		if (_basic.contains(type) || enumType(type)) return false;
-		final types: CallGraphTypes = _graph.types;
-		if (member == null || !classLike(type) || !classLike(member) && types.declarationCount(member) != 0) return true;
-		if (!classLike(member) && closure([type], types.supertypesOf).exists(t -> types.declarationCount(t) == 0)) return true;
-		final under: Array<String> = closure([member], types.subtypesOf);
-		return closure([type], types.subtypesOf).exists(t -> under.contains(t));
+		final index: Null<SymbolIndex> = _graph.index;
+		if (index == null || member == null) return true;
+		if (!classLike(type) || !classLike(member) && declared(member)) return true;
+		if (!classLike(member) && index.subtypes.supertypeNamesClosure(type).exists(t -> !declared(t))) return true;
+		final under: Array<String> = index.subtypes.subtypeNamesClosure(member);
+		return index.subtypes.subtypeNamesClosure(type).exists(t -> under.contains(t));
 	}
 
 	/**
@@ -158,25 +158,33 @@ final class ReflectiveValues {
 	public function memberTypeOf(field: String): Null<String> {
 		final dot: Int = field.lastIndexOf('.');
 		if (dot <= 0) return null;
-		final types: CallGraphTypes = _graph.types;
-		final member: String = field.substring(dot + 1);
-		final owner: Null<String> = types.declaringTypeOf(field.substring(0, dot), member);
-		if (owner == null) return null;
-		final params: Array<String> = types.generics.typeParamsOf(owner);
-		final written: Null<String> = CallGraphKeys.keyedInFiles(
-			types.imports, _plugin.typeSyntax, types.imports.memberFilesOf(owner, member), types.memberOnChain(owner, member)?.typeSource,
-			params
+		final index: Null<SymbolIndex> = _graph.index;
+		final found: Null<{ member: MemberInfo, host: ResolvedType }> = index?.members.declaringHost(
+			field.substring(0, dot), field.substring(dot + 1)
 		);
-		if (written == null) return null;
+		final written: Null<String> = found?.member.typeSource;
+		if (index == null || found == null || written == null) return null;
+		final params: Array<String> = found.host.type.typeParamNames;
 		final peeled: String = NominalTypes.unwrapNullable(written, _shape.nullableWrapperTypeNames ?? [], _plugin.typeSyntax);
-		final outer: Null<String> = NominalTypes.outerNominalOf(peeled, _plugin.typeSyntax);
-		return outer == null || params.contains(outer) ? null : types.resolveAlias(outer);
+		final path: Null<String> = switch _plugin.typeSyntax(peeled)?.shape {
+			case Nominal(p, _): p;
+			case _: null;
+		};
+		if (path == null || params.contains(path)) return null;
+		// the name read where the member is declared, its file's imports binding it
+		final decl: Null<ResolvedType> = index.refs.resolveTypeRef(path, found.host.file, found.host.type.span.from);
+		return index.refs.aliasedName(decl == null ? SourceText.lastSegment(path) : decl.type.name);
 	}
 
 	/** Whether `type` is a class or an interface the run declares once. */
 	private function classLike(type: String): Bool {
-		final types: CallGraphTypes = _graph.types;
-		return types.declarationCount(type) == 1 && (types.meta.isClass(type) || types.isInterface(type));
+		final index: Null<SymbolIndex> = _graph.index;
+		return index != null && ReflectiveReach.classLike(index, _shape, type);
+	}
+
+	/** Whether the graph's index declares a type of the name `type`. */
+	private function declared(type: String): Bool {
+		return (_graph.index?.refs.declsNamed(type) ?? []).length > 0;
 	}
 
 	/**
@@ -184,8 +192,9 @@ final class ReflectiveValues {
 	 * structure holds any object with its fields, an abstract whatever it wraps.
 	 */
 	private function enumType(type: String): Bool {
-		final types: CallGraphTypes = _graph.types;
-		return types.declarationCount(type) == 1 && types.meta.isEnum(type);
+		final index: Null<SymbolIndex> = _graph.index;
+		final decl: Null<ResolvedType> = index == null ? null : ReflectiveReach.onlyDeclaration(index, type);
+		return decl != null && (_shape.runtimeTaggedTypeKinds ?? []).contains(decl.type.kind);
 	}
 
 	/**
@@ -209,7 +218,7 @@ final class ReflectiveValues {
 
 	/**
 	 * Whether `written`, the type the value `node` of `file` is declared of, names a type parameter in scope at it — the
-	 * enclosing type's or function's (`TypeParamTable.inScopeAt`): whatever it is instantiated with, a lock included, never
+	 * enclosing type's or function's (`CallGraphGenerics.inScopeAt`): whatever it is instantiated with, a lock included, never
 	 * the project type the name may also name.
 	 */
 	private function typeParameter(file: String, node: QueryNode, written: String): Bool {
@@ -219,7 +228,7 @@ final class ReflectiveValues {
 		final at: Null<Int> = node.span?.from;
 		if (outer == null || outer.indexOf('.') >= 0 || tree == null || source == null || at == null) return false;
 		final kinds: Array<String> = (_shape.functionKinds ?? []).concat(_shape.inlineFunctionKinds ?? []);
-		return TypeParamTable.inScopeAt(tree, at, RunScan.typeParamNamesOf(_plugin, source), kinds).contains(outer);
+		return CallGraphGenerics.inScopeAt(tree, at, RunScan.typeParamNamesOf(_plugin, source), kinds).contains(outer);
 	}
 
 	/**
@@ -468,8 +477,10 @@ final class ReflectiveValues {
 		final named: Null<{ type: String, name: String }> = memberOf(id);
 		if (named == null) return args;
 		final type: String = named.type;
-		if (!_graph.types.isStatic(type, named.name) || !FieldWrites.accessKind(callee.kind, _shape) || callee.children.length == 0)
-			return args;
+		final declarations: Array<{ type: TypeDeclInfo, member: MemberInfo }> =
+			_graph.index?.members.memberDeclarationsOf(type, named.name) ?? [];
+		final isStatic: Bool = declarations.length > 0 && declarations.foreach(d -> d.member.isStatic);
+		if (!isStatic || !FieldWrites.accessKind(callee.kind, _shape) || callee.children.length == 0) return args;
 		final receiver: Null<String> = callee.children[0].name;
 		if (receiver == CallGraphNames.lastSegments(type, 1)) return args;
 		return receiver != null && CallGraphNames.isTypeLike(receiver) ? null : [callee.children[0]].concat(args);
@@ -523,9 +534,9 @@ final class ReflectiveValues {
 		if (holders == null) return true;
 		final globs: Array<String> = holders;
 		if (literals().contains(name)) return true;
-		final imports: CallGraphImports = graph.types.imports;
-		return closure([type], graph.types.subtypesOf).exists(t -> {
-			final paths: Array<String> = imports.declaredPathsOf(t);
+		final subtypes: Array<String> = graph.index?.subtypes.subtypeNamesClosure(type) ?? [type];
+		return subtypes.exists(t -> {
+			final paths: Array<String> = graph.declaredPathsOf(t);
 			paths.length == 0 || paths.exists(p -> globs.exists(g -> Glob.qualifiedNames(g).match(p)));
 		});
 	}

@@ -1,8 +1,8 @@
 package anyparse.check;
 
-import anyparse.query.CallGraphTypes;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
+import anyparse.query.SymbolIndex;
 
 using Lambda;
 
@@ -10,8 +10,9 @@ using Lambda;
  * Whether a `catch` clause PROVABLY catches what a `throw` raises — a positive answer, so a clause that may not is taken
  * to let the exception through. A clause catches everything when its variable is untyped or written as a catch-all
  * type (`RefShape.catchAllTypeNames`, or the language's exception type `RefShape.exceptionTypePath`, by its path or, with no project
- * type of that simple name — or no `types` to ask — by its simple name). A typed clause catches a thrown value of a known type: the
- * same written type, or a supertype of it by the index's type chain, both names declared once. A thrown value of no
+ * type of that simple name — or no `index` to ask — by its simple name). A typed clause catches a thrown value of a known type: the
+ * same written type, or a supertype of it by the index's type chain
+ * (`SubtypeGraph.isSubtype`), both names declared once. A thrown value of no
  * known type — a raising call, a `throw` of anything but a string literal or a `new` — is caught by a catch-all only.
  */
 @:nullSafety(Strict)
@@ -32,24 +33,24 @@ final class CatchTypes {
 	}
 
 	/** Whether one of the `catch` clauses `clauses` provably catches a thrown value of the written type `thrown` (null: unknown). */
-	public static function anyCatches(clauses: Array<QueryNode>, thrown: Null<String>, shape: RefShape, ?types: CallGraphTypes): Bool {
-		return clauses.exists(c -> catches(c, thrown, shape, types));
+	public static function anyCatches(clauses: Array<QueryNode>, thrown: Null<String>, shape: RefShape, ?index: SymbolIndex): Bool {
+		return clauses.exists(c -> catches(c, thrown, shape, index));
 	}
 
 	/**
 	 * Whether the `catch` clause `clause` provably catches a thrown value of the written type `thrown` (null: unknown),
-	 * reading supertypes off `types` when given.
+	 * reading the supertypes off `index` when given (`SubtypeGraph.isSubtype`).
 	 */
-	public static function catches(clause: QueryNode, thrown: Null<String>, shape: RefShape, ?types: CallGraphTypes): Bool {
+	public static function catches(clause: QueryNode, thrown: Null<String>, shape: RefShape, ?index: SymbolIndex): Bool {
 		final declared: Null<QueryNode> = clause.type;
 		if (declared == null) return true;
 		final written: Null<String> = writtenType(declared, shape);
 		if (written == null) return false;
-		if (catchesAll(written, shape, types)) return true;
+		if (catchesAll(written, shape, index)) return true;
 		if (thrown == null) return false;
 		if (written == thrown) return true;
-		return types != null && types.declarationCount(thrown) == 1 && types.declarationCount(written) == 1
-			&& types.firstOnChain(thrown, t -> t == written) != null;
+		return index != null && index.refs.declsNamed(thrown).length == 1 && index.refs.declsNamed(written).length == 1
+			&& index.subtypes.isSubtype(thrown, written);
 	}
 
 	/**
@@ -65,13 +66,13 @@ final class CatchTypes {
 	}
 
 	/** Whether a clause written as `written` catches every thrown value. */
-	private static function catchesAll(written: String, shape: RefShape, types: Null<CallGraphTypes>): Bool {
+	private static function catchesAll(written: String, shape: RefShape, index: Null<SymbolIndex>): Bool {
 		if ((shape.catchAllTypeNames ?? []).contains(written)) return true;
 		final exception: Null<String> = shape.exceptionTypePath;
 		if (exception == null) return false;
 		if (written == exception) return true;
 		final simple: String = exception.substring(exception.lastIndexOf('.') + 1);
-		return written == simple && (types == null || types.declarationCount(simple) == 0);
+		return written == simple && (index == null || index.refs.declsNamed(simple).length == 0);
 	}
 
 }

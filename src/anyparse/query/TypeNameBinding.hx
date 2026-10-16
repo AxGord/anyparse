@@ -130,19 +130,78 @@ final class TypeNameBinding {
 	public function tierOf(name: String, fi: FileInfo, ?at: Int): Tier {
 		final own: Array<TypeDeclInfo> = fi.types.filter(t -> t.name == name);
 		if (own.length > 0) return Bound([for (t in own) { file: fi, type: t }]);
-		final explicit: Array<ImportInfo> = [];
-		final wildcards: Array<ImportInfo> = [];
-		for (imports in [fi.imports].concat([for (group in fi.ambientImports) group.imports])) {
-			final lastFirst: Array<ImportInfo> = imports.copy();
-			lastFirst.reverse();
-			for (imp in lastFirst) (imp.kind == ImportKind.Wild ? wildcards : explicit).push(imp);
-		}
-		final order: StatementOrder = { explicit: explicit, wildcards: wildcards, use: at == null ? null : branchPathAt(fi, at) };
-		return switch explicitFrom(name, fi, order, 0, false) {
+		return switch explicitFrom(name, fi, orderOf(fi, at), 0, false) {
 			case Decls(decls): Bound(decls);
-			case Unreadable: Unknown;
-			case Outside, Pass: Free;
+			case Unreadable(_): Unknown;
+			case Outside(_), Pass: Free;
 		};
+	}
+
+	/**
+	 * Every type `name`, written in `fi` (at offset `at` when the caller knows where), may be on some build — what a
+	 * caller dispatching on each one asks, where `tierOf` answers one or none: `bound`, what the order binds it to wherever
+	 * it can read the binding (null where nothing readable binds it); `guarded`, what it binds instead on the builds a
+	 * `#if`-guarded statement holds; `unlisted`, what a package wildcard the order cannot list may supply. A binding is a
+	 * declaration set of the index or the path of a type outside it (`InIndex`, `OutOfIndex`). The package tier reads the
+	 * std core's modules beside the index's, package by package, as the compiler finds either on its class paths.
+	 */
+	public function bindingsOf(name: String, fi: FileInfo, ?at: Int): NameTargets {
+		final out: NameTargets = { bound: null, guarded: [], unlisted: [] };
+		final own: Array<TypeDeclInfo> = fi.types.filter(t -> t.name == name);
+		if (own.length > 0) {
+			out.bound = InIndex([for (t in own) { file: fi, type: t }]);
+			return out;
+		}
+		final order: StatementOrder = orderOf(fi, at);
+		for (imp in order.explicit) {
+			final answer: Answer = statementAnswer(name, imp);
+			// a module the order cannot read may hold the name as a sub-type, which no reading lists: a binding only of the
+			// type the statement itself names
+			if (answer.match(Pass) || answer.match(Unreadable(_)) && !namesItsType(imp, answer)) continue;
+			final binding: Null<NameTarget> = bindingOf(answer);
+			if (!imp.guarded || coGuarded(imp, fi, order.use)) {
+				out.bound = binding;
+				return out;
+			}
+			if (binding != null) out.guarded.push(binding);
+		}
+		if (!fi.ambientImportsBounded) return out;
+		final std: Answer = stdTypesAnswer(name);
+		if (!std.match(Pass)) {
+			out.bound = bindingOf(std);
+			return out;
+		}
+		for (w in order.wildcards) {
+			final answer: Answer = wildcardAnswer(name, SourceText.parentPath(w.raw));
+			final binding: Null<NameTarget> = bindingOf(answer);
+			if (binding == null) continue;
+			if (answer.match(Unreadable(_)))
+				out.unlisted.push(binding)
+			else if (w.guarded && !coGuarded(w, fi, order.use))
+				out.guarded.push(binding)
+			else {
+				out.bound = binding;
+				return out;
+			}
+		}
+		out.bound = bindingOf(packageAnswer(name, fi.pkg, false, true));
+		return out;
+	}
+
+	/**
+	 * The declarations of the index whose canonical path (`canonicalPath`) is `path`: a module's main type at the module's
+	 * path, a sub-type at the module's path and its own name.
+	 */
+	public function declsAt(path: String): Array<ResolvedType> {
+		final last: String = SourceText.lastSegment(path);
+		final mains: Array<ResolvedType> = [
+			for (f in tables().modules[path] ?? []) for (t in f.types) if (t.isMain && t.name == last) { file: f, type: t }
+		];
+		if (mains.length > 0 || path.indexOf('.') < 0) return mains;
+		return [
+			for (f in tables()
+				.modules[SourceText.parentPath(path)] ?? []) for (t in f.types) if (!t.isMain && t.name == last) { file: f, type: t }
+		];
 	}
 
 	/** The indexed files of module `module` (`pkg.Mod`, a root module by its bare name), in index order. */
@@ -188,6 +247,21 @@ final class TypeNameBinding {
 	}
 
 	/**
+	 * The explicit statements and the package wildcards of `fi` and its ambient chain in the order the compiler asks them,
+	 * and the `#if` branch of a use at `at`.
+	 */
+	private function orderOf(fi: FileInfo, at: Null<Int>): StatementOrder {
+		final explicit: Array<ImportInfo> = [];
+		final wildcards: Array<ImportInfo> = [];
+		for (imports in [fi.imports].concat([for (group in fi.ambientImports) group.imports])) {
+			final lastFirst: Array<ImportInfo> = imports.copy();
+			lastFirst.reverse();
+			for (imp in lastFirst) (imp.kind == ImportKind.Wild ? wildcards : explicit).push(imp);
+		}
+		return { explicit: explicit, wildcards: wildcards, use: at == null ? null : branchPathAt(fi, at) };
+	}
+
+	/**
 	 * The answer of the order from explicit statement `at` on: each explicit statement, the LAST of a list first
 	 * and the file's own list before the ambient chain's (nearest source first); then the chain's bound, the
 	 * `StdTypes` tier and the wildcards. `strict` is set inside a `#if`-guarded statement's other build (`bothBuilds`).
@@ -201,10 +275,10 @@ final class TypeNameBinding {
 				case Decls(decls) if (guarded):
 					return bothBuilds(decls, explicitFrom(name, fi, order, i + 1, true));
 				case answer:
-					return guarded ? Unreadable : answer;
+					return guarded ? Unreadable(null) : answer;
 			}
 		}
-		if (!fi.ambientImportsBounded) return Unreadable;
+		if (!fi.ambientImportsBounded) return Unreadable(null);
 		return switch stdTypesAnswer(name) {
 			case Pass: wildcardFrom(name, fi, order, 0, strict);
 			case answer: answer;
@@ -224,7 +298,7 @@ final class TypeNameBinding {
 				case Decls(decls) if (guarded):
 					return bothBuilds(decls, wildcardFrom(name, fi, order, i + 1, true));
 				case answer:
-					return guarded ? Unreadable : answer;
+					return guarded ? Unreadable(null) : answer;
 			}
 		}
 		return packageAnswer(name, fi.pkg, strict);
@@ -240,19 +314,20 @@ final class TypeNameBinding {
 		if (aliased && imp.alias != name) return Pass;
 		final path: Null<String> = aliased ? imp.aliasTarget : imp.raw;
 		final split: Null<ImportPath> = path == null ? null : splitPath(path);
-		if (split == null) return Unreadable;
+		if (split == null) return Unreadable(null);
 		if (split.rest.length > 1 || (!aliased && split.rest.length == 1 && split.rest[0] != name)) return Pass;
 		final wanted: String = split.rest.length == 1 ? split.rest[0] : aliased ? SourceText.lastSegment(split.module) : name;
 		// An alias of a module names its main type, and one whose module declares none names nothing that is known.
-		final missing: Answer = aliased && split.rest.length == 0 ? Unreadable : Pass;
+		final missing: Answer = aliased && split.rest.length == 0 ? Unreadable(null) : Pass;
 		final files: Array<FileInfo> = tables().modules[split.module] ?? [];
 		if (files.length > 0) {
 			final decls: Array<ResolvedType> = typesIn(files, wanted, false);
 			return decls.length > 0 ? Decls(decls) : missing;
 		}
 		final outside: Null<Array<TypeDeclInfo>> = outsideTypes(split.module, wanted);
-		if (outside == null) return Unreadable;
-		return outside.exists(t -> t.name == wanted && !t.isPrivate) ? Outside : missing;
+		final bound: String = pathIn(split.module, wanted);
+		if (outside == null) return Unreadable(bound);
+		return outside.exists(t -> t.name == wanted && !t.isPrivate) ? Outside(bound) : missing;
 	}
 
 	/**
@@ -267,7 +342,7 @@ final class TypeNameBinding {
 		}
 		final outside: Null<Array<TypeDeclInfo>> = StdTypes.moduleTypes(_plugin, STD_TYPES_MODULE);
 		final declared: Bool = outside == null ? STD_TYPE_NAMES.contains(name) : outside.exists(t -> t.name == name && !t.isPrivate);
-		return declared ? Outside : Pass;
+		return declared ? Outside(name) : Pass;
 	}
 
 	/**
@@ -284,8 +359,8 @@ final class TypeNameBinding {
 		}
 		return switch StdTypes.declaresModule(pkg, name) {
 			case false: Pass;
-			case true: declaresMain(outsideTypes('$pkg.$name', name), name) ?? Unreadable;
-			case null: Unreadable;
+			case true: declaresMain(outsideTypes('$pkg.$name', name), name, '$pkg.$name') ?? Unreadable('$pkg.$name');
+			case null: Unreadable('$pkg.$name');
 		};
 	}
 
@@ -293,10 +368,11 @@ final class TypeNameBinding {
 	 * The file's package, then each parent package, then the toplevel one: the non-private main type of a
 	 * module named `name`. A file the parser skipped that could be that module makes the tier unreadable. A
 	 * module outside the index is asked about only in a guarded statement's other build (`strict`), where binding
-	 * one is an answer of its own rather than nothing.
+	 * one is an answer of its own rather than nothing; with `listed`, each package past the index also holds the std core
+	 * modules the std listing knows (`StdTypes.declaresModule`) — the toplevel's none — found there before a farther package's.
 	 */
-	private function packageAnswer(name: String, pkg: String, strict: Bool): Answer {
-		if (_skipped.exists(f -> f == '$name.hx' || f.endsWith('/$name.hx'))) return Unreadable;
+	private function packageAnswer(name: String, pkg: String, strict: Bool, listed: Bool = false): Answer {
+		if (_skipped.exists(f -> f == '$name.hx' || f.endsWith('/$name.hx'))) return Unreadable(null);
 		final packages: Map<String, Array<FileInfo>> = tables().packages;
 		final chain: Array<String> = [];
 		var p: String = pkg;
@@ -311,8 +387,9 @@ final class TypeNameBinding {
 			// In a guarded statement's other build a module nothing here can read is unknown, never taken as absent; one the
 			// index holds was read above.
 			final module: String = scope == '' ? name : '$scope.$name';
+			if (listed && scope != '' && StdTypes.declaresModule(scope, name) == true) return Outside(module);
 			final outside: Null<Answer> = strict && !tables().modules.exists(module)
-				? declaresMain(outsideTypes(module, name), name) ?? Unreadable
+				? declaresMain(outsideTypes(module, name), name, module) ?? Unreadable(module)
 				: null;
 			if (outside != null && !outside.match(Pass)) return outside;
 		}
@@ -363,6 +440,39 @@ final class TypeNameBinding {
 		return use != null && fi.imports.indexOf(imp) >= 0 && CondBranchPath.within(use, branchPathAt(fi, imp.span.from));
 	}
 
+	/** Whether the statement `imp` names the type `answer` binds by its own path — the path written, or an alias's target. */
+	private static function namesItsType(imp: ImportInfo, answer: Answer): Bool {
+		final written: Null<String> = imp.kind == ImportKind.Alias ? imp.aliasTarget : imp.raw;
+		return switch answer {
+			case Unreadable(path), Outside(path):
+				path != null && path == written;
+			case _: false;
+		};
+	}
+
+	/** The path an import of module `module` names its type `name` by: the module's own for its main type. */
+	private static inline function pathIn(module: String, name: String): String {
+		return name == SourceText.lastSegment(module) ? module : '$module.$name';
+	}
+
+	/** What one tier's answer binds a name to: none for `Pass`, nor for an unreadable tier that names no path. */
+	private static function bindingOf(answer: Answer): Null<NameTarget> {
+		return switch answer {
+			case Decls(decls): InIndex(decls);
+			case Outside(path): OutOfIndex(path);
+			case Unreadable(path): path == null ? null : OutOfIndex(path);
+			case Pass: null;
+		};
+	}
+
+	/**
+	 * The path the compiler names a declaration by: a module's main type by the module's path, a sub-type by the module's
+	 * path and its own name.
+	 */
+	public static function canonicalPath(decl: ResolvedType): String {
+		return decl.type.isMain ? decl.file.module : '${decl.file.module}.${decl.type.name}';
+	}
+
 	/**
 	 * `path` split the way the compiler reads an import path: every leading segment that starts lower-case
 	 * (after any underscores) is a package, the first that does not is the MODULE — a module name must start
@@ -396,15 +506,16 @@ final class TypeNameBinding {
 		return switch rest {
 			case Pass: Decls(decls);
 			case Decls(other) if (sameDecls(decls, other)): Decls(decls);
-			case _: Unreadable;
+			case _: Unreadable(null);
 		};
 	}
 
 	/**
-	 * `Outside` when `types`, a module outside the index, declares a non-private main type `name`; `Pass` when not; null unread.
+	 * `Outside` at `path` when `types`, a module outside the index, declares a non-private main type `name`; `Pass` when
+	 * not; null unread.
 	 */
-	private static function declaresMain(types: Null<Array<TypeDeclInfo>>, name: String): Null<Answer> {
-		return types == null ? null : types.exists(t -> t.name == name && t.isMain && !t.isPrivate) ? Outside : Pass;
+	private static function declaresMain(types: Null<Array<TypeDeclInfo>>, name: String, path: String): Null<Answer> {
+		return types == null ? null : types.exists(t -> t.name == name && t.isMain && !t.isPrivate) ? Outside(path) : Pass;
 	}
 
 	/** The non-private types `files` declare — named `name` unless it is null, main types only when `mainOnly`. */
@@ -431,6 +542,26 @@ final class TypeNameBinding {
 typedef ImportPath = {
 	final module: String;
 	final rest: Array<String>;
+}
+
+/** One type a name may bind to (`TypeNameBinding.bindingsOf`): declarations of the index, or the path of a type outside it. */
+enum NameTarget {
+
+	InIndex(decls: Array<ResolvedType>);
+
+	OutOfIndex(path: String);
+
+}
+
+/**
+ * Every type a name may bind to on some build (`TypeNameBinding.bindingsOf`): `bound` wherever the order reads it,
+ * null where nothing readable binds it; `guarded` on the builds a `#if`-guarded statement holds; `unlisted` where a
+ * package wildcard the order cannot list may supply it.
+ */
+typedef NameTargets = {
+	var bound: Null<NameTarget>;
+	final guarded: Array<NameTarget>;
+	final unlisted: Array<NameTarget>;
 }
 
 /**
@@ -461,10 +592,13 @@ private enum Answer {
 	/** It binds the name to these declarations of the index. */
 	Decls(decls: Array<ResolvedType>);
 
-	/** It binds the name to a declaration the index does not hold: a built-in, a std or library type. */
-	Outside;
+	/** It binds the name to a declaration the index does not hold — a built-in, a std or library type — at `path`. */
+	Outside(path: String);
 
-	/** It may bind the name to something nothing here can read, so no lower tier may answer. */
-	Unreadable;
+	/**
+	 * It may bind the name to something nothing here can read, so no lower tier may answer: at `path` when the statement
+	 * or the package names one.
+	 */
+	Unreadable(path: Null<String>);
 
 }

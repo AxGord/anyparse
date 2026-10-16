@@ -89,7 +89,6 @@ class ThreadSafetyReflectiveSealTest extends Test {
 	@:killer('M-TS-PLACE-GLOB-MATCH') @:killer('M-TS-PLACE-MAKES-NEW') @:killer('M-TS-PLACE-MAKES-VALUE')
 	@:killer('M-TS-PLACE-MAKES-RECEIVER') @:killer('M-TS-PLACE-VOID') @:killer('M-TS-PLACE-FORWARDED-BOUND')
 	@:killer('M-TS-PLACE-PARAM-CONSTRAINT') @:killer('M-TS-PLACE-PARAM-OWNER') @:killer('M-TS-FINAL-SUPERS-WRITTEN')
-	@:killer('M-TS-REACH-ALIAS-SUBTYPES')
 	public function testATypeParameterReceiverIsBoundedByItsInstantiations(): Void {
 		#if (sys || nodejs)
 		final use: String = 'new V().toTarget("_l", d._m);';

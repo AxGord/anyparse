@@ -922,6 +922,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.BodySlotGuardSliceTest',
 		'unit.query.BuildFailureTest',
 		'unit.query.CachingGrammarPluginTest',
+		'unit.query.CallGraphBindingTest',
 		'unit.query.CallGraphTest',
 		'unit.query.CallSitesTest',
 		'unit.query.CaseCaptureTest',
@@ -942,6 +943,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.CreatingFixContractTest',
 		'unit.query.CrossRenameMemberSliceTest',
 		'unit.query.CrossRenameSliceTest',
+		'unit.query.DeclarationQueriesTest',
 		'unit.query.DeclaredNullityTest',
 		'unit.query.DeleteBlankLineSliceTest',
 		'unit.query.DocOwnerGuardSliceTest',
@@ -1040,6 +1042,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.TypeResolverSliceTest',
 		'unit.query.TypeSyntaxTest',
 		'unit.query.UncheckedConversionsTest',
+		'unit.query.ValueNameBindingTest',
 		'unit.runtime.CommonPrefixTest',
 		'unit.runtime.InputTest',
 		'unit.runtime.ParseErrorTest',
@@ -2368,7 +2371,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyPositiveSinksTest#testADottedWaiverNamesOnlyTheTypeAtThatPath :: control :: M-TS-DOTTED-WILDCARD',
 			'unit.check.ThreadSafetyPositiveSinksTest#testALibraryTypeIsNotItsProjectNamesake :: control :: '
 				+ 'M-TS-PATH-FOREIGN,M-TS-PATH-IMPORT,M-TS-PATH-RECEIVER-STATIC,M-TS-PATH-NEW,M-TS-PATH-MATCH,M-TS-SHADOWING-KEPT,'
-				+ 'M-TS-PATH-DECLARED-PACKAGE,M-TS-PATH-NOMINAL,M-TS-PATH-RETURN,M-TS-PATH-NULLABLE-KEYED,M-TS-ALIAS-TYPE',
+				+ 'M-TS-PATH-DECLARED-PACKAGE,M-TS-PATH-NOMINAL,M-TS-PATH-RETURN,M-TS-ALIAS-TYPE',
 			'unit.check.ThreadSafetyPositiveSinksTest#testALocalOfACallResultIsTypedByWhatTheCallReturns :: control :: '
 				+ 'M-TS-LOCAL-CALL-INIT,M-TS-LOCAL-CALL-READ',
 			'unit.check.ThreadSafetyPositiveSinksTest#testAStdLockWrittenInADeclarationWaitsWhereverItIsRead :: control :: '
@@ -2408,8 +2411,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyReflectiveSealTest#testATypeParameterReceiverIsBoundedByItsInstantiations :: control :: '
 				+ 'M-TS-PLACE-INSTANTIATIONS,M-TS-PLACE-COMPLETE,M-TS-PLACE-RAW-LINK,M-TS-PLACE-FREE-SUB,M-TS-PLACE-NEVER-MADE,'
 				+ 'M-TS-PLACE-UNDECLARED,M-TS-PLACE-GLOB-MATCH,M-TS-PLACE-MAKES-NEW,M-TS-PLACE-MAKES-VALUE,M-TS-PLACE-MAKES-RECEIVER,'
-				+ 'M-TS-PLACE-VOID,M-TS-PLACE-FORWARDED-BOUND,M-TS-PLACE-PARAM-CONSTRAINT,M-TS-PLACE-PARAM-OWNER,M-TS-FINAL-SUPERS-WRITTEN,'
-				+ 'M-TS-REACH-ALIAS-SUBTYPES',
+				+ 'M-TS-PLACE-VOID,M-TS-PLACE-FORWARDED-BOUND,M-TS-PLACE-PARAM-CONSTRAINT,M-TS-PLACE-PARAM-OWNER,M-TS-FINAL-SUPERS-WRITTEN',
 			'unit.check.ThreadSafetyReflectiveSealTest#testAValueTheRunCannotPlaceUnsealsEveryLock :: control :: '
 				+ 'M-TS-SEAL-REFLECT-UNPLACED,M-TS-SEAL-UNPLACED-NOTICE,M-TS-BINDER-TYPE,M-TS-STORED-COMPLETE',
 			'unit.check.ThreadSafetyReflectiveSealTest#testAWriteThatMayStoreALockUnsealsAsBefore :: control :: M-TS-STORED-ANY,M-TS-STORED-RELATED,M-TS-STORED-ARGUMENTS',
@@ -3051,10 +3053,16 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.BodySlotGuardSliceTest#testAllowsSoleCatchClauseRemoval :: control :: M-BODYSLOT-LEAD-KEPT',
 			'unit.query.BodySlotGuardSliceTest#testAllowsSoleCatchClauseRemovalWithATrailingComment :: control :: M-BODYSLOT-TRIM-WS-ONLY',
 			'unit.query.BodySlotGuardSliceTest#testAllowsWholeElseBranchRemoval :: control :: M-BODYSLOT-LEAD-KEPT',
+			'unit.query.CallGraphBindingTest#testAClassExtendingAnAliasIsASubtypeOfItsTarget :: control :: M-TS-REACH-ALIAS-SUBTYPES',
+			'unit.query.CallGraphBindingTest#testAContainerIsTheStdOneOnlyWhereItsWritingFileBindsIt :: control :: '
+				+ 'M-TS-STD-CONTAINER-DECLARED,M-TS-STD-CONTAINER-WHERE,M-TS-NULLABLE-PATH-KEY',
+			'unit.query.CallGraphBindingTest#testAModuleLevelFunctionSeesItsModuleAndImportsNoClassChain :: control :: '
+				+ 'M-TS-MODULE-FN-CLASS-CHAIN,M-TS-MODULE-FN-IMPORTED-REF',
+			'unit.query.CallGraphBindingTest#testASupertypeIsTheTypeItsDeclaringFileBinds :: control :: M-SUPERS-BY-DECLARATION',
 			'unit.query.CallGraphTest#testACalledFunctionValueReturnsWhatItsFunctionTypeSays :: control :: '
 				+ 'M-TS-CALLED-VALUE,M-TS-CALLED-RECEIVER,M-TS-CALLED-NULL',
 			'unit.query.CallGraphTest#testAContainerIsTheStandardOneOnlyWhereItsNameMeansIt :: control :: '
-				+ 'M-TS-STD-CONTAINER,M-TS-STD-CONTAINER-DECLARED,M-TS-STD-CONTAINER-WHERE,M-TS-STD-CONTAINER-GUARDED,M-TS-STD-CONTAINER-STD-OWN',
+				+ 'M-TS-STD-CONTAINER,M-TS-STD-CONTAINER-WHERE,M-TS-STD-CONTAINER-GUARDED,M-TS-STD-CONTAINER-STD-OWN',
 			'unit.query.CallGraphTest#testADeclaredTypeIsReadInTheFileThatWroteIt :: control :: '
 				+ 'M-TS-DECL-MEMBER-FILE,M-TS-DECL-RETURN-FILE,M-TS-DECL-READ-FROM,M-TS-DECL-BOUND,M-TS-PATH-NULLABLE-KEYED',
 			'unit.query.CallGraphTest#testAForwardedCallRunsTheUnderlyingTheAbstractsFileNames :: control :: '
@@ -3239,6 +3247,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CreatingFixContractTest#testACreateSettlesItsTextAtTheWriterFixedPoint :: guard :: ',
 			'unit.query.CreatingFixContractTest#testAPassSeesTheChainAPreviousPassWrote :: control :: M-AMBIENT-CHAIN-STALE',
 			'unit.query.CreatingFixContractTest#testDeletingACreatedFileToleratesOneAlreadyGone :: guard :: ',
+			'unit.query.DeclarationQueriesTest#testAMemberIsHostedWhereItsDeclarationIs :: control :: M-HOST-UNIQUE',
+			'unit.query.DeclarationQueriesTest#testASupertypeThatMayDeclareTheMemberIsNamed :: control :: '
+				+ 'M-SEAL-AMBIGUOUS,M-SEAL-UNRESOLVED-IFACE,M-SEAL-DECLARING-SUPER',
+			'unit.query.DeclarationQueriesTest#testAnAliasIsFollowedThroughOneDeclarationAHop :: control :: M-ALIAS-SINGLE-DECL',
 			'unit.query.DeclaredNullityTest#testAbstractOverClassIsProven :: control :: M-NULLITY-HOPS-CUT',
 			'unit.query.DeclaredNullityTest#testAbstractOverNullIsUnproven :: control :: M-NULLITY-UNDERLYING-TRUSTED',
 			'unit.query.DeclaredNullityTest#testAliasOfClassIsProven :: control :: M-NULLITY-HOPS-CUT',
@@ -4074,6 +4086,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-INDEX-GUARDED-PRIVATE-SPLIT,M-INDEX-GUARDED-PRIVATE-PAST-MODIFIERS',
 			'unit.query.SymbolIndexSliceTest#testPlatformFileDeclaresTheModuleBeforeItsDot :: control :: '
 				+ 'M-MODULE-PLATFORM,M-MODULE-SCAN-PLATFORM',
+			'unit.query.TypeNameBindingTest#testADeclarationIsAtItsCanonicalPath :: control :: M-BINDINGS-DECLS-AT-SUBTYPE,M-CANONICAL-SUBTYPE',
 			'unit.query.TypeNameBindingTest#testAGuardedImportAgainstAStdTypeIsUnknown :: control :: M-BINDING-STRICT-OUTSIDE',
 			'unit.query.TypeNameBindingTest#testAGuardedImportAgainstAnotherBindingIsUnknown :: control :: M-AMBIENT-GUARDED-UNION',
 			'unit.query.TypeNameBindingTest#testAGuardedImportBindsWhereTheOtherBuildProvablyBindsNothing :: control :: '
@@ -4094,9 +4107,12 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.TypeNameBindingTest#testAWildcardBindsMainTypesOnly :: control :: M-BINDING-SUBTYPES-VISIBLE',
 			'unit.query.TypeNameBindingTest#testAnImportLineListsTheNonPrivateTypesItBinds :: control :: M-BINDING-PRIVATE-VISIBLE',
 			'unit.query.TypeNameBindingTest#testAnUnreadableModuleImportIsUnknown :: control :: M-BINDING-UNINDEXED-MODULE-FREE',
+			'unit.query.TypeNameBindingTest#testBindingsListEveryBuildsType :: control :: '
+				+ 'M-TS-GUARDED-IMPORT,M-TS-WILD-MAYBE,M-BINDINGS-UNREADABLE-SUBTYPE,M-TS-WILD-GUARDED',
 			'unit.query.TypeNameBindingTest#testStdTypesOutrankThePackage :: control :: M-BINDING-STDTYPES-CUT',
 			'unit.query.TypeNameBindingTest#testTheLastExplicitImportWins :: control :: M-BINDING-FIRST-STATEMENT-WINS',
 			'unit.query.TypeNameBindingTest#testTheModulesOwnTypeOutranksAnImport :: control :: M-BINDING-OWN-TIER-CUT',
+			'unit.query.TypeNameBindingTest#testThePackageTierReadsTheStdCoresModulesPackageByPackage :: control :: M-TS-PACKAGE-PROJECT-FIRST',
 			'unit.query.TypeNameBindingTest#testTheStdTypesNamesAreTheStdsOwn :: guard :: ',
 			'unit.query.TypeNameBindingTest#testWildcardsAreAskedLastFirst :: control :: M-BINDING-FIRST-STATEMENT-WINS',
 			'unit.query.UncheckedConversionsTest#testAFactsFileSaysTheTargetItsBuildGeneratesCodeFor :: control :: M-FACTS-TARGET-RECORD',
@@ -4105,7 +4121,15 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-UNCHECKED-POINTER,M-UNCHECKED-ALIAS,M-UNCHECKED-ALIAS-PLACE,M-UNCHECKED-BOXED-ALIAS,'
 				+ 'M-NATIVE-SITE-INERT,M-NATIVE-SITE-CORE-TYPE,M-NATIVE-SITE-ALIAS,M-NATIVE-SITE-ARRAY-ELEMENTS',
 			'unit.query.UncheckedConversionsTest#testAnInstanceOfAnotherClassSitsOnlyWhereSomeBuildKeepsIt :: control :: '
-				+ 'M-UNCHECKED-CLASS-EXTERN,M-UNCHECKED-ALIKE'
+				+ 'M-UNCHECKED-CLASS-EXTERN,M-UNCHECKED-ALIKE',
+			'unit.query.ValueNameBindingTest#testAModuleFieldComesBeforeAnyImport :: control :: '
+				+ 'M-TS-MODULE-NAME,M-TS-MODULE-NAME-NESTED,M-TS-MODULE-NAME-ALIAS',
+			'unit.query.ValueNameBindingTest#testAUsingBringsEveryTypeOfItsModule :: control :: M-USING-MODULE-TYPES',
+			'unit.query.ValueNameBindingTest#testAWildcardBringsTheTypesStaticsOnly :: control :: '
+				+ 'M-GRAPH-UNLISTED-WILDCARD,M-VALUES-OWNER-BY-NAME,M-VALUES-EXTERN,M-VALUES-BUILT-ABOVE',
+			'unit.query.ValueNameBindingTest#testAnAliasWhosePathDoesNotDecodeMayBeAnyStatic :: control :: M-VALUES-ALIAS-UNDECODED',
+			'unit.query.ValueNameBindingTest#testAnExplicitImportBindsTheStaticItsPathNames :: control :: '
+				+ 'M-VALUES-SUBTYPE-IMPORT,M-VALUES-ENUM-CTOR,M-GRAPH-IMPORT-UNLISTED'
 		];
 		final actualPins: Array<String> = TestRegistry.pins();
 		Assert.same(
@@ -6800,6 +6824,25 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-MODULE-NAME',
 			'M-TS-MODULE-NAME-NESTED',
 			'M-TS-MODULE-NAME-ALIAS',
+			'M-VALUES-SUBTYPE-IMPORT',
+			'M-VALUES-ENUM-CTOR',
+			'M-VALUES-OWNER-BY-NAME',
+			'M-VALUES-EXTERN',
+			'M-VALUES-BUILT-ABOVE',
+			'M-VALUES-ALIAS-UNDECODED',
+			'M-TS-MODULE-FN-CLASS-CHAIN',
+			'M-TS-MODULE-FN-IMPORTED-REF',
+			'M-BINDINGS-UNREADABLE-SUBTYPE',
+			'M-BINDINGS-DECLS-AT-SUBTYPE',
+			'M-CANONICAL-SUBTYPE',
+			'M-USING-MODULE-TYPES',
+			'M-TS-NULLABLE-PATH-KEY',
+			'M-SUPERS-BY-DECLARATION',
+			'M-SEAL-AMBIGUOUS',
+			'M-SEAL-UNRESOLVED-IFACE',
+			'M-SEAL-DECLARING-SUPER',
+			'M-ALIAS-SINGLE-DECL',
+			'M-HOST-UNIQUE',
 			'M-TS-OVERLOAD-RETURN',
 			'M-TS-OVERLOAD-RETURN-EACH',
 			'M-TS-OVERLOAD-PARAMS',
