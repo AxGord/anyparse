@@ -245,7 +245,7 @@ final class FunctionValueTypes {
 
 	/** Of `candidates`, the functions written at one of `values`, and every one that escaped when they hold `ESCAPED_VALUES`. */
 	private function writtenAt(g: CallGraph, candidates: Array<String>, values: Array<FactPos>): Array<String> {
-		final table: CompilerFacts = _view.table;
+		final table: CompilerFacts = _view._table;
 		final escaped: Bool = values.contains(ESCAPED_VALUES);
 		return [
 			for (id in candidates)
@@ -289,7 +289,7 @@ final class FunctionValueTypes {
 	/** `storedValues`, read. */
 	private function readStored(target: String): Null<Array<FactPos>> {
 		final dot: Int = target.lastIndexOf('.');
-		final table: CompilerFacts = _view.table;
+		final table: CompilerFacts = _view._table;
 		final owner: String = target.substr(0, dot);
 		final name: String = target.substr(dot + 1);
 		final fact: Null<TypeFact> = dot < 0 ? null : table.type(owner);
@@ -364,7 +364,7 @@ final class FunctionValueTypes {
 	 * writes a field only by its name or through the reflection whose call sites the facts record.
 	 */
 	private function untypedStores(name: String, hierarchy: Array<String>, out: Array<FactPos>): Bool {
-		final table: CompilerFacts = _view.table;
+		final table: CompilerFacts = _view._table;
 		final computedNames: Bool = _methods().declaredHolders(hierarchy).length > 0;
 		if (targetCodeNames(name)) return false;
 		for (id in table.nodeIds()) {
@@ -460,7 +460,7 @@ final class FunctionValueTypes {
 		final held: Null<Map<String, Array<String>>> = _flows;
 		if (held != null) return held;
 		final out: Map<String, Array<String>> = [];
-		final table: CompilerFacts = _view.table;
+		final table: CompilerFacts = _view._table;
 		for (id in table.nodeIds()) for (f in table.node(id)?.flows ?? []) {
 			final from: String = FactsTypeText.unwrapNull(f.from);
 			final to: String = FactsTypeText.unwrapNull(f.to);
@@ -533,7 +533,7 @@ final class FunctionValueTypes {
 	 * a reflective construction (`reflectiveConstructions`).
 	 */
 	private function constructedWith(owner: String, index: Int, count: Int, param: QueryNode): Null<Array<FactPos>> {
-		final table: CompilerFacts = _view.table;
+		final table: CompilerFacts = _view._table;
 		final ctorName: String = _scope.shape.constructorName ?? 'new';
 		final fact: Null<TypeFact> = table.type(owner);
 		final ctor: Null<FieldDeclFact> = fact?.fields.find(f -> f.name == ctorName && !f.isStatic);
@@ -597,7 +597,7 @@ final class FunctionValueTypes {
 	 * (`FactsView.splicedReflection`).
 	 */
 	private function reflectiveConstructions(owner: String, index: Int, arity: Null<Int>, out: Array<FactPos>): Void {
-		final table: CompilerFacts = _view.table;
+		final table: CompilerFacts = _view._table;
 		final shape: RefShape = _scope.shape;
 		inline function escaped(): Void {
 			if (!out.contains(ESCAPED_VALUES)) out.push(ESCAPED_VALUES);
@@ -661,7 +661,7 @@ final class FunctionValueTypes {
 
 	/** Whether the class a `Class<T>` holds, `T` being `t`, may be `owner` (`mayConstruct`). */
 	private function classMayBe(t: FactsType, owner: String, depth: Int): Bool {
-		final table: CompilerFacts = _view.table;
+		final table: CompilerFacts = _view._table;
 		if (depth > MAX_ALIASES) return true;
 		return switch t {
 			case Named(NULLABLE, [inner]): classMayBe(inner, owner, depth + 1);
@@ -694,7 +694,7 @@ final class FunctionValueTypes {
 	 * (`FactNode.params`, each variant's); null when the builds disagree or one types it as no function.
 	 */
 	private function parameterArity(id: String, index: Int): Null<Int> {
-		final n: Null<FactNode> = _view.table.node(id);
+		final n: Null<FactNode> = _view._table.node(id);
 		if (n == null) return null;
 		final lists: Array<Array<{ name: String, type: String }>> = [n.params].concat([for (v in n.variants) v.params]);
 		var found: Null<Int> = null;
@@ -713,7 +713,7 @@ final class FunctionValueTypes {
 	 * invocation hands it anything else.
 	 */
 	private function invokedWith(owner: String, name: String, index: Int, count: Int): Null<Array<FactPos>> {
-		final table: CompilerFacts = _view.table;
+		final table: CompilerFacts = _view._table;
 		final fact: Null<TypeFact> = table.type(owner);
 		final field: Null<FieldDeclFact> = fact?.fields.find(f -> f.name == name);
 		if (fact == null || field == null) return null;
@@ -760,7 +760,7 @@ final class FunctionValueTypes {
 	 */
 	private function untypedInvocations(name: String, hierarchy: Array<String>, index: Int, count: Int, out: Array<FactPos>): Bool {
 		if (_methods().readAsValue(name, hierarchy) || targetCodeNames(name)) return false;
-		final table: CompilerFacts = _view.table;
+		final table: CompilerFacts = _view._table;
 		for (id in table.nodeIds()) {
 			final made: Null<FactNode> = table.node(id);
 			if (made == null) return false;
@@ -783,7 +783,7 @@ final class FunctionValueTypes {
 	 * its name, or through the reflection whose call sites the facts record. A node whose facts are lost may hold any.
 	 */
 	private function targetCodeNames(name: String): Bool {
-		final table: CompilerFacts = _view.table;
+		final table: CompilerFacts = _view._table;
 		function named(code: Null<String>): Bool {
 			return code == null || FactsNativeReach.targetNames(code).contains(name);
 		}
@@ -818,7 +818,7 @@ final class FunctionValueTypes {
 		var index: Null<Map<String, Array<CallFact>>> = _invocations;
 		if (index == null) {
 			final built: Map<String, Array<CallFact>> = [];
-			final table: CompilerFacts = _view.table;
+			final table: CompilerFacts = _view._table;
 			for (id in table.nodeIds()) for (c in table.node(id)?.calls ?? []) {
 				final target: Null<String> = c.target;
 				if (target == null || !INVOKING.contains(c.access)) continue;
@@ -879,7 +879,7 @@ final class FunctionValueTypes {
 	/** The text the facts of the file keyed `key` were read off and its tree, parsed once; null when it does not read. */
 	private function parsed(key: String): Null<ParsedFile> {
 		if (_parsed.exists(key)) return _parsed[key];
-		final source: Null<String> = _view.table.sourceOf(key);
+		final source: Null<String> = _view._table.sourceOf(key);
 		final tree: Null<QueryNode> = source == null ? null : try _scope.plugin.parseFile(source) catch (exception: Exception) null;
 		final read: Null<ParsedFile> = source == null || tree == null ? null : { source: source, tree: tree };
 		_parsed[key] = read;
@@ -908,7 +908,7 @@ final class FunctionValueTypes {
 			final type: Null<String> = node.typeName;
 			final name: Null<String> = node.name;
 			if (type == null || name == null || id.indexOf(NESTED) >= 0) return null;
-			for (typed in _view.bySimpleName()[type] ?? []) for (f in _view.table.type(typed)?.fields ?? []) if (f.name == name) {
+			for (typed in _view.bySimpleName()[type] ?? []) for (f in _view._table.type(typed)?.fields ?? []) if (f.name == name) {
 				ids.push('$typed.$name');
 				for (t in f.types) texts.push(t);
 			}
@@ -924,7 +924,7 @@ final class FunctionValueTypes {
 		final held: Null<Map<String, Array<String>>> = _callers;
 		if (held != null) return held;
 		final out: Map<String, Array<String>> = [];
-		final table: CompilerFacts = _view.table;
+		final table: CompilerFacts = _view._table;
 		for (id in table.nodeIds()) {
 			final n: Null<FactNode> = table.node(id);
 			if (n == null || !EXPRESSION_KINDS.contains(n.kind)) continue;
@@ -956,12 +956,12 @@ final class FunctionValueTypes {
 		final name: Null<String> = node?.name;
 		final owners: Array<String> = type == null ? [] : _view.bySimpleName()[type] ?? [];
 		final hierarchy: Array<String> = [];
-		for (o in owners) for (t in [o].concat(_view.table.subtypesOf(o))) if (!hierarchy.contains(t)) hierarchy.push(t);
+		for (o in owners) for (t in [o].concat(_view._table.subtypesOf(o))) if (!hierarchy.contains(t)) hierarchy.push(t);
 		// a constructor and the pseudo-nodes running a type's initializers are no field any read names
 		final initializers: Bool = name == CallGraph.INIT_NAME || name == CallGraph.STATIC_INIT_NAME
 			|| name == (_scope.shape.constructorName ?? 'new');
 		final statics: Bool = name != null
-			&& owners.exists(o -> _view.table.type(o)?.fields.exists(f -> f.name == name && f.isStatic) == true);
+			&& owners.exists(o -> _view._table.type(o)?.fields.exists(f -> f.name == name && f.isStatic) == true);
 		final answer: Bool = !initializers
 			&& (name == null || hierarchy.length == 0 || _methods().obtainedUntyped(name, hierarchy, _escapedTypes(), _bindings, statics));
 		_untyped[id] = answer;
@@ -992,7 +992,7 @@ final class FunctionValueTypes {
 		final x: Null<String> = nominalId(a);
 		final y: Null<String> = nominalId(b);
 		if (x == null || y == null || x == y) return false;
-		final table: CompilerFacts = _view.table;
+		final table: CompilerFacts = _view._table;
 		return !table.subtypesOf(x).contains(y) && !table.subtypesOf(y).contains(x);
 	}
 
@@ -1003,7 +1003,7 @@ final class FunctionValueTypes {
 	private function nominalId(t: FactsType): Null<String> {
 		return switch aliased(t) {
 			case Named(id, _):
-				final fact: Null<TypeFact> = _view.table.type(id);
+				final fact: Null<TypeFact> = _view._table.type(id);
 				fact != null && fact.alike && NOMINAL_KINDS.contains(fact.kind) ? id : null;
 			case _: null;
 		};
@@ -1016,7 +1016,7 @@ final class FunctionValueTypes {
 			final next: Null<FactsType> = switch current {
 				case Named(NULLABLE, [inner]): inner;
 				case Named(id, _):
-					final fact: Null<TypeFact> = _view.table.type(id);
+					final fact: Null<TypeFact> = _view._table.type(id);
 					fact != null && fact.kind == TYPEDEF_KIND && fact.targets.length == 1 ? FactsTypeTree.read(fact.targets[0]) : null;
 				case _: null;
 			};

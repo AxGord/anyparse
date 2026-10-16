@@ -440,14 +440,14 @@ final class MemberTouchScan {
 					if (!expanded) return unreadable;
 					unread = true;
 				} else if (expanded)
-					for (run in expansionRuns(n, f)) out.push(run)
+					for (run in expansionRuns(n, f, view)) out.push(run)
 				else if (made || declarationHolding(g, node.id, f.at, view) != null)
 					out.push(f)
 				else
 					return BySyntax;
 			}
 			for (child in n.fns) {
-				final nested: Null<FactNode> = view.table.node(child);
+				final nested: Null<FactNode> = view.node(child);
 				if (nested == null) return unreadable;
 				// a function an expansion placed outside its type's file runs whenever its value is called: what it does to a
 				// name of the member no reading places
@@ -468,16 +468,16 @@ final class MemberTouchScan {
 	 */
 	private static function expansionCode(g: CallGraph, node: FnNode, n: FactNode, at: FactPos, view: FactsView): Bool {
 		return view.truth && FactMarkers.carries(n, m -> m.match(MacroExpansion)) && declarationHolding(g, node.id, at, view) == null
-			&& CompilerFacts.spliceOf(n, at) == null;
+			&& view.spliceOf(n, at) == null;
 	}
 
 	/**
 	 * The typed access `f` of code an expression macro's expansion built into `n`, read where it runs: at each site the
 	 * expansion holding it runs at (`CompilerFacts.expansionSites`), or over the whole of `n` when none is known.
 	 */
-	private static function expansionRuns(n: FactNode, f: FieldFact): Array<FieldFact> {
-		final expansion: Null<ExpansionFact> = CompilerFacts.expansionOf(n, f.at);
-		final sites: Array<Span> = (expansion == null ? null : CompilerFacts.expansionSites(n, expansion)) ?? [n.at.span];
+	private static function expansionRuns(n: FactNode, f: FieldFact, view: FactsView): Array<FieldFact> {
+		final expansion: Null<ExpansionFact> = view.expansionOf(n, f.at);
+		final sites: Array<Span> = (expansion == null ? null : view.expansionSites(n, expansion)) ?? [n.at.span];
 		return [
 			for (s in sites)
 				{
@@ -871,8 +871,7 @@ final class MemberTouchScan {
 
 	/** The declaration of the node `id` (`CallGraph.declarationsOf`) whose text holds the fact position `at`, or null. */
 	private static function declarationHolding(g: CallGraph, id: String, at: FactPos, view: FactsView): Null<FnDeclaration> {
-		return g.declarationsOf(id)
-			.find(d -> at.file == view.table.keyOf(d.file) && d.span.from <= at.span.from && at.span.to <= d.span.to);
+		return g.declarationsOf(id).find(d -> at.file == view.keyOf(d.file) && d.span.from <= at.span.from && at.span.to <= d.span.to);
 	}
 
 	/** Whether `span` shares a position with `region`; false when either is missing. */

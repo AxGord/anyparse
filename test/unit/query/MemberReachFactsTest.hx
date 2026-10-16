@@ -2103,7 +2103,7 @@ class MemberReachFactsTest extends Test {
 			final region: ReachEntry = Region(Path.join([dir, 'Main.hx']), regionOf(main));
 			final first: MemberReach = new MemberReach(
 				truth._plugin, truth._project, truth._index, true, MemberReach.MAX_LIBRARY_FILES, MemberReach.MAX_VISITED, null,
-				() -> false, FactsView.over(truth._scope.facts?.table)
+				() -> false, FactsView.over(truth._scope.facts?._table)
 			);
 			final alone: ReachResult = first.mayReach(region, store, Mutate);
 			first._factsTruthAvailable = true;
@@ -2876,7 +2876,7 @@ class MemberReachFactsTest extends Test {
 			+ '\tfunction g():Void {}\n}\n';
 		final result: ReachResult = withReach(
 			['Main.hx' => main, 'Broken.hx' => broken], null, true, false, null, null, null, true, (reach, dir) -> {
-				reach._scope.facts?.table.invalidate(Path.join([dir, 'Broken.hx']));
+				reach._scope.facts?._table.invalidate(Path.join([dir, 'Broken.hx']));
 				reach.mayReach(Region(Path.join([dir, 'Main.hx']), regionOf(main)), { owner: 'Main', name: 'items' }, Mutate);
 			}
 		);
@@ -3259,7 +3259,7 @@ class MemberReachFactsTest extends Test {
 			Assert.notNull(facts);
 			if (facts == null) return;
 			for (typed in ['pkg._M.P', 'pkg._M.Q', 'pkg._Sqlite.Row', 'pkg._Acc.A']) {
-				Assert.notNull(facts.table.type(typed), 'the builds type $typed');
+				Assert.notNull(facts.type(typed), 'the builds type $typed');
 				Assert.equals(typed, facts.declaredIds(typed.substr(typed.lastIndexOf('.') + 1)).join(', '));
 			}
 			Assert.equals('pkg._Acc.A', facts.implemented('pkg._Acc.A_Impl_'));

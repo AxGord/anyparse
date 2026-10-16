@@ -2946,3 +2946,8 @@ decided the question; it may not become a record of runs.
   the file does now (a module-level function's, which the oracle does not place yet), declines instead of being read
   raw, and a value only a flow types is typed. No finding of the oracle-assisted run on TM changed — branch
   `feat/infra-B5`
+- B5's leftover in a B4b-owned file: `MemberTouchScan` still read the facts table itself (`view.table.node` /
+  `.keyOf`) and three `CompilerFacts` statics (`spliceOf`, `expansionOf`, `expansionSites`) → the view's facade
+  answers all five (`FactsView.spliceOf` / `expansionOf` / `expansionSites` added beside `node` / `keyOf`), its
+  `@:allow(MemberTouchScan)` grant is gone and the field is `_table`, read only by the facts layer's own parts.
+  owned-types 12 -> 9 (CompilerFacts 3 -> 0) — branch `feat/infra-B4b`

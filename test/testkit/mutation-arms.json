@@ -8138,7 +8138,7 @@
 			"name": "M-GRAPH-FACTS-SPLICED-SITE",
 			"type": "anyparse.query.CallGraphFacts",
 			"method": "siteOf",
-			"find": "at.file == view.table.keyOf(node.file) && CompilerFacts.placed(n, at) ? at.span : null",
+			"find": "at.file == view._table.keyOf(node.file) && CompilerFacts.placed(n, at) ? at.span : null",
 			"replace": "at.span",
 			"note": "a spliced fact files its edge under its caller's file at the callee's range, which a region or a dead branch there then claims"
 		},
@@ -8146,7 +8146,7 @@
 			"name": "M-GRAPH-FACTS-SPLICED-FILE",
 			"type": "anyparse.query.CallGraphFacts",
 			"method": "graphFile",
-			"find": "for (file in g._entries.keys()) if (view.table.keyOf(file) == key) return file;",
+			"find": "for (file in g._entries.keys()) if (view._table.keyOf(file) == key) return file;",
 			"replace": "",
 			"note": "a function spliced in from another file is looked up in its caller's file, where no graph node starts at its range"
 		},
@@ -13408,7 +13408,7 @@
 			"name": "M-TOUCH-EXPANSION-RUNS",
 			"type": "anyparse.query.MemberTouchScan",
 			"method": "expansionRuns",
-			"find": "(expansion == null ? null : CompilerFacts.expansionSites(n, expansion)) ?? [n.at.span]",
+			"find": "(expansion == null ? null : view.expansionSites(n, expansion)) ?? [n.at.span]",
 			"replace": "[n.at.span]",
 			"note": "a touch an expansion makes is read over its whole function, not where the call of the macro was"
 		},
@@ -14102,7 +14102,7 @@
 			"name": "M-FACTS-SPLICED-REFLECTION-MEMBERLESS",
 			"type": "anyparse.query.FactsView",
 			"method": "splicedReachesNoMember",
-			"find": " && FactsMethodValues.memberless(table, m)",
+			"find": " && FactsMethodValues.memberless(_table, m)",
 			"replace": "",
 			"note": "a spliced reflective body whose result may hold a member's value (`Reflect.copy`, spliced by its call site) leaves its function's regions readable"
 		},
@@ -14222,8 +14222,8 @@
 			"name": "M-FACTS-COPY-NESTED-UNION",
 			"type": "anyparse.query.FactsProvenance",
 			"method": "factsOnText",
-			"find": "final nested: Null<FactNode> = _view.table.nodeAsBuiltBy(child, builds);",
-			"replace": "final nested: Null<FactNode> = _view.table.node(child);",
+			"find": "final nested: Null<FactNode> = _view._table.nodeAsBuiltBy(child, builds);",
+			"replace": "final nested: Null<FactNode> = _view._table.node(child);",
 			"note": "a function nested in a copy's body is judged by every build's facts of it, the other copies' among them"
 		},
 		{
