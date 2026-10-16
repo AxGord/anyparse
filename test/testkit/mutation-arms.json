@@ -9195,7 +9195,7 @@
 			"name": "M-REACH-DISCARDED-BODY",
 			"type": "anyparse.query.MemberTouchScan",
 			"method": "valueDiscarded",
-			"find": "if ((shape.loopStatementKinds ?? []).concat(shape.doWhileLoopKinds ?? []).contains(kind)) return true;",
+			"find": "if (ShapeVocab.statementLoopKinds(shape).contains(kind)) return true;",
 			"replace": "",
 			"note": "a loop's body is not taken as discarding its last statement's value, so a fresh write ending a loop body makes the local shared"
 		},
