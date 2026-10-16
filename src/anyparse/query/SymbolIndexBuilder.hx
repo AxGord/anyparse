@@ -285,6 +285,12 @@ final class SymbolIndexBuilder {
 		// empty set and every type indexes as public, which is the pre-existing answer.
 		final privateModifierKinds: Array<String> = privateVisibilityKinds(shape);
 		var pendingPrivate: Bool = false;
+		inline function clearPending(): Void {
+			pendingMeta = [];
+			pendingForwarded = null;
+			pendingExtern = false;
+			pendingPrivate = false;
+		}
 
 		for (gn in declNodes(tree, source, externModifierKind, privateModifierKinds)) {
 			final node: QueryNode = gn.node;
@@ -333,16 +339,8 @@ final class SymbolIndexBuilder {
 					guarded: gn.guarded,
 					forwardedMembers: pendingForwarded
 				};
-				// another branch's declaration of a type already listed is the same type in another build: folded into it
-				final listed: Null<Int> = gn.alternate == true ? lastIndexNamed(types, typeDecl.name) : null;
-				if (listed == null)
-					types.push(info)
-				else
-					types[listed] = withAlternate(types[listed], info);
-				pendingMeta = [];
-				pendingForwarded = null;
-				pendingExtern = false;
-				pendingPrivate = false;
+				addType(types, info, gn.alternate == true);
+				clearPending();
 				continue;
 			}
 
@@ -366,81 +364,23 @@ final class SymbolIndexBuilder {
 				if (node.kind == 'PackageDecl' && nullableName != null) pkg = nullableName;
 				continue;
 			}
-			final name: String = nullableName;
-			final span: Span = nullableSpan;
-			switch node.kind {
-				case 'PackageDecl':
-					pkg = name;
-					pendingMeta = [];
-					pendingForwarded = null;
-					pendingExtern = false;
-					pendingPrivate = false;
-				case 'ImportDecl':
-					imports.push({
-						raw: name,
-						kind: ImportKind.Import,
-						alias: null,
-						aliasTarget: null,
-						span: span,
-						guarded: gn.guarded
-					});
-					pendingMeta = [];
-					pendingForwarded = null;
-					pendingExtern = false;
-					pendingPrivate = false;
-				case 'ImportAliasDecl', 'ImportAliasInDecl':
-					// The grammar's name slot for these two kinds is the ALIAS; the aliased path is
-					// only in the statement text, so it is decoded there — through the project's one
-					// decoder of that text, rather than a second spelling of the same scan.
-					final target: String = ModuleScan.aliasTargetOf(source.substring(span.from, span.to));
-					imports.push({
-						raw: name,
-						kind: ImportKind.Alias,
-						alias: name,
-						aliasTarget: target == '' ? null : target,
-						span: span,
-						guarded: gn.guarded
-					});
-					pendingMeta = [];
-					pendingForwarded = null;
-					pendingExtern = false;
-					pendingPrivate = false;
-				case 'ImportWildDecl':
-					imports.push({
-						raw: name,
-						kind: ImportKind.Wild,
-						alias: null,
-						aliasTarget: null,
-						span: span,
-						guarded: gn.guarded
-					});
-					pendingMeta = [];
-					pendingForwarded = null;
-					pendingExtern = false;
-					pendingPrivate = false;
-				case 'UsingDecl':
-					imports.push({
-						raw: name,
-						kind: ImportKind.Using,
-						alias: null,
-						aliasTarget: null,
-						span: span,
-						guarded: gn.guarded
-					});
-					pendingMeta = [];
-					pendingForwarded = null;
-					pendingExtern = false;
-					pendingPrivate = false;
-				case _:
-					// A module-level declaration that is not a TYPE — Haxe 4.2's module-level statics
-					// project as `(Private) (FnDecl helper)`, so the visibility modifier reaches this loop
-					// with no type to attach to. It must NOT be carried forward the way `pendingMeta` and
-					// `pendingExtern` are: over-attaching those two only makes a consumer more
-					// conservative, while over-attaching `isPrivate` REMOVES a binding, and a removed
-					// binding is what `MoveSymbol`'s gate reads as "nothing binds this name" — the
-					// direction that refuses LESS.
-					pendingPrivate = false;
+			final statement: Null<ImportInfo> = importOf(node.kind, nullableName, nullableSpan, gn.guarded, source);
+			if (statement != null)
+				imports.push(statement)
+			else if (node.kind == 'PackageDecl')
+				pkg = nullableName
+			else {
+				// A module-level declaration that is not a TYPE — Haxe 4.2's module-level statics
+				// project as `(Private) (FnDecl helper)`, so the visibility modifier reaches this loop
+				// with no type to attach to. It must NOT be carried forward the way `pendingMeta` and
+				// `pendingExtern` are: over-attaching those two only makes a consumer more
+				// conservative, while over-attaching `isPrivate` REMOVES a binding, and a removed
+				// binding is what `MoveSymbol`'s gate reads as "nothing binds this name" — the
+				// direction that refuses LESS.
+				pendingPrivate = false;
+				continue;
 			}
+			clearPending();
 		}
 
 		final module: String = pkg == '' ? basename : '$pkg.$basename';
@@ -457,6 +397,45 @@ final class SymbolIndexBuilder {
 			accessGrants: collectAccessGrants(tree, shape),
 			moduleFields: moduleFieldsOf(tree, shape)
 		};
+	}
+
+	/**
+	 * The import record of the module-level statement of `kind`, named `name` at `span` (`extractFileInfo`): an `import`,
+	 * an alias import, a wildcard import or a `using`. Null for any other statement.
+	 */
+	private static function importOf(kind: String, name: String, span: Span, guarded: Bool, source: String): Null<ImportInfo> {
+		final importKind: Null<ImportKind> = switch kind {
+			case 'ImportDecl': ImportKind.Import;
+			case 'ImportAliasDecl', 'ImportAliasInDecl': ImportKind.Alias;
+			case 'ImportWildDecl': ImportKind.Wild;
+			case 'UsingDecl': ImportKind.Using;
+			case _: null;
+		};
+		if (importKind == null) return null;
+		// The grammar's name slot for the two alias kinds is the ALIAS; the aliased path is
+		// only in the statement text, so it is decoded there — through the project's one
+		// decoder of that text, rather than a second spelling of the same scan.
+		final target: String = importKind == ImportKind.Alias ? ModuleScan.aliasTargetOf(source.substring(span.from, span.to)) : '';
+		return {
+			raw: name,
+			kind: importKind,
+			alias: importKind == ImportKind.Alias ? name : null,
+			aliasTarget: target == '' ? null : target,
+			span: span,
+			guarded: guarded
+		};
+	}
+
+	/**
+	 * Add `info` to `types`, or — the `alternate` branch's declaration of a type already listed, the same type in
+	 * another build — fold it into that one.
+	 */
+	private static function addType(types: Array<TypeDeclInfo>, info: TypeDeclInfo, alternate: Bool): Void {
+		final listed: Null<Int> = alternate ? lastIndexNamed(types, info.name) : null;
+		if (listed == null)
+			types.push(info)
+		else
+			types[listed] = withAlternate(types[listed], info);
 	}
 
 	/**

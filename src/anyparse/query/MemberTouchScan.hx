@@ -421,44 +421,74 @@ final class MemberTouchScan {
 	): TypedTouches {
 		final declared: Array<FnDeclaration> = g.declarationsOf(node.id);
 		if (declared.length == 0 && !made) return BySyntax;
-		final unreadable: TypedTouches = made ? Unread : BySyntax;
-		final out: Array<FieldFact> = [];
-		final work: Array<FactNode> = bodies.copy();
-		var unread: Bool = false;
-		while (work.length > 0) {
-			final n: Null<FactNode> = work.pop();
-			if (n == null) return unreadable;
+		final walk: TouchWalk = {
+			g: g,
+			node: node,
+			name: name,
+			declaring: declaring,
+			owners: owners,
+			view: view,
+			made: made,
+			unreadable: made ? Unread : BySyntax,
+			out: [],
+			work: bodies.copy(),
+			unread: false
+		};
+		while (walk.work.length > 0) {
+			final n: Null<FactNode> = walk.work.pop();
+			if (n == null) return walk.unreadable;
 			if (n.generated && !made) return BySyntax;
 			// a field the compiler calls — a function a variable holds, a dynamic receiver's field — is a call, no field fact
 			for (c in n.calls) if (calledField(c.target) == name) {
-				if (made || !expansionCode(g, node, n, c.at, view)) return unreadable;
-				unread = true;
+				if (made || !expansionCode(g, node, n, c.at, view)) return walk.unreadable;
+				walk.unread = true;
 			}
-			for (f in n.fields) if (f.field == name && bindsTo(f, declaring, owners)) {
-				final expanded: Bool = !made && expansionCode(g, node, n, f.at, view);
-				if (!typedShape(f)) {
-					if (!expanded) return unreadable;
-					unread = true;
-				} else if (expanded)
-					for (run in expansionRuns(n, f, view)) out.push(run)
-				else if (made || declarationHolding(g, node.id, f.at, view) != null)
-					out.push(f)
-				else
-					return BySyntax;
-			}
-			for (child in n.fns) {
-				final nested: Null<FactNode> = view.node(child);
-				if (nested == null) return unreadable;
-				// a function an expansion placed outside its type's file runs whenever its value is called: what it does to a
-				// name of the member no reading places
-				if (!made && nested.generated && expansionCode(g, node, n, nested.at, view)) {
-					if (nested.fields.exists(f -> f.field == name) || nested.calls.exists(c -> calledField(c.target) == name))
-						unread = true;
-				} else if (made || CallGraphFacts.graphNodeOf(g, node, child, view) == null)
-					work.push(nested);
-			}
+			final ended: Null<TypedTouches> = fieldTouches(walk, n);
+			if (ended != null) return ended;
+			if (!nestedBodies(walk, n)) return walk.unreadable;
 		}
-		return unread ? Unread : Typed(out);
+		return walk.unread ? Unread : Typed(walk.out);
+	}
+
+	/**
+	 * Read the accesses of the member in the body `n` (`nodeAccesses`): each of a typed shape lands in `walk.out` — where an
+	 * expansion built it, as the call of the macro runs it (`expansionRuns`). The verdict that ends the walk when one cannot
+	 * be read: of another shape outside such code, or outside every declaration's text; null otherwise.
+	 */
+	private function fieldTouches(walk: TouchWalk, n: FactNode): Null<TypedTouches> {
+		for (f in n.fields) if (f.field == walk.name && bindsTo(f, walk.declaring, walk.owners)) {
+			final expanded: Bool = !walk.made && expansionCode(walk.g, walk.node, n, f.at, walk.view);
+			if (!typedShape(f)) {
+				if (!expanded) return walk.unreadable;
+				walk.unread = true;
+			} else if (expanded)
+				for (run in expansionRuns(n, f, walk.view)) walk.out.push(run)
+			else if (walk.made || declarationHolding(walk.g, walk.node.id, f.at, walk.view) != null)
+				walk.out.push(f)
+			else
+				return BySyntax;
+		}
+		return null;
+	}
+
+	/**
+	 * Queue the functions the compiler made inside the body `n` that the graph declares no node for (`nodeAccesses`), every
+	 * one in a body a build macro made; one an expansion placed that names the member leaves the node unread. False when
+	 * one has no facts.
+	 */
+	private static function nestedBodies(walk: TouchWalk, n: FactNode): Bool {
+		for (child in n.fns) {
+			final nested: Null<FactNode> = walk.view.node(child);
+			if (nested == null) return false;
+			// a function an expansion placed outside its type's file runs whenever its value is called: what it does to a
+			// name of the member no reading places
+			if (!walk.made && nested.generated && expansionCode(walk.g, walk.node, n, nested.at, walk.view)) {
+				if (nested.fields.exists(f -> f.field == walk.name) || nested.calls.exists(c -> calledField(c.target) == walk.name))
+					walk.unread = true;
+			} else if (walk.made || CallGraphFacts.graphNodeOf(walk.g, walk.node, child, walk.view) == null)
+				walk.work.push(nested);
+		}
+		return true;
 	}
 
 	/**
@@ -958,4 +988,24 @@ private enum TypedTouches {
 	/** By neither: such an access lies in code no text holds — a build macro's method, an expression macro's expansion. */
 	Unread;
 
+}
+
+/** The walk `MemberTouchScan.nodeAccesses` makes over one graph node's bodies, for the member `name` of `declaring`. */
+private typedef TouchWalk = {
+	final g: CallGraph;
+	final node: FnNode;
+	final name: String;
+	final declaring: String;
+	final owners: Array<String>;
+	final view: FactsView;
+
+	/** Whether the bodies are a build macro's (`CallGraphFacts.adopted`). */
+	final made: Bool;
+
+	/** The verdict an access no reading answers for ends the walk with. */
+	final unreadable: TypedTouches;
+
+	final out: Array<FieldFact>;
+	final work: Array<FactNode>;
+	var unread: Bool;
 }

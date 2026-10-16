@@ -164,45 +164,59 @@ final class ValueEscapes {
 		final seen: Map<String, Bool> = [];
 		// under the truth every function the builds typed is read, the libraries' as much as the project's
 		final view: Null<FactsView> = _scope.facts;
-		if (view != null && view.truth) {
-			final read: FactsEscapes = new FactsEscapes(view, _scope);
-			_read = read;
-			final types: Null<Array<String>> = read.compute();
-			return {
-				types: types,
-				raw: false,
-				ids: types == null ? null : read.typedIds(),
-				functions: types == null ? null : read.functionTypes()
-			};
-		}
+		if (view != null && view.truth) return factsAnswer(view);
 		if (!_scopeKnown) return { types: null, raw: false, ids: null };
 		final g: CallGraph = _g.graph();
 		for (skipped in g.skippedFiles) if (_scope.sources.exists(skipped)) return { types: null, raw: false, ids: null };
 		final escape: String -> Bool = escapeType.bind(g, out, seen);
 		// a file no build runs lets nothing escape, and the graph holds no tree of it
 		for (f in _scope.files) if (!_scope.runsInNoBuild(f.file)) {
-			final fi: Null<FileInfo> = _scope.index.fileInfo(f.file);
-			final tree: Null<QueryNode> = g.treeOf(f.file);
-			if (fi == null || tree == null) return { types: null, raw: false, ids: null };
-			// a class inheriting library code runs it with the instance as `this`
-			for (t in fi.types) if (inheritsLibrary(g, t.name) && !escape(t.name)) return { types: null, raw: false, ids: null };
-			final compileTime: Array<Span> = macroSpans(f.file, tree);
-			for (h in _hazards.hazardsIn(f.file, tree, f.source, new Span(0, f.source.length))) {
-				// code no build compiles, and a macro function with its modifier, run in no program
-				if (!_live.live(f.file, f.source, h.span) || h.node.kind == _shape.macroModifierKind) continue;
-				if (compileTime.exists(sp -> h.span.from >= sp.from && h.span.to <= sp.to)) continue;
-				switch h.kind {
-					case Native, Untyped, Unmodelled(_):
-						return { types: null, raw: false, ids: null };
-					case Opaque:
-						if (_live.holdsLiveCode(f.file, f.source, h.span)) return { types: null, raw: true, ids: null };
-					case ReflectiveName(_), ArrayChange:
-				}
-			}
-			if (!scanFile(g, f.file, tree, f.source, escape)) return { types: null, raw: false, ids: null };
+			final ended: Null<EscapeAnswer> = fileEscapes(g, f.file, f.source, escape);
+			if (ended != null) return ended;
 		}
 		if (!namedClasses(g, escape)) return { types: null, raw: false, ids: null };
 		return { types: out, raw: false, ids: null };
+	}
+
+	/** `compute` under the truth: what the facts' own reading (`FactsEscapes`) answers. */
+	private function factsAnswer(view: FactsView): EscapeAnswer {
+		final read: FactsEscapes = new FactsEscapes(view, _scope);
+		_read = read;
+		final types: Null<Array<String>> = read.compute();
+		return {
+			types: types,
+			raw: false,
+			ids: types == null ? null : read.typedIds(),
+			functions: types == null ? null : read.functionTypes()
+		};
+	}
+
+	/**
+	 * Hand `escape` every type the code of `file` (its text `source`) lets escape (`compute`): a class inheriting library
+	 * code, and what `scanFile` reads. The answer that ends `compute` when the file holds code whose escapes are not known —
+	 * a native, untyped or unmodelled hazard live code holds, an opaque one holding live code (raw) — null otherwise.
+	 */
+	private function fileEscapes(g: CallGraph, file: String, source: String, escape: String -> Bool): Null<EscapeAnswer> {
+		final fi: Null<FileInfo> = _scope.index.fileInfo(file);
+		final tree: Null<QueryNode> = g.treeOf(file);
+		if (fi == null || tree == null) return { types: null, raw: false, ids: null };
+		// a class inheriting library code runs it with the instance as `this`
+		for (t in fi.types) if (inheritsLibrary(g, t.name) && !escape(t.name)) return { types: null, raw: false, ids: null };
+		final compileTime: Array<Span> = macroSpans(file, tree);
+		for (h in _hazards.hazardsIn(file, tree, source, new Span(0, source.length))) {
+			// code no build compiles, and a macro function with its modifier, run in no program
+			if (!_live.live(file, source, h.span) || h.node.kind == _shape.macroModifierKind) continue;
+			if (compileTime.exists(sp -> h.span.from >= sp.from && h.span.to <= sp.to)) continue;
+			switch h.kind {
+				case Native, Untyped, Unmodelled(_):
+					return { types: null, raw: false, ids: null };
+				case Opaque:
+					if (_live.holdsLiveCode(file, source, h.span)) return { types: null, raw: true, ids: null };
+				case ReflectiveName(_), ArrayChange:
+			}
+		}
+		if (!scanFile(g, file, tree, source, escape)) return { types: null, raw: false, ids: null };
+		return null;
 	}
 
 	/**

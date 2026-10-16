@@ -984,14 +984,7 @@ final class FactsView {
 		if (!truth) return null;
 		final key: String = '$type.$name';
 		if (_soleMember.exists(key)) return _soleMember[key];
-		final holders: Array<String> = [];
-		for (t in bySimpleName()[type] ?? []) {
-			final fact: Null<TypeFact> = _table.type(t);
-			if (fact == null || !fact.fields.exists(f -> graphMember(t, f.name) == name)) continue;
-			final own: String = fact.kind == IMPL_KIND && name == (_scope.shape.constructorName ?? 'new') ? IMPL_CONSTRUCTOR : name;
-			final body: Null<FactNode> = _table.node('$t.$own');
-			if (body != null && FUNCTION_KINDS.contains(body.kind) && !body.generated) holders.push(t);
-		}
+		final holders: Array<String> = bodyHolders(type, name);
 		final holder: Null<String> = holders.length == 1 ? holders[0] : null;
 		final root: Null<String> = holder == null ? null : rootOf(holder);
 		var sole: Null<String> = root == null ? null : holder;
@@ -1001,6 +994,22 @@ final class FactsView {
 					sole = null;
 		_soleMember[key] = sole;
 		return sole;
+	}
+
+	/**
+	 * The typed types the simple name `type` stands for that hold a function body for a member `name` (`soleMember`): one
+	 * the compiler wrote, not generated — an implementation class's constructor under its own name.
+	 */
+	private function bodyHolders(type: String, name: String): Array<String> {
+		final holders: Array<String> = [];
+		for (t in bySimpleName()[type] ?? []) {
+			final fact: Null<TypeFact> = _table.type(t);
+			if (fact == null || !fact.fields.exists(f -> graphMember(t, f.name) == name)) continue;
+			final own: String = fact.kind == IMPL_KIND && name == (_scope.shape.constructorName ?? 'new') ? IMPL_CONSTRUCTOR : name;
+			final body: Null<FactNode> = _table.node('$t.$own');
+			if (body != null && FUNCTION_KINDS.contains(body.kind) && !body.generated) holders.push(t);
+		}
+		return holders;
 	}
 
 	/**

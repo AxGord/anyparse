@@ -481,7 +481,19 @@ final class CallGraphFacts {
 		if (field) holds();
 		// a field no declaration read so far says is a `dynamic` method may still be one, whose body the edge reads
 		if (field && !replaceable && known != null) return;
-		final instance: Bool = c.access == 'FInstance' || c.access == 'FClosure' || field;
+		callEdges(g, node, c, target, owner, name, id, span, view, deferred);
+		if (!field && replaceable) holds();
+	}
+
+	/**
+	 * The edges the call `c` of `target`, the member `name` of `owner` the graph node `id` is, records (`declaredCall`): its
+	 * own — a reference when `deferred` — and, for an instance call, an override edge to each member it may dispatch to.
+	 */
+	private static function callEdges(
+		g: CallGraph, node: FnNode, c: CallFact, target: String, owner: String, name: String, id: String, span: Null<Span>,
+		view: FactsView, deferred: Bool
+	): Void {
+		final instance: Bool = c.access == 'FInstance' || c.access == 'FClosure' || c.access == 'fieldValue';
 		final dispatch: Null<String> = instance ? dispatchType(c.receiver, owner, view) : null;
 		// an inlined call at a known site whose body's facts are filed here (`filed`) runs them, instantiated at this call
 		final spliced: Bool = c.access == INLINED && c.site != null && !view.harmlessSplice(g, target);
@@ -490,7 +502,6 @@ final class CallGraphFacts {
 			CompilerFacts.baseId(owner), spliced
 		);
 		if (dispatch != null) virtualEdges(g, node, dispatch, name, span, deferred ? Ref : Virtual, view);
-		if (!field && replaceable) holds();
 	}
 
 	/** A `new`: the edge to the constructor it names and the run of the initializers it executes, as `CallGraph` records one. */

@@ -512,6 +512,16 @@ final class ShardPlan {
 	 * class off shard 0, and a shard nothing was dealt to.
 	 */
 	private static function checkParity(expected: Array<String>, placements: Array<ShardPlacement>, shards: Int): Null<String> {
+		final uncovered: Null<String> = coverageFailure(expected, placements);
+		if (uncovered != null) return uncovered;
+		return placementFailure(placements, shards);
+	}
+
+	/**
+	 * The coverage half of `checkParity`: every class of `expected` placed whole exactly once, or as `k` slices each placed
+	 * exactly once, and nothing else placed. The refusal text, or null.
+	 */
+	private static function coverageFailure(expected: Array<String>, placements: Array<ShardPlacement>): Null<String> {
 		final slices: Map<String, Array<Int>> = [];
 		final counts: Map<String, Int> = [];
 		for (p in placements) {
@@ -530,6 +540,14 @@ final class ShardPlan {
 			return '${TAG}PARITY FAIL — ${expected.length} registered classes, ${placed.length} placed whole or in every slice';
 		for (i in 0...expected.length) if (placed[i] != expected[i])
 			return '${TAG}PARITY FAIL — the shard plan does not cover the registered class list (${expected[i]} vs ${placed[i]})';
+		return null;
+	}
+
+	/**
+	 * The placement half of `checkParity`: every placement on a shard in range, a pinned class on shard 0, and no shard
+	 * left empty. The refusal text, or null.
+	 */
+	private static function placementFailure(placements: Array<ShardPlacement>, shards: Int): Null<String> {
 		for (p in placements) {
 			if (p.shard < 0 || p.shard >= shards) return '${TAG}PARITY FAIL — ${p.cls} placed on shard ${p.shard} of $shards';
 			if (p.shard != 0 && STICKY_CLASSES.contains(p.cls))

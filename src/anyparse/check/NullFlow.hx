@@ -453,33 +453,12 @@ final class NullFlow {
 		fn: QueryNode, name: String, bodySpan: Span, modifiers: Array<QueryNode>, shape: RefShape, identKind: String, notEqKind: String,
 		typeSources: Map<Int, String>
 	): Null<NonNullPredicate> {
-		inline function carries(kind: Null<String>): Bool return kind != null && modifiers.exists(m -> m.kind == kind);
-		final overloadMeta: Null<String> = shape.signatureOverloadMetaName;
-		if (
-			carries(shape.dynamicModifierKind) || carries(shape.macroModifierKind) || carries(shape.overloadModifierKind)
-			|| overloadMeta != null && modifiers.exists(m -> META_KINDS.contains(m.kind) && m.name == overloadMeta)
-		)
-			return null;
-		if (fn.kind != shape.finalModifierMemberKind && !carries(shape.inlineModifierKind) && !carries(shape.staticModifierKind))
-			return null;
+		if (!predicateModifiers(fn, modifiers, shape)) return null;
 		final params: Array<QueryNode> = fn.children.filter(c -> (shape.paramKinds ?? []).contains(c.kind));
 		if (params.exists(p -> p.kind == shape.restParamKind)) return null;
 		final returned: Null<QueryNode> = soleReturnedExpr(fn, shape);
 		if (returned == null || (shape.writeParentKinds ?? []).exists(k -> MemberKinds.subtreeContainsKind(returned, k))) return null;
-		final conjuncts: Array<QueryNode> = [];
-		function flatten(n: QueryNode): Void {
-			if (n.kind == BOOL_AND_KIND || n.kind == shape.parenKind && n.children.length == 1)
-				for (c in n.children) flatten(c)
-			else
-				conjuncts.push(n);
-		}
-		flatten(returned);
-		final nonNullParams: Array<Int> = [];
-		for (c in conjuncts) if (c.kind == notEqKind) {
-			final operand: Null<String> = NodeShape.nullComparedIdent(c, identKind, shape.nullLiteralKind)?.name;
-			final index: Int = params.findIndex(p -> p.name == operand);
-			if (operand != null && index >= 0 && !nonNullParams.contains(index)) nonNullParams.push(index);
-		}
+		final nonNullParams: Array<Int> = nonNullConjuncts(returned, params, shape, identKind, notEqKind);
 		final paramTypes: Array<Null<String>> = [
 			for (p in params) {
 				final span: Null<Span> = p.span;
@@ -494,6 +473,42 @@ final class NullFlow {
 			nonNullParams: nonNullParams,
 			paramTypes: paramTypes
 		};
+	}
+
+	/**
+	 * Whether the modifier run `modifiers` lets `fn` run only as its body reads (`predicateOf`): not `dynamic`, a macro or an
+	 * overload, and a `final`, `inline` or `static` member no subclass overrides.
+	 */
+	private static function predicateModifiers(fn: QueryNode, modifiers: Array<QueryNode>, shape: RefShape): Bool {
+		inline function carries(kind: Null<String>): Bool return kind != null && modifiers.exists(m -> m.kind == kind);
+		final overloadMeta: Null<String> = shape.signatureOverloadMetaName;
+		if (
+			carries(shape.dynamicModifierKind) || carries(shape.macroModifierKind) || carries(shape.overloadModifierKind)
+			|| overloadMeta != null && modifiers.exists(m -> META_KINDS.contains(m.kind) && m.name == overloadMeta)
+		)
+			return false;
+		return !(fn.kind != shape.finalModifierMemberKind && !carries(shape.inlineModifierKind) && !carries(shape.staticModifierKind));
+	}
+
+	/** The indexes of `params` an `!= null` conjunct of `returned` (its `&&` operands, through parentheses) compares, each once. */
+	private static function nonNullConjuncts(
+		returned: QueryNode, params: Array<QueryNode>, shape: RefShape, identKind: String, notEqKind: String
+	): Array<Int> {
+		final conjuncts: Array<QueryNode> = [];
+		function flatten(n: QueryNode): Void {
+			if (n.kind == BOOL_AND_KIND || n.kind == shape.parenKind && n.children.length == 1)
+				for (c in n.children) flatten(c)
+			else
+				conjuncts.push(n);
+		}
+		flatten(returned);
+		final nonNullParams: Array<Int> = [];
+		for (c in conjuncts) if (c.kind == notEqKind) {
+			final operand: Null<String> = NodeShape.nullComparedIdent(c, identKind, shape.nullLiteralKind)?.name;
+			final index: Int = params.findIndex(p -> p.name == operand);
+			if (operand != null && index >= 0 && !nonNullParams.contains(index)) nonNullParams.push(index);
+		}
+		return nonNullParams;
 	}
 
 	/**
@@ -1436,37 +1451,53 @@ final class NullFlow {
 	): Void {
 		final kind: String = cond.kind;
 		if (cmpKind != null && kind == cmpKind) {
-			// A SAFE-NAVIGATION operand only ever proves the NON-NULL side, and `provesNonNull` — not
-			// `cmpKind` — is what says which side this call is filling: the operator alone cannot,
-			// since the else-arm collects non-null names through `== null` by duality. `x?.a` null
-			// leaves `x` itself entirely unconstrained, so the known-null slot must never take one.
-			final direct: Null<QueryNode> = NodeShape.nullComparedIdent(cond, ctx.identKind, ctx.nullLitKind);
-			final operand: Null<QueryNode> = direct ?? (provesNonNull ? safeNavChainRoot(cond, ctx) : null);
-			final nm: Null<String> = operand?.name;
-			// A caller that tracks compiler visibility takes the safe-navigation names apart: the
-			// compiler narrows `x` on `x != null`, never on `x?.f != null`.
-			if (nm != null) (direct == null ? viaSafeNav ?? out : out).push(nm);
+			narrowComparison(cond, out, ctx, provesNonNull, viaSafeNav);
 		} else if (kind == combineKind) {
 			for (c in cond.children) collectNarrow(c, out, ctx, cmpKind, combineKind, provesNonNull, viaSafeNav);
 		} else if (ctx.parenKind != null && kind == ctx.parenKind && cond.children.length == 1) {
 			collectNarrow(cond.children[0], out, ctx, cmpKind, combineKind, provesNonNull, viaSafeNav);
 		} else if (ctx.notKind != null && kind == ctx.notKind && cond.children.length == 1) {
-			// Feature 3: `!(…)` flips the comparison polarity AND the combine operator (De Morgan) — a
-			// negand proving x null then proves x non-null, and its `&&`/`||` swap; nested `!` unwinds
-			// by recursion (double-not restores the original polarity).
-			final flipCmp: Null<String> = if (cmpKind == ctx.notEqKind)
-				ctx.eqKind
-			else if (cmpKind == ctx.eqKind)
-				ctx.notEqKind
-			else
-				cmpKind;
-			final flipCombine: String = combineKind == BOOL_AND_KIND ? BOOL_OR_KIND : BOOL_AND_KIND;
-			collectNarrow(cond.children[0], out, ctx, flipCmp, flipCombine, provesNonNull, viaSafeNav);
+			narrowNegation(cond.children[0], out, ctx, cmpKind, combineKind, provesNonNull, viaSafeNav);
 		} else if (provesNonNull && cmpKind != null && cmpKind == ctx.notEqKind && kind == ctx.callKind) {
 			// A true NON-NULL PREDICATE call proves its argument the way `x != null` does — in the
 			// polarity a `!= null` holds here. The compiler's own narrowing is not claimed for it.
 			for (n in predicateArgs(cond, ctx)) (viaSafeNav ?? out).push(n);
 		}
+	}
+
+	/** `collectNarrow` of a null comparison `cond`: the name it compares, a safe-navigation chain's root only on the non-null side. */
+	private static function narrowComparison(
+		cond: QueryNode, out: Array<String>, ctx: FlowCtx, provesNonNull: Bool, ?viaSafeNav: Array<String>
+	): Void {
+		// A SAFE-NAVIGATION operand only ever proves the NON-NULL side, and `provesNonNull` — not
+		// `cmpKind` — is what says which side this call is filling: the operator alone cannot,
+		// since the else-arm collects non-null names through `== null` by duality. `x?.a` null
+		// leaves `x` itself entirely unconstrained, so the known-null slot must never take one.
+		final direct: Null<QueryNode> = NodeShape.nullComparedIdent(cond, ctx.identKind, ctx.nullLitKind);
+		final operand: Null<QueryNode> = direct ?? (provesNonNull ? safeNavChainRoot(cond, ctx) : null);
+		final nm: Null<String> = operand?.name;
+		// A caller that tracks compiler visibility takes the safe-navigation names apart: the
+		// compiler narrows `x` on `x != null`, never on `x?.f != null`.
+		if (nm != null) (direct == null ? viaSafeNav ?? out : out).push(nm);
+	}
+
+	/**
+	 * `collectNarrow` of the negand `negated` of a `!`: it flips the comparison polarity AND the combine operator (De Morgan) — a
+	 * negand proving x null then proves x non-null, and its `&&`/`||` swap; nested `!` unwinds by recursion (double-not
+	 * restores the original polarity).
+	 */
+	private static function narrowNegation(
+		negated: QueryNode, out: Array<String>, ctx: FlowCtx, cmpKind: Null<String>, combineKind: String, provesNonNull: Bool,
+		?viaSafeNav: Array<String>
+	): Void {
+		final flipCmp: Null<String> = if (cmpKind == ctx.notEqKind)
+			ctx.eqKind
+		else if (cmpKind == ctx.eqKind)
+			ctx.notEqKind
+		else
+			cmpKind;
+		final flipCombine: String = combineKind == BOOL_AND_KIND ? BOOL_OR_KIND : BOOL_AND_KIND;
+		collectNarrow(negated, out, ctx, flipCmp, flipCombine, provesNonNull, viaSafeNav);
 	}
 
 	/**
@@ -1500,19 +1531,25 @@ final class NullFlow {
 			unseen: unseenAfterJoin(nonNull, a, b),
 			known: [for (n in a.known) if (b.known.contains(n)) n],
 			maybe: [for (n in a.maybe) if (b.maybe.contains(n)) n],
-			predicates: [
-				for (p in a.predicates) if (b.predicates.exists(q ->
-					q.bool == p.bool && q.target == p.target && q.notEq == p.notEq && q.compound == p.compound
-				))
-					p
-			],
-			aliases: [
-				for (x in a.aliases) if (b.aliases.exists(q -> (q.a == x.a && q.b == x.b) || (q.a == x.b && q.b == x.a))) x
-			],
-			present: [
-				for (e in a.present) if (b.present.exists(q -> q.map == e.map && q.key == e.key && q.value == e.value)) e
-			]
+			predicates: [for (p in a.predicates) if (b.predicates.exists(samePredicate.bind(p))) p],
+			aliases: [for (x in a.aliases) if (b.aliases.exists(sameAlias.bind(x))) x],
+			present: [for (e in a.present) if (b.present.exists(samePresent.bind(e))) e]
 		};
+	}
+
+	/** Whether `p` and `q` record the same predicate fact. */
+	private static function samePredicate(p: PredicateFact, q: PredicateFact): Bool {
+		return q.bool == p.bool && q.target == p.target && q.notEq == p.notEq && q.compound == p.compound;
+	}
+
+	/** Whether `x` and `q` alias the same two names, in either order. */
+	private static function sameAlias(x: AliasPair, q: AliasPair): Bool {
+		return (q.a == x.a && q.b == x.b) || (q.a == x.b && q.b == x.a);
+	}
+
+	/** Whether `e` and `q` record the same key present in the same map, holding the same value. */
+	private static function samePresent(e: ExistsFact, q: ExistsFact): Bool {
+		return q.map == e.map && q.key == e.key && q.value == e.value;
 	}
 
 	/**
