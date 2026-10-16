@@ -155,7 +155,7 @@ final class FactsEscapes {
 
 	public function new(view: FactsView, scope: ReachProject) {
 		_view = view;
-		_table = view.table;
+		_table = view._table;
 		_scope = scope;
 		_inert = inertIds(scope.shape);
 		_native = new FactsNativeReach(_table);

@@ -48,7 +48,7 @@ final class CallGraphNodes {
 			// a macro-reification subtree is generated-code emission, not runtime
 			// calls — walking it would fabricate nodes and edges (mirrors Refs)
 			if (opaqueKinds.contains(node.kind)) return;
-			final declared: Null<String> = CallGraphNames.typeNameOf(node);
+			final declared: Null<String> = RefactorSupport.typeDeclOf(node)?.name;
 			final typeName: Null<String> = declared ?? currentType;
 			if (declared != null && underlyingKinds.contains(node.kind)) {
 				// the declared-type slot, never a child: a bounded `<T:B>` projects its bound among the children

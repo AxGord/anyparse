@@ -171,7 +171,7 @@ final class CallGraphFacts {
 	 */
 	public function adopt(g: CallGraph, file: String): Array<String> {
 		if (!view.truth) return [];
-		final key: String = view.table.keyOf(file);
+		final key: String = view._table.keyOf(file);
 		final out: Array<String> = [];
 		for (t in view.indexedFile(key)?.types ?? []) {
 			if (g.types.declarationCount(t.name) != 1) continue;
@@ -562,7 +562,7 @@ final class CallGraphFacts {
 	 * macro placed is code nothing here can follow.
 	 */
 	private static function nested(g: CallGraph, node: FnNode, n: FactNode, id: String, view: FactsView): Void {
-		final fact: Null<FactNode> = view.table.node(id);
+		final fact: Null<FactNode> = view._table.node(id);
 		final target: Null<String> = fact == null || fact.generated ? null : graphNodeOf(g, node, id, view);
 		if (fact != null && target != null)
 			filed(
@@ -606,7 +606,7 @@ final class CallGraphFacts {
 	 * must say so too.
 	 */
 	private static function dispatchesOnly(g: CallGraph, owner: String, type: String, view: FactsView): Bool {
-		final fact: Null<TypeFact> = view.table.type(CompilerFacts.baseId(owner));
+		final fact: Null<TypeFact> = view._table.type(CompilerFacts.baseId(owner));
 		return fact != null && fact.kind == INTERFACE_KIND && fact.alike && (view.truth || g.types.isInterface(type));
 	}
 
@@ -615,7 +615,7 @@ final class CallGraphFacts {
 	 * value of it is it or a subtype — else the declaring type.
 	 */
 	private static function dispatchType(receiver: Null<String>, owner: String, view: FactsView): String {
-		final declared: Null<TypeFact> = receiver == null ? null : view.table.type(CompilerFacts.baseId(receiver));
+		final declared: Null<TypeFact> = receiver == null ? null : view._table.type(CompilerFacts.baseId(receiver));
 		return declared != null && (declared.kind == 'class' || declared.kind == 'interface') ? declared.id : CompilerFacts.baseId(owner);
 	}
 
@@ -624,7 +624,7 @@ final class CallGraphFacts {
 	 * text, or of the callee an inlined body spliced it in from — or null when no node of the graph starts where it does.
 	 */
 	public static function graphNodeOf(g: CallGraph, node: FnNode, id: String, view: FactsView): Null<String> {
-		final fact: Null<FactNode> = view.table.node(id);
+		final fact: Null<FactNode> = view._table.node(id);
 		final file: Null<String> = fact == null || fact.generated ? null : graphFile(g, node, fact.at.file, view);
 		if (fact == null || file == null) return null;
 		final at: Span = fact.at.span;
@@ -636,8 +636,8 @@ final class CallGraphFacts {
 
 	/** The file of the graph whose table key is `key` — `node`'s own, or another the graph holds — or null for none. */
 	private static function graphFile(g: CallGraph, node: FnNode, key: String, view: FactsView): Null<String> {
-		if (view.table.keyOf(node.file) == key) return node.file;
-		for (file in g._entries.keys()) if (view.table.keyOf(file) == key) return file;
+		if (view._table.keyOf(node.file) == key) return node.file;
+		for (file in g._entries.keys()) if (view._table.keyOf(file) == key) return file;
 		return null;
 	}
 
@@ -648,7 +648,7 @@ final class CallGraphFacts {
 	 * claim it, or drop it (`MemberReach.isLive`).
 	 */
 	private static function siteOf(node: FnNode, n: FactNode, at: FactPos, view: FactsView): Null<Span> {
-		return at.file == view.table.keyOf(node.file) && CompilerFacts.placed(n, at) ? at.span : null;
+		return at.file == view._table.keyOf(node.file) && CompilerFacts.placed(n, at) ? at.span : null;
 	}
 
 	/**
@@ -663,7 +663,7 @@ final class CallGraphFacts {
 			for (x in n.news) if (CompilerFacts.placed(n, x.at)) out.push(siteKey(x.at.span));
 			for (f in n.fields) if (CompilerFacts.placed(n, f.at)) out.push(siteKey(f.at.span));
 			for (id in n.fns) {
-				final nested: Null<FactNode> = view.table.node(id);
+				final nested: Null<FactNode> = view._table.node(id);
 				if (nested != null && CompilerFacts.placed(n, nested.at)) out.push(siteKey(nested.at.span));
 			}
 		}
@@ -693,7 +693,7 @@ final class CallGraphFacts {
 		final at: Null<Span> = e.span;
 		if (at == null) return false;
 		final site: Span = at;
-		final key: String = view.table.keyOf(e.file);
+		final key: String = view._table.keyOf(e.file);
 		for (n in bodies) for (x in n.expansions) {
 			final expander: Null<String> = x.expander;
 			if (expander == null || x.anchor.file != key || site.from < x.anchor.span.from || x.anchor.span.to < site.to) continue;
@@ -722,7 +722,7 @@ final class CallGraphFacts {
 	 * `file` (keyed `key`), adding their ids to `out`: none unless a build macro ran over it and it was typed from that file.
 	 */
 	private function adoptType(g: CallGraph, file: String, key: String, type: String, id: String, out: Array<String>): Void {
-		final table: CompilerFacts = view.table;
+		final table: CompilerFacts = view._table;
 		final typed: Null<TypeFact> = table.type(id);
 		if (typed == null || typed.builds.length == 0 || table.typePosition(id)?.file != key) return;
 		for (nodeId in table.nodeIdsOf(id)) {

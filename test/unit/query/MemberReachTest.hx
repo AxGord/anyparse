@@ -508,7 +508,7 @@ class MemberReachTest extends Test {
 		refused(run(source('Keep.put(mine());', 'function mine():Array<C> return [this];')), 'a container whose arguments nothing says');
 	}
 
-	@:pin('control') @:killer('M-ESCAPE-RECEIVER-CALL')
+	@:pin('control') @:killer('M-TS-NEW-RECEIVER')
 	public function testAConstructedReceiverIsItsOwnType(): Void {
 		// `new C().loop()` is the commonest entry: the value is a `C`, whose `loop` takes nothing untyped. Handing the new object
 		// itself to untyped code is an exit.
@@ -1369,7 +1369,7 @@ class MemberReachTest extends Test {
 		assertMatch(refreshed.mayReach(Region('F0.hx', regionOf(src)), { owner: 'C', name: 'items' }, Mutate), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-SPLIT-FRESH') @:killer('M-REACH-FRESH-CHAIN')
+	@:pin('control') @:killer('M-REACH-SPLIT-FRESH') @:killer('M-REACH-FRESH-CHAIN') @:killer('M-NOMINAL-LOCAL-INIT')
 	public function testSplitOfAStringAndAChainedResultAreFresh(): Void {
 		final split: String =
 			'class C { function f(text:String):Void { final xs:Array<String> = text.split(","); /*<*/ anything(xs[0]); /*>*/ } }';
@@ -1377,6 +1377,10 @@ class MemberReachTest extends Test {
 		final chained: String =
 			'class C { function f(text:Array<Int>):Void { final xs:Array<Int> = text.copy().map(v -> v); /*<*/ anything(xs[0]); /*>*/ } }';
 		assertMatch(askLocal(chained, 'xs'), r -> r.match(Proven));
+		// the receiver typed by the shared walk: a local written with no type holds its initializer's
+		final viaLocal: String =
+			'class C { function f(text:String):Void { var s = text; final xs:Array<String> = s.split(","); /*<*/ anything(xs[0]); /*>*/ } }';
+		assertMatch(askLocal(viaLocal, 'xs'), r -> r.match(Proven));
 	}
 
 	@:pin('control') @:killer('M-REACH-STRINGBUF-PURE')

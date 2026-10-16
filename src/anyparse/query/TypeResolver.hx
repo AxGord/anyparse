@@ -105,7 +105,7 @@ final class TypeResolver {
 	 * with: what a bare `this` denotes at a position depends on which kind of type hosts it.
 	 */
 	public static inline function enclosingTypeDecl(tree: QueryNode, faSpan: Span): Null<TypeDeclMatch> {
-		return innermostTypeDecl(tree, faSpan);
+		return enclosingTypeDeclAt(tree, faSpan.from, faSpan.to);
 	}
 
 	/**
@@ -115,6 +115,28 @@ final class TypeResolver {
 	 */
 	public static inline function memoizedDeclaredTypeSources(plugin: GrammarPlugin, source: String): () -> Map<Int, String> {
 		return TypeInfoMemo.declaredTypeSources(plugin is TypeInfoProvider ? cast plugin : null, source);
+	}
+
+	/**
+	 * The innermost type declaration whose text holds the offset `at` — or, given `to`, the whole range `at`...`to` — or null outside every one. The walk enters only the nodes that hold it.
+	 */
+	public static function enclosingTypeDeclAt(tree: QueryNode, at: Int, ?to: Int): Null<TypeDeclMatch> {
+		final end: Int = to ?? at + 1;
+		var best: Null<TypeDeclMatch> = null;
+		function walk(n: QueryNode): Void {
+			// a declaration holding the range lies inside every node that holds it
+			final span: Null<Span> = n.span;
+			if (span != null && (at < span.from || end > span.to)) return;
+			final td: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(n);
+			if (td != null && td.fullSpan.from <= at && end <= td.fullSpan.to) {
+				final width: Int = td.fullSpan.to - td.fullSpan.from;
+				final b: Null<TypeDeclMatch> = best;
+				if (b == null || width < b.fullSpan.to - b.fullSpan.from) best = td;
+			}
+			for (c in n.children) walk(c);
+		}
+		walk(tree);
+		return best;
 	}
 
 	/**
@@ -562,7 +584,7 @@ final class TypeResolver {
 		final binding: Null<QueryNode> = hit.bindingNode;
 		if (binding == null || !fieldDeclKinds.contains(binding.kind)) return null;
 		final declSpan: Null<Span> = binding.span;
-		return declSpan == null ? null : innermostTypeDecl(tree, declSpan)?.name;
+		return declSpan == null ? null : enclosingTypeName(tree, declSpan);
 	}
 
 	/**
@@ -899,6 +921,18 @@ final class TypeResolver {
 		return best;
 	}
 
+	/**
+	 * The hit the reference walk emitted for the occurrence of `name` at `refSpan`, or null when
+	 * it emitted none there — a member-access slot, a reification interior, an unspanned node.
+	 * Both public resolvers read one field of it apiece: the binding's OFFSET keys a decl-type
+	 * map, the binding's NODE says what the reference actually binds to. A caller needing both
+	 * reads this once rather than walking the references twice.
+	 */
+	public static function resolveBindingHit(name: String, refSpan: Span, tree: QueryNode, shape: RefShape): Null<RefHit> {
+		for (hit in Refs.find(name, tree, shape)) if (hit.span.from == refSpan.from && hit.span.to == refSpan.to) return hit;
+		return null;
+	}
+
 	/** Whether `outer` covers `inner` — the containment a tree's spans state between ancestor and descendant. */
 	private static inline function covers(outer: Null<Span>, inner: Span): Bool {
 		return outer != null && outer.from <= inner.from && inner.to <= outer.to;
@@ -931,34 +965,6 @@ final class TypeResolver {
 			.concat(shape.paramKinds ?? [])
 			.concat(shape.selfScopeDeclKinds)
 			.concat(shape.iterationValueBinderKinds ?? []);
-	}
-
-	/**
-	 * The hit the reference walk emitted for the occurrence of `name` at `refSpan`, or null when
-	 * it emitted none there — a member-access slot, a reification interior, an unspanned node.
-	 * Both public resolvers read one field of it apiece: the binding's OFFSET keys a decl-type
-	 * map, the binding's NODE says what the reference actually binds to. A caller needing both
-	 * reads this once rather than walking the references twice.
-	 */
-	public static function resolveBindingHit(name: String, refSpan: Span, tree: QueryNode, shape: RefShape): Null<RefHit> {
-		for (hit in Refs.find(name, tree, shape)) if (hit.span.from == refSpan.from && hit.span.to == refSpan.to) return hit;
-		return null;
-	}
-
-	/** The innermost type declaration whose span contains `faSpan`, or null. */
-	private static function innermostTypeDecl(tree: QueryNode, faSpan: Span): Null<TypeDeclMatch> {
-		var best: Null<TypeDeclMatch> = null;
-		function walk(n: QueryNode): Void {
-			final td: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(n);
-			if (td != null && td.fullSpan.from <= faSpan.from && faSpan.to <= td.fullSpan.to) {
-				final width: Int = td.fullSpan.to - td.fullSpan.from;
-				final b: Null<TypeDeclMatch> = best;
-				if (b == null || width < b.fullSpan.to - b.fullSpan.from) best = td;
-			}
-			for (c in n.children) walk(c);
-		}
-		walk(tree);
-		return best;
 	}
 
 	/** Whether `node` or any descendant carries the name `name`. */

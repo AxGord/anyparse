@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.query.BoolExprShape;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
+import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceText;
 import anyparse.query.TypeInfoProvider;
@@ -28,15 +29,6 @@ typedef AnnotationSite = {
 	final methodName: Null<String>;
 
 };
-
-/**
- * A `new`-expression's written type: the verbatim text and whether it carries
- * explicit `<...>` type parameters — `writtenNewType`'s result.
- */
-private typedef WrittenNewType = {
-	var written: String;
-	var generic: Bool;
-}
 
 /**
  * Shared statically-certain type inference for a declaration's initializer,
@@ -83,33 +75,13 @@ final class LiteralInfer {
 			final inner: QueryNode = init.children[0];
 			return numeric.contains(inner.kind) ? literalTypes[inner.kind] : null;
 		}
-		if (newKind != null && init.kind == newKind) return newTypeSource(init, source);
+		if (newKind != null && init.kind == newKind) {
+			// a `new T()` writing no type arguments may be a generic the language infers: `:T` would not type-check
+			final made: Null<WrittenConstruction> = NominalTypes.writtenConstruction(init, shape, source);
+			return made == null || made.args.length == 0 ? null : made.text;
+		}
 		final span: Null<Span> = init.span;
 		return span != null && castKinds.contains(init.kind) ? TypeResolver.castTargetWithin(span, castTargets()) : null;
-	}
-
-	/**
-	 * The `T<...>` type source of a `new T<...>(...)` when it carries WRITTEN type
-	 * parameters, else null (a bare `new T(...)` could be a generic used without
-	 * parameters, whose bare `:T` annotation would not type-check). Scans from after
-	 * `new` for the balanced `<...>`; a `>` preceded by `-` is the arrow `->` inside
-	 * a function-type parameter, not an angle close. A constructor `(` reached before
-	 * any `<` means no written type parameters.
-	 */
-	public static function newTypeSource(newNode: QueryNode, source: String): Null<String> {
-		final t: Null<WrittenNewType> = writtenNewType(newNode, source);
-		return t != null && t.generic ? t.written : null;
-	}
-
-	/**
-	 * The bare (parameterless) written type of a `new T(...)` — the text between
-	 * `new` and the argument `(`, or null when the constructor writes type
-	 * parameters (`newTypeSource`'s case) or the span is missing. The caller must
-	 * prove `T` non-generic before using this as an annotation.
-	 */
-	public static function bareNewTypeName(newNode: QueryNode, source: String): Null<String> {
-		final t: Null<WrittenNewType> = writtenNewType(newNode, source);
-		return t != null && !t.generic ? t.written : null;
 	}
 
 	/**
@@ -297,38 +269,6 @@ final class LiteralInfer {
 			return run;
 		});
 		return found;
-	}
-
-	/**
-	 * Scan a `new T(...)`'s written type: the text between `new` and the argument
-	 * `(`. A balanced `<...>` before the `(` marks explicit type parameters
-	 * (`generic: true`, text includes them); a `>` preceded by `-` is the arrow
-	 * `->` inside a function-type parameter, not an angle close. Null when the
-	 * span is missing, the text is empty, or the params never close.
-	 */
-	private static function writtenNewType(newNode: QueryNode, source: String): Null<WrittenNewType> {
-		final span: Null<Span> = newNode.span;
-		if (span == null) return null;
-		final full: String = source.substring(span.from, span.to);
-		var i: Int = 3;
-		while (i < full.length && full.isSpace(i)) i++;
-		final typeStart: Int = i;
-		var depth: Int = 0;
-		while (i < full.length) {
-			switch full.fastCodeAt(i) {
-				case '('.code if (depth == 0):
-					final bare: String = full.substring(typeStart, i).rtrim();
-					return bare == '' ? null : { written: bare, generic: false };
-				case '<'.code:
-					depth++;
-				case '>'.code if (full.fastCodeAt(i - 1) != '-'.code):
-					depth--;
-					if (depth == 0) return { written: full.substring(typeStart, i + 1), generic: true };
-				case _:
-			}
-			i++;
-		}
-		return null;
 	}
 
 	/**
