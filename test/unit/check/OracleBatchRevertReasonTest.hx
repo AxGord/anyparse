@@ -6,6 +6,7 @@ import sys.io.File;
 import anyparse.check.CompilerOracle.OracleOutcome;
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.query.cli.command.LintFixVerify;
+import anyparse.query.cli.command.LintFixVerify.OracleBatchResult;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -78,7 +79,9 @@ class OracleBatchRevertReasonTest extends Test {
 		final esc: String = String.fromCharCode(27);
 		final errors: String = 'other/f0.hx:1: characters 1-2 : boom\n$dir/f1.hx:2: characters 1-2 : Warning : deprecated\n'
 			+ '$esc[30;41m ERROR $esc[0m $dir/f2.hx:1: characters 1-2 : boom';
-		final result = LintFixVerify.verifyOracleBatch(batch(dir, 3), oracles(dir), canned([Rejected(errors), Confirmed]));
+		final result: OracleBatchResult = LintFixVerify.verifyOracleBatch(
+			batch(dir, 3), oracles(dir), canned([Rejected(errors), Confirmed])
+		);
 		Assert.same(['$dir/f2.hx'], result.reverted);
 		Assert.equals(2, result.applied.length);
 		Assert.equals('before 2\n', File.getContent('$dir/f2.hx'));
