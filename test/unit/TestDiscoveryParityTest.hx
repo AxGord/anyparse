@@ -3850,7 +3850,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachTest#testAClassNamedToTheClassValueProducerMayBeInstantiatedUntyped :: control :: M-ESCAPE-NAMED-CLASS',
 			'unit.query.MemberReachTest#testAClasspathTheIndexDoesNotHoldMayDeclareAnOverrideOrASubtype :: control :: '
 				+ 'M-REACH-CLASSPATH-DISPATCH,M-CARRY-CLASSPATH',
-			'unit.query.MemberReachTest#testAConstructedReceiverIsItsOwnType :: control :: M-ESCAPE-NEW-TYPE,M-ESCAPE-RECEIVER-CALL',
+			'unit.query.MemberReachTest#testAConstructedReceiverIsItsOwnType :: control :: M-ESCAPE-RECEIVER-CALL',
 			'unit.query.MemberReachTest#testAConversionOfATypedOperandRunsOnlyItsTypesMethod :: control :: M-REACH-TYPED-SITE',
 			'unit.query.MemberReachTest#testAFieldInitializerRunsWhatItHoldsThoughItCallsNothing :: control :: '
 				+ 'M-GRAPH-EAGER-INIT,M-REACH-INIT-BRANCHES',
@@ -3905,7 +3905,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachTest#testEveryDeclarationOfAMemberInEachBranchIsRead :: control :: '
 				+ 'M-REACH-FOLDED-BODIES,M-GRAPH-FOLDED-DECLARATIONS',
 			'unit.query.MemberReachTest#testEveryEscapeRuleLetsItsSoundTwinThrough :: control :: '
-				+ 'M-ESCAPE-P-STORE,M-ESCAPE-P-CAST,M-ESCAPE-P-THROW,M-ESCAPE-P-DECL,M-ESCAPE-P-PARAM,M-ESCAPE-P-RETURN,M-ESCAPE-P-LAMBDA,M-ESCAPE-P-METHOD-VALUE,M-ESCAPE-P-HELD,M-ESCAPE-P-LIBRARY-SUPER,M-ESCAPE-P-NATIVE,M-ESCAPE-P-TYPED-ARGS,M-ESCAPE-DECLARED-SOURCE,M-ESCAPE-LOCAL-INIT,M-ESCAPE-PRIMITIVE-PARAM,M-ESCAPE-ASSIGN-VALUE,M-ESCAPE-IF-VALUE,M-ESCAPE-BLOCK-VALUE,M-ESCAPE-MACRO-MEMBER,M-ESCAPE-MACRO-HAZARD,M-ESCAPE-REIFICATION,M-ESCAPE-THROW,M-ESCAPE-DECL,M-ESCAPE-PARAM,M-ESCAPE-LAMBDA,M-ESCAPE-STORE,M-ESCAPE-CAST,M-ESCAPE-METHOD-VALUE,M-ESCAPE-HELD,M-ESCAPE-LIBRARY-SUPER,M-ESCAPE-NATIVE',
+				+ 'M-ESCAPE-P-STORE,M-ESCAPE-P-CAST,M-ESCAPE-P-THROW,M-ESCAPE-P-DECL,M-ESCAPE-P-PARAM,M-ESCAPE-P-RETURN,M-ESCAPE-P-LAMBDA,M-ESCAPE-P-METHOD-VALUE,M-ESCAPE-P-HELD,M-ESCAPE-P-LIBRARY-SUPER,M-ESCAPE-P-NATIVE,M-ESCAPE-P-TYPED-ARGS,M-ESCAPE-DECLARED-SOURCE,M-ESCAPE-LOCAL-INIT,M-ESCAPE-PRIMITIVE-PARAM,M-ESCAPE-ASSIGN-VALUE,M-ESCAPE-IF-VALUE,M-ESCAPE-BLOCK-VALUE,M-ESCAPE-MACRO-MEMBER,M-ESCAPE-MACRO-HAZARD,M-ESCAPE-REIFICATION,M-ESCAPE-THROW,M-ESCAPE-DECL,M-ESCAPE-PARAM,M-ESCAPE-LAMBDA,M-ESCAPE-STORE,M-ESCAPE-CAST,M-ESCAPE-METHOD-VALUE,M-ESCAPE-HELD,M-ESCAPE-LIBRARY-SUPER,M-ESCAPE-NATIVE,M-ESCAPE-NEW-TYPE',
 			'unit.query.MemberReachTest#testExplainNamesThePath :: control :: M-REACH-EXPLAIN-PATH',
 			'unit.query.MemberReachTest#testExternClosedOverInertValuesAdmitsNoFunctionValue :: control :: M-REACH-EXTERN-INERT',
 			'unit.query.MemberReachTest#testExternHandedAnEnumValueRunsWhatItsArgumentsHoldByName :: control :: '

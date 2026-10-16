@@ -637,7 +637,14 @@ class UnguardedNullableDerefTest extends Test {
 		);
 		Assert.equals(
 			0, violations('class C { function f(flag:Bool, a:Foo) { final p: Null<Foo> = flag ? a : 0; p.foo; } }').length,
-			'a bare literal arm is non-null by kind — the chain resolver types a call but says nothing about `0`'
+			'a bare literal arm is non-null by kind'
+		);
+		// The chain resolver now types an `Int` literal itself, so `0` no longer tells the kind gate from it; an array
+		// literal it cannot give a nominal type is what only the kind gate proves.
+		Assert.equals(
+			0,
+			violations('class C { function f(flag:Bool, a:Array<Int>) { final p: Null<Array<Int>> = flag ? a : []; p.length; } }').length,
+			'an array-literal arm is non-null by kind — the chain resolver says nothing about `[]`'
 		);
 		Assert.equals(
 			1, violations('class C { function f(t:Tex) { final e: Null<Char> = t.getChar(1); e.width; } }').length,

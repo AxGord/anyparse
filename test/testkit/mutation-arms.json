@@ -2221,7 +2221,7 @@
 			"method": "initTypeIsNonNull",
 			"find": "if (NullFlow.NON_NULL_RHS_KINDS.contains(init.kind)) return true;",
 			"replace": "if (NullFlow.NON_NULL_RHS_KINDS.contains('')) return true;",
-			"note": "a bare literal arm is judged by the chain resolver alone, which does not type one, so a ternary with a literal branch stays seeded"
+			"note": "a bare literal arm is judged by the chain resolver alone, which types an Int literal but not an array literal, so a ternary with a [] branch stays seeded"
 		},
 		{
 			"name": "M-DECL-INIT-RECEIVER-MODE-NOMINAL",
@@ -5380,7 +5380,7 @@
 			"method": "scanFile",
 			"find": "if (node.kind != shape.newExprKind || constructed == null) {",
 			"replace": "if (true) {",
-			"note": "(precision) a construction has no type, so new C().loop() leaves every instance anywhere"
+			"note": "(precision) a construction has no type, so a lambda returning new Other() or a local holding one reads as an escape (new C().loop() is resolved by the graph and never asks)"
 		},
 		{
 			"name": "M-ESCAPE-RECEIVER-CALL",
@@ -8052,7 +8052,7 @@
 			"method": "virtualEdges",
 			"find": "for (v in view.overrides(g, dispatch, name)) if (!targets.contains(v)) targets.push(v);",
 			"replace": "",
-			"note": "an instance call dispatches only to the overrides the name-based hierarchy holds, so one it cannot see through an alias is never walked"
+			"note": "an instance call dispatches only to the overrides the name-based hierarchy holds, so one it cannot see through an alias declared per #if branch is never walked"
 		},
 		{
 			"name": "M-FACTS-REACH-VALUE",
