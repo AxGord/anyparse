@@ -5960,8 +5960,8 @@
 			"name": "M-GRAPH-TYPE-PARAM",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "if (declared != null && isTypeParam(declared, currentType)) {",
-			"replace": "if (declared != null && false) {",
+			"find": "else if (!isTypeParam(outer, currentType))",
+			"replace": "else if (true)",
 			"note": "a receiver typed as a type parameter is taken for a type of that name"
 		},
 		{
@@ -5976,8 +5976,8 @@
 			"name": "M-GRAPH-TYPEDEF-ALIAS",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "typeName: types.resolveAlias(declared),",
-			"replace": "typeName: declared,",
+			"find": "else if (!isTypeParam(outer, currentType))\n\ttypes.resolveAlias(outer)",
+			"replace": "else if (!isTypeParam(outer, currentType))\n\touter",
 			"note": "a receiver typed by a typedef alias is not seen through"
 		},
 		{
@@ -20081,8 +20081,8 @@
 			"name": "M-TS-STD-GETTER-LOCAL",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "if (isAccessKind(node.kind) && declared != null && types.declarationCount(declared) == 0) stdAccessors(declared);",
-			"replace": "",
+			"find": "&& types.declarationCount(declared) == 0",
+			"replace": "&& false",
 			"note": "a std property no project type names is never read through its getter"
 		},
 		{
@@ -20092,14 +20092,6 @@
 			"find": "if (found == null && types.declarationCount(ownerType) == 0) stdAccessors(ownerType);",
 			"replace": "",
 			"note": "a std property a project property shares its name with is never read through its getter"
-		},
-		{
-			"name": "M-TS-NEW-LOCAL",
-			"type": "anyparse.query.CallGraphKeys",
-			"method": "typeLocals",
-			"find": "final made: Null<String> = init != null && init.kind == newExprKind ? init.name : null;",
-			"replace": "final made: Null<String> = null;",
-			"note": "an unannotated local a new initialises stays untyped"
 		},
 		{
 			"name": "M-TS-STD-PLACEHOLDER",
@@ -21306,8 +21298,8 @@
 			"name": "M-TS-NULLABLE-PATH-KEY",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "? types.imports.pathType(name) : null",
-			"replace": "? name : null",
+			"find": "final outer: Null<String> = path == null ? null : types.imports.pathType(path);",
+			"replace": "final outer: Null<String> = path;",
 			"note": "the type a Null<T> local wraps is keyed by the path its text spells, so a call on it runs a placeholder of the path"
 		},
 		{

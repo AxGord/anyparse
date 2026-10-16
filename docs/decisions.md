@@ -2883,3 +2883,10 @@ decided the question; it may not become a record of runs.
   `typeLocals` (the graph's `declaredTypes` reads it). All-rules byte-identical and the thread-safety score unchanged on
   the four trees (their locals are annotated); `ThreadSafetyPositiveSinksTest` `C.field` / `C.alias` red on the start
   commit. `M-TS-LOCAL-CALL-INIT` retired with the table it cut — branch `feat/infra-B4b`
+- the graph typed an identifier receiver twice: `identDeclaredType` read the provider's simple-name table re-keyed
+  (`CallGraphKeys.declaredTypes`, `Null<T>` peeled by `nullableInner`) ahead of the walk, which reads the keyed written
+  annotation; and it typed a local a `new` initialises eagerly (`CallGraphKeys.typeLocals`) as well as through the
+  walk → the walk alone: `receiverType`'s identifier arm keeps only the bare type-name receiver and lets the walk and
+  `nominalOf` (type parameter bound, alias, keyed path) answer a value, the std-property read asks the same two, and
+  `declaredTypes`, `nullableInner`, `typeLocals` are gone. All-rules and the thread-safety score unchanged on the four
+  trees — branch `feat/infra-B4b`

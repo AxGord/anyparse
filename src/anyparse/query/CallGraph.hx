@@ -849,7 +849,6 @@ final class CallGraph {
 		final moduleType: String = CallGraphNames.moduleTypeName(file);
 		// the file's declared types as the graph keys them (`CallGraphKeys`): a library type never merges into a project one
 		final keys: CallGraphKeys = new CallGraphKeys(types.imports, file, _plugin.typeSyntax, provider, source, tree, fnKinds);
-		keys.typeLocals(tree, localDeclKinds, newExprKind);
 		// the index entry the file was read from, whose `values` layer says what a bare name the module and its imports bind
 		final held: Null<HeldFile> = types.heldFile(file);
 
@@ -857,7 +856,6 @@ final class CallGraph {
 		final readFrom: Array<String> = [];
 		// each type a declaration typing a receiver names where another one of it names the type read (`readIn`): runs too
 		final keyedApart: Array<{ from: String, to: String }> = [];
-		final declaredTypes: Map<Int, String> = keys.declaredTypes;
 		final typeSources: Map<Int, String> = keys.typeSources;
 		final consumedBindCalls: Array<Int> = [];
 		final frames: Array<Frame> = [];
@@ -911,35 +909,10 @@ final class CallGraph {
 			});
 		}
 
-		/** The key of the type a `Null<T>` annotation source, written as `CallGraphKeys.keyed` spells it, wraps, or null. */
-		function nullableInner(typeSource: Null<String>): Null<String> {
-			final inner: Null<TypeSyntax> = typeSource == null ? null : _plugin.typeSyntax(typeSource)?.wrapped(['Null']);
-			final name: Null<String> = switch inner?.shape {
-				case Nominal(path, _): path;
-				case _: null;
-			};
-			return name != null && CallGraphNames.isTypeLike(SourceText.lastSegment(name)) ? types.imports.pathType(name) : null;
-		}
-
 		/** The result type a value of the function type `typeSource` (`Null<…>` peeled) returns when called; null for any other type. */
 		function calledResult(typeSource: Null<String>): Null<String> {
 			final written: Null<TypeSyntax> = typeSource == null ? null : _plugin.typeSyntax(typeSource);
 			return CallGraphNames.functionReturnSource(written?.wrapped(['Null']) ?? written);
-		}
-
-		/** Declared simple type of a value identifier, `Null<T>` unwrapped to `T`. */
-		function identDeclaredType(name: String, span: Span): Null<String> {
-			final bindingFrom: Null<Int> = Refs.bindingAt(name, span.from, tree, shape);
-			if (bindingFrom == null || bindingFrom < 0) return null;
-			final typeName: Null<String> = declaredTypes[bindingFrom];
-			return if (typeName == null)
-				null
-			else if (typeName == 'Null')
-				nullableInner(typeSources[bindingFrom])
-			else if (nullableWrappers.contains(typeName))
-				null
-			else
-				typeName;
 		}
 
 		/** True for every field-access spelling a callee can wear: plain, null-safe, force-unwrapped. */
@@ -1451,23 +1424,8 @@ final class CallGraph {
 						isDynamic: false
 					};
 				}
+				// a value's declared type is the walk's (below); a bare type-like name binding nothing is a TYPE receiver
 				if (span != null) {
-					final declared: Null<String> = identDeclaredType(name, span);
-					if (declared != null && isTypeParam(declared, currentType)) {
-						final bound: Null<String> = member == null
-							? null
-							: boundType(declared, currentType, member, typeScopeOf(recv, currentType));
-						return bound == null ? null : {
-							typeName: bound,
-							isValue: true,
-							isDynamic: false
-						};
-					}
-					if (declared != null) return {
-						typeName: types.resolveAlias(declared),
-						isValue: true,
-						isDynamic: false
-					};
 					final bound: Null<Int> = Refs.bindingAt(name, span.from, tree, shape);
 					if ((bound == null || bound < 0) && CallGraphNames.isTypeLike(name)) return {
 						typeName: types.imports.typeOf(file, name),
@@ -2091,10 +2049,15 @@ final class CallGraph {
 				for (a in accessors) addEdge(frameId(currentType), externalNode(stdOwner, a), Accessor, null, file, span, stdOwner);
 			}
 			if (!types.hasPropertyNamed(name)) {
-				// a property no indexed type declares may be a std one, on a local or a parameter the graph types as a std type
+				// a property no indexed type declares may be a std one, on a value the graph types as a std type
 				final recv: QueryNode = unwrap(node.children.length > 0 ? node.children[0] : node);
-				final declared: Null<String> = recv.kind != identKind ? null : identDeclaredType(recv.name ?? '', recv.span ?? span);
-				if (isAccessKind(node.kind) && declared != null && types.declarationCount(declared) == 0) stdAccessors(declared);
+				final written: Null<String> = recv.kind != identKind ? null : typeSourceOf(recv, currentType);
+				final declared: Null<String> = written == null ? null : nominalOf(written, currentType);
+				if (
+					isAccessKind(node.kind) && declared != null && !nullableWrappers.contains(declared)
+					&& types.declarationCount(declared) == 0
+				)
+					stdAccessors(declared);
 				return;
 			}
 			var owner: Null<String> = null;

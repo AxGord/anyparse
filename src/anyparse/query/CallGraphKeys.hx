@@ -14,17 +14,14 @@ using StringTools;
 /**
  * The types one file writes, spelled as a `CallGraph` keys them (`CallGraphImports.typeOf`),
  * each written by the path of the type it binds to (`writtenAs`): a name an import or an
- * alias of the file binds, or a dotted path, is the type it names — a library type never merges into a project type
- * of its simple name — and an unannotated local initialised by a `new` holds the type it makes. The declared types a
- * `TypeInfoProvider` reads by simple name, re-keyed. A type another file declares is keyed through THAT file's imports (`keyedIn`,
+ * alias of the file binds, or a dotted path, is the type it names — a library type never merges into a project type of its simple
+ * name. The declared types a `TypeInfoProvider` reads, re-keyed; an unannotated local holds its initializer's type, which the
+ * shared walk reads (`NominalTypes.localInitializer`). A type another file declares is keyed through THAT file's imports (`keyedIn`,
  * `keyedInFiles`, `paramTypesOf`): a declaration names what its own file binds the name to, wherever the value is read.
  */
 @:nullSafety(Strict)
 @:access(anyparse.query.CallGraph)
 final class CallGraphKeys {
-
-	/** Binding offset -> the type a declaration names, as the graph keys it. */
-	public final declaredTypes: Map<Int, String> = [];
 
 	/** Binding offset -> the declaration's written type, the type it names (`Null<…>` peeled) spelled as the graph keys it. */
 	public final typeSources: Map<Int, String> = [];
@@ -61,15 +58,7 @@ final class CallGraphKeys {
 		_functionKinds = functionKinds ?? [];
 		_typeParams = provider == null ? [] : provider.typeParamNames(source);
 		for (names in _typeParams) for (n in names) if (!_paramNames.contains(n)) _paramNames.push(n);
-		final simpleTypes: Map<Int, String> = provider == null ? [] : provider.declaredTypes(source);
 		final writtenSources: Map<Int, String> = provider == null ? [] : provider.declaredTypeSources(source);
-		for (at => simple in simpleTypes) {
-			final written: Null<String> = outerPathOf(writtenSources[at]);
-			declaredTypes[at] = written == null || simple == 'Null' || SourceText.lastSegment(written) != simple
-				|| unkeyedAt(at, written).contains(written)
-				? simple
-				: imports.typeOf(file, written);
-		}
 		for (at => written in writtenSources) typeSources[at] = keyed(written, at);
 	}
 
@@ -79,22 +68,6 @@ final class CallGraphKeys {
 	 */
 	public function keyed(typeSource: String, at: Int): String {
 		return keyedIn(_imports, _file, _typeSyntax, typeSource, unkeyedAt(at, typeSource));
-	}
-
-	/**
-	 * Type every local of `tree` (a node of `localDeclKinds`) written with no annotation and initialised by a
-	 * `newExprKind` node as the type it makes, keyed where written: `declaredTypes` reads it too. Any other
-	 * unannotated local holds its initializer's type, which the shared walk reads (`NominalTypes.localInitializer`).
-	 */
-	public function typeLocals(tree: QueryNode, localDeclKinds: Array<String>, newExprKind: Null<String>): Void {
-		final at: Null<Span> = tree.span;
-		final init: Null<QueryNode> = tree.children.length == 0 ? null : tree.children[tree.children.length - 1];
-		final made: Null<String> = init != null && init.kind == newExprKind ? init.name : null;
-		if (at != null && made != null && localDeclKinds.contains(tree.kind) && !typeSources.exists(at.from)) {
-			typeSources[at.from] = keyed(made, at.from);
-			declaredTypes[at.from] = _imports.typeOf(_file, made);
-		}
-		for (c in tree.children) typeLocals(c, localDeclKinds, newExprKind);
 	}
 
 	/** The dotted or simple path of the type `typeSource` names, `Null<…>` peeled unless `peelNull` is false; null for any other type. */

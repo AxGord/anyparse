@@ -315,7 +315,7 @@ class ThreadSafetyPositiveSinksTest extends Test {
 	 * a datagram read and a result set's `length`.
 	 */
 	@:pin('control') @:killer('M-TS-STD-RETURN') @:killer('M-TS-STD-FIELD') @:killer('M-TS-STD-GETTER') @:killer('M-TS-STD-GETTER-LOCAL')
-	@:killer('M-TS-STD-GETTER-TYPED') @:killer('M-TS-NEW-LOCAL') @:killer('M-TS-ALIAS-TYPE') @:killer('M-TS-STD-PLACEHOLDER')
+	@:killer('M-TS-STD-GETTER-TYPED') @:killer('M-TS-NEW-RECEIVER') @:killer('M-TS-ALIAS-TYPE') @:killer('M-TS-STD-PLACEHOLDER')
 	@:killer('M-TS-BUILTIN-EVENTS')
 	public function testStdResultsTypeTheirReceivers(): Void {
 		#if (sys || nodejs)
