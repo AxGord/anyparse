@@ -2893,3 +2893,8 @@ decided the question; it may not become a record of runs.
   is transparent to the typer; `$a{…}` arity is gated; a spliced `for` / `=>` array element does not compile with the
   pair; the operand arms stay opaque), so the rule is `QuotationAware`, its reason on the class doc — branch
   `feat/infra-B8b`
+- five arms broken on main were read as dead mutation targets → each fixture had stopped reaching its gate (a type
+  out of scope, a literal the resolver now types, an earlier decline, an alias the syntax now resolves, a call the
+  graph resolves), and re-aimed fixtures kill all five; the sixth, M-ESCAPE-RECEIVER-CALL, cuts a `ValueEscapes.call`
+  precision branch no probed shape reaches (28, syntax and facts) — left to the `ValueEscapes` owner — branch
+  `feat/infra-B8b`
