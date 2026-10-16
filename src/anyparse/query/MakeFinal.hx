@@ -5,7 +5,6 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using StringTools;
 using Lambda;
@@ -55,10 +54,11 @@ final class MakeFinal {
 	): EditResult {
 		final parsed: Array<Parsed> = [];
 		for (entry in scopeFiles) {
-			final tree: Null<QueryNode> = try plugin.parseFile(entry.source) catch (exception: Exception) null;
-			if (tree == null) return Err('cannot check writes: ${entry.file} does not parse');
-			final treeNN: QueryNode = tree;
-			parsed.push({ file: entry.file, source: entry.source, tree: treeNN });
+			final tree: QueryNode = switch ParseGate.parse(plugin, entry.source, entry.file) {
+				case Unparsed(_): return Err('cannot check writes: ${entry.file} does not parse');
+				case Parsed(read): read;
+			};
+			parsed.push({ file: entry.file, source: entry.source, tree: tree });
 		}
 
 		final srcEntry: Null<Parsed> = parsed.find(p -> p.file == srcFile);
@@ -112,10 +112,8 @@ final class MakeFinal {
 			return Err('"$fieldName" is a member a structural type may require to stay mutable — cannot make it final');
 		final rewritten: String = '${src.source.substring(0, fieldSpanNN.from)}final${src.source.substring(fieldSpanNN.from + VAR.length)}';
 
-		try
-			plugin.parseFile(rewritten)
-		catch (exception: Exception)
-			return Err('rewritten $srcFile does not parse: ${exception.message}');
+		final unparsed: Null<String> = ParseGate.refusal(plugin, rewritten, 'rewritten $srcFile');
+		if (unparsed != null) return Err(unparsed);
 		return Ok(rewritten);
 	}
 

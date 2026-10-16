@@ -4,7 +4,6 @@ import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.LexicalRegions.LexRegionKind;
 import anyparse.query.ReplaceNode.ReplaceTarget;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
@@ -57,8 +56,10 @@ final class Patch {
 		?optsJson: String, all: Bool = false
 	): EditResult {
 		if (pairs.length == 0) return Err('no fragment pairs given');
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
-		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
+		final tree: QueryNode = switch ParseGate.parse(plugin, source, 'source') {
+			case Unparsed(message): return Err(message);
+			case Parsed(parsed): parsed;
+		};
 
 		final node: QueryNode = switch ReplaceNode.resolveTarget(source, tree, target, plugin) {
 			case Resolved(n): n;

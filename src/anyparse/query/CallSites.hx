@@ -3,9 +3,7 @@ package anyparse.query;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using Lambda;
 
@@ -98,10 +96,10 @@ final class CallSites {
 	 * the op.
 	 */
 	public static function resolveFnAtCursor(source: String, line: Int, col: Int, plugin: GrammarPlugin, shape: RefShape): CursorFnResult {
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return FnAtErr(
-			'source does not parse: $exception'
-		)
-		catch (exception: Exception) return FnAtErr('source does not parse: ${exception.message}');
+		final tree: QueryNode = switch ParseGate.parse(plugin, source, 'source') {
+			case Unparsed(message): return FnAtErr(message);
+			case Parsed(parsed): parsed;
+		};
 		final cursor: Int = Span.offsetOf(source, line, col);
 		final node: Null<QueryNode> = RefactorSupport.resolveCursorNode(tree, cursor, source);
 		if (node == null) return FnAtErr('position $line:$col is not on a function or a call');

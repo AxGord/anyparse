@@ -3,9 +3,7 @@ package anyparse.query;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using StringTools;
 using Lambda;
@@ -79,8 +77,10 @@ final class Inline {
 	 * and `Inline.inline(...)` does not parse at the call site.
 	 */
 	public static function inlineVar(source: String, line: Int, col: Int, plugin: GrammarPlugin, shape: RefShape): InlineResult {
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
-		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
+		final tree: QueryNode = switch ParseGate.parse(plugin, source, 'source') {
+			case Unparsed(message): return Err(message);
+			case Parsed(parsed): parsed;
+		};
 
 		// line:col is 1-based, as apq refs / ast --at / source print.
 		final cursor: Int = Span.offsetOf(source, line, col);
@@ -306,10 +306,10 @@ final class Inline {
 		final rewritten: String = CanonicalEdit.applyEdits(source, edits);
 		if (rewritten == source) return Err('inline of "$name" is a no-op');
 
-		final newTree: QueryNode = try plugin.parseFile(rewritten) catch (exception: ParseError) return Err(
-			'rewritten source does not parse: $exception'
-		)
-		catch (exception: Exception) return Err('rewritten source does not parse: ${exception.message}');
+		final newTree: QueryNode = switch ParseGate.parse(plugin, rewritten, 'rewritten source') {
+			case Unparsed(message): return Err(message);
+			case Parsed(parsed): parsed;
+		};
 		final paren: Int = substitution == initText ? 0 : 1;
 		final captured: Null<Int> = recapturedIdent(target, readFroms, edits, paren, newTree, shape);
 		if (captured == null) return Ok(rewritten);

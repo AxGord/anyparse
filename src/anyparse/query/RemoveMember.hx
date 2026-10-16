@@ -4,9 +4,7 @@ import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.CondBranchPath.CondBranchIndex;
 import anyparse.query.CondBranchPath.CondFrame;
 import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using Lambda;
 
@@ -75,8 +73,10 @@ final class RemoveMember {
 		source: String, typeName: String, memberName: String, reformat: Bool, plugin: GrammarPlugin, withDoc: Bool = true,
 		?optsJson: String
 	): EditResult {
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
-		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
+		final tree: QueryNode = switch ParseGate.parse(plugin, source, 'source') {
+			case Unparsed(message): return Err(message);
+			case Parsed(parsed): parsed;
+		};
 
 		final typeNode: Null<QueryNode> = findType(tree, typeName);
 		if (typeNode == null) return Err('no type named "$typeName" found');

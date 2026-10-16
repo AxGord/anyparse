@@ -1,8 +1,6 @@
 package anyparse.query;
 
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using Lambda;
 using StringTools;
@@ -133,8 +131,10 @@ final class ExtractVar {
 	): ExtractResult {
 		if (!SourceText.isIdentifier(name)) return Err('new name "$name" is not a valid identifier');
 
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
-		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
+		final tree: QueryNode = switch ParseGate.parse(plugin, source, 'source') {
+			case Unparsed(message): return Err(message);
+			case Parsed(parsed): parsed;
+		};
 
 		// line:col is 1-based, as apq refs / ast --at / source print.
 		final cursor: Int = Span.offsetOf(source, line, col);
@@ -183,12 +183,8 @@ final class ExtractVar {
 		final rewritten: String = CanonicalEdit.applyEdits(source, [insertEdit, replaceEdit]);
 		if (rewritten == source) return Err('extract of "$name" is a no-op');
 
-		try
-			plugin.parseFile(rewritten)
-		catch (exception: ParseError)
-			return Err('rewritten source does not parse: $exception')
-		catch (exception: Exception)
-			return Err('rewritten source does not parse: ${exception.message}');
+		final unparsed: Null<String> = ParseGate.refusal(plugin, rewritten, 'rewritten source');
+		if (unparsed != null) return Err(unparsed);
 
 		return Ok(rewritten);
 	}

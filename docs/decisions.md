@@ -2929,3 +2929,16 @@ decided the question; it may not become a record of runs.
   `OracleDeclaration.relativeClasspaths` (line prefixes, quotes kept) asks `hxmlRefs`. A fingerprint over an hxml
   spelled the old way changes once. The compile-dir probe still does not follow an include: it resolves against the
   directory being decided — branch `feat/infra-B6b`
+- the ops left outside `ParseGate` by B7 were read as needing their own catch → none did: 30 parse sites in 23 ops
+  (the input gate and the rewritten-source gate) now ask `ParseGate.parse` / `refusal` under the label they printed,
+  so the text is the gate's. Measured on 29 op entry points x 93 TM files x a parsing and a broken source (11590
+  answers, 5435 of them refusals): byte-identical. Two wordings change, both on paths the corpus never reached:
+  `MakeFinal`'s rewritten-source refusal and `MoveMember`'s per-file scope parse (behind `ScopeFiles`' own refusal)
+  quoted a grammar `ParseError` by its bare message and now quote it as every other gate does, with its `line:col`.
+  The scope loops that word their refusal without a reason (`InheritanceMove`, `MakeFinal`, `SafeDelete`) keep their
+  words and parse through the gate; `CanonicalEdit` and `NewFile` are writer round trips, not parses — branch
+  `feat/infra-B6b`
+- `ExplicitType` and `MoveMember` decoded `ImportKind` themselves → the name-resolution layer answers:
+  `TypeRefIndex.plainImportPathOf` / `bindsUnderGuard` (moved from `ExplicitType`), `usings` / `plainImports` (what
+  `MoveMember`'s scope guard reads). `MoveMember` now checks a file's `using` lines before its static imports, so a
+  file carrying BOTH refusals names the `using` one whatever their order — branch `feat/infra-B6b`
