@@ -1142,28 +1142,6 @@ final class CallGraph {
 		}
 
 		/**
-		 * The nominal the DECLARED return type of `target` denotes for the call `call` made on a value of `receiverType` written
-		 * `receiverSource`, `argType` typing its arguments (`returnThrough`): a nullable or dynamic wrapper names no dispatchable
-		 * type. `member`, when the result is a receiver, is the member looked up on it (`nominalOf`).
-		 */
-		function returnedNominal(
-			call: QueryNode, target: String, receiverSource: Null<String>, receiverType: Null<String>, currentType: Null<String>,
-			argType: QueryNode -> Null<String>, ?member: String, ?scope: Int
-		): Null<String> {
-			// a return type written as a dotted path is read as that path; a std function's from the std (`StdTypes.returnOf`)
-			final written: Null<String> = returnSourceOf(target);
-			// declarations writing it differently each named a type of their own: the one read names it (`returnSourceOf`)
-			final outer: Null<String> = _facts.returnSources.exists(target) || written == null ? null : keys.outerPathOf(written, false);
-			final simple: Null<String> = _facts.returns[target] ?? (outer == null ? null : SourceText.lastSegment(outer));
-			final returned: Null<String> = keys.returnedPath(simple, written) ?? StdTypes.returnOf(_plugin, nodes[target]);
-			final seen: Null<String> = returned == null || nullableWrappers.contains(returned)
-				? null
-				: returnThrough(call, target, returned, receiverSource, receiverType, currentType, argType);
-			final nominal: Null<String> = seen == null ? null : nominalOf(seen, currentType, member, scope);
-			return nominal == null || nullableWrappers.contains(nominal) ? null : nominal;
-		}
-
-		/**
 		 * The element type an index access into a value of `container`'s written type yields, per `indexedElementTypeParams` —
 		 * or, with `params` handed, the one a loop over it binds per `iterationElementTypeParams` — when the container is the
 		 * standard type those maps describe (`standardContainerPaths`) — the type text spells it as the file that wrote it binds it
@@ -1333,18 +1311,22 @@ final class CallGraph {
 			return innerType == null ? null : memberTypeThrough(innerSource, innerType, name, currentType);
 		}
 
+		/** The written return type of the target `call` resolved `expr` to, as the receiver it was made on sees it (`returnThrough`). */
+		function targetReturnSource(expr: QueryNode, call: CallTarget, currentType: Null<String>): Null<String> {
+			final returned: Null<String> = returnSourceOf(call.target) ?? StdTypes.returnOf(_plugin, nodes[call.target]);
+			return returned == null
+				? null
+				: returnThrough(
+					expr, call.target, returned, call.receiverSource, call.onType, currentType, a -> typeSourceOf(a, currentType)
+				);
+		}
 		/**
 		 * `typeSourceOf` for a call: its target's written return type, as the receiver it was made on sees it; for a value no
 		 * function declaration names — a field, a parameter, a call's result — what its function type says.
 		 */
 		function callTypeSource(expr: QueryNode, currentType: Null<String>): Null<String> {
 			final call: Null<CallTarget> = callTargetOf(expr, currentType);
-			if (call == null) return calledResult(typeSourceOf(expr.children[0], currentType));
-			final returned: Null<String> = returnSourceOf(call.target) ?? StdTypes.returnOf(_plugin, nodes[call.target]);
-			if (returned == null) return null;
-			return returnThrough(
-				expr, call.target, returned, call.receiverSource, call.onType, currentType, a -> typeSourceOf(a, currentType)
-			);
+			return call == null ? calledResult(typeSourceOf(expr.children[0], currentType)) : targetReturnSource(expr, call, currentType);
 		}
 
 		graphTyping = {
@@ -1391,11 +1373,12 @@ final class CallGraph {
 			// a call of a value no function declaration names is typed by the value's function type, below
 			final call: Null<CallTarget> = recv.kind == callKind && recv.children.length > 0 ? callTargetOf(recv, currentType) : null;
 			if (call != null) {
-				final returned: Null<String> = returnedNominal(
-					recv, call.target, call.receiverSource, call.onType, currentType, a -> typeSourceOf(a, currentType), member,
-					typeScopeOf(recv, currentType)
-				);
-				return returned == null ? null : {
+				final written: Null<String> = targetReturnSource(recv, call, currentType);
+				final outer: Null<String> = written == null ? null : NominalTypes.outerNominalOf(written.trim(), _plugin.typeSyntax);
+				final returned: Null<String> = written == null || outer != null && nullableWrappers.contains(outer)
+					? null
+					: nominalOf(written, currentType, member, typeScopeOf(recv, currentType));
+				return returned == null || nullableWrappers.contains(returned) ? null : {
 					typeName: returned,
 					isValue: true,
 					isDynamic: false

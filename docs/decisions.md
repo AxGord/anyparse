@@ -2890,3 +2890,12 @@ decided the question; it may not become a record of runs.
   `nominalOf` (type parameter bound, alias, keyed path) answer a value, the std-property read asks the same two, and
   `declaredTypes`, `nullableInner`, `typeLocals` are gone. All-rules and the thread-safety score unchanged on the four
   trees — branch `feat/infra-B4b`
+- the graph typed a CALL two ways: the walk's call arm read the written return through `returnThrough`, while a call in
+  RECEIVER position went through `returnedNominal`, which re-derived the return's simple name from the declaration
+  facts (`returns`) and `keys.returnedPath` before the same `returnThrough` → one reading, `targetReturnSource`, behind
+  both; the receiver keeps its policy that a call returning a nullable or dynamic wrapper names no dispatchable type.
+  What stays the graph host's own, by design, is what the index model has no counterpart for: `nominalOf` (a keyed source
+  to the type a member lookup dispatches on, a type parameter to its bound), `memberReturn` (a member's return on a keyed
+  type, for `iterator()`/`next()`), `argumentTypeSource` (a call argument's expected type) and `receiverType`'s
+  classification (value / type / dynamic receiver). All-rules and the thread-safety score unchanged on the four trees —
+  branch `feat/infra-B4b`

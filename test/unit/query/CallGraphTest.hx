@@ -1837,7 +1837,7 @@ class CallGraphTest extends Test {
 	 * that do not line up (`Lock` and `Array<Lock>`), leave the value unknown (review R4 F7, the F6 remainder).
 	 */
 	@:pin('control')
-	@:killer('M-TS-DECL-EACH-MEMBER') @:killer('M-TS-DECL-EACH-RETURN') @:killer('M-TS-DECL-EACH-SIMPLE')
+	@:killer('M-TS-DECL-EACH-MEMBER') @:killer('M-TS-DECL-EACH-RETURN')
 	@:killer('M-TS-DECL-EACH-UNTYPED') @:killer('M-TS-KEY-LINED')
 	public function testDeclarationsWritingATypeDifferentlyDispatchOnEach(): Void {
 		#if (sys || nodejs)

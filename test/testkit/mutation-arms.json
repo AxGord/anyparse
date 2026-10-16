@@ -20863,14 +20863,6 @@
 			"note": "a return type its declarations write differently is typed as neither (review R4 F6 remainder)"
 		},
 		{
-			"name": "M-TS-DECL-EACH-SIMPLE",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "_facts.returns[target] ?? (outer == null ? null : SourceText.lastSegment(outer));",
-			"replace": "_facts.returns[target];",
-			"note": "a return its declarations write as types of different names names none"
-		},
-		{
 			"name": "M-TS-DECL-EACH-UNTYPED",
 			"type": "anyparse.query.CallGraphKeys",
 			"method": "firstKeyingEach",
@@ -20986,16 +20978,16 @@
 			"name": "M-TS-CALLED-VALUE",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "if (call == null) return calledResult(typeSourceOf(expr.children[0], currentType));",
-			"replace": "if (call == null) return null;",
+			"find": "return call == null ? calledResult(typeSourceOf(expr.children[0], currentType)) : targetReturnSource(expr, call, currentType);",
+			"replace": "return call == null ? null : targetReturnSource(expr, call, currentType);",
 			"note": "a call of a value no function declaration names — a function-typed field, parameter or call result — is not typed (review R4 F7)"
 		},
 		{
 			"name": "M-TS-CALLED-RECEIVER",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "\tif (call != null) {\n\t\tfinal returned: Null<String> = returnedNominal(",
-			"replace": "\tif (recv.kind == callKind && call == null) return null;\n\tif (call != null) {\n\t\tfinal returned: Null<String> = returnedNominal(",
+			"find": "\tif (call != null) {\n\t\tfinal written: Null<String> = targetReturnSource(recv, call, currentType);",
+			"replace": "\tif (recv.kind == callKind && call == null) return null;\n\tif (call != null) {\n\t\tfinal written: Null<String> = targetReturnSource(recv, call, currentType);",
 			"note": "a receiver that is a call of a function-typed value stays unresolved"
 		},
 		{
