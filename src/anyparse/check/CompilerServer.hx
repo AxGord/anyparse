@@ -240,7 +240,7 @@ final class CompilerServer {
 		#if nodejs
 		try {
 			final args: Array<String> = connectArgs(port, hxml, extra, defines ?? []);
-			final opts: Dynamic = { encoding: 'utf8' };
+			final opts: Dynamic = { encoding: 'utf8', env: HaxeSpawn.childEnv() };
 			if (cwd != null) Reflect.setField(opts, 'cwd', cwd);
 			final res: Dynamic = js.node.ChildProcess.spawnSync('haxe', args, opts);
 			if (res.error != null) return null;
@@ -300,7 +300,7 @@ final class CompilerServer {
 	private static function spawnServer(port: Int): Dynamic {
 		#if nodejs
 		try {
-			final opts: Dynamic = { detached: true, stdio: 'ignore' };
+			final opts: Dynamic = { detached: true, stdio: 'ignore', env: HaxeSpawn.childEnv() };
 			return js.node.ChildProcess.spawn('haxe', ['--wait', '$port'], opts);
 		} catch (exception: haxe.Exception) {
 			return null;

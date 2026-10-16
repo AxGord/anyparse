@@ -3070,6 +3070,23 @@ decided the question; it may not become a record of runs.
   could not reach `check/` → ONE `ParseGate.parseOrNull` beside `parse` / `refusal` (moved there, every caller
   repointed by `move-member`, the inline copies replaced). Catching `Exception` alone is the old two-catch form: a
   `ParseError` IS an `Exception`. All-rules and both ops harnesses byte-identical — branch `feat/infra-B9`
+- the compiler oracle was to turn the Haxe ANALYZER off (`--macro addGlobalMetadata("", "@:analyzer(ignore)", true, true, false)`)
+  in every spawn that only typechecks or dumps facts → every spawn kind reads the compile's status or streams (a
+  typecheck's verdict, a warm server's green, the facts compile's drop-on-error, the reach probe's `status != 0`), and
+  the analyzer writes to both on haxe 4.3.7: it raises errors of its own ("Cannot use Void as value",
+  `analyzerTexprTransformer.ml`, which an empty value `switch` relies on — `var a: Dynamic = cast v();` is rejected
+  with it and accepted without it), and the ignore meta makes NEW warnings ("Unrecognized analyzer option: ignore",
+  `filters.ml` `add_field_inits` runs the analyzer on a constructor under the class's meta — 481 lines on a TM
+  typecheck that printed none) and lands in the facts dump's type `meta`. The OCaml collector setting
+  (`HaxeSpawn.DEFAULT_GC`) is the part kept — branch `feat/infra-O1`
+- the narrower analyzer switches (`-D analyzer-no-fusion`, `analyzer-no-const-propagation`,
+  `analyzer-no-copy-propagation`, `analyzer-no-local-dce`) were to keep the analyzer's own errors while dropping its
+  cost → both break a build that compiles: without fusion the post-analyzer `sanitize` rejects the analyzer's own
+  temporaries ("On static platforms, null can't be used as basic type Float"), and without const propagation an
+  `inline` variable's initializer is no constant any more ("Inline variable initialization must be a constant
+  value") — branch `feat/infra-O1`
+- a larger minor heap than `s=16M` (`s=32M`, `s=64M`) was to buy more of the compile → no faster on a TM typecheck or
+  facts compile, and up to 0.4 GB more per process — branch `feat/infra-O1`
 - the 40 functions over the cyclomatic threshold (C1) are split along their own decisions — a dispatch per kind, a
   validation ladder into named predicates, a loop body doing several jobs into one function per job — never into a
   closure or a ternary chain: a local function's branches count toward its enclosing function, and the point is the

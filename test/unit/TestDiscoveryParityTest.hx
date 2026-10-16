@@ -263,6 +263,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.OracleCoverageTest',
 		'unit.check.OracleDirTest',
 		'unit.check.OracleFixImportLeakTest',
+		'unit.check.OracleGcTest',
 		'unit.check.OracleGenerationTest',
 		'unit.check.OracleParallelVerdictTest',
 		'unit.check.OracleParallelismTest',
@@ -1594,6 +1595,12 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.OracleDirTest#testTheDisplayServerWarmsInTheDeclaredDir :: control :: ' + 'M-DISPLAY-IGNORES-DIR',
 			'unit.check.OracleDirTest#testTheFingerprintReadsTheClasspathUnderTheDeclaredDir :: control :: ' + 'M-ORACLE-CACHE-IGNORES-DIR',
 			'unit.check.OracleDirTest#testTheProbesRunInTheDeclaredDir :: control :: ' + 'M-SPAWN-RUN-IGNORES-CWD',
+			'unit.check.OracleGcTest#testATunedCollectorCostsMemory :: guard :: M-GC-MEMORY-UNCOUNTED',
+			'unit.check.OracleGcTest#testEveryKindOfSpawnRunsUnderTheDefault :: control :: '
+				+ 'M-GC-RUN-INHERITS,M-GC-DRIVER-INHERITS,M-GC-PENDING-INHERITS',
+			'unit.check.OracleGcTest#testTheCallersOwnSettingStaysAndOffAddsNothing :: guard :: '
+				+ 'M-GC-INHERITED-OVERRIDDEN,M-GC-OFF-IGNORED',
+			'unit.check.OracleGcTest#testTheParameters :: guard :: M-GC-OFF-IGNORED,M-GC-EMPTY-DECLARED-OFF,M-GC-INHERITED-OVERRIDDEN',
 			'unit.check.OracleGenerationTest#testAChangedCommandRegenerates :: control :: ' + 'M-GENERATE-NEVER-STALE-BY-COMMAND',
 			'unit.check.OracleGenerationTest#testAChangedInputRegeneratesAndAnUnchangedOneDoesNot :: control :: '
 				+ 'M-GENERATE-NEVER-STALE-BY-INPUT',
@@ -6980,7 +6987,14 @@ class TestDiscoveryParityTest extends Test {
 			'M-HXML-SPLIT-LAST-SPACE',
 			'M-HXML-QUOTES-KEPT',
 			'M-BLAMES-BASENAME',
-			'M-COMPILEDIR-PROBE-BLIND'
+			'M-COMPILEDIR-PROBE-BLIND',
+			'M-GC-RUN-INHERITS',
+			'M-GC-DRIVER-INHERITS',
+			'M-GC-PENDING-INHERITS',
+			'M-GC-INHERITED-OVERRIDDEN',
+			'M-GC-OFF-IGNORED',
+			'M-GC-EMPTY-DECLARED-OFF',
+			'M-GC-MEMORY-UNCOUNTED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

@@ -21996,6 +21996,62 @@
 			"method": "relativeClasspaths",
 			"force": "[]",
 			"note": "the compile-dir probe reads no classpath, so every nested hxml compiles from its own directory even where its classpaths resolve from the config's"
+		},
+		{
+			"name": "M-GC-RUN-INHERITS",
+			"type": "anyparse.check.HaxeSpawn",
+			"method": "run",
+			"find": "maxBuffer: maxBuffer, env: childEnv() }",
+			"replace": "maxBuffer: maxBuffer }",
+			"note": "a single haxe spawn inherits the caller's environment untouched, so every typecheck run through `run` pays the default collector again"
+		},
+		{
+			"name": "M-GC-DRIVER-INHERITS",
+			"type": "anyparse.check.HaxeSpawn",
+			"method": "runAllTimed",
+			"find": "env: childEnv(),",
+			"replace": "",
+			"note": "the parallel driver and every job it starts run in the caller's environment, so the overlapped typechecks run under the default collector"
+		},
+		{
+			"name": "M-GC-PENDING-INHERITS",
+			"type": "anyparse.check.PendingRuns",
+			"method": "new",
+			"find": "{ stdio: 'ignore', env: HaxeSpawn.childEnv() }",
+			"replace": "{ stdio: 'ignore' }",
+			"note": "a batch started in the background (the facts compiles, the reach probes, the warm servers) runs under the default collector"
+		},
+		{
+			"name": "M-GC-INHERITED-OVERRIDDEN",
+			"type": "anyparse.check.HaxeSpawn",
+			"method": "gcParams",
+			"find": "if (!taken.contains(paramName(p))) p",
+			"replace": "p",
+			"note": "our parameters are appended even where the caller's own OCAMLRUNPARAM sets the same one, so a later duplicate overrides the setting the caller chose"
+		},
+		{
+			"name": "M-GC-OFF-IGNORED",
+			"type": "anyparse.check.HaxeSpawn",
+			"method": "gcParams",
+			"find": "asked == GC_OFF ? [] : ",
+			"replace": "",
+			"note": "APQ_ORACLE_GC=off is passed to the runtime as a parameter named off instead of leaving the collector alone"
+		},
+		{
+			"name": "M-GC-EMPTY-DECLARED-OFF",
+			"type": "anyparse.check.HaxeSpawn",
+			"method": "gcParams",
+			"find": "declared == null || declared.trim() == ''",
+			"replace": "declared == null",
+			"note": "an empty APQ_ORACLE_GC (how a test restores an unset variable) turns the tuning off instead of meaning the default"
+		},
+		{
+			"name": "M-GC-MEMORY-UNCOUNTED",
+			"type": "anyparse.check.HaxeSpawn",
+			"method": "parallelismFor",
+			"find": "(tunedCollector ? GC_MEMORY : 0)",
+			"replace": "0",
+			"note": "the budget ignores the extra memory a tuned collector's compile holds, so a small machine runs more compiles than it has memory for"
 		}
 	]
 }

@@ -65,7 +65,7 @@ final class PendingRuns {
 			sys.io.File.saveContent(_input, haxe.Json.stringify(jobs));
 			final child: Dynamic = js.node.ChildProcess.spawn(
 				js.Node.process.execPath, HaxeSpawn.driverArgs(parallel, maxBuffer, false, { result: _result, jobs: _input }),
-				{ stdio: 'ignore' }
+				{ stdio: 'ignore', env: HaxeSpawn.childEnv() }
 			);
 			// a batch nobody awaits must not keep this process alive: the driver ends its jobs once this process is gone
 			child.unref();
