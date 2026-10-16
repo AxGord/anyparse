@@ -119,6 +119,32 @@ final class PendingRunsTest extends Test {
 		#end
 	}
 
+	/**
+	 * A background driver that stops doing its work is killed once its bound is spent, and `await` answers every job as
+	 * one that produced no verdict instead of polling a stopped process forever. Run in a child process
+	 * (`testkit.TestChild.wedge`), so a bound that fails fails this test instead of hanging the suite.
+	 */
+	@:pin('control')
+	@:killer('M-PENDING-UNBOUNDED')
+	public function testAWedgedBackgroundDriverIsKilledAtItsBound(): Void {
+		#if nodejs
+		if (js.Node.process.platform == 'win32') {
+			Assert.pass('no SIGSTOP on Windows');
+			return;
+		}
+		final dir: String = CliFixture.writeDir('pendingwedge', []);
+		final runs: Null<Array<HaxeRun>> = testkit.TestChild.wedge('bounded-pending', dir, 1500);
+		Assert.notNull(runs, 'await answered while the driver was stopped');
+		if (runs != null) {
+			Assert.isNull(runs[0].status, 'no verdict');
+			Assert.isTrue(runs[0].failure.indexOf('did not answer within 1500 ms') >= 0, 'and the failure says why: ${runs[0].failure}');
+		}
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('no asynchronous process API on this target');
+		#end
+	}
+
 	#if nodejs
 	/** The pid written to `path`, waiting for the file to appear and fill; null when it never does. */
 	private static function awaitPid(path: String): Null<Int> {

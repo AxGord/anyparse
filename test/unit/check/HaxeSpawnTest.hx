@@ -157,9 +157,8 @@ final class HaxeSpawnTest extends Test {
 		sys.io.File.saveContent(
 			'$dir/jobs.json', haxe.Json.stringify([{ args: [], cwd: dir, shell: 'sleep 30 & echo $! > child.txt; wait' }])
 		);
-		final input: Int = js.Syntax.code("require('fs').openSync({0}, 'r')", '$dir/jobs.json');
 		final driver: Dynamic = js.node.ChildProcess.spawn(
-			js.Node.process.execPath, HaxeSpawn.driverArgs(1, ROOMY, false), { stdio: [input, 'ignore', 'ignore'] }
+			js.Node.process.execPath, HaxeSpawn.driverArgs(1, ROOMY, false, { result: '', jobs: '$dir/jobs.json' }), { stdio: 'ignore' }
 		);
 		final child: Null<Int> = waitForPid('$dir/child.txt');
 		Assert.notNull(child, 'the job started its child');
@@ -239,6 +238,74 @@ final class HaxeSpawnTest extends Test {
 		#else
 		Assert.pass('the process driver needs the node target');
 		#end
+	}
+
+	/**
+	 * The process driver gets its jobs through a FILE, its stdin is the null device. Node's `spawnSync` on macOS can lose
+	 * the writability wakeup of an `input` pipe — the stdin socket drained, the caller asleep in `kevent` with bytes still
+	 * to write — and a driver blocked reading that stdin never starts a job: the `runAll` hang. The job asks what its
+	 * parent, the driver, holds as fd 0.
+	 */
+	@:pin('control')
+	@:killer('M-DRIVER-READS-STDIN')
+	public function testTheDriverReadsItsJobsFromNoPipe(): Void {
+		#if nodejs
+		if (js.Node.process.platform == 'win32') {
+			Assert.pass('no lsof or /proc to ask on Windows');
+			return;
+		}
+		final runs: Array<HaxeRun> = HaxeSpawn.runAll([
+			{
+				args: [],
+				cwd: null,
+				shell: 'if [ -e /proc/$$PPID/fd/0 ]; then readlink /proc/$$PPID/fd/0; else lsof -a -p $$PPID -d 0 -F n; fi'
+			}
+		], ROOMY, 1);
+		Assert.equals(0, runs[0].status, 'the probe ran: ${runs[0].failure} ${runs[0].err}');
+		Assert.isTrue(runs[0].out.indexOf('/dev/null') >= 0, 'the driver\'s stdin is the null device, not a pipe: ${runs[0].out}');
+		#else
+		Assert.pass('the process driver needs the node target');
+		#end
+	}
+
+	/**
+	 * A driver that stops doing its work is killed once its bound is spent, and every job answers that it produced no
+	 * verdict: nothing waits on a wedged driver forever. Run in a child process (`testkit.TestChild.wedge`), so a driver
+	 * the bound fails to end fails this test instead of hanging the suite.
+	 */
+	@:pin('control')
+	@:killer('M-DRIVER-UNBOUNDED')
+	public function testAWedgedDriverIsKilledAtItsBound(): Void {
+		#if nodejs
+		if (js.Node.process.platform == 'win32') {
+			Assert.pass('no SIGSTOP on Windows');
+			return;
+		}
+		final dir: String = CliFixture.writeDir('spawnwedge', []);
+		final runs: Null<Array<HaxeRun>> = testkit.TestChild.wedge('bounded-run', dir, 1500);
+		Assert.notNull(runs, 'runAll answered while its driver was stopped');
+		if (runs != null) {
+			Assert.isNull(runs[0].status, 'no verdict');
+			Assert.isTrue(runs[0].failure.indexOf('did not answer within 1500 ms') >= 0, 'and the failure says why: ${runs[0].failure}');
+		}
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('the process driver needs the node target');
+		#end
+	}
+
+	/**
+	 * The bound grows by a round of the longest job for every `parallel` jobs, a job naming no `timeout` counting as a long
+	 * one: three jobs of one second each cost two more seconds run one at a time than all at once, and a job without a
+	 * timeout outweighs any short one.
+	 */
+	@:pin('control')
+	@:killer('M-DRIVER-BOUND-IGNORES-ROUNDS')
+	public function testTheDriverBoundScalesWithTheJobs(): Void {
+		final short: Array<SpawnJob> = [for (_ in 0...3) { args: [], cwd: null, timeout: 1000 }];
+		Assert.equals(2000, HaxeSpawn.driverBound(short, 1) - HaxeSpawn.driverBound(short, 3));
+		final open: Array<SpawnJob> = [{ args: [], cwd: null }];
+		Assert.isTrue(HaxeSpawn.driverBound(open, 1) > HaxeSpawn.driverBound([{ args: [], cwd: null, timeout: 60000 }], 1));
 	}
 
 }

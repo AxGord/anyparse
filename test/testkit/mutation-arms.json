@@ -9258,8 +9258,8 @@
 			"name": "M-PENDING-RUNS-IN-FOREGROUND",
 			"type": "anyparse.check.PendingRuns",
 			"method": "await",
-			"find": "final answer: Array<HaxeRun> = pid == null ? HaxeSpawn.runAll(_jobs, _maxBuffer, _parallel) : collect(pid);",
-			"replace": "final answer: Array<HaxeRun> = HaxeSpawn.runAll(_jobs, _maxBuffer, _parallel);",
+			"find": "final answer: Array<HaxeRun> = pid == null ? HaxeSpawn.runAll(_jobs, _maxBuffer, _parallel, false, _bound) : collect(pid);",
+			"replace": "final answer: Array<HaxeRun> = HaxeSpawn.runAll(_jobs, _maxBuffer, _parallel, false, _bound);",
 			"note": "a background batch is run again in the foreground when it is awaited, so nothing it did while the caller worked is saved"
 		},
 		{
@@ -22052,6 +22052,38 @@
 			"find": "(tunedCollector ? GC_MEMORY : 0)",
 			"replace": "0",
 			"note": "the budget ignores the extra memory a tuned collector's compile holds, so a small machine runs more compiles than it has memory for"
+		},
+		{
+			"name": "M-DRIVER-READS-STDIN",
+			"type": "anyparse.check.HaxeSpawn",
+			"method": "runAllTimed",
+			"find": "stdio: ['ignore', 'pipe', 'pipe'],",
+			"replace": "input: haxe.Json.stringify(jobs),",
+			"note": "the jobs are piped to the driver's stdin again, the channel node's spawnSync can stall for good on macOS, so about one runAll in seven hundred at 200 KB hangs the run forever"
+		},
+		{
+			"name": "M-DRIVER-UNBOUNDED",
+			"type": "anyparse.check.HaxeSpawn",
+			"method": "runAllTimed",
+			"find": "timeout: limit,",
+			"replace": "",
+			"note": "a wedged parallel driver is waited on forever, so one stopped or stalled driver hangs the whole lint run"
+		},
+		{
+			"name": "M-DRIVER-BOUND-IGNORES-ROUNDS",
+			"type": "anyparse.check.HaxeSpawn",
+			"method": "driverBound",
+			"find": "rounds * longest",
+			"replace": "longest",
+			"note": "the bound is one job's share however many rounds the parallelism splits the jobs into, so an honest run of many jobs on a small machine is killed as wedged"
+		},
+		{
+			"name": "M-PENDING-UNBOUNDED",
+			"type": "anyparse.check.PendingRuns",
+			"method": "collectTimed",
+			"find": "if (Date.now().getTime() - _started > _bound) {",
+			"replace": "if (false) {",
+			"note": "await polls a wedged background driver forever: a stopped driver still answers the liveness probe, so the run never ends"
 		}
 	]
 }

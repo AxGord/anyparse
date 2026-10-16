@@ -3087,6 +3087,24 @@ decided the question; it may not become a record of runs.
   value") — branch `feat/infra-O1`
 - a larger minor heap than `s=16M` (`s=32M`, `s=64M`) was to buy more of the compile → no faster on a TM typecheck or
   facts compile, and up to 0.4 GB more per process — branch `feat/infra-O1`
+- the parallel process driver of `HaxeSpawn.runAll` hung about one run in thirty (`apq` asleep in `spawnSync`, the driver
+  with no children blocked in `readFileSync(0)`, 13+ min until killed), and the suspicion was the stdin pipe's write end
+  leaking into another child → not a leak: reproduced in plain node 20.18 with NO other process alive —
+  `spawnSync(node, { input })` whose child reads its stdin hangs ~1 call in 700 at 200 KB (the real driver: 18 of 3000;
+  inputs to 65 KB and 2.5 KB x 8000: none), and in each captured hang both socket queues were EMPTY
+  (`netstat -f unix -A`: Recv-Q = Send-Q = 0) while the parent slept in `SyncProcessRunner` → `uv_run` → `kevent`: the
+  writability wakeup for the rest of the input, or for the shutdown that is the child's EOF, never came. An oracle run's
+  input grows with the invalidation jobs (configurations x moved paths). The jobs now reach the driver through a FILE
+  (`writeJobs`, argv[5], the channel `PendingRuns` already used: the real driver, 0 of 3000) and the driver's stdin is
+  the null device; it no longer reads stdin at all. A driver still running past `driverBound` (every round of
+  `parallel` jobs the longest job's own timeout, 10 min for one naming none, + 60 s) is SIGKILLed — the one signal a
+  node process blocked in a synchronous call, or stopped, cannot leave unanswered — in `runAll` (`spawnSync` timeout)
+  and `PendingRuns.await` alike, and every job answers "did not answer within N ms and was killed". Not retried: a
+  killed driver may have run any of its jobs (a generate command writes the tree). The cost of SIGKILL over SIGTERM: a
+  wedged driver's non-tethered jobs are not killed with it (a compile runs to its end; a tethered server still dies, its
+  stdin closing). Tests `HaxeSpawnTest.testTheDriverReadsItsJobsFromNoPipe` (deterministic: lsof/proc on the driver's
+  fd 0), `testAWedgedDriverIsKilledAtItsBound`, `PendingRunsTest.testAWedgedBackgroundDriverIsKilledAtItsBound` (a job
+  SIGSTOPs its driver, run in a `TestChild` so a failed bound cannot hang the suite) — branch `feat/infra-F1`
 - the 40 functions over the cyclomatic threshold (C1) are split along their own decisions — a dispatch per kind, a
   validation ladder into named predicates, a loop body doing several jobs into one function per job — never into a
   closure or a ternary chain: a local function's branches count toward its enclosing function, and the point is the

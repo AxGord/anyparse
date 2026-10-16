@@ -1387,6 +1387,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.HaxeSpawnTest#testAJobPastItsTimeoutIsKilled :: control :: ' + 'M-DRIVER-NO-TIMEOUT',
 			'unit.check.HaxeSpawnTest#testAKilledParentTakesItsJobsWithIt :: control :: ' + 'M-DRIVER-OUTLIVES-ITS-PARENT',
 			'unit.check.HaxeSpawnTest#testASignalledDriverTakesItsJobsWithIt :: control :: ' + 'M-DRIVER-SIGNAL-ORPHANS',
+			'unit.check.HaxeSpawnTest#testAWedgedDriverIsKilledAtItsBound :: control :: M-DRIVER-UNBOUNDED',
+			'unit.check.HaxeSpawnTest#testTheDriverBoundScalesWithTheJobs :: control :: M-DRIVER-BOUND-IGNORES-ROUNDS',
+			'unit.check.HaxeSpawnTest#testTheDriverReadsItsJobsFromNoPipe :: control :: M-DRIVER-READS-STDIN',
 			'unit.check.HoistCommonImportTest#testANamesakePushesTheStatementToADeeperSite :: guard :: ',
 			'unit.check.HoistCommonImportTest#testANestedSiteTakesOnlyWhatItsParentDidNot :: control :: '
 				+ 'M-HOIST-SITE-ORDER,M-HOIST-CHAIN-INHERITED',
@@ -1718,6 +1721,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PendingRunsTest#testABatchRunsWhileTheCallerWorks :: control :: M-PENDING-RUNS-IN-FOREGROUND',
 			'unit.check.PendingRunsTest#testACancelledBatchEndsItsJobs :: control :: M-PENDING-CANCEL-LEAVES-JOBS',
 			'unit.check.PendingRunsTest#testATetheredJobDiesWithItsDriver :: control :: M-TETHER-IGNORES-EOF',
+			'unit.check.PendingRunsTest#testAWedgedBackgroundDriverIsKilledAtItsBound :: control :: M-PENDING-UNBOUNDED',
 			'unit.check.PendingRunsTest#testTheBatchFilesArePrivateAndShortLived :: control :: M-PENDING-JOBS-FILE-KEPT',
 			'unit.check.PossibleNullDereferenceTest#testCallReturnPopFlagged :: control :: M-NULLABLE-NO-CHAIN',
 			'unit.check.PossibleNullDereferenceTest#testExistsGuardedEarlyReturnNotFlagged :: control :: M-EXISTS-GUARD-BLIND',
@@ -6994,7 +6998,11 @@ class TestDiscoveryParityTest extends Test {
 			'M-GC-INHERITED-OVERRIDDEN',
 			'M-GC-OFF-IGNORED',
 			'M-GC-EMPTY-DECLARED-OFF',
-			'M-GC-MEMORY-UNCOUNTED'
+			'M-GC-MEMORY-UNCOUNTED',
+			'M-DRIVER-READS-STDIN',
+			'M-DRIVER-UNBOUNDED',
+			'M-DRIVER-BOUND-IGNORES-ROUNDS',
+			'M-PENDING-UNBOUNDED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
