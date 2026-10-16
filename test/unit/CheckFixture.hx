@@ -148,9 +148,12 @@ final class CheckFixture {
 	 * resolution scope, when none is given.
 	 */
 	private static function hosted(?plugin: GrammarPlugin): GrammarPlugin {
-		return plugin == null
-			? new CachingGrammarPlugin(new HaxeQueryPlugin())
-			: plugin is CachingGrammarPlugin ? plugin : new CachingGrammarPlugin(plugin);
+		return if (plugin == null)
+			new CachingGrammarPlugin(new HaxeQueryPlugin())
+		else if (plugin is CachingGrammarPlugin)
+			plugin
+		else
+			new CachingGrammarPlugin(plugin);
 	}
 
 }
