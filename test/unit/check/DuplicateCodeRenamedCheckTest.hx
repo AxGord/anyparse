@@ -419,7 +419,7 @@ class DuplicateCodeRenamedCheckTest extends Test {
 
 	public function testFixReturnsNothingAndTheReasonSaysWhy(): Void {
 		final check: DuplicateCodeRenamed = new DuplicateCodeRenamed();
-		Assert.equals(0, check.fix('class C {}', [], new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.fixOf(check, 'class C {}', []).length);
 		Assert.isTrue(check.noAutofixReason().indexOf('judgement') >= 0, check.noAutofixReason());
 	}
 

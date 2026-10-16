@@ -5,8 +5,6 @@ import anyparse.check.InlineConstant;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.StaticConstant;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.CanonicalEdit;
 import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
@@ -279,12 +277,9 @@ class StaticConstantCheckTest extends Test {
 	 */
 	public function testComposesWithInlineConstant(): Void {
 		final promoted: String = applyFix('class C {\n\tprivate final _minScale:Float = 0.5;\n\tfunction f():Float return _minScale;\n}');
-		final check: InlineConstant = new InlineConstant();
-		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: promoted }];
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		Assert.equals(
 			'class C {\n\tprivate static inline final _minScale:Float = 0.5;\n\tfunction f():Float return _minScale;\n}',
-			CanonicalEdit.applyEdits(promoted, check.fix(promoted, CheckFixture.violationsIn(check, files, plugin), plugin))
+			CheckFixture.fixedSource(new InlineConstant(), promoted)
 		);
 	}
 
@@ -303,10 +298,7 @@ class StaticConstantCheckTest extends Test {
 	}
 
 	private function applyFix(src: String): String {
-		final check: StaticConstant = new StaticConstant();
-		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		return CanonicalEdit.applyEdits(src, check.fix(src, CheckFixture.violationsIn(check, files, plugin), plugin));
+		return CheckFixture.fixedSource(new StaticConstant(), src);
 	}
 
 }

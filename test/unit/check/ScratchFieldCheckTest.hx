@@ -332,7 +332,7 @@ class ScratchFieldCheckTest extends Test {
 	private function fixedWith(check: ScratchField, src: String): String {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final vs: Array<Violation> = CheckFixture.violations(check, src, plugin);
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin);
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.fixOf(check, src, vs, plugin);
 		return CanonicalEdit.applyEdits(src, edits);
 	}
 
@@ -343,7 +343,7 @@ class ScratchFieldCheckTest extends Test {
 		final vs: Array<Violation> = CheckFixture.violations(check, src, plugin);
 		Assert.equals(1, vs.length);
 		if (vs.length != 1) return;
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin);
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.fixOf(check, src, vs, plugin);
 		Assert.equals(0, edits.length);
 		final reason: String = vs[0].declineReason ?? '';
 		Assert.isTrue(reason.indexOf(why) >= 0, reason);

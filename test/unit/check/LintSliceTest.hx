@@ -222,11 +222,10 @@ class LintSliceTest extends Test {
 	public function testFixYieldsDeleteEditsForWarningsOnly(): Void {
 		final src: String = 'package pkg;\nimport a.b.Unused;\nimport a.b.*;\nclass C {}';
 		final check: UnusedImport = new UnusedImport();
-		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'pkg/C.hx', source: src }].concat(
-			declaringStubs()
-		), plugin());
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }].concat(declaringStubs());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin());
 		// One Warning (Unused) + one Info (wildcard); only the Warning is fixable.
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin());
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.fixIn(check, files, vs.filter(v -> v.file == 'pkg/C.hx'));
 		Assert.equals(1, edits.length);
 		Assert.equals('', edits[0].text);
 	}
@@ -235,8 +234,10 @@ class LintSliceTest extends Test {
 	public function testFixRemovesUnusedImport(): Void {
 		final src: String = 'package pkg;\nimport a.b.Used;\nimport a.b.Gone;\nclass C {\n\tvar x:Used;\n}';
 		final check: UnusedImport = new UnusedImport();
-		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'f.hx', source: src }].concat(declaringStubs()), plugin());
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin());
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.fixRun(check, [{ file: 'f.hx', source: src }].concat(
+			declaringStubs()
+		))
+			.edits;
 		switch CanonicalEdit.canonicalize(src, edits, true, plugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf('Gone') == -1);
@@ -313,7 +314,7 @@ class LintSliceTest extends Test {
 		final src: String = 'class C {\n\tfunction f() {\n\t\tfinal x:Int = 1;\n\t\ttrace(1);\n\t}\n}';
 		final check: UnusedLocal = new UnusedLocal();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin());
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin());
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.fixOf(check, src, vs, plugin());
 		switch CanonicalEdit.canonicalize(src, edits, true, plugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf('final x') == -1);
@@ -333,7 +334,7 @@ class LintSliceTest extends Test {
 		final check: UnusedLocal = new UnusedLocal();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin());
 		Assert.equals(1, vs.length);
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin());
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.fixOf(check, src, vs, plugin());
 		Assert.equals(0, edits.length);
 	}
 
@@ -357,7 +358,7 @@ class LintSliceTest extends Test {
 		final src: String = 'class C {\n\tfunction f() {\n\t\tvar used:Int = 1, unusedTail:Int = 2;\n\t\ttrace(used);\n\t}\n}';
 		final check: UnusedLocal = new UnusedLocal();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin());
-		Assert.equals(0, check.fix(src, vs, plugin()).length);
+		Assert.equals(0, CheckFixture.fixOf(check, src, vs, plugin()).length);
 	}
 
 	/**
@@ -371,7 +372,7 @@ class LintSliceTest extends Test {
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin());
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains("'unusedHead'"));
-		Assert.equals(0, check.fix(src, vs, plugin()).length);
+		Assert.equals(0, CheckFixture.fixOf(check, src, vs, plugin()).length);
 	}
 
 	/** `unused-local` is registered in the default check set alongside `unused-import`. */
@@ -447,8 +448,7 @@ class LintSliceTest extends Test {
 	public function testDuplicateImportFix(): Void {
 		final src: String = 'package pkg;\nimport a.b.Dup;\nimport a.b.Dup;\nclass C {}';
 		final check: DuplicateImport = new DuplicateImport();
-		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'pkg/C.hx', source: src }], plugin());
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin());
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.fixRun(check, [{ file: 'pkg/C.hx', source: src }]).edits;
 		Assert.equals(1, edits.length);
 		Assert.equals('', edits[0].text);
 	}
@@ -649,10 +649,8 @@ class LintSliceTest extends Test {
 		// the splice; dropping the contained edit keeps only the outer dead-run delete.
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\treturn;\n\t\tvar x = 0;\n\t\tx = x;\n\t}\n}';
 		final files: Array<{ source: String, file: String }> = [{ file: 'C.hx', source: src }];
-		final edits: Array<{ span: Span, text: String }> = new DeadCode().fix(
-			src, CheckFixture.violationsIn(new DeadCode(), files, plugin()), plugin()
-		);
-		for (e in new SelfAssignment().fix(src, CheckFixture.violationsIn(new SelfAssignment(), files, plugin()), plugin())) edits.push(e);
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.fixRun(new DeadCode(), files).edits;
+		for (e in CheckFixture.fixRun(new SelfAssignment(), files).edits) edits.push(e);
 		switch CanonicalEdit.canonicalize(src, CanonicalEdit.dropContainedEdits(edits), true, plugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf('x = x') == -1);
@@ -707,8 +705,7 @@ class LintSliceTest extends Test {
 	public function testUnusedUsingFixDeletes(): Void {
 		final src: String = 'package pkg;\nusing Lambda;\nclass C {\n\tfunction f(s:String):String return s.toUpperCase();\n}';
 		final check: UnusedImport = new UnusedImport();
-		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'pkg/C.hx', source: src }], plugin());
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin());
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.fixRun(check, [{ file: 'pkg/C.hx', source: src }]).edits;
 		Assert.equals(1, edits.length);
 		Assert.equals('', edits[0].text);
 	}
@@ -765,13 +762,14 @@ class LintSliceTest extends Test {
 	public function testOutOfScopeNamedImportIsInfoNotFixed(): Void {
 		final src: String = 'package pkg;\nimport ext.lib.Widget;\nclass C {}';
 		final check: UnusedImport = new UnusedImport();
-		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'pkg/C.hx', source: src }], plugin());
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin());
 		Assert.equals(1, vs.length);
 		Assert.equals('unused-import', vs[0].rule);
 		Assert.equals(Severity.Info, vs[0].severity);
 		Assert.isTrue(vs[0].message.contains('ext.lib.Widget'));
 		Assert.isTrue(vs[0].message.contains('not in lint scope'));
-		Assert.equals(0, check.fix(src, vs, plugin()).length);
+		Assert.equals(0, CheckFixture.fixIn(check, files, vs).length);
 	}
 
 	/**
@@ -787,7 +785,7 @@ class LintSliceTest extends Test {
 		Assert.equals(1, vs.length);
 		Assert.equals(Severity.Warning, vs[0].severity);
 		Assert.isTrue(vs[0].message.contains('a.b.Unused'));
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin());
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.fixIn(check, files, vs);
 		Assert.equals(1, edits.length);
 		Assert.equals('', edits[0].text);
 	}
@@ -823,7 +821,7 @@ class LintSliceTest extends Test {
 		Assert.equals(1, vs.length);
 		Assert.equals(Severity.Info, vs[0].severity);
 		Assert.isTrue(vs[0].message.contains('unused import \'a.b.Unused\' — `#if`-guarded'));
-		Assert.equals(0, check.fix(src, vs, plugin()).length);
+		Assert.equals(0, CheckFixture.fixIn(check, files, vs).length);
 	}
 
 	/**

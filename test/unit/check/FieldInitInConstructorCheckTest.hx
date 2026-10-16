@@ -54,8 +54,8 @@ class FieldInitInConstructorCheckTest extends Test {
 
 	public function testFixFoldsTheOpeningWriteToATernary(): Void {
 		final out: String = applyFixOnce(wrap(FIELDS, BODY));
-		Assert.isTrue(out.indexOf('_cellsX = palette != null ? palette.length : 20;') != -1);
-		Assert.isTrue(out.indexOf('private var _cellsX:Int;') != -1);
+		Assert.isTrue(out.indexOf('_cellsX = palette != null ? palette.length : CELLS_X_DEFAULT;') != -1, out);
+		Assert.isTrue(out.indexOf('private var _cellsX:Int;') != -1, out);
 		// The second write is not this pass's business: its `if` and its default both survive.
 		Assert.isTrue(out.indexOf('private var _cellsY:Int = 12;') != -1);
 		Assert.isTrue(out.indexOf('_cellsY = 1;') != -1);
@@ -64,13 +64,13 @@ class FieldInitInConstructorCheckTest extends Test {
 	/** An `untyped` condition would swallow the folded `? … : 20` bare; `ParenGuard` gives it the pair. */
 	public function testFixParenthesisesAnUntypedCondition(): Void {
 		final out: String = applyFixOnce(wrap(ONE_FIELD, '\t\tif (untyped palette) _cellsNumX = palette.length;'));
-		Assert.isTrue(out.indexOf('_cellsNumX = (untyped palette) ? palette.length : 20;') != -1, out);
+		Assert.isTrue(out.indexOf('_cellsNumX = (untyped palette) ? palette.length : CELLS_NUM_X_DEFAULT;') != -1, out);
 	}
 
 	public function testTwoPassesFoldBothFieldsAndDropTheIf(): Void {
 		final out: String = applyFixOnce(applyFixOnce(wrap(FIELDS, BODY)));
-		Assert.isTrue(out.indexOf('_cellsX = palette != null ? palette.length : 20;') != -1);
-		Assert.isTrue(out.indexOf('_cellsY = palette != null ? 1 : 12;') != -1);
+		Assert.isTrue(out.indexOf('_cellsX = palette != null ? palette.length : CELLS_X_DEFAULT;') != -1, out);
+		Assert.isTrue(out.indexOf('_cellsY = palette != null ? 1 : CELLS_Y_DEFAULT;') != -1, out);
 		Assert.isTrue(out.indexOf('private var _cellsX:Int;') != -1);
 		Assert.isTrue(out.indexOf('private var _cellsY:Int;') != -1);
 		Assert.equals(-1, out.indexOf('if ('));
@@ -80,13 +80,13 @@ class FieldInitInConstructorCheckTest extends Test {
 		final out: String = applyFixOnce(
 			wrap('\tprivate var _cellsX:Int = 20;', '\t\tif (palette != null) {\n\t\t\t_cellsX = palette.length;\n\t\t}')
 		);
-		Assert.isTrue(out.indexOf('_cellsX = palette != null ? palette.length : 20;') != -1);
+		Assert.isTrue(out.indexOf('_cellsX = palette != null ? palette.length : CELLS_X_DEFAULT;') != -1, out);
 		Assert.equals(-1, out.indexOf('if ('));
 	}
 
 	public function testBraceLessBranchFlagged(): Void {
 		final out: String = applyFixOnce(wrap('\tprivate var _cellsX:Int = 20;', '\t\tif (palette != null) _cellsX = palette.length;'));
-		Assert.isTrue(out.indexOf('_cellsX = palette != null ? palette.length : 20;') != -1);
+		Assert.isTrue(out.indexOf('_cellsX = palette != null ? palette.length : CELLS_X_DEFAULT;') != -1, out);
 		Assert.equals(-1, out.indexOf('if ('));
 	}
 
@@ -234,7 +234,7 @@ class FieldInitInConstructorCheckTest extends Test {
 	 * at all - it still holds the literal, the `if` and the initialised field - cannot satisfy it.
 	 */
 	public function testExtractsTheMovedDefaultIntoANamedConstant(): Void {
-		final out: String = applyIndexedFixOnce(wrap(ONE_FIELD, ONE_GUARD));
+		final out: String = applyFixOnce(wrap(ONE_FIELD, ONE_GUARD));
 		Assert.isTrue(out.indexOf('private static inline final CELLS_NUM_X_DEFAULT:Int = 20;') != -1);
 		Assert.isTrue(out.indexOf('_cellsNumX = palette != null ? palette.length : CELLS_NUM_X_DEFAULT;') != -1);
 		Assert.isTrue(out.indexOf('private var _cellsNumX:Int;') != -1);
@@ -242,7 +242,7 @@ class FieldInitInConstructorCheckTest extends Test {
 
 	/** A plain string default extracts too, with its quote style and content carried verbatim. */
 	public function testStringDefaultExtracted(): Void {
-		final out: String = applyIndexedFixOnce(wrap("\tprivate var _tag:String = 'none';", "\t\tif (palette != null) _tag = 'set';"));
+		final out: String = applyFixOnce(wrap("\tprivate var _tag:String = 'none';", "\t\tif (palette != null) _tag = 'set';"));
 		Assert.isTrue(out.indexOf("private static inline final TAG_DEFAULT:String = 'none';") != -1);
 		Assert.isTrue(out.indexOf("_tag = palette != null ? 'set' : TAG_DEFAULT;") != -1);
 	}
@@ -254,7 +254,7 @@ class FieldInitInConstructorCheckTest extends Test {
 	 */
 	@:pin('control') @:killer('M-LACKSMEMBER-FALSE')
 	public function testConstantLandsInTheConstantsRank(): Void {
-		final out: String = applyIndexedFixOnce(wrap(
+		final out: String = applyFixOnce(wrap(
 			"\tpublic static final TAG:String = 'p';\n\tprivate static inline final HEADER_HEIGHT:Float = 30.0;\n"
 			+ '\tprivate var _cellsNumX:Int = 20;',
 			ONE_GUARD
@@ -270,7 +270,7 @@ class FieldInitInConstructorCheckTest extends Test {
 	 * got no constant at all.
 	 */
 	public function testReusesAnExistingConstantOfTheSameValue(): Void {
-		final out: String = applyIndexedFixOnce(
+		final out: String = applyFixOnce(
 			wrap('\tprivate static inline final CELL_COUNT:Int = 20;\n\tprivate var _cellsNumX:Int = 20;', ONE_GUARD)
 		);
 		Assert.isTrue(out.indexOf('_cellsNumX = palette != null ? palette.length : CELL_COUNT;') != -1);
@@ -283,14 +283,14 @@ class FieldInitInConstructorCheckTest extends Test {
 	 * rather than of the fold's own whitelist.
 	 */
 	public function testNegatedLiteralDefaultStaysInline(): Void {
-		final out: String = applyIndexedFixOnce(wrap('\tprivate var _cellsNumX:Int = -5;', ONE_GUARD));
+		final out: String = applyFixOnce(wrap('\tprivate var _cellsNumX:Int = -5;', ONE_GUARD));
 		Assert.isTrue(out.indexOf('_cellsNumX = palette != null ? palette.length : -5;') != -1);
 		Assert.equals(-1, out.indexOf('CELLS_NUM_X_DEFAULT'));
 	}
 
 	/** A dotted constant default is already named - extracting it would mint a second name for one value. */
 	public function testDottedConstantDefaultStaysInline(): Void {
-		final out: String = applyIndexedFixOnce(wrap('\tprivate var _cellsNumX:Int = Defaults.CELLS;', ONE_GUARD));
+		final out: String = applyFixOnce(wrap('\tprivate var _cellsNumX:Int = Defaults.CELLS;', ONE_GUARD));
 		Assert.isTrue(out.indexOf('_cellsNumX = palette != null ? palette.length : Defaults.CELLS;') != -1);
 		Assert.equals(-1, out.indexOf('CELLS_NUM_X_DEFAULT'));
 	}
@@ -304,7 +304,7 @@ class FieldInitInConstructorCheckTest extends Test {
 	 * occurrence scan alone decides.
 	 */
 	public function testCollidingDerivedNameLeavesTheLiteralInline(): Void {
-		final out: String = applyIndexedFixOnce(
+		final out: String = applyFixOnce(
 			wrap('\tprivate static inline final CELLS_NUM_X_DEFAULT:Int = 7;\n\tprivate var _cellsNumX:Int = 20;', ONE_GUARD)
 		);
 		Assert.isTrue(out.indexOf('_cellsNumX = palette != null ? palette.length : 20;') != -1);
@@ -317,7 +317,7 @@ class FieldInitInConstructorCheckTest extends Test {
 	 * this project already shipped once from two edits of one pass claiming one name.
 	 */
 	public function testTwoFieldsDerivingOneNameClaimItOnce(): Void {
-		final out: String = applyIndexedFixOnce(wrap(
+		final out: String = applyFixOnce(wrap(
 			'\tprivate var _cells:Int = 20;\n\tprivate var cells:Int = 30;',
 			'\t\tif (palette != null) _cells = palette.length;\n\t\tif (palette == null) cells = 3;'
 		));
@@ -330,7 +330,7 @@ class FieldInitInConstructorCheckTest extends Test {
 	 * emitting them separately loses one.
 	 */
 	public function testTwoFoldsInOnePassEmitBothConstants(): Void {
-		final out: String = applyIndexedFixOnce(wrap(
+		final out: String = applyFixOnce(wrap(
 			'\tprivate var _cellsNumX:Int = 20;\n\tprivate var _cellsNumY:Int = 12;',
 			'\t\tif (palette != null) _cellsNumX = palette.length;\n\t\tif (palette == null) _cellsNumY = 1;'
 		));
@@ -339,17 +339,14 @@ class FieldInitInConstructorCheckTest extends Test {
 	}
 
 	/**
-	 * With NO index the extraction arm is OFF - the inherited-member proof has nothing to ask, and
-	 * Haxe rejects a static whose name matches an inherited INSTANCE field. Both arms of the SAME
-	 * input are asserted here: without an index the literal, with one the constant. The negative half
-	 * alone would pass on a build where the whole feature is absent.
+	 * The constant-extraction arm runs on the report index every fix path hands the rule: the literal default becomes a
+	 * named constant the fold reads. (This used to pin the index-less half as well — the literal left inline — which no
+	 * production fix path reaches: `LintFixDriver` and `FixVerifier` both pass the report index.)
 	 */
-	public function testNoIndexLeavesTheLiteralInline(): Void {
-		final src: String = wrap(ONE_FIELD, ONE_GUARD);
-		final bare: String = applyFixOnce(src);
-		Assert.isTrue(bare.indexOf('_cellsNumX = palette != null ? palette.length : 20;') != -1);
-		Assert.equals(-1, bare.indexOf('CELLS_NUM_X_DEFAULT'));
-		Assert.isTrue(applyIndexedFixOnce(src).indexOf('CELLS_NUM_X_DEFAULT') != -1);
+	public function testTheReportIndexExtractsTheConstant(): Void {
+		final out: String = applyFixOnce(wrap(ONE_FIELD, ONE_GUARD));
+		Assert.isTrue(out.indexOf('private static inline final CELLS_NUM_X_DEFAULT:Int = 20;') != -1, out);
+		Assert.isTrue(out.indexOf('_cellsNumX = palette != null ? palette.length : CELLS_NUM_X_DEFAULT;') != -1, out);
 	}
 
 	/**
@@ -358,7 +355,7 @@ class FieldInitInConstructorCheckTest extends Test {
 	 * itself is unaffected - `testSuperCallAfterGuardFlagged` folds the same `extends` shape.
 	 */
 	public function testUnresolvableSupertypeLeavesTheLiteralInline(): Void {
-		final out: String = applyIndexedFixOnce(wrap(ONE_FIELD, ONE_GUARD, ' extends Panel'));
+		final out: String = applyFixOnce(wrap(ONE_FIELD, ONE_GUARD, ' extends Panel'));
 		Assert.isTrue(out.indexOf('_cellsNumX = palette != null ? palette.length : 20;') != -1);
 		Assert.equals(-1, out.indexOf('CELLS_NUM_X_DEFAULT'));
 	}
@@ -369,7 +366,7 @@ class FieldInitInConstructorCheckTest extends Test {
 	 * a member the compiler rejects for the type's own annotation.
 	 */
 	public function testGenericTypeLeavesTheLiteralInline(): Void {
-		final out: String = applyIndexedFixOnce(
+		final out: String = applyFixOnce(
 			'@:generic class Picker<T> {\n\n$ONE_FIELD\n\n\tpublic function new(?palette:Array<Int>) {\n$ONE_GUARD\n\t}\n\n}\n'
 		);
 		Assert.isTrue(out.indexOf('_cellsNumX = palette != null ? palette.length : 20;') != -1);
@@ -383,7 +380,7 @@ class FieldInitInConstructorCheckTest extends Test {
 	 * EMITTED member text rather than the bare name, which the local itself carries.
 	 */
 	public function testDerivedNameBoundElsewhereLeavesTheLiteralInline(): Void {
-		final out: String = applyIndexedFixOnce(wrap(
+		final out: String = applyFixOnce(wrap(
 			ONE_FIELD, ONE_GUARD, '',
 			'\n\n\tprivate function probe():Int {\n\t\tfinal CELLS_NUM_X_DEFAULT:Int = 7;\n\t\treturn CELLS_NUM_X_DEFAULT;\n\t}'
 		));
@@ -426,27 +423,15 @@ class FieldInitInConstructorCheckTest extends Test {
 	}
 
 	private function edits(src: String): Array<{ span: Span, text: String }> {
-		final check: FieldInitInConstructor = new FieldInitInConstructor();
-		return check.fix(src, CheckFixture.violationsIn(check, [{ file: 'Picker.hx', source: src }]), new HaxeQueryPlugin());
-	}
-
-	/** Run `fix` and re-emit through the canonical writer — the `lint --fix` path in one pass. */
-	private function applyFixOnce(src: String): String {
-		return canonicalize(src, edits(src));
+		return CheckFixture.fixRun(new FieldInitInConstructor(), [{ file: 'Picker.hx', source: src }]).edits;
 	}
 
 	/**
-	 * The same pass driven WITH a `SymbolIndex`, which is what `lint --fix` always hands a check —
-	 * and what the constant-extraction arm needs for its inherited-member proof. One check instance
-	 * per call, so its same-pass claim ledger spans every violation of the file.
+	 * Run `fix` the way `lint --fix` runs it — handed the report index, which the constant-extraction
+	 * arm needs for its inherited-member proof — and re-emit through the canonical writer: one pass.
 	 */
-	private function applyIndexedFixOnce(src: String): String {
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final files: Array<{ file: String, source: String }> = [{ file: 'Picker.hx', source: src }];
-		final check: FieldInitInConstructor = new FieldInitInConstructor();
-		return canonicalize(
-			src, check.fix(src, CheckFixture.violationsIn(check, files, plugin), plugin, CheckFixture.index(files, plugin))
-		);
+	private function applyFixOnce(src: String): String {
+		return canonicalize(src, edits(src));
 	}
 
 	/** How many times `needle` occurs in `haystack`. */

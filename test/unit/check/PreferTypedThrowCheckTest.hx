@@ -101,12 +101,11 @@ class PreferTypedThrowCheckTest extends Test {
 		final thrower: String = 'class C {\n\n\tpublic function f():Void {\n\t\tthrow \'boom\';\n\t}\n\n}\n';
 		final handler: String = 'class D {\n\n\tpublic function g():Void {\n\t\ttry h() catch (e:String) {}\n\t}\n\n}\n';
 		final check: PreferTypedThrow = new PreferTypedThrow();
-		final vs: Array<Violation> = CheckFixture.violationsIn(
-			check, [{ file: 'C.hx', source: thrower }, { file: 'D.hx', source: handler }]
-		);
+		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: thrower }, { file: 'D.hx', source: handler }];
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.indexOf('report-only') != -1, 'degraded message, got: ${vs[0].message}');
-		Assert.equals(0, check.fix(thrower, vs, new HaxeQueryPlugin()).length, 'a degraded finding yields no edit');
+		Assert.equals(0, CheckFixture.fixIn(check, files, vs).length, 'a degraded finding yields no edit');
 	}
 
 	public function testDynamicCatchInScopeDegradesToReportOnly(): Void {
@@ -127,12 +126,11 @@ class PreferTypedThrowCheckTest extends Test {
 		final thrower: String = 'class C {\n\n\tpublic function f():Void {\n\t\tthrow \'boom\';\n\t}\n\n}\n';
 		final handler: String = 'class D {\n\n\tpublic function g():Void {\n\t\ttry h() catch (e:haxe.ValueException) {}\n\t}\n\n}\n';
 		final check: PreferTypedThrow = new PreferTypedThrow();
-		final vs: Array<Violation> = CheckFixture.violationsIn(
-			check, [{ file: 'C.hx', source: thrower }, { file: 'D.hx', source: handler }]
-		);
+		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: thrower }, { file: 'D.hx', source: handler }];
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.indexOf('report-only') != -1, 'degraded message, got: ${vs[0].message}');
-		Assert.equals(0, check.fix(thrower, vs, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.fixIn(check, files, vs).length);
 	}
 
 	public function testLineBrokenCatchParameterDegrades(): Void {
@@ -166,19 +164,18 @@ class PreferTypedThrowCheckTest extends Test {
 		final check: PreferTypedThrow = new PreferTypedThrow();
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
-		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.fixOf(check, src, vs).length);
 	}
 
 	public function testTypedCatchDoesNotDegrade(): Void {
 		final thrower: String = 'class C {\n\n\tpublic function f():Void {\n\t\tthrow \'boom\';\n\t}\n\n}\n';
 		final handler: String = 'class D {\n\n\tpublic function g():Void {\n\t\ttry h() catch (e:Exception) {}\n\t}\n\n}\n';
 		final check: PreferTypedThrow = new PreferTypedThrow();
-		final vs: Array<Violation> = CheckFixture.violationsIn(
-			check, [{ file: 'C.hx', source: thrower }, { file: 'D.hx', source: handler }]
-		);
+		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: thrower }, { file: 'D.hx', source: handler }];
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.indexOf('report-only') == -1, 'not degraded, got: ${vs[0].message}');
-		Assert.isTrue(check.fix(thrower, vs, new HaxeQueryPlugin()).length > 0, 'a non-degraded finding yields edits');
+		Assert.isTrue(CheckFixture.fixIn(check, files, vs).length > 0, 'a non-degraded finding yields edits');
 	}
 
 	public function testUntypedCatchDoesNotDegrade(): Void {
@@ -213,7 +210,7 @@ class PreferTypedThrowCheckTest extends Test {
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, report, scoped);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.indexOf('report-only') == -1, 'a std-only catch does not degrade, got: ${vs[0].message}');
-		Assert.isTrue(check.fix(THROWER, vs, scoped).length > 0, 'the fix arm is open');
+		Assert.isTrue(CheckFixture.fixIn(check, report, vs, scoped).length > 0, 'the fix arm is open');
 	}
 
 	/** A `String` catch in a PROJECT library root — not std — still degrades the whole rule. */
@@ -224,7 +221,7 @@ class PreferTypedThrowCheckTest extends Test {
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, report, scoped);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.indexOf('report-only') != -1, 'a project catch degrades, got: ${vs[0].message}');
-		Assert.equals(0, check.fix(THROWER, vs, scoped).length, 'a degraded finding yields no edit');
+		Assert.equals(0, CheckFixture.fixIn(check, report, vs, scoped).length, 'a degraded finding yields no edit');
 	}
 
 	/**
@@ -393,7 +390,7 @@ class PreferTypedThrowCheckTest extends Test {
 		Assert.equals(1, vs.length);
 		if (vs.length != 1) return '';
 		final degraded: Bool = vs[0].message.indexOf('report-only') != -1;
-		Assert.equals(degraded, check.fix(THROWER, vs, scoped).length == 0, 'the fix arm follows the message');
+		Assert.equals(degraded, CheckFixture.fixIn(check, report, vs, scoped).length == 0, 'the fix arm follows the message');
 		return vs[0].message;
 	}
 

@@ -5,6 +5,7 @@ import anyparse.check.ExplicitType;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import sys.io.File;
 import unit.CheckFixture;
@@ -473,14 +474,16 @@ class ExplicitTypeCheckTest extends Test {
 	}
 
 	/**
-	 * Without a `SymbolIndex` (a non-resolving fix path) the pass cannot look anything up and stays
-	 * silent. CONTRACT, not a gate revert: the null check is what makes the pass type-check at all.
+	 * An interface declared in the SAME file is resolved through the report index every fix path hands
+	 * the rule, so its parameter type is copied. (This used to pin the index-less fallback, which no
+	 * production fix path reaches: `LintFixDriver` and `FixVerifier` both pass the report index.)
 	 */
-	public function testFixWithoutIndexSkips(): Void {
+	public function testFixWithTheReportIndexCopiesASameFileInterfaceType(): Void {
 		final src: String = '${IFACE}\n\nclass Impl implements I { public function grab(str):Int return 0; }';
 		final check: ExplicitType = new ExplicitType();
-		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'Impl.hx', source: src }]);
-		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+		final files: Array<{ file: String, source: String }> = [{ file: 'Impl.hx', source: src }];
+		final out: String = CanonicalEdit.applyEdits(src, CheckFixture.fixRun(check, files).edits);
+		Assert.isTrue(out.indexOf('grab(str:String)') != -1, 'got: $out');
 	}
 
 	/**
@@ -612,7 +615,7 @@ class ExplicitTypeCheckTest extends Test {
 	private function fixCount(src: String): Int {
 		final check: ExplicitType = new ExplicitType();
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
-		return check.fix(src, vs, new HaxeQueryPlugin()).length;
+		return CheckFixture.fixOf(check, src, vs).length;
 	}
 
 }

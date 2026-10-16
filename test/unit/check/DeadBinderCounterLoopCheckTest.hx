@@ -171,7 +171,7 @@ class DeadBinderCounterLoopCheckTest extends Test {
 		final src: String = 'package p;\n\nusing Lambda;\n\nclass C {\n\tfunction f(table:Map<Int, Item>):Void {\n\t\tvar i = 0;\n'
 			+ '\t\tfor (x in table) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}\n\t}\n}';
 		final r = runAndExpectOne(src);
-		switch CanonicalEdit.canonicalize(src, r.check.fix(src, r.vs, stdPlugin(src)), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, CheckFixture.fixOf(r.check, src, r.vs, stdPlugin(src)), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.equals(1, countOccurrences(text, 'using Lambda;'));
 			case Err(message):
@@ -301,7 +301,7 @@ class DeadBinderCounterLoopCheckTest extends Test {
 
 	private function assertFixCanonical(src: String, present: Array<String>, absent: Array<String>): Void {
 		final r = runAndExpectOne(src);
-		switch CanonicalEdit.canonicalize(src, r.check.fix(src, r.vs, stdPlugin(src)), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, CheckFixture.fixOf(r.check, src, r.vs, stdPlugin(src)), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				for (p in present) Assert.isTrue(text.indexOf(p) >= 0, 'expected $p in $text');
 				for (a in absent) Assert.isTrue(text.indexOf(a) == -1, 'expected no $a in $text');
@@ -312,7 +312,7 @@ class DeadBinderCounterLoopCheckTest extends Test {
 
 	private function assertFixRefused(src: String): Void {
 		final r = runAndExpectOne(src);
-		Assert.equals(0, r.check.fix(src, r.vs, stdPlugin(src)).length);
+		Assert.equals(0, CheckFixture.fixOf(r.check, src, r.vs, stdPlugin(src)).length);
 	}
 
 	private function runAndExpectOne(src: String): { check: DeadBinderCounterLoop, vs: Array<Violation> } {

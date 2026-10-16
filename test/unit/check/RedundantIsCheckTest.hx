@@ -134,7 +134,7 @@ class RedundantIsCheckTest extends Test {
 	private function fixText(src: String): String {
 		final check: RedundantIsCheck = new RedundantIsCheck();
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
-		return switch CanonicalEdit.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+		return switch CanonicalEdit.canonicalize(src, CheckFixture.fixOf(check, src, vs), true, new HaxeQueryPlugin()) {
 			case Ok(text): text;
 			case Err(message):
 				Assert.fail('fix canonicalize Err: $message');
@@ -154,7 +154,7 @@ class RedundantIsCheckTest extends Test {
 		final check: RedundantIsCheck = new RedundantIsCheck();
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.isTrue(vs.length > 0, 'expected a finding to exist');
-		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.fixOf(check, src, vs).length);
 	}
 
 	private function violations(src: String): Array<Violation> {

@@ -68,10 +68,8 @@ final class CheckFixture {
 	): FixRun {
 		final run: GrammarPlugin = hosted(plugin);
 		final target: String = file ?? files[0].file;
-		final source: Null<String> = files.find(f -> f.file == target)?.source;
-		if (source == null) throw 'fixRun: "$target" is not in the file set';
 		final found: Array<Violation> = violationsIn(check, files, run, resolveConfig).filter(v -> v.file == target);
-		return { violations: found, edits: check.fix(source, found, run, IndexScope.report(files, run)) };
+		return { violations: found, edits: fixIn(check, files, found, target, run) };
 	}
 
 	/**
@@ -80,8 +78,25 @@ final class CheckFixture {
 	 * first and picks which of them to fix.
 	 */
 	public static function fixOf(check: Check, source: String, found: Array<Violation>, ?plugin: GrammarPlugin): Array<FixEdit> {
+		return fixIn(check, [{ file: 'C.hx', source: source }], found, plugin);
+	}
+
+	/**
+	 * `fixOf` over a whole file set: `check.fix` over `found` — findings already read for `file` (default: the
+	 * first file) — handed a run host and the REPORT index of `files`, as `LintFixDriver` hands every fix. A
+	 * fix is only ever asked about the findings of the file it edits, so a finding of another file is a test
+	 * defect and throws rather than reaching a fix that would splice its span into the wrong source.
+	 */
+	public static function fixIn(
+		check: Check, files: Array<{ file: String, source: String }>, found: Array<Violation>, ?file: String, ?plugin: GrammarPlugin
+	): Array<FixEdit> {
 		final run: GrammarPlugin = hosted(plugin);
-		return check.fix(source, found, run, IndexScope.report([{ file: 'C.hx', source: source }], run));
+		final target: String = file ?? files[0].file;
+		final source: Null<String> = files.find(f -> f.file == target)?.source;
+		if (source == null) throw 'fixIn: "$target" is not in the file set';
+		final foreign: Null<Violation> = found.find(v -> v.file != target);
+		if (foreign != null) throw 'fixIn: a finding of "${foreign.file}" handed to the fix of "$target"';
+		return check.fix(source, found, run, IndexScope.report(files, run));
 	}
 
 	/** `fixRun`'s edits for `source` as `C.hx`. */

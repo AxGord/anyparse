@@ -75,7 +75,7 @@ class RedundantToStringCheckTest extends Test {
 		final src: String = '$DECL_K@:nullSafety(Strict) class C { function f(x:K) { final s:String = \'$${x.toString()}\'; } }';
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		Assert.equals(1, edits(src).length);
-		Assert.equals(0, new RedundantToString().fix(src, [], plugin).length);
+		Assert.equals(0, CheckFixture.fixOf(new RedundantToString(), src, [], plugin).length);
 	}
 
 	public function testNullableReceiverReportedNotFixed(): Void {

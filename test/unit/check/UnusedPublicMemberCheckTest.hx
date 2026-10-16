@@ -267,8 +267,8 @@ import utest.Test;
 		final owner: String = 'class C {\n\tpublic function orphaned():Void {}\n}';
 		final user: String =
 			'class U {\n\tpublic static function main(c:C, suffix:String):Dynamic return Reflect.field(c, \'orphan$$suffix\');\n}';
-		Assert.equals(1, fixEditCount(owner, [{ file: 'C.hx', source: owner }]));
-		Assert.equals(0, fixEditCount(owner, [{ file: 'C.hx', source: owner }, { file: 'U.hx', source: user }]));
+		Assert.equals(1, fixEditCount([{ file: 'C.hx', source: owner }]));
+		Assert.equals(0, fixEditCount([{ file: 'C.hx', source: owner }, { file: 'U.hx', source: user }]));
 	}
 
 	public function testFixWithoutRunEditsNothing(): Void {
@@ -281,7 +281,7 @@ import utest.Test;
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final vs: Array<Violation> = CheckFixture.violations(probe, src, plugin);
 		Assert.equals(1, vs.length);
-		Assert.equals(0, check.fix(src, vs, plugin).length);
+		Assert.equals(0, CheckFixture.fixOf(check, src, vs, plugin).length);
 	}
 
 	// --- registry / enablement ---
@@ -411,7 +411,7 @@ import utest.Test;
 	/** And the DELETION follows the report: an unreadable file naming nothing does not withhold the edit either. */
 	public function testUnreadableFileNotSpellingTheMemberLeavesTheDeletionAvailable(): Void {
 		final owner: String = 'class C {\n\tpublic function orphaned():Void {}\n}';
-		Assert.equals(1, fixEditCount(owner, [
+		Assert.equals(1, fixEditCount([
 			{ file: 'C.hx', source: owner },
 			{ file: 'B.hx', source: 'class B {\n\tfunction q(: {{{\n}\n' }
 		]));
@@ -430,8 +430,8 @@ import utest.Test;
 		final owner: String = 'class C {\n\tpublic function orphanedThing():Void {}\n}';
 		final parsed: String = 'class B {\n\tfunction q(o:Dynamic, n:String):Dynamic return Reflect.field(o, \'orphaned$${n}\');\n}';
 		final skipped: String = 'class B {\n\tfunction q(: {{{ Reflect.field(o, \'orphaned$${n}\');\n}\n';
-		Assert.equals(0, fixEditCount(owner, [{ file: 'C.hx', source: owner }, { file: 'B.hx', source: parsed }]));
-		Assert.equals(1, fixEditCount(owner, [{ file: 'C.hx', source: owner }, { file: 'B.hx', source: skipped }]));
+		Assert.equals(0, fixEditCount([{ file: 'C.hx', source: owner }, { file: 'B.hx', source: parsed }]));
+		Assert.equals(1, fixEditCount([{ file: 'C.hx', source: owner }, { file: 'B.hx', source: skipped }]));
 	}
 
 	/**
@@ -475,13 +475,12 @@ import utest.Test;
 		return check == null ? [] : CheckFixture.violationsIn(check, files);
 	}
 
-	/** The number of edits `fix` yields for `owner` after `run` over `files` — the deletion gate's verdict. */
-	private function fixEditCount(owner: String, files: Array<{ file: String, source: String }>): Int {
+	/** The number of edits `fix` yields for the owner — the first of `files` — after `run` over `files`: the deletion gate's verdict. */
+	private function fixEditCount(files: Array<{ file: String, source: String }>): Int {
 		final check: Null<Check> = Linter.byId(RULE);
 		Assert.notNull(check);
 		if (check == null) return -1;
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		return check.fix(owner, CheckFixture.violationsIn(check, files, plugin), plugin).length;
+		return CheckFixture.fixRun(check, files).edits.length;
 	}
 
 	private function applyFix(src: String): String {

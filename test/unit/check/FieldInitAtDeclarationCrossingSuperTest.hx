@@ -277,9 +277,7 @@ class FieldInitAtDeclarationCrossingSuperTest extends Test {
 	/** `src` as `C.hx` after the rule's fix, under a declared project scope. */
 	private function scopedFixedSource(src: String): String {
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
-		final plugin: CachingGrammarPlugin = scopedPlugin(files);
-		final check: FieldInitAtDeclaration = new FieldInitAtDeclaration();
-		return CanonicalEdit.applyEdits(src, check.fix(src, CheckFixture.violationsIn(check, files, plugin), plugin));
+		return CanonicalEdit.applyEdits(src, CheckFixture.fixRun(new FieldInitAtDeclaration(), files, scopedPlugin(files)).edits);
 	}
 
 	/**

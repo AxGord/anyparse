@@ -71,9 +71,7 @@ final class PreferCaseGuardOracleE2ETest extends Test {
 	public function testCanonicalPathAppliesWithoutReformat(): Void {
 		final check: PreferCaseGuard = new PreferCaseGuard();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			APPLIES, CheckFixture.violationsIn(check, [{ file: 'Good.hx', source: APPLIES }], plugin), plugin
-		);
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.fixRun(check, [{ file: 'Good.hx', source: APPLIES }], plugin).edits;
 		Assert.equals(1, edits.length);
 		switch CanonicalEdit.canonicalize(APPLIES, edits, false, plugin, HXFORMAT) {
 			case Ok(text):

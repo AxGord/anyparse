@@ -311,7 +311,7 @@ class UnusedParameterCheckTest extends Test {
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, report, plugin);
 		Assert.equals(1, vs.length);
 		Assert.equals(Severity.Info, vs[0].severity, 'a grantee outside the report scope keeps the finding report-only');
-		Assert.equals(0, check.fix(declSource, vs, plugin).length, 'and no parameter is removed');
+		Assert.equals(0, CheckFixture.fixIn(check, report, vs, plugin).length, 'and no parameter is removed');
 	}
 
 	private function violations(src: String): Array<Violation> {

@@ -2855,3 +2855,12 @@ decided the question; it may not become a record of runs.
   (the index-less refusal `lint --fix` never reaches) stay on the old call, commented; so does
   `ThreadSafetyCheckTest.testNoFindingInAFileWhoseChainWritesNoOption`, whose arm M-TS-REPORT-UNGATED survived through
   the fixture — `Linter.runGated` re-applies the rule's own `GraphScoped` report gate — branch `feat/infra-B8`
+- a fix asked with no index was pinned as a rule's behaviour (148 inline `check.fix(src, vs, plugin)` sites, the
+  multi-file ones among them) → no production path passes none: `LintFixDriver` and `FixVerifier` both hand the
+  report index (`fixGrouped` / `fixCarrying` too), so every site now goes through `CheckFixture` (`fixOf` / `fixIn`
+  / `fixRun`, `fixIn` refusing a finding of another file), and the tests that pinned the index-less answer were
+  restated: `PreferArrayLiteralCheckTest.testThisFieldAssignmentNeedsIndex`, `TypeResolverSliceTest.testNoIndexKept`
+  and `NamingCheckMemberFixTest`'s two private-field refusals duplicated a production twin and are gone;
+  `FieldInitInConstructorCheckTest`'s folds now assert the extracted constant the index lets in;
+  `ExplicitTypeCheckTest.testFixWithoutIndexSkips` became the same-file interface it resolves; `EmptyCaseArmCheckTest`
+  keeps only its indexed half — branch `feat/infra-B8b`
