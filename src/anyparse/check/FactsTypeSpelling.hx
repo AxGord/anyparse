@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.OracleType;
+import anyparse.check.FactsTypeOracle.FactsDecline;
 import anyparse.check.FactsTypeTree.FactsArgument;
 import anyparse.check.FactsTypeTree.FactsField;
 import anyparse.check.FactsTypeTree.FactsType;
@@ -33,11 +34,11 @@ final class FactsTypeSpelling {
 	 */
 	public static function spell(type: String, scope: TypeScope): OracleType {
 		final read: Null<FactsType> = FactsTypeTree.read(type);
-		if (read == null) return Declined(FactsTypeOracle.DECLINE_NO_FACT);
+		if (read == null) return Declined(FactsDecline.NoFact);
 		final writer: FactsTypeSpelling = new FactsTypeSpelling(scope);
 		final spelled: Null<String> = writer.type(read);
 		final failure: Null<String> = writer._failure;
-		return failure != null || spelled == null ? Declined(failure ?? FactsTypeOracle.DECLINE_NO_FACT) : Typed(spelled);
+		return failure != null || spelled == null ? Declined(failure ?? FactsDecline.NoFact) : Typed(spelled);
 	}
 
 	/** Whether the type parameter `path` (`<owner>.<name>`) is one `scope` holds: its owner is the scope's type or method. */
@@ -51,7 +52,7 @@ final class FactsTypeSpelling {
 	public function type(t: FactsType): Null<String> {
 		if (_failure != null) return null;
 		return switch t {
-			case Unknown: fail(FactsTypeOracle.DECLINE_UNKNOWN);
+			case Unknown: fail(FactsDecline.Unbound);
 			case Function(args, result): functionType(args, result);
 			case Structure(fields): structure(fields);
 			case Parameter(path): typeParameter(path);
@@ -85,7 +86,7 @@ final class FactsTypeSpelling {
 	}
 
 	private function nominal(name: String, args: Array<FactsType>): Null<String> {
-		if (name == 'Abstract' || name.indexOf('_Impl_') >= 0) return fail(FactsTypeOracle.DECLINE_UNSPELLABLE);
+		if (name == 'Abstract' || name.indexOf('_Impl_') >= 0) return fail(FactsDecline.Unspellable);
 		if (args.length == 0) return name;
 		final spelled: Array<String> = [];
 		for (a in args) {

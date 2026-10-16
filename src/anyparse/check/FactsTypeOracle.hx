@@ -34,27 +34,10 @@ using StringTools;
  * recorded. Only a file whose compiled text is gone altogether goes to `fallback`, an oracle reading the tree as it is now.
  *
  * Independently of how a declaration was placed, the member and the type holding it in the facts must be the ones
- * holding it in the file as it is now (`DECLINE_ELSEWHERE`).
+ * holding it in the file as it is now (`FactsDecline.Elsewhere`).
  */
 @:nullSafety(Strict)
 final class FactsTypeOracle implements TypeOracle {
-
-	public static inline final DECLINE_FILE_NOT_COMPILED: String = 'no oracle configuration compiles this file';
-
-	public static inline final DECLINE_CODE_NOT_COMPILED: String =
-		'no oracle configuration compiles this code — a conditional branch every build leaves out';
-
-	public static inline final DECLINE_REWRITTEN: String =
-		'the run rewrote this file after the compiler typed it, so no fact names its text';
-
-	public static inline final DECLINE_UNKNOWN: String = 'the compiler left its type unknown (an unbound monomorph)';
-
-	public static inline final DECLINE_NO_FACT: String = 'the compiler recorded no type for it';
-
-	public static inline final DECLINE_UNSPELLABLE: String =
-		"its type is an abstract's statics or implementation class, which no source can spell";
-
-	public static inline final DECLINE_PARAM_MISMATCH: String = "the compiler's parameter list does not match the declaration's";
 
 	/** The nullable wrapper's own name: never the type of a value `typeIdAt` names. */
 	private static inline final NULL_TYPE: String = 'Null';
@@ -65,14 +48,8 @@ final class FactsTypeOracle implements TypeOracle {
 	/** The node kinds that are a member function's own body (`TypedFactsProbe`). */
 	private static final MEMBER_FUNCTION_KINDS: Array<String> = ['method', 'ctor'];
 
-	public static inline final DECLINE_DYNAMIC_SOURCE: String =
-		'a `Dynamic` value flows into it, so the type the compiler gave it was inferred from its uses, not from the value';
-
-	public static inline final DECLINE_SHIFTED: String =
-		'it sits in a string after an escape sequence, where the compiler shifts the ranges of the interpolated code';
-
-	public static inline final DECLINE_ELSEWHERE: String =
-		'the facts place this code in another member or type than the file as it is now does';
+	/** A supertype's metadata whose macro runs over every subtype as its own `@:build` (`inheritedMember`). */
+	private static inline final AUTO_BUILD_META: String = ':autoBuild';
 
 	/** The kinds the facts give a type no operator overload can be declared on (`CompilerFacts.TypeFact`). */
 	private static final PLAIN_KINDS: Array<String> = ['class', 'interface', 'enum'];
@@ -114,13 +91,13 @@ final class FactsTypeOracle implements TypeOracle {
 	 */
 	public static function runFacts(plugin: GrammarPlugin): Null<CompilerFacts> {
 		final facts: Null<CompilerFacts> = plugin is SymbolIndexHost ? (cast plugin: SymbolIndexHost).compilerFacts() : null;
-		return facts == null || facts.dropped.length > 0 || facts.configurations.length == 0 ? null : facts;
+		return facts == null || !facts.complete() ? null : facts;
 	}
 
 	/**
-	 * The oracle a `Check.fix` of `file`, whose text is `source` now, asks over the run's facts (`runFacts`), placing a
-	 * rewritten file through the run's edit journal; null when the run has no such facts. It has no fallback: a file whose
-	 * compiled text is gone declines.
+	 * The oracle a check or a fix of `file`, whose text is `source` now, asks over the run's facts (`runFacts`) — the door a
+	 * structural rule reads the compiler's facts through — placing a rewritten file through the run's edit journal; null
+	 * when the run has no such facts. It has no fallback: a file whose compiled text is gone declines.
 	 */
 	public static function forFix(plugin: GrammarPlugin, file: String, source: String): Null<FactsTypeOracle> {
 		final facts: Null<CompilerFacts> = runFacts(plugin);
@@ -146,8 +123,8 @@ final class FactsTypeOracle implements TypeOracle {
 	public function localType(file: String, decl: Span, name: String, nameEnd: Int): OracleType {
 		return resolve(file, decl, nameOf(name, nameEnd), o -> o.localType(file, decl, name, nameEnd), (site, at, here) -> {
 			final nodes: Array<FactNode> = site.facts.nodesAround(site.file, at);
-			if (nodes.length == 0) return Declined(DECLINE_CODE_NOT_COMPILED);
-			if (!sameHome(site, nodes[nodes.length - 1], here)) return Declined(DECLINE_ELSEWHERE);
+			if (nodes.length == 0) return Declined(FactsDecline.CodeNotCompiled);
+			if (!sameHome(site, nodes[nodes.length - 1], here)) return Declined(FactsDecline.Elsewhere);
 			final types: Array<String> = [];
 			for (n in nodes)
 				for (v in n.vars)
@@ -156,38 +133,41 @@ final class FactsTypeOracle implements TypeOracle {
 			for (n in nodes)
 				for (f in n.flows)
 					if (f.via == 'var' && f.at.file == site.key && within(at, f.at.span) && dynamicSource(f.from))
-						return Declined(DECLINE_DYNAMIC_SOURCE);
-			return agreed(types, scopeOf(nodes[nodes.length - 1]), DECLINE_CODE_NOT_COMPILED);
+						return Declined(FactsDecline.DynamicSource);
+			return agreed(types, scopeOf(nodes[nodes.length - 1]), FactsDecline.CodeNotCompiled);
 		});
 	}
 
 	public function returnType(file: String, fn: Span, name: String, nameEnd: Int): OracleType {
 		return resolve(file, fn, nameOf(name, nameEnd), o -> o.returnType(file, fn, name, nameEnd), (site, at, here) -> {
 			final nodes: Array<FactNode> = memberFunctions(site, at, name);
-			if (nodes.length == 0) return Declined(DECLINE_CODE_NOT_COMPILED);
-			if (!nodes.foreach(n -> sameHome(site, n, here))) return Declined(DECLINE_ELSEWHERE);
+			if (nodes.length == 0) return Declined(FactsDecline.CodeNotCompiled);
+			if (!nodes.foreach(n -> sameHome(site, n, here))) return Declined(FactsDecline.Elsewhere);
 			final types: Array<String> = [];
-			for (n in nodes) for (f in n.flows) if (f.via == 'ret' && dynamicSource(f.from)) return Declined(DECLINE_DYNAMIC_SOURCE);
+			for (n in nodes) for (f in n.flows) if (f.via == 'ret' && dynamicSource(f.from)) return Declined(FactsDecline.DynamicSource);
 			for (n in nodes) for (v in n.variants) {
-				final result: Null<String> = resultOf(v.signature);
-				if (result == null) return Declined(DECLINE_NO_FACT);
+				final result: Null<String> = switch FactsTypeTree.read(v.signature) {
+					case Function(_, type): FactsTypeTree.text(type);
+					case _: null;
+				};
+				if (result == null) return Declined(FactsDecline.NoFact);
 				if (!types.contains(result)) types.push(result);
 			}
-			return agreed(types, scopeOf(nodes[0]), DECLINE_NO_FACT);
+			return agreed(types, scopeOf(nodes[0]), FactsDecline.NoFact);
 		});
 	}
 
 	public function paramType(file: String, fn: Span, name: String, index: Int, param: String, nameEnd: Int): OracleType {
 		return resolve(file, fn, nameOf(param, nameEnd), o -> o.paramType(file, fn, name, index, param, nameEnd), (site, at, here) -> {
 			final nodes: Array<FactNode> = memberFunctions(site, at, name);
-			if (nodes.length == 0) return Declined(DECLINE_CODE_NOT_COMPILED);
-			if (!nodes.foreach(n -> sameHome(site, n, here))) return Declined(DECLINE_ELSEWHERE);
+			if (nodes.length == 0) return Declined(FactsDecline.CodeNotCompiled);
+			if (!nodes.foreach(n -> sameHome(site, n, here))) return Declined(FactsDecline.Elsewhere);
 			final types: Array<String> = [];
 			for (n in nodes) for (v in n.variants) {
-				if (index >= v.params.length || v.params[index].name != param) return Declined(DECLINE_PARAM_MISMATCH);
+				if (index >= v.params.length || v.params[index].name != param) return Declined(FactsDecline.ParamMismatch);
 				if (!types.contains(v.params[index].type)) types.push(v.params[index].type);
 			}
-			return agreed(types, scopeOf(nodes[0]), DECLINE_NO_FACT);
+			return agreed(types, scopeOf(nodes[0]), FactsDecline.NoFact);
 		});
 	}
 
@@ -198,10 +178,10 @@ final class FactsTypeOracle implements TypeOracle {
 				final best: Null<{ id: String, span: Span }> = owner;
 				if (best == null || within(t.span, best.span)) owner = t;
 			}
-			if (owner == null) return Declined(DECLINE_CODE_NOT_COMPILED);
-			if (here.member != name || !sameType(site, owner.id, here)) return Declined(DECLINE_ELSEWHERE);
+			if (owner == null) return Declined(FactsDecline.CodeNotCompiled);
+			if (here.member != name || !sameType(site, owner.id, here)) return Declined(FactsDecline.Elsewhere);
 			final types: Array<String> = site.facts.type(owner.id)?.fields.find(f -> f.name == name)?.types ?? [];
-			return agreed(types, { owner: owner.id, method: null }, DECLINE_NO_FACT);
+			return agreed(types, { owner: owner.id, method: null }, FactsDecline.NoFact);
 		});
 	}
 
@@ -248,22 +228,77 @@ final class FactsTypeOracle implements TypeOracle {
 	}
 
 	/**
+	 * The type every configuration gave the value of the expression at `expr`, as the facts spell it — unspelled, fully
+	 * qualified, a `Null<…>` kept (`CompilerFacts.valueTypesAt`) — placed as `expressionType` places it; null wherever that
+	 * declines or the configurations disagree.
+	 */
+	public function factsTypeAt(file: String, expr: Span): Null<String> {
+		final answer: OracleType = resolve(file, expr, expr, _ -> Declined(FactsDecline.Rewritten), (site, at, here) -> {
+			final nodes: Array<FactNode> = site.facts.nodesAround(site.file, at);
+			final misplaced: Null<OracleType> = misplacedAt(site, at, here, nodes);
+			if (misplaced != null) return misplaced;
+			final types: Array<String> = site.facts.valueTypesAt(site.file, at);
+			return types.length == 1 ? Typed(types[0]) : Declined(FactsDecline.NoFact);
+		});
+		return switch answer {
+			case Typed(type): type;
+			case Declined(_): null;
+		};
+	}
+
+	/**
+	 * Whether the text of `file` now is the text the compile read, unrewritten: a range of it then names what the
+	 * same range of the facts names, for a reader asking the table by range (`StaticExtensionFacts`).
+	 */
+	public function readsAsCompiled(file: String): Bool {
+		final site: Null<FactsSite> = facts.compiled(file) ? siteOf(file) : null;
+		return site != null && site.facts == facts && site.text == site.current;
+	}
+
+	/**
+	 * What the builds typed of the supertypes of the type `owner` that `file` declares, by its simple name, about a member
+	 * `name`: `Untyped` when no build typed that type there or one of its supertypes, `Declared` when a supertype declares
+	 * a member so named in some build, `AutoBuilt` when one carries `@:autoBuild` — whose macro runs over the type as its
+	 * own `@:build` — and `Undeclared` otherwise. The first supertype that answers decides, in the order the facts list them.
+	 */
+	public function inheritedMember(file: String, owner: String, name: String): InheritedMember {
+		final key: String = facts.keyOf(file);
+		final ids: Array<String> = [
+			for (id in facts.typeIds()) if (id.substr(id.lastIndexOf('.') + 1) == owner && facts.typePosition(id)?.file == key) id
+		];
+		if (ids.length == 0) return Untyped;
+		for (id in ids) for (sup in facts.supertypesOf(id)) {
+			final declared: Null<TypeFact> = facts.type(sup);
+			if (declared == null) return Untyped;
+			if (declared.fields.exists(f -> f.name == name)) return Declared(sup);
+			if (declared.meta.contains(AUTO_BUILD_META)) return AutoBuilt(sup);
+		}
+		return Undeclared;
+	}
+
+	/**
 	 * The type the facts of `site` give the expression at `at`, held in the member and type `here` — with `flows`, also
 	 * the type a value flowing from that very range had (`expressionType`), else only the expression's own (`valueType`).
 	 */
 	private function typedAt(flows: Bool, site: FactsSite, at: Span, here: Home): OracleType {
 		final nodes: Array<FactNode> = site.facts.nodesAround(site.file, at);
-		if (nodes.length == 0) return Declined(DECLINE_CODE_NOT_COMPILED);
-		if (escapedBefore(site, at)) return Declined(DECLINE_SHIFTED);
-		if (!sameHome(site, nodes[nodes.length - 1], here)) return Declined(DECLINE_ELSEWHERE);
-		final typed: Null<String> = site.facts.typeOfExpressionAt(site.file, at);
-		final types: Array<String> = typed == null ? [] : [typed];
-		// a value handed to a place of another type flows there at its own type: the facts' only record of many a value
-		if (flows)
-			for (f in site.facts.flowsIn(site.file, at) ?? [])
-				if (f.at.file == site.key && f.at.span.from == at.from && f.at.span.to == at.to && !types.contains(f.from))
-					types.push(f.from);
-		return agreed(types, scopeOf(nodes[nodes.length - 1]), DECLINE_NO_FACT);
+		final misplaced: Null<OracleType> = misplacedAt(site, at, here, nodes);
+		if (misplaced != null) return misplaced;
+		final typed: Null<String> = flows ? null : site.facts.typeOfExpressionAt(site.file, at);
+		final types: Array<String> = flows ? site.facts.valueTypesAt(site.file, at) : typed == null ? [] : [typed];
+		return agreed(types, scopeOf(nodes[nodes.length - 1]), FactsDecline.NoFact);
+	}
+
+	/**
+	 * Why the expression at `at` of the text `site` describes cannot be read off the facts held in the member and type
+	 * `here`, given the nodes around it: no build typed code there, the compiler shifted its range (`escapedBefore`), or the
+	 * facts place it in another member or type. Null when it can.
+	 */
+	private function misplacedAt(site: FactsSite, at: Span, here: Home, nodes: Array<FactNode>): Null<OracleType> {
+		if (nodes.length == 0) return Declined(FactsDecline.CodeNotCompiled);
+		if (escapedBefore(site, at)) return Declined(FactsDecline.Shifted);
+		if (!sameHome(site, nodes[nodes.length - 1], here)) return Declined(FactsDecline.Elsewhere);
+		return null;
 	}
 
 	/**
@@ -279,23 +314,6 @@ final class FactsTypeOracle implements TypeOracle {
 	}
 
 	/**
-	 * The result half of a facts function type — `(Int,String)->Bool` yields `Bool` — or null for any other shape. Only
-	 * parentheses are counted: neither a structure nor a type argument list can hold an unbalanced one.
-	 */
-	public static function resultOf(signature: String): Null<String> {
-		if (!signature.startsWith('(')) return null;
-		var depth: Int = 0;
-		for (i in 0...signature.length) {
-			final c: Int = signature.fastCodeAt(i);
-			if (c == '('.code)
-				depth++;
-			else if (c == ')'.code && --depth == 0)
-				return signature.substr(i + 1, 2) == '->' ? signature.substr(i + 3) : null;
-		}
-		return null;
-	}
-
-	/**
 	 * `query` asked of where the facts of `file` are read, with `key` — the declaration's name token, or the expression —
 	 * placed in the text they describe, and the member and type holding `span` now; `Declined` when the file has none, or
 	 * when `key` lies in text the run rewrote since the compile. A file whose facts cannot be placed at all is asked of the
@@ -304,19 +322,19 @@ final class FactsTypeOracle implements TypeOracle {
 	private function resolve(
 		file: String, span: Span, key: Span, ask: (TypeOracle) -> OracleType, query: (FactsSite, Span, Home) -> OracleType
 	): OracleType {
-		if (!facts.compiled(file)) return Declined(DECLINE_FILE_NOT_COMPILED);
+		if (!facts.compiled(file)) return Declined(FactsDecline.FileNotCompiled);
 		final site: Null<FactsSite> = siteOf(file);
 		if (site == null) {
 			final fallback: Null<() -> Null<TypeOracle>> = _fallback;
 			final other: Null<TypeOracle> = fallback == null ? null : fallback();
-			return other == null ? Declined(DECLINE_REWRITTEN) : ask(other);
+			return other == null ? Declined(FactsDecline.Rewritten) : ask(other);
 		}
 		final here: Home = homeOf(site, span);
 		if (site.text == site.current) return query(site, key, here);
 		final journal: Null<EditJournal> = _journal;
 		final member: Null<Span> = here.span;
 		if (journal == null) return Declined(EditJournal.UNMAPPED_NO_HISTORY);
-		if (member == null) return Declined(DECLINE_ELSEWHERE);
+		if (member == null) return Declined(FactsDecline.Elsewhere);
 		// the WHOLE member is placed, not the declaration alone: what the compiler inferred there rests on all of its text
 		return switch journal.back(site.text, site.current, member) {
 			case Mapped(at) if (site.text.substring(at.from, at.to) == site.current.substring(member.from, member.to)):
@@ -475,6 +493,31 @@ final class FactsTypeOracle implements TypeOracle {
 
 }
 
+/** Why the facts oracle names no type (`OracleType.Declined`): the reasons it gives of its own, besides a disagreement it spells out. */
+enum abstract FactsDecline(String) to String {
+
+	var FileNotCompiled = 'no oracle configuration compiles this file';
+
+	var CodeNotCompiled = 'no oracle configuration compiles this code — a conditional branch every build leaves out';
+
+	var Rewritten = 'the run rewrote this file after the compiler typed it, so no fact names its text';
+
+	var Unbound = 'the compiler left its type unknown (an unbound monomorph)';
+
+	var NoFact = 'the compiler recorded no type for it';
+
+	var Unspellable = "its type is an abstract's statics or implementation class, which no source can spell";
+
+	var ParamMismatch = "the compiler's parameter list does not match the declaration's";
+
+	var DynamicSource = 'a `Dynamic` value flows into it, so the type the compiler gave it was inferred from its uses, not from the value';
+
+	var Shifted = 'it sits in a string after an escape sequence, where the compiler shifts the ranges of the interpolated code';
+
+	var Elsewhere = 'the facts place this code in another member or type than the file as it is now does';
+
+}
+
 /** Where one file's facts are read: the table, the file and its key there, the map from its text now to the one they describe. */
 private typedef FactsSite = {
 	final facts: CompilerFacts;
@@ -499,4 +542,21 @@ private typedef Home = {
 	final member: Null<String>;
 	final type: Null<String>;
 	final span: Null<Span>;
+}
+
+/** What the builds typed of a type's supertypes about a member name (`FactsTypeOracle.inheritedMember`). */
+enum InheritedMember {
+
+	/** No build typed the type where it is declared, or one of its supertypes. */
+	Untyped;
+
+	/** The supertype `supertype` declares a member of the name in some build. */
+	Declared(supertype: String);
+
+	/** The supertype `supertype` carries `@:autoBuild`: its macro builds the type as its own `@:build`. */
+	AutoBuilt(supertype: String);
+
+	/** No supertype declares the name, and none is `@:autoBuild`. */
+	Undeclared;
+
 }

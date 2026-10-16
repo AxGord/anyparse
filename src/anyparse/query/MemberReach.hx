@@ -18,6 +18,7 @@ import anyparse.query.CompilerFacts.FieldDeclFact;
 import anyparse.query.CompilerFacts.FieldFact;
 import anyparse.query.CompilerFacts.NativeFact;
 import anyparse.query.FactsView.ExternCalls;
+import anyparse.query.FactsView.FactsSource;
 import anyparse.query.FactsView.TruthSites;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.ImplicitSites.ImplicitSite;
@@ -314,9 +315,10 @@ final class MemberReach {
 	 * least that and, when wider, over the libraries the walk may grow into. `scopeKnown` false means the
 	 * project may hold files `project` does not, so only a fresh unshared local is ever `Proven`. `configurations`
 	 * are the builds an answer must hold under: a conditional branch none of them compiles is not walked, and with
-	 * none every branch is. `facts` are the compiler's facts of the run's builds: a function they describe whole is read
-	 * through them (`FactsView`), every other one through its syntax; facts naming exactly `configurations` are the
-	 * truth (`factsAreTruth`), and then a project file no build read is out of `index` too (`ReachProject.readThrough`).
+	 * none every branch is. `facts` reads the compiler's facts of the run's builds once the scope is built (`FactsView.over`):
+	 * a function they describe whole is read through them (`FactsView`), every other one through its syntax; facts naming
+	 * exactly `configurations` are the truth (`FactsView.of`), and then a project file no build read is out of `index` too
+	 * (`ReachProject.readThrough`).
 	 * `reflectiveClasses` are the globs the project declares a class made from an unreadable name to match
 	 * (`ReachBuilds.reflectiveClasses`); null for any class. `reflectiveMethodHolders` are the globs it declares every
 	 * class whose methods a read by an unreadable name may obtain as values to match (`ReachBuilds.reflectiveMethodHolders`);
@@ -325,7 +327,7 @@ final class MemberReach {
 	public function new(
 		plugin: GrammarPlugin, project: Array<{ file: String, source: String }>, index: SymbolIndex, scopeKnown: Bool,
 		maxLibraryFiles: Int = MAX_LIBRARY_FILES, maxVisited: Int = MAX_VISITED, ?configurations: Array<ReachConfiguration>,
-		?classpathComplete: () -> Bool, ?facts: CompilerFacts, ?reflectiveClasses: Array<String>, ?reflectiveMethodHolders: Array<String>
+		?classpathComplete: () -> Bool, ?facts: FactsSource, ?reflectiveClasses: Array<String>, ?reflectiveMethodHolders: Array<String>
 	) {
 		_maxVisited = maxVisited;
 		final cached: GrammarPlugin = plugin is CachingGrammarPlugin ? plugin : new CachingGrammarPlugin(plugin);
@@ -352,7 +354,7 @@ final class MemberReach {
 			source == null || live.live(file, source, span);
 		});
 		// under the truth a project file no build runs declares nothing: the index the analysis reads leaves it out
-		final view: Null<FactsView> = FactsView.of(facts, scope, factsAreTruth(facts, configurations));
+		final view: Null<FactsView> = facts == null ? null : facts(scope, configurations);
 		scope.readThrough(view);
 		_index = scope.index;
 		final reachGraph: ReachGraph = new ReachGraph(_scope, carriers, maxLibraryFiles);
@@ -489,9 +491,7 @@ final class MemberReach {
 		for (h in hazardsOf(g, file, [span])) return Unconfined(h.file, h.hazard.span, 'code the walk cannot see through');
 		// a file the run rewrote holds no facts any more (`CompilerFacts.invalidate`): nothing would say what the code reads
 		if (!view.faceted(g, file, span)) return Unconfined(file, span, 'the compiler facts do not describe the code');
-		final entryFacts: Null<Array<FieldFact>> = view.table.within(
-			file, span, n -> n.fields, f -> f.at, true, view.harmlessSplice.bind(g)
-		);
+		final entryFacts: Null<Array<FieldFact>> = view.fieldsIn(g, file, span);
 		if (entryFacts == null) return Unconfined(file, span, 'a fact of the code has no place');
 		final reads: Array<SharedRead> = [];
 		for (f in entryFacts) {
@@ -937,7 +937,7 @@ final class MemberReach {
 		final ids: Array<String> = view.bySimpleName()[declaring] ?? [];
 		final out: Array<FieldDeclFact> = [];
 		for (id in ids) {
-			final declared: Null<FieldDeclFact> = view.table.type(id)?.fields.find(f -> f.name == name);
+			final declared: Null<FieldDeclFact> = view.type(id)?.fields.find(f -> f.name == name);
 			if (declared == null) return null;
 			out.push(declared);
 		}
@@ -1120,7 +1120,7 @@ final class MemberReach {
 			final syntactic: Array<ReachHazard> = liveHazards(file, read.tree, read.source, span);
 			final sites: Null<TruthSites> = _scope.facts?.truthSites(g, file, span, node);
 			// a fact of this file's own code a null guard keeps from running is none (`guardedDead`)
-			final key: Null<String> = _scope.facts?.table.keyOf(file);
+			final key: Null<String> = _scope.facts?.keyOf(file);
 			inline function kept(at: FactPos): Bool {
 				return at.file != key || !guardedDead(file, read.tree, at.span);
 			}
@@ -1373,7 +1373,7 @@ final class MemberReach {
 		final written: Null<FnNode> = origin == null ? null : g.node(origin.node);
 		if (origin == null || written == null) return false;
 		final file: String = written.file;
-		if (_scope.facts?.table.keyOf(file) != origin.file) return false;
+		if (_scope.facts?.keyOf(file) != origin.file) return false;
 		return benignEdge(g, written, {
 			from: written.id,
 			to: e.to,
@@ -1625,12 +1625,12 @@ final class MemberReach {
 			final n: FactNode = item.n;
 			for (f in n.fields) {
 				final why: Null<FreshOnlyAnswer> = sharedAccess(
-					f, item.fresh && CompilerFacts.placed(n, f.at) && freshThisAt(g, node, f), reads
+					f, item.fresh && FactsView.placed(n, f.at) && freshThisAt(g, node, f), reads
 				);
 				if (why != null) return why;
 			}
 			for (child in n.fns) {
-				final nested: Null<FactNode> = view.table.node(child);
+				final nested: Null<FactNode> = view.node(child);
 				if (nested == null) return Unconfined(node.file, node.span, 'a function nested in `${node.id}` has no facts');
 				if (CallGraphFacts.graphNodeOf(g, node, child, view) == null) work.push({ n: nested, fresh: false });
 			}
@@ -1664,7 +1664,7 @@ final class MemberReach {
 		return switch f.access {
 			case 'FEnum':
 				null;
-			case 'FClosure' if (owner != null && immutableMethod(owner, f.field)):
+			case 'FClosure' if (owner != null && view?.immutableMethod(owner, f.field) == true):
 				null;
 			case 'FInstance', 'FStatic' if (owner != null && view != null):
 				final graphOwner: String = view.graphType(owner);
@@ -1677,12 +1677,6 @@ final class MemberReach {
 		};
 	}
 
-	/** Whether every build declares `name` of the typed type `owner` a method no code can reassign (`method` or `inline`). */
-	private function immutableMethod(owner: String, name: String): Bool {
-		final declared: Null<FieldDeclFact> = _scope.facts?.table.type(CompilerFacts.baseId(owner))?.fields.find(d -> d.name == name);
-		return declared != null && declared.kinds.foreach(k -> k == 'method' || k == 'inline');
-	}
-
 	/**
 	 * Whether the instance access `f` of the body of `node` is on its own `this`: an `FInstance` access whose text, in the
 	 * file of `node` the fact lies in, spells the bare name or `this.name` (`MemberTouchScan.onSelf`).
@@ -1690,10 +1684,10 @@ final class MemberReach {
 	private function freshThisAt(g: CallGraph, node: FnNode, f: FieldFact): Bool {
 		if (f.access != 'FInstance') return false;
 		final key: String = f.at.file;
-		final table: Null<CompilerFacts> = _scope.facts?.table;
-		if (table == null) return false;
+		final view: Null<FactsView> = _scope.facts;
+		if (view == null) return false;
 		final files: Array<String> = [node.file].concat([for (d in g.declarationsOf(node.id)) d.file]).concat(g.initializerFiles(node.id));
-		final file: Null<String> = files.find(f -> table.keyOf(f) == key);
+		final file: Null<String> = files.find(f -> view.keyOf(f) == key);
 		return file != null && _touches.onSelf(g, file, f.at.span, f.field);
 	}
 
@@ -1846,7 +1840,7 @@ final class MemberReach {
 				if (indexed == null || _g.loadFile(g, indexed.file) != null) return null;
 				final written: Array<String> = [
 					for (id in g.nodes.keys())
-						if (g.declarationsOf(id).exists(d -> facts.table.keyOf(d.file) == v.file && d.span.from == v.span.from)) id
+						if (g.declarationsOf(id).exists(d -> facts.keyOf(d.file) == v.file && d.span.from == v.span.from)) id
 				];
 				if (written.length == 0) return null;
 				for (id in written) if (!toRead.contains(id)) toRead.push(id);
@@ -1889,7 +1883,7 @@ final class MemberReach {
 						// a library type's overrides are read as a walk following the dispatch reads them (`follow`), unless the builds
 						// type no subtype of it
 						final typed: Array<String> = facts.bySimpleName()[dispatch] ?? [];
-						final extended: Bool = typed.length == 0 || typed.exists(t -> facts.table.subtypesOf(t).length > 0);
+						final extended: Bool = typed.length == 0 || typed.exists(t -> facts.subtypesOf(t).length > 0);
 						final library: Bool = !_projectSources.exists(_scope.siteOf(dispatch)?.file ?? '');
 						if (library && extended && _g.loadOverrides(g, dispatch, dispatched) != null) return null;
 						for (v in g.virtualTargets(dispatch, dispatched)) targets.push(v);
@@ -2577,7 +2571,7 @@ final class MemberReach {
 		function typed(n: QueryNode): Null<String> {
 			final at: Null<Span> = n.span;
 			final own: Null<String> = _g.sites.typeOf(file, readTree, readSource, n);
-			return own ?? (at == null || _scope.facts?.truth != true ? null : _scope.facts?.table.typeOfExpressionAt(file, at));
+			return own ?? (at == null || _scope.facts?.truth != true ? null : _scope.facts?.typeOfExpressionAt(file, at));
 		}
 		// what converting a value converts: an array the built-in array's own method holds, its elements
 		function convertedType(n: QueryNode): Null<String> {
@@ -2843,7 +2837,8 @@ final class MemberReach {
 		// the resolution scope is what the project declares, not what its builds compile: only the builds can say that no
 		// subtype or override lies outside the index (`configuredFor`)
 		final built: MemberReach = new MemberReach(
-			plugin, project, index, scoped != null, MAX_LIBRARY_FILES, MAX_VISITED, null, () -> false, host?.compilerFacts()
+			plugin, project, index, scoped != null, MAX_LIBRARY_FILES, MAX_VISITED, null, () -> false,
+			FactsView.over(host?.compilerFacts())
 		);
 		// the builds are probed only once a question needs them (`escalation`), and read the project's text as it is then
 		if (host != null) {
@@ -3171,24 +3166,8 @@ final class MemberReach {
 		return new MemberReach(
 			plugin, [for (f in project) f],
 			index, scopeKnown, MAX_LIBRARY_FILES, MAX_VISITED, compiled.configurations, declaresEveryType.bind(compiled, index),
-			host.compilerFacts(), compiled.reflectiveClasses, compiled.reflectiveMethodHolders
+			FactsView.over(host.compilerFacts()), compiled.reflectiveClasses, compiled.reflectiveMethodHolders
 		);
-	}
-
-	/**
-	 * Whether `facts` are the truth under `configurations` (`FactsView.truth`): the configurations are the analysis's list
-	 * of builds — a run's is every build it ships (`configuredFor`) — and the facts name exactly them, as both probes name
-	 * a configuration (`OracleDeclaration.describeOracle`). A table that dropped one is no view at all (`FactsView.of`).
-	 */
-	private static function factsAreTruth(facts: Null<CompilerFacts>, configurations: Null<Array<ReachConfiguration>>): Bool {
-		if (facts == null || configurations == null) return false;
-		final typed: Array<String> = facts.configurations.copy();
-		final listed: Array<String> = [for (c in configurations) c.name];
-		typed.sort(Reflect.compare);
-		listed.sort(Reflect.compare);
-		if (typed.length != listed.length) return false;
-		for (i in 0...typed.length) if (typed[i] != listed[i]) return false;
-		return true;
 	}
 
 	/** The outer type a facts type string names, by its simple name: `Array` for `Array<Int>`, `Map` for `haxe.ds.Map<K,V>`. */

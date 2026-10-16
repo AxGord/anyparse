@@ -564,6 +564,14 @@ final class CompilerFacts {
 		return _key(file);
 	}
 
+	/**
+	 * Whether every configuration asked contributed to the table, and at least one did: a configuration missing from it could
+	 * type a declaration differently, so an answer resting on what every build agrees on, or on what none typed, needs this.
+	 */
+	public function complete(): Bool {
+		return dropped.length == 0 && configurations.length > 0;
+	}
+
 	/** Whether any configuration typed code of `file`. */
 	public function compiled(file: String): Bool {
 		return _nodeFiles.exists(_key(file));
@@ -786,6 +794,23 @@ final class CompilerFacts {
 				seen.push(site.type);
 		}
 		return seen.length == 1 ? seen[0] : null;
+	}
+
+	/**
+	 * Every type the configurations gave the VALUE of the expression at exactly `span` in `file`: its own
+	 * (`typeOfExpressionAt`), then the source type of each value flow recorded at that very range — a value handed to a
+	 * place of another type flows there at its own type, the facts' only record of many a value. Distinct; empty when the
+	 * facts record none. One entry is a type every configuration agrees on.
+	 */
+	public function valueTypesAt(file: String, span: Span): Array<String> {
+		final typed: Null<String> = typeOfExpressionAt(file, span);
+		final types: Array<String> = typed == null ? [] : [typed];
+		final key: String = _key(file);
+		for (f in flowsIn(file, span) ?? []) if (
+			f.at.file == key && f.at.span.from == span.from && f.at.span.to == span.to && !types.contains(f.from)
+		)
+			types.push(f.from);
+		return types;
 	}
 
 	/** The type `id` (`pack.Name`); null when no configuration typed it. */

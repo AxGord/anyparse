@@ -8,7 +8,6 @@ import anyparse.check.UsingScan.UsingHeader;
 import anyparse.check.UsingScan.UsingScope;
 import anyparse.query.BoolExprShape;
 import anyparse.query.CanonicalEdit;
-import anyparse.query.CompilerFacts;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.NominalTypes;
@@ -17,7 +16,6 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
-import anyparse.query.SymbolIndexHost;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefIndex;
 import anyparse.query.TypeResolver;
@@ -549,9 +547,9 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		// on a type not bound yet dispatches on whatever the receiver turns out to be at run time
 		final binding: Null<Int> = TypeResolver.identBindingFrom(recv, root, s.shape);
 		if (binding == null || chain.declaredTypeSources[binding] == null) return Verdict.UnresolvedReceiver;
-		final facts: Null<CompilerFacts> = plugin is SymbolIndexHost ? (cast plugin: SymbolIndexHost).compilerFacts() : null;
-		if (facts == null) return Verdict.UnresolvedReceiver;
-		return switch StaticExtensionFacts.judge(facts, file, source, callSpan, recvSpan, module, method, usings) {
+		final oracle: Null<FactsTypeOracle> = FactsTypeOracle.forFix(plugin, file, source);
+		if (oracle == null) return Verdict.UnresolvedReceiver;
+		return switch StaticExtensionFacts.judge(oracle, file, callSpan, recvSpan, module, method, usings) {
 			case Proven: Verdict.Fixable;
 			case Shadowed, DynamicReceiver: null;
 			case Unproven: Verdict.UnresolvedReceiver;

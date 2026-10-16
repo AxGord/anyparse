@@ -8,14 +8,15 @@ using StringTools;
 
 /**
  * Whether the compiler's facts (`CompilerFacts`) prove that a static call `Module.method(recv, …)` may be written as the
- * extension call `recv.method(…)`: the receiver's type, every configuration agreeing on it, declares no member of that
- * name anywhere in its hierarchy, carries no `@:using` of its own, and is handed to the static function's first
- * parameter with no implicit conversion.
+ * extension call `recv.method(…)`: the receiver's type, every configuration agreeing on it where the facts place the
+ * receiver (`FactsTypeOracle.factsTypeAt`), declares no member of that name anywhere in its hierarchy, carries no
+ * `@:using` of its own, and is handed to the static function's first parameter with no implicit conversion.
  *
  * Each proof rests on the union the table keeps: a member any configuration declares is a member, a supertype no
  * configuration typed leaves the hierarchy unproven, and a receiver the configurations type differently has no one
  * type. Only a class or an interface hosts the members the proof reads — an abstract's live on its implementation
- * class, behind `@:forward` and conversions, and a basic type is an abstract.
+ * class, behind `@:forward` and conversions, and a basic type is an abstract. The table is the one the rule's oracle
+ * reads (`FactsTypeOracle.forFix`), which holds every configuration.
  */
 @:nullSafety(Strict)
 final class StaticExtensionFacts {
@@ -51,15 +52,16 @@ final class StaticExtensionFacts {
 	private static final NOMINAL: EReg = ~/^[A-Za-z_][A-Za-z0-9_.]*$/;
 
 	/**
-	 * The verdict of `facts` on the call at `call` of `file` (whose text now is `source`) whose receiver lies at `recv`,
-	 * calling `method` of the configured `module`.
+	 * The verdict of the facts `oracle` reads (`FactsTypeOracle.forFix`) on the call at `call` of `file` whose receiver lies
+	 * at `recv`, calling `method` of the configured `module`.
 	 */
 	public static function judge(
-		facts: CompilerFacts, file: String, source: String, call: Span, recv: Span, module: String, method: String, usings: Array<String>
+		oracle: FactsTypeOracle, file: String, call: Span, recv: Span, module: String, method: String, usings: Array<String>
 	): ExtensionFactsVerdict {
-		// a configuration missing from the table could type the receiver differently, and facts of another text place nothing
-		if (facts.dropped.length > 0 || facts.configurations.length == 0 || facts.sourceOf(facts.keyOf(file)) != source) return Unproven;
-		final typed: Null<String> = receiverType(facts, file, recv);
+		// the table is asked by range below, so only a text the compile read places anything
+		if (!oracle.readsAsCompiled(file)) return Unproven;
+		final facts: CompilerFacts = oracle.facts;
+		final typed: Null<String> = oracle.factsTypeAt(file, recv);
 		if (typed == null) return Unproven;
 		final receiver: String = FactsTypeText.unwrapNull(typed);
 		if (receiver == DYNAMIC) return DynamicReceiver;
@@ -88,36 +90,14 @@ final class StaticExtensionFacts {
 
 	/**
 	 * The first parameter of the facts function type `signature` — `(Iterable<$f.A>,Int)->Bool` yields `Iterable<$f.A>` —
-	 * or null for a function of no parameter or any other shape. The `>` of an arrow closes nothing.
+	 * as the facts spell it, read by the one reader of their type grammar (`FactsTypeTree`); null for a function of no
+	 * parameter or an optional first one, and for any other shape.
 	 */
 	public static function firstParamOf(signature: String): Null<String> {
-		if (!signature.startsWith('(')) return null;
-		var depth: Int = 0;
-		for (i in 1...signature.length) {
-			final c: Int = signature.fastCodeAt(i);
-			if (c == '('.code || c == '<'.code || c == '{'.code || c == '['.code)
-				depth++;
-			else if (c == '>'.code && signature.fastCodeAt(i - 1) != '-'.code || c == '}'.code || c == ']'.code)
-				depth--;
-			else if (c == ')'.code && depth-- == 0 || c == ','.code && depth == 0)
-				return i == 1 ? null : signature.substring(1, i);
-		}
-		return null;
-	}
-
-	/**
-	 * The one type the configurations gave the expression at `recv`: its typed site, and every value flow recorded at
-	 * exactly that range must agree with it. Null when there is none or they disagree.
-	 */
-	private static function receiverType(facts: CompilerFacts, file: String, recv: Span): Null<String> {
-		final typed: Null<String> = facts.typeOfExpressionAt(file, recv);
-		if (typed == null) return null;
-		final key: String = facts.keyOf(file);
-		for (f in facts.flowsIn(file, recv) ?? []) if (
-			f.at.file == key && f.at.span.from == recv.from && f.at.span.to == recv.to && f.from != typed
-		)
-			return null;
-		return typed;
+		return switch FactsTypeTree.read(signature) {
+			case Function(args, _) if (args.length > 0 && !args[0].optional): FactsTypeTree.text(args[0].type);
+			case _: null;
+		};
 	}
 
 	/**
@@ -206,8 +186,7 @@ final class StaticExtensionFacts {
 			|| field.types.length != 1
 		)
 			return null;
-		final param: Null<String> = firstParamOf(field.type);
-		return param == null || param.startsWith('?') ? null : param;
+		return firstParamOf(field.type);
 	}
 
 	/**
