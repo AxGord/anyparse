@@ -9,6 +9,7 @@ import anyparse.grammar.haxe.CheckstyleConfigLoader;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import sys.FileSystem;
 import sys.io.File;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -90,7 +91,7 @@ class ComplexityCheckTest extends Test {
 		final src: String = 'class C {\n\tfunction big(a:Bool):Bool {\n'
 			+ '\t\treturn a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a;\n\t}\n}';
 		final check: Complexity = new Complexity();
-		Assert.equals(0, check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.edits(check, src).length);
 	}
 
 	public function testSkipParseNoCrash(): Void {
@@ -157,7 +158,7 @@ class ComplexityCheckTest extends Test {
 		final path: String = '$dir/Foo.hx';
 		final src: String = 'class Foo {\n\tfunction f(a:Bool):Bool { return a && a && a; }\n}';
 		File.saveContent(path, src);
-		final vs: Array<Violation> = new Complexity().run([{ file: path, source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new Complexity(), [{ file: path, source: src }]);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains('max 2'));
 		FileSystem.deleteFile(path);
@@ -211,7 +212,7 @@ class ComplexityCheckTest extends Test {
 		Assert.isTrue((cast check: NoAutofix).noAutofixReason().length > 0, 'and must say why a machine cannot do it');
 		final src: String = 'class C {\n\tfunction big(a:Bool):Bool {\n'
 			+ '\t\treturn a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a;\n\t}\n}';
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length, 'the declaration must match the behaviour');
 	}
@@ -222,8 +223,8 @@ class ComplexityCheckTest extends Test {
 		// the same function, so the score leaves the key; the configured `(max 20)` beside it
 		// stays, because a threshold change IS a change the blast-radius gate must show.
 		final check: Complexity = new Complexity();
-		final twentyOne: String = check.run([{ file: 'C.hx', source: chained(20) }], new HaxeQueryPlugin())[0].message;
-		final twentyTwo: String = check.run([{ file: 'C.hx', source: chained(21) }], new HaxeQueryPlugin())[0].message;
+		final twentyOne: String = CheckFixture.violations(check, chained(20))[0].message;
+		final twentyTwo: String = CheckFixture.violations(check, chained(21))[0].message;
 		Assert.isTrue(twentyOne.contains('complexity 21 (max 20)'));
 		Assert.notEquals(twentyOne, twentyTwo);
 		final identity: String = check.messageIdentity(twentyOne);
@@ -233,7 +234,7 @@ class ComplexityCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new Complexity().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new Complexity(), src);
 	}
 
 	/** A one-method class whose body chains `n` `&&` operands — score `n + 1`. */

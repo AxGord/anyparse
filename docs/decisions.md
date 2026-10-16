@@ -2909,3 +2909,19 @@ decided the question; it may not become a record of runs.
   `RedundantToString.resolveReceiver` stays: its answer is a DECLARATION tier with a non-null proof (`OperandBinder`,
   `DeclaredNullity`), a currency the walk does not carry; its overlap with the walk is the node-kind dispatch alone.
   All-rules and the thread-safety score unchanged on the four trees — branch `feat/infra-B4b`
+- rule tests ran a check the way production never does: 481 direct `check.run(files, new HaxeQueryPlugin())` sites
+  skipped `Linter.collect` (reification gate, suppression, the per-file gates) on a bare plugin with no run host, 174
+  classes re-implemented `violations`, a dozen `applyFix` helpers re-implemented the splice, `CheckFixture.applyEdits`
+  was a copy of `CanonicalEdit.applyEdits` without its same-`from` tie-break, a fix was asked with no index although
+  `LintFixDriver` always hands the report index, and 170 test sites built a `SymbolIndex` themselves → ONE test kit,
+  `unit.CheckFixture`: `violations` / `violationsIn` read through `Linter.collect` on a `CachingGrammarPlugin` host (a
+  given resolver is the run's, set on a `ConfigAware` check AND handed to `collect`, enablement off as under `--rule`);
+  `fixRun` / `edits` / `fixOf` / `fixedSource` hand `fix` the same host and the report index of the run's files;
+  `index` asks `IndexScope.over`. A class keeps a one-line `violations(src)` that names its check — the binding is the
+  class's, the run is the fixture's. Kept on the raw path on purpose: the tests that PIN the raw `Check.run` contract
+  (`ReificationGateTest`, `ReificationGateFixPathTest`) and the builder's own `SymbolIndex*Test`. A test that went red
+  under the production path is a finding, not a fixture to bend: `RedundantParensCheckTest` (four splice-in-macro fixes
+  production drops, the rule is not `QuotationAware`) and `PreferArrayLiteralCheckTest.testThisFieldAssignmentNeedsIndex`
+  (the index-less refusal `lint --fix` never reaches) stay on the old call, commented; so does
+  `ThreadSafetyCheckTest.testNoFindingInAFileWhoseChainWritesNoOption`, whose arm M-TS-REPORT-UNGATED survived through
+  the fixture — `Linter.runGated` re-applies the rule's own `GraphScoped` report gate — branch `feat/infra-B8`

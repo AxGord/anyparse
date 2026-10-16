@@ -6,6 +6,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -63,7 +64,7 @@ class DeadSafeNavTest extends Test {
 	public function testFixRewritesToDot(): Void {
 		final check: DeadSafeNav = new DeadSafeNav();
 		final src: String = 'class C { function f(?x:String) { if (x != null) { var n = x?.length; } } }';
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
 		Assert.equals(1, edits.length);
 		Assert.equals('.', edits[0].text);
@@ -71,7 +72,7 @@ class DeadSafeNavTest extends Test {
 
 	public function testSkipParseNoCrash(): Void {
 		Assert.equals(
-			0, new DeadSafeNav().run([{ file: 'Bad.hx', source: 'class Bad { function f() { x?. ' }], new HaxeQueryPlugin()).length
+			0, CheckFixture.violationsIn(new DeadSafeNav(), [{ file: 'Bad.hx', source: 'class Bad { function f() { x?. ' }]).length
 		);
 	}
 
@@ -311,7 +312,7 @@ class DeadSafeNavTest extends Test {
 
 	private function assertDeclined(src: String): Void {
 		final check: DeadSafeNav = new DeadSafeNav();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length, 'the redundant `?.` is still reported');
 		Assert.notNull(vs[0].declineReason, 'and says why it gets no fix');
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length, 'no `.` rewrite the compiler would reject');
@@ -319,7 +320,7 @@ class DeadSafeNavTest extends Test {
 
 	private function assertFixed(src: String): Void {
 		final check: DeadSafeNav = new DeadSafeNav();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
 		Assert.equals(1, check.fix(src, vs, new HaxeQueryPlugin()).length, 'the `?.` is rewritten to `.`');
 	}
@@ -331,7 +332,7 @@ class DeadSafeNavTest extends Test {
 		#if (sys || nodejs)
 		final src: String = 'package app; class C { function f(x:Null<Foo>) { final ok = x != null; if (ok) { var n = x?.bar; } } }';
 		final dir: String = CliFixture.writeDir('dsnbuild', [{ name: 'apqlint.json', source: config }].concat(files));
-		final vs: Array<Violation> = new DeadSafeNav().run([{ file: '$dir/C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new DeadSafeNav(), [{ file: '$dir/C.hx', source: src }]);
 		CliFixture.removeDir(dir);
 		Assert.equals(1, vs.length);
 		Assert.equals(declined, vs[0].declineReason != null, declined ? 'the build may enable null-safety' : 'the build is plain');
@@ -341,7 +342,7 @@ class DeadSafeNavTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new DeadSafeNav().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new DeadSafeNav(), src);
 	}
 
 	/** `body` as the body of a null-safe method over a nullable `x` and a few containers. */

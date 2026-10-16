@@ -4,6 +4,7 @@ import anyparse.check.PreferFinalPublicField;
 import anyparse.check.PreferReadOnlyField;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -253,31 +254,31 @@ class FieldWriteResolutionScopeTest extends Test {
 	/** `prefer-final-public-field` over the `Impl` fixture, whose interface lives in the `library` half. */
 	private static function finalPublicImpl(library: Array<SourceFile>): Int {
 		final report: Array<SourceFile> = [{ file: 'proj/Impl.hx', source: IMPL }];
-		return new PreferFinalPublicField().run(report, scoped(report, [], library)).length;
+		return CheckFixture.violationsIn(new PreferFinalPublicField(), report, scoped(report, [], library)).length;
 	}
 
 	/** `prefer-read-only-field` over the `ImplRo` fixture, whose interface lives in the `library` half. */
 	private static function readOnlyImpl(library: Array<SourceFile>): Int {
 		final report: Array<SourceFile> = [{ file: 'proj/ImplRo.hx', source: IMPL_RO }];
-		return new PreferReadOnlyField().run(report, scoped(report, [], library)).length;
+		return CheckFixture.violationsIn(new PreferReadOnlyField(), report, scoped(report, [], library)).length;
 	}
 
 	/** `prefer-final-public-field` over one of the two `Holder` spellings, with the poisoning writer beside it. */
 	private static function finalPublicHolder(holder: String): Int {
 		final report: Array<SourceFile> = [{ file: 'proj/Holder.hx', source: holder }, PROJ_DYN_WRITER_FILE, TOKEN_FILE];
-		return new PreferFinalPublicField().run(report, scoped(report, [], [])).length;
+		return CheckFixture.violationsIn(new PreferFinalPublicField(), report, scoped(report, [], [])).length;
 	}
 
 	/** `prefer-read-only-field` over the `Base` fixture with `library` third-party files and `roots` project roots. */
 	private static function readOnly(library: Array<SourceFile>, ?roots: Array<SourceFile>): Int {
 		final report: Array<SourceFile> = [{ file: 'proj/Base.hx', source: BASE }];
-		return new PreferReadOnlyField().run(report, scoped(report, roots ?? [], library)).length;
+		return CheckFixture.violationsIn(new PreferReadOnlyField(), report, scoped(report, roots ?? [], library)).length;
 	}
 
 	/** `prefer-final-public-field` over the `Ctx` fixture, same scope shape. */
 	private static function finalPublic(library: Array<SourceFile>, ?roots: Array<SourceFile>): Int {
 		final report: Array<SourceFile> = [{ file: 'proj/Ctx.hx', source: CTX }];
-		return new PreferFinalPublicField().run(report, scoped(report, roots ?? [], library)).length;
+		return CheckFixture.violationsIn(new PreferFinalPublicField(), report, scoped(report, roots ?? [], library)).length;
 	}
 
 	/**

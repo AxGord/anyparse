@@ -2,6 +2,7 @@ package unit.query;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.SymbolIndex;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -19,7 +20,7 @@ class StructuralMembershipTest extends Test {
 
 	/** Each membership, and one refusal per way the same member name can carry the WRONG signature. */
 	public function testStructuralIterableMembership(): Void {
-		final index: SymbolIndex = SymbolIndex.build(iterableFiles(), new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(iterableFiles(), new HaxeQueryPlugin());
 
 		Assert.isTrue(index.structural.satisfiesIterable('Bag'));
 		// Inherited through the supertype closure, exactly as a member lookup is.
@@ -51,7 +52,7 @@ class StructuralMembershipTest extends Test {
 	 * proving its element type binds the signature's type parameter.
 	 */
 	public function testStructuralParameterAcceptGate(): Void {
-		final index: SymbolIndex = SymbolIndex.build(iterableFiles(), new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(iterableFiles(), new HaxeQueryPlugin());
 
 		Assert.equals('Widget', index.structural.extensionReturnNominal('IterExt', 'pick', 'Bag'));
 		Assert.equals('Widget', index.structural.extensionReturnNominal('IterExt', 'step', 'BagIter'));
@@ -72,7 +73,7 @@ class StructuralMembershipTest extends Test {
 	 * target QUALIFIED and imports nothing, so only the written PATH can name the target.
 	 */
 	public function testAliasedContainerSatisfiesIterable(): Void {
-		final index: SymbolIndex = SymbolIndex.build(aliasFiles(), new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(aliasFiles(), new HaxeQueryPlugin());
 
 		// `typedef List<T> = haxe.ds.List<T>` -> a class whose `iterator()` returns a sub-module
 		// type of its OWN module, which only the target's file can resolve.
@@ -125,7 +126,7 @@ class StructuralMembershipTest extends Test {
 	 */
 	@:pin('control') @:killer('M-ALIAS-TARGET-SIMPLE-NAME')
 	public function testAliasTargetPairAgrees(): Void {
-		final index: SymbolIndex = SymbolIndex.build(aliasFiles(), new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(aliasFiles(), new HaxeQueryPlugin());
 
 		Assert.equals('List', aliasNominal(index, 'List'));
 		Assert.equals('haxe.ds.List', aliasRaw(index, 'List'));

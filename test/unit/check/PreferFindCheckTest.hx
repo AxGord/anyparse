@@ -8,8 +8,8 @@ import anyparse.check.PreferSafeNav;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
-import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -445,7 +445,7 @@ class PreferFindCheckTest extends Test {
 		for (check in ([new PreferFind(), new PreferSafeNav(), new PreferFinal()]: Array<Check>)) {
 			final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 			final text: String = out;
-			final edits: Array<{ span: Span, text: String }> = check.fix(text, check.run([{ file: 'C.hx', source: text }], plugin), plugin);
+			final edits: Array<{ span: Span, text: String }> = CheckFixture.edits(check, text, plugin);
 			Assert.isTrue(edits.length > 0, 'stage ${check.id()} produced no edits');
 			switch CanonicalEdit.canonicalize(text, edits, true, plugin) {
 				case Ok(next):
@@ -467,7 +467,7 @@ class PreferFindCheckTest extends Test {
 			{ file: 'Other.hx', source: other }
 		];
 		final edits: Array<{ span: Span, text: String }> = check.fix(
-			source, check.run(files, plugin), plugin, SymbolIndex.build(files, plugin)
+			source, CheckFixture.violationsIn(check, files, plugin), plugin, CheckFixture.index(files, plugin)
 		);
 		switch CanonicalEdit.canonicalize(source, edits, true, plugin) {
 			case Ok(text):
@@ -495,7 +495,7 @@ class PreferFindCheckTest extends Test {
 	}
 
 	private function violations(source: String): Array<Violation> {
-		return new PreferFind().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferFind(), source);
 	}
 
 	private function file(body: String, ret: String, withUsing: Bool): String {
@@ -506,7 +506,7 @@ class PreferFindCheckTest extends Test {
 	private function fixResult(src: String): String {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: PreferFind = new PreferFind();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
+		final vs: Array<Violation> = CheckFixture.violations(check, src, plugin);
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin);
 		switch CanonicalEdit.canonicalize(src, edits, true, plugin) {
 			case Ok(text):

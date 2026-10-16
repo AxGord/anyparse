@@ -6,6 +6,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -78,7 +79,7 @@ class ImpossibleIsCheckTest extends Test {
 	public function testFixIsNoop(): Void {
 		final check: ImpossibleIsCheck = new ImpossibleIsCheck();
 		final src: String = 'class A {} class B {} class C { function f(a:A) { var b = a is B; } }';
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
 		Assert.equals(0, edits.length);
 	}
@@ -86,7 +87,7 @@ class ImpossibleIsCheckTest extends Test {
 	public function testSkipParseNoCrash(): Void {
 		Assert.equals(
 			0,
-			new ImpossibleIsCheck().run([{ file: 'Bad.hx', source: 'class Bad { function f() { var b = x is ' }], new HaxeQueryPlugin())
+			CheckFixture.violationsIn(new ImpossibleIsCheck(), [{ file: 'Bad.hx', source: 'class Bad { function f() { var b = x is ' }])
 				.length
 		);
 	}
@@ -115,7 +116,7 @@ class ImpossibleIsCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new ImpossibleIsCheck().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new ImpossibleIsCheck(), src);
 	}
 
 }

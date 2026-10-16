@@ -3,7 +3,7 @@ package unit.check;
 import anyparse.check.Check.Violation;
 import anyparse.check.Severity;
 import anyparse.check.UnusedImport;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -54,19 +54,19 @@ class LintUsingSubmoduleExtensionTest extends Test {
 
 	/** A module the run cannot read at all stays an unverifiable Info — no member set, no verdict. */
 	public function testOutOfScopeModuleStaysInfo(): Void {
-		final vs: Array<Violation> = new UnusedImport().run([
+		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), [
 			{
 				file: 'pkg/C.hx',
 				source: 'package pkg;\n\nusing a.b.Tools;\n\nclass C {\n\tfunction f(v: Float): String return v.toFixed();\n}'
 			}
-		], new HaxeQueryPlugin());
+		]);
 		Assert.equals(1, vs.length);
 		if (vs.length == 1) Assert.equals(Severity.Info, vs[0].severity);
 	}
 
 	private function run(module: String, consumer: String): Array<Violation> {
-		return new UnusedImport().run(
-			[{ file: 'a/b/Tools.hx', source: module }, { file: 'pkg/C.hx', source: consumer }], new HaxeQueryPlugin()
+		return CheckFixture.violationsIn(
+			new UnusedImport(), [{ file: 'a/b/Tools.hx', source: module }, { file: 'pkg/C.hx', source: consumer }]
 		);
 	}
 

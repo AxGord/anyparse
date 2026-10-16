@@ -4,7 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.PreferFinalField;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -75,7 +75,7 @@ class PreferFinalFieldCheckTest extends Test {
 			{ file: 'C.hx', source: 'class C { private var _x:Int = 0; }' },
 			{ file: 'D.hx', source: 'class D extends C { function s():Void { _x = 5; } }' }
 		];
-		Assert.equals(0, new PreferFinalField().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(new PreferFinalField(), files).length);
 	}
 
 	/**
@@ -99,7 +99,7 @@ class PreferFinalFieldCheckTest extends Test {
 			{ file: 'C.hx', source: 'class C { private var _x:Int = 0; }' },
 			{ file: 'D.hx', source: 'class D extends C {}' }
 		];
-		Assert.equals(1, new PreferFinalField().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(1, CheckFixture.violationsIn(new PreferFinalField(), files).length);
 	}
 
 	/** A subtype that only READS the inherited private field does not block it either — a read survives `final`. */
@@ -108,7 +108,7 @@ class PreferFinalFieldCheckTest extends Test {
 			{ file: 'C.hx', source: 'class C { private var _x:Int = 0; }' },
 			{ file: 'D.hx', source: 'class D extends C { function r():Int { return _x; } }' }
 		];
-		Assert.equals(1, new PreferFinalField().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(1, CheckFixture.violationsIn(new PreferFinalField(), files).length);
 	}
 
 	/** A TRANSITIVE subtype's write blocks the finalization too. */
@@ -118,7 +118,7 @@ class PreferFinalFieldCheckTest extends Test {
 			{ file: 'D.hx', source: 'class D extends C {}' },
 			{ file: 'E.hx', source: 'class E extends D { function s():Void { _x = 5; } }' }
 		];
-		Assert.equals(0, new PreferFinalField().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(new PreferFinalField(), files).length);
 	}
 
 	/**
@@ -130,7 +130,7 @@ class PreferFinalFieldCheckTest extends Test {
 			{ file: 'a/C.hx', source: 'package a;\nclass C { private var _x:Int = 0; }' },
 			{ file: 'b/C.hx', source: 'package b;\nclass C extends a.C { function s():Void { _x = 5; } }' }
 		];
-		Assert.equals(0, new PreferFinalField().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(new PreferFinalField(), files).length);
 	}
 
 	/**
@@ -152,7 +152,7 @@ class PreferFinalFieldCheckTest extends Test {
 			{ file: 'C.hx', source: 'class C { private var _x:Int = 0; }' },
 			{ file: 'D.hx', source: '@:build(M.gen()) class D extends C {}' }
 		];
-		Assert.equals(0, new PreferFinalField().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(new PreferFinalField(), files).length);
 	}
 
 	/** The no-initializer (constructor-assigned) case gets the same precise subtype gate. */
@@ -161,7 +161,7 @@ class PreferFinalFieldCheckTest extends Test {
 			{ file: 'C.hx', source: 'class C { private var _x:Int; public function new() { _x = 1; } }' },
 			{ file: 'D.hx', source: 'class D extends C {}' }
 		];
-		Assert.equals(1, new PreferFinalField().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(1, CheckFixture.violationsIn(new PreferFinalField(), files).length);
 	}
 
 	/** The no-initializer case is still blocked by a subtype write. */
@@ -170,7 +170,7 @@ class PreferFinalFieldCheckTest extends Test {
 			{ file: 'C.hx', source: 'class C { private var _x:Int; public function new() { _x = 1; } }' },
 			{ file: 'D.hx', source: 'class D extends C { function s():Void { _x = 2; } }' }
 		];
-		Assert.equals(0, new PreferFinalField().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(new PreferFinalField(), files).length);
 	}
 
 	public function testFixVarToFinal(): Void {
@@ -225,7 +225,7 @@ class PreferFinalFieldCheckTest extends Test {
 			{ file: 'C.hx', source: 'class C { private var _x:Int = 0; }' },
 			{ file: 'W.hx', source: '@:access(C) class W { public function poke(c:C):Void { c._x = 9; } }' }
 		];
-		Assert.equals(0, new PreferFinalField().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(new PreferFinalField(), files).length);
 	}
 
 	/**
@@ -303,14 +303,14 @@ class PreferFinalFieldCheckTest extends Test {
 			{ file: 'I.hx', source: 'interface I {\n\tvar needsResync:Bool;\n}' },
 			{ file: 'C.hx', source: 'class C implements I {\n\tvar needsResync:Bool = false;\n}' }
 		];
-		Assert.equals(0, new PreferFinalField().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(new PreferFinalField(), files).length);
 	}
 
 	/** An implemented interface that is not in scope MAY declare the field as a mutable member — skipped conservatively. */
 	public function testUnresolvableInterfaceSkips(): Void {
-		final vs: Array<Violation> = new PreferFinalField().run([
-			{ file: 'C.hx', source: 'class C implements ExternalIface {\n\tvar needsResync:Bool = false;\n}' }
-		], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(
+			new PreferFinalField(), 'class C implements ExternalIface {\n\tvar needsResync:Bool = false;\n}'
+		);
 		Assert.equals(0, vs.length);
 	}
 
@@ -320,7 +320,7 @@ class PreferFinalFieldCheckTest extends Test {
 			{ file: 'I.hx', source: 'interface I {\n\tvar needsResync:Bool;\n}' },
 			{ file: 'C.hx', source: 'class C implements I {\n\tvar _other:Int = 0;\n}' }
 		];
-		Assert.equals(1, new PreferFinalField().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(1, CheckFixture.violationsIn(new PreferFinalField(), files).length);
 	}
 
 	/**
@@ -512,12 +512,12 @@ class PreferFinalFieldCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new PreferFinalField().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferFinalField(), src);
 	}
 
 	/** Only the violations reported against the owner `C.hx` — a subtype fixture can carry findings of its own. */
 	private function ownerViolations(files: Array<{ file: String, source: String }>): Array<Violation> {
-		return new PreferFinalField().run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'C.hx');
+		return CheckFixture.violationsIn(new PreferFinalField(), files).filter(v -> v.file == 'C.hx');
 	}
 
 	private function fixedSource(src: String): String {

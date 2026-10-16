@@ -3,7 +3,7 @@ package unit.check;
 import anyparse.check.Check.Violation;
 import anyparse.check.TrivialGetter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.SymbolIndex;
+import unit.CheckFixture;
 import utest.Assert;
 
 /**
@@ -129,8 +129,8 @@ class TrivialGetterIsVarTest extends TrivialGetterCheckTestBase {
 		final base: String = 'class C {\n\t@:isVar public var angle(get, set):Float;\n\tfunction get_angle():Float return angle;\n'
 			+ '\tfunction set_angle(v:Float):Float { redraw(); return angle = v; }\n}';
 		final sub: String = 'class D extends C {\n\toverride function get_angle():Float return 0;\n}';
-		final vs: Array<Violation> = new TrivialGetter().run(
-			[{ file: 'C.hx', source: base }, { file: 'D.hx', source: sub }], new HaxeQueryPlugin()
+		final vs: Array<Violation> = CheckFixture.violationsIn(
+			new TrivialGetter(), [{ file: 'C.hx', source: base }, { file: 'D.hx', source: sub }]
 		);
 		Assert.equals(0, vs.length);
 	}
@@ -147,7 +147,7 @@ class TrivialGetterIsVarTest extends TrivialGetterCheckTestBase {
 	 */
 	public function testSubclassReadingPropertyStillFixes(): Void {
 		final f: SubtypeReadFixture = subtypeReadFixture();
-		Assert.isTrue(f.check.fix(f.files[0].source, f.vs, f.plugin, SymbolIndex.build(f.files, f.plugin)).length > 0);
+		Assert.isTrue(f.check.fix(f.files[0].source, f.vs, f.plugin, CheckFixture.index(f.files, f.plugin)).length > 0);
 	}
 
 	/** An `override` getter answers a supertype contract the collapse would silently break. */
@@ -176,7 +176,7 @@ class TrivialGetterIsVarTest extends TrivialGetterCheckTestBase {
 	/** The self-backed arm registers no cross-file rename: nothing is deleted, so there is nothing to rewrite elsewhere. */
 	public function testNoCrossFileRenameForSelfBacked(): Void {
 		final f: SubtypeReadFixture = subtypeReadFixture();
-		Assert.equals(0, f.check.crossFileFix(f.files, f.vs, f.plugin, SymbolIndex.build(f.files, f.plugin)).length);
+		Assert.equals(0, f.check.crossFileFix(f.files, f.vs, f.plugin, CheckFixture.index(f.files, f.plugin)).length);
 	}
 
 	/**

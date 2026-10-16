@@ -4,6 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.MisplacedTypeDoc;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -87,7 +88,7 @@ class MisplacedTypeDocGuardedMetaTest extends Test {
 	}
 
 	private function run(source: String): Array<Violation> {
-		return new MisplacedTypeDoc().run([{ file: 'p/C.hx', source: source }], new HaxeQueryPlugin());
+		return CheckFixture.violationsIn(new MisplacedTypeDoc(), [{ file: 'p/C.hx', source: source }]);
 	}
 
 }

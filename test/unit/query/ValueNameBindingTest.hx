@@ -6,6 +6,7 @@ import anyparse.query.ValueNameBinding.FieldAlias;
 import anyparse.query.ValueNameBinding.ImportedStatic;
 import anyparse.query.ValueNameBinding.ImportedStatics;
 import haxe.Exception;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -162,7 +163,7 @@ class ValueNameBindingTest extends Test {
 	private static function indexOf(files: Map<String, String>): SymbolIndex {
 		final entries: Array<{ file: String, source: String }> = [for (file => source in files) { file: file, source: source }];
 		entries.sort((a, b) -> Reflect.compare(a.file, b.file));
-		return SymbolIndex.build(entries, new HaxeQueryPlugin());
+		return CheckFixture.index(entries, new HaxeQueryPlugin());
 	}
 
 	private static function fileOf(index: SymbolIndex, file: String): FileInfo {

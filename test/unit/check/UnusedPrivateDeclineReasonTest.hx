@@ -4,8 +4,8 @@ import anyparse.check.Check.Violation;
 import anyparse.check.Severity;
 import anyparse.check.UnusedPrivate;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -164,7 +164,7 @@ class UnusedPrivateDeclineReasonTest extends Test {
 			},
 			{ file: 'D.hx', source: 'class D {\n\tpublic function f(): Int {\n\t\treturn C.helper();\n\t}\n}\n' }
 		];
-		final reported: Array<Violation> = new UnusedPrivate().run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'C.hx');
+		final reported: Array<Violation> = CheckFixture.violationsIn(new UnusedPrivate(), files).filter(v -> v.file == 'C.hx');
 		Assert.equals(0, reported.length, 'run reported ${reported.length} finding(s) — the gate below it is reachable after all');
 		// Non-vacuity: drop the `@:build` and the very same class DOES report its constructor, so the
 		// zero above is that meta and not a fixture that reports nothing.
@@ -172,7 +172,7 @@ class UnusedPrivateDeclineReasonTest extends Test {
 			{ file: 'C.hx', source: files[0].source.substr('@:build(M.build())\n'.length) },
 			files[1]
 		];
-		Assert.equals(1, new UnusedPrivate().run(withoutMeta, new HaxeQueryPlugin()).filter(v -> v.file == 'C.hx').length);
+		Assert.equals(1, CheckFixture.violationsIn(new UnusedPrivate(), withoutMeta).filter(v -> v.file == 'C.hx').length);
 	}
 
 	/**
@@ -189,12 +189,12 @@ class UnusedPrivateDeclineReasonTest extends Test {
 		final files: Array<SourceFile> = [{ file: 'C.hx', source: source }];
 		final check: UnusedPrivate = new UnusedPrivate();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final own: Array<Violation> = check.run(files, plugin);
+		final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 		Assert.equals(1, own.length);
 		final unspanned: Violation = probe(null);
 		final unplaced: Violation = probe(new Span(0, 1));
 		final edits: Array<{ span: Span, text: String }> = check.fix(
-			source, own.concat([unspanned, unplaced]), plugin, SymbolIndex.build(files, plugin)
+			source, own.concat([unspanned, unplaced]), plugin, CheckFixture.index(files, plugin)
 		);
 		Assert.equals(1, edits.length, 'the deletion this call CAN make is what keeps the two null assertions non-vacuous');
 		Assert.isNull(unspanned.declineReason);
@@ -246,8 +246,8 @@ class UnusedPrivateDeclineReasonTest extends Test {
 		final check: UnusedPrivate = new UnusedPrivate();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final target: String = files[0].file;
-		final own: Array<Violation> = check.run(files, plugin).filter(v -> v.file == target);
-		final edits: Array<{ span: Span, text: String }> = check.fix(files[0].source, own, plugin, SymbolIndex.build(files, plugin));
+		final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == target);
+		final edits: Array<{ span: Span, text: String }> = check.fix(files[0].source, own, plugin, CheckFixture.index(files, plugin));
 		final out: Array<String> = [];
 		for (v in own) {
 			final reason: Null<String> = v.declineReason;

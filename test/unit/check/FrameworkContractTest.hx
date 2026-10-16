@@ -14,6 +14,7 @@ import anyparse.query.NamingPolicy.NamedDecl;
 import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -82,10 +83,10 @@ import utest.Test;
 		// `LintConfig.discover`, which walks up from a fixture path that exists nowhere and lands on
 		// whatever `apqlint.json` the suite's cwd sits under — a real file deciding a unit assertion.
 		plain.setConfigResolver(_ -> LintConfig.parse('{}'));
-		final open: Array<Violation> = plain.run(files, new HaxeQueryPlugin()).filter(v -> v.file == DRIVER_FILE);
+		final open: Array<Violation> = CheckFixture.violationsIn(plain, files).filter(v -> v.file == DRIVER_FILE);
 		Assert.equals(1, open.length, 'without a contract the callback is reported');
 		if (open.length != 1) return;
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final edits: Array<{ span: Span, text: String }> = plain.fix(DRIVER_SRC, open, new HaxeQueryPlugin(), index);
 		switch CanonicalEdit.canonicalize(DRIVER_SRC, edits, true, new HaxeQueryPlugin()) {
 			case Ok(text):
@@ -96,7 +97,7 @@ import utest.Test;
 		}
 		final guarded: Naming = new Naming();
 		guarded.setConfigResolver(_ -> LintConfig.parse(GODOT_CONFIG));
-		Assert.equals(0, guarded.run(files, new HaxeQueryPlugin()).filter(v -> v.file == DRIVER_FILE).length);
+		Assert.equals(0, CheckFixture.violationsIn(guarded, files).filter(v -> v.file == DRIVER_FILE).length);
 	}
 
 	// --- each half of the contract is load-bearing ---
@@ -121,7 +122,7 @@ import utest.Test;
 	 */
 	public function testAPrefixOwnsTheNameOnlyWhenARenameWouldDestroyIt(): Void {
 		final support: HaxeNamingSupport = new HaxeNamingSupport();
-		final index: SymbolIndex = SymbolIndex.build(godotFixture(), new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(godotFixture(), new HaxeQueryPlugin());
 		final destroyed: Array<FrameworkContract> = [{ root: 'Node', names: [], prefixes: ['_r'] }];
 		Assert.isTrue(support.frameworkReachable(driverDecl('_ready'), () -> index, destroyed));
 		Assert.isTrue(support.frameworkOwnsName(driverDecl('_ready'), () -> index, destroyed), 'a `_` fragment survives no rename');
@@ -152,7 +153,7 @@ import utest.Test;
 		];
 		final check: Naming = new Naming();
 		check.setConfigResolver(_ -> LintConfig.parse('{"frameworks":[{"root":"Node","names":["badField"]}]}'));
-		Assert.equals(1, check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == DRIVER_FILE).length);
+		Assert.equals(1, CheckFixture.violationsIn(check, files).filter(v -> v.file == DRIVER_FILE).length);
 	}
 
 	// --- the other two consumers read the same roster ---
@@ -160,10 +161,10 @@ import utest.Test;
 	/** `unused-private` honours a declared contract: a driver's private callback is not dead weight. */
 	public function testUnusedPrivateHonoursADeclaredContract(): Void {
 		final files: Array<{ file: String, source: String }> = unityFixture('private');
-		Assert.equals(1, unconfigured().run(files, new HaxeQueryPlugin()).filter(v -> v.file == DRIVER_FILE).length);
+		Assert.equals(1, CheckFixture.violationsIn(unconfigured(), files).filter(v -> v.file == DRIVER_FILE).length);
 		final guarded: UnusedPrivate = new UnusedPrivate();
 		guarded.setConfigResolver(_ -> LintConfig.parse(UNITY_CONFIG));
-		Assert.equals(0, guarded.run(files, new HaxeQueryPlugin()).filter(v -> v.file == DRIVER_FILE).length);
+		Assert.equals(0, CheckFixture.violationsIn(guarded, files).filter(v -> v.file == DRIVER_FILE).length);
 	}
 
 	/** `unused-public-member` honours the same roster — one question, three consumers, one answer. */
@@ -171,10 +172,10 @@ import utest.Test;
 		final files: Array<{ file: String, source: String }> = unityFixture('public');
 		final plain: UnusedPublicMember = new UnusedPublicMember();
 		plain.setConfigResolver(_ -> LintConfig.parse('{}'));
-		Assert.equals(1, plain.run(files, new HaxeQueryPlugin()).filter(v -> v.file == DRIVER_FILE).length);
+		Assert.equals(1, CheckFixture.violationsIn(plain, files).filter(v -> v.file == DRIVER_FILE).length);
 		final guarded: UnusedPublicMember = new UnusedPublicMember();
 		guarded.setConfigResolver(_ -> LintConfig.parse(UNITY_CONFIG));
-		Assert.equals(0, guarded.run(files, new HaxeQueryPlugin()).filter(v -> v.file == DRIVER_FILE).length);
+		Assert.equals(0, CheckFixture.violationsIn(guarded, files).filter(v -> v.file == DRIVER_FILE).length);
 	}
 
 	// --- the built-in framework is a default value, not a code path ---
@@ -184,10 +185,10 @@ import utest.Test;
 		final files: Array<{ file: String, source: String }> = [
 			{ file: 'unit/CTest.hx', source: 'class C extends Test {\n\tprivate function testX():Void {}\n}' }
 		];
-		Assert.equals(0, unconfigured().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(unconfigured(), files).length);
 		final guarded: UnusedPrivate = new UnusedPrivate();
 		guarded.setConfigResolver(_ -> LintConfig.parse(UNITY_CONFIG));
-		Assert.equals(0, guarded.run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(guarded, files).length);
 	}
 
 	// --- the seam itself ---
@@ -204,7 +205,7 @@ import utest.Test;
 		};
 		final contracts: Array<FrameworkContract> = [{ root: 'Node', names: ['_ready'], prefixes: [] }];
 		Assert.isFalse(support.frameworkReachable(decl, () -> null, contracts));
-		final index: SymbolIndex = SymbolIndex.build(godotFixture(), new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(godotFixture(), new HaxeQueryPlugin());
 		Assert.isTrue(support.frameworkReachable(decl, () -> index, contracts));
 	}
 
@@ -288,7 +289,7 @@ import utest.Test;
 		Assert.equals('Start', roster[0].names.join(','), 'the first file resolves the roster for the whole scope');
 		final check: UnusedPrivate = new UnusedPrivate();
 		check.setConfigResolver(twoRootResolver);
-		final reported: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		final reported: Array<Violation> = CheckFixture.violationsIn(check, files);
 		Assert.equals(1, reported.length, 'the second root nominates Tick and gets no say');
 		if (reported.length == 1) Assert.equals('b/B.hx', reported[0].file, 'and it is B, under the root that named Tick');
 		final paths: Array<String> = [for (entry in files) entry.file];
@@ -339,9 +340,9 @@ import utest.Test;
 		final check: UnusedPrivate = new UnusedPrivate();
 		check.setConfigResolver(_ -> LintConfig.parse(COLLIDE_CONFIG));
 		Assert.equals(
-			0, check.run(collisionFixture(true), new HaxeQueryPlugin()).length, 'spared when the non-extending twin is walked last'
+			0, CheckFixture.violationsIn(check, collisionFixture(true)).length, 'spared when the non-extending twin is walked last'
 		);
-		Assert.equals(0, check.run(collisionFixture(false), new HaxeQueryPlugin()).length, 'and spared when the extending one is');
+		Assert.equals(0, CheckFixture.violationsIn(check, collisionFixture(false)).length, 'and spared when the extending one is');
 	}
 
 	// --- fixtures ---
@@ -419,7 +420,7 @@ import utest.Test;
 	private function namingFindings(config: String): Int {
 		final check: Naming = new Naming();
 		check.setConfigResolver(_ -> LintConfig.parse(config));
-		return check.run(godotFixture(), new HaxeQueryPlugin()).filter(v -> v.file == DRIVER_FILE).length;
+		return CheckFixture.violationsIn(check, godotFixture()).filter(v -> v.file == DRIVER_FILE).length;
 	}
 
 
@@ -429,7 +430,7 @@ import utest.Test;
 	private function unusedPrivateFindings(config: String): Int {
 		final check: UnusedPrivate = new UnusedPrivate();
 		check.setConfigResolver(_ -> LintConfig.parse(config));
-		return check.run(godotFixture(), new HaxeQueryPlugin()).filter(v -> v.file == DRIVER_FILE).length;
+		return CheckFixture.violationsIn(check, godotFixture()).filter(v -> v.file == DRIVER_FILE).length;
 	}
 
 }

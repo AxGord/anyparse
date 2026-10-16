@@ -5,8 +5,10 @@ import anyparse.check.Linter;
 import anyparse.check.MissingVisibility;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -442,13 +444,13 @@ class MissingVisibilityCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new MissingVisibility().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new MissingVisibility(), src);
 	}
 
 	private function fixedSource(src: String): String {
 		final check: MissingVisibility = new MissingVisibility();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.edits(check, src, plugin);
 		return applyEdits(src, edits);
 	}
 
@@ -468,7 +470,7 @@ class MissingVisibilityCheckTest extends Test {
 				message: 'forced'
 			}
 		];
-		return applyEdits(src, check.fix(src, forced, plugin));
+		return applyEdits(src, CheckFixture.fixOf(check, src, forced, plugin));
 	}
 
 	/** `fixedSource` with a `SymbolIndex` built over `others` + the fixed file itself — the production `--fix` shape. */
@@ -476,14 +478,13 @@ class MissingVisibilityCheckTest extends Test {
 		final check: MissingVisibility = new MissingVisibility();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final files: Array<{ file: String, source: String }> = others.concat([{ file: 'C.hx', source: src }]);
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
-		final edits: Array<{ span: Span, text: String }> =
-			check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin, index);
+		final index: SymbolIndex = CheckFixture.index(files, plugin);
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, CheckFixture.violations(check, src, plugin), plugin, index);
 		return applyEdits(src, edits);
 	}
 
 	private static inline function applyEdits(src: String, edits: Array<{ span: Span, text: String }>): String {
-		return CheckFixture.applyEdits(src, edits);
+		return CanonicalEdit.applyEdits(src, edits);
 	}
 
 }

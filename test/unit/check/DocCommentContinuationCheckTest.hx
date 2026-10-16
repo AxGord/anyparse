@@ -3,7 +3,7 @@ package unit.check;
 import anyparse.check.Check.Violation;
 import anyparse.check.DocCommentContinuation;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -387,7 +387,7 @@ class DocCommentContinuationCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new DocCommentContinuation().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new DocCommentContinuation(), src);
 	}
 
 	private function fixed(src: String): String {

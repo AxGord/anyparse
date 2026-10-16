@@ -6,6 +6,7 @@ import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -300,7 +301,7 @@ class DuplicateCodeCrossFileCheckTest extends Test {
 	 */
 	public function testMessageIdentityMasksThePartnerLineOnly(): Void {
 		final check: DuplicateCode = new DuplicateCode();
-		final message: String = check.run([
+		final message: String = CheckFixture.violationsIn(check, [
 			file('A.hx', [
 				'class A {',
 				'\tfunction f():Void {',
@@ -319,7 +320,7 @@ class DuplicateCodeCrossFileCheckTest extends Test {
 				'\t}',
 				'}'
 			])
-		], new HaxeQueryPlugin())[0].message;
+		])[0].message;
 		final identity: String = check.messageIdentity(message);
 		Assert.equals('3 statements duplicated from A.hx:# — extract a shared helper (report-only, cross-file)', identity);
 		Assert.equals(identity, check.messageIdentity(identity), 'the normalization is idempotent');
@@ -360,8 +361,8 @@ class DuplicateCodeCrossFileCheckTest extends Test {
 		// its noise cost is zero: blast-radius verdicts get no lines from this rule while the
 		// masked rules contribute theirs.
 		final check: DuplicateCode = new DuplicateCode();
-		final three: String = check.run([file('A.hx', clone('A')), file('Z.hx', clone('Z'))], new HaxeQueryPlugin())[0].message;
-		final four: String = check.run([file('A.hx', longerClone('A')), file('Z.hx', longerClone('Z'))], new HaxeQueryPlugin())[0].message;
+		final three: String = CheckFixture.violationsIn(check, [file('A.hx', clone('A')), file('Z.hx', clone('Z'))])[0].message;
+		final four: String = CheckFixture.violationsIn(check, [file('A.hx', longerClone('A')), file('Z.hx', longerClone('Z'))])[0].message;
 		Assert.isTrue(three.indexOf('3 statements') == 0, three);
 		Assert.isTrue(four.indexOf('4 statements') == 0, four);
 		final identity: String = check.messageIdentity(three);
@@ -393,7 +394,7 @@ class DuplicateCodeCrossFileCheckTest extends Test {
 	}
 
 	private function violations(files: Array<{ file: String, source: String }>): Array<Violation> {
-		return new DuplicateCode().run(files, new HaxeQueryPlugin());
+		return CheckFixture.violationsIn(new DuplicateCode(), files);
 	}
 
 	private function file(name: String, lines: Array<String>): { file: String, source: String } {

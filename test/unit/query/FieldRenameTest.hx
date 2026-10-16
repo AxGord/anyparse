@@ -1,10 +1,10 @@
 package unit.query;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.FieldRename;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
-import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -75,7 +75,7 @@ class FieldRenameTest extends Test {
 	/** `source` with every edit the walk proposes for `field` -> `propName` applied, last-first. */
 	private static function renamed(source: String, field: String, propName: String, propStatic: Bool): String {
 		final edits: Null<Array<{ span: Span, text: String }>> = editsFor(source, field, propName, propStatic);
-		if (edits != null) return CheckFixture.applyEdits(source, edits);
+		if (edits != null) return CanonicalEdit.applyEdits(source, edits);
 		Assert.fail('the walk refused the rename of $field, so no reference form could be checked');
 		return '';
 	}

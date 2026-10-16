@@ -5,9 +5,9 @@ import anyparse.check.ExplicitType;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import sys.io.File;
+import unit.CheckFixture;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -120,7 +120,7 @@ class ExplicitTypeCheckTest extends Test {
 		final path: String = '$dir/EA.hx';
 		final src: String = 'enum abstract E(Int) {\n\tvar A = 1;\n}';
 		File.saveContent(path, src);
-		Assert.isTrue(new ExplicitType().run([{ file: path, source: src }], new HaxeQueryPlugin()).length >= 1);
+		Assert.isTrue(CheckFixture.violationsIn(new ExplicitType(), [{ file: path, source: src }]).length >= 1);
 		CliFixture.removeDir(dir);
 	}
 
@@ -479,7 +479,7 @@ class ExplicitTypeCheckTest extends Test {
 	public function testFixWithoutIndexSkips(): Void {
 		final src: String = '${IFACE}\n\nclass Impl implements I { public function grab(str):Int return 0; }';
 		final check: ExplicitType = new ExplicitType();
-		final vs: Array<Violation> = check.run([{ file: 'Impl.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'Impl.hx', source: src }]);
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
 	}
 
@@ -593,8 +593,8 @@ class ExplicitTypeCheckTest extends Test {
 		]);
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: ExplicitType = new ExplicitType();
-		final vs: Array<Violation> = check.run(files, plugin).filter(v -> v.file == 'Impl.hx');
-		final edits: Array<{ span: Span, text: String }> = check.fix(impl, vs, plugin, SymbolIndex.build(files, plugin));
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == 'Impl.hx');
+		final edits: Array<{ span: Span, text: String }> = check.fix(impl, vs, plugin, CheckFixture.index(files, plugin));
 		edits.sort((a, b) -> b.span.from - a.span.from);
 		var result: String = impl;
 		for (e in edits) result = result.substring(0, e.span.from) + e.text + result.substring(e.span.to);
@@ -602,22 +602,16 @@ class ExplicitTypeCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new ExplicitType().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new ExplicitType(), src);
 	}
 
 	private function applyFix(src: String): String {
-		final check: ExplicitType = new ExplicitType();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
-		edits.sort((a, b) -> b.span.from - a.span.from);
-		var result: String = src;
-		for (e in edits) result = result.substring(0, e.span.from) + e.text + result.substring(e.span.to);
-		return result;
+		return CheckFixture.fixedSource(new ExplicitType(), src);
 	}
 
 	private function fixCount(src: String): Int {
 		final check: ExplicitType = new ExplicitType();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		return check.fix(src, vs, new HaxeQueryPlugin()).length;
 	}
 

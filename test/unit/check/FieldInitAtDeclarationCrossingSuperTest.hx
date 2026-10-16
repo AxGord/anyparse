@@ -4,6 +4,8 @@ import anyparse.check.Check.Violation;
 import anyparse.check.FieldInitAtDeclaration;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
+import anyparse.query.CanonicalEdit;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -42,7 +44,9 @@ class FieldInitAtDeclarationCrossingSuperTest extends Test {
 		final src: String = crossingSuper('function g():Int return _a.length;');
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
 		Assert.equals(1, scopedViolations(files).length, 'declared roots admit it');
-		Assert.equals(0, new FieldInitAtDeclaration().run(files, scopedPlugin(files, false)).length, 'a libs-only scope');
+		Assert.equals(
+			0, CheckFixture.violationsIn(new FieldInitAtDeclaration(), files, scopedPlugin(files, false)).length, 'a libs-only scope'
+		);
 		Assert.equals(0, violations(src).length, 'no scope at all');
 	}
 
@@ -267,7 +271,7 @@ class FieldInitAtDeclarationCrossingSuperTest extends Test {
 
 	/** The rule's findings over `files` with those files as the report AND the declared `resolutionRoots`. */
 	private function scopedViolations(files: Array<{ file: String, source: String }>): Array<Violation> {
-		return new FieldInitAtDeclaration().run(files, scopedPlugin(files));
+		return CheckFixture.violationsIn(new FieldInitAtDeclaration(), files, scopedPlugin(files));
 	}
 
 	/** `src` as `C.hx` after the rule's fix, under a declared project scope. */
@@ -275,7 +279,7 @@ class FieldInitAtDeclarationCrossingSuperTest extends Test {
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
 		final plugin: CachingGrammarPlugin = scopedPlugin(files);
 		final check: FieldInitAtDeclaration = new FieldInitAtDeclaration();
-		return CheckFixture.applyEdits(src, check.fix(src, check.run(files, plugin), plugin));
+		return CanonicalEdit.applyEdits(src, check.fix(src, CheckFixture.violationsIn(check, files, plugin), plugin));
 	}
 
 	/**
@@ -298,7 +302,7 @@ class FieldInitAtDeclarationCrossingSuperTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new FieldInitAtDeclaration().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new FieldInitAtDeclaration(), src);
 	}
 
 }

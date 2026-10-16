@@ -7,6 +7,7 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -195,22 +196,22 @@ class PreferLpadCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new PreferLpad().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferLpad(), src);
 	}
 
 	/** The check's own edits for its own findings — empty is the report-only verdict. */
 	private function fixEdits(src: String): Array<{ span: Span, text: String }> {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: PreferLpad = new PreferLpad();
-		return check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
+		return CheckFixture.edits(check, src, plugin);
 	}
 
 	/** Run `fix` and re-emit through the canonical writer — layout of the rewritten expression is its job. */
 	private function applyFix(src: String): String {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: PreferLpad = new PreferLpad();
-		final found: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, found, plugin);
+		final found: Array<Violation> = CheckFixture.violations(check, src, plugin);
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.fixOf(check, src, found, plugin);
 		return switch CanonicalEdit.canonicalize(src, edits, true, plugin) {
 			case Ok(text): text;
 			case Err(message): throw message;

@@ -8,6 +8,7 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -222,17 +223,17 @@ class MisplacedTypeDocCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new MisplacedTypeDoc().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new MisplacedTypeDoc(), src);
 	}
 
 	private function edits(src: String): Array<{ span: Span, text: String }> {
 		final check: MisplacedTypeDoc = new MisplacedTypeDoc();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		return check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
+		return CheckFixture.edits(check, src, plugin);
 	}
 
 	private function fixed(src: String): String {
-		return CheckFixture.applyEdits(src, edits(src));
+		return CanonicalEdit.applyEdits(src, edits(src));
 	}
 
 	private function countOccurrences(s: String, sub: String): Int {

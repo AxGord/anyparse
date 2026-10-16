@@ -6,6 +6,7 @@ import anyparse.check.Severity;
 import anyparse.check.WhileTrueCondition;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -209,13 +210,13 @@ class WhileTrueConditionCheckTest extends Test {
 	}
 
 	private function violations(source: String): Array<Violation> {
-		return new WhileTrueCondition().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new WhileTrueCondition(), source);
 	}
 
 	private function edits(source: String): Array<{ span: Span, text: String }> {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: WhileTrueCondition = new WhileTrueCondition();
-		return check.fix(source, check.run([{ file: 'C.hx', source: source }], plugin), plugin);
+		return CheckFixture.edits(check, source, plugin);
 	}
 
 	private function applyFix(source: String): String {

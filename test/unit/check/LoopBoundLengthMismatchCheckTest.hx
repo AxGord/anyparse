@@ -4,7 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.LoopBoundLengthMismatch;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -147,7 +147,7 @@ class LoopBoundLengthMismatchCheckTest extends Test {
 		final sub: String = 'class H extends G {\n\tfunction g():Void {\n\t\tpoints.push(1);\n\t}\n}';
 		Assert.equals(
 			0,
-			new LoopBoundLengthMismatch().run([{ file: 'G.hx', source: GRID }, { file: 'H.hx', source: sub }], new HaxeQueryPlugin())
+			CheckFixture.violationsIn(new LoopBoundLengthMismatch(), [{ file: 'G.hx', source: GRID }, { file: 'H.hx', source: sub }])
 				.filter(v -> v.file == 'G.hx')
 				.length
 		);
@@ -273,7 +273,7 @@ class LoopBoundLengthMismatchCheckTest extends Test {
 	private static final CONSTANTS: String = '\n\nclass G {\n\tpublic static inline final N:Int = 4;\n}';
 
 	private function violations(src: String): Array<Violation> {
-		return new LoopBoundLengthMismatch().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new LoopBoundLengthMismatch(), src);
 	}
 
 	/** A class holding one method `f(n)` with `body`. */

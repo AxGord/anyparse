@@ -9,6 +9,7 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -355,8 +356,8 @@ class JoinSingleUseLocalCheckTest extends Test {
 	public function testCascadesFromPreferSafeNav(): Void {
 		final src: String = wrapField('final logoBmd:Null<T> = _f;\n\t\tif (logoBmd != null) logoBmd.dispose();');
 		final nav: PreferSafeNav = new PreferSafeNav();
-		final vs1: Array<Violation> = nav.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-		final es1: Array<{ span: Span, text: String }> = nav.fix(src, vs1, new HaxeQueryPlugin());
+		final vs1: Array<Violation> = CheckFixture.violations(nav, src);
+		final es1: Array<{ span: Span, text: String }> = CheckFixture.fixOf(nav, src, vs1);
 		final afterNav: String = canonicalize(src, es1);
 		Assert.isTrue(afterNav.indexOf('logoBmd?.dispose();') != -1, 'expected safe-nav form in: $afterNav');
 		final afterJoin: String = applyFixOnce(afterNav);
@@ -371,7 +372,7 @@ class JoinSingleUseLocalCheckTest extends Test {
 	public function testJoinReturnKeepsPriority(): Void {
 		final src: String = wrapRet('final x = _f;\n\t\treturn x;');
 		Assert.equals(0, violations(src).length);
-		Assert.equals(1, new JoinReturn().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()).length);
+		Assert.equals(1, CheckFixture.violations(new JoinReturn(), src).length);
 	}
 
 	/** A `return` of an EXPRESSION over the local is not `join-return`'s shape and stays this rule's. */
@@ -430,12 +431,12 @@ class JoinSingleUseLocalCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new JoinSingleUseLocal().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new JoinSingleUseLocal(), src);
 	}
 
 	private function edits(src: String): Array<{ span: Span, text: String }> {
 		final check: JoinSingleUseLocal = new JoinSingleUseLocal();
-		return check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
+		return CheckFixture.edits(check, src);
 	}
 
 	/** Run `fix` and re-emit through the canonical writer -- the `lint --fix` path in one pass. */

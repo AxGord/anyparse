@@ -4,6 +4,8 @@ import anyparse.check.Check.Violation;
 import anyparse.check.ExplicitLocalType;
 import anyparse.check.PositionTypeOracle;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CanonicalEdit;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -73,8 +75,8 @@ class ExplicitLocalTypePrinterTest extends Test {
 	private function annotate(src: String, inferred: String): String {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: ExplicitLocalType = new ExplicitLocalType();
-		final violations: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
-		return CheckFixture.applyEdits(src, check.fixWithOracle(src, violations, plugin, new CannedTypeOracle(inferred)));
+		final violations: Array<Violation> = CheckFixture.violations(check, src, plugin);
+		return CanonicalEdit.applyEdits(src, check.fixWithOracle(src, violations, plugin, new CannedTypeOracle(inferred)));
 	}
 
 	private function occurrences(haystack: String, needle: String): Int {

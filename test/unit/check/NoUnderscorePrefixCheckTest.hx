@@ -7,10 +7,10 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
-import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import sys.FileSystem;
 import sys.io.File;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -268,9 +268,9 @@ class NoUnderscorePrefixCheckTest extends Test {
 			[{ file: 'pkg/C.hx', source: src }, { file: 'pkg/payload.hx', source: other }];
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: NoUnderscorePrefix = new NoUnderscorePrefix();
-		final vs: Array<Violation> = check.run(files, plugin).filter(v -> v.file == 'pkg/C.hx');
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == 'pkg/C.hx');
 		Assert.equals(1, vs.length);
-		Assert.equals(0, check.fix(src, vs, plugin, SymbolIndex.build(files, plugin)).length);
+		Assert.equals(0, check.fix(src, vs, plugin, CheckFixture.index(files, plugin)).length);
 	}
 
 	/**
@@ -659,7 +659,7 @@ class NoUnderscorePrefixCheckTest extends Test {
 	/** The check's findings for `src`, with `config` (raw `apqlint.json` text) in effect when given. */
 	private function violations(src: String, ?config: String): Array<Violation> {
 		final check: NoUnderscorePrefix = configured(config);
-		return check.run([{ file: 'pkg/C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violationsIn(check, [{ file: 'pkg/C.hx', source: src }]);
 	}
 
 	/** The check's autofix edits for `src`, resolved against a single-file index. */
@@ -667,7 +667,7 @@ class NoUnderscorePrefixCheckTest extends Test {
 		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: NoUnderscorePrefix = configured(config);
-		return check.fix(src, check.run(files, plugin), plugin, SymbolIndex.build(files, plugin));
+		return check.fix(src, CheckFixture.violationsIn(check, files, plugin), plugin, CheckFixture.index(files, plugin));
 	}
 
 	/**
@@ -686,7 +686,9 @@ class NoUnderscorePrefixCheckTest extends Test {
 		final files: Array<{ file: String, source: String }> = [{ file: path, source: src }];
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: NoUnderscorePrefix = new NoUnderscorePrefix();
-		final out: Array<{ span: Span, text: String }> = check.fix(src, check.run(files, plugin), plugin, SymbolIndex.build(files, plugin));
+		final out: Array<{ span: Span, text: String }> = check.fix(
+			src, CheckFixture.violationsIn(check, files, plugin), plugin, CheckFixture.index(files, plugin)
+		);
 		FileSystem.deleteFile(path);
 		FileSystem.deleteFile('$dir/checkstyle.json');
 		FileSystem.deleteDirectory(dir);
@@ -723,9 +725,9 @@ class NoUnderscorePrefixCheckTest extends Test {
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		scoped.setResolutionScope({ declared: true, sources: () -> {report: report, projectRoots: [], library: new LibrarySources(lib) } });
 		final check: NoUnderscorePrefix = configured(config);
-		final vs: Array<Violation> = check.run(report, scoped);
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, report, scoped);
 		Assert.equals(1, vs.length);
-		return check.fix(subSrc, vs, scoped, SymbolIndex.build(report, new HaxeQueryPlugin()));
+		return check.fix(subSrc, vs, scoped, CheckFixture.index(report, new HaxeQueryPlugin()));
 	}
 
 }

@@ -4,7 +4,7 @@ import anyparse.check.Check;
 import anyparse.check.Linter;
 import anyparse.check.RedundantTrailingComma;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -168,7 +168,7 @@ class RedundantTrailingCommaCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new RedundantTrailingComma().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new RedundantTrailingComma(), src);
 	}
 
 	private function applyFix(src: String): String {

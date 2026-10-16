@@ -4,8 +4,8 @@ import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.PreferTryExpressionAssignment;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -311,12 +311,12 @@ class PreferTryExpressionAssignmentCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new PreferTryExpressionAssignment().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferTryExpressionAssignment(), src);
 	}
 
 	private function edits(src: String): Array<{ span: Span, text: String }> {
 		final check: PreferTryExpressionAssignment = new PreferTryExpressionAssignment();
-		return check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
+		return CheckFixture.edits(check, src);
 	}
 
 }

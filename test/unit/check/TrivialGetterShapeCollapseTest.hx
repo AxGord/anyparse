@@ -7,6 +7,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 
 /**
@@ -81,7 +82,7 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 			+ '\tpublic function new() {\n\t\t_disabled = false;\n\t\tinit();\n\t}\n'
 			+ '\tfunction get_disabled():Bool return _disabled;\n\tfunction set_disabled(v:Bool):Bool {\n\t\t_disabled = v;\n'
 			+ '\t\talpha = v ? 0.5 : 1;\n\t\treturn _disabled;\n\t}\n}';
-		Assert.equals(1, new TrivialGetter().run([{ file: 'LicenseButton.hx', source: src }], new HaxeQueryPlugin()).length);
+		Assert.equals(1, CheckFixture.violationsIn(new TrivialGetter(), [{ file: 'LicenseButton.hx', source: src }]).length);
 	}
 
 	public function testShapeACtorInitMoveFix(): Void {
@@ -104,7 +105,7 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 		final src: String = 'class C {\n\tpublic var disabled(get, set):Bool;\n\tprivate var _disabled:Bool;\n\tpublic function new() {\n'
 			+ '\t\ttrace(_disabled);\n\t\t_disabled = false;\n\t}\n\tfunction get_disabled():Bool return _disabled;\n'
 			+ '\tfunction set_disabled(v:Bool):Bool { redraw(); return _disabled = v; }\n}';
-		final vs: Array<Violation> = new TrivialGetter().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(new TrivialGetter(), src);
 		Assert.equals(1, vs.length);
 		final fixed: String = fixedText(src);
 		Assert.isTrue(fixed.indexOf('@:bypassAccessor disabled = false') >= 0);
@@ -414,7 +415,7 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 		final check: TrivialGetter = new TrivialGetter();
 		final cfg: LintConfig = LintConfig.parse('{"rules": {"trivial-getter": {"maxBypassWrites": 1}}}');
 		check.setConfigResolver(_ -> cfg);
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
 		Assert.equals(
 			'property \'active\' has a trivial getter over backing field \'_active\', but 2 external write(s) block a (default, set) '
@@ -561,7 +562,7 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 			},
 			{ file: 'Sub.hx', source: 'class Sub extends Base {\n\tpublic function peek():Bool return _active;\n}' }
 		];
-		Assert.equals(1, new TrivialGetter().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(1, CheckFixture.violationsIn(new TrivialGetter(), files).length);
 		final out: Map<String, String> = crossFixApply(files);
 		final base: String = out['Base.hx'] ?? '';
 		final sub: String = out['Sub.hx'] ?? '';
@@ -583,7 +584,7 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 			},
 			{ file: 'Sub.hx', source: 'class Sub extends Base {\n\tpublic function set():Void { _active = true; }\n}' }
 		];
-		Assert.equals(0, new TrivialGetter().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(new TrivialGetter(), files).length);
 	}
 
 	public function testCrossFileUnresolvableReceiverBlocked(): Void {
@@ -598,7 +599,7 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 			},
 			{ file: 'Sub.hx', source: 'class Sub extends Base {\n\tpublic function peek(o:Base):Bool return o._active;\n}' }
 		];
-		Assert.equals(0, new TrivialGetter().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(new TrivialGetter(), files).length);
 	}
 
 	/**
@@ -637,7 +638,7 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 		];
 		// Leading: the shape reports, so the fixture provably reaches the collapse the assertion below
 		// then reads the output of.
-		Assert.equals(1, new TrivialGetter().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(1, CheckFixture.violationsIn(new TrivialGetter(), files).length);
 		// One string over BOTH reads: `Sub`'s is the rename only the collapse can produce, `Heir`'s is
 		// the one it must leave alone, and neither half can be satisfied without the other.
 		Assert.equals(
@@ -658,7 +659,7 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 			{ file: 'Sub1.hx', source: 'class Sub1 extends Base {\n\tpublic function a():Bool return _active;\n}' },
 			{ file: 'Sub2.hx', source: 'class Sub2 extends Base {\n\tpublic function b():Bool return this._active;\n}' }
 		];
-		Assert.equals(1, new TrivialGetter().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(1, CheckFixture.violationsIn(new TrivialGetter(), files).length);
 		final out: Map<String, String> = crossFixApply(files);
 		Assert.isTrue((out['Base.hx'] ?? '').indexOf('_active') == -1);
 		Assert.isTrue((out['Sub1.hx'] ?? '').indexOf('return active;') >= 0);
@@ -679,7 +680,7 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 			},
 			{ file: 'Sub.hx', source: 'class Sub extends Base {\n\tpublic function draw():String return _label;\n}' }
 		];
-		Assert.equals(1, new TrivialGetter().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(1, CheckFixture.violationsIn(new TrivialGetter(), files).length);
 		final out: Map<String, String> = crossFixApply(files);
 		final base: String = out['Base.hx'] ?? '';
 		Assert.isTrue(base.indexOf('label(default, set)') >= 0);
@@ -700,7 +701,7 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 			},
 			{ file: 'Sub.hx', source: 'class Sub extends Base {\n\tpublic function peek():Bool return _active;\n}' }
 		];
-		Assert.equals(1, new TrivialGetter().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(1, CheckFixture.violationsIn(new TrivialGetter(), files).length);
 		final out: Map<String, String> = crossFixApply(files);
 		final base: String = out['Base.hx'] ?? '';
 		final sub: String = out['Sub.hx'] ?? '';
@@ -722,7 +723,7 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 			},
 			{ file: 'Mid.hx', source: 'abstract class Mid extends Base {\n\tpublic function reset():Void _active = false;\n}' }
 		];
-		Assert.equals(0, new TrivialGetter().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(new TrivialGetter(), files).length);
 	}
 
 	/**
@@ -827,12 +828,12 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 	 */
 	public function testAliasImportedSupertypeRewritesBothFiles(): Void {
 		for (imports in ['import p.Owner as O;\n', 'import p.Owner in O;\n']) {
-			Assert.equals(1, new TrivialGetter().run(aliasSubtypeFiles(imports, 'O'), new HaxeQueryPlugin()).length, imports);
+			Assert.equals(1, CheckFixture.violationsIn(new TrivialGetter(), aliasSubtypeFiles(imports, 'O')).length, imports);
 			final out: Map<String, String> = crossFixApply(aliasSubtypeFiles(imports, 'O'));
 			Assert.isTrue((out['p/Owner.hx'] ?? '').indexOf('active(default, null):Bool = false') >= 0, 'the owner collapses');
 			Assert.isTrue((out['p/Sub.hx'] ?? '').indexOf('return active;') >= 0, 'and the subtype read is rewritten');
 		}
-		Assert.equals(1, new TrivialGetter().run(aliasSubtypeFiles('', 'Owner'), new HaxeQueryPlugin()).length);
+		Assert.equals(1, CheckFixture.violationsIn(new TrivialGetter(), aliasSubtypeFiles('', 'Owner')).length);
 	}
 
 	/**
@@ -914,8 +915,8 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 	private function crossFixApply(files: Array<{ file: String, source: String }>): Map<String, String> {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: TrivialGetter = new TrivialGetter();
-		final vs: Array<Violation> = check.run(files, plugin);
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
+		final index: SymbolIndex = CheckFixture.index(files, plugin);
 		final byFile: Map<String, Array<{ span: Span, text: String }>> = [];
 		for (rename in check.crossFileFix(files, vs, plugin, index)) for (slice in rename) {
 			final fileEdits: Array<{ span: Span, text: String }> = byFile[slice.file] ?? [];

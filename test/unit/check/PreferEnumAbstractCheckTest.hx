@@ -9,6 +9,7 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -82,7 +83,7 @@ class PreferEnumAbstractCheckTest extends Test {
 		final src: String = 'class C { static final RANK_A = 0; static final RANK_B = 1; static final RANK_C = 2; static function '
 			+ 'r(x:Int):Int { return x == 0 ? RANK_A : RANK_B; } }';
 		final check: PreferEnumAbstract = new PreferEnumAbstract();
-		Assert.equals(0, check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.edits(check, src).length);
 	}
 
 	public function testSkipParseNoCrash(): Void {
@@ -446,7 +447,9 @@ class PreferEnumAbstractCheckTest extends Test {
 		// Fail-closed: the whole-scope refusals live in `run`, so a `fix` that skipped it must
 		// not convert anything at all.
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final vs: Array<Violation> = new PreferEnumAbstract().run([{ file: 'Align.hx', source: THREE_STRING_CONSTANTS }], plugin);
+		final vs: Array<Violation> = CheckFixture.violationsIn(
+			new PreferEnumAbstract(), [{ file: 'Align.hx', source: THREE_STRING_CONSTANTS }], plugin
+		);
 		Assert.equals(0, new PreferEnumAbstract().fix(THREE_STRING_CONSTANTS, vs, plugin).length);
 	}
 
@@ -519,7 +522,7 @@ class PreferEnumAbstractCheckTest extends Test {
 		final decl: String = THREE_STRING_CONSTANTS;
 		final check: PreferEnumAbstract = new PreferEnumAbstract();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final vs: Array<Violation> = check.run([{ file: 'A.hx', source: decl }], plugin);
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'A.hx', source: decl }], plugin);
 		final flat: Array<{ span: Span, text: String }> = check.fix(decl, vs, plugin);
 		final grouped: Array<GroupedEdit> = check.fixGrouped(decl, vs, plugin);
 		Assert.equals(grouped.length, flat.length);
@@ -562,8 +565,8 @@ class PreferEnumAbstractCheckTest extends Test {
 			{ file: 'Other.hx', source: other }
 		];
 		final check: PreferEnumAbstract = new PreferEnumAbstract();
-		final vs: Array<Violation> = check.run(files, plugin);
-		final index: Null<SymbolIndex> = withIndex ? SymbolIndex.build(files, plugin) : null;
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
+		final index: Null<SymbolIndex> = withIndex ? CheckFixture.index(files, plugin) : null;
 		return check.fix(THREE_STRING_CONSTANTS, vs, plugin, index).length;
 	}
 
@@ -571,7 +574,7 @@ class PreferEnumAbstractCheckTest extends Test {
 	private function groupedEdits(decl: String): Array<GroupedEdit> {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: PreferEnumAbstract = new PreferEnumAbstract();
-		return check.fixGrouped(decl, check.run([{ file: 'A.hx', source: decl }], plugin), plugin);
+		return check.fixGrouped(decl, CheckFixture.violationsIn(check, [{ file: 'A.hx', source: decl }], plugin), plugin);
 	}
 
 	/** Every finding of this check is a report-only `prefer-enum-abstract` advisory. */
@@ -585,7 +588,7 @@ class PreferEnumAbstractCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new PreferEnumAbstract().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferEnumAbstract(), src);
 	}
 
 	/** `pkg.Align`s grouped fix-edit count with `others` alongside it in scope — 7 for a conversion, 0 for a refusal. */
@@ -594,8 +597,8 @@ class PreferEnumAbstractCheckTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/Align.hx', source: decl }].concat(others);
 		final check: PreferEnumAbstract = new PreferEnumAbstract();
-		final vs: Array<Violation> = check.run(files, plugin).filter(v -> v.file == 'pkg/Align.hx');
-		return check.fixGrouped(decl, vs, plugin, SymbolIndex.build(files, plugin)).length;
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == 'pkg/Align.hx');
+		return check.fixGrouped(decl, vs, plugin, CheckFixture.index(files, plugin)).length;
 	}
 
 }

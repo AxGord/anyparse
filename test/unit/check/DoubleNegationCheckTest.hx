@@ -4,7 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.DoubleNegation;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -93,7 +93,7 @@ class DoubleNegationCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new DoubleNegation().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new DoubleNegation(), src);
 	}
 
 	/** Wrap a single statement body in a minimal class+function so it parses. */

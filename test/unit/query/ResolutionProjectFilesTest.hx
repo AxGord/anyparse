@@ -4,6 +4,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.FieldWriteIndex;
 import anyparse.query.SymbolIndex;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -97,7 +98,7 @@ class ResolutionProjectFilesTest extends Test {
 		final writes: Null<FieldWriteIndex> = plugin.fieldWriteIndex();
 		Assert.notNull(index, 'a declared root gives a project index');
 		Assert.notNull(writes, 'an injected scope gives a write index');
-		plugin.setResolutionIndex(SymbolIndex.build(REPORT, plugin));
+		plugin.setResolutionIndex(CheckFixture.index(REPORT, plugin));
 		Assert.isFalse(index == plugin.projectIndex(), 'a new pass rebuilds the project index');
 		Assert.isFalse(writes == plugin.fieldWriteIndex(), 'a new pass rebuilds the write index');
 	}

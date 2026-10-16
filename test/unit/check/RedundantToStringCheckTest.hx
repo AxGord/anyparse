@@ -5,7 +5,7 @@ import anyparse.check.Linter;
 import anyparse.check.RedundantToString;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.SymbolIndex;
+import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
 import utest.Assert;
@@ -300,7 +300,7 @@ class RedundantToStringCheckTest extends Test {
 			source: '${DECL_K}class Src { public function make():K return new K(); }'
 		};
 		final src: String = "@:nullSafety(Strict) class C { function f(o:Src) { final s:String = '${o.make().toString()}'; } }";
-		final wide: Array<Violation> = new RedundantToString().run([other, { file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final wide: Array<Violation> = CheckFixture.violationsIn(new RedundantToString(), [other, { file: 'C.hx', source: src }]);
 		Assert.equals(1, wide.length);
 		Assert.isTrue(wide[0].message.indexOf('but ') == -1, 'whole-scope run should prove the site: ${wide[0].message}');
 		Assert.equals(1, violations(src).length);
@@ -318,7 +318,7 @@ class RedundantToStringCheckTest extends Test {
 	public function testSkipParseNoCrash(): Void {
 		Assert.equals(
 			0,
-			new RedundantToString().run([{ file: 'Bad.hx', source: 'class Bad { function f() { x.toString(' }], new HaxeQueryPlugin())
+			CheckFixture.violationsIn(new RedundantToString(), [{ file: 'Bad.hx', source: 'class Bad { function f() { x.toString(' }])
 				.length
 		);
 	}
@@ -331,24 +331,16 @@ class RedundantToStringCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new RedundantToString().run(CheckFixture.withStd(src), new HaxeQueryPlugin());
+		return CheckFixture.violationsIn(new RedundantToString(), CheckFixture.withStd(src));
 	}
 
 	/** The check's edits for `src`, driven with the whole-scope index `Cli` always supplies. */
 	private function edits(src: String): Array<{ span: Span, text: String }> {
-		final check: RedundantToString = new RedundantToString();
-		final files: Array<{ file: String, source: String }> = CheckFixture.withStd(src);
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final found: Array<Violation> = check.run(files, plugin);
-		return check.fix(src, found, plugin, SymbolIndex.build(files, plugin));
+		return CheckFixture.fixRun(new RedundantToString(), CheckFixture.withStd(src)).edits;
 	}
 
 	private function applyFix(src: String): String {
-		final applied: Array<{ span: Span, text: String }> = edits(src);
-		applied.sort((a, b) -> b.span.from - a.span.from);
-		var result: String = src;
-		for (edit in applied) result = result.substring(0, edit.span.from) + edit.text + result.substring(edit.span.to);
-		return result;
+		return CanonicalEdit.applyEdits(src, edits(src));
 	}
 
 	@:pin('control')

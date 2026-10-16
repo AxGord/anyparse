@@ -7,6 +7,7 @@ import anyparse.grammar.haxe.HxStringEscape;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.FormatConfigDiscovery;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 
 using StringTools;
@@ -381,7 +382,7 @@ class FoldStringLiteralsWidthCheckTest extends FoldStringLiteralsCheckTestBase {
 		final vs: Array<Violation> = violations(src);
 		Assert.equals(1, vs.length);
 		final check: FoldStringLiterals = new FoldStringLiterals();
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.fixOf(check, src, vs);
 		switch CanonicalEdit.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				// Pin the EDIT, not just its stability: the head must split into the
@@ -683,7 +684,7 @@ class FoldStringLiteralsWidthCheckTest extends FoldStringLiteralsCheckTestBase {
 	private function fixedText(src: String): String {
 		final check: FoldStringLiterals = new FoldStringLiterals();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.edits(check, src, plugin);
 		switch CanonicalEdit.canonicalize(src, edits, true, plugin, FormatConfigDiscovery.discover('C.hx')) {
 			case Ok(text):
 				return text;

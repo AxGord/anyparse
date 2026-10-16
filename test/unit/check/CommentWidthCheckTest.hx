@@ -12,6 +12,7 @@ import haxe.Exception;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -317,14 +318,14 @@ class CommentWidthCheckTest extends Test {
 
 	/** Run the check over `src` as if it were `file`, whose own `hxformat.json` supplies the width. */
 	private function violations(src: String, file: String = 'C.hx'): Array<Violation> {
-		return new CommentWidth().run([{ file: file, source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violationsIn(new CommentWidth(), [{ file: file, source: src }]);
 	}
 
 	/** `src` with every edit the check's own fix proposes for every finding it reports. */
 	private function fixed(src: String, file: String = 'C.hx'): String {
 		final check: CommentWidth = new CommentWidth();
 		final plugin: GrammarPlugin = new HaxeQueryPlugin();
-		return applyEdits(src, check.fix(src, check.run([{ file: file, source: src }], plugin), plugin));
+		return applyEdits(src, check.fix(src, CheckFixture.violationsIn(check, [{ file: file, source: src }], plugin), plugin));
 	}
 
 	/** A class carrying one doc block whose single content line is `line`. */

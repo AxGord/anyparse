@@ -4,7 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.SelfAssignment;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -89,7 +89,7 @@ class SelfAssignmentCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new SelfAssignment().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new SelfAssignment(), src);
 	}
 
 	private function applyFix(src: String): String {

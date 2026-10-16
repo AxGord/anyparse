@@ -4,7 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.RedundantBypassAccessor;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -131,7 +131,7 @@ class RedundantBypassAccessorCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new RedundantBypassAccessor().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new RedundantBypassAccessor(), src);
 	}
 
 	private function applyFix(src: String): String {

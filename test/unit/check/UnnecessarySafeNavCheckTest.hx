@@ -81,7 +81,7 @@ class UnnecessarySafeNavCheckTest extends Test {
 	public function testFixRewritesQuestionDot(): Void {
 		final check: UnnecessarySafeNav = new UnnecessarySafeNav();
 		final src: String = 'class C { function f(i:Int) { var s = i?.foo; } }';
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
 		Assert.equals(1, edits.length);
@@ -92,7 +92,7 @@ class UnnecessarySafeNavCheckTest extends Test {
 	public function testSkipParseNoCrash(): Void {
 		Assert.equals(
 			0,
-			new UnnecessarySafeNav().run([{ file: 'Bad.hx', source: 'class Bad { function f() { var x = a?.' }], new HaxeQueryPlugin())
+			CheckFixture.violationsIn(new UnnecessarySafeNav(), [{ file: 'Bad.hx', source: 'class Bad { function f() { var x = a?.' }])
 				.length
 		);
 	}
@@ -104,7 +104,7 @@ class UnnecessarySafeNavCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new UnnecessarySafeNav().run(CheckFixture.withStd(src), new HaxeQueryPlugin());
+		return CheckFixture.violationsIn(new UnnecessarySafeNav(), CheckFixture.withStd(src));
 	}
 
 	@:pin('control')

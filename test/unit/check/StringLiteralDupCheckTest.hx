@@ -10,6 +10,7 @@ import anyparse.check.StringLiteralDup;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import sys.FileSystem;
 import sys.io.File;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -145,7 +146,7 @@ class StringLiteralDupCheckTest extends Test {
 		// Report-only: the constant's name is intent a human supplies, like magic-number.
 		final src: String = body('trace("hello"); trace("hello"); trace("hello");');
 		final check: StringLiteralDup = new StringLiteralDup();
-		Assert.equals(0, check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.edits(check, src).length);
 	}
 
 	public function testSkipParseNoCrash(): Void {
@@ -310,7 +311,7 @@ class StringLiteralDupCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new StringLiteralDup().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new StringLiteralDup(), src);
 	}
 
 	/** Write `configJson` + `fixture` to a fresh temp dir, run the check with on-disk config discovery, return the finding count. */
@@ -319,7 +320,7 @@ class StringLiteralDupCheckTest extends Test {
 		File.saveContent('$dir/apqlint.json', configJson);
 		final path: String = '$dir/Foo.hx';
 		File.saveContent(path, fixture);
-		final count: Int = new StringLiteralDup().run([{ file: path, source: fixture }], new HaxeQueryPlugin()).length;
+		final count: Int = CheckFixture.violationsIn(new StringLiteralDup(), [{ file: path, source: fixture }]).length;
 		cleanup(dir, path);
 		return count;
 	}
@@ -341,7 +342,7 @@ class StringLiteralDupCheckTest extends Test {
 	/** The one message `check` reports for `stmts` wrapped in the standard one-method class. */
 	private function messageOf(check: StringLiteralDup, stmts: String): String {
 		final src: String = body(stmts);
-		return check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin())[0].message;
+		return CheckFixture.violations(check, src)[0].message;
 	}
 
 }

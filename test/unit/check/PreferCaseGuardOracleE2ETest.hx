@@ -10,6 +10,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.Cli;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -71,7 +72,7 @@ final class PreferCaseGuardOracleE2ETest extends Test {
 		final check: PreferCaseGuard = new PreferCaseGuard();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final edits: Array<{ span: Span, text: String }> = check.fix(
-			APPLIES, check.run([{ file: 'Good.hx', source: APPLIES }], plugin), plugin
+			APPLIES, CheckFixture.violationsIn(check, [{ file: 'Good.hx', source: APPLIES }], plugin), plugin
 		);
 		Assert.equals(1, edits.length);
 		switch CanonicalEdit.canonicalize(APPLIES, edits, false, plugin, HXFORMAT) {

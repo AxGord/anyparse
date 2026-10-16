@@ -4,8 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.RedundantNullCoalescing;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -86,8 +85,8 @@ class RedundantNullCoalescingCheckTest extends Test {
 	public function testSkipParseNoCrash(): Void {
 		Assert.equals(
 			0,
-			new RedundantNullCoalescing().run(
-				[{ file: 'Bad.hx', source: 'class Bad { function f() { var a = x ??' }], new HaxeQueryPlugin()
+			CheckFixture.violationsIn(
+				new RedundantNullCoalescing(), [{ file: 'Bad.hx', source: 'class Bad { function f() { var a = x ??' }]
 			)
 				.length
 		);
@@ -129,17 +128,11 @@ class RedundantNullCoalescingCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new RedundantNullCoalescing().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new RedundantNullCoalescing(), src);
 	}
 
 	private function applyFix(src: String): String {
-		final check: RedundantNullCoalescing = new RedundantNullCoalescing();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
-		edits.sort((a, b) -> b.span.from - a.span.from);
-		var result: String = src;
-		for (e in edits) result = result.substring(0, e.span.from) + e.text + result.substring(e.span.to);
-		return result;
+		return CheckFixture.fixedSource(new RedundantNullCoalescing(), src);
 	}
 
 	@:pin('control')

@@ -7,6 +7,7 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -219,7 +220,7 @@ class DefaultRepeatedArgumentCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new DefaultRepeatedArgument().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new DefaultRepeatedArgument(), src);
 	}
 
 	/** `src` after applying the cross-file fix pass after pass until a pass finds nothing — the `--fix` loop. */
@@ -230,7 +231,7 @@ class DefaultRepeatedArgumentCheckTest extends Test {
 			final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: text }];
 			final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 			final edits: Array<{ span: Span, text: String }> = [];
-			for (group in check.crossFileFix(files, check.run(files, plugin), plugin))
+			for (group in check.crossFileFix(files, CheckFixture.violationsIn(check, files, plugin), plugin))
 				for (slice in group)
 					for (e in slice.edits) edits.push(e);
 			if (edits.length == 0) return text;
@@ -244,7 +245,7 @@ class DefaultRepeatedArgumentCheckTest extends Test {
 		final check: DefaultRepeatedArgument = new DefaultRepeatedArgument();
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final groups: Array<Array<CrossFileEdits>> = check.crossFileFix(files, check.run(files, plugin), plugin);
+		final groups: Array<Array<CrossFileEdits>> = check.crossFileFix(files, CheckFixture.violationsIn(check, files, plugin), plugin);
 		var count: Int = 0;
 		for (group in groups) for (slice in group) count += slice.edits.length;
 		return count;
