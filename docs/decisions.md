@@ -2839,3 +2839,17 @@ decided the question; it may not become a record of runs.
   level, plus a method call whose declarations write one return naming no type parameter. `DefaultRepeatedArgument`
   reads a receiver's declared type through `TypeResolver.identTypeName` instead of its own `Refs.find` memo. All-rules
   on the four trees unchanged — branch `feat/infra-B4`
+- rule tests ran a check the way production never does: 481 direct `check.run(files, new HaxeQueryPlugin())` sites
+  skipped `Linter.collect` (reification gate, suppression, the per-file gates) on a bare plugin with no run host, 174
+  classes re-implemented `violations`, a dozen `applyFix` helpers re-implemented the splice, `CheckFixture.applyEdits`
+  was a copy of `CanonicalEdit.applyEdits` without its same-`from` tie-break, a fix was asked with no index although
+  `LintFixDriver` always hands the report index, and 170 test sites built a `SymbolIndex` themselves → ONE test kit,
+  `unit.CheckFixture`: `violations` / `violationsIn` read through `Linter.collect` on a `CachingGrammarPlugin` host (a
+  given resolver is the run's, set on a `ConfigAware` check AND handed to `collect`, enablement off as under `--rule`);
+  `fixRun` / `edits` / `fixOf` / `fixedSource` hand `fix` the same host and the report index of the run's files;
+  `index` asks `IndexScope.over`. A class keeps a one-line `violations(src)` that names its check — the binding is the
+  class's, the run is the fixture's. Kept on the raw path on purpose: the tests that PIN the raw `Check.run` contract
+  (`ReificationGateTest`, `ReificationGateFixPathTest`) and the builder's own `SymbolIndex*Test`. A test that went red
+  under the production path is a finding, not a fixture to bend: `RedundantParensCheckTest` (four splice-in-macro fixes
+  production drops, the rule is not `QuotationAware`) and `PreferArrayLiteralCheckTest.testThisFieldAssignmentNeedsIndex`
+  (the index-less refusal `lint --fix` never reaches) stay on the old call, commented — branch `feat/infra-B8`
