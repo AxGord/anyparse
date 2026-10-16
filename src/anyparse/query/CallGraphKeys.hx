@@ -32,9 +32,6 @@ final class CallGraphKeys {
 	/** Binding offset -> the call a local written with no type is initialised by: the local holds what that call returns. */
 	public final callInitializers: Map<Int, QueryNode> = [];
 
-	/** The binding offsets of the locals whose initializing call `throughInitializer` is reading, against a cycle. */
-	private final _reading: Array<Int> = [];
-
 	/** Every type-parameter name a declaration of the file declares. */
 	private final _paramNames: Array<String> = [];
 
@@ -105,19 +102,6 @@ final class CallGraphKeys {
 			}
 		}
 		for (c in tree.children) typeLocals(c, localDeclKinds, newExprKind, callKind);
-	}
-
-	/**
-	 * What `read` makes of the call that initialises the local bound at `bound`, a local written with no type
-	 * (`callInitializers`) — the type it holds; null for any other local, and for one whose initializer is being read already.
-	 */
-	public function throughInitializer(bound: Int, read: QueryNode -> Null<String>): Null<String> {
-		final init: Null<QueryNode> = _reading.contains(bound) ? null : callInitializers[bound];
-		if (init == null) return null;
-		_reading.push(bound);
-		final held: Null<String> = read(init);
-		_reading.pop();
-		return held;
 	}
 
 	/** The dotted or simple path of the type `typeSource` names, `Null<…>` peeled unless `peelNull` is false; null for any other type. */

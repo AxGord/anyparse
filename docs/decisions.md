@@ -2839,3 +2839,22 @@ decided the question; it may not become a record of runs.
   level, plus a method call whose declarations write one return naming no type parameter. `DefaultRepeatedArgument`
   reads a receiver's declared type through `TypeResolver.identTypeName` instead of its own `Refs.find` memo. All-rules
   on the four trees unchanged — branch `feat/infra-B4`
+- ONE structural walk, TWO resolution models (B4b design, recorded before the move). The call graph typed an expression
+  with its own walk (`typeSourceOf`: identifier, field, element, call, construction, with `keys.throughInitializer`
+  for an unannotated local) while `NominalTypes`' deep SOURCE mode walked the same shapes over the `SymbolIndex`. The two
+  differ in what a type VALUE is, not in which shape answers what: the graph's is a type source spelled as it keys
+  types (`CallGraphKeys.keyedIn`: every name in the canonical spelling of what the WRITING file binds it to, so the text
+  resolves on its own and its node ids stay `Simple.member` — 28 TM names are declared twice, 37 truth keys sit on
+  them), the index's a written source whose names resolve in the file that wrote them (`MemberPathWalk` resolves each
+  link where its member is declared). Neither can stand in for the other: re-keying the index's answers would hand
+  its consumers spellings they copy into the user's file (`explicit-local-type`), and reading the graph's keyed text
+  by declaration would resolve a canonical path twice. So the SEAM is `NominalTypes.typeWalk<T, C>` over a
+  `TypingHost<T, C>`: the walk owns the shape dispatch (parentheses, literal, the self reference, a binding with its
+  annotation, an unannotated binding's initializer and a loop binder's element under ONE cycle guard, an unbound name,
+  a field access, an element, a call, a construction) and the host owns resolution in its own currency `T` — what a
+  binding's annotation, a member, a call, an element ARE. `C` is what a walk threads (the graph's enclosing type). The
+  host answers a field access and a call itself, given the walk to type a receiver with, because the index resolves a
+  whole path from its root in one walk (`pathReceiverMemberTypeSource`: import-aware, then package-blind) where the graph
+  goes link by link. An arc a host does not know answers null, never a guess; an arc one host learns is added to the
+  other only as its own measured change. Moved first as a pure move (each host answering exactly what its walk did),
+  all-rules byte-identical on the four trees — branch `feat/infra-B4b`

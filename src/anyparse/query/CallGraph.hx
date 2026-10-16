@@ -5,6 +5,7 @@ import anyparse.query.CallGraphTypes.HeldFile;
 import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.NominalTypes.TypingHost;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.TypeSyntax;
 import anyparse.query.ValueNameBinding.ImportedStatics;
@@ -1310,62 +1311,97 @@ final class CallGraph {
 			return null;
 		}
 
+		// the graph's resolution for the ONE structural walk (`NominalTypes.typeWalk`), set right below `typeSourceOf`'s arms
+		var graphTyping: Null<TypingHost<String, Null<String>>> = null;
+		// the bindings whose unannotated type the walk is reading, against a cycle (`TypingHost.reading`)
+		final unannotatedReads: Array<Int> = [];
+
 		/**
-		 * The DECLARED type source of a value expression the receiver arms below do not name: an
-		 * identifier's own annotation, an inherited field read without `this` (through the index),
-		 * each link of a field path, and an element `a[i]` of a container whose written type names
-		 * its element. Never an inferred type: an unannotated link answers null.
+		 * The DECLARED type source of a value expression the receiver arms below do not name, as the graph keys it — the
+		 * shared walk (`NominalTypes.typeWalk`) over the graph's resolution (`graphTyping`): an identifier's own annotation
+		 * (or, for a local written with none, the call initialising it), an inherited field read without `this` (through the
+		 * index), each link of a field path, an element `a[i]` of a container whose written type names its element, a call's
+		 * declared return and a construction. Never an inferred type: an unannotated link answers null.
 		 */
 		function typeSourceOf(exprRaw: QueryNode, currentType: Null<String>): Null<String> {
-			final expr: QueryNode = unwrap(exprRaw);
-			final name: Null<String> = expr.name;
-			if (expr.kind == identKind && name != null) {
-				if (name == selfText) return selfTypeOf(currentType);
-				final span: Null<Span> = expr.span;
-				if (span == null) return null;
-				final bound: Null<Int> = Refs.bindingAt(name, span.from, tree, shape);
-				if (bound != null && bound >= 0)
-					return typeSources[bound] ?? keys.throughInitializer(bound, c -> typeSourceOf(c, currentType));
-				if (CallGraphNames.isTypeLike(name)) return null;
-				// a static an import binds by its own name (`import p.T.*;`): its type, read where it is declared
-				final imported: Null<{ owner: String, member: String }> = CallGraphKeys.importedStatic(
-					this, importedOf(name), name, currentType
-				);
-				if (imported != null) return memberTypeSource(imported.owner, imported.member);
-				// a supertype's static is not in scope bare
-				return currentType == null || CallGraphKeys.staticOfSupertype(this, currentType, name)
-					? null
-					: memberTypeThrough(null, currentType, name, currentType);
-			}
-			if (isAccessKind(expr.kind) && name != null && expr.children.length > 0) {
-				// `Type.field`: a static member, read off a type name no local shadows
-				final staticOwner: Null<String> = typeNameReceiver(expr.children[0]);
-				if (staticOwner != null && types.isStatic(staticOwner, name)) return memberTypeSource(staticOwner, name);
-				final inner: Null<String> = typeSourceOf(expr.children[0], currentType);
-				if (inner == null) return null;
-				final innerSource: String = inner;
-				final innerType: Null<String> = nominalOf(innerSource, currentType, name, typeScopeOf(expr.children[0], currentType));
-				return innerType == null ? null : memberTypeThrough(innerSource, innerType, name, currentType);
-			}
-			if (indexKind != null && expr.kind == indexKind && expr.children.length > 0) {
-				final container: Null<String> = typeSourceOf(expr.children[0], currentType);
-				return container == null ? null : elementTypeSource(container);
-			}
-			if (expr.kind == callKind && expr.children.length > 0) {
-				// a call's written return type, as the receiver it was made on sees it
-				final call: Null<CallTarget> = callTargetOf(expr, currentType);
-				// a value no function declaration names — a field, a parameter, a call's result — returns what its function type says
-				if (call == null) return calledResult(typeSourceOf(expr.children[0], currentType));
-				final returned: Null<String> = returnSourceOf(call.target) ?? StdTypes.returnOf(_plugin, nodes[call.target]);
-				if (returned == null) return null;
-				return returnThrough(
-					expr, call.target, returned, call.receiverSource, call.onType, currentType, a -> typeSourceOf(a, currentType)
-				);
-			}
-			// a value a `new` makes is of the type it names, read where written — its type arguments left to what the language infers
-			final made: Null<Span> = newExprKind != null && expr.kind == newExprKind && name != null ? expr.span : null;
-			return made == null || name == null ? null : keys.keyed(name, made.from);
+			final host: Null<TypingHost<String, Null<String>>> = graphTyping;
+			if (host == null) throw new Exception('the graph typing host is set before the walk types anything');
+			return NominalTypes.typeWalk(exprRaw, shape, host, currentType);
 		}
+
+		/**
+		 * `typeSourceOf` for an identifier that binds no value: a static an import binds by its own name, else a member of the
+		 * enclosing type's chain read bare — never a supertype's static, and never a type-like name.
+		 */
+		function unboundTypeSource(ident: QueryNode, currentType: Null<String>): Null<String> {
+			final name: Null<String> = ident.name;
+			if (name == null || ident.span == null) return null;
+			if (CallGraphNames.isTypeLike(name)) return null;
+			// a static an import binds by its own name (`import p.T.*;`): its type, read where it is declared
+			final imported: Null<{ owner: String, member: String }> = CallGraphKeys.importedStatic(
+				this, importedOf(name), name, currentType
+			);
+			if (imported != null) return memberTypeSource(imported.owner, imported.member);
+			// a supertype's static is not in scope bare
+			return currentType == null || CallGraphKeys.staticOfSupertype(this, currentType, name)
+				? null
+				: memberTypeThrough(null, currentType, name, currentType);
+		}
+
+		/** `typeSourceOf` for a field access: a static member read off a type name no local shadows, else the receiver's member. */
+		function accessTypeSource(expr: QueryNode, currentType: Null<String>): Null<String> {
+			final name: Null<String> = expr.name;
+			if (name == null) return null;
+			final staticOwner: Null<String> = typeNameReceiver(expr.children[0]);
+			if (staticOwner != null && types.isStatic(staticOwner, name)) return memberTypeSource(staticOwner, name);
+			final inner: Null<String> = typeSourceOf(expr.children[0], currentType);
+			if (inner == null) return null;
+			final innerSource: String = inner;
+			final innerType: Null<String> = nominalOf(innerSource, currentType, name, typeScopeOf(expr.children[0], currentType));
+			return innerType == null ? null : memberTypeThrough(innerSource, innerType, name, currentType);
+		}
+
+		/**
+		 * `typeSourceOf` for a call: its target's written return type, as the receiver it was made on sees it; for a value no
+		 * function declaration names — a field, a parameter, a call's result — what its function type says.
+		 */
+		function callTypeSource(expr: QueryNode, currentType: Null<String>): Null<String> {
+			final call: Null<CallTarget> = callTargetOf(expr, currentType);
+			if (call == null) return calledResult(typeSourceOf(expr.children[0], currentType));
+			final returned: Null<String> = returnSourceOf(call.target) ?? StdTypes.returnOf(_plugin, nodes[call.target]);
+			if (returned == null) return null;
+			return returnThrough(
+				expr, call.target, returned, call.receiverSource, call.onType, currentType, a -> typeSourceOf(a, currentType)
+			);
+		}
+
+		graphTyping = {
+			peel: (node, _) -> unwrap(node),
+			isAccess: (kind, _) -> isAccessKind(kind),
+			literal: null,
+			self: (_, currentType) -> selfTypeOf(currentType),
+			binding: (ident, _) -> {
+				final name: Null<String> = ident.name;
+				final span: Null<Span> = ident.span;
+				final bound: Null<Int> = name == null || span == null ? null : Refs.bindingAt(name, span.from, tree, shape);
+				bound != null && bound >= 0 ? bound : null;
+			},
+			bound: (from, _) -> typeSources[from],
+			// a local written with no type and initialised by a call holds what the call returns (`CallGraphKeys.typeLocals`)
+			initializer: (from, _, _) -> keys.callInitializers[from],
+			loopElement: (_, _) -> null,
+			unbound: unboundTypeSource,
+			access: accessTypeSource,
+			element: (container, _) -> elementTypeSource(container),
+			call: callTypeSource,
+			// a value a `new` makes is of the type it names, read where written — its type arguments left to what the language infers
+			construction: (made, _) -> {
+				final at: Null<Span> = made.span;
+				final name: Null<String> = made.name;
+				at == null || name == null ? null : keys.keyed(name, at.from);
+			},
+			reading: _ -> unannotatedReads
+		};
 
 		/**
 		 * Receiver classification: the simple type name plus whether the

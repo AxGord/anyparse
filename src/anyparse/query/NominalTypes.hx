@@ -53,6 +53,30 @@ using StringTools;
 @:nullSafety(Strict)
 final class NominalTypes {
 
+	/**
+	 * The index's resolution for `typeWalk` (`TypingHost`): a written type source, resolved in the file that wrote it — the
+	 * deep walk's arcs, each answering what it always did. An identifier's annotation (`declaredTypeSources`, then the
+	 * `declaredTypes` nominal, so the deep walk never resolves less than the shallow one), a `for` binder's element
+	 * (`forBindingElementTypeSource`), a field PATH walked from its root as one (`indexAccess`), a tabled static call, and
+	 * the self reference (`indexSelf`). It types no initializer, element or construction.
+	 */
+	private static final INDEX_HOST: TypingHost<String, IndexTyping> = {
+		peel: (node, _) -> node,
+		isAccess: (kind, c) -> kind == c.shape.fieldAccessKind,
+		literal: (typeName, _) -> typeName,
+		self: indexSelf,
+		binding: (ident, c) -> TypeResolver.identBindingFrom(ident, c.root, c.shape),
+		bound: (from, c) -> c.chain.declaredTypeSources[from] ?? c.declaredTypes[from],
+		initializer: (_, _, _) -> null,
+		loopElement: forBindingElementTypeSource,
+		unbound: (_, _) -> null,
+		access: indexAccess,
+		element: null,
+		call: (node, c) -> tabledStaticCallTypeSource(node, c.root, c.shape, c.index),
+		construction: null,
+		reading: c -> c.seen
+	};
+
 	/** Whether `loop` carries a key-value VALUE binder — i.e. it binds a key AND a value. */
 	public static inline function hasIterationValueBinder(loop: QueryNode, valueBinderKinds: Array<String>): Bool {
 		return iterationValueBinder(loop, valueBinderKinds) != null;
@@ -484,6 +508,32 @@ final class NominalTypes {
 	}
 
 	/**
+	 * The type `raw` carries, in `host`'s currency — THE structural walk both resolution models share (`TypingHost`;
+	 * `docs/decisions.md`, "ONE structural walk, TWO resolution models"). The walk owns the shapes: what a type passes
+	 * through (`peel`), a literal, the self reference, an identifier (`identifierType`), a field access, an element read, a
+	 * call and a construction; the host answers each in its own terms. Null for every other shape.
+	 */
+	public static function typeWalk<T, C>(raw: QueryNode, shape: RefShape, host: TypingHost<T, C>, ctx: C): Null<T> {
+		final node: QueryNode = host.peel(raw, ctx);
+		final name: Null<String> = node.name;
+		final kind: String = node.kind;
+		final literalType: Null<String> = shape.literalTypeNames?.get(kind);
+		final literal: Null<(typeName:String, ctx:C) -> Null<T>> = host.literal;
+		if (literalType != null) return literal == null ? null : literal(literalType, ctx);
+		if (kind == shape.identKind && name != null)
+			return name == shape.selfReferenceText ? host.self(node, ctx) : identifierType(node, shape, host, ctx);
+		if (host.isAccess(kind, ctx) && name != null && node.children.length > 0) return host.access(node, ctx);
+		final element: Null<(container:T, ctx:C) -> Null<T>> = host.element;
+		if (kind == shape.indexAccessKind && element != null && node.children.length > 0) {
+			final container: Null<T> = typeWalk(node.children[0], shape, host, ctx);
+			return container == null ? null : element(container, ctx);
+		}
+		if (kind == shape.callKind && node.children.length > 0) return host.call(node, ctx);
+		final construction: Null<(node:QueryNode, ctx:C) -> Null<T>> = host.construction;
+		return kind == shape.newExprKind && name != null && construction != null ? construction(node, ctx) : null;
+	}
+
+	/**
 	 * The simple name of the one of `types` (simple name to standard path) `iterable`'s type resolves to, when the file
 	 * does not rebind it and the iterable is not a local written in its scope — the gates `valueIterationProvable`'s doc
 	 * gives — or null.
@@ -508,11 +558,7 @@ final class NominalTypes {
 	 * type declaration (the self reference) or a value BINDING. Null when the path's root is not
 	 * a bare identifier at all, or the one thing it is cannot be resolved.
 	 *
-	 * Extracted because `pathRootTypeName` and its deep-mode twin `pathRootTypeSourceDeep` differ
-	 * ONLY in what they do with a resolved binding — one reads a nominal off `declaredTypes`, the
-	 * other prefers the written source and falls through to the for-binding arm. Everything before
-	 * that (walking down single-child wrappers to the root identifier, and the self-reference
-	 * branch) is one question with one answer, and had no business being written twice.
+	 * The shallow walk's root (`pathRootTypeName`); the deep walk types its root through `typeWalk`'s identifier arm instead.
 	 */
 	private static function pathRootBinding(recv: QueryNode, root: QueryNode, shape: RefShape): Null<PathRoot> {
 		final identKind: Null<String> = shape.identKind;
@@ -536,9 +582,8 @@ final class NominalTypes {
 	 * instead of silently dropping to the shallow answer at the first receiver.
 	 *
 	 * `seen` rides along rather than being re-created per receiver only for tidiness: the call-tail
-	 * recursion is structurally decreasing, and the cycle the guard actually exists for lives
-	 * entirely inside `forBindingElementTypeSource`, which recurses into `valueTypeSourceDeep`
-	 * directly and never comes back through here.
+	 * recursion is structurally decreasing, and the cycle the guard actually exists for lives entirely
+	 * inside `typeWalk` (a `for` binder whose iterable reads it), which never comes back through here.
 	 */
 	/**
 	 * The type of an IDENT that names no value binding: a member of the ENCLOSING type, read
@@ -752,23 +797,17 @@ final class NominalTypes {
 		node: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, chain: ChainTypeContext,
 		index: Null<SymbolIndex>, file: String, seen: Array<Int>
 	): Null<String> {
-		final identKind: Null<String> = shape.identKind;
-		final fieldKind: Null<String> = shape.fieldAccessKind;
-		if (identKind == null || fieldKind == null) return null;
-		// a literal denotes its type whatever surrounds it (`'x'` is a `String`)
-		final literal: Null<String> = shape.literalTypeNames?.get(node.kind);
-		if (literal != null) return literal;
-		final tabled: Null<String> = tabledStaticCallTypeSource(node, root, shape, index);
-		if (tabled != null) return tabled;
-		final path: Null<Array<String>> = pathOf(node, identKind, fieldKind);
-		if (path == null) return null;
-		final rootSource: Null<String> = pathRootTypeSourceDeep(node, root, shape, declaredTypes, chain, index, file, seen);
-		return if (path.length == 1)
-			rootSource
-		else if (index == null)
-			null
-		else
-			pathReceiverMemberTypeSource(path, rootSource, index, file, true, shape.memberTransparentWrapperTypeNames ?? []);
+		if (shape.identKind == null || shape.fieldAccessKind == null) return null;
+		final c: IndexTyping = {
+			root: root,
+			shape: shape,
+			declaredTypes: declaredTypes,
+			chain: chain,
+			index: index,
+			file: file,
+			seen: seen
+		};
+		return typeWalk(node, shape, INDEX_HOST, c);
 	}
 
 	/**
@@ -792,51 +831,15 @@ final class NominalTypes {
 	}
 
 	/**
-	 * `pathRootTypeName`'s deep-mode twin, answering the root's written type SOURCE rather than its
-	 * nominal. Three tiers, in order: the self reference resolves to the enclosing declaration's
-	 * name (a bare name, carrying no arguments — the enclosing header's parameters are not in
-	 * scope as concrete types); then the root identifier's own annotation, preferring the written
-	 * `declaredTypeSources` form and falling back to the `declaredTypes` nominal so deep mode can
-	 * never resolve LESS than the shallow walk; and finally, for a binding with no annotation at
-	 * all, the for-binding element arm.
-	 */
-	private static function pathRootTypeSourceDeep(
-		recv: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, chain: ChainTypeContext,
-		index: Null<SymbolIndex>, file: String, seen: Array<Int>
-	): Null<String> {
-		final resolved: Null<PathRoot> = pathRootBinding(recv, root, shape);
-		if (resolved == null) return null;
-		final bindingFrom: Null<Int> = resolved.bindingFrom;
-		if (bindingFrom == null) return selfTypeSourceDeep(recv, root, shape, chain, resolved.selfTypeName);
-		final annotated: Null<String> = chain.declaredTypeSources[bindingFrom] ?? declaredTypes[bindingFrom];
-		return annotated ?? forBindingElementTypeSource(bindingFrom, root, shape, declaredTypes, chain, index, file, seen);
-	}
-
-	/**
-	 * What the self reference `recv` denotes in deep mode: the enclosing type `selfTypeName`, or — inside a type whose `this`
-	 * is its underlying value (`RefShape.underlyingThisTypeKinds`: `abstract A(T)`, where 4.3.7 types `this` as `T`) — the
-	 * underlying type as its declaration writes it. Null for such a type whose underlying type is not written readably.
-	 */
-	private static function selfTypeSourceDeep(
-		recv: QueryNode, root: QueryNode, shape: RefShape, chain: ChainTypeContext, selfTypeName: Null<String>
-	): Null<String> {
-		final span: Null<Span> = recv.span;
-		final decl: Null<TypeDeclMatch> = span == null ? null : TypeResolver.enclosingTypeDecl(root, span);
-		if (decl == null || !(shape.underlyingThisTypeKinds ?? []).contains(decl.kind)) return selfTypeName;
-		final underlying: Null<Span> = decl.declNode.type?.span;
-		return underlying == null ? null : chain.source.substring(underlying.from, underlying.to);
-	}
-
-	/**
 	 * The written ELEMENT type source a `for` binder carries, for a binding `declaredTypes` has no
 	 * entry for: the loop header declares no `:Type`, so the element type can only be read off the
 	 * ITERABLE's own declared type through `RefShape.iterationElementTypeParams`.
 	 *
 	 * Every gate here fails closed (null = the caller keeps its conservative branch):
 	 *
-	 *  - `seen` is the recursion guard. The iterable is a CHILD of the loop node, so in
-	 *    `for (x in x)` the iterable's `x` resolves right back to the binder and the walk would
-	 *    never terminate. The binding offset is pushed for the duration of the recursive call only.
+	 *  - The walk's cycle guard (`TypingHost.reading`, `c.seen` here) stops the recursion. The iterable is
+	 *    a CHILD of the loop node, so in `for (x in x)` the iterable's `x` resolves right back to the
+	 *    binder and the walk would never terminate.
 	 *  - The loop node is found by a kind-FILTERED walk for an exact `span.from` match, not by
 	 *    "first node starting here" — the binding offset is the loop's own start, which several
 	 *    co-starting nodes share. A key-value loop's VALUE binder is its own node, so the same
@@ -848,24 +851,20 @@ final class NominalTypes {
 	 *    stays unresolved. Its VALUE binder is the element and resolves normally — the same
 	 *    parameter a single-binder `for (v in m)` reads.
 	 */
-	private static function forBindingElementTypeSource(
-		bindingFrom: Int, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, chain: ChainTypeContext,
-		index: Null<SymbolIndex>, file: String, seen: Array<Int>
-	): Null<String> {
+	private static function forBindingElementTypeSource(bindingFrom: Int, c: IndexTyping): Null<String> {
+		final shape: RefShape = c.shape;
 		final kinds: Null<Array<String>> = shape.iterationBindingKinds;
 		final elementParams: Null<Map<String, Int>> = shape.iterationElementTypeParams;
-		if (kinds == null || elementParams == null || seen.contains(bindingFrom)) return null;
+		if (kinds == null || elementParams == null) return null;
 		final valueBinderKinds: Array<String> = shape.iterationValueBinderKinds ?? [];
-		final hit: Null<LoopBinderHit> = loopBinderAt(root, bindingFrom, kinds, valueBinderKinds);
+		final hit: Null<LoopBinderHit> = loopBinderAt(c.root, bindingFrom, kinds, valueBinderKinds);
 		if (hit == null) return null;
 		final loop: QueryNode = hit.loop;
 		if (!hit.isValueBinder && hasIterationValueBinder(loop, valueBinderKinds)) return null;
 		final iterable: Null<QueryNode> = iterationIterable(loop, valueBinderKinds);
 		if (iterable == null) return null;
-		seen.push(bindingFrom);
-		final iterableSource: Null<String> = valueTypeSourceDeep(iterable, root, shape, declaredTypes, chain, index, file, seen);
-		seen.pop();
-		return iterableSource == null ? null : elementTypeSourceOf(iterableSource, elementParams, [], chain.typeSyntax);
+		final iterableSource: Null<String> = typeWalk(iterable, shape, INDEX_HOST, c);
+		return iterableSource == null ? null : elementTypeSourceOf(iterableSource, elementParams, [], c.chain.typeSyntax);
 	}
 
 	/**
@@ -914,6 +913,57 @@ final class NominalTypes {
 		final bound: Null<Span> = own?.bindingSpan;
 		return bound != null
 			&& hits.exists(h -> h.kind == RefKind.Write && h.bindingSpan?.from == bound.from && h.bindingSpan?.to == bound.to);
+	}
+
+	/**
+	 * `typeWalk`'s identifier: the type its binding is written with; else — for a binding written with no type, under the
+	 * host's ONE cycle guard (`reading`: `for (x in x)`, a local whose initializer reads itself) — the type of the
+	 * expression initialising it or the element of the loop binding it; for a name binding no value, what it names.
+	 */
+	private static function identifierType<T, C>(ident: QueryNode, shape: RefShape, host: TypingHost<T, C>, ctx: C): Null<T> {
+		final from: Null<Int> = host.binding(ident, ctx);
+		if (from == null) return host.unbound(ident, ctx);
+		final written: Null<T> = host.bound(from, ctx);
+		final reading: Array<Int> = host.reading(ctx);
+		if (written != null || reading.contains(from)) return written;
+		reading.push(from);
+		final init: Null<QueryNode> = host.initializer(from, ident, ctx);
+		final held: Null<T> = init == null ? host.loopElement(from, ctx) : typeWalk(init, shape, host, ctx);
+		reading.pop();
+		return held;
+	}
+
+	/**
+	 * The self reference `node` for the index host: the enclosing type by its name, or — inside a type whose `this` is its
+	 * underlying value (`RefShape.underlyingThisTypeKinds`: `abstract A(T)`, where 4.3.7 types `this` as `T`) — the
+	 * underlying type as its declaration writes it. Null outside a type, and for such a type whose underlying type is not
+	 * written readably.
+	 */
+	private static function indexSelf(node: QueryNode, c: IndexTyping): Null<String> {
+		final span: Null<Span> = node.span;
+		final decl: Null<TypeDeclMatch> = span == null ? null : TypeResolver.enclosingTypeDecl(c.root, span);
+		if (decl == null) return null;
+		if (!(c.shape.underlyingThisTypeKinds ?? []).contains(decl.kind)) return decl.name;
+		final underlying: Null<Span> = decl.declNode.type?.span;
+		return underlying == null ? null : c.chain.source.substring(underlying.from, underlying.to);
+	}
+
+	/**
+	 * A field access for the index host: a PATH (`pathOf`) walked from its root as one — the root typed by the walk, the
+	 * members through `pathReceiverMemberTypeSource` with substitution, each link resolved where its member is declared
+	 * and only then package-blind. Null for any other receiver, and with no index.
+	 */
+	private static function indexAccess(node: QueryNode, c: IndexTyping): Null<String> {
+		final shape: RefShape = c.shape;
+		final identKind: Null<String> = shape.identKind;
+		final fieldKind: Null<String> = shape.fieldAccessKind;
+		final index: Null<SymbolIndex> = c.index;
+		final path: Null<Array<String>> = identKind == null || fieldKind == null ? null : pathOf(node, identKind, fieldKind);
+		if (path == null || index == null) return null;
+		var root: QueryNode = node;
+		while (root.kind != identKind && root.children.length == 1) root = root.children[0];
+		final rootSource: Null<String> = typeWalk(root, shape, INDEX_HOST, c);
+		return pathReceiverMemberTypeSource(path, rootSource, index, c.file, true, shape.memberTransparentWrapperTypeNames ?? []);
 	}
 
 }
@@ -972,4 +1022,66 @@ typedef ChainTypeContext = {
 
 	/** `GrammarPlugin.typeSyntax` — how the deep mode reads a written type's wrapper and arguments. */
 	final typeSyntax: TypeSyntaxReader;
+}
+
+/**
+ * The resolution `NominalTypes.typeWalk` asks for, in the host's own type currency `T`: a type source the call graph
+ * spells as it keys types (`CallGraphKeys.keyedIn`), one the index reads where it was written. `C` is what a walk
+ * threads through every question (the call graph's enclosing type). The walk owns the shapes; the host owns what a
+ * binding, a member, a call ARE — `docs/decisions.md`, "ONE structural walk, TWO resolution models". An arc a host does
+ * not know is a null function (the walk skips the shape) or a null answer, never a guess.
+ */
+typedef TypingHost<T, C> = {
+	/** `node` with what a type passes through unchanged (parentheses) peeled off, or `node` itself. */
+	final peel: (node:QueryNode, ctx:C) -> QueryNode;
+
+	/** Whether `kind` is a field access the host types (`a.b`; a member-lookup host adds `a?.b`, `a!.b`). */
+	final isAccess: (kind:String, ctx:C) -> Bool;
+
+	/** The value of a literal whose type `RefShape.literalTypeNames` names `typeName`; null for a host typing none. */
+	final literal: Null<(typeName:String, ctx:C) -> Null<T>>;
+
+	/** What the self reference `node` denotes. */
+	final self: (node:QueryNode, ctx:C) -> Null<T>;
+
+	/** The binding offset of the value the identifier `ident` reads, or null when it binds none. */
+	final binding: (ident:QueryNode, ctx:C) -> Null<Int>;
+
+	/** The type the binding at `from` is written with, or the host otherwise holds for it; null when none. */
+	final bound: (from:Int, ctx:C) -> Null<T>;
+
+	/** The expression initialising the binding at `from`, written with no type, as read at `use`: the binding holds its type. */
+	final initializer: (from:Int, use:QueryNode, ctx:C) -> Null<QueryNode>;
+
+	/** The element the loop binder at `from` binds, read off what the loop iterates. */
+	final loopElement: (from:Int, ctx:C) -> Null<T>;
+
+	/** What the identifier `ident`, which binds no value, names. */
+	final unbound: (ident:QueryNode, ctx:C) -> Null<T>;
+
+	/** What the field access `node` (an `isAccess` kind with a receiver) reads. */
+	final access: (node:QueryNode, ctx:C) -> Null<T>;
+
+	/** The element an index access into a value of type `container` reads; null for a host typing none. */
+	final element: Null<(container:T, ctx:C) -> Null<T>>;
+
+	/** What the call `node` returns. */
+	final call: (node:QueryNode, ctx:C) -> Null<T>;
+
+	/** What the construction `node` makes; null for a host typing none. */
+	final construction: Null<(node:QueryNode, ctx:C) -> Null<T>>;
+
+	/** The binding offsets whose unannotated type the walk is reading right now, against a cycle (`for (x in x)`). */
+	final reading: (ctx:C) -> Array<Int>;
+}
+
+/** What the index host of `NominalTypes.typeWalk` reads with: the deep walk's arguments, `seen` its cycle guard. */
+private typedef IndexTyping = {
+	final root: QueryNode;
+	final shape: RefShape;
+	final declaredTypes: Map<Int, String>;
+	final chain: ChainTypeContext;
+	final index: Null<SymbolIndex>;
+	final file: String;
+	final seen: Array<Int>;
 }
