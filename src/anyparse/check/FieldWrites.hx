@@ -296,7 +296,7 @@ final class FieldWrites {
 		if (at == null) return;
 		final fn: Null<String> = _graph.functionAt(file, at.from);
 		final literal: Null<StringLiteral> = key == null ? null : _fold?.literalOf(key, source);
-		final declared: Null<String> = target == null ? null : declaredType(file, source, fn, target);
+		final declared: Null<String> = target == null ? null : declaredType(file, source, target);
 		final capture: Null<Capture> = target == null || declared != null ? null : captureOf(file, source, fn, target);
 		final place: Placement = target == null
 			? { reaches: null, by: null }
@@ -331,13 +331,12 @@ final class FieldWrites {
 	 * the running type for the self reference; null when unknown.
 	 */
 	private function typeOf(file: String, source: String, fn: Null<String>, node: QueryNode): Null<String> {
-		return declaredType(file, source, fn, node) ?? captureOf(file, source, fn, node)?.type;
+		return declaredType(file, source, node) ?? captureOf(file, source, fn, node)?.type;
 	}
 
 	/** The type the value `node`, in `file` of `source` and the function `fn`, is declared of (`typeOf`), captures aside. */
-	private function declaredType(file: String, source: String, fn: Null<String>, node: QueryNode): Null<String> {
+	private function declaredType(file: String, source: String, node: QueryNode): Null<String> {
 		final value: QueryNode = BoolExprShape.unwrapParens(node, _shape.parenKind);
-		if (value.kind == _shape.identKind && value.name == _shape.selfReferenceText) return fn == null ? null : _graph.node(fn)?.typeName;
 		if (!_typers.exists(file)) {
 			final tree: Null<QueryNode> = _graph.treeOf(file);
 			_typers[file] = tree == null ? null : CheckScan.typeNominalResolver(source, _plugin, tree, file, heldIndex(), true, false);

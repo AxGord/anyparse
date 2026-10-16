@@ -13,6 +13,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.MemberReach.ReachAccess;
 import anyparse.query.MemberReach.ReachStep;
 import anyparse.query.MemberReach.ReachUnknown;
+import anyparse.query.NominalTypes.ChainTypeContext;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.MemberInfo;
@@ -809,18 +810,27 @@ final class MemberTouchScan {
 	}
 
 	/**
-	 * The built-in array or string type `node` is known to hold — a literal, an identifier declared of the
-	 * type, or a fresh-returning call (whose result is an array) — or null.
+	 * The built-in array or string type `node` is known to hold — an array literal, a fresh-returning call (whose
+	 * result is an array), or what the shared walk types it as (`NominalTypes.expressionTypeSource`: a string literal, a
+	 * binding's annotation or initializer) — or null.
 	 */
 	private function builtinTypeOf(node: QueryNode, ctx: FreshContext): Null<String> {
 		final arrays: Array<String> = _scope.shape.arrayTypeNames ?? [];
 		final strings: Array<String> = stringTypeNames();
 		if (node.kind == _scope.shape.arrayLiteralKind) return arrays[0];
-		if ((_scope.shape.stringLiteralKinds ?? []).contains(node.kind)) return strings[0];
 		if (freshResult(node, ctx)) return arrays[0];
 		final provider: Null<TypeInfoProvider> = _scope.plugin is TypeInfoProvider ? cast _scope.plugin : null;
-		final bound: Null<Int> = TypeResolver.identBindingFrom(node, ctx.tree, _scope.shape);
-		final written: Null<String> = bound == null || provider == null ? null : provider.declaredTypeSources(ctx.source)[bound];
+		if (provider == null) return null;
+		final chain: ChainTypeContext = {
+			declaredTypeSources: provider.declaredTypeSources(ctx.source),
+			source: ctx.source,
+			usings: [],
+			typeSyntax: _scope.plugin.typeSyntax
+		};
+		// no index: only the walk's arcs that need no file — a literal, a binding's annotation or initializer, a loop binder
+		final written: Null<String> = NominalTypes.expressionTypeSource(
+			node, ctx.tree, _scope.shape, provider.declaredTypes(ctx.source), null, '', chain
+		);
 		final outer: Null<String> = written == null ? null : NominalTypes.outerNominalOf(written, _scope.plugin.typeSyntax);
 		return outer != null && (arrays.contains(outer) || strings.contains(outer)) ? outer : null;
 	}

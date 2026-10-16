@@ -3977,7 +3977,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachTest#testSharedInitializerIsAnEscape :: control :: M-REACH-SHARED-INITIALIZER',
 			'unit.query.MemberReachTest#testSharedParameterWithoutTheWholeProjectIsUnknown :: control :: M-REACH-LOCAL-SCOPE',
 			'unit.query.MemberReachTest#testSlotWriteIsATouch :: control :: M-REACH-SLOT-WRITE',
-			'unit.query.MemberReachTest#testSplitOfAStringAndAChainedResultAreFresh :: control :: M-REACH-SPLIT-FRESH,M-REACH-FRESH-CHAIN',
+			'unit.query.MemberReachTest#testSplitOfAStringAndAChainedResultAreFresh :: control :: '
+				+ 'M-REACH-SPLIT-FRESH,M-REACH-FRESH-CHAIN,M-NOMINAL-LOCAL-INIT',
 			'unit.query.MemberReachTest#testStoringASharedValueIsAnEscape :: control :: M-REACH-FRESH-ASSIGN',
 			'unit.query.MemberReachTest#testTargetCodeCanNameAFreshLocal :: control :: M-REACH-LOCAL-HAZARDS',
 			'unit.query.MemberReachTest#testTwoHopMutatorIsReached :: control :: M-REACH-TOUCHER-FOUND',

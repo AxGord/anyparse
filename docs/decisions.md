@@ -2899,3 +2899,13 @@ decided the question; it may not become a record of runs.
   type, for `iterator()`/`next()`), `argumentTypeSource` (a call argument's expected type) and `receiverType`'s
   classification (value / type / dynamic receiver). All-rules and the thread-safety score unchanged on the four trees —
   branch `feat/infra-B4b`
+- `MemberTouchScan.builtinTypeOf` typed a string literal and a binding's annotation itself, and `FieldWrites.typeOf`
+  answered the self reference with the graph node's type ahead of the deep walk → both ask the walk: `builtinTypeOf`
+  keeps only the array literal and the fresh-returning call (the freshness question's own arcs) and reads the rest off
+  `NominalTypes.expressionTypeSource` with no index — the arcs that need no file: a literal, an annotation, an
+  initializer, a loop binder — so `var s = text; s.split(",")` is a fresh array now (red on the start commit,
+  `MemberReachTest`); `FieldWrites` drops its self arm, the walk answering the enclosing class the same way and, inside
+  an abstract, its underlying type (4.3.7) — two reflective-write probes inside an abstract placed nothing either way.
+  `RedundantToString.resolveReceiver` stays: its answer is a DECLARATION tier with a non-null proof (`OperandBinder`,
+  `DeclaredNullity`), a currency the walk does not carry; its overlap with the walk is the node-kind dispatch alone.
+  All-rules and the thread-safety score unchanged on the four trees — branch `feat/infra-B4b`

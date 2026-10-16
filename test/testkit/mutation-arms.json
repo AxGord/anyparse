@@ -20443,8 +20443,8 @@
 			"name": "M-TS-BINDER-TYPE",
 			"type": "anyparse.check.FieldWrites",
 			"method": "typeOf",
-			"find": "return declaredType(file, source, fn, node) ?? captureOf(file, source, fn, node)?.type;",
-			"replace": "return declaredType(file, source, fn, node);",
+			"find": "return declaredType(file, source, node) ?? captureOf(file, source, fn, node)?.type;",
+			"replace": "return declaredType(file, source, node);",
 			"note": "(precision) a case capture is typed by nothing, so an index write into a Map capture is reflective"
 		},
 		{
