@@ -12,6 +12,7 @@ import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.NominalTypes;
 import anyparse.query.OccurrenceScan;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
@@ -338,7 +339,7 @@ final class JoinArrayPushes implements Check {
 	private static function collectMatches(
 		plugin: GrammarPlugin, source: String, seams: Seams, symbols: () -> Null<SymbolIndex>, writes: () -> FieldWriteIndex
 	): Array<Match> {
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final root: QueryNode = tree;
 		var purity: Null<PurityCtx> = null;

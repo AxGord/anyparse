@@ -474,7 +474,7 @@ final class NewFile {
 		final ifaceModule: Null<String> = spec.ifaceModule;
 		if (ifaceSimple == null || ifaceSource == null || ifaceModule == null) return null;
 
-		final tree: Null<QueryNode> = try plugin.parseFile(ifaceSource) catch (exception: Exception) null;
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, ifaceSource);
 		if (tree == null) return 'could not parse the resolved interface source';
 		final iface: Null<QueryNode> = findInterface(tree, ifaceSimple);
 		if (iface == null) return 'no interface "$ifaceSimple" in the resolved source';

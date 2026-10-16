@@ -7,6 +7,7 @@ import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
@@ -157,7 +158,7 @@ final class UnnecessarySwitch implements Check {
 
 	/** Every degenerate switch in `source`, in document order, each with the edit that unwraps it. */
 	private static function candidates(seams: Seams, plugin: GrammarPlugin, source: String, index: SymbolIndex): Array<Candidate> {
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final purity: Null<PurityCtx> = PurityScan.contextOf(plugin, source, tree, index);
 		if (purity == null) return [];

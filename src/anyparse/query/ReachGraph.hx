@@ -18,7 +18,6 @@ import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using Lambda;
 
@@ -162,7 +161,7 @@ final class ReachGraph {
 		final held: Null<QueryNode> = _graph?.treeOf(file);
 		if (held != null) return held;
 		final source: Null<String> = _scope.sources[file];
-		return source == null ? null : try _scope.plugin.parseFile(source) catch (exception: Exception) null;
+		return source == null ? null : ParseGate.parseOrNull(_scope.plugin, source);
 	}
 
 	/**
@@ -1199,7 +1198,7 @@ final class ReachGraph {
 		var tree: Null<QueryNode> = _graph?.treeOf(r.file);
 		if (tree == null && source != null) {
 			final text: String = source;
-			tree = try _scope.plugin.parseFile(text) catch (exception: Exception) null;
+			tree = ParseGate.parseOrNull(_scope.plugin, text);
 		}
 		final kinds: Array<String> = (_scope.shape.functionKinds ?? []).concat(_scope.shape.fieldDeclKinds ?? []);
 		var member: Null<QueryNode> = null;

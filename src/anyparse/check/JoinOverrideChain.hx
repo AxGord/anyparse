@@ -11,6 +11,7 @@ import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
 import anyparse.query.SourceComments;
@@ -177,7 +178,7 @@ final class JoinOverrideChain implements Check implements DefaultOff {
 
 	/** Every collapsible run in `source`, in document order, each with the edit that collapses it. */
 	private static function matches(source: String, plugin: GrammarPlugin, s: Seams, index: SymbolIndex): Array<Match> {
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final purity: Null<PurityCtx> = PurityScan.contextOf(plugin, source, tree, index);
 		if (purity == null) return [];

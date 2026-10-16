@@ -13,6 +13,7 @@ import anyparse.query.NamingPolicy.HoistedConstant;
 import anyparse.query.NamingPolicy.NamingRule;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.OccurrenceScan;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
@@ -168,7 +169,7 @@ final class FieldInitInConstructor implements Check implements DefaultOff {
 		// One insertion PER OFFSET, not per constant: two zero-width edits sharing an offset are
 		// contained in one another, so `dropContainedEdits` would keep exactly one of them.
 		final inserts: Array<{ at: Int, text: String }> = [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		final file: String = violations.length == 0 ? '' : violations[0].file;
 		// The inherited-member proof walks the FULL supertype closure, so it resolves against the
 		// plugin's resolution scope (report files UNION the configured libraries) when there is one —

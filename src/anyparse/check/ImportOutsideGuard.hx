@@ -6,6 +6,7 @@ import anyparse.query.ImportBindings;
 import anyparse.query.ImportOrder;
 import anyparse.query.IndexScope;
 import anyparse.query.ModuleScan;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -129,7 +130,7 @@ final class ImportOutsideGuard implements Check {
 	 * refuse.
 	 */
 	private static function guardedModule(source: String, plugin: GrammarPlugin): Null<{ tree: QueryNode, guard: QueryNode }> {
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return null;
 		final guard: Null<QueryNode> = UsingScan.headerOf(tree, source, plugin).guard;
 		return guard == null ? null : { tree: tree, guard: guard };

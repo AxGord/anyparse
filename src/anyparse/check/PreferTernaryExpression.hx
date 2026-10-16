@@ -5,6 +5,7 @@ import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.ParenGuard;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
@@ -162,7 +163,7 @@ final class PreferTernaryExpression implements Check {
 	 * `run` and `fix` both go through it, so neither can encode a gate the other misses.
 	 */
 	private static function collect(plugin: GrammarPlugin, source: String, s: Seams, resolveIndex: () -> Null<SymbolIndex>): Array<Match> {
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final root: QueryNode = tree;
 		final out: Array<Match> = [];

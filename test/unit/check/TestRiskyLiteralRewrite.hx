@@ -1,9 +1,9 @@
 package unit.check;
 
 import anyparse.check.Check;
-import anyparse.check.CheckScan;
 import anyparse.check.Severity;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -35,7 +35,7 @@ final class TestRiskyLiteralRewrite implements Check implements RiskyFix {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final out: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			final node: Null<QueryNode> = firstLiteralOne(tree);
 			if (node == null) continue;

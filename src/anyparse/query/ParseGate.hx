@@ -12,9 +12,10 @@ enum ParseOutcome {
 }
 
 /**
- * The parse gate of the refactoring ops: parse a source and, when it does not parse, answer the
- * ONE diagnostic every op words the same way — `<label> does not parse: <reason>`, where a grammar
- * `ParseError` reads as itself (its position included) and any other exception by its message.
+ * The ONE parse gate. `parse` / `refusal` answer the diagnostic every refactoring op words the same
+ * way — `<label> does not parse: <reason>`, where a grammar `ParseError` reads as itself (its position
+ * included) and any other exception by its message; `parseOrNull` drops the reason for a caller that
+ * only skips an unparsable source.
  *
  * Both ends of an op go through it. The INPUT gate (`$file` as the label) refuses a source the op
  * cannot read; the OUTPUT gate (`rewritten $file`) is the atomicity check every span-splice op runs
@@ -36,6 +37,15 @@ final class ParseGate {
 			case Parsed(_): null;
 			case Unparsed(message): message;
 		};
+	}
+
+	/**
+	 * The tree of `source`, or null on any parse failure — the tolerant parse of a caller that skips an
+	 * unparsable source unworded: every check's `run` / `fix` (`Check` forbids throwing on unparseable
+	 * input), the call graph, the CLI.
+	 */
+	public static function parseOrNull(plugin: GrammarPlugin, source: String): Null<QueryNode> {
+		return try plugin.parseFile(source) catch (exception: Exception) null;
 	}
 
 }

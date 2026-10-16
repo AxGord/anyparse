@@ -11,6 +11,7 @@ import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.NominalTypes;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -214,7 +215,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		for (entry in files) {
 			final options: Options = readOptions(LintConfig.resolveWith(_resolveConfig, entry.file));
 			if (options.modules.length == 0) continue;
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			for (candidate in candidates(tree, entry.source, entry.file, seams, options, plugin, symbols)) violations.push({
 				file: entry.file,

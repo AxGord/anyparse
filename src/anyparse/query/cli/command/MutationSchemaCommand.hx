@@ -108,7 +108,7 @@ final class MutationSchemaCommand implements CliCommand {
 	/** `file`'s arms composed into it (written over it when anything changed) and each arm's placement line into `placed`. */
 	private static function composeFile(plugin: GrammarPlugin, file: String, arms: Array<SchemaArm>, placed: Map<Int, String>): Void {
 		final source: String = CliIo.readFile(file);
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: Exception) null;
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) {
 			for (arm in arms) placed[arm.id] = 'skip\t$file\tthe file does not parse';
 			return;

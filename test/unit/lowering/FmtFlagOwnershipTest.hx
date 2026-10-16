@@ -1,7 +1,7 @@
 package unit.lowering;
 
-import anyparse.check.CheckScan;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 import sys.FileSystem;
@@ -230,7 +230,7 @@ class FmtFlagOwnershipTest extends Test {
 			final module: String = entry.substring(0, entry.length - '.hx'.length);
 			if (module == READER_MODULE) continue;
 			final raw: String = File.getContent('$root/$MACRO_DIR/$entry');
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, raw);
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, raw);
 			Assert.notNull(tree, '$MACRO_DIR/$entry no longer parses - the scan below would silently report it as naming nothing');
 			if (tree == null) continue;
 			final found: Array<String> = [];

@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.QuotationAware;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 
@@ -111,7 +112,7 @@ final class ReificationScan {
 	/** The spans of every `opaqueKinds` subtree in `source`; empty when it does not parse. */
 	private static function spansOf(plugin: GrammarPlugin, source: String, opaqueKinds: Array<String>): Array<Span> {
 		final out: Array<Span> = [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree != null) collectSpans(tree, opaqueKinds, out);
 		return out;
 	}

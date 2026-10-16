@@ -7,6 +7,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
 import anyparse.query.ModuleScan;
 import anyparse.query.OccurrenceScan;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
@@ -197,7 +198,7 @@ final class UnusedLocal implements Check implements VolatileMessage {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final edits: Array<{ span: Span, text: String }> = [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return edits;
 
 		final shape: RefShape = plugin.refShape();

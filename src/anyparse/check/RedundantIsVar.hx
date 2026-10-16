@@ -13,6 +13,7 @@ import anyparse.query.IndexScope;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberKinds;
 import anyparse.query.MemberWriteScan;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.RawSourceScan;
 import anyparse.query.SourceText;
@@ -201,7 +202,7 @@ final class RedundantIsVar implements Check implements DefaultOff implements Ris
 	private static function storageReachable(ctx: Ctx, name: String): Bool {
 		final accessors: Array<String> = [CheckScan.GET_PREFIX + name, CheckScan.SET_PREFIX + name];
 		for (entry in ctx.scope) if (RawSourceScan.mentionsWord(entry.source, name)) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(ctx.plugin, entry.source);
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(ctx.plugin, entry.source);
 			if (tree == null) return true;
 			if (CondRegionScan.opaqueCondRegionMentioning(tree, entry.source, name, ctx.shape) != null) return true;
 			if (touchesStorage(tree, entry.source, name, accessors, ctx)) return true;

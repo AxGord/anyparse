@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
@@ -60,7 +61,7 @@ final class PreferSingleQuotes implements Check {
 		for (entry in files) {
 			// A project checkstyle `StringLiteral.policy` that prefers double quotes disables this check.
 			if (plugin.checkOverrides(entry.file)?.preferSingleQuotesEnabled == false) continue;
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			if (tree != null) walk(violations, entry.file, entry.source, tree, support);
 		}
 		return violations;

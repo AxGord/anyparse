@@ -2,7 +2,6 @@ package anyparse.query;
 
 import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.runtime.Span;
-import haxe.Exception;
 import haxe.ds.Either;
 
 /** One scope file parsed once: its path, source and parse tree. */
@@ -38,14 +37,11 @@ final class ScopeFiles {
 	public static function parseScope(scopeFiles: Array<{ file: String, source: String }>, plugin: GrammarPlugin, op: String): ScopeParse {
 		final parsed: Array<ParsedFile> = [];
 		final skipped: Array<String> = [];
-		for (entry in scopeFiles) {
-			final tree: Null<QueryNode> = try plugin.parseFile(entry.source) catch (exception: Exception) null;
-			if (tree == null) {
+		for (entry in scopeFiles) switch ParseGate.parse(plugin, entry.source, entry.file) {
+			case Parsed(tree):
+				parsed.push({ file: entry.file, source: entry.source, tree: tree });
+			case Unparsed(_):
 				skipped.push(entry.file);
-			} else {
-				final parsedTree: QueryNode = tree;
-				parsed.push({ file: entry.file, source: entry.source, tree: parsedTree });
-			}
 		}
 		return { parsed: parsed, error: unparsedRefusal(op, skipped) };
 	}

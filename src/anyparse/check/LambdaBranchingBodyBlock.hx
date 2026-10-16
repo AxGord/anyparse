@@ -5,12 +5,11 @@ import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using StringTools;
 
@@ -151,7 +150,7 @@ final class LambdaBranchingBodyBlock implements Check {
 
 	/** Every brace-less branching lambda body in `source`, as the span the wrap replaces. */
 	private static function collect(plugin: GrammarPlugin, source: String, s: Seams): Array<Span> {
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final out: Array<Span> = [];
 		walk(tree, s, out, false);

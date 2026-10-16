@@ -13,6 +13,7 @@ import anyparse.query.NamingPolicy.NamedDecl;
 import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.NominalTypes;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
 import anyparse.query.ShapeVocab;
@@ -136,15 +137,6 @@ final class CheckScan {
 	}
 
 	/**
-	 * Parse `source` with `plugin`, or null on any parse failure — the tolerant
-	 * parse every check's `run` / `fix` opens with (`Check` forbids throwing on
-	 * unparseable input, so both failure modes collapse to null).
-	 */
-	public static function parseOrNull(plugin: GrammarPlugin, source: String): Null<QueryNode> {
-		return try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
-	}
-
-	/**
 	 * Every entry of `files` that PARSES, with its tree — the loop a whole-scope check opens with,
 	 * here once instead of once per check. An unparseable file is dropped silently, which is the
 	 * `Check` contract: a check must be as tolerant as `SymbolIndex.build`.
@@ -154,7 +146,7 @@ final class CheckScan {
 	): Array<{ file: String, source: String, tree: QueryNode }> {
 		final out: Array<{ file: String, source: String, tree: QueryNode }> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> = parseOrNull(plugin, entry.source);
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			if (tree != null) out.push({ file: entry.file, source: entry.source, tree: tree });
 		}
 		return out;
@@ -213,7 +205,7 @@ final class CheckScan {
 		plugin: GrammarPlugin, source: String, violations: Array<Violation>,
 		collect: (tree:QueryNode, source:String) -> Array<{ span: Span, text: String }>
 	): Array<{ span: Span, text: String }> {
-		final tree: Null<QueryNode> = parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final textBySpan: Map<String, String> = [];
 		for (m in collect(tree, source)) textBySpan['${m.span.from}:${m.span.to}'] = m.text;
@@ -226,7 +218,7 @@ final class CheckScan {
 	 * as "nothing to do here" rather than as an error.
 	 */
 	public static function nodesByKind(plugin: GrammarPlugin, source: String, kinds: Array<String>): Map<String, QueryNode> {
-		final tree: Null<QueryNode> = parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		final byKey: Map<String, QueryNode> = [];
 		if (tree != null) MemberKinds.indexNodesByKind(tree, kinds, byKey);
 		return byKey;
@@ -272,7 +264,7 @@ final class CheckScan {
 	public static function simplifyConditionFixes(
 		plugin: GrammarPlugin, source: String, violations: Array<Violation>, flaggedKinds: Array<String>, alwaysTrueOf: (QueryNode) -> Bool
 	): Array<{ span: Span, text: String }> {
-		final tree: Null<QueryNode> = parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final shape: RefShape = plugin.refShape();
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
@@ -578,7 +570,7 @@ final class CheckScan {
 			if (span != null && deletable.contains(spanKey(v.file, span))) wanted.push('${span.from}:${span.to}');
 		}
 		if (wanted.length == 0) return [];
-		final tree: Null<QueryNode> = parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final edits: Array<{ span: Span, text: String }> = [];
 		final regions: Array<LexRegion> = plugin.lexicalRegions(source);

@@ -15,6 +15,7 @@ import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberKinds;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.OccurrenceScan;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -212,7 +213,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		final sourceByFile: Map<String, String> = [for (f in files) f.file => f.source];
 		final out: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			// Core-API bail: every collapse this rule makes rewrites the property's accessor pair,
 			// and a `@:coreApi` type's members are pinned to the access of a core type in the
 			// compiler's std path: `(get, null)` -> `(default, null)` on `sys.ssl.Certificate.commonName`
@@ -322,7 +323,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		if (span == null) return null;
 		final source: Null<String> = sourceByFile[v.file];
 		if (source == null) return null;
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return null;
 		final maxBypass: Int = LintConfig.resolveWith(_resolveConfig, v.file)
 			.intOption('trivial-getter', 'maxBypassWrites') ?? DEFAULT_MAX_BYPASS_WRITES;

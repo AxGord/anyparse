@@ -802,7 +802,7 @@ class PreferInlineCheckTest extends Test {
 	/**
 	 * Assert that `blockedSource` yields no finding — with a plain control class appended to the same
 	 * module, asserted to STILL be flagged. A bare `Assert.equals(0, …)` cannot tell "the gate
-	 * blocked it" from "nothing parsed": `CheckScan.parseOrNull` returns null on a parse failure and
+	 * blocked it" from "nothing parsed": `ParseGate.parseOrNull` returns null on a parse failure and
 	 * `run` then yields `[]`, so a future grammar regression on `#if`-prefixed or argument-carrying
 	 * metadata would silently turn every skip fixture into a no-op asserting nothing.
 	 */

@@ -5,6 +5,7 @@ import anyparse.query.CondRegionScan;
 import anyparse.query.FieldRefScan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.OccurrenceScan;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
@@ -143,7 +144,7 @@ final class BackingFieldRefs {
 			final source: Null<String> = sourceByFile[file];
 			if (source == null) return null;
 			final src: String = source;
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, src);
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, src);
 			if (tree == null) return null;
 			final refs: Null<{ renameEdits: Array<{ span: Span, text: String }>, excludeSpans: Array<Span> }> = collectSubtypeFieldRefs(
 				tree, field, owner, propName, index, src, file == ownerFile, shape

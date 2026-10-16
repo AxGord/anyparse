@@ -304,27 +304,6 @@ final class SourceText {
 		return false;
 	}
 
-	/** The index of the LAST occurrence of `name` in `head` that stands alone as an identifier, or -1. */
-	public static function lastStandaloneIdentIndex(head: String, name: String): Int {
-		var at: Int = head.lastIndexOf(name);
-		while (at >= 0) {
-			if (standaloneIdentAt(head, name, at)) return at;
-			if (at == 0) return -1;
-			at = head.lastIndexOf(name, at - 1);
-		}
-		return -1;
-	}
-
-	/** The index of the FIRST occurrence of `name` in `head` that stands alone as an identifier, or -1. */
-	public static function firstStandaloneIdentIndex(head: String, name: String): Int {
-		var at: Int = head.indexOf(name);
-		while (at >= 0) {
-			if (standaloneIdentAt(head, name, at)) return at;
-			at = head.indexOf(name, at + 1);
-		}
-		return -1;
-	}
-
 	/** Index of the first character of the line containing `i` (just past the preceding newline). */
 	public static function lineStartOf(source: String, i: Int): Int {
 		final nl: Int = source.lastIndexOf('\n', i);

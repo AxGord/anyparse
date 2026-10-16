@@ -2354,7 +2354,7 @@ final class MemberReach {
 	private function bodySpans(g: CallGraph, node: FnNode): Null<Array<Occurrence>> {
 		final declared: Array<FnDeclaration> = g.declarationsOf(node.id);
 		if (declared.length > 0)
-			return _scope.facts?.typedElsewhere(g, node, declared) == true ? null : [for (d in declared) { file: d.file, span: d.span }];
+			return _scope.facts?.typedElsewhere(node, declared) == true ? null : [for (d in declared) { file: d.file, span: d.span }];
 		final type: Null<String> = node.typeName;
 		final files: Array<String> = g.initializerFiles(node.id);
 		final isStatic: Bool = node.name == CallGraph.STATIC_INIT_NAME;

@@ -5,6 +5,7 @@ import anyparse.check.Check.Violation;
 import anyparse.query.BoolExprShape;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceText;
 import anyparse.query.StdResolver;
@@ -143,7 +144,7 @@ final class PreferTypedThrow implements Check implements DefaultOff {
 		if (seams == null) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			walkThrows(tree, seams, false, (literal, _) -> {
 				final span: Null<Span> = literal.span;

@@ -11,6 +11,7 @@ import anyparse.query.MemberKinds;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.NominalTypes;
 import anyparse.query.OccurrenceScan;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
@@ -105,7 +106,7 @@ final class ScratchField implements Check implements RiskyFix implements OracleR
 		var surface: Null<ReflectionSurface> = null;
 		final out: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			for (c in candidatesIn(tree, entry.source, seams)) {
 				final index: Null<SymbolIndex> = lazyIndex();
@@ -142,7 +143,7 @@ final class ScratchField implements Check implements RiskyFix implements OracleR
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final resolved: Null<Seams> = seamsOf(plugin.refShape());
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (resolved == null || tree == null) return [];
 		final seams: Seams = resolved;
 		final typed: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
@@ -557,7 +558,7 @@ final class ScratchField implements Check implements RiskyFix implements OracleR
 		if (decl == null || decl.type.isExtern || !classKinds.contains(decl.type.kind)) return null;
 		if (index.traits.transitivelyCarriesBuildMacro(decl.type.name, decl.file.file)) return null;
 		final source: Null<String> = index.sourceOf(decl.file.file);
-		final tree: Null<QueryNode> = source == null ? null : CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = source == null ? null : ParseGate.parseOrNull(plugin, source);
 		if (source == null || tree == null) return null;
 		final at: Span = decl.type.span;
 		final className: String = decl.type.name;

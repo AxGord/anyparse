@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -50,7 +51,7 @@ final class ModifierOrder implements Check {
 			// A project checkstyle `ModifierOrder.modifiers` overrides the grammar's default ranking.
 			final order: Array<String> = plugin.checkOverrides(entry.file)?.modifierOrder ?? defaultOrder;
 			if (order.length == 0) continue;
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			if (tree != null) walk(violations, entry.file, tree, ranking(shape, order, members));
 		}
 		return violations;

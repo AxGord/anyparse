@@ -4,6 +4,7 @@ import anyparse.query.BoolExprShape;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberWriteScan;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -163,7 +164,7 @@ final class MapValueScan {
 		final scope: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? report;
 		return !scope.text.hasAccessGrant(owner) && !scope.subtypes.subtypeDeclMatches(owner, name, (subtype, src, span, redeclares) -> {
 			if (redeclares || MemberWriteScan.carriesBuildMacro(src)) return true;
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, src);
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, src);
 			return tree == null || !subtreeSafe(tree, null, -1, null, -1, name, span.from, span.to, seams);
 		});
 	}

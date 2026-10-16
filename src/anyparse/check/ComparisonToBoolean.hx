@@ -8,6 +8,7 @@ import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.NodeShape;
 import anyparse.query.NominalTypes;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoMemo;
@@ -168,7 +169,7 @@ final class ComparisonToBoolean implements Check {
 		final seams: Null<Seams> = resolveSeams(plugin);
 		if (seams == null || violations.length == 0) return [];
 		final maybeEqKind: Null<String> = seams.eqKind;
-		final maybeRoot: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final maybeRoot: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (maybeEqKind == null || maybeRoot == null) return [];
 		final eqKind: String = maybeEqKind;
 		final root: QueryNode = maybeRoot;

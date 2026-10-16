@@ -1,12 +1,12 @@
 package unit.check;
 
 import anyparse.check.Check.Violation;
-import anyparse.check.CheckScan;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.TailMerge;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
+import anyparse.query.ParseGate;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
 import utest.Assert;
@@ -48,7 +48,7 @@ class TailMergeCheckTest extends Test {
 			+ '\t\t\t\twork2();\n\t\t\t}\n\t\t}\n\t\thelper(v);\n\t\treturn v;\n\t}\n}',
 			result
 		);
-		Assert.notNull(CheckScan.parseOrNull(new HaxeQueryPlugin(), result));
+		Assert.notNull(ParseGate.parseOrNull(new HaxeQueryPlugin(), result));
 	}
 
 	public function testSingleBranchIfFlagged(): Void {

@@ -6,6 +6,7 @@ import anyparse.check.Check.VolatileMessage;
 import anyparse.query.CondRegionScan;
 import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
@@ -344,7 +345,7 @@ final class CommentWidth implements Check implements DefaultOff implements Volat
 
 	/** Every raw `#if` region of `source`, or null when it does not parse — the fail-closed answer. */
 	private static function opaqueRegionsOf(source: String, plugin: GrammarPlugin): Null<Array<Span>> {
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		return tree == null ? null : [
 			for (region in CondRegionScan.opaqueCondRegions(tree, source, plugin.refShape())) region.region
 		];
