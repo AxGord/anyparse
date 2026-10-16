@@ -1,7 +1,11 @@
 package anyparse.check;
 
 import anyparse.core.PhaseTimings;
+
+using StringTools;
+
 #if nodejs
+import haxe.DynamicAccess;
 import js.node.ChildProcess.ChildProcessSpawnSyncResult;
 #end
 
@@ -50,12 +54,31 @@ import js.node.ChildProcess.ChildProcessSpawnSyncResult;
  * exercised in practice. `sys.io.Process` has no working directory, so the native
  * branch runs in the PROCESS cwd; `honoursCwd` states that, and a caller for which it
  * matters checks it rather than discovering the mismatch as wrong output.
+ *
+ * ## Environment
+ *
+ * Every `haxe` the oracle starts — a compile, a `--wait` server, a `--connect` client, the jobs of the process driver — runs
+ * in `childEnv`: this process's environment with the OCaml collector tuned (`gcSetting`, `DEFAULT_GC` unless
+ * `APQ_ORACLE_GC` says otherwise), which buys compile time with a few hundred MB more per process — what
+ * `parallelismFor` budgets. Nothing else is: the analyzer stays on in every spawn, because each of them reads the
+ * compile's status or streams and the analyzer is one of the compiler phases that writes them (`docs/decisions.md`,
+ * "O1"). The native `sys` branch runs in this process's environment as it is.
  */
 @:nullSafety(Strict)
 final class HaxeSpawn {
 
 	/** The failure sentence of a job `runAll` never started because an earlier one failed under `stopAfterFailure`. */
 	public static inline final NOT_STARTED: String = 'not started — an earlier job failed';
+
+	/**
+	 * The OCaml runtime parameters every `haxe` the oracle starts runs under unless `APQ_ORACLE_GC` names others: a
+	 * 16M-word minor heap and a `space_overhead` of 400, which collect a compile's short-lived allocations far less
+	 * often. The collector's settings change when memory is reclaimed, never what the compiler answers.
+	 */
+	public static inline final DEFAULT_GC: String = 's=16M,o=400';
+
+	/** The `APQ_ORACLE_GC` value that leaves every compile under the runtime's own collector settings. */
+	public static inline final GC_OFF: String = 'off';
 
 	/** Bytes a job's JSON-escaped streams may add over its own output cap in the parallel driver's reply. */
 	private static inline final OVERHEAD: Int = 1024 * 1024;
@@ -68,6 +91,13 @@ final class HaxeSpawn {
 	 * plus headroom for everything else the machine runs.
 	 */
 	private static inline final COMPILE_MEMORY: Float = 2.0 * 1024 * 1024 * 1024;
+
+	/**
+	 * What a compile under a tuned collector (`gcSetting`) is budgeted on top of `COMPILE_MEMORY`: the larger minor heap
+	 * and the later major collections of `DEFAULT_GC` raise a large project's peak by a few hundred megabytes.
+	 */
+	private static inline final GC_MEMORY: Float = 0.5 * 1024 * 1024 * 1024;
+
 
 	/**
 	 * The node program a `tethered` job runs under, between the driver and the job: `argv[1]` is `1` when the tether leads
@@ -174,7 +204,7 @@ final class HaxeSpawn {
 	 */
 	public static function run(args: Array<String>, cwd: Null<String>, maxBuffer: Int): HaxeRun {
 		#if nodejs
-		final options: Dynamic = { encoding: 'utf8', maxBuffer: maxBuffer };
+		final options: Dynamic = { encoding: 'utf8', maxBuffer: maxBuffer, env: childEnv() };
 		if (cwd != null) Reflect.setField(options, 'cwd', cwd);
 		final res: ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync('haxe', args, options);
 		final out: String = streamText(res.stdout);
@@ -243,6 +273,8 @@ final class HaxeSpawn {
 		final options: Dynamic = {
 			encoding: 'utf8',
 			input: haxe.Json.stringify(jobs),
+			// the driver hands its own environment to every job it starts
+			env: childEnv(),
 			maxBuffer: (maxBuffer + OVERHEAD) * jobs.length
 		};
 		final res: ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync(
@@ -341,7 +373,7 @@ final class HaxeSpawn {
 		final declared: Null<Int> = Std.parseInt(Sys.getEnv('APQ_ORACLE_PARALLEL') ?? '');
 		if (declared != null && declared > 0) return declared;
 		#if nodejs
-		return parallelismFor(js.node.Os.cpus().length, js.node.Os.totalmem());
+		return parallelismFor(js.node.Os.cpus().length, js.node.Os.totalmem(), gcSetting() != null);
 		#else
 		return 1;
 		#end
@@ -349,13 +381,55 @@ final class HaxeSpawn {
 
 	/**
 	 * The bound for a machine of `cores` cores and `memory` bytes: every core but one, at most as many compiles as the
-	 * memory holds at `COMPILE_MEMORY` each, at most `MAX_PARALLEL`, never fewer than one. A compile is one
-	 * single-threaded process the caller only waits on, so the cores are the budget; the knee of anyparse's own process
-	 * fan-out (`docs/design-principles.md` § 2) is about parse processes sharing a tree, not about compiles.
+	 * memory holds at `COMPILE_MEMORY` each — plus `GC_MEMORY` when the compiles run under a `tunedCollector` — at most
+	 * `MAX_PARALLEL`, never fewer than one. A compile is one single-threaded process the caller only waits on, so the
+	 * cores are the budget; the knee of anyparse's own process fan-out (`docs/design-principles.md` § 2) is about parse
+	 * processes sharing a tree, not about compiles.
 	 */
-	public static function parallelismFor(cores: Int, memory: Float): Int {
-		return Std.int(Math.max(1, Math.min(MAX_PARALLEL, Math.min(cores - 1, memory / COMPILE_MEMORY))));
+	public static function parallelismFor(cores: Int, memory: Float, tunedCollector: Bool): Int {
+		final perCompile: Float = COMPILE_MEMORY + (tunedCollector ? GC_MEMORY : 0);
+		return Std.int(Math.max(1, Math.min(MAX_PARALLEL, Math.min(cores - 1, memory / perCompile))));
 	}
+
+	/**
+	 * The `OCAMLRUNPARAM` a `haxe` the oracle starts runs under (`gcParams` of this process's environment), or null for
+	 * none: `APQ_ORACLE_GC` (unset or empty: `DEFAULT_GC`; `off`: none of ours) over the `OCAMLRUNPARAM` — or, when that
+	 * is unset, the `CAMLRUNPARAM` the OCaml runtime falls back to — this process inherited.
+	 */
+	public static function gcSetting(): Null<String> {
+		return gcParams(Sys.getEnv('APQ_ORACLE_GC'), Sys.getEnv('OCAMLRUNPARAM') ?? Sys.getEnv('CAMLRUNPARAM'));
+	}
+
+	/**
+	 * The runtime parameters `declared` (an `APQ_ORACLE_GC` value) and `inherited` (the caller's own `OCAMLRUNPARAM`)
+	 * make, null for none. Every parameter `inherited` sets stays as it is, and ours join it only for the parameters it
+	 * does not set: a caller who tuned the runtime for a reason of their own keeps it. Pure.
+	 */
+	public static function gcParams(declared: Null<String>, inherited: Null<String>): Null<String> {
+		final asked: String = declared == null || declared.trim() == '' ? DEFAULT_GC : declared.trim();
+		final own: Array<String> = asked == GC_OFF ? [] : [for (p in asked.split(',')) if (p.trim() != '') p.trim()];
+		final kept: String = inherited == null ? '' : inherited.trim();
+		final taken: Array<String> = [for (p in kept.split(',')) if (p.trim() != '') paramName(p)];
+		final added: Array<String> = [for (p in own) if (!taken.contains(paramName(p))) p];
+		final all: Array<String> = (kept == '' ? [] : [kept]).concat(added);
+		return all.length == 0 ? null : all.join(',');
+	}
+
+	#if nodejs
+	/**
+	 * The environment every `haxe` the oracle starts runs in — this process's own, with `OCAMLRUNPARAM` set to
+	 * `gcSetting` when that names any parameter. The process driver of `runAll` runs under it and hands it to every job,
+	 * so a generate command's shell gets it too: the collector's settings change no output, only when memory is reclaimed.
+	 */
+	public static function childEnv(): DynamicAccess<Null<String>> {
+		final own: DynamicAccess<String> = js.Node.process.env;
+		final env: DynamicAccess<Null<String>> = {};
+		for (key in own.keys()) env[key] = own[key];
+		final gc: Null<String> = gcSetting();
+		if (gc != null) env['OCAMLRUNPARAM'] = gc;
+		return env;
+	}
+	#end
 
 	/**
 	 * `jobs` one after another, and — with `stop` — every job after the first failure answered `NOT_STARTED`: the
@@ -391,6 +465,12 @@ final class HaxeSpawn {
 			runs.push(result);
 		}
 		return runs;
+	}
+
+	/** The name of one `OCAMLRUNPARAM` parameter `param` (`s` of `s=16M`, `b` of the flag `b`). */
+	private static inline function paramName(param: String): String {
+		final eq: Int = param.indexOf('=');
+		return (eq < 0 ? param : param.substr(0, eq)).trim();
 	}
 
 	#if nodejs

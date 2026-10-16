@@ -16,16 +16,16 @@ final class OracleParallelismTest extends Test {
 	@:pin('control')
 	@:killer('M-ORACLE-PARALLEL-HALF-THE-CORES')
 	public function testTheBudgetIsEveryCoreButOne(): Void {
-		Assert.equals(15, HaxeSpawn.parallelismFor(16, 64 * GIB), 'sixteen cores and room for all: fifteen compiles');
-		Assert.equals(3, HaxeSpawn.parallelismFor(4, 64 * GIB));
+		Assert.equals(15, HaxeSpawn.parallelismFor(16, 64 * GIB, false), 'sixteen cores and room for all: fifteen compiles');
+		Assert.equals(3, HaxeSpawn.parallelismFor(4, 64 * GIB, false));
 	}
 
 	@:pin('guard')
 	public function testMemoryTheCapAndOneBoundTheBudget(): Void {
-		Assert.equals(4, HaxeSpawn.parallelismFor(16, 8 * GIB), 'eight GiB hold four compiles at two each');
-		Assert.equals(16, HaxeSpawn.parallelismFor(64, 256 * GIB), 'never past the cap');
-		Assert.equals(1, HaxeSpawn.parallelismFor(1, 64 * GIB), 'never fewer than one');
-		Assert.equals(1, HaxeSpawn.parallelismFor(8, GIB), 'never fewer than one, whatever the memory');
+		Assert.equals(4, HaxeSpawn.parallelismFor(16, 8 * GIB, false), 'eight GiB hold four compiles at two each');
+		Assert.equals(16, HaxeSpawn.parallelismFor(64, 256 * GIB, false), 'never past the cap');
+		Assert.equals(1, HaxeSpawn.parallelismFor(1, 64 * GIB, false), 'never fewer than one');
+		Assert.equals(1, HaxeSpawn.parallelismFor(8, GIB, false), 'never fewer than one, whatever the memory');
 	}
 
 }
