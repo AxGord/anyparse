@@ -74,12 +74,15 @@ final class HxValueIfBracketHugSliceTest extends Test {
 		+ '\t\t\t\tif (i + d >= 0)\n\t\t\t\t\te[i + d]\n\t\t\t\telse\n\t\t\t\t\te[i + d + e.length]\n\t\t\t]\n\t\t] else\n'
 		+ '\t\t\tthis;\n\t}\n}';
 
-	/** Without the key the outer `[` drops to its own line and every level below it shifts one step in. */
+	/**
+	 * Without the key the outer `[` drops to its own line and every level below it shifts one step in, and each
+	 * `else` goes back to the `if`'s indent: the `]` it follows closes one level deeper, so there is no `] else`.
+	 */
 	private static final HOR_UNHUGGED: String = 'class C {\n\tpublic function hor(d: Int): Matrix<T> {\n\t\treturn if (d > 0)\n'
 		+ '\t\t\t[ for (e in this)\n\t\t\t\t[ for (i in 0...e.length)\n\t\t\t\t\tif (i + d < e.length)\n\t\t\t\t\t\te[i + d]\n'
-		+ '\t\t\t\t\telse\n\t\t\t\t\t\te[i + d - e.length]\n\t\t\t\t]\n\t\t\t] else if (d < 0)\n\t\t\t[ for (e in this)\n'
+		+ '\t\t\t\t\telse\n\t\t\t\t\t\te[i + d - e.length]\n\t\t\t\t]\n\t\t\t]\n\t\telse if (d < 0)\n\t\t\t[ for (e in this)\n'
 		+ '\t\t\t\t[ for (i in 0...e.length)\n\t\t\t\t\tif (i + d >= 0)\n\t\t\t\t\t\te[i + d]\n\t\t\t\t\telse\n'
-		+ '\t\t\t\t\t\te[i + d + e.length]\n\t\t\t\t]\n\t\t\t] else\n\t\t\tthis;\n\t}\n}';
+		+ '\t\t\t\t\t\te[i + d + e.length]\n\t\t\t\t]\n\t\t\t]\n\t\telse\n\t\t\tthis;\n\t}\n}';
 
 	/** The reported `Matrix.cut` — two nested comprehensions that fit one line. */
 	private static final CUT_FLAT: String =
@@ -94,10 +97,10 @@ final class HxValueIfBracketHugSliceTest extends Test {
 		+ '\t\t\tfirstLongElementNameHereThatIsQuiteLongIndeed,\n\t\t\tsecondLongElementNameHereThatIsAlsoLongIndeed\n'
 		+ '\t\t] else [];\n\t}\n}';
 
-	/** …and unhugged: the `[` and the `]` each take a line of their own and the `else` trails the closer. */
+	/** …and unhugged: the `[` and the `]` each take a line of their own, and so does the `else`, at the `if`'s indent. */
 	private static final ARRAY_UNHUGGED: String = 'class C {\n\tpublic function b(c: Bool): Array<String> {\n\t\treturn if (c)\n'
 		+ '\t\t\t[\n\t\t\t\tfirstLongElementNameHereThatIsQuiteLongIndeed,\n'
-		+ '\t\t\t\tsecondLongElementNameHereThatIsAlsoLongIndeed\n\t\t\t] else\n\t\t\t[];\n\t}\n}';
+		+ '\t\t\t\tsecondLongElementNameHereThatIsAlsoLongIndeed\n\t\t\t]\n\t\telse\n\t\t\t[];\n\t}\n}';
 
 	/**
 	 * The same literal branch written with BOTH seams broken in source — `[` on a line of its own,
@@ -195,7 +198,7 @@ final class HxValueIfBracketHugSliceTest extends Test {
 		Assert.equals(ARRAY_HUGGED, HxWriteFixture.triviaWrite(ARRAY_FLAT, CFG_ON));
 	}
 
-	/** VACUITY GUARD for the literal arm: without the key it keeps the base `[` / `] else` / `[];` shape. */
+	/** VACUITY GUARD for the literal arm: without the key it keeps the `next` shape, `[` / `]` / `else` / `[];`. */
 	public function testAnArrayLiteralBranchWithoutTheKeyKeepsItsOwnLine(): Void {
 		Assert.equals(ARRAY_UNHUGGED, HxWriteFixture.triviaWrite(ARRAY_FLAT, CFG_OFF));
 	}

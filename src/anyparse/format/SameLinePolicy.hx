@@ -17,10 +17,9 @@ package anyparse.format;
  * as the preceding token when that token closes a CURLY block
  * (`} else {`), because a block owns its own indent and its `}` is a
  * complete close. After any other shape the `@:fmt(shapeAware)` sites
- * keep the answer they already gave — a forced break after a non-block
- * sibling, and `Keep` (source-preserving) after a BRACKET block, since a
- * bracket body hugging its head is house style owned by a config flag,
- * not a structural fact. A caller with no shape information degrades it
+ * force a break — after a non-block sibling and after a BRACKET block alike, since a bracket body is
+ * placed like any value (its `]` closes one indent deeper under `next`) and hugging its head is house
+ * style owned by a config flag, not a structural fact. A caller with no shape information degrades it
  * to `Same`. Produced by a config fanout (Haxe: `sameLine.expressionIf:
  * next`), never by a JSON value of its own.
  *

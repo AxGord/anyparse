@@ -595,7 +595,23 @@
 			"type": "anyparse.macro.WriterPolicyLowering",
 			"method": "sameLineNonCurlyBlockPolicySwitch",
 			"force": "sameLinePolicySwitch(optFlag, keepExpr)",
-			"note": "a `[ … ]` block ctor separator falls back to the curly switch, where `SameOnBlock` matches no case and lands on the default space - so a bracket branch loses the source break the policy promised it"
+			"note": "a `[ … ]` block ctor separator falls back to the curly switch, where `SameOnBlock` matches no case and lands on the default space - so a bracket branch the `next` layout moved to its own line glues its `else` to the `]` (`[1] else if (b)` / `[] else`)"
+		},
+		{
+			"name": "M-VIF-SEAM-BRACKET-REFUSED",
+			"type": "anyparse.macro.WriterFieldSepLowering",
+			"method": "valueIfFitSeam",
+			"find": "collectCurlyBlockCtorPatterns(ctx.ctorPat, prevBody.typePath)",
+			"replace": "collectBlockCtorPatterns(ctx.ctorPat, prevBody.typePath)",
+			"note": "the `expressionIfFit` soft pre-`else` seam is refused after a `[ … ]` branch as well as after a curly one, so a fitting bracket chain written as the ladder can never collapse onto one line"
+		},
+		{
+			"name": "M-VIF-SEAM-GLUE-BLIND",
+			"type": "anyparse.macro.WriterFieldSepLowering",
+			"method": "valueIfFitSeam",
+			"find": "final fitGate: Expr = glueTest == null ? macro _vifFit : macro (_vifFit && !$glueTest);",
+			"replace": "final fitGate: Expr = macro _vifFit;",
+			"note": "the `expressionIfFit` soft pre-`else` seam ignores the bracket hug, so a `]` the knob glues to its `else` is split onto two lines whenever the fit group breaks"
 		},
 		{
 			"name": "M-NEWLINE-SIGNALS-NONE",

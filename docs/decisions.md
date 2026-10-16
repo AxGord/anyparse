@@ -274,6 +274,11 @@ decided the question; it may not become a record of runs.
   kept that break forever while its statement twin joined to `} else {`; mapping it onto a plain
   `Same` instead glues a bracket-closed branch (`[] else {`); `next` maps to `SameOnBlock`, which
   is `Same` only after a CURLY close — `8e7b149e`
+- `SameOnBlock` answering a BRACKET close from the source's `Keep` slot → the `]` of a branch the
+  `next` layout had moved to its own line came back glued to a flat source's `else`
+  (`[1] else if (b)` / `[] else`) and broken after a broken one; it now breaks like every non-curly
+  close, and `expressionIfFit`'s soft pre-`else` seam is refused after a CURLY close only (and after
+  a `]` the bracket knob glues), since the refusal exists for the `} else` glue — N4
 - deriving the Haxe lexical-region scan from a full PARSE → refused permanently: the scan is
   handed raw source with no promise it parses, and a parsed tree carries no node for a string
   literal in a `#if` condition, a `#error` message or a quoted object key — an unmasked region

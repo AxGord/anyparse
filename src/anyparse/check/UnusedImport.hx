@@ -275,10 +275,12 @@ final class UnusedImport implements Check {
 	private static function readerScans(info: FileInfo, sourceOf: Map<String, String>, plugin: GrammarPlugin): Null<Array<FileScan>> {
 		final governance: Null<AmbientImportGovernance> = plugin.ambientImportGovernance(info.file);
 		return if (governance == null)
-			[scanOf(info.file, sourceOf[info.file] ?? '', plugin, info.imports)] else if (governance.bounded)
+			[scanOf(info.file, sourceOf[info.file] ?? '', plugin, info.imports)]
+		else if (governance.bounded)
 			[
 				for (governed in governance.governs) scanOf(governed.file, governed.source, plugin, [])
-			] else
+			]
+		else
 			null;
 	}
 

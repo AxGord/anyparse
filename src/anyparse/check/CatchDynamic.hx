@@ -421,7 +421,8 @@ final class CatchDynamic implements Check implements ConfigAware implements Vers
 		if (bareEdit != null) return [bareEdit];
 		final unusedEdit: Null<{ span: Span, text: String }> = swapEdit(node, source, catchAll, exText, flagged);
 		return if (unusedEdit != null)
-			[unusedEdit] else if (fixLogging)
+			[unusedEdit]
+		else if (fixLogging)
 			loggingSwapEdits(node, source, catchAll, exText, flagged, callKind, fieldKind, identKind)
 		else
 			[];

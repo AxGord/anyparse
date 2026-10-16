@@ -160,23 +160,27 @@ final class WriterPolicyLowering {
 	 * ω-same-on-block — the sibling of `sameLinePolicySwitch` for a
 	 * `@:fmt(shapeAware)` site whose preceding sibling is a block ctor that
 	 * is NOT a curly one (a `[ … ]` list ctor). The only difference is where
-	 * `SameOnBlock` lands: here it routes to `keepExpr` instead of falling
+	 * `SameOnBlock` lands: here it routes to the hardline instead of falling
 	 * through the default to a plain space, because the policy's cuddle
-	 * promise is about a `}` close. A `]` close stays exactly where the
-	 * source put it — gluing it is house style, owned by the opt-in
-	 * `@:fmt(bracketBodyGlueIfFlag(...))` knob, which is layered OUTSIDE
-	 * this separator and therefore still wins when it is set.
+	 * promise is about a `}` close. A curly block always hugs its head, so its
+	 * `}` sits in the keyword's column; a bracket branch is placed by the body
+	 * policy like any value, which under `next` puts it on its own line one
+	 * indent deeper, so its `]` is never where the keyword belongs. Gluing a
+	 * `]` is house style, owned by the opt-in `@:fmt(bracketBodyGlueIfFlag(...))`
+	 * knob (which hugs the `[` to its head as well), layered OUTSIDE this
+	 * separator and therefore still winning when it is set.
 	 *
-	 * Without this arm the whole `SameOnBlock` fanout is measurably too
-	 * broad: mapping `sameLine.expressionIf: next` onto a plain `Same` moves
-	 * files that should not move, and most of them read WORSE — `[] else {`
-	 * and `['--code', staged]; else if (…)`, an `else` glued to a list-literal
-	 * branch that had been on its own line.
+	 * This arm used to route `SameOnBlock` to `keepExpr`, the source's own
+	 * break slot, so a source typed flat came back as `[1] else if (b)` /
+	 * `[] else` — the `else` glued to a close the writer had itself moved — and
+	 * one written with the break kept it: the layout followed how the source
+	 * was typed. Mapping `next` onto a plain `Same` is no better: it glues
+	 * `[] else {` and `['--code', staged]; else if (…)` everywhere.
 	 */
 	private static function sameLineNonCurlyBlockPolicySwitch(optFlag: Expr, keepExpr: Expr): Expr {
 		return buildPolicySwitch(['anyparse', 'format', 'SameLinePolicy'], optFlag, [
-			{ values: ['Next'], expr: macro _dhl() },
-			{ values: ['Keep', 'SameOnBlock'], expr: keepExpr }
+			{ values: ['Next', 'SameOnBlock'], expr: macro _dhl() },
+			{ values: ['Keep'], expr: keepExpr }
 		], macro _dt(' '));
 	}
 

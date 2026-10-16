@@ -21,10 +21,8 @@ import utest.Test;
  * outlives everything — and the comment called true shape-aware dispatch
  * "deferred until a fixture surfaces that the source-preserving mapping
  * mishits". This is that fixture. `next` now maps to `SameOnBlock`, which the
- * shape-aware separator answers per DELIMITER: a curly close cuddles, a
- * bracket close keeps its source shape (its glue is
- * `expressionIfWithBrackets`), and a non-block branch keeps the forced
- * break it already had.
+ * shape-aware separator answers per DELIMITER: a curly close cuddles, while a bracket close (its glue is
+ * `expressionIfWithBrackets`) and a non-block branch keep the forced break before `else` (`HxValueIfBracketElseBreakSliceTest`).
  *
  * The cheaper-looking fix is refuted by the tree, not by argument: mapping `next` onto a plain `Same` moved more anyparse
  * files than the report named and made some of them WORSE — `[] else {` and `['--code', staged]; else if (…)`, an `else`
@@ -139,7 +137,7 @@ final class HxValueIfCurlyElseJoinSliceTest extends Test {
 		Assert.equals(OBJ, HxWriteFixture.triviaWrite(OBJ, CFG_NEXT));
 	}
 
-	/** A `[ … ]` branch keeps the SOURCE shape: gluing a `]` is `expressionIfWithBrackets`, not this policy. */
+	/** A `[ … ]` branch keeps its break before `else`: gluing a `]` is `expressionIfWithBrackets`, not this policy. */
 	@:pin('control')
 	@:killer('M-EXPR-ELSE-PLAIN-SAME')
 	@:killer('M-NONCURLY-SAME-DROP')
