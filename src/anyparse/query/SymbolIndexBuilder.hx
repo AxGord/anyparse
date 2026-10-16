@@ -5,6 +5,7 @@ import anyparse.query.GrammarPlugin.AmbientImports;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefKind;
+import anyparse.query.SpanTypeInfoProvider.SpanTypeInfo;
 import anyparse.query.SymbolIndex.AmbientImportGroup;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ImportInfo;
@@ -164,6 +165,30 @@ final class SymbolIndexBuilder {
 		}
 		attachAmbientImports(infos, plugin, shape, memberSeams, abstractKinds, provider);
 		return { files: infos, skipped: skipped, sources: sources };
+	}
+
+	/**
+	 * The `FileInfo` of `file` read off `root`, a root of `provider` — typically its declarations-only parse
+	 * (`ParsedRootProvider.parseDeclarationsRoot`), whose function bodies are empty: what `extract` gives for the file
+	 * alone, ambient imports included, since nothing it records is read from a body. Null when `root` is null (the
+	 * source does not parse). The ONE reader of a module's declarations outside an index (`IndexScope.declarationsOf`).
+	 */
+	public static function declarationsFromRoot(
+		file: String, source: String, root: Null<Any>, provider: ParsedRootProvider, plugin: GrammarPlugin
+	): Null<FileInfo> {
+		if (root == null) return null;
+		final tree: Null<QueryNode> = try provider.treeFromRoot(root, source, false) catch (_: Exception) null;
+		if (tree == null) return null;
+		final maps: SpanTypeInfo = provider.spanTypeInfoFromRoot(root, source);
+		final shape: RefShape = plugin.refShape();
+		final abstractKinds: Array<String> = shape.underlyingThisTypeKinds ?? [];
+		final memberSeams: MemberSeams = memberSeamsOf(shape);
+		final info: FileInfo = extractFileInfo(
+			file, source, tree, maps.propertyAccessors, maps.propertyWriteAccessors, maps.returnTypes, maps.declaredTypeSources,
+			maps.typeParamNames, shape, memberSeams, abstractKinds, plugin.typeSyntax
+		);
+		attachAmbientImports([info], plugin, shape, memberSeams, abstractKinds, plugin is TypeInfoProvider ? cast plugin : null);
+		return info;
 	}
 
 	/**

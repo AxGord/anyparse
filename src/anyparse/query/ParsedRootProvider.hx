@@ -29,6 +29,14 @@ interface ParsedRootProvider {
 	/** Parse `source` into the grammar's root value, or null when it does not parse. */
 	public function parseRoot(source: String): Null<Any>;
 
+	/**
+	 * Parse `source` DECLARATIONS-ONLY (`anyparse.runtime.BodySkip`): the root `parseRoot` gives with every skimmable
+	 * body left empty — every declaration, member signature and initializer as a full parse reads it, at a fraction of
+	 * the cost. Null when it does not parse. Projected by the same three methods; what it answers about a body is
+	 * nothing, so it is for a reader of declarations only (`SymbolIndexBuilder.declarationsFromRoot`).
+	 */
+	public function parseDeclarationsRoot(source: String): Null<Any>;
+
 	/** The `parseFile` / `parseFileTypeRefs` projection of an already-parsed root. Throws when `root` is null. */
 	public function treeFromRoot(root: Null<Any>, source: String, withTypeRefs: Bool): QueryNode;
 

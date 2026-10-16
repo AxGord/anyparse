@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.check.ReflectionMemo;
 import anyparse.query.ReachLiveness.ReachBuilds;
+import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 
 /**
@@ -59,6 +60,13 @@ interface SymbolIndexHost {
 	 * does not hold.
 	 */
 	function moduleTypesInScope(module: String, name: String): Null<Array<TypeDeclInfo>>;
+
+	/**
+	 * The declarations of the module file `file` (text `source`), read declarations-only and memoised per file for the run
+	 * (`IndexScope.declarationsOf`); null when it does not parse. A file whose full parse the run already holds is read off
+	 * that one.
+	 */
+	function declarationsOf(file: String, source: String): Null<FileInfo>;
 
 	/**
 	 * The resolution scope's RAW sources — report files UNION the library roots — or null when no

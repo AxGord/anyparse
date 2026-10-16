@@ -21697,6 +21697,53 @@
 			"find": "return resolutionIndexOf(plugin) ?? report(files, plugin);",
 			"replace": "return resolutionIndexOf(plugin) ?? SymbolIndex.build(files, plugin);",
 			"note": "the resolution question without a scope builds a second report index instead of sharing the memoised one"
+		},
+		{
+			"name": "M-SKIM-GAPS-COUNTED",
+			"type": "anyparse.runtime.BodySkip",
+			"method": "closeAt",
+			"find": "if (gap < _gaps.length && i >= _gaps[gap].from) {",
+			"replace": "if (false) {",
+			"note": "a brace inside a string, a comment or a regex counts, so a skipped body ends at a quoted `}`"
+		},
+		{
+			"name": "M-SKIM-NEVER",
+			"type": "anyparse.runtime.BodySkip",
+			"method": "closeAt",
+			"force": "pos",
+			"note": "no body is ever skipped: the declarations read is a full parse, and a body the grammar cannot read hides the module's declarations"
+		},
+		{
+			"name": "M-SKIM-BRANCH-DEPTH",
+			"type": "anyparse.runtime.BodySkip",
+			"method": "closeAt",
+			"find": "if (opened.length == 0 || opened[opened.length - 1] != depth) return pos;",
+			"replace": "if (opened.length == 0) return pos;",
+			"note": "a directive branch that does not return to the depth its region opened at is balanced across branches, so a body whose branches each open a brace ends past its own close"
+		},
+		{
+			"name": "M-SKIM-REGION-LEFT-OPEN",
+			"type": "anyparse.runtime.BodySkip",
+			"method": "closeAt",
+			"find": "if (depth == 0) return opened.length == 0 ? i : pos;",
+			"replace": "if (depth == 0) return i;",
+			"note": "a body may end inside a directive region it opened, so the members after it are read as part of the region"
+		},
+		{
+			"name": "M-SKIM-OUTER-REGION",
+			"type": "anyparse.runtime.BodySkip",
+			"method": "closeAt",
+			"find": "if (opened.length == 0 || opened[opened.length - 1] != depth) return pos;",
+			"replace": "if (opened.length > 0 && opened[opened.length - 1] != depth) return pos;",
+			"note": "a directive of a region opened before the body is taken for one of the body's own"
+		},
+		{
+			"name": "M-SCOPE-UNPARSED-UNSPELLED",
+			"type": "anyparse.query.CachingGrammarPlugin",
+			"method": "moduleTypesInScope",
+			"find": "if (!rooted && entry.source.indexOf(name) < 0) {",
+			"replace": "if (false) {",
+			"note": "a library module that does not parse is unknown even for a name its text never spells, so any import of one makes every name unknown"
 		}
 	]
 }

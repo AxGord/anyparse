@@ -1,5 +1,7 @@
 package anyparse.query;
 
+import anyparse.query.SymbolIndex.FileInfo;
+
 /**
  * Which `SymbolIndex` (and `FieldWriteIndex`) a question asks, and the ONE place outside the run host
  * (`CachingGrammarPlugin`, the `SymbolIndexHost`) that builds one. Every rule, op and query asks here
@@ -196,6 +198,22 @@ final class IndexScope {
 	 */
 	public static function resolutionWrites(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): FieldWriteIndex {
 		return fieldWriteIndexOf(plugin) ?? reportWrites(files, plugin);
+	}
+
+	/**
+	 * The declarations of the module file `file` (text `source`) that no index of the run holds — what a name binding asks
+	 * of a library or std module it meets through an import: read DECLARATIONS-ONLY and memoised per file on a host
+	 * (`SymbolIndexHost.declarationsOf`), off the plugin's declarations parse otherwise, off a full single-file index for a
+	 * plugin that has none. Null when the source does not parse.
+	 */
+	public static function declarationsOf(file: String, source: String, plugin: GrammarPlugin): Null<FileInfo> {
+		final host: Null<SymbolIndexHost> = hostOf(plugin);
+		if (host != null) return host.declarationsOf(file, source);
+		if (plugin is ParsedRootProvider) {
+			final provider: ParsedRootProvider = cast plugin;
+			return SymbolIndexBuilder.declarationsFromRoot(file, source, provider.parseDeclarationsRoot(source), provider, plugin);
+		}
+		return over([{ file: file, source: source }], plugin).fileInfo(file);
 	}
 
 	/** `plugin` as the run's index host, or null for a bare plugin. */

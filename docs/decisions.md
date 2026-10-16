@@ -2776,3 +2776,17 @@ decided the question; it may not become a record of runs.
   each ONE declaration, resolved where written). The graph's generics table moved into the graph family
   (`TypeParamTable` → `CallGraphGenerics`); `ReflectiveReach` still asks it for the arguments a subtype's chain passes
   (`argumentsFor`), the one question no shared layer answers yet — branch `feat/infra-B3`
+- a name binding learns which types an imported library or std module declares by parsing that module whole (B3: 170
+  modules, 2.7 MB per TM run, +0.8 s of `--rule thread-safety`), and the substring pre-filter in front of it ("parse
+  only a file that spells the name") filtered none of them out → a DECLARATIONS-ONLY read through the grammar: the
+  span parser with a `BodySkip` jumps each `@:skimmable` function body (`HxFnBlock.stmts`) from `{` to its matching
+  `}` over the grammar's own non-code regions (`lexicalRegions`) and directive marks (`CondDirectives.skipMarks`), and
+  reads it element by element wherever the balance is not proven (a directive branch not back at its region's depth,
+  a region opened in the body still open at its close, a directive of an outer region, no close). No keyword scanner
+  of its own: the delimiters are the field's `@:lead` / `@:trail`, the vocabulary `RefShape`'s. One reader for every
+  consumer of a module's declarations outside the index (`IndexScope.declarationsOf` → `SymbolIndexHost.
+  declarationsOf`, memoised per file, off the run's full root when it already holds one; `StdTypes` and
+  `moduleTypesInScope`); `DeclarationsReadTest` pins it equal to the full read on every `src/anyparse/query` source.
+  Two answers change, both toward the compiler: a module whose BODY the grammar cannot read still declares its types
+  (a body declares none), and a scope file at `a/b/C.hx` whose package is not `a.b` is no longer the module `a.b.C` for
+  a name it never spells either — branch `feat/infra-B4`

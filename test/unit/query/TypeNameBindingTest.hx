@@ -212,6 +212,37 @@ class TypeNameBindingTest extends Test {
 	}
 
 	@:pin('control')
+	@:killer('M-SKIM-NEVER')
+	public function testALibraryModuleWhoseBodyDoesNotParseStillDeclaresItsTypes(): Void {
+		// The scope's module is read declarations-only: a body the grammar cannot read is never read, so the sub-type `X`
+		// it declares outranks the package's own, as the compiler has it.
+		final project: Array<{ file: String, source: String }> = [
+			{ file: 'p/X.hx', source: 'package p;\n\nclass X {}\n' },
+			{ file: 'p/Main.hx', source: 'package p;\n\nimport lib.Pair;\n\nclass Main {}\n' }
+		];
+		final library: Array<{ file: String, source: String }> = [
+			{ file: 'lib/Pair.hx', source: 'package lib;\n\nclass Pair {\n\tfunction f() {\n\t\treturn 1 +;\n\t}\n}\n\nclass X {}\n' }
+		];
+		final index: SymbolIndex = IndexScope.report(project, QueryTestHelpers.projectPlugin(project, library));
+		Assert.equals('Free', tierText(index, 'X', 'p/Main.hx'), '`lib.Pair` declares an `X` past a body nothing reads');
+	}
+
+	@:pin('control')
+	@:killer('M-SCOPE-UNPARSED-UNSPELLED')
+	public function testALibraryModuleThatDoesNotParseDeclaresNoTypeItNeverSpells(): Void {
+		final project: Array<{ file: String, source: String }> = [
+			{ file: 'p/X.hx', source: 'package p;\n\nclass X {}\n' },
+			{ file: 'p/Main.hx', source: 'package p;\n\nimport lib.Pair;\nimport lib.Odd;\n\nclass Main {}\n' }
+		];
+		final library: Array<{ file: String, source: String }> = [
+			{ file: 'lib/Pair.hx', source: 'package lib;\n\nclass Pair {\n\tvar ;\n}\n' },
+			{ file: 'lib/Odd.hx', source: 'package lib;\n\nclass Odd {\n\tvar ;\n}\n' }
+		];
+		final index: SymbolIndex = IndexScope.report(project, QueryTestHelpers.projectPlugin(project, library));
+		Assert.equals('p/X.hx#X', tierText(index, 'X', 'p/Main.hx'), 'neither unparsed module spells `X`, so neither declares it');
+	}
+
+	@:pin('control')
 	@:killer('M-BINDING-GUARDED-OTHER-BUILD')
 	public function testAGuardedImportBindsWhereTheOtherBuildProvablyBindsNothing(): Void {
 		// The scope READS the toplevel module `T` and finds no type `T` in it, so a build without the import binds nothing.

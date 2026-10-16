@@ -944,6 +944,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.CrossRenameMemberSliceTest',
 		'unit.query.CrossRenameSliceTest',
 		'unit.query.DeclarationQueriesTest',
+		'unit.query.DeclarationsReadTest',
 		'unit.query.DeclaredNullityTest',
 		'unit.query.DeleteBlankLineSliceTest',
 		'unit.query.DocOwnerGuardSliceTest',
@@ -3251,6 +3252,14 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.DeclarationQueriesTest#testASupertypeThatMayDeclareTheMemberIsNamed :: control :: '
 				+ 'M-SEAL-AMBIGUOUS,M-SEAL-UNRESOLVED-IFACE,M-SEAL-DECLARING-SUPER',
 			'unit.query.DeclarationQueriesTest#testAnAliasIsFollowedThroughOneDeclarationAHop :: control :: M-ALIAS-SINGLE-DECL',
+			'unit.query.DeclarationsReadTest#testABalancedDirectiveRegionIsJumpedOver :: control :: M-SKIM-NEVER',
+			'unit.query.DeclarationsReadTest#testABodyIsJumpedToItsMatchingCloseOverEveryNonCodeRegion :: control :: M-SKIM-GAPS-COUNTED',
+			'unit.query.DeclarationsReadTest#testABodyTheGrammarCannotReadDoesNotHideTheDeclarations :: control :: M-SKIM-NEVER',
+			'unit.query.DeclarationsReadTest#testABranchThatDoesNotReturnToItsDepthIsNotSkipped :: control :: M-SKIM-BRANCH-DEPTH',
+			'unit.query.DeclarationsReadTest#testADirectiveOfARegionOpenedOutsideIsNotSkipped :: control :: M-SKIM-OUTER-REGION',
+			'unit.query.DeclarationsReadTest#testARegionStillOpenAtTheCloseIsNotSkipped :: control :: M-SKIM-REGION-LEFT-OPEN',
+			'unit.query.DeclarationsReadTest#testAnUnclosedBodyIsNotSkipped :: guard :: ',
+			'unit.query.DeclarationsReadTest#testTheDeclarationsReadAgreesWithTheFullReadOnEverySource :: guard :: ',
 			'unit.query.DeclaredNullityTest#testAbstractOverClassIsProven :: control :: M-NULLITY-HOPS-CUT',
 			'unit.query.DeclaredNullityTest#testAbstractOverNullIsUnproven :: control :: M-NULLITY-UNDERLYING-TRUSTED',
 			'unit.query.DeclaredNullityTest#testAliasOfClassIsProven :: control :: M-NULLITY-HOPS-CUT',
@@ -4092,6 +4101,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.TypeNameBindingTest#testAGuardedImportBindsWhereTheOtherBuildProvablyBindsNothing :: control :: '
 				+ 'M-BINDING-GUARDED-OTHER-BUILD',
 			'unit.query.TypeNameBindingTest#testALibraryModuleIsReadFromTheResolutionScope :: control :: M-SCOPE-MODULE-TYPES-NONE',
+			'unit.query.TypeNameBindingTest#testALibraryModuleThatDoesNotParseDeclaresNoTypeItNeverSpells :: control :: M-SCOPE-UNPARSED-UNSPELLED',
+			'unit.query.TypeNameBindingTest#testALibraryModuleWhoseBodyDoesNotParseStillDeclaresItsTypes :: control :: M-SKIM-NEVER',
 			'unit.query.TypeNameBindingTest#testAParentPackageMainTypeBinds :: control :: M-BINDING-PACKAGE-TIER-CUT',
 			'unit.query.TypeNameBindingTest#testAPrivateTypeIsNeverImportedOrSeenFromItsPackage :: control :: M-BINDING-PRIVATE-VISIBLE',
 			'unit.query.TypeNameBindingTest#testARootModuleIsNotAFileOfItsNameInAnotherPackage :: control :: '
@@ -6882,7 +6893,13 @@ class TestDiscoveryParityTest extends Test {
 			'M-INDEX-MEMO-OUTLIVES-AMBIENT',
 			'M-WRITE-INDEX-MEMO-OFF',
 			'M-INDEXSCOPE-HOST-IGNORED',
-			'M-INDEXSCOPE-RESOLUTION-OWN-BUILD'
+			'M-INDEXSCOPE-RESOLUTION-OWN-BUILD',
+			'M-SKIM-GAPS-COUNTED',
+			'M-SKIM-NEVER',
+			'M-SKIM-BRANCH-DEPTH',
+			'M-SKIM-REGION-LEFT-OPEN',
+			'M-SKIM-OUTER-REGION',
+			'M-SCOPE-UNPARSED-UNSPELLED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

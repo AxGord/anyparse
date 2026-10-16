@@ -760,8 +760,7 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	/**
 	 * The types named `name` the module `module` declares in the resolution scope, or null when the scope holds no file of
 	 * that module or one that does not parse. The module is the file the compiler would load, `<root>/a/b/C.hx` under any
-	 * root, and only a file whose text spells `name` is parsed — the scope is never indexed whole, and an import of a module
-	 * whose source never names the type costs a substring search.
+	 * root, read declarations-only (`declarationsOf`) once per file whatever name is asked — the scope is never indexed whole.
 	 */
 	public function moduleTypesInScope(module: String, name: String): Null<Array<TypeDeclInfo>> {
 		final asked: String = '$module#$name';
@@ -788,19 +787,19 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 			for (entry in named[Path.withoutDirectory(tail)] ?? []) if (entry.file == tail || StringTools.endsWith(entry.file, '/$tail'))
 				entry
 		];
-		// A file at `a/b/C.hx` is that module's own, and one that never spells `name` declares no type of it, so it is not
-		// parsed. A ROOT module's path is its bare file name, which any directory may hold, so its candidates are parsed and
-		// their package read.
+		// Each candidate is read declarations-only, once per file whatever name is asked. A ROOT module's path is its bare file
+		// name, which any directory may hold, so the package read decides; a file at `a/b/C.hx` is that module's own, and one
+		// that does not parse declares no type of `name` only when its text never spells it.
 		final rooted: Bool = module.indexOf('.') < 0;
 		var found: Bool = false;
 		final declared: Array<TypeDeclInfo> = [];
 		for (entry in files) {
-			if (!rooted && entry.source.indexOf(name) < 0) {
-				found = true;
-				continue;
-			}
-			final info: Null<FileInfo> = IndexScope.over([entry], this).fileInfo(entry.file);
+			final info: Null<FileInfo> = declarationsOf(entry.file, entry.source);
 			if (info == null) {
+				if (!rooted && entry.source.indexOf(name) < 0) {
+					found = true;
+					continue;
+				}
 				_scopeModules[asked] = null;
 				return null;
 			}
@@ -813,8 +812,31 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		return types;
 	}
 
+	/**
+	 * `SymbolIndexHost`: the declarations of `file`, read once per file and source — off the full root when this run
+	 * already parsed the source, off the wrapped grammar's declarations-only parse otherwise
+	 * (`ParsedRootProvider.parseDeclarationsRoot`), which jumps over every function body, and off a single-file index for
+	 * a grammar that offers no roots.
+	 */
+	public function declarationsOf(file: String, source: String): Null<FileInfo> {
+		final known: Null<{ source: String, info: Null<FileInfo> }> = _declarations[file];
+		if (known != null && known.source == source) return known.info;
+		final provider: Null<ParsedRootProvider> = _rootProvider;
+		final info: Null<FileInfo> = if (provider == null)
+			IndexScope.over([{ file: file, source: source }], this).fileInfo(file)
+		else {
+			final full: Null<Any> = _rootCache[source];
+			SymbolIndexBuilder.declarationsFromRoot(file, source, full ?? provider.parseDeclarationsRoot(source), provider, this);
+		};
+		_declarations[file] = { source: source, info: info };
+		return info;
+	}
+
 	/** `module#name` -> the types of that name the module declares in the resolution scope, null when unknown (`moduleTypesInScope`). */
 	private final _scopeModules: Map<String, Null<Array<TypeDeclInfo>>> = [];
+
+	/** File path -> the source its declarations were read from and what `declarationsOf` read. */
+	private final _declarations: Map<String, { source: String, info: Null<FileInfo> }> = [];
 
 	/** File name (`Mod.hx`) -> the resolution scope's sources of that name, built on the first `moduleTypesInScope`. */
 	private var _scopeByFileName: Null<Map<String, Array<{ file: String, source: String }>>> = null;

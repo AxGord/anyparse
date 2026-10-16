@@ -238,9 +238,7 @@ final class StdTypes {
 	/** The declarations of the std file `file`, null when it cannot be read or does not parse. */
 	private static function parsed(plugin: GrammarPlugin, file: String): Null<FileInfo> {
 		final source: Null<String> = read(file);
-		return source == null
-			? null
-			: try IndexScope.over([{ file: file, source: source }], plugin).fileInfo(file) catch (exception: Exception) null;
+		return source == null ? null : try IndexScope.declarationsOf(file, source, plugin) catch (exception: Exception) null;
 	}
 
 	/** Module path -> the declarations of a std module outside the core (`moduleTypes`), null for one that cannot be read. */

@@ -29,13 +29,16 @@ package anyparse.grammar.haxe;
  * via the `tailStmtReadsExprPosition` barrier — a statement `if` in the body dispatches
  * through `sameLine.ifBody`, never `expressionIf`, matching the arrow `() -> { ... }` block
  * body and the class-method body. Inert for method / named-decl bodies.
+ *
+ * `@:skimmable` on `stmts`: a declarations-only parse (`anyparse.runtime.BodySkip`, `ParsedRootProvider.parseDeclarationsRoot`) jumps
+ * from `{` to its matching `}` and leaves the list empty - a body declares no type and no member, and bodies are most of a module's text.
  */
 @:peg
 @:fmt(multilineWhenFieldNonEmpty('stmts'))
 typedef HxFnBlock = {
 	@:fmt(emptyCurlyBreak, keepCurlyBlanks, rightCurlyAnonFnOverride('anonFunctionRightCurly'), clearExprPositionNonTail,
 		uniformStmtBlanks, trailSepKeepIf('elementIsConditional_HxStatement'))
-	@:lead('{') @:trail('}') @:trivia
+	@:lead('{') @:trail('}') @:trivia @:skimmable
 	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
 	var stmts: Array<HxStatement>;
 }
