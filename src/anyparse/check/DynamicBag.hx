@@ -5,6 +5,7 @@ import anyparse.check.Check.TypeOracle;
 import anyparse.check.Check.Violation;
 import anyparse.check.DynamicShape.DynCtx;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
 import anyparse.query.TreePath;
@@ -66,7 +67,7 @@ final class DynamicBag {
 	): Array<{ span: Span, text: String }> {
 		final shape: RefShape = plugin.refShape();
 		final dynName: Null<String> = shape.rawDynamicTypeName;
-		final tree: Null<QueryNode> = dynName == null ? null : CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = dynName == null ? null : ParseGate.parseOrNull(plugin, source);
 		if (dynName == null || tree == null) return [];
 		final ctx: DynCtx = DynamicShape.buildCtx(shape, dynName, plugin.typeSyntax);
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);

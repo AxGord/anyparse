@@ -10,6 +10,7 @@ import anyparse.query.Glob;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.NominalTypes;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
@@ -199,7 +200,7 @@ final class OwnedTypes implements Check implements ConfigAware implements FileGa
 			for (name => candidates in scan.spellings)
 				for (hit in Uses.find(name, typeTree, plugin.typeRefShape(), true))
 					for (s in typeSubjectsDenoted(scan, hit.name, candidates)) report(scan, s, hit.span);
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree != null) walk(scan, tree, tree);
 	}
 

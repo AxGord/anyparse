@@ -6,6 +6,7 @@ import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.NominalTypes;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
@@ -185,7 +186,7 @@ final class EmptyCaseArm implements Check {
 
 	/** One file's scan context, or null when `source` does not parse (a check never throws on bad input). */
 	private static function contextOf(scan: Scan, plugin: GrammarPlugin, file: String, source: String, index: SymbolIndex): Null<Ctx> {
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		return tree == null ? null : {
 			scan: scan,
 			root: tree,

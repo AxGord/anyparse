@@ -5,6 +5,7 @@ import anyparse.check.CheckScan.NegationSeams;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.CondRegionScan;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeNameBinding.Tier;
@@ -108,7 +109,7 @@ final class SimplifyNegatedCompound implements Check {
 		if (seams == null) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			// The type resolver walks the whole resolution scope, so it is built only for a file
 			// that actually holds the shape — most files skip it entirely.
 			if (tree == null || !hasShape(tree, seams)) continue;

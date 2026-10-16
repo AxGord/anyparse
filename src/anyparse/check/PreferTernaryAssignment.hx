@@ -7,6 +7,7 @@ import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
 import anyparse.query.ParenGuard;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
@@ -134,7 +135,7 @@ final class PreferTernaryAssignment implements Check {
 				return edit;
 			});
 		final decl: Null<DeclSeams> = DeclFallbackChain.readSeams(plugin, AssignmentTreeHoist.readTreeSeams(plugin.refShape()));
-		final tree: Null<QueryNode> = decl == null ? null : CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = decl == null ? null : ParseGate.parseOrNull(plugin, source);
 		if (decl != null && tree != null) {
 			final byKey: Map<String, GuardedEdit> = [];
 			for (e in declEdits(tree, source, comments, decl)) byKey['${e.key.from}:${e.key.to}'] = e.edit;

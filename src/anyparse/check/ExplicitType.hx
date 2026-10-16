@@ -9,6 +9,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MemberKinds;
 import anyparse.query.OccurrenceScan;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.SourceText;
@@ -127,7 +128,7 @@ final class ExplicitType implements Check implements OracleAssisted {
 		final bodies: Array<String> = shape.functionBodyKinds ?? [];
 		final functions: Array<String> = [for (k in members) if (!fields.contains(k)) k];
 		if (functions.length == 0 || bodies.length == 0 || violations.length == 0) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final printer: TypeRefPrinter = LiteralInfer.printerFor(source, tree, plugin, violations[0].file);
 		final seams: ReturnSeams = {
@@ -673,7 +674,7 @@ final class ExplicitType implements Check implements OracleAssisted {
 	): Null<String> {
 		final provider: Null<TypeInfoProvider> = s.plugin is TypeInfoProvider ? cast s.plugin : null;
 		if (provider == null) return null;
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(s.plugin, src);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(s.plugin, src);
 		if (tree == null) return null;
 		final fn: Null<QueryNode> = memberNamed(tree, typeSpan, method, s.functions);
 		if (fn == null) return null;

@@ -10,6 +10,7 @@ import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.NominalTypes;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
@@ -103,7 +104,7 @@ final class LoopBoundLengthMismatch implements Check implements NoAutofix implem
 		final seams: Seams = resolved;
 		final parsed: Array<{ file: String, source: String, tree: QueryNode }> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			if (tree != null) parsed.push({ file: entry.file, source: entry.source, tree: tree });
 		}
 		final constants: Map<String, Constant> = collectConstants(parsed, seams);

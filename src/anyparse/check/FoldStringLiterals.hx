@@ -8,6 +8,7 @@ import anyparse.check.OperatorSelection.OperatorVerdict;
 import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceText;
 import anyparse.query.StringFold.ConcatSegment;
@@ -301,7 +302,7 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 			final at: Null<Span> = v.span;
 			if (at != null && v.message.indexOf(OperatorGate.REFUSAL) != -1) unproven['${at.from}:${at.to}'] = v;
 		}
-		final tree: Null<QueryNode> = unproven.keys().hasNext() ? CheckScan.parseOrNull(plugin, source) : null;
+		final tree: Null<QueryNode> = unproven.keys().hasNext() ? ParseGate.parseOrNull(plugin, source) : null;
 		final oracle: Null<FactsTypeOracle> = tree == null ? null : FactsTypeOracle.forFix(plugin, file, source);
 		final proven: Null<(QueryNode) -> Bool> = if (oracle == null)
 			null
@@ -1650,7 +1651,7 @@ private class PlanContext {
 		final cached: Null<Array<Span>> = _memberSpans;
 		if (cached != null) return cached;
 		final spans: Array<Span> = [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree != null) collectMembers(tree, spans);
 
 		_memberSpans = spans;

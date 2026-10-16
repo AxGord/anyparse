@@ -11,6 +11,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.NominalTypes;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
@@ -135,7 +136,7 @@ final class TypedEventConstant implements Check implements ConfigAware implement
 		if (types == null) return [];
 		final parsed: Array<Parsed> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			final info: Null<FileInfo> = index.fileInfo(entry.file);
 			if (tree == null || info == null) continue;
 			final parsedTree: QueryNode = tree;
@@ -170,7 +171,7 @@ final class TypedEventConstant implements Check implements ConfigAware implement
 		final file: String = RunScan.oneFile(violations, RULE_ID);
 		final seams: Null<Seams> = readSeams(plugin);
 		final spec: Null<EventSpec> = specFor(file);
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		final resolved: Null<SymbolIndex> = IndexScope.resolutionIndexOf(plugin) ?? index;
 		if (seams == null || spec == null || tree == null || resolved == null) return [];
 		final abstractType: Null<ResolvedType> = ConfiguredTypes.resolve(resolved, spec.typeAbstract);
@@ -241,7 +242,7 @@ final class TypedEventConstant implements Check implements ConfigAware implement
 		if (!seams.abstractKinds.contains(decl.kind) || decl.kind == seams.enumAbstractKind) return false;
 		if (decl.typeParamArity != ABSTRACT_ARITY || decl.underlyingRaw != seams.stringType) return false;
 		final source: Null<String> = index.sourceOf(t.file.file);
-		final tree: Null<QueryNode> = source == null ? null : CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = source == null ? null : ParseGate.parseOrNull(plugin, source);
 		final node: Null<QueryNode> = tree == null ? null : findDecl(tree, decl.kind, decl.name);
 		return node != null && convertsWith(node, FROM_CLAUSE_KIND, seams.stringType) && convertsWith(
 			node, TO_CLAUSE_KIND, seams.stringType

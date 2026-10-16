@@ -29,7 +29,6 @@ import anyparse.query.SourceText;
 import anyparse.query.cli.CliContext;
 import anyparse.query.format.LintFormat;
 import anyparse.query.format.Text;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 import haxe.io.Path;
@@ -1372,8 +1371,7 @@ final class LintCommand implements CliCommand {
 					final span: Null<Span> = v.span;
 					final source: Null<String> = sourceOf[v.file];
 					if (span == null || source == null) return null;
-					final tree: Null<QueryNode> =
-						try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
+					final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 					return tree == null ? null : addresser.addressAt(tree, source, span.from);
 				}, explain));
 			case FORMAT_CHECKSTYLE:

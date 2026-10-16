@@ -24,18 +24,10 @@ import anyparse.query.SymbolIndex.FileInfo;
 final class IndexScope {
 
 	/**
-	 * The report + resolution-scope `SymbolIndex` the plugin host carries — a subtype declared in a
-	 * configured resolution library, or in the implicitly-scoped Haxe std, is indexed there too — or
-	 * null when the plugin is not a resolution host or no scope reached it at all (the caller falls
-	 * back to the report index). The eager counterpart of `lazySymbolIndex`, for a check that already
-	 * holds a report index and only needs to know whether a WIDER one exists:
-	 * `resolutionIndexOf(plugin) ?? index`.
-	 *
-	 * The null return is now the RARE case rather than the default. A `Cli` run reaches it only when
-	 * the project declares no resolution key AND no Haxe std is discoverable — a machine without Haxe,
-	 * or one that declined the std via `APQ_NO_STD` / `"resolutionStd": false`. It is still the plain
-	 * answer for a direct `check.run` with a bare plugin, which is what the unit tests that pin the
-	 * report-only behaviour use.
+	 * The host's report + resolution-scope `SymbolIndex` (a configured library and the implicit std indexed too), or null
+	 * when the plugin is not a resolution host or no scope reached it: a bare plugin (the unit tests pinning report-only
+	 * behaviour), a machine with no discoverable std, a project declining it (`APQ_NO_STD`, `"resolutionStd": false`). The
+	 * eager counterpart of `lazySymbolIndex`, for a check already holding a report index: `resolutionIndexOf(plugin) ?? index`.
 	 */
 	public static inline function resolutionIndexOf(plugin: GrammarPlugin): Null<SymbolIndex> {
 		final host: Null<SymbolIndexHost> = hostOf(plugin);
@@ -43,47 +35,18 @@ final class IndexScope {
 	}
 
 	/**
-	 * The WIDEST index a structural confinement or zero-occurrence proof may ask: the host's
-	 * resolution-scoped index (report UNION the DECLARED library roots) when `plugin` is a
-	 * `SymbolIndexHost` carrying a declared scope, else the report-scoped `index` the caller passed,
-	 * else null (no index reached the call at all — the caller falls back to the single file it holds).
+	 * The WIDEST index a name-keyed confinement or zero-occurrence proof may ask: the host's resolution-scoped index when
+	 * the project DECLARED a scope, else the report-scoped `index` the caller passed, else null (the caller falls back to
+	 * the one file it holds).
 	 *
-	 * Deliberately gated on `hasDeclaredResolutionScope`, NOT on `hasAnyResolutionScope` the way
-	 * `resolutionIndexOf` beside it is. The proofs this index feeds are name-keyed rather than
-	 * type-resolved, so a SIMPLE-NAME coincidence with a std type decides them: an owner whose simple name
-	 * collides with a std type that HAS subtypes reads as unconfined on that coincidence alone. The
-	 * direction is safe — an unconfined member is kept, its rename refused, its parameter left alone — so
-	 * the hazard costs usefulness rather than correctness, which is exactly why it must not happen by
-	 * ACCIDENT. A DECLARED library is a different matter: the project chose it, and a file the run does not
-	 * lint can legitimately be where the reference lives.
-	 *
-	 * Read the gate for what it does and not for what its name suggests, because the obvious reading is
-	 * wrong: it does NOT keep the std out of the returned index. `LintCommand.readResolutionLibrary`
-	 * appends the std to the SAME scope as the declared roots and libs, so a project that declares anything
-	 * gets the std in here too. What the gate refuses is a scope that exists ONLY because a std was
-	 * discovered — a project that declared nothing keeps the report index. The narrower
-	 * `resolutionProjectSourcesOf` below is the seam for a proof that must not admit third-party sources at
-	 * all — a FIELD-WRITE proof, and only that; a name-keyed REFLECTION question does NOT belong there, and
-	 * both such sites go through `check/ReflectionScan.scopeFiles`, which unions `resolutionSourcesOf`
-	 * (`CrossScopeSoundnessTest.placementDivergences` prices the difference: the narrow seam licenses an
-	 * edit the wide one refuses).
-	 *
-	 * What BOTH seams answer on a project declaring `resolutionLibs` and no `resolutionRoots` is nothing
-	 * of the project: `projectRoots` is empty, so the narrow seam returns null, and this one returns
-	 * report ∪ haxelibs ∪ std — a declared scope with not one of the project's own other files in it.
-	 * Neither seam can tell, so the CLI says it instead (`ConfigDisagreement.warnMissingProjectRoots`), and
-	 * `CrossScopeSoundnessTest.LIBS_ONLY_REGRESSIONS` prices what it costs.
-	 *
-	 * FOUR call sites, and they fail DIFFERENTLY on the narrow report index, which is why each asks
-	 * for this one. `UnusedPrivate.run` feeds `violationFor`, which otherwise reports a live member
-	 * dead, and `UnusedPrivate.fix` feeds `referencedElsewhere`, the zero-occurrence proof that lifts a
-	 * `#if`-carrying file's whole-file veto. The other two WRITE: `UnusedParameter.run` raises the
-	 * finding to `Warning`, and `Warning` is what removes a parameter whose cross-file callers the
-	 * proof never saw; `Naming.fix` takes ONE index and feeds it to TWO proofs — `RenameRefusal.of`,
-	 * which otherwise lets a single-file rename orphan a cross-file reference to the old
-	 * name, and `reflectionNamesInOtherFiles`, which otherwise never visits the file whose
-	 * `Reflect.field(x, 'name')` the rename is about to break. That sharing is why the arm cutting the
-	 * confinement half has to cut the ARGUMENT rather than the local.
+	 * Gated on `hasDeclaredResolutionScope`, not on `hasAnyResolutionScope` as `resolutionIndexOf` is: these proofs are
+	 * name-keyed, so a simple-name coincidence with a std type that HAS subtypes decides them, and that must not happen by
+	 * accident. The gate does not keep the std OUT of the index (`LintCommand.readResolutionLibrary` appends it to the
+	 * declared scope); it refuses a scope that exists ONLY because a std was discovered. A field-write proof that must admit
+	 * no third-party source asks the narrower `RefactorSupport.resolutionProjectSourcesOf`; a name-keyed reflection
+	 * question asks `ReflectionScan.scopeFiles` (`CrossScopeSoundnessTest.placementDivergences` prices the difference). On a
+	 * project declaring `resolutionLibs` and no `resolutionRoots` the index holds none of the project's other files, which
+	 * no seam can tell, so the CLI warns (`ConfigDisagreement.warnMissingProjectRoots`).
 	 */
 	public static inline function widestScopeIndex(plugin: GrammarPlugin, ?index: SymbolIndex): Null<SymbolIndex> {
 		final host: Null<SymbolIndexHost> = hostOf(plugin);
@@ -92,32 +55,11 @@ final class IndexScope {
 	}
 
 	/**
-	 * The memoised write index over the RESOLUTION scope (report UNION the library, the library
-	 * half tagged third-party), or null when the plugin hosts no scope at all. Gated on the ANY
-	 * predicate, not the declared one: the library half is exactly what this index is for, and an
-	 * implicit std-only scope still supplies one.
-	 */
-	public static inline function fieldWriteIndexOf(plugin: GrammarPlugin): Null<FieldWriteIndex> {
-		final host: Null<SymbolIndexHost> = hostOf(plugin);
-		return host != null && host.hasAnyResolutionScope() ? host.fieldWriteIndex() : null;
-	}
-
-	/**
-	 * A memoized `SymbolIndex` builder — built at most once, on first call, over `files`. Shared by
-	 * checks whose path-receiver type gate needs cross-file resolution only after cheaper structural
-	 * gates pass, so most runs never trigger the build. When `plugin` is a `SymbolIndexHost` carrying
-	 * ANY resolution scope — a declared one (report files UNION the configured library roots) or the
-	 * implicit std-only one — that host's memoised resolution index is preferred, so the check resolves
-	 * against libraries and std too.
-	 *
-	 * The report-only fallback below it is therefore no longer the ordinary path: on a Haxe-equipped
-	 * machine a `Cli` run always takes the host branch, and the fallback answers only for a direct
-	 * `check.run` with a bare plugin (every unit test that pins report-scope behaviour) or a machine
-	 * with no discoverable std. `prebuilt`, when supplied, is an already-built report-scope index that
-	 * fallback returns as-is instead of building a second one — `prefer-final-field` passes the eager
-	 * index it already holds. It is ignored when a resolution scope is present, since the wider index
-	 * must win; that is not a lost optimisation, because the host's index is a DIFFERENT (wider) index
-	 * than `prebuilt`, so there is no duplicate build to avoid on that path.
+	 * A memoized `SymbolIndex` builder — built at most once, on first call — for a check that needs cross-file resolution
+	 * only after its cheaper structural gates pass, so most runs never build it. A host carrying ANY resolution scope
+	 * answers its memoised resolution index; otherwise (a bare plugin, no discoverable std) the report index over `files`,
+	 * or `prebuilt` as-is when the caller already holds one. `prebuilt` is ignored under a resolution scope: the wider
+	 * index must win, and it is a different index, so no duplicate build is skipped there.
 	 */
 	public static function lazySymbolIndex(
 		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?prebuilt: SymbolIndex
@@ -193,11 +135,14 @@ final class IndexScope {
 	}
 
 	/**
-	 * The RESOLUTION-scope write index (`fieldWriteIndexOf`: report UNION library, the library half
-	 * tagged third-party) when any scope reached the run, else `reportWrites(files)`.
+	 * The memoised write index over the RESOLUTION scope (report UNION the library, the library half tagged third-party)
+	 * when ANY scope reached the run — an implicit std-only one still supplies the library half this index is for — else
+	 * `reportWrites(files)`.
 	 */
 	public static function resolutionWrites(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): FieldWriteIndex {
-		return fieldWriteIndexOf(plugin) ?? reportWrites(files, plugin);
+		final host: Null<SymbolIndexHost> = hostOf(plugin);
+		final wide: Null<FieldWriteIndex> = host != null && host.hasAnyResolutionScope() ? host.fieldWriteIndex() : null;
+		return wide ?? reportWrites(files, plugin);
 	}
 
 	/**

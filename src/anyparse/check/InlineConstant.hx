@@ -7,6 +7,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberWriteScan;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.RawSourceScan;
 import anyparse.query.StringFold.StringFoldSupport;
@@ -208,7 +209,7 @@ final class InlineConstant implements Check {
 		final index: SymbolIndex = IndexScope.report(files, plugin);
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			// Core-API bail: both arms of this rule change a field's PROPERTY ACCESS — `static final`
 			// -> `static inline final`, and `static inline var` -> `static inline final` — and a
 			// `@:coreApi` type's fields are pinned to the access of a core type in the compiler's std

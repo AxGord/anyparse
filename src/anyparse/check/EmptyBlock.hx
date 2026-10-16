@@ -6,6 +6,7 @@ import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
@@ -58,7 +59,7 @@ final class EmptyBlock implements Check {
 		for (entry in files) {
 			// A project checkstyle `EmptyBlock.option` of `empty` (allow empty blocks) disables this check.
 			if (plugin.checkOverrides(entry.file)?.emptyBlockEnabled == false) continue;
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			if (tree != null) walk(violations, entry.file, entry.source, tree, support);
 		}
 		return violations;

@@ -9,7 +9,6 @@ import anyparse.query.NominalTypes.TypingHost;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.TypeSyntax;
 import anyparse.query.ValueNameBinding.ImportedStatics;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
@@ -535,8 +534,7 @@ final class CallGraph {
 		for (entry in files) {
 			final key: String = CallGraphNames.normalizePath(entry.file);
 			if (_entries.exists(key) || skippedFiles.exists(f -> CallGraphNames.normalizePath(f) == key)) continue;
-			final tree: Null<QueryNode> =
-				try _plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(_plugin, entry.source);
 			if (tree == null) {
 				skippedFiles.push(entry.file);
 				continue;
@@ -1262,7 +1260,7 @@ final class CallGraph {
 		}
 
 		// the graph's resolution for the ONE structural walk (`NominalTypes.typeWalk`), set right below `typeSourceOf`'s arms
-		var graphTyping: Null<TypingHost<String, Null<String>>> = null;
+		var graphTyping: Null<TypingHost<Null<String>>> = null;
 		// the bindings whose unannotated type the walk is reading, against a cycle (`TypingHost.reading`)
 		final unannotatedReads: Array<Int> = [];
 
@@ -1274,7 +1272,7 @@ final class CallGraph {
 		 * declared return and a construction. Never an inferred type: an unannotated link answers null.
 		 */
 		function typeSourceOf(exprRaw: QueryNode, currentType: Null<String>): Null<String> {
-			final host: Null<TypingHost<String, Null<String>>> = graphTyping;
+			final host: Null<TypingHost<Null<String>>> = graphTyping;
 			if (host == null) throw new Exception('the graph typing host is set before the walk types anything');
 			return NominalTypes.typeWalk(exprRaw, shape, host, currentType);
 		}

@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.ShapeVocab;
 import anyparse.runtime.Span;
@@ -95,10 +96,10 @@ final class DefiniteAssignmentGuard {
 		final shape: RefShape = plugin.refShape();
 		final vocab: Null<Vocabulary> = vocabulary(shape);
 		if (vocab == null) return null;
-		final before: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final before: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (before == null) return null;
 		final spliced: String = CanonicalEdit.applyEdits(source, edits);
-		final after: Null<QueryNode> = CheckScan.parseOrNull(plugin, spliced);
+		final after: Null<QueryNode> = ParseGate.parseOrNull(plugin, spliced);
 		if (after == null) return null;
 		final stood: Array<String> = [for (had in findings(before, shape, vocab)) had.name];
 		for (hit in findings(after, shape, vocab)) if (!stood.contains(hit.name)) return message(hit, spliced);

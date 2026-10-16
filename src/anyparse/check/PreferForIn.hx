@@ -182,7 +182,7 @@ final class PreferForIn implements Check implements DefaultOff {
 	 * kinds MINUS the conditional-branch projection, which is NOT a scope: a `#if` region does
 	 * not bind names in Haxe, so a declaration inside one stays visible after `#end`, and
 	 * treating the branch as a scope would hide exactly that read. That subtraction is FORWARD
-	 * DEFENCE, not a live path: `CheckScan.parseOrNull` goes through `parseFile`, which does not
+	 * DEFENCE, not a live path: `ParseGate.parseOrNull` goes through `parseFile`, which does not
 	 * project branches (`projectBranchAware` is a separate opt-in entry), so no unit fixture can
 	 * flip it today — the raw `Conditional` kind is not a block kind at all, which is what makes
 	 * `testConditionalRegionIsNotAScope` pass. A grammar with no control-flow support returns an

@@ -2,12 +2,12 @@ package unit.check;
 
 import anyparse.check.Check.GroupedEdit;
 import anyparse.check.Check.Violation;
-import anyparse.check.CheckScan;
 import anyparse.check.LambdaLoopScan;
 import anyparse.check.PreferStaticExtension;
 import anyparse.check.Severity;
 import anyparse.check.UsingScan;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 import utest.Assert;
@@ -150,7 +150,7 @@ class UsingInsertRefusalTest extends Test {
 	/** The header of `SRC`, built the way every rule sharing the seam builds it. */
 	private function headerOf(): UsingHeader {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, SRC);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, SRC);
 		if (tree == null) throw 'the fixture must parse';
 		return UsingScan.headerOf(tree, SRC, plugin);
 	}

@@ -1,7 +1,6 @@
 package anyparse.query.cli.command;
 
 import anyparse.check.Check;
-import anyparse.check.CheckScan;
 import anyparse.check.CompilerDisplayOracle;
 import anyparse.check.CompilerOracle;
 import anyparse.check.CompilerServer;
@@ -21,6 +20,7 @@ import anyparse.query.CompilerFacts;
 import anyparse.query.EditJournal;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.LintFixSafePass;
+import anyparse.query.ParseGate;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 import anyparse.query.ExitCode.*;
@@ -991,7 +991,7 @@ final class LintFixVerify {
 	 */
 	public static function unparseableFiles(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<String> {
 		return [
-			for (entry in files) if (CheckScan.parseOrNull(plugin, entry.source) == null) entry.file
+			for (entry in files) if (ParseGate.parseOrNull(plugin, entry.source) == null) entry.file
 		];
 	}
 

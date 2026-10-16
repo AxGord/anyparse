@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
@@ -200,7 +201,7 @@ final class PreferDocComment implements Check implements DefaultOff {
 		final comments: Array<CommentTok> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
 		if (comments.length == 0) return [];
 		final owned: Array<CommentTok> = [for (tok in comments) if (ownsItsLine(source, tok)) tok];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final anchors: Map<Int, Anchor> = [];
 		collectAnchors(source, tree, seams, new Span(-1, source.length), anchors);

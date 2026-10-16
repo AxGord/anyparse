@@ -1279,7 +1279,7 @@ final class FactsView {
 	 * the node's — each body and overload of the member they type at a range of a file; one a macro placed, at no range,
 	 * is read by its id. False for a nested function, whose enclosing node answers.
 	 */
-	public function typedElsewhere(g: CallGraph, node: FnNode, declared: Array<FnDeclaration>): Bool {
+	public function typedElsewhere(node: FnNode, declared: Array<FnDeclaration>): Bool {
 		final type: Null<String> = node.typeName;
 		final name: Null<String> = node.name;
 		if (type == null || name == null || node.id.indexOf(NESTED_MARK) >= 0) return false;

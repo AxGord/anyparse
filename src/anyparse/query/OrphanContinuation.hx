@@ -67,7 +67,7 @@ final class OrphanContinuation {
 	 */
 	public static function introduced(source: String, result: String, plugin: GrammarPlugin): Null<String> {
 		if (result == source || (plugin.refShape().orphanContinuationKinds ?? []).length == 0) return null;
-		final after: Null<QueryNode> = try plugin.parseFile(result) catch (exception: Exception) null;
+		final after: Null<QueryNode> = ParseGate.parseOrNull(plugin, result);
 		if (after == null) return null;
 		final stranded: Array<QueryNode> = unjustified(after, result, plugin);
 		if (stranded.length == 0) return null;

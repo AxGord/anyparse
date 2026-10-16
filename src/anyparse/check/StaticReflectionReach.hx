@@ -5,6 +5,7 @@ import anyparse.check.ReflectionScan.ScopeFile;
 import anyparse.query.CondRegionScan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.OccurrenceScan;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.RawSourceScan;
 import anyparse.query.RefactorSupport;
@@ -206,7 +207,7 @@ final class StaticReflectionReach {
 		};
 		final scanned: Array<FileScan> = [];
 		for (entry in projectFiles(files, plugin)) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			if (tree == null) {
 				state.escapesAll = true;
 				break;

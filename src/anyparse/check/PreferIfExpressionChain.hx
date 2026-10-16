@@ -9,6 +9,7 @@ import anyparse.query.BoolExprShape;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SourceComments;
@@ -296,7 +297,7 @@ final class PreferIfExpressionChain implements Check {
 	private static function collect(
 		plugin: GrammarPlugin, file: String, source: String, s: Seams, resolveIndex: () -> Null<SymbolIndex>, ?index: SymbolIndex
 	): Array<Match> {
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final out: Array<Match> = [];
 		walk(

@@ -1,11 +1,11 @@
 package unit.check;
 
 import anyparse.check.Check.Violation;
-import anyparse.check.CheckScan;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.SimplifyBooleanTernary;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
@@ -278,7 +278,7 @@ class SimplifyBooleanTernaryCheckTest extends Test {
 	/** `claimedSpans` over `source`, or null after failing the test when the fixture does not parse. */
 	private function claimsOf(source: String): Null<Map<String, Bool>> {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree != null) return SimplifyBooleanTernary.claimedSpans(source, tree, plugin);
 		Assert.fail('the fixture does not parse');
 		return null;

@@ -5,6 +5,7 @@ import anyparse.query.CtorFieldWrite;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.OccurrenceScan;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
 import anyparse.query.SourceText;
@@ -91,7 +92,7 @@ final class PreferFinal implements Check {
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		final abstractKinds: Array<String> = shape.underlyingThisTypeKinds ?? [];
 		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			if (tree != null)
 				checkTree(
 					violations, entry.file, entry.source, tree, shape, scopeKinds, opaqueKinds, mutableKinds, index,

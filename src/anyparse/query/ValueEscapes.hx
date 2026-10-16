@@ -10,7 +10,6 @@ import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using Lambda;
 
@@ -588,7 +587,7 @@ final class ValueEscapes {
 			if (source == null) return false;
 			final text: String = source;
 			if (!producers.exists(p -> RawSourceScan.mentionsWord(text, p))) continue;
-			final tree: Null<QueryNode> = g.treeOf(fi.file) ?? (try _scope.plugin.parseFile(text) catch (exception: Exception) null);
+			final tree: Null<QueryNode> = g.treeOf(fi.file) ?? ParseGate.parseOrNull(_scope.plugin, text);
 			if (tree == null) return false;
 			var ok: Bool = true;
 			function walk(node: QueryNode, parent: Null<QueryNode>, index: Int): Void {

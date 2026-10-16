@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
@@ -147,7 +148,7 @@ final class MisplacedTypeDoc implements Check implements DefaultOff {
 	 * scan (which no ordinary file ever reaches).
 	 */
 	private static function strandedDoc(source: String, plugin: GrammarPlugin, seams: Seams): Null<Stranded> {
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return null;
 		final header: Null<Header> = headerOf(tree, seams);
 		if (header == null || header.decls.length < MIN_HEADER_DECLS) return null;

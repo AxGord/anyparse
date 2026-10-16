@@ -7,6 +7,7 @@ import anyparse.query.CondRegionScan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
 import anyparse.query.StringFold.StringFoldSupport;
@@ -305,7 +306,7 @@ final class SwitchChain {
 	): Array<{ span: Span, text: String }> {
 		final flagged: Array<Int> = RunScan.spanStarts(violations);
 		if (flagged.length == 0) return [];
-		final parsed: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final parsed: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (parsed == null) return [];
 		final tree: QueryNode = parsed;
 		// Every flagged violation names the file `source` came from; gate 10 binds operand types in it.

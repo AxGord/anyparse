@@ -13,6 +13,7 @@ import anyparse.query.MemberKinds;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.NamingPolicy.FrameworkContract;
 import anyparse.query.NamingPolicy.NamingSupport;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.RawSourceScan;
 import anyparse.query.SymbolIndex;
@@ -235,7 +236,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 			branch: MemberBranchSeams
 		}> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			if (tree != null) trees.push({
 				file: entry.file,
 				source: entry.source,
@@ -280,7 +281,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 			if (reflectScanned) return reflectBlocked;
 			reflectScanned = true;
 			for (entry in ReflectionScan.scopeFiles(files, plugin)) {
-				final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+				final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 				// A scope file the parser could not read still spells whatever `Reflect.field` call it
 				// holds, and the narrow scanner above needs a tree. So it degrades to the same
 				// word-boundary mention every skipped-file proof in the check layer reduces to

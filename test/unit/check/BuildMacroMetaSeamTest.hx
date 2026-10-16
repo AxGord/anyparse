@@ -1,11 +1,11 @@
 package unit.check;
 
 import anyparse.check.Check.Violation;
-import anyparse.check.CheckScan;
 import anyparse.check.StaticConstant;
 import anyparse.check.UnusedPrivate;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.MemberWriteScan;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -407,7 +407,7 @@ class BuildMacroMetaSeamTest extends Test {
 	 */
 	private function metaTagLiterals(raw: String): Array<String> {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, raw);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, raw);
 		if (tree == null) return [];
 		final kinds: Array<String> = plugin.refShape().stringLiteralKinds ?? [];
 		final out: Array<String> = [];

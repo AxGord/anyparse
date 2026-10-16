@@ -6,6 +6,7 @@ import anyparse.check.PurityScan.PurityCtx;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SourceComments;
@@ -269,7 +270,7 @@ final class JoinBranchCall implements Check {
 	 * reports nothing rather than hoisting an unproven expression.
 	 */
 	private static function contextOf(plugin: GrammarPlugin, source: String, seams: Seams, symbols: () -> Null<SymbolIndex>): Null<Ctx> {
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		return tree == null
 			? null
 			: ctxOn(plugin, source, tree, SourceComments.collectCommentTokens(plugin.lexicalRegions(source)), seams, symbols);

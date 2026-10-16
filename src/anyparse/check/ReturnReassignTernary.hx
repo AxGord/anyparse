@@ -7,6 +7,7 @@ import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.NodeShape;
 import anyparse.query.ParenGuard;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
 import anyparse.query.ShapeVocab;
@@ -180,7 +181,7 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 
 	/** Every collapsible pair in `source` -- the one traversal `run` and `fix` share. */
 	private static function matchesIn(source: String, plugin: GrammarPlugin, s: Seams): Array<Match> {
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
 		final nestedFnSpans: Array<Span> = [];

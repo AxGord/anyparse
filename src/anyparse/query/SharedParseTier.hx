@@ -2,7 +2,6 @@ package anyparse.query;
 
 import anyparse.query.CachingGrammarPlugin.LibrarySources;
 import anyparse.query.SpanTypeInfoProvider;
-import haxe.Exception;
 
 /**
  * The PROCESS-scoped second tier behind a `CachingGrammarPlugin`'s run-scoped parse caches,
@@ -112,7 +111,7 @@ final class SharedParseTier {
 			// so an already-promoted entry goes through the SERVE branch, the one thing this tier
 			// exists for. Short-circuiting here is what made the serve path deletable with a green
 			// suite: the counters then measured this loop, never the lookup.
-			final tree: Null<QueryNode> = try plugin.parseFile(entry.source) catch (exception: Exception) null;
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			if (tree == null || _parses.exists(entry.source)) continue;
 			_parses[entry.source] = tree;
 			_spans[entry.source] = plugin.spanTypeInfo(entry.source);

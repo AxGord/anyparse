@@ -13,7 +13,6 @@ import anyparse.query.CompilerFacts.TypeFact;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Refs.RefHit;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using Lambda;
 
@@ -744,7 +743,7 @@ final class NullGuardedCode {
 	private function parsed(key: String): Null<ParsedText> {
 		if (_parsed.exists(key)) return _parsed[key];
 		final source: Null<String> = _view.sourceOf(key);
-		final tree: Null<QueryNode> = source == null ? null : try _scope.plugin.parseFile(source) catch (exception: Exception) null;
+		final tree: Null<QueryNode> = source == null ? null : ParseGate.parseOrNull(_scope.plugin, source);
 		final read: Null<ParsedText> = source == null || tree == null ? null : { source: source, tree: tree };
 		_parsed[key] = read;
 		return read;

@@ -1,7 +1,6 @@
 package unit.check;
 
 import anyparse.check.Check;
-import anyparse.check.CheckScan;
 import anyparse.check.DuplicateCode;
 import anyparse.check.DuplicateCodeRenamed;
 import anyparse.check.Linter;
@@ -9,6 +8,7 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import unit.CheckFixture;
 import utest.Assert;
@@ -463,7 +463,7 @@ class DuplicateCodeRenamedCheckTest extends Test {
 	/** The direct-child statements of the first block the grammar's block seam names in `source`. */
 	private function bodyStatements(plugin: HaxeQueryPlugin, source: String): Array<QueryNode> {
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (support == null || tree == null) throw 'the fixture must parse under a grammar with a block seam';
 		final blockKinds: Array<String> = support.blockKinds();
 		function firstBlock(node: QueryNode): Null<QueryNode> {

@@ -9,6 +9,7 @@ import anyparse.check.IfExpressionChain.Carried;
 import anyparse.check.IfExpressionChain.IfChain;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
@@ -177,7 +178,7 @@ final class PreferIfExpressionAssignment implements Check {
 				return m == null ? null : buildEdit(m, source, span);
 			});
 		final decl: Null<DeclSeams> = DeclFallbackChain.readSeams(plugin, seams.tree);
-		final tree: Null<QueryNode> = decl == null ? null : CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = decl == null ? null : ParseGate.parseOrNull(plugin, source);
 		if (decl != null && tree != null) {
 			final byKey: Map<String, { span: Span, text: String }> = [];
 			for (e in declEdits(tree, source, comments, decl)) byKey['${e.key.from}:${e.key.to}'] = e.edit;

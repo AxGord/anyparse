@@ -506,7 +506,7 @@ final class IfExpressionChain {
 	 *
 	 * `blockKinds()` carries `CondBranchProjection.COND_BRANCH_KIND`, so on a BRANCH-AWARE tree a
 	 * `CondBranch` counts as a shield. Both current consumers walk the RAW tree
-	 * (`CheckScan.parseOrNull`), where that kind never appears, and the projection is
+	 * (`ParseGate.parseOrNull`), where that kind never appears, and the projection is
 	 * block-parented wherever it does — so nothing rests on it today; a consumer switching to
 	 * `parseBranchAwareOrNull` inherits the assumption.
 	 */

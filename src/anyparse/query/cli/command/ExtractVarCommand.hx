@@ -2,7 +2,6 @@ package anyparse.query.cli.command;
 
 import anyparse.query.ExtractVar;
 import anyparse.query.cli.CliContext;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 import anyparse.query.ExitCode.*;
@@ -114,7 +113,7 @@ final class ExtractVarCommand implements CliCommand {
 		var exactTo: Null<Int> = null;
 		var pos: Null<Position> = null;
 		if (matchExpr != null) {
-			final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 			if (tree == null) {
 				CliIo.stderr('apq extract-var: $filePath does not parse\n');
 				return EXIT_RUNTIME;

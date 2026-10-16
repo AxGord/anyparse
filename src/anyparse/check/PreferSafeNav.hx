@@ -9,6 +9,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.NodeShape;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -207,7 +208,7 @@ final class PreferSafeNav implements Check implements VersionGated {
 		if (seams == null) return [];
 		final ternaryKind: Null<String> = seams.ternaryKind;
 		final spanIndexKinds: Array<String> = ternaryKind == null ? seams.ifKinds : seams.ifKinds.concat([ternaryKind]);
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		final assigns: Map<String, AssignGuard> = [];
 		if (tree != null) collectAssignGuards(tree, source, seams, assigns);
 		final edits: Array<{ span: Span, text: String }> = [];

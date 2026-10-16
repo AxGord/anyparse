@@ -4,6 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.NominalTypes;
+import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SourceComments;
@@ -603,7 +604,7 @@ final class PreferArrowCallback implements Check {
 	/** The parsed tree of a declaring file's source, memoized by file path. */
 	private static function declTreeOf(ctx: Ctx, file: String, declSource: String): Null<QueryNode> {
 		if (ctx.declTrees.exists(file)) return ctx.declTrees[file];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(ctx.plugin, declSource);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(ctx.plugin, declSource);
 		ctx.declTrees[file] = tree;
 		return tree;
 	}
