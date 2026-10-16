@@ -598,7 +598,7 @@ final class LambdaLoopScan {
 		if (iterable.kind == s.intervalKind) return null;
 		if (iterable.kind == s.callKind && !resolvesToOneOf(iterable, probe.iterableTypes, probe)) return null;
 		final shape: Null<BodyShape> = bodyShape(unwrapSole(operands[1], s), source, s, sink);
-		final receiverType: Null<String> = receiverNominal(iterable, probe, s);
+		final receiverType: Null<String> = receiverNominal(iterable, probe);
 		if (shape == null || provenIterator(receiverType, probe)) return null;
 		final spelling: Null<CallSpelling> = spellingOf(iterable, receiverType, shape.cond == null, probe, s);
 		return spelling == null ? null : {
@@ -688,12 +688,10 @@ final class LambdaLoopScan {
 	 * `baseData:Null<Map<Int, ObjectFrameData>>` site names `Null` as a value and `Map` as a member
 	 * host, and it is the member host the rewrite binds against — and a `Null<Iterator<T>>` is as
 	 * much an `Iterator` to `Lambda` as a bare one. The `Iterable` proof keeps the value question:
-	 * peeling a `Null<Array<T>>` there would claim a shape the loop's own iterable does not have.
+	 * peeling a `Null<Array<T>>` there would claim a shape the loop's own iterable does not have. A construction is typed
+	 * by the type it writes, as the shared typer reads it (`NominalTypes.expressionTypeNominal`).
 	 */
-	private static function receiverNominal(iterable: QueryNode, probe: Probes, s: Seams): Null<String> {
-		// A construction WRITES its type at the site, which the expression resolver does not read.
-		final constructed: Null<String> = iterable.kind == s.newExprKind ? iterable.name : null;
-		if (constructed != null) return SourceText.lastSegment(constructed);
+	private static function receiverNominal(iterable: QueryNode, probe: Probes): Null<String> {
 		final resolve: Null<(QueryNode) -> Null<String>> = probe.receiver();
 		return resolve == null ? null : resolve(iterable);
 	}

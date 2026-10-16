@@ -4,6 +4,7 @@ import anyparse.check.PreferComprehension.ComprehensionAcc;
 import anyparse.check.PreferComprehension.ComprehensionCtx;
 import anyparse.check.PreferComprehension.ComprehensionSeams;
 import anyparse.query.CtorFieldFold;
+import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
@@ -112,7 +113,7 @@ final class ComprehensionFills {
 		final innerAcc: ComprehensionAcc = {
 			checks: [],
 			hoisted: [],
-			elementType: annotation == null ? null : PreferComprehension.elementTypeOf(annotation, s)
+			elementType: annotation == null ? null : NominalTypes.elementTypeSourceOf(annotation, s.elementTypeParams, [], s.typeSyntax)
 		};
 		final text: Null<String> = loopText(fill, innerName, annotation, ctx, innerAcc);
 		if (text == null || innerAcc.checks.exists(cn -> PreferComprehension.referencesName(cn, innerName, s))) return null;

@@ -21162,8 +21162,8 @@
 			"name": "M-TS-STD-CONTAINER",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "if (!types.imports.isStandard(file, path, standardContainers[outer] ?? [])) return null;",
-			"replace": "",
+			"find": "return types.imports.isStandard(file, path, standardContainers[SourceText.lastSegment(path)] ?? []) ? element : null;",
+			"replace": "return element;",
 			"note": "a container is read as the std one its simple name spells wherever written (a project List<T> yields T)"
 		},
 		{
@@ -21825,6 +21825,69 @@
 			"find": "if (!extensionsOnly || imp.kind == ImportKind.Using) {",
 			"replace": "if (true) {",
 			"note": "a call on a value receiver is taken to be routed by a static-field import of its member name, not only by a `using`"
+		},
+		{
+			"name": "M-NOMINAL-LITERAL",
+			"type": "anyparse.query.NominalTypes",
+			"method": "valueTypeSourceDeep",
+			"find": "if (literal != null) return literal;",
+			"replace": "",
+			"note": "a literal types as nothing, so `'x'.ext()` has an unresolved receiver"
+		},
+		{
+			"name": "M-NOMINAL-CONSTRUCTED",
+			"type": "anyparse.query.NominalTypes",
+			"method": "valueNominalDeep",
+			"find": "constructedNominal(node, shape)",
+			"replace": "null",
+			"note": "a construction `new T()` types as nothing in the deep walk"
+		},
+		{
+			"name": "M-NOMINAL-ABSTRACT-THIS",
+			"type": "anyparse.query.NominalTypes",
+			"method": "selfTypeSourceDeep",
+			"force": "selfTypeName",
+			"note": "`this` inside an abstract is the abstract, not its underlying value (4.3.7 types it as the underlying)"
+		},
+		{
+			"name": "M-NOMINAL-SOURCE-CALL",
+			"type": "anyparse.query.NominalTypes",
+			"method": "expressionTypeSource",
+			"find": "return receiver == null ? null : returnSourceOf(index, receiver, method);",
+			"replace": "return null;",
+			"note": "the source mode reads no method call's return"
+		},
+		{
+			"name": "M-NOMINAL-RETURN-TYPEPARAM",
+			"type": "anyparse.query.NominalTypes",
+			"method": "returnSourceOf",
+			"find": "|| CallGraphNames.mentionsTypeName(written, params, index.typeSyntax)",
+			"replace": "",
+			"note": "a return written as a type parameter the call binds is answered verbatim (`T`)"
+		},
+		{
+			"name": "M-NOMINAL-RETURN-AGREE",
+			"type": "anyparse.query.NominalTypes",
+			"method": "returnSourceOf",
+			"find": "found != null && written != found || ",
+			"replace": "",
+			"note": "declarations writing the return differently answer the last one read"
+		},
+		{
+			"name": "M-ELEMENT-PEEL",
+			"type": "anyparse.query.NominalTypes",
+			"method": "elementTypeSourceOf",
+			"find": "typeSyntax(memberLookupReceiverSource(typeSource, wrappers, typeSyntax))?.shape",
+			"replace": "typeSyntax(typeSource)?.shape",
+			"note": "a container under a nullable wrapper has no element"
+		},
+		{
+			"name": "M-OUTER-PATH-PEEL",
+			"type": "anyparse.query.NominalTypes",
+			"method": "outerPathOf",
+			"find": "typeSyntax(memberLookupReceiverSource(typeSource, wrappers, typeSyntax))?.shape",
+			"replace": "typeSyntax(typeSource)?.shape",
+			"note": "a path under a nullable wrapper is the wrapper's"
 		}
 	]
 }

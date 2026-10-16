@@ -998,6 +998,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.NameMentionScanTest',
 		'unit.query.NewFileSliceTest',
 		'unit.query.NodeShapeTest',
+		'unit.query.NominalTypesTest',
 		'unit.query.OccurrenceScanMatchMaskTest',
 		'unit.query.OpaqueCondRegionScanTest',
 		'unit.query.OrphanContinuationTest',
@@ -4026,6 +4027,12 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.NewFileSliceTest#testImportsSectionRefusesABareKeyword :: control :: M-NEWFILE-BARE-KEYWORD-WRAPPED',
 			'unit.query.NewFileSliceTest#testImportsSectionRefusesAnUnusableLine :: control :: M-NEWFILE-IMPORT-ANY-LINE',
 			'unit.query.NewFileSliceTest#testImportsSectionTakesStatements :: control :: M-NEWFILE-IMPORT-DOUBLED',
+			'unit.query.NominalTypesTest#testAConstructionIsTheTypeItWrites :: control :: M-NOMINAL-CONSTRUCTED',
+			'unit.query.NominalTypesTest#testALiteralIsItsType :: control :: M-NOMINAL-LITERAL',
+			'unit.query.NominalTypesTest#testDeclarationsWritingAReturnDifferentlyHaveNoSource :: control :: M-NOMINAL-RETURN-AGREE',
+			'unit.query.NominalTypesTest#testTheSourceModeKeepsTypeArguments :: control :: M-NOMINAL-SOURCE-CALL,M-NOMINAL-RETURN-TYPEPARAM',
+			'unit.query.NominalTypesTest#testTheWrittenTypeReadersPeelTheirWrappers :: control :: M-ELEMENT-PEEL,M-OUTER-PATH-PEEL',
+			'unit.query.NominalTypesTest#testThisInsideAnAbstractIsItsUnderlyingValue :: control :: M-NOMINAL-ABSTRACT-THIS',
 			'unit.query.OpaqueCondRegionScanTest#testABraceDeltaRuleAnswersTwoOfTheThreeRegionClassesWrong :: control :: '
 				+ 'M-OPAQUE-REGION-BRACE-DELTA',
 			'unit.query.OpaqueCondRegionScanTest#testACommentAfterTheEndStaysOutOfTheQuote :: control :: M-OPAQUE-REGION-TRIVIA-KEPT',
@@ -6917,7 +6924,15 @@ class TestDiscoveryParityTest extends Test {
 			'M-VALUES-ALIAS-WHOLE-MODULE',
 			'M-VALUES-FIELD-IMPORT-TYPES',
 			'M-MACRO-VALUE-UNLISTED',
-			'M-MACRO-EXTENSIONS-ONLY'
+			'M-MACRO-EXTENSIONS-ONLY',
+			'M-NOMINAL-LITERAL',
+			'M-NOMINAL-CONSTRUCTED',
+			'M-NOMINAL-ABSTRACT-THIS',
+			'M-NOMINAL-SOURCE-CALL',
+			'M-NOMINAL-RETURN-TYPEPARAM',
+			'M-NOMINAL-RETURN-AGREE',
+			'M-ELEMENT-PEEL',
+			'M-OUTER-PATH-PEEL'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

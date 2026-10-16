@@ -624,7 +624,9 @@ final class FieldWriteIndex {
 		if (c.indexKind == null || node.kind != c.indexKind) return null;
 		if (node.children.length == 0) return null;
 		final containerTs: Null<String> = resolveReceiverTypeSource(node.children[0], typeCtx, c);
-		return containerTs == null ? null : elementTypeSource(containerTs, c);
+		return containerTs == null
+			? null
+			: NominalTypes.elementTypeSourceOf(containerTs, c.elementTypeParams, c.unwrapNames, c.index.typeSyntax);
 	}
 
 	/**
@@ -749,19 +751,6 @@ final class FieldWriteIndex {
 				return null;
 		}
 		return null;
-	}
-
-	/**
-	 * The ELEMENT type source an index access `container[key]` yields, per the
-	 * container's `RefShape.indexedElementTypeParams` entry — `Map<K, V>` → `V`,
-	 * `Array<T>` → `T`. Null when the container is not such a type, carries no
-	 * parameters, or the listed parameter is missing.
-	 */
-	private static function elementTypeSource(containerSource: String, c: ScanCtx): Null<String> {
-		final parsed: Null<NominalParts> = nominalParse(containerSource, c.unwrapNames, c.index.typeSyntax);
-		if (parsed == null) return null;
-		final at: Null<Int> = c.elementTypeParams[parsed.name];
-		return at != null && at < parsed.args.length ? parsed.args[at] : null;
 	}
 
 	/**

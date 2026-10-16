@@ -6,9 +6,9 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
-import anyparse.query.Refs;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
+import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -320,28 +320,13 @@ final class DefaultRepeatedArgument implements Check implements DefaultOff imple
 			final member: Null<MemberInfo> = scope.members['$receiverName.$name'];
 			return member != null && member.isStatic ? member : null;
 		}
-		final typeName: Null<String> = receiverType(receiverName, receiver, entry, seams);
+		final declaredTypes: Null<Map<Int, String>> = entry.declaredTypes;
+		final typeName: Null<String> = declaredTypes == null
+			? null
+			: TypeResolver.identTypeName(receiver, entry.tree, entry.shape, declaredTypes);
 		if (typeName == null || scope.ambiguousTypes[typeName] == true) return null;
 		final member: Null<MemberInfo> = scope.members['$typeName.$name'];
 		return member != null && !member.isStatic ? member : null;
-	}
-
-	/**
-	 * The simple name of an INSTANCE receiver's declared type, resolved through the binding the
-	 * scope resolver hands the occurrence and the annotation on that binding. Null for an
-	 * unannotated or unresolved receiver — no evidence, no finding.
-	 */
-	private static function receiverType(name: String, receiver: QueryNode, entry: Parsed, seams: Seams): Null<String> {
-		final span: Null<Span> = receiver.span;
-		final sources: Null<Map<Int, String>> = entry.declaredTypes;
-		if (span == null || sources == null) return null;
-		final hits: Array<RefHit> = entry.refs[name] ?? Refs.find(name, entry.tree, entry.shape);
-		entry.refs[name] = hits;
-		for (hit in hits) if (hit.span.from == span.from) {
-			final binding: Null<Span> = hit.bindingSpan;
-			return binding == null ? null : sources[binding.from];
-		}
-		return null;
 	}
 
 	// ---- declaration collection ------------------------------------------------------------
@@ -471,8 +456,7 @@ final class DefaultRepeatedArgument implements Check implements DefaultOff imple
 				tree: entry.tree,
 				shape: shape,
 				binders: binders,
-				declaredTypes: provider?.declaredTypes(entry.source),
-				refs: []
+				declaredTypes: provider?.declaredTypes(entry.source)
 			});
 		}
 		return out;
@@ -538,7 +522,6 @@ private typedef Parsed = {
 	final shape: RefShape;
 	final binders: Map<String, Bool>;
 	final declaredTypes: Null<Map<Int, String>>;
-	final refs: Map<String, Array<RefHit>>;
 };
 
 /** One function declaration the rule can see, and what its signature allows. */

@@ -2809,3 +2809,16 @@ decided the question; it may not become a record of runs.
   `unlistedImportOf`, `TypeNameBinding.bindingsOf` for a written receiver. The gate's answer is now the path the
   compiler binds the name to — `import m.Lang as L;` and `import m.*;` name `m.Lang`, so a whitelisted `m.Lang.t`
   clears them — and the ambient chain's imports count as the file's own do — branch `feat/infra-B4`
+- typing copies kept arcs the shared typer lacked: `PreferStaticExtension` typed a string literal and `this` inside an
+  abstract itself, `LambdaLoopScan` a construction, and five readers took a container's element (or a type's path) off
+  its written type each their own way (`PreferComprehension.elementTypeOf` keyed by the full written path, `MemberReach.
+  elementType` arrays only, `FieldWriteIndex.elementTypeSource`, `CallGraph.elementTypeSource`, `NominalTypes`' own
+  for-binder tail; `PreferArrowCallback.receiverNominal`, `CallGraphKeys.outerPathOf`) → the deep walk of `NominalTypes`
+  reads a literal as its type, a construction as the type it writes (nominal only: `new Box(item)` spells no
+  arguments), and `this` inside a `RefShape.underlyingThisTypeKinds` type as its underlying type (4.3.7 types `this` in
+  `abstract A(T)` as `T`); `elementTypeSourceOf` / `outerPathOf` are the one written-type reading, keyed by the simple
+  name, wrappers peeled to a fixed point, and which container it IS stays each caller's question
+  (`isStandard`, `arrayTypeNames`). `NominalTypes.expressionTypeSource` is the SOURCE mode: the same deep walk at source
+  level, plus a method call whose declarations write one return naming no type parameter. `DefaultRepeatedArgument`
+  reads a receiver's declared type through `TypeResolver.identTypeName` instead of its own `Refs.find` memo. All-rules
+  on the four trees unchanged — branch `feat/infra-B4`

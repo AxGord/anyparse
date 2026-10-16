@@ -122,11 +122,7 @@ final class CallGraphKeys {
 
 	/** The dotted or simple path of the type `typeSource` names, `Null<…>` peeled unless `peelNull` is false; null for any other type. */
 	public function outerPathOf(typeSource: Null<String>, peelNull: Bool = true): Null<String> {
-		final t: Null<TypeSyntax> = typeSource == null ? null : _typeSyntax(typeSource);
-		return switch ((peelNull ? t?.wrapped(['Null']) : null) ?? t)?.shape {
-			case Nominal(path, _): path;
-			case _: null;
-		};
+		return typeSource == null ? null : NominalTypes.outerPathOf(typeSource, peelNull ? ['Null'] : [], _typeSyntax);
 	}
 
 	/**

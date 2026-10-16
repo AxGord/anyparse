@@ -2,8 +2,11 @@ package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.NodeShape;
+import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
+import anyparse.query.SymbolIndex.MemberInfo;
+import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
@@ -34,11 +37,13 @@ using StringTools;
  *   / `pathReceiverMemberTypeSource` follow the segments through the `SymbolIndex` to the
  *   member type at the end.
  * - **Typing a value or an expression.** `valueTypeNominal` and `expressionTypeNominal` are
- *   the entry points the analysis checks call. The private deep walk below them keeps the
+ *   the entry points the analysis checks call; `expressionTypeSource` is the SOURCE mode, the
+ *   same deep walk answering the written type. The private deep walk below them keeps the
  *   answer at SOURCE level (type arguments intact, for substitution) and adds the arms a
  *   plain path has not got: a method call resolved through `MemberLookup.returnNominalOf` or, when
  *   the receiver provably lacks the member, through a `using` STATIC EXTENSION
- *   (`staticExtensionNominal`); a tabled `Type.method` static call; and the loop binder whose
+ *   (`staticExtensionNominal`); a tabled `Type.method` static call; a literal, a construction, and
+ *   `this` inside an abstract (its underlying type); and the loop binder whose
  *   type is the ELEMENT type of what it iterates (`iterationValueBinder` / `iterationIterable` /
  *   `forBindingElementTypeSource`).
  *
@@ -109,6 +114,34 @@ final class NominalTypes {
 	public static function outerNominalOf(typeSource: String, typeSyntax: TypeSyntaxReader): Null<String> {
 		return switch typeSyntax(typeSource)?.shape {
 			case Nominal(path, _): SourceText.lastSegment(path);
+			case _: null;
+		};
+	}
+
+	/**
+	 * The dotted path of a written type's outer nominal — `pkg.Map<String, Int>` → `pkg.Map`, as written — once each
+	 * of the `wrappers` around it is peeled (`memberLookupReceiverSource`); null when the text is not a named type.
+	 */
+	public static function outerPathOf(typeSource: String, wrappers: Array<String>, typeSyntax: TypeSyntaxReader): Null<String> {
+		return switch typeSyntax(memberLookupReceiverSource(typeSource, wrappers, typeSyntax))?.shape {
+			case Nominal(path, _): path;
+			case _: null;
+		};
+	}
+
+	/**
+	 * The ELEMENT type a written container type gives what iterates it, as written: the argument at the position
+	 * `elementParams` names for the container's simple name (`RefShape.iterationElementTypeParams`: `Array<Item>` → `Item`,
+	 * `Map<K, V>` → `V`), the `wrappers` around it peeled first. Null for a container `elementParams` does not list, or one
+	 * written without that argument. Which container it IS — the std's or a namesake — is the caller's question.
+	 */
+	public static function elementTypeSourceOf(
+		typeSource: String, elementParams: Map<String, Int>, wrappers: Array<String>, typeSyntax: TypeSyntaxReader
+	): Null<String> {
+		return switch typeSyntax(memberLookupReceiverSource(typeSource, wrappers, typeSyntax))?.shape {
+			case Nominal(path, args):
+				final at: Null<Int> = elementParams[SourceText.lastSegment(path)];
+				at != null && at < args.length ? args[at].text : null;
 			case _: null;
 		};
 	}
@@ -321,6 +354,29 @@ final class NominalTypes {
 		?chain: ChainTypeContext, asReceiver: Bool = false
 	): Null<String> {
 		return expressionNominalWalk(node, root, shape, declaredTypes, index, file, chain, [], asReceiver);
+	}
+
+	/**
+	 * The SOURCE mode of the deep walk: the written type SOURCE an expression carries, type arguments kept
+	 * (`Map<String, Array<Int>>`, not `Map`) — what a consumer substituting or reading arguments needs, where
+	 * `expressionTypeNominal` has already thrown them away. Every arc the deep walk reads at source level answers: a literal,
+	 * an identifier's annotation (`declaredTypeSources`), a `for` binder's element, a field path with substitution, a tabled
+	 * static call, `this` (an abstract's underlying type); and a METHOD CALL `<recv>.m(…)` when every declaration of `m` on
+	 * the receiver's type writes one return type that names no type parameter of the method or its type
+	 * (`returnSourceOf`). A construction has none (`new Box(item)` is a `Box<Item>` nothing spells), nor has an inherited
+	 * method or one returning a type parameter: null, as for anything else the walk cannot spell exactly.
+	 */
+	public static function expressionTypeSource(
+		node: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: Null<SymbolIndex>, file: String,
+		chain: ChainTypeContext
+	): Null<String> {
+		final direct: Null<String> = valueTypeSourceDeep(node, root, shape, declaredTypes, chain, index, file, []);
+		if (direct != null || index == null || node.kind != shape.callKind || node.children.length == 0) return direct;
+		final callee: QueryNode = node.children[0];
+		final method: Null<String> = callee.name;
+		if (method == null || callee.kind != shape.fieldAccessKind || callee.children.length != 1) return null;
+		final receiver: Null<String> = expressionNominalWalk(callee.children[0], root, shape, declaredTypes, index, file, chain, [], true);
+		return receiver == null ? null : returnSourceOf(index, receiver, method);
 	}
 
 	/**
@@ -633,13 +689,40 @@ final class NominalTypes {
 	): Null<String> {
 		final source: Null<String> = valueTypeSourceDeep(node, root, shape, declaredTypes, chain, index, file, seen);
 		return if (source == null)
-			null
+			constructedNominal(node, shape)
 		else if (asReceiver)
 			outerNominalOf(
 				memberLookupReceiverSource(source, shape.memberTransparentWrapperTypeNames ?? [], chain.typeSyntax), chain.typeSyntax
 			)
 		else
 			outerNominalOf(source, chain.typeSyntax);
+	}
+
+	/**
+	 * The nominal a construction `new T(…)` makes: the type it writes, by its simple name — whatever type arguments it passes
+	 * or infers, so it has no SOURCE answer (`new Box(item)` is a `Box<Item>` nothing here spells). Null for any other node.
+	 */
+	private static function constructedNominal(node: QueryNode, shape: RefShape): Null<String> {
+		final written: Null<String> = node.kind == shape.newExprKind ? node.name : null;
+		return written == null ? null : SourceText.lastSegment(written);
+	}
+
+	/**
+	 * The return type every declaration of the method `method` on `typeName` writes, as written — null when they disagree,
+	 * when one writes none, when it names a type parameter of the method or of its declaring type (which the call binds), or
+	 * when `typeName` declares no such method directly (an inherited one returns through its supertype's arguments).
+	 */
+	private static function returnSourceOf(index: SymbolIndex, typeName: String, method: String): Null<String> {
+		var found: Null<String> = null;
+		final declared: Array<{ type: TypeDeclInfo, member: MemberInfo }> = index.members.memberDeclarationsOf(typeName, method);
+		for (d in declared) {
+			final written: Null<String> = d.member.returnSource;
+			final params: Array<String> = d.type.typeParamNames.concat(d.member.typeParamNames);
+			if (written == null || found != null && written != found || CallGraphNames.mentionsTypeName(written, params, index.typeSyntax))
+				return null;
+			found = written;
+		}
+		return found;
 	}
 
 	/**
@@ -672,6 +755,9 @@ final class NominalTypes {
 		final identKind: Null<String> = shape.identKind;
 		final fieldKind: Null<String> = shape.fieldAccessKind;
 		if (identKind == null || fieldKind == null) return null;
+		// a literal denotes its type whatever surrounds it (`'x'` is a `String`)
+		final literal: Null<String> = shape.literalTypeNames?.get(node.kind);
+		if (literal != null) return literal;
 		final tabled: Null<String> = tabledStaticCallTypeSource(node, root, shape, index);
 		if (tabled != null) return tabled;
 		final path: Null<Array<String>> = pathOf(node, identKind, fieldKind);
@@ -721,9 +807,24 @@ final class NominalTypes {
 		final resolved: Null<PathRoot> = pathRootBinding(recv, root, shape);
 		if (resolved == null) return null;
 		final bindingFrom: Null<Int> = resolved.bindingFrom;
-		if (bindingFrom == null) return resolved.selfTypeName;
+		if (bindingFrom == null) return selfTypeSourceDeep(recv, root, shape, chain, resolved.selfTypeName);
 		final annotated: Null<String> = chain.declaredTypeSources[bindingFrom] ?? declaredTypes[bindingFrom];
 		return annotated ?? forBindingElementTypeSource(bindingFrom, root, shape, declaredTypes, chain, index, file, seen);
+	}
+
+	/**
+	 * What the self reference `recv` denotes in deep mode: the enclosing type `selfTypeName`, or — inside a type whose `this`
+	 * is its underlying value (`RefShape.underlyingThisTypeKinds`: `abstract A(T)`, where 4.3.7 types `this` as `T`) — the
+	 * underlying type as its declaration writes it. Null for such a type whose underlying type is not written readably.
+	 */
+	private static function selfTypeSourceDeep(
+		recv: QueryNode, root: QueryNode, shape: RefShape, chain: ChainTypeContext, selfTypeName: Null<String>
+	): Null<String> {
+		final span: Null<Span> = recv.span;
+		final decl: Null<TypeDeclMatch> = span == null ? null : TypeResolver.enclosingTypeDecl(root, span);
+		if (decl == null || !(shape.underlyingThisTypeKinds ?? []).contains(decl.kind)) return selfTypeName;
+		final underlying: Null<Span> = decl.declNode.type?.span;
+		return underlying == null ? null : chain.source.substring(underlying.from, underlying.to);
 	}
 
 	/**
@@ -764,17 +865,7 @@ final class NominalTypes {
 		seen.push(bindingFrom);
 		final iterableSource: Null<String> = valueTypeSourceDeep(iterable, root, shape, declaredTypes, chain, index, file, seen);
 		seen.pop();
-		if (iterableSource == null) return null;
-		final nominal: Null<String> = outerNominalOf(iterableSource, chain.typeSyntax);
-		final args: Null<Array<String>> = typeArgumentSourcesOf(iterableSource, chain.typeSyntax);
-		if (nominal == null || args == null) return null;
-		final at: Null<Int> = elementParams[nominal];
-		return if (at == null)
-			null
-		else if (at < args.length)
-			args[at]
-		else
-			null;
+		return iterableSource == null ? null : elementTypeSourceOf(iterableSource, elementParams, [], chain.typeSyntax);
 	}
 
 	/**
