@@ -113,14 +113,14 @@ class LintUnusedImportResolutionScopeTest extends Test {
 		assertDecline(usingUnknown, 'known neither to the std probe nor to the report index');
 		// The other half of the contract: a finding the fix DOES take carries no reason at all, so a
 		// reader never sees a decline where an edit happened.
-		final deletable: Array<Violation> = runScoped('package pkg;\n\nimport ext.lib.Widget;\n\nclass C {}', lib);
-		Assert.equals(1, deletable.length);
-		Assert.equals(Severity.Warning, deletable[0].severity);
-		Assert.isNull(deletable[0].declineReason, 'a finding the fix takes declined nothing');
-		Assert.equals(
-			1, new UnusedImport().fix('package pkg;\n\nimport ext.lib.Widget;\n\nclass C {}', deletable, new HaxeQueryPlugin()).length,
-			'and it really is the arm that produces an edit'
-		);
+		final report: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/C.hx', source: 'package pkg;\n\nimport ext.lib.Widget;\n\nclass C {}' }
+		];
+		final deletable: FixRun = CheckFixture.fixRun(new UnusedImport(), report, scopedHost(report, lib));
+		Assert.equals(1, deletable.violations.length);
+		Assert.equals(Severity.Warning, deletable.violations[0].severity);
+		Assert.isNull(deletable.violations[0].declineReason, 'a finding the fix takes declined nothing');
+		Assert.equals(1, deletable.edits.length, 'and it really is the arm that produces an edit');
 	}
 
 	/**
@@ -140,9 +140,16 @@ class LintUnusedImportResolutionScopeTest extends Test {
 
 	private function runScoped(useSource: String, lib: Array<{ file: String, source: String }>): Array<Violation> {
 		final report: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: useSource }];
+		return CheckFixture.violationsIn(new UnusedImport(), report, scopedHost(report, lib));
+	}
+
+	/** A run host whose declared resolution scope is `report` beside the third-party `lib`. */
+	private function scopedHost(
+		report: Array<{ file: String, source: String }>, lib: Array<{ file: String, source: String }>
+	): CachingGrammarPlugin {
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		scoped.setResolutionScope({ declared: true, sources: () -> {report: report, projectRoots: [], library: new LibrarySources(lib) } });
-		return CheckFixture.violationsIn(new UnusedImport(), report, scoped);
+		return scoped;
 	}
 
 }

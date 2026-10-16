@@ -57,7 +57,7 @@ class NamingCheckLocalFixTest extends NamingCheckTestBase {
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
-		assertCanonicalized(src, check.fix(src, vs, new HaxeQueryPlugin()), '// legacy myLocal reference', 'MyLocal');
+		assertCanonicalized(src, CheckFixture.fixOf(check, src, vs), '// legacy myLocal reference', 'MyLocal');
 	}
 
 	public function testFixSkipsLocalMentionedInStringLiteral(): Void {
@@ -68,7 +68,7 @@ class NamingCheckLocalFixTest extends NamingCheckTestBase {
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
-		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.fixOf(check, src, vs).length);
 	}
 
 	public function testFixSkipsLocalMentionedInNoqaComment(): Void {
@@ -79,7 +79,7 @@ class NamingCheckLocalFixTest extends NamingCheckTestBase {
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
-		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.fixOf(check, src, vs).length);
 	}
 
 	public function testFixRenamesParamNamedAfterAnImportedTypeName(): Void {
@@ -235,7 +235,7 @@ class NamingCheckLocalFixTest extends NamingCheckTestBase {
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.isTrue(vs.length >= 1);
-		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.fixOf(check, src, vs).length);
 	}
 
 	public function testFixRenamesThreeSameNameBindings(): Void {
@@ -304,7 +304,7 @@ class NamingCheckLocalFixTest extends NamingCheckTestBase {
 			+ '\tpublic function b(__x:Int):Int {\n\t\tvar x:Int = 5;\n\t\t// keep __x here\n\t\treturn __x + x;\n\t}\n}';
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
-		switch CanonicalEdit.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, CheckFixture.fixOf(check, src, vs), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf('// keep __x here') >= 0);
 				Assert.isTrue(text.indexOf('a(x:Int)') >= 0);
@@ -538,7 +538,7 @@ class NamingCheckLocalFixTest extends NamingCheckTestBase {
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
-		assertCanonicalized(src, check.fix(src, vs, new HaxeQueryPlugin()), present, absent);
+		assertCanonicalized(src, CheckFixture.fixOf(check, src, vs), present, absent);
 	}
 
 	/** Assert the naming autofix emits edits for `targetFile` that never overlap one another. */

@@ -758,8 +758,9 @@ class ThreadSafetyCheckTest extends Test {
 
 	/**
 	 * A file whose chain writes no `thread-safety` option reports nothing of its own, though the builtin sinks make its
-	 * calls blocking for the graph: called directly, past the linter's own `needs-config` gate, the check drops `Y.f`'s
-	 * `Sys.sleep` and keeps the one `x` reports.
+	 * calls blocking for the graph: the run reads `y` for the graph and `Linter.collect` drops `Y.f`'s `Sys.sleep`, keeping
+	 * the one `x` reports. The report gate has ONE owner, `Linter.runGated` (`GraphScoped`) — the rule's own copy of it
+	 * was unobservable in production and is gone (B8b).
 	 */
 	@:pin('control') @:killer('M-TS-REPORT-UNGATED')
 	public function testNoFindingInAFileWhoseChainWritesNoOption(): Void {
@@ -774,11 +775,9 @@ class ThreadSafetyCheckTest extends Test {
 		final files: Array<{ file: String, source: String }> = [
 			for (t in tree) if (StringTools.endsWith(t.name, '.hx')) { file: '${root}/${t.name}', source: t.source }
 		];
-		// The RAW `run`, not `CheckFixture`: this pins the rule's OWN report gate, and `Linter.collect` applies the same
-		// `GraphScoped` gate again (`runGated`), so through the fixture the gate would be unobservable (B8 finding).
 		final found: Array<String> = [
-			for (v in new ThreadSafety().run(
-				files, new HaxeQueryPlugin()
+			for (v in CheckFixture.violationsIn(
+				new ThreadSafety(), files
 			)) if (v.file != '') '${v.file.substring(root.length + 1)}: ${v.message}'
 		];
 		CliFixture.removeDir(root);

@@ -52,11 +52,11 @@ class MapKeysLookupCheckTest extends Test {
 		final check: MapKeysLookup = new MapKeysLookup();
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
-		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.fixOf(check, src, vs).length);
 		// The same loop without the annotation still gets its edit.
 		final plain: String = wrapMap('for (k in m.keys()) trace(m[k]);');
 		final pv: Array<Violation> = CheckFixture.violations(check, plain);
-		Assert.isTrue(check.fix(plain, pv, new HaxeQueryPlugin()).length > 0);
+		Assert.isTrue(CheckFixture.fixOf(check, plain, pv).length > 0);
 	}
 
 	public function testGetLookupFlagged(): Void {
@@ -573,7 +573,7 @@ class MapKeysLookupCheckTest extends Test {
 		final check: MapKeysLookup = new MapKeysLookup();
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
-		switch CanonicalEdit.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, CheckFixture.fixOf(check, src, vs), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf(present) >= 0);
 				Assert.isTrue(text.indexOf(absent) == -1);

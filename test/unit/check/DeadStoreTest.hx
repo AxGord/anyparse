@@ -219,7 +219,7 @@ class DeadStoreTest extends Test {
 		final check: DeadStore = new DeadStore();
 		final vs: Array<Violation> = CheckFixture.violations(check, src, plugin);
 		Assert.equals(0, vs.length);
-		Assert.equals(0, check.fix(src, vs, plugin).length);
+		Assert.equals(0, CheckFixture.fixOf(check, src, vs, plugin).length);
 	}
 
 	public function testBareArrowAccumulatorExcluded(): Void {
@@ -433,7 +433,7 @@ class DeadStoreTest extends Test {
 
 	public function testFixSkipParseNoEdit(): Void {
 		// An unparseable source yields no edits (no crash).
-		Assert.equals(0, new DeadStore().fix('class Bad { function f() { var x = ', [], new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.fixOf(new DeadStore(), 'class Bad { function f() { var x = ', []).length);
 	}
 
 	public function testFixKeepsBlockExprTailStore(): Void {
@@ -443,7 +443,7 @@ class DeadStoreTest extends Test {
 		final check: DeadStore = new DeadStore();
 		final src: String = 'class C { static function f():Int { var x = 0; return { x = 2; }; } }';
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
-		switch CanonicalEdit.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, CheckFixture.fixOf(check, src, vs), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf('x = 2') >= 0);
 			case Err(message):
@@ -559,7 +559,7 @@ class DeadStoreTest extends Test {
 	private function assertFix(src: String, present: String, absent: String): Void {
 		final check: DeadStore = new DeadStore();
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
-		switch CanonicalEdit.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, CheckFixture.fixOf(check, src, vs), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf(present) >= 0);
 				Assert.isTrue(text.indexOf(absent) == -1);
@@ -572,7 +572,7 @@ class DeadStoreTest extends Test {
 		final check: DeadStore = new DeadStore();
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.isTrue(vs.length > 0);
-		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.fixOf(check, src, vs).length);
 	}
 
 	private function indexedFixEdits(src: String): Array<{ span: Span, text: String }> {

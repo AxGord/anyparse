@@ -3,7 +3,6 @@ package unit.check;
 import anyparse.check.Check.Violation;
 import anyparse.check.FoldStringLiterals;
 import anyparse.check.LintConfig;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
 import utest.Assert;
@@ -126,7 +125,7 @@ class FoldStringLiteralsCandidateGateTest extends FoldStringLiteralsCheckTestBas
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.indexOf(WHITELIST_OPTION) != -1);
-		Assert.equals(0, check.fix(files[1].source, vs, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.fixIn(check, files, vs, files[1].file).length);
 	}
 
 	/** A macro PROVEN to fold `+` chains of constants is whitelisted by qualified path, and its arguments become fixable. */
@@ -136,7 +135,7 @@ class FoldStringLiteralsCandidateGateTest extends FoldStringLiteralsCheckTestBas
 		check.setConfigResolver(_ -> LintConfig.parse('{"rules":{"$RULE":{"$WHITELIST_OPTION":["m.Lang.t"]}}}'));
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		Assert.equals(1, vs.length);
-		final edits: Array<{ span: Span, text: String }> = check.fix(files[1].source, vs, new HaxeQueryPlugin());
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.fixIn(check, files, vs, files[1].file);
 		Assert.equals(1, edits.length);
 		Assert.equals('\'${''.rpad('A', 100)}\\n\' + \'${''.rpad('B', 60)}\'', edits[0].text);
 	}
@@ -162,7 +161,7 @@ class FoldStringLiteralsCandidateGateTest extends FoldStringLiteralsCheckTestBas
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, [caller]);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.indexOf(WHITELIST_OPTION) != -1);
-		Assert.equals(0, check.fix(caller.source, vs, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.fixIn(check, [caller], vs).length);
 	}
 
 	/**
@@ -219,7 +218,7 @@ class FoldStringLiteralsCandidateGateTest extends FoldStringLiteralsCheckTestBas
 			final src: String = outOfScopeCallSource(spelling.imports, spelling.call);
 			final vs: Array<Violation> = CheckFixture.violations(check, src);
 			Assert.equals(1, vs.length);
-			Assert.equals(1, check.fix(src, vs, new HaxeQueryPlugin()).length, 'expected a fix for ${spelling.imports} ${spelling.call}');
+			Assert.equals(1, CheckFixture.fixOf(check, src, vs).length, 'expected a fix for ${spelling.imports} ${spelling.call}');
 		}
 	}
 
@@ -234,10 +233,11 @@ class FoldStringLiteralsCandidateGateTest extends FoldStringLiteralsCheckTestBas
 		final other: { file: String, source: String } = { file: 'other/D.hx', source: files[1].source };
 		final check: FoldStringLiterals = new FoldStringLiterals();
 		check.setConfigResolver(path -> LintConfig.parse(path == 'C.hx' ? '{"rules":{"$RULE":{"$WHITELIST_OPTION":["m.Lang.t"]}}}' : '{}'));
-		final vs: Array<Violation> = CheckFixture.violationsIn(check, [files[0], files[1], other]);
+		final run: Array<{ file: String, source: String }> = [files[0], files[1], other];
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, run);
 		Assert.equals(2, vs.length);
-		Assert.equals(1, check.fix(files[1].source, vs.filter(v -> v.file == 'C.hx'), new HaxeQueryPlugin()).length);
-		Assert.equals(0, check.fix(other.source, vs.filter(v -> v.file == other.file), new HaxeQueryPlugin()).length);
+		Assert.equals(1, CheckFixture.fixIn(check, run, vs.filter(v -> v.file == 'C.hx'), 'C.hx').length);
+		Assert.equals(0, CheckFixture.fixIn(check, run, vs.filter(v -> v.file == other.file), other.file).length);
 	}
 
 	/**
@@ -381,7 +381,7 @@ class FoldStringLiteralsCandidateGateTest extends FoldStringLiteralsCheckTestBas
 	private function refusedBy(check: FoldStringLiterals, src: String): Bool {
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
-		return check.fix(src, vs, new HaxeQueryPlugin()).length == 0;
+		return CheckFixture.fixOf(check, src, vs).length == 0;
 	}
 
 }

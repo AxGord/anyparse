@@ -1,13 +1,11 @@
 package unit.query;
 
-import anyparse.check.Check.Violation;
 import anyparse.check.UnusedLocal;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.DeclaredNullity;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
-import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
@@ -37,14 +35,6 @@ class TypeResolverSliceTest extends Test {
 		final src: String = 'typedef Ctx = { var f:Int; }; class C { static function mk():Ctx { return null; } static function m():Void {'
 			+ ' final c = mk(); final dead = c.f; } }';
 		Assert.equals(0, fixEdits(src).length, 'no annotation on the receiver → unresolved → kept');
-	}
-
-	public function testNoIndexKept(): Void {
-		final src: String = wrap('c: Ctx', 'final dead = c.f;');
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final check: UnusedLocal = new UnusedLocal();
-		final violations: Array<Violation> = CheckFixture.violations(check, src, plugin);
-		Assert.equals(0, check.fix(src, violations, plugin).length, 'no symbol index → conservative status quo');
 	}
 
 	public function testDeclaredTypeSpanAlignment(): Void {
@@ -363,12 +353,7 @@ class TypeResolverSliceTest extends Test {
 	}
 
 	private function fixEdits(src: String): Array<{ span: Span, text: String }> {
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
-		final check: UnusedLocal = new UnusedLocal();
-		final violations: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
-		final index: SymbolIndex = CheckFixture.index(files, plugin);
-		return check.fix(src, violations, plugin, index);
+		return CheckFixture.edits(new UnusedLocal(), src);
 	}
 
 	/** The `… != null` operand of `src`, put to whichever `TypeResolver` entry point is asked for. */

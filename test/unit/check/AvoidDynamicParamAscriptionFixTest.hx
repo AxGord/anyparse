@@ -347,10 +347,7 @@ class AvoidDynamicParamAscriptionFixTest extends Test {
 
 	/** Run the check over `src` and fix its findings, handing back BOTH halves (the decline reasons ride the violations). */
 	private function fixed(src: String): FixRun {
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final check: AvoidDynamic = new AvoidDynamic();
-		final vs: Array<Violation> = CheckFixture.violations(check, src, plugin);
-		return { violations: vs, edits: check.fix(src, vs, plugin) };
+		return CheckFixture.fixRun(new AvoidDynamic(), [{ file: 'C.hx', source: src }]);
 	}
 
 	/** The edits for `base` alone, resolved against an index that ALSO holds `sub` — the override-family gate's scope. */

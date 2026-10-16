@@ -199,8 +199,8 @@ import utest.Test;
 		// carry the reflection intent — `'get_$suffix'` may name this very method at runtime.
 		final owner: String = 'class C {\n\tpublic var data(default, set):Int = 0;\n\tpublic function get_data():Int return data;\n}';
 		final user: String = 'class U {\n\tfunction f(c:C, suffix:String):Dynamic return Reflect.field(c, \'get_$$suffix\');\n}';
-		Assert.equals(1, fixEditCount(owner, [{ file: 'C.hx', source: owner }]));
-		Assert.equals(0, fixEditCount(owner, [{ file: 'C.hx', source: owner }, { file: 'U.hx', source: user }]));
+		Assert.equals(1, fixEditCount([{ file: 'C.hx', source: owner }]));
+		Assert.equals(0, fixEditCount([{ file: 'C.hx', source: owner }, { file: 'U.hx', source: user }]));
 	}
 
 	/**
@@ -212,7 +212,7 @@ import utest.Test;
 	 */
 	public function testUnreadableFileNotSpellingTheAccessorLeavesTheDeletionAvailable(): Void {
 		final owner: String = 'class C {\n\tpublic var data(default, set):Int = 0;\n\tpublic function get_data():Int return data;\n}';
-		Assert.equals(1, fixEditCount(owner, [
+		Assert.equals(1, fixEditCount([
 			{ file: 'C.hx', source: owner },
 			{ file: 'B.hx', source: 'class B {\n\tfunction q(: {{{\n}\n' }
 		]));
@@ -225,7 +225,7 @@ import utest.Test;
 			{ file: 'C.hx', source: owner },
 			{ file: 'B.hx', source: 'class B {\n\tfunction q(: {{{\n\tc.get_data();\n}\n' }
 		];
-		Assert.equals(0, fixEditCount(owner, files));
+		Assert.equals(0, fixEditCount(files));
 		final vs: Array<Violation> = violationsOf(files);
 		Assert.equals(1, vs.length);
 		if (vs.length != 1) return;
@@ -245,7 +245,7 @@ import utest.Test;
 	 */
 	public function testUnreadableSubtypeDeclaringThePropertyBlocksTheDeletion(): Void {
 		final owner: String = 'class C {\n\tpublic function get_data():Int return 0;\n}';
-		Assert.equals(0, fixEditCount(owner, [
+		Assert.equals(0, fixEditCount([
 			{ file: 'C.hx', source: owner },
 			{ file: 'D.hx', source: 'class D extends C {\n\tpublic var data(get, never):Int;\n\tfunction q(: {{{\n}\n' }
 		]));
@@ -363,7 +363,7 @@ import utest.Test;
 	 */
 	public function testUnreadableComputedAccessorNameBlocksTheDeletion(): Void {
 		final owner: String = 'class C {\n\tpublic var data(default, set):Int = 0;\n\tpublic function get_data():Int return data;\n}';
-		Assert.equals(0, fixEditCount(owner, [
+		Assert.equals(0, fixEditCount([
 			{ file: 'C.hx', source: owner },
 			{ file: 'B.hx', source: 'class B {\n\tfunction q(: {{{\n\tReflect.field(o, \'get_\' + p);\n}\n' }
 		]));
@@ -372,7 +372,7 @@ import utest.Test;
 	/** The control for the prefix probe: an unreadable file whose only `get_` is an ordinary declaration does NOT block. */
 	public function testUnreadablePlainAccessorDeclarationDoesNotBlockTheDeletion(): Void {
 		final owner: String = 'class C {\n\tpublic var data(default, set):Int = 0;\n\tpublic function get_data():Int return data;\n}';
-		Assert.equals(1, fixEditCount(owner, [
+		Assert.equals(1, fixEditCount([
 			{ file: 'C.hx', source: owner },
 			{ file: 'B.hx', source: 'class B {\n\tfunction q(: {{{\n\tfunction get_other():Int return 0;\n}\n' }
 		]));
@@ -402,7 +402,7 @@ import utest.Test;
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 		Assert.equals(1, vs.length);
-		Assert.equals(0, check.fix(owner, vs, plugin).length);
+		Assert.equals(0, CheckFixture.fixIn(check, files, vs, plugin).length);
 	}
 
 	public function testInterpolatedReferenceBlocksFix(): Void {
@@ -456,7 +456,7 @@ import utest.Test;
 		if (probe == null) return;
 		final vs: Array<Violation> = CheckFixture.violations(probe, src, plugin);
 		Assert.equals(1, vs.length);
-		Assert.equals(0, check.fix(src, vs, plugin).length);
+		Assert.equals(0, CheckFixture.fixOf(check, src, vs, plugin).length);
 	}
 
 	public function testDynamicWriteSlotCountsAsDeclared(): Void {
@@ -566,7 +566,7 @@ import utest.Test;
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 		Assert.equals(1, vs.length);
-		Assert.equals(0, check.fix(owner, vs, plugin).length);
+		Assert.equals(0, CheckFixture.fixIn(check, files, vs, plugin).length);
 	}
 
 	public function testEmptyPropertyNameSkipped(): Void {
@@ -693,7 +693,7 @@ import utest.Test;
 	public function testAnUnreadableCallerOutsideTheReportScopeStillDeclinesTheDeletion(): Void {
 		final report: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: BARE_GETTER }];
 		final reach: Array<{ file: String, source: String }> = [{ file: 'B.hx', source: UNREADABLE_CALLER }];
-		Assert.equals(0, scopedFixEditCount(BARE_GETTER, report, reach));
+		Assert.equals(0, scopedFixEditCount(report, reach));
 		final found: Null<Violation> = scopedLoneFinding(report, reach);
 		if (found == null) return;
 		final reason: Null<String> = found.declineReason;
@@ -747,10 +747,7 @@ import utest.Test;
 	@:killer('M-ORPHAN-UNREADABLE-REFLECTIVE-NARROWED')
 	public function testAnUnreadableThirdPartyFileSpellingTheAccessorStillDeclines(): Void {
 		Assert.equals(
-			0,
-			scopedFixEditCount(
-				BARE_GETTER, [{ file: 'C.hx', source: BARE_GETTER }], [], [{ file: 'lib/Third.hx', source: UNREADABLE_CALLER }]
-			)
+			0, scopedFixEditCount([{ file: 'C.hx', source: BARE_GETTER }], [], [{ file: 'lib/Third.hx', source: UNREADABLE_CALLER }])
 		);
 	}
 
@@ -778,10 +775,7 @@ import utest.Test;
 	@:killer('M-ORPHAN-REPORT-OWNER-WIDE')
 	public function testAnUnreadableThirdPartySubtypeDoesNotDeclineAProjectDeletion(): Void {
 		Assert.equals(
-			1,
-			scopedFixEditCount(
-				BARE_GETTER, [{ file: 'C.hx', source: BARE_GETTER }], [], [{ file: 'lib/Third.hx', source: UNREADABLE_SUBTYPE }]
-			)
+			1, scopedFixEditCount([{ file: 'C.hx', source: BARE_GETTER }], [], [{ file: 'lib/Third.hx', source: UNREADABLE_SUBTYPE }])
 		);
 	}
 
@@ -796,9 +790,7 @@ import utest.Test;
 	@:pin('control')
 	@:killer('M-ORPHAN-UNREADABLE-ANY-FILE')
 	public function testAnUnreadableProjectFileSpellingNothingLeavesTheDeletionAvailable(): Void {
-		Assert.equals(
-			1, scopedFixEditCount(BARE_GETTER, [{ file: 'C.hx', source: BARE_GETTER }], [{ file: 'B.hx', source: UNREADABLE_INERT }])
-		);
+		Assert.equals(1, scopedFixEditCount([{ file: 'C.hx', source: BARE_GETTER }], [{ file: 'B.hx', source: UNREADABLE_INERT }]));
 	}
 
 	private function violations(src: String): Array<Violation> {
@@ -832,13 +824,12 @@ import utest.Test;
 		Assert.equals('get_data has no property to serve: neither C nor its supertypes declare data', found.message);
 	}
 
-	/** The number of edits `fix` yields for `owner` after `run` over `files` — the deletion gate's verdict. */
-	private function fixEditCount(owner: String, files: Array<{ file: String, source: String }>): Int {
+	/** The number of edits `fix` yields for the owner — the first of `files` — after `run` over `files`: the deletion gate's verdict. */
+	private function fixEditCount(files: Array<{ file: String, source: String }>): Int {
 		final check: Null<Check> = Linter.byId('orphan-accessor');
 		Assert.notNull(check);
 		if (check == null) return -1;
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		return check.fix(owner, CheckFixture.violationsIn(check, files, plugin), plugin).length;
+		return CheckFixture.fixRun(check, files).edits.length;
 	}
 
 	private function applyFix(src: String): String {
@@ -866,14 +857,13 @@ import utest.Test;
 
 	/** `fixEditCount` with a report scope of `report` alone — `reach` and `thirdParty` are reachable only through the resolution scope. */
 	private function scopedFixEditCount(
-		owner: String, report: Array<{ file: String, source: String }>, reach: Array<{ file: String, source: String }>,
+		report: Array<{ file: String, source: String }>, reach: Array<{ file: String, source: String }>,
 		?thirdParty: Array<{ file: String, source: String }>
 	): Int {
 		final check: Null<Check> = Linter.byId('orphan-accessor');
 		Assert.notNull(check);
 		if (check == null) return -1;
-		final plugin: CachingGrammarPlugin = scoped(report, reach, thirdParty ?? []);
-		return check.fix(owner, CheckFixture.violationsIn(check, report, plugin), plugin).length;
+		return CheckFixture.fixRun(check, report, scoped(report, reach, thirdParty ?? [])).edits.length;
 	}
 
 	/** The rule's ONE finding over that same narrow report scope, or null when it did not produce exactly one. */

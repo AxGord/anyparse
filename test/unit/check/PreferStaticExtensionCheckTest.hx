@@ -142,7 +142,11 @@ class PreferStaticExtensionCheckTest extends Test {
 	public function testUsingInAnotherBranchDoesNotCoverTheCall(): Void {
 		final files: Array<{ file: String, source: String }> = branchedUsingFiles();
 		Assert.equals(1, violationsOf(files).length);
-		Assert.equals(0, editsOf(files).length);
+		final run: { edits: Array<{ span: Span, text: String }>, violations: Array<Violation> } = fixRunOf(files);
+		Assert.equals(0, run.edits.length);
+		// declined by THIS gate, not by an earlier one the fixture happens to trip
+		final reason: String = run.violations.length == 1 ? run.violations[0].declineReason ?? '' : '';
+		Assert.isTrue(reason.indexOf('this call sits outside of') != -1, reason);
 	}
 
 	public function testAddUsingFalseReportsButDoesNotFix(): Void {
@@ -978,8 +982,10 @@ class PreferStaticExtensionCheckTest extends Test {
 		return [
 			{
 				file: 'C.hx',
-				source: 'package top;\n\n#if FLAG\nimport sub.Widget;\n\nusing Ext;\n\nclass D {\n\tfunction g():Void {}\n}\n'
-					+ '#else\nimport sub.Widget;\n\nclass C {\n\tfunction f(w:Widget):Void {\n\t\tExt.deco(w, 1);\n\t}\n}\n#end\n'
+				// The import stays OUTSIDE the region: one written in each branch leaves `w`'s member closure unresolved, and
+				// the fix declined on that gate before it ever asked whether the other branch's `using` covers the call.
+				source: 'import sub.Widget;\n\n#if FLAG\nusing Ext;\n\nclass D {\n\tfunction g():Void {}\n}\n'
+					+ '#else\nclass C {\n\tfunction f(w:Widget):Void {\n\t\tExt.deco(w, 1);\n\t}\n}\n#end\n'
 			},
 			{ file: 'Ext.hx', source: EXT_SOURCE },
 			{ file: 'sub/Widget.hx', source: 'package sub;\n\n$WIDGET_SOURCE' }

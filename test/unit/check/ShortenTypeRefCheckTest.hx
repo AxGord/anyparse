@@ -631,10 +631,11 @@ class ShortenTypeRefCheckTest extends Test {
 		final check: ShortenTypeRef = new ShortenTypeRef();
 		// A bare plugin carries no resolution scope, so nothing PROVES which declaration
 		// `pkg.deep.Sub` names — the finding stands, the rewrite does not.
-		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'app/C.hx', source: src }]);
+		final files: Array<{ file: String, source: String }> = [{ file: 'app/C.hx', source: src }];
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.indexOf('report-only') != -1, 'degraded message, got: ${vs[0].message}');
-		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length, 'an unproven finding yields no edit');
+		Assert.equals(0, CheckFixture.fixIn(check, files, vs).length, 'an unproven finding yields no edit');
 		// And SAYS so, on the caller's own violation object. This is a `RiskyFix` rule, so the only
 		// caller of its `fix` is `FixVerifier` — until that carried the reason out, a note written
 		// here reached nothing and the run answered "the check declared no reason for these" for
@@ -876,8 +877,7 @@ class ShortenTypeRefCheckTest extends Test {
 	}
 
 	private function applyFixWith(src: String, plugin: CachingGrammarPlugin, report: Array<{ file: String, source: String }>): String {
-		final check: ShortenTypeRef = new ShortenTypeRef();
-		return CanonicalEdit.applyEdits(src, check.fix(src, CheckFixture.violationsIn(check, report, plugin), plugin));
+		return CanonicalEdit.applyEdits(src, CheckFixture.fixRun(new ShortenTypeRef(), report, plugin).edits);
 	}
 
 }

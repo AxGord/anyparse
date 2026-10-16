@@ -129,7 +129,7 @@ class UsingDeclineAttributionTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final found: Array<Violation> = CheckFixture.violations(check, CONFLICTING_LPAD, plugin);
 		Assert.equals(1, found.length);
-		Assert.equals(0, check.fix(CONFLICTING_LPAD, found, plugin).length);
+		Assert.equals(0, CheckFixture.fixOf(check, CONFLICTING_LPAD, found, plugin).length);
 		assertNamesTheConflict(found[0].declineReason, 'StringTools', 'lpad');
 	}
 
@@ -143,7 +143,7 @@ class UsingDeclineAttributionTest extends Test {
 		final found: Array<Violation> = CheckFixture.violations(check, CONFLICTING_FIND, plugin);
 		Assert.equals(1, found.length);
 		final unmatched: Violation = probeViolation();
-		Assert.equals(0, check.fix(CONFLICTING_FIND, found.concat([unmatched]), plugin).length);
+		Assert.equals(0, CheckFixture.fixOf(check, CONFLICTING_FIND, found.concat([unmatched]), plugin).length);
 		assertNamesTheConflict(found[0].declineReason, 'Lambda', 'find');
 		// The other half of the same contract, in the caller whose subset comes from a `byKey`
 		// lookup rather than a span pairing: a finding the candidate map never matched got no edit
@@ -162,7 +162,7 @@ class UsingDeclineAttributionTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final found: Array<Violation> = CheckFixture.violations(check, CONFLICTING_EXISTS, plugin);
 		Assert.equals(1, found.length);
-		Assert.equals(0, check.fix(CONFLICTING_EXISTS, found, plugin).length);
+		Assert.equals(0, CheckFixture.fixOf(check, CONFLICTING_EXISTS, found, plugin).length);
 		assertNamesTheConflict(found[0].declineReason, 'Lambda', 'exists');
 	}
 
@@ -180,7 +180,7 @@ class UsingDeclineAttributionTest extends Test {
 		final found: Array<Violation> = CheckFixture.violations(check, GUARDED, plugin);
 		Assert.equals(1, found.length);
 		final unmatched: Violation = probeViolation();
-		Assert.equals(0, check.fix(GUARDED, found.concat([unmatched]), plugin).length);
+		Assert.equals(0, CheckFixture.fixOf(check, GUARDED, found.concat([unmatched]), plugin).length);
 		final reason: Null<String> = found[0].declineReason;
 		Assert.notNull(reason);
 		Assert.isTrue(reason != null && reason.indexOf('#if') != -1, reason);
@@ -214,7 +214,7 @@ class UsingDeclineAttributionTest extends Test {
 		final found: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 		Assert.equals(2, found.length);
 		// The `length` site still rewrites — the refusal is per site, not per file.
-		Assert.equals(1, check.fix(CONFLICTING_COUNT, found, plugin).length);
+		Assert.equals(1, CheckFixture.fixIn(check, files, found, plugin).length);
 		final mapSite: Violation = found[0].message.indexOf('count()') != -1 ? found[0] : found[1];
 		final arraySite: Violation = mapSite == found[0] ? found[1] : found[0];
 		assertNamesTheConflict(mapSite.declineReason, 'Lambda', 'count');
@@ -234,7 +234,7 @@ class UsingDeclineAttributionTest extends Test {
 		final found: Array<Violation> = CheckFixture.violations(check, GUARDED_COUNT, plugin);
 		Assert.equals(1, found.length);
 		final unmatched: Violation = probeViolation();
-		Assert.equals(0, check.fix(GUARDED_COUNT, found.concat([unmatched]), plugin).length);
+		Assert.equals(0, CheckFixture.fixOf(check, GUARDED_COUNT, found.concat([unmatched]), plugin).length);
 		final reason: Null<String> = found[0].declineReason;
 		Assert.notNull(reason);
 		Assert.isTrue(reason != null && reason.indexOf('#if') != -1, reason);

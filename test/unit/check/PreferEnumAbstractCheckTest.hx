@@ -447,10 +447,9 @@ class PreferEnumAbstractCheckTest extends Test {
 		// Fail-closed: the whole-scope refusals live in `run`, so a `fix` that skipped it must
 		// not convert anything at all.
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final vs: Array<Violation> = CheckFixture.violationsIn(
-			new PreferEnumAbstract(), [{ file: 'Align.hx', source: THREE_STRING_CONSTANTS }], plugin
-		);
-		Assert.equals(0, new PreferEnumAbstract().fix(THREE_STRING_CONSTANTS, vs, plugin).length);
+		final files: Array<{ file: String, source: String }> = [{ file: 'Align.hx', source: THREE_STRING_CONSTANTS }];
+		final vs: Array<Violation> = CheckFixture.violationsIn(new PreferEnumAbstract(), files, plugin);
+		Assert.equals(0, CheckFixture.fixIn(new PreferEnumAbstract(), files, vs, plugin).length);
 	}
 
 	@:pin('control') @:killer('M-HASSUBTYPE-FALSE')
@@ -522,9 +521,10 @@ class PreferEnumAbstractCheckTest extends Test {
 		final decl: String = THREE_STRING_CONSTANTS;
 		final check: PreferEnumAbstract = new PreferEnumAbstract();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'A.hx', source: decl }], plugin);
-		final flat: Array<{ span: Span, text: String }> = check.fix(decl, vs, plugin);
-		final grouped: Array<GroupedEdit> = check.fixGrouped(decl, vs, plugin);
+		final files: Array<{ file: String, source: String }> = [{ file: 'A.hx', source: decl }];
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
+		final flat: Array<{ span: Span, text: String }> = CheckFixture.fixIn(check, files, vs, plugin);
+		final grouped: Array<GroupedEdit> = check.fixGrouped(decl, vs, plugin, CheckFixture.index(files, plugin));
 		Assert.equals(grouped.length, flat.length);
 		for (i in 0...flat.length) {
 			Assert.equals(grouped[i].span.from, flat[i].span.from);

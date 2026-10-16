@@ -255,8 +255,9 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		// after every finding: the counterfactual solves fill taints of their own, which must not shape a report
 		longLocks = explained(sites, judged, long, costs, states, dominance.dominators, { taint: paths.normal, errors: errors });
 		library?.annotate(violations);
-		// a file whose chain writes no option is scanned for the graph's sake only: it reports no finding of its own
-		return violations.filter(v -> v.file == '' || listsOf(v.file).reports);
+		// a file whose chain writes no option is scanned for the graph's sake only, and reports no finding of its own:
+		// `Linter.collect` drops those (`GraphScoped`, applied in `runGated`), the one door every run of a rule goes through
+		return violations;
 	}
 
 	public function fix(

@@ -4,7 +4,6 @@ import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.NullDereference;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
 import utest.Assert;
@@ -80,7 +79,7 @@ class NullDereferenceTest extends Test {
 		final check: NullDereference = new NullDereference();
 		final src: String = 'class C { function f() { var x = null; x.foo(); } }';
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.fixOf(check, src, vs);
 		Assert.equals(0, edits.length);
 	}
 

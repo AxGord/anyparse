@@ -507,7 +507,7 @@ class PreferFindCheckTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: PreferFind = new PreferFind();
 		final vs: Array<Violation> = CheckFixture.violations(check, src, plugin);
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin);
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.fixOf(check, src, vs, plugin);
 		switch CanonicalEdit.canonicalize(src, edits, true, plugin) {
 			case Ok(text):
 				return text;

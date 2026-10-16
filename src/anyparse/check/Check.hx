@@ -167,7 +167,8 @@ interface ConfigAware {
  * report-only finding there is un-actionable besides (see `ReificationScan`). The drop is applied
  * once, in `Linter.collect`, through which every consumer of a check's findings reads them.
  *
- * NOTHING implements this today, and no builtin should without a reason written down beside it.
+ * ONE builtin implements it, `redundant-parens`, with its reason written down beside it (a pair dropped in a delimited slot types
+ * the same inside a quotation, the splice-arity and operand gates covering what does not); no other builtin should without one.
  * The slot exists so the central drop is a policy a future check can DECLINE rather than a trap
  * it cannot see: a check that analyses quotations AS DATA — a macro-hygiene rule, a reification
  * linter — would otherwise silently report nothing at all and give no hint why.

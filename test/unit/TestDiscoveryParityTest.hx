@@ -492,6 +492,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.cli.LintNoOracleCliTest',
 		'unit.cli.LintPerFileConfigCliTest',
 		'unit.cli.LintProjectWriteScopeCliTest',
+		'unit.cli.LintQuotationAwareCliTest',
 		'unit.cli.LintRangeCliTest',
 		'unit.cli.RenameMemberInFileCliTest',
 		'unit.cli.RenameTypeInFileCliTest',
@@ -1958,6 +1959,10 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-VALUE-TYPE-UNINIT-FIELD',
 			'unit.check.RedundantNullCoalescingCheckTest#testValueTypePropertyReadThroughGetterFlagged :: control :: '
 				+ 'M-VALUE-TYPE-FIELDS-REFUSED',
+			'unit.check.RedundantParensCheckTest#testDoubleParensAroundASpliceCollapseToOnePair :: control :: M-PARENS-QUOTED-DROPPED',
+			'unit.check.RedundantParensCheckTest#testSpliceReificationKeepsItsParensInASplicingHost :: control :: M-PARENS-SPLICE-HOST-OPEN',
+			'unit.check.RedundantParensCheckTest#testSpliceReificationOutsideASplicingHostIsUnwrapped :: control :: M-PARENS-QUOTED-DROPPED',
+			'unit.check.RedundantParensOperandArmsTest#testMacroQuotationSubtreeIsUntouched :: control :: M-PARENS-OPERAND-QUOTED-OPEN',
 			'unit.check.RedundantReplaceLoopCheckTest#testEmptyLiteralReplacementBoundsTheRedundancyToOneCharacter :: control :: '
 				+ 'M-EMPTY-B-ANY-NONEMPTY',
 			'unit.check.RedundantReplaceLoopCheckTest#testMultiCharSearchWithEmptyReplacementNotFlagged :: control :: M-SEAM-BLIND',
@@ -2395,7 +2400,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-TS-STD-RETURN,M-TS-STD-FIELD,M-TS-STD-GETTER,M-TS-STD-GETTER-LOCAL,M-TS-STD-GETTER-TYPED,M-TS-NEW-LOCAL,M-TS-ALIAS-TYPE,'
 				+ 'M-TS-STD-PLACEHOLDER,M-TS-BUILTIN-EVENTS',
 			'unit.check.ThreadSafetyPositiveSinksTest#testTheBuiltinAppliesWithNoSinks :: control :: '
-				+ 'M-TS-BUILTIN-NEEDS-SINKS,M-TS-BUILTIN-OFF,M-TS-BUILTIN-ANY-NODE',
+				+ 'M-TS-REPORT-NEEDS-SINKS,M-TS-BUILTIN-OFF,M-TS-BUILTIN-ANY-NODE',
 			'unit.check.ThreadSafetyPositiveSinksTest#testTheNoticeCountsWhatNonBlockingRemoved :: control :: M-TS-NOTICE-WAIVED',
 			'unit.check.ThreadSafetyPositiveSinksTest#testTheRunSaysWhichBuiltinsApplied :: control :: M-TS-BUILTIN-NOTICE-OFF',
 			'unit.check.ThreadSafetyQuietLocksTest#testAConstructorsOwnTakeNeverWaits :: control :: M-TS-CTOR-TAKE',
@@ -2665,6 +2670,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.cli.LintExplainLongCliTest#testNothingToExplainIsSaid :: control :: M-LINT-EXPLAIN-NO-ENVELOPE',
 			'unit.cli.LintFixFactsSettleTest#testTheFactsSettleBeforeTheFirstWrite :: control :: M-FIX-FACTS-SETTLED',
 			'unit.cli.LintFixQuietDefaultTest#testTheRuleAccountingWaitsForAnEditOrForVerbose :: control :: M-LINT-FIX-CENSUS-UNGATED',
+			'unit.cli.LintQuotationAwareCliTest#testAQuotedRedundantParensFindingIsFixed :: control :: M-PARENS-QUOTED-DROPPED',
+			'unit.cli.LintQuotationAwareCliTest#testAQuotedRedundantParensFindingReports :: control :: M-PARENS-QUOTED-DROPPED',
 			'unit.cli.LintRangeCliTest#testWriteFixLeavesAStandingFindingOutsideTheWindow :: control :: M-LINT-RANGE-INERT',
 			'unit.cli.ResolutionScopeCliTest#testCrossingSuperNeedsRootsThatMatch :: control :: M-FIAD-ROOTS-MATCH-IGNORED',
 			'unit.core.RendererParenSiblingRestTest#testAParenOnAnUnresolvedFlatSideIsNoBreakPoint :: control :: M-PAREN-ALT-ROUTE',
@@ -3843,7 +3850,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachTest#testAClassNamedToTheClassValueProducerMayBeInstantiatedUntyped :: control :: M-ESCAPE-NAMED-CLASS',
 			'unit.query.MemberReachTest#testAClasspathTheIndexDoesNotHoldMayDeclareAnOverrideOrASubtype :: control :: '
 				+ 'M-REACH-CLASSPATH-DISPATCH,M-CARRY-CLASSPATH',
-			'unit.query.MemberReachTest#testAConstructedReceiverIsItsOwnType :: control :: M-ESCAPE-NEW-TYPE,M-ESCAPE-RECEIVER-CALL',
+			'unit.query.MemberReachTest#testAConstructedReceiverIsItsOwnType :: control :: M-ESCAPE-RECEIVER-CALL',
 			'unit.query.MemberReachTest#testAConversionOfATypedOperandRunsOnlyItsTypesMethod :: control :: M-REACH-TYPED-SITE',
 			'unit.query.MemberReachTest#testAFieldInitializerRunsWhatItHoldsThoughItCallsNothing :: control :: '
 				+ 'M-GRAPH-EAGER-INIT,M-REACH-INIT-BRANCHES',
@@ -3898,7 +3905,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachTest#testEveryDeclarationOfAMemberInEachBranchIsRead :: control :: '
 				+ 'M-REACH-FOLDED-BODIES,M-GRAPH-FOLDED-DECLARATIONS',
 			'unit.query.MemberReachTest#testEveryEscapeRuleLetsItsSoundTwinThrough :: control :: '
-				+ 'M-ESCAPE-P-STORE,M-ESCAPE-P-CAST,M-ESCAPE-P-THROW,M-ESCAPE-P-DECL,M-ESCAPE-P-PARAM,M-ESCAPE-P-RETURN,M-ESCAPE-P-LAMBDA,M-ESCAPE-P-METHOD-VALUE,M-ESCAPE-P-HELD,M-ESCAPE-P-LIBRARY-SUPER,M-ESCAPE-P-NATIVE,M-ESCAPE-P-TYPED-ARGS,M-ESCAPE-DECLARED-SOURCE,M-ESCAPE-LOCAL-INIT,M-ESCAPE-PRIMITIVE-PARAM,M-ESCAPE-ASSIGN-VALUE,M-ESCAPE-IF-VALUE,M-ESCAPE-BLOCK-VALUE,M-ESCAPE-MACRO-MEMBER,M-ESCAPE-MACRO-HAZARD,M-ESCAPE-REIFICATION,M-ESCAPE-THROW,M-ESCAPE-DECL,M-ESCAPE-PARAM,M-ESCAPE-LAMBDA,M-ESCAPE-STORE,M-ESCAPE-CAST,M-ESCAPE-METHOD-VALUE,M-ESCAPE-HELD,M-ESCAPE-LIBRARY-SUPER,M-ESCAPE-NATIVE',
+				+ 'M-ESCAPE-P-STORE,M-ESCAPE-P-CAST,M-ESCAPE-P-THROW,M-ESCAPE-P-DECL,M-ESCAPE-P-PARAM,M-ESCAPE-P-RETURN,M-ESCAPE-P-LAMBDA,M-ESCAPE-P-METHOD-VALUE,M-ESCAPE-P-HELD,M-ESCAPE-P-LIBRARY-SUPER,M-ESCAPE-P-NATIVE,M-ESCAPE-P-TYPED-ARGS,M-ESCAPE-DECLARED-SOURCE,M-ESCAPE-LOCAL-INIT,M-ESCAPE-PRIMITIVE-PARAM,M-ESCAPE-ASSIGN-VALUE,M-ESCAPE-IF-VALUE,M-ESCAPE-BLOCK-VALUE,M-ESCAPE-MACRO-MEMBER,M-ESCAPE-MACRO-HAZARD,M-ESCAPE-REIFICATION,M-ESCAPE-THROW,M-ESCAPE-DECL,M-ESCAPE-PARAM,M-ESCAPE-LAMBDA,M-ESCAPE-STORE,M-ESCAPE-CAST,M-ESCAPE-METHOD-VALUE,M-ESCAPE-HELD,M-ESCAPE-LIBRARY-SUPER,M-ESCAPE-NATIVE,M-ESCAPE-NEW-TYPE',
 			'unit.query.MemberReachTest#testExplainNamesThePath :: control :: M-REACH-EXPLAIN-PATH',
 			'unit.query.MemberReachTest#testExternClosedOverInertValuesAdmitsNoFunctionValue :: control :: M-REACH-EXTERN-INERT',
 			'unit.query.MemberReachTest#testExternHandedAnEnumValueRunsWhatItsArgumentsHoldByName :: control :: '
@@ -5528,6 +5535,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-TAINT-UNION-SINK',
 			'M-TS-GRAPH-CUT',
 			'M-TS-REPORT-UNGATED',
+			'M-PARENS-QUOTED-DROPPED',
+			'M-PARENS-SPLICE-HOST-OPEN',
+			'M-PARENS-OPERAND-QUOTED-OPEN',
 			'M-ANON-FIRST-FILE-CONFIG',
 			'M-COLLECT-NO-ENABLEMENT',
 			'M-FIXVERIFY-ENABLEMENT-DROPPED',
@@ -6572,6 +6582,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-REPEATED-BY-HEADER',
 			'M-TS-FOLD-SITE-CYCLE',
 			'M-TS-BUILTIN-NEEDS-SINKS',
+			'M-TS-REPORT-NEEDS-SINKS',
 			'M-TS-BUILTIN-OFF',
 			'M-TS-BUILTIN-ANY-NODE',
 			'M-TS-WAIVE-OFF',

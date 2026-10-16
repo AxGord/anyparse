@@ -24,7 +24,7 @@ class TrivialGetterCheckTestBase extends Test {
 
 	private function assertFixCanonical(src: String, present: String, absent: String): Void {
 		final r: { vs: Array<Violation>, check: TrivialGetter } = runAndExpectOne(src);
-		switch CanonicalEdit.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, CheckFixture.fixOf(r.check, src, r.vs), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf(present) >= 0);
 				Assert.isTrue(text.indexOf(absent) == -1);
@@ -35,7 +35,7 @@ class TrivialGetterCheckTestBase extends Test {
 
 	private function assertFixContains(src: String, present: String): Void {
 		final r: { vs: Array<Violation>, check: TrivialGetter } = runAndExpectOne(src);
-		switch CanonicalEdit.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, CheckFixture.fixOf(r.check, src, r.vs), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf(present) >= 0);
 			case Err(message):
@@ -45,7 +45,7 @@ class TrivialGetterCheckTestBase extends Test {
 
 	private function assertFixRefused(src: String): Void {
 		final r: { vs: Array<Violation>, check: TrivialGetter } = runAndExpectOne(src);
-		Assert.equals(0, r.check.fix(src, r.vs, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.fixOf(r.check, src, r.vs).length);
 	}
 
 	private function runAndExpectOne(src: String): { check: TrivialGetter, vs: Array<Violation> } {
@@ -69,7 +69,7 @@ class TrivialGetterCheckTestBase extends Test {
 
 	private function fixedText(src: String): String {
 		final r: { vs: Array<Violation>, check: TrivialGetter } = runAndExpectOne(src);
-		return switch CanonicalEdit.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+		return switch CanonicalEdit.canonicalize(src, CheckFixture.fixOf(r.check, src, r.vs), true, new HaxeQueryPlugin()) {
 			case Ok(text): text;
 			case Err(message):
 				Assert.fail('fix canonicalize Err: $message');

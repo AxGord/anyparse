@@ -306,7 +306,9 @@ class PreferCountCheckTest extends Test {
 	public function testCommentInDroppedRegionNotFixed(): Void {
 		final src: String = file('var n:Int = 0;\n\t\tfor (x in xs) // why\n\t\t\tif (x > 2) n++;\n\t\treturn n;', true);
 		Assert.equals(1, violations(src).length);
-		Assert.equals(0, new PreferCount().fix(src, violations(src), StdScope.plugin([{ file: 'C.hx', source: src }])).length);
+		Assert.equals(
+			0, CheckFixture.fixOf(new PreferCount(), src, violations(src), StdScope.plugin([{ file: 'C.hx', source: src }])).length
+		);
 	}
 
 	public function testReceiverDeclaringCountTakesTheQualifiedForm(): Void {
