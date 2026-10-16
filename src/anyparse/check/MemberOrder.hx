@@ -236,6 +236,22 @@ final class MemberOrder implements Check implements ConfigAware {
 	}
 
 	/**
+	 * `compareOrder`'s pinned key of `m`, whose ranked-block ordinal is `ordinal`: 1 for a conditional member of
+	 * no ranked block, which sinks, else 0.
+	 */
+	private static inline function pinnedKey(m: OrderedMember, ordinal: Null<Int>): Int {
+		return m.condition != null && ordinal == null ? 1 : 0;
+	}
+
+	/**
+	 * `compareOrder`'s within-rank step of `m`, whose ranked-block ordinal is `ordinal`: 0 for a plain member, and for a
+	 * member of a content-ranked block -1 when the block leads its rank, 1 when it trails the plain members.
+	 */
+	private static inline function blockStep(m: OrderedMember, ordinal: Null<Int>, plan: SortPlan): Int {
+		return ordinal == null ? 0 : (leadsRank(m, plan) ? -1 : 1);
+	}
+
+	/**
 	 * Total source lines the reorder genuinely MOVES: the extent of every member that falls
 	 * outside a longest common subsequence of the current and the sorted list, compared by node
 	 * identity. Members of that subsequence keep their relative order, so a line diff of the
@@ -915,22 +931,6 @@ final class MemberOrder implements Check implements ConfigAware {
 			if (sub != 0) return sub;
 		}
 		return a.index - b.index;
-	}
-
-	/**
-	 * `compareOrder`'s pinned key of `m`, whose ranked-block ordinal is `ordinal`: 1 for a conditional member of
-	 * no ranked block, which sinks, else 0.
-	 */
-	private static inline function pinnedKey(m: OrderedMember, ordinal: Null<Int>): Int {
-		return m.condition != null && ordinal == null ? 1 : 0;
-	}
-
-	/**
-	 * `compareOrder`'s within-rank step of `m`, whose ranked-block ordinal is `ordinal`: 0 for a plain member, and for a
-	 * member of a content-ranked block -1 when the block leads its rank, 1 when it trails the plain members.
-	 */
-	private static inline function blockStep(m: OrderedMember, ordinal: Null<Int>, plan: SortPlan): Int {
-		return ordinal == null ? 0 : (leadsRank(m, plan) ? -1 : 1);
 	}
 
 	/**

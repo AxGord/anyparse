@@ -12030,8 +12030,8 @@
 			"name": "M-NULLFLOW-PREDICATE-UNCHECKED",
 			"type": "anyparse.check.NullFlow",
 			"method": "predicateModifiers",
-			"find": "return !(fn.kind != shape.finalModifierMemberKind && ",
-			"replace": "return !(false && ",
+			"find": "return fn.kind == shape.finalModifierMemberKind || ",
+			"replace": "return true || ",
 			"note": "an overridable member is trusted as a non-null predicate"
 		},
 		{
@@ -13089,8 +13089,8 @@
 			"name": "M-METHODS-NATIVE-REFUSED",
 			"type": "anyparse.query.FactsMethodValues",
 			"method": "scan",
-			"find": "final lost: Null<String> = lostFact(id, n);",
-			"replace": "final lost: Null<String> = n.natives.length > 0 ? 'native' : lostFact(id, n);",
+			"find": "final lost: Null<String> = FactMarkers.lossReason(id, n, inlinedMemberless);",
+			"replace": "final lost: Null<String> = n.natives.length > 0 ? 'native' : FactMarkers.lossReason(id, n, inlinedMemberless);",
 			"note": "(precision) target code is taken to obtain any method as a value and rebind it, so no `this` is answered in a program holding any"
 		},
 		{
@@ -15553,9 +15553,9 @@
 		},
 		{
 			"name": "M-ESCAPES-FACTS-MARKER-UNKNOWN",
-			"type": "anyparse.query.FactsEscapes",
-			"method": "lostFact",
-			"find": "FactMarkers.unknownReason(id, text);",
+			"type": "anyparse.query.FactMarkers",
+			"method": "lossReason",
+			"find": "unknownReason(id, text);",
 			"replace": "null;",
 			"note": "a node carrying a marker no reader names is read whole, so what a lost fact of it lets escape is missed"
 		},
@@ -15569,9 +15569,9 @@
 		},
 		{
 			"name": "M-METHODS-MARKER-UNKNOWN",
-			"type": "anyparse.query.FactsMethodValues",
-			"method": "lostFact",
-			"find": "FactMarkers.unknownReason(id, text);",
+			"type": "anyparse.query.FactMarkers",
+			"method": "lossReason",
+			"find": "unknownReason(id, text);",
 			"replace": "null;",
 			"note": "a node carrying a marker no reader names is read whole, so a method value a lost fact of it reads is missed"
 		},

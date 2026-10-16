@@ -215,8 +215,7 @@ final class ValueEscapes {
 				case ReflectiveName(_), ArrayChange:
 			}
 		}
-		if (!scanFile(g, file, tree, source, escape)) return { types: null, raw: false, ids: null };
-		return null;
+		return scanFile(g, file, tree, source, escape) ? null : { types: null, raw: false, ids: null };
 	}
 
 	/**

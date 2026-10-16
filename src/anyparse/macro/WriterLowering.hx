@@ -1508,11 +1508,11 @@ class WriterLowering {
 	 */
 	private function openRightCase(branch: ShapeNode, typePath: String, helperName: String, pos: Position): Null<Case> {
 		final none: Int = WriterPrattLowering.OPEN_NONE;
-		final prec: Null<Int> = branch.annotations.get(AnnotationKeys.PRATT_PREC);
-		final tPrec: Null<Int> = branch.annotations.get(AnnotationKeys.TERNARY_PREC);
+		final prec: Null<Int> = branch.annotations[AnnotationKeys.PRATT_PREC];
+		final tPrec: Null<Int> = branch.annotations[AnnotationKeys.TERNARY_PREC];
 		final children: Array<ShapeNode> = branch.children;
 		final arity: Int = children.length + branchExtraArgs(branch);
-		final ctorRef: Expr = MacroStringTools.toFieldExpr(ruleCtorPath(typePath, branch.annotations.get(AnnotationKeys.BASE_CTOR)));
+		final ctorRef: Expr = MacroStringTools.toFieldExpr(ruleCtorPath(typePath, branch.annotations[AnnotationKeys.BASE_CTOR]));
 		if (prec == null && tPrec == null) return atomOpenCase(branch, typePath, arity, ctorRef, pos);
 		final body: Expr = if (tPrec != null)
 			macro $v{tPrec} < ctx ? $v{none} : 0

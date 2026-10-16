@@ -324,7 +324,7 @@ final class FactsMethodValues {
 				return out;
 			}
 			final n: FactNode = made;
-			final lost: Null<String> = lostFact(id, n);
+			final lost: Null<String> = FactMarkers.lossReason(id, n, inlinedMemberless);
 			if (lost != null) {
 				out.unknown = lost;
 				return out;
@@ -335,23 +335,6 @@ final class FactsMethodValues {
 			if (!scanReflection(out, id, n)) return out;
 		}
 		return out;
-	}
-
-	/**
-	 * Why a fact of the node `id` is lost to `scan` — its file's text is gone, a spliced reflective body lost its
-	 * name, a marker is unknown; null when none is.
-	 */
-	private function lostFact(id: String, n: FactNode): Null<String> {
-		return FactMarkers.first(
-			n, m -> switch m {
-				case StaleForeign: 'a fact of `$id` lies in a file whose text the table no longer has';
-				case ReflectionInlined: inlinedMemberless(n) ? null : 'a reflective body spliced into `$id` lost the name it was handed';
-				case Unknown(text):
-					FactMarkers.unknownReason(id, text);
-				// a splice's and an expansion's facts are the node's own, wherever they sit
-				case InlineSite | MacroExpansion | ReflectionUnattributed | ReflectionFrom(_): null;
-			}
-		);
 	}
 
 	/**

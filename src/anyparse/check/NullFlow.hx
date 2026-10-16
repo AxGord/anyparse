@@ -487,7 +487,7 @@ final class NullFlow {
 			|| overloadMeta != null && modifiers.exists(m -> META_KINDS.contains(m.kind) && m.name == overloadMeta)
 		)
 			return false;
-		return !(fn.kind != shape.finalModifierMemberKind && !carries(shape.inlineModifierKind) && !carries(shape.staticModifierKind));
+		return fn.kind == shape.finalModifierMemberKind || carries(shape.inlineModifierKind) || carries(shape.staticModifierKind);
 	}
 
 	/** The indexes of `params` an `!= null` conjunct of `returned` (its `&&` operands, through parentheses) compares, each once. */

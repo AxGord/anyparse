@@ -3070,3 +3070,16 @@ decided the question; it may not become a record of runs.
   could not reach `check/` → ONE `ParseGate.parseOrNull` beside `parse` / `refusal` (moved there, every caller
   repointed by `move-member`, the inline copies replaced). Catching `Exception` alone is the old two-catch form: a
   `ParseError` IS an `Exception`. All-rules and both ops harnesses byte-identical — branch `feat/infra-B9`
+- the 40 functions over the cyclomatic threshold (C1) are split along their own decisions — a dispatch per kind, a
+  validation ladder into named predicates, a loop body doing several jobs into one function per job — never into a
+  closure or a ternary chain: a local function's branches count toward its enclosing function, and the point is the
+  shape, not the number. Closures that carried an accumulator (`FactsEscapes.instances`, `CompilerFacts.within` /
+  `materialize`, `NullGuardedCode.gathered`) became members threading it; a walk whose state crosses three per-body
+  readers carries it in one struct (`MemberTouchScan.TouchWalk`). Two copies the split exposed now have one home:
+  the per-argument classification `FunctionValueTypes.boundArguments` and `reflectiveConstructions` each spelled →
+  `argumentFunction`; the lost-fact marker switch `FactsEscapes` and `FactsMethodValues` each spelled, differing in
+  which spliced reflection is harmless → `FactMarkers.lossReason(id, n, harmlessSplice)`; and the four import-record
+  literals of `SymbolIndexBuilder.extractFileInfo` → `importOf`. Kept whole: `Renderer.flatTokenWidthOfRestStack`'s
+  frame loop (one stack machine threading five running values on the formatter's hot path; only its pure final
+  combination moved out) and `CompilerOracle.rememberedTimed` / `warmFirst` (the oracle spawn path another task is
+  changing). Macro-time splits keep the generated parsers and writers byte-identical — branch `feat/infra-C1`

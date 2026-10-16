@@ -204,27 +204,9 @@ final class FactsEscapes {
 		final made: Null<FactNode> = _table.node(id);
 		if (made == null) return refuse('the facts of `$id` lie in a file whose text the table no longer has');
 		final n: FactNode = made;
-		final lost: Null<String> = lostFact(id, n);
+		final lost: Null<String> = FactMarkers.lossReason(id, n, harmlessReflection);
 		if (lost != null) return refuse(lost);
-		if (!_native.nodeEscapes(id, n, _hand)) return false;
-		return handEscapes(n);
-	}
-
-	/**
-	 * Why a fact of the node `id` is lost — its file's text is gone, a spliced reflective body lost its name, a
-	 * marker is unknown; null when none is.
-	 */
-	private function lostFact(id: String, n: FactNode): Null<String> {
-		return FactMarkers.first(
-			n, m -> switch m {
-				case StaleForeign: 'a fact of `$id` lies in a file whose text the table no longer has';
-				case ReflectionInlined: harmlessReflection(n) ? null : 'a reflective body spliced into `$id` lost the name it was handed';
-				case Unknown(text):
-					FactMarkers.unknownReason(id, text);
-				// a splice's and an expansion's facts are the node's own, wherever they sit
-				case InlineSite | MacroExpansion | ReflectionUnattributed | ReflectionFrom(_): null;
-			}
-		);
+		return _native.nodeEscapes(id, n, _hand) && handEscapes(n);
 	}
 
 	/**

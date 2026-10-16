@@ -382,8 +382,7 @@ final class NullGuardedCode {
 		final fnSpan: Null<Span> = fn?.span;
 		if (fn == null || fnSpan == null) return false;
 		final params: Array<QueryNode> = [for (c in fn.children) if ((_shape.paramKinds ?? []).contains(c.kind)) c];
-		if (params.length != count || params[index].name != name) return false;
-		return readsNeverCall(node, read.tree, fn, params[index], name, depth);
+		return params.length == count && params[index].name == name && readsNeverCall(node, read.tree, fn, params[index], name, depth);
 	}
 
 	/**

@@ -512,9 +512,7 @@ final class ShardPlan {
 	 * class off shard 0, and a shard nothing was dealt to.
 	 */
 	private static function checkParity(expected: Array<String>, placements: Array<ShardPlacement>, shards: Int): Null<String> {
-		final uncovered: Null<String> = coverageFailure(expected, placements);
-		if (uncovered != null) return uncovered;
-		return placementFailure(placements, shards);
+		return coverageFailure(expected, placements) ?? placementFailure(placements, shards);
 	}
 
 	/**
