@@ -10665,11 +10665,11 @@
 		},
 		{
 			"name": "M-TS-REPORT-UNGATED",
-			"type": "anyparse.check.ThreadSafety",
-			"method": "run",
-			"find": "return violations.filter(v -> v.file == '' || listsOf(v.file).reports);",
-			"replace": "return violations;",
-			"note": "a file whose chain lists no sinks reports findings of its own"
+			"type": "anyparse.check.Linter",
+			"method": "runGated",
+			"find": "return found.filter(v -> v.file == '' || gated.skipReason(v.file, LintConfig.resolveWith(resolveConfig, v.file)) == null);",
+			"replace": "return found;",
+			"note": "a graph-scoped rule's findings in a file its report gate refuses are kept, so a file whose chain writes no option reports findings of its own"
 		},
 		{
 			"name": "M-ANON-FIRST-FILE-CONFIG",

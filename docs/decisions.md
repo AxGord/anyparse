@@ -2864,3 +2864,6 @@ decided the question; it may not become a record of runs.
   `FieldInitInConstructorCheckTest`'s folds now assert the extracted constant the index lets in;
   `ExplicitTypeCheckTest.testFixWithoutIndexSkips` became the same-file interface it resolves; `EmptyCaseArmCheckTest`
   keeps only its indexed half — branch `feat/infra-B8b`
+- `ThreadSafety.run` filtered its own findings by the report gate → `Linter.runGated` applies the same `GraphScoped`
+  gate to every graph-scoped rule and is the one door a run goes through, so the rule's copy was unobservable in
+  production; it is gone, and M-TS-REPORT-UNGATED cuts `runGated` — branch `feat/infra-B8b`
