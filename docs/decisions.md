@@ -2917,3 +2917,15 @@ decided the question; it may not become a record of runs.
   written, as the split gave it), COMPILER text through the facts readers (`MemberReach.outerTypeName` by
   `FactsTypeTree`, `FactsView.unwrapped` by the new `FactsTypeText.unwrap`, which peels a wrapper only when its `<`
   closes at the end) — branch `feat/infra-B6b`
+- the two compiler-diagnostic readers were read as one being merely terser → `LintFixVerify.errorMentionsFile` blamed
+  the wrong file: a basename match (`other/A.hx` blamed `src/A.hx`), a warning counted as a cause, a pretty-reported
+  error unread behind its ANSI badge. The oracle batch now asks `LintFixSafePass.blames` (the safe pass's
+  `errorFiles` + segment-aligned `samePath`) and the copy is gone — branch `feat/infra-B6b`
+- the token-based hxml reader (`OracleCache.hxmlRefs`: several flags per line, tab as a separator) was taken as the
+  stronger of the two → Haxe 4.3.7 reads an hxml as an argv the other way round: a line is trimmed and unquoted, a `#`
+  only leads a comment, and a line starting with `-` is split ONCE at its first space (`-cp a -cp b` is the one
+  classpath `a -cp b`, `-cp<TAB>src` an unknown option, a flag's value may stand on the next line; probed with
+  `--interp` builds). `OracleCache.hxmlArgs` reads that argv, `hxmlRefs` walks it, and
+  `OracleDeclaration.relativeClasspaths` (line prefixes, quotes kept) asks `hxmlRefs`. A fingerprint over an hxml
+  spelled the old way changes once. The compile-dir probe still does not follow an include: it resolves against the
+  directory being decided — branch `feat/infra-B6b`

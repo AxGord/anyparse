@@ -192,32 +192,19 @@ final class OracleDeclaration {
 	}
 
 	/**
-	 * The relative classpath entries (`-cp` / `-p` / `--class-path`) declared inside `hxml` —
-	 * the probe set `compileDir` resolves under each candidate directory. Only INPUT
-	 * paths qualify: they must already exist, where an output path (`-cpp`, `-js`) may not
-	 * yet. Absolute entries prove nothing about the compile dir and are dropped; an
-	 * unreadable hxml (or a non-sys target) yields the empty set — the tie.
+	 * The relative classpath entries (`-cp` / `-p` / `--class-path`) declared inside `hxml`, read as the compiler reads
+	 * it (`OracleCache.hxmlRefs`) — the probe set `compileDir` resolves under each candidate directory. Only INPUT paths
+	 * qualify: they must already exist, where an output path (`-cpp`, `-js`) may not yet. Absolute entries prove nothing
+	 * about the compile dir and are dropped; an unreadable hxml (or a non-sys target) yields the empty set — the tie. An
+	 * include is not followed: it resolves against the compile directory, which is what is being decided.
 	 */
 	private static function relativeClasspaths(hxml: String): Array<String> {
 		#if (sys || nodejs)
 		final content: Null<String> = try sys.io.File.getContent(hxml) catch (exception: Exception) null;
 		if (content == null) return [];
-		final out: Array<String> = [];
-		for (line in content.split('\n')) {
-			final trimmed: String = line.trim();
-			final path: Null<String> = if (trimmed.startsWith('-cp '))
-				trimmed.substr(4)
-			else if (trimmed.startsWith('-p '))
-				trimmed.substr(3)
-			else if (trimmed.startsWith('--class-path '))
-				trimmed.substr(13)
-			else
-				null;
-			if (path == null) continue;
-			final cleaned: String = path.trim();
-			if (cleaned != '' && !Path.isAbsolute(cleaned)) out.push(cleaned);
-		}
-		return out;
+		return [
+			for (path in OracleCache.hxmlRefs(content).classPaths) if (path != '' && !Path.isAbsolute(path)) path
+		];
 		#else
 		return [];
 		#end

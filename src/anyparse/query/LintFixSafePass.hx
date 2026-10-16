@@ -137,6 +137,15 @@ final class LintFixSafePass {
 	}
 
 	/**
+	 * Whether the compiler's `errors` blame `file`: one of the files `errorFiles` reads off them names it (`samePath`).
+	 * The one reading of a failed typecheck every revert net attributes by — ANSI colour stripped, warnings skipped, the
+	 * path matched by segment-aligned suffix and never by basename, so `other/A.hx` does not blame `src/A.hx`.
+	 */
+	public static function blames(errors: String, file: String): Bool {
+		return errorFiles(errors).exists(path -> samePath(path, file));
+	}
+
+	/**
 	 * Which of the files this run WROTE the compiler's errors blame, closed under `coupled`.
 	 *
 	 * The compiler's spelling is matched against a written path by segment-aligned suffix on

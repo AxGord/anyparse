@@ -21927,6 +21927,36 @@
 			"find": "typeSyntax(memberLookupReceiverSource(typeSource, wrappers, typeSyntax))?.shape",
 			"replace": "typeSyntax(typeSource)?.shape",
 			"note": "a path under a nullable wrapper is the wrapper's"
+		},
+		{
+			"name": "M-HXML-SPLIT-LAST-SPACE",
+			"type": "anyparse.check.OracleCache",
+			"method": "hxmlArgs",
+			"find": "line.indexOf(' ')",
+			"replace": "line.lastIndexOf(' ')",
+			"note": "a flag line splits at its LAST space, so `-cp lib -lib heaps` reads as the flag `-cp lib -lib` and the compiler's one classpath is lost"
+		},
+		{
+			"name": "M-HXML-QUOTES-KEPT",
+			"type": "anyparse.check.OracleCache",
+			"method": "unquote",
+			"force": "s",
+			"note": "an hxml argument keeps the quotes the compiler drops, so `-cp \"src\"` names a directory called `\"src\"`"
+		},
+		{
+			"name": "M-BLAMES-BASENAME",
+			"type": "anyparse.query.LintFixSafePass",
+			"method": "blames",
+			"find": "errorFiles(errors).exists(path -> samePath(path, file))",
+			"replace": "errors.indexOf(haxe.io.Path.withoutDirectory(file)) >= 0",
+			"note": "the compiler's errors blame any file whose basename they mention: a same-named file elsewhere, a warning, a badge-prefixed line all revert what they name by name only"
+		},
+		{
+			"name": "M-COMPILEDIR-PROBE-BLIND",
+			"type": "anyparse.check.OracleDeclaration",
+			"method": "relativeClasspaths",
+			"force": "[]",
+			"note": "the compile-dir probe reads no classpath, so every nested hxml compiles from its own directory even where its classpaths resolve from the config's"
 		}
 	]
 }

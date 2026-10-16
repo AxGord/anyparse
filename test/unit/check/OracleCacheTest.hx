@@ -222,14 +222,33 @@ final class OracleCacheTest extends Test {
 	}
 
 	/**
-	 * The hxml token grammar: comments skipped, all three classpath spellings, both library spellings
-	 * with the version suffix stripped, includes by extension, and several tokens on one line.
+	 * The hxml grammar as the compiler reads it (Haxe 4.3.7): comments skipped, all three classpath spellings, both library
+	 * spellings with the version suffix stripped, includes by extension — and a line holding a flag is split ONCE, so
+	 * `-cp lib -lib heaps` is the one classpath `lib -lib heaps` and binds no library.
 	 */
+	@:pin('control')
+	@:killer('M-HXML-SPLIT-LAST-SPACE')
 	public function testHxmlRefsReadsCpLibAndIncludes(): Void {
 		final refs: HxmlRefs = OracleCache.hxmlRefs(HXML_FIXTURE);
-		Assert.same(['src', 'test', 'lib'], refs.classPaths);
-		Assert.same(['utest', 'hxnodejs', 'heaps'], refs.libs);
+		Assert.same(['src', 'test', 'lib -lib heaps'], refs.classPaths);
+		Assert.same(['utest', 'hxnodejs'], refs.libs);
 		Assert.same(['other.hxml'], refs.includes);
+	}
+
+	/**
+	 * The argument list an hxml hands the compiler, each spelling probed on Haxe 4.3.7: a tab is no separator (`-cp\tsrc`
+	 * is one unknown option), a `#` after a value is part of it, quotes enclosing a value or a whole line are dropped,
+	 * blanks and a `\r` around a line are trimmed, and a flag's value may stand on the next line.
+	 */
+	@:pin('control')
+	@:killer('M-HXML-SPLIT-LAST-SPACE')
+	@:killer('M-HXML-QUOTES-KEPT')
+	public function testHxmlArgsReadTheLinesAsTheCompilerDoes(): Void {
+		Assert.same(['-cp\tsrc'], OracleCache.hxmlArgs('-cp\tsrc\n'));
+		Assert.same(['-cp', 'lib # comment'], OracleCache.hxmlArgs('-cp lib # comment\n'));
+		Assert.same(['-cp', 'src', '-cp', 'my dir'], OracleCache.hxmlArgs('-cp "src"\n"-cp my dir"\n'));
+		Assert.same(['-cp', 'src', '-main', 'Main'], OracleCache.hxmlArgs('  -cp   src  \r\n# -cp gone\n\n-main Main\r\n'));
+		Assert.same(['lib'], OracleCache.hxmlRefs('-cp\nlib\n').classPaths);
 	}
 
 	/**

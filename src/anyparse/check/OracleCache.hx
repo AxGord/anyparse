@@ -264,37 +264,54 @@ final class OracleCache {
 	}
 
 	/**
-	 * The `-cp` / `-lib` / hxml-include tokens of one hxml's text. Pure — no filesystem,
-	 * no process — so the token grammar is unit-testable on its own. Comment lines (a
-	 * first non-space `#`) are skipped, tokens are whitespace-separated and one line may
-	 * carry several of them.
+	 * The `-cp` / `-lib` / hxml-include arguments of one hxml's text (`hxmlArgs`). Pure — no filesystem, no process — so
+	 * the grammar is unit-testable on its own. A flag's value is the argument after it, wherever the hxml wrote it.
 	 */
 	public static function hxmlRefs(text: String): HxmlRefs {
 		final classPaths: Array<String> = [];
 		final libs: Array<String> = [];
 		final includes: Array<String> = [];
-		for (rawLine in text.split('\n')) {
-			final line: String = rawLine.trim();
-			if (line == '' || line.startsWith('#')) continue;
-			final tokens: Array<String> = [for (token in line.replace('\t', ' ').split(' ')) if (token != '') token];
-			var i: Int = 0;
-			while (i < tokens.length) {
-				final token: String = tokens[i];
-				final value: Null<String> = i + 1 < tokens.length ? tokens[i + 1] : null;
-				switch token {
-					case '-cp', '-p', '--class-path':
-						if (value != null) classPaths.push(value);
-						i += 2;
-					case '-lib', '-L', '--library':
-						if (value != null) libs.push(libName(value));
-						i += 2;
-					case _:
-						if (!token.startsWith('-') && token.endsWith('.hxml')) includes.push(token);
-						i++;
-				}
+		final args: Array<String> = hxmlArgs(text);
+		var i: Int = 0;
+		while (i < args.length) {
+			final arg: String = args[i];
+			final value: Null<String> = i + 1 < args.length ? args[i + 1] : null;
+			switch arg {
+				case '-cp', '-p', '--class-path':
+					if (value != null) classPaths.push(value);
+					i += 2;
+				case '-lib', '-L', '--library':
+					if (value != null) libs.push(libName(value));
+					i += 2;
+				case _:
+					if (!arg.startsWith('-') && arg.endsWith('.hxml')) includes.push(arg);
+					i++;
 			}
 		}
 		return { classPaths: classPaths, libs: libs, includes: includes };
+	}
+
+	/**
+	 * The arguments one hxml's text hands the compiler, in order, read the way Haxe 4.3 reads an hxml (verified on
+	 * 4.3.7): each line trimmed and unquoted, an empty line or one whose first character is `#` dropped, a line starting
+	 * with `-` split ONCE, at its first space, into the flag and its trimmed, unquoted value, and any other line one
+	 * argument. So `-cp a -cp b` is ONE classpath `a -cp b`, `-cp<TAB>src` is one unknown option, a `#` after a value is
+	 * part of it, and a flag's value may stand alone on the next line.
+	 */
+	public static function hxmlArgs(text: String): Array<String> {
+		final out: Array<String> = [];
+		for (rawLine in text.split('\n')) {
+			final line: String = unquote(rawLine.trim());
+			if (line == '' || line.startsWith('#')) continue;
+			final space: Int = line.startsWith('-') ? line.indexOf(' ') : -1;
+			if (space < 0) {
+				out.push(line);
+				continue;
+			}
+			out.push(unquote(line.substring(0, space)));
+			out.push(unquote(line.substring(space + 1).trim()));
+		}
+		return out;
 	}
 
 	/**
@@ -323,6 +340,11 @@ final class OracleCache {
 	private static function libName(token: String): String {
 		final colon: Int = token.indexOf(':');
 		return colon < 0 ? token : token.substr(0, colon);
+	}
+
+	/** `s` without the double quotes that enclose the whole of it, as the compiler unquotes an hxml argument. */
+	private static function unquote(s: String): String {
+		return s.length >= 2 && s.startsWith('"') && s.endsWith('"') ? s.substring(1, s.length - 1) : s;
 	}
 
 	/** The first trimmed line of `text` starting with `prefix`, or null when there is none. */
