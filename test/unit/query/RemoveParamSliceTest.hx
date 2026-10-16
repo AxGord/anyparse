@@ -290,7 +290,7 @@ class RemoveParamSliceTest extends Test {
 	 * collapses.
 	 */
 	@:pin('control')
-	@:killer('M-REMOVE-PARAM-RAW-SPLICE')
+	@:killer('M-SIGNATURE-EDIT-RAW-SPLICE')
 	public function testAnInterfaceSignatureThatNowFitsComesBackCanonical(): Void {
 		final source: String = canonical('interface I {\n\tpublic function f(alpha:Int, beta:String, gamma:Int, delta:Int):Bool;\n}\n');
 		Assert.isTrue(source.contains('gamma:Int,\n\t\tdelta:Int):Bool;'), 'the fixture starts wrapped:\n$source');
@@ -305,7 +305,7 @@ class RemoveParamSliceTest extends Test {
 	 * The raw splice (the killing arm) keeps both wraps.
 	 */
 	@:pin('control')
-	@:killer('M-REMOVE-PARAM-RAW-SPLICE')
+	@:killer('M-SIGNATURE-EDIT-RAW-SPLICE')
 	public function testAClassMethodAndItsCallThatNowFitComeBackCanonical(): Void {
 		final source: String = canonical(
 			'class C {\n\tfunction h(alpha:Int, beta:String, gamma:Int, delta:Int):Bool {\n\t\treturn alpha + gamma + delta > 0;\n\t}\n\n'

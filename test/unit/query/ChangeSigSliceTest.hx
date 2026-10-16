@@ -237,7 +237,7 @@ class ChangeSigSliceTest extends Test {
 	 * re-fills.
 	 */
 	@:pin('control')
-	@:killer('M-CHANGE-SIG-RAW-SPLICE')
+	@:killer('M-SIGNATURE-EDIT-RAW-SPLICE')
 	public function testAReorderThatMovesTheBreakComesBackCanonical(): Void {
 		final source: String = canonical(
 			'class S {\n\tfunction s(a:Int, beta:String, gamma:Int, deltaepsilonzeta:Int):Bool {\n\t\treturn true;\n\t}\n}\n'
