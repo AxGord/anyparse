@@ -774,9 +774,11 @@ class ThreadSafetyCheckTest extends Test {
 		final files: Array<{ file: String, source: String }> = [
 			for (t in tree) if (StringTools.endsWith(t.name, '.hx')) { file: '${root}/${t.name}', source: t.source }
 		];
+		// The RAW `run`, not `CheckFixture`: this pins the rule's OWN report gate, and `Linter.collect` applies the same
+		// `GraphScoped` gate again (`runGated`), so through the fixture the gate would be unobservable (B8 finding).
 		final found: Array<String> = [
-			for (v in CheckFixture.violationsIn(
-				new ThreadSafety(), files
+			for (v in new ThreadSafety().run(
+				files, new HaxeQueryPlugin()
 			)) if (v.file != '') '${v.file.substring(root.length + 1)}: ${v.message}'
 		];
 		CliFixture.removeDir(root);
