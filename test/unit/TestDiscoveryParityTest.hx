@@ -3064,6 +3064,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CallGraphBindingTest#testAModuleLevelFunctionSeesItsModuleAndImportsNoClassChain :: control :: '
 				+ 'M-TS-MODULE-FN-CLASS-CHAIN,M-TS-MODULE-FN-IMPORTED-REF',
 			'unit.query.CallGraphBindingTest#testASupertypeIsTheTypeItsDeclaringFileBinds :: control :: M-SUPERS-BY-DECLARATION',
+			'unit.query.CallGraphTest#testACallReceiverBoundToANullableTypeDispatchesOnIt :: control :: M-TS-RETURN-WRAPPER-BOUND',
 			'unit.query.CallGraphTest#testACalledFunctionValueReturnsWhatItsFunctionTypeSays :: control :: '
 				+ 'M-TS-CALLED-VALUE,M-TS-CALLED-RECEIVER,M-TS-CALLED-NULL',
 			'unit.query.CallGraphTest#testAContainerIsTheStandardOneOnlyWhereItsNameMeansIt :: control :: '
@@ -6935,7 +6936,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-ELEMENT-PEEL',
 			'M-OUTER-PATH-PEEL',
 			'M-CONSTRUCTION-CTOR-GAP',
-			'M-NOMINAL-LOCAL-INIT'
+			'M-NOMINAL-LOCAL-INIT',
+			'M-TS-RETURN-WRAPPER-BOUND'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

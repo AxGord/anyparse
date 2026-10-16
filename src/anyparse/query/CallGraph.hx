@@ -1311,10 +1311,15 @@ final class CallGraph {
 			return innerType == null ? null : memberTypeThrough(innerSource, innerType, name, currentType);
 		}
 
-		/** The written return type of the target `call` resolved `expr` to, as the receiver it was made on sees it (`returnThrough`). */
-		function targetReturnSource(expr: QueryNode, call: CallTarget, currentType: Null<String>): Null<String> {
+		/**
+		 * The written return type of the target `call` resolved `expr` to, as the receiver it was made on sees it (`returnThrough`);
+		 * null when the DECLARED return's outer type is one of `refused` — before its type parameters are bound, so a `T` a call
+		 * binds to `Null<X>` is no refusal.
+		 */
+		function targetReturnSource(expr: QueryNode, call: CallTarget, currentType: Null<String>, ?refused: Array<String>): Null<String> {
 			final returned: Null<String> = returnSourceOf(call.target) ?? StdTypes.returnOf(_plugin, nodes[call.target]);
-			return returned == null
+			final outer: Null<String> = returned == null ? null : NominalTypes.outerNominalOf(returned.trim(), _plugin.typeSyntax);
+			return returned == null || outer != null && (refused ?? []).contains(outer)
 				? null
 				: returnThrough(
 					expr, call.target, returned, call.receiverSource, call.onType, currentType, a -> typeSourceOf(a, currentType)
@@ -1373,9 +1378,9 @@ final class CallGraph {
 			// a call of a value no function declaration names is typed by the value's function type, below
 			final call: Null<CallTarget> = recv.kind == callKind && recv.children.length > 0 ? callTargetOf(recv, currentType) : null;
 			if (call != null) {
-				final written: Null<String> = targetReturnSource(recv, call, currentType);
-				final outer: Null<String> = written == null ? null : NominalTypes.outerNominalOf(written.trim(), _plugin.typeSyntax);
-				final returned: Null<String> = written == null || outer != null && nullableWrappers.contains(outer)
+				// a nullable / dynamic wrapper the declaration returns names no dispatchable type
+				final written: Null<String> = targetReturnSource(recv, call, currentType, nullableWrappers);
+				final returned: Null<String> = written == null
 					? null
 					: nominalOf(written, currentType, member, typeScopeOf(recv, currentType));
 				return returned == null || nullableWrappers.contains(returned) ? null : {

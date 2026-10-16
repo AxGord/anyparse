@@ -20978,8 +20978,8 @@
 			"name": "M-TS-CALLED-RECEIVER",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "\tif (call != null) {\n\t\tfinal written: Null<String> = targetReturnSource(recv, call, currentType);",
-			"replace": "\tif (recv.kind == callKind && call == null) return null;\n\tif (call != null) {\n\t\tfinal written: Null<String> = targetReturnSource(recv, call, currentType);",
+			"find": "\tif (call != null) {\n\t\t// a nullable / dynamic wrapper the declaration returns names no dispatchable type\n\t\tfinal written: Null<String> = targetReturnSource(recv, call, currentType, nullableWrappers);",
+			"replace": "\tif (recv.kind == callKind && call == null) return null;\n\tif (call != null) {\n\t\t// a nullable / dynamic wrapper the declaration returns names no dispatchable type\n\t\tfinal written: Null<String> = targetReturnSource(recv, call, currentType, nullableWrappers);",
 			"note": "a receiver that is a call of a function-typed value stays unresolved"
 		},
 		{
@@ -21856,6 +21856,14 @@
 			"method": "localInitializer",
 			"force": "null",
 			"note": "a local written with no type has none, though Haxe gives it its initializer's"
+		},
+		{
+			"name": "M-TS-RETURN-WRAPPER-BOUND",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "final written: Null<String> = targetReturnSource(recv, call, currentType, nullableWrappers);",
+			"replace": "final written: Null<String> = [for (w in [targetReturnSource(recv, call, currentType)]) if (w != null && !nullableWrappers.contains(NominalTypes.outerNominalOf(w.trim(), _plugin.typeSyntax) ?? '')) w][0];",
+			"note": "the wrapper refusal reads the return after its type parameters are bound, so a T bound to Null<X> names nothing"
 		}
 	]
 }

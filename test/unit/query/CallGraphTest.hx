@@ -1874,6 +1874,37 @@ class CallGraphTest extends Test {
 		#end
 	}
 
+	/**
+	 * A call receiver whose callee DECLARES a nullable or dynamic return names no dispatchable type, but one returning a type
+	 * parameter the call binds to `Null<X>` is an `X` for a member lookup: the refusal reads the declared return, before its
+	 * parameters are bound (`round8/h/tp-null`).
+	 */
+	@:pin('control')
+	@:killer('M-TS-RETURN-WRAPPER-BOUND')
+	public function testACallReceiverBoundToANullableTypeDispatchesOnIt(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final g: CallGraph = graphOf([
+			'package app; class A { public static function id<T>(x:T):T return x;'
+			+ ' public static function maybe():Null<sys.thread.Lock> return null; }',
+			'package app; class C { static function bound():Void { final s:Null<sys.thread.Lock> = null; A.id(s).wait(); }'
+			+ ' static function declared():Void A.maybe().wait(); }'
+		]);
+		function targets(from: String): Array<String> {
+			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+			out.sort(Reflect.compare);
+			return out;
+		}
+		Assert.same(['A.id', 'Lock.wait'], targets('C.bound'), 'a type parameter bound to a nullable type');
+		Assert.same(['A.maybe'], targets('C.declared'), 'a nullable return the declaration writes');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	private inline function graphOf(sources: Array<String>): CallGraph {
 		return QueryTestHelpers.graphOf(sources);
 	}
