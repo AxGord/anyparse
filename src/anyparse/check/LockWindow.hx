@@ -2,8 +2,8 @@ package anyparse.check;
 
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
+import anyparse.query.ShapeVocab;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -111,18 +111,17 @@ final class LockWindow {
 		_sequenceKinds = flow.blockKinds()
 			.concat(shape.exprStatementKind == null ? [] : [shape.exprStatementKind])
 			.concat(shape.expressionBodyKinds ?? []);
-		_ifKinds = (shape.ifStatementKinds ?? []).concat(shape.ifExpressionKinds ?? [])
-			.concat(shape.ternaryKind == null ? [] : [shape.ternaryKind]);
-		_loopKinds = Loops.kindsOf(shape);
-		_tryKinds = (shape.tryStatementKinds ?? []).concat(shape.tryExpressionKinds ?? []);
+		_ifKinds = ShapeVocab.conditionalKinds(shape);
+		_loopKinds = ShapeVocab.loopKinds(shape);
+		_tryKinds = ShapeVocab.tryKinds(shape);
 		_switchKinds = shape.switchKinds ?? [];
 		_declKinds = inPlaceKindsOf(shape);
 		_jumpKinds = [
 			for (k in [shape.breakStatementKind, shape.continueStatementKind]) if (k != null) k
 		];
 		_breakKind = shape.breakStatementKind;
-		_branchKinds = [for (k in [shape.caseBranchKind, shape.defaultBranchKind]) if (k != null) k];
-		_nestedFnKinds = MemberKinds.nestedFunctionKinds(shape);
+		_branchKinds = ShapeVocab.switchArmKinds(shape);
+		_nestedFnKinds = ShapeVocab.nestedFunctionKinds(shape);
 		_exitKinds = shape.controlExitKinds ?? [];
 		_throwKinds = shape.throwKinds ?? [];
 		_catchKind = shape.catchClauseKind;

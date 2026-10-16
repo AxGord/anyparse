@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.NodeShape;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 
@@ -53,7 +54,7 @@ final class NullFlowScan {
 	public static function nullComparedOperand(node: QueryNode, s: NullFlowSeams): Null<IdentOperand> {
 		return !s.equalityKinds.contains(node.kind) || node.children.length != COMPARISON_CHILD_COUNT
 			? null
-			: identOperand(node, NullFlow.nullComparisonOperand(node, s.identKind, s.nullLitKind), s.identKind);
+			: identOperand(node, NodeShape.nullComparedIdent(node, s.identKind, s.nullLitKind), s.identKind);
 	}
 
 	/** `operand` as a named identifier under `host`'s span, or null when either is missing or `operand` is another kind. */

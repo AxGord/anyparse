@@ -7,6 +7,7 @@ import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
@@ -177,7 +178,7 @@ final class JoinStringAppend implements Check implements DefaultOff {
 		// blocks: `CaseBranch`'s leading pattern (and optional guard) child never matches
 		// `openingTerm`'s `exprStmtKind` shape, so it is skipped as a harmless non-match
 		// rather than needing an index offset.
-		final caseKinds: Array<String> = [for (k in [shape.caseBranchKind, shape.defaultBranchKind]) if (k != null) k];
+		final caseKinds: Array<String> = ShapeVocab.switchArmKinds(shape);
 		return {
 			shape: shape,
 			typeSyntax: plugin.typeSyntax,

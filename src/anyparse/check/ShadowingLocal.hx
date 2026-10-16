@@ -6,6 +6,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TreePath;
 import anyparse.runtime.Span;
@@ -383,7 +384,7 @@ final class ShadowingLocal implements Check implements NoAutofix {
 			catchKind: shape.catchClauseKind,
 			opaqueKinds: shape.opaqueKinds ?? [],
 			conditionalKind: shape.conditionalMemberKind,
-			nestedFnKinds: (shape.functionKinds ?? []).concat(MemberKinds.nestedFunctionKinds(shape))
+			nestedFnKinds: ShapeVocab.functionLikeKinds(shape)
 		};
 	}
 
@@ -437,7 +438,7 @@ private typedef ScopeSeams = {
 	final conditionalKind: Null<String>;
 
 	/**
-	 * Every node that opens a function scope: `RefactorSupport.nestedFunctionKinds` — THE
+	 * Every node that opens a function scope: `ShapeVocab.nestedFunctionKinds` — THE
 	 * authority for function VALUES — plus `functionKinds`, the declarations (methods,
 	 * module-level functions) that open one without being a value. That second half is this
 	 * check's documented extra over the authority.

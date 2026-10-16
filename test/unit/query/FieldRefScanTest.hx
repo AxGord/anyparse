@@ -27,7 +27,7 @@ import utest.Test;
  * one, "derived" and "copied" are indistinguishable here.
  *
  * The pin this class opened with compared `FieldRefScan.FN_SCOPE_KINDS` against
- * `MemberKinds.nestedFunctionKinds` plus `functionKinds` minus the local and module-level ones. That
+ * `ShapeVocab.nestedFunctionKinds` plus `functionKinds` minus the local and module-level ones. That
  * was the right pin for a hand copy and is a TAUTOLOGY for the derivation, which is now that exact
  * expression — the reason it was replaced rather than kept.
  */
@@ -115,7 +115,7 @@ class FieldRefScanTest extends Test {
 	 * parsing real source rather than by reading the vocabulary back.
 	 *
 	 * The pin this replaces compared `FN_SCOPE_KINDS` against
-	 * `MemberKinds.nestedFunctionKinds(shape)` plus `functionKinds` minus the local and
+	 * `ShapeVocab.nestedFunctionKinds(shape)` plus `functionKinds` minus the local and
 	 * module-level ones — the exact expression `FieldRefScan.fnScopeKinds` is now derived by, so
 	 * that comparison became a tautology the moment the hand copy went away. The discriminating
 	 * second instance has to come from somewhere else, and here it is the PARSER: each row names a

@@ -295,7 +295,7 @@ final class ValueEscapes {
 		final memberFunctions: Array<String> = [
 			for (k in shape.functionKinds ?? []) if (!(shape.localFunctionKinds ?? []).contains(k)) k
 		];
-		final functions: Array<String> = (shape.functionKinds ?? []).concat(shape.lambdaKinds ?? []);
+		final functions: Array<String> = ShapeVocab.functionOrLambdaKinds(shape);
 		final assignKinds: Array<String> = [for (k in [shape.assignKind, shape.nullCoalAssignKind]) if (k != null) k];
 		// a lambda whose body is an expression yields it; a `function` lambda returns only through `return`
 		final arrowKinds: Array<String> = [

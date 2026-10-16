@@ -4,6 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -126,7 +127,7 @@ final class UnnecessaryBlock implements Check {
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
 		if (blockStmtKind == null || support == null) return null;
 		final blockKinds: Array<String> = support.blockKinds();
-		final caseBranchKinds: Array<String> = [for (k in [shape.caseBranchKind, shape.defaultBranchKind]) if (k != null) k];
+		final caseBranchKinds: Array<String> = ShapeVocab.switchArmKinds(shape);
 		return {
 			blockStmtKind: blockStmtKind,
 			opaqueKinds: shape.opaqueKinds ?? [],

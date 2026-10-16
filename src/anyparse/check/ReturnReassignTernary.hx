@@ -5,11 +5,11 @@ import anyparse.check.Check.Violation;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.MemberKinds;
 import anyparse.query.NodeShape;
 import anyparse.query.ParenGuard;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
@@ -200,7 +200,7 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 		final assignKind: Null<String> = shape.assignKind;
 		if (returnKind == null || exprStmtKind == null || assignKind == null) return null;
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
-		final nestedFnKinds: Array<String> = MemberKinds.nestedFunctionKinds(shape);
+		final nestedFnKinds: Array<String> = ShapeVocab.nestedFunctionKinds(shape);
 		return support == null ? null : {
 			ifKinds: ifKinds,
 			returnKind: returnKind,
@@ -213,7 +213,7 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 			bodyKinds: shape.functionBodyKinds ?? [],
 			// EVERY nested-function kind, not just the arrow lambdas: a named `function g() {}`
 			// and an `inline function` capture a binding exactly as a lambda does, and omitting
-			// them opens the capture gate. `RefactorSupport.nestedFunctionKinds` is the authority;
+			// them opens the capture gate. `ShapeVocab.nestedFunctionKinds` is the authority;
 			// the hand union this replaced had missed the NAMED function literal.
 			nestedFnKinds: nestedFnKinds,
 			// The declaration kinds whose own return type gates the collapse, so descending into

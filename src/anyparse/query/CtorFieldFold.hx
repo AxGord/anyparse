@@ -610,7 +610,7 @@ final class CtorFieldFold {
 	 * the target's span disappears silently. Checking around the target rather than around
 	 * the whole assignment is what makes this the same fail-closed rule the declaration
 	 * side applies in `initializerDropSpan`. No false positive is possible: by the time
-	 * this runs the condition is proven to be exactly `<ident> != null` and the tail is the
+	 * this runs the condition is proven to be exactly `<ident> != null` (or `null != <ident>`) and the tail is the
 	 * statement terminator, so no string literal can occupy either region.
 	 */
 	private static function statementCommentFree(source: String, stmt: Span, target: Span): Bool {
@@ -619,16 +619,14 @@ final class CtorFieldFold {
 	}
 
 	/**
-	 * The parameter name of a bare `<name> != null` guard on `stmt`, or null when the
+	 * The parameter name of a bare `<name> != null` guard on `stmt` (either operand order), or null when the
 	 * condition has any other shape or an `else` branch follows (a second assignment path
 	 * the `??` rewrite cannot express).
 	 */
 	private static function nullGuardParamName(stmt: QueryNode, shape: RefShape): Null<String> {
 		if (stmt.children.length != 2) return null;
 		final cond: QueryNode = stmt.children[0];
-		if (cond.kind != shape.notEqKind || cond.children.length != 2 || cond.children[1].kind != shape.nullLiteralKind) return null;
-		final guard: QueryNode = cond.children[0];
-		return guard.kind == shape.identKind ? guard.name : null;
+		return cond.kind == shape.notEqKind ? NodeShape.nullComparedIdent(cond, shape.identKind, shape.nullLiteralKind)?.name : null;
 	}
 
 	/**

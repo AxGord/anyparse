@@ -15,6 +15,7 @@ import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
@@ -278,9 +279,7 @@ final class CheckScan {
 		final blockKinds: Array<String> = support != null ? support.blockKinds() : [];
 		// Without the block-container seam `ScopeFrames` cannot collect a frame, so every collision test would
 		// pass vacuously — leave `containerKinds` empty and never unwrap rather than unwrap unchecked.
-		final caseBranchKinds: Array<String> = support == null
-			? []
-			: [for (k in [shape.caseBranchKind, shape.defaultBranchKind]) if (k != null) k];
+		final caseBranchKinds: Array<String> = support == null ? [] : ShapeVocab.switchArmKinds(shape);
 		final seams: CondSimplifySeams = {
 			ifKinds: shape.ifStatementKinds ?? [],
 			andKind: shape.logicalAndKind ?? '',

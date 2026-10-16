@@ -6,7 +6,9 @@ import anyparse.query.BoolExprShape;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
+import anyparse.query.NodeShape;
 import anyparse.query.QueryNode;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -323,15 +325,7 @@ final class PreferSafeNavComparison implements Check implements VersionGated {
 	 */
 	private static function nullCompOperand(conjunct: QueryNode, compKind: String, s: Seams): Null<QueryNode> {
 		final c: QueryNode = BoolExprShape.unwrapParens(conjunct, s.parenKind);
-		if (c.kind != compKind || c.children.length != BINARY_CHILD_COUNT) return null;
-		final a: QueryNode = c.children[0];
-		final b: QueryNode = c.children[1];
-		return if (a.kind == s.nullKind && b.kind != s.nullKind)
-			b;
-		else if (b.kind == s.nullKind && a.kind != s.nullKind)
-			a;
-		else
-			null;
+		return c.kind == compKind ? NodeShape.nullComparedSide(c, s.nullKind) : null;
 	}
 
 	/**
@@ -508,7 +502,7 @@ final class PreferSafeNavComparison implements Check implements VersionGated {
 	 * empty, so the ascent runs to the root and the whole-file fallback applies.
 	 */
 	private static function boundaryKinds(shape: RefShape): Array<String> {
-		final kinds: Array<String> = (shape.functionKinds ?? []).concat(shape.lambdaKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
+		final kinds: Array<String> = ShapeVocab.functionOrLambdaKinds(shape).concat(shape.inlineFunctionKinds ?? []);
 		final blockBodyKind: Null<String> = shape.blockBodyKind;
 		if (blockBodyKind != null) kinds.push(blockBodyKind);
 		return kinds;

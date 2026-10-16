@@ -8,6 +8,7 @@ import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.QueryNode;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -254,9 +255,7 @@ final class UnnecessarySwitch implements Check {
 		final statementKinds: Array<String> = shape.switchStatementKinds ?? [];
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
 		if (statementKinds.length == 0 || support == null) return null;
-		final armKinds: Array<String> = [
-			for (k in [resolved.caseBranchKind, resolved.defaultBranchKind]) if (k != null) k
-		];
+		final armKinds: Array<String> = ShapeVocab.switchArmKinds(shape);
 		final collectionKinds: Array<String> = [
 			for (k in [shape.arrayLiteralKind, shape.objectLiteralKind, shape.objectFieldKind]) if (k != null) k
 		];

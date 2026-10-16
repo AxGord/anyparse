@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.FixEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberLookup.SupertypeProof;
+import anyparse.query.NodeShape;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
@@ -305,9 +306,8 @@ final class ParamAscription {
 
 	/** Whether `host` compares `occurrence` with the null literal — the one read that says nothing about the value's type. */
 	private static function isNullComparison(host: QueryNode, occurrence: QueryNode, shape: RefShape): Bool {
-		final nullKind: Null<String> = shape.nullLiteralKind;
-		return nullKind != null && host.children.length == 2 && (host.kind == shape.eqKind || host.kind == shape.notEqKind)
-			&& (host.children[0] == occurrence ? host.children[1] : host.children[0]).kind == nullKind;
+		return (host.kind == shape.eqKind || host.kind == shape.notEqKind)
+			&& NodeShape.nullComparedSide(host, shape.nullLiteralKind) == occurrence;
 	}
 
 	/**

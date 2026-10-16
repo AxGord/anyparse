@@ -5,6 +5,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
@@ -286,8 +287,7 @@ final class PreferArrowCallback implements Check {
 
 	/** Statement kinds that are `Void`-typed by construction when they close a block body. */
 	private static function voidTailKinds(shape: RefShape): Array<String> {
-		final out: Array<String> = [for (k in shape.loopStatementKinds ?? []) k];
-		for (k in shape.doWhileLoopKinds ?? []) out.push(k);
+		final out: Array<String> = ShapeVocab.statementLoopKinds(shape);
 		for (k in shape.localDeclKinds ?? []) out.push(k);
 		for (k in shape.localFunctionKinds ?? []) out.push(k);
 		final empty: Null<String> = shape.emptyStmtKind;

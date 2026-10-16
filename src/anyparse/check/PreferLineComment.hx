@@ -4,6 +4,7 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.CommonPrefix;
@@ -140,7 +141,7 @@ final class PreferLineComment implements Check implements DefaultOff {
 		final stmtKind: Null<String> = shape.blockStmtKind;
 		if (bodyKind != null) blocks.push(bodyKind);
 		if (stmtKind != null) blocks.push(stmtKind);
-		return { blocks: blocks, localFns: (shape.localFunctionKinds ?? []).concat(shape.inlineFunctionKinds ?? []) };
+		return { blocks: blocks, localFns: ShapeVocab.localFunctionScopeKinds(shape) };
 	}
 
 	/** Every convertible block comment in `source`, in source order. */

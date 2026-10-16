@@ -4,8 +4,8 @@ import anyparse.check.LockSites.LockAcquire;
 import anyparse.check.LockSites.LockGive;
 import anyparse.query.CallGraph;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
+import anyparse.query.ShapeVocab;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -77,7 +77,7 @@ final class LockReleasers {
 		_facts = facts;
 		final shape: RefShape = plugin.refShape();
 		_callKind = shape.callKind;
-		_functionKinds = (shape.functionKinds ?? []).concat(MemberKinds.nestedFunctionKinds(shape));
+		_functionKinds = ShapeVocab.functionLikeKinds(shape);
 		collectUnknownRun(inertRef, unresolvedNames);
 	}
 

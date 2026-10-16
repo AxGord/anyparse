@@ -8,6 +8,7 @@ import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -515,7 +516,7 @@ final class TailMerge implements Check {
 			localDeclKinds: localDeclKinds,
 			localDeclContinuationKinds: localDeclContinuationKinds,
 			localDeclExprKinds: shape.localDeclExprKinds ?? [],
-			fnDeclKinds: (shape.localFunctionKinds ?? []).concat(shape.inlineFunctionKinds ?? []),
+			fnDeclKinds: ShapeVocab.localFunctionScopeKinds(shape),
 			metaKinds: plugin.metaShape().metaKinds
 		};
 	}

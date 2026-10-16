@@ -684,7 +684,7 @@ final class CtorFieldWrite {
 
 	/** The kinds that host a deferred body — a lambda, a local `function`, a local `inline function`. */
 	private static function closureHostKinds(shape: RefShape): Array<String> {
-		return (shape.lambdaKinds ?? []).concat(shape.localFunctionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
+		return ShapeVocab.lambdaOrLocalFunctionKinds(shape).concat(shape.inlineFunctionKinds ?? []);
 	}
 
 	/**

@@ -3,8 +3,8 @@ package anyparse.check;
 import anyparse.check.HeldTrees.HeldDecl;
 import anyparse.query.CallGraph;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -71,7 +71,7 @@ final class ExhaustiveSwitches {
 		_writes = writes;
 		_seedable = seedable;
 		_shape = plugin.refShape();
-		_nestedFnKinds = MemberKinds.nestedFunctionKinds(_shape);
+		_nestedFnKinds = ShapeVocab.nestedFunctionKinds(_shape);
 		_metaKinds = plugin.metaShape().metaKinds;
 		_typeKinds = _shape.typeAnnotationKinds ?? [];
 	}
