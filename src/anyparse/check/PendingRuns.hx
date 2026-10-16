@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.HaxeSpawn.DriverBatch;
 import anyparse.check.HaxeSpawn.HaxeRun;
 import anyparse.check.HaxeSpawn.SpawnJob;
 import anyparse.core.PhaseTimings;
@@ -8,7 +9,6 @@ import haxe.Exception;
 using StringTools;
 
 #if nodejs
-import anyparse.core.TempScratch;
 import haxe.io.Path;
 #end
 
@@ -20,7 +20,8 @@ import haxe.io.Path;
  * The driver is talked to through two files, since a synchronous caller never lets node deliver a pipe's data or a
  * child's exit: the jobs go in through one, and the runs come back through the other, which exists only once it is
  * complete. A driver that died without an answer — found by probing its pid, as an exited child nobody reaped still
- * holds one — is answered like a failed `runAll` driver: every job a run that produced no verdict. The driver already
+ * holds one — is answered like a failed `runAll` driver: every job a run that produced no verdict, and so is one
+ * still without an answer past its bound (`HaxeSpawn.driverBound`), which is wedged and is killed. The driver already
  * ends every job it started when this process is gone, so an abandoned batch leaves nothing running.
  *
  * On a target without an asynchronous process API nothing starts before `await`, which then runs `runAll`.
@@ -38,33 +39,40 @@ final class PendingRuns {
 	private final _maxBuffer: Int;
 	private final _parallel: Int;
 
+	/** Milliseconds after the start past which a driver still without an answer counts as wedged (`HaxeSpawn.driverBound`). */
+	private final _bound: Int;
+
 	private var _answer: Null<Array<HaxeRun>> = null;
 
 	#if nodejs
+	/** When the driver was started, in milliseconds since the epoch. */
+	private final _started: Float = Date.now().getTime();
+
 	private var _pid: Null<Int> = null;
 
 	/** The batch's own directory, made with `mkdtemp`: private to this user, and no other process can have named it first. */
 	private var _dir: String = '';
 	private var _result: String = '';
-	private var _input: String = '';
 	#end
 
-	public function new(jobs: Array<SpawnJob>, maxBuffer: Int, parallel: Int) {
+	public function new(jobs: Array<SpawnJob>, maxBuffer: Int, parallel: Int, ?bound: Int) {
 		_jobs = jobs;
 		_maxBuffer = maxBuffer;
 		_parallel = parallel;
+		_bound = bound ?? HaxeSpawn.driverBound(jobs, parallel);
 		#if nodejs
 		if (jobs.length == 0) {
 			_answer = [];
 			return;
 		}
+		final batch: Null<DriverBatch> = HaxeSpawn.writeJobs(jobs, 'apq-pending-');
+		// a batch whose jobs could not be written leaves `_pid` null, and `await` runs it in the foreground
+		if (batch == null) return;
+		_dir = batch.dir;
+		_result = Path.join([_dir, 'runs.json']);
 		try {
-			_dir = js.node.Fs.mkdtempSync(Path.join([TempScratch.root(), 'apq-pending-']));
-			_input = Path.join([_dir, 'jobs.json']);
-			_result = Path.join([_dir, 'runs.json']);
-			sys.io.File.saveContent(_input, haxe.Json.stringify(jobs));
 			final child: Dynamic = js.node.ChildProcess.spawn(
-				js.Node.process.execPath, HaxeSpawn.driverArgs(parallel, maxBuffer, false, { result: _result, jobs: _input }),
+				js.Node.process.execPath, HaxeSpawn.driverArgs(parallel, maxBuffer, false, { result: _result, jobs: batch.jobs }),
 				{ stdio: 'ignore', env: HaxeSpawn.childEnv() }
 			);
 			// a batch nobody awaits must not keep this process alive: the driver ends its jobs once this process is gone
@@ -85,9 +93,9 @@ final class PendingRuns {
 		if (held != null) return held;
 		#if nodejs
 		final pid: Null<Int> = _pid;
-		final answer: Array<HaxeRun> = pid == null ? HaxeSpawn.runAll(_jobs, _maxBuffer, _parallel) : collect(pid);
+		final answer: Array<HaxeRun> = pid == null ? HaxeSpawn.runAll(_jobs, _maxBuffer, _parallel, false, _bound) : collect(pid);
 		#else
-		final answer: Array<HaxeRun> = HaxeSpawn.runAll(_jobs, _maxBuffer, _parallel);
+		final answer: Array<HaxeRun> = HaxeSpawn.runAll(_jobs, _maxBuffer, _parallel, false, _bound);
 		#end
 		_answer = answer;
 		return answer;
@@ -105,22 +113,7 @@ final class PendingRuns {
 			// a driver already gone has nothing left to end
 		} forget();
 		#end
-		_answer = unanswered('cancelled — the batch was abandoned', true);
-	}
-
-	/** Every job of the batch answered as a run that produced no verdict, for `failure`, and `cancelled` when it was ended. */
-	private function unanswered(failure: String, cancelled: Bool): Array<HaxeRun> {
-		return [
-			for (_ in _jobs)
-				{
-					status: null,
-					out: '',
-					err: '',
-					failure: failure,
-					overflowed: false,
-					cancelled: cancelled
-				}
-		];
+		_answer = HaxeSpawn.unanswered(_jobs.length, 'cancelled — the batch was abandoned', '', true);
 	}
 
 	#if nodejs
@@ -133,6 +126,16 @@ final class PendingRuns {
 	private function collectTimed(pid: Int): Array<HaxeRun> {
 		var polls: Int = 0;
 		while (!sys.FileSystem.exists(_result)) {
+			if (Date.now().getTime() - _started > _bound) {
+				// a driver this far past every job's share is wedged: SIGKILL is the one signal it cannot leave unanswered
+				try js.Node.process.kill(pid, 'SIGKILL') catch (exception: Exception) { // noqa: swallowed-exception
+					// a driver gone meanwhile has nothing left to end
+				}
+				forget();
+				return HaxeSpawn.unanswered(
+					_jobs.length, 'the background process driver did not answer within $_bound ms and was killed', '', false
+				);
+			}
 			if (++polls % POLLS_PER_PROBE == 0 && !living(pid)) break;
 			pause(POLL_MS);
 		}
@@ -141,19 +144,12 @@ final class PendingRuns {
 		final answer: Null<Array<HaxeRun>> = text == null ? null : try haxe.Json.parse(text) catch (exception: Exception) null;
 		return answer != null && answer.length == _jobs.length
 			? answer
-			: unanswered('the background process driver ended without an answer', false);
+			: HaxeSpawn.unanswered(_jobs.length, 'the background process driver ended without an answer', '', false);
 	}
 
 	/** Delete the batch's directory and what is left in it. */
 	private function forget(): Void {
-		if (_dir == '') return;
-		for (path in [_input, _result])
-			if (sys.FileSystem.exists(path)) try sys.FileSystem.deleteFile(path) catch (exception: Exception) { // noqa: swallowed-exception
-				// a leftover file costs nothing but disk: the answer never depends on it
-			}
-		try sys.FileSystem.deleteDirectory(_dir) catch (exception: Exception) { // noqa: swallowed-exception
-			// the driver may still be removing it
-		}
+		if (_dir != '') HaxeSpawn.dropBatch(_dir);
 	}
 
 	/**
