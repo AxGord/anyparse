@@ -1262,7 +1262,7 @@ final class CallGraph {
 		}
 
 		// the graph's resolution for the ONE structural walk (`NominalTypes.typeWalk`), set right below `typeSourceOf`'s arms
-		var graphTyping: Null<TypingHost<String, Null<String>>> = null;
+		var graphTyping: Null<TypingHost<Null<String>>> = null;
 		// the bindings whose unannotated type the walk is reading, against a cycle (`TypingHost.reading`)
 		final unannotatedReads: Array<Int> = [];
 
@@ -1274,7 +1274,7 @@ final class CallGraph {
 		 * declared return and a construction. Never an inferred type: an unannotated link answers null.
 		 */
 		function typeSourceOf(exprRaw: QueryNode, currentType: Null<String>): Null<String> {
-			final host: Null<TypingHost<String, Null<String>>> = graphTyping;
+			final host: Null<TypingHost<Null<String>>> = graphTyping;
 			if (host == null) throw new Exception('the graph typing host is set before the walk types anything');
 			return NominalTypes.typeWalk(exprRaw, shape, host, currentType);
 		}
