@@ -1379,7 +1379,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.GuardReturnCheckTest#testElseBranchNotFlagged :: control :: M-GUARD-ELSE-ADMITTED',
 			'unit.check.GuardReturnCheckTest#testGlueCommentNotFlagged :: control :: M-GUARD-GLUE-COMMENT-BLIND',
 			'unit.check.GuardReturnCheckTest#testSingleStatementThenNotFlagged :: control :: M-GUARD-MIN-THEN-IGNORED',
-			'unit.check.GuardReturnCheckTest#testUnbracedThenNotFlagged :: control :: M-GUARD-UNBRACED-THEN',
+			'unit.check.GuardReturnCheckTest#testUnbracedCompoundThenNotFlagged :: control :: M-GUARD-UNBRACED-THEN',
 			'unit.check.GuardReturnCheckTest#testUnprovableOrderedNotFlagged :: control :: M-GUARD-UNCLEAN-INVERSION-REPORTED',
 			'unit.check.HaxeSpawnTest#testACancelledShellJobTakesItsChildrenWithIt :: control :: ' + 'M-DRIVER-KILLS-ONLY-THE-SHELL',
 			'unit.check.HaxeSpawnTest#testAFailureEndsTheJobsDeclaredAfterIt :: control :: ' + 'M-DRIVER-NEVER-STOPS',

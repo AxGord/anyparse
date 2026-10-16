@@ -291,12 +291,12 @@ class GuardReturnCheckTest extends Test {
 		Assert.equals(0, v('if (ok) {\n\t\t\tlog(a);\n\t\t\treturn true;\n\t\t}\n\t\tstep();\n\t\treturn false;').length);
 	}
 
-	@:killer('M-GUARD-UNBRACED-THEN')
-	@:pin('control')
 	public function testUnbracedThenNotFlagged(): Void {
 		Assert.equals(0, v('if (ok) return true;\n\t\treturn false;').length);
 	}
 
+	@:killer('M-GUARD-UNBRACED-THEN')
+	@:pin('control')
 	public function testUnbracedCompoundThenNotFlagged(): Void {
 		// An unbraced then-branch that still has 2 children and a terminal last child —
 		// only the braced-block gate rejects it (`editFor` would slice off `w` and `;`).
