@@ -146,7 +146,7 @@ class StringLiteralDupCheckTest extends Test {
 		// Report-only: the constant's name is intent a human supplies, like magic-number.
 		final src: String = body('trace("hello"); trace("hello"); trace("hello");');
 		final check: StringLiteralDup = new StringLiteralDup();
-		Assert.equals(0, check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.edits(check, src).length);
 	}
 
 	public function testSkipParseNoCrash(): Void {

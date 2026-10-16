@@ -286,7 +286,7 @@ class DeadBinderCounterLoopCheckTest extends Test {
 	}
 
 	private function violations(source: String): Array<Violation> {
-		return CheckFixture.violationsIn(new DeadBinderCounterLoop(), [{ file: 'C.hx', source: source }], stdPlugin(source));
+		return CheckFixture.violations(new DeadBinderCounterLoop(), source, stdPlugin(source));
 	}
 
 	private function countOccurrences(text: String, needle: String): Int {
@@ -317,7 +317,7 @@ class DeadBinderCounterLoopCheckTest extends Test {
 
 	private function runAndExpectOne(src: String): { check: DeadBinderCounterLoop, vs: Array<Violation> } {
 		final check: DeadBinderCounterLoop = new DeadBinderCounterLoop();
-		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], stdPlugin(src));
+		final vs: Array<Violation> = CheckFixture.violations(check, src, stdPlugin(src));
 		Assert.equals(1, vs.length);
 		return { check: check, vs: vs };
 	}

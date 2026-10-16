@@ -279,7 +279,7 @@ import utest.Test;
 		Assert.notNull(check);
 		if (probe == null || check == null) return;
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final vs: Array<Violation> = CheckFixture.violationsIn(probe, [{ file: 'C.hx', source: src }], plugin);
+		final vs: Array<Violation> = CheckFixture.violations(probe, src, plugin);
 		Assert.equals(1, vs.length);
 		Assert.equals(0, check.fix(src, vs, plugin).length);
 	}

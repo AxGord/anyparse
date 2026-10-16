@@ -118,9 +118,7 @@ class AvoidDynamicBagCheckTest extends Test {
 	private function bagMsg(src: String): String {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: AvoidDynamic = new AvoidDynamic();
-		for (v in CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin)) if (v.message.indexOf('string-keyed bag')
-			!= -1)
-			return v.message;
+		for (v in CheckFixture.violations(check, src, plugin)) if (v.message.indexOf('string-keyed bag') != -1) return v.message;
 		return '';
 	}
 

@@ -5,7 +5,6 @@ import anyparse.check.Linter;
 import anyparse.check.PreferArrowCallback;
 import anyparse.check.PreferLambdaExpressionBody;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
@@ -534,7 +533,7 @@ class PreferLambdaExpressionBodyCheckTest extends Test {
 
 	private function edits(src: String): Array<{ span: Span, text: String }> {
 		final check: PreferLambdaExpressionBody = new PreferLambdaExpressionBody();
-		return check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
+		return CheckFixture.edits(check, src);
 	}
 
 }

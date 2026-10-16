@@ -321,9 +321,7 @@ class UnnecessarySwitchCheckTest extends Test {
 	private function applyFixOnce(src: String): String {
 		final check: UnnecessarySwitch = new UnnecessarySwitch();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin), plugin
-		);
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.edits(check, src, plugin);
 		return switch CanonicalEdit.canonicalize(src, edits, true, plugin) {
 			case Ok(text): text;
 			case Err(message): throw message;

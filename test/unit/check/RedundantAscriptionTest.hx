@@ -5,7 +5,6 @@ import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.RedundantAscription;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
@@ -110,7 +109,7 @@ class RedundantAscriptionTest extends Test {
 	public function testFixLeavesUnflaggedAscriptionAlone(): Void {
 		final src: String = 'class Foo {} class Bar {} class C { function f():Bar { return (new Foo() : Bar); } }';
 		final check: RedundantAscription = new RedundantAscription();
-		Assert.equals(0, check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.edits(check, src).length);
 	}
 
 	public function testFlaggedAsInfo(): Void {

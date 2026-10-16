@@ -450,9 +450,7 @@ class MissingVisibilityCheckTest extends Test {
 	private function fixedSource(src: String): String {
 		final check: MissingVisibility = new MissingVisibility();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin), plugin
-		);
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.edits(check, src, plugin);
 		return applyEdits(src, edits);
 	}
 
@@ -472,7 +470,7 @@ class MissingVisibilityCheckTest extends Test {
 				message: 'forced'
 			}
 		];
-		return applyEdits(src, check.fix(src, forced, plugin));
+		return applyEdits(src, CheckFixture.fixOf(check, src, forced, plugin));
 	}
 
 	/** `fixedSource` with a `SymbolIndex` built over `others` + the fixed file itself — the production `--fix` shape. */
@@ -481,9 +479,7 @@ class MissingVisibilityCheckTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final files: Array<{ file: String, source: String }> = others.concat([{ file: 'C.hx', source: src }]);
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin), plugin, index
-		);
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, CheckFixture.violations(check, src, plugin), plugin, index);
 		return applyEdits(src, edits);
 	}
 

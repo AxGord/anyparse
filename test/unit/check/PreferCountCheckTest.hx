@@ -465,8 +465,7 @@ class PreferCountCheckTest extends Test {
 			final text: String = out;
 			final plugin: CachingGrammarPlugin = StdScope.plugin([{ file: 'C.hx', source: text }]);
 			final edits: Array<{ span: Span, text: String }> = check.fix(
-				text, CheckFixture.violationsIn(check, [{ file: 'C.hx', source: text }], plugin), plugin,
-				SymbolIndex.build([{ file: 'C.hx', source: text }], plugin)
+				text, CheckFixture.violations(check, text, plugin), plugin, SymbolIndex.build([{ file: 'C.hx', source: text }], plugin)
 			);
 			Assert.isTrue(edits.length > 0, 'stage ${check.id()} produced no edits');
 			switch CanonicalEdit.canonicalize(text, edits, true, plugin) {

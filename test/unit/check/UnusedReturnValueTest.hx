@@ -5,7 +5,6 @@ import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.UnusedReturnValue;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
@@ -127,7 +126,7 @@ class UnusedReturnValueTest extends Test {
 	public function testFixYieldsNoEdits(): Void {
 		final src: String = 'class C { function r():Int return 1; function m():Void { r(); return; } }';
 		final check: UnusedReturnValue = new UnusedReturnValue();
-		Assert.equals(0, check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.edits(check, src).length);
 	}
 
 	public function testRegisteredInBuiltins(): Void {

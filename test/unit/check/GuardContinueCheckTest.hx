@@ -724,7 +724,7 @@ class GuardContinueCheckTest extends Test {
 
 	private function edits(source: String): Array<{ span: Span, text: String }> {
 		final check: GuardContinue = new GuardContinue();
-		return check.fix(source, CheckFixture.violations(check, source), new HaxeQueryPlugin());
+		return CheckFixture.edits(check, source);
 	}
 
 	/** Canonicalise the loop code then de-nest to a fixpoint, exactly as the `lint --fix` CLI does. */
@@ -745,9 +745,7 @@ class GuardContinueCheckTest extends Test {
 	private function applyFixOnce(source: String): String {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: GuardContinue = new GuardContinue();
-		final es: Array<{ span: Span, text: String }> = check.fix(
-			source, CheckFixture.violationsIn(check, [{ file: 'C.hx', source: source }], plugin), plugin
-		);
+		final es: Array<{ span: Span, text: String }> = CheckFixture.edits(check, source, plugin);
 		return es.length == 0
 			? source
 			: switch CanonicalEdit.canonicalize(source, es, false, plugin) {

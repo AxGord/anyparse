@@ -5,7 +5,6 @@ import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.check.MagicNumber;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import haxe.Json;
 import sys.FileSystem;
 import sys.io.File;
@@ -158,7 +157,7 @@ class MagicNumberCheckTest extends Test {
 	public function testFixReturnsEmpty(): Void {
 		final src: String = 'class C {\n\tfunction f(n:Int):Bool { return n > 5000; }\n}';
 		final check: MagicNumber = new MagicNumber();
-		Assert.equals(0, check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.edits(check, src).length);
 	}
 
 	public function testSkipParseNoCrash(): Void {

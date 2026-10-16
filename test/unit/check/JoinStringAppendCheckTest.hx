@@ -162,7 +162,7 @@ class JoinStringAppendCheckTest extends Test {
 		final afterJoin: String = applyFixOnce(wrap("str += ' line '; str += line;"));
 		final fold: FoldStringLiterals = new FoldStringLiterals();
 		final vs2: Array<Violation> = CheckFixture.violations(fold, afterJoin);
-		final es2: Array<{ span: Span, text: String }> = fold.fix(afterJoin, vs2, new HaxeQueryPlugin());
+		final es2: Array<{ span: Span, text: String }> = CheckFixture.fixOf(fold, afterJoin, vs2);
 		final afterFold: String = switch CanonicalEdit.canonicalize(afterJoin, es2, true, new HaxeQueryPlugin(), null) {
 			case Ok(text): text;
 			case Err(message): throw message;
@@ -191,7 +191,7 @@ class JoinStringAppendCheckTest extends Test {
 
 	private function edits(src: String): Array<{ span: Span, text: String }> {
 		final check: JoinStringAppend = new JoinStringAppend();
-		return check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
+		return CheckFixture.edits(check, src);
 	}
 
 	/** Run `fix` and re-emit through the canonical writer — the `lint --fix` path in one pass. */

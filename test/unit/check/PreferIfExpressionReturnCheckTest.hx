@@ -419,7 +419,7 @@ class PreferIfExpressionReturnCheckTest extends Test {
 
 	private function edits(src: String): Array<{ span: Span, text: String }> {
 		final check: PreferIfExpressionReturn = new PreferIfExpressionReturn();
-		return check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
+		return CheckFixture.edits(check, src);
 	}
 
 	/** Whether the rule CLAIMS the chain headed by the first `if` of `body` - the question the two deferring rules ask. */

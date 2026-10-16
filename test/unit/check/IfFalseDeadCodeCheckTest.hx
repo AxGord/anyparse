@@ -3,7 +3,6 @@ package unit.check;
 import anyparse.check.Check.Violation;
 import anyparse.check.IfFalseDeadCode;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
@@ -143,7 +142,7 @@ class IfFalseDeadCodeCheckTest extends Test {
 		Assert.equals(2, vs.length);
 		Assert.isFalse(vs[0].message.indexOf('dead branch - verify intent before deleting') != -1);
 		Assert.isTrue(vs[1].message.indexOf('dead branch - verify intent before deleting') != -1);
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.fixOf(check, src, vs);
 		Assert.equals(1, edits.length);
 		final out: String = applyEdits(src, edits);
 		// Not `'#if false'` — a standalone string literal spelling it out would
@@ -267,7 +266,7 @@ class IfFalseDeadCodeCheckTest extends Test {
 		Assert.equals(2, vs.length);
 		Assert.isFalse(vs[0].message.indexOf('dead branch - verify intent before deleting') != -1);
 		Assert.isTrue(vs[1].message.indexOf('dead branch - verify intent before deleting') != -1);
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.fixOf(check, src, vs);
 		Assert.equals(1, edits.length);
 		final out: String = applyEdits(src, edits);
 		Assert.isTrue(out.indexOf('c();') != -1 && out.indexOf('#if') != -1, 'non-trivial region kept, got: <$out>');
@@ -287,7 +286,7 @@ class IfFalseDeadCodeCheckTest extends Test {
 
 	private function applyFix(src: String): String {
 		final check: IfFalseDeadCode = new IfFalseDeadCode();
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.edits(check, src);
 		return applyEdits(src, edits);
 	}
 

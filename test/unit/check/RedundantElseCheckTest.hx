@@ -4,7 +4,6 @@ import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.RedundantElse;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
 import utest.Assert;
@@ -314,7 +313,7 @@ class RedundantElseCheckTest extends Test {
 
 	private function edits(src: String): Array<{ span: Span, text: String }> {
 		final check: RedundantElse = new RedundantElse();
-		return check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
+		return CheckFixture.edits(check, src);
 	}
 
 }

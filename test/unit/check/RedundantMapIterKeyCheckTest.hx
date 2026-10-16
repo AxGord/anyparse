@@ -40,7 +40,7 @@ class RedundantMapIterKeyCheckTest extends Test {
 	public function testFixDropsKeyPrefix(): Void {
 		final src: String = 'class C {\n\tfunction f(m:Array<Int>):Void {\n\t\tfor (_ => v in m) g(v);\n\t}\n}';
 		final check: RedundantMapIterKey = new RedundantMapIterKey();
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.edits(check, src);
 		Assert.equals(1, edits.length);
 		Assert.equals('', edits[0].text);
 		final cut: Span = edits[0].span;

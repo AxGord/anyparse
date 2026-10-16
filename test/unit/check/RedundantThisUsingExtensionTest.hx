@@ -2,8 +2,7 @@ package unit.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.check.RedundantThis;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.runtime.Span;
+import anyparse.query.CanonicalEdit;
 import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
@@ -73,13 +72,7 @@ class RedundantThisUsingExtensionTest extends Test {
 	}
 
 	private function applyFix(src: String): String {
-		final check: RedundantThis = new RedundantThis();
-		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'Widget.hx', source: src }]);
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
-		edits.sort((a, b) -> b.span.from - a.span.from);
-		var result: String = src;
-		for (e in edits) result = result.substring(0, e.span.from) + e.text + result.substring(e.span.to);
-		return result;
+		return CanonicalEdit.applyEdits(src, CheckFixture.fixRun(new RedundantThis(), [{ file: 'Widget.hx', source: src }]).edits);
 	}
 
 }

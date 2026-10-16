@@ -83,7 +83,7 @@ class PreferEnumAbstractCheckTest extends Test {
 		final src: String = 'class C { static final RANK_A = 0; static final RANK_B = 1; static final RANK_C = 2; static function '
 			+ 'r(x:Int):Int { return x == 0 ? RANK_A : RANK_B; } }';
 		final check: PreferEnumAbstract = new PreferEnumAbstract();
-		Assert.equals(0, check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.edits(check, src).length);
 	}
 
 	public function testSkipParseNoCrash(): Void {

@@ -77,7 +77,7 @@ class RedundantReplaceLoopCheckTest extends Test {
 			'trace(\'a\');\n\t\twhile (now.indexOf(\' \') != -1) now = now.replace(\' \', \'_\');\n\t\ttrace(\'b\');'
 		);
 		final r = runAndExpectOne(src);
-		switch CanonicalEdit.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, CheckFixture.fixOf(r.check, src, r.vs), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf('trace(\'a\');') >= 0);
 				Assert.isTrue(text.indexOf('trace(\'b\');') >= 0);
@@ -109,7 +109,7 @@ class RedundantReplaceLoopCheckTest extends Test {
 		final src: String = wrapFn('while (now.indexOf(\'  \') != -1) now = now.replace(\'  \', \' \');');
 		final check: RedundantReplaceLoop = new RedundantReplaceLoop();
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
-		switch CanonicalEdit.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, CheckFixture.fixOf(check, src, vs), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf('while (now.indexOf(\'  \') != -1) now = now.replace(\'  \', \' \');') >= 0);
 			case Err(message):
@@ -706,7 +706,7 @@ class RedundantReplaceLoopCheckTest extends Test {
 
 	private function assertFixCanonical(src: String, present: String, absent: String): Void {
 		final r = runAndExpectOne(src);
-		switch CanonicalEdit.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, CheckFixture.fixOf(r.check, src, r.vs), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf(present) >= 0);
 				Assert.isTrue(text.indexOf(absent) == -1);
@@ -717,7 +717,7 @@ class RedundantReplaceLoopCheckTest extends Test {
 
 	private function assertFixRefused(src: String): Void {
 		final r = runAndExpectOne(src);
-		Assert.equals(0, r.check.fix(src, r.vs, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.fixOf(r.check, src, r.vs).length);
 	}
 
 	private function runAndExpectOne(src: String): { check: RedundantReplaceLoop, vs: Array<Violation> } {

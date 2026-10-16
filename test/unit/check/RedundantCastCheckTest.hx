@@ -4,8 +4,6 @@ import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.RedundantCast;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.runtime.Span;
 import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
@@ -146,13 +144,7 @@ class RedundantCastCheckTest extends Test {
 	}
 
 	private function applyFix(src: String): String {
-		final check: RedundantCast = new RedundantCast();
-		final vs: Array<Violation> = CheckFixture.violations(check, src);
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
-		edits.sort((a, b) -> b.span.from - a.span.from);
-		var result: String = src;
-		for (e in edits) result = result.substring(0, e.span.from) + e.text + result.substring(e.span.to);
-		return result;
+		return CheckFixture.fixedSource(new RedundantCast(), src);
 	}
 
 }

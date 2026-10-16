@@ -229,7 +229,7 @@ class MisplacedTypeDocCheckTest extends Test {
 	private function edits(src: String): Array<{ span: Span, text: String }> {
 		final check: MisplacedTypeDoc = new MisplacedTypeDoc();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		return check.fix(src, CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin), plugin);
+		return CheckFixture.edits(check, src, plugin);
 	}
 
 	private function fixed(src: String): String {

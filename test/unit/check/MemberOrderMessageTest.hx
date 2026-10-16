@@ -127,7 +127,7 @@ final class MemberOrderMessageTest extends Test {
 	private function violations(src: String): Array<Violation> {
 		final check: MemberOrder = new MemberOrder();
 		check.setConfigResolver(_ -> _config);
-		return CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], _plugin);
+		return CheckFixture.violations(check, src, _plugin);
 	}
 
 }

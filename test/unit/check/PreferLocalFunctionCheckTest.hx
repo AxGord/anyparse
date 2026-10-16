@@ -422,7 +422,7 @@ class PreferLocalFunctionCheckTest extends Test {
 	private function edits(src: String): Array<{ span: Span, text: String }> {
 		final check: PreferLocalFunction = new PreferLocalFunction();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		return check.fix(src, CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin), plugin);
+		return CheckFixture.edits(check, src, plugin);
 	}
 
 	private function fixed(src: String): String {

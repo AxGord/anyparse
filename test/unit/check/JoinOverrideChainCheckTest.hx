@@ -247,7 +247,7 @@ class JoinOverrideChainCheckTest extends Test {
 
 	private function edits(src: String): Array<{ span: Span, text: String }> {
 		final check: JoinOverrideChain = new JoinOverrideChain();
-		return check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
+		return CheckFixture.edits(check, src);
 	}
 
 }

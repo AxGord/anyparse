@@ -123,7 +123,7 @@ class ShadowingCaseBinderCheckTest extends Test {
 		final check: ShadowingCaseBinder = new ShadowingCaseBinder();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final src: String = withField('closeAction');
-		Assert.equals(0, check.fix(src, CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin), plugin).length);
+		Assert.equals(0, CheckFixture.edits(check, src, plugin).length);
 	}
 
 	public function testRegisteredAsBuiltin(): Void {

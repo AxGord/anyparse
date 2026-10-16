@@ -218,7 +218,7 @@ class DeadStoreTest extends Test {
 			+ ' if (cur == null || t != tr) { cur = build(tr); t = tr; ix = cur; } return cur[0]; }); } }';
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: DeadStore = new DeadStore();
-		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin);
+		final vs: Array<Violation> = CheckFixture.violations(check, src, plugin);
 		Assert.equals(0, vs.length);
 		Assert.equals(0, check.fix(src, vs, plugin).length);
 	}

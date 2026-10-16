@@ -302,7 +302,7 @@ class AvoidDynamicParamAscriptionFixTest extends Test {
 		final src: String = 'class C {\n\tfunction f(p:Dynamic):Void {\n\t\ttrace((p : Foo));\n\t\ttrace((p : Foo));\n\t}\n}$FOO';
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: AvoidDynamic = new AvoidDynamic();
-		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin);
+		final vs: Array<Violation> = CheckFixture.violations(check, src, plugin);
 		final grouped: Array<GroupedEdit> = check.fixGrouped(src, vs, plugin);
 		Assert.equals(3, grouped.length, 'the signature type plus both unwraps');
 		final first: Null<Int> = grouped[0].group;
@@ -349,7 +349,7 @@ class AvoidDynamicParamAscriptionFixTest extends Test {
 	private function fixed(src: String): FixRun {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: AvoidDynamic = new AvoidDynamic();
-		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin);
+		final vs: Array<Violation> = CheckFixture.violations(check, src, plugin);
 		return { violations: vs, edits: check.fix(src, vs, plugin) };
 	}
 

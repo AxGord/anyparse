@@ -316,7 +316,7 @@ class SimplifyBooleanTernaryCheckTest extends Test {
 	/** The first rewrite `fix` emits for `src`, or an empty string when there is none. */
 	private function firstEdit(src: String): String {
 		final check: SimplifyBooleanTernary = new SimplifyBooleanTernary();
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.edits(check, src);
 		return edits.length > 0 ? edits[0].text : '';
 	}
 

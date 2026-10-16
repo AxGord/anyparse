@@ -91,7 +91,7 @@ class ComplexityCheckTest extends Test {
 		final src: String = 'class C {\n\tfunction big(a:Bool):Bool {\n'
 			+ '\t\treturn a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a;\n\t}\n}';
 		final check: Complexity = new Complexity();
-		Assert.equals(0, check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.edits(check, src).length);
 	}
 
 	public function testSkipParseNoCrash(): Void {

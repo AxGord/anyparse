@@ -284,7 +284,7 @@ class EmptyCaseArmCheckTest extends Test {
 	private function fixEdits(src: String): Array<{ span: Span, text: String }> {
 		final check: EmptyCaseArm = new EmptyCaseArm();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		return check.fix(src, CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin), plugin);
+		return CheckFixture.edits(check, src, plugin);
 	}
 
 

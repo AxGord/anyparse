@@ -5,7 +5,7 @@ import anyparse.check.Linter;
 import anyparse.check.RedundantToString;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.SymbolIndex;
+import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
 import utest.Assert;
@@ -336,19 +336,11 @@ class RedundantToStringCheckTest extends Test {
 
 	/** The check's edits for `src`, driven with the whole-scope index `Cli` always supplies. */
 	private function edits(src: String): Array<{ span: Span, text: String }> {
-		final check: RedundantToString = new RedundantToString();
-		final files: Array<{ file: String, source: String }> = CheckFixture.withStd(src);
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final found: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
-		return check.fix(src, found, plugin, SymbolIndex.build(files, plugin));
+		return CheckFixture.fixRun(new RedundantToString(), CheckFixture.withStd(src)).edits;
 	}
 
 	private function applyFix(src: String): String {
-		final applied: Array<{ span: Span, text: String }> = edits(src);
-		applied.sort((a, b) -> b.span.from - a.span.from);
-		var result: String = src;
-		for (edit in applied) result = result.substring(0, edit.span.from) + edit.text + result.substring(edit.span.to);
-		return result;
+		return CanonicalEdit.applyEdits(src, edits(src));
 	}
 
 	@:pin('control')

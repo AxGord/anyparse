@@ -600,7 +600,7 @@ class PreferSwitchExpressionAssignmentCheckTest extends Test {
 
 	private function edits(src: String): Array<{ span: Span, text: String }> {
 		final check: PreferSwitchExpressionAssignment = new PreferSwitchExpressionAssignment();
-		return check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
+		return CheckFixture.edits(check, src);
 	}
 
 }

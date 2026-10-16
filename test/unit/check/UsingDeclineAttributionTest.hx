@@ -127,7 +127,7 @@ class UsingDeclineAttributionTest extends Test {
 	public function testLpadConflictingUsingRefusalNamesItself(): Void {
 		final check: PreferLpad = new PreferLpad();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final found: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: CONFLICTING_LPAD }], plugin);
+		final found: Array<Violation> = CheckFixture.violations(check, CONFLICTING_LPAD, plugin);
 		Assert.equals(1, found.length);
 		Assert.equals(0, check.fix(CONFLICTING_LPAD, found, plugin).length);
 		assertNamesTheConflict(found[0].declineReason, 'StringTools', 'lpad');
@@ -140,7 +140,7 @@ class UsingDeclineAttributionTest extends Test {
 	public function testFindConflictingUsingRefusalNamesItself(): Void {
 		final check: PreferFind = new PreferFind();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final found: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: CONFLICTING_FIND }], plugin);
+		final found: Array<Violation> = CheckFixture.violations(check, CONFLICTING_FIND, plugin);
 		Assert.equals(1, found.length);
 		final unmatched: Violation = probeViolation();
 		Assert.equals(0, check.fix(CONFLICTING_FIND, found.concat([unmatched]), plugin).length);
@@ -160,7 +160,7 @@ class UsingDeclineAttributionTest extends Test {
 	public function testExistsConflictingUsingRefusalNamesItself(): Void {
 		final check: PreferExists = new PreferExists();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final found: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: CONFLICTING_EXISTS }], plugin);
+		final found: Array<Violation> = CheckFixture.violations(check, CONFLICTING_EXISTS, plugin);
 		Assert.equals(1, found.length);
 		Assert.equals(0, check.fix(CONFLICTING_EXISTS, found, plugin).length);
 		assertNamesTheConflict(found[0].declineReason, 'Lambda', 'exists');
@@ -177,7 +177,7 @@ class UsingDeclineAttributionTest extends Test {
 	public function testGuardRefusalNamesOnlyTheFindingItTookDown(): Void {
 		final check: PreferLpad = new PreferLpad();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final found: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: GUARDED }], plugin);
+		final found: Array<Violation> = CheckFixture.violations(check, GUARDED, plugin);
 		Assert.equals(1, found.length);
 		final unmatched: Violation = probeViolation();
 		Assert.equals(0, check.fix(GUARDED, found.concat([unmatched]), plugin).length);
@@ -231,7 +231,7 @@ class UsingDeclineAttributionTest extends Test {
 	public function testCounterLoopGuardRefusalNamesOnlyTheSurvivingFinding(): Void {
 		final check: DeadBinderCounterLoop = new DeadBinderCounterLoop();
 		final plugin: CachingGrammarPlugin = StdScope.plugin([{ file: 'C.hx', source: GUARDED_COUNT }]);
-		final found: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: GUARDED_COUNT }], plugin);
+		final found: Array<Violation> = CheckFixture.violations(check, GUARDED_COUNT, plugin);
 		Assert.equals(1, found.length);
 		final unmatched: Violation = probeViolation();
 		Assert.equals(0, check.fix(GUARDED_COUNT, found.concat([unmatched]), plugin).length);

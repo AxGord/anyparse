@@ -75,7 +75,7 @@ class ExplicitLocalTypePrinterTest extends Test {
 	private function annotate(src: String, inferred: String): String {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: ExplicitLocalType = new ExplicitLocalType();
-		final violations: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin);
+		final violations: Array<Violation> = CheckFixture.violations(check, src, plugin);
 		return CanonicalEdit.applyEdits(src, check.fixWithOracle(src, violations, plugin, new CannedTypeOracle(inferred)));
 	}
 

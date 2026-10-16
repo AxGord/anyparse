@@ -4,7 +4,6 @@ import anyparse.check.Check.Violation;
 import anyparse.check.ConstantCondition;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
@@ -158,7 +157,7 @@ class ConstantConditionCheckTest extends Test {
 		Assert.equals(2, vs.length);
 		Assert.equals('condition is always true', vs[0].message);
 		Assert.equals('condition is always false (dead branch - verify intent before deleting)', vs[1].message);
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.fixOf(check, src, vs);
 		Assert.equals(1, edits.length);
 		Assert.equals('class C {\n\tfunction f():Void {\n\t\tg();\n\t\tif (false) h();\n\t}\n}', applyEdits(src, edits));
 	}
@@ -183,7 +182,7 @@ class ConstantConditionCheckTest extends Test {
 
 	private function applyFix(src: String): String {
 		final check: ConstantCondition = new ConstantCondition();
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.edits(check, src);
 		return applyEdits(src, edits);
 	}
 

@@ -152,7 +152,7 @@ class ImportOutsideGuardCheckTest extends Test {
 	private function edits(src: String): Array<{ span: Span, text: String }> {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: ImportOutsideGuard = new ImportOutsideGuard();
-		return check.fix(src, CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin), plugin);
+		return CheckFixture.edits(check, src, plugin);
 	}
 
 	/** `src` with the edits spliced in VERBATIM — the relocation alone, before any writer pass. */
@@ -176,9 +176,7 @@ class ImportOutsideGuardCheckTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: ImportOutsideGuard = new ImportOutsideGuard();
 		final files: Array<{ file: String, source: String }> = libs.concat([{ file: 'C.hx', source: src }]);
-		return check.fix(
-			src, CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin), plugin, SymbolIndex.build(files, plugin)
-		);
+		return check.fix(src, CheckFixture.violations(check, src, plugin), plugin, SymbolIndex.build(files, plugin));
 	}
 
 }

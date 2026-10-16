@@ -372,7 +372,7 @@ class PreferCaseGuardCheckTest extends Test {
 
 	private function fixEdits(src: String): Array<{ span: Span, text: String }> {
 		final check: PreferCaseGuard = new PreferCaseGuard();
-		return check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
+		return CheckFixture.edits(check, src);
 	}
 
 	/** Run `fix` and re-emit through the canonical writer, `reformat` on so the minimal fixture need not be canonical. */

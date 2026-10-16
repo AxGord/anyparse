@@ -295,8 +295,8 @@ class AvoidDynamicNarrowFixTest extends Test {
 	private function fixed(src: String): FixRun {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: AvoidDynamic = new AvoidDynamic();
-		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin);
-		return { violations: vs, edits: check.fix(src, vs, plugin) };
+		final vs: Array<Violation> = CheckFixture.violations(check, src, plugin);
+		return { violations: vs, edits: CheckFixture.fixOf(check, src, vs, plugin) };
 	}
 
 	private function narrow(src: String): Null<String> {

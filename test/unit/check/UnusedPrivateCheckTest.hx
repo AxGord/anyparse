@@ -255,7 +255,7 @@ class UnusedPrivateCheckTest extends Test {
 	public function testFixAppliedRemovesDeadMethodKeepsRest(): Void {
 		final src: String = 'class C {\n\tprivate function dead() {}\n\tpublic function keep() {}\n}';
 		final check: UnusedPrivate = new UnusedPrivate();
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.edits(check, src);
 		switch CanonicalEdit.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf('dead') == -1);
@@ -1078,7 +1078,7 @@ class UnusedPrivateCheckTest extends Test {
 
 	private function fixEdits(source: String): Array<{ span: Span, text: String }> {
 		final check: UnusedPrivate = new UnusedPrivate();
-		return check.fix(source, CheckFixture.violations(check, source), new HaxeQueryPlugin());
+		return CheckFixture.edits(check, source);
 	}
 
 	/**

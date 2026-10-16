@@ -390,7 +390,7 @@ class PreferInterpolationCheckTest extends Test {
 
 	private function fixText(src: String): String {
 		final check: PreferInterpolation = new PreferInterpolation();
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.edits(check, src);
 		return edits.length == 1 ? edits[0].text : '<${edits.length} edits>';
 	}
 

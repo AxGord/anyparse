@@ -167,7 +167,7 @@ class DocCoverageCheckTest extends Test {
 	public function testFixReturnsEmpty(): Void {
 		final src: String = 'class C {}';
 		final check: DocCoverage = new DocCoverage();
-		Assert.equals(0, check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.edits(check, src).length);
 	}
 
 	public function testSkipParseNoCrash(): Void {

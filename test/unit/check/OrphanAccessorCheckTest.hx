@@ -454,7 +454,7 @@ import utest.Test;
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final probe: Null<Check> = Linter.byId('orphan-accessor');
 		if (probe == null) return;
-		final vs: Array<Violation> = CheckFixture.violationsIn(probe, [{ file: 'C.hx', source: src }], plugin);
+		final vs: Array<Violation> = CheckFixture.violations(probe, src, plugin);
 		Assert.equals(1, vs.length);
 		Assert.equals(0, check.fix(src, vs, plugin).length);
 	}

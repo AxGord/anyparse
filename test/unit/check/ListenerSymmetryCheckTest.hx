@@ -143,7 +143,7 @@ class ListenerSymmetryCheckTest extends Test {
 	public function testFixReturnsEmpty(): Void {
 		final src: String = 'class C {\n\tpublic function addFooListener():Void {}\n}';
 		final check: ListenerSymmetry = new ListenerSymmetry();
-		Assert.equals(0, check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.edits(check, src).length);
 	}
 
 	public function testSkipParseNoCrash(): Void {

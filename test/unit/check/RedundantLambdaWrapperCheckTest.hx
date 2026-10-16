@@ -332,7 +332,7 @@ class RedundantLambdaWrapperCheckTest extends Test {
 	public function testFixReplacesLambdaWithCallee(): Void {
 		final src: String = '${HELPER}class C {\n\tfunction f():Void {\n\t\txs.foreach(p -> Helper.isPos(p));\n\t}\n}';
 		final check: RedundantLambdaWrapper = new RedundantLambdaWrapper();
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.edits(check, src);
 		Assert.equals(1, edits.length);
 		Assert.equals('Helper.isPos', edits[0].text);
 		final applied: String = src.substring(0, edits[0].span.from) + edits[0].text + src.substring(edits[0].span.to, src.length);

@@ -331,7 +331,7 @@ class ScratchFieldCheckTest extends Test {
 	/** `src` after `check`'s fix of its own findings. */
 	private function fixedWith(check: ScratchField, src: String): String {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin);
+		final vs: Array<Violation> = CheckFixture.violations(check, src, plugin);
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin);
 		return CanonicalEdit.applyEdits(src, edits);
 	}
@@ -340,7 +340,7 @@ class ScratchFieldCheckTest extends Test {
 	private function assertDeclinedAs(src: String, why: String): Void {
 		final check: ScratchField = new ScratchField();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin);
+		final vs: Array<Violation> = CheckFixture.violations(check, src, plugin);
 		Assert.equals(1, vs.length);
 		if (vs.length != 1) return;
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin);

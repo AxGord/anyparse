@@ -488,7 +488,7 @@ class TailMergeCheckTest extends Test {
 
 	private static function edits(src: String): Array<{ span: Span, text: String }> {
 		final check: TailMerge = new TailMerge();
-		return check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
+		return CheckFixture.edits(check, src);
 	}
 
 }

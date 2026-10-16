@@ -4,7 +4,6 @@ import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.NullableSwitchMissingNull;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
@@ -195,7 +194,7 @@ class NullableSwitchMissingNullCheckTest extends Test {
 		final check: NullableSwitchMissingNull = new NullableSwitchMissingNull();
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
-		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.fixOf(check, src, vs).length);
 	}
 
 	public function testRegisteredInBuiltins(): Void {

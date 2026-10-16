@@ -523,7 +523,7 @@ class PreferMapTypeCheckTest extends Test {
 	private function fixed(src: String): String {
 		final check: PreferMapType = new PreferMapType();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		return applyEdits(src, check.fix(src, CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin), plugin));
+		return applyEdits(src, CheckFixture.edits(check, src, plugin));
 	}
 
 	/** Assert `src` is reported (one finding) yet gate-refused (no fix edit). */

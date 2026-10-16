@@ -4,7 +4,6 @@ import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.RedundantCondCompParens;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import unit.CheckFixture;
 import utest.Assert;
@@ -171,7 +170,7 @@ class RedundantCondCompParensCheckTest extends Test {
 		final check: RedundantCondCompParens = new RedundantCondCompParens();
 		final all: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(2, all.length);
-		final edited: String = CanonicalEdit.applyEdits(src, check.fix(src, [all[1]], new HaxeQueryPlugin()));
+		final edited: String = CanonicalEdit.applyEdits(src, CheckFixture.fixOf(check, src, [all[1]]));
 		Assert.equals('class C {\n\tfunction f():Void {\n\t\t#if (sys)\n\t\tg();\n\t\t#elseif js\n\t\th();\n\t\t#end\n\t}\n}', edited);
 	}
 
@@ -196,7 +195,7 @@ class RedundantCondCompParensCheckTest extends Test {
 
 	private function applyFix(src: String): String {
 		final check: RedundantCondCompParens = new RedundantCondCompParens();
-		return CanonicalEdit.applyEdits(src, check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin()));
+		return CanonicalEdit.applyEdits(src, CheckFixture.edits(check, src));
 	}
 
 }

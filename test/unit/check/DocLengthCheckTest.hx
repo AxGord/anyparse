@@ -5,7 +5,6 @@ import anyparse.check.DocLength;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
 import utest.Assert;
@@ -103,7 +102,7 @@ class DocLengthCheckTest extends Test {
 		final check: DocLength = new DocLength();
 		final src: String = docBlock(DEFAULT_MAX + 5);
 		final found: Array<Violation> = CheckFixture.violations(check, src);
-		Assert.equals(0, check.fix(src, found, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.fixOf(check, src, found).length);
 		Assert.isTrue(check.noAutofixReason().indexOf('prose') >= 0, check.noAutofixReason());
 	}
 

@@ -133,9 +133,7 @@ class LambdaBranchingBodyBlockCheckTest extends Test {
 	private function applied(src: String): String {
 		final check: LambdaBranchingBodyBlock = new LambdaBranchingBodyBlock();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin), plugin
-		);
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.edits(check, src, plugin);
 		return switch CanonicalEdit.canonicalize(src, edits, true, plugin) {
 			case Ok(text): text;
 			case Err(message): 'ERR: $message';

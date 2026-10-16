@@ -124,6 +124,8 @@ class PreferArrayLiteralCheckTest extends Test {
 
 	private function fixText(src: String): String {
 		final check: PreferArrayLiteral = new PreferArrayLiteral();
+		// Deliberately WITHOUT the report index production hands every fix: `testThisFieldAssignmentNeedsIndex` pins the
+		// index-less fallback, which `lint --fix` never reaches (B8 finding).
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
 		return edits.length == 1 ? edits[0].text : '<${edits.length} edits>';
 	}

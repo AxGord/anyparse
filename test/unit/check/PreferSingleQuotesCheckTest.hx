@@ -100,7 +100,7 @@ class PreferSingleQuotesCheckTest extends Test {
 	public function testFixAppliedResult(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\tfinal a = "hi";\n\t}\n}';
 		final check: PreferSingleQuotes = new PreferSingleQuotes();
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.edits(check, src);
 		switch CanonicalEdit.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.contains("'hi'"));
@@ -143,7 +143,7 @@ class PreferSingleQuotesCheckTest extends Test {
 	/** The single-quoted text the fix emits for `src`'s first convertible literal (empty if none). */
 	private function singleOf(src: String): String {
 		final check: PreferSingleQuotes = new PreferSingleQuotes();
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.edits(check, src);
 		return edits.length > 0 ? edits[0].text : '';
 	}
 

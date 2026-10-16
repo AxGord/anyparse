@@ -5,7 +5,6 @@ import anyparse.check.Linter;
 import anyparse.check.PreferIfExpressionAssignment;
 import anyparse.check.PreferTernaryAssignment;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
 import utest.Assert;
@@ -172,7 +171,7 @@ class PreferTernaryAssignmentCheckTest extends Test {
 		final claiming: PreferIfExpressionAssignment = new PreferIfExpressionAssignment();
 		final own: Array<Violation> = CheckFixture.violations(claiming, TERNARY_TAILED_ELSE);
 		Assert.equals(1, own.length, 'prefer-if-expression-assignment claims the site: $own');
-		final es: Array<{ span: Span, text: String }> = claiming.fix(TERNARY_TAILED_ELSE, own, new HaxeQueryPlugin());
+		final es: Array<{ span: Span, text: String }> = CheckFixture.fixOf(claiming, TERNARY_TAILED_ELSE, own);
 		Assert.equals(1, es.length);
 		Assert.equals('x = if (a) 1 else if (p) q else r;', es[0].text);
 	}
@@ -309,7 +308,7 @@ class PreferTernaryAssignmentCheckTest extends Test {
 
 	private function edits(src: String): Array<{ span: Span, text: String }> {
 		final check: PreferTernaryAssignment = new PreferTernaryAssignment();
-		return check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
+		return CheckFixture.edits(check, src);
 	}
 
 }

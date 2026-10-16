@@ -186,7 +186,7 @@ class NarrowLocalScopeCheckTest extends Test {
 
 	private function edits(src: String): Array<{ span: Span, text: String }> {
 		final check: NarrowLocalScope = new NarrowLocalScope();
-		return check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
+		return CheckFixture.edits(check, src);
 	}
 
 	/** Run `fix` and re-emit through the canonical writer -- the `lint --fix` path in one pass. */

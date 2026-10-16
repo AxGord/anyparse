@@ -207,9 +207,9 @@ class FactsTypeOracleTest extends Test {
 		final source: String = 'class C {\n\tvar y = g();\n\n\tfunction f(x) {\n\t\treturn x;\n\t}\n}\n';
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: ExplicitType = new ExplicitType();
-		final violations: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: source }], plugin);
+		final violations: Array<Violation> = CheckFixture.violations(check, source, plugin);
 		Assert.equals(3, violations.length);
-		Assert.equals(0, check.fix(source, violations, plugin).length);
+		Assert.equals(0, CheckFixture.fixOf(check, source, violations, plugin).length);
 		for (v in violations)
 			Assert.isTrue((v.declineReason ?? '').indexOf('oracle-assisted pass') >= 0, '${v.message}: ${v.declineReason}');
 	}

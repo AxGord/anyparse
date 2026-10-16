@@ -101,7 +101,7 @@ class FoldStringLiteralsCheckTest extends FoldStringLiteralsCheckTestBase {
 	public function testFixAppliedResultIsCanonicalAndIdempotent(): Void {
 		final src: String = 'class C {\n\tfunction f(name:String) {\n\t\tfinal a = "a" + name + "b";\n\t}\n}';
 		final check: FoldStringLiterals = new FoldStringLiterals();
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.edits(check, src);
 		switch CanonicalEdit.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.equals("class C {\n\tfunction f(name:String) {\n\t\tfinal a = 'a${name}b';\n\t}\n}\n", text);

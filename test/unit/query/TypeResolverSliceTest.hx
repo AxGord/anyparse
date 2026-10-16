@@ -43,7 +43,7 @@ class TypeResolverSliceTest extends Test {
 		final src: String = wrap('c: Ctx', 'final dead = c.f;');
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: UnusedLocal = new UnusedLocal();
-		final violations: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin);
+		final violations: Array<Violation> = CheckFixture.violations(check, src, plugin);
 		Assert.equals(0, check.fix(src, violations, plugin).length, 'no symbol index → conservative status quo');
 	}
 

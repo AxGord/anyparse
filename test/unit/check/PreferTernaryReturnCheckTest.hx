@@ -535,9 +535,7 @@ class PreferTernaryReturnCheckTest extends Test {
 		final source: String = 'class C {\n\tfunction f(a:Bool):Int {\n\t\tif (a) return 1;\n\t\t// why zero\n\t\treturn 0;\n\t}\n}';
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: PreferTernaryReturn = new PreferTernaryReturn();
-		final carrying: Array<CarryingEdit> = check.fixCarrying(
-			source, CheckFixture.violationsIn(check, [{ file: 'C.hx', source: source }], plugin), plugin
-		);
+		final carrying: Array<CarryingEdit> = check.fixCarrying(source, CheckFixture.violations(check, source, plugin), plugin);
 		Assert.equals(1, carrying.length, 'the rule still computes the fold - the seam is what declines it');
 		Assert.equals('// why zero\nreturn a ? 1 : 0;', carrying[0].text);
 		Assert.equals(3, carrying[0].carried.length, 'condition, then-value and else-value are what the replacement quotes');
@@ -559,7 +557,7 @@ class PreferTernaryReturnCheckTest extends Test {
 
 	private function edits(src: String): Array<{ span: Span, text: String }> {
 		final check: PreferTernaryReturn = new PreferTernaryReturn();
-		return check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
+		return CheckFixture.edits(check, src);
 	}
 
 }

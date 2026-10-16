@@ -487,9 +487,7 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 	private function applyFix(source: String): String {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: SimplifyNegatedCompound = new SimplifyNegatedCompound();
-		final es: Array<{ span: Span, text: String }> = check.fix(
-			source, CheckFixture.violationsIn(check, [{ file: 'C.hx', source: source }], plugin), plugin
-		);
+		final es: Array<{ span: Span, text: String }> = CheckFixture.edits(check, source, plugin);
 		return es.length == 0 ? source : canonicalized(source, es, plugin);
 	}
 

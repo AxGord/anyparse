@@ -84,7 +84,7 @@ class OversizedTypeCheckTest extends Test {
 	public function testFixReturnsEmpty(): Void {
 		final src: String = classWithMembers(51);
 		final check: OversizedType = new OversizedType();
-		Assert.equals(0, check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.edits(check, src).length);
 	}
 
 	public function testSkipParseNoCrash(): Void {

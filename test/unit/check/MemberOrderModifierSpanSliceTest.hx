@@ -143,8 +143,8 @@ class MemberOrderModifierSpanSliceTest extends Test {
 		final check: MemberOrder = new MemberOrder();
 		final cfg: LintConfig = LintConfig.parse('{}');
 		check.setConfigResolver(_ -> cfg);
-		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin);
-		return switch CanonicalEdit.canonicalize(src, check.fix(src, vs, plugin), true, plugin) {
+		final vs: Array<Violation> = CheckFixture.violations(check, src, plugin);
+		return switch CanonicalEdit.canonicalize(src, CheckFixture.fixOf(check, src, vs, plugin), true, plugin) {
 			case Ok(text): text;
 			case Err(message):
 				Assert.fail(message);

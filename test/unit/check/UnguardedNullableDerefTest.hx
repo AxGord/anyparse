@@ -4,7 +4,6 @@ import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.UnguardedNullableDeref;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
 import utest.Assert;
@@ -254,7 +253,7 @@ class UnguardedNullableDerefTest extends Test {
 	public function testFixReturnsEmpty(): Void {
 		final src: String = 'class C { function f(m:Map<String,Int>) { var u = m[k]; u.foo; } }';
 		final check: UnguardedNullableDeref = new UnguardedNullableDeref();
-		Assert.equals(0, check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.edits(check, src).length);
 	}
 
 	public function testRegisteredInBuiltins(): Void {

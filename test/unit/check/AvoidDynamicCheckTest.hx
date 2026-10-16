@@ -122,7 +122,7 @@ class AvoidDynamicCheckTest extends Test {
 		final src: String = 'class C {\n\tvar x:Dynamic;\n}';
 		final check: AvoidDynamic = new AvoidDynamic();
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
-		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.fixOf(check, src, vs).length);
 	}
 
 	public function testExcludePathsConfig(): Void {

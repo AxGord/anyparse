@@ -478,9 +478,7 @@ class PreferSafeNavCheckTest extends Test {
 	private function fixCanonical(source: String): String {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: PreferSafeNav = new PreferSafeNav();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			source, CheckFixture.violationsIn(check, [{ file: 'C.hx', source: source }], plugin), plugin
-		);
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.edits(check, source, plugin);
 		switch CanonicalEdit.canonicalize(source, edits, true, plugin) {
 			case Ok(text):
 				return text;

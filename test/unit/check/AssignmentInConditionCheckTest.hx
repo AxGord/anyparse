@@ -4,7 +4,6 @@ import anyparse.check.AssignmentInCondition;
 import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
 import utest.Assert;
@@ -48,7 +47,7 @@ class AssignmentInConditionCheckTest extends Test {
 	public function testReportOnlyNoFix(): Void {
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\tif (a = b) c();\n\t}\n}';
 		final check: AssignmentInCondition = new AssignmentInCondition();
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.edits(check, src);
 		Assert.equals(0, edits.length);
 	}
 

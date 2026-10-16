@@ -155,7 +155,7 @@ class HoistBranchStringAffixCheckTest extends Test {
 
 	private function edits(src: String): Array<{ span: Span, text: String }> {
 		final check: HoistBranchStringAffix = new HoistBranchStringAffix();
-		return check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
+		return CheckFixture.edits(check, src);
 	}
 
 }

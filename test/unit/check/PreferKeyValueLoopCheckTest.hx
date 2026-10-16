@@ -119,7 +119,7 @@ class PreferKeyValueLoopCheckTest extends Test {
 		final src: String = wrapFn('for (i in 0...items.length) {\n\t\t\tbefore(i);\n\t\t\tfinal it = items[i];\n\t\t\tuse(it);\n\t\t}');
 		final r: CheckRun = runAndExpectOne(src);
 		Assert.equals('this indexed loop can be for (i => item in items)', r.vs[0].message);
-		Assert.equals(0, r.check.fix(src, r.vs, project(src)).length);
+		Assert.equals(0, CheckFixture.fixOf(r.check, src, r.vs, project(src)).length);
 		// Through a receiver instead, the same loop is fixed.
 		final text: String = fixedText(
 			wrapSink('for (i in 0...items.length) {\n\t\t\tsink.before(i);\n\t\t\tfinal it = items[i];\n\t\t\tsink.use(it);\n\t\t}')
@@ -349,7 +349,7 @@ class PreferKeyValueLoopCheckTest extends Test {
 			+ '\t\tfor (i in 0...items.length) sink.use(items[i], i);\n\t}\n}';
 		final r: CheckRun = runAndExpectOne(src);
 		Assert.equals('this indexed loop reads items[i]; it can be a key-value loop over items', r.vs[0].message);
-		Assert.equals(0, r.check.fix(src, r.vs, project(src)).length);
+		Assert.equals(0, CheckFixture.fixOf(r.check, src, r.vs, project(src)).length);
 	}
 
 	@:pin('control') @:killer('M-KV-NOOPENER-TAKEN-MEMBER')
@@ -450,7 +450,7 @@ class PreferKeyValueLoopCheckTest extends Test {
 		final value: PreferValueLoop = new PreferValueLoop();
 		final vs: Array<Violation> = CheckFixture.violations(value, src);
 		Assert.equals(1, vs.length);
-		Assert.equals(0, value.fix(src, vs, project(src)).length);
+		Assert.equals(0, CheckFixture.fixOf(value, src, vs, project(src)).length);
 		Assert.equals(nestedDecline('key'), vs[0].declineReason);
 	}
 
@@ -527,7 +527,7 @@ class PreferKeyValueLoopCheckTest extends Test {
 
 	private function assertFixCanonical(src: String, present: String, absent: String): Void {
 		final r: CheckRun = runAndExpectOne(src);
-		switch CanonicalEdit.canonicalize(src, r.check.fix(src, r.vs, project(src)), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, CheckFixture.fixOf(r.check, src, r.vs, project(src)), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf(present) >= 0, 'expected $present in $text');
 				Assert.isTrue(text.indexOf(absent) == -1, 'expected no $absent in $text');
@@ -538,7 +538,7 @@ class PreferKeyValueLoopCheckTest extends Test {
 
 	private function assertFixRefused(src: String): Void {
 		final r: CheckRun = runAndExpectOne(src);
-		Assert.equals(0, r.check.fix(src, r.vs, project(src)).length);
+		Assert.equals(0, CheckFixture.fixOf(r.check, src, r.vs, project(src)).length);
 	}
 
 	private function runAndExpectOne(src: String): CheckRun {
@@ -568,7 +568,7 @@ class PreferKeyValueLoopCheckTest extends Test {
 	/** The canonical text after this rule's fix, expecting exactly one finding. */
 	private function fixedText(src: String): String {
 		final r: CheckRun = runAndExpectOne(src);
-		return switch CanonicalEdit.canonicalize(src, r.check.fix(src, r.vs, project(src)), true, new HaxeQueryPlugin()) {
+		return switch CanonicalEdit.canonicalize(src, CheckFixture.fixOf(r.check, src, r.vs, project(src)), true, new HaxeQueryPlugin()) {
 			case Ok(text): text;
 			case Err(message): 'fix canonicalize Err: $message';
 		};
@@ -590,7 +590,7 @@ class PreferKeyValueLoopCheckTest extends Test {
 	/** The `declineReason` the fix writes on the single finding of `src`, asserting the fix withheld its edits. */
 	private function declineOf(src: String): Null<String> {
 		final r: CheckRun = runAndExpectOne(src);
-		Assert.equals(0, r.check.fix(src, r.vs, project(src)).length);
+		Assert.equals(0, CheckFixture.fixOf(r.check, src, r.vs, project(src)).length);
 		return r.vs.length == 1 ? r.vs[0].declineReason : null;
 	}
 
@@ -598,7 +598,7 @@ class PreferKeyValueLoopCheckTest extends Test {
 	private function declines(src: String): Array<Null<String>> {
 		final check: PreferKeyValueLoop = new PreferKeyValueLoop();
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
-		Assert.equals(0, check.fix(src, vs, project(src)).length);
+		Assert.equals(0, CheckFixture.fixOf(check, src, vs, project(src)).length);
 		return [for (v in vs) v.declineReason];
 	}
 
@@ -612,7 +612,7 @@ class PreferKeyValueLoopCheckTest extends Test {
 	private function fixedAll(src: String): String {
 		final check: PreferKeyValueLoop = new PreferKeyValueLoop();
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
-		return switch CanonicalEdit.canonicalize(src, check.fix(src, vs, project(src)), true, new HaxeQueryPlugin()) {
+		return switch CanonicalEdit.canonicalize(src, CheckFixture.fixOf(check, src, vs, project(src)), true, new HaxeQueryPlugin()) {
 			case Ok(text): text;
 			case Err(message): 'fix canonicalize Err: $message';
 		};

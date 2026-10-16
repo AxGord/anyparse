@@ -67,8 +67,8 @@ class RedundantParensOperandArmsTestBase extends Test {
 		final check: RedundantParens = new RedundantParens();
 		if (resolve != null) check.setConfigResolver(resolve);
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin);
-		return CanonicalEdit.applyEdits(src, check.fix(src, vs, plugin));
+		final vs: Array<Violation> = CheckFixture.violations(check, src, plugin);
+		return CanonicalEdit.applyEdits(src, CheckFixture.fixOf(check, src, vs, plugin));
 	}
 
 	/** `src` fixed repeatedly until it stops changing — what `lint --fix` does over passes. */

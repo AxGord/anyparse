@@ -4,7 +4,6 @@ import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.RedundantUpcast;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
@@ -88,7 +87,7 @@ class RedundantUpcastTest extends Test {
 		// A non-flagged cast (unrelated types) yields no edits — fix only unwraps proven upcasts.
 		final src: String = 'class A {} class B {} class C { function f(a:A) { var b = cast(a, B); } }';
 		final check: RedundantUpcast = new RedundantUpcast();
-		Assert.equals(0, check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.edits(check, src).length);
 	}
 
 	public function testSkipParseNoCrash(): Void {

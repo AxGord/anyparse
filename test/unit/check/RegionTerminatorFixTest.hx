@@ -76,9 +76,7 @@ final class RegionTerminatorFixTest extends Test {
 
 	private static function fixed(check: Check, src: String): String {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		return CanonicalEdit.applyEdits(
-			src, check.fix(src, CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin), plugin)
-		);
+		return CanonicalEdit.applyEdits(src, CheckFixture.edits(check, src, plugin));
 	}
 
 	private static function wrap(body: String): String {

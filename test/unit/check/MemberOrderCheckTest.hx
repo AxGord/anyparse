@@ -1406,8 +1406,8 @@ class MemberOrderCheckTest extends Test {
 		final check: MemberOrder = new MemberOrder();
 		check.setConfigResolver(emptyConfigResolver());
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin);
-		final applied: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin);
+		final vs: Array<Violation> = CheckFixture.violations(check, src, plugin);
+		final applied: Array<{ span: Span, text: String }> = CheckFixture.fixOf(check, src, vs, plugin);
 		return { reasons: [for (v in vs) v.declineReason], edits: applied.length };
 	}
 
@@ -1415,7 +1415,7 @@ class MemberOrderCheckTest extends Test {
 		final check: MemberOrder = new MemberOrder();
 		check.setConfigResolver(resolve ?? emptyConfigResolver());
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		return check.fix(src, CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin), plugin);
+		return CheckFixture.edits(check, src, plugin);
 	}
 
 	private function fixedSource(src: String, ?resolve: (String) -> LintConfig): String {
@@ -1437,10 +1437,7 @@ class MemberOrderCheckTest extends Test {
 		final check: MemberOrder = new MemberOrder();
 		check.setConfigResolver(emptyConfigResolver());
 		return CanonicalEdit.applyEdits(
-			src,
-			check.fix(
-				src, CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin), plugin, SymbolIndex.build(files, plugin)
-			)
+			src, check.fix(src, CheckFixture.violations(check, src, plugin), plugin, SymbolIndex.build(files, plugin))
 		);
 	}
 
@@ -1484,8 +1481,8 @@ class MemberOrderCheckTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: MemberOrder = new MemberOrder();
 		check.setConfigResolver(resolve ?? emptyConfigResolver());
-		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin);
-		return switch CanonicalEdit.canonicalize(src, check.fix(src, vs, plugin), true, plugin) {
+		final vs: Array<Violation> = CheckFixture.violations(check, src, plugin);
+		return switch CanonicalEdit.canonicalize(src, CheckFixture.fixOf(check, src, vs, plugin), true, plugin) {
 			case Ok(text): text;
 			case Err(message):
 				Assert.fail(message);

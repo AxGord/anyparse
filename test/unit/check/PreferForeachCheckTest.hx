@@ -341,7 +341,7 @@ class PreferForeachCheckTest extends Test {
 	private function fixResult(src: String): String {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: PreferForeach = new PreferForeach();
-		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin);
+		final vs: Array<Violation> = CheckFixture.violations(check, src, plugin);
 		final edits: Array<{ span: Span, text: String }> = check.fix(
 			src, vs, plugin, SymbolIndex.build([{ file: 'C.hx', source: src }], plugin)
 		);

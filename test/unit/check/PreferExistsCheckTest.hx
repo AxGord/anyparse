@@ -560,7 +560,7 @@ class PreferExistsCheckTest extends Test {
 	private function grouped(src: String): Array<GroupedEdit> {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: PreferExists = new PreferExists();
-		return check.fixGrouped(src, CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin), plugin);
+		return check.fixGrouped(src, CheckFixture.violations(check, src, plugin), plugin);
 	}
 
 	private function fn(body: String): String {
@@ -622,7 +622,7 @@ class PreferExistsCheckTest extends Test {
 	private function fixResult(src: String): String {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: PreferExists = new PreferExists();
-		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin);
+		final vs: Array<Violation> = CheckFixture.violations(check, src, plugin);
 		final edits: Array<{ span: Span, text: String }> = check.fix(
 			src, vs, plugin, SymbolIndex.build([{ file: 'C.hx', source: src }], plugin)
 		);

@@ -607,13 +607,7 @@ class ExplicitTypeCheckTest extends Test {
 	}
 
 	private function applyFix(src: String): String {
-		final check: ExplicitType = new ExplicitType();
-		final vs: Array<Violation> = CheckFixture.violations(check, src);
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
-		edits.sort((a, b) -> b.span.from - a.span.from);
-		var result: String = src;
-		for (e in edits) result = result.substring(0, e.span.from) + e.text + result.substring(e.span.to);
-		return result;
+		return CheckFixture.fixedSource(new ExplicitType(), src);
 	}
 
 	private function fixCount(src: String): Int {

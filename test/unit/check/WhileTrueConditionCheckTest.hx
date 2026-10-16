@@ -216,7 +216,7 @@ class WhileTrueConditionCheckTest extends Test {
 	private function edits(source: String): Array<{ span: Span, text: String }> {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: WhileTrueCondition = new WhileTrueCondition();
-		return check.fix(source, CheckFixture.violationsIn(check, [{ file: 'C.hx', source: source }], plugin), plugin);
+		return CheckFixture.edits(check, source, plugin);
 	}
 
 	private function applyFix(source: String): String {

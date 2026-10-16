@@ -170,7 +170,7 @@ class ExplicitLocalTypeOracleAbstainTest extends Test {
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\tvar x = (g() : Dynamic);\n\t}\n}';
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: ExplicitLocalType = new ExplicitLocalType();
-		Assert.equals(0, check.fix(src, CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin), plugin).length);
+		Assert.equals(0, CheckFixture.edits(check, src, plugin).length);
 	}
 
 	// --- end to end, against a real compiler and display server ---

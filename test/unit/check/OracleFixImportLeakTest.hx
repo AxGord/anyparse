@@ -155,7 +155,7 @@ final class OracleFixImportLeakTest extends Test {
 	 */
 	private function editTexts(check: Check, source: String, byName: Map<String, String>): Array<String> {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final violations: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: source }], plugin);
+		final violations: Array<Violation> = CheckFixture.violations(check, source, plugin);
 		final fixer: OracleAssisted = cast check;
 		final edits: Array<{ span: Span, text: String }> = fixer.fixWithOracle(
 			source, violations, plugin, new IdentTypeOracle(source, byName)

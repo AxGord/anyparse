@@ -5,7 +5,6 @@ import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.RedundantCastType;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
@@ -392,7 +391,7 @@ class RedundantCastTypeCheckTest extends Test {
 	public function testFixLeavesUnflaggedCastAlone(): Void {
 		final src: String = 'class Foo {} class Bar {} class C { function f(v:Dynamic) { final a:Bar = cast(v, Foo); } }';
 		final check: RedundantCastType = new RedundantCastType();
-		Assert.equals(0, check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.edits(check, src).length);
 	}
 
 	public function testIsDefaultOff(): Void {

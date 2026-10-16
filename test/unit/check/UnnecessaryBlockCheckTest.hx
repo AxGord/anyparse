@@ -204,7 +204,7 @@ class UnnecessaryBlockCheckTest extends Test {
 	private function fixedCanonical(src: String): String {
 		final check: UnnecessaryBlock = new UnnecessaryBlock();
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
-		return switch CanonicalEdit.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+		return switch CanonicalEdit.canonicalize(src, CheckFixture.fixOf(check, src, vs), true, new HaxeQueryPlugin()) {
 			case Ok(text): text;
 			case Err(message):
 				Assert.fail('fix canonicalize Err: $message');

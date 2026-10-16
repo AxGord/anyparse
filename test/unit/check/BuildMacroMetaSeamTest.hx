@@ -297,7 +297,7 @@ class BuildMacroMetaSeamTest extends Test {
 		final src: String = '$tag(M.build()) class C {\n\tprivate function dead() {}\n}';
 		final check: UnusedPrivate = new UnusedPrivate();
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
-		return check.fix(src, vs, new HaxeQueryPlugin()).length;
+		return CheckFixture.fixOf(check, src, vs).length;
 	}
 
 	/** The grammar's declared descendant-ward build-macro tags; non-empty, so no guard here passes vacuously. */

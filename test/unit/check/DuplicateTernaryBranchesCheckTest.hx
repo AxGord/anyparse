@@ -4,7 +4,6 @@ import anyparse.check.Check.Violation;
 import anyparse.check.DuplicateTernaryBranches;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
 import utest.Assert;
@@ -32,7 +31,7 @@ class DuplicateTernaryBranchesCheckTest extends Test {
 	public function testFixCollapsesPureCondition(): Void {
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\tvar t = cond ? x : x;\n\t}\n}';
 		final check: DuplicateTernaryBranches = new DuplicateTernaryBranches();
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.edits(check, src);
 		Assert.equals(1, edits.length);
 		Assert.equals('x', edits[0].text);
 	}
@@ -42,7 +41,7 @@ class DuplicateTernaryBranchesCheckTest extends Test {
 		final check: DuplicateTernaryBranches = new DuplicateTernaryBranches();
 		final found: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, found.length);
-		Assert.equals(0, check.fix(src, found, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.fixOf(check, src, found).length);
 	}
 
 	public function testRegisteredInBuiltins(): Void {

@@ -4,7 +4,6 @@ import anyparse.check.Check;
 import anyparse.check.DocMeasurementClaim;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
@@ -138,7 +137,7 @@ class DocMeasurementClaimCheckTest extends Test {
 		final check: DocMeasurementClaim = new DocMeasurementClaim();
 		final src: String = 'class C {\n\t// rebuilt at a3588740\n}';
 		final found: Array<Violation> = CheckFixture.violations(check, src);
-		Assert.equals(0, check.fix(src, found, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.fixOf(check, src, found).length);
 		Assert.isTrue(check.noAutofixReason().indexOf('numbers') >= 0, check.noAutofixReason());
 	}
 

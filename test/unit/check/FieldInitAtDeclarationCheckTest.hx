@@ -306,9 +306,9 @@ class FieldInitAtDeclarationCheckTest extends Test {
 			+ '\tpublic function dispose():Void {\n\t\t_a = null;\n\t\t_b = null;\n\t\t_c = null;\n\t}\n}';
 		final check: FieldInitAtDeclaration = new FieldInitAtDeclaration();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final all: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin);
+		final all: Array<Violation> = CheckFixture.violations(check, src, plugin);
 		Assert.equals(3, all.length);
-		Assert.equals(0, check.fix(src, all.slice(1), plugin).length);
+		Assert.equals(0, CheckFixture.fixOf(check, src, all.slice(1), plugin).length);
 	}
 
 	/**

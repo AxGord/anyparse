@@ -153,7 +153,7 @@ class AvoidDynamicBagFixTest extends Test {
 	private function edits(src: String, oracle: TypeOracle): Array<{ span: Span, text: String }> {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: AvoidDynamic = new AvoidDynamic();
-		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin);
+		final vs: Array<Violation> = CheckFixture.violations(check, src, plugin);
 		return check.fixWithOracle(src, vs, plugin, oracle);
 	}
 
