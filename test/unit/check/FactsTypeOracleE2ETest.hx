@@ -6,6 +6,7 @@ import sys.io.File;
 import anyparse.check.CompilerDisplayOracle;
 import anyparse.check.CompilerOracle;
 import anyparse.check.FactsTypeOracle;
+import anyparse.check.FactsTypeOracle.FactsDecline;
 import anyparse.check.HaxeSpawn;
 import anyparse.query.Cli;
 import unit.cli.CliFixture;
@@ -123,7 +124,7 @@ class FactsTypeOracleE2ETest extends Test {
 		for (left in ['vardyn=Json', 'varconf=#if']) Assert.isTrue(packed.indexOf(left) >= 0, 'left alone: $$left\n$$packed');
 		Assert.isTrue(err.indexOf('oracle-assisted explicit-local-type DECLINED') >= 0, err);
 		Assert.isTrue(err.indexOf('the oracle configurations type it differently') >= 0, err);
-		Assert.isTrue(err.indexOf(FactsTypeOracle.DECLINE_DYNAMIC_SOURCE) >= 0, err);
+		Assert.isTrue(err.indexOf(FactsDecline.DynamicSource) >= 0, err);
 		Assert.equals(before[0], run(dir, []), 'the default build prints what it printed');
 		Assert.equals(before[1], run(dir, ['-D', 'alt']), 'the alt build prints what it printed');
 		CliFixture.removeDir(dir);

@@ -2065,7 +2065,7 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main]), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TRUTH-WIRED')
+	@:pin('control') @:killer('M-FACTS-TRUTH-WIRED') @:killer('M-FACTS-SOURCE-UNLISTED')
 	@:access(anyparse.query.MemberReach)
 	public function testTheFactsAreTheTruthOnlyUnderTheWholeListOfTheirBuilds(): Void {
 		// the facts of every build of a list declared whole, none dropped, are what every build the project ships resolves;
@@ -2083,7 +2083,7 @@ class MemberReachFactsTest extends Test {
 	}
 
 	@:pin('control') @:killer('M-REACH-PROVEN-TRUTH')
-	@:access(anyparse.query.MemberReach)
+	@:access(anyparse.query.MemberReach) @:access(anyparse.query.FactsView)
 	public function testAProofTheTruthContradictsIsAskedAgainUnderTheTruth(): Void {
 		// `Mac.loop` replaces `Main.f`, the region's function, by a push onto `Store.items`. The reading a run asks first — the
 		// compiler facts with no whole list of builds — proves the region, whose text runs nothing; under the truth the region's
@@ -2102,7 +2102,7 @@ class MemberReachFactsTest extends Test {
 			final region: ReachEntry = Region(Path.join([dir, 'Main.hx']), regionOf(main));
 			final first: MemberReach = new MemberReach(
 				truth._plugin, truth._project, truth._index, true, MemberReach.MAX_LIBRARY_FILES, MemberReach.MAX_VISITED, null,
-				() -> false, truth._scope.facts?.table
+				() -> false, FactsView.over(truth._scope.facts?.table)
 			);
 			final alone: ReachResult = first.mayReach(region, store, Mutate);
 			first._factsTruthAvailable = true;
@@ -2115,7 +2115,7 @@ class MemberReachFactsTest extends Test {
 
 	@:pin('control') @:killer('M-FACTS-TRUTH-UNLISTED') @:killer('M-FACTS-TRUTH-COUNT') @:killer('M-FACTS-TRUTH-NAMES')
 	@:killer('M-FACTS-TRUTH-ORDER')
-	@:access(anyparse.query.MemberReach)
+	@:access(anyparse.query.FactsView)
 	public function testTheTruthNeedsTheFactsToNameExactlyTheListedBuilds(): Void {
 		final facts: CompilerFacts = CompilerFacts.create(file -> null, file -> file);
 		facts.configurations.push('b.hxml -D y');
@@ -2133,16 +2133,14 @@ class MemberReachFactsTest extends Test {
 					}
 			];
 		}
-		Assert.isTrue(MemberReach.factsAreTruth(facts, listed(['b.hxml', 'b.hxml -D y'])), 'the order of the list counted');
-		Assert.isFalse(MemberReach.factsAreTruth(facts, null), 'facts were the truth with no list of builds');
-		Assert.isFalse(MemberReach.factsAreTruth(null, listed(['b.hxml'])), 'no facts were the truth');
-		Assert.isFalse(MemberReach.factsAreTruth(facts, listed([])), 'facts were the truth under an empty list');
-		Assert.isFalse(MemberReach.factsAreTruth(facts, listed(['b.hxml'])), 'facts of a build the list does not name were the truth');
+		Assert.isTrue(FactsView.namesExactly(facts, listed(['b.hxml', 'b.hxml -D y'])), 'the order of the list counted');
+		Assert.isFalse(FactsView.namesExactly(facts, null), 'facts were the truth with no list of builds');
+		Assert.isFalse(FactsView.namesExactly(facts, listed([])), 'facts were the truth under an empty list');
+		Assert.isFalse(FactsView.namesExactly(facts, listed(['b.hxml'])), 'facts of a build the list does not name were the truth');
 		Assert.isFalse(
-			MemberReach.factsAreTruth(facts, listed(['b.hxml', 'b.hxml -D y', 'b.hxml -D z'])),
-			'facts missing a listed build were the truth'
+			FactsView.namesExactly(facts, listed(['b.hxml', 'b.hxml -D y', 'b.hxml -D z'])), 'facts missing a listed build were the truth'
 		);
-		Assert.isFalse(MemberReach.factsAreTruth(facts, listed(['b.hxml', 'b.hxml -D z'])), 'facts of other builds were the truth');
+		Assert.isFalse(FactsView.namesExactly(facts, listed(['b.hxml', 'b.hxml -D z'])), 'facts of other builds were the truth');
 	}
 
 	@:pin('control') @:killer('M-FACTS-TRUTH-HAZARDS') @:killer('M-FACTS-TRUTH-HAZARDS-UNLISTED')
@@ -2869,7 +2867,7 @@ class MemberReachFactsTest extends Test {
 	}
 
 	@:pin('control') @:killer('M-FACTS-DEAD-FILE-REWRITTEN')
-	@:access(anyparse.query.MemberReach)
+	@:access(anyparse.query.MemberReach) @:access(anyparse.query.FactsView)
 	public function testAFileTheRunWroteMayBeCompiled(): Void {
 		// a file the run wrote after the compiles — one a fix created, say — holds text no build read: it may be compiled
 		final broken: String = 'class Broken {\n\tfunction f() { ( }\n}\n';
@@ -5100,8 +5098,8 @@ class MemberReachFactsTest extends Test {
 		// the builds as a run probes them: every define each one sees, the target's and the compiler's included
 		final builds: Null<Array<ReachConfiguration>> = listed ? ReachDefinesProbe.probeAll(oracles)?.configurations : null;
 		final reach: MemberReach = new MemberReach(
-			plugin, project, index, true, MemberReach.MAX_LIBRARY_FILES, MemberReach.MAX_VISITED, builds, () -> classpathComplete, facts,
-			reflective, holders
+			plugin, project, index, true, MemberReach.MAX_LIBRARY_FILES, MemberReach.MAX_VISITED, builds, () -> classpathComplete,
+			FactsView.over(facts), reflective, holders
 		);
 		final result: T = question(reach, dir);
 		CliFixture.removeDir(dir);

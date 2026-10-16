@@ -38,10 +38,13 @@
 			],
 			"owners": [
 				"anyparse.query.FactsView",
-				"anyparse.check.TypedFactsWalk",
 				"anyparse.check.FactsTypeOracle",
+				"anyparse.check.TypedFactsProbe",
 				"anyparse.check.FactsTypeText",
 				"anyparse.check.FactsTypeTree",
+				"anyparse.check.StaticExtensionFacts",
+				"anyparse.query.ArgumentUses",
+				"anyparse.query.UncheckedConversions",
 				"anyparse.query.CallGraphFacts",
 				"anyparse.query.FactsProvenance",
 				"anyparse.query.FactsEscapes",
@@ -54,7 +57,7 @@
 				"anyparse.query.cli.command.LintCommand",
 				"anyparse.query.cli.command.LintFixVerify"
 			],
-			"why": "the compiler's facts are read through the facts layer (FactsView, TypedFactsWalk, FactsTypeOracle) and produced by the run host; a rule reading CompilerFacts directly grows a third facts reader"
+			"why": "the compiler's facts are produced by TypedFactsProbe for the run host and read through two doors: FactsView (the facts against the project, the reach analyses) and FactsTypeOracle (the facts placed in a file's text now, the TypeOracle a structural rule asks); the other owners are parts of the facts layer a door builds or reads through, answering from the facts alone. A rule or an analysis naming CompilerFacts grows another facts reader"
 		},
 		{
 			"types": [

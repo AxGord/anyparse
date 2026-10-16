@@ -4,6 +4,7 @@ import anyparse.check.Check.OracleType;
 import anyparse.check.Check.Violation;
 import anyparse.check.ExplicitType;
 import anyparse.check.FactsTypeOracle;
+import anyparse.check.FactsTypeOracle.FactsDecline;
 import anyparse.check.FactsTypeSpelling;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CompilerFacts;
@@ -37,8 +38,8 @@ class FactsTypeOracleTest extends Test {
 
 	@:pin('control') @:killer('M-FACTS-SPELL-UNKNOWN') @:killer('M-FACTS-TREE-OPTIONAL')
 	public function testAnUnknownDeclines(): Void {
-		Assert.same(Declined(FactsTypeOracle.DECLINE_UNKNOWN), local(table([dump('Array<?>')])));
-		Assert.same(Declined(FactsTypeOracle.DECLINE_UNKNOWN), FactsTypeSpelling.spell('(?)->Void', { owner: null, method: null }));
+		Assert.same(Declined(FactsDecline.Unbound), local(table([dump('Array<?>')])));
+		Assert.same(Declined(FactsDecline.Unbound), FactsTypeSpelling.spell('(?)->Void', { owner: null, method: null }));
 	}
 
 	@:pin('control') @:killer('M-FACTS-SPELL-SCOPE')
@@ -52,8 +53,8 @@ class FactsTypeOracleTest extends Test {
 	@:pin('control') @:killer('M-FACTS-SPELL-IMPL')
 	public function testTypesNoSourceCanSpellDecline(): Void {
 		final scope: TypeScope = { owner: 'A', method: null };
-		Assert.same(Declined(FactsTypeOracle.DECLINE_UNSPELLABLE), FactsTypeSpelling.spell('Abstract<pack.M>', scope));
-		Assert.same(Declined(FactsTypeOracle.DECLINE_UNSPELLABLE), FactsTypeSpelling.spell('Class<pack._M.M_Impl_>', scope));
+		Assert.same(Declined(FactsDecline.Unspellable), FactsTypeSpelling.spell('Abstract<pack.M>', scope));
+		Assert.same(Declined(FactsDecline.Unspellable), FactsTypeSpelling.spell('Class<pack._M.M_Impl_>', scope));
 		Assert.same(Typed('(Int, ?Null<String>) -> Bool'), FactsTypeSpelling.spell('(Int,?Null<String>)->Bool', scope));
 		Assert.same(Typed('{a:Int, ?b:() -> Void}'), FactsTypeSpelling.spell('{a:Int,?b:()->Void}', scope));
 	}
@@ -62,11 +63,9 @@ class FactsTypeOracleTest extends Test {
 	public function testCodeNoConfigurationCompiledDeclines(): Void {
 		final facts: CompilerFacts = table([dump('Int')]);
 		final oracle: FactsTypeOracle = new FactsTypeOracle(facts, file -> SRC, null, PLUGIN);
-		Assert.same(Declined(FactsTypeOracle.DECLINE_FILE_NOT_COMPILED), oracle.localType('B.hx', declOf(SRC), 'v', 0));
+		Assert.same(Declined(FactsDecline.FileNotCompiled), oracle.localType('B.hx', declOf(SRC), 'v', 0));
 		// a local of the same name the facts do not list: a branch no build compiled
-		Assert.same(
-			Declined(FactsTypeOracle.DECLINE_CODE_NOT_COMPILED), oracle.localType('A.hx', declOf(SRC), 'w', SRC.indexOf('var v') + 5)
-		);
+		Assert.same(Declined(FactsDecline.CodeNotCompiled), oracle.localType('A.hx', declOf(SRC), 'w', SRC.indexOf('var v') + 5));
 	}
 
 	@:pin('control') @:killer('M-FACTS-ORACLE-ORIGINAL') @:killer('M-JOURNAL-SHIFT')
@@ -107,9 +106,7 @@ class FactsTypeOracleTest extends Test {
 			[{ name: 'one', text: dump('Int'), file: path -> path }], file -> file == 'A.hx' ? renamed : null, file -> file
 		);
 		final oracle: FactsTypeOracle = new FactsTypeOracle(facts, file -> renamed, null, PLUGIN);
-		Assert.same(
-			Declined(FactsTypeOracle.DECLINE_ELSEWHERE), oracle.localType('A.hx', declOf(renamed), 'v', renamed.indexOf('var v') + 5)
-		);
+		Assert.same(Declined(FactsDecline.Elsewhere), oracle.localType('A.hx', declOf(renamed), 'v', renamed.indexOf('var v') + 5));
 	}
 
 	@:pin('control') @:killer('M-ORACLE-HOME-MODIFIED-TYPE')
@@ -198,7 +195,7 @@ class FactsTypeOracleTest extends Test {
 		Assert.isTrue(
 			declinedWith(apart.paramType('A.hx', fn, 'f', 0, 'p', SRC.indexOf('(p)') + 2), 'the oracle configurations type it differently')
 		);
-		Assert.same(Declined(FactsTypeOracle.DECLINE_PARAM_MISMATCH), same.paramType('A.hx', fn, 'f', 0, 'q', SRC.indexOf('(p)') + 2));
+		Assert.same(Declined(FactsDecline.ParamMismatch), same.paramType('A.hx', fn, 'f', 0, 'q', SRC.indexOf('(p)') + 2));
 	}
 
 	@:pin('control') @:killer('M-EXPLICIT-TYPE-STRUCTURAL-DECLINE')
@@ -211,6 +208,27 @@ class FactsTypeOracleTest extends Test {
 		Assert.equals(0, check.fix(source, violations, plugin).length);
 		for (v in violations)
 			Assert.isTrue((v.declineReason ?? '').indexOf('oracle-assisted pass') >= 0, '${v.message}: ${v.declineReason}');
+	}
+
+	/**
+	 * A value is typed by what the facts record at exactly its range: its own typed site and the source of each flow out
+	 * of it there (`CompilerFacts.valueTypesAt`). A flow of another type is a disagreement, which `expressionType` and
+	 * `factsTypeAt` decline and `valueType` — the expression's own type alone — does not see.
+	 */
+	@:pin('control') @:killer('M-FACTS-VALUE-FLOWS') @:killer('M-FACTS-ORACLE-RAW-AGREE')
+	public function testAValueIsTypedByTheFlowsAtItsRange(): Void {
+		final call: Span = new Span(SRC.indexOf('g();\n\t}'), SRC.indexOf('g();\n\t}') + 3);
+		final alike: FactsTypeOracle = new FactsTypeOracle(
+			table([dump('Float', 0, 'Int', 'Int', 'Int', null, 'Int')]), file -> SRC, null, PLUGIN
+		);
+		Assert.equals('Int', alike.factsTypeAt('A.hx', call));
+		Assert.same(Typed('Int'), alike.expressionType('A.hx', call));
+		final apart: FactsTypeOracle = new FactsTypeOracle(
+			table([dump('Float', 0, 'Int', 'Int', 'Int', null, 'pack.X')]), file -> SRC, null, PLUGIN
+		);
+		Assert.same(Typed('Int'), apart.valueType('A.hx', call));
+		Assert.isTrue(declinedWith(apart.expressionType('A.hx', call), 'the oracle configurations type it differently'));
+		Assert.isNull(apart.factsTypeAt('A.hx', call));
 	}
 
 	/** The type the oracle over `facts` gives the local `v` of `SRC`. */
@@ -233,10 +251,12 @@ class FactsTypeOracleTest extends Test {
 	/**
 	 * One configuration's facts of `SRC` (at compiler offsets `shift` fewer than the text's, for text before it the
 	 * compiler counts shorter): `v` typed `varType`, `fld` typed `fieldType`, and `f` returning `result` from a parameter
-	 * `p` typed `Null<param>`.
+	 * `p` typed `Null<param>`. With `flowFrom`, `v`'s initializer `g()` is a call typed `Int` whose value flows into `v`
+	 * as a value of `flowFrom`.
 	 */
 	private static function dump(
-		varType: String, shift: Int = 0, fieldType: String = 'Int', result: String = 'Int', param: String = 'Int', ?source: String
+		varType: String, shift: Int = 0, fieldType: String = 'Int', result: String = 'Int', param: String = 'Int', ?source: String,
+		?flowFrom: String
 	): String {
 		final text: String = source ?? SRC;
 		function at(offset: Int): Int return offset + shift;
@@ -246,11 +266,16 @@ class FactsTypeOracleTest extends Test {
 		final varTo: Int = at(text.indexOf('g();\n\t}') + 3);
 		final fldFrom: Int = at(text.indexOf('var fld'));
 		final fldTo: Int = at(text.indexOf('g();') + 3);
+		final callFrom: Int = at(text.indexOf('g();\n\t}'));
+		final flowing: String = flowFrom == null
+			? ''
+			: ',"calls":[{"t":"A.g","a":"FStatic","rt":"Int","p":[$callFrom,${callFrom + 3}]}],'
+				+ '"flows":[{"s":"$flowFrom","d":"$varType","c":"var","p":[$callFrom,${callFrom + 3}]}]';
 		return '{"k":"facts","v":1,"inline":true}\n'
 			+ '{"k":"type","id":"A","f":"A.hx","p":[${at(0)},${at(text.length)}],"kind":"class","pack":"","params":["T"],'
 			+ '"fields":[{"n":"fld","k":"var(default,default)","t":"$fieldType","p":[$fldFrom,$fldTo]}]}\n'
 			+ '{"k":"node","id":"A.f","f":"A.hx","p":[$fnFrom,$fnTo],"kind":"method","owner":"A","t":"(?Null<$param>)->$result",'
-			+ '"params":[{"n":"p","t":"Null<$param>"}],"vars":[{"n":"v","t":"$varType","p":[$varFrom,$varTo]}]}\n'
+			+ '"params":[{"n":"p","t":"Null<$param>"}],"vars":[{"n":"v","t":"$varType","p":[$varFrom,$varTo]}]$flowing}\n'
 			+ '{"k":"end","nodes":1,"types":1}\n';
 	}
 

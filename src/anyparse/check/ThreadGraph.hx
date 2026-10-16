@@ -1,13 +1,11 @@
 package anyparse.check;
 
 import anyparse.query.CallGraph;
-import anyparse.query.CompilerFacts;
 import anyparse.query.FactsView;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.ReachProject;
 import anyparse.query.SymbolIndex;
-import anyparse.query.SymbolIndexHost;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -23,11 +21,9 @@ final class ThreadGraph {
 	 * facts describe carries no receiver field (`CallEdge.receiverField`), so the locks its takes work go unnamed.
 	 */
 	public static function build(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, useFacts: Bool): CallGraph {
-		final host: Null<SymbolIndexHost> = useFacts && plugin is SymbolIndexHost ? cast plugin : null;
-		final facts: Null<CompilerFacts> = host?.compilerFacts();
-		if (facts == null) return CallGraph.build(files, plugin);
+		if (!useFacts) return CallGraph.build(files, plugin);
 		final index: SymbolIndex = IndexScope.report(files, plugin);
-		return CallGraph.build(files, plugin, index, FactsView.of(facts, new ReachProject(plugin, index, files), false));
+		return CallGraph.build(files, plugin, index, FactsView.ofRun(plugin, new ReachProject(plugin, index, files)));
 	}
 
 	/**
