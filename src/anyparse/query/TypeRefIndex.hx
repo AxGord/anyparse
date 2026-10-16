@@ -338,4 +338,48 @@ final class TypeRefIndex {
 		];
 	}
 
+	/** The paths of the `using` statements `fi` itself writes, a guarded one included — the extensions it brings in by name. */
+	public static function usings(fi: FileInfo): Array<String> {
+		return [for (imp in fi.imports) if (imp.kind == ImportKind.Using) imp.raw];
+	}
+
+	/**
+	 * The paths of the plain `import` statements `fi` itself writes (no alias, no wildcard), a guarded one included — a
+	 * static field import among them (`import pkg.Type.member;`).
+	 */
+	public static function plainImports(fi: FileInfo): Array<String> {
+		return [for (imp in fi.imports) if (imp.kind == ImportKind.Import) imp.raw];
+	}
+
+	/**
+	 * The one path an UNGUARDED plain `import` of `fi` binds the simple name `simple` through (its last segment), or
+	 * null when none does or two disagree.
+	 */
+	public static function plainImportPathOf(fi: FileInfo, simple: String): Null<String> {
+		var found: Null<String> = null;
+		for (imp in fi.imports) if (!imp.guarded && imp.kind == ImportKind.Import) {
+			if (SourceText.lastSegment(imp.raw) != simple) continue;
+			if (found != null && found != imp.raw) return null;
+			found = imp.raw;
+		}
+		return found;
+	}
+
+	/**
+	 * Whether `fi` brings `simple` into scope only under a conditional-compilation guard — an `ImportInfo.guarded` import
+	 * or `using` whose last segment it is, an alias binding the name, or any guarded wildcard. The reference index is
+	 * branch-blind, so such an import reads as unconditional.
+	 */
+	public static function bindsUnderGuard(fi: FileInfo, simple: String): Bool {
+		for (imp in fi.imports) if (imp.guarded) switch imp.kind {
+			case ImportKind.Import, ImportKind.Using:
+				if (SourceText.lastSegment(imp.raw) == simple) return true;
+			case ImportKind.Alias:
+				if (imp.alias == simple) return true;
+			case ImportKind.Wild:
+				return true;
+		}
+		return false;
+	}
+
 }

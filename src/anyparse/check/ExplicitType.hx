@@ -14,6 +14,7 @@ import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoMemo;
 import anyparse.query.TypeInfoProvider;
+import anyparse.query.TypeRefIndex;
 import anyparse.query.TypeRefPrinter;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
@@ -728,7 +729,7 @@ final class ExplicitType implements Check implements OracleAssisted {
 		final there: Null<FileInfo> = s.idx.fileInfo(declFile);
 		if (here == null || there == null) return false;
 		for (n in nominalsOf(typeText)) if (!AMBIENT_TYPES.contains(n)) {
-			if (guardedImportOf(here, n) || guardedImportOf(there, n)) return false;
+			if (TypeRefIndex.bindsUnderGuard(here, n) || TypeRefIndex.bindsUnderGuard(there, n)) return false;
 			final mine: Array<{ file: FileInfo, type: TypeDeclInfo }> = s.idx.resolveTypeRefsFrom(n, s.file);
 			final theirs: Array<{ file: FileInfo, type: TypeDeclInfo }> = s.idx.resolveTypeRefsFrom(n, declFile);
 			if (mine.length == 1 && theirs.length == 1) {
@@ -736,39 +737,10 @@ final class ExplicitType implements Check implements OracleAssisted {
 				continue;
 			}
 			if (mine.length != 0 || theirs.length != 0) return false;
-			final path: Null<String> = plainImportPathOf(here, n);
-			if (path == null || path != plainImportPathOf(there, n)) return false;
+			final path: Null<String> = TypeRefIndex.plainImportPathOf(here, n);
+			if (path == null || path != TypeRefIndex.plainImportPathOf(there, n)) return false;
 		}
 		return true;
-	}
-
-	/** Whether `fi` names `simple` in an import / using path's last segment, or binds it as an import alias. */
-	private static function plainImportPathOf(fi: FileInfo, simple: String): Null<String> {
-		var found: Null<String> = null;
-		for (imp in fi.imports) if (!imp.guarded && imp.kind == ImportKind.Import) {
-			if (SourceText.lastSegment(imp.raw) != simple) continue;
-			if (found != null && found != imp.raw) return null;
-			found = imp.raw;
-		}
-		return found;
-	}
-
-	/**
-	 * Whether `fi` brings `simple` into scope only under a conditional-compilation guard — an
-	 * `ImportInfo.guarded` import (or an alias binding the name). The reference index is branch-blind,
-	 * so such an import reads as unconditional; copying a type that rests on it emits a name that does
-	 * not resolve in the other configuration.
-	 */
-	private static function guardedImportOf(fi: FileInfo, simple: String): Bool {
-		for (imp in fi.imports) if (imp.guarded) switch imp.kind {
-			case ImportKind.Import, ImportKind.Using:
-				if (SourceText.lastSegment(imp.raw) == simple) return true;
-			case ImportKind.Alias:
-				if (imp.alias == simple) return true;
-			case ImportKind.Wild:
-				return true;
-		}
-		return false;
 	}
 
 	/**

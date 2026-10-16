@@ -11,9 +11,7 @@ import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
 import anyparse.query.SymbolIndex.FileInfo;
-import anyparse.query.SymbolIndex.ImportKind;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using StringTools;
 using Lambda;
@@ -455,8 +453,9 @@ final class MoveMember {
 		final srcSource: Null<String> = sourceOf[srcFile];
 		if (srcSource == null) return PErr('source file $srcFile is not in the scope file set');
 		final trees: Map<String, QueryNode> = [];
-		for (entry in scopeFiles) trees[entry.file] = try plugin.parseFile(entry.source) catch (exception: Exception) {
-			return PErr('${entry.file} does not parse: ${exception.message}');
+		for (entry in scopeFiles) trees[entry.file] = switch ParseGate.parse(plugin, entry.source, entry.file) {
+			case Unparsed(message): return PErr(message);
+			case Parsed(tree): tree;
 		};
 		final srcTree: Null<QueryNode> = trees[srcFile];
 		if (srcTree == null) return PErr('source file $srcFile is not indexed');
@@ -531,15 +530,15 @@ final class MoveMember {
 		for (entry in scopeFiles) {
 			final info: Null<FileInfo> = index.fileInfo(entry.file);
 			if (info == null) continue;
-			for (imp in info.imports) {
-				if (imp.kind == ImportKind.Using && SourceText.lastSegment(imp.raw) == srcTypeName)
-					return '${entry.file} has "using ${imp.raw}" — extension-call sites are not findable, refusing';
-				if (imp.kind == ImportKind.Using && SourceText.lastSegment(imp.raw) == destTypeName)
-					return '${entry.file} has "using ${imp.raw}" — moving a member into a type under `using` could '
+			for (path in TypeRefIndex.usings(info)) {
+				if (SourceText.lastSegment(path) == srcTypeName)
+					return '${entry.file} has "using $path" — extension-call sites are not findable, refusing';
+				if (SourceText.lastSegment(path) == destTypeName)
+					return '${entry.file} has "using $path" — moving a member into a type under `using` could '
 						+ 'hijack extension calls, refusing';
-				if (imp.kind == ImportKind.Import && memberNames.exists(name -> StringTools.endsWith(imp.raw, '.$srcTypeName.$name')))
-					return '${entry.file} has a static import "${imp.raw}" — refusing';
 			}
+			for (path in TypeRefIndex.plainImports(info)) if (memberNames.exists(name -> StringTools.endsWith(path, '.$srcTypeName.$name')))
+				return '${entry.file} has a static import "$path" — refusing';
 		}
 		return null;
 	}
