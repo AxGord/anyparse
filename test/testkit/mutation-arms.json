@@ -19013,7 +19013,15 @@
 			"method": "chainLists",
 			"find": "reports: options.declared,",
 			"replace": "reports: option('sinks').length > 0,",
-			"note": "a chain writing no sinks of its own reports nothing, though the builtin sinks apply wherever the rule runs"
+			"note": "a chain writing no sinks of its own is no config to report on, so a malformed option of it goes unsaid"
+		},
+		{
+			"name": "M-TS-REPORT-NEEDS-SINKS",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "skipReason",
+			"find": "return config.optionKeys('thread-safety').length == 0 ? 'needs-config' : scanSkipReason(file, config);",
+			"replace": "return (config.stringListOption('thread-safety', 'sinks') ?? []).length == 0 ? 'needs-config' : scanSkipReason(file, config);",
+			"note": "the report gate wants sinks of the chain's own, so a chain writing other options only reports nothing though the builtin sinks apply"
 		},
 		{
 			"name": "M-TS-BUILTIN-OFF",

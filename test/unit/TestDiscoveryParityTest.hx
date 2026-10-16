@@ -2400,7 +2400,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-TS-STD-RETURN,M-TS-STD-FIELD,M-TS-STD-GETTER,M-TS-STD-GETTER-LOCAL,M-TS-STD-GETTER-TYPED,M-TS-NEW-LOCAL,M-TS-ALIAS-TYPE,'
 				+ 'M-TS-STD-PLACEHOLDER,M-TS-BUILTIN-EVENTS',
 			'unit.check.ThreadSafetyPositiveSinksTest#testTheBuiltinAppliesWithNoSinks :: control :: '
-				+ 'M-TS-BUILTIN-NEEDS-SINKS,M-TS-BUILTIN-OFF,M-TS-BUILTIN-ANY-NODE',
+				+ 'M-TS-REPORT-NEEDS-SINKS,M-TS-BUILTIN-OFF,M-TS-BUILTIN-ANY-NODE',
 			'unit.check.ThreadSafetyPositiveSinksTest#testTheNoticeCountsWhatNonBlockingRemoved :: control :: M-TS-NOTICE-WAIVED',
 			'unit.check.ThreadSafetyPositiveSinksTest#testTheRunSaysWhichBuiltinsApplied :: control :: M-TS-BUILTIN-NOTICE-OFF',
 			'unit.check.ThreadSafetyQuietLocksTest#testAConstructorsOwnTakeNeverWaits :: control :: M-TS-CTOR-TAKE',
@@ -6582,6 +6582,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-REPEATED-BY-HEADER',
 			'M-TS-FOLD-SITE-CYCLE',
 			'M-TS-BUILTIN-NEEDS-SINKS',
+			'M-TS-REPORT-NEEDS-SINKS',
 			'M-TS-BUILTIN-OFF',
 			'M-TS-BUILTIN-ANY-NODE',
 			'M-TS-WAIVE-OFF',
