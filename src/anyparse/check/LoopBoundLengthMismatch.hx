@@ -11,6 +11,7 @@ import anyparse.query.MemberKinds;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
@@ -286,7 +287,9 @@ final class LoopBoundLengthMismatch implements Check implements NoAutofix implem
 		if (typeName == null) return false;
 		for (path in ctx.seams.fixedTypes) {
 			if (typeName == path) return true;
-			if (typeName == simpleName(path) && ctx.tree.children.exists(c -> ctx.seams.modulePathKinds.contains(c.kind) && c.name == path))
+			if (typeName == SourceText.lastSegment(path) && ctx.tree.children.exists(c ->
+				ctx.seams.modulePathKinds.contains(c.kind) && c.name == path
+			))
 				return true;
 		}
 		return false;
@@ -367,7 +370,7 @@ final class LoopBoundLengthMismatch implements Check implements NoAutofix implem
 		if (outer == null) return false;
 		final nominal: String = outer;
 		return source.fixedLength
-			? ctx.seams.fixedTypes.exists(p -> p == nominal || simpleName(p) == nominal)
+			? ctx.seams.fixedTypes.exists(p -> p == nominal || SourceText.lastSegment(p) == nominal)
 			: ctx.seams.arrayTypes.contains(nominal);
 	}
 
@@ -649,11 +652,6 @@ final class LoopBoundLengthMismatch implements Check implements NoAutofix implem
 		return depth == 0;
 	}
 
-	/** The last dot-separated segment of `path`. */
-	private static function simpleName(path: String): String {
-		return path.substr(path.lastIndexOf('.') + 1);
-	}
-
 	/** Bundle the kinds this check reads, or null when one it cannot work without is unset (the check is then a no-op). */
 	private static function seamsOf(shape: RefShape): Null<Seams> {
 		final core: LoopSeams = LoopScan.seamsOf(shape) ?? return null;
@@ -679,7 +677,7 @@ final class LoopBoundLengthMismatch implements Check implements NoAutofix implem
 			exprStmtKind: shape.exprStatementKind ?? return null,
 			arrayTypes: present(shape.arrayTypeNames),
 			fixedTypes: present(shape.execution?.fixedLengthArrayTypes),
-			appendMethod: simpleName(appendCall),
+			appendMethod: SourceText.lastSegment(appendCall),
 			sizeMember: present(shape.sizeFieldNames)[0] ?? return null,
 			readMethods: present(shape.execution?.nonMutatingArrayMethods),
 			loopKinds: loopKinds,

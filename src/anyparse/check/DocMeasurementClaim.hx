@@ -167,11 +167,6 @@ final class DocMeasurementClaim implements Check implements DefaultOff implement
 		return code == '.'.code || code == ','.code;
 	}
 
-	/** Whether `code` may appear inside an identifier. */
-	private static inline function isIdentChar(code: Int): Bool {
-		return isDigit(code) || (code >= 'a'.code && code <= 'z'.code) || (code >= 'A'.code && code <= 'Z'.code) || code == '_'.code;
-	}
-
 	/** Whether `code` is drawn from a comment's own opener or gutter rather than from its prose. */
 	private static inline function isGutter(code: Int): Bool {
 		return code == ' '.code || code == '\t'.code || code == '*'.code || code == '/'.code;
@@ -335,13 +330,13 @@ final class DocMeasurementClaim implements Check implements DefaultOff implement
 
 	/** Whether a token starts at `at` — nothing an identifier may carry stands before it. */
 	private static function isTokenStart(source: String, from: Int, at: Int): Bool {
-		return at == from || !isIdentChar(source.fastCodeAt(at - 1));
+		return at == from || !SourceText.isIdentChar(source.fastCodeAt(at - 1));
 	}
 
 	/** Where the identifier token at `at` ends; `at` itself when none starts there. */
 	private static function tokenEnd(source: String, to: Int, at: Int): Int {
 		var i: Int = at;
-		while (i < to && isIdentChar(source.fastCodeAt(i))) i++;
+		while (i < to && SourceText.isIdentChar(source.fastCodeAt(i))) i++;
 		return i;
 	}
 

@@ -304,7 +304,7 @@ final class CommentRewrite {
 		final seen: Array<Int> = [];
 		final lines: Array<WideLine> = [];
 		for (tok in SourceComments.collectCommentTokens(regions)) {
-			var from: Int = text.lastIndexOf('\n', tok.from) + 1;
+			var from: Int = SourceText.lineStartOf(text, tok.from);
 			while (from < tok.to) {
 				var to: Int = text.indexOf('\n', from);
 				if (to < 0) to = text.length;

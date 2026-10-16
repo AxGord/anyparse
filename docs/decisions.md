@@ -2898,3 +2898,22 @@ decided the question; it may not become a record of runs.
   graph resolves), and re-aimed fixtures kill all five; the sixth, M-ESCAPE-RECEIVER-CALL, cuts a `ValueEscapes.call`
   precision branch no probed shape reaches (28, syntax and facts) — left to the `ValueEscapes` owner — branch
   `feat/infra-B8b`
+- the private `isIdentChar` / `isSpace` / `lineStartOf` / `lastSegment` / `nodeAt` copies were read as one question
+  each → most were (byte-equal bodies, deleted for `SourceText` / `TreePath` / `MacroNames`), but not all, and the ones
+  that differ stay: `CommentProse.isIdentChar` admits `$` (a macro splice in a comment's prose), `LintFixSafePass.isSpace`
+  and `AccessorClauseText.isHorizontalSpace` are space-and-tab only, `BlockCommentNormalizer.isSpace` lives in the
+  format layer, which reads nothing of `anyparse.query`. Two line-start answers are both right and are kept apart by
+  name: `SourceText.lineStartOf` gives the line AFTER a newline offset, `lineStartAt` the line that newline ends
+  (`FoldStringLiterals`, `PreferLineComment` and `PreferCaseGuard` scanned the second; no caller hands either a newline
+  offset, so routing each to its own twin changed no answer). The macro layer and the macro-time facts probe
+  (`TypedFactsMacro`, `TypedFactsWalk`) read nothing of `anyparse.query` either, so their dotted-path splits go to
+  `MacroNames` or stay; the nodeAt copies' walk is `TreePath.firstAround` (pre-order, containment-pruned), which also
+  finds a match past a first containing child the greedy descent of `FunctionTrees` / `LockAliases` gave up on — branch
+  `feat/infra-B6b`
+- hand-rolled `<` scans of type text were read as seven parsers → three were not type text at all (`MemberWriteScan`
+  operator characters, `Pattern.isStarSlot` punctuation, `LintFormat` XML escaping) and `CompilerFacts.baseId` is the
+  facts primitive; the real ones read through the reader of their grammar: SOURCE text through `TypeSyntax`
+  (`PreferMapType` by the new `TypeSyntax.argumentsOpen`, `ExhaustiveSwitches` by the `Nominal` path — the path as
+  written, as the split gave it), COMPILER text through the facts readers (`MemberReach.outerTypeName` by
+  `FactsTypeTree`, `FactsView.unwrapped` by the new `FactsTypeText.unwrap`, which peels a wrapper only when its `<`
+  closes at the end) — branch `feat/infra-B6b`

@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.query.CallGraph;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex.MemberInfo;
 
 using Lambda;
@@ -108,7 +109,7 @@ final class ObjectPaths {
 
 	/** The member name of the field id `field`. */
 	private static inline function nameOf(field: String): String {
-		return field.substring(field.lastIndexOf('.') + 1);
+		return SourceText.lastSegment(field);
 	}
 
 }

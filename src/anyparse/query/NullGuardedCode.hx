@@ -258,7 +258,7 @@ final class NullGuardedCode {
 		final held: Null<Bool> = _nullOnly[key];
 		if (held != null) return held;
 		_assumed = key;
-		final answer: Bool = staticInvocations(key.substr(0, key.lastIndexOf('.')), param.method, param.index, param.count);
+		final answer: Bool = staticInvocations(SourceText.parentPath(key), param.method, param.index, param.count);
 		_assumed = null;
 		_nullOnly[key] = answer;
 		return answer;

@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.check.FactsTypeText;
 import anyparse.check.FactsTypeTree;
 import anyparse.check.FactsTypeTree.FactsType;
 import anyparse.query.CallGraph.FnDeclaration;
@@ -614,7 +615,7 @@ final class FactsView {
 		final calls: Null<Array<CallFact>> = table.callsIn(file, span, true, harmless);
 		if (fields == null || calls == null) return false;
 		inline function named(target: Null<String>): Bool {
-			return target != null && names.contains(target.substr(target.lastIndexOf('.') + 1));
+			return target != null && names.contains(SourceText.lastSegment(target));
 		}
 		return !fields.exists(f -> names.contains(f.field)) && !calls.exists(c -> named(c.target));
 	}
@@ -723,7 +724,7 @@ final class FactsView {
 		var base: String = CompilerFacts.baseId(id);
 		final generic: Null<String> = table.type(base)?.genericOf;
 		if (generic != null) base = CompilerFacts.baseId(generic);
-		final simple: String = base.substr(base.lastIndexOf('.') + 1);
+		final simple: String = SourceText.lastSegment(base);
 		return simple.endsWith(IMPL_SUFFIX) ? simple.substr(0, simple.length - IMPL_SUFFIX.length) : simple;
 	}
 
@@ -1451,7 +1452,7 @@ final class FactsView {
 		for (c in n.calls) {
 			final target: Null<String> = c.target;
 			if (target != null && DECLARED_ACCESSES.contains(c.access)) members.push({ target: target, receiver: c.receiver });
-			if (target != null && c.access == 'FStatic') statics.push(target.substr(target.lastIndexOf('.') + 1));
+			if (target != null && c.access == 'FStatic') statics.push(SourceText.lastSegment(target));
 			types.push(c.receiver ?? c.result);
 			types.push(c.result);
 		}
@@ -1734,7 +1735,7 @@ final class FactsView {
 	 */
 	private static function declaredId(fi: FileInfo, t: TypeDeclInfo): String {
 		final path: Array<String> = fi.pkg == '' ? [] : fi.pkg.split('.');
-		if (t.isPrivate) path.push('_' + fi.module.substr(fi.module.lastIndexOf('.') + 1));
+		if (t.isPrivate) path.push('_' + SourceText.lastSegment(fi.module));
 		path.push(t.name);
 		return path.join('.');
 	}
@@ -1809,10 +1810,7 @@ final class FactsView {
 
 	/** The facts type string `type` seen through every wrapper that keeps its members (`Null<T>`). */
 	private function unwrapped(type: String): String {
-		final wrappers: Array<String> = _scope.shape.memberTransparentWrapperTypeNames ?? [];
-		var t: String = StringTools.trim(type);
-		while (t.endsWith('>') && wrappers.contains(CompilerFacts.baseId(t))) t = t.substring(t.indexOf('<') + 1, t.length - 1);
-		return t;
+		return FactsTypeText.unwrap(StringTools.trim(type), _scope.shape.memberTransparentWrapperTypeNames ?? []);
 	}
 
 	/** The graph's names (`graphMember`) of every method the typed type `id` declares, an accessor among them. */

@@ -709,8 +709,7 @@ final class MemberLookup {
 	 * the evidence walks want the import-aware `resolveTypeRef` answer and nothing more.
 	 */
 	private function uniqueDeclarationOf(raw: String): Null<ResolvedType> {
-		final dot: Int = raw.lastIndexOf('.');
-		final simple: String = dot < 0 ? raw : raw.substr(dot + 1);
+		final simple: String = SourceText.lastSegment(raw);
 		final declarers: Array<FileInfo> = _refs.declaringFiles(simple);
 		return declarers.length == 1 ? _refs.findDeclaredType(declarers[0].file, simple) : null;
 	}
@@ -792,8 +791,7 @@ final class MemberLookup {
 	 * `#if`). Matched on the last path segment, so a qualified spelling is skipped too.
 	 */
 	private static inline function dynamicSupertypeRef(raw: String): Bool {
-		final dot: Int = raw.lastIndexOf('.');
-		return (dot < 0 ? raw : raw.substr(dot + 1)) == 'Dynamic';
+		return SourceText.lastSegment(raw) == 'Dynamic';
 	}
 
 	/**

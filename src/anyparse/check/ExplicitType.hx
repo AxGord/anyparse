@@ -10,6 +10,7 @@ import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MemberKinds;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoMemo;
 import anyparse.query.TypeInfoProvider;
@@ -745,8 +746,7 @@ final class ExplicitType implements Check implements OracleAssisted {
 	private static function plainImportPathOf(fi: FileInfo, simple: String): Null<String> {
 		var found: Null<String> = null;
 		for (imp in fi.imports) if (!imp.guarded && imp.kind == ImportKind.Import) {
-			final dot: Int = imp.raw.lastIndexOf('.');
-			if ((dot < 0 ? imp.raw : imp.raw.substr(dot + 1)) != simple) continue;
+			if (SourceText.lastSegment(imp.raw) != simple) continue;
 			if (found != null && found != imp.raw) return null;
 			found = imp.raw;
 		}
@@ -762,8 +762,7 @@ final class ExplicitType implements Check implements OracleAssisted {
 	private static function guardedImportOf(fi: FileInfo, simple: String): Bool {
 		for (imp in fi.imports) if (imp.guarded) switch imp.kind {
 			case ImportKind.Import, ImportKind.Using:
-				final dot: Int = imp.raw.lastIndexOf('.');
-				if ((dot < 0 ? imp.raw : imp.raw.substr(dot + 1)) == simple) return true;
+				if (SourceText.lastSegment(imp.raw) == simple) return true;
 			case ImportKind.Alias:
 				if (imp.alias == simple) return true;
 			case ImportKind.Wild:
@@ -794,8 +793,7 @@ final class ExplicitType implements Check implements OracleAssisted {
 			final start: Int = i;
 			while (i < typeText.length && isNominalPart(typeText.fastCodeAt(i))) i++;
 			final token: String = typeText.substring(start, i);
-			final dot: Int = token.lastIndexOf('.');
-			final simple: String = dot < 0 ? token : token.substr(dot + 1);
+			final simple: String = SourceText.lastSegment(token);
 			final head: Int = simple.fastCodeAt(0);
 			if (head >= 'A'.code && head <= 'Z'.code && !out.contains(simple)) out.push(simple);
 		}

@@ -620,7 +620,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		if (newKind == null || init.kind != newKind) return null;
 		final written: Null<String> = LiteralInfer.bareNewTypeName(init, source);
 		if (written == null) return null;
-		final simple: String = written.substring(written.lastIndexOf('.') + 1);
+		final simple: String = SourceText.lastSegment(written);
 		// Declared in an index: provably non-generic ONLY when every declaration THERE agrees on zero
 		// type parameters. A unanimous non-zero arity, or an ambiguous one (declarations disagree, so
 		// typeParamArityOf returns null), both fail `== 0` and stay report-only — ambiguity must never

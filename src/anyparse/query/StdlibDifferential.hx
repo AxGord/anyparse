@@ -392,7 +392,7 @@ final class StdlibDifferential {
 	 * most convincing disguise -- the finding is literally true and completely useless.
 	 */
 	private static function fn(id: String, ret: String, params: Array<String>): StdlibFn {
-		final markers: Array<String> = id.indexOf('StringTools.') == 0 ? [id, '.${member(id)}'] : [id];
+		final markers: Array<String> = id.indexOf('StringTools.') == 0 ? [id, '.${SourceText.lastSegment(id)}'] : [id];
 		return {
 			id: id,
 			ret: ret,
@@ -411,7 +411,7 @@ final class StdlibDifferential {
 			params: params,
 			instance: true,
 			property: false,
-			markers: ['.${member(id)}']
+			markers: ['.${SourceText.lastSegment(id)}']
 		};
 	}
 
@@ -423,14 +423,8 @@ final class StdlibDifferential {
 			params: params,
 			instance: true,
 			property: true,
-			markers: ['.${member(id)}']
+			markers: ['.${SourceText.lastSegment(id)}']
 		};
-	}
-
-	/** The member half of a pooled entry's dotted id. */
-	private static function member(id: String): String {
-		final dot: Int = id.lastIndexOf('.');
-		return dot < 0 ? id : id.substr(dot + 1);
 	}
 
 	/**
@@ -487,7 +481,9 @@ final class StdlibDifferential {
 	private static function render(entry: StdlibFn, args: Array<String>): String {
 		if (!entry.instance) return '${entry.id}(${args.join(', ')})';
 		final receiver: String = '(${args[0]})';
-		return entry.property ? '$receiver.${member(entry.id)}' : '$receiver.${member(entry.id)}(${args.slice(1).join(', ')})';
+		return entry.property
+			? '$receiver.${SourceText.lastSegment(entry.id)}'
+			: '$receiver.${SourceText.lastSegment(entry.id)}(${args.slice(1).join(', ')})';
 	}
 
 	/** `count` tab characters, the generated program's indentation unit. */

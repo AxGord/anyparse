@@ -11,16 +11,28 @@ using StringTools;
 @:nullSafety(Strict)
 final class FactsTypeText {
 
-	private static inline final NULL_OPEN: String = 'Null<';
+	private static inline final NULL_NAME: String = 'Null';
 
 	/**
 	 * `type` without the `Null<…>` wrappers that enclose the WHOLE of it — each peeled only while its `<`
 	 * closes at the last character. `Null<A> -> Null<B>` is a function type and is returned unchanged.
 	 */
 	public static function unwrapNull(type: String): String {
+		return unwrap(type, [NULL_NAME]);
+	}
+
+	/**
+	 * `type` without the wrappers named in `wrappers` (`Null`, or any type the caller sees through) that enclose the
+	 * WHOLE of it — each peeled only while its `<` closes at the last character, so a function type whose parameter
+	 * starts with one is returned unchanged.
+	 */
+	public static function unwrap(type: String, wrappers: Array<String>): String {
 		var out: String = type;
-		while (out.startsWith(NULL_OPEN) && closesAtEnd(out, NULL_OPEN.length - 1)) out = out.substring(NULL_OPEN.length, out.length - 1);
-		return out;
+		while (true) {
+			final open: Int = out.indexOf('<');
+			if (open <= 0 || !wrappers.contains(out.substr(0, open)) || !closesAtEnd(out, open)) return out;
+			out = out.substring(open + 1, out.length - 1);
+		}
 	}
 
 	/** Whether the `<` at `open` in `type` is closed by its last character — the `>` of a `->` arrow closes nothing. */

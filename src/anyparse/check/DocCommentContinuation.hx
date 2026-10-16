@@ -141,12 +141,6 @@ final class DocCommentContinuation implements Check {
 			&& source.fastCodeAt(tok.to - 1) == '/'.code;
 	}
 
-	/** The offset of the start of the line holding `at`. */
-	private static inline function lineStartOf(source: String, at: Int): Int {
-		final nl: Int = source.lastIndexOf('\n', at);
-		return nl < 0 ? 0 : nl + 1;
-	}
-
 	/** Scan every block comment in `source`, flagging each interior line that breaks the block's prefix. */
 	private static function scan(out: Array<Violation>, file: String, source: String, regions: Array<LexRegion>): Void {
 		for (tok in SourceComments.collectCommentTokens(regions)) if (!tok.isLine) {
@@ -175,7 +169,7 @@ final class DocCommentContinuation implements Check {
 	 */
 	private static function judgedBlock(source: String, tok: CommentTok): Null<JudgedBlock> {
 		if (!closed(source, tok) || !SourceText.startsItsLine(source, tok.from)) return null;
-		final indent: String = source.substring(lineStartOf(source, tok.from), tok.from);
+		final indent: String = source.substring(SourceText.lineStartOf(source, tok.from), tok.from);
 		final lines: Array<InteriorLine> = interiorLines(source, tok);
 		if (lines.length == 0) return null;
 		final opener: Null<InteriorLine> = lines.find(line -> line.text.trim() != '');
@@ -292,7 +286,7 @@ final class DocCommentContinuation implements Check {
 	 * are the writer's own to place, so neither is this rule's business.
 	 */
 	private static function interiorLines(source: String, tok: CommentTok): Array<InteriorLine> {
-		final closerStart: Int = lineStartOf(source, tok.to - 1);
+		final closerStart: Int = SourceText.lineStartOf(source, tok.to - 1);
 		final out: Array<InteriorLine> = [];
 		var from: Int = source.indexOf('\n', tok.from);
 		if (from < 0) return out;

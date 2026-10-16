@@ -114,9 +114,9 @@ final class Address {
 		while (i + name.length <= stop) {
 			final at: Int = source.indexOf(name, i);
 			if (at < 0 || at + name.length > stop) return null;
-			final beforeOk: Bool = at == 0 || !isIdentChar(source.fastCodeAt(at - 1));
+			final beforeOk: Bool = at == 0 || !SourceText.isIdentChar(source.fastCodeAt(at - 1));
 			final afterIdx: Int = at + name.length;
-			final afterOk: Bool = afterIdx >= source.length || !isIdentChar(source.fastCodeAt(afterIdx));
+			final afterOk: Bool = afterIdx >= source.length || !SourceText.isIdentChar(source.fastCodeAt(afterIdx));
 			if (beforeOk && afterOk) return at;
 			i = at + 1;
 		}
@@ -218,11 +218,6 @@ final class Address {
 		final names: String = kindHint(tree, source, plugin, selector);
 		if (names.length > 0) clauses.push(names);
 		return clauses.length == 0 ? '' : ' — ${clauses.join('; ')}';
-	}
-
-	/** Identifier-character test for the name-token word-boundary scan. */
-	private static inline function isIdentChar(c: Int): Bool {
-		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code;
 	}
 
 	/**

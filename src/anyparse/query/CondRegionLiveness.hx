@@ -419,7 +419,7 @@ final class CondRegionLiveness {
 			cursor.ok = false;
 			return null;
 		}
-		if (CondDirectives.isIdentStart(code)) {
+		if (SourceText.isIdentStartChar(code)) {
 			final from: Int = cursor.pos;
 			cursor.pos = flagEnd(text, cursor.pos);
 			final flag: String = text.substring(from, cursor.pos);
@@ -523,9 +523,9 @@ final class CondRegionLiveness {
 	private static function flagEnd(text: String, at: Int): Int {
 		var i: Int = at;
 		while (true) {
-			while (i < text.length && CondDirectives.isIdentChar(text.fastCodeAt(i))) i++;
+			while (i < text.length && SourceText.isIdentChar(text.fastCodeAt(i))) i++;
 			if (i + 1 >= text.length || text.fastCodeAt(i) != '.'.code) return i;
-			if (!CondDirectives.isIdentStart(text.fastCodeAt(i + 1))) return i;
+			if (!SourceText.isIdentStartChar(text.fastCodeAt(i + 1))) return i;
 			i += 2;
 		}
 	}

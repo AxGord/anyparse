@@ -84,7 +84,7 @@ final class FactText {
 		for (f in n.flows) if (f.via == 'arg' || f.via == 'arr' || f.via == 'obj') out.push({ at: f.at, type: f.from, member: null });
 		for (x in n.news) {
 			final id: String = CompilerFacts.baseId(x.type);
-			out.push({ at: x.at, type: x.instance, member: id.substr(id.lastIndexOf('.') + 1) });
+			out.push({ at: x.at, type: x.instance, member: SourceText.lastSegment(id) });
 		}
 		return out;
 	}
@@ -156,7 +156,7 @@ final class FactText {
 		final target: Null<String> = c.target;
 		if (target == null || c.access == 'local' || c.access == 'value') return null;
 		if (c.access == 'super') return 'super';
-		final name: String = target.substr(target.lastIndexOf('.') + 1);
+		final name: String = SourceText.lastSegment(target);
 		return StringTools.startsWith(name, 'get_') || StringTools.startsWith(name, 'set_') ? name.substr(ACCESSOR_PREFIX) : name;
 	}
 

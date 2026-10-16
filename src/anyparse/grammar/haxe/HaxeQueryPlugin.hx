@@ -16,6 +16,7 @@ import anyparse.query.ParsedRootProvider;
 import anyparse.query.Pattern;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
+import anyparse.query.SourceText;
 import anyparse.query.SpanTypeInfoProvider;
 import anyparse.query.StdResolver;
 import anyparse.query.StringFold.StringFoldSupport;
@@ -2092,8 +2093,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		for (node in tree.children) if (node.kind == 'ImportDecl') {
 			final raw: Null<String> = node.name;
 			if (raw != null) {
-				final dot: Int = raw.lastIndexOf('.');
-				out[dot == -1 ? raw : raw.substring(dot + 1)] = raw;
+				out[SourceText.lastSegment(raw)] = raw;
 			}
 		}
 		for (tp in HaxeQueryWalker.typeParamNamesRoot(cast root, source)) out.remove(tp);

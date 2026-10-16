@@ -150,7 +150,7 @@ final class TypeRefIndex {
 	 * that DOES depend on the referring file; `moduleRelativeRefAll` owns it.
 	 */
 	public function resolveQualifiedRefAll(raw: String): Array<ResolvedType> {
-		final simple: String = raw.substr(raw.lastIndexOf('.') + 1);
+		final simple: String = SourceText.lastSegment(raw);
 		final matches: Array<ResolvedType> = [];
 		final seen: Array<String> = [];
 		for (r in named(simple)) if (importPathFor(r.file, r.type) == raw) {
@@ -206,7 +206,9 @@ final class TypeRefIndex {
 		final prefix: String = raw.substring(0, dot);
 		final matches: Array<ResolvedType> = [];
 		final seen: Array<String> = [];
-		for (r in named(simple)) if (!r.type.isMain && moduleSimpleName(r.file.module) == prefix && moduleRefInScope(fromFile, r.file)) {
+		for (r in named(simple)) if (
+			!r.type.isMain && SourceText.lastSegment(r.file.module) == prefix && moduleRefInScope(fromFile, r.file)
+		) {
 			final key: String = '${r.file.file}#${r.type.name}';
 			if (!seen.contains(key)) {
 				seen.push(key);
@@ -266,12 +268,6 @@ final class TypeRefIndex {
 	/** The import path naming type `t` in file `fi`: its module when `t` is the module main type, else `module.name`. */
 	public static inline function importPathFor(fi: FileInfo, t: TypeDeclInfo): String {
 		return t.isMain ? fi.module : '${fi.module}.${t.name}';
-	}
-
-	/** The last segment of a dotted module path — `pkg.Mod` -> `Mod`, a root-package `Mod` unchanged. */
-	private static inline function moduleSimpleName(module: String): String {
-		final dot: Int = module.lastIndexOf('.');
-		return dot < 0 ? module : module.substr(dot + 1);
 	}
 
 	/**

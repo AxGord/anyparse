@@ -5,6 +5,7 @@ import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.CommonPrefix;
 import anyparse.runtime.Span;
@@ -170,7 +171,7 @@ final class PreferLineComment implements Check implements DefaultOff {
 		if (tok.to - tok.from < 4 || source.substring(tok.to - 2, tok.to) != '*/') return null; // noqa: magic-number
 		final lineEnd: Int = lineEndOf(source, tok.to);
 		if (source.substring(tok.to, lineEnd).trim() != '') return null;
-		final indent: String = source.substring(lineStartOf(source, tok.from), tok.from);
+		final indent: String = source.substring(SourceText.lineStartAt(source, tok.from), tok.from);
 		final raw: String = source.substring(tok.from, tok.to);
 		final multiline: Bool = raw.indexOf('\n') >= 0;
 		if (multiline && indent.trim() != '') return null;
@@ -302,13 +303,6 @@ final class PreferLineComment implements Check implements DefaultOff {
 				return innermostKind(child, from, to, child.kind);
 		}
 		return fallback;
-	}
-
-	/** The offset just after the newline preceding `at` (the start of its physical line). */
-	private static function lineStartOf(source: String, at: Int): Int {
-		var i: Int = at;
-		while (i > 0 && source.fastCodeAt(i - 1) != '\n'.code) i--;
-		return i;
 	}
 
 	/** The offset of the line terminator ending `at`'s physical line (before a `\r\n` CR), or the source end. */

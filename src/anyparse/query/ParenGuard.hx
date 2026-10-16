@@ -196,10 +196,6 @@ final class ParenGuard {
 		return '$from:$to';
 	}
 
-	private static inline function isSpace(c: Int): Bool {
-		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
-	}
-
 	/**
 	 * Which template POSITIONS can hold a pair at all — one probe apiece, and the
 	 * answer is shared by every match of that position, since every match of one
@@ -527,13 +523,13 @@ final class ParenGuard {
 
 	private static function trimmedFrom(text: String, span: Span): Int {
 		var at: Int = span.from;
-		while (at < span.to && isSpace(text.fastCodeAt(at))) at++;
+		while (at < span.to && SourceText.isSpace(text.fastCodeAt(at))) at++;
 		return at;
 	}
 
 	private static function trimmedTo(text: String, span: Span): Int {
 		var at: Int = span.to;
-		while (at > span.from && isSpace(text.fastCodeAt(at - 1))) at--;
+		while (at > span.from && SourceText.isSpace(text.fastCodeAt(at - 1))) at--;
 		return at;
 	}
 

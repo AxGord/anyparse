@@ -87,7 +87,7 @@ class SpanTypeSynth {
 	}
 
 	private static function buildTypeDefinition(origName: String, origNode: ShapeNode, synthPack: Array<String>): TypeDefinition {
-		final pairedSimple: String = leafOf(origName) + PAIRED_SUFFIX;
+		final pairedSimple: String = simpleName(origName) + PAIRED_SUFFIX;
 		final pos: Position = Context.currentPos();
 		return switch origNode.kind {
 			case Seq:
@@ -174,17 +174,17 @@ class SpanTypeSynth {
 					? TPath({
 						pack: synthPack,
 						name: SYNTH_MODULE_LEAF,
-						sub: leafOf(refName) + PAIRED_SUFFIX,
+						sub: simpleName(refName) + PAIRED_SUFFIX,
 						params: []
 					})
-					: TPath({ pack: packOf(refName), name: leafOf(refName), params: [] });
+					: TPath({ pack: packOf(refName), name: simpleName(refName), params: [] });
 				wrapOptional(node, base);
 			case Star:
 				final elementCT: ComplexType = shapeToComplexType(node.children[0], synthPack);
 				wrapOptional(node, TPath({ pack: [], name: 'Array', params: [TPType(elementCT)] }));
 			case Terminal:
 				final tp: Null<String> = node.annotations[AnnotationKeys.BASE_TYPE_PATH];
-				if (tp != null) return wrapOptional(node, TPath({ pack: packOf(tp), name: leafOf(tp), params: [] }));
+				if (tp != null) return wrapOptional(node, TPath({ pack: packOf(tp), name: simpleName(tp), params: [] }));
 				final under: String = node.annotations['base.underlying'];
 				wrapOptional(node, TPath({ pack: [], name: under, params: [] }));
 			case _:
@@ -199,11 +199,6 @@ class SpanTypeSynth {
 			if (node != null) return node.kind != Terminal;
 		}
 		return false;
-	}
-
-	private static function leafOf(qualifiedName: String): String {
-		final idx: Int = qualifiedName.lastIndexOf('.');
-		return idx == -1 ? qualifiedName : qualifiedName.substring(idx + 1);
 	}
 
 }

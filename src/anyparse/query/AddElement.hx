@@ -305,10 +305,6 @@ final class AddElement {
 		return EXPR_CONTAINER_KINDS.contains(node.kind) || RefactorSupport.typeDeclOf(node) != null;
 	}
 
-	private static inline function isSpace(c: Int): Bool {
-		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
-	}
-
 	/**
 	 * Whether `cursor` falls within the first token of a node starting at
 	 * `from` (its start through the token's trailing boundary, inclusive).
@@ -384,7 +380,7 @@ final class AddElement {
 		var at: Int = hi - 1;
 		var afterComments: Int = -1;
 		while (at >= lo) {
-			if (isSpace(source.fastCodeAt(at))) {
+			if (SourceText.isSpace(source.fastCodeAt(at))) {
 				at--;
 				continue;
 			}
@@ -419,7 +415,7 @@ final class AddElement {
 	): EditResult {
 		var close: Int = containerSpan.to - 1;
 		if (close >= source.length) close = source.length - 1;
-		while (close >= containerSpan.from && isSpace(source.fastCodeAt(close))) close--;
+		while (close >= containerSpan.from && SourceText.isSpace(source.fastCodeAt(close))) close--;
 		if (close < containerSpan.from) return Err('the container at $line:$col has no closing delimiter');
 		final closeCode: Int = source.fastCodeAt(close);
 		if (closeCode != '}'.code && closeCode != ']'.code && closeCode != ')'.code)

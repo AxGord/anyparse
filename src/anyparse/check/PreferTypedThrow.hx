@@ -306,7 +306,7 @@ final class PreferTypedThrow implements Check implements DefaultOff {
 		}
 		final wrapper: Null<String> = shape.rawThrowWrapperTypePath;
 		if (wrapper != null) {
-			final simple: String = wrapper.substring(wrapper.lastIndexOf('.') + 1);
+			final simple: String = SourceText.lastSegment(wrapper);
 			if (!blocking.contains(simple)) blocking.push(simple);
 		}
 		return {

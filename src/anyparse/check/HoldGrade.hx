@@ -5,6 +5,7 @@ import anyparse.check.LockSites.LockAcquire;
 import anyparse.check.ThreadSafety.CostNote;
 import anyparse.check.ThreadSafety.FindingFamily;
 import anyparse.query.CallGraph;
+import anyparse.query.SourceText;
 
 using Lambda;
 
@@ -151,7 +152,7 @@ final class HoldGrade {
 	 */
 	public static function takenKey(a: LockAcquire): String {
 		final lock: Null<String> = a.lock;
-		return lock ?? UNNAMED + a.pair.lockId.substring(0, a.pair.lockId.lastIndexOf('.'));
+		return lock ?? UNNAMED + SourceText.parentPath(a.pair.lockId);
 	}
 
 	/**

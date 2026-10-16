@@ -208,7 +208,7 @@ final class DeclaredNullity {
 	): Nullity {
 		final head: Null<String> = headPathOf(typeSource, _typeSyntax);
 		if (head == null || hops > MAX_HOPS || typeParams.contains(head)) return Unproven;
-		final simple: String = head.substr(head.lastIndexOf('.') + 1);
+		final simple: String = SourceText.lastSegment(head);
 		if ((_shape.nullableWrapperTypeNames ?? []).contains(simple)) return Unproven;
 		if ((_shape.nonNullableTypeNames ?? []).contains(head)) return hops == 0 ? ValueType : NonNull;
 		final index: Null<SymbolIndex> = _index();

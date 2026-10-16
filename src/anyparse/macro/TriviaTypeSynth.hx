@@ -532,7 +532,7 @@ class TriviaTypeSynth {
 	}
 
 	private static function buildTypeDefinition(origName: String, origNode: ShapeNode, synthPack: Array<String>): TypeDefinition {
-		final pairedSimple: String = leafOf(origName) + PAIRED_SUFFIX;
+		final pairedSimple: String = simpleName(origName) + PAIRED_SUFFIX;
 		final pos: Position = Context.currentPos();
 		return switch origNode.kind {
 			case Seq:
@@ -677,8 +677,8 @@ class TriviaTypeSynth {
 			case Ref:
 				final refName: String = node.annotations[AnnotationKeys.BASE_REF];
 				final base: ComplexType = refIsBearing(refName)
-					? TPath({ pack: synthPack, name: leafOf(refName) + PAIRED_SUFFIX, params: [] })
-					: TPath({ pack: packOf(refName), name: leafOf(refName), params: [] });
+					? TPath({ pack: synthPack, name: simpleName(refName) + PAIRED_SUFFIX, params: [] })
+					: TPath({ pack: packOf(refName), name: simpleName(refName), params: [] });
 				return TriviaPairSlots.wrapOptional(node, base);
 			case Star:
 				final elementCT: ComplexType = shapeToComplexType(node.children[0], synthPack);
@@ -688,7 +688,7 @@ class TriviaTypeSynth {
 				return TriviaPairSlots.wrapOptional(node, TPath({ pack: [], name: 'Array', params: [TPType(wrapped)] }));
 			case Terminal:
 				final tp: Null<String> = node.annotations[AnnotationKeys.BASE_TYPE_PATH];
-				if (tp != null) return TriviaPairSlots.wrapOptional(node, TPath({ pack: packOf(tp), name: leafOf(tp), params: [] }));
+				if (tp != null) return TriviaPairSlots.wrapOptional(node, TPath({ pack: packOf(tp), name: simpleName(tp), params: [] }));
 				final under: String = node.annotations['base.underlying'];
 				return TriviaPairSlots.wrapOptional(node, TPath({ pack: [], name: under, params: [] }));
 			case _:
@@ -703,11 +703,6 @@ class TriviaTypeSynth {
 			if (node != null) return node.annotations.get(AnnotationKeys.TRIVIA_BEARING) == true;
 		}
 		return false;
-	}
-
-	private static function leafOf(qualifiedName: String): String {
-		final idx: Int = qualifiedName.lastIndexOf('.');
-		return idx == -1 ? qualifiedName : qualifiedName.substring(idx + 1);
 	}
 
 }

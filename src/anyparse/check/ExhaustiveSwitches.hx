@@ -6,6 +6,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -46,6 +47,10 @@ final class ExhaustiveSwitches {
 
 	private final _graph: CallGraph;
 	private final _shape: RefShape;
+
+	/** `GrammarPlugin.typeSyntax` — how a member's written type is read to the type it names. */
+	private final _typeSyntax: TypeSyntaxReader;
+
 	private final _nestedFnKinds: Array<String>;
 	private final _metaKinds: Array<String>;
 	private final _typeKinds: Array<String>;
@@ -71,6 +76,7 @@ final class ExhaustiveSwitches {
 		_writes = writes;
 		_seedable = seedable;
 		_shape = plugin.refShape();
+		_typeSyntax = plugin.typeSyntax;
 		_nestedFnKinds = MemberKinds.nestedFunctionKinds(_shape);
 		_metaKinds = plugin.metaShape().metaKinds;
 		_typeKinds = _shape.typeAnnotationKinds ?? [];
@@ -424,7 +430,10 @@ final class ExhaustiveSwitches {
 			member.typeSource
 		else
 			_graph.types.declarationCount(via) == 1 ? via : null;
-		final bare: Null<String> = type == null ? null : type.split('<')[0];
+		final bare: Null<String> = switch type == null ? null : _typeSyntax(type)?.shape {
+			case Nominal(path, _): path;
+			case _: null;
+		};
 		final declaring: Null<String> = bare == null ? null : _graph.types.declaringTypeOf(bare, name);
 		return declaring != null && holdsValues(declaring, name, closed);
 	}

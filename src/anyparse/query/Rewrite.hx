@@ -82,10 +82,6 @@ final class Rewrite {
 		return CanonicalEdit.canonicalize(source, guarded, reformat, plugin, optsJson);
 	}
 
-	private static inline function isIdentChar(c: Int): Bool {
-		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code;
-	}
-
 	private static function sortedByFrom(matches: Array<Match>): Array<Match> {
 		final copy: Array<Match> = matches.copy();
 		copy.sort((a, b) -> a.span.from != b.span.from ? a.span.from - b.span.from : b.span.to - a.span.to);
@@ -135,7 +131,7 @@ final class Rewrite {
 				continue;
 			}
 			var j: Int = i + 1;
-			while (j < n && isIdentChar(template.fastCodeAt(j))) j++;
+			while (j < n && SourceText.isIdentChar(template.fastCodeAt(j))) j++;
 			if (j == i + 1) {
 				buf.addChar('$'.code);
 				written++;

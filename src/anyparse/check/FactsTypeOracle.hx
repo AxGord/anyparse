@@ -9,6 +9,7 @@ import anyparse.query.EditJournal;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions;
 import anyparse.query.QueryNode;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndexHost;
 import anyparse.runtime.Span;
 
@@ -203,7 +204,7 @@ final class FactsTypeOracle implements TypeOracle {
 		final shape: RefShape = _plugin.refShape();
 		final builtins: Array<String> = [for (name in shape.literalTypeNames ?? []) name].concat(shape.nonNullableTypeNames ?? []);
 		return id != null && (builtins.contains(id) || (declared != null && declared.alike && PLAIN_KINDS.contains(declared.kind)))
-			? id.substr(id.lastIndexOf('.') + 1)
+			? SourceText.lastSegment(id)
 			: null;
 	}
 
@@ -264,7 +265,7 @@ final class FactsTypeOracle implements TypeOracle {
 	public function inheritedMember(file: String, owner: String, name: String): InheritedMember {
 		final key: String = facts.keyOf(file);
 		final ids: Array<String> = [
-			for (id in facts.typeIds()) if (id.substr(id.lastIndexOf('.') + 1) == owner && facts.typePosition(id)?.file == key) id
+			for (id in facts.typeIds()) if (SourceText.lastSegment(id) == owner && facts.typePosition(id)?.file == key) id
 		];
 		if (ids.length == 0) return Untyped;
 		for (id in ids) for (sup in facts.supertypesOf(id)) {
@@ -390,7 +391,7 @@ final class FactsTypeOracle implements TypeOracle {
 	private static function sameType(site: FactsSite, owner: String, here: Home): Bool {
 		final generic: Null<String> = site.facts.type(owner)?.genericOf;
 		var id: String = generic == null ? owner : CompilerFacts.baseId(generic);
-		id = id.substr(id.lastIndexOf('.') + 1);
+		id = SourceText.lastSegment(id);
 		if (id.endsWith(IMPL_SUFFIX)) id = id.substr(0, id.length - IMPL_SUFFIX.length);
 		return here.type != null && id == here.type;
 	}
