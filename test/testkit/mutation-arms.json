@@ -8387,7 +8387,7 @@
 			"type": "anyparse.query.FactsProvenance",
 			"method": "factsOnText",
 			"find": "final built: String = _view.graphType(x.type);",
-			"replace": "final built: String = simpleName(CompilerFacts.baseId(x.type));",
+			"replace": "final built: String = SourceText.lastSegment(CompilerFacts.baseId(x.type));",
 			"note": "a construction of an abstract spells its implementation class, which no text names"
 		},
 		{
