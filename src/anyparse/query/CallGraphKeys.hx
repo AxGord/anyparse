@@ -75,15 +75,6 @@ final class CallGraphKeys {
 	}
 
 	/**
-	 * The type a call returns, from `simple` — the provider's simple name of its return type — and `written`, the type
-	 * written: that type's dotted path when it is written as one, a library type then keyed apart; `simple` otherwise.
-	 */
-	public function returnedPath(simple: Null<String>, written: Null<String>): Null<String> {
-		final path: Null<String> = outerPathOf(written);
-		return simple != null && path != null && path.indexOf('.') >= 0 && SourceText.lastSegment(path) == simple ? path : simple;
-	}
-
-	/**
 	 * The type parameters in scope at the offset `at` of the file (`CallGraphGenerics.inScopeAt`), asked only when `written`
 	 * mentions a name some declaration of the file declares as one.
 	 */

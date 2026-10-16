@@ -20030,14 +20030,6 @@
 			"note": "a member or a return type written with a library package merges into the project type of its simple name"
 		},
 		{
-			"name": "M-TS-PATH-RETURN",
-			"type": "anyparse.query.CallGraphKeys",
-			"method": "returnedPath",
-			"find": "path.indexOf('.') >= 0 && SourceText.lastSegment(path) == simple",
-			"replace": "false",
-			"note": "a call's return type written with a library package is read by its simple name"
-		},
-		{
 			"name": "M-TS-PATH-NULLABLE-KEYED",
 			"type": "anyparse.query.CallGraphKeys",
 			"method": "keyedIn",

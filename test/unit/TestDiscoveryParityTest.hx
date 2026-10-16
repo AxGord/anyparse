@@ -2376,7 +2376,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyPositiveSinksTest#testADottedWaiverNamesOnlyTheTypeAtThatPath :: control :: M-TS-DOTTED-WILDCARD',
 			'unit.check.ThreadSafetyPositiveSinksTest#testALibraryTypeIsNotItsProjectNamesake :: control :: '
 				+ 'M-TS-PATH-FOREIGN,M-TS-PATH-IMPORT,M-TS-PATH-RECEIVER-STATIC,M-TS-PATH-NEW,M-TS-PATH-MATCH,M-TS-SHADOWING-KEPT,'
-				+ 'M-TS-PATH-DECLARED-PACKAGE,M-TS-PATH-NOMINAL,M-TS-PATH-RETURN,M-TS-ALIAS-TYPE',
+				+ 'M-TS-PATH-DECLARED-PACKAGE,M-TS-PATH-NOMINAL,M-TS-ALIAS-TYPE',
 			'unit.check.ThreadSafetyPositiveSinksTest#testALocalOfACallResultIsTypedByWhatTheCallReturns :: control :: '
 				+ 'M-NOMINAL-LOCAL-INIT,M-TS-LOCAL-CALL-READ',
 			'unit.check.ThreadSafetyPositiveSinksTest#testAStdLockWrittenInADeclarationWaitsWhereverItIsRead :: control :: '
@@ -6704,7 +6704,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-SHADOWING-KEPT',
 			'M-TS-PATH-DECLARED-PACKAGE',
 			'M-TS-PATH-NOMINAL',
-			'M-TS-PATH-RETURN',
+
 			'M-TS-PATH-NULLABLE-KEYED',
 			'M-TS-ALIAS-TYPE',
 			'M-TS-STD-RETURN',
