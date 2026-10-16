@@ -375,7 +375,7 @@ class TrivialGetterCheckTest extends TrivialGetterCheckTestBase {
 			{ file: 'C.hx', source: classSrc }
 		];
 		final r: { check: TrivialGetter, vs: Array<Violation> } = runFilesAndExpectOne(files);
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		Assert.isTrue(r.check.fix(classSrc, r.vs, new HaxeQueryPlugin(), index).length > 0);
 	}
 

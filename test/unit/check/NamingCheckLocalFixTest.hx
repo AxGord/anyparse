@@ -108,7 +108,7 @@ class NamingCheckLocalFixTest extends NamingCheckTestBase {
 					+ '\tpublic function new() {}\n}'
 			}
 		];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == 'pkg/C.hx');
 		Assert.isTrue(vs.length >= 1);
@@ -245,7 +245,7 @@ class NamingCheckLocalFixTest extends NamingCheckTestBase {
 		final src: String = 'package pkg;\nclass C {\n\tprivate var __id:Int = 0;\n\tpublic function add():Int {\n\t\treturn __id++;\n\t}\n'
 			+ '\tpublic function remove(__id:Int):Void {\n\t\tremoveAt(__id);\n\t}\n\tpublic function clear():Void {\n'
 			+ '\t\tfor (__id in [1, 2, 3]) removeAt(__id);\n\t}\n\tfunction removeAt(x:Int):Void {}\n}';
-		final index: SymbolIndex = SymbolIndex.build([{ file: 'pkg/C.hx', source: src }], new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index([{ file: 'pkg/C.hx', source: src }], new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'pkg/C.hx', source: src }]);
 		Assert.isTrue(vs.length >= 3);
@@ -543,7 +543,7 @@ class NamingCheckLocalFixTest extends NamingCheckTestBase {
 
 	/** Assert the naming autofix emits edits for `targetFile` that never overlap one another. */
 	private function assertFixEditsDisjoint(files: Array<{ file: String, source: String }>, targetFile: String, targetSrc: String): Void {
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == targetFile);
 		Assert.isTrue(vs.length >= 2);

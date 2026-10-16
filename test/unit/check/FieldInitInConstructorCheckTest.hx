@@ -8,7 +8,6 @@ import anyparse.check.PreferFinalField;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
-import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
 import utest.Assert;
@@ -445,7 +444,9 @@ class FieldInitInConstructorCheckTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final files: Array<{ file: String, source: String }> = [{ file: 'Picker.hx', source: src }];
 		final check: FieldInitInConstructor = new FieldInitInConstructor();
-		return canonicalize(src, check.fix(src, CheckFixture.violationsIn(check, files, plugin), plugin, SymbolIndex.build(files, plugin)));
+		return canonicalize(
+			src, check.fix(src, CheckFixture.violationsIn(check, files, plugin), plugin, CheckFixture.index(files, plugin))
+		);
 	}
 
 	/** How many times `needle` occurs in `haystack`. */

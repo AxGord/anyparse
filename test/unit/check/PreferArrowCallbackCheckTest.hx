@@ -474,7 +474,7 @@ class PreferArrowCallbackCheckTest extends Test {
 	private function fixTextIndexed(files: Array<{ file: String, source: String }>, target: String): String {
 		final check: PreferArrowCallback = new PreferArrowCallback();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final index: SymbolIndex = CheckFixture.index(files, plugin);
 		var source: Null<String> = null;
 		for (f in files) if (f.file == target) source = f.source;
 		final src: Null<String> = source;

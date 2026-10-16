@@ -123,11 +123,14 @@ final class CheckFixture {
 	}
 
 	/**
-	 * The REPORT-scope `SymbolIndex` over `files`, asked of the run host the way a rule asks it
-	 * (`IndexScope.report`) — the one door a test takes to an index it hands a check or a query.
+	 * The `SymbolIndex` over `files` (third-party files tagged as given), asked of the run host the way a rule asks one
+	 * (`IndexScope.over`; `report` when no third-party set is named) — the one door a test takes to an index it hands a
+	 * check, a fix or a query, so no test builds one by a path the tool itself never takes.
 	 */
-	public static function index(files: Array<{ file: String, source: String }>, ?plugin: GrammarPlugin): SymbolIndex {
-		return IndexScope.report(files, hosted(plugin));
+	public static function index(
+		files: Array<{ file: String, source: String }>, ?plugin: GrammarPlugin, ?thirdPartyFiles: Array<String>
+	): SymbolIndex {
+		return IndexScope.over(files, hosted(plugin), thirdPartyFiles);
 	}
 
 	/**

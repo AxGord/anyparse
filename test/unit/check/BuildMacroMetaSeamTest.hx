@@ -315,7 +315,7 @@ class BuildMacroMetaSeamTest extends Test {
 
 	/** A one-file `SymbolIndex` over `src`. */
 	private function indexOf(src: String): SymbolIndex {
-		return SymbolIndex.build([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.index([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
 
 	/** The single indexed type declaration of `src`. */

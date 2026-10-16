@@ -6,7 +6,6 @@ import anyparse.check.PreferSwitchExpression;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
-import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
 import utest.Assert;
@@ -496,7 +495,7 @@ class PreferSwitchExpressionCheckTest extends Test {
 		final files: Array<{ file: String, source: String }> = entries(src, constants);
 		final file: String = mainFileOf(src);
 		final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == file);
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, own, plugin, SymbolIndex.build(files, plugin));
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, own, plugin, CheckFixture.index(files, plugin));
 		return CanonicalEdit.applyEdits(src, edits);
 	}
 

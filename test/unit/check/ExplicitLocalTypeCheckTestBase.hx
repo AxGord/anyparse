@@ -56,7 +56,7 @@ class ExplicitLocalTypeCheckTestBase extends Test {
 		final check: ExplicitLocalType = new ExplicitLocalType();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final fixFile: { file: String, source: String } = { file: 'C.hx', source: fixSrc };
-		final index: SymbolIndex = SymbolIndex.build([fixFile].concat(otherFiles), plugin);
+		final index: SymbolIndex = CheckFixture.index([fixFile].concat(otherFiles), plugin);
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, [fixFile], plugin);
 		Assert.isTrue(vs.length >= 1);
 		switch CanonicalEdit.canonicalize(fixSrc, check.fix(fixSrc, vs, plugin, index), true, plugin) {
@@ -72,7 +72,7 @@ class ExplicitLocalTypeCheckTestBase extends Test {
 		final check: ExplicitLocalType = new ExplicitLocalType();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final fixFile: { file: String, source: String } = { file: 'C.hx', source: fixSrc };
-		final index: SymbolIndex = SymbolIndex.build([fixFile].concat(otherFiles), plugin);
+		final index: SymbolIndex = CheckFixture.index([fixFile].concat(otherFiles), plugin);
 		Assert.equals(0, check.fix(fixSrc, CheckFixture.violationsIn(check, [fixFile], plugin), plugin, index).length);
 	}
 
@@ -93,7 +93,7 @@ class ExplicitLocalTypeCheckTestBase extends Test {
 		scoped.setResolutionScope(
 			{ declared: true, sources: () -> {report: report, projectRoots: [], library: new LibrarySources(libFiles) } }
 		);
-		final index: SymbolIndex = SymbolIndex.build(report, scoped);
+		final index: SymbolIndex = CheckFixture.index(report, scoped);
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, report, scoped);
 		Assert.isTrue(vs.length >= 1, 'the fixture must produce a finding to fix');
 		switch CanonicalEdit.canonicalize(fixSrc, check.fix(fixSrc, vs, scoped, index), true, scoped) {

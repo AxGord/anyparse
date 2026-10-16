@@ -916,7 +916,7 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: TrivialGetter = new TrivialGetter();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final index: SymbolIndex = CheckFixture.index(files, plugin);
 		final byFile: Map<String, Array<{ span: Span, text: String }>> = [];
 		for (rename in check.crossFileFix(files, vs, plugin, index)) for (slice in rename) {
 			final fileEdits: Array<{ span: Span, text: String }> = byFile[slice.file] ?? [];

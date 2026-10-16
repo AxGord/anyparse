@@ -530,7 +530,7 @@ class PreferSwitchCheckTest extends Test {
 		final check: PreferSwitch = new PreferSwitch();
 		final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == 'C.hx');
 		Assert.equals(1, own.length);
-		final reportScoped: SymbolIndex = SymbolIndex.build([{ file: 'C.hx', source: src }], plugin);
+		final reportScoped: SymbolIndex = CheckFixture.index([{ file: 'C.hx', source: src }], plugin);
 		Assert.equals(1, check.fix(src, own, plugin, reportScoped).length);
 	}
 
@@ -568,7 +568,7 @@ class PreferSwitchCheckTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final files: Array<{ file: String, source: String }> = entries(src, constants);
 		final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == 'C.hx');
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, own, plugin, SymbolIndex.build(files, plugin));
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, own, plugin, CheckFixture.index(files, plugin));
 		return CanonicalEdit.applyEdits(src, edits);
 	}
 

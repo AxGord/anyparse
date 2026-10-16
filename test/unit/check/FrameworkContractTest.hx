@@ -86,7 +86,7 @@ import utest.Test;
 		final open: Array<Violation> = CheckFixture.violationsIn(plain, files).filter(v -> v.file == DRIVER_FILE);
 		Assert.equals(1, open.length, 'without a contract the callback is reported');
 		if (open.length != 1) return;
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final edits: Array<{ span: Span, text: String }> = plain.fix(DRIVER_SRC, open, new HaxeQueryPlugin(), index);
 		switch CanonicalEdit.canonicalize(DRIVER_SRC, edits, true, new HaxeQueryPlugin()) {
 			case Ok(text):
@@ -122,7 +122,7 @@ import utest.Test;
 	 */
 	public function testAPrefixOwnsTheNameOnlyWhenARenameWouldDestroyIt(): Void {
 		final support: HaxeNamingSupport = new HaxeNamingSupport();
-		final index: SymbolIndex = SymbolIndex.build(godotFixture(), new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(godotFixture(), new HaxeQueryPlugin());
 		final destroyed: Array<FrameworkContract> = [{ root: 'Node', names: [], prefixes: ['_r'] }];
 		Assert.isTrue(support.frameworkReachable(driverDecl('_ready'), () -> index, destroyed));
 		Assert.isTrue(support.frameworkOwnsName(driverDecl('_ready'), () -> index, destroyed), 'a `_` fragment survives no rename');
@@ -205,7 +205,7 @@ import utest.Test;
 		};
 		final contracts: Array<FrameworkContract> = [{ root: 'Node', names: ['_ready'], prefixes: [] }];
 		Assert.isFalse(support.frameworkReachable(decl, () -> null, contracts));
-		final index: SymbolIndex = SymbolIndex.build(godotFixture(), new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(godotFixture(), new HaxeQueryPlugin());
 		Assert.isTrue(support.frameworkReachable(decl, () -> index, contracts));
 	}
 

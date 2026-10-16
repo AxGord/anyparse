@@ -417,7 +417,7 @@ class ImportBlockOrderCheckTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: ImportBlockOrder = configured(null);
 		final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == '$dir/Main.hx');
-		final reordered: String = CanonicalEdit.applyEdits(main, check.fix(main, own, plugin, SymbolIndex.build(files, plugin)));
+		final reordered: String = CanonicalEdit.applyEdits(main, check.fix(main, own, plugin, CheckFixture.index(files, plugin)));
 		Assert.isTrue(
 			reordered.startsWith('import a.Alpha;\nimport p.Tools.*;\nimport q.T;\nimport r.*;\nimport z.Zed;\n\nimport s.Two.*;\n'),
 			reordered
@@ -481,7 +481,7 @@ class ImportBlockOrderCheckTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: ImportBlockOrder = configured(null);
 		final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == '$dir/Main.hx');
-		final sortedEdits: Array<{ span: Span, text: String }> = check.fix(main, own, plugin, SymbolIndex.build(files, plugin));
+		final sortedEdits: Array<{ span: Span, text: String }> = check.fix(main, own, plugin, CheckFixture.index(files, plugin));
 		File.saveContent('$dir/Main.hx', main.replace('import v.Fns2;\nimport v.Fns;', 'import v.Fns;\nimport v.Fns2;'));
 		final sorted: HaxeRun = runMain(dir);
 		CliFixture.removeDir(dir);
@@ -797,7 +797,7 @@ class ImportBlockOrderCheckTest extends Test {
 		final check: ImportBlockOrder = new ImportBlockOrder();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == 'app/C.hx');
 		Assert.equals(1, vs.length);
-		Assert.equals(0, check.fix(src, vs, plugin, SymbolIndex.build(files, plugin)).length);
+		Assert.equals(0, check.fix(src, vs, plugin, CheckFixture.index(files, plugin)).length);
 	}
 
 	public function testAnInsertedImportSatisfiesTheRule(): Void {
@@ -981,7 +981,7 @@ class ImportBlockOrderCheckTest extends Test {
 		Assert.equals(1, own.length);
 		if (own.length != 1) return null;
 		Assert.isTrue(own[0].declineReason == null, 'run() declines nothing — the guard belongs to the fix path');
-		Assert.equals(0, check.fix(src, own, plugin, SymbolIndex.build(files, plugin)).length);
+		Assert.equals(0, check.fix(src, own, plugin, CheckFixture.index(files, plugin)).length);
 		return own[0].declineReason;
 	}
 
@@ -1020,7 +1020,7 @@ class ImportBlockOrderCheckTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: ImportBlockOrder = configured(config);
 		final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == 'app/C.hx');
-		return check.fix(src, own, plugin, SymbolIndex.build(files, plugin));
+		return check.fix(src, own, plugin, CheckFixture.index(files, plugin));
 	}
 
 	/** `src` with the check's raw edits spliced in — the reorder verbatim, before any writer pass. */

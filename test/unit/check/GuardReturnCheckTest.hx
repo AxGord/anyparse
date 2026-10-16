@@ -710,7 +710,7 @@ class GuardReturnCheckTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: GuardReturn = new GuardReturn();
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: source }, { file: 'Res.hx', source: model }];
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final index: SymbolIndex = CheckFixture.index(files, plugin);
 		final es: Array<{ span: Span, text: String }> = check.fix(source, scopedViolations(source, model), plugin, index);
 		return switch CanonicalEdit.canonicalize(source, es, false, plugin) {
 			case Ok(text): text;

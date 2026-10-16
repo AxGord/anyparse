@@ -6,7 +6,6 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
-import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
 import utest.Assert;
@@ -176,7 +175,7 @@ class ImportOutsideGuardCheckTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: ImportOutsideGuard = new ImportOutsideGuard();
 		final files: Array<{ file: String, source: String }> = libs.concat([{ file: 'C.hx', source: src }]);
-		return check.fix(src, CheckFixture.violations(check, src, plugin), plugin, SymbolIndex.build(files, plugin));
+		return check.fix(src, CheckFixture.violations(check, src, plugin), plugin, CheckFixture.index(files, plugin));
 	}
 
 }

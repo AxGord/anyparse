@@ -7,7 +7,6 @@ import anyparse.check.SimplifyNegatedCompound;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
-import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
 import unit.QueryTestHelpers;
@@ -508,7 +507,7 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 		final check: SimplifyNegatedCompound = new SimplifyNegatedCompound();
 		final files: Array<{ file: String, source: String }> = report.concat(library);
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, report, scoped);
-		final es: Array<{ span: Span, text: String }> = check.fix(source, vs, scoped, SymbolIndex.build(files, scoped));
+		final es: Array<{ span: Span, text: String }> = check.fix(source, vs, scoped, CheckFixture.index(files, scoped));
 		return es.length == 0 ? source : canonicalized(source, es, scoped);
 	}
 

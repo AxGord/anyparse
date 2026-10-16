@@ -6,7 +6,6 @@ import anyparse.check.RuleDeclaration;
 import anyparse.check.Severity;
 import anyparse.check.TypedEventConstant;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
 import utest.Assert;
@@ -148,7 +147,7 @@ class TypedEventConstantCheckTest extends Test {
 		final problems: Array<String> = [];
 		final spec: Null<EventSpec> = RuleDeclaration.eventTypes(LintConfig.parse(config), 'typed-event-constant', []);
 		Assert.notNull(spec);
-		if (spec != null) Assert.isNull(TypedEventConstant.validate(spec, SymbolIndex.build(files, plugin), plugin, problems));
+		if (spec != null) Assert.isNull(TypedEventConstant.validate(spec, CheckFixture.index(files, plugin), plugin, problems));
 		Assert.same([
 			'"typeAbstract" "ev.OneWay" is not an abstract of one type parameter over String converting from String and to String — rule '
 			+ 'inert'
@@ -173,7 +172,7 @@ class TypedEventConstantCheckTest extends Test {
 		final spec: Null<EventSpec> = RuleDeclaration.eventTypes(
 			LintConfig.parse(CONFIG.replace('ev.Event"', 'ev.Nope"')), 'typed-event-constant', []
 		);
-		if (spec != null) Assert.isNull(TypedEventConstant.validate(spec, SymbolIndex.build(files, plugin), plugin, unknownBase));
+		if (spec != null) Assert.isNull(TypedEventConstant.validate(spec, CheckFixture.index(files, plugin), plugin, unknownBase));
 		Assert.same([
 			'"eventBase" "ev.Nope" names no single type in the resolution scope — rule inert'
 		], unknownBase);
@@ -215,7 +214,7 @@ class TypedEventConstantCheckTest extends Test {
 		final own: Array<Violation> = CheckFixture.violationsIn(rule, files, plugin, resolver(CONFIG)).filter(v -> v.file == file);
 		if (own.length == 0) return [];
 		final source: String = files.filter(f -> f.file == file)[0].source;
-		final edits: Array<{ span: Span, text: String }> = rule.fix(source, own, plugin, SymbolIndex.build(files, plugin));
+		final edits: Array<{ span: Span, text: String }> = rule.fix(source, own, plugin, CheckFixture.index(files, plugin));
 		return [for (e in edits) e.text];
 	}
 

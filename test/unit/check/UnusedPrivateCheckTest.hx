@@ -97,7 +97,7 @@ class UnusedPrivateCheckTest extends Test {
 		final check: UnusedPrivate = new UnusedPrivate();
 		final cViol: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == 'pkg/C.hx');
 		Assert.equals(1, cViol.length);
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		Assert.equals(1, check.fix(cSrc, cViol, new HaxeQueryPlugin(), index).length);
 	}
 
@@ -493,7 +493,7 @@ class UnusedPrivateCheckTest extends Test {
 		final check: UnusedPrivate = new UnusedPrivate();
 		final cViol: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == 'pkg/C.hx');
 		Assert.equals(1, cViol.length);
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		Assert.equals(0, check.fix(cSrc, cViol, new HaxeQueryPlugin(), index).length);
 	}
 
@@ -513,7 +513,7 @@ class UnusedPrivateCheckTest extends Test {
 		final check: UnusedPrivate = new UnusedPrivate();
 		final cViol: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == 'pkg/C.hx');
 		Assert.equals(1, cViol.length);
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		Assert.equals(1, check.fix(cSrc, cViol, new HaxeQueryPlugin(), index).length);
 	}
 
@@ -528,7 +528,7 @@ class UnusedPrivateCheckTest extends Test {
 		final check: UnusedPrivate = new UnusedPrivate();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		Assert.equals(1, vs.length);
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin(), index).length);
 	}
 
@@ -618,7 +618,7 @@ class UnusedPrivateCheckTest extends Test {
 		final check: UnusedPrivate = new UnusedPrivate();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		Assert.equals(1, vs.length);
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin(), index).length);
 	}
 
@@ -685,7 +685,7 @@ class UnusedPrivateCheckTest extends Test {
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		final cViol: Array<Violation> = vs.filter(v -> v.file == 'pkg/C.hx');
 		Assert.equals(1, cViol.length);
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		Assert.equals(0, check.fix(cSrc, cViol, new HaxeQueryPlugin(), index).length);
 	}
 
@@ -866,7 +866,7 @@ class UnusedPrivateCheckTest extends Test {
 		final bareCheck: UnusedPrivate = new UnusedPrivate();
 		final bareVs: Array<Violation> = CheckFixture.violationsIn(bareCheck, report, bare);
 		Assert.equals(1, bareVs.length);
-		Assert.isTrue(bareCheck.fix(declSource, bareVs, bare, SymbolIndex.build(report, bare)).length > 0);
+		Assert.isTrue(bareCheck.fix(declSource, bareVs, bare, CheckFixture.index(report, bare)).length > 0);
 		final library: Array<{ file: String, source: String }> = [
 			{
 				file: 'pkg/F.hx',
@@ -882,7 +882,7 @@ class UnusedPrivateCheckTest extends Test {
 		final check: UnusedPrivate = new UnusedPrivate();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, report, plugin).filter(v -> v.file == 'pkg/D.hx');
 		Assert.equals(1, vs.length, 'the member is still REPORTED — only the deletion is withheld');
-		Assert.equals(0, check.fix(declSource, vs, plugin, SymbolIndex.build(report, plugin)).length);
+		Assert.equals(0, check.fix(declSource, vs, plugin, CheckFixture.index(report, plugin)).length);
 	}
 
 	/**

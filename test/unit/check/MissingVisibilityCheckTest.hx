@@ -478,7 +478,7 @@ class MissingVisibilityCheckTest extends Test {
 		final check: MissingVisibility = new MissingVisibility();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final files: Array<{ file: String, source: String }> = others.concat([{ file: 'C.hx', source: src }]);
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final index: SymbolIndex = CheckFixture.index(files, plugin);
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, CheckFixture.violations(check, src, plugin), plugin, index);
 		return applyEdits(src, edits);
 	}

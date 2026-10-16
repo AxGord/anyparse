@@ -9,6 +9,7 @@ import anyparse.query.StdTypes;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeNameBinding;
 import haxe.Exception;
+import unit.CheckFixture;
 import unit.QueryTestHelpers;
 import utest.Assert;
 import utest.Test;
@@ -351,7 +352,7 @@ class TypeNameBindingTest extends Test {
 	private static function indexOf(files: Map<String, String>): SymbolIndex {
 		final entries: Array<{ file: String, source: String }> = [for (file => source in files) { file: file, source: source }];
 		entries.sort((a, b) -> Reflect.compare(a.file, b.file));
-		return SymbolIndex.build(entries, new HaxeQueryPlugin());
+		return CheckFixture.index(entries, new HaxeQueryPlugin());
 	}
 
 	/** `name` as `from` binds it: each declaration `file#Type`, else `Unknown` or `Free`. */

@@ -123,7 +123,7 @@ class PreferMapLiteralCheckTest extends Test {
 		final check: PreferMapLiteral = new PreferMapLiteral();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
-		final idx: SymbolIndex = SymbolIndex.build(files, plugin);
+		final idx: SymbolIndex = CheckFixture.index(files, plugin);
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, CheckFixture.violationsIn(check, files, plugin), plugin, idx);
 		return edits.length == 1 ? edits[0].text : '<${edits.length} edits>';
 	}

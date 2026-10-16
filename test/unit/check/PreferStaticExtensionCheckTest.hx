@@ -162,7 +162,7 @@ class PreferStaticExtensionCheckTest extends Test {
 		Assert.isNull(own[0].declineReason, 'run() wrote nothing — this verdict is Fixable');
 		final check: PreferStaticExtension = new PreferStaticExtension();
 		check.setConfigResolver(_ -> LintConfig.parse(config));
-		Assert.equals(0, check.fix(files[0].source, own, new HaxeQueryPlugin(), SymbolIndex.build(files, new HaxeQueryPlugin())).length);
+		Assert.equals(0, check.fix(files[0].source, own, new HaxeQueryPlugin(), CheckFixture.index(files, new HaxeQueryPlugin())).length);
 		final reason: Null<String> = own[0].declineReason;
 		if (reason == null) {
 			Assert.fail('the per-site gate inside fix() must say why it declined');
@@ -535,7 +535,7 @@ class PreferStaticExtensionCheckTest extends Test {
 		final violations: Array<Violation> = CheckFixture.violationsIn(check, report, scoped);
 		Assert.equals(1, violations.length);
 		// The index argument sees the report file ONLY — the wider scope must win.
-		Assert.equals(2, check.fix(source, violations, scoped, SymbolIndex.build(report, scoped)).length);
+		Assert.equals(2, check.fix(source, violations, scoped, CheckFixture.index(report, scoped)).length);
 	}
 
 	public function testNoAnchorInsertsUsingAtFileHead(): Void {
@@ -1007,7 +1007,7 @@ class PreferStaticExtensionCheckTest extends Test {
 		final json: String = config ?? EXT_CONFIG;
 		check.setConfigResolver(_ -> LintConfig.parse(json));
 		final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == files[0].file);
-		return { edits: check.fix(files[0].source, own, plugin, SymbolIndex.build(files, plugin)), violations: own };
+		return { edits: check.fix(files[0].source, own, plugin, CheckFixture.index(files, plugin)), violations: own };
 	}
 
 	/** The fix edits for `files[0]`'s own findings, resolved through a `SymbolIndex` over the whole set. */

@@ -8,7 +8,6 @@ import anyparse.check.PreferSafeNav;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
-import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
 import utest.Assert;
@@ -468,7 +467,7 @@ class PreferFindCheckTest extends Test {
 			{ file: 'Other.hx', source: other }
 		];
 		final edits: Array<{ span: Span, text: String }> = check.fix(
-			source, CheckFixture.violationsIn(check, files, plugin), plugin, SymbolIndex.build(files, plugin)
+			source, CheckFixture.violationsIn(check, files, plugin), plugin, CheckFixture.index(files, plugin)
 		);
 		switch CanonicalEdit.canonicalize(source, edits, true, plugin) {
 			case Ok(text):

@@ -229,7 +229,7 @@ final class ApqCountSummaryCliTest extends Test {
 	public function testOneFindingCostsFourEditSpans(): Void {
 		final files: Array<{ file: String, source: String }> = [{ file: 'Probe.hx', source: ONE_FINDING_FOUR_EDITS }];
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final index: SymbolIndex = CheckFixture.index(files, plugin);
 		final check: Naming = new Naming();
 		final found: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 		Assert.equals(1, found.length, 'the fixture must carry exactly ONE finding');

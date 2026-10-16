@@ -6,7 +6,6 @@ import anyparse.check.OversizedType;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
-import anyparse.query.SymbolIndex;
 import sys.FileSystem;
 import sys.io.File;
 import unit.CheckFixture;
@@ -312,7 +311,7 @@ class OversizedTypeCheckTest extends Test {
 	 */
 	private function withIndex(files: Array<{ file: String, source: String }>): Array<Violation> {
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		plugin.setResolutionIndex(SymbolIndex.build(files, plugin));
+		plugin.setResolutionIndex(CheckFixture.index(files, plugin));
 		return CheckFixture.violationsIn(new OversizedType(), files, plugin);
 	}
 

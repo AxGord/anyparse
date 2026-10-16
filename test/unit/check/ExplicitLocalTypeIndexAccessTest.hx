@@ -134,7 +134,7 @@ class ExplicitLocalTypeIndexAccessTest extends Test {
 		final check: ExplicitLocalType = new ExplicitLocalType();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final fixFile: { file: String, source: String } = { file: 'C.hx', source: fixSrc };
-		final index: SymbolIndex = SymbolIndex.build([fixFile].concat(otherFiles), plugin);
+		final index: SymbolIndex = CheckFixture.index([fixFile].concat(otherFiles), plugin);
 		Assert.equals(0, check.fix(fixSrc, CheckFixture.violationsIn(check, [fixFile], plugin), plugin, index).length);
 	}
 

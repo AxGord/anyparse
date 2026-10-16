@@ -87,8 +87,9 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 		Assert.isTrue(own.length > 0, 'the fixture reports at least one unused-local finding');
 		final ledger: Map<String, RuleFixOutcome> = [];
-		final groups: Array<RuleEdits> =
-			LintFixDriver.collectFileLintEdits(REFUSED, own, [check], plugin, SymbolIndex.build(files, plugin));
+		final groups: Array<RuleEdits> = LintFixDriver.collectFileLintEdits(
+			REFUSED, own, [check], plugin, CheckFixture.index(files, plugin)
+		);
 		LintFixDriver.ledgerFileLintEdits(ledger, groups, true);
 		final edits: Array<{ span: Span, text: String }> = LintFixDriver.contributedEdits(groups);
 		Assert.equals(0, edits.length, 'the guard drops the check edits');
@@ -170,8 +171,9 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 		final ledger: Map<String, RuleFixOutcome> = [];
 		// `countDeclines` false IS "this is not pass 1" — the driver passes `passes == 1`.
-		final groups: Array<RuleEdits> =
-			LintFixDriver.collectFileLintEdits(REFUSED, own, [check], plugin, SymbolIndex.build(files, plugin));
+		final groups: Array<RuleEdits> = LintFixDriver.collectFileLintEdits(
+			REFUSED, own, [check], plugin, CheckFixture.index(files, plugin)
+		);
 		LintFixDriver.ledgerFileLintEdits(ledger, groups, false);
 		final edits: Array<{ span: Span, text: String }> = LintFixDriver.contributedEdits(groups);
 		Assert.equals(0, edits.length, 'the guard drops the check edits on this pass too');
@@ -217,7 +219,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final files: Array<{ file: String, source: String }> = [{ file: 'G.hx', source: REFUSED_BY_WRITER }];
 		final own: Array<Violation> = Linter.run(files, plugin, checks, _ -> LintConfig.parse('{}'), false);
 		final groups: Array<RuleEdits> = LintFixDriver.collectFileLintEdits(
-			REFUSED_BY_WRITER, own, checks, plugin, SymbolIndex.build(files, plugin)
+			REFUSED_BY_WRITER, own, checks, plugin, CheckFixture.index(files, plugin)
 		);
 		Assert.equals(2, groups.length, 'both rules answered with edits: $groups');
 		// DETECT-PROOF: the whole set really is refused, so the salvage below is doing work rather
@@ -325,7 +327,8 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: source }];
 		final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 		Assert.isTrue(own.length > 0, 'the fixture reports a fixable finding');
-		final groups: Array<RuleEdits> = LintFixDriver.collectFileLintEdits(source, own, [check], plugin, SymbolIndex.build(files, plugin));
+		final groups: Array<RuleEdits> =
+			LintFixDriver.collectFileLintEdits(source, own, [check], plugin, CheckFixture.index(files, plugin));
 		Assert.equals(1, LintFixDriver.contributedEdits(groups).length, 'and the check produced its edit');
 		final blamed: Array<String> = [];
 		Assert.isNull(
@@ -474,7 +477,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 		final ledger: Map<String, RuleFixOutcome> = [];
 		LintFixDriver.ledgerFileLintEdits(
-			ledger, LintFixDriver.collectFileLintEdits(REFUSED, own, [check], plugin, SymbolIndex.build(files, plugin)), true
+			ledger, LintFixDriver.collectFileLintEdits(REFUSED, own, [check], plugin, CheckFixture.index(files, plugin)), true
 		);
 		final row: Null<RuleFixOutcome> = ledger['unused-local'];
 		if (row == null) {
@@ -1034,7 +1037,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final source: String = 'package p;\n\nclass G {\n\n\tfinal private /*inline*/ function f():String {\n\t\treturn "x";\n\t}\n\n'
 			+ '\tfinal private function g():String {\n\t\treturn "y";\n\t}\n\n}\n';
 		final files: Array<{ file: String, source: String }> = [{ file: 'G.hx', source: source }];
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final index: SymbolIndex = CheckFixture.index(files, plugin);
 		final groups: Array<RuleEdits> = LintFixDriver.collectFileLintEdits(
 			source, CheckFixture.violationsIn(check, files, plugin), [check], plugin, index
 		);
@@ -1072,7 +1075,8 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 		Assert.equals(2, own.length, 'the fixture reports both locals');
 		final ledger: Map<String, RuleFixOutcome> = [];
-		final groups: Array<RuleEdits> = LintFixDriver.collectFileLintEdits(source, own, [check], plugin, SymbolIndex.build(files, plugin));
+		final groups: Array<RuleEdits> =
+			LintFixDriver.collectFileLintEdits(source, own, [check], plugin, CheckFixture.index(files, plugin));
 		LintFixDriver.ledgerFileLintEdits(ledger, groups, true);
 		final written: String = CanonicalEdit.applyEdits(source, LintFixDriver.contributedEdits(groups));
 		// ONE assertion over both halves, so neither can be satisfied alone.

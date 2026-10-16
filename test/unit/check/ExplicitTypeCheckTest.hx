@@ -5,7 +5,6 @@ import anyparse.check.ExplicitType;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import sys.io.File;
 import unit.CheckFixture;
@@ -595,7 +594,7 @@ class ExplicitTypeCheckTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: ExplicitType = new ExplicitType();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == 'Impl.hx');
-		final edits: Array<{ span: Span, text: String }> = check.fix(impl, vs, plugin, SymbolIndex.build(files, plugin));
+		final edits: Array<{ span: Span, text: String }> = check.fix(impl, vs, plugin, CheckFixture.index(files, plugin));
 		edits.sort((a, b) -> b.span.from - a.span.from);
 		var result: String = impl;
 		for (e in edits) result = result.substring(0, e.span.from) + e.text + result.substring(e.span.to);

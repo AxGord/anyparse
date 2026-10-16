@@ -8,7 +8,6 @@ import anyparse.check.MemberSpacing;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
-import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
 import utest.Assert;
@@ -1437,7 +1436,7 @@ class MemberOrderCheckTest extends Test {
 		final check: MemberOrder = new MemberOrder();
 		check.setConfigResolver(emptyConfigResolver());
 		return CanonicalEdit.applyEdits(
-			src, check.fix(src, CheckFixture.violations(check, src, plugin), plugin, SymbolIndex.build(files, plugin))
+			src, check.fix(src, CheckFixture.violations(check, src, plugin), plugin, CheckFixture.index(files, plugin))
 		);
 	}
 

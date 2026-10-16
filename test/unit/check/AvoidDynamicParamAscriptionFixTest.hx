@@ -359,7 +359,7 @@ class AvoidDynamicParamAscriptionFixTest extends Test {
 		final check: AvoidDynamic = new AvoidDynamic();
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: base }, { file: subFile, source: sub }];
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == 'C.hx');
-		return check.fix(base, vs, plugin, SymbolIndex.build(files, plugin));
+		return check.fix(base, vs, plugin, CheckFixture.index(files, plugin));
 	}
 
 }

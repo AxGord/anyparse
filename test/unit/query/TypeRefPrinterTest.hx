@@ -6,6 +6,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeRefPrinter;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -858,7 +859,7 @@ class TypeRefPrinterTest extends Test {
 	}
 
 	private function indexOf(files: Array<{ file: String, source: String }>): SymbolIndex {
-		return SymbolIndex.build(files, new HaxeQueryPlugin());
+		return CheckFixture.index(files, new HaxeQueryPlugin());
 	}
 
 	/** The pending import statement text, trimmed of the newline the anchor carries. */

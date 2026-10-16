@@ -6,7 +6,6 @@ import anyparse.check.RedundantImport;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
-import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
 import utest.Assert;
@@ -245,7 +244,7 @@ class RedundantImportCheckTest extends Test {
 		final check: RedundantImport = new RedundantImport();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 		Assert.equals(2, vs.length);
-		final fixed: String = CanonicalEdit.applyEdits(src, check.fix(src, vs, plugin, SymbolIndex.build(files, plugin)));
+		final fixed: String = CanonicalEdit.applyEdits(src, check.fix(src, vs, plugin, CheckFixture.index(files, plugin)));
 		Assert.isFalse(fixed.contains('import fs.FileSystemInterface.FileSystemCloudAction;'));
 		Assert.isFalse(fixed.contains('import fs.cloud.CloudDatabase.CloudDatabaseFilePath;'));
 		Assert.isTrue(fixed.contains('import fs.FileSystemInterface;'));
@@ -279,7 +278,7 @@ class RedundantImportCheckTest extends Test {
 		final files: Array<{ file: String, source: String }> = fileSet(src);
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: RedundantImport = new RedundantImport();
-		return check.fix(src, CheckFixture.violationsIn(check, files, plugin), plugin, SymbolIndex.build(files, plugin));
+		return check.fix(src, CheckFixture.violationsIn(check, files, plugin), plugin, CheckFixture.index(files, plugin));
 	}
 
 	private function fileSet(src: String): Array<{ file: String, source: String }> {

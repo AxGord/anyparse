@@ -184,7 +184,7 @@ class PreferApiIdiomCheckTest extends Test {
 	@:pin('control') @:killer('M-IDIOM-VALIDATE-TRUSTS')
 	public function testTheIndexRefutesADeclarationThatCannotBeTrue(): Void {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final index: SymbolIndex = SymbolIndex.build(user('p.x = 1;'), plugin);
+		final index: SymbolIndex = CheckFixture.index(user('p.x = 1;'), plugin);
 		final specs: Array<IdiomSpec> = RuleDeclaration.idioms(
 			LintConfig.parse(
 				'{"rules":{"prefer-api-idiom":{"idioms":[{"type":"geom.Nope","fields":["x"],"method":"setOne"},{'
@@ -239,7 +239,7 @@ class PreferApiIdiomCheckTest extends Test {
 		final rule: PreferApiIdiom = check(config ?? CONFIG);
 		final own: Array<Violation> = CheckFixture.violationsIn(rule, files, plugin, resolver(config ?? CONFIG))
 			.filter(v -> v.file == files[0].file);
-		return own.length == 0 ? [] : rule.fix(files[0].source, own, plugin, SymbolIndex.build(files, plugin));
+		return own.length == 0 ? [] : rule.fix(files[0].source, own, plugin, CheckFixture.index(files, plugin));
 	}
 
 	private function onlyEditText(files: Array<{ file: String, source: String }>, ?config: String): String {

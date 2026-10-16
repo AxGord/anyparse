@@ -367,7 +367,7 @@ class TypeResolverSliceTest extends Test {
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
 		final check: UnusedLocal = new UnusedLocal();
 		final violations: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final index: SymbolIndex = CheckFixture.index(files, plugin);
 		return check.fix(src, violations, plugin, index);
 	}
 
@@ -378,7 +378,7 @@ class TypeResolverSliceTest extends Test {
 		final shape: RefShape = plugin.refShape();
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
 		final types: DeclaredNullity = DeclaredNullity.of(
-			'C.hx', tree, src, shape, plugin, plugin.typeSyntax, () -> SymbolIndex.build(files, plugin)
+			'C.hx', tree, src, shape, plugin, plugin.typeSyntax, () -> CheckFixture.index(files, plugin)
 		);
 		final operand: Null<QueryNode> = nullCheckOperand(tree, shape);
 		Assert.notNull(operand, 'fixture must contain a `… != null` comparison');

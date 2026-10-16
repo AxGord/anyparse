@@ -566,7 +566,7 @@ class PreferEnumAbstractCheckTest extends Test {
 		];
 		final check: PreferEnumAbstract = new PreferEnumAbstract();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
-		final index: Null<SymbolIndex> = withIndex ? SymbolIndex.build(files, plugin) : null;
+		final index: Null<SymbolIndex> = withIndex ? CheckFixture.index(files, plugin) : null;
 		return check.fix(THREE_STRING_CONSTANTS, vs, plugin, index).length;
 	}
 
@@ -598,7 +598,7 @@ class PreferEnumAbstractCheckTest extends Test {
 		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/Align.hx', source: decl }].concat(others);
 		final check: PreferEnumAbstract = new PreferEnumAbstract();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == 'pkg/Align.hx');
-		return check.fixGrouped(decl, vs, plugin, SymbolIndex.build(files, plugin)).length;
+		return check.fixGrouped(decl, vs, plugin, CheckFixture.index(files, plugin)).length;
 	}
 
 }

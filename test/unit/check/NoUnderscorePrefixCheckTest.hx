@@ -7,7 +7,6 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
-import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import sys.FileSystem;
 import sys.io.File;
@@ -271,7 +270,7 @@ class NoUnderscorePrefixCheckTest extends Test {
 		final check: NoUnderscorePrefix = new NoUnderscorePrefix();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == 'pkg/C.hx');
 		Assert.equals(1, vs.length);
-		Assert.equals(0, check.fix(src, vs, plugin, SymbolIndex.build(files, plugin)).length);
+		Assert.equals(0, check.fix(src, vs, plugin, CheckFixture.index(files, plugin)).length);
 	}
 
 	/**
@@ -668,7 +667,7 @@ class NoUnderscorePrefixCheckTest extends Test {
 		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: NoUnderscorePrefix = configured(config);
-		return check.fix(src, CheckFixture.violationsIn(check, files, plugin), plugin, SymbolIndex.build(files, plugin));
+		return check.fix(src, CheckFixture.violationsIn(check, files, plugin), plugin, CheckFixture.index(files, plugin));
 	}
 
 	/**
@@ -688,7 +687,7 @@ class NoUnderscorePrefixCheckTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: NoUnderscorePrefix = new NoUnderscorePrefix();
 		final out: Array<{ span: Span, text: String }> = check.fix(
-			src, CheckFixture.violationsIn(check, files, plugin), plugin, SymbolIndex.build(files, plugin)
+			src, CheckFixture.violationsIn(check, files, plugin), plugin, CheckFixture.index(files, plugin)
 		);
 		FileSystem.deleteFile(path);
 		FileSystem.deleteFile('$dir/checkstyle.json');
@@ -728,7 +727,7 @@ class NoUnderscorePrefixCheckTest extends Test {
 		final check: NoUnderscorePrefix = configured(config);
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, report, scoped);
 		Assert.equals(1, vs.length);
-		return check.fix(subSrc, vs, scoped, SymbolIndex.build(report, new HaxeQueryPlugin()));
+		return check.fix(subSrc, vs, scoped, CheckFixture.index(report, new HaxeQueryPlugin()));
 	}
 
 }

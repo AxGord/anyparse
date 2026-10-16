@@ -532,7 +532,7 @@ class CrossScopeSoundnessTest extends Test {
 				{ file: REACH_FILE, source: cell.grantee }
 			];
 			final plugin: CachingGrammarPlugin = scoped(report, []);
-			final index: SymbolIndex = SymbolIndex.build(report, plugin);
+			final index: SymbolIndex = CheckFixture.index(report, plugin);
 			for (check in Linter.builtins()) {
 				final cross: Null<CrossFileFix> = check is CrossFileFix ? cast check : null;
 				if (cross == null) continue;
@@ -888,7 +888,7 @@ class CrossScopeSoundnessTest extends Test {
 		report: Array<SourceFile>, reach: Array<SourceFile>, declSource: String, placement: String = ROOTS_AND_LIBRARY
 	): Map<String, Array<String>> {
 		final plugin: CachingGrammarPlugin = scoped(report, reach, placement);
-		final index: SymbolIndex = SymbolIndex.build(report, plugin);
+		final index: SymbolIndex = CheckFixture.index(report, plugin);
 		final out: Map<String, Array<String>> = [];
 		for (check in Linter.builtins()) {
 			final vs: Array<Violation> = CheckFixture.violationsIn(check, report, plugin).filter(v -> v.file == DECL_FILE);
@@ -952,7 +952,7 @@ class CrossScopeSoundnessTest extends Test {
 	private function reachesByReflectiveString(cell: Cell): Bool {
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		final surface: ReflectionSurface = ReflectionScan.reflectionSurface([{ file: REACH_FILE, source: cell.grantee }], plugin);
-		final index: SymbolIndex = SymbolIndex.build([{ file: DECL_FILE, source: cell.decl }], plugin);
+		final index: SymbolIndex = CheckFixture.index([{ file: DECL_FILE, source: cell.decl }], plugin);
 		return surface.whole.exists(name -> index.members.typeDeclaresMember(DECL_TYPE, name));
 	}
 

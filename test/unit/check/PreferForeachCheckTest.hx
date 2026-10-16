@@ -5,7 +5,6 @@ import anyparse.check.PreferForeach;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
-import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
 import utest.Assert;
@@ -343,7 +342,7 @@ class PreferForeachCheckTest extends Test {
 		final check: PreferForeach = new PreferForeach();
 		final vs: Array<Violation> = CheckFixture.violations(check, src, plugin);
 		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, vs, plugin, SymbolIndex.build([{ file: 'C.hx', source: src }], plugin)
+			src, vs, plugin, CheckFixture.index([{ file: 'C.hx', source: src }], plugin)
 		);
 		switch CanonicalEdit.canonicalize(src, edits, true, plugin) {
 			case Ok(text):

@@ -5,7 +5,6 @@ import anyparse.check.Linter;
 import anyparse.check.PreferBind;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
 import utest.Assert;
@@ -209,7 +208,7 @@ class PreferBindCheckTest extends Test {
 			final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 			final check: PreferBind = new PreferBind();
 			final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == 'C.hx');
-			return check.fix(files[0].source, own, plugin, SymbolIndex.build(files, plugin, thirdParty)).length;
+			return check.fix(files[0].source, own, plugin, CheckFixture.index(files, plugin, thirdParty)).length;
 		}
 		Assert.equals(0, edits('Lib.m', ['Lib.hx']), 'a library method');
 		Assert.equals(1, edits('Lib.m', []), 'the project twin');

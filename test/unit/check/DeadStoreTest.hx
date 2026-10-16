@@ -10,7 +10,6 @@ import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
-import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
 import utest.Assert;
@@ -582,7 +581,7 @@ class DeadStoreTest extends Test {
 		final check: DeadStore = new DeadStore();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 		Assert.isTrue(vs.length > 0, 'the dead store must be reported before its fix can be judged');
-		return check.fix(src, vs, plugin, SymbolIndex.build(files, plugin));
+		return check.fix(src, vs, plugin, CheckFixture.index(files, plugin));
 	}
 
 	/** Whether `node`'s subtree holds a node of kind `kind`. */

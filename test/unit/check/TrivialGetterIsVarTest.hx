@@ -3,7 +3,6 @@ package unit.check;
 import anyparse.check.Check.Violation;
 import anyparse.check.TrivialGetter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.SymbolIndex;
 import unit.CheckFixture;
 import utest.Assert;
 
@@ -148,7 +147,7 @@ class TrivialGetterIsVarTest extends TrivialGetterCheckTestBase {
 	 */
 	public function testSubclassReadingPropertyStillFixes(): Void {
 		final f: SubtypeReadFixture = subtypeReadFixture();
-		Assert.isTrue(f.check.fix(f.files[0].source, f.vs, f.plugin, SymbolIndex.build(f.files, f.plugin)).length > 0);
+		Assert.isTrue(f.check.fix(f.files[0].source, f.vs, f.plugin, CheckFixture.index(f.files, f.plugin)).length > 0);
 	}
 
 	/** An `override` getter answers a supertype contract the collapse would silently break. */
@@ -177,7 +176,7 @@ class TrivialGetterIsVarTest extends TrivialGetterCheckTestBase {
 	/** The self-backed arm registers no cross-file rename: nothing is deleted, so there is nothing to rewrite elsewhere. */
 	public function testNoCrossFileRenameForSelfBacked(): Void {
 		final f: SubtypeReadFixture = subtypeReadFixture();
-		Assert.equals(0, f.check.crossFileFix(f.files, f.vs, f.plugin, SymbolIndex.build(f.files, f.plugin)).length);
+		Assert.equals(0, f.check.crossFileFix(f.files, f.vs, f.plugin, CheckFixture.index(f.files, f.plugin)).length);
 	}
 
 	/**

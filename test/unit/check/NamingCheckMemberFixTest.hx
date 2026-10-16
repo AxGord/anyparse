@@ -79,7 +79,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 			{ file: 'pkg/C.hx', source: cSrc },
 			{ file: 'pkg/D.hx', source: 'package pkg;\nclass D extends C {\n\tpublic function g() { return shape; }\n}' }
 		];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final cVs: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == 'pkg/C.hx');
 		Assert.equals(1, cVs.length);
@@ -93,7 +93,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 			{ file: 'pkg/C.hx', source: cSrc },
 			{ file: 'pkg/E.hx', source: 'package pkg;\n@:access(pkg.C)\nclass E {}' }
 		];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final cVs: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == 'pkg/C.hx');
 		Assert.equals(0, check.fix(cSrc, cVs, new HaxeQueryPlugin(), index).length);
@@ -103,7 +103,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		// @:allow on the class grants another type access → report-only.
 		final src: String = 'package pkg;\n@:allow(pkg.X)\nclass C {\n\tprivate var shape:Int;\n}';
 		final files: Array<{ source: String, file: String }> = [{ file: 'pkg/C.hx', source: src }];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin(), index).length);
@@ -138,7 +138,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		final src: String = 'package pkg;\nclass C {\n\tprivate var _shape:Int;\n\tprivate var shape:Int;\n'
 			+ '\tpublic function f() { return this.shape + this._shape; }\n}';
 		final files: Array<{ source: String, file: String }> = [{ file: 'pkg/C.hx', source: src }];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		Assert.equals(1, vs.length);
@@ -201,7 +201,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		final src: String = 'package pkg;\nclass C {\n\t// resets the shape state\n\tprivate var shape:Int;\n'
 			+ '\tpublic function f() { return this.shape; }\n}';
 		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		Assert.equals(1, vs.length);
@@ -228,7 +228,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		final src: String = 'package pkg;\nclass C {\n\t// legacy xShape fallback\n\tprivate var xShape:Int;\n'
 			+ '\tpublic function f() { return this.xShape; }\n}';
 		final files: Array<{ source: String, file: String }> = [{ file: 'pkg/C.hx', source: src }];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		Assert.equals(1, vs.length);
@@ -246,7 +246,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		// Stripping `_FORCE_build` yields `FORCE_build`, not a valid camelCase name → report-only.
 		final src: String = 'package pkg;\nclass C {\n\tprivate static final _FORCE_build:Int = 0;\n}';
 		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		Assert.equals(1, vs.length);
@@ -267,7 +267,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		final src: String =
 			'package pkg;\nclass C {\n\tprivate static final _forceBuild:Int = 0;\n\tprivate static final _cacheSize:Int = 0;\n}';
 		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		Assert.equals(2, vs.length);
@@ -298,7 +298,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 				source: otherSrc
 			}
 		];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final cVs: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == '$dir/C.hx');
 		Assert.equals(1, cVs.length);
@@ -325,7 +325,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 				source: otherSrc
 			}
 		];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final cVs: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == '$dir/C.hx');
 		Assert.equals(1, cVs.length);
@@ -409,7 +409,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		final src: String = 'package pkg;\nclass C {\n\tprivate var Value(get, set):Int;\n\tfunction get_Value():Int return this.Value;\n'
 			+ '\tfunction set_Value(v:Int):Int return this.Value = v;\n}';
 		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		Assert.equals(1, vs.length);
@@ -433,7 +433,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 			'package pkg;\nclass C extends Base {\n\tprivate var count:Int = 1;\n\tpublic function f() { return this.count; }\n}';
 		final files: Array<{ file: String, source: String }> =
 			[{ file: 'pkg/Base.hx', source: baseSrc }, { file: 'pkg/C.hx', source: cSrc }];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final cVs: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == 'pkg/C.hx');
 		Assert.isTrue(cVs.length >= 1);
@@ -445,7 +445,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		// renaming it breaks saved files. Report-only even though the field is otherwise confined.
 		final src: String = 'package pkg;\n@:rtti\nclass C {\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}';
 		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		Assert.equals(1, vs.length);
@@ -460,7 +460,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 			'package pkg;\nclass C extends Base {\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}';
 		final files: Array<{ file: String, source: String }> =
 			[{ file: 'pkg/Base.hx', source: baseSrc }, { file: 'pkg/C.hx', source: cSrc }];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final cVs: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == 'pkg/C.hx');
 		Assert.equals(1, cVs.length);
@@ -502,7 +502,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		// convention (`_size`), mirroring the snake/de-prefix normalisation already applied to locals.
 		final src: String = 'package pkg;\nclass C {\n\tprivate var __size:Int;\n\tpublic function f() { return this.__size; }\n}';
 		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		Assert.equals(1, vs.length);
@@ -539,7 +539,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 			+ 'Sprite();\n\t\t\t\tlogo;\n\t\t\tcase _:\n\t\t\t\tfinal logo:Sprite = new Sprite();\n\t\t\t\tlogo;\n\t\t};\n'
 			+ '\t\taddChild(logo);\n\t}\n\tfunction removeChild(o:Sprite):Void {}\n\tfunction addChild(o:Sprite):Void {}\n}';
 		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == 'pkg/C.hx');
 		switch CanonicalEdit.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin(), index), true, new HaxeQueryPlugin()) {
@@ -935,7 +935,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: renamed }];
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
-		Assert.isTrue(check.fix(renamed, vs, new HaxeQueryPlugin(), SymbolIndex.build(files, new HaxeQueryPlugin())).length > 0);
+		Assert.isTrue(check.fix(renamed, vs, new HaxeQueryPlugin(), CheckFixture.index(files, new HaxeQueryPlugin())).length > 0);
 		Assert.isNull(vs[0].declineReason, 'a rename that landed declined nothing');
 	}
 
@@ -1066,7 +1066,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		final bareCheck: Naming = new Naming();
 		final bareVs: Array<Violation> = CheckFixture.violationsIn(bareCheck, report, bare);
 		Assert.equals(1, bareVs.length);
-		Assert.isTrue(bareCheck.fix(declSource, bareVs, bare, SymbolIndex.build(report, bare)).length > 0);
+		Assert.isTrue(bareCheck.fix(declSource, bareVs, bare, CheckFixture.index(report, bare)).length > 0);
 		final library: Array<{ file: String, source: String }> = [
 			{ file: 'pkg/E.hx', source: 'package pkg;\n@:access(pkg.C)\nclass E {\n\tpublic function f(c:C) { return c.My_Field; }\n}' }
 		];
@@ -1078,7 +1078,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, report, plugin).filter(v -> v.file == 'pkg/C.hx');
 		Assert.equals(1, vs.length);
-		final index: SymbolIndex = SymbolIndex.build(report, plugin);
+		final index: SymbolIndex = CheckFixture.index(report, plugin);
 		Assert.equals(0, check.crossFileFix(report, vs, plugin, index).length, 'the cross-file rename declines');
 		Assert.equals(0, check.fix(declSource, vs, plugin, index).length, 'and the single-file rename is refused');
 		Assert.equals(
@@ -1118,7 +1118,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		final bareCheck: Naming = new Naming();
 		final bareVs: Array<Violation> = CheckFixture.violationsIn(bareCheck, report, bare);
 		Assert.equals(1, bareVs.length);
-		Assert.isTrue(bareCheck.fix(declSource, bareVs, bare, SymbolIndex.build(report, bare)).length > 0);
+		Assert.isTrue(bareCheck.fix(declSource, bareVs, bare, CheckFixture.index(report, bare)).length > 0);
 		final library: Array<{ file: String, source: String }> = [
 			{ file: 'pkg/E.hx', source: 'package pkg;\nclass E {\n\tpublic function f(c:C) { return Reflect.field(c, \'My_Field\'); }\n}' }
 		];
@@ -1130,7 +1130,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, report, plugin).filter(v -> v.file == 'pkg/C.hx');
 		Assert.equals(1, vs.length);
-		final index: SymbolIndex = SymbolIndex.build(report, plugin);
+		final index: SymbolIndex = CheckFixture.index(report, plugin);
 		Assert.equals(0, check.crossFileFix(report, vs, plugin, index).length, 'the cross-file rename declines');
 		Assert.equals(0, check.fix(declSource, vs, plugin, index).length, 'and the single-file rename is refused');
 		Assert.equals(
@@ -1145,7 +1145,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 			{ file: 'pkg/C.hx', source: cSrc },
 			{ file: 'pkg/Bad.hx', source: badSrc }
 		];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final cVs: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == 'pkg/C.hx');
 		return check.fix(cSrc, cVs, new HaxeQueryPlugin(), index).length;
@@ -1170,7 +1170,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 			{ file: 'pkg/C.hx', source: src },
 			{ file: 'pkg/Rect.hx', source: 'package pkg;\n\nclass Rect {\n\tpublic var bottom:Int = 0;\n\n\tpublic function new() {}\n}' }
 		];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == 'pkg/C.hx');
 		Assert.isTrue(vs.length >= 1);
@@ -1180,7 +1180,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 	/** `assertNotRenamed`'s single-file setup, asserting on the fixed TEXT instead of a refusal. */
 	private function assertRenamedSingle(src: String, present: String, absent: String): Void {
 		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == 'pkg/C.hx');
 		Assert.isTrue(vs.length >= 1);
@@ -1197,7 +1197,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		final lib: Array<{ file: String, source: String }> = [{ file: 'ext/Base.hx', source: libSrc }];
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		scoped.setResolutionScope({ declared: true, sources: () -> {report: report, projectRoots: [], library: new LibrarySources(lib) } });
-		final reportIndex: SymbolIndex = SymbolIndex.build(report, new HaxeQueryPlugin());
+		final reportIndex: SymbolIndex = CheckFixture.index(report, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, report, scoped).filter(v -> v.file == 'pkg/Sub.hx');
 		Assert.equals(1, vs.length);
@@ -1222,7 +1222,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		final files: Array<{ file: String, source: String }> = [{ file: '$dir/C.hx', source: src }];
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
-		return { edits: check.fix(src, vs, plugin, SymbolIndex.build(files, plugin)).length, findings: vs };
+		return { edits: check.fix(src, vs, plugin, CheckFixture.index(files, plugin)).length, findings: vs };
 	}
 
 	/** The `unused-private` findings a one-file `pkg/C.hx` fixture carries — the OTHER reader of `implicitReach`. */
@@ -1271,7 +1271,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 			{ file: '$dir/C.hx', source: cSrc },
 			{ file: '$dir/E.hx', source: otherSource }
 		];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == '$dir/C.hx');
 		Assert.isTrue(vs.length >= 1);

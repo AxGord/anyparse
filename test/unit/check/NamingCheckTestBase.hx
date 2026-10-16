@@ -38,7 +38,7 @@ class NamingCheckTestBase extends Test {
 
 	private function assertFixCanonicalWithIndex(src: String, present: String, absent: String): Void {
 		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		Assert.equals(1, vs.length);
@@ -47,7 +47,7 @@ class NamingCheckTestBase extends Test {
 
 	/** Assert the naming autofix emits NO edit for `targetFile`, which must still carry at least one finding. */
 	private function assertFixSkipped(files: Array<{ file: String, source: String }>, targetFile: String, targetSrc: String): Void {
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == targetFile);
 		Assert.isTrue(vs.length >= 1);
@@ -57,7 +57,7 @@ class NamingCheckTestBase extends Test {
 	/** Fix the single flagged decl of `src` at `path` and assert on the canonicalized result. */
 	private function assertRenamedIn(path: String, src: String, present: String, absent: String): Void {
 		final files: Array<{ file: String, source: String }> = [{ file: path, source: src }];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == path);
 		Assert.isTrue(vs.length >= 1);
@@ -67,7 +67,7 @@ class NamingCheckTestBase extends Test {
 	/** The flagged decl in `src` (single file `pkg/C.hx`) yields no edits — the rename is refused. */
 	private function assertNotRenamed(src: String): Void {
 		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == 'pkg/C.hx');
 		Assert.isTrue(vs.length >= 1);
@@ -77,7 +77,7 @@ class NamingCheckTestBase extends Test {
 	private function assertLocalRenamed(
 		files: Array<{ file: String, source: String }>, targetFile: String, targetSrc: String, present: String, absent: String
 	): Void {
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == targetFile);
 		Assert.isTrue(vs.length >= 1);
@@ -96,7 +96,7 @@ class NamingCheckTestBase extends Test {
 	 */
 	private function refusalFor(files: Array<{ file: String, source: String }>, targetFile: String, crossFirst: Bool = false): String {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final index: SymbolIndex = CheckFixture.index(files, plugin);
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == targetFile);
 		Assert.equals(1, vs.length);

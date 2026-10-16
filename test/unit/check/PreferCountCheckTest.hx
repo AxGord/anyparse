@@ -6,7 +6,6 @@ import anyparse.check.PreferCount;
 import anyparse.check.Severity;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
-import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
 import utest.Assert;
@@ -447,7 +446,7 @@ class PreferCountCheckTest extends Test {
 		if (other != null) files.push({ file: 'Other.hx', source: other });
 		final plugin: CachingGrammarPlugin = StdScope.plugin(files);
 		final edits: Array<{ span: Span, text: String }> = check.fix(
-			source, CheckFixture.violationsIn(check, files, plugin), plugin, SymbolIndex.build(files, plugin)
+			source, CheckFixture.violationsIn(check, files, plugin), plugin, CheckFixture.index(files, plugin)
 		);
 		switch CanonicalEdit.canonicalize(source, edits, true, plugin) {
 			case Ok(text):
@@ -465,7 +464,7 @@ class PreferCountCheckTest extends Test {
 			final text: String = out;
 			final plugin: CachingGrammarPlugin = StdScope.plugin([{ file: 'C.hx', source: text }]);
 			final edits: Array<{ span: Span, text: String }> = check.fix(
-				text, CheckFixture.violations(check, text, plugin), plugin, SymbolIndex.build([{ file: 'C.hx', source: text }], plugin)
+				text, CheckFixture.violations(check, text, plugin), plugin, CheckFixture.index([{ file: 'C.hx', source: text }], plugin)
 			);
 			Assert.isTrue(edits.length > 0, 'stage ${check.id()} produced no edits');
 			switch CanonicalEdit.canonicalize(text, edits, true, plugin) {

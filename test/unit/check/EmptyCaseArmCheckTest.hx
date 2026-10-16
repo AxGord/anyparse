@@ -6,7 +6,6 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
-import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
 import utest.Assert;
@@ -247,7 +246,7 @@ class EmptyCaseArmCheckTest extends Test {
 		final found: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 		Assert.equals(1, found.length);
 		Assert.equals(0, check.fix(user.source, found, plugin).length);
-		Assert.equals(1, check.fix(user.source, found, plugin, SymbolIndex.build(files, plugin)).length);
+		Assert.equals(1, check.fix(user.source, found, plugin, CheckFixture.index(files, plugin)).length);
 	}
 
 	/** A STATIC root resolves too: `S.mode` has no value receiver at all. */

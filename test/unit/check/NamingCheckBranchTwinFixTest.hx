@@ -66,7 +66,7 @@ class NamingCheckBranchTwinFixTest extends NamingCheckTestBase {
 	 */
 	private function assertFixed(src: String, present: Array<String>, absent: String): Void {
 		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == 'pkg/C.hx');
 		Assert.isTrue(vs.length >= 1);
