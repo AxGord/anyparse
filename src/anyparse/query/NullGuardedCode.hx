@@ -206,12 +206,9 @@ final class NullGuardedCode {
 
 	/** The identifier `condition`, a comparison of the kind `kind`, compares with the null literal, or null. */
 	private function comparedWithNull(condition: QueryNode, kind: Null<String>): Null<QueryNode> {
-		if (kind == null || condition.kind != kind || condition.children.length != 2) return null;
-		final a: QueryNode = unwrap(condition.children[0]);
-		final b: QueryNode = unwrap(condition.children[1]);
-		if (b.kind == _shape.nullLiteralKind && a.kind == _shape.identKind) return a;
-		if (a.kind == _shape.nullLiteralKind && b.kind == _shape.identKind) return b;
-		return null;
+		return kind == null || condition.kind != kind
+			? null
+			: NodeShape.nullComparedIdent(condition, _shape.identKind, _shape.nullLiteralKind, _shape.parenKind);
 	}
 
 	/**
@@ -220,7 +217,7 @@ final class NullGuardedCode {
 	 */
 	private function memberParams(tree: QueryNode): Map<QueryNode, MemberParam> {
 		final out: Map<QueryNode, MemberParam> = [];
-		final functions: Array<String> = (_shape.functionKinds ?? []).concat(_shape.lambdaKinds ?? []);
+		final functions: Array<String> = ShapeVocab.functionOrLambdaKinds(_shape);
 		final kinds: Array<String> = _shape.paramKinds ?? [];
 		function walk(node: QueryNode, nested: Bool): Void {
 			final isFunction: Bool = functions.contains(node.kind);
@@ -370,7 +367,7 @@ final class NullGuardedCode {
 		final params: Array<QueryNode> = [for (c in fn.children) if ((_shape.paramKinds ?? []).contains(c.kind)) c];
 		if (params.length != count || params[index].name != name) return false;
 		final binding: QueryNode = params[index];
-		final functions: Array<String> = (_shape.functionKinds ?? []).concat(_shape.lambdaKinds ?? []);
+		final functions: Array<String> = ShapeVocab.functionOrLambdaKinds(_shape);
 		for (hit in Refs.find(name, read.tree, _shape)) if (hit.bindingNode == binding && hit.kind != Decl) {
 			if (hit.kind != Read) return false;
 			final chain: Null<Array<QueryNode>> = ancestors(read.tree, hit.span);

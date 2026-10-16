@@ -815,7 +815,7 @@ final class CallGraph {
 		// a local `inline function` is a function of its own like any local one, though the grammar gives it a kind apart
 		final fnKinds: Array<String> = (shape.functionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
 		final lambdaKinds: Array<String> = shape.lambdaKinds ?? [];
-		final localFnKinds: Array<String> = (shape.localFunctionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
+		final localFnKinds: Array<String> = ShapeVocab.localFunctionScopeKinds(shape);
 		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
 		final nullableWrappers: Array<String> = shape.nullableWrapperTypeNames ?? [];
 		final transparentWrappers: Array<String> = shape.memberTransparentWrapperTypeNames ?? [];

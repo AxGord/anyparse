@@ -5,6 +5,7 @@ import anyparse.query.BinderScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
+import anyparse.query.NodeShape;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
@@ -310,10 +311,7 @@ final class PreferIndexAccess implements Check {
 		if (node.kind == cfg.ternaryKind && node.children.length == 3) {
 			final cond: QueryNode = node.children[0];
 			final eq: Bool = cond.kind == cfg.eqKind;
-			if (
-				(eq || cond.kind == cfg.notEqKind) && cond.children.length == 2 && cfg.nullLitKind != null
-				&& (cond.children[0].kind == cfg.nullLitKind || cond.children[1].kind == cfg.nullLitKind)
-			) {
+			if ((eq || cond.kind == cfg.notEqKind) && NodeShape.nullComparedSide(cond, cfg.nullLitKind) != null) {
 				final fallback: QueryNode = eq ? node.children[1] : node.children[2];
 				if (TypeResolver.isInferenceFragileNullGuard(fallback, site, root, cfg.shape, declaredTypes)) return true;
 			}

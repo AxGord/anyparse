@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
+import anyparse.query.NodeShape;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
@@ -419,7 +420,7 @@ final class OptionalParamShorthand implements Check {
 		node: QueryNode, name: String, identKind: String, nullLitKind: String, seams: Seams
 	): Bool {
 		if (seams.equalityKinds.contains(node.kind)) {
-			final operand: Null<QueryNode> = NullFlow.nullComparisonOperand(node, identKind, nullLitKind);
+			final operand: Null<QueryNode> = NodeShape.nullComparedIdent(node, identKind, nullLitKind);
 			if (operand != null && operand.name == name) return true;
 		}
 		if (seams.assignKind != null && node.kind == seams.assignKind && node.children.length >= 2) {

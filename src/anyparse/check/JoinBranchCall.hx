@@ -7,6 +7,7 @@ import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.QueryNode;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -251,7 +252,7 @@ final class JoinBranchCall implements Check {
 			exprStmtKind: exprStmtKind,
 			blockStmtKind: blockStmtKind,
 			callKind: callKind,
-			conditionalKinds: IfExpressionChain.conditionalKinds(shape)
+			conditionalKinds: ShapeVocab.ifKinds(shape)
 		};
 	}
 

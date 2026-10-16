@@ -2,14 +2,17 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.check.CheckScan.NegationSeams;
+import anyparse.check.GuardScan.GuardSeams;
+import anyparse.check.GuardScan.GuardSplice;
+import anyparse.check.GuardScan.GuardedIf;
 import anyparse.query.BinderScan;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
-import anyparse.query.CanonicalEdit;
 import anyparse.query.CondRegionScan;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -180,9 +183,6 @@ using Lambda;
 @:nullSafety(Strict)
 final class GuardReturn implements Check {
 
-	/** A guard `if` with no `else` has exactly [condition, then-branch] children. */
-	private static inline final IF_NO_ELSE_CHILD_COUNT: Int = 2;
-
 	/**
 	 * The fewest statements a de-nestable then-branch may hold. A ONE-statement branch is
 	 * `prefer-ternary-return`'s shape (`if (c) return a;` + `return b;` → `return c ? a : b;`),
@@ -212,18 +212,14 @@ final class GuardReturn implements Check {
 			final file: String = entry.file;
 			final source: String = entry.source;
 			final types: Null<(QueryNode) -> Null<String>> = CheckScan.typeNominalResolver(source, plugin, tree, file);
-			walk(tree, source, s, [], null, m -> {
-				// An inversion that cannot shed its `!( … )` wrap reads worse than the positive
-				// branch it replaces — the whole point of the guard form is lost, so skip the site.
-				final span: Null<Span> = m.ifNode.span;
-				if (span != null && NegationScan.negationIsClean(m.cond, source, s.logic, types)) violations.push({
-					file: file,
-					span: span,
-					rule: 'guard-return',
-					severity: Severity.Info,
-					message: 'this trailing if can invert into an early-return guard'
-				});
-			});
+			walk(
+				tree, source, s, [], null,
+				m ->
+					GuardScan.report(
+						violations, file, source, m, s.logic, types, 'guard-return',
+						'this trailing if can invert into an early-return guard'
+					)
+			);
 		}, CheckScan.parseBranchAwareOrNull);
 	}
 
@@ -233,16 +229,8 @@ final class GuardReturn implements Check {
 	): Array<{ span: Span, text: String }> {
 		return RunScan.editsWith(plugin, source, readSeams(plugin), (tree, seams) -> {
 			final byIf: Map<String, Candidate> = [];
-			walk(tree, source, seams, [], null, m -> {
-				final span: Null<Span> = m.ifNode.span;
-				if (span != null) byIf['${span.from}:${span.to}'] = m;
-			});
-			final types: Null<(QueryNode) -> Null<String>> = violations.length == 0
-				? null
-				: CheckScan.typeNominalResolver(source, plugin, tree, violations[0].file, index);
-			return CanonicalEdit.dropContainedEdits(
-				CheckScan.collectSpanEdits(violations, byIf, (m, _) -> (editFor(m, source, seams, types)))
-			);
+			walk(tree, source, seams, [], null, GuardScan.index.bind(byIf));
+			return GuardScan.edits(plugin, source, tree, violations, index, byIf, (m, types) -> editFor(m, source, seams, types));
 		}, CheckScan.parseBranchAwareOrNull);
 	}
 
@@ -253,22 +241,16 @@ final class GuardReturn implements Check {
 
 	/** Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */
 	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {
-		final shape: RefShape = plugin.refShape();
-		final ifKinds: Array<String> = shape.ifStatementKinds ?? [];
-		if (ifKinds.length == 0) return null;
-		final flow: Null<ControlFlowSupport> = plugin.controlFlowSupport();
-		if (flow == null) return null;
+		final base: Null<GuardSeams> = GuardScan.seamsOf(plugin);
+		if (base == null) return null;
+		final shape: RefShape = base.shape;
+		final flow: ControlFlowSupport = base.flow;
 		final voidReturnKind: Null<String> = shape.voidReturnKind;
 		final blockBodyKind: Null<String> = shape.blockBodyKind;
 		final valueReturnKinds: Array<String> = shape.valueReturnKinds ?? [];
-		final returnKinds: Array<String> = [];
-		for (k in [
-			(shape.returnStatementKind: Null<String>),
-			voidReturnKind
-		]) if (k != null && !returnKinds.contains(k)) returnKinds.push(k);
-		for (k in valueReturnKinds) if (!returnKinds.contains(k)) returnKinds.push(k);
+		final returnKinds: Array<String> = ShapeVocab.returnKinds(shape);
 		return returnKinds.length == 0 ? null : {
-			ifKinds: ifKinds,
+			ifKinds: base.ifKinds,
 			returnKinds: returnKinds,
 			blockKinds: flow.blockKinds(),
 			flow: flow,
@@ -281,7 +263,7 @@ final class GuardReturn implements Check {
 			voidTypeName: shape.voidTypeName,
 			blockBodyKind: blockBodyKind,
 			valueReturnKinds: valueReturnKinds,
-			returnScopeStop: (shape.localFunctionKinds ?? []).concat(shape.inlineFunctionKinds ?? []).concat(shape.lambdaKinds ?? []),
+			returnScopeStop: ShapeVocab.localFunctionScopeKinds(shape).concat(shape.lambdaKinds ?? []),
 			shape: shape,
 			implicitTailEnabled: voidReturnKind != null && blockBodyKind != null && valueReturnKinds.length > 0,
 			condKind: shape.conditionalMemberKind,
@@ -394,18 +376,16 @@ final class GuardReturn implements Check {
 	private static function gatedCandidate(
 		block: QueryNode, ifNode: QueryNode, tail: Null<QueryNode>, s: Seams, source: String, scopeNames: Array<String>
 	): Null<Candidate> {
-		if (!s.ifKinds.contains(ifNode.kind) || ifNode.children.length != IF_NO_ELSE_CHILD_COUNT) return null;
-		final cond: QueryNode = ifNode.children[0];
-		final thenBlock: QueryNode = ifNode.children[1];
-		if (!s.blockKinds.contains(thenBlock.kind) || thenBlock.children.length < MIN_THEN_STATEMENTS) return null;
+		final g: Null<GuardedIf> = GuardScan.guardedIf(ifNode, s.ifKinds, s.blockKinds, MIN_THEN_STATEMENTS);
+		if (g == null) return null;
+		final thenBlock: QueryNode = g.thenBlock;
 		if (tail != null && !s.flow.isTerminal(thenBlock.children[thenBlock.children.length - 1])) return null;
 		if (hasConditionalRegion(ifNode, s.shape) || (tail != null && hasConditionalRegion(tail, s.shape))) return null;
-		final blocked: Bool = spanCommentBlocked(source, ifNode, cond, thenBlock, tail ?? ifNode)
-			|| redeclaresSibling(block, ifNode, thenBlock, s, scopeNames);
+		final blocked: Bool = spanCommentBlocked(source, g, tail ?? ifNode) || redeclaresSibling(block, ifNode, thenBlock, s, scopeNames);
 		return blocked ? null : {
 			ifNode: ifNode,
 			thenBlock: thenBlock,
-			cond: cond,
+			cond: g.cond,
 			tail: tail
 		};
 	}
@@ -461,16 +441,10 @@ final class GuardReturn implements Check {
 	 * closing brace, a comment that would otherwise end up documenting the last de-nested
 	 * statement.
 	 */
-	private static function spanCommentBlocked(
-		source: String, ifNode: QueryNode, cond: QueryNode, thenBlock: QueryNode, endNode: QueryNode
-	): Bool {
-		final ifSpan: Null<Span> = ifNode.span;
-		final condSpan: Null<Span> = cond.span;
-		final thenSpan: Null<Span> = thenBlock.span;
+	private static function spanCommentBlocked(source: String, g: GuardedIf, endNode: QueryNode): Bool {
+		final ifSpan: Null<Span> = g.ifNode.span;
 		final endSpan: Null<Span> = endNode.span;
-		if (ifSpan == null || condSpan == null || thenSpan == null || endSpan == null) return true;
-		if (CheckScan.hasCommentMarker(source, ifSpan.from, condSpan.from)) return true;
-		if (CheckScan.hasCommentMarker(source, condSpan.to, thenSpan.from)) return true;
+		if (ifSpan == null || endSpan == null || GuardScan.headerHasComment(source, g)) return true;
 		// On the implicit-tail arm `endNode` IS the `if`, so the gap degenerates to an empty
 		// range and both checks fall away — nothing sits between the `if` and itself. Guarded
 		// rather than sliced: `String.substring` SWAPS a reversed pair and would hand back the
@@ -523,17 +497,15 @@ final class GuardReturn implements Check {
 	private static function editFor(
 		m: Candidate, source: String, s: Seams, ?types: (QueryNode) -> Null<String>
 	): Null<{ span: Span, text: String }> {
-		final ifSpan: Null<Span> = m.ifNode.span;
-		final thenSpan: Null<Span> = m.thenBlock.span;
-		if (ifSpan == null || thenSpan == null) return null;
-		final neg: String = NegationScan.negateConditionText(m.cond, source, s.negation, s.logic, types);
-		final inner: String = source.substring(thenSpan.from + 1, thenSpan.to - 1).rtrim();
+		final cut: Null<GuardSplice> = GuardScan.splice(m, source, s.negation, s.logic, types);
+		if (cut == null) return null;
+		final inner: String = cut.inner.rtrim();
 		final tail: Null<QueryNode> = m.tail;
-		if (tail == null) return { span: new Span(ifSpan.from, ifSpan.to), text: 'if ($neg) return;$inner' };
+		if (tail == null) return { span: new Span(cut.ifSpan.from, cut.ifSpan.to), text: 'if (${cut.neg}) return;$inner' };
 		final tailSpan: Null<Span> = tail.span;
 		if (tailSpan == null) return null;
 		final tailSource: String = source.substring(tailSpan.from, tailSpan.to);
-		return { span: new Span(ifSpan.from, tailSpan.to), text: 'if ($neg) $tailSource$inner' };
+		return { span: new Span(cut.ifSpan.from, tailSpan.to), text: 'if (${cut.neg}) $tailSource$inner' };
 	}
 
 }
@@ -567,9 +539,6 @@ private typedef Seams = {
  * or null on the implicit-tail arm, where the guard returns no value and the rewritten span
  * ends at the `if` itself.
  */
-private typedef Candidate = {
-	var ifNode: QueryNode;
-	var thenBlock: QueryNode;
-	var cond: QueryNode;
+private typedef Candidate = GuardedIf & {
 	var tail: Null<QueryNode>;
 }

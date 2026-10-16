@@ -2,7 +2,9 @@ package anyparse.check;
 
 import anyparse.query.CallGraph;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.NodeShape;
 import anyparse.query.QueryNode;
+import anyparse.query.ShapeVocab;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
 
@@ -70,7 +72,7 @@ final class ArgumentValues {
 		_trees = trees;
 		_shape = plugin.refShape();
 		_types = plugin is TypeInfoProvider ? cast plugin : null;
-		_ifKinds = conditionalKinds(_shape);
+		_ifKinds = ShapeVocab.conditionalKinds(_shape);
 		_builtKinds = builtKindsOf(_shape);
 	}
 
@@ -129,14 +131,7 @@ final class ArgumentValues {
 
 	/** The operand `cond` (an `==` / `!=`) compares with the `null` literal; null when neither side is that literal. */
 	public function nullTested(cond: QueryNode): Null<QueryNode> {
-		final kids: Array<QueryNode> = cond.children;
-		if (kids.length != 2) return null;
-		return if (kids[1].kind == _shape.nullLiteralKind)
-			kids[0]
-		else if (kids[0].kind == _shape.nullLiteralKind)
-			kids[1]
-		else
-			null;
+		return NodeShape.nullComparedSide(cond, _shape.nullLiteralKind);
 	}
 
 	/** The call node of `edge`'s site in its function's body; null when there is none at exactly that range. */
@@ -324,12 +319,6 @@ final class ArgumentValues {
 		}
 		final name: Null<String> = expr.name;
 		if (expr.kind == _shape.identKind && name != null && !into.contains(name)) into.push(name);
-	}
-
-	/** The kinds of an `if` statement, an `if` expression and a ternary: the constructs whose first child is a condition. */
-	public static function conditionalKinds(shape: RefShape): Array<String> {
-		return (shape.ifStatementKinds ?? []).concat(shape.ifExpressionKinds ?? [])
-			.concat(shape.ternaryKind == null ? [] : [shape.ternaryKind]);
 	}
 
 	/** The kinds of a value built where it is written, never null: a construction, an object or array literal. */

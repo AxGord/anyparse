@@ -8,6 +8,7 @@ import anyparse.query.BoolExprShape;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.NodeShape;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
 import anyparse.query.SourceComments;
@@ -383,11 +384,7 @@ final class TryCatchNullGuard implements Check implements DefaultOff {
 
 	/** Whether `cond`'s two operands are the `null` literal and a plain `name` reference, in either order. */
 	private static function comparesToNull(cond: QueryNode, name: String, s: Seams): Bool {
-		final left: QueryNode = BoolExprShape.unwrapParens(cond.children[0], s.parenKind);
-		final right: QueryNode = BoolExprShape.unwrapParens(cond.children[1], s.parenKind);
-		final subject: QueryNode = left.kind == s.nullKind ? right : left;
-		final literal: QueryNode = left.kind == s.nullKind ? left : right;
-		return literal.kind == s.nullKind && subject.kind == s.identKind && subject.name == name;
+		return NodeShape.nullComparedIdent(cond, s.identKind, s.nullKind, s.parenKind)?.name == name;
 	}
 
 	/**

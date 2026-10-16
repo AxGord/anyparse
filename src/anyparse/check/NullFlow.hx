@@ -8,6 +8,7 @@ import anyparse.query.NodeShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SourceText;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
@@ -131,10 +132,25 @@ private typedef FlowCtx = {
 	var localDeclKinds: Array<String>;
 	var declTypeChildKinds: Array<String>;
 	var localDeclContinuationKinds: Array<String>;
+
+	/** The two-armed conditionals (`ShapeVocab.conditionalKinds`): each value arm is analyzed from an isolated branch state. */
 	var ifKinds: Array<String>;
+
+	/** Every loop (`ShapeVocab.loopKinds`): every name one assigns is cleared before its body, so a back edge carries no stale fact. */
 	var loopKinds: Array<String>;
+
+	/**
+	 * The PRE-TEST loops among `loopKinds` — the `while` statement and the `while` comprehension, children
+	 * `[condition, body …]`, the condition evaluated before every iteration, so it narrows the body exactly as an `if`
+	 * narrows its then-arm (`while (x != null) { … }` leaves `x` non-null inside). A `do … while` is deliberately absent:
+	 * its body runs BEFORE the test, so the condition proves nothing there. A `for` has no null test to read.
+	 */
 	var preTestLoopKinds: Array<String>;
+
+	/** Every `switch` (`switchKinds`, statement and expression forms, bare and parenthesized subjects), joined branch per branch. */
 	var switchKinds: Array<String>;
+
+	/** Every `try` (`ShapeVocab.tryKinds`): the body and each catch clause joined by the flow walk. */
 	var tryKinds: Array<String>;
 	var blockKinds: Array<String>;
 	var controlExitKinds: Array<String>;
@@ -145,7 +161,7 @@ private typedef FlowCtx = {
 	 * The nested function-value kinds — a separate flow context: their bodies are not walked with
 	 * the outer state, and the names they touch are excluded from the enclosing unit's analysis.
 	 *
-	 * `RefactorSupport.nestedFunctionKinds(shape)` and nothing else. It must cover EVERY spelling
+	 * `ShapeVocab.nestedFunctionKinds(shape)` and nothing else. It must cover EVERY spelling
 	 * of a function value the grammar projects, or the omitted one is analyzed as straight-line
 	 * code belonging to the enclosing function: a hand-written list missing `ThinArrow` — the
 	 * bare `v -> …` — makes `dead-store` report a false positive on any local a bare-arrow
@@ -291,33 +307,6 @@ private typedef FlowCtx = {
  */
 @:nullSafety(Strict)
 final class NullFlow {
-
-	/** Branch constructs with two mutually-exclusive value arms — analyzed with isolated branch states. */
-	public static final IF_KINDS: Array<String> = ['IfStmt', 'IfExpr', 'Ternary'];
-
-	/** Loop constructs — every name they assign is cleared before the body so a back-edge carries no stale fact. */
-	public static final LOOP_KINDS: Array<String> = ['WhileStmt', 'DoWhileStmt', 'ForStmt', 'WhileExpr', 'ForExpr'];
-
-	/**
-	 * The PRE-TEST loops among `LOOP_KINDS` — children `[condition, body …]`, the condition
-	 * evaluated before every iteration, so it narrows the body exactly as an `if` narrows its
-	 * then-arm (`while (x != null) { … }` leaves `x` non-null inside). A `DoWhileStmt` is
-	 * deliberately absent: its body runs BEFORE the test, so the condition proves nothing there.
-	 * A `for` has no null test to read.
-	 */
-	public static final PRE_TEST_LOOP_KINDS: Array<String> = ['WhileStmt', 'WhileExpr'];
-
-	/**
-	 * `switch` construct kinds — joined branch-per-branch by the flow walk
-	 * (statement and expression forms, bare and parenthesized subjects).
-	 */
-	public static final SWITCH_KINDS: Array<String> = ['SwitchStmt', 'SwitchStmtBare', 'SwitchExpr', 'SwitchExprBare'];
-
-	/** `try` construct kinds — the body and each catch clause joined by the flow walk. */
-	public static final TRY_KINDS: Array<String> = ['TryCatchStmt', 'TryCatchStmtBare', 'TryExpr'];
-
-	/** Multi-branch construct kinds — the union of `SWITCH_KINDS` and `TRY_KINDS`; the `dead-store` liveness walk treats them uniformly. */
-	public static final BRANCHY_KINDS: Array<String> = SWITCH_KINDS.concat(TRY_KINDS);
 
 	/**
 	 * Metadata annotation kinds (`@:name(args)` / `@:name` / raw) — their argument
@@ -487,7 +476,7 @@ final class NullFlow {
 		flatten(returned);
 		final nonNullParams: Array<Int> = [];
 		for (c in conjuncts) if (c.kind == notEqKind) {
-			final operand: Null<String> = nullComparisonOperand(c, identKind, shape.nullLiteralKind)?.name;
+			final operand: Null<String> = NodeShape.nullComparedIdent(c, identKind, shape.nullLiteralKind)?.name;
 			final index: Int = params.findIndex(p -> p.name == operand);
 			if (operand != null && index >= 0 && !nonNullParams.contains(index)) nonNullParams.push(index);
 		}
@@ -545,23 +534,6 @@ final class NullFlow {
 	}
 
 	/**
-	 * For a binary comparison whose one operand is the null literal and the other a
-	 * plain identifier, that identifier node; null otherwise. The shared recogniser of
-	 * an `x != null` / `x == null` comparison for the null-flow consumers.
-	 */
-	public static function nullComparisonOperand(node: QueryNode, identKind: String, nullLitKind: Null<String>): Null<QueryNode> {
-		if (node.children.length != 2 || nullLitKind == null) return null;
-		final nullLit: String = nullLitKind;
-		final left: QueryNode = node.children[0];
-		final right: QueryNode = node.children[1];
-		final leftIsNull: Bool = left.kind == nullLit;
-		final rightIsNull: Bool = right.kind == nullLit;
-		if (leftIsNull == rightIsNull) return null;
-		final operand: QueryNode = leftIsNull ? right : left;
-		return operand.kind == identKind ? operand : null;
-	}
-
-	/**
 	 * The initializer expression of a local declaration node, or null when it has
 	 * none. A declaration's initializer is its LAST child — a top-level
 	 * anonymous-struct type annotation also projects as a child
@@ -599,7 +571,7 @@ final class NullFlow {
 	 * and the `dead-store` liveness walk).
 	 *
 	 * A unit is a function DECLARATION (`RefShape.functionKinds`) or a function VALUE
-	 * (`RefactorSupport.nestedFunctionKinds` — every lambda spelling, the named literal, the local
+	 * (`ShapeVocab.nestedFunctionKinds` — every lambda spelling, the named literal, the local
 	 * `inline function`). Both halves are needed and neither is optional: the engines already REFUSE
 	 * to walk a function value with the enclosing unit's state (it may run at any later time), so a
 	 * spelling that is in neither set is analyzed by NOBODY: without the value kinds `dead-store`
@@ -628,7 +600,7 @@ final class NullFlow {
 		if (functionKinds.length == 0 || bodyKinds.length == 0) return;
 		final paramKinds: Array<String> = shape.paramKinds ?? [];
 		final typeChildKinds: Array<String> = shape.typeAnnotationKinds ?? [];
-		final valueKinds: Array<String> = MemberKinds.nestedFunctionKinds(shape);
+		final valueKinds: Array<String> = ShapeVocab.nestedFunctionKinds(shape);
 		function unitBody(node: QueryNode): Null<QueryNode> {
 			final wrapped: Null<QueryNode> = node.children.find(c -> bodyKinds.contains(c.kind));
 			if (wrapped != null) return wrapped;
@@ -779,7 +751,7 @@ final class NullFlow {
 		predicates: Array<NonNullPredicate>, argType: QueryNode -> Null<String>
 	): Void {
 		final localDeclKinds: Array<String> = shape.localDeclKinds ?? [];
-		final nestedFnKinds: Array<String> = MemberKinds.nestedFunctionKinds(shape);
+		final nestedFnKinds: Array<String> = ShapeVocab.nestedFunctionKinds(shape);
 		final ctx: FlowCtx = {
 			identKind: identKind,
 			assignKind: shape.assignKind,
@@ -792,11 +764,11 @@ final class NullFlow {
 			localDeclKinds: localDeclKinds,
 			declTypeChildKinds: shape.declTypeChildKinds ?? [],
 			localDeclContinuationKinds: shape.localDeclContinuationKinds ?? [],
-			ifKinds: IF_KINDS,
-			loopKinds: LOOP_KINDS,
-			preTestLoopKinds: PRE_TEST_LOOP_KINDS,
-			switchKinds: SWITCH_KINDS,
-			tryKinds: TRY_KINDS,
+			ifKinds: ShapeVocab.conditionalKinds(shape),
+			loopKinds: ShapeVocab.loopKinds(shape),
+			preTestLoopKinds: MemberKinds.withSetKinds([], [shape.whileStmtKind, shape.whileExprKind]),
+			switchKinds: shape.switchKinds ?? [],
+			tryKinds: ShapeVocab.tryKinds(shape),
 			blockKinds: BLOCK_KINDS,
 			controlExitKinds: shape.controlExitKinds ?? [],
 			nonNullRhsKinds: NON_NULL_RHS_KINDS,
@@ -1468,7 +1440,7 @@ final class NullFlow {
 			// `cmpKind` — is what says which side this call is filling: the operator alone cannot,
 			// since the else-arm collects non-null names through `== null` by duality. `x?.a` null
 			// leaves `x` itself entirely unconstrained, so the known-null slot must never take one.
-			final direct: Null<QueryNode> = nullComparisonOperand(cond, ctx.identKind, ctx.nullLitKind);
+			final direct: Null<QueryNode> = NodeShape.nullComparedIdent(cond, ctx.identKind, ctx.nullLitKind);
 			final operand: Null<QueryNode> = direct ?? (provesNonNull ? safeNavChainRoot(cond, ctx) : null);
 			final nm: Null<String> = operand?.name;
 			// A caller that tracks compiler visibility takes the safe-navigation names apart: the
@@ -1669,7 +1641,7 @@ final class NullFlow {
 		final r: QueryNode = BoolExprShape.unwrapParens(rhs, ctx.parenKind);
 		final rk: String = r.kind;
 		if (rk == ctx.notEqKind || rk == ctx.eqKind) {
-			final operand: Null<QueryNode> = nullComparisonOperand(r, ctx.identKind, ctx.nullLitKind);
+			final operand: Null<QueryNode> = NodeShape.nullComparedIdent(r, ctx.identKind, ctx.nullLitKind);
 			final t: Null<String> = operand?.name;
 			if (t != null && t != name && ctx.ownNames.contains(t) && !ctx.captured.contains(t)) {
 				final target: String = t;
@@ -1818,16 +1790,8 @@ final class NullFlow {
 	 */
 	private static function nullCompareFact(rawCond: QueryNode, ctx: FlowCtx, cmpKind: Null<String>): Null<ExistsFact> {
 		final cond: QueryNode = BoolExprShape.unwrapParens(rawCond, ctx.parenKind);
-		final nullLit: Null<String> = ctx.nullLitKind;
-		if (cmpKind == null || nullLit == null || cond.kind != cmpKind || cond.children.length != 2) return null;
-		final left: QueryNode = cond.children[0];
-		final right: QueryNode = cond.children[1];
-		return if (right.kind == nullLit)
-			indexFact(left, ctx)
-		else if (left.kind == nullLit)
-			indexFact(right, ctx)
-		else
-			null;
+		final operand: Null<QueryNode> = cmpKind == null || cond.kind != cmpKind ? null : NodeShape.nullComparedSide(cond, ctx.nullLitKind);
+		return operand == null ? null : indexFact(operand, ctx);
 	}
 
 	/**
@@ -2036,16 +2000,12 @@ final class NullFlow {
 	 */
 	private static function safeNavChainRoot(cond: QueryNode, ctx: FlowCtx): Null<QueryNode> {
 		final safeKind: Null<String> = ctx.nullSafeAccessKind;
-		final nullLit: Null<String> = ctx.nullLitKind;
-		if (safeKind == null || nullLit == null || cond.children.length != 2) return null;
-		final left: QueryNode = cond.children[0];
-		final right: QueryNode = cond.children[1];
-		final leftIsNull: Bool = left.kind == nullLit;
-		if (leftIsNull == (right.kind == nullLit)) return null;
+		final compared: Null<QueryNode> = NodeShape.nullComparedSide(cond, ctx.nullLitKind);
+		if (safeKind == null || compared == null) return null;
 		final chainKinds: Array<String> = [
 			for (k in [safeKind, ctx.fieldAccessKind, ctx.callKind, ctx.indexAccessKind]) if (k != null) k
 		];
-		var cur: QueryNode = leftIsNull ? right : left;
+		var cur: QueryNode = compared;
 		while (cur.children.length >= 1 && chainKinds.contains(cur.kind)) {
 			final receiver: QueryNode = cur.children[0];
 			if (receiver.kind == ctx.identKind) return cur.kind == safeKind ? receiver : null;

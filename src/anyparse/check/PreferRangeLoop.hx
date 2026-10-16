@@ -5,6 +5,7 @@ import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
@@ -154,7 +155,7 @@ final class PreferRangeLoop implements Check {
 		final continueKind: Null<String> = shape.continueStatementKind;
 		if (continueKind == null) return null;
 		final mutableKinds: Array<String> = shape.mutableLocalDeclKinds ?? [];
-		final closureKinds: Array<String> = (shape.lambdaKinds ?? []).concat(shape.localFunctionKinds ?? []);
+		final closureKinds: Array<String> = ShapeVocab.lambdaOrLocalFunctionKinds(shape);
 		final atomicKinds: Array<String> = [
 			for (k in [
 				(shape.identKind: Null<String>),

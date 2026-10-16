@@ -140,7 +140,7 @@ final class MemberTouchScan {
 		if (!(shape.localDeclKinds ?? []).contains(declaration.kind)) return declSpan;
 		final init: Null<QueryNode> = CtorFieldFold.declInitializer(declaration, shape);
 		if (init == null || !isFresh(init, { tree: tree, source: source, call: freshCall })) return init?.span ?? declSpan;
-		final closures: Array<String> = (shape.lambdaKinds ?? []).concat(shape.localFunctionKinds ?? []);
+		final closures: Array<String> = ShapeVocab.lambdaOrLocalFunctionKinds(shape);
 		final end: Int = rerunEnd(fn, region);
 		var found: Null<Span> = null;
 		final declFrom: Int = declSpan.from;
@@ -174,7 +174,7 @@ final class MemberTouchScan {
 	 */
 	public function localTouch(fn: QueryNode, name: String, declFrom: Int, region: Span, owns: OwnMethods): Null<Span> {
 		final shape: RefShape = _scope.shape;
-		final closures: Array<String> = (shape.lambdaKinds ?? []).concat(shape.localFunctionKinds ?? []);
+		final closures: Array<String> = ShapeVocab.lambdaOrLocalFunctionKinds(shape);
 		var found: Null<Span> = null;
 		final lineage: Array<QueryNode> = [];
 		function walk(
@@ -209,7 +209,7 @@ final class MemberTouchScan {
 
 	/** Where code that can run before `region` runs again ends: `region.to`, or the end of the outermost loop of `fn` enclosing it. */
 	public function rerunEnd(fn: QueryNode, region: Span): Int {
-		final loops: Array<String> = (_scope.shape.loopStatementKinds ?? []).concat(_scope.shape.doWhileLoopKinds ?? []);
+		final loops: Array<String> = ShapeVocab.statementLoopKinds(_scope.shape);
 		var end: Int = region.to;
 		function walk(node: QueryNode): Void {
 			final span: Null<Span> = node.span;
@@ -761,7 +761,7 @@ final class MemberTouchScan {
 		final kind: String = parent.kind;
 		final sequence: Bool = kind == shape.blockStmtKind || kind == shape.blockBodyKind || (shape.branchScopeKinds ?? []).contains(kind);
 		if (sequence && parent.children[parent.children.length - 1] != node) return true;
-		if ((shape.loopStatementKinds ?? []).concat(shape.doWhileLoopKinds ?? []).contains(kind)) return true;
+		if (ShapeVocab.statementLoopKinds(shape).contains(kind)) return true;
 		if (kind == shape.blockBodyKind) return at >= 2 && bodyDiscardsItsValue(lineage[at - 2]);
 		final statementForms: Array<String> = (shape.ifStatementKinds ?? []).concat(shape.switchStatementKinds ?? [])
 			.concat(shape.tryStatementKinds ?? []);
@@ -780,7 +780,7 @@ final class MemberTouchScan {
 		final arrows: Array<String> = [
 			for (k in shape.lambdaKinds ?? []) if (k != shape.fnExprKind && k != shape.namedFnExprKind) k
 		];
-		final discarding: Array<String> = (shape.functionKinds ?? []).concat(shape.lambdaKinds ?? []).concat(shape.doWhileLoopKinds ?? []);
+		final discarding: Array<String> = ShapeVocab.functionOrLambdaKinds(shape).concat(shape.doWhileLoopKinds ?? []);
 		return !arrows.contains(owner.kind) && discarding.contains(owner.kind);
 	}
 

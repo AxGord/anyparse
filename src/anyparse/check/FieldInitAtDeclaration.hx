@@ -12,6 +12,7 @@ import anyparse.query.MemberReach;
 import anyparse.query.QueryNode;
 import anyparse.query.RawSourceScan;
 import anyparse.query.RefactorSupport;
+import anyparse.query.ShapeVocab;
 import anyparse.query.StdResolver;
 import anyparse.query.SymbolIndex;
 import anyparse.query.SymbolIndexHost;
@@ -1168,7 +1169,7 @@ final class FieldInitAtDeclaration implements Check {
 			for (k in [shape.fieldAccessKind, shape.indexAccessKind, shape.callKind]) if (k != null) k
 		];
 		final classLike: Array<String> = MemberKinds.classLikeContainerKinds(shape);
-		final tryKinds: Array<String> = (shape.tryStatementKinds ?? []).concat(shape.tryExpressionKinds ?? []);
+		final tryKinds: Array<String> = ShapeVocab.tryKinds(shape);
 		for (entry in scope) if (RawSourceScan.mentionsWord(entry.source, name)) {
 			final parsed: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (parsed == null) return true;

@@ -113,6 +113,8 @@ class GuardContinueCheckTest extends Test {
 		Assert.isTrue(fx(cond('!(a || b)')).indexOf('if (a || b) continue;') != -1);
 	}
 
+	@:killer('M-GUARD-UNCLEAN-INVERSION-REPORTED')
+	@:pin('control')
 	public function testLessThanNotFlagged(): Void {
 		// `q` is unbound, so the flip is not licensed; the guard would have to wrap `!(q < 10)`,
 		// which reads worse than the nesting it removes — the site is left alone. NOT the loop
@@ -263,6 +265,8 @@ class GuardContinueCheckTest extends Test {
 		Assert.equals(0, v('for (x in xs) {\n\t\t\tpre();\n\t\t\tif (cond) {\n\t\t\t\tbody();\n\t\t\t}\n\t\t\ttail();\n\t\t}').length);
 	}
 
+	@:killer('M-GUARD-ELSE-ADMITTED')
+	@:pin('control')
 	public function testElseBranchNotFlagged(): Void {
 		Assert.equals(
 			0,
@@ -275,10 +279,14 @@ class GuardContinueCheckTest extends Test {
 		Assert.equals(0, v('for (x in xs) {\n\t\t\tif (cond) {\n\t\t\t\tbody();\n\t\t\t}\n\t\t}').length);
 	}
 
+	@:killer('M-GUARD-MIN-THEN-IGNORED')
+	@:pin('control')
 	public function testEmptyBodyNotFlagged(): Void {
 		Assert.equals(0, v('for (x in xs) {\n\t\t\tpre();\n\t\t\tif (cond) {}\n\t\t}').length);
 	}
 
+	@:killer('M-GUARD-UNBRACED-THEN')
+	@:pin('control')
 	public function testUnbracedThenNotFlagged(): Void {
 		Assert.equals(0, v('for (x in xs) {\n\t\t\tpre();\n\t\t\tif (cond) body();\n\t\t}').length);
 	}
@@ -606,6 +614,8 @@ class GuardContinueCheckTest extends Test {
 		Assert.isTrue(es[0].text.indexOf('/* keep */') != -1);
 	}
 
+	@:killer('M-GUARD-GLUE-COMMENT-BLIND')
+	@:pin('control')
 	public function testGlueCommentNotFlagged(): Void {
 		// A comment in the dropped `) {` glue would be lost — refused.
 		Assert.equals(0, v('for (x in xs) {\n\t\t\tpre();\n\t\t\tif (cond) /* x */ {\n\t\t\t\tbody();\n\t\t\t}\n\t\t}').length);

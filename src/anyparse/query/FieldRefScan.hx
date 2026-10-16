@@ -152,7 +152,7 @@ final class FieldRefScan {
 
 	/**
 	 * The function scopes a shadowed member reference can be RE-QUALIFIED from — every function VALUE
-	 * (`MemberKinds.nestedFunctionKinds`) plus the METHOD declarations, which is `functionKinds` minus the
+	 * (`ShapeVocab.nestedFunctionKinds`) plus the METHOD declarations, which is `functionKinds` minus the
 	 * local functions (already function values) and minus the module-level declarations.
 	 *
 	 * That last exclusion is a decision, not an omission: a shadowed reference is rewritten to `this.` /
@@ -161,7 +161,7 @@ final class FieldRefScan {
 	 * module-level VALUE bindings — rather than naming `FnDecl`.
 	 */
 	private static function fnScopeKinds(shape: RefShape): Array<String> {
-		final out: Array<String> = MemberKinds.nestedFunctionKinds(shape);
+		final out: Array<String> = ShapeVocab.nestedFunctionKinds(shape);
 		final localOrModule: Array<String> = (shape.localFunctionKinds ?? []).concat(shape.moduleValueDeclKinds);
 		for (kind in shape.functionKinds ?? []) if (!localOrModule.contains(kind) && !out.contains(kind)) out.push(kind);
 		return out;

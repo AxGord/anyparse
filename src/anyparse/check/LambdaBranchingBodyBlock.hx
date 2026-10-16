@@ -6,6 +6,7 @@ import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
@@ -191,7 +192,7 @@ final class LambdaBranchingBodyBlock implements Check {
 		final fnExprKind: Null<String> = shape.fnExprKind;
 		if (fnExprKind == null) return null;
 		final arrowKinds: Array<String> = (shape.lambdaKinds ?? []).filter(k -> k != fnExprKind);
-		final conditionalKinds: Array<String> = (shape.ifStatementKinds ?? []).concat(shape.ifExpressionKinds ?? []);
+		final conditionalKinds: Array<String> = ShapeVocab.ifKinds(shape);
 		final switchKinds: Array<String> = shape.switchKinds ?? [];
 		return arrowKinds.length == 0 || (conditionalKinds.length == 0 && switchKinds.length == 0) ? null : {
 			arrowKinds: arrowKinds,

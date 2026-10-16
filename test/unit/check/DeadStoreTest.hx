@@ -8,8 +8,8 @@ import anyparse.check.NullFlow;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
+import anyparse.query.ShapeVocab;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
 import utest.Assert;
@@ -275,7 +275,7 @@ class DeadStoreTest extends Test {
 		// against parsed source rather than against declarations.
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final shape: RefShape = plugin.refShape();
-		final authority: Array<String> = MemberKinds.nestedFunctionKinds(shape);
+		final authority: Array<String> = ShapeVocab.nestedFunctionKinds(shape);
 		final declared: Array<String> = (shape.lambdaKinds ?? []).concat(shape.localFunctionKinds ?? [])
 			.concat(shape.inlineFunctionKinds ?? []);
 		for (kind in [shape.fnExprKind, shape.namedFnExprKind]) if (kind != null) declared.push(kind);
@@ -294,7 +294,7 @@ class DeadStoreTest extends Test {
 		// `ParenLambdaExpr` (the Haxe-3 `(v) => e` fat arrow) has no row: Haxe 4 cannot spell it, so
 		// the pin above is what keeps it in the set.
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final authority: Array<String> = MemberKinds.nestedFunctionKinds(plugin.refShape());
+		final authority: Array<String> = ShapeVocab.nestedFunctionKinds(plugin.refShape());
 		final spellings: Array<{ code: String, kind: String }> = [
 			{ code: 'a.map(v -> t(v));', kind: 'ThinArrow' },
 			{ code: 'a.map((v) -> t(v));', kind: 'ThinParenLambdaExpr' },
@@ -484,7 +484,7 @@ class DeadStoreTest extends Test {
 	}
 
 	/**
-	 * The two spellings whose host kind is in `RefactorSupport.nestedFunctionKinds` but NOT in
+	 * The two spellings whose host kind is in `ShapeVocab.nestedFunctionKinds` but NOT in
 	 * `RefShape.functionKinds`, so they fell through the same hole as the lambdas: the local
 	 * `inline function` (`LocalInlineFnStmt`, which the grammar gives its own ctor) and the named
 	 * function LITERAL in value position (`NamedFnExpr`). Both were silent on the base binary.

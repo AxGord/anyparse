@@ -4,6 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.NodeShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
@@ -239,11 +240,8 @@ final class RedundantElse implements Check {
 		final node: QueryNode = seams.parenKind != null && cond.kind == seams.parenKind && cond.children.length > 0
 			? cond.children[0]
 			: cond;
-		if (node.kind != seams.notEqKind || node.children.length < 2) return null;
-		final left: QueryNode = node.children[0];
-		final right: QueryNode = node.children[1];
-		if (left.kind == seams.nullLitKind) return receiverName(right, seams);
-		return right.kind == seams.nullLitKind ? receiverName(left, seams) : null;
+		final operand: Null<QueryNode> = node.kind == seams.notEqKind ? NodeShape.nullComparedSide(node, seams.nullLitKind) : null;
+		return operand == null ? null : receiverName(operand, seams);
 	}
 
 	/** `node` read as a narrowable subject: a bare identifier, or a `this.<name>` field read — both spelling one member. */

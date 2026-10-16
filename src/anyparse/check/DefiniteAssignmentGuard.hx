@@ -2,8 +2,8 @@ package anyparse.check;
 
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
+import anyparse.query.ShapeVocab;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -57,7 +57,7 @@ using Lambda;
  * already reads that way is not the fix's doing.
  *
  * Grammar-agnostic: every kind vocabulary comes from `RefShape` and `NullFlow`'s construct sets,
- * and the nested-function set from `RefactorSupport.nestedFunctionKinds`, the one authority. A
+ * and the nested-function set from `ShapeVocab.nestedFunctionKinds`, the one authority. A
  * grammar declaring none of them makes the guard inert.
  *
  * ## What it does NOT reach, by construction
@@ -131,8 +131,8 @@ final class DefiniteAssignmentGuard {
 			writeKinds: writeKinds,
 			continuationKinds: shape.localDeclContinuationKinds ?? [],
 			typeChildKinds: shape.declTypeChildKinds ?? [],
-			ifKinds: NullFlow.IF_KINDS,
-			nestedFnKinds: MemberKinds.nestedFunctionKinds(shape),
+			ifKinds: ShapeVocab.conditionalKinds(shape),
+			nestedFnKinds: ShapeVocab.nestedFunctionKinds(shape),
 			metaKinds: NullFlow.META_KINDS,
 			exitKinds: shape.controlExitKinds ?? []
 		};

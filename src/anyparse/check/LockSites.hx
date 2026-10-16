@@ -5,9 +5,9 @@ import anyparse.check.LockWindow.HeldWindow;
 import anyparse.query.CallGraph;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.query.ReachAdmission;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SourceText;
 import anyparse.runtime.Span;
 
@@ -209,7 +209,7 @@ final class LockSites {
 		final flow: Null<ControlFlowSupport> = plugin.controlFlowSupport();
 		_walker = flow == null ? null : new LockWindow(_shape, flow, switches);
 		_ctorName = _shape.constructorName ?? 'new';
-		_nestedFnKinds = MemberKinds.nestedFunctionKinds(_shape);
+		_nestedFnKinds = ShapeVocab.nestedFunctionKinds(_shape);
 		final takes: Array<LockCall> = [];
 		final gives: Array<LockCall> = [];
 		final pairIds: Array<String> = [];
