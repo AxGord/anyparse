@@ -11,6 +11,7 @@ import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.EditJournal;
 import anyparse.query.FactText;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -206,7 +207,7 @@ class FactsTypeOracleTest extends Test {
 		final source: String = 'class C {\n\tvar y = g();\n\n\tfunction f(x) {\n\t\treturn x;\n\t}\n}\n';
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: ExplicitType = new ExplicitType();
-		final violations: Array<Violation> = check.run([{ file: 'C.hx', source: source }], plugin);
+		final violations: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: source }], plugin);
 		Assert.equals(3, violations.length);
 		Assert.equals(0, check.fix(source, violations, plugin).length);
 		for (v in violations)

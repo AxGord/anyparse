@@ -8,6 +8,8 @@ import anyparse.check.Severity;
 import anyparse.check.ShortenTypeRef;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
+import anyparse.query.CanonicalEdit;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -629,7 +631,7 @@ class ShortenTypeRefCheckTest extends Test {
 		final check: ShortenTypeRef = new ShortenTypeRef();
 		// A bare plugin carries no resolution scope, so nothing PROVES which declaration
 		// `pkg.deep.Sub` names — the finding stands, the rewrite does not.
-		final vs: Array<Violation> = check.run([{ file: 'app/C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'app/C.hx', source: src }]);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.indexOf('report-only') != -1, 'degraded message, got: ${vs[0].message}');
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length, 'an unproven finding yields no edit');
@@ -677,7 +679,7 @@ class ShortenTypeRefCheckTest extends Test {
 			sources: () ->
 				{report: report, projectRoots: [], library: new LibrarySources([{ file: 'pkg/deep/Mod.hx', source: MOD_SOURCE }]) }
 		});
-		final vs: Array<Violation> = check.run(report, scoped);
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, report, scoped);
 		Assert.equals(2, vs.length);
 		Assert.equals(1, [for (v in vs) if (v.message.indexOf('report-only') == -1) v].length, 'exactly one proven half');
 		Assert.equals('\t\tfinal v:Map<Sub, pkg.deep.Foo> = g();', annotationLine(applyFixWith(src, scoped, report)));
@@ -774,9 +776,7 @@ class ShortenTypeRefCheckTest extends Test {
 	}
 
 	public function testSkipParseNoCrash(): Void {
-		Assert.equals(
-			0, new ShortenTypeRef().run([{ file: 'C.hx', source: 'class Bad { function f() { final v:' }], new HaxeQueryPlugin()).length
-		);
+		Assert.equals(0, CheckFixture.violations(new ShortenTypeRef(), 'class Bad { function f() { final v:').length);
 	}
 
 	/** A consumer in `package app;` carrying `imports` verbatim and one local annotated `annotation`. */
@@ -843,7 +843,7 @@ class ShortenTypeRefCheckTest extends Test {
 
 	private function enumViolations(src: String): Array<Violation> {
 		final report: Array<{ file: String, source: String }> = [{ file: 'module/Clean.hx', source: src }];
-		return new ShortenTypeRef().run(report, enumPlugin(report));
+		return CheckFixture.violationsIn(new ShortenTypeRef(), report, enumPlugin(report));
 	}
 
 	private function enumApplyFix(src: String): String {
@@ -853,7 +853,7 @@ class ShortenTypeRefCheckTest extends Test {
 
 	private function violations(src: String): Array<Violation> {
 		final report: Array<{ file: String, source: String }> = [{ file: 'app/C.hx', source: src }];
-		return new ShortenTypeRef().run(report, scopedPlugin(report));
+		return CheckFixture.violationsIn(new ShortenTypeRef(), report, scopedPlugin(report));
 	}
 
 	private function applyFix(src: String): String {
@@ -872,12 +872,12 @@ class ShortenTypeRefCheckTest extends Test {
 
 	/** `suppressedEdits` applied — the flat projection `Check.fix` owes `fixGrouped`. */
 	private function suppressedFix(src: String): String {
-		return CheckFixture.applyEdits(src, [for (e in suppressedEdits(src)) { span: e.span, text: e.text }]);
+		return CanonicalEdit.applyEdits(src, [for (e in suppressedEdits(src)) { span: e.span, text: e.text }]);
 	}
 
 	private function applyFixWith(src: String, plugin: CachingGrammarPlugin, report: Array<{ file: String, source: String }>): String {
 		final check: ShortenTypeRef = new ShortenTypeRef();
-		return CheckFixture.applyEdits(src, check.fix(src, check.run(report, plugin), plugin));
+		return CanonicalEdit.applyEdits(src, check.fix(src, CheckFixture.violationsIn(check, report, plugin), plugin));
 	}
 
 }

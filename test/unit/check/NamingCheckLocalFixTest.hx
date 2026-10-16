@@ -6,6 +6,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 
 /**
@@ -54,7 +55,7 @@ class NamingCheckLocalFixTest extends NamingCheckTestBase {
 		final src: String =
 			'class C {\n\tpublic function f() {\n\t\t// legacy MyLocal reference\n\t\tvar MyLocal = 1;\n\t\ttrace(MyLocal);\n\t}\n}';
 		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
 		assertCanonicalized(src, check.fix(src, vs, new HaxeQueryPlugin()), '// legacy myLocal reference', 'MyLocal');
 	}
@@ -65,7 +66,7 @@ class NamingCheckLocalFixTest extends NamingCheckTestBase {
 		final src: String =
 			'class C {\n\tpublic function f():String {\n\t\tvar MyLocal = 1;\n\t\ttrace(MyLocal);\n\t\treturn "MyLocal";\n\t}\n}';
 		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
 	}
@@ -76,7 +77,7 @@ class NamingCheckLocalFixTest extends NamingCheckTestBase {
 		final src: String =
 			'class C {\n\tpublic function f() {\n\t\t// noqa: naming keep MyLocal\n\t\tvar MyLocal = 1;\n\t\ttrace(MyLocal);\n\t}\n}';
 		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
 	}
@@ -109,7 +110,7 @@ class NamingCheckLocalFixTest extends NamingCheckTestBase {
 		];
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'pkg/C.hx');
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == 'pkg/C.hx');
 		Assert.isTrue(vs.length >= 1);
 		switch CanonicalEdit.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin(), index), true, new HaxeQueryPlugin()) {
 			case Ok(text):
@@ -232,7 +233,7 @@ class NamingCheckLocalFixTest extends NamingCheckTestBase {
 		final src: String =
 			'class C {\n\tpublic function f() {\n\t\tvar minGap = 1;\n\t\tvar min_gap = 2;\n\t\ttrace(minGap + min_gap);\n\t}\n}';
 		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.isTrue(vs.length >= 1);
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
 	}
@@ -246,7 +247,7 @@ class NamingCheckLocalFixTest extends NamingCheckTestBase {
 			+ '\t\tfor (__id in [1, 2, 3]) removeAt(__id);\n\t}\n\tfunction removeAt(x:Int):Void {}\n}';
 		final index: SymbolIndex = SymbolIndex.build([{ file: 'pkg/C.hx', source: src }], new HaxeQueryPlugin());
 		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run([{ file: 'pkg/C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'pkg/C.hx', source: src }]);
 		Assert.isTrue(vs.length >= 3);
 		switch CanonicalEdit.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin(), index), true, new HaxeQueryPlugin()) {
 			case Ok(text):
@@ -302,7 +303,7 @@ class NamingCheckLocalFixTest extends NamingCheckTestBase {
 		final src: String = 'package pkg;\nclass C {\n\tpublic function a(__x:Int):Int {\n\t\treturn __x;\n\t}\n'
 			+ '\tpublic function b(__x:Int):Int {\n\t\tvar x:Int = 5;\n\t\t// keep __x here\n\t\treturn __x + x;\n\t}\n}';
 		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		switch CanonicalEdit.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf('// keep __x here') >= 0);
@@ -535,7 +536,7 @@ class NamingCheckLocalFixTest extends NamingCheckTestBase {
 
 	private function assertFixCanonical(src: String, present: String, absent: String): Void {
 		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
 		assertCanonicalized(src, check.fix(src, vs, new HaxeQueryPlugin()), present, absent);
 	}
@@ -544,7 +545,7 @@ class NamingCheckLocalFixTest extends NamingCheckTestBase {
 	private function assertFixEditsDisjoint(files: Array<{ file: String, source: String }>, targetFile: String, targetSrc: String): Void {
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == targetFile);
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == targetFile);
 		Assert.isTrue(vs.length >= 2);
 		final edits: Array<{ span: Span, text: String }> = check.fix(targetSrc, vs, new HaxeQueryPlugin(), index);
 		for (i in 0...edits.length) for (j in i + 1...edits.length) {

@@ -7,6 +7,7 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -477,7 +478,9 @@ class PreferSafeNavCheckTest extends Test {
 	private function fixCanonical(source: String): String {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: PreferSafeNav = new PreferSafeNav();
-		final edits: Array<{ span: Span, text: String }> = check.fix(source, check.run([{ file: 'C.hx', source: source }], plugin), plugin);
+		final edits: Array<{ span: Span, text: String }> = check.fix(
+			source, CheckFixture.violationsIn(check, [{ file: 'C.hx', source: source }], plugin), plugin
+		);
 		switch CanonicalEdit.canonicalize(source, edits, true, plugin) {
 			case Ok(text):
 				return text;
@@ -496,7 +499,7 @@ class PreferSafeNavCheckTest extends Test {
 	}
 
 	private function violations(source: String): Array<Violation> {
-		return new PreferSafeNav().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferSafeNav(), source);
 	}
 
 	private function applyFix(source: String): String {

@@ -2,7 +2,7 @@ package unit.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.check.PreferFinalPublicField;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -131,7 +131,7 @@ class PreferFinalPublicFieldStructuralTest extends Test {
 	}
 
 	private function run(files: Array<{ file: String, source: String }>): Array<Violation> {
-		return new PreferFinalPublicField().run(files, new HaxeQueryPlugin());
+		return CheckFixture.violationsIn(new PreferFinalPublicField(), files);
 	}
 
 	/** Only the violations against the owner `C.hx` — a sibling fixture can carry findings of its own. */

@@ -11,6 +11,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
 import anyparse.runtime.Span;
 import haxe.Exception;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -413,12 +414,12 @@ class PreferIfExpressionReturnCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new PreferIfExpressionReturn().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferIfExpressionReturn(), src);
 	}
 
 	private function edits(src: String): Array<{ span: Span, text: String }> {
 		final check: PreferIfExpressionReturn = new PreferIfExpressionReturn();
-		return check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
+		return check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
 	}
 
 	/** Whether the rule CLAIMS the chain headed by the first `if` of `body` - the question the two deferring rules ask. */

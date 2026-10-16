@@ -5,6 +5,7 @@ import anyparse.check.Linter;
 import anyparse.check.RedundantUpcast;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -87,13 +88,13 @@ class RedundantUpcastTest extends Test {
 		// A non-flagged cast (unrelated types) yields no edits — fix only unwraps proven upcasts.
 		final src: String = 'class A {} class B {} class C { function f(a:A) { var b = cast(a, B); } }';
 		final check: RedundantUpcast = new RedundantUpcast();
-		Assert.equals(0, check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()).length);
+		Assert.equals(0, check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin()).length);
 	}
 
 	public function testSkipParseNoCrash(): Void {
 		Assert.equals(
 			0,
-			new RedundantUpcast().run([{ file: 'Bad.hx', source: 'class Bad { function f() { var b = cast(a, ' }], new HaxeQueryPlugin())
+			CheckFixture.violationsIn(new RedundantUpcast(), [{ file: 'Bad.hx', source: 'class Bad { function f() { var b = cast(a, ' }])
 				.length
 		);
 	}
@@ -109,7 +110,7 @@ class RedundantUpcastTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new RedundantUpcast().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new RedundantUpcast(), src);
 	}
 
 }

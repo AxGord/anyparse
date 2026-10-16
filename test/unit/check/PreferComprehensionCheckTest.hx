@@ -4,7 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.PreferComprehension;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -614,7 +614,7 @@ class PreferComprehensionCheckTest extends Test {
 	}
 
 	private function violations(source: String): Array<Violation> {
-		return new PreferComprehension().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferComprehension(), source);
 	}
 
 	private function applyFix(source: String): String {

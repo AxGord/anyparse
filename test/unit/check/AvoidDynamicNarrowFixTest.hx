@@ -4,6 +4,7 @@ import anyparse.check.AvoidDynamic;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.Violation;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CanonicalEdit;
 import unit.CheckFixture.FixRun;
 import utest.Assert;
 import utest.Test;
@@ -276,7 +277,7 @@ class AvoidDynamicNarrowFixTest extends Test {
 	}
 
 	private inline function apply(src: String, e: Array<FixEdit>): String {
-		return CheckFixture.applyEdits(src, e);
+		return CanonicalEdit.applyEdits(src, e);
 	}
 
 	// ---- helpers ----
@@ -294,7 +295,7 @@ class AvoidDynamicNarrowFixTest extends Test {
 	private function fixed(src: String): FixRun {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: AvoidDynamic = new AvoidDynamic();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin);
 		return { violations: vs, edits: check.fix(src, vs, plugin) };
 	}
 

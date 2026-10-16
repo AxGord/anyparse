@@ -5,7 +5,9 @@ import anyparse.check.ConstantCondition;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -152,7 +154,7 @@ class ConstantConditionCheckTest extends Test {
 		// the one edit actually produced, not the two violations reported.
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\tif (true) g();\n\t\tif (false) h();\n\t}\n}';
 		final check: ConstantCondition = new ConstantCondition();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(2, vs.length);
 		Assert.equals('condition is always true', vs[0].message);
 		Assert.equals('condition is always false (dead branch - verify intent before deleting)', vs[1].message);
@@ -172,18 +174,16 @@ class ConstantConditionCheckTest extends Test {
 	}
 
 	private inline function applyEdits(src: String, edits: Array<{ span: Span, text: String }>): String {
-		return CheckFixture.applyEdits(src, edits);
+		return CanonicalEdit.applyEdits(src, edits);
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new ConstantCondition().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new ConstantCondition(), src);
 	}
 
 	private function applyFix(src: String): String {
 		final check: ConstantCondition = new ConstantCondition();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
 		return applyEdits(src, edits);
 	}
 

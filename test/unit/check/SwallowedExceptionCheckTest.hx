@@ -5,6 +5,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.SwallowedException;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -85,7 +86,7 @@ class SwallowedExceptionCheckTest extends Test {
 		final src: String =
 			'class C {\n\tpublic function f():Void {\n\t\ttry { g(); } catch (e:Exception) {\n\t\t\ttrace("oops");\n\t\t}\n\t}\n}';
 		final check: SwallowedException = new SwallowedException();
-		Assert.equals(0, check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()).length);
+		Assert.equals(0, check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin()).length);
 	}
 
 	public function testRegisteredInBuiltins(): Void {
@@ -99,7 +100,7 @@ class SwallowedExceptionCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new SwallowedException().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new SwallowedException(), src);
 	}
 
 }

@@ -6,6 +6,7 @@ import anyparse.check.PreferRangeLoop;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -178,7 +179,7 @@ class PreferRangeLoopCheckTest extends Test {
 	}
 
 	private function violations(source: String): Array<Violation> {
-		return new PreferRangeLoop().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferRangeLoop(), source);
 	}
 
 	private function assertFixCanonical(src: String, present: String, absent: String): Void {
@@ -199,7 +200,7 @@ class PreferRangeLoopCheckTest extends Test {
 
 	private function runAndExpectOne(src: String): { check: PreferRangeLoop, vs: Array<Violation> } {
 		final check: PreferRangeLoop = new PreferRangeLoop();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
 		return { check: check, vs: vs };
 	}

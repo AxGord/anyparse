@@ -9,6 +9,7 @@ import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -110,7 +111,7 @@ class GuardReturnCheckTest extends Test {
 	public function testOrderedFloatOperandNotFlagged(): Void {
 		final source: String = 'class C {\n\tfunction f(a:Float):Bool {\n\t\tif (a > 0) {\n\t\t\tlog(a);\n\t\t\treturn true;\n\t\t}\n'
 			+ '\t\treturn false;\n\t}\n}\n';
-		Assert.equals(0, new GuardReturn().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violations(new GuardReturn(), source).length);
 	}
 
 	public function testOrderedFloatLiteralOperandNotFlagged(): Void {
@@ -127,7 +128,7 @@ class GuardReturnCheckTest extends Test {
 		// only one in the file that asks the resolver to prove BOTH operands from declarations.
 		final source: String = 'class C {\n\tfunction f(s:String, k:String):Bool {\n\t\tif (s < k) {\n\t\t\tlog(s);\n\t\t\treturn true;\n'
 			+ '\t\t}\n\t\treturn false;\n\t}\n}\n';
-		Assert.equals(0, new GuardReturn().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violations(new GuardReturn(), source).length);
 	}
 
 	public function testOrderedFlippedThroughMemberPath(): Void {
@@ -391,9 +392,7 @@ class GuardReturnCheckTest extends Test {
 	}
 
 	public function testSkipParseNoCrash(): Void {
-		Assert.equals(
-			0, new GuardReturn().run([{ file: 'C.hx', source: 'class Bad { function f() { if (a) { g();' }], new HaxeQueryPlugin()).length
-		);
+		Assert.equals(0, CheckFixture.violations(new GuardReturn(), 'class Bad { function f() { if (a) { g();').length);
 	}
 
 	public function testRegisteredInBuiltins(): Void {
@@ -655,7 +654,7 @@ class GuardReturnCheckTest extends Test {
 
 	/** The check's violations for a whole `source`, no wrapper. */
 	private function vSource(source: String): Array<Violation> {
-		return new GuardReturn().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new GuardReturn(), source);
 	}
 
 	/** `v` through `wrapVoid` — a body whose enclosing function returns nothing. */
@@ -665,7 +664,7 @@ class GuardReturnCheckTest extends Test {
 
 	private function edits(source: String): Array<{ span: Span, text: String }> {
 		final check: GuardReturn = new GuardReturn();
-		return check.fix(source, check.run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
+		return check.fix(source, CheckFixture.violations(check, source), new HaxeQueryPlugin());
 	}
 
 	/** Canonicalise the body then invert to a fixpoint, exactly as the `lint --fix` CLI does. */
@@ -700,7 +699,7 @@ class GuardReturnCheckTest extends Test {
 			declared: true,
 			sources: () -> {report: report, projectRoots: [], library: new LibrarySources([{ file: 'Res.hx', source: model }]) }
 		});
-		return new GuardReturn().run(report, scoped);
+		return CheckFixture.violationsIn(new GuardReturn(), report, scoped);
 	}
 
 	/**
@@ -722,7 +721,9 @@ class GuardReturnCheckTest extends Test {
 	private function applyFixOnce(source: String): String {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: GuardReturn = new GuardReturn();
-		final es: Array<{ span: Span, text: String }> = check.fix(source, check.run([{ file: 'C.hx', source: source }], plugin), plugin);
+		final es: Array<{ span: Span, text: String }> = check.fix(
+			source, CheckFixture.violationsIn(check, [{ file: 'C.hx', source: source }], plugin), plugin
+		);
 		return es.length == 0
 			? source
 			: switch CanonicalEdit.canonicalize(source, es, false, plugin) {

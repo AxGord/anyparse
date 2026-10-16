@@ -8,6 +8,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -144,14 +145,14 @@ class ImportOutsideGuardCheckTest extends Test {
 
 	/** The check's findings for `src`. */
 	private function violations(src: String): Array<Violation> {
-		return new ImportOutsideGuard().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new ImportOutsideGuard(), src);
 	}
 
 	/** The check's autofix edits for `src`'s own findings. */
 	private function edits(src: String): Array<{ span: Span, text: String }> {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: ImportOutsideGuard = new ImportOutsideGuard();
-		return check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
+		return check.fix(src, CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin), plugin);
 	}
 
 	/** `src` with the edits spliced in VERBATIM — the relocation alone, before any writer pass. */
@@ -175,7 +176,9 @@ class ImportOutsideGuardCheckTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: ImportOutsideGuard = new ImportOutsideGuard();
 		final files: Array<{ file: String, source: String }> = libs.concat([{ file: 'C.hx', source: src }]);
-		return check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin, SymbolIndex.build(files, plugin));
+		return check.fix(
+			src, CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin), plugin, SymbolIndex.build(files, plugin)
+		);
 	}
 
 }

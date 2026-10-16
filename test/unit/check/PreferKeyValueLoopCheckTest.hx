@@ -9,6 +9,7 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
+import unit.CheckFixture;
 import unit.QueryTestHelpers;
 import utest.Assert;
 import utest.Test;
@@ -250,7 +251,7 @@ class PreferKeyValueLoopCheckTest extends Test {
 	}
 
 	public function testNoOpenerShapeIsNotAValueLoop(): Void {
-		Assert.equals(0, new PreferValueLoop().run([{ file: 'C.hx', source: fieldSource() }], new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violations(new PreferValueLoop(), fieldSource()).length);
 	}
 
 	@:pin('control') @:killer('M-KV-NOOPENER-INDEX-ONLY')
@@ -258,7 +259,7 @@ class PreferKeyValueLoopCheckTest extends Test {
 		// Every read of `i` is an `items[i]`: prefer-value-loop's loop, so this rule stays silent on it.
 		final src: String = wrapSink('for (i in 0...items.length) {\n\t\t\tsink.use(items[i]);\n\t\t\tsink.use(items[i]);\n\t\t}');
 		Assert.equals(0, violations(src).length);
-		Assert.equals(1, new PreferValueLoop().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()).length);
+		Assert.equals(1, CheckFixture.violations(new PreferValueLoop(), src).length);
 	}
 
 	@:pin('control') @:killer('M-KV-NOOPENER-OPENER-CLAIM')
@@ -447,7 +448,7 @@ class PreferKeyValueLoopCheckTest extends Test {
 		final src: String = withVals('for (i in 0...keys.length) for (j in 0...keys.length) sink.use(i, keys[i], keys[j]);');
 		Assert.same([nestedDecline('key')], declines(src));
 		final value: PreferValueLoop = new PreferValueLoop();
-		final vs: Array<Violation> = value.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(value, src);
 		Assert.equals(1, vs.length);
 		Assert.equals(0, value.fix(src, vs, project(src)).length);
 		Assert.equals(nestedDecline('key'), vs[0].declineReason);
@@ -521,7 +522,7 @@ class PreferKeyValueLoopCheckTest extends Test {
 	}
 
 	private function violations(source: String): Array<Violation> {
-		return new PreferKeyValueLoop().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferKeyValueLoop(), source);
 	}
 
 	private function assertFixCanonical(src: String, present: String, absent: String): Void {
@@ -542,7 +543,7 @@ class PreferKeyValueLoopCheckTest extends Test {
 
 	private function runAndExpectOne(src: String): CheckRun {
 		final check: PreferKeyValueLoop = new PreferKeyValueLoop();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
 		return { check: check, vs: vs };
 	}
@@ -596,7 +597,7 @@ class PreferKeyValueLoopCheckTest extends Test {
 	/** The `declineReason` of every finding of `src`, in order, asserting the fix withheld every edit. */
 	private function declines(src: String): Array<Null<String>> {
 		final check: PreferKeyValueLoop = new PreferKeyValueLoop();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(0, check.fix(src, vs, project(src)).length);
 		return [for (v in vs) v.declineReason];
 	}
@@ -610,7 +611,7 @@ class PreferKeyValueLoopCheckTest extends Test {
 	/** The canonical text after this rule's fix over every finding of `src`. */
 	private function fixedAll(src: String): String {
 		final check: PreferKeyValueLoop = new PreferKeyValueLoop();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		return switch CanonicalEdit.canonicalize(src, check.fix(src, vs, project(src)), true, new HaxeQueryPlugin()) {
 			case Ok(text): text;
 			case Err(message): 'fix canonicalize Err: $message';

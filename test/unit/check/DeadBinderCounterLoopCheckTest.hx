@@ -7,6 +7,7 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -55,8 +56,8 @@ class DeadBinderCounterLoopCheckTest extends Test {
 		for (header in headers)
 			Assert.equals(
 				0,
-				new DeadBinderCounterLoop().run(
-					[{ file: 'C.hx', source: header + body }, { file: 'p/List.hx', source: list }],
+				CheckFixture.violationsIn(
+					new DeadBinderCounterLoop(), [{ file: 'C.hx', source: header + body }, { file: 'p/List.hx', source: list }],
 					StdScope.plugin([{ file: 'C.hx', source: header + body }, { file: 'p/List.hx', source: list }])
 				)
 					.length,
@@ -285,7 +286,7 @@ class DeadBinderCounterLoopCheckTest extends Test {
 	}
 
 	private function violations(source: String): Array<Violation> {
-		return new DeadBinderCounterLoop().run([{ file: 'C.hx', source: source }], stdPlugin(source));
+		return CheckFixture.violationsIn(new DeadBinderCounterLoop(), [{ file: 'C.hx', source: source }], stdPlugin(source));
 	}
 
 	private function countOccurrences(text: String, needle: String): Int {
@@ -316,7 +317,7 @@ class DeadBinderCounterLoopCheckTest extends Test {
 
 	private function runAndExpectOne(src: String): { check: DeadBinderCounterLoop, vs: Array<Violation> } {
 		final check: DeadBinderCounterLoop = new DeadBinderCounterLoop();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], stdPlugin(src));
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], stdPlugin(src));
 		Assert.equals(1, vs.length);
 		return { check: check, vs: vs };
 	}

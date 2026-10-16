@@ -200,7 +200,7 @@ class UnnecessaryNullCheckCheckTest extends Test {
 	public function testSkipParseNoCrash(): Void {
 		Assert.equals(
 			0,
-			new UnnecessaryNullCheck().run([{ file: 'Bad.hx', source: 'class Bad { function f() { if (x != ' }], new HaxeQueryPlugin())
+			CheckFixture.violationsIn(new UnnecessaryNullCheck(), [{ file: 'Bad.hx', source: 'class Bad { function f() { if (x != ' }])
 				.length
 		);
 	}
@@ -263,7 +263,7 @@ class UnnecessaryNullCheckCheckTest extends Test {
 	/** Run + fix + canonicalise (whole-file reformat) `src`, returning the emitted text. */
 	private function fixText(src: String): String {
 		final check: UnnecessaryNullCheck = new UnnecessaryNullCheck();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		return switch CanonicalEdit.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
 			case Ok(text): text;
 			case Err(message):
@@ -282,13 +282,13 @@ class UnnecessaryNullCheckCheckTest extends Test {
 	/** `src` is flagged by `run` but produces no fix edit — a conservative refusal. */
 	private function assertFixRefused(src: String): Void {
 		final check: UnnecessaryNullCheck = new UnnecessaryNullCheck();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.isTrue(vs.length > 0, 'expected a finding to exist');
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new UnnecessaryNullCheck().run(CheckFixture.withStd(src), new HaxeQueryPlugin());
+		return CheckFixture.violationsIn(new UnnecessaryNullCheck(), CheckFixture.withStd(src));
 	}
 
 	@:pin('control')

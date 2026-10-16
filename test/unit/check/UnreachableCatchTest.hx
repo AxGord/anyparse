@@ -6,6 +6,7 @@ import anyparse.check.Severity;
 import anyparse.check.UnreachableCatch;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -107,7 +108,7 @@ class UnreachableCatchTest extends Test {
 		// Unrelated clauses — nothing to fix.
 		final check: UnreachableCatch = new UnreachableCatch();
 		final src: String = 'class A2 {} class B2 {} class C { function f() { try { g(); } catch (e:A2) {} catch (e:B2) {} } }';
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
 	}
 
@@ -121,8 +122,8 @@ class UnreachableCatchTest extends Test {
 	public function testSkipParseNoCrash(): Void {
 		Assert.equals(
 			0,
-			new UnreachableCatch().run(
-				[{ file: 'Bad.hx', source: 'class Bad { function f() { try { g(); } catch (e: ' }], new HaxeQueryPlugin()
+			CheckFixture.violationsIn(
+				new UnreachableCatch(), [{ file: 'Bad.hx', source: 'class Bad { function f() { try { g(); } catch (e: ' }]
 			)
 				.length
 		);
@@ -150,7 +151,7 @@ class UnreachableCatchTest extends Test {
 
 	private function assertFix(src: String, present: String, absent: String): Void {
 		final check: UnreachableCatch = new UnreachableCatch();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		switch CanonicalEdit.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf(present) >= 0);
@@ -161,7 +162,7 @@ class UnreachableCatchTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new UnreachableCatch().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new UnreachableCatch(), src);
 	}
 
 }

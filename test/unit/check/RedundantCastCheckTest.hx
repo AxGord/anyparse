@@ -6,6 +6,7 @@ import anyparse.check.RedundantCast;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -60,7 +61,7 @@ class RedundantCastCheckTest extends Test {
 
 	public function testSkipParseNoCrash(): Void {
 		Assert.equals(
-			0, new RedundantCast().run([{ file: 'Bad.hx', source: 'class Bad { function f() { cast(' }], new HaxeQueryPlugin()).length
+			0, CheckFixture.violationsIn(new RedundantCast(), [{ file: 'Bad.hx', source: 'class Bad { function f() { cast(' }]).length
 		);
 	}
 
@@ -141,12 +142,12 @@ class RedundantCastCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new RedundantCast().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new RedundantCast(), src);
 	}
 
 	private function applyFix(src: String): String {
 		final check: RedundantCast = new RedundantCast();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
 		edits.sort((a, b) -> b.span.from - a.span.from);
 		var result: String = src;

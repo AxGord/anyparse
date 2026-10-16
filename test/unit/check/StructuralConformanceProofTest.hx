@@ -1,7 +1,7 @@
 package unit.check;
 
 import anyparse.check.PreferFinalPublicField;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -206,7 +206,7 @@ class StructuralConformanceProofTest extends Test {
 
 	/** How many findings the rule reports against the owner file `C.hx`. */
 	private function owner(files: Array<SourceFile>): Int {
-		return new PreferFinalPublicField().run(files, new HaxeQueryPlugin()).count(v -> v.file == 'C.hx');
+		return CheckFixture.violationsIn(new PreferFinalPublicField(), files).count(v -> v.file == 'C.hx');
 	}
 
 }

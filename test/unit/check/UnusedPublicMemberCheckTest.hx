@@ -6,6 +6,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.UnusedPublicMember;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -278,7 +279,7 @@ import utest.Test;
 		Assert.notNull(check);
 		if (probe == null || check == null) return;
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final vs: Array<Violation> = probe.run([{ file: 'C.hx', source: src }], plugin);
+		final vs: Array<Violation> = CheckFixture.violationsIn(probe, [{ file: 'C.hx', source: src }], plugin);
 		Assert.equals(1, vs.length);
 		Assert.equals(0, check.fix(src, vs, plugin).length);
 	}
@@ -471,7 +472,7 @@ import utest.Test;
 
 	private function violationsOf(files: Array<{ file: String, source: String }>): Array<Violation> {
 		final check: Null<Check> = Linter.byId(RULE);
-		return check == null ? [] : check.run(files, new HaxeQueryPlugin());
+		return check == null ? [] : CheckFixture.violationsIn(check, files);
 	}
 
 	/** The number of edits `fix` yields for `owner` after `run` over `files` — the deletion gate's verdict. */
@@ -480,7 +481,7 @@ import utest.Test;
 		Assert.notNull(check);
 		if (check == null) return -1;
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		return check.fix(owner, check.run(files, plugin), plugin).length;
+		return check.fix(owner, CheckFixture.violationsIn(check, files, plugin), plugin).length;
 	}
 
 	private function applyFix(src: String): String {

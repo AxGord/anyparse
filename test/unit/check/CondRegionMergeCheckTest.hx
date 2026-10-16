@@ -6,6 +6,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -139,7 +140,7 @@ class CondRegionMergeCheckTest extends Test {
 	public function testFixEditsOnlyTheGivenSubset(): Void {
 		final src: String = '#if a\nx();\n#end\n\n#if a\ny();\n#end\n\nfoo();\n\n#if b\np();\n#end\n\n#if b\nq();\n#end\n';
 		final check: CondRegionMerge = new CondRegionMerge();
-		final all: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final all: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(2, all.length);
 		final edited: String = CanonicalEdit.applyEdits(src, check.fix(src, [all[1]], new HaxeQueryPlugin()));
 		Assert.equals('#if a\nx();\n#end\n\n#if a\ny();\n#end\n\nfoo();\n\n#if b\np();\n\nq();\n#end\n', edited);
@@ -165,14 +166,12 @@ class CondRegionMergeCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new CondRegionMerge().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new CondRegionMerge(), src);
 	}
 
 	private function applyFix(src: String): String {
 		final check: CondRegionMerge = new CondRegionMerge();
-		return CanonicalEdit.applyEdits(
-			src, check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin())
-		);
+		return CanonicalEdit.applyEdits(src, check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin()));
 	}
 
 }

@@ -9,6 +9,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import haxe.Json;
 import sys.FileSystem;
 import sys.io.File;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -148,7 +149,7 @@ class MagicNumberCheckTest extends Test {
 		final path: String = '$dir/Foo.hx';
 		final src: String = 'class Foo {\n\tfunction f(k:Int):Int { return 5000 * k; }\n}';
 		File.saveContent(path, src);
-		Assert.equals(0, new MagicNumber().run([{ file: path, source: src }], new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(new MagicNumber(), [{ file: path, source: src }]).length);
 		FileSystem.deleteFile(path);
 		FileSystem.deleteFile('$dir/apqlint.json');
 		FileSystem.deleteDirectory(dir);
@@ -157,7 +158,7 @@ class MagicNumberCheckTest extends Test {
 	public function testFixReturnsEmpty(): Void {
 		final src: String = 'class C {\n\tfunction f(n:Int):Bool { return n > 5000; }\n}';
 		final check: MagicNumber = new MagicNumber();
-		Assert.equals(0, check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()).length);
+		Assert.equals(0, check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin()).length);
 	}
 
 	public function testSkipParseNoCrash(): Void {
@@ -210,7 +211,7 @@ class MagicNumberCheckTest extends Test {
 		final path: String = '$dir/Foo.hx';
 		final src: String = 'class Foo {\n\tfunction f(k:Int):Int { return 5000 * k; }\n}';
 		File.saveContent(path, src);
-		Assert.equals(0, new MagicNumber().run([{ file: path, source: src }], new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(new MagicNumber(), [{ file: path, source: src }]).length);
 		FileSystem.deleteFile(path);
 		FileSystem.deleteFile('$dir/checkstyle.json');
 		FileSystem.deleteDirectory(dir);
@@ -268,7 +269,7 @@ class MagicNumberCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new MagicNumber().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new MagicNumber(), src);
 	}
 
 	/** The findings on `src` under a config whose `ignoreCallArguments` lists `calls`. */
@@ -276,7 +277,7 @@ class MagicNumberCheckTest extends Test {
 		final check: MagicNumber = new MagicNumber();
 		final config: LintConfig = LintConfig.parse('{"rules":{"magic-number":{"ignoreCallArguments":${Json.stringify(calls)}}}}');
 		check.setConfigResolver(_ -> config);
-		return check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(check, src);
 	}
 
 }

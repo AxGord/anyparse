@@ -10,6 +10,7 @@ import anyparse.query.Refs;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -42,7 +43,7 @@ class TypeResolverSliceTest extends Test {
 		final src: String = wrap('c: Ctx', 'final dead = c.f;');
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: UnusedLocal = new UnusedLocal();
-		final violations: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
+		final violations: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin);
 		Assert.equals(0, check.fix(src, violations, plugin).length, 'no symbol index → conservative status quo');
 	}
 
@@ -365,7 +366,7 @@ class TypeResolverSliceTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
 		final check: UnusedLocal = new UnusedLocal();
-		final violations: Array<Violation> = check.run(files, plugin);
+		final violations: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
 		return check.fix(src, violations, plugin, index);
 	}

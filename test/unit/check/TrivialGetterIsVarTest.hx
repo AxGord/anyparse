@@ -4,6 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.TrivialGetter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.SymbolIndex;
+import unit.CheckFixture;
 import utest.Assert;
 
 /**
@@ -129,8 +130,8 @@ class TrivialGetterIsVarTest extends TrivialGetterCheckTestBase {
 		final base: String = 'class C {\n\t@:isVar public var angle(get, set):Float;\n\tfunction get_angle():Float return angle;\n'
 			+ '\tfunction set_angle(v:Float):Float { redraw(); return angle = v; }\n}';
 		final sub: String = 'class D extends C {\n\toverride function get_angle():Float return 0;\n}';
-		final vs: Array<Violation> = new TrivialGetter().run(
-			[{ file: 'C.hx', source: base }, { file: 'D.hx', source: sub }], new HaxeQueryPlugin()
+		final vs: Array<Violation> = CheckFixture.violationsIn(
+			new TrivialGetter(), [{ file: 'C.hx', source: base }, { file: 'D.hx', source: sub }]
 		);
 		Assert.equals(0, vs.length);
 	}

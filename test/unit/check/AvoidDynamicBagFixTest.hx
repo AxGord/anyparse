@@ -5,7 +5,9 @@ import anyparse.check.Check.TypeOracle;
 import anyparse.check.Check.Violation;
 import anyparse.check.PositionTypeOracle;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -139,7 +141,7 @@ class AvoidDynamicBagFixTest extends Test {
 	}
 
 	private inline function apply(src: String, e: Array<{ span: Span, text: String }>): String {
-		return CheckFixture.applyEdits(src, e);
+		return CanonicalEdit.applyEdits(src, e);
 	}
 
 	// ---- helpers ----
@@ -151,7 +153,7 @@ class AvoidDynamicBagFixTest extends Test {
 	private function edits(src: String, oracle: TypeOracle): Array<{ span: Span, text: String }> {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: AvoidDynamic = new AvoidDynamic();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin);
 		return check.fixWithOracle(src, vs, plugin, oracle);
 	}
 

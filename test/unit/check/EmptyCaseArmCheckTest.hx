@@ -8,6 +8,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -243,7 +244,7 @@ class EmptyCaseArmCheckTest extends Test {
 		final files: Array<{ file: String, source: String }> = [owner, user];
 		final check: EmptyCaseArm = new EmptyCaseArm();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final found: Array<Violation> = check.run(files, plugin);
+		final found: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 		Assert.equals(1, found.length);
 		Assert.equals(0, check.fix(user.source, found, plugin).length);
 		Assert.equals(1, check.fix(user.source, found, plugin, SymbolIndex.build(files, plugin)).length);
@@ -276,14 +277,14 @@ class EmptyCaseArmCheckTest extends Test {
 
 
 	private function violations(src: String): Array<Violation> {
-		return new EmptyCaseArm().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new EmptyCaseArm(), src);
 	}
 
 	/** `fix` with NO index — the single-file fallback a direct caller gets. */
 	private function fixEdits(src: String): Array<{ span: Span, text: String }> {
 		final check: EmptyCaseArm = new EmptyCaseArm();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		return check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
+		return check.fix(src, CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin), plugin);
 	}
 
 

@@ -6,6 +6,7 @@ import anyparse.check.Severity;
 import anyparse.check.SimplifyBooleanReturnChain;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -77,7 +78,7 @@ class SimplifyBooleanReturnChainCheckTest extends Test {
 	public function testSkipParseNoCrash(): Void {
 		Assert.equals(
 			0,
-			new SimplifyBooleanReturnChain().run([{ file: 'Bad.hx', source: 'class Bad { function f() { ' }], new HaxeQueryPlugin()).length
+			CheckFixture.violationsIn(new SimplifyBooleanReturnChain(), [{ file: 'Bad.hx', source: 'class Bad { function f() { ' }]).length
 		);
 	}
 
@@ -165,7 +166,7 @@ class SimplifyBooleanReturnChainCheckTest extends Test {
 	private function violations(body: String): Array<Violation> {
 		final src: String =
 			'class C { static function f(a: Bool, b: Bool, c: Bool, x: Int, s: String, t: String, y: Float): Dynamic ${body} }';
-		return new SimplifyBooleanReturnChain().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new SimplifyBooleanReturnChain(), src);
 	}
 
 	/** The rewrite text the fix emits for the first chain in `body` (empty if none). */
@@ -173,9 +174,7 @@ class SimplifyBooleanReturnChainCheckTest extends Test {
 		final src: String =
 			'class C { static function f(a: Bool, b: Bool, c: Bool, x: Int, s: String, t: String, y: Float): Dynamic ${body} }';
 		final check: SimplifyBooleanReturnChain = new SimplifyBooleanReturnChain();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
 		return edits.length > 0 ? edits[0].text : '';
 	}
 

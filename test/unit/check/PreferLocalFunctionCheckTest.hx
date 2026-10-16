@@ -7,6 +7,7 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -415,13 +416,13 @@ class PreferLocalFunctionCheckTest extends Test {
 	// ---- helpers ----
 
 	private function violations(src: String): Array<Violation> {
-		return new PreferLocalFunction().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferLocalFunction(), src);
 	}
 
 	private function edits(src: String): Array<{ span: Span, text: String }> {
 		final check: PreferLocalFunction = new PreferLocalFunction();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		return check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
+		return check.fix(src, CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin), plugin);
 	}
 
 	private function fixed(src: String): String {

@@ -5,6 +5,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.UncheckedNullable;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -90,7 +91,7 @@ class UncheckedNullableTest extends Test {
 	public function testFixReturnsEmpty(): Void {
 		final src: String = 'class C { function f(s:String) { var a = Std.parseInt(s) + 1; } }';
 		final check: UncheckedNullable = new UncheckedNullable();
-		Assert.equals(0, check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()).length);
+		Assert.equals(0, check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin()).length);
 	}
 
 	public function testRegisteredInBuiltins(): Void {
@@ -104,7 +105,7 @@ class UncheckedNullableTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new UncheckedNullable().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new UncheckedNullable(), src);
 	}
 
 }

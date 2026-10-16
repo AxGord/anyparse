@@ -4,6 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.PreferComprehension;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -36,7 +37,7 @@ class PreferComprehensionFinalTest extends Test {
 			+ '\t\tvar cmd: Array<String> = [];\n\t\tfor (x in xs) cmd.push(x);\n$tail\n\t}\n}\n';
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: PreferComprehension = new PreferComprehension();
-		final violations: Array<Violation> = check.run([{ file: 'C.hx', source: source }], plugin);
+		final violations: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: source }], plugin);
 		Assert.equals(1, violations.length, tail);
 		final edits: Array<{ span: Span, text: String }> = check.fix(source, violations, plugin);
 		Assert.isTrue(edits.length > 0, tail);

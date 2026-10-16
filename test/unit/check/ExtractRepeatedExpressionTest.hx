@@ -5,6 +5,7 @@ import anyparse.check.ExtractRepeatedExpression;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -112,7 +113,7 @@ class ExtractRepeatedExpressionTest extends Test {
 	public function testFixYieldsNoEdits(): Void {
 		final src: String = 'class C { function m() { k(a.b.c); k(a.b.c); k(a.b.c); } }';
 		final check: ExtractRepeatedExpression = new ExtractRepeatedExpression();
-		Assert.equals(0, check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()).length);
+		Assert.equals(0, check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin()).length);
 	}
 
 	public function testRegisteredInBuiltins(): Void {
@@ -141,12 +142,10 @@ class ExtractRepeatedExpressionTest extends Test {
 		// expression going from three occurrences to four is the same standing advisory about
 		// the same body, so the tally leaves the blast-radius key.
 		final check: ExtractRepeatedExpression = new ExtractRepeatedExpression();
-		final three: String = check.run([
-			{ file: 'C.hx', source: 'class C { function m() { k(a.b.c); k(a.b.c); k(a.b.c); } }' }
-		], new HaxeQueryPlugin())[0].message;
-		final four: String = check.run([
-			{ file: 'C.hx', source: 'class C { function m() { k(a.b.c); k(a.b.c); k(a.b.c); k(a.b.c); } }' }
-		], new HaxeQueryPlugin())[0].message;
+		final three: String = CheckFixture.violations(check, 'class C { function m() { k(a.b.c); k(a.b.c); k(a.b.c); } }')[0].message;
+		final four: String = CheckFixture.violations(
+			check, 'class C { function m() { k(a.b.c); k(a.b.c); k(a.b.c); k(a.b.c); } }'
+		)[0].message;
 		Assert.notEquals(three, four);
 		final identity: String = check.messageIdentity(three);
 		Assert.isTrue(identity.indexOf('repeated # times in one function body') != -1);
@@ -179,7 +178,7 @@ class ExtractRepeatedExpressionTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new ExtractRepeatedExpression().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new ExtractRepeatedExpression(), src);
 	}
 
 }

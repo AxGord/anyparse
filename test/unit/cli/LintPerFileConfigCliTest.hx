@@ -6,8 +6,8 @@ import sys.io.File;
 import anyparse.check.Check.Violation;
 import anyparse.check.Complexity;
 import anyparse.check.LintConfig;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -216,7 +216,7 @@ class LintPerFileConfigCliTest extends Test {
 		// still discover the on-disk apqlint.json by walking up from the file path — the
 		// fallback that keeps checks usable outside the CLI.
 		final dir: String = dirWith('Foo.hx', SCORE_TWO, '{"rules":{"complexity":{"max":1}}}');
-		final vs: Array<Violation> = new Complexity().run([{ file: '$dir/Foo.hx', source: SCORE_TWO }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new Complexity(), [{ file: '$dir/Foo.hx', source: SCORE_TWO }]);
 		Assert.equals(1, vs.length, 'direct run discovers the on-disk max:1 and flags the score-2 function');
 		Assert.equals('complexity', vs[0].rule);
 		CliFixture.removeDir(dir);

@@ -8,6 +8,7 @@ import anyparse.check.TailMerge;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -482,12 +483,12 @@ class TailMergeCheckTest extends Test {
 	}
 
 	private static function violations(src: String): Array<Violation> {
-		return new TailMerge().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new TailMerge(), src);
 	}
 
 	private static function edits(src: String): Array<{ span: Span, text: String }> {
 		final check: TailMerge = new TailMerge();
-		return check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
+		return check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
 	}
 
 }

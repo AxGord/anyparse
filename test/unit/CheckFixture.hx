@@ -1,9 +1,20 @@
 package unit;
 
 import anyparse.check.Check;
+import anyparse.check.LintConfig;
+import anyparse.check.Linter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CachingGrammarPlugin;
+import anyparse.query.CachingGrammarPlugin.ResolutionScope;
+import anyparse.query.CanonicalEdit;
+import anyparse.query.GrammarPlugin;
+import anyparse.query.IndexScope;
+import anyparse.query.SymbolIndex;
+import anyparse.query.cli.command.LintCommand;
 import anyparse.runtime.Span;
 import utest.Assert;
+
+using Lambda;
 
 /**
  * Shared in-memory harness for the analysis-check test suites.
@@ -27,15 +38,96 @@ final class CheckFixture {
 	private static inline final QUOTATION_END: String = '};';
 
 	/**
-	 * `source` with `edits` spliced in, applied last-first so an earlier edit's
-	 * span is still valid when it is applied. The input array is not reordered.
+	 * The run host every production lint goes through: a `CachingGrammarPlugin` (the `SymbolIndexHost`) over the
+	 * Haxe plugin, carrying `resolution` when given and no resolution scope otherwise. A test that needs the plugin
+	 * itself — to build an index beside the run, to read a tree — asks for this one and passes it on.
 	 */
-	public static function applyEdits(source: String, edits: Array<FixEdit>): String {
-		final sorted: Array<{ span: Span, text: String }> = edits.copy();
-		sorted.sort((a, b) -> b.span.from - a.span.from);
-		var out: String = source;
-		for (e in sorted) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
-		return out;
+	public static function host(?resolution: ResolutionScope): CachingGrammarPlugin {
+		return LintCommand.wrapResolution(new HaxeQueryPlugin(), resolution);
+	}
+
+	/**
+	 * `check`'s findings over `source` as `C.hx`, read the way production reads them: through `Linter.collect`
+	 * (the reification and suppression gates) on a run host. `plugin` defaults to a fresh `host()`; a plugin
+	 * that is not already a host is wrapped in one, as `Linter.run` does.
+	 */
+	public static function violations(check: Check, source: String, ?plugin: GrammarPlugin): Array<Violation> {
+		return violationsIn(check, [{ file: 'C.hx', source: source }], plugin);
+	}
+
+	/**
+	 * `violations` over a whole file set. `resolveConfig`, when given, is the per-file config the run reads, as
+	 * `Linter.run` hands it: set on a `ConfigAware` check AND passed to `collect`, whose `FileGated` and
+	 * `languageVersion` gates read the same answer. Enablement is not applied — the test selected the check, as
+	 * `--rule` does.
+	 */
+	public static function violationsIn(
+		check: Check, files: Array<{ file: String, source: String }>, ?plugin: GrammarPlugin, ?resolveConfig: (String) -> LintConfig
+	): Array<Violation> {
+		if (resolveConfig != null && check is ConfigAware) (cast check: ConfigAware).setConfigResolver(resolveConfig);
+		return Linter.collect(files, hosted(plugin), [check], resolveConfig, false);
+	}
+
+	/**
+	 * One `run` + `fix` pass the way `lint --fix` makes it: the findings `violationsIn` reads over `files`, and
+	 * `check.fix` over the findings in `file` (default: the first file) with the same host and the REPORT index
+	 * of `files` — the index `LintFixDriver` hands every fix.
+	 */
+	public static function fixRun(
+		check: Check, files: Array<{ file: String, source: String }>, ?file: String, ?plugin: GrammarPlugin,
+		?resolveConfig: (String) -> LintConfig
+	): FixRun {
+		final run: GrammarPlugin = hosted(plugin);
+		final target: String = file ?? files[0].file;
+		final source: Null<String> = files.find(f -> f.file == target)?.source;
+		if (source == null) throw 'fixRun: "$target" is not in the file set';
+		final found: Array<Violation> = violationsIn(check, files, run, resolveConfig).filter(v -> v.file == target);
+		return { violations: found, edits: check.fix(source, found, run, IndexScope.report(files, run)) };
+	}
+
+	/**
+	 * `check.fix` over `found` — findings already read for `source` as `C.hx` — handed a run host and the
+	 * report index of that one file, the way `LintFixDriver` hands them. For a test that reads the findings
+	 * first and picks which of them to fix.
+	 */
+	public static function fixOf(check: Check, source: String, found: Array<Violation>, ?plugin: GrammarPlugin): Array<FixEdit> {
+		final run: GrammarPlugin = hosted(plugin);
+		return check.fix(source, found, run, IndexScope.report([{ file: 'C.hx', source: source }], run));
+	}
+
+	/** `fixRun`'s edits for `source` as `C.hx`. */
+	public static function edits(check: Check, source: String, ?plugin: GrammarPlugin): Array<FixEdit> {
+		return fixRun(check, [{ file: 'C.hx', source: source }], plugin).edits;
+	}
+
+	/**
+	 * `source` after `check`'s fix, the edits spliced by `CanonicalEdit.applyEdits` — the one splice every
+	 * `--fix` path uses.
+	 */
+	public static function fixedSource(check: Check, source: String, ?plugin: GrammarPlugin): String {
+		return CanonicalEdit.applyEdits(source, edits(check, source, plugin));
+	}
+
+	/**
+	 * `source` after `check`'s fix, finished through `CanonicalEdit.canonicalize` the way a written fix is
+	 * (`reformat` canonicalises the whole file); a refusal throws its message.
+	 */
+	public static function canonicalFixed(
+		check: Check, source: String, reformat: Bool = true, ?optsJson: String, ?plugin: GrammarPlugin
+	): String {
+		final run: GrammarPlugin = hosted(plugin);
+		return switch CanonicalEdit.canonicalize(source, edits(check, source, run), reformat, run, optsJson) {
+			case Ok(text): text;
+			case Err(message): throw message;
+		};
+	}
+
+	/**
+	 * The REPORT-scope `SymbolIndex` over `files`, asked of the run host the way a rule asks it
+	 * (`IndexScope.report`) — the one door a test takes to an index it hands a check or a query.
+	 */
+	public static function index(files: Array<{ file: String, source: String }>, ?plugin: GrammarPlugin): SymbolIndex {
+		return IndexScope.report(files, hosted(plugin));
 	}
 
 	/**
@@ -72,10 +164,9 @@ final class CheckFixture {
 		];
 	}
 
-	public static function fixedSource(check: Check, source: String): String {
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final violations: Array<Violation> = check.run([{ file: 'C.hx', source: source }], plugin);
-		return applyEdits(source, check.fix(source, violations, plugin));
+	/** `plugin` as a run host: itself when it already is one, else wrapped the way `Linter.run` wraps it. */
+	private static function hosted(?plugin: GrammarPlugin): GrammarPlugin {
+		return plugin == null ? host() : plugin is CachingGrammarPlugin ? plugin : new CachingGrammarPlugin(plugin);
 	}
 
 }

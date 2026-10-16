@@ -6,6 +6,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -47,9 +48,7 @@ class AssignmentInConditionCheckTest extends Test {
 	public function testReportOnlyNoFix(): Void {
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\tif (a = b) c();\n\t}\n}';
 		final check: AssignmentInCondition = new AssignmentInCondition();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
 		Assert.equals(0, edits.length);
 	}
 
@@ -68,7 +67,7 @@ class AssignmentInConditionCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new AssignmentInCondition().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new AssignmentInCondition(), src);
 	}
 
 }

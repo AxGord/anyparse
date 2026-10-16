@@ -6,6 +6,7 @@ import anyparse.check.Linter;
 import anyparse.check.RedundantCastType;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -391,7 +392,7 @@ class RedundantCastTypeCheckTest extends Test {
 	public function testFixLeavesUnflaggedCastAlone(): Void {
 		final src: String = 'class Foo {} class Bar {} class C { function f(v:Dynamic) { final a:Bar = cast(v, Foo); } }';
 		final check: RedundantCastType = new RedundantCastType();
-		Assert.equals(0, check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()).length);
+		Assert.equals(0, check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin()).length);
 	}
 
 	public function testIsDefaultOff(): Void {
@@ -407,8 +408,8 @@ class RedundantCastTypeCheckTest extends Test {
 	public function testSkipParseNoCrash(): Void {
 		Assert.equals(
 			0,
-			new RedundantCastType().run(
-				[{ file: 'Bad.hx', source: 'class Bad { function f() { final a:Foo = cast(v, ' }], new HaxeQueryPlugin()
+			CheckFixture.violationsIn(
+				new RedundantCastType(), [{ file: 'Bad.hx', source: 'class Bad { function f() { final a:Foo = cast(v, ' }]
 			)
 				.length
 		);
@@ -419,7 +420,7 @@ class RedundantCastTypeCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new RedundantCastType().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new RedundantCastType(), src);
 	}
 
 }

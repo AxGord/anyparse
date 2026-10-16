@@ -14,6 +14,7 @@ import anyparse.query.cli.command.LintFixDriver;
 import anyparse.query.cli.command.LintFixLedger;
 import anyparse.query.cli.command.LintFixVerify;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -83,7 +84,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 			return;
 		}
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: REFUSED }];
-		final own: Array<Violation> = check.run(files, plugin);
+		final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 		Assert.isTrue(own.length > 0, 'the fixture reports at least one unused-local finding');
 		final ledger: Map<String, RuleFixOutcome> = [];
 		final groups: Array<RuleEdits> =
@@ -166,7 +167,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 			return;
 		}
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: REFUSED }];
-		final own: Array<Violation> = check.run(files, plugin);
+		final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 		final ledger: Map<String, RuleFixOutcome> = [];
 		// `countDeclines` false IS "this is not pass 1" — the driver passes `passes == 1`.
 		final groups: Array<RuleEdits> =
@@ -322,7 +323,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 		}
 		final source: String = 'package p;\n\nclass C {\n    public function f(): String {\n        return "x";\n    }\n}\n';
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: source }];
-		final own: Array<Violation> = check.run(files, plugin);
+		final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 		Assert.isTrue(own.length > 0, 'the fixture reports a fixable finding');
 		final groups: Array<RuleEdits> = LintFixDriver.collectFileLintEdits(source, own, [check], plugin, SymbolIndex.build(files, plugin));
 		Assert.equals(1, LintFixDriver.contributedEdits(groups).length, 'and the check produced its edit');
@@ -470,7 +471,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 			return;
 		}
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: REFUSED }];
-		final own: Array<Violation> = check.run(files, plugin);
+		final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 		final ledger: Map<String, RuleFixOutcome> = [];
 		LintFixDriver.ledgerFileLintEdits(
 			ledger, LintFixDriver.collectFileLintEdits(REFUSED, own, [check], plugin, SymbolIndex.build(files, plugin)), true
@@ -992,7 +993,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final source: String = 'package p;\n\nclass G {\n\n\tfinal private /*inline*/ function f():String {\n\t\treturn "x";\n\t}\n\n'
 			+ '\tfinal private function g():String {\n\t\treturn "y";\n\t}\n\n}\n';
 		final files: Array<{ file: String, source: String }> = [{ file: 'G.hx', source: source }];
-		Assert.equals(2, check.run(files, plugin).length, 'the fixture reports both modifier runs');
+		Assert.equals(2, CheckFixture.violationsIn(check, files, plugin).length, 'the fixture reports both modifier runs');
 		final noted: Array<String> = [];
 		final ledger: Map<String, RuleFixOutcome> = [];
 		LintFixDriver.applyLintPass(
@@ -1034,7 +1035,9 @@ class LintFixDeclineWiringSliceTest extends Test {
 			+ '\tfinal private function g():String {\n\t\treturn "y";\n\t}\n\n}\n';
 		final files: Array<{ file: String, source: String }> = [{ file: 'G.hx', source: source }];
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
-		final groups: Array<RuleEdits> = LintFixDriver.collectFileLintEdits(source, check.run(files, plugin), [check], plugin, index);
+		final groups: Array<RuleEdits> = LintFixDriver.collectFileLintEdits(
+			source, CheckFixture.violationsIn(check, files, plugin), [check], plugin, index
+		);
 		final blamed: Array<String> = [];
 		final settled: Null<{ text: String, rewrites: Null<Int> }> = LintFixDriver.salvageFileLintEdits(
 			source, groups, 'FILE LEVEL SENTENCE', plugin, null, blamed, LintFixDriver.findingSplitter(source, [check], plugin, index)
@@ -1066,7 +1069,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final source: String =
 			'package p;\n\nclass U {\n\tpublic function f(c:Bool):Void {\n\t\tif (c) var y:Int = 1;\n\t\tvar z:Int = 2;\n\t}\n}\n';
 		final files: Array<{ file: String, source: String }> = [{ file: 'U.hx', source: source }];
-		final own: Array<Violation> = check.run(files, plugin);
+		final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 		Assert.equals(2, own.length, 'the fixture reports both locals');
 		final ledger: Map<String, RuleFixOutcome> = [];
 		final groups: Array<RuleEdits> = LintFixDriver.collectFileLintEdits(source, own, [check], plugin, SymbolIndex.build(files, plugin));

@@ -5,6 +5,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.ShadowingLocal;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -219,7 +220,7 @@ class ShadowingLocalCheckTest extends Test {
 	public function testReportOnly(): Void {
 		final src: String = 'class C { function f() { var q:Int = 1; var q:Int = 2; } }';
 		final check: ShadowingLocal = new ShadowingLocal();
-		Assert.equals(0, check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()).length);
+		Assert.equals(0, check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin()).length);
 	}
 
 	public function testRegisteredInBuiltins(): Void {
@@ -231,7 +232,7 @@ class ShadowingLocalCheckTest extends Test {
 	public function testSkipParseNoCrash(): Void {
 		Assert.equals(
 			0,
-			new ShadowingLocal().run([{ file: 'Bad.hx', source: 'class Bad { function f() { var q:Int = ' }], new HaxeQueryPlugin()).length
+			CheckFixture.violationsIn(new ShadowingLocal(), [{ file: 'Bad.hx', source: 'class Bad { function f() { var q:Int = ' }]).length
 		);
 	}
 
@@ -273,7 +274,7 @@ class ShadowingLocalCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new ShadowingLocal().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new ShadowingLocal(), src);
 	}
 
 }

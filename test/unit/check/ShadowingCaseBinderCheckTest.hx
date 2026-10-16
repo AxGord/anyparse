@@ -5,6 +5,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.ShadowingCaseBinder;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -122,7 +123,7 @@ class ShadowingCaseBinderCheckTest extends Test {
 		final check: ShadowingCaseBinder = new ShadowingCaseBinder();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final src: String = withField('closeAction');
-		Assert.equals(0, check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin).length);
+		Assert.equals(0, check.fix(src, CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin), plugin).length);
 	}
 
 	public function testRegisteredAsBuiltin(): Void {
@@ -138,7 +139,7 @@ class ShadowingCaseBinderCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new ShadowingCaseBinder().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new ShadowingCaseBinder(), src);
 	}
 
 }

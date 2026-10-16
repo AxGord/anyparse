@@ -8,6 +8,7 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -334,18 +335,20 @@ class ReturnReassignTernaryCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new ReturnReassignTernary().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new ReturnReassignTernary(), src);
 	}
 
 	private function edits(src: String): Array<{ span: Span, text: String }> {
 		final check: ReturnReassignTernary = new ReturnReassignTernary();
-		return check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
+		return check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
 	}
 
 	private function applyFixOnce(source: String): String {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: ReturnReassignTernary = new ReturnReassignTernary();
-		final es: Array<{ span: Span, text: String }> = check.fix(source, check.run([{ file: 'C.hx', source: source }], plugin), plugin);
+		final es: Array<{ span: Span, text: String }> = check.fix(
+			source, CheckFixture.violationsIn(check, [{ file: 'C.hx', source: source }], plugin), plugin
+		);
 		return es.length == 0
 			? source
 			: switch CanonicalEdit.canonicalize(source, es, false, plugin) {
@@ -357,7 +360,9 @@ class ReturnReassignTernaryCheckTest extends Test {
 	private function applyPreferFinalOnce(source: String): String {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: PreferFinal = new PreferFinal();
-		final es: Array<{ span: Span, text: String }> = check.fix(source, check.run([{ file: 'C.hx', source: source }], plugin), plugin);
+		final es: Array<{ span: Span, text: String }> = check.fix(
+			source, CheckFixture.violationsIn(check, [{ file: 'C.hx', source: source }], plugin), plugin
+		);
 		return es.length == 0
 			? source
 			: switch CanonicalEdit.canonicalize(source, es, false, plugin) {

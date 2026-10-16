@@ -6,6 +6,7 @@ import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 
 /**
@@ -264,7 +265,7 @@ class ExplicitLocalTypeCheckTest extends ExplicitLocalTypeCheckTestBase {
 		// The other half: a shape the ladder DOES name declined nothing, so it carries no reason.
 		final annotated: String = wrap('var a = 5;');
 		final check: ExplicitLocalType = new ExplicitLocalType();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: annotated }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, annotated);
 		Assert.equals(1, check.fix(annotated, vs, new HaxeQueryPlugin()).length);
 		Assert.isNull(vs[0].declineReason, 'a finding the ladder answers declined nothing');
 	}
@@ -273,7 +274,7 @@ class ExplicitLocalTypeCheckTest extends ExplicitLocalTypeCheckTestBase {
 	private function assertDeclineReason(body: String, gate: String): Void {
 		final src: String = wrap(body);
 		final check: ExplicitLocalType = new ExplicitLocalType();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length, 'one finding for: $body');
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length, 'the shape is report-only: $body');
 		final reason: Null<String> = vs[0].declineReason;

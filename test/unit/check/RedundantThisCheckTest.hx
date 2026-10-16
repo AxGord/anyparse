@@ -6,6 +6,7 @@ import anyparse.check.RedundantThis;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -108,7 +109,7 @@ class RedundantThisCheckTest extends Test {
 		// `this.` is mandatory — never flagged.
 		Assert.equals(
 			0,
-			new RedundantThis().run([{ file: 'A.hx', source: 'abstract A(Int) { function f() return this.x; }' }], new HaxeQueryPlugin())
+			CheckFixture.violationsIn(new RedundantThis(), [{ file: 'A.hx', source: 'abstract A(Int) { function f() return this.x; }' }])
 				.length
 		);
 	}
@@ -122,7 +123,7 @@ class RedundantThisCheckTest extends Test {
 
 	public function testSkipParseNoCrash(): Void {
 		Assert.equals(
-			0, new RedundantThis().run([{ file: 'Bad.hx', source: 'class Bad { function f() { ' }], new HaxeQueryPlugin()).length
+			0, CheckFixture.violationsIn(new RedundantThis(), [{ file: 'Bad.hx', source: 'class Bad { function f() { ' }]).length
 		);
 	}
 
@@ -138,7 +139,7 @@ class RedundantThisCheckTest extends Test {
 	 */
 	public function testInheritedFromSameFileBaseFlagged(): Void {
 		final src: String = 'class Base { public function inh():Void {} } class S extends Base { function m():Void { this.inh(); } }';
-		Assert.equals(1, new RedundantThis().run([{ file: 'S.hx', source: src }], new HaxeQueryPlugin()).length);
+		Assert.equals(1, CheckFixture.violationsIn(new RedundantThis(), [{ file: 'S.hx', source: src }]).length);
 	}
 
 	/**
@@ -147,10 +148,10 @@ class RedundantThisCheckTest extends Test {
 	 */
 	@:pin('control') @:killer('M-INHERITS-FALSE')
 	public function testInheritedFromOtherFileBaseFlagged(): Void {
-		final vs: Array<Violation> = new RedundantThis().run([
+		final vs: Array<Violation> = CheckFixture.violationsIn(new RedundantThis(), [
 			{ file: 'Base.hx', source: 'class Base { public function inh():Void {} }' },
 			{ file: 'S.hx', source: 'class S extends Base { function m():Void { this.inh(); } }' }
-		], new HaxeQueryPlugin());
+		]);
 		Assert.equals(1, vs.length);
 		Assert.equals('S.hx', vs[0].file);
 	}
@@ -160,9 +161,9 @@ class RedundantThisCheckTest extends Test {
 	 * member (inherited member OR `using` extension), so `this.` is kept.
 	 */
 	public function testInheritedFromBaseOutsideSetNotFlagged(): Void {
-		final vs: Array<Violation> = new RedundantThis().run([
+		final vs: Array<Violation> = CheckFixture.violationsIn(new RedundantThis(), [
 			{ file: 'S.hx', source: 'class S extends Base { function m():Void { this.inh(); } }' }
-		], new HaxeQueryPlugin());
+		]);
 		Assert.equals(0, vs.length);
 	}
 
@@ -170,13 +171,13 @@ class RedundantThisCheckTest extends Test {
 	// is NOT declared by the type or any ancestor stays silent — dropping `this.` would
 	// break compile (`Unknown identifier`).
 	public function testUsingExtensionSilentEvenWithBaseInSet(): Void {
-		final vs: Array<Violation> = new RedundantThis().run([
+		final vs: Array<Violation> = CheckFixture.violationsIn(new RedundantThis(), [
 			{ file: 'Base.hx', source: 'class Base { public function inh():Void {} }' },
 			{
 				file: 'W.hx',
 				source: 'using Type; class W extends Base { function m():Class<Dynamic> { return this.getClass(); } }'
 			}
-		], new HaxeQueryPlugin());
+		]);
 		Assert.equals(0, vs.length);
 	}
 
@@ -185,10 +186,10 @@ class RedundantThisCheckTest extends Test {
 	 * runs before the membership check, so `this.inh` (with a local `inh`) is kept.
 	 */
 	public function testShadowedBindingWinsOverInheritedMembership(): Void {
-		final vs: Array<Violation> = new RedundantThis().run([
+		final vs: Array<Violation> = CheckFixture.violationsIn(new RedundantThis(), [
 			{ file: 'Base.hx', source: 'class Base { public function inh():Void {} }' },
 			{ file: 'S.hx', source: 'class S extends Base { function m():Void { var inh = 1; trace(this.inh); } }' }
-		], new HaxeQueryPlugin());
+		]);
 		Assert.equals(0, vs.length);
 	}
 
@@ -199,14 +200,14 @@ class RedundantThisCheckTest extends Test {
 	 * `(file, name)` declaration keeps it silent. Fails before the ambiguity fix.
 	 */
 	public function testVectorAUnrelatedSameNamedEnclosingNotFlagged(): Void {
-		final vs: Array<Violation> = new RedundantThis().run([
+		final vs: Array<Violation> = CheckFixture.violationsIn(new RedundantThis(), [
 			{ file: 'Lib.hx', source: 'class Lib { public function getClass():Class<Dynamic> return null; }' },
 			{ file: 'pa/S.hx', source: 'package pa; class S extends Lib {}' },
 			{
 				file: 'pr/S.hx',
 				source: 'package pr; using Type; class S { function m():Class<Dynamic> { return this.getClass(); } }'
 			}
-		], new HaxeQueryPlugin());
+		]);
 		Assert.equals(0, vs.length);
 	}
 
@@ -217,13 +218,13 @@ class RedundantThisCheckTest extends Test {
 	 * the membership and `this.getClass()` stays silent. Fails before the ambiguity fix.
 	 */
 	public function testVectorBQualifiedSupertypeCollisionNotFlagged(): Void {
-		final vs: Array<Violation> = new RedundantThis().run([
+		final vs: Array<Violation> = CheckFixture.violationsIn(new RedundantThis(), [
 			{ file: 'a/Widget.hx', source: 'package a; class Widget { public function getClass():Class<Dynamic> return null; }' },
 			{
 				file: 'pr/S.hx',
 				source: 'package pr; using Type; class S extends b.Widget { function m():Class<Dynamic> { return this.getClass(); } }'
 			}
-		], new HaxeQueryPlugin());
+		]);
 		Assert.equals(0, vs.length);
 	}
 
@@ -234,7 +235,7 @@ class RedundantThisCheckTest extends Test {
 	 * `this.getClass()` stays silent. Fails before the ambiguity fix.
 	 */
 	public function testVectorBImportedSupertypeCollisionNotFlagged(): Void {
-		final vs: Array<Violation> = new RedundantThis().run([
+		final vs: Array<Violation> = CheckFixture.violationsIn(new RedundantThis(), [
 			{ file: 'a/Widget.hx', source: 'package a; class Widget { public function getClass():Class<Dynamic> return null; }' },
 			{ file: 'b/Widget.hx', source: 'package b; class Widget {}' },
 			{
@@ -242,7 +243,7 @@ class RedundantThisCheckTest extends Test {
 				source: 'package pr; import b.Widget; using Type; class S extends Widget { function m():Class<Dynamic> {'
 				+ ' return this.getClass(); } }'
 			}
-		], new HaxeQueryPlugin());
+		]);
 		Assert.equals(0, vs.length);
 	}
 
@@ -253,10 +254,10 @@ class RedundantThisCheckTest extends Test {
 	 * inherited members.
 	 */
 	public function testInheritedCrossPackageViaImportFlagged(): Void {
-		final vs: Array<Violation> = new RedundantThis().run([
+		final vs: Array<Violation> = CheckFixture.violationsIn(new RedundantThis(), [
 			{ file: 'lib/Base.hx', source: 'package lib; class Base { public function inh():Void {} }' },
 			{ file: 'app/S.hx', source: 'package app; import lib.Base; class S extends Base { function m():Void { this.inh(); } }' }
-		], new HaxeQueryPlugin());
+		]);
 		Assert.equals(1, vs.length);
 		Assert.equals('app/S.hx', vs[0].file);
 	}
@@ -266,11 +267,11 @@ class RedundantThisCheckTest extends Test {
 	 * declaring ancestor is reached through a same-package intermediate is proven and flagged.
 	 */
 	public function testInheritedTransitiveFlagged(): Void {
-		final vs: Array<Violation> = new RedundantThis().run([
+		final vs: Array<Violation> = CheckFixture.violationsIn(new RedundantThis(), [
 			{ file: 'g/Grand.hx', source: 'package g; class Grand { public function inh():Void {} }' },
 			{ file: 'g/Mid.hx', source: 'package g; class Mid extends Grand {}' },
 			{ file: 'app/S.hx', source: 'package app; import g.Mid; class S extends Mid { function m():Void { this.inh(); } }' }
-		], new HaxeQueryPlugin());
+		]);
 		Assert.equals(1, vs.length);
 	}
 
@@ -282,7 +283,7 @@ class RedundantThisCheckTest extends Test {
 	 * falsely flag. Must FAIL under that mutation.
 	 */
 	public function testWildcardAmbiguousSupertypeNotFlagged(): Void {
-		final vs: Array<Violation> = new RedundantThis().run([
+		final vs: Array<Violation> = CheckFixture.violationsIn(new RedundantThis(), [
 			{ file: 'a/Widget.hx', source: 'package a; class Widget { public function getClass():Class<Dynamic> return null; }' },
 			{ file: 'b/Widget.hx', source: 'package b; class Widget {}' },
 			{
@@ -290,7 +291,7 @@ class RedundantThisCheckTest extends Test {
 				source: 'package s; import a.*; import b.*; using Type; class S extends Widget { function m():Class<Dynamic> {'
 				+ ' return this.getClass(); } }'
 			}
-		], new HaxeQueryPlugin());
+		]);
 		Assert.equals(0, vs.length);
 	}
 
@@ -301,10 +302,10 @@ class RedundantThisCheckTest extends Test {
 	 * refuse all wildcards).
 	 */
 	public function testWildcardUnambiguousInheritedFlagged(): Void {
-		final vs: Array<Violation> = new RedundantThis().run([
+		final vs: Array<Violation> = CheckFixture.violationsIn(new RedundantThis(), [
 			{ file: 'pkg/Base.hx', source: 'package pkg; class Base { public function bump():Void {} }' },
 			{ file: 'app/S.hx', source: 'package app; import pkg.*; class S extends Base { function m():Void { this.bump(); } }' }
-		], new HaxeQueryPlugin());
+		]);
 		Assert.equals(1, vs.length);
 	}
 
@@ -316,11 +317,11 @@ class RedundantThisCheckTest extends Test {
 	 * Fails CLOSED by design.
 	 */
 	public function testAliasedSupertypeNotFlagged(): Void {
-		final vs: Array<Violation> = new RedundantThis().run([
+		final vs: Array<Violation> = CheckFixture.violationsIn(new RedundantThis(), [
 			{ file: 'a/B.hx', source: 'package a; class B {}' },
 			{ file: 'other/B.hx', source: 'package other; class B { public function bump():Void {} }' },
 			{ file: 'app/S.hx', source: 'package app; import a.B as C; class S extends C { function m():Void { this.bump(); } }' }
-		], new HaxeQueryPlugin());
+		]);
 		Assert.equals(0, vs.length);
 	}
 
@@ -329,20 +330,20 @@ class RedundantThisCheckTest extends Test {
 	// `importPathFor == raw` positive branch (the Vector-B-qualified test only exercises the
 	// external/negative direction).
 	public function testQualifiedInheritedFlagged(): Void {
-		final vs: Array<Violation> = new RedundantThis().run([
+		final vs: Array<Violation> = CheckFixture.violationsIn(new RedundantThis(), [
 			{ file: 'pkg/T.hx', source: 'package pkg; class T { public function bump():Void {} }' },
 			{ file: 'app/S.hx', source: 'package app; class S extends pkg.T { function m():Void { this.bump(); } }' }
-		], new HaxeQueryPlugin());
+		]);
 		Assert.equals(1, vs.length);
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new RedundantThis().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new RedundantThis(), src);
 	}
 
 	private function applyFix(src: String): String {
 		final check: RedundantThis = new RedundantThis();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
 		edits.sort((a, b) -> b.span.from - a.span.from);
 		var result: String = src;

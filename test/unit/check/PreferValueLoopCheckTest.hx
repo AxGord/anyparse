@@ -8,6 +8,7 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
+import unit.CheckFixture;
 import unit.QueryTestHelpers;
 import utest.Assert;
 import utest.Test;
@@ -375,7 +376,7 @@ class PreferValueLoopCheckTest extends Test {
 			'vals:Array<Int>, sink:Sink', 'for (i in 0...vals.length) for (j in 0...vals.length) sink.use(vals[i], vals[j]);'
 		);
 		final check: PreferValueLoop = new PreferValueLoop();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(2, vs.length);
 		Assert.equals(0, check.fix(src, vs, project(src)).length);
 		for (v in vs) Assert.equals('an enclosing or nested indexed loop derives the same element name `val`', v.declineReason);
@@ -507,7 +508,7 @@ class PreferValueLoopCheckTest extends Test {
 	}
 
 	private function violations(source: String): Array<Violation> {
-		return new PreferValueLoop().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferValueLoop(), source);
 	}
 
 	private function assertFixCanonical(src: String, present: Array<String>, absent: Array<String>): Void {
@@ -528,7 +529,7 @@ class PreferValueLoopCheckTest extends Test {
 
 	private function runAndExpectOne(src: String): CheckRun {
 		final check: PreferValueLoop = new PreferValueLoop();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
 		return { check: check, vs: vs };
 	}
@@ -536,7 +537,7 @@ class PreferValueLoopCheckTest extends Test {
 	/** Canonicalise the whole edit set of a MULTI-finding file at once — what a `--fix` pass over the file does. */
 	private function assertAllFixed(src: String, present: Array<String>, absent: Array<String>): Void {
 		final check: PreferValueLoop = new PreferValueLoop();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		switch CanonicalEdit.canonicalize(src, check.fix(src, vs, project(src)), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				for (p in present) Assert.isTrue(text.indexOf(p) >= 0, 'expected $p in $text');

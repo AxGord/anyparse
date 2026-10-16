@@ -9,6 +9,7 @@ import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.SymbolIndex;
 import sys.FileSystem;
 import sys.io.File;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -83,7 +84,7 @@ class OversizedTypeCheckTest extends Test {
 	public function testFixReturnsEmpty(): Void {
 		final src: String = classWithMembers(51);
 		final check: OversizedType = new OversizedType();
-		Assert.equals(0, check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()).length);
+		Assert.equals(0, check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin()).length);
 	}
 
 	public function testSkipParseNoCrash(): Void {
@@ -108,7 +109,7 @@ class OversizedTypeCheckTest extends Test {
 		final path: String = '$dir/Foo.hx';
 		final src: String = 'class Foo {\n\tvar a:Int;\n\tvar b:Int;\n\tvar c:Int;\n}';
 		File.saveContent(path, src);
-		final vs: Array<Violation> = new OversizedType().run([{ file: path, source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new OversizedType(), [{ file: path, source: src }]);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains('3 members (max 2)'));
 		Assert.isTrue(vs[0].message.contains('5 lines (max 3)'));
@@ -126,9 +127,7 @@ class OversizedTypeCheckTest extends Test {
 	public function testMessageIdentityMasksBothItsOwnMeasurementsAndKeepsTheThresholds(): Void {
 		final blanks: String = [for (_ in 0...2001) '\n'].join('');
 		final check: OversizedType = new OversizedType();
-		final message: String = check.run(
-			[{ file: 'C.hx', source: classWithMembers(51).replace('\n}', '$blanks\n}') }], new HaxeQueryPlugin()
-		)[0].message;
+		final message: String = CheckFixture.violations(check, classWithMembers(51).replace('\n}', '$blanks\n}'))[0].message;
 		Assert.isTrue(message.contains('51 members (max 50)'), 'the message states both measurements');
 		Assert.isTrue(message.contains('lines (max 2000)'));
 		final identity: String = check.messageIdentity(message);
@@ -147,8 +146,8 @@ class OversizedTypeCheckTest extends Test {
 		// finding about the same type, and the blast-radius gate must not report the growth as
 		// one added plus one removed.
 		final check: OversizedType = new OversizedType();
-		final fiftyOne: String = check.run([{ file: 'C.hx', source: classWithMembers(51) }], new HaxeQueryPlugin())[0].message;
-		final fiftyTwo: String = check.run([{ file: 'C.hx', source: classWithMembers(52) }], new HaxeQueryPlugin())[0].message;
+		final fiftyOne: String = CheckFixture.violations(check, classWithMembers(51))[0].message;
+		final fiftyTwo: String = CheckFixture.violations(check, classWithMembers(52))[0].message;
 		Assert.notEquals(fiftyOne, fiftyTwo);
 		Assert.equals(check.messageIdentity(fiftyOne), check.messageIdentity(fiftyTwo));
 	}
@@ -314,11 +313,11 @@ class OversizedTypeCheckTest extends Test {
 	private function withIndex(files: Array<{ file: String, source: String }>): Array<Violation> {
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		plugin.setResolutionIndex(SymbolIndex.build(files, plugin));
-		return new OversizedType().run(files, plugin);
+		return CheckFixture.violationsIn(new OversizedType(), files, plugin);
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new OversizedType().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new OversizedType(), src);
 	}
 
 	/** Like `violations`, but through `Linter.run` so inline `// noqa` suppression applies. */
@@ -339,7 +338,7 @@ class OversizedTypeCheckTest extends Test {
 		File.saveContent('$dir/apqlint.json', config);
 		final path: String = '$dir/C.hx';
 		File.saveContent(path, src);
-		final out: Array<Violation> = new OversizedType().run([{ file: path, source: src }], new HaxeQueryPlugin());
+		final out: Array<Violation> = CheckFixture.violationsIn(new OversizedType(), [{ file: path, source: src }]);
 		FileSystem.deleteFile(path);
 		FileSystem.deleteFile('$dir/apqlint.json');
 		FileSystem.deleteDirectory(dir);

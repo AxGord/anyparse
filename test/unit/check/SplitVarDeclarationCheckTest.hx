@@ -12,6 +12,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.Cli;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -279,12 +280,12 @@ class SplitVarDeclarationCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new SplitVarDeclaration().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new SplitVarDeclaration(), src);
 	}
 
 	private function edits(src: String): Array<{ span: Span, text: String }> {
 		final check: SplitVarDeclaration = new SplitVarDeclaration();
-		return check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
+		return check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
 	}
 
 	/** Run `fix` and re-emit through the canonical writer -- the `lint --fix` path in one pass. */
@@ -293,12 +294,12 @@ class SplitVarDeclarationCheckTest extends Test {
 	}
 
 	private function preferFinalViolations(src: String): Array<Violation> {
-		return new PreferFinal().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferFinal(), src);
 	}
 
 	private function applyPreferFinal(src: String): String {
 		final check: PreferFinal = new PreferFinal();
-		return canonical(src, check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()));
+		return canonical(src, check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin()));
 	}
 
 	private function canonical(src: String, es: Array<{ span: Span, text: String }>): String {

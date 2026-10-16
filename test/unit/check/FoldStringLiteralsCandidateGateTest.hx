@@ -5,6 +5,7 @@ import anyparse.check.FoldStringLiterals;
 import anyparse.check.LintConfig;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 
 using StringTools;
@@ -122,7 +123,7 @@ class FoldStringLiteralsCandidateGateTest extends FoldStringLiteralsCheckTestBas
 	public function testMacroArgumentIsReportedButNotFixed(): Void {
 		final files: Array<{ file: String, source: String }> = macroArgFiles(100, 60);
 		final check: FoldStringLiterals = new FoldStringLiterals();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.indexOf(WHITELIST_OPTION) != -1);
 		Assert.equals(0, check.fix(files[1].source, vs, new HaxeQueryPlugin()).length);
@@ -133,7 +134,7 @@ class FoldStringLiteralsCandidateGateTest extends FoldStringLiteralsCheckTestBas
 		final files: Array<{ file: String, source: String }> = macroArgFiles(100, 60);
 		final check: FoldStringLiterals = new FoldStringLiterals();
 		check.setConfigResolver(_ -> LintConfig.parse('{"rules":{"$RULE":{"$WHITELIST_OPTION":["m.Lang.t"]}}}'));
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		Assert.equals(1, vs.length);
 		final edits: Array<{ span: Span, text: String }> = check.fix(files[1].source, vs, new HaxeQueryPlugin());
 		Assert.equals(1, edits.length);
@@ -158,7 +159,7 @@ class FoldStringLiteralsCandidateGateTest extends FoldStringLiteralsCheckTestBas
 	public function testMacroArgumentStaysRefusedWhenTheDeclarationIsOutOfScope(): Void {
 		final caller: { file: String, source: String } = macroArgFiles(100, 60)[1];
 		final check: FoldStringLiterals = new FoldStringLiterals();
-		final vs: Array<Violation> = check.run([caller], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, [caller]);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.indexOf(WHITELIST_OPTION) != -1);
 		Assert.equals(0, check.fix(caller.source, vs, new HaxeQueryPlugin()).length);
@@ -216,7 +217,7 @@ class FoldStringLiteralsCandidateGateTest extends FoldStringLiteralsCheckTestBas
 			{ imports: '', call: 'm.Lang.t' }
 		]) {
 			final src: String = outOfScopeCallSource(spelling.imports, spelling.call);
-			final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+			final vs: Array<Violation> = CheckFixture.violations(check, src);
 			Assert.equals(1, vs.length);
 			Assert.equals(1, check.fix(src, vs, new HaxeQueryPlugin()).length, 'expected a fix for ${spelling.imports} ${spelling.call}');
 		}
@@ -233,7 +234,7 @@ class FoldStringLiteralsCandidateGateTest extends FoldStringLiteralsCheckTestBas
 		final other: { file: String, source: String } = { file: 'other/D.hx', source: files[1].source };
 		final check: FoldStringLiterals = new FoldStringLiterals();
 		check.setConfigResolver(path -> LintConfig.parse(path == 'C.hx' ? '{"rules":{"$RULE":{"$WHITELIST_OPTION":["m.Lang.t"]}}}' : '{}'));
-		final vs: Array<Violation> = check.run([files[0], files[1], other], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, [files[0], files[1], other]);
 		Assert.equals(2, vs.length);
 		Assert.equals(1, check.fix(files[1].source, vs.filter(v -> v.file == 'C.hx'), new HaxeQueryPlugin()).length);
 		Assert.equals(0, check.fix(other.source, vs.filter(v -> v.file == other.file), new HaxeQueryPlugin()).length);
@@ -378,7 +379,7 @@ class FoldStringLiteralsCandidateGateTest extends FoldStringLiteralsCheckTestBas
 
 	/** The shared half of the two above: `src` must report EXACTLY one finding, and the answer is whether `fix` declined it. */
 	private function refusedBy(check: FoldStringLiterals, src: String): Bool {
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
 		return check.fix(src, vs, new HaxeQueryPlugin()).length == 0;
 	}

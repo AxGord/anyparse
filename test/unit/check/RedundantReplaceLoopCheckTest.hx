@@ -7,6 +7,7 @@ import anyparse.check.RedundantReplaceLoop;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -107,7 +108,7 @@ class RedundantReplaceLoopCheckTest extends Test {
 	public function testSeamReformingLiteralPairSurvivesTheFix(): Void {
 		final src: String = wrapFn('while (now.indexOf(\'  \') != -1) now = now.replace(\'  \', \' \');');
 		final check: RedundantReplaceLoop = new RedundantReplaceLoop();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		switch CanonicalEdit.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf('while (now.indexOf(\'  \') != -1) now = now.replace(\'  \', \' \');') >= 0);
@@ -700,7 +701,7 @@ class RedundantReplaceLoopCheckTest extends Test {
 	}
 
 	private function violations(source: String): Array<Violation> {
-		return new RedundantReplaceLoop().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new RedundantReplaceLoop(), source);
 	}
 
 	private function assertFixCanonical(src: String, present: String, absent: String): Void {
@@ -721,7 +722,7 @@ class RedundantReplaceLoopCheckTest extends Test {
 
 	private function runAndExpectOne(src: String): { check: RedundantReplaceLoop, vs: Array<Violation> } {
 		final check: RedundantReplaceLoop = new RedundantReplaceLoop();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
 		return { check: check, vs: vs };
 	}

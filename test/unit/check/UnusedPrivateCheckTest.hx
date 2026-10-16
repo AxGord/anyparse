@@ -9,6 +9,7 @@ import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -94,7 +95,7 @@ class UnusedPrivateCheckTest extends Test {
 			{ file: 'pkg/D.hx', source: 'package pkg;\nclass D extends C {}' }
 		];
 		final check: UnusedPrivate = new UnusedPrivate();
-		final cViol: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'pkg/C.hx');
+		final cViol: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == 'pkg/C.hx');
 		Assert.equals(1, cViol.length);
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
 		Assert.equals(1, check.fix(cSrc, cViol, new HaxeQueryPlugin(), index).length);
@@ -129,7 +130,7 @@ class UnusedPrivateCheckTest extends Test {
 			declared: true,
 			sources: () -> {report: report, projectRoots: [], library: new LibrarySources(library) }
 		});
-		final result: Array<Violation> = new UnusedPrivate().run(report, plugin);
+		final result: Array<Violation> = CheckFixture.violationsIn(new UnusedPrivate(), report, plugin);
 		Assert.equals(0, result.filter(v -> v.file == 'pkg/C.hx').length);
 	}
 
@@ -254,9 +255,7 @@ class UnusedPrivateCheckTest extends Test {
 	public function testFixAppliedRemovesDeadMethodKeepsRest(): Void {
 		final src: String = 'class C {\n\tprivate function dead() {}\n\tpublic function keep() {}\n}';
 		final check: UnusedPrivate = new UnusedPrivate();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
 		switch CanonicalEdit.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf('dead') == -1);
@@ -422,7 +421,7 @@ class UnusedPrivateCheckTest extends Test {
 		final src: String =
 			'class Sub extends UnresolvableBase {\n\tprivate function needToGetSharedInternal():Bool {\n\t\treturn true;\n\t}\n}';
 		final check: UnusedPrivate = new UnusedPrivate();
-		final vs: Array<Violation> = check.run([{ file: 'Sub.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'Sub.hx', source: src }]);
 		Assert.equals(1, vs.length);
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
 		Assert.equals(0, edits.length);
@@ -439,7 +438,7 @@ class UnusedPrivateCheckTest extends Test {
 		final src: String =
 			'class Sub extends UnresolvableBase {\n\t#if cpp\n\tprivate function abstractImpl():Bool {\n\t\treturn true;\n\t}\n\t#end\n}';
 		final check: UnusedPrivate = new UnusedPrivate();
-		final vs: Array<Violation> = check.run([{ file: 'Sub.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'Sub.hx', source: src }]);
 		Assert.equals(1, vs.length);
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
 		Assert.equals(0, edits.length);
@@ -454,7 +453,7 @@ class UnusedPrivateCheckTest extends Test {
 	public function testFixDeletesDeadMemberInConditionalFileWhenUnreferenced(): Void {
 		final src: String = 'class C {\n\tprivate var _x:Int = 5;\n\t#if debug\n\tpublic function d() { trace(1); }\n\t#end\n}';
 		final check: UnusedPrivate = new UnusedPrivate();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
 		Assert.equals(1, check.fix(src, vs, new HaxeQueryPlugin()).length);
 	}
@@ -474,7 +473,7 @@ class UnusedPrivateCheckTest extends Test {
 		final src: String = 'class C {\n\tpublic function keep() {}\n\t#if debug\n\tprivate var _dead:Int = 5;\n\n'
 			+ '\tpublic function dbg():Void {\n\t\ttrace(1);\n\t}\n\t#end\n}';
 		final check: UnusedPrivate = new UnusedPrivate();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
 		Assert.equals(1, check.fix(src, vs, new HaxeQueryPlugin()).length);
 	}
@@ -492,7 +491,7 @@ class UnusedPrivateCheckTest extends Test {
 			{ file: 'pkg/D.hx', source: 'package pkg;\nclass D {\n\t#if debug\n\tpublic function bar() { foo(); }\n\t#end\n}' }
 		];
 		final check: UnusedPrivate = new UnusedPrivate();
-		final cViol: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'pkg/C.hx');
+		final cViol: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == 'pkg/C.hx');
 		Assert.equals(1, cViol.length);
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
 		Assert.equals(0, check.fix(cSrc, cViol, new HaxeQueryPlugin(), index).length);
@@ -512,7 +511,7 @@ class UnusedPrivateCheckTest extends Test {
 			{ file: 'pkg/D.hx', source: 'package pkg;\nclass D {\n\t// once called foo here\n\tpublic function bar() {}\n}' }
 		];
 		final check: UnusedPrivate = new UnusedPrivate();
-		final cViol: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'pkg/C.hx');
+		final cViol: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == 'pkg/C.hx');
 		Assert.equals(1, cViol.length);
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
 		Assert.equals(1, check.fix(cSrc, cViol, new HaxeQueryPlugin(), index).length);
@@ -527,7 +526,7 @@ class UnusedPrivateCheckTest extends Test {
 		final src: String = '@:rtti class C {\n\tprivate var _x:Int;\n\t#if debug\n\tpublic function d() { trace(1); }\n\t#end\n}';
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
 		final check: UnusedPrivate = new UnusedPrivate();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		Assert.equals(1, vs.length);
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin(), index).length);
@@ -543,7 +542,7 @@ class UnusedPrivateCheckTest extends Test {
 		final src: String = 'class DashLineUtil {\n\tpublic static var gap:Float = 4;\n\tprivate static var thickness:Float = 2;\n'
 			+ '\tpublic static function draw() { thickness += gap; }\n\tprivate function new() {}\n}';
 		final check: UnusedPrivate = new UnusedPrivate();
-		final vs: Array<Violation> = check.run([{ file: 'DashLineUtil.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'DashLineUtil.hx', source: src }]);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains("'new'"));
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
@@ -592,7 +591,7 @@ class UnusedPrivateCheckTest extends Test {
 		final src: String = 'class U {\n\tpublic static function draw() { dbg(); }\n\tprivate function new() {}\n\t#if debug\n'
 			+ '\tstatic function dbg() { trace(1); }\n\t#end\n}';
 		final check: UnusedPrivate = new UnusedPrivate();
-		final vs: Array<Violation> = check.run([{ file: 'U.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'U.hx', source: src }]);
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
 	}
 
@@ -604,7 +603,7 @@ class UnusedPrivateCheckTest extends Test {
 		final src: String = '@:build(M.b()) class U {\n\tpublic static function draw() {}\n\tprivate function new() {}\n}';
 		Assert.equals(
 			0,
-			new UnusedPrivate().run([{ file: 'U.hx', source: src }], new HaxeQueryPlugin()).filter(v -> v.message.contains("'new'")).length
+			CheckFixture.violationsIn(new UnusedPrivate(), [{ file: 'U.hx', source: src }]).filter(v -> v.message.contains("'new'")).length
 		);
 	}
 
@@ -617,7 +616,7 @@ class UnusedPrivateCheckTest extends Test {
 		final src: String = '@:rtti class C {\n\tprivate var _x:Int;\n}';
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
 		final check: UnusedPrivate = new UnusedPrivate();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		Assert.equals(1, vs.length);
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin(), index).length);
@@ -630,7 +629,7 @@ class UnusedPrivateCheckTest extends Test {
 	public function testFixKeepsBuildClassMember(): Void {
 		final src: String = '@:build(M.build()) class C {\n\tprivate function dead() {}\n}';
 		final check: UnusedPrivate = new UnusedPrivate();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
 	}
@@ -655,7 +654,7 @@ class UnusedPrivateCheckTest extends Test {
 		final src: String = '@:genericBuild(M.b()) class U {\n\tpublic static function draw() {}\n\tprivate function new() {}\n}';
 		Assert.equals(
 			0,
-			new UnusedPrivate().run([{ file: 'U.hx', source: src }], new HaxeQueryPlugin()).filter(v -> v.message.contains("'new'")).length
+			CheckFixture.violationsIn(new UnusedPrivate(), [{ file: 'U.hx', source: src }]).filter(v -> v.message.contains("'new'")).length
 		);
 	}
 
@@ -666,7 +665,7 @@ class UnusedPrivateCheckTest extends Test {
 	public function testFixKeepsKeepClassMember(): Void {
 		final src: String = '@:keep class C {\n\tprivate function dead() {}\n}';
 		final check: UnusedPrivate = new UnusedPrivate();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
 	}
@@ -683,7 +682,7 @@ class UnusedPrivateCheckTest extends Test {
 			{ file: 'pkg/D.hx', source: 'package pkg;\nclass D {\n\tpublic function f(o:Dynamic) { Reflect.setField(o, "_x", 1); }\n}' }
 		];
 		final check: UnusedPrivate = new UnusedPrivate();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		final cViol: Array<Violation> = vs.filter(v -> v.file == 'pkg/C.hx');
 		Assert.equals(1, cViol.length);
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
@@ -752,7 +751,7 @@ class UnusedPrivateCheckTest extends Test {
 	public function testFixKeepsRegionWhoseEveryMemberIsDead(): Void {
 		final src: String = 'class C {\n\tpublic function live():Void {\n\t\ttrace(1);\n\t}\n\n\t#if swc\n'
 			+ '\tprivate function a():Void {}\n\n\tprivate function b():Void {}\n\t#end\n}';
-		Assert.equals(2, new UnusedPrivate().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()).length);
+		Assert.equals(2, CheckFixture.violations(new UnusedPrivate(), src).length);
 		Assert.equals(0, fixEdits(src).length);
 	}
 
@@ -765,7 +764,7 @@ class UnusedPrivateCheckTest extends Test {
 	public function testFixKeepsRegionWhoseEveryBranchMemberIsDead(): Void {
 		final src: String = 'class C {\n\tpublic function live():Void {\n\t\ttrace(1);\n\t}\n\n\t#if swc\n'
 			+ '\tprivate function a():Void {}\n\t#else\n\tprivate function b():Void {}\n\t#end\n}';
-		Assert.equals(2, new UnusedPrivate().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()).length);
+		Assert.equals(2, CheckFixture.violations(new UnusedPrivate(), src).length);
 		Assert.equals(0, fixEdits(src).length);
 	}
 
@@ -777,7 +776,7 @@ class UnusedPrivateCheckTest extends Test {
 	public function testFixKeepsOuterRegionWhenNestedRegionEmptiesToo(): Void {
 		final src: String = 'class C {\n\tpublic function live():Void {\n\t\ttrace(1);\n\t}\n\n\t#if swc\n'
 			+ '\tprivate function dead():Void {}\n\n\t#if debug\n\tprivate function alsoDead():Void {}\n\t#end\n\t#end\n}';
-		Assert.equals(2, new UnusedPrivate().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()).length);
+		Assert.equals(2, CheckFixture.violations(new UnusedPrivate(), src).length);
 		Assert.equals(0, fixEdits(src).length);
 	}
 
@@ -813,7 +812,7 @@ class UnusedPrivateCheckTest extends Test {
 	public function testFixKeepsKeepClassMemberAcrossMemberFreeRegion(): Void {
 		final src: String = '@:keep #if js @:native("C") #end\nclass C {\n\tprivate function dead() {}\n}';
 		final check: UnusedPrivate = new UnusedPrivate();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
 	}
@@ -865,7 +864,7 @@ class UnusedPrivateCheckTest extends Test {
 		// refusal below is about the out-of-scope reflection call and not about the fixture.
 		final bare: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final bareCheck: UnusedPrivate = new UnusedPrivate();
-		final bareVs: Array<Violation> = bareCheck.run(report, bare);
+		final bareVs: Array<Violation> = CheckFixture.violationsIn(bareCheck, report, bare);
 		Assert.equals(1, bareVs.length);
 		Assert.isTrue(bareCheck.fix(declSource, bareVs, bare, SymbolIndex.build(report, bare)).length > 0);
 		final library: Array<{ file: String, source: String }> = [
@@ -881,7 +880,7 @@ class UnusedPrivateCheckTest extends Test {
 			sources: () -> {report: report, projectRoots: library, library: new LibrarySources(library) }
 		});
 		final check: UnusedPrivate = new UnusedPrivate();
-		final vs: Array<Violation> = check.run(report, plugin).filter(v -> v.file == 'pkg/D.hx');
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, report, plugin).filter(v -> v.file == 'pkg/D.hx');
 		Assert.equals(1, vs.length, 'the member is still REPORTED — only the deletion is withheld');
 		Assert.equals(0, check.fix(declSource, vs, plugin, SymbolIndex.build(report, plugin)).length);
 	}
@@ -912,7 +911,7 @@ class UnusedPrivateCheckTest extends Test {
 			}
 		];
 		final reported: Array<String> = [
-			for (v in new UnusedPrivate().run(files, new HaxeQueryPlugin())) if (v.message.contains('constructor')) v.file
+			for (v in CheckFixture.violationsIn(new UnusedPrivate(), files)) if (v.message.contains('constructor')) v.file
 		];
 		Assert.equals(
 			'pkg/Exception.hx,pkg/Zzzunique.hx', reported.join(','),
@@ -1001,7 +1000,7 @@ class UnusedPrivateCheckTest extends Test {
 	/** `run` reports the dead member and `fix` declines it — the shape every class-annotation gate has. */
 	private function assertReportedButNotDeleted(src: String): Void {
 		final check: UnusedPrivate = new UnusedPrivate();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length, 'the member is still reported');
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length, 'and not deleted');
 	}
@@ -1074,12 +1073,12 @@ class UnusedPrivateCheckTest extends Test {
 	}
 
 	private function violations(files: Array<{ file: String, source: String }>): Array<Violation> {
-		return new UnusedPrivate().run(files, new HaxeQueryPlugin());
+		return CheckFixture.violationsIn(new UnusedPrivate(), files);
 	}
 
 	private function fixEdits(source: String): Array<{ span: Span, text: String }> {
 		final check: UnusedPrivate = new UnusedPrivate();
-		return check.fix(source, check.run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
+		return check.fix(source, CheckFixture.violations(check, source), new HaxeQueryPlugin());
 	}
 
 	/**

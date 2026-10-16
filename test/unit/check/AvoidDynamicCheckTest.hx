@@ -7,6 +7,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -120,7 +121,7 @@ class AvoidDynamicCheckTest extends Test {
 	public function testReportOnlyNoFix(): Void {
 		final src: String = 'class C {\n\tvar x:Dynamic;\n}';
 		final check: AvoidDynamic = new AvoidDynamic();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
 	}
 
@@ -142,7 +143,7 @@ class AvoidDynamicCheckTest extends Test {
 		final check: AvoidDynamic = new AvoidDynamic();
 		check.setConfigResolver(_ -> LintConfig.parse('{"rules":{"avoid-dynamic":{"excludeMeta":["@:keep"]}}}'));
 		final src: String = 'class C {\n\t@:keep var kept:Dynamic;\n\tvar plain:Dynamic;\n}';
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
 		Assert.equals('plain', slicePlain(src, vs[0]));
 	}
@@ -211,7 +212,7 @@ class AvoidDynamicCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new AvoidDynamic().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new AvoidDynamic(), src);
 	}
 
 }

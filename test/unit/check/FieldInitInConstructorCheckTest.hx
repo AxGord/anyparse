@@ -10,6 +10,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -411,12 +412,12 @@ class FieldInitInConstructorCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new FieldInitInConstructor().run([{ file: 'Picker.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violationsIn(new FieldInitInConstructor(), [{ file: 'Picker.hx', source: src }]);
 	}
 
 	/** The `prefer-final-field` findings over `src`, as the flagged declaration texts. */
 	private function finalFieldNames(src: String): Array<String> {
-		final vs: Array<Violation> = new PreferFinalField().run([{ file: 'Picker.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new PreferFinalField(), [{ file: 'Picker.hx', source: src }]);
 		return [
 			for (v in vs) {
 				final span: Null<Span> = v.span;
@@ -427,7 +428,7 @@ class FieldInitInConstructorCheckTest extends Test {
 
 	private function edits(src: String): Array<{ span: Span, text: String }> {
 		final check: FieldInitInConstructor = new FieldInitInConstructor();
-		return check.fix(src, check.run([{ file: 'Picker.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
+		return check.fix(src, CheckFixture.violationsIn(check, [{ file: 'Picker.hx', source: src }]), new HaxeQueryPlugin());
 	}
 
 	/** Run `fix` and re-emit through the canonical writer — the `lint --fix` path in one pass. */
@@ -444,7 +445,7 @@ class FieldInitInConstructorCheckTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final files: Array<{ file: String, source: String }> = [{ file: 'Picker.hx', source: src }];
 		final check: FieldInitInConstructor = new FieldInitInConstructor();
-		return canonicalize(src, check.fix(src, check.run(files, plugin), plugin, SymbolIndex.build(files, plugin)));
+		return canonicalize(src, check.fix(src, CheckFixture.violationsIn(check, files, plugin), plugin, SymbolIndex.build(files, plugin)));
 	}
 
 	/** How many times `needle` occurs in `haystack`. */

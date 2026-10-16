@@ -7,6 +7,7 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -103,14 +104,12 @@ class PreferMapLiteralCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new PreferMapLiteral().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferMapLiteral(), src);
 	}
 
 	private function fixText(src: String): String {
 		final check: PreferMapLiteral = new PreferMapLiteral();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
 		return edits.length == 1 ? edits[0].text : '<${edits.length} edits>';
 	}
 
@@ -125,7 +124,7 @@ class PreferMapLiteralCheckTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
 		final idx: SymbolIndex = SymbolIndex.build(files, plugin);
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, check.run(files, plugin), plugin, idx);
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, CheckFixture.violationsIn(check, files, plugin), plugin, idx);
 		return edits.length == 1 ? edits[0].text : '<${edits.length} edits>';
 	}
 

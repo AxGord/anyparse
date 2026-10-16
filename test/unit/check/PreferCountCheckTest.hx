@@ -8,6 +8,7 @@ import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -432,7 +433,7 @@ class PreferCountCheckTest extends Test {
 	private function run(
 		files: Array<{ file: String, source: String }>, ?libraries: Array<{ file: String, source: String }>, complete: Bool = true
 	): Array<Violation> {
-		return new PreferCount().run(files, StdScope.plugin(files, libraries, complete));
+		return CheckFixture.violationsIn(new PreferCount(), files, StdScope.plugin(files, libraries, complete));
 	}
 
 	private function fixResult(src: String): String {
@@ -446,7 +447,7 @@ class PreferCountCheckTest extends Test {
 		if (other != null) files.push({ file: 'Other.hx', source: other });
 		final plugin: CachingGrammarPlugin = StdScope.plugin(files);
 		final edits: Array<{ span: Span, text: String }> = check.fix(
-			source, check.run(files, plugin), plugin, SymbolIndex.build(files, plugin)
+			source, CheckFixture.violationsIn(check, files, plugin), plugin, SymbolIndex.build(files, plugin)
 		);
 		switch CanonicalEdit.canonicalize(source, edits, true, plugin) {
 			case Ok(text):
@@ -464,7 +465,7 @@ class PreferCountCheckTest extends Test {
 			final text: String = out;
 			final plugin: CachingGrammarPlugin = StdScope.plugin([{ file: 'C.hx', source: text }]);
 			final edits: Array<{ span: Span, text: String }> = check.fix(
-				text, check.run([{ file: 'C.hx', source: text }], plugin), plugin,
+				text, CheckFixture.violationsIn(check, [{ file: 'C.hx', source: text }], plugin), plugin,
 				SymbolIndex.build([{ file: 'C.hx', source: text }], plugin)
 			);
 			Assert.isTrue(edits.length > 0, 'stage ${check.id()} produced no edits');

@@ -6,6 +6,7 @@ import anyparse.check.Severity;
 import anyparse.check.UnguardedNullableDeref;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -253,7 +254,7 @@ class UnguardedNullableDerefTest extends Test {
 	public function testFixReturnsEmpty(): Void {
 		final src: String = 'class C { function f(m:Map<String,Int>) { var u = m[k]; u.foo; } }';
 		final check: UnguardedNullableDeref = new UnguardedNullableDeref();
-		Assert.equals(0, check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()).length);
+		Assert.equals(0, check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin()).length);
 	}
 
 	public function testRegisteredInBuiltins(): Void {
@@ -770,11 +771,11 @@ class UnguardedNullableDerefTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new UnguardedNullableDeref().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new UnguardedNullableDeref(), src);
 	}
 
 	private function violationsFiles(files: Array<{ file: String, source: String }>): Array<Violation> {
-		return new UnguardedNullableDeref().run(files, new HaxeQueryPlugin());
+		return CheckFixture.violationsIn(new UnguardedNullableDeref(), files);
 	}
 
 	/** A class declaring the predicate `fn` and a method whose `item: Null<Item>` local then runs `use`. */

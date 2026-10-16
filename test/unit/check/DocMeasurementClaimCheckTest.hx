@@ -5,6 +5,7 @@ import anyparse.check.DocMeasurementClaim;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -136,7 +137,7 @@ class DocMeasurementClaimCheckTest extends Test {
 	public function testFixReturnsEmptyAndTheReasonSaysWhy(): Void {
 		final check: DocMeasurementClaim = new DocMeasurementClaim();
 		final src: String = 'class C {\n\t// rebuilt at a3588740\n}';
-		final found: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final found: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(0, check.fix(src, found, new HaxeQueryPlugin()).length);
 		Assert.isTrue(check.noAutofixReason().indexOf('numbers') >= 0, check.noAutofixReason());
 	}
@@ -215,7 +216,7 @@ class DocMeasurementClaimCheckTest extends Test {
 
 	/** The check's findings on `src`, asked of the check directly so enablement does not apply. */
 	private function violations(src: String): Array<Violation> {
-		return new DocMeasurementClaim().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new DocMeasurementClaim(), src);
 	}
 
 }

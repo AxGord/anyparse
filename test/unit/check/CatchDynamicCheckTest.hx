@@ -6,6 +6,7 @@ import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -328,7 +329,7 @@ class CatchDynamicCheckTest extends Test {
 
 	private function editCount(src: String): Int {
 		final check: CatchDynamic = new CatchDynamic();
-		return check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()).length;
+		return check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin()).length;
 	}
 
 	private function applyFix(src: String): String {
@@ -336,7 +337,7 @@ class CatchDynamicCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new CatchDynamic().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new CatchDynamic(), src);
 	}
 
 	private function applyFixLogging(src: String): String {
@@ -348,7 +349,7 @@ class CatchDynamicCheckTest extends Test {
 	private function editCountLogging(src: String): Int {
 		final check: CatchDynamic = new CatchDynamic();
 		check.setConfigResolver(_ -> LintConfig.parse('{"rules": {"catch-dynamic": {"fixLoggingUses": true}}}'));
-		return check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()).length;
+		return check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin()).length;
 	}
 
 }

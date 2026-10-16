@@ -6,6 +6,7 @@ import anyparse.check.PositiveSinks;
 import anyparse.check.Severity;
 import anyparse.check.ThreadSafety;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import unit.QueryTestHelpers;
 import unit.cli.CliFixture;
 import utest.Assert;
@@ -774,8 +775,8 @@ class ThreadSafetyCheckTest extends Test {
 			for (t in tree) if (StringTools.endsWith(t.name, '.hx')) { file: '${root}/${t.name}', source: t.source }
 		];
 		final found: Array<String> = [
-			for (v in new ThreadSafety().run(
-				files, new HaxeQueryPlugin()
+			for (v in CheckFixture.violationsIn(
+				new ThreadSafety(), files
 			)) if (v.file != '') '${v.file.substring(root.length + 1)}: ${v.message}'
 		];
 		CliFixture.removeDir(root);

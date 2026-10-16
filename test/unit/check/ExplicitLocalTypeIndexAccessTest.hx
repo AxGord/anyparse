@@ -5,6 +5,7 @@ import anyparse.check.ExplicitLocalType;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -104,13 +105,13 @@ class ExplicitLocalTypeIndexAccessTest extends Test {
 	}
 
 	private function violations(source: String): Array<Violation> {
-		return new ExplicitLocalType().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new ExplicitLocalType(), source);
 	}
 
 	private function assertFixContains(body: String, expected: String): Void {
 		final src: String = wrap(body);
 		final check: ExplicitLocalType = new ExplicitLocalType();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.isTrue(vs.length >= 1);
 		switch CanonicalEdit.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
 			case Ok(text):
@@ -134,7 +135,7 @@ class ExplicitLocalTypeIndexAccessTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final fixFile: { file: String, source: String } = { file: 'C.hx', source: fixSrc };
 		final index: SymbolIndex = SymbolIndex.build([fixFile].concat(otherFiles), plugin);
-		Assert.equals(0, check.fix(fixSrc, check.run([fixFile], plugin), plugin, index).length);
+		Assert.equals(0, check.fix(fixSrc, CheckFixture.violationsIn(check, [fixFile], plugin), plugin, index).length);
 	}
 
 }

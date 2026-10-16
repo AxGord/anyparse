@@ -5,6 +5,7 @@ import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.GroupedEdit;
 import anyparse.check.Check.Violation;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import unit.CheckFixture.FixRun;
 import utest.Assert;
@@ -301,7 +302,7 @@ class AvoidDynamicParamAscriptionFixTest extends Test {
 		final src: String = 'class C {\n\tfunction f(p:Dynamic):Void {\n\t\ttrace((p : Foo));\n\t\ttrace((p : Foo));\n\t}\n}$FOO';
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: AvoidDynamic = new AvoidDynamic();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin);
 		final grouped: Array<GroupedEdit> = check.fixGrouped(src, vs, plugin);
 		Assert.equals(3, grouped.length, 'the signature type plus both unwraps');
 		final first: Null<Int> = grouped[0].group;
@@ -341,14 +342,14 @@ class AvoidDynamicParamAscriptionFixTest extends Test {
 	}
 
 	private function fixedSource(src: String): String {
-		return CheckFixture.applyEdits(src, edits(src));
+		return CanonicalEdit.applyEdits(src, edits(src));
 	}
 
 	/** Run the check over `src` and fix its findings, handing back BOTH halves (the decline reasons ride the violations). */
 	private function fixed(src: String): FixRun {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: AvoidDynamic = new AvoidDynamic();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin);
 		return { violations: vs, edits: check.fix(src, vs, plugin) };
 	}
 
@@ -357,7 +358,7 @@ class AvoidDynamicParamAscriptionFixTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: AvoidDynamic = new AvoidDynamic();
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: base }, { file: subFile, source: sub }];
-		final vs: Array<Violation> = check.run(files, plugin).filter(v -> v.file == 'C.hx');
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == 'C.hx');
 		return check.fix(base, vs, plugin, SymbolIndex.build(files, plugin));
 	}
 

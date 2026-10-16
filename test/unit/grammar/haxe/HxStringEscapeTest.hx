@@ -5,6 +5,7 @@ import anyparse.check.UnusedLocal;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.haxe.HxStringEscape;
 import anyparse.query.QueryNode;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -214,7 +215,7 @@ final class HxStringEscapeTest extends Test {
 	}
 
 	private static function unusedLocals(src: String): Array<Violation> {
-		return new UnusedLocal().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new UnusedLocal(), src);
 	}
 
 	/** The first node of `kind` in `node`'s subtree, depth-first, or null. */

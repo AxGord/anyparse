@@ -6,6 +6,7 @@ import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -166,7 +167,7 @@ class DocCoverageCheckTest extends Test {
 	public function testFixReturnsEmpty(): Void {
 		final src: String = 'class C {}';
 		final check: DocCoverage = new DocCoverage();
-		Assert.equals(0, check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()).length);
+		Assert.equals(0, check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin()).length);
 	}
 
 	public function testSkipParseNoCrash(): Void {
@@ -187,7 +188,7 @@ class DocCoverageCheckTest extends Test {
 
 	/** Run with the default config (type requirement only). */
 	private function typeVs(src: String): Array<Violation> {
-		return new DocCoverage().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new DocCoverage(), src);
 	}
 
 	/** Run the check with a specific `apqlint.json` config threaded through the resolver. */
@@ -195,7 +196,7 @@ class DocCoverageCheckTest extends Test {
 		final check: DocCoverage = new DocCoverage();
 		final cfg: LintConfig = LintConfig.parse(configJson);
 		check.setConfigResolver((_) -> cfg);
-		return check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(check, src);
 	}
 
 	/** Through `Linter.run` so inline `// noqa` suppression applies (default config). */

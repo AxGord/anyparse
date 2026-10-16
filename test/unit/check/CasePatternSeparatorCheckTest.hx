@@ -9,6 +9,7 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -221,14 +222,14 @@ class CasePatternSeparatorCheckTest extends Test {
 	}
 
 	private function violations(src: String, configJson: String): Array<Violation> {
-		return checkOf(configJson).run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(checkOf(configJson), src);
 	}
 
 	/** Run `fix` and re-emit through the canonical writer — the separator edit leaves the spacing to it. */
 	private function applyFix(src: String, configJson: String): String {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: CasePatternSeparator = checkOf(configJson);
-		final found: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
+		final found: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin);
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, found, plugin);
 		return switch CanonicalEdit.canonicalize(src, edits, true, plugin) {
 			case Ok(text): text;

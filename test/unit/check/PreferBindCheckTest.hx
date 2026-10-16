@@ -7,6 +7,7 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -71,9 +72,7 @@ class PreferBindCheckTest extends Test {
 		final src: String = "class C {\n\tfunction h(i:Int, k:String, n:Int, s:String):Void {}\n\tfunction f(i:Int):Void {\n"
 			+ "\t\tfinal k:String = 'k';\n\t\tvar g = () -> h(i, k, -1, 'plain');\n\t}\n}";
 		final check: PreferBind = new PreferBind();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
 		Assert.equals(1, edits.length);
 		Assert.equals("h.bind(i, k, -1, 'plain')", edits[0].text);
 	}
@@ -82,9 +81,7 @@ class PreferBindCheckTest extends Test {
 		final src: String =
 			'class C {\n\tfunction h(a:Int, b:String):Void {}\n\tfunction f(a:Int, b:String):Void {\n\t\tvar g = () -> h(a, b);\n\t}\n}';
 		final check: PreferBind = new PreferBind();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
 		Assert.equals(1, edits.length);
 		Assert.equals('h.bind(a, b)', edits[0].text);
 	}
@@ -93,9 +90,7 @@ class PreferBindCheckTest extends Test {
 		final src: String = 'class Obj {\n\tpublic function m(x:Int):Void {}\n}\nclass C {\n\tfunction f(obj:Obj, x:Int):Void {\n'
 			+ '\t\tvar g = () -> obj.m(x);\n\t}\n}';
 		final check: PreferBind = new PreferBind();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
 		Assert.equals(1, edits.length);
 		Assert.equals('obj.m.bind(x)', edits[0].text);
 	}
@@ -213,7 +208,7 @@ class PreferBindCheckTest extends Test {
 			];
 			final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 			final check: PreferBind = new PreferBind();
-			final own: Array<Violation> = check.run(files, plugin).filter(v -> v.file == 'C.hx');
+			final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == 'C.hx');
 			return check.fix(files[0].source, own, plugin, SymbolIndex.build(files, plugin, thirdParty)).length;
 		}
 		Assert.equals(0, edits('Lib.m', ['Lib.hx']), 'a library method');
@@ -258,7 +253,7 @@ class PreferBindCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new PreferBind().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferBind(), src);
 	}
 
 }

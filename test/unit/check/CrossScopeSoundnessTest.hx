@@ -8,6 +8,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -535,7 +536,9 @@ class CrossScopeSoundnessTest extends Test {
 			for (check in Linter.builtins()) {
 				final cross: Null<CrossFileFix> = check is CrossFileFix ? cast check : null;
 				if (cross == null) continue;
-				for (rename in cross.crossFileFix(report, check.run(report, plugin), plugin, index)) for (slice in rename) {
+				for (rename in cross.crossFileFix(
+					report, CheckFixture.violationsIn(check, report, plugin), plugin, index
+				)) for (slice in rename) {
 					slices++;
 					Assert.isTrue(
 						reportFiles.contains(slice.file), '${check.id()}@${cell.name} names ${slice.file}, outside the report scope'
@@ -858,8 +861,8 @@ class CrossScopeSoundnessTest extends Test {
 	): Array<String> {
 		final plugin: CachingGrammarPlugin = scoped(report, reach, placement);
 		return [
-			for (check in Linter.builtins()) for (v in check.run(
-				report, plugin
+			for (check in Linter.builtins()) for (v in CheckFixture.violationsIn(
+				check, report, plugin
 			)) if (v.file == DECL_FILE) '${v.rule}|${v.severity}|${v.span?.from}'
 		];
 	}
@@ -888,7 +891,7 @@ class CrossScopeSoundnessTest extends Test {
 		final index: SymbolIndex = SymbolIndex.build(report, plugin);
 		final out: Map<String, Array<String>> = [];
 		for (check in Linter.builtins()) {
-			final vs: Array<Violation> = check.run(report, plugin).filter(v -> v.file == DECL_FILE);
+			final vs: Array<Violation> = CheckFixture.violationsIn(check, report, plugin).filter(v -> v.file == DECL_FILE);
 			if (vs.length == 0) continue;
 			final edits: Array<{ span: Span, text: String }> = check.fix(declSource, vs, plugin, index);
 			out[check.id()] = [for (edit in edits) '${edit.span.from}:${edit.span.to}:${edit.text}'];

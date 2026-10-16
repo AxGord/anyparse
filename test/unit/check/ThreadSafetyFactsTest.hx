@@ -10,6 +10,7 @@ import anyparse.check.TypedFactsProbe;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CompilerFacts;
+import unit.CheckFixture;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -49,7 +50,7 @@ class ThreadSafetyFactsTest extends Test {
 		final files: Array<{ file: String, source: String }> = [{ file: OracleCoverage.canonical(dir, 'Main.hx'), source: MAIN }];
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		// by syntax `s.work()` is unresolved, and `S.work`, reached by nothing, is assumed to run on the main thread
-		final syntax: Array<String> = graded(new ThreadSafety().run(files, plugin));
+		final syntax: Array<String> = graded(CheckFixture.violationsIn(new ThreadSafety(), files, plugin));
 		plugin.setResolutionScope({
 			declared: false,
 			sources: () -> {
@@ -61,11 +62,11 @@ class ThreadSafetyFactsTest extends Test {
 			},
 			facts: () -> facts
 		});
-		final typed: Array<String> = graded(new ThreadSafety().run(files, plugin));
+		final typed: Array<String> = graded(CheckFixture.violationsIn(new ThreadSafety(), files, plugin));
 		// a project that does not ask reads the syntax alone, facts or not
 		final unasked: ThreadSafety = new ThreadSafety();
 		unasked.setConfigResolver(_ -> LintConfig.parse(StringTools.replace(CONFIG, '"compilerFacts":true', '"compilerFacts":false')));
-		final off: Array<String> = graded(unasked.run(files, plugin));
+		final off: Array<String> = graded(CheckFixture.violationsIn(unasked, files, plugin));
 		CliFixture.removeDir(dir);
 		Assert.same(['warning A S.work | Sys.sleep'], syntax, 'syntax alone');
 		Assert.same([], typed, 'through the facts: the worker runs it');

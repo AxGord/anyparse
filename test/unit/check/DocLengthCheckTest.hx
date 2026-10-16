@@ -7,6 +7,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -101,7 +102,7 @@ class DocLengthCheckTest extends Test {
 	public function testFixReturnsEmptyAndTheReasonSaysWhy(): Void {
 		final check: DocLength = new DocLength();
 		final src: String = docBlock(DEFAULT_MAX + 5);
-		final found: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final found: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(0, check.fix(src, found, new HaxeQueryPlugin()).length);
 		Assert.isTrue(check.noAutofixReason().indexOf('prose') >= 0, check.noAutofixReason());
 	}
@@ -118,7 +119,7 @@ class DocLengthCheckTest extends Test {
 		final check: DocLength = new DocLength();
 		final cfg: LintConfig = LintConfig.parse(configJson);
 		check.setConfigResolver((_) -> cfg);
-		return check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(check, src);
 	}
 
 	/** A class whose member carries a doc block spanning exactly `lines` physical lines. */

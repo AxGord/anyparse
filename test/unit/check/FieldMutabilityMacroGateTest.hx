@@ -5,7 +5,7 @@ import anyparse.check.InlineConstant;
 import anyparse.check.PreferFinal;
 import anyparse.check.PreferFinalField;
 import anyparse.check.TrivialGetter;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -193,30 +193,30 @@ class FieldMutabilityMacroGateTest extends Test {
 	 * (`PreferFinalMacroOwnerTest`), so the gate these cells pin is the one on the edit.
 	 */
 	private function fieldViolations(owner: String): Array<Violation> {
-		return new PreferFinalField().run([
+		return CheckFixture.violationsIn(new PreferFinalField(), [
 			{ file: 'p/Declarator.hx', source: DECLARATOR },
 			{ file: 'p/W.hx', source: owner }
-		], new HaxeQueryPlugin()).filter(v -> v.file == 'p/W.hx' && v.declineReason == null);
+		]).filter(v -> v.file == 'p/W.hx' && v.declineReason == null);
 	}
 
 	/** `prefer-final-field` findings for a `q.W`, linted alongside a same-simple-name `p.W`. */
 	private function homonymFieldViolations(homonym: String): Array<Violation> {
 		final owner: String = 'package q;\n\nclass W {\n\n\tprivate static var counter: Int = 0;\n\n'
 			+ '\tpublic function new() {}\n\n\tpublic function bump(): Int return counter;\n\n}\n';
-		return new PreferFinalField().run([
+		return CheckFixture.violationsIn(new PreferFinalField(), [
 			{ file: 'p/W.hx', source: homonym },
 			{ file: 'q/W.hx', source: owner }
-		], new HaxeQueryPlugin()).filter(v -> v.file == 'q/W.hx' && v.declineReason == null);
+		]).filter(v -> v.file == 'q/W.hx' && v.declineReason == null);
 	}
 
 	/** `trivial-getter` findings for the same `q.W` / `p.W` pair. */
 	private function homonymPropertyViolations(homonym: String): Array<Violation> {
 		final owner: String = 'package q;\n\nclass W {\n\n\tpublic var active(get, never): Bool;\n\n\tprivate var _active: Bool = '
 			+ 'false;\n\n\tpublic function new() {}\n\n\tprivate function get_active(): Bool return _active;\n\n}\n';
-		return new TrivialGetter().run([
+		return CheckFixture.violationsIn(new TrivialGetter(), [
 			{ file: 'p/W.hx', source: homonym },
 			{ file: 'q/W.hx', source: owner }
-		], new HaxeQueryPlugin()).filter(v -> v.file == 'q/W.hx');
+		]).filter(v -> v.file == 'q/W.hx');
 	}
 
 	/**
@@ -226,11 +226,11 @@ class FieldMutabilityMacroGateTest extends Test {
 	private function markerFieldViolations(pkg: String): Array<Violation> {
 		final owner: String = 'package $pkg;\n\nclass W implements Marker {\n\n\tprivate static var counter: Int = 0;\n\n'
 			+ '\tpublic function new() {}\n\n\tpublic function bump(): Int return counter;\n\n}\n';
-		return new PreferFinalField().run([
+		return CheckFixture.violationsIn(new PreferFinalField(), [
 			{ file: 'p/Marker.hx', source: BUILT_MARKER },
 			{ file: 'q/Marker.hx', source: PLAIN_MARKER },
 			{ file: '$pkg/W.hx', source: owner }
-		], new HaxeQueryPlugin()).filter(v -> v.file == '$pkg/W.hx' && v.declineReason == null);
+		]).filter(v -> v.file == '$pkg/W.hx' && v.declineReason == null);
 	}
 
 	/** `inline-constant` findings for a class `head` carrying one private static scalar constant. */
@@ -253,20 +253,20 @@ class FieldMutabilityMacroGateTest extends Test {
 
 	/** Run `check` over `owner` with both interfaces in scope, keeping only the owner's own findings. */
 	private function ownerViolations(check: Check, owner: String): Array<Violation> {
-		return check.run([
+		return CheckFixture.violationsIn(check, [
 			{ file: 'p/Declarator.hx', source: DECLARATOR },
 			{ file: 'p/Plain.hx', source: PLAIN_IFACE },
 			{ file: 'p/W.hx', source: owner }
-		], new HaxeQueryPlugin()).filter(v -> v.file == 'p/W.hx');
+		]).filter(v -> v.file == 'p/W.hx');
 	}
 
 	/** `prefer-final` findings for a method body, linted alongside the `this`-rebinding abstract. */
 	private function localViolations(body: String): Array<Violation> {
 		final user: String = 'package p;\n\nclass U {\n\n\tpublic static function run(): Int {\n\t\t$body\n\t}\n\n}\n';
-		return new PreferFinal().run([
+		return CheckFixture.violationsIn(new PreferFinal(), [
 			{ file: 'p/ThreadTasks.hx', source: THREAD_TASKS },
 			{ file: 'p/U.hx', source: user }
-		], new HaxeQueryPlugin()).filter(v -> v.file == 'p/U.hx');
+		]).filter(v -> v.file == 'p/U.hx');
 	}
 
 }

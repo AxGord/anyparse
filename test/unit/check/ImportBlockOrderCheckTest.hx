@@ -16,6 +16,7 @@ import anyparse.query.TypeRefPrinter;
 import anyparse.runtime.Span;
 import haxe.io.Path;
 import sys.io.File;
+import unit.CheckFixture;
 import unit.QueryTestHelpers;
 import unit.cli.CliFixture;
 import utest.Assert;
@@ -415,7 +416,7 @@ class ImportBlockOrderCheckTest extends Test {
 		files.push({ file: '$dir/Main.hx', source: main });
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: ImportBlockOrder = configured(null);
-		final own: Array<Violation> = check.run(files, plugin).filter(v -> v.file == '$dir/Main.hx');
+		final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == '$dir/Main.hx');
 		final reordered: String = CanonicalEdit.applyEdits(main, check.fix(main, own, plugin, SymbolIndex.build(files, plugin)));
 		Assert.isTrue(
 			reordered.startsWith('import a.Alpha;\nimport p.Tools.*;\nimport q.T;\nimport r.*;\nimport z.Zed;\n\nimport s.Two.*;\n'),
@@ -479,7 +480,7 @@ class ImportBlockOrderCheckTest extends Test {
 		files.push({ file: '$dir/Main.hx', source: main });
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: ImportBlockOrder = configured(null);
-		final own: Array<Violation> = check.run(files, plugin).filter(v -> v.file == '$dir/Main.hx');
+		final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == '$dir/Main.hx');
 		final sortedEdits: Array<{ span: Span, text: String }> = check.fix(main, own, plugin, SymbolIndex.build(files, plugin));
 		File.saveContent('$dir/Main.hx', main.replace('import v.Fns2;\nimport v.Fns;', 'import v.Fns;\nimport v.Fns2;'));
 		final sorted: HaxeRun = runMain(dir);
@@ -794,7 +795,7 @@ class ImportBlockOrderCheckTest extends Test {
 		];
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: ImportBlockOrder = new ImportBlockOrder();
-		final vs: Array<Violation> = check.run(files, plugin).filter(v -> v.file == 'app/C.hx');
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == 'app/C.hx');
 		Assert.equals(1, vs.length);
 		Assert.equals(0, check.fix(src, vs, plugin, SymbolIndex.build(files, plugin)).length);
 	}
@@ -976,7 +977,7 @@ class ImportBlockOrderCheckTest extends Test {
 		final files: Array<{ file: String, source: String }> = scope(src);
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: ImportBlockOrder = configured(null);
-		final own: Array<Violation> = check.run(files, plugin).filter(v -> v.file == 'app/C.hx');
+		final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == 'app/C.hx');
 		Assert.equals(1, own.length);
 		if (own.length != 1) return null;
 		Assert.isTrue(own[0].declineReason == null, 'run() declines nothing — the guard belongs to the fix path');
@@ -1008,7 +1009,7 @@ class ImportBlockOrderCheckTest extends Test {
 	 */
 	private function violations(src: String, ?config: String, ?libs: Array<{ file: String, source: String }>): Array<Violation> {
 		final check: ImportBlockOrder = configured(config);
-		return check.run(scope(src, libs), new HaxeQueryPlugin()).filter(v -> v.file == 'app/C.hx');
+		return CheckFixture.violationsIn(check, scope(src, libs)).filter(v -> v.file == 'app/C.hx');
 	}
 
 	/** The check's autofix edits for `src`, resolved against the stub-library index plus `libs`. */
@@ -1018,7 +1019,7 @@ class ImportBlockOrderCheckTest extends Test {
 		final files: Array<{ file: String, source: String }> = scope(src, libs);
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: ImportBlockOrder = configured(config);
-		final own: Array<Violation> = check.run(files, plugin).filter(v -> v.file == 'app/C.hx');
+		final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == 'app/C.hx');
 		return check.fix(src, own, plugin, SymbolIndex.build(files, plugin));
 	}
 

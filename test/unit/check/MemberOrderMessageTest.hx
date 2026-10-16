@@ -4,6 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.LintConfig;
 import anyparse.check.MemberOrder;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -126,7 +127,7 @@ final class MemberOrderMessageTest extends Test {
 	private function violations(src: String): Array<Violation> {
 		final check: MemberOrder = new MemberOrder();
 		check.setConfigResolver(_ -> _config);
-		return check.run([{ file: 'C.hx', source: src }], _plugin);
+		return CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], _plugin);
 	}
 
 }

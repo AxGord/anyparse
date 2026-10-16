@@ -4,7 +4,7 @@ import anyparse.check.Check;
 import anyparse.check.Linter;
 import anyparse.check.PreferForIn;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -236,7 +236,7 @@ class PreferForInCheckTest extends Test {
 	}
 
 	private function violations(source: String): Array<Violation> {
-		return new PreferForIn().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferForIn(), source);
 	}
 
 	private function applyFix(source: String): String {

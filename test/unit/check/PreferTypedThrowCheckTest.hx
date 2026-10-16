@@ -9,6 +9,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.StdResolver;
 import haxe.io.Path;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -100,8 +101,8 @@ class PreferTypedThrowCheckTest extends Test {
 		final thrower: String = 'class C {\n\n\tpublic function f():Void {\n\t\tthrow \'boom\';\n\t}\n\n}\n';
 		final handler: String = 'class D {\n\n\tpublic function g():Void {\n\t\ttry h() catch (e:String) {}\n\t}\n\n}\n';
 		final check: PreferTypedThrow = new PreferTypedThrow();
-		final vs: Array<Violation> = check.run(
-			[{ file: 'C.hx', source: thrower }, { file: 'D.hx', source: handler }], new HaxeQueryPlugin()
+		final vs: Array<Violation> = CheckFixture.violationsIn(
+			check, [{ file: 'C.hx', source: thrower }, { file: 'D.hx', source: handler }]
 		);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.indexOf('report-only') != -1, 'degraded message, got: ${vs[0].message}');
@@ -112,8 +113,8 @@ class PreferTypedThrowCheckTest extends Test {
 		final thrower: String = 'class C {\n\n\tpublic function f():Void {\n\t\tthrow \'boom\';\n\t}\n\n}\n';
 		final handler: String = 'class D {\n\n\tpublic function g():Void {\n\t\ttry h() catch (e : Dynamic) {}\n\t}\n\n}\n';
 		final check: PreferTypedThrow = new PreferTypedThrow();
-		final vs: Array<Violation> = check.run(
-			[{ file: 'C.hx', source: thrower }, { file: 'D.hx', source: handler }], new HaxeQueryPlugin()
+		final vs: Array<Violation> = CheckFixture.violationsIn(
+			check, [{ file: 'C.hx', source: thrower }, { file: 'D.hx', source: handler }]
 		);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.indexOf('report-only') != -1, 'degraded message, got: ${vs[0].message}');
@@ -126,8 +127,8 @@ class PreferTypedThrowCheckTest extends Test {
 		final thrower: String = 'class C {\n\n\tpublic function f():Void {\n\t\tthrow \'boom\';\n\t}\n\n}\n';
 		final handler: String = 'class D {\n\n\tpublic function g():Void {\n\t\ttry h() catch (e:haxe.ValueException) {}\n\t}\n\n}\n';
 		final check: PreferTypedThrow = new PreferTypedThrow();
-		final vs: Array<Violation> = check.run(
-			[{ file: 'C.hx', source: thrower }, { file: 'D.hx', source: handler }], new HaxeQueryPlugin()
+		final vs: Array<Violation> = CheckFixture.violationsIn(
+			check, [{ file: 'C.hx', source: thrower }, { file: 'D.hx', source: handler }]
 		);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.indexOf('report-only') != -1, 'degraded message, got: ${vs[0].message}');
@@ -138,8 +139,8 @@ class PreferTypedThrowCheckTest extends Test {
 		final thrower: String = 'class C {\n\n\tpublic function f():Void {\n\t\tthrow \'boom\';\n\t}\n\n}\n';
 		final handler: String = 'class D {\n\n\tpublic function g():Void {\n\t\ttry h() catch (\n\t\t\te:String\n\t\t) {}\n\t}\n\n}\n';
 		final check: PreferTypedThrow = new PreferTypedThrow();
-		final vs: Array<Violation> = check.run(
-			[{ file: 'C.hx', source: thrower }, { file: 'D.hx', source: handler }], new HaxeQueryPlugin()
+		final vs: Array<Violation> = CheckFixture.violationsIn(
+			check, [{ file: 'C.hx', source: thrower }, { file: 'D.hx', source: handler }]
 		);
 		Assert.isTrue(vs[0].message.indexOf('report-only') != -1, 'degraded message, got: ${vs[0].message}');
 	}
@@ -163,7 +164,7 @@ class PreferTypedThrowCheckTest extends Test {
 	public function testSameFileCatchAllDegrades(): Void {
 		final src: String = 'class C {\n\n\tpublic function f():Void {\n\t\ttry g() catch (e:Any) {}\n\t\tthrow \'boom\';\n\t}\n\n}\n';
 		final check: PreferTypedThrow = new PreferTypedThrow();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
 	}
@@ -172,8 +173,8 @@ class PreferTypedThrowCheckTest extends Test {
 		final thrower: String = 'class C {\n\n\tpublic function f():Void {\n\t\tthrow \'boom\';\n\t}\n\n}\n';
 		final handler: String = 'class D {\n\n\tpublic function g():Void {\n\t\ttry h() catch (e:Exception) {}\n\t}\n\n}\n';
 		final check: PreferTypedThrow = new PreferTypedThrow();
-		final vs: Array<Violation> = check.run(
-			[{ file: 'C.hx', source: thrower }, { file: 'D.hx', source: handler }], new HaxeQueryPlugin()
+		final vs: Array<Violation> = CheckFixture.violationsIn(
+			check, [{ file: 'C.hx', source: thrower }, { file: 'D.hx', source: handler }]
 		);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.indexOf('report-only') == -1, 'not degraded, got: ${vs[0].message}');
@@ -184,8 +185,8 @@ class PreferTypedThrowCheckTest extends Test {
 		final thrower: String = 'class C {\n\n\tpublic function f():Void {\n\t\tthrow \'boom\';\n\t}\n\n}\n';
 		final handler: String = 'class D {\n\n\tpublic function g():Void {\n\t\ttry h() catch (e) {}\n\t}\n\n}\n';
 		final check: PreferTypedThrow = new PreferTypedThrow();
-		final vs: Array<Violation> = check.run(
-			[{ file: 'C.hx', source: thrower }, { file: 'D.hx', source: handler }], new HaxeQueryPlugin()
+		final vs: Array<Violation> = CheckFixture.violationsIn(
+			check, [{ file: 'C.hx', source: thrower }, { file: 'D.hx', source: handler }]
 		);
 		Assert.isTrue(vs[0].message.indexOf('report-only') == -1, 'not degraded, got: ${vs[0].message}');
 	}
@@ -209,7 +210,7 @@ class PreferTypedThrowCheckTest extends Test {
 			{ file: Path.join([std, 'haxe', 'ds', 'BalancedTree.hx']), source: STRING_CATCH }
 		]);
 		final check: PreferTypedThrow = new PreferTypedThrow();
-		final vs: Array<Violation> = check.run(report, scoped);
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, report, scoped);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.indexOf('report-only') == -1, 'a std-only catch does not degrade, got: ${vs[0].message}');
 		Assert.isTrue(check.fix(THROWER, vs, scoped).length > 0, 'the fix arm is open');
@@ -220,7 +221,7 @@ class PreferTypedThrowCheckTest extends Test {
 		final report: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: THROWER }];
 		final scoped: CachingGrammarPlugin = scopedPlugin(report, [{ file: 'vendor/crashdumper/CrashDumper.hx', source: STRING_CATCH }]);
 		final check: PreferTypedThrow = new PreferTypedThrow();
-		final vs: Array<Violation> = check.run(report, scoped);
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, report, scoped);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.indexOf('report-only') != -1, 'a project catch degrades, got: ${vs[0].message}');
 		Assert.equals(0, check.fix(THROWER, vs, scoped).length, 'a degraded finding yields no edit');
@@ -255,7 +256,7 @@ class PreferTypedThrowCheckTest extends Test {
 			{ file: Path.join([std, 'haxe', 'ds', 'BalancedTree.hx']), source: STRING_CATCH },
 			{ file: 'vendor/crashdumper/CrashDumper.hx', source: STRING_CATCH }
 		]);
-		final vs: Array<Violation> = new PreferTypedThrow().run(report, scoped);
+		final vs: Array<Violation> = CheckFixture.violationsIn(new PreferTypedThrow(), report, scoped);
 		Assert.isTrue(vs[0].message.indexOf('report-only') != -1, 'the project clause still degrades, got: ${vs[0].message}');
 	}
 
@@ -277,7 +278,7 @@ class PreferTypedThrowCheckTest extends Test {
 		]);
 		StdResolver.resetCache();
 		Sys.putEnv('APQ_NO_STD', '1');
-		final vs: Array<Violation> = new PreferTypedThrow().run(report, scoped);
+		final vs: Array<Violation> = CheckFixture.violationsIn(new PreferTypedThrow(), report, scoped);
 		Sys.putEnv('APQ_NO_STD', '');
 		StdResolver.resetCache();
 		Assert.equals(live, StdResolver.stdDir(), 'the memo is re-primed for the rest of the suite');
@@ -353,8 +354,8 @@ class PreferTypedThrowCheckTest extends Test {
 	 */
 	public function testDegradedFindingCarriesTheDeclineReasonTheFixLedgerReads(): Void {
 		final check: PreferTypedThrow = new PreferTypedThrow();
-		final vs: Array<Violation> = check.run(
-			[{ file: 'C.hx', source: THROWER }, { file: 'H.hx', source: STRING_CATCH }], new HaxeQueryPlugin()
+		final vs: Array<Violation> = CheckFixture.violationsIn(
+			check, [{ file: 'C.hx', source: THROWER }, { file: 'H.hx', source: STRING_CATCH }]
 		);
 		Assert.equals(1, vs.length);
 		final reason: Null<String> = vs[0].declineReason;
@@ -388,7 +389,7 @@ class PreferTypedThrowCheckTest extends Test {
 		final report: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: THROWER }];
 		final scoped: CachingGrammarPlugin = scopedPlugin(report, [{ file: 'vendor/broken/B.hx', source: unreadable }]);
 		final check: PreferTypedThrow = new PreferTypedThrow();
-		final vs: Array<Violation> = check.run(report, scoped);
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, report, scoped);
 		Assert.equals(1, vs.length);
 		if (vs.length != 1) return '';
 		final degraded: Bool = vs[0].message.indexOf('report-only') != -1;
@@ -397,7 +398,7 @@ class PreferTypedThrowCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new PreferTypedThrow().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferTypedThrow(), src);
 	}
 
 	private function applyFix(src: String): String {

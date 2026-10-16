@@ -8,6 +8,7 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -243,7 +244,7 @@ class JoinBranchCallCheckTest extends Test {
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final claimed: Array<String> = [
-			for (check in Linter.builtins()) for (v in check.run(files, plugin))
+			for (check in Linter.builtins()) for (v in CheckFixture.violationsIn(check, files, plugin))
 				if (v.rule == 'join-branch-call' || v.rule == 'prefer-ternary-expression') v.rule
 		];
 		Assert.equals('join-branch-call', claimed.join(','));
@@ -253,7 +254,7 @@ class JoinBranchCallCheckTest extends Test {
 	public function testStatementChainStillReachesTernary(): Void {
 		final joined: String = applyFixOnce(wrap('if (a) log(1);\n\t\telse log(2);'));
 		Assert.isTrue(joined.indexOf('log(if (a) 1 else 2);') != -1);
-		final after: Array<Violation> = new PreferTernaryExpression().run([{ file: 'C.hx', source: joined }], new HaxeQueryPlugin());
+		final after: Array<Violation> = CheckFixture.violations(new PreferTernaryExpression(), joined);
 		Assert.equals(1, after.length);
 	}
 
@@ -261,7 +262,7 @@ class JoinBranchCallCheckTest extends Test {
 	public function testValueChainStillReachesTernary(): Void {
 		final joined: String = applyFixOnce(wrap('final e = if (a) log(1) else log(2);'));
 		Assert.isTrue(joined.indexOf('log(if (a) 1 else 2);') != -1);
-		Assert.equals(1, new PreferTernaryExpression().run([{ file: 'C.hx', source: joined }], new HaxeQueryPlugin()).length);
+		Assert.equals(1, CheckFixture.violations(new PreferTernaryExpression(), joined).length);
 	}
 
 	/**
@@ -302,12 +303,12 @@ class JoinBranchCallCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new JoinBranchCall().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new JoinBranchCall(), src);
 	}
 
 	private function edits(src: String): Array<{ span: Span, text: String }> {
 		final check: JoinBranchCall = new JoinBranchCall();
-		return check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
+		return check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
 	}
 
 }

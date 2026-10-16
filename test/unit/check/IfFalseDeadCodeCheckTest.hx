@@ -4,7 +4,9 @@ import anyparse.check.Check.Violation;
 import anyparse.check.IfFalseDeadCode;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -137,7 +139,7 @@ class IfFalseDeadCodeCheckTest extends Test {
 		final src: String = 'class C {\n\tfunction f() {\n\t\ta();\n\t\t#if false\n\t\t;\n\t\t#end\n\t\tb();\n\t\t#if false\n\t\tc();\n'
 			+ '\t\t#end\n\t\td();\n\t}\n}';
 		final check: IfFalseDeadCode = new IfFalseDeadCode();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(2, vs.length);
 		Assert.isFalse(vs[0].message.indexOf('dead branch - verify intent before deleting') != -1);
 		Assert.isTrue(vs[1].message.indexOf('dead branch - verify intent before deleting') != -1);
@@ -261,7 +263,7 @@ class IfFalseDeadCodeCheckTest extends Test {
 		final src: String = 'class C {\n\tfunction f() {\n\t\ta();\n\t\t#if true\n\t\tlive();\n\t\t#end\n\t\tb();\n\t\t#if true\n\t\tc();\n'
 			+ '\t\t#else\n\t\tdead();\n\t\t#end\n\t\td();\n\t}\n}';
 		final check: IfFalseDeadCode = new IfFalseDeadCode();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(2, vs.length);
 		Assert.isFalse(vs[0].message.indexOf('dead branch - verify intent before deleting') != -1);
 		Assert.isTrue(vs[1].message.indexOf('dead branch - verify intent before deleting') != -1);
@@ -276,18 +278,16 @@ class IfFalseDeadCodeCheckTest extends Test {
 	}
 
 	private inline function applyEdits(src: String, edits: Array<{ span: Span, text: String }>): String {
-		return CheckFixture.applyEdits(src, edits);
+		return CanonicalEdit.applyEdits(src, edits);
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new IfFalseDeadCode().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new IfFalseDeadCode(), src);
 	}
 
 	private function applyFix(src: String): String {
 		final check: IfFalseDeadCode = new IfFalseDeadCode();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
 		return applyEdits(src, edits);
 	}
 

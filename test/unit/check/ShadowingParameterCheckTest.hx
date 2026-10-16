@@ -6,6 +6,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.ShadowingParameter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -134,7 +135,7 @@ class ShadowingParameterCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new ShadowingParameter().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new ShadowingParameter(), src);
 	}
 
 }

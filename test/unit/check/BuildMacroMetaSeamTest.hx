@@ -11,6 +11,7 @@ import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import sys.FileSystem;
 import sys.io.File;
+import unit.CheckFixture;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -295,7 +296,7 @@ class BuildMacroMetaSeamTest extends Test {
 	private function deletions(tag: String): Int {
 		final src: String = '$tag(M.build()) class C {\n\tprivate function dead() {}\n}';
 		final check: UnusedPrivate = new UnusedPrivate();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		return check.fix(src, vs, new HaxeQueryPlugin()).length;
 	}
 
@@ -356,7 +357,7 @@ class BuildMacroMetaSeamTest extends Test {
 
 	/** How many `static-constant` findings `src` yields. */
 	private function promotions(src: String): Int {
-		return new StaticConstant().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()).length;
+		return CheckFixture.violations(new StaticConstant(), src).length;
 	}
 
 	#if (sys || nodejs)

@@ -5,7 +5,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.PreferLineComment;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -220,7 +220,7 @@ class PreferLineCommentCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new PreferLineComment().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferLineComment(), src);
 	}
 
 	private function applyFix(src: String): String {

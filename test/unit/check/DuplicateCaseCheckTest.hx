@@ -5,6 +5,7 @@ import anyparse.check.DuplicateCase;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -108,7 +109,7 @@ class DuplicateCaseCheckTest extends Test {
 
 
 	private function violations(src: String): Array<Violation> {
-		return new DuplicateCase().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new DuplicateCase(), src);
 	}
 
 	/**

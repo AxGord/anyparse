@@ -6,6 +6,7 @@ import anyparse.check.PreferFinalPublicField;
 import anyparse.check.PreferReadOnlyField;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -60,7 +61,7 @@ class PreferReadOnlyFieldCheckTest extends Test {
 			{ file: 'C.hx', source: 'class C { public var x:Int = 0; function s():Void { x = 1; } }' },
 			{ file: 'W.hx', source: 'class W { public function poke(c:C):Void { c.x = 9; } }' }
 		];
-		Assert.equals(0, new PreferReadOnlyField().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(new PreferReadOnlyField(), files).length);
 	}
 
 	/** An unresolved receiver write (`makeC().x = 7`) bails the field name — left alone. */
@@ -167,8 +168,8 @@ class PreferReadOnlyFieldCheckTest extends Test {
 		final src: String = 'class C { public var x:Int = 0; function s():Void { x = 5; } }';
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		Assert.equals(0, new PreferFinalPublicField().run(files, plugin).length);
-		Assert.equals(1, new PreferReadOnlyField().run(files, plugin).length);
+		Assert.equals(0, CheckFixture.violationsIn(new PreferFinalPublicField(), files, plugin).length);
+		Assert.equals(1, CheckFixture.violationsIn(new PreferReadOnlyField(), files, plugin).length);
 	}
 
 	/**
@@ -180,8 +181,8 @@ class PreferReadOnlyFieldCheckTest extends Test {
 		final src: String = 'class C { public var x:Int; public function new(x:Int) { this.x = x; } }';
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		Assert.equals(1, new PreferFinalPublicField().run(files, plugin).length);
-		Assert.equals(0, new PreferReadOnlyField().run(files, plugin).length);
+		Assert.equals(1, CheckFixture.violationsIn(new PreferFinalPublicField(), files, plugin).length);
+		Assert.equals(0, CheckFixture.violationsIn(new PreferReadOnlyField(), files, plugin).length);
 	}
 
 	public function testRegisteredInBuiltins(): Void {
@@ -200,7 +201,7 @@ class PreferReadOnlyFieldCheckTest extends Test {
 			{ file: 'I.hx', source: 'interface I { public var x:Int; }' },
 			{ file: 'C.hx', source: 'class C implements I { public var x:Int = 0; function s():Void { x = 1; } }' }
 		];
-		Assert.equals(0, new PreferReadOnlyField().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(new PreferReadOnlyField(), files).length);
 	}
 
 	/**
@@ -209,11 +210,11 @@ class PreferReadOnlyFieldCheckTest extends Test {
 	 * the container is correctly treated as externally written.
 	 */
 	public function testUnrelatedIndexWriteNoLongerPoisons(): Void {
-		final vs: Array<Violation> = new PreferReadOnlyField().run([
+		final vs: Array<Violation> = CheckFixture.violationsIn(new PreferReadOnlyField(), [
 			{ file: 'C.hx', source: 'class C { public var x:Int = 0; function s():Void { x = 1; } }' },
 			{ file: 'Tab.hx', source: 'class Tab { public var x:Int = 0; }' },
 			{ file: 'U.hx', source: 'class U { public function f(tabs:Map<String, Tab>):Void { tabs["k"].x = 5; } }' }
-		], new HaxeQueryPlugin());
+		]);
 		Assert.equals(1, vs.length);
 		Assert.equals('C.hx', vs[0].file);
 	}
@@ -231,8 +232,8 @@ class PreferReadOnlyFieldCheckTest extends Test {
 		final src: String = 'class C { public var mode:Int = 7; public function new(?other:Int) { if (other != null) mode = other; } }';
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		Assert.equals(1, new PreferFinalPublicField().run(files, plugin).length);
-		Assert.equals(0, new PreferReadOnlyField().run(files, plugin).length);
+		Assert.equals(1, CheckFixture.violationsIn(new PreferFinalPublicField(), files, plugin).length);
+		Assert.equals(0, CheckFixture.violationsIn(new PreferReadOnlyField(), files, plugin).length);
 	}
 
 	/**
@@ -315,12 +316,12 @@ class PreferReadOnlyFieldCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new PreferReadOnlyField().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferReadOnlyField(), src);
 	}
 
 	/** Only the violations against the owner `C.hx` — a subtype fixture can carry findings of its own. */
 	private function ownerViolations(files: Array<{ file: String, source: String }>): Array<Violation> {
-		return new PreferReadOnlyField().run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'C.hx');
+		return CheckFixture.violationsIn(new PreferReadOnlyField(), files).filter(v -> v.file == 'C.hx');
 	}
 
 	private function fixedSource(src: String): String {

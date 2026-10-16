@@ -5,7 +5,9 @@ import anyparse.check.Linter;
 import anyparse.check.PreferMapType;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -476,10 +478,10 @@ class PreferMapTypeCheckTest extends Test {
 
 	/** `run` is a multi-file seam: each file resolves its own header, and findings carry their own path. */
 	public function testMultipleFilesResolveIndependently(): Void {
-		final vs: Array<Violation> = new PreferMapType().run([
+		final vs: Array<Violation> = CheckFixture.violationsIn(new PreferMapType(), [
 			{ file: 'A.hx', source: imp('IntMap', 'class A { var m:IntMap<Int>; }') },
 			{ file: 'B.hx', source: 'class B { var m:IntMap<Int>; }' }
-		], new HaxeQueryPlugin());
+		]);
 		Assert.equals(1, vs.length);
 		Assert.equals('A.hx', vs[0].file);
 	}
@@ -514,14 +516,14 @@ class PreferMapTypeCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new PreferMapType().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferMapType(), src);
 	}
 
 	/** `src` with every edit the check offers applied — the check is a `RiskyFix`, so `fix` is called directly. */
 	private function fixed(src: String): String {
 		final check: PreferMapType = new PreferMapType();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		return applyEdits(src, check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin));
+		return applyEdits(src, check.fix(src, CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin), plugin));
 	}
 
 	/** Assert `src` is reported (one finding) yet gate-refused (no fix edit). */
@@ -531,7 +533,7 @@ class PreferMapTypeCheckTest extends Test {
 	}
 
 	private static inline function applyEdits(src: String, edits: Array<{ span: Span, text: String }>): String {
-		return CheckFixture.applyEdits(src, edits);
+		return CanonicalEdit.applyEdits(src, edits);
 	}
 
 }

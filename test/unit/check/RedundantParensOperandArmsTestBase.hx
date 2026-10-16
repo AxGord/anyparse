@@ -8,6 +8,7 @@ import anyparse.query.BoolExprShape;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.QueryNode;
 import anyparse.query.format.Text;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -58,7 +59,7 @@ class RedundantParensOperandArmsTestBase extends Test {
 	private function violations(src: String, ?resolve: (String) -> LintConfig): Array<Violation> {
 		final check: RedundantParens = new RedundantParens();
 		if (resolve != null) check.setConfigResolver(resolve);
-		return check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(check, src);
 	}
 
 	/** `src` with every edit ONE pass of the check's own `fix` produces applied. */
@@ -66,7 +67,7 @@ class RedundantParensOperandArmsTestBase extends Test {
 		final check: RedundantParens = new RedundantParens();
 		if (resolve != null) check.setConfigResolver(resolve);
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin);
 		return CanonicalEdit.applyEdits(src, check.fix(src, vs, plugin));
 	}
 

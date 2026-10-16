@@ -7,6 +7,8 @@ import anyparse.check.InvertNegatedIfElse;
 import anyparse.check.PreferSwitch;
 import anyparse.check.RedundantElse;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CanonicalEdit;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -68,13 +70,15 @@ final class RegionTerminatorFixTest extends Test {
 	@:pin('control')
 	@:killer('M-REGION-TERM-OFF')
 	public function testEmptyStatementKeepsARegionTerminator(): Void {
-		Assert.equals(0, new EmptyStatement().run([{ file: 'C.hx', source: wrap('$REGION;\n\t\tp();') }], new HaxeQueryPlugin()).length);
-		Assert.equals(1, new EmptyStatement().run([{ file: 'C.hx', source: wrap('p();;') }], new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violations(new EmptyStatement(), wrap('$REGION;\n\t\tp();')).length);
+		Assert.equals(1, CheckFixture.violations(new EmptyStatement(), wrap('p();;')).length);
 	}
 
 	private static function fixed(check: Check, src: String): String {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		return CheckFixture.applyEdits(src, check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin));
+		return CanonicalEdit.applyEdits(
+			src, check.fix(src, CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin), plugin)
+		);
 	}
 
 	private static function wrap(body: String): String {

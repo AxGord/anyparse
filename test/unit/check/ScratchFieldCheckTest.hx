@@ -9,6 +9,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import sys.io.File;
+import unit.CheckFixture;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -257,7 +258,7 @@ class ScratchFieldCheckTest extends Test {
 		final src: String = scratch('private var _z:Int = 0;', 'function f():Int {\n\t\t_z = 1;\n\t\treturn _z;\n\t}');
 		final sub: String = 'class D extends C {\n\tfunction g():Int {\n\t\treturn _z;\n\t}\n}';
 		Assert.equals(
-			0, new ScratchField().run([{ file: 'C.hx', source: src }, { file: 'D.hx', source: sub }], new HaxeQueryPlugin()).length
+			0, CheckFixture.violationsIn(new ScratchField(), [{ file: 'C.hx', source: src }, { file: 'D.hx', source: sub }]).length
 		);
 	}
 
@@ -319,7 +320,7 @@ class ScratchFieldCheckTest extends Test {
 		+ '\tpublic function go():Void {}\n}\n\nclass N {\n\tpublic var v:Int = 0;\n\n\tpublic function new() {\n\t\ttrace(v);\n\t}\n}';
 
 	private function violations(src: String): Array<Violation> {
-		return new ScratchField().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new ScratchField(), src);
 	}
 
 	/** `src` after the fix of a check that runs without an oracle. */
@@ -330,7 +331,7 @@ class ScratchFieldCheckTest extends Test {
 	/** `src` after `check`'s fix of its own findings. */
 	private function fixedWith(check: ScratchField, src: String): String {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin);
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin);
 		return CanonicalEdit.applyEdits(src, edits);
 	}
@@ -339,7 +340,7 @@ class ScratchFieldCheckTest extends Test {
 	private function assertDeclinedAs(src: String, why: String): Void {
 		final check: ScratchField = new ScratchField();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin);
 		Assert.equals(1, vs.length);
 		if (vs.length != 1) return;
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin);

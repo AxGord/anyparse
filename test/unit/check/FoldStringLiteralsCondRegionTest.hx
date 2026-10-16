@@ -3,6 +3,7 @@ package unit.check;
 import anyparse.check.FoldStringLiterals;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 
 using StringTools;
@@ -45,9 +46,7 @@ class FoldStringLiteralsCondRegionTest extends FoldStringLiteralsCheckTestBase {
 	 */
 	public function testEditSpanStaysInsideTheBranch(): Void {
 		final check: FoldStringLiterals = new FoldStringLiterals();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			LIVE, check.run([{ file: 'C.hx', source: LIVE }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
+		final edits: Array<{ span: Span, text: String }> = check.fix(LIVE, CheckFixture.violations(check, LIVE), new HaxeQueryPlugin());
 		Assert.equals(1, edits.length);
 		final replaced: String = LIVE.substring(edits[0].span.from, edits[0].span.to);
 		Assert.equals("'b: ' + p + '\\n'", replaced);

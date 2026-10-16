@@ -282,7 +282,7 @@ class PreferInterpolationCheckTest extends Test {
 			+ "var s = '${!e.folder && e.cloudId != -1 ? Std.string(e.cloudId) : 'NULL'},';\n\t}\n}";
 		final check: PreferInterpolation = new PreferInterpolation();
 		check.setOracleRelaxed(true);
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
 		Assert.equals(1, edits.length);
@@ -373,26 +373,24 @@ class PreferInterpolationCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new PreferInterpolation().run(CheckFixture.withStd(src), new HaxeQueryPlugin());
+		return CheckFixture.violationsIn(new PreferInterpolation(), CheckFixture.withStd(src));
 	}
 
 	/** What `fold-adjacent-string-literals` reports for `src` — the other half of every hand-off fixture. */
 	private function foldViolations(src: String): Array<Violation> {
-		return new FoldStringLiterals().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new FoldStringLiterals(), src);
 	}
 
 	/** The check's findings for `src` with the oracle-relaxed candidate set enabled. */
 	private function relaxedViolations(src: String): Array<Violation> {
 		final check: PreferInterpolation = new PreferInterpolation();
 		check.setOracleRelaxed(true);
-		return check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(check, src);
 	}
 
 	private function fixText(src: String): String {
 		final check: PreferInterpolation = new PreferInterpolation();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
 		return edits.length == 1 ? edits[0].text : '<${edits.length} edits>';
 	}
 

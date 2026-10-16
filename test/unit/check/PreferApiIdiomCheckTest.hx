@@ -9,6 +9,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -222,20 +223,22 @@ class PreferApiIdiomCheckTest extends Test {
 		];
 	}
 
+	/** A `PreferApiIdiom` reading `config` — the same resolver `resolver` hands the run's file gate. */
 	private function check(config: String): PreferApiIdiom {
 		final rule: PreferApiIdiom = new PreferApiIdiom();
-		rule.setConfigResolver(_ -> LintConfig.parse(config));
+		rule.setConfigResolver(resolver(config));
 		return rule;
 	}
 
 	private function violationsOf(files: Array<{ file: String, source: String }>, ?config: String): Array<Violation> {
-		return check(config ?? CONFIG).run(files, new HaxeQueryPlugin());
+		return CheckFixture.violationsIn(check(config ?? CONFIG), files, null, resolver(config ?? CONFIG));
 	}
 
 	private function editsOf(files: Array<{ file: String, source: String }>, ?config: String): Array<{ span: Span, text: String }> {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final rule: PreferApiIdiom = check(config ?? CONFIG);
-		final own: Array<Violation> = rule.run(files, plugin).filter(v -> v.file == files[0].file);
+		final own: Array<Violation> = CheckFixture.violationsIn(rule, files, plugin, resolver(config ?? CONFIG))
+			.filter(v -> v.file == files[0].file);
 		return own.length == 0 ? [] : rule.fix(files[0].source, own, plugin, SymbolIndex.build(files, plugin));
 	}
 
@@ -254,6 +257,14 @@ class PreferApiIdiomCheckTest extends Test {
 				Assert.fail('canonicalize Err: $message');
 		}
 		return '';
+	}
+
+	/**
+	 * `config` as the run's per-file resolver. The rule is `FileGated`, so `Linter.collect` asks its file gate
+	 * through the same resolver the check reads its options from — as `Linter.run` hands both.
+	 */
+	private static function resolver(config: String): (String) -> LintConfig {
+		return _ -> LintConfig.parse(config);
 	}
 
 }

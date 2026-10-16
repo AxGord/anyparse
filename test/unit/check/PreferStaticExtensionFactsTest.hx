@@ -18,6 +18,7 @@ import anyparse.query.CompilerFacts;
 import anyparse.query.StdResolver;
 import anyparse.runtime.Span;
 import haxe.io.Path;
+import unit.CheckFixture;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -529,7 +530,7 @@ class PreferStaticExtensionFactsTest extends Test {
 		final check: PreferStaticExtension = new PreferStaticExtension();
 		final json: String = config;
 		check.setConfigResolver(_ -> LintConfig.parse(json));
-		final found: Array<Violation> = check.run(files, plugin);
+		final found: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 		CliFixture.removeDir(dir);
 		final lines: Array<String> = text.split('\n');
 		final out: Map<String, String> = [];

@@ -7,6 +7,7 @@ import anyparse.check.Severity;
 import anyparse.check.UnusedParameter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -295,7 +296,7 @@ class UnusedParameterCheckTest extends Test {
 		final report: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: declSource }];
 		// Leading assertion — with NO grantee anywhere the same declaration is removable, so the
 		// downgrade below is about the out-of-scope grant and not about the fixture.
-		final bare: Array<Violation> = new UnusedParameter().run(report, new HaxeQueryPlugin());
+		final bare: Array<Violation> = CheckFixture.violationsIn(new UnusedParameter(), report);
 		Assert.equals(1, bare.length);
 		Assert.equals(Severity.Warning, bare[0].severity, 'a confined private method is the autofixable subset');
 		final library: Array<{ file: String, source: String }> = [
@@ -307,14 +308,14 @@ class UnusedParameterCheckTest extends Test {
 			sources: () -> {report: report, projectRoots: [], library: new LibrarySources(library) }
 		});
 		final check: UnusedParameter = new UnusedParameter();
-		final vs: Array<Violation> = check.run(report, plugin);
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, report, plugin);
 		Assert.equals(1, vs.length);
 		Assert.equals(Severity.Info, vs[0].severity, 'a grantee outside the report scope keeps the finding report-only');
 		Assert.equals(0, check.fix(declSource, vs, plugin).length, 'and no parameter is removed');
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new UnusedParameter().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new UnusedParameter(), src);
 	}
 
 	/** Apply the check's own fix edits to `src`; `renameSilence` opts the `Info` silence-rename in, as an `apqlint.json` would. */

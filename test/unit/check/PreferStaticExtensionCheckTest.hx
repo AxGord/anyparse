@@ -12,6 +12,7 @@ import anyparse.query.IndexScope;
 import anyparse.query.StdResolver;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -531,7 +532,7 @@ class PreferStaticExtensionCheckTest extends Test {
 		);
 		final check: PreferStaticExtension = new PreferStaticExtension();
 		check.setConfigResolver(_ -> LintConfig.parse(EXT_CONFIG));
-		final violations: Array<Violation> = check.run(report, scoped);
+		final violations: Array<Violation> = CheckFixture.violationsIn(check, report, scoped);
 		Assert.equals(1, violations.length);
 		// The index argument sees the report file ONLY — the wider scope must win.
 		Assert.equals(2, check.fix(source, violations, scoped, SymbolIndex.build(report, scoped)).length);
@@ -990,7 +991,7 @@ class PreferStaticExtensionCheckTest extends Test {
 		final check: PreferStaticExtension = new PreferStaticExtension();
 		final json: String = config ?? EXT_CONFIG;
 		check.setConfigResolver(_ -> LintConfig.parse(json));
-		return check.run(files, new HaxeQueryPlugin());
+		return CheckFixture.violationsIn(check, files);
 	}
 
 	/**
@@ -1005,7 +1006,7 @@ class PreferStaticExtensionCheckTest extends Test {
 		final check: PreferStaticExtension = new PreferStaticExtension();
 		final json: String = config ?? EXT_CONFIG;
 		check.setConfigResolver(_ -> LintConfig.parse(json));
-		final own: Array<Violation> = check.run(files, plugin).filter(v -> v.file == files[0].file);
+		final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == files[0].file);
 		return { edits: check.fix(files[0].source, own, plugin, SymbolIndex.build(files, plugin)), violations: own };
 	}
 

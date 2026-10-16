@@ -6,6 +6,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -305,7 +306,7 @@ class FieldInitAtDeclarationCheckTest extends Test {
 			+ '\tpublic function dispose():Void {\n\t\t_a = null;\n\t\t_b = null;\n\t\t_c = null;\n\t}\n}';
 		final check: FieldInitAtDeclaration = new FieldInitAtDeclaration();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final all: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
+		final all: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin);
 		Assert.equals(3, all.length);
 		Assert.equals(0, check.fix(src, all.slice(1), plugin).length);
 	}
@@ -736,7 +737,7 @@ class FieldInitAtDeclarationCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new FieldInitAtDeclaration().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new FieldInitAtDeclaration(), src);
 	}
 
 	private function fixedSource(src: String): String {

@@ -12,6 +12,7 @@ import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -217,7 +218,7 @@ class DeadStoreTest extends Test {
 			+ ' if (cur == null || t != tr) { cur = build(tr); t = tr; ix = cur; } return cur[0]; }); } }';
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: DeadStore = new DeadStore();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin);
 		Assert.equals(0, vs.length);
 		Assert.equals(0, check.fix(src, vs, plugin).length);
 	}
@@ -442,7 +443,7 @@ class DeadStoreTest extends Test {
 		// still stripped).
 		final check: DeadStore = new DeadStore();
 		final src: String = 'class C { static function f():Int { var x = 0; return { x = 2; }; } }';
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		switch CanonicalEdit.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf('x = 2') >= 0);
@@ -553,12 +554,12 @@ class DeadStoreTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new DeadStore().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new DeadStore(), src);
 	}
 
 	private function assertFix(src: String, present: String, absent: String): Void {
 		final check: DeadStore = new DeadStore();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		switch CanonicalEdit.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf(present) >= 0);
@@ -570,7 +571,7 @@ class DeadStoreTest extends Test {
 
 	private function assertNoFix(src: String): Void {
 		final check: DeadStore = new DeadStore();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.isTrue(vs.length > 0);
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
 	}
@@ -579,7 +580,7 @@ class DeadStoreTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
 		final check: DeadStore = new DeadStore();
-		final vs: Array<Violation> = check.run(files, plugin);
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 		Assert.isTrue(vs.length > 0, 'the dead store must be reported before its fix can be judged');
 		return check.fix(src, vs, plugin, SymbolIndex.build(files, plugin));
 	}

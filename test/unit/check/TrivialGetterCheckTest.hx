@@ -6,6 +6,7 @@ import anyparse.check.Severity;
 import anyparse.check.TrivialGetter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.SymbolIndex;
+import unit.CheckFixture;
 import utest.Assert;
 
 /**
@@ -285,7 +286,7 @@ class TrivialGetterCheckTest extends TrivialGetterCheckTestBase {
 			},
 			{ file: 'Leaf.hx', source: 'class Leaf extends Mid {\n\toverride function get_active():Bool return true;\n}' }
 		];
-		Assert.equals(0, new TrivialGetter().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(new TrivialGetter(), files).length);
 	}
 
 	// --- (a) interface-conformance gate: collapsing a public property to (default, null)
@@ -312,7 +313,7 @@ class TrivialGetterCheckTest extends TrivialGetterCheckTestBase {
 					+ '\tfunction get_active():Bool return _active;\n}'
 			}
 		];
-		Assert.equals(0, new TrivialGetter().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(new TrivialGetter(), files).length);
 	}
 
 	/**
@@ -329,7 +330,7 @@ class TrivialGetterCheckTest extends TrivialGetterCheckTestBase {
 					+ '\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}'
 			}
 		];
-		Assert.equals(1, new TrivialGetter().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(1, CheckFixture.violationsIn(new TrivialGetter(), files).length);
 	}
 
 	/** The mirror: the imported interface DOES declare `active`, so the getter must stay. */
@@ -343,7 +344,7 @@ class TrivialGetterCheckTest extends TrivialGetterCheckTestBase {
 					+ '\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}'
 			}
 		];
-		Assert.equals(0, new TrivialGetter().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(new TrivialGetter(), files).length);
 	}
 
 	public function testInterfaceLackingPropStillFlagged(): Void {
@@ -356,7 +357,7 @@ class TrivialGetterCheckTest extends TrivialGetterCheckTestBase {
 					+ '\tfunction get_active():Bool return _active;\n}'
 			}
 		];
-		Assert.equals(1, new TrivialGetter().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(1, CheckFixture.violationsIn(new TrivialGetter(), files).length);
 	}
 
 	public function testPrivatePropInImplementerStillFlagged(): Void {

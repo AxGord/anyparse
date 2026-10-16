@@ -7,6 +7,7 @@ import anyparse.grammar.haxe.HxStringEscape;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.FormatConfigDiscovery;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 
 using StringTools;
@@ -683,7 +684,9 @@ class FoldStringLiteralsWidthCheckTest extends FoldStringLiteralsCheckTestBase {
 	private function fixedText(src: String): String {
 		final check: FoldStringLiterals = new FoldStringLiterals();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
+		final edits: Array<{ span: Span, text: String }> = check.fix(
+			src, CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin), plugin
+		);
 		switch CanonicalEdit.canonicalize(src, edits, true, plugin, FormatConfigDiscovery.discover('C.hx')) {
 			case Ok(text):
 				return text;

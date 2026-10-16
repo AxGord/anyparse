@@ -9,6 +9,7 @@ import anyparse.query.NamingPolicy.NamingPolicy;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -39,7 +40,7 @@ class NamingCheckTestBase extends Test {
 		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		Assert.equals(1, vs.length);
 		assertCanonicalized(src, check.fix(src, vs, new HaxeQueryPlugin(), index), present, absent);
 	}
@@ -48,7 +49,7 @@ class NamingCheckTestBase extends Test {
 	private function assertFixSkipped(files: Array<{ file: String, source: String }>, targetFile: String, targetSrc: String): Void {
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == targetFile);
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == targetFile);
 		Assert.isTrue(vs.length >= 1);
 		Assert.equals(0, check.fix(targetSrc, vs, new HaxeQueryPlugin(), index).length);
 	}
@@ -58,7 +59,7 @@ class NamingCheckTestBase extends Test {
 		final files: Array<{ file: String, source: String }> = [{ file: path, source: src }];
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == path);
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == path);
 		Assert.isTrue(vs.length >= 1);
 		assertCanonicalized(src, check.fix(src, vs, new HaxeQueryPlugin(), index), present, absent);
 	}
@@ -68,7 +69,7 @@ class NamingCheckTestBase extends Test {
 		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'pkg/C.hx');
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == 'pkg/C.hx');
 		Assert.isTrue(vs.length >= 1);
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin(), index).length);
 	}
@@ -78,7 +79,7 @@ class NamingCheckTestBase extends Test {
 	): Void {
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == targetFile);
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == targetFile);
 		Assert.isTrue(vs.length >= 1);
 		assertCanonicalized(targetSrc, check.fix(targetSrc, vs, new HaxeQueryPlugin(), index), present, absent);
 	}
@@ -97,7 +98,7 @@ class NamingCheckTestBase extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
 		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, plugin).filter(v -> v.file == targetFile);
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == targetFile);
 		Assert.equals(1, vs.length);
 		if (crossFirst) Assert.equals(0, check.crossFileFix(files, vs, plugin, index).length, 'the cross-file rename is refused');
 		final source: String = files.filter(f -> f.file == targetFile)[0].source;

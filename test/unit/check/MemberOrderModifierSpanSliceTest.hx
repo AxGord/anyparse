@@ -8,6 +8,7 @@ import anyparse.query.CanonicalEdit;
 import anyparse.query.ElementSpan;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -142,7 +143,7 @@ class MemberOrderModifierSpanSliceTest extends Test {
 		final check: MemberOrder = new MemberOrder();
 		final cfg: LintConfig = LintConfig.parse('{}');
 		check.setConfigResolver(_ -> cfg);
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin);
 		return switch CanonicalEdit.canonicalize(src, check.fix(src, vs, plugin), true, plugin) {
 			case Ok(text): text;
 			case Err(message):
