@@ -1198,15 +1198,12 @@ final class CallGraph {
 		 * say wherever the text is read (review R5 F2, L3 G2 and G6).
 		 */
 		function elementTypeSource(container: String, ?params: Map<String, Int>): Null<String> {
-			final peeled: String = NominalTypes.unwrapNullable(container.trim(), transparentWrappers, _plugin.typeSyntax);
-			final path: Null<String> = keys.outerPathOf(peeled, false);
-			final outer: Null<String> = path == null ? null : SourceText.lastSegment(path);
-			final at: Null<Int> = outer == null ? null : (params ?? elementParams)[outer];
-			final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(peeled, _plugin.typeSyntax);
-			if (path == null || outer == null || at == null || args == null) return null;
-			if (!types.imports.isStandard(file, path, standardContainers[outer] ?? [])) return null;
-			final list: Array<String> = args;
-			return at >= list.length ? null : list[at];
+			final path: Null<String> = NominalTypes.outerPathOf(container, transparentWrappers, _plugin.typeSyntax);
+			final element: Null<String> = NominalTypes.elementTypeSourceOf(
+				container, params ?? elementParams, transparentWrappers, _plugin.typeSyntax
+			);
+			if (path == null || element == null) return null;
+			return types.imports.isStandard(file, path, standardContainers[SourceText.lastSegment(path)] ?? []) ? element : null;
 		}
 
 		/**

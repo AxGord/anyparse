@@ -79,6 +79,12 @@ final class Parser {
 	public var pendingTrivia: Null<PendingTrivia> = null;
 
 	/**
+	 * Set for a DECLARATIONS-ONLY parse (`BodySkip`): a `@:skimmable` star field jumps over its elements to the matching
+	 * close. Null for every full parse.
+	 */
+	public var bodySkip: Null<BodySkip> = null;
+
+	/**
 	 * Packrat memo of the `@:memo` grammar rules: generated rule key plus the
 	 * pending-trivia content (`memoKey`), then start position. Scoped to this
 	 * parse like every other field here: an entry is valid only for this

@@ -2,6 +2,8 @@ package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.runtime.BodySkip.SkipMark;
+import anyparse.runtime.BodySkip.SkipMarkRole;
 import anyparse.runtime.Span;
 
 using StringTools;
@@ -426,6 +428,29 @@ final class CondDirectives {
 			if (!isIdentStart(source.fastCodeAt(i + 1))) return i;
 			i += 2;
 		}
+	}
+
+	/**
+	 * `source`'s directives as a declarations-only parse balances a skipped body against them (`BodySkip`): the
+	 * grammar's opener opens a region, each else keyword starts its next branch, the closer ends it.
+	 */
+	public static function skipMarks(source: String, shape: RefShape, regions: Array<LexRegion>): Array<SkipMark> {
+		final elseKeywords: Array<String> = shape.conditionalElseKeywords ?? [];
+		return [
+			for (directive in scan(source, shape, () -> regions))
+				{
+					from: directive.span.from,
+					to: directive.span.to,
+					role: if (directive.keyword == shape.conditionalIfKeyword)
+						SkipMarkRole.Open
+					else if (directive.keyword == shape.conditionalEndKeyword)
+						SkipMarkRole.Close
+					else if (elseKeywords.contains(directive.keyword))
+						SkipMarkRole.Next
+					else
+						SkipMarkRole.Other
+				}
+		];
 	}
 
 }

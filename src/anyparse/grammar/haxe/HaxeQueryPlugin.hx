@@ -6,6 +6,7 @@ import anyparse.format.comment.CommentLossException;
 import anyparse.format.comment.FormatterOff;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.CondBranchProjection;
+import anyparse.query.CondDirectives;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.GrammarPlugin;
@@ -14,12 +15,16 @@ import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.ParsedRootProvider;
 import anyparse.query.Pattern;
 import anyparse.query.QueryNode;
+import anyparse.query.SourceComments;
 import anyparse.query.SpanTypeInfoProvider;
 import anyparse.query.StdResolver;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeSyntax;
+import anyparse.runtime.BodySkip;
 import anyparse.runtime.ParseError;
+import anyparse.runtime.Parser;
+import anyparse.runtime.StringInput;
 import haxe.Exception;
 
 using Lambda;
@@ -2008,6 +2013,18 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 */
 	public function parseRoot(source: String): Null<Any> {
 		return HaxeQueryWalker.parseRoot(source);
+	}
+
+	/**
+	 * `ParsedRootProvider`: the declarations-only parse of `source` — the span parser with a `BodySkip` over this
+	 * grammar's own non-code regions and directives, so `HxFnBlock`'s `@:skimmable` statements are jumped over. Not
+	 * memoised here; the caching host memoises what it reads off it.
+	 */
+	public function parseDeclarationsRoot(source: String): Null<Any> {
+		final regions: Array<LexRegion> = lexicalRegions(source);
+		final ctx: Parser = new Parser(new StringInput(source));
+		ctx.bodySkip = new BodySkip(SourceComments.collectNonCodeRegions(regions), CondDirectives.skipMarks(source, refShape(), regions));
+		return try HaxeModuleSpanParser.parseWith(ctx) catch (exception: Exception) null;
 	}
 
 	/**

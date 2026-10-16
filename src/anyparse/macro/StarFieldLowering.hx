@@ -178,6 +178,7 @@ final class StarFieldLowering {
 			pos: Context.currentPos()
 		});
 		final accumRef: Expr = macro $i{localName};
+		pushSkimStep(starNode, openText, closeText, parseSteps);
 		if (closeText == null && sepText != null && starNode.hasMeta(':tryparse')) {
 			// Try-parse with sep peek. After each successful
 			// element, peeks the next non-whitespace char: if it equals
@@ -1210,6 +1211,27 @@ final class StarFieldLowering {
 			expectLit(ctx, $v{trailText});
 			return $ctorCall;
 		};
+	}
+
+	/**
+	 * The `@:skimmable` step of a delimited star field, run right after its opening delimiter: under a declarations-only
+	 * parse (`Parser.bodySkip`) the position jumps to the matching close, so the element loop that follows sees the close
+	 * at once and leaves the list empty; a run `BodySkip.closeAt` cannot prove balanced is read element by element.
+	 * Only a field whose `@:lead` and `@:trail` are single characters can be balanced that way. Nothing for a field
+	 * without the meta.
+	 */
+	private static function pushSkimStep(
+		starNode: ShapeNode, openText: Null<String>, closeText: Null<String>, parseSteps: Array<Expr>
+	): Void {
+		if (!starNode.hasMeta(':skimmable')) return;
+		if (openText == null || closeText == null || openText.length != 1 || closeText.length != 1)
+			Context.fatalError('Lowering: @:skimmable needs a single-character @:lead and @:trail', Context.currentPos());
+		final open: Int = openText.charCodeAt(0);
+		final close: Int = closeText.charCodeAt(0);
+		parseSteps.push(macro {
+			final _skip: Null<anyparse.runtime.BodySkip> = ctx.bodySkip;
+			if (_skip != null) ctx.pos = _skip.closeAt(ctx.input, ctx.pos, $v{open}, $v{close});
+		});
 	}
 
 }

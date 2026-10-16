@@ -205,6 +205,7 @@ anyparse.runtime/
 ├── Parser.hx        — context: input, pos, errors, cache, indentStack, captures, cancelled
 ├── ParseCache.hx    — interface; NoOpCache.hx is the default (a real cache is for incremental mode)
 ├── MemoEntry.hx     — one recorded run of a `@:memo` rule (value or error, end, trivia effect)
+├── BodySkip.hx      — the declarations-only read: where a `@:skimmable` star field's run closes
 ├── PendingTrivia.hx — the trivia stash a Trivia-mode parser carries to the next `collectTrivia`
 ├── Trivial.hx       — the source-fidelity wrapper a `@:trivia` Star element parses into
 ├── UnknownField.hx  — an input key the schema has no field for, collected rather than dropped
@@ -217,6 +218,7 @@ Key design properties:
 - **Allocation minimized in Fast mode.** `ParseResult` and `Node` wrappers are only used in Tolerant mode. Fast mode returns bare AST values.
 - **Cache opt-in.** By default, `Parser.cache` is `NoOpCache` — zero overhead. Real caching is plugged in only in incremental scenarios.
 - **Packrat memo per rule, opt-in by grammar.** A grammar type marked `@:memo` records its operand unit's outcome (the atom wrapper of a Pratt enum, else the rule) per start position in the `Parser`, keyed also by the pending-trivia content, and replays it — `pos`, value or error, and the run's effect on the stash — instead of re-running. It exists for sibling alternatives that share a prefix and re-enter the same operand (`(e : T)` then `(e)`): unmemoized, a nest of them costs `2^depth`. `Parser.memoRuns` counts the runs that were not replays.
+- **Declarations-only read, opt-in by grammar.** A delimited star field marked `@:skimmable` (Haxe: a function body's statements, `HxFnBlock.stmts`) is jumped from its single-character `@:lead` to the matching `@:trail` when the `Parser` carries a `BodySkip` — balanced over the grammar's own non-code regions and conditional-compilation directives, and read element by element wherever that balance is not proven. `ParsedRootProvider.parseDeclarationsRoot` is the entry, `IndexScope.declarationsOf` the one reader of a module outside the index built on it; a full parse sets no `BodySkip` and pays one null test per such field.
 - **Cancellation optional.** `Parser.cancelled` is `() -> false` by default. Hot loops check it; if never true, cost is one inlined comparison.
 - **Line/col lazy.** `Span` stores only byte offsets and resolves line/col by a linear walk per call. A caller resolving many offsets in the same text builds a `LineIndex` over it instead — a newline prefix index plus binary search, owned by the caller, not shared.
 

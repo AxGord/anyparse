@@ -34,9 +34,73 @@ final class ValueNameBinding {
 	/** The member kinds an enum constructor projects as: one an import names builds a value, no static. */
 	private final _enumConstructorKinds: Array<String>;
 
-	public function new(refs: TypeRefIndex, enumConstructorKinds: Array<String>) {
+	/** The type kinds whose every member is a value by its bare name where the type is in scope: an enum's, an abstract's. */
+	private final _valueHostKinds: Array<String>;
+
+	public function new(refs: TypeRefIndex, enumConstructorKinds: Array<String>, valueHostKinds: Array<String>) {
 		_refs = refs;
 		_enumConstructorKinds = enumConstructorKinds;
+		_valueHostKinds = valueHostKinds;
+	}
+
+	/**
+	 * Whether an import of `fi` (its own, then its ambient chain's) may bring a VALUE named `name` into unqualified scope —
+	 * what a bare `case` pattern compares against (`PatternNameScope`): a static an explicit import, an alias or a type
+	 * wildcard binds (`importedStatics`); a constructor or value of a type an import puts in scope — an enum's, an
+	 * abstract's, a module's sub-types' with it; a module-level field of a module a whole-module import names (4.3.7: `import
+	 * p.Mod;` brings `Mod`'s module-level `modX` and its sub-type enum's constructors in, and `case modX:` compares). True
+	 * where the index cannot list what an import brings, and for an alias or an explicit import spelling `name` itself.
+	 */
+	public function mayImportValue(fi: FileInfo, name: String): Bool {
+		final statics: ImportedStatics = importedStatics(fi, name);
+		return statics.unknown || statics.statics.length > 0 || importsOf(fi).exists(imp -> importMayBring(imp, name));
+	}
+
+	/**
+	 * The path of the first import of `fi` (its own, then its ambient chain's) that may bind the bare call name `name` to a
+	 * function the index cannot list — what a gate asks before it trusts that no import routes the call out of sight
+	 * (`MacroIndex.unresolvedBinding`): a static-field import or an alias of a static whose owner the index does not hold, a
+	 * type wildcard over a type whose statics are not all listed (the type's path), a `using` of a module the index does not
+	 * hold or whose types are not all listed (a static extension may answer any call). With `extensionsOnly`, only a `using`
+	 * is asked: a call written on a value receiver is routed by none of the others. Null when every import binding the name
+	 * is listed, or none binds it.
+	 */
+	public function unlistedImportOf(fi: FileInfo, name: String, extensionsOnly: Bool = false): Null<String> {
+		for (imp in importsOf(fi)) if (!extensionsOnly || imp.kind == ImportKind.Using) {
+			final unlistedAt: Null<String> = switch imp.kind {
+				case ImportKind.Import if (SourceText.lastSegment(imp.raw) == name):
+					final named: Null<ImportedStatic> = staticOf(imp.raw);
+					final hidden: Bool = if (named == null)
+						TypeNameBinding.splitPath(imp.raw) == null
+					else
+						unlisted(named.decls);
+					hidden ? imp.raw : null;
+				case ImportKind.Alias if (imp.alias == name):
+					final target: Null<ImportedStatic> = aliasOf(imp)?.target;
+					final path: String = imp.aliasTarget ?? imp.raw;
+					final hidden: Bool = if (target == null)
+						TypeNameBinding.splitPath(path) == null
+					else
+						unlisted(target.decls);
+					hidden ? path : null;
+				case ImportKind.Wild:
+					final prefix: String = SourceText.parentPath(imp.raw);
+					final split: Null<ImportPath> = TypeNameBinding.splitPath(prefix);
+					final decls: Array<ResolvedType> = split == null || split.rest.length > 1
+						? []
+						: typesOf(
+							_refs.names.filesOfModule(split.module),
+							split.rest.length == 1 ? split.rest[0] : SourceText.lastSegment(split.module)
+						);
+					split != null && split.rest.length <= 1 && unlisted(decls) ? prefix : null;
+				case ImportKind.Using:
+					final types: Null<Array<ResolvedType>> = _refs.names.importedTypes(imp.raw);
+					types == null || unlisted(types) ? imp.raw : null;
+				case _: null;
+			};
+			if (unlistedAt != null) return unlistedAt;
+		}
+		return null;
 	}
 
 	/**
@@ -92,6 +156,39 @@ final class ValueNameBinding {
 			for (n in names) if (!out.contains(n)) out.push(n);
 		}
 		return out;
+	}
+
+	/**
+	 * Whether the one statement `imp` may bring a constructor, a value or a module-level field named `name` into unqualified
+	 * scope (`mayImportValue`); a `using` brings none, a package wildcard none, an alias only what the one
+	 * type it names carries (4.3.7: `import p.Mod as M;` brings neither `modX` nor a sub-type's constructor).
+	 */
+	private function importMayBring(imp: ImportInfo, name: String): Bool {
+		return switch imp.kind {
+			case ImportKind.Using: false;
+			case ImportKind.Alias:
+				final target: Null<String> = imp.aliasTarget;
+				imp.alias == name
+					|| if (target == null)
+						true
+					else
+						carriesValue(_refs.names.declsAt(target), name);
+			case ImportKind.Wild:
+				final prefix: String = SourceText.parentPath(imp.raw);
+				TypeNameBinding.splitPath(prefix) != null && carriesValue(_refs.names.declsAt(prefix), name);
+			case _:
+				final split: Null<ImportPath> = TypeNameBinding.splitPath(imp.raw);
+				final types: Null<Array<ResolvedType>> = _refs.names.importedTypes(imp.raw);
+				// a static-field import brings its one field, which the last segment spells
+				SourceText.lastSegment(imp.raw) == name || split != null && SourceText.isUpperInitial(SourceText.lastSegment(imp.raw))
+					&& (types == null || carriesValue(types, name) || split.rest.length == 0
+						&& _refs.names.filesOfModule(split.module).exists(f -> f.moduleFields.contains(name)));
+		};
+	}
+
+	/** Whether one of `types` — an empty list may be anything — declares `name` as a member its bare name is a value of. */
+	private function carriesValue(types: Array<ResolvedType>, name: String): Bool {
+		return types.length == 0 || types.exists(t -> _valueHostKinds.contains(t.type.kind) && t.type.members.exists(m -> m.name == name));
 	}
 
 	/**

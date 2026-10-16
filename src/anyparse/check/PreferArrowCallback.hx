@@ -461,7 +461,7 @@ final class PreferArrowCallback implements Check {
 			}
 			final typeSrc: Null<String> = TypeResolver.identDeclaredTypeSource(recv, ctx.shape, ctx.tree, ctx.typeSources, false);
 			if (typeSrc != null) {
-				final nominal: Null<String> = receiverNominal(ctx, typeSrc);
+				final nominal: Null<String> = NominalTypes.outerPathOf(typeSrc, [NULL_WRAPPER], ctx.plugin.typeSyntax);
 				return nominal == null
 					? null
 					: chainLookup(ctx, idx, idx.resolveTypeRefsFrom(nominal, ctx.file), member, argIndex, argCount, [], 0);
@@ -492,15 +492,6 @@ final class PreferArrowCallback implements Check {
 		if (head == null || name == null) return null;
 		final prefix: Null<String> = dottedPathOf(ctx, head);
 		return prefix == null ? null : '$prefix.$name';
-	}
-
-	/** The head path of a receiver's declared type source, `Null<>` peeled (`Null<Signal<Int>>` -> `Signal`). */
-	private static function receiverNominal(ctx: Ctx, typeSrc: String): Null<String> {
-		final peeled: String = NominalTypes.memberLookupReceiverSource(typeSrc, [NULL_WRAPPER], ctx.plugin.typeSyntax);
-		return switch ctx.plugin.typeSyntax(peeled)?.shape {
-			case Nominal(path, _): path;
-			case _: null;
-		};
 	}
 
 	/**

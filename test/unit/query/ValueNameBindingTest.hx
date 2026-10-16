@@ -102,6 +102,63 @@ class ValueNameBindingTest extends Test {
 		Assert.equals('Sub', index.values.usingTypes(fileOf(index, 'One.hx')).join(','), 'the one type a path names');
 	}
 
+	/**
+	 * What an import may bring into unqualified scope as a VALUE (`mayImportValue`, what a bare `case` pattern compares
+	 * against), each probed on Haxe 4.3.7 `--interp`: a whole-module import brings its module-level fields and its sub-type
+	 * enum's constructors, a sub-type import and a wildcard over it the constructors; an alias of the main type neither, a
+	 * static-field import only the field it names, a package wildcard no value.
+	 */
+	@:pin('control')
+	@:killer('M-VALUES-IMPORTED-CTOR') @:killer('M-VALUES-WILDCARD-CTOR') @:killer('M-VALUES-ALIAS-WHOLE-MODULE')
+	@:killer('M-VALUES-FIELD-IMPORT-TYPES') @:killer('M-SCOPE-MODULE-IMPORT-BLIND')
+	public function testAnImportBringsTheValuesOfTheTypesItPutsInScope(): Void {
+		final index: SymbolIndex = indexOf([
+			'pk/Mod.hx' => 'package pk;\n\nfinal modval = 1;\n\nenum Sub {\n\tlowctor;\n}\n\nclass Mod {}\n',
+			'A1.hx' => 'import pk.Mod;\n\nclass A1 {}\n',
+			'A2.hx' => 'import pk.Mod.Sub;\n\nclass A2 {}\n',
+			'A3.hx' => 'import pk.Mod.Sub.*;\n\nclass A3 {}\n',
+			'A4.hx' => 'import pk.Mod as M;\n\nclass A4 {}\n',
+			'A5.hx' => 'import nowhere.Gone.thing;\n\nclass A5 {}\n',
+			'A6.hx' => 'import pk.*;\n\nclass A6 {}\n'
+		]);
+		function may(file: String, name: String): Bool {
+			return index.values.mayImportValue(fileOf(index, file), name);
+		}
+		Assert.isTrue(may('A1.hx', 'lowctor'), 'a whole-module import: its sub-type enum\'s constructor');
+		Assert.isTrue(may('A1.hx', 'modval'), 'a whole-module import: its module-level field');
+		Assert.isTrue(may('A2.hx', 'lowctor'), 'a sub-type import');
+		Assert.isFalse(may('A2.hx', 'modval'), 'a sub-type import brings no module-level field');
+		Assert.isTrue(may('A3.hx', 'lowctor'), 'a wildcard over the enum');
+		Assert.isFalse(may('A4.hx', 'lowctor'), 'an alias of the main type brings no sub-type\'s constructor');
+		Assert.isFalse(may('A4.hx', 'modval'), 'nor a module-level field');
+		Assert.isTrue(may('A5.hx', 'thing'), 'a static-field import: the field it names');
+		Assert.isFalse(may('A5.hx', 'lowctor'), 'and nothing else, even outside the index');
+		Assert.isFalse(may('A6.hx', 'lowctor'), 'a package wildcard brings types');
+	}
+
+	/**
+	 * The import a bare call may be routed through out of the index's sight (`unlistedImportOf`, the macro gate's question): a
+	 * static-field import of a module the index does not hold, a `using` of one; a wildcard over an indexed type it lists is
+	 * none. On a value receiver only a `using` is asked.
+	 */
+	@:pin('control')
+	@:killer('M-MACRO-VALUE-UNLISTED') @:killer('M-MACRO-EXTENSIONS-ONLY')
+	public function testAnUnlistedImportIsTheOneACallMayBeRoutedThrough(): Void {
+		final index: SymbolIndex = indexOf([
+			'pk/Mod.hx' => 'package pk;\n\nclass Mod {\n\tpublic static function t():Void {}\n}\n',
+			'B1.hx' => 'import m.Lang.t;\n\nclass B1 {}\n',
+			'B2.hx' => 'import pk.Mod.*;\n\nclass B2 {}\n',
+			'B3.hx' => 'using m.Ext;\nimport m.Lang.t;\n\nclass B3 {}\n'
+		]);
+		function at(file: String, extensionsOnly: Bool): String {
+			return index.values.unlistedImportOf(fileOf(index, file), 't', extensionsOnly) ?? '-';
+		}
+		Assert.equals('m.Lang.t', at('B1.hx', false), 'a static-field import of a module the index does not hold');
+		Assert.equals('-', at('B1.hx', true), 'which routes no call on a value');
+		Assert.equals('-', at('B2.hx', false), 'a wildcard over a type the index lists');
+		Assert.equals('m.Ext', at('B3.hx', true), 'a `using` of a module the index does not hold');
+	}
+
 	private static function indexOf(files: Map<String, String>): SymbolIndex {
 		final entries: Array<{ file: String, source: String }> = [for (file => source in files) { file: file, source: source }];
 		entries.sort((a, b) -> Reflect.compare(a.file, b.file));

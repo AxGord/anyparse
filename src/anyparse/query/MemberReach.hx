@@ -2688,13 +2688,10 @@ final class MemberReach {
 
 	/** The element type of a value typed `type` when that is the built-in array type written with it (`Array<T>`), else null. */
 	private function elementType(type: String): Null<String> {
-		final source: String = NominalTypes.unwrapNullable(
-			StringTools.trim(type), _shape.memberTransparentWrapperTypeNames ?? [], _scope.plugin.typeSyntax
+		return NominalTypes.elementTypeSourceOf(
+			type, [for (name in _shape.arrayTypeNames ?? []) name => 0],
+			_shape.memberTransparentWrapperTypeNames ?? [], _scope.plugin.typeSyntax
 		);
-		final nominal: Null<String> = NominalTypes.outerNominalOf(source, _scope.plugin.typeSyntax);
-		if (nominal == null || !(_shape.arrayTypeNames ?? []).contains(nominal)) return null;
-		final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(source, _scope.plugin.typeSyntax);
-		return args == null || args.length != 1 ? null : args[0];
 	}
 
 	/** The call or constructor node of `tree` spanning exactly `span` — a chained call starting there is another node. */

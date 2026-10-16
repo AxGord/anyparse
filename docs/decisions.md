@@ -2793,3 +2793,49 @@ decided the question; it may not become a record of runs.
   names only it (`cannot move across scope: <file> does not parse`), where the rename / move gate names every one;
   `MoveMember.resolveMove`'s own parse loop words it `<file> does not parse: <message>` without the `ParseError`
   position. Folding either would change an op's message, so both stay; they share `ParsedFile` — branch `feat/infra-B7`
+- a name binding learns which types an imported library or std module declares by parsing that module whole (B3: 170
+  modules, 2.7 MB per TM run, +0.8 s of `--rule thread-safety`), and the substring pre-filter in front of it ("parse
+  only a file that spells the name") filtered none of them out → a DECLARATIONS-ONLY read through the grammar: the
+  span parser with a `BodySkip` jumps each `@:skimmable` function body (`HxFnBlock.stmts`) from `{` to its matching
+  `}` over the grammar's own non-code regions (`lexicalRegions`) and directive marks (`CondDirectives.skipMarks`), and
+  reads it element by element wherever the balance is not proven (a directive branch not back at its region's depth,
+  a region opened in the body still open at its close, a directive of an outer region, no close). No keyword scanner
+  of its own: the delimiters are the field's `@:lead` / `@:trail`, the vocabulary `RefShape`'s. One reader for every
+  consumer of a module's declarations outside the index (`IndexScope.declarationsOf` → `SymbolIndexHost.
+  declarationsOf`, memoised per file, off the run's full root when it already holds one; `StdTypes` and
+  `moduleTypesInScope`); `DeclarationsReadTest` pins it equal to the full read on every `src/anyparse/query` source.
+  Two answers change, both toward the compiler: a module whose BODY the grammar cannot read still declares its types
+  (a body declares none), and a scope file at `a/b/C.hx` whose package is not `a.b` is no longer the module `a.b.C` for
+  a name it never spells either — branch `feat/infra-B4`
+- whether a stored value's field is exposed was asked of the node HOLDING the field, which under `#if` is the region, so
+  a `@:publicFields` type's field read as private (review L3 G1, `f1x`) → `StoredValues` asks of the type declaration
+  (`TypeResolver.enclosingTypeDecl`), and `MemberKinds.fieldExposed` reads the modifiers of a type declared through a
+  `final` wrapper on the wrapper (`@:publicFields final class` exposed nothing to FIAD either) — branch `feat/infra-B4`
+- a function's own type parameter was bound by argument POSITION even where a skipped optional parameter shifts the
+  arguments (`f<T>(?n:Int, x:T, ?y:L)` called `f(s, u)` took `T` for `L`; review L3 G3) → from the first argument that
+  may shift (`CallGraphKeys.mayShift`) no parameter is proven bound, and a type parameter one of them is written as is
+  unknown — branch `feat/infra-B4`
+- `@:overload` signatures agreed by return TEXT, so `function<T>(x:T):T` matched the class's `T` (review L3 G4) → a
+  signature declaring type parameters of its own (`typeParamNames` by declaration offset) makes every signature disagree
+  — branch `feat/infra-B4`
+- `PatternNameScope` read the file's module-level names off the tree (package and import paths included, review L3
+  low) and what an import brings by its own kind-by-kind reading; `MacroIndex` matched an import's last segments against
+  ANY declared type name → both ask the shared bindings: `FileInfo.moduleFields`, `ValueNameBinding.mayImportValue`
+  (4.3.7, `hx/pns`, `hx/ctor`: a whole-module import brings its module-level fields and its sub-type enum's
+  constructors, a sub-type import and a wildcard over it the constructors, an alias of the main type neither) and
+  `unlistedImportOf`, `TypeNameBinding.bindingsOf` for a written receiver. The gate's answer is now the path the
+  compiler binds the name to — `import m.Lang as L;` and `import m.*;` name `m.Lang`, so a whitelisted `m.Lang.t`
+  clears them — and the ambient chain's imports count as the file's own do — branch `feat/infra-B4`
+- typing copies kept arcs the shared typer lacked: `PreferStaticExtension` typed a string literal and `this` inside an
+  abstract itself, `LambdaLoopScan` a construction, and five readers took a container's element (or a type's path) off
+  its written type each their own way (`PreferComprehension.elementTypeOf` keyed by the full written path, `MemberReach.
+  elementType` arrays only, `FieldWriteIndex.elementTypeSource`, `CallGraph.elementTypeSource`, `NominalTypes`' own
+  for-binder tail; `PreferArrowCallback.receiverNominal`, `CallGraphKeys.outerPathOf`) → the deep walk of `NominalTypes`
+  reads a literal as its type, a construction as the type it writes (nominal only: `new Box(item)` spells no
+  arguments), and `this` inside a `RefShape.underlyingThisTypeKinds` type as its underlying type (4.3.7 types `this` in
+  `abstract A(T)` as `T`); `elementTypeSourceOf` / `outerPathOf` are the one written-type reading, keyed by the simple
+  name, wrappers peeled to a fixed point, and which container it IS stays each caller's question
+  (`isStandard`, `arrayTypeNames`). `NominalTypes.expressionTypeSource` is the SOURCE mode: the same deep walk at source
+  level, plus a method call whose declarations write one return naming no type parameter. `DefaultRepeatedArgument`
+  reads a receiver's declared type through `TypeResolver.identTypeName` instead of its own `Refs.find` memo. All-rules
+  on the four trees unchanged — branch `feat/infra-B4`

@@ -5,6 +5,8 @@ import anyparse.query.IndexScope;
 import anyparse.query.QueryNode;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeNameBinding.NameTarget;
+import anyparse.query.TypeNameBinding.NameTargets;
 import haxe.Exception;
 
 using Lambda;
@@ -46,52 +48,30 @@ final class MacroIndex {
 	}
 
 	/**
-	 * The raw path of the first import of `file` that BINDS `name` and whose own target
-	 * type the index does NOT carry, or null when nothing binds it or what does is in
-	 * scope. That is the question "could this file's imports route this call to a
-	 * declaration the resolution scope cannot see".
-	 *
-	 * Binding is per import KIND, and the two wildcard forms are why the kind has to be
-	 * read rather than the path: a plain import binds its last segment, an alias binds the
-	 * alias, and a WILDCARD or a `using` binds everything — the first because it pulls a
-	 * package's types or a type's statics in under their own names, the second because a
-	 * static extension routes by receiver TYPE and can answer any method call in the file.
+	 * The path an import of `file` (its own or its ambient chain's) binds `name` through to a declaration the resolution
+	 * index does NOT hold, or null when nothing binds it or what does is in the index — the question "could this file's
+	 * imports route this call to a declaration the resolution scope cannot see". A `typeName` (a written receiver) is bound
+	 * as the compiler binds a type name (`TypeNameBinding.bindingsOf`: the path of a type outside the index on any build); a
+	 * bare call name as the compiler binds a value, and a receiver that names no type through the
+	 * `using` statements alone (`ValueNameBinding.unlistedImportOf`: a static whose owner the index does
+	 * not list, a type wildcard over one, a `using` of one — a static extension can answer any method call).
 	 */
-	public function unresolvedBinding(file: String, name: String): Null<String> {
+	public function unresolvedBinding(file: String, name: String, typeName: Bool): Null<String> {
 		build();
 		final info: Null<FileInfo> = index().fileInfo(file);
 		if (info == null) return null;
-		// The wildcard's own `*` is dropped from the answer: the caller appends the member
-		// name to it to probe the whitelist, and `m.Lang.*.t` names nothing.
-		for (imported in info.imports) if (binds(imported, name) && !carriesTarget(imported.raw))
-			return imported.raw.endsWith('.*') ? imported.raw.substr(0, imported.raw.length - 2) : imported.raw;
-		return null;
-	}
-
-	/** Whether `imported` puts `name` in scope — see the kind-by-kind reasoning on `unresolvedBinding`. */
-	private function binds(imported: ImportInfo, name: String): Bool {
-		return switch imported.kind {
-			case ImportKind.Alias: imported.alias == name;
-			case ImportKind.Wild, ImportKind.Using: true;
-			case _: lastSegment(imported.raw) == name;
+		if (!typeName) return index().values.unlistedImportOf(info, name);
+		final targets: NameTargets = index().refs.names.bindingsOf(name, info);
+		final bound: Null<NameTarget> = targets.bound;
+		final candidates: Array<NameTarget> = targets.guarded.concat(targets.unlisted);
+		if (bound != null) candidates.unshift(bound);
+		for (target in candidates) switch target {
+			case OutOfIndex(path):
+				return path;
+			case InIndex(_):
 		}
-	}
-
-	/**
-	 * Whether the index carries the TYPE an import path names. WHICH segment that is
-	 * cannot be known from the path alone — `pkg.Lang.t` is a member of `Lang`, `pkg.a.Lang`
-	 * is a type in `pkg.a` — so both trailing segments are tried, a wildcard's `*` dropped
-	 * first. Trying too many is the safe direction: it can only conclude the target IS in
-	 * scope, which is the answer that allows a fix the caller was going to get anyway.
-	 */
-	private function carriesTarget(raw: String): Bool {
-		final segments: Array<String> = raw.split('.');
-		if (segments[segments.length - 1] == '*') segments.pop();
-		for (i in 0...segments.length) {
-			if (i >= 2) break;
-			if (declaresType(segments[segments.length - 1 - i])) return true;
-		}
-		return false;
+		// a receiver no type binding names is a value, and a static extension a `using` brings may answer the call on it
+		return index().values.unlistedImportOf(info, name, true);
 	}
 
 	/** The resolved index, valid after `build`. */
@@ -114,12 +94,6 @@ final class MacroIndex {
 			macros[member.name] = paths;
 		}
 		_macros = macros;
-	}
-
-	/** `path`'s last dot-separated segment. */
-	private static function lastSegment(path: String): String {
-		final dot: Int = path.lastIndexOf('.');
-		return dot == -1 ? path : path.substr(dot + 1);
 	}
 
 }
@@ -277,7 +251,8 @@ final class MacroGate {
 		}
 		final receiver: Null<String> = call.receiver;
 		if (receiver != null && (_macros.declaresType(receiver) || whitelisted('$receiver.${call.name}'))) return false;
-		final binding: Null<String> = _macros.unresolvedBinding(_file, receiver ?? call.name);
+		final binding: Null<String> = _macros.unresolvedBinding(_file, receiver ?? call.name, receiver != null);
+
 		// A WRITTEN qualified receiver names a type path directly, so it refuses on its own
 		// evidence: `pkg.Lang.t(…)` needs no import at all, and nothing else in the file
 		// says where `Lang` lives.

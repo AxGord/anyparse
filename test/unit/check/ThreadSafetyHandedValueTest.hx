@@ -227,6 +227,22 @@ class ThreadSafetyHandedValueTest extends Test {
 		#end
 	}
 
+	/**
+	 * Review L3 G1 (`f1x`): what exposes a field is written on its TYPE DECLARATION — `@:publicFields`, on a `final` wrapper
+	 * too — whatever holds the field: a member under `#if` is held by the region, not by the type.
+	 */
+	@:pin('control') @:killer('M-TS-STORED-HOLDER-NOT-DECLARATION')
+	public function testAFieldItsTypeDeclarationExposesIsNotOnlyStored(): Void {
+		#if (sys || nodejs)
+		final warns: Array<String> = ['S.work | S._m'];
+		Assert.same(warns, holds(implicit('new PfCond(load);')), 'a `@:publicFields` type, the field under `#if`');
+		Assert.same(warns, holds(implicit('new PfFinal(load);')), 'a `@:publicFields final` type');
+		Assert.same([], holds(implicit('new PrivCond(load);')), 'a private field under `#if`, only stored');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
 	/**
 	 * `S.work` runs on a spawned thread and holds `_m` across `held`; the main thread takes `_m` too. `load` blocks, `caught` blocks only in its `catch`, `scan` hands `load` to `Lambda.iter`.
@@ -286,7 +302,8 @@ class ThreadSafetyHandedValueTest extends Test {
 
 	/**
 	 * `stored` with classes keeping the value in a field the language calls by name (`Ib`, `Kv`, `Ts`, `PIb` iterating
-	 * itself), in a public field (`Pub`) and in a private one (`Priv`); `it`, `kv`, `ts` and `load` block.
+	 * itself), in a public field (`Pub`), in a private one (`Priv`), and in fields their type declaration exposes
+	 * or not, held by a `#if` region (`PfCond`, `PfFinal`, `PrivCond`); `it`, `kv`, `ts` and `load` block.
 	 */
 	private static function implicit(held: String): Array<Violation> {
 		return ThreadSafetyCheckTest.violations(
@@ -305,6 +322,9 @@ class ThreadSafetyHandedValueTest extends Test {
 				+ ' public function each():Void for (x in this) {} }',
 				'class Pub { public final job:String->Void; public function new(j:String->Void) { job = j; } }',
 				'class Priv { final _job:String->Void; public function new(j:String->Void) { _job = j; } }',
+				'@:publicFields class PfCond {\n#if !nothing\nfinal job:String->Void; function new(j:String->Void) { job = j; }\n#end\n}',
+				'@:publicFields final class PfFinal { final job:String->Void; function new(j:String->Void) { job = j; } }',
+				'class PrivCond {\n#if !nothing\nfinal _job:String->Void; public function new(j:String->Void) { _job = j; }\n#end\n}',
 				'class S { final _m:Mutex = new Mutex(); public function new() {} function load(p:String):Void Disk.stat(p);'
 				+ ' function it():Iterator<String> { Disk.stat("p"); return null; }'
 				+ ' function kv():KeyValueIterator<Int, String> { Disk.stat("p"); return null; }'

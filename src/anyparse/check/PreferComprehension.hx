@@ -8,6 +8,7 @@ import anyparse.query.CtorFieldWrite;
 import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.NominalTypes;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
@@ -442,7 +443,9 @@ final class PreferComprehension implements Check {
 		if (declName == null || declSpan == null || initSpan == null || forSpan == null || scopeSpan == null) return null;
 		if (!gapAdmits(source, declName, declSpan, forSpan, gapped)) return null;
 		final annotation: Null<String> = CtorFieldFold.declaredTypeAnnotation(source, decl);
-		final element: Null<String> = annotation == null ? null : elementTypeOf(annotation, s);
+		final element: Null<String> = annotation == null
+			? null
+			: NominalTypes.elementTypeSourceOf(annotation, s.elementTypeParams, [], s.typeSyntax);
 		final acc: ComprehensionAcc = { checks: [], hoisted: [], elementType: element };
 		// A comment on its own line between an ADJACENT pair documents the loop the fix dissolves, so it
 		// is hoisted above the result like a body comment; one trailing the declaration still refuses
@@ -650,21 +653,6 @@ final class PreferComprehension implements Check {
 	private static function restatesElementType(l: ChainLocal, annotation: String, acc: ComprehensionAcc): Bool {
 		final element: Null<String> = acc.elementType;
 		return l.wholeArgument && element != null && stripWhitespace(element) == stripWhitespace(annotation);
-	}
-
-	/**
-	 * The ELEMENT type named by a container annotation `Name<A0, A1, …>` — the argument at the index
-	 * `RefShape.indexedElementTypeParams` records for `Name` (Haxe `Array<T>` → 0, `Map<K, V>` → 1).
-	 * Null when the annotation is not of that shape, names an unlisted container, or carries too few
-	 * arguments; null means NOTHING is restated, so the link keeps its annotation.
-	 */
-	private static function elementTypeOf(annotation: String, s: ComprehensionSeams): Null<String> {
-		return switch s.typeSyntax(annotation)?.shape {
-			case Nominal(path, args):
-				final at: Null<Int> = s.elementTypeParams[path];
-				at != null && at < args.length ? args[at].text : null;
-			case _: null;
-		};
 	}
 
 	/**

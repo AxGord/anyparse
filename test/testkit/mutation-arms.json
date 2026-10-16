@@ -11068,31 +11068,33 @@
 		},
 		{
 			"name": "M-SCOPE-IMPORT-BLIND",
-			"type": "anyparse.query.PatternNameScope",
-			"method": "importMayBind",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "mayImportValue",
 			"force": "false",
 			"note": "an import that may bring a value of the binder's name in (a static import, a type wildcard) is not consulted"
 		},
 		{
 			"name": "M-SCOPE-AMBIENT-BLIND",
-			"type": "anyparse.query.PatternNameScope",
-			"method": "mayCompare",
-			"find": "return _fi.ambientImports.exists(group -> group.imports.exists(imp -> importMayBind(imp, name)));",
-			"replace": "return false;",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "importsOf",
+			"find": "[fi.imports].concat([for (group in fi.ambientImports) group.imports])",
+			"replace": "[fi.imports]",
 			"note": "the ambient `import.hx` chain is not consulted, so a static it brings in reads as a capture"
 		},
 		{
 			"name": "M-SCOPE-MODULE-FIELDS",
 			"type": "anyparse.query.PatternNameScope",
-			"method": "moduleLevelNames",
-			"force": "[]",
+			"method": "of",
+			"find": "for (name in fi.moduleFields) if (!local.contains(name)) local.push(name);",
+			"replace": "",
 			"note": "a module-level field, which a bare pattern compares against, is not consulted"
 		},
 		{
 			"name": "M-SCOPE-MODULE-IMPORT-BLIND",
-			"type": "anyparse.query.PatternNameScope",
-			"method": "moduleMayCarry",
-			"force": "false",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "importMayBring",
+			"find": "_refs.names.filesOfModule(split.module).exists(f -> f.moduleFields.contains(name))",
+			"replace": "false",
 			"note": "a module import's module-level fields, which a bare pattern compares against, are not consulted"
 		},
 		{
@@ -21136,7 +21138,7 @@
 			"name": "M-TS-STORED-PUBLIC",
 			"type": "anyparse.check.StoredValues",
 			"method": "runsOnlyWhereSpelled",
-			"find": "return name != null && !_calledByName.contains(name) && !MemberKinds.fieldExposed(tree, field, body, _plugin, _shape);",
+			"find": "return name != null && !_calledByName.contains(name) && !MemberKinds.fieldExposed(tree, field, declaration, _plugin, _shape);",
 			"replace": "return name != null && !_calledByName.contains(name);",
 			"note": "a public stored field std code may read as a structure's counts as only stored"
 		},
@@ -21144,8 +21146,8 @@
 			"name": "M-TS-STD-CONTAINER",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "if (!types.imports.isStandard(file, path, standardContainers[outer] ?? [])) return null;",
-			"replace": "",
+			"find": "return types.imports.isStandard(file, path, standardContainers[SourceText.lastSegment(path)] ?? []) ? element : null;",
+			"replace": "return element;",
 			"note": "a container is read as the std one its simple name spells wherever written (a project List<T> yields T)"
 		},
 		{
@@ -21681,6 +21683,195 @@
 			"find": "return resolutionIndexOf(plugin) ?? report(files, plugin);",
 			"replace": "return resolutionIndexOf(plugin) ?? SymbolIndex.build(files, plugin);",
 			"note": "the resolution question without a scope builds a second report index instead of sharing the memoised one"
+		},
+		{
+			"name": "M-SKIM-GAPS-COUNTED",
+			"type": "anyparse.runtime.BodySkip",
+			"method": "closeAt",
+			"find": "if (gap < _gaps.length && i >= _gaps[gap].from) {",
+			"replace": "if (false) {",
+			"note": "a brace inside a string, a comment or a regex counts, so a skipped body ends at a quoted `}`"
+		},
+		{
+			"name": "M-SKIM-NEVER",
+			"type": "anyparse.runtime.BodySkip",
+			"method": "closeAt",
+			"force": "pos",
+			"note": "no body is ever skipped: the declarations read is a full parse, and a body the grammar cannot read hides the module's declarations"
+		},
+		{
+			"name": "M-SKIM-BRANCH-DEPTH",
+			"type": "anyparse.runtime.BodySkip",
+			"method": "closeAt",
+			"find": "if (opened.length == 0 || opened[opened.length - 1] != depth) return pos;",
+			"replace": "if (opened.length == 0) return pos;",
+			"note": "a directive branch that does not return to the depth its region opened at is balanced across branches, so a body whose branches each open a brace ends past its own close"
+		},
+		{
+			"name": "M-SKIM-REGION-LEFT-OPEN",
+			"type": "anyparse.runtime.BodySkip",
+			"method": "closeAt",
+			"find": "if (depth == 0) return opened.length == 0 ? i : pos;",
+			"replace": "if (depth == 0) return i;",
+			"note": "a body may end inside a directive region it opened, so the members after it are read as part of the region"
+		},
+		{
+			"name": "M-SKIM-OUTER-REGION",
+			"type": "anyparse.runtime.BodySkip",
+			"method": "closeAt",
+			"find": "if (opened.length == 0 || opened[opened.length - 1] != depth) return pos;",
+			"replace": "if (opened.length > 0 && opened[opened.length - 1] != depth) return pos;",
+			"note": "a directive of a region opened before the body is taken for one of the body's own"
+		},
+		{
+			"name": "M-SCOPE-UNPARSED-UNSPELLED",
+			"type": "anyparse.query.CachingGrammarPlugin",
+			"method": "moduleTypesInScope",
+			"find": "if (!rooted && entry.source.indexOf(name) < 0) {",
+			"replace": "if (false) {",
+			"note": "a library module that does not parse is unknown even for a name its text never spells, so any import of one makes every name unknown"
+		},
+		{
+			"name": "M-TS-STORED-HOLDER-NOT-DECLARATION",
+			"type": "anyparse.check.StoredValues",
+			"method": "finalFieldsBeside",
+			"find": "runsOnlyWhereSpelled(tree, declaration, c)",
+			"replace": "runsOnlyWhereSpelled(tree, body, c)",
+			"note": "whether a field is exposed is asked of the node holding it, so a `@:publicFields` field under `#if` reads as private and a value stored there as run only where spelled"
+		},
+		{
+			"name": "M-EXPOSED-WRAPPER-IGNORED",
+			"type": "anyparse.query.MemberKinds",
+			"method": "fieldExposed",
+			"find": "RefactorSupport.typeDeclOf(wrapper)?.nameNode == container ? wrapper : container",
+			"replace": "false ? wrapper : container",
+			"note": "a `@:publicFields final class` exposes nothing, its meta sitting on the `final` wrapper"
+		},
+		{
+			"name": "M-TS-INFER-SHIFT",
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "argumentBindings",
+			"find": "!shifted && passed.length > 0",
+			"replace": "passed.length > 0",
+			"note": "a call that skips an optional parameter binds a function's type parameter by argument POSITION, so `f(?n:Int, x:T, ?y:L)` called `f(s, u)` takes `T` for `L`"
+		},
+		{
+			"name": "M-TS-OVERLOAD-OWN-PARAMS",
+			"type": "anyparse.query.CallGraphNodes",
+			"method": "overloaded",
+			"find": "final unread: Bool = others.length == 0 || [fn].concat(others).exists(ownParams);",
+			"replace": "final unread: Bool = others.length == 0;",
+			"note": "an `@:overload` signature declaring its own `T` agrees with the class's `T` by text, so the call returns the class's type argument"
+		},
+		{
+			"name": "M-VALUES-IMPORTED-CTOR",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "importMayBring",
+			"find": "types == null || carriesValue(types, name)",
+			"replace": "types == null",
+			"note": "an import that puts an enum in scope brings none of its constructors, so a bare pattern naming one reads as a capture"
+		},
+		{
+			"name": "M-VALUES-WILDCARD-CTOR",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "importMayBring",
+			"find": "TypeNameBinding.splitPath(prefix) != null && carriesValue(_refs.names.declsAt(prefix), name)",
+			"replace": "false",
+			"note": "a wildcard over an enum brings its statics only, never its constructors"
+		},
+		{
+			"name": "M-VALUES-ALIAS-WHOLE-MODULE",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "importMayBring",
+			"find": "carriesValue(_refs.names.declsAt(target), name)",
+			"replace": "carriesValue(_refs.names.importedTypes(target) ?? [], name)",
+			"note": "an alias of a module's main type brings the constructors of every type of the module"
+		},
+		{
+			"name": "M-VALUES-FIELD-IMPORT-TYPES",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "importMayBring",
+			"find": "SourceText.isUpperInitial(SourceText.lastSegment(imp.raw))",
+			"replace": "true",
+			"note": "a static-field import of a module the index does not hold may bring any value, not just its one field"
+		},
+		{
+			"name": "M-MACRO-VALUE-UNLISTED",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "unlistedImportOf",
+			"force": "null",
+			"note": "no import of a bare call name is ever out of the index's sight, so a macro an unindexed static import brings is folded into"
+		},
+		{
+			"name": "M-MACRO-EXTENSIONS-ONLY",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "unlistedImportOf",
+			"find": "if (!extensionsOnly || imp.kind == ImportKind.Using) {",
+			"replace": "if (true) {",
+			"note": "a call on a value receiver is taken to be routed by a static-field import of its member name, not only by a `using`"
+		},
+		{
+			"name": "M-NOMINAL-LITERAL",
+			"type": "anyparse.query.NominalTypes",
+			"method": "valueTypeSourceDeep",
+			"find": "if (literal != null) return literal;",
+			"replace": "",
+			"note": "a literal types as nothing, so `'x'.ext()` has an unresolved receiver"
+		},
+		{
+			"name": "M-NOMINAL-CONSTRUCTED",
+			"type": "anyparse.query.NominalTypes",
+			"method": "valueNominalDeep",
+			"find": "constructedNominal(node, shape)",
+			"replace": "null",
+			"note": "a construction `new T()` types as nothing in the deep walk"
+		},
+		{
+			"name": "M-NOMINAL-ABSTRACT-THIS",
+			"type": "anyparse.query.NominalTypes",
+			"method": "selfTypeSourceDeep",
+			"force": "selfTypeName",
+			"note": "`this` inside an abstract is the abstract, not its underlying value (4.3.7 types it as the underlying)"
+		},
+		{
+			"name": "M-NOMINAL-SOURCE-CALL",
+			"type": "anyparse.query.NominalTypes",
+			"method": "expressionTypeSource",
+			"find": "return receiver == null ? null : returnSourceOf(index, receiver, method);",
+			"replace": "return null;",
+			"note": "the source mode reads no method call's return"
+		},
+		{
+			"name": "M-NOMINAL-RETURN-TYPEPARAM",
+			"type": "anyparse.query.NominalTypes",
+			"method": "returnSourceOf",
+			"find": "|| CallGraphNames.mentionsTypeName(written, params, index.typeSyntax)",
+			"replace": "",
+			"note": "a return written as a type parameter the call binds is answered verbatim (`T`)"
+		},
+		{
+			"name": "M-NOMINAL-RETURN-AGREE",
+			"type": "anyparse.query.NominalTypes",
+			"method": "returnSourceOf",
+			"find": "found != null && written != found || ",
+			"replace": "",
+			"note": "declarations writing the return differently answer the last one read"
+		},
+		{
+			"name": "M-ELEMENT-PEEL",
+			"type": "anyparse.query.NominalTypes",
+			"method": "elementTypeSourceOf",
+			"find": "typeSyntax(memberLookupReceiverSource(typeSource, wrappers, typeSyntax))?.shape",
+			"replace": "typeSyntax(typeSource)?.shape",
+			"note": "a container under a nullable wrapper has no element"
+		},
+		{
+			"name": "M-OUTER-PATH-PEEL",
+			"type": "anyparse.query.NominalTypes",
+			"method": "outerPathOf",
+			"find": "typeSyntax(memberLookupReceiverSource(typeSource, wrappers, typeSyntax))?.shape",
+			"replace": "typeSyntax(typeSource)?.shape",
+			"note": "a path under a nullable wrapper is the wrapper's"
 		}
 	]
 }

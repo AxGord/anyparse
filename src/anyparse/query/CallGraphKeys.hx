@@ -122,11 +122,7 @@ final class CallGraphKeys {
 
 	/** The dotted or simple path of the type `typeSource` names, `Null<…>` peeled unless `peelNull` is false; null for any other type. */
 	public function outerPathOf(typeSource: Null<String>, peelNull: Bool = true): Null<String> {
-		final t: Null<TypeSyntax> = typeSource == null ? null : _typeSyntax(typeSource);
-		return switch ((peelNull ? t?.wrapped(['Null']) : null) ?? t)?.shape {
-			case Nominal(path, _): path;
-			case _: null;
-		};
+		return typeSource == null ? null : NominalTypes.outerPathOf(typeSource, peelNull ? ['Null'] : [], _typeSyntax);
 	}
 
 	/**
@@ -417,7 +413,7 @@ final class CallGraphKeys {
 	 * What the arguments of `call` bind each type parameter the function `target` of `g` declares itself to, in order, as the
 	 * language infers it: the type `argType` gives every argument passed to a parameter written as that bare type parameter
 	 * — a rest parameter taking every argument from its position on — when they all agree; `CallGraph.UNKNOWN_TYPE` for one
-	 * no argument binds, or arguments of different types bind.
+	 * no argument binds, arguments of different types bind, or an argument that may bind a later parameter (`mayShift`) may bind.
 	 */
 	public static function argumentBindings(
 		g: CallGraph, target: String, call: QueryNode, argType: QueryNode -> Null<String>
@@ -425,6 +421,14 @@ final class CallGraphKeys {
 		final params: Array<Null<String>> = paramTypesOf(g, target) ?? [];
 		final last: Int = params.length - 1;
 		final rest: Bool = g._facts.restParams.exists(target);
+		final count: Int = call.children.length - 1;
+		// From the first argument that may bind a later parameter than its position's on (`mayShift`), no parameter is proven
+		// bound: a type parameter one of those parameters is written as binds whatever the language picks (review L3 G3).
+		var shiftsFrom: Int = count;
+		for (i in 0...count) if (mayShift(g, target, i, count)) {
+			shiftsFrom = i;
+			break;
+		}
 		return [
 			for (p in g._facts.typeParams[target] ?? []) {
 				final passed: Array<Null<String>> = [
@@ -433,7 +437,10 @@ final class CallGraphKeys {
 						if (at <= last && (params[at] ?? '').trim() == p) argType(call.children[j]);
 					}
 				];
-				passed.length > 0 && !passed.exists(a -> a != passed[0]) ? passed[0] ?? CallGraph.UNKNOWN_TYPE : CallGraph.UNKNOWN_TYPE;
+				final shifted: Bool = [for (i in shiftsFrom ... params.length) params[i]].exists(t -> (t ?? '').trim() == p);
+				!shifted && passed.length > 0 && !passed.exists(a -> a != passed[0])
+					? passed[0] ?? CallGraph.UNKNOWN_TYPE
+					: CallGraph.UNKNOWN_TYPE;
 			}
 		];
 	}
