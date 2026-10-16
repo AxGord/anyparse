@@ -168,8 +168,10 @@ class AnonTypeDupCheckTest extends Test {
 
 	/** No autofix — the typedef's name is a human's choice. */
 	public function testNoFixEdits(): Void {
-		final vs: Array<Violation> = violations([SHAPE, SHAPE, SHAPE]);
-		Assert.equals(0, new AnonTypeDup().fix(SHAPE, vs, new HaxeQueryPlugin()).length);
+		final files: Array<{ file: String, source: String }> = [for (i in 0...3) { file: 'a$i.hx', source: SHAPE }];
+		final check: AnonTypeDup = new AnonTypeDup();
+		Assert.isTrue(CheckFixture.violationsIn(check, files).length > 0);
+		for (f in files) Assert.equals(0, CheckFixture.fixRun(check, files, f.file).edits.length);
 	}
 
 	public function testMessageIdentityMasksBothTallies(): Void {

@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.QuotationAware;
 import anyparse.check.Check.Violation;
 import anyparse.query.BoolExprShape;
 import anyparse.query.GrammarPlugin;
@@ -294,11 +295,33 @@ using StringTools;
  * comment is outside the span for every kind, and refuses everywhere.
  *
  * Carrying is sound wherever it happens: the bytes move with the expression they
- * annotate and the fix's own re-parse sees them. What the gate guarantees is the one
- * direction that matters — a comment the fix would DELETE always refuses.
+ * annotate and the fix's own re-parse sees them. What the gate guarantees is the
+ * one direction that matters — a comment the fix would DELETE always refuses.
+ *
+ * ## Inside a `macro` quotation (`QuotationAware`)
+ *
+ * The rule declines the central reification drop (`ReificationScan`), because the arms that fire
+ * inside a quotation are the ones whose drop builds the same program. A pair written there reifies as
+ * `EParenthesis`, which the typer reads transparently (`(e)` types as `e`), so the expression the
+ * macro returns compiles to what it did. What could differ is decided per arm, and each is gated:
+ *
+ * - The OPERAND arms are `opaque` inside `parenOpaqueSubtreeKinds`: there the content may be a
+ *   splice (`$e`, `${e}`) whose value and precedence the source does not show, and a consumer that
+ *   PRINTS the built expression (`haxe.macro.Printer` adds no parentheses of its own) would print a
+ *   different program.
+ * - A DELIMITED slot binds nothing across the pair, so the typed program is the same for any
+ *   content — except for `$a{…}`, whose arity depends on being directly an argument or element
+ *   (`spliceSensitiveExprKinds`). The one shape left whose compiled meaning a bare slot changes is a
+ *   spliced `for` / `while` / `=>` as an ARRAY ELEMENT (`[($e)]` → a comprehension or a map), and
+ *   there the parenthesised form does not compile, so no working program is changed.
+ * - The ternary arms fire only on content the whitelists name, and no splice kind is on them.
+ *
+ * What a macro still sees is one `EParenthesis` fewer when it pattern-matches or prints the expression it built (a spliced
+ * declaration printed bare in an argument list reads as a second declarator) — the exposure every delimited-slot fix already has
+ * for an argument handed to a macro function in ordinary code (`M.f((x))`). Verified against Haxe 4.3.7 (B8b, `docs/decisions.md`).
  */
 @:nullSafety(Strict)
-final class RedundantParens implements Check implements ConfigAware {
+final class RedundantParens implements Check implements ConfigAware implements QuotationAware {
 
 	/** A ternary's else-arm child index — `[condition, then, else]`. */
 	private static inline final TERNARY_ELSE_CHILD_INDEX: Int = 2;

@@ -4,8 +4,6 @@ import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.PreferArrayLiteral;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
 import utest.Assert;
@@ -43,11 +41,6 @@ class PreferArrayLiteralCheckTest extends Test {
 	/** An assignment whose lvalue does not resolve to any known binding is NOT pinned — reported, no edit. */
 	public inline function testGateRefusesUnresolvedAssignment(): Void {
 		assertGateRefuses('class C { function f():Void { unknownVar = new Array(); } }');
-	}
-
-	/** A `this.<field>` assignment with no SymbolIndex threaded stays report-only (the cross-file resolver cannot reach the member). */
-	public inline function testThisFieldAssignmentNeedsIndex(): Void {
-		assertGateRefuses('class C { var xs:Array<Int>; function f():Void { this.xs = new Array(); } }');
 	}
 
 	public function testNewArrayTypedFlagged(): Void {
@@ -109,9 +102,9 @@ class PreferArrayLiteralCheckTest extends Test {
 		Assert.equals('[]', fixText('class C { function f(xs:Array<Int>):Void { xs = new Array(); } }'));
 	}
 
-	/** A `this.<field>` assignment resolves the field type through the SymbolIndex — rewritten to `[]`. */
+	/** A `this.<field>` assignment resolves the field type through the report index every fix path hands the rule — rewritten to `[]`. */
 	public function testFixThisFieldAssignment(): Void {
-		Assert.equals('[]', fixTextIndexed('class C { var xs:Array<Int>; function f():Void { this.xs = new Array(); } }'));
+		Assert.equals('[]', fixText('class C { var xs:Array<Int>; function f():Void { this.xs = new Array(); } }'));
 	}
 
 	private function wrap(expr: String): String {
@@ -123,10 +116,7 @@ class PreferArrayLiteralCheckTest extends Test {
 	}
 
 	private function fixText(src: String): String {
-		final check: PreferArrayLiteral = new PreferArrayLiteral();
-		// Deliberately WITHOUT the report index production hands every fix: `testThisFieldAssignmentNeedsIndex` pins the
-		// index-less fallback, which `lint --fix` never reaches (B8 finding).
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.edits(new PreferArrayLiteral(), src);
 		return edits.length == 1 ? edits[0].text : '<${edits.length} edits>';
 	}
 
@@ -134,15 +124,6 @@ class PreferArrayLiteralCheckTest extends Test {
 	private function assertGateRefuses(src: String): Void {
 		Assert.equals(1, violations(src).length);
 		Assert.equals('<0 edits>', fixText(src));
-	}
-
-	private function fixTextIndexed(src: String): String {
-		final check: PreferArrayLiteral = new PreferArrayLiteral();
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
-		final idx: SymbolIndex = CheckFixture.index(files, plugin);
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, CheckFixture.violationsIn(check, files, plugin), plugin, idx);
-		return edits.length == 1 ? edits[0].text : '<${edits.length} edits>';
 	}
 
 }

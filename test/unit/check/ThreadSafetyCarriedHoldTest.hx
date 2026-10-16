@@ -254,9 +254,11 @@ class ThreadSafetyCarriedHoldTest extends Test {
 		#if (sys || nodejs)
 		final broken: String = 'class Plugin { public static function install(fs:Fs, h:Holder):Void fs.holder = h;'
 			+ ' static function odd():Void { var x = 1 +* 2; } }';
-		// in the run as `F5.hx` and on disk under that name: the project's file the run holds but cannot read
+		// in the run as `Plugin.hx` — the run names each source after its first type — and on disk under that name: the
+		// project's file the run holds but cannot read. Under any other name the disk file is one the run leaves out, which
+		// uncovers the project by itself and the parse gate goes unasked.
 		final found: Array<Violation> = ThreadSafetyCheckTest.violations(
-			CONFIG, sources(path('')).concat([broken]), [{ name: 'F5.hx', source: broken }]
+			CONFIG, sources(path('')).concat([broken]), [{ name: 'Plugin.hx', source: broken }]
 		);
 		Assert.same(['info B Fs.work | Db.batch (folded)'], holds(found));
 		Assert.isTrue(closedNote(found) != null, 'the closedWorld notice');

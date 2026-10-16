@@ -61,7 +61,7 @@ class RedundantMapIterKeyCheckTest extends Test {
 			final check: RedundantMapIterKey = new RedundantMapIterKey();
 			final vs: Array<Violation> = CheckFixture.violations(check, src);
 			Assert.equals(1, vs.length);
-			Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+			Assert.equals(0, CheckFixture.fixOf(check, src, vs).length);
 			Assert.notNull(vs[0].declineReason);
 		}
 	}
@@ -141,11 +141,10 @@ class RedundantMapIterKeyCheckTest extends Test {
 			final src: String = localMap('new Map()', 'g(v);');
 			final check: RedundantMapIterKey = new RedundantMapIterKey();
 			final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-			final vs: Array<Violation> = CheckFixture.violationsIn(
-				check, [{ file: 'C.hx', source: src }, { file: 'Other.hx', source: other }], plugin
-			);
+			final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }, { file: 'Other.hx', source: other }];
+			final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 			Assert.equals(1, vs.length);
-			Assert.equals(0, check.fix(src, vs, plugin).length, other);
+			Assert.equals(0, CheckFixture.fixIn(check, files, vs, plugin).length, other);
 		}
 	}
 
@@ -158,11 +157,10 @@ class RedundantMapIterKeyCheckTest extends Test {
 		final tree: String = 'class Tree<K, V> extends haxe.ds.BalancedTree<K, V> {}';
 		final check: RedundantMapIterKey = new RedundantMapIterKey();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final vs: Array<Violation> = CheckFixture.violationsIn(
-			check, [{ file: 'C.hx', source: src }, { file: 'Tree.hx', source: tree }], plugin
-		);
+		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }, { file: 'Tree.hx', source: tree }];
 		Assert.equals(
-			StringTools.replace(src, 'for (_ => v in m)', 'for (v in m)'), CanonicalEdit.applyEdits(src, check.fix(src, vs, plugin))
+			StringTools.replace(src, 'for (_ => v in m)', 'for (v in m)'),
+			CanonicalEdit.applyEdits(src, CheckFixture.fixRun(check, files, plugin).edits)
 		);
 	}
 
@@ -176,7 +174,7 @@ class RedundantMapIterKeyCheckTest extends Test {
 		final check: RedundantMapIterKey = new RedundantMapIterKey();
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
-		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.fixOf(check, src, vs).length);
 		if (vs.length == 1) Assert.isTrue((vs[0].declineReason ?? '').indexOf('project roots') >= 0, vs[0].declineReason);
 	}
 
@@ -211,14 +209,14 @@ class RedundantMapIterKeyCheckTest extends Test {
 	private function fixed(src: String): String {
 		final check: RedundantMapIterKey = new RedundantMapIterKey();
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
-		return CanonicalEdit.applyEdits(src, check.fix(src, vs, new HaxeQueryPlugin()));
+		return CanonicalEdit.applyEdits(src, CheckFixture.fixOf(check, src, vs));
 	}
 
 	private function assertDeclined(src: String): Void {
 		final check: RedundantMapIterKey = new RedundantMapIterKey();
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
-		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length, src);
+		Assert.equals(0, CheckFixture.fixOf(check, src, vs).length, src);
 		if (vs.length == 1) Assert.notNull(vs[0].declineReason);
 	}
 

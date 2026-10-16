@@ -197,13 +197,16 @@ class PreferBindCheckTest extends Test {
 	@:killer('M-BIND-LIBRARY-CALLEE')
 	@:killer('M-BIND-EXTERN-TYPE')
 	public function testLibraryOrExternCalleeNotFlagged(): Void {
-		final lib: String =
-			'class Lib {\n\tpublic static function m(n:Int):Void {}\n}\nextern class Ext {\n\tpublic static function e(n:Int):Void;\n}\n';
+		// `Ext` is the main type of its own module: a second type of `Lib.hx` is out of `C.hx`'s scope without an import, so the
+		// call would not resolve at all and the extern half of this test would pass on a callee nobody bound.
+		final lib: String = 'class Lib {\n\tpublic static function m(n:Int):Void {}\n}\n';
+		final ext: String = 'extern class Ext {\n\tpublic static function e(n:Int):Void;\n}\n';
 		final src: String = 'class C {\n\tfunction f(p:Int):Void {\n\t\tfinal g = () -> CALLEE(p);\n\t}\n}';
 		function edits(callee: String, thirdParty: Array<String>): Int {
 			final files: Array<{ file: String, source: String }> = [
 				{ file: 'C.hx', source: src.replace('CALLEE', callee) },
-				{ file: 'Lib.hx', source: lib }
+				{ file: 'Lib.hx', source: lib },
+				{ file: 'Ext.hx', source: ext }
 			];
 			final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 			final check: PreferBind = new PreferBind();

@@ -230,9 +230,8 @@ class EmptyCaseArmCheckTest extends Test {
 
 	/**
 	 * The subject's type is declared in ANOTHER file, so only a cross-file index resolves it: `run`
-	 * finds the arm, `fix` WITHOUT an index re-derives nothing (its fallback index sees one file),
-	 * and `fix` WITH the run-built index — the way `Cli.computeFileLintEdits` calls it — emits the
-	 * deletion.
+	 * finds the arm, `fix`, handed the report index of both files the way `LintFixDriver` hands it, emits the deletion.
+	 * (Every production fix path passes that index, so the index-less fallback this test used to pin as well is not asserted.)
 	 */
 	public function testCrossFileSubjectNeedsIndex(): Void {
 		final owner: { file: String, source: String } = { file: 'D.hx', source: 'class D {\n\tpublic var code: Int;\n}' };
@@ -245,8 +244,7 @@ class EmptyCaseArmCheckTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final found: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 		Assert.equals(1, found.length);
-		Assert.equals(0, check.fix(user.source, found, plugin).length);
-		Assert.equals(1, check.fix(user.source, found, plugin, CheckFixture.index(files, plugin)).length);
+		Assert.equals(1, CheckFixture.fixIn(check, files, found, user.file, plugin).length);
 	}
 
 	/** A STATIC root resolves too: `S.mode` has no value receiver at all. */

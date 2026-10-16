@@ -393,7 +393,7 @@ class MemberReachTest extends Test {
 	@:killer('M-ESCAPE-IF-VALUE') @:killer('M-ESCAPE-BLOCK-VALUE') @:killer('M-ESCAPE-MACRO-MEMBER') @:killer('M-ESCAPE-MACRO-HAZARD') @:killer('M-ESCAPE-REIFICATION')
 	@:killer('M-ESCAPE-THROW') @:killer('M-ESCAPE-DECL') @:killer('M-ESCAPE-PARAM') @:killer('M-ESCAPE-LAMBDA')
 	@:killer('M-ESCAPE-STORE') @:killer('M-ESCAPE-CAST') @:killer('M-ESCAPE-METHOD-VALUE') @:killer('M-ESCAPE-HELD')
-	@:killer('M-ESCAPE-LIBRARY-SUPER') @:killer('M-ESCAPE-NATIVE')
+	@:killer('M-ESCAPE-LIBRARY-SUPER') @:killer('M-ESCAPE-NATIVE') @:killer('M-ESCAPE-NEW-TYPE')
 	public function testEveryEscapeRuleLetsItsSoundTwinThrough(): Void {
 		// Each exit a `C` may take out of the type system beside a twin that keeps it typed: the escaped one lets a `Dynamic`
 		// handed to `poke` be the `C`, the sound one does not, so `poke`'s `o.items` of an `Other` cannot touch `C.items`.
@@ -508,7 +508,7 @@ class MemberReachTest extends Test {
 		refused(run(source('Keep.put(mine());', 'function mine():Array<C> return [this];')), 'a container whose arguments nothing says');
 	}
 
-	@:pin('control') @:killer('M-ESCAPE-NEW-TYPE') @:killer('M-ESCAPE-RECEIVER-CALL')
+	@:pin('control') @:killer('M-ESCAPE-RECEIVER-CALL')
 	public function testAConstructedReceiverIsItsOwnType(): Void {
 		// `new C().loop()` is the commonest entry: the value is a `C`, whose `loop` takes nothing untyped. Handing the new object
 		// itself to untyped code is an exit.

@@ -2951,3 +2951,25 @@ decided the question; it may not become a record of runs.
   answers all five (`FactsView.spliceOf` / `expansionOf` / `expansionSites` added beside `node` / `keyOf`), its
   `@:allow(MemberTouchScan)` grant is gone and the field is `_table`, read only by the facts layer's own parts.
   owned-types 12 -> 9 (CompilerFacts 3 -> 0) — branch `feat/infra-B4b`
+- a fix asked with no index was pinned as a rule's behaviour (148 inline `check.fix(src, vs, plugin)` sites, the
+  multi-file ones among them) → no production path passes none: `LintFixDriver` and `FixVerifier` both hand the
+  report index (`fixGrouped` / `fixCarrying` too), so every site now goes through `CheckFixture` (`fixOf` / `fixIn`
+  / `fixRun`, `fixIn` refusing a finding of another file), and the tests that pinned the index-less answer were
+  restated: `PreferArrayLiteralCheckTest.testThisFieldAssignmentNeedsIndex`, `TypeResolverSliceTest.testNoIndexKept`
+  and `NamingCheckMemberFixTest`'s two private-field refusals duplicated a production twin and are gone;
+  `FieldInitInConstructorCheckTest`'s folds now assert the extracted constant the index lets in;
+  `ExplicitTypeCheckTest.testFixWithoutIndexSkips` became the same-file interface it resolves; `EmptyCaseArmCheckTest`
+  keeps only its indexed half — branch `feat/infra-B8b`
+- `ThreadSafety.run` filtered its own findings by the report gate → `Linter.runGated` applies the same `GraphScoped`
+  gate to every graph-scoped rule and is the one door a run goes through, so the rule's copy was unobservable in
+  production; it is gone, and M-TS-REPORT-UNGATED cuts `runGated` — branch `feat/infra-B8b`
+- `redundant-parens` was believed unsafe inside a `macro` quotation (the reification gate dropped every quoted finding,
+  so its splice gates were unreachable) → a pair dropped in a delimited slot types the same (Haxe 4.3.7: `EParenthesis`
+  is transparent to the typer; `$a{…}` arity is gated; a spliced `for` / `=>` array element does not compile with the
+  pair; the operand arms stay opaque), so the rule is `QuotationAware`, its reason on the class doc — branch
+  `feat/infra-B8b`
+- five arms broken on main were read as dead mutation targets → each fixture had stopped reaching its gate (a type
+  out of scope, a literal the resolver now types, an earlier decline, an alias the syntax now resolves, a call the
+  graph resolves), and re-aimed fixtures kill all five; the sixth, M-ESCAPE-RECEIVER-CALL, cuts a `ValueEscapes.call`
+  precision branch no probed shape reaches (28, syntax and facts) — left to the `ValueEscapes` owner — branch
+  `feat/infra-B8b`

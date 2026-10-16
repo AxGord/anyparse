@@ -94,11 +94,9 @@ import utest.Test;
 		final src: String = wrap('for (k => v in l) g(v);');
 		final check: Check = rule();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final vs: Array<Violation> = CheckFixture.violationsIn(
-			check, [{ file: 'C.hx', source: src }, { file: 'List.hx', source: own }], plugin
-		);
-		Assert.equals(1, vs.length);
-		Assert.equals(wrap('for (_ => v in l) g(v);'), CanonicalEdit.applyEdits(src, check.fix(src, vs, plugin)));
+		final run: FixRun = CheckFixture.fixRun(check, [{ file: 'C.hx', source: src }, { file: 'List.hx', source: own }], plugin);
+		Assert.equals(1, run.violations.length);
+		Assert.equals(wrap('for (_ => v in l) g(v);'), CanonicalEdit.applyEdits(src, run.edits));
 	}
 
 	public function testUnreadValueRenamed(): Void {

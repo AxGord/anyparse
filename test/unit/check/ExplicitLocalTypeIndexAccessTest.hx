@@ -113,7 +113,7 @@ class ExplicitLocalTypeIndexAccessTest extends Test {
 		final check: ExplicitLocalType = new ExplicitLocalType();
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.isTrue(vs.length >= 1);
-		switch CanonicalEdit.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, CheckFixture.fixOf(check, src, vs), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf(expected) >= 0, text);
 			case Err(message):
@@ -126,7 +126,7 @@ class ExplicitLocalTypeIndexAccessTest extends Test {
 	}
 
 	private function assertNoFixSrc(src: String): Void {
-		Assert.equals(0, new ExplicitLocalType().fix(src, violations(src), new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.fixOf(new ExplicitLocalType(), src, violations(src)).length);
 	}
 
 	/** Fix `fixSrc` (as `C.hx`) with a `SymbolIndex` built over it plus `otherFiles`, and assert no edit is produced. */

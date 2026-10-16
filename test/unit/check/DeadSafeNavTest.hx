@@ -4,7 +4,6 @@ import anyparse.check.Check.Violation;
 import anyparse.check.DeadSafeNav;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
 import unit.cli.CliFixture;
@@ -65,7 +64,7 @@ class DeadSafeNavTest extends Test {
 		final check: DeadSafeNav = new DeadSafeNav();
 		final src: String = 'class C { function f(?x:String) { if (x != null) { var n = x?.length; } } }';
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.fixOf(check, src, vs);
 		Assert.equals(1, edits.length);
 		Assert.equals('.', edits[0].text);
 	}
@@ -315,14 +314,14 @@ class DeadSafeNavTest extends Test {
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length, 'the redundant `?.` is still reported');
 		Assert.notNull(vs[0].declineReason, 'and says why it gets no fix');
-		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length, 'no `.` rewrite the compiler would reject');
+		Assert.equals(0, CheckFixture.fixOf(check, src, vs).length, 'no `.` rewrite the compiler would reject');
 	}
 
 	private function assertFixed(src: String): Void {
 		final check: DeadSafeNav = new DeadSafeNav();
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
-		Assert.equals(1, check.fix(src, vs, new HaxeQueryPlugin()).length, 'the `?.` is rewritten to `.`');
+		Assert.equals(1, CheckFixture.fixOf(check, src, vs).length, 'the `?.` is rewritten to `.`');
 	}
 
 	/** The plain Bool-local shape, run from a scratch project configured by `config` (an oracle `build.hxml` among `files`). */

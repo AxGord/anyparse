@@ -320,7 +320,7 @@ class PreferExistsCheckTest extends Test {
 
 	public function testCommentInDroppedRegionNotFixed(): Void {
 		final src: String = file('for (x in xs) // why\n\t\t\tif (x > 2) return true;\n\t\treturn false;', true);
-		Assert.equals(0, new PreferExists().fix(src, violations(src), new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.fixOf(new PreferExists(), src, violations(src)).length);
 	}
 
 	public function testInsertedUsingIsAtomicWithItsRewrites(): Void {
@@ -537,7 +537,7 @@ class PreferExistsCheckTest extends Test {
 			'var found:Bool = false;\n\t\t// why\n\t\tfor (x in xs) if (x > 2) found = true;\n\t\treturn found;', true
 		);
 		Assert.equals(1, violations(src).length);
-		Assert.equals(0, new PreferExists().fix(src, violations(src), new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.fixOf(new PreferExists(), src, violations(src)).length);
 	}
 
 	/** `ps` of `P`, whose fields share their names with the flags, and `lists` to index by one. */

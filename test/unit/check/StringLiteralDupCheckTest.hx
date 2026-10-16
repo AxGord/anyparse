@@ -7,7 +7,6 @@ import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.StringLiteralDup;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import sys.FileSystem;
 import sys.io.File;
 import unit.CheckFixture;
@@ -46,7 +45,7 @@ class StringLiteralDupCheckTest extends Test {
 		final src: String = body('trace("hello"); trace("hello"); trace("hello");');
 		final vs: Array<Violation> = violations(src);
 		Assert.equals(1, vs.length);
-		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.fixOf(check, src, vs).length);
 		Assert.isTrue(check is NoAutofix);
 		final reason: String = check.noAutofixReason();
 		Assert.isTrue(reason.contains('extract-constant'));

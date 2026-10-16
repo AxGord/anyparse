@@ -622,10 +622,12 @@ class MemberReachFactsTest extends Test {
 	@:pin('control') @:killer('M-FACTS-REACH-OVERRIDES')
 	public function testTheCompilersHierarchyReachesAnOverride(): Void {
 		// `Mutator` extends `Worker` through an alias the name-based hierarchy does not see through: only the facts know the
-		// override a dispatch on `Worker` reaches
+		// override a dispatch on `Worker` reaches. The alias is declared once per `#if` branch — a plain `typedef W = Worker`
+		// is resolved by the shared type-name resolution now, so it no longer told the facts' edge from the syntax's.
 		final main: String = LOOP_HEAD + '\tstatic function main() {\n\t\tvar w:Worker = new Mutator();\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ w.run(); /*>*/ }\n\t}\n}\n'
-			+ 'typedef W = Worker;\nclass Worker {\n\tpublic function new() {}\n\tpublic function run():Void {}\n}\n'
+			+ '#if !nope typedef W = Worker; #else typedef W = Main; #end\n'
+			+ 'class Worker {\n\tpublic function new() {}\n\tpublic function run():Void {}\n}\n'
 			+ 'class Mutator extends W {\n\toverride public function run():Void Main.items.push(1);\n}\n';
 		assertMatch(ask(['Main.hx' => main]), r -> r.match(Reached(_)));
 	}

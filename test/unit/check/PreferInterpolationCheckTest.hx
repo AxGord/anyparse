@@ -6,7 +6,6 @@ import anyparse.check.Linter;
 import anyparse.check.MacroGate;
 import anyparse.check.PreferInterpolation;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
 import utest.Assert;
@@ -284,7 +283,7 @@ class PreferInterpolationCheckTest extends Test {
 		check.setOracleRelaxed(true);
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.fixOf(check, src, vs);
 		Assert.equals(1, edits.length);
 		Assert.equals("'${e.cloudId}'", edits[0].text);
 	}

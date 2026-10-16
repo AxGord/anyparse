@@ -33,22 +33,13 @@ using StringTools;
  */
 class NamingCheckMemberFixTest extends NamingCheckTestBase {
 
-	public function testFixSkipsPrivateField(): Void {
-		// A private field is cross-file-reachable (subclass / @:access) — report-only, no rename edit.
-		final src: String = 'class C {\n\tprivate var BadField:Int;\n}';
-		final check: Naming = new Naming();
-		final vs: Array<Violation> = CheckFixture.violations(check, src);
-		Assert.equals(1, vs.length);
-		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
-	}
-
 	public function testFixSkipsType(): Void {
 		// A type is cross-file-reachable — report-only, no rename edit.
 		final src: String = 'class foo {}';
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
-		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.fixOf(check, src, vs).length);
 	}
 
 	public function testFixRenamesConfinedPrivateField(): Void {
@@ -113,14 +104,6 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		// A non-`this` access (`o.shape`) is attributed through `o`'s declared type and renames along.
 		final src: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n\tpublic function eq(o:C) { return o.shape == shape; }\n}';
 		assertRenamedSingle(src, 'return o._shape == _shape', 'o.shape');
-	}
-
-	public function testFixWithoutIndexLeavesPrivateFieldReportOnly(): Void {
-		// No index passed → a private field cannot be proven confined → report-only.
-		final src: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n}';
-		final check: Naming = new Naming();
-		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'pkg/C.hx', source: src }]);
-		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
 	}
 
 	public function testFixSkipsPrivateFieldWhenASkipParsedFileMentionsIt(): Void {

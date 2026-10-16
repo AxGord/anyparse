@@ -36,7 +36,7 @@ class ThreadSafetyPositiveSinksTest extends Test {
 	 * A chain writing no `sinks` reports the runtime's blocking calls, a wait for another thread among them; a project
 	 * function named like one is read through its body.
 	 */
-	@:pin('control') @:killer('M-TS-BUILTIN-NEEDS-SINKS') @:killer('M-TS-BUILTIN-OFF') @:killer('M-TS-BUILTIN-ANY-NODE')
+	@:pin('control') @:killer('M-TS-REPORT-NEEDS-SINKS') @:killer('M-TS-BUILTIN-OFF') @:killer('M-TS-BUILTIN-ANY-NODE')
 	public function testTheBuiltinAppliesWithNoSinks(): Void {
 		#if (sys || nodejs)
 		Assert.same(

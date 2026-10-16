@@ -4,8 +4,6 @@ import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.RedundantParens;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
 import utest.Assert;
@@ -356,12 +354,19 @@ class RedundantParensCheckTest extends Test {
 	 * wraps it, so dropping the paren changes the built call's ARITY with no syntax
 	 * error. Only a SPLICING host is affected.
 	 */
+	@:pin('control')
+	@:killer('M-PARENS-SPLICE-HOST-OPEN')
 	public function testSpliceReificationKeepsItsParensInASplicingHost(): Void {
+		// The rule is `QuotationAware`, so a quoted pair the gate does not keep reports — which is what makes the
+		// three zeroes below the splice gate's answer rather than the reification drop's.
+		Assert.equals(1, violations(inFn("var a = macro g((x));")).length);
 		Assert.equals(0, violations(inFn("var a = macro g(($a{args}));")).length);
 		Assert.equals(0, violations(inFn("var a = macro [($a{args})];")).length);
 		Assert.equals(0, violations(inFn("var a = macro new T(($a{args}));")).length);
 	}
 
+	@:pin('control')
+	@:killer('M-PARENS-QUOTED-DROPPED')
 	public function testSpliceReificationOutsideASplicingHostIsUnwrapped(): Void {
 		// An object-literal field value never splices, so the splicing-host gate does
 		// not apply and the ordinary delimited-slot rule unwraps it.
@@ -369,6 +374,8 @@ class RedundantParensCheckTest extends Test {
 		Assert.equals(inFn("var a = macro q({k: $a{args}, j: 2});"), fixed(inFn("var a = macro q({k: ($a{args}), j: 2});")));
 	}
 
+	@:pin('control')
+	@:killer('M-PARENS-QUOTED-DROPPED')
 	public function testDoubleParensAroundASpliceCollapseToOnePair(): Void {
 		Assert.equals(inFn("var a = macro g(($a{args}));"), fixed(inFn("var a = macro g((($a{args})));")));
 	}
@@ -544,15 +551,12 @@ class RedundantParensCheckTest extends Test {
 	}
 
 	/**
-	 * `src` with every edit the check's own `fix` produces applied — read off the RAW `run`, not `CheckFixture`:
-	 * the splicing-host tests fix a finding inside a `macro` quotation, which `Linter.collect`'s reification gate drops
-	 * in every production run (this rule is not `QuotationAware`). B8 finding: that half of the rule is unreachable.
+	 * `src` with every edit the check's own `fix` produces applied, read the way `lint --fix` reads it (`CheckFixture`). The
+	 * splicing-host tests fix a finding inside a `macro` quotation, which the reification gate keeps because the rule is
+	 * `QuotationAware`.
 	 */
 	private function fixed(src: String): String {
-		final check: RedundantParens = new RedundantParens();
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
-		return CanonicalEdit.applyEdits(src, check.fix(src, vs, plugin));
+		return CheckFixture.fixedSource(new RedundantParens(), src);
 	}
 
 	/** `body` as the sole statement of a method — the shortest host for a statement-level fixture. */

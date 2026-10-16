@@ -109,14 +109,14 @@ class UnreachableCatchTest extends Test {
 		final check: UnreachableCatch = new UnreachableCatch();
 		final src: String = 'class A2 {} class B2 {} class C { function f() { try { g(); } catch (e:A2) {} catch (e:B2) {} } }';
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
-		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.fixOf(check, src, vs).length);
 	}
 
 	public function testFixSkipParseNoEdit(): Void {
 		// An unparseable source yields no edits (no crash).
 		final check: UnreachableCatch = new UnreachableCatch();
 		final src: String = 'class Bad { function f() { try { g(); } catch (e: ';
-		Assert.equals(0, check.fix(src, [], new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.fixOf(check, src, []).length);
 	}
 
 	public function testSkipParseNoCrash(): Void {
@@ -152,7 +152,7 @@ class UnreachableCatchTest extends Test {
 	private function assertFix(src: String, present: String, absent: String): Void {
 		final check: UnreachableCatch = new UnreachableCatch();
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
-		switch CanonicalEdit.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, CheckFixture.fixOf(check, src, vs), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf(present) >= 0);
 				Assert.isTrue(text.indexOf(absent) == -1);

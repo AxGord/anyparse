@@ -106,7 +106,7 @@ class CommentWidthCheckTest extends Test {
 		final vs: Array<Violation> = violations(src);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains('it trails after code'), vs[0].message);
-		Assert.equals(0, new CommentWidth().fix(src, vs, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.fixOf(new CommentWidth(), src, vs).length);
 	}
 
 	/**
@@ -190,7 +190,7 @@ class CommentWidthCheckTest extends Test {
 		final src: String = 'class C {\n\t/**\n\t * $LONG\n\t * $LONG_TWO\n\t */\n\tfunction f() {}\n}';
 		final vs: Array<Violation> = violations(src);
 		Assert.equals(2, vs.length);
-		final text: String = applyEdits(src, new CommentWidth().fix(src, [vs[0]], new HaxeQueryPlugin()));
+		final text: String = applyEdits(src, CheckFixture.fixOf(new CommentWidth(), src, [vs[0]]));
 		Assert.isTrue(text.contains('\t * $LONG_TWO\n'), text);
 		Assert.isFalse(text.contains('\t * $LONG\n'), text);
 	}
@@ -211,7 +211,7 @@ class CommentWidthCheckTest extends Test {
 		final src: String = 'class C {\n\t/**\n\t * $LONG\n\t * $LONG\n\t */\n\tfunction f() {}\n}';
 		final vs: Array<Violation> = violations(src);
 		Assert.equals(2, vs.length);
-		final text: String = applyEdits(src, new CommentWidth().fix(src, [vs[0]], new HaxeQueryPlugin()));
+		final text: String = applyEdits(src, CheckFixture.fixOf(new CommentWidth(), src, [vs[0]]));
 		Assert.equals(src.split('\n').length + 1, text.split('\n').length);
 		Assert.isTrue(text.contains('\t * $LONG\n\t */'), text);
 	}
@@ -249,7 +249,7 @@ class CommentWidthCheckTest extends Test {
 		final vs: Array<Violation> = violations(src);
 		Assert.equals(2, vs.length);
 		Assert.isFalse(vs[0].message.contains('not reflowed'), vs[0].message);
-		Assert.equals(1, new CommentWidth().fix(src, vs, new HaxeQueryPlugin()).length);
+		Assert.equals(1, CheckFixture.fixOf(new CommentWidth(), src, vs).length);
 	}
 
 	/**
@@ -284,7 +284,7 @@ class CommentWidthCheckTest extends Test {
 		final vs: Array<Violation> = violations(src);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains('conditional-compilation region the parser captured raw'), vs[0].message);
-		Assert.equals(0, new CommentWidth().fix(src, vs, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.fixOf(new CommentWidth(), src, vs).length);
 	}
 
 	/** A source that does not parse cannot rule a raw `#if` region out, so every finding in it declines. */
@@ -298,7 +298,7 @@ class CommentWidthCheckTest extends Test {
 	public function testFixWritesTheDeclineReason(): Void {
 		final src: String = doc('| $LONG |');
 		final vs: Array<Violation> = violations(src);
-		new CommentWidth().fix(src, vs, new HaxeQueryPlugin());
+		CheckFixture.fixOf(new CommentWidth(), src, vs);
 		Assert.equals('a table row', vs[0].declineReason);
 	}
 
@@ -323,9 +323,7 @@ class CommentWidthCheckTest extends Test {
 
 	/** `src` with every edit the check's own fix proposes for every finding it reports. */
 	private function fixed(src: String, file: String = 'C.hx'): String {
-		final check: CommentWidth = new CommentWidth();
-		final plugin: GrammarPlugin = new HaxeQueryPlugin();
-		return applyEdits(src, check.fix(src, CheckFixture.violationsIn(check, [{ file: file, source: src }], plugin), plugin));
+		return applyEdits(src, CheckFixture.fixRun(new CommentWidth(), [{ file: file, source: src }]).edits);
 	}
 
 	/** A class carrying one doc block whose single content line is `line`. */

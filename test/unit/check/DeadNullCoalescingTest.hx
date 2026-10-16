@@ -4,7 +4,6 @@ import anyparse.check.Check.Violation;
 import anyparse.check.DeadNullCoalescing;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
 import utest.Assert;
@@ -85,7 +84,7 @@ class DeadNullCoalescingTest extends Test {
 		final check: DeadNullCoalescing = new DeadNullCoalescing();
 		final src: String = 'class C { function f(?x:String) { if (x != null) { var n = x ?? "d"; } } }';
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.fixOf(check, src, vs);
 		Assert.equals(1, edits.length);
 		Assert.equals('x', edits[0].text);
 	}

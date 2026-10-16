@@ -6,7 +6,6 @@ import anyparse.check.Complexity;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.CheckstyleConfigLoader;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import sys.FileSystem;
 import sys.io.File;
 import unit.CheckFixture;
@@ -214,7 +213,7 @@ class ComplexityCheckTest extends Test {
 			+ '\t\treturn a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a;\n\t}\n}';
 		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
-		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length, 'the declaration must match the behaviour');
+		Assert.equals(0, CheckFixture.fixOf(check, src, vs).length, 'the declaration must match the behaviour');
 	}
 
 	public function testMessageIdentityMasksTheScoreAndKeepsTheThreshold(): Void {
