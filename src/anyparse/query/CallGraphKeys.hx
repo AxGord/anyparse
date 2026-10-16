@@ -6,7 +6,6 @@ import anyparse.query.CallGraphImports.WrittenIn;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.query.ValueNameBinding.ImportedStatics;
-import anyparse.runtime.Span;
 
 using Lambda;
 using StringTools;
