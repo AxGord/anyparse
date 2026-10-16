@@ -618,7 +618,8 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	): Null<String> {
 		final newKind: Null<String> = shape.newExprKind;
 		if (newKind == null || init.kind != newKind) return null;
-		final written: Null<String> = LiteralInfer.bareNewTypeName(init, source);
+		final made: Null<WrittenConstruction> = NominalTypes.writtenConstruction(init, shape, source);
+		final written: Null<String> = made == null || made.args.length > 0 ? null : made.path;
 		if (written == null) return null;
 		final simple: String = written.substring(written.lastIndexOf('.') + 1);
 		// Declared in an index: provably non-generic ONLY when every declaration THERE agrees on zero

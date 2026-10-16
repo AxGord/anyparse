@@ -534,6 +534,42 @@ final class NominalTypes {
 	}
 
 	/**
+	 * The type a construction `new T<…>(…)` writes, read off the grammar's nodes: `path` the type as written, `args` the
+	 * verbatim type arguments it writes (none for `new Box(item)`, whose arguments the language infers), `text` the two
+	 * spelled as one type. The type arguments and the constructor's are both children of the node; the separators between
+	 * them say which list a child belongs to — the first gap holding the `(` starts the constructor's — and a shape they do
+	 * not spell consistently (a `<` never closed, a `(` inside the type list) answers null, as does any other node.
+	 */
+	public static function writtenConstruction(node: QueryNode, shape: RefShape, source: String): Null<WrittenConstruction> {
+		final path: Null<String> = node.name;
+		final span: Null<Span> = node.span;
+		if (node.kind != shape.newExprKind || path == null || span == null) return null;
+		final args: Array<Span> = [];
+		var at: Int = span.from;
+		var closesAt: Int = span.to;
+		for (child in node.children) {
+			final cs: Null<Span> = child.span;
+			if (cs == null) return null;
+			final gap: String = source.substring(at, cs.from);
+			if (gap.indexOf('(') >= 0) {
+				if (args.length == 0 && gap.indexOf('<') >= 0) return null;
+				closesAt = cs.from;
+				break;
+			}
+			if (gap.indexOf(args.length == 0 ? '<' : ',') < 0) return null;
+			args.push(cs);
+			at = cs.to;
+		}
+		if (args.length == 0) return { path: path, args: [], text: path };
+		if (source.substring(at, closesAt).indexOf('>') < 0) return null;
+		return {
+			path: path,
+			args: [for (a in args) source.substring(a.from, a.to)],
+			text: '$path<${source.substring(args[0].from, args[args.length - 1].to)}>'
+		};
+	}
+
+	/**
 	 * The simple name of the one of `types` (simple name to standard path) `iterable`'s type resolves to, when the file
 	 * does not rebind it and the iterable is not a local written in its scope — the gates `valueIterationProvable`'s doc
 	 * gives — or null.
@@ -1073,6 +1109,18 @@ typedef TypingHost<T, C> = {
 
 	/** The binding offsets whose unannotated type the walk is reading right now, against a cycle (`for (x in x)`). */
 	final reading: (ctx:C) -> Array<Int>;
+}
+
+/** The type a construction writes (`NominalTypes.writtenConstruction`). */
+typedef WrittenConstruction = {
+	/** The type's path as written (`pkg.Box`). */
+	final path: String;
+
+	/** The type arguments it writes, each verbatim; empty when the language infers them. */
+	final args: Array<String>;
+
+	/** `path` with its written arguments (`pkg.Box<Int, String>`), the arguments' source kept as written between them. */
+	final text: String;
 }
 
 /** What the index host of `NominalTypes.typeWalk` reads with: the deep walk's arguments, `seen` its cycle guard. */

@@ -85,6 +85,22 @@ class NominalTypesTest extends Test {
 		Assert.isNull(NominalTypes.outerPathOf('Int -> Void', [], plugin.typeSyntax), 'a function type has none');
 	}
 
+	@:pin('control')
+	@:killer('M-CONSTRUCTION-CTOR-GAP')
+	public function testAConstructionReadsTheTypeArgumentsItWrites(): Void {
+		final text: String = 'package p;\n\nclass C {\n\tfunction probeBare() return new Box(x);\n'
+			+ '\tfunction probeArgs() return new pkg.Box<Int,Array<String>>(1, (y));\n'
+			+ '\tfunction probeParens() return new Box<(Int), "s">(f);\n\tfunction probeNone() return new Box<Int>();\n}\n';
+		final bare: Null<WrittenConstruction> = construction(text, 'probeBare');
+		Assert.equals('Box', bare?.text, 'no type argument written');
+		Assert.equals(0, bare?.args.length, 'the constructor\'s argument is none of the type\'s');
+		final args: Null<WrittenConstruction> = construction(text, 'probeArgs');
+		Assert.equals('pkg.Box<Int,Array<String>>', args?.text, 'the path and the arguments as written');
+		Assert.equals('Array<String>', args?.args[1], 'each argument verbatim');
+		Assert.equals(2, construction(text, 'probeParens')?.args.length, 'a parenthesised and a constant type argument');
+		Assert.equals('Box<Int>', construction(text, 'probeNone')?.text, 'with no constructor argument');
+	}
+
 	private static function nominal(fn: String): Null<String> {
 		final at: Probe = probeIn(SOURCE, fn);
 		return NominalTypes.expressionTypeNominal(at.node, at.root, at.plugin.refShape(), at.declared, at.index, 'p/C.hx', at.chain);
@@ -134,6 +150,12 @@ class NominalTypesTest extends Test {
 			if (hit != null) return hit;
 		}
 		return null;
+	}
+
+	/** What `NominalTypes.writtenConstruction` reads off the construction the function `fn` of `text` returns. */
+	private static function construction(text: String, fn: String): Null<WrittenConstruction> {
+		final at: Probe = probeIn(text, fn);
+		return NominalTypes.writtenConstruction(at.node, at.plugin.refShape(), text);
 	}
 
 }

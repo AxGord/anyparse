@@ -517,7 +517,7 @@ final class FunctionValueTypes {
 		final fnSpan: Null<Span> = method?.fn.span;
 		final fnName: Null<String> = method?.fn.name;
 		if (method == null || fnSpan == null || fnName == null || !(shape.functionKinds ?? []).contains(method.fn.kind)) return null;
-		final typeName: Null<String> = MemberTouchScan.typeAt(read.tree, fnSpan.from);
+		final typeName: Null<String> = TypeResolver.enclosingTypeDeclAt(read.tree, fnSpan.from)?.name;
 		final typed: Array<String> = typeName == null ? [] : _view.bySimpleName()[typeName] ?? [];
 		if (typed.length != 1) return null;
 		return fnName == (shape.constructorName ?? 'new')

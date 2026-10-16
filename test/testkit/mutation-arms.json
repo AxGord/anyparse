@@ -21186,7 +21186,7 @@
 			"name": "M-TS-SKIP-NEW-ARGS",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": ": [for (c in holder.children) if (!annotationKinds.contains(c.kind)) c];",
+			"find": ": holder.children.slice(NominalTypes.writtenConstruction(holder, shape, source)?.args.length ?? holder.children.length);",
 			"replace": ": holder.children;",
 			"note": "a `new` counts the type arguments it names among its arguments"
 		},
@@ -21873,6 +21873,14 @@
 			"find": "typeSyntax(memberLookupReceiverSource(typeSource, wrappers, typeSyntax))?.shape",
 			"replace": "typeSyntax(typeSource)?.shape",
 			"note": "a path under a nullable wrapper is the wrapper's"
+		},
+		{
+			"name": "M-CONSTRUCTION-CTOR-GAP",
+			"type": "anyparse.query.NominalTypes",
+			"method": "writtenConstruction",
+			"find": "if (gap.indexOf('(') >= 0) {",
+			"replace": "if (false) {",
+			"note": "the constructor's arguments are read as the type's"
 		}
 	]
 }

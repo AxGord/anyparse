@@ -420,7 +420,7 @@ final class MemberReach {
 			final fn: Null<QueryNode> = enclosingFunctionNode(tree, declSpan);
 			return fn == null ? Unknown(Escape(file, declSpan)) : localMutation(file, fn, decl, region, localOwns);
 		}
-		final owner: Null<String> = MemberTouchScan.typeAt(tree, region.from);
+		final owner: Null<String> = TypeResolver.enclosingTypeDeclAt(tree, region.from)?.name;
 		if (owner == null) return Unknown(OutOfScope('`$name` belongs to no type the analysis can name'));
 		final ownerName: String = owner;
 		if (graph().types.declaringTypeOf(ownerName, name) == null)
@@ -980,7 +980,7 @@ final class MemberReach {
 		final facts: Null<FactsView> = _scope.facts;
 		if (facts == null || !facts.truth || tree == null) return null;
 		for (span in spans) {
-			final type: Null<String> = MemberTouchScan.typeAt(tree, span.from);
+			final type: Null<String> = TypeResolver.enclosingTypeDeclAt(tree, span.from)?.name;
 			if (type == null) continue;
 			final own: Null<String> = g.types.declarationCount(type) > 1 ? facts.typedIn(file, type) : null;
 			final built: Null<ReachUnknown> = own == null ? _g.rewrittenBy(type) : _g.rewrittenAs(g, file, type, own);
@@ -1008,7 +1008,7 @@ final class MemberReach {
 		final tree: Null<QueryNode> = g.treeOf(file);
 		var marked: Null<ReachUnknown> = null;
 		for (span in spans) {
-			_g.enter(g, file, span, tree == null ? null : MemberTouchScan.typeAt(tree, span.from));
+			_g.enter(g, file, span, tree == null ? null : TypeResolver.enclosingTypeDeclAt(tree, span.from)?.name);
 			marked = marked ?? _scope.facts?.blindIn(file, span, g);
 		}
 		return marked;
@@ -1252,7 +1252,7 @@ final class MemberReach {
 			for (at in sites) for (id in _g.idsAt(g, at)) push(id);
 		}
 		// whether it widened anything does not matter: every site is asked right after
-		_g.enter(g, file, region, MemberTouchScan.typeAt(tree, region.from)); // noqa: unused-return-value
+		_g.enter(g, file, region, TypeResolver.enclosingTypeDeclAt(tree, region.from)?.name); // noqa: unused-return-value
 		admitAll();
 		for (e in callees) {
 			final unknown: Null<Occurrence> = followEdge(g, e, push);
@@ -1541,7 +1541,7 @@ final class MemberReach {
 			for (at in sites) for (id in _g.idsAt(g, at)) push(id);
 		}
 		// whether it widened anything does not matter: every site is asked right after
-		_g.enter(g, file, span, MemberTouchScan.typeAt(tree, span.from)); // noqa: unused-return-value
+		_g.enter(g, file, span, TypeResolver.enclosingTypeDeclAt(tree, span.from)?.name); // noqa: unused-return-value
 		admitAll();
 		final entered: Null<FreshOnlyAnswer> = followUnlessBenign(g, entryNode, edges, push);
 		if (entered != null) return entered;
@@ -2562,7 +2562,7 @@ final class MemberReach {
 		// and reaches its members by name as it does an argument's (a native `toJSON` runs `this.toISOString()`). A
 		// construction's receiver is the object it makes, an instance of exactly the target class: no program object
 		final receiverType: Null<String> = receiver == null
-			? MemberTouchScan.typeAt(tree, call.span?.from ?? 0)
+			? TypeResolver.enclosingTypeDeclAt(tree, call.span?.from ?? 0)?.name
 			: _g.sites.typeOf(file, tree, source, receiver);
 		if (handed == null && onInstance && !constructs) carried(receiverType);
 		if (handed == null && onInstance && !arrayOwn && !constructs) hand(receiverType);
@@ -2798,7 +2798,7 @@ final class MemberReach {
 				if (_hazards.isAccess(node.kind) && node.children.length > 0)
 					out.push({ span: at, relation: receiverRelation(g, file, node.children[0], member) });
 				else if (node.kind == _shape.identKind && TypeResolver.bindingNodeFrom(member.name, at, root, _shape) == null)
-					out.push({ span: at, relation: _carriers.relation(MemberTouchScan.typeAt(root, at.from), owner) });
+					out.push({ span: at, relation: _carriers.relation(TypeResolver.enclosingTypeDeclAt(root, at.from)?.name, owner) });
 			}
 			for (c in node.children) walk(c);
 		}

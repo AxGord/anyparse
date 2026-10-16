@@ -2858,3 +2858,19 @@ decided the question; it may not become a record of runs.
   goes link by link. An arc a host does not know answers null, never a guess; an arc one host learns is added to the
   other only as its own measured change. Moved first as a pure move (each host answering exactly what its walk did),
   all-rules byte-identical on the four trees — branch `feat/infra-B4b`
+- the innermost type declaration holding a position had three walks: `TypeResolver.innermostTypeDecl` (by span),
+  `MemberTouchScan.typeAt` (by offset, 19 callers across eight files) and `Rename.enclosingTypeDecl` (by offset), the
+  second reading `CallGraphNames.typeNameOf`, whose `EXTRA_TYPE_DECL_KINDS` arm was dead (`MemberKinds.TYPE_DECL_KINDS`
+  already lists `AbstractClassDecl` and `EnumAbstractDecl`) → ONE walk, `TypeResolver.enclosingTypeDeclAt(tree, at, ?to)`,
+  entering only the nodes that hold the range (what `typeAt` did; the span walk visited the whole tree);
+  `enclosingTypeDecl` / `enclosingTypeName` are its span spellings, `typeNameOf` callers ask `RefactorSupport.typeDeclOf`,
+  and `ImplicitSites.typeOf` drops its own self-reference arm, which the walk answers the same way. All-rules
+  byte-identical on the four trees — branch `feat/infra-B4b`
+- which children of a construction are its TYPE arguments was decided three ways: `LiteralInfer` scanned the text after
+  `new` for a balanced `<…>` (a `>` after `-` read as an arrow), while `ValueEscapes` and the graph's argument
+  expectation (`expectedAt`) took the children of a `typeAnnotationKinds` kind — a list without `Parens` or
+  `ConstStringType`, so `new Box<(Int)>(f)` handed `f` the constructor's SECOND parameter → `NominalTypes.
+  writtenConstruction` reads the grammar's children and lets the separators between them say which list each belongs
+  to (the first gap holding `(` starts the constructor's); a shape they do not spell consistently answers null. The
+  three consumers read its `path` / `args` / `text` (the arguments verbatim). All-rules byte-identical on the four
+  trees; `CallGraphTest` `C.paren` red on the start commit — branch `feat/infra-B4b`

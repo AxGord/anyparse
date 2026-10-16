@@ -838,7 +838,6 @@ final class CallGraph {
 		final blockKinds: Array<String> = [for (k in [shape.blockStmtKind, shape.exprStatementKind]) if (k != null) k];
 		final mapEntryKind: Null<String> = shape.mapLiteralEntryKind;
 		final objectFieldKind: Null<String> = shape.objectFieldKind;
-		final annotationKinds: Array<String> = shape.typeAnnotationKinds ?? [];
 		// call / `new` site `span.from` -> the target it resolved to and the receiver it was made on, for typing its arguments
 		final sites: Map<Int, CallSite> = [];
 		// the ancestors of the node being walked, outermost first, and the child index leading down from each
@@ -2024,7 +2023,7 @@ final class CallGraph {
 				// a `new` names its type's arguments among its children (`new Box<Int>(x)`): they are no arguments
 				final args: Array<QueryNode> = kind == callKind
 					? holder.children.slice(1)
-					: [for (c in holder.children) if (!annotationKinds.contains(c.kind)) c];
+					: holder.children.slice(NominalTypes.writtenConstruction(holder, shape, source)?.args.length ?? holder.children.length);
 				final at: Int = args.indexOf(holder.children[index]);
 				site == null || at < 0 ? null : argumentTypeSource(site, at, args.length, currentType);
 			} else
@@ -2212,7 +2211,7 @@ final class CallGraph {
 		): Void {
 			// symmetric with `CallGraphNodes.collect`: reified code is not runtime calls
 			if (opaqueKinds.contains(node.kind)) return;
-			final typeName: Null<String> = CallGraphNames.typeNameOf(node) ?? currentType;
+			final typeName: Null<String> = RefactorSupport.typeDeclOf(node)?.name ?? currentType;
 
 			if (!inArgument && (node.kind == identKind || isAccessKind(node.kind) || lambdaKinds.contains(node.kind)))
 				handleValueUse(node, parent, childIndex, typeName);

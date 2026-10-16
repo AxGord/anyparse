@@ -1637,7 +1637,8 @@ class CallGraphTest extends Test {
 			'package app; class Box<T> { public function new(f:(sys.thread.Lock) -> Void, ?v:T) {} }',
 			'package app; class C { static function shift():Void A.run(l -> {}, l2 -> l2.wait());'
 			+ ' static function full():Void A.full(1, l -> l.wait()); static function dflt():Void A.dflt(l -> {}, l2 -> l2.wait());'
-			+ ' static function late():Void A.late(l -> l.wait()); static function made():Void new Box<Int>(l -> l.wait()); }'
+			+ ' static function late():Void A.late(l -> l.wait()); static function made():Void new Box<Int>(l -> l.wait());'
+			+ ' static function paren():Void new Box<(Int)>(l -> l.wait()); }'
 		]);
 		function inLambdas(fn: String): Array<String> {
 			final out: Array<String> = [];
@@ -1649,6 +1650,7 @@ class CallGraphTest extends Test {
 		Assert.same([], inLambdas('C.dflt'), 'a parameter with a default value is skippable too');
 		Assert.same(['sys.thread.Lock.wait'], inLambdas('C.late'), 'the skippable parameter after it');
 		Assert.same(['sys.thread.Lock.wait'], inLambdas('C.made'), 'the type arguments of a new are no arguments');
+		Assert.same(['sys.thread.Lock.wait'], inLambdas('C.paren'), 'nor is a parenthesised one, whatever kind its node is');
 		#else
 		Assert.pass('non-sys target');
 		#end

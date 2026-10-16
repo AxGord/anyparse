@@ -309,7 +309,7 @@ final class MemberTouchScan {
 			node: QueryNode, parent: Null<QueryNode>, grand: Null<QueryNode>, index: Int, parentIndex: Int, type: Null<String>
 		): Void {
 			if (opaqueKinds.contains(node.kind)) return;
-			final current: Null<String> = CallGraphNames.typeNameOf(node) ?? type;
+			final current: Null<String> = RefactorSupport.typeDeclOf(node)?.name ?? type;
 			final span: Null<Span> = node.span;
 			final spelled: Null<String> = node.name;
 			if (spelled == name && span != null) {
@@ -672,7 +672,7 @@ final class MemberTouchScan {
 		final fn: Null<String> = g.functionAt(file, offset);
 		if (fn != null) return [fn];
 		final tree: Null<QueryNode> = g.treeOf(file);
-		final type: Null<String> = tree == null ? null : typeAt(tree, offset);
+		final type: Null<String> = tree == null ? null : TypeResolver.enclosingTypeDeclAt(tree, offset)?.name;
 		return type == null ? [] : ['$type.${CallGraph.INIT_NAME}', '$type.${CallGraph.STATIC_INIT_NAME}'];
 	}
 
@@ -852,20 +852,6 @@ final class MemberTouchScan {
 			if (init != null && span != null && !isFresh(init, null)) return { file: site.file, span: span };
 		}
 		return null;
-	}
-
-	/** The innermost type declaration of `tree` enclosing `offset`. */
-	public static function typeAt(tree: QueryNode, offset: Int): Null<String> {
-		var found: Null<String> = null;
-		function walk(node: QueryNode): Void {
-			final span: Null<Span> = node.span;
-			if (span != null && (offset < span.from || offset >= span.to)) return;
-			final name: Null<String> = CallGraphNames.typeNameOf(node);
-			if (name != null) found = name;
-			for (c in node.children) walk(c);
-		}
-		walk(tree);
-		return found;
 	}
 
 	/** The field a call fact's `target` names (`pack.Type.field`, a bare field name), or null for a call of no field. */

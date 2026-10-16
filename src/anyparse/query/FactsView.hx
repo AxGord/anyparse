@@ -1093,7 +1093,7 @@ final class FactsView {
 			// the type its text declares it in: the index lists a type once per file, whatever branch of a region each copy is in
 			final fi: Null<FileInfo> = _scope.index.fileInfo(d.file);
 			final tree: Null<QueryNode> = g.treeOf(d.file);
-			final holder: Null<String> = tree == null ? null : MemberTouchScan.typeAt(tree, d.span.from);
+			final holder: Null<String> = tree == null ? null : TypeResolver.enclosingTypeDeclAt(tree, d.span.from)?.name;
 			final listed: Null<TypeDeclInfo> = fi?.types.find(t -> t.name == type);
 			if (fi == null || listed == null || holder != type) return null;
 			if (declaredId(fi, listed) == root) out.push(d);
@@ -1115,7 +1115,7 @@ final class FactsView {
 		final declared: Array<FnDeclaration> = g.declarationsOf(node.id);
 		if (!truth || type == null || node.id.indexOf(NESTED_MARK) < 0 || declared.length != 1) return null;
 		final tree: Null<QueryNode> = g.treeOf(declared[0].file);
-		if (tree == null || MemberTouchScan.typeAt(tree, declared[0].span.from) != type) return null;
+		if (tree == null || TypeResolver.enclosingTypeDeclAt(tree, declared[0].span.from)?.name != type) return null;
 		return typedIn(declared[0].file, type);
 	}
 
