@@ -3055,3 +3055,13 @@ decided the question; it may not become a record of runs.
   read off an ancestor chain, `ExplicitType.enclosingType` the same answer over the index's type spans (Haxe nests no
   type, and the index and `typeDeclOf` read one kind list, `MemberKinds.TYPE_DECL_KINDS`); all three ask the walk now.
   `HaxeNamingSupport`'s `enclosingType` is a walk parameter, not a lookup — branch `feat/infra-B6b`
+- `NominalTypes.typeWalk<T, C>` / `TypingHost<T, C>` carried a type parameter for the host's "currency", but both
+  hosts (`INDEX_HOST`, the call graph's `graphTyping`) answer `String`: the currencies differ in how the source is
+  SPELLED (keyed vs as written), which no type parameter distinguishes → `typeWalk<C>` / `TypingHost<C>`, answering a
+  `Null<String>`; `C` (what a walk threads) still varies. All-rules byte-identical on the four trees — branch
+  `feat/infra-B9`
+- `IndexScope.fieldWriteIndexOf` had one caller, `resolutionWrites`, which it now is; the IndexScope docs named
+  "FOUR call sites" of `widestScopeIndex` (seven by then) and a `resolutionProjectSourcesOf` "below" that lives in
+  `RefactorSupport` → call-site lists dropped (they rot), the pointer qualified. `ScopeFiles.parseScope` caught a
+  parse failure itself beside `ParseGate.parse` → asks the gate. Dead `SourceText.last/firstStandaloneIdentIndex` and
+  `FactsView.typedElsewhere`'s unused graph parameter removed — branch `feat/infra-B9`

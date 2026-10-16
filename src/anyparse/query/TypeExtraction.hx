@@ -17,15 +17,7 @@ typedef SourceClass = {
  * The core the type-extracting ops share — `extract-interface` and `extract-superclass`, which
  * generate a NEW type from a class and splice a header clause into it, and `pull-up` /
  * `push-down`, which move a member along the same `extends` axis. Each op keeps only what makes it
- * that op (which members it selects, what the new type holds, which clause it adds); the steps
- * here used to be written once per op, and a fix to one copy (anchoring the header splice on the AST) had to be made in each.
- *
- *  - `sourceClass` — parse the source and resolve its sole class: the extraction prologue.
- *  - `uniqueClass` / `superNameOf` — the class lookups the inheritance ops ask.
- *  - `referencedMembers` — which members of a class a moved subtree still needs.
- *  - `carriedImports` — the source imports a generated type must carry.
- *  - `assembleTypeFile` — the new module, built through `NewFile.createRaw`.
- *  - `rewriteSource` / `rewritesNotes` — the source edit, canonical in / canonical out, re-parsed.
+ * that op (which members it selects, what the new type holds, which clause it adds).
  */
 @:nullSafety(Strict)
 final class TypeExtraction {
@@ -65,9 +57,7 @@ final class TypeExtraction {
 		source: String, decl: TypeDeclMatch, typeName: String, text: String, regions: Array<LexRegion>
 	): Null<{ span: Span, text: String }> {
 		final at: Null<Int> = RefactorSupport.typeHeaderInsertOffset(source, decl, typeName, regions);
-		if (at == null) return null;
-		final atNN: Int = at;
-		return { span: new Span(atNN, atNN), text: text };
+		return at == null ? null : { span: new Span(at, at), text: text };
 	}
 
 	/** The written name of a class's direct superclass (`extends X`), or null. */
@@ -134,12 +124,9 @@ final class TypeExtraction {
 	 * Assemble a generated module — `package pkg;`, one plain `import` per entry of `imports`,
 	 * then `typeSource` — through `NewFile.createRaw`, so the result is parse-validated and
 	 * canonical AT THE WRITER'S FIXED POINT under `optsJson`, the config governing where the file
-	 * lands, rather than under compiled defaults. `what` names the type in the refusal.
-	 *
-	 * Both of those used to be wrong in each extracting op, and either alone left the created file
-	 * drifted from birth: a `writeRoundTrip(source, null)` styled it by the writer's built-in
-	 * defaults while `fmt --list` judged it under the project's `hxformat.json`, and one round trip
-	 * lands short of the fixed point on the shapes `WrapFlatSourceFixedPointTest` pins.
+	 * lands — the one `fmt --list` judges it by — rather than under compiled defaults, and past the
+	 * single round trip that lands short of the fixed point (`WrapFlatSourceFixedPointTest`). `what`
+	 * names the type in the refusal.
 	 */
 	public static function assembleTypeFile(
 		pkg: String, imports: Array<String>, typeSource: String, what: String, plugin: GrammarPlugin, optsJson: Null<String>
@@ -185,9 +172,8 @@ final class TypeExtraction {
 
 	/**
 	 * The advisory tail naming each file the writer needed more than one pass to settle — the
-	 * count is the WRITER's, not the extraction's, and it reaches the user only through the
-	 * advisory: a created file the writer needed two passes to settle is the defect `apq fmt`
-	 * reports, which every op used to absorb in silence.
+	 * count is the WRITER's, not the extraction's: a created file that needed two passes is the
+	 * defect `apq fmt` reports, and this advisory is the only place the user hears of it.
 	 */
 	public static function rewritesNotes(newFile: String, newRewrites: Null<Int>, srcFile: String, srcRewrites: Null<Int>): String {
 		final newNote: Null<String> = FormatFixedPoint.rewritesNote(newRewrites);
