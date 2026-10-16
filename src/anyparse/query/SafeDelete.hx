@@ -98,18 +98,12 @@ final class SafeDelete {
 	private static function memberSpanOf(
 		tree: QueryNode, typeName: String, memberName: String, source: String, shape: RefShape, regions: () -> Array<LexRegion>
 	): Null<Span> {
-		final decls: Array<TypeDeclMatch> = [];
-		function walk(node: QueryNode): Void {
-			final m: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
-			if (m != null && m.name == typeName) decls.push(m);
-			for (c in node.children) walk(c);
-		}
-		walk(tree);
-		if (decls.length != 1) return null;
+		final decl: Null<TypeDeclMatch> = RefactorSupport.uniqueTypeDeclNamed(tree, typeName);
+		if (decl == null) return null;
 		var hit: Null<Span> = null;
 		// Branch-aware: a member a `#if` region declares is not a direct child of the type. The delete
 		// cuts it in place, inside that region.
-		MemberBranchScan.eachTypeMember(decls[0], shape, source, n -> MemberKinds.isFieldMemberKind(n.kind), (child, _) -> {
+		MemberBranchScan.eachTypeMember(decl, shape, source, n -> MemberKinds.isFieldMemberKind(n.kind), (child, _) -> {
 			if (hit == null && child.name == memberName) hit = child.span;
 		}, regions);
 		return hit;

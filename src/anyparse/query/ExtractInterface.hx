@@ -1,14 +1,13 @@
 package anyparse.query;
 
-import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.query.MoveSymbol.MoveResult;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
-import anyparse.runtime.ParseError;
+import anyparse.query.TypeExtraction.SourceClass;
 import anyparse.runtime.Span;
-import haxe.Exception;
+import haxe.ds.Either;
 
 using StringTools;
 using Lambda;
@@ -96,14 +95,11 @@ final class ExtractInterface {
 		if (!SourceText.isIdentifier(ifaceName)) return Err('interface name "$ifaceName" is not a valid identifier');
 		if (ifaceName == srcTypeName) return Err('interface name must differ from the source type "$srcTypeName"');
 
-		final tree: QueryNode = try plugin.parseFile(srcSource) catch (exception: ParseError) return Err(
-			'$srcFile does not parse: $exception'
-		)
-		catch (exception: Exception) return Err('$srcFile does not parse: ${exception.message}');
-
-		final decl: Null<TypeDeclMatch> = uniqueClass(tree, srcTypeName);
-		if (decl == null) return Err('no unique class "$srcTypeName" in $srcFile');
-		final declNN: TypeDeclMatch = decl;
+		final src: SourceClass = switch TypeExtraction.sourceClass(srcFile, srcSource, srcTypeName, plugin) {
+			case Left(message): return Err(message);
+			case Right(found): found;
+		};
+		final declNN: TypeDeclMatch = src.decl;
 		// Re-running the op against a source that already carries the clause used to
 		// splice a SECOND one — `class A implements IA implements IA`, at rc 0, past
 		// the parse gate because the header still parses. The occupied-destination
@@ -120,21 +116,20 @@ final class ExtractInterface {
 		};
 		if (selected.length == 0) return Err('class "$srcTypeName" has no public instance method to extract');
 
-		final pkg: String = ModuleScan.packageOf(tree);
-		final imports: Array<String> = carriedImports(tree, selected);
-		// The count is the WRITER's, not the extraction's, and it reaches the user only
-		// through the advisory: a created file the writer needed two passes to settle is
-		// the defect `apq fmt` reports and every op used to absorb in silence.
+		final pkg: String = ModuleScan.packageOf(src.tree);
+		final imports: Array<String> = TypeExtraction.carriedImports(src.tree, [for (m in selected) m.signature].join('\n'));
 		var ifaceRewrites: Null<Int> = null;
-		final ifaceSource: String = switch buildInterface(ifaceName, pkg, selected, imports, plugin, optsJson) {
+		final ifaceSource: String = switch TypeExtraction.assembleTypeFile(
+			pkg, imports, interfaceSource(ifaceName, selected), 'interface', plugin, optsJson
+		) {
 			case Err(message): return Err(message);
 			case Ok(source, rewrites):
 				ifaceRewrites = rewrites;
 				source;
 		};
 
-		final srcEdit: Null<{ span: Span, text: String }> = implementsEdit(
-			srcSource, decl, srcTypeName, ifaceName, plugin.lexicalRegions(srcSource)
+		final srcEdit: Null<{ span: Span, text: String }> = TypeExtraction.headerInsertEdit(
+			srcSource, declNN, srcTypeName, ' implements $ifaceName', plugin.lexicalRegions(srcSource)
 		);
 		if (srcEdit == null)
 			return Err('could not verify the body brace of class "$srcTypeName" — refusing to add implements (nothing written)');
@@ -145,26 +140,17 @@ final class ExtractInterface {
 		// canonical one second earlier is drifted — the very defect this op's CREATED file
 		// was taught to avoid, one file over.
 		var srcRewrites: Null<Int> = null;
-		final newSrc: String = switch CanonicalEdit.editKeepingCanonical(srcSource, [edit], plugin, srcOptsJson) {
-			case Err(message): return Err('the rewritten $srcFile: $message');
+		final newSrc: String = switch TypeExtraction.rewriteSource(srcFile, srcSource, [edit], plugin, srcOptsJson) {
+			case Err(message): return Err(message);
 			case Ok(text, rewrites):
 				srcRewrites = rewrites;
 				text;
 		};
 
-		try
-			plugin.parseFile(newSrc)
-		catch (exception: ParseError)
-			return Err('rewritten $srcFile does not parse: $exception')
-		catch (exception: Exception)
-			return Err('rewritten $srcFile does not parse: ${exception.message}');
-
 		final incomplete: Array<String> = [for (m in selected) if (m.signature.indexOf(':') < 0) m.name];
-		final rewritesNote: Null<String> = FormatFixedPoint.rewritesNote(ifaceRewrites);
-		final srcRewritesNote: Null<String> = FormatFixedPoint.rewritesNote(srcRewrites);
-		final advisory: String = 'extracted ${selected.length} method(s) into interface "$ifaceName"' + (
-			incomplete.length > 0 ? '; method(s) without an explicit return type may need annotations: ${incomplete.join(', ')}' : ''
-		) + (rewritesNote == null ? '' : '; $ifaceFile: $rewritesNote') + (srcRewritesNote == null ? '' : '; $srcFile: $srcRewritesNote');
+		final advisory: String = 'extracted ${selected.length} method(s) into interface "$ifaceName"'
+			+ (incomplete.length > 0 ? '; method(s) without an explicit return type may need annotations: ${incomplete.join(', ')}' : '')
+			+ TypeExtraction.rewritesNotes(ifaceFile, ifaceRewrites, srcFile, srcRewrites);
 		final changes: Array<MoveChange> = [
 			{ file: ifaceFile, newSource: ifaceSource },
 			{ file: srcFile, newSource: newSrc }
@@ -201,18 +187,6 @@ final class ExtractInterface {
 			if (guarded != null) return guarded;
 		}
 		return null;
-	}
-
-	/** The sole class declaration named `typeName`, or null. Final-aware. */
-	private static function uniqueClass(tree: QueryNode, typeName: String): Null<TypeDeclMatch> {
-		final matches: Array<TypeDeclMatch> = [];
-		function walk(node: QueryNode): Void {
-			final m: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
-			if (m != null && m.name == typeName && m.kind == 'ClassDecl') matches.push(m);
-			for (c in node.children) walk(c);
-		}
-		walk(tree);
-		return matches.length == 1 ? matches[0] : null;
 	}
 
 	/**
@@ -299,62 +273,11 @@ final class ExtractInterface {
 	}
 
 	/**
-	 * The plain imports of the source file whose exposed name appears in
-	 * any selected signature — the type-position dependencies the
-	 * interface must carry so it type-checks. `using` / wildcard / aliased
-	 * imports are not carried (signatures never reference them).
+	 * The interface declaration itself: each selected signature becomes a body-less method requirement.
+	 * `TypeExtraction.assembleTypeFile` puts the package and the carried imports above it.
 	 */
-	private static function carriedImports(tree: QueryNode, methods: Array<IfaceMethod>): Array<String> {
-		final sigBlob: String = [for (m in methods) m.signature].join('\n');
-		final out: Array<String> = [];
-		function walk(node: QueryNode): Void {
-			if (node.kind == 'ImportDecl') {
-				final raw: Null<String> = node.name;
-				if (raw != null) {
-					final dot: Int = raw.lastIndexOf('.');
-					final exposed: String = dot < 0 ? raw : raw.substr(dot + 1);
-					if (referencedWord(sigBlob, exposed) && !out.contains(raw)) out.push(raw);
-				}
-			}
-			for (c in node.children) walk(c);
-		}
-		walk(tree);
-		return out;
-	}
-
-	/** Does `word` occur in `hay` on identifier boundaries? */
-	private static function referencedWord(hay: String, word: String): Bool {
-		return SourceText.identTokenOffset(hay, new Span(0, hay.length), word) >= 0;
-	}
-
-	/**
-	 * Assemble the interface source through `NewFile.createRaw` — the signatures
-	 * become body-less method requirements, the carried imports plain import
-	 * statements — so the result is parse-validated and canonical AT THE WRITER'S
-	 * FIXED POINT, under `optsJson` rather than under compiled defaults.
-	 *
-	 * Both of those used to be wrong here, and each on its own is enough to make
-	 * the created file drift: a `plugin.writeRoundTrip(source, null)` formatted the
-	 * interface with the writer's built-in style while `fmt --list` judged it under
-	 * the project's discovered `hxformat.json`, and one round trip lands short of
-	 * the fixed point on the shapes `WrapFlatSourceFixedPointTest` pins. The doc on
-	 * this class claimed `NewFile` all along; now it is true.
-	 */
-	private static function buildInterface(
-		ifaceName: String, pkg: String, methods: Array<IfaceMethod>, imports: Array<String>, plugin: GrammarPlugin, optsJson: Null<String>
-	): EditResult {
+	private static function interfaceSource(ifaceName: String, methods: Array<IfaceMethod>): String {
 		final sb: StringBuf = new StringBuf();
-		if (pkg != '') {
-			sb.add('package ');
-			sb.add(pkg);
-			sb.add(';\n\n');
-		}
-		for (raw in imports) {
-			sb.add('import ');
-			sb.add(raw);
-			sb.add(';\n');
-		}
-		if (imports.length > 0) sb.add('\n');
 		sb.add('interface ');
 		sb.add(ifaceName);
 		sb.add(' {\n');
@@ -364,37 +287,7 @@ final class ExtractInterface {
 			sb.add(';\n');
 		}
 		sb.add('}\n');
-		return switch NewFile.createRaw(sb.toString(), plugin, optsJson) {
-			case Ok(text, rewrites): Ok(text, rewrites);
-			case Err(message): Err('the assembled interface: $message');
-		};
+		return sb.toString();
 	}
-
-	/**
-	 * The span-splice that adds `implements <Iface>` to the class header —
-	 * inserted just past the last header token, before the body `{`, so the
-	 * existing spacing and any `extends` / `implements` clauses are
-	 * preserved. Null when the body brace cannot be verified, which aborts
-	 * the extraction before anything is written.
-	 */
-	private static function implementsEdit(
-		source: String, decl: TypeDeclMatch, typeName: String, ifaceName: String, regions: Array<LexRegion>
-	): Null<{ span: Span, text: String }> {
-		final at: Null<Int> = RefactorSupport.typeHeaderInsertOffset(source, decl, typeName, regions);
-		if (at == null) return null;
-		final atNN: Int = at;
-		return { span: new Span(atNN, atNN), text: ' implements $ifaceName' };
-	}
-
-}
-
-/**
- * A tiny sum type for a computed value or an error message, so the
- * extraction phases short-circuit without sentinel strings.
- */
-private enum Either<L, R> {
-
-	Left(value: L);
-	Right(value: R);
 
 }

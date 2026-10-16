@@ -341,14 +341,24 @@ final class RefactorSupport {
 	 */
 	public static function uniqueTypeDeclNamed(tree: QueryNode, typeName: String, ?kinds: Array<String>): Null<TypeDeclMatch> {
 		final allow: Array<String> = kinds ?? [];
+		final matches: Array<TypeDeclMatch> = typeDeclsNamed(tree, typeName).filter(m -> allow.length == 0 || allow.contains(m.kind));
+		return matches.length == 1 ? matches[0] : null;
+	}
+
+	/**
+	 * Every type declaration named `typeName` in `tree`, in document order (pre-order), each one
+	 * final-aware through `typeDeclOf`. The one walk behind every by-name type lookup of the ops: the
+	 * uniqueness proofs count it, `uniqueTypeDeclNamed` filters it, a move enumerates it.
+	 */
+	public static function typeDeclsNamed(tree: QueryNode, typeName: String): Array<TypeDeclMatch> {
 		final matches: Array<TypeDeclMatch> = [];
 		function walk(node: QueryNode): Void {
 			final match: Null<TypeDeclMatch> = typeDeclOf(node);
-			if (match != null && match.name == typeName && (allow.length == 0 || allow.contains(match.kind))) matches.push(match);
+			if (match != null && match.name == typeName) matches.push(match);
 			for (child in node.children) walk(child);
 		}
 		walk(tree);
-		return matches.length == 1 ? matches[0] : null;
+		return matches;
 	}
 
 	/**
@@ -469,6 +479,19 @@ final class RefactorSupport {
 				? !valueResolved.contains(recvSpan.from)
 				: recv.kind == MemberKinds.FIELD_ACCESS_KIND && qualified.contains(flattenPath(recv))
 		);
+	}
+
+	/**
+	 * The `valueResolved` half of `receiverIsTypeNamespace`: the offset of every read / write of
+	 * `name` in `tree` that the resolver BOUND to an in-file value (a var, param or field named like
+	 * the type). A bare receiver at one of these offsets is that value, never the type used as a
+	 * namespace.
+	 */
+	public static function valueBoundOffsets(name: String, tree: QueryNode, shape: RefShape): Array<Int> {
+		return [
+			for (h in Refs.find(name, tree, shape))
+				if ((h.kind == RefKind.Read || h.kind == RefKind.Write) && h.bindingSpan != null) h.span.from
+		];
 	}
 
 	/**
@@ -716,6 +739,23 @@ final class RefactorSupport {
 		}
 		if (brace < 0) brace = headerScan(source, from, limit, regions).brace;
 		return brace < 0 || source.fastCodeAt(brace) != '{'.code ? null : brace;
+	}
+
+	/**
+	 * The offset of `decl`'s body-CLOSING `}`, or null when the body does not end in one.
+	 *
+	 * Scanned back over trailing whitespace from the end of `nameNode` — the inner `ClassForm` of a
+	 * `final class`, the decl itself otherwise. NOT from `fullSpan`: the outer `FinalDecl` span of a
+	 * final class swallows trailing trivia past the `}` (a following declaration's doc comment, when
+	 * the final class is not the last one), so a scan from there lands in that trivia and misses the
+	 * brace. `nameNode.span` ends right at the `}`, and equals `fullSpan` for every non-final shape.
+	 */
+	public static function typeBodyCloseOffset(source: String, decl: TypeDeclMatch): Null<Int> {
+		final bodySpan: Span = decl.nameNode.span ?? decl.fullSpan;
+		var bodyClose: Int = bodySpan.to - 1;
+		if (bodyClose >= source.length) bodyClose = source.length - 1;
+		while (bodyClose >= bodySpan.from && SourceText.isSpace(source.fastCodeAt(bodyClose))) bodyClose--;
+		return bodyClose < bodySpan.from || source.fastCodeAt(bodyClose) != '}'.code ? null : bodyClose;
 	}
 
 	/**

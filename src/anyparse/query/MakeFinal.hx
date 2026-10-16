@@ -146,7 +146,7 @@ final class MakeFinal {
 	private static function resolveVarField(
 		tree: QueryNode, typeName: String, fieldName: String, source: String, shape: RefShape, regions: () -> Array<LexRegion>
 	): Null<QueryNode> {
-		final decl: Null<TypeDeclMatch> = findSoleTypeDecl(tree, typeName);
+		final decl: Null<TypeDeclMatch> = RefactorSupport.uniqueTypeDeclNamed(tree, typeName);
 		if (decl == null) return null;
 		var hit: Null<QueryNode> = null;
 		// Branch-aware: a field a `#if` region declares is not a direct child of the type. The swap is
@@ -161,7 +161,7 @@ final class MakeFinal {
 	private static function constructorSpan(
 		tree: QueryNode, typeName: String, source: String, shape: RefShape, regions: () -> Array<LexRegion>
 	): Null<Span> {
-		final decl: Null<TypeDeclMatch> = findSoleTypeDecl(tree, typeName);
+		final decl: Null<TypeDeclMatch> = RefactorSupport.uniqueTypeDeclNamed(tree, typeName);
 		if (decl == null) return null;
 		var hit: Null<Span> = null;
 		MemberBranchScan.eachTypeMember(decl, shape, source, n -> n.kind == 'FnMember', (child, _) -> {
@@ -196,19 +196,6 @@ final class MakeFinal {
 	/** The `var`-keyword-length source slice at `from` (for the keyword check). */
 	private static function keywordAt(source: String, from: Int): String {
 		return from >= 0 && from + VAR.length <= source.length ? source.substr(from, VAR.length) : '';
-	}
-
-
-	/** The sole type declaration named `typeName` (final-aware), or null when absent / ambiguous. */
-	private static function findSoleTypeDecl(tree: QueryNode, typeName: String): Null<TypeDeclMatch> {
-		final decls: Array<TypeDeclMatch> = [];
-		function walk(node: QueryNode): Void {
-			final m: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
-			if (m != null && m.name == typeName) decls.push(m);
-			for (c in node.children) walk(c);
-		}
-		walk(tree);
-		return decls.length == 1 ? decls[0] : null;
 	}
 
 }

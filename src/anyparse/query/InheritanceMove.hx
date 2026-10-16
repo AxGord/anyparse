@@ -5,7 +5,7 @@ import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.query.MoveSymbol.MoveResult;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
-import anyparse.runtime.ParseError;
+import anyparse.query.ScopeFiles.ParsedFile;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
@@ -30,13 +30,6 @@ private typedef Resolved = {
 	/** Declared inside a `#if` region — present in only SOME builds, so it cannot leave its branch. */
 	var guarded: Bool;
 }
-
-/** One scope file parsed once. */
-private typedef Parsed = {
-	final file: String;
-	final source: String;
-	final tree: QueryNode;
-};
 
 /**
  * `pull-up` / `push-down` — move an instance member along the inheritance
@@ -90,29 +83,29 @@ final class InheritanceMove {
 	): MoveResult {
 		if (srcType == targetType) return Err('source and target type are the same — nothing to move');
 
-		final scope: { error: Null<String>, parsed: Array<Parsed> } = parseScope(scopeFiles, plugin);
+		final scope: { error: Null<String>, parsed: Array<ParsedFile> } = parseScope(scopeFiles, plugin);
 		if (scope.error != null) return Err(scope.error);
-		final parsed: Array<Parsed> = scope.parsed;
+		final parsed: Array<ParsedFile> = scope.parsed;
 
-		final srcEntry: Null<Parsed> = parsed.find(p -> p.file == srcFile);
+		final srcEntry: Null<ParsedFile> = parsed.find(p -> p.file == srcFile);
 		if (srcEntry == null) return Err('source file $srcFile is not in the scope file set');
-		final src: Parsed = srcEntry;
-		final srcDecl: Null<TypeDeclMatch> = uniqueClass(src.tree, srcType);
+		final src: ParsedFile = srcEntry;
+		final srcDecl: Null<TypeDeclMatch> = TypeExtraction.uniqueClass(src.tree, srcType);
 		if (srcDecl == null) return Err('no unique class "$srcType" in $srcFile');
 		final srcDeclNN: TypeDeclMatch = srcDecl;
 
-		final targetHit: Null<Parsed> = parsed.find(p -> uniqueClass(p.tree, targetType) != null);
+		final targetHit: Null<ParsedFile> = parsed.find(p -> TypeExtraction.uniqueClass(p.tree, targetType) != null);
 		if (targetHit == null) return Err('no unique class "$targetType" under scope');
-		final target: Parsed = targetHit;
-		final targetDeclOpt: Null<TypeDeclMatch> = uniqueClass(target.tree, targetType);
+		final target: ParsedFile = targetHit;
+		final targetDeclOpt: Null<TypeDeclMatch> = TypeExtraction.uniqueClass(target.tree, targetType);
 		if (targetDeclOpt == null) return Err('no unique class "$targetType" under scope');
 		final targetDecl: TypeDeclMatch = targetDeclOpt;
 
 		// Verify the DIRECT inheritance relationship.
 		final subDecl: TypeDeclMatch = dir == Up ? srcDeclNN : targetDecl;
 		final expectedSuper: String = dir == Up ? targetType : srcType;
-		final actualSuper: Null<String> = superNameOf(subDecl);
-		if (actualSuper == null || simpleName(actualSuper) != simpleName(expectedSuper)) {
+		final actualSuper: Null<String> = TypeExtraction.superNameOf(subDecl);
+		if (actualSuper == null || SourceText.lastSegment(actualSuper) != SourceText.lastSegment(expectedSuper)) {
 			final subName: String = dir == Up ? srcType : targetType;
 			return Err('"$subName" does not directly extend "$expectedSuper" (extends "${actualSuper ?? 'nothing'}")');
 		}
@@ -127,8 +120,8 @@ final class InheritanceMove {
 		if (refusal != null) return Err(refusal);
 
 		if (dir == Up) {
-			final stranded: Array<String> = referencedSubMembers(
-				srcDeclNN, memberName, m.node, src.source, shape, plugin.lexicalRegions.bind(src.source)
+			final stranded: Array<String> = TypeExtraction.referencedMembers(
+				srcDeclNN, [memberName], [m.node], src.source, shape, plugin.lexicalRegions.bind(src.source)
 			);
 			if (stranded.length > 0)
 				return Err(
@@ -143,8 +136,8 @@ final class InheritanceMove {
 	/** Parse every scope file once; a skip-parse becomes a refusal (atomicity). */
 	private static function parseScope(
 		scopeFiles: Array<{ file: String, source: String }>, plugin: GrammarPlugin
-	): { error: Null<String>, parsed: Array<Parsed> } {
-		final parsed: Array<Parsed> = [];
+	): { error: Null<String>, parsed: Array<ParsedFile> } {
+		final parsed: Array<ParsedFile> = [];
 		for (entry in scopeFiles) {
 			final tree: Null<QueryNode> = try plugin.parseFile(entry.source) catch (exception: Exception) null;
 			if (tree == null) return { error: 'cannot move across scope: ${entry.file} does not parse', parsed: [] };
@@ -184,11 +177,11 @@ final class InheritanceMove {
 	 * live in the same file, both edits apply to one source.
 	 */
 	private static function splice(
-		src: Parsed, target: Parsed, srcFile: String, m: Resolved, dir: Direction, memberName: String, targetType: String,
+		src: ParsedFile, target: ParsedFile, srcFile: String, m: Resolved, dir: Direction, memberName: String, targetType: String,
 		plugin: GrammarPlugin
 	): MoveResult {
 		final block: String = SourceText.trimNewlineEdges(src.source.substring(m.cut.from, m.cut.to));
-		final bodyClose: Null<Int> = typeBodyClose(target.source, findTargetDecl(target, targetType));
+		final bodyClose: Null<Int> = RefactorSupport.typeBodyCloseOffset(target.source, findTargetDecl(target, targetType));
 		if (bodyClose == null) return Err('"$targetType" has no brace body to receive the member');
 		var wsStart: Int = bodyClose;
 		while (wsStart > 0 && SourceText.isSpace(StringTools.fastCodeAt(target.source, wsStart - 1))) wsStart--;
@@ -215,12 +208,8 @@ final class InheritanceMove {
 		}
 
 		for (c in changes) {
-			try
-				plugin.parseFile(c.newSource)
-			catch (exception: ParseError)
-				return Err('rewritten ${c.file} does not parse: $exception')
-			catch (exception: Exception)
-				return Err('rewritten ${c.file} does not parse: ${exception.message}');
+			final refusal: Null<String> = ParseGate.refusal(plugin, c.newSource, 'rewritten ${c.file}');
+			if (refusal != null) return Err(refusal);
 		}
 
 		final advisory: String = dir == Up
@@ -232,37 +221,10 @@ final class InheritanceMove {
 	}
 
 	/** Re-resolve the target decl in the (possibly identical) target file. */
-	private static function findTargetDecl(target: Parsed, targetType: String): TypeDeclMatch {
-		final d: Null<TypeDeclMatch> = uniqueClass(target.tree, targetType);
+	private static function findTargetDecl(target: ParsedFile, targetType: String): TypeDeclMatch {
+		final d: Null<TypeDeclMatch> = TypeExtraction.uniqueClass(target.tree, targetType);
 		if (d == null) throw new Exception('target class "$targetType" vanished');
 		return d;
-	}
-
-	/** The sole class declaration named `typeName`, or null. Final-aware. */
-	private static function uniqueClass(tree: QueryNode, typeName: String): Null<TypeDeclMatch> {
-		final matches: Array<TypeDeclMatch> = [];
-		function walk(node: QueryNode): Void {
-			final t: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
-			if (t != null && t.name == typeName && t.kind == 'ClassDecl') matches.push(t);
-			for (c in node.children) walk(c);
-		}
-		walk(tree);
-		return matches.length == 1 ? matches[0] : null;
-	}
-
-	/** The simple name of a class's direct superclass (`extends X`), or null. */
-	private static function superNameOf(decl: TypeDeclMatch): Null<String> {
-		for (child in decl.nameNode.children)
-			if (child.kind == 'ExtendsClause')
-				for (gc in child.children)
-					if (gc.kind == 'Named') return gc.name;
-		return null;
-	}
-
-	/** The last dotted segment of a (possibly qualified) type name. */
-	private static function simpleName(name: String): String {
-		final dot: Int = name.lastIndexOf('.');
-		return dot < 0 ? name : name.substr(dot + 1);
 	}
 
 	/**
@@ -284,7 +246,7 @@ final class InheritanceMove {
 				final spanNN: Span = span;
 				hit = {
 					node: child,
-					cut: cutSpanOf(source, MemberBranchScan.groupSpanOf(run, spanNN), regions),
+					cut: ElementSpan.memberCutSpan(source, MemberBranchScan.groupSpanOf(run, spanNN), regions),
 					isStatic: run.exists(m -> m.kind == 'Static'),
 					isOverride: run.exists(m -> m.kind == 'Override'),
 					guarded: MemberBranchScan.isGuardedMember(decl, shape, source, child, () -> regions)
@@ -293,60 +255,6 @@ final class InheritanceMove {
 			() -> regions
 		);
 		return hit;
-	}
-
-	/**
-	 * The member names of `subDecl` (other than `movingName`) that the
-	 * moved member's subtree references — they would be stranded on a
-	 * superclass. Matches any node whose `name` is a subclass member name
-	 * (bare call / read / `this.member`), so a comment or string never
-	 * triggers it. Conservative: a local / parameter that shadows a member
-	 * name may over-refuse, which only ever keeps a member in place.
-	 */
-	private static function referencedSubMembers(
-		subDecl: TypeDeclMatch, movingName: String, moved: QueryNode, source: String, shape: RefShape, regions: () -> Array<LexRegion>
-	): Array<String> {
-		final memberNames: Map<String, Bool> = [];
-		// Branch-aware, and silently wrong when it is not: a member left behind inside a `#if` region
-		// was absent from this set, so a member referencing it passed the gate and the move produced
-		// code that does not compile.
-		MemberBranchScan.eachTypeMember(
-			subDecl, shape, source, n -> MemberKinds.isFieldMemberKind(n.kind) || MemberKinds.FN_DECL_KINDS.contains(n.kind),
-			(child, _) -> {
-				final nm: Null<String> = child.name;
-				if (nm != null && nm != movingName) memberNames[nm] = true;
-			},
-			regions
-		);
-		final found: Map<String, Bool> = [];
-		function walk(node: QueryNode): Void {
-			final nm: Null<String> = node.name;
-			if (nm != null && memberNames.exists(nm) && (node.kind == 'IdentExpr' || node.kind == 'FieldAccess' || node.kind == 'Call'))
-				found[nm] = true;
-			for (c in node.children) walk(c);
-		}
-		walk(moved);
-		return [for (k in found.keys()) k];
-	}
-
-	/**
-	 * The cut span of a member group: its declaration, leading doc comment,
-	 * and whole physical line(s), plus a bounding blank line when the decl
-	 * is fenced by blanks on both sides. Mirrors `MoveMember.cutSpanOf`.
-	 */
-	private static function cutSpanOf(source: String, groupSpan: Span, regions: Array<LexRegion>): Span {
-		return ElementSpan.blankExtendedSpan(
-			source, ElementSpan.lineExtendedSpan(source, ElementSpan.docExtendedSpan(source, groupSpan, regions))
-		);
-	}
-
-	/** The offset of a type's body-closing `}`, or null. Mirrors `MoveMember`. */
-	private static function typeBodyClose(source: String, decl: TypeDeclMatch): Null<Int> {
-		final bodySpan: Span = decl.nameNode.span ?? decl.fullSpan;
-		var bodyClose: Int = bodySpan.to - 1;
-		if (bodyClose >= source.length) bodyClose = source.length - 1;
-		while (bodyClose >= bodySpan.from && SourceText.isSpace(source.fastCodeAt(bodyClose))) bodyClose--;
-		return bodyClose < bodySpan.from || source.fastCodeAt(bodyClose) != '}'.code ? null : bodyClose;
 	}
 
 }

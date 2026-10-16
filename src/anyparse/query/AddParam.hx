@@ -1,8 +1,6 @@
 package anyparse.query;
 
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using StringTools;
 using Lambda;
@@ -88,8 +86,10 @@ final class AddParam {
 	public static function addParam(
 		source: String, line: Int, col: Int, paramText: String, plugin: GrammarPlugin, ?optsJson: String
 	): AddParamResult {
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
-		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
+		final tree: QueryNode = switch ParseGate.parse(plugin, source, 'source') {
+			case Unparsed(message): return Err(message);
+			case Parsed(parsed): parsed;
+		};
 
 		// line:col is 1-based, as apq refs / ast --at / source print.
 		final cursor: Int = Span.offsetOf(source, line, col);
@@ -133,20 +133,10 @@ final class AddParam {
 			text: insertText
 		};
 
-		if (CanonicalEdit.applyEdits(source, [edit]) == source) return Err('adding "$newName" is a no-op');
-		final rewritten: String = switch CanonicalEdit.editKeepingCanonical(source, [edit], plugin, optsJson) {
-			case Err(message): return Err(message);
-			case Ok(text, _): text;
+		return switch SignatureEdit.commit(source, [edit], plugin, optsJson, 'adding "$newName" is a no-op') {
+			case Left(message): Err(message);
+			case Right(rewritten): Ok(rewritten);
 		};
-
-		try
-			plugin.parseFile(rewritten)
-		catch (exception: ParseError)
-			return Err('rewritten source does not parse: $exception')
-		catch (exception: Exception)
-			return Err('rewritten source does not parse: ${exception.message}');
-
-		return Ok(rewritten);
 	}
 
 	/**

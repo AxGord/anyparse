@@ -166,7 +166,7 @@ class AddParamSliceTest extends Test {
 	 * The raw splice (the killing arm) answers the one-line `k(alpha:Int, beta:Int, ?gammaDeltaEpsilon:String = null):Bool {`.
 	 */
 	@:pin('control')
-	@:killer('M-ADD-PARAM-RAW-SPLICE')
+	@:killer('M-SIGNATURE-EDIT-RAW-SPLICE')
 	public function testASignatureThatNoLongerFitsComesBackCanonical(): Void {
 		final source: String = canonical('class K {\n\tfunction k(alpha:Int, beta:Int):Bool {\n\t\treturn true;\n\t}\n}\n');
 		Assert.isTrue(source.contains('\tfunction k(alpha:Int, beta:Int):Bool {\n'), 'the fixture starts on one line:\n$source');

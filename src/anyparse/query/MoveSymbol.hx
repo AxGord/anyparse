@@ -11,7 +11,6 @@ import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ImportInfo;
 import anyparse.query.SymbolIndex.ImportKind;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
@@ -231,7 +230,7 @@ final class MoveSymbol {
 		final unseated: Array<String> = carriedDestEdits(destSource, destInfo, carried, plugin).unseated;
 		if (unseated.length > 0) return Err(unseatedUsingRefusal(destFile, unseated));
 		final destInsertEdits: Array<{ span: Span, text: String }> = buildDestInsertEdits(destSource, destInfo, declText, carried, plugin);
-		for (e in destInsertEdits) editsFor(editsByFile, destFile).push(e);
+		for (e in destInsertEdits) ScopeFiles.editsFor(editsByFile, destFile).push(e);
 
 		// 7b. Rewrite cross-file importers: every file (other than dest)
 		//     whose import `raw` equals the old import path is repointed at
@@ -271,7 +270,7 @@ final class MoveSymbol {
 				cursorSource, moved, NameMentionScan.referenceExclusions(cursorInfo, cut), plugin.lexicalRegions(cursorSource)
 			)) {
 				final insert: Null<{ span: Span, text: String }> = addImportEdit(cursorSource, cursorInfo, plugin, newImportPath);
-				if (insert != null) editsFor(editsByFile, cursorFile).push(insert);
+				if (insert != null) ScopeFiles.editsFor(editsByFile, cursorFile).push(insert);
 			}
 			destinationImportEdits(editsByFile, target, destSource, declText, oldImportPath, newImportPath, plugin.lexicalRegions);
 		}
@@ -281,7 +280,7 @@ final class MoveSymbol {
 		//     the source file's own new import share ONE offset whenever the declaration sat directly
 		//     under the import region; `applyEdits` orders that tie by span width so the removal goes
 		//     first, which is what keeps the insert's text out of the range being removed.
-		final cursorEdits: Array<{ span: Span, text: String }> = editsFor(editsByFile, cursorFile);
+		final cursorEdits: Array<{ span: Span, text: String }> = ScopeFiles.editsFor(editsByFile, cursorFile);
 		final needsSeparator: Bool = hasSiblingsOnBothSides(cursorSource, target.declParent, target.declNode, cut, cursorComments);
 		cursorEdits.push({ span: cutEditSpan(cursorSource, cut, cursorEdits, needsSeparator), text: '' });
 
@@ -518,7 +517,7 @@ final class MoveSymbol {
 		var seat: Int = -1;
 		for (imp in destInfo.imports) if (imp.kind == ImportKind.Using && !imp.guarded) {
 			final at: Int = imp.span.from;
-			final start: Int = lineStartOf(destSource, at);
+			final start: Int = SourceText.lineStartAt(destSource, at);
 			if (isBlank(destSource, start, at) && (seat < 0 || start < seat)) seat = start;
 		}
 		// A guarded statement, and one sharing its line, offer no candidate of their own — but the
@@ -570,7 +569,7 @@ final class MoveSymbol {
 		source: String, declSpan: Span, groupEnd: Int, comments: Array<Span>
 	): Null<{ span: Span, textEnd: Int }> {
 		// Start of the decl's own line.
-		final lineStart: Int = lineStartOf(source, declSpan.from);
+		final lineStart: Int = SourceText.lineStartAt(source, declSpan.from);
 		// The characters between the line start and the decl must be pure
 		// whitespace (the decl's indentation) — otherwise the decl shares a
 		// line with other code and a whole-line cut would corrupt it.
@@ -731,7 +730,7 @@ final class MoveSymbol {
 	private static function blankRunStart(source: String, at: Int): Int {
 		var start: Int = at;
 		while (start > 0) {
-			final prevLineStart: Int = lineStartOf(source, start - 1);
+			final prevLineStart: Int = SourceText.lineStartAt(source, start - 1);
 			if (!isBlank(source, prevLineStart, start - 1)) return start;
 			start = prevLineStart;
 		}
@@ -826,7 +825,7 @@ final class MoveSymbol {
 		var to: Int = imp.span.to;
 		if (to < source.length && source.charAt(to) == '\n') to++;
 		// Also drop the import's own leading indentation if any.
-		final from: Int = lineStartOf(source, imp.span.from);
+		final from: Int = SourceText.lineStartAt(source, imp.span.from);
 		final actualFrom: Int = isBlank(source, from, imp.span.from) ? from : imp.span.from;
 		return new Span(actualFrom, to);
 	}
@@ -891,7 +890,7 @@ final class MoveSymbol {
 			// with no type of its own name, and `using` a module the cut left empty.
 			if (imp.kind == ImportKind.Using) {
 				final statement: String = destSource.substring(imp.span.from, imp.span.to);
-				editsFor(editsByFile, destInfo.file).push({
+				ScopeFiles.editsFor(editsByFile, destInfo.file).push({
 					span: imp.span,
 					text: (keepsOthers ? '$statement\n${importIndent(destSource, imp)}' : '')
 					+ importStatementText(imp, newImportPath, statement)
@@ -910,7 +909,7 @@ final class MoveSymbol {
 			// compiles and no rule reports it — which is why it has to be decided here rather than left
 			// to one.
 			final redundant: Bool = imp.kind != ImportKind.Alias || imp.alias == typeName;
-			editsFor(editsByFile, destInfo.file).push(redundant ? { span: removeImportSpan(destSource, imp), text: '' } : {
+			ScopeFiles.editsFor(editsByFile, destInfo.file).push(redundant ? { span: removeImportSpan(destSource, imp), text: '' } : {
 				span: imp.span,
 				text: importStatementText(imp, newImportPath, destSource.substring(imp.span.from, imp.span.to))
 			});
@@ -947,7 +946,7 @@ final class MoveSymbol {
 		if (destInfo.imports.exists(imp -> imp.kind == ImportKind.Using && SymbolIndex.pathImportedBy(imp) == oldImportPath)) return;
 		for (imp in destInfo.imports) if (imp.kind == ImportKind.Using && SymbolIndex.pathImportedBy(imp) == sourceModule) {
 			final statement: String = destSource.substring(imp.span.from, imp.span.to);
-			editsFor(editsByFile, destInfo.file).push({
+			ScopeFiles.editsFor(editsByFile, destInfo.file).push({
 				span: imp.span,
 				text: '$statement\n${importIndent(destSource, imp)}${importStatementText(imp, newImportPath, statement)}'
 			});
@@ -1101,7 +1100,7 @@ final class MoveSymbol {
 			if (!NameMentionScan.sourceNamesAny(src, moved, NameMentionScan.referenceExclusions(info), plugin.lexicalRegions(src)))
 				continue;
 			final insert: Null<{ span: Span, text: String }> = addImportEdit(src, info, plugin, newImportPath);
-			if (insert != null) editsFor(editsByFile, info.file).push(insert);
+			if (insert != null) ScopeFiles.editsFor(editsByFile, info.file).push(insert);
 		}
 	}
 
@@ -1112,15 +1111,8 @@ final class MoveSymbol {
 	 */
 	private static function importIndent(source: String, imp: ImportInfo): String {
 		final at: Int = imp.span.from;
-		final start: Int = lineStartOf(source, at);
+		final start: Int = SourceText.lineStartAt(source, at);
 		return isBlank(source, start, at) ? source.substring(start, at) : '';
-	}
-
-	/** Start offset of the line containing `offset`. */
-	private static function lineStartOf(source: String, offset: Int): Int {
-		var i: Int = offset < source.length ? offset : source.length;
-		while (i > 0 && source.charAt(i - 1) != '\n') i--;
-		return i;
 	}
 
 	/** Are `[from, to)` of `source` all whitespace (space / tab)? */
@@ -1184,8 +1176,8 @@ final class MoveSymbol {
 		//    catch it: this one is load-bearing, and removing it corrupts rather
 		//    than merely widens. Single-subject and it names the files, which is
 		//    what makes the refusal actionable.
-		final skipped: Array<String> = index.skippedFiles();
-		if (skipped.length > 0) return PErr('cannot move across scope: ${skipped.length} file(s) do not parse: ${skipped.join(', ')}');
+		final skipped: Null<String> = ScopeFiles.unparsedRefusal('move', index.skippedFiles());
+		if (skipped != null) return PErr(skipped);
 
 		// Source text lookup for every scope file (the index keeps only
 		// structural info, not the raw bytes).
@@ -1195,10 +1187,10 @@ final class MoveSymbol {
 
 		// 2. Resolve the type declaration the cursor sits on. `fullSpan` is the
 		//    FULL decl span — for a `final class` the OUTER `FinalDecl` span.
-		final cursorTree: QueryNode = try plugin.parseFile(cursorSource) catch (exception: ParseError) return PErr(
-			'$cursorFile does not parse: $exception'
-		)
-		catch (exception: Exception) return PErr('$cursorFile does not parse: ${exception.message}');
+		final cursorTree: QueryNode = switch ParseGate.parse(plugin, cursorSource, cursorFile) {
+			case Unparsed(message): return PErr(message);
+			case Parsed(tree): tree;
+		};
 		final cursor: Int = Span.offsetOf(cursorSource, line, col);
 		final declMatch: Null<TypeDeclMatch> = RefactorSupport.resolveTypeDeclAtCursor(cursorTree, cursor, cursorSource);
 		if (declMatch == null) return PErr('position $line:$col is not on a type declaration');
@@ -1247,18 +1239,6 @@ final class MoveSymbol {
 			destInfo: destInfoNN,
 			sourceOf: sourceOf
 		});
-	}
-
-	/** The per-file edit accumulator for `file`, created on first use. */
-	private static function editsFor(
-		editsByFile: Map<String, Array<{ span: Span, text: String }>>, file: String
-	): Array<{ span: Span, text: String }> {
-		var arr: Null<Array<{ span: Span, text: String }>> = editsByFile[file];
-		if (arr == null) {
-			arr = [];
-			editsByFile[file] = arr;
-		}
-		return arr;
 	}
 
 	/**
@@ -1328,7 +1308,7 @@ final class MoveSymbol {
 				&& NameMentionScan.sourceNamesAny(src, plan.moved, excluded, lexicalRegions(src));
 			for (imp in importer.imports) {
 				final edit: Null<{ span: Span, text: String }> = importerStatementEdit(imp, src, plan, needsRemaining, needsMoved);
-				if (edit != null) editsFor(editsByFile, importer.file).push(edit);
+				if (edit != null) ScopeFiles.editsFor(editsByFile, importer.file).push(edit);
 			}
 		}
 	}
@@ -1343,23 +1323,10 @@ final class MoveSymbol {
 		editsByFile: Map<String, Array<{ span: Span, text: String }>>, sourceOf: Map<String, String>, plugin: GrammarPlugin,
 		typeName: String
 	): MoveResult {
-		final changes: Array<MoveChange> = [];
-		for (file => edits in editsByFile) {
-			final original: Null<String> = sourceOf[file];
-			if (original == null) continue;
-			final newSource: String = CanonicalEdit.applyEdits(original, edits);
-			if (newSource == original) continue;
-
-			// Atomic validation: every rewritten file must re-parse.
-			try
-				plugin.parseFile(newSource)
-			catch (exception: ParseError)
-				return Err('rewritten $file does not parse: $exception')
-			catch (exception: Exception)
-				return Err('rewritten $file does not parse: ${exception.message}');
-
-			changes.push({ file: file, newSource: newSource });
-		}
+		final changes: Array<MoveChange> = switch ScopeFiles.applyAll(editsByFile, sourceOf, plugin) {
+			case Left(message): return Err(message);
+			case Right(applied): applied;
+		};
 		return changes.length == 0 ? Err('move of "$typeName" changed nothing') : Ok(changes, ADVISORY);
 	}
 
@@ -1420,11 +1387,11 @@ final class MoveSymbol {
 	 * not trivia, so the walk stops at the separator rather than swallowing it.
 	 */
 	private static function triviaStartOf(source: String, at: Int, comments: Array<Span>): Int {
-		var start: Int = lineStartOf(source, at);
+		var start: Int = SourceText.lineStartAt(source, at);
 		while (start > 0) {
 			// `start` is at the start of the current line; step to the previous line.
 			final prevLineEnd: Int = start - 1; // the n terminating the previous line
-			final prevLineStart: Int = lineStartOf(source, prevLineEnd);
+			final prevLineStart: Int = SourceText.lineStartAt(source, prevLineEnd);
 			// A BLOCK comment whose continuation lines carry no `*` gutter — the
 			// `/**\n\tText\n**/` spelling — is ordinary prose to a per-line prefix test, so the
 			// walk stopped one line below the opener and the cut took only the closing `**/`.
@@ -1432,7 +1399,7 @@ final class MoveSymbol {
 			// look at. The lexer already knows where the comment starts; ask it before reading the text.
 			final open: Int = commentStartCovering(comments, prevLineEnd);
 			if (open >= 0 && open < prevLineStart) {
-				start = lineStartOf(source, open);
+				start = SourceText.lineStartAt(source, open);
 				continue;
 			}
 			if (!isContiguousTriviaLine(source.substring(prevLineStart, prevLineEnd))) break;

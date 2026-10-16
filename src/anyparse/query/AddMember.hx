@@ -52,13 +52,7 @@ final class AddMember {
 		final trimmed: String = memberText.trim();
 		if (trimmed.length == 0) return Err('add-member requires a non-empty member text');
 
-		final matches: Array<TypeDeclMatch> = [];
-		function walk(node: QueryNode): Void {
-			final m: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
-			if (m != null && m.name == typeName) matches.push(m);
-			for (c in node.children) walk(c);
-		}
-		walk(tree);
+		final matches: Array<TypeDeclMatch> = RefactorSupport.typeDeclsNamed(tree, typeName);
 		if (matches.length == 0) return Err('no type named "$typeName"');
 		if (matches.length > 1) return Err('ambiguous: ${matches.length} types named "$typeName"');
 		if (carriesOpaqueMemberRegion(matches[0].nameNode))
@@ -67,21 +61,9 @@ final class AddMember {
 				+ 'undetected; add the member by hand'
 			);
 
-		// The body's closing `}` is found by scanning back over trailing
-		// whitespace from the end of the body-bearing node — `nameNode`: the
-		// inner `ClassForm` for a `final class`, the decl itself otherwise.
-		// NOT the matched `fullSpan`: the outer `FinalDecl` span of a final
-		// class swallows trailing trivia past the `}` (a following decl's
-		// doc-comment, when the final class is not the last decl), so
-		// `fullSpan` would land in that trivia and miss the brace.
-		// `nameNode.span` ends right at the `}`, and equals `fullSpan` for
-		// every non-final shape.
-		final bodySpan: Span = matches[0].nameNode.span ?? matches[0].fullSpan;
-		var bodyClose: Int = bodySpan.to - 1;
-		if (bodyClose >= source.length) bodyClose = source.length - 1;
-		while (bodyClose >= bodySpan.from && SourceText.isSpace(source.fastCodeAt(bodyClose))) bodyClose--;
-		if (bodyClose < bodySpan.from || source.fastCodeAt(bodyClose) != '}'.code)
-			return Err('"$typeName" has no brace body to add a member to');
+		final closeAt: Null<Int> = RefactorSupport.typeBodyCloseOffset(source, matches[0]);
+		if (closeAt == null) return Err('"$typeName" has no brace body to add a member to');
+		final bodyClose: Int = closeAt;
 
 		// The leading newline is the SEPARATOR the new member needs from the one above it. Under a
 		// config that KEEPS the blank line before a closing brace — this project's and Pony's — a

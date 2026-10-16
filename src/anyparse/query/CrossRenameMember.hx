@@ -8,13 +8,13 @@ import anyparse.query.RefactorSupport.ModulePath;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
+import anyparse.query.ScopeFiles.ParsedFile;
+import anyparse.query.ScopeFiles.ScopeParse;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.OverrideFamilyMember;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using StringTools;
 using Lambda;
@@ -34,15 +34,6 @@ private typedef MemberTarget = {
 	var isEnumValue: Bool;
 	var srcDecl: TypeDeclMatch;
 }
-
-/**
- * One scope file parsed once — the shared unit passed between phases.
- */
-private typedef ParsedFile = {
-	final file: String;
-	final source: String;
-	final tree: QueryNode;
-};
 
 /**
  * The located member-token offsets for ONE file plus the diagnostic of the
@@ -208,10 +199,10 @@ final class CrossRenameMember {
 	): CrossRenameResult {
 		if (!SourceText.isIdentifier(newName)) return Err('new name "$newName" is not a valid identifier');
 
-		final cursorTree: QueryNode = try plugin.parseFile(cursorSource) catch (exception: ParseError) return Err(
-			'$cursorFile does not parse: $exception'
-		)
-		catch (exception: Exception) return Err('$cursorFile does not parse: ${exception.message}');
+		final cursorTree: QueryNode = switch ParseGate.parse(plugin, cursorSource, cursorFile) {
+			case Unparsed(message): return Err(message);
+			case Parsed(tree): tree;
+		};
 
 		// line:col is 1-based, as apq refs / ast --at / source print.
 		final cursor: Int = Span.offsetOf(cursorSource, line, col);
@@ -232,10 +223,10 @@ final class CrossRenameMember {
 		if (BinderScan.casePatternCaptures(cursorTree, refShape).contains(t.memberName))
 			return Err('cannot rename "${t.memberName}": a case-pattern capture in $cursorFile shares its name (would be mis-rewritten)');
 
-		final parse: ScopeParse = parseScopeFiles(scopeFiles, plugin);
+		final parse: ScopeParse = ScopeFiles.parseScope(scopeFiles, plugin, 'rename');
 		if (parse.error != null) return Err(parse.error);
 
-		final uniqueErr: Null<String> = checkTypeUniqueness(parse.parsed, cursorFile, t.typeName);
+		final uniqueErr: Null<String> = ScopeFiles.uniquenessRefusal(parse.parsed, cursorFile, t.typeName);
 		if (uniqueErr != null) return Err(uniqueErr);
 		// The overrides the refusal above promises rename with the base. Built over THIS scope's own
 		// in-memory sources, so the op stays pure - no disk, and the index sees exactly what the caller
@@ -361,67 +352,6 @@ final class CrossRenameMember {
 	}
 
 	/**
-	 * Parse every scope file once; a file that does not parse is turned
-	 * into a refusal so the rename stays atomic. Mirrors `CrossRename`.
-	 */
-	private static function parseScopeFiles(scopeFiles: Array<{ file: String, source: String }>, plugin: GrammarPlugin): ScopeParse {
-		final parsed: Array<ParsedFile> = [];
-		final skipped: Array<String> = [];
-		for (entry in scopeFiles) {
-			final tree: Null<QueryNode> = try plugin.parseFile(entry.source) catch (exception: ParseError) null
-			catch (exception: Exception) null;
-			if (tree == null) {
-				skipped.push(entry.file);
-			} else {
-				final parsedTree: QueryNode = tree;
-				parsed.push({ file: entry.file, source: entry.source, tree: parsedTree });
-			}
-		}
-		final error: Null<String> = skipped.length > 0
-			? 'cannot rename across scope: ${skipped.length} file(s) do not parse: ${skipped.join(', ')}'
-			: null;
-		return { parsed: parsed, error: error };
-	}
-
-	/**
-	 * Prove exactly one declaration of `typeName` exists under scope and
-	 * that it is the one in `cursorFile` — a second same-named type would
-	 * make the simple-name receiver match ambiguous. Returns the refusal
-	 * diagnostic or null.
-	 */
-	private static function checkTypeUniqueness(parsed: Array<ParsedFile>, cursorFile: String, typeName: String): Null<String> {
-		var declCount: Int = 0;
-		var declInCursorFile: Bool = false;
-		for (entry in parsed) {
-			final n: Int = countTypeDecls(entry.tree, typeName);
-			declCount += n;
-			if (n > 0 && entry.file == cursorFile) declInCursorFile = true;
-		}
-		return if (declCount == 0)
-			'no type "$typeName" declared under scope'
-		else if (declCount > 1)
-			'type "$typeName" is declared in $declCount files under scope — ambiguous, refusing'
-		else if (!declInCursorFile)
-			'the type "$typeName" at the cursor is not the one declared under scope — refusing'
-		else
-			null;
-	}
-
-	/**
-	 * Count type-declaration nodes named `typeName` (final-aware).
-	 */
-	private static function countTypeDecls(tree: QueryNode, typeName: String): Int {
-		var count: Int = 0;
-		function walk(node: QueryNode): Void {
-			final m: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
-			if (m != null && m.name == typeName) count++;
-			for (c in node.children) walk(c);
-		}
-		walk(tree);
-		return count;
-	}
-
-	/**
 	 * Collect the member's occurrences in each file, rewrite them to
 	 * `newName`, and re-parse before any change is returned (atomicity).
 	 * The declaring file adds the single-file occurrence set
@@ -464,10 +394,10 @@ final class CrossRenameMember {
 			];
 			final newSource: String = CanonicalEdit.applyEdits(entry.source, edits);
 
-			final newTree: QueryNode = try plugin.parseFile(newSource) catch (exception: ParseError) return Err(
-				'rewritten ${entry.file} does not parse: $exception'
-			)
-			catch (exception: Exception) return Err('rewritten ${entry.file} does not parse: ${exception.message}');
+			final newTree: QueryNode = switch ParseGate.parse(plugin, newSource, 'rewritten ${entry.file}') {
+				case Unparsed(message): return Err(message);
+				case Parsed(tree): tree;
+			};
 
 			final capture: Null<String> = Rename.captureDiagnostic(
 				newSource, newTree, [for (edit in edits) edit.span], resolved, newName, cursor, refShape
@@ -508,10 +438,7 @@ final class CrossRenameMember {
 		source: String, tree: QueryNode, typeName: String, memberName: String, refShape: RefShape, module: ModulePath,
 		regions: Array<LexRegion>
 	): LocatedOffsets {
-		final valueResolved: Array<Int> = [
-			for (h in Refs.find(typeName, tree, refShape))
-				if ((h.kind == RefKind.Read || h.kind == RefKind.Write) && h.bindingSpan != null) h.span.from
-		];
+		final valueResolved: Array<Int> = RefactorSupport.valueBoundOffsets(typeName, tree, refShape);
 		// Which DOTTED receivers legally name this type from THIS file — the whole path, not its last
 		// segment: `Boxes` is a module name dozens of packages may each declare.
 		final qualified: Array<String> = RefactorSupport.qualifiedPaths(typeName, module, ModuleScan.packageOf(tree));
@@ -1122,15 +1049,6 @@ final class CrossRenameMember {
 	}
 
 }
-
-/**
- * The result of parsing the scope: the parsed files, plus a non-null
- * `error` diagnostic when any file skip-parsed (the rename is refused).
- */
-private typedef ScopeParse = {
-	final parsed: Array<ParsedFile>;
-	final error: Null<String>;
-};
 
 /**
  * The grammar seams the EXPECTED-RETURN scan reads, resolved once per rename. Bundled so the

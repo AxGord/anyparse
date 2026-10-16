@@ -2776,3 +2776,20 @@ decided the question; it may not become a record of runs.
   each ONE declaration, resolved where written). The graph's generics table moved into the graph family
   (`TypeParamTable` → `CallGraphGenerics`); `ReflectiveReach` still asks it for the arguments a subtype's chain passes
   (`argumentsFor`), the one question no shared layer answers yet — branch `feat/infra-B3`
+- the refactoring ops kept their shared steps as per-op copies, so a fix made in one had to be found and made in the
+  others (`1740e907` went to both extract ops; ChangeSig / RemoveParam shared 11 of 15 commits) → one core per family,
+  every op calling it and its copy deleted: `TypeExtraction` (`sourceClass`, `uniqueClass`, `superNameOf`,
+  `referencedMembers`, `carriedImports`, `assembleTypeFile`, `headerInsertEdit`, `rewriteSource`, `rewritesNotes`) for
+  `extract-interface` / `extract-superclass` / `pull-up` / `push-down`; `SignatureEdit` (`resolve`, `arityRefusal`,
+  `commit`, `crossFileAdvisory`) for `change-sig` / `remove-param` / `add-param`; `ScopeFiles` (`ParsedFile`,
+  `parseScope`, `unparsedRefusal`, `uniquenessRefusal`, `editsFor`, `applyAll`) for `rename --scope` (type and member),
+  `move`, `move-member`, `pull-up`; `ParseGate` for the `<label> does not parse: …` gate both ends of those ops run;
+  `RefactorSupport.typeDeclsNamed` / `typeBodyCloseOffset` / `valueBoundOffsets`, `ElementSpan.memberCutSpan` and
+  `SourceText.lineStartAt` for the lookups and scans each op re-wrote (also `AddMember`, `SafeDelete`, `MakeFinal`,
+  `ExtractVar`, `MoveScaffold`). Behaviour is byte-identical — the ops' suites and a corpus run of every op over TM
+  sources before and after compare equal; the three `*-RAW-SPLICE` arms are one, `M-SIGNATURE-EDIT-RAW-SPLICE`, on
+  `SignatureEdit.commit`, the one `editKeepingCanonical` call those three ops have left — branch `feat/infra-B7`
+- `InheritanceMove.parseScope` is NOT `ScopeFiles.parseScope`: it refuses on the FIRST file that does not parse and
+  names only it (`cannot move across scope: <file> does not parse`), where the rename / move gate names every one;
+  `MoveMember.resolveMove`'s own parse loop words it `<file> does not parse: <message>` without the `ParseError`
+  position. Folding either would change an op's message, so both stay; they share `ParsedFile` — branch `feat/infra-B7`

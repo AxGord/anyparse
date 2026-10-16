@@ -1,14 +1,13 @@
 package anyparse.query;
 
-import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.query.MoveSymbol.MoveResult;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
-import anyparse.runtime.ParseError;
+import anyparse.query.TypeExtraction.SourceClass;
 import anyparse.runtime.Span;
-import haxe.Exception;
+import haxe.ds.Either;
 
 using StringTools;
 using Lambda;
@@ -18,14 +17,6 @@ private typedef Moved = {
 	var name: String;
 	var node: QueryNode;
 	var cut: Span;
-}
-
-/** A computed value or an error message. */
-private enum Either<L, R> {
-
-	Left(value: L);
-	Right(value: R);
-
 }
 
 /**
@@ -89,35 +80,35 @@ final class ExtractSuperclass {
 		if (superName == srcTypeName) return Err('superclass name must differ from the source type "$srcTypeName"');
 		if (memberNames.length == 0) return Err('no members named — nothing to pull up');
 
-		final tree: QueryNode = try plugin.parseFile(srcSource) catch (exception: ParseError) return Err(
-			'$srcFile does not parse: $exception'
-		)
-		catch (exception: Exception) return Err('$srcFile does not parse: ${exception.message}');
-
-		final decl: Null<TypeDeclMatch> = uniqueClass(tree, srcTypeName);
-		if (decl == null) return Err('no unique class "$srcTypeName" in $srcFile');
-		final declNN: TypeDeclMatch = decl;
-		if (superNameOf(declNN) != null) return Err('class "$srcTypeName" already extends a class — single inheritance, refusing');
+		final src: SourceClass = switch TypeExtraction.sourceClass(srcFile, srcSource, srcTypeName, plugin) {
+			case Left(message): return Err(message);
+			case Right(found): found;
+		};
+		final declNN: TypeDeclMatch = src.decl;
+		if (TypeExtraction.superNameOf(declNN) != null)
+			return Err('class "$srcTypeName" already extends a class — single inheritance, refusing');
 
 		final shape: RefShape = plugin.refShape();
 		final moved: Array<Moved> = switch resolveMembers(declNN, memberNames, srcSource, shape, plugin.lexicalRegions.bind(srcSource)) {
 			case Left(message): return Err(message);
 			case Right(list): list;
 		};
-		final stranded: Array<String> = strandedRefs(declNN, moved, srcSource, shape, plugin.lexicalRegions.bind(srcSource));
+		final stranded: Array<String> = TypeExtraction.referencedMembers(
+			declNN, [for (m in moved) m.name].concat(['new']),
+			[for (m in moved) m.node], srcSource, shape, plugin.lexicalRegions.bind(srcSource)
+		);
 		if (stranded.length > 0)
 			return Err('pulled-up member(s) reference member(s) staying behind: ${stranded.join(', ')} — add them to the set or refactor');
 
 		final blocks: Array<String> = [
 			for (m in moved) SourceText.trimNewlineEdges(srcSource.substring(m.cut.from, m.cut.to))
 		];
-		final pkg: String = ModuleScan.packageOf(tree);
-		final imports: Array<String> = carriedImports(tree, blocks);
-		// The count is the WRITER's, not the extraction's, and it reaches the user only
-		// through the advisory: a created file the writer needed two passes to settle is
-		// the defect `apq fmt` reports and every op used to absorb in silence.
+		final pkg: String = ModuleScan.packageOf(src.tree);
+		final imports: Array<String> = TypeExtraction.carriedImports(src.tree, blocks.join('\n'));
 		var superRewrites: Null<Int> = null;
-		final superSource: String = switch buildSuperclass(superName, pkg, blocks, imports, plugin, optsJson) {
+		final superSource: String = switch TypeExtraction.assembleTypeFile(
+			pkg, imports, 'class $superName {\n\n${blocks.join('\n\n')}\n\n}\n', 'superclass', plugin, optsJson
+		) {
 			case Err(message): return Err(message);
 			case Ok(source, rewrites):
 				superRewrites = rewrites;
@@ -138,51 +129,21 @@ final class ExtractSuperclass {
 		// multi-line literal by one newline, and every gate stayed green because the result
 		// still parsed and was still canonical.
 		var srcRewrites: Null<Int> = null;
-		final newSrc: String = switch CanonicalEdit.editKeepingCanonical(srcSource, edits, plugin, srcOptsJson) {
-			case Err(message): return Err('the rewritten $srcFile: $message');
+		final newSrc: String = switch TypeExtraction.rewriteSource(srcFile, srcSource, edits, plugin, srcOptsJson) {
+			case Err(message): return Err(message);
 			case Ok(text, rewrites):
 				srcRewrites = rewrites;
 				text;
 		};
 
-		try
-			plugin.parseFile(newSrc)
-		catch (exception: ParseError)
-			return Err('rewritten $srcFile does not parse: $exception')
-		catch (exception: Exception)
-			return Err('rewritten $srcFile does not parse: ${exception.message}');
-
-		final rewritesNote: Null<String> = FormatFixedPoint.rewritesNote(superRewrites);
-		final srcRewritesNote: Null<String> = FormatFixedPoint.rewritesNote(srcRewrites);
 		final advisory: String = 'pulled ${moved.length} member(s) up into new superclass "$superName'
 			+ '" — subclass access preserved by inheritance; the superclass has no constructor (the source constructor is unchanged)'
-			+ (rewritesNote == null ? '' : '; $superFile: $rewritesNote') + (srcRewritesNote == null ? '' : '; $srcFile: $srcRewritesNote');
+			+ TypeExtraction.rewritesNotes(superFile, superRewrites, srcFile, srcRewrites);
 		final changes: Array<MoveChange> = [
 			{ file: superFile, newSource: superSource },
 			{ file: srcFile, newSource: newSrc }
 		];
 		return Ok(changes, advisory);
-	}
-
-	/** The sole class declaration named `typeName`, or null. Final-aware. */
-	private static function uniqueClass(tree: QueryNode, typeName: String): Null<TypeDeclMatch> {
-		final matches: Array<TypeDeclMatch> = [];
-		function walk(node: QueryNode): Void {
-			final t: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
-			if (t != null && t.name == typeName && t.kind == 'ClassDecl') matches.push(t);
-			for (c in node.children) walk(c);
-		}
-		walk(tree);
-		return matches.length == 1 ? matches[0] : null;
-	}
-
-	/** The simple name of a class's direct superclass (`extends X`), or null. */
-	private static function superNameOf(decl: TypeDeclMatch): Null<String> {
-		for (child in decl.nameNode.children)
-			if (child.kind == 'ExtendsClause')
-				for (gc in child.children)
-					if (gc.kind == 'Named') return gc.name;
-		return null;
 	}
 
 	/**
@@ -231,98 +192,10 @@ final class ExtractSuperclass {
 					+ 'builds declare it'
 				);
 			final groupSpan: Span = ElementSpan.declGroupSpan(hitNN.node, decl.nameNode, hitNN.span);
-			out.push({ name: name, node: hitNN.node, cut: cutSpanOf(source, groupSpan, regions()) });
+			out.push({ name: name, node: hitNN.node, cut: ElementSpan.memberCutSpan(source, groupSpan, regions()) });
 		}
 		out.sort((a, b) -> a.cut.from - b.cut.from);
 		return Right(out);
-	}
-
-	/**
-	 * The source member names that a moved body references but that are
-	 * NOT in the moved set — they would be stranded on the superclass.
-	 * AST-name match (bare call / read / `this.member`), so comments and
-	 * strings never trigger it.
-	 */
-	private static function strandedRefs(
-		decl: TypeDeclMatch, moved: Array<Moved>, source: String, shape: RefShape, regions: () -> Array<LexRegion>
-	): Array<String> {
-		final movingNames: Map<String, Bool> = [for (m in moved) m.name => true];
-		final memberNames: Map<String, Bool> = [];
-		// Branch-aware, and this one fails SILENTLY when it is not: a member left behind inside a `#if`
-		// region was absent from this set, so a pulled-up method reading it passed the stranded-reference
-		// gate and the generated superclass did not compile.
-		MemberBranchScan.eachTypeMember(
-			decl, shape, source, n -> MemberKinds.isFieldMemberKind(n.kind) || MemberKinds.FN_DECL_KINDS.contains(n.kind), (child, _) -> {
-				final nm: Null<String> = child.name;
-				if (nm != null && !movingNames.exists(nm) && nm != 'new') memberNames[nm] = true;
-			},
-			regions
-		);
-		final found: Map<String, Bool> = [];
-		function walk(node: QueryNode): Void {
-			final nm: Null<String> = node.name;
-			if (nm != null && memberNames.exists(nm) && (node.kind == 'IdentExpr' || node.kind == 'FieldAccess' || node.kind == 'Call'))
-				found[nm] = true;
-			for (c in node.children) walk(c);
-		}
-		for (m in moved) walk(m.node);
-		return [for (k in found.keys()) k];
-	}
-
-	/** The source imports whose exposed name appears in any moved block. */
-	private static function carriedImports(tree: QueryNode, blocks: Array<String>): Array<String> {
-		final blob: String = blocks.join('\n');
-		final out: Array<String> = [];
-		function walk(node: QueryNode): Void {
-			if (node.kind == 'ImportDecl') {
-				final raw: Null<String> = node.name;
-				if (raw != null) {
-					final dot: Int = raw.lastIndexOf('.');
-					final exposed: String = dot < 0 ? raw : raw.substr(dot + 1);
-					if (SourceText.identTokenOffset(blob, new Span(0, blob.length), exposed) >= 0 && !out.contains(raw)) out.push(raw);
-				}
-			}
-			for (c in node.children) walk(c);
-		}
-		walk(tree);
-		return out;
-	}
-
-	/**
-	 * Assemble the superclass through `NewFile.createRaw` — parse-validated and
-	 * canonical AT THE WRITER'S FIXED POINT, under `optsJson` rather than under
-	 * compiled defaults.
-	 *
-	 * A moved member carries its BODY, so every writer shape that needs two round
-	 * trips to settle can arrive here; and a `writeRoundTrip(source, null)` styled
-	 * the new file by the writer's built-in defaults while `fmt --list` judged it
-	 * under the project's discovered `hxformat.json`. Either alone left the created
-	 * file drifted from birth.
-	 */
-	private static function buildSuperclass(
-		superName: String, pkg: String, blocks: Array<String>, imports: Array<String>, plugin: GrammarPlugin, optsJson: Null<String>
-	): EditResult {
-		final sb: StringBuf = new StringBuf();
-		if (pkg != '') {
-			sb.add('package ');
-			sb.add(pkg);
-			sb.add(';\n\n');
-		}
-		for (raw in imports) {
-			sb.add('import ');
-			sb.add(raw);
-			sb.add(';\n');
-		}
-		if (imports.length > 0) sb.add('\n');
-		sb.add('class ');
-		sb.add(superName);
-		sb.add(' {\n\n');
-		sb.add(blocks.join('\n\n'));
-		sb.add('\n\n}\n');
-		return switch NewFile.createRaw(sb.toString(), plugin, optsJson) {
-			case Ok(text, rewrites): Ok(text, rewrites);
-			case Err(message): Err('the assembled superclass: $message');
-		};
 	}
 
 	/**
@@ -338,17 +211,7 @@ final class ExtractSuperclass {
 			final s: Null<Span> = child.span;
 			if (s != null) return { span: new Span(s.from, s.from), text: 'extends $superName ' };
 		}
-		final at: Null<Int> = RefactorSupport.typeHeaderInsertOffset(source, decl, typeName, regions);
-		if (at == null) return null;
-		final atNN: Int = at;
-		return { span: new Span(atNN, atNN), text: ' extends $superName' };
-	}
-
-	/** The cut span of a member group: decl + leading doc + whole line(s). */
-	private static function cutSpanOf(source: String, groupSpan: Span, regions: Array<LexRegion>): Span {
-		return ElementSpan.blankExtendedSpan(
-			source, ElementSpan.lineExtendedSpan(source, ElementSpan.docExtendedSpan(source, groupSpan, regions))
-		);
+		return TypeExtraction.headerInsertEdit(source, decl, typeName, ' extends $superName', regions);
 	}
 
 }

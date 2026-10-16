@@ -1,11 +1,8 @@
 package anyparse.query;
 
-import anyparse.query.CallSites.CursorFn;
-import anyparse.query.CallSites.CursorFnResult;
 import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.runtime.ParseError;
+import anyparse.query.SignatureEdit.SignatureTarget;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Outcome of a `RemoveParam.removeParam` call. `Ok` carries the
@@ -89,18 +86,13 @@ final class RemoveParam {
 	public static function removeParam(
 		source: String, line: Int, col: Int, index: Int, plugin: GrammarPlugin, shape: RefShape, ?optsJson: String
 	): RemoveParamResult {
-		final found: CursorFn = switch CallSites.resolveFnAtCursor(source, line, col, plugin, shape) {
-			case FnAtErr(message): return Err(message);
-			case FnAt(fn): fn;
+		final fn: SignatureTarget = switch SignatureEdit.resolve(
+			source, line, col, plugin, shape, 'remove-param removes a function parameter'
+		) {
+			case Left(message): return Err(message);
+			case Right(target): target;
 		};
-		final tree: QueryNode = found.tree;
-		final decl: QueryNode = found.decl;
-		final name: String = found.name;
-		if (!MemberKinds.FN_DECL_KINDS.contains(decl.kind))
-			return Err('"$name" is not a function (remove-param removes a function parameter)');
-		final declSpan: Null<Span> = decl.span;
-		if (declSpan == null) return Err('"$name" declaration has no source span');
-		final binding: Int = declSpan.from;
+		final name: String = fn.name;
 
 		// The completeness proof and slot-removal edits are the shared core
 		// `paramSlotEdits`, reused by the `unused-parameter` lint autofix.
@@ -108,31 +100,22 @@ final class RemoveParam {
 			edits: Array<{ span: Span, text: String }>,
 			error: Null<String>,
 			callSites: Int
-		} = paramSlotEdits(source, tree, decl, index, name, binding, shape);
+		} = paramSlotEdits(source, fn.tree, fn.decl, index, name, fn.binding, shape);
 		final error: Null<String> = result.error;
 		if (error != null) return Err(error);
 
-		if (CanonicalEdit.applyEdits(source, result.edits) == source) return Err('removing parameter $index of "$name" is a no-op');
 		// A removal shortens the signature and every call, so a list the writer wrapped may now fit on one line: a
 		// canonical file comes back canonical, or the next writer-emit op refuses it as drifted.
-		final rewritten: String = switch CanonicalEdit.editKeepingCanonical(source, result.edits, plugin, optsJson) {
-			case Err(message): return Err(message);
-			case Ok(text, _): text;
+		return switch SignatureEdit.commit(source, result.edits, plugin, optsJson, 'removing parameter $index of "$name" is a no-op') {
+			case Left(message): Err(message);
+			case Right(rewritten):
+				Ok(
+					rewritten,
+					SignatureEdit.crossFileAdvisory(
+						fn.decl, 'removed the parameter and updated ${result.callSites} in-file call site(s)', name
+					)
+				);
 		};
-
-		try
-			plugin.parseFile(rewritten)
-		catch (exception: ParseError)
-			return Err('rewritten source does not parse: $exception')
-		catch (exception: Exception)
-			return Err('rewritten source does not parse: ${exception.message}');
-
-		final isMethod: Bool = decl.kind != 'LocalFnStmt';
-		final advisory: Null<String> = isMethod
-			? 'removed the parameter and updated ${result.callSites} in-file call site(s); if "$name'
-				+ '" is called from other files, update those call sites too — cross-file resolution is out of scope'
-			: null;
-		return Ok(rewritten, advisory);
 	}
 
 	/**
@@ -188,16 +171,8 @@ final class RemoveParam {
 			case COk(sites): sites;
 		};
 
-		for (call in callSites) {
-			final argc: Int = call.children.length - 1;
-			if (argc == n) continue;
-			final at: String = CallSites.posOf(source, call.span);
-			return {
-				edits: [],
-				error: 'call at $at has $argc args, expected $n — remove-param cannot update calls with omitted optional arguments',
-				callSites: 0
-			};
-		}
+		final arity: Null<String> = SignatureEdit.arityRefusal(source, callSites, n, 'remove-param cannot update');
+		if (arity != null) return { edits: [], error: arity, callSites: 0 };
 
 		final edits: Array<{ span: Span, text: String }> = [];
 		appendSlotRemoval(edits, params, index);

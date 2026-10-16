@@ -1,11 +1,8 @@
 package anyparse.query;
 
-import anyparse.query.CallSites.CursorFn;
-import anyparse.query.CallSites.CursorFnResult;
 import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.runtime.ParseError;
+import anyparse.query.SignatureEdit.SignatureTarget;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using StringTools;
 
@@ -91,23 +88,18 @@ final class ChangeSig {
 	): ChangeSigResult {
 		// The cursor resolves through the shared prologue: a cursor already on a function decl IS that
 		// decl; a bare call resolves back to the decl through `Refs` (methods, not local functions).
-		final found: CursorFn = switch CallSites.resolveFnAtCursor(source, line, col, plugin, shape) {
-			case FnAtErr(message): return Err(message);
-			case FnAt(fn): fn;
+		final fn: SignatureTarget = switch SignatureEdit.resolve(
+			source, line, col, plugin, shape, 'change-sig reorders function parameters'
+		) {
+			case Left(message): return Err(message);
+			case Right(target): target;
 		};
-		final tree: QueryNode = found.tree;
-		final decl: QueryNode = found.decl;
-		final name: String = found.name;
-		if (!MemberKinds.FN_DECL_KINDS.contains(decl.kind))
-			return Err('"$name" is not a function (change-sig reorders function parameters)');
-		final declSpan: Null<Span> = decl.span;
-		if (declSpan == null) return Err('"$name" declaration has no source span');
-		final binding: Int = declSpan.from;
+		final name: String = fn.name;
 
 		// Parameters: the leading Required / Optional children, in source
 		// order. The scan stops at the first child that is neither (the
 		// `Named` return type or the body).
-		final params: Array<QueryNode> = CallSites.leadingParams(decl, shape);
+		final params: Array<QueryNode> = CallSites.leadingParams(fn.decl, shape);
 		final n: Int = params.length;
 		if (n < 2) return Err('"$name" has fewer than 2 parameters — nothing to reorder');
 
@@ -118,22 +110,16 @@ final class ChangeSig {
 
 		// Collect the call sites and prove the set is complete. The two
 		// strategies (method vs. local function) live in `CallSites`.
-		final isMethod: Bool = decl.kind != 'LocalFnStmt';
-		final callSites: Array<QueryNode> = switch CallSites.collect(decl, tree, source, name, binding, shape) {
+		final callSites: Array<QueryNode> = switch CallSites.collect(fn.decl, fn.tree, source, name, fn.binding, shape) {
 			case CErr(message): return Err(message);
 			case COk(sites): sites;
 		};
 
 		// Arity: every collected call must have exactly `n` positional
-		// arguments. A call with omitted optional / defaulted arguments
-		// cannot be slot-swapped, so it is a hard refusal rather than a
-		// silent misorder.
-		for (call in callSites) {
-			final argc: Int = call.children.length - 1;
-			if (argc == n) continue;
-			final at: String = CallSites.posOf(source, call.span);
-			return Err('call at $at has $argc args, expected $n — change-sig cannot reorder calls with omitted optional arguments');
-		}
+		// arguments — a call with omitted optional / defaulted arguments
+		// cannot be slot-swapped.
+		final arity: Null<String> = SignatureEdit.arityRefusal(source, callSites, n, 'change-sig cannot reorder');
+		if (arity != null) return Err(arity);
 
 		// Build the slot-swap edits. Each new slot `i` is overwritten with
 		// the source text of the item that the permutation moves into it
@@ -145,26 +131,16 @@ final class ChangeSig {
 			appendSlotSwap(edits, source, args, order);
 		}
 
-		if (CanonicalEdit.applyEdits(source, edits) == source) return Err('reorder of "$name" is a no-op');
 		// Moving a long slot ahead of a short one moves where a filled list breaks, so a canonical file goes back
 		// through the writer rather than keeping the old breaks.
-		final rewritten: String = switch CanonicalEdit.editKeepingCanonical(source, edits, plugin, optsJson) {
-			case Err(message): return Err(message);
-			case Ok(text, _): text;
+		return switch SignatureEdit.commit(source, edits, plugin, optsJson, 'reorder of "$name" is a no-op') {
+			case Left(message): Err(message);
+			case Right(rewritten):
+				Ok(
+					rewritten,
+					SignatureEdit.crossFileAdvisory(fn.decl, 'updated the declaration and ${callSites.length} in-file call site(s)', name)
+				);
 		};
-
-		try
-			plugin.parseFile(rewritten)
-		catch (exception: ParseError)
-			return Err('rewritten source does not parse: $exception')
-		catch (exception: Exception)
-			return Err('rewritten source does not parse: ${exception.message}');
-
-		final advisory: Null<String> = isMethod
-			? 'updated the declaration and ${callSites.length} in-file call site(s); if "$name'
-				+ '" is called from other files, update those call sites too — cross-file resolution is out of scope'
-			: null;
-		return Ok(rewritten, advisory);
 	}
 
 	/**

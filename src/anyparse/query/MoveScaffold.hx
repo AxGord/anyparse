@@ -29,9 +29,9 @@ using Lambda;
  * constructor into the destination) and `scaffoldViaField` (declare the via field on the source
  * type and wire it in the source constructor).
  *
- * Reaches back into `MoveMember` for the member-group scans and the edit accumulator every op in
- * that file shares (`membersOf`, `memberGroupOf`, `constructorGroupOf`, `editsFor`,
- * `lineStartOf`, `isAllWhitespace`) — a hub set, not a dependency this split could take with it.
+ * Reaches back into `MoveMember` for the member-group scans every op in that file shares (`membersOf`,
+ * `memberGroupOf`, `constructorGroupOf`, `isAllWhitespace`) — a hub set, not a dependency this split could
+ * take with it. The edit accumulator is `ScopeFiles.editsFor`, the line scan `SourceText.lineStartAt`.
  */
 @:access(anyparse.query.MoveMember)
 @:nullSafety(Strict)
@@ -128,8 +128,8 @@ final class MoveScaffold {
 				+ '(a bare `new() {}` or no constructor)',
 			prependBlock: ''
 		};
-		final from: Int = MoveMember.lineStartOf(prep.destSource, ctor.groupSpan.from);
-		MoveMember.editsFor(editsByFile, prep.destFile).push({ span: new Span(from, ctor.groupSpan.to), text: block });
+		final from: Int = SourceText.lineStartAt(prep.destSource, ctor.groupSpan.from);
+		ScopeFiles.editsFor(editsByFile, prep.destFile).push({ span: new Span(from, ctor.groupSpan.to), text: block });
 		return { error: null, prependBlock: '' };
 	}
 
@@ -144,8 +144,8 @@ final class MoveScaffold {
 	): Null<String> {
 		final ctor: Null<MemberGroup> = MoveMember.constructorGroupOf(prep.srcDecl, prep.srcSource, prep.shape, lexicalRegions);
 		if (ctor == null) return 'cannot --scaffold via field "$viaName": "${prep.srcTypeName}" has no constructor to wire it in';
-		final fieldFrom: Int = MoveMember.lineStartOf(prep.srcSource, ctor.groupSpan.from);
-		MoveMember.editsFor(editsByFile, prep.srcFile).push({
+		final fieldFrom: Int = SourceText.lineStartAt(prep.srcSource, ctor.groupSpan.from);
+		ScopeFiles.editsFor(editsByFile, prep.srcFile).push({
 			span: new Span(fieldFrom, fieldFrom),
 			text: '\tprivate final $viaName: ${prep.destTypeName};\n\n'
 		});
@@ -154,7 +154,7 @@ final class MoveScaffold {
 		var wsStart: Int = bodyClose;
 		while (wsStart > 0 && SourceText.isSpace(StringTools.fastCodeAt(prep.srcSource, wsStart - 1))) wsStart--;
 		final args: String = [for (f in fields) f.name].join(', ');
-		MoveMember.editsFor(editsByFile, prep.srcFile).push({
+		ScopeFiles.editsFor(editsByFile, prep.srcFile).push({
 			span: new Span(wsStart, bodyClose),
 			text: '\n\t\t$viaName = new ${prep.destTypeName}($args);\n\t'
 		});
