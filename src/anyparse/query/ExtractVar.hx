@@ -165,7 +165,7 @@ final class ExtractVar {
 
 		// The hoisted decl is inserted at the start of the enclosing
 		// statement's line, carrying that statement's leading indentation.
-		final lineStart: Int = lineStartOf(source, hoistSpan.from);
+		final lineStart: Int = SourceText.lineStartAt(source, hoistSpan.from);
 		final indent: String = source.substring(lineStart, hoistSpan.from);
 		if (!isAllWhitespace(indent)) return Err('"$name": enclosing statement shares its line — cannot extract cleanly');
 
@@ -288,13 +288,6 @@ final class ExtractVar {
 	 */
 	private static function isStructural(kind: String): Bool {
 		return STRUCTURAL_KINDS.contains(kind) || STRUCTURAL_SUFFIXES.exists(suffix -> kind.endsWith(suffix));
-	}
-
-	/** Offset of the first byte after the previous `\n` before `at` (or 0). */
-	private static function lineStartOf(source: String, at: Int): Int {
-		var i: Int = at;
-		while (i > 0 && source.charAt(i - 1) != '\n') i--;
-		return i;
 	}
 
 	/** Is every character of `s` an ASCII space / tab / carriage return? */

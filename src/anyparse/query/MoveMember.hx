@@ -12,7 +12,6 @@ import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ImportKind;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
@@ -326,14 +325,6 @@ final class MoveMember {
 	}
 
 	/**
-	 * The unique type decl named `typeName` in `tree`, or null on 0 / 2+.
-	 */
-	private static function uniqueTypeDecl(tree: QueryNode, typeName: String): Null<TypeDeclMatch> {
-		final matches: Array<TypeDeclMatch> = typeDeclsNamed(tree, typeName);
-		return matches.length == 1 ? matches[0] : null;
-	}
-
-	/**
 	 * All direct members of a type decl with their modifier / meta runs.
 	 */
 	private static function membersOf(
@@ -394,10 +385,7 @@ final class MoveMember {
 	private static function qualifiedReceiverEdits(
 		source: String, tree: QueryNode, prep: MovePrep, memberName: String
 	): Array<QualifiedHit> {
-		final valueResolved: Array<Int> = [
-			for (h in Refs.find(prep.srcTypeName, tree, prep.shape))
-				if ((h.kind == RefKind.Read || h.kind == RefKind.Write) && h.bindingSpan != null) h.span.from
-		];
+		final valueResolved: Array<Int> = RefactorSupport.valueBoundOffsets(prep.srcTypeName, tree, prep.shape);
 		final qualified: Array<String> = RefactorSupport.qualifiedPaths(prep.srcTypeName, prep.srcModule, ModuleScan.packageOf(tree));
 		final destPath: String = RefactorSupport.rootQualifiedPath(prep.destTypeName, prep.destModule);
 		final out: Array<QualifiedHit> = [];
@@ -435,40 +423,13 @@ final class MoveMember {
 		for (entry in scopeFiles) {
 			final tree: Null<QueryNode> = trees[entry.file];
 			if (tree == null) continue;
-			final matches: Array<TypeDeclMatch> = typeDeclsNamed(tree, typeName);
+			final matches: Array<TypeDeclMatch> = RefactorSupport.typeDeclsNamed(tree, typeName);
 			if (matches.length > 1) return FErr('type "$typeName" is declared ${matches.length} times in ${entry.file}');
 			if (matches.length != 1) continue;
 			if (found != null) return FErr('type "$typeName" is declared in both ${found.file} and ${entry.file} — ambiguous');
 			found = { file: entry.file, decl: matches[0] };
 		}
 		return FOk(found);
-	}
-
-	/**
-	 * Offset of the type body's closing `}` — the `AddMember` back-scan.
-	 */
-	private static function typeBodyClose(source: String, decl: TypeDeclMatch): Null<Int> {
-		final bodySpan: Span = decl.nameNode.span ?? decl.fullSpan;
-		var bodyClose: Int = bodySpan.to - 1;
-		if (bodyClose >= source.length) bodyClose = source.length - 1;
-		while (bodyClose >= bodySpan.from && SourceText.isSpace(source.fastCodeAt(bodyClose))) bodyClose--;
-		return bodyClose < bodySpan.from || source.fastCodeAt(bodyClose) != '}'.code ? null : bodyClose;
-	}
-
-	private static function editsFor(
-		editsByFile: Map<String, Array<{ span: Span, text: String }>>, file: String
-	): Array<{ span: Span, text: String }> {
-		final existing: Null<Array<{ span: Span, text: String }>> = editsByFile[file];
-		if (existing != null) return existing;
-		final created: Array<{ span: Span, text: String }> = [];
-		editsByFile[file] = created;
-		return created;
-	}
-
-	private static function lineStartOf(source: String, offset: Int): Int {
-		var i: Int = offset;
-		while (i > 0 && source.fastCodeAt(i - 1) != '\n'.code) i--;
-		return i;
 	}
 
 	/**
@@ -488,8 +449,8 @@ final class MoveMember {
 		// is the OPTIONAL of the two move gates (`MoveSymbol`'s has no such backstop). The narrowing
 		// question does not arise: the op REWRITES call sites, so an unreadable importer is a file it
 		// cannot edit rather than one it cannot prove things about.
-		final skipped: Array<String> = index.skippedFiles();
-		if (skipped.length > 0) return PErr('cannot move across scope: ${skipped.length} file(s) do not parse: ${skipped.join(', ')}');
+		final skipped: Null<String> = ScopeFiles.unparsedRefusal('move', index.skippedFiles());
+		if (skipped != null) return PErr(skipped);
 		final sourceOf: Map<String, String> = [for (entry in scopeFiles) entry.file => entry.source];
 		final srcSource: Null<String> = sourceOf[srcFile];
 		if (srcSource == null) return PErr('source file $srcFile is not in the scope file set');
@@ -499,7 +460,7 @@ final class MoveMember {
 		};
 		final srcTree: Null<QueryNode> = trees[srcFile];
 		if (srcTree == null) return PErr('source file $srcFile is not indexed');
-		final srcDecl: Null<TypeDeclMatch> = uniqueTypeDecl(srcTree, srcTypeName);
+		final srcDecl: Null<TypeDeclMatch> = RefactorSupport.uniqueTypeDeclNamed(srcTree, srcTypeName);
 		if (srcDecl == null) return PErr('no unique type "$srcTypeName" in $srcFile');
 		final destHit: Null<{ file: String, decl: TypeDeclMatch }> = switch findTypeAcrossScope(scopeFiles, trees, destTypeName) {
 			case FErr(message): return PErr(message);
@@ -584,17 +545,6 @@ final class MoveMember {
 	}
 
 	/**
-	 * Doc comment + modifier run + decl, whole lines; a member framed by
-	 * blank lines on both sides leaves a double blank at the cut, so the
-	 * following blank line is swallowed.
-	 */
-	private static function cutSpanOf(srcSource: String, group: MemberGroup, regions: Array<LexRegion>): Span {
-		return ElementSpan.blankExtendedSpan(
-			srcSource, ElementSpan.lineExtendedSpan(srcSource, ElementSpan.docExtendedSpan(srcSource, group.groupSpan, regions))
-		);
-	}
-
-	/**
 	 * Qualified `Src.member` receivers across the scope: outside the cut they are rewritten in
 	 * place (counted as remaining callers, and — for the BARE spelling only — the caller file is
 	 * remembered for the import pass); inside the cut they are rewritten within the moved text.
@@ -616,7 +566,7 @@ final class MoveMember {
 				if (file == prep.srcFile && insideAnyCut(prep, hit.span.from)) {
 					movedTextEdits.push(edit);
 				} else {
-					editsFor(editsByFile, file).push(edit);
+					ScopeFiles.editsFor(editsByFile, file).push(edit);
 					// A caller inside the destination file needs no promotion —
 					// after the move it is a same-type qualified access.
 					if (file != prep.destFile) outsideCallers++;
@@ -685,7 +635,7 @@ final class MoveMember {
 				// Re-bound: Strict does not carry a narrowed local into an anonymous struct literal.
 				final mNN: MovedMember = m;
 				final hit: BareHit = { m: mNN, offset: ref.span.from, interp: ref.interpolated ? ref.span : null };
-				editsFor(editsByFile, file).push(qualifyEdit(hit, '${prep.destTypeName}.'));
+				ScopeFiles.editsFor(editsByFile, file).push(qualifyEdit(hit, '${prep.destTypeName}.'));
 				// A caller inside the destination FILE is repointed but owes nothing else: no import (it
 				// is the same file) and no promotion (the member is landing there).
 				if (isDest) continue;
@@ -834,7 +784,7 @@ final class MoveMember {
 		// counts as a match: a short `@:access(Src)` resolves through the destination's own imports,
 		// and reading one as this path would DROP a grant the moved body needs.
 		if (RefactorSupport.accessGrantsOn(prep.trees[prep.destFile], prep.destDecl.declNode, '@:access').contains(accessPath)) return;
-		final lineStart: Int = lineStartOf(prep.srcSource, m.group.groupSpan.from);
+		final lineStart: Int = SourceText.lineStartAt(prep.srcSource, m.group.groupSpan.from);
 		final indent: String = prep.srcSource.substring(lineStart, m.group.groupSpan.from);
 		// A decl sharing its line with other code (one-line class) gets the
 		// meta inline — the "indent" would otherwise capture that code.
@@ -882,12 +832,12 @@ final class MoveMember {
 		if (destEdits.unseated.length > 0) return MoveSymbol.unseatedUsingRefusal(prep.destFile, destEdits.unseated);
 		// Captured into locals: a narrowed FIELD does not stay narrowed across the call that reads it.
 		final usingEdit: Null<{ span: Span, text: String }> = destEdits.usingEdit;
-		if (usingEdit != null) editsFor(editsByFile, prep.destFile).push(usingEdit);
+		if (usingEdit != null) ScopeFiles.editsFor(editsByFile, prep.destFile).push(usingEdit);
 		// A carried `#if` region merged into one the destination already has — see
 		// `MoveSymbol.carriedDestEdits`; a region with no such seat is part of `importEdit` instead.
-		for (edit in destEdits.guardedEdits) editsFor(editsByFile, prep.destFile).push(edit);
+		for (edit in destEdits.guardedEdits) ScopeFiles.editsFor(editsByFile, prep.destFile).push(edit);
 		final carriedEdit: Null<{ span: Span, text: String }> = destEdits.importEdit;
-		if (carriedEdit != null) editsFor(editsByFile, prep.destFile).push(carriedEdit);
+		if (carriedEdit != null) ScopeFiles.editsFor(editsByFile, prep.destFile).push(carriedEdit);
 		final destImportPath: String = RefactorSupport.rootQualifiedPath(prep.destTypeName, prep.destModule);
 		for (file in callerFilesNeedingImport) {
 			final info: Null<FileInfo> = prep.index.fileInfo(file);
@@ -897,7 +847,7 @@ final class MoveMember {
 			// sub-module destination is invisible bare even to a sibling file in that package.
 			if (RefactorSupport.bareNameResolves(prep.destTypeName, prep.destModule, info.pkg)) continue;
 			final edit: Null<{ span: Span, text: String }> = MoveSymbol.addImportEdit(callerSource, info, plugin, destImportPath);
-			if (edit != null) editsFor(editsByFile, file).push(edit);
+			if (edit != null) ScopeFiles.editsFor(editsByFile, file).push(edit);
 		}
 		return null;
 	}
@@ -909,20 +859,10 @@ final class MoveMember {
 		editsByFile: Map<String, Array<{ span: Span, text: String }>>, sourceOf: Map<String, String>, plugin: GrammarPlugin,
 		memberName: String, advisoryExtras: Array<String>
 	): MoveResult {
-		final changes: Array<MoveChange> = [];
-		for (file => edits in editsByFile) {
-			final original: Null<String> = sourceOf[file];
-			if (original == null) continue;
-			final newSource: String = CanonicalEdit.applyEdits(original, edits);
-			if (newSource == original) continue;
-			try
-				plugin.parseFile(newSource)
-			catch (exception: ParseError)
-				return Err('rewritten $file does not parse: $exception')
-			catch (exception: Exception)
-				return Err('rewritten $file does not parse: ${exception.message}');
-			changes.push({ file: file, newSource: newSource });
-		}
+		final changes: Array<MoveChange> = switch ScopeFiles.applyAll(editsByFile, sourceOf, plugin) {
+			case Left(message): return Err(message);
+			case Right(applied): applied;
+		};
 		if (changes.length == 0) return Err('move of "$memberName" changed nothing');
 		final advisory: String = advisoryExtras.length == 0 ? ADVISORY : '${advisoryExtras.join('; ')}. $ADVISORY';
 		return Ok(changes, advisory);
@@ -931,20 +871,6 @@ final class MoveMember {
 	private static function isAllWhitespace(text: String): Bool {
 		for (i in 0...text.length) if (!SourceText.isSpace(text.fastCodeAt(i))) return false;
 		return true;
-	}
-
-	/**
-	 * Every type decl named `typeName` in `tree` (final-aware).
-	 */
-	private static function typeDeclsNamed(tree: QueryNode, typeName: String): Array<TypeDeclMatch> {
-		final matches: Array<TypeDeclMatch> = [];
-		function walk(node: QueryNode): Void {
-			final m: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
-			if (m != null && m.name == typeName) matches.push(m);
-			for (c in node.children) walk(c);
-		}
-		walk(tree);
-		return matches;
 	}
 
 	/**
@@ -1048,7 +974,7 @@ final class MoveMember {
 	): Null<String> {
 		final bareHits: Array<BareHit> = collectBareCallerHits(prep, plugin);
 		for (h in bareHits) if (h.m.isStatic) {
-			editsFor(editsByFile, prep.srcFile).push(qualifyEdit(h, '${prep.destTypeName}.'));
+			ScopeFiles.editsFor(editsByFile, prep.srcFile).push(qualifyEdit(h, '${prep.destTypeName}.'));
 			outsideCallersOf[h.m.name] = (outsideCallersOf[h.m.name] ?? 0) + 1;
 		}
 		final instanceHits: Array<BareHit> = bareHits.filter(h -> !h.m.isStatic);
@@ -1066,7 +992,7 @@ final class MoveMember {
 					+ 'field would be read before it is initialized; move the call out of the constructor or wire the via field manually';
 		}
 		for (h in instanceHits) {
-			editsFor(editsByFile, prep.srcFile).push(qualifyEdit(h, '${via.name}.'));
+			ScopeFiles.editsFor(editsByFile, prep.srcFile).push(qualifyEdit(h, '${via.name}.'));
 			outsideCallersOf[h.m.name] = (outsideCallersOf[h.m.name] ?? 0) + 1;
 		}
 		if (via.scaffold) {
@@ -1153,7 +1079,7 @@ final class MoveMember {
 				name: name,
 				group: groupNN,
 				span: memberSpanNN,
-				cut: cutSpanOf(srcSource, groupNN, lexicalRegions(srcSource)),
+				cut: ElementSpan.memberCutSpan(srcSource, groupNN.groupSpan, lexicalRegions(srcSource)),
 				isStatic: modifierStatic || hostStatic
 			});
 		}
@@ -1187,7 +1113,7 @@ final class MoveMember {
 			final cuts: Array<Span> = [
 				for (name in names) {
 					final g: Null<MemberGroup> = byName[name];
-					if (g != null) cutSpanOf(srcSource, g, srcRegions);
+					if (g != null) ElementSpan.memberCutSpan(srcSource, g.groupSpan, srcRegions);
 				}
 			];
 			final added: Array<String> = instanceCallsInto(allMembers, names, cuts, srcSource, srcTree, plugin);
@@ -1307,13 +1233,13 @@ final class MoveMember {
 			advisoryExtras.push('--scaffold generated ${scaffoldFields.length} final field(s) + constructor on "${prep.destTypeName}"');
 		}
 		final blocks: Array<String> = buildMovedBlocks(prep, movedTextEdits);
-		for (m in prep.moved) editsFor(editsByFile, prep.srcFile).push({ span: m.cut, text: '' });
-		final bodyClose: Null<Int> = typeBodyClose(prep.destSource, prep.destDecl);
+		for (m in prep.moved) ScopeFiles.editsFor(editsByFile, prep.srcFile).push({ span: m.cut, text: '' });
+		final bodyClose: Null<Int> = RefactorSupport.typeBodyCloseOffset(prep.destSource, prep.destDecl);
 		if (bodyClose == null) return '"${prep.destTypeName}" has no brace body to receive the member';
 		var wsStart: Int = bodyClose;
 		while (wsStart > 0 && SourceText.isSpace(StringTools.fastCodeAt(prep.destSource, wsStart - 1))) wsStart--;
 		final destFrame: String = destPrepend == '' ? '\n\n${blocks.join('\n\n')}\n\n' : '\n\n$destPrepend\n\n${blocks.join('\n\n')}\n\n';
-		editsFor(editsByFile, prep.destFile).push({ span: new Span(wsStart, bodyClose), text: destFrame });
+		ScopeFiles.editsFor(editsByFile, prep.destFile).push({ span: new Span(wsStart, bodyClose), text: destFrame });
 		return null;
 	}
 
@@ -1344,13 +1270,13 @@ final class MoveMember {
 		);
 		if (srcNamesDestBare && !RefactorSupport.bareNameResolves(prep.destTypeName, prep.destModule, prep.srcInfo.pkg)) {
 			final edit: Null<{ span: Span, text: String }> = MoveSymbol.addImportEdit(prep.srcSource, prep.srcInfo, plugin, destPath);
-			if (edit != null) editsFor(editsByFile, prep.srcFile).push(edit);
+			if (edit != null) ScopeFiles.editsFor(editsByFile, prep.srcFile).push(edit);
 		}
 		if (!movedTextEdits.exists(e -> StringTools.contains(e.text, '${prep.srcTypeName}.'))) return;
 		if (RefactorSupport.bareNameResolves(prep.srcTypeName, prep.srcModule, prep.destInfo.pkg)) return;
 		final srcPath: String = RefactorSupport.rootQualifiedPath(prep.srcTypeName, prep.srcModule);
 		final edit: Null<{ span: Span, text: String }> = MoveSymbol.addImportEdit(prep.destSource, prep.destInfo, plugin, srcPath);
-		if (edit != null) editsFor(editsByFile, prep.destFile).push(edit);
+		if (edit != null) ScopeFiles.editsFor(editsByFile, prep.destFile).push(edit);
 	}
 
 	/**
