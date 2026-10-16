@@ -221,15 +221,10 @@ final class ParamAscription {
 			: null;
 	}
 
-	/** The innermost type declaration of the root-to-owner `chain`, with its index in it, or null when the chain holds none. */
+	/** The innermost type declaration holding the last node of the root-to-owner `chain` (`TypeResolver.enclosingTypeDeclAt`), or null. */
 	private static function enclosingTypeOf(chain: Array<QueryNode>): Null<TypeDeclMatch> {
-		var at: Int = chain.length - 2;
-		while (at >= 0) {
-			final found: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(chain[at]);
-			if (found != null) return found;
-			at--;
-		}
-		return null;
+		final span: Null<Span> = chain[chain.length - 1].span;
+		return span == null ? null : TypeResolver.enclosingTypeDeclAt(chain[0], span.from, span.to);
 	}
 
 	/**

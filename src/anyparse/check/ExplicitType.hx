@@ -10,12 +10,14 @@ import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MemberKinds;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoMemo;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefIndex;
 import anyparse.query.TypeRefPrinter;
+import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
@@ -590,7 +592,7 @@ final class ExplicitType implements Check implements OracleAssisted {
 			final name: Null<String> = node.name;
 			if (functions.contains(node.kind) && name != null && name != 'new') {
 				final own: Array<QueryNode> = [for (c in node.children) if (params.contains(c.kind)) c];
-				final owner: Null<TypeDeclInfo> = enclosingType(owners, node.span);
+				final owner: Null<TypeDeclInfo> = enclosingType(tree, owners, node.span);
 				if (owner != null) for (i in 0...own.length) paramEdit(seams, owner, name, own, i, source, edits, flagged);
 			}
 			for (c in node.children) visit(c);
@@ -618,16 +620,10 @@ final class ExplicitType implements Check implements OracleAssisted {
 		if (at >= 0) edits.push({ span: new Span(at, at), text: ':${found.text}' });
 	}
 
-	/** The innermost indexed type declaration of this file whose span contains `span`, or null. */
-	private static function enclosingType(owners: Array<TypeDeclInfo>, span: Null<Span>): Null<TypeDeclInfo> {
-		final s: Null<Span> = span;
-		if (s == null) return null;
-		var best: Null<TypeDeclInfo> = null;
-		for (t in owners) if (t.span.from <= s.from && s.to <= t.span.to) {
-			final b: Null<TypeDeclInfo> = best;
-			if (b == null || t.span.from >= b.span.from) best = t;
-		}
-		return best;
+	/** The index entry of the type declaration of `tree` holding `span` (`TypeResolver.enclosingTypeDeclAt`), or null. */
+	private static function enclosingType(tree: QueryNode, owners: Array<TypeDeclInfo>, span: Null<Span>): Null<TypeDeclInfo> {
+		final decl: Null<TypeDeclMatch> = span == null ? null : TypeResolver.enclosingTypeDeclAt(tree, span.from, span.to);
+		return decl == null ? null : owners.find(t -> t.name == decl.name);
 	}
 
 	/**

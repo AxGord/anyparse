@@ -3024,3 +3024,8 @@ decided the question; it may not become a record of runs.
   `TypeRefIndex.plainImportPathOf` / `bindsUnderGuard` (moved from `ExplicitType`), `usings` / `plainImports` (what
   `MoveMember`'s scope guard reads). `MoveMember` now checks a file's `using` lines before its static imports, so a
   file carrying BOTH refusals names the `using` one whatever their order — branch `feat/infra-B6b`
+- the enclosing-type copies B4b left beside `TypeResolver.enclosingTypeDeclAt` were read as other questions →
+  `UnusedReturnValue.enclosingTypeName` was the same walk unpruned, `ParamAscription.enclosingTypeOf` the same answer
+  read off an ancestor chain, `ExplicitType.enclosingType` the same answer over the index's type spans (Haxe nests no
+  type, and the index and `typeDeclOf` read one kind list, `MemberKinds.TYPE_DECL_KINDS`); all three ask the walk now.
+  `HaxeNamingSupport`'s `enclosingType` is a walk parameter, not a lookup — branch `feat/infra-B6b`
