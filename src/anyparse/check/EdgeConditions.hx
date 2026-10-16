@@ -3,8 +3,8 @@ package anyparse.check;
 import anyparse.query.CallGraph;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
+import anyparse.query.ShapeVocab;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -83,9 +83,9 @@ final class EdgeConditions {
 		_values = new ArgumentValues(graph, trees, plugin);
 		final flow: Null<ControlFlowSupport> = plugin.controlFlowSupport();
 		_blockKinds = flow == null ? [] : flow.blockKinds();
-		_sequenceKinds = _blockKinds.concat([for (k in [_shape.caseBranchKind, _shape.defaultBranchKind]) if (k != null) k]);
-		_ifKinds = ArgumentValues.conditionalKinds(_shape);
-		_nestedFnKinds = MemberKinds.nestedFunctionKinds(_shape);
+		_sequenceKinds = _blockKinds.concat(ShapeVocab.switchArmKinds(_shape));
+		_ifKinds = ShapeVocab.conditionalKinds(_shape);
+		_nestedFnKinds = ShapeVocab.nestedFunctionKinds(_shape);
 	}
 
 	/** The valuation of `id` that knows nothing: every tracked parameter unknown (`ArgumentValues.unknown`). */

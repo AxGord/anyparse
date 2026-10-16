@@ -348,7 +348,7 @@ final class NullableSwitchMissingNull implements Check implements NoAutofix {
 	private static function relationalAssertOperand(arg: QueryNode, s: Seams, asTrue: Bool): Null<QueryNode> {
 		final e: QueryNode = BoolExprShape.unwrapParens(arg, s.parenKind);
 		final wantKind: Null<String> = asTrue ? s.shape.notEqKind : s.shape.eqKind;
-		return wantKind == null || e.kind != wantKind ? null : NullFlow.nullComparisonOperand(e, s.identKind, s.nullLitKind);
+		return wantKind == null || e.kind != wantKind ? null : NodeShape.nullComparedIdent(e, s.identKind, s.nullLitKind);
 	}
 
 }

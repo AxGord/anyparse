@@ -252,7 +252,7 @@
 			"name": "M-FN-SCOPE-KINDS-DROPS-METHODS",
 			"type": "anyparse.query.FieldRefScan",
 			"method": "fnScopeKinds",
-			"force": "MemberKinds.nestedFunctionKinds(shape)",
+			"force": "ShapeVocab.nestedFunctionKinds(shape)",
 			"note": "the METHOD half of the scope vocabulary is dropped and only the function VALUES remain, so a method body stops counting as a scope that can bind the property name and the `this.` qualifier a shadowed reference needs is never emitted"
 		},
 		{
@@ -18363,9 +18363,9 @@
 		},
 		{
 			"name": "M-TS-WIN-FOREXPR",
-			"type": "anyparse.check.Loops",
-			"method": "kindsOf",
-			"find": ".concat(shape.iterationBindingKinds ?? [])",
+			"type": "anyparse.query.ShapeVocab",
+			"method": "loopKinds",
+			"find": "shape.iterationBindingKinds, ",
 			"replace": "",
 			"note": "a for expression is no loop"
 		},
@@ -21927,6 +21927,61 @@
 			"find": "typeSyntax(memberLookupReceiverSource(typeSource, wrappers, typeSyntax))?.shape",
 			"replace": "typeSyntax(typeSource)?.shape",
 			"note": "a path under a nullable wrapper is the wrapper's"
+		},
+		{
+			"name": "M-VOCAB-UNION-DUPLICATES",
+			"type": "anyparse.query.ShapeVocab",
+			"method": "union",
+			"find": "if (g != null) for (k in g) if (!out.contains(k)) out.push(k);",
+			"replace": "if (g != null) for (k in g) out.push(k);",
+			"note": "a kind two seams both name is answered twice, so every derived set carries a duplicate where the grammar's seams overlap"
+		},
+		{
+			"name": "M-VOCAB-UNSET-SEAM-ADDED",
+			"type": "anyparse.query.ShapeVocab",
+			"method": "one",
+			"find": "kind == null ? null : [kind]",
+			"replace": "[kind ?? '']",
+			"note": "a single seam the grammar leaves unset adds an empty kind name instead of nothing"
+		},
+		{
+			"name": "M-GUARD-ELSE-ADMITTED",
+			"type": "anyparse.check.GuardScan",
+			"method": "guardedIf",
+			"find": " || ifNode.children.length != IF_NO_ELSE_CHILD_COUNT",
+			"replace": "",
+			"note": "an `if` with an `else` is inverted as if it had none, so both guard rules drop the else branch"
+		},
+		{
+			"name": "M-GUARD-UNBRACED-THEN",
+			"type": "anyparse.check.GuardScan",
+			"method": "guardedIf",
+			"find": "blockKinds.contains(thenBlock.kind) && ",
+			"replace": "",
+			"note": "an un-braced then-branch is taken for a block, so its braces are cut off text that has none"
+		},
+		{
+			"name": "M-GUARD-MIN-THEN-IGNORED",
+			"type": "anyparse.check.GuardScan",
+			"method": "guardedIf",
+			"find": " && thenBlock.children.length >= minThen",
+			"replace": "",
+			"note": "a then-branch under the rule's minimum is inverted, so guard-return flattens a one-statement branch"
+		},
+		{
+			"name": "M-GUARD-GLUE-COMMENT-BLIND",
+			"type": "anyparse.check.GuardScan",
+			"method": "headerHasComment",
+			"force": "false",
+			"note": "a comment in the `if (` or `) {` glue no longer refuses the rewrite, which drops it"
+		},
+		{
+			"name": "M-GUARD-UNCLEAN-INVERSION-REPORTED",
+			"type": "anyparse.check.GuardScan",
+			"method": "report",
+			"find": " && NegationScan.negationIsClean(g.cond, source, logic, types)",
+			"replace": "",
+			"note": "a condition that can only invert into a `!( … )` wrap is reported, so the guard form reads worse than the nesting it removes"
 		}
 	]
 }

@@ -5,6 +5,7 @@ import anyparse.query.CondRegionScan;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
+import anyparse.query.ShapeVocab;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -453,18 +454,6 @@ final class IfExpressionChain {
 	}
 
 	/**
-	 * Every `if` form the grammar has — the expression kinds and the statement kinds together.
-	 * This is the set the else-less scan below must recognise, and it is deliberately BOTH: an
-	 * else-less conditional of either kind absorbs a ` else ` emitted after it, and a rule that
-	 * emits one cannot afford to know only the kind its own construct is written in (a
-	 * statement-position `if` reaches an expression branch value through a block unwrap, and an
-	 * if-EXPRESSION is a legal branch statement).
-	 */
-	public static function conditionalKinds(shape: RefShape): Array<String> {
-		return (shape.ifExpressionKinds ?? []).concat(shape.ifStatementKinds ?? []);
-	}
-
-	/**
 	 * Whether `node` ITSELF is a conditional with no else-slot (fewer children than the
 	 * `[condition, then, else]` an `if`/`else` has). The one definition of "else-less"; the
 	 * subtree scan below and the terminal gates in the statement-side rules both ask it, so they
@@ -535,7 +524,7 @@ final class IfExpressionChain {
 			shape.caseBranchKind
 		];
 		for (host in delimitedHosts) if (host != null) kinds.push(host);
-		return { shieldKinds: kinds, conditionalKinds: conditionalKinds(shape), shape: shape };
+		return { shieldKinds: kinds, conditionalKinds: ShapeVocab.ifKinds(shape), shape: shape };
 	}
 
 	/**

@@ -6,6 +6,7 @@ import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.PatternNameScope;
 import anyparse.query.QueryNode;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TreePath;
 import anyparse.query.TypeResolver;
@@ -388,7 +389,7 @@ final class CasePatternScan {
 	 * a branch of its own, and there are six here.
 	 */
 	private static function scopeSeamsOf(shape: RefShape): ScopeSeams {
-		final functionKinds: Array<String> = (shape.functionKinds ?? []).concat(shape.lambdaKinds ?? []);
+		final functionKinds: Array<String> = ShapeVocab.functionOrLambdaKinds(shape);
 		final catchKind: Null<String> = shape.catchClauseKind;
 		return {
 			functionKinds: functionKinds,

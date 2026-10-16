@@ -971,7 +971,7 @@ typedef RefShape = {
 	 * rewrite and the name may be the only binding a self-recursive body has. The projection itself draws
 	 * no such line — `function nn(a) …` projects as `NamedFnExpr nn (Required a) (BlockBody …)`, the name
 	 * on the node's own `name` slot and the parameter at `children[0]`, exactly like every anonymous
-	 * spelling. Read it through `RefactorSupport.nestedFunctionKinds`, never on its own. Optional — a
+	 * spelling. Read it through `ShapeVocab.nestedFunctionKinds`, never on its own. Optional — a
 	 * grammar with no named function literal leaves it unset.
 	 */
 	@:optional var namedFnExprKind: String;

@@ -8,6 +8,7 @@ import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
+import anyparse.query.NodeShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -484,14 +485,8 @@ final class PreferSafeNav implements Check implements VersionGated {
 
 	/** The guard SUBJECT of a `<subject> <op> null` / `null <op> <subject>` comparison, or null for any other shape. */
 	private static function subjectOperand(cond: QueryNode, s: Seams): Null<QueryNode> {
-		final a: QueryNode = cond.children[0];
-		final b: QueryNode = cond.children[1];
-		return if (a.kind == s.nullKind)
-			subjectOf(b, s)
-		else if (b.kind == s.nullKind)
-			subjectOf(a, s)
-		else
-			null;
+		final operand: Null<QueryNode> = NodeShape.nullComparedSide(cond, s.nullKind);
+		return operand == null ? null : subjectOf(operand, s);
 	}
 
 	/**

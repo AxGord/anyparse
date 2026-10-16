@@ -2,14 +2,16 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.check.CheckScan.NegationSeams;
+import anyparse.check.GuardScan.GuardSeams;
+import anyparse.check.GuardScan.GuardSplice;
+import anyparse.check.GuardScan.GuardedIf;
 import anyparse.check.IfExpressionChain.ShieldSeams;
 import anyparse.query.BinderScan;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
-import anyparse.query.CanonicalEdit;
-import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -111,9 +113,6 @@ using Lambda;
 @:nullSafety(Strict)
 final class GuardContinue implements Check {
 
-	/** A guard `if` with no `else` has exactly [condition, then-branch] children. */
-	private static inline final IF_NO_ELSE_CHILD_COUNT: Int = 2;
-
 	/** The first suffix a collision rename tries (`path` → `path2`). */
 	private static inline final FRESH_NAME_FIRST: Int = 2;
 
@@ -148,12 +147,7 @@ final class GuardContinue implements Check {
 		return RunScan.editsWith(plugin, source, readSeams(plugin), (tree, seams) -> {
 			final byIf: Map<String, Candidate> = [];
 			indexCandidates(tree, tree, source, seams, byIf, true);
-			final types: Null<(QueryNode) -> Null<String>> = violations.length == 0
-				? null
-				: CheckScan.typeNominalResolver(source, plugin, tree, violations[0].file, index);
-			return CanonicalEdit.dropContainedEdits(
-				CheckScan.collectSpanEdits(violations, byIf, (m, _) -> (editFor(m, source, seams, types)))
-			);
+			return GuardScan.edits(plugin, source, tree, violations, index, byIf, (m, types) -> editFor(m, source, seams, types));
 		});
 	}
 
@@ -164,20 +158,18 @@ final class GuardContinue implements Check {
 
 	/** Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */
 	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {
-		final shape: RefShape = plugin.refShape();
-		final ifKinds: Array<String> = shape.ifStatementKinds ?? [];
-		if (ifKinds.length == 0) return null;
+		final base: Null<GuardSeams> = GuardScan.seamsOf(plugin);
+		if (base == null) return null;
+		final shape: RefShape = base.shape;
 		final continueKind: Null<String> = shape.continueStatementKind;
 		if (continueKind == null) return null;
-		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
-		if (support == null) return null;
-		final loopKinds: Array<String> = shape.loopStatementKinds ?? [];
-		final doWhileKinds: Array<String> = shape.doWhileLoopKinds ?? [];
-		return loopKinds.length == 0 && doWhileKinds.length == 0 ? null : {
-			loopKinds: loopKinds,
-			doWhileKinds: doWhileKinds,
-			ifKinds: ifKinds,
-			blockKinds: support.blockKinds(),
+		final statementLoopKinds: Array<String> = ShapeVocab.statementLoopKinds(shape);
+		return statementLoopKinds.length == 0 ? null : {
+			statementLoopKinds: statementLoopKinds,
+			loopKinds: shape.loopStatementKinds ?? [],
+			doWhileKinds: shape.doWhileLoopKinds ?? [],
+			ifKinds: base.ifKinds,
+			blockKinds: base.flow.blockKinds(),
 			blockStmtKind: shape.blockStmtKind,
 			continueKind: continueKind,
 			localDeclKinds: shape.localDeclKinds ?? [],
@@ -186,7 +178,7 @@ final class GuardContinue implements Check {
 			opaqueKinds: shape.opaqueKinds ?? [],
 			hoist: hoistSeams(shape),
 			negation: NegationScan.negationSeams(shape),
-			shield: IfExpressionChain.shieldSeams(shape, support.blockKinds()),
+			shield: IfExpressionChain.shieldSeams(shape, base.flow.blockKinds()),
 			support: plugin.booleanLogicSupport()
 		};
 	}
@@ -233,12 +225,8 @@ final class GuardContinue implements Check {
 	 */
 	private static function hoistHardExitKinds(shape: RefShape, loopJumpKinds: Array<String>): Array<String> {
 		final out: Array<String> = [];
-		for (k in [
-			(shape.returnStatementKind: Null<String>),
-			shape.voidReturnKind
-		]) if (k != null && !out.contains(k)) out.push(k);
 		for (grp in [
-			shape.valueReturnKinds ?? [],
+			ShapeVocab.returnKinds(shape),
 			shape.throwKinds ?? [],
 			shape.controlExitKinds ?? []
 		]) for (k in grp) if (!out.contains(k) && !loopJumpKinds.contains(k)) out.push(k);
@@ -253,18 +241,11 @@ final class GuardContinue implements Check {
 		if (s.opaqueKinds.contains(node.kind)) return;
 		if (isLoop(node, s)) {
 			final m: Null<Candidate> = match(node, root, source, s, shielded, types);
-			// An inversion that cannot shed its `!( … )` wrap reads worse than the nesting it
-			// removes — the guard form buys nothing there, so the site is left alone.
-			if (m != null && NegationScan.negationIsClean(m.cond, source, s.support, types)) {
-				final span: Null<Span> = m.ifNode.span;
-				if (span != null) out.push({
-					file: file,
-					span: span,
-					rule: 'guard-continue',
-					severity: Severity.Info,
-					message: 'this trailing if can de-nest to an if (!cond) continue; guard'
-				});
-			}
+			if (m != null)
+				GuardScan.report(
+					out, file, source, m, s.support, types, 'guard-continue',
+					'this trailing if can de-nest to an if (!cond) continue; guard'
+				);
 		}
 		for (i => c in node.children)
 			walk(c, root, out, file, source, s, IfExpressionChain.childShielded(node, i, s.shield, shielded), types);
@@ -283,17 +264,14 @@ final class GuardContinue implements Check {
 			// can only ever answer "not claimed" here, so this map stays the SUPERSET of what `run`
 			// reported that `fix` has always relied on.
 			final m: Null<Candidate> = match(node, root, source, s, shielded);
-			if (m != null) {
-				final span: Null<Span> = m.ifNode.span;
-				if (span != null) out['${span.from}:${span.to}'] = m;
-			}
+			if (m != null) GuardScan.index(out, m);
 		}
 		for (i => c in node.children)
 			indexCandidates(c, root, source, s, out, IfExpressionChain.childShielded(node, i, s.shield, shielded));
 	}
 
-	private static function isLoop(node: QueryNode, s: Seams): Bool {
-		return s.loopKinds.contains(node.kind) || s.doWhileKinds.contains(node.kind);
+	private static inline function isLoop(node: QueryNode, s: Seams): Bool {
+		return s.statementLoopKinds.contains(node.kind);
 	}
 
 	/**
@@ -329,18 +307,15 @@ final class GuardContinue implements Check {
 		// right after the first) stays THIS rule's, which is exactly what the shared predicate
 		// excludes.
 		if (loopGuardClaims(loop, body, source, s, shielded, types)) return null;
-		final ifNode: QueryNode = stmts[ifIndex];
-		if (!s.ifKinds.contains(ifNode.kind) || ifNode.children.length != IF_NO_ELSE_CHILD_COUNT) return null;
-		final cond: QueryNode = ifNode.children[0];
-		final thenBlock: QueryNode = ifNode.children[1];
-		if (!s.blockKinds.contains(thenBlock.kind) || thenBlock.children.length == 0) return null;
-		if (tail.length != 0 && !tailHoistSafe(loop, ifNode, thenBlock, tail, source, s)) return null;
-		if (headerHasComment(source, ifNode, cond, thenBlock)) return null;
-		final renames: Null<Array<LocalRename>> = collisionRenames(loop, root, body, ifNode, thenBlock, source, s);
+		final g: Null<GuardedIf> = GuardScan.guardedIf(stmts[ifIndex], s.ifKinds, s.blockKinds, 1);
+		if (g == null) return null;
+		if (tail.length != 0 && !tailHoistSafe(loop, g.ifNode, g.thenBlock, tail, source, s)) return null;
+		if (GuardScan.headerHasComment(source, g)) return null;
+		final renames: Null<Array<LocalRename>> = collisionRenames(loop, root, body, g.ifNode, g.thenBlock, source, s);
 		return renames == null ? null : {
-			ifNode: ifNode,
-			thenBlock: thenBlock,
-			cond: cond,
+			ifNode: g.ifNode,
+			thenBlock: g.thenBlock,
+			cond: g.cond,
 			tail: tail,
 			renames: renames
 		};
@@ -596,19 +571,6 @@ final class GuardContinue implements Check {
 	}
 
 	/**
-	 * Whether a comment sits in the dropped `if (` or `) {` glue (a comment
-	 * in the condition or the then-body is preserved and does NOT refuse).
-	 */
-	private static function headerHasComment(source: String, ifNode: QueryNode, cond: QueryNode, thenBlock: QueryNode): Bool {
-		final ifSpan: Null<Span> = ifNode.span;
-		final condSpan: Null<Span> = cond.span;
-		final thenSpan: Null<Span> = thenBlock.span;
-		if (ifSpan == null || condSpan == null || thenSpan == null) return true;
-		final headerGap: Bool = CheckScan.hasCommentMarker(source, ifSpan.from, condSpan.from);
-		return headerGap || CheckScan.hasCommentMarker(source, condSpan.to, thenSpan.from);
-	}
-
-	/**
 	 * Replace the flagged `if` (and its hoisted tail, when present) with the tail
 	 * statements, an `if (!cond) continue;` guard, and the then-branch's inner
 	 * statements (the writer re-indents the de-nested run).
@@ -616,13 +578,10 @@ final class GuardContinue implements Check {
 	private static function editFor(
 		m: Candidate, source: String, s: Seams, ?types: (QueryNode) -> Null<String>
 	): Null<{ span: Span, text: String }> {
-		final ifSpan: Null<Span> = m.ifNode.span;
-		final thenSpan: Null<Span> = m.thenBlock.span;
-		if (ifSpan == null || thenSpan == null) return null;
-		final neg: String = NegationScan.negateConditionText(m.cond, source, s.negation, s.support, types);
-		final innerFrom: Int = thenSpan.from + 1;
-		final inner: String = StringTools.rtrim(applyRenames(source.substring(innerFrom, thenSpan.to - 1), innerFrom, m.renames));
-		var to: Int = ifSpan.to;
+		final cut: Null<GuardSplice> = GuardScan.splice(m, source, s.negation, s.support, types);
+		if (cut == null) return null;
+		final inner: String = StringTools.rtrim(applyRenames(cut.inner, cut.innerFrom, m.renames));
+		var to: Int = cut.ifSpan.to;
 		final hoisted: StringBuf = new StringBuf();
 		for (t in m.tail) {
 			final span: Null<Span> = t.span;
@@ -631,7 +590,7 @@ final class GuardContinue implements Check {
 			hoisted.add('\n');
 			to = span.to;
 		}
-		return { span: new Span(ifSpan.from, to), text: '${hoisted.toString()}if ($neg) continue;$inner' };
+		return { span: new Span(cut.ifSpan.from, to), text: '${hoisted.toString()}if (${cut.neg}) continue;$inner' };
 	}
 
 	/**
@@ -685,6 +644,10 @@ final class GuardContinue implements Check {
 
 /** The `RefShape` kinds `GuardContinue` reads, bundled once so the walkers take one argument. */
 private typedef Seams = {
+
+	/** Every loop statement this check visits (`ShapeVocab.statementLoopKinds`): `loopKinds` and `doWhileKinds` together. */
+	var statementLoopKinds: Array<String>;
+
 	var loopKinds: Array<String>;
 	var doWhileKinds: Array<String>;
 	var ifKinds: Array<String>;
@@ -732,10 +695,7 @@ private typedef HoistSeams = {
  * exact last statement), and the collision renames the de-nested block needs (empty
  * when no de-nested local clashes with the surrounding scope).
  */
-private typedef Candidate = {
-	var ifNode: QueryNode;
-	var thenBlock: QueryNode;
-	var cond: QueryNode;
+private typedef Candidate = GuardedIf & {
 	var tail: Array<QueryNode>;
 	var renames: Array<LocalRename>;
 }

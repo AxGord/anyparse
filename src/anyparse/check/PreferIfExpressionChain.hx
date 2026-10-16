@@ -10,6 +10,7 @@ import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -352,10 +353,10 @@ final class PreferIfExpressionChain implements Check {
 		return {
 			ternaryKind: ternaryKind,
 			chainKinds: chainKinds,
-			conditionalKinds: IfExpressionChain.conditionalKinds(shape),
+			conditionalKinds: ShapeVocab.ifKinds(shape),
 			hostKinds: hostKinds,
 			exprStatementKind: shape.exprStatementKind,
-			armKinds: [for (k in [shape.caseBranchKind, shape.defaultBranchKind]) if (k != null) k],
+			armKinds: ShapeVocab.switchArmKinds(shape),
 			negation: NegationScan.negationSeams(shape),
 			logic: plugin.booleanLogicSupport(),
 			parenKind: shape.parenKind,

@@ -3,8 +3,8 @@ package anyparse.check;
 import anyparse.check.LockSites.LockEscape;
 import anyparse.query.CallGraph;
 import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
+import anyparse.query.ShapeVocab;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -45,9 +45,9 @@ final class ThrowReach {
 		_graph = graph;
 		_throwersOf = throwersOf;
 		_trees = trees;
-		_tryKinds = (shape.tryStatementKinds ?? []).concat(shape.tryExpressionKinds ?? []);
+		_tryKinds = ShapeVocab.tryKinds(shape);
 		_catchKind = shape.catchClauseKind;
-		_nestedFnKinds = MemberKinds.nestedFunctionKinds(shape);
+		_nestedFnKinds = ShapeVocab.nestedFunctionKinds(shape);
 		_throwKinds = shape.throwKinds ?? [];
 		_shape = shape;
 		solve();

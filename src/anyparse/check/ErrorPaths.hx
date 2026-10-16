@@ -2,8 +2,8 @@ package anyparse.check;
 
 import anyparse.query.CallGraph;
 import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
+import anyparse.query.ShapeVocab;
 import anyparse.runtime.LineIndex;
 import anyparse.runtime.Span;
 
@@ -36,8 +36,8 @@ final class ErrorPaths {
 		_graph = graph;
 		_trees = trees;
 		_catchKind = shape.catchClauseKind;
-		_nestedFnKinds = MemberKinds.nestedFunctionKinds(shape);
-		_loopKinds = Loops.kindsOf(shape);
+		_nestedFnKinds = ShapeVocab.nestedFunctionKinds(shape);
+		_loopKinds = ShapeVocab.loopKinds(shape);
 	}
 
 	/** The `catch` clause whose body holds the site of `edge`, the innermost one; null for a site outside every one, or unplaced. */

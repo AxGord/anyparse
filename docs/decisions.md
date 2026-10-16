@@ -2898,3 +2898,29 @@ decided the question; it may not become a record of runs.
   graph resolves), and re-aimed fixtures kill all five; the sixth, M-ESCAPE-RECEIVER-CALL, cuts a `ValueEscapes.call`
   precision branch no probed shape reaches (28, syntax and facts) — left to the `ValueEscapes` owner — branch
   `feat/infra-B8b`
+- the grammar's derived vocabulary was respelled per rule — `functionKinds ∪ nestedFunctionKinds` three times,
+  `localFunctionKinds ∪ inlineFunctionKinds` five, `functionKinds ∪ lambdaKinds` fifteen, the `try` / `if` / case-arm
+  unions five to eight times each, the return kinds in three shapes, the loop kinds read raw beside `Loops.kindsOf`, and
+  `NullFlow` carried the Haxe loop / conditional / `switch` / `try` sets as LITERAL lists read by `DeadStore`,
+  `DefiniteAssignmentGuard` and `JoinSingleUseLocal` → one home, `anyparse.query.ShapeVocab` (`loopKinds`,
+  `statementLoopKinds`, `nestedFunctionKinds` and `functionLikeKinds`, `localFunctionScopeKinds`, `functionOrLambdaKinds`,
+  `lambdaOrLocalFunctionKinds`, `returnStatementKinds` / `returnKinds`, `tryKinds`, `ifKinds` / `conditionalKinds`,
+  `switchArmKinds`); `Loops.kindsOf`, `MemberKinds.nestedFunctionKinds`, `ArgumentValues.conditionalKinds`,
+  `IfExpressionChain.conditionalKinds` and `NullFlow.IF/LOOP/PRE_TEST_LOOP/SWITCH/TRY/BRANCHY_KINDS` are gone. Each
+  union is replaced only where the site spelled exactly it (same seams; each kind once, which no reader's `contains`
+  sees); a site that unions a NARROWER set keeps it and is named instead: `functionKinds ∪ lambdaKinds` misses
+  `NamedFnExpr` and `LocalInlineFnStmt` (fifteen sites, now one spelling to widen), `PreferLambdaExpressionBody`'s
+  control-flow kinds and `LoopGuard` read `loopStatementKinds` without `do … while` — candidates, not changed here.
+  All-rules lint on the three TM trees and anyparse: byte-identical — branch `feat/infra-B6a`
+- `guard-continue` and `guard-return` decided the same `if` shape, glue comment, clean-inversion report gate, splice and
+  fix lookup in two copies edited in step (15 shared commits) → `anyparse.check.GuardScan` (`seamsOf`, `guardedIf`,
+  `headerHasComment`, `report`, `splice`, `index`, `edits`); each rule keeps where its `if` sits, its tail and what it
+  emits — branch `feat/infra-B6a`
+- "the operand compared with `null`" had nine answers — `NullFlow.nullComparisonOperand`, `BoolExprShape`'s private
+  copy, and inline ones in eleven rules, some first-null-wins (`null == null` answered the null literal as the
+  operand), one right-side-only (`CtorFieldFold` saw `p != null` but not `null != p`) → `NodeShape.nullComparedSide` /
+  `nullComparedIdent`: exactly one side the null literal, each side optionally read through parentheses, the
+  comparison kind the caller's. Haxe 4.3.7 treats `null != p` as the same guard (it narrows `p` under strict
+  null-safety), so `prefer-final-public-field` now folds the swapped spelling too
+  (`testCtorConditionalDefaultSwappedGuardFixed`, red on the start commit); `null == null` names no operand, which
+  every former first-null-wins caller already discarded downstream — branch `feat/infra-B6a`

@@ -6,6 +6,7 @@ import anyparse.query.CallGraph;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
+import anyparse.query.ShapeVocab;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -96,13 +97,13 @@ final class MustHeld {
 
 		final flow: Null<ControlFlowSupport> = plugin.controlFlowSupport();
 		_blockKinds = flow == null ? [] : flow.blockKinds();
-		_tryKinds = (_shape.tryStatementKinds ?? []).concat(_shape.tryExpressionKinds ?? []);
+		_tryKinds = ShapeVocab.tryKinds(_shape);
 
 		_sequenceKinds = _blockKinds.concat(_shape.exprStatementKind == null ? [] : [_shape.exprStatementKind])
 			.concat(_shape.expressionBodyKinds ?? [])
 			.concat(_shape.localDeclKinds ?? [])
 			.concat(_shape.parenKind == null ? [] : [_shape.parenKind]);
-		_ifKinds = (_shape.ifStatementKinds ?? []).concat(_shape.ifExpressionKinds ?? []);
+		_ifKinds = ShapeVocab.ifKinds(_shape);
 		_body = new BodyFacts(sites, trees, new ArgumentValues(graph, trees, plugin), _shape, { tryKinds: _tryKinds, ifKinds: _ifKinds });
 		for (a in holds) if (a.lock != null && !sites.helpers.contains(a.edge.from)) {
 			final list: Array<LockAcquire> = _holdsIn[a.edge.from] ?? [];
@@ -419,7 +420,7 @@ final class MustHeld {
 		if (site == null || block == null) return false;
 		final span: Null<Span> = block.span;
 		if (span == null || span.from <= at && at < span.to || block.children.length == 0) return false;
-		final returns: Array<String> = [for (k in [_shape.returnStatementKind, _shape.voidReturnKind]) if (k != null) k];
+		final returns: Array<String> = ShapeVocab.returnStatementKinds(_shape);
 		final last: QueryNode = block.children[block.children.length - 1];
 		if ((last.span?.from ?? -1) <= site.from) return false;
 		return returns.contains(last.kind) || (_shape.throwKinds ?? []).contains(last.kind) && !_body.inTryBody(give.file, site);

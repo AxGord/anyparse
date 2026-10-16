@@ -8,6 +8,7 @@ import anyparse.query.MemberKinds;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
@@ -37,6 +38,15 @@ private typedef LiveCtx = {
 	var exitTopKinds: Array<String>;
 	var opaqueKinds: Array<String>;
 	var nestedFnKinds: Array<String>;
+
+	/** The two-armed conditionals (`ShapeVocab.conditionalKinds`): each arm is a path of its own. */
+	var conditionalKinds: Array<String>;
+
+	/** Every loop (`ShapeVocab.loopKinds`): its back edge carries what the body reads round again. */
+	var loopKinds: Array<String>;
+
+	/** The multi-branch constructs, every `switch` and every `try`: each branch joins the same exit. */
+	var branchyKinds: Array<String>;
 	var scopeKinds: Array<String>;
 	var loopJumpNames: Array<String>;
 	var ownNames: Array<String>;
@@ -304,17 +314,9 @@ final class DeadStore implements Check {
 		out: Array<Violation>, file: String, source: String, body: QueryNode, shape: RefShape, identKind: String, paramNames: Array<String>
 	): Void {
 		final localDeclKinds: Array<String> = shape.localDeclKinds ?? [];
-		final nestedFnKinds: Array<String> = MemberKinds.nestedFunctionKinds(shape);
+		final nestedFnKinds: Array<String> = ShapeVocab.nestedFunctionKinds(shape);
 		final controlExitKinds: Array<String> = shape.controlExitKinds ?? [];
-		final returnKinds: Array<String> = [];
-		{
-			final rk: Null<String> = shape.returnStatementKind;
-			if (rk != null) returnKinds.push(rk);
-		}
-		{
-			final vk: Null<String> = shape.voidReturnKind;
-			if (vk != null) returnKinds.push(vk);
-		}
+		final returnKinds: Array<String> = ShapeVocab.returnStatementKinds(shape);
 		final ownNames: Array<String> = paramNames.concat(NullFlow.collectDeclared(body, localDeclKinds, nestedFnKinds));
 		final excluded: Array<String> = collectExcluded(body, identKind, shape.stringInterpIdentKind, nestedFnKinds);
 		for (i in 0...ownNames.length) {
@@ -336,6 +338,9 @@ final class DeadStore implements Check {
 			exitTopKinds: [for (k in controlExitKinds) if (!returnKinds.contains(k)) k],
 			opaqueKinds: shape.opaqueKinds ?? [],
 			nestedFnKinds: nestedFnKinds,
+			conditionalKinds: ShapeVocab.conditionalKinds(shape),
+			loopKinds: ShapeVocab.loopKinds(shape),
+			branchyKinds: (shape.switchKinds ?? []).concat(ShapeVocab.tryKinds(shape)),
 			scopeKinds: shape.scopeKinds,
 			loopJumpNames: shape.loopJumpNames ?? [],
 			ownNames: ownNames,
@@ -406,11 +411,11 @@ final class DeadStore implements Check {
 	 * short-circuit operators, null-safe calls — anything else folds its children generically.
 	 */
 	private static function walkConstruct(node: QueryNode, kind: String, live: Array<String>, scope: QueryNode, ctx: LiveCtx): Void {
-		if (NullFlow.IF_KINDS.contains(kind) && node.children.length >= 2)
+		if (ctx.conditionalKinds.contains(kind) && node.children.length >= 2)
 			handleIf(node, live, scope, ctx);
-		else if (NullFlow.LOOP_KINDS.contains(kind))
+		else if (ctx.loopKinds.contains(kind))
 			handleLoop(node, live, scope, ctx);
-		else if (NullFlow.BRANCHY_KINDS.contains(kind))
+		else if (ctx.branchyKinds.contains(kind))
 			handleBranchy(node, live, scope, ctx);
 		else if (SHORT_CIRCUIT_KINDS.contains(kind) && node.children.length == 2)
 			handleShortCircuit(node, live, scope, ctx);

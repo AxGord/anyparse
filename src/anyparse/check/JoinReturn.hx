@@ -7,6 +7,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.NodeShape;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
@@ -191,7 +192,7 @@ final class JoinReturn implements Check {
 		if (returnKind == null) return null;
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
 		if (support == null) return null;
-		final functionKinds: Array<String> = (shape.functionKinds ?? []).concat(shape.lambdaKinds ?? []);
+		final functionKinds: Array<String> = ShapeVocab.functionOrLambdaKinds(shape);
 		return {
 			typeSyntax: plugin.typeSyntax,
 			localDeclKinds: localDeclKinds,

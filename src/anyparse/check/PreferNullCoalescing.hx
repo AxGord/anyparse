@@ -5,6 +5,7 @@ import anyparse.check.Check.VersionGated;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
+import anyparse.query.NodeShape;
 import anyparse.query.ParenGuard;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
@@ -218,15 +219,7 @@ final class PreferNullCoalescing implements Check implements RiskyFix implements
 	private static function guardOf(
 		cond: QueryNode, thenBranch: QueryNode, elseBranch: QueryNode, source: String, seams: Seams
 	): Null<{ guarded: QueryNode, fallback: QueryNode }> {
-		if (cond.children.length != 2) return null;
-		final left: QueryNode = cond.children[0];
-		final right: QueryNode = cond.children[1];
-		final guarded: Null<QueryNode> = if (left.kind == seams.nullKind && right.kind != seams.nullKind)
-			right;
-		else if (right.kind == seams.nullKind && left.kind != seams.nullKind)
-			left;
-		else
-			null;
+		final guarded: Null<QueryNode> = NodeShape.nullComparedSide(cond, seams.nullKind);
 		if (guarded == null || subtreeMutates(guarded, seams.unsafeKinds)) return null;
 		return if (cond.kind == seams.notEqKind && MemberKinds.sameSource(guarded, thenBranch, source))
 			{ guarded: guarded, fallback: elseBranch };

@@ -6,6 +6,7 @@ import anyparse.query.CondRegionScan;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
+import anyparse.query.ShapeVocab;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -39,10 +40,10 @@ final class DeadCatches {
 		_trees = trees;
 		_shape = plugin.refShape();
 		_listsOf = listsOf;
-		_tryKinds = (_shape.tryStatementKinds ?? []).concat(_shape.tryExpressionKinds ?? []);
+		_tryKinds = ShapeVocab.tryKinds(_shape);
 		final flow: Null<ControlFlowSupport> = plugin.controlFlowSupport();
 		_blockKinds = flow == null ? [] : flow.blockKinds();
-		_sequenceKinds = _blockKinds.concat([for (k in [_shape.caseBranchKind, _shape.defaultBranchKind]) if (k != null) k]);
+		_sequenceKinds = _blockKinds.concat(ShapeVocab.switchArmKinds(_shape));
 	}
 
 	/** Whether the site of `edge` sits in the body of a `catch` whose `try` throws nothing (`throwsNothing`). */

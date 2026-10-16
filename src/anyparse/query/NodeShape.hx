@@ -32,6 +32,36 @@ final class NodeShape {
 	/** A `return x;` carries exactly its value. */
 	private static inline final RETURN_VALUE_CHILD_COUNT: Int = 1;
 
+	/** A comparison has exactly [left, right] operands. */
+	private static inline final COMPARISON_CHILD_COUNT: Int = 2;
+
+	/**
+	 * The operand the two-operand node `node` holds against the null literal — the other side when EXACTLY ONE side is
+	 * `nullLitKind` (each side read through `parenKind` parentheses when given), null when neither or both are, when
+	 * `node` has another arity, or when the grammar names no null literal. Which comparison `node` is (`==`, `!=`, any
+	 * equality) stays the caller's to check: the questions differ per caller, the shape does not.
+	 */
+	public static function nullComparedSide(node: QueryNode, nullLitKind: Null<String>, ?parenKind: String): Null<QueryNode> {
+		if (nullLitKind == null || node.children.length != COMPARISON_CHILD_COUNT) return null;
+		final left: QueryNode = BoolExprShape.unwrapParens(node.children[0], parenKind);
+		final right: QueryNode = BoolExprShape.unwrapParens(node.children[1], parenKind);
+		final leftIsNull: Bool = left.kind == nullLitKind;
+		return if (leftIsNull == (right.kind == nullLitKind))
+			null
+		else if (leftIsNull)
+			right
+		else
+			left;
+	}
+
+	/** `nullComparedSide` when the operand it answers is an identifier of `identKind`, else null. */
+	public static function nullComparedIdent(
+		node: QueryNode, identKind: String, nullLitKind: Null<String>, ?parenKind: String
+	): Null<QueryNode> {
+		final operand: Null<QueryNode> = nullComparedSide(node, nullLitKind, parenKind);
+		return operand != null && operand.kind == identKind ? operand : null;
+	}
+
 	/**
 	 * The `x = e` binary an expression statement wraps, or null when `stmt` is not an expression statement
 	 * holding exactly one two-operand assignment.

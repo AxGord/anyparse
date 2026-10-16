@@ -6,6 +6,7 @@ import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SourceText;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
@@ -283,7 +284,7 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 			// count as an enclosing scope a parameter operand may belong to. Which of those scopes
 			// each reader admits differs: `operandOf` takes a parameter of ANY of them,
 			// `dominatingGuards` reads only the innermost.
-			fnKinds: (shape.functionKinds ?? []).concat(shape.lambdaKinds ?? []),
+			fnKinds: ShapeVocab.functionOrLambdaKinds(shape),
 			paramKinds: shape.paramKinds ?? [],
 			ifStatementKinds: shape.ifStatementKinds ?? [],
 			flow: flow,

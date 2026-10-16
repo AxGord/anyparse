@@ -199,7 +199,7 @@ final class BinderScan {
 		if (binding == null) return cursorHost;
 		final host: QueryNode = enclosingFunctionSubtree(tree, binding, shape);
 		if (host == tree) return cursorHost;
-		final localFnKinds: Array<String> = (shape.localFunctionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
+		final localFnKinds: Array<String> = ShapeVocab.localFunctionScopeKinds(shape);
 		final span: Null<Span> = host.span;
 		if (span == null || span.from != binding || !localFnKinds.contains(host.kind)) return host;
 		final parentSpan: Null<Span> = TreePath.parentOf(tree, host)?.span;
@@ -238,7 +238,7 @@ final class BinderScan {
 	 * contains it: an inner scope's bindings already lie inside the outer one's subtree.
 	 */
 	public static function bindingScopeKinds(shape: RefShape): Array<String> {
-		return (shape.functionKinds ?? []).concat(shape.lambdaKinds ?? []).concat(shape.localFunctionKinds ?? []);
+		return ShapeVocab.functionOrLambdaKinds(shape).concat(shape.localFunctionKinds ?? []);
 	}
 
 	/**

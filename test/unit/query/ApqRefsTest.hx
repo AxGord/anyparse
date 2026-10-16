@@ -3,9 +3,9 @@ package unit.query;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.haxe.HxType;
 import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
+import anyparse.query.ShapeVocab;
 import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
@@ -189,7 +189,7 @@ class ApqRefsTest extends Test {
 
 	/**
 	 * Make the GRAMMAR the authority for the question the missing entry answered wrong: every kind
-	 * that binds a parameter — every function VALUE (`RefactorSupport.nestedFunctionKinds`, the
+	 * that binds a parameter — every function VALUE (`ShapeVocab.nestedFunctionKinds`, the
 	 * authority) and every function DECLARATION (`functionKinds`) — must open a scope frame, or its
 	 * parameters collect into the enclosing one. `NamedFnExpr` was the sixth sighting of that
 	 * duplicate-set class in this campaign; a plugin adding a seventh spelling fails HERE rather
@@ -199,7 +199,7 @@ class ApqRefsTest extends Test {
 	public function testEveryKindThatBindsParametersOpensAScopeFrame(): Void {
 		final shape: RefShape = new HaxeQueryPlugin().refShape();
 		final frames: Array<String> = shape.scopeKinds ?? [];
-		final binders: Array<String> = MemberKinds.nestedFunctionKinds(shape).concat(shape.functionKinds ?? []);
+		final binders: Array<String> = ShapeVocab.nestedFunctionKinds(shape).concat(shape.functionKinds ?? []);
 		Assert.isTrue(binders.length > 0, 'the plugin must declare at least one parameter-binding kind');
 		for (kind in binders)
 			Assert.isTrue(frames.contains(kind), '"$kind" binds parameters but opens no scope frame, so they leak into the enclosing one');
@@ -212,7 +212,7 @@ class ApqRefsTest extends Test {
 	 */
 	public function testEveryNonFunctionScopeFrameIsOneTheGrammarDocuments(): Void {
 		final shape: RefShape = new HaxeQueryPlugin().refShape();
-		final binders: Array<String> = MemberKinds.nestedFunctionKinds(shape).concat(shape.functionKinds ?? []);
+		final binders: Array<String> = ShapeVocab.nestedFunctionKinds(shape).concat(shape.functionKinds ?? []);
 		final documented: Array<String> = [
 			'ClassDecl',
 			'ClassForm',

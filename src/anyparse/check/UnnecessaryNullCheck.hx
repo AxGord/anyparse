@@ -4,6 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.query.DeclaredNullity;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
+import anyparse.query.NodeShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
@@ -59,7 +60,6 @@ final class UnnecessaryNullCheck implements Check {
 		final equalityKinds: Array<String> = shape.equalityKinds ?? [];
 		final nullLitKind: Null<String> = shape.nullLiteralKind;
 		if (equalityKinds.length == 0 || nullLitKind == null) return [];
-		final nullLit: String = nullLitKind;
 		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		final index: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
@@ -69,20 +69,16 @@ final class UnnecessaryNullCheck implements Check {
 			function walk(node: QueryNode): Void {
 				if (opaqueKinds.contains(node.kind)) return;
 				final span: Null<Span> = node.span;
-				if (span != null && node.children.length == 2 && equalityKinds.contains(node.kind)) {
-					final leftIsNull: Bool = node.children[0].kind == nullLit;
-					final rightIsNull: Bool = node.children[1].kind == nullLit;
-					if (leftIsNull != rightIsNull) {
-						final operand: QueryNode = leftIsNull ? node.children[1] : node.children[0];
-						if (TypeResolver.isProvablyNonNullAtNullComparison(operand, root, shape, types)) violations.push({
-							file: entry.file,
-							span: span,
-							rule: 'unnecessary-null-check',
-							severity: Severity.Info,
-							message: 'null check is redundant — operand is never null'
-						});
-					}
-				}
+				final operand: Null<QueryNode> = equalityKinds.contains(node.kind) ? NodeShape.nullComparedSide(node, nullLitKind) : null;
+				if (
+					span != null && operand != null && TypeResolver.isProvablyNonNullAtNullComparison(operand, root, shape, types)
+				) violations.push({
+					file: entry.file,
+					span: span,
+					rule: 'unnecessary-null-check',
+					severity: Severity.Info,
+					message: 'null check is redundant — operand is never null'
+				});
 				for (c in node.children) walk(c);
 			}
 			walk(tree);

@@ -8,6 +8,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
@@ -234,19 +235,14 @@ final class JoinSingleUseLocal implements Check {
 			barrierKinds: barriers,
 			branchKinds: shape.branchKinds ?? [],
 			memberNamingKinds: memberNamingKinds(shape),
-			fnKinds: (shape.functionKinds ?? []).concat(shape.lambdaKinds ?? []).concat(shape.localFunctionKinds ?? []),
+			fnKinds: ShapeVocab.functionOrLambdaKinds(shape).concat(shape.localFunctionKinds ?? []),
 			shape: shape
 		};
 	}
 
 	/**
-	 * The node kinds that make a read REPEATED or DEFERRED relative to the eager, once-only
-	 * capture it would replace -- nested functions and loops. Built from the `RefShape` seams
-	 * that name them, unioned with `NullFlow`'s curated Haxe lists for the same two categories:
-	 * those cover the expression-position forms (`ForExpr` / `WhileExpr` in a comprehension,
-	 * `NamedFnExpr`) that no `RefShape` seam names -- `loopStatementKinds` is documented as
-	 * STATEMENT loops only. `opaqueKinds` joins them because a reification subtree's uses are
-	 * spliced rather than written, so no textual scan can price the substitution there.
+	 * The kinds whose name is a MEMBER name rather than a read of a binding — a field access in every null spelling and an
+	 * object-literal field — so a scan for a leftover use of a name passes them by.
 	 */
 	private static function memberNamingKinds(shape: RefShape): Array<String> {
 		final out: Array<String> = [];
@@ -259,19 +255,15 @@ final class JoinSingleUseLocal implements Check {
 		return out;
 	}
 
+	/**
+	 * The node kinds that make a read REPEATED or DEFERRED relative to the eager, once-only capture it would replace —
+	 * every function-like kind (`ShapeVocab.functionLikeKinds`, a named function expression included) and every loop
+	 * (`ShapeVocab.loopKinds`, a comprehension's included). `opaqueKinds` joins them because a reification subtree's uses are
+	 * spliced rather than written, so no textual scan can price the substitution there.
+	 */
 	private static function barrierKinds(shape: RefShape): Array<String> {
-		final out: Array<String> = [];
-		inline function add(kinds: Null<Array<String>>): Void {
-			if (kinds != null) for (k in kinds) if (!out.contains(k)) out.push(k);
-		}
-		add(shape.functionKinds);
-		add(MemberKinds.nestedFunctionKinds(shape));
-		add(shape.loopStatementKinds);
-		add(shape.doWhileLoopKinds);
-		add(shape.forStmtKind == null ? null : [shape.forStmtKind]);
-		add(shape.whileStmtKind == null ? null : [shape.whileStmtKind]);
-		add(shape.opaqueKinds);
-		add(NullFlow.LOOP_KINDS);
+		final out: Array<String> = ShapeVocab.functionLikeKinds(shape);
+		for (k in ShapeVocab.loopKinds(shape).concat(shape.opaqueKinds ?? [])) if (!out.contains(k)) out.push(k);
 		return out;
 	}
 

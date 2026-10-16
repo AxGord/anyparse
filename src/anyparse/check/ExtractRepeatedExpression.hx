@@ -8,6 +8,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -124,7 +125,7 @@ final class ExtractRepeatedExpression implements Check implements VolatileMessag
 		final callK: String = callKind;
 		final indexKind: Null<String> = shape.indexAccessKind;
 		final candidateKinds: Array<String> = indexKind == null ? [faKind, callKind] : [faKind, callKind, indexKind];
-		final functionUnitKinds: Array<String> = (shape.functionKinds ?? []).concat(shape.lambdaKinds ?? []);
+		final functionUnitKinds: Array<String> = ShapeVocab.functionOrLambdaKinds(shape);
 		final exclusiveConditionalKinds: Array<String> = (shape.branchConditionKinds ?? []).concat(shape.switchKinds ?? []);
 		final index: SymbolIndex = IndexScope.report(files, plugin);
 		return RunScan.collect(files, plugin, (entry, root, violations) -> {

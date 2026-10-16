@@ -98,6 +98,8 @@ class GuardReturnCheckTest extends Test {
 		Assert.isTrue(fx(cond('!(p || q)')).indexOf('if (p || q) return false;') != -1);
 	}
 
+	@:killer('M-GUARD-UNCLEAN-INVERSION-REPORTED')
+	@:pin('control')
 	public function testUnprovableOrderedNotFlagged(): Void {
 		// `x` has no resolvable type, so the flip is not licensed and the inversion would have
 		// to wrap `!(x < 10)` — worse than the positive branch it replaces.
@@ -256,6 +258,8 @@ class GuardReturnCheckTest extends Test {
 
 	// --- gates: safe misses ----------------------------------------------------------
 
+	@:killer('M-GUARD-MIN-THEN-IGNORED')
+	@:pin('control')
 	public function testSingleStatementThenNotFlagged(): Void {
 		// One statement is `prefer-ternary-return`'s shape.
 		Assert.equals(0, v('if (ok) {\n\t\t\treturn true;\n\t\t}\n\t\treturn false;').length);
@@ -265,6 +269,8 @@ class GuardReturnCheckTest extends Test {
 		Assert.equals(0, v('if (ok) {\n\t\t\tlog(a);\n\t\t\tstep();\n\t\t}\n\t\treturn false;').length);
 	}
 
+	@:killer('M-GUARD-ELSE-ADMITTED')
+	@:pin('control')
 	public function testElseBranchNotFlagged(): Void {
 		Assert.equals(
 			0, v('if (ok) {\n\t\t\tlog(a);\n\t\t\treturn true;\n\t\t} else {\n\t\t\treturn false;\n\t\t}\n\t\treturn false;').length
@@ -285,6 +291,8 @@ class GuardReturnCheckTest extends Test {
 		Assert.equals(0, v('if (ok) {\n\t\t\tlog(a);\n\t\t\treturn true;\n\t\t}\n\t\tstep();\n\t\treturn false;').length);
 	}
 
+	@:killer('M-GUARD-UNBRACED-THEN')
+	@:pin('control')
 	public function testUnbracedThenNotFlagged(): Void {
 		Assert.equals(0, v('if (ok) return true;\n\t\treturn false;').length);
 	}
@@ -325,6 +333,8 @@ class GuardReturnCheckTest extends Test {
 		Assert.equals(0, v('if (ok) {\n\t\t\tlog(a);\n\t\t\treturn true;\n\t\t}\n\t\treturn #if debug 2 > 1 #else 3 > 1 #end;').length);
 	}
 
+	@:killer('M-GUARD-GLUE-COMMENT-BLIND')
+	@:pin('control')
 	public function testGlueCommentNotFlagged(): Void {
 		Assert.equals(0, v('if (ok) /* x */ {\n\t\t\tlog(a);\n\t\t\treturn true;\n\t\t}\n\t\treturn false;').length);
 	}

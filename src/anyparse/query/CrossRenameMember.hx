@@ -911,7 +911,7 @@ final class CrossRenameMember {
 		return {
 			memberName: memberName,
 			identKind: refShape.identKind,
-			functionKinds: (refShape.functionKinds ?? []).concat(refShape.lambdaKinds ?? []).concat(refShape.inlineFunctionKinds ?? []),
+			functionKinds: ShapeVocab.functionOrLambdaKinds(refShape).concat(refShape.inlineFunctionKinds ?? []),
 			bodyKinds: bodyKinds,
 			typeKinds: typeKinds,
 			returnKinds: returnKinds,

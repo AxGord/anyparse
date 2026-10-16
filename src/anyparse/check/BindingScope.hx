@@ -4,6 +4,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SourceText;
 import anyparse.runtime.Span;
 
@@ -160,7 +161,7 @@ final class BindingScope {
 	 * name lives in.
 	 */
 	private static function localFunctionDeclSpan(tree: QueryNode, declFrom: Int, shape: RefShape): Null<Span> {
-		final kinds: Array<String> = (shape.localFunctionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
+		final kinds: Array<String> = ShapeVocab.localFunctionScopeKinds(shape);
 		if (kinds.length == 0) return null;
 		var found: Null<Span> = null;
 		function walk(n: QueryNode): Void {

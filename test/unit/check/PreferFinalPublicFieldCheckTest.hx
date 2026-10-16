@@ -777,6 +777,16 @@ class PreferFinalPublicFieldCheckTest extends Test {
 		Assert.isTrue(fixed.indexOf('mode = other ?? 7;') >= 0);
 	}
 
+	/** The guard read with its operands swapped, `null != p`, is the same guard: the fold applies. */
+	public function testCtorConditionalDefaultSwappedGuardFixed(): Void {
+		final fixed: String = fixedSource(
+			'class C { public var mode:Int = 7; public function new(?other:Int) { if (null != other) mode = other; } }'
+		);
+		Assert.isTrue(fixed.indexOf('public final mode:Int;') >= 0);
+		Assert.isTrue(fixed.indexOf('mode = other ?? 7;') >= 0);
+		Assert.equals(-1, fixed.indexOf('if (null != other)'));
+	}
+
 	/** A `Null<T>` (non-optional) constructor parameter is nullable too — the fold applies. */
 	public function testCtorConditionalDefaultNullWrappedParamFlagged(): Void {
 		Assert.equals(

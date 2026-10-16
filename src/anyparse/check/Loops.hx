@@ -3,15 +3,15 @@ package anyparse.check;
 import anyparse.check.LockTaint.ChainLists;
 import anyparse.query.CallGraph;
 import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
+import anyparse.query.ShapeVocab;
 import anyparse.runtime.Span;
 
 using Lambda;
 
 /**
- * The loops of a file's tree: the one definition of a loop every check of repetition and control flow reads
- * (`kindsOf`), the loops around a position (`around`), and what names a loop (`label`).
+ * The loops of a file's tree: the loops around a position (`around`) and what names a loop (`label`), over
+ * the one definition of a loop every check of repetition and control flow reads (`ShapeVocab.loopKinds`).
  *
  * A loop is a kind the grammar names: `loopStatementKinds`, `doWhileLoopKinds`, `iterationBindingKinds` and
  * `whileExprKind`. Of a loop binding a name (`for`), only the body repeats — the iterable runs once; of any other, every
@@ -21,7 +21,7 @@ using Lambda;
 @:nullSafety(Strict)
 final class Loops {
 
-	/** The loop kinds of the grammar (`kindsOf`); empty for a grammar naming none. */
+	/** The loop kinds of the grammar (`ShapeVocab.loopKinds`); empty for a grammar naming none. */
 	public final kinds: Array<String>;
 
 	/** The functions a call of which may block: one calling a sink its call's chain names, and every one calling or handing on such a one. */
@@ -38,24 +38,10 @@ final class Loops {
 	public function new(graph: CallGraph, shape: RefShape, listsOf: (String) -> ChainLists) {
 		_graph = graph;
 		_listsOf = listsOf;
-		kinds = kindsOf(shape);
+		kinds = ShapeVocab.loopKinds(shape);
 		_bindingKinds = shape.iterationBindingKinds ?? [];
 		_doWhileKinds = shape.doWhileLoopKinds ?? [];
-		_functionKinds = (shape.functionKinds ?? []).concat(MemberKinds.nestedFunctionKinds(shape));
-	}
-
-	/**
-	 * The loops of `shape` — `loopStatementKinds`, `doWhileLoopKinds`, `iterationBindingKinds` and `whileExprKind`, each
-	 * once: the one definition of a loop every check of repetition and control flow reads (`CallRepetition`,
-	 * `ErrorPaths`, `LockWindow`).
-	 */
-	public static function kindsOf(shape: RefShape): Array<String> {
-		final out: Array<String> = [];
-		final all: Array<String> = (shape.loopStatementKinds ?? []).concat(shape.doWhileLoopKinds ?? [])
-			.concat(shape.iterationBindingKinds ?? [])
-			.concat(shape.whileExprKind == null ? [] : [shape.whileExprKind]);
-		for (k in all) if (!out.contains(k)) out.push(k);
-		return out;
+		_functionKinds = ShapeVocab.functionLikeKinds(shape);
 	}
 
 	/** A loop header as a label spells it (`label`, a `boundedRepeats` entry's `loop`): each run of whitespace one space, none at the ends. */

@@ -45,7 +45,7 @@ class ShadowingParameterCheckTest extends Test {
 
 	/**
 	 * The two spellings whose host kind the grammar keeps out of `RefShape.functionKinds` — they
-	 * reach the walk through `RefactorSupport.nestedFunctionKinds` like every other function value.
+	 * reach the walk through `ShapeVocab.nestedFunctionKinds` like every other function value.
 	 */
 	public function testInlineLocalAndNamedLiteralParametersFlagged(): Void {
 		Assert.equals(

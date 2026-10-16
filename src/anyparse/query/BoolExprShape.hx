@@ -192,23 +192,10 @@ final class BoolExprShape {
 			if (name != null) bumpCount(identCount, name);
 		}
 		if ((eqKind != null && node.kind == eqKind) || (notEqKind != null && node.kind == notEqKind)) {
-			final ident: Null<String> = nullComparedIdent(node, identKind, nullKind);
+			final ident: Null<String> = NodeShape.nullComparedIdent(node, identKind, nullKind)?.name;
 			if (ident != null) bumpCount(checkCount, ident);
 		}
 		for (c in node.children) tallyGuardIdents(c, identKind, nullKind, eqKind, notEqKind, identCount, checkCount);
-	}
-
-	/** The identifier compared against null in `node` (one operand an ident, the other null), or null. */
-	private static function nullComparedIdent(node: QueryNode, identKind: String, nullKind: String): Null<String> {
-		if (node.children.length != 2) return null;
-		final a: QueryNode = node.children[0];
-		final b: QueryNode = node.children[1];
-		return if (a.kind == identKind && b.kind == nullKind)
-			a.name
-		else if (b.kind == identKind && a.kind == nullKind)
-			b.name
-		else
-			null;
 	}
 
 }

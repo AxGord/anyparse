@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SourceText;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax;
@@ -148,7 +149,7 @@ final class LoopScan {
 			localDeclKinds: localDeclKinds,
 			localDeclContinuationKinds: shape.localDeclContinuationKinds ?? [],
 			writeParentKinds: shape.writeParentKinds,
-			closureKinds: (shape.lambdaKinds ?? []).concat(shape.localFunctionKinds ?? []),
+			closureKinds: ShapeVocab.lambdaOrLocalFunctionKinds(shape),
 			opaqueKinds: shape.opaqueKinds ?? []
 		};
 	}

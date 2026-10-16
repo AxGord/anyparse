@@ -10,6 +10,7 @@ import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -309,7 +310,7 @@ final class PreferIfExpressionReturn implements Check {
 			ifKinds: ifKinds,
 			returnKind: returnKind,
 			blockStmtKind: blockStmtKind,
-			conditionalKinds: IfExpressionChain.conditionalKinds(shape),
+			conditionalKinds: ShapeVocab.ifKinds(shape),
 			ternaryKind: shape.ternaryKind,
 			parenKind: shape.parenKind,
 			shape: shape
