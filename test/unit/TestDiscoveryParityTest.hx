@@ -1333,7 +1333,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FIAD-CROSS-SUPER-UNPROVED',
 			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testNewInitAfterSuperNotMoved :: control :: M-FIAD-INERT-ADMITS-ALL',
 			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testNonCoreDeclaredTypeNotMoved :: control :: M-FIAD-ANY-DECLARED-TYPE',
-			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testPublicFieldNotMoved :: control :: M-FIAD-PUBLIC-ADMITTED',
+			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testPublicFieldNotMoved :: control :: M-FIAD-PUBLIC-ADMITTED,M-EXPOSED-WRAPPER-IGNORED',
 			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testRefusedCrossingInitDoesNotHoldBackTheFix :: control :: '
 				+ 'M-FIAD-CROSS-SUPER-CHAIN',
 			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testSameNamedFieldOfAnotherTypeDoesNotBlock :: control :: '
@@ -1365,6 +1365,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.FieldWriteResolutionScopeTest#testThirdPartySubtypeWriteVetoesReadOnly :: control :: M-WRITEINDEX-PROJECT-READONLY',
 			'unit.check.FieldWriteResolutionScopeTest#testThirdPartyUnresolvedWriteDoesNotVeto :: control :: M-ADMITS-TRUE',
 			'unit.check.FixVerifierProbeRefusalE2ETest#testAWriterRefusedSetKeepsItsWritableUnits :: control :: M-WRITER-NARROW-NONE',
+			'unit.check.FoldStringLiteralsCandidateGateTest#testEveryOutOfScopeCallSpellingIsRefused :: control :: M-MACRO-VALUE-UNLISTED',
 			'unit.check.FoldStringLiteralsCheckTest#testConstantOperandMergesAsText :: control :: M-FOLD-CONSTANT-AS-EXPRESSION',
 			'unit.check.HaxeSpawnTest#testACancelledShellJobTakesItsChildrenWithIt :: control :: ' + 'M-DRIVER-KILLS-ONLY-THE-SHELL',
 			'unit.check.HaxeSpawnTest#testAFailureEndsTheJobsDeclaredAfterIt :: control :: ' + 'M-DRIVER-NEVER-STOPS',
@@ -2303,6 +2304,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyFoldingTest#testMainTakesOfOneLockWarnOnce :: control :: M-TS-ONE-TAKE-OFF,M-TS-ONE-TAKE-NO-WRAPPER',
 			'unit.check.ThreadSafetyHandedValueTest#testADirectCallOutranksAHandedValue :: control :: '
 				+ 'M-TS-WAY-HANDED-RANK,M-TS-OWNER-HANDED-RANK',
+			'unit.check.ThreadSafetyHandedValueTest#testAFieldItsTypeDeclarationExposesIsNotOnlyStored :: control :: '
+				+ 'M-TS-STORED-HOLDER-NOT-DECLARATION',
 			'unit.check.ThreadSafetyHandedValueTest#testAFieldTheLanguageCallsByNameIsNotOnlyStored :: control :: '
 				+ 'M-TS-STORED-IMPLICIT-NAME,M-TS-STORED-PUBLIC',
 			'unit.check.ThreadSafetyHandedValueTest#testAHandedValueRepeatsWithTheCallItIsHandedTo :: control :: M-TS-REPEAT-NO-ITERATES,M-TS-RUNS-ONCE-OFF',
@@ -3069,9 +3072,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CallGraphTest#testAForwardedCallRunsTheUnderlyingTheAbstractsFileNames :: control :: '
 				+ 'M-TS-FORWARD-KEYED,M-TS-FORWARD-PARAM,M-TS-FORWARD-ALIAS',
 			'unit.query.CallGraphTest#testAFunctionOfferingOtherSignaturesIsTypedWhereTheyAgree :: control :: '
-				+ 'M-TS-OVERLOAD-RETURN,M-TS-OVERLOAD-RETURN-EACH,M-TS-OVERLOAD-PARAMS,M-TS-OVERLOAD-AGREE,M-TS-OVERLOAD-EXTERNAL',
+				+ 'M-TS-OVERLOAD-RETURN,M-TS-OVERLOAD-RETURN-EACH,M-TS-OVERLOAD-PARAMS,M-TS-OVERLOAD-AGREE,M-TS-OVERLOAD-EXTERNAL,'
+				+ 'M-TS-OVERLOAD-OWN-PARAMS',
 			'unit.query.CallGraphTest#testAFunctionsOwnTypeParameterIsWhatItsArgumentsBind :: control :: '
-				+ 'M-GRAPH-FN-RETURN-PARAM,M-TS-INFER-AGREE,M-TS-INFER-REST,M-TS-INFER-SHADOW,M-TS-INFER-BARE',
+				+ 'M-GRAPH-FN-RETURN-PARAM,M-TS-INFER-AGREE,M-TS-INFER-REST,M-TS-INFER-SHADOW,M-TS-INFER-BARE,M-TS-INFER-SHIFT',
 			'unit.query.CallGraphTest#testALambdaParameterIsNoReferenceToItsLambda :: control :: M-GRAPH-LAMBDA-PARAM-SELF',
 			'unit.query.CallGraphTest#testALambdaParameterIsTypedByTheFunctionTypeItIsExpectedToBe :: control :: '
 				+ 'M-TS-LAMBDA-PARAMS,M-TS-LAMBDA-ARITY,M-TS-LAMBDA-ANNOTATED,M-TS-LAMBDA-NULL',
@@ -4140,7 +4144,11 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-GRAPH-UNLISTED-WILDCARD,M-VALUES-OWNER-BY-NAME,M-VALUES-EXTERN,M-VALUES-BUILT-ABOVE',
 			'unit.query.ValueNameBindingTest#testAnAliasWhosePathDoesNotDecodeMayBeAnyStatic :: control :: M-VALUES-ALIAS-UNDECODED',
 			'unit.query.ValueNameBindingTest#testAnExplicitImportBindsTheStaticItsPathNames :: control :: '
-				+ 'M-VALUES-SUBTYPE-IMPORT,M-VALUES-ENUM-CTOR,M-GRAPH-IMPORT-UNLISTED'
+				+ 'M-VALUES-SUBTYPE-IMPORT,M-VALUES-ENUM-CTOR,M-GRAPH-IMPORT-UNLISTED',
+			'unit.query.ValueNameBindingTest#testAnImportBringsTheValuesOfTheTypesItPutsInScope :: control :: '
+				+ 'M-VALUES-IMPORTED-CTOR,M-VALUES-WILDCARD-CTOR,M-VALUES-ALIAS-WHOLE-MODULE,M-VALUES-FIELD-IMPORT-TYPES,M-SCOPE-MODULE-IMPORT-BLIND',
+			'unit.query.ValueNameBindingTest#testAnUnlistedImportIsTheOneACallMayBeRoutedThrough :: control :: '
+				+ 'M-MACRO-VALUE-UNLISTED,M-MACRO-EXTENSIONS-ONLY'
 		];
 		final actualPins: Array<String> = TestRegistry.pins();
 		Assert.same(
@@ -6899,7 +6907,17 @@ class TestDiscoveryParityTest extends Test {
 			'M-SKIM-BRANCH-DEPTH',
 			'M-SKIM-REGION-LEFT-OPEN',
 			'M-SKIM-OUTER-REGION',
-			'M-SCOPE-UNPARSED-UNSPELLED'
+			'M-SCOPE-UNPARSED-UNSPELLED',
+			'M-TS-STORED-HOLDER-NOT-DECLARATION',
+			'M-EXPOSED-WRAPPER-IGNORED',
+			'M-TS-INFER-SHIFT',
+			'M-TS-OVERLOAD-OWN-PARAMS',
+			'M-VALUES-IMPORTED-CTOR',
+			'M-VALUES-WILDCARD-CTOR',
+			'M-VALUES-ALIAS-WHOLE-MODULE',
+			'M-VALUES-FIELD-IMPORT-TYPES',
+			'M-MACRO-VALUE-UNLISTED',
+			'M-MACRO-EXTENSIONS-ONLY'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

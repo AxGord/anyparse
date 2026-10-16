@@ -2790,3 +2790,22 @@ decided the question; it may not become a record of runs.
   Two answers change, both toward the compiler: a module whose BODY the grammar cannot read still declares its types
   (a body declares none), and a scope file at `a/b/C.hx` whose package is not `a.b` is no longer the module `a.b.C` for
   a name it never spells either — branch `feat/infra-B4`
+- whether a stored value's field is exposed was asked of the node HOLDING the field, which under `#if` is the region, so
+  a `@:publicFields` type's field read as private (review L3 G1, `f1x`) → `StoredValues` asks of the type declaration
+  (`TypeResolver.enclosingTypeDecl`), and `MemberKinds.fieldExposed` reads the modifiers of a type declared through a
+  `final` wrapper on the wrapper (`@:publicFields final class` exposed nothing to FIAD either) — branch `feat/infra-B4`
+- a function's own type parameter was bound by argument POSITION even where a skipped optional parameter shifts the
+  arguments (`f<T>(?n:Int, x:T, ?y:L)` called `f(s, u)` took `T` for `L`; review L3 G3) → from the first argument that
+  may shift (`CallGraphKeys.mayShift`) no parameter is proven bound, and a type parameter one of them is written as is
+  unknown — branch `feat/infra-B4`
+- `@:overload` signatures agreed by return TEXT, so `function<T>(x:T):T` matched the class's `T` (review L3 G4) → a
+  signature declaring type parameters of its own (`typeParamNames` by declaration offset) makes every signature disagree
+  — branch `feat/infra-B4`
+- `PatternNameScope` read the file's module-level names off the tree (package and import paths included, review L3
+  low) and what an import brings by its own kind-by-kind reading; `MacroIndex` matched an import's last segments against
+  ANY declared type name → both ask the shared bindings: `FileInfo.moduleFields`, `ValueNameBinding.mayImportValue`
+  (4.3.7, `hx/pns`, `hx/ctor`: a whole-module import brings its module-level fields and its sub-type enum's
+  constructors, a sub-type import and a wildcard over it the constructors, an alias of the main type neither) and
+  `unlistedImportOf`, `TypeNameBinding.bindingsOf` for a written receiver. The gate's answer is now the path the
+  compiler binds the name to — `import m.Lang as L;` and `import m.*;` name `m.Lang`, so a whitelisted `m.Lang.t`
+  clears them — and the ambient chain's imports count as the file's own do — branch `feat/infra-B4`

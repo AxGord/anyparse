@@ -1197,7 +1197,7 @@ class CallGraphTest extends Test {
 	 * for, marked so in the index, types no parameter either.
 	 */
 	@:pin('control') @:killer('M-TS-OVERLOAD-RETURN') @:killer('M-TS-OVERLOAD-RETURN-EACH') @:killer('M-TS-OVERLOAD-PARAMS') @:killer('M-TS-OVERLOAD-AGREE')
-	@:killer('M-TS-OVERLOAD-EXTERNAL')
+	@:killer('M-TS-OVERLOAD-EXTERNAL') @:killer('M-TS-OVERLOAD-OWN-PARAMS')
 	public function testAFunctionOfferingOtherSignaturesIsTypedWhereTheyAgree(): Void {
 		#if (sys || nodejs)
 		if (anyparse.query.StdResolver.stdDir() == null) {
@@ -1218,10 +1218,16 @@ class CallGraphTest extends Test {
 					+ ' #else public static function each(x:String):utils.Lock return null; #end }'
 			},
 			{
+				file: 'app/Box.hx',
+				source: 'package app; class Box<T> { public function new() {} @:overload(function<T>(x:T):T {})'
+					+ ' public function get(x:Int):T return null; }'
+			},
+			{
 				file: 'app/C.hx',
 				source: 'package app; import lib.L; class C { static function get():Void A.get(1).wait(); static function same():Void A.same(1).wait();'
 					+ ' static function run():Void A.run(l -> l.wait()); static function each():Void A.each("x").wait();'
-					+ ' static function lib():Void L.run(l -> l.wait()); }'
+					+ ' static function lib():Void L.run(l -> l.wait());'
+					+ ' static function own(b:Box<utils.Lock>, s:sys.thread.Lock):Void b.get(s).wait(); }'
 			}
 		];
 		final library: Array<{ file: String, source: String }> = [
@@ -1247,6 +1253,7 @@ class CallGraphTest extends Test {
 		Assert.same(['A.run'], targets('C.run'), 'another signature takes other parameters');
 		Assert.same(['A.each'], targets('C.each'), 'one declaration of several offers another signature');
 		Assert.same(['L.run'], targets('C.lib'), 'a library function the index marks');
+		Assert.same(['Box.get'], targets('C.own'), 'a signature whose own type parameter shadows the class\'s (review L3 G4)');
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -1770,11 +1777,12 @@ class CallGraphTest extends Test {
 	 * A type parameter a function declares itself is what the arguments bind it to, as the language infers it — never the type
 	 * an import of its name names: `id<Lock>(x:Lock):Lock` in a file importing the project `Lock`, called with the std lock,
 	 * returns the std lock, read off the call or through a local; arguments that disagree, a parameter that only nests the type
-	 * parameter, and one shadowing a type parameter of the function's type leave the result unknown (review R4 F7).
+	 * parameter, one shadowing a type parameter of the function's type, and an argument a skipped optional
+	 * parameter may shift onto another parameter (review L3 G3) leave the result unknown (review R4 F7).
 	 */
 	@:pin('control')
 	@:killer('M-GRAPH-FN-RETURN-PARAM') @:killer('M-TS-INFER-AGREE') @:killer('M-TS-INFER-REST') @:killer('M-TS-INFER-SHADOW')
-	@:killer('M-TS-INFER-BARE')
+	@:killer('M-TS-INFER-BARE') @:killer('M-TS-INFER-SHIFT')
 	public function testAFunctionsOwnTypeParameterIsWhatItsArgumentsBind(): Void {
 		#if (sys || nodejs)
 		if (anyparse.query.StdResolver.stdDir() == null) {
@@ -1785,7 +1793,8 @@ class CallGraphTest extends Test {
 			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
 			'package app; import utils.Lock; class A { public static function id<Lock>(x:Lock):Lock return x;'
 			+ ' public static function two<Lock>(a:Lock, b:Lock):Lock return a; public static function pick<Lock>(...xs:Lock):Lock return xs[0];'
-			+ ' public static function head<Lock>(xs:Array<Lock>):Lock return xs[0]; }',
+			+ ' public static function head<Lock>(xs:Array<Lock>):Lock return xs[0];'
+			+ ' public static function skip<Lock>(?n:Int, x:Lock, ?y:utils.Lock):Lock return x; }',
 			'package app; class Box<T> { public function new() {} public function get<T>(x:T):T return x; }',
 			'package app; class C { static function id(s:sys.thread.Lock):Void A.id(s).wait();'
 			+ ' static function local(s:sys.thread.Lock):Void { final l = A.id(s); l.wait(); }'
@@ -1793,7 +1802,9 @@ class CallGraphTest extends Test {
 			+ ' static function apart(s:sys.thread.Lock, u:utils.Lock):Void A.two(s, u).wait();'
 			+ ' static function rest(s:sys.thread.Lock, u:utils.Lock):Void A.pick(s, u).wait();'
 			+ ' static function nested(xs:Array<sys.thread.Lock>):Void A.head(xs).wait();'
-			+ ' static function shadow(b:Box<utils.Lock>, s:sys.thread.Lock):Void b.get(s).wait(); }'
+			+ ' static function shadow(b:Box<utils.Lock>, s:sys.thread.Lock):Void b.get(s).wait();'
+			+ ' static function shifted(s:sys.thread.Lock, u:utils.Lock):Void A.skip(s, u).wait();'
+			+ ' static function placed(s:sys.thread.Lock, u:utils.Lock):Void A.skip(0, s, u).wait(); }'
 		]);
 		function waits(from: String): Array<String> {
 			final out: Array<String> = [
@@ -1810,6 +1821,8 @@ class CallGraphTest extends Test {
 		Assert.same([], waits('C.rest'), 'rest arguments that disagree');
 		Assert.same([], waits('C.nested'), 'a parameter nesting the type parameter');
 		Assert.same([], waits('C.shadow'), 'a function type parameter shadowing its type\'s');
+		Assert.same([], waits('C.shifted'), 'an argument a skipped optional parameter shifts (review L3 G3)');
+		Assert.same(std, waits('C.placed'), 'every argument at its position');
 		#else
 		Assert.pass('non-sys target');
 		#end

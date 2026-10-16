@@ -212,9 +212,14 @@ class FieldInitAtDeclarationCrossingSuperTest extends Test {
 	/** Code outside the project may read a public field — or one of a `@:publicFields` type — early. */
 	@:pin('control')
 	@:killer('M-FIAD-PUBLIC-ADMITTED')
+	@:killer('M-EXPOSED-WRAPPER-IGNORED')
 	public function testPublicFieldNotMoved(): Void {
 		Assert.equals(0, crossingCount('class C extends B { public var _a:Array<Int>; public function new() { super(); _a = []; } }'));
 		Assert.equals(0, crossingCount('@:publicFields class C extends B { var _a:Array<Int>; function new() { super(); _a = []; } }'));
+		Assert.equals(
+			0, crossingCount('@:publicFields final class C extends B { var _a:Array<Int>; function new() { super(); _a = []; } }'),
+			'the meta sits on the `final` wrapper'
+		);
 	}
 
 	/**

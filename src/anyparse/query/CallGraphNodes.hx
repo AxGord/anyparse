@@ -91,7 +91,7 @@ final class CallGraphNodes {
 				DeclarationFacts.settle(
 					g._facts.returnSources, id, CallGraphNames.returnSourceOf(node, entry.source, annotationKinds), first
 				);
-				if (overloads != null) overloaded(g, id, node, overloads, entry.source);
+				if (overloads != null) overloaded(g, id, node, overloads, entry.source, typeParams);
 			} else if (span != null && lambdaKinds.contains(node.kind)) {
 				lambdaCounter++;
 				fnId = '${parentFn ?? (typeName ?? moduleType)}#$lambdaCounter';
@@ -133,9 +133,13 @@ final class CallGraphNodes {
 	/**
 	 * Mark the node `id`, declared by `fn` (in `source`) offering the signatures `others`, as one whose return type or
 	 * parameters a call cannot read off its declaration: some other signature writes them differently. An offered
-	 * signature that does not read as a function differs in both.
+	 * signature that does not read as a function differs in both, and so does every one when a signature declares type
+	 * parameters of its own (`typeParams`, by declaration offset): the same text names another type in each (review L3 G4,
+	 * `@:overload(function<T>(x:T):T {})` beside a class's own `T`).
 	 */
-	private static function overloaded(g: CallGraph, id: String, fn: QueryNode, others: Array<QueryNode>, source: String): Void {
+	private static function overloaded(
+		g: CallGraph, id: String, fn: QueryNode, others: Array<QueryNode>, source: String, typeParams: Map<Int, Array<String>>
+	): Void {
 		final shape: RefShape = g._shape;
 		final annotationKinds: Array<String> = shape.typeAnnotationKinds ?? [];
 		final paramKinds: Array<String> = shape.paramKinds ?? [];
@@ -150,8 +154,13 @@ final class CallGraphNodes {
 		}
 		final returned: Null<String> = CallGraphNames.returnSourceOf(fn, source, annotationKinds);
 		final written: String = params(fn);
-		// an `@:overload` holding no function expression offers a signature nothing reads
-		final unread: Bool = others.length == 0;
+		// an `@:overload` holding no function expression offers a signature nothing reads; one with type parameters of its own
+		// writes names no other signature means
+		function ownParams(f: QueryNode): Bool {
+			final at: Null<Span> = f.span;
+			return at != null && (typeParams[at.from] ?? []).length > 0;
+		}
+		final unread: Bool = others.length == 0 || [fn].concat(others).exists(ownParams);
 		if (unread || others.exists(o -> CallGraphNames.returnSourceOf(o, source, annotationKinds) != returned)) {
 			g._facts.overloadedReturns[id] = true;
 			g._facts.returns.remove(id);

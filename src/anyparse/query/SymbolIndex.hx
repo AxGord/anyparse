@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
@@ -681,7 +682,10 @@ final class SymbolIndex {
 		paths = new MemberPathWalk(files, refs, members, plugin.typeSyntax);
 		text = new RawSourceScan(files, skipped, sources, plugin, thirdParty);
 		traits = new TypeTraits(files, sources, refs);
-		values = new ValueNameBinding(refs, plugin.refShape().execution?.enumConstructorKinds ?? []);
+		final shape: RefShape = plugin.refShape();
+		values = new ValueNameBinding(
+			refs, shape.execution?.enumConstructorKinds ?? [], (shape.bareConstructorTypeKinds ?? []).concat(shape.aliasingDeclKinds ?? [])
+		);
 	}
 
 	/**

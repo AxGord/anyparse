@@ -4,6 +4,7 @@ import anyparse.query.CallGraph;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
+import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -49,7 +50,7 @@ private typedef Placed = {
  *   `iterator()` / `keyValueIterator()`, a string conversion's `toString()`, the serializer's `hxSerialize()`
  *   (`implicitCallNames`, `reflectivelyCalledNames`) — and no field code outside the project may name: std code reads a
  *   public field as a field of a structure it is handed (`Lambda` iterating an `Iterable`), which no occurrence shows
- *   either (review R5 F1, `CheckScan.fieldExposed`);
+ *   either (review R5 F1, `MemberKinds.fieldExposed`, asked of the type declaration — review L3 G1);
  * - every node of the held files carrying the field's name is a declaration of a field of that name, the target of an
  *   assignment, a call of it (`F(...)`, `x.F(...)`) made in a function the graph holds — the value runs there — or a
  *   whole argument of a `new` of another constructor storing it the same way, whose own field is then followed alike;
@@ -296,21 +297,27 @@ final class StoredValues {
 	private function finalFieldsBeside(file: String, fn: QueryNode): Array<String> {
 		final tree: Null<QueryNode> = _trees.ofFile(file);
 		final body: Null<QueryNode> = holderOf(tree, fn);
+		final span: Null<Span> = fn.span;
+		// The type declaration, not the holder: a member under `#if` is held by the region, and what exposes a field — the
+		// type's own `@:publicFields`, `extern` — is written on the declaration.
+		final declaration: Null<QueryNode> = tree == null || span == null ? null : TypeResolver.enclosingTypeDecl(tree, span)?.declNode;
 		final kinds: Array<String> = _shape.fieldDeclKinds ?? [];
 		final mutable: Array<String> = _shape.mutableFieldDeclKinds ?? [];
-		return tree == null || body == null ? [] : [
+		return tree == null || body == null || declaration == null ? [] : [
 			for (c in body.children)
-				if (kinds.contains(c.kind) && !mutable.contains(c.kind) && c.name != null && runsOnlyWhereSpelled(tree, body, c)) c.name
+				if (kinds.contains(c.kind) && !mutable.contains(c.kind) && c.name != null && runsOnlyWhereSpelled(tree, declaration, c))
+					c.name
 		];
 	}
 
 	/**
-	 * Whether every call of the field `field` the type `body` of `tree` declares is a node of its name: not one the language or
-	 * library code calls by name (`_calledByName`), and not one code outside the project may name (`CheckScan.fieldExposed`).
+	 * Whether every call of the field `field` the type declaration `declaration` of `tree` declares is a node of its name: not
+	 * one the language or library code calls by name (`_calledByName`), and not one code outside the project may name
+	 * (`MemberKinds.fieldExposed`).
 	 */
-	private function runsOnlyWhereSpelled(tree: QueryNode, body: QueryNode, field: QueryNode): Bool {
+	private function runsOnlyWhereSpelled(tree: QueryNode, declaration: QueryNode, field: QueryNode): Bool {
 		final name: Null<String> = field.name;
-		return name != null && !_calledByName.contains(name) && !MemberKinds.fieldExposed(tree, field, body, _plugin, _shape);
+		return name != null && !_calledByName.contains(name) && !MemberKinds.fieldExposed(tree, field, declaration, _plugin, _shape);
 	}
 
 	/** Every node of the held files carrying one of `names` not yet indexed, with its holder, filed by name in `_occurrences`. */

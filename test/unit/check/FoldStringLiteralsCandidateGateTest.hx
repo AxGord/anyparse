@@ -170,6 +170,8 @@ class FoldStringLiteralsCandidateGateTest extends FoldStringLiteralsCheckTestBas
 	 * wildcard and a `using` bind every name in the file, which is why an unresolved call
 	 * under either is refused whatever it is called.
 	 */
+	@:pin('control')
+	@:killer('M-MACRO-VALUE-UNLISTED')
 	public function testEveryOutOfScopeCallSpellingIsRefused(): Void {
 		for (spelling in [
 			{ imports: 'import m.Lang.t;', call: 't' },
@@ -197,13 +199,20 @@ class FoldStringLiteralsCandidateGateTest extends FoldStringLiteralsCheckTestBas
 		Assert.isFalse(refusedIn(outOfScopeCallSource('class Lang { public static function t(v:String):String return v; }', 'Lang.t')));
 	}
 
-	/** A whitelisted target clears the refusal whichever spelling the call site used — the entry and the call meet by dotted suffix. */
+	/**
+	 * A whitelisted target clears the refusal whichever spelling the call site used — the entry and the call meet by dotted
+	 * suffix. The import is read as the compiler binds the name, so an alias and a package wildcard name the type they bind
+	 * (`m.Lang`), never the alias or the package.
+	 */
 	public function testWhitelistClearsAnOutOfScopeCall(): Void {
 		final check: FoldStringLiterals = new FoldStringLiterals();
 		check.setConfigResolver(_ -> LintConfig.parse('{"rules":{"$RULE":{"$WHITELIST_OPTION":["m.Lang.t"]}}}'));
 		for (spelling in [
 			{ imports: 'import m.Lang.t;', call: 't' },
 			{ imports: 'import m.Lang;', call: 'Lang.t' },
+			{ imports: 'import m.Lang as L;', call: 'L.t' },
+			{ imports: 'import m.*;', call: 'Lang.t' },
+
 			{ imports: '', call: 'm.Lang.t' }
 		]) {
 			final src: String = outOfScopeCallSource(spelling.imports, spelling.call);

@@ -11068,31 +11068,33 @@
 		},
 		{
 			"name": "M-SCOPE-IMPORT-BLIND",
-			"type": "anyparse.query.PatternNameScope",
-			"method": "importMayBind",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "mayImportValue",
 			"force": "false",
 			"note": "an import that may bring a value of the binder's name in (a static import, a type wildcard) is not consulted"
 		},
 		{
 			"name": "M-SCOPE-AMBIENT-BLIND",
-			"type": "anyparse.query.PatternNameScope",
-			"method": "mayCompare",
-			"find": "return _fi.ambientImports.exists(group -> group.imports.exists(imp -> importMayBind(imp, name)));",
-			"replace": "return false;",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "importsOf",
+			"find": "[fi.imports].concat([for (group in fi.ambientImports) group.imports])",
+			"replace": "[fi.imports]",
 			"note": "the ambient `import.hx` chain is not consulted, so a static it brings in reads as a capture"
 		},
 		{
 			"name": "M-SCOPE-MODULE-FIELDS",
 			"type": "anyparse.query.PatternNameScope",
-			"method": "moduleLevelNames",
-			"force": "[]",
+			"method": "of",
+			"find": "for (name in fi.moduleFields) if (!local.contains(name)) local.push(name);",
+			"replace": "",
 			"note": "a module-level field, which a bare pattern compares against, is not consulted"
 		},
 		{
 			"name": "M-SCOPE-MODULE-IMPORT-BLIND",
-			"type": "anyparse.query.PatternNameScope",
-			"method": "moduleMayCarry",
-			"force": "false",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "importMayBring",
+			"find": "_refs.names.filesOfModule(split.module).exists(f -> f.moduleFields.contains(name))",
+			"replace": "false",
 			"note": "a module import's module-level fields, which a bare pattern compares against, are not consulted"
 		},
 		{
@@ -21152,7 +21154,7 @@
 			"name": "M-TS-STORED-PUBLIC",
 			"type": "anyparse.check.StoredValues",
 			"method": "runsOnlyWhereSpelled",
-			"find": "return name != null && !_calledByName.contains(name) && !MemberKinds.fieldExposed(tree, field, body, _plugin, _shape);",
+			"find": "return name != null && !_calledByName.contains(name) && !MemberKinds.fieldExposed(tree, field, declaration, _plugin, _shape);",
 			"replace": "return name != null && !_calledByName.contains(name);",
 			"note": "a public stored field std code may read as a structure's counts as only stored"
 		},
@@ -21744,6 +21746,85 @@
 			"find": "if (!rooted && entry.source.indexOf(name) < 0) {",
 			"replace": "if (false) {",
 			"note": "a library module that does not parse is unknown even for a name its text never spells, so any import of one makes every name unknown"
+		},
+		{
+			"name": "M-TS-STORED-HOLDER-NOT-DECLARATION",
+			"type": "anyparse.check.StoredValues",
+			"method": "finalFieldsBeside",
+			"find": "runsOnlyWhereSpelled(tree, declaration, c)",
+			"replace": "runsOnlyWhereSpelled(tree, body, c)",
+			"note": "whether a field is exposed is asked of the node holding it, so a `@:publicFields` field under `#if` reads as private and a value stored there as run only where spelled"
+		},
+		{
+			"name": "M-EXPOSED-WRAPPER-IGNORED",
+			"type": "anyparse.query.MemberKinds",
+			"method": "fieldExposed",
+			"find": "RefactorSupport.typeDeclOf(wrapper)?.nameNode == container ? wrapper : container",
+			"replace": "false ? wrapper : container",
+			"note": "a `@:publicFields final class` exposes nothing, its meta sitting on the `final` wrapper"
+		},
+		{
+			"name": "M-TS-INFER-SHIFT",
+			"type": "anyparse.query.CallGraphKeys",
+			"method": "argumentBindings",
+			"find": "!shifted && passed.length > 0",
+			"replace": "passed.length > 0",
+			"note": "a call that skips an optional parameter binds a function's type parameter by argument POSITION, so `f(?n:Int, x:T, ?y:L)` called `f(s, u)` takes `T` for `L`"
+		},
+		{
+			"name": "M-TS-OVERLOAD-OWN-PARAMS",
+			"type": "anyparse.query.CallGraphNodes",
+			"method": "overloaded",
+			"find": "final unread: Bool = others.length == 0 || [fn].concat(others).exists(ownParams);",
+			"replace": "final unread: Bool = others.length == 0;",
+			"note": "an `@:overload` signature declaring its own `T` agrees with the class's `T` by text, so the call returns the class's type argument"
+		},
+		{
+			"name": "M-VALUES-IMPORTED-CTOR",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "importMayBring",
+			"find": "types == null || carriesValue(types, name)",
+			"replace": "types == null",
+			"note": "an import that puts an enum in scope brings none of its constructors, so a bare pattern naming one reads as a capture"
+		},
+		{
+			"name": "M-VALUES-WILDCARD-CTOR",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "importMayBring",
+			"find": "TypeNameBinding.splitPath(prefix) != null && carriesValue(_refs.names.declsAt(prefix), name)",
+			"replace": "false",
+			"note": "a wildcard over an enum brings its statics only, never its constructors"
+		},
+		{
+			"name": "M-VALUES-ALIAS-WHOLE-MODULE",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "importMayBring",
+			"find": "carriesValue(_refs.names.declsAt(target), name)",
+			"replace": "carriesValue(_refs.names.importedTypes(target) ?? [], name)",
+			"note": "an alias of a module's main type brings the constructors of every type of the module"
+		},
+		{
+			"name": "M-VALUES-FIELD-IMPORT-TYPES",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "importMayBring",
+			"find": "SourceText.isUpperInitial(SourceText.lastSegment(imp.raw))",
+			"replace": "true",
+			"note": "a static-field import of a module the index does not hold may bring any value, not just its one field"
+		},
+		{
+			"name": "M-MACRO-VALUE-UNLISTED",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "unlistedImportOf",
+			"force": "null",
+			"note": "no import of a bare call name is ever out of the index's sight, so a macro an unindexed static import brings is folded into"
+		},
+		{
+			"name": "M-MACRO-EXTENSIONS-ONLY",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "unlistedImportOf",
+			"find": "if (!extensionsOnly || imp.kind == ImportKind.Using) {",
+			"replace": "if (true) {",
+			"note": "a call on a value receiver is taken to be routed by a static-field import of its member name, not only by a `using`"
 		}
 	]
 }
