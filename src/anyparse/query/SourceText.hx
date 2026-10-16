@@ -311,6 +311,17 @@ final class SourceText {
 		return nl < 0 ? 0 : nl + 1;
 	}
 
+	/**
+	 * Index of the first character of the line `offset` sits on, where an offset ON a newline
+	 * belongs to the line that newline ENDS — `lineStartOf` answers the line after it there. The scan
+	 * the span-splice ops position by; an offset past the end counts from the end.
+	 */
+	public static function lineStartAt(source: String, offset: Int): Int {
+		var i: Int = offset < source.length ? offset : source.length;
+		while (i > 0 && source.fastCodeAt(i - 1) != '\n'.code) i--;
+		return i;
+	}
+
 	/** The source text under `node`'s span, or null when the node carries none. */
 	public static function nodeText(node: QueryNode, source: String): Null<String> {
 		final span: Null<Span> = node.span;

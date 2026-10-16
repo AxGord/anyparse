@@ -271,7 +271,7 @@ final class ElementSpan {
 	 * helper's two dozen consumers splice replacement text into the line they widened, and
 	 * giving back a separator there would swallow a line the replacement still needs. The
 	 * callers are `deleteNodes`, `CheckScan.deletionEdit`, the collapsed-`if` arm of
-	 * `CheckScan.ifShapeEdit`, and the three `cutSpanOf` move helpers. That is NOT every
+	 * `CheckScan.ifShapeEdit`, and `memberCutSpan`, the cut of every member move. That is NOT every
 	 * pure deletion in the tree: the statement-level check fixers (`unused-local`,
 	 * `dead-code`, `self-assignment` and a dozen more) each build their own
 	 * `{ span: lineExtendedSpan(…), text: '' }` inline, with no shared helper to route
@@ -297,6 +297,17 @@ final class ElementSpan {
 		while (below < source.length && SourceText.isHorizontalSpace(source.fastCodeAt(below))) below++;
 		// End of file is not a blank line — there is no separator left to give back.
 		return below < source.length && source.fastCodeAt(below) == '\n'.code ? new Span(span.from, below + 1) : span;
+	}
+
+	/**
+	 * The span a member MOVE cuts out of its type: the member group (`groupSpan` — modifiers, metas
+	 * and declaration), its leading doc comment, its whole physical line(s), and the blank separator
+	 * it owned when blank lines flank it on both sides (`blankExtendedSpan`). One cut for every op
+	 * that lifts a member out of a body — `extract-superclass`, `pull-up` / `push-down`,
+	 * `move-member` — so the bytes each takes with the member cannot drift apart.
+	 */
+	public static function memberCutSpan(source: String, groupSpan: Span, regions: Array<LexRegion>): Span {
+		return blankExtendedSpan(source, lineExtendedSpan(source, docExtendedSpan(source, groupSpan, regions)));
 	}
 
 	/**
