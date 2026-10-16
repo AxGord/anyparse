@@ -5,25 +5,24 @@ import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
-import anyparse.query.CachingGrammarPlugin.ResolutionScope;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.SymbolIndex;
-import anyparse.query.cli.command.LintCommand;
 import anyparse.runtime.Span;
 import utest.Assert;
 
 using Lambda;
 
 /**
- * Shared in-memory harness for the analysis-check test suites.
+ * The one test kit every rule test runs a rule through, the way `lint` runs it.
  *
- * A check test exercises `run` on an inline source and then, for a fixable check,
- * applies `fix`'s edits back onto that source and asserts the rewritten text. Both
- * halves are the same two moves in every suite — order the edits last-first so an
- * earlier span keeps its offsets, then splice them in — so they live here once
- * instead of once per test class.
+ * Findings are read through `Linter.collect` — the reification and suppression gates, and the per-file gates when the
+ * test hands a resolver — on a `CachingGrammarPlugin` run host, never by a bare `check.run` on a bare plugin, which
+ * checks a configuration production never has (no host, so no resolution index, and no gates). A fix is asked the way
+ * `LintFixDriver` asks it: the same host and the REPORT index of the run's files, its edits spliced by
+ * `CanonicalEdit.applyEdits`. A test that needs an index asks `index`, the run host's door. A test class keeps only a
+ * one-line `violations(src)` naming its check.
  */
 @:nullSafety(Strict)
 final class CheckFixture {
@@ -38,18 +37,8 @@ final class CheckFixture {
 	private static inline final QUOTATION_END: String = '};';
 
 	/**
-	 * The run host every production lint goes through: a `CachingGrammarPlugin` (the `SymbolIndexHost`) over the
-	 * Haxe plugin, carrying `resolution` when given and no resolution scope otherwise. A test that needs the plugin
-	 * itself — to build an index beside the run, to read a tree — asks for this one and passes it on.
-	 */
-	public static function host(?resolution: ResolutionScope): CachingGrammarPlugin {
-		return LintCommand.wrapResolution(new HaxeQueryPlugin(), resolution);
-	}
-
-	/**
 	 * `check`'s findings over `source` as `C.hx`, read the way production reads them: through `Linter.collect`
-	 * (the reification and suppression gates) on a run host. `plugin` defaults to a fresh `host()`; a plugin
-	 * that is not already a host is wrapped in one, as `Linter.run` does.
+	 * (the reification and suppression gates) on a run host (`hosted`).
 	 */
 	public static function violations(check: Check, source: String, ?plugin: GrammarPlugin): Array<Violation> {
 		return violationsIn(check, [{ file: 'C.hx', source: source }], plugin);
@@ -109,20 +98,6 @@ final class CheckFixture {
 	}
 
 	/**
-	 * `source` after `check`'s fix, finished through `CanonicalEdit.canonicalize` the way a written fix is
-	 * (`reformat` canonicalises the whole file); a refusal throws its message.
-	 */
-	public static function canonicalFixed(
-		check: Check, source: String, reformat: Bool = true, ?optsJson: String, ?plugin: GrammarPlugin
-	): String {
-		final run: GrammarPlugin = hosted(plugin);
-		return switch CanonicalEdit.canonicalize(source, edits(check, source, run), reformat, run, optsJson) {
-			case Ok(text): text;
-			case Err(message): throw message;
-		};
-	}
-
-	/**
 	 * The `SymbolIndex` over `files` (third-party files tagged as given), asked of the run host the way a rule asks one
 	 * (`IndexScope.over`; `report` when no third-party set is named) — the one door a test takes to an index it hands a
 	 * check, a fix or a query, so no test builds one by a path the tool itself never takes.
@@ -167,9 +142,15 @@ final class CheckFixture {
 		];
 	}
 
-	/** `plugin` as a run host: itself when it already is one, else wrapped the way `Linter.run` wraps it. */
+	/**
+	 * `plugin` as the run host every production lint goes through — a `CachingGrammarPlugin`, the `SymbolIndexHost`:
+	 * itself when it already is one, else wrapped the way `Linter.run` wraps it; a fresh host over the Haxe plugin, with no
+	 * resolution scope, when none is given.
+	 */
 	private static function hosted(?plugin: GrammarPlugin): GrammarPlugin {
-		return plugin == null ? host() : plugin is CachingGrammarPlugin ? plugin : new CachingGrammarPlugin(plugin);
+		return plugin == null
+			? new CachingGrammarPlugin(new HaxeQueryPlugin())
+			: plugin is CachingGrammarPlugin ? plugin : new CachingGrammarPlugin(plugin);
 	}
 
 }
