@@ -3851,7 +3851,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachTest#testAClassNamedToTheClassValueProducerMayBeInstantiatedUntyped :: control :: M-ESCAPE-NAMED-CLASS',
 			'unit.query.MemberReachTest#testAClasspathTheIndexDoesNotHoldMayDeclareAnOverrideOrASubtype :: control :: '
 				+ 'M-REACH-CLASSPATH-DISPATCH,M-CARRY-CLASSPATH',
-			'unit.query.MemberReachTest#testAConstructedReceiverIsItsOwnType :: control :: M-ESCAPE-RECEIVER-CALL',
+			'unit.query.MemberReachTest#testAConstructedReceiverIsItsOwnType :: control :: M-TS-NEW-RECEIVER',
 			'unit.query.MemberReachTest#testAConversionOfATypedOperandRunsOnlyItsTypesMethod :: control :: M-REACH-TYPED-SITE',
 			'unit.query.MemberReachTest#testAFieldInitializerRunsWhatItHoldsThoughItCallsNothing :: control :: '
 				+ 'M-GRAPH-EAGER-INIT,M-REACH-INIT-BRANCHES',
@@ -4871,7 +4871,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-ESCAPE-DECLARED-SOURCE',
 			'M-ESCAPE-UNWRITTEN-ARGS',
 			'M-ESCAPE-NEW-TYPE',
-			'M-ESCAPE-RECEIVER-CALL',
+
 			'M-REACH-CLASSPATH-DISPATCH',
 			'M-REACH-LIB-ACCESS',
 			'M-REACH-BUILD-MACRO',

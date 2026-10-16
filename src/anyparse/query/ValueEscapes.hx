@@ -452,8 +452,10 @@ final class ValueEscapes {
 		}
 		function call(node: QueryNode): Void {
 			final isNew: Bool = node.kind == shape.newExprKind;
-			final typeKinds: Array<String> = shape.typeAnnotationKinds ?? [];
-			final args: Array<QueryNode> = isNew ? [for (c in node.children) if (!typeKinds.contains(c.kind)) c] : node.children.slice(1);
+			// a `new` names its type's arguments among its children (`NominalTypes.writtenConstruction`): they are no arguments
+			final args: Array<QueryNode> = isNew
+				? node.children.slice(NominalTypes.writtenConstruction(node, shape, source)?.args.length ?? node.children.length)
+				: node.children.slice(1);
 			final callee: Null<QueryNode> = isNew || node.children.length == 0 ? null : node.children[0];
 			final head: Null<QueryNode> = callee != null && _hazards.isAccess(callee.kind) && callee.children.length > 0
 				? callee.children[0]
@@ -466,17 +468,8 @@ final class ValueEscapes {
 				final held: Null<QueryNode> = receiver;
 				if (held != null) value(held);
 			}
-			// a call the graph did not resolve still resolves through its receiver's static type, when that is known
-			final calleeName: Null<String> = callee?.name;
-			final owner: Null<String> = receiver == null || calleeName == null ? null : typeOf(receiver);
-			final declared: Null<MemberInfo> = owner == null || calleeName == null ? null : g.types.memberOnChain(owner, calleeName);
-			if (
-				targets.length == 0 && owner != null && calleeName != null && declared != null && !declared.isStatic
-				&& g.types.functionOnChain(owner, calleeName) && !libraryMember(owner, calleeName)
-			) {
-				for (i in 0...args.length) if (!paramsTyped(declared.paramTypeSources, i)) value(args[i]);
-				return;
-			}
+			// a call the graph did not resolve hands everything to code nothing here can read: the graph types a receiver through
+			// the same walk this file's own typing reads (`NominalTypes.typeWalk`), so no receiver it leaves untyped is typed here
 			if (targets.length == 0) {
 				handAll();
 				return;

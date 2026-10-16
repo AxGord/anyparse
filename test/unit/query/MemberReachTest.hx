@@ -508,7 +508,7 @@ class MemberReachTest extends Test {
 		refused(run(source('Keep.put(mine());', 'function mine():Array<C> return [this];')), 'a container whose arguments nothing says');
 	}
 
-	@:pin('control') @:killer('M-ESCAPE-RECEIVER-CALL')
+	@:pin('control') @:killer('M-TS-NEW-RECEIVER')
 	public function testAConstructedReceiverIsItsOwnType(): Void {
 		// `new C().loop()` is the commonest entry: the value is a `C`, whose `loop` takes nothing untyped. Handing the new object
 		// itself to untyped code is an exit.

@@ -2973,3 +2973,10 @@ decided the question; it may not become a record of runs.
   graph resolves), and re-aimed fixtures kill all five; the sixth, M-ESCAPE-RECEIVER-CALL, cuts a `ValueEscapes.call`
   precision branch no probed shape reaches (28, syntax and facts) — left to the `ValueEscapes` owner — branch
   `feat/infra-B8b`
+- `ValueEscapes`' call with no graph target had a fallback typing the receiver itself (`typeOf`) and handing on only the
+  arguments of a project method's untyped parameters; B8b probed 28 shapes (21 syntax, 7 facts) and none reached it,
+  and since the graph types a receiver through the same walk (`NominalTypes.typeWalk`) — annotation, initializer,
+  member, call, construction — no receiver it leaves untyped is typed by `typeOf`'s syntax tier → the branch is gone and
+  such a call hands everything on, the sound direction; `M-ESCAPE-RECEIVER-CALL` retired with it, its control re-pinned
+  to `M-TS-NEW-RECEIVER`. The `new` argument split there reads `NominalTypes.writtenConstruction` like the graph's.
+  All-rules unchanged on the four trees — branch `feat/infra-B4b`

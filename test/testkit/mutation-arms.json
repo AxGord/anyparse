@@ -5383,14 +5383,6 @@
 			"note": "(precision) a construction has no type, so a lambda returning new Other() or a local holding one reads as an escape (new C().loop() is resolved by the graph and never asks)"
 		},
 		{
-			"name": "M-ESCAPE-RECEIVER-CALL",
-			"type": "anyparse.query.ValueEscapes",
-			"method": "scanFile",
-			"find": "targets.length == 0 && owner != null && calleeName",
-			"replace": "false && owner != null && calleeName",
-			"note": "(precision) a call the graph did not resolve hands its receiver to untyped code, though its static type declares the method"
-		},
-		{
 			"name": "M-REACH-CLASSPATH-DISPATCH",
 			"type": "anyparse.query.ReachGraph",
 			"method": "loadOverrides",
