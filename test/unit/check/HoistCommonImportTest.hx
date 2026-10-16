@@ -6,6 +6,7 @@ import anyparse.check.HoistCommonImport;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -450,7 +451,7 @@ class HoistCommonImportTest extends Test {
 
 	/** The rule's report over the whole tree written under `root`. */
 	private function reportOf(tree: Array<TreeFile>, root: String): Array<Violation> {
-		return new HoistCommonImport().run(analysed(tree, root), new HaxeQueryPlugin());
+		return CheckFixture.violationsIn(new HoistCommonImport(), analysed(tree, root));
 	}
 
 	/** The rule's cross-file fix over the whole tree written under `root`, justified by its own report. */
@@ -458,7 +459,7 @@ class HoistCommonImportTest extends Test {
 		final files: Array<{ file: String, source: String }> = analysed(tree, root);
 		final plugin: GrammarPlugin = new HaxeQueryPlugin();
 		final rule: HoistCommonImport = new HoistCommonImport();
-		return rule.crossFileFix(files, rule.run(files, plugin), plugin);
+		return rule.crossFileFix(files, CheckFixture.violationsIn(rule, files, plugin), plugin);
 	}
 
 	/** `path` without the fixture root prefix. */

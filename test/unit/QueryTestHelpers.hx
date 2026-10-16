@@ -48,7 +48,7 @@ final class QueryTestHelpers {
 		final cwd: String = Sys.getCwd();
 		function builds(): ReachBuilds {
 			final all: Array<{ file: String, source: String }> = project.concat(libraryFiles);
-			final index: SymbolIndex = SymbolIndex.build(all, new HaxeQueryPlugin());
+			final index: SymbolIndex = CheckFixture.index(all, new HaxeQueryPlugin());
 			final types: Array<{ name: String, file: String }> = [];
 			for (fi in index.allFiles()) for (t in fi.types) types.push({ name: t.name, file: OracleCoverage.canonical(cwd, fi.file) });
 			return {

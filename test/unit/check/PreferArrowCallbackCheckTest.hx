@@ -7,6 +7,7 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -452,11 +453,11 @@ class PreferArrowCallbackCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new PreferArrowCallback().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferArrowCallback(), src);
 	}
 
 	private function violationsMulti(files: Array<{ file: String, source: String }>, target: String): Array<Violation> {
-		return new PreferArrowCallback().run(files, new HaxeQueryPlugin()).filter(v -> v.file == target);
+		return CheckFixture.violationsIn(new PreferArrowCallback(), files).filter(v -> v.file == target);
 	}
 
 	private function fixText(src: String): String {
@@ -473,12 +474,12 @@ class PreferArrowCallbackCheckTest extends Test {
 	private function fixTextIndexed(files: Array<{ file: String, source: String }>, target: String): String {
 		final check: PreferArrowCallback = new PreferArrowCallback();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final index: SymbolIndex = CheckFixture.index(files, plugin);
 		var source: Null<String> = null;
 		for (f in files) if (f.file == target) source = f.source;
 		final src: Null<String> = source;
 		if (src == null) return '<no target>';
-		final own: Array<Violation> = check.run(files, plugin).filter(v -> v.file == target);
+		final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == target);
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, own, plugin, index);
 		return edits.length == 1 ? edits[0].text : '<${edits.length} edits>';
 	}

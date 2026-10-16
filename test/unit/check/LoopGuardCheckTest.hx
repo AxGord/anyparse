@@ -4,7 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.LoopGuard;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -418,7 +418,7 @@ class LoopGuardCheckTest extends Test {
 	}
 
 	private function violations(source: String): Array<Violation> {
-		return new LoopGuard().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new LoopGuard(), source);
 	}
 
 	private function applyFix(source: String): String {

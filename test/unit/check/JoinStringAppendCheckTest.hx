@@ -8,6 +8,7 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -160,8 +161,8 @@ class JoinStringAppendCheckTest extends Test {
 	public function testCascadesWithFoldStringLiterals(): Void {
 		final afterJoin: String = applyFixOnce(wrap("str += ' line '; str += line;"));
 		final fold: FoldStringLiterals = new FoldStringLiterals();
-		final vs2: Array<Violation> = fold.run([{ file: 'C.hx', source: afterJoin }], new HaxeQueryPlugin());
-		final es2: Array<{ span: Span, text: String }> = fold.fix(afterJoin, vs2, new HaxeQueryPlugin());
+		final vs2: Array<Violation> = CheckFixture.violations(fold, afterJoin);
+		final es2: Array<{ span: Span, text: String }> = CheckFixture.fixOf(fold, afterJoin, vs2);
 		final afterFold: String = switch CanonicalEdit.canonicalize(afterJoin, es2, true, new HaxeQueryPlugin(), null) {
 			case Ok(text): text;
 			case Err(message): throw message;
@@ -185,12 +186,12 @@ class JoinStringAppendCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new JoinStringAppend().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new JoinStringAppend(), src);
 	}
 
 	private function edits(src: String): Array<{ span: Span, text: String }> {
 		final check: JoinStringAppend = new JoinStringAppend();
-		return check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
+		return CheckFixture.edits(check, src);
 	}
 
 	/** Run `fix` and re-emit through the canonical writer — the `lint --fix` path in one pass. */

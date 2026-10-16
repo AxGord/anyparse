@@ -2,7 +2,7 @@ package unit.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.check.UnusedPrivate;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -124,7 +124,7 @@ class AmbientImportSubtypeShieldTest extends Test {
 		];
 		final reported: Array<String> = [];
 		try {
-			final violations: Array<Violation> = new UnusedPrivate().run(files, new HaxeQueryPlugin());
+			final violations: Array<Violation> = CheckFixture.violationsIn(new UnusedPrivate(), files);
 			for (v in violations) if (v.message.contains('constructor')) reported.push(v.file.substr(root.length + 1));
 		} catch (exception: haxe.Exception) {
 			CliFixture.removeDir(root);

@@ -5,8 +5,8 @@ import anyparse.check.RedundantMapExists;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
-import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -203,17 +203,17 @@ class RedundantMapExistsCheckTest extends Test {
 	}
 
 	private function violations(files: Array<{ file: String, source: String }>): Array<Violation> {
-		return new RedundantMapExists().run(files, new HaxeQueryPlugin());
+		return CheckFixture.violationsIn(new RedundantMapExists(), files);
 	}
 
 	/** The result of fixing `file`'s own violations — the caller hands a check ONE file's set. */
 	private function fixResult(files: Array<{ file: String, source: String }>, file: String): String {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: RedundantMapExists = new RedundantMapExists();
-		final vs: Array<Violation> = check.run(files, plugin).filter(v -> v.file == file);
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == file);
 		var source: String = '';
 		for (entry in files) if (entry.file == file) source = entry.source;
-		final edits: Array<{ span: Span, text: String }> = check.fix(source, vs, plugin, SymbolIndex.build(files, plugin));
+		final edits: Array<{ span: Span, text: String }> = check.fix(source, vs, plugin, CheckFixture.index(files, plugin));
 		switch CanonicalEdit.canonicalize(source, edits, true, plugin) {
 			case Ok(text):
 				return text;

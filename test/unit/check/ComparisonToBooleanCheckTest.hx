@@ -4,7 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.ComparisonToBoolean;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -556,7 +556,7 @@ class ComparisonToBooleanCheckTest extends Test {
 
 	/** `violations` over SEVERAL files — the only way to build a cross-file homonym. */
 	private function violationsAcross(files: Array<{ file: String, source: String }>): Array<Violation> {
-		return new ComparisonToBoolean().run(files, new HaxeQueryPlugin());
+		return CheckFixture.violationsIn(new ComparisonToBoolean(), files);
 	}
 
 	/** Wrap a single statement body in a minimal class+function so it parses. */

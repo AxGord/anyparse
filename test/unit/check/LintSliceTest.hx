@@ -15,6 +15,7 @@ import anyparse.query.format.Text;
 import anyparse.runtime.Span;
 import haxe.DynamicAccess;
 import haxe.Json;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -40,7 +41,7 @@ class LintSliceTest extends Test {
 	public function testUsedVsUnused(): Void {
 		final src: String = 'package pkg;\nimport a.b.Used;\nimport a.b.Unused;\nclass C {\n\tvar x:Used;\n}';
 		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }].concat(declaringStubs());
-		final vs: Array<Violation> = new UnusedImport().run(files, plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), files, plugin());
 
 		Assert.equals(1, vs.length);
 		final v: Violation = vs[0];
@@ -59,7 +60,9 @@ class LintSliceTest extends Test {
 	/** A value reference (`Foo.bar()`) counts as usage; the sibling unused import is flagged. */
 	public function testValueReferenceCounts(): Void {
 		final src: String = 'package pkg;\nimport a.b.Foo;\nimport a.b.Bar;\nclass C {\n\tfunction f() { Foo.bar(); }\n}';
-		final vs: Array<Violation> = new UnusedImport().run([{ file: 'pkg/C.hx', source: src }].concat(declaringStubs()), plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), [{ file: 'pkg/C.hx', source: src }].concat(
+			declaringStubs()
+		), plugin());
 
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains('a.b.Bar'));
@@ -73,7 +76,7 @@ class LintSliceTest extends Test {
 	 */
 	public function testAlias(): Void {
 		final src: String = 'package pkg;\nimport a.b.Long as Short;\nimport a.b.Other as Gone;\nclass C {\n\tvar x:Short;\n}';
-		final vs: Array<Violation> = new UnusedImport().run([{ file: 'pkg/C.hx', source: src }], plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), [{ file: 'pkg/C.hx', source: src }], plugin());
 
 		Assert.equals(1, vs.length);
 		Assert.equals(Severity.Warning, vs[0].severity);
@@ -83,7 +86,7 @@ class LintSliceTest extends Test {
 	/** A wildcard import cannot be verified — reported as an `Info` advisory, not warned. */
 	public function testWildcardInfo(): Void {
 		final src: String = 'package pkg;\nimport a.b.*;\nclass C {}';
-		final vs: Array<Violation> = new UnusedImport().run([{ file: 'pkg/C.hx', source: src }], plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), [{ file: 'pkg/C.hx', source: src }], plugin());
 
 		Assert.equals(1, vs.length);
 		Assert.equals(Severity.Info, vs[0].severity);
@@ -93,7 +96,7 @@ class LintSliceTest extends Test {
 	/** A `using` import is applied implicitly as extension calls — an `Info` advisory, not a warning. */
 	public function testUsingInfo(): Void {
 		final src: String = 'package pkg;\nusing a.b.Helper;\nclass C {}';
-		final vs: Array<Violation> = new UnusedImport().run([{ file: 'pkg/C.hx', source: src }], plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), [{ file: 'pkg/C.hx', source: src }], plugin());
 
 		Assert.equals(1, vs.length);
 		Assert.equals(Severity.Info, vs[0].severity);
@@ -130,7 +133,7 @@ class LintSliceTest extends Test {
 	 */
 	public function testDeepNestedTypeUsageNotFlagged(): Void {
 		final src: String = 'package pkg;\nimport a.b.Foo;\nclass C {\n\tfunction f(xs:Array<{h:Array<Foo>}>):Void {}\n}';
-		final vs: Array<Violation> = new UnusedImport().run([{ file: 'f.hx', source: src }], plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), [{ file: 'f.hx', source: src }], plugin());
 		Assert.equals(0, vs.length);
 	}
 
@@ -150,14 +153,14 @@ class LintSliceTest extends Test {
 		// than the not-in-scope advisory — the point is that `--fix` would remove this import.
 		final owner: { file: String, source: String } = { file: 'a/b/Foo.hx', source: 'package a.b;\nclass Foo {}' };
 		final src: String = 'package pkg;\nimport a.b.Foo;\n// Foo is referenced here only\nclass C {}';
-		final vs: Array<Violation> = new UnusedImport().run([{ file: 'f.hx', source: src }, owner], plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), [{ file: 'f.hx', source: src }, owner], plugin());
 		Assert.equals(1, vs.length, 'a comment cannot resolve a type, so the import is unused');
 		Assert.equals(Severity.Warning, vs[0].severity, 'and it is deletable, not an advisory');
 		// The control that keeps the conservative bias where it EARNS its keep: a name spelled in a
 		// string literal stays a use, because `Type.resolveClass('Foo')` and the macro family reach a
 		// type that way and the raw scan is the only thing that sees them.
 		final str: String = 'package pkg;\nimport a.b.Foo;\nclass C {\n\tvar n:String = "Foo";\n}';
-		Assert.equals(0, new UnusedImport().run([{ file: 'g.hx', source: str }, owner], plugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(new UnusedImport(), [{ file: 'g.hx', source: str }, owner], plugin()).length);
 	}
 
 	/**
@@ -179,7 +182,7 @@ class LintSliceTest extends Test {
 		};
 		inline function findings(body: String): Int {
 			final src: String = 'package app;\nimport q.Dep;\nclass User {\n\tpublic function f(c:Bool):String return $body;\n}';
-			return new UnusedImport().run([{ file: 'app/User.hx', source: src }, owner], plugin()).length;
+			return CheckFixture.violationsIn(new UnusedImport(), [{ file: 'app/User.hx', source: src }, owner], plugin()).length;
 		}
 		Assert.equals(0, findings("'${c ? '// note' : Dep.NAME}'"), 'a nested same-quote string in a hole is not a comment');
 		Assert.equals(0, findings("'${c ? '/*' : Dep.NAME}'"), 'and an unterminated one does not mask the rest of the file');
@@ -193,7 +196,7 @@ class LintSliceTest extends Test {
 			{ file: 'pkg/Good.hx', source: 'package pkg;\nimport a.b.Unused;\nclass Good {}' },
 			{ file: 'pkg/Bad.hx', source: 'package pkg;\nclass Bad { function f() { ' }
 		];
-		final vs: Array<Violation> = new UnusedImport().run(files, plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), files, plugin());
 		Assert.equals(1, vs.length);
 		Assert.equals('pkg/Good.hx', vs[0].file);
 	}
@@ -201,7 +204,9 @@ class LintSliceTest extends Test {
 	/** The grouped reporter emits a file header and an indented `[severity] message (rule)` line. */
 	public function testRenderViolations(): Void {
 		final src: String = 'package pkg;\nimport a.b.Unused;\nclass C {}';
-		final vs: Array<Violation> = new UnusedImport().run([{ file: 'pkg/C.hx', source: src }].concat(declaringStubs()), plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), [{ file: 'pkg/C.hx', source: src }].concat(
+			declaringStubs()
+		), plugin());
 		final out: String = Text.renderViolations('pkg/C.hx', src, vs, false);
 
 		Assert.isTrue(out.contains('pkg/C.hx:'));
@@ -217,7 +222,9 @@ class LintSliceTest extends Test {
 	public function testFixYieldsDeleteEditsForWarningsOnly(): Void {
 		final src: String = 'package pkg;\nimport a.b.Unused;\nimport a.b.*;\nclass C {}';
 		final check: UnusedImport = new UnusedImport();
-		final vs: Array<Violation> = check.run([{ file: 'pkg/C.hx', source: src }].concat(declaringStubs()), plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'pkg/C.hx', source: src }].concat(
+			declaringStubs()
+		), plugin());
 		// One Warning (Unused) + one Info (wildcard); only the Warning is fixable.
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin());
 		Assert.equals(1, edits.length);
@@ -228,7 +235,7 @@ class LintSliceTest extends Test {
 	public function testFixRemovesUnusedImport(): Void {
 		final src: String = 'package pkg;\nimport a.b.Used;\nimport a.b.Gone;\nclass C {\n\tvar x:Used;\n}';
 		final check: UnusedImport = new UnusedImport();
-		final vs: Array<Violation> = check.run([{ file: 'f.hx', source: src }].concat(declaringStubs()), plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'f.hx', source: src }].concat(declaringStubs()), plugin());
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin());
 		switch CanonicalEdit.canonicalize(src, edits, true, plugin()) {
 			case Ok(text):
@@ -246,7 +253,7 @@ class LintSliceTest extends Test {
 	 */
 	public function testUnusedLocalFlagged(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\tfinal x:Int = 1;\n\t\ttrace(1);\n\t}\n}';
-		final vs: Array<Violation> = new UnusedLocal().run([{ file: 'C.hx', source: src }], plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedLocal(), [{ file: 'C.hx', source: src }], plugin());
 
 		Assert.equals(1, vs.length);
 		final v: Violation = vs[0];
@@ -264,7 +271,7 @@ class LintSliceTest extends Test {
 	/** A local that is read by a later statement is not flagged. */
 	public function testUsedLocalNotFlagged(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\tfinal x:Int = 1;\n\t\ttrace(x);\n\t}\n}';
-		final vs: Array<Violation> = new UnusedLocal().run([{ file: 'C.hx', source: src }], plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedLocal(), [{ file: 'C.hx', source: src }], plugin());
 		Assert.equals(0, vs.length);
 	}
 
@@ -275,7 +282,7 @@ class LintSliceTest extends Test {
 	 */
 	public function testInterpolationCountsAsUse(): Void {
 		final src: String = "class C {\n\tfunction f() {\n\t\tfinal name:String = \"a\";\n\t\ttrace('$name');\n\t}\n}";
-		final vs: Array<Violation> = new UnusedLocal().run([{ file: 'C.hx', source: src }], plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedLocal(), [{ file: 'C.hx', source: src }], plugin());
 		Assert.equals(0, vs.length);
 	}
 
@@ -287,14 +294,14 @@ class LintSliceTest extends Test {
 	public function testScopeBoundedScan(): Void {
 		final src: String =
 			'class C {\n\tfunction a() {\n\t\tfinal v:Int = 1;\n\t}\n\tfunction b() {\n\t\tfinal v:Int = 2;\n\t\ttrace(v);\n\t}\n}';
-		final vs: Array<Violation> = new UnusedLocal().run([{ file: 'C.hx', source: src }], plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedLocal(), [{ file: 'C.hx', source: src }], plugin());
 		Assert.equals(1, vs.length);
 	}
 
 	/** An unused function parameter is not a local — it is left alone. */
 	public function testParameterNotFlagged(): Void {
 		final src: String = 'class C {\n\tfunction f(p:Int) {\n\t\ttrace(1);\n\t}\n}';
-		final vs: Array<Violation> = new UnusedLocal().run([{ file: 'C.hx', source: src }], plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedLocal(), [{ file: 'C.hx', source: src }], plugin());
 		Assert.equals(0, vs.length);
 	}
 
@@ -305,7 +312,7 @@ class LintSliceTest extends Test {
 	public function testFixDeletesSideEffectFreeLocal(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\tfinal x:Int = 1;\n\t\ttrace(1);\n\t}\n}';
 		final check: UnusedLocal = new UnusedLocal();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin());
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin());
 		switch CanonicalEdit.canonicalize(src, edits, true, plugin()) {
 			case Ok(text):
@@ -324,7 +331,7 @@ class LintSliceTest extends Test {
 	public function testFixSkipsSideEffectingInit(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\tfinal x:Int = compute();\n\t\ttrace(1);\n\t}\n}';
 		final check: UnusedLocal = new UnusedLocal();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin());
 		Assert.equals(1, vs.length);
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin());
 		Assert.equals(0, edits.length);
@@ -337,7 +344,7 @@ class LintSliceTest extends Test {
 	 */
 	public function testUnusedLocalFlagsMultiVarContinuation(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\tvar used:Int = 1, unusedTail:Int = 2;\n\t\ttrace(used);\n\t}\n}';
-		final vs: Array<Violation> = new UnusedLocal().run([{ file: 'C.hx', source: src }], plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedLocal(), [{ file: 'C.hx', source: src }], plugin());
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains("'unusedTail'"));
 	}
@@ -349,7 +356,7 @@ class LintSliceTest extends Test {
 	public function testUnusedLocalFixSkipsMultiVarContinuation(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\tvar used:Int = 1, unusedTail:Int = 2;\n\t\ttrace(used);\n\t}\n}';
 		final check: UnusedLocal = new UnusedLocal();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin());
 		Assert.equals(0, check.fix(src, vs, plugin()).length);
 	}
 
@@ -361,7 +368,7 @@ class LintSliceTest extends Test {
 	public function testUnusedLocalFixSkipsHeadSharingItsLine(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\tvar unusedHead:Int = 1, used:Int = 2;\n\t\ttrace(used);\n\t}\n}';
 		final check: UnusedLocal = new UnusedLocal();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'C.hx', source: src }], plugin());
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains("'unusedHead'"));
 		Assert.equals(0, check.fix(src, vs, plugin()).length);
@@ -378,7 +385,7 @@ class LintSliceTest extends Test {
 	/** Two identical imports: the second is flagged; distinct aliases of one module are not. */
 	public function testDuplicateImportFlagged(): Void {
 		final src: String = 'package pkg;\nimport a.b.Dup;\nimport a.b.Dup;\nimport c.D as X;\nimport c.D as Y;\nclass C {}';
-		final vs: Array<Violation> = new DuplicateImport().run([{ file: 'pkg/C.hx', source: src }], plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new DuplicateImport(), [{ file: 'pkg/C.hx', source: src }], plugin());
 		Assert.equals(1, vs.length);
 		Assert.equals('duplicate-import', vs[0].rule);
 		Assert.equals(Severity.Warning, vs[0].severity);
@@ -391,7 +398,7 @@ class LintSliceTest extends Test {
 	/** Same path under different kinds (import vs using) bind distinctly — not a duplicate. */
 	public function testDistinctKindNotDuplicate(): Void {
 		final src: String = 'package pkg;\nimport a.b.Mod;\nusing a.b.Mod;\nclass C {}';
-		final vs: Array<Violation> = new DuplicateImport().run([{ file: 'pkg/C.hx', source: src }], plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new DuplicateImport(), [{ file: 'pkg/C.hx', source: src }], plugin());
 		Assert.equals(0, vs.length);
 	}
 
@@ -408,7 +415,7 @@ class LintSliceTest extends Test {
 	 */
 	public function testGuardedAliasBranchesBindingDifferentModulesNotDuplicate(): Void {
 		inline function duplicates(extra: String): Int {
-			return new DuplicateImport().run([
+			return CheckFixture.violationsIn(new DuplicateImport(), [
 				{
 					file: 'pkg/C.hx',
 					source: 'package pkg;\n#if js\nimport a.b.One as U;\n#else\nimport a.b.Two as U;\n#end\n${extra}class C extends U {}'
@@ -427,7 +434,7 @@ class LintSliceTest extends Test {
 		// involved, so this arm is independent of the builder's dedup key.
 		Assert.equals(
 			0,
-			new DuplicateImport().run([
+			CheckFixture.violationsIn(new DuplicateImport(), [
 				{
 					file: 'pkg/C.hx',
 					source: 'package pkg;\nimport a.b.One as U;\nimport a.b.Two as U;\nclass C {\n\tvar u:U;\n}'
@@ -440,7 +447,7 @@ class LintSliceTest extends Test {
 	public function testDuplicateImportFix(): Void {
 		final src: String = 'package pkg;\nimport a.b.Dup;\nimport a.b.Dup;\nclass C {}';
 		final check: DuplicateImport = new DuplicateImport();
-		final vs: Array<Violation> = check.run([{ file: 'pkg/C.hx', source: src }], plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'pkg/C.hx', source: src }], plugin());
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin());
 		Assert.equals(1, edits.length);
 		Assert.equals('', edits[0].text);
@@ -522,7 +529,9 @@ class LintSliceTest extends Test {
 	public function testJsonFormat(): Void {
 		final src: String = 'package pkg;\nimport a.b.Unused;\nclass C {}';
 		final file: String = 'pkg/C.hx';
-		final vs: Array<Violation> = new UnusedImport().run([{ file: file, source: src }].concat(declaringStubs()), plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), [{ file: file, source: src }].concat(
+			declaringStubs()
+		), plugin());
 		Assert.equals(1, vs.length);
 		final sourceOf: Map<String, String> = [file => src];
 		final parsed: Array<Dynamic> = Json.parse(LintFormat.json(vs, sourceOf));
@@ -560,7 +569,9 @@ class LintSliceTest extends Test {
 	public function testCheckstyleFormat(): Void {
 		final src: String = 'package pkg;\nimport a.b.Unused;\nclass C {}';
 		final file: String = 'pkg/C.hx';
-		final vs: Array<Violation> = new UnusedImport().run([{ file: file, source: src }].concat(declaringStubs()), plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), [{ file: file, source: src }].concat(
+			declaringStubs()
+		), plugin());
 		final xml: String = LintFormat.checkstyle(vs, [file => src]);
 		Assert.isTrue(xml.contains('<checkstyle'));
 		Assert.isTrue(xml.contains('source="apq.unused-import"'));
@@ -638,8 +649,10 @@ class LintSliceTest extends Test {
 		// the splice; dropping the contained edit keeps only the outer dead-run delete.
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\treturn;\n\t\tvar x = 0;\n\t\tx = x;\n\t}\n}';
 		final files: Array<{ source: String, file: String }> = [{ file: 'C.hx', source: src }];
-		final edits: Array<{ span: Span, text: String }> = new DeadCode().fix(src, new DeadCode().run(files, plugin()), plugin());
-		for (e in new SelfAssignment().fix(src, new SelfAssignment().run(files, plugin()), plugin())) edits.push(e);
+		final edits: Array<{ span: Span, text: String }> = new DeadCode().fix(
+			src, CheckFixture.violationsIn(new DeadCode(), files, plugin()), plugin()
+		);
+		for (e in new SelfAssignment().fix(src, CheckFixture.violationsIn(new SelfAssignment(), files, plugin()), plugin())) edits.push(e);
 		switch CanonicalEdit.canonicalize(src, CanonicalEdit.dropContainedEdits(edits), true, plugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf('x = x') == -1);
@@ -657,7 +670,7 @@ class LintSliceTest extends Test {
 	 */
 	public function testUsingStringToolsExtensionUsed(): Void {
 		final src: String = 'package pkg;\nusing StringTools;\nclass C {\n\tfunction f(s:String):String return s.trim();\n}';
-		final vs: Array<Violation> = new UnusedImport().run([{ file: 'pkg/C.hx', source: src }], plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), [{ file: 'pkg/C.hx', source: src }], plugin());
 		Assert.equals(0, vs.length);
 	}
 
@@ -668,7 +681,7 @@ class LintSliceTest extends Test {
 	public function testUsingUsedViaTypeName(): Void {
 		final src: String =
 			'package pkg;\nusing StringTools;\nclass C {\n\tfunction f(s:String):Int return StringTools.fastCodeAt(s, 0);\n}';
-		final vs: Array<Violation> = new UnusedImport().run([{ file: 'pkg/C.hx', source: src }], plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), [{ file: 'pkg/C.hx', source: src }], plugin());
 		Assert.equals(0, vs.length);
 	}
 
@@ -680,7 +693,7 @@ class LintSliceTest extends Test {
 	 */
 	public function testUsingLambdaUnusedIsWarning(): Void {
 		final src: String = 'package pkg;\nusing Lambda;\nclass C {\n\tfunction f(s:String):String return s.toUpperCase();\n}';
-		final vs: Array<Violation> = new UnusedImport().run([{ file: 'pkg/C.hx', source: src }], plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), [{ file: 'pkg/C.hx', source: src }], plugin());
 		Assert.equals(1, vs.length);
 		Assert.equals('unused-import', vs[0].rule);
 		Assert.equals(Severity.Warning, vs[0].severity);
@@ -694,7 +707,7 @@ class LintSliceTest extends Test {
 	public function testUnusedUsingFixDeletes(): Void {
 		final src: String = 'package pkg;\nusing Lambda;\nclass C {\n\tfunction f(s:String):String return s.toUpperCase();\n}';
 		final check: UnusedImport = new UnusedImport();
-		final vs: Array<Violation> = check.run([{ file: 'pkg/C.hx', source: src }], plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'pkg/C.hx', source: src }], plugin());
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin());
 		Assert.equals(1, edits.length);
 		Assert.equals('', edits[0].text);
@@ -715,7 +728,7 @@ class LintSliceTest extends Test {
 				source: user
 			}
 		];
-		final vs: Array<Violation> = new UnusedImport().run(files, plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), files, plugin());
 		Assert.equals(0, vs.length);
 	}
 
@@ -733,7 +746,7 @@ class LintSliceTest extends Test {
 				source: user
 			}
 		];
-		final vs: Array<Violation> = new UnusedImport().run(files, plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), files, plugin());
 		Assert.equals(1, vs.length);
 		Assert.equals('unused-import', vs[0].rule);
 		Assert.equals(Severity.Warning, vs[0].severity);
@@ -752,7 +765,7 @@ class LintSliceTest extends Test {
 	public function testOutOfScopeNamedImportIsInfoNotFixed(): Void {
 		final src: String = 'package pkg;\nimport ext.lib.Widget;\nclass C {}';
 		final check: UnusedImport = new UnusedImport();
-		final vs: Array<Violation> = check.run([{ file: 'pkg/C.hx', source: src }], plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'pkg/C.hx', source: src }], plugin());
 		Assert.equals(1, vs.length);
 		Assert.equals('unused-import', vs[0].rule);
 		Assert.equals(Severity.Info, vs[0].severity);
@@ -770,7 +783,7 @@ class LintSliceTest extends Test {
 		final src: String = 'package pkg;\nimport a.b.Unused;\nclass C {}';
 		final check: UnusedImport = new UnusedImport();
 		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }].concat(declaringStubs());
-		final vs: Array<Violation> = check.run(files, plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin());
 		Assert.equals(1, vs.length);
 		Assert.equals(Severity.Warning, vs[0].severity);
 		Assert.isTrue(vs[0].message.contains('a.b.Unused'));
@@ -787,7 +800,7 @@ class LintSliceTest extends Test {
 	public function testInIndexUsedNamedImportIsSilent(): Void {
 		final src: String = 'package pkg;\nimport a.b.Used;\nclass C {\n\tvar x:Used;\n}';
 		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }].concat(declaringStubs());
-		final vs: Array<Violation> = new UnusedImport().run(files, plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), files, plugin());
 		Assert.equals(0, vs.length);
 	}
 
@@ -805,7 +818,7 @@ class LintSliceTest extends Test {
 		final src: String = 'package pkg;\n\n#if macro\nimport a.b.Used;\nimport a.b.Unused;\n#end\n\nclass C {\n\tvar x:Used;\n}';
 		final check: UnusedImport = new UnusedImport();
 		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }].concat(declaringStubs());
-		final vs: Array<Violation> = check.run(files, plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin());
 
 		Assert.equals(1, vs.length);
 		Assert.equals(Severity.Info, vs[0].severity);
@@ -825,7 +838,7 @@ class LintSliceTest extends Test {
 			{ file: 'pkg/C.hx', source: src },
 			{ file: 'a/b/Pair.hx', source: 'package a.b;\nclass Pair {}\ntypedef Half = Int;' }
 		];
-		final vs: Array<Violation> = new UnusedImport().run(files, plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), files, plugin());
 
 		Assert.equals(0, vs.length);
 	}
@@ -837,7 +850,7 @@ class LintSliceTest extends Test {
 	 */
 	public function testGuardedUsingReachesTheUsingArm(): Void {
 		final src: String = 'package pkg;\n\n#if macro\nusing a.b.Helper;\n#end\n\nclass C {}';
-		final vs: Array<Violation> = new UnusedImport().run([{ file: 'pkg/C.hx', source: src }], plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), [{ file: 'pkg/C.hx', source: src }], plugin());
 
 		Assert.equals(1, vs.length);
 		Assert.equals(Severity.Info, vs[0].severity);
@@ -857,7 +870,7 @@ class LintSliceTest extends Test {
 			{ file: 'pkg/C.hx', source: src },
 			{ file: 'a/b/Helper.hx', source: 'package a.b;\nclass Helper {\n\tpublic static function pad(s:String):String return s;\n}' }
 		];
-		final vs: Array<Violation> = new UnusedImport().run(files, plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), files, plugin());
 
 		Assert.equals(1, vs.length);
 		Assert.equals(Severity.Warning, vs[0].severity);
@@ -877,7 +890,7 @@ class LintSliceTest extends Test {
 			{ file: 'pkg/C.hx', source: src },
 			{ file: 'a/b/Helper.hx', source: 'package a.b;\nclass Helper {\n\tpublic static function pad(s:String):String return s;\n}' }
 		];
-		final vs: Array<Violation> = new UnusedImport().run(files, plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), files, plugin());
 
 		Assert.equals(0, vs.length);
 	}

@@ -5,8 +5,9 @@ import anyparse.check.Linter;
 import anyparse.check.PreferSwitchExpression;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.SymbolIndex;
+import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -477,7 +478,7 @@ class PreferSwitchExpressionCheckTest extends Test {
 
 
 	private function violations(src: String, ?constants: String): Array<Violation> {
-		return new PreferSwitchExpression().run(entries(src, constants), new HaxeQueryPlugin());
+		return CheckFixture.violationsIn(new PreferSwitchExpression(), entries(src, constants));
 	}
 
 	/**
@@ -493,9 +494,9 @@ class PreferSwitchExpressionCheckTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final files: Array<{ file: String, source: String }> = entries(src, constants);
 		final file: String = mainFileOf(src);
-		final own: Array<Violation> = check.run(files, plugin).filter(v -> v.file == file);
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, own, plugin, SymbolIndex.build(files, plugin));
-		return CheckFixture.applyEdits(src, edits);
+		final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == file);
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, own, plugin, CheckFixture.index(files, plugin));
+		return CanonicalEdit.applyEdits(src, edits);
 	}
 
 }

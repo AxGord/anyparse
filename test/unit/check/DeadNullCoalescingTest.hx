@@ -6,6 +6,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -83,7 +84,7 @@ class DeadNullCoalescingTest extends Test {
 	public function testFixUnwrapsToLeft(): Void {
 		final check: DeadNullCoalescing = new DeadNullCoalescing();
 		final src: String = 'class C { function f(?x:String) { if (x != null) { var n = x ?? "d"; } } }';
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
 		Assert.equals(1, edits.length);
 		Assert.equals('x', edits[0].text);
@@ -91,7 +92,7 @@ class DeadNullCoalescingTest extends Test {
 
 	public function testSkipParseNoCrash(): Void {
 		Assert.equals(
-			0, new DeadNullCoalescing().run([{ file: 'Bad.hx', source: 'class Bad { function f() { x ?? ' }], new HaxeQueryPlugin()).length
+			0, CheckFixture.violationsIn(new DeadNullCoalescing(), [{ file: 'Bad.hx', source: 'class Bad { function f() { x ?? ' }]).length
 		);
 	}
 
@@ -109,7 +110,7 @@ class DeadNullCoalescingTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new DeadNullCoalescing().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new DeadNullCoalescing(), src);
 	}
 
 }

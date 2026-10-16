@@ -6,6 +6,7 @@ import anyparse.check.Severity;
 import anyparse.check.UnnecessaryBlock;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -192,7 +193,7 @@ class UnnecessaryBlockCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new UnnecessaryBlock().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new UnnecessaryBlock(), src);
 	}
 
 	private function fixedSource(src: String): String {
@@ -202,8 +203,8 @@ class UnnecessaryBlockCheckTest extends Test {
 	/** Run + fix + canonicalise (whole-file reformat) `src`, returning the emitted text. */
 	private function fixedCanonical(src: String): String {
 		final check: UnnecessaryBlock = new UnnecessaryBlock();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-		return switch CanonicalEdit.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
+		return switch CanonicalEdit.canonicalize(src, CheckFixture.fixOf(check, src, vs), true, new HaxeQueryPlugin()) {
 			case Ok(text): text;
 			case Err(message):
 				Assert.fail('fix canonicalize Err: $message');

@@ -113,7 +113,7 @@ class RedundantIsCheckTest extends Test {
 	public function testSkipParseNoCrash(): Void {
 		Assert.equals(
 			0,
-			new RedundantIsCheck().run([{ file: 'Bad.hx', source: 'class Bad { function f() { var b = x is ' }], new HaxeQueryPlugin())
+			CheckFixture.violationsIn(new RedundantIsCheck(), [{ file: 'Bad.hx', source: 'class Bad { function f() { var b = x is ' }])
 				.length
 		);
 	}
@@ -133,7 +133,7 @@ class RedundantIsCheckTest extends Test {
 	/** Run + fix + canonicalise (whole-file reformat) `src`, returning the emitted text. */
 	private function fixText(src: String): String {
 		final check: RedundantIsCheck = new RedundantIsCheck();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		return switch CanonicalEdit.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
 			case Ok(text): text;
 			case Err(message):
@@ -152,13 +152,13 @@ class RedundantIsCheckTest extends Test {
 	/** `src` is flagged by `run` but produces no fix edit — a conservative refusal. */
 	private function assertFixRefused(src: String): Void {
 		final check: RedundantIsCheck = new RedundantIsCheck();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.isTrue(vs.length > 0, 'expected a finding to exist');
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new RedundantIsCheck().run(CheckFixture.withStd(src), new HaxeQueryPlugin());
+		return CheckFixture.violationsIn(new RedundantIsCheck(), CheckFixture.withStd(src));
 	}
 
 }

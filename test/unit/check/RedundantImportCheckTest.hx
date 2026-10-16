@@ -6,8 +6,8 @@ import anyparse.check.RedundantImport;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
-import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -98,7 +98,7 @@ class RedundantImportCheckTest extends Test {
 					+ '\tpublic static function twice(v:Int):Int {\n\t\treturn v * 2;\n\t}\n\n}\n'
 			}
 		];
-		Assert.equals(0, new RedundantImport().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(new RedundantImport(), files).length);
 	}
 
 	/**
@@ -144,7 +144,7 @@ class RedundantImportCheckTest extends Test {
 			{ file: 'pkg/deep/Mod.hx', source: MOD },
 			{ file: 'other/Other.hx', source: 'package other;\n\nclass Other {}\n\ntypedef Sub = Float;\n' }
 		];
-		Assert.equals(0, new RedundantImport().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(new RedundantImport(), files).length);
 	}
 
 	/**
@@ -160,8 +160,8 @@ class RedundantImportCheckTest extends Test {
 		];
 		final rival: String = 'package app;\n\nimport p.M;\nimport p.Col;\nimport p.M.MSub;\n\nclass C {\n\n\tvar s:MSub = Red;\n\n}\n';
 		final free: String = 'package app;\n\nimport p.M;\nimport p.M.MSub;\n\nclass C {\n\n\tvar s:MSub = Red;\n\n}\n';
-		Assert.equals(0, new RedundantImport().run(files.concat([{ file: 'app/C.hx', source: rival }]), new HaxeQueryPlugin()).length);
-		Assert.equals(1, new RedundantImport().run(files.concat([{ file: 'app/C.hx', source: free }]), new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(new RedundantImport(), files.concat([{ file: 'app/C.hx', source: rival }])).length);
+		Assert.equals(1, CheckFixture.violationsIn(new RedundantImport(), files.concat([{ file: 'app/C.hx', source: free }])).length);
 	}
 
 	/** A type the file itself declares under that name outranks every import — leave the statement alone. */
@@ -188,7 +188,7 @@ class RedundantImportCheckTest extends Test {
 			{ file: 'app/C.hx', source: src },
 			{ file: 'pkg/deep/Colors.hx', source: 'package pkg.deep;\n\nenum Colors {\n\tRed;\n\tBlue;\n}\n' }
 		];
-		Assert.equals(0, new RedundantImport().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(new RedundantImport(), files).length);
 	}
 
 	/**
@@ -214,7 +214,7 @@ class RedundantImportCheckTest extends Test {
 			{ file: 'pkg/deep/Mod.hx', source: MOD },
 			{ file: 'far/Sub.hx', source: 'package far;\n\nclass Sub {}\n' }
 		];
-		Assert.equals(1, new RedundantImport().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(1, CheckFixture.violationsIn(new RedundantImport(), files).length);
 	}
 
 	// --- the live repro shape ---
@@ -242,9 +242,9 @@ class RedundantImportCheckTest extends Test {
 		];
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: RedundantImport = new RedundantImport();
-		final vs: Array<Violation> = check.run(files, plugin);
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 		Assert.equals(2, vs.length);
-		final fixed: String = CanonicalEdit.applyEdits(src, check.fix(src, vs, plugin, SymbolIndex.build(files, plugin)));
+		final fixed: String = CanonicalEdit.applyEdits(src, check.fix(src, vs, plugin, CheckFixture.index(files, plugin)));
 		Assert.isFalse(fixed.contains('import fs.FileSystemInterface.FileSystemCloudAction;'));
 		Assert.isFalse(fixed.contains('import fs.cloud.CloudDatabase.CloudDatabaseFilePath;'));
 		Assert.isTrue(fixed.contains('import fs.FileSystemInterface;'));
@@ -270,7 +270,7 @@ class RedundantImportCheckTest extends Test {
 
 	/** The check's findings for `src`, resolved against a file set that also carries `pkg.deep.Mod`. */
 	private function violations(src: String): Array<Violation> {
-		return new RedundantImport().run(fileSet(src), new HaxeQueryPlugin());
+		return CheckFixture.violationsIn(new RedundantImport(), fileSet(src));
 	}
 
 	/** The check's autofix edits for `src`. */
@@ -278,7 +278,7 @@ class RedundantImportCheckTest extends Test {
 		final files: Array<{ file: String, source: String }> = fileSet(src);
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: RedundantImport = new RedundantImport();
-		return check.fix(src, check.run(files, plugin), plugin, SymbolIndex.build(files, plugin));
+		return check.fix(src, CheckFixture.violationsIn(check, files, plugin), plugin, CheckFixture.index(files, plugin));
 	}
 
 	private function fileSet(src: String): Array<{ file: String, source: String }> {

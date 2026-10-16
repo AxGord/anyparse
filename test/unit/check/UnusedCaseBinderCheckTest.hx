@@ -7,6 +7,7 @@ import anyparse.check.UnusedCaseBinder;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -335,7 +336,7 @@ class UnusedCaseBinderCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new UnusedCaseBinder().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new UnusedCaseBinder(), src);
 	}
 
 	/**
@@ -354,7 +355,7 @@ class UnusedCaseBinderCheckTest extends Test {
 				)
 					{ file: '$root/${f.name}', source: f.source }
 			];
-			final found: Array<Violation> = new UnusedCaseBinder().run(files, new HaxeQueryPlugin());
+			final found: Array<Violation> = CheckFixture.violationsIn(new UnusedCaseBinder(), files);
 			count = found.filter(v -> v.file == '$root/$subject').length;
 		});
 		return count;
@@ -365,7 +366,7 @@ class UnusedCaseBinderCheckTest extends Test {
 
 	private function fixEdits(src: String): Array<{ span: Span, text: String }> {
 		final check: UnusedCaseBinder = new UnusedCaseBinder();
-		return check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
+		return CheckFixture.edits(check, src);
 	}
 
 	/** Run `fix` and re-emit through the canonical writer, `reformat` on so the minimal fixture need not be canonical. */

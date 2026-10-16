@@ -8,6 +8,7 @@ import anyparse.check.UnusedCaseBinder;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -201,12 +202,12 @@ class RedundantCaseBodyCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new RedundantCaseBody().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new RedundantCaseBody(), src);
 	}
 
 	private function fixEdits(src: String): Array<{ span: Span, text: String }> {
 		final check: RedundantCaseBody = new RedundantCaseBody();
-		return check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
+		return CheckFixture.edits(check, src);
 	}
 
 	/** Run `redundant-case-body`'s fix and re-emit through the canonical writer. */
@@ -217,9 +218,7 @@ class RedundantCaseBodyCheckTest extends Test {
 	/** Run `unused-case-binder`'s fix — the pass that has to run first for the composition fixture. */
 	private function applyBinderFix(src: String): String {
 		final check: UnusedCaseBinder = new UnusedCaseBinder();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.edits(check, src);
 		return canonical(src, edits);
 	}
 

@@ -5,7 +5,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.RedundantAscription;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -109,7 +109,7 @@ class RedundantAscriptionTest extends Test {
 	public function testFixLeavesUnflaggedAscriptionAlone(): Void {
 		final src: String = 'class Foo {} class Bar {} class C { function f():Bar { return (new Foo() : Bar); } }';
 		final check: RedundantAscription = new RedundantAscription();
-		Assert.equals(0, check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.edits(check, src).length);
 	}
 
 	public function testFlaggedAsInfo(): Void {
@@ -132,8 +132,8 @@ class RedundantAscriptionTest extends Test {
 	public function testSkipParseNoCrash(): Void {
 		Assert.equals(
 			0,
-			new RedundantAscription().run(
-				[{ file: 'Bad.hx', source: 'class Bad { function f() { final a = (new Row(' }], new HaxeQueryPlugin()
+			CheckFixture.violationsIn(
+				new RedundantAscription(), [{ file: 'Bad.hx', source: 'class Bad { function f() { final a = (new Row(' }]
 			)
 				.length
 		);
@@ -144,7 +144,7 @@ class RedundantAscriptionTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new RedundantAscription().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new RedundantAscription(), src);
 	}
 
 }

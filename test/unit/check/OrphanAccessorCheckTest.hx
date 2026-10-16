@@ -5,6 +5,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -399,7 +400,7 @@ import utest.Test;
 		Assert.notNull(check);
 		if (check == null) return;
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final vs: Array<Violation> = check.run(files, plugin);
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 		Assert.equals(1, vs.length);
 		Assert.equals(0, check.fix(owner, vs, plugin).length);
 	}
@@ -453,7 +454,7 @@ import utest.Test;
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final probe: Null<Check> = Linter.byId('orphan-accessor');
 		if (probe == null) return;
-		final vs: Array<Violation> = probe.run([{ file: 'C.hx', source: src }], plugin);
+		final vs: Array<Violation> = CheckFixture.violations(probe, src, plugin);
 		Assert.equals(1, vs.length);
 		Assert.equals(0, check.fix(src, vs, plugin).length);
 	}
@@ -563,7 +564,7 @@ import utest.Test;
 		Assert.notNull(check);
 		if (check == null) return;
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final vs: Array<Violation> = check.run(files, plugin);
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 		Assert.equals(1, vs.length);
 		Assert.equals(0, check.fix(owner, vs, plugin).length);
 	}
@@ -806,7 +807,7 @@ import utest.Test;
 
 	private function violationsOf(files: Array<{ file: String, source: String }>): Array<Violation> {
 		final check: Null<Check> = Linter.byId('orphan-accessor');
-		return check == null ? [] : check.run(files, new HaxeQueryPlugin());
+		return check == null ? [] : CheckFixture.violationsIn(check, files);
 	}
 
 	/**
@@ -837,7 +838,7 @@ import utest.Test;
 		Assert.notNull(check);
 		if (check == null) return -1;
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		return check.fix(owner, check.run(files, plugin), plugin).length;
+		return check.fix(owner, CheckFixture.violationsIn(check, files, plugin), plugin).length;
 	}
 
 	private function applyFix(src: String): String {
@@ -872,7 +873,7 @@ import utest.Test;
 		Assert.notNull(check);
 		if (check == null) return -1;
 		final plugin: CachingGrammarPlugin = scoped(report, reach, thirdParty ?? []);
-		return check.fix(owner, check.run(report, plugin), plugin).length;
+		return check.fix(owner, CheckFixture.violationsIn(check, report, plugin), plugin).length;
 	}
 
 	/** The rule's ONE finding over that same narrow report scope, or null when it did not produce exactly one. */
@@ -881,7 +882,7 @@ import utest.Test;
 	): Null<Violation> {
 		final check: Null<Check> = Linter.byId('orphan-accessor');
 		if (check == null) return null;
-		final vs: Array<Violation> = check.run(report, scoped(report, reach, []));
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, report, scoped(report, reach, []));
 		Assert.equals(1, vs.length);
 		return vs.length == 1 ? vs[0] : null;
 	}

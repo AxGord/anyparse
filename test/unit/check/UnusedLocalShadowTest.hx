@@ -2,7 +2,7 @@ package unit.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.check.UnusedLocal;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -384,7 +384,7 @@ class UnusedLocalShadowTest extends Test {
 	public function testMessageIdentityMasksItsOwnRedeclarationPosition(): Void {
 		final check: UnusedLocal = new UnusedLocal();
 		final source: String = 'class C {\n\tfunction f() {\n\t\tvar a = 1;\n\t\tvar a = 2;\n\t\treturn a;\n\t}\n}';
-		final message: String = check.run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin())[0].message;
+		final message: String = CheckFixture.violations(check, source)[0].message;
 		final identity: String = check.messageIdentity(message);
 		Assert.equals("unused local 'a' — re-declared at #, and every read past that belongs to the second binding", identity);
 		Assert.equals(identity, check.messageIdentity(identity), 'the normalization is idempotent');
@@ -514,7 +514,7 @@ class UnusedLocalShadowTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new UnusedLocal().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new UnusedLocal(), src);
 	}
 
 	private function applyFix(src: String): String {

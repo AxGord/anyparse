@@ -6,7 +6,7 @@ import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -84,7 +84,7 @@ class AsymmetricBranchBracesCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new AsymmetricBranchBraces().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new AsymmetricBranchBraces(), src);
 	}
 
 	private function wrap(body: String): String {

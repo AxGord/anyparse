@@ -10,6 +10,7 @@ import anyparse.check.FixVerifier;
 import anyparse.check.PreferInline;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
+import unit.CheckFixture;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -41,23 +42,23 @@ class PreferInlineOracleTest extends Test {
 
 	public function testObjectLiteralBodyNeverCandidate(): Void {
 		final src: String = 'class C {\n\tpublic function make():Dynamic return {a: 1};\n\tpublic function plain():Int return 1;\n}';
-		final vs: Array<Violation> = new PreferInline().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(new PreferInline(), src);
 		Assert.isFalse(mentions(vs, 'make'), 'an object literal is an allocation — never a candidate');
 		Assert.isTrue(mentions(vs, 'plain'), 'a plain single-expression method is still flagged');
 		final relaxed: PreferInline = new PreferInline();
 		relaxed.setOracleRelaxed(true);
-		final rvs: Array<Violation> = relaxed.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final rvs: Array<Violation> = CheckFixture.violations(relaxed, src);
 		Assert.isFalse(mentions(rvs, 'make'), 'the relaxed oracle path widens only the null gate, not the benefit classes');
 	}
 
 	public function testOracleRelaxedRunFlagsNullArgForward(): Void {
 		final src: String =
 			'class C {\n\tvar _cb:Null<Int>->Void;\n\tpublic function fire():Void _cb(null);\n\tpublic function plain():Int return 1;\n}';
-		final vs: Array<Violation> = new PreferInline().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(new PreferInline(), src);
 		Assert.isFalse(mentions(vs, 'fire'), 'gate on: a null argument re-typechecks in the caller mode — suppressed');
 		final check: PreferInline = new PreferInline();
 		check.setOracleRelaxed(true);
-		final rvs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final rvs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.isTrue(mentions(rvs, 'fire'), 'relaxed: the null-arg forward becomes a candidate');
 		Assert.isTrue(mentions(rvs, 'plain'), 'the plain method stays a candidate too');
 	}

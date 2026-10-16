@@ -4,7 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.EmptyStatement;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -136,7 +136,7 @@ class EmptyStatementCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new EmptyStatement().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new EmptyStatement(), src);
 	}
 
 	private function applyFix(src: String): String {

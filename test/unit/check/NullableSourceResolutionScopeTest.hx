@@ -5,6 +5,7 @@ import anyparse.check.PossibleNullDereference;
 import anyparse.check.UnguardedNullableDeref;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -93,13 +94,13 @@ class NullableSourceResolutionScopeTest extends Test {
 	/** `possible-null-dereference` over `source`, with `Lib` / `Item` / `Array` reachable only through the resolution scope. */
 	private function pointwise(source: String): Array<Violation> {
 		final report: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: source }];
-		return new PossibleNullDereference().run(report, scoped(report));
+		return CheckFixture.violationsIn(new PossibleNullDereference(), report, scoped(report));
 	}
 
 	/** `unguarded-nullable-deref` over `source`, same scope shape. */
 	private function flow(source: String): Array<Violation> {
 		final report: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: source }];
-		return new UnguardedNullableDeref().run(report, scoped(report));
+		return CheckFixture.violationsIn(new UnguardedNullableDeref(), report, scoped(report));
 	}
 
 	/** A plugin hosting the scope in the shape `LintCommand` builds: report under report, the rest in the library half. */

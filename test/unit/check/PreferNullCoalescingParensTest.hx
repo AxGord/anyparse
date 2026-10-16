@@ -4,6 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.PreferNullCoalescing;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -59,9 +60,9 @@ class PreferNullCoalescingParensTest extends Test {
 		final source: String = 'class C {\n\tstatic function f(): Dynamic {\n\t\t$body\n\t}\n}\n';
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: PreferNullCoalescing = new PreferNullCoalescing();
-		final violations: Array<Violation> = check.run([{ file: 'C.hx', source: source }], plugin);
+		final violations: Array<Violation> = CheckFixture.violations(check, source, plugin);
 		Assert.equals(1, violations.length, body);
-		final edits: Array<{ span: Span, text: String }> = check.fix(source, violations, plugin);
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.fixOf(check, source, violations, plugin);
 		Assert.equals(1, edits.length, body);
 		return edits.length == 1 ? edits[0].text : '';
 	}

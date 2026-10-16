@@ -2,8 +2,8 @@ package unit.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.check.FoldStringLiterals;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Test;
 
 /**
@@ -31,15 +31,13 @@ class FoldStringLiteralsCheckTestBase extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new FoldStringLiterals().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new FoldStringLiterals(), src);
 	}
 
 	/** The canonical text the fix emits for `src`'s first flagged construct (empty if none). */
 	private function foldOf(src: String): String {
 		final check: FoldStringLiterals = new FoldStringLiterals();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.edits(check, src);
 		return edits.length > 0 ? edits[0].text : '';
 	}
 

@@ -8,6 +8,7 @@ import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 
 /**
@@ -81,9 +82,9 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 			{ file: 'pkg/C.hx', source: cSrc },
 			{ file: 'pkg/CSub.hx', source: dSrc }
 		];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		final renames: Array<Array<CrossFileEdits>> = check.crossFileFix(files, vs, new HaxeQueryPlugin(), index);
 		Assert.equals(1, renames.length);
 		assertRenameSlice(renames[0], 'pkg/C.hx', cSrc, 'return _bottom + d._bottom', 'd.bottom');
@@ -95,9 +96,9 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}';
 		final dSrc: String = 'package pkg;\nclass D extends C {\n\tpublic function g() { return shape; }\n}';
 		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: cSrc }, { file: 'pkg/D.hx', source: dSrc }];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		// The single-file fix still refuses the non-confined field.
 		Assert.equals(0, check.fix(cSrc, vs.filter(v -> v.file == 'pkg/C.hx'), new HaxeQueryPlugin(), index).length);
 		final renames: Array<Array<CrossFileEdits>> = check.crossFileFix(files, vs, new HaxeQueryPlugin(), index);
@@ -115,9 +116,9 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 		final dSrc: String = 'package pkg;\nclass D extends C {\n\tpublic function g():Int {\n\t\t#if flag\n\t\treturn shape;\n\t\t#else\n'
 			+ '\t\treturn 0;\n\t\t#end\n\t}\n}';
 		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: cSrc }, { file: 'pkg/D.hx', source: dSrc }];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		Assert.equals(0, check.crossFileFix(files, vs, new HaxeQueryPlugin(), index).length);
 	}
 
@@ -127,9 +128,9 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}';
 		final dSrc: String = 'package pkg;\nclass D extends C {\n\tpublic function g():Dynamic { return Reflect.field(this, "shape"); }\n}';
 		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: cSrc }, { file: 'pkg/D.hx', source: dSrc }];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		Assert.equals(0, check.crossFileFix(files, vs, new HaxeQueryPlugin(), index).length);
 	}
 
@@ -146,9 +147,9 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 			{ file: 'pkg/Other.hx', source: otherSrc },
 			{ file: 'pkg/D.hx', source: dSrc }
 		];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		final renames: Array<Array<CrossFileEdits>> = check.crossFileFix(files, vs, new HaxeQueryPlugin(), index);
 		Assert.equals(1, renames.length);
 		final rename: Array<CrossFileEdits> = renames[0];
@@ -163,9 +164,9 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var size:Int;\n\tpublic function f() { return this.size; }\n}';
 		final dSrc: String = 'package pkg;\nclass D extends C {\n\tpublic function g(d:D) { return d.size; }\n}';
 		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: cSrc }, { file: 'pkg/D.hx', source: dSrc }];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		final renames: Array<Array<CrossFileEdits>> = check.crossFileFix(files, vs, new HaxeQueryPlugin(), index);
 		Assert.equals(1, renames.length);
 		final rename: Array<CrossFileEdits> = renames[0];
@@ -216,9 +217,9 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 			{ file: 'pkg/B.hx', source: bSrc },
 			{ file: 'pkg/SubB.hx', source: subBSrc }
 		];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		final renames: Array<Array<CrossFileEdits>> = check.crossFileFix(files, vs, new HaxeQueryPlugin(), index);
 		Assert.equals(2, renames.length);
 		var renamedA: Bool = false;
@@ -244,9 +245,9 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var size:Int;\n\tpublic function f() { return this.size; }\n}';
 		final dSrc: String = 'package pkg;\nclass D extends C {\n\tpublic function g(o) { return o.size; }\n}';
 		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: cSrc }, { file: 'pkg/D.hx', source: dSrc }];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		Assert.equals(0, check.crossFileFix(files, vs, new HaxeQueryPlugin(), index).length);
 	}
 
@@ -267,9 +268,9 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 			{ file: 'pkg/Base.hx', source: baseSrc },
 			{ file: 'pkg/Host.hx', source: hostSrc }
 		];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		final renames: Array<Array<CrossFileEdits>> = check.crossFileFix(files, vs, new HaxeQueryPlugin(), index);
 		Assert.equals(1, renames.length);
 		final rename: Array<CrossFileEdits> = renames[0];
@@ -287,9 +288,9 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var __w:Int;\n\tpublic function f() { return this.__w; }\n}';
 		final dSrc: String = 'package pkg;\nclass D extends C {\n\tprivate var _w:Int;\n\tpublic function g() { return __w + _w; }\n}';
 		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: cSrc }, { file: 'pkg/D.hx', source: dSrc }];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		Assert.equals(0, check.crossFileFix(files, vs, new HaxeQueryPlugin(), index).length);
 	}
 
@@ -305,9 +306,9 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 			{ file: 'pkg/C.hx', source: AMBIGUITY_OWNER_SRC },
 			{ file: 'pkg/D.hx', source: dSrc }
 		];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		Assert.equals(1, vs.length);
 		final renames: Array<Array<CrossFileEdits>> = check.crossFileFix(files, vs, new HaxeQueryPlugin(), index);
 		Assert.equals(1, renames.length);
@@ -340,9 +341,9 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 				{ file: 'pkg/Alias.hx', source: 'package pkg;\ntypedef Alias = $aliasTarget;' },
 				{ file: 'pkg/D.hx', source: dSrc }
 			];
-			final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+			final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 			final check: Naming = new Naming();
-			final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+			final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 			Assert.equals(1, vs.length);
 			final renames: Array<Array<CrossFileEdits>> = check.crossFileFix(files, vs, new HaxeQueryPlugin(), index);
 			assertNotHalfApplied(renames, 'pkg/C.hx', 'pkg/D.hx');
@@ -371,9 +372,9 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 			{ file: 'pkg/D.hx', source: dSrc },
 			{ file: 'pkg/Twin.hx', source: twinSrc }
 		];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		Assert.equals(1, vs.length);
 		final renames: Array<Array<CrossFileEdits>> = check.crossFileFix(files, vs, new HaxeQueryPlugin(), index);
 		assertNotHalfApplied(renames, 'pkg/C.hx', 'pkg/D.hx');
@@ -392,9 +393,9 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 			{ file: 'pkg/D.hx', source: dSrc },
 			{ file: 'pkg/E.hx', source: eSrc }
 		];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		final renames: Array<Array<CrossFileEdits>> = check.crossFileFix(files, vs, new HaxeQueryPlugin(), index);
 		Assert.equals(1, renames.length);
 		final rename: Array<CrossFileEdits> = renames[0];
@@ -415,9 +416,9 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 		final dSrc: String =
 			'package pkg;\nclass D extends C {\n\t// _shape is inherited from C\n\tpublic function g() { return shape; }\n}';
 		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: cSrc }, { file: 'pkg/D.hx', source: dSrc }];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		final renames: Array<Array<CrossFileEdits>> = check.crossFileFix(files, vs, new HaxeQueryPlugin(), index);
 		Assert.equals(1, renames.length);
 		assertRenameSlice(renames[0], 'pkg/D.hx', dSrc, '_shape', 'return shape');
@@ -432,9 +433,9 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 		final dSrc: String =
 			'package pkg;\nclass D extends C {\n\tprivate var _shape:Int;\n\tpublic function g() { return shape + _shape; }\n}';
 		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: cSrc }, { file: 'pkg/D.hx', source: dSrc }];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		Assert.equals(0, check.crossFileFix(files, vs, new HaxeQueryPlugin(), index).length);
 	}
 
@@ -581,9 +582,9 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 		final lib: Array<{ file: String, source: String }> = [{ file: 'ext/SSub.hx', source: libSrc }];
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		scoped.setResolutionScope({ declared: true, sources: () -> {report: report, projectRoots: [], library: new LibrarySources(lib) } });
-		final reportIndex: SymbolIndex = SymbolIndex.build(report, new HaxeQueryPlugin());
+		final reportIndex: SymbolIndex = CheckFixture.index(report, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(report, scoped);
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, report, scoped);
 		// The finding MUST exist, or the zero below would prove nothing.
 		Assert.equals(1, vs.length);
 		Assert.equals(0, check.crossFileFix(report, vs, scoped, reportIndex).length);
@@ -674,9 +675,9 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 			{ file: 'pkg/A.hx', source: CLAIM_BASE_SRC },
 			{ file: 'pkg/B.hx', source: CLAIM_SUB_SRC }
 		];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		// BOTH findings MUST exist, or the per-file zero below would be `fix`'s empty-violations
 		// early return rather than the claim gate.
 		Assert.equals(2, vs.length);
@@ -701,7 +702,7 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 		];
 		// BOTH must still be flagged, or the single rename below would be one candidate rather than
 		// two candidates of which one deferred.
-		Assert.equals(2, new Naming().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(2, CheckFixture.violationsIn(new Naming(), files).length);
 		assertRenameSlice(crossFileRename(files), 'pkg/A.hx', CLAIM_BASE_SRC, '_caps', 'CAPS');
 	}
 
@@ -747,9 +748,9 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 			{ file: 'pkg/XSub.hx', source: xSubSrc }
 		];
 		final check: Naming = new Naming();
-		Assert.equals(2, check.run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(2, CheckFixture.violationsIn(check, files).length);
 		final first: Array<Array<CrossFileEdits>> = check.crossFileFix(
-			files, check.run(files, new HaxeQueryPlugin()), new HaxeQueryPlugin(), SymbolIndex.build(files, new HaxeQueryPlugin())
+			files, CheckFixture.violationsIn(check, files), new HaxeQueryPlugin(), CheckFixture.index(files, new HaxeQueryPlugin())
 		);
 		// Only `A` lands: `X` is an `abstract class`, which `unrelatedClasses` will not certify, so it
 		// defers rather than risk the duplicate. That deferral is what the second pass has to undo.
@@ -757,7 +758,7 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 		assertRenameSlice(first[0], 'pkg/A.hx', CLAIM_BASE_SRC, '_caps', 'CAPS');
 		files[0].source = CanonicalEdit.applyEdits(CLAIM_BASE_SRC, first[0][0].edits);
 		final second: Array<Array<CrossFileEdits>> = check.crossFileFix(
-			files, check.run(files, new HaxeQueryPlugin()), new HaxeQueryPlugin(), SymbolIndex.build(files, new HaxeQueryPlugin())
+			files, CheckFixture.violationsIn(check, files), new HaxeQueryPlugin(), CheckFixture.index(files, new HaxeQueryPlugin())
 		);
 		Assert.equals(1, second.length);
 		assertRenameSlice(second[0], 'pkg/X.hx', xSrc, 'return _caps', 'Caps');
@@ -812,7 +813,7 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 	public function testAnUnrelatedSkipParseFileDoesNotBlockACrossFileRename(): Void {
 		final files: Array<{ file: String, source: String }> = scopeWithBroken('package pkg;\nclass Broken { var x = ((( ; }');
 		// The file really does skip-parse, or the rename below would say nothing about the gate.
-		Assert.equals(1, SymbolIndex.build(files, new HaxeQueryPlugin()).skippedFiles().length);
+		Assert.equals(1, CheckFixture.index(files, new HaxeQueryPlugin()).skippedFiles().length);
 		final rename: Array<CrossFileEdits> = crossFileRename(files);
 		Assert.equals(2, rename.length);
 		assertRenameSlice(rename, 'pkg/C.hx', files[0].source, 'private var _shape', 'var shape');
@@ -993,9 +994,9 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 			declared: true,
 			sources: () -> {report: report, projectRoots: roots, library: new LibrarySources(roots.concat(library)) }
 		});
-		final index: SymbolIndex = SymbolIndex.build(report, plugin);
+		final index: SymbolIndex = CheckFixture.index(report, plugin);
 		final check: Naming = new Naming();
-		return check.crossFileFix(report, check.run(report, plugin), plugin, index).length;
+		return check.crossFileFix(report, CheckFixture.violationsIn(check, report, plugin), plugin, index).length;
 	}
 
 	/**
@@ -1029,7 +1030,7 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 	 * quietly parses would take its refusal from some entirely different gate and prove nothing.
 	 */
 	private function refusalNamingIn(files: Array<{ file: String, source: String }>): String {
-		Assert.equals(1, SymbolIndex.build(files, new HaxeQueryPlugin()).skippedFiles().length);
+		Assert.equals(1, CheckFixture.index(files, new HaxeQueryPlugin()).skippedFiles().length);
 		return refusalFor(files, 'pkg/C.hx', true);
 	}
 
@@ -1042,9 +1043,9 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 
 	/** `files` carries at least one finding and the cross-file rename refuses it outright. */
 	private function assertCrossFileRefused(files: Array<{ file: String, source: String }>): Void {
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		// The finding MUST exist, or the zero below would prove nothing.
 		Assert.isTrue(vs.length >= 1);
 		Assert.equals(0, check.crossFileFix(files, vs, new HaxeQueryPlugin(), index).length);
@@ -1073,9 +1074,9 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 			{ file: 'pkg/D.hx', source: dSrc },
 			{ file: 'pkg/Twin.hx', source: twinSrc }
 		];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		// The candidate MUST exist, or the zero below would prove nothing.
 		Assert.equals(1, vs.length);
 		final renames: Array<Array<CrossFileEdits>> = check.crossFileFix(files, vs, new HaxeQueryPlugin(), index);
@@ -1102,9 +1103,9 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 
 	/** Every cross-file rename `files` yields in ONE pass, from a fresh check. */
 	private function crossFileRenames(files: Array<{ file: String, source: String }>): Array<Array<CrossFileEdits>> {
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
-		return check.crossFileFix(files, check.run(files, new HaxeQueryPlugin()), new HaxeQueryPlugin(), index);
+		return check.crossFileFix(files, CheckFixture.violationsIn(check, files), new HaxeQueryPlugin(), index);
 	}
 
 }

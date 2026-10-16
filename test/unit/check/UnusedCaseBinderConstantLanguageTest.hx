@@ -2,7 +2,7 @@ package unit.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.check.UnusedCaseBinder;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -48,7 +48,7 @@ class UnusedCaseBinderConstantLanguageTest extends Test {
 	}
 
 	private function run(source: String): Array<Violation> {
-		return new UnusedCaseBinder().run([{ file: 'p/C.hx', source: source }], new HaxeQueryPlugin());
+		return CheckFixture.violationsIn(new UnusedCaseBinder(), [{ file: 'p/C.hx', source: source }]);
 	}
 
 }

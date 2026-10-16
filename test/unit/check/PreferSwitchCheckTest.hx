@@ -7,8 +7,10 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CachingGrammarPlugin.LibrarySources;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import unit.QueryTestHelpers;
 import utest.Assert;
 import utest.Test;
@@ -526,9 +528,9 @@ class PreferSwitchCheckTest extends Test {
 			sources: () -> {report: files, projectRoots: [], library: new LibrarySources([]) }
 		});
 		final check: PreferSwitch = new PreferSwitch();
-		final own: Array<Violation> = check.run(files, plugin).filter(v -> v.file == 'C.hx');
+		final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == 'C.hx');
 		Assert.equals(1, own.length);
-		final reportScoped: SymbolIndex = SymbolIndex.build([{ file: 'C.hx', source: src }], plugin);
+		final reportScoped: SymbolIndex = CheckFixture.index([{ file: 'C.hx', source: src }], plugin);
 		Assert.equals(1, check.fix(src, own, plugin, reportScoped).length);
 	}
 
@@ -550,7 +552,7 @@ class PreferSwitchCheckTest extends Test {
 
 
 	private function violations(src: String, ?constants: String): Array<Violation> {
-		return new PreferSwitch().run(entries(src, constants), new HaxeQueryPlugin());
+		return CheckFixture.violationsIn(new PreferSwitch(), entries(src, constants));
 	}
 
 	/**
@@ -565,9 +567,9 @@ class PreferSwitchCheckTest extends Test {
 		final check: PreferSwitch = new PreferSwitch();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final files: Array<{ file: String, source: String }> = entries(src, constants);
-		final own: Array<Violation> = check.run(files, plugin).filter(v -> v.file == 'C.hx');
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, own, plugin, SymbolIndex.build(files, plugin));
-		return CheckFixture.applyEdits(src, edits);
+		final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == 'C.hx');
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, own, plugin, CheckFixture.index(files, plugin));
+		return CanonicalEdit.applyEdits(src, edits);
 	}
 
 }

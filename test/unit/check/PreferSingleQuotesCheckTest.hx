@@ -9,6 +9,7 @@ import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import sys.FileSystem;
 import sys.io.File;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -99,9 +100,7 @@ class PreferSingleQuotesCheckTest extends Test {
 	public function testFixAppliedResult(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\tfinal a = "hi";\n\t}\n}';
 		final check: PreferSingleQuotes = new PreferSingleQuotes();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.edits(check, src);
 		switch CanonicalEdit.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.contains("'hi'"));
@@ -131,22 +130,20 @@ class PreferSingleQuotesCheckTest extends Test {
 		final path: String = '$dir/Foo.hx';
 		final src: String = 'class Foo {\n\tfunction f() { var s = "hi"; return s; }\n}';
 		File.saveContent(path, src);
-		Assert.equals(0, new PreferSingleQuotes().run([{ file: path, source: src }], new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(new PreferSingleQuotes(), [{ file: path, source: src }]).length);
 		FileSystem.deleteFile(path);
 		FileSystem.deleteFile('$dir/checkstyle.json');
 		FileSystem.deleteDirectory(dir);
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new PreferSingleQuotes().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferSingleQuotes(), src);
 	}
 
 	/** The single-quoted text the fix emits for `src`'s first convertible literal (empty if none). */
 	private function singleOf(src: String): String {
 		final check: PreferSingleQuotes = new PreferSingleQuotes();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.edits(check, src);
 		return edits.length > 0 ? edits[0].text : '';
 	}
 

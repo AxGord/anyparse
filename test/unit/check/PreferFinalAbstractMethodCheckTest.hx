@@ -5,6 +5,7 @@ import anyparse.check.PreferFinal;
 import anyparse.check.PreferFinalField;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -203,8 +204,8 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 				])
 			}
 		});
-		Assert.equals(1, new PreferFinal().run(report, scoped).length);
-		Assert.equals(0, new PreferFinal().run(report, new HaxeQueryPlugin()).length);
+		Assert.equals(1, CheckFixture.violationsIn(new PreferFinal(), report, scoped).length);
+		Assert.equals(0, CheckFixture.violationsIn(new PreferFinal(), report).length);
 	}
 
 	/**
@@ -294,11 +295,11 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 	}
 
 	private function fieldViolations(src: String): Array<Violation> {
-		return new PreferFinalField().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferFinalField(), src);
 	}
 
 	private function localViolations(src: String): Array<Violation> {
-		return new PreferFinal().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferFinal(), src);
 	}
 
 }

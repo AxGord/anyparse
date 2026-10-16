@@ -7,6 +7,7 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -353,7 +354,7 @@ class PreferCaseGuardCheckTest extends Test {
 
 
 	private function violations(src: String): Array<Violation> {
-		return new PreferCaseGuard().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferCaseGuard(), src);
 	}
 
 	/**
@@ -366,12 +367,12 @@ class PreferCaseGuardCheckTest extends Test {
 
 	/** Run over TWO files so the resolution index can see `other`'s declarations. */
 	private function scopedViolations(other: String, src: String): Array<Violation> {
-		return new PreferCaseGuard().run([{ file: 'Other.hx', source: other }, { file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violationsIn(new PreferCaseGuard(), [{ file: 'Other.hx', source: other }, { file: 'C.hx', source: src }]);
 	}
 
 	private function fixEdits(src: String): Array<{ span: Span, text: String }> {
 		final check: PreferCaseGuard = new PreferCaseGuard();
-		return check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
+		return CheckFixture.edits(check, src);
 	}
 
 	/** Run `fix` and re-emit through the canonical writer, `reformat` on so the minimal fixture need not be canonical. */

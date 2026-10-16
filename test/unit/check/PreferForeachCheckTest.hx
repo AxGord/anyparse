@@ -5,8 +5,8 @@ import anyparse.check.PreferForeach;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
-import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -317,7 +317,7 @@ class PreferForeachCheckTest extends Test {
 	 * candidate won is therefore legible from the finding COUNT alone.
 	 */
 	private function extViolations(usings: String, sBody: String): Array<Violation> {
-		return new PreferForeach().run([
+		return CheckFixture.violationsIn(new PreferForeach(), [
 			{
 				file: 'C.hx',
 				source: '$usings\nclass C {\n\tfunction f(s:S):Bool {\n'
@@ -330,19 +330,19 @@ class PreferForeachCheckTest extends Test {
 				source: 'class ExtIter {\n\tpublic static function items(s:S):Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}'
 			},
 			{ file: 'ExtInt.hx', source: 'class ExtInt {\n\tpublic static function items(n:Int):Array<Int> {\n\t\treturn [];\n\t}\n}' }
-		], new HaxeQueryPlugin());
+		]);
 	}
 
 	private function violations(source: String): Array<Violation> {
-		return new PreferForeach().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferForeach(), source);
 	}
 
 	private function fixResult(src: String): String {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: PreferForeach = new PreferForeach();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
+		final vs: Array<Violation> = CheckFixture.violations(check, src, plugin);
 		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, vs, plugin, SymbolIndex.build([{ file: 'C.hx', source: src }], plugin)
+			src, vs, plugin, CheckFixture.index([{ file: 'C.hx', source: src }], plugin)
 		);
 		switch CanonicalEdit.canonicalize(src, edits, true, plugin) {
 			case Ok(text):

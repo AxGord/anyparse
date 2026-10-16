@@ -6,6 +6,7 @@ import anyparse.query.GrammarPlugin.AmbientImports;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import haxe.Exception;
+import unit.CheckFixture;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -205,7 +206,7 @@ class AmbientImportResolutionTest extends Test {
 			{ file: '$host/a/T.hx', source: 'package a;\n\nclass T {}\n' }
 		];
 		CliFixture.always(CliFixture.removeDir.bind(host), () -> {
-			final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+			final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 			Assert.equals(
 				'$host/lib/T.hx', declaringFile(index, 'T', '$host/lib/Plain.hx'),
 				'an ambient source beside an invented path binds nothing, so the same-package type still answers'
@@ -363,7 +364,7 @@ class AmbientImportResolutionTest extends Test {
 			{ file: 'lib/T.hx', source: 'package lib;\n\nclass T {}\n' },
 			{ file: 'a/T.hx', source: 'package a;\n\nclass T {}\n' }
 		];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		Assert.equals(
 			'lib/T.hx', declaringFile(index, 'T', 'lib/Plain.hx'), 'with no ambient source only the same-package `lib.T` is in scope'
 		);
@@ -408,9 +409,9 @@ class AmbientImportResolutionTest extends Test {
 		final files: Array<{ file: String, source: String }> = [
 			for (entry in TREE) { file: '$root/${entry.name}', source: sys.io.File.getContent('$root/${entry.name}') }
 		];
-		return SymbolIndex.build(files, new HaxeQueryPlugin());
+		return CheckFixture.index(files, new HaxeQueryPlugin());
 		#else
-		return SymbolIndex.build([], new HaxeQueryPlugin());
+		return CheckFixture.index([], new HaxeQueryPlugin());
 		#end
 	}
 
@@ -420,9 +421,9 @@ class AmbientImportResolutionTest extends Test {
 		final files: Array<{ file: String, source: String }> = [
 			for (name in names) { file: '$root/$name', source: sys.io.File.getContent('$root/$name') }
 		];
-		return SymbolIndex.build(files, new HaxeQueryPlugin());
+		return CheckFixture.index(files, new HaxeQueryPlugin());
 		#else
-		return SymbolIndex.build([], new HaxeQueryPlugin());
+		return CheckFixture.index([], new HaxeQueryPlugin());
 		#end
 	}
 

@@ -5,6 +5,7 @@ import anyparse.check.Severity;
 import anyparse.check.UnusedImport;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -35,7 +36,7 @@ class LintUnusedImportResolutionScopeTest extends Test {
 	/** Control: without a resolution scope the same import is an unverifiable Info. */
 	public function testLibraryImportUnusedIsInfoWithoutScope(): Void {
 		final use: String = 'package pkg;\n\nimport ext.lib.Widget;\n\nclass C {}';
-		final vs: Array<Violation> = new UnusedImport().run([{ file: 'pkg/C.hx', source: use }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), [{ file: 'pkg/C.hx', source: use }]);
 		Assert.equals(1, vs.length);
 		Assert.equals(Severity.Info, vs[0].severity);
 	}
@@ -141,7 +142,7 @@ class LintUnusedImportResolutionScopeTest extends Test {
 		final report: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: useSource }];
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		scoped.setResolutionScope({ declared: true, sources: () -> {report: report, projectRoots: [], library: new LibrarySources(lib) } });
-		return new UnusedImport().run(report, scoped);
+		return CheckFixture.violationsIn(new UnusedImport(), report, scoped);
 	}
 
 }

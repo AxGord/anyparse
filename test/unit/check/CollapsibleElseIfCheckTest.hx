@@ -7,6 +7,7 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -194,7 +195,7 @@ class CollapsibleElseIfCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new CollapsibleElseIf().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new CollapsibleElseIf(), src);
 	}
 
 	/**
@@ -211,7 +212,7 @@ class CollapsibleElseIfCheckTest extends Test {
 
 	private function fixEdits(src: String): Array<{ span: Span, text: String }> {
 		final check: CollapsibleElseIf = new CollapsibleElseIf();
-		return check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
+		return CheckFixture.edits(check, src);
 	}
 
 }

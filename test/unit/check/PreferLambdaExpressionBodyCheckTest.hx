@@ -5,9 +5,9 @@ import anyparse.check.Linter;
 import anyparse.check.PreferArrowCallback;
 import anyparse.check.PreferLambdaExpressionBody;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -139,7 +139,7 @@ class PreferLambdaExpressionBodyCheckTest extends Test {
 	public function testFunctionLiteralOwnedByArrowCallback(): Void {
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\tg(function(v) { return v + 1; });\n\t}\n}';
 		Assert.equals(0, violations(src).length);
-		Assert.equals(1, new PreferArrowCallback().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()).length);
+		Assert.equals(1, CheckFixture.violations(new PreferArrowCallback(), src).length);
 	}
 
 	/** A reification subtree is spliced code a consumer may pattern-match, not source anyone reads. */
@@ -528,12 +528,12 @@ class PreferLambdaExpressionBodyCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new PreferLambdaExpressionBody().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferLambdaExpressionBody(), src);
 	}
 
 	private function edits(src: String): Array<{ span: Span, text: String }> {
 		final check: PreferLambdaExpressionBody = new PreferLambdaExpressionBody();
-		return check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
+		return CheckFixture.edits(check, src);
 	}
 
 }

@@ -6,6 +6,7 @@ import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -176,8 +177,8 @@ class AnonTypeDupCheckTest extends Test {
 		// populations, so one new anonymous structure anywhere re-keyed every finding the rule
 		// had. Pinned against messages `run` produced, as `Check.VolatileMessage` requires.
 		final check: AnonTypeDup = new AnonTypeDup();
-		final three: String = check.run([for (i in 0...3) { file: 'a$i.hx', source: SHAPE }], new HaxeQueryPlugin())[0].message;
-		final four: String = check.run([for (i in 0...4) { file: 'a$i.hx', source: SHAPE }], new HaxeQueryPlugin())[0].message;
+		final three: String = CheckFixture.violationsIn(check, [for (i in 0...3) { file: 'a$i.hx', source: SHAPE }])[0].message;
+		final four: String = CheckFixture.violationsIn(check, [for (i in 0...4) { file: 'a$i.hx', source: SHAPE }])[0].message;
 		Assert.isTrue(three.contains('written 3 times across 3 files'), three);
 		Assert.notEquals(three, four);
 		final identity: String = check.messageIdentity(three);
@@ -204,7 +205,7 @@ class AnonTypeDupCheckTest extends Test {
 		for (files in [[x, y], [y, x]]) {
 			final check: AnonTypeDup = new AnonTypeDup();
 			check.setConfigResolver(f -> f.startsWith('x/') ? low : high);
-			Assert.same(['x/X.hx'], [for (v in check.run(files, new HaxeQueryPlugin())) v.file]);
+			Assert.same(['x/X.hx'], [for (v in CheckFixture.violationsIn(check, files)) v.file]);
 		}
 	}
 
@@ -235,7 +236,7 @@ class AnonTypeDupCheckTest extends Test {
 	}
 
 	private function violations(sources: Array<String>): Array<Violation> {
-		return new AnonTypeDup().run([for (i in 0...sources.length) { file: 'a$i.hx', source: sources[i] }], new HaxeQueryPlugin());
+		return CheckFixture.violationsIn(new AnonTypeDup(), [for (i in 0...sources.length) { file: 'a$i.hx', source: sources[i] }]);
 	}
 
 }

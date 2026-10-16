@@ -4,6 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.TrivialGetter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -18,7 +19,7 @@ class TrivialGetterCheckTestBase extends Test {
 	}
 
 	private function violations(source: String): Array<Violation> {
-		return new TrivialGetter().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new TrivialGetter(), source);
 	}
 
 	private function assertFixCanonical(src: String, present: String, absent: String): Void {
@@ -61,7 +62,7 @@ class TrivialGetterCheckTestBase extends Test {
 		vs: Array<Violation>
 	} {
 		final check: TrivialGetter = new TrivialGetter();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		Assert.equals(1, vs.length);
 		return { check: check, vs: vs };
 	}

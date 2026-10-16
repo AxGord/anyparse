@@ -2,6 +2,7 @@ package unit.query;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.SymbolIndex;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -73,7 +74,7 @@ class DeclarationQueriesTest extends Test {
 	private static function indexOf(files: Map<String, String>): SymbolIndex {
 		final entries: Array<{ file: String, source: String }> = [for (file => source in files) { file: file, source: source }];
 		entries.sort((a, b) -> Reflect.compare(a.file, b.file));
-		return SymbolIndex.build(entries, new HaxeQueryPlugin());
+		return CheckFixture.index(entries, new HaxeQueryPlugin());
 	}
 
 	private static function sorted(names: Array<String>): Array<String> {

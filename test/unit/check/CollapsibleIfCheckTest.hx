@@ -4,8 +4,8 @@ import anyparse.check.Check.Violation;
 import anyparse.check.CollapsibleIf;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -79,12 +79,12 @@ class CollapsibleIfCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new CollapsibleIf().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new CollapsibleIf(), src);
 	}
 
 	private function fixEdits(src: String): Array<{ span: Span, text: String }> {
 		final check: CollapsibleIf = new CollapsibleIf();
-		return check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
+		return CheckFixture.edits(check, src);
 	}
 
 }

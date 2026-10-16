@@ -7,8 +7,8 @@ import anyparse.check.InvertNegatedIfElse;
 import anyparse.check.JoinStringAppend;
 import anyparse.check.RedundantToString;
 import anyparse.check.SimplifyNegatedCompound;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -393,7 +393,7 @@ class OperandBindingTest extends Test {
 			sys.io.File.saveContent(entry.file, entry.source);
 		}
 		#end
-		return check.run(run, new HaxeQueryPlugin()).filter(v -> {
+		return CheckFixture.violationsIn(check, run).filter(v -> {
 			final span: Null<Span> = v.span;
 			return v.file == '${prefix}u/Use.hx' && span != null && span.from <= at && at < span.to;
 		});

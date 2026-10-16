@@ -9,6 +9,7 @@ import anyparse.grammar.haxe.HaxeNamingSupport;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.NamingPolicy.NamedDecl;
 import anyparse.query.NamingPolicy.NamingPolicy;
+import unit.CheckFixture;
 import utest.Assert;
 
 using StringTools;
@@ -54,8 +55,8 @@ class NamingCheckTest extends NamingCheckTestBase {
 		final check: Naming = new Naming();
 		final plain: String = '@:enum abstract E(Int) { final Red = 0; final Green = 1; }';
 		final guarded: String = '#if (haxe_ver >= 4.2) enum #else @:enum #end abstract E(Int) { final Red = 0; final Green = 1; }';
-		Assert.equals(0, check.run([{ file: 'C.hx', source: plain }], new HaxeQueryPlugin()).length);
-		Assert.equals(0, check.run([{ file: 'C.hx', source: guarded }], new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violations(check, plain).length);
+		Assert.equals(0, CheckFixture.violations(check, guarded).length);
 	}
 
 	public function testLowercaseTypeFlagged(): Void {
@@ -137,7 +138,7 @@ class NamingCheckTest extends NamingCheckTestBase {
 
 	public function testSkipParseNoCrash(): Void {
 		final files: Array<{ file: String, source: String }> = [{ file: 'Bad.hx', source: 'class Bad { function f() { ' }];
-		Assert.equals(0, new Naming().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(new Naming(), files).length);
 	}
 
 	public function testEnumAbstractValuesNotFlaggedAsFields(): Void {
@@ -162,7 +163,7 @@ class NamingCheckTest extends NamingCheckTestBase {
 	/** A CLASS field spelled like a contract key is the project's own name — still reported. */
 	public function testClassFieldWithContractLikeNameStillReported(): Void {
 		final src: String = 'class C {\n\tprivate var Limit:Int = 0;\n}';
-		final vs: Array<Violation> = new Naming().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(new Naming(), src);
 		Assert.equals(1, vs.length);
 	}
 
@@ -174,7 +175,7 @@ class NamingCheckTest extends NamingCheckTestBase {
 	public function testAccessorBackedPropertyStillReported(): Void {
 		final src: String = 'class C {\n\tpublic var Active(get, never):Bool;\n\n\tprivate function get_Active():Bool return true;\n}';
 		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
 	}
@@ -186,7 +187,7 @@ class NamingCheckTest extends NamingCheckTestBase {
 		// `renameUnsafe`, which still reports.
 		final src: String = 'typedef T = {\n\tId: Int,\n\tName: String,\n}';
 		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run([{ file: 'T.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, [{ file: 'T.hx', source: src }]);
 		Assert.equals(0, vs.length);
 	}
 
@@ -194,14 +195,14 @@ class NamingCheckTest extends NamingCheckTestBase {
 		// The same contract reading applies to an inline anon type in a signature - the field is
 		// a `Required` node inside `Anon`, not a real parameter.
 		final src: String = 'class C {\n\tpublic function f(o:{ Id:Int }):Void {}\n}';
-		final vs: Array<Violation> = new Naming().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(new Naming(), src);
 		Assert.equals(0, vs.length);
 	}
 
 	public function testStructureExtensionFieldNotReported(): Void {
 		// A structure-extension body's own field is equally a contract name.
 		final src: String = 'typedef T = {\n\t> Base,\n\tExtra: Int,\n}';
-		final vs: Array<Violation> = new Naming().run([{ file: 'T.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new Naming(), [{ file: 'T.hx', source: src }]);
 		Assert.equals(0, vs.length);
 	}
 
