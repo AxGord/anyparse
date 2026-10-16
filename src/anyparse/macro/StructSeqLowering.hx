@@ -1397,30 +1397,7 @@ final class StructSeqLowering {
 		//    run flows into `pendingTrivia` for the sub-rule's
 		//    first @:trivia Star to drain.
 		//  - Plain mode: plain ws skip.
-		final innerCommitAction: Expr = if (hasKwTriviaSlots)
-			macro {
-				final _kwEndPos: Int = ctx.pos;
-				$i{afterKwLocal} = collectTrailing(ctx);
-				final _t = collectTrivia(ctx);
-				for (_c in _t.leadingComments) $i{kwLeadingLocal}.push(_c);
-				$i{bodyOnSameLineLocal} = !hasNewlineIn(ctx.input, _kwEndPos, ctx.pos);
-			}
-		else if (sc.ctx.trivia)
-			macro {
-				final _t = collectTrivia(ctx);
-				// Stash whenever the captured run carries any signal the
-				// downstream `collectTrivia` would otherwise lose:
-				// comments, blank lines, OR a single newline boundary
-				// (the `newlineBefore` channel — sub-rule's first
-				// `@:trivia` Star element consumes it via `_t.newlineBefore` — EXCEPT
-				// when that Star carries a `@:lead`, whose open literal clears the
-				// newline again, a gap before `[` never being the first element's own;
-				// see `stashNewlineClearExpr`).
-				if (_t.leadingComments.length > 0 || _t.blankBefore || _t.blankAfterLeadingComments || _t.newlineBefore)
-					ctx.pendingTrivia = _t;
-			}
-		else
-			macro skipWs(ctx);
+		final innerCommitAction: Expr = commitTriviaAction(sc, hasKwTriviaSlots, afterKwLocal, kwLeadingLocal, bodyOnSameLineLocal);
 		final preCommitCapture: Expr = if (hasKwTriviaSlots)
 			macro $i{beforeKwNlLocal} = hasNewlineIn(ctx.input, _prevEnd, _kwStartPos);
 		else
@@ -1436,48 +1413,7 @@ final class StructSeqLowering {
 		// trivia so the enclosing Star's next `collectTrivia` re-
 		// observes it.
 		final valueExpr: Expr = if (hasKwTriviaSlots)
-			macro {
-				final _wsPos: Int = ctx.pos;
-				// ω-prev-content-end: scan back past trailing whitespace consumed
-				// by the preceding field's parser (notably HxExpr→Pratt, whose tail
-				// loop's `skipWsAndStash` swallows `\n` before bailing on no-op
-				// match — see Pratt loop tail rewind logic). Without scan-back,
-				// `BeforeKwNewline = hasNewlineIn(_wsPos, _kwStartPos)` was always
-				// false for `HxExpr→@:optional @:kw` siblings (HxIfExpr.elseBranch
-				// most notably). `_prevEnd` walks back over [' ', '\t', '\n', '\r']
-				// without touching `ctx.pos`, so `@:raw` next-siblings (e.g. `${expr}`
-				// trailing `}` in HxStringSegment.Block) are unaffected.
-				var _prevEnd: Int = _wsPos;
-				while (_prevEnd > 0) {
-					final _wsCh: Int = ctx.input.charCodeAt(_prevEnd - 1);
-					if (_wsCh == ' '.code || _wsCh == '\t'.code || _wsCh == '\n'.code || _wsCh == '\r'.code)
-						_prevEnd--;
-					else
-						break;
-				}
-				// ω-trivia-before-kw-trailing: probe for a single same-line
-				// `// comment` after the preceding sibling's last token
-				// (e.g. `resize(); // first\nelse`). `collectTrailing`
-				// consumes pos to end of comment on hit, rewinds otherwise.
-				// On commit-success the captured body lands in
-				// `_beforeKwTrailing_<field>` for the writer to cuddle to
-				// the prior token. On commit-miss the outer `ctx.pos =
-				// _wsPos` rewind drops the capture so the enclosing Star's
-				// next `collectTrivia` re-observes it.
-				final _trailComment: Null<String> = collectTrailing(ctx);
-				final _preTrivia = collectTrivia(ctx);
-				final _kwStartPos: Int = ctx.pos;
-				if ($commitCheck) {
-					$i{beforeKwTrailingLocal} = _trailComment;
-					for (_c in _preTrivia.leadingComments) $i{beforeKwLeadingLocal}.push(_c);
-					$preCommitCapture;
-					$innerCommitAction;
-					$subCall;
-				} else {
-					ctx.pos = _wsPos;
-					null;
-				}
-			}
+			kwTriviaPeek(commitCheck, preCommitCapture, innerCommitAction, subCall, beforeKwTrailingLocal, beforeKwLeadingLocal)
 		else if (beforeLeadLocal != null)
 			// ω-before-lead: a BLOCK comment between the preceding token and the
 			// lead literal (`var x /* c */ = 1`) is captured before `skipWs` would
@@ -1523,6 +1459,94 @@ final class StructSeqLowering {
 			]),
 			pos: Context.currentPos()
 		});
+	}
+
+	/**
+	 * The post-commit trivia handling of `emitOptionalRefLeadCommit`, three ways: trivia mode with kw slots captures the
+	 * same-line trailing comment into `afterKwLocal`, routes own-line leadings into `kwLeadingLocal` and whether the body
+	 * stayed on the kw's line into `bodyOnSameLineLocal`; trivia mode with a lead stashes the captured run for the sub-rule's
+	 * first `@:trivia` Star (ω₆b); plain mode skips whitespace.
+	 */
+	private static function commitTriviaAction(
+		sc: StructSeqCtx, hasKwTriviaSlots: Bool, afterKwLocal: String, kwLeadingLocal: String, bodyOnSameLineLocal: String
+	): Expr {
+		return if (hasKwTriviaSlots)
+			macro {
+				final _kwEndPos: Int = ctx.pos;
+				$i{afterKwLocal} = collectTrailing(ctx);
+				final _t = collectTrivia(ctx);
+				for (_c in _t.leadingComments) $i{kwLeadingLocal}.push(_c);
+				$i{bodyOnSameLineLocal} = !hasNewlineIn(ctx.input, _kwEndPos, ctx.pos);
+			}
+		else if (sc.ctx.trivia)
+			macro {
+				final _t = collectTrivia(ctx);
+				// Stash whenever the captured run carries any signal the
+				// downstream `collectTrivia` would otherwise lose:
+				// comments, blank lines, OR a single newline boundary
+				// (the `newlineBefore` channel — sub-rule's first
+				// `@:trivia` Star element consumes it via `_t.newlineBefore` — EXCEPT
+				// when that Star carries a `@:lead`, whose open literal clears the
+				// newline again, a gap before `[` never being the first element's own;
+				// see `stashNewlineClearExpr`).
+				if (_t.leadingComments.length > 0 || _t.blankBefore || _t.blankAfterLeadingComments || _t.newlineBefore)
+					ctx.pendingTrivia = _t;
+			}
+		else
+			macro skipWs(ctx);
+	}
+
+	/**
+	 * The kw-trivia peek of `emitOptionalRefLeadCommit` (ω-trivia-before-kw): the pre-commit scan collects trivia instead of
+	 * skipping it, so on commit the same-line trailing comment lands in `beforeKwTrailingLocal` and own-line comments in
+	 * `beforeKwLeadingLocal`; a miss rewinds over them for the enclosing Star to re-observe.
+	 */
+	private static function kwTriviaPeek(
+		commitCheck: Expr, preCommitCapture: Expr, innerCommitAction: Expr, subCall: Expr, beforeKwTrailingLocal: String,
+		beforeKwLeadingLocal: String
+	): Expr {
+		return macro {
+			final _wsPos: Int = ctx.pos;
+			// ω-prev-content-end: scan back past trailing whitespace consumed
+			// by the preceding field's parser (notably HxExpr→Pratt, whose tail
+			// loop's `skipWsAndStash` swallows `\n` before bailing on no-op
+			// match — see Pratt loop tail rewind logic). Without scan-back,
+			// `BeforeKwNewline = hasNewlineIn(_wsPos, _kwStartPos)` was always
+			// false for `HxExpr→@:optional @:kw` siblings (HxIfExpr.elseBranch
+			// most notably). `_prevEnd` walks back over [' ', '\t', '\n', '\r']
+			// without touching `ctx.pos`, so `@:raw` next-siblings (e.g. `${expr}`
+			// trailing `}` in HxStringSegment.Block) are unaffected.
+			var _prevEnd: Int = _wsPos;
+			while (_prevEnd > 0) {
+				final _wsCh: Int = ctx.input.charCodeAt(_prevEnd - 1);
+				if (_wsCh == ' '.code || _wsCh == '\t'.code || _wsCh == '\n'.code || _wsCh == '\r'.code)
+					_prevEnd--;
+				else
+					break;
+			}
+			// ω-trivia-before-kw-trailing: probe for a single same-line
+			// `// comment` after the preceding sibling's last token
+			// (e.g. `resize(); // first\nelse`). `collectTrailing`
+			// consumes pos to end of comment on hit, rewinds otherwise.
+			// On commit-success the captured body lands in
+			// `_beforeKwTrailing_<field>` for the writer to cuddle to
+			// the prior token. On commit-miss the outer `ctx.pos =
+			// _wsPos` rewind drops the capture so the enclosing Star's
+			// next `collectTrivia` re-observes it.
+			final _trailComment: Null<String> = collectTrailing(ctx);
+			final _preTrivia = collectTrivia(ctx);
+			final _kwStartPos: Int = ctx.pos;
+			if ($commitCheck) {
+				$i{beforeKwTrailingLocal} = _trailComment;
+				for (_c in _preTrivia.leadingComments) $i{beforeKwLeadingLocal}.push(_c);
+				$preCommitCapture;
+				$innerCommitAction;
+				$subCall;
+			} else {
+				ctx.pos = _wsPos;
+				null;
+			}
+		};
 	}
 
 }
