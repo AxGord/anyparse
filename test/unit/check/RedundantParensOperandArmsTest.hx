@@ -178,10 +178,12 @@ class RedundantParensOperandArmsTest extends RedundantParensOperandArmsTestBase 
 
 	/**
 	 * Inside a `macro` quotation a paren is DATA: it reifies as `EParenthesis`, so
-	 * dropping it rewrites the built expression with nothing rejecting it. The bare
-	 * fixtures below pin that the quotation is what rejects these — the shipped
-	 * delimited arm reaches inside a quotation and is deliberately left as it was.
+	 * dropping it rewrites the built expression with nothing rejecting it. The bare fixtures below pin that the quotation
+	 * is what rejects these — the shipped delimited arm reaches inside a quotation and is deliberately left as it was.
+	 * The rule is `QuotationAware`, so this gate, not the central reification drop, is what keeps these quoted pairs.
 	 */
+	@:pin('control')
+	@:killer('M-PARENS-OPERAND-QUOTED-OPEN')
 	public function testMacroQuotationSubtreeIsUntouched(): Void {
 		Assert.equals(0, violations(inFn('var e = macro (a) + b;'), atoms()).length);
 		Assert.equals(1, violations(inFn('var e = (a) + b;'), atoms()).length);

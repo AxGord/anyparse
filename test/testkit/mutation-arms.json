@@ -10672,6 +10672,29 @@
 			"note": "a graph-scoped rule's findings in a file its report gate refuses are kept, so a file whose chain writes no option reports findings of its own"
 		},
 		{
+			"name": "M-PARENS-QUOTED-DROPPED",
+			"type": "anyparse.check.ReificationScan",
+			"method": "exemptIdsOf",
+			"force": "[]",
+			"note": "no rule declines the quotation drop, so redundant-parens reports and fixes nothing inside a macro quotation"
+		},
+		{
+			"name": "M-PARENS-SPLICE-HOST-OPEN",
+			"type": "anyparse.check.RedundantParens",
+			"method": "dropsParens",
+			"find": "atom || !slots.splice.contains(bare.kind) && !spineEndsWith(bare, slots.greedy);",
+			"replace": "atom || !spineEndsWith(bare, slots.greedy);",
+			"note": "a pair around $a{...} in a splicing host drops, so the quoted call's arity changes"
+		},
+		{
+			"name": "M-PARENS-OPERAND-QUOTED-OPEN",
+			"type": "anyparse.check.RedundantParens",
+			"method": "dropsParens",
+			"find": "final atom: Bool = !opaque && isAtom(bare, slots);",
+			"replace": "final atom: Bool = isAtom(bare, slots);",
+			"note": "the atoms arm drops a quoted operand pair, whose content may be a splice of unknown precedence"
+		},
+		{
 			"name": "M-ANON-FIRST-FILE-CONFIG",
 			"type": "anyparse.check.AnonTypeDup",
 			"method": "run",

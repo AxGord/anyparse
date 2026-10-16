@@ -46,7 +46,8 @@ using Lambda;
  *
  * That the drop is enough to gate the FIXES as well is a property of the pipeline, not an
  * assumption: every fix path re-derives its edits from the violations it is handed, so a finding
- * that never appears produces no edit. `QuotationAware` is the opt-out, and nothing carries it.
+ * that never appears produces no edit. `QuotationAware` is the opt-out;
+ * `redundant-parens` is the one builtin carrying it, its reason on its class doc.
  */
 @:nullSafety(Strict)
 final class ReificationScan {
@@ -83,8 +84,8 @@ final class ReificationScan {
 
 	/**
 	 * The rule ids among `checks` that DECLINE the quotation drop (`QuotationAware`) — the
-	 * `exemptRules` every enforcement point passes alongside the findings it is filtering. Empty
-	 * for every builtin today, which is what makes the gate's cost one `contains` per finding.
+	 * `exemptRules` every enforcement point passes alongside the findings it is filtering. One builtin
+	 * today (`redundant-parens`), which is what makes the gate's cost one `contains` per finding.
 	 */
 	public static function exemptIdsOf(checks: Array<Check>): Array<String> {
 		return [for (check in checks) if (check is QuotationAware) check.id()];

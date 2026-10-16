@@ -2867,3 +2867,8 @@ decided the question; it may not become a record of runs.
 - `ThreadSafety.run` filtered its own findings by the report gate → `Linter.runGated` applies the same `GraphScoped`
   gate to every graph-scoped rule and is the one door a run goes through, so the rule's copy was unobservable in
   production; it is gone, and M-TS-REPORT-UNGATED cuts `runGated` — branch `feat/infra-B8b`
+- `redundant-parens` was believed unsafe inside a `macro` quotation (the reification gate dropped every quoted finding,
+  so its splice gates were unreachable) → a pair dropped in a delimited slot types the same (Haxe 4.3.7: `EParenthesis`
+  is transparent to the typer; `$a{…}` arity is gated; a spliced `for` / `=>` array element does not compile with the
+  pair; the operand arms stay opaque), so the rule is `QuotationAware`, its reason on the class doc — branch
+  `feat/infra-B8b`
