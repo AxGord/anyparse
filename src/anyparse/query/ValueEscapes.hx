@@ -329,18 +329,10 @@ final class ValueEscapes {
 			if (node.kind != shape.newExprKind || constructed == null) {
 				// what the declarations say, and for an unannotated local its initializer's type: the one Haxe infers for it
 				final said: Null<String> = _g.sites.typeOf(file, tree, source, node);
-				final name: Null<String> = node.name;
-				final at: Null<Span> = node.span;
-				if (said != null || node.kind != shape.identKind || name == null || at == null) return said;
-				final decl: Null<QueryNode> = TypeResolver.bindingNodeFrom(name, at, tree, shape);
-				if (decl == null || !(shape.localDeclKinds ?? []).contains(decl.kind)) return null;
-				final declAt: Null<Span> = decl.span;
-				if (declAt == null || annotations.exists(declAt.from)) return null;
-				final init: Null<QueryNode> = CtorFieldFold.declInitializer(decl, shape);
-				if (init == null) return null;
-				// an initializer ending before the use: a self-reference would not terminate
-				final initAt: Null<Span> = init.span;
-				return initAt == null || initAt.to > at.from ? null : typeOf(init);
+				if (said != null || node.kind != shape.identKind) return said;
+				// an initializer ending before the use, so a self-reference terminates (`NominalTypes.localInitializer`)
+				final init: Null<QueryNode> = NominalTypes.localInitializer(node, tree, shape, annotations);
+				return init == null ? null : typeOf(init);
 			}
 			// a construction is of the type it names, with the arguments it writes
 			return NominalTypes.writtenConstruction(node, shape, source)?.text;

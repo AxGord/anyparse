@@ -5283,7 +5283,7 @@
 			"name": "M-ESCAPE-LOCAL-INIT",
 			"type": "anyparse.query.ValueEscapes",
 			"method": "scanFile",
-			"find": "return initAt == null || initAt.to > at.from ? null : typeOf(init);",
+			"find": "return init == null ? null : typeOf(init);",
 			"replace": "return null;",
 			"note": "(precision) an unannotated local has no type, though Haxe gives it its initializer's"
 		},
@@ -20097,7 +20097,7 @@
 			"name": "M-TS-NEW-LOCAL",
 			"type": "anyparse.query.CallGraphKeys",
 			"method": "typeLocals",
-			"find": "final made: Null<String> = init.kind == newExprKind ? init.name : null;",
+			"find": "final made: Null<String> = init != null && init.kind == newExprKind ? init.name : null;",
 			"replace": "final made: Null<String> = null;",
 			"note": "an unannotated local a new initialises stays untyped"
 		},
@@ -20304,19 +20304,11 @@
 			"note": "a pkg.Type.* pattern matches every type of that simple name"
 		},
 		{
-			"name": "M-TS-LOCAL-CALL-INIT",
-			"type": "anyparse.query.CallGraphKeys",
-			"method": "typeLocals",
-			"find": "callInitializers[at.from] = init;",
-			"replace": "",
-			"note": "a local a call initialises is never recorded, so it stays untyped"
-		},
-		{
 			"name": "M-TS-LOCAL-CALL-READ",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "initializer: (from, _, _) -> keys.callInitializers[from],",
-			"replace": "initializer: (from, _, _) -> null,",
+			"find": "initializer: (_, use, _) -> NominalTypes.localInitializer(use, tree, shape, typeSources),",
+			"replace": "initializer: (_, use, _) -> null,",
 			"note": "a local a call initialises is never typed by what the call returns"
 		},
 		{
@@ -21881,6 +21873,13 @@
 			"find": "if (gap.indexOf('(') >= 0) {",
 			"replace": "if (false) {",
 			"note": "the constructor's arguments are read as the type's"
+		},
+		{
+			"name": "M-NOMINAL-LOCAL-INIT",
+			"type": "anyparse.query.NominalTypes",
+			"method": "localInitializer",
+			"force": "null",
+			"note": "a local written with no type has none, though Haxe gives it its initializer's"
 		}
 	]
 }

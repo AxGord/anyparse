@@ -2874,3 +2874,12 @@ decided the question; it may not become a record of runs.
   to (the first gap holding `(` starts the constructor's); a shape they do not spell consistently answers null. The
   three consumers read its `path` / `args` / `text` (the arguments verbatim). All-rules byte-identical on the four
   trees; `CallGraphTest` `C.paren` red on the start commit — branch `feat/infra-B4b`
+- "the type of a local written with no type is its initializer's" had three copies: the graph recorded only a CALL
+  initializer (`CallGraphKeys.callInitializers`, read by `throughInitializer`), `ValueEscapes` read any initializer
+  ending before the use, `NominalTypes`' deep walk none → ONE arc: `NominalTypes.localInitializer` (a local declaration,
+  no annotation, an initializer that ends before the use) behind the walk's `TypingHost.initializer`, under the walk's
+  one cycle guard, for both hosts; `ValueEscapes` asks it too. 4.3.7 types `var l = lock;` as `lock`'s type, so a field
+  read, another such local and a literal now type the local the way a call did; a `new` keeps its eager entry in
+  `typeLocals` (the graph's `declaredTypes` reads it). All-rules byte-identical and the thread-safety score unchanged on
+  the four trees (their locals are annotated); `ThreadSafetyPositiveSinksTest` `C.field` / `C.alias` red on the start
+  commit. `M-TS-LOCAL-CALL-INIT` retired with the table it cut — branch `feat/infra-B4b`

@@ -2378,7 +2378,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-TS-PATH-FOREIGN,M-TS-PATH-IMPORT,M-TS-PATH-RECEIVER-STATIC,M-TS-PATH-NEW,M-TS-PATH-MATCH,M-TS-SHADOWING-KEPT,'
 				+ 'M-TS-PATH-DECLARED-PACKAGE,M-TS-PATH-NOMINAL,M-TS-PATH-RETURN,M-TS-ALIAS-TYPE',
 			'unit.check.ThreadSafetyPositiveSinksTest#testALocalOfACallResultIsTypedByWhatTheCallReturns :: control :: '
-				+ 'M-TS-LOCAL-CALL-INIT,M-TS-LOCAL-CALL-READ',
+				+ 'M-NOMINAL-LOCAL-INIT,M-TS-LOCAL-CALL-READ',
 			'unit.check.ThreadSafetyPositiveSinksTest#testAStdLockWrittenInADeclarationWaitsWhereverItIsRead :: control :: '
 				+ 'M-TS-DECL-MEMBER-FILE,M-TS-ALTERNATE-WHOLE-CALL',
 			'unit.check.ThreadSafetyPositiveSinksTest#testAStdMemberStandsWhereEveryNamesakeAgrees :: control :: '
@@ -4030,6 +4030,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.NominalTypesTest#testAConstructionIsTheTypeItWrites :: control :: M-NOMINAL-CONSTRUCTED',
 			'unit.query.NominalTypesTest#testAConstructionReadsTheTypeArgumentsItWrites :: control :: M-CONSTRUCTION-CTOR-GAP',
 			'unit.query.NominalTypesTest#testALiteralIsItsType :: control :: M-NOMINAL-LITERAL',
+			'unit.query.NominalTypesTest#testALocalWrittenWithNoTypeHoldsItsInitializersType :: control :: M-NOMINAL-LOCAL-INIT',
 			'unit.query.NominalTypesTest#testDeclarationsWritingAReturnDifferentlyHaveNoSource :: control :: M-NOMINAL-RETURN-AGREE',
 			'unit.query.NominalTypesTest#testTheSourceModeKeepsTypeArguments :: control :: M-NOMINAL-SOURCE-CALL,M-NOMINAL-RETURN-TYPEPARAM',
 			'unit.query.NominalTypesTest#testTheWrittenTypeReadersPeelTheirWrappers :: control :: M-ELEMENT-PEEL,M-OUTER-PATH-PEEL',
@@ -6735,7 +6736,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-ALTERNATE-NEW',
 			'M-TS-DOTTED-TARGET',
 			'M-TS-DOTTED-WILDCARD',
-			'M-TS-LOCAL-CALL-INIT',
+
 			'M-TS-LOCAL-CALL-READ',
 			'M-TS-PLACE-FRESH-STRUCT',
 			'M-TS-PLACE-FRESH-NEW',
@@ -6932,7 +6933,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-NOMINAL-RETURN-AGREE',
 			'M-ELEMENT-PEEL',
 			'M-OUTER-PATH-PEEL',
-			'M-CONSTRUCTION-CTOR-GAP'
+			'M-CONSTRUCTION-CTOR-GAP',
+			'M-NOMINAL-LOCAL-INIT'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

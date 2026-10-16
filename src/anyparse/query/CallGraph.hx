@@ -849,7 +849,7 @@ final class CallGraph {
 		final moduleType: String = CallGraphNames.moduleTypeName(file);
 		// the file's declared types as the graph keys them (`CallGraphKeys`): a library type never merges into a project one
 		final keys: CallGraphKeys = new CallGraphKeys(types.imports, file, _plugin.typeSyntax, provider, source, tree, fnKinds);
-		keys.typeLocals(tree, localDeclKinds, newExprKind, callKind);
+		keys.typeLocals(tree, localDeclKinds, newExprKind);
 		// the index entry the file was read from, whose `values` layer says what a bare name the module and its imports bind
 		final held: Null<HeldFile> = types.heldFile(file);
 
@@ -1386,8 +1386,8 @@ final class CallGraph {
 				bound != null && bound >= 0 ? bound : null;
 			},
 			bound: (from, _) -> typeSources[from],
-			// a local written with no type and initialised by a call holds what the call returns (`CallGraphKeys.typeLocals`)
-			initializer: (from, _, _) -> keys.callInitializers[from],
+			// a local written with no type holds its initializer's type (`NominalTypes.localInitializer`)
+			initializer: (_, use, _) -> NominalTypes.localInitializer(use, tree, shape, typeSources),
 			loopElement: (_, _) -> null,
 			unbound: unboundTypeSource,
 			access: accessTypeSource,

@@ -57,8 +57,8 @@ final class NominalTypes {
 	 * The index's resolution for `typeWalk` (`TypingHost`): a written type source, resolved in the file that wrote it — the
 	 * deep walk's arcs, each answering what it always did. An identifier's annotation (`declaredTypeSources`, then the
 	 * `declaredTypes` nominal, so the deep walk never resolves less than the shallow one), a `for` binder's element
-	 * (`forBindingElementTypeSource`), a field PATH walked from its root as one (`indexAccess`), a tabled static call, and
-	 * the self reference (`indexSelf`). It types no initializer, element or construction.
+	 * (`forBindingElementTypeSource`), a field PATH walked from its root as one (`indexAccess`), a tabled static call, the self reference
+	 * (`indexSelf`), and a local written with no type by its initializer (`localInitializer`). It types no element or construction.
 	 */
 	private static final INDEX_HOST: TypingHost<String, IndexTyping> = {
 		peel: (node, _) -> node,
@@ -67,7 +67,7 @@ final class NominalTypes {
 		self: indexSelf,
 		binding: (ident, c) -> TypeResolver.identBindingFrom(ident, c.root, c.shape),
 		bound: (from, c) -> c.chain.declaredTypeSources[from] ?? c.declaredTypes[from],
-		initializer: (_, _, _) -> null,
+		initializer: (_, use, c) -> localInitializer(use, c.root, c.shape, c.chain.declaredTypeSources),
 		loopElement: forBindingElementTypeSource,
 		unbound: (_, _) -> null,
 		access: indexAccess,
@@ -567,6 +567,27 @@ final class NominalTypes {
 			args: [for (a in args) source.substring(a.from, a.to)],
 			text: '$path<${source.substring(args[0].from, args[args.length - 1].to)}>'
 		};
+	}
+
+	/**
+	 * The expression initialising the local the identifier `use` reads, when that local is written with no type
+	 * (`annotations` keyed by binding offset, `TypeInfoProvider.declaredTypeSources`): the local holds its type, the one
+	 * Haxe infers for it. Null for a binding of another kind (a parameter, a field, a loop binder), one written with a
+	 * type, one with no initializer, and a use the initializer does not end before.
+	 */
+	public static function localInitializer(
+		use: QueryNode, root: QueryNode, shape: RefShape, annotations: Map<Int, String>
+	): Null<QueryNode> {
+		final name: Null<String> = use.name;
+		final at: Null<Span> = use.span;
+		if (name == null || at == null) return null;
+		final decl: Null<QueryNode> = TypeResolver.bindingNodeFrom(name, at, root, shape);
+		if (decl == null || !(shape.localDeclKinds ?? []).contains(decl.kind)) return null;
+		final declAt: Null<Span> = decl.span;
+		if (declAt == null || annotations.exists(declAt.from)) return null;
+		final init: Null<QueryNode> = CtorFieldFold.declInitializer(decl, shape);
+		final initAt: Null<Span> = init?.span;
+		return initAt == null || initAt.to > at.from ? null : init;
 	}
 
 	/**

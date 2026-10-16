@@ -101,6 +101,23 @@ class NominalTypesTest extends Test {
 		Assert.equals('Box<Int>', construction(text, 'probeNone')?.text, 'with no constructor argument');
 	}
 
+	@:pin('control')
+	@:killer('M-NOMINAL-LOCAL-INIT')
+	public function testALocalWrittenWithNoTypeHoldsItsInitializersType(): Void {
+		final text: String = 'package p;\n\nclass Item {}\n\nclass C {\n\tvar items: Array<Item>;\n'
+			+ '\tfunction probeLiteral() {\n\t\tvar s = \'x\';\n\t\treturn s;\n\t}\n'
+			+ '\tfunction probeField() {\n\t\tvar all = items;\n\t\treturn all;\n\t}\n'
+			+ '\tfunction probeTyped() {\n\t\tvar n: Float = 1;\n\t\treturn n;\n\t}\n'
+			+ '\tfunction probeChain() {\n\t\tvar a = items;\n\t\tvar b = a;\n\t\treturn b;\n\t}\n}\n';
+		Assert.equals('String', sourceIn(text, 'probeLiteral'), 'a literal initializer');
+		Assert.equals('Array<Item>', sourceIn(text, 'probeField'), 'a field initializer, arguments kept');
+		Assert.equals('Float', sourceIn(text, 'probeTyped'), 'the annotation wins over the initializer');
+		Assert.equals('Array<Item>', sourceIn(text, 'probeChain'), 'through a local initialised by another');
+		final at: Probe = probeIn(text, 'probeField');
+		final use: Null<QueryNode> = NominalTypes.localInitializer(at.node, at.root, at.plugin.refShape(), at.chain.declaredTypeSources);
+		Assert.equals('IdentExpr', use?.kind, 'the initializer node itself');
+	}
+
 	private static function nominal(fn: String): Null<String> {
 		final at: Probe = probeIn(SOURCE, fn);
 		return NominalTypes.expressionTypeNominal(at.node, at.root, at.plugin.refShape(), at.declared, at.index, 'p/C.hx', at.chain);
@@ -141,8 +158,14 @@ class NominalTypesTest extends Test {
 	/** The value the expression body of the function `fn` under `node` returns. */
 	private static function returnedBy(node: QueryNode, fn: String): Null<QueryNode> {
 		if (node.kind == 'FnMember' && node.name == fn) {
-			final body: Null<QueryNode> = Lambda.find(node.children, c -> c.kind == 'ExprBody');
-			final ret: Null<QueryNode> = body == null ? null : body.children[0];
+			// an expression body returns its expression; a block, what its `return` does
+			final body: Null<QueryNode> = Lambda.find(node.children, c -> c.kind == 'ExprBody' || c.kind == 'BlockBody');
+			final ret: Null<QueryNode> = if (body == null)
+				null
+			else if (body.kind == 'ExprBody')
+				body.children[0]
+			else
+				Lambda.find(body.children, c -> c.kind == 'ReturnStmt');
 			return ret == null ? null : ret.children[0];
 		}
 		for (c in node.children) {
