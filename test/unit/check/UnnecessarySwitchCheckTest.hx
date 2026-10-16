@@ -7,6 +7,7 @@ import anyparse.check.UnnecessarySwitch;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -313,14 +314,14 @@ class UnnecessarySwitchCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new UnnecessarySwitch().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new UnnecessarySwitch(), src);
 	}
 
 	/** Run the fix and re-emit through the canonical writer, the way `lint --fix` does. */
 	private function applyFixOnce(src: String): String {
 		final check: UnnecessarySwitch = new UnnecessarySwitch();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.edits(check, src, plugin);
 		return switch CanonicalEdit.canonicalize(src, edits, true, plugin) {
 			case Ok(text): text;
 			case Err(message): throw message;

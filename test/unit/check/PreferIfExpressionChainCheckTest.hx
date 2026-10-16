@@ -7,9 +7,9 @@ import anyparse.check.PreferSwitchExpression;
 import anyparse.check.PreferTernaryExpression;
 import anyparse.check.Severity;
 import anyparse.check.SimplifyBooleanTernary;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -560,9 +560,7 @@ class PreferIfExpressionChainCheckTest extends Test {
 		// DETECT-PROOF, in one assertion with the deferral: the other check really does claim this
 		// exact span, so the zeroes above are a deferral and not a fixture the chain walk never
 		// reached. Without it a typo in the fixture would pass this pin vacuously.
-		final claimed: Array<Violation> = new SimplifyBooleanTernary().run(
-			[{ file: 'C.hx', source: BOOL_REDUCIBLE_CHAIN_HEAD }], new HaxeQueryPlugin()
-		);
+		final claimed: Array<Violation> = CheckFixture.violations(new SimplifyBooleanTernary(), BOOL_REDUCIBLE_CHAIN_HEAD);
 		Assert.equals(1, claimed.length, 'simplify-boolean-ternary claims the head: $claimed');
 	}
 
@@ -580,9 +578,7 @@ class PreferIfExpressionChainCheckTest extends Test {
 		Assert.equals(0, edits(BOOL_REDUCIBLE_CHAIN_RUNG).length);
 		// DETECT-PROOF: the other rule claims the RUNG (not the head), so the zeroes are a deferral
 		// and not a fixture this walk never reached.
-		final claimed: Array<Violation> = new SimplifyBooleanTernary().run(
-			[{ file: 'C.hx', source: BOOL_REDUCIBLE_CHAIN_RUNG }], new HaxeQueryPlugin()
-		);
+		final claimed: Array<Violation> = CheckFixture.violations(new SimplifyBooleanTernary(), BOOL_REDUCIBLE_CHAIN_RUNG);
 		Assert.equals(1, claimed.length, 'simplify-boolean-ternary claims one node: $claimed');
 	}
 
@@ -599,9 +595,7 @@ class PreferIfExpressionChainCheckTest extends Test {
 	 */
 	public function testBooleanReducibleFoldedRungIsNotFlagged(): Void {
 		Assert.equals(0, violations(BOOL_REDUCIBLE_FOLDED_RUNG).length);
-		final claimed: Array<Violation> = new SimplifyBooleanTernary().run(
-			[{ file: 'C.hx', source: BOOL_REDUCIBLE_FOLDED_RUNG }], new HaxeQueryPlugin()
-		);
+		final claimed: Array<Violation> = CheckFixture.violations(new SimplifyBooleanTernary(), BOOL_REDUCIBLE_FOLDED_RUNG);
 		Assert.equals(1, claimed.length, 'simplify-boolean-ternary claims the then-arm ternary: $claimed');
 	}
 
@@ -620,7 +614,7 @@ class PreferIfExpressionChainCheckTest extends Test {
 	public function testBooleanReducibleUnfoldedRungStillConverts(): Void {
 		Assert.equals(1, violations(BOOL_REDUCIBLE_UNFOLDED_RUNG).length);
 		Assert.equals(
-			1, new SimplifyBooleanTernary().run([{ file: 'C.hx', source: BOOL_REDUCIBLE_UNFOLDED_RUNG }], new HaxeQueryPlugin()).length,
+			1, CheckFixture.violations(new SimplifyBooleanTernary(), BOOL_REDUCIBLE_UNFOLDED_RUNG).length,
 			'and the other check still reports its own node'
 		);
 	}
@@ -651,20 +645,20 @@ class PreferIfExpressionChainCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new PreferIfExpressionChain().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferIfExpressionChain(), src);
 	}
 
 	private function ternaryExpressionViolations(src: String): Array<Violation> {
-		return new PreferTernaryExpression().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferTernaryExpression(), src);
 	}
 
 	private function switchExpressionViolations(src: String): Array<Violation> {
-		return new PreferSwitchExpression().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferSwitchExpression(), src);
 	}
 
 	private function edits(src: String): Array<{ span: Span, text: String }> {
 		final check: PreferIfExpressionChain = new PreferIfExpressionChain();
-		return check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
+		return CheckFixture.edits(check, src);
 	}
 
 }

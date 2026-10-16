@@ -1,7 +1,6 @@
 package unit.check;
 
 import anyparse.check.PreferComprehension;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
@@ -179,7 +178,7 @@ using StringTools;
 	}
 
 	private function count(source: String): Int {
-		return new PreferComprehension().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()).length;
+		return CheckFixture.violations(new PreferComprehension(), source).length;
 	}
 
 	private function applyFix(source: String): String {

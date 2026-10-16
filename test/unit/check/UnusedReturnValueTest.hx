@@ -5,7 +5,7 @@ import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.UnusedReturnValue;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -126,7 +126,7 @@ class UnusedReturnValueTest extends Test {
 	public function testFixYieldsNoEdits(): Void {
 		final src: String = 'class C { function r():Int return 1; function m():Void { r(); return; } }';
 		final check: UnusedReturnValue = new UnusedReturnValue();
-		Assert.equals(0, check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.edits(check, src).length);
 	}
 
 	public function testRegisteredInBuiltins(): Void {
@@ -140,18 +140,18 @@ class UnusedReturnValueTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new UnusedReturnValue().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new UnusedReturnValue(), src);
 	}
 
 	private function violationsFiles(files: Array<{ file: String, source: String }>): Array<Violation> {
-		return new UnusedReturnValue().run(files, new HaxeQueryPlugin());
+		return CheckFixture.violationsIn(new UnusedReturnValue(), files);
 	}
 
 	private function violationsWithAllow(src: String, allow: Array<String>): Array<Violation> {
 		final check: UnusedReturnValue = new UnusedReturnValue();
 		final json: String = '{"rules":{"unused-return-value":{"allow":${haxe.Json.stringify(allow)}}}}';
 		check.setConfigResolver(_ -> LintConfig.parse(json));
-		return check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(check, src);
 	}
 
 }

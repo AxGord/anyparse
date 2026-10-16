@@ -7,6 +7,7 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -297,7 +298,7 @@ class PreferInlineCheckTest extends Test {
 			{ file: 'B.hx', source: 'class B {\n\tfunction f():Int return 1;\n}' },
 			{ file: 'S.hx', source: 'class S extends B {\n\toverride function f():Int return 2;\n}' }
 		];
-		Assert.equals(0, new PreferInline().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(new PreferInline(), files).length);
 	}
 
 	/**
@@ -314,7 +315,7 @@ class PreferInlineCheckTest extends Test {
 				source: 'import b.I;\n\nclass C implements I {\n\tfunction other():Int return 1;\n\tfunction g():Int return 2;\n}'
 			}
 		];
-		final vs: Array<Violation> = new PreferInline().run(files, new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new PreferInline(), files);
 		// `other` fills b.I's slot and stays physical; `g` fills nothing and is flagged.
 		Assert.equals(1, vs.length);
 		if (vs.length == 1) Assert.isTrue(vs[0].message.indexOf("'g'") >= 0, vs[0].message);
@@ -325,13 +326,13 @@ class PreferInlineCheckTest extends Test {
 			{ file: 'I.hx', source: 'interface I {\n\tfunction f():Int;\n}' },
 			{ file: 'C.hx', source: 'class C implements I {\n\tfunction f():Int return 1;\n}' }
 		];
-		Assert.equals(0, new PreferInline().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(new PreferInline(), files).length);
 	}
 
 	public function testFixInsertsInline(): Void {
 		final src: String = cls('public function one():Int return 1;');
 		final check: PreferInline = new PreferInline();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
 		switch CanonicalEdit.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
 			case Ok(text):
@@ -399,7 +400,7 @@ class PreferInlineCheckTest extends Test {
 			}
 		];
 		Assert.equals(
-			0, new PreferInline().run(files, new HaxeQueryPlugin()).length, 'a subtype override forbids inlining the abstract base method'
+			0, CheckFixture.violationsIn(new PreferInline(), files).length, 'a subtype override forbids inlining the abstract base method'
 		);
 	}
 
@@ -415,7 +416,7 @@ class PreferInlineCheckTest extends Test {
 			{ file: 'B.hx', source: 'class B {\n\tpublic function hook():Void {}\n}' },
 			{ file: 'S.hx', source: 'class S extends B {\n\toverride public function hook():Void doStuff();\n}' }
 		];
-		Assert.equals(0, new PreferInline().run(files, new HaxeQueryPlugin()).length, 'an overridden empty hook must stay a real method');
+		Assert.equals(0, CheckFixture.violationsIn(new PreferInline(), files).length, 'an overridden empty hook must stay a real method');
 	}
 
 	public function testAbstractClassEmptyBodyFlagged(): Void {
@@ -438,7 +439,7 @@ class PreferInlineCheckTest extends Test {
 				source: 'class S extends B {\n\tprivate function hook():Void {}\n\tprivate function calc():Int return 1;\n}'
 			}
 		];
-		Assert.equals(0, new PreferInline().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(new PreferInline(), files).length);
 	}
 
 	public function testEmptyBodyMessageNamesTheNoOp(): Void {
@@ -591,7 +592,7 @@ class PreferInlineCheckTest extends Test {
 			{ file: 'B.hx', source: '@:autoBuild(b.B.build())\nclass B {}' },
 			{ file: 'S.hx', source: 'class S extends B {\n\tpublic function runCommand(cmd:String):Void {}\n}' }
 		];
-		Assert.equals(0, new PreferInline().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(new PreferInline(), files).length);
 	}
 
 	/**
@@ -657,18 +658,10 @@ class PreferInlineCheckTest extends Test {
 		final check: PreferInline = new PreferInline();
 		check.setConfigResolver(_ -> LintConfig.parse('{"frameworks":[{"root":"MonoBehaviour","names":["Start"],"prefixes":[]}]}'));
 		Assert.equals(
-			0,
-			check.run([
-				{ file: 'C.hx', source: 'class T extends MonoBehaviour {\n\tpublic function Start():Void _other.ping();\n}' }
-			], new HaxeQueryPlugin())
-				.length
+			0, CheckFixture.violations(check, 'class T extends MonoBehaviour {\n\tpublic function Start():Void _other.ping();\n}').length
 		);
 		Assert.equals(
-			1,
-			check.run([
-				{ file: 'C.hx', source: 'class T extends Helper {\n\tpublic function Start():Void _other.ping();\n}' }
-			], new HaxeQueryPlugin())
-				.length
+			1, CheckFixture.violations(check, 'class T extends Helper {\n\tpublic function Start():Void _other.ping();\n}').length
 		);
 	}
 
@@ -748,12 +741,12 @@ class PreferInlineCheckTest extends Test {
 				])
 			}
 		});
-		final scopedNames: Array<String> = [for (v in new PreferInline().run(report, scoped)) v.file];
+		final scopedNames: Array<String> = [for (v in CheckFixture.violationsIn(new PreferInline(), report, scoped)) v.file];
 		Assert.equals(
 			'pkg/Exception.hx,pkg/Zzzunique.hx', scopedNames.join(','),
 			'the twin named like a library supertype keeps its finding; the type that library really subtypes loses it'
 		);
-		Assert.equals(3, new PreferInline().run(report, new HaxeQueryPlugin()).length, 'with no resolution scope all three flag');
+		Assert.equals(3, CheckFixture.violationsIn(new PreferInline(), report).length, 'with no resolution scope all three flag');
 	}
 
 	/**
@@ -795,7 +788,10 @@ class PreferInlineCheckTest extends Test {
 		}
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		scoped.setResolutionScope({ declared: true, sources: sources });
-		Assert.equals(0, new PreferInline().run(report, scoped).length, 'a build-macro owner is refused whichever gate answers');
+		Assert.equals(
+			0, CheckFixture.violationsIn(new PreferInline(), report, scoped).length,
+			'a build-macro owner is refused whichever gate answers'
+		);
 		Assert.equals(0, demands, 'the owner own source answers the gate, so the widest index is never demanded');
 	}
 
@@ -818,13 +814,13 @@ class PreferInlineCheckTest extends Test {
 	}
 
 	private function violations(source: String): Array<Violation> {
-		return new PreferInline().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferInline(), source);
 	}
 
 	private function relaxedViolations(source: String): Array<Violation> {
 		final check: PreferInline = new PreferInline();
 		check.setOracleRelaxed(true);
-		return check.run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+		return CheckFixture.violations(check, source);
 	}
 
 	private function hasMethod(vs: Array<Violation>, name: String): Bool {

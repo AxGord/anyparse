@@ -3,6 +3,7 @@ package unit.check;
 import anyparse.check.Check;
 import anyparse.check.Linter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -171,8 +172,8 @@ class BuiltinFixClassCensusTest extends Test {
 	public function testEveryDeclaredNoAutofixRuleAnswersNoEdit(): Void {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		for (check in Linter.builtins()) if (check is NoAutofix) {
-			final found: Array<Violation> = check.run([{ file: 'C.hx', source: TRIPWIRE }], plugin);
-			Assert.equals(0, check.fix(TRIPWIRE, found, plugin).length, check.id());
+			final found: Array<Violation> = CheckFixture.violations(check, TRIPWIRE, plugin);
+			Assert.equals(0, CheckFixture.fixOf(check, TRIPWIRE, found, plugin).length, check.id());
 		}
 	}
 

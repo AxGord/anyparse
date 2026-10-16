@@ -5,6 +5,8 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.UnusedLoopBinder;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CanonicalEdit;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -92,9 +94,11 @@ import utest.Test;
 		final src: String = wrap('for (k => v in l) g(v);');
 		final check: Check = rule();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }, { file: 'List.hx', source: own }], plugin);
+		final vs: Array<Violation> = CheckFixture.violationsIn(
+			check, [{ file: 'C.hx', source: src }, { file: 'List.hx', source: own }], plugin
+		);
 		Assert.equals(1, vs.length);
-		Assert.equals(wrap('for (_ => v in l) g(v);'), CheckFixture.applyEdits(src, check.fix(src, vs, plugin)));
+		Assert.equals(wrap('for (_ => v in l) g(v);'), CanonicalEdit.applyEdits(src, check.fix(src, vs, plugin)));
 	}
 
 	public function testUnreadValueRenamed(): Void {
@@ -251,9 +255,9 @@ import utest.Test;
 		// container it PROVES the std one, and a plain test index holds no std.
 		final src: String = wrap('var c = 0; for (x in xs) { g(); c++; }');
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
-		Assert.equals(0, rule().run(files, StdScope.plugin(files)).length);
+		Assert.equals(0, CheckFixture.violationsIn(rule(), files, StdScope.plugin(files)).length);
 		final counter: Null<Check> = Linter.byId('dead-binder-counter-loop');
-		Assert.equals(1, counter == null ? 0 : counter.run(files, StdScope.plugin(files)).length);
+		Assert.equals(1, counter == null ? 0 : CheckFixture.violationsIn(counter, files, StdScope.plugin(files)).length);
 		// Read after the loop, the counter is no counter loop: the dead binder is this rule's again.
 		Assert.equals(1, violations(wrap('var c = 0; for (x in xs) { g(); c++; } h(c);')).length);
 	}
@@ -274,7 +278,7 @@ import utest.Test;
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return rule().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(rule(), src);
 	}
 
 	private function applyFix(src: String): String {

@@ -10,6 +10,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -239,7 +240,7 @@ class DuplicateCodeRenamedCheckTest extends Test {
 
 	/** The cross-file wording names the partner file and says the bindings were renamed. */
 	public function testCrossFileRenamedCloneNamesThePartner(): Void {
-		final vs: Array<Violation> = new DuplicateCodeRenamed().run([
+		final vs: Array<Violation> = CheckFixture.violationsIn(new DuplicateCodeRenamed(), [
 			{
 				file: 'src/Foo.hx',
 				source: src([
@@ -264,7 +265,7 @@ class DuplicateCodeRenamedCheckTest extends Test {
 					'}'
 				])
 			}
-		], new HaxeQueryPlugin());
+		]);
 		Assert.equals(1, vs.length);
 		Assert.equals('test/Bar.hx', vs[0].file);
 		Assert.equals(
@@ -428,36 +429,31 @@ class DuplicateCodeRenamedCheckTest extends Test {
 	 */
 	public function testMessageIdentityMasksItsOwnOriginalLine(): Void {
 		final check: DuplicateCodeRenamed = new DuplicateCodeRenamed();
-		final message: String = check.run([
-			{
-				file: 'C.hx',
-				source: src([
-					'class C {',
-					'\tfunction f(alpha:Int, beta:Int):Void {',
-					'\t\tfinal one:Int = alpha + beta;',
-					'\t\tfinal two:Int = one * alpha;',
-					'\t\ttrace(one, two, beta);',
-					'\t}',
-					'\tfunction g(gamma:Int, delta:Int):Void {',
-					'\t\tfinal first:Int = gamma + delta;',
-					'\t\tfinal second:Int = first * gamma;',
-					'\t\ttrace(first, second, delta);',
-					'\t}',
-					'}'
-				])
-			}
-		], new HaxeQueryPlugin())[0].message;
+		final message: String = CheckFixture.violations(check, src([
+			'class C {',
+			'\tfunction f(alpha:Int, beta:Int):Void {',
+			'\t\tfinal one:Int = alpha + beta;',
+			'\t\tfinal two:Int = one * alpha;',
+			'\t\ttrace(one, two, beta);',
+			'\t}',
+			'\tfunction g(gamma:Int, delta:Int):Void {',
+			'\t\tfinal first:Int = gamma + delta;',
+			'\t\tfinal second:Int = first * gamma;',
+			'\t\ttrace(first, second, delta);',
+			'\t}',
+			'}'
+		]))[0].message;
 		final identity: String = check.messageIdentity(message);
 		Assert.equals('3 statements duplicated from line # — extract a helper (bindings renamed; hxq extract-method)', identity);
 		Assert.equals(identity, check.messageIdentity(identity), 'the normalization is idempotent');
 	}
 
 	private function violations(source: String): Array<Violation> {
-		return new DuplicateCodeRenamed().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new DuplicateCodeRenamed(), source);
 	}
 
 	private function exact(source: String): Array<Violation> {
-		return new DuplicateCode().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new DuplicateCode(), source);
 	}
 
 	private function src(lines: Array<String>): String {

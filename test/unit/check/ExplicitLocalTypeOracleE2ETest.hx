@@ -11,6 +11,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.Cli;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -67,7 +68,8 @@ class ExplicitLocalTypeOracleE2ETest extends Test {
 		final path: String = '$dir/Main.hx';
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: ExplicitLocalType = new ExplicitLocalType();
-		final violations: Array<Violation> = check.run([{ file: path, source: SRC }], plugin).filter(v -> v.rule == 'explicit-local-type');
+		final violations: Array<Violation> = CheckFixture.violationsIn(check, [{ file: path, source: SRC }], plugin)
+			.filter(v -> v.rule == 'explicit-local-type');
 		Assert.equals(3, violations.length, 'three untyped locals are flagged');
 		final display: Null<CompilerDisplayOracle> = CompilerDisplayOracle.start(new HaxeQueryPlugin().typeSyntax, 'check.hxml', dir);
 		if (display == null) {

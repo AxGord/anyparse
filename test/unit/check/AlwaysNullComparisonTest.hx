@@ -6,6 +6,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -90,7 +91,7 @@ class AlwaysNullComparisonTest extends Test {
 	public function testFixIsNoop(): Void {
 		final check: AlwaysNullComparison = new AlwaysNullComparison();
 		final src: String = 'class C { function f() { var x = null; if (x == null) trace(1); } }';
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
 		Assert.equals(0, edits.length);
 	}
@@ -98,8 +99,8 @@ class AlwaysNullComparisonTest extends Test {
 	public function testSkipParseNoCrash(): Void {
 		Assert.equals(
 			0,
-			new AlwaysNullComparison().run(
-				[{ file: 'Bad.hx', source: 'class Bad { function f() { var x = null; if (x == ' }], new HaxeQueryPlugin()
+			CheckFixture.violationsIn(
+				new AlwaysNullComparison(), [{ file: 'Bad.hx', source: 'class Bad { function f() { var x = null; if (x == ' }]
 			)
 				.length
 		);
@@ -243,7 +244,7 @@ class AlwaysNullComparisonTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new AlwaysNullComparison().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new AlwaysNullComparison(), src);
 	}
 
 }

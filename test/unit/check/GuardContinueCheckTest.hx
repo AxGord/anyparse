@@ -8,6 +8,7 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -141,7 +142,7 @@ class GuardContinueCheckTest extends Test {
 		// binder, is the same shape with a licensed nominal and IS flagged.
 		final str: String = 'class C {\n\tfunction f(ss:Array<String>, k:String):Void {\n\t\tfor (s in ss) {\n\t\t\tpre();\n'
 			+ '\t\t\tif (s < k) {\n\t\t\t\tbody();\n\t\t\t}\n\t\t}\n\t}\n}\n';
-		Assert.equals(0, new GuardContinue().run([{ file: 'C.hx', source: str }], new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violations(new GuardContinue(), str).length);
 		Assert.equals(1, v(cond('x < 10')).length);
 	}
 
@@ -618,13 +619,7 @@ class GuardContinueCheckTest extends Test {
 	}
 
 	public function testSkipParseNoCrash(): Void {
-		Assert.equals(
-			0,
-			new GuardContinue().run(
-				[{ file: 'C.hx', source: 'class Bad { function f() { for (x in xs) { if (a) {' }], new HaxeQueryPlugin()
-			)
-				.length
-		);
+		Assert.equals(0, CheckFixture.violations(new GuardContinue(), 'class Bad { function f() { for (x in xs) { if (a) {').length);
 	}
 
 	public function testRegisteredInBuiltins(): Void {
@@ -645,8 +640,8 @@ class GuardContinueCheckTest extends Test {
 		final source: String = wrap(
 			'for (x in xs) {\n\t\t\tif (a != null) continue;\n\t\t\tpre();\n\t\t\tif (b != null) {\n\t\t\t\tbody(b);\n\t\t\t}\n\t\t}'
 		);
-		Assert.equals(0, new GuardContinue().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()).length);
-		Assert.equals(1, new LoopGuard().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violations(new GuardContinue(), source).length);
+		Assert.equals(1, CheckFixture.violations(new LoopGuard(), source).length);
 	}
 
 	/**
@@ -659,8 +654,8 @@ class GuardContinueCheckTest extends Test {
 			'for (x in xs) {\n\t\t\tif (a != null) continue;\n\t\t\tif (c != null) continue;\n\t\t\tif (b != null) {\n\t\t\t\tbody(b);\n'
 			+ '\t\t\t}\n\t\t}'
 		);
-		Assert.equals(1, new GuardContinue().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()).length);
-		Assert.equals(0, new LoopGuard().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()).length);
+		Assert.equals(1, CheckFixture.violations(new GuardContinue(), source).length);
+		Assert.equals(0, CheckFixture.violations(new LoopGuard(), source).length);
 	}
 
 	/**
@@ -673,8 +668,8 @@ class GuardContinueCheckTest extends Test {
 		final source: String = wrap(
 			'for (x in xs) {\n\t\t\tif (x.lo < x.hi) continue;\n\t\t\tpre();\n\t\t\tif (b != null) {\n\t\t\t\tbody(b);\n\t\t\t}\n\t\t}'
 		);
-		Assert.equals(1, new GuardContinue().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()).length);
-		Assert.equals(0, new LoopGuard().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()).length);
+		Assert.equals(1, CheckFixture.violations(new GuardContinue(), source).length);
+		Assert.equals(0, CheckFixture.violations(new LoopGuard(), source).length);
 	}
 
 	/**
@@ -687,8 +682,8 @@ class GuardContinueCheckTest extends Test {
 			'if (p) for (x in xs) {\n\t\t\tif (a != null) continue;\n\t\t\tpre();\n\t\t\tif (b != null) {\n\t\t\t\tbody(b);\n\t\t\t}\n'
 			+ '\t\t} else other();'
 		);
-		Assert.equals(1, new GuardContinue().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()).length);
-		Assert.equals(0, new LoopGuard().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()).length);
+		Assert.equals(1, CheckFixture.violations(new GuardContinue(), source).length);
+		Assert.equals(0, CheckFixture.violations(new LoopGuard(), source).length);
 	}
 
 	/**
@@ -701,11 +696,11 @@ class GuardContinueCheckTest extends Test {
 	public function testKeepsADoWhileLoopGuardNeverVisits(): Void {
 		final body: String = '{\n\t\t\tif (a != null) continue;\n\t\t\tpre();\n\t\t\tif (b != null) {\n\t\t\t\tbody(b);\n\t\t\t}\n\t\t}';
 		final doWhile: String = wrap('do $body while (ok);');
-		Assert.equals(1, new GuardContinue().run([{ file: 'C.hx', source: doWhile }], new HaxeQueryPlugin()).length);
-		Assert.equals(0, new LoopGuard().run([{ file: 'C.hx', source: doWhile }], new HaxeQueryPlugin()).length);
+		Assert.equals(1, CheckFixture.violations(new GuardContinue(), doWhile).length);
+		Assert.equals(0, CheckFixture.violations(new LoopGuard(), doWhile).length);
 		final forLoop: String = wrap('for (x in xs) $body');
-		Assert.equals(0, new GuardContinue().run([{ file: 'C.hx', source: forLoop }], new HaxeQueryPlugin()).length);
-		Assert.equals(1, new LoopGuard().run([{ file: 'C.hx', source: forLoop }], new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violations(new GuardContinue(), forLoop).length);
+		Assert.equals(1, CheckFixture.violations(new LoopGuard(), forLoop).length);
 	}
 
 	// --- helpers -------------------------------------------------------------------
@@ -724,12 +719,12 @@ class GuardContinueCheckTest extends Test {
 	}
 
 	private function v(loopCode: String): Array<Violation> {
-		return new GuardContinue().run([{ file: 'C.hx', source: wrap(loopCode) }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new GuardContinue(), wrap(loopCode));
 	}
 
 	private function edits(source: String): Array<{ span: Span, text: String }> {
 		final check: GuardContinue = new GuardContinue();
-		return check.fix(source, check.run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
+		return CheckFixture.edits(check, source);
 	}
 
 	/** Canonicalise the loop code then de-nest to a fixpoint, exactly as the `lint --fix` CLI does. */
@@ -750,7 +745,7 @@ class GuardContinueCheckTest extends Test {
 	private function applyFixOnce(source: String): String {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: GuardContinue = new GuardContinue();
-		final es: Array<{ span: Span, text: String }> = check.fix(source, check.run([{ file: 'C.hx', source: source }], plugin), plugin);
+		final es: Array<{ span: Span, text: String }> = CheckFixture.edits(check, source, plugin);
 		return es.length == 0
 			? source
 			: switch CanonicalEdit.canonicalize(source, es, false, plugin) {

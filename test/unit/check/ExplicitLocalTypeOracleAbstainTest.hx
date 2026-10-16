@@ -10,6 +10,7 @@ import anyparse.check.ExplicitLocalType;
 import anyparse.check.LiteralInfer;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
+import unit.CheckFixture;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -169,7 +170,7 @@ class ExplicitLocalTypeOracleAbstainTest extends Test {
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\tvar x = (g() : Dynamic);\n\t}\n}';
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: ExplicitLocalType = new ExplicitLocalType();
-		Assert.equals(0, check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin).length);
+		Assert.equals(0, CheckFixture.edits(check, src, plugin).length);
 	}
 
 	// --- end to end, against a real compiler and display server ---

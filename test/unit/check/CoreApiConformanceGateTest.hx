@@ -11,6 +11,7 @@ import anyparse.check.TrivialGetter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.MakeFinal;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -81,32 +82,32 @@ class CoreApiConformanceGateTest extends Test {
 
 	/** `var` -> `final` on a PRIVATE field: core types do declare private fields (`haxe.Timer.id`, `haxe.ds.List.h`). */
 	public function testPreferFinalFieldDeclinesUnderCoreApi(): Void {
-		assertGated(PRIVATE_FIELD, files -> new PreferFinalField().run(files, new HaxeQueryPlugin()));
+		assertGated(PRIVATE_FIELD, files -> CheckFixture.violationsIn(new PreferFinalField(), files));
 	}
 
 	/** `var` -> `final` on a public field: "Field x has different property access than core type". */
 	public function testPreferFinalPublicFieldDeclinesUnderCoreApi(): Void {
-		assertGated(PUBLIC_FIELD, files -> new PreferFinalPublicField().run(files, new HaxeQueryPlugin()));
+		assertGated(PUBLIC_FIELD, files -> CheckFixture.violationsIn(new PreferFinalPublicField(), files));
 	}
 
 	/** `var` -> `var(default, null)`: the same property-access error, measured for `(default, never)` too. */
 	public function testPreferReadOnlyFieldDeclinesUnderCoreApi(): Void {
-		assertGated(INTERNALLY_WRITTEN_FIELD, files -> new PreferReadOnlyField().run(files, new HaxeQueryPlugin()));
+		assertGated(INTERNALLY_WRITTEN_FIELD, files -> CheckFixture.violationsIn(new PreferReadOnlyField(), files));
 	}
 
 	/** `static final` -> `static inline final`: `static var X` -> `static inline var X` already errors. */
 	public function testInlineConstantDeclinesUnderCoreApi(): Void {
-		assertGated(STATIC_CONSTANT, files -> new InlineConstant().run(files, new HaxeQueryPlugin()));
+		assertGated(STATIC_CONSTANT, files -> CheckFixture.violationsIn(new InlineConstant(), files));
 	}
 
 	/** An instance `final` promoted to `static` leaves the instance member set: "Missing field required by core type". */
 	public function testStaticConstantDeclinesUnderCoreApi(): Void {
-		assertGated(INSTANCE_CONSTANT, files -> new StaticConstant().run(files, new HaxeQueryPlugin()));
+		assertGated(INSTANCE_CONSTANT, files -> CheckFixture.violationsIn(new StaticConstant(), files));
 	}
 
 	/** Collapsing `(get, never)` to `(default, null)` rewrites the accessor pair — a property-access change. */
 	public function testTrivialGetterDeclinesUnderCoreApi(): Void {
-		assertGated(TRIVIAL_PROPERTY, files -> new TrivialGetter().run(files, new HaxeQueryPlugin()));
+		assertGated(TRIVIAL_PROPERTY, files -> CheckFixture.violationsIn(new TrivialGetter(), files));
 	}
 
 	/** The `make-final` op takes the gate as a refusal, before the index it would otherwise build. */
@@ -133,8 +134,8 @@ class CoreApiConformanceGateTest extends Test {
 	 * NOT to widen it is written above, not left to the numbers.
 	 */
 	public function testPreferInlineIsUnaffectedByTheGate(): Void {
-		Assert.equals(1, new PreferInline().run([{ file: FIXTURE_FILE, source: THIN_METHOD }], new HaxeQueryPlugin()).length);
-		Assert.equals(0, new PreferInline().run([{ file: FIXTURE_FILE, source: CORE_API + THIN_METHOD }], new HaxeQueryPlugin()).length);
+		Assert.equals(1, CheckFixture.violationsIn(new PreferInline(), [{ file: FIXTURE_FILE, source: THIN_METHOD }]).length);
+		Assert.equals(0, CheckFixture.violationsIn(new PreferInline(), [{ file: FIXTURE_FILE, source: CORE_API + THIN_METHOD }]).length);
 	}
 
 	/**

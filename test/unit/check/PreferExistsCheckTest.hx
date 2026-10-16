@@ -5,8 +5,8 @@ import anyparse.check.PreferExists;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
-import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -176,8 +176,8 @@ class PreferExistsCheckTest extends Test {
 		// STATIC `exists`, so `Lambda.exists(m, …)` would not resolve.
 		final own: String = memberFn('for (x in m) if (x > 2) return true;\n\t\treturn false;');
 		final lambda: String = 'class Lambda {\n\tpublic static function foreach(it:Int):Bool {\n\t\treturn false;\n\t}\n}';
-		final vs: Array<Violation> = new PreferExists().run(
-			[{ file: 'C.hx', source: own }, { file: 'Lambda.hx', source: lambda }], new HaxeQueryPlugin()
+		final vs: Array<Violation> = CheckFixture.violationsIn(
+			new PreferExists(), [{ file: 'C.hx', source: own }, { file: 'Lambda.hx', source: lambda }]
 		);
 		Assert.equals(0, vs.length);
 	}
@@ -188,8 +188,8 @@ class PreferExistsCheckTest extends Test {
 		final own: String = memberFn('for (x in m) if (x > 2) return true;\n\t\treturn false;');
 		final lambda: String =
 			'class Lambda {\n\tpublic static function exists<A>(it:Iterable<A>, f:A -> Bool):Bool {\n\t\treturn false;\n\t}\n}';
-		final vs: Array<Violation> = new PreferExists().run(
-			[{ file: 'C.hx', source: own }, { file: 'Lambda.hx', source: lambda }], new HaxeQueryPlugin()
+		final vs: Array<Violation> = CheckFixture.violationsIn(
+			new PreferExists(), [{ file: 'C.hx', source: own }, { file: 'Lambda.hx', source: lambda }]
 		);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.indexOf('Lambda.exists(m, x -> x > 2)') != -1, vs[0].message);
@@ -502,14 +502,12 @@ class PreferExistsCheckTest extends Test {
 	public function testFlagFormReceiverDeclaringExistsTakesTheQualifiedForm(): Void {
 		// The FLAG sink reaches the same head and therefore the same fallback: the shadow picks the
 		// qualified spelling, and the fold's own purity gate is untouched by it.
-		final vs: Array<Violation> = new PreferExists().run([
-			{
-				file: 'C.hx',
-				source: 'class C {\n\tfunction f(m:M):Bool {\n\t\tvar found:Bool = false;\n\t\tfor (x in m) if (x > 2) found = true;\n'
-				+ '\t\treturn found;\n\t}\n}\n\nclass M {\n\tpublic function exists(key:Int):Bool {\n\t\treturn false;\n\t}\n\n'
-				+ '\tpublic function iterator():Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}'
-			}
-		], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(
+			new PreferExists(),
+			'class C {\n\tfunction f(m:M):Bool {\n\t\tvar found:Bool = false;\n\t\tfor (x in m) if (x > 2) found = true;\n'
+			+ '\t\treturn found;\n\t}\n}\n\nclass M {\n\tpublic function exists(key:Int):Bool {\n\t\treturn false;\n\t}\n\n'
+			+ '\tpublic function iterator():Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}'
+		);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.indexOf('final found = Lambda.exists(m, x -> x > 2)') != -1, vs[0].message);
 	}
@@ -561,7 +559,7 @@ class PreferExistsCheckTest extends Test {
 	private function grouped(src: String): Array<GroupedEdit> {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: PreferExists = new PreferExists();
-		return check.fixGrouped(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
+		return check.fixGrouped(src, CheckFixture.violations(check, src, plugin), plugin);
 	}
 
 	private function fn(body: String): String {
@@ -617,15 +615,15 @@ class PreferExistsCheckTest extends Test {
 	}
 
 	private function violations(source: String): Array<Violation> {
-		return new PreferExists().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferExists(), source);
 	}
 
 	private function fixResult(src: String): String {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: PreferExists = new PreferExists();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
+		final vs: Array<Violation> = CheckFixture.violations(check, src, plugin);
 		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, vs, plugin, SymbolIndex.build([{ file: 'C.hx', source: src }], plugin)
+			src, vs, plugin, CheckFixture.index([{ file: 'C.hx', source: src }], plugin)
 		);
 		switch CanonicalEdit.canonicalize(src, edits, true, plugin) {
 			case Ok(text):

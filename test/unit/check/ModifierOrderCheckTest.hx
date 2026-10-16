@@ -5,8 +5,8 @@ import anyparse.check.Linter;
 import anyparse.check.ModifierOrder;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeModuleParser;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.haxe.HxModuleWriter;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -140,7 +140,7 @@ class ModifierOrderCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new ModifierOrder().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new ModifierOrder(), src);
 	}
 
 	private function fixedSource(src: String): String {

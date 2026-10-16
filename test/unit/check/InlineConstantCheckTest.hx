@@ -4,7 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.InlineConstant;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -122,7 +122,7 @@ class InlineConstantCheckTest extends Test {
 			{ file: 'C.hx', source: 'class C { static final MYCONST:Int = 5; }' },
 			{ file: 'D.hx', source: 'class D { function f():Void { Reflect.field(C, "MYCONST"); } }' }
 		];
-		Assert.equals(0, new InlineConstant().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(new InlineConstant(), files).length);
 	}
 
 	/**
@@ -136,7 +136,7 @@ class InlineConstantCheckTest extends Test {
 			{ file: 'C.hx', source: 'class C { static final MYCONST:Int = 5; }' },
 			{ file: 'D.hx', source: 'class D { function f(p:String):Void { Reflect.field(C, \'$${p}MYCONST\'); } }' }
 		];
-		Assert.equals(0, new InlineConstant().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(new InlineConstant(), files).length);
 	}
 
 	/**
@@ -148,7 +148,7 @@ class InlineConstantCheckTest extends Test {
 			{ file: 'C.hx', source: 'class C { static final MYCONST:Int = 5; }' },
 			{ file: 'D.hx', source: 'class D { function f(p:String):Void { Reflect.field(C, \'$${p}OTHERNAME\'); } }' }
 		];
-		Assert.equals(1, new InlineConstant().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(1, CheckFixture.violationsIn(new InlineConstant(), files).length);
 	}
 
 	/**
@@ -160,7 +160,7 @@ class InlineConstantCheckTest extends Test {
 			{ file: 'C.hx', source: 'class C { static final CONST:Int = 5; }' },
 			{ file: 'D.hx', source: 'class D { function f(p:String):Void { Reflect.field(C, \'$${p}ONS\'); } }' }
 		];
-		Assert.equals(1, new InlineConstant().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(1, CheckFixture.violationsIn(new InlineConstant(), files).length);
 	}
 
 	/**
@@ -172,7 +172,7 @@ class InlineConstantCheckTest extends Test {
 			{ file: 'C.hx', source: 'class C { public static inline var MYCONST:Int = 5; }' },
 			{ file: 'D.hx', source: 'class D { function f(p:String):Void { Reflect.field(C, \'$${p}MYCONST\'); } }' }
 		];
-		Assert.equals(0, new InlineConstant().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(new InlineConstant(), files).length);
 	}
 
 	/**
@@ -270,7 +270,7 @@ class InlineConstantCheckTest extends Test {
 			{ file: 'C.hx', source: 'class C { public static inline var MYCONST:Int = 5; }' },
 			{ file: 'D.hx', source: 'class D { function f():Void { Reflect.field(C, "MYCONST"); } }' }
 		];
-		Assert.equals(0, new InlineConstant().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(new InlineConstant(), files).length);
 	}
 
 	public function testInlineVarExprInitNotFlagged(): Void {
@@ -313,7 +313,7 @@ class InlineConstantCheckTest extends Test {
 			{ file: 'C.hx', source: 'class C { public static final A:Int = 5; }' },
 			{ file: 'Build.hx', source: 'import haxe.macro.Context;\nclass Build { public static function f():Void { C; } }' }
 		];
-		Assert.equals(0, new InlineConstant().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(new InlineConstant(), files).length);
 	}
 
 	/** The same class mentioned in a NON-macro file is not macro-consumed — its public constant still converts. */
@@ -322,7 +322,7 @@ class InlineConstantCheckTest extends Test {
 			{ file: 'C.hx', source: 'class C { public static final A:Int = 5; }' },
 			{ file: 'User.hx', source: 'class User { public static function f():Void { C; } }' }
 		];
-		Assert.equals(1, new InlineConstant().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(1, CheckFixture.violationsIn(new InlineConstant(), files).length);
 	}
 
 	/** A field-level `@:rtti` pins the constant for runtime type info — never inlined. */
@@ -422,7 +422,7 @@ class InlineConstantCheckTest extends Test {
 			{ file: 'Other.hx', source: 'class Other { @:keep public static inline final A:Int = 1; }' },
 			{ file: 'C.hx', source: 'class C { static final B:Int = Other.A; }' }
 		];
-		Assert.equals(0, new InlineConstant().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(new InlineConstant(), files).length);
 	}
 
 	/** A qualified reference whose type nothing declares proves nothing either. */
@@ -506,7 +506,7 @@ class InlineConstantCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new InlineConstant().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new InlineConstant(), src);
 	}
 
 	private function fixedSource(src: String): String {

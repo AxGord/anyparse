@@ -5,6 +5,7 @@ import anyparse.check.Linter;
 import anyparse.check.PreferCaseWildcard;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -99,7 +100,7 @@ class PreferCaseWildcardCheckTest extends Test {
 
 
 	private function violations(source: String): Array<Violation> {
-		return new PreferCaseWildcard().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferCaseWildcard(), source);
 	}
 
 	/**

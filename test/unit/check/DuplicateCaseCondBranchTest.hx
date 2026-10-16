@@ -2,7 +2,7 @@ package unit.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.check.DuplicateCase;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -50,7 +50,7 @@ class DuplicateCaseCondBranchTest extends Test {
 	private function run(arms: String): Array<Violation> {
 		final source: String =
 			'class C {\n\tstatic function f(v: Int): Void {\n\t\tswitch (v) {\n\t\t\t$arms\n\t\t\tcase _: n();\n\t\t}\n\t}\n}\n';
-		return new DuplicateCase().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new DuplicateCase(), source);
 	}
 
 }

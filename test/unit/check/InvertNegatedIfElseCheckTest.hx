@@ -4,9 +4,9 @@ import anyparse.check.Check.Violation;
 import anyparse.check.InvertNegatedIfElse;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -98,12 +98,12 @@ class InvertNegatedIfElseCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new InvertNegatedIfElse().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new InvertNegatedIfElse(), src);
 	}
 
 	private function edits(src: String): Array<{ span: Span, text: String }> {
 		final check: InvertNegatedIfElse = new InvertNegatedIfElse();
-		return check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
+		return CheckFixture.edits(check, src);
 	}
 
 }

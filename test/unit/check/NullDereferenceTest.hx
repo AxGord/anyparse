@@ -6,6 +6,7 @@ import anyparse.check.NullDereference;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -78,7 +79,7 @@ class NullDereferenceTest extends Test {
 	public function testFixIsNoop(): Void {
 		final check: NullDereference = new NullDereference();
 		final src: String = 'class C { function f() { var x = null; x.foo(); } }';
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
 		Assert.equals(0, edits.length);
 	}
@@ -86,7 +87,7 @@ class NullDereferenceTest extends Test {
 	public function testSkipParseNoCrash(): Void {
 		Assert.equals(
 			0,
-			new NullDereference().run([{ file: 'Bad.hx', source: 'class Bad { function f() { var x = null; x.' }], new HaxeQueryPlugin())
+			CheckFixture.violationsIn(new NullDereference(), [{ file: 'Bad.hx', source: 'class Bad { function f() { var x = null; x.' }])
 				.length
 		);
 	}
@@ -198,7 +199,7 @@ class NullDereferenceTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new NullDereference().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new NullDereference(), src);
 	}
 
 }

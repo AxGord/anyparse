@@ -4,8 +4,8 @@ import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.PreferNullCoalescing;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -128,14 +128,12 @@ class PreferNullCoalescingCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new PreferNullCoalescing().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferNullCoalescing(), src);
 	}
 
 	private function fixText(src: String): String {
 		final check: PreferNullCoalescing = new PreferNullCoalescing();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.edits(check, src);
 		return edits.length == 1 ? edits[0].text : '<${edits.length} edits>';
 	}
 

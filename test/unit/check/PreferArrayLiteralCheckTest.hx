@@ -7,6 +7,7 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -118,14 +119,14 @@ class PreferArrayLiteralCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new PreferArrayLiteral().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferArrayLiteral(), src);
 	}
 
 	private function fixText(src: String): String {
 		final check: PreferArrayLiteral = new PreferArrayLiteral();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
+		// Deliberately WITHOUT the report index production hands every fix: `testThisFieldAssignmentNeedsIndex` pins the
+		// index-less fallback, which `lint --fix` never reaches (B8 finding).
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, CheckFixture.violations(check, src), new HaxeQueryPlugin());
 		return edits.length == 1 ? edits[0].text : '<${edits.length} edits>';
 	}
 
@@ -139,8 +140,8 @@ class PreferArrayLiteralCheckTest extends Test {
 		final check: PreferArrayLiteral = new PreferArrayLiteral();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
-		final idx: SymbolIndex = SymbolIndex.build(files, plugin);
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, check.run(files, plugin), plugin, idx);
+		final idx: SymbolIndex = CheckFixture.index(files, plugin);
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, CheckFixture.violationsIn(check, files, plugin), plugin, idx);
 		return edits.length == 1 ? edits[0].text : '<${edits.length} edits>';
 	}
 

@@ -17,6 +17,7 @@ import anyparse.query.StdResolver;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import haxe.io.Path;
+import unit.CheckFixture;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -5094,7 +5095,7 @@ class MemberReachFactsTest extends Test {
 		];
 		final std: Array<{ file: String, source: String }> = [for (name => text in STD_STAND_INS) { file: name, source: text }];
 		for (name => text in declared ?? []) std.push({ file: name, source: text });
-		final index: SymbolIndex = SymbolIndex.build(project.concat(libraries).concat(std), plugin);
+		final index: SymbolIndex = CheckFixture.index(project.concat(libraries).concat(std), plugin);
 		// the builds as a run probes them: every define each one sees, the target's and the compiler's included
 		final builds: Null<Array<ReachConfiguration>> = listed ? ReachDefinesProbe.probeAll(oracles)?.configurations : null;
 		final reach: MemberReach = new MemberReach(

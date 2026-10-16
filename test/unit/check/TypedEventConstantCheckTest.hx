@@ -6,8 +6,8 @@ import anyparse.check.RuleDeclaration;
 import anyparse.check.Severity;
 import anyparse.check.TypedEventConstant;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -147,7 +147,7 @@ class TypedEventConstantCheckTest extends Test {
 		final problems: Array<String> = [];
 		final spec: Null<EventSpec> = RuleDeclaration.eventTypes(LintConfig.parse(config), 'typed-event-constant', []);
 		Assert.notNull(spec);
-		if (spec != null) Assert.isNull(TypedEventConstant.validate(spec, SymbolIndex.build(files, plugin), plugin, problems));
+		if (spec != null) Assert.isNull(TypedEventConstant.validate(spec, CheckFixture.index(files, plugin), plugin, problems));
 		Assert.same([
 			'"typeAbstract" "ev.OneWay" is not an abstract of one type parameter over String converting from String and to String — rule '
 			+ 'inert'
@@ -172,7 +172,7 @@ class TypedEventConstantCheckTest extends Test {
 		final spec: Null<EventSpec> = RuleDeclaration.eventTypes(
 			LintConfig.parse(CONFIG.replace('ev.Event"', 'ev.Nope"')), 'typed-event-constant', []
 		);
-		if (spec != null) Assert.isNull(TypedEventConstant.validate(spec, SymbolIndex.build(files, plugin), plugin, unknownBase));
+		if (spec != null) Assert.isNull(TypedEventConstant.validate(spec, CheckFixture.index(files, plugin), plugin, unknownBase));
 		Assert.same([
 			'"eventBase" "ev.Nope" names no single type in the resolution scope — rule inert'
 		], unknownBase);
@@ -196,29 +196,38 @@ class TypedEventConstantCheckTest extends Test {
 		];
 	}
 
+	/** A `TypedEventConstant` reading `config` — the same resolver `resolver` hands the run's file gate. */
 	private function check(config: String): TypedEventConstant {
 		final rule: TypedEventConstant = new TypedEventConstant();
-		rule.setConfigResolver(_ -> LintConfig.parse(config));
+		rule.setConfigResolver(resolver(config));
 		return rule;
 	}
 
 	private function violationsOf(files: Array<{ file: String, source: String }>, ?config: String): Array<Violation> {
-		return check(config ?? CONFIG).run(files, new HaxeQueryPlugin());
+		return CheckFixture.violationsIn(check(config ?? CONFIG), files, null, resolver(config ?? CONFIG));
 	}
 
 	/** The replacement texts of the fix for `file`'s own findings. */
 	private function editTexts(files: Array<{ file: String, source: String }>, file: String): Array<String> {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final rule: TypedEventConstant = check(CONFIG);
-		final own: Array<Violation> = rule.run(files, plugin).filter(v -> v.file == file);
+		final own: Array<Violation> = CheckFixture.violationsIn(rule, files, plugin, resolver(CONFIG)).filter(v -> v.file == file);
 		if (own.length == 0) return [];
 		final source: String = files.filter(f -> f.file == file)[0].source;
-		final edits: Array<{ span: Span, text: String }> = rule.fix(source, own, plugin, SymbolIndex.build(files, plugin));
+		final edits: Array<{ span: Span, text: String }> = rule.fix(source, own, plugin, CheckFixture.index(files, plugin));
 		return [for (e in edits) e.text];
 	}
 
 	private static function messages(vs: Array<Violation>): String {
 		return [for (v in vs) '${v.file} ${v.severity} ${v.message}'].join('\n');
+	}
+
+	/**
+	 * `config` as the run's per-file resolver. The rule is `FileGated`, so `Linter.collect` asks its file gate
+	 * through the same resolver the check reads its options from — as `Linter.run` hands both.
+	 */
+	private static function resolver(config: String): (String) -> LintConfig {
+		return _ -> LintConfig.parse(config);
 	}
 
 }

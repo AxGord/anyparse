@@ -8,6 +8,7 @@ import anyparse.check.SimplifyBooleanTernary;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -82,7 +83,7 @@ class SimplifyBooleanTernaryCheckTest extends Test {
 
 	public function testSkipParseNoCrash(): Void {
 		Assert.equals(
-			0, new SimplifyBooleanTernary().run([{ file: 'Bad.hx', source: 'class Bad { function f() { ' }], new HaxeQueryPlugin()).length
+			0, CheckFixture.violationsIn(new SimplifyBooleanTernary(), [{ file: 'Bad.hx', source: 'class Bad { function f() { ' }]).length
 		);
 	}
 
@@ -101,7 +102,7 @@ class SimplifyBooleanTernaryCheckTest extends Test {
 		final source: String = hosted('Bool', '{ return c ? false : p; }');
 		final claimed: Null<Map<String, Bool>> = claimsOf(source);
 		if (claimed == null) return;
-		final reported: Array<Violation> = new SimplifyBooleanTernary().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+		final reported: Array<Violation> = CheckFixture.violations(new SimplifyBooleanTernary(), source);
 		Assert.equals(1, reported.length, 'the fixture reports exactly one claim: $reported');
 		final span: Null<Span> = reported[0].span;
 		if (span == null) {
@@ -122,7 +123,7 @@ class SimplifyBooleanTernaryCheckTest extends Test {
 		final source: String = hosted('Int', '{ return c ? a : b; }');
 		final claimed: Null<Map<String, Bool>> = claimsOf(source);
 		if (claimed == null) return;
-		Assert.equals(0, new SimplifyBooleanTernary().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violations(new SimplifyBooleanTernary(), source).length);
 		Assert.equals(0, [for (k in claimed.keys()) k].length);
 	}
 
@@ -284,7 +285,7 @@ class SimplifyBooleanTernaryCheckTest extends Test {
 	}
 
 	private function violations(body: String): Array<Violation> {
-		return new SimplifyBooleanTernary().run([{ file: 'C.hx', source: hosted('Dynamic', body) }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new SimplifyBooleanTernary(), hosted('Dynamic', body));
 	}
 
 	/** The rewrite text the fix emits for the first ternary in `body` (empty if none). */
@@ -315,9 +316,7 @@ class SimplifyBooleanTernaryCheckTest extends Test {
 	/** The first rewrite `fix` emits for `src`, or an empty string when there is none. */
 	private function firstEdit(src: String): String {
 		final check: SimplifyBooleanTernary = new SimplifyBooleanTernary();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.edits(check, src);
 		return edits.length > 0 ? edits[0].text : '';
 	}
 

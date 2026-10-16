@@ -15,6 +15,7 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.cli.command.FmtCommand;
 import anyparse.query.cli.command.LintFixLedger;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -228,9 +229,9 @@ final class ApqCountSummaryCliTest extends Test {
 	public function testOneFindingCostsFourEditSpans(): Void {
 		final files: Array<{ file: String, source: String }> = [{ file: 'Probe.hx', source: ONE_FINDING_FOUR_EDITS }];
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final index: SymbolIndex = CheckFixture.index(files, plugin);
 		final check: Naming = new Naming();
-		final found: Array<Violation> = check.run(files, plugin);
+		final found: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 		Assert.equals(1, found.length, 'the fixture must carry exactly ONE finding');
 		final edits: Array<{ span: Span, text: String }> = check.fix(ONE_FINDING_FOUR_EDITS, found, plugin, index);
 		Assert.equals(4, edits.length, 'one finding, four edit spans — the declaration and its three reads');

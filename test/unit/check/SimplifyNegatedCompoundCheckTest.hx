@@ -7,8 +7,8 @@ import anyparse.check.SimplifyNegatedCompound;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
-import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import unit.QueryTestHelpers;
 import utest.Assert;
 import utest.Test;
@@ -462,7 +462,7 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new SimplifyNegatedCompound().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new SimplifyNegatedCompound(), src);
 	}
 
 	/** Wrap a single statement body in a minimal, already-CANONICAL class + function so it parses and `fix` can splice into it. */
@@ -486,7 +486,7 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 	private function applyFix(source: String): String {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: SimplifyNegatedCompound = new SimplifyNegatedCompound();
-		final es: Array<{ span: Span, text: String }> = check.fix(source, check.run([{ file: 'C.hx', source: source }], plugin), plugin);
+		final es: Array<{ span: Span, text: String }> = CheckFixture.edits(check, source, plugin);
 		return es.length == 0 ? source : canonicalized(source, es, plugin);
 	}
 
@@ -506,8 +506,8 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 		});
 		final check: SimplifyNegatedCompound = new SimplifyNegatedCompound();
 		final files: Array<{ file: String, source: String }> = report.concat(library);
-		final vs: Array<Violation> = check.run(report, scoped);
-		final es: Array<{ span: Span, text: String }> = check.fix(source, vs, scoped, SymbolIndex.build(files, scoped));
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, report, scoped);
+		final es: Array<{ span: Span, text: String }> = check.fix(source, vs, scoped, CheckFixture.index(files, scoped));
 		return es.length == 0 ? source : canonicalized(source, es, scoped);
 	}
 

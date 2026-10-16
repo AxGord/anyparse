@@ -7,6 +7,7 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -180,12 +181,12 @@ class NarrowLocalScopeCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new NarrowLocalScope().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new NarrowLocalScope(), src);
 	}
 
 	private function edits(src: String): Array<{ span: Span, text: String }> {
 		final check: NarrowLocalScope = new NarrowLocalScope();
-		return check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
+		return CheckFixture.edits(check, src);
 	}
 
 	/** Run `fix` and re-emit through the canonical writer -- the `lint --fix` path in one pass. */

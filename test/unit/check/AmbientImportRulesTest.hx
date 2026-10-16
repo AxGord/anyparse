@@ -3,7 +3,7 @@ package unit.check;
 import anyparse.check.Check.Violation;
 import anyparse.check.RedundantImport;
 import anyparse.check.UnusedImport;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -351,7 +351,7 @@ class AmbientImportRulesTest extends Test {
 			final files: Array<{ file: String, source: String }> = [
 				for (entry in tree) if (!entry.name.endsWith('import.hx')) { file: '$root/${entry.name}', source: entry.source }
 			];
-			final violations: Array<Violation> = new RedundantImport().run(files, new HaxeQueryPlugin());
+			final violations: Array<Violation> = CheckFixture.violationsIn(new RedundantImport(), files);
 			out = [for (v in violations) '${v.file.substr(root.length + 1)}:${pathOf(v.message)}'].join(',');
 		});
 		return out;
@@ -362,7 +362,7 @@ class AmbientImportRulesTest extends Test {
 
 	/** Every `unused-import` finding as `<file without prefix>:<import path>`, comma-joined in report order. */
 	private function reported(files: Array<{ file: String, source: String }>, prefix: String): String {
-		final violations: Array<Violation> = new UnusedImport().run(files, new HaxeQueryPlugin());
+		final violations: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), files);
 		return [
 			for (v in violations) '${v.file.substr(prefix.length)}:${pathOf(v.message)}'
 		].join(',');

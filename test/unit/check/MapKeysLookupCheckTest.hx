@@ -6,6 +6,7 @@ import anyparse.check.MapKeysLookup;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
+import unit.CheckFixture;
 import unit.QueryTestHelpers;
 import utest.Assert;
 import utest.Test;
@@ -49,12 +50,12 @@ class MapKeysLookupCheckTest extends Test {
 		// stays — only the automatic application is withheld.
 		final src: String = '@:build(B.b())\n' + wrapMap('for (k in m.keys()) trace(m[k]);');
 		final check: MapKeysLookup = new MapKeysLookup();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
 		// The same loop without the annotation still gets its edit.
 		final plain: String = wrapMap('for (k in m.keys()) trace(m[k]);');
-		final pv: Array<Violation> = check.run([{ file: 'C.hx', source: plain }], new HaxeQueryPlugin());
+		final pv: Array<Violation> = CheckFixture.violations(check, plain);
 		Assert.isTrue(check.fix(plain, pv, new HaxeQueryPlugin()).length > 0);
 	}
 
@@ -555,22 +556,22 @@ class MapKeysLookupCheckTest extends Test {
 	}
 
 	private function violations(source: String): Array<Violation> {
-		return new MapKeysLookup().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new MapKeysLookup(), source);
 	}
 
 	/** Run over several sources at once, so the type gate can resolve a member declared in another file. */
 	private function violationsAcross(sources: Array<String>): Array<Violation> {
-		return new MapKeysLookup().run(QueryTestHelpers.rootModules(sources), new HaxeQueryPlugin());
+		return CheckFixture.violationsIn(new MapKeysLookup(), QueryTestHelpers.rootModules(sources));
 	}
 
 	/** Run over explicit file paths, so package + import scope (isMain module names) resolves. */
 	private function violationsForFiles(files: Array<{ file: String, source: String }>): Array<Violation> {
-		return new MapKeysLookup().run(files, new HaxeQueryPlugin());
+		return CheckFixture.violationsIn(new MapKeysLookup(), files);
 	}
 
 	private function assertFixCanonical(src: String, present: String, absent: String): Void {
 		final check: MapKeysLookup = new MapKeysLookup();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
 		switch CanonicalEdit.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
 			case Ok(text):

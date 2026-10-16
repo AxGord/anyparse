@@ -4,7 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.NullableSwitchMissingNull;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -192,9 +192,9 @@ class NullableSwitchMissingNullCheckTest extends Test {
 	public function testFixIsReportOnly(): Void {
 		final src: String = mod('function f(e:Null<Colour>):Void { switch e { case Red: trace(1); case Green: trace(2); } }');
 		final check: NullableSwitchMissingNull = new NullableSwitchMissingNull();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
-		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.fixOf(check, src, vs).length);
 	}
 
 	public function testRegisteredInBuiltins(): Void {
@@ -208,7 +208,7 @@ class NullableSwitchMissingNullCheckTest extends Test {
 	}
 
 	private function violations(source: String): Array<Violation> {
-		return new NullableSwitchMissingNull().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new NullableSwitchMissingNull(), source);
 	}
 
 	/** The fixture module: the two subject types the gates discriminate, plus `body` inside class `C`. */

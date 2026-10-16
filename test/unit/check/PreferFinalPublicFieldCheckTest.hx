@@ -5,7 +5,7 @@ import anyparse.check.Linter;
 import anyparse.check.PreferFinalField;
 import anyparse.check.PreferFinalPublicField;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -157,7 +157,7 @@ class PreferFinalPublicFieldCheckTest extends Test {
 			{ file: 'C.hx', source: 'class C { public var x:Int = 0; }' },
 			{ file: 'W.hx', source: 'class W { public function poke(c:C):Void { c.x = 9; } }' }
 		];
-		Assert.equals(0, new PreferFinalPublicField().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(new PreferFinalPublicField(), files).length);
 	}
 
 	/** A typed external write to a DIFFERENT type's same-named field does not count. */
@@ -166,7 +166,7 @@ class PreferFinalPublicFieldCheckTest extends Test {
 			{ file: 'C.hx', source: 'class C { public var x:Int = 0; }' },
 			{ file: 'D.hx', source: 'class D { public var x:Int = 0; public function poke(d:D):Void { d.x = 9; } }' }
 		];
-		final vs: Array<Violation> = new PreferFinalPublicField().run(files, new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(new PreferFinalPublicField(), files);
 		Assert.equals(1, vs.length);
 		Assert.equals('C.hx', vs[0].file);
 	}
@@ -285,7 +285,7 @@ class PreferFinalPublicFieldCheckTest extends Test {
 			{ file: 'I.hx', source: 'interface I { public var x:Int; }' },
 			{ file: 'C.hx', source: 'class C implements I { public var x:Int = 0; }' }
 		];
-		Assert.equals(0, new PreferFinalPublicField().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violationsIn(new PreferFinalPublicField(), files).length);
 	}
 
 	/** A field written inside a `macro {}` reification (emitted runtime code, unresolved receiver) is bailed, not flagged. */
@@ -961,9 +961,9 @@ class PreferFinalPublicFieldCheckTest extends Test {
 	public function testConditionalCarriedVisibilityKeepsPrivateRuleOut(): Void {
 		Assert.equals(
 			0,
-			new PreferFinalField().run([
-				{ file: 'C.hx', source: 'class C {\n\t#if cpp\n\tpublic\n\t#else\n\tprivate\n\t#end\n\tvar x:Int = 0;\n}' }
-			], new HaxeQueryPlugin())
+			CheckFixture.violations(
+				new PreferFinalField(), 'class C {\n\t#if cpp\n\tpublic\n\t#else\n\tprivate\n\t#end\n\tvar x:Int = 0;\n}'
+			)
 				.length
 		);
 	}
@@ -984,7 +984,7 @@ class PreferFinalPublicFieldCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new PreferFinalPublicField().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferFinalPublicField(), src);
 	}
 
 	private function fixedSource(src: String): String {
@@ -992,7 +992,7 @@ class PreferFinalPublicFieldCheckTest extends Test {
 	}
 
 	private function multi(files: Array<{ file: String, source: String }>): Array<Violation> {
-		return new PreferFinalPublicField().run(files, new HaxeQueryPlugin());
+		return CheckFixture.violationsIn(new PreferFinalPublicField(), files);
 	}
 
 	/** Only the violations against the owner `C.hx` — a subtype fixture can carry findings of its own. */

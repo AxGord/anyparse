@@ -7,6 +7,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.cli.command.LintCommand;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -142,8 +143,8 @@ import utest.Test;
 		final check: Null<Check> = Linter.byId('redundant-isvar');
 		Assert.notNull(check);
 		if (check == null) return;
-		Assert.equals(0, check.run(report, scoped(report, [{ file: 'Sub.hx', source: writes }])).length);
-		Assert.equals(1, check.run(report, scoped(report, [])).length);
+		Assert.equals(0, CheckFixture.violationsIn(check, report, scoped(report, [{ file: 'Sub.hx', source: writes }])).length);
+		Assert.equals(1, CheckFixture.violationsIn(check, report, scoped(report, [])).length);
 	}
 
 	@:pin('control') @:killer('M-ISVAR-BYPASS-BLIND')
@@ -241,7 +242,7 @@ import utest.Test;
 
 	private function violationsOf(files: Array<{ file: String, source: String }>): Array<Violation> {
 		final check: Null<Check> = Linter.byId('redundant-isvar');
-		return check == null ? [] : check.run(files, new HaxeQueryPlugin());
+		return check == null ? [] : CheckFixture.violationsIn(check, files);
 	}
 
 	private function applyFix(src: String): String {

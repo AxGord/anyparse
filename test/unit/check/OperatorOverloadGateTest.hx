@@ -9,6 +9,7 @@ import anyparse.check.SimplifyNegatedCompound;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -165,7 +166,7 @@ class OperatorOverloadGateTest extends Test {
 		final plugin: GrammarPlugin = new HaxeQueryPlugin();
 		final at: Int = use.indexOf(needle);
 		Assert.isTrue(at >= 0, 'the fixture holds $needle');
-		final found: Array<Violation> = check.run([
+		final found: Array<Violation> = CheckFixture.violationsIn(check, [
 			{ file: 'Decl.hx', source: decl },
 			{ file: 'Use.hx', source: use }
 		], plugin);

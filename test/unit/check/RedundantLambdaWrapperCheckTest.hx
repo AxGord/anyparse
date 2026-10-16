@@ -8,6 +8,7 @@ import anyparse.check.RedundantLambdaWrapper;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -53,7 +54,7 @@ class RedundantLambdaWrapperCheckTest extends Test {
 	/** `prefer-bind` must stay silent on the one shape both rules could see — the registry-order claim in `Linter.builtins`. */
 	public function testPreferBindSilentOnZeroArgCall(): Void {
 		final src: String = 'class C {\n\tstatic function go():Bool return true;\n\tfunction f():Void {\n\t\trun(() -> go());\n\t}\n}';
-		Assert.equals(0, new PreferBind().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()).length);
+		Assert.equals(0, CheckFixture.violations(new PreferBind(), src).length);
 		Assert.equals(1, violations(src).length);
 	}
 
@@ -312,11 +313,11 @@ class RedundantLambdaWrapperCheckTest extends Test {
 		final second: String = 'class Helper {\n\tpublic static function isPos(v:Int):Bool return false;\n}\n';
 		final caller: String = 'class C {\n\tfunction f():Void {\n\t\txs.foreach(p -> Helper.isPos(p));\n\t}\n}';
 		final check: RedundantLambdaWrapper = new RedundantLambdaWrapper();
-		final vs: Array<Violation> = check.run([
+		final vs: Array<Violation> = CheckFixture.violationsIn(check, [
 			{ file: 'A.hx', source: HELPER },
 			{ file: 'B.hx', source: second },
 			{ file: 'C.hx', source: caller }
-		], new HaxeQueryPlugin());
+		]);
 		Assert.equals(0, vs.length);
 	}
 
@@ -331,9 +332,7 @@ class RedundantLambdaWrapperCheckTest extends Test {
 	public function testFixReplacesLambdaWithCallee(): Void {
 		final src: String = '${HELPER}class C {\n\tfunction f():Void {\n\t\txs.foreach(p -> Helper.isPos(p));\n\t}\n}';
 		final check: RedundantLambdaWrapper = new RedundantLambdaWrapper();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.edits(check, src);
 		Assert.equals(1, edits.length);
 		Assert.equals('Helper.isPos', edits[0].text);
 		final applied: String = src.substring(0, edits[0].span.from) + edits[0].text + src.substring(edits[0].span.to, src.length);
@@ -416,7 +415,7 @@ class RedundantLambdaWrapperCheckTest extends Test {
 		// never fire on any `function` lambda, while the rule's own doc says it covers "a lambda".
 		final src: String = '${HELPER}class C {\n\tfunction f():Void {\n\t\txs.foreach(function(p) return Helper.isPos(p));\n\t}\n}';
 		final check: RedundantLambdaWrapper = new RedundantLambdaWrapper();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = CheckFixture.violations(check, src);
 		Assert.equals(1, vs.length);
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
 		Assert.equals(1, edits.length);
@@ -476,7 +475,7 @@ class RedundantLambdaWrapperCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new RedundantLambdaWrapper().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new RedundantLambdaWrapper(), src);
 	}
 
 	/** Assert that `gated` is refused and its one-variable `twin` fires — the pair, not either half, is the evidence. */

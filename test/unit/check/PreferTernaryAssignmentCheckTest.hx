@@ -5,8 +5,8 @@ import anyparse.check.Linter;
 import anyparse.check.PreferIfExpressionAssignment;
 import anyparse.check.PreferTernaryAssignment;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -169,9 +169,9 @@ class PreferTernaryAssignmentCheckTest extends Test {
 		// exact site, so the zeroes above are a deferral rather than a fixture this walk never
 		// reached — and its edit is the canon, not another ternary.
 		final claiming: PreferIfExpressionAssignment = new PreferIfExpressionAssignment();
-		final own: Array<Violation> = claiming.run([{ file: 'C.hx', source: TERNARY_TAILED_ELSE }], new HaxeQueryPlugin());
+		final own: Array<Violation> = CheckFixture.violations(claiming, TERNARY_TAILED_ELSE);
 		Assert.equals(1, own.length, 'prefer-if-expression-assignment claims the site: $own');
-		final es: Array<{ span: Span, text: String }> = claiming.fix(TERNARY_TAILED_ELSE, own, new HaxeQueryPlugin());
+		final es: Array<{ span: Span, text: String }> = CheckFixture.fixOf(claiming, TERNARY_TAILED_ELSE, own);
 		Assert.equals(1, es.length);
 		Assert.equals('x = if (a) 1 else if (p) q else r;', es[0].text);
 	}
@@ -185,9 +185,7 @@ class PreferTernaryAssignmentCheckTest extends Test {
 	 */
 	public function testCommentInTheTernaryTailKeepsTheFindingHere(): Void {
 		Assert.equals(1, violations(COMMENTED_TERNARY_TAIL).length);
-		Assert.equals(
-			0, new PreferIfExpressionAssignment().run([{ file: 'C.hx', source: COMMENTED_TERNARY_TAIL }], new HaxeQueryPlugin()).length
-		);
+		Assert.equals(0, CheckFixture.violations(new PreferIfExpressionAssignment(), COMMENTED_TERNARY_TAIL).length);
 	}
 
 	public function testRegisteredInBuiltins(): Void {
@@ -305,12 +303,12 @@ class PreferTernaryAssignmentCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new PreferTernaryAssignment().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferTernaryAssignment(), src);
 	}
 
 	private function edits(src: String): Array<{ span: Span, text: String }> {
 		final check: PreferTernaryAssignment = new PreferTernaryAssignment();
-		return check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
+		return CheckFixture.edits(check, src);
 	}
 
 }

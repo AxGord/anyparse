@@ -7,6 +7,7 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -45,9 +46,7 @@ class RedundantParensCheckTest extends Test {
 	public function testFixUnwrapsToSinglePair(): Void {
 		final src: String = inFn('var b = (((a))) + c;');
 		final check: RedundantParens = new RedundantParens();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.edits(check, src);
 		Assert.equals(1, edits.length);
 		Assert.equals('(a)', edits[0].text);
 	}
@@ -541,10 +540,14 @@ class RedundantParensCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new RedundantParens().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new RedundantParens(), src);
 	}
 
-	/** `src` with every edit the check's own `fix` produces applied. */
+	/**
+	 * `src` with every edit the check's own `fix` produces applied — read off the RAW `run`, not `CheckFixture`:
+	 * the splicing-host tests fix a finding inside a `macro` quotation, which `Linter.collect`'s reification gate drops
+	 * in every production run (this rule is not `QuotationAware`). B8 finding: that half of the rule is unreachable.
+	 */
 	private function fixed(src: String): String {
 		final check: RedundantParens = new RedundantParens();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();

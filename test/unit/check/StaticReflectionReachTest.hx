@@ -6,9 +6,9 @@ import anyparse.check.StaticReflectionReach;
 import anyparse.check.UnusedPrivate;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
-import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import sys.io.File;
+import unit.CheckFixture;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -255,9 +255,9 @@ using StringTools;
 		final files: Array<SourceFile> = [{ file: 'C.hx', source: owner }, { file: 'T.hx', source: TABLE }].concat(others);
 		final check: UnusedPrivate = new UnusedPrivate();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final own: Array<Violation> = check.run(files, plugin).filter(v -> v.file == 'C.hx');
+		final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == 'C.hx');
 		Assert.equals(1, own.length, 'the finding the gate decides must exist');
-		final edits: Array<{ span: Span, text: String }> = check.fix(owner, own, plugin, SymbolIndex.build(files, plugin));
+		final edits: Array<{ span: Span, text: String }> = check.fix(owner, own, plugin, CheckFixture.index(files, plugin));
 		return edits.length;
 	}
 
@@ -267,7 +267,7 @@ using StringTools;
 		final reach: Null<StaticReflectionReach> = StaticReflectionReach.build(
 			files, plugin, ReflectionScan.reflectionSurface(files, plugin)
 		);
-		if (reach != null) return reach.staticReachable('C', 'C.hx', 'SIZE', SymbolIndex.build(files, plugin));
+		if (reach != null) return reach.staticReachable('C', 'C.hx', 'SIZE', CheckFixture.index(files, plugin));
 		Assert.fail('the Haxe grammar answers the static-reach question');
 		return true;
 	}

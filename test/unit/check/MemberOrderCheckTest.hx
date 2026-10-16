@@ -8,8 +8,8 @@ import anyparse.check.MemberSpacing;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
-import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -1388,7 +1388,7 @@ class MemberOrderCheckTest extends Test {
 	private function violations(src: String): Array<Violation> {
 		final check: MemberOrder = new MemberOrder();
 		check.setConfigResolver(emptyConfigResolver());
-		return check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return CheckFixture.violations(check, src);
 	}
 
 	/**
@@ -1405,8 +1405,8 @@ class MemberOrderCheckTest extends Test {
 		final check: MemberOrder = new MemberOrder();
 		check.setConfigResolver(emptyConfigResolver());
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
-		final applied: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin);
+		final vs: Array<Violation> = CheckFixture.violations(check, src, plugin);
+		final applied: Array<{ span: Span, text: String }> = CheckFixture.fixOf(check, src, vs, plugin);
 		return { reasons: [for (v in vs) v.declineReason], edits: applied.length };
 	}
 
@@ -1414,11 +1414,11 @@ class MemberOrderCheckTest extends Test {
 		final check: MemberOrder = new MemberOrder();
 		check.setConfigResolver(resolve ?? emptyConfigResolver());
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		return check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
+		return CheckFixture.edits(check, src, plugin);
 	}
 
 	private function fixedSource(src: String, ?resolve: (String) -> LintConfig): String {
-		return CheckFixture.applyEdits(src, edits(src, resolve));
+		return CanonicalEdit.applyEdits(src, edits(src, resolve));
 	}
 
 	/**
@@ -1435,8 +1435,8 @@ class MemberOrderCheckTest extends Test {
 		];
 		final check: MemberOrder = new MemberOrder();
 		check.setConfigResolver(emptyConfigResolver());
-		return CheckFixture.applyEdits(
-			src, check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin, SymbolIndex.build(files, plugin))
+		return CanonicalEdit.applyEdits(
+			src, check.fix(src, CheckFixture.violations(check, src, plugin), plugin, CheckFixture.index(files, plugin))
 		);
 	}
 
@@ -1480,8 +1480,8 @@ class MemberOrderCheckTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: MemberOrder = new MemberOrder();
 		check.setConfigResolver(resolve ?? emptyConfigResolver());
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
-		return switch CanonicalEdit.canonicalize(src, check.fix(src, vs, plugin), true, plugin) {
+		final vs: Array<Violation> = CheckFixture.violations(check, src, plugin);
+		return switch CanonicalEdit.canonicalize(src, CheckFixture.fixOf(check, src, vs, plugin), true, plugin) {
 			case Ok(text): text;
 			case Err(message):
 				Assert.fail(message);

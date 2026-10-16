@@ -4,7 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.DuplicateCode;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -306,25 +306,20 @@ class DuplicateCodeCheckTest extends Test {
 	 */
 	public function testMessageIdentityMasksItsOwnOriginalLine(): Void {
 		final check: DuplicateCode = new DuplicateCode();
-		final message: String = check.run([
-			{
-				file: 'C.hx',
-				source: src([
-					'class C {',
-					'\tfunction f():Void {',
-					'\t\ttrace(alpha, beta);',
-					'\t\ttrace(gamma, delta);',
-					'\t\ttrace(epsilon, zeta);',
-					'\t}',
-					'\tfunction g():Void {',
-					'\t\ttrace(alpha, beta);',
-					'\t\ttrace(gamma, delta);',
-					'\t\ttrace(epsilon, zeta);',
-					'\t}',
-					'}'
-				])
-			}
-		], new HaxeQueryPlugin())[0].message;
+		final message: String = CheckFixture.violations(check, src([
+			'class C {',
+			'\tfunction f():Void {',
+			'\t\ttrace(alpha, beta);',
+			'\t\ttrace(gamma, delta);',
+			'\t\ttrace(epsilon, zeta);',
+			'\t}',
+			'\tfunction g():Void {',
+			'\t\ttrace(alpha, beta);',
+			'\t\ttrace(gamma, delta);',
+			'\t\ttrace(epsilon, zeta);',
+			'\t}',
+			'}'
+		]))[0].message;
 		final identity: String = check.messageIdentity(message);
 		Assert.equals('3 statements duplicated from line # — extract a helper (hxq extract-method)', identity);
 		Assert.equals(identity, check.messageIdentity(identity), 'the normalization is idempotent');
@@ -377,7 +372,7 @@ class DuplicateCodeCheckTest extends Test {
 	}
 
 	private function violations(source: String): Array<Violation> {
-		return new DuplicateCode().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new DuplicateCode(), source);
 	}
 
 	private function src(lines: Array<String>): String {

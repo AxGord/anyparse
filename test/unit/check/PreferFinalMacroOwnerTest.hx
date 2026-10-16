@@ -2,7 +2,6 @@ package unit.check;
 
 import anyparse.check.Check;
 import anyparse.check.Linter;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.cli.command.LintCommand;
 import unit.CheckFixture;
 import utest.Assert;
@@ -141,7 +140,7 @@ using StringTools;
 			return [];
 		}
 		(cast check: OracleRelaxable).setOracleRelaxed(oracle);
-		final out: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		final out: Array<Violation> = CheckFixture.violationsIn(check, files);
 		(cast check: OracleRelaxable).setOracleRelaxed(false);
 		return out;
 	}
@@ -149,7 +148,7 @@ using StringTools;
 	/** Rule `id`'s findings over `src` as `C.hx`, no oracle. */
 	private function violations(id: String, src: String): Array<Violation> {
 		final check: Null<Check> = Linter.byId(id);
-		return check == null ? [] : check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return check == null ? [] : CheckFixture.violations(check, src);
 	}
 
 	/** `src` after rule `id`'s fix, with the oracle-relaxed candidate set on when `oracle`. */

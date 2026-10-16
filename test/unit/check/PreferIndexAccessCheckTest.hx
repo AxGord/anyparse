@@ -4,7 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.PreferIndexAccess;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import unit.QueryTestHelpers;
 import utest.Assert;
 import utest.Test;
@@ -480,7 +480,7 @@ class PreferIndexAccessCheckTest extends Test {
 	}
 
 	private function violations(source: String): Array<Violation> {
-		return new PreferIndexAccess().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+		return CheckFixture.violations(new PreferIndexAccess(), source);
 	}
 
 	private function applyFix(source: String): String {
@@ -494,12 +494,12 @@ class PreferIndexAccessCheckTest extends Test {
 
 	/** Run over several sources at once, so the type gate can resolve a member declared in another file. */
 	private function violationsAcross(sources: Array<String>): Array<Violation> {
-		return new PreferIndexAccess().run(QueryTestHelpers.rootModules(sources), new HaxeQueryPlugin());
+		return CheckFixture.violationsIn(new PreferIndexAccess(), QueryTestHelpers.rootModules(sources));
 	}
 
 	/** Run over explicit file paths, so package + import scope (isMain module names) resolves. */
 	private function violationsForFiles(files: Array<{ file: String, source: String }>): Array<Violation> {
-		return new PreferIndexAccess().run(files, new HaxeQueryPlugin());
+		return CheckFixture.violationsIn(new PreferIndexAccess(), files);
 	}
 
 }

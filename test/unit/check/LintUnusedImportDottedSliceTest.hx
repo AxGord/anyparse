@@ -3,7 +3,7 @@ package unit.check;
 import anyparse.check.Check.Violation;
 import anyparse.check.Severity;
 import anyparse.check.UnusedImport;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -134,10 +134,10 @@ class LintUnusedImportDottedSliceTest extends Test {
 	public function testSecondaryTypeQualifiedTailDoesNotKeepImport(): Void {
 		final mod: String = 'package a.b;\n\ntypedef ModExtra = {\n\tvar id: Int;\n}\n\nclass Mod {}';
 		final use: String = 'package pkg;\n\nimport a.b.Mod;\n\nclass C {\n\tpublic var x: a.b.Mod.ModExtra;\n}';
-		final vs: Array<Violation> = new UnusedImport().run([
+		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), [
 			{ file: 'a/b/Mod.hx', source: mod },
 			{ file: 'pkg/C.hx', source: use }
-		], new HaxeQueryPlugin());
+		]);
 
 		Assert.equals(1, vs.length);
 		Assert.equals(Severity.Warning, vs[0].severity);
@@ -202,12 +202,12 @@ class LintUnusedImportDottedSliceTest extends Test {
 		final ctx: String = 'package a.b;\n\nclass Ctx {\n\tpublic static function currentPos(): Int return 0;\n}';
 		final limit: String = 'package a.b;\n\nclass Limit {\n\tpublic static final MAX: Int = 10;\n}';
 		final mod: String = 'package a.b;\n\nclass Mod {\n\tpublic static final VALUE: Int = 1;\n}';
-		return new UnusedImport().run([
+		return CheckFixture.violationsIn(new UnusedImport(), [
 			{ file: 'a/b/Ctx.hx', source: ctx },
 			{ file: 'a/b/Limit.hx', source: limit },
 			{ file: 'a/b/Mod.hx', source: mod },
 			{ file: 'pkg/C.hx', source: use }
-		], new HaxeQueryPlugin());
+		]);
 	}
 
 }

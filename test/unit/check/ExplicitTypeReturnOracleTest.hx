@@ -12,6 +12,7 @@ import anyparse.query.CanonicalEdit;
 import anyparse.query.Cli;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -99,7 +100,7 @@ class ExplicitTypeReturnOracleTest extends Test {
 		final path: String = '$dir/Main.hx';
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: ExplicitType = new ExplicitType();
-		final all: Array<Violation> = check.run([{ file: path, source: SRC }], plugin);
+		final all: Array<Violation> = CheckFixture.violationsIn(check, [{ file: path, source: SRC }], plugin);
 		final returns: Array<Violation> = all.filter(v -> v.message.indexOf('return type') != -1);
 		Assert.equals(3, returns.length, 'label, shout and main are flagged; the constructor is not');
 		final display: Null<CompilerDisplayOracle> = CompilerDisplayOracle.start(TYPES, 'check.hxml', dir);

@@ -6,6 +6,7 @@ import sys.io.File;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.StdResolver;
 import anyparse.query.SymbolIndex;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -31,7 +32,7 @@ class StdResolverReturnTypeTest extends Test {
 			{ file: datePath, source: File.getContent(datePath) },
 			{ file: ctxPath, source: File.getContent(ctxPath) }
 		];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		Assert.equals(
 			'Date', index.members.returnNominalOf('Date', 'now'), 'the index resolves Date.now -> Date, so the tabled entry is derivable'
 		);
