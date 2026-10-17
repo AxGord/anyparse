@@ -3123,6 +3123,44 @@ decided the question; it may not become a record of runs.
   frame loop (one stack machine threading five running values on the formatter's hot path; only its pure final
   combination moved out). Macro-time splits keep the generated parsers and writers byte-identical — branch
   `feat/infra-C1`
+- a type is declared at its RUNTIME path too, its package and its name (`CallGraphImports.recordFile`), not because a
+  source may write it: for a sub-type `T` of `pkg/Other.hx`, Haxe 4.3.7 answers `Type not found : pkg.T` to both
+  `var x:pkg.T` and `import pkg.T`, while `Type.getClassName(pkg.Other.T)` is `pkg.T` and `Type.resolveClass("pkg.T")`
+  finds it. What reads that path is a declaration of the classes made from a computed name (`reflectiveClasses`,
+  `ReflectiveReach.neverMade`), which names a class as `Type.resolveClass` does. The old comment ("what an import reads
+  when a file does not name its module") described a written path no compiler accepts, and its arm
+  (`M-TS-PATH-DECLARED-PACKAGE`) survived because every pin wrote main types, whose package path is their module's path.
+  Re-pinned on `ThreadSafetyReflectiveSealTest#testATypeParameterReceiverIsBoundedByItsInstantiations` (a sub-type of
+  `pkg.Nodes` declared reflective as `pkg.Node`) — branch `feat/infra-N3`
+- `TypeMetaFacts.isEnum` and its tables (`_enums`, `_nonEnums`, `_enumKinds`, the constructor's `enumKinds`) are
+  deleted: since `ReflectiveValues.enumType` asks the only declaration's kind itself (`ReflectiveReach.onlyDeclaration`,
+  branch `feat/infra-B3c`) nothing read them, and `M-TS-ENUM-KIND`, which cut their writer, SURVIVED every sweep. The arm
+  is re-aimed at `enumType` with the same cut (a structure typedef taken for an enum) and kills its pin,
+  `ThreadSafetyReflectiveSealTest#testAStructureTypedefMayHoldALock`. `M-TS-PATH-IMPORT` is re-pinned on
+  `ThreadSafetyPositiveSinksTest#testStdResultsTypeTheirReceivers`, the test its cut breaks: the import case of
+  `testALibraryTypeIsNotItsProjectNamesake` is typed through a path that does not ask `CallGraphImports.typeOf` — branch
+  `feat/infra-N3`
+- the two narrower function unions B6a named are gone: `ShapeVocab.functionOrLambdaKinds` (`functionKinds ∪
+  lambdaKinds`, 15 readers) and `lambdaOrLocalFunctionKinds` (5 readers) both left out the named function expression
+  `function g() …` written as a value and the local `inline function`, and every reader asked a question those two answer
+  like any other function (Haxe 4.3.7 `--interp`: `function g` binds `g` in the enclosing scope AND in its own body, an
+  `inline` local function has its own `return`, Haxe rejects a `final` field write in either). Readers asking "which
+  function owns this — its scope, parameters, `return`s, return type, body" now read `functionLikeKinds`
+  (`CasePatternScan`, `ExtractRepeatedExpression`, `JoinReturn`, `PreferSafeNavComparison`, `RedundantReplaceLoop`,
+  `BinderScan.bindingScopeKinds` and through it `JoinSingleUseLocal` — whose own copy of the enclosing-function walk is
+  deleted — `CrossRenameMember` (a pure respell: its body-child derivation already caught the named form),
+  `ImplicitSites`, `MemberReach`, `MemberTouchScan.bodyDiscardsItsValue`, `NullGuardedCode`, `ValueEscapes`); readers
+  asking "is this a body that runs later" read `nestedFunctionKinds` (`MemberTouchScan` capture, `LoopScan` /
+  `PreferRangeLoop` capture, `CtorFieldWrite`, `ScratchField`). `ScratchField`'s own binder list is
+  `BinderScan.binderKinds` now. A named function expression's name binds in the PARENT, so `bindingHostSubtree` steps out
+  of it as out of a local function. Two of the old answers were unsound (`ValueEscapes` read a nested `return` against
+  the enclosing METHOD's type, `MemberTouchScan.localEscape` missed a capture by a named function); the rest refused or
+  missed a site. `loop-guard` visits a `do … while` (its `continue` goes on to the condition, the same equivalence;
+  body = first child, a block body or an expression body holding the header `if`), and `guard-continue`'s deferral asks
+  no loop kind any more. Kept: `prefer-lambda-expression-body` leaves `do … while` out (`() -> do x while (c)` does not
+  parse in this grammar, Haxe accepts it); `ScratchField`'s `loopKinds` / `doWhileKinds` are two arms of one union (a
+  do-while body all-conditional because a `continue` skips its rest); `FactsProvenance` reads the LOWERED loops (`for`
+  and comprehensions), and no `do … while` is lowered — branch `feat/infra-N2`
 - the 15 types over the oversized-type thresholds (C2) are split only where `hxq clusters` and the field census show a
   seam with state of its own or a natural home, never by member count: `LintConfig`'s document pipeline →
   `LintDocuments`; `HaxeQueryPlugin`'s 1229-line kind table → `HaxeRefShape` (answered the way `namingSupport` is);

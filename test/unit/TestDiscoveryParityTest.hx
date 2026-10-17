@@ -1373,6 +1373,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.FixVerifierProbeRefusalE2ETest#testAWriterRefusedSetKeepsItsWritableUnits :: control :: M-WRITER-NARROW-NONE',
 			'unit.check.FoldStringLiteralsCandidateGateTest#testEveryOutOfScopeCallSpellingIsRefused :: control :: M-MACRO-VALUE-UNLISTED',
 			'unit.check.FoldStringLiteralsCheckTest#testConstantOperandMergesAsText :: control :: M-FOLD-CONSTANT-AS-EXPRESSION',
+			'unit.check.GuardContinueCheckTest#testDefersADoWhileLoopGuardLifts :: control :: '
+				+ 'M-GUARD-CONTINUE-DEFERS-STATEMENT-BLOCK-ONLY',
 			'unit.check.GuardContinueCheckTest#testElseBranchNotFlagged :: control :: M-GUARD-ELSE-ADMITTED',
 			'unit.check.GuardContinueCheckTest#testEmptyBodyNotFlagged :: control :: M-GUARD-MIN-THEN-IGNORED',
 			'unit.check.GuardContinueCheckTest#testGlueCommentNotFlagged :: control :: M-GUARD-GLUE-COMMENT-BLIND',
@@ -1526,6 +1528,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.LoopBoundLengthMismatchCheckTest#testAnUnimportedVectorIsNoFixedLengthType :: control :: M-LOOPBOUND-VECTOR-IMPORT',
 			'unit.check.LoopBoundLengthMismatchCheckTest#testFoldedConstantsCompareByValue :: control :: M-LOOPBOUND-FOLD-OFF',
 			'unit.check.LoopBoundLengthMismatchCheckTest#testParallelArraysShareTheirBound :: control :: M-LOOPBOUND-RELATED-OFF',
+			'unit.check.LoopGuardCheckTest#testDoWhileLoopFlaggedAndFixed :: control :: '
+				+ 'M-LOOPGUARD-DO-WHILE-BODY-LAST,M-LOOPGUARD-BODY-STATEMENT-BLOCK-ONLY',
+			'unit.check.LoopGuardCheckTest#testDoWhileMergeArmJoinsTheHeader :: control :: '
+				+ 'M-LOOPGUARD-EXPR-BODY-KEPT,M-LOOPGUARD-HEADER-STATEMENT-IF-ONLY,M-LOOPGUARD-BRANCH-STATEMENT-BLOCK-ONLY',
 			'unit.check.MagicNumberCheckTest#testADirectArgumentOfAnIgnoredCallIsExempt :: control :: M-MAGIC-CALLARG-BLIND',
 			'unit.check.MagicNumberCheckTest#testADottedEntryMatchesTheCalleeTail :: control :: M-MAGIC-CALLARG-SUFFIX-LOOSE',
 			'unit.check.NamingCheckCrossFileFixTest#testCrossFileRenameAsksTheResolutionScopeForUnreadableFiles :: control :: '
@@ -2407,9 +2413,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyOwnReasonsTest#testARepeatedOrUnknownUnresolvedCallKeepsTheLockLong :: control :: M-TS-DOM-BRIEF-REPEATED',
 			'unit.check.ThreadSafetyOwnReasonsTest#testAnUnresolvedCallInACatchIsAnErrorPath :: control :: M-TS-BLIND-CATCH-OFF',
 			'unit.check.ThreadSafetyPositiveSinksTest#testADottedWaiverNamesOnlyTheTypeAtThatPath :: control :: M-TS-DOTTED-WILDCARD',
-			'unit.check.ThreadSafetyPositiveSinksTest#testALibraryTypeIsNotItsProjectNamesake :: control :: '
-				+ 'M-TS-PATH-FOREIGN,M-TS-PATH-IMPORT,M-TS-PATH-RECEIVER-STATIC,M-TS-PATH-NEW,M-TS-PATH-MATCH,M-TS-SHADOWING-KEPT,'
-				+ 'M-TS-PATH-DECLARED-PACKAGE,M-TS-PATH-NOMINAL,M-TS-ALIAS-TYPE',
+			'unit.check.ThreadSafetyPositiveSinksTest#testALibraryTypeIsNotItsProjectNamesake :: control :: M-TS-PATH-FOREIGN,'
+				+ 'M-TS-PATH-RECEIVER-STATIC,M-TS-PATH-NEW,M-TS-PATH-MATCH,M-TS-SHADOWING-KEPT,M-TS-PATH-NOMINAL,M-TS-ALIAS-TYPE',
 			'unit.check.ThreadSafetyPositiveSinksTest#testALocalOfACallResultIsTypedByWhatTheCallReturns :: control :: '
 				+ 'M-NOMINAL-LOCAL-INIT,M-TS-LOCAL-CALL-READ',
 			'unit.check.ThreadSafetyPositiveSinksTest#testAStdLockWrittenInADeclarationWaitsWhereverItIsRead :: control :: '
@@ -2425,7 +2430,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-TS-NATIVE-CALLEE-SPAN,M-TS-NATIVE-CODE-CALLS,M-TS-NATIVE-LOADED-MEMBER',
 			'unit.check.ThreadSafetyPositiveSinksTest#testStdResultsTypeTheirReceivers :: control :: '
 				+ 'M-TS-STD-RETURN,M-TS-STD-FIELD,M-TS-STD-GETTER,M-TS-STD-GETTER-LOCAL,M-TS-STD-GETTER-TYPED,M-TS-NEW-RECEIVER,M-TS-ALIAS-TYPE,'
-				+ 'M-TS-STD-PLACEHOLDER,M-TS-BUILTIN-EVENTS',
+				+ 'M-TS-STD-PLACEHOLDER,M-TS-BUILTIN-EVENTS,M-TS-PATH-IMPORT',
 			'unit.check.ThreadSafetyPositiveSinksTest#testTheBuiltinAppliesWithNoSinks :: control :: '
 				+ 'M-TS-REPORT-NEEDS-SINKS,M-TS-BUILTIN-OFF,M-TS-BUILTIN-ANY-NODE',
 			'unit.check.ThreadSafetyPositiveSinksTest#testTheNoticeCountsWhatNonBlockingRemoved :: control :: M-TS-NOTICE-WAIVED',
@@ -2449,7 +2454,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyReflectiveSealTest#testATypeParameterReceiverIsBoundedByItsInstantiations :: control :: '
 				+ 'M-TS-PLACE-INSTANTIATIONS,M-TS-PLACE-COMPLETE,M-TS-PLACE-RAW-LINK,M-TS-PLACE-FREE-SUB,M-TS-PLACE-NEVER-MADE,'
 				+ 'M-TS-PLACE-UNDECLARED,M-TS-PLACE-GLOB-MATCH,M-TS-PLACE-MAKES-NEW,M-TS-PLACE-MAKES-VALUE,M-TS-PLACE-MAKES-RECEIVER,'
-				+ 'M-TS-PLACE-VOID,M-TS-PLACE-FORWARDED-BOUND,M-TS-PLACE-PARAM-CONSTRAINT,M-TS-PLACE-PARAM-OWNER,M-TS-FINAL-SUPERS-WRITTEN',
+				+ 'M-TS-PLACE-VOID,M-TS-PLACE-FORWARDED-BOUND,M-TS-PLACE-PARAM-CONSTRAINT,M-TS-PLACE-PARAM-OWNER,M-TS-FINAL-SUPERS-WRITTEN,'
+				+ 'M-TS-PATH-DECLARED-PACKAGE',
 			'unit.check.ThreadSafetyReflectiveSealTest#testAValueTheRunCannotPlaceUnsealsEveryLock :: control :: '
 				+ 'M-TS-SEAL-REFLECT-UNPLACED,M-TS-SEAL-UNPLACED-NOTICE,M-TS-BINDER-TYPE,M-TS-STORED-COMPLETE',
 			'unit.check.ThreadSafetyReflectiveSealTest#testAWriteThatMayStoreALockUnsealsAsBefore :: control :: M-TS-STORED-ANY,M-TS-STORED-RELATED,M-TS-STORED-ARGUMENTS',
@@ -4129,6 +4135,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.RemoveParamSliceTest#testAClassMethodAndItsCallThatNowFitComeBackCanonical :: control :: M-SIGNATURE-EDIT-RAW-SPLICE',
 			'unit.query.RemoveParamSliceTest#testAnInterfaceSignatureThatNowFitsComesBackCanonical :: control :: M-SIGNATURE-EDIT-RAW-SPLICE',
 			'unit.query.RenameSliceTest#testModelledSpliceConditionOccurrenceRenames :: control :: M-COND-GAP-KEEPS-DIRECTIVES',
+			'unit.query.RenameSliceTest#testNameOfANamedFunctionExpressionSweepsTheEnclosingMethod :: control :: '
+				+ 'M-BINDER-NAMED-FN-NO-STEP-OUT',
 			'unit.query.ResolutionProjectFilesTest#testDerivedIndexesAreMemoised :: control :: M-MEMO-OFF',
 			'unit.query.ResolutionProjectFilesTest#testSetResolutionIndexExpiresDerivedIndexes :: control :: M-NO-INVALIDATE',
 			'unit.query.SetModifierSliceTest#testAConditionalRegionOutsideTheKeywordRunIsStillServed :: control :: '
@@ -4137,6 +4145,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.SetModifierSliceTest#testPrivateOnAFinalClassPrecedesTheFinal :: control :: M-DECLSPAN-FINAL-WRAPPER-BLIND',
 			'unit.query.ShapeVocabTest#testAKindTwoSeamsNameIsAnsweredOnce :: control :: M-VOCAB-UNION-DUPLICATES',
 			'unit.query.ShapeVocabTest#testAnUnsetSeamAddsNothing :: control :: M-VOCAB-UNSET-SEAM-ADDED',
+			'unit.query.ShapeVocabTest#testHaxeLoopAndFunctionVocabulary :: control :: M-VOCAB-NESTED-NO-NAMED-FN',
 			'unit.query.ShardPlanTest#testAClassHeavierThanAShardIsDealtAsSlices :: control :: M-SHARD-SPLIT-NEVER,M-SHARD-SPLIT-SLICE-WEIGHT',
 			'unit.query.ShardPlanTest#testAMalformedSliceTokenIsRefused :: control :: M-SHARD-FILTER-PARSE-RANGE',
 			'unit.query.ShardPlanTest#testAPinnedClassIsNeverSliced :: control :: M-SHARD-SPLIT-STICKY',
@@ -7016,7 +7025,15 @@ class TestDiscoveryParityTest extends Test {
 			'M-DRIVER-READS-STDIN',
 			'M-DRIVER-UNBOUNDED',
 			'M-DRIVER-BOUND-IGNORES-ROUNDS',
-			'M-PENDING-UNBOUNDED'
+			'M-PENDING-UNBOUNDED',
+			'M-LOOPGUARD-DO-WHILE-BODY-LAST',
+			'M-LOOPGUARD-BODY-STATEMENT-BLOCK-ONLY',
+			'M-LOOPGUARD-EXPR-BODY-KEPT',
+			'M-LOOPGUARD-HEADER-STATEMENT-IF-ONLY',
+			'M-LOOPGUARD-BRANCH-STATEMENT-BLOCK-ONLY',
+			'M-GUARD-CONTINUE-DEFERS-STATEMENT-BLOCK-ONLY',
+			'M-BINDER-NAMED-FN-NO-STEP-OUT',
+			'M-VOCAB-NESTED-NO-NAMED-FN'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

@@ -354,4 +354,41 @@ class ScratchFieldCheckTest extends Test {
 		return 'class C {\n\t$field\n\n\tpublic function new() {}\n\n\t$method\n}\n\n$SUPPORT';
 	}
 
+	/**
+	 * A named function expression and an `inline` local function run when they are called, not where they are written,
+	 * like a lambda (`ShapeVocab.nestedFunctionKinds`): an occurrence inside one is no read the write before it dominates.
+	 */
+	public function testAnOccurrenceInEveryNestedFunctionFormIsNotReported(): Void {
+		for (nested in [
+			'return function named():Int return _c + r;',
+			'inline function named():Int return _c + r;\n\t\treturn named;'
+		])
+			Assert.equals(
+				0,
+				violations(
+					scratch('private var _c:Int = 0;', 'function f():() -> Int {\n\t\t_c = 1;\n\t\tfinal r:Int = _c;\n\t\t$nested\n\t}')
+				).length,
+				nested
+			);
+	}
+
+	/**
+	 * A named function expression and an `inline` local function BIND their name in the method, like a local function or
+	 * a local does (`BinderScan.binderKinds`), so one spelled as the field takes the name and refuses it.
+	 */
+	public function testANestedFunctionNamedAsTheFieldIsNotReported(): Void {
+		for (nested in [
+			'final h = function _c():Int return r;',
+			'inline function _c():Int return r;',
+			'function _c():Int return r;'
+		])
+			Assert.equals(
+				0,
+				violations(scratch(
+					'private var _c:Int = 0;', 'function f():Int {\n\t\t_c = 1;\n\t\tfinal r:Int = _c;\n\t\t$nested\n\t\treturn r;\n\t}'
+				)).length,
+				nested
+			);
+	}
+
 }

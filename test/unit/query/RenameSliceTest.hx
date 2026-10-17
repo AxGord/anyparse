@@ -884,6 +884,28 @@ class RenameSliceTest extends Test {
 		assertRename(src, 3, 7, 'last', expected);
 	}
 
+	/**
+	 * A named function expression is a binding scope of its own (`BinderScan.bindingScopeKinds`): a local it declares
+	 * cannot be read from the enclosing method, so an escape-spelled hole there refuses nothing.
+	 */
+	public function testLocalOfANamedFunctionExpressionRenamesPastAnOuterBlindSpot(): Void {
+		final head: String = 'class C {\n\tfunction f():String {\n\t\tfinal g = function named():Int {\n';
+		final tail: String = '\t\t};\n\t\treturn \'v \\x24{g}\';\n\t}\n}';
+		assertRename('$head\t\t\tvar v = 1;\n\t\t\treturn v;\n$tail', 4, 8, 'w', '$head\t\t\tvar w = 1;\n\t\t\treturn w;\n$tail');
+	}
+
+	/**
+	 * The NAME a named function expression declares binds in the ENCLOSING method (Haxe reads a later `v` of the method
+	 * as that function, verified on `--interp` 4.3.7), so a rename from its declaration sweeps the method, not only the
+	 * function's body: the escape-spelled hole there may read it.
+	 */
+	@:pin('control') @:killer('M-BINDER-NAMED-FN-NO-STEP-OUT')
+	public function testNameOfANamedFunctionExpressionSweepsTheEnclosingMethod(): Void {
+		final src: String =
+			'class C {\n\tfunction f():String {\n\t\tfinal g = function v():Int return 1;\n\t\treturn \'v \\x24{v}\';\n\t}\n}';
+		assertRenameErr(src, 3, 22, 'w', 'no parsed expression');
+	}
+
 	private function assertRename(source: String, line: Int, col: Int, newName: String, expected: String): Void {
 		final result: RenameResult = renameOf(source, line, col, newName);
 		switch result {

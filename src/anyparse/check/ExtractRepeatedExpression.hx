@@ -125,7 +125,7 @@ final class ExtractRepeatedExpression implements Check implements VolatileMessag
 		final callK: String = callKind;
 		final indexKind: Null<String> = shape.indexAccessKind;
 		final candidateKinds: Array<String> = indexKind == null ? [faKind, callKind] : [faKind, callKind, indexKind];
-		final functionUnitKinds: Array<String> = ShapeVocab.functionOrLambdaKinds(shape);
+		final functionUnitKinds: Array<String> = ShapeVocab.functionLikeKinds(shape);
 		final exclusiveConditionalKinds: Array<String> = (shape.branchConditionKinds ?? []).concat(shape.switchKinds ?? []);
 		final index: SymbolIndex = IndexScope.report(files, plugin);
 		return RunScan.collect(files, plugin, (entry, root, violations) -> {

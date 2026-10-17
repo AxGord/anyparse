@@ -84,7 +84,7 @@ final class CallGraphTypes {
 
 	/** `index` null yields the empty tables of a graph that resolves nothing. */
 	public function new(index: Null<SymbolIndex>, shape: RefShape) {
-		meta = new TypeMetaFacts(shape.classDeclKinds ?? [], shape.runtimeTaggedTypeKinds ?? []);
+		meta = new TypeMetaFacts(shape.classDeclKinds ?? []);
 		_fieldKinds = shape.fieldDeclKinds ?? [];
 		_functionKinds = shape.functionKinds ?? [];
 		_interfaceKinds = shape.interfaceDeclKinds ?? [];

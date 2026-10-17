@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.BinderScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.ElementSpan;
@@ -235,7 +236,6 @@ final class JoinSingleUseLocal implements Check {
 			barrierKinds: barriers,
 			branchKinds: shape.branchKinds ?? [],
 			memberNamingKinds: memberNamingKinds(shape),
-			fnKinds: ShapeVocab.functionOrLambdaKinds(shape).concat(shape.localFunctionKinds ?? []),
 			shape: shape
 		};
 	}
@@ -365,8 +365,8 @@ final class JoinSingleUseLocal implements Check {
 	 * capture is not noise even when the value is unchanged: under strict null safety Haxe
 	 * narrows an immutable binding but NOT a `var` a closure captures, so `final b = best;
 	 * b?.span` compiles where the inlined `best?.span` does not -- the `final`-ness itself is
-	 * doing the work an annotation would do elsewhere. Found by running the rule over its own
-	 * source (`enclosingFunctionSubtree`), where the inline produced code that does not compile.
+	 * doing the work an annotation would do elsewhere. Found by running the rule over its own source (the enclosing-function
+	 * walk it kept before `BinderScan.enclosingFunctionSubtree`), where the inline produced code that does not compile.
 	 *
 	 * Only the bare-identifier form is asked: a field-read chain never resolves to a local
 	 * declaration, so it cannot be this shape.
@@ -456,7 +456,7 @@ final class JoinSingleUseLocal implements Check {
 	 * `#end`, and a `$name` read there would sit outside the scanned subtree.
 	 */
 	private static function unindexedNameUse(name: String, declSpan: Span, readFrom: Int, tree: QueryNode, s: Seams): Bool {
-		final scope: QueryNode = enclosingFunctionSubtree(tree, declSpan, s);
+		final scope: QueryNode = BinderScan.enclosingFunctionSubtree(tree, declSpan.from, s.shape);
 		var found: Bool = false;
 		function walk(n: QueryNode): Void {
 			if (found) return;
@@ -510,32 +510,6 @@ final class JoinSingleUseLocal implements Check {
 		}
 		walk(init);
 		return out;
-	}
-
-	/**
-	 * The innermost function / lambda / local-function subtree containing `inner`, or the whole
-	 * `tree` when none does -- the widest region a local declared at `inner` can still be read
-	 * from. Deliberately NOT the statement-list node the declaration sits in: under the
-	 * branch-aware projection that node may be a synthetic `CondBranch`, which is not a Haxe
-	 * scope (a local declared inside `#if A ... #end` stays visible past `#end`), so scanning it
-	 * would miss exactly the reads the caller is looking for. Mirrors `Rename`'s own
-	 * enclosing-function walk, and like it does no containment pruning: the parse root carries
-	 * no span, so a prune at a null-span node would stop there and silently widen the scope.
-	 */
-	private static function enclosingFunctionSubtree(tree: QueryNode, inner: Span, s: Seams): QueryNode {
-		var best: Null<QueryNode> = null;
-		function walk(n: QueryNode): Void {
-			final span: Null<Span> = n.span;
-			if (s.fnKinds.contains(n.kind) && span != null && span.from <= inner.from && inner.to <= span.to) {
-				// Re-bind before the field read: null safety does not narrow a closure-captured `var`.
-				final b: Null<QueryNode> = best;
-				final bSpan: Null<Span> = b?.span;
-				if (bSpan == null || span.to - span.from < bSpan.to - bSpan.from) best = n;
-			}
-			for (c in n.children) walk(c);
-		}
-		walk(tree);
-		return best ?? tree;
 	}
 
 	/**
@@ -614,7 +588,6 @@ private typedef Seams = {
 	var barrierKinds: Array<String>;
 	var branchKinds: Array<String>;
 	var memberNamingKinds: Array<String>;
-	var fnKinds: Array<String>;
 	var shape: RefShape;
 }
 

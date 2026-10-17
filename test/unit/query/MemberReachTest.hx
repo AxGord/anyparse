@@ -6,6 +6,7 @@ import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CallGraph;
 import anyparse.query.CompilerFacts;
 import anyparse.query.MemberReach;
+import anyparse.query.NullGuardedCode;
 import anyparse.query.QueryNode;
 import anyparse.query.ReachLiveness.ReachConfiguration;
 import anyparse.runtime.Span;
@@ -2003,6 +2004,91 @@ class MemberReachTest extends Test {
 				));
 			case _:
 				Assert.fail('expected a path ending in $last, got $result');
+		}
+	}
+
+	/**
+	 * A named function expression and an `inline` local function nested in `all` return their OWN value, like the
+	 * anonymous literal does (`ShapeVocab.functionLikeKinds`): their `return kept` is not one of `all`'s.
+	 */
+	public function testAReturnOfEveryNestedFunctionFormIsNotTheFreshSources(): Void {
+		final src: String =
+			'class C { var line:Line; function f():Void { final xs:Array<Int> = line.all(); /*<*/ anything(xs[0]); /*>*/ } }';
+		for (nested in [
+			'final g = function named() return kept;',
+			'inline function named() return kept;'
+		]) {
+			final line: String = 'class Line { var kept:Array<Int> = []; public function new() {} public function all():Array<Int> { '
+				+ '$nested return []; } }';
+			assertMatch(askLocalIn([src, line], 'xs'), r -> r.match(Proven));
+		}
+	}
+
+	/**
+	 * The block body of a named function expression or of an `inline` local function discards its last statement's
+	 * value as a method's does (`ShapeVocab.functionLikeKinds`): the fresh array written there is shared with nothing.
+	 */
+	public function testFreshWriteEndingANestedFunctionBodyKeepsTheMemberUnshared(): Void {
+		for (nested in [
+			'final g = function named():Void { items = []; }; g();',
+			'inline function named():Void { items = []; } named();'
+		]) {
+			final member: String = 'class C { var items:Array<Int> = []; public function reset():Void { $nested } '
+				+ 'function f():Void { /*<*/ helper(); /*>*/ } function helper():Void {} }';
+			assertMatch(ask([member]), r -> r.match(Proven));
+		}
+	}
+
+	/**
+	 * A `return` hands its value to the return type of its OWN function: one of a named function expression or an
+	 * `inline` local function nested in a method typed `C` hands `this` to the `Dynamic` that function declares, which
+	 * lets the `C` escape (`ShapeVocab.functionLikeKinds`). Read off the enclosing method, it looked typed.
+	 */
+	public function testAReturnOfANestedFunctionEscapesThroughItsOwnReturnType(): Void {
+		final other: String = 'class Other { public var items:Array<Int> = []; public function new() {} }';
+		final poker: String = 'class Poker { public static function poke(o:Other):Void { o.items.push(9); } }';
+		function source(nested: String): String {
+			return 'class C { public var items:Array<Int> = []; var me:Dynamic; public function new() {} '
+				+ 'function mine():C { $nested return this; } function loop():Void { /*<*/ Poker.poke(me); /*>*/ } }';
+		}
+		for (nested in [
+			'final g = function():Dynamic return this; g();',
+			'final g = function named():Dynamic return this; g();',
+			'inline function named():Dynamic return this; named();'
+		]) refused(ask([source(nested), other, poker]), nested);
+	}
+
+	/**
+	 * A local captured by a named function expression or an `inline` local function escapes as one a lambda captures
+	 * does (`ShapeVocab.nestedFunctionKinds`): the function may run, and change the local's object, wherever it is called.
+	 */
+	public function testLocalCapturedByEveryNestedFunctionFormIsAnEscape(): Void {
+		for (nested in [
+			'final g = function named() { return xs.length; };',
+			'inline function named() return xs.length; final g = named;'
+		]) {
+			final src: String = 'class C { function f():Void { final xs:Array<Int> = []; $nested /*<*/ anything(g, xs[0]); /*>*/ } }';
+			assertMatch(askLocal(src, 'xs'), r -> r.match(Unknown(Aliased(_, _, _, _))));
+		}
+	}
+
+	/**
+	 * A local function nested in a named function expression is no member method, also where no method encloses it — in
+	 * a static variable's initializer (`ShapeVocab.functionLikeKinds`). Taken for one, its `config` was keyed as
+	 * `Boot.create`'s, the member whose every call may hand `config` null.
+	 */
+	@:access(anyparse.query.NullGuardedCode)
+	public function testALocalFunctionOfANamedFunctionExpressionIsNoMemberParameterHolder(): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final scan: NullGuardedCode = Type.createEmptyInstance(NullGuardedCode);
+		Reflect.setField(scan, '_shape', plugin.refShape());
+		for (fn in ['function named()', 'function()']) {
+			final tree: QueryNode = plugin.parseFile(
+				'class Boot {\n\tstatic var hook = $fn {\n\t\tfunction create(config:Dynamic):Void {}\n'
+				+ '\t};\n\n\tpublic static function create(config:Dynamic):Void {}\n}\n'
+			);
+			final holders: Array<String> = [for (p in scan.memberParams(tree)) '${p.type}.${p.method}#${p.index}'];
+			Assert.equals('Boot.create#0', holders.join(', '), fn);
 		}
 	}
 

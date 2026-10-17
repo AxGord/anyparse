@@ -7,11 +7,12 @@ import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
 /**
- * Flags a loop (`for` / `while`) that opens with a bare `if (g) continue;` guard — the
+ * Flags a loop (`for` / `while` / `do … while`) whose body opens with a bare `if (g) continue;` guard — the
  * user's rule: combine `for` + `if` into `for (...) if (...) {`, preferred over a leading
  * `if (!cond) continue;` that inverts the condition and wastes a line. `Severity.Info`,
  * with an autofix in TWO arms.
@@ -27,8 +28,10 @@ import anyparse.runtime.Span;
  * one:
  * `for (x in xs) if (c) { if (g) continue; REST }` → `for (x in xs) if (c && INV(g)) { REST }`.
  *
- * Both arms rest on the same equivalence — a `continue` in that FIRST position is exactly
- * "do not enter the body" — and both run every gate below. The merge arm additionally
+ * Both arms rest on the same equivalence — a `continue` in that FIRST position is exactly "do not enter
+ * the body" — and both run every gate below. It holds for a `do … while` too: its `continue` goes on to
+ * the condition, which is where the inverted `if` leaves it (verified on `haxe --interp` 4.3.7), so `do {
+ * if (g) continue; REST } while (c);` lifts to `do if (!g) { REST } while (c);`. The merge arm additionally
  * parenthesises whichever operand binds looser than `&&`: the KEPT header condition through
  * `RefShape.andLowerPrecedenceKinds` (the same list `collapsible-if` merges with), and a De
  * Morgan `||` negation through the `slotKind` argument `NegationScan.negateConditionText` /
@@ -99,7 +102,8 @@ import anyparse.runtime.Span;
  *
  * ## Grammar-agnostic
  *
- * Driven by `loopStatementKinds` (loops whose body is the last child),
+ * Driven by `ShapeVocab.statementLoopKinds` — `loopStatementKinds`, whose body is the
+ * last child, and `doWhileLoopKinds`, whose body is the FIRST (`LoopScan.loopBody`) —
  * `continueStatementKind`, `ifStatementKinds` and `blockStmtKind` (any unset → no-op),
  * plus `notKind` / `eqKind` / `notEqKind` / `parenKind` and the atomic-expression kinds
  * (`identKind` / `callKind` / `fieldAccessKind` / …) that shape the inversion,
@@ -184,23 +188,29 @@ final class LoopGuard implements Check {
 	/** Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */
 	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
-		final loopKinds: Null<Array<String>> = shape.loopStatementKinds;
-		if (loopKinds == null || loopKinds.length == 0) return null;
+		final loopKinds: Array<String> = ShapeVocab.statementLoopKinds(shape);
+		if (loopKinds.length == 0) return null;
 		final continueKind: Null<String> = shape.continueStatementKind;
 		if (continueKind == null) return null;
 		final ifKinds: Null<Array<String>> = shape.ifStatementKinds;
 		if (ifKinds == null || ifKinds.length == 0) return null;
 		final blockStmtKind: Null<String> = shape.blockStmtKind;
-		return blockStmtKind == null ? null : {
+		if (blockStmtKind == null) return null;
+		final blockKinds: Array<String> = plugin.controlFlowSupport()?.blockKinds() ?? [];
+		return {
 			loopKinds: loopKinds,
+			doWhileKinds: shape.doWhileLoopKinds ?? [],
 			continueKind: continueKind,
 			ifKinds: ifKinds,
 			blockStmtKind: blockStmtKind,
+			bodyBlockKinds: blockKinds.length == 0 ? [blockStmtKind] : blockKinds,
+			exprBodyKinds: shape.expressionBodyKinds ?? [],
+			headerIfKinds: ShapeVocab.ifKinds(shape),
 			negation: NegationScan.negationSeams(shape),
 			opaqueKinds: shape.opaqueKinds ?? [],
 			support: plugin.booleanLogicSupport(),
 			andOperatorText: shape.andOperatorText,
-			shield: IfExpressionChain.shieldSeams(shape, plugin.controlFlowSupport()?.blockKinds() ?? [])
+			shield: IfExpressionChain.shieldSeams(shape, blockKinds)
 		};
 	}
 
@@ -249,22 +259,25 @@ final class LoopGuard implements Check {
 	 * parenthesised against).
 	 */
 	private static function match(loop: QueryNode, source: String, s: Seams, shielded: Bool): Null<Candidate> {
-		if (loop.children.length == 0) return null;
-		final body: QueryNode = loop.children[loop.children.length - 1];
+		final body: Null<QueryNode> = LoopScan.loopBody(loop, s.doWhileKinds);
+		if (body == null) return null;
 		// The LIFT arm creates an `if` header with NO `else`, so in a position an `else` can
 		// reach, that trailing `else` rebinds to the emitted header. Refuse there. The MERGE arm
 		// below needs none: it edits an EXISTING header's condition instead of emitting an `if`,
 		// so it changes no else-binding at all. See the dangling-else gate in the class doc.
-		if (body.kind == s.blockStmtKind) return shielded ? matchBlock(body, source, s, null) : null;
+		if (s.bodyBlockKinds.contains(body.kind)) return shielded ? matchBlock(body, source, s, null) : null;
 		// The MERGE arm: the loop body is already a lifted header `if (c) { … }`, so the guard
 		// joins that header with `&&` instead of creating one. An `else` disqualifies the site —
 		// it fires on `!c` today and would fire on `!c || g` after the merge.
 		// `andKind` gates too: it is the slot the inversion is parenthesised against, and without it a
 		// De Morgan `||` result would land bare after the `&&` and silently re-associate.
 		if (s.andOperatorText == null || s.negation.andKind == null) return null;
-		if (!s.ifKinds.contains(body.kind) || body.children.length != IF_NO_ELSE_CHILD_COUNT) return null;
-		final thenBranch: QueryNode = body.children[1];
-		return thenBranch.kind == s.blockStmtKind ? matchBlock(thenBranch, source, s, body.children[0]) : null;
+		// A `do … while` holds a body that is not a block in an expression-body wrapper, its `if` an
+		// if-EXPRESSION with a block-expression branch: `do if (c) { … } while (x);`.
+		final header: QueryNode = s.exprBodyKinds.contains(body.kind) && body.children.length == 1 ? body.children[0] : body;
+		if (!s.headerIfKinds.contains(header.kind) || header.children.length != IF_NO_ELSE_CHILD_COUNT) return null;
+		final thenBranch: QueryNode = header.children[1];
+		return s.bodyBlockKinds.contains(thenBranch.kind) ? matchBlock(thenBranch, source, s, header.children[0]) : null;
 	}
 
 	/**
@@ -301,10 +314,26 @@ final class LoopGuard implements Check {
 
 /** The `RefShape` kinds `LoopGuard` reads, bundled once so the walkers take one argument. */
 private typedef Seams = {
+	/** Every loop statement (`ShapeVocab.statementLoopKinds`); a `doWhileKinds` one carries its body FIRST, the rest last. */
 	var loopKinds: Array<String>;
+
+	var doWhileKinds: Array<String>;
 	var continueKind: String;
 	var ifKinds: Array<String>;
 	var blockStmtKind: String;
+
+	/**
+	 * The block kinds a loop body or a header's branch may be (`ControlFlowSupport.blockKinds`, `blockStmtKind` alone
+	 * without the support): a `for` / `while` body is a statement block, a `do … while` one a body block, the branch of
+	 * its header `if` a block expression.
+	 */
+	var bodyBlockKinds: Array<String>;
+
+	/** The wrapper a `do … while` puts around a body that is not a block (`RefShape.expressionBodyKinds`). */
+	var exprBodyKinds: Array<String>;
+
+	/** Every `if` a MERGE header may be (`ShapeVocab.ifKinds`): a `do … while` header is an if-expression. */
+	var headerIfKinds: Array<String>;
 	var negation: NegationSeams;
 	var opaqueKinds: Array<String>;
 	var support: Null<BooleanLogicSupport>;

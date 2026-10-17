@@ -155,7 +155,7 @@ final class PreferRangeLoop implements Check {
 		final continueKind: Null<String> = shape.continueStatementKind;
 		if (continueKind == null) return null;
 		final mutableKinds: Array<String> = shape.mutableLocalDeclKinds ?? [];
-		final closureKinds: Array<String> = ShapeVocab.lambdaOrLocalFunctionKinds(shape);
+		final closureKinds: Array<String> = ShapeVocab.nestedFunctionKinds(shape);
 		final atomicKinds: Array<String> = [
 			for (k in [
 				(shape.identKind: Null<String>),
@@ -321,7 +321,8 @@ final class PreferRangeLoop implements Check {
 	}
 
 	/**
-	 * Whether any lambda / local-function subtree within `scope` references `loopVar`
+	 * Whether any nested-function subtree (`ShapeVocab.nestedFunctionKinds`: a lambda, a local
+	 * or `inline` function, a named function expression) within `scope` references `loopVar`
 	 * (a word-boundary match inside the closure's span). Such a closure captures the
 	 * `while`'s one function-scoped counter by reference, so the range `for`'s
 	 * per-iteration re-scoping would change what it observes — a conservative bail.
