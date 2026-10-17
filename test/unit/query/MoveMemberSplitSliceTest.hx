@@ -175,7 +175,8 @@ class MoveMemberSplitSliceTest extends Test {
 	}
 
 	/**
-	 * A receiver the op cannot prove refuses the move rather than being guessed at: a `Dynamic` one may hold a `G`; a field
+	 * A receiver the op cannot prove refuses the move rather than being guessed at: a `Dynamic` one, or one of no known type,
+	 * may hold a `G`; a field
 	 * the holding object is reached through must be public to serve a caller in another class; and a receiver of an
 	 * unrelated type declaring a member of the same name is left alone, so that move goes through.
 	 */
@@ -186,6 +187,13 @@ class MoveMemberSplitSliceTest extends Test {
 			'p/G.hx', 'G', 'isPure', 'Lib', holderScope('public', '\n\tpublic static function any(d:Dynamic):Bool return d.isPure(5);\n')
 		));
 		Assert.isTrue(catchAll.contains('cannot route `d.isPure`'), catchAll);
+		final unknown: String = errMessage(move(
+			'p/G.hx', 'G', 'isPure', 'Lib',
+			holderScope(
+				'public', '\n\tpublic static function any():Bool {\n' + '\t\tfinal g = Elsewhere.make();\n\t\treturn g.isPure(5);\n\t}\n'
+			)
+		));
+		Assert.isTrue(unknown.contains('its receiver\'s type is not known'), unknown);
 		final hidden: String = errMessage(move('p/G.hx', 'G', 'isPure', 'Lib', holderScope('private', '')));
 		Assert.isTrue(hidden.contains('"library" is not public'), hidden);
 		final other: String = okSource(
