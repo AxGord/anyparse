@@ -87,10 +87,9 @@ final class NamingCrossRenameTest extends Test {
 
 	/** Each gate, alone on a control fixture, refuses with its own reason. */
 	@:pin('control')
-	@:killer('M-XRENAME-RUNTIME-TYPE', 'M-XRENAME-MAIN-TYPE', 'M-XRENAME-TYPE-META', 'M-XRENAME-SAFE-META', 'M-XRENAME-GUARDED',
-		'M-XRENAME-ENUM-CTOR', 'M-XRENAME-STRING', 'M-XRENAME-TYPE-PATH', 'M-XRENAME-OLD-SHARED', 'M-XRENAME-NEW-DECLARED',
-		'M-XRENAME-NEW-SPELLED', 'M-XRENAME-VALUE-OLD-SHARED', 'M-XRENAME-VALUE-NEW-SHARED', 'M-XRENAME-VALUE-BOUND', 'M-XRENAME-OUTSIDE',
-		'M-XRENAME-VALUE-META')
+	@:killer('M-XRENAME-RUNTIME-TYPE', 'M-XRENAME-MAIN-TYPE', 'M-XRENAME-TYPE-META', 'M-XRENAME-GUARDED', 'M-XRENAME-ENUM-CTOR',
+		'M-XRENAME-STRING', 'M-XRENAME-TYPE-PATH', 'M-XRENAME-OLD-SHARED', 'M-XRENAME-NEW-DECLARED', 'M-XRENAME-NEW-SPELLED',
+		'M-XRENAME-VALUE-OLD-SHARED', 'M-XRENAME-VALUE-NEW-SHARED', 'M-XRENAME-VALUE-BOUND', 'M-XRENAME-OUTSIDE', 'M-XRENAME-VALUE-META')
 	public function testEachGateRefusesWithItsReason(): Void {
 		final types: { file: String, source: String } = { file: 'pkg/T.hx', source: TYPES };
 		final user: { file: String, source: String } = { file: 'pkg/U.hx', source: USER };
@@ -210,6 +209,16 @@ final class NamingCrossRenameTest extends Test {
 				roots: [],
 				name: 'JSON_POINT',
 				reason: NamingCrossRename.NEW_NAME_TAKEN
+			},
+			{
+				what: 'a literal naming the value',
+				files: [
+					enums,
+					{ file: 'pkg/F.hx', source: ENUM_USER.replace('\t\treturn MY_ACTIONS', '\t\ttrace(\'goals\');\n\t\treturn MY_ACTIONS') }
+				],
+				roots: [],
+				name: 'goals',
+				reason: NamingCrossRename.STRING_LITERAL
 			},
 			{
 				what: 'another enum value of the old name',
