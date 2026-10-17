@@ -146,7 +146,7 @@ final class FactsEscapes {
 		_table = view._table;
 		_scope = scope;
 		_inert = inertIds(scope.shape);
-		_native = new FactsNativeReach(_table);
+		_native = view.nativeReach();
 		_instances = new FactsInstances(_table);
 		_hand = { escape: escape, escapeType: escapeType, refuse: refuse };
 	}

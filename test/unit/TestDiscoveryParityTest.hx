@@ -1545,9 +1545,11 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryReturnBindingSeeded :: control :: M-NULLABLE-FLOW-REPORT-INDEX',
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryReturnDerefFlagged :: control :: M-NULLABLE-REPORT-INDEX',
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryStaticReturnDerefFlagged :: control :: M-NULLABLE-REPORT-INDEX',
+			'unit.check.NullableSwitchMissingNullCheckTest#testDeclaredLocalFromAMapReadFlagged :: control :: M-NULLABLE-NO-CHAIN',
 			'unit.check.OperandBindingTest#testAliasOfUnindexedTypeOutranksSamePackageClass :: control :: M-BINDING-ALIAS-BLIND',
 			'unit.check.OperandBindingTest#testAmbientImportOfUnindexedTypeOutranksSamePackageClass :: control :: M-BINDING-UNINDEXED-IMPORT-FREE',
 			'unit.check.OperandBindingTest#testCallToFunctionOfThisFileIsProven :: control :: M-OPERAND-LOCAL-CALL-CUT',
+			'unit.check.OperandBindingTest#testConstructionIsOfTheTypeItWrites :: control :: M-OPERAND-NEW-CUT',
 			'unit.check.OperandBindingTest#testDeclarationInsideTheBranchOutranksItsCapture :: control :: M-OPERAND-CASE-CAPTURE-INSIDE',
 			'unit.check.OperandBindingTest#testImportOfUnindexedTypeIsNotItsIndexedNamesake :: control :: M-OPERAND-SIMPLE-NAME',
 			'unit.check.OperandBindingTest#testImportOfUnindexedTypeOutranksSamePackageClass :: control :: M-BINDING-UNINDEXED-IMPORT-FREE',
@@ -3324,9 +3326,13 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CreatingFixContractTest#testAPassSeesTheChainAPreviousPassWrote :: control :: M-AMBIENT-CHAIN-STALE',
 			'unit.query.CreatingFixContractTest#testDeletingACreatedFileToleratesOneAlreadyGone :: guard :: ',
 			'unit.query.DeclarationQueriesTest#testAMemberIsHostedWhereItsDeclarationIs :: control :: M-HOST-UNIQUE',
+			'unit.query.DeclarationQueriesTest#testASubtypeChainPassesItsArgumentsInItsOwnTerms :: control :: '
+				+ 'M-SUBTYPE-ARGS-SUBSTITUTED,M-SUBTYPE-ARGS-ARITY,M-GRAPH-INHERITED-ARGS',
 			'unit.query.DeclarationQueriesTest#testASupertypeThatMayDeclareTheMemberIsNamed :: control :: '
 				+ 'M-SEAL-AMBIGUOUS,M-SEAL-UNRESOLVED-IFACE,M-SEAL-DECLARING-SUPER',
 			'unit.query.DeclarationQueriesTest#testAnAliasIsFollowedThroughOneDeclarationAHop :: control :: M-ALIAS-SINGLE-DECL',
+			'unit.query.DeclarationQueriesTest#testTheGraphsDeclarationQuestionsAreTheIndexs :: control :: '
+				+ 'M-MEMBER-KIND-IGNORED,M-TS-PATH-DECLARED-PACKAGE',
 			'unit.query.DeclarationsReadTest#testABalancedDirectiveRegionIsJumpedOver :: control :: M-SKIM-NEVER',
 			'unit.query.DeclarationsReadTest#testABodyIsJumpedToItsMatchingCloseOverEveryNonCodeRegion :: control :: M-SKIM-GAPS-COUNTED',
 			'unit.query.DeclarationsReadTest#testABodyTheGrammarCannotReadDoesNotHideTheDeclarations :: control :: M-SKIM-NEVER',
@@ -7113,7 +7119,11 @@ class TestDiscoveryParityTest extends Test {
 			'M-GRAPH-MODULE-RECEIVERS-MEMBER',
 			'M-GRAPH-MODULE-RECEIVERS-UNTYPED',
 			'M-GRAPH-IMPORTED-POSITION',
-			'M-GRAPH-MODULE-CALL-UNSEEN'
+			'M-GRAPH-MODULE-CALL-UNSEEN',
+			'M-SUBTYPE-ARGS-SUBSTITUTED',
+			'M-SUBTYPE-ARGS-ARITY',
+			'M-OPERAND-NEW-CUT',
+			'M-MEMBER-KIND-IGNORED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

@@ -175,6 +175,23 @@ class ApqDxTier3CliTest extends Test {
 		#end
 	}
 
+	/**
+	 * A row behind an erase-line sequence (`ESC[2K`, what a progress printer redraws its line with) still counts: every CSI
+	 * sequence is stripped, not only a colour code (`SourceText.stripAnsi`), so the row's indent is the first thing on it.
+	 */
+	public function testTestSummaryReadsRowsBehindAnEraseLine(): Void {
+		#if (sys || nodejs)
+		final erase: String = '\x1b[2K';
+		final transcript: String = 'FailProbe\n$erase  testOk: OK .\n$erase  testIntentionalFail: FAILURE F\n    line: 9, intentional\n';
+		final r: TestSummaryResult = TestTranscript.parseTestSummary(transcript);
+		Assert.equals(1, r.tests);
+		Assert.equals(1, r.failures);
+		Assert.equals('testIntentionalFail', r.firstFailure?.testName);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	public function testTestSummaryFirstErrorCapturesMessage(): Void {
 		#if (sys || nodejs)
 		// utest ERROR shape: `  testName: ERROR E\n    <bare message>` —

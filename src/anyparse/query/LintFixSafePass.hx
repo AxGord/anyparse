@@ -65,12 +65,6 @@ final class LintFixSafePass {
 	 */
 	public static inline final NARROW_ROUNDS: Int = 4;
 
-	/** The ESC that opens every ANSI control sequence in `-D message.reporting=pretty` output. */
-	private static inline final ESCAPE: String = '\x1b';
-
-	/** The lowest byte value that TERMINATES an ANSI CSI sequence; everything below it is a parameter. */
-	private static inline final CSI_FINAL_MIN: Int = 0x40;
-
 	/** Whether an oracle verdict is the green one — the only case worth taking a second measurement for. */
 	public static inline function isConfirmed(outcome: OracleOutcome): Bool {
 		return switch outcome {
@@ -128,7 +122,7 @@ final class LintFixSafePass {
 	public static function errorFiles(errors: String): Array<String> {
 		final found: Array<String> = [];
 		for (raw in errors.split('\n')) {
-			final line: String = stripAnsi(raw);
+			final line: String = SourceText.stripAnsi(raw);
 			if (line.contains(' : Warning :') || line.ltrim().startsWith('WARNING ')) continue;
 			final path: Null<String> = diagnosticPath(line);
 			if (path != null && !found.contains(path)) found.push(path);
@@ -333,31 +327,6 @@ final class LintFixSafePass {
 	private static function suffixSegment(whole: String, part: String): Bool {
 		final cut: Int = whole.length - part.length;
 		return cut > 0 && part.length > 0 && whole.substr(cut) == part && whole.charAt(cut - 1) == '/';
-	}
-
-	/**
-	 * The line with its ANSI CSI sequences removed. `-D message.reporting=pretty` wraps the
-	 * severity badge and the source excerpt in colour codes; nothing downstream wants them,
-	 * and the badge is what pushes the path off column 0.
-	 */
-	private static function stripAnsi(line: String): String {
-		if (!line.contains(ESCAPE)) return line;
-		final out: StringBuf = new StringBuf();
-		var i: Int = 0;
-		while (i < line.length) {
-			if (line.charAt(i) != ESCAPE) {
-				out.add(line.charAt(i));
-				i++;
-				continue;
-			}
-			i++;
-			if (line.charAt(i) != '[') continue;
-			// CSI: parameter and intermediate bytes, then one final byte in 0x40..0x7E.
-			i++;
-			while (i < line.length && line.fastCodeAt(i) < CSI_FINAL_MIN) i++;
-			i++;
-		}
-		return out.toString();
 	}
 
 }

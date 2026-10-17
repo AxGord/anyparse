@@ -8,6 +8,7 @@ import anyparse.query.CallGraphGenerics;
 import anyparse.query.CallGraphNames;
 import anyparse.query.Glob;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberLookup.MemberDeclaration;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceText;
@@ -478,8 +479,7 @@ final class ReflectiveValues {
 		final named: Null<{ type: String, name: String }> = memberOf(id);
 		if (named == null) return args;
 		final type: String = named.type;
-		final declarations: Array<{ type: TypeDeclInfo, member: MemberInfo }> =
-			_graph.index?.members.memberDeclarationsOf(type, named.name) ?? [];
+		final declarations: Array<MemberDeclaration> = _graph.index?.members.memberDeclarationsOf(type, named.name) ?? [];
 		final isStatic: Bool = declarations.length > 0 && declarations.foreach(d -> d.member.isStatic);
 		if (!isStatic || !FieldWrites.accessKind(callee.kind, _shape) || callee.children.length == 0) return args;
 		final receiver: Null<String> = callee.children[0].name;

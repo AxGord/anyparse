@@ -17,22 +17,14 @@ import anyparse.runtime.Span;
  * `obj.method()` whose resolved return nominal is `Null` (conservative under a
  * simple-name collision).
  *
- * ## The receiver type is load-bearing, and is asked in two steps
+ * ## The receiver type is load-bearing, and is the shared typer's
  *
- * `m[k]` and `arr[i]` share an AST — only the receiver's type tells them apart. The
- * first question is its own written annotation (`TypeResolver.identTypeName` over
- * `declaredTypes`), which reaches a plain identifier and nothing else. Everything
- * past that is `nominalOf`, the optional chain resolver
- * (`CheckScan.typeNominalResolver` over `NominalTypes`): it answers a field path
- * (`o.cache[k]`), a call receiver (`g().pop()`), a `using` extension, and a binding
- * the annotation map has no entry for. It is a FALLBACK — an answer the annotation
- * already gives never moves, and a caller that passes no resolver keeps exactly the
- * annotation-only behaviour.
+ * `m[k]` and `arr[i]` share an AST — only the receiver's type tells them apart. It is asked of `nominalOf` alone, the shared typer
+ * (`CheckScan.typeNominalResolver` over `NominalTypes`, in receiver mode): a plain identifier through its binding's written type, a field
+ * path (`o.cache[k]`), a call receiver (`g().pop()`), a `using` extension. A caller that passes no typer gets no receiver arc at all.
  *
- * One place the annotation is asked and then DISCARDED: `declaredTypes` records
- * `Null<Map<K, V>>` as its bare outer name `Null`, a member-transparent wrapper that
- * names no member set of its own. That string is a loss, not an answer, so it falls
- * through to the resolver, which reads the written source and peels the wrapper.
+ * A member-transparent wrapper is peeled by the typer itself: `Null<Map<K, V>>` answers `Map`,
+ * read off the written source, where `declaredTypes` alone records the bare outer name `Null`.
  *
  * ## The cross-file arc asks the RESOLUTION index, and owes the exclusion list for it
  *
@@ -93,19 +85,18 @@ final class NullableSource {
 	 * The nullable-source description of `receiver` — a `Map`-family index
 	 * (`'map access T[key]'`), an `Array` / `List` `pop` / `shift` call (`'T.method()'`),
 	 * or a `Null<T>`-returning plain-identifier call (`'name()'`) — else null. `root`
-	 * is the file tree (for scope resolution); `declaredTypes` / `returnTypes` are the
-	 * file's `TypeInfoProvider` maps; `nominalOf` is the optional chain resolver asked
-	 * wherever the annotation lookup has no answer.
+	 * is the file tree (for scope resolution); `returnTypes` is the file's
+	 * `TypeInfoProvider` return map; `nominalOf` is the shared typer every receiver's type
+	 * is asked of (`receiverTypeName`), null for a caller that has none — the receiver arcs
+	 * then answer nothing.
 	 */
 	public static function describe(
-		receiver: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>, returnTypes: Map<Int, String>, cfg: NullableSourceCfg,
-		?index: SymbolIndex, ?nominalOf: (QueryNode) -> Null<String>
+		receiver: QueryNode, root: QueryNode, returnTypes: Map<Int, String>, cfg: NullableSourceCfg, index: Null<SymbolIndex>,
+		nominalOf: Null<(QueryNode) -> Null<String>>
 	): Null<String> {
-		return mapIndexSource(receiver, root, declaredTypes, cfg, nominalOf) ?? instanceCallSource(
-			receiver, root, declaredTypes, cfg, nominalOf
-		) ?? returnCallSource(receiver, root, returnTypes, cfg) ?? crossFileReturnCallSource(
-			receiver, root, declaredTypes, cfg, index, nominalOf
-		);
+		return mapIndexSource(receiver, cfg, nominalOf) ?? instanceCallSource(receiver, cfg, nominalOf) ?? returnCallSource(
+			receiver, root, returnTypes, cfg
+		) ?? crossFileReturnCallSource(receiver, root, cfg, index, nominalOf);
 	}
 
 	/**
@@ -169,51 +160,36 @@ final class NullableSource {
 	}
 
 	/**
-	 * The receiver's type nominal: its own declared annotation when it is a plain identifier
-	 * carrying one, else `nominalOf` — the chain resolver, which reads field paths, method
-	 * return types and `using` extensions the annotation lookup cannot see. Fallback ONLY, so
-	 * an answer the annotation already gives never moves; a caller with no resolver keeps
-	 * exactly today's behaviour.
+	 * The receiver's type nominal, as the shared typer answers it (`nominalOf`, `CheckScan.typeNominalResolver` in RECEIVER
+	 * mode): a plain identifier through its binding's written type, a field path, a call's return type, a `using` extension,
+	 * a member-transparent wrapper (`Null<Map<K, V>>`) peeled to what it wraps. Null when the caller has no typer or the
+	 * typer cannot type the node.
 	 */
-	private static function receiverTypeName(
-		node: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>, cfg: NullableSourceCfg,
-		nominalOf: Null<(QueryNode) -> Null<String>>
-	): Null<String> {
-		final declared: Null<String> = node.kind == cfg.identKind ? TypeResolver.identTypeName(node, root, cfg.shape, declaredTypes) : null;
-		// A member-transparent wrapper is what `declaredTypes` DEGRADES to: `Null<Map<K, V>>` is
-		// recorded as its bare outer name `Null`, which names no member set of its own. That is a
-		// LOSS, not an answer — hand it on, and the resolver reads the written SOURCE and peels the
-		// wrapper. No arc's type list holds `Null`, so this can only ever fill an unknown.
-		final lossy: Bool = declared == null || (cfg.shape.memberTransparentWrapperTypeNames ?? []).contains(declared);
-		return if (lossy)
-			nominalOf == null ? null : nominalOf(node);
-		else
-			declared;
+	private static inline function receiverTypeName(node: QueryNode, nominalOf: Null<(QueryNode) -> Null<String>>): Null<String> {
+		return nominalOf == null ? null : nominalOf(node);
 	}
 
 	/** `'map access T[key]'` when `receiver` is a `nullableIndexTypes` index, else null. */
 	private static function mapIndexSource(
-		receiver: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>, cfg: NullableSourceCfg,
-		nominalOf: Null<(QueryNode) -> Null<String>>
+		receiver: QueryNode, cfg: NullableSourceCfg, nominalOf: Null<(QueryNode) -> Null<String>>
 	): Null<String> {
 		if (
 			cfg.indexAccessKind == null || cfg.nullableIndexTypes.length == 0 || receiver.kind != cfg.indexAccessKind
 			|| receiver.children.length < 1
 		)
 			return null;
-		final typeName: Null<String> = receiverTypeName(receiver.children[0], root, declaredTypes, cfg, nominalOf);
+		final typeName: Null<String> = receiverTypeName(receiver.children[0], nominalOf);
 		return typeName != null && cfg.nullableIndexTypes.contains(typeName) ? 'map access ${typeName}[key]' : null;
 	}
 
 	/** `'T.method()'` when `receiver` is a `nullableInstanceReturnCalls` call, else null. */
 	private static function instanceCallSource(
-		receiver: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>, cfg: NullableSourceCfg,
-		nominalOf: Null<(QueryNode) -> Null<String>>
+		receiver: QueryNode, cfg: NullableSourceCfg, nominalOf: Null<(QueryNode) -> Null<String>>
 	): Null<String> {
 		if (cfg.instanceSigs.length == 0) return null;
 		final parts: Null<{ recv: QueryNode, method: String }> = methodCallParts(receiver, cfg);
 		if (parts == null) return null;
-		final typeName: Null<String> = receiverTypeName(parts.recv, root, declaredTypes, cfg, nominalOf);
+		final typeName: Null<String> = receiverTypeName(parts.recv, nominalOf);
 		if (typeName == null) return null;
 		for (sig in cfg.instanceSigs) if (sig.type == typeName && sig.method == parts.method) return '${typeName}.${parts.method}()';
 		return null;
@@ -236,15 +212,15 @@ final class NullableSource {
 	/**
 	 * `'recv.method()'` when `receiver` is a call `recv.method()` whose resolved return OUTER
 	 * nominal is a `returnMarkers` (`Null`) — the CROSS-FILE `Null<T>`-return source. `recv`
-	 * resolves as an instance (its declared type via `TypeResolver.identTypeName`) or, failing
-	 * that, as a static receiver (its own name as a type); `index.returnNominalOf` supplies the
+	 * resolves as a static receiver (its own name as a type) when it binds no value,
+	 * else as an instance (`receiverTypeName`); `index.returnNominalOf` supplies the
 	 * cross-file member nominal, conservative under a simple-name collision. Null when there is
 	 * no index, `recv` is not a plain identifier, the `Type.method` is one of `cfg.excludedCalls`, or
 	 * the lookup is unresolved / ambiguous — so
 	 * `this.f()` and an external-typed receiver are safe misses.
 	 */
 	private static function crossFileReturnCallSource(
-		receiver: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>, cfg: NullableSourceCfg, index: Null<SymbolIndex>,
+		receiver: QueryNode, root: QueryNode, cfg: NullableSourceCfg, index: Null<SymbolIndex>,
 		nominalOf: Null<(QueryNode) -> Null<String>>
 	): Null<String> {
 		if (index == null || cfg.returnMarkers.length == 0) return null;
@@ -252,13 +228,12 @@ final class NullableSource {
 		if (parts == null) return null;
 		final recv: QueryNode = parts.recv;
 		final idx: SymbolIndex = index;
-		// A BOUND local / param resolves via its DECLARED type first, so an inferred-type variable
-		// name is never reinterpreted as a same-named class by the ANNOTATION lookup. An UNBOUND
-		// name is a static / type receiver, looked up by its own name. Only when neither answers
-		// does `receiverTypeName` ask the chain resolver, which re-resolves the binding itself.
+		// A BOUND local / param is typed by the shared typer (`receiverTypeName`), so a variable name
+		// is never reinterpreted as a same-named class. An UNBOUND name is a static / type receiver,
+		// looked up by its own name; anything else is the typer's too.
 		final recvName: Null<String> = recv.kind == cfg.identKind ? recv.name : null;
 		final bound: Bool = recvName != null && TypeResolver.identBindingFrom(recv, root, cfg.shape) != null;
-		final lookupType: Null<String> = (bound ? null : recvName) ?? receiverTypeName(recv, root, declaredTypes, cfg, nominalOf);
+		final lookupType: Null<String> = (bound ? null : recvName) ?? receiverTypeName(recv, nominalOf);
 		if (lookupType == null) return null;
 		// The EXCLUSION list is applied to `instanceSigs` at build time, and this arc reaches the
 		// same call by a different route — an index lookup that never sees that filter. Without

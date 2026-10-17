@@ -390,11 +390,12 @@ final class OwnedTypes implements Check implements ConfigAware implements FileGa
 		final nominal: Null<String> = receiverType(scan, tree, receiver);
 		if (nominal == null) return null;
 		final typed: Array<ResolvedType> = scan.index.refs.resolveTypeRefAll(nominal, scan.info);
-		// Not one expression: a nested ternary is rewritten to an if-expression chain, and the writer glues that
-		// chain's empty-array branch to the next `else` (`[] else`).
-		if (typed.length > 0) return typed; // noqa: prefer-if-expression-return, prefer-ternary-return
-		// The name is the subject's but resolves to nothing here: unknown rather than another type.
-		return nominal == subject.simple ? [] : null;
+		return if (typed.length > 0)
+			typed
+		else if (nominal == subject.simple)
+			[]
+		else
+			null;
 	}
 
 	/** The type declarations a TYPE receiver denotes (`typesNamed`); null for a receiver that is no path or is a value. */
