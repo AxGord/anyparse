@@ -4,7 +4,6 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
-import haxe.Exception;
 
 using Lambda;
 using StringTools;
@@ -57,7 +56,7 @@ typedef BindingCollision = {
  *
  * POSITIVE whitelist. A set the index cannot list is null: an enum or abstract carrying a build macro,
  * a typedef whose target does not resolve (or is a nullable wrapper the compiler follows through),
- * a module whose retained source does not parse, a module the index never saw. The residual limit —
+ * a module the index never saw. The residual limit —
  * documented, not hidden: a module the index never saw contributes its own last segment as its only
  * TYPE, and two lines whose sets are BOTH unlisted are not read as colliding (`collision`), the
  * pre-index reading; a project unlocks them by declaring the library in `resolutionLibs`.
@@ -76,9 +75,6 @@ final class ImportBindings {
 
 	/** Import path -> what the line binds; a stored null is a wildcard that cannot be enumerated. */
 	private final _imports: Map<String, Null<ImportBinding>> = [];
-
-	/** File path -> its module-level field names; a stored null is "source not retained or unparseable". */
-	private final _moduleFields: Map<String, Null<Array<String>>> = [];
 
 	/** The resolution index, asked for only once a question actually needs it. */
 	private final _index: () -> Null<SymbolIndex>;
@@ -163,7 +159,7 @@ final class ImportBindings {
 			fieldValues: []
 		};
 		final ownerFields: Array<String> = [
-			for (file in filesOf(owner)) for (name in moduleFieldsOf(file) ?? []) name
+			for (file in filesOf(owner)) for (name in moduleFieldsOf(file)) name
 		];
 		final owners: Array<TypeDeclInfo> = typesNamed(owner);
 		final member: Bool = ownerFields.contains(leaf) || owners.length > 0 && owners.foreach(t -> t.members.exists(m -> m.name == leaf));
@@ -247,43 +243,6 @@ final class ImportBindings {
 		return [for (m in type.members) if (!m.isStatic && fields.contains(m.kind)) m.name];
 	}
 
-	/**
-	 * The module-level FIELD names `file` declares — Haxe 4.2's module statics, which an explicit
-	 * import of the module brings in unqualified — read from its retained source, or null when the
-	 * source is not retained or does not parse (memoised per file). Every named top-level declaration
-	 * counts, looking through nameless wrappers (a `final`, a `#if` region) — minus the types the index
-	 * lists and the import-family statements.
-	 */
-	private function moduleFieldsOf(file: FileInfo): Null<Array<String>> {
-		if (_moduleFields.exists(file.file)) return _moduleFields[file.file];
-		final fields: Null<Array<String>> = readModuleFields(file);
-		_moduleFields[file.file] = fields;
-		return fields;
-	}
-
-	private function readModuleFields(file: FileInfo): Null<Array<String>> {
-		final index: Null<SymbolIndex> = _index();
-		final source: Null<String> = index?.sourceOf(file.file);
-		if (source == null) return null;
-		final tree: Null<QueryNode> = try _plugin.parseFile(source) catch (_: Exception) null;
-		if (tree == null) return null;
-		final types: Array<String> = [for (t in file.types) t.name];
-		final out: Array<String> = [];
-		function walk(node: QueryNode): Void {
-			for (c in node.children) if (
-				!ModuleScan.IMPORT_DECL_KINDS.contains(c.kind) && !ModuleScan.PACKAGE_DECL_KINDS.contains(c.kind)
-			) {
-				final name: Null<String> = c.name;
-				if (name == null)
-					walk(c);
-				else if (SourceText.isIdentifier(name) && !types.contains(name) && !out.contains(name))
-					out.push(name);
-			}
-		}
-		walk(tree);
-		return out;
-	}
-
 	/** Every declaration `target` names: a module's MAIN type (`p.C`) or a module's secondary type (`p.Mod.C`). */
 	private function typesNamed(target: String): Array<TypeDeclInfo> {
 		final leaf: String = SourceText.lastSegment(target);
@@ -344,6 +303,17 @@ final class ImportBindings {
 			if (found != null) return found;
 		}
 		return null;
+	}
+
+	/**
+	 * The module-level FIELD names `file` declares — Haxe 4.2's module statics, which an explicit
+	 * import of the module brings in unqualified — each once, a declaration in every `#if` branch
+	 * included: the index's own reading of them (`FileInfo.moduleFields`).
+	 */
+	private static function moduleFieldsOf(file: FileInfo): Array<String> {
+		final out: Array<String> = [];
+		for (field in file.moduleFields) if (!out.contains(field.name)) out.push(field.name);
+		return out;
 	}
 
 	/** `collision` at one rank. */

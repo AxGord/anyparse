@@ -52,15 +52,7 @@ class ValueNameBindingTest extends Test {
 			'a/A.hx' => 'package a;\n\nclass A {\n\tpublic static var x:Int = 0;\n\tpublic static var y:Int = 0;\n\tpublic static var z:Int = 0;\n}\n',
 			'Main.hx' => source
 		]);
-		function at(type: String, name: String): String {
-			final values: Null<ModuleValues> = index.values.moduleValuesAt(fileOf(index, 'Main.hx'), name, source.indexOf('class $type'));
-			if (values == null) return 'none';
-			final imported: Null<ImportedStatics> = values.imported;
-			final decls: String = [
-				for (d in values.decls) d.name + '@' + source.substr(0, d.span.from).split('\n').length
-			].join(',');
-			return '$decls|${imported == null ? '-' : [for (s in imported.statics) render(s)].join(' ')}';
-		}
+		final at: (String, String) -> String = valuesAt.bind(index, source);
 		Assert.equals('x@4|-', at('InFoo', 'x'), 'the branch the use sits in');
 		Assert.equals('x@6|-', at('InElse', 'x'), 'a sibling region\'s #else is the same builds');
 		Assert.equals('x@4,x@6|A.x[a/A.hx]', at('InBar', 'x'), 'another region decides nothing: each branch, and the import');
@@ -74,6 +66,30 @@ class ValueNameBindingTest extends Test {
 			'', statics(index, 'Main.hx', 'x', source.indexOf('class InFoo')),
 			'at a use every build of which declares it, it hides the import'
 		);
+	}
+
+	/**
+	 * A use is an alternative of a module-level declaration in ANOTHER region when the two chains spell the same condition where
+	 * the earlier branch is taken (`CondBranchPath.comparable`, Haxe 4.3.7 `hx/p2`): `#if foo` declares, and the use sits in the
+	 * `#else` — or an `#elseif` — of a region opening with `#if foo`; no build compiles both, so the imports alone supply the name.
+	 * A chain whose conditions differ there, or one a condition spelling `|` cannot be split back into, still may bind it.
+	 */
+	@:pin('control')
+	@:killer('M-COND-ALTERNATIVE-REGIONS') @:killer('M-COND-ALTERNATIVE-SPLIT')
+	public function testAnotherRegionOfTheSameConditionIsAnAlternative(): Void {
+		final source: String = 'import a.A.*;\n\n#if foo\nfinal w:Int = 1;\n#end\n#if foo\nclass WFoo {}\n#else\nclass WElse {}\n#end\n'
+			+ '#if foo\nclass Wf {}\n#elseif bar\nclass WBar {}\n#end\n#if bar\nclass VBar {}\n#elseif foo\nclass VFoo {}\n#end\n'
+			+ '#if (p || q)\nfinal u:Int = 1;\n#end\n#if (p || r)\nclass UIn {}\n#else\nclass UOut {}\n#end\n';
+		final index: SymbolIndex = indexOf([
+			'a/A.hx' => 'package a;\n\nclass A {\n\tpublic static var w:Int = 0;\n\tpublic static var u:Int = 0;\n}\n',
+			'Main.hx' => source
+		]);
+		final at: (String, String) -> String = valuesAt.bind(index, source);
+		Assert.equals('w@4|-', at('WFoo', 'w'), 'a sibling region of the same condition is the same builds');
+		Assert.equals('|A.w[a/A.hx]', at('WElse', 'w'), 'its #else compiles none of them');
+		Assert.equals('|A.w[a/A.hx]', at('WBar', 'w'), 'nor does an #elseif after the same #if');
+		Assert.equals('w@4|A.w[a/A.hx]', at('VFoo', 'w'), 'an #elseif after another condition may be compiled with it');
+		Assert.equals('u@22|A.u[a/A.hx]', at('UOut', 'u'), 'a condition spelling | is not split back into its chain');
 	}
 
 	@:pin('control')
@@ -236,6 +252,20 @@ class ValueNameBindingTest extends Test {
 
 	private static function render(s: ImportedStatic): String {
 		return '${s.owner}.${s.member}[${[for (d in s.decls) d.file.file].join(',')}]';
+	}
+
+	/**
+	 * What `moduleValuesAt` answers for the bare `name` read at `class <type>` of `Main.hx` (`source`): each declaration it binds
+	 * as `name@line`, then the imported statics of the builds compiling none (`-` when every such build compiles one).
+	 */
+	private static function valuesAt(index: SymbolIndex, source: String, type: String, name: String): String {
+		final values: Null<ModuleValues> = index.values.moduleValuesAt(fileOf(index, 'Main.hx'), name, source.indexOf('class $type'));
+		if (values == null) return 'none';
+		final imported: Null<ImportedStatics> = values.imported;
+		final decls: String = [
+			for (d in values.decls) d.name + '@' + source.substr(0, d.span.from).split('\n').length
+		].join(',');
+		return '$decls|${imported == null ? '-' : [for (s in imported.statics) render(s)].join(' ')}';
 	}
 
 }

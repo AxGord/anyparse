@@ -6478,7 +6478,7 @@
 			"name": "M-REACH-INCREMENTAL-PURGE",
 			"type": "anyparse.query.CallGraph",
 			"method": "purgeSites",
-			"find": "for (e in edges) if (CallGraphNames.normalizePath(e.file) != key && !removed.exists(e.from)) e",
+			"find": "for (e in edges) if (CallGraphNames.normalizePath(e.file) != key && !removed.exists(e.from) && !bodies.contains(e.to)) e",
 			"replace": "for (e in edges) e",
 			"note": "a file taken back out of the graph leaves its edges behind, so what its old text called still counts"
 		},
@@ -8706,8 +8706,8 @@
 			"name": "M-FACTS-REACH-SYNTAX-UNION",
 			"type": "anyparse.query.CallGraph",
 			"method": "addEdge",
-			"find": "if (facts?.holdsBack(edge) != true) indexEdge(edge);",
-			"replace": "if (kind != Contains && facts?.muted.exists(from) == true) return;\nindexEdge(edge);",
+			"find": "if (facts?.holdsBack(e) != true)",
+			"replace": "if (kind == Contains || facts?.muted.exists(from) != true)",
 			"note": "a faceted function records the facts' edges alone, so a name another build resolves the way the syntax reads it is lost"
 		},
 		{
@@ -22455,8 +22455,8 @@
 			"name": "M-GRAPH-MODULE-RECEIVERS-MEMBER",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "values.decls.length == 0 || CallGraphKeys.memberMayBind(this, currentType, name))",
-			"replace": "values.decls.length == 0)",
+			"find": "imported == null || values.decls.length == 0 || CallGraphKeys.memberMayBind(this, currentType, name))",
+			"replace": "imported == null || values.decls.length == 0)",
 			"note": "a module-level value is dispatched on where a member of the enclosing type's chain may be meant"
 		},
 		{
@@ -22650,6 +22650,118 @@
 			"find": "return viaPublic",
 			"replace": "return true",
 			"note": "a caller in another class is routed through a private holding field it cannot reach"
+		},
+		{
+			"name": "M-COND-ALTERNATIVE-REGIONS",
+			"type": "anyparse.query.CondBranchPath",
+			"method": "alternatives",
+			"find": "return own != '' && own == lateChain[early.branch];",
+			"replace": "return false;",
+			"note": "two regions spelling the same condition where the earlier branch is taken are never alternatives, so a use in the other's #else may bind a declaration no build compiling it has"
+		},
+		{
+			"name": "M-COND-ALTERNATIVE-SPLIT",
+			"type": "anyparse.query.CondBranchPath",
+			"method": "alternatives",
+			"find": "if (earlyChain.length != early.branch + 1 || lateChain.length != late.branch + 1) return false;",
+			"replace": "",
+			"note": "a chain is split on every | it spells, so a condition holding || is read as a run of conditions it is not and two branches some build compiles together read as alternatives"
+		},
+		{
+			"name": "M-GRAPH-BODY-SPLIT",
+			"type": "anyparse.query.CallGraphNodes",
+			"method": "bodyId",
+			"find": "if (!g.declarationsOf(base).exists(d -> CallGraphNames.normalizePath(d.file) == key)) return base;",
+			"replace": "return base;",
+			"note": "a further body of a module-level function folds into the first: every build's code is one node"
+		},
+		{
+			"name": "M-GRAPH-BODY-EXPAND",
+			"type": "anyparse.query.CallGraph",
+			"method": "addEdge",
+			"find": "exact ? [] : [for (body in _bodies[to] ?? []) retargeted(edge, body)]",
+			"replace": "[]",
+			"note": "an edge naming a module-level function reaches its first body only, never another build's"
+		},
+		{
+			"name": "M-GRAPH-BODY-EXACT",
+			"type": "anyparse.query.CallGraph",
+			"method": "addEdge",
+			"find": "exact ? [] : [for",
+			"replace": "[for",
+			"note": "an edge a bare use binds to one body per build runs every other body too"
+		},
+		{
+			"name": "M-GRAPH-BODY-TARGETS",
+			"type": "anyparse.query.CallGraph",
+			"method": "resolveTarget",
+			"find": "for (body in bodiesOf(id))",
+			"replace": "for (body in [id])",
+			"note": "a query naming a module-level function answers its first body only"
+		},
+		{
+			"name": "M-GRAPH-BODY-COPY-IN",
+			"type": "anyparse.query.CallGraphNodes",
+			"method": "bodyId",
+			"find": "for (e in g.inEdges(base).copy()) g.indexEdge(CallGraph.retargeted(e, id));",
+			"replace": "",
+			"note": "an edge an earlier file left on a module-level function never reaches the further bodies its own file declares"
+		},
+		{
+			"name": "M-GRAPH-BODY-PURGE",
+			"type": "anyparse.query.CallGraph",
+			"method": "purgeSites",
+			"find": " && !bodies.contains(e.to)",
+			"replace": "",
+			"note": "a further body keeps the copies of the function's edges from other files when its file leaves, and gets them twice when it is read again"
+		},
+		{
+			"name": "M-GRAPH-MODULE-BINDING",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "? bareModuleBinding(calleeName, callee.span, currentType)",
+			"replace": "? null",
+			"note": "a bare call of a module-level function is bound by name, never per build: module-level code's is unresolved"
+		},
+		{
+			"name": "M-GRAPH-MODULE-BINDING-MEMBER",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "|| CallGraphKeys.memberMayBind(this, currentType, name)) return null;",
+			"replace": ") return null;",
+			"note": "a module-level function comes before a member of the enclosing chain of its name"
+		},
+		{
+			"name": "M-GRAPH-MODULE-BINDING-VALUE",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "out.unresolved = FunctionValue(name)",
+			"replace": "out.unresolved = null",
+			"note": "a build declaring a module-level value calls nothing the graph is told of"
+		},
+		{
+			"name": "M-GRAPH-MODULE-BINDING-IMPORTS",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "for (s in imported.statics) {",
+			"replace": "for (s in imported.statics.slice(0, 0)) {",
+			"note": "the builds declaring no module-level function of the name call no imported static"
+		},
+		{
+			"name": "M-GRAPH-MODULE-REF",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "final module: Null<ModuleBinding> = bareModuleBinding(name, arg.span, currentType);",
+			"replace": "final module: Null<ModuleBinding> = null;",
+			"note": "a module-level function read as a value is bound by name: one under #if in several builds is no reference at all"
+		},
+		{
+			"name": "M-GRAPH-MODULE-IDENT",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "final module: Null<ModuleBinding> = bound != null && bound >= 0 ? null : moduleBinding(name, span, currentType);",
+			"replace": "final module: Null<ModuleBinding> = null;",
+			"note": "the one module-level function a bare call binds does not type the call's result"
 		},
 		{
 			"name": "M-SUBTYPE-ROOT-NEGATIVE-LIST",

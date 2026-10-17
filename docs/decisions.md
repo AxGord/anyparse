@@ -3386,6 +3386,37 @@ decided the question; it may not become a record of runs.
   class-level `@:access`, the sub-type import of `ReceiverHit`'s `move`). Two helpers moved to their shared homes for
   reuse rather than copied: `PreferReadOnlyField.isProperty` -> `SourceText.isProperty` and
   `DependencyCarry.memberAccessKinds` -> `ShapeVocab.memberAccessKinds` — branch `feat/infra-N10`
+- `ImportBindings.readModuleFields` was a second reader of a module's module-level fields — it re-parsed the file's
+  retained source and kept every named top-level declaration that was not a type or an import statement → it reads the
+  index's `FileInfo.moduleFields` (each name once), the reading `ValueNameBinding` already used. The kinds agree
+  (`RefShape.moduleValueDeclKinds` is every value binder the grammar spells), and every indexed file's source is
+  retained, so the null "unparseable" set it could answer never arose for an indexed module: byte-identical on the three
+  TM trees, anyparse and the review fixtures — branch `feat/infra-N11`
+- `CondBranchPath.comparable` read two positions as alternatives only when ONE region held both in different branches,
+  so a use in `#if a … #else USE #end` could bind a module-level declaration in an earlier `#if a DECL #end` that no
+  build compiling the use has → two branches of two regions are alternatives too when the earlier branch `j` spells, as
+  its own condition, the `j`-th condition of the later one's chain (the earlier needs it, the later its negation; Haxe
+  4.3.7 `v-N11-hx/p2`: `#if foo final w … #end` then `#if foo … #elseif bar USE #else USE #end` reads the imported `w` in
+  both `USE`s). Read only where each chain splits back into exactly its branch's conditions — a condition spelling `|`
+  (`a || b`) is never split — and an empty condition proves nothing; logical equivalence (`#if !a` against `#else`) is
+  still not read (`ValueNameBindingTest#testAnotherRegionOfTheSameConditionIsAnAlternative`, RED on `d0f12ab9e`) —
+  branch `feat/infra-N11`
+- A module-level FUNCTION the module declares in several `#if` branches was ONE call-graph node (`Mod.f`, keyed by name,
+  every body's edges folded in), and a bare call of it was bound by name only — from a class through the module
+  pseudo-type, from module-level code not at all (`UnboundName`: `Refs` binds no module-level declaration) → each further
+  body in the file is a node of its own (`Mod.f@2`, `Mod.f@3`, … in source order, `CallGraph.bodiesOf`), and a bare call or
+  read binds per build the way a module-level value does (`ValueNameBinding.moduleValuesAt`): the body of each declaration
+  some build compiling the use declares, plus the imported static in the builds declaring none, after a local, a
+  parameter and a member of the enclosing chain (`CallGraphKeys.memberMayBind`) — Haxe 4.3.7 `v-N11-hx/p1` (`#if a` /
+  `#elseif b` bodies: module-level caller, class caller, value read all run the build's body; the module's function beats
+  `import B.*`; a class's own static beats the module's). Fail-closed by construction: every edge that names the function
+  rather than a body — an import, a qualified access, a compiler fact, an earlier file's placeholder — reaches each body
+  (`CallGraph.addEdge`), and so does a query (`resolveTarget`); a call or read that binds several bodies types nothing by
+  them (`identTarget`, a call site's target). A build whose declaration is a module-level VALUE now records the call as a
+  `FunctionValue`, not `UnboundName`: it runs the function the value holds, which is what `FunctionValue` means. A
+  declaration of the module in another file (another class path) still folds into its node. Not done: a member declared in
+  several branches of its class stays one folded node (`CallGraphBindingTest#testEachBodyOfAModuleLevelFunctionUnderIfIsANodeOfItsOwn`,
+  RED on `d0f12ab9e`) — branch `feat/infra-N11`
 - a receiver-qualified caller of a moved instance member was LEFT alone whenever `SubtypeGraph.provablyNotSubtype`
   cleared its receiver's type, and that proof's root refusal was a NEGATIVE list (`typedef` alias, plain `abstract`):
   a `@:forward enum abstract A(G)` read as unrelated to `G`, and so did a structure declaring `isPure`, which a `G`

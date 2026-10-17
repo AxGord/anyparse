@@ -3138,6 +3138,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CallGraphBindingTest#testAModuleLevelFunctionSeesItsModuleAndImportsNoClassChain :: control :: '
 				+ 'M-TS-MODULE-FN-CLASS-CHAIN,M-TS-MODULE-FN-IMPORTED-REF',
 			'unit.query.CallGraphBindingTest#testASupertypeIsTheTypeItsDeclaringFileBinds :: control :: M-SUPERS-BY-DECLARATION',
+			'unit.query.CallGraphBindingTest#testEachBodyOfAModuleLevelFunctionUnderIfIsANodeOfItsOwn :: control :: '
+				+ 'M-GRAPH-BODY-SPLIT,M-GRAPH-BODY-EXPAND,M-GRAPH-BODY-EXACT,M-GRAPH-BODY-TARGETS,M-GRAPH-BODY-COPY-IN,M-GRAPH-BODY-PURGE,'
+				+ 'M-GRAPH-MODULE-BINDING,M-GRAPH-MODULE-BINDING-MEMBER,M-GRAPH-MODULE-BINDING-VALUE,'
+				+ 'M-GRAPH-MODULE-BINDING-IMPORTS,M-GRAPH-MODULE-REF,M-GRAPH-MODULE-IDENT',
 			'unit.query.CallGraphTest#testACallReceiverBoundToANullableTypeDispatchesOnIt :: control :: M-TS-RETURN-WRAPPER-BOUND',
 			'unit.query.CallGraphTest#testACalledFunctionValueReturnsWhatItsFunctionTypeSays :: control :: '
 				+ 'M-TS-CALLED-VALUE,M-TS-CALLED-RECEIVER,M-TS-CALLED-NULL',
@@ -3196,6 +3200,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CallGraphTest#testDeclarationsWritingATypeDifferentlyDispatchOnEach :: control :: '
 				+ 'M-TS-DECL-EACH-MEMBER,M-TS-DECL-EACH-RETURN,M-TS-DECL-EACH-UNTYPED,M-TS-KEY-LINED',
 			'unit.query.CallGraphTest#testDynamicMethodCallIsAlsoAFunctionValueCall :: control :: M-GRAPH-DYNAMIC-METHOD',
+
 			'unit.query.CallGraphTest#testEnumConstructorSharingAStaticFunctionNameIsUnresolved :: control :: M-GRAPH-ENUM-VS-STATIC',
 			'unit.query.CallGraphTest#testEveryUsingThatDeclaresTheExtensionIsATarget :: control :: M-GRAPH-USING-ALL',
 			'unit.query.CallGraphTest#testEveryValueUseOfAFunctionIsARef :: control :: M-GRAPH-VALUE-USE,M-GRAPH-VALUE-USE-LAMBDA',
@@ -4299,7 +4304,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.ValueNameBindingTest#testAnImportBringsTheValuesOfTheTypesItPutsInScope :: control :: '
 				+ 'M-VALUES-IMPORTED-CTOR,M-VALUES-WILDCARD-CTOR,M-VALUES-ALIAS-WHOLE-MODULE,M-VALUES-FIELD-IMPORT-TYPES,M-SCOPE-MODULE-IMPORT-BLIND',
 			'unit.query.ValueNameBindingTest#testAnUnlistedImportIsTheOneACallMayBeRoutedThrough :: control :: '
-				+ 'M-MACRO-VALUE-UNLISTED,M-MACRO-EXTENSIONS-ONLY'
+				+ 'M-MACRO-VALUE-UNLISTED,M-MACRO-EXTENSIONS-ONLY',
+			'unit.query.ValueNameBindingTest#testAnotherRegionOfTheSameConditionIsAnAlternative :: control :: '
+				+ 'M-COND-ALTERNATIVE-REGIONS,M-COND-ALTERNATIVE-SPLIT'
 		];
 		final actualPins: Array<String> = TestRegistry.pins();
 		Assert.same(
@@ -7178,6 +7185,20 @@ class TestDiscoveryParityTest extends Test {
 			'M-RECEIVER-UNKNOWN-ROUTED',
 			'M-RECEIVER-UNRELATED-ROUTED',
 			'M-VIA-PRIVATE-REACHED',
+			'M-COND-ALTERNATIVE-REGIONS',
+			'M-COND-ALTERNATIVE-SPLIT',
+			'M-GRAPH-BODY-SPLIT',
+			'M-GRAPH-BODY-EXPAND',
+			'M-GRAPH-BODY-EXACT',
+			'M-GRAPH-BODY-TARGETS',
+			'M-GRAPH-BODY-COPY-IN',
+			'M-GRAPH-BODY-PURGE',
+			'M-GRAPH-MODULE-BINDING',
+			'M-GRAPH-MODULE-BINDING-MEMBER',
+			'M-GRAPH-MODULE-BINDING-VALUE',
+			'M-GRAPH-MODULE-BINDING-IMPORTS',
+			'M-GRAPH-MODULE-REF',
+			'M-GRAPH-MODULE-IDENT',
 			'M-SUBTYPE-ROOT-NEGATIVE-LIST',
 			'M-RECEIVER-STRUCTURE-LEFT',
 			'M-MOVE-OVERRIDE-MEMBER',
