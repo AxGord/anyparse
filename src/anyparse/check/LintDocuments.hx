@@ -256,7 +256,25 @@ final class LintDocuments {
 		return out;
 	}
 
+	/** `parseDocument`, answered from `memo` when the same content was parsed against the same directory before. */
+	public static function parseDocumentIn(memo: Null<DocumentMemo>, content: String, ?baseDir: String): Null<LintDocument> {
+		if (memo == null) return parseDocument(content, baseDir);
+		final key: String = '${baseDir ?? ''}\n$content';
+		if (memo.exists(key)) return memo[key];
+		final doc: Null<LintDocument> = parseDocument(content, baseDir);
+		memo[key] = doc;
+		return doc;
+	}
+
 }
+
+/**
+ * `apqlint.json` documents already parsed in one run, keyed by directory and content (`LintDocuments.parseDocumentIn`),
+ * null for content the schema rejects. Owned by a caller that resolves the chains of many directories and only READS
+ * the documents — the oracle entries a lint run prepares are written in place, so a memo shared with that run's own
+ * configs would hand one directory's prepared entries to another.
+ */
+typedef DocumentMemo = Map<String, Null<LintDocument>>;
 
 /**
  * ONE `apqlint.json` document, as DECLARED — the intermediate a chain of them is

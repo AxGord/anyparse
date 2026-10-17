@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.LintDocuments.DocumentMemo;
 import anyparse.check.LintDocuments.LintDocument;
 import anyparse.check.OwnedTypesDeclaration.TypeOwnership;
 import anyparse.grammar.json.JValue;
@@ -518,7 +519,7 @@ final class LintConfig {
 	 * declares is resolved against that document's own directory; that is what lets a report group
 	 * files by chain rather than by directory.
 	 */
-	public static function discoverChain(path: String): DiscoveredConfig {
+	public static function discoverChain(path: String, ?documents: DocumentMemo): DiscoveredConfig {
 		final chain: ConfigChain = ConfigFinder.findUpAll(path, 'apqlint.json', ConfigFinder.PROJECT_ROOT_MARKERS);
 		final folded: Array<String> = [];
 		var merged: Null<LintDocument> = null;
@@ -527,7 +528,7 @@ final class LintConfig {
 		// answered, and nothing else says so.
 		for (path in chain.unreadable) warnOnce(path, 'apq: $path could not be read — ignored, the rest of the chain still applies\n');
 		for (entry in chain.documents) {
-			final doc: Null<LintDocument> = LintDocuments.parseDocument(entry.content, Path.directory(entry.path));
+			final doc: Null<LintDocument> = LintDocuments.parseDocumentIn(documents, entry.content, Path.directory(entry.path));
 			if (doc == null) {
 				// A REAL config file that the schema rejects must not degrade silently — a
 				// wholesale fallback quietly collapses the resolution scope and every rule
@@ -595,8 +596,8 @@ final class LintConfig {
 	 * the same boundary `CheckstyleConfigLoader` moved to. Per-VALUE leniency
 	 * survives inside `rules`, whose entries stay raw JSON on purpose.
 	 */
-	public static function parse(content: String, ?baseDir: String): LintConfig {
-		final doc: Null<LintDocument> = LintDocuments.parseDocument(content, baseDir);
+	public static function parse(content: String, ?baseDir: String, ?documents: DocumentMemo): LintConfig {
+		final doc: Null<LintDocument> = LintDocuments.parseDocumentIn(documents, content, baseDir);
 		return doc == null ? new LintConfig([]) : LintDocuments.fromDocument(doc);
 	}
 
