@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.MemberLookup.HostedMembers;
 import anyparse.query.MemberLookup.MemberDeclaration;
 import anyparse.query.NodeShape;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
@@ -738,11 +739,16 @@ final class NominalTypes {
 	 * and it fails closed for a receiver whose type, or any type in its supertype closure, the run
 	 * does not index.
 	 *
-	 * `usings` is walked BACKWARDS because Haxe resolves static extensions in reverse
-	 * declaration order (`using A; using B;` binds `B.tag`, the reverse binds `A.tag`). The first
-	 * module that ANSWERS wins; one declaring the name with a first parameter the receiver does not
-	 * fit answers null and the walk continues to the earlier ones — which is the compiler's own
-	 * behaviour (`using A; using C;` with `C.tag(s:Int)` binds `A.tag(s:String)` for a `String`).
+	 * The second gate is `MemberLookup.closureFreeOfExtensionTypes`: a type's own `@:using`, on the
+	 * receiver's type or any supertype, binds ahead of every `using` of the file (4.3.7), so a
+	 * closure that brings extensions — or one the index cannot read link by link — answers null.
+	 *
+	 * Which `using` supplies the call is the shared walk's (`ValueNameBinding.extensionDeclaration`):
+	 * the LAST one whose module declares a static `method` on any of its types (`using A; using B;`
+	 * binds `B.tag`, the reverse binds `A.tag`). Its first parameter must then ACCEPT the receiver
+	 * (`StructuralTypes.extensionReturnNominal`), and a NO there ends the walk rather than trying
+	 * the earlier `using`s: the compiler passes over only a parameter that provably rejects the
+	 * receiver, while `<T>(s:T)` or `(s:Dynamic)` bind it, and no nominal proof tells those apart.
 	 *
 	 * Deliberately unreachable in SHALLOW mode: `chain` is the opt-in every deep arm sits behind,
 	 * and this one carries the same obligation as its siblings — it resolves not merely MORE but
@@ -753,12 +759,13 @@ final class NominalTypes {
 	): Null<String> {
 		if (chain == null) return null;
 		final usings: Array<String> = chain.usings;
-		if (usings.length == 0 || !index.members.typeProvablyLacksMember(receiver, method, file)) return null;
-		for (k in 0...usings.length) {
-			final ret: Null<String> = index.structural.extensionReturnNominal(usings[usings.length - 1 - k], method, receiver, file);
-			if (ret != null) return ret;
-		}
-		return null;
+		if (
+			usings.length == 0 || !index.members.typeProvablyLacksMember(receiver, method, file)
+			|| !index.members.closureFreeOfExtensionTypes(receiver, file)
+		)
+			return null;
+		final declared: Null<HostedMembers> = index.values.extensionDeclaration(usings, method);
+		return declared == null ? null : index.structural.extensionReturnNominal(declared, receiver, file);
 	}
 
 	/**
@@ -1056,10 +1063,10 @@ typedef ChainTypeContext = {
 
 	/**
 	 * The module paths of every `using` the file declares, in DECLARATION order
-	 * (`UsingScan.usingModules`). The static-extension arm reads them BACKWARDS, because Haxe
+	 * (`UsingScan.extensionUsings`). The static-extension arm reads them BACKWARDS, because Haxe
 	 * resolves a static extension in reverse declaration order — the later `using` wins.
 	 * An empty array switches the arm off, which is what a consumer that has not thought about
-	 * static extensions should pass.
+	 * static extensions should pass, and what a file with a `#if`-guarded `using` gets.
 	 */
 	final usings: Array<String>;
 

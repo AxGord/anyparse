@@ -1,6 +1,7 @@
 package unit.query;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.MemberLookup.HostedMembers;
 import anyparse.query.SymbolIndex;
 import unit.CheckFixture;
 import utest.Assert;
@@ -54,16 +55,16 @@ class StructuralMembershipTest extends Test {
 	public function testStructuralParameterAcceptGate(): Void {
 		final index: SymbolIndex = CheckFixture.index(iterableFiles(), new HaxeQueryPlugin());
 
-		Assert.equals('Widget', index.structural.extensionReturnNominal('IterExt', 'pick', 'Bag'));
-		Assert.equals('Widget', index.structural.extensionReturnNominal('IterExt', 'step', 'BagIter'));
+		Assert.equals('Widget', extensionReturn(index, 'IterExt', 'pick', 'Bag'));
+		Assert.equals('Widget', extensionReturn(index, 'IterExt', 'step', 'BagIter'));
 		// A receiver satisfying neither membership, and one satisfying the OTHER one.
-		Assert.isNull(index.structural.extensionReturnNominal('IterExt', 'pick', 'Widget'));
-		Assert.isNull(index.structural.extensionReturnNominal('IterExt', 'step', 'Bag'));
+		Assert.isNull(extensionReturn(index, 'IterExt', 'pick', 'Widget'));
+		Assert.isNull(extensionReturn(index, 'IterExt', 'step', 'Bag'));
 		// The type ARGUMENT gate: a concrete element type binds nothing, a nested application is
 		// not a bare parameter, and an unapplied `Iterable` names no element at all.
-		Assert.isNull(index.structural.extensionReturnNominal('IterExt', 'fixed', 'Bag'));
-		Assert.isNull(index.structural.extensionReturnNominal('IterExt', 'nest', 'Bag'));
-		Assert.isNull(index.structural.extensionReturnNominal('IterExt', 'bare', 'Bag'));
+		Assert.isNull(extensionReturn(index, 'IterExt', 'fixed', 'Bag'));
+		Assert.isNull(extensionReturn(index, 'IterExt', 'nest', 'Bag'));
+		Assert.isNull(extensionReturn(index, 'IterExt', 'bare', 'Bag'));
 	}
 
 	/**
@@ -111,9 +112,9 @@ class StructuralMembershipTest extends Test {
 		Assert.isFalse(index.members.typeProvablyLacksMember('List', 'iterator', 'Use.hx'));
 
 		// The accept gate consumes it: `Lambda`-shaped extensions now bind on an aliased container.
-		Assert.equals('Widget', index.structural.extensionReturnNominal('IterExt', 'pick', 'List', 'Use.hx'));
-		Assert.equals('Widget', index.structural.extensionReturnNominal('IterExt', 'pick', 'Map', 'Use.hx'));
-		Assert.isNull(index.structural.extensionReturnNominal('IterExt', 'pick', 'PlainAlias', 'Use.hx'));
+		Assert.equals('Widget', extensionReturn(index, 'IterExt', 'pick', 'List', 'Use.hx'));
+		Assert.equals('Widget', extensionReturn(index, 'IterExt', 'pick', 'Map', 'Use.hx'));
+		Assert.isNull(extensionReturn(index, 'IterExt', 'pick', 'PlainAlias', 'Use.hx'));
 	}
 
 	/**
@@ -218,6 +219,14 @@ class StructuralMembershipTest extends Test {
 					+ 'return null;\n\n\tpublic static function bare(it:Iterable):Widget return null;\n}'
 			}
 		];
+	}
+
+	/** The return nominal `using <module>;` alone gives at `<recv>.<method>(…)` on a `receiver` — the shared walk, then the accept gate. */
+	private static function extensionReturn(
+		index: SymbolIndex, module: String, method: String, receiver: String, ?file: String
+	): Null<String> {
+		final declared: Null<HostedMembers> = index.values.extensionDeclaration([module], method);
+		return declared == null ? null : index.structural.extensionReturnNominal(declared, receiver, file);
 	}
 
 }

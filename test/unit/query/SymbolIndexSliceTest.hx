@@ -1,6 +1,7 @@
 package unit.query;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.MemberLookup.HostedMembers;
 import anyparse.query.MemberLookup.MemberDeclaration;
 import anyparse.query.ModuleScan;
 import anyparse.query.SymbolIndex;
@@ -1541,19 +1542,19 @@ class SymbolIndexSliceTest extends Test {
 		Assert.equals('String', memberOf(fileInfoOf(index, 'Ext.hx').types[0], 'tag').firstParamTypeSource);
 		Assert.isNull(memberOf(fileInfoOf(index, 'Ext.hx').types[0], 'bare').firstParamTypeSource);
 
-		Assert.equals('Int', index.structural.extensionReturnNominal('Ext', 'tag', 'String'));
+		Assert.equals('Int', extensionReturn(index, 'Ext', 'tag', 'String'));
 		// The first parameter must ACCEPT the receiver, not merely exist.
-		Assert.isNull(index.structural.extensionReturnNominal('Ext', 'ints', 'String'));
+		Assert.isNull(extensionReturn(index, 'Ext', 'ints', 'String'));
 		// A parameterless static is not an extension at all, and neither is an instance method.
-		Assert.isNull(index.structural.extensionReturnNominal('Ext', 'bare', 'String'));
-		Assert.isNull(index.structural.extensionReturnNominal('Inst', 'tag', 'String'));
+		Assert.isNull(extensionReturn(index, 'Ext', 'bare', 'String'));
+		Assert.isNull(extensionReturn(index, 'Inst', 'tag', 'String'));
 		// An unannotated return names no type, so it proves nothing.
-		Assert.isNull(index.structural.extensionReturnNominal('Ext', 'inferred', 'String'));
+		Assert.isNull(extensionReturn(index, 'Ext', 'inferred', 'String'));
 		// A SUBTYPE of the first parameter's type is accepted; an unrelated receiver is not.
-		Assert.equals('Base', index.structural.extensionReturnNominal('BaseExt', 'id', 'Sub'));
-		Assert.isNull(index.structural.extensionReturnNominal('BaseExt', 'id', 'String'));
+		Assert.equals('Base', extensionReturn(index, 'BaseExt', 'id', 'Sub'));
+		Assert.isNull(extensionReturn(index, 'BaseExt', 'id', 'String'));
 		// A module the index does not hold answers nothing.
-		Assert.isNull(index.structural.extensionReturnNominal('Missing', 'tag', 'String'));
+		Assert.isNull(extensionReturn(index, 'Missing', 'tag', 'String'));
 	}
 
 	/** The static-extension fixture set: one module of statics, one instance host, and a two-level `extends` pair. */
@@ -1663,6 +1664,14 @@ class SymbolIndexSliceTest extends Test {
 		], plugin());
 		Assert.isFalse(index.subtypes.provablyNotSubtype('EFwd', 'Owner'));
 		Assert.isTrue(index.subtypes.provablyNotSubtype('Other', 'Owner'));
+	}
+
+	/** The return nominal `using <module>;` alone gives at `<recv>.<method>(…)` on a `receiver` — the shared walk, then the accept gate. */
+	private static function extensionReturn(
+		index: SymbolIndex, module: String, method: String, receiver: String, ?file: String
+	): Null<String> {
+		final declared: Null<HostedMembers> = index.values.extensionDeclaration([module], method);
+		return declared == null ? null : index.structural.extensionReturnNominal(declared, receiver, file);
 	}
 
 }

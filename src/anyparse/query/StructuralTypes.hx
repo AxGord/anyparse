@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.MemberLookup.HostedMembers;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
@@ -160,43 +161,36 @@ final class StructuralTypes {
 	}
 
 	/**
-	 * The RETURN nominal a `using <module>` STATIC EXTENSION gives at `<recv>.<method>(…)`, where
-	 * `recv` carries the simple type `receiver` — or null when nothing here proves one.
-	 *
-	 * `module` resolves the same way `typeProvablyLacksMember` resolves its start type: against
-	 * `fromFile`'s import scope when one is given, else by its own dotted path, else as a simple
-	 * name that must be unique among indexed decls. Pass the `using` declaration's text verbatim
-	 * and the file that declared it.
+	 * The RETURN nominal the STATIC EXTENSION `declared` gives at `<recv>.<method>(…)`, where `recv`
+	 * carries the simple type `receiver` — or null when nothing here proves one. `declared` is what
+	 * the file's `using`s bind (`ValueNameBinding.extensionDeclaration`): every static `method` of
+	 * the one type that supplies it, which is also where the walk over the `using`s ENDS — a
+	 * declaration whose first parameter is not proven to accept the receiver answers null, and the
+	 * caller must not try an earlier `using` (4.3.7 binds `<T>(s:T)` and `(s:Dynamic)` there).
 	 *
 	 * Every gate fails closed, and one of them is the whole reason this is not `returnNominalOf`
-	 * on the module: the first parameter must ACCEPT the receiver, not merely exist. Accepted are
+	 * on the host: the first parameter must ACCEPT the receiver, not merely exist. Accepted are
 	 * an exact nominal match, a proven NOMINAL subtype (`isSubtype`), and — only for the two
 	 * structural types the layer models by MEMBERSHIP — a receiver that satisfies `Iterable` /
 	 * `Iterator` while implementing neither (`receiverFitsParameter`), which is what lets
 	 * `Lambda.exists(it:Iterable<A>, …)` bind on an `Array`.
 	 *
-	 * The rest: the member must be STATIC (an instance method is not reachable through a
-	 * `using`), and must carry a WRITTEN return — an inference-typed one
-	 * names no type at all, while `:Void` resolves to the nominal `Void`, exactly as
-	 * `returnNominalOf` already answers it for an ordinary member. Every declaration of the name
-	 * must agree, since a `#if` pair returning two different types proves nothing branch-blind. A
-	 * module declaring the name with a non-accepting first parameter answers null rather than the
-	 * next candidate's return: that IS the correct answer for that module, and the caller walks
-	 * its remaining `using`s itself.
+	 * The rest: the member must carry a WRITTEN return — an inference-typed one names no type at
+	 * all, while `:Void` resolves to the nominal `Void`, exactly as `returnNominalOf` already
+	 * answers it for an ordinary member — and every declaration must agree.
 	 *
 	 * What this deliberately does NOT decide is whether the receiver's own type declares `method`
 	 * — a real member BEATS an extension and the extension must not be consulted at all. That
 	 * gate belongs to the caller, which holds the receiver and must prove absence with
 	 * `typeProvablyLacksMember` BEFORE asking here (`NominalTypes.staticExtensionNominal`).
 	 */
-	public function extensionReturnNominal(module: String, method: String, receiver: String, ?fromFile: String): Null<String> {
-		final host: Null<ResolvedType> = _refs.resolveStartType(module, fromFile);
-		if (host == null) return null;
+	public function extensionReturnNominal(declared: HostedMembers, receiver: String, ?fromFile: String): Null<String> {
+		final host: ResolvedType = declared.host;
 		var found: Null<String> = null;
-		for (m in host.type.members) if (m.name == method) {
+		for (m in declared.members) {
 			final paramSource: Null<String> = m.firstParamTypeSource;
 			final ret: Null<String> = m.returnNominal;
-			if (!m.isStatic || paramSource == null || ret == null) return null;
+			if (paramSource == null || ret == null) return null;
 			final accepts: Null<String> = NominalTypes.outerNominalOf(paramSource, _typeSyntax);
 			if (accepts == null || !receiverFitsParameter(receiver, accepts, paramSource, host, fromFile)) return null;
 			if (found != null && found != ret) return null;

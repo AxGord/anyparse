@@ -23738,10 +23738,10 @@
 		},
 		{
 			"name": "M-BINDER-EXTENSION-LAST-USING",
-			"type": "anyparse.check.OperandBinder",
-			"method": "extensionTier",
-			"find": "_index.values.usingHosts(usings[k])",
-			"replace": "_index.values.usingHosts(usings[usings.length - 1 - k])",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "extensionDeclaration",
+			"find": "usingHosts(usings[k])",
+			"replace": "usingHosts(usings[usings.length - 1 - k])",
 			"note": "the FIRST using declaring the extension wins instead of the last"
 		},
 		{
@@ -23754,18 +23754,18 @@
 		},
 		{
 			"name": "M-BINDER-EXTENSION-UNINDEXED",
-			"type": "anyparse.check.OperandBinder",
-			"method": "extensionTier",
-			"find": "if (hosts == null) return Unknown;",
-			"replace": "if (hosts == null) continue;",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "extensionDeclaration",
+			"find": "if (hosts == null || hosts.exists(h -> builtAtOrAbove(h, []))) return null;",
+			"replace": "if (hosts == null) continue;\n\t\tif (hosts.exists(h -> builtAtOrAbove(h, []))) return null;",
 			"note": "a later using the index does not hold is passed over, though it may declare the extension"
 		},
 		{
 			"name": "M-BINDER-EXTENSION-GUARDED-USING",
-			"type": "anyparse.check.OperandBinder",
-			"method": "forFile",
-			"find": "usings = header.guardedUsings.length > 0 ? null : UsingScan.usingModules(header);",
-			"replace": "usings = UsingScan.usingModules(header);",
+			"type": "anyparse.check.UsingScan",
+			"method": "extensionUsings",
+			"find": "header.guardedUsings.length > 0 ? null : usingModules(header)",
+			"replace": "usingModules(header)",
 			"note": "a #if-guarded using no longer refuses the extension, though a build defining it binds another"
 		},
 		{
@@ -23831,6 +23831,70 @@
 			"find": "for (m in collect(plugin, entry.file, entry.source, seams, resolveIndex, selection))",
 			"replace": "for (m in collect(plugin, entry.file, entry.source, seams, resolveIndex, OperatorSelection.of(plugin, [entry])))",
 			"note": "the chain rule asks a per-file operator table, which sees no overload a sibling module declares, and leaves a chain the switch rule refuses to nobody"
+		},
+		{
+			"name": "M-EXT-DECL-BUILT",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "extensionDeclaration",
+			"find": " || hosts.exists(h -> builtAtOrAbove(h, []))",
+			"replace": "",
+			"note": "a later using whose type a build macro may give the static is passed over, though in that build it binds the call"
+		},
+		{
+			"name": "M-EXT-DECL-PASS-OVER",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "extensionDeclaration",
+			"find": "if (declaring.length == 0) continue;",
+			"replace": "if (declaring.length == 0) return null;",
+			"note": "a later using offering no extension of the name stops the walk instead of leaving the call to the earlier one"
+		},
+		{
+			"name": "M-EXT-DECL-TWO-HOSTS",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "extensionDeclaration",
+			"find": "declaring.length != 1 || ",
+			"replace": "",
+			"note": "of two types of one used module declaring the extension the first is taken, though 4.3.7 binds the last that accepts"
+		},
+		{
+			"name": "M-EXT-DECL-GUARDED-HOST",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "extensionDeclaration",
+			"find": " || host.type.guarded",
+			"replace": "",
+			"note": "an extension on a #if-guarded type of a used module is taken in every build, though without the flag the earlier using binds"
+		},
+		{
+			"name": "M-EXT-DECL-GUARDED-MEMBER",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "extensionDeclaration",
+			"find": " || members.exists(m -> m.guarded)",
+			"replace": "",
+			"note": "a #if-guarded extension static is taken in every build, though without the flag the earlier using binds"
+		},
+		{
+			"name": "M-EXT-DECL-STATIC",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "extendsAs",
+			"find": "m.name == method && m.isStatic && ",
+			"replace": "m.name == method && ",
+			"note": "an instance method of a used type is taken as the extension, though a using offers statics only"
+		},
+		{
+			"name": "M-EXT-DECL-NOUSING",
+			"type": "anyparse.query.ValueNameBinding",
+			"method": "extendsAs",
+			"find": " && !m.excludedFromExtensions",
+			"replace": "",
+			"note": "a @:noUsing static is taken as the extension, though 4.3.7 passes it over for the earlier using"
+		},
+		{
+			"name": "M-EXT-NOMINAL-ATUSING",
+			"type": "anyparse.query.NominalTypes",
+			"method": "staticExtensionNominal",
+			"find": "|| !index.members.closureFreeOfExtensionTypes(receiver, file)",
+			"replace": "|| false",
+			"note": "a file's using answers a call on a receiver whose type (or a supertype) brings extensions of its own (@:using), which 4.3.7 binds first"
 		}
 	]
 }
