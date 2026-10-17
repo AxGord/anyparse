@@ -269,6 +269,23 @@ final class SourceText {
 	}
 
 	/**
+	 * `name` with its leading capital run lower-cased the way a camelCase VALUE name spells a type's: `Point` → `point`,
+	 * `RightPanelEvent` → `rightPanelEvent`, an acronym run up to the capital that opens the next word `URLLoader` →
+	 * `urlLoader`, and a run with no lower-case letter after it entirely `IO` → `io`, `MD5Hash` → `md5Hash`. A name not
+	 * starting upper-case comes back unchanged.
+	 *
+	 * Shared: `introduce-parameter-object` names its parameter after the structure's type, `shadowing-local`'s fix a
+	 * declaration after its written type.
+	 */
+	public static function lowerCamel(name: String): String {
+		var run: Int = 0;
+		while (run < name.length && isUpperCode(name.fastCodeAt(run))) run++;
+		final wordOpensAtRunEnd: Bool = run > 1 && run < name.length && isLowerCode(name.fastCodeAt(run));
+		final cut: Int = wordOpensAtRunEnd ? run - 1 : run;
+		return name.substr(0, cut).toLowerCase() + name.substr(cut);
+	}
+
+	/**
 	 * A single-line excerpt of `span`'s source text for a diagnostic — whitespace runs collapsed
 	 * to one space and the result capped at `REGION_EXCERPT_CHARS`, so a region spanning several
 	 * source lines still names itself in one message line.
@@ -389,11 +406,16 @@ final class SourceText {
 		return code >= 'A'.code && code <= 'Z'.code;
 	}
 
+	/** An ASCII lower-case letter. */
+	private static inline function isLowerCode(code: Int): Bool {
+		return code >= 'a'.code && code <= 'z'.code;
+	}
+
 	/** True when the capital at `at` OPENS a word: it follows a non-capital, or it closes an acronym run before a new word. */
 	private static function opensWord(name: String, at: Int): Bool {
 		if (!isUpperCode(name.fastCodeAt(at - 1))) return true;
 		final next: Int = at + 1 < name.length ? name.fastCodeAt(at + 1) : 0;
-		return next >= 'a'.code && next <= 'z'.code;
+		return isLowerCode(next);
 	}
 
 	/**

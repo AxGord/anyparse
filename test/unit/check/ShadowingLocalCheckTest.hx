@@ -216,9 +216,12 @@ class ShadowingLocalCheckTest extends Test {
 		Assert.equals(0, violations('class C { function f() { var q:Int = 1; { var r:Int = 2; } } }').length);
 	}
 
-	public function testReportOnly(): Void {
-		final src: String = 'class C { function f() { var q:Int = 1; var q:Int = 2; } }';
+	/** The defect this rule exists for stays report-only: the hidden local is read once the `case` ends. */
+	public function testTheDefectShapeIsNotFixed(): Void {
+		final src: String = 'class C { function f(e:String) { var displayObject:DisplayObject = null; switch e { case \'div\':'
+			+ ' var displayObject:Sprite = new Sprite(); render(displayObject); case _: } if (displayObject == null) trace(e); } }';
 		final check: ShadowingLocal = new ShadowingLocal();
+		Assert.equals(1, CheckFixture.violations(check, src).length);
 		Assert.equals(0, CheckFixture.edits(check, src).length);
 	}
 
@@ -272,8 +275,80 @@ class ShadowingLocalCheckTest extends Test {
 		Assert.isTrue(found[0].message.indexOf('shadowing declaration') == 0, 'expected the block, got: ${found[0].message}');
 	}
 
+	/** TM `PlayerOptionsGroup`: an event parameter nothing reads after the shadow — the inner takes its type's name. */
+	@:pin('control')
+	@:killer('M-SHADOWING-LOCAL-NO-RENAME')
+	public function testFixRenamesTheInnerAfterItsWrittenType(): Void {
+		final src: String = 'class C {\n\tfunction h(event:Event):Void {\n\t\tfinal event:RightPanelEvent = new RightPanelEvent(1);\n'
+			+ '\t\tevent.data = 2;\n\t\tdispatch(event);\n\t}\n}';
+		Assert.equals(
+			'class C {\n\tfunction h(event:Event):Void {\n\t\tfinal rightPanelEvent:RightPanelEvent = new RightPanelEvent(1);\n'
+			+ '\t\trightPanelEvent.data = 2;\n\t\tdispatch(rightPanelEvent);\n\t}\n}',
+			CheckFixture.fixedSource(new ShadowingLocal(), src)
+		);
+	}
+
+	/** The hidden binding is read once the inner scope ends: the shadow may be the defect, so the finding stays. */
+	@:pin('control')
+	@:killer('M-SHADOWING-LOCAL-OUTER-READ-IGNORED')
+	public function testFixKeepsAShadowWhoseHiddenBindingIsReadAfter(): Void {
+		final src: String = 'class C {\n\tfunction h(event:Event):Void {\n\t\tif (c) {\n\t\t\tfinal event:RightPanelEvent = new '
+			+ 'RightPanelEvent(1);\n\t\t\tdispatch(event);\n\t\t}\n\t\ttrace(event);\n\t}\n}';
+		Assert.equals(src, CheckFixture.fixedSource(new ShadowingLocal(), src));
+		Assert.isTrue((declineOf(src) ?? '').indexOf('read after this declaration') != -1, 'got: ${declineOf(src)}');
+	}
+
+	/** TM `DatePicker`: a same-block `var` redeclared with the same written type becomes an assignment. */
+	@:pin('control')
+	@:killer('M-SHADOWING-LOCAL-NO-ASSIGNMENT')
+	public function testFixTurnsASameBlockRedeclarationIntoAnAssignment(): Void {
+		final src: String =
+			'class C {\n\tfunction h():Void {\n\t\tvar dayIdx:Int = 0;\n\t\tdayIdx++;\n\t\tvar dayIdx:Int = g();\n\t\tf(dayIdx);\n\t}\n}';
+		Assert.equals(
+			'class C {\n\tfunction h():Void {\n\t\tvar dayIdx:Int = 0;\n\t\tdayIdx++;\n\t\tdayIdx = g();\n\t\tf(dayIdx);\n\t}\n}',
+			CheckFixture.fixedSource(new ShadowingLocal(), src)
+		);
+	}
+
+	/** A closure over the first binding would see the new value, a final cannot be assigned, a second type differs. */
+	@:pin('control')
+	@:killer('M-SHADOWING-LOCAL-CAPTURE-IGNORED')
+	public function testFixRefusesAnAssignmentThatChangesWhatSomethingReads(): Void {
+		for (src in [
+			'class C {\n\tfunction h():Void {\n\t\tvar i:Int = 0;\n\t\tvar cb = () -> i;\n\t\tvar i:Int = 5;\n\t\ttrace(i + cb());\n\t}\n}',
+			'class C {\n\tfunction h():Void {\n\t\tfinal i:Int = 0;\n\t\tvar i:Int = 5;\n\t\ttrace(i);\n\t}\n}',
+			'class C {\n\tfunction h():Void {\n\t\tvar i:Int = 0;\n\t\tvar i:Float = 5;\n\t\ttrace(i);\n\t}\n}'
+		]) {
+			// `Int` / `Float` name no renamed local either, so each finding stays.
+			Assert.equals(src, CheckFixture.fixedSource(new ShadowingLocal(), src));
+			Assert.notNull(declineOf(src));
+		}
+	}
+
+	/** A nested function rebinding the name, and the name in a string of the scope, keep the rename off. */
+	public function testFixRefusesARenameItCannotAccountFor(): Void {
+		for (src in [
+			'class C {\n\tfunction h(event:Event):Void {\n\t\tfinal event:RightPanelEvent = new RightPanelEvent(1);\n'
+			+ '\t\txs.map(event -> event);\n\t\tdispatch(event);\n\t}\n}',
+			'class C {\n\tfunction h(event:Event):Void {\n\t\tfinal event:RightPanelEvent = new RightPanelEvent(1);\n'
+			+ '\t\tjs.Syntax.code("event.x");\n\t\tdispatch(event);\n\t}\n}',
+			'class C {\n\tfunction h(event:Event):Void {\n\t\tvar rightPanelEvent = 0;\n'
+			+ '\t\tfinal event:RightPanelEvent = new RightPanelEvent(1);\n\t\tdispatch(event, rightPanelEvent);\n\t}\n}'
+		]) {
+			Assert.equals(src, CheckFixture.fixedSource(new ShadowingLocal(), src));
+			Assert.notNull(declineOf(src));
+		}
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return CheckFixture.violations(new ShadowingLocal(), src);
+	}
+
+	/** The decline the fix leaves on the one finding of `src`. */
+	private function declineOf(src: String): Null<String> {
+		final run: FixRun = CheckFixture.fixRun(new ShadowingLocal(), [{ file: 'C.hx', source: src }]);
+		Assert.equals(1, run.violations.length);
+		return run.violations[0].declineReason;
 	}
 
 }

@@ -136,6 +136,16 @@ final class RunScan {
 		return keys;
 	}
 
+	/** Every spanned violation under its `spanKeys` key — the lookup a fix walk that writes back onto a finding keeps. */
+	public static function findingsBySpan(violations: Array<Violation>): Map<String, Violation> {
+		final byKey: Map<String, Violation> = [];
+		for (v in violations) {
+			final span: Null<Span> = v.span;
+			if (span != null) byKey['${span.from}:${span.to}'] = v;
+		}
+		return byKey;
+	}
+
 	/** The start offset of every spanned violation, in report order — `spanKeys` for a fix keyed on position alone. */
 	public static function spanStarts(violations: Array<Violation>): Array<Int> {
 		final starts: Array<Int> = [];

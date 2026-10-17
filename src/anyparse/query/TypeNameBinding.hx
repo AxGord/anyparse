@@ -81,6 +81,36 @@ final class TypeNameBinding {
 		'ArrayAccess'
 	];
 
+	/**
+	 * Simple names visible WITHOUT an import from every Haxe module — the standard library's root
+	 * package. `explicit-type`'s `collectInheritedParamEdits` may copy one of these across files
+	 * unconditionally, every other name having to be proven to denote the same type on both sides;
+	 * `shadowing-local` names no renamed local after one (`int`, `string` name a type, not a value).
+	 * Hand-maintained on purpose: the resolution index does not model the standard library unless a
+	 * project happens to name it as a resolution library, so this list — not the index — is what
+	 * makes the common `str:String` copy possible at all.
+	 */
+	public static final AMBIENT_TYPE_NAMES: Array<String> = [
+		'Any',
+		'Array',
+		'Bool',
+		'Class',
+		'Dynamic',
+		'Enum',
+		'EnumValue',
+		'Float',
+		'Int',
+		'Iterable',
+		'Iterator',
+		'KeyValueIterator',
+		'Map',
+		'Null',
+		'Single',
+		'String',
+		'UInt',
+		'Void'
+	];
+
 	/** File path -> its `#if` directive marks (`CondBranchPath.scan`), read on the first question about the file. */
 	private final _branches: Map<String, CondBranchIndex> = [];
 

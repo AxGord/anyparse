@@ -328,6 +328,11 @@ final class HaxeRefShape {
 			// short name whose import it added to THIS file, while the reified type is spliced into
 			// another module where that import does not apply.
 			opaqueKinds: ['MacroExpr', 'MacroTypeExpr', 'MacroClassExpr'],
+			quotationTypes: [
+				'MacroExpr' => 'haxe.macro.Expr',
+				'MacroTypeExpr' => 'haxe.macro.Expr.ComplexType',
+				'MacroClassExpr' => 'haxe.macro.Expr.TypeDefinition'
+			],
 			interpolationKinds: ['DollarBlockExpr', 'DollarReifExpr'],
 			branchKinds: [
 				'IfStmt',
@@ -1061,6 +1066,9 @@ final class HaxeRefShape {
 				// `Dynamic` lets it apply its own `Dynamic` policy (`prefer-static-extension` drops the
 				// site — an extension dispatches no method on a `Dynamic` value at runtime).
 				'Reflect.field' => 'Dynamic',
+				// `haxe.macro.Context.error` is declared `:Dynamic` (it never returns: it aborts the macro), so a
+				// `macro` function's `return Context.error(…)` unifies with any other return it has.
+				'Context.error' => 'Dynamic',
 				// Reflection statics whose return is a plain `Array<String>` on every target — the
 				// shapes real code iterates (`for (key in Reflect.fields(o))`), where the binder
 				// carries no annotation and the element type is only readable from this return.

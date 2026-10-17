@@ -182,7 +182,7 @@ final class TypeResolver {
 	 * predicate conservatively rejects are added here: an array literal whose
 	 * elements are each deletion-pure, a plain (non-getter) field read
 	 * (`isPlainFieldRead`), a provably-pure stdlib static call
-	 * (`isPureStdlibCall`), and two TRANSPARENT single-child wrappers — a
+	 * (`isPureStdlibCall`, a `String` method included), and two TRANSPARENT single-child wrappers — a
 	 * parenthesized expression (`shape.parenKind`) and the UNCHECKED cast
 	 * `cast expr` (`shape.uncheckedCastKind`) — each pure iff its one child is.
 	 * The runtime-CHECKED `cast(expr, T)` (`shape.checkedCastKind`) is
@@ -213,8 +213,11 @@ final class TypeResolver {
 	}
 
 	/**
-	 * Whether `callNode` is a call to a provably-pure stdlib STATIC function.
-	 * Requires: the callee is a field access `Type.method` whose flattened
+	 * Whether `callNode` is a call to a provably-pure stdlib function: a STATIC one, or a method of a `String`.
+	 * A `String` method qualifies on an identifier DECLARED `String` (`declaredTypes` at its binding — a
+	 * `Null<String>` reads `Null` and is refused) when no project type shadows `String`; an instance field wins
+	 * over a `using` extension of the same name, so the method IS the std one, and a null receiver's throw is the
+	 * exposure `isPlainFieldRead` already accepts. A static one requires: the callee is a field access `Type.method` whose flattened
 	 * `Type.method` names a `PURE_STDLIB_STATIC_FUNCS` entry; the receiver is a
 	 * genuine type / package reference (its root identifier binds to NO local —
 	 * a same-named local would make it a value call, not a static one); no
@@ -230,12 +233,30 @@ final class TypeResolver {
 		if (fieldAccessKind == null || callNode.children.length == 0) return false;
 		final callee: QueryNode = callNode.children[0];
 		if (callee.kind != fieldAccessKind || callee.children.length != 1) return false;
-		final method: Null<String> = callee.name;
+		final method: String = callee.name ?? '';
 		final receiver: QueryNode = callee.children[0];
 		final typeName: Null<String> = receiver.name;
-		if (method == null || typeName == null || !PURE_STDLIB_STATIC_FUNCS.contains('$typeName.$method')) return false;
-		if (!receiverRootIsUnboundType(receiver, tree, shape)) return false;
-		if (index.refs.declaringFiles(typeName).length != 0) return false;
+		// Every instance method of the std `String`: an immutable value, so each only reads its receiver. A local, not a
+		// member, for this type's member budget.
+		final stringMethods: Array<String> = [
+			'charAt',
+			'charCodeAt',
+			'indexOf',
+			'lastIndexOf',
+			'split',
+			'substr',
+			'substring',
+			'toLowerCase',
+			'toUpperCase',
+			'toString'
+		];
+		inline function onStringBinding(): Bool {
+			final from: Null<Int> = identBindingFrom(receiver, tree, shape);
+			return from != null && declaredTypes[from] == 'String' && !NominalTypes.shadowedByNonStdType(index, 'String');
+		}
+		final pureStatic: Bool = typeName != null && PURE_STDLIB_STATIC_FUNCS.contains('$typeName.$method')
+			&& receiverRootIsUnboundType(receiver, tree, shape) && index.refs.declaringFiles(typeName).length == 0;
+		if (!pureStatic && !(stringMethods.contains(method) && onStringBinding())) return false;
 		for (i in 1...callNode.children.length) if (!isDeletionPure(callNode.children[i], tree, shape, declaredTypes, index)) return false;
 		return true;
 	}

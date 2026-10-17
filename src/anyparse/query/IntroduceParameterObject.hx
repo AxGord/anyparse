@@ -151,7 +151,7 @@ final class IntroduceParameterObject {
 		final typeErr: Null<String> = resolveFields(params, rngNN, source, plugin, fields);
 		if (typeErr != null) return Refused(typeErr);
 
-		final obj: String = objName ?? lowerCamel(typeName);
+		final obj: String = objName ?? SourceText.lowerCamel(typeName);
 		if (!SourceText.isIdentifier(obj)) return Refused('object parameter name "$obj" is not a valid identifier');
 		for (p in params) if (p.name == obj && !paramNames.contains(p.name))
 			return Refused('object name "$obj" collides with an existing parameter — pass --name');
@@ -211,11 +211,6 @@ final class IntroduceParameterObject {
 	/** The span of a param / arg node (its own span). */
 	private static function firstSpan(node: QueryNode): Span {
 		return node.span ?? new Span(0, 0);
-	}
-
-	/** Lower-camel of a type name (`Point` -> `point`). */
-	private static function lowerCamel(name: String): String {
-		return name.length == 0 ? name : name.charAt(0).toLowerCase() + name.substr(1);
 	}
 
 	/**
