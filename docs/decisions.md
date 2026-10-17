@@ -3810,3 +3810,23 @@ decided the question; it may not become a record of runs.
   active + full-scope union. `no-underscore-prefix` supersedes `naming` (it is opted into and its options state the stance
   on exactly these bindings). No collision-free alternative name is invented: the finding stays report-only with the
   reason — branch `feat/infra-N26`
+- N27 A5 — a type / enum-value finding had no fix (`NOT_A_MEMBER`) although `rename --scope` performs the cross-file
+  rename. → `NamingCrossRename`, the CROSS-FILE half of `RiskyArm` (`riskyCrossFileFindings` / `riskyCrossFileFix`,
+  edit sets of `RiskyCrossFileEdit`), driving `CrossRename.crossRenameType` / `CrossRenameMember.crossRenameMember` —
+  no second engine; `FileChange.edits` hands their span edits out so several renames combine over one file.
+  RISKY, because the engines' contract is "every miss is a compile error": `FixVerifierCrossFile.extend` (after every
+  per-file arm) judges each edit set as a whole — components by shared file, coverage asked per component (an edited file
+  no judging configuration compiles declines it), bisect over sets with `FixVerifier.isolateFailers`, the complement
+  confirmed before anything is kept. Fail-closed POSITIVE gates for what a typecheck cannot see: whole project indexed;
+  type kinds whose name the compiler erases (`compileTimeTypeDeclKinds` typedef / abstract / enum abstract — a class keeps
+  its name at run time: `Type.getClassName`, `resolveClass`, serialization, so it is refused rather than proven unread);
+  enum-abstract values only (a plain enum constructor's name is runtime-visible), valued by an initializer or an
+  `indexValuedEnumAbstractUnderlyings` underlying (Haxe: an implicit `String` value is the name, an implicit `Int` one the
+  previous plus one); not a main / guarded / metadata-carrying type; no `StringLiteral` naming it, no runtime type path
+  (`ReflectionScan.runtimeTypePath`); the old name declared once (a leftover would bind elsewhere — CrossRenameMember's own
+  documented silent case is an imported homonym value); the new name declared nowhere (resolution index, std included) and
+  spelled in no project file but a comment; an enum abstract's PROPERTY is no value for those homonym tests; every edited
+  file in the run. Type / EnumValue rules carry `pascalCase` (the arm is their only consumer). Separately (A5's "5 private
+  members" in a WHOLE-scope run: 1 renamed by N26, 2 correct refusals, 2 owner-name ambiguities):
+  `isPrivateMemberConfined(?ownerFile)` passes the declaring file to `hasSubtype`, so only edges resolving to the owner's
+  own declaration count (both naming paths pass it; other callers unchanged) — branch `feat/infra-N27`
