@@ -6,7 +6,6 @@ import anyparse.query.MoveMember.MovedMember;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
-using StringTools;
 using Lambda;
 
 /**

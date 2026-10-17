@@ -2,9 +2,6 @@ package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
 
-using StringTools;
-using Lambda;
-
 /**
  * The grammar's DERIVED vocabulary: every kind set a check reads as a union of `RefShape` seams — all the loops, every
  * function-like kind, every `return`, every `try` — spelled once here, so a seam a grammar adds reaches every reader at once.

@@ -9,7 +9,6 @@ import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
 import anyparse.runtime.Span;
 
-using StringTools;
 using Lambda;
 
 /**
