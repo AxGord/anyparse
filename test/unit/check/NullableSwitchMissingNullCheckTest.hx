@@ -189,6 +189,32 @@ class NullableSwitchMissingNullCheckTest extends Test {
 		);
 	}
 
+	/**
+	 * A local DECLARED with the enum type and bound from a map read is seeded whatever the map's receiver is: the read's
+	 * receiver is typed by the shared typer (`NullableSource.describe` with `nominalOf`), a field path (`b.cache`) as much as a
+	 * parameter — the check used to hand `NullableSource` no typer, and a field-path map read seeded nothing.
+	 */
+	@:pin('control')
+	@:killer('M-NULLABLE-NO-CHAIN')
+	public function testDeclaredLocalFromAMapReadFlagged(): Void {
+		final box: String = 'class Box {\n\tpublic var cache:Map<String, Colour> = [];\n}\n';
+		Assert.equals(
+			1,
+			violations(mod(
+				'function f(m:Map<String, Colour>):Void { final u:Colour = m[\'k\']; switch u {'
+				+ ' case Red: trace(1); case Green: trace(2); } }'
+			)).length,
+			'a parameter receiver'
+		);
+		Assert.equals(
+			1,
+			violations(mod(
+				'function f(b:Box):Void { final u:Colour = b.cache[\'k\']; switch u { case Red: trace(1); case Green: trace(2); } }'
+			) + '\n$box').length,
+			'a field-path receiver'
+		);
+	}
+
 	public function testFixIsReportOnly(): Void {
 		final src: String = mod('function f(e:Null<Colour>):Void { switch e { case Red: trace(1); case Green: trace(2); } }');
 		final check: NullableSwitchMissingNull = new NullableSwitchMissingNull();

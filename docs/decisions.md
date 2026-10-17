@@ -3289,6 +3289,46 @@ decided the question; it may not become a record of runs.
   only some builds declare dispatches on each build's type; one untyped build, or imports that may bind more than one
   static, leave the receiver unresolved. Refs is unchanged: it binds a module-level value to nothing (-1), the lexical
   answer `rename` and the unused checks read — branch `feat/infra-N7`
+- the two `stripAnsi` copies disagreed: `LintFixSafePass` removed every CSI sequence, `TestTranscript` only an SGR
+  colour code (`ESC[<digits;>m`) → one `SourceText.stripAnsi`, the CSI-wide reading. A transcript row behind an
+  erase-line (`ESC[2K`, what a progress printer redraws with) kept its escape, failed the indent-anchored row
+  regexes and was not counted (`ApqDxTier3CliTest#testTestSummaryReadsRowsBehindAnEraseLine`, RED on `b5a5bccac`)
+  — branch `feat/infra-N6`
+- the arguments a subtype's `extends` / `implements` chain passes to a supertype's parameters had one reading, the
+  call graph's (`CallGraphGenerics`), which `ReflectiveReach.bindingsOf` borrowed though every other question it
+  asks there goes to the index → the walk is `SubtypeGraph.chainArguments` over any keying of the written
+  supertypes; the index answers it by simple name (`SubtypeGraph.argumentsPassed`, every declaration of a name
+  folding in index order, as `supertypeNameUnion`) and the graph over its own tables, which read each argument
+  through the writing file's imports (`keyIn`). Simple-name keying is kept, not narrowed to one declaration: the
+  owner is already required to be ONE declaration (`onlyDeclaration`), and the subtypes come from the index's own
+  simple-name closure — branch `feat/infra-N6`
+- `NullableSource.receiverTypeName` asked a receiver's type in two steps — the identifier's own annotation
+  (`TypeResolver.identTypeName`), then the shared typer as a fallback — and `nullable-switch-missing-null` passed no
+  typer at all → the receiver is typed by the shared typer alone (`CheckScan.typeNominalResolver`, receiver mode,
+  which reads the same annotation for an identifier and peels a member-transparent wrapper itself), every caller
+  hands one, and `describe` lost its `declaredTypes` parameter. Byte-identical on the three TM trees and anyparse;
+  the switch rule now seeds a local bound from a field-path map read (`final u:Colour = b.cache[k]; switch u`),
+  which it missed (`NullableSwitchMissingNullCheckTest#testDeclaredLocalFromAMapReadFlagged`, RED on `b5a5bccac`)
+  — branch `feat/infra-N6`
+- `RedundantToString.resolveReceiver` bound a construction's type itself (`OperandBinder.writtenTier` on the
+  written name) beside the identifier it asked the shared binder for → `OperandBinder.tierOf` types a construction
+  `new T(…)` as the type it writes, bound where written, so every consumer of the binder sees it: the operator gate
+  now proves `new Tag() + 'a' + 'b'` built-in concatenation for a plain class and still refuses it for an unindexed
+  import (`OperandBindingTest#testConstructionIsOfTheTypeItWrites`, RED on `b5a5bccac`). The literal arm stays in
+  the rule: no consumer of the binder tells a literal's `Free` from `Unknown` (`OperatorSelection` decides a literal
+  before it asks), so a binder arm for it would be unkillable. The non-null half is already the shared provers'
+  (`TypeResolver.isProvablyNonNull`, `DeclaredNullity.ofMemberReturn`); the curated static-return table
+  (`staticMethodReturns`) stays the rule's, read where the binder's static access has no declaration — branch
+  `feat/infra-N6`
+- `CallGraphImports` kept four tables of its own, filled file by file as the graph merged an index — the files
+  declaring each member of a type name, the types each declaration writes for it, the enum constructors by name, the
+  paths each type name is declared under → each is a question to the indexes the graph took its files from
+  (`recordIndex`): `MemberLookup.memberDeclarationsOf` (now with each declaration's file, one shared
+  `MemberDeclaration` typedef replacing three anonymous spellings and `SwitchChain.MemberDecl`),
+  `MemberLookup.declaresMemberAs`, `TypeNameBinding.namingPaths` (a main type's package path is its module path, so it
+  is listed once); only the paths keep a memo, cleared when an index is taken. A graph merges an index only over files
+  it does not hold, so asking the whole index answers what the per-file tables held — byte-identical on the three TM
+  trees and anyparse — branch `feat/infra-N6`
 - the last two readers of a construction's children as its arguments read `QueryNode.typeArgCount` now. `ImplicitSites.
   landings` landed EVERY child of a `new` as a value, so `new Box<Int>(d)` put a landing of no known type at `Int` — a
   string conversion of any object at every construction that writes type arguments. `CallGraph` (`handleNew`'s

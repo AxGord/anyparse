@@ -33,6 +33,9 @@ final class MemberLookup {
 	 */
 	private final _refs: TypeRefIndex;
 
+	/** Member name -> the member kinds any indexed type declares a member of that name as (`declaresMemberAs`), built on first need. */
+	private var _memberKinds: Null<Map<String, Array<String>>> = null;
+
 	/** Built once by the owning `SymbolIndex`, which hands over the shared, immutable index data. */
 	public function new(refs: TypeRefIndex) {
 		_refs = refs;
@@ -177,7 +180,7 @@ final class MemberLookup {
 
 	/**
 	 * Every indexed declaration of type `typeName`'s member `memberName`, each paired
-	 * with the type declaration that hosts it — one entry per same-simple-name type
+	 * with the type declaration that hosts it and the file holding both — one entry per same-simple-name type
 	 * across the index (the index models no packages, so resolution is by SIMPLE name)
 	 * and one per `#if` branch that declares the member. DIRECT members only, like
 	 * `memberTypeSourceOf`: a supertype's member is a different declaration and is not
@@ -190,11 +193,31 @@ final class MemberLookup {
 	 * the index skips unparseable files and models neither packages nor macro-generated
 	 * members.
 	 */
-	public function memberDeclarationsOf(typeName: String, memberName: String): Array<{ type: TypeDeclInfo, member: MemberInfo }> {
+	public function memberDeclarationsOf(typeName: String, memberName: String): Array<MemberDeclaration> {
 		return [
 			for (decl in _refs.named(typeName))
-				for (m in decl.type.members) if (m.name == memberName) { type: decl.type, member: m }
+				for (m in decl.type.members) if (m.name == memberName) { type: decl.type, member: m, file: decl.file }
 		];
+	}
+
+	/**
+	 * Whether any indexed type declares a member named `member` as one of the member kinds `kinds` — an enum constructor of
+	 * that name, say, which a bare call builds with no import, the language resolving it against the expected type. Over every
+	 * type of every file, by the member's name alone.
+	 */
+	public function declaresMemberAs(member: String, kinds: Array<String>): Bool {
+		var table: Null<Map<String, Array<String>>> = _memberKinds;
+		if (table == null) {
+			final built: Map<String, Array<String>> = [];
+			for (fi in _refs._files) for (t in fi.types) for (m in t.members) {
+				final declared: Array<String> = built[m.name] ?? [];
+				if (!declared.contains(m.kind)) declared.push(m.kind);
+				built[m.name] = declared;
+			}
+			_memberKinds = built;
+			table = built;
+		}
+		return (table[member] ?? []).exists(k -> kinds.contains(k));
 	}
 
 	/**
@@ -825,5 +848,19 @@ enum abstract SupertypeProof(Int) {
 
 	/** Some supertype link leaves the index, so absence is unproven. */
 	final Unreachable = 2;
+
+}
+
+/** One declaration of a member on a type the index holds (`MemberLookup.memberDeclarationsOf`). */
+typedef MemberDeclaration = {
+
+	/** The declaration of the type declaring the member. */
+	final type: TypeDeclInfo;
+
+	/** The member as that declaration declares it. */
+	final member: MemberInfo;
+
+	/** The file holding the declaration. */
+	final file: FileInfo;
 
 }

@@ -27,6 +27,12 @@ final class SourceText {
 	 */
 	public static inline final REGION_EXCERPT_CHARS: Int = 60;
 
+	/** The ESC that opens every ANSI control sequence (`stripAnsi`). */
+	private static inline final ESCAPE: String = '\x1b';
+
+	/** The lowest byte value that TERMINATES an ANSI CSI sequence (`stripAnsi`); everything below it is a parameter. */
+	private static inline final CSI_FINAL_MIN: Int = 0x40;
+
 	/**
 	 * The last dotted segment of `dotted` — the simple name a plain import binds
 	 * (`pkg.sub.Foo` -> `Foo`), and the whole string when it carries no dot at all.
@@ -346,6 +352,31 @@ final class SourceText {
 				break;
 		}
 		return block.substring(from, to);
+	}
+
+	/**
+	 * `text` with its ANSI escape sequences removed: every CSI sequence (`ESC [`, parameter and intermediate bytes, one final
+	 * byte in 0x40..0x7E) whole — a colour code (`ESC[31m`) as much as an erase (`ESC[2K`) or a cursor move — and any other
+	 * ESC alone. A compiler's `-D message.reporting=pretty` diagnostics and a coloured test transcript both carry them, and
+	 * nothing that reads either wants them.
+	 */
+	public static function stripAnsi(text: String): String {
+		if (!text.contains(ESCAPE)) return text;
+		final out: StringBuf = new StringBuf();
+		var i: Int = 0;
+		while (i < text.length) {
+			if (text.charAt(i) != ESCAPE) {
+				out.add(text.charAt(i));
+				i++;
+				continue;
+			}
+			i++;
+			if (text.charAt(i) != '[') continue;
+			i++;
+			while (i < text.length && text.fastCodeAt(i) < CSI_FINAL_MIN) i++;
+			i++;
+		}
+		return out.toString();
 	}
 
 	/** Whether the occurrence of `name` at `at` in `head` stands alone — no identifier character on either side. */

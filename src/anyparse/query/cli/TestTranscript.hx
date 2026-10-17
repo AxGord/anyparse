@@ -4,6 +4,7 @@ import anyparse.query.Cli.TestSummaryFailureKind;
 import anyparse.query.Cli.TestSummaryFailureLocus;
 import anyparse.query.Cli.TestSummaryHeader;
 import anyparse.query.Cli.TestSummaryResult;
+import anyparse.query.SourceText;
 import haxe.Exception;
 
 using StringTools;
@@ -28,8 +29,8 @@ final class TestTranscript {
 	 * first-failure locus) can be asserted directly without the
 	 * stdout-capture round-trip Cli.run would impose.
 	 *
-	 * ANSI color escapes are stripped first (see `stripAnsi`) so neither
-	 * format's regexes need to tolerate embedded `ESC[...m` sequences,
+	 * ANSI escapes are stripped first (`SourceText.stripAnsi`: colour codes and every other CSI sequence,
+	 * an erase-line a progress printer emits included) so neither format's regexes need to tolerate them,
 	 * then `looksLikeTinkTranscript` picks the parser: tink_testrunner's
 	 * shape (`- [OK]/[FAIL] [file:line] ...` rows, `N Assertions   N
 	 * Success   ...` summary — see `parseTinkTestSummary`) or, by
@@ -50,7 +51,7 @@ final class TestTranscript {
 	 * `firstFailure` is set, subsequent failures only bump counters.
 	 */
 	public static function parseTestSummary(raw: String): TestSummaryResult {
-		final lines: Array<String> = stripAnsi(raw).split('\n');
+		final lines: Array<String> = SourceText.stripAnsi(raw).split('\n');
 		if (looksLikeTinkTranscript(lines)) return parseTinkTestSummary(lines);
 		final okRe: EReg = ~/^\s+(\w[\w.]*):\s+OK(\s+(\.+))?/;
 		final failRe: EReg = ~/^\s+(\w[\w.]*):\s+FAIL/;
@@ -267,23 +268,6 @@ final class TestTranscript {
 		} else
 			pending = '';
 		return names;
-	}
-
-	/**
-	 * Strips ANSI SGR color escapes (`ESC [ <params> m`) from `s`. Both
-	 * transcript formats this parser reads (utest, tink_testrunner) are
-	 * commonly captured with color on (tink's `AnsiFormatter` wraps every
-	 * status token — `[OK]`/`[FAIL]`, positions, the summary line — in
-	 * `ESC[<n>m ... ESC[39m`); stripping first keeps every downstream
-	 * regex a plain-text match instead of threading ANSI-tolerant
-	 * patterns through both parsers. Built from `String.fromCharCode(27)`
-	 * rather than a `\x1b` literal so the escape byte is unambiguous
-	 * across targets.
-	 */
-	private static function stripAnsi(s: String): String {
-		final esc: String = String.fromCharCode(27); // noqa: magic-number
-		final re: EReg = new EReg('$esc\\[[0-9;]*m', 'g');
-		return re.replace(s, '');
 	}
 
 	/**

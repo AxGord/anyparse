@@ -920,11 +920,11 @@
 		},
 		{
 			"name": "M-NULLABLE-WRAPPER-OPAQUE",
-			"type": "anyparse.check.NullableSource",
-			"method": "receiverTypeName",
-			"find": "final lossy: Bool = declared == null || (cfg.shape.memberTransparentWrapperTypeNames ?? []).contains(declared);",
-			"replace": "final lossy: Bool = declared == null;",
-			"note": "the lossy `Null` that `declaredTypes` records for a `Null<Map<K, V>>` counts as an answer again, so a wrapped receiver goes back to being a safe miss"
+			"type": "anyparse.query.NominalTypes",
+			"method": "valueNominalDeep",
+			"find": "memberLookupReceiverSource(source, shape.memberTransparentWrapperTypeNames ?? [], chain.typeSyntax)",
+			"replace": "source",
+			"note": "the shared typer no longer peels a member-transparent wrapper off a receiver, so a `Null<Map<K, V>>` receiver reads as `Null` and goes back to being a safe miss"
 		},
 		{
 			"name": "M-SAFENAV-NO-NARROW",
@@ -6284,8 +6284,8 @@
 		},
 		{
 			"name": "M-GRAPH-INHERITED-ARGS",
-			"type": "anyparse.query.CallGraphGenerics",
-			"method": "argumentsVia",
+			"type": "anyparse.query.SubtypeGraph",
+			"method": "chainVia",
 			"find": "if (outer == owner) return args;",
 			"replace": "if (outer == owner) return null;",
 			"note": "a member a supertype declares with its parameter never takes the argument the `extends` clause passes"
@@ -10645,7 +10645,7 @@
 			"method": "resolveReceiver",
 			"find": "decls: boundDecls(ctx.binder?.tierOf(receiver)),",
 			"replace": "decls: null,",
-			"note": "an identifier receiver's type is never bound"
+			"note": "an identifier or construction receiver's type is never bound"
 		},
 		{
 			"name": "M-TOSTRING-STRING-BINDING",
@@ -20032,7 +20032,7 @@
 			"name": "M-TS-PATH-FOREIGN",
 			"type": "anyparse.query.CallGraphImports",
 			"method": "pathKey",
-			"find": "return declared == null || declared.contains(path) ? simple : path;",
+			"find": "return declared.length == 0 || declared.contains(path) ? simple : path;",
 			"replace": "return simple;",
 			"note": "a library type bearing a project type's simple name merges into it again, so sys.thread.Lock.wait runs the project's Lock"
 		},
@@ -20078,10 +20078,10 @@
 		},
 		{
 			"name": "M-TS-PATH-DECLARED-PACKAGE",
-			"type": "anyparse.query.CallGraphImports",
-			"method": "recordFile",
-			"find": "t.isMain ? [fi.module, inModule, inPackage] : [inModule, inPackage]",
-			"replace": "t.isMain ? [fi.module, inModule] : [inModule]",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "namingPaths",
+			"find": "return decl.type.isMain ? [decl.file.module, inModule] : [inModule, inPackage];",
+			"replace": "return decl.type.isMain ? [decl.file.module, inModule] : [inModule];",
 			"note": "a sub-type is not declared at its runtime path (its package and its name), so a reflectiveClasses entry naming it by that path misses it and it reads as never made"
 		},
 		{
@@ -20579,7 +20579,7 @@
 			"type": "anyparse.check.ReflectiveReach",
 			"method": "subjectEnum",
 			"find": "final written: Null<String> = subjectType(BoolExprShape.unwrapParens(held.children[0], _shape.parenKind));",
-			"replace": "final only: Array<String> = @:privateAccess _graph.types.imports._enumConstructors[ctor] ?? []; if (only.length == 1) return only[0]; final written: Null<String> = null;",
+			"replace": "final only: Array<String> = [for (f in _graph.index?.allFiles() ?? []) for (t in f.types) if (t.members.exists(m -> m.name == ctor && (_shape.execution?.enumConstructorKinds ?? []).contains(m.kind))) t.name]; if (only.length == 1) return only[0]; final written: Null<String> = null;",
 			"note": "a capture is typed by the one indexed enum declaring its constructor's name, whatever the subject is (review R3 H2)"
 		},
 		{
@@ -20720,8 +20720,8 @@
 		},
 		{
 			"name": "M-TS-DECL-SUPER-ARGS",
-			"type": "anyparse.query.CallGraphGenerics",
-			"method": "argumentsVia",
+			"type": "anyparse.query.SubtypeGraph",
+			"method": "chainVia",
 			"find": "keyIn == null ? a : keyIn(link.file, a, typeName)",
 			"replace": "a",
 			"note": "a type argument a subclass passes is read through the imports of the file reading the value"
@@ -22482,6 +22482,38 @@
 			"find": "if (imported.unknown || declared) unresolvedAt(span, UnboundName(name), currentType);",
 			"replace": "if (imported.unknown) unresolvedAt(span, UnboundName(name), currentType);",
 			"note": "a bare call some builds make on a module-level value holding a function records only the imported static it may run"
+		},
+		{
+			"name": "M-SUBTYPE-ARGS-SUBSTITUTED",
+			"type": "anyparse.query.SubtypeGraph",
+			"method": "chainVia",
+			"find": "return [for (a in up) CallGraphNames.substituteTypeParams(a, params, args, typeSyntax)];",
+			"replace": "return up;",
+			"note": "a chain climbing a generic type passes the argument in that type's terms, not the subtype's"
+		},
+		{
+			"name": "M-SUBTYPE-ARGS-ARITY",
+			"type": "anyparse.query.SubtypeGraph",
+			"method": "chainVia",
+			"find": "if (up != null && args.length >= params.length)",
+			"replace": "if (up != null)",
+			"note": "a link filling fewer parameters than the type it names has still answers"
+		},
+		{
+			"name": "M-OPERAND-NEW-CUT",
+			"type": "anyparse.check.OperandBinder",
+			"method": "tierOf",
+			"find": "return at == null ? Unknown : writtenTier(operand.name, at.from);",
+			"replace": "return Unknown;",
+			"note": "a construction is no longer of the type it writes, so its operator and its toString go unproven"
+		},
+		{
+			"name": "M-MEMBER-KIND-IGNORED",
+			"type": "anyparse.query.MemberLookup",
+			"method": "declaresMemberAs",
+			"find": "return (table[member] ?? []).exists(k -> kinds.contains(k));",
+			"replace": "return table.exists(member);",
+			"note": "a member of any kind counts as one of the kinds asked, so a field reads as an enum constructor a bare call may build"
 		},
 		{
 			"name": "M-LANDING-TYPE-ARGS-AS-VALUES",

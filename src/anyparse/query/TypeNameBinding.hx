@@ -474,6 +474,19 @@ final class TypeNameBinding {
 	}
 
 	/**
+	 * Every dotted path that names `decl`, each once: its module's path and its name (`pkg.Mod.Name`), a main type's module
+	 * path alone (`pkg.Mod`, which is also its package and its name), and a sub-type's package and its name — its runtime
+	 * path (`Type.getClassName`), which no source can write for it, but a declaration of the classes made from a computed
+	 * name spells.
+	 */
+	public static function namingPaths(decl: ResolvedType): Array<String> {
+		final name: String = decl.type.name;
+		final inModule: String = '${decl.file.module}.$name';
+		final inPackage: String = decl.file.pkg == '' ? name : '${decl.file.pkg}.$name';
+		return decl.type.isMain ? [decl.file.module, inModule] : [inModule, inPackage];
+	}
+
+	/**
 	 * `path` split the way the compiler reads an import path: every leading segment that starts lower-case
 	 * (after any underscores) is a package, the first that does not is the MODULE — a module name must start
 	 * upper-case, the compiler refuses to import any other — and what follows names a type of it and then a

@@ -176,10 +176,10 @@ final class CallGraphTypes {
 			if (_files.exists(key)) continue;
 			final held: HeldFile = { index: index, info: fi };
 			_files[key] = held;
-			imports.recordFile(fi, key);
 			added.push({ info: fi, key: key });
 		}
 		// a supertype is keyed where its declaration writes it, which reads the paths every file of the index declares
+		if (added.length > 0) imports.recordIndex(index);
 		for (a in added) for (t in a.info.types) record(t, a.key);
 		// `class R extends N` with `typedef N = T` names `N` alone: `R` is a subtype of `T` too
 		for (alias in _aliases.keys()) if (resolveAlias(alias) != alias) unionInto(_subs, resolveAlias(alias), subtypesOf(alias));
