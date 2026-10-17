@@ -198,10 +198,10 @@ final class TypedFactsWalk {
 		final localName: Null<String> = _name;
 		if (localName != null) out.add(',"name":${q(localName)}');
 		out.add(_header);
-		if (_incomplete.length > 0) out.add(',"inc":' + TypedFactsMacro.arr([for (i in _incomplete) q(i)]));
+		if (_incomplete.length > 0) out.add(',"inc":' + TypedFactsTypeStrings.arr([for (i in _incomplete) q(i)]));
 		for (category in CATEGORIES) {
 			final list: Null<Array<String>> = _facts[category];
-			if (list != null) out.add(',"$category":' + TypedFactsMacro.arr(list));
+			if (list != null) out.add(',"$category":' + TypedFactsTypeStrings.arr(list));
 		}
 		out.add('}');
 		_host.nodes++;
@@ -926,7 +926,7 @@ final class TypedFactsWalk {
 		final dot: Int = substituted.id.lastIndexOf('.');
 		final name: String = substituted.id.substr(dot + 1);
 		return switch TypeTools.followWithAbstracts(v.t) {
-			case TInst(c, _) if (TypedFactsMacro.typeId(c.get().pack, c.get().name) == substituted.id.substr(0, dot)): name;
+			case TInst(c, _) if (TypedFactsTypeStrings.typeId(c.get().pack, c.get().name) == substituted.id.substr(0, dot)): name;
 			case _: null;
 		};
 	}
@@ -1178,11 +1178,11 @@ final class TypedFactsWalk {
 	}
 
 	private static inline function str(t: Null<Type>): String {
-		return TypedFactsMacro.typeString(t, 0);
+		return TypedFactsTypeStrings.typeString(t, 0);
 	}
 
 	private static inline function q(s: String): String {
-		return TypedFactsMacro.q(s);
+		return TypedFactsTypeStrings.q(s);
 	}
 
 	/**

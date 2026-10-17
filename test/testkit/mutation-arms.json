@@ -7742,7 +7742,7 @@
 		},
 		{
 			"name": "M-FACTS-TYPE-PARAMETER",
-			"type": "anyparse.check.TypedFactsMacro",
+			"type": "anyparse.check.TypedFactsTypeStrings",
 			"method": "instString",
 			"find": "return isParam ? '$' + path : path + paramString(params, depth);",
 			"replace": "return path + paramString(params, depth);",
@@ -8942,7 +8942,7 @@
 		},
 		{
 			"name": "M-FACTS-STATICS-TYPEDEF",
-			"type": "anyparse.check.TypedFactsMacro",
+			"type": "anyparse.check.TypedFactsTypeStrings",
 			"method": "typeString",
 			"find": "StringTools.endsWith(name, '>') ? name : name + paramString(params, depth);",
 			"replace": "name + paramString(params, depth);",
@@ -14365,7 +14365,7 @@
 			"name": "M-FACTS-SUBSTITUTED-OWNER",
 			"type": "anyparse.check.TypedFactsWalk",
 			"method": "substitutedReceiver",
-			"find": "case TInst(c, _) if (TypedFactsMacro.typeId(c.get().pack, c.get().name) == substituted.id.substr(0, dot)): name;",
+			"find": "case TInst(c, _) if (TypedFactsTypeStrings.typeId(c.get().pack, c.get().name) == substituted.id.substr(0, dot)): name;",
 			"replace": "case TInst(c, _): name;",
 			"note": "a local spliced into an inline method of another class than its own is taken for that method's receiver"
 		},

@@ -1735,7 +1735,7 @@ final class FactsView {
 	}
 
 	/**
-	 * The id the compiler gives the type `t` the indexed file `fi` declares (`TypedFactsMacro.typeId`): its package, then its
+	 * The id the compiler gives the type `t` the indexed file `fi` declares (`TypedFactsTypeStrings.typeId`): its package, then its
 	 * name — a private type's package ends in its module's name, prefixed `_`.
 	 */
 	private static function declaredId(fi: FileInfo, t: TypeDeclInfo): String {
