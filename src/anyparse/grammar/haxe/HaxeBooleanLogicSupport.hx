@@ -126,15 +126,24 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 		// nominal), which types either branch. Neither proof -> left alone, mirroring
 		// `ComparisonToBoolean`'s `provablyBool` gate. The caller's flag is trusted for
 		// TYPE only; every readability gate on the branch is the caller's to apply first.
+		// An `||` result is written through `narrowingOr`: the flat chain carries a null-safety
+		// fact from its first operand only, so a stranded null test is regrouped or the reduction
+		// refused, where the ternary narrowed its branch from the whole condition.
 		final other: QueryNode = thenBool != null ? elseNode : thenNode;
 		return if (!provablyBool(other) && resultIsNonNullBool != true)
 			null
 		else if (thenBool != null)
 			thenBool
-				? joinOr(plain(cond, source), plain(elseNode, source))
+				? narrowingOr(
+					orLeaves(elseNode, false, source, typeNominalOf, orLeaves(cond, false, source, typeNominalOf, [])),
+					joinOr(plain(cond, source), plain(elseNode, source)), source
+				)
 				: joinAnd(negate(cond, source, typeNominalOf), plain(elseNode, source))
 		else if (elseBool == true)
-			joinOr(negate(cond, source, typeNominalOf), plain(thenNode, source))
+			narrowingOr(
+				orLeaves(thenNode, false, source, typeNominalOf, orLeaves(cond, true, source, typeNominalOf, [])),
+				joinOr(negate(cond, source, typeNominalOf), plain(thenNode, source)), source
+			)
 		else
 			joinAnd(plain(cond, source), plain(thenNode, source));
 	}
@@ -151,6 +160,14 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 		var accSrc: String = finalVal ? 'true' : 'false';
 		var accPrec: Precedence = PREC_ATOM;
 		var accLit: Null<Bool> = finalVal;
+		// The accumulator as the `||` chain it is while it is one (`narrowingOr`), and the
+		// identifiers the conditions folded into it mention and null-compare.
+		var run: Null<Array<OrLeaf>> = null;
+		final names: Array<String> = [];
+		final tested: Array<String> = [];
+		// The source the conditions folded into the accumulator span, for `narrowingOr`'s comment gate.
+		final lastTo: Null<Int> = conds[conds.length - 1].span?.to;
+		var accSpan: Null<Span> = null;
 		var i: Int = conds.length - 1;
 		while (i >= 0) {
 			final litVal: Null<Bool> = boolValue(lits[i], source);
@@ -158,25 +175,41 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 			final cond: QueryNode = conds[i];
 			if (litVal == true) {
 				if (accLit == true) return null; // cond || true -> true : drops cond's evaluation
+				final head: Array<OrLeaf> = orLeaves(cond, false, source, typeNominalOf, []);
 				if (accLit == false) {
 					final p: Operand = plain(cond, source); // cond || false -> cond
 					accSrc = p.src;
 					accPrec = p.prec;
+					run = head;
 				} else {
-					accSrc = joinOr(plain(cond, source), {
+					final acc: Operand = {
 						src: accSrc,
 						prec: accPrec,
 						declined: false,
 						notDelta: 0
-					});
+					};
+					final leaves: Array<OrLeaf> = head.concat(run ?? [
+						{
+							op: acc,
+							names: names.copy(),
+							providers: [],
+							tested: tested.copy(),
+							span: accSpan
+						}
+					]);
+					final joined: Null<String> = narrowingOr(leaves, joinOr(plain(cond, source), acc), source);
+					if (joined == null) return null;
+					accSrc = joined;
 					accPrec = PREC_OR;
+					run = leaves;
 				}
 			} else {
 				if (accLit == false) return null; // !cond && false -> false : drops cond's evaluation
 				final n: Operand = negate(cond, source, typeNominalOf);
-				if (accLit == true) { // !cond && true -> !cond
+				if (accLit == true) { // !cond && true -> !cond, an `||` chain when `cond` is an `&&`
 					accSrc = n.src;
 					accPrec = n.prec;
+					run = orLeaves(cond, true, source, typeNominalOf, []);
 				} else {
 					accSrc = joinAnd(n, {
 						src: accSrc,
@@ -185,8 +218,13 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 						notDelta: 0
 					});
 					accPrec = PREC_AND;
+					run = null;
 				}
 			}
+			final condSpan: Null<Span> = cond.span;
+			accSpan = condSpan == null || lastTo == null ? null : new Span(condSpan.from, lastTo);
+			identNames(cond, names);
+			nullComparedIdents(cond, tested);
 			accLit = null;
 			i--;
 		}
@@ -281,6 +319,11 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	private static inline function src(node: QueryNode, source: String): String {
 		final span: Null<Span> = node.span;
 		return span == null ? '' : source.substring(span.from, span.to).trim();
+	}
+
+	/** Whether `text` holds a comment opener — over-reads one inside a string literal, which only refuses a regrouping. */
+	private static inline function commented(text: String): Bool {
+		return text.indexOf('//') >= 0 || text.indexOf('/*') >= 0;
 	}
 
 	/**
@@ -462,10 +505,8 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	private static function nullTestIdents(o: QueryNode): Array<String> {
 		var n: QueryNode = o;
 		while ((n.kind == 'ParenExpr' || n.kind == 'Not') && n.children.length == 1) n = n.children[0];
-		if ((n.kind != 'Eq' && n.kind != 'NotEq') || n.children.length != 2) return [];
-		final l: QueryNode = n.children[0];
-		final r: QueryNode = n.children[1];
-		return l.kind != 'NullLit' && r.kind != 'NullLit' ? [] : identNames(l.kind == 'NullLit' ? r : l, []);
+		final tested: Null<QueryNode> = nullComparedOperand(n);
+		return tested == null ? [] : identNames(tested, []);
 	}
 
 	/**
@@ -640,6 +681,80 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 		return BOOL_OP_KINDS.contains(n.kind);
 	}
 
+	/**
+	 * Append to `out` the operands of the flat `||` chain `node` writes — `negate(node)` when `negated` — and return it:
+	 * an `||` splits into its two sides and an `&&` under negation into the negations of its sides (De Morgan), a `!`
+	 * under negation is its operand as written, parentheses are transparent; any other node is one operand. The chain a
+	 * reduction joins is what null safety reads, so `narrowingOr` judges it operand by operand.
+	 */
+	private static function orLeaves(
+		node: QueryNode, negated: Bool, source: String, types: Null<(QueryNode) -> Null<String>>, out: Array<OrLeaf>
+	): Array<OrLeaf> {
+		final kids: Array<QueryNode> = node.children;
+		if (node.kind == 'ParenExpr' && kids.length == 1) return orLeaves(kids[0], negated, source, types, out);
+		if (kids.length == 2 && node.kind == (negated ? 'And' : 'Or'))
+			return orLeaves(kids[1], negated, source, types, orLeaves(kids[0], negated, source, types, out));
+		if (negated && node.kind == 'Not' && kids.length == 1) return orLeaves(kids[0], false, source, types, out);
+		out.push({
+			op: negated ? negate(node, source, types) : plain(node, source),
+			names: identNames(node, []),
+			providers: nullTestIdents(node),
+			tested: nullComparedIdents(node, []),
+			span: node.span
+		});
+		return out;
+	}
+
+	/**
+	 * The `||` chain over `leaves` that keeps every null-safety narrowing the reduction relied on: `flat` — the plain
+	 * binary join, byte for byte — when no operand's null test is stranded, the right-nested regrouping of `negateAndChain`
+	 * (`orJoinGrouped`) when a bare null test past the first operand is, and null when a comment stands between
+	 * two operands of such a chain (the regrouping joins the operands alone), or when a null comparison buried in a
+	 * compound operand narrows an identifier a later operand mentions: Haxe carries no fact out of such an operand into a
+	 * later `||` operand under any grouping (`!(a != null && b != null) || b.length > 0` does not compile, the ternary it
+	 * came from did), so the caller leaves the code alone.
+	 */
+	private static function narrowingOr(leaves: Array<OrLeaf>, flat: String, source: String): Null<String> {
+		for (i => leaf in leaves)
+			for (j in i + 1...leaves.length)
+				for (name in leaves[j].names)
+					if (leaf.tested.contains(name) && !leaf.providers.contains(name)) return null;
+		final names: Array<Array<String>> = [for (l in leaves) l.names];
+		final providers: Array<Array<String>> = [for (l in leaves) l.providers];
+		if (strandedGroupStart(names, providers, 0) < 0) return flat;
+		// The regrouped chain is joined from the operands' own text, one line: no comment may stand between two operands,
+		// and none inside one (a node's span can carry a trailing line comment, which would swallow the rest of the line).
+		for (k => leaf in leaves) {
+			final before: Null<Span> = k == 0 ? leaf.span : leaves[k - 1].span;
+			final after: Null<Span> = leaf.span;
+			if (before == null || after == null) return null;
+			final glue: String = after.from < before.to ? '' : source.substring(before.to, after.from);
+			if (commented(glue) || commented(leaf.op.src)) return null;
+		}
+		return orJoinGrouped([for (l in leaves) l.op], names, providers, 0).src;
+	}
+
+	/** Append to `out` every plain identifier a `== null` / `!= null` comparison anywhere in `node`'s subtree names, and return it. */
+	private static function nullComparedIdents(node: QueryNode, out: Array<String>): Array<String> {
+		final tested: Null<QueryNode> = nullComparedOperand(node);
+		if (tested != null) identNames(tested, out);
+		for (child in node.children) nullComparedIdents(child, out);
+		return out;
+	}
+
+	/** The operand `node` compares with the null literal (`x == null`, `null != x`), or null for any other node. */
+	private static function nullComparedOperand(node: QueryNode): Null<QueryNode> {
+		if ((node.kind != 'Eq' && node.kind != 'NotEq') || node.children.length != 2) return null;
+		final l: QueryNode = node.children[0];
+		final r: QueryNode = node.children[1];
+		return if (l.kind == 'NullLit')
+			r
+		else if (r.kind == 'NullLit')
+			l
+		else
+			null;
+	}
+
 }
 
 private typedef Operand = {
@@ -668,6 +783,20 @@ private typedef Operand = {
 	 * disagree about which branch was taken.
 	 */
 	var notDelta: Int;
+};
+
+/**
+ * One operand of a flat `||` chain a reduction writes (`orLeaves`): its text, the plain identifiers it mentions, those its
+ * bare null test can source a narrowing from (`nullTestIdents`), and those any null comparison inside it names.
+ */
+private typedef OrLeaf = {
+	final op: Operand;
+	final names: Array<String>;
+	final providers: Array<String>;
+	final tested: Array<String>;
+
+	/** Where the operand stands in the source: a comment between two operands has no place in a regrouped chain. */
+	final span: Null<Span>;
 };
 
 /**

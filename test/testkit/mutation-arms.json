@@ -539,8 +539,8 @@
 		{
 			"name": "M-INVERT-REGION-UNGUARDED",
 			"type": "anyparse.check.InvertNegatedIfElse",
-			"method": "inversionEdits",
-			"find": "\t\tif (RegionTerminator.unterminatedRegion(thenBranch, source, seams.shape)) return;\n",
+			"method": "statementEdits",
+			"find": "\t\tif (RegionTerminator.unterminatedRegion(thenBranch, source, shape)) return;\n",
 			"replace": "",
 			"note": "a then-region closed only by the `else` is swapped into the tail slot with no terminator"
 		},
@@ -23085,6 +23085,281 @@
 			"find": "reported.declineReason = pinned;\n\t\tMemberSpacing.emitSpacingOnly(edits, members, source, options.separateInline);",
 			"replace": "reported.declineReason = pinned;\n\t\tMemberSpacing.emitSpacingOnly(edits, members, source, false);",
 			"note": "the spacing-only fallback of a pinned container ignores the option, so its glued boundary is reported for ever and never fixed"
+		},
+		{
+			"name": "M-NEGCOND-ANY-KIND",
+			"type": "anyparse.check.NegatedCondition",
+			"method": "negatedOperand",
+			"find": "not.kind != s.notKind || ",
+			"replace": "",
+			"note": "any one-operand condition reads as a negation, so `a.b ? 1 : 2` is \"inverted\" to `b ? 2 : 1`"
+		},
+		{
+			"name": "M-NEGCOND-PAREN-KEPT",
+			"type": "anyparse.check.NegatedCondition",
+			"method": "negatedOperand",
+			"find": "operand.kind == s.parenKind && operand.children.length == 1",
+			"replace": "false",
+			"note": "the redundant paren around the negated operand is kept: `!(a || b) ? x : y` becomes `(a || b) ? y : x`"
+		},
+		{
+			"name": "M-NEGCOND-OVERLOAD-BLIND",
+			"type": "anyparse.check.NegatedCondition",
+			"method": "builtinNot",
+			"force": "true",
+			"note": "an `@:op(!A)` overload is ignored, so a `!` that need not be the complement is dropped and the branches swapped"
+		},
+		{
+			"name": "M-NEGCOND-COMMENT-BEFORE-KEPT",
+			"type": "anyparse.check.NegatedCondition",
+			"method": "commentOutside",
+			"find": "SourceComments.hasCommentMarker(source, outer.from, inner.from) || ",
+			"replace": "",
+			"note": "a comment between the `!` and its operand is not seen, and the positive rebuild drops it"
+		},
+		{
+			"name": "M-NEGCOND-COMMENT-AFTER-KEPT",
+			"type": "anyparse.check.NegatedCondition",
+			"method": "commentOutside",
+			"find": "inner.to, outer.to",
+			"replace": "inner.to, inner.to",
+			"note": "a comment after the operand inside the dropped paren is not seen, and the positive rebuild drops it"
+		},
+		{
+			"name": "M-NEGCOND-COMMENT-WHOLE-COND",
+			"type": "anyparse.check.NegatedCondition",
+			"method": "commentOutside",
+			"force": "SourceComments.hasCommentMarker(source, outer.from, outer.to)",
+			"note": "a comment INSIDE the kept operand blocks the inversion too, though it travels verbatim"
+		},
+		{
+			"name": "M-NEGCOND-SWAP-OFF",
+			"type": "anyparse.check.NegatedCondition",
+			"method": "ternaryEdit",
+			"find": "final kept: Null<QueryNode> = positive(cond, site);",
+			"replace": "final kept: Null<QueryNode> = null;",
+			"note": "a ternary built from a negated guard keeps the `!` (`x = !a ? 1 : 2`)"
+		},
+		{
+			"name": "M-OPSEL-REPORT-DROPPED",
+			"type": "anyparse.check.OperatorSelection",
+			"method": "indexes",
+			"find": "_report ?? IndexScope.report(_files, _plugin)",
+			"replace": "IndexScope.report(_files, _plugin)",
+			"note": "a fix's report index is ignored, so an `@:op(!A)` declared in a sibling module is unseen by the fix that orients a ternary"
+		},
+		{
+			"name": "M-INVERT-VALUE-CHAIN-SWAPPED",
+			"type": "anyparse.check.InvertNegatedIfElse",
+			"method": "valueVerdict",
+			"find": "if (sameConstruct(thenBranch, node, scan.seams) || sameConstruct(elseBranch, node, scan.seams)) return Skip;",
+			"replace": "",
+			"note": "a ternary chain or else-if value chain is swapped, re-nesting it"
+		},
+		{
+			"name": "M-INVERT-VALUE-GLUE-BEFORE-BLIND",
+			"type": "anyparse.check.InvertNegatedIfElse",
+			"method": "valueVerdict",
+			"find": "condSpan.to, thenSpan.from",
+			"replace": "condSpan.to, condSpan.to",
+			"note": "a comment between the condition and the then-branch stays while the branches move"
+		},
+		{
+			"name": "M-INVERT-VALUE-GLUE-AFTER-BLIND",
+			"type": "anyparse.check.InvertNegatedIfElse",
+			"method": "valueVerdict",
+			"find": "thenSpan.to, elseSpan.from",
+			"replace": "thenSpan.to, thenSpan.to",
+			"note": "a comment between the two branches stays while the branches move"
+		},
+		{
+			"name": "M-INVERT-VALUE-NO-DESCEND",
+			"type": "anyparse.check.InvertNegatedIfElse",
+			"method": "walk",
+			"find": "\t\t\t\t\t\tout.push(finding(scan, span, message + COMMENT_BLOCKS));\n",
+			"replace": "\t\t\t\t\t\tout.push(finding(scan, span, message + COMMENT_BLOCKS));\n\t\t\t\t\t\treturn;\n",
+			"note": "a report-only value form stops the walk, so an invertible conditional inside it is never fixed"
+		},
+		{
+			"name": "M-INVERT-VALUE-DESCEND-FIXED",
+			"type": "anyparse.check.InvertNegatedIfElse",
+			"method": "walk",
+			"find": "\t\t\t\t\t\tout.push(finding(scan, span, message));\n\t\t\t\t\t\treturn;\n",
+			"replace": "\t\t\t\t\t\tout.push(finding(scan, span, message));\n",
+			"note": "a fixable value form does not stop the walk, so a nested one is rewritten in the same pass (overlapping edits)"
+		},
+		{
+			"name": "M-INVERT-VALUE-UNGUARDED",
+			"type": "anyparse.check.InvertNegatedIfElse",
+			"method": "fix",
+			"find": "edits.concat(ParenGuard.guard(source, guarded, plugin))",
+			"replace": "edits.concat([for (g in guarded) { span: g.span, text: g.text }])",
+			"note": "value splices skip the parse round-trip: `!(a = b) ? 1 : 2` becomes `a = b ? 2 : 1`"
+		},
+		{
+			"name": "M-INVERT-VALUE-LOOSE-SPAN",
+			"type": "anyparse.check.InvertNegatedIfElse",
+			"method": "tight",
+			"force": "node.span",
+			"note": "a splice over a node span that runs on through trailing trivia welds the condition to the `?` (`a? 2 : 1`)"
+		},
+		{
+			"name": "M-PTR-NO-ORIENT",
+			"type": "anyparse.check.PreferTernaryReturn",
+			"method": "fixCarrying",
+			"find": "NegatedCondition.siteOf(negation, file, source, tree)",
+			"replace": "null",
+			"note": "prefer-ternary-return writes `return !c ? a : b;` again"
+		},
+		{
+			"name": "M-PTR-TRAILING-SWAPS",
+			"type": "anyparse.check.PreferTernaryReturn",
+			"method": "buildEdit",
+			"find": "split.branchTrailing == null ? NegatedCondition.positive(match.condition, site)?.span : null",
+			"replace": "NegatedCondition.positive(match.condition, site)?.span",
+			"note": "a guard's own trailing comment is left riding the value that moved to the `:` slot"
+		},
+		{
+			"name": "M-RRT-NO-ORIENT",
+			"type": "anyparse.check.ReturnReassignTernary",
+			"method": "matchesIn",
+			"find": "NegatedCondition.siteOf(s.negation, file, source, tree)",
+			"replace": "null",
+			"note": "return-reassign-ternary writes `return !c ? e : x;` again"
+		},
+		{
+			"name": "M-PTA-NO-ORIENT",
+			"type": "anyparse.check.PreferTernaryAssignment",
+			"method": "fix",
+			"find": "NegatedCondition.siteOf(negation, file, source, tree)",
+			"replace": "null",
+			"note": "prefer-ternary-assignment writes `x = !c ? a : b;` again, in both arms"
+		},
+		{
+			"name": "M-PTE-NO-ORIENT",
+			"type": "anyparse.check.PreferTernaryExpression",
+			"method": "collect",
+			"find": "NegatedCondition.siteOf(s.negation, file, source, root)",
+			"replace": "null",
+			"note": "prefer-ternary-expression writes `!c ? a : b` again"
+		},
+		{
+			"name": "M-NARROWING-OR-FLAT",
+			"type": "anyparse.grammar.haxe.HaxeBooleanLogicSupport",
+			"method": "narrowingOr",
+			"force": "flat",
+			"note": "every `||` a boolean reduction writes joins flat, stranding a null test past the first operand"
+		},
+		{
+			"name": "M-NARROWING-OR-COMPOUND-ADMITTED",
+			"type": "anyparse.grammar.haxe.HaxeBooleanLogicSupport",
+			"method": "narrowingOr",
+			"find": "if (leaf.tested.contains(name) && !leaf.providers.contains(name)) return null;",
+			"replace": "if (false && leaf.tested.contains(name)) return null;",
+			"note": "a null comparison buried in a compound operand no longer refuses a reduction whose later operand it narrows"
+		},
+		{
+			"name": "M-NARROWING-OR-GLUE-COMMENT-ADMITTED",
+			"type": "anyparse.grammar.haxe.HaxeBooleanLogicSupport",
+			"method": "narrowingOr",
+			"find": "if (commented(glue) || commented(leaf.op.src)) return null;",
+			"replace": "if (commented(leaf.op.src)) return null;",
+			"note": "a regrouped chain drops a comment standing between two of its operands"
+		},
+		{
+			"name": "M-NARROWING-OR-INNER-COMMENT-ADMITTED",
+			"type": "anyparse.grammar.haxe.HaxeBooleanLogicSupport",
+			"method": "narrowingOr",
+			"find": "if (commented(glue) || commented(leaf.op.src)) return null;",
+			"replace": "if (commented(glue)) return null;",
+			"note": "a regrouped chain joins an operand whose span carries a line comment, which swallows the rest of the line"
+		},
+		{
+			"name": "M-OR-LEAVES-OR-OPAQUE",
+			"type": "anyparse.grammar.haxe.HaxeBooleanLogicSupport",
+			"method": "orLeaves",
+			"find": "if (kids.length == 2 && node.kind == (negated ? 'And' : 'Or'))",
+			"replace": "if (kids.length == 2 && negated && node.kind == 'And')",
+			"note": "an `||` is one opaque operand, so a null test inside it is never seen as stranded"
+		},
+		{
+			"name": "M-OR-LEAVES-NEGATED-AND-OPAQUE",
+			"type": "anyparse.grammar.haxe.HaxeBooleanLogicSupport",
+			"method": "orLeaves",
+			"find": "if (kids.length == 2 && node.kind == (negated ? 'And' : 'Or'))",
+			"replace": "if (kids.length == 2 && !negated && node.kind == 'Or')",
+			"note": "a negated `&&` is one opaque operand, so the De Morgan `||` it writes is never regrouped"
+		},
+		{
+			"name": "M-TERNARY-OR-BRANCH-UNREAD",
+			"type": "anyparse.grammar.haxe.HaxeBooleanLogicSupport",
+			"method": "simplifyBooleanTernary",
+			"find": "orLeaves(elseNode, false, source, typeNominalOf, orLeaves(cond, false, source, typeNominalOf, []))",
+			"replace": "orLeaves(cond, false, source, typeNominalOf, [])",
+			"note": "the kept branch is left out of the `||` chain the reduction judges, so a null test inside it is never regrouped"
+		},
+		{
+			"name": "M-GUARD-CHAIN-NEGATED-RUN-DROPPED",
+			"type": "anyparse.grammar.haxe.HaxeBooleanLogicSupport",
+			"method": "reduceBooleanGuardChain",
+			"find": "run = orLeaves(cond, true, source, typeNominalOf, []);",
+			"replace": "run = null;",
+			"note": "a negated `&&` guard's `||` is one opaque operand of the chain before it, so its null test strands"
+		},
+		{
+			"name": "M-DEFAULT-ARG-NULL-SITE-ADMITTED",
+			"type": "anyparse.check.DefaultRepeatedArgument",
+			"method": "report",
+			"find": " || nullable['${member.name}#$index'] == true",
+			"replace": "",
+			"note": "a call passing null where the default lands is ignored, so it silently takes the default"
+		},
+		{
+			"name": "M-DEFAULT-ARG-NONNULL-ANY",
+			"type": "anyparse.check.DefaultRepeatedArgument",
+			"method": "provenNonNull",
+			"force": "true",
+			"note": "every argument counts as non-null, a variable or a call included"
+		},
+		{
+			"name": "M-DEFAULT-ARG-UNRESOLVED-NULL-IGNORED",
+			"type": "anyparse.check.DefaultRepeatedArgument",
+			"method": "collectCalls",
+			"find": "if (called != null && scope.memberOwners.exists(called))",
+			"replace": "if (called != null && resolveCallee(call, owner, entry, scope, seams) != null)",
+			"note": "only resolved calls are read, so a null handed through a receiver the rule cannot type escapes"
+		},
+		{
+			"name": "M-DEFAULT-ARG-NULL-CONST-NONNULL",
+			"type": "anyparse.check.DefaultRepeatedArgument",
+			"method": "collectMembers",
+			"find": "scope.constants['$owner.$name'] = child.children.length == 0 || child.children[0].kind != seams.nullLiteralKind;",
+			"replace": "scope.constants['$owner.$name'] = true;",
+			"note": "an inline constant whose value is null proves its argument non-null"
+		},
+		{
+			"name": "M-UNUSED-LOCAL-IMPURE-UNSAID",
+			"type": "anyparse.check.UnusedLocal",
+			"method": "fix",
+			"find": "v.declineReason = 'the initializer is not provably side-effect-free, so deleting the declaration would drop whatever '",
+			"replace": "final unsaid: String = 'the initializer is not provably side-effect-free, so deleting the declaration would drop whatever '",
+			"note": "the side-effecting-initializer refusal names no reason in the --fix ledger"
+		},
+		{
+			"name": "M-UNUSED-LOCAL-SHARED-LINE-UNSAID",
+			"type": "anyparse.check.UnusedLocal",
+			"method": "fix",
+			"find": "v.declineReason = 'the binding shares its declaration line with another one, and the deletion takes the whole line';",
+			"replace": "final unsaid: String = 'the binding shares its declaration line with another one, and the deletion takes the whole line';",
+			"note": "the shared-line refusal names no reason in the --fix ledger"
+		},
+		{
+			"name": "M-UNUSED-PRIVATE-FIELD-KIND-PURITY",
+			"type": "anyparse.check.UnusedPrivate",
+			"method": "initializerPurity",
+			"find": ": TypeResolver.isDeletionPure.bind(_, tree, shape, RunScan.typeInfoOf(plugin)?.declaredTypes(source) ?? [], index);",
+			"replace": ": MemberKinds.isSideEffectFree.bind(_, shape);",
+			"note": "a field initializer is judged kind-only again, so a pure collection literal or stdlib call keeps a dead field"
 		},
 		{
 			"name": "M-PRIVATIZE-NO-CANDIDATE",

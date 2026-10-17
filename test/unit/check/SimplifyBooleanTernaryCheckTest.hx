@@ -275,6 +275,55 @@ class SimplifyBooleanTernaryCheckTest extends Test {
 		Assert.equals('', boolFnSimplifyOf('return p ? true : (c ? false : g());'));
 	}
 
+	/**
+	 * A null test that is not the FIRST operand of the `||` the reduction writes keeps its
+	 * narrowing only inside a right-nested group: Haxe's strict null safety carries a fact into a
+	 * later `||` operand from the chain's first operand alone, so the flat
+	 * `a == null || b == null || b.length > 0` does not compile (4.3.7), while the ternary did.
+	 */
+	@:killer('M-NARROWING-OR-FLAT', 'M-OR-LEAVES-OR-OPAQUE')
+	@:pin('control')
+	public function testStrandedNullTestRegroupsInOr(): Void {
+		Assert.equals('a == null || (b == null || b.length > 0)', simplifyOf('return a == null || b == null ? true : b.length > 0;'));
+	}
+
+	/** The negated `&&` of the `cond ? x : true` arm is the same `||` chain, and regroups the same way. */
+	@:killer('M-OR-LEAVES-NEGATED-AND-OPAQUE')
+	@:pin('control')
+	public function testStrandedNullTestRegroupsInNegatedAnd(): Void {
+		Assert.equals('a == null || (b == null || b.length > 0)', simplifyOf('return a != null && b != null ? b.length > 0 : true;'));
+	}
+
+	/** A null test inside the BRANCH is stranded by the condition the reduction puts in front of it. */
+	@:killer('M-TERNARY-OR-BRANCH-UNREAD')
+	@:pin('control')
+	public function testStrandedNullTestInBranchRegroups(): Void {
+		Assert.equals('p || (b == null || b.length > 0)', simplifyOf('return p ? true : b == null || b.length > 0;'));
+	}
+
+	/**
+	 * A null test buried in a compound operand narrows a later `||` operand under no grouping (`!(a != null && b != null) ||
+	 * b.length > 0` does not compile, the ternary did), so the ternary is left alone.
+	 */
+	@:killer('M-NARROWING-OR-COMPOUND-ADMITTED')
+	@:pin('control')
+	public function testCompoundNullTestBeforeReuseNotSimplified(): Void {
+		Assert.equals('', simplifyOf('return !(a != null && b != null) ? true : b.length > 0;'));
+	}
+
+	/** The first operand's fact survives a flat `||`, and an `&&` carries every fact: both stay flat. */
+	public function testFirstOperandAndConjunctionNullTestsStayFlat(): Void {
+		Assert.equals('a == null || a.length > 0', simplifyOf('return a == null ? true : a.length > 0;'));
+		Assert.equals('a != null && b != null && b.length > 0', simplifyOf('return a == null || b == null ? false : b.length > 0;'));
+	}
+
+	/** A regrouped chain is joined from its operands alone, so a comment among them refuses the reduction rather than swallow the rest. */
+	@:killer('M-NARROWING-OR-INNER-COMMENT-ADMITTED')
+	@:pin('control')
+	public function testStrandedNullTestWithCommentNotSimplified(): Void {
+		Assert.equals('', simplifyOf('return a == null // first\n\t|| b == null ? true : b.length > 0;'));
+	}
+
 	/** `claimedSpans` over `source`, or null after failing the test when the fixture does not parse. */
 	private function claimsOf(source: String): Null<Map<String, Bool>> {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();

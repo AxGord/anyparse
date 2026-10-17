@@ -1,46 +1,46 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
-import anyparse.query.BoolExprShape;
+import anyparse.check.NegatedCondition.InversionSeams;
+import anyparse.check.NegatedCondition.InversionSite;
+import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MemberKinds;
+import anyparse.query.ParenGuard;
 import anyparse.query.QueryNode;
+import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
 /**
- * Flags an `if` STATEMENT whose condition's TOP-LEVEL node is a logical NOT and which
- * has an `else` branch — `if (!c) A else B`. Inverting reads better as `if (c) B else A`:
- * drop the leading `!` and SWAP the two branches. A pure branch swap is an EXACT
- * complement of the negation, so it is semantics-safe under every value including `NaN`
- * (unlike a De Morgan condition rewrite, which is not). `Severity.Info`; `fix` performs
- * the inversion, moving each branch's source slot verbatim so braces / formatting /
- * comments travel with their branch.
+ * Flags a negated two-branch conditional — an `if` STATEMENT with an `else`, a value-position `if` or a ternary — whose condition's
+ * TOP-LEVEL node is a logical NOT, and inverts it: drop the `!`, SWAP the branches (`if (c) B else A`, `if (c) b else a`, `c ? b :
+ * a`). A pure branch swap is an EXACT complement of the negation, semantics-safe under every value including `NaN` (unlike a De Morgan
+ * rewrite). `Severity.Info`; `fix` moves each branch's source slot verbatim, so braces / layout / comments travel with their branch.
  *
  * ## What is flagged
  *
- * Only a literal top-level `!` (`RefShape.notKind`) — a `!=` comparison is a different
- * kind and is never touched. Outer parentheses around the condition are unwrapped via
- * `RefShape.parenKind` (`if ((!c))` still counts). An `else` branch that is ITSELF an
- * `if` (an else-if chain) is skipped — swapping would restructure the chain rather than
- * simply invert. A no-`else` `if` is skipped (there is nothing to swap into). A comment
- * inside the condition that the rebuilt condition would drop leaves the finding
- * unreported — the swap is only offered when it loses nothing.
+ * Only a literal top-level BUILT-IN `!`, read through `NegatedCondition` — the one owner of that question here and in the
+ * ternary-building rules, which emit the positive form directly. A `!=` is a different kind; `!a && b` keeps its shape; outer
+ * parens around the condition are unwrapped. A branch that is the same construct bare (an else-if chain, a ternary in a ternary's
+ * branch) is skipped: the swap would re-nest the chain rather than invert it. A no-`else` `if` has nothing to swap into.
  *
- * ## Chaining with `comparison-to-boolean`
+ * ## Comments
  *
- * `comparison-to-boolean` turns `x == false` into `!x`; this rule then removes that `!`
- * by swapping the branches — a multi-pass `--fix` converges the two into `if (x) B else A`.
+ * The positive condition is the not's operand, a redundant paren around it unwrapped, so a comment between the
+ * `!` and that operand would be dropped (one INSIDE the operand travels). A statement that would drop one is
+ * left unreported. A value form is REPORT-ONLY instead, for that comment and for one in the glue between the
+ * condition and the branches, which stays put while the branches move and would then describe the other one.
  *
  * ## Autofix
  *
- * Three non-overlapping edits per finding: the condition span is replaced by the positive
- * condition (the not's operand source, unwrapping a redundant paren AROUND that operand —
- * always precedence-safe, since the operand becomes the whole `if`-parens-delimited
- * condition), and the then / else branch spans are swapped verbatim. The walk STOPS at a
- * flagged `if` (it does not descend into the swapped branches), so a nested invertible
- * `if-else` surfaces on a later pass and the per-pass edits never overlap. Unset
- * `ifStatementKinds` or `notKind` makes the check a no-op.
+ * Three non-overlapping edits per finding: the condition becomes the positive form, the two branches swap. In a
+ * statement the `if` parentheses delimit the condition; in a value form each edit is a `ParenGuard` splice, so the
+ * parse round-trip adds exactly the pairs precedence needs (`!(a = b) ? x : y` -> `(a = b) ? y : x`, `!(a && b) ? x
+ * : y` -> `a && b ? y : x`). The walk STOPS at a flagged node, so a nested one surfaces on a later pass and per-pass
+ * edits never overlap; a report-only node is descended into. Chains with `comparison-to-boolean` through the `--fix`
+ * fixed point (`x == false` -> `!x` -> swapped away). Unset `ifStatementKinds` or `notKind` makes the check a no-op.
  */
 @:nullSafety(Strict)
 final class InvertNegatedIfElse implements Check {
@@ -48,160 +48,232 @@ final class InvertNegatedIfElse implements Check {
 	/** An if node with an else branch has children [cond, then, else]. */
 	private static inline final IF_WITH_ELSE_CHILD_COUNT: Int = 3;
 
+	private static inline final RULE_ID: String = 'invert-negated-if-else';
+	private static inline final MSG_STATEMENT: String = 'this negated if-else can be inverted — drop the ! and swap the branches';
+	private static inline final MSG_TERNARY: String = 'this negated ternary can be inverted — drop the ! and swap the branches';
+	private static inline final MSG_IF_EXPRESSION: String = 'this negated if-expression can be inverted — drop the ! and swap the branches';
+
+	/** Appended to a value-form message when a comment keeps the site report-only. */
+	private static inline final COMMENT_BLOCKS: String = ' (a comment blocks the autofix)';
+
 	public function new() {}
 
 	public function id(): String {
-		return 'invert-negated-if-else';
+		return RULE_ID;
 	}
 
 	public function description(): String {
-		return 'an if with a top-level negated condition and an else — invert the condition and swap the branches';
+		return 'an if-else, if-expression or ternary with a top-level negated condition — invert the condition and swap the branches';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		return RunScan.collectWith(
 			files, plugin, resolveSeams(plugin, files),
-			(entry, tree, seams, violations) -> walk(violations, entry.file, tree, tree, entry.source, seams)
+			(entry, tree, seams, violations) -> walk(violations, scanOf(seams, entry.file, entry.source, tree, plugin), tree)
 		);
 	}
 
 	/**
-	 * Invert each flagged `if`: replace its condition with the positive form and swap the
-	 * then / else branch source. The flagged `if` is recovered by span; a re-validation
-	 * (top-level not, non-`if` else, no dropped condition comment) guards the independent
-	 * `fix` parse. Unset seams make `fix` a no-op.
+	 * Invert each flagged node: replace its condition with the positive form and swap the then /
+	 * else branch source. The flagged node is recovered by span; a re-validation guards the
+	 * independent `fix` parse. Unset seams make `fix` a no-op.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		if (violations.length == 0) return [];
 		final file: String = violations[0].file;
-		return RunScan.editsWith(plugin, source, resolveSeams(plugin, [{ file: file, source: source }]), (root, seams) -> {
+		return RunScan.editsWith(plugin, source, resolveSeams(plugin, [{ file: file, source: source }], index), (root, seams) -> {
+			final scan: Scan = scanOf(seams, file, source, root, plugin);
 			final byKey: Map<String, QueryNode> = [];
-			MemberKinds.indexNodesByKind(root, seams.ifKinds, byKey);
+			MemberKinds.indexNodesByKind(root, seams.ifKinds.concat(seams.valueKinds), byKey);
 			final edits: Array<{ span: Span, text: String }> = [];
-			RunScan.eachMatched(violations, byKey, (ifNode, _) -> inversionEdits(ifNode, file, root, source, seams, edits));
-			return edits;
+			final guarded: Array<GuardedEdit> = [];
+			RunScan.eachMatched(violations, byKey, (node, _) -> {
+				if (seams.ifKinds.contains(node.kind))
+					statementEdits(node, scan, edits)
+				else
+					valueEdits(node, scan, guarded);
+			});
+			return edits.concat(ParenGuard.guard(source, guarded, plugin));
 		});
 	}
 
 	/**
-	 * Walk `node`; flag an `if` STATEMENT with an `else` whose condition's top-level node
-	 * (after unwrapping outer parens) is a logical not, then STOP descending into it — a
-	 * nested invertible `if-else` is found on a re-run, keeping per-pass edits non-overlapping.
+	 * Walk `node`; flag an invertible `if` statement or value form, then STOP descending into it — a
+	 * nested invertible conditional is found on a re-run, keeping per-pass edits non-overlapping. A
+	 * report-only value form is flagged and descended into: nothing of it is rewritten.
 	 */
-	private static function walk(
-		out: Array<Violation>, file: String, root: QueryNode, node: QueryNode, source: String, seams: Seams
-	): Void {
-		if (
-			seams.ifKinds.contains(node.kind) && node.children.length == IF_WITH_ELSE_CHILD_COUNT
-			&& isInvertible(node, file, root, source, seams)
-		) {
-			final span: Null<Span> = node.span;
-			if (span != null) {
-				out.push({
-					file: file,
-					span: span,
-					rule: 'invert-negated-if-else',
-					severity: Severity.Info,
-					message: 'this negated if-else can be inverted — drop the ! and swap the branches'
-				});
+	private static function walk(out: Array<Violation>, scan: Scan, node: QueryNode): Void {
+		final span: Null<Span> = node.span;
+		if (span != null && node.children.length == IF_WITH_ELSE_CHILD_COUNT) {
+			final seams: Seams = scan.seams;
+			if (seams.ifKinds.contains(node.kind) && statementInvertible(node, scan)) {
+				out.push(finding(scan, span, MSG_STATEMENT));
 				return;
 			}
+			if (seams.valueKinds.contains(node.kind)) {
+				final message: String = node.kind == seams.ternaryKind ? MSG_TERNARY : MSG_IF_EXPRESSION;
+				switch valueVerdict(node, scan) {
+					case Fixable:
+						out.push(finding(scan, span, message));
+						return;
+					case CommentBlocked:
+						out.push(finding(scan, span, message + COMMENT_BLOCKS));
+					case Skip:
+				}
+			}
 		}
-		for (c in node.children) walk(out, file, root, c, source, seams);
+		for (c in node.children) walk(out, scan, c);
+	}
+
+	/** One `Info` finding of this rule at `span`. */
+	private static function finding(scan: Scan, span: Span, message: String): Violation {
+		return {
+			file: scan.site.file,
+			span: span,
+			rule: RULE_ID,
+			severity: Severity.Info,
+			message: message
+		};
 	}
 
 	/**
-	 * Whether `ifNode` is a swap candidate: its condition's top-level node (outer parens
-	 * unwrapped) is a not, its `else` branch is not itself an `if`, and no comment in the
-	 * condition span would be dropped by the rebuild.
+	 * Whether the `if` statement `ifNode` (with an `else`) is a swap candidate: its condition reads
+	 * positive through `NegatedCondition.positive` (a built-in top-level not whose rebuild drops no
+	 * comment) and its `else` branch is not itself an `if`.
 	 */
-	private static function isInvertible(ifNode: QueryNode, file: String, root: QueryNode, source: String, seams: Seams): Bool {
-		final cond: QueryNode = ifNode.children[0];
-		final not: QueryNode = BoolExprShape.unwrapParens(cond, seams.parenKind);
-		if (not.kind != seams.notKind) return false;
-		if (seams.ifKinds.contains(ifNode.children[2].kind)) return false;
-		final condSpan: Null<Span> = cond.span;
-		if (condSpan == null || CheckScan.hasCommentMarker(source, condSpan.from, condSpan.to)) return false;
-		return builtinNot(not, file, root, source, seams);
+	private static function statementInvertible(ifNode: QueryNode, scan: Scan): Bool {
+		return !scan.seams.ifKinds.contains(ifNode.children[2].kind) && NegatedCondition.positive(ifNode.children[0], scan.site) != null;
 	}
 
 	/**
-	 * Whether the `!` this inversion DROPS is the language own.
-	 *
-	 * The swap is an exact complement of the negation only while `!c` and `c` are complementary,
-	 * which the built-in `!` guarantees and an overloaded one does not: an abstract may declare
-	 * both `@:op(!A)` and a `to Bool` coercion that disagree, and then `if (!f) A else B` and
-	 * `if (f) B else A` run different branches (a `@:op(!A)` returning the value rather than its
-	 * complement makes `!f` true AND `if (f)` taken).
-	 *
-	 * A tree declaring no such operator pays a map lookup and nothing more: `declared` is false
-	 * and no operand type is ever resolved.
+	 * What the value form `node` (a ternary or a value `if`, with both branches) is: `Skip` when its
+	 * condition is no built-in top-level not or a branch is the same construct (a chain the swap
+	 * would restructure), `CommentBlocked` when the rebuild would drop or misplace a comment (one
+	 * the positive condition drops, or one in the glue between the condition and the branches, which
+	 * stays where it is while the branches move), else `Fixable`.
 	 */
-	private static function builtinNot(not: QueryNode, file: String, root: QueryNode, source: String, seams: Seams): Bool {
-		final selection: Null<OperatorSelection> = seams.selection;
-		if (selection == null) return true;
-		final kinds: Array<String> = [seams.notKind];
-		return !selection.declared(kinds) || selection.verdictFor(not, kinds, selection.typingFor(file, source, root)).match(Builtin);
+	private static function valueVerdict(node: QueryNode, scan: Scan): ValueVerdict {
+		final cond: QueryNode = node.children[0];
+		final thenBranch: QueryNode = node.children[1];
+		final elseBranch: QueryNode = node.children[2];
+		if (sameConstruct(thenBranch, node, scan.seams) || sameConstruct(elseBranch, node, scan.seams)) return Skip;
+		final kept: Null<QueryNode> = NegatedCondition.negatedOperand(cond, scan.site);
+		final condSpan: Null<Span> = tight(cond, scan);
+		final thenSpan: Null<Span> = tight(thenBranch, scan);
+		final elseSpan: Null<Span> = tight(elseBranch, scan);
+		if (kept == null || condSpan == null || thenSpan == null || elseSpan == null) return Skip;
+		final source: String = scan.site.source;
+		return NegatedCondition.dropsComment(cond, kept, source) || SourceComments.hasCommentMarker(source, condSpan.to, thenSpan.from)
+			|| SourceComments.hasCommentMarker(source, thenSpan.to, elseSpan.from)
+			? CommentBlocked
+			: Fixable;
+	}
+
+	/** Whether `branch` is the same construct as its value-form `parent` — a ternary in a ternary, a value `if` in a value `if`. */
+	private static function sameConstruct(branch: QueryNode, parent: QueryNode, seams: Seams): Bool {
+		return parent.kind == seams.ternaryKind ? branch.kind == seams.ternaryKind : seams.ifExpressionKinds.contains(branch.kind);
 	}
 
 	/**
-	 * Push the three inversion edits for one flagged `if` (or nothing when it fails a
-	 * re-validation or lacks the spans): condition replaced by the positive form, then /
-	 * else branch source swapped.
+	 * Push the three inversion edits for one flagged `if` statement (or nothing when it fails a
+	 * re-validation or lacks the spans): condition replaced by the positive form, then / else
+	 * branch source swapped.
 	 */
-	private static function inversionEdits(
-		ifNode: QueryNode, file: String, root: QueryNode, source: String, seams: Seams, edits: Array<{ span: Span, text: String }>
-	): Void {
-		if (ifNode.children.length < IF_WITH_ELSE_CHILD_COUNT || !isInvertible(ifNode, file, root, source, seams)) return;
+	private static function statementEdits(ifNode: QueryNode, scan: Scan, edits: Array<{ span: Span, text: String }>): Void {
+		if (ifNode.children.length < IF_WITH_ELSE_CHILD_COUNT || !statementInvertible(ifNode, scan)) return;
+		final source: String = scan.site.source;
+		final shape: RefShape = scan.seams.shape;
 		final cond: QueryNode = ifNode.children[0];
 		final thenBranch: QueryNode = ifNode.children[1];
 		final elseBranch: QueryNode = ifNode.children[2];
-		final notNode: QueryNode = BoolExprShape.unwrapParens(cond, seams.parenKind);
-		if (notNode.children.length != 1) return;
 		// A region then-body closed only by the `else` after it would land in the tail slot with no
 		// terminator it can be proved not to need; every branch travels with the one it owns.
-		if (RegionTerminator.unterminatedRegion(thenBranch, source, seams.shape)) return;
-		final condSpan: Null<Span> = cond.span;
-		final thenSpan: Null<Span> = RegionTerminator.ownedSpan(thenBranch, source, seams.shape);
-		final elseSpan: Null<Span> = RegionTerminator.ownedSpan(elseBranch, source, seams.shape);
-		final positive: Null<String> = positiveConditionText(notNode.children[0], source, seams.parenKind);
-		if (condSpan == null || thenSpan == null || elseSpan == null || positive == null) return;
-		edits.push({ span: condSpan, text: positive });
+		if (RegionTerminator.unterminatedRegion(thenBranch, source, shape)) return;
+		final condSpan: Null<Span> = tight(cond, scan);
+		final thenSpan: Null<Span> = RegionTerminator.ownedSpan(thenBranch, source, shape);
+		final elseSpan: Null<Span> = RegionTerminator.ownedSpan(elseBranch, source, shape);
+		final keptSpan: Null<Span> = NegatedCondition.positive(cond, scan.site)?.span;
+		if (condSpan == null || thenSpan == null || elseSpan == null || keptSpan == null) return;
+		edits.push({ span: condSpan, text: source.substring(keptSpan.from, keptSpan.to) });
 		edits.push({ span: thenSpan, text: source.substring(elseSpan.from, elseSpan.to) });
 		edits.push({ span: elseSpan, text: source.substring(thenSpan.from, thenSpan.to) });
 	}
 
 	/**
-	 * The positive-condition source for the not's `operand`: its own source, but a single
-	 * redundant paren AROUND the whole operand is unwrapped — the operand becomes the entire
-	 * `if`-parens-delimited condition, so dropping that paren is always precedence-safe
-	 * (`!(a && b)` becomes `a && b`). Null when the kept node has no span.
+	 * Push the three inversion splices for one flagged value form (or nothing when it is no longer
+	 * `Fixable`): the condition replaced by the positive form, the branches swapped. Each is a
+	 * `ParenGuard` splice — the whole text is the hole — because each lands in an operator context
+	 * the parser, not this rule, decides about.
 	 */
-	private static function positiveConditionText(operand: QueryNode, source: String, parenKind: Null<String>): Null<String> {
-		final kept: QueryNode = parenKind != null && operand.kind == parenKind && operand.children.length == 1
-			? operand.children[0]
-			: operand;
-		final span: Null<Span> = kept.span;
-		return span == null ? null : source.substring(span.from, span.to);
+	private static function valueEdits(node: QueryNode, scan: Scan, out: Array<GuardedEdit>): Void {
+		if (node.children.length != IF_WITH_ELSE_CHILD_COUNT || !valueVerdict(node, scan).match(Fixable)) return;
+		final source: String = scan.site.source;
+		final cond: QueryNode = node.children[0];
+		final condSpan: Null<Span> = tight(cond, scan);
+		final thenSpan: Null<Span> = tight(node.children[1], scan);
+		final elseSpan: Null<Span> = tight(node.children[2], scan);
+		final keptSpan: Null<Span> = NegatedCondition.negatedOperand(cond, scan.site)?.span;
+		if (condSpan == null || thenSpan == null || elseSpan == null || keptSpan == null) return;
+		out.push(splice(condSpan, keptSpan, source));
+		out.push(splice(thenSpan, elseSpan, source));
+		out.push(splice(elseSpan, thenSpan, source));
 	}
 
+	/**
+	 * `node`'s span without the trailing trivia a node span may run on through (a prefix `!` ends past
+	 * the blank before the `?`), so a splice over it keeps the whitespace and any comment there in place.
+	 */
+	private static function tight(node: QueryNode, scan: Scan): Null<Span> {
+		final span: Null<Span> = node.span;
+		return span == null ? null : ElementSpan.trailingTrimmedSpan(scan.site.source, span, scan.regions);
+	}
 
-	/** Resolve the if / not / paren seam kinds, or null when a required piece is unset. */
-	private static function resolveSeams(plugin: GrammarPlugin, files: Array<{ file: String, source: String }>): Null<Seams> {
+	/** The per-file scan state over `seams`; the lexical regions are lexed once, on first demand. */
+	private static function scanOf(seams: Seams, file: String, source: String, root: QueryNode, plugin: GrammarPlugin): Scan {
+		var lexed: Null<Array<LexRegion>> = null;
+		return {
+			regions: () -> {
+				final known: Null<Array<LexRegion>> = lexed;
+				if (known != null) return known;
+				final fresh: Array<LexRegion> = plugin.lexicalRegions(source);
+				lexed = fresh;
+				return fresh;
+			},
+			seams: seams,
+			site: {
+				seams: seams.negation,
+				file: file,
+				source: source,
+				root: root
+			}
+		};
+	}
+
+	/** Resolve the if / value-form / negation seams, or null when a required piece is unset. */
+	private static function resolveSeams(
+		plugin: GrammarPlugin, files: Array<{ file: String, source: String }>, ?report: SymbolIndex
+	): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
 		final ifKinds: Array<String> = shape.ifStatementKinds ?? [];
-		final notKind: Null<String> = shape.notKind;
-		if (ifKinds.length == 0 || notKind == null) return null;
-		final parenKind: Null<String> = shape.parenKind;
+		final negation: Null<InversionSeams> = NegatedCondition.readSeams(plugin, files, report);
+		if (ifKinds.length == 0 || negation == null) return null;
+		final ternaryKind: Null<String> = shape.ternaryKind;
+		final ifExpressionKinds: Array<String> = shape.ifExpressionKinds ?? [];
 		return {
 			ifKinds: ifKinds,
-			notKind: notKind,
-			parenKind: parenKind,
-			selection: OperatorSelection.of(plugin, files),
+			ternaryKind: ternaryKind,
+			ifExpressionKinds: ifExpressionKinds,
+			valueKinds: (ternaryKind == null ? [] : [ternaryKind]).concat(ifExpressionKinds),
+			negation: negation,
 			shape: shape
 		};
+	}
+
+	/** The `ParenGuard` splice writing `from`'s source over `to` — the whole text is the hole. */
+	private static function splice(to: Span, from: Span, source: String): GuardedEdit {
+		return { span: to, text: source.substring(from.from, from.to), holes: [] };
 	}
 
 }
@@ -209,16 +281,33 @@ final class InvertNegatedIfElse implements Check {
 /** The resolved seams `InvertNegatedIfElse` reads in both `run` and `fix`. */
 private typedef Seams = {
 	final ifKinds: Array<String>;
-	final notKind: String;
-	final parenKind: Null<String>;
+	final ternaryKind: Null<String>;
+	final ifExpressionKinds: Array<String>;
 
-	/**
-	 * The run OPERATOR table, or null when the grammar declares no operator-overload annotation.
-	 * The inversion DROPS a `!` and swaps the branches, which is an exact complement only while
-	 * that `!` is the built-in one — see `builtinNot`.
-	 */
-	final selection: Null<OperatorSelection>;
+	/** `ternaryKind` and `ifExpressionKinds` together — every value form the rule inverts. */
+	final valueKinds: Array<String>;
+
+	/** The negation read every form shares (`NegatedCondition`), its operator table included. */
+	final negation: InversionSeams;
 
 	/** Read by `RegionTerminator` for the region kind and its terminator. */
 	final shape: RefShape;
 };
+
+/** One file's scan: the run seams and that file's negation site. */
+private typedef Scan = {
+	final seams: Seams;
+	final site: InversionSite;
+
+	/** The file's lexical regions, lexed on first demand (`ElementSpan.trailingTrimmedSpan`). */
+	final regions: () -> Array<LexRegion>;
+};
+
+/** What a value form is to this rule. */
+private enum ValueVerdict {
+	Skip;
+	Fixable;
+
+	/** Reported, not rewritten: a comment would be dropped or left describing the other branch. */
+	CommentBlocked;
+}

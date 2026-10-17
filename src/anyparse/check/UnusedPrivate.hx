@@ -20,6 +20,7 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeRefIndex;
+import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -300,6 +301,8 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 		// resolution scope onto whatever it is handed.
 		final reflected: Array<String> = _reflectedContents ?? ReflectionScan.reflectionSurface([{ file: '', source: source }], plugin)
 			.whole;
+		final shape: RefShape = plugin.refShape();
+		final pure: (QueryNode) -> Bool = initializerPurity(plugin, source, tree, index);
 
 		final deleting: Array<QueryNode> = [];
 		// The finding behind each member this call TRIED to delete, so the region gate below can name
@@ -336,14 +339,13 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 			}
 			final decline: Null<String> = memberDeclineReason(
 				node, owner, hit.inExtends, supertypeDecline.bind(plugin, v.file, source, owner, node.name), index, classMeta, reflected,
-				plugin.refShape(), stringsUnreachable.bind(node, hit.parent, owner, v.file, plugin, scopeIndex ?? index)
+				pure, stringsUnreachable.bind(node, hit.parent, owner, v.file, plugin, scopeIndex ?? index)
 			);
 			if (decline == null)
 				attempt();
 			else
 				v.declineReason = decline;
 		}
-		final shape: RefShape = plugin.refShape();
 		final surviving: Array<QueryNode> = survivingPerType(
 			tree, MemberBranchScan.seamsOf(shape, source, plugin.lexicalRegions.bind(source)), shape.conditionalMemberKind, deleting
 		);
@@ -569,10 +571,10 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	 * Why removing `member`s declaration would drop behaviour, or null when it drops none: a
 	 * body-bearing method never executes at its site (deletable); a body-less declaration is a
 	 * contract whose implementation lives elsewhere (never deletable); a field is deletable only
-	 * when it has no initializer or a side-effect-free one (its first child is the initializer
-	 * expression).
+	 * when it has no initializer or one `pure` clears (its first child is the initializer expression): the type-aware deletion
+	 * purity `TypeResolver.isDeletionPure` when the fix has an index, the kind-only `MemberKinds.isSideEffectFree` without one.
 	 */
-	private static function shapeDecline(member: QueryNode, shape: RefShape): Null<String> {
+	private static function shapeDecline(member: QueryNode, pure: (QueryNode) -> Bool): Null<String> {
 		// A body-less declaration has no dead code to remove — its implementation
 		// lives elsewhere (an `extern`'s in native code; an `abstract`'s in
 		// subclasses, though those are already exempt in `violationFor`).
@@ -581,7 +583,7 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 				+ 'in native code) and there is no dead code here to remove';
 		if (member.kind != 'VarMember' && member.kind != 'FinalMember') return null;
 		final init: Null<QueryNode> = member.children.length > 0 ? member.children[0] : null;
-		return init == null || MemberKinds.isSideEffectFree(init, shape)
+		return init == null || pure(init)
 			? null
 			: 'the initializer is not provably side-effect-free, so deleting the field would drop whatever it does';
 	}
@@ -865,10 +867,10 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	 */
 	private static function memberDeclineReason(
 		node: QueryNode, owner: Null<String>, inExtends: Bool, supertypes: () -> Null<String>, index: Null<SymbolIndex>,
-		classMeta: Map<String, { hasBuild: Bool, hasKeep: Bool }>, reflected: Array<String>, shape: RefShape,
+		classMeta: Map<String, { hasBuild: Bool, hasKeep: Bool }>, reflected: Array<String>, pure: (QueryNode) -> Bool,
 		stringsUnreachable: () -> Bool
 	): Null<String> {
-		final shapeReason: Null<String> = shapeDecline(node, shape);
+		final shapeReason: Null<String> = shapeDecline(node, pure);
 		if (shapeReason != null) return shapeReason;
 		if (mayImplementAbstractMethod(node, inExtends)) {
 			final reason: Null<String> = supertypes();
@@ -949,6 +951,20 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 				declined.declineReason = 'every member of its `#if` branch would go with it, and emptying a conditional region '
 					+ 'loses the branch itself';
 		}
+	}
+
+	/**
+	 * How `fix` judges a field initializer: by the deletion purity `unused-local` asks of a local's — with an index, a
+	 * plain field read, a pure array literal and a provably pure stdlib call widen the kind-only answer
+	 * (`TypeResolver.isDeletionPure`); without one, `MemberKinds.isSideEffectFree`.
+	 */
+	private static function initializerPurity(
+		plugin: GrammarPlugin, source: String, tree: QueryNode, index: Null<SymbolIndex>
+	): (QueryNode) -> Bool {
+		final shape: RefShape = plugin.refShape();
+		return index == null
+			? MemberKinds.isSideEffectFree.bind(_, shape)
+			: TypeResolver.isDeletionPure.bind(_, tree, shape, RunScan.typeInfoOf(plugin)?.declaredTypes(source) ?? [], index);
 	}
 
 }

@@ -162,6 +162,49 @@ class SimplifyBooleanReturnChainCheckTest extends Test {
 		Assert.equals('return s < t || b;', reduce('{ if (s < t) return true; if (b) return true; return false; }'));
 	}
 
+	/**
+	 * A guard's null test that is not the first `||` operand regroups: the flat `a == null || b == null || b.length == 0`
+	 * strands `b`'s narrowing (4.3.7 rejects it), the guards narrowed it by their early returns.
+	 */
+	@:killer('M-NARROWING-OR-FLAT')
+	@:pin('control')
+	public function testStrandedNullTestRegroups(): Void {
+		Assert.equals(
+			'return a == null || (b == null || b.length == 0);',
+			reduce('{ if (a == null) return true; if (b == null) return true; if (b.length == 0) return true; return false; }')
+		);
+		Assert.equals(
+			'return a || (s == null || s.length == 0);',
+			reduce('{ if (a) return true; if (s == null) return true; if (s.length == 0) return true; return false; }')
+		);
+	}
+
+	/** The first guard's fact survives the flat `||`: no group. */
+	public function testFirstGuardNullTestStaysFlat(): Void {
+		Assert.equals(
+			'return s == null || s.length == 0;', reduce('{ if (s == null) return true; if (s.length == 0) return true; return false; }')
+		);
+	}
+
+	/** A negated `&&` guard folds into an `||` chain too, and its null test regroups behind the guard before it. */
+	@:killer('M-GUARD-CHAIN-NEGATED-RUN-DROPPED')
+	@:pin('control')
+	public function testNegatedConjunctionGuardRegroups(): Void {
+		Assert.equals(
+			'return a || (s == null || !s.ok);', reduce('{ if (a) return true; if (s != null && s.ok) return false; return true; }')
+		);
+	}
+
+	/** A comment between the guards of a chain that must regroup refuses the reduction: the regrouped text has no place for it. */
+	@:killer('M-NARROWING-OR-GLUE-COMMENT-ADMITTED')
+	@:pin('control')
+	public function testStrandedNullTestWithCommentNotReduced(): Void {
+		Assert.equals(
+			'',
+			reduce('{ if (s == null) return true;\n// why\nif (t == null) return true; if (t.length == 0) return true; return false; }')
+		);
+	}
+
 	private function violations(body: String): Array<Violation> {
 		final src: String =
 			'class C { static function f(a: Bool, b: Bool, c: Bool, x: Int, s: String, t: String, y: Float): Dynamic ${body} }';
