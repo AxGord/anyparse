@@ -3250,3 +3250,8 @@ decided the question; it may not become a record of runs.
   signature answered for it and `foreach(ok)` was proposed for a `(v:Int, ?w:Int) -> Bool` literal Haxe 4.3.7
   rejects. `LoopScan.capturedByClosure` takes the two kind sets it reads instead of a whole `LoopSeams`, so
   `prefer-range-loop`'s bundle passes as it is — branch `feat/infra-N8`
+- the two `stripAnsi` copies disagreed: `LintFixSafePass` removed every CSI sequence, `TestTranscript` only an SGR
+  colour code (`ESC[<digits;>m`) → one `SourceText.stripAnsi`, the CSI-wide reading. A transcript row behind an
+  erase-line (`ESC[2K`, what a progress printer redraws with) kept its escape, failed the indent-anchored row
+  regexes and was not counted (`ApqDxTier3CliTest#testTestSummaryReadsRowsBehindAnEraseLine`, RED on `b5a5bccac`)
+  — branch `feat/infra-N6`
