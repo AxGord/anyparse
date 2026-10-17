@@ -5,6 +5,7 @@ import anyparse.check.Check.CrossFileFix;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
@@ -17,8 +18,11 @@ using Lambda;
  * A parameter with no default that at least two call sites hand the SAME compile-time constant:
  * the constant is the default the signature never declared. Flags the parameter, and the autofix
  * writes `= <constant>` onto it and drops the argument at every site that agreed — atomically,
- * across files, through `CrossFileFix`. Sites passing something ELSE keep their explicit argument
- * and are untouched, which is what makes the rewrite meaning-preserving rather than a guess.
+ * across files, through `CrossFileFix`. Sites passing something ELSE keep their explicit argument and are untouched,
+ * which is what makes the rewrite meaning-preserving rather than a guess — PROVIDED that argument is never `null`:
+ * Haxe hands a parameter its default for an explicit `null` too (`f(null)` with `x:Null<Int> = 7` is 7 on 4.3.7,
+ * `--interp` and js), so one call of the name whose argument there is not proven non-null (`provenNonNull`, a
+ * positive list) refuses the finding. The rewrite compiles either way, so no compiler oracle can catch it.
  * `Severity.Info`, default OFF.
  *
  * The shape is common enough to have a name: a constant whose own doc calls it "the default", read
@@ -105,8 +109,9 @@ final class DefaultRepeatedArgument implements Check implements DefaultOff imple
 		final parsed: Array<Parsed> = parseAll(plugin, files, resolved);
 		final scope: Scope = collectDeclarations(parsed, resolved);
 		final census: Map<String, Map<String, Array<CallSite>>> = [];
-		for (entry in parsed) collectCalls(census, entry, scope, resolved);
-		return report(census, scope, resolved);
+		final nullable: Map<String, Bool> = [];
+		for (entry in parsed) collectCalls(census, nullable, entry, scope, resolved);
+		return report(census, nullable, scope, resolved);
 	}
 
 	/** Every edit lands through `crossFileFix` — the argument sites are in other files. */
@@ -133,7 +138,9 @@ final class DefaultRepeatedArgument implements Check implements DefaultOff imple
 	// ---- reporting -------------------------------------------------------------------------
 
 	/** One finding per (member, parameter) whose agreeing sites clear every gate. */
-	private function report(census: Map<String, Map<String, Array<CallSite>>>, scope: Scope, seams: Seams): Array<Violation> {
+	private function report(
+		census: Map<String, Map<String, Array<CallSite>>>, nullable: Map<String, Bool>, scope: Scope, seams: Seams
+	): Array<Violation> {
 		final out: Array<Violation> = [];
 		for (key => byConstant in census) {
 			final parts: Array<String> = key.split('#');
@@ -141,7 +148,8 @@ final class DefaultRepeatedArgument implements Check implements DefaultOff imple
 			final found: Null<MemberInfo> = scope.members[parts[0]];
 			if (index == null || found == null) continue;
 			final member: MemberInfo = found;
-			if (!eligible(member, scope, seams)) continue;
+			// A call of the name passing an argument there that may be null would take the default once there is one.
+			if (!eligible(member, scope, seams) || nullable['${member.name}#$index'] == true) continue;
 			final winner: Null<{ constant: String, sites: Array<CallSite> }> = agreed(byConstant);
 			if (winner == null) continue;
 			final param: Null<QueryNode> = index < member.params.length ? member.params[index] : null;
@@ -186,9 +194,15 @@ final class DefaultRepeatedArgument implements Check implements DefaultOff imple
 
 	/** Every (member, parameter index) a call handed a constant, and which constant, and where. */
 	private static function collectCalls(
-		census: Map<String, Map<String, Array<CallSite>>>, entry: Parsed, scope: Scope, seams: Seams
+		census: Map<String, Map<String, Array<CallSite>>>, nullable: Map<String, Bool>, entry: Parsed, scope: Scope, seams: Seams
 	): Void {
 		walkCalls(entry.tree, null, (call, owner) -> {
+			// EVERY call of a name the scope declares, resolved or not: Haxe hands a parameter its default for an explicit
+			// `null` too, so a site whose argument may be null would change meaning under the default — and it compiles.
+			final called: Null<String> = call.children[0].name;
+			if (called != null && scope.memberOwners.exists(called))
+				for (i in 1...call.children.length)
+					if (!provenNonNull(call.children[i], owner, entry, scope, seams)) nullable['$called#${i - 1}'] = true;
 			final member: Null<MemberInfo> = resolveCallee(call, owner, entry, scope, seams);
 			if (member == null) return;
 			final args: Array<QueryNode> = [for (i in 1...call.children.length) call.children[i]];
@@ -379,7 +393,8 @@ final class DefaultRepeatedArgument implements Check implements DefaultOff imple
 				if (seams.functionKinds.contains(child.kind))
 					addMember(child, owner, name, run, blocked, entry, scope, seams);
 				else if (isInlineConstant(run, seams))
-					scope.constants['$owner.$name'] = true;
+					// One whose value is `null` is no default worth writing, and no proof an argument is non-null.
+					scope.constants['$owner.$name'] = child.children.length == 0 || child.children[0].kind != seams.nullLiteralKind;
 			}
 			run.resize(0);
 			blocked = false;
@@ -489,7 +504,23 @@ final class DefaultRepeatedArgument implements Check implements DefaultOff imple
 		]) {
 			if (kind != null && !modifiers.contains(kind)) modifiers.push(kind);
 		}
+		final nonNullKinds: Array<String> = [
+			for (kind in MemberKinds.constantLiteralKinds(shape)) if (kind != shape.nullLiteralKind) kind
+		];
+		for (kind in [
+			shape.newExprKind,
+			shape.arrayLiteralKind,
+			shape.objectLiteralKind,
+			shape.notKind,
+			shape.logicalAndKind,
+			shape.logicalOrKind
+		]) if (kind != null) nonNullKinds.push(kind);
+		for (kind in (shape.lambdaKinds ?? []).concat(shape.comparisonKinds ?? [])) nonNullKinds.push(kind);
 		return {
+			nonNullKinds: nonNullKinds,
+			nullLiteralKind: shape.nullLiteralKind,
+			parenKind: shape.parenKind,
+			negationKind: shape.negationKind,
 			callKind: callKind,
 			identKind: shape.identKind,
 			fieldAccessKind: fieldAccessKind,
@@ -511,6 +542,20 @@ final class DefaultRepeatedArgument implements Check implements DefaultOff imple
 			constructorName: shape.constructorName,
 			bodyKinds: shape.functionBodyKinds ?? []
 		};
+	}
+
+	/**
+	 * Whether `arg` can never be `null` — a POSITIVE list, since a typecheck is no net here: a non-null literal (a
+	 * negated one too), a construction, a collection or object literal, a function value, a boolean operator's result,
+	 * or a reference to an `inline` constant whose value is no `null` literal. Anything else (a variable, a call, a field
+	 * read, `null` itself) may be null at run time, where it would take the default instead of itself.
+	 */
+	private static function provenNonNull(arg: QueryNode, owner: Null<String>, entry: Parsed, scope: Scope, seams: Seams): Bool {
+		final kids: Array<QueryNode> = arg.children;
+		if ((arg.kind == seams.parenKind || arg.kind == seams.negationKind) && kids.length == 1)
+			return provenNonNull(kids[0], owner, entry, scope, seams);
+		if (seams.nonNullKinds.contains(arg.kind)) return true;
+		return owner != null && constantSpelling(arg, owner, owner, entry, scope, seams) != null;
 	}
 
 }
@@ -563,6 +608,12 @@ private typedef Scope = {
 
 /** Every seam `DefaultRepeatedArgument` reads, resolved once per run. */
 private typedef Seams = {
+	/** The kinds of an expression that is never `null` (`provenNonNull`). */
+	final nonNullKinds: Array<String>;
+
+	final nullLiteralKind: Null<String>;
+	final parenKind: Null<String>;
+	final negationKind: Null<String>;
 	final callKind: String;
 	final identKind: String;
 	final fieldAccessKind: String;

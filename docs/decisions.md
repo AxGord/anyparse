@@ -3510,3 +3510,13 @@ decided the question; it may not become a record of runs.
   provably pure stdlib call): two answers to one question, and TM's `bitmapDataCollection: Map<String, Any> = []` was
   declined as "not provably side-effect-free". The field gate now asks `isDeletionPure` when the fix has an index
   (the kind-only answer without one) — branch `feat/infra-N15`
+- `default-repeated-argument` changed what a call means: it took "a site passing something else keeps its explicit
+  argument" for meaning-preserving, but Haxe hands a parameter its default for an explicit `null` too (`f(null)` with
+  `x:Null<Int> = 7` answers 7 on 4.3.7, `--interp` and js). TM's `SharedSyncLoopTest.seedGhost(cloudId:Null<Int>)`
+  got `= GHOST_ID` from three agreeing sites, so the fourth, `seedGhost(null)`, silently became
+  `seedGhost(GHOST_ID)` and the test it drove failed; it compiles, so the oracle cannot catch this class. Now EVERY
+  call of the name (resolved or not) is read: an argument at the parameter's position that is not proven non-null
+  refuses the finding. Proven = a POSITIVE list (`provenNonNull`): a non-null literal (also negated), `new`, an array /
+  object literal, a function value, a comparison or boolean operator, a reference to an `inline` constant whose value
+  is no `null` literal (such a constant is no default candidate either). A variable or a call is not proven — no
+  types read, since a non-`Null<T>` declaration proves nothing without null safety — branch `feat/infra-N15`
