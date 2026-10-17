@@ -7096,7 +7096,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-KWREF-TIGHT-LEAD-BLIND :: anyparse.macro.WriterKwRefLowering#subStructStartsWithTightLead',
 			'M-CASE-CTRLFLOW-STAR-FLAG-BLIND :: anyparse.macro.WriterTriviaStarDispatch#ownStarHasFlag',
 			'M-PROJECTED-KINDS-ALT-ONLY :: anyparse.macro.QueryWalkerLowering#eachProjectedKind',
-			'M-DECL-HOST-KIND-STALE :: anyparse.grammar.haxe.HaxeQueryPlugin#FinalMember:DECL_HOST_KINDS',
+			'M-DECL-HOST-KIND-STALE :: anyparse.grammar.haxe.HaxeRefShape#FinalMember:DECL_HOST_KINDS',
 			'M-ELLIPSIS-STMT-TOKEN-STALE :: anyparse.grammar.haxe.HxStatement#SimpleCtor:EllipsisStmt',
 			'M-NON-NULL-RHS-DROP-HEX :: anyparse.check.NullFlow#FinalMember:NON_NULL_RHS_KINDS',
 			'M-SPAWN-RUNALL-IGNORES-CWD :: anyparse.check.HaxeSpawn#FinalMember:PARALLEL_DRIVER',
