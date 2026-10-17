@@ -4,6 +4,7 @@ import anyparse.check.Check.OracleRelaxable;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.check.ReflectionScan.ReflectionSurface;
+import anyparse.query.BinderScan;
 import anyparse.query.CtorFieldWrite;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
@@ -13,6 +14,7 @@ import anyparse.query.NominalTypes;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
@@ -442,7 +444,7 @@ final class ScratchField implements Check implements RiskyFix implements OracleR
 		final defaultVis: Null<String> = shape.defaultVisibilityModifierText;
 		if (assignKind == null || exprStmtKind == null || fieldAccessKind == null || blockStmtKind == null || defaultVis == null)
 			return null;
-		final closureKinds: Array<String> = present(shape.lambdaKinds).concat(present(shape.localFunctionKinds));
+		final closureKinds: Array<String> = ShapeVocab.nestedFunctionKinds(shape);
 		return {
 			identKind: shape.identKind,
 			interpIdentKind: shape.stringInterpIdentKind,
@@ -459,7 +461,7 @@ final class ScratchField implements Check implements RiskyFix implements OracleR
 			modifierRunKinds: present(shape.modifierKinds).concat(MemberKinds.META_KINDS),
 			visibility: present(shape.visibilityModifierKinds),
 			defaultVis: defaultVis,
-			binderKinds: binderKindsOf(shape),
+			binderKinds: BinderScan.binderKinds(shape),
 			shelterKinds: closureKinds.concat(present(shape.opaqueKinds)).concat(present(shape.conditionalRegionKinds)),
 			opaqueKinds: present(shape.opaqueKinds),
 			statementListKinds: MemberKinds.withSetKinds([blockStmtKind], [shape.blockBodyKind]),
@@ -479,19 +481,6 @@ final class ScratchField implements Check implements RiskyFix implements OracleR
 			finalKeyword: 'final',
 			varKeyword: 'var'
 		};
-	}
-
-	/** Every kind that binds a name: a local, a parameter, a loop binder, a case capture, a local function, a `catch` variable. */
-	private static function binderKindsOf(shape: RefShape): Array<String> {
-		return MemberKinds.withSetKinds(
-			present(shape.localDeclKinds)
-				.concat(present(shape.paramKinds))
-				.concat(present(shape.iterationBindingKinds))
-				.concat(present(shape.iterationValueBinderKinds))
-				.concat(present(shape.casePatternBinderKinds))
-				.concat(present(shape.localFunctionKinds)),
-			[shape.catchClauseKind]
-		);
 	}
 
 	/** The simple names of the types whose values are no objects — a value type the language never nulls, a literal's type. */

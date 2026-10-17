@@ -22102,6 +22102,70 @@
 			"note": "await polls a wedged background driver forever: a stopped driver still answers the liveness probe, so the run never ends"
 		},
 		{
+			"name": "M-LOOPGUARD-DO-WHILE-BODY-LAST",
+			"type": "anyparse.check.LoopGuard",
+			"method": "match",
+			"find": "LoopScan.loopBody(loop, s.doWhileKinds)",
+			"replace": "LoopScan.loopBody(loop, [])",
+			"note": "a do-while's body is read off its LAST child, its condition, so loop-guard never sees the guard that opens it"
+		},
+		{
+			"name": "M-LOOPGUARD-BODY-STATEMENT-BLOCK-ONLY",
+			"type": "anyparse.check.LoopGuard",
+			"method": "match",
+			"find": "if (s.bodyBlockKinds.contains(body.kind)) return shielded",
+			"replace": "if (body.kind == s.blockStmtKind) return shielded",
+			"note": "the LIFT arm takes a statement block alone, so a do-while's body block is never lifted"
+		},
+		{
+			"name": "M-LOOPGUARD-EXPR-BODY-KEPT",
+			"type": "anyparse.check.LoopGuard",
+			"method": "match",
+			"find": "s.exprBodyKinds.contains(body.kind) && body.children.length == 1 ? body.children[0] : body",
+			"replace": "body",
+			"note": "the MERGE arm reads a do-while's expression-body wrapper as its header, so `do if (c) { … } while (x)` is never merged"
+		},
+		{
+			"name": "M-LOOPGUARD-HEADER-STATEMENT-IF-ONLY",
+			"type": "anyparse.check.LoopGuard",
+			"method": "match",
+			"find": "!s.headerIfKinds.contains(header.kind)",
+			"replace": "!s.ifKinds.contains(header.kind)",
+			"note": "a MERGE header must be an if-statement, so a do-while's if-expression header is never merged"
+		},
+		{
+			"name": "M-LOOPGUARD-BRANCH-STATEMENT-BLOCK-ONLY",
+			"type": "anyparse.check.LoopGuard",
+			"method": "match",
+			"find": "s.bodyBlockKinds.contains(thenBranch.kind) ?",
+			"replace": "thenBranch.kind == s.blockStmtKind ?",
+			"note": "a MERGE header's branch must be a statement block, so a do-while header's block expression is never merged"
+		},
+		{
+			"name": "M-GUARD-CONTINUE-DEFERS-STATEMENT-BLOCK-ONLY",
+			"type": "anyparse.check.GuardContinue",
+			"method": "loopGuardClaims",
+			"find": "if (!shielded) return false;",
+			"replace": "if (body.kind != s.blockStmtKind || !shielded) return false;",
+			"note": "guard-continue defers to loop-guard on a statement-block body alone, so a do-while both rules read is reported by both"
+		},
+		{
+			"name": "M-BINDER-NAMED-FN-NO-STEP-OUT",
+			"type": "anyparse.query.BinderScan",
+			"method": "bindingHostSubtree",
+			"find": "[for (k in [shape.namedFnExprKind]) if (k != null) k]",
+			"replace": "[]",
+			"note": "a rename anchored on a named function expression's own name sweeps only that function's body, though the name binds in the enclosing one"
+		},
+		{
+			"name": "M-VOCAB-NESTED-NO-NAMED-FN",
+			"type": "anyparse.query.ShapeVocab",
+			"method": "nestedFunctionKinds",
+			"find": "one(shape.namedFnExprKind),",
+			"replace": "",
+			"note": "the named function expression drops out of every nested- and function-like-kind reader: its scope, parameters, returns and captures are read as the enclosing function's"
+		},
+		{
 			"name": "M-REMOVE-ELEMENT-KIND-IGNORED",
 			"type": "anyparse.query.cli.command.RemoveElementCommand",
 			"method": "runRemoveElement",

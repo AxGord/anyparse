@@ -3140,6 +3140,27 @@ decided the question; it may not become a record of runs.
   `ThreadSafetyPositiveSinksTest#testStdResultsTypeTheirReceivers`, the test its cut breaks: the import case of
   `testALibraryTypeIsNotItsProjectNamesake` is typed through a path that does not ask `CallGraphImports.typeOf` — branch
   `feat/infra-N3`
+- the two narrower function unions B6a named are gone: `ShapeVocab.functionOrLambdaKinds` (`functionKinds ∪
+  lambdaKinds`, 15 readers) and `lambdaOrLocalFunctionKinds` (5 readers) both left out the named function expression
+  `function g() …` written as a value and the local `inline function`, and every reader asked a question those two answer
+  like any other function (Haxe 4.3.7 `--interp`: `function g` binds `g` in the enclosing scope AND in its own body, an
+  `inline` local function has its own `return`, Haxe rejects a `final` field write in either). Readers asking "which
+  function owns this — its scope, parameters, `return`s, return type, body" now read `functionLikeKinds`
+  (`CasePatternScan`, `ExtractRepeatedExpression`, `JoinReturn`, `PreferSafeNavComparison`, `RedundantReplaceLoop`,
+  `BinderScan.bindingScopeKinds` and through it `JoinSingleUseLocal` — whose own copy of the enclosing-function walk is
+  deleted — `CrossRenameMember` (a pure respell: its body-child derivation already caught the named form),
+  `ImplicitSites`, `MemberReach`, `MemberTouchScan.bodyDiscardsItsValue`, `NullGuardedCode`, `ValueEscapes`); readers
+  asking "is this a body that runs later" read `nestedFunctionKinds` (`MemberTouchScan` capture, `LoopScan` /
+  `PreferRangeLoop` capture, `CtorFieldWrite`, `ScratchField`). `ScratchField`'s own binder list is
+  `BinderScan.binderKinds` now. A named function expression's name binds in the PARENT, so `bindingHostSubtree` steps out
+  of it as out of a local function. Two of the old answers were unsound (`ValueEscapes` read a nested `return` against
+  the enclosing METHOD's type, `MemberTouchScan.localEscape` missed a capture by a named function); the rest refused or
+  missed a site. `loop-guard` visits a `do … while` (its `continue` goes on to the condition, the same equivalence;
+  body = first child, a block body or an expression body holding the header `if`), and `guard-continue`'s deferral asks
+  no loop kind any more. Kept: `prefer-lambda-expression-body` leaves `do … while` out (`() -> do x while (c)` does not
+  parse in this grammar, Haxe accepts it); `ScratchField`'s `loopKinds` / `doWhileKinds` are two arms of one union (a
+  do-while body all-conditional because a `continue` skips its rest); `FactsProvenance` reads the LOWERED loops (`for`
+  and comprehensions), and no `do … while` is lowered — branch `feat/infra-N2`
 - `apq rewrite` never hands a NAME-slot capture (`new $C()`, `final $x = …`, `a.$f`: the matcher's `NameOnly` binding)
   to `ParenGuard` as a hole (`Rewrite.isNameCapture`). The guard's premise that an illegal pair fails to parse is false
   after `new`: `new (A)()` parses as a call of an identifier `new`, so the type name looked both wrappable and

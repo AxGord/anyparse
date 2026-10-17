@@ -682,9 +682,13 @@ final class CtorFieldWrite {
 			collectCtorFieldWrites(child, fieldFrom, fieldName, container, shape, assignKind, closures, enclosed, out);
 	}
 
-	/** The kinds that host a deferred body — a lambda, a local `function`, a local `inline function`. */
+	/**
+	 * The kinds that host a deferred body — every nested function (`ShapeVocab.nestedFunctionKinds`): a lambda, a local
+	 * `function`, a local `inline function` and a named function expression, inside each of which Haxe 4.3.7 rejects a
+	 * `final` field write (`This expression cannot be accessed for writing`, verified on `--interp`).
+	 */
 	private static function closureHostKinds(shape: RefShape): Array<String> {
-		return ShapeVocab.lambdaOrLocalFunctionKinds(shape).concat(shape.inlineFunctionKinds ?? []);
+		return ShapeVocab.nestedFunctionKinds(shape);
 	}
 
 	/**

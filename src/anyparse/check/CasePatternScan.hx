@@ -389,7 +389,7 @@ final class CasePatternScan {
 	 * a branch of its own, and there are six here.
 	 */
 	private static function scopeSeamsOf(shape: RefShape): ScopeSeams {
-		final functionKinds: Array<String> = ShapeVocab.functionOrLambdaKinds(shape);
+		final functionKinds: Array<String> = ShapeVocab.functionLikeKinds(shape);
 		final catchKind: Null<String> = shape.catchClauseKind;
 		return {
 			functionKinds: functionKinds,

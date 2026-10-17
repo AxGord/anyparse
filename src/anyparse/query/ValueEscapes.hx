@@ -307,15 +307,15 @@ final class ValueEscapes {
 		final memberFunctions: Array<String> = [
 			for (k in shape.functionKinds ?? []) if (!(shape.localFunctionKinds ?? []).contains(k)) k
 		];
-		final functions: Array<String> = ShapeVocab.functionOrLambdaKinds(shape);
+		final functions: Array<String> = ShapeVocab.functionLikeKinds(shape);
 		final assignKinds: Array<String> = [for (k in [shape.assignKind, shape.nullCoalAssignKind]) if (k != null) k];
 		// a lambda whose body is an expression yields it; a `function` lambda returns only through `return`
 		final arrowKinds: Array<String> = [
 			for (k in shape.lambdaKinds ?? []) if (k != shape.fnExprKind && k != shape.namedFnExprKind) k
 		];
-		// statements that yield no value as a block's last one
-		final silentKinds: Array<String> = (shape.localDeclKinds ?? []).concat(shape.loopStatementKinds ?? [])
-			.concat(shape.doWhileLoopKinds ?? [])
+		// statements that yield no value as a block's last one; a local function
+		// yields its closure, which `value` lets pass as it does a lambda
+		final silentKinds: Array<String> = (shape.localDeclKinds ?? []).concat(ShapeVocab.statementLoopKinds(shape))
 			.concat(shape.localFunctionKinds ?? [])
 			.concat(shape.valueReturnKinds ?? [])
 			.concat(shape.throwKinds ?? [])

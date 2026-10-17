@@ -35,19 +35,6 @@ final class ShapeVocab {
 	}
 
 	/**
-	 * The declared functions and the lambdas — `functionKinds` and `lambdaKinds`, each once. Narrower than
-	 * `functionLikeKinds`: a named function expression and an `inline` local function are not in it.
-	 */
-	public static function functionOrLambdaKinds(shape: RefShape): Array<String> {
-		return union([shape.functionKinds, shape.lambdaKinds]);
-	}
-
-	/** The lambdas and the local function statements — `lambdaKinds` and `localFunctionKinds`, each once. */
-	public static function lambdaOrLocalFunctionKinds(shape: RefShape): Array<String> {
-		return union([shape.lambdaKinds, shape.localFunctionKinds]);
-	}
-
-	/**
 	 * The `return` STATEMENTS — `returnStatementKind` and `voidReturnKind`, each once: the ones that end a statement list,
 	 * a `return` in expression position (`valueReturnKinds`) aside.
 	 */

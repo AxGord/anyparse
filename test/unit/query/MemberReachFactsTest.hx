@@ -5355,4 +5355,37 @@ class MemberReachFactsTest extends Test {
 		assertMatch(result, r -> r.match(Unknown(DynamicName(_, _))));
 	}
 
+	/**
+	 * A `return` lands its value at the return type of its OWN function, and a named function expression or an
+	 * `inline` local function is one (`ShapeVocab.functionLikeKinds`): `d` returned as the `String` such a function
+	 * declares is converted by its `toString`, which replaces `items` — read off the enclosing `main`, which declares no
+	 * return type, it landed nowhere.
+	 */
+	public function testAReturnOfANestedFunctionLandsAtItsOwnReturnType(): Void {
+		function region(code: String): String {
+			return LOOP_HEAD + '\tstatic var d:Dynamic = null;\n\n\tstatic function main() {\n\t\td = new Obj();\n'
+				+ '\t\tfor (i in 0...items.length) { /*<*/ ' + code + ' /*>*/ }\n\t}\n}\n' + CLEARING_OBJ;
+		}
+		for (code in [
+			'final g = function named():String { return d; };',
+			'inline function named():String { return d; }'
+		]) assertMatch(ask(['Main.hx' => region(code)], null, false), r -> r.match(Reached(_)));
+		assertMatch(ask(['Main.hx' => region('final g = function named():Int { return 1; };')], null, false), r -> r.match(Proven));
+	}
+
+	/**
+	 * A read of the parameter from a named function expression or an `inline` local function nested in the method
+	 * captures the value, as one from a lambda does (`ShapeVocab.functionLikeKinds`): the use is no proof that nothing
+	 * calls it, so the guard's branch is not known never to run.
+	 */
+	public function testAParameterReadByANestedFunctionLeavesItsGuardUnknownUnderTheTruth(): Void {
+		final hop: String = '\tstatic function store(key:String, value:Dynamic -> Void):Void {\n'
+			+ '\t\tif (entries == null) entries = new Map();\n\t\tentries[key] = value;\n\t}\n';
+		for (nested in [
+			'final g = () -> store(name, entry);\n\t\tg();',
+			'final g = function named():Void store(name, entry);\n\t\tg();',
+			'inline function named():Void store(name, entry);\n\t\tnamed();'
+		]) assertGuarded(guardedFixture(null, nested, null, hop), false);
+	}
+
 }

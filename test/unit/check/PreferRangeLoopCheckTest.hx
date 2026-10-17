@@ -174,6 +174,14 @@ class PreferRangeLoopCheckTest extends Test {
 		Assert.equals(0, violations(wrapFn('var i = 0;\n\t\twhile (i < n) {\n\t\t\tqueue(() -> i);\n\t\t\ti++;\n\t\t}')).length);
 	}
 
+	/** A named function expression or an `inline` local function capturing the counter bails as a lambda does. */
+	public function testEveryNestedFunctionFormCapturingCounterNotFlagged(): Void {
+		for (capture in [
+			'queue(function named() return i);',
+			'inline function named() return i;\n\t\t\tqueue(named);'
+		]) Assert.equals(0, violations(wrapFn('var i = 0;\n\t\twhile (i < n) {\n\t\t\t$capture\n\t\t\ti++;\n\t\t}')).length, capture);
+	}
+
 	private function wrapFn(body: String): String {
 		return 'class C {\n\tfunction f(n:Int):Void {\n\t\t$body\n\t}\n}';
 	}

@@ -410,6 +410,17 @@ class JoinSingleUseLocalCheckTest extends Test {
 		Assert.equals(0, violations(wrapField("final x = _f;\n\t\tuse(x);\n\t\ttrace('got ${x}');")).length);
 	}
 
+	/**
+	 * The leftover-use scan covers the function the local is declared in, and a named function expression or an
+	 * `inline` local function is one (`ShapeVocab.functionLikeKinds`): a later `x` of the OUTER method, past the
+	 * nested function's end, is no use of the nested function's local and must not refuse it.
+	 */
+	public function testScanStopsAtTheNestedFunctionTheLocalIsDeclaredIn(): Void {
+		final body: String = '{\n\t\t\tfinal x = _f;\n\t\t\tuse(x);\n\t\t}';
+		for (nested in ['final h = function g() $body;', 'inline function g() $body'])
+			Assert.equals(1, violations(wrapField('$nested\n\t\tuse(x);')).length, nested);
+	}
+
 	/** Wrap a statement body in a class carrying one typed field, so a field capture resolves a declared type. */
 	private inline function wrapField(body: String): String {
 		return wrapTyped('private final _f:Null<T>;', body);
