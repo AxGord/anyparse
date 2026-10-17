@@ -697,20 +697,18 @@ class GuardContinueCheckTest extends Test {
 	}
 
 	/**
-	 * A `do … while` whose body opens with a guard `loop-guard` WOULD lift if it visited do-while
-	 * loops — which it does not: it reads `loopStatementKinds` only, while this check also reads
-	 * `doWhileLoopKinds`. The first draft of the deferral asked a body-level predicate that cannot
-	 * see the loop kind, and the site went unreported by BOTH rules. The identical `for` body is the
-	 * discriminator beside it: there the deferral is right.
+	 * A `do … while` whose body opens with a guard `loop-guard` lifts is that rule's, exactly like the identical
+	 * `for` body beside it: `loop-guard` visits every loop statement (`ShapeVocab.statementLoopKinds`), so the
+	 * deferral asks the same loop set. Before it did, a `do … while` was the one loop both rules read differently:
+	 * `loop-guard` skipped it and this check kept the cascade it would have lifted.
 	 */
-	public function testKeepsADoWhileLoopGuardNeverVisits(): Void {
+	@:pin('control') @:killer('M-GUARD-CONTINUE-DEFERS-STATEMENT-BLOCK-ONLY')
+	public function testDefersADoWhileLoopGuardLifts(): Void {
 		final body: String = '{\n\t\t\tif (a != null) continue;\n\t\t\tpre();\n\t\t\tif (b != null) {\n\t\t\t\tbody(b);\n\t\t\t}\n\t\t}';
-		final doWhile: String = wrap('do $body while (ok);');
-		Assert.equals(1, CheckFixture.violations(new GuardContinue(), doWhile).length);
-		Assert.equals(0, CheckFixture.violations(new LoopGuard(), doWhile).length);
-		final forLoop: String = wrap('for (x in xs) $body');
-		Assert.equals(0, CheckFixture.violations(new GuardContinue(), forLoop).length);
-		Assert.equals(1, CheckFixture.violations(new LoopGuard(), forLoop).length);
+		for (loop in [wrap('do $body while (ok);'), wrap('for (x in xs) $body')]) {
+			Assert.equals(0, CheckFixture.violations(new GuardContinue(), loop).length);
+			Assert.equals(1, CheckFixture.violations(new LoopGuard(), loop).length);
+		}
 	}
 
 	// --- helpers -------------------------------------------------------------------

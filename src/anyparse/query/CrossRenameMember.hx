@@ -911,7 +911,7 @@ final class CrossRenameMember {
 		return {
 			memberName: memberName,
 			identKind: refShape.identKind,
-			functionKinds: ShapeVocab.functionOrLambdaKinds(refShape).concat(refShape.inlineFunctionKinds ?? []),
+			functionKinds: ShapeVocab.functionLikeKinds(refShape),
 			bodyKinds: bodyKinds,
 			typeKinds: typeKinds,
 			returnKinds: returnKinds,
@@ -926,10 +926,9 @@ final class CrossRenameMember {
 	}
 
 	/**
-	 * Whether `node` owns a return type of its own: a kind the grammar NAMES as a function or
-	 * lambda, or ANY node carrying a function-BODY child — the derivation that also catches a
-	 * shape no kind list mentions (Haxe's named function expression `function g(): T …`, which is
-	 * in neither `functionKinds` nor `lambdaKinds`). Missing one would attribute an inner
+	 * Whether `node` owns a return type of its own: a function-like kind (`ShapeVocab.functionLikeKinds`, Haxe's
+	 * named function expression `function g(): T …` among them), or ANY node carrying a function-BODY child — the
+	 * derivation that also catches a shape a grammar names in no kind list. Missing one would attribute an inner
 	 * function's `return` to the OUTER function's declared type, which is the one way this scan
 	 * could rewrite a value of another abstract.
 	 */

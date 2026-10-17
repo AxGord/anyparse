@@ -22,6 +22,16 @@ import anyparse.runtime.Span;
 final class BinderScan {
 
 	/**
+	 * Every node kind that OWNS a local binding scope — every function-like kind (`ShapeVocab.functionLikeKinds`): a
+	 * method, a lambda, a local function, an `inline` one and a named function expression, whose parameters and locals
+	 * are its own. A consumer gathering the names bound around a point takes the OUTERMOST of these that contains it: an
+	 * inner scope's bindings already lie inside the outer one's subtree.
+	 */
+	public static inline function bindingScopeKinds(shape: RefShape): Array<String> {
+		return ShapeVocab.functionLikeKinds(shape);
+	}
+
+	/**
 	 * The local name a top-level statement DECLARES, or null — the `name` of
 	 * `topLevelDeclaredNode`'s result. ONE `declKinds` list rather than the node walk's
 	 * statement/expression pair: its two callers, `exclusiveBranchRedeclaration` and
@@ -180,8 +190,9 @@ final class BinderScan {
 	 * nested body, which holds no conditional region: the guard passes and the rename rewrites the
 	 * references of one configuration only.
 	 *
-	 * A local `function g` is declared in its PARENT's block while its own span contains that
-	 * declaration offset, so an anchor landing exactly on the function it names steps out one level.
+	 * A local `function g` — plain, `inline`, or a named function expression `function g()` written
+	 * as a value — is declared in its PARENT's scope while its own span contains that declaration
+	 * offset, so an anchor landing exactly on the function it names steps out one level.
 	 * Otherwise renaming `g` from its own declaration would sweep only its body and miss a conditional
 	 * region two statements down that declares the same name. That is the climb the cursor anchor also
 	 * needed, now gated on the binding's identity instead of on its name.
@@ -199,9 +210,11 @@ final class BinderScan {
 		if (binding == null) return cursorHost;
 		final host: QueryNode = enclosingFunctionSubtree(tree, binding, shape);
 		if (host == tree) return cursorHost;
-		final localFnKinds: Array<String> = ShapeVocab.localFunctionScopeKinds(shape);
+		// every nested function that DECLARES its name in the parent: a local one, an `inline` one, a named function expression
+		final namedFnKinds: Array<String> = ShapeVocab.localFunctionScopeKinds(shape)
+			.concat([for (k in [shape.namedFnExprKind]) if (k != null) k]);
 		final span: Null<Span> = host.span;
-		if (span == null || span.from != binding || !localFnKinds.contains(host.kind)) return host;
+		if (span == null || span.from != binding || !namedFnKinds.contains(host.kind)) return host;
 		final parentSpan: Null<Span> = TreePath.parentOf(tree, host)?.span;
 		return parentSpan == null ? tree : enclosingFunctionSubtree(tree, parentSpan.from, shape);
 	}
@@ -230,15 +243,6 @@ final class BinderScan {
 		}
 		walk(tree);
 		return out;
-	}
-
-	/**
-	 * Every node kind that OWNS a local binding scope — a function, a lambda, a local function.
-	 * A consumer gathering the names bound around a point takes the OUTERMOST of these that
-	 * contains it: an inner scope's bindings already lie inside the outer one's subtree.
-	 */
-	public static function bindingScopeKinds(shape: RefShape): Array<String> {
-		return ShapeVocab.functionOrLambdaKinds(shape).concat(shape.localFunctionKinds ?? []);
 	}
 
 	/**

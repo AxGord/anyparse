@@ -176,6 +176,21 @@ class ExtractRepeatedExpressionTest extends Test {
 		);
 	}
 
+	/**
+	 * A named function expression and an `inline` local function are bodies of their own too: what they
+	 * compute runs when they are CALLED, never where they are written, so their occurrences never count
+	 * toward the enclosing body (`ShapeVocab.functionLikeKinds`).
+	 */
+	public function testEveryNestedFunctionFormIsSeparateBody(): Void {
+		for (inner in [
+			'final g = function named() { k(a.b.c); };',
+			'inline function inl() { k(a.b.c); }'
+		]) {
+			final src: String = 'class C { function m() { k(a.b.c); k(a.b.c); $inner } }';
+			Assert.equals(0, violations(src).length, inner);
+		}
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return CheckFixture.violations(new ExtractRepeatedExpression(), src);
 	}

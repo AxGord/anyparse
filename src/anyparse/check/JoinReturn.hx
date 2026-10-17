@@ -79,8 +79,9 @@ using Lambda;
  *
  * `fix` replaces both statements with the single return (verbatim initializer, plus the
  * ascription when the annotation must survive). Needs `localDeclKinds`, `returnStatementKind`
- * and `controlFlowSupport` (any unset makes the check a no-op); function return-type
- * detection additionally reads `functionKinds` / `lambdaKinds` / `paramKinds` /
+ * and `controlFlowSupport` (any unset makes the check a no-op); function return-type detection
+ * additionally reads every function-like kind (`ShapeVocab.functionLikeKinds`, a named function expression
+ * and an `inline` local function included — each answers for its own `return`s) / `paramKinds` /
  * `functionBodyKinds`, and when those are unset an annotated decl always ascribes (a
  * type-check that always compiles). The `new T(...)`-matches-annotation ascription skip
  * additionally reads `newExprKind`; unset, that skip never fires and an annotated decl keeps
@@ -192,7 +193,7 @@ final class JoinReturn implements Check {
 		if (returnKind == null) return null;
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
 		if (support == null) return null;
-		final functionKinds: Array<String> = ShapeVocab.functionOrLambdaKinds(shape);
+		final functionKinds: Array<String> = ShapeVocab.functionLikeKinds(shape);
 		return {
 			typeSyntax: plugin.typeSyntax,
 			localDeclKinds: localDeclKinds,

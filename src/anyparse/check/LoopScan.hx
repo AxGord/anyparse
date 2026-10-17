@@ -149,7 +149,7 @@ final class LoopScan {
 			localDeclKinds: localDeclKinds,
 			localDeclContinuationKinds: shape.localDeclContinuationKinds ?? [],
 			writeParentKinds: shape.writeParentKinds,
-			closureKinds: ShapeVocab.lambdaOrLocalFunctionKinds(shape),
+			closureKinds: ShapeVocab.nestedFunctionKinds(shape),
 			opaqueKinds: shape.opaqueKinds ?? []
 		};
 	}
@@ -182,7 +182,8 @@ final class LoopScan {
 	}
 
 	/**
-	 * Whether any lambda / local-function subtree within `scope` references `name` (a
+	 * Whether any nested-function subtree (`ShapeVocab.nestedFunctionKinds`: a lambda, a local
+	 * or `inline` function, a named function expression) within `scope` references `name` (a
 	 * word-boundary match inside the closure's span). Such a closure captures ONE
 	 * function-scoped binding by reference, so a rewrite that re-scopes the name per
 	 * iteration would change what the closure observes — a conservative bail.

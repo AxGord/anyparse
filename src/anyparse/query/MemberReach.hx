@@ -765,7 +765,7 @@ final class MemberReach {
 	/** The value `return`s of the function `fn`, outside the functions and lambdas nested in it: those return their own. */
 	private function valueReturns(fn: QueryNode): Array<QueryNode> {
 		final returnKinds: Array<String> = _shape.valueReturnKinds ?? [];
-		final nested: Array<String> = ShapeVocab.functionOrLambdaKinds(_shape).concat(_shape.localFunctionKinds ?? []);
+		final nested: Array<String> = ShapeVocab.functionLikeKinds(_shape);
 		final out: Array<QueryNode> = [];
 		function collect(node: QueryNode): Void {
 			for (c in node.children) if (!nested.contains(c.kind)) {
@@ -798,7 +798,7 @@ final class MemberReach {
 
 	/** The innermost function or lambda node of `tree` whose span contains `span`. */
 	private function enclosingFunctionNode(tree: QueryNode, span: Span): Null<QueryNode> {
-		final kinds: Array<String> = ShapeVocab.functionOrLambdaKinds(_shape);
+		final kinds: Array<String> = ShapeVocab.functionLikeKinds(_shape);
 		var found: Null<QueryNode> = null;
 		function walk(node: QueryNode): Void {
 			final s: Null<Span> = node.span;

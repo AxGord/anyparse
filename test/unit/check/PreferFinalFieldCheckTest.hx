@@ -511,6 +511,17 @@ class PreferFinalFieldCheckTest extends Test {
 		);
 	}
 
+	/**
+	 * A write inside a named function expression or an `inline` local function is refused like one inside a lambda:
+	 * Haxe 4.3.7 rejects both for a `final` field (`This expression cannot be accessed for writing`, `--interp`).
+	 */
+	public function testEveryNestedFunctionFormCtorWriteNotFinalizable(): Void {
+		for (body in [
+			'run(function named() _a = new Foo());',
+			'inline function named() _a = new Foo(); named();'
+		]) Assert.equals(0, violations('class C { private var _a:Foo; public function new() { $body } }').length, body);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return CheckFixture.violations(new PreferFinalField(), src);
 	}

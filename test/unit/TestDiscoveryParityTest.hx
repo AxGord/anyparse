@@ -1373,6 +1373,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.FixVerifierProbeRefusalE2ETest#testAWriterRefusedSetKeepsItsWritableUnits :: control :: M-WRITER-NARROW-NONE',
 			'unit.check.FoldStringLiteralsCandidateGateTest#testEveryOutOfScopeCallSpellingIsRefused :: control :: M-MACRO-VALUE-UNLISTED',
 			'unit.check.FoldStringLiteralsCheckTest#testConstantOperandMergesAsText :: control :: M-FOLD-CONSTANT-AS-EXPRESSION',
+			'unit.check.GuardContinueCheckTest#testDefersADoWhileLoopGuardLifts :: control :: '
+				+ 'M-GUARD-CONTINUE-DEFERS-STATEMENT-BLOCK-ONLY',
 			'unit.check.GuardContinueCheckTest#testElseBranchNotFlagged :: control :: M-GUARD-ELSE-ADMITTED',
 			'unit.check.GuardContinueCheckTest#testEmptyBodyNotFlagged :: control :: M-GUARD-MIN-THEN-IGNORED',
 			'unit.check.GuardContinueCheckTest#testGlueCommentNotFlagged :: control :: M-GUARD-GLUE-COMMENT-BLIND',
@@ -1526,6 +1528,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.LoopBoundLengthMismatchCheckTest#testAnUnimportedVectorIsNoFixedLengthType :: control :: M-LOOPBOUND-VECTOR-IMPORT',
 			'unit.check.LoopBoundLengthMismatchCheckTest#testFoldedConstantsCompareByValue :: control :: M-LOOPBOUND-FOLD-OFF',
 			'unit.check.LoopBoundLengthMismatchCheckTest#testParallelArraysShareTheirBound :: control :: M-LOOPBOUND-RELATED-OFF',
+			'unit.check.LoopGuardCheckTest#testDoWhileLoopFlaggedAndFixed :: control :: '
+				+ 'M-LOOPGUARD-DO-WHILE-BODY-LAST,M-LOOPGUARD-BODY-STATEMENT-BLOCK-ONLY',
+			'unit.check.LoopGuardCheckTest#testDoWhileMergeArmJoinsTheHeader :: control :: '
+				+ 'M-LOOPGUARD-EXPR-BODY-KEPT,M-LOOPGUARD-HEADER-STATEMENT-IF-ONLY,M-LOOPGUARD-BRANCH-STATEMENT-BLOCK-ONLY',
 			'unit.check.MagicNumberCheckTest#testADirectArgumentOfAnIgnoredCallIsExempt :: control :: M-MAGIC-CALLARG-BLIND',
 			'unit.check.MagicNumberCheckTest#testADottedEntryMatchesTheCalleeTail :: control :: M-MAGIC-CALLARG-SUFFIX-LOOSE',
 			'unit.check.NamingCheckCrossFileFixTest#testCrossFileRenameAsksTheResolutionScopeForUnreadableFiles :: control :: '
@@ -4129,6 +4135,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.RemoveParamSliceTest#testAClassMethodAndItsCallThatNowFitComeBackCanonical :: control :: M-SIGNATURE-EDIT-RAW-SPLICE',
 			'unit.query.RemoveParamSliceTest#testAnInterfaceSignatureThatNowFitsComesBackCanonical :: control :: M-SIGNATURE-EDIT-RAW-SPLICE',
 			'unit.query.RenameSliceTest#testModelledSpliceConditionOccurrenceRenames :: control :: M-COND-GAP-KEEPS-DIRECTIVES',
+			'unit.query.RenameSliceTest#testNameOfANamedFunctionExpressionSweepsTheEnclosingMethod :: control :: '
+				+ 'M-BINDER-NAMED-FN-NO-STEP-OUT',
 			'unit.query.ResolutionProjectFilesTest#testDerivedIndexesAreMemoised :: control :: M-MEMO-OFF',
 			'unit.query.ResolutionProjectFilesTest#testSetResolutionIndexExpiresDerivedIndexes :: control :: M-NO-INVALIDATE',
 			'unit.query.SetModifierSliceTest#testAConditionalRegionOutsideTheKeywordRunIsStillServed :: control :: '
@@ -4137,6 +4145,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.SetModifierSliceTest#testPrivateOnAFinalClassPrecedesTheFinal :: control :: M-DECLSPAN-FINAL-WRAPPER-BLIND',
 			'unit.query.ShapeVocabTest#testAKindTwoSeamsNameIsAnsweredOnce :: control :: M-VOCAB-UNION-DUPLICATES',
 			'unit.query.ShapeVocabTest#testAnUnsetSeamAddsNothing :: control :: M-VOCAB-UNSET-SEAM-ADDED',
+			'unit.query.ShapeVocabTest#testHaxeLoopAndFunctionVocabulary :: control :: M-VOCAB-NESTED-NO-NAMED-FN',
 			'unit.query.ShardPlanTest#testAClassHeavierThanAShardIsDealtAsSlices :: control :: M-SHARD-SPLIT-NEVER,M-SHARD-SPLIT-SLICE-WEIGHT',
 			'unit.query.ShardPlanTest#testAMalformedSliceTokenIsRefused :: control :: M-SHARD-FILTER-PARSE-RANGE',
 			'unit.query.ShardPlanTest#testAPinnedClassIsNeverSliced :: control :: M-SHARD-SPLIT-STICKY',
@@ -7016,7 +7025,15 @@ class TestDiscoveryParityTest extends Test {
 			'M-DRIVER-READS-STDIN',
 			'M-DRIVER-UNBOUNDED',
 			'M-DRIVER-BOUND-IGNORES-ROUNDS',
-			'M-PENDING-UNBOUNDED'
+			'M-PENDING-UNBOUNDED',
+			'M-LOOPGUARD-DO-WHILE-BODY-LAST',
+			'M-LOOPGUARD-BODY-STATEMENT-BLOCK-ONLY',
+			'M-LOOPGUARD-EXPR-BODY-KEPT',
+			'M-LOOPGUARD-HEADER-STATEMENT-IF-ONLY',
+			'M-LOOPGUARD-BRANCH-STATEMENT-BLOCK-ONLY',
+			'M-GUARD-CONTINUE-DEFERS-STATEMENT-BLOCK-ONLY',
+			'M-BINDER-NAMED-FN-NO-STEP-OUT',
+			'M-VOCAB-NESTED-NO-NAMED-FN'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

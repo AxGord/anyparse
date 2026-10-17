@@ -124,8 +124,8 @@ using Lambda;
  * Driven by `logicalAndKind`, `logicalOrKind`, `eqKind`, `notEqKind`, `nullLiteralKind`,
  * `fieldAccessKind` and `blockStmtKind` (any unset → no-op), plus the always-present
  * `identKind` / `writeParentKinds`, the optional `blockBodyKind` (a function body is a
- * statement block AND a narrowing boundary), `functionKinds` / `lambdaKinds` /
- * `inlineFunctionKinds` (the other narrowing boundaries, and the inline-splice gate),
+ * statement block AND a narrowing boundary), every function-like kind (`ShapeVocab.functionLikeKinds` — the other
+ * narrowing boundaries, a named function expression included) and `inlineFunctionKinds` (the inline-splice gate),
  * `inlineModifierKind` with `modifierOrderKinds` / `visibilityModifierKinds` (reading a
  * function's modifier run), `callKind` / `newExprKind` (the mutation guard, via
  * `CheckScan.mutationKinds`), `selfReferenceText` (self-qualifier normalisation on the
@@ -493,7 +493,8 @@ final class PreferSafeNavComparison implements Check implements VersionGated {
 
 	/**
 	 * The kinds that BOUND null-safety narrowing, ending the scan-scope ascent: the
-	 * function-body kind plus every function and lambda node. Deliberately NOT every
+	 * function-body kind plus every function-like node (`ShapeVocab.functionLikeKinds`),
+	 * a named function expression with an expression body included. Deliberately NOT every
 	 * `scopeKinds` entry — a plain block (and a block EXPRESSION) opens a lexical scope
 	 * but does not stop flow, so an early exit inside one narrows the statements that
 	 * FOLLOW the block and the ascent has to reach them. Anything else (a loop, a catch
@@ -502,7 +503,7 @@ final class PreferSafeNavComparison implements Check implements VersionGated {
 	 * empty, so the ascent runs to the root and the whole-file fallback applies.
 	 */
 	private static function boundaryKinds(shape: RefShape): Array<String> {
-		final kinds: Array<String> = ShapeVocab.functionOrLambdaKinds(shape).concat(shape.inlineFunctionKinds ?? []);
+		final kinds: Array<String> = ShapeVocab.functionLikeKinds(shape);
 		final blockBodyKind: Null<String> = shape.blockBodyKind;
 		if (blockBodyKind != null) kinds.push(blockBodyKind);
 		return kinds;
