@@ -3281,3 +3281,12 @@ decided the question; it may not become a record of runs.
   (`TypeResolver.isProvablyNonNull`, `DeclaredNullity.ofMemberReturn`); the curated static-return table
   (`staticMethodReturns`) stays the rule's, read where the binder's static access has no declaration — branch
   `feat/infra-N6`
+- `CallGraphImports` kept four tables of its own, filled file by file as the graph merged an index — the files
+  declaring each member of a type name, the types each declaration writes for it, the enum constructors by name, the
+  paths each type name is declared under → each is a question to the indexes the graph took its files from
+  (`recordIndex`): `MemberLookup.memberDeclarationsOf` (now with each declaration's file, one shared
+  `MemberDeclaration` typedef replacing three anonymous spellings and `SwitchChain.MemberDecl`),
+  `MemberLookup.declaresMemberAs`, `TypeNameBinding.namingPaths` (a main type's package path is its module path, so it
+  is listed once); only the paths keep a memo, cleared when an index is taken. A graph merges an index only over files
+  it does not hold, so asking the whole index answers what the per-file tables held — byte-identical on the three TM
+  trees and anyparse — branch `feat/infra-N6`

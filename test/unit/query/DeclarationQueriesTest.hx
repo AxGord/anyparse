@@ -2,6 +2,7 @@ package unit.query;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeNameBinding;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import unit.CheckFixture;
 import utest.Assert;
@@ -64,6 +65,36 @@ class DeclarationQueriesTest extends Test {
 		Assert.same(['Array<Int>'], index.subtypes.argumentsPassed('Box', 'Leaf', syntax), 'substituted through the type climbed');
 		Assert.isNull(index.subtypes.argumentsPassed('Box', 'Short', syntax), 'a link filling fewer parameters than it has');
 		Assert.isNull(index.subtypes.argumentsPassed('Box', 'Other', syntax), 'not on the chain');
+	}
+
+	/**
+	 * The declaration questions the call graph asks by simple name, answered by the index (`CallGraphImports`): whether any
+	 * type declares a member of a kind (`MemberLookup.declaresMemberAs`, an enum constructor a bare call builds), each
+	 * declaration of a member with its file (`MemberLookup.memberDeclarationsOf`), and the paths a declaration is named by
+	 * (`TypeNameBinding.namingPaths`).
+	 */
+	@:pin('control') @:killer('M-MEMBER-KIND-IGNORED') @:killer('M-TS-PATH-DECLARED-PACKAGE')
+	public function testTheGraphsDeclarationQuestionsAreTheIndexs(): Void {
+		final index: SymbolIndex = indexOf([
+			'p/Colour.hx' => 'package p;\n\nenum Colour {\n\tRed;\n\tGreen;\n}\n\nclass Paint {\n\tpublic var tone:Int = 0;\n}\n',
+			'q/Box.hx' => 'package q;\n\nclass Box {\n\tpublic var item:String;\n}\n',
+			'r/Box.hx' => 'package r;\n\nclass Box {\n\tpublic var item:Int;\n}\n'
+		]);
+		final ctorKinds: Array<String> = new HaxeQueryPlugin().refShape().execution?.enumConstructorKinds ?? [];
+		Assert.isTrue(index.members.declaresMemberAs('Red', ctorKinds), 'an enum constructor');
+		Assert.isFalse(index.members.declaresMemberAs('tone', ctorKinds), 'a field is no constructor');
+		Assert.isFalse(index.members.declaresMemberAs('Blue', ctorKinds), 'nothing declares it');
+		Assert.same(['q/Box.hx:String', 'r/Box.hx:Int'], [
+			for (d in index.members.memberDeclarationsOf('Box', 'item')) '${d.file.file}:${d.member.typeSource}'
+		], 'each declaration, with its file');
+		final paths: Array<String> = [
+			for (r in index.refs.resolvedDeclsNamed('Colour')) for (p in TypeNameBinding.namingPaths(r)) p
+		];
+		Assert.same(['p.Colour', 'p.Colour.Colour'], paths, 'a main type: its module, and its module and its name');
+		final sub: Array<String> = [
+			for (r in index.refs.resolvedDeclsNamed('Paint')) for (p in TypeNameBinding.namingPaths(r)) p
+		];
+		Assert.same(['p.Colour.Paint', 'p.Paint'], sub, 'a sub-type: its module and its name, its package and its name');
 	}
 
 	@:pin('control') @:killer('M-HOST-UNIQUE')

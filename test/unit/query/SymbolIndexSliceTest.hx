@@ -1,6 +1,7 @@
 package unit.query;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.MemberLookup.MemberDeclaration;
 import anyparse.query.ModuleScan;
 import anyparse.query.SymbolIndex;
 import utest.Assert;
@@ -805,7 +806,7 @@ class SymbolIndexSliceTest extends Test {
 			{ file: 'src/B.hx', source: "class Dup { public static var K:String = 'b'; }" }
 		], plugin());
 
-		final decls: Array<{ type: TypeDeclInfo, member: MemberInfo }> = index.members.memberDeclarationsOf('Dup', 'K');
+		final decls: Array<MemberDeclaration> = index.members.memberDeclarationsOf('Dup', 'K');
 		Assert.equals(2, decls.length);
 		Assert.isTrue(decls.exists(d -> d.member.isInline));
 		Assert.isTrue(decls.exists(d -> !d.member.isInline));

@@ -20032,7 +20032,7 @@
 			"name": "M-TS-PATH-FOREIGN",
 			"type": "anyparse.query.CallGraphImports",
 			"method": "pathKey",
-			"find": "return declared == null || declared.contains(path) ? simple : path;",
+			"find": "return declared.length == 0 || declared.contains(path) ? simple : path;",
 			"replace": "return simple;",
 			"note": "a library type bearing a project type's simple name merges into it again, so sys.thread.Lock.wait runs the project's Lock"
 		},
@@ -20078,10 +20078,10 @@
 		},
 		{
 			"name": "M-TS-PATH-DECLARED-PACKAGE",
-			"type": "anyparse.query.CallGraphImports",
-			"method": "recordFile",
-			"find": "t.isMain ? [fi.module, inModule, inPackage] : [inModule, inPackage]",
-			"replace": "t.isMain ? [fi.module, inModule] : [inModule]",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "namingPaths",
+			"find": "return decl.type.isMain ? [decl.file.module, inModule] : [inModule, inPackage];",
+			"replace": "return decl.type.isMain ? [decl.file.module, inModule] : [inModule];",
 			"note": "a sub-type is not declared at its runtime path (its package and its name), so a reflectiveClasses entry naming it by that path misses it and it reads as never made"
 		},
 		{
@@ -22322,6 +22322,14 @@
 			"find": "return at == null ? Unknown : writtenTier(operand.name, at.from);",
 			"replace": "return Unknown;",
 			"note": "a construction is no longer of the type it writes, so its operator and its toString go unproven"
+		},
+		{
+			"name": "M-MEMBER-KIND-IGNORED",
+			"type": "anyparse.query.MemberLookup",
+			"method": "declaresMemberAs",
+			"find": "return (table[member] ?? []).exists(k -> kinds.contains(k));",
+			"replace": "return table.exists(member);",
+			"note": "a member of any kind counts as one of the kinds asked, so a field reads as an enum constructor a bare call may build"
 		}
 	]
 }

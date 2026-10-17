@@ -1,9 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.CallGraphTypes.HeldFile;
-import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
-import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TypeNameBinding.NameTarget;
 import anyparse.query.TypeNameBinding.NameTargets;
 
@@ -14,25 +12,22 @@ using Lambda;
  * type name written in a file means (`typeOf` — the declaration the shared binding `TypeNameBinding.bindingsOf` binds it
  * to, a type outside the indexes by its path when a declaration bears its simple name), the other keys it may mean on
  * some build (`alternateTypes`), the spelling a written type is read by wherever its text goes (`writtenAs`), the static
- * extensions a file's `using`s bring (`ValueNameBinding.usingTypes`), and per type name the files declaring each member
- * and the enum constructors a bare call may build. No import statement is read here. Files are keyed by
+ * extensions a file's `using`s bring (`ValueNameBinding.usingTypes`), and per type name the files declaring each
+ * member, the paths it is declared under and the enum constructors a bare call may build — each read off the indexes
+ * the graph took its files from (`recordIndex`: `MemberLookup.memberDeclarationsOf`, `MemberLookup.declaresMemberAs`,
+ * `TypeNameBinding.namingPaths`), never a table of its own. No import statement is read here. Files are keyed by
  * `CallGraphNames.normalizePath`.
  */
 @:nullSafety(Strict)
 final class CallGraphImports {
 
-	/** Enum constructor name -> the enums declaring one of that name. */
-	private final _enumConstructors: Map<String, Array<String>> = [];
+	/**
+	 * The indexes the graph took its files from, in that order (`recordIndex`): their layers answer every declaration question.
+	 */
+	private final _indexes: Array<SymbolIndex> = [];
 
-	/** Type simple name -> member name -> the files whose declarations of the type declare the member. */
-	private final _memberFiles: Map<String, Map<String, Array<String>>> = [];
-
-	/** Type simple name -> member name -> each declaration of the member: its file and the type it writes (null for none). */
-	private final _memberTypes: Map<String, Map<String, Array<WrittenIn>>> = [];
-
-	/** Type simple name -> the dotted paths that name a declaration of it (`pkg.Module.Name`; a main type's also `pkg.Module`). */
-	private final _declaredPaths: Map<String, Array<String>> = [];
-
+	/** Type simple name -> the dotted paths that name a declaration of it (`declaredPathsOf`), read on its first question. */
+	private final _paths: Map<String, Array<String>> = [];
 
 	/** Type simple name -> the paths `pathType` keyed apart from the declarations of that name, as it met them. */
 	private final _foreign: Map<String, Array<String>> = [];
@@ -56,62 +51,72 @@ final class CallGraphImports {
 		_held = held;
 	}
 
-	/**
-	 * Whether an indexed enum declares a constructor named `name` — which a bare call may build without any
-	 * import, since the language resolves a constructor against the expected type.
-	 */
-	public inline function isEnumConstructor(name: String): Bool {
-		return _enumConstructors.exists(name);
+	/** The paths of types outside the tables that bear the simple name `simple`, each keyed by its path (`pathType`). */
+	public inline function foreignPaths(simple: String): Array<String> {
+		return _foreign[simple] ?? [];
 	}
 
+	/**
+	 * Whether an indexed enum declares a constructor named `name` — which a bare call may build without any
+	 * import, since the language resolves a constructor against the expected type (`MemberLookup.declaresMemberAs`).
+	 */
+	public function isEnumConstructor(name: String): Bool {
+		return _indexes.exists(index -> index.members.declaresMemberAs(name, _enumConstructorKinds));
+	}
 
 	/**
 	 * The files (`normalizePath`d) whose declarations of the type of simple name `typeName` declare `member` itself, not a
-	 * supertype's — where the types its record writes are to be read (`CallGraphKeys.keyedIn`).
+	 * supertype's — where the types its record writes are to be read (`CallGraphKeys.keyedIn`); each once, in the order the
+	 * indexes hold them (`MemberLookup.memberDeclarationsOf`).
 	 */
-	public inline function memberFilesOf(typeName: String, member: String): Array<String> {
-		return _memberFiles[typeName]?.get(member) ?? [];
+	public function memberFilesOf(typeName: String, member: String): Array<String> {
+		final out: Array<String> = [];
+		for (index in _indexes) for (d in index.members.memberDeclarationsOf(typeName, member)) {
+			final key: String = CallGraphNames.normalizePath(d.file.file);
+			if (!out.contains(key)) out.push(key);
+		}
+		return out;
 	}
 
 	/**
 	 * Each declaration of `member` the declarations of the type of simple name `typeName` hold — one per branch of a
-	 * conditional region, one per declaration of the type — with its file and the type it writes, each once.
+	 * conditional region, one per declaration of the type — with its file and the type it writes, each once
+	 * (`MemberLookup.memberDeclarationsOf`).
 	 */
-	public inline function memberTypesOf(typeName: String, member: String): Array<WrittenIn> {
-		return _memberTypes[typeName]?.get(member) ?? [];
-	}
-
-	/** The qualified paths the type of simple name `name` is declared under (`recordFile`): by its module, by its package. */
-	public inline function declaredPathsOf(name: String): Array<String> {
-		return _declaredPaths[name] ?? [];
-	}
-
-	/** Fold the declarations of `fi`, held under `key`: their members and the paths they are declared under. */
-	public function recordFile(fi: FileInfo, key: String): Void {
-		for (t in fi.types) {
-			recordMembers(t, key);
-			// a type is named by its module's path and its own name, a main type by its module's path too; and by its package
-			// and its name, whatever its module is called — its runtime path (`Type.getClassName`), which a declaration of the
-			// classes made from a computed name spells (`ReflectiveReach.neverMade`) and no source can write for a sub-type
-			final inModule: String = '${fi.module}.${t.name}';
-			final inPackage: String = fi.pkg == '' ? t.name : '${fi.pkg}.${t.name}';
-			CallGraphTypes.unionInto(_declaredPaths, t.name, t.isMain ? [fi.module, inModule, inPackage] : [inModule, inPackage]);
+	public function memberTypesOf(typeName: String, member: String): Array<WrittenIn> {
+		final out: Array<WrittenIn> = [];
+		for (index in _indexes) for (d in index.members.memberDeclarationsOf(typeName, member)) {
+			final key: String = CallGraphNames.normalizePath(d.file.file);
+			if (!out.exists(w -> w.file == key && w.written == d.member.typeSource)) out.push({ file: key, written: d.member.typeSource });
 		}
+		return out;
 	}
 
-	/** Fold the members of `t`, a declaration of the file keyed `key`: its enum constructors, and where each member is declared. */
-	private function recordMembers(t: TypeDeclInfo, key: String): Void {
-		final files: Map<String, Array<String>> = _memberFiles[t.name] ?? [];
-		final written: Map<String, Array<WrittenIn>> = _memberTypes[t.name] ?? [];
-		for (m in t.members) {
-			if (_enumConstructorKinds.contains(m.kind)) CallGraphTypes.unionInto(_enumConstructors, m.name, [t.name]);
-			CallGraphTypes.unionInto(files, m.name, [key]);
-			final each: Array<WrittenIn> = written[m.name] ?? [];
-			if (!each.exists(w -> w.file == key && w.written == m.typeSource)) each.push({ file: key, written: m.typeSource });
-			written[m.name] = each;
-		}
-		_memberFiles[t.name] = files;
-		_memberTypes[t.name] = written;
+	/**
+	 * The qualified paths the type of simple name `name` is declared under, each once (`TypeNameBinding.namingPaths` of every
+	 * declaration of it the indexes hold): by its module, by its package; none for a name nothing declares.
+	 */
+	public function declaredPathsOf(name: String): Array<String> {
+		final known: Null<Array<String>> = _paths[name];
+		if (known != null) return known;
+		final out: Array<String> = [];
+		for (index in _indexes)
+			for (decl in index.refs.resolvedDeclsNamed(name))
+				for (path in TypeNameBinding.namingPaths(decl))
+					if (!out.contains(path)) out.push(path);
+		_paths[name] = out;
+		return out;
+	}
+
+	/**
+	 * Take the declarations of `index`, whose files the tables have just begun to hold: every declaration question the graph
+	 * asks by simple name is answered by the indexes so taken, in that order. The graph merges an index only over files it
+	 * does not hold yet (`CallGraphTypes.merge`), so no file is read through two of them.
+	 */
+	public function recordIndex(index: SymbolIndex): Void {
+		if (_indexes.contains(index)) return;
+		_indexes.push(index);
+		_paths.clear();
 	}
 
 	/**
@@ -251,8 +256,8 @@ final class CallGraphImports {
 		final simple: String = SourceText.lastSegment(path);
 		final dot: Int = path.indexOf('.');
 		if (dot < 0 || CallGraphNames.isTypeLike(path.substring(0, dot))) return simple;
-		final declared: Null<Array<String>> = _declaredPaths[simple];
-		return declared == null || declared.contains(path) ? simple : path;
+		final declared: Array<String> = declaredPathsOf(simple);
+		return declared.length == 0 || declared.contains(path) ? simple : path;
 	}
 
 	/**
@@ -262,11 +267,6 @@ final class CallGraphImports {
 	public function typeKeys(written: String): Array<String> {
 		final simple: String = SourceText.lastSegment(written);
 		return written == simple ? foreignPaths(simple).concat([simple]) : [pathKey(written)];
-	}
-
-	/** The paths of types outside the tables that bear the simple name `simple`, each keyed by its path (`pathType`). */
-	public inline function foreignPaths(simple: String): Array<String> {
-		return _foreign[simple] ?? [];
 	}
 
 	/**
@@ -307,6 +307,11 @@ final class CallGraphImports {
 		};
 	}
 
+	/** What `targets` binds a name to instead on some build: a guarded statement's type, then a wildcard's the order cannot list. */
+	private static inline function maybeOf(targets: Null<NameTargets>): Array<NameTarget> {
+		return targets == null ? [] : targets.guarded.concat(targets.unlisted);
+	}
+
 	/** The spelling of the type `target` binds `name` to (`writtenAs`): a `StdTypes` type by its bare name. */
 	private static function spellingOf(target: NameTarget, name: String): String {
 		return switch target {
@@ -314,11 +319,6 @@ final class CallGraphImports {
 			case InIndex(_): name;
 			case OutOfIndex(path): path;
 		};
-	}
-
-	/** What `targets` binds a name to instead on some build: a guarded statement's type, then a wildcard's the order cannot list. */
-	private static inline function maybeOf(targets: Null<NameTargets>): Array<NameTarget> {
-		return targets == null ? [] : targets.guarded.concat(targets.unlisted);
 	}
 
 }

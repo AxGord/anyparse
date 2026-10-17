@@ -3318,6 +3318,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.DeclarationQueriesTest#testASupertypeThatMayDeclareTheMemberIsNamed :: control :: '
 				+ 'M-SEAL-AMBIGUOUS,M-SEAL-UNRESOLVED-IFACE,M-SEAL-DECLARING-SUPER',
 			'unit.query.DeclarationQueriesTest#testAnAliasIsFollowedThroughOneDeclarationAHop :: control :: M-ALIAS-SINGLE-DECL',
+			'unit.query.DeclarationQueriesTest#testTheGraphsDeclarationQuestionsAreTheIndexs :: control :: '
+				+ 'M-MEMBER-KIND-IGNORED,M-TS-PATH-DECLARED-PACKAGE',
 			'unit.query.DeclarationsReadTest#testABalancedDirectiveRegionIsJumpedOver :: control :: M-SKIM-NEVER',
 			'unit.query.DeclarationsReadTest#testABodyIsJumpedToItsMatchingCloseOverEveryNonCodeRegion :: control :: M-SKIM-GAPS-COUNTED',
 			'unit.query.DeclarationsReadTest#testABodyTheGrammarCannotReadDoesNotHideTheDeclarations :: control :: M-SKIM-NEVER',
@@ -7078,7 +7080,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-RLW-LOCAL-FN-AS-BINDER',
 			'M-SUBTYPE-ARGS-SUBSTITUTED',
 			'M-SUBTYPE-ARGS-ARITY',
-			'M-OPERAND-NEW-CUT'
+			'M-OPERAND-NEW-CUT',
+			'M-MEMBER-KIND-IGNORED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

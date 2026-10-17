@@ -7,6 +7,7 @@ import anyparse.query.CondRegionScan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
+import anyparse.query.MemberLookup.MemberDeclaration;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
@@ -670,7 +671,9 @@ final class SwitchChain {
 		final text: String = spanText(source, span);
 		if (seams.stringFold?.literalOf(node, source) != null || seams.litKinds.contains(node.kind))
 			return { text: text, value: CaseValueKey.of(node.kind, text, seams.values), builtinEq: true };
-		final decls: Null<Array<MemberDecl>> = constantReferenceDecls(node, seams, scope) ?? bareConstantDecls(node, span, seams, scope);
+		final decls: Null<Array<MemberDeclaration>> = constantReferenceDecls(node, seams, scope) ?? bareConstantDecls(
+			node, span, seams, scope
+		);
 		return decls == null
 			? null
 			: { text: text, value: agreedValue(decls, seams), builtinEq: decls.foreach(d -> selectsBuiltinEq(d, seams)) };
@@ -684,7 +687,7 @@ final class SwitchChain {
 	 * test runs BEFORE the index is demanded, so a chain with no such candidate never
 	 * triggers the build.
 	 */
-	private static function constantReferenceDecls(node: QueryNode, seams: ChainSeams, scope: ChainScope): Null<Array<MemberDecl>> {
+	private static function constantReferenceDecls(node: QueryNode, seams: ChainSeams, scope: ChainScope): Null<Array<MemberDeclaration>> {
 		final accessKind: Null<String> = seams.fieldAccessKind;
 		if (accessKind == null || node.kind != accessKind || node.children.length != 1) return null;
 		final memberName: Null<String> = node.name;
@@ -714,7 +717,9 @@ final class SwitchChain {
 	 * touched, and the resolver runs against `shape.refsCache` in a real lint run, so the walk
 	 * is one memoised `Refs.findMulti` per file rather than one per candidate.
 	 */
-	private static function bareConstantDecls(node: QueryNode, span: Span, seams: ChainSeams, scope: ChainScope): Null<Array<MemberDecl>> {
+	private static function bareConstantDecls(
+		node: QueryNode, span: Span, seams: ChainSeams, scope: ChainScope
+	): Null<Array<MemberDeclaration>> {
 		if (node.kind != seams.identKind || node.children.length != 0) return null;
 		final name: Null<String> = node.name;
 		if (name == null) return null;
@@ -730,10 +735,10 @@ final class SwitchChain {
 	 */
 	private static function constantMemberDecls(
 		typeName: String, memberName: String, seams: ChainSeams, scope: ChainScope
-	): Null<Array<MemberDecl>> {
+	): Null<Array<MemberDeclaration>> {
 		final index: Null<SymbolIndex> = scope.resolveIndex();
 		if (index == null) return null;
-		final decls: Array<MemberDecl> = index.members.memberDeclarationsOf(typeName, memberName);
+		final decls: Array<MemberDeclaration> = index.members.memberDeclarationsOf(typeName, memberName);
 		return decls.length != 0 && decls.foreach(decl -> isPatternConstant(decl.type, decl.member, seams)) ? decls : null;
 	}
 
@@ -780,7 +785,7 @@ final class SwitchChain {
 	 * index resolves to several declarations (one per same-named type) denotes whichever the compiler binds,
 	 * so only a value they all share is known.
 	 */
-	private static function agreedValue(decls: Array<MemberDecl>, seams: ChainSeams): Null<String> {
+	private static function agreedValue(decls: Array<MemberDeclaration>, seams: ChainSeams): Null<String> {
 		final values: Array<Null<String>> = [for (decl in decls) CaseValueKey.ofMember(decl.type, decl.member, seams.values)];
 		final first: Null<String> = values[0];
 		return first != null && values.foreach(v -> v == first) ? first : null;
@@ -792,7 +797,7 @@ final class SwitchChain {
 	 * constant's own TYPE must be one that cannot overload — the enum abstract itself for a value, a built-in
 	 * type for a `static inline` field: written, or inferred from the literal initializer gate 9 demands.
 	 */
-	private static function selectsBuiltinEq(decl: MemberDecl, seams: ChainSeams): Bool {
+	private static function selectsBuiltinEq(decl: MemberDeclaration, seams: ChainSeams): Bool {
 		final type: TypeDeclInfo = decl.type;
 		if (type.hasBuild || type.members.exists(m -> m.operatorOverloads.contains(seams.eqKind))) return false;
 		if (type.kind == seams.enumAbstractDeclKind && !decl.member.isStatic) return true;
@@ -965,6 +970,3 @@ private typedef CasePattern = {
 	/** Whether the pattern's own type leaves the language's `==` selected (`selectsBuiltinEq`). */
 	final builtinEq: Bool;
 };
-
-/** One declaration a constant reference resolves to, as `MemberLookup.memberDeclarationsOf` returns it. */
-private typedef MemberDecl = { type: TypeDeclInfo, member: MemberInfo };

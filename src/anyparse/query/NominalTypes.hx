@@ -1,12 +1,11 @@
 package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.MemberLookup.MemberDeclaration;
 import anyparse.query.NodeShape;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
-import anyparse.query.SymbolIndex.MemberInfo;
-import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
@@ -816,7 +815,7 @@ final class NominalTypes {
 	 */
 	private static function returnSourceOf(index: SymbolIndex, typeName: String, method: String): Null<String> {
 		var found: Null<String> = null;
-		final declared: Array<{ type: TypeDeclInfo, member: MemberInfo }> = index.members.memberDeclarationsOf(typeName, method);
+		final declared: Array<MemberDeclaration> = index.members.memberDeclarationsOf(typeName, method);
 		for (d in declared) {
 			final written: Null<String> = d.member.returnSource;
 			final params: Array<String> = d.type.typeParamNames.concat(d.member.typeParamNames);
