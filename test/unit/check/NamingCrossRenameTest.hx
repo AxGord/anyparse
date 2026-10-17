@@ -73,7 +73,7 @@ final class NamingCrossRenameTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-XRENAME-INDEXED-UNDERLYING', 'M-XRENAME-STRING-OWN-DECL')
+	@:killer('M-XRENAME-INDEXED-UNDERLYING')
 	public function testAnEnumAbstractAndItsValuesRename(): Void {
 		final files: Array<{ file: String, source: String }> = [
 			{ file: 'pkg/E.hx', source: ENUMS },
@@ -217,13 +217,13 @@ final class NamingCrossRenameTest extends Test {
 				reason: NamingCrossRename.NEW_NAME_TAKEN
 			},
 			{
-				what: 'a literal naming the value',
+				what: 'an interpolation naming the type',
 				files: [
-					enums,
-					{ file: 'pkg/F.hx', source: ENUM_USER.replace('\t\treturn MY_ACTIONS', '\t\ttrace(\'goals\');\n\t\treturn MY_ACTIONS') }
+					types,
+					{ file: 'pkg/U.hx', source: USER.replace('return p.x + p.y;', 'trace(\'$$JSON_POINT\');\n\t\treturn p.x + p.y;') }
 				],
 				roots: [],
-				name: 'goals',
+				name: 'JSON_POINT',
 				reason: NamingCrossRename.STRING_LITERAL
 			},
 			{
@@ -296,7 +296,7 @@ final class NamingCrossRenameTest extends Test {
 
 	/** Metadata the compiler reads and no tool resolves by name does not refuse, and neither does an enum abstract's PROPERTY of the old name. */
 	@:pin('control')
-	@:killer('M-XRENAME-SAFE-META', 'M-XRENAME-VALUE-PROPERTY')
+	@:killer('M-XRENAME-SAFE-META', 'M-XRENAME-VALUE-PROPERTY', 'M-XRENAME-STRING-TYPES-ONLY')
 	public function testInertNeighboursDoNotRefuse(): Void {
 		final forward: String = 'package pkg;\n\nclass A {}\n\n@:forward\nabstract SMALL_LIST(Array<Int>) {}\n';
 		Assert.equals(1, armSets([{ file: 'pkg/A.hx', source: forward }], [], 'SMALL_LIST').length, '@:forward');
@@ -309,6 +309,11 @@ final class NamingCrossRenameTest extends Test {
 				{ file: 'pkg/Handle.hx', source: property }
 			], [], 'goals').length,
 			'a property is no value'
+		);
+		final data: String = ENUM_USER.replace('\t\treturn MY_ACTIONS', '\t\ttrace(\'goals\');\n\t\treturn MY_ACTIONS');
+		Assert.equals(
+			1, armSets([{ file: 'pkg/E.hx', source: ENUMS }, { file: 'pkg/F.hx', source: data }], [], 'goals').length,
+			'a literal spelling a value is data'
 		);
 	}
 

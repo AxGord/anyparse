@@ -1640,14 +1640,14 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.NamingCrossRenameTest#testANamesakesSubtypesDoNotUnconfineAPrivate :: control :: M-CONFINED-NO-OWNER-FILE',
 			'unit.check.NamingCrossRenameTest#testATypedefRenamesInEveryFileThatNamesIt :: control :: '
 				+ 'M-XRENAME-NOT-CANDIDATE,M-XRENAME-FINDINGS-NONE,M-XRENAME-EDITS-DROPPED',
-			'unit.check.NamingCrossRenameTest#testAnEnumAbstractAndItsValuesRename :: control :: '
-				+ 'M-XRENAME-INDEXED-UNDERLYING,M-XRENAME-STRING-OWN-DECL',
+			'unit.check.NamingCrossRenameTest#testAnEnumAbstractAndItsValuesRename :: control :: M-XRENAME-INDEXED-UNDERLYING',
 			'unit.check.NamingCrossRenameTest#testEachGateRefusesWithItsReason :: control :: '
 				+ 'M-XRENAME-RUNTIME-TYPE,M-XRENAME-MAIN-TYPE,M-XRENAME-TYPE-META,M-XRENAME-GUARDED,'
 				+ 'M-XRENAME-ENUM-CTOR,M-XRENAME-STRING,M-XRENAME-TYPE-PATH,M-XRENAME-OLD-SHARED,M-XRENAME-NEW-DECLARED,'
 				+ 'M-XRENAME-NEW-SPELLED,M-XRENAME-VALUE-OLD-SHARED,M-XRENAME-VALUE-NEW-SHARED,M-XRENAME-VALUE-BOUND,'
 				+ 'M-XRENAME-OUTSIDE,M-XRENAME-VALUE-META',
-			'unit.check.NamingCrossRenameTest#testInertNeighboursDoNotRefuse :: control :: M-XRENAME-SAFE-META,M-XRENAME-VALUE-PROPERTY',
+			'unit.check.NamingCrossRenameTest#testInertNeighboursDoNotRefuse :: control :: '
+				+ 'M-XRENAME-SAFE-META,M-XRENAME-VALUE-PROPERTY,M-XRENAME-STRING-TYPES-ONLY',
 			'unit.check.NamingCrossRenameTest#testSetsSharingAFileFormOneComponent :: control :: M-XVERIFY-NO-MERGE',
 			'unit.check.NamingCrossRenameTest#testTheArmNeedsTheWholeProject :: control :: M-XRENAME-NO-PROJECT',
 			'unit.check.NamingCrossRenameTest#testTheOracleRunRenamesAndRevertsTheMiss :: control :: '
@@ -7613,7 +7613,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-RISKYARM-CROSS-NOT-VERIFIED',
 			'M-XVERIFY-NO-BISECT',
 			'M-CONFINED-NO-OWNER-FILE',
-			'M-XRENAME-STRING-OWN-DECL'
+			'M-XRENAME-STRING-TYPES-ONLY'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

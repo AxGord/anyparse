@@ -51,9 +51,10 @@ using Lambda;
  *   `Std.string` and serialized), and only one whose VALUE does not depend on its name: it has an
  *   initializer, or the abstract's underlying type numbers implicit values
  *   (`RefShape.indexValuedEnumAbstractUnderlyings`). An implicit `String` value IS the name.
- * - No string spells the old name where a lookup could read it: no literal that names it in any
- *   project file (`OccurrenceScan`'s `StringLiteral` class), and — for a type — no runtime type path
- *   in the reflection surface (`ReflectionScan.runtimeTypePath`).
+ * - For a TYPE, no string spells its name where a lookup could read it: no literal that names it in any
+ *   project file (`OccurrenceScan`'s `StringLiteral` class) and no runtime type path in the reflection
+ *   surface (`ReflectionScan.runtimeTypePath`). An enum-abstract value has no runtime name — it is its
+ *   value, inlined — so a literal spelling its name is data and does not refuse.
  * - The OLD name is declared nowhere else (`SymbolIndex` over the resolution scope): an occurrence the
  *   engine leaves behind would then BIND to the other declaration instead of failing.
  * - The NEW name is declared nowhere and spelled in no project file outside a comment: a reference
@@ -185,7 +186,9 @@ final class NamingCrossRename {
 		final isType: Bool = decl.category == NamingCategory.Type;
 		final gate: Null<String> = isType ? typeRefusal(decl, v.file, tree, text, newName, ctx) : valueRefusal(decl, v.file, newName, ctx);
 		if (gate != null) return refuse(v, gate);
-		if (stringNamesIt(decl.name, v.file, span, ctx)) return refuse(v, STRING_LITERAL);
+		// A TYPE's name is what a runtime lookup or a macro string spells. An enum-abstract VALUE has no runtime name:
+		// it IS its value, inlined, so a literal spelling the name is data (`'vertical'` beside `final vertical = 'vertical'`).
+		if (isType && stringNamesIt(decl.name, ctx)) return refuse(v, STRING_LITERAL);
 		final pos: Position = new Span(at, at).lineCol(text);
 		final scope: Array<{ file: String, source: String }> = [
 			for (entry in ctx.project) if (entry.file == v.file || entry.source.indexOf(decl.name) >= 0) entry
@@ -331,15 +334,11 @@ final class NamingCrossRename {
 		return false;
 	}
 
-	/**
-	 * Whether a project file holds a string that NAMES `name` (`OccurrenceClass.StringLiteral`), or a `noqa` naming it, or
-	 * cannot be read — outside the declaration itself (`own`, in `file`): an enum-abstract value's own initializer
-	 * (`final vertical = 'vertical'`) is its value, not a lookup of its name.
-	 */
-	private static function stringNamesIt(name: String, file: String, own: Span, ctx: Context): Bool {
+	/** Whether a project file holds a string that NAMES `name` (`OccurrenceClass.StringLiteral`), or a `noqa` naming it, or cannot be read. */
+	private static function stringNamesIt(name: String, ctx: Context): Bool {
 		for (entry in ctx.project) if (entry.source.indexOf(name) >= 0) {
 			final found: Null<Array<ClassifiedOccurrence>> = OccurrenceScan.classifyOccurrences(
-				entry.source, name, ctx.plugin, 0, entry.source.length, entry.file == file ? [own] : []
+				entry.source, name, ctx.plugin, 0, entry.source.length, []
 			);
 			if (found == null || found.exists(occ ->
 				occ.kind == OccurrenceClass.StringLiteral || occ.kind == OccurrenceClass.DirectiveComment
