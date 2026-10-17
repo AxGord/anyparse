@@ -108,6 +108,16 @@ final class CaseValueKey {
 	}
 
 	/**
+	 * Whether a node of kind `kind` written as `text` is a LITERAL at all — a number (a negated one
+	 * in a spelling `of` reads too), a bool, `null`, a string — whatever value it denotes and whether
+	 * or not `of` can key it (an escaped or interpolated string is still a literal here).
+	 */
+	public static function isLiteral(kind: String, text: String, seams: CaseValueSeams): Bool {
+		return seams.numericKinds.contains(kind) || seams.stringKinds.contains(kind) || kind == seams.boolKind || kind == seams.nullKind
+			|| numberOf(kind, text, seams) != null;
+	}
+
+	/**
 	 * The value key of `member`, declared by `type`: its initializer's (`of`), or the implicit value
 	 * of an uninitialized enum-abstract value, or null when neither is provable.
 	 */

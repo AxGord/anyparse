@@ -4,6 +4,7 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.Violation;
 import anyparse.check.NegatedCondition.InversionSeams;
 import anyparse.check.NegatedCondition.InversionSite;
+import anyparse.check.NegatedCondition.Swap;
 import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
@@ -43,13 +44,14 @@ import anyparse.runtime.Span;
  * edits never overlap; a report-only node is descended into. Chains with `comparison-to-boolean` through the `--fix`
  * fixed point (`x == false` -> `!x` -> swapped away). Unset `ifStatementKinds` or `notKind` makes the check a no-op.
  *
- * ## Option `keepDefaultElse` (default off)
+ * ## Options (both default off)
  *
- * With `"keepDefaultElse": true` a negated choice whose CURRENT else arm is a default literal (`null`, `false`, a
- * numeric zero, an empty string; parenthesised too) is left alone: `!hasNext ? event : null` keeps the fallback
- * last, where the inversion would bury the value (`hasNext ? null : event`). Likewise a value `if`, and an `if`
- * statement whose else branch is `return <default>;` (bare or alone in a block). A non-default else still inverts.
- * The gate is `NegatedCondition`'s, so the four ternary builders read this same option.
+ * `keepDefaultElse` leaves a negated choice whose CURRENT else arm is a default literal (`null`, `false`, a zero, an
+ * empty string) alone, so `!hasNext ? event : null` keeps the fallback last; an `if` statement counts when its else
+ * is `return <default>;`. `defaultLast`, which implies it, turns the reverse: a default THEN arm before a non-literal
+ * else goes last — `c ? null : v` -> `!c ? v : null`, `a != b ? null : v` -> `a == b ? v : null` — for a condition
+ * that negates cleanly (`NegatedCondition.defaultLastCondition`). Both are read through `NegatedCondition.swapOf`, so
+ * the four ternary builders and the swap agree and `--fix` settles.
  */
 @:nullSafety(Strict)
 final class InvertNegatedIfElse implements Check implements ConfigAware {
@@ -62,6 +64,12 @@ final class InvertNegatedIfElse implements Check implements ConfigAware {
 	private static inline final MSG_STATEMENT: String = 'this negated if-else can be inverted — drop the ! and swap the branches';
 	private static inline final MSG_TERNARY: String = 'this negated ternary can be inverted — drop the ! and swap the branches';
 	private static inline final MSG_IF_EXPRESSION: String = 'this negated if-expression can be inverted — drop the ! and swap the branches';
+	private static inline final MSG_DEFAULT_STATEMENT: String =
+		'this if-else returns the default first — invert the condition so the default goes last';
+	private static inline final MSG_DEFAULT_TERNARY: String =
+		'this ternary puts the default first — invert the condition so the default goes last';
+	private static inline final MSG_DEFAULT_IF_EXPRESSION: String =
+		'this if-expression puts the default first — invert the condition so the default goes last';
 
 	/** Appended to a value-form message when a comment keeps the site report-only. */
 	private static inline final COMMENT_BLOCKS: String = ' (a comment blocks the autofix)';
@@ -126,23 +134,33 @@ final class InvertNegatedIfElse implements Check implements ConfigAware {
 		final span: Null<Span> = node.span;
 		if (span != null && node.children.length == IF_WITH_ELSE_CHILD_COUNT) {
 			final seams: Seams = scan.seams;
-			if (seams.ifKinds.contains(node.kind) && statementInvertible(node, scan)) {
-				out.push(finding(scan, span, MSG_STATEMENT));
+			final swap: Null<Swap> = seams.ifKinds.contains(node.kind) ? statementSwap(node, scan) : null;
+			if (swap != null) {
+				out.push(finding(scan, span, swap.defaultLast ? MSG_DEFAULT_STATEMENT : MSG_STATEMENT));
 				return;
 			}
 			if (seams.valueKinds.contains(node.kind)) {
-				final message: String = node.kind == seams.ternaryKind ? MSG_TERNARY : MSG_IF_EXPRESSION;
 				switch valueVerdict(node, scan) {
-					case Fixable:
-						out.push(finding(scan, span, message));
+					case Fixable(swap):
+						out.push(finding(scan, span, valueMessage(node, swap, seams)));
 						return;
-					case CommentBlocked:
-						out.push(finding(scan, span, message + COMMENT_BLOCKS));
+					case CommentBlocked(swap):
+						out.push(finding(scan, span, valueMessage(node, swap, seams) + COMMENT_BLOCKS));
 					case Skip:
 				}
 			}
 		}
 		for (c in node.children) walk(out, scan, c);
+	}
+
+	/** The finding text for the value form `node` swapped as `swap`. */
+	private static function valueMessage(node: QueryNode, swap: Swap, seams: Seams): String {
+		return if (node.kind == seams.ternaryKind)
+			swap.defaultLast ? MSG_DEFAULT_TERNARY : MSG_TERNARY
+		else if (swap.defaultLast)
+			MSG_DEFAULT_IF_EXPRESSION
+		else
+			MSG_IF_EXPRESSION;
 	}
 
 	/** One `Info` finding of this rule at `span`. */
@@ -157,19 +175,21 @@ final class InvertNegatedIfElse implements Check implements ConfigAware {
 	}
 
 	/**
-	 * Whether the `if` statement `ifNode` (with an `else`) is a swap candidate: its condition reads
-	 * positive through `NegatedCondition.positive` for its `else` branch (a built-in top-level not whose
-	 * rebuild drops no comment, and no `keepDefaultElse` default arm) and that branch is not itself an `if`.
+	 * How the `if` statement `ifNode` (with an `else`) swaps, or null when it is no swap candidate: its
+	 * else branch is not itself an `if`, `NegatedCondition.swapOf` reads it for that else branch (a
+	 * built-in top-level not, no `keepDefaultElse` default arm; or a `defaultLast` turn) and the rebuild
+	 * drops no comment.
 	 */
-	private static function statementInvertible(ifNode: QueryNode, scan: Scan): Bool {
+	private static function statementSwap(ifNode: QueryNode, scan: Scan): Null<Swap> {
 		final elseBranch: QueryNode = ifNode.children[2];
-		return
-			!scan.seams.ifKinds.contains(elseBranch.kind) && NegatedCondition.positive(ifNode.children[0], elseBranch, scan.site) != null;
+		if (scan.seams.ifKinds.contains(elseBranch.kind)) return null;
+		final swap: Null<Swap> = NegatedCondition.swapOf(ifNode.children[0], ifNode.children[1], elseBranch, scan.site);
+		return swap == null || swap.dropsComment ? null : swap;
 	}
 
 	/**
-	 * What the value form `node` (a ternary or a value `if`, with both branches) is: `Skip` when its
-	 * condition is no built-in top-level not or a branch is the same construct (a chain the swap
+	 * What the value form `node` (a ternary or a value `if`, with both branches) is: `Skip` when
+	 * `NegatedCondition.swapOf` does not swap it or a branch is the same construct (a chain the swap
 	 * would restructure), `CommentBlocked` when the rebuild would drop or misplace a comment (one
 	 * the positive condition drops, or one in the glue between the condition and the branches, which
 	 * stays where it is while the branches move), else `Fixable`.
@@ -179,16 +199,16 @@ final class InvertNegatedIfElse implements Check implements ConfigAware {
 		final thenBranch: QueryNode = node.children[1];
 		final elseBranch: QueryNode = node.children[2];
 		if (sameConstruct(thenBranch, node, scan.seams) || sameConstruct(elseBranch, node, scan.seams)) return Skip;
-		final kept: Null<QueryNode> = NegatedCondition.invertibleOperand(cond, elseBranch, scan.site);
+		final swap: Null<Swap> = NegatedCondition.swapOf(cond, thenBranch, elseBranch, scan.site);
 		final condSpan: Null<Span> = tight(cond, scan);
 		final thenSpan: Null<Span> = tight(thenBranch, scan);
 		final elseSpan: Null<Span> = tight(elseBranch, scan);
-		if (kept == null || condSpan == null || thenSpan == null || elseSpan == null) return Skip;
+		if (swap == null || condSpan == null || thenSpan == null || elseSpan == null) return Skip;
 		final source: String = scan.site.source;
-		return NegatedCondition.dropsComment(cond, kept, source) || SourceComments.hasCommentMarker(source, condSpan.to, thenSpan.from)
+		return swap.dropsComment || SourceComments.hasCommentMarker(source, condSpan.to, thenSpan.from)
 			|| SourceComments.hasCommentMarker(source, thenSpan.to, elseSpan.from)
-			? CommentBlocked
-			: Fixable;
+			? CommentBlocked(swap)
+			: Fixable(swap);
 	}
 
 	/** Whether `branch` is the same construct as its value-form `parent` — a ternary in a ternary, a value `if` in a value `if`. */
@@ -198,45 +218,47 @@ final class InvertNegatedIfElse implements Check implements ConfigAware {
 
 	/**
 	 * Push the three inversion edits for one flagged `if` statement (or nothing when it fails a
-	 * re-validation or lacks the spans): condition replaced by the positive form, then / else
+	 * re-validation or lacks the spans): condition replaced by the swapped form, then / else
 	 * branch source swapped.
 	 */
 	private static function statementEdits(ifNode: QueryNode, scan: Scan, edits: Array<{ span: Span, text: String }>): Void {
-		if (ifNode.children.length < IF_WITH_ELSE_CHILD_COUNT || !statementInvertible(ifNode, scan)) return;
+		if (ifNode.children.length < IF_WITH_ELSE_CHILD_COUNT) return;
+		final swap: Null<Swap> = statementSwap(ifNode, scan);
+		if (swap == null) return;
 		final source: String = scan.site.source;
 		final shape: RefShape = scan.seams.shape;
-		final cond: QueryNode = ifNode.children[0];
 		final thenBranch: QueryNode = ifNode.children[1];
 		final elseBranch: QueryNode = ifNode.children[2];
 		// A region then-body closed only by the `else` after it would land in the tail slot with no
 		// terminator it can be proved not to need; every branch travels with the one it owns.
 		if (RegionTerminator.unterminatedRegion(thenBranch, source, shape)) return;
-		final condSpan: Null<Span> = tight(cond, scan);
+		final condSpan: Null<Span> = tight(ifNode.children[0], scan);
 		final thenSpan: Null<Span> = RegionTerminator.ownedSpan(thenBranch, source, shape);
 		final elseSpan: Null<Span> = RegionTerminator.ownedSpan(elseBranch, source, shape);
-		final keptSpan: Null<Span> = NegatedCondition.positive(cond, elseBranch, scan.site)?.span;
-		if (condSpan == null || thenSpan == null || elseSpan == null || keptSpan == null) return;
-		edits.push({ span: condSpan, text: source.substring(keptSpan.from, keptSpan.to) });
+		if (condSpan == null || thenSpan == null || elseSpan == null) return;
+		edits.push({ span: condSpan, text: swap.condition });
 		edits.push({ span: thenSpan, text: source.substring(elseSpan.from, elseSpan.to) });
 		edits.push({ span: elseSpan, text: source.substring(thenSpan.from, thenSpan.to) });
 	}
 
 	/**
 	 * Push the three inversion splices for one flagged value form (or nothing when it is no longer
-	 * `Fixable`): the condition replaced by the positive form, the branches swapped. Each is a
+	 * `Fixable`): the condition replaced by the swapped form, the branches swapped. Each is a
 	 * `ParenGuard` splice — the whole text is the hole — because each lands in an operator context
 	 * the parser, not this rule, decides about.
 	 */
 	private static function valueEdits(node: QueryNode, scan: Scan, out: Array<GuardedEdit>): Void {
-		if (node.children.length != IF_WITH_ELSE_CHILD_COUNT || !valueVerdict(node, scan).match(Fixable)) return;
+		if (node.children.length != IF_WITH_ELSE_CHILD_COUNT) return;
+		final swap: Null<Swap> = switch valueVerdict(node, scan) {
+			case Fixable(fixable): fixable;
+			case CommentBlocked(_), Skip: null;
+		};
 		final source: String = scan.site.source;
-		final cond: QueryNode = node.children[0];
-		final condSpan: Null<Span> = tight(cond, scan);
+		final condSpan: Null<Span> = tight(node.children[0], scan);
 		final thenSpan: Null<Span> = tight(node.children[1], scan);
 		final elseSpan: Null<Span> = tight(node.children[2], scan);
-		final keptSpan: Null<Span> = NegatedCondition.invertibleOperand(cond, node.children[2], scan.site)?.span;
-		if (condSpan == null || thenSpan == null || elseSpan == null || keptSpan == null) return;
-		out.push(splice(condSpan, keptSpan, source));
+		if (swap == null || condSpan == null || thenSpan == null || elseSpan == null) return;
+		out.push(write(condSpan, swap.condition));
 		out.push(splice(thenSpan, elseSpan, source));
 		out.push(splice(elseSpan, thenSpan, source));
 	}
@@ -288,7 +310,12 @@ final class InvertNegatedIfElse implements Check implements ConfigAware {
 
 	/** The `ParenGuard` splice writing `from`'s source over `to` — the whole text is the hole. */
 	private static function splice(to: Span, from: Span, source: String): GuardedEdit {
-		return { span: to, text: source.substring(from.from, from.to), holes: [] };
+		return write(to, source.substring(from.from, from.to));
+	}
+
+	/** The `ParenGuard` splice writing `text` over `to` — the whole text is the hole. */
+	private static function write(to: Span, text: String): GuardedEdit {
+		return { span: to, text: text, holes: [] };
 	}
 
 }
@@ -321,8 +348,10 @@ private typedef Scan = {
 /** What a value form is to this rule. */
 private enum ValueVerdict {
 	Skip;
-	Fixable;
+
+	/** Rewritten as `swap` reads it. */
+	Fixable(swap: Swap);
 
 	/** Reported, not rewritten: a comment would be dropped or left describing the other branch. */
-	CommentBlocked;
+	CommentBlocked(swap: Swap);
 }

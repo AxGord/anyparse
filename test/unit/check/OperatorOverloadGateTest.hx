@@ -5,6 +5,7 @@ import anyparse.check.DoubleNegation;
 import anyparse.check.FoldStringLiterals;
 import anyparse.check.InvertNegatedIfElse;
 import anyparse.check.JoinStringAppend;
+import anyparse.check.LintConfig;
 import anyparse.check.PreferTernaryReturn;
 import anyparse.check.SimplifyNegatedCompound;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
@@ -63,6 +64,11 @@ class OperatorOverloadGateTest extends Test {
 	private static final NEGATED_VALUE_USE: String = 'class Use3 {\n\n\tpublic static function e(f: Flag, x: Int): Int {\n'
 		+ '\t\treturn !f ? x : -x;\n\t}\n\n\tpublic static function g(f: Flag, x: Int): Int {\n\t\tif (!f) return x;\n'
 		+ '\t\treturn -x;\n\t}\n\n}\n';
+
+	/** Two default-first ternaries over the `Flag` abstract — what `defaultLast` turns by adding a `!` and by flipping `==`. */
+	private static final DEFAULT_FIRST_USE: String = 'class Use4 {\n\n\tpublic static function h(f: Flag, x: Null<Int>): Null<Int> {\n'
+		+ '\t\treturn f ? null : x;\n\t}\n\n\tpublic static function k(f: Flag, g: Flag, x: Null<Int>): Null<Int> {\n'
+		+ '\t\treturn f == g ? null : x;\n\t}\n\n}\n';
 
 	/** An abstract whose `@:op(A += B)` inserts a separator — the append twin of the `Dir` shape. */
 	private static final APPEND_OVERLOAD: String = 'abstract Route(String) from String to String {\n\n'
@@ -184,6 +190,26 @@ class OperatorOverloadGateTest extends Test {
 	}
 
 	/**
+	 * `defaultLast` turns `f ? null : x` by ADDING a `!` and `f == g ? null : x` by FLIPPING the `==`, so each
+	 * asks the operator table about the operator it writes: an `@:op(!A)` refuses the first, an `@:op(A == B)`
+	 * without its `!=` twin refuses the second; the plain abstract turns both.
+	 *
+	 * RED under M-NEGCOND-DEFAULT-LAST-OVERLOAD-BLIND (no operator asked) and M-NEGCOND-DEFAULT-LAST-EQ-UNASKED
+	 * (only the not asked).
+	 */
+	@:pin('control') @:killer('M-NEGCOND-DEFAULT-LAST-OVERLOAD-BLIND', 'M-NEGCOND-DEFAULT-LAST-EQ-UNASKED')
+	public function testDefaultLastAsksTheOperatorItWrites(): Void {
+		final eqOnly: String = 'abstract Flag(Bool) from Bool to Bool {\n\n'
+			+ '\t@:op(A == B) public inline function eq(b: Flag): Bool return this == cast b;\n\n}\n';
+		final notOnly: String =
+			'abstract Flag(Bool) from Bool to Bool {\n\n\t@:op(!A) public inline function inv(): Bool return this;\n\n}\n';
+		Assert.isFalse(lastReports(notOnly, 'f ?'));
+		Assert.isFalse(lastReports(eqOnly, 'f == g ?'));
+		Assert.isTrue(lastReports(NEGATION_PLAIN, 'f ?'));
+		Assert.isTrue(lastReports(NEGATION_PLAIN, 'f == g ?'));
+	}
+
+	/**
 	 * Whether `check` reports a finding whose span covers `needle` in the USE file, with `decl` in
 	 * the same run — the two-file shape is the point: the annotation that decides the verdict lives
 	 * in another module, which is where a check would never look on its own.
@@ -214,6 +240,21 @@ class OperatorOverloadGateTest extends Test {
 		], 'Use.hx', new HaxeQueryPlugin());
 		Assert.equals(1, run.edits.length);
 		return run.edits.length == 0 ? '' : run.edits[0].text;
+	}
+
+	/** Whether `invert-negated-if-else` under `defaultLast` reports `DEFAULT_FIRST_USE` at `needle`, with `decl` in the same run. */
+	private function lastReports(decl: String, needle: String): Bool {
+		final at: Int = DEFAULT_FIRST_USE.indexOf(needle);
+		Assert.isTrue(at >= 0, 'the fixture holds $needle');
+		final config: LintConfig = LintConfig.parse(InvertNegatedIfElseCheckTest.lastConfig());
+		final found: Array<Violation> = CheckFixture.violationsIn(new InvertNegatedIfElse(), [
+			{ file: 'Decl.hx', source: decl },
+			{ file: 'Use.hx', source: DEFAULT_FIRST_USE }
+		], new HaxeQueryPlugin(), _ -> config);
+		return found.exists(v -> {
+			final span: Null<Span> = v.span;
+			return v.file == 'Use.hx' && span != null && span.from <= at && at < span.to;
+		});
 	}
 
 }
