@@ -93,8 +93,7 @@ final class StdTypes {
 		plugin: GrammarPlugin, typeName: String, member: String, reads: Bool, writes: Bool, prefixes: Array<String>
 	): Array<String> {
 		final m: Null<StdMember> = memberOf(plugin, typeName, member);
-		if (m == null || m.isFunction) return [];
-		return [
+		return m == null || m.isFunction ? [] : [
 			for (i in 0...2) if ((i == 0 ? reads && m.hasGetter : writes && m.hasSetter) && i < prefixes.length) prefixes[i] + member
 		];
 	}
@@ -168,7 +167,12 @@ final class StdTypes {
 		}
 		if (imported != null) return imported;
 		final sibling: String = info.pkg == '' ? name : '${info.pkg}.$name';
-		return modulePaths.exists(sibling) ? sibling : modulePaths.exists(name) ? name : null;
+		return if (modulePaths.exists(sibling))
+			sibling
+		else if (modulePaths.exists(name))
+			name
+		else
+			null;
 	}
 
 	/** The module a type path lives in: the path itself when it names a module, else the path without its last segment. */
@@ -212,11 +216,7 @@ final class StdTypes {
 	}
 
 	private static function read(file: String): Null<String> {
-		#if (sys || nodejs)
-		return try sys.io.File.getContent(file) catch (exception: Exception) null;
-		#else
-		return null;
-		#end
+		return #if (sys || nodejs) try sys.io.File.getContent(file) catch (exception: Exception) null #else null #end;
 	}
 
 	/**

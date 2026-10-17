@@ -470,8 +470,9 @@ final class ElementSpan {
 		final parent: Null<QueryNode> = TreePath.parentOf(tree, node);
 		final wrapper: Null<QueryNode> = parent == null ? null : foldingWrapperOf(node, parent);
 		final wrapperSpan: Null<Span> = wrapper?.span;
-		if (wrapper == null || wrapperSpan == null) return trailingTrimmedSpan(source, declGroupSpan(node, parent, nodeSpan), regions);
-		return trailingTrimmedSpan(source, declGroupSpan(wrapper, TreePath.parentOf(tree, wrapper), wrapperSpan), regions);
+		return wrapper == null || wrapperSpan == null
+			? trailingTrimmedSpan(source, declGroupSpan(node, parent, nodeSpan), regions)
+			: trailingTrimmedSpan(source, declGroupSpan(wrapper, TreePath.parentOf(tree, wrapper), wrapperSpan), regions);
 	}
 
 	/**

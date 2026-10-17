@@ -282,8 +282,7 @@ final class NullGuardedCode {
 		if (!types.foreach(t -> FactsTypeText.unwrapNull(t) == UNBOUND || builtinEquality(FactsTypeTree.read(t), 0))) return false;
 		if (namedByTargetCode(name) || namesInNode(node, param)) return false;
 		final hierarchy: Array<String> = [owner].concat(_view.subtypesOf(owner));
-		if (_methods().obtainedUntyped(name, hierarchy, _escapedTypes(), _bindings, true)) return false;
-		return invocationsHandNull(id, index, count);
+		return !_methods().obtainedUntyped(name, hierarchy, _escapedTypes(), _bindings, true) && invocationsHandNull(id, index, count);
 	}
 
 	/**
@@ -446,8 +445,7 @@ final class NullGuardedCode {
 
 	/** Whether the static variable `field` of `owner` is a plain variable no code reads but by a comparison. */
 	private function fieldSealed(owner: String, field: String): Bool {
-		if (!plainStatic(owner, field)) return false;
-		return (gathered().fields['$owner.$field'] ?? []).foreach(a -> a.fact.write || a.fact.use == COMPARE);
+		return plainStatic(owner, field) && (gathered().fields['$owner.$field'] ?? []).foreach(a -> a.fact.write || a.fact.use == COMPARE);
 	}
 
 	/**
@@ -561,7 +559,7 @@ final class NullGuardedCode {
 		if (t == null || depth > MAX_ALIASES) return false;
 		return switch t {
 			case Named(NULLABLE, [inner]): builtinEquality(inner, depth + 1);
-			case Named(CATCH_ALL, []) | Structure(_) | Function(_, _): true;
+			case Named(CATCH_ALL, []), Structure(_), Function(_, _): true;
 			case Named(id, _):
 				final fact: Null<TypeFact> = _view.type(id);
 				fact != null && fact.alike

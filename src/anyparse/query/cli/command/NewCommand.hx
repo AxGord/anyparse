@@ -155,7 +155,7 @@ final class NewCommand implements CliCommand {
 			}
 			if (srcRoot == null) return null;
 			final file: String = '${srcRoot + iface.split('.').join('/')}.hx';
-			return !FileSystem.exists(file) ? null : { source: CliIo.readFile(file), ifaceModule: iface, simple: simple };
+			return FileSystem.exists(file) ? { source: CliIo.readFile(file), ifaceModule: iface, simple: simple } : null;
 		}
 		final file: String = '${Path.directory(FileSystem.absolutePath(newPath))}/$iface.hx';
 		if (!FileSystem.exists(file)) return null;

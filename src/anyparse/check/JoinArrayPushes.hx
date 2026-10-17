@@ -733,9 +733,9 @@ final class JoinArrayPushes implements Check {
 	 * be merging two allocations into one and must not admit it.
 	 */
 	private static function constantElement(node: QueryNode, purity: PurityCtx, s: Seams): Bool {
-		return !s.collectionKinds.contains(node.kind)
-			? PurityScan.isPure(node, purity)
-			: node.children.foreach(child -> constantElement(child, purity, s));
+		return s.collectionKinds.contains(node.kind)
+			? node.children.foreach(child -> constantElement(child, purity, s))
+			: PurityScan.isPure(node, purity);
 	}
 
 	/**

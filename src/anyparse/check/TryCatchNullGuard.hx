@@ -409,7 +409,7 @@ final class TryCatchNullGuard implements Check implements DefaultOff {
 	 */
 	private static function terminatorText(source: String, span: Span): Null<String> {
 		final trimmed: String = source.substring(span.from, span.to).rtrim();
-		return !trimmed.endsWith(';') ? null : trimmed.substring(0, trimmed.length - 1).rtrim();
+		return trimmed.endsWith(';') ? trimmed.substring(0, trimmed.length - 1).rtrim() : null;
 	}
 
 	/** Assemble `<prefix> = try <value> catch (…) <term> …;` — every clause takes the SAME terminator. */

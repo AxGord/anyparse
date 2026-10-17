@@ -55,12 +55,12 @@ final class RemoveElement {
 		final cursor: Int = Span.offsetOf(source, line, col);
 
 		final hit: Null<ElementHit> = elementAt(tree, source, cursor);
-		if (hit == null)
-			return Err(
+		return hit == null
+			? Err(
 				'position $line:$col'
 				+ ' is not on the first token of an element — point at the first token of a statement / case / list element / member'
-			);
-		return ElementSpan.deleteNode(source, hit.node, hit.parent, reformat, plugin, withDoc, optsJson);
+			)
+			: ElementSpan.deleteNode(source, hit.node, hit.parent, reformat, plugin, withDoc, optsJson);
 	}
 
 	/**

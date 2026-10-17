@@ -268,8 +268,8 @@ final class FactsMethodValues {
 			case Named(CLASS_VALUE | ABSTRACT_VALUE, [Named(id, _)]):
 				statics && hierarchy.contains(id);
 			case Named(CLASS_VALUE | ABSTRACT_VALUE, _): statics;
-			case Named(ENUM_VALUE, _) | Function(_, _): false;
-			case Named(CATCH_ALL | ANY, _) | Structure(_): left;
+			case Named(ENUM_VALUE, _), Function(_, _): false;
+			case Named(CATCH_ALL | ANY, _), Structure(_): left;
 			case Named(id, _):
 				final declared: Null<TypeFact> = _table.type(id);
 				if (declared == null || !declared.alike)

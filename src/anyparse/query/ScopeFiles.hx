@@ -71,10 +71,10 @@ final class ScopeFiles {
 			'no type "$typeName" declared under scope'
 		else if (declCount > 1)
 			'type "$typeName" is declared in $declCount files under scope — ambiguous, refusing'
-		else if (!declInCursorFile)
-			'the type "$typeName" at the cursor is not the one declared under scope — refusing'
+		else if (declInCursorFile)
+			null
 		else
-			null;
+			'the type "$typeName" at the cursor is not the one declared under scope — refusing';
 	}
 
 	/** The edit list of `file` in `editsByFile`, created on first use. */

@@ -227,7 +227,12 @@ final class LockWindow {
 			final cond: Null<Bool> = step(kids[0], held);
 			if (cond == null) return null;
 			final fixed: Null<Bool> = FixedFlags.decide(kids[0], _decided, _shape);
-			if (fixed != null) return fixed ? step(kids[1], cond) : kids.length > 2 ? step(kids[2], cond) : cond;
+			if (fixed != null) return if (fixed)
+				step(kids[1], cond)
+			else if (kids.length > 2)
+				step(kids[2], cond)
+			else
+				cond;
 			final otherwise: Null<Bool> = kids.length > 2 ? step(kids[2], cond) : cond;
 			return join(step(kids[1], cond), otherwise);
 		}

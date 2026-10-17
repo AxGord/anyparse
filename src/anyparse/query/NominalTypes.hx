@@ -680,9 +680,14 @@ final class NominalTypes {
 		final identKind: Null<String> = shape.identKind;
 		final name: Null<String> = receiver.name;
 		final span: Null<Span> = receiver.span;
-		if (identKind == null || receiver.kind != identKind || name == null || span == null) return null;
-		if (!SourceText.isUpperInitial(name) || TypeResolver.resolveBindingFrom(name, span, root, shape) != null) return null;
-		return index.refs.declaringFiles(name).length == 0 ? null : index.members.returnNominalOf(name, method);
+		return if (identKind == null || receiver.kind != identKind || name == null || span == null)
+			null
+		else if (!SourceText.isUpperInitial(name) || TypeResolver.resolveBindingFrom(name, span, root, shape) != null)
+			null
+		else if (index.refs.declaringFiles(name).length == 0)
+			null
+		else
+			index.members.returnNominalOf(name, method);
 	}
 
 	private static function expressionNominalWalk(

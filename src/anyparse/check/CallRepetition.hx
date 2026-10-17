@@ -106,8 +106,9 @@ final class CallRepetition {
 		if (initializerRun(edge)) return false;
 		final loops: Null<Array<Span>> = loopsAround(edge);
 		final outer: Null<Array<Span>> = loopsAround(take);
-		if (loops == null || outer == null || recursive(edge)) return true;
-		return !boundedOnce(edge, sourcesOf(edge, loops.filter(l -> !outer.exists(o -> o.from == l.from))));
+		return loops == null || (
+			outer == null || recursive(edge) || !boundedOnce(edge, sourcesOf(edge, loops.filter(l -> !outer.exists(o -> o.from == l.from))))
+		);
 	}
 
 	/**
@@ -128,8 +129,9 @@ final class CallRepetition {
 	public function alongUnder(edge: CallEdge, take: CallEdge, way: BoundedWay): Null<BoundedWay> {
 		final loops: Null<Array<Span>> = loopsAround(edge);
 		final outer: Null<Array<Span>> = loopsAround(take);
-		if (initializerRun(edge) || loops == null || outer == null) return way;
-		return extend(edge, sourcesOf(edge, loops.filter(l -> !outer.exists(o -> o.from == l.from))), way);
+		return initializerRun(edge) || loops == null || outer == null
+			? way
+			: extend(edge, sourcesOf(edge, loops.filter(l -> !outer.exists(o -> o.from == l.from))), way);
 	}
 
 	/**

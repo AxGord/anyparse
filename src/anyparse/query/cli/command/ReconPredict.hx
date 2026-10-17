@@ -288,17 +288,17 @@ final class ReconPredict {
 	 */
 	private static function reconRegressionParse(plugin: GrammarPlugin, source: String): ReconCurrentParse {
 		try {
-			return !plugin.reconParse(source)
+			return plugin.reconParse(source)
 				? {
-					unwired: true,
-					ok: false,
+					unwired: false,
+					ok: true,
 					line: 0,
 					col: 0,
 					msg: ''
 				}
 				: {
-					unwired: false,
-					ok: true,
+					unwired: true,
+					ok: false,
 					line: 0,
 					col: 0,
 					msg: ''

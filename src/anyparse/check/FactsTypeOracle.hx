@@ -346,7 +346,12 @@ final class FactsTypeOracle implements TypeOracle {
 		final misplaced: Null<OracleType> = misplacedAt(site, at, here, nodes);
 		if (misplaced != null) return misplaced;
 		final typed: Null<String> = flows ? null : site.facts.typeOfExpressionAt(site.file, at);
-		final types: Array<String> = flows ? site.facts.valueTypesAt(site.file, at) : typed == null ? [] : [typed];
+		final types: Array<String> = if (flows)
+			site.facts.valueTypesAt(site.file, at)
+		else if (typed == null)
+			[]
+		else
+			[typed];
 		return agreed(types, scopeOf(nodes[nodes.length - 1]), FactsDecline.NoFact);
 	}
 
@@ -356,10 +361,14 @@ final class FactsTypeOracle implements TypeOracle {
 	 * facts place it in another member or type. Null when it can.
 	 */
 	private function misplacedAt(site: FactsSite, at: Span, here: Home, nodes: Array<FactNode>): Null<OracleType> {
-		if (nodes.length == 0) return Declined(FactsDecline.CodeNotCompiled);
-		if (escapedBefore(site, at)) return Declined(FactsDecline.Shifted);
-		if (!sameHome(site, nodes[nodes.length - 1], here)) return Declined(FactsDecline.Elsewhere);
-		return null;
+		return if (nodes.length == 0)
+			Declined(FactsDecline.CodeNotCompiled)
+		else if (escapedBefore(site, at))
+			Declined(FactsDecline.Shifted)
+		else if (sameHome(site, nodes[nodes.length - 1], here))
+			null
+		else
+			Declined(FactsDecline.Elsewhere);
 	}
 
 	/**
@@ -420,7 +429,7 @@ final class FactsTypeOracle implements TypeOracle {
 		var type: Null<String> = null;
 		function walk(node: QueryNode): Void {
 			final at: Null<Span> = node.span;
-			if (at != null && !(at.from <= span.from && span.to <= at.to)) return;
+			if (at != null && (at.from > span.from || span.to > at.to)) return;
 			if (at != null && members.contains(node.kind)) {
 				member = node.name;
 				memberSpan = at;
@@ -493,9 +502,12 @@ final class FactsTypeOracle implements TypeOracle {
 
 	/** The one type all of `types` agree on, spelled; `none` when there is none, a decline naming them when several. */
 	private static function agreed(types: Array<String>, scope: TypeScope, none: String): OracleType {
-		if (types.length == 0) return Declined(none);
-		if (types.length > 1) return Declined('the oracle configurations type it differently: ${types.join(' / ')}');
-		return FactsTypeSpelling.spell(types[0], scope);
+		return if (types.length == 0)
+			Declined(none)
+		else if (types.length > 1)
+			Declined('the oracle configurations type it differently: ${types.join(' / ')}')
+		else
+			FactsTypeSpelling.spell(types[0], scope);
 	}
 
 	/**

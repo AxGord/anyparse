@@ -149,9 +149,10 @@ final class ReachAdmission {
 	private function runsUnseenCode(g: CallGraph, node: FnNode): Bool {
 		final type: Null<String> = node.typeName;
 		final name: Null<String> = node.name;
-		if (type == null || name == null) return node.isExternal;
-		if (!node.isExternal && !(node.isBodyless && g.types.meta.isExtern(type) && !_g.library.externQuiet(g, type, name))) return false;
-		return !_g.library.runsNoUserCode(g, type, name, true);
+		return type == null || name == null
+			? node.isExternal
+			: (node.isExternal || node.isBodyless && g.types.meta.isExtern(type) && !_g.library.externQuiet(g, type, name))
+				&& !_g.library.runsNoUserCode(g, type, name, true);
 	}
 
 	/**

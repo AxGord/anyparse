@@ -302,8 +302,12 @@ final class FunctionValueTypes {
 		final out: Array<FactPos> = [];
 		// an object that left the type system may have the field written by its name too
 		final left: Bool = escaped.exists(e -> hierarchy.contains(e));
-		if (left && !untypedStores(name, hierarchy, out)) return null;
-		return typedStores(name, related, left, out) ? out : null;
+		return if (left && !untypedStores(name, hierarchy, out))
+			null
+		else if (typedStores(name, related, left, out))
+			out
+		else
+			null;
 	}
 
 	/**
@@ -340,8 +344,7 @@ final class FunctionValueTypes {
 		final read: Null<ParsedFile> = parsed(at.file);
 		final shape: RefShape = _scope.shape;
 		final assign: Null<QueryNode> = read == null ? null : nodeAt(read.tree, at.span, shape.assignKind, true);
-		if (assign == null || assign.children.length != 2) return null;
-		return storedValue(n, at, assign.children[1]);
+		return assign == null || assign.children.length != 2 ? null : storedValue(n, at, assign.children[1]);
 	}
 
 	/**
@@ -401,7 +404,7 @@ final class FunctionValueTypes {
 					spliced == null || spliced.exists(s -> REFLECTIVE_WRITERS.contains(s));
 				// a marker no reader knows may say a write's name was lost
 				case Unknown(_): true;
-				case StaleForeign | InlineSite | MacroExpansion | ReflectionUnattributed | ReflectionFrom(_): false;
+				case StaleForeign, InlineSite, MacroExpansion, ReflectionUnattributed, ReflectionFrom(_): false;
 			}
 		);
 	}
@@ -457,8 +460,7 @@ final class FunctionValueTypes {
 		if (held.indexOf(PARAMETER) < 0 && place.indexOf(PARAMETER) < 0) return false;
 		final a: Null<FactsType> = functionText(held);
 		final b: Null<FactsType> = functionText(place);
-		if (a == null || b == null) return true;
-		return mayUnify(a, b);
+		return a == null || (b == null || mayUnify(a, b));
 	}
 
 	/**
@@ -535,10 +537,12 @@ final class FunctionValueTypes {
 		if (method == null || fnSpan == null || fnName == null || !(shape.functionKinds ?? []).contains(method.fn.kind)) return null;
 		final typeName: Null<String> = TypeResolver.enclosingTypeDeclAt(read.tree, fnSpan.from)?.name;
 		final typed: Array<String> = typeName == null ? [] : _view.bySimpleName()[typeName] ?? [];
-		if (typed.length != 1) return null;
-		return fnName == (shape.constructorName ?? 'new')
-			? constructedWith(typed[0], method.index, method.count, declared)
-			: invokedWith(typed[0], fnName, method.index, method.count);
+		return if (typed.length != 1)
+			null
+		else if (fnName == (shape.constructorName ?? 'new'))
+			constructedWith(typed[0], method.index, method.count, declared)
+		else
+			invokedWith(typed[0], fnName, method.index, method.count);
 	}
 
 	/** The parameter the identifier at `at` in `read` reads, when it is one its function never writes (`Refs`); null otherwise. */
@@ -549,11 +553,15 @@ final class FunctionValueTypes {
 		final hit: Null<RefHit> = hits.find(h -> h.kind == Read && h.span.from == at.span.from && h.span.to == at.span.to);
 		final declared: Null<QueryNode> = hit?.bindingNode;
 		final binding: Null<Span> = hit?.bindingSpan;
-		if (declared == null || binding == null) return null;
-		if (!(shape.paramKinds ?? []).contains(declared.kind)) return null;
+		return if (declared == null || binding == null)
+			null
+		else if (!(shape.paramKinds ?? []).contains(declared.kind))
+			null
 		// a parameter the function writes holds what it is assigned as well
-		if (hits.exists(h -> h.kind == Write && h.bindingSpan?.from == binding.from && h.bindingSpan?.to == binding.to)) return null;
-		return declared;
+		else if (hits.exists(h -> h.kind == Write && h.bindingSpan?.from == binding.from && h.bindingSpan?.to == binding.to))
+			null
+		else
+			declared;
 	}
 
 	/**
@@ -625,9 +633,14 @@ final class FunctionValueTypes {
 		final value: QueryNode = BoolExprShape.unwrapParens(arg, shape.parenKind);
 		final span: Null<Span> = value.span;
 		final where: Null<FactPos> = span == null ? null : { file: file, span: span };
-		if (value.kind == shape.nullLiteralKind || (shape.literalTypeNames ?? []).exists(value.kind)) return [];
-		if (where == null || !(shape.lambdaKinds ?? []).contains(value.kind)) return null;
-		return arity == null || parameterCount(value) == arity ? [where] : [];
+		return if (value.kind == shape.nullLiteralKind || (shape.literalTypeNames ?? []).exists(value.kind))
+			[]
+		else if (where == null || !(shape.lambdaKinds ?? []).contains(value.kind))
+			null
+		else if (arity == null || parameterCount(value) == arity)
+			[where]
+		else
+			[];
 	}
 
 	/**
@@ -660,7 +673,7 @@ final class FunctionValueTypes {
 					spliced == null || spliced.contains(CONSTRUCTING);
 				// a marker no reader knows may say a construction's arguments were lost
 				case Unknown(_): true;
-				case StaleForeign | InlineSite | MacroExpansion | ReflectionUnattributed | ReflectionFrom(_): false;
+				case StaleForeign, InlineSite, MacroExpansion, ReflectionUnattributed, ReflectionFrom(_): false;
 			}
 		);
 	}
@@ -924,9 +937,12 @@ final class FunctionValueTypes {
 	 * of what the facts place at its written side — or null, and null for a kind the grammar does not name.
 	 */
 	private function nodeAt(tree: QueryNode, span: Span, kind: Null<String>, byTarget: Bool): Null<QueryNode> {
-		if (kind == null) return null;
-		if (!byTarget) return TreePath.withSpan(tree, span, kind);
-		return TreePath.firstAround(tree, span, n -> n.kind == kind && n.children.length > 0 && TreePath.spansExactly(n.children[0], span));
+		return if (kind == null)
+			null
+		else if (byTarget)
+			TreePath.firstAround(tree, span, n -> n.kind == kind && n.children.length > 0 && TreePath.spansExactly(n.children[0], span))
+		else
+			TreePath.withSpan(tree, span, kind);
 	}
 
 	/** The text the facts of the file keyed `key` were read off and its tree, parsed once; null when it does not read. */

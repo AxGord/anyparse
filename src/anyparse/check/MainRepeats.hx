@@ -202,8 +202,12 @@ final class MainRepeats {
 	 * around it rules it out there.
 	 */
 	private function runsFrom(e: CallEdge, valuation: String): Null<String> {
-		if (e.kind == Ref) return _conditions.unknown(e.to);
-		return _conditions.carried(e, valuation, ThreadSafety.CTX_MAIN) == 0 ? null : _conditions.bind(e, valuation);
+		return if (e.kind == Ref)
+			_conditions.unknown(e.to)
+		else if (_conditions.carried(e, valuation, ThreadSafety.CTX_MAIN) == 0)
+			null
+		else
+			_conditions.bind(e, valuation);
 	}
 
 	/** The valuations of the main-thread states of `id`. */
@@ -224,8 +228,7 @@ final class MainRepeats {
 
 	/** The worst of `way` and `known` on every count: the most turns, the worst turn, every entry of both. */
 	private static function merged(way: BoundedWay, known: Null<BoundedWay>): BoundedWay {
-		if (known == null) return way;
-		return {
+		return known == null ? way : {
 			turns: Math.max(way.turns, known.turns),
 			cost: Math.max(way.cost, known.cost),
 			entries: known.entries.concat([for (e in way.entries) if (!known.entries.contains(e)) e])

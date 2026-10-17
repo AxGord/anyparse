@@ -234,8 +234,7 @@ final class FactNodeRecords {
 	/** The uses `record` gives each parameter of its node (`FactNode.paramUses`), or null when it records none. */
 	private static function paramUsesOf(record: NodeRecord): Null<Array<Array<ParamUse>>> {
 		final recorded: Null<Array<Array<UseRecord>>> = record.pu;
-		if (recorded == null || recorded.length != (record.params ?? []).length) return null;
-		return [
+		return recorded == null || recorded.length != (record.params ?? []).length ? null : [
 			for (uses in recorded) [for (u in uses) { use: u.u ?? '', method: u.m, argument: argumentOf(u) }]
 		];
 	}

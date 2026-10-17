@@ -209,9 +209,8 @@ class TransformLowering {
 	 * needless allocation and stops descent at inline primitive leaves.
 	 */
 	private function rebuildCore(node: ShapeNode, valueExpr: Expr): Expr {
-		return !isTransformable(node)
-			? valueExpr
-			: switch node.kind {
+		return isTransformable(node)
+			? switch node.kind {
 				case Ref:
 					// Dispatch into the referenced rule's own `_transform`,
 					// threading `visit` so its hooks fire deeper in the tree.
@@ -232,7 +231,8 @@ class TransformLowering {
 						'TransformLowering: cannot rebuild ${node.kind} child reaching a grammar type', Context.currentPos()
 					);
 					throw 'unreachable';
-			};
+			}
+			: valueExpr;
 	}
 
 	/**

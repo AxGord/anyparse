@@ -664,7 +664,7 @@ final class FactsView {
 						truth && !splicedReachesNoMember(n) ? DynamicName(file, span) : null;
 					// a marker no reader knows may stand for code no text holds, as an expansion does
 					case Unknown(text): Unmodelled(file, span, 'facts marker $text');
-					case StaleForeign | InlineSite | ReflectionUnattributed | ReflectionFrom(_): null;
+					case StaleForeign, InlineSite, ReflectionUnattributed, ReflectionFrom(_): null;
 				}
 			);
 			if (blind != null) return blind;
@@ -698,7 +698,7 @@ final class FactsView {
 		for (c in n.incomplete) switch FactMarkers.read(c) {
 			case ReflectionFrom(method):
 				out.push(method);
-			case StaleForeign | InlineSite | MacroExpansion | ReflectionInlined | ReflectionUnattributed | Unknown(_):
+			case StaleForeign, InlineSite, MacroExpansion, ReflectionInlined, ReflectionUnattributed, Unknown(_):
 		}
 		if (out.length == 0) return null;
 		for (c in n.calls) {
@@ -1233,8 +1233,9 @@ final class FactsView {
 		final declared: Array<FnDeclaration> = g.declarationsOf(node.id);
 		if (!truth || type == null || node.id.indexOf(NESTED_MARK) < 0 || declared.length != 1) return null;
 		final tree: Null<QueryNode> = g.treeOf(declared[0].file);
-		if (tree == null || TypeResolver.enclosingTypeDeclAt(tree, declared[0].span.from)?.name != type) return null;
-		return typedIn(declared[0].file, type);
+		return tree == null || TypeResolver.enclosingTypeDeclAt(tree, declared[0].span.from)?.name != type
+			? null
+			: typedIn(declared[0].file, type);
 	}
 
 	/**
@@ -1338,7 +1339,12 @@ final class FactsView {
 		final fact: Null<TypeFact> = _table.type(typed);
 		if (fact == null || fact.kind == TYPEDEF_KIND) return null;
 		final generic: Null<String> = fact.genericOf;
-		return generic != null ? CompilerFacts.baseId(generic) : fact.kind == IMPL_KIND ? implemented(typed) : typed;
+		return if (generic != null)
+			CompilerFacts.baseId(generic)
+		else if (fact.kind == IMPL_KIND)
+			implemented(typed)
+		else
+			typed;
 	}
 
 	/**
@@ -1349,9 +1355,12 @@ final class FactsView {
 		final fact: Null<TypeFact> = _table.type(typed);
 		if (typed == id || fact == null) return typed == id;
 		final generic: Null<String> = fact.genericOf;
-		if (generic != null) return CompilerFacts.baseId(generic) == id;
-		if (fact.kind == IMPL_KIND) return implemented(typed) == id;
-		return fact.kind == TYPEDEF_KIND && fact.targets.length > 0 && fact.targets.foreach(t -> CompilerFacts.baseId(t) == id);
+		return if (generic != null)
+			CompilerFacts.baseId(generic) == id
+		else if (fact.kind == IMPL_KIND)
+			implemented(typed) == id
+		else
+			fact.kind == TYPEDEF_KIND && fact.targets.length > 0 && fact.targets.foreach(t -> CompilerFacts.baseId(t) == id);
 	}
 
 	/**
@@ -1363,9 +1372,9 @@ final class FactsView {
 	 */
 	private function unplaced(m: String): Bool {
 		return switch FactMarkers.read(m) {
-			case ReflectionInlined | ReflectionUnattributed | ReflectionFrom(_): false;
-			case InlineSite | MacroExpansion: !truth;
-			case StaleForeign | Unknown(_): true;
+			case ReflectionInlined, ReflectionUnattributed, ReflectionFrom(_): false;
+			case InlineSite, MacroExpansion: !truth;
+			case StaleForeign, Unknown(_): true;
 		};
 	}
 
@@ -1538,8 +1547,7 @@ final class FactsView {
 		final tree: Null<QueryNode> = try _scope.plugin.parseFile(text.source) catch (exception: haxe.Exception) null;
 		final decl: Null<QueryNode> = tree == null ? null : RefactorSupport.nodeAtFrom(tree, m.declFrom);
 		final at: Null<Span> = decl?.span;
-		if (decl == null || at == null) return false;
-		return !conditional(text.file, text.source, typingSpan(decl, at, m));
+		return decl != null && at != null && !conditional(text.file, text.source, typingSpan(decl, at, m));
 	}
 
 	/**
@@ -1588,10 +1596,9 @@ final class FactsView {
 			}
 			final alias: Bool = info != null && (_scope.shape.aliasingDeclKinds ?? []).contains(info.kind)
 				&& !(_scope.shape.underlyingThisTypeKinds ?? []).contains(info.kind);
-			final header: Span = if (info == null || alias)
-				text.span
-			else
-				new Span(info.span.from, info.members.fold((m, least) -> m.declFrom < least ? m.declFrom : least, info.span.to));
+			final header: Span = info == null || alias
+				? text.span
+				: new Span(info.span.from, info.members.fold((m, least) -> m.declFrom < least ? m.declFrom : least, info.span.to));
 			// a file, or an ambient import source, importing under a condition may resolve every name in the type otherwise
 			final fi: Null<FileInfo> = indexedFile(text.file);
 			final guarded: Bool = fi != null
@@ -1671,8 +1678,7 @@ final class FactsView {
 	public static function of(
 		table: Null<CompilerFacts>, scope: ReachProject, ?configurations: Array<ReachConfiguration>
 	): Null<FactsView> {
-		if (table == null || !table.complete()) return null;
-		return new FactsView(table, scope, namesExactly(table, configurations));
+		return table == null || !table.complete() ? null : new FactsView(table, scope, namesExactly(table, configurations));
 	}
 
 	/** `of` over the compiler facts of the run `plugin` serves (`SymbolIndexHost.compilerFacts`): none when it serves no run. */
@@ -1705,8 +1711,7 @@ final class FactsView {
 	 * abstract. Null for a type carrying an unknown or a type parameter, which names no declaration.
 	 */
 	public static function simpleSource(type: String): Null<String> {
-		if (type.indexOf('?') >= 0 || type.indexOf('$') >= 0) return null;
-		return IMPL_NAME.replace(PACKAGE_PREFIX.replace(type, ''), '$1');
+		return type.indexOf('?') >= 0 || type.indexOf('$') >= 0 ? null : IMPL_NAME.replace(PACKAGE_PREFIX.replace(type, ''), '$1');
 	}
 
 	/** Whether the fact at `at` lies in the range of its node `n`, not spliced in from elsewhere (`FactSites.placed`). */
@@ -1799,8 +1804,7 @@ final class FactsView {
 
 	private function classlessType(t: FactsType, depth: Int): Bool {
 		return switch t {
-			case Structure(_): true;
-			case Named(CATCH_ALL, []): true;
+			case Structure(_), Named(CATCH_ALL, []): true;
 			case Named(NULLABLE, [inner]): classlessType(inner, depth);
 			case Named(id, _) if (depth < MAX_TYPEDEF_DEPTH):
 				final declared: Null<TypeFact> = _table.type(id);

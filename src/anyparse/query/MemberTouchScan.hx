@@ -745,10 +745,14 @@ final class MemberTouchScan {
 			}
 			return { touch: writes(grand, parentIndex), escape: false };
 		}
-		if (pk == shape.forStmtKind && isIterableOf(parent, node)) return { touch: false, escape: false };
-		if ((shape.equalityKinds ?? []).contains(pk)) return { touch: false, escape: false };
-		if (pk == shape.parenKind) return classify(parent, grand, null, lineage.slice(0, lineage.length - 1), parentIndex, 0, access, owns);
-		return { touch: false, escape: true };
+		return if (pk == shape.forStmtKind && isIterableOf(parent, node))
+			{ touch: false, escape: false }
+		else if ((shape.equalityKinds ?? []).contains(pk))
+			{ touch: false, escape: false }
+		else if (pk == shape.parenKind)
+			classify(parent, grand, null, lineage.slice(0, lineage.length - 1), parentIndex, 0, access, owns)
+		else
+			{ touch: false, escape: true };
 	}
 
 	/**

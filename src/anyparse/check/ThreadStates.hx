@@ -270,8 +270,7 @@ final class ThreadStates {
 	private function workerStep(e: CallEdge, valuation: String): Null<WorkerAt> {
 		final live: Int = _conditions.carried(e, valuation, ThreadSafety.CTX_BG);
 		final ctx: Int = e.kind == Ref ? _callbackContext(e, live) : live;
-		if (live == 0 || ctx & ThreadSafety.CTX_BG == 0) return null;
-		return workerAt(e.to, _conditions.entered(e, valuation));
+		return live == 0 || ctx & ThreadSafety.CTX_BG == 0 ? null : workerAt(e.to, _conditions.entered(e, valuation));
 	}
 
 	/** A `mainPath` as text, its last `cap` hops after `...` when it is longer. */

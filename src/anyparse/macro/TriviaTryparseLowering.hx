@@ -1163,17 +1163,7 @@ final class TriviaTryparseLowering {
 		final hasFlatChildOpt: Bool = flatChildOptPairs != null && flatChildOptPairs.length > 0;
 		return if (!hasFlatChildOpt && !propagateExprPosition)
 			macro opt;
-		else if (!propagateExprPosition) {
-			final block: Array<Expr> = [macro final _wo = _copyOpt(opt)];
-			for (pair in flatChildOptPairs) {
-				final fromAccess: Expr = { expr: EField(macro _wo, pair[0]), pos: Context.currentPos() };
-				final toAccess: Expr = optFieldAccess(pair[1]);
-				block.push(macro $fromAccess = $toAccess);
-			}
-			block.push(macro _wo);
-			final overrideBlock: Expr = { expr: EBlock(block), pos: Context.currentPos() };
-			macro (_flatCase ? $overrideBlock : opt);
-		} else {
+		else if (propagateExprPosition) {
 			// Wrap each `macro` expression in parens — array-literal `,` after
 			// a `macro final ... = ...` reification fragment otherwise mis-parses
 			// (the parser treats `macro` as a variable name in the next element).
@@ -1195,6 +1185,16 @@ final class TriviaTryparseLowering {
 			block.push(macro _wo);
 			final overrideBlock: Expr = { expr: EBlock(block), pos: Context.currentPos() };
 			overrideBlock;
+		} else {
+			final block: Array<Expr> = [macro final _wo = _copyOpt(opt)];
+			for (pair in flatChildOptPairs) {
+				final fromAccess: Expr = { expr: EField(macro _wo, pair[0]), pos: Context.currentPos() };
+				final toAccess: Expr = optFieldAccess(pair[1]);
+				block.push(macro $fromAccess = $toAccess);
+			}
+			block.push(macro _wo);
+			final overrideBlock: Expr = { expr: EBlock(block), pos: Context.currentPos() };
+			macro (_flatCase ? $overrideBlock : opt);
 		};
 	}
 

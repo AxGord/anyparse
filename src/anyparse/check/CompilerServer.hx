@@ -205,11 +205,7 @@ final class CompilerServer {
 	 * proves a compilation server answered (`isServerReply`). The file is named by its realpath — see `jsonPath`.
 	 */
 	public static function invalidateRequest(file: String): String {
-		#if nodejs
-		return '{"jsonrpc":"2.0","id":1,"method":"server/invalidate","params":{"file":"${jsonPath(file)}"}}';
-		#else
-		return '';
-		#end
+		return #if nodejs '{"jsonrpc":"2.0","id":1,"method":"server/invalidate","params":{"file":"${jsonPath(file)}"}}' #else '' #end;
 	}
 
 	/**

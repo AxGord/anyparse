@@ -812,9 +812,9 @@ final class WriterTriviaStarDispatch {
 	private static function caseSiblingControlFlowFnExpr(
 		tc: TriviaStarDispatchCtx, caseSymArgs: Null<Array<String>>, elemRefName: String
 	): Null<Expr> {
-		return !elemBodyStarHasFlag(tc, elemRefName, 'refuseGlueOnControlFlowRoot')
-			? null
-			: casePredFnExpr(tc, caseSymArgs, elemRefName, 'caseUnitControlFlowBody');
+		return elemBodyStarHasFlag(tc, elemRefName, 'refuseGlueOnControlFlowRoot')
+			? casePredFnExpr(tc, caseSymArgs, elemRefName, 'caseUnitControlFlowBody')
+			: null;
 	}
 
 	/**

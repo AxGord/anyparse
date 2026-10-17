@@ -1074,8 +1074,8 @@ final class CompilerFacts {
 	private static function lostWhere(n: FactNode): Bool {
 		return FactMarkers.carries(
 			n, m -> switch m {
-				case StaleForeign | Unknown(_): true;
-				case InlineSite | MacroExpansion | ReflectionInlined | ReflectionUnattributed | ReflectionFrom(_): false;
+				case StaleForeign, Unknown(_): true;
+				case InlineSite, MacroExpansion, ReflectionInlined, ReflectionUnattributed, ReflectionFrom(_): false;
 			}
 		);
 	}

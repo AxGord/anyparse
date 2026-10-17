@@ -46,8 +46,12 @@ final class FixedFlags {
 
 	/** The name `node` reads bare, through parentheses; null for anything else. */
 	private static function flagOf(node: QueryNode, shape: RefShape): Null<String> {
-		if (node.kind == shape.parenKind && node.children.length == 1) return flagOf(node.children[0], shape);
-		return node.kind == shape.identKind ? node.name : null;
+		return if (node.kind == shape.parenKind && node.children.length == 1)
+			flagOf(node.children[0], shape)
+		else if (node.kind == shape.identKind)
+			node.name
+		else
+			null;
 	}
 
 	/** Counts in `tests` the `if`s each of `params` decides under `node`. */

@@ -299,28 +299,28 @@ final class MutationSchema {
 		var owner: Null<QueryNode> = parent;
 		while (owner != null && !TYPE_KINDS.contains(owner.kind)) owner = parentOf(tree, owner);
 		final closing: Int = closingBrace(source, owner);
-		if (closing < span.to) return Refused('no type body to hold the switch');
-		return Method({
-			name: name,
-			span: span,
-			bodyOpen: bodySpan.from,
-			modifiers: modifiers,
-			params: [
-				for (child in member.children) if (PARAM_KINDS.contains(child.kind))
-					(child.kind == 'Rest' ? '...' : '') + (child.name ?? '')
-			],
-			copyAt: parent == owner ? closing : span.to,
-			closing: closing,
-			owner: owner?.name ?? ''
-		});
+		return closing < span.to
+			? Refused('no type body to hold the switch')
+			: Method({
+				name: name,
+				span: span,
+				bodyOpen: bodySpan.from,
+				modifiers: modifiers,
+				params: [
+					for (child in member.children) if (PARAM_KINDS.contains(child.kind))
+						(child.kind == 'Rest' ? '...' : '') + (child.name ?? '')
+				],
+				copyAt: parent == owner ? closing : span.to,
+				closing: closing,
+				owner: owner?.name ?? ''
+			});
 	}
 
 	/** Whether a copy keeps `modifier`. */
 	private static function keeps(modifier: QueryNode): Bool {
-		return if (modifier.kind == 'Meta' || modifier.kind == 'MetaCall')
-			!DROPPED_METAS.contains(modifier.name ?? '')
-		else
-			KEPT_MODIFIERS.contains(modifier.kind);
+		return modifier.kind == 'Meta' || modifier.kind == 'MetaCall'
+			? !DROPPED_METAS.contains(modifier.name ?? '')
+			: KEPT_MODIFIERS.contains(modifier.kind);
 	}
 
 	/** The modifiers and metadata right before `member` among `parent`'s children, in source order. */

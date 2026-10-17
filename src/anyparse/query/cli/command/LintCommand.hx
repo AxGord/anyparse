@@ -1279,9 +1279,7 @@ final class LintCommand implements CliCommand {
 	 * tree) gets the summary, which for one rule is a by-file breakdown.
 	 */
 	public static function summarises(shown: Int, format: String, forced: Null<Bool>, threshold: Int): Bool {
-		if (format != FORMAT_TEXT) return false;
-		if (forced != null) return forced;
-		return threshold > 0 && shown > threshold;
+		return format == FORMAT_TEXT && (forced != null ? forced : threshold > 0 && shown > threshold);
 	}
 
 	/** The stderr line that closes a summarised report: why it is a summary, and the ways to the full list. */

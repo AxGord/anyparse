@@ -74,18 +74,12 @@ final class ValueNameBinding {
 			final unlistedAt: Null<String> = switch imp.kind {
 				case ImportKind.Import if (SourceText.lastSegment(imp.raw) == name):
 					final named: Null<ImportedStatic> = staticOf(imp.raw);
-					final hidden: Bool = if (named == null)
-						TypeNameBinding.splitPath(imp.raw) == null
-					else
-						unlisted(named.decls);
+					final hidden: Bool = named == null ? TypeNameBinding.splitPath(imp.raw) == null : unlisted(named.decls);
 					hidden ? imp.raw : null;
 				case ImportKind.Alias if (imp.alias == name):
 					final target: Null<ImportedStatic> = aliasOf(imp)?.target;
 					final path: String = imp.aliasTarget ?? imp.raw;
-					final hidden: Bool = if (target == null)
-						TypeNameBinding.splitPath(path) == null
-					else
-						unlisted(target.decls);
+					final hidden: Bool = target == null ? TypeNameBinding.splitPath(path) == null : unlisted(target.decls);
 					hidden ? path : null;
 				case ImportKind.Wild:
 					final prefix: String = SourceText.parentPath(imp.raw);
@@ -270,8 +264,9 @@ final class ValueNameBinding {
 		if (split.rest.length == 1 && files.exists(f -> f.types.exists(t -> t.name == member))) return null;
 		final owner: String = split.rest.length == 2 ? split.rest[0] : SourceText.lastSegment(split.module);
 		final decls: Array<ResolvedType> = typesOf(files, owner);
-		if (decls.exists(d -> d.type.members.exists(m -> m.name == member && _enumConstructorKinds.contains(m.kind)))) return null;
-		return { owner: owner, decls: decls, member: member };
+		return decls.exists(d -> d.type.members.exists(m -> m.name == member && _enumConstructorKinds.contains(m.kind)))
+			? null
+			: { owner: owner, decls: decls, member: member };
 	}
 
 	/**

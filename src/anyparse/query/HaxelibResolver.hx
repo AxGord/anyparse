@@ -108,8 +108,7 @@ final class HaxelibResolver {
 	public static function rootsFrom(libpathOutput: Null<String>, count: Int): Null<Array<String>> {
 		if (libpathOutput == null) return null;
 		final lines: Array<String> = [for (line in libpathOutput.split('\n')) if (line.trim() != '') line.trim()];
-		if (lines.length != count) return null;
-		return lines;
+		return lines.length != count ? null : lines;
 	}
 
 	/**

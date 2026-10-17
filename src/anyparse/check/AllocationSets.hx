@@ -61,8 +61,7 @@ final class AllocationSets {
 			? callee.children[0]
 			: null;
 		final field: Null<String> = edge.receiverField;
-		if (receiver == null || field == null || !_sites.readsOwnMember(receiver)) return null;
-		return fieldClasses(field)?.join(SEPARATOR);
+		return receiver == null || field == null || !_sites.readsOwnMember(receiver) ? null : fieldClasses(field)?.join(SEPARATOR);
 	}
 
 	/**
@@ -70,8 +69,9 @@ final class AllocationSets {
 	 * dispatched one or a construction when some class of them resolves to it (`resolves`).
 	 */
 	public function dispatches(edge: CallEdge, classes: Null<String>): Bool {
-		if (classes == null || edge.dispatchType == null && edge.kind != New) return true;
-		return classes.split(SEPARATOR).exists(c -> resolves(c, edge));
+		return classes == null || edge.dispatchType == null && edge.kind != New
+			? true
+			: classes.split(SEPARATOR).exists(c -> resolves(c, edge));
 	}
 
 	/** The classes of `classes` the dispatched call `edge` runs its target on: the target's own running object. */
@@ -146,8 +146,12 @@ final class AllocationSets {
 		if (file == null) return null;
 		final tree: Null<QueryNode> = _graph.treeOf(file);
 		final decl: Null<QueryNode> = tree == null ? null : declarationAt(tree, info.declFrom);
-		if (decl == null || decl.children.length > 1) return null;
-		return decl.children.length == 0 ? [] : constructed(decl.children[0], file);
+		return if (decl == null || decl.children.length > 1)
+			null
+		else if (decl.children.length == 0)
+			[]
+		else
+			constructed(decl.children[0], file);
 	}
 
 	/** The node of `tree` starting at `from` that declares a member; null when none does. */
@@ -204,9 +208,14 @@ final class AllocationSets {
 		if (name == null) return null;
 		final simple: String = CallGraphNames.lastSegments(name, 1);
 		final imports: FileImports = importsOf(file);
-		if (imports.aliases.contains(simple)) return null;
-		if (_graph.types.declarationCount(simple) > 0) return simple;
-		return _writes.complete && (name.indexOf('.') >= 0 || imports.named.contains(simple)) ? simple : null;
+		return if (imports.aliases.contains(simple))
+			null
+		else if (_graph.types.declarationCount(simple) > 0)
+			simple
+		else if (_writes.complete && (name.indexOf('.') >= 0 || imports.named.contains(simple)))
+			simple
+		else
+			null;
 	}
 
 	/**

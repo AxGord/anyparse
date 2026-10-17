@@ -423,8 +423,7 @@ final class CondRegionLiveness {
 			final from: Int = cursor.pos;
 			cursor.pos = flagEnd(text, cursor.pos);
 			final flag: String = text.substring(from, cursor.pos);
-			if (flag == VERSION_CALL && openParen(text, cursor)) return parseVersion(text, cursor);
-			return flagValue(flag, facts);
+			return flag == VERSION_CALL && openParen(text, cursor) ? parseVersion(text, cursor) : flagValue(flag, facts);
 		}
 		if (code == '"'.code || code == '\''.code) {
 			final from: Int = cursor.pos;

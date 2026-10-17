@@ -328,8 +328,8 @@ final class FactsProvenance {
 		// macro expanded carries its own (`ExpansionFact`), and is the text's only where a call the text writes built it
 		if (FactMarkers.carries(
 			n, m -> switch m {
-				case StaleForeign | Unknown(_): true;
-				case InlineSite | MacroExpansion | ReflectionInlined | ReflectionUnattributed | ReflectionFrom(_): false;
+				case StaleForeign, Unknown(_): true;
+				case InlineSite, MacroExpansion, ReflectionInlined, ReflectionUnattributed, ReflectionFrom(_): false;
 			}
 		))
 			return false;
@@ -431,11 +431,10 @@ final class FactsProvenance {
 		}
 		if (name == null) return spliced(p.span.from) && spliced(p.span.to);
 		final member: String = name;
-		if (spliced(p.span.from)) {
-			return spliced(p.span.to) || siteSpells(n, p, p.span.from, p.span.to, member, body) || accessEnds(n, p.span.to, member);
-		}
-		return spliced(p.span.to)
-			&& (siteSpells(n, p, p.span.to, p.span.from, member, body) || accessEnds(n, p.span.from + member.length, member));
+		return spliced(p.span.from)
+			? spliced(p.span.to) || siteSpells(n, p, p.span.from, p.span.to, member, body) || accessEnds(n, p.span.to, member)
+			: spliced(p.span.to)
+				&& (siteSpells(n, p, p.span.to, p.span.from, member, body) || accessEnds(n, p.span.from + member.length, member));
 	}
 
 	/**
@@ -899,7 +898,12 @@ private final class Interpolation {
 			if (code != '\\'.code) {
 				chars.push(code);
 				at.push(span.from + i);
-				final width: Int = code < TWO_BYTES ? 1 : code < THREE_BYTES ? 2 : MAX_WIDTH;
+				final width: Int = if (code < TWO_BYTES)
+					1
+				else if (code < THREE_BYTES)
+					2
+				else
+					MAX_WIDTH;
 				widths.push(width);
 				if (width > 1) shifted = true;
 				i++;

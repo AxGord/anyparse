@@ -118,13 +118,13 @@ final class ExtractConstant {
 			// Same-package files (and a root-package module, globally visible)
 			// reference the module with no import; a differing real package needs one.
 			final needsImport: Bool = modulePkg != '' && ModuleScan.packageOf(tree) != modulePkg && !alreadyImportsModule(tree, modulePath);
-			final newSource: String = if (!needsImport)
-				replaced
-			else
+			final newSource: String = if (needsImport)
 				switch AddImport.addImport(replaced, modulePath, false, true, plugin, optsJson) {
 					case Ok(text): text;
 					case Err(message): return Err('${sf.file}: import: $message');
-				};
+				}
+			else
+				replaced;
 			changes.push({ file: sf.file, newSource: newSource, count: occurrences.length });
 		}
 

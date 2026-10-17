@@ -266,9 +266,9 @@ final class DeclaredNullity {
 	private function isTypeParamAt(name: String, at: Int): Bool {
 		function declares(node: QueryNode): Bool {
 			final span: Null<Span> = node.span;
-			if (span == null) return node.children.exists(declares);
-			if (at < span.from || at >= span.to) return false;
-			return (_typeParams[span.from] ?? []).contains(name) || node.children.exists(declares);
+			return span == null
+				? node.children.exists(declares)
+				: at >= span.from && at < span.to && ((_typeParams[span.from] ?? []).contains(name) || node.children.exists(declares));
 		}
 		return declares(_root);
 	}

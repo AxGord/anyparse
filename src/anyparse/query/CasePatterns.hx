@@ -115,8 +115,12 @@ final class CasePatterns {
 		if (decl == null) return none;
 		final isDynamic: Bool = isDynamicType(decl.type, shape);
 		// A field read off a dynamic value is dynamic too; any other field has a type this file does not see.
-		if (receiver != subject) return isDynamic ? { typed: true, isDynamic: true } : none;
-		return { typed: typeRulesOutConstants(decl.type, root, shape), isDynamic: isDynamic };
+		return if (receiver == subject)
+			{ typed: typeRulesOutConstants(decl.type, root, shape), isDynamic: isDynamic }
+		else if (isDynamic)
+			{ typed: true, isDynamic: true }
+		else
+			none;
 	}
 
 	/**
@@ -372,8 +376,8 @@ final class CasePatterns {
 		final aliases: Array<String> = shape.aliasingDeclKinds ?? [];
 		final kinds: Array<String> = (shape.typeDeclKinds ?? []).concat(closed);
 		function walk(node: QueryNode): Bool {
-			if (node.name == name && kinds.contains(node.kind) && (closed.contains(node.kind) || !aliases.contains(node.kind))) return true;
-			return node.children.exists(walk);
+			return node.name == name && kinds.contains(node.kind) && (closed.contains(node.kind) || !aliases.contains(node.kind))
+				|| node.children.exists(walk);
 		}
 		return walk(root);
 	}

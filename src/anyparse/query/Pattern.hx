@@ -221,10 +221,10 @@ final class Metavar {
 	public static function decodePlaceholderName(ident: String): Null<String> {
 		return if (!ident.startsWith(PLACEHOLDER_PREFIX))
 			null
-		else if (!ident.endsWith(PLACEHOLDER_SUFFIX))
-			null
+		else if (ident.endsWith(PLACEHOLDER_SUFFIX))
+			ident.substring(PLACEHOLDER_PREFIX.length, ident.length - PLACEHOLDER_SUFFIX.length)
 		else
-			ident.substring(PLACEHOLDER_PREFIX.length, ident.length - PLACEHOLDER_SUFFIX.length);
+			null;
 	}
 
 	/**

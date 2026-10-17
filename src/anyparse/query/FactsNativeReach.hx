@@ -75,8 +75,9 @@ final class FactsNativeReach {
 	 */
 	public function siteEscapes(x: NativeFact, hand: NativeHand): Bool {
 		final home: Null<String> = _table.node(x.holder)?.owner;
-		if (home == null) return hand.refuse('the facts of `${x.holder}`, which holds target-language code, are lost');
-		return handed(x, hand) && reach(x.holder, home, selfOf(x.holder), localsOf(x.holder), x.code, x.computed, hand);
+		return home == null
+			? hand.refuse('the facts of `${x.holder}`, which holds target-language code, are lost')
+			: handed(x, hand) && reach(x.holder, home, selfOf(x.holder), localsOf(x.holder), x.code, x.computed, hand);
 	}
 
 	/**

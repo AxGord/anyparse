@@ -75,15 +75,19 @@ final class TypedFactsShapes {
 	 */
 	public static function nativeCode(args: Array<TypedExpr>, carrying: Bool): String {
 		final text: Null<String> = args.length == 0 ? null : literalText(args[0]);
-		if (text != null) return ',"c":${Json.stringify(text)}';
-		return carrying ? ',"cc":true' : '';
+		return if (text != null)
+			',"c":${Json.stringify(text)}'
+		else if (carrying)
+			',"cc":true'
+		else
+			'';
 	}
 
 	/** The text of `e` when it is a string literal, through parentheses, metadata and an unchecked cast; null otherwise. */
 	public static function literalText(e: TypedExpr): Null<String> {
 		return switch e.expr {
 			case TConst(TString(s)): s;
-			case TParenthesis(inner) | TMeta(_, inner) | TCast(inner, null): literalText(inner);
+			case TParenthesis(inner), TMeta(_, inner), TCast(inner, null): literalText(inner);
 			case _: null;
 		};
 	}
@@ -104,7 +108,7 @@ final class TypedFactsShapes {
 	public static function nativeRoot(e: TypedExpr): Null<TypedExpr> {
 		return switch e.expr {
 			case TField(receiver, _): identRoot(receiver);
-			case TParenthesis(inner) | TMeta(_, inner): nativeRoot(inner);
+			case TParenthesis(inner), TMeta(_, inner): nativeRoot(inner);
 			case _: null;
 		};
 	}
@@ -114,7 +118,7 @@ final class TypedFactsShapes {
 		return switch e.expr {
 			case TIdent(name): name;
 			case TField(receiver, fa): '${chainText(receiver)}.${describe(fa).field}';
-			case TParenthesis(inner) | TMeta(_, inner): chainText(inner);
+			case TParenthesis(inner), TMeta(_, inner): chainText(inner);
 			case _: '';
 		};
 	}
@@ -124,7 +128,7 @@ final class TypedFactsShapes {
 		return switch e.expr {
 			case TIdent(_): e;
 			case TField(receiver, _): identRoot(receiver);
-			case TParenthesis(inner) | TMeta(_, inner): identRoot(inner);
+			case TParenthesis(inner), TMeta(_, inner): identRoot(inner);
 			case _: null;
 		};
 	}
@@ -142,7 +146,7 @@ final class TypedFactsShapes {
 				for (c in catches) collectLeaves(c.expr, out);
 			case TBlock(exprs) if (exprs.length > 0):
 				collectLeaves(exprs[exprs.length - 1], out);
-			case TParenthesis(inner) | TMeta(_, inner):
+			case TParenthesis(inner), TMeta(_, inner):
 				collectLeaves(inner, out);
 			case _:
 				out.push(e);
@@ -158,7 +162,7 @@ final class TypedFactsShapes {
 		collectLeaves(e, leaves);
 		return Lambda.foreach(
 			leaves, leaf -> switch leaf.expr {
-				case TArrayDecl(_) | TConst(TNull): true;
+				case TArrayDecl(_), TConst(TNull): true;
 				case TNew(c, _, _): FRESH_CLASSES.contains(c.toString());
 				case _: false;
 			}
@@ -221,7 +225,7 @@ final class TypedFactsShapes {
 		final out: Map<Int, Bool> = [];
 		function scan(e: TypedExpr): Void {
 			switch e.expr {
-				case TBinop(OpAssign | OpAssignOp(_), { expr: TLocal(v) }, _) | TUnop(OpIncrement | OpDecrement, _, { expr: TLocal(v) }):
+				case TBinop(OpAssign | OpAssignOp(_), { expr: TLocal(v) }, _), TUnop(OpIncrement | OpDecrement, _, { expr: TLocal(v) }):
 					out[v.id] = true;
 				case _:
 			}

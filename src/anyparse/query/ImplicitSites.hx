@@ -212,9 +212,8 @@ final class ImplicitSites {
 	 * checked (`landings`).
 	 */
 	private function mayConvertAt(place: Null<String>): Bool {
-		if (place == null) return true;
-		if ((_shape.catchAllTypeNames ?? []).contains(place) || (_shape.nonNullableTypeNames ?? []).contains(place)) return false;
-		return (_shape.arrayTypeNames ?? []).contains(place) || !_index.resolvesToPlainNominal(place);
+		return place == null || !(_shape.catchAllTypeNames ?? []).contains(place) && !(_shape.nonNullableTypeNames ?? []).contains(place)
+			&& ((_shape.arrayTypeNames ?? []).contains(place) || !_index.resolvesToPlainNominal(place));
 	}
 
 	/**
@@ -233,9 +232,12 @@ final class ImplicitSites {
 	 * its own operand, a braced expression's operand is what the braces hold.
 	 */
 	private function interpolatedOperand(segment: QueryNode): Null<QueryNode> {
-		if (segment.kind == _shape.stringInterpIdentKind) return segment;
-		if ((_shape.stringInterpInertSegmentKinds ?? []).contains(segment.kind) || segment.children.length == 0) return null;
-		return segment.children[0];
+		return if (segment.kind == _shape.stringInterpIdentKind)
+			segment
+		else if ((_shape.stringInterpInertSegmentKinds ?? []).contains(segment.kind) || segment.children.length == 0)
+			null
+		else
+			segment.children[0];
 	}
 
 }

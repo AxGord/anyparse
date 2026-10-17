@@ -119,12 +119,16 @@ final class MoveMemberReceivers {
 		)
 			return LEAVE;
 		final type: Null<String> = try typeOf(recv) catch (exception: Exception) null;
-		if (type == null) return 'its receiver\'s type is not known';
-		if (type == prep.srcTypeName || prep.index.subtypes.isSubtype(type, prep.srcTypeName))
-			return srcUnique ? ROUTE : 'more than one type in scope is named "${prep.srcTypeName}"';
-		if (classOrInterface(prep, type) && prep.index.subtypes.provablyNotSubtype(type, prep.srcTypeName)) return LEAVE;
-		if (StdTypes.memberOf(plugin, type, node.name ?? '') != null) return LEAVE;
-		return 'its receiver is a "$type", which is not provably unrelated to "${prep.srcTypeName}"';
+		return if (type == null)
+			'its receiver\'s type is not known'
+		else if (type == prep.srcTypeName || prep.index.subtypes.isSubtype(type, prep.srcTypeName))
+			srcUnique ? ROUTE : 'more than one type in scope is named "${prep.srcTypeName}"'
+		else if (classOrInterface(prep, type) && prep.index.subtypes.provablyNotSubtype(type, prep.srcTypeName))
+			LEAVE
+		else if (StdTypes.memberOf(plugin, type, node.name ?? '') != null)
+			LEAVE
+		else
+			'its receiver is a "$type", which is not provably unrelated to "${prep.srcTypeName}"';
 	}
 
 	/** The leftmost node of a receiver chain — the identifier a path starts from. */

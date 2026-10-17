@@ -113,8 +113,7 @@ final class MakeFinal {
 		final rewritten: String = '${src.source.substring(0, fieldSpanNN.from)}final${src.source.substring(fieldSpanNN.from + VAR.length)}';
 
 		final unparsed: Null<String> = ParseGate.refusal(plugin, rewritten, 'rewritten $srcFile');
-		if (unparsed != null) return Err(unparsed);
-		return Ok(rewritten);
+		return unparsed != null ? Err(unparsed) : Ok(rewritten);
 	}
 
 	/**

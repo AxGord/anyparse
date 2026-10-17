@@ -114,10 +114,10 @@ final class MutationSchemaCommand implements CliCommand {
 			return;
 		}
 		final composed: SchemaFile = MutationSchema.compose(source, tree, plugin, arms);
-		for (at in composed.placements) placed[at.id] = if (at.skip != null)
-			'skip\t$file\t${at.skip}'
-		else
-			'ok\t$file\t${at.dispatch}\t${at.copyFrom}\t${at.copyTo}\t${at.owner}';
+		for (at in composed.placements)
+			placed[at.id] = at.skip != null
+				? 'skip\t$file\t${at.skip}'
+				: 'ok\t$file\t${at.dispatch}\t${at.copyFrom}\t${at.copyTo}\t${at.owner}';
 		if (composed.text != source) CliIo.writeFile(file, composed.text);
 	}
 	#end

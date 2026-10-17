@@ -319,8 +319,7 @@ final class ReachDefinesProbe {
 		final read: Null<Dynamic> = try haxe.Json.parse(json) catch (exception: haxe.Exception) null;
 		if (read == null || !(read is Array)) return null;
 		final pair: Array<Dynamic> = read;
-		if (pair.length != 2 || !(pair[0] is String) || !(pair[1] is String)) return null;
-		return { name: '${pair[0]}', value: '${pair[1]}' };
+		return pair.length != 2 || !(pair[0] is String) || !(pair[1] is String) ? null : { name: '${pair[0]}', value: '${pair[1]}' };
 	}
 
 	private static function defines(list: String): Array<String> {

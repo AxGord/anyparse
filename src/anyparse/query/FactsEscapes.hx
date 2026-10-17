@@ -173,8 +173,12 @@ final class FactsEscapes {
 	 */
 	public function parameterTypes(path: String): Null<Array<FactsType>> {
 		final bound: Null<Map<String, FactsType>> = _instances.boundTo(path);
-		if (_instances.unread || _instances.unresolved(path)) return null;
-		return bound == null ? [] : [for (t in bound) t];
+		return if (_instances.unread || _instances.unresolved(path))
+			null
+		else if (bound == null)
+			[]
+		else
+			[for (t in bound) t];
 	}
 
 	/** The function types of the function values `compute` found escaping (`_functions`). */
@@ -191,8 +195,7 @@ final class FactsEscapes {
 		if (made == null) return refuse('the facts of `$id` lie in a file whose text the table no longer has');
 		final n: FactNode = made;
 		final lost: Null<String> = FactMarkers.lossReason(id, n, harmlessReflection);
-		if (lost != null) return refuse(lost);
-		return _native.nodeEscapes(id, n, _hand) && handEscapes(n);
+		return lost != null ? refuse(lost) : _native.nodeEscapes(id, n, _hand) && handEscapes(n);
 	}
 
 	/**
@@ -302,8 +305,9 @@ final class FactsEscapes {
 		final field: Null<FieldDeclFact> = declaredField(target);
 		if (field == null || !producer(field)) return true;
 		final name: Null<String> = r.name;
-		if (r.isValue || name == null) return anyClass('`$target` makes a class value of a name computed at run time in `${r.holder}`');
-		return _table.type(name) == null || escapeType(Named(name, []));
+		return r.isValue || name == null
+			? anyClass('`$target` makes a class value of a name computed at run time in `${r.holder}`')
+			: _table.type(name) == null || escapeType(Named(name, []));
 	}
 
 	/** The field `target` (`pack.Type.field`) names, as its type declares it; null when no build typed one. */
@@ -319,8 +323,7 @@ final class FactsEscapes {
 	private function producer(f: FieldDeclFact): Bool {
 		final classValue: Null<String> = _scope.shape.execution?.classValueTypeName;
 		final string: Null<String> = (_scope.shape.literalTypeNames ?? [])[(_scope.shape.stringLiteralKinds ?? [])[0] ?? ''];
-		if (classValue == null || string == null) return false;
-		return f.types.exists(t -> switch FactsTypeTree.read(t) {
+		return classValue != null && string != null && f.types.exists(t -> switch FactsTypeTree.read(t) {
 			case Function(args, Named(result, _)):
 				result == classValue && args.exists(a -> switch a.type {
 					case Named(name, []): name == string;
@@ -380,7 +383,7 @@ final class FactsEscapes {
 	/** Whether the type `text` is a function type, nullable or not: a value of it is a function value, which holds no object. */
 	private static function functionTyped(text: String): Bool {
 		return switch FactsTypeTree.read(text) {
-			case Function(_, _) | Named(NULLABLE, [Function(_, _)]): true;
+			case Function(_, _), Named(NULLABLE, [Function(_, _)]): true;
 			case _: false;
 		};
 	}
@@ -388,7 +391,7 @@ final class FactsEscapes {
 	/** Whether the type `text` is a type parameter, nullable or not: an extern handed a value there gives it back as one. */
 	private static function typeParameter(text: String): Bool {
 		return switch FactsTypeTree.read(text) {
-			case Parameter(_) | Named(NULLABLE, [Parameter(_)]): true;
+			case Parameter(_), Named(NULLABLE, [Parameter(_)]): true;
 			case _: false;
 		};
 	}
@@ -453,7 +456,7 @@ final class FactsEscapes {
 				if (!args.foreach(escapeType)) return false;
 				final bound: Map<String, FactsType> = bindings(id, fact, args);
 				return switch fact.kind {
-					case 'class' | 'interface' | 'impl': escapeClass(id, fact, bound);
+					case 'class', 'interface', 'impl': escapeClass(id, fact, bound);
 					case 'enum': fact.constructors.foreach(c -> constructorEscapes(id, c.name, c.type, bound));
 					case 'abstract': within(fact.underlying, bound);
 					case 'typedef': within(fact.targets, bound);
@@ -474,7 +477,7 @@ final class FactsEscapes {
 				held.foreach(a -> escapeType(substitute(a.type, bound)));
 			// a constructor of no arguments is a value of its enum, which holds nothing
 			case Named(_, _): true;
-			case Unknown | Parameter(_) | Structure(_): refuse('the constructor `$id.$name` has a type that is no function and no enum');
+			case Unknown, Parameter(_), Structure(_): refuse('the constructor `$id.$name` has a type that is no function and no enum');
 		};
 	}
 

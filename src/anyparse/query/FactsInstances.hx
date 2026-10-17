@@ -150,7 +150,7 @@ final class FactsInstances {
 				scanInstances(out, result);
 			case Structure(fields):
 				for (f in fields) scanInstances(out, f.type);
-			case Parameter(_) | Unknown:
+			case Parameter(_), Unknown:
 		}
 	}
 

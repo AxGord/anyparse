@@ -390,7 +390,7 @@ final class ReachGraph {
 			case Text: described(text, [], [], false);
 			case Iteration: described([for (n in execution?.implicitCallNames ?? []) if (!text.contains(n)) n], [], [], true);
 			case Literal: described([], [], bare(execution?.implicitConstructionTypeMetaNames), true);
-			case Index | Operator(_): described([], bare(execution?.implicitCallMetaNames), [], true);
+			case Index, Operator(_): described([], bare(execution?.implicitCallMetaNames), [], true);
 		};
 	}
 
@@ -773,8 +773,7 @@ final class ReachGraph {
 	 * static type is written — a project class's always, a library class's when its type is in play (`inPlay`).
 	 */
 	private function counts(c: ImplicitCandidate): Bool {
-		if (c.isAbstract) return visibleAbstracts().exists(c.type);
-		return _scope.sources.exists(c.file) || inPlay(c);
+		return c.isAbstract ? visibleAbstracts().exists(c.type) : _scope.sources.exists(c.file) || inPlay(c);
 	}
 
 	/**
@@ -835,7 +834,7 @@ final class ReachGraph {
 		// noqa: complexity
 		final view: Null<FactsView> = _scope.facts;
 		final owners: Null<Array<Null<String>>> = at.owners;
-		if (view == null || !view.truth || owners == null || !(at.family == Text || at.family == Iteration)) return null;
+		if (view == null || !view.truth || owners == null || at.family != Text && at.family != Iteration) return null;
 		final facts: FactsView = view;
 		final out: Map<String, Null<Array<String>>> = [];
 		function note(name: String, owner: Null<String>): Void {
@@ -1013,8 +1012,9 @@ final class ReachGraph {
 		// whether the name is declared at all is the static type's question: an instance that left the type system and
 		// declares it does not make a static extension, or a member a build macro generated, one the index describes
 		final declared: Null<Array<String>> = runtimeTypes(g, type, Literal, false);
-		if (declared == null || !declared.exists(t -> g.types.memberOnChain(t, name) != null)) return declared;
-		return runtimeTypes(g, type, Literal);
+		return declared == null || !declared.exists(t -> g.types.memberOnChain(t, name) != null)
+			? declared
+			: runtimeTypes(g, type, Literal);
 	}
 
 	/**

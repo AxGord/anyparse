@@ -608,15 +608,15 @@ final class ImportOrder {
 		final newline: Int = source.indexOf('\n', slot.to);
 		return if (newline < 0)
 			null
-		else if (!isPureTail(source.substring(slot.to, newline).trim()))
-			null
-		else
+		else if (isPureTail(source.substring(slot.to, newline).trim()))
 			{
 				path: slot.path,
 				declFrom: slot.from,
 				chunkFrom: withLeadingComments(source, lineStart),
 				chunkTo: newline + 1
-			};
+			}
+		else
+			null;
 	}
 
 	/**

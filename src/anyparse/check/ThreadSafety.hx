@@ -651,8 +651,9 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final shape: RefShape = plugin.refShape();
 		final kinds: Array<String> = (shape.modifierKinds ?? []).concat(plugin.metaShape().metaKinds);
 		final leading: Null<Array<QueryNode>> = MemberKinds.precedingAt(tree, d.span, kinds);
-		if (leading == null) return false;
-		return !leading.exists(m -> m.kind == shape.overrideModifierKind || plugin.metaShape().metaKinds.contains(m.kind));
+		return leading != null && !leading.exists(m ->
+			m.kind == shape.overrideModifierKind || plugin.metaShape().metaKinds.contains(m.kind)
+		);
 	}
 
 	/**

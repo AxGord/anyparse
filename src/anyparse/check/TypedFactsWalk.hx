@@ -386,11 +386,12 @@ final class TypedFactsWalk {
 		final receiver: { min: Int, max: Int, file: String } = Context.getPosInfos(field.receiver.pos);
 		if (receiver.file != info.file) return null;
 		final name: String = field.name;
-		if (info.max > receiver.max && _host.spellsAccess(info.file, info.max - name.length, name))
-			return _host.inlineCallee(info.file, info.max, info.max);
-		if (info.min < receiver.min && _host.spellsAccess(info.file, info.min, name))
-			return _host.inlineCallee(info.file, info.min, info.min);
-		return null;
+		return if (info.max > receiver.max && _host.spellsAccess(info.file, info.max - name.length, name))
+			_host.inlineCallee(info.file, info.max, info.max)
+		else if (info.min < receiver.min && _host.spellsAccess(info.file, info.min, name))
+			_host.inlineCallee(info.file, info.min, info.min)
+		else
+			null;
 	}
 
 	/**
@@ -701,7 +702,7 @@ final class TypedFactsWalk {
 			case TTry(body, catches):
 				walkAs(body, use);
 				for (c in catches) walkAs(c.expr, use);
-			case TParenthesis(inner) | TMeta(_, inner):
+			case TParenthesis(inner), TMeta(_, inner):
 				walkAs(inner, use);
 			case _:
 				TypedExprTools.iter(e, walk);
@@ -720,8 +721,9 @@ final class TypedFactsWalk {
 		if (method == null || block == null || !method.receiver || v.name != TypedFactsMacro.INLINED_RECEIVER) return null;
 		final at: { min: Int, max: Int, file: String } = Context.getPosInfos(p);
 		final around: { min: Int, max: Int, file: String } = Context.getPosInfos(block);
-		if (at.file != around.file || at.min != around.min || at.max != around.max) return null;
-		return method.id.substr(method.id.lastIndexOf('.') + 1);
+		return at.file != around.file || at.min != around.min || at.max != around.max
+			? null
+			: method.id.substr(method.id.lastIndexOf('.') + 1);
 	}
 
 	/** Walk the receiver of a field access, its value used as `use`; a type named as one is no value, so it is not walked. */
@@ -732,7 +734,7 @@ final class TypedFactsWalk {
 	/** A `Reflect.*` / `Type.*` member read as a value rather than called: whatever calls it later is reflection. */
 	private function reflectionValue(fa: FieldAccess, e: TypedExpr): Void {
 		switch fa {
-			case FStatic(c, cf) | FClosure({ c: c }, cf) if (TypedFactsShapes.REFLECTION_CLASSES.contains(c.toString())):
+			case FStatic(c, cf), FClosure({ c: c }, cf) if (TypedFactsShapes.REFLECTION_CLASSES.contains(c.toString())):
 				add('refl', '{"t":${q(c.toString() + '.' + cf.toString())},"v":true,"p":${at(e.pos)}}');
 			case _:
 		}
@@ -744,7 +746,7 @@ final class TypedFactsWalk {
 	 */
 	private function instantiated(fa: FieldAccess, applied: Type, p: Position): Void {
 		final field: Null<ClassField> = switch fa {
-			case FInstance(_, _, f) | FStatic(_, f) | FClosure(_, f): f.get();
+			case FInstance(_, _, f), FStatic(_, f), FClosure(_, f): f.get();
 			case _: null;
 		};
 		if (field != null && field.params.length > 0) add('gens', '{"d":${q(str(field.type))},"s":${q(str(applied))},"p":${at(p)}}');
@@ -783,7 +785,7 @@ final class TypedFactsWalk {
 	 */
 	private function exactObject(e: TypedExpr): Bool {
 		return switch e.expr {
-			case TParenthesis(inner) | TMeta(_, inner): exactObject(inner);
+			case TParenthesis(inner), TMeta(_, inner): exactObject(inner);
 			case TLocal(v):
 				_built.exists(v.id) && !_written.exists(v.id);
 			case _: constructed(e);
@@ -804,7 +806,7 @@ final class TypedFactsWalk {
 	 */
 	private function freshStructure(e: TypedExpr): Bool {
 		return switch e.expr {
-			case TParenthesis(inner) | TMeta(_, inner): freshStructure(inner);
+			case TParenthesis(inner), TMeta(_, inner): freshStructure(inner);
 			case TLocal(v):
 				_literals.exists(v.id) && !_written.exists(v.id);
 			case _: objectLiteral(e);
@@ -814,7 +816,7 @@ final class TypedFactsWalk {
 	/** Whether `e` is an object literal, seen through parentheses and metadata. */
 	private static function objectLiteral(e: TypedExpr): Bool {
 		return switch e.expr {
-			case TParenthesis(inner) | TMeta(_, inner): objectLiteral(inner);
+			case TParenthesis(inner), TMeta(_, inner): objectLiteral(inner);
 			case TObjectDecl(_): true;
 			case _: false;
 		};
@@ -823,7 +825,7 @@ final class TypedFactsWalk {
 	/** Whether `e` is a construction, seen through parentheses and metadata. */
 	private static function constructed(e: TypedExpr): Bool {
 		return switch e.expr {
-			case TParenthesis(inner) | TMeta(_, inner): constructed(inner);
+			case TParenthesis(inner), TMeta(_, inner): constructed(inner);
 			case TNew(_, _, _): true;
 			case _: false;
 		};
@@ -876,8 +878,8 @@ final class TypedFactsWalk {
 	 */
 	private static function heldValue(e: TypedExpr): Bool {
 		return switch e.expr {
-			case TField(_, _) | TLocal(_): true;
-			case TParenthesis(inner) | TMeta(_, inner):
+			case TField(_, _), TLocal(_): true;
+			case TParenthesis(inner), TMeta(_, inner):
 				heldValue(inner);
 			// the typer wraps every branch of an if- / switch-expression in a block whose last expression is its value
 			case TBlock(exprs):
@@ -1021,7 +1023,7 @@ final class TypedFactsWalk {
 		if (chained) _nativeChain = null;
 		instantiated(fa, callee.t, callee.pos);
 		switch fa {
-			case FInstance(c, _, cf) | FStatic(c, cf):
+			case FInstance(c, _, cf), FStatic(c, cf):
 				handed(c.get(), cf.get(), targetName, args);
 			case _:
 		}
@@ -1059,11 +1061,15 @@ final class TypedFactsWalk {
 	 */
 	private function calledKind(fa: FieldAccess, targetName: String, kind: String): String {
 		final cf: Null<Ref<ClassField>> = switch fa {
-			case FInstance(_, _, f) | FStatic(_, f): f;
+			case FInstance(_, _, f), FStatic(_, f): f;
 			case _: null;
 		};
-		if (cf == null) return kind;
-		return _host.replaceable(targetName, cf) ? 'fieldValue' : kind;
+		return if (cf == null)
+			kind
+		else if (_host.replaceable(targetName, cf))
+			'fieldValue'
+		else
+			kind;
 	}
 
 	private function reflection(targetName: String, args: Array<TypedExpr>, where: String): Void {
@@ -1175,7 +1181,7 @@ final class TypedFactsWalk {
 			case Iterable: '"u":"iter"';
 			case Update: '"u":"update"';
 			case Argument(target, access, index): '"u":"value","ag":${q(target)},"aa":"$access","ai":$index';
-			case Value | Statement | Held(_) | Assigned: '"u":"value"';
+			case Value, Statement, Held(_), Assigned: '"u":"value"';
 		};
 	}
 
@@ -1196,8 +1202,9 @@ final class TypedFactsWalk {
 	private function dynamicOperand(fnType: Null<Type>, args: Array<TypedExpr>): String {
 		final params: Null<Array<{ name: String, opt: Bool, t: Type }>> = parametersOf(fnType);
 		final first: Null<TypedExpr> = args.length > 0 ? args[0] : null;
-		if (params == null || params.length == 0 || first == null || str(params[0].t) != 'Dynamic') return '';
-		return ',"o":${q(sourceType(first))}' + (exactObject(first) ? ',"x":true' : '');
+		return params == null || params.length == 0 || first == null || str(params[0].t) != 'Dynamic'
+			? ''
+			: ',"o":${q(sourceType(first))}' + (exactObject(first) ? ',"x":true' : '');
 	}
 
 	/** The type the abstract `t` wraps, at its arguments — what its value is at run time; null for any other type and a core type. */
@@ -1229,7 +1236,7 @@ final class TypedFactsWalk {
 	/** Whether `e` is `this`, seen through parentheses and metadata. */
 	private static function isThis(e: TypedExpr): Bool {
 		return switch e.expr {
-			case TParenthesis(inner) | TMeta(_, inner): isThis(inner);
+			case TParenthesis(inner), TMeta(_, inner): isThis(inner);
 			case TConst(TThis): true;
 			case _: false;
 		};

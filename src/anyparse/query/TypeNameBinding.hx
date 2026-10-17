@@ -233,8 +233,7 @@ final class TypeNameBinding {
 		final mains: Array<ResolvedType> = [
 			for (f in tables().modules[path] ?? []) for (t in f.types) if (t.isMain && t.name == last) { file: f, type: t }
 		];
-		if (mains.length > 0 || path.indexOf('.') < 0) return mains;
-		return [
+		return mains.length > 0 || path.indexOf('.') < 0 ? mains : [
 			for (f in tables()
 				.modules[SourceText.parentPath(path)] ?? []) for (t in f.types) if (!t.isMain && t.name == last) { file: f, type: t }
 		];
@@ -255,8 +254,7 @@ final class TypeNameBinding {
 		if (split == null) return null;
 		if (split.rest.length > 1) return [];
 		final files: Array<FileInfo> = tables().modules[split.module] ?? [];
-		if (files.length == 0) return null;
-		return typesIn(files, split.rest.length == 0 ? null : split.rest[0], false);
+		return files.length == 0 ? null : typesIn(files, split.rest.length == 0 ? null : split.rest[0], false);
 	}
 
 	/**
@@ -352,7 +350,12 @@ final class TypeNameBinding {
 		final split: Null<ImportPath> = path == null ? null : importPathOf(path);
 		if (split == null) return Unreadable(null);
 		if (split.rest.length > 1 || (!aliased && split.rest.length == 1 && split.rest[0] != name)) return Pass;
-		final wanted: String = split.rest.length == 1 ? split.rest[0] : aliased ? SourceText.lastSegment(split.module) : name;
+		final wanted: String = if (split.rest.length == 1)
+			split.rest[0]
+		else if (aliased)
+			SourceText.lastSegment(split.module)
+		else
+			name;
 		// An alias of a module names its main type, and one whose module declares none names nothing that is known.
 		final missing: Answer = aliased && split.rest.length == 0 ? Unreadable(null) : Pass;
 		final files: Array<FileInfo> = tables().modules[split.module] ?? [];
@@ -362,8 +365,12 @@ final class TypeNameBinding {
 		}
 		final outside: Null<Array<TypeDeclInfo>> = outsideTypes(split.module, wanted);
 		final bound: String = pathIn(split.module, wanted);
-		if (outside == null) return Unreadable(bound);
-		return outside.exists(t -> t.name == wanted && !t.isPrivate) ? Outside(bound) : missing;
+		return if (outside == null)
+			Unreadable(bound)
+		else if (outside.exists(t -> t.name == wanted && !t.isPrivate))
+			Outside(bound)
+		else
+			missing;
 	}
 
 	/**
@@ -564,7 +571,12 @@ final class TypeNameBinding {
 	 * not; null unread.
 	 */
 	private static function declaresMain(types: Null<Array<TypeDeclInfo>>, name: String, path: String): Null<Answer> {
-		return types == null ? null : types.exists(t -> t.name == name && t.isMain && !t.isPrivate) ? Outside(path) : Pass;
+		return if (types == null)
+			null
+		else if (types.exists(t -> t.name == name && t.isMain && !t.isPrivate))
+			Outside(path)
+		else
+			Pass;
 	}
 
 	/** The non-private types `files` declare — named `name` unless it is null, main types only when `mainOnly`. */

@@ -723,7 +723,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	private static function readStdModule(dir: String, modulePath: String): Null<String> {
 		#if (sys || nodejs)
 		final file: String = haxe.io.Path.join([dir, '${modulePath.split('.').join('/')}.hx']);
-		return !sys.FileSystem.exists(file) ? null : try sys.io.File.getContent(file) catch (exception: Exception) null;
+		return sys.FileSystem.exists(file) ? try sys.io.File.getContent(file) catch (exception: Exception) null : null;
 		#else
 		return null;
 		#end

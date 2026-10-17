@@ -558,8 +558,9 @@ final class SymbolIndexBuilder {
 	 * annotations before it already said — when `meta` is not one or names none.
 	 */
 	private static function forwardedArgsOf(meta: QueryNode, shape: RefShape, pending: Null<Array<String>>): Null<Array<String>> {
-		if (meta.name != shape.forwardingDeclMetaName || meta.children.length == 0) return pending;
-		return [for (c in meta.children) if (c.name != null) c.name ?? ''];
+		return meta.name != shape.forwardingDeclMetaName || meta.children.length == 0
+			? pending
+			: [for (c in meta.children) if (c.name != null) c.name ?? ''];
 	}
 
 	/**

@@ -566,8 +566,8 @@ final class LockSites {
 	/** Whether `call` works a named lock on every path of `fn`: in, for a take; out, for a give. */
 	private function onEveryPath(walker: LockWindow, fn: QueryNode, call: LockCall, takes: Bool): Bool {
 		final at: Null<Span> = call.edge.span;
-		if (at == null || lockOf(call.edge) == null) return false;
-		return takes ? walker.runsOnEveryPath(fn, at.from) : walker.releasesOnEveryPath(fn, [at.from]);
+		return at != null && lockOf(call.edge) != null
+			&& (takes ? walker.runsOnEveryPath(fn, at.from) : walker.releasesOnEveryPath(fn, [at.from]));
 	}
 
 	/**
@@ -752,8 +752,8 @@ private class WrapperOps {
 		function runsOther(node: QueryNode): Bool {
 			if (node != fn && kinds.nested.contains(node.kind)) return false;
 			final at: Null<Span> = node.span;
-			if ((node.kind == shape.callKind || node.kind == shape.newExprKind) && !sites.contains(LockReleasers.callKey(at))) return true;
-			return node.children.exists(runsOther);
+			return (node.kind == shape.callKind || node.kind == shape.newExprKind) && !sites.contains(LockReleasers.callKey(at))
+				|| node.children.exists(runsOther);
 		}
 		return !runsOther(fn);
 	}

@@ -217,8 +217,7 @@ final class CompilerDisplayOracle extends PositionTypeOracle {
 		if (line == null || dash < 0) return null;
 		final first: Null<Int> = Std.parseInt(payload.substring(at + marker.length, dash));
 		final last: Null<Int> = Std.parseInt(payload.substring(dash + 1));
-		if (first == null || last == null) return null;
-		return {
+		return first == null || last == null ? null : {
 			file: payload.substring(0, colon),
 			line: line,
 			first: first,
@@ -281,8 +280,12 @@ final class CompilerDisplayOracle extends PositionTypeOracle {
 		final src: Null<String> = sourceOf(file);
 		// Unreadable source cannot refute the reply, and refusing on that would turn every
 		// query on a file the linter holds only in memory into an abstention.
-		if (src == null) return parseTypeResponse(raw);
-		return replyCovers(src, pos, bytePos) ? parseTypeResponse(raw) : null;
+		return if (src == null)
+			parseTypeResponse(raw)
+		else if (replyCovers(src, pos, bytePos))
+			parseTypeResponse(raw)
+		else
+			null;
 	}
 
 	/** `file`'s bytes as the compiler read them, cached per file; null when it cannot be read through any of its `pathForms`. */

@@ -174,8 +174,7 @@ final class ValueEscapes {
 			final ended: Null<EscapeAnswer> = fileEscapes(g, f.file, f.source, escape);
 			if (ended != null) return ended;
 		}
-		if (!namedClasses(g, escape)) return { types: null, raw: false, ids: null };
-		return { types: out, raw: false, ids: null };
+		return namedClasses(g, escape) ? { types: out, raw: false, ids: null } : { types: null, raw: false, ids: null };
 	}
 
 	/** `compute` under the truth: what the facts' own reading (`FactsEscapes`) answers. */
@@ -608,7 +607,7 @@ final class ValueEscapes {
 				final name: Null<String> = node.name;
 				final named: Bool = name != null && producers.contains(name)
 					&& (node.kind == _shape.identKind || _hazards.isAccess(node.kind));
-				if (named && !(parent?.kind == _shape.callKind && index == 0)) ok = false;
+				if (named && (parent?.kind != _shape.callKind || index != 0)) ok = false;
 				if (named && parent != null && parent.kind == _shape.callKind && index == 0) for (arg in parent.children.slice(1)) {
 					final literal: Null<String> = stringFold.literalOf(arg, text)?.content;
 					if (literal == null) {

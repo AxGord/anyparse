@@ -317,8 +317,7 @@ final class UnusedLocal implements Check implements VolatileMessage {
 			// loop form needs no such guard — its shadowing binding is the language's own `for` /
 			// `catch` binder, which no statement-list rewrite moves.
 			final redecl: Null<QueryNode> = bindsOwnValue(ctx, decl) ? sameScopeRedeclaration(ctx, enclosingScope, name, declSpan) : null;
-			var claimed: Null<QueryNode> = null;
-			if (redecl != null && appendRedeclaredRegion(ctx, redecl, name, scopeSpan, shadowed)) claimed = redecl;
+			var claimed: Null<QueryNode> = redecl != null && appendRedeclaredRegion(ctx, redecl, name, scopeSpan, shadowed) ? redecl : null;
 			if (shadowed.length == 0) return;
 			for (region in shadowed) excluded.push(region);
 			if (OccurrenceScan.referencedInRange(ctx.source, name, scopeSpan.from, scopeSpan.to, excluded, ctx.matchMask)) return;

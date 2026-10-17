@@ -278,8 +278,9 @@ final class ExplicitType implements Check implements OracleAssisted {
 		// A position-based oracle answers at a position INSIDE the name token, not at the
 		// `function` keyword the node's span starts on.
 		final nameAt: Int = OccurrenceScan.activeCodeIdentTokenOffset(s.source, span, name, s.regions);
-		if (nameAt < 0) return decline(v, DECLINE_NO_NAME);
-		return annotation(s, v, s.oracle.returnType(s.file, span, name, nameAt + name.length), at, methodProof(s, fn), false);
+		return nameAt < 0
+			? decline(v, DECLINE_NO_NAME)
+			: annotation(s, v, s.oracle.returnType(s.file, span, name, nameAt + name.length), at, methodProof(s, fn), false);
 	}
 
 	/** The oracle-assisted edits for the flagged return type and parameters of the function `fn`. */
@@ -312,10 +313,9 @@ final class ExplicitType implements Check implements OracleAssisted {
 		final nameAt: Int = OccurrenceScan.activeCodeIdentTokenOffset(s.source, span, name, s.regions);
 		if (nameAt < 0) return decline(v, DECLINE_NO_NAME);
 		final at: Int = param.children.length > 0 ? LiteralInfer.insertPoint(param, param.children[0], s.source) : nameAt + name.length;
-		if (at < 0) return decline(v, DECLINE_NO_SLOT);
-		return annotation(
-			s, v, s.oracle.paramType(s.file, fnSpan, fnName, index, name, nameAt + name.length), at, methodProof(s, fn), true
-		);
+		return at < 0
+			? decline(v, DECLINE_NO_SLOT)
+			: annotation(s, v, s.oracle.paramType(s.file, fnSpan, fnName, index, name, nameAt + name.length), at, methodProof(s, fn), true);
 	}
 
 	/** The annotation edit for the flagged field `field`, or null when any gate fails (the finding's `declineReason` says which). */
@@ -329,8 +329,9 @@ final class ExplicitType implements Check implements OracleAssisted {
 		final at: Int = field.children.length > 0
 			? LiteralInfer.insertPoint(field, field.children[0], s.source)
 			: bareFieldInsertPoint(s.source, nameAt + name.length, span.to);
-		if (at < 0) return decline(v, DECLINE_NO_SLOT);
-		return annotation(s, v, s.oracle.fieldType(s.file, span, name, nameAt + name.length), at, null, true);
+		return at < 0
+			? decline(v, DECLINE_NO_SLOT)
+			: annotation(s, v, s.oracle.fieldType(s.file, span, name, nameAt + name.length), at, null, true);
 	}
 
 	/**

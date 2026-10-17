@@ -35,15 +35,14 @@ final class FactText {
 	 * body was generated; null for a line that is not one.
 	 */
 	public static function nodeHead(line: String): Null<NodeHead> {
-		if (!NODE_HEAD.match(line)) return null;
-		return {
+		return NODE_HEAD.match(line) ? {
 			id: Json.parse(NODE_HEAD.matched(1)),
 			file: Json.parse(NODE_HEAD.matched(2)),
 			min: Std.parseInt(NODE_HEAD.matched(HEAD_MIN)) ?? 0,
 			max: Std.parseInt(NODE_HEAD.matched(HEAD_MAX)) ?? 0,
 			foreign: FOREIGN_POSITION.match(line),
 			generated: line.indexOf(',"gen":true') >= 0 || line.indexOf(',"gi":true') >= 0 || line.indexOf(',"inl":') >= 0
-		};
+		} : null;
 	}
 
 	/** The `len:md5` of `source` as UTF-8, the hash the facts file records for each file it homes a record in. */
@@ -54,11 +53,7 @@ final class FactText {
 
 	/** A line the table keeps, detached from the dump it was cut from so the dump's text can be freed. */
 	public static function detached(line: String): String {
-		#if js
-		return js.Syntax.code('(" " + {0}).slice(1)', line);
-		#else
-		return line;
-		#end
+		return #if js js.Syntax.code('(" " + {0}).slice(1)', line) #else line #end;
 	}
 
 	/** Whether `text` is a bare identifier. */

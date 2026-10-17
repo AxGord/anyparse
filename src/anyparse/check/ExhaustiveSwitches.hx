@@ -224,8 +224,7 @@ final class ExhaustiveSwitches {
 			collectReturns(fn, returns, true);
 			return returns.length == 0;
 		}
-		if (!mentions(declared, type)) return true;
-		return declared.name == type && declared.children.length == 0 && handsBackValuesOnly(fn, values);
+		return !mentions(declared, type) || declared.name == type && declared.children.length == 0 && handsBackValuesOnly(fn, values);
 	}
 
 	/** Whether every `return` of the function `fn`, outside a function nested in it, hands back one of `values`. */
@@ -379,11 +378,14 @@ final class ExhaustiveSwitches {
 			return arms.length > 0
 				&& arms.foreach(b -> b.children.length > 0 && valueExpr(unwrapped(b.children[b.children.length - 1]), at, closed));
 		}
-		if (kind == _shape.nullCoalesceKind && kids.length == 2)
-			return valueExpr(kids[1], at, closed) && (valueExpr(kids[0], at, closed) || parameterOf(kids[0], at, closed, true));
-		if (kind == _shape.identKind) return identValue(expr, at, closed);
-		if (isAccess(kind) && kids.length == 1) return accessValue(expr, at, closed);
-		return kind == _shape.callKind && convertedCall(expr, at, closed);
+		return if (kind == _shape.nullCoalesceKind && kids.length == 2)
+			valueExpr(kids[1], at, closed) && (valueExpr(kids[0], at, closed) || parameterOf(kids[0], at, closed, true))
+		else if (kind == _shape.identKind)
+			identValue(expr, at, closed)
+		else if (isAccess(kind) && kids.length == 1)
+			accessValue(expr, at, closed)
+		else
+			kind == _shape.callKind && convertedCall(expr, at, closed);
 	}
 
 	/** `node` without the expression statement around it, as a `switch` arm's value is written. */
@@ -405,8 +407,7 @@ final class ExhaustiveSwitches {
 		if (named.exists(n -> n.kind != _shape.caseBranchKind)) return parameterOf(read, at, closed, false);
 		final owner: Null<String> = at.owner;
 		final declaring: Null<String> = owner == null ? null : _graph.types.declaringTypeOf(owner, name);
-		if (declaring == null) return closed.values.contains(name);
-		return holdsValues(declaring, name, closed);
+		return declaring == null ? closed.values.contains(name) : holdsValues(declaring, name, closed);
 	}
 
 	/**
@@ -428,8 +429,10 @@ final class ExhaustiveSwitches {
 			owner
 		else if (member != null)
 			member.typeSource
+		else if (_graph.types.declarationCount(via) == 1)
+			via
 		else
-			_graph.types.declarationCount(via) == 1 ? via : null;
+			null;
 		final bare: Null<String> = switch type == null ? null : _typeSyntax(type)?.shape {
 			case Nominal(path, _): path;
 			case _: null;
@@ -453,10 +456,9 @@ final class ExhaustiveSwitches {
 		final declared: Null<QueryNode> = param?.type;
 		if (param == null || declared == null) return false;
 		if (declared.name != closed.name || declared.children.length > 0) return false;
-		final shaped: Bool = if (param.kind == _shape.optionalParamKind)
-			optional
-		else
-			(_shape.paramKinds ?? []).contains(param.kind) && param.kind != _shape.restParamKind && param.children.length == 0;
+		final shaped: Bool = param.kind == _shape.optionalParamKind
+			? optional
+			: (_shape.paramKinds ?? []).contains(param.kind) && param.kind != _shape.restParamKind && param.children.length == 0;
 		return shaped && callersPassValues(fn, param, at.file, closed);
 	}
 

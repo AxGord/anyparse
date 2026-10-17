@@ -171,7 +171,7 @@ final class ParenGuard {
 		if (mask == null) return plain;
 
 		final minimal: Array<Bool> = minimize(probe, wrap, mask);
-		return !minimal.contains(true) ? plain : buildVariant(source, edits, minimal, delims).edits;
+		return minimal.contains(true) ? buildVariant(source, edits, minimal, delims).edits : plain;
 	}
 
 	/**

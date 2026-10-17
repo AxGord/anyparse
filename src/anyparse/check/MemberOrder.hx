@@ -172,9 +172,8 @@ final class MemberOrder implements Check implements ConfigAware {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final shape: RefShape = plugin.refShape();
-		return !applicable(shape)
-			? []
-			: RunScan.edits(plugin, source, tree -> {
+		return applicable(shape)
+			? RunScan.edits(plugin, source, tree -> {
 				final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 				final accessors: Map<Int, Bool> = provider != null ? provider.propertyAccessors(source) : [];
 				final movableArglessNew: Bool = violations.length > 0 && optionOn(violations[0].file, 'movableArglessNew');
@@ -200,7 +199,8 @@ final class MemberOrder implements Check implements ConfigAware {
 					index, file, plugin.lexicalRegions(source)
 				);
 				return edits;
-			});
+			})
+			: [];
 	}
 
 	/**

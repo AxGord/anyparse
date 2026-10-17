@@ -115,8 +115,7 @@ final class IntroduceParameterObject {
 			case Ok(text, _): text;
 		};
 		final unparsed: Null<String> = ParseGate.refusal(plugin, rewritten, 'rewritten source');
-		if (unparsed != null) return Err(unparsed);
-		return Ok(rewritten);
+		return unparsed != null ? Err(unparsed) : Ok(rewritten);
 	}
 
 	/**

@@ -315,9 +315,12 @@ final class CallGraphKeys {
 	public static function importedStatic(
 		g: CallGraph, imported: ImportedStatics, name: String, currentType: Null<String>
 	): Null<{ owner: String, member: String }> {
-		if (memberMayBind(g, currentType, name)) return null;
-		if (imported.unknown || imported.statics.length != 1) return null;
-		return { owner: imported.statics[0].owner, member: imported.statics[0].member };
+		return if (memberMayBind(g, currentType, name))
+			null
+		else if (imported.unknown || imported.statics.length != 1)
+			null
+		else
+			{ owner: imported.statics[0].owner, member: imported.statics[0].member };
 	}
 
 	/**

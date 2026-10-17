@@ -127,7 +127,7 @@ final class TypedFactsMacro {
 				final c: ClassType = r.get();
 				if (c.module == OWN_MODULE) return;
 				switch c.kind {
-					case KTypeParameter(_) | KMacroType | KGenericBuild | KExpr(_):
+					case KTypeParameter(_), KMacroType, KGenericBuild, KExpr(_):
 						return;
 					case _:
 				}
@@ -313,7 +313,7 @@ final class TypedFactsMacro {
 		final known: Null<Bool> = _replaceable[key];
 		if (known != null) return known;
 		final answer: Bool = switch cf.get().kind {
-			case FVar(_, _) | FMethod(MethDynamic): true;
+			case FVar(_, _), FMethod(MethDynamic): true;
 			case FMethod(_): false;
 		};
 		_replaceable[key] = answer;

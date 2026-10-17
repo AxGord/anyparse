@@ -425,9 +425,9 @@ final class MemberReach {
 		final owner: Null<String> = TypeResolver.enclosingTypeDeclAt(tree, region.from)?.name;
 		if (owner == null) return Unknown(OutOfScope('`$name` belongs to no type the analysis can name'));
 		final ownerName: String = owner;
-		if (graph().types.declaringTypeOf(ownerName, name) == null)
-			return Unknown(OutOfScope('`$name` is not a member of `$ownerName` or its supertypes — an import or a module-level value'));
-		return mayReach(Region(file, region), { owner: ownerName, name: name, site: at }, Mutate);
+		return graph().types.declaringTypeOf(ownerName, name) == null
+			? Unknown(OutOfScope('`$name` is not a member of `$ownerName` or its supertypes — an import or a module-level value'))
+			: mayReach(Region(file, region), { owner: ownerName, name: name, site: at }, Mutate);
 	}
 
 	/**
@@ -698,8 +698,12 @@ final class MemberReach {
 		if (from == null) return null;
 		final sited: Array<CallEdge> = [for (e in g.outEdges(from)) if (e.file == file && sameSpan(e.span, at)) e];
 		// a faceted body records the site twice, its syntax's edge and its facts', both to the one function
-		if (sited.length == 0 || !sited.foreach(e -> e.kind == Call && e.to == sited[0].to)) return null;
-		return g.unresolved.exists(u -> u.file == file && sameSpan(u.span, at)) ? null : g.node(sited[0].to);
+		return if (sited.length == 0 || !sited.foreach(e -> e.kind == Call && e.to == sited[0].to))
+			null
+		else if (g.unresolved.exists(u -> u.file == file && sameSpan(u.span, at)))
+			null
+		else
+			g.node(sited[0].to);
 	}
 
 	/**
@@ -713,11 +717,9 @@ final class MemberReach {
 		final name: Null<String> = target.name;
 		if (type == null || name == null || target.isExternal || target.isBodyless || target.isDynamic) return false;
 		final g: CallGraph = graph();
-		if (!_projectSources.exists(target.file) || g.types.declarationCount(type) != 1 || !declaredOnce(target.file, type, name))
-			return false;
-		if (g.declarationsOf(target.id).length != 1) return false;
-		if (!_carriers.subtypesKnown(type) || g.virtualTargets(type, name).length > 0 || overriddenInFacts(g, type, name)) return false;
-		return _g.rewrittenBy(type) == null || _scope.provenance()?.bodyIsSource(g, target) == true;
+		return _projectSources.exists(target.file) && g.types.declarationCount(type) == 1 && declaredOnce(target.file, type, name)
+			&& g.declarationsOf(target.id).length == 1 && _carriers.subtypesKnown(type) && !(g.virtualTargets(type, name).length > 0)
+			&& !overriddenInFacts(g, type, name) && (_g.rewrittenBy(type) == null || _scope.provenance()?.bodyIsSource(g, target) == true);
 	}
 
 	/**
@@ -1232,8 +1234,7 @@ final class MemberReach {
 		if (decl == null || declSpan == null || fnSpan == null) return false;
 		final d: Span = declSpan;
 		final f: Span = fnSpan;
-		if (d.from < f.from || d.to > f.to) return false;
-		return _touches.localEscape(tree, source, fn, decl, name, region) == null;
+		return d.from >= f.from && d.to <= f.to && _touches.localEscape(tree, source, fn, decl, name, region) == null;
 	}
 
 	/**
@@ -1384,8 +1385,7 @@ final class MemberReach {
 		final written: Null<FnNode> = origin == null ? null : g.node(origin.node);
 		if (origin == null || written == null) return false;
 		final file: String = written.file;
-		if (_scope.facts?.keyOf(file) != origin.file) return false;
-		return benignEdge(g, written, {
+		return _scope.facts?.keyOf(file) == origin.file && benignEdge(g, written, {
 			from: written.id,
 			to: e.to,
 			kind: e.kind,
@@ -1415,8 +1415,8 @@ final class MemberReach {
 		final name: Null<String> = node.name;
 		if (type == null || g.types.declarationCount(type) <= 1 || g.facts?.qualified.exists(node.id) == true) return false;
 		final facts: Null<FactsView> = _scope.facts;
-		if (facts == null) return true;
-		return facts.soleType(type) == null && (name == null || facts.soleMember(type, name) == null) && ownTypes(g, node) == null;
+		return facts == null || facts.soleType(type) == null && (name == null || facts.soleMember(type, name) == null)
+			&& ownTypes(g, node) == null;
 	}
 
 	/**
@@ -1435,8 +1435,7 @@ final class MemberReach {
 			return nested == null ? null : [nested];
 		}
 		final spans: Null<Array<Occurrence>> = bodySpans(g, node);
-		if (spans == null || !spans.foreach(d -> facts.faceted(g, d.file, d.span, node.id))) return null;
-		return facts.initializerOwners(type);
+		return spans == null || !spans.foreach(d -> facts.faceted(g, d.file, d.span, node.id)) ? null : facts.initializerOwners(type);
 	}
 
 	/**
@@ -1920,7 +1919,7 @@ final class MemberReach {
 					? admission.value.copy()
 					: values.admitted(g, admission.value, called, site.calledAt);
 			}
-			final ids: Array<String> = !site.values ? [] : held ?? typed();
+			final ids: Array<String> = site.values ? held ?? typed() : [];
 			// a set beside the list: a site admitting the whole closure made `ids.contains` quadratic
 			final have: Map<String, Bool> = [for (id in ids) id => true];
 			function admit(id: String): Void {
@@ -2022,9 +2021,12 @@ final class MemberReach {
 			}
 			// code the walk does not read may run an implicitly-called member of a type whose text the index does not hold
 			final typed: Array<SiteFamily> = [SiteFamily.Text, SiteFamily.Iteration];
-			final families: Array<SiteFamily> = read
-				? typed.concat([SiteFamily.Index, SiteFamily.Operator(''), SiteFamily.Literal])
-				: run == null ? typed : [];
+			final families: Array<SiteFamily> = if (read)
+				typed.concat([SiteFamily.Index, SiteFamily.Operator(''), SiteFamily.Literal])
+			else if (run == null)
+				typed
+			else
+				[];
 			final textless: Null<String> = _g.unheldInPlay(families, false);
 			if (textless != null)
 				blind = blind ?? UnresolvedDispatch(
@@ -2423,8 +2425,7 @@ final class MemberReach {
 			span: span
 		};
 		if (resolved != null && g.node(resolved)?.isExternal == false) enqueue(resolved, step);
-		var grown: Null<ReachUnknown> = null;
-		if (!_projectSources.exists(_scope.siteOf(type)?.file ?? '')) grown = _g.loadOverrides(g, type, name);
+		var grown: Null<ReachUnknown> = _projectSources.exists(_scope.siteOf(type)?.file ?? '') ? null : _g.loadOverrides(g, type, name);
 		for (v in g.virtualTargets(type, name)) enqueue(v, step);
 		if (resolved != null && g.node(resolved)?.isExternal == false) return grown;
 		// a type that declares no constructor has a generated one: its initializers, then its superclass's constructor
@@ -2615,8 +2616,7 @@ final class MemberReach {
 	 */
 	private function handedConverted(g: CallGraph, handed: NativeHands, arrayOwn: Bool): Array<Null<String>> {
 		final types: Null<Array<String>> = handed.types;
-		if (types == null) return [null];
-		return [
+		return types == null ? [null] : [
 			for (t in types) {
 				final converted: String = (arrayOwn ? elementType(t) : null) ?? t;
 				final nominal: String = NominalTypes.outerNominalOf(converted, _scope.plugin.typeSyntax) ?? converted;
@@ -2724,10 +2724,9 @@ final class MemberReach {
 	 * excused.
 	 */
 	private function freshlyConstructed(g: CallGraph, id: String, step: Null<ReachStep>, scan: MemberTouches, member: MemberRef): Bool {
-		if (step == null || !(step.kind == EdgeKind.New.label() || step.kind == REFLECTIVE_CONSTRUCTOR) || scan.notOnSelf.exists(id))
+		if (step == null || step.kind != EdgeKind.New.label() && step.kind != REFLECTIVE_CONSTRUCTOR || scan.notOnSelf.exists(id))
 			return false;
-		if (g.node(id)?.name != (_shape.constructorName ?? 'new')) return false;
-		return g.types.memberOnChain(member.owner, member.name)?.isStatic == false;
+		return g.node(id)?.name == (_shape.constructorName ?? 'new') && g.types.memberOnChain(member.owner, member.name)?.isStatic == false;
 	}
 
 	/** The files of `project` whose text differs from this analysis's, or null when the set of files itself differs. */

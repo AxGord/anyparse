@@ -144,10 +144,12 @@ final class NewFile {
 			return err('assembled source does not parse: ${exception.message}');
 		};
 		final canonical: Null<String> = settled.text;
-		if (canonical == null) return err('no writer for this grammar');
-		return settled.converged
-			? { result: EditResult.Ok(canonical, settled.rewrites), stubbed: stubbed }
-			: err('the writer cannot settle the assembled source, so no file was created (${settled.failure})');
+		return if (canonical == null)
+			err('no writer for this grammar')
+		else if (settled.converged)
+			{ result: EditResult.Ok(canonical, settled.rewrites), stubbed: stubbed }
+		else
+			err('the writer cannot settle the assembled source, so no file was created (${settled.failure})');
 	}
 
 	/**
@@ -182,10 +184,12 @@ final class NewFile {
 			return EditResult.Err('source does not parse: ${exception.message}');
 		};
 		final canonical: Null<String> = settled.text;
-		if (canonical == null) return EditResult.Err('no writer for this grammar');
-		return settled.converged
-			? EditResult.Ok(canonical, settled.rewrites)
-			: EditResult.Err(
+		return if (canonical == null)
+			EditResult.Err('no writer for this grammar')
+		else if (settled.converged)
+			EditResult.Ok(canonical, settled.rewrites)
+		else
+			EditResult.Err(
 				'the writer cannot settle this content, so no file was created (${settled.failure})'
 				+ ' — write it with ordinary tools and report the construct'
 			);

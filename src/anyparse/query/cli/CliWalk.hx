@@ -73,8 +73,7 @@ final class CliWalk {
 	 * only fires on the implicit "no limit" default.
 	 */
 	public static function effectiveAutoLimit(limit: Int, totalHits: Int): Int {
-		if (limit >= 0 || totalHits <= AUTO_LIMIT_THRESHOLD) return limit;
-		return AUTO_LIMIT_THRESHOLD;
+		return limit >= 0 || totalHits <= AUTO_LIMIT_THRESHOLD ? limit : AUTO_LIMIT_THRESHOLD;
 	}
 
 	/**

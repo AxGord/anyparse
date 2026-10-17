@@ -133,8 +133,7 @@ final class ReflectiveReach {
 			: typeParamPlacement(fn, CallGraphNames.lastSegments(type, 1));
 		if (param != null) return param;
 		final reaches: Null<Array<String>> = reachOf(type);
-		if (reaches != null) return { reaches: reaches, by: capture };
-		return freshPlacement(file, fn, target) ?? { reaches: null, by: null };
+		return reaches != null ? { reaches: reaches, by: capture } : freshPlacement(file, fn, target) ?? { reaches: null, by: null };
 	}
 
 	/**
@@ -355,12 +354,10 @@ final class ReflectiveReach {
 		final index: Null<SymbolIndex> = _graph.index;
 		final made: String = aliased(CallGraphNames.lastSegments(init.name ?? '', 1));
 		final decl: Null<ResolvedType> = index == null ? null : onlyDeclaration(index, made);
-		if (
-			index == null || decl == null || !(_shape.classDeclKinds ?? []).contains(decl.type.kind) || fn != null
+		return index == null || decl == null || !(_shape.classDeclKinds ?? []).contains(decl.type.kind) || fn != null
 			&& _graph.typeParamBoundsOf(fn, made) != null
-		)
-			return null;
-		return { reaches: index.subtypes.supertypeNamesClosure(made), by: 'a fresh $made' };
+			? null
+			: { reaches: index.subtypes.supertypeNamesClosure(made), by: 'a fresh $made' };
 	}
 
 	/** The initializer of the `final` local the identifier `node`, in `file`, names; null for any other value. */

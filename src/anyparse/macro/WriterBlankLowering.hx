@@ -62,9 +62,8 @@ final class WriterBlankLowering {
 	 * one, with nothing in any module's types to catch it.
 	 */
 	private static function triviaUniformCollapseInitExpr(uniformStmtBlanks: Bool): Expr {
-		return !uniformStmtBlanks
-			? macro {}
-			: macro var _uniformCollapse: Bool = opt.uniformStatementBlanks == anyparse.format.UniformStatementBlanksPolicy.Collapse && {
+		return uniformStmtBlanks
+			? macro var _uniformCollapse: Bool = opt.uniformStatementBlanks == anyparse.format.UniformStatementBlanksPolicy.Collapse && {
 				var _ok: Bool = true;
 				var _uci: Int = 0;
 				while (_uci < _arr.length) {
@@ -75,7 +74,8 @@ final class WriterBlankLowering {
 					_uci++;
 				}
 				_ok;
-			};
+			}
+			: macro {};
 	}
 
 	/**

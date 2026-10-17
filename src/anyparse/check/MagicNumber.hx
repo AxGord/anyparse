@@ -220,8 +220,7 @@ final class MagicNumber implements Check implements ConfigAware implements NoAut
 	private static function literalValue(text: String): Null<Float> {
 		final clean: String = text.replace('_', '');
 		if (clean.startsWith('0x') || clean.startsWith('0X')) {
-			final i: Null<Int> = Std.parseInt(clean);
-			return i;
+			return (Std.parseInt(clean): Null<Int>);
 		}
 		final f: Float = Std.parseFloat(clean);
 		return Math.isNaN(f) ? null : f;

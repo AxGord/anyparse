@@ -326,8 +326,9 @@ final class TypedFactsProbe {
 	private static function answer(oracle: OracleConfig, run: HaxeRun, out: String): Null<FactsDump> {
 		if (run.failure != '' || run.status != 0) return null;
 		final text: Null<String> = try sys.io.File.getContent(out) catch (exception: haxe.Exception) null;
-		if (text == null) return null;
-		return { name: OracleDeclaration.describeOracle(oracle), text: text, file: memoised(oracle.dir ?? Sys.getCwd()) };
+		return text == null
+			? null
+			: { name: OracleDeclaration.describeOracle(oracle), text: text, file: memoised(oracle.dir ?? Sys.getCwd()) };
 	}
 
 	/** `OracleCoverage.canonical` against `root`, each path resolved once: a facts file names one path on many lines. */

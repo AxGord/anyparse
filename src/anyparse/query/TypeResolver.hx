@@ -746,8 +746,7 @@ final class TypeResolver {
 			buf.addChar(c);
 		}
 		final s: String = buf.toString();
-		if (s == '') return null;
-		return SourceText.lastSegment(s);
+		return s == '' ? null : SourceText.lastSegment(s);
 	}
 
 	/**

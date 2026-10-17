@@ -449,9 +449,12 @@ final class UsingScan {
 
 	/** The graver of two verdicts. */
 	private static inline function worse(a: UsingConflict, b: UsingConflict): UsingConflict {
-		return a == UsingConflict.Conflict || b == UsingConflict.Conflict
-			? UsingConflict.Conflict
-			: a == UsingConflict.Unresolved || b == UsingConflict.Unresolved ? UsingConflict.Unresolved : UsingConflict.Clear;
+		return if (a == UsingConflict.Conflict || b == UsingConflict.Conflict)
+			UsingConflict.Conflict
+		else if (a == UsingConflict.Unresolved || b == UsingConflict.Unresolved)
+			UsingConflict.Unresolved
+		else
+			UsingConflict.Clear;
 	}
 
 	/**

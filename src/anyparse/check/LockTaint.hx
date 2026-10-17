@@ -329,8 +329,7 @@ final class LockTaint {
 		if (!_threads.runsFrom(edge) || !listsOf(edge.file).sinkIds.contains(edge.to)) return false;
 		if (!takesLock(edge)) return true;
 		final lock: Null<String> = _sites.lockOf(edge);
-		if (quiet.never(edge)) return false;
-		return lock == null || !(lock == held && _sites.selfTake(edge)) && blockingLocks().contains(lock);
+		return !quiet.never(edge) && (lock == null || !(lock == held && _sites.selfTake(edge)) && blockingLocks().contains(lock));
 	}
 
 	/**
@@ -343,7 +342,7 @@ final class LockTaint {
 		if (retakesElsewhere(edge, held)) return held != null && _long.contains(held);
 		if (!takesLock(edge)) return !listsOf(edge.file).shortSinkIds.contains(edge.to);
 		final lock: Null<String> = _sites.lockOf(edge);
-		return lock == null || _long.contains(lock) && !(_cost?.dominance.dominated(edge, valuation) == true);
+		return lock == null || _long.contains(lock) && _cost?.dominance.dominated(edge, valuation) != true;
 	}
 
 	/**

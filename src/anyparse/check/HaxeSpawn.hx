@@ -352,14 +352,13 @@ final class HaxeSpawn {
 	 * the wrong place.
 	 */
 	private static function runShell(command: String, cwd: Null<String>): HaxeRun {
-		if (cwd != null && haxe.io.Path.normalize(cwd) != haxe.io.Path.normalize(Sys.getCwd())) return {
+		return cwd != null && haxe.io.Path.normalize(cwd) != haxe.io.Path.normalize(Sys.getCwd()) ? {
 			status: null,
 			out: '',
 			err: '',
 			failure: 'a command cannot run in $cwd on this target',
 			overflowed: false
-		};
-		return processRun(command, null, 'the command');
+		} : processRun(command, null, 'the command');
 	}
 
 	/**
@@ -400,12 +399,9 @@ final class HaxeSpawn {
 	 */
 	public static function parallelism(): Int {
 		final declared: Null<Int> = Std.parseInt(Sys.getEnv('APQ_ORACLE_PARALLEL') ?? '');
-		if (declared != null && declared > 0) return declared;
-		#if nodejs
-		return parallelismFor(js.node.Os.cpus().length, js.node.Os.totalmem(), gcSetting() != null);
-		#else
-		return 1;
-		#end
+		return declared != null && declared > 0
+			? declared
+			: #if nodejs parallelismFor(js.node.Os.cpus().length, js.node.Os.totalmem(), gcSetting() != null) #else 1 #end;
 	}
 
 	/**

@@ -464,8 +464,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		// the same `w` an unparenthesized site would, and the peeled `(` / `)` fall inside the two
 		// deleted regions, where the comment gate already guards them.
 		final recv: QueryNode = BoolExprShape.unwrapParens(call.children[1], s.parenKind);
-		if (callSpan == null || recv.span == null) return null;
-		return {
+		return callSpan == null || recv.span == null ? null : {
 			typeName: typeName,
 			module: module,
 			method: method,

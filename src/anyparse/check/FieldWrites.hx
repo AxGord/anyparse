@@ -377,8 +377,9 @@ final class FieldWrites {
 	 */
 	public function mayWrite(site: FieldWriteSite, owner: String): Bool {
 		final reaches: Null<Array<String>> = site.reaches;
-		if (site.reflective) return reaches == null || reaches.contains(owner);
-		return !site.own || !site.typed || site.declaring == null || site.declaring == owner || _graph.types.isInterface(owner);
+		return site.reflective
+			? reaches == null || reaches.contains(owner)
+			: !site.own || !site.typed || site.declaring == null || site.declaring == owner || _graph.types.isInterface(owner);
 	}
 
 	/**

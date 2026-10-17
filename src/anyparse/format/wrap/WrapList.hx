@@ -3306,9 +3306,9 @@ class WrapList {
 		// every other Keep consumer) the head stays glued to the open delim.
 		final headBreak: Bool = sourceBreakBefore.length > 0 && sourceBreakBefore[0];
 		if (items.length == 1) {
-			return !headBreak
-				? Concat([Text(open), items[0], Text(close)])
-				: Concat([Text(open), Nest(cols, Concat([Line('\n'), items[0]])), Text(close)]);
+			return headBreak
+				? Concat([Text(open), Nest(cols, Concat([Line('\n'), items[0]])), Text(close)])
+				: Concat([Text(open), items[0], Text(close)]);
 		}
 		// `nested` holds everything inside the continuation Nest: the optional
 		// leading head break, the head itself (when broken), then each link's

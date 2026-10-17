@@ -493,12 +493,12 @@ class QueryWalkerLowering extends PairedShapeLowering {
 		else
 			refsAware;
 
-		return !optional ? [core] : [
+		return optional ? [
 			block([
 				{ expr: EVars([{ name: '_ty', type: null, expr: access }]), pos: Context.currentPos() },
 				macro if (_ty != null) $core
 			])
-		];
+		] : [core];
 	}
 
 	/**

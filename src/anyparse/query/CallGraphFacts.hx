@@ -297,7 +297,12 @@ final class CallGraphFacts {
 		for (n in facts) {
 			for (c in n.calls) if (!view.truth || !nativeChained(n, c)) {
 				final own: Null<FactPos> = c.site;
-				final inlined: Null<Array<Span>> = c.access != INLINED ? null : own == null ? [] : [own.span];
+				final inlined: Null<Array<Span>> = if (c.access != INLINED)
+					null
+				else if (own == null)
+					[]
+				else
+					[own.span];
 				filed(g, node, n, c.at, view, inlined, span -> call(g, node, c, span, view, deferred));
 			}
 			for (x in n.news) filed(g, node, n, x.at, view, null, span -> construction(g, node, x, span, view, deferred));
@@ -316,8 +321,7 @@ final class CallGraphFacts {
 	private static function nativeChained(n: FactNode, c: CallFact): Bool {
 		final receiver: Null<FactPos> = c.receiverAt;
 		final target: Null<String> = c.target;
-		if (receiver == null || target == null || !DYNAMIC_CALLS.contains(c.access)) return false;
-		return n.natives.exists(x -> {
+		return receiver != null && target != null && DYNAMIC_CALLS.contains(c.access) && n.natives.exists(x -> {
 			final code: Null<String> = x.code;
 			code != null && !x.computed && StringTools.endsWith(code, '.$target') && x.at.file == receiver.file
 			&& x.at.span.from == receiver.span.from;

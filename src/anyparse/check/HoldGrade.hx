@@ -109,8 +109,8 @@ final class HoldGrade {
 		final lock: Null<String> = a.lock;
 		// the calls alone: a value handed on that may give the lock back proves no give here — the hold stays handed off
 		final calls: Array<CallEdge> = a.window.filter(e -> e.kind.isInvocation());
-		if (lock == null || !a.leaks || a.delegated || a.untraced || calls.length == 0) return false;
-		return !sites.gives.exists(g -> g.edge.from == a.edge.from && g.lock == lock)
+		return lock != null && a.leaks && !a.delegated && !a.untraced && calls.length != 0
+			&& !sites.gives.exists(g -> g.edge.from == a.edge.from && g.lock == lock)
 			&& !calls.exists(e -> sites.crossing.exists(c -> c.lock == lock && c.edge.from == e.to));
 	}
 
@@ -201,7 +201,12 @@ final class HoldGrade {
 			final error: Null<String> = judges.normal.blockingCalls(a, held).length > 0
 				? null
 				: judges.errors.placeOf(judges.long.blockingTrail(a, long[0].edge, held)?.edges ?? []);
-			final note: String = error != null ? ErrorPaths.note(error) : mainOnly ? CostNote.MainOwnWork : '';
+			final note: String = if (error != null)
+				ErrorPaths.note(error)
+			else if (mainOnly)
+				CostNote.MainOwnWork
+			else
+				'';
 			final elsewhere: Null<String> = mainOnly && error == null ? reportedElsewhere(a, held, long, judges) : null;
 			return {
 				calls: long,

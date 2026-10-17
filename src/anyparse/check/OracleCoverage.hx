@@ -202,10 +202,12 @@ final class OracleCoverage {
 		// The union holds the file but no ARM claims it, so the transcript could not be read
 		// apart. Saying the oracle does not compile the file would be false; this state is its
 		// own, and it is unreachable while `probe` builds the union out of the arms.
-		if (!claimed) return 'the compiler oracle\'s compile arms could not be told apart for this file';
-		return gap == null
-			? fileGap(paths.length)
-			: 'the compiler oracle does not typecheck this region ($gap is live under no compiled arm)';
+		return if (!claimed)
+			'the compiler oracle\'s compile arms could not be told apart for this file'
+		else if (gap == null)
+			fileGap(paths.length)
+		else
+			'the compiler oracle does not typecheck this region ($gap is live under no compiled arm)';
 		#else
 		return UNSUPPORTED_TARGET;
 		#end
@@ -473,8 +475,7 @@ final class OracleCoverage {
 		final quoteAt: Int = open < 0 || openDouble >= 0 && openDouble < open ? openDouble : open;
 		if (quoteAt < 0) return null;
 		final close: Int = line.indexOf(line.charAt(quoteAt), quoteAt + 1);
-		if (close <= quoteAt + 1) return null;
-		return line.substring(quoteAt + 1, close);
+		return close <= quoteAt + 1 ? null : line.substring(quoteAt + 1, close);
 	}
 
 	/** The `-v` probe's argument vector for `hxml` under `defines` — see `probe` for why the order is what it is. */
@@ -588,14 +589,13 @@ final class OracleCoverage {
 	 * plausible-looking set of wrong keys.
 	 */
 	private static function probeOutput(root: String, args: Array<String>): HaxeRun {
-		if (!HaxeSpawn.honoursCwd() && Path.normalize(root) != Path.normalize(Sys.getCwd())) return {
+		return !HaxeSpawn.honoursCwd() && Path.normalize(root) != Path.normalize(Sys.getCwd()) ? {
 			status: null,
 			out: '',
 			err: '',
 			failure: 'the coverage probe cannot run haxe in $root on this target',
 			overflowed: false
-		};
-		return reworded(HaxeSpawn.run(args, root, PROBE_BUFFER));
+		} : reworded(HaxeSpawn.run(args, root, PROBE_BUFFER));
 	}
 
 	/**

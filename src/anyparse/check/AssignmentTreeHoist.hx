@@ -327,8 +327,7 @@ final class AssignmentTreeHoist {
 	): Null<UnitValue> {
 		final head: Null<BranchValues> = branchValues(branches, ref, source, s, carried);
 		final lent: Null<UnitValue> = verbatimUnit(fallback, source);
-		if (head == null || lent == null) return null;
-		return {
+		return head == null || lent == null ? null : {
 			text: IfExpressionChain.buildValue(head.built, lent.text),
 			kept: head.kept.concat(lent.kept),
 			gaps: head.gaps.concat(seatGaps(head.seats, null)),

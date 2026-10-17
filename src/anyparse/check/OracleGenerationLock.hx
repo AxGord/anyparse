@@ -279,9 +279,7 @@ final class OracleGenerationLock {
 	private static inline function pause(): Void {
 		js.Syntax.code('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, {0})', LOCK_POLL);
 	}
-	#end
 
-	#if nodejs
 	/** `path`'s modification time in ms, or now when it cannot be read. */
 	private static function modified(path: String): Float {
 		return try sys.FileSystem.stat(path).mtime.getTime() catch (exception: haxe.Exception) Date.now().getTime();

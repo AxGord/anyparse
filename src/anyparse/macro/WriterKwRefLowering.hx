@@ -981,8 +981,7 @@ final class WriterKwRefLowering {
 	 */
 	private static function leftOperandCtors(kw: KwRefCtx, refName: String): Array<String> {
 		final rule: Null<ShapeNode> = kw.shape.rules[refName];
-		if (rule == null || rule.kind != Alt) return [];
-		return [
+		return rule == null || rule.kind != Alt ? [] : [
 			for (b in rule.children)
 				if (
 					b.annotations.get(AnnotationKeys.PRATT_PREC) != null || b.annotations.get(AnnotationKeys.POSTFIX_OP) != null

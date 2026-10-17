@@ -475,9 +475,8 @@ final class SweepCommand implements CliCommand {
 	 * absent, matching the pre-schema Reflect-based reader.
 	 */
 	private static function loadSweepJson(path: String): Null<SweepTotals> {
-		return !sys.FileSystem.exists(path)
-			? null
-			: try {
+		return sys.FileSystem.exists(path)
+			? try {
 				final raw: String = sys.io.File.getContent(path);
 				final snapshot: SweepSnapshot = SweepSnapshotParser.parse(raw);
 				final pass: Null<Int> = snapshot.pass;
@@ -492,7 +491,8 @@ final class SweepCommand implements CliCommand {
 					skipConfig: snapshot.skipConfig ?? 0,
 					skipMalformed: snapshot.skipMalformed ?? 0
 				};
-			} catch (_: Exception) null;
+			} catch (_: Exception) null
+			: null;
 	}
 
 	private static inline function sweepSigned(n: Int): String return n > 0 ? '+$n' : '$n';

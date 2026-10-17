@@ -127,8 +127,10 @@ class Pratt implements Strategy {
 						);
 						throw 'unreachable';
 				}
-			} else
-				assocValue == 'Right' ? precValue : precValue + 1;
+			} else if (assocValue == 'Right')
+				precValue
+			else
+				precValue + 1;
 			node.annotations[AnnotationKeys.PRATT_OP] = opText;
 			node.annotations[AnnotationKeys.PRATT_PREC] = precValue;
 			node.annotations[AnnotationKeys.PRATT_ASSOC] = assocValue;

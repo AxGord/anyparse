@@ -195,9 +195,8 @@ final class OperandBinder {
 			final span: Null<Span> = node.span;
 			if (span == null || at.from < span.from || at.to > span.to) return span == null && node.children.exists(walk);
 			final inside: Bool = from >= span.from && from < span.to;
-			if (node.kind == branchKind && !inside && CasePatterns.scan(node, _shape, []).idents.exists(ident -> ident.name == name))
-				return true;
-			return node.children.exists(walk);
+			return node.kind == branchKind && !inside && CasePatterns.scan(node, _shape, []).idents.exists(ident -> ident.name == name)
+				|| node.children.exists(walk);
 		}
 		return walk(_tree);
 	}
@@ -215,12 +214,14 @@ final class OperandBinder {
 		final declaration: QueryNode = fn;
 		final member: Null<MemberInfo> = _index.fileInfo(_file)?.types.flatMap(t -> t.members)
 			.find(m -> m.declFrom == declaration.span?.from);
-		if (member != null && !typedByItsReturn(member)) return Unknown;
-		return _fnKinds.contains(declaration.kind)
-			? _declared.headTier(
+		return if (member != null && !typedByItsReturn(member))
+			Unknown
+		else if (_fnKinds.contains(declaration.kind))
+			_declared.headTier(
 				CallGraphNames.returnSourceOf(declaration, _source, _shape.typeAnnotationKinds ?? []), from, _wrappers, _builtins
 			)
-			: Unknown;
+		else
+			Unknown;
 	}
 
 	/**

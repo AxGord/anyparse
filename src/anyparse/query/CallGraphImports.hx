@@ -278,8 +278,9 @@ final class CallGraphImports {
 		final simple: String = CallGraphNames.lastSegments(query, 2);
 		final dot: Int = simple.indexOf('.');
 		final member: String = simple.substring(dot);
-		if (query != simple) return [pathKey(query.substring(0, query.length - simple.length + dot)) + member];
-		return [simple].concat([for (path in foreignPaths(simple.substring(0, dot))) path + member]);
+		return query != simple
+			? [pathKey(query.substring(0, query.length - simple.length + dot)) + member]
+			: [simple].concat([for (path in foreignPaths(simple.substring(0, dot))) path + member]);
 	}
 
 	/**

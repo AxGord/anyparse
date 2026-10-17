@@ -762,8 +762,7 @@ final class CallGraph {
 		final declared: Null<String> = memberOnChain(typeName, ctorName);
 		if (declared != null) return declared;
 		final owner: Null<String> = types.declaringTypeOf(typeName, ctorName);
-		if (owner == null && types.chainFullyIndexed(typeName)) return null;
-		return externalNode(owner ?? typeName, ctorName);
+		return owner == null && types.chainFullyIndexed(typeName) ? null : externalNode(owner ?? typeName, ctorName);
 	}
 
 	/** Pseudo-node holding calls made from the instance (or, `isStatic`, the static) field initializers of `typeName`. */

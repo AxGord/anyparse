@@ -405,8 +405,10 @@ final class MainSinkReport {
 			ErrorPaths.note(error)
 		else if (bounded.length > 0)
 			boundedNote(bounded)
+		else if (registered)
+			CostNote.ShortRegisteredCall
 		else
-			registered ? CostNote.ShortRegisteredCall : CostNote.ShortMainCall;
+			CostNote.ShortMainCall;
 	}
 
 	/**

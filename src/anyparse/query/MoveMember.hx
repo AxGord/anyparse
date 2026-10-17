@@ -1010,10 +1010,12 @@ final class MoveMember {
 			return 'a switch case pattern in ${prep.srcFile} binds "${m.name}" — reference resolution cannot tell the '
 				+ 'capture from the member; rename the capture first';
 		final inherited: Null<String> = inheritanceRefusal(prep);
-		if (inherited != null) return inherited;
-		return prep.moved.exists(m -> !m.isStatic) && thisInsideCuts(prep)
-			? 'a moved body references "this", which would re-bind to "${prep.destTypeName}" — rewrite to bare member access first'
-			: null;
+		return if (inherited != null)
+			inherited
+		else if (prep.moved.exists(m -> !m.isStatic) && thisInsideCuts(prep))
+			'a moved body references "this", which would re-bind to "${prep.destTypeName}" — rewrite to bare member access first'
+		else
+			null;
 	}
 
 	/**

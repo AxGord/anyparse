@@ -197,11 +197,10 @@ final class OracleCache {
 		final chain: Null<HxmlChain> = scanHxmlChain(root, hxml);
 		if (chain == null) return null;
 		final probe: CompilerProbe = compilerProbe(root, chain.libs);
-		if (!probe.ok) return null;
-		return {
+		return probe.ok ? {
 			fingerprint: md5(buildManifest(root, chain, probe, defines ?? [], memo, walks).join('\n')),
 			roots: [root].concat(chain.classPaths).concat([for (dir in probe.dirs) absolute(root, dir)])
-		};
+		} : null;
 		#else
 		return null;
 		#end

@@ -87,8 +87,7 @@ final class ValueCarriers {
 	 * own supertypes, not the whole run.
 	 */
 	public function subtypesKnown(type: String): Bool {
-		if (classpathComplete()) return true;
-		return _buildsListed && _scope.provenance()?.subtypesIndexed(type) == true;
+		return classpathComplete() || _buildsListed && _scope.provenance()?.subtypesIndexed(type) == true;
 	}
 
 	/**
@@ -171,8 +170,12 @@ final class ValueCarriers {
 	public function relation(type: Null<String>, owner: String): CarryRelation {
 		final values: Null<Array<String>> = type == null ? null : valueTypes(type);
 		final owners: Null<Array<String>> = declaredValueTypes(owner);
-		if (values == null || owners == null) return MayCarry;
-		return values.exists(t -> owners.contains(t)) ? Carries : CannotCarry;
+		return if (values == null || owners == null)
+			MayCarry
+		else if (values.exists(t -> owners.contains(t)))
+			Carries
+		else
+			CannotCarry;
 	}
 
 	/**

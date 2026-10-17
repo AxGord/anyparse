@@ -435,9 +435,7 @@ final class InlineMethod {
 		if (rewritten == source) return Err('inline of "$name" is a no-op');
 
 		final unparsed: Null<String> = ParseGate.refusal(plugin, rewritten, 'rewritten source');
-		if (unparsed != null) return Err(unparsed);
-
-		return Ok(rewritten);
+		return unparsed != null ? Err(unparsed) : Ok(rewritten);
 	}
 
 }
