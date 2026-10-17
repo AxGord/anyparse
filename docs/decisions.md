@@ -3690,3 +3690,31 @@ decided the question; it may not become a record of runs.
   (one table per run) refused it, so neither reported it; and the fold's fix judged a construct the run left report-only
   against its own file's overloads alone and merged it → one table per run, and a fix asks with the report index it is
   handed (`OperatorSelection.of`'s `report`). Found by `OperandTypingTest`'s parity matrix — branch `feat/infra-N22`
+- the CLI ran its command from the entry script's own frame, where V8's verbose `v8::TryCatch` makes EVERY throw build a
+  message object (the throw site's source position, decoded from an optimized frame) even when a JavaScript `catch` two
+  frames up takes it; the generated parsers backtrack by throwing `ParseError.backtrack` ~400k times on the TM tree, so
+  that bookkeeping was a fifth of all parsing (5.47 s -> 4.37 s measured by hrtime, not by `--cpu-prof`, whose self time
+  INSIDE the generated parser is misattributed — `parseHxCondSemiValueS` showed 1.2 s self against 145 ms measured) →
+  `Cli.main` queues `run` as a microtask (`js.Node.queueMicrotask`), which V8 runs under a non-verbose catcher. Exit
+  codes and an escaping crash's raw stack are unchanged. NOT done: the throws themselves (~2-3 µs each even now —
+  doubling them costs ~1 s); removing them is a codegen change (lookahead before an alternative that cannot start
+  here), out of N1's scope — branch `feat/infra-N1`
+- `fold-adjacent-string-literals` re-rendered a candidate's whole member per candidate (TM's 120 KB generated
+  `FallbackLanguage2.getEN`: 18 renders, ~1.4 s) → a direct child of a function's block body, two indents deep, is
+  measured inside a one-statement wrapper, but only with evidence for THAT statement (`rendersAlone`: the wrapper renders
+  back to its own lines and the statement's lines appear verbatim in the member's rendering) — the measure compares a
+  rendering with its baseline as a multiset of lines, so equal statement lines give equal widths. A `@formatter:off`
+  guard was written and dropped: a statement inside an off region the member copies verbatim fails `rendersAlone`
+  unless it is already canonical, and eight fixture families (merge / split / call-argument / interpolation shapes at
+  the width boundary) found no input where the guard changed a finding, so it was a gate no test could tell from its
+  absence — branch `feat/infra-N1`
+- `ProjectCoverage` parsed each `apqlint.json` twice per run directory → a run-scoped `DocumentMemo` (directory +
+  content -> parsed document) that the coverage OWNS; deliberately not shared with the lint run's own per-directory
+  configs, whose `compilerOracle` entries `OracleGeneration.prepare` writes in place (`unavailable`, `raced`, `runs`), so
+  one shared document would hand one directory's prepared entries to another — branch `feat/infra-N1`
+- run-scoped memos added for pure per-run answers the checks re-derived per call, each where the answer's owner already
+  keeps run state (never a `static`, `docs/design-principles.md` § 2): `CachingGrammarPlugin` (`refShape` once,
+  `lexicalRegions` per source as a copy, `checkOverrides` per directory like `maxComplexity`), `RefsCache` (`@:nullSafety`
+  scopes per tree), `FunctionTrees` (node per file + span), `SubtypeGraph` (member-name -> declaring types),
+  `TypeNameBinding` (import path splits); and `lint` asks rule enablement per distinct config
+  (`LintDocuments.distinctConfigs`) instead of per file — branch `feat/infra-N1`
