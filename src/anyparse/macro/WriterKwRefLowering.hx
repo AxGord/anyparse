@@ -856,7 +856,7 @@ final class WriterKwRefLowering {
 			? macro (
 				opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.FixedZero
 					? _dcmz($case3Doc)
-					: (opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedDecrease ? _dcmd($case3Doc) : $case3Doc)
+					: opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedDecrease ? _dcmd($case3Doc) : $case3Doc
 			)
 			: case3Doc;
 	}

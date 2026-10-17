@@ -1150,7 +1150,7 @@ final class TriviaSepLowering {
 				// never runs on a non-array Star (whose element node is a non-enum struct →
 				// the cast would throw). Non-comprehension arrays keep their `_smlKeep` reflow
 				// behaviour untouched.
-				_matrixDoc != null ? _dbg(_matrixDoc) : (_smlKeep && !_isComprehension ? _dbg(_wlResult) : _wlResult);
+				_matrixDoc != null ? _dbg(_matrixDoc) : _smlKeep && !_isComprehension ? _dbg(_wlResult) : _wlResult;
 			};
 		} else {
 			triviaSepFlatBranch(openText, closeText, sepText, triviaElemCall);

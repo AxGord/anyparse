@@ -317,7 +317,7 @@ final class WriterFieldSepLowering {
 		// knob builds the group, and every flag carrier is a field of
 		// `HxConditionalExpr`, consumed only by the group-building ctor.
 		return child.fmtHasFlag('condExprFitBreak')
-			? macro $picked ? _dhl() : (opt.conditionalExprFit ? _dl() : _dt(' '))
+			? macro $picked ? _dhl() : opt.conditionalExprFit ? _dl() : _dt(' ')
 			: macro $picked ? _dhl() : _dt(' ');
 	}
 
@@ -465,7 +465,7 @@ final class WriterFieldSepLowering {
 			final nlSep: Expr = keepBlankGate == null ? macro $nlAccess ? _dhl() : _dt(' ') : {
 				final gate: Expr = keepBlankGate;
 				final blankAccess: Expr = beforeBlankAccess(fieldName);
-				macro $blankAccess && $gate ? $blankBreak : ($nlAccess ? _dhl() : _dt(' '));
+				macro $blankAccess && $gate ? $blankBreak : $nlAccess ? _dhl() : _dt(' ');
 			};
 			final triviaSepExpr: Expr = if (fillSeam)
 				macro _de();
