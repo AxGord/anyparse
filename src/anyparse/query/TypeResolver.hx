@@ -282,7 +282,7 @@ final class TypeResolver {
 	 */
 	public static function bindingNodeFrom(name: String, recvSpan: Span, tree: QueryNode, shape: RefShape): Null<QueryNode> {
 		final hit: Null<RefHit> = resolveBindingHit(name, recvSpan, tree, shape);
-		return hit == null ? null : hit.bindingNode;
+		return hit?.bindingNode;
 	}
 
 	/**

@@ -574,11 +574,11 @@ final class CallGraph {
 			// a function the facts describe records its syntax's edges alone, none of its unresolved sites (`CallGraphFacts.mute`)
 			final faceted: Map<String, Array<FactNode>> = reading == null ? [] : reading.mute(this, p.file);
 			CallGraphEdges.collect(this, p);
-			if (reading != null) reading.recordMuted(this, faceted);
+			reading?.recordMuted(this, faceted);
 		}
-		if (reading != null) reading.recordAdopted(this, adopted);
+		reading?.recordAdopted(this, adopted);
 		// the field initializers of every type read so far, which the facts read whole once its files are in
-		if (reading != null) reading.recordInitializers(this, [for (id in _initFiles.keys()) id]);
+		reading?.recordInitializers(this, [for (id in _initFiles.keys()) id]);
 		_wiring.markGrownChains(_grownTypes);
 		_wiring.wire((from, to, kind, file, span) -> addEdge(from, to, kind, null, file, span));
 	}

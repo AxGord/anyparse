@@ -221,7 +221,7 @@ final class MagicNumber implements Check implements ConfigAware implements NoAut
 		final clean: String = text.replace('_', '');
 		if (clean.startsWith('0x') || clean.startsWith('0X')) {
 			final i: Null<Int> = Std.parseInt(clean);
-			return i ?? null;
+			return i;
 		}
 		final f: Float = Std.parseFloat(clean);
 		return Math.isNaN(f) ? null : f;

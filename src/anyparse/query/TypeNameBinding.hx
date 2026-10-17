@@ -443,7 +443,7 @@ final class TypeNameBinding {
 			: null;
 		if (scoped != null) return scoped;
 		final std: Null<Array<TypeDeclInfo>> = StdTypes.moduleTypes(_plugin, module);
-		return std == null ? null : std.filter(t -> t.name == name);
+		return std?.filter(t -> t.name == name);
 	}
 
 	/**

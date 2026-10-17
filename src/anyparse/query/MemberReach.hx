@@ -346,7 +346,7 @@ final class MemberReach {
 		var escapes: Null<ValueEscapes> = null;
 		final carriers: ValueCarriers = new ValueCarriers(scope, classpathComplete ?? () -> false, () -> {
 			final held: Null<ValueEscapes> = escapes;
-			held == null ? null : held.escaped();
+			held?.escaped();
 		}, configurations != null && configurations.length > 0);
 		_carriers = carriers;
 		_touches = new MemberTouchScan(scope, _hazards, carriers, (file, span) -> {
