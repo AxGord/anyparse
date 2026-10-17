@@ -989,9 +989,9 @@ final class CallGraph {
 			return out;
 		}
 
-		/** `moduleBinding` for a bare identifier `name` at `span`, which no local function, local or parameter binds first. */
+		/** `moduleBinding` for a bare identifier `name` at `span`, which nothing in scope binds first: a local function, a local, a parameter. */
 		function bareModuleBinding(name: String, span: Null<Span>, currentType: Null<String>): Null<ModuleBinding> {
-			if (span == null || localFn(name) != null) return null;
+			if (span == null) return null;
 			final bound: Null<Int> = Refs.bindingAt(name, span.from, tree, shape);
 			return bound != null && bound >= 0 ? null : moduleBinding(name, span, currentType);
 		}

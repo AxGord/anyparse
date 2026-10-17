@@ -125,7 +125,7 @@ class CallGraphBindingTest extends Test {
 	@:pin('control')
 	@:killer('M-GRAPH-BODY-SPLIT') @:killer('M-GRAPH-BODY-EXPAND') @:killer('M-GRAPH-BODY-EXACT') @:killer('M-GRAPH-BODY-TARGETS')
 	@:killer('M-GRAPH-BODY-COPY-IN') @:killer('M-GRAPH-BODY-PURGE') @:killer('M-GRAPH-MODULE-BINDING')
-	@:killer('M-GRAPH-MODULE-BINDING-MEMBER') @:killer('M-GRAPH-MODULE-BINDING-LOCAL') @:killer('M-GRAPH-MODULE-BINDING-VALUE')
+	@:killer('M-GRAPH-MODULE-BINDING-MEMBER') @:killer('M-GRAPH-MODULE-BINDING-VALUE')
 	@:killer('M-GRAPH-MODULE-BINDING-IMPORTS') @:killer('M-GRAPH-MODULE-REF') @:killer('M-GRAPH-MODULE-IDENT')
 	public function testEachBodyOfAModuleLevelFunctionUnderIfIsANodeOfItsOwn(): Void {
 		final files: Array<{ file: String, source: String }> = QueryTestHelpers.rootModules([
@@ -140,11 +140,14 @@ class CallGraphBindingTest extends Test {
 			+ ' static function f():Void {} static function call():Void f(); } class Ref { static function call():Void Runner.create(f); }'
 			+ ' function local():Void { function f():Void {} f(); } #if a function g():Void {} #else var g:() -> Void = null; #end '
 			+ 'function viaG():Void g(); function make():utils.Lock return null; class Typed { static function call():Void make().wait(); }'
+			+ ' class Parent { public function new() {} public function f():Void {} } class Kid extends Parent { function call():Void f(); }',
+			'package app; import app.Main.f; class Later { static function call():Void f(); }'
 		]);
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		final last: Int = files.length - 1;
-		final g: CallGraph = CallGraph.build(files.slice(0, last), plugin, SymbolIndex.build(files, plugin));
-		g.addFiles([files[last]]);
+		final main: Int = files.length - 2;
+		final g: CallGraph = CallGraph.build(files.slice(0, main), plugin, SymbolIndex.build(files, plugin));
+		g.addFiles([files[main]]);
+		g.addFiles([files[main + 1]]);
 		function targets(from: String, kind: EdgeKind = Call): Array<String> {
 			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == kind) e.to];
 			out.sort(Reflect.compare);
@@ -168,9 +171,11 @@ class CallGraphBindingTest extends Test {
 		);
 		Assert.same(['Lock.wait', 'Main.make'], targets('Typed.call'), 'a call of the one function a use binds is of its return type');
 		Assert.same(['Main.f', 'Main.f@2'], targets('Elsewhere.call'), 'an import names the function: every body');
+		Assert.same(['Main.f', 'Main.f@2'], targets('Later.call'), 'from a file read after it too');
+		Assert.same(['Parent.f'], targets('Kid.call'), 'an inherited member comes first');
 		Assert.same(['Main.f', 'Main.f@2'], [for (n in g.resolveTarget('Main.f')) n.id], 'so does a query');
-		g.removeFile(files[last].file);
-		g.addFiles([files[last]]);
+		g.removeFile(files[main].file);
+		g.addFiles([files[main]]);
 		Assert.same(['Main.f', 'Main.f@2'], targets('Elsewhere.call'), 'read again, each body once');
 	}
 

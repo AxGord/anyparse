@@ -1396,6 +1396,7 @@ class CallGraphTest extends Test {
 			+ ' #if a class Calls { static function field():Void cb(); } #end class CallsOut { static function field():Void cb(); }',
 			'package app; import app.B.*; var cb:() -> Void = null; class CallsPlain { static function field():Void cb(); }',
 			'package app; import app.B.*; #if a var cb:() -> Void = null; #end class Far extends lib.Base { function field():Void cb(); }'
+			+ ' #if a class FarIn extends lib.Base { function field():Void cb(); } #end'
 		]);
 		function targets(from: String): Array<String> {
 			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
@@ -1423,6 +1424,12 @@ class CallGraphTest extends Test {
 			['UnboundName(cb)'],
 			[for (u in g.unresolved) if (u.from == 'Far.field') Std.string(u.reason)],
 			'and the builds declaring the value'
+		);
+		Assert.same([], targets('FarIn.field'), 'a read every build of which declares the value binds no import');
+		Assert.same(
+			['UnboundName(cb)'],
+			[for (u in g.unresolved) if (u.from == 'FarIn.field') Std.string(u.reason)],
+			'the supertype or the value it holds'
 		);
 		Assert.same([], targets('CallsPlain.field'), 'a declaration no #if guards hides the import everywhere');
 		#else

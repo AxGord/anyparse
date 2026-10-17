@@ -3134,7 +3134,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CallGraphBindingTest#testASupertypeIsTheTypeItsDeclaringFileBinds :: control :: M-SUPERS-BY-DECLARATION',
 			'unit.query.CallGraphBindingTest#testEachBodyOfAModuleLevelFunctionUnderIfIsANodeOfItsOwn :: control :: '
 				+ 'M-GRAPH-BODY-SPLIT,M-GRAPH-BODY-EXPAND,M-GRAPH-BODY-EXACT,M-GRAPH-BODY-TARGETS,M-GRAPH-BODY-COPY-IN,M-GRAPH-BODY-PURGE,'
-				+ 'M-GRAPH-MODULE-BINDING,M-GRAPH-MODULE-BINDING-MEMBER,M-GRAPH-MODULE-BINDING-LOCAL,M-GRAPH-MODULE-BINDING-VALUE,'
+				+ 'M-GRAPH-MODULE-BINDING,M-GRAPH-MODULE-BINDING-MEMBER,M-GRAPH-MODULE-BINDING-VALUE,'
 				+ 'M-GRAPH-MODULE-BINDING-IMPORTS,M-GRAPH-MODULE-REF,M-GRAPH-MODULE-IDENT',
 			'unit.query.CallGraphTest#testACallReceiverBoundToANullableTypeDispatchesOnIt :: control :: M-TS-RETURN-WRAPPER-BOUND',
 			'unit.query.CallGraphTest#testACalledFunctionValueReturnsWhatItsFunctionTypeSays :: control :: '
@@ -7181,7 +7181,6 @@ class TestDiscoveryParityTest extends Test {
 			'M-GRAPH-BODY-PURGE',
 			'M-GRAPH-MODULE-BINDING',
 			'M-GRAPH-MODULE-BINDING-MEMBER',
-			'M-GRAPH-MODULE-BINDING-LOCAL',
 			'M-GRAPH-MODULE-BINDING-VALUE',
 			'M-GRAPH-MODULE-BINDING-IMPORTS',
 			'M-GRAPH-MODULE-REF',

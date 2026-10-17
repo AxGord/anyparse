@@ -22732,14 +22732,6 @@
 			"note": "a module-level function comes before a member of the enclosing chain of its name"
 		},
 		{
-			"name": "M-GRAPH-MODULE-BINDING-LOCAL",
-			"type": "anyparse.query.CallGraph",
-			"method": "collectEdges",
-			"find": "if (span == null || localFn(name) != null) return null;",
-			"replace": "if (span == null) return null;",
-			"note": "a module-level function comes before a local function of its name"
-		},
-		{
 			"name": "M-GRAPH-MODULE-BINDING-VALUE",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
