@@ -181,7 +181,7 @@ final class FactsView {
 
 	/**
 	 * Whether a call of `type.name` runs no project code, as the analysis owning the view classifies one
-	 * (`ReachGraph.runsNoUserCode`): what an inlined call of such a method spliced in is none of the body's own code
+	 * (`LibraryCalls.runsNoUserCode`): what an inlined call of such a method spliced in is none of the body's own code
 	 * (`harmlessSplice`). None does until the analysis says so.
 	 */
 	public var runsNoUserCode: (g:CallGraph, type:String, name:String) -> Bool = (g, type, name) -> false;
@@ -809,7 +809,7 @@ final class FactsView {
 	 * itself, or for an abstract its implementation class — a method of such a call: one named as `members` names (an
 	 * instance method, but for an abstract, whose methods are its implementation's statics) or carrying a metadata it names.
 	 * An interface declares no code (each type implementing it is a type of its own); an extern type's body-less method runs
-	 * target code alone (`ReachGraph.externQuiet`), and its inline one only where `members` says the call is the compiler's
+	 * target code alone (`LibraryCalls.externQuiet`), and its inline one only where `members` says the call is the compiler's
 	 * (`ImplicitMembers.externInline`) — a conversion the target runs calls the target's own method.
 	 */
 	public function implicitUnheld(owner: String, members: ImplicitMembers): Bool {

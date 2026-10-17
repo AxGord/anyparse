@@ -238,7 +238,7 @@ final class ValueEscapes {
 			if (typeSyntax(source)?.holdsFunction() == true) continue;
 			final nominal: Null<String> = NominalTypes.outerNominalOf(source, typeSyntax);
 			if (nominal == null) return false;
-			if (catchAll.contains(nominal) || _g.inertType(source)) continue;
+			if (catchAll.contains(nominal) || _g.library.inertType(source)) continue;
 			final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(source, typeSyntax);
 			// a container written without its arguments holds what nothing here says: `Array` is any `Array<T>`
 			if ((args ?? []).length < g.types.generics.typeParamsOf(nominal).length) return false;
@@ -358,7 +358,7 @@ final class ValueEscapes {
 				if ((shape.literalTypeNames ?? []).exists(operand.kind) || operand.kind == shape.nullLiteralKind || plainOperation(operand))
 					continue;
 				final type: Null<String> = typeOf(operand);
-				if (type == null || !(_g.inertType(type) || typedPosition(type) || (shape.catchAllTypeNames ?? []).contains(type)))
+				if (type == null || !(_g.library.inertType(type) || typedPosition(type) || (shape.catchAllTypeNames ?? []).contains(type)))
 					return false;
 			}
 			return true;
@@ -580,7 +580,7 @@ final class ValueEscapes {
 	private function namedClasses(g: CallGraph, escape: String -> Bool): Bool {
 		// noqa: complexity
 		final classType: Null<String> = _shape.execution?.classValueTypeName;
-		final stringType: Null<String> = _g.stringTypeName();
+		final stringType: Null<String> = _g.library.stringTypeName();
 		if (classType == null || stringType == null) return true;
 		final functionKinds: Array<String> = _shape.functionKinds ?? [];
 		final producers: Array<String> = [];

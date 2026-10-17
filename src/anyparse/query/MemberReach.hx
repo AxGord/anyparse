@@ -155,7 +155,7 @@ enum FreshOnlyAnswer {
 
 /**
  * A member of shared state code may read: the graph's simple name of its declaring type, its name, and whether its value is
- * inert (`ReachGraph.inertType`) — a string, number or boolean, which only a write of the member itself can change.
+ * inert (`LibraryCalls.inertType`) — a string, number or boolean, which only a write of the member itself can change.
  */
 typedef SharedRead = {
 	final owner: String;
@@ -360,7 +360,7 @@ final class MemberReach {
 		final reachGraph: ReachGraph = new ReachGraph(_scope, carriers, maxLibraryFiles);
 		_g = reachGraph;
 		// an inlined call of a method that runs no project code answers for what it spliced in, as any call of it does
-		if (view != null) view.runsNoUserCode = (g, type, name) -> reachGraph.runsNoUserCode(g, type, name, true);
+		if (view != null) view.runsNoUserCode = (g, type, name) -> reachGraph.library.runsNoUserCode(g, type, name, true);
 		_admission = new ReachAdmission(_scope, _g);
 		final built: ValueEscapes = new ValueEscapes(scope, _g, _hazards, live, carriers, scopeKnown);
 		escapes = built;
@@ -1205,10 +1205,10 @@ final class MemberReach {
 		final type: Null<String> = target.typeName;
 		final name: Null<String> = target.name;
 		if (type == null || name == null) return false;
-		if (_g.isPureLibrary(g, type, name, call?.children.slice(1))) return true;
-		if (!(_shape.arrayTypeNames ?? []).contains(type) || _g.callsItsArgument(g, type, name)) return false;
+		if (_g.library.isPureLibrary(g, type, name, call?.children.slice(1))) return true;
+		if (!(_shape.arrayTypeNames ?? []).contains(type) || _g.library.callsItsArgument(g, type, name)) return false;
 		// a method returning a string converts the elements to one (`join`), and an element's `toString` may run anything
-		if (g.types.memberOnChain(type, name)?.returnNominal == _g.stringTypeName()) return false;
+		if (g.types.memberOnChain(type, name)?.returnNominal == _g.library.stringTypeName()) return false;
 		if ((_shape.execution?.nonMutatingArrayMethods ?? []).contains(name)) return true;
 		if (!(_shape.execution?.mutatingArrayMethods ?? []).contains(name) || call == null) return false;
 		return receiverIsFreshLocal(tree, source, fn, call, region);
@@ -1312,7 +1312,7 @@ final class MemberReach {
 		final next: Array<String> = if (node.isBodyless) {
 			if (type == null || name == null) return { file: node.file, span: node.span ?? new Span(0, 0) };
 			final member: String = name;
-			if (g.types.meta.isExtern(type) && !_g.externQuiet(g, type, member))
+			if (g.types.meta.isExtern(type) && !_g.library.externQuiet(g, type, member))
 				return { file: node.file, span: node.span ?? new Span(0, 0) };
 			g.virtualTargets(type, member);
 		} else {
@@ -1496,7 +1496,7 @@ final class MemberReach {
 		final type: Null<String> = node.typeName;
 		final name: Null<String> = node.name;
 		if (type == null || name == null) return Opaque;
-		if (_g.runsNoUserCode(g, type, name, mutatorsToo)) return Harmless;
+		if (_g.library.runsNoUserCode(g, type, name, mutatorsToo)) return Harmless;
 		if (_g.loadType(g, type, []) != null) return Opaque;
 		final resolved: Null<String> = g.memberOnChain(type, name);
 		final loaded: Null<FnNode> = resolved == null ? null : g.node(resolved);
@@ -1681,7 +1681,7 @@ final class MemberReach {
 				final graphOwner: String = view.graphType(owner);
 				final source: Null<String> = FactsView.simpleSource(f.type);
 				if (!reads.exists(r -> r.owner == graphOwner && r.name == f.field))
-					reads.push({ owner: graphOwner, name: f.field, inert: source != null && _g.inertType(source) });
+					reads.push({ owner: graphOwner, name: f.field, inert: source != null && _g.library.inertType(source) });
 				null;
 			case _:
 				Unconfined(f.at.file, f.at.span, 'it reads `${f.field}` off a value of no class');
@@ -1717,14 +1717,14 @@ final class MemberReach {
 
 	/**
 	 * Whether a call of the library member `type.name` changes and reads no state at all: it runs no user code — a pure
-	 * library call, or a reading method of the built-in array (`ReachGraph.runsNoUserCode`) — and it is no
+	 * library call, or a reading method of the built-in array (`LibraryCalls.runsNoUserCode`) — and it is no
 	 * `ExecutionShape.statefulLibraryCalls` entry; with that seam undeclared, none is.
 	 */
 	private function statelessLibrary(g: CallGraph, type: Null<String>, name: Null<String>): Bool {
 		final stateful: Null<Array<String>> = _shape.execution?.statefulLibraryCalls;
 		if (type == null || name == null || stateful == null) return false;
 		final member: String = '$type.$name';
-		return !stateful.contains(member) && _g.runsNoUserCode(g, type, name, false);
+		return !stateful.contains(member) && _g.library.runsNoUserCode(g, type, name, false);
 	}
 
 	/**
@@ -1866,7 +1866,9 @@ final class MemberReach {
 				final type: Null<String> = found.typeName;
 				final name: Null<String> = found.name;
 				// library code that runs no project code runs no implicit call of it either, read or not
-				if (type != null && name != null && (found.isExternal || found.isBodyless) && _g.runsNoUserCode(g, type, name, true))
+				if (
+					type != null && name != null && (found.isExternal || found.isBodyless) && _g.library.runsNoUserCode(g, type, name, true)
+				)
 					continue;
 				// library code not read yet is read now, from the file declaring its type
 				final owner: Null<String> = !found.isExternal || type == null ? null : _scope.siteOf(type)?.file;
@@ -1876,7 +1878,7 @@ final class MemberReach {
 				// a body-less member the walk runs nothing for (`walk`): a declaration that only dispatches, a quiet extern's
 				if (node.isBodyless) {
 					if (type == null || name == null) return null;
-					if (g.types.meta.isExtern(type) && !_g.externQuiet(g, type, name)) return null;
+					if (g.types.meta.isExtern(type) && !_g.library.externQuiet(g, type, name)) return null;
 					continue;
 				}
 				final spans: Null<Array<Occurrence>> = bodySpans(g, node);
@@ -2262,7 +2264,7 @@ final class MemberReach {
 					final name: Null<String> = node.name;
 					if (type == null || name == null)
 						blind = blind ?? UnresolvedDispatch(node.file, null, 'a call to `${node.id}`');
-					else if (g.types.meta.isExtern(type) && !_g.externQuiet(g, type, name))
+					else if (g.types.meta.isExtern(type) && !_g.library.externQuiet(g, type, name))
 						admitExtern(id, node.id, reach[id]?.file ?? node.file, reach[id]?.span, type, name);
 					continue;
 				}
@@ -2396,7 +2398,7 @@ final class MemberReach {
 		final file: String = via?.file ?? '';
 		final span: Null<Span> = via?.span;
 		if (type == null || name == null) return UnresolvedDispatch(file, span, 'a call to `${node.id}`');
-		if (_g.runsNoUserCode(g, type, name, true)) return null;
+		if (_g.library.runsNoUserCode(g, type, name, true)) return null;
 		final loaded: Null<ReachUnknown> = _g.loadType(g, type, []);
 		return loaded ?? followLoaded(g, node, type, name, via, enqueue, admitValue);
 	}
@@ -2479,12 +2481,12 @@ final class MemberReach {
 		final tree: Null<QueryNode> = g.treeOf(file);
 		final source: Null<String> = g.sourceOf(file);
 		final call: Null<QueryNode> = span == null || tree == null ? null : invocationAt(tree, span);
-		final takesObject: Bool = _g.externTakesObject(g, type, name);
+		final takesObject: Bool = _g.library.externTakesObject(g, type, name);
 		final onInstance: Bool = g.types.memberOnChain(type, name)?.isStatic == false;
 		// a construction's children are its arguments alone: it names a type, not a callee
 		final constructs: Bool = call?.kind == _shape.newExprKind;
 		function hand(t: Null<String>): Void {
-			if (t != null && _g.inertType(t)) return;
+			if (t != null && _g.library.inertType(t)) return;
 			final members: Null<Array<String>> = t == null ? null : _g.handedMemberIds(g, t);
 			if (members == null) {
 				site.all = true;
@@ -2500,13 +2502,13 @@ final class MemberReach {
 		final arrayOwn: Bool = (_shape.arrayTypeNames ?? []).contains(type)
 			&& ((_shape.execution?.nonMutatingArrayMethods ?? []).contains(name)
 				|| (_shape.execution?.mutatingArrayMethods ?? []).contains(name) || name == (_shape.constructorName ?? 'new'));
-		if (arrayOwn) site.values = _g.callsItsArgument(g, type, name);
+		if (arrayOwn) site.values = _g.library.callsItsArgument(g, type, name);
 		// target code handed an object carrying the member may write it by its name — a blind spot, as at a code site — unless it
 		// writes no member by name: the built-in array's own methods, which store and convert what they hold, a call known to run
-		// no code of the program's (`ReachGraph.runsNoUserCode`), and a reflective access by a name, which the walk judges by the
+		// no code of the program's (`LibraryCalls.runsNoUserCode`), and a reflective access by a name, which the walk judges by the
 		// name it is handed (`ExecutionShape.reflectiveNameCalls`, `ReachHazard.ReflectiveName`)
 		final reflective: Map<String, Int> = _shape.execution?.reflectiveNameCalls ?? [];
-		final namesNoMember: Bool = arrayOwn || _g.runsNoUserCode(g, type, name, true) || reflective.exists('$type.$name');
+		final namesNoMember: Bool = arrayOwn || _g.library.runsNoUserCode(g, type, name, true) || reflective.exists('$type.$name');
 		// read by the syntax: a value its type may carry the member in, or a primitive once an object carrying it left the type
 		// system, which the syntax then reads as one that may be anything
 		function carried(t: Null<String>): Void {
@@ -2514,7 +2516,7 @@ final class MemberReach {
 			if (_carriers.relation(t, declaring) != CannotCarry) site.blind = true;
 		}
 		final returned: Null<String> = g.types.memberOnChain(type, name)?.returnNominal;
-		final stringType: Null<String> = _g.stringTypeName();
+		final stringType: Null<String> = _g.library.stringTypeName();
 		// under the truth the compiler says what the caller's calls of it hand its target code, the receiver included, wherever
 		// the syntax sees the call or not: read positively (`externHanded`), it replaces the syntax's reading of the arguments.
 		// The built-in array's own methods call only a function value they are handed, and reach a member by name only converting
