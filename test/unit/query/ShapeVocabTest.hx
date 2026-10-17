@@ -75,18 +75,6 @@ class ShapeVocabTest extends Test {
 		Assert.same(['CaseBranch', 'DefaultBranch'], ShapeVocab.switchArmKinds(shape));
 	}
 
-	/** A shape naming only the seams `RefShape` requires. */
-	private static function bare(): RefShape {
-		return {
-			identKind: 'IdentExpr',
-			declHostKinds: [],
-			moduleValueDeclKinds: [],
-			scopeKinds: [],
-			writeParentKinds: [],
-			selfScopeDeclKinds: []
-		};
-	}
-
 	/**
 	 * Every loop and every two-armed conditional of the Haxe grammar is a decision point (`branchKinds`): the
 	 * hand-kept list missed `WhileExpr` (a `while` comprehension or lambda body) while `ForExpr` was there.
@@ -98,6 +86,18 @@ class ShapeVocabTest extends Test {
 		final branches: Array<String> = shape.branchKinds ?? [];
 		for (kind in ShapeVocab.loopKinds(shape).concat(ShapeVocab.conditionalKinds(shape)))
 			Assert.isTrue(branches.contains(kind), '$kind is not in branchKinds');
+	}
+
+	/** A shape naming only the seams `RefShape` requires. */
+	private static function bare(): RefShape {
+		return {
+			identKind: 'IdentExpr',
+			declHostKinds: [],
+			moduleValueDeclKinds: [],
+			scopeKinds: [],
+			writeParentKinds: [],
+			selfScopeDeclKinds: []
+		};
 	}
 
 }

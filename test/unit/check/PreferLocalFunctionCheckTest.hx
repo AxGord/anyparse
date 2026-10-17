@@ -413,22 +413,6 @@ class PreferLocalFunctionCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f() { ').length);
 	}
 
-	// ---- helpers ----
-
-	private function violations(src: String): Array<Violation> {
-		return CheckFixture.violations(new PreferLocalFunction(), src);
-	}
-
-	private function edits(src: String): Array<{ span: Span, text: String }> {
-		final check: PreferLocalFunction = new PreferLocalFunction();
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		return CheckFixture.edits(check, src, plugin);
-	}
-
-	private function fixed(src: String): String {
-		return CanonicalEdit.applyEdits(src, edits(src));
-	}
-
 	/**
 	 * A `while` in EXPRESSION position (a comprehension, a lambda body) runs its body zero or more times, exactly
 	 * as the statement form and a `for` comprehension do, so a binding under it is not hoisted either.
@@ -443,6 +427,22 @@ class PreferLocalFunctionCheckTest extends Test {
 					.length,
 				loop
 			);
+	}
+
+	// ---- helpers ----
+
+	private function violations(src: String): Array<Violation> {
+		return CheckFixture.violations(new PreferLocalFunction(), src);
+	}
+
+	private function edits(src: String): Array<{ span: Span, text: String }> {
+		final check: PreferLocalFunction = new PreferLocalFunction();
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		return CheckFixture.edits(check, src, plugin);
+	}
+
+	private function fixed(src: String): String {
+		return CanonicalEdit.applyEdits(src, edits(src));
 	}
 
 }

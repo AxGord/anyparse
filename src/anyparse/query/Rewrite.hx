@@ -5,7 +5,6 @@ import anyparse.query.Matcher.Match;
 import anyparse.query.ParenGuard.GuardedEdit;
 import anyparse.query.Pattern.PatternStar;
 import anyparse.runtime.Span;
-import anyparse.runtime.Span.Position;
 import haxe.Exception;
 
 using Lambda;

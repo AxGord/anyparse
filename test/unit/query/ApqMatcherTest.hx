@@ -631,16 +631,6 @@ class Y {
 		Assert.equals(1, Matcher.search(plugin.parsePattern("cast($y, String)"), tree).length, 'the Bytes cast is a different node');
 	}
 
-	/** The names each match bound to the given metavariable, in match order. */
-	private static function boundNames(matches: Array<Match>, metavar: String): Array<String> {
-		return [
-			for (m in matches) {
-				final n: Null<QueryNode> = m.bindings.get(metavar);
-				n == null ? '<none>' : (n.name ?? '<noname>');
-			}
-		];
-	}
-
 	/**
 	 * Type arguments and value arguments are two child RUNS of a construction, unified separately: a value
 	 * metavariable binds value arguments only, a run the pattern writes must agree in arity (each run may
@@ -662,6 +652,16 @@ class Y {
 		Assert.equals(2, Matcher.search(plugin.parsePattern("new $T<$K, ...>(...)"), tree).length, 'one star per run');
 		Assert.equals(4, Matcher.search(plugin.parsePattern("new $T<...>(...)"), tree).length);
 		Assert.equals('Map', boundNames(Matcher.search(plugin.parsePattern("new $T()"), tree), 'T').join(','));
+	}
+
+	/** The names each match bound to the given metavariable, in match order. */
+	private static function boundNames(matches: Array<Match>, metavar: String): Array<String> {
+		return [
+			for (m in matches) {
+				final n: Null<QueryNode> = m.bindings.get(metavar);
+				n == null ? '<none>' : (n.name ?? '<noname>');
+			}
+		];
 	}
 
 }

@@ -875,21 +875,6 @@ class QueryWalkerLowering extends PairedShapeLowering {
 		return out;
 	}
 
-	/** Generated walk-function name for a rule type path (`anyparse.grammar.haxe.HxExpr` to `_walkHxExprS`). */
-	public static inline function walkFnName(typePath: String): String {
-		return '_walk${simpleName(typePath)}S';
-	}
-
-	/** Generated name-resolution function name for a rule type path. */
-	public static inline function nameFnName(typePath: String): String {
-		return '_nameOf${simpleName(typePath)}S';
-	}
-
-	/** Generated type-ref projection function name for a rule type path. */
-	public static inline function typeRefsFnName(typePath: String): String {
-		return '_typeRefs${simpleName(typePath)}S';
-	}
-
 	/**
 	 * The `typeArgCount` of the node a ctor arm forms: the `@:queryTypeArgs` field of a TRANSPARENT
 	 * `Seq` argument — whose fields' nodes are this node's children — or 0.
@@ -911,6 +896,21 @@ class QueryWalkerLowering extends PairedShapeLowering {
 		if (tagged == null) return null;
 		final access: Expr = field(owner, fieldNameOf(tagged));
 		return isOptional(tagged) ? macro ($access == null ? 0 : $access.length) : macro $access.length;
+	}
+
+	/** Generated walk-function name for a rule type path (`anyparse.grammar.haxe.HxExpr` to `_walkHxExprS`). */
+	public static inline function walkFnName(typePath: String): String {
+		return '_walk${simpleName(typePath)}S';
+	}
+
+	/** Generated name-resolution function name for a rule type path. */
+	public static inline function nameFnName(typePath: String): String {
+		return '_nameOf${simpleName(typePath)}S';
+	}
+
+	/** Generated type-ref projection function name for a rule type path. */
+	public static inline function typeRefsFnName(typePath: String): String {
+		return '_typeRefs${simpleName(typePath)}S';
 	}
 
 }

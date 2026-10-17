@@ -232,15 +232,6 @@ class ComplexityCheckTest extends Test {
 		Assert.equals(identity, check.messageIdentity(identity));
 	}
 
-	private function violations(src: String): Array<Violation> {
-		return CheckFixture.violations(new Complexity(), src);
-	}
-
-	/** A one-method class whose body chains `n` `&&` operands — score `n + 1`. */
-	private static function chained(n: Int): String {
-		return 'class C {\n\tfunction big(a:Bool):Bool {\n\t\treturn ' + [for (_ in 0...n + 1) 'a'].join(' && ') + ';\n\t}\n}';
-	}
-
 	/**
 	 * A `while` counts one decision point in every position: the statement, a lambda body and a comprehension
 	 * alike — 19 `&&` (score 20) plus one `while` is 21, over the threshold.
@@ -258,6 +249,15 @@ class ComplexityCheckTest extends Test {
 			final vs: Array<Violation> = violations('class C {\n\tfunction big(a:Bool):Bool {\n\t\t$loop\n\t\treturn $chain;\n\t}\n}');
 			Assert.equals(1, vs.length, loop);
 		}
+	}
+
+	private function violations(src: String): Array<Violation> {
+		return CheckFixture.violations(new Complexity(), src);
+	}
+
+	/** A one-method class whose body chains `n` `&&` operands — score `n + 1`. */
+	private static function chained(n: Int): String {
+		return 'class C {\n\tfunction big(a:Bool):Bool {\n\t\treturn ' + [for (_ in 0...n + 1) 'a'].join(' && ') + ';\n\t}\n}';
 	}
 
 }

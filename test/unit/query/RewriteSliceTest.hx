@@ -151,22 +151,6 @@ class RewriteSliceTest extends Test {
 		Assert.isTrue(okText(Rewrite.rewrite(src, "g($x)", "k($x)", true, new HaxeQueryPlugin())).contains('k(1)'));
 	}
 
-	private function okText(res: EditResult): String {
-		return switch res {
-			case Ok(text): text;
-			case Err(message):
-				Assert.fail('expected Ok, got Err: $message');
-				'';
-		};
-	}
-
-	private function isErr(res: EditResult): Bool {
-		return switch res {
-			case Ok(_): false;
-			case Err(_): true;
-		};
-	}
-
 	/**
 	 * A value metavariable never captures a TYPE argument. `new $C($b, $a)` over `new Map<String, Int>()`
 	 * used to bind the two type arguments as values and write `new Map(Int, String)`, re-parseably; the
@@ -185,6 +169,22 @@ class RewriteSliceTest extends Test {
 		Assert.isTrue(isErr(Rewrite.rewrite(boxed, "new $C($a)", "make($a)", true, new HaxeQueryPlugin())));
 		final kept: String = okText(Rewrite.rewrite(boxed, "new $C<$T>($a)", "new $C<$T>($a, 0)", true, new HaxeQueryPlugin()));
 		Assert.isTrue(kept.contains('var b = new Box<Int>(1, 0);'), kept);
+	}
+
+	private function okText(res: EditResult): String {
+		return switch res {
+			case Ok(text): text;
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+				'';
+		};
+	}
+
+	private function isErr(res: EditResult): Bool {
+		return switch res {
+			case Ok(_): false;
+			case Err(_): true;
+		};
 	}
 
 }

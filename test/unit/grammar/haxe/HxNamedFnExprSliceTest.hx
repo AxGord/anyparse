@@ -129,6 +129,37 @@ class HxNamedFnExprSliceTest extends HxTestHelpers {
 		]) Assert.equals(src, HxWriteFixture.triviaWrite(src, opts), src);
 	}
 
+	/**
+	 * A named function expression with a BLOCK body ends its statement at its `}`, exactly as the anonymous
+	 * spelling does: `haxe --interp` 4.3.7 runs `x = function n() { return 1; } trace(x());` and the `var` form,
+	 * while an EXPRESSION body ends there only when the body itself ends with `}` (`return switch …`, `return
+	 * {a: 1}`) and otherwise still needs its `;` (`x = function n() return 1 trace(x());` is `Missing ;`).
+	 */
+	@:pin('control')
+	@:killer('M-NAMED-FN-STMT-NO-ARM') @:killer('M-NAMED-FN-NOT-BRACE-ENDED') @:killer('M-NAMED-FN-EXPR-BODY-RELAXED')
+	public function testNamedFnExprBlockBodyEndsItsStatement(): Void {
+		for (src in [
+			'class C { function f():Void { x = function n() { return 1; } trace(x()); } }',
+			'class C { function f():Void { var y = function n() { return 1; } trace(y()); } }',
+			'class C { function f():Void { x = function n(v:Int):Int { return v; } trace(x(1)); } }',
+			'class C { function f():Void { x = function n() return switch 1 { case _: 7; } trace(x()); } }',
+			'class C { function f():Void { var y = function n() return {a: 1} trace(y().a); } }'
+		]) {
+			Assert.equals(2, parseBody(src).length, src);
+			Assert.equals(
+				HxWriteFixture.triviaWrite(src, '{}'), HxWriteFixture.triviaWrite(HxWriteFixture.triviaWrite(src, '{}'), '{}'), src
+			);
+		}
+		Assert.raises(parseBody.bind('class C { function f():Void { x = function n() return 1 trace(x()); } }'));
+		final plain: String = HxModuleWriter.write(HaxeModuleParser.parse(
+			'class C { function f():Void { var g = function() { return 1; }; var h = function n() { return 1; }; } }'
+		));
+		Assert.equals(
+			'class C {\n\tfunction f():Void {\n\t\tvar g = function() {\n\t\t\treturn 1;\n\t\t}\n\t\tvar h = function n() {\n\t\t\treturn 1;\n\t\t}\n\t}\n}\n',
+			plain
+		);
+	}
+
 	private function parseBody(source: String): Array<HxStatement> {
 		final fn: HxFnDecl = parseSingleFnDecl(source);
 		return fnBodyStmts(fn);
@@ -155,34 +186,6 @@ class HxNamedFnExprSliceTest extends HxTestHelpers {
 				decl.init;
 			case _: throw 'expected VarStmt, got $stmt';
 		};
-	}
-
-	/**
-	 * A named function expression with a BLOCK body ends its statement at its `}`, exactly as the anonymous
-	 * spelling does: `haxe --interp` 4.3.7 runs `x = function n() { return 1; } trace(x());` and the `var` form,
-	 * while an EXPRESSION body still needs its `;` (`x = function n() return 1 trace(x());` is `Missing ;`).
-	 */
-	@:pin('control')
-	@:killer('M-NAMED-FN-STMT-NO-ARM') @:killer('M-NAMED-FN-NOT-BRACE-ENDED') @:killer('M-NAMED-FN-EXPR-BODY-RELAXED')
-	public function testNamedFnExprBlockBodyEndsItsStatement(): Void {
-		for (src in [
-			'class C { function f():Void { x = function n() { return 1; } trace(x()); } }',
-			'class C { function f():Void { var y = function n() { return 1; } trace(y()); } }',
-			'class C { function f():Void { x = function n(v:Int):Int { return v; } trace(x(1)); } }'
-		]) {
-			Assert.equals(2, parseBody(src).length, src);
-			Assert.equals(
-				HxWriteFixture.triviaWrite(src, '{}'), HxWriteFixture.triviaWrite(HxWriteFixture.triviaWrite(src, '{}'), '{}'), src
-			);
-		}
-		Assert.raises(() -> parseBody('class C { function f():Void { x = function n() return 1 trace(x()); } }'));
-		final plain: String = HxModuleWriter.write(HaxeModuleParser.parse(
-			'class C { function f():Void { var g = function() { return 1; }; var h = function n() { return 1; }; } }'
-		));
-		Assert.equals(
-			'class C {\n\tfunction f():Void {\n\t\tvar g = function() {\n\t\t\treturn 1;\n\t\t}\n\t\tvar h = function n() {\n\t\t\treturn 1;\n\t\t}\n\t}\n}\n',
-			plain
-		);
 	}
 
 }
