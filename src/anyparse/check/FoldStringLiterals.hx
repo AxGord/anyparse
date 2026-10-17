@@ -404,10 +404,10 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 			final verdict: OperatorVerdict = proposed == null || operators == null ? Builtin : operators.verdictFor(node, literal);
 			final planned: Null<PlannedFold> = verdict.match(Overloaded(_)) ? null : proposed;
 			if (planned != null) {
-				final gated: String = (gate.blocks(calls, planned.groups) ? MACRO_REFUSAL : "")
-					+ (verdict.match(Unproven) ? OperatorGate.REFUSAL : "");
+				final gated: String = (gate.blocks(calls, planned.groups) ? MACRO_REFUSAL : '')
+					+ (verdict.match(Unproven) ? OperatorGate.REFUSAL : '');
 				final refused: String = gate.intrinsic(calls, planned.constant) ? MacroGate.INTRINSIC_REFUSAL + gated : gated;
-				out.push(refused == "" ? planned : {
+				out.push(refused == '' ? planned : {
 					span: planned.span,
 					editSpan: planned.editSpan,
 					text: planned.text,

@@ -156,7 +156,7 @@ final class FactsNativeReach {
 	 */
 	private static function handed(x: NativeFact, hand: NativeHand): Bool {
 		final code: Null<String> = x.code;
-		final literal: Bool = code != null && !StringTools.startsWith(code, x.name + '.');
+		final literal: Bool = code != null && !StringTools.startsWith(code, '${x.name}.');
 		return [for (i in (literal ? 1 : 0) ... x.handed.length) x.handed[i]].foreach(hand.escape);
 	}
 

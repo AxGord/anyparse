@@ -88,7 +88,8 @@ final class MoveMemberReceivers {
 					});
 				} else if (verdict != LEAVE) {
 					final at: Position = span.lineCol(source);
-					return 'cannot route `${source.substring(span.from, span.to)}` at $file:${at.line}:${at.col} through the via field: $verdict';
+					return 'cannot route `${source.substring(span.from, span.to)}` at $file:${at.line}:${at.col} through the via field: '
+						+ verdict;
 				}
 			}
 			for (c in node.children) {

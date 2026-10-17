@@ -198,10 +198,10 @@ final class TypedFactsWalk {
 		final localName: Null<String> = _name;
 		if (localName != null) out.add(',"name":${q(localName)}');
 		out.add(_header);
-		if (_incomplete.length > 0) out.add(',"inc":' + TypedFactsTypeStrings.arr([for (i in _incomplete) q(i)]));
+		if (_incomplete.length > 0) out.add(',"inc":${TypedFactsTypeStrings.arr([for (i in _incomplete) q(i)])}');
 		for (category in CATEGORIES) {
 			final list: Null<Array<String>> = _facts[category];
-			if (list != null) out.add(',"$category":' + TypedFactsTypeStrings.arr(list));
+			if (list != null) out.add(',"$category":${TypedFactsTypeStrings.arr(list)}');
 		}
 		out.add('}');
 		_host.nodes++;
@@ -220,7 +220,7 @@ final class TypedFactsWalk {
 			incomplete('reflection-inlined');
 			// the method whose declared code holds the fact: the reflective body it stands in, or none that says
 			final from: Null<InlineMethod> = _host.inlineCallee(info.file, info.min, info.max);
-			incomplete(from == null ? 'reflection-unattributed' : 'reflection-from:' + from.id);
+			incomplete(from == null ? 'reflection-unattributed' : 'reflection-from:${from.id}');
 		}
 		return _host.pos(p, _home);
 	}
@@ -548,7 +548,7 @@ final class TypedFactsWalk {
 			case TIdent(identifier):
 				// the root of a field chain spells the chain as its code, and is handed what a call through it is
 				final chain: Null<NativeChain> = _nativeChain;
-				final rooted: String = chain != null && chain.root == e ? ',"c":${q(chain.text)}' + handedText(chain.handed) : '';
+				final rooted: String = chain != null && chain.root == e ? ',"c":${q(chain.text)}${handedText(chain.handed)}' : '';
 				add('native', '{"w":"ident","n":${q(identifier)},"p":${at(e.pos)}$rooted}');
 			case TTypeExpr(m):
 				// a reflection class read as a value takes every one of its members along
@@ -599,7 +599,7 @@ final class TypedFactsWalk {
 					case Held(local):
 						_deferred.push({ fact: fieldHead(e, receiver, fa, false), local: local });
 					case _:
-						fieldFact(e, receiver, fa, false, ',' + useText(use));
+						fieldFact(e, receiver, fa, false, ',${useText(use)}');
 				}
 				reflectionValue(fa, e);
 				instantiated(fa, e.t, e.pos);
@@ -835,7 +835,7 @@ final class TypedFactsWalk {
 		switch lhs.expr {
 			case TField(receiver, fa):
 				fieldFact(lhs, receiver, fa, true, fresh ? ',"fresh":true' : '');
-				if (alsoRead) fieldFact(lhs, receiver, fa, false, ',' + useText(Update));
+				if (alsoRead) fieldFact(lhs, receiver, fa, false, ',${useText(Update)}');
 				walkReceiver(receiver, MemberWrite);
 			case TArray(array, index):
 				add('elems', '{"r":${q(str(array.t))},"rp":${at(array.pos)},"p":${at(lhs.pos)}}');
@@ -950,7 +950,7 @@ final class TypedFactsWalk {
 
 	/** Record a field access: `tail` ends its fact with how a read value is used, or what a write stores. */
 	private function fieldFact(e: TypedExpr, receiver: TypedExpr, fa: FieldAccess, write: Bool, tail: String): Void {
-		add('fields', fieldHead(e, receiver, fa, write) + tail + '}');
+		add('fields', '${fieldHead(e, receiver, fa, write) + tail}}');
 	}
 
 	/** The fact of a field access up to its closing brace. */
@@ -965,7 +965,7 @@ final class TypedFactsWalk {
 	private function call(e: TypedExpr, callee: TypedExpr, args: Array<TypedExpr>): Void {
 		argFlows(callee.t, args);
 		final where: String = at(e.pos);
-		final head: String = '"rt":${q(str(e.t))},"p":$where' + dynamicOperand(callee.t, args);
+		final head: String = '"rt":${q(str(e.t))},"p":$where${dynamicOperand(callee.t, args)}';
 		// the method a declared field names, whose parameters take the arguments: its own facts follow each (`Argument`)
 		var handedTo: Null<String> = null;
 		var handedVia: String = '';
@@ -1069,15 +1069,15 @@ final class TypedFactsWalk {
 		var named: String = '';
 		for (a in args) switch a.expr {
 			case TConst(TString(s)) if (literal == ''):
-				literal = ',"n":' + Json.stringify(s);
+				literal = ',"n":${Json.stringify(s)}';
 			case TTypeExpr(m) if (named == ''):
-				named = ',"c":' + q(TypedFactsShapes.moduleTypeId(m));
+				named = ',"c":${q(TypedFactsShapes.moduleTypeId(m))}';
 			case _:
 		}
 		// the member the call names: the literal its name argument holds, through what leaves a value as it is
 		final at: Null<Int> = TypedFactsShapes.NAME_ARGUMENTS[targetName];
 		final member: Null<String> = at == null || at >= args.length ? null : TypedFactsShapes.literalText(args[at]);
-		final spelled: String = member == null ? '' : ',"m":' + Json.stringify(member);
+		final spelled: String = member == null ? '' : ',"m":${Json.stringify(member)}';
 		final first: Null<TypedExpr> = args.length > 0 ? args[0] : null;
 		final receiver: String = first == null
 			? ''

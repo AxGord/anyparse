@@ -319,7 +319,7 @@ final class CliWalk {
 		if (name != null) tail.add(nudgeNameHint(cmd, name, widenKinds));
 		tail.add(nudgeSkipWarning(cmd, skipEntries));
 		tail.add(nudgeFuzzy(cmd, name, candidates));
-		return summary + tail.toString();
+		return summary + tail;
 	}
 
 	/**

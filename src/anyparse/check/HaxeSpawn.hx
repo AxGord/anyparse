@@ -157,42 +157,42 @@ final class HaxeSpawn {
 		+ "const jobs = JSON.parse(require('fs').readFileSync(process.argv[5], 'utf8'));"
 		+ "if (process.argv[5]) try { require('fs').unlinkSync(process.argv[5]); } catch (err) {}"
 		+ "function drop() { if (process.argv[4]) try { require('fs').rmSync(require('path').dirname(process.argv[4]),"
-		+ " { recursive: true, force: true }); } catch (err) {} }"
-		+ "function emit(s) { const f = process.argv[4]; if (!f) { process.stdout.write(s); return; }"
+		+ ' { recursive: true, force: true }); } catch (err) {} }'
+		+ 'function emit(s) { const f = process.argv[4]; if (!f) { process.stdout.write(s); return; }'
 		+ " require('fs').writeFileSync(f + '.part', s); require('fs').renameSync(f + '.part', f); }"
 		+ "const limit = parseInt(process.argv[1]); const max = parseInt(process.argv[2]); const stop = process.argv[3] === '1';"
 		+ "const group = process.platform !== 'win32';"
-		+ "const out = new Array(jobs.length); const kids = new Array(jobs.length); let next = 0, running = 0, done = 0;"
-		+ "function kill(c) { if (c.tethered && !group) { c.stdin.destroy(); return; }"
+		+ 'const out = new Array(jobs.length); const kids = new Array(jobs.length); let next = 0, running = 0, done = 0;'
+		+ 'function kill(c) { if (c.tethered && !group) { c.stdin.destroy(); return; }'
 		+ " try { if (group) process.kill(-c.pid, 'SIGKILL'); else c.kill(); }"
 		+ " catch (err) { try { c.kill('SIGKILL'); } catch (ignored) {} } }"
-		+ "function killAll() { for (const c of kids) if (c) kill(c); }"
+		+ 'function killAll() { for (const c of kids) if (c) kill(c); }'
 		+ "for (const s of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(s, () => { killAll(); drop(); process.exit(1); });"
-		+ "const parent = process.ppid;"
-		+ "setInterval(() => { if (process.ppid !== parent) { killAll(); drop(); process.exit(1); } }, 500).unref();"
+		+ 'const parent = process.ppid;'
+		+ 'setInterval(() => { if (process.ppid !== parent) { killAll(); drop(); process.exit(1); } }, 500).unref();'
 		+ "function recordGroup(j, c) { if (j.groupFile == null || c.pid == null) return; let st = '';"
 		+ " try { if (group) st = cp.execFileSync('ps', ['-o', 'lstart=', '-p', String(c.pid)], { encoding: 'utf8' }).trim(); } catch (err) {}"
 		+ " try { require('fs').writeFileSync(j.groupFile, c.pid + '\\n' + st); } catch (err) {} }"
-		+ "function cancelAfter(i) { for (let k = i + 1; k < jobs.length; k++) { if (out[k]) continue;"
-		+ " if (kids[k]) { kids[k].cancelled = true; kill(kids[k]); }"
+		+ 'function cancelAfter(i) { for (let k = i + 1; k < jobs.length; k++) { if (out[k]) continue;'
+		+ ' if (kids[k]) { kids[k].cancelled = true; kill(kids[k]); }'
 		+ " else if (k >= next) { out[k] = { status: null, out: '', err: '', failure: '" + NOT_STARTED + "', overflowed: false,"
-		+ " cancelled: true, unstarted: true }; done++; } } next = jobs.length; }"
-		+ "function finish(i, rec) { if (out[i]) return; out[i] = rec; if (kids[i] && kids[i].timer) clearTimeout(kids[i].timer);"
-		+ " kids[i] = null; running--; done++;" + " if (stop && rec.status !== 0 && !rec.cancelled) cancelAfter(i);"
-		+ " if (done === jobs.length) emit(JSON.stringify(out)); else start(); }"
-		+ "function start() { while (running < limit && next < jobs.length) { const i = next++; if (out[i]) continue; running++;"
+		+ ' cancelled: true, unstarted: true }; done++; } } next = jobs.length; }'
+		+ 'function finish(i, rec) { if (out[i]) return; out[i] = rec; if (kids[i] && kids[i].timer) clearTimeout(kids[i].timer);'
+		+ ' kids[i] = null; running--; done++;' + ' if (stop && rec.status !== 0 && !rec.cancelled) cancelAfter(i);'
+		+ ' if (done === jobs.length) emit(JSON.stringify(out)); else start(); }'
+		+ 'function start() { while (running < limit && next < jobs.length) { const i = next++; if (out[i]) continue; running++;'
 		+ " const j = jobs[i]; const o = [], e = []; let size = 0, over = false; const what = j.shell == null ? 'haxe' : 'the command';"
 		+ " const opts = { cwd: j.cwd == null ? undefined : j.cwd, stdio: [j.tethered ? 'pipe' : 'ignore', 'pipe', 'pipe'],"
-		+ " detached: group };"
+		+ ' detached: group };'
 		+ " const c = j.tethered ? cp.spawn(process.execPath, ['-e', TETHER, '--', group ? '1' : '0', JSON.stringify(j.shell == null"
 		+ " ? { cmd: 'haxe', args: j.args } : { cmd: j.shell, args: [], shell: true })], opts)"
 		+ " : j.shell == null ? cp.spawn('haxe', j.args, opts) : cp.spawn(j.shell, Object.assign({ shell: true }, opts));"
 		+ " c.tethered = j.tethered === true; if (c.tethered) c.stdin.on('error', () => {}); kids[i] = c; recordGroup(j, c);"
-		+ " if (j.timeout > 0) c.timer = setTimeout(() => { c.timedOut = true; kill(c); }, j.timeout);"
+		+ ' if (j.timeout > 0) c.timer = setTimeout(() => { c.timedOut = true; kill(c); }, j.timeout);'
 		+ " c.stdout.on('data', d => { size += d.length; if (size > max) { over = true; kill(c); } else o.push(d); });"
 		+ " c.stderr.on('data', d => e.push(d));"
 		+ " c.on('error', err => finish(i, { status: null, out: '', err: '', failure: 'could not launch ' + what + ' (' + err.message + ')',"
-		+ " overflowed: false }));" + " c.on('close', code => finish(i, { status: over || c.cancelled || c.timedOut ? null : code,"
+		+ ' overflowed: false }));' + " c.on('close', code => finish(i, { status: over || c.cancelled || c.timedOut ? null : code,"
 		+ " out: Buffer.concat(o).toString('utf8'), err: Buffer.concat(e).toString('utf8'),"
 		+ " failure: c.cancelled ? 'cancelled — an earlier job failed' : c.timedOut ? what + ' timed out after ' + j.timeout + ' ms'"
 		+ " : over ? what + ' out-wrote its ' + max + ' byte output buffer' : '', overflowed: over, cancelled: c.cancelled === true })); } }"

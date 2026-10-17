@@ -438,7 +438,8 @@ final class MainSinkReport {
 			span: edge.span,
 			rule: 'thread-safety',
 			severity: warn ? Severity.Warning : Severity.Info,
-			message: 'main thread reaches blocking $named$also: ${ThreadStates.chainText(path, ThreadSafety.CHAIN_CAP)} -> ${sinks.join(ThreadSafety.SUBJECT_SEPARATOR)}$note',
+			message: 'main thread reaches blocking $named$also: ${ThreadStates.chainText(path, ThreadSafety.CHAIN_CAP)} -> '
+				+ '${sinks.join(ThreadSafety.SUBJECT_SEPARATOR)}$note',
 			data: {
 				family: FindingFamily.MainSink,
 				member: ThreadSafety.memberOf(graph, edge.from),
@@ -509,8 +510,9 @@ final class MainSinkReport {
 	private static function fill(owned: OwnedFinding): Void {
 		final sorted: Array<String> = ThreadSafety.sortedIds(owned.sinks);
 		owned.sinks = sorted;
-		owned.finding.message = 'main thread repeats short blocking ${[for (t in sorted) '"$t"'].join(ThreadSafety.SUBJECT_SEPARATOR)}'
-			+ ' at this call: ${ThreadStates.chainText(owned.path, ThreadSafety.CHAIN_CAP)} -> ${sorted.join(ThreadSafety.SUBJECT_SEPARATOR)}';
+		owned.finding.message = 'main thread repeats short blocking ' + [for (t in sorted) '"$t"'].join(ThreadSafety.SUBJECT_SEPARATOR)
+			+ ' at this call: ${ThreadStates.chainText(owned.path, ThreadSafety.CHAIN_CAP)} -> '
+			+ sorted.join(ThreadSafety.SUBJECT_SEPARATOR);
 		final data: Null<FindingData> = owned.finding.data;
 		if (data != null) data.chain = owned.path.concat(sorted);
 	}

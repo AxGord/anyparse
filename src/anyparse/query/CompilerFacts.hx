@@ -1189,7 +1189,7 @@ final class CompilerFacts {
 		}
 		// a fact is identified by its resolved text, so the same site from two configurations is one fact
 		function fresh(category: String, fact: Any, where: FactPos): Bool {
-			final identity: String = category + ' ' + where.file + ' ' + where.span.from + ' ' + where.span.to + ' ' + Json.stringify(fact);
+			final identity: String = '$category ${where.file} ${where.span.from} ${where.span.to} ${Json.stringify(fact)}';
 			if (seen.exists(identity)) return false;
 			seen[identity] = true;
 			return true;

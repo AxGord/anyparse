@@ -131,7 +131,7 @@ final class ThreadSafetyOptions {
 
 	/** Every option this read keeps, as one string: two reads keeping the same options have the same signature. */
 	public function signature(): String {
-		final parts: Array<String> = [for (key in LIST_KEYS) key + '=' + list(key).join('\n')];
+		final parts: Array<String> = [for (key in LIST_KEYS) '$key=' + list(key).join('\n')];
 		for (key in FLAG_KEYS) parts.push('$key=${flag(key)}');
 		parts.push('$BUDGET_KEY=$repeatBudgetMs');
 		for (b in boundedRepeats) parts.push('${b.site}>${b.call}@${b.loop}:${b.max}x${b.costMs}');
@@ -236,13 +236,13 @@ final class ThreadSafetyOptions {
 				if (wrong.length > 0)
 					problems.push('$BOUNDED_KEY[$i] dropped: ${wrong.join(', ')}');
 				else if (siteName == null)
-					problems.push(dropped + 'it names no "site"');
+					problems.push('${dropped}it names no "site"');
 				else if (siteName.indexOf('*') >= 0)
-					problems.push(dropped + '"site" is a pattern, not one member');
+					problems.push('$dropped"site" is a pattern, not one member');
 				else if (bound == null || !(bound > 0))
-					problems.push(dropped + '"max" is not a positive number');
+					problems.push('$dropped"max" is not a positive number');
 				else if (turn == null || !(turn > 0))
-					problems.push(dropped + '"costMs" is not a positive number');
+					problems.push('$dropped"costMs" is not a positive number');
 				else {
 					// re-bound: strict null-safety does not carry a narrowed local into a structure literal
 					final named: String = siteName;

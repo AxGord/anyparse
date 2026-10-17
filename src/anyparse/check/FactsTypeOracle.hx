@@ -538,7 +538,7 @@ final class FactsTypeOracle implements TypeOracle {
 
 	/** The member a node belongs to: its id past the owner, before a nested function's offset or an overload's index. */
 	private static function memberOf(n: FactNode): Null<String> {
-		if (!n.id.startsWith(n.owner + '.')) return null;
+		if (!n.id.startsWith('${n.owner}.')) return null;
 		var member: String = n.id.substr(n.owner.length + 1);
 		for (mark in ['@', '~', '#']) {
 			final cut: Int = member.indexOf(mark);

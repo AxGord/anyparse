@@ -228,7 +228,7 @@ final class CallRepetition {
 	 */
 	public function handLabel(edge: CallEdge): String {
 		final target: String = edge.kind == Ref ? (edge.via ?? edge.viaMember ?? edge.to) : edge.to;
-		final named: String = ~/#[0-9]+/g.replace(target, "#fn");
+		final named: String = ~/#[0-9]+/g.replace(target, '#fn');
 		if (edge.kind != Ref) return named;
 		final same: Array<CallEdge> = [
 			for (o in _graph.outEdges(edge.from))

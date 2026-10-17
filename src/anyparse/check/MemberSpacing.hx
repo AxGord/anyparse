@@ -304,7 +304,8 @@ final class MemberSpacing {
 			case InlineBoundary: 'the inline members of a rank group are not separated from the rest of it by a blank line';
 			case DocComment if (want.count == 0): 'a doc-commented member is separated by a blank line the formatter removes';
 			case DocComment: 'a doc-commented member is not separated from its neighbour by $blanks, as the formatter writes it';
-			case Multiline: 'a member written over several lines is not separated from its neighbour by $blanks, as the formatter writes it';
+			case Multiline: 'a member written over several lines is not separated from its neighbour by $blanks'
+				+ ', as the formatter writes it';
 		};
 	}
 

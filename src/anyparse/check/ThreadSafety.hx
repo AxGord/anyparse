@@ -375,7 +375,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		// one graph serves every chain, so the facts one chain asks for (`run`'s `useFacts`) build it for all of them
 		if (factsAsked.length > 1)
 			problems.push(
-				'option "compilerFacts" is set by some chains of the run only — the graph is one, built with the facts for every' + ' file'
+				'option "compilerFacts" is set by some chains of the run only — the graph is one, built with the facts for every file'
 			);
 		return byFile;
 	}
@@ -757,7 +757,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			final holder: String = a.edge.from;
 			final unsealed: String = judged.writes.unsealedNote(a.edge.receiverField, lock) ?? '';
 			final message: String = '"$holder" holds "${lock ?? a.pair.lockId}" across $calls that can block: '
-				+ evidenceOf(blocking, held, graded.taint) + graded.note + unsealed;
+				+ '${evidenceOf(blocking, held, graded.taint)}${graded.note}$unsealed';
 			final anchor: CallEdge = blocking[0].edge;
 			final key: String = '${anchor.file}:${anchor.span?.from}:$message';
 			final known: Null<Violation> = made[key];

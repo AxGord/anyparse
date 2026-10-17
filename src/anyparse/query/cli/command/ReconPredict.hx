@@ -670,8 +670,8 @@ final class ReconPredict {
 		hits.sort((a, b) -> b.count - a.count);
 		for (h in hits) CliIo.sysPrint('${h.path} :: ${h.count} match${h.count == 1 ? '' : 'es'}\n');
 		CliIo.sysPrint(
-			'--- candidates: ${hits.length} file${CliIo.plural(hits.length)} matched ($totalHits total hit${CliIo.plural(totalHits)} across '
-			+ '${walk.records.length} skip-parse file${CliIo.plural(walk.records.length)}) ---\n'
+			'--- candidates: ${hits.length} file${CliIo.plural(hits.length)} matched ($totalHits total hit${CliIo.plural(totalHits)}'
+			+ ' across ${walk.records.length} skip-parse file${CliIo.plural(walk.records.length)}) ---\n'
 		);
 		return hits.length == 0 ? EXIT_RUNTIME : EXIT_OK;
 	}

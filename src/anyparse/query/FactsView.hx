@@ -1469,7 +1469,7 @@ final class FactsView {
 		for (x in n.news) types.push(x.type);
 		for (v in n.vars) types.push(v.type);
 		for (p in n.params) types.push(p.type);
-		for (f in n.flows) types.push(f.from + ',' + f.to);
+		for (f in n.flows) types.push('${f.from},${f.to}');
 		// a static a build calls as an extension may be shadowed there by a member another build declares
 		final guarded: Map<String, Bool> = guardedNames();
 		for (name in statics) if (guarded.exists(name)) return false;
@@ -1739,7 +1739,7 @@ final class FactsView {
 	 */
 	private static function declaredId(fi: FileInfo, t: TypeDeclInfo): String {
 		final path: Array<String> = fi.pkg == '' ? [] : fi.pkg.split('.');
-		if (t.isPrivate) path.push('_' + SourceText.lastSegment(fi.module));
+		if (t.isPrivate) path.push('_${SourceText.lastSegment(fi.module)}');
 		path.push(t.name);
 		return path.join('.');
 	}

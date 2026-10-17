@@ -590,7 +590,7 @@ final class GuardContinue implements Check {
 			hoisted.add('\n');
 			to = span.to;
 		}
-		return { span: new Span(cut.ifSpan.from, to), text: '${hoisted.toString()}if (${cut.neg}) continue;$inner' };
+		return { span: new Span(cut.ifSpan.from, to), text: '${hoisted}if (${cut.neg}) continue;$inner' };
 	}
 
 	/**

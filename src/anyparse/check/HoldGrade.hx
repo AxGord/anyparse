@@ -206,7 +206,7 @@ final class HoldGrade {
 			return {
 				calls: long,
 				taint: judges.long,
-				note: elsewhere == null ? note : note + ', which finding (a) reports at $elsewhere, so reported as info',
+				note: elsewhere == null ? note : '$note, which finding (a) reports at $elsewhere, so reported as info',
 				info: error != null || elsewhere != null,
 				elsewhere: error == null && elsewhere != null
 			};

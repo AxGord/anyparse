@@ -75,7 +75,7 @@ final class TypedFactsShapes {
 	 */
 	public static function nativeCode(args: Array<TypedExpr>, carrying: Bool): String {
 		final text: Null<String> = args.length == 0 ? null : literalText(args[0]);
-		if (text != null) return ',"c":' + Json.stringify(text);
+		if (text != null) return ',"c":${Json.stringify(text)}';
 		return carrying ? ',"cc":true' : '';
 	}
 
@@ -113,7 +113,7 @@ final class TypedFactsShapes {
 	public static function chainText(e: TypedExpr): String {
 		return switch e.expr {
 			case TIdent(name): name;
-			case TField(receiver, fa): chainText(receiver) + '.' + describe(fa).field;
+			case TField(receiver, fa): '${chainText(receiver)}.${describe(fa).field}';
 			case TParenthesis(inner) | TMeta(_, inner): chainText(inner);
 			case _: '';
 		};

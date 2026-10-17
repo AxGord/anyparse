@@ -1139,8 +1139,8 @@ final class MoveMember {
 		if (prep.srcFile == prep.destFile) return '${head}"${prep.destTypeName}" shares the source module';
 		final destMain: Bool = prep.destInfo.types.exists(t -> t.name == prep.destTypeName && t.isMain);
 		if (prep.destDecl.kind != 'ClassDecl' || !destMain)
-			return
-				'${head}"${prep.destTypeName}" is not the main class of its module, and `import <module>.*;` brings in only that class\'s statics';
+			return '$head"${prep.destTypeName}'
+				+ '" is not the main class of its module, and `import <module>.*;` brings in only that class\'s statics';
 		if (!prep.index.subtypes.supertypeChainResolved(prep.srcTypeName))
 			return '${head}the supertypes of "${prep.srcTypeName}" do not resolve in scope, and a static they declare would win';
 		final names: Array<String> = DependencyCarry.wildcardBoundNames(prep.destInfo, prep.shape);
@@ -1364,9 +1364,8 @@ final class MoveMember {
 			);
 		if (state.mutableDeps.length > 0)
 			problems.push(
-				'moved bodies read mutable instance field(s) ${quoted(state.mutableDeps)} — shared mutable state '
-				+ 'cannot be mirrored onto "${prep.destTypeName}"${stayingReadersNote(prep, state.mutableDeps, plugin)}; make them '
-				+ 'final or refactor first'
+				'moved bodies read mutable instance field(s) ${quoted(state.mutableDeps)} — shared mutable state cannot be mirrored onto '
+				+ '"${prep.destTypeName}"${stayingReadersNote(prep, state.mutableDeps, plugin)}; make them final or refactor first'
 			);
 		// A missing final field on the destination is a hard error UNLESS
 		// --scaffold is on, which generates the field + constructor instead.

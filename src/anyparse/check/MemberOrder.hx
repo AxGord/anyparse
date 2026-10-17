@@ -140,12 +140,11 @@ final class MemberOrder implements Check implements ConfigAware {
 	}
 
 	public function description(): String {
-		return 'type members not in canonical order ('
-			+ 'constants, properties, fields, constructor, accessors, instance methods, static methods; public before private; within one '
-			+ 'rank inline members lead, then initialized declarations lead init-less ones; conditional members grouped into one #if block '
-			+ 'per condition and branch shape, sorted at the rank their members share and leading it when the block holds only inline '
-			+ 'fields - or pinned to the end of their '
-			+ 'section when they span several ranks) or rank groups and conditional blocks not separated by blank lines';
+		return 'type members not in canonical order (constants, properties, fields, constructor, accessors, instance methods, static '
+			+ 'methods; public before private; within one rank inline members lead, then initialized declarations lead init-less ones; '
+			+ 'conditional members grouped into one #if block per condition and branch shape, sorted at the rank their members share and '
+			+ 'leading it when the block holds only inline fields - or pinned to the end of their section when they span several ranks) '
+			+ 'or rank groups and conditional blocks not separated by blank lines';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

@@ -319,7 +319,7 @@ final class ReachDefinesProbe {
 		if (read == null || !(read is Array)) return null;
 		final pair: Array<Dynamic> = read;
 		if (pair.length != 2 || !(pair[0] is String) || !(pair[1] is String)) return null;
-		return { name: Std.string(pair[0]), value: Std.string(pair[1]) };
+		return { name: '${pair[0]}', value: '${pair[1]}' };
 	}
 
 	private static function defines(list: String): Array<String> {

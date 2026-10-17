@@ -92,7 +92,8 @@ class Pratt implements Strategy {
 		for (entry in meta) if (entry.name == ':infix') {
 			if (entry.params.length < 2 || entry.params.length > 4) {
 				Context.fatalError(
-					'@:infix expects two to four arguments: "op", precedence:Int, optional associativity ("Left"/"Right") and an optional right-operand precedence:Int',
+					'@:infix expects two to four arguments: "op", precedence:Int, optional associativity ("Left"/"Right") '
+					+ 'and an optional right-operand precedence:Int',
 					entry.pos
 				);
 			}

@@ -43,7 +43,7 @@ final class TypedFactsTypeStrings {
 
 	/** The id of a type: its package, then its name, which is how the compiler names it — a private type's package ends in its module. */
 	public static function typeId(pack: Array<String>, name: String): String {
-		return pack.length == 0 ? name : pack.join('.') + '.' + name;
+		return pack.length == 0 ? name : pack.join('.') + '.$name';
 	}
 
 	/** `t` in the facts type grammar (`TypedFactsProbe`). */
@@ -59,11 +59,11 @@ final class TypedFactsTypeStrings {
 			case TType(d, params):
 				// the compiler names the typedef of a type's statics after it (`Enum<pack.E>`), which carries no arguments of its own
 				final name: String = d.toString();
-				if (!StringTools.endsWith(name, '>')) printedTypedefs[name + '@' + Std.string(d.get().pos)] = d;
+				if (!StringTools.endsWith(name, '>')) printedTypedefs['$name@${d.get().pos}'] = d;
 				StringTools.endsWith(name, '>') ? name : name + paramString(params, depth);
 			case TAbstract(a, params): a.toString() + paramString(params, depth);
 			case TDynamic(null): 'Dynamic';
-			case TDynamic(inner): 'Dynamic<' + typeString(inner, depth + 1) + '>';
+			case TDynamic(inner): 'Dynamic<${typeString(inner, depth + 1)}>';
 			case TFun(args, ret):
 				'(' + [for (a in args) (a.opt ? '?' : '') + typeString(a.t, depth + 1)].join(',') + ')->' + typeString(ret, depth + 1);
 			case TAnonymous(a):
@@ -90,7 +90,7 @@ final class TypedFactsTypeStrings {
 			isParam = c.get().kind.match(KTypeParameter(_));
 			typeParams[path] = isParam;
 		}
-		return isParam ? '$' + path : path + paramString(params, depth);
+		return isParam ? '$$$path' : path + paramString(params, depth);
 	}
 
 	private static function paramString(params: Array<Type>, depth: Int): String {

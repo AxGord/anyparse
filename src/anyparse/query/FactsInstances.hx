@@ -158,7 +158,7 @@ final class FactsInstances {
 	private static function bindInstance(out: Map<String, Map<String, FactsType>>, path: String, t: FactsType): Void {
 		final types: Map<String, FactsType> = out[path] ?? [];
 		out[path] = types;
-		types[Std.string(t)] = t;
+		types['$t'] = t;
 	}
 
 	/** Unify a generic instantiation's declared type with the applied one; either text failing to read marks the table unread. */

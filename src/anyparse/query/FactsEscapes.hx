@@ -412,7 +412,7 @@ final class FactsEscapes {
 				// target code, which hands back only what it was handed and makes no program object (see the type doc)
 				return true;
 			case Parameter(path):
-				final key: String = Std.string(t);
+				final key: String = '$t';
 				if (_done.exists(key)) return true;
 				_done[key] = true;
 				// a value of a type parameter has a type some instantiation binds it to
@@ -425,7 +425,7 @@ final class FactsEscapes {
 				return true;
 			case Function(_, _):
 				// a function value holds no object a name reaches, but it is itself a value of no known place now
-				final key: String = Std.string(t);
+				final key: String = '$t';
 				if (!_functionKeys.exists(key)) {
 					_functionKeys[key] = true;
 					_functions.push(t);
@@ -444,7 +444,7 @@ final class FactsEscapes {
 				return impl == null || escapeType(Named(impl, []));
 			case Named(id, args):
 				if (inert(id)) return true;
-				final key: String = Std.string(t);
+				final key: String = '$t';
 				if (_done.exists(key)) return true;
 				_done[key] = true;
 				final fact: Null<TypeFact> = _table.type(id);

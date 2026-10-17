@@ -244,8 +244,8 @@ final class PreferComprehension implements Check {
 	}
 
 	public function description(): String {
-		return
-			'an empty-array local plus a loop that only fills it (push, sequential index write, nested build) replaceable with an array comprehension';
+		return 'an empty-array local plus a loop that only fills it (push, sequential index write, nested build) '
+			+ 'replaceable with an array comprehension';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

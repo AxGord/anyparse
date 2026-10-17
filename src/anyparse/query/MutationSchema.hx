@@ -119,15 +119,16 @@ final class MutationSchema {
 	 * a module the build embeds as text. Fields of the type and not a class of their own: a module whose
 	 * types are all behind `#if macro` must still contribute no type to a build that is not one.
 	 */
-	private static final SWITCH_FIELDS: String = '\n\tprivate static var __mutActive: Null<Int>;\n' + '\t#if macro\n'
-		+ '\tprivate static var __mutReached: Null<Array<Int>>;\n' + '\t#end\n\n' + '\tpublic static function $SWITCH(id: Int): Bool {\n'
-		+ '\t\tvar active: Null<Int> = __mutActive;\n' + '\t\tif (active == null) {\n'
-		+ '\t\t\tfinal raw: Null<String> = Sys.getEnv(\'$ACTIVE_VAR\');\n' + '\t\t\tactive = raw == null ? 0 : Std.parseInt(raw) ?? 0;\n'
-		+ '\t\t\t__mutActive = active;\n' + '\t\t}\n' + '\t\t#if macro\n'
-		+ '\t\tfinal log: Null<String> = Sys.getEnv(\'$MACRO_LOG_VAR\');\n' + '\t\tfinal reached: Array<Int> = __mutReached ?? [];\n'
-		+ '\t\t__mutReached = reached;\n' + '\t\tif (log != null && !reached.contains(id)) {\n' + '\t\t\treached.push(id);\n'
-		+ '\t\t\tfinal out: sys.io.FileOutput = sys.io.File.append(log);\n' + '\t\t\tout.writeString(\'$$id\\n\');\n'
-		+ '\t\t\tout.close();\n' + '\t\t}\n' + '\t\t#end\n' + '\t\treturn active == id;\n' + '\t}\n';
+	private static final SWITCH_FIELDS: String = '\n\tprivate static var __mutActive: Null<Int>;\n\t#if macro\n'
+		+ '\tprivate static var __mutReached: Null<Array<Int>>;\n\t#end\n\n\tpublic static function '
+		+ '$SWITCH(id: Int): Bool {\n\t\tvar active: Null<Int> = __mutActive;\n'
+		+ '\t\tif (active == null) {\n\t\t\tfinal raw: Null<String> = Sys.getEnv(\'$ACTIVE_VAR\');\n'
+		+ '\t\t\tactive = raw == null ? 0 : Std.parseInt(raw) ?? 0;\n\t\t\t__mutActive = active;\n'
+		+ '\t\t}\n\t\t#if macro\n\t\tfinal log: Null<String> = Sys.getEnv(\'$MACRO_LOG_VAR\');\n'
+		+ '\t\tfinal reached: Array<Int> = __mutReached ?? [];\n\t\t__mutReached = reached;\n'
+		+ '\t\tif (log != null && !reached.contains(id)) {\n\t\t\treached.push(id);\n\t\t\tfinal out: '
+		+ 'sys.io.FileOutput = sys.io.File.append(log);\n\t\t\tout.writeString(\'$$id\\n\');\n'
+		+ '\t\t\tout.close();\n\t\t}\n\t\t#end\n\t\treturn active == id;\n\t}\n';
 
 	/** The modifiers a copy keeps (`Override` is dropped: the copy overrides nothing). */
 	private static final KEPT_MODIFIERS: Array<String> = ['Public', 'Private', 'Static', 'Inline', 'Dynamic', 'Final'];

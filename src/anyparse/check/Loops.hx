@@ -123,7 +123,7 @@ final class Loops {
 		final first: Null<Span> = loop.children[0].span;
 		final last: Null<Span> = loop.children[loop.children.length - 1].span;
 		final text: Null<String> = if (_doWhileKinds.contains(loop.kind))
-			first == null ? null : 'do … ' + source.substring(first.to, span.to)
+			first == null ? null : 'do … ${source.substring(first.to, span.to)}'
 		else
 			last == null ? null : source.substring(span.from, last.from);
 		return text == null ? null : spelled(text);

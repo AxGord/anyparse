@@ -712,7 +712,7 @@ final class LintFixVerify {
 		}
 		final why: String = result.reverted.length == 0 ? '' : ' (${result.reason})';
 		return {
-			tail: ', oracle-assisted: ${result.applied.length} file(s) applied, ${result.reverted.length}' + ' reverted to report-only$why',
+			tail: ', oracle-assisted: ${result.applied.length} file(s) applied, ${result.reverted.length} reverted to report-only$why',
 			appliedCount: edits
 		};
 	}
