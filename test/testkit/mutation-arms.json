@@ -6595,6 +6595,14 @@
 			"note": "a field read does not bring its declared type into reach, so a conversion of the value read runs unseen"
 		},
 		{
+			"name": "M-REACH-INFERRED-ANON-METHOD",
+			"type": "anyparse.query.ReachGraph",
+			"method": "inferredFrom",
+			"find": "\n\t\t\t.concat(MemberKinds.FIELD_MEMBER_KINDS);",
+			"replace": ";",
+			"note": "a structure's `function` field is not found in its own text, so reading one puts every abstract in reach and admits every conversion wherever code runs"
+		},
+		{
 			"name": "M-REACH-INFERRED-MEMBER",
 			"type": "anyparse.query.AbstractReach",
 			"method": "settle",

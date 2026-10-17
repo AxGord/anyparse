@@ -1698,6 +1698,22 @@ class MemberReachTest extends Test {
 		assertMatch(ask([head + 'function f():Void { /*<*/ var s:String = Keeper.guess; /*>*/ } }'], lib), r -> r.match(Reached(_)));
 	}
 
+	@:pin('control') @:killer('M-REACH-INFERRED-ANON-METHOD')
+	public function testAStructureFunctionFieldBringsOnlyWhatItsTextSpells(): Void {
+		// `Steps.next` is a structure's `function` field, which the signature words send to the field's own text for its
+		// type: read there, it spells `Int` — the region holding a `Steps` holds no `Loud`, so the conversion that changes
+		// `items` cannot run. A field whose text spells `Loud` keeps it in reach. (Not read at all, every abstract was.)
+		final lib: Array<String> = [
+			'abstract Loud(Int) { @:from static function fromInt(i:Int):Loud { Keeper.cb(); return cast i; } }',
+			'class Keeper { public static var cb:() -> Void; }',
+			'typedef Steps = { function hasNext():Bool; function next():Int; }',
+			'typedef LoudSteps = { function hasNext():Bool; function next():Loud; }'
+		];
+		final head: String = 'class C { public static var items:Array<Int> = []; public function new() Keeper.cb = () -> items.push(0);';
+		assertMatch(ask(['$head function f():Void { /*<*/ var s:Steps = null; /*>*/ } }'], lib), r -> r.match(Proven));
+		assertMatch(ask(['$head function f():Void { /*<*/ var s:LoudSteps = null; /*>*/ } }'], lib), r -> r.match(Reached(_)));
+	}
+
 	@:pin('control') @:killer('M-REACH-INDEX-OPERATOR')
 	public function testIndexOperatorOverloadRunsFromAnIndexAccess(): Void {
 		// `@:op([])` overloads the index access, though its annotation projects as an array literal: `l[0]` runs it.

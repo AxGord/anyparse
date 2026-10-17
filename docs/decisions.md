@@ -3810,3 +3810,14 @@ decided the question; it may not become a record of runs.
   active + full-scope union. `no-underscore-prefix` supersedes `naming` (it is opted into and its options state the stance
   on exactly these bindings). No collision-free alternative name is invented: the finding stays report-only with the
   reason — branch `feat/infra-N26`
+- N24 (a) — `prefer-keyvalue-loop` declined 30 anyparse loops (52 with `--no-oracle`) on "code at hxnodejs
+  Writable.hx:350 may change it", though no call path leads there: `WritableNewOptionsAdapter.from` is an `@:from` of an
+  abstract, admitted wherever code read by its syntax runs (`ReachGraph.alwaysIds`) once the abstract is in reach. It was
+  in reach by accident: `ReachGraph.signatureWords` sends a structure's `function` field (`FnField`, e.g. std/hxnodejs
+  `Iterator.next`, `PathModule.join`) to `inferredFrom` because its return type is not a data field's annotation, and
+  `inferredFrom` looked only among `functionKinds` + `fieldDeclKinds`, found nothing, answered null, and
+  `AbstractReach.inferred` then put EVERY indexed type in reach — so a `Map` spelled in the region made every library
+  abstract's conversions run everywhere. → `inferredFrom` looks among every kind the index records a member under
+  (`MemberKinds.FIELD_MEMBER_KINDS`) and reads the field's own text, which spells its declared type (Haxe 4.3.7 requires
+  a structure function field's return type: `Explicit type required for field f`). A file that does not parse or a
+  member truly not found still answers null and keeps every type in reach — branch `feat/infra-N24`
