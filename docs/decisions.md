@@ -3574,6 +3574,38 @@ decided the question; it may not become a record of runs.
   object literal, a function value, a comparison or boolean operator, a reference to an `inline` constant whose value
   is no `null` literal (such a constant is no default candidate either). A variable or a call is not proven — no
   types read, since a non-`Null<T>` declaration proves nothing without null safety — branch `feat/infra-N15`
+- `naming` gains a PRIVATIZE arm for a public `_x` field nothing outside its type reads (user request 2026-10-17 from
+  TM `Slider.hx`, where `--fix` renamed `public final _labelTextField` of `private final class FloatingReadOut` to
+  `labelTextField`; no reference outside the class). The rename came from `naming`'s public-field rule (its
+  `crossFileFix`), NOT `no-underscore-prefix`, which flags parameters and locals only — so the arm lives in `naming`
+  (`NamingPrivatize`) and `no-underscore-prefix` is unchanged. Decisions: (1) ONE finding, two arms: the privatize arm's
+  finding carries the arm in its message (`… — nothing outside FloatingReadOut reads it, so the fix makes it private`),
+  the rename arm keeps today's message byte-for-byte; `crossFileFix` declines the privatize finding with
+  `RenameRefusal.PRIVATIZE_ARM`. (2) A positive candidate list: a FIELD, `public`, `_`-prefixed, with an owner, no
+  `implicitReach`, not rename-unsafe, and the rule that would govern it once PRIVATE accepts the name — so the arm is
+  the policy's, not a hard-coded `_`. (3) The verdict is `unused-public-member`'s reachability set, MOVED into
+  `PublicReach` (token map, confirm, type gates, chain walk, member-run reading — UPM's copies deleted) and asked by
+  both rules, with the allowed regions widened from the member's own declaration to the type's declaration plus every
+  subtype's (`SubtypeGraph.subtypeDecls`, `RawSourceScan.nameOccursOutsideAll`): Haxe `private` is visible to a
+  subclass. No supertype / interface / structure gate of its own, for UPM's reason — each of them spells the name, so
+  the token count already refuses. (4) An `@:autoBuild` ANCESTOR does not refuse the arm (`chainOutOfReach(…,
+  autoBuildCounts: false)`), while it still vetoes UPM's deletion: generated code may CALL a member, but it lands inside
+  the descendant, where a private field stays visible — and openfl's `Sprite` carries `@:autoBuild`, so the veto would
+  refuse every TM UI class, the motivating one included. The residual (a macro that reads VISIBILITY and changes what
+  it generates) is invisible to every source scan and is part of why the arm is risky. The type's OWN `@:build` still
+  refuses. (5) RISKY per arm, not per rule: a new `Check.RiskyArm` capability (`riskyArmFindings` + `riskyFix`) keeps
+  `naming` in the safe loop and adds it to the verified set only when an oracle is configured (`partitionChecks`), where
+  `FixVerifier` asks the arm's findings of `riskyFix`; marking all of `naming` `RiskyFix` would have made every rename
+  report-only without an oracle. Without an oracle the privatize finding is report-only and NOT renamed — the arm owns
+  it. (6) Whole-project evidence is a precondition, not a hope (the lint-fix-scope incident: a narrowed report scope
+  read a reference in an unlinted file as absent): the arm runs only when `RefactorSupport.projectIsComplete` (declared
+  `resolutionRoots`, every one matched), where the token map spans the project however narrow the lint scope; without
+  it the arm is off and the finding keeps the rename. TM: `_labelTextField` (tm-fix-before) is privatized and verified by
+  all 13 oracle configurations; `_scrollContainer` (`SessionPDFPreview`) is refused by the token count — three other
+  classes declare a private `_scrollContainer` — and keeps the (already refused) rename. Known gap, stated rather than
+  closed: the token count is NAME-keyed, so a common private-field name anywhere in the project refuses the arm; a
+  resolution-based occurrence attribution (the rename's own `otherFileRenameSpans`) would lift that — branch
+  `feat/infra-N19`
 - `member-order` asks the WRITER's member-gap policy before its own (user request 2026-10-17, N21; found by N16): in TM
   44 findings `members of one rank group are separated by a blank line` sat next to a field the writer renders over
   several lines under `emptyLines.aroundMultilineFields: 1`, so `--fix` emitted the edit, the canonical round-trip put
