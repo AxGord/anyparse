@@ -99,6 +99,30 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	private final _maxComplexityCache: Map<String, Null<Int>> = [];
 
 	/**
+	 * The `checkstyle.json` overrides per DIRECTORY, keyed and justified exactly like
+	 * `_maxComplexityCache`: `checkOverrides` walks up from a file to the same config, and five
+	 * checks ask it once per file, so without the memo every file paid one disk walk per check.
+	 * `null` is a real answer (no config), so reads go through `exists`.
+	 */
+	private final _checkOverridesCache: Map<String, Null<CheckOverrides>> = [];
+
+	/**
+	 * The lexical regions per source. A pure function of the text, asked by dozens of checks per
+	 * file, each of which used to rescan the whole file. The cached array never leaves this class:
+	 * every answer is a COPY, so a consumer that sorts or filters its array in place cannot reach
+	 * another consumer's (the regions themselves are immutable).
+	 */
+	private final _lexicalRegionsCache: Map<String, Array<LexRegion>> = [];
+
+	/**
+	 * The grammar's `RefShape`, built once per wrapper. The inner plugin builds a fresh shape on
+	 * every call — several hundred fields, a dozen maps and the kind lists concatenated anew — and
+	 * the checks ask it per file. Consumers only read it (the one write, `refsCache`, is this
+	 * class's own and is the same value on every call).
+	 */
+	private var _refShape: Null<RefShape> = null;
+
+	/**
 	 * The ambient-import chain per DIRECTORY and package, memoised for the run: the seam walks a
 	 * file's ancestors on disk and reads each source it finds, and every file of one directory with
 	 * one package gets the same chain by construction.
@@ -502,15 +526,18 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	public function projectedKinds(): Array<String> return _inner.projectedKinds();
 
 	/**
-	 * `GrammarPlugin`: attaches this wrapper's run-scoped `RefsCache` to a fresh
-	 * copy of the inner shape, so `Refs.find` resolves through the memoized
-	 * index instead of walking the tree per query. Safe: `_inner.refShape()`
-	 * returns a fresh struct literal per call, so mutating the copy leaks
-	 * nowhere.
+	 * `GrammarPlugin`: the inner shape with this wrapper's run-scoped `RefsCache` attached, so
+	 * `Refs.find` resolves through the memoized index instead of walking the tree per query. Built
+	 * ONCE per wrapper (`_refShape`): `_inner.refShape()` returns a fresh struct literal per call and
+	 * the checks ask per file, which cost ~0.8 s of construction and garbage on the TM tree. The
+	 * attach is a write to the inner plugin's fresh copy, so it leaks nowhere.
 	 */
 	public function refShape(): RefShape {
+		final cached: Null<RefShape> = _refShape;
+		if (cached != null) return cached;
 		final shape: RefShape = _inner.refShape();
 		shape.refsCache = _refsCache;
+		_refShape = shape;
 		return shape;
 	}
 
@@ -585,20 +612,31 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	public function controlFlowSupport(): Null<ControlFlowSupport> return _inner.controlFlowSupport();
 
 	/**
-	 * Straight through, NOT memoised. The wrapped scan is a small share of a
-	 * full `lint --all --fix`, and a cache keyed on source content would hold
-	 * one array per distinct file for the life of the run to buy a slice of that — while the
-	 * caches above exist because a parse costs orders of magnitude more and is demanded once
-	 * per CHECK. Adding it here on speculation is the shape invariant 1 warns about; add it
-	 * when a profile names it, and as instance state like the rest, never process-scoped.
+	 * Memoised per source, now that a profile names it (N1, 2026-10-17): on the TM tree a `lint --all`
+	 * asked about every file from dozens of checks and paid ~0.9 s of whole-file rescans for it. The
+	 * cache holds one array per distinct file for the run, which is the price the old note here weighed
+	 * against a scan it judged small; the measurement settled it. Instance state like the rest, never
+	 * process-scoped, and every answer is a copy (see `_lexicalRegionsCache`).
 	 */
-	public function lexicalRegions(source: String): Array<LexRegion> return _inner.lexicalRegions(source);
+	public function lexicalRegions(source: String): Array<LexRegion> {
+		final cached: Null<Array<LexRegion>> = _lexicalRegionsCache[source];
+		if (cached != null) return cached.copy();
+		final regions: Array<LexRegion> = _inner.lexicalRegions(source);
+		_lexicalRegionsCache[source] = regions.copy();
+		return regions;
+	}
 
 	public function booleanLogicSupport(): Null<BooleanLogicSupport> return _inner.booleanLogicSupport();
 
 	public function knownExtensionMethods(modulePath: String): Null<Array<String>> return _inner.knownExtensionMethods(modulePath);
 
-	public function checkOverrides(path: String): Null<CheckOverrides> return _inner.checkOverrides(path);
+	public function checkOverrides(path: String): Null<CheckOverrides> {
+		final dir: String = Path.directory(path);
+		if (_checkOverridesCache.exists(dir)) return _checkOverridesCache[dir];
+		final overrides: Null<CheckOverrides> = _inner.checkOverrides(path);
+		_checkOverridesCache[dir] = overrides;
+		return overrides;
+	}
 
 	/**
 	 * The ambient chain per directory + package. The seam's answer is a function of the file's
