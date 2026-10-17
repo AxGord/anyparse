@@ -38,6 +38,20 @@ class EmptyBlockCheckTest extends Test {
 		Assert.equals(1, violations('class C {\n\tfunction f():Void {\n\t\tfor (i in 0...n) {}\n\t}\n}').length);
 	}
 
+	@:pin('control')
+	@:killer('M-EMPTY-BLOCK-DRAIN-LOOP')
+	public function testDrainLoopNotFlagged(): Void {
+		// The condition does the work: each test evaluates a call, so the empty body is the idiom, not a forgotten one.
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\twhile (gl.getError() != 0) {}\n\t}\n}').length);
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\twhile (client.input.readLine() != \'\') {}\n\t}\n}').length);
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\twhile (i++ < n) {}\n\t}\n}').length);
+	}
+
+	public function testEmptyForWithCallNotExempt(): Void {
+		// A `for` iterates its iterable; the exemption is for a condition loop only.
+		Assert.equals(1, violations('class C {\n\tfunction f():Void {\n\t\tfor (x in items()) {}\n\t}\n}').length);
+	}
+
 	public function testEmptyCatchFlagged(): Void {
 		Assert.equals(1, violations('class C {\n\tfunction f():Void {\n\t\ttry { a(); } catch (e:Dynamic) {}\n\t}\n}').length);
 	}
@@ -94,6 +108,21 @@ class EmptyBlockCheckTest extends Test {
 		Assert.equals(src, applyFix(src));
 	}
 
+	@:pin('control')
+	@:killer('M-EMPTY-BLOCK-NO-DECLINE')
+	public function testDeclinedSitesSayWhy(): Void {
+		// Every flagged site the fix leaves alone names its gate, so the `--fix` ledger does not report a bare "returned no edit".
+		Assert.equals('a loop body: removing it removes the loop', declineOf('while (a) {}'));
+		Assert.equals('a try / catch body: the construct needs it', declineOf('try { a(); } catch (e:Dynamic) {}'));
+		Assert.equals('the if condition may have a side effect', declineOf('if (compute()) {}'));
+		Assert.equals('the if is a single-statement branch body', declineOf('if (a) b(); else if (c) {}'));
+	}
+
+	public function testFixedSiteHasNoDecline(): Void {
+		Assert.isNull(declineOf('if (a) {}'));
+		Assert.isNull(declineOf('if (a) b(); else {}'));
+	}
+
 	public function testRegisteredInBuiltins(): Void {
 		Assert.notNull(Linter.byId('empty-block'));
 		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
@@ -110,6 +139,15 @@ class EmptyBlockCheckTest extends Test {
 
 	private function applyFix(src: String): String {
 		return CheckFixture.fixedSource(new EmptyBlock(), src);
+	}
+
+	/** The decline note the fix leaves on the one finding of `body` as the body of `f`, or null when it took an edit. */
+	private function declineOf(body: String): Null<String> {
+		final run: FixRun = CheckFixture.fixRun(
+			new EmptyBlock(), [{ file: 'C.hx', source: 'class C {\n\tfunction f():Void {\n\t\t$body\n\t}\n}' }]
+		);
+		Assert.equals(1, run.violations.length);
+		return run.violations[0].declineReason;
 	}
 
 }

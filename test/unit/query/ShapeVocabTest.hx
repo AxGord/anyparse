@@ -34,6 +34,15 @@ class ShapeVocabTest extends Test {
 		Assert.same([], ShapeVocab.switchArmKinds(bare()));
 	}
 
+	/** A condition loop is a statement loop no iteration binding names: `while` and `do … while`, never `for`. */
+	@:pin('control') @:killer('M-VOCAB-CONDITION-LOOP-KEEPS-FOR')
+	public function testConditionLoopsDropTheIteratingOnes(): Void {
+		Assert.same(['WhileStmt', 'DoWhileStmt', 'DoWhileExpr'], ShapeVocab.conditionLoopKinds(new HaxeQueryPlugin().refShape()));
+		final shape: RefShape = bare();
+		shape.loopStatementKinds = ['ForStmt', 'WhileStmt'];
+		Assert.same(['ForStmt', 'WhileStmt'], ShapeVocab.conditionLoopKinds(shape));
+	}
+
 	/** The Haxe grammar's loops and functions, each union spelled out. */
 	@:pin('control') @:killer('M-VOCAB-NESTED-NO-NAMED-FN') @:killer('M-VOCAB-DOWHILE-EXPR-NOT-LOOP')
 	public function testHaxeLoopAndFunctionVocabulary(): Void {

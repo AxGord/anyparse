@@ -23831,6 +23831,28 @@
 			"find": "for (m in collect(plugin, entry.file, entry.source, seams, resolveIndex, selection))",
 			"replace": "for (m in collect(plugin, entry.file, entry.source, seams, resolveIndex, OperatorSelection.of(plugin, [entry])))",
 			"note": "the chain rule asks a per-file operator table, which sees no overload a sibling module declares, and leaves a chain the switch rule refuses to nobody"
+		},
+		{
+			"name": "M-EMPTY-BLOCK-DRAIN-LOOP",
+			"type": "anyparse.check.EmptyBlock",
+			"method": "isDrainLoopBody",
+			"force": "false",
+			"note": "no loop is a drain loop, so `while (gl.getError() != 0) {}` is reported as a forgotten body although its condition does the work"
+		},
+		{
+			"name": "M-EMPTY-BLOCK-NO-DECLINE",
+			"type": "anyparse.check.EmptyBlock",
+			"method": "collectEmptyFixes",
+			"find": "finding.declineReason = reason;",
+			"replace": "{}",
+			"note": "a kept empty block carries no decline note, so the --fix ledger reports a bare 'returned no edit' for every loop / catch / side-effecting if"
+		},
+		{
+			"name": "M-VOCAB-CONDITION-LOOP-KEEPS-FOR",
+			"type": "anyparse.query.ShapeVocab",
+			"method": "conditionLoopKinds",
+			"force": "statementLoopKinds(shape)",
+			"note": "the condition loops keep the iterating `for`, so an empty `for (x in items()) {}` passes as a drain loop"
 		}
 	]
 }

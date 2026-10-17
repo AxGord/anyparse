@@ -22,6 +22,15 @@ final class ShapeVocab {
 		return union([shape.loopStatementKinds, shape.doWhileLoopKinds]);
 	}
 
+	/**
+	 * The CONDITION loop statements — `statementLoopKinds` without the `iterationBindingKinds`: `while` and `do … while`,
+	 * whose repetition a condition decides, where a `for` walks an iterable.
+	 */
+	public static function conditionLoopKinds(shape: RefShape): Array<String> {
+		final iterating: Array<String> = shape.iterationBindingKinds ?? [];
+		return statementLoopKinds(shape).filter(k -> !iterating.contains(k));
+	}
+
 	/** Every function-like kind — the declared functions (`functionKinds`) and the nested ones (`nestedFunctionKinds`), each once. */
 	public static function functionLikeKinds(shape: RefShape): Array<String> {
 		return union([shape.functionKinds, nestedFunctionKinds(shape)]);
