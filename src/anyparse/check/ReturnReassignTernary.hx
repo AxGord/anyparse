@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.check.NegatedCondition.InversionSeams;
@@ -123,7 +124,7 @@ using Lambda;
  * `inlineFunctionKinds`; and the return-type gate reads `functionKinds` / `lambdaKinds`.
  */
 @:nullSafety(Strict)
-final class ReturnReassignTernary implements Check implements DefaultOff {
+final class ReturnReassignTernary implements Check implements DefaultOff implements ConfigAware {
 
 	/** The rule's stable identifier -- the `apqlint.json` key and the `--rule` selector. */
 	private static inline final RULE_ID: String = 'return-reassign-ternary';
@@ -138,7 +139,14 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 	/** A no-else `if` projects exactly [condition, then-branch]. */
 	private static inline final IF_NO_ELSE_CHILD_COUNT: Int = 2;
 
+	/** The linter's per-file config resolver (`invert-negated-if-else` `keepDefaultElse`), or null to read each file's chain from disk. */
+	private var _resolveConfig: Null<(String) -> LintConfig> = null;
+
 	public function new() {}
+
+	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
+		_resolveConfig = resolve;
+	}
 
 	public function id(): String {
 		return RULE_ID;
@@ -149,7 +157,7 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = readSeams(plugin, files);
+		final seams: Null<Seams> = readSeams(plugin, files, _resolveConfig);
 		return seams == null ? [] : [
 			for (entry in files) for (m in matchesIn(entry.file, entry.source, plugin, seams))
 				{
@@ -166,7 +174,7 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final file: String = violations.length == 0 ? '' : violations[0].file;
-		final seams: Null<Seams> = readSeams(plugin, [{ file: file, source: source }], index);
+		final seams: Null<Seams> = readSeams(plugin, [{ file: file, source: source }], _resolveConfig, index);
 		if (seams == null) return [];
 		final byKey: Map<String, Match> = [];
 		for (m in matchesIn(file, source, plugin, seams)) byKey['${m.ifSpan.from}:${m.ifSpan.to}'] = m;
@@ -202,7 +210,7 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 	 * `files` / `report` scope the negation read's operator table (`NegatedCondition.readSeams`).
 	 */
 	private static function readSeams(
-		plugin: GrammarPlugin, files: Array<{ file: String, source: String }>, ?report: SymbolIndex
+		plugin: GrammarPlugin, files: Array<{ file: String, source: String }>, config: Null<(String) -> LintConfig>, ?report: SymbolIndex
 	): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
 		final ifKinds: Array<String> = shape.ifStatementKinds ?? [];
@@ -233,7 +241,7 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 			// plus the method / module-level declarations, which are not function VALUES.
 			fnKinds: (shape.functionKinds ?? []).concat(nestedFnKinds),
 			blockKinds: support.blockKinds(),
-			negation: NegatedCondition.readSeams(plugin, files, report),
+			negation: NegatedCondition.readSeams(plugin, files, config, report),
 			shape: shape
 		};
 	}
@@ -298,8 +306,7 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 			edit: blocked
 				? null
 				: NegatedCondition.ternaryEdit(
-					new Span(ifSpan.from, retSpan.to), 'return ', condition, source.substring(rhsSpan.from, rhsSpan.to),
-					source.substring(retIdentSpan.from, retIdentSpan.to), ';', source, site
+					new Span(ifSpan.from, retSpan.to), 'return ', condition, rhs, returned.retIdent, ';', source, site
 				)
 		};
 	}

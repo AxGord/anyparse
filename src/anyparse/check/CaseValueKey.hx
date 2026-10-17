@@ -97,6 +97,17 @@ final class CaseValueKey {
 	}
 
 	/**
+	 * Whether a literal of node kind `kind` written as `text` is a DEFAULT value — `null`, `false`, a
+	 * numeric zero in any spelling `of` reads (`0`, `0.0`, `0x0`, `-0`), an empty string (`""`, `''`) —
+	 * the value a choice falls back to rather than the one it computes. Proved through `of`: a spelling
+	 * it does not read (`0i32`, a member constant) is no default.
+	 */
+	public static function isDefaultLiteral(kind: String, text: String, seams: CaseValueSeams): Bool {
+		final key: Null<String> = of(kind, text, seams);
+		return key == NULL_KEY || key == '${BOOL_PREFIX}false' || key == numberKey(0) || key == STRING_PREFIX;
+	}
+
+	/**
 	 * The value key of `member`, declared by `type`: its initializer's (`of`), or the implicit value
 	 * of an uninitialized enum-abstract value, or null when neither is provable.
 	 */

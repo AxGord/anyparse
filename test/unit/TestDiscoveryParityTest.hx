@@ -1492,6 +1492,18 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ImpossibleCastTest#testUnrelatedClassesFlagged :: control :: M-UNRELATED-FALSE',
 			'unit.check.ImpossibleIsCheckTest#testUnrelatedClassesFlagged :: control :: M-UNRELATED-FALSE',
 			'unit.check.InvertNegatedIfElseCheckTest#testIfExpressionElseIfChainNotFlagged :: control :: M-INVERT-VALUE-CHAIN-SWAPPED',
+			'unit.check.InvertNegatedIfElseCheckTest#testKeepDefaultElseInvertsANonDefaultElse :: control :: '
+				+ 'M-NEGCOND-KEEP-DEFAULT-ANY-LITERAL,M-INVERT-KEEP-DEFAULT-STATEMENT-THEN-ARM,'
+				+ 'M-INVERT-KEEP-DEFAULT-STATEMENT-EDIT-THEN-ARM,M-INVERT-KEEP-DEFAULT-VALUE-THEN-ARM,'
+				+ 'M-INVERT-KEEP-DEFAULT-VALUE-EDIT-THEN-ARM',
+			'unit.check.InvertNegatedIfElseCheckTest#testKeepDefaultElseIsOffByDefault :: control :: M-NEGCOND-KEEP-DEFAULT-ON',
+			'unit.check.InvertNegatedIfElseCheckTest#testKeepDefaultElseKeepsADefaultIfExpressionElse :: control :: '
+				+ 'M-NEGCOND-KEEP-DEFAULT-BLIND',
+			'unit.check.InvertNegatedIfElseCheckTest#testKeepDefaultElseKeepsADefaultTernaryElse :: control :: '
+				+ 'M-NEGCOND-KEEP-DEFAULT-BLIND,M-NEGCOND-KEEP-DEFAULT-NO-PAREN,M-DEFLIT-NULL-DROPPED,M-DEFLIT-FALSE-DROPPED,'
+				+ 'M-DEFLIT-ZERO-DROPPED,M-DEFLIT-EMPTY-STRING-DROPPED',
+			'unit.check.InvertNegatedIfElseCheckTest#testKeepDefaultElseKeepsAStatementReturningADefault :: control :: '
+				+ 'M-NEGCOND-KEEP-DEFAULT-NO-RETURN,M-NEGCOND-KEEP-DEFAULT-NO-BLOCK',
 			'unit.check.InvertNegatedIfElseCheckTest#testNegatedTernaryAssignmentOperandKeepsParen :: control :: M-INVERT-VALUE-UNGUARDED',
 			'unit.check.InvertNegatedIfElseCheckTest#testNegatedTernaryFixed :: control :: M-INVERT-VALUE-LOOSE-SPAN',
 			'unit.check.InvertNegatedIfElseCheckTest#testNegatedTernaryOperandParenDrops :: control :: M-NEGCOND-PAREN-KEPT',
@@ -2086,10 +2098,16 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PreferTernaryAssignmentCheckTest#testDeclNegatedConditionEmitsPositiveTernary :: control :: M-PTA-NO-ORIENT',
 			'unit.check.PreferTernaryAssignmentCheckTest#testDeclNullNarrowingBoolNotFlagged :: control :: M-DECLTERN-NARROWING',
 			'unit.check.PreferTernaryAssignmentCheckTest#testDeclNullPassThroughWritesTheValue :: control :: M-PASSTHROUGH-TERNARY',
+			'unit.check.PreferTernaryAssignmentCheckTest#testKeepDefaultElseKeepsTheNegatedAssignment :: control :: '
+				+ 'M-NEGCOND-KEEP-DEFAULT-BLIND,M-NEGCOND-KEEP-DEFAULT-THEN-ARM',
 			'unit.check.PreferTernaryAssignmentCheckTest#testMutatingPassThroughKeepsTheTernary :: control :: M-NULLPASS-MUTATES',
 			'unit.check.PreferTernaryAssignmentCheckTest#testNegatedConditionEmitsPositiveTernary :: control :: M-PTA-NO-ORIENT,M-NEGCOND-SWAP-OFF',
 			'unit.check.PreferTernaryAssignmentCheckTest#testNullPassThroughAssignmentWritesTheValue :: control :: M-PASSTHROUGH-TERNARY',
+			'unit.check.PreferTernaryExpressionCheckTest#testKeepDefaultElseKeepsTheNegatedIfExpression :: control :: '
+				+ 'M-NEGCOND-KEEP-DEFAULT-BLIND,M-NEGCOND-KEEP-DEFAULT-THEN-ARM',
 			'unit.check.PreferTernaryExpressionCheckTest#testNegatedConditionEmitsPositiveTernary :: control :: M-PTE-NO-ORIENT,M-NEGCOND-SWAP-OFF',
+			'unit.check.PreferTernaryReturnCheckTest#testKeepDefaultElseKeepsTheNegatedGuard :: control :: '
+				+ 'M-NEGCOND-KEEP-DEFAULT-BLIND,M-PTR-KEEP-DEFAULT-THEN-ARM',
 			'unit.check.PreferTernaryReturnCheckTest#testNegatedGuardEmitsPositiveTernary :: control :: M-PTR-NO-ORIENT',
 			'unit.check.PreferTernaryReturnCheckTest#testNegatedGuardTrailingCommentKeepsNegation :: control :: M-PTR-TRAILING-SWAPS',
 			'unit.check.PreferTernaryReturnCheckTest#testOwnLineCommentInACascadeDefersTheTail :: control :: '
@@ -7584,7 +7602,23 @@ class TestDiscoveryParityTest extends Test {
 			'M-NAMING-FOREIGN-UNBOUND',
 			'M-NAMING-OUTSIDE-SCOPE-IGNORED',
 			'M-PRIVATIZE-FOREIGN-IGNORED',
-			'M-NAMING-FOREIGN-LOSES-TO-BARE'
+			'M-NAMING-FOREIGN-LOSES-TO-BARE',
+			'M-NEGCOND-KEEP-DEFAULT-BLIND',
+			'M-NEGCOND-KEEP-DEFAULT-ON',
+			'M-NEGCOND-KEEP-DEFAULT-NO-RETURN',
+			'M-NEGCOND-KEEP-DEFAULT-NO-BLOCK',
+			'M-NEGCOND-KEEP-DEFAULT-NO-PAREN',
+			'M-NEGCOND-KEEP-DEFAULT-ANY-LITERAL',
+			'M-NEGCOND-KEEP-DEFAULT-THEN-ARM',
+			'M-PTR-KEEP-DEFAULT-THEN-ARM',
+			'M-INVERT-KEEP-DEFAULT-STATEMENT-THEN-ARM',
+			'M-INVERT-KEEP-DEFAULT-STATEMENT-EDIT-THEN-ARM',
+			'M-INVERT-KEEP-DEFAULT-VALUE-THEN-ARM',
+			'M-INVERT-KEEP-DEFAULT-VALUE-EDIT-THEN-ARM',
+			'M-DEFLIT-NULL-DROPPED',
+			'M-DEFLIT-FALSE-DROPPED',
+			'M-DEFLIT-ZERO-DROPPED',
+			'M-DEFLIT-EMPTY-STRING-DROPPED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

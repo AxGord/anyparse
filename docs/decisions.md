@@ -3810,6 +3810,23 @@ decided the question; it may not become a record of runs.
   active + full-scope union. `no-underscore-prefix` supersedes `naming` (it is opted into and its options state the stance
   on exactly these bindings). No collision-free alternative name is invented: the finding stays report-only with the
   reason — branch `feat/infra-N26`
+- N33 — `invert-negated-if-else` turned `!hasNext ? _changeEvent : null` into `hasNext ? null : _changeEvent` (TM
+  `RequestDrillsAccessDialog`), burying the meaningful value behind the fallback. → option `keepDefaultElse` (default
+  OFF, so no project changes silently): a negated choice whose CURRENT else arm is a default literal is neither reported
+  nor rewritten. Decisions: (1) ONE gate, `NegatedCondition.invertibleOperand(cond, elseArm, site)` (and `positive`, which
+  adds the comment check over it), asked with the else arm by the ternary, the value `if`, the `if` statement AND the four
+  ternary builders (`ternaryEdit` takes the two value NODES now) — the builders orient `if (!c) return v; return null;`
+  the same way the swap would, so they read the same option, spelled under `invert-negated-if-else`; `negatedOperand`
+  became private, so no reader can bypass it. (2) "Default literal" is `CaseValueKey.isDefaultLiteral` — the value key the
+  switch rules already prove (`null`, `false`, a number whose value is 0 in a spelling `of` reads: `0`, `0.0`, `0x0`,
+  `-0`; a string with empty content, either quote), parentheses unwrapped; a spelling it does not read (`0i32`, a named
+  constant) is no default — fail-closed, the choice is then inverted as before. (3) Statement form: the else branch counts
+  only as `return <default>;`, bare or the sole statement of a block; `else y = null;`, `else null;` are no default arm.
+  (4) Only the ELSE arm counts: `!x ? null : v` still inverts, which moves the default last — the option's own goal.
+  (5) The config is read lazily per file, and only for a default arm, so a file without one never resolves it.
+  Not routed: `double-negation` / `simplify-negated-compound` never swap branches (they rewrite the condition in place),
+  and the guard inverters (`guard-return` / `guard-continue`) ADD a negation to build an early exit, which is a different
+  reordering — branch `feat/infra-N33`
 - N24 (a) — `prefer-keyvalue-loop` declined 30 anyparse loops (52 with `--no-oracle`) on "code at hxnodejs
   Writable.hx:350 may change it", though no call path leads there: `WritableNewOptionsAdapter.from` is an `@:from` of an
   abstract, admitted wherever code read by its syntax runs (`ReachGraph.alwaysIds`) once the abstract is in reach. It was
