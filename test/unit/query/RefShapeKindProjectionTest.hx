@@ -302,6 +302,70 @@ final class RefShapeKindProjectionTest extends Test {
 				after: ' class C {}'
 			},
 			{
+				field: 'nameInertTypeMetaNames',
+				slot: '0',
+				kind: 'Meta',
+				names: NAME_IS,
+				before: '',
+				after: ' class C {}'
+			},
+			{
+				field: 'nameInertTypeMetaNames',
+				slot: '1',
+				kind: 'Meta',
+				names: NAME_IS,
+				before: '',
+				after: ' class C {}'
+			},
+			{
+				field: 'nameInertTypeMetaNames',
+				slot: '2',
+				kind: 'Meta',
+				names: NAME_IS,
+				before: '',
+				after: ' class C {}'
+			},
+			{
+				field: 'nameInertTypeMetaNames',
+				slot: '3',
+				kind: 'Meta',
+				names: NAME_IS,
+				before: '',
+				after: ' class C {}'
+			},
+			{
+				field: 'nameInertTypeMetaNames',
+				slot: '4',
+				kind: 'Meta',
+				names: NAME_IS,
+				before: '',
+				after: ' class C {}'
+			},
+			{
+				field: 'nameInertTypeMetaNames',
+				slot: '5',
+				kind: 'Meta',
+				names: NAME_IS,
+				before: '',
+				after: ' class C {}'
+			},
+			{
+				field: 'nameInertTypeMetaNames',
+				slot: '6',
+				kind: 'Meta',
+				names: NAME_IS,
+				before: '',
+				after: ' class C {}'
+			},
+			{
+				field: 'nameInertTypeMetaNames',
+				slot: '7',
+				kind: 'Meta',
+				names: NAME_IS,
+				before: '',
+				after: ' class C {}'
+			},
+			{
 				field: 'implicitConstructorDeclMetaName',
 				slot: '',
 				kind: 'Meta',

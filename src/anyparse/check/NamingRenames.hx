@@ -93,7 +93,7 @@ final class NamingRenames {
 		if (span == null || !flaggedFroms.contains(span.from)) return null;
 		final declFrom: Int = span.from;
 		final unsafe: Null<String> = RenameRefusal.of(
-			decl, source, confinementIndex, reflectionNames, confinedMemo, memberGrants(tree, source, plugin, decl)
+			decl, source, confinementIndex, reflectionNames, confinedMemo, memberGrants(tree, source, plugin, decl), file
 		);
 		if (unsafe != null) return RenameRefusal.rename(flaggedAt, declFrom, unsafe);
 		final rule: Null<NamingRule> = Naming.applicableRule(decl, policy);
@@ -312,7 +312,7 @@ final class NamingRenames {
 		// with `NOT_CONFINED` as its decline reason) and can never both claim it. The gap is the safe
 		// direction; the overlap, which is the one that writes twice, is structurally impossible.
 		final grants: Null<Array<String>> = memberGrants(tree, source, plugin, decl);
-		if (!isPublic && RefactorSupport.isPrivateMemberConfined(ownerName, decl.name, source, index, grants)) return null;
+		if (!isPublic && RefactorSupport.isPrivateMemberConfined(ownerName, decl.name, source, index, grants, declFile)) return null;
 		// No reflection guard here, deliberately. `RenameRefusal.of`'s exists because the single-file path
 		// never looks at another file; this path DOES - a public member's affected set is every scope file
 		// mentioning the name (`publicAffectedFiles`), and `otherFileRenameSpans` already refuses on a
@@ -1499,9 +1499,12 @@ class RenameRefusal {
 	public static inline final RENAME_UNSAFE: String =
 		'the grammar marked this declaration rename-unsafe — its identifier is a wire / accessor / `@:rtti` contract that a rewrite of the declaration alone cannot honour';
 
-	/** A Type / EnumValue: no member-confinement proof applies, so the in-file rename never owns it. */
+	/**
+	 * A Type / EnumValue: no member-confinement proof applies, so neither member rename owns it — its fix is
+	 * `NamingCrossRename`'s compiler-verified arm, which states its own reason when it declines.
+	 */
 	public static inline final NOT_A_MEMBER: String =
-		'only a member (field / constant / method) has a confinement proof, and this declaration is not one — a type or enum-value rename reaches every file that names it';
+		'a type or enum-value rename reaches every file that names it, so only the cross-file `rename --scope` arm can fix it — applied only through the compiler oracle';
 
 	/** A public member: reachable from anywhere holding a value of the owner's type. */
 	public static inline final PUBLIC_MEMBER: String =
@@ -1762,7 +1765,7 @@ class RenameRefusal {
 	 */
 	public static function of(
 		decl: NamedDecl, source: String, confinementIndex: Null<SymbolIndex>, reflectionNames: Array<String>,
-		confinedMemo: Map<String, Bool>, ?grants: Null<Array<String>>
+		confinedMemo: Map<String, Bool>, ?grants: Null<Array<String>>, ?file: String
 	): Null<String> {
 		// A declaration the grammar marked rename-unsafe (a typedef / anon-structure
 		// field whose name is a wire contract, or a property backed by physical
@@ -1818,7 +1821,7 @@ class RenameRefusal {
 		final memoKey: String = '$owner\t${decl.name}';
 		final cached: Null<Bool> = confinedMemo[memoKey];
 		if (cached != null) return cached ? null : NOT_CONFINED;
-		final confined: Bool = RefactorSupport.isPrivateMemberConfined(owner, decl.name, source, confinementIndex, grants);
+		final confined: Bool = RefactorSupport.isPrivateMemberConfined(owner, decl.name, source, confinementIndex, grants, file);
 		confinedMemo[memoKey] = confined;
 		return confined ? null : NOT_CONFINED;
 	}

@@ -205,6 +205,10 @@ interface RiskyFix {}
  * The first consumer is `naming`'s privatize arm: a public `_x` nothing outside its type reads is
  * made private rather than renamed, and that verdict rests on a NEGATIVE whole-project gate list,
  * exactly the reason `unused-public-member`'s deletions are `RiskyFix`.
+ *
+ * An arm can also be CROSS-FILE (`riskyCrossFileFix`): each answer is one atomic multi-file edit set,
+ * which the verifier writes, typechecks and reverts as a whole. `naming`'s type / enum-value rename is
+ * the consumer: its occurrence set comes from `rename --scope`, whose misses are compile errors.
  */
 interface RiskyArm {
 
@@ -219,6 +223,21 @@ interface RiskyArm {
 	public function riskyFix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }>;
+
+	/**
+	 * The subset of `violations` whose fix is the risky CROSS-FILE arm — disjoint from
+	 * `riskyArmFindings`, so the verifier tallies each finding under exactly one arm.
+	 */
+	public function riskyCrossFileFindings(violations: Array<Violation>): Array<Violation>;
+
+	/**
+	 * The cross-file arm's edit sets for `violations` (its own findings, over every file of `files`), one per finding it
+	 * can fix; a finding it refuses carries the reason in `Violation.declineReason`. Every set is relative to `files`' current
+	 * sources and touches only files among them.
+	 */
+	public function riskyCrossFileFix(
+		files: Array<{ file: String, source: String }>, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<RiskyCrossFileEdit>;
 
 }
 
@@ -416,6 +435,12 @@ typedef CrossFileEdits = {
 	 * that no edit list can express. `edits` must be empty beside it.
 	 */
 	@:optional final create: Null<String>;
+};
+
+/** One edit set of a cross-file `RiskyArm`: the finding it fixes and its per-file slices, verified and reverted as one. */
+typedef RiskyCrossFileEdit = {
+	final violation: Violation;
+	final slices: Array<CrossFileEdits>;
 };
 
 /**

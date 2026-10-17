@@ -956,6 +956,18 @@ final class HaxeRefShape {
 			// `class PercentSize extends MonoBehaviour` with no annotation.
 			nativeInteropDeclMetaName: '@:nativeGen',
 			enumAbstractSyntax: { head: 'enum abstract {name}({under}) to {under}', bodyOpen: '{' },
+			compileTimeTypeDeclKinds: ['TypedefDecl', 'AbstractDecl', 'EnumAbstractDecl'],
+			indexValuedEnumAbstractUnderlyings: ['Int'],
+			nameInertTypeMetaNames: [
+				'@:forward',
+				'@:forwardStatics',
+				'@:transitive',
+				'@:nullSafety',
+				'@:enum',
+				'@:noCompletion',
+				'@:noDoc',
+				'@:callable'
+			],
 			rawDynamicTypeName: 'Dynamic',
 			bareConstructorTypeKinds: ['EnumDecl', 'EnumAbstractDecl'],
 			runtimeTaggedTypeKinds: ['EnumDecl'],

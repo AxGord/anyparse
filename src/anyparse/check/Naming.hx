@@ -5,6 +5,7 @@ import anyparse.check.Check.CrossFileEdits;
 import anyparse.check.Check.CrossFileFix;
 import anyparse.check.Check.FrameworkAware;
 import anyparse.check.Check.RiskyArm;
+import anyparse.check.Check.RiskyCrossFileEdit;
 import anyparse.check.Check.Violation;
 import anyparse.check.ConstantHoist.Hoist;
 import anyparse.check.NamingPrivatize.PrivatizeCandidate;
@@ -88,6 +89,13 @@ final class Naming implements Check implements CrossFileFix implements RiskyArm 
 	 */
 	private var _privatized: Map<String, Privatized> = [];
 
+	/**
+	 * The findings of the latest `run` whose fix is the cross-file rename arm (`NamingCrossRename`), keyed like
+	 * `_privatized`: a type or an enum value. Only candidacy is decided there — it reads the declaration alone —
+	 * and every gate is asked by `riskyCrossFileFix`, which only a compiler-oracle run reaches.
+	 */
+	private var _crossRenamed: Array<String> = [];
+
 	public function new() {}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
@@ -106,6 +114,7 @@ final class Naming implements Check implements CrossFileFix implements RiskyArm 
 		final contracts: Array<FrameworkContract> = LintConfig.frameworksFor(_resolveConfig, files);
 		final indexOf: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		final privatizable: Array<PrivatizeCandidate> = [];
+		final crossRenamed: Array<String> = [];
 		final out: Array<Violation> = RunScan.collectWith(files, plugin, plugin.namingSupport(), (entry, tree, support, violations) -> {
 			// The values of an enum abstract written `@:enum` (or through the `#if` version guard)
 			// project as fields of a plain abstract, where the FIELD naming rule governs them — and an
@@ -124,6 +133,7 @@ final class Naming implements Check implements CrossFileFix implements RiskyArm 
 				final at: Null<Span> = v.span;
 				final decl: Null<NamedDecl> = at == null ? null : byStart[at.from];
 				violations.push(v);
+				if (decl != null && at != null && NamingCrossRename.isCandidate(decl)) crossRenamed.push(CheckScan.spanKey(entry.file, at));
 				if (decl == null || !NamingPrivatize.isCandidate(decl, policy)) continue;
 				// Re-bound: strict null-safety does not narrow inside a struct literal.
 				final candidate: NamedDecl = decl;
@@ -136,6 +146,7 @@ final class Naming implements Check implements CrossFileFix implements RiskyArm 
 			}
 		});
 		_privatized = NamingPrivatize.verdicts(privatizable, files, plugin);
+		_crossRenamed = crossRenamed;
 		for (v in out) {
 			final arm: Null<Privatized> = privatizedOf(v);
 			if (arm != null) v.message += ' — nothing outside ${arm.owner} reads it, so the fix makes it private';
@@ -327,6 +338,22 @@ final class Naming implements Check implements CrossFileFix implements RiskyArm 
 		return [for (v in violations) if (privatizedOf(v) != null) v];
 	}
 
+	public function riskyCrossFileFindings(violations: Array<Violation>): Array<Violation> {
+		return [for (v in violations) if (crossRenamedBy(v)) v];
+	}
+
+	/** The cross-file rename arm (`NamingCrossRename`): one atomic edit set per type / enum value its gates admit. */
+	public function riskyCrossFileFix(
+		files: Array<{ file: String, source: String }>, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<RiskyCrossFileEdit> {
+		final support: Null<NamingSupport> = plugin.namingSupport();
+		if (support == null) {
+			for (v in violations) RenameRefusal.note(v, RenameRefusal.NO_SUPPORT);
+			return [];
+		}
+		return NamingCrossRename.edits(files, violations, plugin, support);
+	}
+
 	/** The privatize arm: each finding `run` proved confined gets its `public` keyword rewritten to `private`. */
 	public function riskyFix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
@@ -393,6 +420,12 @@ final class Naming implements Check implements CrossFileFix implements RiskyArm 
 		if (!defersToAnAcceptedRename(rename, edits, claims, owner, index)) return false;
 		if (declSpan != null) RenameRefusal.note(flaggedAt[declSpan.from], RenameRefusal.NAME_CLAIMED);
 		return true;
+	}
+
+	/** Whether `run` gave `v` to the cross-file rename arm. */
+	private function crossRenamedBy(v: Violation): Bool {
+		final s: Null<Span> = v.span;
+		return s != null && _crossRenamed.contains(CheckScan.spanKey(v.file, s));
 	}
 
 	/** The privatize arm's verdict for `v`, or null when its fix is the rename. */

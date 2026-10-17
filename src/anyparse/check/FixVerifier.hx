@@ -297,9 +297,8 @@ private enum EntryVerdict {
  * safe complement is confirm-typechecked and written, only the failer(s) revert.
  * Search PROBES per file are capped at `2*ceil(log2(N))`, each of which may cost one compile per
  * covering configuration; beyond the cap the file falls back to a
- * whole-file revert. Cross-file risky checks are out of scope — the intended
- * consumers (avoid-dynamic / prefer-inline and other targeted rewrites) are
- * single-file.
+ * whole-file revert. A `RiskyArm`'s CROSS-FILE edit sets (`riskyCrossFileFix`) are the one
+ * multi-file unit: they are judged after its per-file arm, as wholes, by `FixVerifierCrossFile`.
  *
  * Stateless and free of global mutable state (the invariant): all state is the
  * caller's `files`/disk plus locals; `write` is the caller's own file sink so the
@@ -500,18 +499,33 @@ final class FixVerifier {
 				});
 			}
 		}
-		return {
-			baseline: baseline,
-			applied: applied,
-			appliedEdits: appliedEdits,
-			reverted: reverted,
-			partials: partials,
-			declined: declined,
-			coverageUnknown: null,
-			coverage: coverageMemo.probes,
-			excluded: excluded,
-			tallies: tallies
-		};
+		// The CROSS-FILE arms, after every per-file one: their edit sets span several files, so they are judged as
+		// wholes, over the sources the per-file arms left (`FixVerifierCrossFile.extend`).
+		return FixVerifierCrossFile.extend(
+			{
+				baseline: baseline,
+				applied: applied,
+				appliedEdits: appliedEdits,
+				reverted: reverted,
+				partials: partials,
+				declined: declined,
+				coverageUnknown: null,
+				coverage: coverageMemo.probes,
+				excluded: excluded,
+				tallies: tallies
+			},
+			{
+				checks: riskyChecks,
+				plugin: plugin,
+				opts: optsByFile,
+				memo: coverageMemo,
+				judging: judging,
+				write: write,
+				resolveConfig: resolveConfig,
+				applyEnablement: applyEnablement
+			},
+			files
+		);
 	}
 
 	/**
