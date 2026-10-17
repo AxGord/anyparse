@@ -134,8 +134,9 @@ final class WriterFieldSepLowering {
 		// and after nothing else. A curly branch takes `flagBased`, where
 		// `SameOnBlock` falls through the default to a plain space — the `} else`
 		// join the policy is named for. A bracket branch takes the sibling switch,
-		// where `SameOnBlock` routes to `keepExpr` and the source keeps its own
-		// shape: gluing a `]` is house style, owned by the opt-in
+		// where `SameOnBlock` breaks as it does after a non-block branch: the body
+		// policy places a `[ … ]` like any value, so its `]` closes one indent
+		// deeper, and gluing it is house style, owned by the opt-in
 		// `bracketBodyGlueIfFlag` knob layered outside this separator, not a
 		// structural fact about the close. Every other `SameLinePolicy` value
 		// reaches both arms through the same `buildPolicySwitch` cases as before,
@@ -233,25 +234,28 @@ final class WriterFieldSepLowering {
 		// space), since with the branch policy forced to `Same` the shape-aware
 		// arm is suppressed and the space would leave the chain unbreakable.
 		// omega-value-if-fit reuses the seam, with ONE extra refusal the arrow knob does not need: a
-		// BLOCK previous body. A block-branch chain (`return if (c) { … } else if (d) { … }`) can
-		// never collapse to one line, so the soft gap buys nothing there and costs the `} else` glue
-		// `shapeAware` computes -- the chain would come back as `}` / `else if (…) {` on two lines.
-		// The arrow knob keeps its unconditional override in BOTH arms, so its output is unchanged.
-		return child.fmtHasFlag(WriterLowering.ARROW_VALUE_IF_SITE) ? valueIfFitSeam(ctx, prevBodyField, sepExpr) : sepExpr;
+		// CURLY block previous body. A block-branch chain (`return if (c) { … } else if (d) { … }`)
+		// can never collapse to one line, so the soft gap buys nothing there and costs the `} else`
+		// glue `shapeAware` computes -- the chain would come back as `}` / `else if (…) {` on two
+		// lines. A `[ … ]` branch owns no such glue unless the bracket knob hugs it (`glueTest`), so it
+		// answers the fit question like any other value. The arrow knob keeps its unconditional
+		// override in every arm, so its output is unchanged.
+		return child.fmtHasFlag(WriterLowering.ARROW_VALUE_IF_SITE) ? valueIfFitSeam(ctx, prevBodyField, sepExpr, glueTest) : sepExpr;
 	}
 
 	/**
 	 * The pre-`else` gap of an `arrowValueIfReflowSite`: a soft `Line(" ")` under either re-flow gate,
 	 * so the chain has ONE break axis its enclosing `Group` decides. `_vifFit` is ignored when the
-	 * PREVIOUS body is a block ctor -- see the call site; `_aifReflow` overrides in both arms, which
-	 * is what keeps the arrow knob byte-identical.
+	 * PREVIOUS body is a curly block ctor, or a `[ … ]` body the bracket knob glues (`glueTest`) -- see the
+	 * call site; `_aifReflow` overrides in both arms, which is what keeps the arrow knob byte-identical.
 	 */
-	private static function valueIfFitSeam(ctx: FieldSepCtx, prevBody: Null<PrevBodyInfo>, sepExpr: Expr): Expr {
-		final blockPatterns: Array<Expr> = prevBody == null ? [] : collectBlockCtorPatterns(ctx.ctorPat, prevBody.typePath);
-		if (blockPatterns.length == 0) return macro (_aifReflow || _vifFit ? _dl() : $sepExpr);
+	private static function valueIfFitSeam(ctx: FieldSepCtx, prevBody: Null<PrevBodyInfo>, sepExpr: Expr, glueTest: Null<Expr>): Expr {
+		final fitGate: Expr = glueTest == null ? macro _vifFit : macro (_vifFit && !$glueTest);
+		final curlyPatterns: Array<Expr> = prevBody == null ? [] : collectCurlyBlockCtorPatterns(ctx.ctorPat, prevBody.typePath);
+		if (curlyPatterns.length == 0) return macro (_aifReflow || $fitGate ? _dl() : $sepExpr);
 		final cases: Array<Case> = [
-			{ values: blockPatterns, expr: macro (_aifReflow ? _dl() : $sepExpr), guard: null },
-			{ values: [macro _], expr: macro (_aifReflow || _vifFit ? _dl() : $sepExpr), guard: null }
+			{ values: curlyPatterns, expr: macro (_aifReflow ? _dl() : $sepExpr), guard: null },
+			{ values: [macro _], expr: macro (_aifReflow || $fitGate ? _dl() : $sepExpr), guard: null }
 		];
 		return { expr: ESwitch(prevBody.access, cases, null), pos: Context.currentPos() };
 	}

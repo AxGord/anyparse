@@ -971,13 +971,13 @@ final class HaxeFormatConfigLoader {
 		// defaults to `Same`) — one construct, two layouts, decided by
 		// value-vs-statement position alone.
 		//
-		// `SameOnBlock` is `Same` after a CURLY close and byte-identical
-		// to `Keep` after everything else, so the two shapes that were
-		// already right stay right: a non-block branch (object literal,
+		// `SameOnBlock` is `Same` after a CURLY close and `Next` after
+		// everything else: a non-block branch (object literal,
 		// `macro { … }`, a bare value) keeps the forced break the
-		// `@:fmt(shapeAware)` switch gives it, and a BRACKET-block branch
-		// keeps its source shape — mapping `next` onto a plain `Same`
-		// instead glues `[] else {` and `['--code', staged]; else if (…)`.
+		// `@:fmt(shapeAware)` switch gives it, and so does a BRACKET-block
+		// branch, whose `]` the `next` layout closes one indent deeper —
+		// mapping `next` onto a plain `Same` instead glues `[] else {` and
+		// `['--code', staged]; else if (…)`.
 		// `Same` and `Keep` map directly. `FitLine` falls through to
 		// `Same` (no SameLinePolicy counterpart).
 		opt.sameLineExpressionElse = switch p {

@@ -864,6 +864,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.grammar.haxe.HxTypedefSemiSliceTest',
 		'unit.grammar.haxe.HxUniformStatementBlanksSliceTest',
 		'unit.grammar.haxe.HxUntypedBodyPolicySliceTest',
+		'unit.grammar.haxe.HxValueIfBracketElseBreakSliceTest',
 		'unit.grammar.haxe.HxValueIfBracketHugSliceTest',
 		'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest',
 		'unit.grammar.haxe.HxValueIfElseTrailCommentWriteTest',
@@ -3004,6 +3005,17 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-SSB-TRY-DEBRACE-NONE,M-SSB-TRY-SUBST-OFF',
 			'unit.grammar.haxe.HxTryBraceSymmetrySliceTest#testValueTryBracesTheBareBody :: control :: '
 				+ 'M-TRY-BODY-SYM-OFF,M-SSB-TRY-SUBST-OFF',
+			'unit.grammar.haxe.HxValueIfBracketElseBreakSliceTest#testAFittingBracketLadderCollapses :: control :: '
+				+ 'M-VIF-SEAM-BRACKET-REFUSED',
+			'unit.grammar.haxe.HxValueIfBracketElseBreakSliceTest#testAFittingBracketPairStaysFlat :: guard :: ',
+			'unit.grammar.haxe.HxValueIfBracketElseBreakSliceTest#testAFlatBracketChainBreaksBeforeEveryElse :: control :: '
+				+ 'M-NONCURLY-SAME-DROP',
+			'unit.grammar.haxe.HxValueIfBracketElseBreakSliceTest#testAWideBracketPairBreaksIntoTheLadder :: guard :: ',
+			'unit.grammar.haxe.HxValueIfBracketElseBreakSliceTest#testOverTheBranchCapTheFitKnobKeepsTheLadder :: control :: '
+				+ 'M-NONCURLY-SAME-DROP',
+			'unit.grammar.haxe.HxValueIfBracketElseBreakSliceTest#testTheLadderIsAFixedPoint :: guard :: ',
+			'unit.grammar.haxe.HxValueIfBracketElseBreakSliceTest#testUnderTheHugTheGluedCloseKeepsItsElse :: control :: '
+				+ 'M-VIF-SEAM-GLUE-BLIND',
 			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testAnArrayLiteralBranchHugsTheHead :: control :: M-BRACKET-GLUE-NONE',
 			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testTheKeepTargetLayoutIsIdempotent :: guard :: ',
 			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testTheReportedComprehensionReachesTheTargetLayout :: control :: '
@@ -4289,6 +4301,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-TRY-BODY-SYM-OFF',
 			'M-TRY-CATCHES-SYM-OFF',
 			'M-NONCURLY-SAME-DROP',
+			'M-VIF-SEAM-BRACKET-REFUSED',
+			'M-VIF-SEAM-GLUE-BLIND',
 			'M-NEWLINE-SIGNALS-NONE',
 			'M-WORDOP-NO-RESTORE',
 			'M-BLANK-MULTILINE-OFF',
@@ -7032,6 +7046,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-TRY-BODY-SYM-OFF :: anyparse.macro.WriterBraceSymmetryLowering#tryBraceSymmetryWrap',
 			'M-TRY-CATCHES-SYM-OFF :: anyparse.macro.WriterBraceSymmetryLowering#tryCatchesSymmetryWrap',
 			'M-NONCURLY-SAME-DROP :: anyparse.macro.WriterPolicyLowering#sameLineNonCurlyBlockPolicySwitch',
+			'M-VIF-SEAM-BRACKET-REFUSED :: anyparse.macro.WriterFieldSepLowering#valueIfFitSeam',
+			'M-VIF-SEAM-GLUE-BLIND :: anyparse.macro.WriterFieldSepLowering#valueIfFitSeam',
 			'M-NEWLINE-SIGNALS-NONE :: anyparse.macro.WriterTriviaSlotLowering#collectFollowingNewlineSignals',
 			'M-WORDOP-NO-RESTORE :: anyparse.macro.OperatorLoopLowering#buildWordOpRestoreExpr',
 			'M-BLANK-MULTILINE-OFF :: anyparse.macro.WriterBlankLowering#blankAroundMultilineExprs',

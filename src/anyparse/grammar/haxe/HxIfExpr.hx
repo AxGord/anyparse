@@ -29,7 +29,7 @@ package anyparse.grammar.haxe;
  * `thenBranch` under `Next` / `FitLine` forces a hardline before `else`; a block-shape `thenBranch` keeps a
  * flag-driven separator, split by delimiter — a CURLY close reads `sameLinePolicySwitch` (`SameOnBlock` falls
  * through to a space, so `} else {` cuddles), a BRACKET close reads `sameLineNonCurlyBlockPolicySwitch`
- * (`SameOnBlock` routes to `Keep`, so gluing `]` stays `expressionIfWithBrackets`'s job).
+ * (`SameOnBlock` breaks there like after a non-block branch, so gluing `]` stays `expressionIfWithBrackets`'s job).
  * `@:fmt(elseSwitch(...))` on BOTH branches is the value twin of the statement form's meta (see `HxIfStmt`).
  * `@:fmt(elseIf)` on `elseBranch` routes an `else if` chain through `opt.elseIf` instead of
  * `expressionElseBody`. `@:fmt(noSiblingFallback('ifBody'))` on `thenBranch` swaps `opt.expressionIfBody` for

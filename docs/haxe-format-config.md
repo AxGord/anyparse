@@ -531,6 +531,15 @@ itself, whose `next` resolves the pre-`else` gap to `SameOnBlock`. So a value-`i
 branches hugs its head and cuddles its `else` under `same` and `next` with or without
 `expressionIfWithBlocks`.
 
+WITHOUT the knob a bracket branch is an ordinary value: `next` puts it on its own line one indent
+deeper, so its `]` is never in the `else`'s column, and `SameOnBlock` breaks before the `else` after
+a `]` exactly as it does after any non-curly branch (`if (a)` / `[1]` / `else if (b)` / `[]` / `else`
+/ `[2];`). It used to read the source's own break there instead, which glued `[1] else if (b)` /
+`[] else` onto a flat source and kept the break of one typed broken. Under `expressionIfFit` a
+bracket branch answers the fit question like any other value (only a CURLY previous branch refuses
+the soft pre-`else` seam, for the `} else` glue it owns), so `if (a) [] else [2]` stays on one line
+when it fits whichever way it was typed (`unit.grammar.haxe.HxValueIfBracketElseBreakSliceTest`).
+
 ## Where to look when a key still does nothing
 
 1. Check the spelling here. An unknown value is silently ignored.

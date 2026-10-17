@@ -97,8 +97,10 @@ final class PreferFinalClass implements Check {
 		final metaFrom: Int = c.metaSpan.from;
 		final cutTo: Int = firstNonWs(source, c.metaSpan.to);
 		return if (c.redundant)
-			[{ span: new Span(metaFrom, cutTo), text: '' }] else if (cutTo == c.declFrom)
-			[{ span: new Span(metaFrom, c.declFrom), text: MODIFIER }] else
+			[{ span: new Span(metaFrom, cutTo), text: '' }]
+		else if (cutTo == c.declFrom)
+			[{ span: new Span(metaFrom, c.declFrom), text: MODIFIER }]
+		else
 			[
 				{ span: new Span(metaFrom, cutTo), text: '' },
 				{ span: new Span(c.declFrom, c.declFrom), text: MODIFIER }
