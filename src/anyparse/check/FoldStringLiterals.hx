@@ -1316,7 +1316,8 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 			inlineKind: shape.inlineModifierKind,
 			modifierKinds: CheckScan.modifierKinds(shape),
 			functionKinds: shape.functionKinds ?? [],
-			candidateKinds: [concatKind].concat(stringLiteralKinds).concat(shape.condOperandRunKinds ?? [])
+			candidateKinds: [concatKind].concat(stringLiteralKinds).concat(shape.condOperandRunKinds ?? []),
+			blockBodyKind: shape.blockBodyKind
 		};
 	}
 
@@ -1373,6 +1374,9 @@ private typedef Seams = {
 
 	/** `concatKind` plus the literal kinds — the node kinds `fix` re-finds a violation's span among. */
 	final candidateKinds: Array<String>;
+
+	/** A function's `{ … }` body (`RefShape.blockBodyKind`), whose statements a candidate may be measured inside alone. */
+	final blockBodyKind: Null<String>;
 };
 
 /** One construct flattened for planning: its segments, the SOURCE's own group boundaries, and the span to replace. */
@@ -1518,6 +1522,12 @@ private class PlanContext {
 	/** The closing half of `SCOPE_HEAD`. */
 	private static inline final SCOPE_TAIL: String = '\n}\n';
 
+	/** The synthetic wrapper a body STATEMENT is measured inside — a one-statement function, two indents deep like its own. */
+	private static inline final STATEMENT_SCOPE_HEAD: String = 'class Scope {\n\tfunction scope() {\n\t\t';
+
+	/** The closing half of `STATEMENT_SCOPE_HEAD`. */
+	private static inline final STATEMENT_SCOPE_TAIL: String = '\n\t}\n}\n';
+
 	public final plugin: GrammarPlugin;
 	public final seams: Seams;
 	public final source: String;
@@ -1541,6 +1551,10 @@ private class PlanContext {
 	private var _originalLines: Null<Array<String>> = null;
 	private var _originalFailed: Bool = false;
 	private var _memberSpans: Null<Array<Span>> = null;
+	private var _statementSpans: Null<Array<Span>> = null;
+
+	/** Statement region ("<from>:<to>") -> whether its member renders it exactly as it renders alone (`rendersAlone`). */
+	private final _alone: Map<String, Bool> = [];
 
 	public function new(
 		plugin: GrammarPlugin, seams: Seams, source: String, optsJson: Null<String>, metrics: LayoutMetrics, operators: Null<OperatorGate>
@@ -1585,27 +1599,33 @@ private class PlanContext {
 	 * width would be off by the difference), and the wrapper must round-trip at all.
 	 * Both answers are memoised per member, since a member usually holds several
 	 * candidates.
+	 *
+	 * One level further down, the same claim lets a body STATEMENT stand in for its
+	 * member (`statementSpans`), when `rendersAlone` shows the member renders it
+	 * exactly as it renders on its own: for a member of thousands of statements that
+	 * is one render of the statement per candidate instead of one of the member.
 	 */
 	public function scopeFor(span: Span): Null<MemberScope> {
 		final member: Null<Span> = memberSpanOf(span);
 		if (member == null) return null;
-		final key: String = '${member.from}:${member.to}';
-		if (_scopes.exists(key)) return _scopes[key];
-		final scope: Null<MemberScope> = buildScope(member);
-		_scopes[key] = scope;
-		return scope;
+		final memberScope: Null<MemberScope> = scopeOf(member, SCOPE_HEAD, SCOPE_TAIL);
+		if (memberScope == null) return null;
+		final statement: Null<Span> = statementSpanOf(span, member);
+		if (statement == null) return memberScope;
+		final statementScope: Null<MemberScope> = scopeOf(statement, STATEMENT_SCOPE_HEAD, STATEMENT_SCOPE_TAIL);
+		return statementScope != null && rendersAlone(statementScope, memberScope) ? statementScope : memberScope;
 	}
 
 	/**
 	 * `member` wrapped and rendered, or null when the writer declines the wrapper.
 	 */
-	private function buildScope(member: Span): Null<MemberScope> {
-		final written: Null<String> = write(SCOPE_HEAD + source.substring(member.from, member.to) + SCOPE_TAIL);
+	private function buildScope(region: Span, head: String, tail: String): Null<MemberScope> {
+		final written: Null<String> = write(head + source.substring(region.from, region.to) + tail);
 		return written == null ? null : {
-			head: SCOPE_HEAD,
-			tail: SCOPE_TAIL,
-			from: member.from,
-			to: member.to,
+			head: head,
+			tail: tail,
+			from: region.from,
+			to: region.to,
 			baseline: written.split('\n')
 		};
 	}
@@ -1673,10 +1693,111 @@ private class PlanContext {
 
 	/** The first non-blank offset on `pos`'s line when that line opens exactly one indent deep, else -1. */
 	private function memberLineStart(pos: Int): Int {
+		return lineStartAtDepth(pos, 1);
+	}
+
+	/**
+	 * `region` wrapped in `head` / `tail` and rendered (`buildScope`), memoised per wrapper and region: a region
+	 * usually holds several candidates, and a candidate is measured more than once while it settles.
+	 */
+	private function scopeOf(region: Span, head: String, tail: String): Null<MemberScope> {
+		final key: String = '${head.length}:${region.from}:${region.to}';
+		if (_scopes.exists(key)) return _scopes[key];
+		final scope: Null<MemberScope> = buildScope(region, head, tail);
+		_scopes[key] = scope;
+		return scope;
+	}
+
+	/** The region of the body statement of `member` that contains `span`, or null when `span` is in none. */
+	private function statementSpanOf(span: Span, member: Span): Null<Span> {
+		var best: Null<Span> = null;
+		for (statement in statementSpans()) if (
+			member.from <= statement.from && statement.to <= member.to && statement.from <= span.from && span.to <= statement.to
+			&& (best == null || statement.to - statement.from < best.to - best.from)
+		)
+			best = statement;
+		return best;
+	}
+
+	/**
+	 * Every STATEMENT region of a function body, built once: a direct child of a `blockBodyKind` node that
+	 * opens TWO indents deep, from the first non-blank character of its line to the end of the line it closes on —
+	 * the member regions' convention, one level down.
+	 *
+	 * Measuring a candidate inside its statement instead of its member is what keeps a member of thousands of
+	 * statements (a generated translation table) from being re-rendered whole for every candidate in it: the writer
+	 * decides a statement's lines from the statement and its depth alone, which is the same claim the member scope
+	 * makes one level up. `scopeFor` takes it only with evidence for this statement: `rendersAlone` finds the lines the
+	 * statement renders to on its own, verbatim, in its member's rendering. A body the source indents short of where
+	 * the writer puts it fails that test, and so does a statement inside a `@formatter:off` region that is not already
+	 * canonical (the member copies its source bytes back, the wrapper formats them).
+	 */
+	private function statementSpans(): Array<Span> {
+		final cached: Null<Array<Span>> = _statementSpans;
+		if (cached != null) return cached;
+		final spans: Array<Span> = [];
+		final bodyKind: Null<String> = seams.blockBodyKind;
+		final tree: Null<QueryNode> = bodyKind == null ? null : ParseGate.parseOrNull(plugin, source);
+		if (tree != null && bodyKind != null) collectStatements(tree, bodyKind, spans);
+		_statementSpans = spans;
+		return spans;
+	}
+
+	/** Push the region of every child of a `bodyKind` node under `node` whose line opens two indents deep. */
+	private function collectStatements(node: QueryNode, bodyKind: String, out: Array<Span>): Void {
+		if (node.kind == bodyKind) for (child in node.children) {
+			final span: Null<Span> = child.span;
+			if (span == null) continue;
+			final start: Int = lineStartAtDepth(span.from, 2);
+			if (start == -1) continue;
+			final end: Int = FoldStringLiterals.lineEndOf(source, span.to);
+			if (end > start) out.push(new Span(start, end));
+		}
+		for (child in node.children) collectStatements(child, bodyKind, out);
+	}
+
+	/** The first non-blank offset on `pos`'s line when that line opens exactly `depth` indents deep, else -1. */
+	private function lineStartAtDepth(pos: Int, depth: Int): Int {
 		final lineStart: Int = SourceText.lineStartAt(source, pos);
 		var indent: Int = lineStart;
 		while (indent < source.length && FoldStringLiterals.isBlank(source.fastCodeAt(indent))) indent++;
-		return FoldStringLiterals.columnWidth(this, lineStart, indent) == metrics.indentWidth ? indent : -1;
+		return FoldStringLiterals.columnWidth(this, lineStart, indent) == depth * metrics.indentWidth ? indent : -1;
+	}
+
+	/**
+	 * Whether the member's rendering holds the statement's lines exactly as the statement renders on its own: the
+	 * one-statement wrapper rendered back to its own two head and three tail lines, and the lines between them found,
+	 * contiguous and verbatim, in `member`'s baseline. That is the evidence `statementSpans` needs before the statement
+	 * stands in for its member — the measure only ever compares a rendering with its baseline as a multiset of lines,
+	 * so when the statement's lines are the same in both scopes, so is every width the two report. Memoised per
+	 * statement.
+	 */
+	private function rendersAlone(statement: MemberScope, member: MemberScope): Bool {
+		final key: String = '${statement.from}:${statement.to}';
+		final known: Null<Bool> = _alone[key];
+		if (known != null) return known;
+		final answer: Bool = statementLinesIn(statement.baseline, member.baseline);
+		_alone[key] = answer;
+		return answer;
+	}
+
+	/** `rendersAlone`'s test over the two baselines. */
+	private static function statementLinesIn(statement: Array<String>, member: Array<String>): Bool {
+		final head: Array<String> = STATEMENT_SCOPE_HEAD.split('\n');
+		final tail: Array<String> = STATEMENT_SCOPE_TAIL.split('\n');
+		// the wrapper's own lines, the statement's first line excluded from the head and the last from the tail
+		final headLines: Int = head.length - 1;
+		final tailLines: Int = tail.length - 1;
+		if (statement.length <= headLines + tailLines) return false;
+		for (i in 0...headLines) if (statement[i] != head[i]) return false;
+		for (i in 0...tailLines) if (statement[statement.length - tailLines + i] != tail[i + 1]) return false;
+		final inner: Array<String> = statement.slice(headLines, statement.length - tailLines);
+		for (start in 0...member.length - inner.length + 1) {
+			var at: Int = 0;
+			while (at < inner.length && member[start + at] == inner[at]) at++;
+			if (at == inner.length) return true;
+		}
+		return false;
 	}
 
 }

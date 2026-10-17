@@ -23809,6 +23809,14 @@
 			"note": "the fold's fix judges a construct the run left report-only against its own file's overloads alone, and merges past a sibling module's"
 		},
 		{
+			"name": "M-FOLD-STATEMENT-UNPROVEN",
+			"type": "anyparse.check.FoldStringLiterals",
+			"method": "scopeFor",
+			"find": "return statementScope != null && rendersAlone(statementScope, memberScope) ? statementScope : memberScope;",
+			"replace": "return statementScope != null ? statementScope : memberScope;",
+			"note": "a body statement stands in for its member without the evidence that the member renders it as it renders alone, and a function literal's body the source under-indents is measured a tab narrow"
+		},
+		{
 			"name": "M-PIEC-FIX-REPORT-INDEX",
 			"type": "anyparse.check.PreferIfExpressionChain",
 			"method": "fix",
