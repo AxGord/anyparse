@@ -263,8 +263,8 @@ class ExplicitTypeCheckTest extends Test {
 	@:killer('M-EXPLICIT-TYPE-MACRO-NO-COMPANION')
 	public function testFixMacroFunctionTernaryAndContextError(): Void {
 		// TM crashdumper Util.getProjectVersion: a ternary of quotations, and `Context.error` (Dynamic) in the catch.
-		final src: String = "import haxe.macro.Context;\nimport haxe.macro.Expr;\nclass C {\n\tmacro static function v(p:String) {\n"
-			+ "\t\ttry {\n\t\t\treturn p.length > 0 ? macro 1 : (macro 2);\n\t\t} catch (e:haxe.Exception) {\n"
+		final src: String = 'import haxe.macro.Context;\nimport haxe.macro.Expr;\nclass C {\n\tmacro static function v(p:String) {\n'
+			+ '\t\ttry {\n\t\t\treturn p.length > 0 ? macro 1 : (macro 2);\n\t\t} catch (e:haxe.Exception) {\n'
 			+ "\t\t\treturn Context.error('no', Context.currentPos());\n\t\t}\n\t}\n}";
 		Assert.isTrue(applyFix(src).indexOf('function v(p:String):Expr {') != -1, 'got: ${applyFix(src)}');
 	}

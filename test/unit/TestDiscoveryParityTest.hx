@@ -2166,10 +2166,13 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ScratchFieldCheckTest#testSeveralWritesDeclareAVar :: control :: M-SCRATCH-SILENT',
 			'unit.check.ScratchFieldCheckTest#testWritesInBothArmsHaveNoDeclarationSlot :: control :: M-SCRATCH-SLOT-ANYWHERE',
 			'unit.check.ShadowingCaseBinderCheckTest#testUnprovenSubjectRefused :: control :: M-SHADOWING-BINDER-UNPROVEN',
-			'unit.check.ShadowingLocalCheckTest#testFixKeepsAShadowWhoseHiddenBindingIsReadAfter :: control :: M-SHADOWING-LOCAL-OUTER-READ-IGNORED',
-			'unit.check.ShadowingLocalCheckTest#testFixRefusesAnAssignmentThatChangesWhatSomethingReads :: control :: M-SHADOWING-LOCAL-CAPTURE-IGNORED',
+			'unit.check.ShadowingLocalCheckTest#testFixKeepsAShadowWhoseHiddenBindingIsReadAfter :: control :: '
+				+ 'M-SHADOWING-LOCAL-OUTER-READ-IGNORED',
+			'unit.check.ShadowingLocalCheckTest#testFixRefusesAnAssignmentThatChangesWhatSomethingReads :: control :: '
+				+ 'M-SHADOWING-LOCAL-CAPTURE-IGNORED',
 			'unit.check.ShadowingLocalCheckTest#testFixRenamesTheInnerAfterItsWrittenType :: control :: M-SHADOWING-LOCAL-NO-RENAME',
-			'unit.check.ShadowingLocalCheckTest#testFixTurnsASameBlockRedeclarationIntoAnAssignment :: control :: M-SHADOWING-LOCAL-NO-ASSIGNMENT',
+			'unit.check.ShadowingLocalCheckTest#testFixTurnsASameBlockRedeclarationIntoAnAssignment :: control :: '
+				+ 'M-SHADOWING-LOCAL-NO-ASSIGNMENT',
 			'unit.check.ShortenTypeRefCheckTest#testASingleSurvivingOccurrenceEarnsNoImport :: control :: M-SHORTEN-IMPORT-THRESHOLD-ONE',
 			'unit.check.SimplifyBooleanReturnChainCheckTest#testCommentInAFlatChainIsNotDropped :: control :: M-RETURN-CHAIN-COMMENT-ADMITTED',
 			'unit.check.SimplifyBooleanReturnChainCheckTest#testNegatedConjunctionGuardRegroups :: control :: '
@@ -2788,8 +2791,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.UnusedPrivateDeclineReasonTest#testEachGateNamesItself :: control :: '
 				+ 'M-UNUSED-PRIVATE-DECLINE-SILENT,M-UNUSED-PRIVATE-REGION-DECLINE-SILENT',
 			'unit.check.UnusedPrivateSupertypeChainTest#testFixDeletesADeadFinalOfAPureStringMethod :: control :: M-PURE-STRING-METHOD-OFF',
-			'unit.check.UnusedPrivateSupertypeChainTest#testFixDeletesTheMethodWhenTheChainProvesNothingDeclaresIt :: control :: M-UNUSED-PRIVATE-CHAIN-NOT-RESOLVED',
-			'unit.check.UnusedPrivateSupertypeChainTest#testFixKeepsTheMethodTheChainMayReach :: control :: M-UNUSED-PRIVATE-CHAIN-BUILD-IGNORED',
+			'unit.check.UnusedPrivateSupertypeChainTest#testFixDeletesTheMethodWhenTheChainProvesNothingDeclaresIt :: control :: '
+				+ 'M-UNUSED-PRIVATE-CHAIN-NOT-RESOLVED',
+			'unit.check.UnusedPrivateSupertypeChainTest#testFixKeepsTheMethodTheChainMayReach :: control :: '
+				+ 'M-UNUSED-PRIVATE-CHAIN-BUILD-IGNORED',
 			'unit.check.UnusedPublicMemberCheckTest#testAutoBuildAncestorNotFlagged :: control :: M-REACH-AUTOBUILD-IGNORED',
 			'unit.check.UnusedPublicMemberCheckTest#testInterpolationEscapeKeepsTheMember :: control :: M-NAMEOUTSIDE-TRUE',
 			'unit.check.UsingDeclineAttributionTest#testCounterLoopConflictNamesTheSkippedSiteAndKeepsTheOther :: control :: '

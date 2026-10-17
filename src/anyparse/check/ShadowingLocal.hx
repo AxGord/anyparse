@@ -222,6 +222,11 @@ final class ShadowingLocal implements Check {
 		return binding != null && within(binding, span);
 	}
 
+	/** `offset` in a source whose run ending at `end` changed length by `delta`. */
+	private static inline function shifted(offset: Int, end: Int, delta: Int): Int {
+		return offset >= end ? offset + delta : offset;
+	}
+
 	/** What to call a binder of `kind` in the message — the two self-scoped families read differently. */
 	private static inline function binderLabel(kind: String, seams: ScopeSeams): String {
 		return kind == seams.catchKind ? 'catch binding' : 'loop iterator';
@@ -643,11 +648,6 @@ final class ShadowingLocal implements Check {
 			&& !TypeNameBinding.AMBIENT_TYPE_NAMES.contains(simple)
 			? SourceText.lowerCamel(simple)
 			: null;
-	}
-
-	/** `offset` in a source whose run ending at `end` changed length by `delta`. */
-	private static inline function shifted(offset: Int, end: Int, delta: Int): Int {
-		return offset >= end ? offset + delta : offset;
 	}
 
 }
