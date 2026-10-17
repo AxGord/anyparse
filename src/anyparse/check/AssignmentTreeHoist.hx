@@ -603,9 +603,9 @@ final class AssignmentTreeHoist {
 	 */
 	private static function seatGaps(parts: Array<{ cond: Null<Span>, atom: Null<Span> }>, terminalSpan: Null<Span>): Array<CarryGap> {
 		final seats: Array<CarrySeat> = [];
-		for (i in 0...parts.length) {
-			final cond: Null<Span> = parts[i].cond;
-			final atom: Null<Span> = parts[i].atom;
+		for (i => part in parts) {
+			final cond: Null<Span> = part.cond;
+			final atom: Null<Span> = part.atom;
 			final next: Null<Span> = i + 1 < parts.length ? parts[i + 1].cond : terminalSpan;
 			if (cond == null || atom == null || next == null) continue;
 			// Re-bind: a narrowed Null<T> does not carry its narrowing into a struct literal.

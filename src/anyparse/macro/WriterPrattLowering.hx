@@ -1194,7 +1194,7 @@ final class WriterPrattLowering {
 	 * Prefix branch (`prefix.op`): `op operand`.
 	 */
 	private static function lowerPrefixBranch(c: WriterLowering.LowerBranchCtx): Expr {
-		final prefixOp: String = c.branch.annotations.get(AnnotationKeys.PREFIX_OP);
+		final prefixOp: String = c.branch.annotations[AnnotationKeys.PREFIX_OP];
 		final operandCall: Expr = makeWriteCall(c.writeFnName, macro $i{c.argNames[0]}, c.hasPratt, c.precPostfix);
 		return macro _dc([_dt($v{prefixOp}), $operandCall]);
 	}
@@ -1374,10 +1374,10 @@ final class WriterPrattLowering {
 	 */
 	private static function keywordAtomOverWholeExpr(branch: ShapeNode, typePath: String): Bool {
 		final children: Array<ShapeNode> = branch.children;
-		if (children.length != 1 || branch.annotations.get(AnnotationKeys.KW_LEAD_TEXT) == null) return false;
-		if (branch.annotations.get(AnnotationKeys.LIT_TRAIL_TEXT) != null || branch.fmtHasFlag('atomOperand')) return false;
+		if (children.length != 1 || branch.annotations[AnnotationKeys.KW_LEAD_TEXT] == null) return false;
+		if (branch.annotations[AnnotationKeys.LIT_TRAIL_TEXT] != null || branch.fmtHasFlag('atomOperand')) return false;
 		final only: ShapeNode = children[0];
-		final ref: Null<String> = only.kind == Ref ? only.annotations.get(AnnotationKeys.BASE_REF) : null;
+		final ref: Null<String> = only.kind == Ref ? only.annotations[AnnotationKeys.BASE_REF] : null;
 		return ref != null && simpleName(ref) == simpleName(typePath);
 	}
 

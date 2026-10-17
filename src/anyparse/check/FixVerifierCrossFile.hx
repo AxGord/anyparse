@@ -243,8 +243,9 @@ final class FixVerifierCrossFile {
 	private static function candidate(judge: Judge, before: Map<String, String>, indices: Array<Int>): Null<Map<String, String>> {
 		final out: Map<String, String> = [];
 		for (file => source in before) {
-			final edits: Array<{ span: Span, text: String }> = [];
-			for (i in indices) for (slice in judge.sets[i].slices) if (slice.file == file) for (edit in slice.edits) edits.push(edit);
+			final edits: Array<{ span: Span, text: String }> = [
+				for (i in indices) for (slice in judge.sets[i].slices) if (slice.file == file) for (edit in slice.edits) edit
+			];
 			if (edits.length == 0) {
 				out[file] = source;
 				continue;

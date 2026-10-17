@@ -753,10 +753,9 @@ final class ReachGraph {
 				? init
 				: g.memberOnChain(c.type, c.member);
 			final id: String = declared ?? placeholder(g, c.type, c.member == CallGraph.INIT_NAME ? ctorName : c.member);
-			if (!held.exists(id)) {
-				out.push(id);
-				held[id] = true;
-			}
+			if (held.exists(id)) continue;
+			out.push(id);
+			held[id] = true;
 		}
 		return out;
 	}
@@ -1086,10 +1085,9 @@ final class ReachGraph {
 			var inner: Null<QueryNode> = null;
 			for (c in node.children) {
 				final s: Null<Span> = c.span;
-				if (s != null && s.from <= span.from && span.to <= s.to) {
-					inner = c;
-					break;
-				}
+				if (s == null || s.from > span.from || span.to > s.to) continue;
+				inner = c;
+				break;
 			}
 			if (inner == null) return null;
 			final found: QueryNode = inner;
@@ -1189,12 +1187,11 @@ final class ReachGraph {
 					words(into, key, t.name);
 					// a type the declaration does not write is inferred from the member's own code (`inferredFrom`)
 					final written: Null<String> = functionKinds.contains(m.kind) ? m.returnNominal : m.typeSource;
-					if (written == null && m.name != ctorName && !ctorKinds.contains(m.kind)) {
-						final inferredInto: Map<String, Array<InferredRef>> = implicit ? out.inferredType : out.inferredMember;
-						final list: Array<InferredRef> = inferredInto[key] ?? [];
-						list.push({ file: fi.file, type: t.name, member: m.name });
-						inferredInto[key] = list;
-					}
+					if (written != null || m.name == ctorName || ctorKinds.contains(m.kind)) continue;
+					final inferredInto: Map<String, Array<InferredRef>> = implicit ? out.inferredType : out.inferredMember;
+					final list: Array<InferredRef> = inferredInto[key] ?? [];
+					list.push({ file: fi.file, type: t.name, member: m.name });
+					inferredInto[key] = list;
 				}
 			}
 		}

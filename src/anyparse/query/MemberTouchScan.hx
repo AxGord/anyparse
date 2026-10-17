@@ -736,16 +736,7 @@ final class MemberTouchScan {
 		if (access == Read) return { touch: true, escape: false };
 		final writes: Null<QueryNode> -> Int -> Bool = (n, i) -> n != null && shape.writeParentKinds.contains(n.kind) && i == 0;
 		if (pk == shape.indexAccessKind && index == 0) return { touch: writes(grand, parentIndex), escape: false };
-		if (_hazards.isAccess(pk) && index == 0) {
-			if (grand != null && grand.kind == shape.callKind && parentIndex == 0) {
-				final method: String = parent.name ?? '';
-				final reads: Bool = owns.reads.contains(method);
-				final own: Bool = reads || owns.changes.contains(method);
-				return { touch: !reads, escape: !own };
-			}
-			return { touch: writes(grand, parentIndex), escape: false };
-		}
-		return if (pk == shape.forStmtKind && isIterableOf(parent, node))
+		if (!_hazards.isAccess(pk) || index != 0) return if (pk == shape.forStmtKind && isIterableOf(parent, node))
 			{ touch: false, escape: false }
 		else if ((shape.equalityKinds ?? []).contains(pk))
 			{ touch: false, escape: false }
@@ -753,6 +744,11 @@ final class MemberTouchScan {
 			classify(parent, grand, null, lineage.slice(0, lineage.length - 1), parentIndex, 0, access, owns)
 		else
 			{ touch: false, escape: true };
+		if (grand == null || grand.kind != shape.callKind || parentIndex != 0) return { touch: writes(grand, parentIndex), escape: false };
+		final method: String = parent.name ?? '';
+		final reads: Bool = owns.reads.contains(method);
+		final own: Bool = reads || owns.changes.contains(method);
+		return { touch: !reads, escape: !own };
 	}
 
 	/**

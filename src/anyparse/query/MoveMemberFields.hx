@@ -110,11 +110,9 @@ final class MoveMemberFields {
 			final span: Null<Span> = node.span;
 			if (node.kind == MemberKinds.FIELD_ACCESS_KIND && node.name == name && span != null && !(inSource && inside(span.from)))
 				return true;
-			for (c in node.children) if (walk(c, inSource)) return true;
-			return false;
+			return node.children.exists(c -> walk(c, inSource));
 		}
-		for (tree in trees) if (walk(tree, tree == srcTree)) return true;
-		return false;
+		return Lambda.exists(trees, tree -> walk(tree, tree == srcTree));
 	}
 
 	/**

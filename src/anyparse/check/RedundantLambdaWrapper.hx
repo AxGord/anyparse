@@ -230,9 +230,9 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 			params.push(name);
 		}
 		if (call.children.length - 1 != params.length) return null;
-		for (i in 0...params.length) {
+		for (i => param in params) {
 			final arg: QueryNode = call.children[i + 1];
-			if (arg.kind != seams.identKind || arg.name != params[i]) return null;
+			if (arg.kind != seams.identKind || arg.name != param) return null;
 		}
 		final callee: QueryNode = call.children[0];
 		for (name in params) if (mentions(callee, name)) return null;
@@ -364,7 +364,7 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 		if (receiver.kind != seams.identKind || typeName == null || typeName == '') return null;
 		if (typeName.charAt(0).toUpperCase() != typeName.charAt(0)) return null;
 		if (ctx.scope.valueNames.exists(typeName)) return null;
-		final members: Null<Map<String, Signature>> = ctx.types.get(typeName);
+		final members: Null<Map<String, Signature>> = ctx.types[typeName];
 		final member: Null<Signature> = members == null ? null : members[name];
 		return member != null && member.isStatic ? member : null;
 	}

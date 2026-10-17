@@ -99,9 +99,10 @@ final class ExhaustiveSwitches {
 		if (!_writes.complete || at < 1 || !catchAll(branch)) return false;
 		final closed: Null<ClosedAbstract> = subjectAbstract(fn, fnId, kids[0]);
 		if (closed == null) return false;
-		final named: Array<String> = [];
 		// a guarded case runs only where its guard holds: it names no value for sure
-		for (k in kids.slice(1, at)) if (k.kind == _shape.caseBranchKind && !guarded(k)) for (v in plainValues(k)) named.push(v);
+		final named: Array<String> = [
+			for (k in kids.slice(1, at)) if (k.kind == _shape.caseBranchKind && !guarded(k)) for (v in plainValues(k)) v
+		];
 		return closed.values.foreach(v -> named.contains(v));
 	}
 
@@ -219,12 +220,11 @@ final class ExhaustiveSwitches {
 	private function buildsNoOther(fn: QueryNode, type: String, values: Array<String>): Bool {
 		if (fn.name == (_shape.constructorName ?? 'new')) return false;
 		final declared: Null<QueryNode> = fn.children.find(c -> _typeKinds.contains(c.kind));
-		if (declared == null) {
-			final returns: Array<QueryNode> = [];
-			collectReturns(fn, returns, true);
-			return returns.length == 0;
-		}
-		return !mentions(declared, type) || declared.name == type && declared.children.length == 0 && handsBackValuesOnly(fn, values);
+		if (declared != null)
+			return !mentions(declared, type) || declared.name == type && declared.children.length == 0 && handsBackValuesOnly(fn, values);
+		final returns: Array<QueryNode> = [];
+		collectReturns(fn, returns, true);
+		return returns.length == 0;
 	}
 
 	/** Whether every `return` of the function `fn`, outside a function nested in it, hands back one of `values`. */
@@ -248,12 +248,9 @@ final class ExhaustiveSwitches {
 		if (e.kind == _shape.parenKind && e.children.length == 1) return valueOnly(e.children[0], values);
 		if (e.kind == _shape.ternaryKind && e.children.length == 3)
 			return valueOnly(e.children[1], values) && valueOnly(e.children[2], values);
-		if ((_shape.switchKinds ?? []).contains(e.kind)) {
-			final branches: Array<QueryNode> = [for (b in e.children.slice(1)) b];
-			return branches.length > 0
-				&& branches.foreach(b -> b.children.length > 0 && valueOnly(b.children[b.children.length - 1], values));
-		}
-		return false;
+		if (!(_shape.switchKinds ?? []).contains(e.kind)) return false;
+		final branches: Array<QueryNode> = [for (b in e.children.slice(1)) b];
+		return branches.length > 0 && branches.foreach(b -> b.children.length > 0 && valueOnly(b.children[b.children.length - 1], values));
 	}
 
 	/** Whether the case `branch` carries a guard (`case A if (c):`): the parenthesised expression right after its patterns. */
@@ -373,12 +370,7 @@ final class ExhaustiveSwitches {
 		final kind: String = expr.kind;
 		if (kind == _shape.parenKind && kids.length == 1) return valueExpr(kids[0], at, closed);
 		if (kind == _shape.ternaryKind && kids.length == 3) return valueExpr(kids[1], at, closed) && valueExpr(kids[2], at, closed);
-		if ((_shape.switchKinds ?? []).contains(kind)) {
-			final arms: Array<QueryNode> = kids.slice(1);
-			return arms.length > 0
-				&& arms.foreach(b -> b.children.length > 0 && valueExpr(unwrapped(b.children[b.children.length - 1]), at, closed));
-		}
-		return if (kind == _shape.nullCoalesceKind && kids.length == 2)
+		if (!(_shape.switchKinds ?? []).contains(kind)) return if (kind == _shape.nullCoalesceKind && kids.length == 2)
 			valueExpr(kids[1], at, closed) && (valueExpr(kids[0], at, closed) || parameterOf(kids[0], at, closed, true))
 		else if (kind == _shape.identKind)
 			identValue(expr, at, closed)
@@ -386,6 +378,9 @@ final class ExhaustiveSwitches {
 			accessValue(expr, at, closed)
 		else
 			kind == _shape.callKind && convertedCall(expr, at, closed);
+		final arms: Array<QueryNode> = kids.slice(1);
+		return arms.length > 0
+			&& arms.foreach(b -> b.children.length > 0 && valueExpr(unwrapped(b.children[b.children.length - 1]), at, closed));
 	}
 
 	/** `node` without the expression statement around it, as a `switch` arm's value is written. */

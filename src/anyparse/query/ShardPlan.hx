@@ -453,7 +453,7 @@ final class ShardPlan {
 		}
 		entries.sort(compareEntries);
 
-		final load: Array<Int> = [for (s in 0...shards) 0];
+		final load: Array<Int> = [for (_ in 0...shards) 0];
 		final out: Array<ShardPlacement> = [];
 		for (entry in entries) {
 			var target: Int = 0;

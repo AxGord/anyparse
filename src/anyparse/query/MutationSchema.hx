@@ -173,15 +173,14 @@ final class MutationSchema {
 		final typed: Array<Int> = [];
 		for (arm in arms) {
 			final offset: Int = switchAt[arm.id] ?? -1;
-			if (offset >= 0 && !skips.exists(arm.id) && !typed.contains(offset)) {
-				typed.push(offset);
-				ordered.push({
-					at: offset,
-					text: SWITCH_FIELDS,
-					id: 0,
-					role: Switch
-				});
-			}
+			if (offset < 0 || skips.exists(arm.id) || typed.contains(offset)) continue;
+			typed.push(offset);
+			ordered.push({
+				at: offset,
+				text: SWITCH_FIELDS,
+				id: 0,
+				role: Switch
+			});
 		}
 		// stable: two inserts at one offset keep the order they were pushed in
 		haxe.ds.ArraySort.sort(ordered, (a, b) -> a.at - b.at);

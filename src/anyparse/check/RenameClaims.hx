@@ -4,6 +4,8 @@ import anyparse.query.NamingPolicy.NamedDecl;
 import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.SymbolIndex;
 
+using Lambda;
+
 /**
  * The member renames one `apq lint --fix` PASS has already accepted, so a rename decided later in
  * that pass can see them.
@@ -56,8 +58,7 @@ final class RenameClaims {
 	 */
 	public function defers(owner: Null<String>, newName: String, index: Null<SymbolIndex>): Bool {
 		if (owner == null || index == null) return false;
-		for (c in ledger(index)) if (c.newName == newName && !index.subtypes.unrelatedClasses(owner, c.owner)) return true;
-		return false;
+		return ledger(index).exists(c -> c.newName == newName && !index.subtypes.unrelatedClasses(owner, c.owner));
 	}
 
 	/**

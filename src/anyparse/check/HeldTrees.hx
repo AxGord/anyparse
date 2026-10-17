@@ -80,11 +80,12 @@ final class HeldTrees {
 	 */
 	public function typeDecl(type: String): Null<HeldDecl> {
 		if (_decls.exists(type)) return _decls[type];
-		final found: Array<HeldDecl> = [];
-		for (held in files())
-			for (top in held.tree.children)
-				for (d in [top].concat(top.children))
-					if (d.name == type && d.children.length > 0) found.push({ node: d, file: held.file, source: held.source });
+		final found: Array<HeldDecl> = [
+			for (held in files()) for (top in held.tree.children) for (d in [top].concat(top.children)) if (
+				d.name == type && d.children.length > 0
+			)
+				{ node: d, file: held.file, source: held.source }
+		];
 		final decl: Null<HeldDecl> = found.length == 1 && _graph.types.declarationCount(type) == 1 ? found[0] : null;
 		_decls[type] = decl;
 		return decl;

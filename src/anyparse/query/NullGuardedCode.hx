@@ -185,7 +185,7 @@ final class NullGuardedCode {
 			final hit: Null<RefHit> = Refs.find(name, tree, _shape)
 				.find(h -> h.kind == Read && h.span.from == at.from && h.span.to == at.to);
 			final declared: Null<QueryNode> = hit?.bindingNode;
-			final param: Null<MemberParam> = declared == null ? null : params.get(declared);
+			final param: Null<MemberParam> = declared == null ? null : params[declared];
 			if (param != null) out.push({ param: param, branch: branch });
 		}
 		return out;
@@ -292,8 +292,7 @@ final class NullGuardedCode {
 	private function invocationsHandNull(id: String, index: Int, count: Int): Bool {
 		final facts: FactsIndex = gathered();
 		for (call in facts.calls[id] ?? []) if (call.access != STATIC_ACCESS || !handsNull(call.at, index, count)) return false;
-		for (read in facts.fields[id] ?? []) {
-			if (read.fact.write || read.fact.use == COMPARE) continue;
+		for (read in facts.fields[id] ?? []) if (!read.fact.write && read.fact.use != COMPARE) {
 			if (read.fact.use != VALUE || read.fact.held || !neverCalled(read.node, read.fact.at, 0)) return false;
 		}
 		return true;
@@ -339,8 +338,7 @@ final class NullGuardedCode {
 		final runs: Null<Array<String>> = callableRuns(owner, name, call.access);
 		if (runs == null) return false;
 		final count: Int = argument.call.children.length - 1;
-		for (o in runs) if (!parameterNeverCalls('$o.$name', argument.index, count, depth + 1)) return false;
-		return true;
+		return runs.foreach(o -> parameterNeverCalls('$o.$name', argument.index, count, depth + 1));
 	}
 
 	/**
@@ -456,10 +454,9 @@ final class NullGuardedCode {
 		if (!plainStatic(owner, field)) return false;
 		final declared: Null<FieldDeclFact> = _view.type(owner)?.fields.find(f -> f.name == field);
 		if (declared == null || !declared.types.foreach(t -> container(t))) return false;
-		for (a in gathered().fields['$owner.$field'] ?? []) {
-			if (a.fact.write ? !a.fact.fresh : a.fact.use != COMPARE && !elementStoreReceiver(a.fact.at)) return false;
-		}
-		return true;
+		return (gathered().fields['$owner.$field'] ?? []).foreach(a ->
+			!(a.fact.write ? !a.fact.fresh : a.fact.use != COMPARE && !elementStoreReceiver(a.fact.at))
+		);
 	}
 
 	/**
@@ -493,8 +490,7 @@ final class NullGuardedCode {
 		for (a in facts.byName[field] ?? []) {
 			if (!assumedDead(a.at) && holdsClassValue(a.receiver, hierarchy, escaped)) return true;
 		}
-		for (r in facts.reflection) {
-			if (_view.memberless(r.target) && !WRITERS.contains(r.target)) continue;
+		for (r in facts.reflection) if (!_view.memberless(r.target) || WRITERS.contains(r.target)) {
 			// the member the literal at the call's NAME argument names; null — a computed name, or a call naming no member — is any
 			final named: Null<String> = r.memberName;
 			if ((named != null && named != field) || assumedDead(r.at)) continue;

@@ -368,19 +368,18 @@ final class TypedFactsMacro {
 						case FMethod(MethMacro): _macros;
 						case _: null;
 					};
-					if (methods != null) {
-						final info: { min: Int, max: Int, file: String } = Context.getPosInfos(f.pos);
-						final list: Array<InlineMethod> = methods[info.file] ?? [];
-						methods[info.file] = list;
-						list.push({
-							file: info.file,
-							min: info.min,
-							max: info.max,
-							id: '$owner.${f.name}',
-							receiver: !takes(f, INLINED_RECEIVER),
-							arity: arity(f)
-						});
-					}
+					if (methods == null) continue;
+					final info: { min: Int, max: Int, file: String } = Context.getPosInfos(f.pos);
+					final list: Array<InlineMethod> = methods[info.file] ?? [];
+					methods[info.file] = list;
+					list.push({
+						file: info.file,
+						min: info.min,
+						max: info.max,
+						id: '$owner.${f.name}',
+						receiver: !takes(f, INLINED_RECEIVER),
+						arity: arity(f)
+					});
 				}
 			case _:
 		}

@@ -615,8 +615,8 @@ final class FunctionValueTypes {
 		final skipped: Int = count - args.length;
 		if (skipped < 0) return null;
 		final out: Array<FactPos> = [];
-		for (j in 0...args.length) if (j <= index && index <= j + skipped) {
-			final held: Null<Array<FactPos>> = argumentFunction(args[j], at.file, arity);
+		for (j => arg in args) if (j <= index && index <= j + skipped) {
+			final held: Null<Array<FactPos>> = argumentFunction(arg, at.file, arity);
 			if (held == null) return null;
 			for (where in held) out.push(where);
 		}

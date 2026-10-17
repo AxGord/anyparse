@@ -1169,11 +1169,9 @@ final class LintCommand implements CliCommand {
 			CliIo.stderr('apq lint: --explain-long has no checkstyle form — use --format text or json\n');
 			return lintParseExit(EXIT_USAGE);
 		}
-		if (summary == true && format != FORMAT_TEXT) {
-			CliIo.stderr('apq lint: --summary applies to the text report — --format $format always lists every finding\n');
-			return lintParseExit(EXIT_USAGE);
-		}
-		return listRules ? lintParseExit(runListRules(opts)) : opts;
+		if (summary != true || format == FORMAT_TEXT) return listRules ? lintParseExit(runListRules(opts)) : opts;
+		CliIo.stderr('apq lint: --summary applies to the text report — --format $format always lists every finding\n');
+		return lintParseExit(EXIT_USAGE);
 	}
 
 	/**

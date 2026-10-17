@@ -360,18 +360,15 @@ final class ReconCommand implements CliCommand {
 			}
 		}
 		if (
-			o.permissiveConstruct && (
-				o.probePath != null || o.predictStrip || o.predictRelax || o.regressionProbe || o.clusterFilter != null
-				|| o.candidatesRegex != null || o.patterns.length > 0
-			)
-		) {
-			CliIo.stderr(
-				'apq recon: --permissive-construct is its own mode — mutually exclusive with --probe / --predict-strip / --predict-relax '
-				+ '/ --regression-probe / --cluster / --candidates / --replace/--with/--delete\n'
-			);
-			return EXIT_USAGE;
-		}
-		return null;
+			!o.permissiveConstruct || o.probePath == null && !o.predictStrip && !o.predictRelax && !o.regressionProbe
+			&& o.clusterFilter == null && o.candidatesRegex == null && o.patterns.length <= 0
+		)
+			return null;
+		CliIo.stderr(
+			'apq recon: --permissive-construct is its own mode — mutually exclusive with --probe / --predict-strip / --predict-relax '
+			+ '/ --regression-probe / --cluster / --candidates / --replace/--with/--delete\n'
+		);
+		return EXIT_USAGE;
 	}
 
 	/**

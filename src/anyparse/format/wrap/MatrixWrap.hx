@@ -54,7 +54,7 @@ final class MatrixWrap {
 
 		// Per-column max bare width (no separator).
 		final widths: Array<Int> = [for (i in 0...n) DocMeasure.flatTokenWidth(items[i])];
-		final maxCols: Array<Int> = [for (c in 0...lineRun) 0];
+		final maxCols: Array<Int> = [for (_ in 0...lineRun) 0];
 		for (i in 0...n) {
 			final c: Int = i % lineRun;
 			if (widths[i] > maxCols[c]) maxCols[c] = widths[i];

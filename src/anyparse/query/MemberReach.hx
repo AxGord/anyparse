@@ -881,14 +881,17 @@ final class MemberReach {
 	private function splicedInto(g: CallGraph, file: String, spans: Array<Span>): Array<String> {
 		final facts: Null<CallGraphFacts> = g.facts;
 		if (_scope.facts?.truth != true || facts == null) return [];
-		final out: Array<String> = [];
 		final key: String = CallGraphNames.normalizePath(file);
 		// every declaration the node folds is its code: a range meeting any of them may run what its facts filed off it
-		for (id in facts.faceted.keys()) if (
-			g.declarationsOf(id)
-				.exists(d -> CallGraphNames.normalizePath(d.file) == key && spans.exists(s -> d.span.from < s.to && s.from < d.span.to))
-		)
-			out.push(id);
+		final out: Array<String> = [
+			for (id in facts.faceted.keys()) if (
+				g.declarationsOf(id)
+					.exists(
+						d -> CallGraphNames.normalizePath(d.file) == key && spans.exists(s -> d.span.from < s.to && s.from < d.span.to)
+					)
+			)
+				id
+		];
 		return out;
 	}
 
@@ -2429,11 +2432,10 @@ final class MemberReach {
 		for (v in g.virtualTargets(type, name)) enqueue(v, step);
 		if (resolved != null && g.node(resolved)?.isExternal == false) return grown;
 		// a type that declares no constructor has a generated one: its initializers, then its superclass's constructor
-		if (resolved == null && name == (_shape.constructorName ?? 'new') && g.types.declarationCount(type) > 0) {
-			for (id in _g.generatedConstructor(g, type)) enqueue(id, step);
-			return grown;
-		}
-		return grown ?? bodyless(g, node.id, type, name, file, span, admitValue);
+		if (resolved != null || name != (_shape.constructorName ?? 'new') || g.types.declarationCount(type) <= 0)
+			return grown ?? bodyless(g, node.id, type, name, file, span, admitValue);
+		for (id in _g.generatedConstructor(g, type)) enqueue(id, step);
+		return grown;
 	}
 
 	/**

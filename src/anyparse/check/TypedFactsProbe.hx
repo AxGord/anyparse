@@ -274,13 +274,11 @@ final class TypedFactsProbe {
 	/** Why the compile `run` left no facts, in one line. */
 	private static function failureOf(run: HaxeRun): String {
 		if (run.failure != '') return run.failure;
-		if (run.status != 0) {
-			final first: String = StringTools.trim(
-				Lambda.find(run.err.split('\n'), l -> StringTools.trim(l) != '' && l.indexOf('Warning') < 0) ?? ''
-			);
-			return 'the compile failed (status ${run.status})' + (first == '' ? '' : ': $first');
-		}
-		return 'it wrote no facts file';
+		if (run.status == 0) return 'it wrote no facts file';
+		final first: String = StringTools.trim(
+			Lambda.find(run.err.split('\n'), l -> StringTools.trim(l) != '' && l.indexOf('Warning') < 0) ?? ''
+		);
+		return 'the compile failed (status ${run.status})' + (first == '' ? '' : ': $first');
 	}
 
 	/** The arguments of the facts compile of `hxml` under `defines`, writing to `out` with the hook found under `dir`. */

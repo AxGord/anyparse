@@ -338,10 +338,10 @@ final class IfExpressionChain {
 	 */
 	public static function buildValue(pairs: Array<{ cond: String, value: String }>, terminalValue: String): String {
 		final parts: Array<String> = [];
-		for (i in 0...pairs.length) {
+		for (i => pair in pairs) {
 			if (i > 0) parts.push('else');
-			parts.push('if (${pairs[i].cond})');
-			parts.push(pairs[i].value);
+			parts.push('if (${pair.cond})');
+			parts.push(pair.value);
 		}
 		parts.push('else');
 		parts.push(terminalValue);

@@ -216,10 +216,9 @@ final class SymbolIndexBuilder {
 				return;
 			}
 			final declared: String = name;
-			if (kinds.contains(node.kind) && span != null) {
-				final at: Span = span;
-				out.push({ name: declared, span: at });
-			}
+			if (!kinds.contains(node.kind) || span == null) return;
+			final at: Span = span;
+			out.push({ name: declared, span: at });
 		}
 		for (c in tree.children) walk(c);
 		return out;
@@ -545,12 +544,9 @@ final class SymbolIndexBuilder {
 	 * other member is scanned with the write walker, so a write hidden in a `#if` branch counts too.
 	 */
 	private static function memberRebindsThis(node: QueryNode, shape: RefShape): Bool {
-		if (node.kind == 'FnMember') {
-			if (node.name == 'new') return false;
-			for (h in Refs.find('this', node, shape)) if (h.kind == RefKind.Write) return true;
-			return false;
-		}
-		return node.children.exists(c -> memberRebindsThis(c, shape));
+		if (node.kind != 'FnMember') return node.children.exists(c -> memberRebindsThis(c, shape));
+		if (node.name == 'new') return false;
+		return Refs.find('this', node, shape).exists(h -> h.kind == RefKind.Write);
 	}
 
 	/**

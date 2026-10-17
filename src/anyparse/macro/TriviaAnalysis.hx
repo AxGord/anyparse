@@ -38,7 +38,7 @@ using Lambda;
 class TriviaAnalysis {
 
 	public static function run(result: ShapeBuilder.ShapeResult): Void {
-		for (name => node in result.rules) markStarsWithTrivia(node);
+		for (_ => node in result.rules) markStarsWithTrivia(node);
 		// ω-postfix-starsuffix-trivia: postfix Star-suffix branches
 		// (e.g. `@:postfix('(', ')') @:sep(',') Call(operand, args)`)
 		// auto-mark their args' Star with `trivia.starCollects = true`
@@ -51,7 +51,7 @@ class TriviaAnalysis {
 		// over-breaks call-arg lists.
 		// The dedicated
 		// `lowerPostfixStar` writer path is unaffected.
-		for (name => node in result.rules) markPostfixStarSuffix(node);
+		for (_ => node in result.rules) markPostfixStarSuffix(node);
 		final directlyBearing: Map<String, Bool> = [];
 		for (name => node in result.rules) directlyBearing[name] = hasAnyTriviaStar(node);
 		final bearing: Map<String, Bool> = [];

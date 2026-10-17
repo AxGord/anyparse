@@ -428,15 +428,14 @@ final class LoopBoundLengthMismatch implements Check implements NoAutofix implem
 	private static function admitted(ref: QueryNode, parent: Null<QueryNode>, grand: Null<QueryNode>, src: LengthSource, s: Seams): Bool {
 		if (parent == null) return false;
 		if (parent.kind == s.core.indexAccessKind && parent.children[0] == ref) return src.fixedLength || !isWriteTarget(parent, grand, s);
-		if (s.core.accessKinds.contains(parent.kind) && parent.children.length == 1) {
-			if (isWriteTarget(parent, grand, s)) return false;
-			if (parent.name == s.sizeMember) return true;
-			if (grand == null || grand.kind != s.core.callKind || grand.children[0] != parent) return false;
-			return s.readMethods.contains(parent.name ?? '') || grand == src.push;
-		}
-		return s.loopKinds.contains(parent.kind)
-			? parent.children.length > 1 && parent.children.indexOf(ref) == parent.children.length - 2
-			: parent == src.initAssign && parent.children[0] == ref;
+		if (!s.core.accessKinds.contains(parent.kind) || parent.children.length != 1)
+			return s.loopKinds.contains(parent.kind)
+				? parent.children.length > 1 && parent.children.indexOf(ref) == parent.children.length - 2
+				: parent == src.initAssign && parent.children[0] == ref;
+		if (isWriteTarget(parent, grand, s)) return false;
+		if (parent.name == s.sizeMember) return true;
+		if (grand == null || grand.kind != s.core.callKind || grand.children[0] != parent) return false;
+		return s.readMethods.contains(parent.name ?? '') || grand == src.push;
 	}
 
 	/** Whether `node` is the l-value of an assignment / increment — the first child of a `writeParentKinds` parent. */

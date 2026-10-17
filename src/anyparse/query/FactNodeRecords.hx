@@ -259,17 +259,14 @@ final class FactNodeRecords {
 		for (c in node.calls) {
 			final body: Null<FactPos> = c.body;
 			final site: Null<FactPos> = c.site;
-			if (c.access == INLINED && body != null && site != null) {
-				final declared: FactPos = body;
-				final ran: Span = site.span;
-				final known: Null<SpliceFact> = node.splices.find(s ->
-					s.body.file == declared.file && sameSpan(s.body.span, declared.span)
-				);
-				if (known == null)
-					node.splices.push({ callee: c.target ?? '', body: declared, sites: [ran] })
-				else if (!known.sites.exists(s -> sameSpan(s, ran)))
-					known.sites.push(ran);
-			}
+			if (c.access != INLINED || body == null || site == null) continue;
+			final declared: FactPos = body;
+			final ran: Span = site.span;
+			final known: Null<SpliceFact> = node.splices.find(s -> s.body.file == declared.file && sameSpan(s.body.span, declared.span));
+			if (known == null)
+				node.splices.push({ callee: c.target ?? '', body: declared, sites: [ran] })
+			else if (!known.sites.exists(s -> sameSpan(s, ran)))
+				known.sites.push(ran);
 		}
 	}
 

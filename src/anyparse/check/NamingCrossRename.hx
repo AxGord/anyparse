@@ -296,12 +296,11 @@ final class NamingCrossRename {
 	 * can edit, where a renamed bare occurrence would bind to that binding first.
 	 */
 	private static function boundWhereRenamed(newName: String, oldName: String, ctx: Context): Bool {
-		for (entry in ctx.project) if (
-			entry.source.indexOf(oldName) >= 0 && entry.source.indexOf(newName) >= 0
-			&& OccurrenceScan.nameBoundInRange(entry.source, newName, 0, entry.source.length, [], ctx.plugin)
-		)
-			return true;
-		return false;
+		return ctx.project.exists(
+			entry ->
+				entry.source.indexOf(oldName) >= 0 && entry.source.indexOf(newName) >= 0
+				&& OccurrenceScan.nameBoundInRange(entry.source, newName, 0, entry.source.length, [], ctx.plugin)
+		);
 	}
 
 	/** Whether `name` occurs in some project file anywhere but a comment or a word of prose inside a string. */

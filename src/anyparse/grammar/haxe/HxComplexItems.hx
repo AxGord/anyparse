@@ -109,8 +109,7 @@ final class HxComplexItems {
 		if (Reflect.isEnumValue(v)) {
 			final ctor: String = Type.enumConstructor(v);
 			if (ctor == 'Call' || ctor == 'NewExpr') return true;
-			for (param in Type.enumParameters(v)) if (subtreeHasCallOrNew(param, depth + 1)) return true;
-			return false;
+			return Type.enumParameters(v).exists(param -> subtreeHasCallOrNew(param, depth + 1));
 		}
 		if (Std.isOfType(v, Array)) {
 			final arr: Array<Any> = cast v;

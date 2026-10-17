@@ -210,8 +210,7 @@ final class FactsEscapes {
 			final receiver: Null<String> = c.receiver;
 			if (byName(c.access) && receiver != null && !escape(receiver)) return false;
 		}
-		for (r in n.reflection) if (!produced(r)) return false;
-		return true;
+		return n.reflection.foreach(r -> produced(r));
 	}
 
 	/**
@@ -264,10 +263,9 @@ final class FactsEscapes {
 		_declaredEscaped = true;
 		for (id in declaredClasses(_table, globs)) {
 			final fact: Null<TypeFact> = _table.type(id);
-			if (fact != null && !escapeInstance(id, fact, [])) {
-				_declaredEscaped = false;
-				return false;
-			}
+			if (fact == null || escapeInstance(id, fact, [])) continue;
+			_declaredEscaped = false;
+			return false;
 		}
 		return true;
 	}

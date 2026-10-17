@@ -858,12 +858,12 @@ final class CollapsePass {
 		if (items.length < 2) return null;
 		final operands: Array<Doc> = [];
 		final ops: Array<String> = [];
-		for (i in 0...items.length) {
+		for (i => item in items) {
 			if (i == items.length - 1) {
-				operands.push(items[i]);
+				operands.push(item);
 				break;
 			}
-			switch items[i] {
+			switch item {
 				case Concat([operand, Text(opText)]):
 					operands.push(operand);
 					final trimmed: String = StringTools.ltrim(opText);

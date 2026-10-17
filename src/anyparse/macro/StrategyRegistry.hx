@@ -52,7 +52,7 @@ class StrategyRegistry {
 	 * sort computed in `prepare`.
 	 */
 	public function runAnnotate(shape: ShapeBuilder.ShapeResult, ctx: LoweringCtx): Void {
-		for (s in _ordered) for (name => root in shape.rules) walkAnnotate(root, s, ctx);
+		for (s in _ordered) for (_ => root in shape.rules) walkAnnotate(root, s, ctx);
 	}
 
 	private function walkAnnotate(node: ShapeNode, s: Strategy, ctx: LoweringCtx): Void {

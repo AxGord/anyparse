@@ -385,14 +385,12 @@ final class ValueEscapes {
 				final enclosing: Null<String> = TypeResolver.enclosingTypeDeclAt(tree, at.from)?.name;
 				return enclosing == null ? null : g.types.memberOnChain(enclosing, name)?.typeSource;
 			}
-			if (_hazards.isAccess(target.kind) && target.children.length > 0 && name != null) {
-				final receiver: QueryNode = target.children[0];
-				final owner: Null<String> = isTypeName(receiver)
-					? SourceText.lastSegment(RefactorSupport.flattenPath(receiver))
-					: typeOf(receiver);
-				return owner == null ? null : g.types.memberOnChain(owner, name)?.typeSource;
-			}
-			return null;
+			if (!_hazards.isAccess(target.kind) || target.children.length <= 0 || name == null) return null;
+			final receiver: QueryNode = target.children[0];
+			final owner: Null<String> = isTypeName(receiver)
+				? SourceText.lastSegment(RefactorSupport.flattenPath(receiver))
+				: typeOf(receiver);
+			return owner == null ? null : g.types.memberOnChain(owner, name)?.typeSource;
 		}
 		function value(raw: QueryNode): Void {
 			if (!ok) return;
@@ -537,8 +535,7 @@ final class ValueEscapes {
 			final span: Null<Span> = written?.span;
 			if (span == null || !typedPosition(source.substring(span.from, span.to))) return false;
 			// an override of a library member returns into the library code that calls it
-			for (s in g.types.supertypesOf(type)) if (g.types.memberOnChain(s, name) != null && libraryMember(s, name)) return false;
-			return true;
+			return g.types.supertypesOf(type).foreach(s -> !(g.types.memberOnChain(s, name) != null && libraryMember(s, name)));
 		}
 		function walk(node: QueryNode, fn: Null<QueryNode>): Void {
 			if (!ok) return;

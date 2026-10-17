@@ -181,8 +181,7 @@ final class FactsProvenance {
 		if (!typed.fields.foreach(f -> declaredAlike(typed, f, declared))) return false;
 		final table: CompilerFacts = _view._table;
 		final key: String = table.keyOf(file);
-		for (nodeId in table.nodeIdsOf(typed.id)) {
-			if (!table.buildsTyping(nodeId).exists(b -> builds.contains(b))) continue;
+		for (nodeId in table.nodeIdsOf(typed.id)) if (table.buildsTyping(nodeId).exists(b -> builds.contains(b))) {
 			final n: Null<FactNode> = table.nodeAsBuiltBy(nodeId, builds);
 			if (n == null || !nodeOnText(n, typed, declared, key, source, tree, builds)) return false;
 		}

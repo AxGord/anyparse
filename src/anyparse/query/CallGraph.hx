@@ -474,8 +474,7 @@ final class CallGraph {
 		final key: String = CallGraphNames.normalizePath(file);
 		for (d in _fileDeclarations[key] ?? []) if (declarationsOf(d.id).exists(o -> CallGraphNames.normalizePath(o.file) != key))
 			return true;
-		for (files in _initFiles) if (files.length > 1 && files.exists(f -> CallGraphNames.normalizePath(f) == key)) return true;
-		return false;
+		return Lambda.exists(_initFiles, files -> files.length > 1 && files.exists(f -> CallGraphNames.normalizePath(f) == key));
 	}
 
 	/**
@@ -679,10 +678,9 @@ final class CallGraph {
 			for (sub in types.subtypesOf(t)) {
 				queue.push(sub);
 				final hit: Null<String> = _members[sub]?.get(member) ?? inheritedOffChain(typeName, sub, member);
-				if (hit != null && !found.exists(hit)) {
-					found[hit] = true;
-					result.push(hit);
-				}
+				if (hit == null || found.exists(hit)) continue;
+				found[hit] = true;
+				result.push(hit);
 			}
 		}
 		return result;

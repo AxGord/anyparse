@@ -506,19 +506,17 @@ private final class BodyFacts {
 			final inner: Null<Bool> = decided(kids[0], id, valuation);
 			return inner == null ? null : !inner;
 		}
-		if ((kind == _shape.logicalAndKind || kind == _shape.logicalOrKind) && kids.length == 2) {
-			final a: Null<Bool> = decided(kids[0], id, valuation);
-			final b: Null<Bool> = decided(kids[1], id, valuation);
-			final and: Bool = kind == _shape.logicalAndKind;
-			// either side settling the operator settles it; else both sides must be known
-			return if (a == !and || b == !and)
-				!and
-			else if (a != null && b != null)
-				and
-			else
-				null;
-		}
-		return decidedParam(cond, id, valuation);
+		if (kind != _shape.logicalAndKind && kind != _shape.logicalOrKind || kids.length != 2) return decidedParam(cond, id, valuation);
+		final a: Null<Bool> = decided(kids[0], id, valuation);
+		final b: Null<Bool> = decided(kids[1], id, valuation);
+		final and: Bool = kind == _shape.logicalAndKind;
+		// either side settling the operator settles it; else both sides must be known
+		return if (a == !and || b == !and)
+			!and
+		else if (a != null && b != null)
+			and
+		else
+			null;
 	}
 
 	/**

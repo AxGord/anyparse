@@ -6,6 +6,8 @@ import anyparse.query.Scope.ScopeFrame;
 import anyparse.query.Scope.ScopeStack;
 import anyparse.runtime.Span;
 
+using Lambda;
+
 /**
  * Lexical reference / declaration walker for `apq refs`.
  *
@@ -197,8 +199,7 @@ final class Refs {
 	 * re-reading the other.
 	 */
 	public static function readsName(name: String, node: QueryNode, shape: RefShape): Bool {
-		for (h in find(name, node, shape)) if (h.kind != RefKind.Write) return true;
-		return false;
+		return find(name, node, shape).exists(h -> h.kind != RefKind.Write);
 	}
 
 	/**

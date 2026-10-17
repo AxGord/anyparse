@@ -350,11 +350,9 @@ final class ExplicitType implements Check implements OracleAssisted {
 		final mark: Int = s.printer.pendingImportMark();
 		final normalized: Null<String> = LiteralInfer.normalizeWith(raw, s.printer, MAX_ANON_LEN, site, at);
 		final norm: Null<String> = admissible ? LiteralInfer.admissibleLocal(normalized, s.printer) : normalized;
-		if (norm == null) {
-			s.printer.rollbackPendingImports(mark);
-			return decline(v, LiteralInfer.unwritableReason(raw, MAX_ANON_LEN, site, admissible));
-		}
-		return { span: new Span(at, at), text: ':$norm' };
+		if (norm != null) return { span: new Span(at, at), text: ':$norm' };
+		s.printer.rollbackPendingImports(mark);
+		return decline(v, LiteralInfer.unwritableReason(raw, MAX_ANON_LEN, site, admissible));
 	}
 
 	/**

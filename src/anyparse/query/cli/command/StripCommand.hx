@@ -154,14 +154,12 @@ final class StripCommand implements CliCommand {
 			CliIo.stderr('apq strip: --per-pattern takes exactly one file (got ${o.files.length})\n');
 			return EXIT_USAGE;
 		}
-		if (o.patterns.length < 2) {
-			CliIo.stderr(
-				'apq strip: --per-pattern requires ≥2 patterns (got ${o.patterns.length}'
-				+ ') — isolation diagnostic only useful when patterns can be tested independently\n'
-			);
-			return EXIT_USAGE;
-		}
-		return runStripPerPattern(plugin, o.files[0], o.patterns, o.replacements, compiledRegex);
+		if (o.patterns.length >= 2) return runStripPerPattern(plugin, o.files[0], o.patterns, o.replacements, compiledRegex);
+		CliIo.stderr(
+			'apq strip: --per-pattern requires ≥2 patterns (got ${o.patterns.length}'
+			+ ') — isolation diagnostic only useful when patterns can be tested independently\n'
+		);
+		return EXIT_USAGE;
 	}
 
 	/**

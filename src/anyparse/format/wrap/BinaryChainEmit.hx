@@ -570,8 +570,8 @@ final class BinaryChainEmit {
 
 	private static function shapeNoWrap(items: Array<Doc>, ops: Array<String>): Doc {
 		final inner: Array<Doc> = [items[0]];
-		for (i in 0...ops.length) {
-			inner.push(Text(' ${ops[i]} '));
+		for (i => op in ops) {
+			inner.push(Text(' ${op} '));
 			inner.push(items[i + 1]);
 		}
 		return Concat(inner);
@@ -667,7 +667,7 @@ final class BinaryChainEmit {
 		final tail: Array<Doc> = [];
 		switch location {
 			case BeforeLast:
-				for (i in 0...ops.length) {
+				for (i => op in ops) {
 					// ω-ternary-cuddled-braces: `cuddleLast` glues the FINAL gap —
 					// the operator rides the previous operand's own closing line
 					// (` : {`) instead of opening a continuation line of its own.
@@ -675,7 +675,7 @@ final class BinaryChainEmit {
 					// dropped `Line`, so the knob-off path is the pre-knob Concat.
 					final cuddled: Bool = cuddleLast && i == ops.length - 1;
 					if (!cuddled) tail.push(Line('\n'));
-					tail.push(Text(cuddled ? ' ${ops[i]} ' : '${ops[i]} '));
+					tail.push(Text(cuddled ? ' ${op} ' : '${op} '));
 					tail.push(items[i + 1]);
 				}
 				return Concat([items[0], Nest(cols, Concat(tail))]);
@@ -717,20 +717,20 @@ final class BinaryChainEmit {
 		final inner: Array<Doc> = [OptHardlineSkipAtOpenDelim, items[0]];
 		switch location {
 			case AfterLast:
-				for (i in 0...ops.length) {
-					inner.push(Text(' ${ops[i]}'));
+				for (i => op in ops) {
+					inner.push(Text(' ${op}'));
 					inner.push(Line('\n'));
 					inner.push(items[i + 1]);
 				}
 			case BeforeLast:
-				for (i in 0...ops.length) {
+				for (i => op in ops) {
 					// ω-ternary-cuddled-braces, sister of the `OnePerLineAfterFirst`
 					// arm: the final gap glues when `cuddleLast`. Same one dropped
 					// `Line` — this shaper differs only in breaking before the FIRST
 					// operand as well, which the cuddle never touches.
 					final cuddled: Bool = cuddleLast && i == ops.length - 1;
 					if (!cuddled) inner.push(Line('\n'));
-					inner.push(Text(cuddled ? ' ${ops[i]} ' : '${ops[i]} '));
+					inner.push(Text(cuddled ? ' ${op} ' : '${op} '));
 					inner.push(items[i + 1]);
 				}
 		}
@@ -772,7 +772,7 @@ final class BinaryChainEmit {
 		final enriched: Array<Doc> = switch location {
 			case BeforeLast:
 				final acc: Array<Doc> = [items[0]];
-				for (i in 0...ops.length) acc.push(Concat([Text('${ops[i]} '), items[i + 1]]));
+				for (i => op in ops) acc.push(Concat([Text('${op} '), items[i + 1]]));
 				acc;
 			case AfterLast:
 				final acc: Array<Doc> = [for (i in 0...ops.length) Concat([items[i], Text(' ${ops[i]}')])];

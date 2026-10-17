@@ -165,7 +165,7 @@ final class DynamicBag {
 		if (parent == null) return false;
 		final kids: Array<QueryNode> = parent.children;
 		var idx: Int = -1;
-		for (i in 0...kids.length) if (kids[i] == member) idx = i;
+		for (i => kid in kids) if (kid == member) idx = i;
 		if (idx < 0) return false;
 		var j: Int = idx - 1;
 		while (j >= 0) {

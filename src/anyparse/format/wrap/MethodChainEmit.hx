@@ -532,9 +532,9 @@ class MethodChainEmit {
 	private static function shapeKeepTail(segments: Array<Doc>, cols: Int, ?sourceBreakBefore: Array<Bool>): Doc {
 		final breaks: Array<Bool> = sourceBreakBefore ?? [];
 		final tail: Array<Doc> = [];
-		for (i in 0...segments.length) {
+		for (i => segment in segments) {
 			if (i < breaks.length && breaks[i]) tail.push(Line('\n'));
-			tail.push(segments[i]);
+			tail.push(segment);
 		}
 		return Concat([Nest(cols, Concat(tail))]);
 	}

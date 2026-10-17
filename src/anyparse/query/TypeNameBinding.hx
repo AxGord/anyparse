@@ -396,15 +396,13 @@ final class TypeNameBinding {
 	private function wildcardAnswer(name: String, pkg: String): Answer {
 		if (splitPath(pkg) != null) return Pass;
 		final mains: Null<Array<ResolvedType>> = wildcardTypes(pkg);
-		if (mains != null) {
-			final named: Array<ResolvedType> = mains.filter(m -> m.type.name == name);
-			return named.length > 0 ? Decls(named) : Pass;
-		}
-		return switch StdTypes.declaresModule(pkg, name) {
+		if (mains == null) return switch StdTypes.declaresModule(pkg, name) {
 			case false: Pass;
 			case true: declaresMain(outsideTypes('$pkg.$name', name), name, '$pkg.$name') ?? Unreadable('$pkg.$name');
 			case null: Unreadable('$pkg.$name');
 		};
+		final named: Array<ResolvedType> = mains.filter(m -> m.type.name == name);
+		return named.length > 0 ? Decls(named) : Pass;
 	}
 
 	/**

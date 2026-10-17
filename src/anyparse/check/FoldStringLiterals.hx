@@ -1092,11 +1092,11 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 			from = end;
 		}
 		final text: StringBuf = new StringBuf();
-		for (k in 0...parts.length) {
+		for (k => part in parts) {
 			// A locked boundary is re-emitted from the SOURCE, so the comment, the line break and
 			// the `+` an author wrote come back byte for byte; every other boundary is plain glue.
 			if (k > 0) text.add(decomposition.glue[ends[k - 1]] ?? GROUP_JOIN);
-			text.add(parts[k]);
+			text.add(part);
 		}
 		return { text: text.toString(), widest: widest };
 	}

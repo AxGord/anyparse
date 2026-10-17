@@ -174,8 +174,7 @@ final class CallGraphFacts {
 		if (!view.truth) return [];
 		final key: String = view._table.keyOf(file);
 		final out: Array<String> = [];
-		for (t in view.indexedFile(key)?.types ?? []) {
-			if (g.types.declarationCount(t.name) != 1) continue;
+		for (t in view.indexedFile(key)?.types ?? []) if (g.types.declarationCount(t.name) == 1) {
 			for (id in view.bySimpleName()[t.name] ?? []) adoptType(g, file, key, t.name, id, out);
 		}
 		return out;

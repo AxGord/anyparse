@@ -655,8 +655,7 @@ final class FactsView {
 	 * reader of the syntax gets no graph: a macro's code may name a local of the code calling it, which no fact relates.
 	 */
 	public function blindIn(file: String, span: Span, ?g: CallGraph): Null<ReachUnknown> {
-		for (n in _table.nodesIn(file)) {
-			if (n.generated || !meets(n.at.span, span)) continue;
+		for (n in _table.nodesIn(file)) if (!n.generated && meets(n.at.span, span)) {
 			final blind: Null<ReachUnknown> = FactMarkers.first(
 				n, m -> switch m {
 					case MacroExpansion: truth && g != null && faceted(g, file, n.at.span) ? null : Reification(file, span);

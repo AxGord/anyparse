@@ -1831,13 +1831,12 @@ final class WriterRefFieldLowering {
 		// D61: non-optional lead — no space before lead. The end-field of a
 		// condWrap span cannot push its own `@:lead` (the open paren is owned by
 		// the start field and emitted via the splice's emitCondition wrap).
-		if (leadText != null && !isOptional && !hasCondWrap && !hasCondWrapEnd) {
-			// ω-before-lead: the block comment captured just before the lead
-			// literal (`{x /* c */ : 1}`), ahead of the lead's own spacing.
-			final beforeLead: Null<Expr> = beforeLeadSlotAccess(ctx, child, isFirstField, fieldAccess, typePath);
-			if (beforeLead != null) parts.push(beforeLeadDoc(beforeLead));
-			emitMandatoryLead(child, parts, leadText, fieldAccess);
-		}
+		if (leadText == null || isOptional || hasCondWrap || hasCondWrapEnd) return;
+		// ω-before-lead: the block comment captured just before the lead
+		// literal (`{x /* c */ : 1}`), ahead of the lead's own spacing.
+		final beforeLead: Null<Expr> = beforeLeadSlotAccess(ctx, child, isFirstField, fieldAccess, typePath);
+		if (beforeLead != null) parts.push(beforeLeadDoc(beforeLead));
+		emitMandatoryLead(child, parts, leadText, fieldAccess);
 	}
 
 	/**

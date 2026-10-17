@@ -102,10 +102,9 @@ final class LockReleasers {
 		final queue: Array<String> = [];
 		for (g in _sites.gives) {
 			final from: String = g.edge.from;
-			if (g.lock == lock && !found.exists(from) && !g.own && !_sites.helpers.contains(from) && givesUntaken(g, lock)) {
-				found[from] = true;
-				queue.push(from);
-			}
+			if (g.lock != lock || found.exists(from) || g.own || _sites.helpers.contains(from) || !givesUntaken(g, lock)) continue;
+			found[from] = true;
+			queue.push(from);
 		}
 		var qi: Int = 0;
 		while (qi < queue.length) for (e in _graph.inEdges(queue[qi++])) if (runsFrom(e) && !found.exists(e.from)) {

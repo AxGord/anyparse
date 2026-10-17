@@ -544,20 +544,18 @@ final class CallGraphEdges {
 			if (isAccessKind(expr.kind) && name != null && expr.children.length > 0)
 				return typeNameReceiver(expr.children[0]) != null ? null : typeScopeOf(expr.children[0], currentType);
 			if (indexKind != null && expr.kind == indexKind && expr.children.length > 0) return typeScopeOf(expr.children[0], currentType);
-			if (expr.kind == callKind && expr.children.length > 0) {
-				final callee: QueryNode = unwrap(expr.children[0]);
-				if (isAccessKind(callee.kind) && callee.children.length > 0) return typeScopeOf(callee.children[0], currentType);
-				final target: Null<String> = callTargetOf(expr, currentType)?.target;
-				final declaredAt: Null<Span> = target == null ? null : g.nodes[target]?.span;
-				return if (target == null || declaredAt == null)
-					null
-				// a local function's return type is written inside the functions enclosing it; a member's, on the member
-				else if (target.contains('#'))
-					declaredAt.from
-				else
-					MEMBER_SCOPE;
-			}
-			return null;
+			if (expr.kind != callKind || expr.children.length <= 0) return null;
+			final callee: QueryNode = unwrap(expr.children[0]);
+			if (isAccessKind(callee.kind) && callee.children.length > 0) return typeScopeOf(callee.children[0], currentType);
+			final target: Null<String> = callTargetOf(expr, currentType)?.target;
+			final declaredAt: Null<Span> = target == null ? null : g.nodes[target]?.span;
+			return if (target == null || declaredAt == null)
+				null
+			// a local function's return type is written inside the functions enclosing it; a member's, on the member
+			else if (target.contains('#'))
+				declaredAt.from
+			else
+				MEMBER_SCOPE;
 		}
 
 		// the graph's resolution for the ONE structural walk (`NominalTypes.typeWalk`), set right below `typeSourceOf`'s arms

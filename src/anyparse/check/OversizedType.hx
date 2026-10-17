@@ -343,11 +343,9 @@ final class OversizedType implements Check implements ConfigAware implements Vol
 		}
 		final cut: Int = head.indexOf('<=');
 		final name: String = cut < 0 ? '' : head.substring(0, cut).trim();
-		if (!identifier.match(name)) {
-			problems.push(malformedGrant(head));
-			return null;
-		}
-		return readCeilings(name, head, head.substring(cut + 2).split('/'), maxMembers, maxLines, problems);
+		if (identifier.match(name)) return readCeilings(name, head, head.substring(cut + 2).split('/'), maxMembers, maxLines, problems);
+		problems.push(malformedGrant(head));
+		return null;
 	}
 
 	/**

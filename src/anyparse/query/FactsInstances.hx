@@ -115,8 +115,7 @@ final class FactsInstances {
 
 	/** Every type text a type's own facts spell: its fields, supertypes, targets, underlying types, constructors. */
 	private static function typeFactTexts(fact: TypeFact): Array<Null<String>> {
-		final texts: Array<Null<String>> = [];
-		for (f in fact.fields) for (t in f.types) texts.push(t);
+		final texts: Array<Null<String>> = [for (f in fact.fields) for (t in f.types) t];
 		texts.push(fact.superClass);
 		for (i in fact.interfaces) texts.push(i);
 		for (t in fact.targets) texts.push(t);

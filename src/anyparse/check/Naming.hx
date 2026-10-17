@@ -347,11 +347,9 @@ final class Naming implements Check implements CrossFileFix implements RiskyArm 
 		files: Array<{ file: String, source: String }>, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<RiskyCrossFileEdit> {
 		final support: Null<NamingSupport> = plugin.namingSupport();
-		if (support == null) {
-			for (v in violations) RenameRefusal.note(v, RenameRefusal.NO_SUPPORT);
-			return [];
-		}
-		return NamingCrossRename.edits(files, violations, plugin, support);
+		if (support != null) return NamingCrossRename.edits(files, violations, plugin, support);
+		for (v in violations) RenameRefusal.note(v, RenameRefusal.NO_SUPPORT);
+		return [];
 	}
 
 	/** The privatize arm: each finding `run` proved confined gets its `public` keyword rewritten to `private`. */

@@ -428,11 +428,9 @@ final class CondRegionLiveness {
 		if (code == '"'.code || code == '\''.code) {
 			final from: Int = cursor.pos;
 			cursor.pos = quotedEnd(text, cursor.pos);
-			if (cursor.pos < 0) {
-				cursor.ok = false;
-				return null;
-			}
-			return CondValues.text(text.substring(from + 1, cursor.pos - 1));
+			if (cursor.pos >= 0) return CondValues.text(text.substring(from + 1, cursor.pos - 1));
+			cursor.ok = false;
+			return null;
 		}
 		if (code >= '0'.code && code <= '9'.code) {
 			final from: Int = cursor.pos;
@@ -476,11 +474,9 @@ final class CondRegionLiveness {
 		}
 		cursor.pos = end;
 		final raw: String = text.substring(from + 1, end - 1);
-		if (!closeParen(text, cursor)) {
-			cursor.ok = false;
-			return null;
-		}
-		return raw.indexOf('\\') >= 0 ? null : CondValues.version(raw);
+		if (closeParen(text, cursor)) return raw.indexOf('\\') >= 0 ? null : CondValues.version(raw);
+		cursor.ok = false;
+		return null;
 	}
 
 	/** Consume a `(` at the cursor (after spaces), reporting whether one was there; the cursor stays put when not. */

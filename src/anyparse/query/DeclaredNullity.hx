@@ -165,14 +165,12 @@ final class DeclaredNullity {
 	): Tier {
 		final head: Null<String> = headPathOf(NominalTypes.unwrapNullable(written.trim(), wrappers, index.typeSyntax), index.typeSyntax);
 		if (head == null || wrappers.contains(head) || params.contains(head)) return Unknown;
-		if (head.indexOf('.') >= 0) {
-			final decls: Array<ResolvedType> = index.resolveTypeRefsFrom(head, fi.file, at);
-			return decls.length == 0 ? Unknown : Bound(decls);
-		}
-		return switch index.refs.names.tierOf(head, fi, at) {
+		if (head.indexOf('.') < 0) return switch index.refs.names.tierOf(head, fi, at) {
 			case Free if (!builtins.contains(head)): Unknown;
 			case tier: tier;
 		};
+		final decls: Array<ResolvedType> = index.resolveTypeRefsFrom(head, fi.file, at);
+		return decls.length == 0 ? Unknown : Bound(decls);
 	}
 
 	/**

@@ -684,9 +684,7 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 		if (kids.length == 0) return false;
 		final last: QueryNode = kids[kids.length - 1];
 		if (last.kind != ctx.callKind || last.children.length == 0) return false;
-		for (seg in NodeShape.calleePath(last.children[0], ctx.fieldAccessKind, ctx.identKind)) if (boundaryCalls.contains(seg))
-			return true;
-		return false;
+		return NodeShape.calleePath(last.children[0], ctx.fieldAccessKind, ctx.identKind).exists(seg -> boundaryCalls.contains(seg));
 	}
 
 	/** Whether `file`'s path contains any of the configured exclusion substrings. */

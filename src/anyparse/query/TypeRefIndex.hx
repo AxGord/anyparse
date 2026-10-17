@@ -357,8 +357,7 @@ final class TypeRefIndex {
 	 */
 	public static function plainImportPathOf(fi: FileInfo, simple: String): Null<String> {
 		var found: Null<String> = null;
-		for (imp in fi.imports) if (!imp.guarded && imp.kind == ImportKind.Import) {
-			if (SourceText.lastSegment(imp.raw) != simple) continue;
+		for (imp in fi.imports) if (!imp.guarded && imp.kind == ImportKind.Import && SourceText.lastSegment(imp.raw) == simple) {
 			if (found != null && found != imp.raw) return null;
 			found = imp.raw;
 		}

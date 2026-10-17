@@ -398,10 +398,9 @@ final class OracleGeneration {
 		final refs: HxmlRefs = OracleCache.hxmlRefs(text);
 		for (include in refs.includes) {
 			final path: String = absolute(cwd, include);
-			if (!paths.contains(path)) {
-				paths.push(path);
-				collectHxml(path, cwd, root, paths, names, libraries, depth + 1);
-			}
+			if (paths.contains(path)) continue;
+			paths.push(path);
+			collectHxml(path, cwd, root, paths, names, libraries, depth + 1);
 		}
 		for (lib in refs.libs) if (!names.contains(lib)) names.push(lib);
 		for (classPath in refs.classPaths) {
