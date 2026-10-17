@@ -24,6 +24,6 @@ package anyparse.grammar.haxe;
  * tests can build expected ASTs with plain strings without explicit
  * casts.
  */
-@:re('[A-Za-z_][A-Za-z0-9_]*')
+@:re('(?!(?:abstract|break|case|cast|catch|class|continue|default|do|dynamic|else|enum|extends|extern|false|final|for|function|if|implements|import|in|inline|interface|macro|new|null|operator|overload|override|package|private|public|return|static|switch|this|throw|true|try|typedef|untyped|using|var|while)\\b)[A-Za-z_][A-Za-z0-9_]*')
 @:rawString
 abstract HxIdentLit(String) from String to String {}

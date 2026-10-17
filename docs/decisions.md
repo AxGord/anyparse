@@ -3421,3 +3421,15 @@ decided the question; it may not become a record of runs.
   deletes one by, now ONE function (`OccurrenceScan.usingExtensionCalled`) both call. Fixture consequence: four
   `MoveSymbolSliceTest` fixtures modelled `using q.Ext;` supplying `s.go()` with an EMPTY `class Ext {}` (no such
   extension exists); `Ext` now declares `go` — branch `feat/infra-N12`
+- the name terminals took any identifier-shaped word: `final dynamic = 1;`, `var default:Int;`, `function f(macro:Int)`,
+  `catch (null:Dynamic)` and 41 more reserved words parsed, so an op writing such a name passed its own re-parse gate
+  with a tree Haxe rejects (each of the 45 words of the 4.3 keyword table refused as a local's name, verified on 4.3.7).
+  `HxIdentLit` (every declaration name: parameter, binder, type, enum constructor, structure field, type parameter),
+  `HxVarNameLit` and `HxFnNameLit` (minus `new`, the constructor) now refuse all of them; the slots that DO take a
+  keyword moved to `HxWordLit` (a property accessor `(default, null)` / `dynamic`, an interpolated `'$this'`, a `$name`
+  reification). `HxExprIdentLit` additionally refuses the declaration words no expression is (`class`, `dynamic`,
+  `static`, `using`, …) — `abstract` stays, it is the abstract's own value in `switch abstract { … }`. Not refused: an
+  arrow over a check-type expression, `(null:Int) -> 1`, which reaches the general `ThinArrow` fallback rather than a
+  name slot; `super`, which Haxe does not reserve. Writer and formatter are untouched: `fmt --write` over TM src (876
+  files) and anyparse src (1140) is byte-identical. Fixture consequence: a `CallGraphTest` fixture named a function
+  `untyped` — branch `feat/infra-N12`

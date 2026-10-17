@@ -794,6 +794,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.grammar.haxe.HxPrecedenceTableTest',
 		'unit.grammar.haxe.HxPrefixSliceTest',
 		'unit.grammar.haxe.HxRegexLitSliceTest',
+		'unit.grammar.haxe.HxReservedNameSliceTest',
 		'unit.grammar.haxe.HxRestProbeSelfBreakSliceTest',
 		'unit.grammar.haxe.HxReturnBodySliceTest',
 		'unit.grammar.haxe.HxReturnCallOpenParenSliceTest',
@@ -2948,6 +2949,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxNestingCostTest#testEachBodyIsWrittenOnce :: control :: M-FOR-BODY-PROBE-EAGER,M-CHAIN-WALK-EAGER',
 			'unit.grammar.haxe.HxNestingCostTest#testParserRunsEachNestedAtomOnce :: control :: M-PARSE-MEMO-REPLAY-OFF,M-PARSE-MEMO-STASHED-SKIP',
 			'unit.grammar.haxe.HxNestingCostTest#testWriterDocKeepsItsSharing :: control :: M-GROUPIFY-SHARED-OFF',
+			'unit.grammar.haxe.HxReservedNameSliceTest#testAReservedWordIsNoFunctionParameterOrBinderName :: control :: '
+				+ 'M-RESERVED-IDENT-NAME,M-RESERVED-FN-NAME',
+			'unit.grammar.haxe.HxReservedNameSliceTest#testAReservedWordIsNoLocalOrFieldName :: control :: M-RESERVED-VAR-NAME',
 			'unit.grammar.haxe.HxRestProbeSelfBreakSliceTest#testArrayStillBreaksForAShortTrailingCall :: control :: '
 				+ 'M-RESTPROBE-COLUMN-FLAT',
 			'unit.grammar.haxe.HxRestProbeSelfBreakSliceTest#testCallStillBreaksBeforeAChainLink :: control :: M-RESTPROBE-FULL-LINE',
@@ -7182,7 +7186,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-CARRY-ORDER-MET',
 			'M-CARRY-IMPORTLESS-BELOW',
 			'M-CARRY-USING-UNUSED',
-			'M-CARRY-USING-ORDER-MET'
+			'M-CARRY-USING-ORDER-MET',
+			'M-RESERVED-IDENT-NAME',
+			'M-RESERVED-VAR-NAME',
+			'M-RESERVED-FN-NAME'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
@@ -7414,6 +7421,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-NAMED-FN-NOT-BRACE-ENDED :: anyparse.grammar.haxe.HxAstPredLowering#endsWithCloseBraceField',
 			'M-NAMED-FN-EXPR-BODY-RELAXED :: anyparse.grammar.haxe.HxAstPredLowering#stmtExprNoSemiAtField',
 			'M-WALK-TYPE-ARGS-UNCOUNTED :: anyparse.macro.QueryWalkerLowering#seqTypeArgCount',
+			'M-RESERVED-IDENT-NAME :: anyparse.grammar.haxe.HxIdentLit#MetaCall:@:re',
+			'M-RESERVED-VAR-NAME :: anyparse.grammar.haxe.HxVarNameLit#MetaCall:@:re',
+			'M-RESERVED-FN-NAME :: anyparse.grammar.haxe.HxFnNameLit#MetaCall:@:re',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

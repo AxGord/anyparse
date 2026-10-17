@@ -26,6 +26,6 @@ package anyparse.grammar.haxe;
  * `from String to String` keeps `(decl.name : String)` reads and string-built test ASTs
  * compiling transparently.
  */
-@:re("\\$?(?!(?:var|final)\\b)[A-Za-z_][A-Za-z0-9_]*")
+@:re("\\$?(?!(?:abstract|break|case|cast|catch|class|continue|default|do|dynamic|else|enum|extends|extern|false|final|for|function|if|implements|import|in|inline|interface|macro|new|null|operator|overload|override|package|private|public|return|static|switch|this|throw|true|try|typedef|untyped|using|var|while)\\b)[A-Za-z_][A-Za-z0-9_]*")
 @:rawString
 abstract HxVarNameLit(String) from String to String {}
