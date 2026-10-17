@@ -332,9 +332,9 @@
 		{
 			"name": "M-NAMEOUTSIDE-TRUE",
 			"type": "anyparse.query.RawSourceScan",
-			"method": "nameOccursOutside",
+			"method": "nameOccursOutsideAll",
 			"force": "true",
-			"note": "every name reads as occurring outside its own file, so unused-public-member keeps every member it should have flagged"
+			"note": "every name reads as occurring outside its excluded regions, so unused-public-member keeps every member it should have flagged (nameOccursOutside delegates here)"
 		},
 		{
 			"name": "M-NO-INVALIDATE",
@@ -23360,6 +23360,186 @@
 			"find": ": TypeResolver.isDeletionPure.bind(_, tree, shape, RunScan.typeInfoOf(plugin)?.declaredTypes(source) ?? [], index);",
 			"replace": ": MemberKinds.isSideEffectFree.bind(_, shape);",
 			"note": "a field initializer is judged kind-only again, so a pure collection literal or stdlib call keeps a dead field"
+		},
+		{
+			"name": "M-PRIVATIZE-NO-CANDIDATE",
+			"type": "anyparse.check.NamingPrivatize",
+			"method": "isCandidate",
+			"force": "false",
+			"note": "no finding is ever a privatize candidate, so the public `_x` nothing outside reads is renamed again"
+		},
+		{
+			"name": "M-PRIVATIZE-METHOD-CANDIDATE",
+			"type": "anyparse.check.NamingPrivatize",
+			"method": "isCandidate",
+			"find": "decl.category != NamingCategory.Field || ",
+			"replace": "",
+			"note": "a method is a candidate too, though its visibility answers to overrides and interfaces"
+		},
+		{
+			"name": "M-PRIVATIZE-NO-UNDERSCORE",
+			"type": "anyparse.check.NamingPrivatize",
+			"method": "isCandidate",
+			"find": "!decl.name.startsWith(UNDERSCORE) || ",
+			"replace": "",
+			"note": "a public field without the private marker is a candidate under a policy whose private rule admits it"
+		},
+		{
+			"name": "M-PRIVATIZE-NOT-PUBLIC",
+			"type": "anyparse.check.NamingPrivatize",
+			"method": "isCandidate",
+			"find": " || !decl.mods.contains(PUBLIC_MOD)) return false;",
+			"replace": ") return false;",
+			"note": "a field already private is a candidate, whose `public` keyword does not exist"
+		},
+		{
+			"name": "M-PRIVATIZE-NO-OWNER",
+			"type": "anyparse.check.NamingPrivatize",
+			"method": "isCandidate",
+			"find": "if (decl.enclosingType == null || ",
+			"replace": "if (",
+			"note": "a declaration with no enclosing type is a candidate"
+		},
+		{
+			"name": "M-PRIVATIZE-IMPLICIT-REACH",
+			"type": "anyparse.check.NamingPrivatize",
+			"method": "isCandidate",
+			"find": " || decl.implicitReach != null",
+			"replace": "",
+			"note": "an annotated / registry member some mechanism reaches without a written reference is privatized"
+		},
+		{
+			"name": "M-PRIVATIZE-RENAME-UNSAFE",
+			"type": "anyparse.check.NamingPrivatize",
+			"method": "isCandidate",
+			"find": " || decl.renameUnsafe == true",
+			"replace": "",
+			"note": "a member the grammar marks rename-unsafe (accessor property, @:rtti, structure field) is privatized"
+		},
+		{
+			"name": "M-PRIVATIZE-RULE-UNCHECKED",
+			"type": "anyparse.check.NamingPrivatize",
+			"method": "isCandidate",
+			"find": "return rule != null && rule.format.match(decl.name);",
+			"replace": "return true;",
+			"note": "a field the private rule would still flag (`_Label`, a static) is privatized and keeps its finding"
+		},
+		{
+			"name": "M-PRIVATIZE-INCOMPLETE-PROJECT",
+			"type": "anyparse.check.NamingPrivatize",
+			"method": "verdicts",
+			"find": " || !RefactorSupport.projectIsComplete(plugin)",
+			"replace": "",
+			"note": "the arm runs on a report set that is not the whole project — the lint-fix-scope incident shape"
+		},
+		{
+			"name": "M-PRIVATIZE-UNCERTAIN-RUN",
+			"type": "anyparse.check.NamingPrivatize",
+			"method": "publicKeywordIfConfined",
+			"find": "if (found == null || !found.certain) return null;",
+			"replace": "if (found == null) return null;",
+			"note": "a modifier run only some builds see is privatized"
+		},
+		{
+			"name": "M-PRIVATIZE-TYPE-REACH",
+			"type": "anyparse.check.NamingPrivatize",
+			"method": "publicKeywordIfConfined",
+			"find": "PublicReach.typeOutOfReach(type) || ",
+			"replace": "",
+			"note": "a `@:keep` / `@:build` / extern type's field is privatized"
+		},
+		{
+			"name": "M-PRIVATIZE-CHAIN",
+			"type": "anyparse.check.NamingPrivatize",
+			"method": "publicKeywordIfConfined",
+			"find": " || PublicReach.chainOutOfReach(scope, host, type, false)",
+			"replace": "",
+			"note": "an unresolved supertype or an RTTI hierarchy does not refuse"
+		},
+		{
+			"name": "M-PRIVATIZE-AUTOBUILD-COUNTS",
+			"type": "anyparse.check.NamingPrivatize",
+			"method": "publicKeywordIfConfined",
+			"find": "PublicReach.chainOutOfReach(scope, host, type, false)",
+			"replace": "PublicReach.chainOutOfReach(scope, host, type, true)",
+			"note": "an @:autoBuild ancestor refuses, so no openfl display class is ever privatized"
+		},
+		{
+			"name": "M-PRIVATIZE-ACCESS-GRANT",
+			"type": "anyparse.check.NamingPrivatize",
+			"method": "publicKeywordIfConfined",
+			"find": "if (ctx.wide.allFiles().exists(fi -> fi.accessGrants.contains(owner))) return null;",
+			"replace": "",
+			"note": "an @:access grant naming the type does not refuse"
+		},
+		{
+			"name": "M-PRIVATIZE-FRAGMENT",
+			"type": "anyparse.check.NamingPrivatize",
+			"method": "publicKeywordIfConfined",
+			"find": "if (ReflectionScan.runtimeNameFragment(ctx.fragments, c.decl.name)) return null;",
+			"replace": "",
+			"note": "an interpolation fragment that may spell the name at runtime does not refuse"
+		},
+		{
+			"name": "M-PRIVATIZE-TOKENS-UNCHECKED",
+			"type": "anyparse.check.NamingPrivatize",
+			"method": "publicKeywordIfConfined",
+			"find": "regions != null && PublicReach.occursOnlyWithin(c.decl.name, ctx.tokens, regions, ctx.wide)",
+			"replace": "regions != null",
+			"note": "an outside reader does not refuse"
+		},
+		{
+			"name": "M-PRIVATIZE-NO-SUBTYPE-REGION",
+			"type": "anyparse.check.NamingPrivatize",
+			"method": "allowedRegions",
+			"find": "out.push({ file: sub.file.file, source: text, span: sub.type.span });",
+			"replace": "",
+			"note": "a subtype's read refuses, though Haxe private is visible to a subclass"
+		},
+		{
+			"name": "M-NAMING-PRIVATIZE-NOT-DECLINED",
+			"type": "anyparse.check.Naming",
+			"method": "crossFileFix",
+			"find": "if (privatizedOf(v) != null) {",
+			"replace": "if (false) {",
+			"note": "the rename runs over a finding the privatize arm owns"
+		},
+		{
+			"name": "M-NAMING-RISKYFIX-EMPTY",
+			"type": "anyparse.check.Naming",
+			"method": "riskyFix",
+			"force": "[]",
+			"note": "the privatize arm writes nothing"
+		},
+		{
+			"name": "M-NAMING-RISKY-FINDINGS-ALL",
+			"type": "anyparse.check.Naming",
+			"method": "riskyArmFindings",
+			"force": "violations",
+			"note": "every naming finding is handed to the risky arm"
+		},
+		{
+			"name": "M-RISKYARM-NOT-VERIFIED",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "partitionChecks",
+			"find": " || (oracleConfigured && c is RiskyArm)",
+			"replace": "",
+			"note": "a RiskyArm check never reaches the verifier, so its arm is report-only even with an oracle"
+		},
+		{
+			"name": "M-FIXVERIFY-RISKYARM-FIX",
+			"type": "anyparse.check.FixVerifier",
+			"method": "flatFix",
+			"force": "check.fix(source, own, plugin, index)",
+			"note": "the verifier asks a RiskyArm check for its SAFE fix, which declines the arm's findings"
+		},
+		{
+			"name": "M-REACH-AUTOBUILD-IGNORED",
+			"type": "anyparse.check.PublicReach",
+			"method": "chainOutOfReach",
+			"find": " || (autoBuildCounts && chain.generated)",
+			"replace": "",
+			"note": "an @:autoBuild ancestor no longer keeps unused-public-member from deleting a method its macro may call"
 		},
 		{
 			"name": "M-SAFE-REVERT-ABORTS",

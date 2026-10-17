@@ -840,6 +840,9 @@ final class LintCommand implements CliCommand {
 	 * NEVER applied unverified. So a RiskyFix check only leaves the risky set for the safe loop
 	 * when it is OracleRelaxable AND no oracle is configured.
 	 *
+	 * A `RiskyArm` check is in BOTH sets when an oracle is configured: the safe loop runs its safe
+	 * arms, and the verifier its `riskyFix`.
+	 *
 	 * The safe set then splits by lint SCOPE: a per-file check decides a file's findings from
 	 * that file alone, so later passes re-lint only the files a prior pass changed. A cross-file
 	 * check must see every file or it mis-resolves on the active subset — those run over the
@@ -957,7 +960,12 @@ final class LintCommand implements CliCommand {
 			'scratch-field'
 		];
 		return {
-			risky: [for (c in checks) if (c is RiskyFix && !relaxableNoOracle(c)) c],
+			// A `RiskyArm` check keeps its place in the safe loop below (its safe arm declines the
+			// findings the risky arm owns) and joins the verified set only when there is an oracle to
+			// verify with - without one its risky arm is report-only and the run never mentions it.
+			risky: [
+				for (c in checks) if ((c is RiskyFix && !relaxableNoOracle(c)) || (oracleConfigured && c is RiskyArm)) c
+			],
 			safe: safeChecks,
 			activeScope: [for (c in safeChecks) if (!fullScopeIds.contains(c.id())) c],
 			fullScope: [for (c in safeChecks) if (fullScopeIds.contains(c.id())) c]

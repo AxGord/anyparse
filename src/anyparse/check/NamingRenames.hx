@@ -1364,6 +1364,10 @@ class RenameRefusal {
 	public static inline final PUBLIC_MEMBER: String =
 		'a public member is reachable from every file holding a value of its owner type, so the single-file rename never applies to one — the cross-file path owns it, and declined too';
 
+	/** A public `_x` whose fix is the PRIVATIZE arm (`NamingPrivatize`) - the rename steps aside for it. */
+	public static inline final PRIVATIZE_ARM: String =
+		'nothing outside its type reads this public `_`-prefixed member, so the fix makes it private instead of renaming it — applied only through the compiler oracle';
+
 	/** No cross-file index: nothing can prove the member is unreferenced elsewhere. */
 	public static inline final NO_INDEX: String =
 		'this run built no cross-file index, so no proof that the member is referenced nowhere else is available';

@@ -206,6 +206,8 @@ import utest.Test;
 		Assert.equals(0, violations('extern class C {\n\tpublic function orphaned():Void;\n}').length);
 	}
 
+	@:pin('control')
+	@:killer('M-REACH-AUTOBUILD-IGNORED')
 	public function testAutoBuildAncestorNotFlagged(): Void {
 		// `@:autoBuild` generates into DESCENDANTS, so it is read while walking the chain UPWARD —
 		// the subclass's member set is not knowable. The pair isolates the metadata.
