@@ -564,13 +564,7 @@ final class MemberReach {
 		final ownerFile: Null<String> = ownerFileOf(declaring, pinned);
 		if (ownerFile == null)
 			return Unknown(OutOfScope('`$declaring` is not declared in the project, so library code may name `${member.name}`'));
-		final info: Null<MemberInfo> = g.types.memberOnChain(declaring, member.name);
-		if (info != null && (info.hasGetter || info.hasSetter) && !readStraight(declaring, member.name))
-			return Unknown(UnresolvedDispatch(
-				ownerFile, null, '`${member.name}` is a property whose accessor stands between the reader and the storage'
-			));
-		final rewritten: Null<ReachUnknown> = pinned == null ? _g.rewrittenBy(declaring) : _g.rewrittenAs(g, ownerFile, declaring, pinned);
-		final built: Null<ReachUnknown> = rewritten ?? entryRewritten(g, entryFile, entrySpans(entry));
+		final built: Null<ReachUnknown> = storageHidden(g, entry, entryFile, member, declaring, ownerFile, pinned);
 		if (built != null) return Unknown(built);
 		if (access == Mutate && scan.escapes.length > 0) {
 			final at: Occurrence = scan.escapes[0];
@@ -585,6 +579,23 @@ final class MemberReach {
 			owns: owns
 		};
 		return walk(g, seeds, entryHazards(g, entry), entrySites(g, entry), scan, member, question);
+	}
+
+	/**
+	 * Why the member `declaring.name` is not the storage `answerReach` walks to, declared in `ownerFile` — on the owner the
+	 * compiler `pinned`, when one is: a property accessor stands between its readers and the storage, or a macro rewrote
+	 * the owner or the entry's code. Null when neither holds.
+	 */
+	private function storageHidden(
+		g: CallGraph, entry: ReachEntry, entryFile: String, member: MemberRef, declaring: String, ownerFile: String, pinned: Null<String>
+	): Null<ReachUnknown> {
+		final info: Null<MemberInfo> = g.types.memberOnChain(declaring, member.name);
+		if (info != null && (info.hasGetter || info.hasSetter) && !readStraight(declaring, member.name))
+			return UnresolvedDispatch(
+				ownerFile, null, '`${member.name}` is a property whose accessor stands between the reader and the storage'
+			);
+		final rewritten: Null<ReachUnknown> = pinned == null ? _g.rewrittenBy(declaring) : _g.rewrittenAs(g, ownerFile, declaring, pinned);
+		return rewritten ?? entryRewritten(g, entryFile, entrySpans(entry));
 	}
 
 	/**

@@ -75,4 +75,22 @@ final class FactMarkers {
 		return '`$id` carries the facts marker `$text`, which no reader here knows';
 	}
 
+	/**
+	 * Why a fact of the node `id`, `n`, is lost to a reader that reads every fact of it: its file's text is gone, a spliced
+	 * reflective body lost the name it was handed — unless `harmlessSplice` says the bodies spliced into `n` obtain no
+	 * member — or a marker no reader knows; null when none is. A splice's and an expansion's facts are the node's own,
+	 * wherever they sit.
+	 */
+	public static function lossReason(id: String, n: FactNode, harmlessSplice: (FactNode) -> Bool): Null<String> {
+		return first(
+			n, m -> switch m {
+				case StaleForeign: 'a fact of `$id` lies in a file whose text the table no longer has';
+				case ReflectionInlined: harmlessSplice(n) ? null : 'a reflective body spliced into `$id` lost the name it was handed';
+				case Unknown(text):
+					unknownReason(id, text);
+				case InlineSite, MacroExpansion, ReflectionUnattributed, ReflectionFrom(_): null;
+			}
+		);
+	}
+
 }

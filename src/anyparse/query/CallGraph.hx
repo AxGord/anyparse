@@ -581,8 +581,21 @@ final class CallGraph {
 		skippedFiles.remove(file);
 		if (!_entries.exists(key)) return;
 		_entries.remove(key);
+		final removed: Map<String, Bool> = nodesLeavingWith(key);
+		_fileNodes.remove(key);
+		_fileDeclarations.remove(key);
+		forgetDeclarationsIn(key);
+		forgetNodes(file, removed);
+		purgeSites(key, removed);
+	}
+
+	/**
+	 * The nodes that leave the graph with the file keyed `key` (`removeFile`): those it declares, and each read as one of the
+	 * types sharing a name (`CallGraphFacts.qualify`) whose node leaves or any declaration it reads lies in the file — whose
+	 * declarations go with it.
+	 */
+	private function nodesLeavingWith(key: String): Map<String, Bool> {
 		final removed: Map<String, Bool> = [for (n in _fileNodes[key] ?? []) n.id => true];
-		// a node read as one of the types sharing a name (`CallGraphFacts.qualify`) leaves with its node or any declaration it reads
 		final reading: Null<CallGraphFacts> = facts;
 		if (reading != null) for (variant => read in reading.qualified) if (
 			removed.exists(read.node) || declarationsOf(variant).exists(d -> CallGraphNames.normalizePath(d.file) == key)
@@ -590,8 +603,14 @@ final class CallGraph {
 			removed[variant] = true;
 			_declarations.remove(variant);
 		}
-		_fileNodes.remove(key);
-		_fileDeclarations.remove(key);
+		return removed;
+	}
+
+	/**
+	 * Drop every declaration the file keyed `key` holds, and the file from the files whose field initializers a node runs —
+	 * the initializers of a file read again are recorded again (`CallGraphFacts.recordInitializers`).
+	 */
+	private function forgetDeclarationsIn(key: String): Void {
 		for (id in [for (id in _declarations.keys()) id]) {
 			final kept: Array<FnDeclaration> = [for (d in declarationsOf(id)) if (CallGraphNames.normalizePath(d.file) != key) d];
 			if (kept.length == 0)
@@ -600,10 +619,13 @@ final class CallGraph {
 				_declarations[id] = kept;
 		}
 		for (id => files in _initFiles) {
-			// the initializers of a file read again are recorded again (`CallGraphFacts.recordInitializers`)
 			if (files.exists(f -> CallGraphNames.normalizePath(f) == key)) facts?.faceted.remove(id);
 			_initFiles[id] = [for (f in files) if (CallGraphNames.normalizePath(f) != key) f];
 		}
+	}
+
+	/** Drop the nodes `removed`, which leave with `file`, from the node table, the facts and the member tables. */
+	private function forgetNodes(file: String, removed: Map<String, Bool>): Void {
 		for (id in removed.keys()) {
 			nodes.remove(id);
 			_facts.forget(id);
@@ -611,7 +633,6 @@ final class CallGraph {
 		facts?.forget(file, removed);
 		for (table in _members) for (member in [for (m => id in table) if (removed.exists(id)) m]) table.remove(member);
 		for (name => ids in _byMember) _byMember[name] = [for (id in ids) if (!removed.exists(id)) id];
-		purgeSites(key, removed);
 	}
 
 	/**

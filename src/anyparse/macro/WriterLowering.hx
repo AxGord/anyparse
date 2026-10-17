@@ -1485,39 +1485,8 @@ class WriterLowering {
 		final pos: Position = Context.currentPos();
 		final cases: Array<Case> = [];
 		for (branch in node.children) {
-			final prec: Null<Int> = branch.annotations.get(AnnotationKeys.PRATT_PREC);
-			final tPrec: Null<Int> = branch.annotations.get(AnnotationKeys.TERNARY_PREC);
-			final children: Array<ShapeNode> = branch.children;
-			final arity: Int = children.length + branchExtraArgs(branch);
-			final ctorRef: Expr = MacroStringTools.toFieldExpr(ruleCtorPath(typePath, branch.annotations.get(AnnotationKeys.BASE_CTOR)));
-			if (prec == null && tPrec == null) {
-				// A keyword atom whose whole operand is an unbracketed expression of this rule
-				// (`untyped e`, `cast e`, `return e`) takes everything to its right.
-				// Under `@:fmt(atomOperandWhen(…))` a listed atom ENDS the operand (`cast (x : Int)`).
-				if (keywordAtomOverWholeExpr(branch, typePath)) {
-					final atomWhen: Array<String> = branch.fmtReadStringArgs('atomOperandWhen') ?? [];
-					final listed: Expr = { expr: EArrayDecl([for (n in atomWhen) macro $v{n}]), pos: pos };
-					final atomBody: Expr = atomWhen.length == 0 ? macro 0 : macro $listed.contains(Type.enumConstructor(_r)) ? $v{none} : 0;
-					final atomArgs: Array<Expr> = [for (i in 0...arity) i == 0 && atomWhen.length > 0 ? macro _r : macro _];
-					cases.push({ values: [{ expr: ECall(ctorRef, atomArgs), pos: pos }], expr: atomBody, guard: null });
-				}
-				continue;
-			}
-			final body: Expr = if (tPrec != null)
-				macro $v{tPrec} < ctx ? $v{none} : 0
-			else {
-				final right: ShapeNode = children[1];
-				final rightRef: Null<String> = right.kind == Ref ? right.annotations[AnnotationKeys.BASE_REF] : null;
-				// A right operand of another rule (`a is T`) ends in that rule's own syntax.
-				if (rightRef == null || simpleName(rightRef) != simpleName(typePath)) continue;
-				final rightPrec: Int = branch.annotations[AnnotationKeys.PRATT_RIGHT_PREC];
-				macro $v{prec} < ctx ? $v{none} : {
-					final _o: Int = $i{helperName}(_r, $v{rightPrec});
-					_o < $v{rightPrec} ? _o : $v{rightPrec};
-				};
-			};
-			final args: Array<Expr> = [for (i in 0...arity) tPrec == null && i == 1 ? macro _r : macro _];
-			cases.push({ values: [{ expr: ECall(ctorRef, args), pos: pos }], expr: body, guard: null });
+			final branchCase: Null<Case> = openRightCase(branch, typePath, helperName, pos);
+			if (branchCase != null) cases.push(branchCase);
 		}
 		final dispatch: Expr = { expr: ESwitch(macro value, cases, macro $v{none}), pos: pos };
 		return {
@@ -1530,6 +1499,51 @@ class WriterLowering {
 			}),
 			pos: pos
 		};
+	}
+
+	/**
+	 * The `openRightField` case of `branch`, a constructor of `typePath`: a ternary is open at its own precedence, an infix
+	 * node whose right operand is of this rule as far as that operand is (`helperName` asked of it), a keyword atom over a
+	 * whole expression (`atomOpenCase`) at 0. Null for a branch nothing can be read into the right of.
+	 */
+	private function openRightCase(branch: ShapeNode, typePath: String, helperName: String, pos: Position): Null<Case> {
+		final none: Int = WriterPrattLowering.OPEN_NONE;
+		final prec: Null<Int> = branch.annotations[AnnotationKeys.PRATT_PREC];
+		final tPrec: Null<Int> = branch.annotations[AnnotationKeys.TERNARY_PREC];
+		final children: Array<ShapeNode> = branch.children;
+		final arity: Int = children.length + branchExtraArgs(branch);
+		final ctorRef: Expr = MacroStringTools.toFieldExpr(ruleCtorPath(typePath, branch.annotations[AnnotationKeys.BASE_CTOR]));
+		if (prec == null && tPrec == null) return atomOpenCase(branch, typePath, arity, ctorRef, pos);
+		final body: Expr = if (tPrec != null)
+			macro $v{tPrec} < ctx ? $v{none} : 0
+		else {
+			final right: ShapeNode = children[1];
+			final rightRef: Null<String> = right.kind == Ref ? right.annotations[AnnotationKeys.BASE_REF] : null;
+			// A right operand of another rule (`a is T`) ends in that rule's own syntax.
+			if (rightRef == null || simpleName(rightRef) != simpleName(typePath)) return null;
+			final rightPrec: Int = branch.annotations[AnnotationKeys.PRATT_RIGHT_PREC];
+			macro $v{prec} < ctx ? $v{none} : {
+				final _o: Int = $i{helperName}(_r, $v{rightPrec});
+				_o < $v{rightPrec} ? _o : $v{rightPrec};
+			};
+		};
+		final args: Array<Expr> = [for (i in 0...arity) tPrec == null && i == 1 ? macro _r : macro _];
+		return { values: [{ expr: ECall(ctorRef, args), pos: pos }], expr: body, guard: null };
+	}
+
+	/**
+	 * The `openRightField` case of a branch of no precedence: a keyword atom whose whole operand is an unbracketed expression
+	 * of this rule (`untyped e`, `cast e`, `return e`) takes everything to its right — unless, under
+	 * `@:fmt(atomOperandWhen(…))`, a listed atom ends the operand (`cast (x : Int)`). Null for any other branch.
+	 */
+	private function atomOpenCase(branch: ShapeNode, typePath: String, arity: Int, ctorRef: Expr, pos: Position): Null<Case> {
+		if (!keywordAtomOverWholeExpr(branch, typePath)) return null;
+		final none: Int = WriterPrattLowering.OPEN_NONE;
+		final atomWhen: Array<String> = branch.fmtReadStringArgs('atomOperandWhen') ?? [];
+		final listed: Expr = { expr: EArrayDecl([for (n in atomWhen) macro $v{n}]), pos: pos };
+		final atomBody: Expr = atomWhen.length == 0 ? macro 0 : macro $listed.contains(Type.enumConstructor(_r)) ? $v{none} : 0;
+		final atomArgs: Array<Expr> = [for (i in 0...arity) i == 0 && atomWhen.length > 0 ? macro _r : macro _];
+		return { values: [{ expr: ECall(ctorRef, atomArgs), pos: pos }], expr: atomBody, guard: null };
 	}
 
 	/**

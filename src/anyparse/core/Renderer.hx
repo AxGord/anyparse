@@ -1424,6 +1424,15 @@ class Renderer {
 				pending = heldBackSpace(node.doc, step.add, pending);
 			}
 		}
+		return restLineWidth(total, routes);
+	}
+
+	/**
+	 * The width `flatTokenWidthOfRestStack` answers from its walked `total`: that total, or — where a sibling's prediction
+	 * ended the walk — the wider of that total with what the routes it left add (`surplus`) and the line the alternative
+	 * route ends on (`altLine`).
+	 */
+	private static function restLineWidth(total: Int, routes: RestRoutes): Int {
 		return if (!routes.endedByPrediction)
 			total
 		else if (total + routes.surplus > routes.altLine)

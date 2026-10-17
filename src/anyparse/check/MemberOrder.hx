@@ -236,6 +236,22 @@ final class MemberOrder implements Check implements ConfigAware {
 	}
 
 	/**
+	 * `compareOrder`'s pinned key of `m`, whose ranked-block ordinal is `ordinal`: 1 for a conditional member of
+	 * no ranked block, which sinks, else 0.
+	 */
+	private static inline function pinnedKey(m: OrderedMember, ordinal: Null<Int>): Int {
+		return m.condition != null && ordinal == null ? 1 : 0;
+	}
+
+	/**
+	 * `compareOrder`'s within-rank step of `m`, whose ranked-block ordinal is `ordinal`: 0 for a plain member, and for a
+	 * member of a content-ranked block -1 when the block leads its rank, 1 when it trails the plain members.
+	 */
+	private static inline function blockStep(m: OrderedMember, ordinal: Null<Int>, plan: SortPlan): Int {
+		return ordinal == null ? 0 : (leadsRank(m, plan) ? -1 : 1);
+	}
+
+	/**
 	 * Total source lines the reorder genuinely MOVES: the extent of every member that falls
 	 * outside a longest common subsequence of the current and the sorted list, compared by node
 	 * identity. Members of that subsequence keep their relative order, so a line diff of the
@@ -897,13 +913,13 @@ final class MemberOrder implements Check implements ConfigAware {
 		if (sa != sb) return sa - sb;
 		final oa: Null<Int> = rankedOrdinalOf(a, plan);
 		final ob: Null<Int> = rankedOrdinalOf(b, plan);
-		final pa: Int = a.condition != null && oa == null ? 1 : 0;
-		final pb: Int = b.condition != null && ob == null ? 1 : 0;
+		final pa: Int = pinnedKey(a, oa);
+		final pb: Int = pinnedKey(b, ob);
 		if (pa != pb) return pa - pb;
 		if (pa == 1) return comparePinned(a, b, plan.groupFirst, sa);
 		if (a.rank != b.rank) return a.rank - b.rank;
-		final ca: Int = oa == null ? 0 : (leadsRank(a, plan) ? -1 : 1);
-		final cb: Int = ob == null ? 0 : (leadsRank(b, plan) ? -1 : 1);
+		final ca: Int = blockStep(a, oa, plan);
+		final cb: Int = blockStep(b, ob, plan);
 		if (ca != cb) return ca - cb;
 		if (oa != null && ob != null) {
 			if (oa != ob) return oa - ob;

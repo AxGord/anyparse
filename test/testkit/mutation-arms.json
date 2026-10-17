@@ -5181,7 +5181,7 @@
 		{
 			"name": "M-ESCAPE-NATIVE",
 			"type": "anyparse.query.ValueEscapes",
-			"method": "compute",
+			"method": "fileEscapes",
 			"find": "case Native, Untyped, Unmodelled(_):",
 			"replace": "case Native, Untyped:\n\t\t\t\t\tcase Unmodelled(_):",
 			"note": "target-language and untyped code in the project reaches no object, though it sees every local and static by name"
@@ -5282,9 +5282,9 @@
 		{
 			"name": "M-ESCAPE-P-NATIVE",
 			"type": "anyparse.query.ValueEscapes",
-			"method": "compute",
+			"method": "fileEscapes",
 			"find": "case ReflectiveName(_), ArrayChange:",
-			"replace": "case ReflectiveName(_), ArrayChange:\n\t\t\t\t\t\treturn { types: null, raw: false, ids: null };",
+			"replace": "case ReflectiveName(_), ArrayChange:\n\t\t\t\treturn { types: null, raw: false, ids: null };",
 			"note": "(precision) an array change or a literal reflective name in the project leaves every instance anywhere"
 		},
 		{
@@ -5345,7 +5345,7 @@
 		{
 			"name": "M-ESCAPE-MACRO-HAZARD",
 			"type": "anyparse.query.ValueEscapes",
-			"method": "compute",
+			"method": "fileEscapes",
 			"find": "|| h.node.kind == _shape.macroModifierKind) continue;",
 			"replace": ") continue;",
 			"note": "(precision) a macro modifier, a compile-time construct, reads as unmodelled code that leaves every instance anywhere"
@@ -5424,7 +5424,7 @@
 		{
 			"name": "M-REACH-PROPERTY",
 			"type": "anyparse.query.MemberReach",
-			"method": "answerReach",
+			"method": "storageHidden",
 			"find": "\t\tif (info != null && (info.hasGetter || info.hasSetter) && !readStraight(declaring, member.name))\n",
 			"replace": "\t\tif (false)\n",
 			"note": "a member behind an accessor is answered as if it were the storage"
@@ -7200,7 +7200,7 @@
 		{
 			"name": "M-REACH-PINNED-REWRITTEN-SIMPLE",
 			"type": "anyparse.query.MemberReach",
-			"method": "answerReach",
+			"method": "storageHidden",
 			"find": "pinned == null ? _g.rewrittenBy(declaring) : _g.rewrittenAs(g, ownerFile, declaring, pinned);",
 			"replace": "_g.rewrittenBy(declaring);",
 			"note": "(precision) a pinned owner asks for a build macro by its simple name, so any build macro of another type of that name is a Reification"
@@ -7208,7 +7208,7 @@
 		{
 			"name": "M-REACH-PINNED-REWRITTEN-NONE",
 			"type": "anyparse.query.MemberReach",
-			"method": "answerReach",
+			"method": "storageHidden",
 			"find": "pinned == null ? _g.rewrittenBy(declaring) : _g.rewrittenAs(g, ownerFile, declaring, pinned);",
 			"replace": "pinned == null ? _g.rewrittenBy(declaring) : null;",
 			"note": "a pinned owner's own build macro is never asked, so code it made other than its text is read off the text"
@@ -7336,7 +7336,7 @@
 		{
 			"name": "M-REACH-UNHELD-REFLECTED",
 			"type": "anyparse.query.ReachGraph",
-			"method": "reflectedMembers",
+			"method": "reflectedIds",
 			"find": "final textless: Bool = facts.unheld(id) || facts.textless(id);",
 			"replace": "final textless: Bool = facts.textless(id);",
 			"note": "a method reflection reaches by a computed name off a type the index holds no text of is its namesake's method"
@@ -7504,7 +7504,7 @@
 		{
 			"name": "M-REACH-REFLECT-TEXTLESS",
 			"type": "anyparse.query.ReachGraph",
-			"method": "reflectedMembers",
+			"method": "reflectedIds",
 			"find": "final textless: Bool = facts.unheld(id) || facts.textless(id);",
 			"replace": "final textless: Bool = facts.unheld(id);",
 			"note": "a method reflection reaches by a computed name off a type the index declares nowhere is a placeholder, which runs nothing"
@@ -7512,7 +7512,7 @@
 		{
 			"name": "M-REACH-REFLECT-EXTERN",
 			"type": "anyparse.query.ReachGraph",
-			"method": "reflectedMembers",
+			"method": "reflectedIds",
 			"find": "if (textless && !facts.externMethod(id, member)) return null;",
 			"replace": "if (textless) return null;",
 			"note": "(precision) an escaped extern's method reflection reaches is code of the program the index lacks: js's `Symbol` refuses every reflection"
@@ -7663,7 +7663,7 @@
 		{
 			"name": "M-FACTS-CALL-TARGET",
 			"type": "anyparse.check.TypedFactsWalk",
-			"method": "call",
+			"method": "fieldCall",
 			"find": "'{\"t\":${q(targetName)},\"a\":\"$kind\"$chosen,",
 			"replace": "'{\"a\":\"$kind\"$chosen,",
 			"note": "a field call is written without its target, so an abstract operator or an accessor is a call of nothing"
@@ -7727,7 +7727,7 @@
 		{
 			"name": "M-FACTS-NATIVE",
 			"type": "anyparse.check.TypedFactsWalk",
-			"method": "call",
+			"method": "fieldCall",
 			"find": "add('native', '{\"w\":\"syntax\",\"n\":${q(targetName)},\"p\":$where$code${handedText(args)}}');",
 			"replace": "{}",
 			"note": "a Syntax.code call is no native site"
@@ -8034,7 +8034,7 @@
 		{
 			"name": "M-FACTS-STALE-FOREIGN",
 			"type": "anyparse.query.CompilerFacts",
-			"method": "materialize",
+			"method": "mergeRecord",
 			"find": "if (where == null && !node.incomplete.contains('stale-foreign')) node.incomplete.push('stale-foreign');",
 			"replace": "",
 			"note": "a spliced fact lost to a dropped file leaves no mark"
@@ -8106,8 +8106,8 @@
 			"name": "M-FACTS-SPLICED-WITHIN-UNPLACED",
 			"type": "anyparse.query.CompilerFacts",
 			"method": "within",
-			"find": "splice && spliced && !placed(n, where) ? runsIn(n, where) : whole || inside(where)",
-			"replace": "whole || inside(where)",
+			"find": "splice && spliced && !placed(n, where) ? runsIn(n, where, span, dropped) : whole || inside(key, span, where)",
+			"replace": "whole || inside(key, span, where)",
 			"note": "a range question in a body an inlined function was spliced into drops the spliced facts, which sit at the callee yet run in the body"
 		},
 		{
@@ -8169,7 +8169,7 @@
 		{
 			"name": "M-FACTS-SPLICE-SITE-INNERMOST",
 			"type": "anyparse.check.TypedFactsWalk",
-			"method": "walk",
+			"method": "enterRange",
 			"find": "_site = { min: info.min, max: info.max }",
 			"replace": "_site = { min: _min, max: _max }",
 			"note": "(precision) an inlined call ran anywhere in its caller's body, not in the innermost expression around its call site"
@@ -8185,7 +8185,7 @@
 		{
 			"name": "M-FACTS-NESTED-SPLICE",
 			"type": "anyparse.check.TypedFactsWalk",
-			"method": "walk",
+			"method": "enterRange",
 			"find": "nestedSplice(e, info);",
 			"replace": "{}",
 			"note": "a body a spliced body spliced in turn is no call of its own: its code is attributed to no call, or to a call of it elsewhere"
@@ -8193,23 +8193,23 @@
 		{
 			"name": "M-FACTS-SPLICE-SITES-MET",
 			"type": "anyparse.query.CompilerFacts",
-			"method": "within",
-			"find": "if (splice != null) return !dropped(splice.callee) && meets(splice.sites);",
+			"method": "runsIn",
+			"find": "if (splice != null) return !dropped(splice.callee) && meets(splice.sites, span);",
 			"replace": "if (splice != null) return !dropped(splice.callee);",
 			"note": "(precision) what an inlined call spliced in runs in every range its caller meets, wherever the call stood"
 		},
 		{
 			"name": "M-FACTS-SPLICE-UNATTRIBUTED",
 			"type": "anyparse.query.CompilerFacts",
-			"method": "within",
-			"find": "return sites == null || meets(sites);",
-			"replace": "return sites != null && meets(sites);",
+			"method": "runsIn",
+			"find": "return sites == null || meets(sites, span);",
+			"replace": "return sites != null && meets(sites, span);",
 			"note": "a spliced fact no inlined call's body holds runs nowhere, though it may run anywhere in its node"
 		},
 		{
 			"name": "M-FACTS-SPLICE-HARMLESS",
 			"type": "anyparse.query.CompilerFacts",
-			"method": "within",
+			"method": "runsIn",
 			"find": "!dropped(splice.callee) && ",
 			"replace": "",
 			"note": "(precision) what a method that runs no project code spliced in is its caller's own code, the target code its body spells among it"
@@ -8481,7 +8481,7 @@
 		{
 			"name": "M-REACH-ENTRY-MEMBER",
 			"type": "anyparse.query.MemberReach",
-			"method": "answerReach",
+			"method": "storageHidden",
 			"find": " ?? entryRewritten(g, entryFile, entrySpans(entry))",
 			"replace": "",
 			"note": "a member question's region in code a build macro replaced is read as its text, which is none of what runs"
@@ -8952,8 +8952,8 @@
 			"name": "M-ESCAPES-TRUTH-FACTS",
 			"type": "anyparse.query.ValueEscapes",
 			"method": "compute",
-			"find": "if (view != null && view.truth) {",
-			"replace": "if (view != null && view.truth && false) {",
+			"find": "if (view != null && view.truth) return factsAnswer(view);",
+			"replace": "if (view != null && view.truth && false) return factsAnswer(view);",
 			"note": "under the truth the escapes are still read off the project's syntax, which counts every value handed to library code as escaped"
 		},
 		{
@@ -8966,15 +8966,15 @@
 		{
 			"name": "M-ESCAPES-FACTS-FLOW",
 			"type": "anyparse.query.FactsEscapes",
-			"method": "escapesOf",
-			"find": "(f.via == CAST || !keepsNominal(f.to)) && !(f.via != CAST && functionTyped(f.from) && functionTyped(f.to)) && !escape(f.from)",
+			"method": "handEscapes",
+			"find": "flowLeaves(f) && !escape(f.from)",
 			"replace": "false",
 			"note": "a value flowing into a catch-all, a type parameter, a structure or through a cast is taken to stay in the type system"
 		},
 		{
 			"name": "M-ESCAPES-FACTS-HANDED",
 			"type": "anyparse.query.FactsEscapes",
-			"method": "escapesOf",
+			"method": "handEscapes",
 			"find": "for (h in n.handed) if (!typeParameter(h.to) && !escape(h.from)) return false;",
 			"replace": "",
 			"note": "a value handed to target code is taken to stay in the type system"
@@ -9005,8 +9005,8 @@
 		{
 			"name": "M-ESCAPES-FACTS-INSTANCES",
 			"type": "anyparse.query.FactsEscapes",
-			"method": "instances",
-			"find": "if (fact != null && fact.params.length == args.length) for (i => name in fact.params) bind('$id.$name', args[i]);",
+			"method": "scanInstances",
+			"find": "if (fact != null && fact.params.length == args.length) for (i => name in fact.params)\n\t\t\t\tbindInstance(out, '$id.$name', args[i]);",
 			"replace": "",
 			"note": "a type written with arguments binds nothing, so a value a generic class lets go is of no type"
 		},
@@ -9021,8 +9021,8 @@
 		{
 			"name": "M-ESCAPES-FACTS-GENERIC-METHOD",
 			"type": "anyparse.query.FactsEscapes",
-			"method": "instances",
-			"find": "unify(declared, applied);",
+			"method": "unifyInstantiation",
+			"find": "unifyInstance(out, declared, applied);",
 			"replace": "{}",
 			"note": "the instantiation of a generic method binds nothing, so a value it lets go is of no type"
 		},
@@ -12045,9 +12045,9 @@
 		{
 			"name": "M-NULLFLOW-PREDICATE-UNCHECKED",
 			"type": "anyparse.check.NullFlow",
-			"method": "predicateOf",
-			"find": "if (fn.kind != shape.finalModifierMemberKind && ",
-			"replace": "if (false && ",
+			"method": "predicateModifiers",
+			"find": "return fn.kind == shape.finalModifierMemberKind || ",
+			"replace": "return true || ",
 			"note": "an overridable member is trusted as a non-null predicate"
 		},
 		{
@@ -12244,7 +12244,7 @@
 		{
 			"name": "M-PAREN-ALT-ROUTE",
 			"type": "anyparse.core.Renderer",
-			"method": "flatTokenWidthOfRestStack",
+			"method": "restLineWidth",
 			"find": "return if (!routes.endedByPrediction)",
 			"replace": "return if (true)",
 			"note": "a walk a later paren ends answers the walked route only, though render may take an unresolved probe's break side and run the line on past that paren"
@@ -12372,7 +12372,7 @@
 		{
 			"name": "M-GRAPH-FACTS-TYPED-NONE",
 			"type": "anyparse.query.CallGraphFacts",
-			"method": "declaredCall",
+			"method": "callEdges",
 			"find": "null,\n\t\t\tCompilerFacts.baseId(owner), spliced\n\t\t);",
 			"replace": "null,\n\t\t\tnull, spliced\n\t\t);",
 			"note": "a call's edge no longer names the owner its fact resolved, so a name two types share stays Ambiguous where the call enters it"
@@ -12859,7 +12859,7 @@
 		{
 			"name": "M-GRAPH-REFLECT-UNTYPED",
 			"type": "anyparse.query.ReachGraph",
-			"method": "reflectedMembers",
+			"method": "reflectedObjects",
 			"find": "if (receiver == null || !plain || !facts.classless(receiver)) return null;\nescapes = true;",
 			"replace": "",
 			"note": "a reflective access on a value of no class reaches nothing — `Dynamic`, a structure, and a typedef of a class or an abstract alike"
@@ -12867,7 +12867,7 @@
 		{
 			"name": "M-GRAPH-REFLECT-SUBTYPES",
 			"type": "anyparse.query.ReachGraph",
-			"method": "reflectedMembers",
+			"method": "reflectedObjects",
 			"find": "for (sub in facts.subtypesOf(id)) note(sub);",
 			"replace": "",
 			"note": "an object reflection acts on is never an instance of a subtype of its type"
@@ -12876,14 +12876,14 @@
 			"name": "M-GRAPH-REFLECT-SUPERTYPES",
 			"type": "anyparse.query.ReachGraph",
 			"method": "reflectedMembers",
-			"find": "for (id in objects) for (sup in facts.supertypesOf(id)) note(sup);",
+			"find": "for (id in objects) for (sup in facts.supertypesOf(id)) if (!typed.contains(sup)) typed.push(sup);",
 			"replace": "",
 			"note": "an object reflection acts on carries no member its type inherits"
 		},
 		{
 			"name": "M-GRAPH-REFLECT-EXACT",
 			"type": "anyparse.query.ReachGraph",
-			"method": "reflectedMembers",
+			"method": "reflectedObjects",
 			"find": "if (r.receiverExact) continue;",
 			"replace": "",
 			"note": "(precision) an object built of exactly its class may be an instance of a subclass"
@@ -12891,7 +12891,7 @@
 		{
 			"name": "M-GRAPH-REFLECT-ESCAPES",
 			"type": "anyparse.query.ReachGraph",
-			"method": "reflectedMembers",
+			"method": "reflectedObjects",
 			"find": "if (!r.receiverSelf || !methodValues(facts).selfBound(r.holder)) escapes = true;",
 			"replace": "",
 			"note": "an object reflection acts on is never an instance that left the type system, so a `Main` handed to `Dynamic` cannot come back as the `Other` it reads"
@@ -12899,7 +12899,7 @@
 		{
 			"name": "M-GRAPH-REFLECT-SELF-ESCAPES",
 			"type": "anyparse.query.ReachGraph",
-			"method": "reflectedMembers",
+			"method": "reflectedObjects",
 			"find": "if (!r.receiverSelf || !methodValues(facts).selfBound(r.holder)) escapes = true;",
 			"replace": "escapes = true;",
 			"note": "(precision) `this` may be an escaped instance of any type, though only a dispatch on its own class binds it"
@@ -12915,7 +12915,7 @@
 		{
 			"name": "M-METHODS-SELF-BOUND",
 			"type": "anyparse.query.ReachGraph",
-			"method": "reflectedMembers",
+			"method": "reflectedObjects",
 			"find": "if (!r.receiverSelf || !methodValues(facts).selfBound(r.holder)) escapes = true;",
 			"replace": "if (!r.receiverSelf) escapes = true;",
 			"note": "`this` is its method's class's wherever it runs, though a call handed the method as a value may run it with a receiver of its own (`Reflect.callMethod`)"
@@ -12932,7 +12932,7 @@
 			"name": "M-METHODS-CLOSURE-READ",
 			"type": "anyparse.query.FactsMethodValues",
 			"method": "scan",
-			"find": "named(f.field, { receiver: f.receiver, exact: false, typeless: f.access == DYNAMIC_ACCESS });",
+			"find": "addNamed(out, f.field, { receiver: f.receiver, exact: false, typeless: f.access == DYNAMIC_ACCESS });",
 			"replace": "null;",
 			"note": "a method read as a closure is no value a rebinding call may be handed"
 		},
@@ -12947,9 +12947,9 @@
 		{
 			"name": "M-FACTS-REFL-HOLDER",
 			"type": "anyparse.query.CompilerFacts",
-			"method": "materialize",
-			"find": "receiverFresh: r.o == true,\n\t\t\t\t\tholder: id",
-			"replace": "receiverFresh: r.o == true,\n\t\t\t\t\tholder: ''",
+			"method": "collectFacts",
+			"find": "receiverFresh: r.o == true,\n\t\t\t\tholder: id",
+			"replace": "receiverFresh: r.o == true,\n\t\t\t\tholder: ''",
 			"note": "(precision) a reflective call's fact names no function whose `this` it may hand"
 		},
 		{
@@ -13105,8 +13105,8 @@
 			"name": "M-METHODS-NATIVE-REFUSED",
 			"type": "anyparse.query.FactsMethodValues",
 			"method": "scan",
-			"find": "final lost: Null<String> = FactMarkers.first(",
-			"replace": "final lost: Null<String> = n.natives.length > 0 ? 'native' : FactMarkers.first(",
+			"find": "final lost: Null<String> = FactMarkers.lossReason(id, n, inlinedMemberless);",
+			"replace": "final lost: Null<String> = n.natives.length > 0 ? 'native' : FactMarkers.lossReason(id, n, inlinedMemberless);",
 			"note": "(precision) target code is taken to obtain any method as a value and rebind it, so no `this` is answered in a program holding any"
 		},
 		{
@@ -13224,7 +13224,7 @@
 		{
 			"name": "M-FACTS-INLINED-EDGE",
 			"type": "anyparse.query.CallGraphFacts",
-			"method": "declaredCall",
+			"method": "callEdges",
 			"find": "final spliced: Bool = c.access == INLINED && c.site != null && !view.harmlessSplice(g, target);",
 			"replace": "final spliced: Bool = false;",
 			"note": "(precision) an inlined call is no splice its caller holds, so the callee is read at its declared types"
@@ -13406,8 +13406,8 @@
 		{
 			"name": "M-FACTS-WITHIN-EXPANSION",
 			"type": "anyparse.query.CompilerFacts",
-			"method": "within",
-			"find": "return sites == null || meets(sites);",
+			"method": "runsIn",
+			"find": "return sites == null || meets(sites, span);",
 			"replace": "return true;",
 			"note": "a fact an expansion brought runs anywhere in its node, not where the call of the macro was"
 		},
@@ -13446,8 +13446,8 @@
 		{
 			"name": "M-TOUCH-EXPANSION-CODE",
 			"type": "anyparse.query.MemberTouchScan",
-			"method": "nodeAccesses",
-			"find": "final expanded: Bool = !made && expansionCode(g, node, n, f.at, view);",
+			"method": "fieldTouches",
+			"find": "final expanded: Bool = !walk.made && expansionCode(walk.g, walk.node, n, f.at, walk.view);",
 			"replace": "final expanded: Bool = false;",
 			"note": "an access in an expansion's code leaves its function to the syntax, which spells only the macro's call"
 		},
@@ -13478,7 +13478,7 @@
 		{
 			"name": "M-VALUE-ARG-WRITTEN",
 			"type": "anyparse.query.FunctionValueTypes",
-			"method": "readArguments",
+			"method": "unwrittenParameter",
 			"find": "if (hits.exists(h -> h.kind == Write && h.bindingSpan?.from == binding.from && h.bindingSpan?.to == binding.to)) return null;",
 			"replace": "",
 			"note": "a parameter its method assigns holds only what the invocations hand it"
@@ -13542,7 +13542,7 @@
 		{
 			"name": "M-VALUE-STORED-COMPUTED",
 			"type": "anyparse.query.FunctionValueTypes",
-			"method": "untypedStores",
+			"method": "reflectiveStores",
 			"find": "if (computed && computedNames) return false;",
 			"replace": "if (computed) return false;",
 			"note": "a write by a name computed at run time is taken to reach any dynamic method, whatever classes the project declares such a name names"
@@ -13574,7 +13574,7 @@
 		{
 			"name": "M-VALUE-CTOR-REFLECTIVE-ARGS",
 			"type": "anyparse.query.FunctionValueTypes",
-			"method": "reflectiveConstructions",
+			"method": "reflectiveConstruction",
 			"find": "if (args == null || args.kind != shape.arrayLiteralKind) {",
 			"replace": "if (args == null) {",
 			"note": "a reflective construction handed an array no literal spells is taken to hand the constructor nothing"
@@ -13598,7 +13598,7 @@
 		{
 			"name": "M-VALUE-STORED-WRITES",
 			"type": "anyparse.query.FunctionValueTypes",
-			"method": "readStored",
+			"method": "typedStores",
 			"find": "if (!f.write || f.field != name) continue;",
 			"replace": "continue;",
 			"note": "no write is read, so a dynamic method is taken to hold nothing but its declared body"
@@ -13630,7 +13630,7 @@
 		{
 			"name": "M-VALUE-CTOR-ARGUMENT",
 			"type": "anyparse.query.FunctionValueTypes",
-			"method": "boundArguments",
+			"method": "argumentFunction",
 			"find": "if (where == null || !(shape.lambdaKinds ?? []).contains(value.kind)) return null;",
 			"replace": "if (where == null) return null;",
 			"note": "a construction's argument of any shape is read as the function written there"
@@ -13646,9 +13646,9 @@
 		{
 			"name": "M-VALUE-CTOR-ARITY",
 			"type": "anyparse.query.FunctionValueTypes",
-			"method": "boundArguments",
-			"find": "if (arity == null || parameterCount(value) == arity) out.push(where);",
-			"replace": "out.push(where);",
+			"method": "argumentFunction",
+			"find": "return arity == null || parameterCount(value) == arity ? [where] : [];",
+			"replace": "return [where];",
 			"note": "a function expression of another arity than the parameter's is taken to bind it"
 		},
 		{
@@ -13726,7 +13726,7 @@
 		{
 			"name": "M-ESCAPES-FUNCTION-FLOW-TYPED",
 			"type": "anyparse.query.FactsEscapes",
-			"method": "escapesOf",
+			"method": "flowLeaves",
 			"find": " && !(f.via != CAST && functionTyped(f.from) && functionTyped(f.to))",
 			"replace": "",
 			"note": "a function value placed in a place of another function type escapes"
@@ -13774,7 +13774,7 @@
 		{
 			"name": "M-METHODS-HOLDERS-VALUE",
 			"type": "anyparse.query.FactsMethodValues",
-			"method": "scan",
+			"method": "scanReflection",
 			"find": "if (_holders == null) {",
 			"replace": "if (true) {",
 			"note": "(precision) a reflective member read as a value may obtain any method whatever the project declares"
@@ -13782,7 +13782,7 @@
 		{
 			"name": "M-METHODS-HOLDERS-REBIND",
 			"type": "anyparse.query.FactsMethodValues",
-			"method": "scan",
+			"method": "scanReflection",
 			"find": "if (REFLECTION_CLASSES.contains(target)) out.rebinds = true;",
 			"replace": "",
 			"note": "a reflective class read as a value rebinds no function, though whatever calls it may call `Reflect.callMethod`"
@@ -13878,7 +13878,7 @@
 		{
 			"name": "M-REFLECTED-HOLDERS-ACCESSORS",
 			"type": "anyparse.query.ReachGraph",
-			"method": "reflectedMembers",
+			"method": "reflectedIds",
 			"find": "if (owners.contains(id) || accessors.exists(p -> StringTools.startsWith(member, p)))",
 			"replace": "if (owners.contains(id))",
 			"note": "a property access by a computed name runs no accessor of an undeclared class"
@@ -13894,7 +13894,7 @@
 		{
 			"name": "M-REFLECTED-CLASSLESS",
 			"type": "anyparse.query.ReachGraph",
-			"method": "reflectedMembers",
+			"method": "reflectedObjects",
 			"find": "if (receiver == null || !plain || !facts.classless(receiver)) return null;",
 			"replace": "return null;",
 			"note": "(precision) a reflective access by a computed name on an object of no class — a structure, the catch-all — may reach any member of any object"
@@ -13902,7 +13902,7 @@
 		{
 			"name": "M-REFLECTED-CLASSLESS-ESCAPES",
 			"type": "anyparse.query.ReachGraph",
-			"method": "reflectedMembers",
+			"method": "reflectedObjects",
 			"find": "if (receiver == null || !plain || !facts.classless(receiver)) return null;\nescapes = true;",
 			"replace": "if (receiver == null || !plain || !facts.classless(receiver)) return null;",
 			"note": "an object of no class reaches no member of an instance that escaped the type system, as if a structure could hold none"
@@ -13942,7 +13942,7 @@
 		{
 			"name": "M-REFLECTED-FRESH",
 			"type": "anyparse.query.ReachGraph",
-			"method": "reflectedMembers",
+			"method": "reflectedObjects",
 			"find": "if (r.receiverFresh && plain) continue;",
 			"replace": "",
 			"note": "(precision) a structure the code built where a computed name acts on it may be an object of any class"
@@ -13950,7 +13950,7 @@
 		{
 			"name": "M-REFLECTED-FRESH-PLAIN",
 			"type": "anyparse.query.ReachGraph",
-			"method": "reflectedMembers",
+			"method": "reflectedObjects",
 			"find": "if (r.receiverFresh && plain) continue;",
 			"replace": "if (r.receiverFresh) continue;",
 			"note": "a property access by a computed name on a structure the code built runs none of the functions its fields hold"
@@ -13958,7 +13958,7 @@
 		{
 			"name": "M-REFLECTED-CLASSLESS-PLAIN",
 			"type": "anyparse.query.ReachGraph",
-			"method": "reflectedMembers",
+			"method": "reflectedObjects",
 			"find": "if (receiver == null || !plain || !facts.classless(receiver)) return null;",
 			"replace": "if (receiver == null || !facts.classless(receiver)) return null;",
 			"note": "a property access by a computed name on a value of no class runs none of the functions a structure's fields hold"
@@ -14660,8 +14660,8 @@
 		{
 			"name": "M-FACTS-KEPT-BUILDS",
 			"type": "anyparse.query.CompilerFacts",
-			"method": "materialize",
-			"find": "if (made != null) for (i in node.keptParams.copy()) if (!(record.pk ?? []).contains(i)) node.keptParams.remove(i);",
+			"method": "joinConfiguration",
+			"find": "for (i in node.keptParams.copy()) if (!(record.pk ?? []).contains(i)) node.keptParams.remove(i);",
 			"replace": "// cut",
 			"note": "(soundness) a parameter one build keeps is kept though another build assigns it"
 		},
@@ -14699,7 +14699,7 @@
 		{
 			"name": "M-GUARDED-NEVER-CALLED",
 			"type": "anyparse.query.NullGuardedCode",
-			"method": "staticInvocations",
+			"method": "invocationsHandNull",
 			"find": "if (read.fact.use != VALUE || read.fact.held || !neverCalled(read.node, read.fact.at, 0)) return false;",
 			"replace": "if (read.fact.use != VALUE || read.fact.held) return false;",
 			"note": "(soundness) a method read as a value is never invoked through it"
@@ -14707,8 +14707,8 @@
 		{
 			"name": "M-GUARDED-OVERRIDES",
 			"type": "anyparse.query.NullGuardedCode",
-			"method": "neverCalled",
-			"find": "if (call.access != STATIC_ACCESS) for (sub in _view.subtypesOf(owner)) {",
+			"method": "callableRuns",
+			"find": "if (access != STATIC_ACCESS) for (sub in _view.subtypesOf(owner)) {",
 			"replace": "if (false) for (sub in _view.subtypesOf(owner)) {",
 			"note": "(soundness) a function value handed to an instance method runs only its declared body, not an override"
 		},
@@ -14786,7 +14786,7 @@
 		{
 			"name": "M-GUARDED-HANDS-NULL",
 			"type": "anyparse.query.NullGuardedCode",
-			"method": "staticInvocations",
+			"method": "invocationsHandNull",
 			"find": "call.access != STATIC_ACCESS || !handsNull(call.at, index, count)",
 			"replace": "call.access != STATIC_ACCESS",
 			"note": "(soundness) a typed call handing the parameter an object counts as handing it null"
@@ -15243,7 +15243,7 @@
 		{
 			"name": "M-FACTS-ARGUMENT-USE",
 			"type": "anyparse.check.TypedFactsWalk",
-			"method": "call",
+			"method": "walkArguments",
 			"find": "walkAs(args[i], Argument(to, handedVia, i))",
 			"replace": "walk(args[i])",
 			"note": "an argument of a declared method is recorded as a plain value, so no read names the parameter it is handed to and every argument escapes again"
@@ -15569,9 +15569,9 @@
 		},
 		{
 			"name": "M-ESCAPES-FACTS-MARKER-UNKNOWN",
-			"type": "anyparse.query.FactsEscapes",
-			"method": "escapesOf",
-			"find": "FactMarkers.unknownReason(id, text);",
+			"type": "anyparse.query.FactMarkers",
+			"method": "lossReason",
+			"find": "unknownReason(id, text);",
 			"replace": "null;",
 			"note": "a node carrying a marker no reader names is read whole, so what a lost fact of it lets escape is missed"
 		},
@@ -15585,16 +15585,16 @@
 		},
 		{
 			"name": "M-METHODS-MARKER-UNKNOWN",
-			"type": "anyparse.query.FactsMethodValues",
-			"method": "scan",
-			"find": "FactMarkers.unknownReason(id, text);",
+			"type": "anyparse.query.FactMarkers",
+			"method": "lossReason",
+			"find": "unknownReason(id, text);",
 			"replace": "null;",
 			"note": "a node carrying a marker no reader names is read whole, so a method value a lost fact of it reads is missed"
 		},
 		{
 			"name": "M-VALUE-STORED-MARKER-UNKNOWN",
 			"type": "anyparse.query.FunctionValueTypes",
-			"method": "untypedStores",
+			"method": "writeNameLost",
 			"find": "case Unknown(_): true;",
 			"replace": "case Unknown(_): false;",
 			"note": "a node carrying a marker no reader names stores nothing by a name, so a store a lost fact of it makes is missed"
@@ -15602,7 +15602,7 @@
 		{
 			"name": "M-VALUE-CTOR-MARKER-UNKNOWN",
 			"type": "anyparse.query.FunctionValueTypes",
-			"method": "reflectiveConstructions",
+			"method": "constructionLost",
 			"find": "case Unknown(_): true;",
 			"replace": "case Unknown(_): false;",
 			"note": "a node carrying a marker no reader names constructs nothing by reflection, so the arguments a lost construction hands are missed"
@@ -15618,7 +15618,7 @@
 		{
 			"name": "M-FACTS-WITHIN-MARKER-UNKNOWN",
 			"type": "anyparse.query.CompilerFacts",
-			"method": "within",
+			"method": "lostWhere",
 			"find": "case StaleForeign | Unknown(_): true;",
 			"replace": "case StaleForeign: true;\n\t\t\t\tcase Unknown(_): false;",
 			"note": "a range question meeting a node carrying a marker no reader names takes its facts as placed"
@@ -16105,8 +16105,8 @@
 		{
 			"name": "M-VALUE-STORED-FOREIGN",
 			"type": "anyparse.query.FunctionValueTypes",
-			"method": "readStored",
-			"find": "if (!related.contains(declaring) && left && f.owner != null && _view.unchecked().holdsForeign(declaring)) return null;",
+			"method": "typedStores",
+			"find": "if (!related.contains(declaring) && left && f.owner != null && _view.unchecked().holdsForeign(declaring)) return false;",
 			"replace": "",
 			"note": "a typed write naming another class is taken to replace no method of an instance of the hierarchy a conversion put where it is written"
 		},

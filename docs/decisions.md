@@ -3110,3 +3110,16 @@ decided the question; it may not become a record of runs.
   stdin closing). Tests `HaxeSpawnTest.testTheDriverReadsItsJobsFromNoPipe` (deterministic: lsof/proc on the driver's
   fd 0), `testAWedgedDriverIsKilledAtItsBound`, `PendingRunsTest.testAWedgedBackgroundDriverIsKilledAtItsBound` (a job
   SIGSTOPs its driver, run in a `TestChild` so a failed bound cannot hang the suite) — branch `feat/infra-F1`
+- the 40 functions over the cyclomatic threshold (C1) are split along their own decisions — a dispatch per kind, a
+  validation ladder into named predicates, a loop body doing several jobs into one function per job — never into a
+  closure or a ternary chain: a local function's branches count toward its enclosing function, and the point is the
+  shape, not the number. Closures that carried an accumulator (`FactsEscapes.instances`, `CompilerFacts.within` /
+  `materialize`, `NullGuardedCode.gathered`) became members threading it; a walk whose state crosses three per-body
+  readers carries it in one struct (`MemberTouchScan.TouchWalk`). Two copies the split exposed now have one home:
+  the per-argument classification `FunctionValueTypes.boundArguments` and `reflectiveConstructions` each spelled →
+  `argumentFunction`; the lost-fact marker switch `FactsEscapes` and `FactsMethodValues` each spelled, differing in
+  which spliced reflection is harmless → `FactMarkers.lossReason(id, n, harmlessSplice)`; and the four import-record
+  literals of `SymbolIndexBuilder.extractFileInfo` → `importOf`. Kept whole: `Renderer.flatTokenWidthOfRestStack`'s
+  frame loop (one stack machine threading five running values on the formatter's hot path; only its pure final
+  combination moved out). Macro-time splits keep the generated parsers and writers byte-identical — branch
+  `feat/infra-C1`

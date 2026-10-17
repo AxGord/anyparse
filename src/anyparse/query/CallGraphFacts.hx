@@ -52,6 +52,9 @@ final class CallGraphFacts {
 	/** The access of a call of a method the compiler spliced in (`CompilerFacts.CallFact`). */
 	private static inline final INLINED: String = 'inlined';
 
+	/** The access of a call of the value a field holds (`CompilerFacts.CallFact`). */
+	private static inline final FIELD_VALUE: String = 'fieldValue';
+
 	/** The fact kind of a method's body (`TypedFactsProbe`): the one kind a build macro's own method is taken in as. */
 	private static inline final METHOD_KIND: String = 'method';
 
@@ -463,7 +466,7 @@ final class CallGraphFacts {
 		// an interface's member runs nothing of its own, declared or implied by a property (`get_x` of `x(get, …)`)
 		final dispatched: Bool = dispatchesOnly(g, owner, type, view);
 		final id: String = g.memberOnChain(type, name) ?? g.externalNode(g.types.declaringTypeOf(type, name) ?? type, name, dispatched);
-		final field: Bool = c.access == 'fieldValue';
+		final field: Bool = c.access == FIELD_VALUE;
 		// the index knows a library member before the graph reads its body
 		final known: Null<MemberInfo> = g.types.memberOnChain(type, name);
 		final replaceable: Bool = g.nodes[id]?.isDynamic == true || known?.isDynamic == true;
@@ -481,7 +484,19 @@ final class CallGraphFacts {
 		if (field) holds();
 		// a field no declaration read so far says is a `dynamic` method may still be one, whose body the edge reads
 		if (field && !replaceable && known != null) return;
-		final instance: Bool = c.access == 'FInstance' || c.access == 'FClosure' || field;
+		callEdges(g, node, c, target, owner, name, id, span, view, deferred);
+		if (!field && replaceable) holds();
+	}
+
+	/**
+	 * The edges the call `c` of `target`, the member `name` of `owner` the graph node `id` is, records (`declaredCall`): its
+	 * own — a reference when `deferred` — and, for an instance call, an override edge to each member it may dispatch to.
+	 */
+	private static function callEdges(
+		g: CallGraph, node: FnNode, c: CallFact, target: String, owner: String, name: String, id: String, span: Null<Span>,
+		view: FactsView, deferred: Bool
+	): Void {
+		final instance: Bool = c.access == 'FInstance' || c.access == 'FClosure' || c.access == FIELD_VALUE;
 		final dispatch: Null<String> = instance ? dispatchType(c.receiver, owner, view) : null;
 		// an inlined call at a known site whose body's facts are filed here (`filed`) runs them, instantiated at this call
 		final spliced: Bool = c.access == INLINED && c.site != null && !view.harmlessSplice(g, target);
@@ -490,7 +505,6 @@ final class CallGraphFacts {
 			CompilerFacts.baseId(owner), spliced
 		);
 		if (dispatch != null) virtualEdges(g, node, dispatch, name, span, deferred ? Ref : Virtual, view);
-		if (!field && replaceable) holds();
 	}
 
 	/** A `new`: the edge to the constructor it names and the run of the initializers it executes, as `CallGraph` records one. */

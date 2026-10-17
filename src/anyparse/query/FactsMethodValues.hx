@@ -317,12 +317,6 @@ final class FactsMethodValues {
 			rebinds: false
 		};
 		_reads = out;
-
-		function named(name: String, read: MethodValueRead): Void {
-			final list: Array<MethodValueRead> = out.named[name] ?? [];
-			list.push(read);
-			out.named[name] = list;
-		}
 		for (id in _table.nodeIds()) {
 			final made: Null<FactNode> = _table.node(id);
 			if (made == null) {
@@ -330,50 +324,56 @@ final class FactsMethodValues {
 				return out;
 			}
 			final n: FactNode = made;
-			final lost: Null<String> = FactMarkers.first(
-				n, m -> switch m {
-					case StaleForeign: 'a fact of `$id` lies in a file whose text the table no longer has';
-					case ReflectionInlined: inlinedMemberless(n)
-						? null
-						: 'a reflective body spliced into `$id` lost the name it was handed';
-					case Unknown(text):
-						FactMarkers.unknownReason(id, text);
-					// a splice's and an expansion's facts are the node's own, wherever they sit
-					case InlineSite | MacroExpansion | ReflectionUnattributed | ReflectionFrom(_): null;
-				}
-			);
+			final lost: Null<String> = FactMarkers.lossReason(id, n, inlinedMemberless);
 			if (lost != null) {
 				out.unknown = lost;
 				return out;
 			}
 			for (f in n.fields) if (!f.write && methodRead(f.access, f.owner, f.field))
-				named(f.field, { receiver: f.receiver, exact: false, typeless: f.access == DYNAMIC_ACCESS });
+				addNamed(out, f.field, { receiver: f.receiver, exact: false, typeless: f.access == DYNAMIC_ACCESS });
 			for (c in n.calls) if (c.access == INLINED && REBINDING_CALLS.contains(c.target ?? '')) out.rebinds = true;
-			for (r in n.reflection) {
-				final target: String = r.target;
-				if (REBINDING_CALLS.contains(target)) out.rebinds = true;
-				if (memberless(_table, target)) continue;
-				if (r.isValue || REFLECTION_CLASSES.contains(target)) {
-					// whatever calls it later hands it a name computed there, and any object: the project's declaration bounds
-					// what that obtains (`declaredHolders`); a reflective class as a value may also rebind
-					if (_holders == null) {
-						out.unknown = '`$target` is read as a value in `$id`';
-						return out;
-					}
-					if (REFLECTION_CLASSES.contains(target)) out.rebinds = true;
-					out.computed.push({ receiver: null, exact: false, typeless: true });
-					continue;
-				}
-				final read: MethodValueRead = { receiver: r.receiver, exact: r.receiverExact, typeless: true };
-				// the literal at the call's NAME argument: a call naming no member, or a computed name, may obtain any
-				final literal: Null<String> = r.memberName;
-				if (literal == null)
-					out.computed.push(read)
-				else
-					named(literal, read);
-			}
+			if (!scanReflection(out, id, n)) return out;
 		}
 		return out;
+	}
+
+	/**
+	 * Add to `out` the method values the reflection of the node `id`, `n`, may obtain (`scan`): by the literal name a call
+	 * names, or by any computed one. False — with `out.unknown` said — when a reflective function read as a value may obtain
+	 * any method and the project declares no classes bounding what it obtains (`declaredHolders`).
+	 */
+	private function scanReflection(out: MethodValueReads, id: String, n: FactNode): Bool {
+		for (r in n.reflection) {
+			final target: String = r.target;
+			if (REBINDING_CALLS.contains(target)) out.rebinds = true;
+			if (memberless(_table, target)) continue;
+			if (r.isValue || REFLECTION_CLASSES.contains(target)) {
+				// whatever calls it later hands it a name computed there, and any object: the project's declaration bounds
+				// what that obtains (`declaredHolders`); a reflective class as a value may also rebind
+				if (_holders == null) {
+					out.unknown = '`$target` is read as a value in `$id`';
+					return false;
+				}
+				if (REFLECTION_CLASSES.contains(target)) out.rebinds = true;
+				out.computed.push({ receiver: null, exact: false, typeless: true });
+				continue;
+			}
+			final read: MethodValueRead = { receiver: r.receiver, exact: r.receiverExact, typeless: true };
+			// the literal at the call's NAME argument: a call naming no member, or a computed name, may obtain any
+			final literal: Null<String> = r.memberName;
+			if (literal == null)
+				out.computed.push(read)
+			else
+				addNamed(out, literal, read);
+		}
+		return true;
+	}
+
+	/** Record `read` as one read of a method value named `name`. */
+	private static function addNamed(out: MethodValueReads, name: String, read: MethodValueRead): Void {
+		final list: Array<MethodValueRead> = out.named[name] ?? [];
+		list.push(read);
+		out.named[name] = list;
 	}
 
 	/**

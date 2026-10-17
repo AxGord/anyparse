@@ -403,29 +403,15 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		call: QueryNode, root: QueryNode, source: String, file: String, s: Seams, options: Options, plugin: GrammarPlugin,
 		symbols: () -> Null<SymbolIndex>, declaredTypes: Map<Int, String>, chain: ChainTypeContext, conflicts: Map<String, UsingConflict>
 	): Null<Candidate> {
-		if (call.children.length < MIN_CALL_CHILDREN) return null;
-		final callee: QueryNode = call.children[0];
-		final method: Null<String> = callee.name;
-		if (callee.kind != s.fieldKind || method == null || callee.children.length != 1) return null;
-		final typeIdent: QueryNode = callee.children[0];
-		final typeName: Null<String> = typeIdent.name;
-		if (typeIdent.kind != s.identKind || typeName == null) return null;
-		final moduleIndex: Int = options.simpleNames.indexOf(typeName);
-		if (moduleIndex == -1) return null;
-		final module: String = options.modules[moduleIndex];
-		// A local / parameter named after the module shadows it: `Lambda.map` is then a field read.
-		if (TypeResolver.identBindingFrom(typeIdent, root, s.shape) != null) return null;
-		final known: Null<Array<String>> = plugin.knownExtensionMethods(module);
-		if (known != null && !known.contains(method)) return null;
-		final callSpan: Null<Span> = call.span;
-		// The receiver is the argument WITHOUT its redundant parentheses: `Ext.deco((w), 1)` splices
-		// the same `w` an unparenthesized site would, and the peeled `(` / `)` fall inside the two
-		// deleted regions, where the comment gate already guards them.
-		final recv: QueryNode = BoolExprShape.unwrapParens(call.children[1], s.parenKind);
-		if (callSpan == null || recv.span == null) return null;
+		final site: Null<ExtensionSite> = extensionSite(call, root, s, options, plugin);
+		if (site == null) return null;
+		final method: String = site.method;
+		final module: String = site.module;
+		final recv: QueryNode = site.recv;
+		final callSpan: Span = site.callSpan;
 		// Every channel through which the compiler could bind `recv.method` to another function: what the written name denotes,
 		// whether the function takes part in `using` at all, and every `using` that could reach the site.
-		final channels: Channels = channelsOf(typeName, module, method, file, callSpan.from, root, symbols);
+		final channels: Channels = channelsOf(site.typeName, module, method, file, callSpan.from, root, symbols);
 		final key: String = '$module:$method';
 		final conflict: UsingConflict = conflicts[key] ?? UsingScan.usingConflict(channels.usings, module, method, plugin, symbols, file);
 		conflicts[key] = conflict;
@@ -450,6 +436,42 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 			module: module,
 			verdict: verdict,
 			message: messageFor(verdict, suggestion)
+		};
+	}
+
+	/**
+	 * `call` read as a static call `Type.method(recv, …)` of a configured extension module (`classify`): the type name is
+	 * no local or parameter, which would shadow the module, and the method one the module may extend with. Null otherwise.
+	 */
+	private static function extensionSite(
+		call: QueryNode, root: QueryNode, s: Seams, options: Options, plugin: GrammarPlugin
+	): Null<ExtensionSite> {
+		if (call.children.length < MIN_CALL_CHILDREN) return null;
+		final callee: QueryNode = call.children[0];
+		final method: Null<String> = callee.name;
+		if (callee.kind != s.fieldKind || method == null || callee.children.length != 1) return null;
+		final typeIdent: QueryNode = callee.children[0];
+		final typeName: Null<String> = typeIdent.name;
+		if (typeIdent.kind != s.identKind || typeName == null) return null;
+		final moduleIndex: Int = options.simpleNames.indexOf(typeName);
+		if (moduleIndex == -1) return null;
+		final module: String = options.modules[moduleIndex];
+		// A local / parameter named after the module shadows it: `Lambda.map` is then a field read.
+		if (TypeResolver.identBindingFrom(typeIdent, root, s.shape) != null) return null;
+		final known: Null<Array<String>> = plugin.knownExtensionMethods(module);
+		if (known != null && !known.contains(method)) return null;
+		final callSpan: Null<Span> = call.span;
+		// The receiver is the argument WITHOUT its redundant parentheses: `Ext.deco((w), 1)` splices
+		// the same `w` an unparenthesized site would, and the peeled `(` / `)` fall inside the two
+		// deleted regions, where the comment gate already guards them.
+		final recv: QueryNode = BoolExprShape.unwrapParens(call.children[1], s.parenKind);
+		if (callSpan == null || recv.span == null) return null;
+		return {
+			typeName: typeName,
+			module: module,
+			method: method,
+			recv: recv,
+			callSpan: callSpan
 		};
 	}
 
@@ -800,6 +822,15 @@ private typedef Candidate = {
 	var verdict: Verdict;
 	var message: String;
 };
+
+/** A static call of an extension module's method, as `PreferStaticExtension.extensionSite` reads it. */
+private typedef ExtensionSite = {
+	final typeName: String;
+	final module: String;
+	final method: String;
+	final recv: QueryNode;
+	final callSpan: Span;
+}
 
 /** What `channelsOf` read off the channels a call's extension form could bind through. */
 private typedef Channels = {

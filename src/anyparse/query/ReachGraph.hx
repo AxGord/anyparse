@@ -978,17 +978,31 @@ final class ReachGraph {
 			final types: Null<Array<String>> = at.exact ? exactTypes(g, t) : runtimeTypes(g, t, at.family);
 			if (types == null) return null;
 			for (x in types) if (!out.contains(x)) out.push(x);
-			if (at.family == Iteration) for (x in types) for (name in (_scope.shape.execution?.implicitCallNames ?? [])) {
-				final returned: Null<String> = iterables == null || iterables.contains(name)
-					? g.types.memberOnChain(x, name)?.returnNominal
-					: null;
-				if (returned == null) continue;
-				final more: Null<Array<String>> = runtimeTypes(g, returned, at.family);
+			if (at.family == Iteration) for (x in types) {
+				final more: Null<Array<String>> = iteratorTypes(g, x, iterables, at.family);
 				if (more == null) return null;
 				for (y in more) if (!out.contains(y)) out.push(y);
 			}
 		}
 		return out;
+	}
+
+	/**
+	 * The types the iterator methods of `x` the loop runs return (`typesAt`), each as `runtimeTypes` widens it — only those
+	 * `iterables` names when it is not null. Null when one of them may be of any type.
+	 */
+	private function iteratorTypes(g: CallGraph, x: String, iterables: Null<Array<String>>, family: SiteFamily): Null<Array<String>> {
+		final found: Array<String> = [];
+		for (name in (_scope.shape.execution?.implicitCallNames ?? [])) {
+			final returned: Null<String> = iterables == null || iterables.contains(name)
+				? g.types.memberOnChain(x, name)?.returnNominal
+				: null;
+			if (returned == null) continue;
+			final more: Null<Array<String>> = runtimeTypes(g, returned, family);
+			if (more == null) return null;
+			for (y in more) found.push(y);
+		}
+		return found;
 	}
 
 	/**
@@ -1559,6 +1573,25 @@ final class ReachGraph {
 		final view: Null<FactsView> = _scope.facts;
 		if (view == null || !view.truth || receivers.length == 0) return null;
 		final facts: FactsView = view;
+		final found: Null<Array<String>> = reflectedObjects(facts, receivers);
+		if (found == null) return null;
+		final objects: Array<String> = found;
+		final typed: Array<String> = objects.copy();
+		for (id in objects) for (sup in facts.supertypesOf(id)) if (!typed.contains(sup)) typed.push(sup);
+		// a method other than an accessor is obtained off an object of a class the project declares (`reflectiveMethodHolders`),
+		// each by its own name, and is one of that class or of a class it extends; an accessor runs off an object of any class
+		final held: Array<String> = methodValues(facts).declaredHolders(objects);
+		final owners: Array<String> = held.copy();
+		for (id in held) for (sup in facts.supertypesOf(id)) if (!owners.contains(sup)) owners.push(sup);
+		return reflectedIds(g, facts, typed, owners);
+	}
+
+	/**
+	 * The typed classes and interfaces the objects `receivers` name may be instances of (`reflectedMembers`): each one's
+	 * class, its typed subtypes unless it is of exactly that class, and the escaped types when one may have left the type
+	 * system. Null when one is of no such type.
+	 */
+	private function reflectedObjects(facts: FactsView, receivers: Array<ReflectionFact>): Null<Array<String>> {
 		final typed: Array<String> = [];
 		function note(id: String): Void {
 			if (!typed.contains(id)) typed.push(id);
@@ -1588,13 +1621,15 @@ final class ReachGraph {
 			if (escaped == null) return null;
 			for (id in escaped) note(id);
 		}
-		final objects: Array<String> = typed.copy();
-		for (id in objects) for (sup in facts.supertypesOf(id)) note(sup);
-		// a method other than an accessor is obtained off an object of a class the project declares (`reflectiveMethodHolders`),
-		// each by its own name, and is one of that class or of a class it extends; an accessor runs off an object of any class
-		final held: Array<String> = methodValues(facts).declaredHolders(objects);
-		final owners: Array<String> = held.copy();
-		for (id in held) for (sup in facts.supertypesOf(id)) if (!owners.contains(sup)) owners.push(sup);
+		return typed;
+	}
+
+	/**
+	 * The members `reflectedMembers` answers among the methods of `typed`: every method of a type in `owners` and every
+	 * accessor of any of them, with the simple names of their types. Null when one is of a type whose text the index does
+	 * not hold or holds nothing of, and is not an extern's.
+	 */
+	private function reflectedIds(g: CallGraph, facts: FactsView, typed: Array<String>, owners: Array<String>): Null<ReflectedMembers> {
 		final accessors: Array<String> = _scope.shape.accessorMethodPrefixes ?? [];
 		final types: Array<String> = [];
 		final ids: Array<OwnedId> = [];
