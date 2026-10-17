@@ -18,6 +18,7 @@ import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoMemo;
 import anyparse.query.TypeInfoProvider;
+import anyparse.query.TypeNameBinding;
 import anyparse.query.TypeRefIndex;
 import anyparse.query.TypeRefPrinter;
 import anyparse.query.TypeResolver;
@@ -86,35 +87,6 @@ final class ExplicitType implements Check implements OracleAssisted {
 	private static inline final DECLINE_NO_STRUCTURAL_TYPE: String = 'no structural rule names its type — a literal, a typed `new` '
 		+ 'or cast initializer, or a supertype declaring the parameter — and the oracle-assisted pass types it when the project '
 		+ 'configures a compilerOracle';
-
-	/**
-	 * Simple names visible WITHOUT an import from every Haxe module — the standard library's root
-	 * package. `collectInheritedParamEdits` may copy one of these across files unconditionally;
-	 * every other name has to be proven to denote the same type on both sides. Hand-maintained on
-	 * purpose: the resolution index does not model the standard library unless a project happens to
-	 * name it as a resolution library, so this list — not the index — is what makes the common
-	 * `str:String` copy possible at all.
-	 */
-	private static final AMBIENT_TYPES: Array<String> = [
-		'Any',
-		'Array',
-		'Bool',
-		'Class',
-		'Dynamic',
-		'Enum',
-		'EnumValue',
-		'Float',
-		'Int',
-		'Iterable',
-		'Iterator',
-		'KeyValueIterator',
-		'Map',
-		'Null',
-		'Single',
-		'String',
-		'UInt',
-		'Void'
-	];
 
 	public function new() {}
 
@@ -849,7 +821,7 @@ final class ExplicitType implements Check implements OracleAssisted {
 	 *
 	 * Per nominal, in order:
 	 *
-	 * - one of `AMBIENT_TYPES` → yes, it means the same thing in every module;
+	 * - one of `TypeNameBinding.AMBIENT_TYPE_NAMES` → yes, it means the same thing in every module;
 	 * - brought in by a `#if`-guarded import on EITHER side → no: `ImportInfo.guarded` marks an
 	 *   import whose presence is branch-dependent while the index is branch-blind, so the name
 	 *   would not resolve in the other configuration;
@@ -865,7 +837,7 @@ final class ExplicitType implements Check implements OracleAssisted {
 		final here: Null<FileInfo> = s.idx.fileInfo(s.file);
 		final there: Null<FileInfo> = s.idx.fileInfo(declFile);
 		if (here == null || there == null) return false;
-		for (n in nominalsOf(typeText)) if (!AMBIENT_TYPES.contains(n)) {
+		for (n in nominalsOf(typeText)) if (!TypeNameBinding.AMBIENT_TYPE_NAMES.contains(n)) {
 			if (TypeRefIndex.bindsUnderGuard(here, n) || TypeRefIndex.bindsUnderGuard(there, n)) return false;
 			final mine: Array<{ file: FileInfo, type: TypeDeclInfo }> = s.idx.resolveTypeRefsFrom(n, s.file);
 			final theirs: Array<{ file: FileInfo, type: TypeDeclInfo }> = s.idx.resolveTypeRefsFrom(n, declFile);

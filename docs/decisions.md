@@ -3718,3 +3718,36 @@ decided the question; it may not become a record of runs.
   scopes per tree), `FunctionTrees` (node per file + span), `SubtypeGraph` (member-name -> declaring types),
   `TypeNameBinding` (import path splits); and `lint` asks rule enablement per distinct config
   (`LintDocuments.distinctConfigs`) instead of per file — branch `feat/infra-N1`
+- `empty-block` reported the empty body of a DRAIN loop (`while (gl.getError() != 0) {}`, TM GlProgressOverlay /
+  NativeURLLoaderTimeoutTest) → a condition loop (`ShapeVocab.conditionLoopKinds`: the statement loops minus the
+  iterating ones, a new derived vocabulary answer) whose condition is not side-effect-free (`MemberKinds.isSideEffectFree`,
+  a positive whitelist — an unknown condition shape counts as working) is not flagged; a `for` gets no pass. The rule HAS
+  a fix, so it does not declare `NoAutofix`: each flagged block the fix keeps carries its gate (`declineReason`: loop
+  body, try / catch body, side-effecting condition, branch body, then-branch with an else) — branch `feat/infra-N28`
+- `explicit-type` never fixed a `macro` function's return type: the oracle is blind in macro context and the structural
+  pass skipped them → `:Expr` (through the file's printer, import added when needed) when EVERY own-scope return is a
+  quotation `RefShape.quotationTypes` (new seam: `MacroExpr` → `haxe.macro.Expr`, `MacroTypeExpr` → `ComplexType`,
+  `MacroClassExpr` → `TypeDefinition`) types `Expr`, directly / in a parenthesis / in both ternary arms, or a tabled static
+  call answering `Dynamic` whose type name no project type shadows (`Context.error`, added to `staticMethodReturns` — its
+  std signature is `:Dynamic`), at least one being a quotation. Measured with Haxe 4.3.7: `Expr` and `Dynamic` returns
+  unify to `Expr` in either order, `macro : Int` is `ComplexType`. A build macro returning `Array<Field>` has no quotation
+  return and declines; so does every macro parameter, in its own words — branch `feat/infra-N28`
+- `unused-private` declined every private method of an `extends` class as a possible abstract-method impl whenever the
+  compiler's facts could not clear the chain, although the resolution scope (TM: openfl in `resolutionLibs`) holds the
+  whole chain → `supertypeDecline` falls back to `MemberLookup.supertypeMemberProof` over the widest scope index, pinned to
+  the owner's declaring file (new optional `file`): `Absent` clears, `Declares` keeps the old decline, `Unreachable` gets
+  its own sentence. The shared walk now also answers `Unreachable` for an ancestor carrying `@:build` / `@:autoBuild`
+  (its macro may add the member, or run over the subtype) — tightens `param-ascription`'s use of it in the same, safe,
+  direction. `TypeResolver.isDeletionPure` takes a `String` method (`PURE_STRING_METHODS`, immutable receiver) on an
+  identifier declared `String` (a `Null<String>` reads `Null` and is refused) — branch `feat/infra-N28`
+- `shadowing-local` was `NoAutofix` → a fix for the mechanical subset, gated on the hidden binding NOT being read after
+  the declaration inside the frame declaring it (a read there is the defect shape the rule exists for — the fix would
+  bury it; that one stays report-only). A same-block redeclaration of a single-declarator `var` with the same written
+  type becomes an assignment (no comment in the replaced run, no closure capturing the first binding, re-resolved: every
+  read of the second must bind to the first afterwards); any other declaration is renamed to its written type's
+  lower-camel name through `Rename.rename` (scope-correct, refuses captures and resolution blind spots), refusing a std
+  root type name (`int`), a nested function rebinding the name, the name inside a string of the scope, and a name another
+  rename of the same call takes in an overlapping frame. Local names carry no meaning a compiler reads, so the fix is not
+  a `RiskyFix`; the binder is its verification. Shared pieces MOVED: `SourceText.lowerCamel` (was
+  `IntroduceParameterObject`'s private first-letter copy; now lowers a leading acronym run, `URLPair` → `urlPair`) and
+  `TypeNameBinding.AMBIENT_TYPE_NAMES` (was `ExplicitType.AMBIENT_TYPES`) — branch `feat/infra-N28`

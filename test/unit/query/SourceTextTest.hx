@@ -20,6 +20,17 @@ class SourceTextTest extends Test {
 		Assert.isNull(SourceText.nodeText(new QueryNode('IntLit', null, []), source));
 	}
 
+	@:pin('control')
+	@:killer('M-LOWER-CAMEL-FIRST-ONLY')
+	public function testLowerCamelLowersTheLeadingCapitalRun(): Void {
+		Assert.equals('point', SourceText.lowerCamel('Point'));
+		Assert.equals('rightPanelEvent', SourceText.lowerCamel('RightPanelEvent'));
+		Assert.equals('urlLoader', SourceText.lowerCamel('URLLoader'));
+		Assert.equals('io', SourceText.lowerCamel('IO'));
+		Assert.equals('md5Hash', SourceText.lowerCamel('MD5Hash'));
+		Assert.equals('already', SourceText.lowerCamel('already'));
+	}
+
 	public function testTrimNewlineEdgesKeepsInteriorBreaksAndIndentation(): Void {
 		Assert.equals('\tfunction f() {}\n\n\tvar x: Int;', SourceText.trimNewlineEdges('\n\r\n\tfunction f() {}\n\n\tvar x: Int;\n\n'));
 		Assert.equals('a', SourceText.trimNewlineEdges('a'));

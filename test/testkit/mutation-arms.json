@@ -23906,6 +23906,41 @@
 			"method": "isPureStringMethodCall",
 			"force": "false",
 			"note": "a String method on a String final is not pure, so the dead `CHARSET.toUpperCase()` constant stays undeletable"
+		},
+		{
+			"name": "M-SHADOWING-LOCAL-NO-RENAME",
+			"type": "anyparse.check.ShadowingLocal",
+			"method": "renameEdits",
+			"force": "Declined('mutated')",
+			"note": "no shadow is renamed, so `final event:RightPanelEvent` over an unread `event` parameter stays a finding although the rename is binder-proven"
+		},
+		{
+			"name": "M-SHADOWING-LOCAL-OUTER-READ-IGNORED",
+			"type": "anyparse.check.ShadowingLocal",
+			"method": "readAfter",
+			"force": "false",
+			"note": "a hidden binding read after the inner scope ends no longer keeps the finding, so the rule's own defect shape (a write meant for the outer) is renamed away and buried"
+		},
+		{
+			"name": "M-SHADOWING-LOCAL-NO-ASSIGNMENT",
+			"type": "anyparse.check.ShadowingLocal",
+			"method": "assignmentEdit",
+			"force": "null",
+			"note": "a same-block `var` redeclaration of the same type is never turned into an assignment (TM DatePicker dayIdx stays a finding)"
+		},
+		{
+			"name": "M-SHADOWING-LOCAL-CAPTURE-IGNORED",
+			"type": "anyparse.check.ShadowingLocal",
+			"method": "capturedInNestedFunction",
+			"force": "false",
+			"note": "a closure capturing the first binding does not stop the assignment, so the closure reads the redeclaration's value after the fix"
+		},
+		{
+			"name": "M-LOWER-CAMEL-FIRST-ONLY",
+			"type": "anyparse.query.SourceText",
+			"method": "lowerCamel",
+			"force": "name.length == 0 ? name : name.charAt(0).toLowerCase() + name.substr(1)",
+			"note": "only the first capital is lowered, so `URLLoader` names its value `uRLLoader`"
 		}
 	]
 }

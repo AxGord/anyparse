@@ -43,6 +43,12 @@ class IntroduceParameterObjectSliceTest extends Test {
 		Assert.isTrue(text.contains('p.a + p.b'), 'body uses the custom name');
 	}
 
+	/** An acronym-led type names its object the camelCase way: `URLPair` → `urlPair`, not `uRLPair`. */
+	public function testAcronymTypeNamesItsObjectInCamelCase(): Void {
+		final src: String = 'package pkg;\n\nclass C {\n\tpublic function new() {}\n\tpublic function f(a:Int, b:Int):Int return a + b;\n}';
+		Assert.isTrue(okFold(src, 'f', ['a', 'b'], 'URLPair', null).contains('f(urlPair:URLPair)'), 'acronym run lower-cased');
+	}
+
 	/** Non-contiguous parameters are refused. */
 	public function testNonContiguousRefused(): Void {
 		final src: String =
