@@ -1,9 +1,11 @@
 package anyparse.query;
 
 import anyparse.query.CondBranchPath;
+import anyparse.query.MemberLookup.HostedMembers;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ImportInfo;
 import anyparse.query.SymbolIndex.ImportKind;
+import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.ModuleField;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.TypeNameBinding.ImportPath;
@@ -329,6 +331,38 @@ final class ValueNameBinding {
 	/** The `#if` regions and branches the module-level declaration `field` of `fi` sits in. */
 	private inline function branchOf(fi: FileInfo, field: ModuleField): Array<CondFrame> {
 		return _refs.names.branchPathAt(fi, field.span.from);
+	}
+
+	/**
+	 * The static extension a call `recv.method(…)` binds under the file's `usings` (its `using` paths in declaration order),
+	 * for a receiver whose own type's closure provably declares no `method` and brings no extensions of its own (`@:using`,
+	 * which 4.3.7 binds ahead of every `using`) — both the caller's gates: every static `method` of the one type of the LAST
+	 * `using` declaring one, with that type. 4.3.7 walks the `using`s backwards, binds an extension declared on ANY type of a
+	 * used module, and passes over a `using` only for a module declaring no such static (`@:noUsing` ones excluded).
+	 *
+	 * Null — not proven — when a later `using` cannot be read (`usingHosts`), a type it brings is built by a macro, which may
+	 * add the static, two types of one module declare it, or it or the type declaring it sits under a `#if`. Whether the
+	 * first parameter ACCEPTS the receiver is the caller's question, and a NO there is a refusal, not a reason to try the
+	 * earlier `using`: the compiler passes over only a parameter that provably rejects the receiver (`<T>(s:T)` and
+	 * `(s:Dynamic)` both bind), which no caller proves.
+	 */
+	public function extensionDeclaration(usings: Array<String>, method: String): Null<HostedMembers> {
+		var k: Int = usings.length;
+		while (k-- > 0) {
+			final hosts: Null<Array<ResolvedType>> = usingHosts(usings[k]);
+			if (hosts == null || hosts.exists(h -> builtAtOrAbove(h, []))) return null;
+			final declaring: Array<ResolvedType> = hosts.filter(h -> h.type.members.exists(m -> extendsAs(m, method)));
+			if (declaring.length == 0) continue;
+			final host: ResolvedType = declaring[0];
+			final members: Array<MemberInfo> = host.type.members.filter(m -> extendsAs(m, method));
+			return declaring.length != 1 || host.type.guarded || members.exists(m -> m.guarded) ? null : { members: members, host: host };
+		}
+		return null;
+	}
+
+	/** Whether `m` is a static a `using` offers as the extension `method` — `@:noUsing` withholds it. */
+	private static inline function extendsAs(m: MemberInfo, method: String): Bool {
+		return m.name == method && m.isStatic && !m.excludedFromExtensions;
 	}
 
 }

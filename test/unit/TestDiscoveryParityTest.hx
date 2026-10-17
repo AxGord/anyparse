@@ -1928,6 +1928,13 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-PFPF-MACRO-SILENT',
 			'unit.check.PreferFinalMacroOwnerTest#testTheFoldIsNeverAdmittedOnAMacroBuiltOwner :: control :: M-FINAL-MACRO-FOLD-ADMITTED',
 			'unit.check.PreferFindCheckTest#testFixRefusedWhenTheOnlyUsingIsGuarded :: control :: M-GUARDED-USING-ABSENT',
+			'unit.check.PreferForeachCheckTest#testALaterUsingOfferingNoExtensionIsPassedOver :: control :: M-EXT-DECL-PASS-OVER,M-EXT-DECL-STATIC,M-EXT-DECL-NOUSING',
+			'unit.check.PreferForeachCheckTest#testALaterUsingThatMayOfferTheExtensionStopsTheWalk :: control :: M-EXT-DECL-BUILT,M-EXT-DECL-GUARDED-HOST',
+			'unit.check.PreferForeachCheckTest#testGuardedUsingOrDeclarationRefuses :: control :: M-EXT-DECL-GUARDED-MEMBER,M-BINDER-EXTENSION-GUARDED-USING',
+			'unit.check.PreferForeachCheckTest#testLaterUsingWinsOverEarlierOne :: control :: M-BINDER-EXTENSION-LAST-USING',
+			'unit.check.PreferForeachCheckTest#testReceiverUsingMetaBeatsTheFileUsing :: control :: M-EXT-NOMINAL-ATUSING',
+			'unit.check.PreferForeachCheckTest#testTwoTypesOfOneModuleDeclaringTheNameRefuse :: control :: M-EXT-DECL-TWO-HOSTS',
+			'unit.check.PreferForeachCheckTest#testUnindexedLaterUsingStopsTheWalk :: control :: M-BINDER-EXTENSION-UNINDEXED',
 			'unit.check.PreferIfExpressionAssignmentCheckTest#testDeclChainElseWhileNotFlagged :: control :: M-ELSELESS-FINAL-ELSE',
 			'unit.check.PreferIfExpressionAssignmentCheckTest#testDeclChainImpureInitNotFlagged :: control :: M-DECLCHAIN-INIT-ANY',
 			'unit.check.PreferIfExpressionAssignmentCheckTest#testDeclChainNestedWriteNotFlagged :: control :: M-DECLCHAIN-OCCURRENCE-COUNT',
@@ -7460,7 +7467,15 @@ class TestDiscoveryParityTest extends Test {
 			'M-FOLD-FIX-REPORT-INDEX',
 			'M-FOLD-STATEMENT-UNPROVEN',
 			'M-PIEC-FIX-REPORT-INDEX',
-			'M-PIEC-RUN-SELECTION'
+			'M-PIEC-RUN-SELECTION',
+			'M-EXT-DECL-BUILT',
+			'M-EXT-DECL-PASS-OVER',
+			'M-EXT-DECL-TWO-HOSTS',
+			'M-EXT-DECL-GUARDED-HOST',
+			'M-EXT-DECL-GUARDED-MEMBER',
+			'M-EXT-DECL-STATIC',
+			'M-EXT-DECL-NOUSING',
+			'M-EXT-NOMINAL-ATUSING'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
