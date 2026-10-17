@@ -1,8 +1,10 @@
 package anyparse.query;
 
+import anyparse.query.CondBranchPath;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ImportInfo;
 import anyparse.query.SymbolIndex.ImportKind;
+import anyparse.query.SymbolIndex.ModuleField;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.TypeNameBinding.ImportPath;
 
@@ -104,13 +106,37 @@ final class ValueNameBinding {
 	}
 
 	/**
+	 * The module-level declarations of the bare value name `name` a use at offset `at` of `fi` binds, by the `#if` branches
+	 * the builds compiling the use take (Haxe 4.3.7, `hx/p1`): the one declaration every such build compiles
+	 * (`CondBranchPath.within`), when there is one; else every declaration some such build may compile — none of a branch the
+	 * use is an alternative of (`CondBranchPath.comparable`) — and what the imports supply in the builds that compile none of
+	 * them. A build compiles at most one: two module-level declarations of a name in one build do not compile. Coverage is not
+	 * read — `#if a … #else … #end` declaring the name in both branches still lists the imports — so the answer may hold a
+	 * build that does not exist, never miss one that does. Null when the module declares no value of the name.
+	 */
+	public function moduleValuesAt(fi: FileInfo, name: String, at: Int): Null<ModuleValues> {
+		final fields: Array<ModuleField> = fi.moduleFields.filter(f -> f.name == name);
+		if (fields.length == 0) return null;
+		final use: Array<CondFrame> = _refs.names.branchPathAt(fi, at);
+		final certain: Null<ModuleField> = fields.find(f -> CondBranchPath.within(use, branchOf(fi, f)));
+		return certain != null
+			? { decls: [certain], imported: null }
+			: { decls: fields.filter(f -> CondBranchPath.comparable(use, branchOf(fi, f))), imported: importedStatics(fi, name, at) };
+	}
+
+	/**
 	 * What the imports of `fi` — its own, then its ambient chain's — may supply under the bare name `name`: every static an
 	 * explicit import, an alias or a type wildcard binds it to, and whether one may supply it that the index cannot list. None
-	 * when the module itself declares the name at module level.
+	 * when every build compiling a use at offset `at` declares the name at module level (`moduleValuesAt`) — with no `at`,
+	 * when a declaration of it sits in no `#if` branch: a module-level field is what the name means where it is compiled.
 	 */
-	public function importedStatics(fi: FileInfo, name: String): ImportedStatics {
+	public function importedStatics(fi: FileInfo, name: String, ?at: Int): ImportedStatics {
 		final out: ImportedStatics = { statics: [], unknown: false };
-		if (fi.moduleFields.contains(name)) return out;
+		// the use's branch is read only for a name the module declares — most are not
+		if (fi.moduleFields.exists(f -> f.name == name)) {
+			final use: Array<CondFrame> = at == null ? [] : _refs.names.branchPathAt(fi, at);
+			if (fi.moduleFields.exists(f -> f.name == name && CondBranchPath.within(use, branchOf(fi, f)))) return out;
+		}
 		for (imp in importsOf(fi)) switch imp.kind {
 			case ImportKind.Import:
 				final named: Null<ImportedStatic> = SourceText.lastSegment(imp.raw) == name ? staticOf(imp.raw) : null;
@@ -182,7 +208,7 @@ final class ValueNameBinding {
 				// a static-field import brings its one field, which the last segment spells
 				SourceText.lastSegment(imp.raw) == name || split != null && SourceText.isUpperInitial(SourceText.lastSegment(imp.raw))
 					&& (types == null || carriesValue(types, name) || split.rest.length == 0
-						&& _refs.names.filesOfModule(split.module).exists(f -> f.moduleFields.contains(name)));
+						&& _refs.names.filesOfModule(split.module).exists(f -> f.moduleFields.exists(m -> m.name == name)));
 		};
 	}
 
@@ -275,6 +301,20 @@ final class ValueNameBinding {
 		if (!out.statics.exists(s -> s.owner == found.owner && s.member == found.member)) out.statics.push(found);
 	}
 
+	/** The `#if` regions and branches the module-level declaration `field` of `fi` sits in. */
+	private inline function branchOf(fi: FileInfo, field: ModuleField): Array<CondFrame> {
+		return _refs.names.branchPathAt(fi, field.span.from);
+	}
+
+}
+
+/** What a bare value name means at module level at one use (`ValueNameBinding.moduleValuesAt`). */
+typedef ModuleValues = {
+	/** Each module-level declaration of the name a build compiling the use binds it to, in source order. */
+	final decls: Array<ModuleField>;
+
+	/** What the imports supply in the builds compiling the use and none of `decls`; null when every such build compiles one. */
+	final imported: Null<ImportedStatics>;
 }
 
 /** What the imports of a file may supply under one bare value name (`ValueNameBinding.importedStatics`). */

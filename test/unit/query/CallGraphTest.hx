@@ -1332,7 +1332,7 @@ class CallGraphTest extends Test {
 	 * Review R5 F4 (`h/stat-modvar(-rev)`): a field the reading file's own module declares at module level — plain, `final`,
 	 * inside a conditional region — is what a bare name means there, before any static an import brings in under it.
 	 */
-	@:pin('control') @:killer('M-TS-MODULE-NAME') @:killer('M-TS-MODULE-NAME-NESTED') @:killer('M-TS-MODULE-NAME-ALIAS')
+	@:pin('control') @:killer('M-TS-MODULE-NAME-NESTED') @:killer('M-TS-MODULE-NAME-ALIAS')
 	public function testAModuleLevelFieldComesBeforeAnImportedStatic(): Void {
 		#if (sys || nodejs)
 		if (anyparse.query.StdResolver.stdDir() == null) {
@@ -1350,10 +1350,74 @@ class CallGraphTest extends Test {
 		function targets(from: String): Array<String> {
 			return [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
 		}
-		Assert.same([], targets('M.field'), 'a module-level final of the name');
-		Assert.same([], targets('N.field'), 'a module-level var inside a conditional region');
+		Assert.same(['Lock.wait'], targets('M.field'), 'a module-level final of the name: its type');
+		Assert.same(['Lock.wait', 'sys.thread.Lock.wait'], targets('N.field'), 'one inside a conditional region: the import elsewhere');
 		Assert.same(['sys.thread.Lock.wait'], targets('W.field'), 'no module-level field: the imported static');
 		Assert.same(['sys.thread.Lock.wait'], targets('Q.field'), 'an import alias declares no module-level name');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A module-level value inside `#if` binds a bare name only in the builds that compile it (Haxe 4.3.7, `hx/p1`): a use the
+	 * same branch compiles binds the branch's value, a use some other build compiles without it binds what that build has —
+	 * the value of another branch, or the imported static — and a call on it dispatches on every type it may be.
+	 */
+	@:pin('control')
+	@:killer('M-GRAPH-MODULE-VALUE-TYPED') @:killer('M-GRAPH-MODULE-VALUE-MEMBER-FIRST') @:killer('M-GRAPH-MODULE-RECEIVERS')
+	@:killer('M-GRAPH-MODULE-RECEIVERS-IMPORTS') @:killer('M-GRAPH-MODULE-RECEIVERS-MEMBER') @:killer('M-GRAPH-MODULE-RECEIVERS-UNTYPED')
+	@:killer('M-GRAPH-IMPORTED-POSITION') @:killer('M-TS-MODULE-NAME') @:killer('M-GRAPH-MODULE-CALL-UNSEEN')
+	public function testAModuleLevelValueUnderIfBindsInTheBuildsThatCompileIt(): Void {
+		#if (sys || nodejs)
+		if (anyparse.query.StdResolver.stdDir() == null) {
+			Assert.pass('no std on this machine');
+			return;
+		}
+		final g: CallGraph = graphOf([
+			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
+			'package utils; class Other { public function new() {} public function wait():Bool return true; }',
+			'package app; import sys.thread.Lock; class A { public static var lock:Lock = null; }',
+			'package app; class Holder { public var lock:utils.Other = null; }',
+			'package app; import app.A.*; #if never final lock:utils.Lock = null; #end'
+			+ ' class Outside { static function field():Void lock.wait(); }'
+			+ ' #if never class Inside { static function field():Void lock.wait(); } #end',
+			'package app; #if a final lock:utils.Lock = null; #else var lock:utils.Other = null; #end'
+			+ ' class Either { static function field():Void lock.wait(); }'
+			+ ' #if a class InA { static function field():Void lock.wait(); } #else class InElse { static function field():Void lock.wait(); } #end',
+			'package app; import app.A.*; #if a final lock:utils.Lock = null; #end'
+			+ ' #if !a class Elsewhere { static function field():Void lock.wait(); } #end',
+			'package app; final lock:utils.Lock = null; class Kid extends Holder { function field():Void lock.wait(); }',
+			'package app; #if a final lock:utils.Lock = null; #end class Unseen extends lib.Base { function field():Void lock.wait(); }',
+			'package app; #if a final lock = null; #else final lock:utils.Lock = null; #end'
+			+ ' class Untyped { static function field():Void lock.wait(); }',
+			'package app; class B { public static function cb():Void {} }',
+			'package app; import app.B.*; #if a var cb:() -> Void = null; #end'
+			+ ' #if a class Calls { static function field():Void cb(); } #end class CallsOut { static function field():Void cb(); }',
+			'package app; import app.B.*; var cb:() -> Void = null; class CallsPlain { static function field():Void cb(); }'
+		]);
+		function targets(from: String): Array<String> {
+			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+			out.sort(Reflect.compare);
+			return out;
+		}
+		Assert.same(['Lock.wait', 'sys.thread.Lock.wait'], targets('Outside.field'), 'a build with the value, a build with the import');
+		Assert.same(['Lock.wait'], targets('Inside.field'), 'a use inside the branch binds its value');
+		Assert.same(['Lock.wait', 'Other.wait'], targets('Either.field'), 'each branch\'s value, nothing imported');
+		Assert.same(['Lock.wait'], targets('InA.field'), 'a sibling region of the same condition is the same builds');
+		Assert.same(['Other.wait'], targets('InElse.field'), 'its #else is the #else\'s');
+		Assert.same(['Lock.wait', 'sys.thread.Lock.wait'], targets('Elsewhere.field'), 'another region proves nothing');
+		Assert.same(['Other.wait'], targets('Kid.field'), 'an inherited member comes before a module-level field');
+		Assert.same([], targets('Unseen.field'), 'a supertype the index does not hold may declare it');
+		Assert.same([], targets('Untyped.field'), 'one build\'s value is not typed: the receiver is unresolved');
+		Assert.same([], targets('Calls.field'), 'every build compiling the call declares the value: no import binds it');
+		Assert.same(['B.cb'], targets('CallsOut.field'), 'the builds without it call the imported static');
+		Assert.same(
+			['UnboundName(cb)'],
+			[for (u in g.unresolved) if (u.from == 'CallsOut.field') Std.string(u.reason)],
+			'and the others the value'
+		);
+		Assert.same([], targets('CallsPlain.field'), 'a declaration no #if guards hides the import everywhere');
 		#else
 		Assert.pass('non-sys target');
 		#end
