@@ -3123,6 +3123,23 @@ decided the question; it may not become a record of runs.
   frame loop (one stack machine threading five running values on the formatter's hot path; only its pure final
   combination moved out). Macro-time splits keep the generated parsers and writers byte-identical — branch
   `feat/infra-C1`
+- a type is declared at its RUNTIME path too, its package and its name (`CallGraphImports.recordFile`), not because a
+  source may write it: for a sub-type `T` of `pkg/Other.hx`, Haxe 4.3.7 answers `Type not found : pkg.T` to both
+  `var x:pkg.T` and `import pkg.T`, while `Type.getClassName(pkg.Other.T)` is `pkg.T` and `Type.resolveClass("pkg.T")`
+  finds it. What reads that path is a declaration of the classes made from a computed name (`reflectiveClasses`,
+  `ReflectiveReach.neverMade`), which names a class as `Type.resolveClass` does. The old comment ("what an import reads
+  when a file does not name its module") described a written path no compiler accepts, and its arm
+  (`M-TS-PATH-DECLARED-PACKAGE`) survived because every pin wrote main types, whose package path is their module's path.
+  Re-pinned on `ThreadSafetyReflectiveSealTest#testATypeParameterReceiverIsBoundedByItsInstantiations` (a sub-type of
+  `pkg.Nodes` declared reflective as `pkg.Node`) — branch `feat/infra-N3`
+- `TypeMetaFacts.isEnum` and its tables (`_enums`, `_nonEnums`, `_enumKinds`, the constructor's `enumKinds`) are
+  deleted: since `ReflectiveValues.enumType` asks the only declaration's kind itself (`ReflectiveReach.onlyDeclaration`,
+  branch `feat/infra-B3c`) nothing read them, and `M-TS-ENUM-KIND`, which cut their writer, SURVIVED every sweep. The arm
+  is re-aimed at `enumType` with the same cut (a structure typedef taken for an enum) and kills its pin,
+  `ThreadSafetyReflectiveSealTest#testAStructureTypedefMayHoldALock`. `M-TS-PATH-IMPORT` is re-pinned on
+  `ThreadSafetyPositiveSinksTest#testStdResultsTypeTheirReceivers`, the test its cut breaks: the import case of
+  `testALibraryTypeIsNotItsProjectNamesake` is typed through a path that does not ask `CallGraphImports.typeOf` — branch
+  `feat/infra-N3`
 - the two narrower function unions B6a named are gone: `ShapeVocab.functionOrLambdaKinds` (`functionKinds ∪
   lambdaKinds`, 15 readers) and `lambdaOrLocalFunctionKinds` (5 readers) both left out the named function expression
   `function g() …` written as a value and the local `inline function`, and every reader asked a question those two answer
