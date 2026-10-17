@@ -203,7 +203,16 @@ final class Cli {
 		// synchronously, which is why `apq … > file` was always complete). `run`
 		// is fully synchronous, so the event loop empties immediately and Node
 		// drains stdout/stderr before exiting with this code.
-		proc.exitCode = run(Sys.args());
+		//
+		// The command runs from a MICROTASK, not from the main script's own frame. V8 runs the
+		// entry script under a VERBOSE `v8::TryCatch`, and under one EVERY throw builds a message
+		// object (source location of the throw site, decoded from the optimized frame) even when a
+		// JavaScript `catch` two frames up takes it. The generated parsers backtrack by throwing
+		// `ParseError.backtrack` hundreds of thousands of times per run, so that bookkeeping was
+		// about a fifth of all parsing (TM tree: 5.5 s -> 4.4 s; `lint --all` -5.5%). A microtask
+		// runs under a non-verbose catcher, so the throw is a plain unwind. Same exit code, same
+		// raw stack for a crash that escapes `run`.
+		js.Node.queueMicrotask(() -> proc.exitCode = run(Sys.args()));
 		#elseif sys
 		Sys.exit(run(Sys.args()));
 		#else
