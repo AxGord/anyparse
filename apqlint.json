@@ -140,9 +140,18 @@
 		},
 		"oversized-type": {
 			"grants": [
-				"Renderer: the Doc layout engine is ONE algorithm — 47 of its 48 non-hub members land in a single `hxq clusters` component (98%), because every fit probe, push and flush reads the same render state. S11 measured the only real seam, a 22-member width layer, and cutting it leaves 2383 lines behind.",
-				"WrapList: one wrapping decision table, 80 of 94 non-hub members in one component (85%). The members are arms of a single policy keyed by construct, not collaborating objects; splitting them by call edges would move the arms and leave the dispatch.",
-				"NullFlow: one MaybeNull lattice plus its transfer functions — 50 of 52 non-hub members in one component (96%). A flow-sensitive dataflow analysis has no seam that is not the lattice itself."
+				"Renderer <= 71 members / 4150 lines: the Doc layout engine is ONE algorithm — 47 of its 48 non-hub members land in a single `hxq clusters` component (98%), because every fit probe, push and flush reads the same render state. S11 measured the only real seam, a 22-member width layer, and cutting it leaves 2383 lines behind.",
+				"WrapList <= 119 members / 4700 lines: one wrapping decision table, 80 of 94 non-hub members in one component (85%). The members are arms of a single policy keyed by construct, not collaborating objects; splitting them by call edges would move the arms and leave the dispatch.",
+				"NullFlow <= 99 members: one MaybeNull lattice plus its transfer functions — 50 of 52 non-hub members in one component (96%). A flow-sensitive dataflow analysis has no seam that is not the lattice itself.",
+				"FactsView <= 166 members: the owned-types door to the compiler facts: 75 public questions, so no split reaches the member threshold without forwarders, and every member reads the same `_table` / `_scope` / `truth` (C2, re-measured).",
+				"MemberReach <= 158 members / 3150 lines: one member-reach analysis: `hxq clusters` puts 105 of its 119 non-hub members in one component (88%), and that component holds every mutable field, at every hub count tried (C2).",
+				"TypedFactsWalk <= 103 members: one typed-facts traversal: 56 of 66 non-hub members in one component (85%), the one holding every mutable field, at every hub count tried (C2).",
+				"FunctionValueTypes <= 100 members: one function-value inference: 44 of 59 non-hub members in one component, the one holding every mutable field, and no hub count tried separates it (C2).",
+				"NullGuardedCode <= 79 members: one null-guard analysis: 35 of 43 non-hub members in one component (81%), the one holding every mutable field, at every hub count tried (C2).",
+				"CompilerFacts <= 80 members: C2 moved its node-record decoding out (`FactNodeRecords`) and its node-site queries (`FactSites`); every member left serves the one fact table and its caches and reads the same fields.",
+				"ReachGraph <= 98 members: C2 moved its library-call predicates out (`LibraryCalls`, `ReachProject.declarationOf`); every member left reads the graph growth state.",
+				"FactsEscapes <= 62 members: C2 moved its type-parameter instances out (`FactsInstances`); what is left is the escape walk, every member of it reading the same fields.",
+				"TypedFactsMacro <= 61 members: C2 moved its type-string printer out (`TypedFactsTypeStrings`); what is left is the fact-record writer, every member of it reading the same fields."
 			]
 		},
 		"prefer-doc-comment": {

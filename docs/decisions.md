@@ -3464,3 +3464,20 @@ decided the question; it may not become a record of runs.
   name slot; `super`, which Haxe does not reserve. Refused although Haxe takes it: `this` as a `for` variable or a lambda parameter (`for (this in a)`, `(this) -> 1`: Haxe reads those heads as expressions, where `this` is an identifier), and `new` as the name of a function inside a `#if` name splice (`HxConditionalFnName`) — none is code an op writes or a project holds (both corpora parse unchanged), and a refusal is the loud direction. Writer and formatter are untouched: `fmt --write` over TM src (876
   files) and anyparse src (1140) is byte-identical. Fixture consequence: a `CallGraphTest` fixture named a function
   `untyped` — branch `feat/infra-N12`
+- an `oversized-type` grant (`"Name: reason"`) silenced its type at ANY size, so a granted type could grow without
+  bound and nothing said so. A grant now carries a CEILING, `"<Name> <= <N> members / <M> lines: <reason>"` (either
+  clause alone, members first when both are given; digits capped at nine, a type name an ASCII identifier), which
+  REPLACES the threshold for that type and that dimension: silent within it, reported again past it with the grant
+  named (`… (max 71) — beyond its grant 'Renderer <= 71 members / 4150 lines'`), the current size masked out of the
+  finding key and the ceiling kept in it (a raised ceiling is a configuration change the blast-radius gate must
+  show). A dimension the grant gives no ceiling keeps the threshold. The ceiling-less legacy shape is REFUSED, not
+  read as an unbounded grant and not given a default margin: accepting it would keep exactly the silence the change
+  exists to end, and a refusal costs one config edit whose numbers the type's own returning finding supplies. Every
+  other unreadable entry — no reason, a ceiling at or below the threshold (it grants nothing, and reading it as a
+  TIGHTER limit would report a type no other type its size is reported for), any other head, two grants for one type
+  (two ceilings, neither obviously meant) — is refused the same way: it grants nothing and is reported once per run as
+  a file-less `Warning`, the shape `thread-safety` reports an option it could not read in. Migrated grants: ceilings
+  = current size + 5% rounded up (lines to the next 50) — `Renderer`, `WrapList`, `NullFlow`, the test tree's
+  `TestDiscoveryParityTest`, and the types C2 measured and declined (`FactsView`, `MemberReach`, `TypedFactsWalk`,
+  `FunctionValueTypes`, `NullGuardedCode`, `CompilerFacts`, `ReachGraph`, `FactsEscapes`, `TypedFactsMacro`), each
+  with C2's reason. `CallGraph` is left ungranted: N13 is splitting it — branch `feat/infra-N14`

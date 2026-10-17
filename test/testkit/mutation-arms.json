@@ -22885,6 +22885,118 @@
 			"find": "|null|override|",
 			"replace": "|null|operator|overload|override|",
 			"note": "a `var` name refuses `operator` / `overload` too, and a module declaring one under a `#if` for an older Haxe skip-parses"
+		},
+		{
+			"name": "M-OVERSIZED-GRANT-UNBOUNDED",
+			"type": "anyparse.check.OversizedType",
+			"method": "checkType",
+			"find": "final maxMembers: Int = grant?.members ?? cfg.maxMembers;",
+			"replace": "final maxMembers: Int = grant == null ? cfg.maxMembers : 1000000;",
+			"note": "a grant silences its type's member count at any size again, the ceiling read and ignored"
+		},
+		{
+			"name": "M-OVERSIZED-GRANT-LINES-UNBOUNDED",
+			"type": "anyparse.check.OversizedType",
+			"method": "checkType",
+			"find": "final maxLines: Int = grant?.lines ?? cfg.maxLines;",
+			"replace": "final maxLines: Int = grant == null ? cfg.maxLines : 1000000;",
+			"note": "a grant silences its type's line extent at any size, whether it gave a line ceiling or not"
+		},
+		{
+			"name": "M-OVERSIZED-UNGRANTED-DIMENSION",
+			"type": "anyparse.check.OversizedType",
+			"method": "checkType",
+			"find": "final maxLines: Int = grant?.lines ?? cfg.maxLines;",
+			"replace": "final maxLines: Int = grant == null ? cfg.maxLines : grant.lines ?? 1000000;",
+			"note": "a members-only grant forgives the line extent too"
+		},
+		{
+			"name": "M-OVERSIZED-BEYOND-UNNAMED",
+			"type": "anyparse.check.OversizedType",
+			"method": "checkType",
+			"find": "final beyond: String = grant == null ? '' : '$BEYOND_GRANT${grant.head}\\'';",
+			"replace": "final beyond: String = '';",
+			"note": "a type past its grant's ceiling is reported without naming the grant it outgrew"
+		},
+		{
+			"name": "M-OVERSIZED-PROBLEM-ONCE",
+			"type": "anyparse.check.OversizedType",
+			"method": "run",
+			"find": "for (problem in grants.problems) if (!told.contains(problem)) {",
+			"replace": "for (problem in grants.problems) if (true) {",
+			"note": "a refused grant is reported once per FILE resolving its config, not once per run"
+		},
+		{
+			"name": "M-OVERSIZED-PROBLEM-SILENT",
+			"type": "anyparse.check.OversizedType",
+			"method": "run",
+			"find": "violations.push(configProblem(problem));",
+			"replace": "",
+			"note": "a refused grant grants nothing but says nothing either"
+		},
+		{
+			"name": "M-OVERSIZED-LEGACY-GRANT",
+			"type": "anyparse.check.OversizedType",
+			"method": "readGrant",
+			"find": "\t\tif (identifier.match(head)) {\n",
+			"replace": "\t\tif (identifier.match(head)) return { name: head, members: 1000000, lines: 1000000, head: head };\n\t\tif (false) {\n",
+			"note": "a ceiling-less `Name: reason` grant is read as an unbounded grant again, silently"
+		},
+		{
+			"name": "M-OVERSIZED-GRANT-REASONLESS",
+			"type": "anyparse.check.OversizedType",
+			"method": "readGrant",
+			"find": "if (at < 0 || entry.substr(at + 1).trim().length == 0) {",
+			"replace": "if (at < 0) {",
+			"note": "a grant whose `:` is followed by no reason is accepted"
+		},
+		{
+			"name": "M-OVERSIZED-GRANT-NAME",
+			"type": "anyparse.check.OversizedType",
+			"method": "readGrant",
+			"find": "\t\tif (!identifier.match(name)) {\n",
+			"replace": "\t\tif (name.length == 0) {\n",
+			"note": "a grant head naming no identifier (`C<T> <= …`) is accepted"
+		},
+		{
+			"name": "M-OVERSIZED-CLAUSE-ORDER",
+			"type": "anyparse.check.OversizedType",
+			"method": "readCeilings",
+			"find": "if (unit == 'members' && i == 0)",
+			"replace": "if (unit == 'members' && members == null)",
+			"note": "a members ceiling written after the lines ceiling is accepted"
+		},
+		{
+			"name": "M-OVERSIZED-CLAUSE-REPEATED",
+			"type": "anyparse.check.OversizedType",
+			"method": "readCeilings",
+			"find": "else if (unit == 'lines' && lines == null)",
+			"replace": "else if (unit == 'lines')",
+			"note": "a second lines ceiling overwrites the first instead of refusing the grant"
+		},
+		{
+			"name": "M-OVERSIZED-CEILING-DIGITS",
+			"type": "anyparse.check.OversizedType",
+			"method": "readCeilings",
+			"find": "([0-9]{1,9})",
+			"replace": "([0-9]+)",
+			"note": "a ceiling of ten or more digits is read, by a parseInt whose answer differs per target"
+		},
+		{
+			"name": "M-OVERSIZED-DUPLICATE-GRANT",
+			"type": "anyparse.check.OversizedType",
+			"method": "readGrants",
+			"find": "if (read.count(g -> g.name == grant.name) == 1) {",
+			"replace": "if (true) {",
+			"note": "two grants for one type both stand, and the first found wins"
+		},
+		{
+			"name": "M-OVERSIZED-CEILING-AT-THRESHOLD",
+			"type": "anyparse.check.OversizedType",
+			"method": "readCeilings",
+			"find": "if (ceiling != null && ceiling <= (unit == 'members' ? maxMembers : maxLines)) grantsNothing = true;",
+			"replace": "",
+			"note": "a ceiling at or below the rule's threshold is read as a tighter limit instead of being refused"
 		}
 	]
 }
