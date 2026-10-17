@@ -58,7 +58,7 @@ final class RuleDeclaration {
 			case null: null;
 			case JArray(items):
 				final names: Array<String> = [];
-				LintConfig.collectStrings(items, names);
+				LintDocuments.collectStrings(items, names);
 				if (names.length != items.length || names.exists(n -> n == '')) {
 					problems.push('"$LISTENER_METHODS_KEY" holds a value that is not a method name — ignored');
 					null;
@@ -113,7 +113,7 @@ final class RuleDeclaration {
 				subtypes = v;
 			case ['fields', JArray(items)]:
 				final strings: Array<String> = [];
-				LintConfig.collectStrings(items, strings);
+				LintDocuments.collectStrings(items, strings);
 				names = strings.length == items.length ? strings : null;
 			case [key, _] if (ENTRY_KEYS.contains(key)):
 				problems.push('$label "$key" has the wrong type — dropped');

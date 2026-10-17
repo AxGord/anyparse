@@ -9416,7 +9416,7 @@
 			"name": "M-DSN-HXML-INCLUDE-SKIPPED",
 			"type": "anyparse.check.DeadSafeNav",
 			"method": "buildMayEnableNullSafety",
-			"find": "mayEnable(LintConfig.resolveAgainstConfigDir(base, line), base, depth + 1)",
+			"find": "mayEnable(LintDocuments.resolveAgainstConfigDir(base, line), base, depth + 1)",
 			"replace": "false",
 			"note": "an included hxml is never read, so a `nullSafety` macro in it goes unseen and the build-breaking fix lands"
 		},
@@ -13207,7 +13207,7 @@
 		},
 		{
 			"name": "M-REFLECTIVE-MERGE",
-			"type": "anyparse.check.LintConfig",
+			"type": "anyparse.check.LintDocuments",
 			"method": "mergeDocuments",
 			"find": "reflectiveClasses: near.reflectiveClasses ?? far.reflectiveClasses,",
 			"replace": "reflectiveClasses: near.reflectiveClasses,",
@@ -13837,7 +13837,7 @@
 		},
 		{
 			"name": "M-HOLDERS-MERGE",
-			"type": "anyparse.check.LintConfig",
+			"type": "anyparse.check.LintDocuments",
 			"method": "mergeDocuments",
 			"find": "reflectiveMethodHolders: near.reflectiveMethodHolders ?? far.reflectiveMethodHolders,",
 			"replace": "reflectiveMethodHolders: near.reflectiveMethodHolders,",
@@ -13845,7 +13845,7 @@
 		},
 		{
 			"name": "M-HOLDERS-PARSE",
-			"type": "anyparse.check.LintConfig",
+			"type": "anyparse.check.LintDocuments",
 			"method": "parseDocument",
 			"find": "reflectiveMethodHolders: config.reflectiveMethodHolders,",
 			"replace": "",
@@ -21637,7 +21637,7 @@
 		},
 		{
 			"name": "M-OWNED-MERGE",
-			"type": "anyparse.check.LintConfig",
+			"type": "anyparse.check.LintDocuments",
 			"method": "mergeDocuments",
 			"find": "ownedTypes: near.ownedTypes ?? far.ownedTypes,",
 			"replace": "ownedTypes: near.ownedTypes,",
@@ -21645,7 +21645,7 @@
 		},
 		{
 			"name": "M-OWNED-PARSE",
-			"type": "anyparse.check.LintConfig",
+			"type": "anyparse.check.LintDocuments",
 			"method": "parseDocument",
 			"find": "ownedTypes: ownedTypes,",
 			"replace": "",

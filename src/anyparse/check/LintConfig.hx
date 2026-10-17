@@ -1,13 +1,11 @@
 package anyparse.check;
 
+import anyparse.check.LintDocuments.LintDocument;
 import anyparse.check.OwnedTypesDeclaration.TypeOwnership;
-import anyparse.check.config.ApqLintConfig;
-import anyparse.check.config.ApqLintConfigParser;
 import anyparse.grammar.json.JValue;
 import anyparse.query.ConfigFinder;
 import anyparse.query.NamingPolicy.FrameworkContract;
 import anyparse.query.format.LintFormat;
-import haxe.Exception;
 import haxe.io.Path;
 
 using StringTools;
@@ -77,37 +75,6 @@ typedef OracleGenerate = {
 	var root: String;
 	var inputs: Null<Array<String>>;
 	var probeDir: Bool;
-}
-
-/**
- * ONE `apqlint.json` document, as DECLARED — the intermediate a chain of them is
- * folded through before it becomes a `LintConfig`.
- *
- * Two things separate it from the finished config. Every key is optional, so
- * "the document did not say" stays distinguishable from "the document said the
- * default" — a merge has no other way to know whether a nearer document meant to
- * override. And every path is ALREADY resolved against the directory of the
- * document that declared it, so folding a chain never has to remember which
- * `apqlint.json` a relative `"../src"` was written next to.
- */
-typedef LintDocument = {
-	var rules: Map<String, RuleConfig>;
-	var ?compilerOracles: Array<OracleConfig>;
-	var ?compilerOracleServer: Bool;
-	var ?reachConfigurationsComplete: Bool;
-	var ?reflectiveClasses: Array<String>;
-	var ?reflectiveMethodHolders: Array<String>;
-	var ?resolutionRoots: Array<String>;
-	var ?resolutionLibs: Array<String>;
-	var ?resolutionStd: Bool;
-	var ?languageVersion: String;
-	var ?frameworks: Array<FrameworkContract>;
-	var ?reportSummaryThreshold: Int;
-	var ?ownedTypes: Array<TypeOwnership>;
-
-	/** Read off the document as PARSED, never off a merged one — a fold has already decided where the chain ends. */
-	var ?inherit: Bool;
-	var drops: Array<String>;
 }
 
 /**
@@ -418,7 +385,7 @@ final class LintConfig {
 		final raw: Null<Array<JValue>> = arrayOption(id, key);
 		if (raw == null) return null;
 		final out: Array<String> = [];
-		collectStrings(raw, out);
+		LintDocuments.collectStrings(raw, out);
 		return out;
 	}
 
@@ -560,7 +527,7 @@ final class LintConfig {
 		// answered, and nothing else says so.
 		for (path in chain.unreadable) warnOnce(path, 'apq: $path could not be read — ignored, the rest of the chain still applies\n');
 		for (entry in chain.documents) {
-			final doc: Null<LintDocument> = parseDocument(entry.content, Path.directory(entry.path));
+			final doc: Null<LintDocument> = LintDocuments.parseDocument(entry.content, Path.directory(entry.path));
 			if (doc == null) {
 				// A REAL config file that the schema rejects must not degrade silently — a
 				// wholesale fallback quietly collapses the resolution scope and every rule
@@ -578,12 +545,12 @@ final class LintConfig {
 				final lines: Array<String> = [for (drop in doc.drops) 'apq: ${entry.path}: $drop\n'];
 				warnOnce(entry.path, lines.join(''));
 			}
-			merged = merged == null ? doc : mergeDocuments(merged, doc);
+			merged = merged == null ? doc : LintDocuments.mergeDocuments(merged, doc);
 			folded.push(entry.path);
 			if (doc.inherit == false) break;
 		}
 		final result: Null<LintDocument> = merged;
-		return { config: result == null ? new LintConfig([]) : fromDocument(result), chain: folded };
+		return { config: result == null ? new LintConfig([]) : LintDocuments.fromDocument(result), chain: folded };
 	}
 
 	/**
@@ -629,35 +596,8 @@ final class LintConfig {
 	 * survives inside `rules`, whose entries stay raw JSON on purpose.
 	 */
 	public static function parse(content: String, ?baseDir: String): LintConfig {
-		final doc: Null<LintDocument> = parseDocument(content, baseDir);
-		return doc == null ? new LintConfig([]) : fromDocument(doc);
-	}
-
-	/**
-	 * Append every `JString` of `items` to `out`, dropping any other element
-	 * — the loop `stringListOption` runs one level up, shared with it.
-	 *
-	 * Public for `OracleDeclaration`, which reads a list of defines off the same per-entry-lenient
-	 * contract and must not answer a wrong-typed element differently from the rest of this reader.
-	 */
-	public static function collectStrings(items: Array<JValue>, out: Array<String>): Void {
-		for (item in items) switch item {
-			case JString(v):
-				out.push(v);
-			case _:
-		}
-	}
-
-	/**
-	 * Resolve a config-relative path (a `resolutionRoots` entry, the `compilerOracle` hxml) to
-	 * absolute against the config dir; an absolute path (or one parsed without a base) is kept as-is.
-	 *
-	 * Public for `OracleDeclaration`: every path a document declares is resolved against the
-	 * directory of THAT document, and one reader spelling it differently is how a nested config's
-	 * oracle would come to point somewhere else.
-	 */
-	public static function resolveAgainstConfigDir(baseDir: Null<String>, path: String): String {
-		return baseDir == null || Path.isAbsolute(path) ? path : Path.normalize(Path.join([baseDir, path]));
+		final doc: Null<LintDocument> = LintDocuments.parseDocument(content, baseDir);
+		return doc == null ? new LintConfig([]) : LintDocuments.fromDocument(doc);
 	}
 
 	/** Guarded stderr write — mirrors `Cli.stderr` (`#if sys` alone is false on hxnodejs). */
@@ -675,211 +615,6 @@ final class LintConfig {
 		if (warnedConfigs.contains(configPath)) return;
 		warnedConfigs.push(configPath);
 		stderr(message);
-	}
-
-	/**
-	 * `near` layered over `far` — the nearer document's declared keys win, and every
-	 * key it did not name falls through. A `compilerOracle` list replaces wholesale like
-	 * every other array: each element carries its own compile directory and defines, so a
-	 * document that names its own oracles can no longer inherit a directory belonging to
-	 * somebody else's hxml.
-	 */
-	private static function mergeDocuments(near: LintDocument, far: LintDocument): LintDocument {
-		final rules: Map<String, RuleConfig> = [];
-		for (id => rc in far.rules) rules[id] = rc;
-		for (id => rc in near.rules) rules[id] = mergeRule(rc, far.rules[id]);
-		return {
-			rules: rules,
-			compilerOracles: near.compilerOracles ?? far.compilerOracles,
-			compilerOracleServer: near.compilerOracleServer ?? far.compilerOracleServer,
-			reachConfigurationsComplete: near.reachConfigurationsComplete ?? far.reachConfigurationsComplete,
-			reflectiveClasses: near.reflectiveClasses ?? far.reflectiveClasses,
-			reflectiveMethodHolders: near.reflectiveMethodHolders ?? far.reflectiveMethodHolders,
-			resolutionRoots: near.resolutionRoots ?? far.resolutionRoots,
-			resolutionLibs: near.resolutionLibs ?? far.resolutionLibs,
-			resolutionStd: near.resolutionStd ?? far.resolutionStd,
-			languageVersion: near.languageVersion ?? far.languageVersion,
-			frameworks: near.frameworks ?? far.frameworks,
-			reportSummaryThreshold: near.reportSummaryThreshold ?? far.reportSummaryThreshold,
-			ownedTypes: near.ownedTypes ?? far.ownedTypes,
-			drops: near.drops.concat(far.drops)
-		};
-	}
-
-	/**
-	 * One rule entry layered over the ancestor's entry of the same id: `enabled` and
-	 * `severity` fall through when the nearer document leaves them unsaid, and the
-	 * option bags merge per key. So a nested `{"oversized-type": {"maxMembers": 100}}`
-	 * raises exactly that threshold and changes nothing else about the rule.
-	 */
-	private static function mergeRule(near: RuleConfig, far: Null<RuleConfig>): RuleConfig {
-		if (far == null) return near;
-		final props: Map<String, JValue> = [];
-		for (key => value in far.props) props[key] = value;
-		for (key => value in near.props) props[key] = value;
-		return { enabled: near.enabled ?? far.enabled, severity: near.severity ?? far.severity, props: props };
-	}
-
-	/** The finished config for a folded document — the one place the "absent" nulls collapse into the defaults. */
-	private static function fromDocument(doc: LintDocument): LintConfig {
-		return new LintConfig(
-			doc.rules, doc.compilerOracles, doc.resolutionRoots, doc.resolutionLibs, doc.resolutionStd, doc.compilerOracleServer,
-			doc.languageVersion, doc.frameworks, doc.drops, doc.reachConfigurationsComplete, doc.reportSummaryThreshold,
-			doc.reflectiveClasses, doc.reflectiveMethodHolders, doc.ownedTypes
-		);
-	}
-
-	/**
-	 * The typed parse and mapping of ONE `apqlint.json` document, or null when the
-	 * schema rejects it. Stops at `LintDocument` rather than at `LintConfig` so a
-	 * caller folding a chain can still tell an unsaid key from a defaulted one, and
-	 * so every relative path is resolved here — against THIS document's directory,
-	 * the only place that knows it. `parse` folds the null into the silent empty
-	 * config (it cannot tell a probe from a real config file, so it never prints);
-	 * `discover` turns the same null into the user-facing diagnostic, because it
-	 * knows the file path.
-	 */
-	private static function parseDocument(content: String, ?baseDir: String): Null<LintDocument> {
-		final config: Null<ApqLintConfig> = try ApqLintConfigParser.parse(content) catch (exception: Exception) null;
-		if (config == null) return null;
-		final rules: Map<String, RuleConfig> = [];
-		final declared: Null<Map<String, JValue>> = config.rules;
-		if (declared != null) for (id => raw in declared) {
-			final rule: Null<RuleConfig> = parseRule(raw);
-			if (rule != null) rules[id] = rule;
-		}
-		final drops: Array<String> = [];
-		final declaredOracle: Null<JValue> = config.compilerOracle;
-		final oracles: Null<Array<OracleConfig>> = declaredOracle == null ? null : OracleDeclaration.read(declaredOracle, baseDir, drops);
-		final declaredRoots: Null<Array<String>> = config.resolutionRoots;
-		// Absence has to survive the mapping: `null` is "this document said nothing about
-		// roots, ask the one above", where `[]` is "this document declares none". Collapsing
-		// the two here is what would make an inheriting document silently claim an empty scope.
-		final roots: Null<Array<String>> = declaredRoots?.map(resolveAgainstConfigDir.bind(baseDir));
-		final declaredFrameworks: Null<Array<JValue>> = config.frameworks;
-		final frameworks: Null<Array<FrameworkContract>> = declaredFrameworks == null ? null : parseFrameworks(declaredFrameworks, drops);
-		final declaredOwnership: Null<Array<JValue>> = config.ownedTypes;
-		final ownedTypes: Null<Array<TypeOwnership>> = declaredOwnership == null
-			? null
-			: OwnedTypesDeclaration.read(declaredOwnership, drops);
-		return {
-			rules: rules,
-			compilerOracles: oracles,
-			compilerOracleServer: config.compilerOracleServer,
-			reachConfigurationsComplete: config.reachConfigurationsComplete,
-			reflectiveClasses: config.reflectiveClasses,
-			reflectiveMethodHolders: config.reflectiveMethodHolders,
-			resolutionRoots: roots,
-			resolutionLibs: config.resolutionLibs,
-			resolutionStd: config.resolutionStd,
-			languageVersion: config.languageVersion,
-			frameworks: frameworks,
-			reportSummaryThreshold: config.reportSummaryThreshold,
-			ownedTypes: ownedTypes,
-			inherit: config.inherit,
-			drops: drops
-		};
-	}
-
-	/**
-	 * One `rules` entry → its `RuleConfig`. `enabled` (a JSON boolean) and
-	 * `severity` (a JSON string resolved through `Severity.fromName`, an
-	 * unknown label yielding no override) are lifted out; every other key stays
-	 * in `props` verbatim for the owning check to read. A value that is not a
-	 * JSON object is not a rule config at all — null, and the caller drops the
-	 * entry, exactly as the untyped reader skipped a non-object.
-	 */
-	private static function parseRule(raw: JValue): Null<RuleConfig> {
-		return switch raw {
-			case JObject(entries):
-				var enabled: Null<Bool> = null;
-				var severity: Null<Severity> = null;
-				final props: Map<String, JValue> = [];
-				for (entry in entries) {
-					final key: String = entry.key;
-					final value: JValue = entry.value;
-					switch [key, value] {
-						case ['enabled', JBool(v)]:
-							enabled = v;
-						case ['severity', JString(v)]:
-							severity = Severity.fromName(v);
-						case _:
-							props[key] = value;
-					}
-				}
-				{ enabled: enabled, severity: severity, props: props };
-			case _: null;
-		};
-	}
-
-	/**
-	 * The `frameworks` entries → their `FrameworkContract`s. An entry that is not an object, names no
-	 * `root`, or reaches no name at all is dropped: a contract with no root can be tested against no
-	 * type and one that names nothing nominates nothing, so keeping either would be a half-applied
-	 * declaration the project could not tell from a working one. Per-ENTRY leniency, like `rules` — the
-	 * whole-document rejection stays the schema's job.
-	 *
-	 * But a dropped entry that says NOTHING is indistinguishable from one that works, so every drop
-	 * appends a diagnostic line to `drops`, which `discover` prints once per config file.
-	 */
-	private static function parseFrameworks(raw: Null<Array<JValue>>, drops: Array<String>): Array<FrameworkContract> {
-		if (raw == null) return [];
-		final entries: Array<JValue> = raw;
-		final out: Array<FrameworkContract> = [];
-		for (i in 0...entries.length) switch entries[i] {
-			case JObject(fields):
-				var declaredRoot: Null<String> = null;
-				final names: Array<String> = [];
-				final prefixes: Array<String> = [];
-				// `into`, not `out`: the enclosing `out` is the contract list, and a same-named
-				// parameter here would shadow it for every reader of this block.
-				inline function collect(key: String, items: Array<JValue>, into: Array<String>): Void {
-					final before: Int = into.length;
-					collectStrings(items, into);
-					final skipped: Int = items.length - (into.length - before);
-					if (skipped > 0) drops.push('frameworks[$i] "$key" ignored $skipped value(s) that are not strings');
-				}
-				// A wrong-SHAPED value was the last silence in this reader. The entry survives, the key
-				// it declares simply is not there, and the surviving half reads as the whole:
-				// `"names": "Start"` claimed nothing and said nothing, while `"root": ["X"]` fell
-				// through to the no-root drop below, which then reported "declares no root" about an
-				// entry that declares one. An unknown key is the same silence spelled as a typo —
-				// `"name"` for `"names"` leaves an entry claiming only its prefixes.
-				for (field in fields) switch [field.key, field.value] {
-					case ['root', JString(v)]:
-						declaredRoot = v;
-					case ['names', JArray(items)]:
-						collect(field.key, items, names);
-					case ['prefixes', JArray(items)]:
-						collect(field.key, items, prefixes);
-					case ['root', _]:
-						drops.push('frameworks[$i] "root" is not a string — ignored');
-					case ['names', _], ['prefixes', _]:
-						drops.push('frameworks[$i] "${field.key}" is not an array of strings — ignored');
-					case _:
-						drops.push('frameworks[$i] declares unknown key "${field.key}" — ignored');
-				}
-				final root: Null<String> = declaredRoot;
-				if (root == null) {
-					drops.push('frameworks[$i] declares no "root" — dropped');
-					continue;
-				}
-				// Re-bound: strict null-safety does not carry a narrowed local into a structure literal.
-				final rootName: String = root;
-				// An EMPTY fragment would claim every method of every subtype, so a stray "" is dropped
-				// here rather than read as a universal claim; an entry left with nothing then falls into
-				// the drop below and says so.
-				final claimedNames: Array<String> = names.filter(s -> s != '');
-				final claimedPrefixes: Array<String> = prefixes.filter(s -> s != '');
-				if (claimedNames.length == 0 && claimedPrefixes.length == 0) {
-					drops.push('frameworks[$i] ("$rootName") declares neither "names" nor "prefixes" — dropped');
-					continue;
-				}
-				out.push({ root: rootName, names: claimedNames, prefixes: claimedPrefixes });
-			case _:
-				drops.push('frameworks[$i] is not an object — dropped');
-		}
-		return out;
 	}
 
 	/**

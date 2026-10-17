@@ -844,7 +844,7 @@ final class HaxeNamingSupport implements NamingSupport {
 	 *
 	 * Conservative on the residue (a digit, a non-ASCII unit): survival it cannot prove reads as
 	 * destroyed, which costs one unreported name and never an unhooked callback. An EMPTY fragment
-	 * would claim every name here; `LintConfig.parseFrameworks` is what makes that unreachable, by
+	 * would claim every name here; `LintDocuments.parseFrameworks` is what makes that unreachable, by
 	 * filtering `""` out of a declared roster and dropping the entry it empties — not dead validation.
 	 */
 	private static function claimsByPrefix(name: String, prefix: String, wholeName: Bool): Bool {

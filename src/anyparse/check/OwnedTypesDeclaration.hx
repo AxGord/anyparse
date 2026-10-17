@@ -97,7 +97,7 @@ final class OwnedTypesDeclaration {
 	/** Append the strings of `items` to `into` through `LintConfig`'s own per-element reader, reporting what it skipped. */
 	private static function collect(label: String, key: String, items: Array<JValue>, into: Array<String>, drops: Array<String>): Void {
 		final before: Int = into.length;
-		LintConfig.collectStrings(items, into);
+		LintDocuments.collectStrings(items, into);
 		final skipped: Int = items.length - (into.length - before);
 		if (skipped > 0) drops.push('$label "$key" ignored $skipped value(s) that are not strings');
 	}
