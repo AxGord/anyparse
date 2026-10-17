@@ -24349,6 +24349,217 @@
 			"find": " || key == STRING_PREFIX",
 			"replace": "",
 			"note": "an empty string is no default literal, so `!a ? x : \"\"` is inverted under `keepDefaultElse`"
+		},
+		{
+			"name": "M-XRENAME-NOT-CANDIDATE",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "isCandidate",
+			"find": "(decl.category == NamingCategory.Type || decl.category == NamingCategory.EnumValue)",
+			"replace": "false",
+			"note": "no type or enum value reaches the cross-file rename arm"
+		},
+		{
+			"name": "M-XRENAME-FINDINGS-NONE",
+			"type": "anyparse.check.Naming",
+			"method": "riskyCrossFileFindings",
+			"force": "[]",
+			"note": "the verifier is handed no finding of the cross-file arm"
+		},
+		{
+			"name": "M-XRENAME-EDITS-DROPPED",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "slicesOf",
+			"find": "edits: change.edits",
+			"replace": "edits: []",
+			"note": "the engine's edits never reach the edit set"
+		},
+		{
+			"name": "M-XRENAME-INDEXED-UNDERLYING",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "valueRefusal",
+			"find": "!indexed.contains(type.underlyingRaw ?? '')",
+			"replace": "true",
+			"note": "an implicit Int value is refused as if it were its name"
+		},
+		{
+			"name": "M-XRENAME-RUNTIME-TYPE",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "typeRefusal",
+			"find": "!kinds.contains(type.kind)",
+			"replace": "false",
+			"note": "a class is renamed although its name exists at run time"
+		},
+		{
+			"name": "M-XRENAME-MAIN-TYPE",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "typeRefusal",
+			"find": "type.isMain",
+			"replace": "false",
+			"note": "a module main type is renamed without its file"
+		},
+		{
+			"name": "M-XRENAME-TYPE-META",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "unsafeTypeMeta",
+			"force": "false",
+			"note": "a type carrying @:native / @:keep is renamed"
+		},
+		{
+			"name": "M-XRENAME-SAFE-META",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "unsafeTypeMeta",
+			"find": "!inert.contains(hit.annotation)",
+			"replace": "true",
+			"note": "an inert @:forward refuses the rename"
+		},
+		{
+			"name": "M-XRENAME-GUARDED",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "typeRefusal",
+			"find": "type.guarded",
+			"replace": "false",
+			"note": "a type only one build sees is renamed"
+		},
+		{
+			"name": "M-XRENAME-ENUM-CTOR",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "valueRefusal",
+			"find": "type.kind != ctx.shape.enumAbstractDeclKind",
+			"replace": "false",
+			"note": "a plain enum constructor is treated as an enum-abstract value"
+		},
+		{
+			"name": "M-XRENAME-STRING",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "stringNamesIt",
+			"force": "false",
+			"note": "a literal naming the declaration does not refuse"
+		},
+		{
+			"name": "M-XRENAME-TYPE-PATH",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "typeRefusal",
+			"find": "ReflectionScan.runtimeTypePath(ctx.surface.whole, decl.name)",
+			"replace": "false",
+			"note": "a Type.resolveClass path literal does not refuse"
+		},
+		{
+			"name": "M-XRENAME-OLD-SHARED",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "typeRefusal",
+			"find": "ctx.index.refs.declaringFiles(decl.name).length != 1",
+			"replace": "false",
+			"note": "a second declaration of the old type name does not refuse"
+		},
+		{
+			"name": "M-XRENAME-NEW-DECLARED",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "typeRefusal",
+			"find": "ctx.index.refs.declaringFiles(newName).length > 0",
+			"replace": "false",
+			"note": "a library type of the new name does not refuse"
+		},
+		{
+			"name": "M-XRENAME-NEW-SPELLED",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "spelledInProject",
+			"force": "false",
+			"note": "a project reference already spelling the new name does not refuse"
+		},
+		{
+			"name": "M-XRENAME-VALUE-OLD-SHARED",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "valueRefusal",
+			"find": "valueDeclaredElsewhere(decl.name, type, ctx)",
+			"replace": "false",
+			"note": "another enum value of the old name does not refuse"
+		},
+		{
+			"name": "M-XRENAME-VALUE-NEW-SHARED",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "valueRefusal",
+			"find": "valueDeclaredElsewhere(newName, type, ctx)",
+			"replace": "false",
+			"note": "another enum value of the new name does not refuse"
+		},
+		{
+			"name": "M-XRENAME-VALUE-PROPERTY",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "valueDeclaredElsewhere",
+			"find": "!m.hasGetter && !m.hasSetter",
+			"replace": "true",
+			"note": "an enum abstract property of the old name refuses as if it were a value"
+		},
+		{
+			"name": "M-XRENAME-VALUE-BOUND",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "boundWhereRenamed",
+			"force": "false",
+			"note": "a binding of the new name in a file the rename edits does not refuse"
+		},
+		{
+			"name": "M-XRENAME-OUTSIDE",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "slicesOf",
+			"find": "!ctx.files.exists(f -> f.file == change.file)",
+			"replace": "false",
+			"note": "a narrowed run edits a project file outside its scope"
+		},
+		{
+			"name": "M-XRENAME-VALUE-META",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "valueRefusal",
+			"find": "member.metaNames.length > 0",
+			"replace": "false",
+			"note": "a value carrying metadata is renamed"
+		},
+		{
+			"name": "M-XRENAME-NO-PROJECT",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "edits",
+			"find": "RefactorSupport.completeProjectSourcesOf(plugin);",
+			"replace": "RefactorSupport.completeProjectSourcesOf(plugin) ?? files;",
+			"note": "the arm runs without the whole project indexed"
+		},
+		{
+			"name": "M-XVERIFY-NO-MERGE",
+			"type": "anyparse.check.FixVerifierCrossFile",
+			"method": "componentsOf",
+			"find": "group.files.exists(f -> touched.contains(f))",
+			"replace": "false",
+			"note": "edit sets sharing a file are judged apart, over spans the other one moved"
+		},
+		{
+			"name": "M-RISKYARM-CROSS-NOT-VERIFIED",
+			"type": "anyparse.check.FixVerifierCrossFile",
+			"method": "extend",
+			"find": "if (cross.length == 0) continue;",
+			"replace": "continue;",
+			"note": "the verifier never runs the cross-file arm"
+		},
+		{
+			"name": "M-XVERIFY-NO-BISECT",
+			"type": "anyparse.check.FixVerifierCrossFile",
+			"method": "judgeComponent",
+			"find": "safe.length > 0 && ",
+			"replace": "false && ",
+			"note": "one failing rename reverts every rename of its component"
+		},
+		{
+			"name": "M-CONFINED-NO-OWNER-FILE",
+			"type": "anyparse.query.RefactorSupport",
+			"method": "isPrivateMemberConfined",
+			"find": "hasSubtype(owner, ownerFile)",
+			"replace": "hasSubtype(owner)",
+			"note": "a namesake type's subtypes unconfine a private member"
+		},
+		{
+			"name": "M-XRENAME-STRING-TYPES-ONLY",
+			"type": "anyparse.check.NamingCrossRename",
+			"method": "renameFor",
+			"find": "isType && stringNamesIt(decl.name, ctx)",
+			"replace": "stringNamesIt(decl.name, ctx)",
+			"note": "a literal spelling an enum-abstract value's name (data) refuses its rename"
 		}
 	]
 }

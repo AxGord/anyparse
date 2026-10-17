@@ -172,8 +172,16 @@ final class RefactorSupport {
 	 * never read is invisible, and unknown is no proof.
 	 */
 	public static function projectIsComplete(plugin: GrammarPlugin): Bool {
+		return completeProjectSourcesOf(plugin) != null;
+	}
+
+	/**
+	 * Every source of the project when `plugin`'s run indexes the WHOLE of it (`projectIsComplete`), else null —
+	 * `SymbolIndexHost.completeProjectFiles`, for a proof that must READ every place a project name is spelled.
+	 */
+	public static function completeProjectSourcesOf(plugin: GrammarPlugin): Null<Array<{ file: String, source: String }>> {
 		final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;
-		return host?.completeProjectFiles() != null;
+		return host?.completeProjectFiles();
 	}
 
 	/**
@@ -589,11 +597,17 @@ final class RefactorSupport {
 	 * and its type's) instead of the file: a grant written on ANOTHER member opens only that one, so
 	 * the file-level answer refused every private member of a file holding one. Absent or null - the
 	 * grants could not be read, or the caller never asked - the file-level answer stands.
+	 *
+	 * `ownerFile` is the file DECLARING `owner`. Given, the subtype half reads only the subtype edges
+	 * that resolve to THAT declaration (`SubtypeGraph.hasSubtype`'s own disambiguation, which keeps
+	 * every edge that resolves to nothing): a `private class IconButton` in one module no longer counts
+	 * the subtypes of another package's `IconButton`. Absent, the simple-name union answers as before.
+	 * The `@:access` half stays a simple-name test either way, the conservative direction.
 	 */
 	public static function isPrivateMemberConfined(
-		owner: String, member: String, source: String, index: SymbolIndex, ?grants: Null<Array<String>>
+		owner: String, member: String, source: String, index: SymbolIndex, ?grants: Null<Array<String>>, ?ownerFile: String
 	): Bool {
-		return privateMemberScanIsSound(source, index, member, grants) && !index.subtypes.hasSubtype(owner)
+		return privateMemberScanIsSound(source, index, member, grants) && !index.subtypes.hasSubtype(owner, ownerFile)
 			&& !index.text.hasAccessGrant(owner);
 	}
 

@@ -1460,6 +1460,30 @@ typedef RefShape = {
 	@:optional var enumAbstractSyntax: EnumAbstractSyntax;
 
 	/**
+	 * The type-declaration kinds whose NAME the compiler erases — no runtime lookup, serializer or
+	 * class-name read can ever see it (Haxe `typedef`, `abstract`, `enum abstract`). The positive list
+	 * `naming`'s compiler-verified cross-file rename arm admits types from: a class, an interface or an
+	 * enum keeps its name at run time (`Type.getClassName`, `Type.resolveClass`, serialized data), where
+	 * a rename changes behaviour no typecheck sees. Optional; unset admits no type.
+	 */
+	@:optional var compileTimeTypeDeclKinds: Array<String>;
+
+	/**
+	 * The underlying types of an enum abstract whose IMPLICIT values do not depend on the value's name
+	 * (Haxe `Int`: an implicit value is the previous one plus one). An implicit `String` value IS the
+	 * name, so renaming the value changes it. The cross-file rename arm admits a value written without
+	 * an initializer only over one of these. Optional; unset admits only explicitly-valued values.
+	 */
+	@:optional var indexValuedEnumAbstractUnderlyings: Array<String>;
+
+	/**
+	 * Type metadata that changes how the compiler treats a declaration and that no tool, macro or runtime
+	 * resolves by the type's NAME (Haxe `@:forward`, `@:nullSafety`, `@:enum`, …). Every OTHER metadata on a
+	 * type refuses `naming`'s cross-file rename arm. Optional; unset makes every metadata refuse.
+	 */
+	@:optional var nameInertTypeMetaNames: Array<String>;
+
+	/**
 	 * The grammar's raw dynamic-type name (Haxe `Dynamic`) — the `avoid-dynamic`
 	 * check flags a whole-word occurrence of it in a declared type position (field,
 	 * parameter, return, type argument, or annotated local). A typed abstraction whose

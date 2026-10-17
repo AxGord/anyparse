@@ -250,6 +250,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.NamingCheckLocalFixTest',
 		'unit.check.NamingCheckMemberFixTest',
 		'unit.check.NamingCheckTest',
+		'unit.check.NamingCrossRenameTest',
 		'unit.check.NamingPrivatizeTest',
 		'unit.check.NarrowLocalScopeCheckTest',
 		'unit.check.NoUnderscorePrefixCheckTest',
@@ -1648,6 +1649,21 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-REFLECTION-REPORT-INDEX-RENAME',
 			'unit.check.NamingCheckTest#testEnumAbstractPropertyAndStaticTakeTheMemberPolicy :: control :: '
 				+ 'M-NAMING-ENUMVALUE-PROPERTY,M-NAMING-ENUMVALUE-STATIC,M-NAMING-PROPERTY-FACTS-NULL',
+			'unit.check.NamingCrossRenameTest#testANamesakesSubtypesDoNotUnconfineAPrivate :: control :: M-CONFINED-NO-OWNER-FILE',
+			'unit.check.NamingCrossRenameTest#testATypedefRenamesInEveryFileThatNamesIt :: control :: '
+				+ 'M-XRENAME-NOT-CANDIDATE,M-XRENAME-FINDINGS-NONE,M-XRENAME-EDITS-DROPPED',
+			'unit.check.NamingCrossRenameTest#testAnEnumAbstractAndItsValuesRename :: control :: M-XRENAME-INDEXED-UNDERLYING',
+			'unit.check.NamingCrossRenameTest#testEachGateRefusesWithItsReason :: control :: '
+				+ 'M-XRENAME-RUNTIME-TYPE,M-XRENAME-MAIN-TYPE,M-XRENAME-TYPE-META,M-XRENAME-GUARDED,'
+				+ 'M-XRENAME-ENUM-CTOR,M-XRENAME-STRING,M-XRENAME-TYPE-PATH,M-XRENAME-OLD-SHARED,M-XRENAME-NEW-DECLARED,'
+				+ 'M-XRENAME-NEW-SPELLED,M-XRENAME-VALUE-OLD-SHARED,M-XRENAME-VALUE-NEW-SHARED,M-XRENAME-VALUE-BOUND,'
+				+ 'M-XRENAME-OUTSIDE,M-XRENAME-VALUE-META',
+			'unit.check.NamingCrossRenameTest#testInertNeighboursDoNotRefuse :: control :: '
+				+ 'M-XRENAME-SAFE-META,M-XRENAME-VALUE-PROPERTY,M-XRENAME-STRING-TYPES-ONLY',
+			'unit.check.NamingCrossRenameTest#testSetsSharingAFileFormOneComponent :: control :: M-XVERIFY-NO-MERGE',
+			'unit.check.NamingCrossRenameTest#testTheArmNeedsTheWholeProject :: control :: M-XRENAME-NO-PROJECT',
+			'unit.check.NamingCrossRenameTest#testTheOracleRunRenamesAndRevertsTheMiss :: control :: '
+				+ 'M-RISKYARM-CROSS-NOT-VERIFIED,M-XVERIFY-NO-BISECT',
 			'unit.check.NamingPrivatizeTest#testANameThePrivateRuleRejectsIsNotACandidate :: control :: M-PRIVATIZE-RULE-UNCHECKED',
 			'unit.check.NamingPrivatizeTest#testANarrowedRunSeesAReaderOutsideItsScope :: control :: M-PRIVATIZE-TOKENS-UNCHECKED',
 			'unit.check.NamingPrivatizeTest#testAPublicUnderscoreFieldReadOnlyInsideIsPrivatized :: control :: '
@@ -7604,7 +7620,34 @@ class TestDiscoveryParityTest extends Test {
 			'M-DEFLIT-NULL-DROPPED',
 			'M-DEFLIT-FALSE-DROPPED',
 			'M-DEFLIT-ZERO-DROPPED',
-			'M-DEFLIT-EMPTY-STRING-DROPPED'
+			'M-DEFLIT-EMPTY-STRING-DROPPED',
+			'M-XRENAME-NOT-CANDIDATE',
+			'M-XRENAME-FINDINGS-NONE',
+			'M-XRENAME-EDITS-DROPPED',
+			'M-XRENAME-INDEXED-UNDERLYING',
+			'M-XRENAME-RUNTIME-TYPE',
+			'M-XRENAME-MAIN-TYPE',
+			'M-XRENAME-TYPE-META',
+			'M-XRENAME-SAFE-META',
+			'M-XRENAME-GUARDED',
+			'M-XRENAME-ENUM-CTOR',
+			'M-XRENAME-STRING',
+			'M-XRENAME-TYPE-PATH',
+			'M-XRENAME-OLD-SHARED',
+			'M-XRENAME-NEW-DECLARED',
+			'M-XRENAME-NEW-SPELLED',
+			'M-XRENAME-VALUE-OLD-SHARED',
+			'M-XRENAME-VALUE-NEW-SHARED',
+			'M-XRENAME-VALUE-PROPERTY',
+			'M-XRENAME-VALUE-BOUND',
+			'M-XRENAME-OUTSIDE',
+			'M-XRENAME-VALUE-META',
+			'M-XRENAME-NO-PROJECT',
+			'M-XVERIFY-NO-MERGE',
+			'M-RISKYARM-CROSS-NOT-VERIFIED',
+			'M-XVERIFY-NO-BISECT',
+			'M-CONFINED-NO-OWNER-FILE',
+			'M-XRENAME-STRING-TYPES-ONLY'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
