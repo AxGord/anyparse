@@ -10,9 +10,9 @@ import anyparse.query.GrammarPlugin;
 import anyparse.runtime.Span;
 import haxe.Exception;
 import haxe.io.Path;
-import sys.FileSystem;
 import sys.io.File;
 import unit.CheckFixture;
+import unit.ConfigTrees;
 import utest.Assert;
 import utest.Test;
 
@@ -48,12 +48,11 @@ class CommentWidthCheckTest extends Test {
 	/** A config declaring a line width no other fixture uses — the SECOND declaration this rule is read against. */
 	private static inline final NARROW: String = '{"wrapping": {"maxLineLength": 60}, "indentation": {"character": "tab", "tabWidth": 4}}';
 
-	/** Every fixture directory `makeTree` built, removed in `teardown`; their shared parent is reused across runs. */
-	private final _made: Array<String> = [];
+	/** The fixture trees, removed in `teardown`; their shared parent is reused across runs. */
+	private final _trees: ConfigTrees = new ConfigTrees('apq-comment-width-test');
 
 	public function teardown(): Void {
-		for (dir in _made) removeTree(dir);
-		_made.resize(0);
+		_trees.removeAll();
 	}
 
 	public function testWideDocLineIsFlagged(): Void {
@@ -169,7 +168,7 @@ class CommentWidthCheckTest extends Test {
 	@:pin('control')
 	@:killer('M-COMMENT-WIDTH-CONFIG-BLIND')
 	public function testTheConfiguredWidthIsRead(): Void {
-		final dir: String = makeTree('narrow');
+		final dir: String = _trees.make('narrow');
 		File.saveContent(Path.join([dir, 'hxformat.json']), NARROW);
 		final src: String = doc(MEDIUM);
 		Assert.equals(1, violations(src, Path.join([dir, 'A.hx'])).length);
@@ -372,16 +371,6 @@ class CommentWidthCheckTest extends Test {
 		return words.join(' ');
 	}
 
-	/** A uniquely named temporary directory, removed in `teardown`. */
-	private function makeTree(name: String): String {
-		final root: String = Path.join([Sys.getEnv('TMPDIR') ?? '/tmp', 'apq-comment-width-test']);
-		if (!FileSystem.exists(root)) FileSystem.createDirectory(root);
-		final dir: String = Path.join([root, 'apq-cw-$name-${Std.random(0x7FFFFFFF)}']);
-		FileSystem.createDirectory(dir);
-		_made.push(dir);
-		return dir;
-	}
-
 	/** `src` with `edits` spliced in, last first, so an earlier span keeps its offsets. */
 	private static function applyEdits(src: String, edits: Array<{ span: Span, text: String }>): String {
 		final ordered: Array<{ span: Span, text: String }> = edits.copy();
@@ -396,19 +385,6 @@ class CommentWidthCheckTest extends Test {
 		final buf: StringBuf = new StringBuf();
 		for (_ in 0...times) buf.add(unit);
 		return buf.toString();
-	}
-
-	/** Remove `dir` and everything under it. */
-	private static function removeTree(dir: String): Void {
-		if (!FileSystem.exists(dir)) return;
-		for (entry in FileSystem.readDirectory(dir)) {
-			final path: String = Path.join([dir, entry]);
-			if (FileSystem.isDirectory(path))
-				removeTree(path);
-			else
-				FileSystem.deleteFile(path);
-		}
-		FileSystem.deleteDirectory(dir);
 	}
 
 }

@@ -218,6 +218,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.LintConfigTest',
 		'unit.check.LintFixDeclineWiringSliceTest',
 		'unit.check.LintFixFollowUpRoundTest',
+		'unit.check.LintFixSafeRevertContinuesTest',
 		'unit.check.LintLanguageVersionGateTest',
 		'unit.check.LintModuleSecondaryTypeSliceTest',
 		'unit.check.LintReportChannelSliceTest',
@@ -235,6 +236,8 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.MemberOrderCheckTest',
 		'unit.check.MemberOrderMessageTest',
 		'unit.check.MemberOrderModifierSpanSliceTest',
+		'unit.check.MemberOrderWriterGapTest',
+		'unit.check.MemberSpacingPolicyTest',
 		'unit.check.MessageMaskTest',
 		'unit.check.MisplacedTypeDocCheckTest',
 		'unit.check.MisplacedTypeDocGuardedMetaTest',
@@ -1514,6 +1517,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.LintFixDeclineWiringSliceTest#testARefusedFindingCostsItsRuleNothingElse :: control :: M-LINTFIX-FINDING-SPLIT-NONE',
 			'unit.check.LintFixDeclineWiringSliceTest#testARefusedRuleCostsOnlyItsOwnEdits :: control :: M-LINTFIX-BLAME-SITE-ALWAYS',
 			'unit.check.LintFixDeclineWiringSliceTest#testAnAcceptedFileIsWrittenAndBlamesNobody :: control :: M-LINTFIX-ACCEPTED-BLAMED',
+			'unit.check.LintFixSafeRevertContinuesTest#testANarrowedRevertKeepsTheGoodSafeEditAndTheVerifiedOnes :: control :: '
+				+ 'M-SAFE-REVERT-ABORTS,M-SAFE-REVERT-EDITS-COUNTED,M-SAFE-REVERT-FILES-COUNTED,M-SAFE-REVERT-EXIT-OK',
+			'unit.check.LintFixSafeRevertContinuesTest#testRiskyAndOracleAssistedFixesLandAfterAWholeWaveSafeRevert :: control :: '
+				+ 'M-SAFE-REVERT-ABORTS,M-SAFE-REVERT-EDITS-COUNTED,M-SAFE-REVERT-FILES-COUNTED,M-SAFE-REVERT-EXIT-OK,M-SAFE-REVERT-UNSAID',
 			'unit.check.LintLanguageVersionGateTest#testAnExplicitRuleSelectionKeepsTheVersionFloor :: control :: M-VERSION-LIFTED-BY-RULE',
 			'unit.check.LintModuleSecondaryTypeSliceTest#testAModuleWhoseConstructorsCannotBeListedStaysAdvisory :: control :: '
 				+ 'M-UNUSED-VALUES-UNLISTED-DELETED',
@@ -1575,6 +1582,22 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-MO-INLINE-BOUNDARY-OFF,M-MO-INLINE-BOUNDARY-AT-LEAST-ONE',
 			'unit.check.MemberOrderCheckTest#testInlineSubgroupOptionLeavesTheRestAlone :: control :: '
 				+ 'M-MO-INLINE-CONDITIONAL-BOUNDARY,M-MO-INLINE-BOUNDARY-BEFORE-EXEMPTIONS',
+			'unit.check.MemberOrderWriterGapTest#testADocCommentedFieldIsSetOffAsTheWriterSetsItOff :: control :: '
+				+ 'M-MO-WRITER-DOC-IGNORED,M-MO-WRITER-FIX-UNREAD,M-MO-INLINE-SEPARATOR-DROPPED',
+			'unit.check.MemberOrderWriterGapTest#testAGluedMultiLineFieldIsReportedAndTheFixLandsTheWritersBlank :: control :: '
+				+ 'M-MO-WRITER-MULTILINE-IGNORED,M-MO-INLINE-SEPARATOR-DROPPED',
+			'unit.check.MemberOrderWriterGapTest#testALineCommentLedSlotIsLeftToTheSource :: control :: M-GAP-DOCLED-ANY-COMMENT',
+			'unit.check.MemberOrderWriterGapTest#testAMultiLineMemberStillGetsItsBlankUnderBeforeDocNone :: control :: '
+				+ 'M-GAP-MULTILINE-AFTER-NOBLANK',
+			'unit.check.MemberOrderWriterGapTest#testAnIfBodyKeepsItsSourceGaps :: control :: M-MO-WRITER-CONDITIONAL',
+			'unit.check.MemberOrderWriterGapTest#testTheBeforeDocNonePolicyRemovesTheBlankAndWins :: control :: M-GAP-DOC-PRECEDENCE',
+			'unit.check.MemberOrderWriterGapTest#testTheWritersBlankAroundAMultiLineFieldIsNotReported :: control :: '
+				+ 'M-MO-WRITER-REPORT-UNREAD,M-MO-WRITER-MULTILINE-IGNORED',
+			'unit.check.MemberOrderWriterGapTest#testTheWritersDocBlankIsAMinimum :: control :: M-MO-WRITER-MINIMUM-AS-EXACT',
+			'unit.check.MemberSpacingPolicyTest#testAnUnmeasurableSlotLeavesThePairToTheSource :: control :: '
+				+ 'M-MO-WRITER-UNMEASURABLE-GUESS',
+			'unit.check.MemberSpacingPolicyTest#testTheWriterPolicyIsReadOnlyOnTheKindsItCovers :: control :: '
+				+ 'M-MO-WRITER-CONTAINER-KIND',
 			'unit.check.NamingCheckCrossFileFixTest#testCrossFileRenameAsksTheResolutionScopeForUnreadableFiles :: control :: '
 				+ 'M-NAMING-SKIPSCAN-REPORT-INDEX,M-SKIPSCAN-SCOPEWIDE',
 			'unit.check.NamingCheckMemberFixTest#testAccessGrantOutsideReportScopeRefusesSingleFileRename :: control :: '
@@ -2136,6 +2159,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ScratchFieldCheckTest#testWritesInBothArmsHaveNoDeclarationSlot :: control :: M-SCRATCH-SLOT-ANYWHERE',
 			'unit.check.ShadowingCaseBinderCheckTest#testUnprovenSubjectRefused :: control :: M-SHADOWING-BINDER-UNPROVEN',
 			'unit.check.ShortenTypeRefCheckTest#testASingleSurvivingOccurrenceEarnsNoImport :: control :: M-SHORTEN-IMPORT-THRESHOLD-ONE',
+			'unit.check.SimplifyBooleanReturnChainCheckTest#testCommentInAFlatChainIsNotDropped :: control :: M-RETURN-CHAIN-COMMENT-ADMITTED',
 			'unit.check.SimplifyBooleanReturnChainCheckTest#testNegatedConjunctionGuardRegroups :: control :: '
 				+ 'M-GUARD-CHAIN-NEGATED-RUN-DROPPED',
 			'unit.check.SimplifyBooleanReturnChainCheckTest#testStrandedNullTestRegroups :: control :: M-NARROWING-OR-FLAT',
@@ -7340,6 +7364,17 @@ class TestDiscoveryParityTest extends Test {
 			'M-MO-INLINE-BOUNDARY-AT-LEAST-ONE',
 			'M-MO-INLINE-CONDITIONAL-REBUILD-UNREAD',
 			'M-MO-INLINE-SPACING-ONLY-UNREAD',
+			'M-MO-WRITER-REPORT-UNREAD',
+			'M-MO-WRITER-FIX-UNREAD',
+			'M-MO-WRITER-DOC-IGNORED',
+			'M-MO-WRITER-MULTILINE-IGNORED',
+			'M-MO-WRITER-UNMEASURABLE-GUESS',
+			'M-MO-WRITER-CONDITIONAL',
+			'M-MO-WRITER-CONTAINER-KIND',
+			'M-MO-WRITER-MINIMUM-AS-EXACT',
+			'M-GAP-DOC-PRECEDENCE',
+			'M-GAP-MULTILINE-AFTER-NOBLANK',
+			'M-GAP-DOCLED-ANY-COMMENT',
 			'M-NEGCOND-ANY-KIND',
 			'M-NEGCOND-PAREN-KEPT',
 			'M-NEGCOND-OVERLOAD-BLIND',
@@ -7399,6 +7434,12 @@ class TestDiscoveryParityTest extends Test {
 			'M-RISKYARM-NOT-VERIFIED',
 			'M-FIXVERIFY-RISKYARM-FIX',
 			'M-REACH-AUTOBUILD-IGNORED',
+			'M-SAFE-REVERT-ABORTS',
+			'M-SAFE-REVERT-EDITS-COUNTED',
+			'M-SAFE-REVERT-FILES-COUNTED',
+			'M-SAFE-REVERT-EXIT-OK',
+			'M-SAFE-REVERT-UNSAID',
+			'M-RETURN-CHAIN-COMMENT-ADMITTED',
 			'M-BINDER-INITIALIZER-CUT',
 			'M-BINDER-SELF-CUT',
 			'M-BINDER-INHERITED-CUT',

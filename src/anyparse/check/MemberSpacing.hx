@@ -1,6 +1,8 @@
 package anyparse.check;
 
 import anyparse.check.MemberSlots.OrderedMember;
+import anyparse.query.FormatConfigDiscovery;
+import anyparse.query.GrammarPlugin;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -16,6 +18,47 @@ typedef LayoutIssue = {
 }
 
 /**
+ * The spacing context of one container: the opt-in `separateInlineSubgroup` option, and `writer`, the writer's
+ * member-gap policy under the file's format config (`GrammarPlugin.memberGapPolicy`) - null when the grammar's writer
+ * forces no member gaps, or does not run that policy on this container's kind (`forContainer`).
+ */
+typedef SpacingPolicy = {
+	final separateInline: Bool;
+	final writer: Null<MemberGapPolicy>;
+}
+
+/** Why a member gap wants the blank lines it wants - the rule `wantedBlanks` answered from, which picks the finding's message. */
+private enum abstract GapRule(Int) {
+
+	/** Two different rank groups: one blank line. */
+	final RankBoundary = 0;
+
+	/** Two fields of one rank group: none. */
+	final TightGroup = 1;
+
+	/** A rank's `inline` subgroup and the rest of it, under `separateInlineSubgroup`: one blank line. */
+	final InlineBoundary = 2;
+
+	/** The writer's doc-comment rule: a doc-commented member is set off as the format config says. */
+	final DocComment = 3;
+
+	/** The writer's multi-line rule: a member written over several lines is set off by `aroundMultilineFields` blank lines. */
+	final Multiline = 4;
+
+}
+
+/**
+ * The blank lines one member gap wants and the rule that decided it (`MemberSpacing.wantedBlanks`). `atLeast` marks a
+ * MINIMUM - the writer's own answer, which fills an empty gap with `count` blank lines and keeps a fuller one as the
+ * source has it - where the check's own rules ask for exactly `count`.
+ */
+private typedef GapWant = {
+	final count: Int;
+	final atLeast: Bool;
+	final rule: GapRule;
+}
+
+/**
  * The two optional blank-line edits `directiveGapEdits` computes for one cross-condition
  * member gap: `ifEdit` the blank before the gap's `#if`, `endEdit` the blank after its
  * `#end`; each null when that blank already exists or the gap has no such directive.
@@ -27,8 +70,10 @@ private typedef DirectiveGap = {
 
 /**
  * The BLANK-LINE half of `member-order`: what has to sit in the gap BETWEEN two collected
- * member slots. Two independent gap rules live here — one blank line between rank groups and
- * none inside one field group (optionally one between a rank's `inline` subgroup and the rest of
+ * member slots. Two independent gap rules live here — the member gap (`wantedBlanks`: what the
+ * writer forces there under the file's format config - a doc-commented member set off, a member
+ * written over several lines set off - and otherwise one blank line between rank groups and
+ * none inside one field group, optionally one between a rank's `inline` subgroup and the rest of
  * it, `separateInlineSubgroup`), and one blank line around a member-level `#if` / `#end` — plus
  * the gate that switches both off for a container whose gaps hold code the rule cannot model.
  *
@@ -47,10 +92,27 @@ final class MemberSpacing {
 	public static final GROUP_SEPARATOR: String = '\n\n';
 
 	/**
+	 * `file`'s spacing context, the same for the report and the fix: its `separateInlineSubgroup` option
+	 * (`separateInline`, read off the file's `apqlint.json` by the caller) and the writer's member-gap policy under the
+	 * file's own `hxformat.json` (discovered from its path, as `fmt` does), so the blank lines the rule demands are the
+	 * ones the writer keeps.
+	 */
+	public static function policyOf(file: String, plugin: GrammarPlugin, separateInline: Bool): SpacingPolicy {
+		return { separateInline: separateInline, writer: plugin.memberGapPolicy(FormatConfigDiscovery.discover(file)) };
+	}
+
+	/** `spacing` for one container of kind `containerKind`: the writer policy is kept only when the writer runs it on that kind. */
+	public static function forContainer(spacing: SpacingPolicy, containerKind: String): SpacingPolicy {
+		final writer: Null<MemberGapPolicy> = spacing.writer;
+		return writer == null || writer.containerKinds.contains(containerKind)
+			? spacing
+			: { separateInline: spacing.separateInline, writer: null };
+	}
+
+	/**
 	 * The spacing-only degradation for a container whose member order cannot be rewritten safely
 	 * (`reorderRefusal` named a gate): normalise every violating inter-slot gap over the
-	 * ORIGINAL member sequence - one blank line between
-	 * rank groups, none inside a tight field group - and, via `emitDirectiveSpacing`,
+	 * ORIGINAL member sequence to the blank lines `wantedBlanks` asks for and, via `emitDirectiveSpacing`,
 	 * set every member-level `#if`/`#end` block off with a blank line before and
 	 * after, leaving the order itself untouched (the order finding stays report-only).
 	 * Shares `spacingViolation` with `firstSpacingIssue` and `directiveGapEdits` with
@@ -58,49 +120,35 @@ final class MemberSpacing {
 	 * finds no issue and a re-run converges.
 	 */
 	public static function emitSpacingOnly(
-		edits: Array<{ span: Span, text: String }>, members: Array<OrderedMember>, source: String, separateInline: Bool
+		edits: Array<{ span: Span, text: String }>, members: Array<OrderedMember>, source: String, spacing: SpacingPolicy
 	): Void {
 		if (spacingDisabled(members, source)) return;
 		for (i in 0...members.length - 1) {
 			final a: OrderedMember = members[i];
 			final b: OrderedMember = members[i + 1];
-			final want: Null<Int> = spacingViolation(a, b, source, separateInline);
+			final want: Null<GapWant> = spacingViolation(a, b, source, spacing);
 			if (want == null) continue;
 			final gap: String = source.substring(a.span.to, b.span.from);
 			final indent: String = gap.substring(gap.lastIndexOf('\n') + 1);
-			edits.push({ span: new Span(a.span.to, b.span.from), text: (want == 1 ? GROUP_SEPARATOR : '\n') + indent });
+			edits.push({ span: new Span(a.span.to, b.span.from), text: separatorOf(want.count) + indent });
 		}
 		emitDirectiveSpacing(edits, members, source);
 	}
 
 	/**
 	 * The first member separated from its predecessor by the wrong number of blank
-	 * lines, or null. The per-pair policy lives in `spacingViolation` (shared with
-	 * the fixer's spacing-only fallback): different-rank neighbours want exactly one
-	 * blank line; same-rank FIELD neighbours want none (a tight group) - save, under the opt-in `separateInlineSubgroup` option,
-	 * exactly one at the boundary between the rank's `inline` subgroup and the rest of it (`inlineSubgroupBoundary`) - unless either
-	 * slot leads with a comment - the writer itself keeps a blank line after a
-	 * doc-commented member, and a blank before a doc comment is never stripped or
-	 * demanded. Same-rank methods are left alone - they are conventionally
-	 * blank-separated. Disabled outright (`spacingDisabled`) for a non-conditional
-	 * container with a non-whitespace inter-slot gap (a stray `;`, a trailing
+	 * lines, or null. The per-pair policy lives in `wantedBlanks` (read through `spacingViolation`, shared with
+	 * the fixer's spacing-only fallback and the rebuild's `separatorBetween`). Disabled outright (`spacingDisabled`)
+	 * for a non-conditional container with a non-whitespace inter-slot gap (a stray `;`, a trailing
 	 * comment): the fixer falls back to order-only slot swaps there, so a spacing
 	 * finding could never converge. Skips pairs sharing a line, crossing an `#if`
 	 * boundary, or whose gap holds directive / stray text.
 	 */
-	public static function firstSpacingIssue(members: Array<OrderedMember>, source: String, separateInline: Bool): Null<LayoutIssue> {
+	public static function firstSpacingIssue(members: Array<OrderedMember>, source: String, spacing: SpacingPolicy): Null<LayoutIssue> {
 		if (spacingDisabled(members, source)) return null;
 		for (i in 0...members.length - 1) {
-			final want: Null<Int> = spacingViolation(members[i], members[i + 1], source, separateInline);
-			if (want != null) return {
-				member: members[i + 1],
-				message: if (want == 0)
-					'members of one rank group are separated by a blank line'
-				else if (members[i].rank != members[i + 1].rank)
-					'rank groups are not separated by a blank line'
-				else
-					'the inline members of a rank group are not separated from the rest of it by a blank line'
-			};
+			final want: Null<GapWant> = spacingViolation(members[i], members[i + 1], source, spacing);
+			if (want != null) return { member: members[i + 1], message: messageOf(want) };
 		}
 		return null;
 	}
@@ -114,19 +162,21 @@ final class MemberSpacing {
 	}
 
 	/**
-	 * The separator between two consecutive reordered members: a blank line between rank
-	 * groups, before a method, or before a comment-led slot (a member whose leading doc the
-	 * writer keeps blank-separated); a single newline between two same-rank plain fields, save across
-	 * the inline-subgroup boundary when `separateInline` is on (`inlineSubgroupBoundary`, the same
-	 * predicate `spacingViolation` reads, so the rebuild lands exactly what the check demands). Note
+	 * The separator between two consecutive reordered members: the blank lines `wantedBlanks` asks for between
+	 * them - the predicate `spacingViolation` reads, so the rebuild lands exactly what the check demands - and,
+	 * where it leaves the pair to the source (a same-rank method pair, a comment-led slot), a blank line before a
+	 * method or a comment-led slot and a single newline otherwise. Note
 	 * this drives the raw joins INSIDE a rebuilt `#if` region, where the writer preserves them
 	 * verbatim; outside `#if`, the writer re-inserts blank-after-doc during canonicalization.
 	 */
-	public static function separatorBetween(prev: OrderedMember, next: OrderedMember, source: String, separateInline: Bool): String {
-		return prev.rank != next.rank || !next.isField || slotStartsWithComment(next, source)
-			|| inlineSubgroupBoundary(prev, next, separateInline)
-			? GROUP_SEPARATOR
-			: '\n';
+	public static function separatorBetween(prev: OrderedMember, next: OrderedMember, source: String, spacing: SpacingPolicy): String {
+		final want: Null<GapWant> = wantedBlanks(prev, next, source, spacing);
+		return if (want != null)
+			separatorOf(want.count)
+		else if (!next.isField || slotStartsWithComment(next, source))
+			GROUP_SEPARATOR
+		else
+			'\n';
 	}
 
 	/**
@@ -138,13 +188,12 @@ final class MemberSpacing {
 		return false;
 	}
 
-	/** Join `sorted` member slots for the reordered region, blank-separating rank groups and members that lead with a comment. */
-	public static function joinMembers(sorted: Array<OrderedMember>, source: String, separateInline: Bool): String {
+	/** Join `sorted` member slots for the reordered region, each pair separated by `separatorBetween`. */
+	public static function joinMembers(sorted: Array<OrderedMember>, source: String, spacing: SpacingPolicy): String {
 		final parts: Array<String> = [source.substring(sorted[0].span.from, sorted[0].span.to)];
 		for (i in 1...sorted.length)
 			parts.push(
-				separatorBetween(sorted[i - 1], sorted[i], source, separateInline)
-				+ source.substring(sorted[i].span.from, sorted[i].span.to)
+				separatorBetween(sorted[i - 1], sorted[i], source, spacing) + source.substring(sorted[i].span.from, sorted[i].span.to)
 			);
 		return parts.join('');
 	}
@@ -188,29 +237,95 @@ final class MemberSpacing {
 	}
 
 	/**
-	 * The blank-line count the spacing rule demands between the adjacent slots `a`
-	 * and `b` when the pair currently violates it, or null when the pair is exempt
-	 * (different `#if` condition, same-line, directive / stray text in the gap, same-rank non-field or comment-led pair) or already
-	 * correct. `separateInline` is the `separateInlineSubgroup` option: on, a same-rank field pair across the inline-subgroup
-	 * boundary wants exactly one blank line instead of none; a comment-led pair keeps its exemption either way. The single source
-	 * of the per-pair spacing policy - shared by the check (`firstSpacingIssue`) and
-	 * the fixer's spacing-only fallback (`emitSpacingOnly`) so the two cannot drift.
+	 * The blank lines the gap between the adjacent slots `a` and `b` wants, or null when the pair is left to the
+	 * source - THE per-pair spacing policy, read by the report, the spacing-only fix and the rebuild alike.
+	 *
+	 * The writer decides first wherever it forces the gap (`spacing.writer`, unconditional pairs only: the members of
+	 * an `#if` body are written with their source gaps): its doc-comment rule sets a doc-commented member off as the
+	 * format config says (`docBlanks`), so a comment-led slot the writer blank-separates is REQUIRED to be, not
+	 * exempt. Otherwise the check's own rule (`ownWant`) answers. Where that rule wants a tight gap, the writer's
+	 * multi-line rule is asked as well: a member it renders over several lines is set off by `aroundMultilineFields`
+	 * blank lines (`multilineBlanks`), measured on the member's Doc (`multiline`) only when the answer depends on it -
+	 * and a slot the measure cannot read leaves the pair to the source rather than guessing. A writer answer is a minimum
+	 * (`GapWant.atLeast`): the writer keeps a fuller gap as the source has it, so only an empty one is reported. The multi-line rule is
+	 * not asked where the check's own rule already wants a blank or has no opinion: it only ever adds blanks there.
 	 */
-	private static function spacingViolation(a: OrderedMember, b: OrderedMember, source: String, separateInline: Bool): Null<Int> {
-		if (a.condition != b.condition) return null;
-		final gap: String = source.substring(a.span.to, b.span.from);
-		if (gap.indexOf('\n') < 0 || gap.trim() != '') return null;
-		final blanks: Int = blankLineCount(gap);
+	private static function wantedBlanks(a: OrderedMember, b: OrderedMember, source: String, spacing: SpacingPolicy): Null<GapWant> {
+		final writer: Null<MemberGapPolicy> = a.condition == null && b.condition == null ? spacing.writer : null;
+		final own: Null<GapWant> = ownWant(a, b, source, spacing.separateInline);
+		if (writer == null) return own;
+		final forced: Null<Int> = writer.docBlanks(a.leadComments, b.leadComments);
+		final base: Null<GapWant> = if (forced == null)
+			own
+		else if (forced == 0)
+			own != null && own.count == 0 ? own : { count: 0, atLeast: false, rule: DocComment }
+		else if (own != null && own.count >= forced)
+			own
+		else
+			{ count: forced, atLeast: true, rule: DocComment };
+		if (base == null || base.count != 0) return base;
+		final lifted: Null<Int> = writer.multilineBlanks(a.leadComments, b.leadComments);
+		if (lifted == null || lifted == 0) return base;
+		final multiA: Null<Bool> = writer.multiline(source.substring(a.span.from, a.span.to));
+		if (multiA == true) return { count: lifted, atLeast: true, rule: Multiline };
+		final multiB: Null<Bool> = writer.multiline(source.substring(b.span.from, b.span.to));
+		return if (multiB == true)
+			{ count: lifted, atLeast: true, rule: Multiline }
+		else if (multiA == null || multiB == null)
+			null
+		else
+			base;
+	}
+
+	/**
+	 * The check's own spacing rule for the adjacent slots `a` and `b`, or null when it has no opinion: different-rank
+	 * neighbours want exactly one blank line; same-rank FIELD neighbours want none (a tight group) - save, under the
+	 * opt-in `separateInlineSubgroup` option (`separateInline`), exactly one at the boundary between the rank's `inline`
+	 * subgroup and the rest of it (`inlineSubgroupBoundary`). A same-rank pair of methods (conventionally
+	 * blank-separated) and a same-rank pair either of whose slots leads with a comment are left alone.
+	 */
+	private static function ownWant(a: OrderedMember, b: OrderedMember, source: String, separateInline: Bool): Null<GapWant> {
 		return if (a.rank != b.rank)
-			blanks != 1 ? 1 : null
+			{ count: 1, atLeast: false, rule: RankBoundary }
 		else if (!b.isField || slotStartsWithComment(a, source) || slotStartsWithComment(b, source))
 			null
 		else if (inlineSubgroupBoundary(a, b, separateInline))
-			blanks != 1 ? 1 : null
-		else if (blanks != 0)
-			0
+			{ count: 1, atLeast: false, rule: InlineBoundary }
 		else
-			null;
+			{ count: 0, atLeast: false, rule: TightGroup };
+	}
+
+	/** The finding message for a gap that does not hold the blank lines `want` asks for. */
+	private static function messageOf(want: GapWant): String {
+		final blanks: String = want.count == 1 ? 'one blank line' : '${want.count} blank lines';
+		return switch want.rule {
+			case RankBoundary: 'rank groups are not separated by a blank line';
+			case TightGroup: 'members of one rank group are separated by a blank line';
+			case InlineBoundary: 'the inline members of a rank group are not separated from the rest of it by a blank line';
+			case DocComment if (want.count == 0): 'a doc-commented member is separated by a blank line the formatter removes';
+			case DocComment: 'a doc-commented member is not separated from its neighbour by $blanks, as the formatter writes it';
+			case Multiline: 'a member written over several lines is not separated from its neighbour by $blanks, as the formatter writes it';
+		};
+	}
+
+	/** The inter-slot text holding exactly `blanks` blank lines (before the next slot's indentation). */
+	private static function separatorOf(blanks: Int): String {
+		return blanks == 1 ? GROUP_SEPARATOR : [for (_ in 0...blanks + 1) '\n'].join('');
+	}
+
+	/**
+	 * What the adjacent slots `a` and `b` want when the pair currently violates it, or null when the pair is exempt
+	 * (different `#if` condition, same line, directive / stray text in the gap, `wantedBlanks` leaves it to the source)
+	 * or already correct. Shared by the check (`firstSpacingIssue`) and the fixer's spacing-only fallback
+	 * (`emitSpacingOnly`) so the two cannot drift.
+	 */
+	private static function spacingViolation(a: OrderedMember, b: OrderedMember, source: String, spacing: SpacingPolicy): Null<GapWant> {
+		if (a.condition != b.condition) return null;
+		final gap: String = source.substring(a.span.to, b.span.from);
+		if (gap.indexOf('\n') < 0 || gap.trim() != '') return null;
+		final want: Null<GapWant> = wantedBlanks(a, b, source, spacing);
+		final blanks: Int = blankLineCount(gap);
+		return want != null && (want.atLeast ? blanks < want.count : blanks != want.count) ? want : null;
 	}
 
 	/**

@@ -194,6 +194,13 @@ interface GrammarPlugin {
 	public function layoutMetrics(?optsJson: String): Null<LayoutMetrics>;
 
 	/**
+	 * Optional: the writer's member-gap policy for `optsJson` (`MemberGapPolicy`) - the blank lines it forces between
+	 * two adjacent type members under that config. `optsJson` follows the `writeRoundTrip` convention. Return `null`
+	 * when the grammar's writer forces none; a check reading it then keeps its own spacing rule.
+	 */
+	public function memberGapPolicy(?optsJson: String): Null<MemberGapPolicy>;
+
+	/**
 	 * Optional: parse `source` with the plain (non-trivia) parser and
 	 * emit via the plain writer. Drops comments and source-layout
 	 * newlines — flattens to the writer's canonical form. Used by `apq
@@ -3696,6 +3703,29 @@ typedef MetaShape = {
 typedef LayoutMetrics = {
 	final lineWidth: Int;
 	final indentWidth: Int;
+}
+
+/**
+ * The member-gap half of a writer's blank-line policy under one format config (`GrammarPlugin.memberGapPolicy`):
+ * the blank lines the writer FORCES between two adjacent members of a type body, whatever the source holds there.
+ * A check that demands blank lines between members asks this instead of keeping a policy of its own, so it never
+ * demands a gap `fmt` would rewrite. A positive answer is a MINIMUM - the writer fills an EMPTY gap with that
+ * many blank lines and keeps a non-empty one as the source has it - and 0 is exact; every answer is null when
+ * the writer leaves the gap to the source, or when the policy cannot tell, which a caller reads the same way.
+ *
+ * `containerKinds` are the projected container kinds whose member list the writer runs this policy on.
+ * `docBlanks(prev, next)` is what the doc-comment rule forces, given each member's leading comments in source order.
+ * `multilineBlanks(prev, next)` is what the writer forces when, in addition, either member renders over several lines
+ * (null when that rule is off) - a caller that would get a different answer from it asks `multiline` about each
+ * member's slot (its leading comments plus its declaration): whether the writer renders it over several lines, null
+ * when the slot cannot be read as a member.
+ */
+@:nullSafety(Strict)
+typedef MemberGapPolicy = {
+	final containerKinds: Array<String>;
+	final docBlanks: (prevLeading:Array<String>, nextLeading:Array<String>) -> Null<Int>;
+	final multilineBlanks: (prevLeading:Array<String>, nextLeading:Array<String>) -> Null<Int>;
+	final multiline: (slot:String) -> Null<Bool>;
 }
 
 /**

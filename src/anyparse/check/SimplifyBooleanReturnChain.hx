@@ -5,6 +5,7 @@ import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
+import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -34,9 +35,18 @@ import anyparse.runtime.Span;
  * `boolLitKind`; the De Morgan / precedence rewrite from
  * `BooleanLogicSupport.reduceBooleanGuardChain` (which refuses a degenerate chain
  * that would drop a condition's evaluation). Any unset seam makes the check a no-op.
+ *
+ * ## Comments
+ *
+ * The rewrite rebuilds the whole span from the conditions alone, so `fix` declines (with a
+ * `Violation.declineReason`) a chain whose span holds a comment; the finding stays reported.
  */
 @:nullSafety(Strict)
 final class SimplifyBooleanReturnChain implements Check {
+
+	/** Why `fix` leaves a chain whose span holds a comment: the rewrite is built from the conditions alone. */
+	private static inline final COMMENT_DECLINE: String =
+		'a comment stands inside the guard chain, and the single return is rebuilt from the conditions alone, which would drop it';
 
 	public function new() {}
 
@@ -76,12 +86,18 @@ final class SimplifyBooleanReturnChain implements Check {
 				final types: Null<(QueryNode) -> Null<String>> = CheckScan.typeNominalResolver(
 					source, plugin, tree, violations[0].file, index
 				);
-				final edits: Array<{ span: Span, text: String }> = [];
-				RunScan.eachMatched(violations, bySpan, (chain, span) -> {
+				return RunScan.spanEdits(violations, (v, span) -> {
+					final chain: Null<Chain> = bySpan['${span.from}:${span.to}'];
+					if (chain == null) return null;
+					// The edit regenerates the WHOLE span from the conditions alone, so a comment anywhere in it - between two
+					// guards, between a guard's condition and its return, in a condition's operator glue - would be dropped.
+					if (SourceComments.hasCommentMarker(source, span.from, span.to)) {
+						v.declineReason = COMMENT_DECLINE;
+						return null;
+					}
 					final expr: Null<String> = ctx.support.reduceBooleanGuardChain(chain.conds, chain.lits, chain.finalLit, source, types);
-					if (expr != null) edits.push({ span: span, text: 'return $expr;' });
+					return expr == null ? null : { span: span, text: 'return $expr;' };
 				});
-				return edits;
 			});
 	}
 

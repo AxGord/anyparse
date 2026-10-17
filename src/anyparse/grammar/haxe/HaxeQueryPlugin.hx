@@ -282,6 +282,10 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		};
 	}
 
+	public function memberGapPolicy(?optsJson: String): Null<MemberGapPolicy> {
+		return HaxeMemberGap.policy(writeOptionsOf(optsJson));
+	}
+
 	/**
 	 * Parse + write round-trip via the PLAIN (non-trivia) pipeline.
 	 * Mirrors the unit-test entry

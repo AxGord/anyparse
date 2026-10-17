@@ -7,6 +7,7 @@ import anyparse.query.GrammarPlugin.AmbientImportGovernance;
 import anyparse.query.GrammarPlugin.AmbientImports;
 import anyparse.query.GrammarPlugin.CheckOverrides;
 import anyparse.query.GrammarPlugin.LayoutMetrics;
+import anyparse.query.GrammarPlugin.MemberGapPolicy;
 import anyparse.query.GrammarPlugin.MetaShape;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.GrammarPlugin.TypeRefShape;
@@ -78,6 +79,7 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 
 	// Layout metrics per config JSON — one entry per distinct `hxformat.json` in a run.
 	private final _layoutMetricsCache: Map<String, Null<LayoutMetrics>> = [];
+	private final _memberGapPolicyCache: Map<String, Null<MemberGapPolicy>> = [];
 
 	// The inner grammar's `typeSyntax` answers per type text. A pure function of the text, so
 	// nothing ever expires it; the same annotation is asked about by every check that reads it.
@@ -537,6 +539,19 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		final metrics: Null<LayoutMetrics> = _inner.layoutMetrics(stated);
 		_layoutMetricsCache[key] = metrics;
 		return metrics;
+	}
+
+	/**
+	 * Memoised by `optsJson`, under the same key `layoutMetrics` uses: `member-order` asks per FILE, and the policy
+	 * carries its own per-slot measurement memo, which then serves every file sharing the config.
+	 */
+	public function memberGapPolicy(?optsJson: String): Null<MemberGapPolicy> {
+		final stated: Null<String> = FormatConfigDiscovery.normalize(optsJson);
+		final key: String = stated == null ? 'none' : 'json:$stated';
+		if (_memberGapPolicyCache.exists(key)) return _memberGapPolicyCache[key];
+		final policy: Null<MemberGapPolicy> = _inner.memberGapPolicy(stated);
+		_memberGapPolicyCache[key] = policy;
+		return policy;
 	}
 
 	public function writeRoundTripPlain(source: String, ?optsJson: String): Null<String>

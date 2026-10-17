@@ -332,13 +332,16 @@ final class LintFixSafePass {
 }
 
 /**
- * What the CLI does with the safe-pass verdict: whether the pass was rolled back at all
- * (the caller then aborts), the summary tail to append when it was not, and the full
- * stderr notice when it was — which files went back, which survived, and the compiler
- * errors behind them.
+ * What the CLI does with the safe-pass verdict: whether the pass was rolled back at all, the
+ * summary tail to append, and the full stderr notice when it was — which files went back, which
+ * survived, and the compiler errors behind them. A rolled-back pass ends on a tree the oracle
+ * confirmed green, so the caller goes on to its later phases and fails the run at the end.
  */
 typedef SafePassOutcome = {
 	final reverted: Bool;
+
+	/** The files the net rolled back (empty when it rolled back nothing), for the caller to take off its edit count. */
+	final revertedFiles: Array<String>;
 	final tail: String;
 	final notice: String;
 

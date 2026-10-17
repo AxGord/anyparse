@@ -8,6 +8,7 @@ import anyparse.check.MemberOrderReason.OrderKeys;
 import anyparse.check.MemberSlots.MemberRank;
 import anyparse.check.MemberSlots.OrderedMember;
 import anyparse.check.MemberSpacing.LayoutIssue;
+import anyparse.check.MemberSpacing.SpacingPolicy;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.QueryNode;
@@ -37,14 +38,15 @@ typedef SortPlan = {
 }
 
 /**
- * The two `member-order` options one fix pass reads off its file's `apqlint.json`:
- * `movableArglessNew` relaxes the side-effecting init constraint for a pure argless `new`
- * (an ORDER option, read by the fix path only), `separateInline` is the spacing-only
- * `separateInlineSubgroup`, which the report path resolves from the same file.
+ * What one fix pass reads off its file's configs: `movableArglessNew` relaxes the side-effecting
+ * init constraint for a pure argless `new` (an ORDER option of `apqlint.json`, read by the fix
+ * path only); `spacing` is the file's spacing context (`MemberSpacing.policyOf`: the spacing-only
+ * `separateInlineSubgroup` option and the writer's member-gap policy), which the report path
+ * resolves from the same file.
  */
 private typedef FixOptions = {
 	var movableArglessNew: Bool;
-	var separateInline: Bool;
+	var spacing: SpacingPolicy;
 }
 
 /**
@@ -152,8 +154,10 @@ final class MemberOrder implements Check implements ConfigAware {
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		return RunScan.collect(files, plugin, (entry, tree, violations) -> {
 			final accessors: Map<Int, Bool> = provider != null ? provider.propertyAccessors(entry.source) : [];
-			final separateInline: Bool = optionOn(entry.file, 'separateInlineSubgroup');
-			walk(violations, entry.file, entry.source, tree, shape, accessors, plugin.lexicalRegions(entry.source), separateInline);
+			walk(
+				violations, entry.file, entry.source, tree, shape, accessors, plugin.lexicalRegions(entry.source),
+				MemberSpacing.policyOf(entry.file, plugin, optionOn(entry.file, 'separateInlineSubgroup'))
+			);
 		});
 	}
 
@@ -175,7 +179,9 @@ final class MemberOrder implements Check implements ConfigAware {
 				final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 				final accessors: Map<Int, Bool> = provider != null ? provider.propertyAccessors(source) : [];
 				final movableArglessNew: Bool = violations.length > 0 && optionOn(violations[0].file, 'movableArglessNew');
-				final separateInline: Bool = violations.length > 0 && optionOn(violations[0].file, 'separateInlineSubgroup');
+				final spacing: SpacingPolicy = violations.length > 0
+					? MemberSpacing.policyOf(violations[0].file, plugin, optionOn(violations[0].file, 'separateInlineSubgroup'))
+					: { separateInline: false, writer: null };
 				// Keyed by the flagged member's slot start, the same coordinate `firstLayoutIssue` re-derives
 				// on this path — so a container that declines can write its reason onto the very finding that
 				// reported it, rather than the caller inferring one from an empty edit list.
@@ -191,8 +197,8 @@ final class MemberOrder implements Check implements ConfigAware {
 				// as "no file named" and answers from the whole index, as it did before it could be told.
 				final file: Null<String> = violations.length > 0 ? violations[0].file : null;
 				fixWalk(
-					edits, source, tree, shape, flagged, accessors,
-					{ movableArglessNew: movableArglessNew, separateInline: separateInline }, index, file, plugin.lexicalRegions(source)
+					edits, source, tree, shape, flagged, accessors, { movableArglessNew: movableArglessNew, spacing: spacing },
+					index, file, plugin.lexicalRegions(source)
 				);
 				return edits;
 			});
@@ -322,11 +328,13 @@ final class MemberOrder implements Check implements ConfigAware {
 	/** Walk `node`; flag each container whose members are out of canonical order or whose rank groups are not blank-line separated. */
 	private static function walk(
 		out: Array<Violation>, file: String, source: String, node: QueryNode, shape: RefShape, accessors: Map<Int, Bool>,
-		regions: Array<LexRegion>, separateInline: Bool
+		regions: Array<LexRegion>, spacing: SpacingPolicy
 	): Void {
 		if ((shape.visibilityContainerKinds ?? []).contains(node.kind)) {
 			final members: Array<OrderedMember> = MemberSlots.collectMembers(node, source, shape, accessors, regions);
-			final issue: Null<LayoutIssue> = firstLayoutIssue(members, source, computePlan(members, source, shape), separateInline);
+			final issue: Null<LayoutIssue> = firstLayoutIssue(
+				members, source, computePlan(members, source, shape), MemberSpacing.forContainer(spacing, node.kind)
+			);
 			if (issue != null) out.push({
 				file: file,
 				span: issue.member.span,
@@ -335,7 +343,7 @@ final class MemberOrder implements Check implements ConfigAware {
 				message: issue.message
 			});
 		}
-		for (c in node.children) walk(out, file, source, c, shape, accessors, regions, separateInline);
+		for (c in node.children) walk(out, file, source, c, shape, accessors, regions, spacing);
 	}
 
 	/**
@@ -368,7 +376,8 @@ final class MemberOrder implements Check implements ConfigAware {
 		final members: Array<OrderedMember> = MemberSlots.collectMembers(container, source, shape, accessors, regions);
 		if (members.length < 2) return;
 		final plan: SortPlan = computePlan(members, source, shape);
-		final bad: Null<LayoutIssue> = firstLayoutIssue(members, source, plan, options.separateInline);
+		final spacing: SpacingPolicy = MemberSpacing.forContainer(options.spacing, container.kind);
+		final bad: Null<LayoutIssue> = firstLayoutIssue(members, source, plan, spacing);
 		if (bad == null) return;
 		final reported: Null<Violation> = flagged[bad.member.span.from];
 		if (reported == null) return;
@@ -382,19 +391,19 @@ final class MemberOrder implements Check implements ConfigAware {
 		final pinned: Null<String> = reorderRefusal(members, source, regions);
 		if (pinned != null) {
 			reported.declineReason = pinned;
-			MemberSpacing.emitSpacingOnly(edits, members, source, options.separateInline);
+			MemberSpacing.emitSpacingOnly(edits, members, source, spacing);
 			return;
 		}
 		final pin: Null<InitOrderConstraint> = initPin(canonical, sorted, bad.member, constraints);
 		if (pin != null) {
 			reported.declineReason = initPinReason(pin.kind);
-			MemberSpacing.emitSpacingOnly(edits, members, source, options.separateInline);
+			MemberSpacing.emitSpacingOnly(edits, members, source, spacing);
 			return;
 		}
 		if (!macroBuiltMetaOrderKept(members, sorted, container, index, file)) {
 			reported.declineReason = 'the order is pinned: this type is built by a MACRO that reads its field list in declaration '
 				+ 'order, so the relative order of its annotated members is what the macro dispatches on';
-			MemberSpacing.emitSpacingOnly(edits, members, source, options.separateInline);
+			MemberSpacing.emitSpacingOnly(edits, members, source, spacing);
 			return;
 		}
 		if (relocatedLines(members, sorted, source) > MAX_RELOCATED_LINES) {
@@ -404,7 +413,7 @@ final class MemberOrder implements Check implements ConfigAware {
 			// run away.
 			reported.declineReason = 'the reorder is a whole-container permutation and this one would move more than $MAX_RELOCATED_LINES'
 				+ ' lines for a single reported member, over the review budget — split the type, or move the member with `apq move-member`';
-			MemberSpacing.emitSpacingOnly(edits, members, source, options.separateInline);
+			MemberSpacing.emitSpacingOnly(edits, members, source, spacing);
 			return;
 		}
 		if (!MemberSpacing.hasConditionalMember(members)) {
@@ -414,10 +423,10 @@ final class MemberOrder implements Check implements ConfigAware {
 				return;
 			}
 			final region: Span = new Span(members[0].span.from, members[members.length - 1].span.to);
-			edits.push({ span: region, text: MemberSpacing.joinMembers(sorted, source, options.separateInline) });
+			edits.push({ span: region, text: MemberSpacing.joinMembers(sorted, source, spacing) });
 			return;
 		}
-		final rebuilt: Null<String> = buildConditionalRegion(sorted, source, shape, options.separateInline);
+		final rebuilt: Null<String> = buildConditionalRegion(sorted, source, shape, spacing);
 		if (rebuilt == null) {
 			// The only decline that emits NOTHING, spacing included: the rebuild owns the whole
 			// conditional region, so there is no sub-edit of it that is still safe to make.
@@ -631,7 +640,7 @@ final class MemberOrder implements Check implements ConfigAware {
 	 * if the self-check finds any member no longer under its recorded condition and branch.
 	 */
 	private static function buildConditionalRegion(
-		sorted: Array<OrderedMember>, source: String, shape: RefShape, separateInline: Bool
+		sorted: Array<OrderedMember>, source: String, shape: RefShape, spacing: SpacingPolicy
 	): Null<String> {
 		final ifKw: String = shape.conditionalIfKeyword ?? '#if';
 		final parts: Array<String> = [];
@@ -674,7 +683,7 @@ final class MemberOrder implements Check implements ConfigAware {
 				prevMember = null;
 			}
 			final blankBefore: Bool = if (prevMember != null)
-				MemberSpacing.separatorBetween(prevMember, m, source, separateInline) == MemberSpacing.GROUP_SEPARATOR;
+				MemberSpacing.separatorBetween(prevMember, m, source, spacing) != '\n';
 			else if (m.condition != null)
 				false;
 			else
@@ -744,10 +753,10 @@ final class MemberOrder implements Check implements ConfigAware {
 	 * and the fix so both agree on which member is flagged, and with which message.
 	 */
 	private static function firstLayoutIssue(
-		members: Array<OrderedMember>, source: String, plan: SortPlan, separateInline: Bool
+		members: Array<OrderedMember>, source: String, plan: SortPlan, spacing: SpacingPolicy
 	): Null<LayoutIssue> {
 		return
-			firstOrderIssue(members, source, plan) ?? MemberSpacing.firstSpacingIssue(members, source, separateInline) ?? MemberSpacing.firstDirectiveSpacingIssue(
+			firstOrderIssue(members, source, plan) ?? MemberSpacing.firstSpacingIssue(members, source, spacing) ?? MemberSpacing.firstDirectiveSpacingIssue(
 				members, source
 			);
 	}
