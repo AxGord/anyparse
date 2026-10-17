@@ -265,9 +265,10 @@ final class MemberLookup {
 	 * An ancestor carrying `@:build` or `@:autoBuild` is `Unreachable` too: its macro may add the
 	 * member to the ancestor (or, `@:autoBuild`, run over `typeName` itself), which no index sees.
 	 * `file` pins the start to the declaration in that file; without it the simple name must name
-	 * exactly one declaration.
+	 * exactly one declaration. `macroBuilt`, when handed, collects the name of every ancestor the
+	 * walk stopped at for its build macro, so a caller can name it.
 	 */
-	public function supertypeMemberProof(typeName: String, field: String, ?file: String): SupertypeProof {
+	public function supertypeMemberProof(typeName: String, field: String, ?file: String, ?macroBuilt: Array<String>): SupertypeProof {
 		final starts: Array<ResolvedType> = _refs.resolvedDeclsNamed(typeName);
 		final pinned: Null<ResolvedType> = file == null ? (starts.length == 1 ? starts[0] : null) : _refs.findDeclaredType(file, typeName);
 		if (pinned == null) return SupertypeProof.Unreachable;
@@ -275,7 +276,7 @@ final class MemberLookup {
 		// Seeded with the OWNER so a cycle back to it stops there: its own declaration of `field` is
 		// the thing being asked about, never a proof that something above it declares one too.
 		final seen: Array<String> = [_refs.seenKey(start)];
-		return ancestorsProof(start, field, seen);
+		return ancestorsProof(start, field, seen, macroBuilt ?? []);
 	}
 
 	/**
@@ -622,11 +623,11 @@ final class MemberLookup {
 	}
 
 	/** `supertypeMemberProof`'s walk: `Declares` short-circuits, an unresolvable link is remembered and reported at the end. */
-	private function ancestorsProof(cur: ResolvedType, field: String, seen: Array<String>): SupertypeProof {
+	private function ancestorsProof(cur: ResolvedType, field: String, seen: Array<String>, built: Array<String>): SupertypeProof {
 		var unreachable: Bool = false;
 		for (raw in cur.type.supertypesRaw) if (!dynamicSupertypeRef(raw)) {
 			final anc: Null<ResolvedType> = _refs.resolveTypeRef(raw, cur.file, cur.type.span.from);
-			switch anc == null ? SupertypeProof.Unreachable : hostProof(anc, field, seen) {
+			switch anc == null ? SupertypeProof.Unreachable : hostProof(anc, field, seen, built) {
 				case SupertypeProof.Declares:
 					return SupertypeProof.Declares;
 				case SupertypeProof.Unreachable:
@@ -644,16 +645,20 @@ final class MemberLookup {
 	 * read, and a `@:forward` abstract all host members this index cannot enumerate, so each is
 	 * `Unreachable` rather than an absence.
 	 */
-	private function hostProof(cur: ResolvedType, field: String, seen: Array<String>): SupertypeProof {
+	private function hostProof(cur: ResolvedType, field: String, seen: Array<String>, built: Array<String>): SupertypeProof {
 		// A supertype CYCLE still enumerates the whole closure, so re-entering proves nothing new.
 		if (!_refs.markSeen(cur, seen)) return SupertypeProof.Absent;
 		final t: TypeDeclInfo = cur.type;
 		if (t.members.exists(m -> m.name == field)) return SupertypeProof.Declares;
-		if (t.abstractForwardUnderlying != null || t.hasBuild || t.hasAutoBuild) return SupertypeProof.Unreachable;
-		if (t.kind != SymbolIndex.TYPEDEF_DECL_KIND) return ancestorsProof(cur, field, seen);
+		if (t.hasBuild || t.hasAutoBuild) {
+			built.push(t.name);
+			return SupertypeProof.Unreachable;
+		}
+		if (t.abstractForwardUnderlying != null) return SupertypeProof.Unreachable;
+		if (t.kind != SymbolIndex.TYPEDEF_DECL_KIND) return ancestorsProof(cur, field, seen, built);
 		final target: Null<String> = t.isAnonStruct ? null : t.aliasTargetRaw;
 		final next: Null<ResolvedType> = target == null ? null : _refs.resolveTypeRef(target, cur.file, cur.type.span.from);
-		return next == null ? SupertypeProof.Unreachable : hostProof(next, field, seen);
+		return next == null ? SupertypeProof.Unreachable : hostProof(next, field, seen, built);
 	}
 
 	/**

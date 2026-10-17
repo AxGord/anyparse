@@ -455,6 +455,24 @@ class UnusedPrivateCheckTest extends Test {
 		Assert.equals(0, extendsFix('class Base extends Missing {}', 'class Root {}').length);
 	}
 
+	/** The decline names the macro-built supertype (TM: openfl's `Sprite` is `@:autoBuild`), and tells it from a missing one. */
+	public function testChainDeclineNamesItsGate(): Void {
+		final c: { file: String, source: String } = {
+			file: 'C.hx',
+			source: 'class C extends Base {\n\tprivate function impl():Int {\n\t\treturn 1;\n\t}\n}'
+		};
+		final built: FixRun = CheckFixture.fixRun(
+			new UnusedPrivate(), [c, { file: 'Base.hx', source: '@:autoBuild(M.b()) class Base {}' }]
+		);
+		Assert.isTrue(
+			(built.violations[0].declineReason ?? '').indexOf('`Base` is under a build macro') != -1, built.violations[0].declineReason
+		);
+		final missing: FixRun = CheckFixture.fixRun(new UnusedPrivate(), [c, { file: 'Base.hx', source: 'class Base extends Gone {}' }]);
+		Assert.isTrue(
+			(missing.violations[0].declineReason ?? '').indexOf('outside the resolution scope') != -1, missing.violations[0].declineReason
+		);
+	}
+
 	/** TM `StringUtil.CHARSET_UPPER`: a `String` method on a `String` final is pure, so the dead constant goes. */
 	@:pin('control')
 	@:killer('M-PURE-STRING-METHOD-OFF')

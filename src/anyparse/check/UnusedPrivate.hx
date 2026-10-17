@@ -138,8 +138,7 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 
 	/** The decline of a member whose `extends` chain neither the facts nor the resolution scope resolve (`supertypeDecline`). */
 	private static inline final DECLINE_UNRESOLVED_CHAIN: String = 'a supertype of the `extends` chain is outside the resolution '
-		+ 'scope or under a build macro, so whether it declares this name (as an ABSTRACT method a Haxe impl implements '
-		+ 'without `override`) is unproven';
+		+ 'scope, so whether it declares this name (as an ABSTRACT method a Haxe impl implements without `override`) is unproven';
 
 	/**
 	 * RESOLUTION-scope string-literal contents gathered by the last `run` — `ReflectionScan.reflectionSurface`,
@@ -450,14 +449,23 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 				'the supertype `$sup` is `@:autoBuild`, whose macro builds this type as its own `@:build` and reads the '
 					+ 'field list this deletion would change';
 			case Declared(_): DECLINE_ABSTRACT_IMPL;
-			case Untyped:
-				scopeIndex == null
-					? DECLINE_ABSTRACT_IMPL
-					: switch scopeIndex.members.supertypeMemberProof(owner, name, file) {
-						case Absent: null;
-						case Declares: DECLINE_ABSTRACT_IMPL;
-						case Unreachable: DECLINE_UNRESOLVED_CHAIN;
-					};
+			case Untyped: scopeIndex == null ? DECLINE_ABSTRACT_IMPL : scopeChainDecline(scopeIndex, file, owner, name);
+		};
+	}
+
+	/**
+	 * `supertypeDecline`'s answer from the resolution scope alone: null when every link of `owner`'s chain resolves and
+	 * none declares `name` or is under a build macro; else the gate, naming the macro-built supertype when there is one.
+	 */
+	private static function scopeChainDecline(scopeIndex: SymbolIndex, file: String, owner: String, name: String): Null<String> {
+		final built: Array<String> = [];
+		return switch scopeIndex.members.supertypeMemberProof(owner, name, file, built) {
+			case Absent: null;
+			case Declares: DECLINE_ABSTRACT_IMPL;
+			case Unreachable if (built.length > 0):
+				'the supertype `${built[0]}` is under a build macro (`@:build` / `@:autoBuild`), which may add or read the member '
+					+ 'this deletion would remove';
+			case Unreachable: DECLINE_UNRESOLVED_CHAIN;
 		};
 	}
 

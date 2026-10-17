@@ -23896,8 +23896,8 @@
 			"name": "M-UNUSED-PRIVATE-CHAIN-BUILD-IGNORED",
 			"type": "anyparse.query.MemberLookup",
 			"method": "hostProof",
-			"find": " || t.hasBuild || t.hasAutoBuild",
-			"replace": "",
+			"find": "if (t.hasBuild || t.hasAutoBuild) {",
+			"replace": "if (false) {",
 			"note": "an ancestor under @:build / @:autoBuild counts as fully indexed, so a member its macro may add or read is proven absent and the subclass's private method is deleted"
 		},
 		{
