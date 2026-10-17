@@ -15,6 +15,13 @@ final class FunctionTrees {
 	/** Each file's branch-aware tree, projected the first time a function in it is asked for; null for a file the graph cannot give. */
 	private final _trees: Map<String, Null<QueryNode>> = [];
 
+	/**
+	 * `nodeAt`'s answers per `<file>\t<from>:<to>`, null included (no node spans it). The thread-safety passes ask
+	 * for the same function again and again, and each ask was a descent through the file's tree (~0.27 s of a TM
+	 * run); a tree is never re-projected, so an answer never goes stale.
+	 */
+	private final _nodes: Map<String, Null<QueryNode>> = [];
+
 	private final _graph: CallGraph;
 	private final _plugin: GrammarPlugin;
 
@@ -46,8 +53,13 @@ final class FunctionTrees {
 
 	/** The node of the tree of `file` spanning exactly `span`; null when there is none. */
 	private function nodeAt(file: String, span: Null<Span>): Null<QueryNode> {
+		if (span == null) return null;
+		final key: String = '$file\t${span.from}:${span.to}';
+		if (_nodes.exists(key)) return _nodes[key];
 		final tree: Null<QueryNode> = ofFile(file);
-		return span == null || tree == null ? null : TreePath.withSpan(tree, span);
+		final node: Null<QueryNode> = tree == null ? null : TreePath.withSpan(tree, span);
+		_nodes[key] = node;
+		return node;
 	}
 
 }
