@@ -214,6 +214,92 @@ class InvertNegatedIfElseCheckTest extends Test {
 		Assert.equals(0, violations(fn('final v = if (!a) 1 else if (b) 2 else 3;')).length);
 	}
 
+	/**
+	 * Under `keepDefaultElse` a negated ternary whose else arm is a default literal — each kind, in any
+	 * zero spelling, in parentheses too — is neither reported nor rewritten: `!a ? x : null` keeps the
+	 * fallback last. With the option off, and unset, each one inverts as before.
+	 *
+	 * RED under M-NEGCOND-KEEP-DEFAULT-BLIND (the gate never keeps), M-NEGCOND-KEEP-DEFAULT-NO-PAREN
+	 * (`(null)`), and M-DEFLIT-NULL-DROPPED / M-DEFLIT-FALSE-DROPPED / M-DEFLIT-ZERO-DROPPED /
+	 * M-DEFLIT-EMPTY-STRING-DROPPED (that literal is no default).
+	 */
+	@:pin('control')
+	@:killer('M-NEGCOND-KEEP-DEFAULT-BLIND', 'M-NEGCOND-KEEP-DEFAULT-NO-PAREN', 'M-DEFLIT-NULL-DROPPED', 'M-DEFLIT-FALSE-DROPPED')
+	@:killer('M-DEFLIT-ZERO-DROPPED', 'M-DEFLIT-EMPTY-STRING-DROPPED')
+	public function testKeepDefaultElseKeepsADefaultTernaryElse(): Void {
+		for (lit in ['null', 'false', '0', '0.0', '-0', '0x0', '""', "''", '(null)', '((0))']) {
+			final src: String = fn('final v = !a ? x : $lit;');
+			final kept: FixRun = keeping(src, true);
+			Assert.equals(0, kept.violations.length, '$lit is a default else arm');
+			Assert.equals(0, kept.edits.length, '$lit is not rewritten');
+			Assert.equals(1, keeping(src, false).violations.length, 'option off: $lit inverts');
+			Assert.equals(1, violations(src).length, 'option unset: $lit inverts');
+		}
+	}
+
+	/** The value `if` reads the same gate as the ternary: its default else arm stays last. */
+	@:pin('control')
+	@:killer('M-NEGCOND-KEEP-DEFAULT-BLIND')
+	public function testKeepDefaultElseKeepsADefaultIfExpressionElse(): Void {
+		final src: String = fn('final v = if (!a) x else "";');
+		Assert.equals(0, keeping(src, true).violations.length);
+		Assert.equals(fn('final v = if (a) "" else x;'), keptFixed(src, false));
+	}
+
+	/**
+	 * An `if` statement keeps its negation when its else branch returns a default literal, bare or as the
+	 * sole statement of a block. Any other else statement — a default-valued assignment, a bare `null;`,
+	 * a non-default return — is no default arm and still inverts.
+	 *
+	 * RED under M-NEGCOND-KEEP-DEFAULT-NO-RETURN (both returns) and M-NEGCOND-KEEP-DEFAULT-NO-BLOCK (the
+	 * braced one).
+	 */
+	@:pin('control')
+	@:killer('M-NEGCOND-KEEP-DEFAULT-NO-RETURN', 'M-NEGCOND-KEEP-DEFAULT-NO-BLOCK')
+	public function testKeepDefaultElseKeepsAStatementReturningADefault(): Void {
+		for (body in [
+			'if (!a) return x; else return null;',
+			'if (!a) { g(); return x; } else { return false; }'
+		]) Assert.equals(0, keeping(fn(body), true).violations.length, body);
+		for (body in [
+			'if (!a) y = 1; else y = null;',
+			'if (!a) g(); else null;',
+			'if (!a) return x; else return y;'
+		]) Assert.equals(1, keeping(fn(body), true).violations.length, body);
+	}
+
+	/**
+	 * Only the CURRENT else arm counts. A non-default else still inverts under the option, and a default in
+	 * the THEN arm moves last — exactly the inversion the option wants — in every shape.
+	 *
+	 * RED under M-NEGCOND-KEEP-DEFAULT-ANY-LITERAL (every value kept) and each M-INVERT-KEEP-DEFAULT-*-THEN-ARM
+	 * (the gate asked about the then arm).
+	 */
+	@:pin('control')
+	@:killer('M-NEGCOND-KEEP-DEFAULT-ANY-LITERAL', 'M-INVERT-KEEP-DEFAULT-STATEMENT-THEN-ARM',
+		'M-INVERT-KEEP-DEFAULT-STATEMENT-EDIT-THEN-ARM')
+	@:killer('M-INVERT-KEEP-DEFAULT-VALUE-THEN-ARM', 'M-INVERT-KEEP-DEFAULT-VALUE-EDIT-THEN-ARM')
+	public function testKeepDefaultElseInvertsANonDefaultElse(): Void {
+		for (lit in ['1', 'true', '"s"', '-1', '0.5', 'y', 'f()'])
+			Assert.equals(1, keeping(fn('final v = !a ? x : $lit;'), true).violations.length, lit);
+		Assert.equals(fn('final v = a ? x : null;'), keptFixed(fn('final v = !a ? null : x;'), true));
+		Assert.equals(fn('final v = if (a) x else 0;'), keptFixed(fn('final v = if (!a) 0 else x;'), true));
+		Assert.equals(fn('if (a) return x; else return null;'), keptFixed(fn('if (!a) return null; else return x;'), true));
+	}
+
+	/**
+	 * `keepDefaultElse` is OFF unless a project sets it: no existing configuration changes behaviour.
+	 *
+	 * RED under M-NEGCOND-KEEP-DEFAULT-ON (the option read as on when unset).
+	 */
+	@:pin('control')
+	@:killer('M-NEGCOND-KEEP-DEFAULT-ON')
+	public function testKeepDefaultElseIsOffByDefault(): Void {
+		final src: String = fn('final v = !a ? x : null;');
+		Assert.equals(fn('final v = a ? null : x;'), CheckFixture.fixedUnder(new InvertNegatedIfElse(), src, '{"rules":{}}'));
+		Assert.equals(fn('final v = a ? null : x;'), fixed(src));
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return CheckFixture.violations(new InvertNegatedIfElse(), src);
 	}
@@ -229,6 +315,21 @@ class InvertNegatedIfElseCheckTest extends Test {
 
 	private function fixed(src: String): String {
 		return CheckFixture.fixedSource(new InvertNegatedIfElse(), src);
+	}
+
+	/** One `--fix` pass over `src` with `keepDefaultElse` set to `on`. */
+	private function keeping(src: String, on: Bool): FixRun {
+		return CheckFixture.fixRunUnder(new InvertNegatedIfElse(), src, keepConfig(on));
+	}
+
+	/** `src` after one `--fix` pass with `keepDefaultElse` set to `on`. */
+	private function keptFixed(src: String, on: Bool): String {
+		return CheckFixture.fixedUnder(new InvertNegatedIfElse(), src, keepConfig(on));
+	}
+
+	/** The `apqlint.json` text setting `invert-negated-if-else` `keepDefaultElse` to `on`. */
+	public static function keepConfig(on: Bool): String {
+		return '{"rules":{"invert-negated-if-else":{"keepDefaultElse":$on}}}';
 	}
 
 }

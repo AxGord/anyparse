@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.CarryingEdit;
 import anyparse.check.Check.CarryingFix;
+import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.Violation;
 import anyparse.check.NegatedCondition.InversionSeams;
 import anyparse.check.NegatedCondition.InversionSite;
@@ -76,9 +77,16 @@ using StringTools;
  * positions are enumerable, so it can carry them instead of bailing.
  */
 @:nullSafety(Strict)
-final class PreferTernaryReturn implements Check implements CarryingFix {
+final class PreferTernaryReturn implements Check implements CarryingFix implements ConfigAware {
+
+	/** The linter's per-file config resolver (`invert-negated-if-else` `keepDefaultElse`), or null to read each file's chain from disk. */
+	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
 	public function new() {}
+
+	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
+		_resolveConfig = resolve;
+	}
 
 	public function id(): String {
 		return 'prefer-ternary-return';
@@ -132,7 +140,7 @@ final class PreferTernaryReturn implements Check implements CarryingFix {
 		final edits: Array<CarryingEdit> = [];
 		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
 		final file: String = violations.length == 0 ? '' : violations[0].file;
-		final negation: Null<InversionSeams> = NegatedCondition.readSeams(plugin, [{ file: file, source: source }], index);
+		final negation: Null<InversionSeams> = NegatedCondition.readSeams(plugin, [{ file: file, source: source }], _resolveConfig, index);
 		final site: Null<InversionSite> = NegatedCondition.siteOf(negation, file, source, tree);
 		collectFixes(tree, source, seams, null, flagged, edits, SourceComments.collectCommentTokens(regions), regions, plugin, site);
 		final kept: Array<{ span: Span, text: String }> = CanonicalEdit.dropContainedEdits([
@@ -302,7 +310,8 @@ final class PreferTernaryReturn implements Check implements CarryingFix {
 	/**
 	 * Build the `return cond ? a : b;` edit spanning the `if` through the trailing `return`, oriented
 	 * positive: a guard `NegatedCondition.positive` reads as a negation (`if (!c) return a; return b;`)
-	 * is written `return c ? b : a;`. A guard carrying its own trailing comment keeps the negated
+	 * is written `return c ? b : a;` — unless `b` is a default literal under `invert-negated-if-else`'s
+	 * `keepDefaultElse`, which keeps `return !c ? a : b;`. A guard carrying its own trailing comment keeps the negated
 	 * form — that comment rides the `?` value, and the swap would move the value it describes into
 	 * the `:` slot, where a line comment glued before the `;` would comment the terminator out.
 	 */
@@ -316,7 +325,9 @@ final class PreferTernaryReturn implements Check implements CarryingFix {
 		final nextSpan: Null<Span> = match.nextReturn.span;
 		if (ifSpan == null || condSpan == null || thenSpan == null || elseSpan == null || nextSpan == null) return null;
 		final split: PreservedComments = preservedComments(source, ifSpan, thenSpan, nextSpan, [condSpan, thenSpan, elseSpan], regions);
-		final positive: Null<Span> = split.branchTrailing == null ? NegatedCondition.positive(match.condition, site)?.span : null;
+		final positive: Null<Span> = split.branchTrailing == null
+			? NegatedCondition.positive(match.condition, match.elseValue, site)?.span
+			: null;
 		// The three ranges the replacement quotes byte for byte, in the order it puts them in: the
 		// condition (its positive operand when inverted), the `?` value, the `:` value.
 		final carried: Array<Span> = positive == null ? [condSpan, thenSpan, elseSpan] : [positive, elseSpan, thenSpan];
