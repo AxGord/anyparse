@@ -100,6 +100,12 @@ final class TypeNameBinding {
 	private var _tables: Null<Tables> = null;
 
 	/**
+	 * `splitPath` per import path, null included: `statementAnswer` reads every import of a file once per NAME the
+	 * file asks about, and split the same path anew each time (~0.25 s of a TM `lint --all`). Read only here.
+	 */
+	private final _importPaths: Map<String, Null<ImportPath>> = [];
+
+	/**
 	 * Built by the owning `TypeRefIndex` over the same files; `sources` are their texts, read for a use site's `#if` branch.
 	 */
 	public function new(files: Array<FileInfo>, skipped: Array<String>, sources: Map<String, String>, plugin: GrammarPlugin) {
@@ -313,7 +319,7 @@ final class TypeNameBinding {
 		final aliased: Bool = imp.kind == ImportKind.Alias;
 		if (aliased && imp.alias != name) return Pass;
 		final path: Null<String> = aliased ? imp.aliasTarget : imp.raw;
-		final split: Null<ImportPath> = path == null ? null : splitPath(path);
+		final split: Null<ImportPath> = path == null ? null : importPathOf(path);
 		if (split == null) return Unreadable(null);
 		if (split.rest.length > 1 || (!aliased && split.rest.length == 1 && split.rest[0] != name)) return Pass;
 		final wanted: String = split.rest.length == 1 ? split.rest[0] : aliased ? SourceText.lastSegment(split.module) : name;
@@ -547,6 +553,14 @@ final class TypeNameBinding {
 			return out;
 		}
 		return keys(a).join('|') == keys(b).join('|');
+	}
+
+	/** `splitPath(path)`, memoised for this binding (`_importPaths`). */
+	private function importPathOf(path: String): Null<ImportPath> {
+		if (_importPaths.exists(path)) return _importPaths[path];
+		final split: Null<ImportPath> = splitPath(path);
+		_importPaths[path] = split;
+		return split;
 	}
 
 }
