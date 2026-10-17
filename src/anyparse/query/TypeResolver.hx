@@ -858,22 +858,9 @@ final class TypeResolver {
 		if (visibleDeclCount(tree, shape, name, span) > 1) return null;
 		final bindingFrom: Null<Int> = resolveBindingFrom(name, span, tree, shape);
 		if (bindingFrom == null) return null;
-		final typeSrc: Null<String> = skipNullableOptionalParam
-			? declaredBindingTypeSource(tree, shape, bindingFrom, declaredTypeSources)
-			: declaredTypeSources()[bindingFrom];
+		if (skipNullableOptionalParam && paramTypeSourceUnsafe(tree, shape, bindingFrom)) return null;
+		final typeSrc: Null<String> = declaredTypeSources()[bindingFrom];
 		return typeSrc == null ? null : stripWs(typeSrc);
-	}
-
-	/**
-	 * The type a binding's DECLARATION writes, when that is the type its reads have, or null.
-	 * Null for a binding with no written type and for a parameter whose written type is not the
-	 * one its body sees: `?b:String` and `b:String = null` read as `Null<String>`, a rest
-	 * parameter `...r:Int` as `haxe.Rest<Int>`. The raw source of the annotation, untrimmed.
-	 */
-	public static function declaredBindingTypeSource(
-		tree: QueryNode, shape: RefShape, bindingFrom: Int, declaredTypeSources: () -> Map<Int, String>
-	): Null<String> {
-		return paramTypeSourceUnsafe(tree, shape, bindingFrom) ? null : declaredTypeSources()[bindingFrom];
 	}
 
 	/**
@@ -943,6 +930,28 @@ final class TypeResolver {
 	public static function resolveBindingHit(name: String, refSpan: Span, tree: QueryNode, shape: RefShape): Null<RefHit> {
 		for (hit in Refs.find(name, tree, shape)) if (hit.span.from == refSpan.from && hit.span.to == refSpan.to) return hit;
 		return null;
+	}
+
+	/**
+	 * Whether the parameter binding at `bindingFrom` has a body type that DIFFERS from its
+	 * written type source `T`, so copying the source verbatim as a read's type would be
+	 * wrong. Three forms qualify: an OPTIONAL parameter with no default (`?p:T`, an
+	 * `optionalParamKind` node with no child) and any `= null`-default parameter
+	 * (`bindingIsNullInitialised`) are `Null<T>`; a REST parameter (`...p:T`, a
+	 * `restParamKind` node) is `haxe.Rest<T>`. A required param, and an optional / required
+	 * param with a NON-null default, keep `T` and are safe to copy. Public because
+	 * `ExtractMethod --member` copies a written type into a parameter and must ask the same.
+	 */
+	public static function paramTypeSourceUnsafe(tree: QueryNode, shape: RefShape, bindingFrom: Int): Bool {
+		final optKind: Null<String> = shape.optionalParamKind;
+		final optNode: Null<QueryNode> = optKind == null ? null : innermostDeclCovering(tree, [optKind], bindingFrom);
+		if (optNode != null && optNode.children.length == 0) return true;
+		final paramKinds: Null<Array<String>> = shape.paramKinds;
+		final nullLiteralKind: Null<String> = shape.nullLiteralKind;
+		if (paramKinds != null && nullLiteralKind != null && bindingIsNullInitialised(tree, bindingFrom, paramKinds, nullLiteralKind))
+			return true;
+		final restKind: Null<String> = shape.restParamKind;
+		return restKind != null && innermostDeclCovering(tree, [restKind], bindingFrom) != null;
 	}
 
 	/** Whether `outer` covers `inner` — the containment a tree's spans state between ancestor and descendant. */
@@ -1140,27 +1149,6 @@ final class TypeResolver {
 		}
 		walk(tree);
 		return count;
-	}
-
-	/**
-	 * Whether the parameter binding at `bindingFrom` has a body type that DIFFERS from its
-	 * written type source `T`, so copying the source verbatim as a read's type would be
-	 * wrong. Three forms qualify: an OPTIONAL parameter with no default (`?p:T`, an
-	 * `optionalParamKind` node with no child) and any `= null`-default parameter
-	 * (`bindingIsNullInitialised`) are `Null<T>`; a REST parameter (`...p:T`, a
-	 * `restParamKind` node) is `haxe.Rest<T>`. A required param, and an optional / required
-	 * param with a NON-null default, keep `T` and are safe to copy.
-	 */
-	private static function paramTypeSourceUnsafe(tree: QueryNode, shape: RefShape, bindingFrom: Int): Bool {
-		final optKind: Null<String> = shape.optionalParamKind;
-		final optNode: Null<QueryNode> = optKind == null ? null : innermostDeclCovering(tree, [optKind], bindingFrom);
-		if (optNode != null && optNode.children.length == 0) return true;
-		final paramKinds: Null<Array<String>> = shape.paramKinds;
-		final nullLiteralKind: Null<String> = shape.nullLiteralKind;
-		if (paramKinds != null && nullLiteralKind != null && bindingIsNullInitialised(tree, bindingFrom, paramKinds, nullLiteralKind))
-			return true;
-		final restKind: Null<String> = shape.restParamKind;
-		return restKind != null && innermostDeclCovering(tree, [restKind], bindingFrom) != null;
 	}
 
 	/**

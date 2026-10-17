@@ -88,25 +88,11 @@ final class Patch {
 				return Err(discarded('${label}the old fragment is empty — copy it verbatim from `apq source --select`', multi));
 			if (oldText == pairs[i].newText)
 				return Err(discarded('${label}the old and new fragments are identical — nothing to change', multi));
-			var located: LocateResult = locate(slice, oldText, node.kind, label, all);
-			final failure: Null<String> = located.error;
-			// A fragment absent from the declaration may still be in its OWN doc block, which is
-			// trivia before the node: retried over the doc-extended region, so the remedy the
-			// doc-orphan refusal names — widen the fragment over the doc — works through the very
-			// address that was refused, and a type's doc is reachable through `ClassDecl:<T>`.
-			// Asked only for a fragment that does not occur at all, so a fragment the declaration
-			// already holds once never turns ambiguous by also appearing in its doc.
-			var base: Int = groupSpan.from;
-			if (failure != null && occurrences(slice, oldText, node.kind) == 0) {
-				final docFrom: Int = ElementSpan.docExtendedSpan(source, groupSpan, plugin.lexicalRegions(source), true).from;
-				final widened: Null<LocateResult> = docFrom < groupSpan.from
-					? locate(source.substring(docFrom, groupSpan.to), oldText, node.kind, label, all)
-					: null;
-				if (widened != null && widened.error == null) {
-					located = widened;
-					base = docFrom;
-				}
-			}
+			final found: { located: LocateResult, base: Int } = locateWithOwnDoc(
+				source, slice, groupSpan, oldText, node.kind, label, all, plugin
+			);
+			final located: LocateResult = found.located;
+			final base: Int = found.base;
 			final refusal: Null<String> = located.error;
 			if (refusal != null) return Err(discarded(sequencingRefusal(label, refusal, slice, placed, oldText, node.kind, all), multi));
 			for (r in located.ranges) {
@@ -162,6 +148,25 @@ final class Patch {
 	/** The leading horizontal whitespace of `line` — the indentation a dedented fragment dropped. */
 	private static inline function leadingSpace(line: String): String {
 		return line.substring(0, line.length - line.ltrim().length);
+	}
+
+	/**
+	 * `locate` over the declaration's slice, and — for a fragment that does not occur there at all
+	 * — over the slice widened back over the declaration's OWN leading doc block, which is trivia
+	 * before the node. That is what lets the doc-orphan refusal's remedy (widen the fragment over
+	 * the doc) work through the very address that was refused, and a type's doc be reached through
+	 * `ClassDecl:<T>`. A fragment the declaration holds is matched there alone, so its doc can never
+	 * make it ambiguous. `base` is the source offset the ranges are relative to.
+	 */
+	private static function locateWithOwnDoc(
+		source: String, slice: String, groupSpan: Span, oldText: String, kind: String, label: String, all: Bool, plugin: GrammarPlugin
+	): { located: LocateResult, base: Int } {
+		final located: LocateResult = locate(slice, oldText, kind, label, all);
+		if (located.error == null || occurrences(slice, oldText, kind) > 0) return { located: located, base: groupSpan.from };
+		final docFrom: Int = ElementSpan.docExtendedSpan(source, groupSpan, plugin.lexicalRegions(source), true).from;
+		if (docFrom >= groupSpan.from) return { located: located, base: groupSpan.from };
+		final widened: LocateResult = locate(source.substring(docFrom, groupSpan.to), oldText, kind, label, all);
+		return widened.error == null ? { located: widened, base: docFrom } : { located: located, base: groupSpan.from };
 	}
 
 	/**
@@ -455,10 +460,9 @@ final class Patch {
 			? 'the doc would silently transfer to the insertion and `$was` would be left undocumented'
 			: '`$was` is no longer declared there, so the replacement either renamed it, leaving the doc where it belongs, or '
 				+ 'pushed `$now` in under the doc ahead of it; nothing in the text tells those apart';
-		return 'the edit moves the `/**` block above `$was` onto `$now` — $why. Widen the old fragment upward to include the '
-			+ 'doc block and repeat it in the replacement, so the doc travels with the declaration it documents; a fragment '
-			+ 'that is not in the addressed declaration is also looked for in that declaration\'s own doc, so the same '
-			+ 'address reaches it';
+		return 'the edit moves the `/**` block above `$was` onto `$now` — $why. Widen the old fragment upward to include the doc block '
+			+ 'and repeat it in the replacement, so the doc travels with the declaration it documents; a fragment that is not in the '
+			+ 'addressed declaration is also looked for in that declaration\'s own doc, so the same address reaches it';
 	}
 
 	/**

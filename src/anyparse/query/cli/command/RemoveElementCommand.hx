@@ -18,10 +18,13 @@ using StringTools;
 @:nullSafety(Strict)
 final class RemoveElementCommand implements CliCommand implements PostWriteFix {
 
+	/** The op's name, as the registry lists it and every address / edit helper is told it. */
+	private static inline final OP: String = 'remove-element';
+
 	public function new() {}
 
 	public function name(): String {
-		return 'remove-element';
+		return OP;
 	}
 
 	public function summary(): String {
@@ -133,15 +136,16 @@ final class RemoveElementCommand implements CliCommand implements PostWriteFix {
 		final liftKind: Null<String> = kind;
 		if (liftKind != null) {
 			final target: Null<ReplaceTarget> = CliEdit.resolveEditTarget(
-				'remove-element', source, filePath, plugin, selectExpr, matchExpr, posSpec, nth, liftKind
+				OP, source, filePath, plugin, selectExpr, matchExpr, posSpec, nth, liftKind
 			);
-			if (target == null) return EXIT_RUNTIME;
-			return CliEdit.finishEdit(
-				'remove-element', filePath, write, RemoveElement.removeTarget(source, target, reformat, plugin, withDoc, optsJson), fix,
-				RemoveElement.describeTarget(source, target, plugin, withDoc)
-			);
+			return target == null
+				? EXIT_RUNTIME
+				: CliEdit.finishEdit(
+					OP, filePath, write, RemoveElement.removeTarget(source, target, reformat, plugin, withDoc, optsJson), fix,
+					RemoveElement.describeTarget(source, target, plugin, withDoc)
+				);
 		}
-		final pos: Null<Position> = CliEdit.resolveAddressPos('remove-element', source, plugin, posSpec, selectExpr, matchExpr, nth);
+		final pos: Null<Position> = CliEdit.resolveAddressPos(OP, source, plugin, posSpec, selectExpr, matchExpr, nth);
 		if (pos == null) return EXIT_RUNTIME;
 		// The address is unambiguous — `FnMember:f` and `MetaCall:@:pin` each remove exactly
 		// what they name — and the op still reported both as `wrote <file>`. That line is what
@@ -150,8 +154,7 @@ final class RemoveElementCommand implements CliCommand implements PostWriteFix {
 		// nothing in the transcript said so. Naming the cut costs no behaviour and no ceremony.
 		final removed: Null<String> = RemoveElement.describeRemoval(source, pos.line, pos.col, plugin, withDoc);
 		return CliEdit.finishEdit(
-			'remove-element', filePath, write, RemoveElement.removeElement(source, pos.line, pos.col, reformat, plugin, withDoc, optsJson),
-			fix, removed
+			OP, filePath, write, RemoveElement.removeElement(source, pos.line, pos.col, reformat, plugin, withDoc, optsJson), fix, removed
 		);
 	}
 

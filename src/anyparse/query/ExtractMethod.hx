@@ -503,7 +503,7 @@ final class ExtractMethod {
 	 *
 	 * A member captures nothing, so every local of the enclosing function the run reads is
 	 * passed as a PARAMETER (in declaration order), typed by the type its declaration WRITES
-	 * (`TypeResolver.declaredBindingTypeSource`); the run's locals read after it come back as
+	 * (refusing what `TypeResolver.paramTypeSourceUnsafe` names); the run's locals read after it come back as
 	 * the return value, typed the same way — one bare, two-plus as an anonymous structure. A
 	 * parameter is a copy, so the op refuses rather than guesses whenever that could differ from
 	 * the shared local the run read: a free local ASSIGNED anywhere in the function (a write the
@@ -607,10 +607,13 @@ final class ExtractMethod {
 		final nameAt: Int = SourceText.identTokenOffset(source, hostSpan, hostName);
 		var at: Int = nameAt < 0 ? -1 : nameAt + hostName.length;
 		while (at >= 0 && at < source.length && SourceText.isSpace(source.fastCodeAt(at))) at++;
-		if (at < 0 || at >= source.length || source.fastCodeAt(at) != '('.code)
-			return '"$hostName" declares type parameters (or its header could not be read), which the new member would need and the '
-				+ 'projection does not carry — extract without --member';
-		return host.names.contains(name) ? '"$name" already names a member of the enclosing type — choose a different name' : null;
+		return if (at < 0 || at >= source.length || source.fastCodeAt(at) != '('.code)
+			'"$hostName" declares type parameters (or its header could not be read), which the new member would need and the '
+				+ 'projection does not carry — extract without --member'
+		else if (host.names.contains(name))
+			'"$name" already names a member of the enclosing type — choose a different name'
+		else
+			null;
 	}
 
 	/**
@@ -640,7 +643,7 @@ final class ExtractMethod {
 					return 'local "$nm" is assigned in this function, and the new member would receive a COPY of it — a write the range '
 						+ 'makes, or one a closure makes while the range calls it, would no longer reach the local; extract without '
 						+ '--member, or make it final first';
-				final type: Null<String> = TypeResolver.declaredBindingTypeSource(tree, shape, b, declared);
+				final type: Null<String> = TypeResolver.paramTypeSourceUnsafe(tree, shape, b) ? null : declared()[b];
 				if (type == null)
 					return
 						'local "$nm" has no written type a parameter can copy (an untyped local, a loop or catch variable, an optional, '

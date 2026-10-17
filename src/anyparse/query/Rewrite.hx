@@ -217,8 +217,12 @@ final class Rewrite {
 		final span: Null<Span> = node.span;
 		final last: Null<QueryNode> = node.children.length == 0 ? null : node.children[node.children.length - 1];
 		final lastSpan: Null<Span> = last?.span;
-		if (span == null || lastSpan == null) return '';
-		return lastSpan.to > span.to ? '' : source.substring(lastSpan.to, span.to).trim();
+		return if (span == null || lastSpan == null)
+			''
+		else if (lastSpan.to > span.to)
+			''
+		else
+			source.substring(lastSpan.to, span.to).trim();
 	}
 
 	/**

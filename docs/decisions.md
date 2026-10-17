@@ -3197,8 +3197,8 @@ decided the question; it may not become a record of runs.
 - `extract-method --member` extracts into a new PRIVATE member placed after the one holding the run, for a caller
   that must not leave the work inside the function (C1: a closure's branches count toward its enclosing function).
   Its parameters are the function's locals the run reads, typed by what their DECLARATIONS write
-  (`TypeResolver.declaredBindingTypeSource`, the reading `identDeclaredTypeSource` already applied, now public so
-  both ask one place), never by inference; the return value is the closure mode's, typed the same way. Positive
+  minus the parameters whose written type is not the type their body reads (`TypeResolver.paramTypeSourceUnsafe`,
+  the test `identDeclaredTypeSource` already applied, now public so both ask one place), never by inference; the return value is the closure mode's, typed the same way. Positive
   whitelist, because a parameter is a copy and nothing here type-checks: a local the function assigns ANYWHERE is
   refused (a write through a closure the run calls would miss the copy — the shape `--member` would otherwise
   silently change), and so is a local whose written type is not its read type (`?o:T` reads `Null<T>`, rest reads

@@ -54,7 +54,7 @@ final class RemoveElement {
 		// line:col is 1-based, as apq refs / ast --at / source print.
 		final cursor: Int = Span.offsetOf(source, line, col);
 
-		final hit: Null<{ node: QueryNode, parent: Null<QueryNode> }> = elementAt(tree, source, cursor);
+		final hit: Null<ElementHit> = elementAt(tree, source, cursor);
 		if (hit == null)
 			return Err(
 				'position $line:$col'
@@ -68,8 +68,8 @@ final class RemoveElement {
 	 * inner form, whose own span leaves the wrapper's `final` behind to glue onto the NEXT declaration
 	 * (`final abstract class Y`). Both the removal and its description read it, so they name one cut.
 	 */
-	private static function elementAt(tree: QueryNode, source: String, cursor: Int): Null<{ node: QueryNode, parent: Null<QueryNode> }> {
-		final hit: Null<{ node: QueryNode, parent: Null<QueryNode> }> = RefactorSupport.elementAtFrom(tree, source, cursor);
+	private static function elementAt(tree: QueryNode, source: String, cursor: Int): Null<ElementHit> {
+		final hit: Null<ElementHit> = RefactorSupport.elementAtFrom(tree, source, cursor);
 		return hit == null ? null : liftedHit(tree, hit.node);
 	}
 
@@ -108,7 +108,7 @@ final class RemoveElement {
 			case Resolved(n): n;
 			case Failed(message): return Err(message);
 		};
-		final hit: { node: QueryNode, parent: Null<QueryNode> } = liftedHit(tree, node);
+		final hit: ElementHit = liftedHit(tree, node);
 		return ElementSpan.deleteNode(source, hit.node, hit.parent, reformat, plugin, withDoc, optsJson);
 	}
 
@@ -125,7 +125,7 @@ final class RemoveElement {
 	}
 
 	/** The element `node` names with its parent, lifted to a folding `final` wrapper as `elementAt` does. */
-	private static function liftedHit(tree: QueryNode, node: QueryNode): { node: QueryNode, parent: Null<QueryNode> } {
+	private static function liftedHit(tree: QueryNode, node: QueryNode): ElementHit {
 		final parent: Null<QueryNode> = TreePath.parentOf(tree, node);
 		final wrapper: Null<QueryNode> = parent == null ? null : ElementSpan.foldingWrapperOf(node, parent);
 		return wrapper == null ? { node: node, parent: parent } : { node: wrapper, parent: TreePath.parentOf(tree, wrapper) };
@@ -133,14 +133,20 @@ final class RemoveElement {
 
 	/** The cut description for the element `find` picks out of the parsed source, or null. */
 	private static function describeHit(
-		source: String, plugin: GrammarPlugin, withDoc: Bool, find: QueryNode -> Null<{ node: QueryNode, parent: Null<QueryNode> }>
+		source: String, plugin: GrammarPlugin, withDoc: Bool, find: QueryNode -> Null<ElementHit>
 	): Null<String> {
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return null;
-		final hit: Null<{ node: QueryNode, parent: Null<QueryNode> }> = find(tree);
+		final hit: Null<ElementHit> = find(tree);
 		if (hit == null) return null;
 		final nodeSpan: Null<Span> = hit.node.span;
 		return nodeSpan == null ? null : ElementSpan.describeCut(source, hit.node, hit.parent, nodeSpan, withDoc, plugin);
 	}
 
 }
+
+/** An element the removal cuts, with the container it is cut from (null for the root). */
+private typedef ElementHit = {
+	node: QueryNode,
+	parent: Null<QueryNode>
+};

@@ -55,8 +55,8 @@ class RewriteSliceTest extends Test {
 	public function testATemplateIsAlignedToEachSitesTerminator(): Void {
 		final src: String = 'class C {\n\tfunction f(p:P, s:String) {\n\t\ttry p.parseFile(s) catch (exception:Exception) null;\n'
 			+ '\t\tfinal r = try p.parseFile(s) catch (exception:Exception) null;\n\t\treturn r;\n\t}\n}';
-		final expected: String = 'class C {\n\tfunction f(p:P, s:String) {\n\t\tparseOrNull(p, s);\n\t\tfinal r = parseOrNull(p, s);\n'
-			+ '\t\treturn r;\n\t}\n}\n';
+		final expected: String =
+			'class C {\n\tfunction f(p:P, s:String) {\n\t\tparseOrNull(p, s);\n\t\tfinal r = parseOrNull(p, s);\n\t\treturn r;\n\t}\n}\n';
 		final pattern: String = "try $p.parseFile($s) catch (exception: Exception) null";
 		Assert.equals(expected, okText(Rewrite.rewrite(src, pattern, "parseOrNull($p, $s)", true, new HaxeQueryPlugin())));
 		Assert.equals(expected, okText(Rewrite.rewrite(src, pattern, "parseOrNull($p, $s);", true, new HaxeQueryPlugin())));
