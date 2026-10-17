@@ -20082,7 +20082,7 @@
 			"method": "recordFile",
 			"find": "t.isMain ? [fi.module, inModule, inPackage] : [inModule, inPackage]",
 			"replace": "t.isMain ? [fi.module, inModule] : [inModule]",
-			"note": "a project type imported by its package and name, in a module named otherwise, reads as a library type"
+			"note": "a sub-type is not declared at its runtime path (its package and its name), so a reflectiveClasses entry naming it by that path misses it and it reads as never made"
 		},
 		{
 			"name": "M-TS-PATH-NOMINAL",

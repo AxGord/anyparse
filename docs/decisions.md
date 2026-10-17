@@ -3123,3 +3123,12 @@ decided the question; it may not become a record of runs.
   frame loop (one stack machine threading five running values on the formatter's hot path; only its pure final
   combination moved out). Macro-time splits keep the generated parsers and writers byte-identical — branch
   `feat/infra-C1`
+- a type is declared at its RUNTIME path too, its package and its name (`CallGraphImports.recordFile`), not because a
+  source may write it: for a sub-type `T` of `pkg/Other.hx`, Haxe 4.3.7 answers `Type not found : pkg.T` to both
+  `var x:pkg.T` and `import pkg.T`, while `Type.getClassName(pkg.Other.T)` is `pkg.T` and `Type.resolveClass("pkg.T")`
+  finds it. What reads that path is a declaration of the classes made from a computed name (`reflectiveClasses`,
+  `ReflectiveReach.neverMade`), which names a class as `Type.resolveClass` does. The old comment ("what an import reads
+  when a file does not name its module") described a written path no compiler accepts, and its arm
+  (`M-TS-PATH-DECLARED-PACKAGE`) survived because every pin wrote main types, whose package path is their module's path.
+  Re-pinned on `ThreadSafetyReflectiveSealTest#testATypeParameterReceiverIsBoundedByItsInstantiations` (a sub-type of
+  `pkg.Nodes` declared reflective as `pkg.Node`) — branch `feat/infra-N3`

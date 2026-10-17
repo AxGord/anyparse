@@ -81,14 +81,16 @@ class ThreadSafetyReflectiveSealTest extends Test {
 	 * a parameter its constraint bounds by `Other` (a `final` class's `extends` included) — and `Node` itself is never made,
 	 * so `_l` stays sealed (a static call on `Node` makes none). Each unbounded instantiation unseals it: a `new Node`, the
 	 * class read as a value, a link through an alias that writes no argument, a free subclass that is made, a run that
-	 * does not cover a closed project, a project declaring no `reflectiveClasses` or declaring one that names `Node`. A
-	 * method's own type parameter is bounded by its constraint alone.
+	 * does not cover a closed project, a project declaring no `reflectiveClasses` or declaring one that names `Node` — a
+	 * sub-type of another module by its runtime path, its package and its name. A method's own type parameter is bounded by
+	 * its constraint alone.
 	 */
 	@:pin('control') @:killer('M-TS-PLACE-INSTANTIATIONS') @:killer('M-TS-PLACE-COMPLETE') @:killer('M-TS-PLACE-RAW-LINK')
 	@:killer('M-TS-PLACE-FREE-SUB') @:killer('M-TS-PLACE-NEVER-MADE') @:killer('M-TS-PLACE-UNDECLARED')
 	@:killer('M-TS-PLACE-GLOB-MATCH') @:killer('M-TS-PLACE-MAKES-NEW') @:killer('M-TS-PLACE-MAKES-VALUE')
 	@:killer('M-TS-PLACE-MAKES-RECEIVER') @:killer('M-TS-PLACE-VOID') @:killer('M-TS-PLACE-FORWARDED-BOUND')
 	@:killer('M-TS-PLACE-PARAM-CONSTRAINT') @:killer('M-TS-PLACE-PARAM-OWNER') @:killer('M-TS-FINAL-SUPERS-WRITTEN')
+	@:killer('M-TS-PATH-DECLARED-PACKAGE')
 	public function testATypeParameterReceiverIsBoundedByItsInstantiations(): Void {
 		#if (sys || nodejs)
 		final use: String = 'new V().toTarget("_l", d._m);';
@@ -111,6 +113,13 @@ class ThreadSafetyReflectiveSealTest extends Test {
 		Assert.equals(1, nodeTakes('{"reflectiveClasses":["nothing.*"],"rules":{$RULE}}}', '', use), 'no closed project');
 		Assert.equals(1, nodeTakes('{"rules":{$RULE,"closedWorld":true}}}', '', use), 'no reflectiveClasses');
 		Assert.equals(1, nodeTakes('{"reflectiveClasses":["Node"],"rules":{$RULE,"closedWorld":true}}}', '', use), 'Node declared');
+		// a sub-type of another module is declared by its runtime path, the one `Type.resolveClass` reads: its package and its
+		// name (`pkg.Node`), which no source may write — the compiler finds no module there
+		Assert.equals(0, nodeTakes(CLOSED, '', use, '', true), 'a sub-type bounded alike');
+		Assert.equals(
+			1, nodeTakes('{"reflectiveClasses":["pkg.Node"],"rules":{$RULE,"closedWorld":true}}}', '', use, '', true),
+			'a sub-type declared by its runtime path'
+		);
 		Assert.equals(
 			1,
 			nodeTakes(
@@ -634,8 +643,8 @@ class ThreadSafetyReflectiveSealTest extends Test {
 	}
 
 	/** How many findings of `nodeFindings` report the main thread's take of `_l` in `D.quick`. */
-	private static function nodeTakes(config: String, classes: String, use: String, members: String = ''): Int {
-		return nodeFindings(config, classes, use, members).filter(f -> f.indexOf('D.quick -> Mutex.acquire') != -1).length;
+	private static function nodeTakes(config: String, classes: String, use: String, members: String = '', packaged: Bool = false): Int {
+		return nodeFindings(config, classes, use, members, packaged).filter(f -> f.indexOf('D.quick -> Mutex.acquire') != -1).length;
 	}
 
 	/**
@@ -643,17 +652,22 @@ class ThreadSafetyReflectiveSealTest extends Test {
 	 * subclasses `V` (`Void`, a `final` class) and `P<X:Other>`, `classes` beside them, `members` among its own, and `D`
 	 * running `use` on the main thread while a worker holds `_m` across a sleep and the main thread takes `_l`.
 	 */
-	private static function nodeFindings(config: String, classes: String, use: String, members: String = ''): Array<String> {
+	private static function nodeFindings(
+		config: String, classes: String, use: String, members: String = '', packaged: Bool = false
+	): Array<String> {
+		// `packaged`: `Node` a sub-type of the module `pkg.Nodes`, imported by its module, its runtime path `pkg.Node`
+		final home: String = packaged ? 'package pkg; class Nodes {} ' : '';
+		final imported: String = packaged ? 'import pkg.Nodes; ' : '';
 		return [
 			for (v in ThreadSafetyCheckTest.violations(config, [
 				ThreadSafetyCheckTest.MUTEX,
 				'class Runner { public static function create(fn:()->Void):Void {} }',
 				'class Other { public function new() {} }',
-				'class Node<T> { public var targetObject:T = null; public function new() {}'
+				'${home}class Node<T> { public var targetObject:T = null; public function new() {}'
 				+ ' public function toTarget(k:String, m:Mutex):Void Reflect.setField(targetObject, k, m);'
 				+ ' public static function poke<X:Other>(o:X, k:String, m:Mutex):Void Reflect.setField(o, k, m); $members }',
-				'final class V extends Node<Void> {} class P<X:Other> extends Node<X> {} $classes',
-				'class D { var _l:Mutex = new Mutex(); final _m:Mutex = new Mutex(); public function new() {}'
+				'${imported}final class V extends Node<Void> {} class P<X:Other> extends Node<X> {} $classes',
+				'${imported}class D { var _l:Mutex = new Mutex(); final _m:Mutex = new Mutex(); public function new() {}'
 				+ ' public function work():Void { _m.acquire(); Sys.sleep(1); _m.release(); }'
 				+ ' public function quick():Void { _l.acquire(); _l.release(); }'
 				+ ' public static function main():Void { final d:D = new D(); Runner.create(() -> d.work()); Node.poke(new Other(), "x", null);'
