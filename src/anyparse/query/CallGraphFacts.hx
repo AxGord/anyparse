@@ -340,7 +340,7 @@ final class CallGraphFacts {
 			add(span);
 			return;
 		}
-		final splice: Null<SpliceFact> = CompilerFacts.spliceOf(n, at);
+		final splice: Null<SpliceFact> = FactSites.spliceOf(n, at);
 		if (inlined == null && splice != null && view.harmlessSplice(g, splice.callee)) return;
 		final edges: Int = g.edges.length;
 		final unresolved: Int = g.unresolved.length;
@@ -357,13 +357,13 @@ final class CallGraphFacts {
 	/**
 	 * Where a fact at `at` of the body `n` that `splice` brought into it runs: at a site of the splice, written in the graph
 	 * node of its method when the graph names one. One an expression macro's expansion brought runs where the call of the
-	 * macro was (`CompilerFacts.expansionSites`), written in no method; one neither brought — the compiler put it where no
+	 * macro was (`FactSites.expansionSites`), written in no method; one neither brought — the compiler put it where no
 	 * method is declared, or the expansion's call has no site — anywhere.
 	 */
 	private static function splicedSite(g: CallGraph, n: FactNode, at: FactPos, splice: Null<SpliceFact>, view: FactsView): SplicedSite {
 		if (splice == null) {
-			final expansion: Null<ExpansionFact> = CompilerFacts.expansionOf(n, at);
-			return { sites: expansion == null ? null : CompilerFacts.expansionSites(n, expansion), origin: null };
+			final expansion: Null<ExpansionFact> = FactSites.expansionOf(n, at);
+			return { sites: expansion == null ? null : FactSites.expansionSites(n, expansion), origin: null };
 		}
 		final owner: String = ownerOf(splice.callee);
 		final written: Null<String> = g.memberOnChain(view.graphType(owner), splice.callee.substr(owner.length + 1));
@@ -656,29 +656,29 @@ final class CallGraphFacts {
 	}
 
 	/**
-	 * Where in `node`'s file a fact of its body `n` at `at` sits: its range when `n` places it there (`CompilerFacts.placed`),
+	 * Where in `node`'s file a fact of its body `n` at `at` sits: its range when `n` places it there (`FactSites.placed`),
 	 * else null — a fact an inlined body spliced in sits at its callee, maybe in another file, and runs at a site of `node`
 	 * no range names. Such an edge, unresolved site or access belongs to the whole of `node`: no range of its file may
 	 * claim it, or drop it (`MemberReach.isLive`).
 	 */
 	private static function siteOf(node: FnNode, n: FactNode, at: FactPos, view: FactsView): Null<Span> {
-		return at.file == view._table.keyOf(node.file) && CompilerFacts.placed(n, at) ? at.span : null;
+		return at.file == view._table.keyOf(node.file) && FactSites.placed(n, at) ? at.span : null;
 	}
 
 	/**
 	 * The sites the compiler typed in the bodies `facts` (`siteKey`): each call, construction and field access, and each
 	 * function nested there. A site the facts place elsewhere, or not at all, is none of them — nor is one an inlined body
-	 * spliced in, which sits at its callee's range (`CompilerFacts.placed`).
+	 * spliced in, which sits at its callee's range (`FactSites.placed`).
 	 */
 	private static function typedSites(facts: Array<FactNode>, view: FactsView): Array<String> {
 		final out: Array<String> = [];
 		for (n in facts) {
-			for (c in n.calls) if (CompilerFacts.placed(n, c.at)) out.push(siteKey(c.at.span));
-			for (x in n.news) if (CompilerFacts.placed(n, x.at)) out.push(siteKey(x.at.span));
-			for (f in n.fields) if (CompilerFacts.placed(n, f.at)) out.push(siteKey(f.at.span));
+			for (c in n.calls) if (FactSites.placed(n, c.at)) out.push(siteKey(c.at.span));
+			for (x in n.news) if (FactSites.placed(n, x.at)) out.push(siteKey(x.at.span));
+			for (f in n.fields) if (FactSites.placed(n, f.at)) out.push(siteKey(f.at.span));
 			for (id in n.fns) {
 				final nested: Null<FactNode> = view._table.node(id);
-				if (nested != null && CompilerFacts.placed(n, nested.at)) out.push(siteKey(nested.at.span));
+				if (nested != null && FactSites.placed(n, nested.at)) out.push(siteKey(nested.at.span));
 			}
 		}
 		return out;

@@ -302,7 +302,7 @@ final class FactsProvenance {
 
 	/**
 	 * Whether every fact of the typed body `n` sits on `body`'s text as its own — as `factsMatch` asks, save that what an
-	 * inlined method spliced in, positioned in that method's declared range (`CompilerFacts.spliceOf`), in the body of a
+	 * inlined method spliced in, positioned in that method's declared range (`FactSites.spliceOf`), in the body of a
 	 * method `n` is wholly the inlined call of (`outer`, `inlinedWhole`)
 	 * or on a range the compiler joined from such code (`joined`), and the `inlined` call itself are that method's text;
 	 * that the code an expression macro built, positioned in that macro's declared range, is the text of the call of it
@@ -335,7 +335,7 @@ final class FactsProvenance {
 		final written: Array<ExpansionFact> = [for (x in n.expansions) if (expansionWritten(n, x, body, outer)) x];
 		final inlined: (FactPos) -> Bool = outer ?? (_ -> false);
 		function own(p: FactPos, onText: Bool, ?name: String): Bool {
-			return onText || CompilerFacts.spliceOf(n, p) != null || inlined(p) || joined(n, p, name, body)
+			return onText || FactSites.spliceOf(n, p) != null || inlined(p) || joined(n, p, name, body)
 				|| written.exists(x -> holds(x.declared, p));
 		}
 		final iterationCalls: Array<String> = _scope.shape.execution?.implicitCallNames ?? [];
@@ -395,7 +395,7 @@ final class FactsProvenance {
 		final macroName: String = SourceText.lastSegment(expander);
 		if (body.holds(x.anchor)) return FactText.spellsCall(body.textAt(x.anchor), macroName);
 		if (outer != null && outer(x.anchor)) return body.spellsCall(macroName);
-		final splice: Null<SpliceFact> = CompilerFacts.spliceOf(n, x.anchor);
+		final splice: Null<SpliceFact> = FactSites.spliceOf(n, x.anchor);
 		if (splice == null) return false;
 		function spells(at: FactPos): Bool {
 			final text: Null<String> = _view._table.sourceOf(at.file)?.substring(at.span.from, at.span.to);

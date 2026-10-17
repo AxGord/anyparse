@@ -494,7 +494,7 @@ final class MemberTouchScan {
 	/**
 	 * Whether the fact at `at` of `node`'s body `n` lies in code an expression macro's expansion built, under the truth: `n`
 	 * holds an expansion (`macro-expansion`), and `at` lies outside the text of every declaration of `node` and in no body
-	 * an inlined call spliced in (`CompilerFacts.spliceOf`), whose method's own text answers for it.
+	 * an inlined call spliced in (`FactSites.spliceOf`), whose method's own text answers for it.
 	 */
 	private static function expansionCode(g: CallGraph, node: FnNode, n: FactNode, at: FactPos, view: FactsView): Bool {
 		return view.truth && FactMarkers.carries(n, m -> m.match(MacroExpansion)) && declarationHolding(g, node.id, at, view) == null
@@ -503,7 +503,7 @@ final class MemberTouchScan {
 
 	/**
 	 * The typed access `f` of code an expression macro's expansion built into `n`, read where it runs: at each site the
-	 * expansion holding it runs at (`CompilerFacts.expansionSites`), or over the whole of `n` when none is known.
+	 * expansion holding it runs at (`FactSites.expansionSites`), or over the whole of `n` when none is known.
 	 */
 	private static function expansionRuns(n: FactNode, f: FieldFact, view: FactsView): Array<FieldFact> {
 		final expansion: Null<ExpansionFact> = view.expansionOf(n, f.at);

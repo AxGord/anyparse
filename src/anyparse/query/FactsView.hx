@@ -651,7 +651,7 @@ final class FactsView {
 	 * body was spliced in and none reaches a member (`splicedReachesNoMember`). A macro's expansion is none either, under the
 	 * truth, to a reader `g` hands its graph for — one reading a faceted body through its facts alone, its touches, edges,
 	 * hazards and implicit calls — when the graph node holding the expansion's body is faceted (`faceted`): the facts hold the
-	 * expanded code every build compiled, which runs where the call of the macro was (`CompilerFacts.expansionSites`). A
+	 * expanded code every build compiled, which runs where the call of the macro was (`FactSites.expansionSites`). A
 	 * reader of the syntax gets no graph: a macro's code may name a local of the code calling it, which no fact relates.
 	 */
 	public function blindIn(file: String, span: Span, ?g: CallGraph): Null<ReachUnknown> {
@@ -1709,9 +1709,9 @@ final class FactsView {
 		return IMPL_NAME.replace(PACKAGE_PREFIX.replace(type, ''), '$1');
 	}
 
-	/** Whether the fact at `at` lies in the range of its node `n`, not spliced in from elsewhere (`CompilerFacts.placed`). */
+	/** Whether the fact at `at` lies in the range of its node `n`, not spliced in from elsewhere (`FactSites.placed`). */
 	public static inline function placed(n: FactNode, at: FactPos): Bool {
-		return CompilerFacts.placed(n, at);
+		return FactSites.placed(n, at);
 	}
 
 	/** Whether `inner` lies within `outer`. */
@@ -1825,19 +1825,19 @@ final class FactsView {
 		];
 	}
 
-	/** The splice an inlined call made in `n`'s body that holds the position `at` (`CompilerFacts.spliceOf`), or null. */
+	/** The splice an inlined call made in `n`'s body that holds the position `at` (`FactSites.spliceOf`), or null. */
 	public inline function spliceOf(n: FactNode, at: FactPos): Null<SpliceFact> {
-		return CompilerFacts.spliceOf(n, at);
+		return FactSites.spliceOf(n, at);
 	}
 
-	/** The expression macro's expansion in `n`'s body that holds the position `at` (`CompilerFacts.expansionOf`), or null. */
+	/** The expression macro's expansion in `n`'s body that holds the position `at` (`FactSites.expansionOf`), or null. */
 	public inline function expansionOf(n: FactNode, at: FactPos): Null<ExpansionFact> {
-		return CompilerFacts.expansionOf(n, at);
+		return FactSites.expansionOf(n, at);
 	}
 
-	/** The sites the expansion `x` in `n`'s body runs at (`CompilerFacts.expansionSites`), or null when none is known. */
+	/** The sites the expansion `x` in `n`'s body runs at (`FactSites.expansionSites`), or null when none is known. */
 	public inline function expansionSites(n: FactNode, x: ExpansionFact): Null<Array<Span>> {
-		return CompilerFacts.expansionSites(n, x);
+		return FactSites.expansionSites(n, x);
 	}
 
 }

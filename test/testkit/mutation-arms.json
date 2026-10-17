@@ -8106,7 +8106,7 @@
 			"name": "M-FACTS-SPLICED-WITHIN-UNPLACED",
 			"type": "anyparse.query.CompilerFacts",
 			"method": "within",
-			"find": "splice && spliced && !placed(n, where) ? runsIn(n, where, span, dropped) : whole || inside(key, span, where)",
+			"find": "splice && spliced && !FactSites.placed(n, where) ? runsIn(n, where, span, dropped) : whole || inside(key, span, where)",
 			"replace": "whole || inside(key, span, where)",
 			"note": "a range question in a body an inlined function was spliced into drops the spliced facts, which sit at the callee yet run in the body"
 		},
@@ -8146,7 +8146,7 @@
 			"name": "M-GRAPH-FACTS-SPLICED-SITE",
 			"type": "anyparse.query.CallGraphFacts",
 			"method": "siteOf",
-			"find": "at.file == view._table.keyOf(node.file) && CompilerFacts.placed(n, at) ? at.span : null",
+			"find": "at.file == view._table.keyOf(node.file) && FactSites.placed(n, at) ? at.span : null",
 			"replace": "at.span",
 			"note": "a spliced fact files its edge under its caller's file at the callee's range, which a region or a dead branch there then claims"
 		},
@@ -8216,7 +8216,7 @@
 		},
 		{
 			"name": "M-FACTS-SPLICE-INNERMOST",
-			"type": "anyparse.query.CompilerFacts",
+			"type": "anyparse.query.FactSites",
 			"method": "spliceOf",
 			"find": "(best == null || body.to - body.from < best.body.span.to - best.body.span.from)",
 			"replace": "best == null",
@@ -8224,7 +8224,7 @@
 		},
 		{
 			"name": "M-FACTS-SPLICE-SECOND-SITE",
-			"type": "anyparse.query.CompilerFacts",
+			"type": "anyparse.query.FactNodeRecords",
 			"method": "collectSplices",
 			"find": "known.sites.push(ran);",
 			"replace": "{}",
@@ -12946,7 +12946,7 @@
 		},
 		{
 			"name": "M-FACTS-REFL-HOLDER",
-			"type": "anyparse.query.CompilerFacts",
+			"type": "anyparse.query.FactNodeRecords",
 			"method": "collectFacts",
 			"find": "receiverFresh: r.o == true,\n\t\t\t\tholder: id",
 			"replace": "receiverFresh: r.o == true,\n\t\t\t\tholder: ''",
@@ -13423,13 +13423,13 @@
 			"name": "M-GRAPH-FACTS-EXPANSION-SITE",
 			"type": "anyparse.query.CallGraphFacts",
 			"method": "splicedSite",
-			"find": "sites: expansion == null ? null : CompilerFacts.expansionSites(n, expansion)",
+			"find": "sites: expansion == null ? null : FactSites.expansionSites(n, expansion)",
 			"replace": "sites: null",
 			"note": "an edge an expansion's facts make runs anywhere in its function"
 		},
 		{
 			"name": "M-FACTS-EXPANSION-SPLICE-SITES",
-			"type": "anyparse.query.CompilerFacts",
+			"type": "anyparse.query.FactSites",
 			"method": "expansionSites",
 			"find": "if (splice != null) return splice.sites;",
 			"replace": "if (splice != null) return null;",
@@ -14659,7 +14659,7 @@
 		},
 		{
 			"name": "M-FACTS-KEPT-BUILDS",
-			"type": "anyparse.query.CompilerFacts",
+			"type": "anyparse.query.FactNodeRecords",
 			"method": "joinConfiguration",
 			"find": "for (i in node.keptParams.copy()) if (!(record.pk ?? []).contains(i)) node.keptParams.remove(i);",
 			"replace": "// cut",

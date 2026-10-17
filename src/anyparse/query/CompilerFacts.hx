@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.FactNodeRecords.NodeRecord;
 import anyparse.query.FactText.NodeHead;
 import anyparse.runtime.Span;
 import haxe.Json;
@@ -485,9 +486,6 @@ typedef TypeFact = {
  */
 @:nullSafety(Strict)
 final class CompilerFacts {
-
-	/** The access of a call of a method the compiler spliced in (`CallFact.access`). */
-	private static inline final INLINED: String = 'inlined';
 
 	/** The `_madeFrom` prefix of a `_nodeCache` id. */
 	private static inline final NODE_ENTRY: String = 'node:';
@@ -1053,7 +1051,7 @@ final class CompilerFacts {
 			if (!whole && !spliced && (expanded || splice)) return null;
 			for (fact in pick(n)) {
 				final where: FactPos = at(fact);
-				if (splice && spliced && !placed(n, where) ? runsIn(n, where, span, dropped) : whole || inside(key, span, where))
+				if (splice && spliced && !FactSites.placed(n, where) ? runsIn(n, where, span, dropped) : whole || inside(key, span, where))
 					out.push(fact);
 			}
 		}
@@ -1088,10 +1086,10 @@ final class CompilerFacts {
 	 * it meets `span` and its method is not `dropped`, an expansion's when a site it runs at does, any other's always.
 	 */
 	private static function runsIn(n: FactNode, where: FactPos, span: Span, dropped: (callee:String) -> Bool): Bool {
-		final splice: Null<SpliceFact> = spliceOf(n, where);
+		final splice: Null<SpliceFact> = FactSites.spliceOf(n, where);
 		if (splice != null) return !dropped(splice.callee) && meets(splice.sites, span);
-		final expansion: Null<ExpansionFact> = expansionOf(n, where);
-		final sites: Null<Array<Span>> = expansion == null ? null : expansionSites(n, expansion);
+		final expansion: Null<ExpansionFact> = FactSites.expansionOf(n, where);
+		final sites: Null<Array<Span>> = expansion == null ? null : FactSites.expansionSites(n, expansion);
 		return sites == null || meets(sites, span);
 	}
 
@@ -1127,43 +1125,6 @@ final class CompilerFacts {
 		return { file: file, span: new Span(index.toNative(min), index.toNative(max)) };
 	}
 
-	/** The node `id` as `record` heads it, at `at`, with no facts yet. */
-	private static function emptyNode(id: String, record: NodeRecord, at: FactPos): FactNode {
-		return {
-			id: id,
-			kind: record.kind,
-			owner: record.owner,
-			isStatic: record.s ?? false,
-			signature: record.t,
-			name: record.name,
-			at: at,
-			incomplete: (record.inc ?? []).copy(),
-			generated: record.gen ?? false,
-			inlinedFrom: record.inl,
-			overloadIndex: record.ov ?? 0,
-			params: [for (p in record.params ?? []) { name: p.n, type: p.t }],
-			keptParams: (record.pk ?? []).copy(),
-			paramUses: paramUsesOf(record),
-			variants: [],
-			calls: [],
-			news: [],
-			fields: [],
-			elementWrites: [],
-			flows: [],
-			handed: [],
-			instantiations: [],
-			strings: [],
-			iterations: [],
-			reflection: [],
-			natives: [],
-			vars: [],
-			reads: [],
-			fns: [],
-			splices: [],
-			expansions: []
-		};
-	}
-
 	/** `materialize`, filed under `entry` in `_madeFrom` for every file the making read. */
 	private function materializeAs(entry: String, id: String, lines: Array<NodeLine>): Null<FactNode> {
 		final reading: Map<String, Bool> = [];
@@ -1190,22 +1151,13 @@ final class CompilerFacts {
 			final home: String = files.file(record.f);
 			final at: Null<FactPos> = position(home, record.p, files.paths);
 			if (at == null) continue;
-			final node: FactNode = made ?? emptyNode(id, record, at);
-			if (made != null) joinConfiguration(node, record);
+			final node: FactNode = made ?? FactNodeRecords.emptyNode(id, record, at);
+			if (made != null) FactNodeRecords.joinConfiguration(node, record);
 			made = node;
 			mergeRecord(id, node, record, home, files.paths, seen);
 		}
-		collectSplices(made);
+		FactNodeRecords.collectSplices(made);
 		return made;
-	}
-
-	/**
-	 * Join a further configuration's `record` into the node an earlier one made: a parameter is kept only where
-	 * every configuration keeps it.
-	 */
-	private static function joinConfiguration(node: FactNode, record: NodeRecord): Void {
-		for (i in node.keptParams.copy()) if (!(record.pk ?? []).contains(i)) node.keptParams.remove(i);
-		node.paramUses = joinedParamUses(node.paramUses, paramUsesOf(record));
 	}
 
 	/**
@@ -1233,196 +1185,9 @@ final class CompilerFacts {
 			seen[identity] = true;
 			return true;
 		}
-		collectFacts(id, node, record, place, fresh);
-		collectExpansions(node, record, place, fresh);
+		FactNodeRecords.collectFacts(id, node, record, place, fresh);
+		FactNodeRecords.collectExpansions(node, record, place, fresh);
 		for (f in record.fns ?? []) if (!node.fns.contains(f)) node.fns.push(f);
-	}
-
-	/** Add the facts of every family `record` holds to `node`, each at the position `place` reads and only when `fresh`. */
-	private static function collectFacts(
-		id: String, node: FactNode, record: NodeRecord, place: (Null<Array<Int>>) -> Null<FactPos>, fresh: (String, Any, FactPos) -> Bool
-	): Void {
-		FactMerge.collect(
-			record.calls, c -> place(c.p), fresh.bind('call'), (c, where) -> ({
-				target: c.t,
-				access: c.a,
-				receiver: c.r,
-				receiverAt: place(c.rp),
-				result: c.rt,
-				at: where,
-				signature: c.sig,
-				site: place(c.s),
-				body: place(c.d),
-				operand: c.o,
-				operandExact: c.x == true
-			}: CallFact),
-			node.calls
-		);
-		FactMerge.collect(
-			record.news, x -> place(x.p), fresh.bind('new'), (x, where) -> ({
-				type: x.t,
-				instance: x.ty,
-				at: where,
-				generic: x.gb
-			}: NewFact),
-			node.news
-		);
-		FactMerge.collect(
-			record.fields, f -> place(f.p), fresh.bind('field'), (f, where) -> ({
-				owner: f.o,
-				field: f.f,
-				access: f.a,
-				receiver: f.r,
-				type: f.t,
-				write: f.w ?? false,
-				at: where,
-				use: f.u,
-				method: f.m,
-				fresh: f.fresh ?? false,
-				held: f.h ?? false,
-				argument: argumentOf(f)
-			}: FieldFact),
-			node.fields
-		);
-		FactMerge.collect(
-			record.elems, x -> place(x.p), fresh.bind('elem'),
-			(x, where) -> ({receiver: x.r, receiverAt: place(x.rp), at: where }: ElementWriteFact), node.elementWrites
-		);
-		FactMerge.collect(
-			record.flows, f -> place(f.p), fresh.bind('flow'), (f, where) -> ({
-				from: f.s,
-				to: f.d,
-				via: f.c,
-				at: where,
-				exact: f.x == true
-			}: FlowFact),
-			node.flows
-		);
-		FactMerge.collect(
-			record.hands, h -> place(h.p), fresh.bind('hand'), (h, where) -> ({
-				target: h.t,
-				from: h.s,
-				to: h.d,
-				at: where
-			}: HandFact),
-			node.handed
-		);
-		FactMerge.collect(
-			record.gens, x -> place(x.p), fresh.bind('gen'), (x, where) -> ({declared: x.d, applied: x.s, at: where }: InstantiationFact),
-			node.instantiations
-		);
-		FactMerge.collect(
-			record.strs, s -> place(s.p), fresh.bind('str'), (s, where) -> ({operand: s.o, at: where, exact: s.x == true }: StringFact),
-			node.strings
-		);
-		FactMerge.collect(
-			record.iters, i -> place(i.p), fresh.bind('iter'), (i, where) -> ({binder: i.v, iterated: i.i, at: where }: IterationFact),
-			node.iterations
-		);
-		FactMerge.collect(
-			record.refl, r -> place(r.p), fresh.bind('refl'), (r, where) -> ({
-				target: r.t,
-				name: r.n,
-				memberName: r.m,
-				typeArgument: r.c,
-				isValue: r.v ?? false,
-				at: where,
-				receiver: r.r,
-				receiverExact: r.x == true,
-				receiverSelf: r.h == true,
-				receiverFresh: r.o == true,
-				holder: id
-			}: ReflectionFact),
-			node.reflection
-		);
-		FactMerge.collect(
-			record.native, n -> place(n.p), fresh.bind('native'), (n, where) -> ({
-				kind: n.w,
-				name: n.n,
-				at: where,
-				code: n.c,
-				computed: n.cc == true,
-				handed: n.h ?? [],
-				holder: id
-			}: NativeFact),
-			node.natives
-		);
-		FactMerge.collect(
-			record.vars, v -> place(v.p), fresh.bind('var'), (v, where) -> ({name: v.n, type: v.t, at: where }: VarFact), node.vars
-		);
-		FactMerge.collect(
-			record.reads, r -> place([for (i in 0...r.length - 1) (r[i]: Int)]), fresh.bind('read'), (r, where) -> ({
-				type: (r[r.length - 1]: String),
-				at: where
-			}: LocalReadFact),
-			node.reads
-		);
-	}
-
-	/** Add the macro expansions `record` holds to `node`: each whose root, anchor and declaration all place, once per root. */
-	private static function collectExpansions(
-		node: FactNode, record: NodeRecord, place: (Null<Array<Int>>) -> Null<FactPos>, fresh: (String, Any, FactPos) -> Bool
-	): Void {
-		for (x in record.exps ?? []) {
-			final root: Null<FactPos> = place(x.p);
-			final anchor: Null<FactPos> = place(x.a);
-			final declared: Null<FactPos> = place(x.d);
-			if (root == null || anchor == null || (x.d != null && declared == null)) continue;
-			final written: FactPos = anchor;
-			// the root tells one expansion from another, and no question asks it
-			if (fresh('exp', x, root)) node.expansions.push({ expander: x.t, anchor: written, declared: declared });
-		}
-	}
-
-	/** The parameter `use` hands its value to (`FieldFact.argument`), or null for any other use. */
-	private static function argumentOf(use: UseRecord): Null<ArgumentFact> {
-		final target: Null<String> = use.ag;
-		final access: Null<String> = use.aa;
-		final index: Null<Int> = use.ai;
-		return target == null || access == null || index == null ? null : { target: target, access: access, index: index };
-	}
-
-	/** The uses `record` gives each parameter of its node (`FactNode.paramUses`), or null when it records none. */
-	private static function paramUsesOf(record: NodeRecord): Null<Array<Array<ParamUse>>> {
-		final recorded: Null<Array<Array<UseRecord>>> = record.pu;
-		if (recorded == null || recorded.length != (record.params ?? []).length) return null;
-		return [
-			for (uses in recorded) [for (u in uses) { use: u.u ?? '', method: u.m, argument: argumentOf(u) }]
-		];
-	}
-
-	/** The uses `known` and `more` give a node's parameters, joined per parameter; null when either is, or they disagree on the count. */
-	private static function joinedParamUses(
-		known: Null<Array<Array<ParamUse>>>, more: Null<Array<Array<ParamUse>>>
-	): Null<Array<Array<ParamUse>>> {
-		if (known == null || more == null) return null;
-		final added: Array<Array<ParamUse>> = more;
-		if (known.length != added.length) return null;
-		for (i in 0...known.length) {
-			final into: Array<ParamUse> = known[i];
-			for (u in added[i]) if (!into.exists(k -> Json.stringify(k) == Json.stringify(u))) into.push(u);
-		}
-		return known;
-	}
-
-	/** The bodies the `inlined` calls of `node` spliced in, one per declared range with every site a call of it ran at. */
-	private static function collectSplices(node: Null<FactNode>): Void {
-		if (node == null) return;
-		for (c in node.calls) {
-			final body: Null<FactPos> = c.body;
-			final site: Null<FactPos> = c.site;
-			if (c.access == INLINED && body != null && site != null) {
-				final declared: FactPos = body;
-				final ran: Span = site.span;
-				final known: Null<SpliceFact> = node.splices.find(s ->
-					s.body.file == declared.file && sameSpan(s.body.span, declared.span)
-				);
-				if (known == null)
-					node.splices.push({ callee: c.target ?? '', body: declared, sites: [ran] })
-				else if (!known.sites.exists(s -> sameSpan(s, ran)))
-					known.sites.push(ran);
-			}
-		}
 	}
 
 	/**
@@ -1442,79 +1207,6 @@ final class CompilerFacts {
 	/** An empty table, which `add` fills one dump at a time: each dump's text can then be freed before the next is read. */
 	public static function create(read: (String) -> Null<String>, key: (String) -> String): CompilerFacts {
 		return new CompilerFacts(read, key);
-	}
-
-	/**
-	 * Whether the fact at `at` lies in the range of its node `n`: one outside it — in another file, or elsewhere in the
-	 * node's own — was spliced in by inlining, at its callee's positions (`TypedFactsProbe`), and runs at a site of the node
-	 * no range names.
-	 */
-	public static function placed(n: FactNode, at: FactPos): Bool {
-		return at.file == n.at.file && n.at.span.from <= at.span.from && at.span.to <= n.at.span.to;
-	}
-
-	/**
-	 * The splice that brought the fact at `at` into `n`: the innermost declared range of a method an inlined call of `n`
-	 * spliced in that holds it (`FactNode.splices`) — the code runs at a site of that splice, and nowhere else in `n`. Null
-	 * for a fact `n` places itself, and for one no such range holds: the compiler put it where no method is declared, or
-	 * the facts record no site for the call (`CallFact.site`), and it may run anywhere in `n`.
-	 */
-	public static function spliceOf(n: FactNode, at: FactPos): Null<SpliceFact> {
-		if (placed(n, at)) return null;
-		var best: Null<SpliceFact> = null;
-		for (s in n.splices) {
-			final body: Span = s.body.span;
-			final holds: Bool = s.body.file == at.file && body.from <= at.span.from && at.span.to <= body.to;
-			if (holds && (best == null || body.to - body.from < best.body.span.to - best.body.span.from)) best = s;
-		}
-		return best;
-	}
-
-	/**
-	 * The expansion of an expression macro that brought the fact at `at` into `n`: the innermost one whose macro's declared
-	 * range holds it (`ExpansionFact.declared`) — the code that macro built, which runs where the compiler replaced the call
-	 * of it (`expansionSites`). Null for a fact `n` places itself, for one a splice brought (`spliceOf`), and for one no such
-	 * range holds.
-	 */
-	public static function expansionOf(n: FactNode, at: FactPos): Null<ExpansionFact> {
-		if (placed(n, at) || spliceOf(n, at) != null) return null;
-		var best: Null<ExpansionFact> = null;
-		for (x in n.expansions) {
-			final declared: Null<FactPos> = x.declared;
-			if (declared == null || declared.file != at.file || at.span.from < declared.span.from || declared.span.to < at.span.to)
-				continue;
-			final size: Int = declared.span.to - declared.span.from;
-			final known: Null<FactPos> = best?.declared;
-			if (known == null || size < known.span.to - known.span.from) best = x;
-		}
-		return best;
-	}
-
-	/**
-	 * Where in the file of `n` the code the expansion `x` built runs: at its anchor, the expression around the call of the
-	 * macro the compiler replaced, when `n` places it; at the sites of the inlined call whose method's code holds the anchor
-	 * (`spliceOf`); or where the expansion whose code holds the anchor runs, in turn. Null when none of these says: the code
-	 * may run anywhere in `n`.
-	 */
-	public static function expansionSites(n: FactNode, x: ExpansionFact): Null<Array<Span>> {
-		final seen: Array<ExpansionFact> = [];
-		var current: ExpansionFact = x;
-		while (!seen.contains(current)) {
-			seen.push(current);
-			final anchor: FactPos = current.anchor;
-			if (placed(n, anchor)) return [anchor.span];
-			final splice: Null<SpliceFact> = spliceOf(n, anchor);
-			if (splice != null) return splice.sites;
-			final outer: Null<ExpansionFact> = expansionOf(n, anchor);
-			if (outer == null) return null;
-			current = outer;
-		}
-		return null;
-	}
-
-	/** Whether `a` and `b` are the same range. */
-	private static inline function sameSpan(a: Span, b: Span): Bool {
-		return a.from == b.from && a.to == b.to;
 	}
 
 	/** The id of type string `type` without its type arguments. */
@@ -1609,116 +1301,4 @@ private typedef TypeRecord = {
 	final ?under: String;
 	final ?impl: String;
 	final ?ctors: Array<{ n: String, t: String }>;
-}
-
-private typedef CallRecord = {
-	final ?t: String;
-	final a: String;
-	final ?r: String;
-	final ?rp: Array<Int>;
-	final rt: String;
-	final ?sig: String;
-	final p: Array<Int>;
-	final ?s: Array<Int>;
-	final ?d: Array<Int>;
-	final ?o: String;
-	final ?x: Bool;
-}
-
-/** How a read's value is used, as a field record and a parameter's use record spell it. */
-private typedef UseRecord = {
-	var ?u: String;
-	var ?m: String;
-	var ?ag: String;
-	var ?aa: String;
-	var ?ai: Int;
-}
-
-private typedef NodeRecord = {
-	final id: String;
-	final f: String;
-	final p: Array<Int>;
-	final kind: String;
-	final owner: String;
-	final t: String;
-	final ?s: Bool;
-	final ?name: String;
-	final ?inc: Array<String>;
-	final ?gen: Bool;
-	final ?inl: String;
-	final ?ov: Int;
-	final ?pk: Array<Int>;
-	final ?pu: Array<Array<UseRecord>>;
-	final ?params: Array<{ n: String, t: String }>;
-	final ?calls: Array<CallRecord>;
-	final ?news: Array<{
-		t: String,
-		ty: String,
-		p: Array<Int>,
-		?gb: String
-	}>;
-	final ?fields: Array<{
-		?o: String,
-		f: String,
-		a: String,
-		r: String,
-		t: String,
-		?w: Bool,
-		p: Array<Int>,
-		?u: String,
-		?m: String,
-		?fresh: Bool,
-		?h: Bool,
-		?ag: String,
-		?aa: String,
-		?ai: Int
-	}>;
-	final ?elems: Array<{ r: String, rp: Array<Int>, p: Array<Int> }>;
-	final ?flows: Array<{
-		s: String,
-		d: String,
-		c: String,
-		p: Array<Int>,
-		?x: Bool
-	}>;
-	final ?hands: Array<{
-		t: String,
-		s: String,
-		d: String,
-		p: Array<Int>
-	}>;
-	final ?gens: Array<{ d: String, s: String, p: Array<Int> }>;
-	final ?strs: Array<{ o: String, p: Array<Int>, ?x: Bool }>;
-	final ?iters: Array<{ v: String, i: String, p: Array<Int> }>;
-	final ?refl: Array<{
-		t: String,
-		?n: String,
-		?m: String,
-		?c: String,
-		?v: Bool,
-		?r: String,
-		?x: Bool,
-		?h: Bool,
-		?o: Bool,
-		p: Array<Int>
-	}>;
-	final ?native: Array<{
-		w: String,
-		n: String,
-		p: Array<Int>,
-		?c: String,
-		?cc: Bool,
-		?h: Array<String>
-	}>;
-	final ?vars: Array<{ n: String, t: String, p: Array<Int> }>;
-
-	/** `[min, max, type]`, or `[file index, min, max, type]` for a foreign position. */
-	final ?reads: Array<Array<Any>>;
-	final ?exps: Array<{
-		?t: String,
-		p: Array<Int>,
-		a: Array<Int>,
-		?d: Array<Int>
-	}>;
-	final ?fns: Array<String>;
 }
