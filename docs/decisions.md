@@ -3263,3 +3263,11 @@ decided the question; it may not become a record of runs.
   through the writing file's imports (`keyIn`). Simple-name keying is kept, not narrowed to one declaration: the
   owner is already required to be ONE declaration (`onlyDeclaration`), and the subtypes come from the index's own
   simple-name closure — branch `feat/infra-N6`
+- `NullableSource.receiverTypeName` asked a receiver's type in two steps — the identifier's own annotation
+  (`TypeResolver.identTypeName`), then the shared typer as a fallback — and `nullable-switch-missing-null` passed no
+  typer at all → the receiver is typed by the shared typer alone (`CheckScan.typeNominalResolver`, receiver mode,
+  which reads the same annotation for an identifier and peels a member-transparent wrapper itself), every caller
+  hands one, and `describe` lost its `declaredTypes` parameter. Byte-identical on the three TM trees and anyparse;
+  the switch rule now seeds a local bound from a field-path map read (`final u:Colour = b.cache[k]; switch u`),
+  which it missed (`NullableSwitchMissingNullCheckTest#testDeclaredLocalFromAMapReadFlagged`, RED on `b5a5bccac`)
+  — branch `feat/infra-N6`

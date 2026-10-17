@@ -1544,6 +1544,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryReturnBindingSeeded :: control :: M-NULLABLE-FLOW-REPORT-INDEX',
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryReturnDerefFlagged :: control :: M-NULLABLE-REPORT-INDEX',
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryStaticReturnDerefFlagged :: control :: M-NULLABLE-REPORT-INDEX',
+			'unit.check.NullableSwitchMissingNullCheckTest#testDeclaredLocalFromAMapReadFlagged :: control :: M-NULLABLE-NO-CHAIN',
 			'unit.check.OperandBindingTest#testAliasOfUnindexedTypeOutranksSamePackageClass :: control :: M-BINDING-ALIAS-BLIND',
 			'unit.check.OperandBindingTest#testAmbientImportOfUnindexedTypeOutranksSamePackageClass :: control :: M-BINDING-UNINDEXED-IMPORT-FREE',
 			'unit.check.OperandBindingTest#testCallToFunctionOfThisFileIsProven :: control :: M-OPERAND-LOCAL-CALL-CUT',

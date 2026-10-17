@@ -920,11 +920,11 @@
 		},
 		{
 			"name": "M-NULLABLE-WRAPPER-OPAQUE",
-			"type": "anyparse.check.NullableSource",
-			"method": "receiverTypeName",
-			"find": "final lossy: Bool = declared == null || (cfg.shape.memberTransparentWrapperTypeNames ?? []).contains(declared);",
-			"replace": "final lossy: Bool = declared == null;",
-			"note": "the lossy `Null` that `declaredTypes` records for a `Null<Map<K, V>>` counts as an answer again, so a wrapped receiver goes back to being a safe miss"
+			"type": "anyparse.query.NominalTypes",
+			"method": "valueNominalDeep",
+			"find": "memberLookupReceiverSource(source, shape.memberTransparentWrapperTypeNames ?? [], chain.typeSyntax)",
+			"replace": "source",
+			"note": "the shared typer no longer peels a member-transparent wrapper off a receiver, so a `Null<Map<K, V>>` receiver reads as `Null` and goes back to being a safe miss"
 		},
 		{
 			"name": "M-SAFENAV-NO-NARROW",

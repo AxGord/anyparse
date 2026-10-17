@@ -122,8 +122,7 @@ final class UnguardedNullableDeref implements Check implements NoAutofix {
 			final valueNominalOf: Null<(QueryNode) -> Null<String>> = CheckScan.typeNominalResolver(
 				entry.source, plugin, tree, entry.file, index
 			);
-			final seed: (QueryNode) -> Bool = rhs ->
-				NullableSource.describe(rhs, root, declaredTypes, returnTypes, cfg, index, nominalOf) != null;
+			final seed: (QueryNode) -> Bool = rhs -> NullableSource.describe(rhs, root, returnTypes, cfg, index, nominalOf) != null;
 			// The annotation is evidence only where the INITIALIZER has none. `NullFlow` reaches this
 			// seed whenever the initializer named no nullable SOURCE, which is also true of an
 			// initializer the resolver typed and typed as NOT nullable — there the `Null<T>` is a

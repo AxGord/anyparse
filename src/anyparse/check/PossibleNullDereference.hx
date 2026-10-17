@@ -86,7 +86,6 @@ final class PossibleNullDereference implements Check implements NoAutofix {
 		// the exclusion list has to be re-applied inside the arc once it is this wide.
 		final index: SymbolIndex = IndexScope.resolution(files, plugin);
 		return RunScan.collectWith(files, plugin, provider, (entry, tree, typed, violations) -> {
-			final declaredTypes: Map<Int, String> = typed.declaredTypes(entry.source);
 			final returnTypes: Map<Int, String> = typed.returnTypes(entry.source);
 			final nominalOf: Null<(QueryNode) -> Null<String>> = CheckScan.typeNominalResolver(
 				entry.source, plugin, tree, entry.file, index, true
@@ -98,7 +97,7 @@ final class PossibleNullDereference implements Check implements NoAutofix {
 				index: index,
 				guarded: existsGuardedReads(tree, shape, entry.source)
 			};
-			walk(violations, entry.file, tree, tree, declaredTypes, returnTypes, nominalOf, ctx);
+			walk(violations, entry.file, tree, tree, returnTypes, nominalOf, ctx);
 		});
 	}
 
@@ -136,8 +135,8 @@ final class PossibleNullDereference implements Check implements NoAutofix {
 
 	/** Walk `node`, flagging a deref whose receiver is a nullable source. */
 	private static function walk(
-		out: Array<Violation>, file: String, node: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>,
-		returnTypes: Map<Int, String>, nominalOf: Null<(QueryNode) -> Null<String>>, ctx: Ctx
+		out: Array<Violation>, file: String, node: QueryNode, root: QueryNode, returnTypes: Map<Int, String>,
+		nominalOf: Null<(QueryNode) -> Null<String>>, ctx: Ctx
 	): Void {
 		if (ctx.opaqueKinds.contains(node.kind)) return;
 		if (ctx.derefKinds.contains(node.kind) && node.children.length >= 1) {
@@ -145,9 +144,7 @@ final class PossibleNullDereference implements Check implements NoAutofix {
 			final receiverSpan: Null<Span> = node.children[0].span;
 			final guarded: Bool = receiverSpan != null && ctx.guarded.exists('${receiverSpan.from}:${receiverSpan.to}');
 			if (span != null && !guarded) {
-				final source: Null<String> = NullableSource.describe(
-					node.children[0], root, declaredTypes, returnTypes, ctx.cfg, ctx.index, nominalOf
-				);
+				final source: Null<String> = NullableSource.describe(node.children[0], root, returnTypes, ctx.cfg, ctx.index, nominalOf);
 				if (source != null) out.push({
 					file: file,
 					span: span,
@@ -157,7 +154,7 @@ final class PossibleNullDereference implements Check implements NoAutofix {
 				});
 			}
 		}
-		for (c in node.children) walk(out, file, c, root, declaredTypes, returnTypes, nominalOf, ctx);
+		for (c in node.children) walk(out, file, c, root, returnTypes, nominalOf, ctx);
 	}
 
 }

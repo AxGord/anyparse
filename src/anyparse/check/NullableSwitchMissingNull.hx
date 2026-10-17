@@ -105,6 +105,9 @@ final class NullableSwitchMissingNull implements Check implements NoAutofix {
 		return RunScan.collectWith(files, plugin, provider, (entry, tree, typed, violations) -> {
 			final declaredTypes: Map<Int, String> = typed.declaredTypes(entry.source);
 			final returnTypes: Map<Int, String> = typed.returnTypes(entry.source);
+			final nominalOf: Null<(QueryNode) -> Null<String>> = CheckScan.typeNominalResolver(
+				entry.source, plugin, tree, entry.file, index, true
+			);
 			final ctx: FileCtx = {
 				file: entry.file,
 				root: tree,
@@ -112,9 +115,10 @@ final class NullableSwitchMissingNull implements Check implements NoAutofix {
 				declaredTypeSources: typed.declaredTypeSources(entry.source),
 				returnTypes: returnTypes,
 				s: s,
-				index: index
+				index: index,
+				nominalOf: nominalOf
 			};
-			final seed: Null<(QueryNode) -> Bool> = makeSeed(s.cfg, tree, declaredTypes, returnTypes, index);
+			final seed: Null<(QueryNode) -> Bool> = makeSeed(s.cfg, tree, returnTypes, index, nominalOf);
 			NullFlow.analyze(tree, shape, entry.source, (node, facts) -> checkSwitch(violations, node, facts, ctx), seed);
 		});
 	}
@@ -177,13 +181,17 @@ final class NullableSwitchMissingNull implements Check implements NoAutofix {
 		};
 	}
 
-	/** The `MaybeNull` seed for `NullFlow` — a local assigned a nullable-source RHS — or null when no nullable source is configured. */
+	/**
+	 * The `MaybeNull` seed for `NullFlow` — a local assigned a nullable-source RHS, its receiver typed by the shared typer
+	 * (`nominalOf`) — or null when no nullable source is configured.
+	 */
 	private static function makeSeed(
-		cfg: Null<NullableSourceCfg>, root: QueryNode, declaredTypes: Map<Int, String>, returnTypes: Map<Int, String>, index: SymbolIndex
+		cfg: Null<NullableSourceCfg>, root: QueryNode, returnTypes: Map<Int, String>, index: SymbolIndex,
+		nominalOf: Null<(QueryNode) -> Null<String>>
 	): Null<(QueryNode) -> Bool> {
 		if (cfg == null) return null;
 		final c: NullableSourceCfg = cfg;
-		return rhs -> NullableSource.describe(rhs, root, declaredTypes, returnTypes, c, index) != null;
+		return rhs -> NullableSource.describe(rhs, root, returnTypes, c, index, nominalOf) != null;
 	}
 
 	/**
@@ -256,7 +264,7 @@ final class NullableSwitchMissingNull implements Check implements NoAutofix {
 			return optKind != null && TypeResolver.bindingIsOptionalParam(ctx.root, from, optKind);
 		}
 		final cfg: Null<NullableSourceCfg> = s.cfg;
-		return cfg != null && NullableSource.describe(subject, ctx.root, ctx.declaredTypes, ctx.returnTypes, cfg, ctx.index) != null;
+		return cfg != null && NullableSource.describe(subject, ctx.root, ctx.returnTypes, cfg, ctx.index, ctx.nominalOf) != null;
 	}
 
 	/**
@@ -391,4 +399,7 @@ private typedef FileCtx = {
 	var returnTypes: Map<Int, String>;
 	var s: Seams;
 	var index: SymbolIndex;
+
+	/** The shared typer in RECEIVER mode (`CheckScan.typeNominalResolver`), which every nullable source's receiver is typed by. */
+	var nominalOf: Null<(QueryNode) -> Null<String>>;
 }
